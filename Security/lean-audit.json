@@ -2,128 +2,7 @@
  "roots": ["Definitions", "Models"],
  "proved_in": ["Proofs"],
  "assumptions_module": "Definitions.Assumptions",
- "assumptions": {
-  "Nci.Cut.Arrays": {
-   "owner": "@training",
-   "digest": "111c92d12e00ac259139b85416c77ad9033a63a45e5f4a7a197c6cce64836ef1"
-  },
-  "Nci.Cut.Assumptions.Exports": {
-   "owner": "@training",
-   "digest": "45a66575def5bbb4d3ab2a6da56b3ea9c3cddd5d096fbf156665d789e887c161"
-  },
-  "Nci.Cut.Assumptions.Hardness": {
-   "owner": "@training",
-   "digest": "f09fae736063873c46856fdfc4975fbee382c2a39f5fe5fab0a90ce3ef2927f6"
-  },
-  "Nci.Cut.CostsAtLeast": {
-   "owner": "@training",
-   "digest": "833c86670586107ebd1803a89f8cdfe1e8f2d927cb74028c4d42e0067709a1bc"
-  },
-  "Nci.Cut.NoSharedPair": {
-   "owner": "@training",
-   "digest": "edf10dcc2cffac840222ebbf36dbd8337aee14933243ad99695e0ab6f31214b1"
-  },
-  "Nci.Cut.ReadsAtMost": {
-   "owner": "@training",
-   "digest": "cbd09eb6c29f2035f8f306634a0e4bc34f1a33c731cb6697a11cd8f972d2cf06"
-  },
-  "Nci.Cut.ValuesInjective": {
-   "owner": "@training",
-   "digest": "379541f687acf8cc5048159a958e0b31a92a647beb56237022b8aec67cefa275"
-  },
-  "Nci.Formalism.Annotation.Valid": {
-   "owner": "@training",
-   "digest": "cb976b329589b2866775b70a459f1333ed2df278cfc0413164a7d6865955151d"
-  },
-  "Nci.Formalism.Annotation.WorkPerBit": {
-   "owner": "@training",
-   "digest": "7bdd11c2cba1213609919fd49575d0c00d26f086f9a078736adc80886b5ffde8"
-  },
-  "Nci.Formalism.Assumptions.CutCost": {
-   "owner": "@training",
-   "digest": "6f7541ca1175cad38a3a58df3032ca71d908a492f15dde825421e128bad8c5b4"
-  },
-  "Nci.Formalism.Assumptions.EfficiencyFloor": {
-   "owner": "@training",
-   "digest": "10a23be267b3535ede3be1dc5f00a9f08200bcc1a81e1e8488d295e77031d75e"
-  },
-  "Nci.Formalism.Assumptions.TokenWork": {
-   "owner": "@training",
-   "digest": "d17288db09108dcb49f4caaf63f493763bd14c3f660dbe809178307fec2a498a"
-  },
-  "Nci.Formalism.Caps": {
-   "owner": "@training",
-   "digest": "341559f3ef65736d8b2f54aba57f2fa4b9b92c503e50d7fd19f28720f35c58c7"
-  },
-  "Nci.Formalism.GateSet": {
-   "owner": "@training",
-   "digest": "01e7c2e54429c917e1d5410ec3c77cb1bfb221feb7a6c259b841c7817b87e26e"
-  },
-  "Nci.Formalism.InPeriods": {
-   "owner": "@training",
-   "digest": "2e9c8f7af1c83a77da3bc7a6cb8c309403d4e72509733fdede069044836a1e79"
-  },
-  "Nci.Formalism.InferenceBlock": {
-   "owner": "@training",
-   "digest": "051d470c6f69d6fa95188b5511f234920621994dbf94255920a2c59f483e776f"
-  },
-  "Nci.Formalism.PartitionBound": {
-   "owner": "@training",
-   "digest": "0efdf3fb0d8f5335cb985e182b6c341fd479b1ed34be23cac225dc95def769f6"
-  },
-  "Nci.Formalism.PeakAtMost": {
-   "owner": "@training",
-   "digest": "d846aaf90484906bcd76942d72dc6be57f5601ddaff436fd6e475ca537f48dce"
-  },
-  "Nci.Formalism.Run.Among": {
-   "owner": "@training",
-   "digest": "d5db13c72b34859a9308ac0ded9b0203e2d3efd37c51faa2a22e3b994542e247"
-  },
-  "Nci.Formalism.Run.Reaches": {
-   "owner": "@training",
-   "digest": "adc282a207f99fc85220964a134b1487df52085b85deba8bdf0de92dcf2377ef"
-  },
-  "Nci.Formalism.Run.Within": {
-   "owner": "@training",
-   "digest": "95f913d00b89c636477a1bf3d9c0a83455b5f5f0489aa40c336c351abe977792"
-  },
-  "Nci.Formalism.ServingFits": {
-   "owner": "@training",
-   "digest": "9362c658fc805110812ff7fed480889858ba419e8ac09d892301fc1e6440a7b4"
-  },
-  "Nci.Formalism.SessionBlocks": {
-   "owner": "@training",
-   "digest": "7a5b062f583e6adef87ad44a6639c7d7e68defa02bca99207acfe26349d472d8"
-  },
-  "Nci.Formalism.TrainingBlocks": {
-   "owner": "@training",
-   "digest": "e3c33e2b849c3b792833dc2980a0ffe283dd178a0ff9737b5430b7e6fac31936"
-  },
-  "Nci.Formalism.TrainingFits": {
-   "owner": "@training",
-   "digest": "b708a3fe8eb9aecf99d6e6ee46afc57aee936c361957b2e2c85ad49e028467a7"
-  },
-  "Verity.Rec.Compiled.ByShape": {
-   "owner": "@lean",
-   "digest": "9058b27233b113ee4da0797648e143426d27e2ca7351624f269317f23b21eeca"
-  },
-  "Verity.Rec.Compiled.Commits": {
-   "owner": "@lean",
-   "digest": "dec783db9eeb84e400318887e8ec8b62611cf21f887502ef8c6ce9668e3618bd"
-  },
-  "Verity.Rec.Compiled.GoesOnAt": {
-   "owner": "@lean",
-   "digest": "413cb03ac88414ce3a6ccda013172152dabe620cdf8be85b3c3c0c207cc5aef4"
-  },
-  "Verity.Rec.Compiled.WitnessIn": {
-   "owner": "@lean",
-   "digest": "bd59936e8a7d2ff64bdd5dd376cada99e5c95eb7a7c6679b8b240ab613cd6205"
-  },
-  "Verity.ZkSystem.ZK": {
-   "owner": "@lean",
-   "digest": "930ff1b2c507f083a7872be8f15f4e78eaa15f4a1cc287304b1376da022be53c"
-  }
- },
+ "assumptions": {},
  "domain": {
   "Claims.Flock.R": {
    "owner": "@proofs",
@@ -1654,7 +1533,7 @@
   },
   "FlockSoundness.Assumptions.SHA512CRExpected": {
    "owner": "@proofs",
-   "digest": "f0b159e63eca73831a6d80d1bbecd21b85472aae5e120138cda49f579ab7fa4d",
+   "digest": "36c211e5e3014ef39db57f379fe623bba45211147b291e62998a69c5dffe97f0",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -1852,7 +1731,7 @@
   },
   "FlockSoundness.Discharge.Recursion.VStarParses": {
    "owner": "@proofs",
-   "digest": "85034e289a7faf26740a1fe21bc95a44aad750a4bd49b0a4ad97d4841e41a308",
+   "digest": "e2622852ac8fe4338babe7cb12f7cb56cb38c61b3fa5d679864b783d12cf15ea",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -1930,13 +1809,13 @@
   },
   "Nci.Assumptions.CapBelowColumns": {
    "owner": "@lean",
-   "digest": "262ba2aed142115072e7844249a6590b20774b9b1ce794439419059af36e6a43",
+   "digest": "aae638ad32224f459cb0a973699c9e18f2a594f1d9c5bdf7d8950250e5a03598",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.CheatingAtMost": {
    "owner": "@training",
-   "digest": "89add569caacb16556501cbd98787134ad9098307d8b22fc10f53b164cd1ade2",
+   "digest": "8a43bc61c0ac16a7f6f3ddf480eb0809aea4fe0ad50b256281cc5b844896ca19",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -1996,7 +1875,7 @@
   },
   "Nci.Assumptions.MinEntropyHard": {
    "owner": "@training",
-   "digest": "404ef4644a8ad49fe0d693f75112033fc92f559374570c43e39726ef420c1ad4",
+   "digest": "c47ce107dfe7c09610755ac55165cc5aac1ee4095d3662392d26ff2b2b6211fb",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -2068,13 +1947,13 @@
   },
   "Nci.Assumptions.RegisteredThrough": {
    "owner": "@lean",
-   "digest": "6681d0aa122155f68c521a3a8009273afe41d5bb596603b6c3fedb1f862567cd",
+   "digest": "74abe407f309ced209dcd753272635067e521bcdf8e7753a18895c8344544e59",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.ResidualAtMost": {
    "owner": "@lean",
-   "digest": "1991167745b6c12c20d9486beacd705ed52b382712c938758c6c31fa725299ee",
+   "digest": "a72543c10000bfb3fdf17ee896ff28cb7f29be0257a57e100f257edb3bbc9bdf",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -2128,7 +2007,7 @@
   },
   "Nci.Assumptions.UnmonitoredAtMost": {
    "owner": "@training",
-   "digest": "a2f3af521431f3a9eb4420c21e04149188f6bcfdb664984c54505a4d514502c2",
+   "digest": "5b6ed8b1d3137bd0ff81fc005fc086bf36950f3c4d50cb9def7b1a1047f09167",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -2146,19 +2025,19 @@
   },
   "Nci.Assumptions.WeightsSupportFmt2": {
    "owner": "@lean",
-   "digest": "fd77547781d38f131fe8a442633650f281f06b1564ec158e59e960b9803c88ff",
+   "digest": "dbbb1f20e040f2cc66f1ba8d02a308d5a32909ab8055875f533bf643df25d73c",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.WindowLength": {
    "owner": "@lean",
-   "digest": "75fc88ca4a46d35c94a12a39979bd2e18b2b8099c0467558c9f238e28f088144",
+   "digest": "b88a4399e57fec983f33b9108140c60973f74a6c19df53ed3345a650cda9940a",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.WindowsHold": {
    "owner": "@lean",
-   "digest": "4ecb0fe6367123c89e464fb645d8543789989e21aa6e18f491e028d25c08be17",
+   "digest": "05d3f99ad636dda34c9d92cc4c56cee029364a7e7adf70614357df19b374e68f",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -2230,13 +2109,13 @@
   },
   "Nci.Cover.Assumptions.BlockFits": {
    "owner": "@training",
-   "digest": "ee906bc2d535d5ad6a83af3e953d5cabc91620eb72a0a6901a7a70ab97faaca9",
+   "digest": "6c8a39590d5ed889ee6d76adba07cee9e4ce74f76ad35fd00388552b0cf4a1fd",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Nci.Cover.Assumptions.CapBelowDepth": {
    "owner": "@training",
-   "digest": "b6a2e9a44600c3a9661d08320279a30d4f6aaaad8e812302fd44694922c961aa",
+   "digest": "4a59a4806a27c95100ab3b95c905c33acb34c61829b50f990a197d9ea06dc17d",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -2312,6 +2191,156 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Nci.Cut.Arrays": {
+   "owner": "@training",
+   "digest": "111c92d12e00ac259139b85416c77ad9033a63a45e5f4a7a197c6cce64836ef1",
+   "issue": "LEAN-186",
+   "due": "2026-11-07"
+  },
+  "Nci.Cut.Assumptions.Exports": {
+   "owner": "@training",
+   "digest": "45a66575def5bbb4d3ab2a6da56b3ea9c3cddd5d096fbf156665d789e887c161",
+   "issue": "LEAN-186",
+   "due": "2026-11-07"
+  },
+  "Nci.Cut.Assumptions.Hardness": {
+   "owner": "@training",
+   "digest": "f09fae736063873c46856fdfc4975fbee382c2a39f5fe5fab0a90ce3ef2927f6",
+   "issue": "LEAN-186",
+   "due": "2026-11-07"
+  },
+  "Nci.Cut.CostsAtLeast": {
+   "owner": "@training",
+   "digest": "833c86670586107ebd1803a89f8cdfe1e8f2d927cb74028c4d42e0067709a1bc",
+   "issue": "LEAN-186",
+   "due": "2026-11-07"
+  },
+  "Nci.Cut.NoSharedPair": {
+   "owner": "@training",
+   "digest": "edf10dcc2cffac840222ebbf36dbd8337aee14933243ad99695e0ab6f31214b1",
+   "issue": "LEAN-186",
+   "due": "2026-11-07"
+  },
+  "Nci.Cut.ReadsAtMost": {
+   "owner": "@training",
+   "digest": "cbd09eb6c29f2035f8f306634a0e4bc34f1a33c731cb6697a11cd8f972d2cf06",
+   "issue": "LEAN-186",
+   "due": "2026-11-07"
+  },
+  "Nci.Cut.ValuesInjective": {
+   "owner": "@training",
+   "digest": "379541f687acf8cc5048159a958e0b31a92a647beb56237022b8aec67cefa275",
+   "issue": "LEAN-186",
+   "due": "2026-11-07"
+  },
+  "Nci.Formalism.Annotation.Valid": {
+   "owner": "@training",
+   "digest": "cb976b329589b2866775b70a459f1333ed2df278cfc0413164a7d6865955151d",
+   "issue": "TRN-45",
+   "due": "2026-11-06"
+  },
+  "Nci.Formalism.Annotation.WorkPerBit": {
+   "owner": "@training",
+   "digest": "7bdd11c2cba1213609919fd49575d0c00d26f086f9a078736adc80886b5ffde8",
+   "issue": "TRN-45",
+   "due": "2026-11-06"
+  },
+  "Nci.Formalism.Assumptions.CutCost": {
+   "owner": "@training",
+   "digest": "6f7541ca1175cad38a3a58df3032ca71d908a492f15dde825421e128bad8c5b4",
+   "issue": "TRN-45",
+   "due": "2026-11-06"
+  },
+  "Nci.Formalism.Assumptions.EfficiencyFloor": {
+   "owner": "@training",
+   "digest": "10a23be267b3535ede3be1dc5f00a9f08200bcc1a81e1e8488d295e77031d75e",
+   "issue": "TRN-45",
+   "due": "2026-11-06"
+  },
+  "Nci.Formalism.Assumptions.TokenWork": {
+   "owner": "@training",
+   "digest": "d17288db09108dcb49f4caaf63f493763bd14c3f660dbe809178307fec2a498a",
+   "issue": "TRN-45",
+   "due": "2026-11-06"
+  },
+  "Nci.Formalism.Caps": {
+   "owner": "@training",
+   "digest": "341559f3ef65736d8b2f54aba57f2fa4b9b92c503e50d7fd19f28720f35c58c7",
+   "issue": "TRN-45",
+   "due": "2026-11-06"
+  },
+  "Nci.Formalism.GateSet": {
+   "owner": "@training",
+   "digest": "01e7c2e54429c917e1d5410ec3c77cb1bfb221feb7a6c259b841c7817b87e26e",
+   "issue": "TRN-45",
+   "due": "2026-11-06"
+  },
+  "Nci.Formalism.InPeriods": {
+   "owner": "@training",
+   "digest": "2e9c8f7af1c83a77da3bc7a6cb8c309403d4e72509733fdede069044836a1e79",
+   "issue": "TRN-45",
+   "due": "2026-11-06"
+  },
+  "Nci.Formalism.InferenceBlock": {
+   "owner": "@training",
+   "digest": "051d470c6f69d6fa95188b5511f234920621994dbf94255920a2c59f483e776f",
+   "issue": "TRN-45",
+   "due": "2026-11-06"
+  },
+  "Nci.Formalism.PartitionBound": {
+   "owner": "@training",
+   "digest": "0efdf3fb0d8f5335cb985e182b6c341fd479b1ed34be23cac225dc95def769f6",
+   "issue": "TRN-45",
+   "due": "2026-11-06"
+  },
+  "Nci.Formalism.PeakAtMost": {
+   "owner": "@training",
+   "digest": "d846aaf90484906bcd76942d72dc6be57f5601ddaff436fd6e475ca537f48dce",
+   "issue": "TRN-45",
+   "due": "2026-11-06"
+  },
+  "Nci.Formalism.Run.Among": {
+   "owner": "@training",
+   "digest": "d5db13c72b34859a9308ac0ded9b0203e2d3efd37c51faa2a22e3b994542e247",
+   "issue": "TRN-45",
+   "due": "2026-11-06"
+  },
+  "Nci.Formalism.Run.Reaches": {
+   "owner": "@training",
+   "digest": "adc282a207f99fc85220964a134b1487df52085b85deba8bdf0de92dcf2377ef",
+   "issue": "TRN-45",
+   "due": "2026-11-06"
+  },
+  "Nci.Formalism.Run.Within": {
+   "owner": "@training",
+   "digest": "95f913d00b89c636477a1bf3d9c0a83455b5f5f0489aa40c336c351abe977792",
+   "issue": "TRN-45",
+   "due": "2026-11-06"
+  },
+  "Nci.Formalism.ServingFits": {
+   "owner": "@training",
+   "digest": "9362c658fc805110812ff7fed480889858ba419e8ac09d892301fc1e6440a7b4",
+   "issue": "TRN-45",
+   "due": "2026-11-06"
+  },
+  "Nci.Formalism.SessionBlocks": {
+   "owner": "@training",
+   "digest": "7a5b062f583e6adef87ad44a6639c7d7e68defa02bca99207acfe26349d472d8",
+   "issue": "TRN-45",
+   "due": "2026-11-06"
+  },
+  "Nci.Formalism.TrainingBlocks": {
+   "owner": "@training",
+   "digest": "e3c33e2b849c3b792833dc2980a0ffe283dd178a0ff9737b5430b7e6fac31936",
+   "issue": "TRN-45",
+   "due": "2026-11-06"
+  },
+  "Nci.Formalism.TrainingFits": {
+   "owner": "@training",
+   "digest": "b708a3fe8eb9aecf99d6e6ee46afc57aee936c361957b2e2c85ad49e028467a7",
+   "issue": "TRN-45",
+   "due": "2026-11-06"
+  },
   "Nci.Ldl.Assumptions.ActivationRate": {
    "owner": "@training",
    "digest": "4e0b2de3da3ef0ceea8c956390d617153e1415d39250c160da01d9e8f2074c1f",
@@ -2362,7 +2391,7 @@
   },
   "Nci.Threading.Sources.FanOutBound": {
    "owner": "@lean",
-   "digest": "37c8ffadf4461302cff82c5ed33d97a5f0b0f5ad4ecb59b3c285dcf0db17c366",
+   "digest": "9ddfa27413551c5e23a4bea490b37d8b0c20ea7bb1068ee59ec03552faa88994",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -3172,7 +3201,7 @@
   },
   "Verity.Assumptions.ZkServerOwnUser": {
    "owner": "@proofs",
-   "digest": "48190983e935f56b4b362642eeb660a306c40d6e5a59fb223e01a60339b03b48",
+   "digest": "b1e9ef38e446427d01ef45ed0a790884ffdcc813bad242696f7b9405d81ce7d4",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -3220,9 +3249,33 @@
   },
   "Verity.Partition.IsCK": {
    "owner": "@lean",
-   "digest": "87b4741808fe13ef55c92c4f2ea30a647f0eda9918c2d42cdc91f8c9efa55829",
+   "digest": "7022e53569d6e81aa4d134c8af406a451fc85818d71cf6de766aa7e784f4db68",
    "issue": "LEAN-186",
    "due": "2026-11-30"
+  },
+  "Verity.Rec.Compiled.ByShape": {
+   "owner": "@lean",
+   "digest": "9058b27233b113ee4da0797648e143426d27e2ca7351624f269317f23b21eeca",
+   "issue": "LEAN-186",
+   "due": "2026-11-07"
+  },
+  "Verity.Rec.Compiled.Commits": {
+   "owner": "@lean",
+   "digest": "dec783db9eeb84e400318887e8ec8b62611cf21f887502ef8c6ce9668e3618bd",
+   "issue": "LEAN-186",
+   "due": "2026-11-07"
+  },
+  "Verity.Rec.Compiled.GoesOnAt": {
+   "owner": "@lean",
+   "digest": "413cb03ac88414ce3a6ccda013172152dabe620cdf8be85b3c3c0c207cc5aef4",
+   "issue": "LEAN-186",
+   "due": "2026-11-07"
+  },
+  "Verity.Rec.Compiled.WitnessIn": {
+   "owner": "@lean",
+   "digest": "bd59936e8a7d2ff64bdd5dd376cada99e5c95eb7a7c6679b8b240ab613cd6205",
+   "issue": "LEAN-186",
+   "due": "2026-11-07"
   },
   "Verity.Recursive.LiveCoins": {
    "owner": "@proofs",
@@ -3253,6 +3306,12 @@
    "digest": "59c32110ad37a324988ebec3721ddbed31555090ee2b008b734c1651b3387da1",
    "issue": "LEAN-186",
    "due": "2026-11-30"
+  },
+  "Verity.ZkSystem.ZK": {
+   "owner": "@lean",
+   "digest": "930ff1b2c507f083a7872be8f15f4e78eaa15f4a1cc287304b1376da022be53c",
+   "issue": "LEAN-186",
+   "due": "2026-11-07"
   }
  },
  "meaning": [
