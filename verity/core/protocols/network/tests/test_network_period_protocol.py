@@ -158,8 +158,10 @@ def test_a_scan_whose_rows_port_is_at_another_root_is_refused(server, monkeypatc
     the rows form refuses, in Lean and in the mirror and by name, each way the scan's registration can name the rows'
     root and domain without holding them there (`PC.UNPORTS`): the egress rows' root and domain at `scan/view` and
     `rows/egress/<w>` at another root, the two ends' names swapped, one end's at another window's, a `roots` entry of
-    other than T leaves, and a second entry of one end's name at another root; and a mirror that takes any entry naming
-    the rows' root and domain, as the check did before it read the port, accepts what Lean refuses."""
+    other than T leaves, a second entry of one end's name at another root, and a second tree under one end's domain at
+    `scan/view`; a mirror that takes any entry naming the rows' root and domain, as the check did before it read the
+    port, accepts what Lean refuses; and so does one that reads only the entries at the rows' port or value, as the
+    check did before their domain had to name one tree, at the second tree under their domain."""
     unport = PC.UNPORTS
     for u in unport:
         monkeypatch.setattr(PC, "UNPORTS", (u,))
@@ -169,15 +171,23 @@ def test_a_scan_whose_rows_port_is_at_another_root_is_refused(server, monkeypatc
             assert why in reference(case)["reason"], (u, n, reference(case))
             verdict, out = D.replay(PORT, case, server)
             assert verdict == REJECT and why in json.loads(out)["reason"], (u, n, out)
-    monkeypatch.setattr(PC, "UNPORTS", unport)
 
     def anywhere(reg, d, w, doc):
         return any(e.get("root") == doc["root"] and e.get("domain") == doc["domain"]
                    for k in ("roots", "registered") for e in PC._entries(reg, k))
 
-    monkeypatch.setattr(PC, "_holds", anywhere)
-    for n in range(4):
-        refused_by_lean_alone(build("rows-port", n, small=n % 2 == 0), server, PC.ROWS_UNHELD)
+    holds = PC._holds
+
+    def at_port(reg, d, w, doc):
+        keep = {"roots": lambda e: e.get("port") == PC.rows_name(d, w),
+                "registered": lambda e: e.get("value") == doc["value"]}
+        return holds({k: [e for e in PC._entries(reg, k) if at(e)] for k, at in keep.items()}, d, w, doc)
+
+    for mirror, unports in ((anywhere, unport), (at_port, ("shadow",))):
+        monkeypatch.setattr(PC, "_holds", mirror)
+        monkeypatch.setattr(PC, "UNPORTS", unports)
+        for n in range(4):
+            refused_by_lean_alone(build("rows-port", n, small=n % 2 == 0), server, PC.ROWS_UNHELD)
 
 
 def test_the_rows_form_accepts_a_wired_state_tied_period(server):
