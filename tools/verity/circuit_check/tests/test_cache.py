@@ -1611,6 +1611,38 @@ def test_the_checker_s_version_is_its_code_not_its_prose(tmp_path, monkeypatch):
     assert CC.version() != here
 
 
+def test_the_checker_s_version_is_read_once_until_a_file_of_it_changes(tmp_path, monkeypatch):
+    """`cache.version`, which `key` asks for once for each target, reads the checker's files once a process: again only when one
+    of them or a directory of them has another stat (an edit, a new file), and on every call while one of them changed within
+    `cache.RACY_NS` of the reading, when another write in the same timestamp tick could leave its stat as it was."""
+    from circuit_check import cache as CC
+
+    mod, code, read = tmp_path / "checks.py", CC._code, []
+    mod.write_text("def f(x):\n    return 2 * x\n")
+    now = [mod.stat().st_ctime_ns + 86400 * 10**9]
+    monkeypatch.setattr(CC, "_HERE", tmp_path)
+    monkeypatch.setattr(CC, "_VERSION", [])
+    monkeypatch.setattr(CC, "_clock", lambda: now[0])
+    monkeypatch.setattr(CC, "_code", lambda p: read.append(p.name) or code(p))
+    here = CC.version()
+    assert CC.version() == here and read == ["checks.py"]
+    mod.write_text("def f(x):\n    return 2 * x + 1\n")
+    edited = CC.version()
+    assert edited != here and CC.version() == edited and read == ["checks.py"] * 2
+    (tmp_path / "data.json").write_text("{}")
+    # a tick of its own for the new entry: in the first write's tick the directory's stat could stay as it was (the race
+    # RACY_NS covers, which this test's clock, a day on, leaves out)
+    os.utime(tmp_path, ns=(0, 0))
+    added = CC.version()
+    assert added != edited and CC.version() == added and read == ["checks.py"] * 3 + ["data.json"]
+    mod.write_text("def f(x):\n    return 3 * x\n")
+    now[0] = mod.stat().st_ctime_ns
+    racy = CC.version()
+    assert CC.version() == racy != added and read[4:] == ["checks.py", "data.json"] * 2
+    now[0] += CC.RACY_NS + 1
+    assert CC.version() == CC.version() == racy and read[8:] == ["checks.py", "data.json"]
+
+
 def _walked(fn) -> str:
     """`cache.descriptor` as a walk of every body node and static, with no memo: what its memo must give."""
     import hashlib
