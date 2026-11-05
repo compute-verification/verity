@@ -375,20 +375,21 @@ def test_the_scan_reads_each_form():
     docs = {
         "a.py": '"""A proof unit, two Proof-Units and a proof\n    units wrap."""\nx.proof_unit  # a faulty unit; unit tests\n',
         "b.rs": "/// the proof\n/// unit of it; a bulletproof unit\nlet reason = \"N, the round's proof units\";\n",
-        "d.py": '# the Proof-Service and a proof\n# services; proof_service, verity/proof-service/stream/v0; a faulty service\n',
-        "c.lean": ('def s := "a proof unit"  -- the proof\n  -- unit, wrapped\n/-- a faulty\n  unit -/ def proof_unit := 1\n'
+        "e.lean": ('def s := "a proof unit"  -- the proof\n  -- unit, wrapped\n/-- a faulty\n  unit -/ def proof_unit := 1\n'
                    "-- a proof\ndef unit := 2\n"),
+        "d.py": '# the Proof-Service and a proof\n# services; proof_service, verity/proof-service/stream/v0; a faulty service\n',
+        "c.lean": "-- a proof unit",
         "verity/README.md": "a proof unit",
         GLOSSARY: '| "proof unit", and "unit" alone meaning one | proof block |\n| other | a proof unit |\n',
     }
     found, used = offenders(list(docs), read=docs.__getitem__)
     assert found == [(GLOSSARY, 2, "proof unit"), ("a.py", 1, "proof unit"), ("a.py", 1, "Proof-Units"),
                      ("a.py", 1, "proof units"), ("a.py", 3, "faulty unit"), ("b.rs", 1, "proof /// unit"),
-                     ("c.lean", 1, "proof -- unit"), ("c.lean", 3, "faulty unit"),
-                     ("d.py", 1, "Proof-Service"), ("d.py", 1, "proof # services")]
-    assert over_lean_list(found, Counter({"c.lean": 2})) == []
-    assert over_lean_list(found, Counter({"c.lean": 1})) == [
-        "  c.lean: 2 found, 1 allowed\n    c.lean:1: proof -- unit\n    c.lean:3: faulty unit"]
+                     ("c.lean", 1, "proof unit"), ("d.py", 1, "Proof-Service"), ("d.py", 1, "proof # services"),
+                     ("e.lean", 1, "proof -- unit"), ("e.lean", 3, "faulty unit")]
+    assert over_lean_list(found, Counter({"c.lean": 1, "e.lean": 2})) == []
+    assert over_lean_list(found, Counter({"c.lean": 1, "e.lean": 1})) == [
+        "  e.lean: 2 found, 1 allowed\n    e.lean:1: proof -- unit\n    e.lean:3: faulty unit"]
     assert used == {"N, the round's proof units", "verity/proof-service/"}
 
 
