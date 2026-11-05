@@ -39,7 +39,9 @@ Python codec refuses as it decodes (`E_REINTERPRET`), so every Program the check
 `NciCheck.Count.check` (`nci-check --count`) is the count of `(c, k)`-inference blocks: that a Boolean declaration's
 computed gates divide into at most `n` proof blocks of a `(c, k)`-partition (`Nci.CompliesAtMost`), the blocks the
 activations of the block Definitions the declaration names, with each block Definition's Boolean gates from the gate
-table and its fresh bits from `NciCheck.Desc`'s summaries; `NciCheck.CountDifftest` holds it to the Python reference.
+table and its fresh bits from `NciCheck.Desc`'s summaries. It publishes only the judgment against `n`, `{complies}`;
+the whole verdict, with the counts, is `NciCheck.Count.checkDetail`, for the private record. `NciCheck.CountDifftest`
+holds both to the Python reference.
 -/
 
 @[expose] public section
