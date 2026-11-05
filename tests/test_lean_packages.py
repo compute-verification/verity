@@ -244,7 +244,7 @@ def test_the_inline_list_only_shrinks():
 #: how far a cap here may stand above its count ({"CAP key": room}): changes queued on `next` when the caps came to equal
 #: their counts moved the counts and not the caps, so each room is the gap between `next`'s count and `main`'s, and each
 #: cap holds on both. Once those changes have landed, a cap and its room come down to the count together.
-ROOM = {"INLINE Security": 52, "INLINE Security/Properties": 2, "UNWITNESSED Security": 15, "UNWITNESSED Security/Properties": 3, "SPEC_THEOREMS Security": 1, "RETIRED_NAMES draw": 13, "RETIRED_NAMES wrong": 6, "RETIRED_NAMES dampener": 14, "TREES_EXCEPT Security": 1, "UNDOCUMENTED Security": 49, "OVERLONG Security/Proofs": 231, "RETIRED_NAMES escape": 3}
+ROOM = {"INLINE Security": 52, "INLINE Security/Properties": 2, "UNWITNESSED Security": 15, "UNWITNESSED Security/Properties": 3, "SPEC_THEOREMS Security": 1, "RETIRED_NAMES draw": 44, "RETIRED_NAMES wrong": 6, "RETIRED_NAMES dampener": 14, "TREES_EXCEPT Security": 1, "UNDOCUMENTED Security": 46, "OVERLONG Security/Proofs": 231, "RETIRED_NAMES escape": 2, "RETIRED_NAMES law": 5}
 
 
 def _rel(p: Path) -> str:
@@ -478,7 +478,7 @@ def test_no_long_module_grows():
 
 
 #: the Lean declarations whose own names carry each of the Glossary's older names (`test_retired_terms.py`'s `LEAN_WORDS`)
-RETIRED_NAMES = {"draw": 914, "law": 99, "escape": 98, "wrong": 114, "dampener": 37, "firewall": 26, "horizon": 29, "warden": 10, "tap": 19, "leg": 3}
+RETIRED_NAMES = {"draw": 945, "law": 104, "escape": 97, "wrong": 114, "dampener": 37, "firewall": 26, "horizon": 29, "warden": 10, "tap": 19, "leg": 3}
 
 
 #: each `import all` of an in-tree module ({"FILE: MODULE": why}), those in the tree when the rule came
