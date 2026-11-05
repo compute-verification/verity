@@ -1,5 +1,7 @@
-import Definitions.Nci.Guarantees.Fmt
-import Proofs.Nci.Info
+module
+
+public import Definitions.Nci.Guarantees.Fmt
+public import Proofs.Nci.Info
 
 /-!
 # Proofs of NCI's guarantees with each thread charged by its work
@@ -11,6 +13,8 @@ on a thread meets the threading inequality itself (`work_threaded`), and every c
 `WeightsSupportFmt` alone gives Theorem 1 at any `b_a` at most its rate (`threaded_reads_info_fmt`). The containment and
 the state carry over as in `Proofs.Nci.Info`.
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.DecodeFlock
-import Proofs.Flock.Claims.NumbersGamma
+module
+
+public import Proofs.Flock.Claims.DecodeFlock
+public import Proofs.Flock.Claims.NumbersGamma
 
 /-!
 # `nMin` at the deployed parameters
@@ -25,6 +27,8 @@ Johnson count `johnsonCount k agree = ⌊(k+1)/agree²⌋ + 1` of the trace's co
   number, while the masked rate `ρ' = (2^c + t)/2^{c+1}` runs from `0.568` (`m = 25`) to `0.500` (`m = 35`), which is
   why the radius form reads its radius per trace (`Deploy.θ`).
 -/
+
+@[expose] public section
 
 namespace Claims.Flock.Numbers
 

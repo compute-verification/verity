@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.KS.RepDist
-import Proofs.Flock.Claims.KS.Rounds
-import Proofs.Flock.Soundness.Defs
-import Proofs.Flock.Soundness.ExecPlacement
-import Proofs.Flock.Soundness.Refine.Regions
+module
+
+public import Proofs.Flock.Claims.KS.RepDist
+public import Proofs.Flock.Claims.KS.Rounds
+public import Proofs.Flock.Soundness.Defs
+public import Proofs.Flock.Soundness.ExecPlacement
+public import Proofs.Flock.Soundness.Refine.Regions
 
 /-!
 # A rep's level caps at the plain fork round's count
@@ -18,6 +20,8 @@ the link message and rep `r`'s `r · R` earlier rounds.
   is `preLig spec st + capRound k0 (ℓ + 1)`;
 * `forkRound_eq`: the plain fork round is the link message, rep `r`'s `r · R` earlier rounds and that count.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

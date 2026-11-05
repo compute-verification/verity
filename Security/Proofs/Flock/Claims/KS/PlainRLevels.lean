@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainAccPrR
-import Proofs.Flock.Claims.KS.PlainRTable
+module
+
+public import Proofs.Flock.Claims.KS.PlainAccPrR
+public import Proofs.Flock.Claims.KS.PlainRTable
 
 /-!
 # The level columns an accepted run of `VR rd` opens
@@ -9,6 +11,8 @@ At the level columns `plainRawLevelColsRV rd` (`plainRawLevelCols` at the run `r
 * `plainRawLevelColsRV_top`: an accepted run has none at or past its schedule's last level (`plainRawLevelCols_topK`'s
   proof): the run's shape is table 0's, whose schedule is the statement's `fast100` one. So `levelTopAt_R`.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

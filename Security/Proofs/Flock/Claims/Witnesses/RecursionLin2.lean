@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Witnesses.RecursionLin
+module
+
+public import Proofs.Flock.Claims.Witnesses.RecursionLin
 
 /-!
 # The witnesses of the recursion's claims with the inner Flock's roots linear
@@ -12,6 +14,8 @@ there `κ < 1/6` (`ksD_κ_lt_sixth`), so `λ₂ > 0` (`ksB_lamLin2_pos`). Their 
 `KSBound`'s: the claims read the same decoders. The toy records stage no V\* statement, so `B_I` and `Fdev` over the
 draws' evaluations (`BinnerV`, `FdevV`) find nothing either (`drawCalls_noCalls`).
 -/
+
+@[expose] public section
 
 namespace Claims.Witness.Recursion
 
@@ -120,7 +124,7 @@ theorem fdevV_pr_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.Dep
   rw [Pr_congr fun s => iff_false_intro ?_]
   · exact Pr_false
   · rintro ⟨u, v, h, -⟩
-    simp only [FdevV, linkOutV, drawCalls_noCalls H D hc hs, List.append_nil, findColl, reduceCtorEq] at h
+    simp only [FdevV, linkOutV, drawCalls_noCalls H D hc hs, List.append_nil, findColl, ite_self, reduceCtorEq] at h
 
 theorem prBinnerV_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.Deploy Coin)
     (hc : ∀ x (r : Fin (D.V.k x) → Coin) ws, D.callsAt H x r ws = []) (hs : ∀ x ps, D.vstar x ps = []) (I : Recursion.Inner Coin W)

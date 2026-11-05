@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.ResSiteD
+module
+
+public import Proofs.Flock.Claims.Recursion.ResSiteD
 
 /-!
 # `ResLoweredPD` at the deployed constants (`resLowered_D`)
@@ -19,6 +21,8 @@ of its messages (`okRuns_deployRec`).
 decisions and collision (`PortsAtV`), `ReadsAt` and the base checks; the site facts are `resSite_of_dec`'s. Its steps
 are `ResLowerDA`'s.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.OpenLower
 

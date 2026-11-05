@@ -1,8 +1,12 @@
-import Proofs.Flock.Claims.Complete.ZkTables.RingSwitch
-import Proofs.Flock.Soundness.Discharge.Hidden.Spec
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Proofs.Flock.Soundness.Discharge.FailClosed.PublicTies
-import Proofs.Flock.Claims.Complete.Json.Parse
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.RingSwitch
+public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+public import Proofs.Flock.Soundness.Discharge.FailClosed.PublicTies
+public import Proofs.Flock.Claims.Complete.Json.Parse
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
 
 /-!
 # What the masked record needs of the statement, at one table
@@ -23,6 +27,10 @@ antecedent.
   decodes, is an object of exactly the keys it reads, each a string, a natural number, an array of them, or strata that
   decode (`good_stratified`, `good_subset`), so it is printable.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace FlockComplete.ZkTables
 

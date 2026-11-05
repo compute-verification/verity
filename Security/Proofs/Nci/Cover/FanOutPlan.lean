@@ -1,4 +1,6 @@
-import Definitions.Nci.Guarantees.CoverFanOut
+module
+
+public import Definitions.Nci.Guarantees.CoverFanOut
 
 /-!
 # The fan-out proof's plan: the statements of its pieces
@@ -9,6 +11,8 @@ variant. The cover bounds follow from the intensities by summing over a cover (`
 lemmas, not guarantees, stated here so that each is proved against a fixed statement: `walk`, `readSet_card_le`,
 `lookupCost` and `charge` in `FanOutWalk`, `rootCost` in `FanOutRootCost`.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.FanOutPlan
 

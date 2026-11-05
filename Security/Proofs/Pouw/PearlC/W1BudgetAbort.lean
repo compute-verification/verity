@@ -1,4 +1,6 @@
-import Definitions.Pouw.PearlC.W1
+module
+
+public import Definitions.Pouw.PearlC.W1
 
 /-!
 # W1 doesn't truncate
@@ -21,6 +23,8 @@ which no W1 program reads.
 Without the refund, W1's charge is fixed by the run's path and fetches, but its language still has no free abort: an
 `ite`'s continuation is shared by both branches, and moving it into them taints it. That case is open here.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.W1BudgetAbort
 

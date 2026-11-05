@@ -1,5 +1,9 @@
-import Proofs.Flock.Claims.Sampling.Select.Take
-import SampledProofs.Slots
+module
+
+public import Proofs.Flock.Claims.Sampling.Select.Take
+public import SampledProofs.Slots
+
+@[expose] public section
 
 open SampledProofs
 

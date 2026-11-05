@@ -1,8 +1,10 @@
-import Mathlib
-import Definitions.Core.Boolean
-import Definitions.Core.Interaction
-import Definitions.Claims.Hm96
-import Definitions.Claims.Json
+module
+
+public import Mathlib
+public import Definitions.Core.Boolean
+public import Definitions.Core.Interaction
+public import Definitions.Claims.Hm96
+public import Definitions.Claims.Json
 
 /-!
 # Claims: Flock's claim statements (frozen before any proof work)
@@ -72,6 +74,8 @@ here but `Flock.ZK`, and the shared forms of `Definitions/Core/Interaction.lean`
 `Flock.Guarantees.MaskedZK`, which states `Flock.ZK` at the deployed masked record: the lock records each one's text
 under `reads`, so a changed claim is a changed record.
 -/
+
+@[expose] public section
 
 namespace Claims
 
@@ -167,8 +171,8 @@ any number of stages the verifier evaluates, reading wires from earlier outputs,
 computes every slot from the leaves (`wiresAcyclic`); every row a `sha512/row/v1` row, or, with hidden outputs, every
 row a `sha512/row/v2` or `sha512/row-seg/v1` row; and no output port pinned (META `pinned_outputs`), which both row forms
 (`rowsV1`, `rowsV2OrSeg`) read. A templated statement (`templated`: its unit read from a template, the unit's fields
-those of the unit it unrolls to) only under `--zk`, with hidden outputs, without registered reads and at one table, its
-unit reading one input group and returning the outputs. -/
+those of the unit it unrolls to) only under `--zk`, with hidden outputs and at one table, its unit reading one input
+group and returning the outputs. -/
 def InScope (zk : Bool) (s : Stmt) : Prop :=
   (if zk then 25 else 22) ≤ s.m ∧ s.m ≤ 35 ∧ 6 ≤ s.kLog ∧ s.kLog ≤ min s.m 27 ∧
     s.form.hm96Rows ∧ ¬ s.form.typed ∧ s.form.retainedRounds ∧
@@ -178,7 +182,7 @@ def InScope (zk : Bool) (s : Stmt) : Prop :=
     ((s.form.unitInputGroups = 1 ∧ ¬ s.form.tail) ∨ (s.form.hiddenOutputs ∧ s.form.wiresAcyclic)) ∧
     s.form.unitLog ≤ 32 ∧ s.form.readsOnlyPortBits ∧
     (s.form.rowsV1 ∨ (s.form.hiddenOutputs ∧ s.form.rowsV2OrSeg)) ∧
-    (s.form.templated → zk ∧ s.form.hiddenOutputs ∧ ¬ s.form.registeredReads ∧ s.form.tables ≤ 1 ∧
+    (s.form.templated → zk ∧ s.form.hiddenOutputs ∧ s.form.tables ≤ 1 ∧
       s.form.unitInputGroups = 1 ∧ ¬ s.form.tail)
 
 /-- **The zero-filled word** of length `n`: at each position the first opened column there, zero where none was opened.

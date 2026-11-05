@@ -1,8 +1,10 @@
-import Definitions.Pous
-import Definitions.Pous.Assumptions
-import Proofs.Pous.Statements
-import Proofs.Pous.Sanity
-import Proofs.Pous.Accounting.Numbers
+module
+
+public import Definitions.Pous
+public import Definitions.Pous.Assumptions
+public import Proofs.Pous.Statements
+public import Proofs.Pous.Sanity
+public import Proofs.Pous.Accounting.Numbers
 
 /-!
 # N10's two core lemmas, on the trusted definitions of `Pous.Invertible`
@@ -16,6 +18,8 @@ not here.
 * `reverse_needs_all_children`: unfolding the trusted reverse rule, a reverse (decode) move on a lower node needs a
   pebble on every green child.
 -/
+
+@[expose] public section
 
 namespace PousInvertible
 
