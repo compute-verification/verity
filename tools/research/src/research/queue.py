@@ -2404,6 +2404,9 @@ class Queue:
                 i += 1
                 e = entries[n]
                 self._preflight_ahead.discard(n)
+                if why := self._stale_carry(e.pr, entries):
+                    refuse(n, why)
+                    continue
                 if blocked := [a for a in e.after if a in dropped]:
                     e.state, e.why = "waiting", f"contains {e.contains(blocked[0])}, which " + (
                         "waits for its preflight" if blocked[0] in unrun else "didn't merge")
@@ -2414,9 +2417,6 @@ class Queue:
                     waits[str(n)] = {"head": e.pr.head, "why": e.why, "handle": self.handle(e.pr)}
                     if state.get("waiting", {}).get(str(n), {}).get("head") != e.pr.head:
                         self.log(f"research queue: #{n} at {e.pr.head[:8]} waits off `{self.branch}`: {e.why}")
-                    continue
-                if why := self._stale_carry(e.pr, entries):
-                    refuse(n, why)
                     continue
                 if e.pr.move:
                     commit, why = self._regenerate(tip, e.pr, main)
