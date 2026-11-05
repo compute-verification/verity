@@ -65,7 +65,30 @@ theorem constsOfP_empty (c : Flock.Circuit) (hU : FlockSoundness.Built c.unit) (
   rw [FlockSoundness.Discharge.Layout.keyPubOf_empty]
   cases constsOf c hU n g <;> rfl
 
+/-- **The constants at a gate's index**: the constant at gate 0, the zero at gate 1. -/
+theorem constsOf_eq_ite (c : Flock.Circuit) (hU : FlockSoundness.Built c.unit) (n : ℕ)
+    (g : Fin (FlockSoundness.Discharge.Layout.keyN c hU n)) :
+    constsOf c hU n g = if g.val = 0 then some true else if g.val = 1 then some false else none := by
+  have e1 : (FlockSoundness.Discharge.Layout.oneG (c := c) (hU := hU) (n := n)).val = 0 := rfl
+  have e0 : (FlockSoundness.Discharge.Layout.zeroG (c := c) (hU := hU) (n := n)).val = 1 := rfl
+  unfold constsOf
+  first
+  | (simp only [Fin.ext_iff, e1, e0]; done)
+  | (by_cases h1 : g.val = 0 <;> by_cases h0 : g.val = 1 <;> simp [Fin.ext_iff, e1, e0, h1, h0])
+
 end Flock.Bridge
+
+namespace Verity
+
+/-- **A parse's constants at a gate's index**: the constant at gate 0, the zero at gate 1. -/
+theorem parsedConsts_some (r : Flock.Bridge.Parsed) (g : Fin (Flock.Bridge.Parsed.circuit (some r)).N) :
+    parsedConsts (some r) g = if g.val = 0 then some true else if g.val = 1 then some false else none := by
+  first
+  | rfl
+  | (simp only [parsedConsts]; rfl)
+  | simp [parsedConsts, FlockSoundness.Discharge.Placed.oneGate, FlockSoundness.Discharge.Placed.zeroGate]
+
+end Verity
 
 namespace Verity.Sampled
 
@@ -95,12 +118,12 @@ theorem unbound_subset_of_parsed {o : Option Flock.Bridge.Parsed} {r : Flock.Bri
           ∀ v : BitVec ((Flock.Bridge.Parsed.circuit o).w g), v.getLsbD 0 = b → op g v)
     (hconst : ∀ g b, Verity.parsedConsts o g = some b → ∀ v : BitVec ((Flock.Bridge.Parsed.circuit o).w g),
       (∀ i : Fin ((Flock.Bridge.Parsed.circuit o).w g), v.getLsbD i.val = b) → op g v)
-    (X : (Flock.Bridge.Parsed.circuit o).Transcript) (hX : HEq X (Flock.Bridge.transcriptOf r.D r.hU r.n κ₀ val)) :
-    (Accounting.unbound (Flock.Bridge.Parsed.parts o) op X).image Fin.val ⊆ F := by
+    (tr : (Flock.Bridge.Parsed.circuit o).Transcript) (htr : HEq tr (Flock.Bridge.transcriptOf r.D r.hU r.n κ₀ val)) :
+    (Accounting.unbound (Flock.Bridge.Parsed.parts o) op tr).image Fin.val ⊆ F := by
   subst ho hC
   obtain rfl := eq_of_heq hP
   obtain rfl := eq_of_heq hκ
-  obtain rfl := eq_of_heq hX
+  obtain rfl := eq_of_heq htr
   refine hgame op (fun g b hk => hconst g b ((hcon g).trans hk) (BitVec.ofBool b) fun i => ?_)
     fun g b hk hv => ?_
   · obtain ⟨i, hi⟩ := i
@@ -144,11 +167,8 @@ theorem P_heq : HEq (Flock.Bridge.keyPartition A.D A.hU A.n) A.P := by
 input ports. -/
 theorem consts_eq (g : Fin A.Cc.N) : Verity.parsedConsts (some ⟨A.D, A.hU, A.n⟩) g = A.κ g := by
   show _ = Flock.Bridge.constsOfP A.D.unroll A.hU A.n {} A.pub g
-  rw [Flock.Bridge.constsOfP_empty]
-  unfold Verity.parsedConsts Flock.Bridge.constsOf
-  simp only [Fin.ext_iff, FlockSoundness.Discharge.Layout.oneG, FlockSoundness.Discharge.Layout.zeroG,
-    FlockSoundness.Discharge.Placed.oneGate, FlockSoundness.Discharge.Placed.zeroGate, Fin.castLE]
-  all_goals (split_ifs <;> first | rfl | omega)
+  exact (Verity.parsedConsts_some _ g).trans ((Flock.Bridge.constsOf_eq_ite A.D.unroll A.hU A.n g).symm.trans
+    (Flock.Bridge.constsOfP_empty A.D.unroll A.hU A.n A.pub g).symm)
 
 /-- **The session's constants fix only inputs.** -/
 theorem κ_isInput (g : Fin A.Cc.N) (b : Bool) (h : A.κ g = some b) : (A.Cc.op g).isInput = true :=
