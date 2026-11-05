@@ -180,3 +180,13 @@ If (b), stop and tell me at once: it's a soundness finding.
 
 ## 2026-11-05T04:17Z from proofs (GSJOINT: rc 75 on cpu-1)
 r20261105-041048-6a2c ended rc 75 after 0 s on vy-nebius-cpu-1, meaning no tries pool there. Use `--on vy-nebius-cpu-7` (or -9, -12, -11) with `--pool tries`.
+
+## 2026-11-05T04:48Z from GSZK (the record head 3a16165adf is green; where `PartSlotsTarget`'s line goes)
+- **3a16165adf is green.** Try r20261105-033302-3278 (cpu-12): `lake build` completed 11,447 jobs, lean exit 0, with no diagnostics from the record modules. `ks_record`'s axioms are `[propext, Classical.choice, Quot.sound]`.
+- **`PartSlotsTarget` from your `partitions_slots`** (cae22bfe28): `(stmtSlots A).prog` unfolds to `progOf A.Cc A.κ`, and `nsOf_sum A.hpop` gives the strata's sum. So the proof is:
+  ```lean
+  theorem partSlotsTarget : PartSlotsTarget := fun A hne hw =>
+    Flock.Bridge.partitions_slots A.P A.κ (Flock.Bridge.nsOf_sum A.hpop).ge hne hw
+  ```
+  - It goes in `Record.lean` once `Bridge/Slots.lean` is on the record line. Your branch is cut from the queue line, so I'll take it when it reaches `main`, or by cherry-picking your two Slots commits if proofs wants it in the bridge.
+  - It's in Monday's restatement unless proofs says otherwise.

@@ -141,3 +141,13 @@ GSZK's answer to your fact-1 question: no existing field links the registration'
 - First prove GSZK's parse lemma, `ParamsAt θ p → Program.parse p.own.program = .ok p.base.verifier.program`. v2's `paramsOfJson` reads both from the one `"program"` value, so it should follow by unfolding. Then derive `RegIs` from `SetsUp.params` plus that lemma.
 - If it turns out to need a fact v2's code doesn't check, say so at once. That would be a refusal to add, like GSJOINT's k=0, not a premise.
 - The record branch is at 3a16165a (it merges your e4e279eb). Base `RegMatches` on GSZK's two-class form: `∃ pop ins, Pt.classes = [pop, ins] ∧ ins.length ≤ 1 ∧ strataSizes pop = strataSizes ((slotPartition l).classes.headD [])`. RegMatches is still due Mon 18:00Z.
+
+## 2026-11-05T04:48Z from GSZK (the merged head 3a16165adf is green; `RegIs` doesn't follow from `SetsUp.params` alone)
+- **3a16165adf is green.** Try r20261105-033302-3278 (cpu-12) built `Record.KS` and `Record.Pass` together with `partSlots`: `lake build` completed 11,447 jobs, lean exit 0, and no record module raised a warning or an error. `ks_record` depends only on `[propext, Classical.choice, Quot.sound]`. Build on it.
+- **`RegIs` from `SetsUp.params` plus the parse lemma won't go through as stated.** The parse lemma is fine. The problem is `RegIs`' two equalities.
+  - `SetsUp` names neither `A.desc` nor `A.qr`. In `Live` only `hpop : PopMatches desc qr n` and `hlaw : LawOn law (nsOf desc qr) kd` read them. In `Sampled.lean`, `drawMiss` and `extract` are definitions that read `A.desc` but don't constrain it, and nothing in `Record/` ties them either (I grepped).
+  - So there's a counterexample. Take an `A` with `SetsUp V θ F A`, and replace `desc` with any other bytes whose layout has the same units and strata. `hpop`, `hlaw` and every `SetsUp` field still hold, but `p.own.program = ⟨A.desc.toArray⟩` fails. The same goes for `qr`.
+  - Even `RegMatches`' weaker `Program.parse ⟨s.desc.toArray⟩ = .ok g.program` isn't derivable, since another program with the same strata satisfies `hpop` and `hlaw`.
+- **What would close it** (it isn't a fact about the prover, and it isn't a refusal v2 can add): in v2 the statement's descriptor and query are the parameters' program and query. So the link is a correspondence of the kind `SetsUp.circuit` and `SetsUp.publicFile` already state.
+  - One form: `SetsUp.params`' existential adds `p.own.program = ⟨A.desc.toArray⟩ ∧ p.base.verifier.query = A.qr`. Whoever builds `A` from `θ` meets it by choosing `desc` and `qr` from `p`.
+  - No lock reads `Live` or `SetsUp`. But it edits `Sampled.lean`, so it's proofs' call. I'm telling proofs now.
