@@ -24,7 +24,7 @@ the code side's.
    topologically ordered program is the glossary's form on the boundary trace (`FaultyBoundary`). At a check on each
    proof block (`BlockCheck`), a protocol's in place of correctness (`correctOk`), the incorrect set (`incorrectBy`)
    holds the units no interior makes pass it, and `RBy` is the relation at that set; at `correctOk` they are `faulty`
-   and `R`.
+   and `R`. `inputOk` passes every input block and holds every other to `correctOk`, so an input counts at its readers.
 4. **Scope** (`Scope`, `InScope`, `ScopeMatches`): a statement that parses, whose query evaluates; a topologically
    ordered program; a partition of all its gates but constants and unread inputs into proof units, each a set of gates
    whose committed values fit its public size class, `|out(u)| ≤ w_{c(u)}` (`unitClasses`: powers of two from 16 to
@@ -384,6 +384,17 @@ abbrev BlockCheck := AuditStatement → List ℕ → (ℕ → Option Bool) → (
 
 /-- **The proof block is correct** on `ref_ι` (`Prog.Correct`), the check `Faulty` reads. -/
 def correctOk : BlockCheck := fun s u val ι => s.prog.Correct (s.prog.refIn u val ι) u
+
+/-- **An input block** of `C`: a proof block that is one input gate, as the deployed verifier lays each input gate
+after the population. -/
+def Prog.InputBlock (C : Prog) (u : List ℕ) : Prop := ∃ g, u = [g] ∧ C.gates[g]? = some .input
+
+/-- **The check that charges an input at its readers**: an input block passes, and every other proof block is correct
+(`correctOk`). An input row is opened only through a drawn unit that reads it, so an input's check is its consistency
+with the commitment at each drawn unit that reads it, which is that reader's own: `Prog.Correct` asks every value a
+proof block reads from outside it to be opened under the statement's roots (`val`), and its committed outputs computed
+from those values. An input no drawn unit reads imposes nothing, and an input's harm counts at its readers' footprint. -/
+def inputOk : BlockCheck := fun s u val ι => s.prog.InputBlock u ∨ correctOk s u val ι
 
 /-- **An incorrect unit at the check `Ok`**, at slot `v` of `P` under `w`: its proof block passes `Ok` at no interior
 values, on the committed values `w` opens. At `correctOk` it is `Faulty`. -/

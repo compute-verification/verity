@@ -445,6 +445,37 @@ omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] [Zero Col] in
 theorem sessionOpensBy_correctOk (H : Msg → Msg) (D : Deploy Coin Col T) (iroots : Msg → Seen → ℕ → List Msg) :
     SessionOpensBy H D iroots correctOk ↔ SessionOpens H D iroots := Iff.rfl
 
+omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] [Zero Col] in
+/-- **A checked unit's Flock witness makes it pass `inputOk`** where `SessionOpens` holds at every checked slot whose
+proof block is not an input block: an input block passes `inputOk` with nothing revealed. -/
+theorem sessionOpensBy_inputOk (H : Msg → Msg) (D : Deploy Coin Col T) (iroots : Msg → Seen → ℕ → List Msg)
+    (h : ∀ x s Pt (Ω : Type) (P : Prover Ω) ω r u xS vS wF,
+      D.parse x = some s → D.partition s = some Pt → InScope Pt s →
+      (run H P D.V x ω r).out = .acc → (∃ p : Fin (nPU D x), (D.checked x r)[p.val]? = some u) →
+      D.session x u (run H P D.V x ω r).seen = some (xS, vS) → Flock.check D.flock.parse xS wF = true →
+      ∃ b, Pt.blocks[u]? = some b ∧ (¬ s.prog.InputBlock b →
+        ∀ (val : ℕ → Option Bool) (ι : ℕ → Bool),
+          (∀ q ∈ D.reveal s u (run H P D.V x ω r).seen wF, D.commit.Opens H q.1 q.2 = true →
+            (q.1 = s.roots → val q.2.pos = some q.2.val) ∧
+            (q.1 = iroots x (run H P D.V x ω r).seen u → ι q.2.pos = q.2.val)) →
+          s.prog.Correct (s.prog.refIn b val ι) b)) :
+    SessionOpensBy H D iroots inputOk := by
+  intro x s Pt Ω P ω r u xS vS wF hx hp hsc hacc hu hs hw
+  obtain ⟨b, hb, hc⟩ := h x s Pt Ω P ω r u xS vS wF hx hp hsc hacc hu hs hw
+  refine ⟨b, hb, fun val ι hq => ?_⟩
+  by_cases hin : s.prog.InputBlock b
+  · exact .inl hin
+  · exact .inr (hc hin val ι hq)
+
+omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] [Zero Col] in
+/-- **`SessionOpensBy` is monotone in the check**: where every proof block passing `Ok` passes `Ok'`. -/
+theorem sessionOpensBy_mono {H : Msg → Msg} {D : Deploy Coin Col T} {iroots : Msg → Seen → ℕ → List Msg}
+    {Ok Ok' : BlockCheck} (hOk : ∀ s u val ι, Ok s u val ι → Ok' s u val ι) (h : SessionOpensBy H D iroots Ok) :
+    SessionOpensBy H D iroots Ok' := by
+  intro x s Pt Ω P ω r u xS vS wF hx hp hsc hacc hu hs hw
+  obtain ⟨b, hb, hc⟩ := h x s Pt Ω P ω r u xS vS wF hx hp hsc hacc hu hs hw
+  exact ⟨b, hb, fun val ι hq => hOk _ _ _ _ (hc val ι hq)⟩
+
 /-! ### Sessions that cover several checked units -/
 
 /-- **The slots' sessions are every checked unit's**: at coins `r`, every checked unit has the rounds and the session of
