@@ -1,5 +1,6 @@
 import Properties.NetworkPeriod
 import Properties.NetworkPeriod.Placed
+import Proofs.Properties.NetworkPeriod.PhaseSum
 import Proofs.Properties.NetworkScan
 import Proofs.Flock.Claims.Sampling.Count
 import Proofs.NetworkCertifier.SampledCharge
