@@ -786,18 +786,31 @@ theorem tileKeepsTheCap_honest :
 on which the inert-work replay refuses, so neither its words' flags nor its forming elements are replayed for its
 credited cell. -/
 theorem tileKeepsTheCap_nontrivial :
-    ∀ (words : List (List (Array Bool × Nat))) (elems : List Nat),
-      ¬ ((capRecord.credited [0] [0]).1.mapM (fun i => (capRecord.credited [0] [0]).2.mapM fun j =>
-          Rule.wordFlags shortOps.a.codes[[0].idxOf i]! shortOps.b.codes[[0].idxOf j]!) = .ok words ∧
-        ((capRecord.credited [0] [0]).1.zip words).mapM (fun (iw : Nat × List (Array Bool × Nat)) =>
+    ¬ TileKeepsTheCap.match_1 (motive := fun _ => Prop) (capRecord.credited [0] [0]) fun cr cc =>
+      cr ≠ [] → cc ≠ [] →
+      ∃ (words : List (List (Array Bool × Nat))) (elems : List Nat),
+        cr.mapM (fun i => cc.mapM fun j => Rule.wordFlags shortOps.a.codes[[0].idxOf i]! shortOps.b.codes[[0].idxOf j]!) =
+          .ok words ∧
+        (cr.zip words).mapM (fun (iw : Nat × List (Array Bool × Nat)) =>
           Rule.rowElements shortOps.a.alpha[[0].idxOf iw.1]! shortOps.a.beta[[0].idxOf iw.1]!
-            shortOps.a.x[[0].idxOf iw.1]! (iw.2.map Prod.fst)) = .ok elems) := by
-  intro words _ ⟨h, _⟩
-  have : ((capRecord.credited [0] [0]).1.mapM (fun i => (capRecord.credited [0] [0]).2.mapM fun j =>
-      Rule.wordFlags shortOps.a.codes[[0].idxOf i]! shortOps.b.codes[[0].idxOf j]!)).toOption = none := by
-    decide +kernel
-  rw [h] at this
-  cases this
+            shortOps.a.x[[0].idxOf iw.1]! (iw.2.map Prod.fst)) = .ok elems ∧
+        let credit := creditOf 1 capRecord.kKept capRecord.matmul.n
+        let rowDebit := (words.zip elems).map fun (we : List (Array Bool × Nat) × Nat) =>
+          Rule.debitUnits capRecord.matmul.n cc.length (we.1.foldl (fun t w => t + (w.1.filter id).size) 0)
+            (we.1.foldl (fun t w => t + w.2) 0) we.2
+        rowDebit.foldl (· + ·) 0 * Rule.CAP_DEN ≤ Rule.CAP_NUM * credit * cr.length * cc.length ∧
+        ∀ d ∈ rowDebit, d * Rule.CAP_DEN ≤
+          Rule.CAP_NUM * credit * cc.length * (if capScheme.censusKs.contains capRecord.matmul.k then 4 else 1) := by
+  intro h
+  obtain ⟨words, _, hw, -⟩ := h (by decide) (by decide)
+  have refused : ∀ e : Except String (List (List (Array Bool × Nat))), e = .ok words → e.toOption = none → False := by
+    rintro e rfl h
+    cases h
+  exact refused _ hw (by decide +kernel)
+
+-- The statement above is `TileKeepsTheCap`'s conclusion at `shortOps`'s tile as written: the kernel checks it here.
+example (h : TileKeepsTheCap) (hc : Rule.checkOpened capScheme capRecord [0] [0] shortOps = none) : False :=
+  tileKeepsTheCap_nontrivial (h capScheme capRecord [0] [0] shortOps hc)
 
 
 /-! ## A drawn tile: `AcceptMeans` and `WorkIsTheCredit` at a test instance
