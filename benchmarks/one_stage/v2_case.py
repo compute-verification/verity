@@ -82,7 +82,8 @@ def case(window: Path, scratch: Path) -> tuple[dict, str, int]:
     if not circuit.is_file():
         got, how = rebuild(c, scratch)
         circuit = got or circuit
-    v2 = a5.case_v2(v1, names, proof=PF.Proof(circuit, pub, sessions), circuit=c["pin"], registered=None, tables=[])
+    v2 = a5.case_v2(v1, names, proof=PF.Proof(circuit, pub, sessions), circuit=c["pin"],
+                     public=PF.file_sha512(pub), registered=None, tables=[])
     return v2, how, len(sessions)
 
 

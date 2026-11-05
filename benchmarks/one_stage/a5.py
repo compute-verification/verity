@@ -734,7 +734,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         publics[m.key] = body(st_dir / f"pub-{m.n}.bin")
         members.append({"k": k, "m": m, "defn": defn, "header": header, "circuit": circuit, "circ": circ, "read": read,
                         "st": {"dir": st_dir, "meta": meta, "pin": made["pin"], "partition_file": out / "partition.json",
-                               "program_file": out / "program.json"},
+                               "program_file": out / "program.json",
+                               "public": a0.sha512_file(st_dir / f"pub-{m.n}.bin")},
                         "compose_s": compose_s, "pin": made["pin"], "class": made.get("class_sha512")})
     summary["staging"] = {"before_draw_s": round(time.time() - t_stage, 1), "public_files": len(members)}
     leaf_layer = CS.leaf_layer(publics)
@@ -1052,19 +1053,22 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
         (out / "case-v2-error.txt").write_text(f"{type(x).__name__}: {x}\n")
 
 
-def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, registered: dict | None,
+def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public: str, registered: dict | None,
             tables: Sequence[Path], interface: Path | None = None) -> dict:
-    """v1's ``case`` as `SampledProofs.OneStageZk` reads it: the params with ``proofs`` (the auditor's circuit digest,
-    the verifier's registered file and, given `interface`, the window's registered circuit record's SHA-512, its file a
-    blob), the evidence with its ``verdicts`` replaced by the proofs' files (`proofs.evidence_v2`, under the evidence's
-    ``sessions``), and ``blobs``, the paths of the files those name and of the pinned lookup tables, which onsite reads
-    after the evidence (`compose.onsite_check`)."""
+    """v1's ``case`` as `SampledProofs.OneStageZk` reads it: the params with ``proofs`` (the auditor's circuit digest, the
+    public file's, taken when it was staged before the draw, the verifier's registered file and, given `interface`, the
+    window's registered circuit record's SHA-512, its file a blob), the evidence with its ``verdicts`` replaced by the
+    proofs' files (`proofs.evidence_v2`, under the evidence's ``sessions``), and ``blobs``, the paths of the files those
+    name and of the pinned lookup tables, which onsite reads after the evidence (`compose.onsite_check`). v2 holds the
+    public file's header to the registration (`registration.matches_public`), so it refuses a windowed registration,
+    whose ports are its members' (``<member>/<port>``)."""
     import replay as RP
     from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
     pr, blobs = PF.evidence_v2(proof, sessions)
     evidence = {k: v for k, v in json.loads(bytes.fromhex(case["evidence"])).items() if k != "verdicts"} | {"proofs": pr}
-    own = {"circuit": circuit, "registered": registered} | ({"interface": PF.file_sha512(interface)} if interface else {})
+    own = {"circuit": circuit, "public": public, "registered": registered} | (
+        {"interface": PF.file_sha512(interface)} if interface else {})
     return {"blobs": [str(b) for b in (*blobs, *tables, *([interface] if interface else []))], "commitment": case["commitment"],
             "evidence": RP.DT.canonical(evidence).encode().hex(), "params": {**case["params"], "proofs": own}}
 
@@ -1089,21 +1093,21 @@ def case_with_form(case: dict, form: str = "one-stage") -> dict:
 
 def v2_proof(done: Sequence[dict], zk: bool) -> dict | str:
     """`case_v2`'s files from the drawn members' sessions (`member_checks`'s), or why the audit has no v2 case: v2 verifies
-    one table's `--zk` sessions on its circuit and public file."""
+    one table's one `--zk` session on its circuit and public file."""
     from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
     if not zk:
         return "v2 verifies --zk sessions; this audit's are plain"
     if len(done) != 1:
-        return f"v2 verifies one table's sessions on its circuit and public file; this audit drew {len(done)} members"
+        return f"v2 verifies one table's session on its circuit and public file; this audit drew {len(done)} members"
     mm, sdir = done[0]["mm"], done[0]["sdir"]
     st, n = mm["st"], mm["m"].n
     tables = sorted(f for f in (st["dir"] / "tables").glob("*") if f.is_file()) if (st["dir"] / "tables").is_dir() else []
     reads = st.get("registered_file")
     return {"proof": PF.Proof(st["dir"] / "circuit.txt", st["dir"] / f"pub-{n}.bin",
                               tuple(f.parent for f in sorted((sdir / "sessions").glob("*/session.json")))),
-            "circuit": mm["pin"], "registered": json.loads(reads.read_text()) if reads else None, "tables": tables,
-            "interface": st.get("interface_file") if reads else None}
+            "circuit": mm["pin"], "public": st["public"], "registered": json.loads(reads.read_text()) if reads else None,
+            "tables": tables, "interface": st.get("interface_file") if reads else None}
 
 
 def streamed(a: argparse.Namespace) -> bool:

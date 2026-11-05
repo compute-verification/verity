@@ -69,10 +69,10 @@ structure Lowering (P : Prog) (gatesOf : String → Option ℕ) (D : Verity.Circ
      else (∀ b ∈ L g, D.isInput b = false) ∧ gatesOf (P.defs[p]!).key = some (L g).card) ∧
     ∀ b ∈ L g, ∀ a ∈ D.reads b, a ∈ L g ∨ ∃ o ∈ ops, a ∈ out o
 
-/-- When the count `out` on `j` has `complies` `true`, every Boolean declaration that lowers the Program by the instance's
+/-- When the count `out` on `j` has `complies` `true`, every Boolean registered circuit that lowers the Program by the instance's
 gate table, with θ the bits of θ's root nodes, has at most `n` `(c, k)`-inference blocks. -/
 def CountWitnessed (j out : Json) : Prop :=
-  ∀ (i : Count.Instance) (P : Prog) (d : Verity.Declaration) (lw : Lowering P i.gatesOf d.D),
+  ∀ (i : Count.Instance) (P : Prog) (d : Verity.RegisteredCircuit) (lw : Lowering P i.gatesOf d.D),
     CountParses j i → Flock.Program.decode i.program.toUTF8 = .ok P → d.D.Boolean →
     (∀ b, b ∈ d.θ ↔ ∃ g, b ∈ lw.L g ∧ InTheta P i.theta g) →
     out.getObjVal? "complies" = .ok (.bool true) → Nci.CompliesAtMost i.c i.k i.n d
