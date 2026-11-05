@@ -24,9 +24,10 @@ accepts, at most the profile's count of proof blocks are incorrect. Its top stat
 `Flock.Guarantees.SampledKSLiveV3`, stated in `Security/Proofs/Flock/Bridge/Refused.lean` and proved in
 `Security/Proofs/Flock/Bridge/KSLive.lean`, and it bounds the probability
 that `flock-verify --zk` accepts the files and the run passes the registration's population while the claim fails. It
-and the V5 guarantees cover sessions of non-templated statements only: knowledge soundness for a templated statement
-(`Flock.Tags.templated`), whose acceptance `flock_verify_sound` covers, is open until the V5 guarantees are restated
-over the statement circuit. It rests on these named assumptions:
+covers sessions of non-templated statements, as `Flock.Desc.parse` reads a flat file. The V5 guarantees
+(`Bridge.SampledKSLiveV5` and those behind it) read the file through `Flock.Desc.parseStmt`, so they also cover templated
+statements (`Flock.Tags.templated`, whose acceptance `flock_verify_sound` covers), at the circuit `HmOut.unrolled`
+builds. The top statement rests on these named assumptions:
 
 - `UniformRandomBytes`: the bytes the verifier's draw reads from its operating system are uniform (the CSPRNG
   idealized; its docstring says what that leaves out).
@@ -109,10 +110,9 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   (`Extraction`) and composition (`Circuit`); `Audit/Flock*.lean` instantiate them for C-Flock. The challenger's coins are
   the named assumption `Assumptions.UniformRandomBytes`.
 - **The executable draw** is the Lean verifier's `verity/core/service/flock/Flock/Draw.lean` (`flock-verify draw`): the
-  samplers, the strata and sizes, the draw object and its checks U1 to U3, specified in
-  `verity/ml/flock/verifier/PROTOCOL.md` §7.3. Soundness's `ExecDraw.lean`, `ExecStratified.lean` and `ExecDrawOS.lean`
-  prove that its draws accept incorrect proof blocks no more often than the modelled sampling designs do, and
-  `Audit/FlockWork.lean` that its sizes are the model's.
+  samplers, the strata and sizes, the draw object and its checks U1 to U3. Soundness's `ExecDraw.lean`,
+  `ExecStratified.lean` and `ExecDrawOS.lean` prove that its draws accept incorrect proof blocks no more often than the
+  modelled sampling designs do, and `Audit/FlockWork.lean` that its sizes are the model's.
 - **The verifier.** `one_stage.verifier` runs the Lean port of the one-stage audit (the Lake package
   `verity/core/service/sampled_proofs`, its `sampled-proofs-verifier`) and the Python beside it on every check: R1-R7
   (`check`), `matches_public`, the challenger's draw (`select`), `check_draw`, `check_proved`, the whole audit record
@@ -294,8 +294,9 @@ It then writes a receipt (`receipt`, `verity/registration-receipt/v1`), and only
 file to the record (`matches_public`), which `FailClosed.flock_verify_public_ties` ties to the proved rows. The Lean
 verifier runs the same check (`SampledProofs.Registration.check`), and `Properties.SampledProofs.R1` to `R7`
 state what it accepts. `verity/core/service/sampled_proofs/tests/test_difftest.py` holds the Python to the Lean. The
-challenger's `service.Registration` is a record it accepted, with its receipt and its position in the stream. The
-format, each check's codes and the window domains (`window_domain`) are in `one_stage.registration`'s docstring.
+challenger's `service.WindowCommitmentRecord` is a record it admitted, with its receipt and its position in the
+stream. The format, each check's codes and the window domains (`window_domain`) are in `one_stage.registration`'s
+docstring.
 
 Pinned by `tests/test_one_stage.py`, and the window domain also by `integrations/vllm/tests/commit/test_serving_rows.py`.
 
@@ -324,7 +325,7 @@ A program's weights, constants and tables are values: committed once, under hidi
   (`verity/core/protocols/pouw/tests/test_pouw_supplied_inputs.py`).
 - **Reads.** The verifier derives every proof block's reads from its own program (`reads`). C-Flock's Lean verifier
   checks each registered port's rows, paths and positions against the `--registered` file the verifier writes
-  (`reads_file`; `verity/ml/flock/verifier/PROTOCOL.md` §16.10).
+  (`reads_file`; `Flock.Registered`, `Flock.TemplateQuery`).
 - **Served trees.** A served path registers each tree a proof block reads as a registered value. `served.register_served`
   returns a `ServedRegistration`: the record's entries, R7's copies and the `--registered` file. That registration is the
   premise `RowsSession.ServedRegistered` of `Flock.Guarantees.ServedRowsLinked`.
@@ -458,7 +459,7 @@ Pinned by `tests/test_consumers.py` and `tests/fixtures/exfiltration_lean.json`,
 - **The draw.** `register` logs the record and its receipt, and `select` draws once from the challenger's coins as the
   Lean verifier's `Flock.Draw.drawWith` does, with no derivation, held to `draw.check_draw`.
 - **Sessions over several rounds** (`Stream(rounds=R)`, `Stream.session`), which C-Flock's verifier refuses
-  (`verity/ml/flock/verifier/PROTOCOL.md` §16.12).
+  (`Flock.ProvedScope`, `Draw.tablesWhy`).
 - **The salt and the registration deadline**: one salt an epoch, and a late registration ends the epoch. This is PoUW's
   `Pouw.AcceptsBy` (`Security/Definitions/Pouw/Game/Deadline.lean`).
 - **The stream's rules** (budget, open registrations, salt, deadlines, once-only steps), decided op by op by the verifier

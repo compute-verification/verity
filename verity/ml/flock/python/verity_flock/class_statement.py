@@ -201,7 +201,7 @@ def _packs(packed: bool | Sequence[bool], groups: list[list[int]]) -> list[bool]
 @dataclass
 class Wiring:
     """A class statement of a template-instance partition (`Q_template_instance(s)` v0, the class one template's instances) whose
-    units may read other units' outputs (PROTOCOL.md §16.13, Linking): the program, the query, and each staged instance's unit
+    units may read other units' outputs (`HmOut`, Linking): the program, the query, and each staged instance's unit
     (ascending). Each such read is a link port: the reader's row of exactly the writer's output row's words (`link_ports`),
     committed under the writer's output row's salt, so the two rows' ``b || c`` are equal and the verifiers compare them
     (`link_triples`). This binds a public topology; it does not hide the topology: the verifiers derive the wiring from

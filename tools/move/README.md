@@ -25,7 +25,9 @@ exclude = ["archive/**", "**/CHANGELOG.md"]
 ~~~
 
 The docstrings give the full format: `[roots]`, `[modules]`, `[split]` and `[rewrite]` for `layout.py`, `[[words_in]]`,
-`[keep]` and `[keep_in]` for `rename.py`.
+`[keep]`, `[keep_in]` and `scope` for `rename.py`. A word map with `scope = "prose"` renames words only where they stand in
+prose (comments, docstrings, Markdown's text), so its move moves no path and leaves every lock and pin as it was;
+`move_check.py` judges that move by the map its commit's `Move:` line names (`Terms`).
 
 A map lives only as long as its move. `move_check.py` reads the word maps in this directory at a move's base, so a word map
 lands just before its move and is deleted once the move has landed; git keeps it in the commits that ran it. The toy tests

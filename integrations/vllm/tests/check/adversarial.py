@@ -129,7 +129,7 @@ def layer_of(hint: str) -> int | None:
 
 @composite("AdvGemmHalfTiled", 1, ["K", "N", "BAD"],
            lambda S: ((("x", Array(S.K, BF16)), ("w", Array(S.N, Array(S.K, BF16)))), Array(S.N, BF16)),
-           conformance="adversarial: NOT a registered semantics")
+           conformance="not-yet-established: adversarial, NOT a registered semantics")
 def AdvGemmHalfTiled(B, S, x, w):
     """Mutation 7/9/10: `x @ W^T` whose FIRST half of the outputs is a batch of `GemmCoordinate` (admissible child units)
     and whose SECOND half is computed through an interior value `t` (`x + x` when BAD=1, `x + 0` when BAD=0), so no
@@ -144,7 +144,7 @@ def AdvGemmHalfTiled(B, S, x, w):
 
 @composite("AdvGemmZeroMass", 1, ["K", "N"],
            lambda S: ((("x", Array(S.K, BF16)), ("w", Array(S.N, Array(S.K, BF16)))), Array(S.N, BF16)),
-           conformance="adversarial: NOT a registered semantics")
+           conformance="not-yet-established: adversarial, NOT a registered semantics")
 def AdvGemmZeroMass(B, S, x, w):
     """Mutation 8: every output coordinate is computed from an interior value, so an oversize instance has NO
     admissible child unit (zero mass)."""
@@ -156,7 +156,7 @@ BAKED: dict[int, tuple[int, ...]] = {}       # TAG -> the observed output words 
 
 
 @composite("AdvBakedOutput", 1, ["N", "TAG"], lambda S: ((("x", Array(S.N, BF16)),), Array(S.N, BF16)),
-           conformance="adversarial: NOT a registered semantics")
+           conformance="not-yet-established: adversarial, NOT a registered semantics")
 def AdvBakedOutput(B, S, x):
     """Mutation 6b: a body that ignores its operand and returns constants — the bytes the runtime was observed to
     produce (one specialization per instance via TAG, so every instance is its own stratum and tier a evaluates it)."""

@@ -1920,6 +1920,50 @@ def test_a_bound_hidden_in_an_excepted_module_holds_its_guarantee_to_exclusion_w
     assert witnessing(False) == [] and witnessing(True) == [] and lock()["unwitnessed"] == entry
 
 
+CAPPED = ("theorem capped : Guarantees.Capped := by\n  unfold Guarantees.Capped Bound\n  intro n\n  omega\n"
+          "theorem capped_honest : Bound (min 2 3) 5 ∧ double 1 = 2 := ⟨by unfold Bound; omega, rfl⟩\n"
+          "theorem capped_nontrivial : ¬ Bound (min 4 3) 2 := by unfold Bound; omega\n"
+          "theorem bounded_honest : Fits 3 ∧ double 1 = 2 := ⟨by unfold Fits; omega, rfl⟩\n"
+          "theorem bounded_nontrivial : ¬ Bound 6 5 := by unfold Bound; omega\n")
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_premise_free_exclusion_bound_is_witnessed_by_a_tighter_bound_failing_at_an_explicit_circuit(tmp_path):
+    """On a real build: `Control.capped : Guarantees.Capped`, `∀ n, Bound (min n 3) 5`, takes no premise (as training's
+    `ServingBlocks.UncertifiedElementary` takes none), so its nontrivial witness is the bare `¬ Bound (min 4 3) 2`: a
+    tighter bound fails at an explicit circuit. `Control.bounded`, which takes `Fits n`, still fails with a bare
+    `¬ Bound 6 5`, which drops no premise. A rule that asked every exclusion theorem to drop a premise failed `capped`'s
+    witness too, whatever it stated."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    (pkg / "Control" / "Partition.lean").write_text(PARTITION.replace(
+        "end Guarantees", "def Capped : Prop := ∀ n : Nat, Bound (min n 3) 5\nend Guarantees"))
+    thms = pkg / "Control" / "Thms.lean"
+    thms.write_text("import Control.Partition\n" + thms.read_text().replace("end Control", f"{BOUNDED}{CAPPED}\nend Control"))
+    pol = A.load(pkg)
+    names = [f"Control.{g}{s}" for g in ("capped", "bounded") for s in ("", "_honest", "_nontrivial")]
+    A.dump(pkg, pol | {"trees": pol["trees"] | {"definitions": [*pol["trees"]["definitions"], "Control.Partition"]},
+                       "layers": pol["layers"] | {"Control.Partition": {"imports": [], "why": "the bound imports nothing"}},
+                       "guarantees": pol["guarantees"] | {n: {"owner": "@lean"} for n in names},
+                       "witnesses": {f"Control.{g}": {"honest": [f"Control.{g}_honest"], "nontrivial": f"Control.{g}_nontrivial",
+                                                      "kind": "exclusion"} for g in ("capped", "bounded")}})
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+
+    def witnessing(update):
+        return [f for f in A.audit(pkg, tmp_path / "out", update=update, replay=False, runs=False, log=lambda *_: None)[
+            "failures"] if f.code.startswith("witnesses")]
+    fails = witnessing(True)
+    assert [(f.code, f.entry) for f in fails] == [("witnesses.nontrivial-drops", "Control.bounded_nontrivial")], fails
+    assert "with P one of Control.Fits; a bare `¬ bound` reads none" in fails[0], fails[0]
+    rec = json.loads((pkg / A.POLICY).read_text())
+    A.dump(pkg, rec | {"witnesses": {}})
+    missing = {f.entry: str(f) for f in witnessing(False) if f.code == "witnesses.missing"}
+    assert {"Control.capped", "Control.bounded"} <= set(missing), missing
+    assert "`Control.capped_nontrivial : ¬ Control.Bound c₀ …` (it takes no premise to drop" in missing["Control.capped"]
+    assert "once one named premise is dropped" in missing["Control.bounded"]
+
+
 def test_a_statement_whose_premises_could_not_be_read_fails():
     """`Facts.lean` writes `premises: null` when `premisesOf` throws on a statement; read as no premises, every premise of it
     would go unlisted, so it fails instead. Facts without the field (older documents) are not held to it."""
@@ -2058,6 +2102,127 @@ def test_a_claim_a_guarantee_takes_as_a_premise_keeps_its_claims_entry():
     assert A.claim_failures({**policy, "claims": swapped}, f) == [
         "claims: P.KS_meets does not state that P.KS fails: past its ∀ and ∃ binders its statement must be `¬ P.KS …`, "
         "and it is P.Within …"]
+
+
+def generic_fixture():
+    """(policy, facts) shaped like GENSAMPLE's compiler statements: `P.Compiler`, a closed `def : Prop` under
+    `claims.modules` over every proof system, stated by `P.compiler` (`theorem P.compiler : P.Compiler`), which takes
+    `P.Arg.KS H A` and `P.Compiled.Sessions H L` inline, reads the claims and the hash vocabulary, has no shape entry, and
+    is listed under `claims.generic` with its witnesses."""
+    def spec(name, statement):
+        return {"name": name, "module": "P.Claims", "kind": "def", "statement": statement, "predicate": True}
+
+    reads = [{"name": "P.Compiler", "module": "P.Claims", "kind": "def", "hash": "4" * 32},
+             {"name": "P.Arg.KS", "module": "P.Claims", "kind": "def", "hash": "5" * 32},
+             {"name": "Hash.Msg", "module": "Definitions.Core.Hash", "kind": "def", "hash": "6" * 32},
+             {"name": "List.length", "module": "Init.Prelude", "kind": "def", "hash": "7" * 32}]
+    g = fact(signature="P.compiler : P.Compiler", hyps=[], reads=reads, h="00000000000000cc") | {
+        "body": {"head": "P.Compiler", "negated": False, "binders": [], "conclusion": [], "absurd": False},
+        "inline": [premise("P.Arg.KS H A", "P.Arg.KS", binder="a"), premise("P.Compiled.Sessions H L",
+                                                                        "P.Compiled.Sessions", binder="a")],
+        "premises": []}
+    built = {m: {"olean": f"/r/Security/.lake/build/lib/lean/{m}.olean"}
+             for m in ("P.Claims", "Definitions.Core.Hash", "Definitions.Pouw", "PouwCheck.Check", "P.Guarantees")}
+    graph = built | {"Init.Prelude": {"olean": "/elan/toolchains/v4/lib/lean/Init/Prelude.olean"},
+                     "Mathlib.Data": {"olean": "/r/Security/.lake/packages/mathlib/.lake/build/lib/lean/Mathlib/Data.olean"}}
+    f = facts(pins={"P.t": fact(), "P.compiler": g}, spec_definitions=[spec("P.Compiler", True), spec("P.KS", False)],
+              graph=graph)
+    policy = {**POLICY, "guarantees": {"P.t": {"owner": "@lean"}, "P.compiler": {"owner": "@proofs"}},
+              "claims": {"modules": ["P.Claims"], "generic": {"P.Compiler": "P.compiler"},
+                         "not": {"P.KS": "a helper the claims read"}},
+              "witnesses": {"P.compiler": {"honest": ["P.compiler_honest"], "nontrivial": "P.compiler_nontrivial"}}}
+    return policy, f
+
+
+def generic_codes(policy, f) -> list[tuple[str, str]]:
+    return [(x.code, x.entry) for x in A.claim_failures(policy, f)]
+
+
+def test_a_generic_statement_s_guarantee_is_exempt_from_the_inline_and_shape_rules():
+    """A closed statement proved of every instance, listed under `claims.generic` with its guarantee and witnesses, passes
+    the claims rule, and its guarantee's inline antecedents and missing shape entry fail nothing; the same guarantee
+    listed nowhere fails both rules, and its claim the claims rule."""
+    policy, f = generic_fixture()
+    assert A.claim_failures(policy, f) == []
+    assert A.generic_claims(policy) == {"P.Compiler": "P.compiler"}
+    ifails, _, offenders = A.inline_failures(policy, f)
+    assert [x for x in ifails if x.entry == "P.compiler"] == [] and "P.compiler" not in offenders
+    assert [x for x in A.shape(policy, f) if x.entry == "P.compiler"] == []
+    bare = {**policy, "claims": {k: v for k, v in policy["claims"].items() if k != "generic"}}
+    assert [x.code for x in A.inline_failures(bare, f)[0] if x.entry == "P.compiler"] == ["guarantees.inline-hypothesis"]
+    assert [x for x in A.shape(bare, f) if x.entry == "P.compiler"] != []
+    assert A.claim_failures(bare, f) == [
+        "claims: P.Compiler (P.Claims) is a claim definition with no witnesses: name its `P.Compiler_fails` (a theorem "
+        "that it is false at a toy instance) and `P.Compiler_meets` (its checkable antecedents hold at each deployed "
+        "record) under `claims.witnesses`, or list it under `claims.not` with the reason it is no claim, or, proved of "
+        "every instance, under `claims.generic` with the guarantee that states it"]
+
+
+def test_a_generic_statement_is_refused_when_it_takes_parameters():
+    policy, f = generic_fixture()
+    f["spec_definitions"][0]["statement"] = False
+    assert generic_codes(policy, f) == [("claims.generic-parameters", "P.Compiler")]
+    assert "close it, or give it `claims.witnesses`" in A.claim_failures(policy, f)[0]
+
+
+def test_a_generic_statement_is_refused_when_its_guarantee_states_something_else():
+    """The guarantee states `C` itself: not another head, not `¬ C`, not `C` under binders, and it is a listed theorem."""
+    policy, f = generic_fixture()
+    body = f["pins"]["P.compiler"]["body"]
+    for wrong in ({"head": "P.Other"}, {"negated": True}, {"binders": ["∀"]}):
+        f["pins"]["P.compiler"]["body"] = body | wrong
+        assert generic_codes(policy, f) == [("claims.generic-statement", "P.Compiler")], wrong
+    assert A.claim_failures(policy, f)[0].endswith("state it as `theorem P.compiler : P.Compiler`")
+    f["pins"]["P.compiler"]["body"] = {"head": "P.Lifted"}
+    f["pins"]["P.compiler"]["lift"] = {"head": "P.Compiler", "module": "P.Claims"}
+    assert generic_codes(policy, f) == []
+    unlisted = {**policy, "guarantees": {"P.t": {"owner": "@lean"}}}
+    assert generic_codes(unlisted, f) == [("claims.generic-unlisted", "P.Compiler")]
+
+
+def test_a_generic_statement_is_refused_without_both_witnesses_or_under_unwitnessed():
+    policy, f = generic_fixture()
+    for ws in ({}, {"P.compiler": {"honest": ["P.compiler_honest"]}}, {"P.compiler": {"honest": [], "nontrivial": "n"}}):
+        assert generic_codes({**policy, "witnesses": ws}, f) == [("claims.generic-witnesses", "P.Compiler")], ws
+    assert "at least two sessions or rounds" in A.claim_failures({**policy, "witnesses": {}}, f)[0]
+    exempt = {**policy, "unwitnessed": {"P.compiler": f["pins"]["P.compiler"]["type_sha256"]}}
+    assert generic_codes(exempt, f) == [("claims.generic-unwitnessed", "P.Compiler")]
+
+
+def test_a_generic_statement_reads_only_the_claims_vocabulary_core_and_what_no_package_here_builds():
+    """A generic statement may read `claims.modules`, `Definitions.Core` and modules the import graph places outside this
+    repository (Init, Mathlib); a read of any other in-tree module (code, a `Guarantees` module), or of one the graph
+    doesn't place, fails, naming the module."""
+    policy, f = generic_fixture()
+    reads = f["pins"]["P.compiler"]["reads"]
+    for module in ("PouwCheck.Check", "P.Guarantees", "Unplaced.Module"):
+        f["pins"]["P.compiler"]["reads"] = reads + [{"name": "Q.deployed", "module": module, "kind": "def"}]
+        assert generic_codes(policy, f) == [("claims.generic-reads", "P.Compiler")], module
+    assert A.claim_failures(policy, f) == [
+        "claims: claims.generic[P.Compiler]: P.compiler reads Unplaced.Module: a generic statement reads only the claims "
+        "vocabulary and Core; a statement that reads Unplaced.Module is about a deployment and belongs under the "
+        "guarantee rules"]
+    f["pins"]["P.compiler"]["reads"] = reads + [{"name": "Mathlib.thing", "module": "Mathlib.Data", "kind": "def"}]
+    assert generic_codes(policy, f) == []
+
+
+def test_a_generic_statement_reading_another_area_s_deployed_numbers_is_refused():
+    """A deployed number in a definitions module outside the claims and Core (`Definitions.Pouw`'s) makes the statement
+    one about the deployment, though it is spec text like the claims."""
+    policy, f = generic_fixture()
+    f["pins"]["P.compiler"]["reads"] += [{"name": "Pouw.tileRows", "module": "Definitions.Pouw", "kind": "def"}]
+    assert generic_codes(policy, f) == [("claims.generic-reads", "P.Compiler")]
+    assert "P.compiler reads Definitions.Pouw:" in A.claim_failures(policy, f)[0]
+
+
+def test_a_generic_entry_is_one_claim_s_only_entry_and_names_a_claim():
+    policy, f = generic_fixture()
+    rule = policy["claims"]
+    both = {**policy, "claims": {**rule, "not": {**rule["not"], "P.Compiler": "proved of every program"}}}
+    assert generic_codes(both, f) == [("claims.generic-both", "P.Compiler")]
+    stale = {**policy, "claims": {**rule, "generic": {**rule["generic"], "P.Gone": "P.compiler"}}}
+    assert generic_codes(stale, f) == [("claims.stale", "P.Gone")]
+    assert generic_codes({**policy, "claims": {**rule, "generic": ["P.Compiler"]}}, f)[0] == ("claims.generic-form", None)
 
 
 def test_a_meets_witness_says_something_about_the_deployment():
@@ -2627,6 +2792,37 @@ def test_an_exclusion_theorem_has_an_honest_witness_and_an_explicit_circuit_beat
         "acceptance", "it reads P.Run.accepts, a verifier's acceptance")
     device = witnessed(g | {"reads": [cover, run | {"name": "P.Device.Accepts"}]})
     assert A.witness_scope("P.sound", device[0], device[1]["pins"]["P.sound"])[0] == "acceptance"
+
+
+def test_a_premise_free_exclusion_theorem_is_witnessed_by_its_bound_failing_at_an_explicit_circuit():
+    """An exclusion theorem that takes no premise (`premise_free`: training's `ServingBlocks.UncertifiedElementary`, a
+    cap at every unit of every refinement) has none to drop: its nontrivial witness is the bare `¬ bound` at an explicit
+    circuit, where a tighter bound fails, and a missing witness is asked for in that form. It still negates the bound,
+    constructs its circuit and takes only listed assumptions. A hypothesis no constant heads is a premise all the same,
+    and a guarantee with a premise still drops one."""
+    cover = {"name": "P.Covering.load", "module": "P.Covering", "kind": "def", "hash": "6" * 32}
+    g = {"reads": [cover], "premises": [], "hypotheses": [],
+         "body": wbody("LE.le", binders=["∀", "∀"], conclusion=[wk("LE.le", ["P.Covering.load"])])}
+    bare = {"body": wbody("LE.le", negated=True, conclusion=[{"head": "Not", "defs": [], "refl": False,
+                                                              "assumed": False, "negated": True, "inner": "LE.le"}])}
+    pol, f = witnessed(g, nontrivial=bare)
+    assert A.premise_free(f["pins"]["P.sound"]) and A.witness_scope("P.sound", pol, f["pins"]["P.sound"])[0] == "exclusion"
+    assert A.witness_failures(pol, f, WOWN) == []
+    missing = A.witness_failures({**pol, "witnesses": {}}, f, WOWN)[0]
+    assert "`P.sound_nontrivial : ¬ LE.le c₀ …` (it takes no premise to drop, so a tighter bound fails at an explicit " \
+           "circuit c₀)" in missing and '"kind": "exclusion"' in missing, missing
+    assert witness_codes(*witnessed(g, nontrivial={"body": wbody("P.Compiled")})) == ["witnesses.nontrivial-form"]
+    assert witness_codes(*witnessed(g, nontrivial={"body": bare["body"] | {"binders": ["∀"]}})) == \
+        ["witnesses.instance-binders"]
+    other = [{"binder": "h", "type": "P.Other", "closed": True, "named": "P.Other", "module": "P.Defs"}]
+    assert witness_codes(*witnessed(g, nontrivial={"body": bare["body"] | {"binders": ["→"]}, "hypotheses": other})) == \
+        ["witnesses.nontrivial-assumes"]
+    unheaded = g | {"hypotheses": [{"binder": "h", "type": "p n", "closed": False}],
+                    "body": g["body"] | {"binders": ["∀", "∀", "→"]}}
+    assert not A.premise_free(unheaded)
+    assert witness_codes(*witnessed(unheaded, nontrivial=bare)) == ["witnesses.nontrivial-drops"]
+    premised = g | {"premises": [COMPILED], "body": g["body"] | {"binders": ["∀", "∀", "→"]}}
+    assert witness_codes(*witnessed(premised, nontrivial=bare)) == ["witnesses.nontrivial-drops"]
 
 
 def test_a_nontrivial_witness_may_negate_what_the_guarantee_unfolds_to():
