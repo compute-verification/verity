@@ -13,17 +13,23 @@ public import Proofs.Flock.Claims.Recursion.PlurLin
 finder's (`ksLinkOn_bits`). Where every statement a run accepts has `κ ≤ 2^{−167.7}` and `ε ≤ 2^{−174.95}`, it is
 at most `2^{−167.7} + t·2^{−174.95}` (`ksLinkOn_tight`); where no run accepts, `Pr[acc ∧ ¬R] = 0`.
 
-* The link's plan names at most two runs in expectation (`linkPlanMadeTwo`, Wald's bound): its first fork, and where
-  that one is accepted, the loop's forks up to the first accepted, which `Claims.Recursion.Ex_linkCost_le` holds to
-  one more on average. The `M + 1` of `linkPlanMade` would leave the link's term near `β₂·c` at `M = 2^256`; at two it
-  is `β₂·(2c + 1)/2^256 ≤ t·β₂·c_S/2^255` where `2c ≤ t·c_S` (`link_term_le`).
+* The link's plan costs at most two runs' average in expectation (`linkPlan_ExCost_two`, Wald's bound): its first
+  fork, and where that one is accepted, the loop's forks up to the first accepted, which
+  `Claims.Recursion.Ex_linkCost_le` holds to one more on average. Each is a fork at a round fixed in advance with a
+  fresh uniform slot, so it averages a run's cost (`Ex_fork_slot`). The `M + 1` of `linkPlanMade` would leave the
+  link's term near `β₂·c` at `M = 2^256`; at two it is `β₂·(2c + 1)/2^256 ≤ t·β₂·c_S/2^255` where
+  `2c + 1 ≤ 2t·c_S` (`link_term_le`).
+* A rerun of `E_O`'s model costs at most `t·c_B/2 + L` on average (`verModel_Ex_cost_le`): its compiled run's and
+  `E_O`'s calls are a draw's, as route 2C charges them, and `L` bounds the rest, its inner view's run's, its searched
+  calls and the compiled verifier's own, which are at most `n_V + w + |S(x_I)| + n + v` (`verModel_extras_le`).
 * The other four terms are as `Claims.Recursion.lin2_bound_le` charges them (`lin2_four_le`), and
   `link_bound_split_le` adds the five.
 
 The premises are SHA-512's named collision assumptions (`StrictBirthday` at `B`; `ExpectedCR` at `B_I`, `FCI` and
 `F0I` charged as route 2C charges them, and at the link's finder at the reruns, `verModel`), the prover's calls
-`t ≥ 1` per run, and the reruns' cost: every rerun of `E_O`'s model, and every fork of one at each first run, costs
-at most `c` calls on average, with `2c ≤ t·c_S`, `c_S = c_B + |S(x_I)| + 2(n + v)`.
+`t ≥ 1` per run, route 2C's call bounds `n` and `v`, and two facts about the deployed code that put a rerun's calls
+beyond its draw's at most `|S(x_I)| + 2(n + v)`: the inner view's run makes at most `n` calls (`n_V ≤ n`), and the calls
+`E_O`'s witnesses record number at most `v` (`w ≤ v`).
 -/
 
 @[expose] public section
@@ -135,11 +141,36 @@ theorem linkPlan_cost_le_linkCost {Ω C : Type} [Fintype Ω] [Nonempty Ω] [Fint
     unfold linkCost
     simp [hfirst]
 
-/-- **The link's plan names at most two runs in expectation, each of cost at most `c`** (Wald's bound): its first
-fork, and where that one is accepted, the loop's forks up to the first accepted, which `Ex_linkCost_le` holds to one
-more fork on average. Every run it names is a fork of the shared first run with a fresh uniform slot. -/
-theorem linkPlanMadeTwo (k : Msg → ℕ) (M : ℕ) : (linkPlan (Coin := Coin) k M).MadeLe fun _ => 2 := by
-  intro Ω _ _ n C _ _ m x c hfork hrun
+/-- **A fork of a uniform first run at a round fixed in advance, with a fresh uniform slot, is a uniform run**: its
+cost averaged over the first run and the slot is a run's average cost. -/
+theorem Ex_fork_slot {Ω C : Type} [Fintype C] [Nonempty C] {n : ℕ} (m : RunModel Coin Ω n C) (ω : Ω) (j : ℕ) :
+    Ex (fun u₀ : (Fin n → Coin) × C => Ex fun v : (Fin n → Coin) × C =>
+      (m.cost ω (fork (m.cut j) u₀.1 v.1, v.2) : ℝ)) = Ex fun u : (Fin n → Coin) × C => (m.cost ω u : ℝ) :=
+  calc Ex (fun u₀ : (Fin n → Coin) × C => Ex fun v : (Fin n → Coin) × C =>
+        (m.cost ω (fork (m.cut j) u₀.1 v.1, v.2) : ℝ))
+      = Ex fun r₀ : Fin n → Coin => Ex fun _ : C => Ex fun v : (Fin n → Coin) × C =>
+          (m.cost ω (fork (m.cut j) r₀ v.1, v.2) : ℝ) :=
+        Claims.Ex_prod fun u₀ : (Fin n → Coin) × C => Ex fun v : (Fin n → Coin) × C =>
+          (m.cost ω (fork (m.cut j) u₀.1 v.1, v.2) : ℝ)
+    _ = Ex fun r₀ : Fin n → Coin => Ex fun v : (Fin n → Coin) × C =>
+          (m.cost ω (fork (m.cut j) r₀ v.1, v.2) : ℝ) := by
+        congr 1
+        funext r₀
+        exact Ex_const _
+    _ = Ex fun p : (Fin n → Coin) × ((Fin n → Coin) × C) => (m.cost ω (fork (m.cut j) p.1 p.2.1, p.2.2) : ℝ) :=
+        (Claims.Ex_prod fun p : (Fin n → Coin) × ((Fin n → Coin) × C) =>
+          (m.cost ω (fork (m.cut j) p.1 p.2.1, p.2.2) : ℝ)).symm
+    _ = Ex fun u : (Fin n → Coin) × C => (m.cost ω u : ℝ) :=
+        Claims.Recursion.unifMap_forkPair (m.cut j) fun u : (Fin n → Coin) × C => (m.cost ω u : ℝ)
+
+/-- **The link's plan costs at most two runs' average in expectation** (Wald's bound), in every model whose runs cost
+at most `c` calls on average: its first fork, and where that one is accepted, the loop's forks up to the first
+accepted, which `Ex_linkCost_le` holds to one more fork on average. Every run it names is a fork of the shared first
+run at its round guess with a fresh uniform slot, so each averages a run's cost (`Ex_fork_slot`). -/
+theorem linkPlan_ExCost_two {Ω C : Type} [Fintype Ω] [Nonempty Ω] [Fintype C] [Nonempty C] {n : ℕ}
+    (k : Msg → ℕ) (M : ℕ) (m : RunModel Coin Ω n C) (x : Msg) (c : ℝ)
+    (hrun : ∀ ω, Ex (fun u : (Fin n → Coin) × C => (m.cost ω u : ℝ)) ≤ c) :
+    (linkPlan (Coin := Coin) k M).ExCost m x ≤ 2 * c := by
   have hc : 0 ≤ c := (Ex_nonneg fun _ => Nat.cast_nonneg _).trans (hrun (Classical.arbitrary Ω))
   unfold RunFinder.ExCost
   split_ifs with h
@@ -160,23 +191,29 @@ theorem linkPlanMadeTwo (k : Msg → ℕ) (M : ℕ) : (linkPlan (Coin := Coin) k
     refine h1.trans (Ex_sel_le G _ fun j ω => ?_)
     show Ex (fun us : Fin (M + 1 + 1) → (Fin n → Coin) × C => F j ω (us 0) fun i => us i.succ) ≤ _
     rw [Claims.Ex_cons (M + 1) (F j ω)]
-    refine (Ex_mono fun u₀ => ?_).trans_eq (Ex_const _)
-    show Ex (fun σ : Fin (M + 1) → (Fin n → Coin) × C => (linkCost
-        (fun v => m.acc ω (fork (m.cut j) u₀.1 v.1, v.2)) (fun v => m.cost ω (fork (m.cut j) u₀.1 v.1, v.2)) M
-        (σ 0, fun t => σ t.succ) : ℝ)) ≤ _
-    rw [Claims.Ex_cons M (fun (u : (Fin n → Coin) × C) (rest : Fin M → (Fin n → Coin) × C) =>
-        (linkCost (fun v => m.acc ω (fork (m.cut j) u₀.1 v.1, v.2))
-          (fun v => m.cost ω (fork (m.cut j) u₀.1 v.1, v.2)) M (u, rest) : ℝ)),
-      ← Claims.Ex_prod (fun p : ((Fin n → Coin) × C) × (Fin M → (Fin n → Coin) × C) =>
-        (linkCost (fun v : (Fin n → Coin) × C => m.acc ω (fork (m.cut j) u₀.1 v.1, v.2))
-          (fun v : (Fin n → Coin) × C => m.cost ω (fork (m.cut j) u₀.1 v.1, v.2)) M p : ℝ))]
-    have := Claims.Recursion.Ex_linkCost_le (fun v : (Fin n → Coin) × C => m.acc ω (fork (m.cut j) u₀.1 v.1, v.2))
-      (fun v : (Fin n → Coin) × C => m.cost ω (fork (m.cut j) u₀.1 v.1, v.2)) M
-    have hf := hfork ω j u₀
-    push_cast
-    linarith
-  · push_cast
-    linarith
+    have hY : ∀ u₀ : (Fin n → Coin) × C, Ex (fun σ : Fin (M + 1) → (Fin n → Coin) × C => F j ω u₀ σ) ≤
+        (Ex fun v : (Fin n → Coin) × C => (m.cost ω (fork (m.cut j) u₀.1 v.1, v.2) : ℝ)) +
+          Ex fun v : (Fin n → Coin) × C => (m.cost ω (fork (m.cut j) u₀.1 v.1, v.2) : ℝ) := by
+      intro u₀
+      show Ex (fun σ : Fin (M + 1) → (Fin n → Coin) × C => (linkCost
+          (fun v => m.acc ω (fork (m.cut j) u₀.1 v.1, v.2)) (fun v => m.cost ω (fork (m.cut j) u₀.1 v.1, v.2)) M
+          (σ 0, fun t => σ t.succ) : ℝ)) ≤ _
+      rw [Claims.Ex_cons M (fun (u : (Fin n → Coin) × C) (rest : Fin M → (Fin n → Coin) × C) =>
+          (linkCost (fun v => m.acc ω (fork (m.cut j) u₀.1 v.1, v.2))
+            (fun v => m.cost ω (fork (m.cut j) u₀.1 v.1, v.2)) M (u, rest) : ℝ)),
+        ← Claims.Ex_prod (fun p : ((Fin n → Coin) × C) × (Fin M → (Fin n → Coin) × C) =>
+          (linkCost (fun v : (Fin n → Coin) × C => m.acc ω (fork (m.cut j) u₀.1 v.1, v.2))
+            (fun v : (Fin n → Coin) × C => m.cost ω (fork (m.cut j) u₀.1 v.1, v.2)) M p : ℝ))]
+      exact (Claims.Recursion.Ex_linkCost_le
+        (fun v : (Fin n → Coin) × C => m.acc ω (fork (m.cut j) u₀.1 v.1, v.2))
+        (fun v : (Fin n → Coin) × C => m.cost ω (fork (m.cut j) u₀.1 v.1, v.2)) M).trans_eq (two_mul _)
+    calc Ex (fun u₀ : (Fin n → Coin) × C => Ex fun σ : Fin (M + 1) → (Fin n → Coin) × C => F j ω u₀ σ)
+        ≤ _ := Ex_mono hY
+      _ = _ := Ex_add _ _
+      _ ≤ 2 * c := by
+          rw [Ex_fork_slot m ω j]
+          linarith [hrun ω]
+  · linarith
 
 end Wald
 
@@ -187,16 +224,13 @@ open Claims.Recursion (βdev2 cBe setupLen xI PrBinnerV PrFCI PrF0I BinnerV FCI 
 
 variable [Fintype Coin] [Nonempty Coin]
 
-/-- **The gated link's term at `M = 2^256` is at most `t·2^{−(255 − log₂(β·c_S))}`**, in a model whose runs, and
-forks of them, cost at most `c` calls on average, at `2c ≤ t·c_S` and `1 ≤ t·c_S`, where the link's finder meets
-`ExpectedCR`: it names at most two runs in expectation (`linkPlanMadeTwo`), so it finds a collision with probability
-at most `2c/2^256 ≤ t·c_S/2^256`, and its tail `1/(2^256 + 1)` is below `t·c_S/2^256`. -/
+/-- **The gated link's term at `M = 2^256` is at most `t·2^{−(255 − log₂(β·c_S))}`**, in a model whose runs cost at
+most `c` calls on average, at `2c + 1 ≤ 2t·c_S`, where the link's finder meets `ExpectedCR`: it costs at most `2c` in
+expectation (`linkPlan_ExCost_two`), so it finds a collision with probability at most `2c/2^256`, and with its tail
+`1/(2^256 + 1)` the two are at most `(2c + 1)/2^256 ≤ t·c_S/2^255`. -/
 theorem link_term_le {Ω C : Type} [Fintype Ω] [Nonempty Ω] [Fintype C] [Nonempty C] {n : ℕ} (H : Msg → Msg)
     (k : Msg → ℕ) (m : RunModel Coin Ω n C) (y : Msg) {β c cS t : ℝ} (hβ : 0 ≤ β) (ht : 0 ≤ t)
-    (hfork : ∀ (ω : Ω) (j : ℕ) (u₀ : (Fin n → Coin) × C),
-      Ex (fun v : (Fin n → Coin) × C => (m.cost ω (fork (m.cut j) u₀.1 v.1, v.2) : ℝ)) ≤ c)
-    (hrun : ∀ ω, Ex (fun u : (Fin n → Coin) × C => (m.cost ω u : ℝ)) ≤ c) (hc : 2 * c ≤ t * cS)
-    (htc : 1 ≤ t * cS)
+    (hrun : ∀ ω, Ex (fun u : (Fin n → Coin) × C => (m.cost ω u : ℝ)) ≤ c) (hc : 2 * c + 1 ≤ 2 * t * cS)
     (hCR : ∀ h : 0 < (linkPlan (Coin := Coin) k (2 ^ 256)).sel y,
       ExpectedCR H ((linkPlan (Coin := Coin) k (2 ^ 256)).finder m y h)) :
     β * ((linkPlan (Coin := Coin) k (2 ^ 256)).PrAt H m y + 1 / (((2 ^ 256 : ℕ) : ℝ) + 1)) ≤
@@ -207,20 +241,27 @@ theorem link_term_le {Ω C : Type} [Fintype Ω] [Nonempty Ω] [Fintype C] [Nonem
   have hMc : (((2 ^ 256 : ℕ) : ℝ)) = (2 : ℝ) ^ (256 : ℝ) := by
     rw [show (256 : ℝ) = ((256 : ℕ) : ℝ) by norm_num, Real.rpow_natCast]
     norm_num
-  have hM : 1 / (((2 ^ 256 : ℕ) : ℝ) + 1) ≤ t * cS / 2 ^ (256 : ℝ) := by
+  have hc0 : 0 ≤ c := (Ex_nonneg fun _ => Nat.cast_nonneg _).trans (hrun (Classical.arbitrary Ω))
+  have hM : 1 / (((2 ^ 256 : ℕ) : ℝ) + 1) ≤ 1 / 2 ^ (256 : ℝ) := by
     rw [hMc]
-    calc 1 / ((2 : ℝ) ^ (256 : ℝ) + 1) ≤ 1 / (2 : ℝ) ^ (256 : ℝ) :=
-          one_div_le_one_div_of_le hp256 (by linarith)
-      _ ≤ t * cS / 2 ^ (256 : ℝ) := div_le_div_of_nonneg_right htc hp256.le
-  have hP : (linkPlan (Coin := Coin) k (2 ^ 256)).PrAt H m y ≤ t * cS / 2 ^ (256 : ℝ) := by
-    refine (RunFinder.PrAt_le_madeLe H _ _ (linkPlanMadeTwo k (2 ^ 256)) m y c hfork hrun hCR).trans
-      (div_le_div_of_nonneg_right ?_ hp256.le)
-    push_cast
-    linarith
+    exact one_div_le_one_div_of_le hp256 (by linarith)
+  have hP : (linkPlan (Coin := Coin) k (2 ^ 256)).PrAt H m y ≤ 2 * c / 2 ^ (256 : ℝ) := by
+    unfold RunFinder.PrAt
+    split_ifs with h
+    · refine (hCR h).trans (div_le_div_of_nonneg_right ?_ hp256.le)
+      have hx : (linkPlan (Coin := Coin) k (2 ^ 256)).ExCost m y =
+          Ex fun s => (((linkPlan (Coin := Coin) k (2 ^ 256)).finder m y h).cost s : ℝ) := dif_pos h
+      have hE := linkPlan_ExCost_two (Coin := Coin) k (2 ^ 256) m y c hrun
+      rw [hx] at hE
+      exact hE
+    · exact div_nonneg (by linarith) hp256.le
   have hcS : 0 ≤ cS := by nlinarith
   calc β * ((linkPlan (Coin := Coin) k (2 ^ 256)).PrAt H m y + 1 / (((2 ^ 256 : ℕ) : ℝ) + 1))
-      ≤ β * (t * cS / 2 ^ (256 : ℝ) + t * cS / 2 ^ (256 : ℝ)) :=
+      ≤ β * (2 * c / 2 ^ (256 : ℝ) + 1 / 2 ^ (256 : ℝ)) :=
         mul_le_mul_of_nonneg_left (add_le_add hP hM) hβ
+    _ = β * (2 * c + 1) / 2 ^ (256 : ℝ) := by ring
+    _ ≤ β * (2 * t * cS) / 2 ^ (256 : ℝ) :=
+        div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_left hc hβ) hp256.le
     _ = t * (β * cS) / 2 ^ (255 : ℝ) := by rw [h256]; ring
     _ ≤ _ := le_two_rpow_of_div ht (mul_nonneg hβ hcS)
 
@@ -365,8 +406,8 @@ theorem lin2_four_le {W Col T : Type} [DecidableEq Col] (H : Msg → Msg) (D : D
 
 /-- **Route 2C's bound with the gated link, at `M = 2^256` and `R = 2^257`, is at most `κ + t·ε`**, `ε` route 2C's
 five terms after `κ`, written out: the first four as route 2C charges them (`lin2_four_le`), and the gated link's in
-place of the deviation finder's (`link_term_le`), in a model whose reruns, and forks of them, cost at most `c` calls
-on average with `2c ≤ t·c_S`. -/
+place of the deviation finder's (`link_term_le`), in a model whose reruns cost at most `t·c_B/2 + L` calls on average,
+a draw's average and `L` more, with `L ≤ |S(x_I)| + 2(n + v)`. -/
 theorem link_bound_split_le {W Col T : Type} [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin)
     (I : Claims.Recursion.Inner Coin W) (DO : Claims.Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T)
     (Cp : Caps Coin) (hS : SessionAccepts D) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (t : ℕ)
@@ -380,11 +421,9 @@ theorem link_bound_split_le {W Col T : Type} [DecidableEq Col] (H : Msg → Msg)
       ExpectedCR H ((F0I H D I DO decO P x R).charge
         (setupLen D x + (I.k (xI D x) + 1) * (n₀ + v))))
     {Ω' C : Type} [Fintype Ω'] [Nonempty Ω'] [Fintype C] [Nonempty C] {n : ℕ} (k : Msg → ℕ)
-    (m : RunModel Coin Ω' n C) (y : Msg) (c : ℝ)
-    (hfork : ∀ (ω : Ω') (j : ℕ) (u₀ : (Fin n → Coin) × C),
-      Ex (fun u : (Fin n → Coin) × C => (m.cost ω (fork (m.cut j) u₀.1 u.1, u.2) : ℝ)) ≤ c)
-    (hrr : ∀ ω, Ex (fun u : (Fin n → Coin) × C => (m.cost ω u : ℝ)) ≤ c)
-    (hc : 2 * c ≤ t * (cBe D x + setupLen D x + 2 * ((n₀ + v : ℕ) : ℝ)))
+    (m : RunModel Coin Ω' n C) (y : Msg) (L : ℝ)
+    (hrr : ∀ ω, Ex (fun u : (Fin n → Coin) × C => (m.cost ω u : ℝ)) ≤ t * cBe D x / 2 + L)
+    (hL : L ≤ setupLen D x + 2 * ((n₀ + v : ℕ) : ℝ))
     (hLink : ∀ h : 0 < (linkPlan (Coin := Coin) k (2 ^ 256)).sel y,
       ExpectedCR H ((linkPlan (Coin := Coin) k (2 ^ 256)).finder m y h)) :
     Claims.Recursion.κ D I x + Real.sqrt (Claims.Recursion.γ D I x * PrB H D.V P x) +
@@ -405,8 +444,13 @@ theorem link_bound_split_le {W Col T : Type} [DecidableEq Col] (H : Msg → Msg)
     have : 4 ≤ cBe D x := by unfold cBe; omega
     exact_mod_cast this
   have hn0 : (0 : ℝ) ≤ setupLen D x + 2 * ((n₀ + v : ℕ) : ℝ) := by positivity
+  have hcB : (cBe D x : ℝ) ≤ t * cBe D x := le_mul_of_one_le_left (by linarith) ht1'
+  have hnt : (setupLen D x : ℝ) + 2 * ((n₀ + v : ℕ) : ℝ) ≤ t * (setupLen D x + 2 * ((n₀ + v : ℕ) : ℝ)) :=
+    le_mul_of_one_le_left hn0 ht1'
+  have hc : 2 * (t * cBe D x / 2 + L) + 1 ≤ 2 * t * (cBe D x + setupLen D x + 2 * ((n₀ + v : ℕ) : ℝ)) := by
+    linarith
   have h₅ := link_term_le (Coin := Coin) H k m y (β := βdev2 D I Cp x) (by unfold βdev2; positivity)
-    (by linarith) hfork hrr hc (by nlinarith) hLink
+    (by linarith) hrr hc hLink
   linarith
 
 end Bits
@@ -418,11 +462,97 @@ open Claims.Recursion
 variable [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {Col T : Type} [DecidableEq Col] {Col' T' : Type}
   [DecidableEq Col']
 
+/-- **A rerun of `E_O`'s model costs at most `t·c_B/2 + L` calls on average**, at every tape: its compiled run's and
+`E_O`'s calls are a draw's, which average at most `t·c_B/2` (`Claims.Recursion.Ex_drawCost_le`), and its inner
+view's run's, searched and own calls are at most `L` at every rerun. -/
+theorem verModel_Ex_cost_le {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin Col T}
+    {DO : Claims.Flock.Deploy Coin Col' T'} (hS : SessionAccepts (D.record Bd.IVStar)) (x : Msg) {Ω : Type}
+    [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (t : ℕ)
+    (hrun : ∀ ω r, (run H P (D.record Bd.IVStar).V x ω r).pLog.length +
+      (run H P (D.record Bd.IVStar).V x ω r).vLog.length ≤ t) (IV : Verifier Coin) (L : ℕ)
+    (hL : ∀ (ω : Ω) (u : (Fin ((compDep D Bd DO).V.k x) → Coin) × (compDep D Bd DO).EO.C x),
+      ((compDep D Bd DO).viewCalls IV H P x ω u).length + ((compDep D Bd DO).rerunCalls H P x ω u).length +
+        ((compDep D Bd DO).ownAt H P x ω u).length ≤ L) (ω : Ω) :
+    Ex (fun u : (Fin ((compDep D Bd DO).V.k x) → Coin) × (compDep D Bd DO).EO.C x =>
+      (((compDep D Bd DO).verModel IV H P x).cost ω u : ℝ)) ≤ t * cBe (D.record Bd.IVStar) x / 2 + L := by
+  have hpt : ∀ u : (Fin ((compDep D Bd DO).V.k x) → Coin) × (compDep D Bd DO).EO.C x,
+      (((compDep D Bd DO).verModel IV H P x).cost ω u : ℝ) ≤
+        (drawCost H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) DO DO.decode P x ω u : ℝ) +
+          L := by
+    intro u
+    have e : ((compDep D Bd DO).verModel IV H P x).cost ω u =
+        drawCost H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) DO DO.decode P x ω u +
+          ((compDep D Bd DO).viewCalls IV H P x ω u).length + ((compDep D Bd DO).rerunCalls H P x ω u).length +
+          ((compDep D Bd DO).ownAt H P x ω u).length := rfl
+    have h := (Nat.cast_le (α := ℝ)).2 (hL ω u)
+    rw [e]
+    push_cast at h ⊢
+    linarith
+  have hd : Ex (fun u : (Fin ((compDep D Bd DO).V.k x) → Coin) × (compDep D Bd DO).EO.C x =>
+      (drawCost H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) DO DO.decode P x ω u : ℝ)) ≤
+        t * cBe (D.record Bd.IVStar) x / 2 :=
+    Ex_drawCost_le H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) DO DO.decode hS x P t hrun ω
+  calc Ex (fun u : (Fin ((compDep D Bd DO).V.k x) → Coin) × (compDep D Bd DO).EO.C x =>
+        (((compDep D Bd DO).verModel IV H P x).cost ω u : ℝ))
+      ≤ Ex (fun u : (Fin ((compDep D Bd DO).V.k x) → Coin) × (compDep D Bd DO).EO.C x =>
+          (drawCost H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) DO DO.decode P x ω u : ℝ) +
+            (L : ℝ)) := Ex_mono hpt
+    _ = Ex (fun u : (Fin ((compDep D Bd DO).V.k x) → Coin) × (compDep D Bd DO).EO.C x =>
+          (drawCost H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) DO DO.decode P x ω u : ℝ)) +
+            (L : ℝ) := by rw [Ex_add, Ex_const]
+    _ ≤ t * cBe (D.record Bd.IVStar) x / 2 + L := by linarith
+
+/-- **A rerun's calls beyond its draw's are at most `n_V + w + |S(x_I)| + n + v`**: none in the inner view's run or
+searched where `E_O` gives up; on its witnesses, the inner view's run's at most `n_V`, and the searched ones the
+recorded calls at most `w`, the inner setup's and the inner verifier's at most `n` (`Deploy.callsAt`); and the
+compiled verifier's own at the run's V\* statements at most `v`. `n` and `v` are route 2C's bounds; `n_V` and `w` hold
+at `E_O`'s witnesses. -/
+theorem verModel_extras_le {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin Col T}
+    {DO : Claims.Flock.Deploy Coin Col' T'} (x : Msg) {Ω : Type} (P : Prover Ω) (IV : Verifier Coin) (nV w n v : ℕ)
+    (hn : ∀ cs ws, ((D.record Bd.IVStar).innerCalls H x cs ws).length ≤ n)
+    (hv : ∀ ps, (setupCalls H (D.record Bd.IVStar) ((D.record Bd.IVStar).vstar x ps)).length ≤ v)
+    (ω : Ω) (u : (Fin ((compDep D Bd DO).V.k x) → Coin) × (compDep D Bd DO).EO.C x)
+    (hV : ∀ ws, (compDep D Bd DO).wits H P x ω u = some ws →
+      ((compDep D Bd DO).innerLog IV H x u.1 ws).length ≤ nV)
+    (hW : ∀ ws, (compDep D Bd DO).wits H P x ω u = some ws → ((D.record Bd.IVStar).calls x ws).length ≤ w) :
+    ((compDep D Bd DO).viewCalls IV H P x ω u).length + ((compDep D Bd DO).rerunCalls H P x ω u).length +
+      ((compDep D Bd DO).ownAt H P x ω u).length ≤ nV + w + setupLen (D.record Bd.IVStar) x + n + v := by
+  have ho : ((compDep D Bd DO).ownAt H P x ω u).length ≤ v := hv _
+  rcases hw : (compDep D Bd DO).wits H P x ω u with _ | ws
+  · have h1 : (compDep D Bd DO).viewCalls IV H P x ω u = [] := by
+      unfold Comp.viewCalls
+      rw [hw]
+      rfl
+    have h2 : (compDep D Bd DO).rerunCalls H P x ω u = [] := by
+      unfold Comp.rerunCalls
+      rw [hw]
+      rfl
+    rw [h1, h2, List.length_nil]
+    omega
+  · have h1 : (compDep D Bd DO).viewCalls IV H P x ω u = (compDep D Bd DO).innerLog IV H x u.1 ws := by
+      unfold Comp.viewCalls
+      rw [hw]
+      rfl
+    have e : (compDep D Bd DO).rerunCalls H P x ω u = (D.record Bd.IVStar).callsAt H x u.1 ws := by
+      unfold Comp.rerunCalls
+      rw [hw]
+      rfl
+    have h2 : ((compDep D Bd DO).rerunCalls H P x ω u).length ≤ w + (setupLen (D.record Bd.IVStar) x + n) := by
+      rw [e]
+      unfold Claims.Recursion.Deploy.callsAt
+      rw [List.length_append, List.length_map, List.length_append]
+      exact Nat.add_le_add (hW ws hw) (Nat.add_le_add_left (hn _ ws) _)
+    have h3 := hV ws hw
+    rw [h1]
+    omega
+
 /-- **`KSLinkOn`'s bound at `M = 2^256` and `R = 2^257` is at most `κ + t·ε`** at a statement `G` admits, `ε` route
 2C's five terms with the gated link's in place of the deviation finder's (`link_bound_split_le`), where every V\*
 session's verifier accepts on an accepted run, under SHA-512's named collision assumptions at `B`, `B_I`, `FCI`,
-`F0I` and the link's finder at the reruns, and where every rerun of `E_O`'s model, and every fork of one at each first
-run, costs at most `c` calls on average, with `2c ≤ t·c_S`. -/
+`F0I` and the link's finder at the reruns. `n` and `v` are route 2C's call bounds, the inner verifier's calls on the
+inner messages (`hn`) and the compiled verifier's own at the V\* statements (`hv`); a rerun's inner view's run makes at
+most `n` (`hV`) and the calls `E_O`'s witnesses record number at most `v` (`hW`), so a rerun of `E_O`'s model makes at
+most `|S(x_I)| + 2(n + v)` calls beyond its draw's (`verModel_extras_le`, `verModel_Ex_cost_le`). -/
 theorem ksLinkOn_bits [Zero Col] [Zero Col'] {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin Col T}
     {DO : Claims.Flock.Deploy Coin Col' T'} {Cp : Caps Coin} {G : Msg → Prop} (hK : KSLinkOn H D Bd DO Cp G)
     (hS : SessionAccepts (D.record Bd.IVStar)) {x : Msg} (hx : G x) {Ω : Type} [Fintype Ω] [Nonempty Ω]
@@ -440,15 +570,12 @@ theorem ksLinkOn_bits [Zero Col] [Zero Col'] {H : Msg → Msg} {D : RecAt Coin} 
       ExpectedCR H ((F0I H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) DO DO.decode P x
         R).charge (setupLen (D.record Bd.IVStar) x +
           ((Inner.ofFlock Bd.deploy Bd.deploy.decode).k (xI (D.record Bd.IVStar) x) + 1) * (n + v))))
-    (c : ℝ)
-    (hfork : ∀ (ω : Ω) (j : ℕ) (u₀ : (Fin ((compDep D Bd DO).V.k x) → Coin) × (compDep D Bd DO).EO.C x),
-      Ex (fun u : (Fin ((compDep D Bd DO).V.k x) → Coin) × (compDep D Bd DO).EO.C x =>
-        (((compDep D Bd DO).verModel ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans) H P x).cost ω
-          (fork (((compDep D Bd DO).verModel ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans) H P x).cut j) u₀.1 u.1,
-            u.2) : ℝ)) ≤ c)
-    (hrr : ∀ ω, Ex (fun u : (Fin ((compDep D Bd DO).V.k x) → Coin) × (compDep D Bd DO).EO.C x =>
-      (((compDep D Bd DO).verModel ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans) H P x).cost ω u : ℝ)) ≤ c)
-    (hc : 2 * c ≤ t * (cBe (D.record Bd.IVStar) x + setupLen (D.record Bd.IVStar) x + 2 * ((n + v : ℕ) : ℝ)))
+    (hn : ∀ cs ws, ((D.record Bd.IVStar).innerCalls H x cs ws).length ≤ n)
+    (hv : ∀ ps, (setupCalls H (D.record Bd.IVStar) ((D.record Bd.IVStar).vstar x ps)).length ≤ v)
+    (hV : ∀ (r : Fin ((compDep D Bd DO).V.k x) → Coin) ws,
+      ((compDep D Bd DO).innerLog ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans) H x r ws).length ≤ n)
+    (hW : ∀ (ω : Ω) (u : (Fin ((compDep D Bd DO).V.k x) → Coin) × (compDep D Bd DO).EO.C x) ws,
+      (compDep D Bd DO).wits H P x ω u = some ws → ((D.record Bd.IVStar).calls x ws).length ≤ v)
     (hLink : ∀ h : 0 < (linkPlan (Coin := Coin) Bd.DE.V.k (2 ^ 256)).sel ((compDep D Bd DO).xI x),
       ExpectedCR H ((linkPlan (Coin := Coin) Bd.DE.V.k (2 ^ 256)).finder
         ((compDep D Bd DO).verModel ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans) H P x) ((compDep D Bd DO).xI x) h)) :
@@ -468,12 +595,17 @@ theorem ksLinkOn_bits [Zero Col] [Zero Col'] {H : Msg → Msg} {D : RecAt Coin} 
           (2 : ℝ) ^ (-(255 - Real.logb 2 (βdev2 (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) Cp x *
             (cBe (D.record Bd.IVStar) x + setupLen (D.record Bd.IVStar) x + 2 * ((n + v : ℕ) : ℝ)))))) :=
   (hK x hx Ω P (2 ^ 256) (2 ^ 257)).trans
-    (link_bound_split_le H _ _ DO DO.decode Cp hS x P t ht1 hrun n v hSB hBI hFCI hF0I Bd.DE.V.k _ _ c hfork hrr hc
-      hLink)
+    (link_bound_split_le H _ _ DO DO.decode Cp hS x P t ht1 hrun n v hSB hBI hFCI hF0I Bd.DE.V.k _ _
+      ((n + v + setupLen (D.record Bd.IVStar) x + n + v : ℕ) : ℝ)
+      (verModel_Ex_cost_le hS x P t hrun _ _ fun ω u =>
+        verModel_extras_le x P _ n v n v hn hv ω u (fun ws _ => hV u.1 ws) (hW ω u))
+      (by exact_mod_cast (by omega : n + v + setupLen (D.record Bd.IVStar) x + n + v ≤
+        setupLen (D.record Bd.IVStar) x + 2 * (n + v))) hLink)
 
 /-- **`Pr[acc ∧ ¬R] ≤ 2^{−167.7} + t·2^{−174.95}` at every statement**, where every statement a run of the
 composite's verifier accepts is one `G` admits with `κ ≤ 2^{−167.7}` and `ε ≤ 2^{−174.95}` (`hb`): `ksLinkOn_bits`
-there, and where no run accepts, `Pr[acc ∧ ¬R] = 0`. -/
+there, and where no run accepts, `Pr[acc ∧ ¬R] = 0`. So `w ≤ v` (`hW`) is needed only where a run accepts, which at
+the deployment's layout holds at every `v ≥ 2^32` (`calls_le_layR_of_acc`). -/
 theorem ksLinkOn_tight [Zero Col] [Zero Col'] {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin Col T}
     {DO : Claims.Flock.Deploy Coin Col' T'} {Cp : Caps Coin} {G : Msg → Prop} (hK : KSLinkOn H D Bd DO Cp G)
     (hS : SessionAccepts (D.record Bd.IVStar)) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
@@ -506,15 +638,13 @@ theorem ksLinkOn_tight [Zero Col] [Zero Col'] {H : Msg → Msg} {D : RecAt Coin}
       ExpectedCR H ((F0I H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) DO DO.decode P x
         R).charge (setupLen (D.record Bd.IVStar) x +
           ((Inner.ofFlock Bd.deploy Bd.deploy.decode).k (xI (D.record Bd.IVStar) x) + 1) * (n + v))))
-    (c : ℝ)
-    (hfork : ∀ (ω : Ω) (j : ℕ) (u₀ : (Fin ((compDep D Bd DO).V.k x) → Coin) × (compDep D Bd DO).EO.C x),
-      Ex (fun u : (Fin ((compDep D Bd DO).V.k x) → Coin) × (compDep D Bd DO).EO.C x =>
-        (((compDep D Bd DO).verModel ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans) H P x).cost ω
-          (fork (((compDep D Bd DO).verModel ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans) H P x).cut j) u₀.1 u.1,
-            u.2) : ℝ)) ≤ c)
-    (hrr : ∀ ω, Ex (fun u : (Fin ((compDep D Bd DO).V.k x) → Coin) × (compDep D Bd DO).EO.C x =>
-      (((compDep D Bd DO).verModel ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans) H P x).cost ω u : ℝ)) ≤ c)
-    (hc : 2 * c ≤ t * (cBe (D.record Bd.IVStar) x + setupLen (D.record Bd.IVStar) x + 2 * ((n + v : ℕ) : ℝ)))
+    (hn : ∀ cs ws, ((D.record Bd.IVStar).innerCalls H x cs ws).length ≤ n)
+    (hv : ∀ ps, (setupCalls H (D.record Bd.IVStar) ((D.record Bd.IVStar).vstar x ps)).length ≤ v)
+    (hV : ∀ (r : Fin ((compDep D Bd DO).V.k x) → Coin) ws,
+      ((compDep D Bd DO).innerLog ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans) H x r ws).length ≤ n)
+    (hW : (∃ ω r, (run H P (compDep D Bd DO).V x ω r).out = .acc) →
+      ∀ (ω : Ω) (u : (Fin ((compDep D Bd DO).V.k x) → Coin) × (compDep D Bd DO).EO.C x) ws,
+        (compDep D Bd DO).wits H P x ω u = some ws → ((D.record Bd.IVStar).calls x ws).length ≤ v)
     (hLink : ∀ h : 0 < (linkPlan (Coin := Coin) Bd.DE.V.k (2 ^ 256)).sel ((compDep D Bd DO).xI x),
       ExpectedCR H ((linkPlan (Coin := Coin) Bd.DE.V.k (2 ^ 256)).finder
         ((compDep D Bd DO).verModel ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans) H P x) ((compDep D Bd DO).xI x) h)) :
@@ -524,7 +654,7 @@ theorem ksLinkOn_tight [Zero Col] [Zero Col'] {H : Msg → Msg} {D : RecAt Coin}
   have hpos : (0 : ℝ) ≤ 2 ^ (-(167.7 : ℝ)) + t * 2 ^ (-(174.95 : ℝ)) := by positivity
   by_cases hex : ∃ ω r, (run H P (compDep D Bd DO).V x ω r).out = .acc
   · obtain ⟨hx, hκ, hε⟩ := hb hex
-    exact (ksLinkOn_bits hK hS hx P t ht1 hrun n v hSB hBI hFCI hF0I c hfork hrr hc hLink).trans
+    exact (ksLinkOn_bits hK hS hx P t ht1 hrun n v hSB hBI hFCI hF0I hn hv hV (hW hex) hLink).trans
       (add_le_add hκ (mul_le_mul_of_nonneg_left hε (Nat.cast_nonneg t)))
   · unfold PrBad
     refine le_trans (Pr_mono (q := fun _ => False) fun q hq => ?_) (Pr_false.le.trans hpos)

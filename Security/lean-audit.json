@@ -16117,6 +16117,16 @@
     "Flock.ProvedScope.programDigest": "a2940561eb7eeb56ad3d6ecdc1811e313d4ac708a523a040fbcd2d1c3eec249d"
    }
   },
+  "Flock.RecBudget": {
+   "digest": "c50559a23ea68e74e7caaa5b32aff521bb4441516d5efea269b4972707b3051f",
+   "definitions": {
+    "Flock.RecBudget.MAX_RECORDED": "6ceafce6a1aca74596646843ff9a6a812a046b34a8494a25a166558200ef0d8f",
+    "Flock.RecBudget.recorded": "f9b560dac17ea83adef1666c128b051f435152aac8a30aa71cdb3a8b583e95ae",
+    "Flock.RecBudget.recordedAt": "b88927110838d76cc89b8de190e37a369ebfc91d4f5761c714dc5a0915f8971c",
+    "Flock.RecBudget.recordedAt._sparseCasesOn_1": "c42eea3056db9fa639bb0d892e59da777ae62a591040985efb0c1d315cbe3f22",
+    "Flock.RecBudget.recordedCalls": "81edfa451d9006aafa962d30f0a21d244ed532e0692ee36a81d0ab67f250afd4"
+   }
+  },
   "Flock.RecCoins": {
    "digest": "255229057751b6e6f2332b79d2a17d4161394f484d8377d601f388965813e0eb",
    "definitions": {
