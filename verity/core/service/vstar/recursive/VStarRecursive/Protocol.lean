@@ -625,8 +625,9 @@ def main (args : List String) : IO UInt32 := do
 
 /-- The inner session's full draw over `n` units (`rec_live.full_draw`): the stratified law at `K = n`, every unit drawn. -/
 private def fullDrawB (n : Nat) (k : Nat := n) : ByteArray :=
-  (Flock.Draw.UnitDraw.toJson { law := .stratified k #[{ template := "t", units := #[(0, n)], k }], population := n,
-    units := Array.range k }).compress.toUTF8
+  let s : Flock.Draw.Stratum := { template := "t", units := #[(0, n)], k := k }
+  let d : Flock.Draw.UnitDraw := { law := .stratified k #[s], population := n, units := Array.range k }
+  d.toJson.compress.toUTF8
 
 -- each part's setup accepts the form `innerHeld` tells it, at its files' units (`checkForm` reads only `n` of them)
 #guard (Flock.RecSetup.checkForm (some (innerForm (fullDrawB 4))) { (default : Flock.Stmt) with n := 4 }).toOption.isSome

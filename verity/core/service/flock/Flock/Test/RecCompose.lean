@@ -30,7 +30,7 @@ def inner : String := hex '1'
 
 def sh : Shared :=
   ⟨some inner, some (hex '2'), some (hex '3'), some (hex '4'), none, some (hex '5'), some (hex '6'), some (hex '7'),
-    some "batched", some true, some [("range8", hex '8')], none, none, none⟩
+    some "batched", some [("range8", hex '8')], none, none, none⟩
 
 /-- A statement carrying the link table: its root and 18 rows. -/
 def table : Option (String × Nat) := some (hex 'c', 18)
