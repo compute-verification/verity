@@ -1,6 +1,6 @@
 # The public monorepo's boundary: the files of this repository its one-way export copies. This repository stays the only
 # source of truth, and the export (`public_export.py`) copies the public set into a tree of fresh history. This file is the
-# decided boundary: moving a path across it is an ask through the proofs lead (the asking-daniel skill), then one line here.
+# decided boundary: moving a path across it is a boundary decision, then one line here.
 #
 # A file is public when a `public` glob covers it, when a `needed` glob covers it and a public file needs it (directly or
 # through other such files), or when a `when_closed` glob covers it and everything it needs is public. A `private` glob
