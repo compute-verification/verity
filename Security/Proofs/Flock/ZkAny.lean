@@ -54,6 +54,7 @@ public import Proofs.Flock.ZkAny.RelayLoopSalts
 public import Proofs.Flock.ZkAny.RelayLoopFacts
 public import Proofs.Flock.ZkAny.RelayLoopCur
 public import Proofs.Flock.ZkAny.RelayLoopFirst
+public import Proofs.Flock.ZkAny.RelayLoopOwn
 public import Proofs.Flock.ZkAny.RelayLoopL0
 
 /-! Zero knowledge at any values: the generic forms, a table's and a release of `J` tables behind the ZK server's
@@ -105,6 +106,7 @@ and at a frame round given what the loop's frames and the model hold there and t
 what the loop's frames and the model hold at a frame round, from that invariant on the deployed loop's model, given
 the model's answer there and what it holds at the round's place, past a stream's first round the model's scheduled
 round where the model's tables and salts are the loop's; and past the `Commit` the session's entry linked to the
-coins answering the model's link, at the setup's link points. -/
+coins answering the model's link, at the setup's link points; and past a rep's schedule so far, at the inner proof's
+rounds, the rep's frame at the session's next round keeping `SameInv` one round more of the rep. -/
 
 @[expose] public section
