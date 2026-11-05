@@ -23,6 +23,12 @@ It is pure Python, stdlib plus `verity`, and slow by design. Four codecs sit beh
 - **P3** (`verity.core.protocols.pous.scheme`, the fast research codec): two layers over the band graph `B(220, 12)`
   with a transpose connector and a tweakable `P` (Lean's `p3Scheme`).
 
+**The caveat.** The band, dense and P3 schemes hold only over an ideal `Π₂`. At the reference `Π₂`, Feistel10 over
+SHAKE256, a prover that keeps each block's five odd-round states of its pad call (1.53% of `C`) rebuilds any label in
+481 sequential Keccak-f with no `Π₂` call: the claim `feistel-indifferentiability` is refuted (`protocol.LOCAL_CLAIMS`),
+and so is every reading of a deadline as a count of whole `Π₂` calls (`call_ns`, the cliff, `audit.AUDIT_CAP`). P2 has
+no `Π₂`.
+
 ## Top statements
 
 Each is proved as `Pous.SecurityProofs.<name>` in `Security/Proofs/Pous.lean` and stated as `Pous.Guarantees.<name>` in
@@ -43,7 +49,8 @@ each statement. The schemes' statements hold in the ideal model each docstring n
   `Q = 2^20`, `k = 111` and `ε = 2^-128`. It is `dense.POINT_64K`'s certificate.
 - `P3ConcreteMeets64` and `P3ConcreteMeets14GB`: P3 with a concrete `H` and 64 KB labels meets the requirement at
   `D = 10`, `Q = 2^20`, `k = 106` and `ε = 2^-128`, for one 14.4 MB segment and jointly for 971 segments (14.005 GB).
-  The first is P3's certificate.
+  They are about Lean's chain, which starts from another `h_0` than the code's, so P3 has no certificate
+  (`DISCREPANCIES.md`, item 16).
 - `ContinuousAudit`: for any scheme with `TimedINC`, the continuous audit's memory challenger (modelled in
   `Security/Definitions/Pous/Model/Continuous.lean`; `continuous.py` runs it) accepts at tolerance `f` while the average
   freed fraction of memory over the challenges exceeds `ε_proof + g(f)` with probability at most `βe + n·(β + 1)·π`.
@@ -86,8 +93,8 @@ each statement. The schemes' statements hold in the ideal model each docstring n
 
 ## Where to look
 
-- `PROTOCOL.md`: the lifecycle, the API and the byte formats; `DISCREPANCIES.md`: where the Lean model, the prose spec
-  and this code differ.
+- `DISCREPANCIES.md`: where the Lean models, their prose and this code differ. Each module's docstring states its part
+  of the lifecycle (the modules and the byte formats are under "API").
 - `check/`: the package `pous_check`, P2's verifier in Lean (below); `lean/`: the grader and where PoUS's Lean is in
   `Security/` (its README).
 - `verity/core/devices/memory_challenger`: the device that runs the timed rounds and the wipe, and its verdicts in Lean.
@@ -97,6 +104,40 @@ each statement. The schemes' statements hold in the ideal model each docstring n
   Lean vectors with `tests/lean/generate.sh`.
 
 ## API
+
+### Modules
+
+| Module | What it holds |
+|---|---|
+| `params`, `labels`, `oracle`, `primitives`, `scheme` | P3: its parameters, the bit layout (Lean's `codeEquiv`), oracle programs and their rounds, the primitives `H` and `P_T` with their backends (`reference`, `ideal`, the unanalysed `heuristic_arx`, and the broken `XorSponge` and `MiyaguchiPreneel`, kept to replay their attacks), and the scheme |
+| `band`, `dense` | the band and dense schemes over the overwrite chain: `SECURE_FIRST`, `POINT_64K`, `check_deployment` (the cliff) |
+| `codec`, `layout` | `Codec`, the seam every module above the scheme uses, and `Geometry`, the sizes they read; tensors laid out in `W`, and per-tensor decode |
+| `setup`, `verifier` | the commitment to `W`, the verifier's salt, and `vk` by the public encoder (the default) or the verifier's own; `VerifierKey`, its leaves and audit paths |
+| `audit` | the challenge key, `UnsignedRounds` and `run_timed` (the sequential reveal, strict), `simulate` (oracle rounds) |
+| `protocol`, `schemes` | the generic protocol (`Scheme`, `Certificate`, `TimedAudit`, `StorageProfile`, `LOCAL_CLAIMS`) and the registered schemes |
+| `memory_challenger`, `challenger_party`, `period_reports` | the memory challenger, which signs its rounds; it as a party of its own; its runs under its party's per-period root |
+| `verdict_circuit`, `answer_circuit`, `decode_circuit`, `circuit` | Definitions: the verdict as one proof block, an answer's label, P2's decode and its modular squaring |
+| `run`, `period` | the composed check of a recorded run, and one period on one node |
+| `continuous` | the continuous audit's memory challenger |
+| `adversary` | holdings replayed against the real labels (Lean's `ColState` and `colRound`) |
+| `streamed_wipe`, `wipe_party`, `wipe_parties`, `wipe_period`, `wipe_store`, `wipe_stream`, `wipe_monitoring` | the streamed-label wipe: the protocol, its memory challenger as a party, one node's wipe, the prover's store on a GPU, the native fill, and the wipe over a monitoring period |
+
+### Byte formats
+
+A second implementation (a GPU codec) matches these, and each changes only with a version bump in a string it carries.
+`primitives.py`'s docstring has the reference backend's layout, `dense.py`'s the dense chain's, and `verifier.py`'s
+`vk`'s.
+
+| Name | Value |
+|---|---|
+| `params.SALT_BITS`, `params.TAG_BITS` | 192, 256: `tag_s = salt ‖ u64(s)` |
+| `primitives.CAPACITY_BITS` | 512: `Π₂` is `2m + 512` bits |
+| `primitives.HEADER` | `b"pous-p3-v1-H"`, the first 12 bytes of P3's `h_0` |
+| `primitives.PI_DOMAIN`, `primitives.P_DOMAIN` | `0x48` (`Π₂`), `0x50` (`P_T`): the first byte of every round function's input |
+| `primitives.EM_KEY_DOMAIN` | `0x4B`: the heuristic `P_T`'s key |
+| `verifier.leaf_hash`, `verifier.node_hash` | prefixes `0x00`, `0x01` |
+| `setup.COMMIT_TAG`, `setup.SALT_DOMAIN` | `"verity-pous/w-commitment/v2"`, `"verity/pous/salt/v1"` |
+| `audit.CHALLENGE_DOMAIN` | `"verity/pous/audit-challenge/v1"` |
 
 ### The codecs and the lifecycle
 
@@ -152,7 +193,11 @@ checks a signed run in the clear and publishes only the verdict. It accepts S1's
 1 iff at most `M` of the `K` rounds miss, a round hitting when its record names it, is on time within `LIMIT` and holds
 the expected digest of its label (`PousVerdict.verdictProg_accepts`). Its gates as Lean code, `PousCheck.Verdict.prog`
 (`check/PousCheck/Verdict.lean`), are `verdictProg` gate for gate (`Security/Proofs/Pous/Continuous/VerdictCode.lean`),
-and `check/tests/test_verdict_difftest.py` holds the Definition's compiled circuit to that code.
+and `check/tests/test_verdict_difftest.py` holds the Definition's compiled circuit to that code. An audit's public
+outputs are the setup's (`run.Setup`: the commitment to `W`, the root of `C*`, the salt and the block count), the
+verdict, and the coin tree's openings once the run has closed. Each round's times and digests are witness in the signed
+record; `audit.AuditResult`, which keeps every answer and its latency in the clear, is the reference's, never a public
+output.
 
 As an auditor party with a device identity, the challenger reports its runs under its party's per-period root instead
 (`period_reports`, on `verity.core.attest`): each run's one public output is its liveness record, and the period's root
@@ -188,8 +233,9 @@ DIGESTS.bin SESSION.json SESSION_ID` (`check/`) is the same check in Lean.
 challenger fills every memory tier of one server with labels it derives itself (SHA-512 under a key fresh for the server
 and the wipe), then reveals `k` indices sampled with live coins once the fill is complete and checks each answer against
 its own label, under a deadline per batch. Its guarantees are the wipe's top statements above, for the sequential
-reveal, the only one the verdict accepts (batch size 1). `PROTOCOL.md` ("The streamed-label wipe") has the messages, the
-bound and the holes. The verdict is decided by its Lean port, `MemoryChallenger.StreamedWipe` (`streamed-wipe-verdict`
+reveal, the only one the verdict accepts (batch size 1). `streamed_wipe.py`'s docstring has the messages and the
+records, and `Pous.Guarantees.StreamedWipe`'s module docstring the bound, its physical premises and what it doesn't
+cover. The verdict is decided by its Lean port, `MemoryChallenger.StreamedWipe` (`streamed-wipe-verdict`
 in `verity/core/devices/memory_challenger/lean/`), through `wipe_verdict.judge` there; `streamed_wipe.verdict` is the
 reference it is difftested against, and runs beside it under `both`.
 
