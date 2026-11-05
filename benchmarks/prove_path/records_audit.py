@@ -72,7 +72,10 @@ audit stopped before its proofs end still says what it was tied to.
 Declared day), a negative moves the declaration to another program, and the summary's ``day`` names the day's declared
 program and where the day came from (`DAY_SOURCES`). ``--day`` and the prover's log are the development fallback: they
 bind the day to no time the auditor's device signed. ``--day-ledger LEDGER`` reads the day from the challenger's signed
-ledger instead (`device_day`): the UTC day of the window's signed open and the declarations the device chained before it.
+ledger instead (`device_day`, the challenger's ``declared_day``): the UTC day of the window's signed open and the
+declarations its lane signed before it. It reads the device's own ledger whole: a copy PoUS cut to a window's sessions
+(`pous.period.cite`) drops the declarations and the chain, and is refused. A window opened before its day's declaration,
+or of a lane that never declares, has no declaration of its day, so R2 refuses it (``R2-undeclared``).
 
 The negatives (`negatives` before the sample, a5's after it) cost Lean verifies of their own; ``--skip-negatives`` leaves
 them out of an audit (its summary says so), for a run of several audits of one circuit, which runs them in its first.
@@ -619,19 +622,15 @@ DAY_SOURCES = {"device": "the challenger's signed ledger (--day-ledger)",
                "development": "development: --day and the prover's --day-log, not device-bound"}
 
 
-def device_day(lines: list[bytes], root: str, key: Any, verify: Callable[[bytes, bytes], bool],
+def device_day(lines: list[str], root: str, key: Any, verify: Callable[[Any, bytes, bytes], bool],
                w: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """``--day-ledger LEDGER``: the window's day and its prover's declarations as the auditor's challenger device signed
-    them, read by the challenger's ``declared_day`` (``{day, declarations}`` in one-stage R2's shape: the UTC day of the
-    window open's signed ``started_utc``, and the declaration entries the ledger chains before that open), never ``--day``.
-    The tied W's naming is held to `registration.Declaration` rebuilt from the device's entry of its day. ValueError
-    where this tree's challenger reads no declarations, or its reader refuses the ledger."""
+    them, read by the challenger's ``declared_day`` from the device's ledger ``lines`` (``{day, declarations}`` in
+    one-stage R2's shape: the UTC day of the window open's signed ``started_utc``, and the declarations its lane signed
+    before that open), never ``--day``. The tied W's naming is held to `registration.Declaration` rebuilt from the
+    device's entry of its day. ValueError (`challenger.CoinError`) where the reader refuses the ledger."""
     from verity.core.protocols.sampled_proofs import challenger as Ch
-    reader = getattr(Ch, "declared_day", None)
-    if reader is None:
-        raise ValueError("--day-ledger: this tree's challenger has no declared_day, the reader of the device's signed "
-                         "declarations: the day is the development fallback's alone (--day --day-log)")
-    got = reader(lines, {"root": root}, key, verify)
+    got = Ch.declared_day(lines, {"root": root}, key, verify)
     day = got["day"]
     declarations = [{"blocks": list(d["blocks"]), "day": d["day"], "program": d["program"]} for d in got["declarations"]]
     if w is not None:
@@ -903,10 +902,9 @@ def audit(a: argparse.Namespace) -> int:
                 raise ValueError(f"the window's registration records two roots for {e['value']!r}")
         reads = IF.registered_reads(doc, mine, pins, registered=REG)
         if a.day_ledger:
-            from verity.core.protocols.sampled_proofs import challenger as Ch
+            from verity.core.protocols.sampled_proofs import challenger as Ch, remote as SPR
             key = Ch.key_of_record(json.loads(Path(a.challenger_key).read_text()))
-            ledger = [ln for ln in Path(a.day_ledger).read_bytes().split(b"\n") if ln]
-            day = device_day(ledger, mine.run, key, lambda m, s: AC.lms_verify(key, m, s), w_tie)
+            day = device_day(SPR.ledger_lines(a.day_ledger), mine.run, key, AC.lms_verify, w_tie)
         else:
             day = declared_day(a.day, a.day_log, a.day_params, w_tie)
     except (ValueError, KeyError, TypeError) as e:
@@ -1087,9 +1085,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--day-log", help="with --day: the deployment's registration log (verity/registration/log/v1)")
     p.add_argument("--day-params", help="with --day: the log's parameters, {auditor, composite} (default the log's composite "
                    "under an auditor of no sheets or keys)")
-    p.add_argument("--day-ledger", help="the challenger's published ledger (windows.jsonl), verified under "
-                   "--challenger-key: R2's day is the window open's signed UTC day and its declarations the device's "
-                   "(`device_day`), in place of --day's development fallback")
+    p.add_argument("--day-ledger", help="the challenger device's own ledger (windows.jsonl, whole: never a copy PoUS cut), "
+                   "verified under --challenger-key: R2's day is the window open's signed UTC day and its declarations the "
+                   "device's (`device_day`), in place of --day's development fallback")
     p.add_argument("--skip-negatives", action="store_true", help="no negatives in this audit (module docstring): a run of "
                    "several audits runs them in its first")
     p.add_argument("--compose-cache", help="a5's compose cache, which `warm` filled under this tree and FLOCK_* environment: "

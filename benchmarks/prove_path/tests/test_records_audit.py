@@ -779,6 +779,19 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
     assert seen["declared"] == {"day": 0, "declarations": [day[0].declared()]}
     assert json.loads((tmp_path / "day" / "summary.json").read_text())["day"] == {
         "day": 0, "declared": [got.rec["program"]], "source": RA.DAY_SOURCES["development"]}
+    root = RA.verifier_window(got.dir, D.parse_law(LAW), None)[0].run
+    lines, _key, record = _device_ledger(tmp_path / "device", [_declared(got.rec["program"], blocks=[]),
+                                                               *_window(S1, 1, root)])
+    (ledger := tmp_path / "windows.jsonl").write_text("".join(x + "\n" for x in lines))
+    device = tmp_path / "w-device.json"
+    device.write_text(json.dumps({**got.w, "window": {"day": DAY0,
+                                                      "declaration": G.Declaration(DAY0, got.rec["program"]).digest()}}))
+    seen.clear()
+    assert RA.main([*base, "--out", str(tmp_path / "device-day"), "--tie", str(device), "--tie-prefix", "h1/",
+                    "--day-ledger", str(ledger), "--challenger-key", str(record)]) == 1
+    assert seen["declared"] == {"day": DAY0, "declarations": [{"blocks": [], "day": DAY0, "program": got.rec["program"]}]}
+    assert json.loads((tmp_path / "device-day" / "summary.json").read_text())["day"] == {
+        "day": DAY0, "declared": [got.rec["program"]], "source": RA.DAY_SOURCES["device"]}
 
 
 def test_a_declared_day_holds_the_registrations_program_to_the_days_one_declaration(written, tmp_path):
@@ -836,38 +849,117 @@ def test_a_declared_day_holds_the_tied_ws_naming_to_a_declaration_of_that_day_in
         RA.declared_day(None, None, None, w(day=3, declaration=d3))
 
 
-def test_the_device_day_is_the_challengers_signed_one_and_holds_ws_naming_to_its_entry(monkeypatch):
-    """``--day-ledger`` (`device_day`): the day and declarations come from the challenger's ``declared_day`` over its
-    signed ledger, never from --day, in R2's shape whatever else the device's entry carries; W's naming is held to the
-    Declaration rebuilt from the device's entry of the day (no ``previous``), so a digest chained in the prover's own
-    log, or another day's, is refused. A tree whose challenger has no ``declared_day`` refuses rather than fall back."""
-    from verity.core.protocols import registration as G
+DAY0, PIN, S1, S2 = 20746, "c" * 40, "s20261020T093000Z-0001", "s20261020T093000Z-0002"
+
+
+def _auditor():
+    import a5_coins as AC
+    return AC._module("a5_auditor", HERE.parents[1] / "live_challenger" / "auditor.py")
+
+
+def _device_ledger(tmp_path: Path, events: list[tuple[str, str | None, dict]]) -> tuple[list[str], object, Path]:
+    """The challenger device's own ledger of ``events`` (kind, session, body), chained and signed by the live challenger's
+    code (`benchmarks/live_challenger/auditor.py`): its lines, its key and the key record ``--challenger-key`` reads."""
     from verity.core.protocols.sampled_proofs import challenger as Ch
+    from verity.ml.crypto import lms
+    A = _auditor()
+    (tmp_path / "var" / "sessions").mkdir(parents=True)
+    (tmp_path / "peers").write_text("vy-challenger-1 research@10.0.0.1\nvy-nebius-1 research@10.0.0.2\n")
+    (tmp_path / "pins.jsonl").write_text(A.pin_line(PIN, "d" * 40, "2026-10-20T09:00:00Z") + "\n")
+    host = A.Host(root=tmp_path / "var", peers=tmp_path / "peers", pins=tmp_path / "pins.jsonl")
+    params = lms.Params(64, 4, 5)
+    first, sign, key_sha = A.key_signer(host, params, workers=1)
+    for kind, session, body in events:
+        A.append(host, kind, session, lambda lines, b=body: {**b, **({"key_sha512": key_sha} if kind == "open" else {})},
+                 first, sign)
+    public = (host.key / "public").read_bytes()
+    record = tmp_path / "challenger-key.json"
+    record.write_text(json.dumps({"schema": Ch.KEY_RECORD_SCHEMA, "W": params.W, "H": params.H, "pubkey": public.hex(),
+                                  "pubkey_sha512": hashlib.sha512(public).hexdigest()}))
+    return [ln.decode() for ln in A.read_ledger(host.ledger)], Ch.ChallengerKey(params.W, params.H, public), record
 
-    day, program, seen = 20396, "5d" * 64, []
 
-    def declared_day(lines: list[bytes], window: dict, key: object, verify: object) -> dict[str, object]:
-        seen.append((lines, window, key))
-        return {"day": day, "declarations": [{"by": "vllm", "blocks": ["t"], "day": day, "declared_utc": "2025-11-04T00:01:00Z",
-                                              "pinned": "ab", "program": program},
-                                             {"by": "vllm", "blocks": [], "day": day + 1, "declared_utc": "x", "pinned": "ab",
-                                              "program": "6e" * 64}]}
-    monkeypatch.delattr(Ch, "declared_day", raising=False)
-    with pytest.raises(ValueError, match="has no declared_day"):
-        RA.device_day([b"{}"], "ab" * 64, None, lambda m, s: True)
-    monkeypatch.setattr(Ch, "declared_day", declared_day, raising=False)
-    mine = G.Declaration(day, program, ("t",)).digest()
-    chained = G.chain("remote", [G.Declaration(day, program, ("t",))])[-1].digest()
+def _declared(program: str, **kw: object) -> tuple[str, None, dict]:
+    return "declaration", None, {"by": "hash", "blocks": ["t"], "day": DAY0, "declared_utc": "2026-10-20T09:30:00Z",
+                                 "pinned": PIN, "program": program, **kw}
 
-    def w(d: int, digest: str) -> dict[str, object]:
-        return {"window": {"day": d, "declaration": digest}}
-    got = RA.device_day([b"{}"], "ab" * 64, "key", lambda m, s: True, w(day, mine))
-    assert got == {"day": day, "declarations": [{"blocks": ["t"], "day": day, "program": program},
-                                                {"blocks": [], "day": day + 1, "program": "6e" * 64}]}
-    assert seen[-1] == ([b"{}"], {"root": "ab" * 64}, "key")
-    for bad in (w(day, chained), w(day + 1, G.Declaration(day + 1, "6e" * 64).digest()), {"window": {}}):
-        with pytest.raises(ValueError, match=f"not one of day {day}'s in the challenger's ledger"):
-            RA.device_day([b"{}"], "ab" * 64, "key", lambda m, s: True, bad)
+
+def _window(session: str, reserve_seq: int, root: str, by: str = "hash") -> list[tuple[str, str, dict]]:
+    """A lane's reserve and v2 open of the window at ``root``, on day DAY0 by its signed ``started_utc``."""
+    reserved = {"by": by, "peer": "vy-nebius-1", "scheme": "verity/test/coins/v1", "epoch": 0,
+                "families": [["pouw/salt", 1], ["pouw/round", 3]], "minutes": 10, "started_utc": "2026-10-20T09:30:00Z",
+                "expires_utc": "2026-10-20T09:40:00Z"}
+    opened = {"window": {"root": root}, "reserve": reserve_seq, **{k: v for k, v in reserved.items() if k in _auditor().RESERVED},
+              "opened_by": by, "started_utc": "2026-10-20T09:31:00Z", "host": "vy-challenger-1.x", "pinned": PIN}
+    return [("reserve", session, reserved), ("open", session, opened)]
+
+
+def _verify(key: object):
+    import a5_coins as AC
+    return AC.lms_verify
+
+
+def test_the_device_day_is_the_challengers_declared_day_over_its_own_ledger_and_holds_ws_naming_to_its_entry(
+        written, tmp_path):
+    """``--day-ledger`` (`device_day`) reads the challenger's ``declared_day`` over the device's own signed ledger: the
+    UTC day of the window's signed open and the declarations its lane signed before it, which R2 takes in place of
+    ``--day``. W's naming is held to the Declaration rebuilt from the device's entry (no ``previous``): the prover log's
+    chained digest, or another day's, is refused."""
+    from verity.core.protocols import registration as G
+    mine, _doc, _sets = RA.verifier_window(written.dir, D.parse_law(LAW), None)
+    program, root = written.rec["program"], "01" * 64
+    lines, key, _record = _device_ledger(tmp_path, [_declared(program), *_window(S1, 1, root)])
+    day = RA.device_day(lines, root, key, _verify(key))
+    assert day == {"day": DAY0, "declarations": [{"blocks": ["t"], "day": DAY0, "program": program}]}
+    assert not [c for c in R.check(written.rec, mine.program, mine.query, D.parse_law(LAW), CS.SCHEME, {}, **day).codes
+                if c.startswith("R2")]
+    rebuilt = G.Declaration(DAY0, program, ("t",)).digest()
+    assert RA.device_day(lines, root, key, _verify(key), {"window": {"day": DAY0, "declaration": rebuilt}}) == day
+    chained = G.chain("remote", [G.Declaration(DAY0, program, ("t",))])[-1].digest()
+    for bad in ({"day": DAY0, "declaration": chained}, {"day": DAY0 + 1, "declaration": rebuilt}, {}):
+        with pytest.raises(ValueError, match=f"not one of day {DAY0}'s in the challenger's ledger"):
+            RA.device_day(lines, root, key, _verify(key), {"window": bad})
+
+
+def test_a_window_opened_before_its_days_declaration_or_of_a_lane_that_never_declares_is_r2_undeclared(written, tmp_path):
+    """memory-accounting's first two points. A declaration signed after some of the day's windows opened leaves those
+    windows with no declaration (``declared_day`` reads only what the lane signed before the open), so R2 refuses them
+    (``R2-undeclared``) and W's naming of the later declaration is refused, while a window opened after it passes. A lane
+    that never declares isn't gated at the challenger, so its windows open, but under ``--day-ledger`` they read no
+    declaration (another lane's binds them not) and R2 refuses them too; with the switch off R2 reads no day."""
+    from verity.core.protocols import registration as G
+    mine, _doc, _sets = RA.verifier_window(written.dir, D.parse_law(LAW), None)
+    program = written.rec["program"]
+
+    def r2(d: dict) -> list[str]:
+        v = R.check(written.rec, mine.program, mine.query, D.parse_law(LAW), CS.SCHEME, {}, **d)
+        return sorted(c for c in v.codes if c.startswith("R2"))
+    late, key, _ = _device_ledger(tmp_path / "late",
+                                  [*_window(S1, 0, "01" * 64), _declared(program), *_window(S2, 3, "02" * 64)])
+    before = RA.device_day(late, "01" * 64, key, _verify(key))
+    assert before == {"day": DAY0, "declarations": []} and r2(before) == ["R2-undeclared"]
+    with pytest.raises(ValueError, match=f"not one of day {DAY0}'s in the challenger's ledger"):
+        RA.device_day(late, "01" * 64, key, _verify(key),
+                      {"window": {"day": DAY0, "declaration": G.Declaration(DAY0, program, ("t",)).digest()}})
+    assert r2(RA.device_day(late, "02" * 64, key, _verify(key))) == []
+
+    never, key, _ = _device_ledger(tmp_path / "never", [_declared(program, by="vllm"), *_window(S1, 1, "01" * 64)])
+    got = RA.device_day(never, "01" * 64, key, _verify(key))
+    assert got == {"day": DAY0, "declarations": []} and r2(got) == ["R2-undeclared"] and r2({}) == []
+
+
+def test_the_device_day_reads_the_devices_own_ledger_and_refuses_a_copy_pous_cut(written, tmp_path):
+    """memory-accounting's third point: PoUS cuts its copies of the ledger to the entries a window cites
+    (`pous.period.cited`), which drops the day's declaration; ``declared_day`` refuses such a copy as a ledger (its chain
+    no longer runs from seq 0), so R2 reads the device's own ledger or nothing, never a copy that would read undeclared."""
+    from verity.core.protocols.pous import period as PP
+    program, root = written.rec["program"], "01" * 64
+    lines, key, _ = _device_ledger(tmp_path, [_declared(program), *_window(S1, 1, root)])
+    cut = [lines[i] for i in PP.cited([json.loads(x) for x in lines], {S1})]
+    assert lines[0] not in cut and len(cut) == len(lines) - 1
+    with pytest.raises(ValueError, match="the auditor's ledger is refused"):
+        RA.device_day(cut, root, key, _verify(key))
+    assert RA.device_day(lines, root, key, _verify(key))["declarations"][0]["program"] == program
 
 
 def _audited(window: Path, out: Path, registration: dict | None = None, accepted: bool = True) -> Path:
