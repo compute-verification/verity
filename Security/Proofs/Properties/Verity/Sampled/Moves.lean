@@ -279,8 +279,8 @@ theorem push_ok {I : Flock.Witness.Inputs} {rd : _root_.SampledProofs.OneStageZk
 theorem verdictOf_ok {I : Flock.Witness.Inputs} {scope ksFiles population : Flock.V Unit} {coinKeys : Array String}
     {record : String} {draw : Option Json} {st : _root_.SampledProofs.OneStageZk.SetUp}
     {files : Flock.V (Array ByteArray)} {coinKey : Option String}
-    (h : _root_.SampledProofs.OneStageZk.verdictOf I scope ksFiles population coinKeys record draw st files coinKey =
-      .ok ()) :
+    (h : _root_.SampledProofs.OneStageZk.verdictOf I scope ksFiles population coinKeys record draw st files coinKey
+      = .ok ()) :
     ∃ proofs spec tabs rest, files = .ok proofs ∧ st = .ok (spec, tabs, rest) ∧
       Flock.Zk.verify spec tabs record proofs = .ok () := by
   unfold _root_.SampledProofs.OneStageZk.verdictOf at h
@@ -296,8 +296,8 @@ UTF-8, set up at its own draw, its proof files the blobs it names, and `Flock.Zk
 theorem step_verified {I : Flock.Witness.Inputs} {rd : _root_.SampledProofs.OneStageZk.Reads}
     {bs : _root_.Core.Blobs} {scope ksFiles population : Flock.V Unit} {programSha : Option String} {want : Json}
     {s : _root_.SampledProofs.OneStageZk.RunFiles} {r : _root_.SampledProofs.OneStageZk.Run}
-    (h : _root_.SampledProofs.OneStageZk.step I rd bs scope ksFiles population programSha want
-      ⟨#[], #[], #[], true⟩ s = .ok r)
+    (h : _root_.SampledProofs.OneStageZk.step I rd bs scope ksFiles population programSha want ⟨#[], #[], #[], true⟩ s
+      = .ok r)
     (hall : r.all = true) :
     ∃ recB record spec tabs rest proofs, bs.get s.record s!"session {s.name}'s record" = .ok recB ∧
       String.fromUTF8? recB = some record ∧
