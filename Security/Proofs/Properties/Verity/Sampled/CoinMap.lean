@@ -711,7 +711,8 @@ theorem relK_logs {β : Type} {lg : β → List Release} {E : List Release → G
     ∃ L, pre ++ [r] = pre' ++ r' :: L := by
   obtain ⟨t⟩ := hE.plays (pre ++ [r])
   obtain ⟨o, ho⟩ := exists_playReaches _ (closeThen (fun log => E (pre ++ r :: log)) t k fs ts)
-  have h₁ : lg o = pre ++ [r] := hE.reads _ t o (playReaches_closeThen _ t k fs ts ho)
+  have h₁ : lg o = pre ++ [r] :=
+    hE.reads _ t o (playReaches_closeThen (fun log => E (pre ++ r :: log)) t k fs ts ho)
   obtain ⟨s', ho'⟩ := playReaches_of_eq ((releases_bind k fs ts _).trans h) _ ho
   obtain ⟨L, s'', ho''⟩ := playReaches_relK k' fs' ts' _ s' ho'
   exact ⟨L, h₁.symm.trans (hE.reads _ s'' o ho'')⟩
@@ -787,9 +788,7 @@ theorem release_eq {lg : β → List Release} (hE : RecordsLog lg E) (o o' : Ope
 /-- **One count at every description**: the `n` of the frame the prover sent (`release_eq`). -/
 theorem n_eq {lg : β → List Release} (hE : RecordsLog lg E) (o o' : OpeningAt E g') : o.n = o'.n := by
   obtain ⟨d⟩ := o.iN
-  have h := congrArg Release.frame (o.release_eq hE o' d).2
-  injection h with _ _ hn
-  exact hn
+  exact (Verity.Frame.opening.inj (congrArg Release.frame (o.release_eq hE o' d).2)).2.2
 
 /-- **One release of each round at every description** (`release_eq`). -/
 theorem opened_eq {lg : β → List Release} (hE : RecordsLog lg E) (o o' : OpeningAt E g') (d : o.Openable) :
@@ -833,7 +832,7 @@ theorem openingOf_some {β : Type} {E : List Release → Game β} {g' : Game β}
     ∃ o, openingOf E g' = some o :=
   ⟨Classical.choice ⟨o'⟩, by
     unfold openingOf
-    exact dif_pos ⟨o'⟩⟩
+    exact dite_eq_left ⟨o'⟩⟩
 
 /-- **The release `bits` written into an opening's node**: at an opening's coin node in a play that ends in `E`, the
 tape's round there replaced by the round it picks among those the node's canonical description releases as `bits`;
