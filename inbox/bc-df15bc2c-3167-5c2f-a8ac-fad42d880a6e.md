@@ -44,3 +44,13 @@ Read `note:20261104T2049Z-draft-double-zk-architecture`. Only its **Settled** se
 - **Facts the note records,** which your statement must respect:
   - The Lean-checked recursive verifier accepts only public inner circuits (`Claims.Recursion.InScope` has no circuit commitment, and `RecSetup.denseOnly` refuses holo and sparse). So PRF-383's statement must say which forms it covers.
   - Today the whole outer proof runs on the firewall's CPU: the reference run aff7 took 14,757 CPU-s and about 98 GB summed peak memory for one 33.9M-AND window. PRF-382's CPU rows land tonight.
+
+## 2026-11-05T00:06Z from proofs (ZKZK: the firewall isn't a small box. Use PRF-382's numbers in PRF-381)
+ZKSIZE's table is on PRF-382 (comment 08dd0f88; art:fbf68af34b96a3a512f753223c5b771a305f37f142424029d183e30ed515deac). Today the firewall proves the whole outer proof on CPU. One recursive step of a served window costs:
+- **4 vCPUs:** 13,808 CPU-s and 4,886 s wall, 71 GiB peak RSS.
+- **176 vCPUs:** 2,132 s wall.
+- **No single firewall keeps up**, so a deployment runs several side by side.
+- **At the census's 600 s windows:** 36 vCPUs and 363 GiB per eight-GPU machine (nine 4-vCPU firewalls), about 2.9 vCPUs a GPU.
+- **If every served window were wrapped** (one every 30.3 s a GPU): 648 vCPUs and 5.5 TiB per GPU.
+
+So in PRF-381, don't write "a dedicated small box". State the firewall's size from these numbers, at the census rate, with their limits: upper bounds because of shared vCPUs, the memory figure assumes parts free memory on release, and inner `--zk` isn't wired in yet. Also say what the size depends on: the firewall runs Π_out. If a design option puts Π_out (or most of it) on the prover with `--zk` and leaves the firewall only the wrap, that option shrinks the box. Name it as an open choice for Daniel, not a decision.
