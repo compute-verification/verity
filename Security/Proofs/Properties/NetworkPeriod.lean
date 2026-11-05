@@ -620,10 +620,10 @@ theorem scanWindowsPlaced : ScanWindowsPlaced := by
     simp only [NetTiming.faultySets, Finset.mem_filter, Finset.mem_powerset] at hF
     exact hF.1
   refine Placed.faultyBits_le hsub (fun v hv => ?_) (hwb i F hF)
-  obtain ⟨m, hm, u, hu, hv⟩ := hblocks v hv
+  obtain ⟨m, hm, u, -, hv⟩ := hblocks v hv
   obtain ⟨j, hj, hfile⟩ := hfiles m hm
   rw [hv, hflat]
-  exact Placed.committed_le_terms hscan hfs hpad hm hu hj hfile
+  exact Placed.committed_le_terms hscan hfs hpad hm hj hfile
 
 /-- A statement of one input gate, with `null`'s bytes as its descriptor and a design of no rule, which draws no slot,
 so every set of slots is accepted with probability `1` (`Design.Pa`). -/
