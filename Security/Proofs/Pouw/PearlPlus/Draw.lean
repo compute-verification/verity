@@ -1,5 +1,6 @@
 import Proofs.Pouw.PearlPlus.Assembly
 import Proofs.Pouw.PearlPlus.Rules
+import Proofs.Properties.Pouw.PearlPlus.Verdict
 import Definitions.Pouw.PearlC.TileDraw
 
 /-!
@@ -10,8 +11,8 @@ its unit's record makes before the coin (`drawTickets`), and an audit that accep
 declaration is consistent with it (`goodDeclTiles`). This file reads the code's draw and acceptance in those terms.
 
 * (c) A passed tile's declaration is consistent: a tile that `checkTile` passes, or finds only over its inert-work
-  bound, has `declOK` under its record's declaration (`declOf`). Its kept width is within `k` (`LoadedGivesUp`), and
-  each credited A row it declares passes `RowOK`: `rowsFailure` holds the row to `row_passes`, on the words its opening parses to and their `s5_stats`, which
+  bound, has `declOK` under its record's declaration (`declOf`). Its kept width is within `k` (a loaded pass's records
+  keep `UnitRecord`'s rule, `load_facts`), and each credited A row it declares passes `RowOK`: `rowsFailure` holds the row to `row_passes`, on the words its opening parses to and their `s5_stats`, which
   `RowsAreTheRules` reads as `RowOK` at the committed activations.
 * (d) The code's tickets are `drawTickets` (`ticketsAreTheDraw`): on a run laid out as the game's workload, an
   injective map from `tickets`' entries to the game's tiles, onto every tile with a ticket, takes each entry to its
@@ -815,19 +816,38 @@ namespace Pouw.PearlPlus.Bridge
 open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus Finset Draw
 
 /-- **The declaration a unit's record makes** before the coin: its kept width, and the rows and columns it credits, as
-`UnitRecord.credited` filters a tile's (real, neither excluded nor voluntary). -/
+`UnitRecord.credited`'s band rule filters a tile's (a real, unexcluded A row whose band holds no voluntary A row; a
+column whose block holds no excluded or voluntary B row). -/
 def declOf (r : UnitRecord) : Decl where
   kept := r.kKept
   rows := (Finset.range r.realRows).filter fun i =>
-    (decide (i < r.realRows) && !r.excludedA.contains i && !r.voluntaryA.contains i) = true
-  cols := (Finset.range r.matmul.n).filter fun j => (!r.excludedB.contains j && !r.voluntaryB.contains j) = true
+    (decide (i < r.realRows) && !r.excludedA.contains i &&
+      !r.voluntaryA.any (· / UnitRecord.BAND == i / UnitRecord.BAND)) = true
+  cols := (Finset.range r.matmul.n).filter fun j =>
+    (!(r.excludedB ++ r.voluntaryB).any (· / UnitRecord.BAND == j / UnitRecord.BAND)) = true
+
+/-- A row the band rule credits is neither excluded nor voluntary, so the check holds it to the per-row rules. -/
+theorem banded_row {r : UnitRecord} {i : ℕ}
+    (h : (decide (i < r.realRows) && !r.excludedA.contains i &&
+      !r.voluntaryA.any (· / UnitRecord.BAND == i / UnitRecord.BAND)) = true) :
+    (decide (i < r.realRows) && !r.excludedA.contains i && !r.voluntaryA.contains i) = true := by
+  rw [Bool.and_eq_true] at h ⊢
+  refine ⟨h.1, ?_⟩
+  have h2 := h.2
+  cases hv : r.voluntaryA.contains i with
+  | false => rfl
+  | true =>
+    have ha : r.voluntaryA.any (· / UnitRecord.BAND == i / UnitRecord.BAND) = true :=
+      List.any_eq_true.2 ⟨i, List.contains_iff_mem.1 hv, by simp⟩
+    rw [ha] at h2
+    cases h2
 
 /-- **(c) A passed tile's declaration is consistent**: a tile of a pass `load` gives, which is audit tile `g` of `U`,
 whose unit `τ` commits as `c` and declares by its record (`declOf`), whose openings are `c`, and that `checkTile` passes
 on its weight's noise or finds only over its inert-work bound, has `declOK` at the deployed rules: its kept width is within `k`, and every credited row it
 declares in the tile passes `RowOK` at `c`'s activations. -/
 def TilePassGivesTheDecl : Prop :=
-  ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (ρ : ℚ) (coins : PouwCommit.CoinCommitment)
+  ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (ρ : ℚ) (coins : PouwCheck.PearlPlus.EpochCoins)
     (man : Lean.Json) (p : Pass) (tid : ℕ) (o : TileOpening) (U : Pouw.PearlC.Workload) (g : ℕ)
     (τ : Pouw.PearlC.Transcript) (c : Pouw.PearlC.Commit) (dec : ℕ → Decl),
     PouwCheck.PearlPlus.load coins man = .ok p → TileOf p tid U g →
@@ -837,10 +857,10 @@ def TilePassGivesTheDecl : Prop :=
       ∃ why, checkTile p (Properties.Pouw.PearlPlus.noiseOf p tid) tid o = .overCap why) →
       declOK (tilesH3 saltOf rootOf ρ : TileRules Q R S) U τ dec g
 
-/-- **(c)** from what a passed tile establishes (`TileAcceptMeans`), what a loaded pass's records keep (`LoadedGivesUp`)
+/-- **(c)** from what a passed tile establishes (`TileAcceptMeans`), what a loaded pass's records keep (`load_facts`)
 and the per-row rules (`RowsAreTheRules`). -/
-theorem tilePassGivesTheDecl (hT : Properties.Pouw.PearlPlus.TileAcceptMeans)
-    (hL : Properties.Pouw.PearlPlus.LoadedGivesUp) (hR : RowsAreTheRules) : TilePassGivesTheDecl := by
+theorem tilePassGivesTheDecl (hT : Properties.Pouw.PearlPlus.TileAcceptMeans) (hR : RowsAreTheRules) :
+    TilePassGivesTheDecl := by
   intro Q R S saltOf rootOf ρ coins man p tid o U g τ c dec hload hof hτ hdec hopen hpass
   obtain ⟨pos, rows, cols, htile, -, hunit, -, hk, -, -, hrows, -⟩ := hof
   obtain ⟨bound, hb⟩ := Assembly.passOrOver_bound hpass
@@ -852,7 +872,7 @@ theorem tilePassGivesTheDecl (hT : Properties.Pouw.PearlPlus.TileAcceptMeans)
   obtain ⟨-, -, -, -, -, -, hform, -, hchk, -, -⟩ := hrest
   obtain ⟨hp, -⟩ := Draw.tile?_some htile
   have hrec : p.records[pos]! ∈ p.records := by rw [getElem!_pos p.records pos hp]; exact List.getElem_mem hp
-  obtain ⟨-, -, hkept0, hkept⟩ := Draw.reason_none ((hL coins man p hload).1 _ hrec).1
+  obtain ⟨-, -, hkept0, hkept⟩ := Draw.reason_none ((Properties.Pouw.PearlPlus.load_facts hload).1 _ hrec)
   have hd : dec ((auditTiling 64 64 U.layout).unit g) = declOf p.records[pos]! := by rw [hunit]; exact hdec _ hrec
   have hK := Assembly.record_domain htile hpass
   rw [← hk] at hK hkept
@@ -867,7 +887,7 @@ theorem tilePassGivesTheDecl (hT : Properties.Pouw.PearlPlus.TileAcceptMeans)
     obtain ⟨x, hx, rfl⟩ := List.getElem_of_mem hi
     rw [hd] at hdi
     simp only [declOf, Finset.mem_filter, Finset.mem_range] at hdi
-    have hrp := Draw.rowsFailure_credited hchk hx hdi.2
+    have hrp := Draw.rowsFailure_credited hchk hx (banded_row hdi.2)
     obtain ⟨wn', -, henc, -⟩ := Assembly.formed_ok hform
     obtain ⟨hoa, -, -, hact, -, -⟩ := hopen pos rows cols htile
     rw [hoa] at henc
