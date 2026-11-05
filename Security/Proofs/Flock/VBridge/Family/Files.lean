@@ -1,5 +1,8 @@
-import Proofs.Flock.VBridge.Family
-import Proofs.Flock.VBridge.Runs.Rep
+module
+
+public import Proofs.Flock.VBridge.Family
+public import Proofs.Flock.VBridge.Runs.Rep
+import all Init.Data.Repr
 
 /-!
 # The family's table files: `HSch`, `HFiles`, `HRuns`
@@ -22,6 +25,8 @@ named `Prop`s, one per fact no check here establishes: the inner statement's set
 (`TableSrc.TranscriptIs`), the rounds' coin counts (`TableSrc.Coins`), the reps' extra claims and combs
 (`TableSrc.ExtrasAre`, `CombFolds`), and the Ligerito openings (`OpenedAll`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 
@@ -247,7 +252,7 @@ def stream (n r : ℕ) : StreamRec :=
 
 /-- The session record at the link points `P`, for `n` extra claims: the level-0 cap's bytes as the table's `root_B`, and
 both reps' streams. -/
-def sessAt (P : Array (Array F128)) (n : ℕ) : Session where
+def sessAt (P : Array (Array F128)) (n : ℕ) : RunRecord where
   rootF := ByteArray.empty
   rootB := #[s.cap.foldl (· ++ ·) ByteArray.empty]
   publics := #[]

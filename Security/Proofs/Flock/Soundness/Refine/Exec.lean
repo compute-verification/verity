@@ -1,12 +1,14 @@
-import Proofs.Flock.Soundness.Refine.Run
-import Flock.Verify
-import Proofs.Flock.Verifier.Transcript
-import Mathlib.Data.List.Range
+module
+
+public import Proofs.Flock.Soundness.Refine.Run
+public import Flock.Verify
+public import Proofs.Flock.Verifier.Transcript
+public import Mathlib.Data.List.Range
 
 /-!
 # Runs of the executable's transcript programs
 
-The executable verifier's phases are programs in `TM = StateT Transcript (Except String)` (PROTOCOL.md §6). A run that
+The executable verifier's phases are programs in `TM = StateT Transcript (Except String)` (`Flock.Transcript`). A run that
 succeeds, `x t = .ok (a, t')`, is taken apart one step at a time: each lemma below peels one step off the front of a
 `bind` and says what that step did.
 
@@ -18,6 +20,8 @@ succeeds, `x t = .ok (a, t')`, is taken apart one step at a time: each lemma bel
 `Adv t t' cs` records what a stretch of a run consumed: the same rounds, and the coins of the rounds from `t.k` to
 `t'.k` are `cs`, in order (`consumed`). It composes (`Adv.trans`), so a phase's coins are its steps' coins, concatenated.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.PlainReg
-import Proofs.Flock.Soundness.Discharge.FailClosed.Exec
-import Proofs.Flock.Soundness.Discharge.FailClosed.General
-import Proofs.Flock.Soundness.Discharge.FailClosed.Design
+module
+
+public import Proofs.Flock.Soundness.Discharge.PlainReg
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Exec
+public import Proofs.Flock.Soundness.Discharge.FailClosed.General
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Design
 
 /-!
 # The hidden-output headlines without `--zk`, over what `verify --registered F` accepts
@@ -21,6 +23,8 @@ with the registered reads checked:
 At public outputs the check with `--registered F` is the check without it (`ScopeR.scope`), so what `verify --registered
 F` accepts there `verify` accepts (`verifies_of_R`), and `FailClosed.Exec`'s public headlines cover it.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.FailClosed
 
@@ -210,9 +214,9 @@ theorem flock_headline_exec_hiddenRG
   ⟨prob_scope (A := LiveAccepts I) (fun _ h => PlainReg.accepts_of_R h.1) (fun _ h => h.2) _ _ _ _ fun hs =>
       flock_headline_hidden_design dj x₀ (instProg (circS I) n) (outsOfI (circS I) n) D Lb src hA3
         (ppHI hs.typed (hs.parseH hh) (General.rowsFit_of_scopeGenH hs.typed (hs.parseH hh) (hs.scopeGen hh hf)) dj x₀)
-        {instOneG (c := circS I) (n := n)} (constCols_instProgH (sitesAtH_parse hs.typed (hs.parseH hh)
+        {instOneG (c := circS I) (n := n)} (constCols_instProgH (sitesAtH_c hs.typed (hs.parseH hh)
           (General.rowsFit_of_scopeGenH hs.typed (hs.parseH hh) (hs.scopeGen hh hf)) dj x₀) (General.rowsFit_of_scopeGenH hs.typed (hs.parseH hh) (hs.scopeGen hh hf)).1 (outsOfI (circS I) n))
-        {instZeroG (c := circS I) (n := n)} (zeroCols_instProgH (sitesAtH_parse hs.typed (hs.parseH hh)
+        {instZeroG (c := circS I) (n := n)} (zeroCols_instProgH (sitesAtH_c hs.typed (hs.parseH hh)
           (General.rowsFit_of_scopeGenH hs.typed (hs.parseH hh) (hs.scopeGen hh hf)) dj x₀) (General.rowsFit_of_scopeGenH hs.typed (hs.parseH hh) (hs.scopeGen hh hf)).1 (outsOfI (circS I) n))
         (layAtHI hs.typed (hs.parseH hh) (General.rowsFit_of_scopeGenH hs.typed (hs.parseH hh) (hs.scopeGen hh hf)) dj x₀ (pub := pubS I))
         (rsAtG hs.typed (hs.parseH hh) (hs.scopeGen hh hf) dj x₀ (hs.loadH hh) hs.built)

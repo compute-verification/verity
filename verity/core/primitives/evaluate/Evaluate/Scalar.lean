@@ -1,3 +1,5 @@
+module
+
 /-!
 # The scalar primitives: integer, bit, select and comparison operations, and the FP32 operations on the encoding
 
@@ -11,6 +13,8 @@ non-negative integer; `Int` holds the Python's signed integers, and Python's `&`
 Each definition's doc names the definition of `Security/Definitions/Core/Scalar.lean` it must equal, to be proved in
 `Security/Proofs` as the certifier's copies are; where Security defines none yet, the Python function is the definition.
 -/
+
+@[expose] public section
 
 namespace Evaluate.Scalar
 

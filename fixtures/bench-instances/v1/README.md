@@ -1,12 +1,13 @@
 # bench-instances/v1
 
-The frozen input set for the Candidate A/B comparison at K=1536. Every proof-backend number at K=1536 is measured on
-prefixes of `vu-k1536` (B=1, 64, 4096 are ids `[0:1]`, `[0:64]`, `[0:4096]`; sub-batches are contiguous id ranges).
-The relation is `verity.proofs.target.FIRST`: `y = f32_to_bf16_rne(chain)`, the chain being 96 sequential Ampere
-`mma.sync.m16n8k16 bf16` transitions from `c_0 = +0` in ascending k (`verity.ml.tc.silicon.tc_dot`, pipeline
-`AMPERE_BF16_M16N8K16`). Expected words come from `silicon`, cross-checked step by step against
-`verity_numerical.reference.hawkeye_close` (saturating steps excepted, D8), and — where `manifest.json` records a
-hardware run — replayed on an RTX 4090 (sm_89) by `tools/tc_probe --replay-instances`.
+The frozen input set for comparing the archived proof systems A-GKR and B-Ligero at K=1536. Every proof-backend number
+at K=1536 is measured on prefixes of `vu-k1536` (B=1, 64, 4096 are ids `[0:1]`, `[0:64]`, `[0:4096]`; sub-batches are
+contiguous id ranges). The relation is `verity.proofs.target.FIRST`: `y = f32_to_bf16_rne(chain)`, the chain being 96
+sequential Ampere `mma.sync.m16n8k16 bf16` transitions from `c_0 = +0` in ascending k (`verity.ml.tc.silicon.tc_dot`,
+pipeline `AMPERE_BF16_M16N8K16`). Expected words come from `silicon`, cross-checked step by step against
+`verity_numerical.reference.hawkeye_close` (saturating steps excepted: the discrepancy log's D8,
+`verity/ml/circuits/silicon/discrepancy_log.json`), and — where `manifest.json` records a hardware run — replayed on an
+RTX 4090 (sm_89) by `tools/tc_probe --replay-instances`.
 
 ## Files
 
@@ -64,7 +65,7 @@ against `manifest.json` (`tiers.<tier>.files.<file>.sha256`) before trusting it.
 
 `vu-k1536`: 64 blocks of 64 ids; each block holds 54 real instances and 10 corners at positions 3, 9, ..., 57, so every
 prefix is representative. Real = the 24 seeds + 24 × 143 (seed activation row × another real weight row of the same
-layer/op, drawn deterministically from the pinned Hugging Face checkpoint). Corner families and the sensitivity table
+layer/op, sampled deterministically from the pinned Hugging Face checkpoint). Corner families and the sensitivity table
 are in `manifest.json` and printed by `python -m verity_numerical.bench.instances stats`.
 
 ## Notes recorded while building

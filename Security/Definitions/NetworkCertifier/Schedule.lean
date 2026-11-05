@@ -1,4 +1,6 @@
-import Definitions.NetworkCertifier.Run
+module
+
+public import Definitions.NetworkCertifier.Run
 
 /-!
 # The Program's logical schedule and the clock-sync advice: the constant-rate Program
@@ -23,6 +25,8 @@ declared sync is outside `Σ_sync` is rejected, so the accepted runs' advice ran
 **One clock per spatial unit.** Every egress link reads the same window's sync (the note's §2.5 and decision A's
 default). **The allocation is the slot count `S`**, as in Python, where a row has `allocation` slots.
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

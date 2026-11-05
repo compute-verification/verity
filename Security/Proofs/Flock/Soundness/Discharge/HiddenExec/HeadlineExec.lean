@@ -1,7 +1,11 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Headline
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Sites
-import Proofs.Flock.Soundness.Discharge.Layout.Scope
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Headline
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Sites
+public import Proofs.Flock.Soundness.Discharge.Layout.Scope
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -21,7 +25,7 @@ the one-table plan of the session's inputs (`planAtH`), with:
 
 So the hypotheses left are those of the plain headline: `hscope`, `hdec`, A3, `cr/sha-512`, `ecr/sha-512` and the
 numeric conditions. flock-verify refuses a statement failing `hscope` or the statement's other form hypotheses
-(PROTOCOL.md §16.15), and `FailClosed.flock_headline_exec_hidden` takes none of them.
+(`Flock.ProvedScope`), and `FailClosed.flock_headline_exec_hidden` takes none of them.
 -/
 
 namespace FlockSoundness.Discharge.HiddenExec

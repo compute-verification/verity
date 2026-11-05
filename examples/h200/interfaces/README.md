@@ -8,7 +8,7 @@ Not a package: run the modules with this directory on `PYTHONPATH` (the suite's 
 `verity_e2e_demo/replay_bundle.py`, schema `verity_e2e_demo/schemas/drawn-unit-bundle.v2.schema.json`. What the prover
 behind the firewall reads to prove a window's drawn units: per unit its coordinates (block, step, slot, layer, op, unit),
 its template id and binding, each row's opening (input and output rows against the step commitment, weight rows against
-their registered value's root, every row against its window port's registered root) and the C-Flock `--zk` session's
+their registered value's root, every row against its window port's registered root) and the Flock `--zk` session's
 member, subset draw and `frame_v3` header entry. A JSON document holds the public part; the private rows and salts are a
 binary payload beside it (`<name>.bin`, mode 0600), each named by `[offset, length]`. The payload is each unit's rows in
 order, each row's u16 words little-endian then its 192-byte salt.
@@ -37,8 +37,8 @@ that law over the registered population (Lean's `flock-verify draw --registratio
 (two requests, one step, both linears, width 128: 512 units, registered `subset:4`), its weights registered as core's
 registered values and its step committed under test salt keys, its target the RTX PRO 6000's. The suite pins its
 SHA-512s. `check` recomputes every string, path and domain and replays each unit's Definition on its input rows. The
-window itself, which `benchmarks/one_stage/prove_bundle.sh` proves the bundle against, is in the evidence store
-(its `BUNDLE_WINDOW`).
+window itself, which `benchmarks/one_stage/prove_bundle.sh` proves the bundle against, is the registered fixture
+`benchmarks/one_stage/tests/fixtures/bundle-window` (its `BUNDLE_WINDOW`).
 
 ## The block record (`verity/block-record/v1`)
 
@@ -52,7 +52,9 @@ for one server-time block and what the composed verdict reads. It extends the al
   S_cert, Q_cert, K, the wipe's foreign_bits at its reads `k` and ratio `r`), its error and the certificate at δ = 1/100
   and 1/10^6, its run ids, and `source: real|fixture`;
 - the composed verdict and the error of `Accounting.Guarantees.JointHorizonLive` over the block: the accepted
-  subprotocols' errors summed;
+  subprotocols' errors summed. It composes the subprotocols of one product (`PRODUCTS`): onsite's, every one, unless
+  `composed.product` names remote's, sampled proofs and PoUW, whose other subprotocols are `dropped`: not run and not
+  composed;
 - the monitoring period: week, month and year over a census deployment's machines (a parameter), with JointHorizonLive's
   union bound over that many blocks and the per-block error each δ needs.
 
@@ -75,7 +77,7 @@ price; its H and B are one recorded run of proofs' planner (`benchmarks/sampling
 together with `PLANNER`. A measurements file with `sections` or `proved` renders the H200 report (`m3.template`): every row is one number with
 its run, its own verdict line quoted and its target, whose misses are listed as visible failures. `proved` is the
 drawn-block proving run's VERDICT and PROVEBUNDLE lines verbatim: the first line is the fallback's until every drawn
-H200 proof block is proved in C-Flock and accepted by Lean. Per-call noise's serving overhead is one line,
+H200 proof block is proved in Flock and accepted by Lean. Per-call noise's serving overhead is one line,
 `serve_noise_line`: the seconds it adds a step with both ratios, never γ_step alone, ending the section marked
 `"serve_noise": true`; a row stating it on its own is refused. The rendered report goes to the
 evidence store (kind `demo-a-report/v1`), never Git.

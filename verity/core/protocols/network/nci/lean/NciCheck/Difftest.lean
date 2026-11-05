@@ -1,4 +1,6 @@
-import NciCheck.Check
+module
+
+public import NciCheck.Check
 
 /-!
 # The difftest: the NCI check against the Python reference, on random declarations
@@ -9,6 +11,8 @@ and fails unless `NciCheck.check` gives every result: per IU its size and novel 
 IU with its rule, or the code of the first malformation. The Lean audit runs it (`runs` in `lean-audit.json`): compiled
 evaluation, a test and not a proof.
 -/
+
+@[expose] public section
 
 namespace NciCheck.Difftest
 

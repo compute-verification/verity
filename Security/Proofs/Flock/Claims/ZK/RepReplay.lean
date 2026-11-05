@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.ZK.RepFree
-import Proofs.Flock.Claims.ZK.SimPiopGo
-import Proofs.Flock.Claims.ZK.FinishSwPts
-import Proofs.Flock.Claims.Complete.ZkTables.ReplayGo
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.LincheckReplay
+module
+
+public import Proofs.Flock.Claims.ZK.RepFree
+public import Proofs.Flock.Claims.ZK.SimPiopGo
+public import Proofs.Flock.Claims.ZK.FinishSwPts
+public import Proofs.Flock.Claims.Complete.ZkTables.ReplayGo
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.LincheckReplay
 
 /-!
 # The cut rep's replay returns on its coins alone
@@ -20,6 +22,8 @@ a vector of width `64`. That fold reads only coins, so it is the firewall's.
   cut's returns, wherever the fold at the coins returns a vector of width `64`.
 * **`Lincheck.replay_fold_w`**: a returned replay's fold at its rounds' coins returned a vector of width `64`.
 -/
+
+@[expose] public section
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000

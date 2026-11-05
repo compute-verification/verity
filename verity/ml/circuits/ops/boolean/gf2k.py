@@ -1,4 +1,4 @@
-"""GF(2^128) and GF(2^256) as C-Flock's verifier has them (its PROTOCOL.md §2.1, §2.4), their products as Boolean Definitions,
+"""GF(2^128) and GF(2^256) as Flock's verifier has them (its `Flock.Field`), their products as Boolean Definitions,
 and the sums of products that a verifier's algebra over them reduces to once its coins are values.
 
 F = GF(2)[x]/(x^128 + x^7 + x^2 + x + 1). An element is an int below 2^128 whose bit i is the coefficient of x^i: the Lean
@@ -34,7 +34,7 @@ one per base product, in that order. **Gf256Mul** is three of them and the produ
 Each product is one Gf128Mul (2,187 ANDs); sums are XORs. `residuals` is the reference.
 
 **Constants.** A product with a constant operand is F2-linear: a circuit that multiplies by a constant can call these with
-the constant's bits as `Const1` gates, and C-Flock's lowering folds every AND with a constant operand, leaving the linear map.
+the constant's bits as `Const1` gates, and Flock's lowering folds every AND with a constant operand, leaving the linear map.
 """
 from __future__ import annotations
 
@@ -91,7 +91,7 @@ def mul(a: int, b: int) -> int:
 
 
 def inv(a: int) -> int:
-    """``a^(2^128 - 2)``: the inverse, with ``inv(0) = 0`` (§2.1)."""
+    """``a^(2^128 - 2)``: the inverse, with ``inv(0) = 0`` (``Flock.Field``)."""
     acc = 1
     for _ in range(127):
         acc = mul(mul(acc, acc), a)
@@ -128,7 +128,7 @@ def from_bytes(b: bytes) -> int:
     return lo | hi << 64
 
 
-#: `φ8`'s generator g, a root of X^8 + X^4 + X^3 + X + 1 in F (§2.2)
+#: `φ8`'s generator g, a root of X^8 + X^4 + X^3 + X + 1 in F (``Flock.Field``)
 PHI8_GEN = (0x0dcb364640a222fe << 64) | 0x6b8330483c2e9849
 
 

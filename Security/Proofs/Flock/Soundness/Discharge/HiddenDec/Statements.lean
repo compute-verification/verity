@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.DecodeZL.OP
-import Proofs.Flock.Soundness.Discharge.DecodeZL.LIG
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Tables
+module
+
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.OP
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.LIG
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Tables
 
 /-!
 # The decoder at the hidden-output headline's draws: statements
@@ -16,8 +18,11 @@ is set up:
 * `DrawOkH`: DecodeZL's `DrawOk` with `Stmt.setupHidden` for `Stmt.setupH`.
 * `opnAtH`: DecodeZL's `opnAt` at `Stmt.setupHidden`'s statement.
 * `DecodesOnExecH`: `DecodesOn` at the hidden tables and the tags' leaf (`leafOfId`), the decoder `decAt` at
-  DecodeZL's wires `wOP` and `wLIG`, `one := true`, no final messages, `capOfRoot`.
+  DecodeZL's wires `wOP` and `wLIG`, `one := true`, no final messages, `capOfRoot`. `DecodesOnExecHSt` is it at the
+  statement circuit (`HmOut.parseStmt`, a templated file's template unrolled).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.HiddenDec
 
@@ -67,6 +72,18 @@ single coins as field elements, no final messages and `capOfRoot`. -/
 def DecodesOnExecH : Prop :=
   ∀ {c : Flock.Circuit} {n : ℕ} {I : Inputs} (_ht : I.tags.typed = false)
     (_hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) (_ho : c.outNet = c.unitNet) {mPts : ℕ}
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
+    (L : Law n) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript),
+    TagsOkHL I → RecordsLive I dj wr → (∀ ω, DrawOkH I dj mPts (L.draw ω)) →
+    DecodesOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH (Reg := Reg) dj x₀) I wr
+      (opnAtH (tablesAtH dj x₀) I dj)
+      (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) L
+
+/-- **`DecodesOnExecH` at the statement circuit**: on every circuit `HmOut.parseStmt` reads (a templated file's template
+unrolled) whose unit returns the outputs. -/
+def DecodesOnExecHSt : Prop :=
+  ∀ {c : Flock.Circuit} {n : ℕ} {I : Inputs} (_ht : I.tags.typed = false)
+    (_hc : HmOut.parseStmt I.tags I.circuitFile I.tables = .ok c) (_ho : c.outNet = c.unitNet) {mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
     (L : Law n) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript),
     TagsOkHL I → RecordsLive I dj wr → (∀ ω, DrawOkH I dj mPts (L.draw ω)) →

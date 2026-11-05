@@ -1,8 +1,10 @@
-import Definitions.Core.Declaration
-import Definitions.Nci.Cover
-import Mathlib.Data.Finset.Lattice.Fold
-import Mathlib.Data.Fintype.Prod
-import Mathlib.Logic.Equiv.Fin.Basic
+module
+
+public import Definitions.Core.Declaration
+public import Definitions.Nci.Cover
+public import Mathlib.Data.Finset.Lattice.Fold
+public import Mathlib.Data.Fintype.Prod
+public import Mathlib.Logic.Equiv.Fin.Basic
 
 /-!
 # A declaration's circuit, bit by bit
@@ -22,6 +24,8 @@ gates compute:
 Bit `(g, i)` is numbered `i + W g` (`finProdFinEquiv`), so the bits a bit reads, of gates of smaller index, have smaller
 numbers. `wordBits d S` is the set of the real bits of the gates of `S`, a set of whole words.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover
 

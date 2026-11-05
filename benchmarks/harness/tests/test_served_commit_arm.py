@@ -13,8 +13,6 @@ import sys
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
-import pytest
-
 ARM = Path(__file__).resolve().parents[2] / "served_commit" / "arm.py"
 PROF_ARM = ARM.parent / "prof_arm.py"
 
@@ -86,17 +84,13 @@ def test_a_measured_run_without_a_root_fails_the_gate():
     assert got["failed"][0]["run"] == "measure:B32" and "not a declared warm-up" in got["failed"][0]["errors"][0]
 
 
-def test_a_vllm_v1_arm_refuses_to_install_by_name_and_a_rows_arm_installs(monkeypatch):
+def test_an_arm_commits_rows_sha512_and_installs(monkeypatch):
     mod = _arm_module()
-    v1 = mod.ServedCommitArm("served-commit-v1", retain="none")
-    with pytest.raises(RuntimeError, match=r"served-commit-v1 arm commits 'vllm-v1' \(SHA-256\), not 'rows-sha512'"):
-        v1.install(SimpleNamespace(hooks=None))
-    assert v1.source is None
     source = ModuleType("verity_vllm.acquire.sources.served_compiled_source")
     source.ServedCompiledSource = lambda into, batch_copies: SimpleNamespace(install_hooks=lambda: None)
     monkeypatch.setitem(sys.modules, source.__name__, source)
     rows = mod.ServedCommitArm("served-commit-rows", retain="none")
-    rows.commit_scheme = "rows-sha512"
+    assert rows.commit_scheme == "rows-sha512"
     assert rows.install(SimpleNamespace(hooks=None)) is rows and rows.source is not None
 
 

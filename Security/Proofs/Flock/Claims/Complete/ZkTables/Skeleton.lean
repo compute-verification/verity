@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Complete.Skeleton
-import Proofs.Flock.Claims.Complete.ZkTables.Ready
-import Proofs.Flock.Claims.Complete.ZkTables.Run
-import Proofs.Flock.Claims.Complete.Zk.Verdict
+module
+
+public import Proofs.Flock.Claims.Complete.Skeleton
+public import Proofs.Flock.Claims.Complete.ZkTables.Ready
+public import Proofs.Flock.Claims.Complete.ZkTables.Run
+public import Proofs.Flock.Claims.Complete.Zk.Verdict
 
 /-!
 # The masked completeness proof's skeleton, at any number of tables
@@ -17,6 +19,8 @@ same name, at `Run`, and already stated per table (`∀ i < |tables|, ∀ r < 2`
 * **The composition**: `Run.rep_ok` (`zk_verifyRepWith_ok`), `Run.verdict_ok` (`zk_verifyWith_ok`), `Run.checks_ok'`
   (`checks_ok`), `Run.acc` (`run_acc_of`), and `complete_of_goals` (`complete_of`).
 -/
+
+@[expose] public section
 
 open Flock FlockDeploy Transcript
 
@@ -86,7 +90,7 @@ def live (o : Run H rel) : Live :=
   | .error _ => ⟨#[], #[], #[], #[]⟩
 
 /-- The record, decoded. -/
-def sess (o : Run H rel) : Session := val (Record.decodeWith o.hs o.spec o.record)
+def sess (o : Run H rel) : RunRecord := val (Record.decodeWith o.hs o.spec o.record)
 
 /-- Table `i`'s `--zk` schedule. -/
 def sch (o : Run H rel) (i : ℕ) : Schedule := (zkSchedsOf o.tabs)[i]!.1

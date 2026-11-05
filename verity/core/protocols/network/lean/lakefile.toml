@@ -4,10 +4,16 @@ defaultTargets = ["NetworkCheck", "network-check-difftest", "network-check", "ne
 [leanOptions]
 autoImplicit = false
 relaxedAutoImplicit = false
+backward.proofsInPublic = true
 
 [[require]]
 name = "flock_verifier"
 path = "../../../service/flock"
+
+# The period's check reads a scan's layout off its description as NCI's check does (`NciCheck.Desc`'s layout checks).
+[[require]]
+name = "nci_check"
+path = "../nci/lean"
 
 # The check is a core protocol, reads the Program's grid from the certifier program (`expectedRow`, Σ_sync) and verifies
 # certificates with the LMS port.
