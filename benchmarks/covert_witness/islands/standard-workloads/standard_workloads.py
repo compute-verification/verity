@@ -21,7 +21,9 @@ workload at its dials, with the model's products at each point (workloads.with_p
 run cell `MODELLED` with what the model is, its dials cell every argument of the model, and each input the model's
 (`modelled_status`). A measured row is the run's last
 checkpoint as te_core.ledger.ingest writes it (into a scratch ledger) with the run's traced structures
-(annotate.with_structures), measured by te_core.formalism.measure (its op log the ledger row's macs_log), and priced by
+(annotate.with_structures), each its latest traced step's, less the read-backs its trace lists past the run's last
+step, the program's code after it, which no step's graph carries (`past_last`, in the row's details), measured by
+te_core.formalism.measure (its op log the ledger row's macs_log), and priced by
 formalism.published under `READING` at the row's points (`own`). The headline, `rho_own`, is its ρ at the row's own
 session, algorithm_policy's `own_session` (te_core.policy's `session`, 4,096 tokens in and 1,024 out on the model the
 row serves: its start, distillation's teacher, a modelled row's model; c `own_c_gates`), at algorithm_policy's `OWN_K`,
@@ -57,14 +59,18 @@ adds there and in the note name no code (`CODE`): the code is training's slowdow
 which the builder relays as they are, are te_core's to word.
 
 A `rounds` row is the run's generation rounds alone (`rounds`), its setup and training steps dropped: a round is one
-counted step that codes the served weights, prefills its prompts and decodes. The capture can't trace a round (its
-decode loop's length is no token axis), so the counter's record is read with these substitutions (`ROUNDS`, each in
-the row's `input_status`): a round's tokens its prompts' and every generated token but the last (the counter counts
-the prompts' positions alone); every GEMM on the served codes (W4A4, emulated in bf16 on their decoded values) priced
-as NVFP4 (gemm/fp4); its affected gates the forward ops that read an updated tensor (te_core's untraced convention); Δ
-the served update's bits from the run's notes (every served matrix's codes and scales with the gains in bf16, or the
-LoRA in bf16), and Δ_grad, the partial gradient and the gradient cut 0 (no backward); τ an id per prompt token and
-none per generated one; a, u and u_in te_core's stubs.
+counted step that codes the served weights, prefills its prompts and decodes, and the run's traces of its rounds (a
+run's rounds share one structure) give its quantities as a training run's traces give its, a row with no traced round
+refused. A round's forward positions are each prompt token and every generated token but the last (the run's notes',
+`positions`), which its token dials count, and which its trace's tokens count where the capture puts the decode loop's
+positions on the token axis the prompts' are on (`axis`, in the row's details). Where a traced round's trace counts
+fewer, its products and token share are the prompts' alone, so the row is published null (`NO_AXIS`): every ρ column,
+its inputs and their sources null, its binding kind unmeasured, and `NO_AXIS` its rests_on and its kinds' why; a trace
+counting more is refused. A priced record is read with these substitutions (`ROUNDS`, each in the row's
+`input_status`): every GEMM on the served codes (W4A4, emulated in bf16 on their decoded values) priced as NVFP4
+(gemm/fp4); Δ the served update's bits from the run's notes (every served matrix's codes and scales with the gains in
+bf16, or the LoRA in bf16); and Δ_grad, the partial gradient and the gradient cut 0, a round having no backward (the
+trace's cut holds its decode loop's values).
 
 DIR gets the uncut table, each row with its labels, parts, its own session (`own_session`) and a distillation row's
 student's (`student_session`), and formalism.at, formalism.published and the one bound (reading A's, formalism.bound)
@@ -95,7 +101,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from te_core import VERSION, algorithm_policy, annotate, console, formalism, panels, policy, workloads
-from te_core.gates import of_log
 from te_core.ledger import Ledger, ingest
 
 HERE = Path(__file__).resolve().parent
@@ -140,35 +145,22 @@ IDLE = ("its structure updates nothing, and the slowdown code takes such a step'
         "the step and a traced step of the run updates something")
 _PRICED = "assumed: the rounds' counted work, each GEMM on the served codes (W4A4, emulated in bf16 on decoded values) " \
           "priced as an NVFP4 GEMM"
-_PER_TOKEN = _PRICED + ", per token through the forward: each prompt token and every generated token but the last " \
-                       "(the counter counts the prompts' alone)"
-_UNTRACED = "; a round is not traced (the tracer has no token axis for its decode loop's length)"
+_PER_TOKEN = _PRICED + ", times the trace's token share, per forward position"
+_NO_BACKWARD = "assumed: 0, a round having no backward (the trace's gradient cut holds its decode loop's values)"
 _DEFAULT = "at the console's default"
-ROUNDS = {
-    "C_gates": _PRICED, "w_gates": _PER_TOKEN, "sigma": _PRICED, "w_fit_gates": _PER_TOKEN,
-    "tau_bits": "assumed: one id per prompt token and none per generated token, which the round samples" + _UNTRACED,
-    "a_bits": "assumed: the slowdown code's default, one token's bf16 residual stream (the model's width times 16 bits)"
-              + _UNTRACED,
-    "u_points": "assumed: the slowdown code's default (assumption A1), spread evenly up to u(1) = Δ" + _UNTRACED,
-    "u_in_points": "assumed: the slowdown code's default (assumption A1′), u_in = u" + _UNTRACED,
-    "alpha_ratio": "assumed: a round's affected work is its forward ops that read an updated tensor (the slowdown "
-                   "code's convention for an untraced step)" + _UNTRACED,
-}
+ROUNDS = {"C_gates": _PRICED, "w_gates": _PER_TOKEN, "sigma": "assumed: the trace's share of a round's gates in token ops",
+          "w_fit_gates": _PER_TOKEN, "delta_grad_bits": _NO_BACKWARD}
+#: a rounds row's rests_on and its kinds' why where a traced round's trace counts fewer tokens than its forward
+#: positions (`axis`): every ρ column, its inputs and their sources null
+NO_AXIS = "unmeasured: the capture puts decode positions on no token axis"
 #: a code name, which none of the builder's own words in a published string holds: they name the code only as
 #: training's slowdown code
 CODE = re.compile(r"te_core|io_bound|formalism|algorithm_policy|annotate|rows_of|capture_\w|gemm/|\w\.py\b|`|"
                   r"\b[A-Z][A-Z0-9]*_[A-Z0-9_]+\b")
 ROUND_LABELS = {
-    "tokens": "measured: each round's prompt positions (the counter's) and every generated token but the last, which "
-              "the counter doesn't count, a sampled id being no data-stream position (the run's notes)",
     "gates": "counted MACs in gates (te_core.gates), the GEMMs on served codes at gemm/fp4 (standard_workloads.rounds)",
-    "token_gates": "counted: the rounds' forward in gates, the GEMMs on served codes at gemm/fp4",
-    "affected_gates": "stub: the rounds' forward ops that read an update tensor, the GEMMs on served codes at gemm/fp4",
     "delta_bits": "measured: the served update's bits (generate.py's notes: every served matrix's NVFP4 codes and "
                   "scales with the gains in bf16, or the LoRA in bf16)",
-    "delta_grad_bits": "measured: 0, a round has no backward",
-    "partial_bits": "measured: 0, a round has no backward (no partial gradient, no update applied)",
-    "tau_bits": "stub: ceil(log2 V) bits per prompt token, none per generated token, over the rounds' tokens",
 }
 
 
@@ -190,12 +182,14 @@ def _version(v: str) -> tuple[int, ...]:
 
 
 def traces(arts: list[str]) -> dict[str, dict[int, dict]]:
-    """Each run's traced steps in `arts` (the island's trace.py output), each with its art and the te_core that traced
-    it, refused unless that is `TRACED_SINCE` to the one it runs on; a step traced in more than one art is the newest
-    te_core's trace (of equal ones, the later art's)."""
+    """Each run's traced steps in `arts` (the island's trace.py output: a tree of its manifest and traces, or the
+    research run's record holding them in out/), each with its art and the te_core that traced it, refused unless that
+    is `TRACED_SINCE` to the one it runs on; a step traced in more than one art is the newest te_core's trace (of equal
+    ones, the later art's)."""
     out: dict[str, dict[int, dict]] = {}
     for art in arts:
-        root = fetch(art)
+        root = fetch(art, "*manifest.json", "*traces/*.json")
+        root = root / "out" if (root / "out" / "manifest.json").exists() else root
         v = version_at(json.loads((root / "manifest.json").read_text())["te_commit"])
         if not _version(TRACED_SINCE) <= _version(v) <= _version(VERSION):
             raise SystemExit(f"{PANEL}: {art} was traced by te_core {v}, not {TRACED_SINCE} to {VERSION}: trace the "
@@ -235,45 +229,77 @@ def coded(row: list, served: set[tuple[int, int]]) -> bool:
 
 def rounds(record: dict, notes: dict, served: set[tuple[int, int]]) -> dict:
     """`record` (generate.py's: each training step, and a round after each of `notes`' rounds) as its rounds alone,
-    the setup and the tail without work and the run's last checkpoint its one: each round's tokens its prompts' (the
-    counter's, which counts data-stream positions, so no sampled id) and every generated token but the last, every
-    GEMM on served codes (`coded`) marked NVFP4, each round structure's affected gates its forward ops that read an
-    update tensor and its Δ_grad 0."""
-    after = [r["after_step"] for r in notes["rounds"]]
-    if len(record["steps"]) != notes["args"]["steps"] + len(after):
+    the setup and the tail without work and the run's last checkpoint its one, each round's tokens its prompts' (the
+    counter's, which counts data-stream positions, so no sampled id) and every GEMM on served codes (`coded`) marked
+    NVFP4."""
+    at = round_at(notes)
+    if len(record["steps"]) != notes["args"]["steps"] + len(at):
         raise ValueError(f"{len(record['steps'])} steps, not {notes['args']['steps']} training steps and "
-                         f"{len(after)} rounds: not generate.py's layout")
-    at = {t + i: r for i, (t, r) in enumerate(zip(after, notes["rounds"]))}
+                         f"{len(at)} rounds: not generate.py's layout")
     steps = [dict(s) for s in record["steps"] if s["step"] in at]
     for s in steps:
         r = at[s["step"]]
         if s["tokens"] != r["sequences"] * r["prompt"]:
             raise ValueError(f"round at step {s['step']}: {s['tokens']} tokens counted, not its prompts' ({r})")
-        s["tokens"] = r["sequences"] * (r["prompt"] + r["generated"] - 1)
     structures = {}
     for sid in {s["struct"] for s in steps}:
         st = record["structures"][sid]
         log = [[*r[:3], f"{r[3]} {FP4}" if coded(r, served) else r[3], *r[4:]] for r in st["log"]]
         if any(r[0] == "bwd" for r in log):
             raise ValueError(f"round structure {sid} has a backward")
-        upd = {" ".join(str(x) for x in r[:4]): r[4:6] for r in log if r[:2] == ["fwd", "updated"]}
-        structures[sid] = st | {"log": log, "affected_gates": of_log({"ops": upd})["gates"], "delta_grad_bits": 0.0}
+        structures[sid] = st | {"log": log}
     none = {"by": {}, "macs": 0}
     return record | {"steps": steps, "structures": structures, "setup": record["setup"] | none,
                      "tail": record.get("tail", {}) | none, "checkpoints": record["checkpoints"][-1:]}
 
 
-def round_formalism(notes: dict, tensors: dict, vocab: int) -> dict:
-    """A rounds record's own `formalism` fields: Δ the served update's bits and τ the rounds' input ids per token."""
+def round_formalism(notes: dict, tensors: dict) -> dict:
+    """A rounds record's own `formalism` fields: Δ the served update's bits."""
     a = notes["args"]
     if a["update"] == "lora":
         delta = notes["served_lora_bits"]
     else:
         gains = sum(math.prod(shape) for _, shape in tensors.values() if len(shape) == 1)
         delta = notes["served_code_bits"] + 16 * (gains + (math.prod(tensors["embed"][1]) if a["head"] == "bf16" else 0))
-    ids = sum(r["sequences"] * r["prompt"] for r in notes["rounds"])
-    tokens = sum(r["sequences"] * (r["prompt"] + r["generated"] - 1) for r in notes["rounds"])
-    return {"delta_bits": float(delta), "tau_bits": policy.id_bits(vocab) * ids / tokens, "labels": ROUND_LABELS}
+    return {"delta_bits": float(delta), "labels": ROUND_LABELS}
+
+
+def round_at(notes: dict) -> dict[int, dict]:
+    """Each round's step in the run's record (generate.py's: a round after each of `notes`' rounds' training step) and
+    its notes."""
+    return {r["after_step"] + i: r for i, r in enumerate(notes["rounds"])}
+
+
+def positions(r: dict) -> int:
+    """A round's forward positions (its notes'): each prompt token and every generated token but the last, which no
+    forward reads."""
+    return r["sequences"] * (r["prompt"] + r["generated"] - 1)
+
+
+def forward_positions(notes: dict) -> int:
+    """The rounds' forward positions (generate.py's notes), `positions` summed."""
+    return sum(positions(r) for r in notes["rounds"])
+
+
+def axis(notes: dict, traced: dict[int, dict]) -> list[dict]:
+    """Each traced round's tokens (its trace's consumed positions) beside its forward positions (`positions`), which a
+    trace counts where the capture puts the decode loop's positions on the token axis the prompts' are on."""
+    at = round_at(notes)
+    return [{"step": s, "traced": t["measured"]["tokens"], "forward": positions(at[s])}
+            for s, t in sorted(traced.items()) if s in at]
+
+
+def off_axis(what: str, rounds: list[dict]) -> bool:
+    """Whether a rounds row's trace lacks its decode loop's positions: a traced round's tokens fewer than its forward
+    positions (`axis`'s `rounds`); refused where none is a round or one counts more, which no forward reads."""
+    if not rounds:
+        raise SystemExit(f"{PANEL}: {what}: no traced step is a round: trace its rounds (islands/{NAME}/job.sh) and "
+                         f"name the traces in the rows")
+    if over := [a for a in rounds if a["traced"] > a["forward"]]:
+        raise SystemExit(f"{PANEL}: {what}: the capture counts more tokens than a round's forward positions ("
+                         + "; ".join(f"step {a['step']}: {a['traced']:,} traced, {a['forward']:,} forward" for a in over)
+                         + "), positions no forward reads: fix the capture and trace the rounds again")
+    return any(a["traced"] < a["forward"] for a in rounds)
 
 
 def start(name: str) -> tuple[dict, dict]:
@@ -303,10 +329,27 @@ def untraced(record: dict, structures: dict[str, dict], last_why: str | None = N
     return out
 
 
+def past_last(structures: dict[str, dict], last: int) -> tuple[dict[str, dict], dict[str, list]]:
+    """The traced `structures` without the read-backs their traces list past the run's `last` step (the program's code
+    after it, which no step's graph carries, such as a harness reading the run's outputs), and those read-backs by
+    structure."""
+    out, after = {}, {}
+    for sid, st in structures.items():
+        f = st.get("formalism") or {}
+        late = {k: [e for e in f.get(k) or () if min(e.get("steps") or [last]) > last] for k in formalism.READ_BACKS}
+        if any(late.values()):
+            after[sid] = [e for k in formalism.READ_BACKS for e in late[k]]
+            f = f | {k: [e for e in f[k] if e not in late[k]] for k in formalism.READ_BACKS if f.get(k) is not None}
+            st = st | {"formalism": f}
+        out[sid] = st
+    return out, after
+
+
 def measured(row: dict, traced: dict[int, dict]) -> tuple[formalism.Measured, dict, dict]:
-    """A row's quantities: its run's last checkpoint ingested with the run's `traced` steps' structures, or its rounds
-    (`rounds`); the start's shape and what the row read, a distillation run's student's shape among it (`student`, from
-    the run's notes)."""
+    """A row's quantities: its run's last checkpoint, or its rounds (`rounds`), ingested with the run's `traced` steps'
+    structures, each structure's its latest traced step's (`structures` in what the row read); the start's shape and
+    what the row read, a distillation run's student's shape among it (`student`, from the run's notes) and a rounds
+    row's traced rounds' tokens beside their forward positions (`axis`)."""
     root = fetch(row["art"], "run/run.json", "meta.json")
     record = json.loads((root / "run" / "run.json").read_text())
     meta = json.loads((root / "meta.json").read_text())
@@ -318,22 +361,28 @@ def measured(row: dict, traced: dict[int, dict]) -> tuple[formalism.Measured, di
     student = {"student": {k: notes["student"][k] for k in ("d_model", "n_layer", "n_head", "d_ff", "vocab")}
                           | {"parameters": notes["student_parameters"]}} if "student" in notes else {}
     by_step = {s["step"]: s["struct"] for s in record["steps"]}
-    structures = {by_step[step]: t["trace"]["structure"] for step, t in traced.items()}
+    latest = {by_step[step]: step for step in sorted(traced)}
+    structures, after = past_last({sid: traced[step]["trace"]["structure"] for sid, step in latest.items()},
+                                  record["steps"][-1]["step"])
     read = {"traces": [{"step": step, "struct": by_step[step], "art": t["from"], "te_core": t["te_core"],
                         "measured": {k: t["measured"].get(k) for k in TRACE_FACTS}}
-                       for step, t in sorted(traced.items())]}
+                       for step, t in sorted(traced.items())], "structures": latest} | (
+        {"past_last_step": after} if after else {})
     if row.get("rounds"):
+        if not traced:
+            raise SystemExit(f"{PANEL}: rounds {row['run']}: no round is traced: trace its rounds (islands/{NAME}/"
+                             f"job.sh) and name the traces in the rows")
         matrices = [n for n in tensors if n.startswith("blocks.") and len(tensors[n][1]) == 2]
         names = matrices + (["embed"] if notes["args"]["head"] == "fp4" else [])
         record = rounds(record, notes, {(tensors[n][1][1], tensors[n][1][0]) for n in names})
-        record["formalism"] = round_formalism(notes, tensors, shape["vocab"])
-        structures = {}
-        read = {"traces": [], "rounds": notes["rounds"], "round_steps": [s["step"] for s in record["steps"]],
-                "fp4_macs": sum(r[5] * sum(s["struct"] == sid for s in record["steps"])
-                                for sid, st in record["structures"].items() for r in st["log"] if r[3].endswith(FP4))}
+        record["formalism"] = round_formalism(notes, tensors)
+        read |= {"rounds": notes["rounds"], "round_steps": [s["step"] for s in record["steps"]],
+                 "forward_positions": forward_positions(notes), "axis": axis(notes, traced),
+                 "fp4_macs": sum(r[5] * sum(s["struct"] == sid for s in record["steps"])
+                                 for sid, st in record["structures"].items() for r in st["log"] if r[3].endswith(FP4))}
     else:
         record["checkpoints"] = record["checkpoints"][-1:]
-        read["untraced"] = untraced(record, structures, row.get("last_untraced"))
+    read["untraced"] = untraced(record, structures, row.get("last_untraced"))
     with tempfile.TemporaryDirectory(prefix="sw-ingest-") as tmp:
         d = Path(tmp) / "run"
         d.mkdir()
@@ -343,10 +392,15 @@ def measured(row: dict, traced: dict[int, dict]) -> tuple[formalism.Measured, di
     read |= {"checkpoint": got["checkpoint_step"], "steps": len(record["steps"]),
              "tokens": sum(s.get("tokens", 0) for s in record["steps"]), "invalid": got["invalid"]} | student
     m = formalism.measure(got, shape)
-    if row.get("rounds"):
-        m = dataclasses.replace(m, parts=tuple(dataclasses.replace(p, partial_bits=0.0, grad_bits=0.0)
-                                               for p in m.parts))
-    return m, shape, read
+    return (no_backward(m) if row.get("rounds") else m), shape, read
+
+
+def no_backward(m: formalism.Measured) -> formalism.Measured:
+    """A rounds row's quantities with each part's Δ_grad, partial gradient and gradient cut 0, a round having no
+    backward (`ROUNDS`)."""
+    zero = {"delta_grad_bits": 0.0, "partial_bits": 0.0, "grad_bits": 0.0}
+    return dataclasses.replace(m, parts=tuple(dataclasses.replace(p, **zero) for p in m.parts),
+                               labels=m.labels | {"delta_grad_bits": _NO_BACKWARD})
 
 
 def _measured(label: str | None) -> bool:
@@ -403,7 +457,7 @@ def status(m: formalism.Measured, override: dict[str, str] | None = None, read: 
     return out | (override or {})
 
 
-def products(b: dict[str, dict], rounds: bool = False, left: list[str] = ()) -> str:
+def products(b: dict[str, dict], left: list[str] = ()) -> str:
     """The products kind's input, the run's products whose two operands both depend on the update, as the one bound
     `b` read them at each of `POINTS`: measured at the console's default, or assumed with te_core's reason (where
     unmeasured, where the dominant traced step's stand in for steps of another shape, formalism.STAND_IN, or where
@@ -411,7 +465,7 @@ def products(b: dict[str, dict], rounds: bool = False, left: list[str] = ()) -> 
     and where unmeasured at the serving block, te_core's reason."""
     con, srv = b["console"], b["served"]
     if (why := con["unmeasured"].get("fresh_products")) is not None:
-        return f"assumed: {why}" + (_UNTRACED if rounds else "")
+        return f"assumed: {why}"
     stand = con["inputs"]["fresh_products"].get("stand_in")
     said = [f"{formalism.STAND_IN.removeprefix('approximated: ')} ({len(stand['structures'])} traced structures)"
             ] if stand else []
@@ -441,15 +495,16 @@ def modelled_status(m: formalism.Measured, b: dict[str, dict]) -> dict[str, str]
     return out | {"products": f"modelled: the workload model's matrix products{rest}"}
 
 
-def token_dials(dials: dict, tokens: float) -> list[str]:
+def token_dials(dials: dict, tokens: float, whose: str = "te_core measured") -> list[str]:
     """Where `dials`' token counts (`tokens`, and `tokens_per_param` over `student_params` or `n_params`) miss the run's
     measured `tokens` (formalism.Measured's: each step's count scaled by its traced structure's consumed tokens over its
-    count, so a step of micro-batches counts them all) by more than 1%: te_core leaves a step before the run's first
-    update at the counter's count, which counts one micro-batch of a step's."""
+    count, so a step of micro-batches counts them all; a rounds row's forward positions, `whose` the notes) by more
+    than 1%: te_core leaves a step before the run's first update at the counter's count, which counts one micro-batch
+    of a step's."""
     want = {"tokens": tokens}
     if "tokens_per_param" in dials:
         want["tokens_per_param"] = tokens / dials.get("student_params", dials.get("n_params"))
-    return [f"its dial {k} is {dials[k]:g}, te_core measured {algorithm_policy.num(v)}: the dial is the run's"
+    return [f"its dial {k} is {dials[k]:g}, {whose} {algorithm_policy.num(v)}: the dial is the run's"
             for k, v in want.items() if k in dials and not math.isclose(dials[k], v, rel_tol=1e-2)]
 
 
@@ -521,12 +576,26 @@ def build(spec: dict, revs: tuple[str, str, str], stamp: str | None = None) -> t
             run = f"{MODELLED} ({r['modelled']})"
         else:
             m, shape, read = measured(r, tr.get(r["run"], {}))
-            if bad := token_dials(r["dials"], m.tokens):
+            fwd = read.get("forward_positions")
+            if bad := (token_dials(r["dials"], m.tokens) if fwd is None else
+                       token_dials(r["dials"], fwd, "its rounds' forward positions are")):
                 raise SystemExit(f"{PANEL}: {what}: {'; '.join(bad)}")
             session, pts = own(shape)
             ms, w_fwd, dials = dict.fromkeys(pts, m), policy.w_fwd(shape), r["dials"]
             said = "; ".join(r[x] for x in ("about", "note") if r.get(x))
             run = f"{r['run']} {r['art']}" + (f" ({said})" if said else "")
+            if r.get("rounds") and off_axis(what, read["axis"]):
+                cells = {"workload": r["workload"], "model": r["model"], "dials": compact(dials), "run": run,
+                         "own_c_gates": float(algorithm_policy.num(session["gates"])), "own_k_bits": session["k_bits"],
+                         "reading": READING, "te_core": VERSION, "capture_code": (m.products or {}).get("capture_code"),
+                         "binding_kind": algorithm_policy.UNMEASURED, "rests_on": NO_AXIS,
+                         "kinds": algorithm_policy.kinds({"terms": dict.fromkeys(formalism.KINDS),
+                                                          "sensitivities": dict.fromkeys(SENSITIVITIES), "why": NO_AXIS})}
+                rows.append([cells.get(c) for c in COLUMNS])
+                details.append(finite({"workload": r["workload"], "run": r["run"], "art": r["art"], "modelled": None,
+                                       "read": read, "w_fwd_gates": w_fwd, "own_session": session,
+                                       "unmeasured": NO_AXIS}))
+                continue
         at = {name: formalism.at(ms[name], c, k) for name, (c, k) in pts.items()}
         one = {name: formalism.published(ms[name], c, k, READING) for name, (c, k) in pts.items()}
         bound = {name: formalism.bound(ms[name], c, k) for name, (c, k) in pts.items()}
@@ -551,7 +620,7 @@ def build(spec: dict, revs: tuple[str, str, str], stamp: str | None = None) -> t
                              f"plot 2's basis_own, and build again")
         if "modelled" not in r:
             left = [g for g in read.get("untraced", []) if not g.endswith(IDLE)]
-            st["products"] = products(bound, bool(r.get("rounds")), left)
+            st["products"] = products(bound, left)
         cells = {"workload": r["workload"], "model": r["model"], "dials": compact(dials), "run": run,
                  "rho_own": rho_cell(mine["rho"]), "own_c_gates": float(algorithm_policy.num(session["gates"])),
                  "own_k_bits": session["k_bits"], "rho_inputs": cell, "input_status": compact(st),

@@ -6,15 +6,18 @@ infinite) at the headline, the row's own session on the model it serves (rho_own
 ids), and two sensitivities, the console's default (rho_default and rho_console) and the registered serving block
 (rho_served), a distillation row's student's own session a third, in the note; whose rho_inputs give the dial's ρ at
 each (page_rho) and whose input_status says which inputs te_core measured (an unmeasured Δ_grad's steps and which ρ
-columns' Fit verdict rests on it, and the products kind's input); a generation run's row is its rounds alone, each
-GEMM on the served codes priced as NVFP4; a workload no run measures is a modelled row, te_core.workloads' model priced
-the same way; it reads traces from te_core 4.4 on; the panel keeps to the panels route's limits, a cell up to 4,096
+columns' Fit verdict rests on it, and the products kind's input); a generation run's row is its traced rounds alone,
+each GEMM on the served codes priced as NVFP4, with no backward, and null with its reason where a traced round's trace
+counts fewer tokens than its forward positions; a workload no run measures is a modelled row,
+te_core.workloads' model priced the same way; it reads traces from te_core 4.4 on; the panel keeps to the panels
+route's limits, a cell up to 4,096
 characters, never replaces a served panel with one that drops its rows, and cites its tables in the research run's
 out/; and a PUT takes a cited body only over the panel the build read, then reads it back."""
 import dataclasses
 import importlib.util
 import json
 import math
+import re
 from pathlib import Path
 
 import pytest
@@ -22,7 +25,7 @@ import pytest
 pytest.importorskip("matplotlib")
 
 from te_core import VERSION, algorithm_policy, console, formalism, panels, policy, workloads
-from te_core.gates import of_log, per_mac
+from te_core.gates import of_log
 
 #: the builder, loaded from its file: on sys.path, the island's directory would hide the standard library's trace
 #: module behind the island's trace.py
@@ -203,11 +206,13 @@ def test_traces_from_te_core_4_4_to_this_one_are_read_and_others_refused(tmp_pat
 
 def test_a_step_traced_in_two_arts_is_read_from_the_newer_te_cores_trace_whatever_their_order(tmp_path, monkeypatch):
     """A run retraced on a newer te_core keeps its older art in the rows file beside the new one: each step is read from
-    the newer te_core's trace in either order, and of two traces by one te_core, from the later art's."""
+    the newer te_core's trace in either order, and of two traces by one te_core, from the later art's, a tree of the
+    traces or the research run's record holding them in out/ ("again")."""
     for art, v in (("old", "4.12.11"), ("new", "4.12.13"), ("again", "4.12.13")):
-        (tmp_path / art / "traces").mkdir(parents=True)
-        (tmp_path / art / "manifest.json").write_text(json.dumps({"te_commit": v}))
-        (tmp_path / art / "traces" / "r1-1.json").write_text(json.dumps({"run": "r1", "step": 1, "trace": {"by": art}}))
+        d = tmp_path / art / ("out" if art == "again" else "")
+        (d / "traces").mkdir(parents=True)
+        (d / "manifest.json").write_text(json.dumps({"te_commit": v}))
+        (d / "traces" / "r1-1.json").write_text(json.dumps({"run": "r1", "step": 1, "trace": {"by": art}}))
     monkeypatch.setattr(SW, "fetch", lambda art, *paths: tmp_path / art)
     monkeypatch.setattr(SW, "version_at", lambda commit: commit)
     for arts in (["old", "new"], ["new", "old"]):
@@ -469,7 +474,6 @@ def test_the_products_input_is_measured_at_the_consoles_default_or_assumed_with_
         f"block, {off}")
     why = bounds(None)["console"]["unmeasured"]["fresh_products"]
     assert SW.products(bounds(None)) == f"assumed: {why}"
-    assert SW.products(bounds(None), rounds=True) == f"assumed: {why}{SW._UNTRACED}"
 
 
 def test_the_builders_own_words_in_a_published_string_name_no_code():
@@ -490,13 +494,13 @@ def test_the_builders_own_words_in_a_published_string_name_no_code():
     con = {"unmeasured": {}, "inputs": {"fresh_products": {"stand_in": {"structures": ["a", "c"]}}}}
     b = {"console": con, "served": {"unmeasured": {"fresh_products": "why"}}}
     said = [SW.products(b, left=gaps * 2),
-            SW.products(b | {"console": con | {"unmeasured": {"fresh_products": "why"}}}, rounds=True),
+            SW.products(b | {"console": con | {"unmeasured": {"fresh_products": "why"}}}),
             SW.products(b | {"console": {"unmeasured": {}, "inputs": {"fresh_products": {}}}})]
     student = [{"student_session": {"published": {"rho": 110_662.4}}}]
     notes = [SW.note({"rows": [[{"reading": x, "model": "20M"}.get(c) for c in SW.COLUMNS]]}, TABLES, student)
              for x in ("A", "B")]
     assert "; distill at its student's session: 20M 110,662. " in notes[0]
-    words = [SW.IDLE, SW._UNTRACED, *SW.ROUNDS.values(), *gaps, *st.values(), *said, *notes]
+    words = [SW.IDLE, SW.NO_AXIS, *SW.ROUNDS.values(), *gaps, *st.values(), *said, *notes]
     assert len(gaps) == 3 and [s for s in words if SW.CODE.search(s)] == []
 
 
@@ -570,22 +574,115 @@ def test_a_row_names_the_capture_code_its_trace_records_and_null_where_it_record
 
 
 def test_a_generation_runs_record_is_its_rounds_with_gemms_on_served_codes_priced_as_nvfp4():
+    """A round keeps the counter's tokens, its prompts' positions; its forward positions (each prompt token and every
+    generated token but the last) are what its token dials count."""
     rec = record()
     got = SW.rounds(rec, NOTES, SERVED)
-    assert [s["step"] for s in got["steps"]] == [1, 3]
-    assert [s["tokens"] for s in got["steps"]] == [2 * (3 + 2 - 1)] * 2 and rec["steps"][1]["tokens"] == 2 * 3
+    assert [s["step"] for s in got["steps"]] == [1, 3] == list(SW.round_at(NOTES))
+    assert [s["tokens"] for s in got["steps"]] == [2 * 3] * 2
+    assert [SW.positions(r) for r in NOTES["rounds"]] == [2 * (3 + 2 - 1)] * 2
+    assert SW.forward_positions(NOTES) == 2 * 2 * (3 + 2 - 1)
     assert list(got["structures"]) == ["round"]
     st = got["structures"]["round"]
+    assert st == rec["structures"]["round"] | {"log": st["log"]}
     assert st["log"][0] == [*CODED[:3], f"{CODED[3]} {SW.FP4}", *CODED[4:]]
     assert st["log"][1:] == ROUND_LOG[1:]
     ops = {" ".join(str(x) for x in r[:4]): r[4:6] for r in st["log"]}
     assert of_log({"ops": ops})["kinds"]["gemm/fp4"]["macs"] == CODED[5]
-    updated = of_log({"ops": {k: v for k, v in ops.items() if k.startswith("fwd updated")}})["gates"]
-    assert st["affected_gates"] == updated > CODED[5] * per_mac("gemm/fp4")
-    assert st["delta_grad_bits"] == 0.0
     assert got["setup"]["by"] == got["tail"]["by"] == {} and got["setup"]["macs"] == got["tail"]["macs"] == 0
     assert got["checkpoints"] == [{"step": 4}]
     assert set(SW.ROUNDS) <= set(SW.KEYS) and all(v.startswith("assumed: ") for v in SW.ROUNDS.values())
+
+
+def test_a_rounds_row_has_no_backward_and_its_token_dials_count_its_forward_positions(monkeypatch):
+    """A rounds row's Δ_grad, partial gradient and gradient cut are 0, whatever cut its trace measured (its decode
+    loop's values), its input_status carries the rounds' substitutions, and its token dials are checked against its
+    rounds' forward positions, which a trace with the decode loop's positions on its token axis counts."""
+    fx = json.loads(PINNED.read_text())
+    m = formalism.from_json(fx["measured"])
+    cut = dataclasses.replace(m, parts=tuple(dataclasses.replace(p, delta_grad_bits=6e8, partial_bits=6e8,
+                                                                 grad_bits=6e8) for p in m.parts))
+    got = SW.no_backward(cut)
+    assert {(p.delta_grad_bits, p.partial_bits, p.grad_bits) for p in got.parts} == {(0.0, 0.0, 0.0)}
+    assert got.labels == cut.labels | {"delta_grad_bits": SW.ROUNDS["delta_grad_bits"]}
+    assert (got.tokens, got.gates, got.sigma) == (cut.tokens, cut.gates, cut.sigma)
+    fwd = 3 * m.tokens
+    row = fx["row"] | {"rounds": True, "dials": {"n_params": 10, "tokens": fwd}}
+    read = fx["read"] | {"forward_positions": fwd, "axis": [{"step": 1, "traced": fwd, "forward": fwd}]}
+    _, _, cells = build(got, fx | {"row": row, "read": read}, monkeypatch)
+    st = json.loads(cells["input_status"])
+    assert {k: st[k] for k in SW.ROUNDS} == SW.ROUNDS
+    miss = re.escape(f"its dial tokens is {m.tokens:g}, its rounds' forward positions are")
+    with pytest.raises(SystemExit, match=miss):
+        build(got, fx | {"row": row | {"dials": {"tokens": m.tokens}}, "read": read}, monkeypatch)
+
+
+def test_a_rounds_row_whose_trace_lacks_the_decode_positions_is_null_with_the_reason(monkeypatch):
+    """Where a traced round's trace counts fewer tokens than its forward positions (the capture's token axis holding
+    its prompts' positions alone), the row is null, nothing priced: every ρ column, its inputs and their sources null,
+    its binding kind unmeasured, and the reason its rests_on and its kinds' why; its run, dials, session and capture
+    code stay, and the route takes it. A trace counting more, or none of whose traced steps is a round, is refused."""
+    traced = {1: {"measured": {"tokens": 2 * 3}}, 2: {"measured": {"tokens": 64}},
+              3: {"measured": {"tokens": 2 * (3 + 2 - 1)}}}
+    rounds = SW.axis(NOTES, traced)
+    assert rounds == [{"step": 1, "traced": 6, "forward": 8}, {"step": 3, "traced": 8, "forward": 8}]
+    assert SW.NO_AXIS == "unmeasured: the capture puts decode positions on no token axis"
+    fx = json.loads(PINNED.read_text())
+    m = dataclasses.replace(formalism.from_json(fx["measured"]), products=products_rows(
+        PRODUCT, dial=(panels.SERVED[1],), code=formalism.CAPTURE_CODE_SINCE))
+    row = fx["row"] | {"rounds": True, "dials": {"n_params": 10, "tokens": 16}}
+    read = fx["read"] | {"forward_positions": 16, "axis": rounds}
+
+    def priced(*args, **kw):
+        raise AssertionError("a null row is priced")
+    for name in ("at", "published", "bound"):
+        monkeypatch.setattr(formalism, name, priced)
+    p, details, cells = build(m, fx | {"row": row, "read": read}, monkeypatch)
+    null = ("rho_own", "rho_inputs", "input_status", "rho_default", "rho_console", "rho_served")
+    assert {c: cells[c] for c in null} == dict.fromkeys(null)
+    assert (cells["binding_kind"], cells["rests_on"]) == (algorithm_policy.UNMEASURED, SW.NO_AXIS)
+    assert json.loads(cells["kinds"]) == {"bound": dict.fromkeys(formalism.KINDS),
+                                          "sensitivity": dict.fromkeys(SW.SENSITIVITIES), "why": SW.NO_AXIS}
+    session = algorithm_policy.own_session(fx["shape"])
+    assert (cells["workload"], cells["model"], cells["dials"], cells["reading"], cells["te_core"],
+            cells["capture_code"]) == (row["workload"], row["model"], SW.compact(row["dials"]), SW.READING, VERSION,
+                                       formalism.CAPTURE_CODE_SINCE)
+    assert cells["run"].startswith(f"{row['run']} {row['art']}")
+    assert (cells["own_c_gates"], cells["own_k_bits"]) == (pytest.approx(session["gates"], rel=1e-6),
+                                                           session["k_bits"])
+    assert details[0]["unmeasured"] == SW.NO_AXIS and details[0]["read"]["axis"] == rounds
+    assert not {"at", "published", "bound", "parts"} & set(details[0])
+    assert not SW.refused(p) and not SW.refused(p | {"note": SW.note(p, TABLES, details)})
+    with pytest.raises(SystemExit, match=re.escape("(step 1: 9 traced, 8 forward), positions no forward reads")):
+        build(m, fx | {"row": row, "read": read | {"axis": [{"step": 1, "traced": 9, "forward": 8}]}}, monkeypatch)
+    with pytest.raises(SystemExit, match="no traced step is a round"):
+        build(m, fx | {"row": row, "read": read | {"axis": []}}, monkeypatch)
+
+
+def test_a_read_back_past_the_runs_last_step_is_dropped_and_listed_and_any_other_kept():
+    """A trace of a run's last step records the program's code after it, which no step's graph carries (generate.py's
+    notes reading the last round's ids), so te_core's refusal doesn't see a read-back listed there; one inside the run
+    still refuses the row."""
+    late = {"kind": "item() of a int64 tensor", "where": "generate.py:230", "steps": [603, 603], "count": 48}
+    inside = {"kind": "item() of a float tensor", "where": "train.py:9", "steps": [602, 603], "count": 1}
+    st = {"log": [], "formalism": {"data_dependent": [late, inside], "carried_scalars": None, "affected_share": 0.5,
+                                   "u1_bits": 8.0}}
+    got, after = SW.past_last({"r": st, "clean": {"formalism": {"data_dependent": [], "carried_scalars": []}}}, 602)
+    assert got["r"] == st | {"formalism": st["formalism"] | {"data_dependent": [inside]}}
+    assert after == {"r": [late]} and got["clean"] == {"formalism": {"data_dependent": [], "carried_scalars": []}}
+    assert formalism.refusal({"formalism": {"trace": got["r"]["formalism"]}}).startswith("data-dependent: not measured")
+    alone, _ = SW.past_last({"r": st | {"formalism": st["formalism"] | {"data_dependent": [late]}}}, 602)
+    assert formalism.refusal({"formalism": {"trace": alone["r"]["formalism"]}}) is None
+
+
+def test_a_rounds_row_with_no_traced_round_is_refused(tmp_path, monkeypatch):
+    (tmp_path / "run").mkdir()
+    (tmp_path / "run" / "run.json").write_text(json.dumps(record() | {"start": {"name": "s-t20"}}))
+    (tmp_path / "meta.json").write_text(json.dumps({"notes": NOTES}))
+    monkeypatch.setattr(SW, "fetch", lambda art, *paths: tmp_path)
+    monkeypatch.setattr(SW, "start", lambda name: ({"vocab": 1000}, {}))
+    with pytest.raises(SystemExit, match="rounds r1: no round is traced: trace its rounds"):
+        SW.measured({"workload": "rl", "run": "r1", "art": "art:x", "rounds": True}, {})
 
 
 @pytest.mark.parametrize("rec, match", [
@@ -598,17 +695,14 @@ def test_a_record_not_in_generate_pys_layout_or_with_a_round_that_trains_is_refu
         SW.rounds(rec, NOTES, SERVED)
 
 
-def test_a_rounds_delta_is_the_served_update_and_its_tau_the_prompts_ids_over_the_rounds_tokens():
+def test_a_rounds_delta_is_the_served_update():
     tensors = {"embed": ["bfloat16", [1000, U]], "blocks.0.w": ["bfloat16", [U, 2 * U]], "blocks.0.g": ["bfloat16", [U]],
                "norm": ["bfloat16", [U]]}
-    lora = SW.round_formalism(NOTES | {"args": NOTES["args"] | {"update": "lora"}}, tensors, 1000)
-    assert lora["delta_bits"] == NOTES["served_lora_bits"]
-    assert lora["tau_bits"] == policy.id_bits(1000) * 3 / 4
-    assert SW.round_formalism(NOTES, tensors, 1000)["delta_bits"] == NOTES["served_code_bits"] + 16 * 2 * U
+    lora = SW.round_formalism(NOTES | {"args": NOTES["args"] | {"update": "lora"}}, tensors)
+    assert lora == {"delta_bits": NOTES["served_lora_bits"], "labels": SW.ROUND_LABELS}
+    assert SW.round_formalism(NOTES, tensors)["delta_bits"] == NOTES["served_code_bits"] + 16 * 2 * U
     bf16_head = NOTES | {"args": NOTES["args"] | {"head": "bf16"}}
-    assert SW.round_formalism(bf16_head, tensors, 1000)["delta_bits"] \
-        == NOTES["served_code_bits"] + 16 * (2 * U + 1000 * U)
-    assert lora["labels"] == SW.ROUND_LABELS
+    assert SW.round_formalism(bf16_head, tensors)["delta_bits"] == NOTES["served_code_bits"] + 16 * (2 * U + 1000 * U)
 
 
 def test_the_route_takes_a_cell_of_4096_characters_and_refuses_a_longer_one_a_long_note_or_a_long_body():
