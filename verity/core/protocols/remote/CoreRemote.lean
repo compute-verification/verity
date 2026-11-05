@@ -32,6 +32,8 @@ refused). `Core.Composition.tiedSameB` composes them on the caller's blobs: ever
 subprotocol accepts or remote doesn't, and any one's rejection rejects remote whatever the others answer. The policy's
 commitment and sampled proofs' are the run's record, and both must commit to the same one; every window of the period
 must name that record as its Commit record (`windows`). Two records reject remote whatever the subprotocols answer.
+The tie is by the record alone: nothing here holds PoUW's committed weights to the weights the record registers, so
+remote doesn't establish that PoUW's credited work and the audited inference read the same weights.
 
 A stated exception: the policy's v0 publishes the declared division and each inference block's profile (its gates and
 fresh-input bits) in the clear. Remote composes it for one run of record only, as an exception to

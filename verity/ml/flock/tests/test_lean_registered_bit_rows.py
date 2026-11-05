@@ -235,21 +235,26 @@ def test_a_pearl_plus_tree_opens_under_its_own_domain(staged):
     reads file's `domains`): cs's rows committed as Pearl+ commits a call's A, under PoUW's rows domain and salts, whose
     root the verifier opens at every table row under that domain. A table row with one word flipped opens nothing, nor
     does x, a `row/v2` port, read from a Pearl+ tree of its rows (whose leaves are `row-seg/v1`), nor cs under
-    one-stage's own domain for it (`registered.domain`, whichever binding it takes). It catches what
+    one-stage's own domain for it (`registered.domain`, whichever binding it takes). The reads file registers the output
+    row out as the fixture does, since a statement under `--registered` registers every port. It catches what
     `tests/test_registered.py`'s Python reads can't: the executable verifier holding a read to a domain from outside
     one-stage, verbatim."""
     program, query = _program()
     (cs, cs_reg), (x, x_reg) = _pearl_plus(staged, VALUE, 7), _pearl_plus(staged, "x", 8)
     mine = G.domain(P.program_digest(program), VALUE, WORDS, TABLE_ROWS).domain_id.hex()
-    assert cs.domain.domain_id.hex() != mine
+    assert cs.domain.domain_id.hex() != mine and staged.own["ports"]["cs"]["domain"] == mine
     own = G.reads_file(program, query, {VALUE: WORDS, "x": WORDS},
                        {VALUE: cs.commitment.root.hex(), "x": staged.regs["x"].root.hex()},
                        domains={VALUE: cs.domain.domain_id.hex()}, schemas=SCHEMAS)
+    assert own["ports"]["cs"]["domain"] == cs.domain.domain_id.hex()
+    own["ports"]["out"] = staged.own["ports"]["out"]
     (staged.dir / "own-pearl.json").write_text(json.dumps(own))
     public = _write(staged, "pearl", {"x": (staged.regs["x"], range(N)), "cs": (cs_reg, POSITIONS)})
     code, out = _statement(staged, staged.dir / "own-pearl.json", public)
     assert code == 0, out
-    assert json.loads(out.splitlines()[0])["registered"]["cs"] == {"value": VALUE, "root": cs.commitment.root.hex()}
+    assert json.loads(out.splitlines()[0])["registered"] == {"cs": {"value": VALUE, "root": cs.commitment.root.hex()},
+                                                             "x": {"value": "x", "root": staged.regs["x"].root.hex()},
+                                                             "out": {"value": OUT_VALUE, "root": staged.out.root.hex()}}
     flipped = _write(staged, "pearl-flipped", {"x": (staged.regs["x"], range(N)),
                                                "cs": (_pearl_plus(staged, VALUE, 7, flip=True)[1], POSITIONS)})
     code, out = _statement(staged, staged.dir / "own-pearl.json", flipped)
