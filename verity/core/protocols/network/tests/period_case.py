@@ -872,10 +872,11 @@ def _rows_check(p: Params, w: int, d: Direction, doc: dict) -> None:
 
 
 def _holds(reg: dict, doc: dict) -> bool:
-    """The scan's registration holds the rows: an entry of its `roots` or `registered` names their root and domain."""
+    """The scan's registration holds the rows: some entry of its `roots` or `registered` is under their domain, and
+    every such entry is at their root."""
     entries = [e for k in ("roots", "registered") if isinstance(reg.get(k), list) for e in reg[k]]
-    return any(isinstance(e, dict) and e.get("root") == doc["root"] and e.get("domain") == doc["domain"]
-               for e in entries)
+    under = [e for e in entries if isinstance(e, dict) and e.get("domain") == doc["domain"]]
+    return bool(under) and all(e.get("root") == doc["root"] for e in under)
 
 
 #: the scan's Programs' rows in its registration, one tree a lane, `PROG<j>` lane j's (`progName`): its `roots` entry's
@@ -1164,7 +1165,7 @@ def _rows_window_check(p: Params, audits: list[dict], w: int, reg: dict, x: Wind
     for doc, d in zip(x.registrations, (INGRESS, EGRESS)):
         _rows_check(p, w, d, doc)
     if not all(_holds(reg, doc) for doc in x.registrations):
-        raise Finding(REJECT, f"{what}: another window's answer")
+        raise Finding(REJECT, f"{what}: the scan's registration doesn't hold the rows: another window's answer")
     if not _prog_tied(audits, reg):
         raise Finding(REJECT, f"{what}: the scan's prog is no compute audit's output")
     prof, pub = _answered(what, reg, x.answer)
@@ -1392,6 +1393,7 @@ EXPECT = {
     "rows-cert-key": REJECT, "rows-past-slots": REJECT,
     "rows-reg-count": REJECT, "rows-reg-swap": REJECT, "rows-reg-forged": REJECT, "rows-reg-window": REJECT,
     "rows-reg-link": REJECT, "rows-reg-session": REJECT, "rows-reg-key": REJECT, "rows-reg-field": REJECT,
+    "rows-reg-shadow": REJECT,
     "rows-schedule": REJECT,
     "rows-answer-protocol": REJECT, "rows-answer-other": REJECT, "rows-answer-window": REJECT,
     "rows-answer-reject": REJECT, "rows-answer-undecided": UNDECIDED, "rows-answer-profile": REJECT,
@@ -2140,6 +2142,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             elif m == "cert-key":
                 recs[j] = sign(on, d, w, recs[j].digest, k=_key(ki, 1, r.random() < 0.5))
         entries = [{"domain": x["domain"], "root": x["root"], "value": x["value"]} for x in named]
+        if aimed and m == "reg-shadow":
+            entries.append(entries[i] | {"root": r.randbytes(64).hex()})
         entries.insert(r.randrange(len(entries) + 1),
                        {"domain": r.randbytes(64).hex(), "root": r.randbytes(64).hex(), "value": "decoy"})
         T = sched.window

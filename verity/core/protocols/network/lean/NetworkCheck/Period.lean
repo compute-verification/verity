@@ -150,8 +150,9 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   refused), the schedule's rows, words, word bits, row format and layout, the execution phase's domain in the session
   (`warden_rows.domain`), and a certificate that is the key's, signs the head (`CellsHead.digest`) and verifies in the
   session (a registration not under the deployment key is refused); the scan's registration holds both, an entry of its
-  `roots` or `registered` naming each one's root and domain, which bind the session, link, end and window (an answer
-  for another window's rows is refused); its Programs' rows are a compute audit's output (`progTied`): a lane's
+  `roots` or `registered` under each one's domain, which binds the session, link, end and window, and every such entry
+  at its root (an answer for another window's rows, or a second tree under the rows' domain, is refused); its Programs'
+  rows are a compute audit's output (`progTied`): a lane's
   `scan/prog<j>` entry names the root and domain of an output port's entry (`<unit>/o<j>`, j ≥ 1) or a `SlotEntry_v1`
   or `SelectEntry_v1` template's entries port's (`<descriptor id>/c<j>/o0`, `entriesPortName`) in the `roots` of an
   audit's registration, so a scan whose `prog` the prover committed alone is refused; and the answer is one-stage's
@@ -1059,12 +1060,20 @@ def rowsCheck (p : Params) (s : Schedule) (sd : ByteArray) (w : Nat) (d : Direct
       { keyId := r.key, link := p.link, direction := d, window := w, digest := r.digest, signature := r.signature } do
     refuse s!"{what}: not under the deployment key in the session"
 
-/-- The scan's registration holds the rows: an entry of its `roots` or `registered` names their root and domain. -/
-def holds (reg : Json) (r : Rows) : Bool :=
+/-- A registration's entries: those of its `roots`, then those of its `registered`. -/
+def regEntries (reg : Json) : Array Json :=
   let entries := fun (k : String) => match reg.getObjValD k with | .arr xs => xs | _ => #[]
-  (entries "roots" ++ entries "registered").any fun e => match e.getObjValD "root", e.getObjValD "domain" with
-    | .str root, .str dom => root == Flock.hexOf r.root && dom == r.domain
-    | _, _ => false
+  entries "roots" ++ entries "registered"
+
+/-- Whether an entry's field `k` is the string `n`, matched as a string, which the kernel evaluates (`Lean.Json`'s `==`
+it doesn't). -/
+def fieldIs (k n : String) (e : Json) : Bool := match e.getObjValD k with | .str x => x == n | _ => false
+
+/-- The scan's registration holds the rows: some entry of its `roots` or `registered` is under their domain, and
+every such entry is at their root, so the domain names the rows' tree alone. -/
+def holds (reg : Json) (r : Rows) : Bool :=
+  let under := (regEntries reg).filter (fieldIs "domain" r.domain)
+  !under.isEmpty && under.all (fieldIs "root" (Flock.hexOf r.root))
 
 /-- The scan's Programs' rows in its registration, one tree a lane: lane `j`'s is the entry of its `roots` whose port,
 or of its `registered` whose value, is `scan/prog<j>`. -/
