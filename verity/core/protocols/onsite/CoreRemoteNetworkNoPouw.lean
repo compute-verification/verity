@@ -53,7 +53,7 @@ private def contains (s pat : String) : Bool := (s.splitOn pat).length > 1
 private def ids : List String := components.map (·.id)
 
 #guard orderedB components
-#guard ids == ["verity/certifier/v0", "verity/inference-only/v0", "verity/sampled-proofs/v1"]
+#guard components.map (·.id) == ["verity/certifier/v0", "verity/inference-only/v0", "verity/sampled-proofs/v1"]
 -- remote with the network certifier's subprotocols but PoUW's period, which no tie names either
 #guard ids == (Core.RemoteNetwork.components.map (·.id)).filter (· != PouwCheck.Period.protocolId)
 #guard Core.Remote.tied.all ids.contains
