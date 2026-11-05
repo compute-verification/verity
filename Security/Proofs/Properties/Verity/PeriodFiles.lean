@@ -1092,7 +1092,7 @@ theorem rnn_at {p c e : ByteArray} {bs cs : Array ByteArray} {n : Nat} (hinj : B
 
 /-- **At remote with the network certifier and without PoUW, the verifier of record agrees with the executable that
 reads the period's circuit files by path**, unless SHA-512 collides among the blobs. -/
-theorem agree_rnn : Verity.CircuitFilesByPathAgreeAt .remoteNetworkNoPouw := by
+theorem agree_rnn : Verity.FilesByPathAgreeWith .remoteNetworkNoPouw (Verity.byPath .remoteNetworkNoPouw) := by
   intro p c e bs cs h
   by_cases hcol : Hash.CollisionIn Verity.sha512 ((bs ++ cs).toList.map (·.data.toList))
   · exact Or.inr hcol
@@ -1127,7 +1127,7 @@ theorem rn_at {p c e : ByteArray} {bs cs : Array ByteArray} {n : Nat} (hinj : Bl
 
 /-- **At remote with the network certifier and PoUW, the verifier of record agrees with the executable that reads the
 period's circuit files by path**, unless SHA-512 collides among the blobs. -/
-theorem agree_rn : Verity.CircuitFilesByPathAgreeAt .remoteNetwork := by
+theorem agree_rn : Verity.FilesByPathAgreeWith .remoteNetwork (Verity.byPath .remoteNetwork) := by
   intro p c e bs cs h
   by_cases hcol : Hash.CollisionIn Verity.sha512 ((bs ++ cs).toList.map (·.data.toList))
   · exact Or.inr hcol
@@ -1160,7 +1160,7 @@ theorem onsite_at {p c e : ByteArray} {bs cs : Array ByteArray} {n : Nat} (hinj 
 
 /-- **At onsite, the verifier of record agrees with the executable that reads the period's circuit files by path**,
 unless SHA-512 collides among the blobs. -/
-theorem agree_onsite : Verity.CircuitFilesByPathAgreeAt .onsite := by
+theorem agree_onsite : Verity.FilesByPathAgreeWith .onsite (Verity.byPath .onsite) := by
   intro p c e bs cs h
   by_cases hcol : Hash.CollisionIn Verity.sha512 ((bs ++ cs).toList.map (·.data.toList))
   · exact Or.inr hcol
@@ -1249,10 +1249,5 @@ end Verity.PeriodFiles
 
 /-- **At every composite with the network certifier's period, the verifier of record agrees with the executable that
 reads the period's circuit files by path**, unless SHA-512 collides among the blobs. -/
-theorem Verity.circuit_files_by_path_agree : Verity.CircuitFilesByPathAgree := by
-  intro k hk
-  cases k with
-  | onsite => exact Verity.PeriodFiles.agree_onsite
-  | remote => exact absurd rfl hk
-  | remoteNetwork => exact Verity.PeriodFiles.agree_rn
-  | remoteNetworkNoPouw => exact Verity.PeriodFiles.agree_rnn
+theorem Verity.circuit_files_by_path_agree : Verity.CircuitFilesByPathAgree :=
+  ⟨Verity.PeriodFiles.agree_onsite, Verity.PeriodFiles.agree_rn, Verity.PeriodFiles.agree_rnn⟩

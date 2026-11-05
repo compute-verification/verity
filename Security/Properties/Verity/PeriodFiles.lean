@@ -10,10 +10,10 @@ is stated over its verifier of record (`verifier`), which finds the circuit file
 (`check P C E BLOB ... --circuits CIRCUIT ...`, `Core.PeriodFiles.main`), and its network certifier's period is then
 `NetworkCheck.Period.readProtocol` on what it read (`byPath`).
 
-`CircuitFilesByPathAgreeAt k` ties the two at composite `k`: where the executable accepts the blobs `bs` with the
-circuit files `cs` read by path, the verifier of record gives the same answer on the blobs `bs ++ cs`, unless two of
-those byte strings collide under SHA-512 (`FilesByPathAgreeWith`, at the executable `byPath`; an executable that accepts
-everything, `acceptAllByPath`, is one it fails at). `CircuitFilesByPathAgree` is that at all three composites.
+`FilesByPathAgreeWith k (byPath k)` ties the two at composite `k`: where the executable accepts the blobs `bs` with
+the circuit files `cs` read by path, the verifier of record gives the same answer on the blobs `bs ++ cs`, unless two of
+those byte strings collide under SHA-512 (an executable that accepts everything, `acceptAllByPath`, is one it fails
+at). `CircuitFilesByPathAgree` is that at all three composites.
 `byPath` holds what the executable reads as the files' bytes: `NetworkCheck.PeriodFiles.read` reads the file at each
 path as `NetworkCheck.Period.ofRead` holds its bytes. Remote, which has no network certifier's period, has no such
 executable.
@@ -49,15 +49,12 @@ def FilesByPathAgreeWith (k : Verity.Registration.Composite)
     (verifier k).answer p c e (bs ++ cs) = exe p c e bs cs ∨
       Hash.CollisionIn sha512 ((bs ++ cs).toList.map (·.data.toList))
 
-/-- **Where composite `k`'s executable accepts with the period's circuit files read by path, its verifier of record
-gives the same answer with them among the blobs**: `FilesByPathAgreeWith` at that executable (`byPath`). -/
-def CircuitFilesByPathAgreeAt (k : Verity.Registration.Composite) : Prop :=
-  FilesByPathAgreeWith k (byPath k)
-
-/-- **`CircuitFilesByPathAgreeAt` at every composite with the network certifier's period**: onsite, and remote with the
-network certifier, with PoUW or without. -/
+/-- **Where a composite's executable accepts with the period's circuit files read by path, its verifier of record gives
+the same answer with them among the blobs**: `FilesByPathAgreeWith` at each composite with the network certifier's
+period (onsite, and remote with the network certifier, with PoUW or without) and its executable (`byPath`). -/
 def CircuitFilesByPathAgree : Prop :=
-  ∀ (k : Verity.Registration.Composite), k ≠ .remote → CircuitFilesByPathAgreeAt k
+  FilesByPathAgreeWith .onsite (byPath .onsite) ∧ FilesByPathAgreeWith .remoteNetwork (byPath .remoteNetwork) ∧
+    FilesByPathAgreeWith .remoteNetworkNoPouw (byPath .remoteNetworkNoPouw)
 
 /-- An executable that accepts every case: what `FilesByPathAgreeWith` must fail at for `CircuitFilesByPathAgree` to say
 something. -/
