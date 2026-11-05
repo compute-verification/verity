@@ -245,16 +245,21 @@ def _shipped(case: dict) -> dict:
 
 def _out(tmp_path: Path, period) -> Path:
     """A served run's OUT as the verifier receives it (`RECEIVED`): the certifier's piece with the scan's circuit file,
-    V3c's audit as the run copies it (its summary and audit record as `served_integrity.public_copy` writes them, the
-    registration it audited, its period audit and its circuit file), the registered compiler, the window's advice
-    registration in its public form (`served_verdicts.public_registration`), the weights registration and a class's
-    count."""
+    its record (`certifier_piece.scan_record`) and its case naming the period's circuit files, V3c's audit as the run
+    copies it (its summary and audit record as `served_integrity.public_copy` writes them, the registration it audited,
+    its period audit and its circuit file), the registered compiler, the window's advice registration in its public form
+    (`served_verdicts.public_registration`), the weights registration and a class's count."""
     out = tmp_path / "out"
     case, answer = _case(period)
     case = _shipped(case)
+    scan = out / "pieces" / "certifier" / KS.CIRCUITS / f"{SCAN_CIRCUITS[0]['sha512']}.txt"
+    case = {**case, "circuits": [str(out / "v3c-audit" / "circuits" / f"{CIRCUIT_PIN}.txt"), str(scan)]}
     piece = _dir(out / "pieces" / "certifier", case, answer)
     (piece / KS.CIRCUITS).mkdir()
-    (piece / KS.CIRCUITS / f"{SCAN_CIRCUITS[0]['sha512']}.txt").write_bytes(SCAN_CIRCUIT)
+    scan.write_bytes(SCAN_CIRCUIT)
+    (reg,) = json.loads(bytes.fromhex(case["commitment"]))["windows"]
+    (piece / CP.SCAN_CIRCUITS).write_text(json.dumps({"format": CP.SCAN_CIRCUITS_FORMAT, "registration": reg,
+                                                      "circuits": SCAN_CIRCUITS}))
     (piece / "piece.json").write_text(json.dumps({"server": "node", "rc": 0, "limit": "CERTIFIER_TIMEOUT"}))
     com, ev = (json.loads(bytes.fromhex(case[k])) for k in ("commitment", "evidence"))
     reg, units = com["audits"][0], [0, 1]
@@ -317,6 +322,8 @@ def test_v3cs_period_audit_with_its_wires_order_is_of_the_public_kinds(tmp_path,
 @pytest.mark.parametrize("plant, want", [
     (lambda o: (o / "pieces" / "certifier" / "chain.log").write_text("chain on window 3\n"),
      [("pieces/certifier/chain.log", "")]),
+    (lambda o: _edit(o / "pieces" / "certifier" / CP.SCAN_CIRCUITS, lambda r: {**r, "requests": 7}),
+     [(f"pieces/certifier/{CP.SCAN_CIRCUITS}", "requests")]),
     (lambda o: (o / "v3c-audit" / "audit.log").write_text('RECORDS {"population": 37}\n'), [("v3c-audit/audit.log", "")]),
     (lambda o: (o / "v3c-audit" / "main.txt").write_text("ab" * 20 + "\n"), [("v3c-audit/main.txt", "")]),
     (lambda o: _edit(o / "registration.json", lambda r: {**r, "binding": {**r["binding"], "advice": {
@@ -347,7 +354,8 @@ def test_v3cs_period_audit_with_its_wires_order_is_of_the_public_kinds(tmp_path,
 ])
 def test_what_reads_the_advice_or_counts_the_window_is_a_finding_in_what_a_verifier_receives(
         tmp_path, period, plant, want):
-    """A log or main's history left in the piece's dir or V3c's audit; the advice's own length in its registration,
+    """A log or main's history left in the piece's dir or V3c's audit; a field the scan's circuit record doesn't
+    declare; the advice's own length in its registration,
     or the registration as `verity-vllm advice` writes it (its requests, compiles and window); a workload in the
     compiler's φ; the advice's length in a class's count; a compile in V3c's summary (the audit opened the advice); an
     advice binding in the registration V3c audited; a field of the audit record `served_integrity.answer` doesn't

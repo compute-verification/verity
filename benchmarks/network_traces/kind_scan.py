@@ -178,13 +178,19 @@ REPORT = {
 #: registrations it is checked against
 SCAN_ANSWERS = {"format": S, "delta": S, **under("registration", REGISTRATION), "windows[].window": S,
                 **under("windows[].answer", ONE_STAGE), **under("windows[].registrations[]", ROWS)}
-#: DIR's files, each by its declaration: the case's two hex fields (`HEX`) are walked as the JSON their bytes are
+#: the scan's circuit record (`certifier_piece.scan_record`): its registration as the case's commitment holds it, and each
+#: root template's circuit file by its template and SHA-512, structure
+SCAN_CIRCUITS = {"format": S, **under("registration", REGISTRATION), "circuits[].template": S, "circuits[].sha512": S}
+#: DIR's files, each by its declaration: the case's two hex fields (`HEX`) are walked as the JSON their bytes are, and its
+#: ``circuits`` are where the composite reads the public circuit files its params name, structure
 DOCS: dict[str, dict[str, Any]] = {
     "answer.json": ANSWER,
     "chain.json": {"chain": O},
     "chain/report/report.json": REPORT,
     "chain/scan/answers.json": SCAN_ANSWERS,
-    "case.json": {**under("commitment", COMMITMENT), **under("evidence", EVIDENCE), **under("params", PARAMS)},
+    "case.json": {"circuits[]": S, **under("commitment", COMMITMENT), **under("evidence", EVIDENCE),
+                  **under("params", PARAMS)},
+    "scan-circuits.json": SCAN_CIRCUITS,
     "period/commitment.bin": COMMITMENT,
     "period/evidence.json": EVIDENCE,
     "period/params.json": PARAMS,

@@ -114,7 +114,10 @@ audit, which refuses cells cut, clocked or ordered otherwise than the schedule),
 the audited Commit period is a certified one inside that execution phase and carries the network certifier's run in its
 release, every certified request is exactly one served request, and the Lean check accepts;
 beside that answer goes its case, `case.json`, as the one-stage composite reads a piece's (inline, about 83 MB on a
-served window). Only the protocol rejecting the served window is a reject: with no fetch kept, a rehearsal the gate's
+served window, its `circuits` the paths of the circuit files the period lists, in the listing's order, which the
+composite's network leg reads), and `scan-circuits.json`, the scan's registration and each of its circuit files by the
+SHA-512 its sessions were held to, as V3c's `period.json` records its audit's. Only the protocol rejecting the served
+window is a reject: with no fetch kept, a rehearsal the gate's
 check didn't pass (each request late, say, a connection the network certifier failed closed) or a step that can't run,
 the piece refuses (`refused.txt`), naming the network certifier's own check's problems, which leaves the certifier
 missing; a rehearsal whose certified egress holds bytes that are no output's is a reject. An accept's profile names its
@@ -136,7 +139,11 @@ the scan on V3c's committed window (`scan_zk.py --v3c`: its scan state and slot 
 trees), and its `period` runs the consistency check on the rows case whose one compute audit is V3c's `period.json`, at any sample of
 V3c's; each step releases through its own hold. Only the split's period is on the run's registration record, as remote
 with the network certifier's `egress` tie requires of every compute audit, so a `PRODUCT=remote-network` run takes the
-split, and so does a `PRODUCT=remote-network-no-pouw` run.
+split, and so does a `PRODUCT=remote-network-no-pouw` run. `period --case-only` runs no `network-period`: it writes the
+case and an undecided answer binding its commitment by the digest `network-period` gives it, so the composite's network
+leg, which reads the listed circuit files, is the period's one check. `--period PERIOD_JSON` reads another
+`period.json` (its circuit files in `circuits/` beside it), and `--circuit RECORD` names the window-circuit record V3c's
+audit is held to, which it must where both V3c's record and its H1_TIE `-tie` one are there.
 
 `attacks.py` lists what the served path must refuse or charge (`table`): each attack with its case, the check that
 refuses it or the leak bound's term that charges it, and the reason its verdict names. Its `relay` is the prover's

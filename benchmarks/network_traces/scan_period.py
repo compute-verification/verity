@@ -225,16 +225,23 @@ def circuit_files(case: dict, audits: Path | None, scans: Path) -> list[Path]:
     return out
 
 
-def lean_check(exe: str, case: dict, d: Path, circuits: Sequence[Path] = (),
-               run: Callable[[list[str]], subprocess.CompletedProcess] | None = None) -> dict:
-    """``EXE check`` (``network-period``'s, or ``network-rows``') on the case's three files in ``d`` and, for
-    ``network-period``, its circuit files (`circuit_files`' order): its answer (its last line). ``run`` runs it with its
-    output captured as text (`subprocess.run`'s ``capture_output=True, text=True`` by default)."""
+def case_files(case: dict, d: Path) -> list[Path]:
+    """The case's three files in ``d``, as ``EXE check`` reads them: ``params.json`` (canonical), ``commitment.bin`` and
+    ``evidence.json``."""
     d.mkdir(parents=True, exist_ok=True)
     files = [d / "params.json", d / "commitment.bin", d / "evidence.json"]
     files[0].write_bytes(canonical_json(case["params"]))
     files[1].write_bytes(bytes.fromhex(case["commitment"]))
     files[2].write_bytes(bytes.fromhex(case["evidence"]))
+    return files
+
+
+def lean_check(exe: str, case: dict, d: Path, circuits: Sequence[Path] = (),
+               run: Callable[[list[str]], subprocess.CompletedProcess] | None = None) -> dict:
+    """``EXE check`` (``network-period``'s, or ``network-rows``') on the case's three files in ``d`` (`case_files`) and,
+    for ``network-period``, its circuit files (`circuit_files`' order): its answer (its last line). ``run`` runs it with
+    its output captured as text (`subprocess.run`'s ``capture_output=True, text=True`` by default)."""
+    files = case_files(case, d)
     argv = [exe, "check", *map(str, files), *map(str, circuits)]
     p = run(argv) if run else subprocess.run(argv, capture_output=True, text=True)
     if p.returncode not in (0, 1, 2) or not p.stdout.strip():
