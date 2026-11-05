@@ -60,6 +60,14 @@ _CHUNK = 1 << 24
 SCOPE_WHY = ("a circuit outside the unit's form under --zk (scopeOkH: the unit reads its one input group and returns the "
              "outputs)")
 TABLES_WHY = "a shared-row public file (header shared_rows) under --zk"
+#: `OneStageZk.NO_ROW_WHY` and `WIDE_WHY` (`template_why`), v2's refusals of the unit template
+NO_ROW_WHY = "the circuit's unit net has no computed row: a proof block of no gate"
+WIDE_WHY = ("a template instance returns more than 262144 bits (16 per output leaf of its units_per_vu units): past the "
+            "widest size class")
+#: `OneStageZk.UNIT_CLASS_MAX`: the widest public size class of a proof block's outputs, in bits
+UNIT_CLASS_MAX = 262144
+#: `Flock.WORD`: the rows of an input word
+WORD = 128
 
 
 class LeanError(RuntimeError):
@@ -158,6 +166,34 @@ def ks_form_why(circuit: Path, public: Path) -> str | None:
     return None
 
 
+def template_why(circuit: Path) -> str | None:
+    """`OneStageZk.templateOk`'s refusals on the circuit file's head, with its reasons: a unit net with no computed row
+    (its constant at its input rows' end: ``const ≤ inWords · WORD``, `inWords` its last input group's column plus its
+    words), else a template instance returning more than `UNIT_CLASS_MAX` bits (16 per entry of META's ``leaves_out``
+    over its ``units_per_vu`` units); None when neither applies or the head is not in that form. v2 refuses each session
+    of such a circuit with that reason, so `verify` turns a session Lean accepts into one rejected with it."""
+    head = _unit_head(circuit)
+    if head is None:
+        return None
+    meta, unit = head
+    try:
+        const, at, in_words = int(unit[3]), 5, 0
+        for _ in range(int(unit[4])):
+            col, words, ports = int(unit[at]), int(unit[at + 1]), int(unit[at + 2])
+            in_words, at = col + words, at + 3 + ports
+    except (IndexError, ValueError):
+        return None
+    if const <= in_words * WORD:
+        return NO_ROW_WHY
+    leaves, upv = meta.get("leaves_out", []), meta.get("units_per_vu", 0)
+    if not (isinstance(leaves, list) and isinstance(upv, int)):
+        return None
+    if 16 * sum(len(leaves[u]) if u < len(leaves) and isinstance(leaves[u], list) else 0 for u in range(upv)) \
+            > UNIT_CLASS_MAX:
+        return WIDE_WHY
+    return None
+
+
 def _refusal(why: str) -> str:
     return f"refused: {why}: a statement form the soundness proof does not cover"
 
@@ -189,7 +225,8 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
     None and the program reads registered values, `reads_registered`; ``circuit``: the circuit file is not the
     committed one; ``proof``: a file is missing or the verifier's answer is not one verdict a session naming the
     partition object's program; ``form``: the verifier accepted a session whose files `ks_form_why` refuses). A session
-    the verifier rejects is a finding, not a refusal.
+    the verifier rejects is a finding, not a refusal, and so is one it accepts on a circuit `template_why` refuses,
+    rejected with that reason as v2 rejects it.
 
     The ``registered`` refusal is the verifier's own: without ``--registered``, Lean refuses a statement's registered
     reads only where its public file, which the prover writes, names them (`Registered.check`), and doesn't read a
@@ -229,9 +266,14 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
     want = partition.get("program")
     accepted = any(v.get("accepted") is True for v in lines)
     form = ks_form_why(proof.circuit, proof.public) if accepted else None
+    template = template_why(proof.circuit) if accepted else None
     out = []
     for s, v in zip(proof.sessions, lines):
         ok = v.get("accepted") is True
+        if ok and form is None and template is not None:
+            out.append(Finding(str(s), False, template, v.get("program_sha512"), v.get("registered") or {}, (),
+                               v.get("openings")))
+            continue
         if ok and form is not None:
             return None, ("form", f"the verifier of record accepted session {s}, whose files its mirror refuses "
                                   f"(`ks_form_why`): {form}")
@@ -334,6 +376,6 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
         raise LeanError(f"{V2_EXE} check answered no line (exit {p.returncode}): {p.stderr[-400:]}") from None
 
 
-__all__ = ["EXE", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY", "V2", "V2_EXE", "Finding", "LeanError", "Proof",
-           "check_v2", "evidence_v2", "executable", "file_sha512", "ks_form_why", "proved_units", "reads_registered",
-           "v2_executable", "verdicts_v2", "verify"]
+__all__ = ["EXE", "NO_ROW_WHY", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY", "UNIT_CLASS_MAX", "V2", "V2_EXE",
+           "WIDE_WHY", "WORD", "Finding", "LeanError", "Proof", "check_v2", "evidence_v2", "executable", "file_sha512",
+           "ks_form_why", "proved_units", "reads_registered", "template_why", "v2_executable", "verdicts_v2", "verify"]
