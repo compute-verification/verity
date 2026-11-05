@@ -1082,7 +1082,7 @@ theorem opensAtPosition_nontrivial :
       some (t, (Plan.whole 130023425).block 130023424)) := by
   intro t h
   rw [block_whole (show 130023424 < 130023425 by decide), position_past (Nat.le_refl _)] at h
-  exact Option.noConfusion h
+  cases h
 
 /-! ### The scheduled layout -/
 
