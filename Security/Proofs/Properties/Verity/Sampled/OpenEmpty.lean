@@ -161,6 +161,7 @@ noncomputable def OpeningAt.oneMore {β : Type} {g' : Game β} (o : OpeningAt g'
       o.f (⟨.opening o.i o.s o.n, o.b, (TreeDraw.opened d.1 (o.n + 1)).take (128 * o.n)⟩ :: log')
     rw [opened_take_succ]))
 
+open Classical in
 /-- **An opening's class is empty below the block**: where a description `o'` of the node opens fewer coins than a
 block, no round is released as `bits` both at `o'` and at the description that opens one coin more
 (`OpeningAt.oneMore`), whose releases are 128 bits longer. -/
