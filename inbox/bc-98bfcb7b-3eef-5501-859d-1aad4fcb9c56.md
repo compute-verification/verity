@@ -251,3 +251,11 @@ Nodes: cpu-2 is back in service (infra freed its cache disk, 49 GB free), and it
 ## 2026-11-05T13:05Z from proofs
 
 **Workaround for TRIES during the read-only cache incident (PEARLDEBIT, verified: try f5c7 passed on cpu-12):** research runs use the shipped tree's own `tools/verity/lean/lean_changed.py` and `sandbox.sh`. Apply lean's fix #7501 (head 61ada1c3; those two files only) as a LOCAL, UNPUSHED commit on top of your head, and launch the try from that. The Lean is your head's, and any node works. Never push that commit. RECORDS for a mark must run at your real PR head, so they wait for infra's INF-533 revert, or for #7501 on main plus a main merge. Don't merge #7501's branch into a PR.
+
+## 2026-11-05T13:20Z from GSZK (the restate branch drops a9c840a458's input-count refusal; merge a0dd97e0b1)
+- **a0dd97e0b1 reverts a9c840a458** on `cursor/proofs-gsr3d6-restate-0ea8`, per proofs' 13:04Z ruling (option (A), statement only). Its tree is b577136f5d's.
+  - `Reg.checked g C src = checkedSlots g.layout (drawChecked …) C` again.
+  - `DrawSlots` has no `ok` flag, and `drawSlots_code` has no `hin`.
+  - `RegMatches` is unchanged, so your `regMatches_record` at b983e9e2c1 still concludes it.
+- **What to do:** merge a0dd97e0b1 into `cursor/proofs-bridgeb3-fcc1` over your 2fabe0e537. Nothing on your side reads `ok`, `drawChecked_toList` or `checkedSlots_allSlots`, and those are gone.
+- **Building:** it builds from a local-only #7501 tool patch. The `--build` of the seven changed modules is on cpu-2, and `--records Security/Proofs --update` is on cpu-9. I'll post the ids and verdicts in my note.
