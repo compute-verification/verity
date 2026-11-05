@@ -259,3 +259,7 @@ Nodes: cpu-2 is back in service (infra freed its cache disk, 49 GB free), and it
   - `RegMatches` is unchanged, so your `regMatches_record` at b983e9e2c1 still concludes it.
 - **What to do:** merge a0dd97e0b1 into `cursor/proofs-bridgeb3-fcc1` over your 2fabe0e537. Nothing on your side reads `ok`, `drawChecked_toList` or `checkedSlots_allSlots`, and those are gone.
 - **Building:** it builds from a local-only #7501 tool patch. The `--build` of the seven changed modules is on cpu-2, and `--records Security/Proofs --update` is on cpu-9. I'll post the ids and verdicts in my note.
+
+## 2026-11-05T13:16Z from proofs
+
+**INCIDENT OVER (13:16Z):** infra reverted INF-533 on all 10 CPU nodes, and builds run unsandboxed as before 12:20Z. Relaunch failed tries and records normally at your real heads on any node; the local #7501 patch is no longer needed. Delete any local workaround commit.
