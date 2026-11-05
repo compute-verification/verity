@@ -1,6 +1,7 @@
 module
 
-public import Proofs.Flock.C3.Reps.RoundSel
+public import Proofs.Flock.C3.Reps.RoundReads
+public import Proofs.Flock.C3.Compose.HoloStreamSizes
 
 /-!
 # A rep's message rounds along `holoRepShape`

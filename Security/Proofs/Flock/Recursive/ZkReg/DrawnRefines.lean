@@ -1,6 +1,7 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.ZkReg.Sound
+public import Proofs.Flock.Soundness.Discharge.Composed.Sound
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 public import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
 
 /-!

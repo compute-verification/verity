@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Pinned
+public import Definitions.Flock.Statement
 
 /-!
 # A pinned statement satisfies its statement without Δ's pinned copies

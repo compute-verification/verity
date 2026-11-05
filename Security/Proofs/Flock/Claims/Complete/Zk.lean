@@ -60,8 +60,7 @@ public import Proofs.Flock.Claims.Complete.Zk.Level0Model
 public import Proofs.Flock.Claims.Complete.Zk.Level0Honest
 public import Proofs.Flock.Claims.Complete.Zk.Level0HonestRun
 public import Proofs.Flock.Claims.Complete.Zk.Level0Opens
-public import Proofs.Flock.Claims.Complete.Zk.Level0Verifier
-public import Proofs.Flock.Claims.Complete.Zk.Level0Complete
+public import Proofs.Flock.Claims.Complete.ZkTables.ShapeGo
 
 /-! Flock's completeness at the deployed masked (`--zk`) verifier at one table (`ZkTables` lifts it to any number, at
 the masked record's prover `ZkTables.honestPR`): the honest masked prover (`Honest`: `honestPZk`, on

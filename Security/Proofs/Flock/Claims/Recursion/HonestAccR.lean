@@ -4,7 +4,9 @@ public import Proofs.Flock.Claims.Recursion.HonestRepR
 public import Proofs.Flock.Claims.Recursion.HonestIVStarR
 public import Proofs.Flock.Claims.Recursion.HonestVerdictR
 public import Proofs.Flock.Claims.Recursion.HonestVerdictFinal
-public import Proofs.Flock.Claims.Recursion.RestVerdictDraw
+public import Proofs.Flock.Claims.Recursion.RestVerdictCustody
+public import Proofs.Flock.Claims.Complete.ZkTables.Stmt
+public import Proofs.Flock.Claims.JsonNorm
 public import Proofs.Flock.Claims.Recursion.RestLive
 public import Proofs.Flock.Soundness.Refine.Seam
 import all Init.Data.Array.Basic

@@ -1,7 +1,9 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.RowBc
-public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Tail
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Defs
+public import Proofs.Flock.Soundness.Discharge.Hidden.Binding
+public import Proofs.Flock.Soundness.Discharge.Hidden.Committed
 
 /-!
 # `sha512/row/v1` or `sha512/row/v2` rows (`OutputsCommittedV2`, `OutputsBindingV2`)

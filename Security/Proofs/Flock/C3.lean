@@ -68,7 +68,6 @@ public import Proofs.Flock.C3.Reps.SentKeys
 public import Proofs.Flock.C3.Reps.WRead
 public import Proofs.Flock.C3.Reps.ReadWhole
 public import Proofs.Flock.C3.Reps.RoundReads
-public import Proofs.Flock.C3.Reps.RoundSel
 public import Proofs.Flock.C3.Reps.RoundOfHolo
 public import Proofs.Flock.C3.Reps.WithReads
 public import Proofs.Flock.C3.Reps.KeysInW
@@ -105,8 +104,8 @@ public import Proofs.Flock.C3.RegLevels.LevelsChecked
 public import Proofs.Flock.C3.RegLevels.TopRead
 public import Proofs.Flock.C3.RegLevels.SrcMaps
 public import Proofs.Flock.C3.Sparse.SessionReg
-public import Proofs.Flock.C3.Sparse.SessionZero
-public import Proofs.Flock.C3.Sparse.HCols
+public import Proofs.Flock.Recursive.PartTie
+public import Proofs.Flock.Recursive.HPortTie
 public import Proofs.Flock.C3.RegLevels.LgCoins
 public import Proofs.Flock.C3.RegLevels.RRounds
 public import Proofs.Flock.C3.RegLevels.LgHeld

@@ -1,6 +1,13 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.KSLin2E
+public import Proofs.Flock.Claims.Recursion.TopsOpens
+public import Proofs.Flock.Claims.Recursion.LastColsE
+public import Proofs.Flock.Claims.Recursion.ConflictTiedE
+public import Proofs.Flock.Claims.Recursion.LastBindsEC
+public import Proofs.Flock.Claims.Recursion.CallsAgree
+public import Proofs.Flock.Claims.Recursion.VStarCross
+public import Proofs.Flock.Claims.Recursion.SetupCalls
+public import Proofs.Flock.Claims.Recursion.PartAccepts
 public import Proofs.Flock.Claims.KS.PlainRConflict
 public import Proofs.Flock.Claims.KS.PlainRCapPrefix
 

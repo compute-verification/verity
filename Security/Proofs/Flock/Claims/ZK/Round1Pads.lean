@@ -1,6 +1,8 @@
 module
 
-public import Proofs.Flock.Claims.ZK.Round1
+public import Proofs.Flock.Claims.ZK.Sent
+public import Proofs.Flock.Claims.Complete.ZkTables.Round1
+public import Proofs.Flock.Claims.Complete.Zk.Json.Runs
 
 /-!
 # Round `1` of the masked session: the pads trees by tree position

@@ -5,7 +5,6 @@ public import Proofs.Flock.Soundness.Discharge.Composed.Base
 public import Proofs.Flock.Soundness.Discharge.Composed.Coined
 public import Proofs.Flock.Soundness.Discharge.Composed.Headline
 public import Proofs.Flock.Soundness.Discharge.Composed.Coins
-public import Proofs.Flock.Soundness.Discharge.Composed.Geometry
 public import Proofs.Flock.Soundness.Discharge.Composed.Pads
 public import Proofs.Flock.Soundness.Discharge.Composed.Inner
 public import Proofs.Flock.Soundness.Discharge.Composed.Inner.Holds
