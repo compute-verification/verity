@@ -411,10 +411,11 @@ theorem play_ends (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : B
     (σ : Verity.Game.Strategy (V.game θ F c)) (x : Verity.Game.CoinTape (V.game θ F c) σ) :
     (Verity.Game.CoinTape.run (V.game θ F c) σ x).params = θ ∧
       (Verity.Game.CoinTape.run (V.game θ F c) σ x).files = F := by
-  obtain ⟨log, s, h⟩ := playReaches_bind (f := fun log => Verity.Game.send (ByteArray × Array ByteArray) fun e =>
-      Verity.Game.ret (⟨θ, F, c, log, e.1, e.2⟩ : Verity.Exchange))
-    (releases (frames (V.families θ)) (V.families θ) []) σ (run_reaches (V.game θ F c) σ x)
-  have ho : Verity.Game.CoinTape.run (V.game θ F c) σ x = ⟨θ, F, c, log, s.1.1, s.1.2⟩ := h
+  obtain ⟨log, s, h⟩ := playReaches_bind (f := finish (V.signer θ) θ F c σ.1)
+    (releases (frames (V.families θ)) (V.families θ) []) σ.2 (run_reaches (V.game θ F c) σ x)
+  obtain ⟨ρ, ho⟩ : ∃ ρ : Fin (V.signer θ).draws → Bool, Verity.Game.CoinTape.run (V.game θ F c) σ x =
+      ⟨θ, F, c, σ.1, log, s.1, List.ofFn ρ, (V.signer θ).signatures σ.1 log s.1 (List.ofFn ρ), (s.2 ρ).1.1,
+        (s.2 ρ).1.2⟩ := h
   rw [ho]
   exact ⟨rfl, rfl⟩
 
