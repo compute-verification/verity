@@ -629,7 +629,7 @@ theorem leakyDec_run (z : Bool) : leakyDec (leakyRun () (emptySched, z)).1 = z :
 
 theorem emptySched_fits : fxRows.Fits 1 0 emptySched := by
   refine ⟨fun c j hj => by simp [emptySched] at hj, fun b => ?_⟩
-  simp [fxRows, laneLoad, emptySched]
+  simp [fxRows, laneLoad, emptySched, tailPads]
 
 /-- **The device is not trusted-host's**: on the serving `true` it shows the client a cell the code, which sends no
 cell on `emptySched`, doesn't. -/
@@ -704,7 +704,10 @@ theorem oneSched_fits : blindRows.Fits 1 1 oneSched := by
   · simp only [blindRows, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero, laneLoad]
     have h0 : ¬ (oneSched.adm () ≤ b ∧ b < oneSched.adm () + oneSched.D) :=
       fun h => absurd h.2 (Nat.not_lt_zero b)
-    rw [ite_eq_right h0, zero_add]
+    have ht : tailPads oneSched () b = 0 := by
+      unfold tailPads
+      split_ifs <;> simp [oneSched]
+    rw [ite_eq_right h0, zero_add, ht, add_zero]
     exact (List.length_filter_le _ _).trans (by simp [oneSched])
 
 /-- The device runs the network certifier's code, recording in `blindRows`. -/
