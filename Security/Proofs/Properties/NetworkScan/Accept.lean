@@ -114,10 +114,12 @@ theorem name_of_map {xs : Array (String × Ty)} {ys : Array String} {nm : String
   rw [getElem!_pos xs _ hlt, e]
 
 theorem firstParams_row (lanes : ℕ) : (firstParams lanes)[0]? = some "row" := by
-  rw [firstParams, Array.getElem?_append_left (xs := #["row"]) (i := 0) (by decide)] <;> rfl
+  rw [firstParams, Array.getElem?_append_left (xs := #["row"]) (i := 0) (by decide)]
+  rfl
 
 theorem ingressParams_row (lanes : ℕ) : (ingressParams lanes)[0]? = some "row" := by
-  rw [ingressParams, Array.getElem?_append_left (xs := #["row", "sin"]) (i := 0) (by decide)] <;> rfl
+  rw [ingressParams, Array.getElem?_append_left (xs := #["row", "sin"]) (i := 0) (by decide)]
+  rfl
 
 /-- **`scanOf` is `scanProg` at the decoded Program**: if `scanOf` accepts the scan `j`, whose canonical text `c`
 decodes to `P`, then `scanProg` accepts `P` with the same terms. -/
@@ -153,9 +155,7 @@ theorem scanProg_accepted {P : Prog} {program : String} {s : Schedule} {sc : Sca
     rw [Array.all_eq_true_iff_forall_mem] at hinp
     have h1 := hinp _ (Array.mem_map.2 ⟨k, List.mem_toArray.2 hk, rfl⟩)
     have h2 : (!Flock.Program.isInputId (callee P k).key) = true := h1
-    first
-      | rwa [Bool.not_eq_true'] at h2
-      | simpa using h2
+    rwa [Bool.not_eq_true'] at h2
   clear hinp
   obtain ⟨⟨xe, de⟩, hback, h⟩ := bind_ok h
   replace hback := needSome_ok hback

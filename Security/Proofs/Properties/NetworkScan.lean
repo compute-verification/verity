@@ -481,17 +481,11 @@ theorem not_fits_of_no_members {L S : ℕ} (lay : NetTiming.BoundaryGates L S) {
 /-- A Program of one Definition, its root, which has no nodes. -/
 def bareProg : Flock.Program.Prog := { defs := #[default], index := {}, root := 0, programFn := "", sha512 := .empty }
 
-theorem bareProg_templateNodes : templateNodes bareProg = [] := by
-  first
-    | rfl
-    | simp [templateNodes, bareProg]
+theorem bareProg_templateNodes : templateNodes bareProg = [] := rfl
 
 /-- The template query over no templates accepts `bareProg` with no ranges: its root has no nodes. -/
 theorem bareProg_evaluate : Flock.TemplateQuery.evaluate (.ofProg bareProg) #[] = .ok #[] := by
-  first
-    | rfl
-    | (unfold Flock.TemplateQuery.evaluate; rfl)
-    | simp [Flock.TemplateQuery.evaluate, Flock.TemplateQuery.Desc.ofProg, Flock.TemplateQuery.Desc.def?, bareProg]
+  simp [Flock.TemplateQuery.evaluate, Flock.TemplateQuery.Desc.ofProg, Flock.TemplateQuery.Desc.def?, bareProg] <;> rfl
 
 /-- **`ScanFits`' nontrivial lemma**: a scan check that accepts every Program accepts `bareProg`, which has no
 templates, so no circuit files and no members: their joint program is empty, and no layout fits it over a window of

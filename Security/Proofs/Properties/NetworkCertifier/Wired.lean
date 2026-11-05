@@ -324,21 +324,12 @@ theorem paramsOf_audits {j : Json} {p : Params} (h : paramsOf j = .ok p) :
       cases hform
       obtain ⟨_, -, hw⟩ := bind_ok hw
       replace hw := jp_ok hw (by intro h'; injection h')
-      first
-        | (generalize (Json.obj kv).getObjVal? "scan_circuits" = sc at hw
-           cases sc
-           all_goals
-             repeat (obtain ⟨_, -, hw⟩ := bind_ok hw)
-             cases hw
-             rfl
-           done)
-        | (dsimp only at hw
-           split at hw
-           all_goals
-             repeat (obtain ⟨_, -, hw⟩ := bind_ok hw)
-             cases hw
-             rfl
-           done)
+      generalize (Json.obj kv).getObjVal? "scan_circuits" = sc at hw
+      cases sc
+      all_goals
+        repeat (obtain ⟨_, -, hw⟩ := bind_ok hw)
+        cases hw
+        rfl
     · obtain ⟨_, -, hw⟩ := bind_ok hw
       obtain ⟨_, -, hw⟩ := bind_ok hw
       obtain ⟨_, -, hw⟩ := bind_ok hw
@@ -350,21 +341,12 @@ theorem paramsOf_audits {j : Json} {p : Params} (h : paramsOf j = .ok p) :
       replace hw := jp_ok hw (by intro h'; injection h')
       replace hw := jp_ok hw (by intro h'; injection h')
       replace hw := jp_ok hw (by intro h'; injection h')
-      first
-        | (generalize (Json.obj kv).getObjVal? "scan_circuits" = sc at hw
-           cases sc
-           all_goals
-             repeat (obtain ⟨_, -, hw⟩ := bind_ok hw)
-             cases hw
-             rfl
-           done)
-        | (dsimp only at hw
-           split at hw
-           all_goals
-             repeat (obtain ⟨_, -, hw⟩ := bind_ok hw)
-             cases hw
-             rfl
-           done)
+      generalize (Json.obj kv).getObjVal? "scan_circuits" = sc at hw
+      cases sc
+      all_goals
+        repeat (obtain ⟨_, -, hw⟩ := bind_ok hw)
+        cases hw
+        rfl
   all_goals exact absurd hw (by intro h'; injection h')
 
 theorem rowsWiresChecked : RowsWiresChecked := by
