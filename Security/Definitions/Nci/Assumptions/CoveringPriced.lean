@@ -1,4 +1,6 @@
-import Definitions.Nci.Assumptions.CoveringTwoCosts
+module
+
+public import Definitions.Nci.Assumptions.CoveringTwoCosts
 
 /-!
 # Parameter-hardness at a price per weight
@@ -10,6 +12,8 @@ cheapest weights cost several times less than the mean. Here each weight `i` has
 the weights it completes, which recovers about the mean. At `p = fun _ => c_w` it is `ParameterHardAt`. Activation-chaining
 is unchanged: `ActivationChainedAt` at an activation cost `c_a`, and `𝓜*` is `chainedBlocksAt`.
 -/
+
+@[expose] public section
 
 namespace Nci.Assumptions
 

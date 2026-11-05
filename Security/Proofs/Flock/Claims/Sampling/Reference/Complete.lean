@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Sampling.Select.DrawLaw
-import Proofs.Flock.Claims.Sampling.Reference.Prover
+module
+
+public import Proofs.Flock.Claims.Sampling.Select.DrawLaw
+public import Proofs.Flock.Claims.Sampling.Reference.Prover
 
 /-!
 # Sampling completeness from Flock's, session by session
@@ -27,6 +29,8 @@ the statements of the sessions at `x`.
   Flock's errors nonnegative, and `D.δc H x ≥ K · sessErr`.
 -/
 
+@[expose] public section
+
 namespace Claims.Sampling.Reference
 
 open Claims Claims.Sampling Finset Properties.SampledProofs Properties.SampledProofs.SecurityProofs
@@ -42,14 +46,14 @@ omit [Nonempty Coin] [Inhabited Coin] in
 refused draw checks each once (`size_checked_le`, `size_allSlots`). -/
 theorem checkedLe_of_slots (D : Deploy Coin Col T) (h : DrawSlots D) : CheckedLe D := by
   rintro x ⟨s, Pt, hx, hP, -⟩ r
-  obtain ⟨rule, d, query, table, cm, l, L, bytes, -, hl, hshape, -, -, hch⟩ := h x s Pt hx hP
+  obtain ⟨rule, cf, d, query, table, cm, l, L, bytes, -, hl, hshape, -, -, hch⟩ := h x s Pt hx hP
   have hnPU : nPU D x = (slotPartition l).blocks.length := by
     simp [nPU, hx, Deploy.part, hP, Partition.blocks_length_of_shape hshape]
   rw [hch r, hnPU, Array.length_toList]
   unfold drawChecked
   split
   · rename_i c hs
-    obtain ⟨hl', draw, proved, read, -, rfl⟩ := slots_select_ok _ _ _ _ _ _ _ _ hs
+    obtain ⟨hl', draw, proved, read, -, rfl⟩ := slots_select_ok _ _ _ _ _ _ _ _ _ hs
     rw [hl] at hl'
     obtain rfl := Except.ok.inj hl'
     exact size_checked_le l proved

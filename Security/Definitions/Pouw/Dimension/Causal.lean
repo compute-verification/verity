@@ -1,4 +1,6 @@
-import Definitions.Pouw.Dimension.Defs
+module
+
+public import Definitions.Pouw.Dimension.Defs
 
 /-!
 # Theorem D with causal inputs: trusted statements
@@ -12,6 +14,8 @@ The bound is Theorem D's, `16·|U|·m·n·(3k/16 − 1)`. The proof peels units 
 at unit `u` kills the words of every earlier unit (they do not read `E₁` of unit `u`) and `V₀`, and the later units'
 coefficients are already known to be 0.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension
 

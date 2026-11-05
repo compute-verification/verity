@@ -1,7 +1,9 @@
-import Proofs.Flock.Recursive.FirewallZK
-import Proofs.Flock.Recursive.FirewallTemplate
-import Proofs.Flock.Recursive.FirewallLive
-import Proofs.Flock.Recursive.FirewallHonest
+module
+
+public import Proofs.Flock.Recursive.FirewallZK
+public import Proofs.Flock.Recursive.FirewallTemplate
+public import Proofs.Flock.Recursive.FirewallLive
+public import Proofs.Flock.Recursive.FirewallHonest
 
 /-!
 # `FirewallSends` from the firewall's code
@@ -27,6 +29,8 @@ those of the messages `msgs`, each reading the strings before it.
   messages (`FirewallHonest.honestMsgs`), at a schedule the firewall holds a session to and a worker that follows it,
   its rows reading only the commit strings before them (`FirewallHonest.honest_accepts` at the zero salt).
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

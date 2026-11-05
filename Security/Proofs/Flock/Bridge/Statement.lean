@@ -1,6 +1,8 @@
-import Proofs.Flock.EndToEndHidden.Statement
-import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
-import Proofs.Flock.Bridge.Deployed
+module
+
+public import Proofs.Flock.EndToEndHidden.Statement
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
+public import Proofs.Flock.Bridge.Deployed
 
 /-!
 # The sampled audit's knowledge soundness, live (stated, not proved)
@@ -15,20 +17,24 @@ off the circuit file (`HiddenExec.rowOfH`); nothing of the commitment, its roots
 named assumptions are `EndToEndHidden`'s: A3, `live-verifier`, `cr/sha-512` and `ecr/sha-512`.
 
 **Strata.** `Bridge.partOf P κ ns` lays the population in strata of sizes `ns`, each a run of consecutive units, as the
-deployed `Slots.layout` lays one stratum per template; `subset kd`'s miss doesn't read them.
+deployed layout (`Slots.fileLayout`) lays the registration's strata, one per template (`FilePart.sizes` of
+`Partition.strata`); `subset kd`'s miss doesn't read them.
 
 **Input rows.** `Bridge.partOf P κ ns` puts each input row in the proof block of the unit that owns it, its first reader
 (`Bridge.blockOf`), and has no input class: that is what the deployed verifier checks, whose session (`HmRow.drawn`)
 opens only the rows its drawn units read, while registration opens none. So a unit whose owned input row doesn't open is a
-faulty slot, and `δ` bounds those slots with the rest. An input no unit reads is in no slot. The deployed
-`Slots.layout` still lays a separate input class, which the claims' design reads `all`, so `partOf` is not yet its
-partition.
+faulty slot, and `δ` bounds those slots with the rest. An input no unit reads is in no slot. The deployed layout has the
+same shape: one class, slot `u` unit `u`'s block of the circuit file (`FilePart.block`), and no input class. That those
+blocks are `partOf`'s at a circuit in scope (`unitLog ≤ 32`) is `Bridge.FilePartTarget`, proved
+(`Bridge.filePartTarget`).
 
 `SampledKSLiveStated` freezes the statement and the definitions it reads; no proof of `SampledKSLive` exists yet.
 `SampledKSLive` holds at `kd = 0` (`δ = 1`), and elsewhere follows from `EndToEndHidden` at
 `min K₀ (n − kd + 1)` by `Bridge.TransportsLive`, `Bridge.FaultyRightTarget` and `Bridge.CountTarget`
 (`Bridge.AssemblyTarget`).
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 
@@ -39,11 +45,21 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
 open Classical in
-/-- **The circuit's constants**: `keyProg`'s constant wire `oneG` is `1` and its zero `zeroG` is `0`, public circuit
-structure, so `progOf` lowers them to constants (`.const`), which a proof unit reads with no opening. -/
-noncomputable def _root_.Flock.Bridge.constsOf (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ)
+/-- **The circuit's constant wires**: `keyProg`'s constant wire `oneG` is `1` and its zero `zeroG` is `0`. -/
+noncomputable def _root_.Flock.Bridge.constWiresOf (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ)
     (g : Fin (Discharge.Layout.keyN c hU n)) : Option Bool :=
   if g = Discharge.Layout.oneG then some true else if g = Discharge.Layout.zeroG then some false else none
+
+open Classical in
+/-- **The circuit's constants**: `keyProg`'s constant wire `oneG` is `1`, and its zero `zeroG` and every program input
+no unit reads (`Bridge.owner`) are `0`, public circuit structure, so `progOf` lowers them to constants (`.const`), which
+a proof unit reads with no opening. They are Bits' (`SampledProofs.Bits.consts`). -/
+noncomputable def _root_.Flock.Bridge.constsOf (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ)
+    (g : Fin (Discharge.Layout.keyN c hU n)) : Option Bool :=
+  if g = Discharge.Layout.oneG then some true
+  else if g = Discharge.Layout.zeroG ∨ (g.val < 2 + n * Discharge.Layout.keyB c hU ∧
+      Bridge.owner ((keyProg c hU n).partition (Discharge.Layout.outsOf c hU n)) g = none) then some false
+  else none
 
 open Classical in
 /-- **The sampled audit's knowledge soundness, live.** `EndToEndHidden`'s setting: for every live prover `τ`, strata

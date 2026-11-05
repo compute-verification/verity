@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Sampling.Select.Design
-import Proofs.Flock.Claims.Sampling.Select.DrawLaw
+module
+
+public import Proofs.Flock.Claims.Sampling.Select.Design
+public import Proofs.Flock.Claims.Sampling.Select.DrawLaw
 
 /-!
 # The sampling scope check from the deployed design (`Claims.Sampling.ScopeMatches`, `Refuses`)
@@ -16,6 +18,8 @@ and draws on (`designWellFormed`), so the scope check need check only the progra
 * `refuses_of`: `Refuses` from `ScopeMatches` where the verifier runs its scope check.
 -/
 
+@[expose] public section
+
 open SampledProofs
 
 namespace Claims.Sampling
@@ -26,7 +30,7 @@ variable {Coin Col T : Type}
 
 /-- **The scope check is the readable scope's program part**: it takes a statement exactly when it parses, its query
 evaluates to a partition, the program is topologically ordered and the partition partitions it into proof units whose
-committed values fit their public size classes. The design part it need not check (`scopeMatches_of`). The program is the statement's bit
+outputs fit their public size classes. The design part it need not check (`scopeMatches_of`). The program is the statement's bit
 gates, its word gates' Boolean lowering, and a `Q_word` unit is the set of its word gates' bit gates. -/
 def ProgramScope (D : Deploy Coin Col T) : Prop :=
   ∀ x, D.scopeCheck x = true ↔ ∃ s Pt, D.parse x = some s ∧ D.partition s = some Pt ∧
@@ -55,9 +59,9 @@ theorem scopeMatches_of [Fintype Coin] (D : Deploy Coin Col T) (hslots : DrawSlo
   · rintro ⟨s, Pt, hx, hP, htop, hpart, -⟩
     exact ⟨s, Pt, hx, hP, htop, hpart⟩
   · rintro ⟨s, Pt, hx, hP, htop, hpart⟩
-    obtain ⟨rule, d, query, table, -, l, -, -, -, hl, hshape, hds, -, -⟩ := hslots x s Pt hx hP
+    obtain ⟨rule, cf, d, query, table, -, l, -, -, -, hl, hshape, hds, -, -⟩ := hslots x s Pt hx hP
     exact ⟨s, _, hx, hP, htop, hpart,
-      (Design.wellFormed_of_shape _ hshape).2 (designWellFormed rule d query table l s.design hl hds)⟩
+      (Design.wellFormed_of_shape _ hshape).2 (designWellFormed rule cf d query table l s.design hl hds)⟩
 
 /-- **The verifier refuses what is out of scope**: an accepted run's statement passed the scope check (`ChecksScope`),
 which is the readable scope (`ScopeMatches`). -/

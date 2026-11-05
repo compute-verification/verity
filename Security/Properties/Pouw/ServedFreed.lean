@@ -1,5 +1,7 @@
-import Definitions.Pouw.Dither
-import Properties.Pouw.ServedWork
+module
+
+public import Definitions.Pouw.Dither
+public import Properties.Pouw.ServedWork
 
 /-!
 # The served PoUW protocol's freed compute, in the onsite form
@@ -34,6 +36,8 @@ provider is `trusted-host`.
 
 The proof is `Proofs.Pouw.ServedFreed`; `Proofs.Pouw.ServedFreed.Honest` has its honest and nontrivial lemmas.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Served
 

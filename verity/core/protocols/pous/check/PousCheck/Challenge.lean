@@ -1,4 +1,6 @@
-import Randomness
+module
+
+public import Randomness
 
 /-!
 # The audit's challenges
@@ -8,6 +10,8 @@ nonce a challenge must carry. In mode 0 the verifier's secret `source` keys the 
 beacon value keys round `j` and is also its nonce. Every key is bound to the epoch and the verification root, so no
 challenge exists before setup has committed to both.
 -/
+
+@[expose] public section
 
 namespace PousCheck.Challenge
 

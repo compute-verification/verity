@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Prob
-import Definitions.Claims.Sampling
+module
+
+public import Proofs.Flock.Claims.Prob
+public import Definitions.Claims.Sampling
 
 /-!
 # `Complete` can fail
@@ -22,6 +24,8 @@ run fails it wherever a statement in scope has a witness in the relation, at eve
 The three are the lock's `claims` witnesses, stated over the spec: each quantifies (`∃`) over the hash and the toy it
 fails at.
 -/
+
+@[expose] public section
 
 namespace Claims.CompleteFails
 

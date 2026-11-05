@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.VerdictPieces
-import Proofs.Flock.VBridge.Family.Openings
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictPieces
+public import Proofs.Flock.VBridge.Family.Openings
 
 /-!
 # The `rec-cap` pieces of the verdict, as the parts compute them
@@ -24,6 +26,8 @@ shape of the `rec-open` and `rec-residuals` pieces' (`openPieces_computes`, `res
   tie) and every copy's `top` there is a node's row (`hpad`, the circuit's: `out` is `top`'s padding and V\*'s zero
   rows, which, like check 5's tie at `rec-residuals`, goes from "same digest" to "same row" at the vcalls ask).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

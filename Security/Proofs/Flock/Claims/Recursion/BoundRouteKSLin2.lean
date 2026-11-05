@@ -1,9 +1,11 @@
-import Proofs.Flock.Claims.Recursion.BoundRouteMergedLin
-import Proofs.Flock.Claims.Recursion.KSLin2
-import Proofs.Flock.Claims.Recursion.LastBindsEC
-import Proofs.Flock.Claims.Recursion.CallsAgree
-import Proofs.Flock.Claims.Recursion.VStarCross
-import Proofs.Flock.Claims.Recursion.SetupCalls
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundRouteMergedLin
+public import Proofs.Flock.Claims.Recursion.KSLin2
+public import Proofs.Flock.Claims.Recursion.LastBindsEC
+public import Proofs.Flock.Claims.Recursion.CallsAgree
+public import Proofs.Flock.Claims.Recursion.VStarCross
+public import Proofs.Flock.Claims.Recursion.SetupCalls
 
 /-!
 # `KSLin2` at the deployment (route 2C)
@@ -16,6 +18,8 @@ statements (`KSLin2On … DenseAt`), from V*'s facts at the dense shape only: th
 (`E_eval_C`), and of the bound's terms only the composite finders read an inner view, through `accAtI`, which decides
 alike at the two records (`accAtI_C`, from `innerView_C`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

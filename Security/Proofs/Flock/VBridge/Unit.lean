@@ -1,5 +1,7 @@
-import Proofs.Flock.VBridge.Net
-import Proofs.Flock.Soundness.ExecRows
+module
+
+public import Proofs.Flock.VBridge.Net
+public import Proofs.Flock.Soundness.ExecRows
 
 /-!
 # V*'s opening in a unit of a partition
@@ -14,6 +16,8 @@ So copy `j` of a unit whose rows are a stack of V*'s laid-out opening computes `
 at the unit's local evaluation (`unit_recOpen`, over `copyVal`). The copy's input columns read the transcript
 (`copyVal_input`), and so does every committed column of a correct unit (`copyVal_committed`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge
 

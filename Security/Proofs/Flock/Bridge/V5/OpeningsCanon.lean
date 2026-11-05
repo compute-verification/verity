@@ -1,5 +1,7 @@
-import Proofs.Flock.Bridge.V5.Statement
-import Proofs.Flock.Bridge.OpeningsCanon
+module
+
+public import Proofs.Flock.Bridge.V5.Statement
+public import Proofs.Flock.Bridge.OpeningsCanon
 
 /-!
 # A drawn proof block's openings are canonical at public inputs (`Bridge.OpeningsCanonTargetV5`, proved)
@@ -18,6 +20,8 @@ proof block's public gates:
 * `Bridge.openingsCanonV5 : Bridge.OpeningsCanonTargetV5`.
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.Discharge.HiddenExec
 
 open Flock FlockLevel3 Model Audit Binding Placed
@@ -33,7 +37,7 @@ a computed gate of the proof block (`Layout.single_gateP`), and a computed one i
 output row's bit (`outBitRow_ne_none`). -/
 theorem rowOfHP_ne_none_of_io
     (hparse : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
-      HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables = .ok c)
+      HmOut.unrolled (si.acc S R u h).st.c = c)
     (hpi : HmIn.parse c = .ok pi)
     (outs : Finset (Fin (keyN c hU n))) (ho : c.outNet = c.unitNet) (hrf : Hidden.Any.RowsFitS c)
     (houts : OutsOutP c hU n pi outs) (hkeys : KeysRowP c hU pi (portRowW c)) {S : Finset (Fin n)} {R : Reg}
@@ -52,20 +56,17 @@ theorem rowOfHP_ne_none_of_io
   obtain ⟨u'', j, t, hoc⟩ := houts u _ hg hm x rfl
   have hno' : outRowOfP c hU n pi outs ((Const.Prog.instC (keyProgP c pi hU n) outs u).wire x) = none := hno
   rw [outRowOfP_wire outs x hm (unit_wireP outs x hm).2, Layout.outDecode_of hoc] at hno'
-  have hc := (si.acc S R u hu).c_eq (hparse S R u hu)
-  have hcr : HmOut.checkRows c = .ok () := hc ▸ (si.acc S R u hu).checkRows
-  have P := parse_facts (hparse S R u hu)
-  obtain ⟨ls, hls⟩ := P.check
-  obtain ⟨-, -, hlo⟩ := Layout.check_out P.typed ho hls
+  have hcr : Hidden.RowsOut c := (si.acc S R u hu).checkRowsU (hparse S R u hu)
+  have hlo := (si.acc S R u hu).leavesOut_ltU (hparse S R u hu) ho
   obtain ⟨hu', hj, ht, -⟩ := hoc
   have hget : c.leavesOut.getD u'' #[] = c.leavesOut[u'']! := by
     rw [Hidden.getElem!_eq_getD']; rfl
   have hwlt : outWordOf c (u'', j, t) < c.outWords := by
     rw [show outWordOf c (u'', j, t) = (c.leavesOut.getD u'' #[])[j] from getElem!_pos _ j hj]
-    refine (hlo u'' hu').2 _ ?_
+    refine hlo u'' hu' _ ?_
     rw [← hget]
     exact Array.getElem_mem_toList _
-  exact outBitRow_ne_none hcr hrf u hwlt ht hno'
+  exact outBitRow_ne_none_of_rowsOut hcr hrf u hwlt ht hno'
 
 end FlockSoundness.Discharge.HiddenExec
 
@@ -82,14 +83,14 @@ file's leaf map registers): its commit string is `.inl (u', q)` (`Layout.ofRows_
 theorem _root_.Flock.Bridge.openingsCanonV5_row
     (n : ℕ) (Reg : Type)
     (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)
-    (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
+    (D : Flock.Desc) (hD : Flock.Desc.parseStmt (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
     (pi : HmIn.Ports) (hpi : HmIn.parse D.unroll = .ok pi)
     (pub : Public) (hpub : HmIn.loadPublic (zkTags I) D.unroll pi I.publicFile = .ok pub)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
     (kd : ℕ) (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : DrawSetupZHJP (inputsJ I 0) own (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀) :
-    let vb := (rsZHJP (Reg := Reg) dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpi hpub).bindingZ
-      (rsZHJP_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpi hpub)
+    let vb := (rsZHJP (Reg := Reg) dj y₀ ht (Flock.Desc.parseStmt_stmt hD) hscope hU hpi hpub).bindingZ
+      (rsZHJP_computes dj y₀ ht (Flock.Desc.parseStmt_stmt hD) hscope hU hpi hpub)
     let Cc := (keyProgP D.unroll pi hU n).circuit (Discharge.Layout.outsOfP D.unroll hU n pi)
     let Lm := Bridge.LeafMap.ofPublic D.unroll pub n
     let rows : Fin Cc.N → Option Bridge.RowAt := fun g =>
@@ -103,7 +104,7 @@ theorem _root_.Flock.Bridge.openingsCanonV5_row
   · exact absurd (by simp [rows, hx] : rows g = none) hr
   have hpos : vb.pos g = Sum.inl (u', q) :=
     Discharge.Layout.ofRows_pos_some
-      (Discharge.HiddenExec.keyPlaceHP (sitesShHJP_parse (Reg := Reg) dj y₀ ht (Flock.Desc.parse_flat hD) hscope) hpi
+      (Discharge.HiddenExec.keyPlaceHP (sitesShHJP_parse (Reg := Reg) dj y₀ ht (Flock.Desc.parseStmt_stmt hD) hscope) hpi
         (Discharge.Layout.outsOfP D.unroll hU n pi))
       (hN := Discharge.Layout.keyN_pos D.unroll hU n) (W := Finset.univ.sup (Discharge.Layout.portRowW D.unroll) + 1)
       (hW := fun q => (Finset.le_sup (Finset.mem_univ q)).trans (Nat.le_succ _)) (h1 := Nat.le_add_left 1 _)
@@ -128,15 +129,15 @@ decoder's (`opening_spec`), which at the public place reads the proof block's co
 theorem _root_.Flock.Bridge.openingsCanonV5_const
     (n : ℕ) (Reg : Type)
     (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)
-    (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
+    (D : Flock.Desc) (hD : Flock.Desc.parseStmt (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
     (pi : HmIn.Ports) (hpi : HmIn.parse D.unroll = .ok pi)
     (pub : Public) (hpub : HmIn.loadPublic (zkTags I) D.unroll pi I.publicFile = .ok pub)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
     (kd : ℕ) (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : DrawSetupZHJP (inputsJ I 0) own (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀) :
     let P := (keyProgP D.unroll pi hU n).partition (Discharge.Layout.outsOfP D.unroll hU n pi)
-    let vb := (rsZHJP (Reg := Reg) dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpi hpub).bindingZ
-      (rsZHJP_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpi hpub)
+    let vb := (rsZHJP (Reg := Reg) dj y₀ ht (Flock.Desc.parseStmt_stmt hD) hscope hU hpi hpub).bindingZ
+      (rsZHJP_computes dj y₀ ht (Flock.Desc.parseStmt_stmt hD) hscope hU hpi hpub)
     ∀ S R u, u ∈ S → ∀ M, (tabOfZ (planZHJP dj y₀) (tabZHJP dj y₀) S R u).S.Satisfies
         (wit execArith (tabOfZ (planZHJP dj y₀) (tabZHJP dj y₀) S R u).S
           (tabOfZ (planZHJP dj y₀) (tabZHJP dj y₀) S R u).sch M) →
@@ -147,16 +148,16 @@ theorem _root_.Flock.Bridge.openingsCanonV5_const
   simp only [decodeOfPlace, hu, ↓reduceDIte, placeZHJP, decode_placeCast]
   have hz := FlockSoundness.Discharge.ZkBind.sat_witOf (planZHJP_S dj y₀ S R u) hM
   obtain ⟨x, hx⟩ := Discharge.Layout.exists_col_of_io
-    ((Discharge.HiddenExec.keyPlaceHP (sitesShHJP_parse (Reg := Reg) dj y₀ ht (Flock.Desc.parse_flat hD) hscope) hpi
+    ((Discharge.HiddenExec.keyPlaceHP (sitesShHJP_parse (Reg := Reg) dj y₀ ht (Flock.Desc.parseStmt_stmt hD) hscope) hpi
       (Discharge.Layout.outsOfP D.unroll hU n pi)) S R u hu).inst hg
-  rcases hcs : Bridge.constsOf D.unroll hU n g with _ | b'
+  rcases hcs : Bridge.constWiresOf D.unroll hU n g with _ | b'
   · simp only [Bridge.constsOfP, hcs] at hb
     obtain ⟨⟨u', q, t⟩, hpq, rfl⟩ := Option.map_eq_some_iff.1 hb
     subst hx
     unfold UnitPlace.decode
     rw [FlockSoundness.Audit.Partition.IsRowsUnit.decode_wire _ (UnitPlace.agree _ hz),
       Discharge.Layout.block_gateAt
-        (Discharge.HiddenExec.keyPlaceHP (sitesShHJP_parse (Reg := Reg) dj y₀ ht (Flock.Desc.parse_flat hD) hscope)
+        (Discharge.HiddenExec.keyPlaceHP (sitesShHJP_parse (Reg := Reg) dj y₀ ht (Flock.Desc.parseStmt_stmt hD) hscope)
           hpi (Discharge.Layout.outsOfP D.unroll hU n pi)) hu hz x]
     obtain ⟨M', hM'⟩ := FlockSoundness.Discharge.ZkBind.wit_surj
       (Partition.tabOf (planShHJP (Reg := Reg) dj y₀) (tabShHJP dj y₀) S R u)
@@ -172,29 +173,29 @@ theorem _root_.Flock.Bridge.openingsCanonV5_const
       rw [hw]
       exact hz
     have hgate := Discharge.HiddenExec.keyProgHP_gate
-      (sitesShHJP_parse (Reg := Reg) dj y₀ ht (Flock.Desc.parse_flat hD) hscope) hpi
+      (sitesShHJP_parse (Reg := Reg) dj y₀ ht (Flock.Desc.parseStmt_stmt hD) hscope) hpi
       (Discharge.Layout.outsOfP D.unroll hU n pi) (fun _ => pub) (Discharge.Layout.scopeOkH_spec hU hscope).2.1
-      (Discharge.HiddenExec.rowsFit_of_scopeH (FlockSoundness.Discharge.ZkBind.zkTyped ht) (Flock.Desc.parse_flat hD)
+      (Discharge.HiddenExec.rowsFit_of_stmt (FlockSoundness.Discharge.ZkBind.zkTyped ht) (Flock.Desc.parseStmt_stmt hD)
         hscope)
       (Discharge.Layout.outsOutP_outsOfP D.unroll hU n pi)
-      (keysRowP_of_scopeZ ht (Flock.Desc.parse_flat hD) hscope hU)
-      (sitesShHJP_bcSite dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpi hpub) hu hsat hg
+      (keysRowP_of_scopeZ ht (Flock.Desc.parseStmt_stmt hD) hscope hU)
+      (sitesShHJP_bcSite dj y₀ ht (Flock.Desc.parseStmt_stmt hD) hscope hU hpi hpub) hu hsat hg
       (Discharge.HiddenExec.rowOfHP_pub _ hpq)
     rw [Discharge.HiddenExec.keyGateP_pub _ _ R hpq, hw] at hgate
     exact hgate
   · have hbb : b' = b := by simpa [Bridge.constsOfP, hcs] using hb
     subst hbb
-    simp only [Bridge.constsOf] at hcs
+    simp only [Bridge.constWiresOf] at hcs
     split_ifs at hcs with h1 h2
     · cases hcs
       have hone := Discharge.HiddenExec.constCols_keyProgHP hU
-        (sitesShHJP_parse (Reg := Reg) dj y₀ ht (Flock.Desc.parse_flat hD) hscope) hpi
+        (sitesShHJP_parse (Reg := Reg) dj y₀ ht (Flock.Desc.parseStmt_stmt hD) hscope) hpi
         (Discharge.Layout.outsOfP D.unroll hU n pi) S R u hu x (by rw [hx, h1]; exact Finset.mem_singleton_self _)
       rw [← hx, hone]
       exact UnitPlace.decode_one _ hz
     · cases hcs
       have hzero := Discharge.HiddenExec.zeroCols_keyProgHP hU
-        (sitesShHJP_parse (Reg := Reg) dj y₀ ht (Flock.Desc.parse_flat hD) hscope) hpi
+        (sitesShHJP_parse (Reg := Reg) dj y₀ ht (Flock.Desc.parseStmt_stmt hD) hscope) hpi
         (Discharge.Layout.outsOfP D.unroll hU n pi) S R u hu x (by rw [hx, h2]; exact Finset.mem_singleton_self _) _ hz
       rw [← hx]
       unfold UnitPlace.decode
@@ -209,19 +210,19 @@ theorem _root_.Flock.Bridge.openingsCanonV5 : Bridge.OpeningsCanonTargetV5 := by
   refine ⟨fun b hb => Bridge.openingsCanonV5_const n Reg I own ht D hD hU pi hpi pub hpub hscope kd dj S₀ d₀ y₀ S R u
     hu M hM g hg b hb, fun hk => ?_⟩
   have hk' : Bridge.constsOfP D.unroll hU n pi pub g = none := hk
-  rcases hcs : Bridge.constsOf D.unroll hU n g with _ | b'
+  rcases hcs : Bridge.constWiresOf D.unroll hU n g with _ | b'
   · have hp : Discharge.Layout.keyPubOf D.unroll hU n pi g = none := by
       simpa [Bridge.constsOfP, hcs] using hk'
-    simp only [Bridge.constsOf] at hcs
+    simp only [Bridge.constWiresOf] at hcs
     split_ifs at hcs with h1 h2
     refine Bridge.openingsCanonV5_row n Reg I own ht D hD hU pi hpi pub hpub hscope kd dj S₀ d₀ y₀ S R u M g ?_
     have hr := Discharge.HiddenExec.rowOfHP_ne_none_of_io (R := R)
-      (sitesShHJP_parse (Reg := Reg) dj y₀ ht (Flock.Desc.parse_flat hD) hscope) hpi
+      (sitesShHJP_parse (Reg := Reg) dj y₀ ht (Flock.Desc.parseStmt_stmt hD) hscope) hpi
       (Discharge.Layout.outsOfP D.unroll hU n pi) (Discharge.Layout.scopeOkH_spec hU hscope).2.1
-      (Discharge.HiddenExec.rowsFit_of_scopeH (FlockSoundness.Discharge.ZkBind.zkTyped ht) (Flock.Desc.parse_flat hD)
+      (Discharge.HiddenExec.rowsFit_of_stmt (FlockSoundness.Discharge.ZkBind.zkTyped ht) (Flock.Desc.parseStmt_stmt hD)
         hscope)
       (Discharge.Layout.outsOutP_outsOfP D.unroll hU n pi)
-      (keysRowP_of_scopeZ ht (Flock.Desc.parse_flat hD) hscope hU) hu hg h1 h2 hp
+      (keysRowP_of_scopeZ ht (Flock.Desc.parseStmt_stmt hD) hscope hU) hu hg h1 h2 hp
     simpa [rows] using hr
   · exact absurd hk' (by simp [Bridge.constsOfP, hcs])
 

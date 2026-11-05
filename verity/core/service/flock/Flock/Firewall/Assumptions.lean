@@ -12,7 +12,11 @@ is what the release log reports. `FirewallComputes spec t` names that
 assumption: each such value is `spec`'s for its name. It bears on zero knowledge only: the verifier checks every outer
 proof whatever the firewall computed, so no soundness statement reads it.
 -/
-import Flock.Firewall.Contract
+module
+
+public import Flock.Firewall.Contract
+
+@[expose] public section
 
 namespace Flock.Firewall.Contract
 

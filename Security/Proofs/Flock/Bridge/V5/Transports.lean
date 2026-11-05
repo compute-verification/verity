@@ -1,5 +1,7 @@
-import Proofs.Flock.Bridge.V5.Statement
-import Proofs.Flock.Bridge.TransportsRefs
+module
+
+public import Proofs.Flock.Bridge.V5.Statement
+public import Proofs.Flock.Bridge.TransportsRefs
 
 /-!
 # Canonical registered openings open the deployed commitment at public inputs (`Bridge.TransportsLiveV5`, proved)
@@ -13,6 +15,8 @@ import Proofs.Flock.Bridge.TransportsRefs
 * `Bridge.rowsOfLP`, `Bridge.transports_shapedP`: `transports_shapedS` at these;
 * `Bridge.transportsLiveV5 : Bridge.TransportsLiveV5`.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 
@@ -56,7 +60,7 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
 
 variable {n mPts : ℕ} {Reg : Type} {I : Inputs} {own : Option ByteArray} (dj : Finset (Fin n) → Lean.Json)
   {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (y₀ : DrawSetupZHJP (inputsJ I 0) own mPts S₀ d₀) (ht : I.tags.typed = false)
-  {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
+  {c : Flock.Circuit} (hc : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c)
   (hscope : Discharge.Layout.scopeOkH c = true) (hU : Built c.unit) {pi : Flock.HmIn.Ports}
   (hpi : Flock.HmIn.parse c = .ok pi) {pub : Flock.Public}
   (hpub : Flock.HmIn.loadPublic (zkTags I) c pi I.publicFile = .ok pub)
@@ -200,7 +204,7 @@ theorem _root_.Flock.Bridge.transportsLiveV5 : Bridge.TransportsLiveV5 := by
     τ P vb σ Cc Lm rows κ roots Cd u g _ _ o he hcan
   obtain ⟨⟨r, hr, hv, hvw⟩, hy⟩ := hcan
   obtain ⟨p, v, y⟩ := o
-  exact Bridge.transports_shapedP (dj := dj) (y₀ := y₀) (ht := ht) (hc := Flock.Desc.parse_flat hD)
+  exact Bridge.transports_shapedP (dj := dj) (y₀ := y₀) (ht := ht) (hc := Flock.Desc.parseStmt_stmt hD)
     (hscope := hscope) (hU := hU) (hpi := hpi) (hpub := hpub) _ hrows (Bridge.rootsDistinctL_of_fixes hdup hroots)
     (fun u q => Bridge.ref_lt_cntP hpub u.isLt q.isLt) hr p v y hv hvw hy he
 

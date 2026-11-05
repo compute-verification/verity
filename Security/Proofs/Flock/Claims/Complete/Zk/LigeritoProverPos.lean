@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Zk.Ligerito
-import Proofs.Flock.Claims.Complete.Replay.LigeritoProver
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Ligerito
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoProver
 
 /-!
 # The masked prover's Ligerito record, by send position
@@ -14,6 +16,8 @@ the record agreement whose verifier half is `zkLigeritoWith_pos`.
   transcript's actions, the state's, a message, a nonce) leaves the bodies as they were (`lsilent_bind`); a loop over
   `[0:n]` keeps an invariant of its state and the bodies (`lforIn_inv`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

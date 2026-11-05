@@ -1,6 +1,10 @@
-import Proofs.Flock.Claims.Sampling.Select.Seq
-import SampledProofs.Draw
-import Init.Internal.Order.While
+module
+
+public import Proofs.Flock.Claims.Sampling.Select.Seq
+public import SampledProofs.Draw
+public import Init.Internal.Order.While
+
+@[expose] public section
 
 open SampledProofs
 

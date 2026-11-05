@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.Mixture
-import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
+module
+
+public import Proofs.Flock.Claims.KS.Mixture
+public import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
 
 /-!
 # One table's masked session after `Commit`, under a live strategy
@@ -14,6 +16,8 @@ openings (`nulOpZ`, `Claims.Bridge.Sim.mapDead`). The simulated `Commit` sends t
 (`simSessZG_fst`), so over a mixture of live strategies whose roots agree, the strategies after `Commit` share one cap
 (`simAtZ`, `live_le_simAtZ`, `mean_live_le_simAtZ`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

@@ -19,8 +19,13 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `draw`: the draw from given bytes of the challenger's coins;
 * `select`: the challenger's draw from a Spec's selection rule on, over a program and query, from given bytes of its
   coins, with the number of bytes it read (`Select.select`);
-* `slots`: the claims' partition over the program and query, and the slots of that draw's checked proof blocks
-  (`Slots.select`);
+* `slots`: the claims' partition over the circuit file, and the slots of that draw's checked proof blocks
+  (`Slots.select`); the file is read from its path, so `DifftestMain` serves it (`slotsWith`), not `table`;
+* `file_part`: the circuit file's summary at `n` units (`FilePart.ofCircuit`), served the same way (`filePartWith`);
+* `file_population`: why the registration's population over a program and query is not a public file's units in order
+  (`FilePart.why`);
+* `file_unit_class`: the bits each of a circuit file's units outputs, from its unit net's returned output columns, and
+  why they fit no public size class (`FilePart.classWhy`);
 * `bound`: the exact bounds on wrong units at δ;
 * `harm_bound`: the harm they hold at δ in closed form (`Bound.densityBound`);
 * `max_harm`: a certificate's bracket around `Flock.Guarantees.JointStratified`'s exact supremum of that harm
@@ -64,21 +69,28 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 `check_proved`, `record`, `check_public`, `check_verdicts`, `run` (`Stream.outcome` holds its outcome to it), `hello`,
 `stream` (each of `service.Stream`'s ops) and `fleet` (each of `service.Fleet`'s).
 -/
-import SampledProofs.OneStage
-import SampledProofs.Slots
-import SampledProofs.Service
-import SampledProofs.Run
-import SampledProofs.Stream
-import SampledProofs.Fleet
-import SampledProofs.Hello
-import SampledProofs.ChallengerRecord
-import SampledProofs.ChallengerSession
-import SampledProofs.ChallengerCoins
-import SampledProofs.ChallengerTrees
-import SampledProofs.Produced
-import SampledProofs.HiddenDraw
-import SampledProofs.PartitionRef
-import SampledProofs.WiresDrawn
+module
+
+public import SampledProofs.OneStage
+public import SampledProofs.Slots
+public import SampledProofs.FilePart
+public import SampledProofs.Service
+public import SampledProofs.Run
+public import SampledProofs.Stream
+public import SampledProofs.Fleet
+public import SampledProofs.Hello
+public import SampledProofs.ChallengerRecord
+public import SampledProofs.ChallengerSession
+public import SampledProofs.ChallengerCoins
+public import SampledProofs.ChallengerTrees
+public import SampledProofs.Produced
+public import SampledProofs.HiddenDraw
+public import SampledProofs.PartitionRef
+public import SampledProofs.WiresDrawn
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Pieces
 
@@ -253,10 +265,11 @@ def select (j : Json) : V Json := do
   let (draw, _, read) ← Select.select rule p (getD j "query") table cm (← Flock.unhex (← Flock.J.str j "source" "the select"))
   return Json.mkObj [("draw", draw), ("read", Lean.toJson read)]
 
-/-- `select`'s input to `{"classes", "checked"}`: the claims' partition over the program under the query (`Slots.layout`),
-and the slots of the challenger's draw on the source's bytes, each as `[slot, 0]` (`Slots.checked`); refused where
-`select` is. -/
-def slots (j : Json) : V Json := do
+/-- `select`'s input with the circuit file `c` (`Slots.parseCircuit`) to `{"classes", "checked"}`: the claims'
+partition over the file in the program's strata (`Slots.layout`), and the slots of the challenger's draw on the
+source's bytes, each as `[slot, 0]` (`Slots.checked`); refused where `select` is, or where the file doesn't parse. -/
+def slotsWith (j : Json) (c : V Flock.Circuit) : V Json := do
+  let c ← c
   let rule ← Select.Rule.ofJson (getD j "rule")
   let .obj _ := getD j "program" | throw "program is not an object"
   let .obj _ := getD j "query" | throw "query is not an object"
@@ -268,9 +281,18 @@ def slots (j : Json) : V Json := do
     | .null => pure none
     | c => some <$> Select.closureMap? c
   let rule ← Select.resolve rule p (getD j "query")
-  let (l, checked) ← Slots.select rule p (getD j "query") table cm (← Flock.unhex (← Flock.J.str j "source" "the slots"))
+  let (l, checked) ← Slots.select rule c p (getD j "query") table cm
+    (← Flock.unhex (← Flock.J.str j "source" "the slots"))
   return Json.mkObj [("classes", l.toJson),
     ("checked", Json.arr (checked.map fun v => Json.arr #[Lean.toJson v, Lean.toJson (0 : Nat)]))]
+
+/-- `{"n"}` with the circuit file `c` (`Slots.parseCircuit`) to `{"n", "B", "m", "srcs"}`: `FilePart.ofCircuit c n`;
+refused where the file doesn't parse or `n` is not a natural number. -/
+def filePartWith (j : Json) (c : V Flock.Circuit) : V Json := do
+  let c ← c
+  let some n := nat? (getD j "n") | throw "n is not a natural number"
+  let f := FilePart.ofCircuit c n
+  return Json.mkObj [("B", Lean.toJson f.B), ("m", Lean.toJson f.m), ("n", Lean.toJson f.n), ("srcs", Lean.toJson f.srcs)]
 
 /-- `{"draw", "proved_units", "instances"}`, a draw whose units (and closure) are integers, to `check_proved`'s codes. -/
 def checkProved (j : Json) : V Json := do
@@ -569,7 +591,9 @@ def run (j : Json) : V Json := do
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("registration", registration),
    ("registered", registered),
-   ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
+   ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("select", select),
+   ("file_population", FilePart.piece),
+   ("file_unit_class", FilePart.classPiece),
    ("check_proved", checkProved),
    ("bound", bound), ("harm_bound", harmBound), ("max_harm", maxHarm), ("bernoulli_bound", bernoulliBound),
    ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.PartAccepts
-import Proofs.Flock.Claims.Recursion.VStarBDeploy
+module
+
+public import Proofs.Flock.Claims.Recursion.PartAccepts
+public import Proofs.Flock.Claims.Recursion.VStarBDeploy
 
 /-!
 # What each V\* part's circuit accepts, on an accepted run (`PartAccepts`, with the vcalls escape)
@@ -18,6 +20,8 @@ outer witness `w` brings at the V\* statement the run stages (`partAccepts_of_ru
 
 The commit strings (`LayoutB.CmtAgrees`) and the coins (`shows`) come from the staging, not from the witness.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion.VStarB
 

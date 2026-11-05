@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.Deployed
-import Proofs.Flock.Claims.ZK.WorkerSeen
+module
+
+public import Proofs.Flock.Claims.ZK.Deployed
+public import Proofs.Flock.Claims.ZK.WorkerSeen
 
 /-!
 # The switched prover at the session's tables
@@ -37,6 +39,8 @@ same order: the values may read the mask slots, level 0's hiding and level 0's s
   prover's messages are the switched prover's at values the workers supply, which read what the workers see and never
   the pads.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

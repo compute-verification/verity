@@ -1,8 +1,10 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Basic.ENNReal.BigOperators
-import Mathlib.Basic.ENNReal.Inv
-import Mathlib.Order.CompleteLattice.Basic
+module
+
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Basic.ENNReal.BigOperators
+public import Mathlib.Basic.ENNReal.Inv
+public import Mathlib.Order.CompleteLattice.Basic
 
 /-!
 # Public-coin interactions with live coins, and what it means for one to be sound
@@ -33,6 +35,8 @@ accepts while the claim `E` about the committed world is false is at most `δ`. 
 their acceptance and their claim. A policy is a check on the declaration inside `accept`, a game with no rounds of its
 own.
 -/
+
+@[expose] public section
 
 namespace Verity
 

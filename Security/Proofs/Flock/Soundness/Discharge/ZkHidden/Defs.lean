@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Tables
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Tables
 
 /-!
 # The `--zk` tables of a hidden-output session
@@ -15,6 +17,8 @@ builds it, field for field.
 * `planAtZKH`, `tabAtZKH`: the one-table plan `zk_flock_countC_execOS_cr` takes.
 * `DrawOkZKH`: `DrawOkZK` with `setupHidden` for `setupH`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkHidden
 
