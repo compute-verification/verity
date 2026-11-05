@@ -255,67 +255,67 @@ theorem cast_dist (a b : ℕ) : (Nat.dist a b : ℝ) = |(a : ℝ) - b| := by
   · rw [max_eq_left (sub_nonneg.2 h), max_eq_right (sub_nonpos.2 h), abs_of_nonneg (sub_nonneg.2 h)]
     ring
 
-theorem core_arith {K J Z X₀ N A Y T : ℝ} (hJK : J ≤ K) (hJ : 0 ≤ J) (hK : 0 < K) (hX : 0 ≤ X₀)
-    (hT : K * Z * N = T + J * X₀) (hA : 2 * (K * Z * A) ≤ J * (Y + |T|)) (hY : |T| ≤ Y) :
-    Z * (A + N * (K - J)) ≤ Y + (K - J) * X₀ := by
-  have hT2 : K * Z * N * (K - J) = (T + J * X₀) * (K - J) := by rw [hT]
-  have h1 : 0 ≤ (K - J) * (Y - T) := mul_nonneg (by linarith) (by linarith [le_abs_self T])
+theorem core_arith {K J W X₀ N A V T : ℝ} (hJK : J ≤ K) (hJ : 0 ≤ J) (hK : 0 < K) (hX : 0 ≤ X₀)
+    (hT : K * W * N = T + J * X₀) (hA : 2 * (K * W * A) ≤ J * (V + |T|)) (hY : |T| ≤ V) :
+    W * (A + N * (K - J)) ≤ V + (K - J) * X₀ := by
+  have hT2 : K * W * N * (K - J) = (T + J * X₀) * (K - J) := by rw [hT]
+  have h1 : 0 ≤ (K - J) * (V - T) := mul_nonneg (by linarith) (by linarith [le_abs_self T])
   have h2 : 0 ≤ (K - J) * (K - J) * X₀ := mul_nonneg (mul_self_nonneg _) hX
-  have h3 : 0 ≤ J * (Y - |T|) := mul_nonneg hJ (by linarith)
-  have key : K * (Z * (A + N * (K - J))) ≤ K * (Y + (K - J) * X₀) := by nlinarith
+  have h3 : 0 ≤ J * (V - |T|) := mul_nonneg hJ (by linarith)
+  have key : K * (W * (A + N * (K - J))) ≤ K * (V + (K - J) * X₀) := by nlinarith
   exact le_of_mul_le_mul_left key hK
 
 /-- **A partition's excess within its distance from uniform**, in the reals: for classes of weights `k` supported in
-`S`, `Z` times the class count is at most the distance of `|Q|·Z·k` from the constant `X₀`. -/
+`S`, `W` times the class count is at most the distance of `|Q|·W·k` from the constant `X₀`. -/
 theorem core_le {Q : Type} [Fintype Q] [DecidableEq Q] (S : Finset Q) (k : Q → ℝ) (hoff : ∀ u ∉ S, k u = 0)
-    {Z X₀ : ℝ} (hX : 0 ≤ X₀) (hN : 0 ≤ ∑ v, k v) (hK : 0 < (Fintype.card Q : ℝ)) :
-    Z * (∑ u, max ((S.card : ℝ) * k u - ∑ v, k v) 0 + (∑ v, k v) * ((Fintype.card Q : ℝ) - S.card)) ≤
-      ∑ u, |(Fintype.card Q : ℝ) * Z * k u - X₀| := by
+    {W X₀ : ℝ} (hX : 0 ≤ X₀) (hN : 0 ≤ ∑ v, k v) (hK : 0 < (Fintype.card Q : ℝ)) :
+    W * (∑ u, max ((S.card : ℝ) * k u - ∑ v, k v) 0 + (∑ v, k v) * ((Fintype.card Q : ℝ) - S.card)) ≤
+      ∑ u, |(Fintype.card Q : ℝ) * W * k u - X₀| := by
   have hNS : ∑ u ∈ S, k u = ∑ v, k v :=
     Finset.sum_subset (Finset.subset_univ S) fun u _ hu => hoff u hu
   have hA : ∑ u, max ((S.card : ℝ) * k u - ∑ v, k v) 0 = ∑ u ∈ S, max ((S.card : ℝ) * k u - ∑ v, k v) 0 :=
     (Finset.sum_subset (Finset.subset_univ S) fun u _ hu => by
       rw [hoff u hu, mul_zero, zero_sub]
       exact max_eq_right (by linarith)).symm
-  have hoffS : ∀ u ∈ Sᶜ, |(Fintype.card Q : ℝ) * Z * k u - X₀| = X₀ := fun u hu => by
+  have hoffS : ∀ u ∈ Sᶜ, |(Fintype.card Q : ℝ) * W * k u - X₀| = X₀ := fun u hu => by
     rw [hoff u (Finset.mem_compl.1 hu), mul_zero, zero_sub, abs_neg, abs_of_nonneg hX]
-  have hR : ∑ u, |(Fintype.card Q : ℝ) * Z * k u - X₀| =
-      ∑ u ∈ S, |(Fintype.card Q : ℝ) * Z * k u - X₀| + ((Fintype.card Q : ℝ) - S.card) * X₀ := by
+  have hR : ∑ u, |(Fintype.card Q : ℝ) * W * k u - X₀| =
+      ∑ u ∈ S, |(Fintype.card Q : ℝ) * W * k u - X₀| + ((Fintype.card Q : ℝ) - S.card) * X₀ := by
     rw [← Finset.sum_add_sum_compl S, Finset.sum_congr rfl hoffS, Finset.sum_const, Finset.card_compl,
       nsmul_eq_mul, Nat.cast_sub (Finset.card_le_univ S)]
   have hJK : (S.card : ℝ) ≤ Fintype.card Q := by exact_mod_cast Finset.card_le_univ S
   have hJ0 : (0 : ℝ) ≤ S.card := Nat.cast_nonneg _
-  have hTs : ∑ u ∈ S, ((Fintype.card Q : ℝ) * Z * k u - X₀) =
-      (Fintype.card Q : ℝ) * Z * (∑ v, k v) - S.card * X₀ := by
+  have hTs : ∑ u ∈ S, ((Fintype.card Q : ℝ) * W * k u - X₀) =
+      (Fintype.card Q : ℝ) * W * (∑ v, k v) - S.card * X₀ := by
     rw [Finset.sum_sub_distrib, ← Finset.mul_sum, hNS, Finset.sum_const, nsmul_eq_mul]
   rw [hA, hR]
   generalize (Fintype.card Q : ℝ) = K at hK hJK hTs ⊢
   generalize hJd : (S.card : ℝ) = J at hJK hJ0 hTs ⊢
   generalize ∑ v, k v = N at hN hTs ⊢
-  have hper : ∀ u ∈ S, 2 * (K * Z * max (J * k u - N) 0) ≤
-      (J * (K * Z * k u - X₀) - (K * Z * N - J * X₀)) + J * |K * Z * k u - X₀| + |K * Z * N - J * X₀| := by
+  have hper : ∀ u ∈ S, 2 * (K * W * max (J * k u - N) 0) ≤
+      (J * (K * W * k u - X₀) - (K * W * N - J * X₀)) + J * |K * W * k u - X₀| + |K * W * N - J * X₀| := by
     intro u _
-    have hJa : J * (K * Z * k u - X₀) ≤ J * |K * Z * k u - X₀| := mul_le_mul_of_nonneg_left (le_abs_self _) hJ0
-    have hJa' : 0 ≤ J * (K * Z * k u - X₀) + J * |K * Z * k u - X₀| := by
+    have hJa : J * (K * W * k u - X₀) ≤ J * |K * W * k u - X₀| := mul_le_mul_of_nonneg_left (le_abs_self _) hJ0
+    have hJa' : 0 ≤ J * (K * W * k u - X₀) + J * |K * W * k u - X₀| := by
       rw [← mul_add]
-      exact mul_nonneg hJ0 (by linarith [neg_abs_le (K * Z * k u - X₀)])
-    have hT1 := neg_le_abs (K * Z * N - J * X₀)
-    have hT2 := le_abs_self (K * Z * N - J * X₀)
+      exact mul_nonneg hJ0 (by linarith [neg_abs_le (K * W * k u - X₀)])
+    have hT1 := neg_le_abs (K * W * N - J * X₀)
+    have hT2 := le_abs_self (K * W * N - J * X₀)
     rcases le_total 0 (J * k u - N) with h | h
     · rw [max_eq_left h]
       linarith
     · rw [max_eq_right h]
       linarith
-  refine core_arith (T := K * Z * N - J * X₀) hJK hJ0 hK hX (by ring) ?_ ?_
-  · calc 2 * (K * Z * ∑ u ∈ S, max (J * k u - N) 0) = ∑ u ∈ S, 2 * (K * Z * max (J * k u - N) 0) := by
+  refine core_arith (T := K * W * N - J * X₀) hJK hJ0 hK hX (by ring) ?_ ?_
+  · calc 2 * (K * W * ∑ u ∈ S, max (J * k u - N) 0) = ∑ u ∈ S, 2 * (K * W * max (J * k u - N) 0) := by
           rw [Finset.mul_sum, Finset.mul_sum]
-      _ ≤ ∑ u ∈ S, ((J * (K * Z * k u - X₀) - (K * Z * N - J * X₀)) + J * |K * Z * k u - X₀| +
-            |K * Z * N - J * X₀|) := Finset.sum_le_sum hper
-      _ = J * (∑ u ∈ S, (K * Z * k u - X₀)) - J * (K * Z * N - J * X₀) + J * (∑ u ∈ S, |K * Z * k u - X₀|) +
-            J * |K * Z * N - J * X₀| := by
+      _ ≤ ∑ u ∈ S, ((J * (K * W * k u - X₀) - (K * W * N - J * X₀)) + J * |K * W * k u - X₀| +
+            |K * W * N - J * X₀|) := Finset.sum_le_sum hper
+      _ = J * (∑ u ∈ S, (K * W * k u - X₀)) - J * (K * W * N - J * X₀) + J * (∑ u ∈ S, |K * W * k u - X₀|) +
+            J * |K * W * N - J * X₀| := by
           rw [Finset.sum_add_distrib, Finset.sum_add_distrib, Finset.sum_sub_distrib, Finset.mul_sum,
             Finset.mul_sum, Finset.sum_const, Finset.sum_const, nsmul_eq_mul, nsmul_eq_mul, hJd]
-      _ = J * (∑ u ∈ S, |K * Z * k u - X₀| + |K * Z * N - J * X₀|) := by
+      _ = J * (∑ u ∈ S, |K * W * k u - X₀| + |K * W * N - J * X₀|) := by
           rw [hTs]
           ring
   · rw [← hTs]
@@ -330,7 +330,7 @@ theorem classNum_cast_le {Q : Type} [Fintype Q] [Nonempty Q] (k : Q → ℕ) (z 
     (fun u hu => by
       simp only [Finset.mem_filter, Finset.mem_univ, true_and, not_lt, Nat.le_zero] at hu
       simp [hu])
-    (Z := z) hX (Finset.sum_nonneg fun _ _ => Nat.cast_nonneg _) (by exact_mod_cast Fintype.card_pos)
+    (W := z) hX (Finset.sum_nonneg fun _ _ => Nat.cast_nonneg _) (by exact_mod_cast Fintype.card_pos)
   refine Eq.trans_le ?_ h
   rw [classNum, Nat.cast_mul, Nat.cast_add, Nat.cast_sum, Nat.cast_mul, Nat.cast_sub hJK, Nat.cast_sum]
   simp only [cast_tsub, Nat.cast_mul, Nat.cast_sum]
@@ -414,8 +414,8 @@ theorem sum_dist_div_le {ι : Type} (s : Finset ι) (a b : ι → ℕ) {D : ℝ�
 
 /-- **An event's complement the other way**: a bound on the complements' probabilities bounds the events' the other
 way round. -/
-theorem prCoin_swap_back {X Z : Type} [Fintype X] [Nonempty X] [Fintype Z] [Nonempty Z] (E₁ : X → Prop)
-    (E₂ : Z → Prop) {δ : ℝ≥0∞} (h : prCoin (fun x => ¬ E₁ x) ≤ prCoin (fun z => ¬ E₂ z) + δ) :
+theorem prCoin_swap_back {Xs Zs : Type} [Fintype Xs] [Nonempty Xs] [Fintype Zs] [Nonempty Zs] (E₁ : Xs → Prop)
+    (E₂ : Zs → Prop) {δ : ℝ≥0∞} (h : prCoin (fun x => ¬ E₁ x) ≤ prCoin (fun z => ¬ E₂ z) + δ) :
     prCoin E₂ ≤ prCoin E₁ + δ := by
   have h1 := FlockSoundness.ZK.prCoin_add_not E₁
   have h2 := FlockSoundness.ZK.prCoin_add_not E₂
@@ -426,9 +426,9 @@ theorem prCoin_swap_back {X Z : Type} [Fintype X] [Nonempty X] [Fintype Z] [None
 
 /-- **A pair's event, counted by its second coordinate's map**: the pairs `(ω, y)` whose `(ω, L (ω, y))` satisfies
 `G`, counted over the values `L` takes. -/
-theorem card_filter_pair {Ω Y Λ : Type} [Fintype Ω] [Fintype Y] [DecidableEq Λ] (L : Ω × Y → Λ) (t : Finset Λ)
+theorem card_filter_pair {Ω Ys Λ : Type} [Fintype Ω] [Fintype Ys] [DecidableEq Λ] (L : Ω × Ys → Λ) (t : Finset Λ)
     (ht : ∀ p, L p ∈ t) (G : Ω × Λ → Prop) [DecidablePred G] :
-    (Finset.univ.filter fun p : Ω × Y => G (p.1, L p)).card =
+    (Finset.univ.filter fun p : Ω × Ys => G (p.1, L p)).card =
       ∑ i ∈ (Finset.univ ×ˢ t).filter G, (Finset.univ.filter fun y => L (i.1, y) = i.2).card := by
   rw [Finset.card_filter, Fintype.sum_prod_type, Finset.sum_filter, Finset.sum_product]
   dsimp only
@@ -442,11 +442,11 @@ theorem card_filter_pair {Ω Y Λ : Type} [Fintype Ω] [Fintype Y] [DecidableEq 
   rw [Finset.sum_congr rfl hc, Finset.sum_const, smul_eq_mul]
   split_ifs <;> simp
 
-theorem prCoin_pair_eq {Ω Y Λ : Type} [Fintype Ω] [Fintype Y] [DecidableEq Λ] (L : Ω × Y → Λ) (t : Finset Λ)
+theorem prCoin_pair_eq {Ω Ys Λ : Type} [Fintype Ω] [Fintype Ys] [DecidableEq Λ] (L : Ω × Ys → Λ) (t : Finset Λ)
     (ht : ∀ p, L p ∈ t) (G : Ω × Λ → Prop) [DecidablePred G] :
-    prCoin (fun p : Ω × Y => G (p.1, L p)) =
+    prCoin (fun p : Ω × Ys => G (p.1, L p)) =
       ((∑ i ∈ (Finset.univ ×ˢ t).filter G, (Finset.univ.filter fun y => L (i.1, y) = i.2).card : ℕ) : ℝ≥0∞) /
-        Fintype.card (Ω × Y) := by
+        Fintype.card (Ω × Ys) := by
   rw [prCoin_eq_card, card_filter_pair L t ht G]
 
 /-- **Events of a release under its law**: a map whose means are those of `bits` gives every event of it the
@@ -459,16 +459,16 @@ theorem prCoin_law {Ω Q R : Type} [Fintype Ω] [Fintype Q] {P : Ω → R} {bits
   exact hlaw fun r => if A r then 1 else 0
 
 /-- **A mean through a map, bounded on each value**: where each value `ℓ` of `L`, weighted by its preimage's size,
-has `F ℓ` within `B ℓ`, the mean of `F ∘ L` is within the values' `B` over `|X|`. -/
-theorem avg_comp_le {X Λ : Type} [Fintype X] [DecidableEq Λ] (L : X → Λ) (F B : Λ → ℝ≥0∞)
+has `F ℓ` within `B ℓ`, the mean of `F ∘ L` is within the values' `B` over `|Xs|`. -/
+theorem avg_comp_le {Xs Λ : Type} [Fintype Xs] [DecidableEq Λ] (L : Xs → Λ) (F B : Λ → ℝ≥0∞)
     (h : ∀ ℓ, ((Finset.univ.filter fun x => L x = ℓ).card : ℝ≥0∞) * F ℓ ≤ B ℓ) :
-    avg (fun x => F (L x)) ≤ ∑ ℓ ∈ Finset.univ.image L, (Fintype.card X : ℝ≥0∞)⁻¹ * B ℓ := by
+    avg (fun x => F (L x)) ≤ ∑ ℓ ∈ Finset.univ.image L, (Fintype.card Xs : ℝ≥0∞)⁻¹ * B ℓ := by
   unfold avg
   rw [← Finset.sum_fiberwise_of_maps_to (s := Finset.univ) (t := Finset.univ.image L) (g := L)
     fun x _ => Finset.mem_image_of_mem L (Finset.mem_univ x)]
   refine Finset.sum_le_sum fun ℓ _ => ?_
   have hc : ∀ x ∈ Finset.univ.filter fun x => L x = ℓ,
-      (Fintype.card X : ℝ≥0∞)⁻¹ * F (L x) = (Fintype.card X : ℝ≥0∞)⁻¹ * F ℓ :=
+      (Fintype.card Xs : ℝ≥0∞)⁻¹ * F (L x) = (Fintype.card Xs : ℝ≥0∞)⁻¹ * F ℓ :=
     fun x hx => by rw [(Finset.mem_filter.1 hx).2]
   rw [Finset.sum_congr rfl hc, Finset.sum_const, nsmul_eq_mul, mul_left_comm]
   exact mul_le_mul_right (h ℓ) _
@@ -477,15 +477,15 @@ theorem avg_comp_le {X Λ : Type} [Fintype X] [DecidableEq Λ] (L : X → Λ) (F
 `LI z` at every event of the draw and the leaf (`hswap`), and releases `P i ω` of the draw, each distributed as an
 injective `bits i` of a uniform `u` (`hlaw`). Over the draw and the salt, the class error of the leaf's fiber
 partitioned by the release, at the worst release `i`, is at most `2·δ₁`. -/
-theorem avg_iSup_classErr_le {Ω Y Z Λ ι : Type} [Fintype Ω] [Nonempty Ω] [Fintype Y] [Nonempty Y] [Fintype Z]
-    [Nonempty Z] [DecidableEq Λ] (L : Ω × Y → Λ) (LI : Z → Λ) {δ₁ : ℝ≥0∞}
+theorem avg_iSup_classErr_le {Ω Ys Zs Λ ι : Type} [Fintype Ω] [Nonempty Ω] [Fintype Ys] [Nonempty Ys] [Fintype Zs]
+    [Nonempty Zs] [DecidableEq Λ] (L : Ω × Ys → Λ) (LI : Zs → Λ) {δ₁ : ℝ≥0∞}
     (hswap : ∀ G : Ω → Λ → Prop,
-      prCoin (fun p : Ω × Y => G p.1 (L p)) ≤ prCoin (fun p : Ω × Z => G p.1 (LI p.2)) + δ₁)
+      prCoin (fun p : Ω × Ys => G p.1 (L p)) ≤ prCoin (fun p : Ω × Zs => G p.1 (LI p.2)) + δ₁)
     {R : ι → Type} [∀ i, DecidableEq (R i)] (P : (i : ι) → Ω → R i) {Q : ι → Type} [∀ i, Fintype (Q i)]
     [∀ i, Nonempty (Q i)] (bits : (i : ι) → Q i → R i) (hinj : ∀ i, Function.Injective (bits i))
     (hlaw : ∀ i (g : R i → ℝ≥0∞), avg (fun ω => g (P i ω)) = avg fun u => g (bits i u)) :
-    avg (fun p₀ : Ω × Y => ⨆ i, classErr (Finset.univ.filter fun p => L p = L p₀).card
-      fun u : Q i => (Finset.univ.filter fun p : Ω × Y => L p = L p₀ ∧ P i p.1 = bits i u).card) ≤ 2 * δ₁ := by
+    avg (fun p₀ : Ω × Ys => ⨆ i, classErr (Finset.univ.filter fun p => L p = L p₀).card
+      fun u : Q i => (Finset.univ.filter fun p : Ω × Ys => L p = L p₀ ∧ P i p.1 = bits i u).card) ≤ 2 * δ₁ := by
   classical
   have hcov : ∀ i ω, ∃ u, P i ω = bits i u := by
     intro i ω
@@ -514,12 +514,12 @@ theorem avg_iSup_classErr_le {Ω Y Z Λ ι : Type} [Fintype Ω] [Nonempty Ω] [F
     rw [prCoin_eq_card, prCoin_eq_card, h1, hf, Nat.cast_one,
       ENNReal.div_eq_div_iff hQ0 (ENNReal.natCast_ne_top _) hΩ0 (ENNReal.natCast_ne_top _), mul_one] at h
     exact_mod_cast h
-  have hN : ∀ ℓ, (Finset.univ.filter fun p : Ω × Y => L p = ℓ).card =
+  have hN : ∀ ℓ, (Finset.univ.filter fun p : Ω × Ys => L p = ℓ).card =
       ∑ ω, (Finset.univ.filter fun y => L (ω, y) = ℓ).card := by
     intro ℓ
     rw [Finset.card_filter, Fintype.sum_prod_type]
     simp only [Finset.card_filter]
-  have hk : ∀ i ℓ (u : Q i), (Finset.univ.filter fun p : Ω × Y => L p = ℓ ∧ P i p.1 = bits i u).card =
+  have hk : ∀ i ℓ (u : Q i), (Finset.univ.filter fun p : Ω × Ys => L p = ℓ ∧ P i p.1 = bits i u).card =
       ∑ ω ∈ Finset.univ.filter (fun ω => cl i ω = u), (Finset.univ.filter fun y => L (ω, y) = ℓ).card := by
     intro i ℓ u
     rw [Finset.card_filter, Fintype.sum_prod_type, Finset.sum_filter]
@@ -534,11 +534,11 @@ theorem avg_iSup_classErr_le {Ω Y Z Λ ι : Type} [Fintype Ω] [Nonempty Ω] [F
     · rw [ite_eq_right hω]
       exact Finset.sum_eq_zero fun y _ =>
         ite_eq_right fun h : L (ω, y) = ℓ ∧ P i ω = bits i u => hω ((hiff i ω u).1 h.2)
-  have hleaf : ∀ ℓ, ((Finset.univ.filter fun p : Ω × Y => L p = ℓ).card : ℝ≥0∞) *
-      (⨆ i, classErr (Finset.univ.filter fun p : Ω × Y => L p = ℓ).card
-        fun u : Q i => (Finset.univ.filter fun p : Ω × Y => L p = ℓ ∧ P i p.1 = bits i u).card) ≤
-      ((∑ ω, Nat.dist (Fintype.card Z * (Finset.univ.filter fun y => L (ω, y) = ℓ).card)
-        ((Finset.univ.filter fun z => LI z = ℓ).card * Fintype.card Y) : ℕ) : ℝ≥0∞) / Fintype.card Z := by
+  have hleaf : ∀ ℓ, ((Finset.univ.filter fun p : Ω × Ys => L p = ℓ).card : ℝ≥0∞) *
+      (⨆ i, classErr (Finset.univ.filter fun p : Ω × Ys => L p = ℓ).card
+        fun u : Q i => (Finset.univ.filter fun p : Ω × Ys => L p = ℓ ∧ P i p.1 = bits i u).card) ≤
+      ((∑ ω, Nat.dist (Fintype.card Zs * (Finset.univ.filter fun y => L (ω, y) = ℓ).card)
+        ((Finset.univ.filter fun z => LI z = ℓ).card * Fintype.card Ys) : ℕ) : ℝ≥0∞) / Fintype.card Zs := by
     intro ℓ
     rw [ENNReal.mul_iSup]
     refine iSup_le fun i => mul_classErr_le Fintype.card_ne_zero ?_
@@ -555,40 +555,40 @@ theorem avg_iSup_classErr_le {Ω Y Z Λ ι : Type} [Fintype Ω] [Nonempty Ω] [F
   have hsub : Finset.univ.image L ⊆ t := by
     rw [ht]
     exact Finset.subset_union_left
-  have hZ0 : (Fintype.card Z : ℝ≥0∞) ≠ 0 := by exact_mod_cast Fintype.card_ne_zero
-  have hY0 : (Fintype.card Y : ℝ≥0∞) ≠ 0 := by exact_mod_cast Fintype.card_ne_zero
-  obtain ⟨D, hD⟩ : ∃ D : ℝ≥0∞, D = ((Fintype.card Z * Fintype.card (Ω × Y) : ℕ) : ℝ≥0∞) := ⟨_, rfl⟩
+  have hZ0 : (Fintype.card Zs : ℝ≥0∞) ≠ 0 := by exact_mod_cast Fintype.card_ne_zero
+  have hY0 : (Fintype.card Ys : ℝ≥0∞) ≠ 0 := by exact_mod_cast Fintype.card_ne_zero
+  obtain ⟨D, hD⟩ : ∃ D : ℝ≥0∞, D = ((Fintype.card Zs * Fintype.card (Ω × Ys) : ℕ) : ℝ≥0∞) := ⟨_, rfl⟩
   have hD0 : D ≠ 0 := by
     rw [hD]
     exact_mod_cast (Nat.mul_pos Fintype.card_pos Fintype.card_pos).ne'
-  have hDI : D = (Fintype.card (Ω × Z) : ℝ≥0∞) * Fintype.card Y := by
+  have hDI : D = (Fintype.card (Ω × Zs) : ℝ≥0∞) * Fintype.card Ys := by
     rw [hD, ← Nat.cast_mul]
     congr 1
     simp only [Fintype.card_prod]
     ring
-  have hterm : ∀ x : ℕ, (Fintype.card (Ω × Y) : ℝ≥0∞)⁻¹ * ((x : ℝ≥0∞) / Fintype.card Z) = (x : ℝ≥0∞) / D :=
+  have hterm : ∀ x : ℕ, (Fintype.card (Ω × Ys) : ℝ≥0∞)⁻¹ * ((x : ℝ≥0∞) / Fintype.card Zs) = (x : ℝ≥0∞) / D :=
     fun x => by
       rw [hD, Nat.cast_mul, div_eq_mul_inv, div_eq_mul_inv,
         ENNReal.mul_inv (Or.inl hZ0) (Or.inl (ENNReal.natCast_ne_top _))]
       ring
-  have hsum : ∑ ℓ ∈ t, ∑ ω, Nat.dist (Fintype.card Z * (Finset.univ.filter fun y => L (ω, y) = ℓ).card)
-        ((Finset.univ.filter fun z => LI z = ℓ).card * Fintype.card Y) =
-      ∑ i ∈ Finset.univ ×ˢ t, Nat.dist (Fintype.card Z * (Finset.univ.filter fun y => L (i.1, y) = i.2).card)
-        ((Finset.univ.filter fun z => LI z = i.2).card * Fintype.card Y) := by
+  have hsum : ∑ ℓ ∈ t, ∑ ω, Nat.dist (Fintype.card Zs * (Finset.univ.filter fun y => L (ω, y) = ℓ).card)
+        ((Finset.univ.filter fun z => LI z = ℓ).card * Fintype.card Ys) =
+      ∑ i ∈ Finset.univ ×ˢ t, Nat.dist (Fintype.card Zs * (Finset.univ.filter fun y => L (i.1, y) = i.2).card)
+        ((Finset.univ.filter fun z => LI z = i.2).card * Fintype.card Ys) := by
     simp only [Finset.sum_product_right]
   have hreal : ∀ (G : Ω × Λ → Prop) [DecidablePred G],
       ((∑ i ∈ (Finset.univ ×ˢ t).filter G,
-        Fintype.card Z * (Finset.univ.filter fun y => L (i.1, y) = i.2).card : ℕ) : ℝ≥0∞) / D =
-        prCoin (fun p : Ω × Y => G (p.1, L p)) := by
+        Fintype.card Zs * (Finset.univ.filter fun y => L (i.1, y) = i.2).card : ℕ) : ℝ≥0∞) / D =
+        prCoin (fun p : Ω × Ys => G (p.1, L p)) := by
     intro G _
     rw [prCoin_pair_eq L t htL G, ← Finset.mul_sum, Nat.cast_mul, hD, Nat.cast_mul,
       ENNReal.mul_div_mul_left _ _ hZ0 (ENNReal.natCast_ne_top _)]
   have hideal : ∀ (G : Ω × Λ → Prop) [DecidablePred G],
       ((∑ i ∈ (Finset.univ ×ˢ t).filter G,
-        (Finset.univ.filter fun z => LI z = i.2).card * Fintype.card Y : ℕ) : ℝ≥0∞) / D =
-        prCoin (fun p : Ω × Z => G (p.1, LI p.2)) := by
+        (Finset.univ.filter fun z => LI z = i.2).card * Fintype.card Ys : ℕ) : ℝ≥0∞) / D =
+        prCoin (fun p : Ω × Zs => G (p.1, LI p.2)) := by
     intro G _
-    rw [prCoin_pair_eq (fun p : Ω × Z => LI p.2) t (fun p => htI p.2) G, ← Finset.sum_mul, Nat.cast_mul, hDI]
+    rw [prCoin_pair_eq (fun p : Ω × Zs => LI p.2) t (fun p => htI p.2) G, ← Finset.sum_mul, Nat.cast_mul, hDI]
     exact ENNReal.mul_div_mul_right _ _ hY0 (ENNReal.natCast_ne_top _)
   refine (avg_comp_le L _ _ hleaf).trans ((Finset.sum_le_sum_of_subset hsub).trans ?_)
   simp only [hterm]
@@ -597,23 +597,23 @@ theorem avg_iSup_classErr_le {Ω Y Z Λ ι : Type} [Fintype Ω] [Nonempty Ω] [F
   · rw [hreal G, hideal G]
     exact hswap fun ω ℓ => G (ω, ℓ)
   · rw [hreal G, hideal G]
-    exact prCoin_swap_back (fun p : Ω × Y => G (p.1, L p)) (fun p : Ω × Z => G (p.1, LI p.2))
+    exact prCoin_swap_back (fun p : Ω × Ys => G (p.1, L p)) (fun p : Ω × Zs => G (p.1, LI p.2))
       (hswap fun ω ℓ => ¬ G (ω, ℓ))
 
 /-- **One hiding swap per hm96 leaf**: `avg_iSup_classErr_le` at the leaf `H (x ω + My y, c y)` of an hm96 salt `y`,
 whose ideal leaf is `H (U, c y)` at a fresh uniform `U` (`ideal_leaf_swap`, from `Claims.Hm96Hiding`). -/
-theorem avg_iSup_classErr_le_hm96 {Ω Y B C Λ ι : Type} [Fintype Ω] [Nonempty Ω] [Fintype Y] [Nonempty Y]
-    [AddCommGroup B] [Fintype B] [DecidableEq Λ] (My : Y → B) (c : Y → C) {δ₁ : ℝ≥0∞}
+theorem avg_iSup_classErr_le_hm96 {Ω Ys B C Λ ι : Type} [Fintype Ω] [Nonempty Ω] [Fintype Ys] [Nonempty Ys]
+    [AddCommGroup B] [Fintype B] [DecidableEq Λ] (My : Ys → B) (c : Ys → C) {δ₁ : ℝ≥0∞}
     (hT1 : Claims.Hm96Hiding My c δ₁) (H : B × C → Λ) (x : Ω → B) {R : ι → Type} [∀ i, DecidableEq (R i)]
     (P : (i : ι) → Ω → R i) {Q : ι → Type} [∀ i, Fintype (Q i)] [∀ i, Nonempty (Q i)] (bits : (i : ι) → Q i → R i)
     (hinj : ∀ i, Function.Injective (bits i))
     (hlaw : ∀ i (g : R i → ℝ≥0∞), avg (fun ω => g (P i ω)) = avg fun u => g (bits i u)) :
-    avg (fun p₀ : Ω × Y => ⨆ i, classErr
-      (Finset.univ.filter fun p : Ω × Y => H (x p.1 + My p.2, c p.2) = H (x p₀.1 + My p₀.2, c p₀.2)).card
-      fun u : Q i => (Finset.univ.filter fun p : Ω × Y =>
+    avg (fun p₀ : Ω × Ys => ⨆ i, classErr
+      (Finset.univ.filter fun p : Ω × Ys => H (x p.1 + My p.2, c p.2) = H (x p₀.1 + My p₀.2, c p₀.2)).card
+      fun u : Q i => (Finset.univ.filter fun p : Ω × Ys =>
         H (x p.1 + My p.2, c p.2) = H (x p₀.1 + My p₀.2, c p₀.2) ∧ P i p.1 = bits i u).card) ≤ 2 * δ₁ := by
   have : Nonempty B := ⟨0⟩
-  exact avg_iSup_classErr_le (fun p : Ω × Y => H (x p.1 + My p.2, c p.2)) (fun z : B × Y => H (z.1, c z.2))
+  exact avg_iSup_classErr_le (fun p : Ω × Ys => H (x p.1 + My p.2, c p.2)) (fun z : B × Ys => H (z.1, c z.2))
     (fun G => FlockSoundness.ZK.ideal_leaf_swap My c hT1 H x G) P bits hinj hlaw
 
 end Verity.Game
