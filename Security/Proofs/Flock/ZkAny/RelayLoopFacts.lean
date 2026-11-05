@@ -31,7 +31,8 @@ model's release being the loop's own frames':
   state but for `stopped`, and where `v` fails the crossing. `placeSt_seen`: its masking state at a round of a stream
   seen, from the rep's `SameInv`. **`placeSched_later`**: its scheduled round past a stream's first round, from
   `StreamAt` and `RealAt`, or `placeOf` places the round at the inner proof's own. **`placeSched_seen`**: the same at
-  a round of a stream seen, from `LoopJ`.
+  a round of a stream seen, from `LoopJ`. **`placeFacts_seen`**: `PlaceFacts` at a round of a stream seen, given the
+  inner proof's own place and the crossing.
 * `roundPlace_scheduled_later`: past a stream's first round, on a frame keeping its schedule so far on the loop's
   table, extras and salts, which are the model's, the round's place is the model's scheduled round, or the schedule
   has no round there (the inner proof's own).
@@ -551,6 +552,40 @@ theorem realAt_slot {M : LoopModel Claims.Flock.Wit
     rw [hF.count hsent]
     omega
   exact realAt_of hsrc (realAt_h0 hsrc hD.setup (hJ.sess hsent) hD.names (hJ.built hc2) hS hlive) hsal
+
+/-- **`PlaceFacts` at a round of a stream seen**: at the slot of a round of `stream`, table `i`'s rep `r`, where
+`LoopFacts` and `LoopJ` hold, `seen` has a round of `stream` and the model's tables and salts are the loop's (`RealAt`),
+the round's place is the model's scheduled round (`placeSched_seen`; where `placeOf` places it at the inner proof's own,
+by `hown`), the frame `roundPlace` readies is at the model's masking state but for `stopped` (`placeSt_seen`), and `v`
+fails the crossing only where it fails to pass (`hcr`). -/
+theorem placeFacts_seen {T : ZKMal.CoinLayer.TableData}
+    {M : LoopModel Claims.Flock.Wit
+      ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
+    {L₀ : LeanRelease Claims.Flock.Wit
+      ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
+    {real : Msg → Claims.Flock.Wit →
+      (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
+      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)}
+    {s0 : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt} (hD : LoopModel.Deployed M L₀ real s0 spec sts)
+    {sid : Nat} {seen : List String} {st : State} {pl : Placed} {σ : LoopAt} {stream : String} {n i r : Nat}
+    (hsl : slot st pl = some (.round stream n)) (hF : LoopFacts sid spec seen st pl σ)
+    (hJ : LoopJ M sid spec sts seen st σ) (hrep : streamRep st stream = (i, r)) (hlt : σ.c < M.τ.length)
+    (hseen : seen.contains stream = true) (hR : RealAt M real sid σ) {v : Claims.Msg}
+    (hcr : M.L.cross M.x (M.hist σ.c).length M.w M.ρ (M.hist σ.c) v = false →
+      M.L.pass M.x M.w M.ρ (M.hist σ.c) v = false)
+    {dom content : ByteArray} {q : Rep} {pc : Place} {f : Bool} {nd : Option String}
+    (hrp : _root_.Flock.Firewall.Frames.roundPlace σ.R σ.L0 sid i r dom content n = .ok (q, pc, f, nd))
+    (hown : ∀ (p : Rep) (rel : _root_.Flock.Firewall.Frames.Release) (name : String)
+      (l0 : _root_.Flock.Firewall.Level0.Level0) n' q', frameAt σ.R sid i r = some p → sessAt σ.R sid = some rel →
+      rel.spec.tables[i]? = some name → _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0 →
+      _root_.Flock.Firewall.Frames.placeOf σ.R.salts l0 rel p (rel.spec.domain name r).toUTF8 = .ok (.own, n', q') →
+      pc = .sched ⟨(M.L.scheduled M.x M.w M.ρ (M.hist σ.c)
+        (computedOf (M.L.computed M.x M.w M.ρ (M.hist σ.c)))).toArray⟩) :
+    PlaceFacts M sid v σ q pc nd := by
+  refine ⟨?_, placeSt_seen hsl hF hJ hrep hlt hD.names hseen hrp, fun _ => hcr⟩
+  rcases placeSched_seen hD hsl hF hJ hrep hlt hseen hR hrp with h | ⟨p, rel, name, l0, hfa, hss, hn, hl0, n', q', ho⟩
+  · exact h
+  · exact hown p rel name l0 n' q' hfa hss hn hl0 ho
 
 /-- **`RoundFacts` at a frame round's slot of the deployed loop**: at the slot of a round of `n` coins of `stream`,
 where `LoopFacts` and `LoopJ` hold, the session's slots took fewer than the run's messages, and the loop ran the round
