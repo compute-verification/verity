@@ -2,6 +2,7 @@ module
 
 public import Definitions.Pouw.Lead.Deployed
 public import Proofs.Pouw.Lead.Compose.Honest
+import all Init.Data.String.Defs
 
 /-!
 # The lead's honest lemma at the deployed instance
