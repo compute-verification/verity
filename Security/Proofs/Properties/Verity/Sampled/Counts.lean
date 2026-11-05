@@ -7,8 +7,9 @@ public import Proofs.Properties.Verity.Sampled.Trees
 
 `SampledProofs.Challenger.sessionTreeReason` accepts a session's record (`none`) only where each round the record gives
 coins of is one the release log shows opened of its tree with as many coins as the record counts there
-(`round_counted`): its link's points, 16 bytes a coin, as the session stream's round 0 (`o.n == points.size / 16`), and
-each stream's round its `n` (`o.n == n`). An opening whose count differs from the record's is refused, beside
+(`session_counted`): its link's points, 16 bytes a coin, as the session stream's round 0 (`o.n == points.size / 16`),
+and each stream's round its `n` (`o.n == n`), every stream of the record counted (`streams_counted`,
+`StreamCounted`). An opening whose count differs from the record's is refused (`round_counted`), beside
 `Trees.round_held`'s coins.
 -/
 
@@ -43,14 +44,16 @@ def StreamCounted (t : LoggedTree) (s : Json) : Prop :=
   ∀ name rounds, getD s "stream" = .str name → getD s "rounds" = .arr rounds →
     ∀ x ∈ rounds.zipIdx, RoundCounted t name x
 
-/-- **A record `sessionTreeReason` accepts counts the coins its tree's log shows opened**: its coin tree's root is that
-of a tree of the log, and each round the record gives coins (`Verity.Sampled.recordRound`) and a count
-(`recordCount`) of is one the log shows opened of that tree with that count, with those coins' SHA-512. -/
-theorem round_counted {trees : Array LoggedTree} {record : Json} {stream : String} {k n : Nat} {cs : ByteArray}
-    (h : sessionTreeReason trees record = none) (hr : Verity.Sampled.recordRound record stream k = some cs)
-    (hn : recordCount record stream k = some n) :
+/-- **A record `sessionTreeReason` accepts is counted of a tree of the log**: its coin tree's root is that of a tree `t`
+of the log; the coins its link's points give (`Verity.Sampled.recordRound`, the session stream's round 0) are a round
+the log shows opened of `t` with a count of one per 16 bytes, with those coins' SHA-512; and each stream of its
+`streams` is counted of `t` (`StreamCounted`). -/
+theorem session_counted {trees : Array LoggedTree} {record : Json} (h : sessionTreeReason trees record = none) :
     ∃ t ∈ trees, Verity.Sampled.recordTree record = t.root ∧
-      ∃ o, t.opening stream k = some o ∧ o.n = n ∧ o.coins = sha512Hex cs := by
+      (∀ (stream : String) (k : Nat) (cs : ByteArray), (stream == TREE_SESSION && k == 0) = true →
+        Verity.Sampled.recordRound record stream k = some cs →
+        ∃ o, t.opening stream k = some o ∧ o.n = cs.size / 16 ∧ o.coins = sha512Hex cs) ∧
+      ∃ streams, getD record "streams" = .arr streams ∧ ∀ s ∈ streams, StreamCounted t s := by
   unfold sessionTreeReason at h
   dsimp only [Id.run] at h
   split at h
@@ -112,19 +115,43 @@ theorem round_counted {trees : Array LoggedTree} {record : Json} {stream : Strin
       exact ⟨coins, m, hcn.1, hcn.2, o, ho, hok.1.1, hok.2⟩
     · exact fun _ _ => ⟨(), rfl⟩
     · exact fun _ => ⟨(), rfl⟩
+  refine ⟨fun stream k cs hsess hr => ?_, streams, hst, hall⟩
+  unfold Verity.Sampled.recordRound at hr
+  rw [ite_eq_left hsess] at hr
+  simp only [Bool.and_eq_true, beq_iff_eq] at hsess
+  obtain ⟨rfl, rfl⟩ := hsess
+  rw [hps] at hr
+  dsimp only at hr
+  cases hr.symm.trans hpts
+  simp only [Bool.and_eq_true, beq_iff_eq] at hlinkOk
+  exact ⟨o, hlo, hlinkOk.1.1, hlinkOk.2⟩
+
+/-- **Each stream of a record `sessionTreeReason` accepts is counted** of a tree of the log whose root is the record's
+coin tree's (`session_counted`): each round of each stream of the record's `streams` gives coins and a count, and is a
+round the log shows opened of that tree with that count, with those coins' SHA-512 (`StreamCounted`). -/
+theorem streams_counted {trees : Array LoggedTree} {record : Json} (h : sessionTreeReason trees record = none) :
+    ∃ t ∈ trees, Verity.Sampled.recordTree record = t.root ∧
+      ∃ streams, getD record "streams" = .arr streams ∧ ∀ s ∈ streams, StreamCounted t s := by
+  obtain ⟨t, ht, hroot, -, hs⟩ := session_counted h
+  exact ⟨t, ht, hroot, hs⟩
+
+/-- **A record `sessionTreeReason` accepts counts the coins its tree's log shows opened**: its coin tree's root is that
+of a tree of the log, and each round the record gives coins (`Verity.Sampled.recordRound`) and a count
+(`recordCount`) of is one the log shows opened of that tree with that count, with those coins' SHA-512
+(`session_counted`). -/
+theorem round_counted {trees : Array LoggedTree} {record : Json} {stream : String} {k n : Nat} {cs : ByteArray}
+    (h : sessionTreeReason trees record = none) (hr : Verity.Sampled.recordRound record stream k = some cs)
+    (hn : recordCount record stream k = some n) :
+    ∃ t ∈ trees, Verity.Sampled.recordTree record = t.root ∧
+      ∃ o, t.opening stream k = some o ∧ o.n = n ∧ o.coins = sha512Hex cs := by
+  obtain ⟨t, ht, hroot, hlink, streams, hst, hall⟩ := session_counted h
+  refine ⟨t, ht, hroot, ?_⟩
   by_cases hsess : (stream == TREE_SESSION && k == 0) = true
   · unfold recordCount at hn
     rw [ite_eq_left hsess, hr] at hn
     have hcount : cs.size / 16 = n := by simpa using hn
-    unfold Verity.Sampled.recordRound at hr
-    rw [ite_eq_left hsess] at hr
-    simp only [Bool.and_eq_true, beq_iff_eq] at hsess
-    obtain ⟨rfl, rfl⟩ := hsess
-    rw [hps] at hr
-    dsimp only at hr
-    cases hr.symm.trans hpts
-    simp only [Bool.and_eq_true, beq_iff_eq] at hlinkOk
-    exact ⟨o, hlo, hlinkOk.1.1.trans hcount, hlinkOk.2⟩
+    obtain ⟨o, ho, hon, hoc⟩ := hlink stream k cs hsess hr
+    exact ⟨o, ho, hon.trans hcount, hoc⟩
   · unfold recordCount at hn
     rw [ite_eq_right hsess] at hn
     rw [hst] at hn
