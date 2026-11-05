@@ -25935,6 +25935,12 @@
     "Claims.ZKMal.CoinLayer.helloMsg": "b9fcb577caf64ca123406e3b8db53df697981be39ade62394117ec812d8d6d92"
    }
   },
+  "Proofs.Flock.Claims.ZK.LinkRecheck": {
+   "digest": "75b457653b4db75351ae54bdc4dc892224ae761981ac52f709feb9e16211ff5e",
+   "definitions": {
+    "Claims.ZKMal.Masked.linkIn": "aad36d20478ae14a727a243c4d335e5a8d479669d651a0b61a62e10ad79c8bf4"
+   }
+  },
   "Proofs.Flock.Claims.ZK.Prefinal": {
    "digest": "51ff416f5eb3df891f789ebd1e12bda5919d8f8cce4edabd4413b60e96c574e2",
    "definitions": {
