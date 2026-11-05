@@ -176,11 +176,12 @@ theorem ks (hB : UnboundFaulty) {r : Verity.FileRead} (hr : r = A.fileRead)
   · unfold Live.drawMiss
     rw [Flock.Bridge.pa_partOf A.P hns _ Fs hFs]
     apply ENNReal.ofReal_le_ofReal
-    haveI : Finite {B : Finset ℕ // B ⊆ Finset.range A.n ∧ A.ε * A.n < B.card} :=
+    have : Finite {B : Finset ℕ // B ⊆ Finset.range A.n ∧ A.ε * A.n < B.card} :=
       Finite.of_injective (fun B => (⟨B.1, Finset.mem_powerset.2 B.2.1⟩ : (Finset.range A.n).powerset))
-        fun a b h => Subtype.ext (congrArg Subtype.val h)
-    exact le_ciSup (Set.finite_range _).bddAbove
-      (⟨Fs, hFs, hcard⟩ : {B : Finset ℕ // B ⊆ Finset.range A.n ∧ A.ε * A.n < B.card})
+        fun a b h => Subtype.ext (by simpa using congrArg Subtype.val h)
+    exact le_ciSup (f := fun B : {B : Finset ℕ // B ⊆ Finset.range A.n ∧ A.ε * A.n < B.card} =>
+        (_root_.Properties.SampledProofs.oneStageOf A.law).Pa (Flock.Bridge.nsOf A.desc A.qr) B.1)
+      (Set.finite_range _).bddAbove ⟨Fs, hFs, hcard⟩
   · exact le_iSup (fun R : A.Reg => ksAvgStrictZ (planZHJP A.dj A.y₀) A.L A.k (A.qF t) (A.qS t) R) _
 
 end Live
