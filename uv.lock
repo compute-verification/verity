@@ -2360,8 +2360,12 @@ dependencies = [
     { name = "blake3" },
     { name = "numpy" },
     { name = "verity" },
-    { name = "verity-numerical" },
     { name = "verity-vllm" },
+]
+
+[package.optional-dependencies]
+bench = [
+    { name = "verity-numerical" },
 ]
 
 [package.metadata]
@@ -2369,9 +2373,10 @@ requires-dist = [
     { name = "blake3", specifier = ">=1.0" },
     { name = "numpy" },
     { name = "verity", editable = "." },
-    { name = "verity-numerical", editable = "benchmarks/numerical" },
+    { name = "verity-numerical", marker = "extra == 'bench'", editable = "benchmarks/numerical" },
     { name = "verity-vllm", editable = "integrations/vllm" },
 ]
+provides-extras = ["bench"]
 
 [[package]]
 name = "verity-graph"
