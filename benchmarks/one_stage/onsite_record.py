@@ -3,7 +3,7 @@ record needs, the network certifier's bound term by term, and that bound over ea
 node, a datacenter and the world. It reads only the run's public $OUT and decides nothing:
 
     python benchmarks/one_stage/onsite_record.py OUT [--window-steps S --max-tokens M] [--advice-charge FILE]
-        [--certifier-key RECORD --site-registration FILE] [--to FILE]
+        [--certifier-key RECORD --site-registration FILE] [--inference-only-case-policy FILE] [--to FILE]
     python benchmarks/one_stage/onsite_record.py --beside RECORD [RECORD ...] --to FILE
 
 `served_verdicts.sh` runs it after its composite step on a run with the network certifier's piece, and its one
@@ -22,7 +22,10 @@ run wrote no answer, ``missing`` and ``why``:
 
 * sampled proofs and PoUW: ``record/verdicts.json``'s ``integrity`` and ``work`` rows (`served_verdicts.py record`);
 * inference-only: its case's outcome in remote's composite, or in the composite of record where that is the one
-  without PoUW;
+  without PoUW, with where its case's α and Γ came from (``alpha_gamma``, `alpha_gamma`), never a registered policy,
+  which none records: read off the run's own division, so the verdict confirms the division against itself, where the
+  case's private policy.json (``--inference-only-case-policy``, of which only ``read`` is read) says so, the run's
+  ALPHA and GAMMA where the case has none, and ``missing`` where the record wasn't handed it;
 * remote: remote's Lean verdict, ``composite/remote/composite.json`` (`composite.py`), with what it couldn't establish;
 * the network certifier: the ``communication`` row, `NetworkCheck.Period`'s answer (`NETWORK`), or, where the run's
   product drops it (remote's, with the split certifier behind its front) and its period check answered, the row that
@@ -186,6 +189,15 @@ EXTENDS = "verity/all-protocols-window/v1"
 NETWORK = "verity/certifier/v0"
 REMOTE = "verity/remote/v0"
 INFERENCE_ONLY = "verity/inference-only/v0"
+#: where the inference-only case's α and Γ came from (`alpha_gamma`), by its private policy.json's ``read``
+#: (`served_cases.FROM_DIVISION`), the one field of it read: never a registered policy, which none records
+ALPHA_GAMMA_FROM_DIVISION = ("α and Γ read off the run's own division (served_cases.py --from-division), not set by a "
+                             "registered policy: the verdict confirms the division against itself, and is no check "
+                             "against a policy")
+ALPHA_GAMMA_GIVEN = ("α and Γ as the run's ALPHA and GAMMA set them (the case has no policy.json), not by a registered "
+                     "policy, which none records: the verdict checks the division against those settings")
+ALPHA_GAMMA_UNSTATED = ("not stated: the record wasn't handed the inference-only case's policy.json "
+                        "(--inference-only-case-policy); α and Γ are no registered policy's, which none records")
 #: the Lean composition of remote's three subprotocols and the network certifier over one registration, as its
 #: composite.json names it (`composite.py`'s remote-network product)
 ONSITE = "verity/remote-network/v0"
@@ -1517,13 +1529,34 @@ def reproof(out: Path, copy: str | None = None, listing: Path | None = None, tie
     return {"inputs": inputs, "copy": kept, "kept": REPROOF_KEPT}
 
 
+def alpha_gamma(path: Path | None) -> dict[str, str]:
+    """Where the inference-only case's α and Γ came from, by its private policy.json at ``path``, of which only ``read``
+    is read, never α or Γ: off the run's own division where it says so (`ALPHA_GAMMA_FROM_DIVISION`), the run's ALPHA
+    and GAMMA where the case has none (`ALPHA_GAMMA_GIVEN`); ``missing`` with no path, ``error`` for a file
+    served_cases.py didn't write."""
+    if path is None:
+        return {"missing": ALPHA_GAMMA_UNSTATED}
+    if not path.exists():
+        return {"read": "given", "is": ALPHA_GAMMA_GIVEN}
+    from served_cases import FROM_DIVISION
+    try:
+        read = json.loads(path.read_text()).get("read")
+    except (OSError, ValueError, AttributeError) as e:
+        return {"error": f"the inference-only case's policy.json isn't a JSON object: {type(e).__name__}"}
+    if read != FROM_DIVISION:
+        return {"error": "the inference-only case's policy.json doesn't say served_cases.py read it off the division"}
+    return {"read": "the division", "is": ALPHA_GAMMA_FROM_DIVISION}
+
+
 def record(out: Path, advice_charge: Path | None = None, copy: str | None = None,
            listing: Path | None = None, serving: tuple[int, int] | None = None, tie: bool = False,
-           certifier_key: Path | None = None, site_registration: Path | None = None) -> dict[str, Any]:
+           certifier_key: Path | None = None, site_registration: Path | None = None,
+           case_policy: Path | None = None) -> dict[str, Any]:
     """OUT's onsite record (module docstring), with the re-proof inputs' ``copy`` and its ``listing`` where given
     (`reproof`, ``tie`` where H1_TIE ties the window), the run's ``serving`` settings, S and MAX_TOKENS, where its
-    caller states them (`SERVING`), and the auditor's inputs the run's checks read, its ``certifier_key`` record and its
-    ``site_registration`` (`auditor_record`); FileNotFoundError where `served_verdicts.py record` wrote no report."""
+    caller states them (`SERVING`), the auditor's inputs the run's checks read, its ``certifier_key`` record and its
+    ``site_registration`` (`auditor_record`), and the inference-only case's private policy.json, ``case_policy``
+    (`alpha_gamma`); FileNotFoundError where `served_verdicts.py record` wrote no report."""
     report = json.loads((out / "record" / "verdicts.json").read_text())
     if report.get("format") != EXTENDS:
         raise ValueError(f"record/verdicts.json is {report.get('format')!r}, not {EXTENDS}")
@@ -1543,6 +1576,7 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
     v["the network certifier"] = nv = row_verdict(rows, ROWS["the network certifier"], net_src)
     v["onsite"] = composite_verdict(found, composite, f"the run has no composite of {composite}")
     v = {k: v[k] for k in VERDICTS}
+    v["inference-only"]["alpha_gamma"] = alpha_gamma(case_policy)
     v["sampled proofs"]["credit"] = paid = credit(out)
     for k in unread:
         v[k]["not_claimed"] = POUW_OPEN
@@ -1628,7 +1662,8 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
 
 
 def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
-    """The ``ONSITE`` line: the run's serving settings, each verdict, whether the run is of record, its composite of
+    """The ``ONSITE`` line: the run's serving settings, each verdict, where the inference-only case's α and Γ came from
+    (`alpha_gamma`), whether the run is of record, its composite of
     record by id (`WITHOUT_POUW`) and the verified compute it credits, none, stated at that id (``compute``,
     `NO_COMPUTE_CLAIM`), and what every figure is conditional on
     (`COINS`; open for a record that read no coins), what the record doesn't claim (`DAY`, `POUW`), the drawn members it
@@ -1639,7 +1674,9 @@ def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
     year = (p.get("year") or {}).get("datacenter")
     m, fig = rec["advice_charge"]["measured"], b.get("of_record") or {}
     return {"serving": {k: s[k] for k in ("window_steps", "max_tokens")} if "window_steps" in s else None,
-            "verdicts": {k: x["verdict"] for k, x in rec["verdicts"].items()}, "of_record": rec["of_record"]["holds"],
+            "verdicts": {k: x["verdict"] for k, x in rec["verdicts"].items()},
+            "inference_only_alpha_gamma": rec["verdicts"]["inference-only"].get("alpha_gamma"),
+            "of_record": rec["of_record"]["holds"],
             **{k: rec["of_record"].get(k) for k in ("composite", "verified_compute")},
             "compute": NO_COMPUTE_CLAIM.format(rec["of_record"].get("composite") or "the composite of record"),
             "conditional_on": rec["of_record"].get("conditional_on", []) if "coins" in rec else [COINS_OPEN],
@@ -1738,6 +1775,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                     help="the auditor's registration of the deployment, {\"params\": {auditor, composite}, \"log\": "
                          "{composite, entries}}, whose auditor must hold the record's key for a network certifier the "
                          "log places (`CHECKED`)")
+    ap.add_argument("--inference-only-case-policy", type=Path, metavar="FILE",
+                    help="the inference-only case's private policy.json under the serve dir (served_cases.py's, not "
+                         "$OUT/inference-only-policy.json), of which only its read is read: where the case's α and Γ "
+                         "came from, the run's ALPHA and GAMMA where it doesn't exist (`alpha_gamma`)")
     ap.add_argument("--to", type=Path,
                     help="the record's path (default OUT/record/onsite.json); with --beside, where the records go "
                          "beside each other")
@@ -1745,7 +1786,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if a.beside is not None:
         if a.to is None or a.h1_tie or any(x is not None for x in (a.out, a.advice_charge, a.reproof_copy,
                                                                      a.reproof_listing, a.window_steps, a.max_tokens,
-                                                                     a.certifier_key, a.site_registration)):
+                                                                     a.certifier_key, a.site_registration,
+                                                                     a.inference_only_case_policy)):
             ap.error("--beside reads the records written, with --to alone: where they go beside each other")
         try:
             doc = beside(a.beside)
@@ -1766,7 +1808,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     serving = None if a.window_steps is None else (a.window_steps, a.max_tokens)
     try:
         rec = record(a.out, a.advice_charge, a.reproof_copy, a.reproof_listing, serving, a.h1_tie,
-                     a.certifier_key, a.site_registration)
+                     a.certifier_key, a.site_registration, a.inference_only_case_policy)
     except FileNotFoundError as e:
         print(f"ONSITE: not written: {e.filename} is missing", file=sys.stderr)
         return 1

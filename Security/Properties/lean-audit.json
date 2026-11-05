@@ -7505,6 +7505,7 @@
     "Properties.NetworkPeriod.rowsStateAnchored_honest",
     "Properties.NetworkPeriod.rowsStateHeld",
     "Properties.NetworkPeriod.rowsStateHeld_honest",
+    "Properties.NetworkPeriod.rowsStateHeld_nontrivial",
     "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkPeriod.rowsStateTied_nontrivial",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
@@ -20844,7 +20845,7 @@
    "guarantees": ["Properties.NetworkCertifier.linkWindowAcceptMeans"]
   },
   "NetworkCheck.Period": {
-   "digest": "276afd4ff0b5f3dd073e4794885fdb4fff82c07c6b95ddb61ad77be25dfe245a",
+   "digest": "4d3660016b0d2264c100ce4693174d2c5ad4404b6be56159f69c73b00ba35f4b",
    "definitions": {
     "NetworkCheck.Period.Audit": "1d09ddb464aaa4df92f6fa9e898ac284f9c3cb3a691d01573bc237bf94b954e8",
     "NetworkCheck.Period.Audit.bits": "e933e5e70e66fbf6d1a3f868d294c6a0cfc6be8b835a4d117602235327ee4af1",
@@ -21038,8 +21039,6 @@
     "NetworkCheck.Period.ingressTemplates": "8d276b76d1a2d0e0b0ae8da67ded106364dbe29d8e471fc70ee1bb55a6c0de13",
     "NetworkCheck.Period.ingressTemplates._sparseCasesOn_1": "368ac2dec63bf724b39bce1b373bd2d1aafc1e5131dc33029960d920e1a714b6",
     "NetworkCheck.Period.ingressTemplates._sparseCasesOn_2": "cdd4ba45029df7dbb4a2be1535025c866cc454a196783a5763eeacb4889be4be",
-    "NetworkCheck.Period.inputArg._sparseCasesOn_1": "1df1ecac5dcb9859890b8d3335224f1c3f484b5b58868fe2600101041d367aad",
-    "NetworkCheck.Period.inputArg._sparseCasesOn_2": "38c95f8602db8e982d4e1093aa93a28f659ebb799a018bb89d7b45f3de619d03",
     "NetworkCheck.Period.instBEqBucketSchedule": "cf2b38e621b4fb2439edd52f558dc33ae4681421f29d919324092851bce915c2",
     "NetworkCheck.Period.instBEqBucketSchedule.beq": "02ecb5808a564bbf729a03f50697f1423781c4e155de59ff2289d3c4ec2da903",
     "NetworkCheck.Period.isDigest": "4bbbff6f240a86c3b59e724f4c2fe37b2e5a7c8971040832a016b87918d0a7aa",
@@ -24383,7 +24382,7 @@
    "guarantees": ["Properties.NetworkCertifier.linkWindowAcceptMeans"]
   },
   "Properties.NetworkPeriod": {
-   "digest": "ff818c04e3a6b8e41c8185c58f1426366b5624a59e8a3755fcef81c04371b0e9",
+   "digest": "21ff6df933560b3f1bf88829fffb98bf20565eb948d2af1865cb1fbe2cdf2305",
    "definitions": {
     "Properties.NetworkPeriod.AnchoredRead": "5afad0a85cdb5e0060b94d01588ee1a4f00a13a44fdc5d3611faea29d8fed3e6",
     "Properties.NetworkPeriod.AnchoredRecord": "9c8bd780a71a667ee213b3967ffa5c6ab8ffc54126019d9a87d41d15db070d60",
@@ -24407,7 +24406,7 @@
     "Properties.NetworkPeriod.anchorSchedule": "9c5315887bc7f3accdb0b2bac043bb6e6c2d6ab6c9b8127b2b38c19bac092024",
     "Properties.NetworkPeriod.heldAudit": "7719d07aab89158b39d30a3f1fa708acff75e0432390b43ab30e8da21ca4869b",
     "Properties.NetworkPeriod.heldParams": "c9f328de20d0994382099d0905d672a5fb0f77911f760bbc39e76aec51089a16",
-    "Properties.NetworkPeriod.heldPublic": "6118595b0766682fb8b2c288f4cf0443dcefbc52d9d55ac62823b22a934053b4",
+    "Properties.NetworkPeriod.heldPublic": "82c2f7a3ac50b8b7e6a837977a6c395950b05b35ea6d96dfe00725992185bb0c",
     "Properties.NetworkPeriod.heldReg": "50d2f460a1f3f88a1dd7597faa7efa900fab4725145621a4bd23444addc25644",
     "Properties.NetworkPeriod.slotAudit": "e760eee56cdb608304fffc97932dcdbf8c9b3391752a8cbc7a28d98d9fbdd8fe",
     "Properties.NetworkPeriod.slotSchedule": "c6acd39e8dd9bdf89c24d4d94581ebea6048341eebcfff110fc675a29515897e",
@@ -27350,7 +27349,12 @@
     "Properties.NetworkPeriod.rowsCircuitHeld",
     "Properties.NetworkPeriod.rowsCircuitHeld_honest",
     "Properties.NetworkPeriod.rowsProgWired",
+    "Properties.NetworkPeriod.rowsStateAnchored",
+    "Properties.NetworkPeriod.rowsStateAnchored_honest",
+    "Properties.NetworkPeriod.rowsStateHeld",
+    "Properties.NetworkPeriod.rowsStateHeld_honest",
     "Properties.NetworkPeriod.rowsStateTied",
+    "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial",

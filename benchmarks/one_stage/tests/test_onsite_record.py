@@ -58,6 +58,7 @@ sys.path.insert(0, str(HERE.parent))
 
 import composite as CO  # noqa: E402
 import onsite_record as OR  # noqa: E402
+import served_cases as SC  # noqa: E402
 import served_verdicts as SV  # noqa: E402
 import leak_bounds as LB  # noqa: E402
 import warden_chain as WC  # noqa: E402
@@ -1387,7 +1388,8 @@ def test_under_the_network_certifiers_composite_without_pouw_the_run_is_of_recor
     assert v["onsite"] == {"protocol": WITHOUT, "verdict": "accept",
                            "from": "composite/remote-network-no-pouw/composite.json"}
     assert v["inference-only"] == {"protocol": OR.INFERENCE_ONLY, "verdict": "accept",
-                                   "from": "composite/remote-network-no-pouw/composite.json cases"}
+                                   "from": "composite/remote-network-no-pouw/composite.json cases",
+                                   "alpha_gamma": {"missing": OR.ALPHA_GAMMA_UNSTATED}}
     assert (v["remote"]["verdict"], v["remote"]["not_claimed"], v["PoUW"]["not_claimed"]) == (
         "reject", OR.POUW_OPEN, OR.POUW_OPEN)
     assert rec["of_record"] == {"holds": True, "composite": WITHOUT, "missing": [], "not_accepting": ["remote"],
@@ -1413,6 +1415,39 @@ def test_under_the_network_certifiers_composite_without_pouw_the_run_is_of_recor
     with pytest.raises(ValueError, match=re.escape(f"2 composites of the network certifier without PoUW ({WITHOUT}, "
                                                    f"{WITHOUT}-b)")):
         record(out)
+
+
+#: α and Γ in the inference-only case's private policy.json, numbers no other part of a toy record holds
+ALPHA, GAMMA = [192837465, 564738291], 918273645
+
+
+@pytest.mark.parametrize("policy, said", [
+    ({"alpha": ALPHA, "gamma": GAMMA, "read": SC.FROM_DIVISION},
+     {"read": "the division", "is": OR.ALPHA_GAMMA_FROM_DIVISION}),
+    (None, {"read": "given", "is": OR.ALPHA_GAMMA_GIVEN}),
+    ({"alpha": ALPHA, "gamma": GAMMA, "read": "set by hand"},
+     {"error": "the inference-only case's policy.json doesn't say served_cases.py read it off the division"}),
+    ([ALPHA, GAMMA], {"error": "the inference-only case's policy.json isn't a JSON object: AttributeError"}),
+])
+def test_the_inference_only_verdict_says_where_alpha_and_gamma_came_from_never_a_registered_policy(
+        tmp_path, capsys, policy, said):
+    """Under the composite without PoUW, the inference-only verdict and the ONSITE line say where the case's α and Γ
+    came from by its private policy.json's read alone: off the run's own division, so the verdict confirms the division
+    against itself, where served_cases.py --from-division wrote it; the run's ALPHA and GAMMA where the case has none;
+    an error for any other file. Neither says α or Γ, and none changes the verdict or the run's being of record."""
+    out = with_composite(accepted(tmp_path), "remote-network-no-pouw", WITHOUT, WITHOUT_IDS)
+    f = tmp_path / "serve" / "private" / "inference-only" / "policy.json"
+    if policy is not None:
+        f.parent.mkdir(parents=True)
+        f.write_text(json.dumps(policy))
+    assert main([str(out), "--inference-only-case-policy", str(f)]) == 0
+    written = (out / "record" / "onsite.json").read_text()
+    line = capsys.readouterr().out.strip()
+    rec = json.loads(written)
+    assert (rec["verdicts"]["inference-only"]["verdict"], rec["verdicts"]["inference-only"]["alpha_gamma"],
+            rec["of_record"]["holds"]) == ("accept", said, True)
+    assert json.loads(line[len("ONSITE "):])["inference_only_alpha_gamma"] == said
+    assert not any(str(x) in text for x in (*ALPHA, GAMMA) for text in (written, line))
 
 
 @pytest.mark.parametrize("how", ["unlisted", "restated", "another key", "no registration", "a case rewritten"])

@@ -220,13 +220,15 @@ negatives.
   (PoUS's `served_case.sh`), then gets remote's, remote-network's and onsite's Lean verdicts, or remote-network-no-pouw's
   alone, on the run's cases (soundness's composite
   reader), all on the node. Only the verdict lines reach the run's `verdicts.txt`, and a tree without those two scripts skips the step.
-- `onsite_record.py OUT [--advice-charge FILE] [--certifier-key RECORD --site-registration FILE]`: the onsite demo's
-  record of a served run (`record/onsite.json`), which
+- `onsite_record.py OUT [--advice-charge FILE] [--certifier-key RECORD --site-registration FILE]
+  [--inference-only-case-policy FILE]`: the onsite demo's record of a served run (`record/onsite.json`), which
   `served_verdicts.sh` writes after its composite step when the network certifier is in the run: its piece
   (`CERTIFIER_CMD`, or the split's `CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`) or its front (`CERTIFIER_FRONT`). It holds every verdict
   the run of record needs (sampled proofs, PoUW, inference-only, remote, the network certifier, onsite), each missing
-  with its why where the run has no answer. It checks two obligations on the auditor's configuration on each run
-  (``checked``), reading only the auditor's inputs: `auditor-record`, that the period's key, LMS parameters and
+  with its why where the run has no answer. The inference-only verdict says where its case's α and Γ came from, never
+  a registered policy: off the run's own division, so the verdict confirms the division against itself, where the
+  case's private `policy.json` says so (its `read`, the one field the record reads), else the run's `ALPHA` and `GAMMA`.
+  It checks two obligations on the auditor's configuration on each run (``checked``), reading only the auditor's inputs: `auditor-record`, that the period's key, LMS parameters and
   session, in parameters whose SHA-512 is the one the composite of record states for the network certifier's case, are
   the auditor's record of its network certifier (`CERTIFIER_KEY`, `certifier-key/v1`) and that the
   auditor's registration of the deployment (`SITE_REGISTRATION`: the registration log's params and the log, which

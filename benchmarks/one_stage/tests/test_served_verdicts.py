@@ -2427,23 +2427,23 @@ def _deferred(tmp_path: Path, tied: bool = True, **extra: str) -> subprocess.Com
 def test_a_node_short_of_v3cs_audits_memory_defers_it_and_the_composite_listing_and_hashing_each_input(tmp_path):
     """Step 6's deferral leaves in the serve dir's private/deferred the pieces the record read, the settings the
     follow-on runs at (the window, the product, V3c's class and law, H1_TIE, the composite, the served node, the tree's
-    commit, and WINDOW_STEPS and MAX_TOKENS, which label the onsite record), and the follow-on's every input, listed for
-    the prover's copy and hashed for the follow-on to hold it to:
-    V3c's window dir whole, H1's log and each record it names, the tie's commit answer, the record's and the composite's
-    inputs and its own files, and nothing else of the serve dir. Its one line in $OUT names what was deferred, why and the
-    follow-on's command, and no window; nothing else lands in $OUT."""
+    commit, WINDOW_STEPS and MAX_TOKENS, which label the onsite record, and OF_RECORD), and the follow-on's every
+    input, listed for the prover's copy and hashed for the follow-on to hold it to: V3c's window dir whole, H1's log
+    and each record it names, the tie's commit answer, the record's and the composite's inputs and its own files, and
+    nothing else of the serve dir. Its one line in $OUT names what was deferred, why and the follow-on's command, and no
+    window; nothing else lands in $OUT."""
     run = _deferred(tmp_path)
     assert run.returncode == 0, run.stderr
     d, dd, out = tmp_path / "serve", tmp_path / "serve" / "private" / "deferred", tmp_path / "served-out"
     names = ("K PRODUCT V3C_CLASS V3C_LAW H1_TIE COMPOSITE ALPHA GAMMA SERVED_NODE DEFERRED_TREE CR_SCAN_DELTA ONSITE "
-             "CERTIFIER_CHAIN_CMD CERTIFIER_PERIOD_CMD WINDOW_STEPS MAX_TOKENS")
+             "CERTIFIER_CHAIN_CMD CERTIFIER_PERIOD_CMD WINDOW_STEPS MAX_TOKENS OF_RECORD")
     said = subprocess.run(["bash", "-c", f'. "$1"; for v in {names}; do printf "%s=%s\\n" "$v" "${{!v}}"; done', "_",
                            str(dd / "deferred.env")], check=True, capture_output=True, text=True).stdout
     assert dict(x.split("=", 1) for x in said.splitlines()) == {
         "K": "7", "PRODUCT": "remote", "V3C_CLASS": W63K4, "V3C_LAW": "stratified:1", "H1_TIE": "1", "COMPOSITE": "1",
         "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200", "DEFERRED_TREE": SHA,
         "CR_SCAN_DELTA": "5.421010862427522e-20", "ONSITE": "", "CERTIFIER_CHAIN_CMD": "", "CERTIFIER_PERIOD_CMD": "",
-        "WINDOW_STEPS": "16", "MAX_TOKENS": "4"}
+        "WINDOW_STEPS": "16", "MAX_TOKENS": "4", "OF_RECORD": ""}
     listed = (dd / "inputs.txt").read_text().splitlines()
     window = [f"v3c-w7-{VTAG}/window/{f}" for f in ("circuit.json", "registration.json", "values/a.bin")]
     own = ["private/deferred/deferred.env", "private/deferred/pieces/pouw/answer.json"]
@@ -2692,6 +2692,22 @@ def test_the_follow_on_runs_reproof_cmd_after_the_audit_then_the_onsite_record_w
         "--reproof-listing", str(listing), "--certifier-key", str(key), "--site-registration", str(site), "--h1-tie"]
 
 
+def test_the_onsite_record_is_handed_the_inference_only_cases_policy_where_the_composite_wrote_the_case(tmp_path):
+    """Where the composite step wrote the inference-only case under the serve dir's private/, the onsite record is
+    handed the case's private policy.json, where served_cases.py --from-division says α and Γ came from, whether or not
+    it exists (with ALPHA and GAMMA set it doesn't); without the case it is handed none (above)."""
+    assert _deferred(tmp_path, CERTIFIER_FRONT="front", WINDOW_STEPS="1", MAX_TOKENS="1").returncode == 0
+    d, out = tmp_path / "serve", tmp_path / "out"
+    (tmp_path / "tree" / "benchmarks" / "one_stage").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "tree" / "benchmarks" / "one_stage" / "onsite_record.py").write_text(FAKE_ONSITE_RECORD)
+    case = 'mkdir -p "$1/private/inference-only" && echo {} > "$1/private/inference-only/case.json"'
+    rc, lines, order, _limits = _follow(tmp_path, f"{FAKE_SERVED_COMPOSITE}\n{case}")
+    assert rc == 0 and order == ["audit", "period", "record", "composite", "onsite"], (lines, order)
+    assert json.loads((tmp_path / "order.onsite").read_text()) == [
+        str(out), "--window-steps", "1", "--max-tokens", "1",
+        "--inference-only-case-policy", str(d / "private" / "inference-only" / "policy.json"), "--h1-tie"]
+
+
 #: V3c's audit of `FAKE_RECORDS_AUDIT` with its circuits composed: template A's in the warm's cache, linked at its first
 #: member m0 and at m2, a drawn member of it; template B's at m1, which V2_CASE makes the file a v2 case names; and m0's
 #: opening, which isn't a circuit
@@ -2743,6 +2759,198 @@ def test_the_follow_on_removes_the_windows_circuit_files_after_its_period_check_
 
 #: the network certifier's kept run in `_deferred`'s serve dir: the gate's fetch and the front's session
 KEPT = ("private/certifier/r1/fetch.tar.gz", "private/certifier/r1/session.json")
+#: the split certifier's period check, writing the network certifier's case and its answer in its piece dir
+NETWORK_PERIOD = ('echo period-check >> "$ORDER"; test -s "$4/period.json" || exit 1; '
+                  'echo \'{"commitment": "7b7d", "evidence": "7b7d", "params": {}}\' > "$3/case.json"; '
+                  'echo \'{"protocol": "verity/certifier/v9", "verdict": "accept"}\' > "$3/answer.json"; echo checked')
+
+
+def _kept(tmp_path: Path) -> None:
+    """The network certifier's kept run (`KEPT`) and an attack log beside it in `_deferred`'s serve dir."""
+    for f in (*KEPT, "private/certifier/attacks/relay.log"):
+        (tmp_path / "serve" / f).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / "serve" / f).write_text(f)
+
+
+def _composing_tree(tmp_path: Path) -> Path:
+    """`_v3c`'s toy tree with the onsite record's and composite.py's stand-ins and the composites' Lean packages, and a
+    directory, for PATH, whose systemd-run fails, so `served_composite.sh` runs each composite outside a scope."""
+    tree = tmp_path / "tree"
+    (tree / "benchmarks" / "one_stage").mkdir(parents=True, exist_ok=True)
+    (tree / "benchmarks" / "one_stage" / "onsite_record.py").write_text(FAKE_ONSITE_RECORD)
+    (tree / "benchmarks" / "one_stage" / "composite.py").write_text(FAKE_COMPOSITE)
+    for pkg in ("remote", "onsite"):
+        (tree / "verity" / "core" / "protocols" / pkg).mkdir(parents=True)
+    _script(tmp_path / "stubs" / "systemd-run", "exit 1")
+    return tmp_path / "stubs"
+
+
+#: a run of record's settings on its served node (`served_verdicts.sh`'s OF_RECORD), untied
+OF_SERVED = {"OF_RECORD": "1", "PRODUCT": "remote-network-no-pouw", "CERTIFIER_FRONT": "front"}
+OF = "of record (OF_RECORD): every input its of_record reads is set"
+OF_LACKS = "PREFLIGHT: OF_RECORD makes this run one of record, and it lacks what its onsite record's of_record reads: "
+OF_PRODUCT = "PRODUCT=remote-network-no-pouw untied (H1_TIE empty) at V3C_LAW subset:1, not PRODUCT="
+OF_SPLIT = ("the split certifier behind its front (CERTIFIER_FRONT, CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD), "
+            "whose network case the composite reads")
+OF_COMPOSITE = "COMPOSITE unset, not empty: the composite is the record's verdict"
+OF_COINS = ("PP_CHALLENGER=gate:USER@HOST with PP_PEER and PP_CHALLENGER_KEY (a non-empty file), the live challenger "
+            "V3c's audit draws on, without which of_record is conditional on live coins")
+OF_KEY = ("CERTIFIER_KEY and SITE_REGISTRATION, each a non-empty file (the auditor's record of its network certifier "
+          "and its registration), without which certifier-key stays open")
+OF_DRAWS = ("CR_SCAN_DELTA its default 2^-64, and CERTIFIER_CHAIN_CMD naming none of CR_N2_DRAW, CR_N2_CMD, "
+            "CR_SCAN_DELTA, CR_SCAN_ARGS, CR_SCAN_CMD, --draw, --chain-cmd, the chain's draws of record, without which "
+            "a chain draw can be open (of_record then conditional on live coins) or the scan's bound at another δ")
+OF_CHAIN = ("CR_N2_DRAW, CR_N2_CMD and CR_SCAN_CMD unset and no --draw in CR_SCAN_ARGS where the chain runs, without "
+            "which a chain draw can be open and of_record conditional on live coins")
+#: `FAKE_RECORDS_AUDIT` on the live challenger gate:research@auditor, its session on cpu-6, under `_auditors`' key
+#: record
+GATE_AUDIT = FAKE_RECORDS_AUDIT.replace(
+    '    assert a[a.index("--challenger") + 1] == "local", a\n',
+    '    assert [a[a.index(f) + 1] for f in ("--challenger", "--peer")] == ["gate:research@auditor", "cpu-6"], a\n'
+    '    assert open(a[a.index("--challenger-key") + 1]).read() == "{}", a\n')
+
+
+def _auditors(tmp_path: Path, peer: str, **files: str) -> dict[str, str]:
+    """What a run of record reads on the node that runs V3c's audit and writes the onsite record: the live challenger,
+    its session on ``peer``, and the auditor's records (its challenger's key record, its network certifier's key and its
+    site registration), each a file written here holding ``{}`` unless ``files`` names it ``missing`` or ``empty``."""
+    auditor = tmp_path / "auditor"
+    auditor.mkdir(exist_ok=True)
+    env = {"PP_CHALLENGER": "gate:research@auditor", "PP_PEER": peer}
+    for v in ("PP_CHALLENGER_KEY", "CERTIFIER_KEY", "SITE_REGISTRATION"):
+        f = auditor / f"{v.lower()}.json"
+        if files.get(v) != "missing":
+            f.write_text("" if files.get(v) == "empty" else "{}")
+        env[v] = str(f)
+    return env
+
+
+@pytest.mark.parametrize("extra, said", [
+    ({}, f"512 GB: the serve's lease 60 min, capped at 128 GB; {OF}"),
+    ({"NODE_MEM_GB": "196", "PP_CHALLENGER": None, "CERTIFIER_KEY": None, "CR_N2_DRAW": "8"},
+     f"196 GB: the serve's lease 60 min, capped at 128 GB; {SHORT}, {DEFERS}; {OF}, but the follow-on's, which its own "
+     "preflight checks"),
+])
+def test_a_run_of_record_passes_its_preflight_with_every_input_its_onsite_records_of_record_reads(
+        tmp_path, extra, said):
+    """OF_RECORD makes a run one of record: untied remote-network-no-pouw behind the network certifier's front, with the
+    split certifier drawing everything, the composite, the live challenger and the auditor's records on the node that
+    runs V3c's audit, the chain and the onsite record. A node short of V3c's audit's memory defers them to a follow-on,
+    which holds the challenger, the auditor's records and the chain's environment in its own preflight, so this node
+    needs none of them; PREFLIGHT_ONLY's line says which."""
+    env = {**OF_SERVED, **_auditors(tmp_path, "vy-dc-h200-2"), **extra}
+    rc, lines, order, limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
+                                    HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", **env)
+    assert (rc, lines, order, limits) == (0, [f"PREFLIGHT passed on vy-dc-h200-2, {said}. {ONLY}"], [], [])
+
+
+@pytest.mark.parametrize("extra, files, said", [
+    ({"PRODUCT": "remote-network"}, {}, f"{OF_PRODUCT}remote-network at subset:1"),
+    (TIES, {}, f"{OF_PRODUCT}remote-network-no-pouw under H1_TIE at stratified:1"),
+    ({"V3C_LAW": "stratified:1"}, {}, f"{OF_PRODUCT}remote-network-no-pouw at stratified:1"),
+    ({"CERTIFIER_FRONT": None}, {}, OF_SPLIT),
+    ({"CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None}, {}, OF_SPLIT),
+    ({"COMPOSITE": ""}, {}, OF_COMPOSITE),
+    ({"PP_CHALLENGER": "local"}, {}, OF_COINS),
+    ({"PP_PEER": None}, {}, OF_COINS),
+    ({}, {"PP_CHALLENGER_KEY": "missing"}, OF_COINS),
+    ({"CERTIFIER_KEY": None}, {}, OF_KEY),
+    ({}, {"SITE_REGISTRATION": "empty"}, OF_KEY),
+    ({"CR_SCAN_DELTA": "1e-06"}, {}, OF_DRAWS),
+    ({"CERTIFIER_CHAIN_CMD": f"{CHAIN} CR_N2_DRAW=8"}, {}, OF_DRAWS),
+    ({"CERTIFIER_CHAIN_CMD": f"{CHAIN} --chain-cmd true"}, {}, OF_DRAWS),
+    ({"CR_N2_DRAW": "8"}, {}, OF_CHAIN),
+    ({"CR_SCAN_ARGS": "--group 2 --draw 8"}, {}, OF_CHAIN),
+    ({"CR_SCAN_CMD": "true"}, {}, OF_CHAIN),
+    ({"COMPOSITE": "", "PP_PEER": None}, {"CERTIFIER_KEY": "empty"}, f"{OF_COMPOSITE}; {OF_COINS}; {OF_KEY}"),
+])
+def test_the_preflight_refuses_a_run_of_record_lacking_any_input_its_onsite_records_of_record_reads(
+        tmp_path, extra, files, said):
+    """A run of record lacking any input its onsite record's of_record reads is refused before anything is kept, built
+    or served, with one line naming each it lacks: another product, H1's tie or another law; the network certifier's
+    front or the split certifier; the composite set empty; a chain draw short of everything, by CR_SCAN_DELTA or
+    CERTIFIER_CHAIN_CMD's text, or by the chain's environment here; the live challenger, its peer or its key record; or
+    the auditor's record of its network certifier or its registration, missing or empty."""
+    env = {**OF_SERVED, **_auditors(tmp_path, "vy-dc-h200-2", **files), **extra}
+    rc, lines, order, limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
+                                    HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", **env)
+    assert (rc, lines, order, limits) == (3, [OF_LACKS + said], [], [])
+    assert not (tmp_path / "root").exists() and not (tmp_path / "fw").exists()
+
+
+def _deferred_of_record(tmp_path: Path) -> subprocess.CompletedProcess:
+    """`_deferred`'s deferral of a run of record: untied remote-network-no-pouw behind the network certifier's front,
+    its kept run in the serve dir, the split certifier's commands set, at one engine step a window and one token a
+    request."""
+    _kept(tmp_path)
+    return _deferred(tmp_path, tied=False, **OF_SERVED, CERTIFIER_CHAIN_CMD=CHAIN, CERTIFIER_PERIOD_CMD=NETWORK_PERIOD,
+                     WINDOW_STEPS="1", MAX_TOKENS="1")
+
+
+@pytest.mark.parametrize("extra, files, line", [
+    ({"PP_CHALLENGER": None}, {}, OF_LACKS + OF_COINS),
+    ({"PP_PEER": None}, {}, OF_LACKS + OF_COINS),
+    ({}, {"PP_CHALLENGER_KEY": "missing"}, OF_LACKS + OF_COINS),
+    ({"CERTIFIER_KEY": None}, {}, OF_LACKS + OF_KEY),
+    ({"SITE_REGISTRATION": None}, {}, OF_LACKS + OF_KEY),
+    ({"CR_N2_DRAW": "8"}, {}, OF_LACKS + OF_CHAIN),
+    ({"CR_SCAN_ARGS": "--draw 8"}, {}, OF_LACKS + OF_CHAIN),
+    ({"OF_RECORD": ""}, {}, f"{CLASH} OF_RECORD: unset it"),
+])
+def test_a_run_of_records_follow_on_refuses_to_run_without_the_live_challenger_or_the_auditors_records(
+        tmp_path, extra, files, line):
+    """The follow-on of a run of record runs V3c's audit, the certifier's chain and the onsite record, so its own
+    preflight refuses it without the live challenger, its peer or its key record, or the auditor's record of its
+    network certifier or its registration, or with a chain environment that draws short of everything, before its
+    copy's check or V3c's audit; and it runs of record as the deferral was, so an environment that says otherwise is
+    refused as any other setting is."""
+    assert _deferred_of_record(tmp_path).returncode == 0
+    rc, lines, order, _limits = _follow(tmp_path, **{**_auditors(tmp_path, "cpu-6", **files), **extra})
+    assert (rc, lines, order) == (3, [line], []), lines
+
+
+def test_a_run_of_record_defers_untied_and_its_follow_on_writes_the_onsite_record_at_remote_network_no_pouw(tmp_path):
+    """Untied remote-network-no-pouw behind the network certifier's front, of record, on a node short of V3c's audit's
+    memory: the deferral records OF_RECORD with the product, the untied law and the split certifier's commands, and the
+    follow-on, on the live challenger with the auditor's records, says whose coins its audit draws on (the
+    challenger's), runs V3c's audit at subset:1 with no tie on the challenger through its peer under its key record,
+    the chain and the certifier's period check after it, the record at the product on the served node's pieces and the
+    certifier's answer from here, remote-network-no-pouw's composite alone over the network certifier's case checked
+    here, and the onsite record last, at the served run's WINDOW_STEPS and MAX_TOKENS with the auditor's records and no
+    --h1-tie."""
+    run = _deferred_of_record(tmp_path)
+    assert run.returncode == 0, run.stderr
+    d, dd, out = tmp_path / "serve", tmp_path / "serve" / "private" / "deferred", tmp_path / "out"
+    names = "OF_RECORD PRODUCT H1_TIE V3C_LAW ONSITE"
+    said = subprocess.run(["bash", "-c", f'. "$1"; for v in {names}; do printf "%s=%s\\n" "$v" "${{!v}}"; done', "_",
+                           str(dd / "deferred.env")], check=True, capture_output=True, text=True).stdout
+    assert dict(x.split("=", 1) for x in said.splitlines()) == {
+        "OF_RECORD": "1", "PRODUCT": "remote-network-no-pouw", "H1_TIE": "", "V3C_LAW": "subset:1", "ONSITE": "1"}
+    stubs = _composing_tree(tmp_path)
+    auditors = _auditors(tmp_path, "cpu-6")
+    rc, lines, order, limits = _follow(tmp_path, composite=(HERE.parent / "served_composite.sh").read_text(),
+                                       records_audit=GATE_AUDIT,
+                                       PATH=f"{_hosts(tmp_path)}:{stubs}:{tmp_path / 'bin'}:{os.defpath}", **auditors)
+    pieces = out / "pieces" / "certifier"
+    assert rc == 0 and order == ["audit", "period", "chain", "period-check", "record",
+                                 "composite-remote-network-no-pouw", "onsite"], (lines, order)
+    assert limits == ["180m", "4h", "12h", "60m"]
+    assert ("COINS sampled proofs: the challenger gate:research@auditor (peer cpu-6); the other protocols' as the "
+            "served node's COINS line names them") in lines
+    assert _audited(tmp_path) == {"--law": "subset:1", "--tie": None, "--tie-prefix": None, "--ports": "16"}
+    record = json.loads((tmp_path / "order.record").read_text())
+    assert (record[record.index("--pieces") + 1], record[record.index("--product") + 1]) == (
+        str(pieces.parent), "remote-network-no-pouw")
+    assert json.loads((pieces / "answer.json").read_text()) == {"protocol": "verity/certifier/v9", "verdict": "accept"}
+    handed = json.loads((d / "private" / "composite" / "remote-network-no-pouw" / "private" / "argv.json").read_text())
+    assert handed == [str(pieces)]
+    assert sorted(f.relative_to(out).as_posix() for f in (out / "composite").rglob("*") if f.is_file()) == [
+        "composite/remote-network-no-pouw/composite.json"]
+    assert json.loads((tmp_path / "order.onsite").read_text()) == [
+        str(out), "--window-steps", "1", "--max-tokens", "1", "--certifier-key", auditors["CERTIFIER_KEY"],
+        "--site-registration", auditors["SITE_REGISTRATION"]]
+    assert lines[-1].startswith("ONSITE ") and not _window_data(out, 7), lines
+
 
 
 @pytest.mark.parametrize("product", ["remote", "remote-network"])
