@@ -1,6 +1,27 @@
 /-
-Remote Verity (`verity/remote/v0`): what the verifier establishes with no hardware of its own at the site. Its
-subprotocols are the inference-only policy (`NciCheck.Protocol.protocol`, `verity/inference-only/v0`: the declared
+Remote Verity: what the verifier establishes with no hardware of its own at the site. Two composites, which differ in
+their work subprotocol:
+
+* `Core.Remote.V1.protocol` (`verity/remote/v1`), **the composite of record**: the inference-only policy, Pearl+'s run
+  verdict (`PouwCheck.PearlPlus.Protocol.protocol`, `verity/pouw/pearl-plus/v1`: a served run's retained passes, the
+  work-weighted draw over their tiles at δ = 1/100, and the run's credit at Pearl's assumption) and sampled proofs.
+  `Verity.Registration.Composite.remote` reads it.
+* `Core.Remote.protocol` (`verity/remote/v0`), **development**: H1's period credit in Pearl+'s place, with the
+  period's windows tied to the run's record (`windows`). It is no verifier: `Core.Composites` doesn't list it, so no
+  configuration names it, and no soundness theorem covers it; it runs only as its development executable (`remote`).
+
+The id bumps with the work subprotocol, because an accepted answer of each means something different: v0's work is a
+period's credit, every window credited all or nothing and named on the run's record, and v1's is one run's credit at
+Pearl's assumption at δ, published as Pearl+'s `Credit`; a caller that read a v0 answer as v1's would read an H1 period
+credit as a Pearl+ run's. The cases each takes are different too (v1's work case is `verity/pouw/pearl-plus/v1`'s), so
+neither accepts the other's input.
+
+v1 ties the run Pearl+ credits to the run's record (`V1.run`): Pearl+'s commitment names the digest of the registration
+record its run is on, which must be the record the policy and sampled proofs commit to, so a run naming another record
+rejects v1 whatever the subprotocols answer. Pearl+'s check doesn't read the record it names: that the passes' tiles are
+the ones the record registers is not yet checked.
+
+v0's subprotocols are the inference-only policy (`NciCheck.Protocol.protocol`, `verity/inference-only/v0`: the declared
 circuit divides into inference blocks within their gate and fresh-input budgets, which reads only the declared circuit
 and the registered information and so needs no hardware at the site), work by proof of useful work over the period
 (`PouwCheck.Period.protocol`, `verity/pouw/period/v1`: the period's windows credited all or nothing), onsite's work
@@ -21,6 +42,7 @@ import CoreComposition.Cases
 import CoreComposition.Tie
 import NciCheck.Protocol
 import PouwCheck.Period
+import PouwPearlPlus.Protocol
 import SampledProofs.OneStage
 import SampledProofs.OneStageZk
 import VStarRecursive.Sampled
@@ -137,5 +159,85 @@ private def strayOf (policy : String) (rs : List String) : Option String :=
 #guard (strayOf (record 1) [record 0]).isSome
 -- a window naming no Commit record leaves the period to refuse it
 #guard strayOf (record 0) [record 0, "{}"] == none
+
+/-! ## `verity/remote/v1`, the composite of record -/
+
+namespace V1
+
+/-- v1's subprotocols, in the order of their ids: Pearl+'s run verdict is the work component. -/
+def components : List BlobProtocol :=
+  [NciCheck.Protocol.protocol, PouwCheck.PearlPlus.Protocol.protocol, VStar.Recursive.Sampled.protocol]
+
+/-- The subprotocols that must commit to one record: the policy and sampled proofs, as in v0. -/
+def tied : List String := [NciCheck.Protocol.protocolId, VStar.Recursive.Sampled.protocol.id]
+
+/-- The record Pearl+'s case names: its commitment's `record`, as Pearl+ decodes it. -/
+def runRecord (k : Case) : Option (List ByteArray) :=
+  (PouwCheck.PearlPlus.Protocol.commitmentOf k.commitment).toOption.map fun c => [c.record]
+
+/-- Pearl+'s run on the policy's record. -/
+def run : Tie :=
+  ⟨"record", [(NciCheck.Protocol.protocolId, policyRecord), (PouwCheck.PearlPlus.Protocol.protocolId, runRecord)]⟩
+
+def ties : List Tie := [run]
+
+def protocol : BlobProtocol := tiedSameB "verity/remote/v1" tied ties components
+
+private def answerV1 (xs : List Case) : Answer := Cases.answerCases (protocol.on #[]) xs ⟨(List.replicate 64 0).toArray⟩
+
+#guard orderedB components
+#guard components.map (·.id) ==
+  ["verity/inference-only/v0", "verity/pouw/pearl-plus/v1", "verity/sampled-proofs/v1"]
+#guard tied.all fun s => (components.map (·.id)).contains s
+
+-- every subprotocol refuses its case: v1 rejects on each, and makes nothing public
+private def allRefused : Answer := answerV1 (components.map refused)
+#guard allRefused.protocol == "verity/remote/v1"
+#guard allRefused.verdict == .reject
+#guard allRefused.published.isNone && allRefused.profile.isNone
+#guard allRefused.reason.map (·.startsWith "verity/inference-only/v0 reject: params: ") == some true
+#guard allRefused.reason.map (contains · "; verity/pouw/pearl-plus/v1 reject: params: ") == some true
+#guard allRefused.reason.map (contains · "; verity/sampled-proofs/v1 reject: params: ") == some true
+#guard (answerV1 [refused NciCheck.Protocol.protocol, refused VStar.Recursive.Sampled.protocol]).reason ==
+  some "params: verity/pouw/pearl-plus/v1 is missing"
+-- H1's period is not v1's work subprotocol: a v0 case set is refused
+#guard (answerV1 [refused NciCheck.Protocol.protocol, refused PouwCheck.Period.protocol,
+    refused VStar.Recursive.Sampled.protocol]).reason ==
+  some "params: verity/pouw/period/v1 is not a component of this composition"
+-- and Pearl+ is not v0's
+#guard (answer [refused NciCheck.Protocol.protocol, refused PouwCheck.PearlPlus.Protocol.protocol,
+    refused VStar.Recursive.Sampled.protocol]).reason ==
+  some "params: verity/pouw/pearl-plus/v1 is not a component of this composition"
+
+-- the policy's record is not sampled proofs': v1 rejects on the tie, whatever the subprotocols answer
+private def recordsOfV1 (policy sampled : String) : Answer :=
+  answerV1 [committing NciCheck.Protocol.protocol policy, refused PouwCheck.PearlPlus.Protocol.protocol,
+    committing VStar.Recursive.Sampled.protocol sampled]
+#guard (recordsOfV1 (record 0) (record 0)).reason.map
+  (·.startsWith "verity/inference-only/v0 reject: params: ") == some true
+#guard (recordsOfV1 (record 1) (record 0)).verdict == .reject
+#guard (recordsOfV1 (record 1) (record 0)).reason.map
+  (·.startsWith "record: verity/inference-only/v0 committed ") == some true
+
+-- Pearl+'s run names a record by its digest, the policy's and sampled proofs' digest of it; a run naming another
+-- record is a stray
+#guard run.names.all fun n => (components.map (·.id)).contains n.1
+private def digestOf (r : String) : ByteArray :=
+  ((policyRecord (committing NciCheck.Protocol.protocol r)).bind (·.head?)).getD ByteArray.empty
+private def pearlOn (r : String) : Case :=
+  { refused PouwCheck.PearlPlus.Protocol.protocol with
+    commitment := ("{\"manifests\":[{}],\"record\":\"" ++ Flock.hexOf (digestOf r) ++ "\"}").toUTF8 }
+private def runStray (policy run : String) : Option String :=
+  V1.run.strays [committing NciCheck.Protocol.protocol policy, pearlOn run]
+#guard (digestOf (record 0)).size == 64
+#guard runRecord (pearlOn (record 0)) == policyRecord (committing NciCheck.Protocol.protocol (record 0))
+#guard runStray (record 0) (record 0) == none
+#guard (runStray (record 1) (record 0)).map (·.startsWith "record: verity/inference-only/v0 committed ") == some true
+#guard (runStray (record 1) (record 0)).map (contains · ", verity/pouw/pearl-plus/v1 committed ") == some true
+-- a run whose commitment doesn't decode leaves Pearl+ to refuse it
+#guard V1.run.strays [committing NciCheck.Protocol.protocol (record 0), refused PouwCheck.PearlPlus.Protocol.protocol] ==
+  none
+
+end V1
 
 end Core.Remote
