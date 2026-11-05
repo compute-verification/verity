@@ -74,8 +74,11 @@ verdict of none, continues with none. -/
 theorem forIn_mem_none {α γ δ : Type} (f : α → Option γ × δ → Id (ForInStep (Option γ × δ))) (Q : α → Prop)
     (hf : ∀ x b, Q x → b.1 = none → match (f x b).run with | .yield b' => b'.1 = none | .done _ => False)
     (l : List α) (hl : ∀ x ∈ l, Q x) (b : Option γ × δ) (hb : b.1 = none) : (forIn l b f).run.1 = none :=
-  (forIn_id_inv f (fun _ => False) l (fun _ b => b.1 = none) b hb fun i hi b hI =>
-    hf l[i] b (hl _ (List.getElem_mem hi)) hI).elim id False.elim
+  (forIn_id_inv f (fun _ => False) l (fun _ b => b.1 = none) b hb fun i hi b hI => by
+    have h := hf l[i] b (hl _ (List.getElem_mem hi)) hI
+    revert h
+    generalize (f l[i] b).run = s
+    cases s <;> exact id).elim id False.elim
 
 /-- `Prog.orderViolation`'s walk so far: no verdict, the queue read up to `at_`, and the queue the root and the entries
 of each Definition seen. -/
@@ -87,7 +90,7 @@ def WalkInv (P : Prog) (b : Option (Option Lean.Json) × Std.HashSet ℕ × Arra
 nodes, when the root and every composite's nodes number under the fuel. -/
 theorem orderViolation_none (P : Prog) (hord : ordered P = true)
     (hfuel : 2 + ∑ d ∈ Finset.range P.defs.size, walkW P d ≤ Flock.Steps.FUEL) : P.orderViolation = none := by
-  have hok : ∀ d, (P.defs[d]!).prim = false → ∀ k < (P.defs[d]!).body.nodes.size,
+  have hok : ∀ d : ℕ, (P.defs[d]!).prim = false → ∀ k < (P.defs[d]!).body.nodes.size,
       nodeOrdered (P.defs[d]!).body k = true := by
     intro d hp k hk
     by_cases hd : d < P.defs.size
