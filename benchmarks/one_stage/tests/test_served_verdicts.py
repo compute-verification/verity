@@ -1555,6 +1555,7 @@ def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verd
     assert (profile["lane"], profile["key_sha512"], profile["period"], profile["session"]) == ("vllm", pin, "p-pc", SID)
     assert profile["draw_session"] == DSID and profile["source"] == DRAW_COIN
     assert profile["lean"]["work"] == PEARL_LEAN_WORK and row["piece"]["piece"] == "pearlplus" and "development" not in row
+    assert row["answer_from"] == S.PEARLPLUS_FROM and "the prover side's" in S.PEARLPLUS_FROM
     (tmp_path / "serve").mkdir()
     assert S.main(["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1", "--sampled-proofs",
                    str(audit), "--pieces", str(pieces), "--out", str(tmp_path / "record"), "--node", "vy-dc-h200",
@@ -1563,6 +1564,7 @@ def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verd
     rec = json.loads((tmp_path / "record" / "block-record.json").read_text())
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
     assert (line["composed"], line["verdicts"]["PoUW"], line["check"]) == ("accept", "accept", {})
+    assert line["answers"]["PoUW"] == S.PEARLPLUS_FROM
     assert rec["legs"]["pouw"]["protocol"] == S.PEARLPLUS_PROTOCOL
     assert rec["legs"]["pouw"]["quantity"] == {"symbol": "W_cert", "value": 5400, "unit": "work", "tiles": 40}
 

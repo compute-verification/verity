@@ -170,7 +170,8 @@ hand-off (``composed_on``'s ``from`` `HANDED_FROM`), and is refused on the recor
 takes sampled proofs' row from this host's own run of its Lean verifier on the records audit's v2 case, its proofs and
 public files (`lean_sampled_row`, ``--sampled-exe`` or built here), not from the summary and audit record the served node
 wrote, so an edit to those leaves the row as it is. Each row with an answer says where it came from (its
-``answer_from``, and the line's ``answers``): `LEAN_HERE`, or `AS_WRITTEN` and the files it was read from.
+``answer_from``, and the line's ``answers``): `LEAN_HERE`, `PEARLPLUS_FROM` for PoUW's where Pearl+'s piece is its
+verdict of record, or `AS_WRITTEN` and the files it was read from.
 ``--tree SHA`` names the commit of the tree that composed it, and ``--tree-on`` the branch its host pinned it from, both in
 ``composed_on`` (the compose gate's: its pin line's).
 
@@ -326,6 +327,10 @@ AS_WRITTEN = "as the served node wrote it"
 #: ... sampled proofs' under ``record --sampled-lean`` (`lean_sampled_row`)
 LEAN_HERE = ("recomputed on this host by the Lean verifier (vstar-recursive sampled check) from the proofs and public "
              "files of the window's sampled proofs case, not the served node's answer")
+#: ... PoUW's where Pearl+'s piece is its verdict of record (`pearlplus_of_record`)
+PEARLPLUS_FROM = (f"{AS_WRITTEN} (its piece files in pouw/): Pearl+'s Lean verdict of record (PouwCheck.PearlPlus), "
+                  "the prover side's, run on the served node over the retained passes; no auditor host re-checks it, since "
+                  "its case (the passes' manifests with their salt key, and the opened tiles' rows) is witness")
 #: ... the files the served node wrote that a row's answer is otherwise read from, by runner name (a piece's: its dir)
 WRITTEN = {"integrity": "the records audit's summary.json and window/audit.json"}
 #: A served run's witness, by a path's part (`witness`): what a compose hand-off never carries, each with why
@@ -1790,7 +1795,7 @@ def piece_row(key: str, pieces_dir: Path, run: str | None = None, *, sampled_pro
         if key == "work" and doc.get("piece") == "pearlplus" and doc.get("verdict") == "accept":
             answer, failed = pearlplus_of_record(doc, d, sampled_proofs, key_sha512, lane)
             if answer is not None:
-                return {**row_of(owner, answer, d, run), "piece": doc}
+                return {**row_of(owner, answer, d, run), "piece": doc, "answer_from": PEARLPLUS_FROM}
             return {"verdict": "missing", "owner": owner, "why": f"{DEV_VERDICT}: {failed}"[:2000], "development": doc}
         if doc.get("verdict") in ("accept", UNCLAIMED):
             own = doc.get("why") or DEV_WHY
