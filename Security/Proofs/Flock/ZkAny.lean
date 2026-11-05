@@ -75,6 +75,6 @@ after a stream's last round, until the next stream's first, the rep's frame kept
 the stream's rounds, as many as its count; and on a frame with no scheduled rounds yet, its algebraic phase as many
 rounds as the placeholder's; and at a stream's first round on a frame as its start pushed it, its round in the place
 its schedule so far gives and the frame after it keeping that schedule; and `EnvPre` from the relay's invariant at
-the deployed loop, given its step at the model's slots, the step at every other slot proved. -/
+the deployed loop, given its step at the model's slots, the step at the `Hello` and at every other slot proved. -/
 
 @[expose] public section
