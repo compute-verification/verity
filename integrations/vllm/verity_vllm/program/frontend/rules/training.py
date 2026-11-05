@@ -9,15 +9,15 @@ Arithmetic is the reference vocabulary's (`ref_prims`): each element-wise op is 
 sum in blocks). Matrix products and the element-wise ops of `Binary` and `Unary` also take bf16 values: a product is
 `LinearRef_v1{DT=bf16}` (operands widened, the f32 dot, its result rounded), and an element-wise op widens its bf16 operands to f32
 (`Bf16ToF32_v1`, exact), performs the f32 operation and rounds a bf16 result once (`F32ToBf16Rn_v1`), as torch CPU's bf16 kernels
-do; where torch's bf16 kernel rounds otherwise, the rule refuses. At a compute capability `cc`, a bf16 `mm` is instead F.linear's
-GEMM as that GPU's cuBLAS computes it (`Matmul`): the route its capture fitted (`cublas_bf16.train_route`), each k16 step the tensor
-core's dot (`HopperBF16WgmmaDot16_v1`); `add`, `sub`, `mul` and `div` are the GPU's (`Binary`); a vector norm or a sum of a
+do; where torch's bf16 kernel rounds otherwise, the rule refuses. At a compute capability `cc`, a bf16 `mm` or `mv` is instead
+F.linear's GEMM as that GPU's cuBLAS computes it (`Matmul`): the route its capture fitted (`cublas_bf16.train_route`), each k16 step
+the tensor core's dot (`HopperBF16WgmmaDot16_v1`); `add`, `sub`, `mul` and `div` are the GPU's (`Binary`); a vector norm or a sum of a
 whole tensor is its `reduce_kernel`'s (`rules.training_reduce.FullReduce`); and the conversions to bf16 and to and from f16 and a
 `kthvalue` are its own (`rules.training_masks`). A random draw is an input of the step, committed with its seed
 (`rules.training_draws.Draw`). A training op with no Definition to lower it to is refused with the Definition it needs
 (`_log_softmax`: a correctly-rounded f32 log, `F32LogRn`).
 
-    training_rules(min_view_leaves, cc) -> RuleSet     the training rule set
+    training_rules(min_view_leaves, cc, tf32) -> RuleSet     the training rule set
 
 Views and static float tensors are `rules.training_views`'s, matrix products `rules.training_matmul`'s, comparisons, masks,
 integer sums, conversions, table lookups and `kthvalue` `rules.training_masks`'s, draws `rules.training_draws`'s and the helpers
@@ -538,24 +538,25 @@ class EmbeddingDenseBackward(_TrainRule):
         ctx.record(self, node, {"tokens": M, "V": V, "H": H}, emitted=f"(SelectF32_v1 + F32Add_v1) x{M * V * H}")
 
 
-def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None) -> RuleSet:
+def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, tf32: bool = False) -> RuleSet:
     """The default rules with the training rules: views of static floats, `BoxPermute` (views of more than `min_view_leaves` leaves
     that are not one run) and `Matmul` before them, the element-wise, reduction, softmax, loss, embedding, comparison, mask,
     integer, conversion, lookup, order-statistic and draw rules after. `min_view_leaves` is 0 by default: the default views write a
     permuted view of fewer leaves than their limit as a list of its leaves, which the root's replay then substitutes as one
-    reference part per leaf.  `cc` (`cublas_bf16.TRAIN_CC`): bf16 `mm`s as that GPU's cuBLAS computes them (`Matmul`), every add,
-    sub, mul and div as its kernels do (`Binary`) and the conversions to bf16 and to and from f16 as its kernels do (`Cast`), both
-    placed first, before the default rules' CPU kinds, a whole tensor's vector norm or sum as its `reduce_kernel` does
-    (`FullReduce`, before `Reduce`) and `kthvalue` as its radix select does (`KthValue`), in the rule set
-    ``training-cc<major>.<minor>``."""
+    reference part per leaf.  `cc` (`cublas_bf16.TRAIN_CC`): bf16 `mm`s and `mv`s as that GPU's cuBLAS computes them (`Matmul`),
+    every add, sub, mul and div as its kernels do (`Binary`) and the conversions to bf16 and to and from f16 as its kernels do
+    (`Cast`), both placed first, before the default rules' CPU kinds, a whole tensor's vector norm or sum as its `reduce_kernel`
+    does (`FullReduce`, before `Reduce`) and `kthvalue` as its radix select does (`KthValue`), in the rule set
+    ``training-cc<major>.<minor>``.  `tf32`, at a `cc`: the step sets cuda.matmul.allow_tf32, which the traced graph doesn't
+    show, so its f32 `mm`s and `bmm`s are cuBLAS's TF32 GEMMs, which `Matmul` refuses (``training-cc<major>.<minor>-tf32``)."""
     from verity_vllm.program.frontend.rules import DEFAULT_RULES
 
-    first = [StaticFloats(), BoxPermute(min_view_leaves), Matmul(cc)] + ([Binary(cc), Cast(cc)] if cc else [])
+    first = [StaticFloats(), BoxPermute(min_view_leaves), Matmul(cc, tf32)] + ([Binary(cc), Cast(cc)] if cc else [])
     last = ([] if cc else [Binary()]) + [Unary(), Lerp(), Addcmul(), FullReduce(cc), Reduce(), IntSum(), SafeSoftmax(),
                                          SoftmaxBackward(), LogSoftmax(), LogSoftmaxBackward(), NllLossForward(),
                                          NllLossBackward(), EmbeddingDenseBackward(), Compare(), Logic(), Where(), Clamp(cc),
                                          Index(), KthValue(cc), Draw()] + ([] if cc else [Cast()])
-    name = "training" if cc is None else f"training-cc{cc[0]}.{cc[1]}"
+    name = "training" if cc is None else f"training-cc{cc[0]}.{cc[1]}" + ("-tf32" if tf32 else "")
     return RuleSet(name, first + list(DEFAULT_RULES.rules) + last, list(DEFAULT_RULES.families))
 
 
