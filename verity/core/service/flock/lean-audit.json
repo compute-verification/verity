@@ -2,6 +2,7 @@
  "roots": [
   "Flock",
   "FlockVerify",
+  "Flock.Test.JsonParse",
   "Flock.Test.Full",
   "Flock.Test.Labels",
   "Flock.Test.PortRoots",
@@ -66,17 +67,23 @@
   "Flock.Test.TmplRows",
   "Flock.Test.TmplLayout",
   "Flock.Test.TmplFold",
+  "Flock.Test.TmplScope",
   "Flock.Test.NetAt",
   "Flock.Test.MaskLog",
   "Flock.Test.CoinsTree",
   "Flock.Test.Canon",
   "Flock.Test.ZkIdentity",
   "Flock.Test.FrameStep",
+  "Flock.Test.SessionPlace",
   "Flock.Test.RegionBytes",
   "Flock.Test.PlainHidden",
+  "Flock.Test.Served",
   "Flock.Test.RequireLink",
   "Flock.Test.FV3",
-  "VStar"
+  "VStar",
+  "Flock.Annot",
+  "Flock.AnnotExpand",
+  "Flock.Test.Annot"
  ],
  "exempt": {
   "Flock.Test.RecCap": "a test, not a proof: its #guards evaluate whole V* lists in the interpreter, 1,097-1,246 s to build on every check node (26 Oct), so it gated every Flock-touching Lean check by about 18 min; built right after landing by verity/ml/flock/tests/test_lean_rec_cap_guards.py instead (top 06:18Z 26 Oct, Daniel's 11 Oct tier for parts whose cold run is over 10 min; proofs' PRF-190 adds a small-shape guard back to the roots)",
@@ -85,7 +92,8 @@
   "FlockWitness": "the flock-witness executable's entry point, one line; its command is Flock.Witness.cmd, audited under Flock",
   "FlockRecSparse": "the flock-rec-sparse executable's entry point, one line; its command is Flock.RecSparseCmd.cmd, audited under Flock",
   "FlockRecOpening": "the flock-rec-opening executable's entry point, one line; its command is Flock.RecOpeningCmd.cmd, audited under Flock",
-  "FlockRecLinks": "the flock-rec-links executable's entry point, one line; its command is Flock.RecLinksCmd.cmd, audited under Flock"
+  "FlockRecLinks": "the flock-rec-links executable's entry point, one line; its command is Flock.RecLinksCmd.cmd, audited under Flock",
+  "FlockFrameTape": "the flock-frame-tape executable's entry point, a test's: Flock.Firewall.Frame.cmdWith (audited under Flock) with the rep's draws read from a file, so verity/ml/flock/tests/test_firewall_frame.py knows the pads the frame masks with"
  },
  "assumptions": {
   "Flock.Firewall.Contract.FirewallComputes": {
@@ -98,7 +106,9 @@
   }
  },
  "meaning": ["Flock"],
- "escapes": {},
+ "escapes": {
+  "Flock.Test.JsonParse.shw.go": "partial def: the test's printer of a parsed value (each number's mantissa and exponent), recursing through nested arrays and objects, to compare `JsonParse.parse` with `Lean.Json.parse` as text; no proof is about it, and the verifier never calls it"
+ },
  "verifier": {
   "entries": ["Flock.verifyWith", "Flock.Zk.verifyWith", "Flock.Stmt.setupTablesWith"],
   "stop": [
@@ -315,11 +325,11 @@
  "compile_time": {
   "Flock.With.ReturnsWalk": {
    "why": "returns_walk, a tactic macro (syntax and macro_rules only) that expands to core tactics (repeat', first, extract_lets, with_reducible apply/refine/exact, intro, assumption, split, conv whnf) and the Flock.With.Returns lemmas; it runs no IO and declares nothing a guarantee reads",
-   "digest": "a206a0d98b6fbc91a700dfa76d1f1a4f6673c81eaa39c2ba32c6adbf34fb6f7e"
+   "digest": "540d97049a8b854a49f0e45c89636813b527f14632d1e7d4d5104d76b3a7295c"
   },
   "Flock.With.SimWalk": {
    "why": "sim_walk, a tactic macro (syntax and macro_rules only) that expands to core tactics (repeat, first, extract_lets, with_reducible apply, assumption, split) and the Flock.With.Sim lemmas; it runs no IO and declares nothing a guarantee reads",
-   "digest": "a8e200749627e43047a3b3daead3d9bdec6666fcf581dd18463c0e4f2dd0c812"
+   "digest": "ab59f66358ef1ff8f7a15e4d9c19e007e677c7f5b1b2d250fabbf695d8a5b1f4"
   }
  },
  "layers": {

@@ -1,5 +1,7 @@
-import Proofs.Flock.VBridge.AccChain
-import Proofs.Flock.VBridge.Decode
+module
+
+public import Proofs.Flock.VBridge.AccChain
+public import Proofs.Flock.VBridge.Decode
 
 /-!
 # VBridge G item 4: the running sums' unit facts, from the units' decoded columns
@@ -23,6 +25,8 @@ facts about one copy of one unit in a layer agreeing with the registrant, the de
   `acc0`, `acc1` carry the rep's message elements and are registered reads of `rec-acc`'s rows at the rep's ends, the
   elements are those rows' (`ReadsEnds`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.AccChain
 

@@ -21,7 +21,7 @@ dependencies the node does not keep.
 `--records` is a lane's fast path to the records in PKG's `lean-audit.json` (PKG: its path, or a unique part of one):
 `tools/verity/lean/check.py --build --no-replay --no-runs` on PKG in a tree kept per slot, which prints what the audit prints,
 `--update`'s review included, after a build of only what changed since that slot's last run, which restores each module the
-node's artifact cache holds under its sha256 key (`check.py --artifacts`, `lean_audit.LakeArtifacts`, the one the audit
+node's artifact cache holds under its key (`check.py --artifacts`, `lean_audit.LakeArtifacts`, the one the audit
 reads); each package whose check.py passes, its report saying it built in the sandbox, puts the modules its build
 compiled there. It first waits for one of the
 node's Lean slots of pool `build` (`lean_slot.py`; pool `any` never stands in for it), never one of the `audit` pool's, where

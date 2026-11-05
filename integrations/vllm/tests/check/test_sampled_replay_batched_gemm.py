@@ -62,7 +62,7 @@ def test_the_evaluator_cites_the_h200_capture_at_every_shape_and_m_the_capture_r
     both configurations at every (K, N) and M the capture script runs, among them the TP8 Commit's prefill (256) and decode (1) M; and
     the Definition's conformance cites the same record."""
     from tests.properties import glm53_bf16_gemm_capture_gpu as X
-    from verity_vllm.program.frontend.conformance import status_of
+    from verity.ml.circuits.defs import conformance_label
 
     p = rows.EVALUATOR_PROVENANCE["BatchedGemm_v1"]
     assert p is batched_gemm_rows.PROVENANCE
@@ -73,7 +73,7 @@ def test_the_evaluator_cites_the_h200_capture_at_every_shape_and_m_the_capture_r
     assert all(c["mismatch"] == 0 and c["words"] == c["B"] * c["N"] * sum(c["M"]) for c in p["cases"].values())
     assert {1, 256} <= set(X.LINEAR_M)
     for d in (CB.BatchedGemmWord, CB.BatchedGemm):
-        assert status_of(d.conformance) == "exact-model-tested"
+        assert conformance_label(d.conformance) == "exact-model-tested"
         assert p["record"][:16] in d.conformance and p["art"]["record"] in d.conformance
 
 

@@ -32,6 +32,16 @@ about = "compile and kernel-replay {name}"
 resources = { cores = 1, mem_gb = 6, disk_gb = 1 }
 timeout_s = 900
 
+[family.lean-env]
+files = ["**/lean-toolchain", "**/lake-manifest.json"]
+kinds = ["lean-env"]
+env = "lean"
+about = "make {name}'s lean env and kernel-replay its modules (scope {scope})"
+# the largest env's whole replay (the toolchain, Mathlib and ArkLib with theirs), its env made cold, with headroom;
+# `cores` is the replay's LEAN_NUM_THREADS
+resources = { cores = 16, mem_gb = 32, disk_gb = 60 }
+timeout_s = 7200
+
 [family.lean-lock]
 files = ["**/lean-audit.json"]
 kinds = ["lean-lock"]
@@ -41,8 +51,8 @@ resources = { cores = 1, mem_gb = 8, disk_gb = 2 }
 timeout_s = 1800
 
 [family.circuit-binding]
-# one task per circuit-check catalog binding, each from the records one circuit-catalog task builds, and one coverage task;
-# a task's cores and mem_gb are its circuit-check's --jobs and --mem-gb
+# one task per circuit-check catalog binding, each from its slice of the records one circuit-catalog task builds, and one
+# coverage task; a task's cores and mem_gb are its circuit-check's --jobs and --mem-gb
 files = ["**/*.circuit-check.py", "**/*.circuit-check.json", "tools/verity/circuit_check/**"]
 kinds = ["circuit-binding", "circuit-coverage", "circuit-catalog"]
 env = "py"
@@ -51,9 +61,12 @@ resources = { cores = 4, mem_gb = 32, disk_gb = 2 }
 timeout_s = 3600
 
 [family.build]
+# the files its tasks are made from (suites.py's AFTER_LEAN and the suites' pyproject.toml: lean-suites', whose inputs are the
+# whole tree)
 files = ["verity/core/service/flock/**", "verity/ml/flock/check_build.sh", "verity/ml/flock/live/**",
-         "verity/ml/flock/flock-*-b684b12.patch", "verity/ml/flock/verifier/**"]
-kinds = ["lean-build", "flock-circuit-build", "lean-agreement"]
+         "verity/ml/flock/flock-*-b684b12.patch", "verity/ml/flock/verifier/**", "tools/verity/check/suites.py",
+         "**/pyproject.toml"]
+kinds = ["lean-build", "flock-circuit-build", "lean-agreement", "lean-unit-cut", "lean-suites", "flock-rust-tests"]
 env = "lean"
 about = "{kind} {name}"
 # a check slot's (`tools/verity/check/tasks.py`'s SLOT); the agreement needs 24 GB at least (`check.AGREEMENT_MIN_GB`)

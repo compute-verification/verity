@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.Split
-import Proofs.Flock.Claims.ZK.Blind
+module
+
+public import Proofs.Flock.Claims.ZK.Split
+public import Proofs.Flock.Claims.ZK.Blind
 
 /-!
 # The switched prover's rep source
@@ -9,7 +11,8 @@ the honest prover the source is `srcE`, what the session reads from its cut (`ta
 is the switched prover's at the workers' values: the same reading of the switched cut (`RefSession.swCutOf`).
 
 * `swCutE`, `swCutOf_eq`: the switched prover's cut at the opened coins, on `w`'s table witnesses, the workers' values
-  `v` and the tape `τ`, as `cutE` has the honest prover's.
+  `v` and the tape `τ`, as `cutE` has the honest prover's; `swCutOf` reads the values at what the workers see of `τ`
+  (`RefSession.seenOf`).
 * `swSrcE`: what the session reads from it (`tabSrcCut`), as `srcE` reads `cutE`.
 * `swCutE_masked`: the switched cut's masked values are `Table.swPre`'s at the table's base.
 * `Table.swPre_masked`: where the worker's rows hold (`RowsAt`), they are the worker's own, its view's at its clear
@@ -18,10 +21,12 @@ is the switched prover's at the workers' values: the same reading of the switche
   worker's view's.
 -/
 
+@[expose] public section
+
 /-- **Where the worker's rows hold, the switched pre-final view's masked values are its own.** -/
 theorem FlockSoundness.ZK.Table.swPre_masked {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (w : W) (v : T.Vals) (ω : T.Rand)
-    (hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1.2.1) : (T.swPre w v ω).masked = (T.onVals.view (w, v) ω).masked := by
+    (hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1) : (T.swPre w v ω).masked = (T.onVals.view (w, v) ω).masked := by
   rw [FlockSoundness.ZK.Table.swPre, if_pos hr]
   rfl
 
@@ -48,8 +53,9 @@ noncomputable def swCutE (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : 
     (swExeOf (tabC PE x) (czExe PE x c) (wtOf PE x w) v (UE.tape x τ).1 (UE.tape x τ).2.1)
 
 theorem swCutOf_eq (nr : Msg → ℕ → ℕ) (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
-    (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) :
-    (session nr (tableData PE QE UE)).swCutOf x c (wtOf PE x w) v τ = swCutE x c w v τ := rfl
+    (v : (∀ j, ZkView.Seen (tabC PE x j).z) → ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) :
+    (session nr (tableData PE QE UE)).swCutOf x c (wtOf PE x w) v τ =
+      swCutE x c w (v ((session nr (tableData PE QE UE)).seenOf x τ)) τ := rfl
 
 /-- **What the deployed session reads from the switched cut** (`tabSrcCut`), as `srcE` reads `cutE`. -/
 noncomputable def swSrcE (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
@@ -70,7 +76,7 @@ theorem swCutE_masked_of_rowsAt (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x))
     (hr : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, v j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1) :
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1) :
     (swCutE x c w v τ j).masked =
       (((tabC PE x j).T (czExe PE x c j)).tab.onVals.view (wtOf PE x w j, v j)
         (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0)).masked := by

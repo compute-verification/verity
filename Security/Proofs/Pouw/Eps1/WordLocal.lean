@@ -1,4 +1,6 @@
-import Proofs.Pouw.Eps1.Basics
+module
+
+public import Proofs.Pouw.Eps1.Basics
 
 /-!
 # Theorem B in M3: a word-local program's instructions
@@ -13,6 +15,8 @@ word is a function of the row's segment and a column-side one of the column. The
 general instance, the row's segment too), so at least 7 column-side slots and 1 row-side slot (8 and 8) feed `L`, and
 `block_outside_slots` caps `L`'s outside slots at `2|L| + 1`.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Eps1.WordLocal
 

@@ -1,6 +1,8 @@
-import Definitions.Accounting.Guarantees.Responder
-import Proofs.Accounting.Actual.Confidence
-import Proofs.Accounting.Memory
+module
+
+public import Definitions.Accounting.Guarantees.Responder
+public import Proofs.Accounting.Actual.Confidence
+public import Proofs.Accounting.Memory
 
 /-!
 # B2, proved
@@ -26,6 +28,8 @@ from a fixed first tick (`ticksIn_of_start`: on time, challenge `j`'s tick is in
 `B2Determines` reads `z` back with a left inverse of the length code (`decodeLen`). `B2_fixed` and `B2Audit_fixed`
 check that the fixed-schedule statements are the case `t x = t`, `τ = 0`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs
 

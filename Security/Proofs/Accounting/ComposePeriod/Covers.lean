@@ -1,6 +1,8 @@
-import Proofs.Accounting.Compose.ServiceCovers
-import Proofs.Accounting.Compose.CircuitWork
-import Definitions.Accounting.ComposePeriod
+module
+
+public import Proofs.Accounting.Compose.ServiceCovers
+public import Proofs.Accounting.Compose.CircuitWork
+public import Definitions.Accounting.ComposePeriod
 
 /-!
 # The period layer's covers: `ServiceCovers` with a window index
@@ -21,6 +23,8 @@ positions, cuts, coins and writers are that layer's tagged by `w`, so a late edg
 layer's inside its window (`CoversProof.late_one`), and `Compose.CoversProof.reaches_of_rtg` and
 `Compose.WorkProof.writerReads`, which read only the static half, give the cone and the writers.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.ComposePeriod
 

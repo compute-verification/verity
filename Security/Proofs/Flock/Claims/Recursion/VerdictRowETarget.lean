@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.NonVacuous
-import Proofs.Flock.Claims.Recursion.VerdictRowEDeployed
+module
+
+public import Proofs.Flock.Claims.Recursion.NonVacuous
+public import Proofs.Flock.Claims.Recursion.VerdictRowEDeployed
 
 /-!
 # Row E's target at the decision
@@ -15,6 +17,8 @@ fixes that `acc` and proves `TargetE` from the `rec-open` pieces' running sums.
   (row G from the dense inner statement, row C's sizes from the reading and the `shaped` base check, and row C's
   points `DecAt.points_eq`); `UnitSums` is `unitSums_of_pieces` at pieces that hold where `P` does.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
