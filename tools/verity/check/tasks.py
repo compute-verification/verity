@@ -8,8 +8,9 @@
 `verity tasks ...` runs these.  The schema and what each field means is the "Tasks" section of this directory's README.md.
 
 `list` prints the task graph of this checkout, uncommitted files included: one task per part of the shard planner's
-(`check.auto_parts`), so each test suite (`pytest:SUITE`, `lean-suites:SUITE`; one measured past `--split-s` seconds, default
-`shards.SPLIT_S`, in M parts by test file, `pytest:SUITE:K/M`), each Lake package's audit (`lean-audit:PKG`), circuit-check's
+(`check.auto_parts`), so each test suite (`pytest:SUITE`, `lean-suites:SUITE`; one that declares `[tool.verity.tests] parts =
+P` in its P parts by test id, `lean-suites:SUITE:K/P`; one measured past `--split-s` seconds, default `shards.SPLIT_S`, in M
+parts by test file, `pytest:SUITE:K/M`), each Lake package's audit (`lean-audit:PKG`), circuit-check's
 `circuit-check:K/M`, the builds (`lean-build`, `flock-circuit-build`) and the other jobs whole.  `--kind
 after-landing` (the default) is every job, `--kind preflight` those on the merge gate.  Each task's argv is the one `check.py`
 builds for that part alone (`check.groups`), with this tree's path, the check's cache and the run's output directory written

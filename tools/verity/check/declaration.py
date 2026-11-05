@@ -24,10 +24,13 @@ no `merge_requires`, and no job on the gate `needs` it or runs `after` it.
 
 A `[[plan]]` is one way to split a check over several machines (`check.py --shard K/N`): `shards`, a list of N lists of
 selectors, shard K the K-th. A selector is a job's name, or for a job in `SPLIT`, `JOB:PART` (one part: for `lean-audit`, a
-Lake package with a `lean-audit.json`; for `circuit-check`, one of its `shards`, `K/N`) or `JOB:*` (its parts no other
-selector of the plan names). Every job on the gate is in exactly one shard, whole or, for a split job, as named parts plus
-exactly one `*`, and a job off it in at most one (a shard skips it either way: a plan that keeps it puts it back on the gate
-in one line); a shard holds what each of its jobs `needs` or runs `after`; no two plans have the same N (`plans`). `resolve`
+Lake package with a `lean-audit.json`; for `circuit-check`, one of its `shards`, `K/N`; for `lean-suites`, one of its suites,
+or of one that declares `[tool.verity.tests] parts = P`, one of its parts by test id, `SUITE:K/P`) or `JOB:*` (its parts no
+other selector of the plan names). Every job on the gate is in exactly one shard, whole or, for a split job, as named parts
+plus exactly one `*`, and a job off it in at most one (a shard skips it either way: a plan that keeps it puts it back on the
+gate in one line); a shard that holds a job whole holds what it `needs` or runs `after`, and one that holds parts of a split
+job runs what that job needs beside them when it doesn't hold it (`check.py`'s `groups`: lean-build beside lean-suites'
+parts), whose verdict `research merge` takes only from the shard that holds it; no two plans have the same N (`plans`). `resolve`
 turns a plan into each shard's parts for a tree's parts (`parts_of`), and refuses a named part the tree lacks, so a stale plan
 stops the shard instead of leaving something out. A spec package's audit and its provers' (the packages its `proved_in` names,
 which it audits beside it from one build of theirs) resolve onto one shard, the one the plan names any of them in, so the
@@ -51,7 +54,9 @@ FIELDS = {"name": str, "owner": str, "group": int, "halts": bool, "halts_on": st
 REQUIRED = ("name", "owner", "group")
 #: the jobs a plan may split, and what their parts are
 SPLIT = {"lean-audit": "the Lake packages with a lean-audit.json",
-         "circuit-check": "its `shards` shards of its targets, K/N (`circuit-check --all --shard K/N`)"}
+         "circuit-check": "its `shards` shards of its targets, K/N (`circuit-check --all --shard K/N`)",
+         "lean-suites": "its suites (`suites.AFTER_LEAN`), one that declares `[tool.verity.tests] parts = P` as its P parts by "
+                        "test id, SUITE:K/P (`suites.py SUITE:K/P`)"}
 #: the split jobs whose parts are shards of their own work, as many as their `shards` say (none given: the job runs whole)
 SHARDED = ("circuit-check",)
 #: the parts a check runs alone (`check.py PART...`)
@@ -191,10 +196,9 @@ def parse_plans(text: str, jobs: list[Job], source: str = "ci.toml") -> dict[int
             named = [x for _, x in p if x != "*"]
             if p and ([x for _, x in p].count("*") != 1 or len(set(named)) != len(named)):
                 raise DeclarationError(f"{where}: {j.name}'s parts must be named once each, with exactly one {j.name}:*")
-        for k, shard in enumerate(shards, 1):
-            held = {s.partition(":")[0] for s in shard}
-            for j in jobs:
-                if j.name in held and (missing := [n for n in (*j.needs, *[j.after] * bool(j.after)) if whole.get(n) != [k]]):
+        for j in jobs:
+            for k in whole.get(j.name, []):
+                if missing := [n for n in (*j.needs, *[j.after] * bool(j.after)) if whole.get(n) != [k]]:
                     raise DeclarationError(f"{where}: shard {k} runs {j.name}, which needs {', '.join(missing)} in the same shard")
         out[len(shards)] = tuple(tuple(s) for s in shards)
     return out

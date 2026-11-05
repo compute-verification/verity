@@ -2221,7 +2221,7 @@ def main(argv: list[str] | None = None) -> int:
                     f"lean-suites step): don't run `lake build` before {', '.join(AFTER_LEAN)}")
     ap.add_argument("--files", metavar="K/M", help="run part K (or parts K1,K2,...) of each named suite's test files in M parts, "
                     "packed longest first by their recorded seconds (`partition`), or of its tests by id where it declares "
-                    "[tool.verity.tests] parts = M; a suite named NAME:K/M takes its own")
+                    "[tool.verity.tests] parts = M; every part runs the suite whole; a suite named NAME:K/M takes its own")
     ap.add_argument("--timings", type=Path, metavar="FILE", help="the timing record --files partitions by: JSON {suite name: {test "
                     "file: seconds}} (default: this machine's per-test record, `file_times`)")
     a = ap.parse_args(argv)
@@ -2299,6 +2299,8 @@ def main(argv: list[str] | None = None) -> int:
                       f"caller named: their timing records differ, so its files would be others; pass the caller's --timings",
                       file=sys.stderr)
                 return 2
+            if parts[s].ks == tuple(range(1, m + 1)):       # every part is the suite: run whole, its pass answers for each part
+                del parts[s]
     plan, ids_of = [], {}
     meta, lock, provided = metadata() + list(STORE_READS), locked(), set(importlib.metadata.packages_distributions())
     for s in chosen:

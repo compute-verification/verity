@@ -130,7 +130,9 @@ def test_an_auto_plan_of_this_tree_runs_each_gated_part_in_one_shard_and_a_stale
     want = CHECK.auto_parts()
     assert sorted(doc["all"]) == sorted(want) and not any(p.partition(":")[0] in CHECK.OFF_GATE for p in want)
     assert {"pytest", "lean-suites"}.isdisjoint(want), "the test steps are split by suite"
-    assert all(p.partition(":")[2] in CHECK.AFTER_LEAN for p in want if p.startswith("lean-suites:"))
+    assert all(S.suite_part(p)[1] in CHECK.AFTER_LEAN for p in want if p.startswith("lean-suites:"))
+    assert [p for p in want if S.suite_part(p)[1] == "verity-core-composition"] == [
+        f"lean-suites:verity-core-composition:{k}/3" for k in (1, 2, 3)], "a suite that declares parts by test id is those parts"
     needs = CHECK.shard_needs()
     for spec in ("lean-audit:Security", "lean-audit:Security/Properties"):
         assert needs[spec] == ["lean-audit:Security/Proofs"], "a spec's audit audits its provers beside it"
@@ -233,7 +235,9 @@ def test_combine_accepts_an_auto_plans_shards_with_the_builds_they_ran_beside_th
     assert next(s for s in steps if s["step"] == "lean-build")["run_id"] == ids[owner - 1], "the build's part is its owner's"
 
 
-def test_combine_refuses_auto_shards_of_two_plans_and_a_hand_plans_shard_running_a_job_outside_its_parts(tmp_path, monkeypatch):
+def test_combine_refuses_auto_shards_of_two_plans_and_takes_a_hand_plans_builds_beside_its_parts(tmp_path, monkeypatch):
+    """A hand-written plan's shard runs lean-build beside lean-suites' parts as an auto plan's does: the build's verdict is its
+    own shard's."""
     from research.merge import shard_set
 
     def other_plan(k, sh):
@@ -247,9 +251,10 @@ def test_combine_refuses_auto_shards_of_two_plans_and_a_hand_plans_shard_running
     def no_plan(k, sh):
         del sh["plan"]
 
-    store, tree, head, ids, _ = _auto_shards(tmp_path / "hand", monkeypatch, no_plan)
-    assert shard_set(store, tree, head, ids, "check", COMMAND) == (
-        None, "the shards ran different steps outside their parts, or a job outside its parts")
+    store, tree, head, ids, doc = _auto_shards(tmp_path / "hand", monkeypatch, no_plan)
+    steps, why = shard_set(store, tree, head, ids, "check", COMMAND)
+    owner = next(k for k, s in enumerate(doc["shards"], 1) if "lean-build" in s["parts"])
+    assert why is None and next(s for s in steps if s["step"] == "lean-build")["run_id"] == ids[owner - 1]
 
 
 def test_record_sends_an_auto_shard_its_plan_as_the_runs_input_and_refuses_one_without(tmp_path, monkeypatch):

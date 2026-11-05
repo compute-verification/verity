@@ -204,7 +204,7 @@ def _status(root: Path, tmp_path: Path, name: str, *args: str) -> dict:
 def test_the_parts_by_test_id_run_each_test_once_and_join_to_the_whole_suites_verdict(tmp_path, S, G):
     """A suite that declares `parts = 4`: every part collects every file and runs the tests whose node id hashes to it, one that
     holds none of the tests collected passes, and the parts join as the whole suite does; each part's pass is keyed by the
-    suite's inputs and the part, and a pass of the whole suite answers for each."""
+    suite's inputs and the part, a pass of the whole suite answers for each, and a run of every part is the whole suite's."""
     ids = [f"tests/{f}::{t}" for f, text in TESTS.items() for t in re.findall(r"^def (test_\w+)", text, re.M)]
     assert {k: sorted(i for i in ids if G.id_part(i, 4) == k) for k in BY_ID} == BY_ID
     root = tmp_path / "tree"
@@ -229,6 +229,10 @@ def test_the_parts_by_test_id_run_each_test_once_and_join_to_the_whole_suites_ve
     (root / "pkg" / "tests" / "helpers.py").write_text("VALUE = 1  # an input of every part\n")
     assert _status(root, tmp_path, "pkg")["status"] == "passed"
     assert _status(root, tmp_path, "pkg:2/4")["status"] == "cached", "a pass of the whole suite answers for each of its parts"
+    every = tmp_path / "every.json"
+    p = _run(root, tmp_path, *[f"pkg:{k}/4" for k in (3, 1, 4, 2)], "--json", str(every))
+    (row,) = json.loads(every.read_text())
+    assert (p.returncode, row["status"], "part" in row) == (0, "cached", False), "every part named, in any order, is the suite"
 
     p = _run(root, tmp_path, "pkg:1/2")
     assert p.returncode == 2 and "declares [tool.verity.tests] parts = 4, by test id: name its parts pkg:K/4" in p.stderr, p.stderr
@@ -272,11 +276,17 @@ def test_the_planner_splits_a_suite_past_the_threshold_into_parts_priced_by_thei
     assert SH.split_m(901, 10) == 2 and SH.split_m(6608, 789) == 8 and SH.split_m(10875, 5) == 5
     assert SH.suite_part("pytest:verity/core/protocols/pouw:2/3") == ("pytest", "verity/core/protocols/pouw", "2/3")
     assert SH.suite_part("pytest:a") == ("pytest", "a", None)
-    names = SH.parts(["pytest", "lean-suites", "lean-build"], ["a", "b", "f"], ["f"], True, {"a": 3, "f": 2})
+    names = SH.parts(["pytest", "lean-suites:f", "lean-build"], ["a", "b", "f"], ["f"], True, {"a": 3, "f": 2})
     assert names == ["pytest:a:1/3", "pytest:a:2/3", "pytest:a:3/3", "pytest:b", "lean-suites:f:1/2", "lean-suites:f:2/2",
                      "lean-build"]
     got = SH.priced(names, {"a": 3000.0, "b": 10.0}, {}, {}, {"pytest:a:1/3": 0.5, "pytest:a:2/3": 0.3, "pytest:a:3/3": 0.2})
     assert got == {"pytest:a:1/3": 1500.0, "pytest:a:2/3": 900.0, "pytest:a:3/3": 600.0, "pytest:b": 10.0}
+    ids = ["lean-suites:g:1/2", "lean-suites:g:2/2"]
+    assert SH.parts(["pytest", "lean-suites:f", *ids], ["b", "f", "g"], ["f", "g"], True, {"f": 2}, {"b": 2, "g": 2}) == [
+        "pytest:b:1/2", "pytest:b:2/2", "lean-suites:f:1/2", "lean-suites:f:2/2", *ids], "a suite's own parts by test id"
+    assert SH.parts(["pytest", "lean-suites:f", *ids], ["b", "f", "g"], ["f", "g"], False, {}, {"g": 2}) == [
+        "pytest:b", "pytest:f", "pytest:g:1/2", "pytest:g:2/2"], "no Lean verifier: pytest runs the lean suites"
+    assert SH.priced(ids, {"g": 300.0}, {}, {}) == {p: 150.0 for p in ids}, "a part by test id at 1/P of its suite"
     ts = SH.tasks(names, got)
     split = {"a": {"m": 3, "digest": "d1"}}
     doc = SH.plan(ts, {}, 4, splits=split)
