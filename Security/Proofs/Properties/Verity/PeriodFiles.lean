@@ -13,15 +13,16 @@ import Proofs.Flock.Soundness.TmplUnitNet
 /-!
 # The circuit files among the blobs, and read by path
 
-Where nothing among the blobs `bs ++ cs` collides under SHA-512, the blobs `bs ++ cs` hold every blob `bs` hold, at the
-same digest (`BlobSup`), and each of `cs` at its own. Where the network certifier's period, with its files `cs` read by
-path, accepts (`NetworkCheck.Period.readCheck`), no file of `cs` is a pinned lookup table, so the sampled proofs find the
-same tables among `bs ++ cs` as among `bs`, and the period finds its listed files among `bs ++ cs` as `cs` itself
-(`filesOf_eq`). The sampled proofs' check is monotone in the blobs where it accepts (`sampled_mono`): where the blobs `bs`
-hold every file it reads, so do `bs ++ cs`, at the same digests. A composite whose every component accepts as much on the
-larger blobs answers the same (`BlobCovers`, `tiedSameB_covers`), so at remote with the network certifier and without
-PoUW the verifier of record answers on `bs ++ cs` as the executable that reads `cs` by path answers on `bs`
-(`agree_rnn`).
+Where nothing among the blobs `bs ++ cs` collides under SHA-512, the blobs `bs ++ cs` hold every blob `bs` hold, at
+the same digest (`BlobSup`), and each of `cs` at its own. Where the network certifier's period, with its files `cs`
+read by path, accepts (`NetworkCheck.Period.readCheck`), no file of `cs` is a pinned lookup table, so the sampled
+proofs find the same tables among `bs ++ cs` as among `bs`, and the period finds its listed files among `bs ++ cs` as
+`cs` itself (`filesOf_eq`). The sampled proofs' check is monotone in the blobs where it accepts (`sampled_mono`):
+where the blobs `bs` hold every file it reads, so do `bs ++ cs`, at the same digests. Every other component reads no
+blobs. A composite whose every component accepts as much on the larger blobs answers the same (`BlobCovers`,
+`tiedSameB_covers`), so at onsite, and at remote with the network certifier with PoUW or without, the verifier of
+record answers on `bs ++ cs` as the executable that reads `cs` by path answers on `bs` (`agree_onsite`, `agree_rn`,
+`agree_rnn`, `Verity.circuit_files_by_path_agree`).
 -/
 
 namespace Verity.PeriodFiles
@@ -206,7 +207,8 @@ theorem get_of {B : Core.Blobs} {d w : String} {x y b : ByteArray} (hu : Flock.u
   all_goals rfl
 
 theorem get_ok_inv {B : Core.Blobs} {d w : String} {b : ByteArray} (h : B.get d w = .ok b) :
-    ∃ x y, Flock.unhex d = .ok x ∧ x.size = 64 ∧ Flock.hexOf x = d ∧ B.entries.find? (·.1 == x) = some (y, b) := by
+    ∃ x y, Flock.unhex d = .ok x ∧ x.size = 64 ∧ Flock.hexOf x = d ∧
+      B.entries.find? (·.1 == x) = some (y, b) := by
   unfold Core.Blobs.get at h
   cases hu : Flock.unhex d with
   | error e => rw [hu] at h; cases h
@@ -548,6 +550,10 @@ theorem covers_onBlobs (P : Core.BlobProtocol) (B1 B2 : Core.Blobs)
     BlobCovers (P.onBlobs B2) (P.onBlobs B1) :=
   ⟨fun p c e => P.checkBlobs p c e B2, rfl, hm⟩
 
+theorem covers_plain (P : Core.Protocol) (B1 B2 : Core.Blobs) :
+    BlobCovers (P.withoutBlobs.onBlobs B2) (P.withoutBlobs.onBlobs B1) :=
+  covers_onBlobs P.withoutBlobs B1 B2 fun _ _ _ _ _ h => h
+
 theorem covers_id {Pa Pb : Core.Protocol} (h : BlobCovers Pa Pb) : Pa.id = Pb.id := by
   obtain ⟨g, rfl, -⟩ := h
   rfl
@@ -555,17 +561,16 @@ theorem covers_id {Pa Pb : Core.Protocol} (h : BlobCovers Pa Pb) : Pa.id = Pb.id
 theorem answer_eq_of (P : Core.Protocol) {a b e : ByteArray} {p : P.Params} {c : P.Commitment} {ev : P.Evidence}
     {pub : P.Public} {prof : P.Profile} (hp : (canonicalJson a >>= P.params) = .ok p)
     (hc : P.commitment b = .ok c) (he : P.evidence e = .ok ev) (hk : P.check p c ev = .accept pub prof) :
-    P.answer a b e = { protocol := P.id, verdict := .accept, reason := none, digest := some (P.digest c),
-      published := some (P.publicJson pub), profile := some (P.profileJson prof) } := by
-  unfold Core.Protocol.answer
-  simp only [hp, hc, he, hk] <;> rfl
+    P.answer a b e =
+      { protocol := P.id, verdict := .accept, reason := none, digest := some (P.digest c),
+        published := some (P.publicJson pub), profile := some (P.profileJson prof) } := by
+  simp only [Core.Protocol.answer, hp, hc, he, hk]
 
 theorem answer_of_covers {Pa Pb : Core.Protocol} (h : BlobCovers Pa Pb) {a b e : ByteArray}
     (hy : (Pb.answer a b e).verdict = .accept) : Pa.answer a b e = Pb.answer a b e := by
   obtain ⟨g, rfl, hg⟩ := h
   obtain ⟨p, c, ev, hp, hc, he, pub, prof, hk⟩ := Properties.Composition.answerAccepts Pb a b e hy
-  rw [answer_eq_of Pb hp hc he hk, answer_eq_of { Pb with check := g } hp hc he (hg p c ev pub prof hk)]
-  all_goals rfl
+  exact (answer_eq_of { Pb with check := g } hp hc he (hg p c ev pub prof hk)).trans (answer_eq_of Pb hp hc he hk).symm
 
 /-- Each of `xs` covers its place in `ys`. -/
 inductive AllCover : List Core.Protocol → List Core.Protocol → Prop
@@ -606,7 +611,7 @@ theorem committedBy_covers {xs ys : List Core.Protocol} (h : AllCover xs ys) (s 
       have ih' := ih ev
       unfold Core.Composition.committedBy at ih' ⊢
       simp only [List.zip_cons_cons, List.find?_cons]
-      cases hb : (Pb.id == s) <;> (try simp only [hb]) <;> first | rfl | exact ih'
+      cases hb : (Pb.id == s) <;> (try simp only) <;> first | rfl | exact ih'
 
 theorem strays_covers {xs ys : List Core.Protocol} (h : AllCover xs ys) (ss : List String)
     (ev : List Core.Composition.Case) : Core.Composition.strays ss xs ev = Core.Composition.strays ss ys ev := by
@@ -643,7 +648,7 @@ theorem run_covers {xs ys : List Core.Protocol} (h : AllCover xs ys) {ps : List 
   have e1 : ps.map (·.id) = xs.map (·.id) := h1.trans h.ids.symm
   have e2 : ev.map (·.id) = xs.map (·.id) := h2.trans h.ids.symm
   unfold Core.Composition.run
-  simp only [e1, e2, ne_eq, eq_self_iff_true, not_true_eq_false, ↓reduceIte]
+  simp only [e1, e2, ne_eq, not_true_eq_false, ↓reduceIte]
   split
   · rename_i P n' k' heq
     obtain ⟨y, hy⟩ := h.zip_snd _ _ (List.mem_of_find?_eq_some heq)
@@ -824,7 +829,6 @@ theorem zk_run_mono (hB : BlobSup B1 B2) (p : SampledProofs.OneStageZk.Own) (pub
   blob_ext (first
     | with_reducible exact ExtP.of_ext (get_ext hB _ _)
     | ((with_reducible apply zk_fold_bind hB) <;> exact fun a b hab hb => by
-        (try dsimp only at hab)
         (repeat' split at hab) <;> (cases hab <;> exact hb)))
 
 theorem treesHeld_ext (hB : BlobSup B1 B2) (ts : Array SampledProofs.Challenger.LoggedTree)
@@ -1081,7 +1085,7 @@ theorem rnn_at {p c e : ByteArray} {bs cs : Array ByteArray} {n : Nat} (hinj : B
         (NetworkCheck.Period.readProtocol n (NetworkCheck.Period.ofRead n cs)).withoutBlobs).map
           (·.onBlobs (Core.Blobs.ofArray bs))) :=
     AllCover.cons (net_covers hinj)
-      (AllCover.cons (covers_onBlobs _ _ _ fun _ _ _ _ _ h => h) (AllCover.cons (sampled_covers hsup) AllCover.nil))
+      (AllCover.cons (covers_plain _ _ _) (AllCover.cons (sampled_covers hsup) AllCover.nil))
   exact answer_of_covers (tiedSameB_covers hcov) h'
 
 /-- **At remote with the network certifier and without PoUW, the verifier of record agrees with the executable that
@@ -1093,4 +1097,122 @@ theorem agree_rnn : Verity.CircuitFilesByPathAgreeAt .remoteNetworkNoPouw := by
   · exact Or.inl (rnn_at (n := NetworkCheck.Period.scanCount
       (Core.PeriodFiles.certifierParams ((canonicalJson p).toOption.getD .null))) (inj_of_noCollision hcol) h)
 
+/-! ## Remote with the network certifier and PoUW -/
+
+theorem rn_at {p c e : ByteArray} {bs cs : Array ByteArray} {n : Nat} (hinj : BlobInj (bs ++ cs))
+    (h : ((Core.RemoteNetwork.protocolWith
+      (NetworkCheck.Period.readProtocol n (NetworkCheck.Period.ofRead n cs)).withoutBlobs).answer p c e bs).verdict =
+        .accept) :
+    Core.RemoteNetwork.protocol.answer p c e (bs ++ cs) =
+      (Core.RemoteNetwork.protocolWith
+        (NetworkCheck.Period.readProtocol n (NetworkCheck.Period.ofRead n cs)).withoutBlobs).answer p c e bs := by
+  have h' : (((Core.Composition.tiedSameB Core.RemoteNetwork.protocolId Core.Remote.tied
+      Core.RemoteNetwork.ties (Core.RemoteNetwork.componentsWith
+        (NetworkCheck.Period.readProtocol n (NetworkCheck.Period.ofRead n cs)).withoutBlobs)).onBlobs
+          (Core.Blobs.ofArray bs)).answer p c e).verdict = .accept := h
+  obtain ⟨p0, c0, e0, pub0, prof0, h0⟩ := head_accepts h'
+  have h0' : NetworkCheck.Period.readCheck n (NetworkCheck.Period.ofRead n cs) p0 c0 e0 = .accept pub0 prof0 := h0
+  have hsup := sup_of (bs := bs) (noTable_of_read h0')
+  have hcov : AllCover
+      ((Core.RemoteNetwork.componentsWith NetworkCheck.Period.blobProtocol).map
+        (·.onBlobs (Core.Blobs.ofArray (bs ++ cs))))
+      ((Core.RemoteNetwork.componentsWith
+        (NetworkCheck.Period.readProtocol n (NetworkCheck.Period.ofRead n cs)).withoutBlobs).map
+          (·.onBlobs (Core.Blobs.ofArray bs))) :=
+    AllCover.cons (net_covers hinj) (AllCover.cons (covers_plain _ _ _)
+      (AllCover.cons (covers_plain _ _ _) (AllCover.cons (sampled_covers hsup) AllCover.nil)))
+  exact answer_of_covers (tiedSameB_covers hcov) h'
+
+/-- **At remote with the network certifier and PoUW, the verifier of record agrees with the executable that reads the
+period's circuit files by path**, unless SHA-512 collides among the blobs. -/
+theorem agree_rn : Verity.CircuitFilesByPathAgreeAt .remoteNetwork := by
+  intro p c e bs cs h
+  by_cases hcol : Hash.CollisionIn Verity.sha512 ((bs ++ cs).toList.map (·.data.toList))
+  · exact Or.inr hcol
+  · exact Or.inl (rn_at (n := NetworkCheck.Period.scanCount
+      (Core.PeriodFiles.certifierParams ((canonicalJson p).toOption.getD .null))) (inj_of_noCollision hcol) h)
+
+/-! ## Onsite -/
+
+theorem onsite_at {p c e : ByteArray} {bs cs : Array ByteArray} {n : Nat} (hinj : BlobInj (bs ++ cs))
+    (h : ((Core.Onsite.protocolWith
+      (NetworkCheck.Period.readProtocol n (NetworkCheck.Period.ofRead n cs)).withoutBlobs).answer p c e bs).verdict =
+        .accept) :
+    Core.Onsite.protocol.answer p c e (bs ++ cs) =
+      (Core.Onsite.protocolWith
+        (NetworkCheck.Period.readProtocol n (NetworkCheck.Period.ofRead n cs)).withoutBlobs).answer p c e bs := by
+  have h' : (((Core.Composition.tiedSameB "verity/onsite/v0" Core.Onsite.tied [Core.Onsite.store]
+      (Core.Onsite.componentsWith
+        (NetworkCheck.Period.readProtocol n (NetworkCheck.Period.ofRead n cs)).withoutBlobs)).onBlobs
+          (Core.Blobs.ofArray bs)).answer p c e).verdict = .accept := h
+  have hcov : AllCover
+      ((Core.Onsite.componentsWith NetworkCheck.Period.blobProtocol).map
+        (·.onBlobs (Core.Blobs.ofArray (bs ++ cs))))
+      ((Core.Onsite.componentsWith
+        (NetworkCheck.Period.readProtocol n (NetworkCheck.Period.ofRead n cs)).withoutBlobs).map
+          (·.onBlobs (Core.Blobs.ofArray bs))) :=
+    AllCover.cons (net_covers hinj) (AllCover.cons (covers_plain _ _ _) (AllCover.cons (covers_plain _ _ _)
+      (AllCover.cons (covers_plain _ _ _) (AllCover.cons (covers_plain _ _ _) (AllCover.cons (covers_plain _ _ _)
+        (AllCover.cons (covers_plain _ _ _) AllCover.nil))))))
+  exact answer_of_covers (tiedSameB_covers hcov) h'
+
+/-- **At onsite, the verifier of record agrees with the executable that reads the period's circuit files by path**,
+unless SHA-512 collides among the blobs. -/
+theorem agree_onsite : Verity.CircuitFilesByPathAgreeAt .onsite := by
+  intro p c e bs cs h
+  by_cases hcol : Hash.CollisionIn Verity.sha512 ((bs ++ cs).toList.map (·.data.toList))
+  · exact Or.inr hcol
+  · exact Or.inl (onsite_at (n := NetworkCheck.Period.scanCount
+      (Core.PeriodFiles.certifierParams ((canonicalJson p).toOption.getD .null))) (inj_of_noCollision hcol) h)
+
+/-! ## An executable that accepts everything -/
+
+/-- An executable that accepts every case. -/
+def acceptAllByPath (_ _ _ : ByteArray) (_ _ : Array ByteArray) : Core.Answer :=
+  { protocol := "", verdict := .accept, reason := none, digest := none, published := none, profile := none }
+
+theorem ff_not_ascii : (ByteArray.mk #[0xff]).data.all (· < 0x7f) = false := by
+  cases h : (ByteArray.mk #[0xff]).data.all (· < 0x7f)
+  · rfl
+  · have h0 := Array.all_eq_true.1 h 0 (by decide)
+    revert h0
+    decide
+
+theorem canonicalJson_ff : ∃ m, Core.canonicalJson (ByteArray.mk #[0xff]) = .error m := by
+  unfold Core.canonicalJson
+  rw [ff_not_ascii]
+  exact ⟨_, rfl⟩
+
+/-- The verifier of record refuses parameters holding a byte at or above `0x7f`, whatever else it is given. -/
+theorem verifier_refuses_ff (k : Verity.Registration.Composite) (c e : ByteArray) (bs : Array ByteArray) :
+    ((Verity.verifier k).answer (ByteArray.mk #[0xff]) c e bs).verdict ≠ .accept := by
+  intro h
+  obtain ⟨p, -, -, hp, -⟩ := Properties.Composition.answerAccepts ((Verity.verifier k).on bs) _ _ _ h
+  obtain ⟨m, hm⟩ := canonicalJson_ff
+  rw [hm] at hp
+  cases hp
+
+/-- **Where an executable that accepts everything stands for the one that reads the circuit files by path, the
+verifier of record disagrees with it**: at parameters holding the byte `0xff` and no blobs, it refuses, and nothing
+collides. -/
+theorem acceptAll_disagrees (k : Verity.Registration.Composite) :
+    ¬ ∀ (p c e : ByteArray) (bs cs : Array ByteArray), (acceptAllByPath p c e bs cs).verdict = .accept →
+      (Verity.verifier k).answer p c e (bs ++ cs) = acceptAllByPath p c e bs cs ∨
+        Hash.CollisionIn Verity.sha512 ((bs ++ cs).toList.map (·.data.toList)) := by
+  intro h
+  rcases h (ByteArray.mk #[0xff]) ByteArray.empty ByteArray.empty #[] #[] rfl with h | h
+  · exact verifier_refuses_ff k _ _ _ (congrArg Core.Answer.verdict h)
+  · obtain ⟨x, hx, -⟩ := h
+    simp at hx
+
 end Verity.PeriodFiles
+
+/-- **At every composite with the network certifier's period, the verifier of record agrees with the executable that
+reads the period's circuit files by path**, unless SHA-512 collides among the blobs. -/
+theorem Verity.circuit_files_by_path_agree : Verity.CircuitFilesByPathAgree := by
+  intro k hk
+  cases k with
+  | onsite => exact Verity.PeriodFiles.agree_onsite
+  | remote => exact absurd rfl hk
+  | remoteNetwork => exact Verity.PeriodFiles.agree_rn
+  | remoteNetworkNoPouw => exact Verity.PeriodFiles.agree_rnn
