@@ -873,6 +873,41 @@ theorem picksOnce_readingAt {R : ℕ} (tables : Array String) (L : Fin R → Slo
       have := openedOf_lt L₁ hfr d
       omega
 
+/-- **Picks after as many logs as the rounds but one are every pick**: where each round picks at most one release of
+`Lg`, round `j₀` picks the release after `L₀`, and some round picks the release after each of the distinct logs `ms`,
+each longer than `L₀` and at least as many as the rounds but one, every release a round picks is after `L₀` or after
+one of `ms`. -/
+theorem covers_of_length {R : ℕ} {P : Fin R → List Release → Frame → Prop} {Lg : List Release}
+    (hU : PicksOnce P Lg) {L₀ : List Release} {j₀ : Fin R} (h₀ : PicksIn P Lg j₀ L₀) {ms : List (List Release)}
+    (hpick : ∀ m ∈ ms, ∃ j, PicksIn P Lg j m) (hgt : ∀ m ∈ ms, L₀.length < m.length) (hnd : ms.Nodup)
+    (hlen : R ≤ ms.length + 1) : ∀ j L₁, PicksIn P Lg j L₁ → L₁ = L₀ ∨ L₁ ∈ ms := by
+  classical
+  intro j L₁ hp
+  by_contra hne
+  rw [not_or] at hne
+  let g : List Release → Fin R := fun m => if h : ∃ j, PicksIn P Lg j m then h.choose else j₀
+  have hg : ∀ m ∈ ms, PicksIn P Lg (g m) m := fun m hm => by
+    have h := hpick m hm
+    show PicksIn P Lg (if h : ∃ j, PicksIn P Lg j m then h.choose else j₀) m
+    rw [dif_pos h]
+    exact h.choose_spec
+  have hnd' : (j₀ :: j :: ms.map g).Nodup := by
+    refine List.nodup_cons.2 ⟨fun h => ?_, List.nodup_cons.2 ⟨fun h => ?_, List.Nodup.map_on
+      (fun x hx y hy e => hU (g y) x y (e ▸ hg x hx) (hg y hy)) hnd⟩⟩
+    · rcases List.mem_cons.1 h with h | h
+      · exact hne.1 (hU j L₁ L₀ hp (h ▸ h₀))
+      · obtain ⟨m, hm, e⟩ := List.mem_map.1 h
+        have h' := hU j₀ m L₀ (e ▸ hg m hm) h₀
+        have h₂ := hgt m hm
+        rw [h'] at h₂
+        exact lt_irrefl _ h₂
+    · obtain ⟨m, hm, e⟩ := List.mem_map.1 h
+      have h' := hU j m L₁ (e ▸ hg m hm) hp
+      exact hne.2 (h' ▸ hm)
+  have hc := hnd'.length_le_card
+  simp only [List.length_cons, List.length_map, Fintype.card_fin] at hc
+  omega
+
 /-! ## The rounds a trace's submissions append -/
 
 /-- **The rounds a list of submissions appends to a stream**: the stream's rounds before, then the rounds of the
@@ -1116,10 +1151,10 @@ theorem firstStop_fixes (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.gam
 injective, of distinct tables, its rep slots of tables before `J`: where each round picks at most one release of the
 log `Lg` of the play on the tape the trace ends on, the coin map writes the link points and a round's coins into a
 stop's opening as their bits, off `BL` and `B` the opening's classes at those bits are not empty, not every cut is past
-at the first stop, and `BL` doesn't hold there: `Lg` has the link points' bits after a log `L₀` (`LoggedAfter`), and the
-trace's answered stops (`RoundsReach.answers`) each release their round's coins after a log, each longer than `L₀` and
-than the one before; and every release of `Lg` a round picks is after `L₀` or one of those, unless the trace answered
-`N` rounds (`RoundsReach.order`). -/
+at the first stop, `BL` doesn't hold there, and the rounds but one are at most the trace's `N`: `Lg` has the link
+points' bits after a log `L₀` (`LoggedAfter`), and the trace's answered stops (`RoundsReach.answers`) each release their
+round's coins after a log, each longer than `L₀` and than the one before; and every release of `Lg` a round picks is
+after `L₀` or one of those (`RoundsReach.order`, `covers_of_length`). -/
 theorem firstStop_order (A : Live) {tables : Array String} {L : Fin A.rounds → Slot} (hL : Function.Injective L)
     (ht : tables.toList.Nodup) {J : ℕ} (hJ : ∀ j t r k, L j = .rep t r k → t < J)
     (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) (reg : Option Claims.Msg → A.Reg)
@@ -1135,7 +1170,8 @@ theorem firstStop_order (A : Live) {tables : Array String} {L : Fin A.rounds →
     {rootB : Array ByteArray} {o : β × CoinTape (V.game θ F c) σ}
     (hr : RoundsReach D M A.dg J B fin rootB pts N (fun _ _ => [])
       ((firstStop V θ F c A rd σ M ω).rewrite (M.link (firstStop V θ F c A rd σ M ω) pts)).consume o)
-    {Lg : List Release} (hLg : (CoinTape.run (V.game θ F c) σ o.2).log = Lg) (hU : PicksOnce rd.round Lg) :
+    {Lg : List Release} (hLg : (CoinTape.run (V.game θ F c) σ o.2).log = Lg) (hU : PicksOnce rd.round Lg)
+    (hRN : A.rounds ≤ N + 1) :
     ∃ (L₀ : List Release) (as : List (Pos (V.game θ F c) σ Claims.Msg (Fin A.rounds) ×
         ((s : SubmitJ J) × (Fin s.n → 𝔽)))) (ms : List (List Release)),
       LoggedAfter rd.round (firstStop V θ F c A rd σ M ω) L₀ (bitsL pts) Lg ∧
@@ -1145,7 +1181,7 @@ theorem firstStop_order (A : Live) {tables : Array String} {L : Fin A.rounds →
       List.Forall₂ (fun a m => D.sub J a.1.toStop.modes = some a.2.1 ∧
         LoggedAfter rd.round a.1.toStop m (bitsOf a.2.1 a.2.2) Lg) as ms ∧
       (∀ m ∈ ms, L₀.length < m.length) ∧ ms.Pairwise (fun m m' => m.length < m'.length) ∧
-      ((∀ j L₁, PicksIn rd.round Lg j L₁ → L₁ = L₀ ∨ L₁ ∈ ms) ∨ as.length = N) := by
+      ∀ j L₁, PicksIn rd.round Lg j L₁ → L₁ = L₀ ∨ L₁ ∈ ms := by
   subst hrd hD
   have hP := readingAt_picks tables L record recordDigest
   have hPS := readingAt_served tables L record recordDigest
@@ -1176,8 +1212,9 @@ theorem firstStop_order (A : Live) {tables : Array String} {L : Fin A.rounds →
       fun j' hj' => ⟨L₀, List.mem_singleton_self _, _, L', hL', not_not.1 fun h => hj' ⟨trivial, h⟩⟩,
       fun j' L₁ hp hl => ?_, fun j' L₁ hd hp => ?_⟩
     · obtain ⟨r, L₂, he, hp'⟩ := id hp
-      obtain ⟨c', d, rfl, hLd⟩ := mid_of_append (pre := []) (L₃ := ⟨.opening i s n, b, bitsL pts⟩ :: L')
-        (he.symm.trans hL') (Nat.zero_le _) (by simp only [List.length_nil, Nat.zero_add]; exact hl)
+      obtain ⟨c', d, rfl, hLd⟩ := mid_of_append (pre := []) (L := L₀) (L₃ := ⟨.opening i s n, b, bitsL pts⟩ :: L')
+        (by rw [List.nil_append]; exact he.symm.trans hL') (Nat.zero_le _)
+        (by simp only [List.length_nil, Nat.zero_add]; exact hl)
       exact absurd hp' (hNP j' trivial c' r d hLd)
     · rw [List.mem_singleton] at hd
       subst hd
@@ -1190,8 +1227,12 @@ theorem firstStop_order (A : Live) {tables : Array String} {L : Fin A.rounds →
     (stopOf_next hP s'' Ks x'' back'' hq hT hKs _) hA
   refine ⟨L₀, as, ms, ⟨j, i, s, n, b, L', hjK, hall, hj, hL'⟩, h1, hF, hgt, hpw, ?_⟩
   rcases hcov with hc | hN | ⟨q, L₁, hnone, hnd, j₁, hj₁, hall₁⟩
-  · exact Or.inl fun j' L₁ hp => (hc j' L₁ hp).imp_left List.mem_singleton.1
-  · exact Or.inr hN
+  · exact fun j' L₁ hp => (hc j' L₁ hp).imp_left List.mem_singleton.1
+  · refine covers_of_length hU (j₀ := j) ⟨_, L', hL', hj⟩ (fun m hm => ?_) hgt
+      (hpw.imp fun h e => by subst e; exact lt_irrefl _ h) (by rw [← hF.length_eq, hN]; exact hRN)
+    obtain ⟨a, -, -, j', i', s', n', b', L'', -, -, hj', he'⟩ :=
+      Properties.Challenger.CanonRead.forall₂_mem_right hF m hm
+    exact ⟨j', _, L'', he', hj'⟩
   · exfalso
     obtain ⟨r, L₂, he, hp₁⟩ := hall₁ j₁ hj₁
     have hone : ∀ j', j' ≠ j₁ → q.modes j' = none := fun j' hj' => Pos.modes_eq_none (p := q) (i := j') (by
