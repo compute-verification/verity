@@ -3466,3 +3466,39 @@ Runs at 0150c77a87c:
 Not exercised here: the V3c path (certifier_piece with a listed record-form audit). It needs an onsite GPU serve.
 ODRECORD has the resolution for review, and ODBRANCH the head. Next: merge ODLEAN's ab3041c85dd once it is pushed.
 
+[2026-11-05T04:37Z] 291da1e10e91
+ODADVICE, NET-225: the plan is agreed with vllm, our branch is pushed, and the public-boundary check lists none of our advice edges.
+
+**Agreed on VLLM-212**
+- Advice edges (window_advice.py:44-45, test_window_advice.py:8): advice v0 and advice_check move to verity_vllm.scheduler (vllm agreed at 02:04Z; vllm reviews the import lines and owns the PUBLIC entry). Date: Fri 13 Nov 6 PM PST, day for day with remote→main, because remote edits 36 of the files the move touches (the 1:18 PM ruling). Sooner only if top lists certifier/advice.py public in the interim (asked of proofs on NET-225).
+- Pous edges (test_pous_option.py:23,26): close with cut 3's private line, with no code (asked of proofs on NET-225).
+- Port (vllm's two class-B edges): vllm accepted both of our conditions at 02:20Z. ports.py and test_ports.py are vllm's (cursor/vllm-pubsplit-496a, unpushed). The provider member and its conformance test are ours. They're not built yet; I need your go and a placement ruling (below).
+
+**Branch** cursor/net225-advice-move-061a, head 9046fc1609d, off origin/remote e712d2eecd0 (pushed; it lands only after remote→main). Commits:
+1. The tie retirement, cherry-picked from onsite d1c762c2f3f with its domains follow-up 7245ff1d607.
+2. head_check's body helpers made public as verity.ml.circuits.boolean.build, so advice_check reads nothing private.
+3. The move itself, by tools/move/layout.py.
+4. Hand fixes.
+5. vLLM lint fixes, made rather than allowlisted.
+6. Onsite's one-line test_negatives pattern.
+7. A census root for scheduler.advice_check, which vLLM's dead-module test needs because its sidecar is its importer.
+Program digests at L=40 and 240 and the sidecar's per-part AND counts are unchanged.
+
+**Boundary** (#7401's checker, --all, at e7e479ea05c, r20261105-023356-1f9c; identical at the head 9046fc1609d, r20261105-043628-502e): 377 edges against the remote tip's 390 (r20261105-022340-0c00). 13 are gone and none are new. The 13 are our three advice edges plus ten of vllm's advice-only edges. Ours left: test_pous_option.py:23,26 (cut 3). The boundary file is unchanged, but the move makes 12 files public by location: advice v0, advice_check with its sidecar, their tests, records/advice.py, the scheduler package's __init__, and boolean/build.py with its test. Top should see that list.
+
+**Suites** (cpu-4/cpu-7):
+- Passed: certifier 857, ml/circuits 1,026, network-e2e 45, encodings 434, prove_path 152, network-traces 528, core-identity 5 (and lake build Identity).
+- circuit-check: 0 new failures over 36 targets.
+- vllm, in 4 parts at 06b0688b2eb (r20261105-040439-39de, -040459-9280, -040504-149c, -040517-7db8): 14,546 passed and 4 distinct failures. After the census root, the dead-module test and every vLLM lint at 9046fc1609d (r20261105-042606-a482) fail exactly as at the remote tip (r20261105-042623-7c8a). That's P1's answers.py:247, the two inference_blocks dead modules, and the two pouw_ncp_v2 end-to-end tests.
+- Base reds only: repository's 5 name files the branch doesn't touch, and research's test_queue fails the same at the remote tip (r20261105-030758-8862).
+
+**Port member, placement ruling needed.** Its conformance test needs both verity_vllm.ports and the certifier. Under verity/ it breaks test_integration_boundaries, whose KNOWN list only shrinks. In a public file it's a new edge.
+- (a) Entry points only, in verity/core/protocols/certifier/port/pyproject.toml. It's private by the certifier glob, like the existing member pous/check, and the export drops private members from the root list. The conformance test goes in vllm's test_ports.py and checks whatever provider is installed, naming no private module. This relaxes my condition (2): a certifier change fails vllm's suite rather than ours.
+- (b) The member and its test in a private integrations directory. This keeps condition (2) but needs a boundary line from top.
+- I recommend (a). Either way the root members line waits on top, since remote edits it.
+Should I build it now, off main?
+
+**Off remote, not main:** I did this because the move can't land before remote→main anyway. Say if you also want an off-main copy, for example for a top ruling that pulls the date in.
+
+vllm's own files changed beyond the import lines (pipeline/window_advice.py, the new records/advice.py, census_roots.txt). I asked vllm on VLLM-212 to review them, and posted the result on NET-225. Neither comment rings anyone, so please ring @vllm and @proofs if you want them to look before 10 AM PST.
+
