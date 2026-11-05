@@ -76,10 +76,10 @@ open Loop LeanRelease in
 /-- **A rep's frame keeps `SameInv` from one round of the rep to the next**: at a `RoundRun` at the model's count whose
 content is the worker's message `v`, past the rep's first round (`hj₀`) and whose next round is the same rep's (`hj`),
 whose round releases and whose coins the rep's frame took off the auditor's answer `a`, where the found frame keeps
-`SameInv` on the table, extras and salts its session and the loop's salts give it, its schedule on its coins holds the
-round (`hlt`) and is of one shape with the placeholder's (`hrs`), whose count is the round's (`hn'`), the round is in
-the frame's schedule's place, and the frame the session's next request finds keeps `SameInv` at the history with
-`(v, a)`, one round more of the rep. -/
+`SameInv` on the table and extras its session gives it and the salts the loop's salts give it at the opening's first
+round (`hsalt`), its schedule on its coins holds the round (`hlt`) and is of one shape with the placeholder's (`hrs`),
+whose count is the round's (`hn'`), the round is in the frame's schedule's place, and the frame the session's next
+request finds keeps `SameInv` at the history with `(v, a)`, one round more of the rep. -/
 theorem roundRun_same (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -115,7 +115,8 @@ theorem roundRun_same (T : ZKMal.CoinLayer.TableData)
     (hn : s.spec.tables[i]? = some name) (hl0 : _root_.Flock.Firewall.Level0.ofSession L0 sid name = some l0)
     {t : _root_.Flock.Firewall.Finish.Tab} {xs : Array (Array F128)} {hi : Array ByteArray} {stm : Stmt}
     {c : Array F128} {r0 : ByteArray} {q0 : Nat} (hst : s.sts[p.table]? = some stm) (hlink : s.link = some c)
-    (hsalt : R.salts.find? (fun x => x.1 == l0.root && x.2.1 == p.rep) = some (r0, q0, hi))
+    (hsalt : p.alg.size ≤ p.coins.size → p.opened = false → p.opening = none →
+      R.salts.find? (fun x => x.1 == l0.root && x.2.1 == p.rep) = some (r0, q0, hi))
     (htab : _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t)
     (hxs : xs = _root_.Flock.Firewall.Drive.extras stm (_root_.Flock.Firewall.Drive.linkPoints stm c))
     {pre : List Req} {ev : List (Nat × ByteArray × Place × Array F128)}

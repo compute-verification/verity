@@ -46,6 +46,7 @@ public import Proofs.Flock.ZkAny.RelayLoopCommit
 public import Proofs.Flock.ZkAny.RelayLoopFinish
 public import Proofs.Flock.ZkAny.RelayLoopRound
 public import Proofs.Flock.ZkAny.RelayReps
+public import Proofs.Flock.ZkAny.RelayRoundFirst
 
 /-! Zero knowledge at any values: the generic forms, a table's and a release of `J` tables behind the ZK server's
 checks, the ZK server's check as the gate a table's file leaves behind, a release at coins it refuses, the release
@@ -86,6 +87,7 @@ firewall's own link is at the level 0 the loop drew for the session, and at the 
 whether an earlier round of the model's run failed; and a frame round at its slot before a stop, which the session
 lets through, and the step at it, given what the loop's frames and the model hold there and the invariant kept; and
 the session's reps and labels the setup's rep streams' once its `Hello` left, so a round's rep its stream's own and no
-other rep stream's. -/
+other rep stream's; and after a stream's first round the rep's frame its run, holding the history's words for its one
+round and keeping its schedule so far, which a stream of one round hands to the next stream's first. -/
 
 @[expose] public section

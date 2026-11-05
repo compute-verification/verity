@@ -54,9 +54,9 @@ theorem roundPlace_later_of {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Sl
 
 /-- **A rep's frame past its stream's first round keeps its schedule so far**: at a `RoundRun` past the stream's first
 round whose round releases and whose coins the rep's frame took off the auditor's answer, where the found frame keeps
-its schedule so far (`Loop.RepInv`) on the table, extras and salts the session and the loop's salts give it, the round
-is in the place that schedule gives the frame's next round, unless that is the inner proof's own, and the frame the
-session's next round finds keeps it. -/
+its schedule so far (`Loop.RepInv`) on the table and extras the session gives it and the salts the loop's salts give
+it at the opening's first round (`hsalt`, where `placeOf` reads them), the round is in the place that schedule gives
+the frame's next round, unless that is the inner proof's own, and the frame the session's next round finds keeps it. -/
 theorem roundRun_repInv {sid : Nat} {st : State} {pl : Placed} {stream : String} {n i r : Nat}
     {dom content : ByteArray} {e : Env} {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {R₃ : Sessions}
     (hr : RoundRun sid st pl stream n i r dom content e R L0 R₃) (hreq : st.request pl (.round stream n) = none)
@@ -72,7 +72,8 @@ theorem roundRun_repInv {sid : Nat} {st : State} {pl : Placed} {stream : String}
     (hl0 : _root_.Flock.Firewall.Level0.ofSession L0 sid name = some l0) {t : _root_.Flock.Firewall.Finish.Tab}
     {xs : Array (Array F128)} {hi : Array ByteArray} {stm : Stmt} {c : Array F128} {r0 : ByteArray} {q0 : Nat}
     (hst : s.sts[p.table]? = some stm) (hlink : s.link = some c)
-    (hsalt : R.salts.find? (fun x => x.1 == l0.root && x.2.1 == p.rep) = some (r0, q0, hi))
+    (hsalt : p.alg.size ≤ p.coins.size → p.opened = false → p.opening = none →
+      R.salts.find? (fun x => x.1 == l0.root && x.2.1 == p.rep) = some (r0, q0, hi))
     (htab : _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t)
     (hxs : xs = _root_.Flock.Firewall.Drive.extras stm (_root_.Flock.Firewall.Drive.linkPoints stm c))
     (hI : Loop.RepInv t (s.spec.domain name r).toUTF8 xs hi p) {sched : Array (ByteArray × Nat)}

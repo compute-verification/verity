@@ -29,9 +29,9 @@ open Loop in
 /-- **A rep's frame keeps its run, words and schedule so far after a round past its first**, whichever rep's round
 comes next: at a `RoundRun` at the loop's count whose content is the worker's message `v`, past the rep's first round
 (`hj₀`), whose round releases and whose coins the rep's frame took off the auditor's answer `a`, where the found frame
-keeps `SameInv` on the table, extras and salts its session and the loop's salts give it, the frame the session's next
-request finds is its run one round on, holds the history's words with `(v, a)` for the rep's rounds so far, and keeps
-its schedule so far. -/
+keeps `SameInv` on the table and extras its session gives it and the salts the loop's salts give it at the opening's
+first round (`hsalt`), the frame the session's next request finds is its run one round on, holds the history's words
+with `(v, a)` for the rep's rounds so far, and keeps its schedule so far. -/
 theorem roundRun_last {W Rr : Type} {L : LeanRelease W Rr} {ρ : Rr} (x : Msg) (e0 : Msg × Msg)
     (h1 : List (Msg × Msg)) (v : Msg) {rs : List Nat} {q₀ j₀ : Nat} (hq : h1.length = q₀ + 1)
     (hj₀ : (ZKMal.CoinLayer.locate rs 0 q₀).2 = j₀ + 1)
@@ -51,7 +51,8 @@ theorem roundRun_last {W Rr : Type} {L : LeanRelease W Rr} {ρ : Rr} (x : Msg) (
     (hn : s.spec.tables[i]? = some name) (hl0 : _root_.Flock.Firewall.Level0.ofSession L0 sid name = some l0)
     {t : _root_.Flock.Firewall.Finish.Tab} {xs : Array (Array F128)} {hi : Array ByteArray} {stm : Stmt}
     {c : Array F128} {r0 : ByteArray} {q0 : Nat} (hst : s.sts[p.table]? = some stm) (hlink : s.link = some c)
-    (hsalt : R.salts.find? (fun x => x.1 == l0.root && x.2.1 == p.rep) = some (r0, q0, hi))
+    (hsalt : p.alg.size ≤ p.coins.size → p.opened = false → p.opening = none →
+      R.salts.find? (fun x => x.1 == l0.root && x.2.1 == p.rep) = some (r0, q0, hi))
     (htab : _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t)
     (hxs : xs = _root_.Flock.Firewall.Drive.extras stm (_root_.Flock.Firewall.Drive.linkPoints stm c))
     {pre : List Req} {ev : List (Nat × ByteArray × Place × Array F128)}
