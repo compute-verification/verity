@@ -56,7 +56,7 @@ def _session(root: Path, name: str, k: int = 0) -> Path:
 
 def _verify(root: Path, tables: int, *sessions: Path, statement: str = STATEMENT, flags: tuple = ()) -> list[dict]:
     p = subprocess.run([str(BIN), "verify", "--statement", statement, "--circuit", str(root / "stage" / "circuit.txt"),
-                        "--public", str(root / "stage" / "pub-8.bin"), "--coins", "seed", "--session-tables", str(tables),
+                        "--public", str(root / "stage" / "pub-8.bin"), "--session-tables", str(tables),
                         *flags, "--session", *map(str, sessions)], capture_output=True, text=True, check=False)
     return [json.loads(line.split(" ", 1)[1]) for line in p.stdout.splitlines() if line.startswith("VERDICT ")]
 

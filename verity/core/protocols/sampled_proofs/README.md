@@ -12,10 +12,12 @@ Sampled proofs (`verity/sampled-proofs/v1`) is a subprotocol of both composite p
 `verity/core/protocols/remote/`) composes it with PoUW's period (`verity/pouw/period/v1`) and the inference-only
 policy, and onsite (`verity/core/protocols/onsite/`) with the other subprotocols. Each composite's verifier runs
 `VStar.Recursive.Sampled`'s Lean check in the form its params name: one-stage v2 (`verity/sampled-proofs/one-stage/v2`,
-the audit on the proofs) or the recursive audit (`verity/sampled-proofs/recursive/v1`, V*'s compiled check, which ends in
-the one-stage audit's live check on its verdict of record). One-stage v1, whose verdicts are the evidence's, is refused
-by name (`V1_REFUSED`: a one-stage form whose params or evidence name no `proofs`). The composite accepts only when
-every component accepts.
+the audit on the proofs) or the recursive audit (`verity/sampled-proofs/recursive/v1`: the recursive session's inner
+coins held to the challenger's release log, every round its coin server recorded opened after what it recorded and
+every logged opening read (`VStar.Recursive.innerCoinsHeld`, `SampledProofs/ChallengerInnerTrees.lean`), then V*'s
+compiled check, which ends in the one-stage audit's live check on its verdict of record). One-stage v1, whose verdicts
+are the evidence's, is refused by name (`V1_REFUSED`: a one-stage form whose params or evidence name no `proofs`). The
+composite accepts only when every component accepts.
 
 ## Guarantee and assumptions
 
@@ -141,8 +143,9 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   isn't the program's proof blocks in order (`Slots.popOk`), parameters naming no challenger coins or a key off
   `Lms.deployed`, and coins past `Challenger.LIMITS`. It reads the
   draw's coins as v1 does (`OneStage.coinsOf`; `oneStageZkReads` in `Security/Properties/Challenger.lean`) and holds
-  the session's record to the coin trees the signed release log shows the challenger sampled and opened
-  (`SampledProofs/ChallengerTrees.lean`, `challenger.sessions_tree_reason`): its `coin_tree` the one tree logged, its
+  the session's record to the coin trees the signed release log shows the challenger sampled and opened, a link
+  `root_B` of any length but its statement's refused before the hash (`LINK_ROOT_LEN`;
+  `SampledProofs/ChallengerTrees.lean`, `challenger.sessions_tree_reason`): its `coin_tree` the one tree logged, its
   link points and round coins that tree's openings after its link's roots and each round's message. Then it runs
   `flock-verify verify --zk`'s one-stage path (the C-Flock library calls `verifyCmd` makes) on those blobs, accepts
   the session only if the public file's units are the population in order (`FilePart.check`), binds `proved_units` to
@@ -308,7 +311,8 @@ A program's weights, constants and tables are values: committed once, under hidi
 - **The commitment.** Row r of a registered value is `words` leaves of `word_bits` bits (16 or 32). It is committed as
   the circuit statement commits that port's row, in the port's row format (`hm96-sha512/row/v1`, or the bit rows
   `hm96-sha512/row/v2` and `hm96-sha512/row-seg/v1`), with a salt drawn once. The root is the frame-v3-sha512 root over
-  the rows under the value's registered-value domain (`registered.domain`). The prover keeps the rows and salts
+  the rows under the value's registered-value domain (`registered.domain`, on the SHA-512 identity frame of
+  `verity/one-stage/registered-domain/v1`). The prover keeps the rows and salts
   (`Registered.commit`). The record's `registered` entry is `{"value", "root", "leaves", "words", "domain"}`, with
   `"word_bits"` when it is not 16 (`Registered.entry`).
 - **R7** holds the entries to the verifier's own (`registered_entries`, from its own program). It holds each value to a
@@ -380,9 +384,7 @@ Code and records call a sampling design a `law`; the name stays until a format v
   Lean verifier reads them.
 - `check_draw` also holds the draw's population to the registration's.
 
-Pinned by `tests/test_one_stage.py` (`test_draw_checks`, `test_derive_expands_the_rule_over_the_verifiers_program`,
-`test_derive_expands_the_work_rule_over_the_verifiers_table`, `test_stratified_draw_checks`,
-`test_work_draw_checks_and_closures`).
+Pinned by `tests/test_one_stage.py`'s checks of each sampling design's text, objects and expansion.
 
 ### What a proof block's work may count
 
@@ -447,7 +449,7 @@ delta, through its weighted bound `harm_bound`; each application counts delta on
 - `compute_bound(profile, work)` is `harm_bound(work)`. Policies and PoUW pass their own utility to `worst_case`.
 - A proof block's output bits or work is one number for every proof block, or per stratum a number or `(bits, units)` pairs.
 
-Pinned by `tests/test_consumers.py` and `tests/fixtures/exfiltration_lean.json`, whose recorded sha256 of the Lean files it came from fails `test_the_lean_vectors_were_generated_from_this_tree` until it is regenerated.
+Pinned by `tests/test_consumers.py` and `tests/fixtures/exfiltration_lean.json`, regenerated when its Lean files change (a test compares their sha256).
 
 ### The proof system
 
@@ -473,9 +475,9 @@ Pinned by `tests/test_consumers.py` and `tests/fixtures/exfiltration_lean.json`,
   verdict), **the records** (`verity/proof-service/stream/v0` and `outcome/v0`) and what a stream refuses until it is
   built.
 
-Each rule, its formats and its refusal codes are in `service`'s module docstring. Pinned by `tests/test_service.py`, the
-log's history by `tests/test_service_history.py`, sessions by `tests/test_service_sessions.py`, the fleet's halt by
-`tests/test_service_fleet.py`, and the stream's and the fleet's rules by the difftest's `stream` and `fleet` pieces.
+Each rule, its formats and its refusal codes are in `service`'s module docstring. Pinned by `tests/test_service.py`,
+`tests/test_service_history.py`, `tests/test_service_sessions.py` and `tests/test_service_fleet.py`, and the stream's
+and the fleet's rules by the difftest's `stream` and `fleet` pieces.
 
 ### The draw's coins
 

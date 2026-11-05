@@ -11,10 +11,11 @@
 # A5_ROW_DIR=D: a single-GPU deferred Commit's row dir in place of the fixture (its sealed D/commit/replay_bundle_p0 and the Build's
 # Programs of record in D, as a5_llama1b_h200.sh leaves them), with A5_PARTITION the partition its --serving-rows named and, with
 # WINDOW=served, A5_WINDOW the window its C2 site committed (`c2_replay.serving_rows`); A5_SUBCIRCUIT is the template's input set
-# for the lowering (default rope-head/d64/neox-bf16, the fixture's RoPEHead_v1{D=64}).
-# Kept in $OUT: a5's records and logs, the public files, the session (its proofs and record), the binaries' sha256 and the
-# circuit's pin; never a prover's file (inst-*, m*-private.bin, v*-private.bin: the rows and their salts) nor the 56 MB
-# circuit (its pin is).
+# for the lowering (default rope-head/d64/neox-bf16, the fixture's RoPEHead_v1{D=64}). FLOCK_CHALLENGER=0: each server samples its
+# session's coin tree itself instead of taking it from a challenger of its own.
+# Kept in $OUT: a5's records and logs, the public files, the session (its proofs and record), each challenger's record and
+# audit, the binaries' sha256 and the circuit's pin; never a prover's file (inst-*, m*-private.bin, v*-private.bin: the rows
+# and their salts), a challenger's key or secret (challenger-work/), nor the 56 MB circuit (its pin is).
 set -uxo pipefail
 if [ "${COMMIT_SCHEME:-rows-sha512}" != rows-sha512 ]; then
   echo "a5.sh: COMMIT_SCHEME=$COMMIT_SCHEME: the fixture commits under rows-sha512 only (vllm-v1 is kept to read recorded runs)" >&2; exit 2
@@ -37,7 +38,9 @@ RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/ml/floc
 BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 $O/build-lean.log; exit 7; }
 LEAN=$REPO/verity/core/service/flock/.lake/build/bin/flock-verify; FWL=${LEAN%/*}/flock-firewall
-(cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
+(cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier sampled-proofs-difftest) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
+# every member's server on a challenger of its own (`a0.session`); its coins and its audit are the build above
+export FLOCK_CHALLENGER=${FLOCK_CHALLENGER:-1} CHALLENGER_PY=$PY CHALLENGER_REPO=$REPO
 sha256sum $BIN $LEAN $FWL | tee $O/binaries.sha256
 
 # serving: the CPU Commit and its window, from the sealed bundle, or the recorded Commit of A5_ROW_DIR and its window
@@ -74,6 +77,6 @@ $PY benchmarks/one_stage/a5.py --bundle $BUNDLE --row-dir $ROWD --partition $PAR
   --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/a5 2>&1 | tee $O/a5.log | cut -c1-4000
 rc=${PIPESTATUS[0]}
 mkdir -p $O/a5
-(cd $W/a5 && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -path './*/archive/*' -print0 \
+(cd $W/a5 && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -path './*/archive/*' ! -path '*/challenger-work/*' -print0 \
   | xargs -0 -I{} cp --parents {} $O/a5/)
 exit $rc

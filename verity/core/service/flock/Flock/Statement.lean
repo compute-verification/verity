@@ -173,7 +173,10 @@ theorem checkRegionBytes_ok (nbl : Nat) (regions : Array Region) :
 
 /-- The coin source named in `Hello` (`Flock.Draw`). -/
 inductive Coins where
+  /-- the verifier's OS's, drawn live every round (`--coins os`) -/
   | os
+  /-- upstream's committed seed: a plain session without a challenger, which `verify` refuses once every check has passed
+  (`ProvedScope.servedForm`) -/
   | seed
   /-- the verifier's keyed coin tree (`Flock.CoinTree`): `Hello`'s `coins` is its spec, with the prover's nonce -/
   | tree (spec : CoinTree.Spec)

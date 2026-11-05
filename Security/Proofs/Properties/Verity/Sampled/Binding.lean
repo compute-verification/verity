@@ -263,8 +263,8 @@ theorem accepted_case {k : Verity.Registration.Composite} (hk : ReadsV2 k) {s : 
     ∃ c e d ξ, caseOf s = .ok (p, c, e) ∧ oneStageZkSource p c = some d ∧ (d, e.base.coins) ∈ records s ∧
       keyOf s.params = some d.key ∧ SampledProofs.OneStageZk.coinsOf p c e = .ok ξ ∧
       drawCoins d.key d.window d.label d.after e.base.coins = .ok ξ ∧
-      ∃ ts, SampledProofs.OneStageZk.treesOf p e = .ok ts ∧
-        SampledProofs.OneStageZk.treesHeld ts e (_root_.Core.Blobs.ofArray s.blobs) = .ok () := by
+      ∃ ts, SampledProofs.OneStageZk.treesOf p.base e.base = .ok ts ∧
+        SampledProofs.OneStageZk.treesHeld p.own ts e (_root_.Core.Blobs.ofArray s.blobs) = .ok () := by
   obtain ⟨P, hP, ps, b, ev, ⟨hps, -, hev⟩, x, hx, hx1, hacc⟩ := ha
   obtain rfl : P = VStar.Recursive.Sampled.protocol := Option.some.inj (hP.symm.trans hk)
   obtain ⟨ps', b', ev', ⟨hps', -, hev'⟩, -, -, ⟨⟨⟨hpi, hei, -, -⟩, -, -⟩, -⟩, -⟩ := hs
@@ -410,7 +410,8 @@ theorem mapError_ok {ε ε' α : Type} {f : ε → ε'} {x : Except ε α} {a : 
 /-- **v2's coin trees are the log's**: where v2 reads the challenger's trees from its evidence (`treesOf`) and the
 session's log is the lines `l`, they are what `coinTreesOf` reads from `l`. -/
 theorem trees_of {p : SampledProofs.OneStageZk.Params} {e : SampledProofs.OneStageZk.Evidence}
-    {ts : Array LoggedTree} {ls : Array Json} {l : List String} (h : SampledProofs.OneStageZk.treesOf p e = .ok ts)
+    {ts : Array LoggedTree} {ls : Array Json} {l : List String}
+    (h : SampledProofs.OneStageZk.treesOf p.base e.base = .ok ts)
     (hlog : _root_.SampledProofs.getD (_root_.SampledProofs.getD e.base.coins "session") "log" = .arr ls)
     (hls : ls.toList = l.map Json.str) : coinTreesOf l = .ok ts := by
   unfold SampledProofs.OneStageZk.treesOf at h
@@ -455,11 +456,12 @@ theorem mapM_mem {β γ : Type} {f : β → Option γ} :
       exact ⟨x', List.mem_cons.2 (.inr hx'), e⟩
 
 /-- **The records v2's check read pass the trees it held them to**: each record `recordsOn` reads from the blobs sent
-is one `sessionTreeReason` accepts against trees `treesHeld` accepts the evidence's sessions at. -/
-theorem records_of {s : Sent} {e : SampledProofs.OneStageZk.Evidence} {ts : Array LoggedTree} {recs : List Json}
-    (h : SampledProofs.OneStageZk.treesHeld ts e (_root_.Core.Blobs.ofArray s.blobs) = .ok ())
+is one `sessionTreeReason` accepts, at some tables, against trees `treesHeld` accepts the evidence's sessions at. -/
+theorem records_of {s : Sent} {p : SampledProofs.OneStageZk.Own} {e : SampledProofs.OneStageZk.Evidence}
+    {ts : Array LoggedTree} {recs : List Json}
+    (h : SampledProofs.OneStageZk.treesHeld p ts e (_root_.Core.Blobs.ofArray s.blobs) = .ok ())
     (hr : Verity.Sampled.recordsOn (_root_.Core.Blobs.ofArray s.blobs) e = some recs) :
-    ∀ rec ∈ recs, sessionTreeReason ts rec = none := by
+    ∀ rec ∈ recs, ∃ tabs, sessionTreeReason ts tabs rec = none := by
   intro rec hrec
   obtain ⟨r, hr', hf⟩ := mapM_mem hr rec hrec
   unfold Verity.Sampled.recordOn at hf
@@ -483,7 +485,7 @@ theorem accepted_run {k : Verity.Registration.Composite} (hk : ReadsV2 k) (dev :
         (∃ c roots, r.commitment = some c ∧ releasedRootsOf c r.log = .ok roots) ∧
         Verity.Sampled.recordsOn (_root_.Core.Blobs.ofArray s.blobs) e = some recs ∧
         Verity.Sampled.readLog d.label d.after recs (r.released d.label d.after) r.log = some l ∧
-        ∃ ts, coinTreesOf r.log = .ok ts ∧ ∀ rec ∈ recs, sessionTreeReason ts rec = none := by
+        ∃ ts, coinTreesOf r.log = .ok ts ∧ ∀ rec ∈ recs, ∃ tabs, sessionTreeReason ts tabs rec = none := by
   unfold Verity.Sampled.coinsRead at hl
   cases hcase : caseOf s with
   | error _ => simp [hcase, Except.toOption] at hl
