@@ -2250,6 +2250,22 @@
    "owner": "@lean",
    "digest": "87b4741808fe13ef55c92c4f2ea30a647f0eda9918c2d42cdc91f8c9efa55829"
   },
+  "Verity.Rec.Compiled.ByShape": {
+   "owner": "@lean",
+   "digest": "9058b27233b113ee4da0797648e143426d27e2ca7351624f269317f23b21eeca"
+  },
+  "Verity.Rec.Compiled.Commits": {
+   "owner": "@lean",
+   "digest": "dec783db9eeb84e400318887e8ec8b62611cf21f887502ef8c6ce9668e3618bd"
+  },
+  "Verity.Rec.Compiled.GoesOnAt": {
+   "owner": "@lean",
+   "digest": "413cb03ac88414ce3a6ccda013172152dabe620cdf8be85b3c3c0c207cc5aef4"
+  },
+  "Verity.Rec.Compiled.WitnessIn": {
+   "owner": "@lean",
+   "digest": "bd59936e8a7d2ff64bdd5dd376cada99e5c95eb7a7c6679b8b240ab613cd6205"
+  },
   "Verity.Recursive.LiveCoins": {
    "owner": "@proofs",
    "digest": "8546e06c806d9823031c662a2c463f83113cfaf39894ef4f03cf02912d4933ba"
@@ -2285,6 +2301,10 @@
   "Verity.Wipe.SurvivorBound": {
    "owner": "@lean",
    "digest": "59c32110ad37a324988ebec3721ddbed31555090ee2b008b734c1651b3387da1"
+  },
+  "Verity.ZkSystem.ZK": {
+   "owner": "@lean",
+   "digest": "930ff1b2c507f083a7872be8f15f4e78eaa15f4a1cc287304b1376da022be53c"
   }
  },
  "meaning": [
@@ -2744,7 +2764,9 @@
    "Claims.SamplingGeneric.FlockKS": "proved of every Flock record, decoder and compiled verifier over it (`Claims.SamplingGeneric.flockKS`)",
    "Claims.SamplingGeneric.FlockKSReg": "proved of every Flock record, decoder and compiled verifier over it (`Claims.SamplingGeneric.flockKSReg`)",
    "Claims.SamplingGeneric.Compiled.OpenCallsLe": "a helper the claims read: the opening checks' count, which `CompilerBits` and `CompilerEfficient` read",
-   "Claims.SamplingGeneric.ZkCompiled.ZkSessions": "a helper the claims read: the compiler's zero-knowledge contract, the code facts `CompilerZK` takes of a masked compiled verifier"
+   "Claims.SamplingGeneric.ZkCompiled.ZkSessions": "a helper the claims read: the compiler's zero-knowledge contract, the code facts `CompilerZK` takes of a masked compiled verifier",
+   "Claims.ZKmalRLeak": "proved of every prover from `ZKmalRx` and `CutsOf` (`Claims.zkmalRLeak_of_cuts`), not of a deployment: a guarantee concludes it at a release's stop positions (`Verity.recZK_leak`, `Verity.zkStop_leak`), and no deployed record's claim reads it",
+   "Claims.CutsOf": "a premise of `ZKmalRLeak`'s derivation (`Claims.zkmalRLeak_of_cuts`) on the released prover: its run is the reference prover's cut at a public position, a condition on the prover like `decOK`, no claim"
   },
   "generic": {
    "Claims.SamplingGeneric.CompilerKS": "Claims.SamplingGeneric.compilerKS",
@@ -3672,9 +3694,15 @@
    "sealed": true
   },
   "Definitions.Claims": {
-   "imports": ["Mathlib", "Definitions.Core.Boolean", "Definitions.Core.Interaction", "Definitions.Claims"],
+   "imports": [
+    "Mathlib",
+    "Definitions.Core.Boolean",
+    "Definitions.Core.Interaction",
+    "Definitions.Core.Hm96",
+    "Definitions.Claims"
+   ],
    "except": [],
-   "why": "the claims and the definitions they read are trusted text: they import no assumption, guarantee or proof; messages and collisions are the hash area's (Definitions.Hash.Basic), and Flock's block circuit is core's Boolean circuit (Definitions.Core.Boolean); the interaction model they are stated in, with its messages and collisions, is core's (Definitions.Core.Interaction)"
+   "why": "the claims and the definitions they read are trusted text: they import no assumption, guarantee or proof; messages and collisions are the hash area's (Definitions.Hash.Basic), and Flock's block circuit is core's Boolean circuit (Definitions.Core.Boolean); the interaction model they are stated in, with its messages and collisions, is core's (Definitions.Core.Interaction); hm96's hiding, which the claims and the composition of zero knowledge through a recursion state, is core's (Definitions.Core.Hm96)"
   },
   "Definitions.Hash": {
    "imports": ["Mathlib", "Definitions.Core.Digest", "Definitions.Core.Hash", "Definitions.Hash"],
@@ -13755,6 +13783,12 @@
    "assumptions": [],
    "type_hash": "f7ed21cd74c37de74d55e3d3d2ff32de391af49d7eb759acfd46292de7e2acea"
   },
+  "Verity.SecurityProofs.RecZK": {
+   "owner": "@lean",
+   "signature": ["Verity.SecurityProofs.RecZK : Verity.Guarantees.RecZK"],
+   "assumptions": [],
+   "type_hash": "0727532c5e5c907b9dfd5c3598154e5af9616f7baac95143939ce6bc0b14aaff"
+  },
   "Verity.SecurityProofs.RefineWrong": {
    "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.RefineWrong : Verity.Guarantees.RefineWrong"],
@@ -15238,7 +15272,8 @@
    "Nci.SecurityProofs.UpdatedMatMulReads_honest": "completeness: UpdatedMatMulReads's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), UpdatedMatMulReads' premises hold together at the toy's one proof block, with c = 2, k = 1, b_w = b_a = 1/2 and the chain ch1, all proved, so UpdatedMatMulReads is not vacuous.",
    "Nci.SecurityProofs.UpdatedMatMulReads_nontrivial": "completeness: UpdatedMatMulReads's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), UpdatedMatMulReads without incompressible activations: UpdatedMatMul_nontrivial's charges, at which the read factor is at least 3/2, above the one bit the toy's proof block reads, all proved, so UpdatedMatMulReads's conclusion is not a tautology and needs the premise it drops.",
    "Nci.SecurityProofs.UpdatedMatMul_honest": "completeness: UpdatedMatMul's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), UpdatedMatMul's premises hold together at the toy, with c = 2, k = 1, b_w = b_a = 1/2 and the one-product chain ch1 of inner dimension d = 1: an inference block holding the product reads the token, one fresh bit, and is charged half a bit for its weight entry and half for its input entry, all proved, so UpdatedMatMul is not vacuous.",
-   "Nci.SecurityProofs.UpdatedMatMul_nontrivial": "completeness: UpdatedMatMul's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), UpdatedMatMul without incompressible activations: charging b_w = 1 and b_a = 2, more than the one bit an inference block holding the product reads, F ≥ 3/2 and the bound F · 2G ≤ size(D) fails, G = 1 and size(D) = 2, all proved, so UpdatedMatMul's conclusion is not a tautology and needs the premise it drops."
+   "Nci.SecurityProofs.UpdatedMatMul_nontrivial": "completeness: UpdatedMatMul's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), UpdatedMatMul without incompressible activations: charging b_w = 1 and b_a = 2, more than the one bit an inference block holding the product reads, F ≥ 3/2 and the bound F · 2G ≤ size(D) fails, G = 1 and size(D) = 2, all proved, so UpdatedMatMul's conclusion is not a tautology and needs the premise it drops.",
+   "Verity.SecurityProofs.RecZK": "frozen (no-function): It is stated over an arbitrary outer proof system and compiled recursion (Verity.ZkSystem, Verity.Rec.Compiled, Security/Definitions/Core/Rec.lean), and says that zero knowledge carries through the composition (Rec.system) under its premises, a simulation statement against every malicious verifier, rather than a Lean function's acceptance."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -18514,13 +18549,6 @@
     "Claims.Flock.κ": "34e791e9371f7d89ca2ffc109f47585ae498acef78f0163f203068cf8ff736d4"
    }
   },
-  "Definitions.Claims.Hm96": {
-   "digest": "1a0af7a4f0c55c58b023c3336ffdfb726648ac202948524990a2c2b96840ec44",
-   "definitions": {
-    "Claims.Hm96Hiding": "6c8f345d2254fc1cff51121b293ab6364de0ff01476d75d7dddc94df14080cd2",
-    "Claims.PrENNReal": "5e884d85245e6c7c79ae257dff1612fbe5d048d84926996eb79d469f11340473"
-   }
-  },
   "Definitions.Claims.Recursion": {
    "digest": "ed51a522f63580360fd7b5051d2ade14f7caa40aa8abc9effb6166aaa8a6bc8c",
    "definitions": {
@@ -19233,6 +19261,48 @@
     "Verity.Registration.Theta": "5a7f6f3891e430dc280ff1672ca2e94a322098d31034a173d41cc3989995968f"
    }
   },
+  "Definitions.Core.Compose": {
+   "digest": "f0d1d77aaf07745d16ebf257868636616a39d51e7d6d40b7621e49ba5e99da07",
+   "definitions": {
+    "Claims.ZKMal.Layout": "a16792367e1340fbade1576acb70f371cf6eab6880e11ec9bb06b49f89daf37c",
+    "Claims.ZKMal.Layout.flatten": "f25895e73e405e1a558c628010ff2aa184a4f1066f8ceb2cabe5402e408c1dca",
+    "Claims.ZKMal.Layout.k₀": "d59dad00b183cd511532394b7d980157df5d6edb431bb7bcaf24b6aefba15b68",
+    "Claims.ZKMal.Layout.n": "996f62eecf6b5b6b1b13ba1edac2798fae6a31ece3ab6c77c5fdbf2a3f986c62",
+    "Claims.ZKMal.Layout.prover": "171160c75fd9e147adbcdbdfea2eb16d1769a621cd84a77f627f38ff22bb2887",
+    "Claims.ZKMal.Layout.seq": "23316e8205f17ba09a678ff04573389137541a0dd396024d9fa7b11ad6aff56a",
+    "Claims.ZKMal.Layout.start": "653665af57fa627c0f8e527bc58940563625c7ec767b529665441bbda9d57ba8",
+    "Claims.ZKMal.Layout.stopped": "0e13c3429c5c2598badab8fb2242184d9f3e44300bb51b75a43bb9d7e69f757a",
+    "Claims.ZKMal.Layout.ws": "7bca608870b4e9090c32c088105fe99a2a81d6e7a4de59d98871602d33471400",
+    "Claims.ZKMal.Layout.xs": "ceb530f6acf011dcd2b03e9153f17a5573ded93b2f33b279e04d992f3851c9c6",
+    "Claims.ZKMal.Seq": "20177d5ef12e53dd8a5a4d137f48902976207e48194bcb7bbb771e3be2695338",
+    "Claims.ZKMal.Seq.U": "aa8791927167f7615eb4dca66e403895832d54f8b562b410d1f9792788272fac",
+    "Claims.ZKMal.Seq.sel": "0c17af0321feb5cec99c11f51b75521ce0027b00a11f409f7115bca62835df9a",
+    "Claims.ZKMal.Seq.simG": "a6bf13de17598053a50f705904db23d0d4dc4d213bfe671493a048bb5f95fa04",
+    "Claims.ZKMal.SeqTape": "8e7391042ea21cac43970f81a9881ce25089c955c4d5e6402eb5c163e47f221c",
+    "Claims.ZKMal.SeqTape.N": "f4b4d57fdcb990d215a97330d251f17bec8b26d076a6e06b0c098c0e7f6cab4b",
+    "Claims.ZKMal.SeqTape.at": "50ca3b61974d68788176affb86ac436cec850cb4ec69e7f8ee5ea06fd6f16fbc",
+    "Claims.ZKMal.SeqTape.fN": "012c10ac4247752890f99ddb65bd4847deea97ea1784e07539a55b48b6887d30",
+    "Claims.ZKMal.SeqTape.fΩ": "9088e888b8894aad8841926beecc939040c05d852b40428301fcfeb39c4eae29",
+    "Claims.ZKMal.SeqTape.iter": "927cb162bb398b49349d2d5e8be4f85dd155a5c596729b2eb97ce24600c91f95",
+    "Claims.ZKMal.SeqTape.Ω": "04214f12fbb94e3028b0d97d5f613575c0d73ab23645069e49dcbddbe73614f1",
+    "Claims.ZKMal.censorSim": "aa02d36c1088815469291817b24ab5deee64ef72f812878fd65e93bfcd5c2b4a",
+    "Claims.ZKMal.fired": "3e8c60273d0d348142f9a2a4bdc04bef7e61a2a8f7e7744c1d702f663e639adb",
+    "Claims.ZKMal.forkTape": "1e9fd3d0d85937f476bc1ce2759709ea358eb0ed6bc440a26aa7b3ee3f8622e7",
+    "Claims.ZKMal.goesOn": "2077f239e51236756a184e8532048d8135b3ba48ed358b521fc529d578108d69",
+    "Claims.ZKMal.isMsg": "5bd8f6374785658872fcc73a7020a464187b14ffe6b0009ac715c9eb6fd0dc1c",
+    "Claims.ZKMal.isMsg._sparseCasesOn_1": "c78b75f5c1cea3d7bb3255beadf04950cf5886474266ae6dcde32070e3f27a6a",
+    "Claims.ZKMal.iterSimG": "e256ec36c586321219db5df7170017e544a4f263df87ee3e0eaf27b1702fd296",
+    "Claims.ZKMal.ocSP": "d7902a7a92c2510e713d325039fb42c7776a790eeed49aff721c1ea019a8d904",
+    "Claims.ZKMal.progOf": "0a3575c8fe7db8e1d85e7c2ec5713af1b8a675ad7e806d15237d7e271698965f",
+    "Claims.ZKMal.silentSP": "412afc78b1a26507337bc06603570c07ff8350c8a45d541f1c47c743d7ca11a5",
+    "Claims.ZKMal.spBind": "5822c885681f37c1a7cc0a01eb8e12128b89032d301d0d8b86d84fb319268c70",
+    "Claims.ZKMal.spRun": "70e54571a242d1d4d251caf8ab4020efe2bc19414206913c5f6381422bc38893",
+    "Claims.ZKMal.spUnder": "133029bbcf4b8ca0cd06347b4564333c7e51a2eb153dadcd39d1a0e1fd9ef186",
+    "Claims.ZKMal.stopIdx": "38b43b8b5c026684cbbe37e10c4e4bff863d06d60040d071a3948593a5f0001c",
+    "Claims.ZKMal.stopP": "403fd580a510fff5cc68f1498e55ddb9d3a0e4a89fd37bf21860ac355622d60a",
+    "Claims.ZKMal.stopProgB": "08fe7d030d4987a3fdeda8d46044d8b1c51722cefe948ad82de4298fb223e7b4"
+   }
+  },
   "Definitions.Core.DeviceFigures": {
    "digest": "a816e1beec2d56e2de32419d2f474dd9833135d1dcaacbf2b97c5febe94324e3",
    "definitions": {
@@ -19407,6 +19477,12 @@
     "Verity.Guarantees.CapacityWithinEstimate": "a15b51a66aa2902094984e4c0f87215b72a03fb31f88cf2daa1e707c180aa987"
    }
   },
+  "Definitions.Core.Guarantees.Rec": {
+   "digest": "cde619c4067c8c6883003f8fdec29371d9cdb0f7fa04ebc34a6653f7e99d576e",
+   "definitions": {
+    "Verity.Guarantees.RecZK": "bef38b5790cda868f25dff5a05dbec39b00ab5f502309ecdc6b23697f08aa063"
+   }
+  },
   "Definitions.Core.Guarantees.ValueSalts": {
    "digest": "5c0e8494a91297a8b80989b64354a7e4c6905165b33bec071262b5a508364597",
    "definitions": {
@@ -19427,8 +19503,15 @@
     "Hash.utf8": "ef81714f5482b6ab1df3203d386a5f234d14a69049d33735cee24064152636c6"
    }
   },
+  "Definitions.Core.Hm96": {
+   "digest": "1a0af7a4f0c55c58b023c3336ffdfb726648ac202948524990a2c2b96840ec44",
+   "definitions": {
+    "Claims.Hm96Hiding": "6c8f345d2254fc1cff51121b293ab6364de0ff01476d75d7dddc94df14080cd2",
+    "Claims.PrENNReal": "5e884d85245e6c7c79ae257dff1612fbe5d048d84926996eb79d469f11340473"
+   }
+  },
   "Definitions.Core.Interaction": {
-   "digest": "0e2ccd14d187261e77f74a46cbb8d5e2aa21c775033064c7c6fe88e14c828753",
+   "digest": "1cd4f9b1a8158887118ba7b32dfc6b99451b08528976594c01e9f5c334dd8c48",
    "definitions": {
     "Claims.B": "4fd019056e63b04b42be5f7cab62e91b26792ff23bfe40dfe6a751905512cde8",
     "Claims.BCoins": "dfd5aa495abff4c66b0bfe023034e60f7c9119d9087c0c2f068e5fc89defd0e3",
@@ -19533,14 +19616,20 @@
     "Claims.Verifier.k": "ce7ee1bf3ba0fcb27e4198fa7b6a7ecdcb13e6f7be6dedc831ed9404030f71d1",
     "Claims.Verifier.next": "c8cfcfa41bdaa7d4099cf568a4f5454b49782ff4b3073ea88467af77682299cd",
     "Claims.ZKmalR": "0a28b394e58b7350c410b176642e9a6c748354ee6e92930c6088eee48d171cdf",
+    "Claims.ZKmalRx": "6f92524188cb8a3c463b832d63e0b50f302d1257302a1305396544388e01dcdb",
     "Claims.coinSeq": "aef2718cd2a53d2a311bb90edc9fb65614312a27c53c7c0aea27c25766bf217d",
+    "Claims.cutMsg": "edd7d23b48394845f984f99ccb09fe2d60271976786d6d64e5d745c7d0554637",
     "Claims.ecrBound": "5a63f16b03af8221c63e8386dc91653577afde66001257db754f76c01e644288",
     "Claims.findColl": "f39659c01c907985e276f71eb1be0ce57508cddaa28210fb44f7f5293d65bed6",
     "Claims.firstWait": "c099c3fa9797f3ba70c1cb8e96557ce468a145ed4f8583b6c25911886f3e672c",
     "Claims.forkCoins": "db2f393cc10ed952d576ebf88683bb1788fee477410dd5894577a7b4af6ce6c4",
+    "Claims.histOf": "d471abfd61c46a90bf5d890c539a63db567c10122ebbecd9d540dfa41f103aa6",
     "Claims.instDecidableEqOut": "b8ae985c0f1e8d241ec448f0823a4319b2d05aa05ece92cfed7b65b0528df2c4",
     "Claims.instDecidableEqOut.decEq": "80ebcbd8e33f47da495d8e84b480eed5fd956551ed6efd51b9132854d25867bf",
+    "Claims.interact": "5cabe200af03d4869d4cd5acced6bf6fd53a01bc94af4d233ba8be2e0823b709",
     "Claims.lamOf": "62eed2bb6456ff8809d7b7d5624af376376fb0295366e09d746b65cbbe313f1f",
+    "Claims.msgOf": "048b96fb9c8f6d3b4baf2b3c4d03f7b69036da99481a948bee4dbf67401597a5",
+    "Claims.msgOf._sparseCasesOn_1": "d992ac8922f25e29659b5de8a95e6b34d4520930aacbb193c2dd7f6843036abb",
     "Claims.replay": "65303099f6063fd6d7c7190a4d02fa63afdcd31a0d50cc61f312f29bea80e3a5",
     "Claims.run": "2ba785854da4b812a030ee1d2a767f08c2880c9632891a1810d0ffd2b2742c5f",
     "Claims.runStar": "3a577125ddd331d3fd7ad8f460dc8b8f15982f01a371562139d5b5f122adb107",
@@ -19563,6 +19652,58 @@
     "Verity.Partition.localEval": "e242da1cf49523aae3ff87f9dc3c63a8048156a209055c554893212d41c48949",
     "Verity.Partition.unit": "b54d29eb5c65700aaa72158c37899485fbb277203c4bd593696085072d25d7b9",
     "Verity.Partition.wrong": "f743923e389a5a0fa4441ad0d02a28e57d61973f65e0a9b998dc6df6445139f8"
+   }
+  },
+  "Definitions.Core.Rec": {
+   "digest": "7485b7c704bf3ffb1e881974d36454e5b9800238f2e88e66fc3dd0b91429e092",
+   "definitions": {
+    "Verity.Rec.Compiled": "8b91932891a8ceaedca12ff14ff87f682c37522000d6e36f812be160251910f7",
+    "Verity.Rec.Compiled.ByShape": "9058b27233b113ee4da0797648e143426d27e2ca7351624f269317f23b21eeca",
+    "Verity.Rec.Compiled.CS": "38490adedd10738bb6782e42521d5d75b51ee1ec218d3285688fcb9aa54d6307",
+    "Verity.Rec.Compiled.Commits": "dec783db9eeb84e400318887e8ec8b62611cf21f887502ef8c6ce9668e3618bd",
+    "Verity.Rec.Compiled.GoesOnAt": "413cb03ac88414ce3a6ccda013172152dabe620cdf8be85b3c3c0c207cc5aef4",
+    "Verity.Rec.Compiled.NB": "a135eb73db68589f93c17de5b7e18dd64a81520f192074ca2f1e82f00c801318",
+    "Verity.Rec.Compiled.P₀": "df611c2064acde1566ac7931073e0e2a52dcb611e3239a32bfd39e57d74f6677",
+    "Verity.Rec.Compiled.R": "0c74e62c2d902041d29a0d5ec9018e83ae5acb39db71d06bacb0e08006c70d9b",
+    "Verity.Rec.Compiled.Rnd": "ba50a0eb594fe7653d8ba958bd12fb5d4e97cafd11c0743080df3acf4388babd",
+    "Verity.Rec.Compiled.S₀": "c08e5f8d948b8eb1a45d823569fed8315e67b3a4e2e262462cc9ae7fb6a02529",
+    "Verity.Rec.Compiled.T₀": "bc462ef1ff224f7259c52d4436eadb596696932f787450e57926937c0c2756a3",
+    "Verity.Rec.Compiled.WitnessIn": "bd59936e8a7d2ff64bdd5dd376cada99e5c95eb7a7c6679b8b240ab613cd6205",
+    "Verity.Rec.Compiled.finCS": "1360c37fc48699ac52be8c80e468041fcb9b02d225ef43c56b5e74ac0cb7af43",
+    "Verity.Rec.Compiled.finNB": "4c8675159c25999013275ec9f24f0693b393b1da7793e764ebd146173067b24d",
+    "Verity.Rec.Compiled.finRnd": "a0276b81a1384fca9e69cb637c29ccdd39e3e83cc867ef74c30e02d5486be3d7",
+    "Verity.Rec.Compiled.finΩB": "d12762ff6540b80326251776213a9c3e0e8d8b1ee5bf887fd080f9870cad1fe6",
+    "Verity.Rec.Compiled.kI": "d6532aba57a8471be35bf8ce53f9da48c2d2741f1111fd7b3f1450ddb7099269",
+    "Verity.Rec.Compiled.lay": "fab2fca80c491763cf1701caabf6c432f74da9594630b84cd15f47b34290a24b",
+    "Verity.Rec.Compiled.mask": "7aed7bb9d31b0adcfbb90a8195faca1fd9474a53e06b3ab358f2a63215b84d39",
+    "Verity.Rec.Compiled.n": "04c53b8c01b8f48b6a762ea9ff6c7bb00e0ab6b52946f628ec950043e01cae05",
+    "Verity.Rec.Compiled.nC": "973a1cf7448f3f66b78390bb7cce9675777ede121d6e23775263ca5abb5f6dfb",
+    "Verity.Rec.Compiled.nS": "3cb72123055412346d8ce5a5e7c4bc95672dac23198a7c72c34b7504ec55641f",
+    "Verity.Rec.Compiled.saltMsg": "2cdf63cd3af760077825557760e407d31209330936b5cb83085bb726f246192f",
+    "Verity.Rec.Compiled.start": "63e1b999be5baa873538b79d661b1ed2a1cb1f3ddbf7d939500cea8873ac200f",
+    "Verity.Rec.Compiled.stg": "09d3c45ee4f04a339d667009f102bacdb1735854336ce43170eed30a10be0e9f",
+    "Verity.Rec.Compiled.stop": "ec5a4eea3eec7a610a8531769d7d341163b782b311dd43e04e3e66b63aa62911",
+    "Verity.Rec.Compiled.str": "d00e565ae45b64136052aa18f14bd9be7aec089d2aa7d5b134d99aaf044b1508",
+    "Verity.Rec.Compiled.ws": "d3bd144ae6757b4b6e1ea7b1679912718d2b4790d6392c0568e9fe7db74d0431",
+    "Verity.Rec.Compiled.xs": "2727bd151eb60dfeefe6eefe89d174cba126a419cad93eda8720c591ad35938d",
+    "Verity.Rec.Compiled.zeroMsg": "ad52b12ad92c7d6ded6b78b24b055ef8a9681b9edd94092932596f737b36ca1d",
+    "Verity.Rec.Compiled.ΩB": "9ee152a39bc55691c3b5e5dd0115b502c50891ae0bbd2576615f9eb5965d46f9",
+    "Verity.Rec.Compiled.γS": "674f6d08c89f0a57002118eb0e732204d9e879b5497388301888089c0c00637a",
+    "Verity.Rec.Compiled.εS": "d1a90b8fd803766ad7b45fb36f366ecffed0933ffe797c0673154b33f0880416",
+    "Verity.Rec.prover": "5485b743616d4ca5f90a1ed7a6e56ab4fe1568f037c794bb17a4ed0d7ab03f6b",
+    "Verity.Rec.queries": "756b906a5731f6cc930887097f35954c0e6e84926ac6f0c1359b7881826364a0",
+    "Verity.Rec.sim": "9e143df89b5b080687a8331e9b8f3fe4555e005d651f68b66b0fa8bc334dfd0b",
+    "Verity.Rec.simAt": "9714a1d77f36ca8f775972db8be6de2c154be03989e6933bb915ca21605b2af3",
+    "Verity.Rec.slotP": "3bdc5459e732e1ad436320e0415b4a43360b6bd8ce4597410a6370a6cece7dd5",
+    "Verity.Rec.system": "9107663023c5a2271f0678724d134fae95367c42c3b3d0ef8659efc846775f87",
+    "Verity.ZkSystem": "e3da888b9acf398c4bf5ca5242b1d6bf2f6f0971cd2ea8bb03c510cb5f4f6064",
+    "Verity.ZkSystem.P": "075dd358a7605ce8ef38be542b47ba3d8972da3feb40638208d80a43df622f40",
+    "Verity.ZkSystem.R": "2d2c4ca99f9f3f9065a84cb82e809e04a055a1f5485a51917e9735608f251b5f",
+    "Verity.ZkSystem.S": "c0cf70d92147e1514c55875911fd1bef47235664133ca1cfed92819cd79089c2",
+    "Verity.ZkSystem.ZK": "930ff1b2c507f083a7872be8f15f4e78eaa15f4a1cc287304b1376da022be53c",
+    "Verity.ZkSystem.k": "99aed620703106d983ef1b0defdb9b904d6febc8f6c41b9b7971ea231e9c1b89",
+    "Verity.ZkSystem.γzk": "7c008c30c771bef1daccf7768d1500bca041f01b1a1b8150f071df3557eee721",
+    "Verity.ZkSystem.εzk": "b86d1375eed7a52cf918412aaefb039dda2039391b89029549506b72538706c0"
    }
   },
   "Definitions.Core.RegisteredCircuit": {
@@ -29126,7 +29267,7 @@
    }
   },
   "Proofs.Flock.Claims.ZK.GK": {
-   "digest": "356d959c27bc4b303f84e1495e18559dfbd90a852ddf1d3d0490b0bcf114c10e",
+   "digest": "09dbb8b90583f80d1d8c5f3b4b0956341dd09a7f1448b45ee78bd568667ee696",
    "definitions": {
     "Claims.ZKMal.Proto": "0aa9df1c855c9d72676b458546c6e4869bc0565d45d598bc906cc65990747571",
     "Claims.ZKMal.Proto.Coin": "7acbd5eca4a1bb4beaab7e5d3ec8533b80ec01a74be2adf91b5e93194bd6e0d0",
@@ -29166,10 +29307,7 @@
     "Claims.ZKMal.fclsOC": "791463bc16c5a29abd193265daae8d6b55034147d8ae91c5a9415df95b2ba6f4",
     "Claims.ZKMal.instDecidableEqSt": "e9cf5fa99210620f217f8c0be2f20cd192d33edd20016084749bbbd570f35289",
     "Claims.ZKMal.ocBind": "df8cb59702ddd6d30c23f576058a9c4968ccd21e79152e61db1536c15bd111c7",
-    "Claims.ZKMal.ocSP": "3681d71b11e7bb0347e584944cd3e72223ac22f7546faaee1744a41b4077ac3f",
     "Claims.ZKMal.resp": "c6cebb6c45b160cc93c0c472770aca34a577d88e8d469bd338e704aba2b1d6fc",
-    "Claims.ZKMal.spBind": "a229a3dda91a90288256fd0835c057197f05f44c45b4c9a59954caa871354f10",
-    "Claims.ZKMal.spRun": "f34e7fc7b303875e0d68ea2a73d3e8e90cd9b34a1493d6b687602d3f6c79646c",
     "Claims.ZKMal.strat": "b1e8f3c50a51ef914f488bc7ae973a0c63ac8adeb979f6a0e2e0fe2590405e2f"
    }
   },
@@ -29298,6 +29436,12 @@
     "Claims.ZKServer.coinVerdict": "8ea7b870dc966912b7348d679abd4a33b864f5cabeee1da0ee9f1be2d72cabf2",
     "Claims.ZKServer.computedOf": "343aa4cb894f6816e6da9a2d61a1b3834f9ab617603d9aad7bc04da284005663",
     "Claims.ZKServer.reqsFrom": "0e20279a02d5128d33a9ee0a3c250811e3f6ec7bfe742b6694a2a334d5a29dcb"
+   }
+  },
+  "Proofs.Flock.Claims.ZK.Server": {
+   "digest": "c975eae9938abc2748515a71c88b948e08bae2bd9fbdd13722f0934785e17f48",
+   "definitions": {
+    "Claims.ZKServer.leaky1": "ef410df1c9e4a940309f83448bd74c021edea77ea6974cc7e1bba54d6069f06c"
    }
   },
   "Proofs.Flock.Claims.ZK.SessionLean": {
