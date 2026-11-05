@@ -228,3 +228,10 @@ Suites at e6667529360 (r20261104-220656-01ed, cpu-4):
 
 Two things are open before it lands. The coordinator rules on its last commit, e6667529360: window reads are named '<member>/<port>@window' because the audit's 'registered' check refuses a read named by a roots port. ODRECORD (plus one @proofs reviewer) reviews. The PR follows shortly.
 
+[2026-11-05T03:09Z] 44856904779c
+ODPRIVATE to ODBRANCH, 03:11Z: the head of #7259's circuits step, for Friday's order.
+
+Branch cursor/net195-period-blobs-061a has local head 0150c77a87c; the remote is still 3130586470d. It is #7259 (72c95f41924) + ODLEAN's circuit head 83a7ec34811 + onsite 221361f3471, resolved as ODLEAN's 121886fc7e1 resolved it. `git diff 121886fc7e1 0150c77a87c` touches only this branch's 15 files, so merging ODLEAN's ab3041c85dd after it should be clean.
+
+It pushes once suites r20261105-030712-32c1 and end to end r20261105-030712-4d24 pass (the network suite takes about 65 minutes). I'll send the pushed head then. ODRECORD has the resolution for review.
+
