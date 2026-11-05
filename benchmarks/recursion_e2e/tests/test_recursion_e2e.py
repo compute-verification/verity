@@ -129,6 +129,23 @@ def test_a_proxy_run_with_no_verdict_is_neither_accepted_nor_refused(tmp_path: P
     assert r["ok"] is None and "nothing verified here" in r["note"]
 
 
+def test_the_baseline_behind_the_zk_server_and_its_lean_checks_are_rows(tmp_path: Path) -> None:
+    o = job(tmp_path)
+    prover_dir(o / "steps" / "inner" / "r1" / "out" / "inner" / "zk-fw", (4.0,))
+    for n in (1, 2):
+        lean = o / "steps" / "lean" / f"r{n}" / "out" / "lean"
+        for part in ("zk", "zk-fw", "m0"):
+            (lean / f"time-{part}.txt").write_text(timev("0:05.00"))
+            (lean / f"{part}.log").write_text('VERDICT {"accepted": true, "why": "ok"}\n')
+    doc = RP.read(o)
+    fw = row(doc, "baseline --zk ZK server")
+    assert fw["step"] == "inner" and fw["wall_s"]["median"] == 4.0 and fw["ok"] is True
+    assert row(doc, "lean zk-fw")["what"] == "flock-verify verify --zk on the baseline --zk ZK server session"
+    m0 = row(doc, "lean m0")
+    assert m0["what"] == "flock-verify verify on the baseline M0 session (--coins os)" and m0["ok"] is True
+    assert row(doc, "lean zk")["wall_s"]["median"] == 5.0
+
+
 def test_outer_rows_by_mode_and_the_summary(tmp_path: Path) -> None:
     doc = RP.read(job(tmp_path))
     fw = next(r for r in doc["rows"] if r["stage"] == "outer L0" and r["extra"]["mode"] == "firewall")
