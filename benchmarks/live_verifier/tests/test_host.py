@@ -515,7 +515,8 @@ def test_publish_puts_the_runs_directory_with_its_request_as_meta(svc):
     "print(host.replay_module().__file__)",
     "sys.path.insert(0, str(host.RESEARCH)); from research.store import cli; print(cli.__file__)",
     "sys.argv = ['verifier.py', '--help']; runpy.run_path(str(host.VERIFIER), run_name='__main__')",
-    "sys.argv = ['auditor_line.py', '--help']; runpy.run_path(str(host.VERIFIER.parent / 'auditor_line.py'), "
+    "sys.argv = ['auditor_line.py', '--help']; "
+    "runpy.run_path(str(host.TREE / 'benchmarks' / 'remote_session' / 'auditor_line.py'), "
     "run_name='__main__')",
 ])
 def test_the_hosts_code_runs_on_a_python_with_no_site_packages(code, tmp_path):
