@@ -65457,12 +65457,12 @@
    "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Properties.Verity.Recursive.Audit": {
-   "digest": "6f28d002b98eefe9d4b0dda1e7e487c420a76488cde924bfd06c3e99949ecb6a",
+   "digest": "b8ce18b55a2fbead8544814b94103fdbf488239fd9f3149975e57fedecb220cb",
    "definitions": {
     "Flock.Guarantees.RecursiveAuditC3": "276606ee9b5ef51b7f47ab55c77f056669dca4d974e626a2d02ab33233974fce",
     "Verity.Recursive.Dep.deployed": "2a21d5fa32c8b67769272d621f88e0d54986c0073dcf05e76414eec499e43d90",
     "Verity.Recursive.SampledProofsRecursive": "68ba28f2d2d842d887a996e04352e4dec95bfaf4dbd662dc55a02d0fcd0b3a5f",
-    "Verity.Recursive.SampledProofsRecursiveAt": "4344a2288a2373cbe594fc4d9b8f371cf54af82007a0751dfa0f056d02114f2b",
+    "Verity.Recursive.SampledProofsRecursiveAt": "6e1859cb942f4cf9531892220b6b921d2c8dbbdadd673a312dc13c595d81b85b",
     "Verity.Recursive.nI₀": "22f7bb249a856dc44878734b3697246fb55f5bba188167c468e37f33cd5b2b73",
     "Verity.Recursive.vS₀": "1161b64bc1cabaa3977412e1c0826efe075e38b014632f034368b957b993bec4"
    },
