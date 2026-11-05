@@ -8,7 +8,7 @@ import json
 import sys
 
 sys.path.insert(0, sys.argv[1])
-import sim  # noqa: E402
+import sim
 
 carried = set()
 for f in sys.argv[2:]:
