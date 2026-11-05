@@ -37,6 +37,15 @@ import all Std.Data.DTreeMap.Internal.Balancing
 import all Std.Data.DTreeMap.Internal.Def
 import all Init.Data.Ord.String
 import all Init.Data.Ord.Basic
+import all Init.Data.String.TakeDrop
+import all Init.Data.String.Slice
+import all Init.Data.String.Pattern.Basic
+import all Init.Data.String.Pattern.String
+import all Init.Data.String.Pattern.Char
+import all Init.Data.String.Search
+import all Init.Data.String.Iterate
+import all Init.Data.String.Decode
+import all Init.Data.String.Termination
 import all Init.Data.String.Defs
 import all Init.Data.String.Basic
 import all Init.Data.String.Extra
