@@ -8,6 +8,7 @@ public import Proofs.Flock.Soundness.Discharge.Hidden.SpecP
 public import Proofs.Flock.Soundness.Refine.Table
 public import Proofs.Flock.Soundness.Refine.Regions
 public import Proofs.Flock.Soundness.Refine.Paths
+import all Lean.Data.Json.Basic
 
 /-!
 # Sampled proofs' coupling: the decoders and the field encoding

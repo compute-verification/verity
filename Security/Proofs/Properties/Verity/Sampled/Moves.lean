@@ -6,6 +6,7 @@ public import Proofs.Flock.Claims.Bridge.Custody
 public import Proofs.Flock.Claims.Bridge.CustodyZkP
 public import Proofs.Flock.Soundness.Discharge.Exec.Retained
 public import Proofs.Flock.Soundness.ExecStrataOf
+import all Init.Data.Repr
 
 /-!
 # Sampled proofs' coupling: the live audit's typed moves, from what v2 reads
@@ -275,10 +276,11 @@ theorem push_ok {I : Flock.Witness.Inputs} {rd : _root_.SampledProofs.OneStageZk
     cases hall
   | ok u => rfl
 
-theorem verdictOf_ok {I : Flock.Witness.Inputs} {scope ksFiles : Flock.V Unit} {coinKeys : Array String}
+theorem verdictOf_ok {I : Flock.Witness.Inputs} {scope ksFiles population : Flock.V Unit} {coinKeys : Array String}
     {record : String} {draw : Option Json} {st : _root_.SampledProofs.OneStageZk.SetUp}
     {files : Flock.V (Array ByteArray)} {coinKey : Option String}
-    (h : _root_.SampledProofs.OneStageZk.verdictOf I scope ksFiles coinKeys record draw st files coinKey = .ok ()) :
+    (h : _root_.SampledProofs.OneStageZk.verdictOf I scope ksFiles population coinKeys record draw st files coinKey
+      = .ok ()) :
     ∃ proofs spec tabs rest, files = .ok proofs ∧ st = .ok (spec, tabs, rest) ∧
       Flock.Zk.verify spec tabs record proofs = .ok () := by
   unfold _root_.SampledProofs.OneStageZk.verdictOf at h
@@ -292,9 +294,10 @@ theorem verdictOf_ok {I : Flock.Witness.Inputs} {scope ksFiles : Flock.V Unit} {
 /-- **One session's `step` after a run that accepted so far, where every session accepted**: its record is a blob,
 UTF-8, set up at its own draw, its proof files the blobs it names, and `Flock.Zk.verify` accepts them. -/
 theorem step_verified {I : Flock.Witness.Inputs} {rd : _root_.SampledProofs.OneStageZk.Reads}
-    {bs : _root_.Core.Blobs} {scope ksFiles : Flock.V Unit} {programSha : Option String} {want : Json}
+    {bs : _root_.Core.Blobs} {scope ksFiles population : Flock.V Unit} {programSha : Option String} {want : Json}
     {s : _root_.SampledProofs.OneStageZk.RunFiles} {r : _root_.SampledProofs.OneStageZk.Run}
-    (h : _root_.SampledProofs.OneStageZk.step I rd bs scope ksFiles programSha want ⟨#[], #[], #[], true⟩ s = .ok r)
+    (h : _root_.SampledProofs.OneStageZk.step I rd bs scope ksFiles population programSha want ⟨#[], #[], #[], true⟩ s
+      = .ok r)
     (hall : r.all = true) :
     ∃ recB record spec tabs rest proofs, bs.get s.record s!"session {s.name}'s record" = .ok recB ∧
       String.fromUTF8? recB = some record ∧
@@ -319,9 +322,9 @@ theorem run_verified {p : _root_.SampledProofs.OneStageZk.Own} {s : _root_.Sampl
     ∃ tags0 circuitB pubB rd, Flock.Tags.find? _root_.SampledProofs.OneStageZk.STATEMENT = some tags0 ∧
       bs.get p.circuit "circuit" = .ok circuitB ∧ bs.get p.pub "public file" = .ok pubB ∧
       _root_.SampledProofs.OneStageZk.readsOf p.registered = .ok rd ∧
-      ∃ scope ksFiles programSha want,
+      ∃ scope ksFiles population programSha want,
         _root_.SampledProofs.OneStageZk.step (_root_.SampledProofs.OneStageZk.inputsOf tags0 p circuitB pubB bs) rd bs
-          scope ksFiles programSha want ⟨#[], #[], #[], true⟩ s = .ok r := by
+          scope ksFiles population programSha want ⟨#[], #[], #[], true⟩ s = .ok r := by
   unfold _root_.SampledProofs.OneStageZk.run at h
   dsimp only at h
   split at h
@@ -336,7 +339,7 @@ theorem run_verified {p : _root_.SampledProofs.OneStageZk.Own} {s : _root_.Sampl
       repeat' (first | (obtain ⟨_, _, h⟩ := ebind_ok h) | (split at h))
       all_goals simpa only [pure, Except.pure, Except.ok.injEq] using h
     subst e
-    exact ⟨tags0, circuitB, pubB, rd, htags, hc, hp, hrd, _, _, _, _, foldlM_single hr'⟩
+    exact ⟨tags0, circuitB, pubB, rd, htags, hc, hp, hrd, _, _, _, _, _, foldlM_single hr'⟩
   · cases h
 
 /-- **v2's check at the coins `ξ` accepts only where its run on the evidence's one session accepted it**. -/
@@ -419,7 +422,7 @@ theorem checkBlobsAt_verified {p : _root_.SampledProofs.OneStageZk.Params}
   obtain ⟨r, hsz, hrun, hall⟩ := checkBlobsAt_run h
   have hs := eq_single hsz
   rw [hs] at hrun
-  obtain ⟨tags0, circuitB, pubB, rd, ht, hc, hp, hrd, _, _, _, _, hstep⟩ := run_verified hrun
+  obtain ⟨tags0, circuitB, pubB, rd, ht, hc, hp, hrd, _, _, _, _, _, hstep⟩ := run_verified hrun
   obtain ⟨recB, record, spec, tabs, rest, proofs, hb, hrec, hst, hf, hv⟩ := step_verified hstep hall
   exact ⟨record, spec, tabs, rest, proofs, e.sessions[0], tags0, circuitB, pubB, rd, hs, ht, hc, hp, hrd,
     sessionRecord_eq hs hb hrec, hst, hf, hv⟩
