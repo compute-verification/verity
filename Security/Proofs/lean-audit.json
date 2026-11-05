@@ -132,7 +132,7 @@
   },
   "Proofs.Flock.Soundness.Refine.Walk": {
    "why": "walk_step and ret_walk, the tactics that step through a computation of the executable by its head (Refine/Setup.lean's proofs of the setups' well-formedness). They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
-   "digest": "43cef63eede2b83794053d51590b5d92c6bbbe72dcc21eb9fae89de357e7545e"
+   "digest": "687819e213e9bde2f55b5c1212a10d3db8a724ecad71e258ec3924a388ce2ffc"
   }
  },
  "layers": {
