@@ -213,6 +213,9 @@ READY = "ready"
 #: (on `checked`; `main` follows only to commits whose after-landing run passed).
 REVIEWED = "reviewed"
 REVIEW_VERDICTS = ("land", "hold")
+#: A preflight's verdict on a pull request at one head (`pr:<n>@<sha>`), one per base tree: `ready --mark`'s, or a pool run's that
+#: drive's sync launched (`research queue preflight`); the sync admits by it and never runs a preflight itself.
+PREFLIGHT = "preflight"
 #: A `check.py --update` report (its audit.json) on a pull request at one head: a record of what its lean-audit.json change printed
 #: as. No merge needs a statement reviewer; the DM of a changed record is the check.
 LEAN_REVIEW = "lean_review"
@@ -402,6 +405,10 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(REVIEWED, GROUP_VERIFICATION, ENUM, "a reviewer's verdict on pr:<n>@<head> (`research queue review`): land, or hold with the "
        "reason as its ref; drive's review landing counts one only by a reviewer who isn't the PR's owner",
        REVIEW_VERDICTS),
+    _k(PREFLIGHT, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>: a JSON object, a preflight's verdict on its merge onto a base "
+       "({base: the base's tree, tree: the merged tree, why: the refusal or null, onto: the base commit, of: pool or ready}); "
+       "by drive from a pool run (`research queue preflight`, its run id as the ref) or by `ready --mark`'s marker; drive's "
+       "sync reads them into `preflights`"),
     _k(LEAN_REVIEW, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>: the art: id of a `tools/verity/lean/check.py --update` report (its audit.json); a lean-audit.json "
        "change it printed whole as the same statements (moved under --moved, printed differently, rehashed); a record only, since no merge "
        "needs a statement reviewer"),

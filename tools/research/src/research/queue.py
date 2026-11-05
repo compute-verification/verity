@@ -637,6 +637,9 @@ class DriveFlags:
     #: infra's enqueue command, the words of one argv run with no shell (`research.executor.QueueTransport`): it puts
     #: `--priority N --check after-landing:SHA` on the executor's queue; none, each tip "shadow" or "on" enqueues fails, told
     executor_enqueue: tuple[str, ...] = ()
+    #: the most preflight runs outstanding on the research pool at once (`Queue.preflights`): a sync launches one for each PR
+    #: whose merge onto `next` has no verdict, up to this many, and the PR waits off `next` until a later sync reads its verdict
+    preflight_pool: int = 16
 
     @classmethod
     def parse(cls, text: str, source: str = "drive.toml", strict: bool = False) -> "DriveFlags":
@@ -682,6 +685,10 @@ class DriveFlags:
             if type(doc["max_lean_checks"]) is not int or doc["max_lean_checks"] < 1:
                 raise bad("max_lean_checks", "a whole number, 1 or more")
             got["max_lean_checks"] = doc["max_lean_checks"]
+        if "preflight_pool" in doc:
+            if type(doc["preflight_pool"]) is not int or doc["preflight_pool"] < 1:
+                raise bad("preflight_pool", "a whole number, 1 or more")
+            got["preflight_pool"] = doc["preflight_pool"]
         if "executor" in doc:
             if doc["executor"] not in EXECUTOR_MODES:
                 raise bad("executor", f"one of {', '.join(EXECUTOR_MODES)}")
@@ -1390,6 +1397,8 @@ class Queue:
         #: the bottom members `order` keeps where they are under `hold`, each at the head `next` holds
         self._held: dict[int, str] = {}
         self.now: Callable[[], float] = time.time
+        #: the most preflight runs outstanding at once (drive.toml's `preflight_pool`)
+        self.preflight_pool = DriveFlags.preflight_pool
         #: what a PR the sync merges onto `next` passes to enter it (`Preflight.onto`: its merge onto the member below its place,
         #: with the members below), or None: no such check (a sync off drive's, a test); `_preflighted` runs
         #: `preflight_parallel` at once and starts them within `PREFLIGHT_BUDGET_S` of wall time a sync, measured by `clock`
@@ -6127,7 +6136,7 @@ def main(argv: list[str]) -> int:
                 raise QueueError(f"drive needs a machine for the checks it launches: set `on` in {DRIVE_FLAGS} at `main`, or pass "
                                  "--on MACHINE")
             q.first, q.nonlean_first, q.reviewed_first = flags.first, flags.nonlean_first, flags.reviewed_first
-            q.verdict_first = flags.verdict_first
+            q.verdict_first, q.preflight_pool = flags.verdict_first, flags.preflight_pool
             q.land_into = flags.land_into
             a.marked_after = flags.marked_after
             labels.since = a.marked_after

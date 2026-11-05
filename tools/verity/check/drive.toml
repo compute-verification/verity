@@ -24,6 +24,10 @@ first = []
 # It is left out while `main` moves only on a full check of a prefix of `next`: that check runs the vLLM lints over the
 # whole tree, and each move of `main` re-judged every member cold (a 514-PR rebuild took 70 min, about 8 s a merge).
 landing_gates = ["tools/verity/check/gates/markdown_caps.py"]
+# the most preflight runs outstanding on the research pool at once. A sync never runs a preflight itself: a PR whose merge onto
+# `next` has no verdict (its ready mark's, or an earlier run's) waits off `next` while a `research run --on auto` of `research
+# queue preflight` judges that merge, and a later sync admits or refuses it by the verdict
+preflight_pool = 16
 # how `next` lands: "review", each member on a reviewer's land verdict (`research queue review`), a Lean change once a Lean check
 # passed; the only landing there is. With `land_into = "checked"`, `main` holds only fully checked commits
 land = "review"
