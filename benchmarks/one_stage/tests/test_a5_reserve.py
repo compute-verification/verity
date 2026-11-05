@@ -1,4 +1,5 @@
-"""a5's challenger reserve (`a5_coins.need`, `families`, `reserve_reason`) and the session `a5_coins.start` opens on it.
+"""a5's challenger reserve (`a5_coins.need`, `families`, `reserve_reason`) and the session `a5_coins.start` opens on it,
+whose evidence `a5.window_record` holds a window's registration to before the audit reads a root from it.
 
 A rank's need is the coins its `service.Stream` draw reads for its law over its window's counts, plus its longest stream
 once more, known before anything opens. The windows are toy templates at the counts of record. One is 38b2's step-16
@@ -8,6 +9,7 @@ under `stratified:1`), whose draw reads more than the 16 coins a rank the old re
 
 from __future__ import annotations
 
+import argparse
 import random
 import sys
 import tempfile
@@ -19,10 +21,11 @@ import pytest
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.types import Array, Value as Bits
 from verity.core.protocols.sampled_proofs import challenger as Ch, coins as CC, service as S
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P
+from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
+import a5  # noqa: E402
 import a5_coins as AC  # noqa: E402
 
 XOR8 = PrimitiveDefinition("A5ReserveTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
@@ -214,6 +217,44 @@ def test_two_ranks_open_the_session_once_both_have_planned(tmp_path, monkeypatch
     assert published["plan"]["needs"] == {"0": 6, "1": 6} and published["plan"]["families"] == [[AC.FAMILY, 33]]
     assert sorted(segments) == [0, 1] and all(len(s["openings"]) == 4 for s in segments.values())
     assert published["trusted"]["released"] == {AC.FAMILY: 1 + 4 + 4}
+
+
+def test_the_window_record_holds_a_registration_to_the_coins_released_after_its_digest(tmp_path, monkeypatch):
+    """`a5.window_record` on the local challenger's evidence, before `complete_drawn` reads any root of the registration:
+    rank 0's registration, its window's run the verifier's and ``ROOT/rank0`` under the root the auditor's ledger opens,
+    whose SHA-512 the coins were released after, holds. Refused: a registration of another digest (a root moved), a window
+    run not the verifier's, a run that is not the ledger's root or the rank's under it, a run the ledger opens no session
+    on, and a stream with no evidence. A development draw holds only the run."""
+    run = f"{ROOT}/rank0"
+    rec = {"format": R.FORMAT, "window": {"kind": "served", "run": run},
+           "roots": [{"port": "m0/x", "root": "11" * 64}, {"port": "m0/o0", "root": "22" * 64}]}
+    rule, law, n = "stratified:4", law_of("stratified:4", SILU_MUL), sum(SILU_MUL)
+    manager, draws, opener = local(tmp_path, monkeypatch, [0])
+    try:
+        coins = AC.RankCoins(draws, 0)
+        coins.plan(need_of(rule, SILU_MUL))
+        coins.commit(bytes.fromhex(R.digest(rec)))
+        S.select_draw(S.Law(rule), law, n, coins)
+        segment = coins.drawn()
+        draws.skip(0)
+        opener.join()
+        published = draws.evidence()
+    finally:
+        manager.shutdown()
+    assert "error" not in published, published.get("error")
+    ev, read = AC.evidence(published, segment), bytes(coins.read)
+    a = argparse.Namespace(coins=object(), window_root=ROOT)
+    assert a5.window_record(a, rec, run, ev, read, 0) is None
+    moved = {**rec, "roots": [rec["roots"][0], {**rec["roots"][1], "root": "33" * 64}]}
+    assert a5.window_record(a, moved, run, ev, read, 0) is not None
+    assert "not the verifier's" in a5.window_record(a, rec, a5.OTHER_RUN, ev, read, 0)
+    assert "the auditor's ledger opens" in a5.window_record(a, rec, run, ev, read, 1)
+    elsewhere = {**rec, "window": {**rec["window"], "run": a5.OTHER_RUN}}
+    assert a5.window_record(a, elsewhere, a5.OTHER_RUN, ev, read, None, root=a5.OTHER_RUN) is not None
+    assert "gave no evidence" in a5.window_record(a, rec, run, None, read, 0)
+    development = argparse.Namespace(coins=None, window_root=None)
+    assert a5.window_record(development, moved, run, None, b"", 0) is None
+    assert "not the verifier's" in a5.window_record(development, rec, a5.OTHER_RUN, None, b"", 0)
 
 
 def test_a_too_small_reserve_is_refused_before_the_session_opens(tmp_path, monkeypatch):
