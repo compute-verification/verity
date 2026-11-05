@@ -30,5 +30,6 @@ import Proofs.Flock.SamplingScope
 import Proofs.Flock.Claims.Complete.Zk
 import Proofs.Flock.EndToEnd.Joint.Bound
 import Proofs.Flock.Soundness.Audit.StratifiedProj
+import Proofs.Flock.Statement
 
 /-! C-Flock's proofs: the verifier's, level3's and soundness's. -/
