@@ -1530,25 +1530,9 @@
    "owner": "@network-accounting",
    "digest": "0d433e5271a1ae85c0d7fde2eacabd9de68f97a6760809219bdf1ab0ba5234ec"
   },
-  "NetTiming.SchedulesCovered": {
-   "owner": "@network-accounting",
-   "digest": "767ae474e9250336583b74a2c21af271e6294275cae4b0a63d321bcfde447cea"
-  },
-  "NetTiming.SchedulesHeld": {
-   "owner": "@network-accounting",
-   "digest": "ef3dc8e45f7f5aa3a85d6bfa4e16bfd85edf4b4a60ae1bf35f0ba3b825120f8f"
-  },
-  "NetTiming.SenderDecodes": {
-   "owner": "@network-accounting",
-   "digest": "621346fd7e57e053597eb741c016a7e58395610b3992ceaea041b53d40c15e1b"
-  },
   "NetTiming.StatusComplete": {
    "owner": "@network-accounting",
    "digest": "e76c46b0a2f8b619b953aeb4331cd813ba0128cec464f244821bd9c6d4ea7f06"
-  },
-  "NetTiming.WindowsPlaced": {
-   "owner": "@network-accounting",
-   "digest": "3c51a220f192b89d144ab2db548f09204a5039ae593305a11714cb5cabd0b157"
   },
   "Pous.AuditSecure": {
    "owner": "@memory-accounting",
@@ -2629,6 +2613,7 @@
    "Claims.Sampling.Faulty": "a helper the claims read: a faulty unit, which the sampling relation reads",
    "Claims.Sampling.FaultyBoundary": "proved of every program (`Claims.Sampling.faultyBoundary`), not of a deployment",
    "Claims.Sampling.InScope": "a helper the claims read: the programs and partitions the sampling scope takes",
+   "Claims.Sampling.IncorrectBy": "a helper the claims read: an incorrect unit at a check on a proof block, which the sampling relation at that check (`RBy`) reads",
    "Claims.Sampling.LogColl": "a helper the claims read: a collision in a log of `H` calls",
    "Claims.Sampling.OneStage.WellFormed": "a helper the claims read: a well-formed one-stage design",
    "Claims.Sampling.Partition.Partitions": "a helper the claims read: a partition of a program's gates into proof units",
@@ -2652,8 +2637,7 @@
    "Claims.Sampling.PrivateCircuit.Fits": "a helper the claims read: a private circuit of a size class",
    "Claims.Json.Ascii": "a helper: a text of ASCII without DEL, which every text `Flock.canon` prints is",
    "Claims.Sampling.CommitmentScheme.Binds": "a helper the claims read: a commitment scheme's binding, which `Binding` reads",
-   "Claims.Recursion.DrawRecord.Full": "a V* session's draw record that takes every unit, a clause of the readable scope (`InScope`), no claim",
-   "Claims.Sampling.IncorrectBy": "a helper the claims read: an incorrect unit at a check on a proof block, which the sampling relation at that check (`RBy`) reads"
+   "Claims.Recursion.DrawRecord.Full": "a V* session's draw record that takes every unit, a clause of the readable scope (`InScope`), no claim"
   }
  },
  "witnesses": {
@@ -2816,9 +2800,6 @@
   "NetTiming.SecurityProofs.PooledLeakAccepted": {
    "honest": ["NetTiming.Witness.PooledLeakAccepted_honest"],
    "nontrivial": "NetTiming.Witness.PooledLeakAccepted_nontrivial"
-  },
-  "NetTiming.SecurityProofs.PeriodLeakRegistered": {
-   "nontrivial": "NetTiming.Witness.PeriodLeakRegistered_nontrivial"
   },
   "NetTiming.SecurityProofs.SampledAuditAccepted": {
    "nontrivial": "NetTiming.Witness.SampledAuditAccepted_nontrivial"
@@ -3123,11 +3104,6 @@
    "type_hash": "eb1ecf1c9fd8c032de54cd8f6a7cfd92a6a3e04c65b54f8d8dfbe15a1e586b9b",
    "missing": "honest",
    "why": "its premises at the network certifier's rows are the sampled leg's (KSBy at the wired check at the layout's wires and CommitmentScheme.Binds at each deployment), whose honest lemmas at the deployed record (NetTiming.Witness.SampledAuditAccepted_honest at layouts with no wiring, NetTiming.ksWired_of_record at a wired one) take the assembled record's hypotheses, which are no named assumptions; both are conditional on the sampled leg's bridge, which is to discharge those hypotheses at the record"
-  },
-  "NetTiming.SecurityProofs.PeriodLeakRegistered": {
-   "type_hash": "f2fad87144bd190ccbf629bb799807d80047ddb2dbc70aff1d4a6bb40c0fd1c6",
-   "missing": "honest",
-   "why": "its honest witness is the sampled leg's guarantee at the honest deployment (Verity.Vocab.SampledProofsSound at one-stage v2), which sampled-audits-sound is to prove; its premises at the network certifier's rows are PeriodLeakAccepted's (KSBy at the wired check at the layout's wires and CommitmentScheme.Binds at each deployment), whose honest half is missing likewise"
   },
   "NetTiming.SecurityProofs.PooledWrongUnitsLe": "4b11601f70dff05cee40e380db457b79380461d4bb512fd7a54931a34a305d38",
   "NetTiming.SecurityProofs.SampledAuditAccepted": {
@@ -10068,12 +10044,6 @@
    "assumptions": [],
    "type_hash": "eb1ecf1c9fd8c032de54cd8f6a7cfd92a6a3e04c65b54f8d8dfbe15a1e586b9b"
   },
-  "NetTiming.SecurityProofs.PeriodLeakRegistered": {
-   "owner": "@network-accounting",
-   "signature": ["NetTiming.SecurityProofs.PeriodLeakRegistered : NetTiming.Guarantees.PeriodLeakRegistered"],
-   "assumptions": [],
-   "type_hash": "f2fad87144bd190ccbf629bb799807d80047ddb2dbc70aff1d4a6bb40c0fd1c6"
-  },
   "NetTiming.SecurityProofs.PooledIncorrectBlocksLe": {
    "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.PooledIncorrectBlocksLe : NetTiming.Guarantees.PooledIncorrectBlocksLe"],
@@ -10431,45 +10401,6 @@
    ],
    "assumptions": [],
    "type_hash": "6d5989bb9928b43e730b8de9d106321e4bf69b6f3c022bb3cc664608992a6bd5"
-  },
-  "NetTiming.Witness.PeriodLeakRegistered_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.PeriodLeakRegistered_nontrivial :",
-    "  Not",
-    "    (Real.instLE.le",
-    "      (Claims.PrBad FlockDeploy.sha512 (NetTiming.Witness.tapD Unit).V",
-    "        (NetTiming.RLeakTap FlockDeploy.sha512 (NetTiming.Witness.tapD Unit).commit (NetTiming.Witness.tapD Unit).parse",
-    "          (NetTiming.Witness.tapD Unit).partition 1 1 1 (fun x => NetTiming.Witness.notLay) (fun x => 1) (1 / 8)",
-    "          (fun s x =>",
-    "            NetTiming.AsReg s.prog NetTiming.Witness.notLay 1 Finset.instEmptyCollection.emptyCollection",
-    "              (NetTiming.regVal List.nil))",
-    "          1 fun x => NetTiming.Witness.tapOps)",
-    "        (Claims.Sampling.E (NetTiming.Witness.tapD Unit) fun x => List.cons Unit.unit List.nil) List.nil",
-    "        Claims.Witness.silentP)",
-    "      (instHAdd.hAdd",
-    "        (instHAdd.hAdd",
-    "          (instHAdd.hAdd",
-    "            (instHAdd.hAdd (Claims.Sampling.κ (NetTiming.Witness.tapD Unit) (1 / 8) List.nil)",
-    "              (instHMul.hMul (Claims.Sampling.γ (NetTiming.Witness.tapD Unit) List.nil)",
-    "                  (Claims.PrB FlockDeploy.sha512 (NetTiming.Witness.tapD Unit).V Claims.Witness.silentP List.nil)).sqrt)",
-    "            (Claims.Finder.Pr FlockDeploy.sha512",
-    "              (Claims.Sampling.Bext FlockDeploy.sha512 (NetTiming.Witness.tapD Unit).V",
-    "                (Claims.Sampling.E (NetTiming.Witness.tapD Unit) fun x => List.cons Unit.unit List.nil) Unit",
-    "                Claims.Witness.silentP List.nil)))",
-    "          (Claims.Finder.Pr FlockDeploy.sha512",
-    "            (NetTiming.Btap FlockDeploy.sha512 (NetTiming.Witness.tapD Unit).V",
-    "              (Claims.Sampling.E (NetTiming.Witness.tapD Unit) fun x => List.cons Unit.unit List.nil)",
-    "              (NetTiming.Witness.tapD Unit).commit (NetTiming.Witness.tapD Unit).parse",
-    "              (fun x => NetTiming.Witness.tapOps) Unit Claims.Witness.silentP List.nil)))",
-    "        (Claims.Finder.Pr FlockDeploy.sha512",
-    "          (NetTiming.Breg FlockDeploy.sha512 (NetTiming.Witness.tapD Unit).V",
-    "            (Claims.Sampling.E (NetTiming.Witness.tapD Unit) fun x => List.cons Unit.unit List.nil)",
-    "            (NetTiming.Witness.tapD Unit).commit (NetTiming.Witness.tapD Unit).parse (fun x => List.nil) Unit",
-    "            Claims.Witness.silentP List.nil))))"
-   ],
-   "assumptions": [],
-   "type_hash": "9d7f0a96bd8af156085a23d514bc81f7f6917a1f3d623232b39952b8ce15ff3c"
   },
   "NetTiming.Witness.PooledLeakAccepted_honest": {
    "owner": "@network-accounting",
@@ -14811,8 +14742,7 @@
    "Flock.SecurityProofs.IntegrityBlock": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.IntegrityHorizonBlocks": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Accounting.SecurityProofs.PooledSampling": "frozen (no-function): It bounds uniform samples over an abstract causal family of rounds whose good sets are any functions of the earlier rounds' coins and of the round's own coins other than its sample (Security/Definitions/Accounting/RateAuditPooled.lean, Causal), not a deployed sampler or verifier.",
-   "Accounting.SecurityProofs.RatePooled": "frozen (no-function,hash): As Accounting.SecurityProofs.PooledSampling for the passes of a chained window of abstract chip programs in the random-oracle model (Security/Definitions/Accounting/RateAuditRemote.lean, Chain), each pass's correct receipts its good set, not the rate audit's code.",
-   "NetTiming.SecurityProofs.PeriodLeakRegistered": "frozen (no-function,world-unlisted): It composes the sampled leak bound at the network certifier's rows with the registered inputs at the values the registration opens (NetTiming.sampledLeak_tapReg: RLeakTap at AsReg and regVal, on the statements whose registration opens its registered inputs, RegOpensAt, an antecedent, with KSBy at the wired check at the layout's wires, until Claims.Sampling.KSByDeployed discharges it, and CommitmentScheme.Binds at each deployment, and Btap and Breg the collisions with the network certifier's and the registration's openings) with the read-back of its record, over the network certifier's code (tapCode, in any record format TapRecord that holds the schedules of Ss, SchedulesHeld) run by an arbitrary device on arbitrary server behaviors with trusted-host (TrustedHost), across a monitoring period of windows: it bounds AccSeqsSampled at each window's registration and the cells of the network certifier's code, not runs of the network check's code, and, where the network certifier registers its observations at every window (TapsOpen, an antecedent), it counts the secrets whose every window meets WindowGoodReg (RLeakTap at the extracted witness and the registration's opened values at the registered inputs), with each window's failure bounded on its own and no union over the monitoring period's live coins yet."
+   "Accounting.SecurityProofs.RatePooled": "frozen (no-function,hash): As Accounting.SecurityProofs.PooledSampling for the passes of a chained window of abstract chip programs in the random-oracle model (Security/Definitions/Accounting/RateAuditRemote.lean, Chain), each pass's correct receipts its good set, not the rate audit's code."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -22484,12 +22414,10 @@
     "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.SamplingClaimsStated",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
-    "NetTiming.SecurityProofs.PeriodLeakRegistered",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakRegistered",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
-    "NetTiming.Witness.PeriodLeakRegistered_nontrivial",
     "NetTiming.Witness.SampledAuditAccepted_nontrivial",
     "NetTiming.Witness.SampledLeakAccepted_nontrivial",
     "NetTiming.Witness.SampledLeakRegistered_nontrivial",
@@ -23059,7 +22987,6 @@
     "Flock.SecurityProofs.SamplingClaimsStated",
     "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
-    "NetTiming.SecurityProofs.PeriodLeakRegistered",
     "NetTiming.SecurityProofs.PooledLeakAccepted",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
@@ -23067,7 +22994,6 @@
     "NetTiming.Witness.EncardAccSeqsSampledLe_honest",
     "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
-    "NetTiming.Witness.PeriodLeakRegistered_nontrivial",
     "NetTiming.Witness.PooledLeakAccepted_nontrivial",
     "NetTiming.Witness.SampledAuditAccepted_nontrivial",
     "NetTiming.Witness.SampledLeakAccepted_nontrivial",
@@ -23363,7 +23289,6 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
-    "NetTiming.SecurityProofs.PeriodLeakRegistered",
     "NetTiming.SecurityProofs.PooledLeakAccepted",
     "Pouw.SecurityProofs.Lead.Compose.G",
     "Pouw.SecurityProofs.Lead.Compose.honest",
@@ -23606,12 +23531,10 @@
     "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
-    "NetTiming.SecurityProofs.PeriodLeakRegistered",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakRegistered",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
-    "NetTiming.Witness.PeriodLeakRegistered_nontrivial",
     "NetTiming.Witness.SampledAuditAccepted_nontrivial",
     "NetTiming.Witness.SampledLeakAccepted_nontrivial",
     "NetTiming.Witness.SampledLeakRegistered_nontrivial",
@@ -23861,12 +23784,10 @@
     "Nci.SecurityProofs.WeightedProductCapHonest",
     "Nci.SecurityProofs.WeightedProductCapNontrivial",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
-    "NetTiming.SecurityProofs.PeriodLeakRegistered",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakRegistered",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
-    "NetTiming.Witness.PeriodLeakRegistered_nontrivial",
     "NetTiming.Witness.SampledAuditAccepted_nontrivial",
     "NetTiming.Witness.SampledLeakAccepted_nontrivial",
     "NetTiming.Witness.SampledLeakRegistered_nontrivial",
@@ -25049,13 +24970,11 @@
     "Hash.SecurityProofs.RowBinding",
     "Hash.SecurityProofs.TreeBinding",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
-    "NetTiming.SecurityProofs.PeriodLeakRegistered",
     "NetTiming.SecurityProofs.PooledLeakAccepted",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakRegistered",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
-    "NetTiming.Witness.PeriodLeakRegistered_nontrivial",
     "NetTiming.Witness.PooledLeakAccepted_nontrivial",
     "NetTiming.Witness.SampledAuditAccepted_nontrivial",
     "NetTiming.Witness.SampledLeakAccepted_nontrivial",
@@ -25327,14 +25246,12 @@
     "Flock.SecurityProofs.SampledKSLiveV5",
     "Flock.SecurityProofs.SamplingClaimsStated",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
-    "NetTiming.SecurityProofs.PeriodLeakRegistered",
     "NetTiming.SecurityProofs.PooledIncorrectBlocksLe",
     "NetTiming.SecurityProofs.PooledLeakAccepted",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakRegistered",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
-    "NetTiming.Witness.PeriodLeakRegistered_nontrivial",
     "NetTiming.Witness.PooledLeakAccepted_nontrivial",
     "NetTiming.Witness.SampledAuditAccepted_nontrivial",
     "NetTiming.Witness.SampledLeakAccepted_nontrivial",
@@ -29592,7 +29509,6 @@
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow",
     "NetTiming.SecurityProofs.ExpectedRowCausal",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
-    "NetTiming.SecurityProofs.PeriodLeakRegistered",
     "NetTiming.SecurityProofs.PooledLeakAccepted",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
@@ -29617,7 +29533,6 @@
     "NetTiming.Witness.EncardIngressObsDecodableLe_nontrivial",
     "NetTiming.Witness.Ingress_honest",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
-    "NetTiming.Witness.PeriodLeakRegistered_nontrivial",
     "NetTiming.Witness.PooledLeakAccepted_honest",
     "NetTiming.Witness.PooledLeakAccepted_nontrivial",
     "NetTiming.Witness.SampledAuditAccepted_nontrivial",
@@ -29669,12 +29584,11 @@
    ]
   },
   "Definitions.NetworkCertifier.Guarantees.Period": {
-   "digest": "2f6c648c8132ff1e9bb85b5baea6a0638f02721bcd71c898d6408561a59e557e",
+   "digest": "c3cc5024012cf4a73ddc9907de44682a92f7a3bd189c541b3e8a5e8fb2440b7c",
    "definitions": {
-    "NetTiming.Guarantees.PeriodLeakAccepted": "a0a9c23666273efec9d2ddef896331f0d5a3699e707f317fe3de4e7189f29a17",
-    "NetTiming.Guarantees.PeriodLeakRegistered": "2865cabaa8bda7278b8ef4a4811e4c8bf858af621fffa21481551790b29a7a45"
+    "NetTiming.Guarantees.PeriodLeakAccepted": "a0a9c23666273efec9d2ddef896331f0d5a3699e707f317fe3de4e7189f29a17"
    },
-   "guarantees": ["NetTiming.SecurityProofs.PeriodLeakAccepted", "NetTiming.SecurityProofs.PeriodLeakRegistered"]
+   "guarantees": ["NetTiming.SecurityProofs.PeriodLeakAccepted"]
   },
   "Definitions.NetworkCertifier.Guarantees.Pooled": {
    "digest": "54fea0a567a4758143eeefd5ddfa44f6ff75b5659e11d867439071d9d3d95129",
@@ -29732,29 +29646,15 @@
    ]
   },
   "Definitions.NetworkCertifier.Period": {
-   "digest": "0e8a564bd7e6ae39698fec52bda52856b27d3ba183386c09a8fa94637c7f15a9",
+   "digest": "f62351d06852ca86b3b2aa07501aa2a2ced8998bc90fa46c91bf7508840d32c8",
    "definitions": {
-    "NetTiming.RegOpensAt": "3a74b3e27c2cb7e1f75661279c29c44bd91dd037f30b51d67f6d27a5502da92f",
     "NetTiming.SameRegistration": "7604bb256ec6683474664e855d7454fcef82e5bd22247f0e1b78612d6147c6d6",
-    "NetTiming.WindowGood": "3c79b3da5aebc32d34db8adbdea63884d52ac19001dc1060d807ee7e9ad60eea",
-    "NetTiming.WindowGoodReg": "ec85cf9b5459178341b8a5411d4d8c475bc1d3be245947aa957dadaee862820f"
+    "NetTiming.WindowGood": "3c79b3da5aebc32d34db8adbdea63884d52ac19001dc1060d807ee7e9ad60eea"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
-    "NetTiming.SecurityProofs.PeriodLeakAccepted",
-    "NetTiming.SecurityProofs.PeriodLeakRegistered"
+    "NetTiming.SecurityProofs.PeriodLeakAccepted"
    ]
-  },
-  "Definitions.NetworkCertifier.PeriodConditions": {
-   "digest": "79b25021a2a60d1f71b6eb0b529cda579757ec228751fb5e1313ef126067c63c",
-   "definitions": {
-    "NetTiming.SchedulesCovered": "767ae474e9250336583b74a2c21af271e6294275cae4b0a63d321bcfde447cea",
-    "NetTiming.SchedulesHeld": "ef3dc8e45f7f5aa3a85d6bfa4e16bfd85edf4b4a60ae1bf35f0ba3b825120f8f",
-    "NetTiming.SenderDecodes": "621346fd7e57e053597eb741c016a7e58395610b3992ceaea041b53d40c15e1b",
-    "NetTiming.TapsOpen": "fc5a60237f1fc714c2469442c21862bf65776a0b8e47658e90c9e51a899704ae",
-    "NetTiming.WindowsPlaced": "3c51a220f192b89d144ab2db548f09204a5039ae593305a11714cb5cabd0b157"
-   },
-   "guarantees": ["NetTiming.SecurityProofs.PeriodLeakRegistered"]
   },
   "Definitions.NetworkCertifier.PooledLeak": {
    "digest": "feacd6c22bbf9dbfdecb6334f134465878f92bf72ed142f82ebc81e18a8c137a",
@@ -29815,7 +29715,6 @@
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow",
     "NetTiming.SecurityProofs.ExpectedRowCausal",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
-    "NetTiming.SecurityProofs.PeriodLeakRegistered",
     "NetTiming.SecurityProofs.PooledLeakAccepted",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
@@ -29840,7 +29739,6 @@
     "NetTiming.Witness.EncardIngressObsDecodableLe_nontrivial",
     "NetTiming.Witness.Ingress_honest",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
-    "NetTiming.Witness.PeriodLeakRegistered_nontrivial",
     "NetTiming.Witness.PooledLeakAccepted_honest",
     "NetTiming.Witness.PooledLeakAccepted_nontrivial",
     "NetTiming.Witness.SampledAuditAccepted_nontrivial",
@@ -29887,7 +29785,6 @@
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
     "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
-    "NetTiming.SecurityProofs.PeriodLeakRegistered",
     "NetTiming.SecurityProofs.PooledLeakAccepted",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
@@ -29895,7 +29792,6 @@
     "NetTiming.Witness.EncardAccSeqsSampledLe_honest",
     "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
-    "NetTiming.Witness.PeriodLeakRegistered_nontrivial",
     "NetTiming.Witness.PooledLeakAccepted_nontrivial",
     "NetTiming.Witness.SampledAuditAccepted_nontrivial",
     "NetTiming.Witness.SampledLeakAccepted_nontrivial",
@@ -29917,14 +29813,12 @@
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
     "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
-    "NetTiming.SecurityProofs.PeriodLeakRegistered",
     "NetTiming.SecurityProofs.PooledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakRegistered",
     "NetTiming.Witness.EncardAccSeqsSampledLe_honest",
     "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
-    "NetTiming.Witness.PeriodLeakRegistered_nontrivial",
     "NetTiming.Witness.PooledLeakAccepted_nontrivial",
     "NetTiming.Witness.SampledLeakAccepted_nontrivial",
     "NetTiming.Witness.SampledLeakRegistered_nontrivial"
@@ -29938,12 +29832,7 @@
     "NetTiming.regLog": "38c80d57935e3a410a11a2af5106dab9e862563e242ba814155e49214562a7c8",
     "NetTiming.regVal": "aa7243eafeed844f556710542e32c50bc76f877e77932e1700755dc310ee4873"
    },
-   "guarantees": [
-    "NetTiming.SecurityProofs.PeriodLeakRegistered",
-    "NetTiming.SecurityProofs.SampledLeakRegistered",
-    "NetTiming.Witness.PeriodLeakRegistered_nontrivial",
-    "NetTiming.Witness.SampledLeakRegistered_nontrivial"
-   ]
+   "guarantees": ["NetTiming.SecurityProofs.SampledLeakRegistered", "NetTiming.Witness.SampledLeakRegistered_nontrivial"]
   },
   "Definitions.NetworkCertifier.Schedule": {
    "digest": "f111025e1c4fd3b54ab0b3e233cd45ec6207e10ef6e40d1058c19954dc177694",
@@ -29977,7 +29866,6 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
-    "NetTiming.SecurityProofs.PeriodLeakRegistered",
     "NetTiming.SecurityProofs.PooledLeakAccepted",
     "NetTiming.Witness.PooledLeakAccepted_honest"
    ]
@@ -29995,9 +29883,7 @@
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted_nontrivial",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
-    "NetTiming.SecurityProofs.PeriodLeakRegistered",
-    "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
-    "NetTiming.Witness.PeriodLeakRegistered_nontrivial"
+    "NetTiming.Witness.PeriodLeakAccepted_nontrivial"
    ]
   },
   "Definitions.NetworkCertifier.Warden": {
@@ -30023,7 +29909,6 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
-    "NetTiming.SecurityProofs.PeriodLeakRegistered",
     "NetTiming.SecurityProofs.PooledLeakAccepted",
     "NetTiming.Witness.PooledLeakAccepted_honest"
    ]
@@ -40432,7 +40317,6 @@
     "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
-    "NetTiming.Witness.PeriodLeakRegistered_nontrivial",
     "NetTiming.Witness.SampledAuditAccepted_nontrivial",
     "NetTiming.Witness.SampledLeakAccepted_nontrivial",
     "NetTiming.Witness.SampledLeakRegistered_nontrivial",
@@ -51328,7 +51212,6 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveKSDeployed",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
-    "NetTiming.Witness.PeriodLeakRegistered_nontrivial",
     "NetTiming.Witness.SampledAuditAccepted_nontrivial",
     "NetTiming.Witness.SampledLeakAccepted_nontrivial",
     "NetTiming.Witness.SampledLeakRegistered_nontrivial",
@@ -51559,7 +51442,6 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveKSDeployed",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
-    "NetTiming.Witness.PeriodLeakRegistered_nontrivial",
     "NetTiming.Witness.SampledAuditAccepted_nontrivial",
     "NetTiming.Witness.SampledLeakAccepted_nontrivial",
     "NetTiming.Witness.SampledLeakRegistered_nontrivial",
@@ -54384,7 +54266,6 @@
     "Claims.Witness.Recursion.ZKStop_fails",
     "Claims.Witness.Recursion.ZK_fails",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
-    "NetTiming.Witness.PeriodLeakRegistered_nontrivial",
     "NetTiming.Witness.SampledAuditAccepted_nontrivial",
     "NetTiming.Witness.SampledLeakRegistered_nontrivial"
    ]

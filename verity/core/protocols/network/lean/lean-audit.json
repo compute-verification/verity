@@ -33,6 +33,7 @@
   "NetworkCheck.Period": {
    "imports": [
     "NetworkCheck.Check",
+    "NetworkCheck.Circuit",
     "CoreProtocol.Profile",
     "Flock.Program",
     "Flock.Public",
@@ -57,6 +58,11 @@
    "imports": ["NetworkCheck.Check", "Lms.Verify", "Flock.Hm96", "Flock.Canon", "Flock.FV3", "Identity.Tagged"],
    "except": [],
    "why": "N2's link-window verdict of record is code: v4's certificate, its one LMS check and its encodings, the LMS verifier, C-Flock's hm96 row commitment, canonical JSON and frame-v3-sha512 domain, and core's identity hash, no Mathlib and nothing of Security"
+  },
+  "NetworkCheck.Circuit": {
+   "imports": ["Flock.Program", "NciCheck.Desc", "SampledProofs.Wires", "SampledProofs.PyJson"],
+   "except": [],
+   "why": "a compute audit's circuit check is code: C-Flock's program decoder (the population program and its gates), NCI's description-sized layout checks, the sampled audit's wires and canonical JSON (the record's digest), no Mathlib and nothing of Security"
   }
  },
  "reads_exempt": {

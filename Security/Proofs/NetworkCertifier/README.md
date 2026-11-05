@@ -46,14 +46,15 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                transfer gates (tapVal, TapOpens), the leak relation at them (RLeakTap) and the
                                collision finder against its openings (Btap)
 ../../Definitions/NetworkCertifier/PeriodConditions.lean  trusted: the named conditions of a monitoring period's
-                               statements (TapsOpen, WindowsPlaced, SchedulesHeld, SchedulesCovered, SenderDecodes)
+                               statements (CertifiersOpen, WindowsPlaced, SchedulesHeld, SchedulesCovered,
+                               SenderDecodes)
 ../../Definitions/NetworkCertifier/Period.lean  trusted: a monitoring period of sampled audits: a statement registered
                                as a window's (SameRegistration), a window's good event (WindowGood; WindowGoodReg
                                at the registration's values) and the registration's openings at a statement
                                (RegOpensAt)
 ../../Definitions/NetworkCertifier/Guarantees/Period.lean  trusted: the leak through the network certifier over a
-                               monitoring period of sampled audits (PeriodLeakAccepted; PeriodLeakRegistered at the
-                               registration's values)
+                               monitoring period of sampled audits (PeriodLeakAccepted; the registered form,
+                               Properties.NetworkPeriodLeak.PeriodLeakRegistered, is at the period check's acceptance)
 ../../Definitions/NetworkCertifier/Guarantees/Pooled.lean  trusted: the incorrect proof blocks over a monitoring period
                                of sampled audits on independent live coins (PooledIncorrectBlocksLe)
 ../../Definitions/NetworkCertifier/PooledLeak.lean  trusted: a window's leak relation at one faulty set (LeakAt) and a
@@ -104,6 +105,11 @@ Tap.lean        what the tap's certifier saw is what its warden sent: under trus
 RecordRows.lean  the rows format reads back the code's cells on every schedule that fits it (read_record), so it
                                          is a record format (tapRecord); #guards hold it to the Python network
                                          certifier's egress records
+ReadFree.lean   the rows format reads back the code's cells from the record and the schedule's rate and latency
+                                         alone (readFree_record), so the secrets decoded from the client's view number
+                                         at most #Θ · ∏_i #A_i, Θ their schedules' (rate, latency) pairs
+                                         (encard_readFree_le); a period's count over any good event, at its windows' or
+                                         phases' sets (encard_periodRead_le)
 TapRows.lean    the leak bound at the network certifier's rows: the sampling relation at the incorrect set,
                                          at a trace that agrees
                                          with its openings gives the leak relation at them (rLeakTap_of_r, through the
@@ -117,8 +123,8 @@ Period.lean     the leak through the network certifier over a monitoring period:
 PeriodReg.lean  the same at the registration's values: a trace that agrees with the network certifier's openings
                                          and the registration's gives the leak relation with the registered inputs
                                          at the registration's values (rLeakTapReg_of_r), a disagreement with either
-                                         being a collision (sampledLeak_tapReg), counted over WindowGoodReg
-                                         (periodLeak_registered)
+                                         being a collision (sampledLeak_tapReg), counted over WindowGoodReg from the
+                                         rows format's read-back, #Θ for the schedules (periodLeak_registered)
 PeriodSum.lean  the period sum: per-window leak bounds `Pr[acc w ∧ b w < moved w] ≤ ε w` summed over a
                                          period's windows by a union bound (Pr_exists_mem_le_sum, periodLeak_le_sum)
 Pooled.lean     the incorrect proof blocks over a monitoring period: a uniform draw misses `f` blocks with
@@ -142,6 +148,12 @@ WitnessToys.lean  the instances the count and period witnesses are stated at, ea
                                          sender that accept and leak everything, a sampled audit with a possible faulty
                                          unit, the accepting verifier `tapD`, the rows format of the Python fixture
                                          `fxQueue`)
+KsToy.lean      a deployment where `Claims.Sampling.KS` holds (`ksNotD_KS`): the negation under a commitment that
+                                         passes one value at each position, its one proof block checked on every run;
+                                         there, a registration that doesn't open breaks PeriodLeakRegisteredWf's
+                                         per-window part (`not_windowLeakAtAnyOps`), which is why it reads `RegOpensAt`;
+                                         and there WitnessToys' `blindRows`, which encodes every frame as the empty
+                                         list, records every serving as one window the circuit accepts
 CountWitnesses.lean  the thirteen counts' pairs: seven egress (four over `AccSeqs`, one under a sampled
                                          audit, two through the wire) and six ingress. The honest run is
                                          accepted at the reference schedule (`fxRate`) or at `sampProg`, or has every
@@ -149,8 +161,12 @@ CountWitnesses.lean  the thirteen counts' pairs: seven egress (four over `AccSeq
                                          everything (`acceptAll`); the per-execution-block forms at `e₀ = 0`, from
                                          the empty prefix. In the lock's `witnesses`
 PeriodWitnesses.lean  the monitoring period's lemmas in the lock's `witnesses`, none with a binder over the
-                                         instance: PooledLeakAccepted's pair and PeriodLeakAccepted's and
-                                         PeriodLeakRegistered's nontrivial, whose honest halves `unwitnessed` exempts
+                                         instance: PooledLeakAccepted's pair and PeriodLeakAccepted's nontrivial,
+                                         whose honest half `unwitnessed` exempts, and, unlisted, the general
+                                         registered form's (PeriodReg's PeriodLeakRegisteredWf) exclusion of
+                                         trusted-host (not_periodLeakRegisteredUntrusted) and why it reads
+                                         RowsFormat.Wf, which the period check refuses without
+                                         (not_periodLeakRegisteredAnyFormat, at blindRows)
 WiredToys.lean  three toys for the wired sampled audit: dropping the wire-wrong blocks from the incorrect set
                                          (the wire flip, flip_excludes), the wires' acyclicity (the two-cycle,
                                          cycle_excludes) or a wire-writing free input from freeInputs (the
