@@ -166,7 +166,7 @@ def test_pearl_c4_pieces_give_the_whole_rows_outputs(side):
 # ---- the roots --------------------------------------------------------------------------------------------------------
 
 def _inputs8(dev: str, k: int, m: int, n: int):
-    s = C.PearlC(k_min=32, tile=(16, 16), forming="v1", device=DEVICES[dev])
+    s = C.PearlC(k_min=32, tile=(16, 16), forming="v1", device=DEVICES[dev], hashing="h0")
     ctx = V8.ctx_of(f"pc8-rowk-{dev}", (m, k, n), 3, 9)
     a, b = V8.rows_f32(f"pc8-rowk-{dev}", "A", m, k), V8.rows_f32(f"pc8-rowk-{dev}", "B", n, k)
     noise = s.noise(ctx)
@@ -389,9 +389,9 @@ def test_each_cut_row_is_short_or_whole_blocks():
 
 def _anchors(shape):
     if isinstance(shape, pc8.Shape):
-        scheme = C.PearlC(forming="v1", device=DEVICES[shape.dev])
+        scheme = C.PearlC(forming="v1", device=DEVICES[shape.dev], hashing="h0")
     else:
-        scheme = F.PearlC4("nvfp4")
+        scheme = F.PearlC4("nvfp4", hashing="h0")
     ctx = V8.ctx_of("pc-rowk-anchors", (shape.m, shape.k, shape.n), 3, 9)
     return TileAnchors.of(scheme, ctx, shape), TileAnchors.of(scheme, ctx, replace(shape, row_k=None))
 

@@ -22,7 +22,7 @@ from typing import Callable
 
 #: a tick's start, before its lines (drive's loop on an agent VM)
 TICK_RE = re.compile(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ)$")
-#: a tick's end, after its lines (drive.sh on the control pod, since 20 Oct): its landings take this time
+#: a tick's end, after its lines (drive.sh on the control pod): its landings take this time
 TICK_END_RE = re.compile(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ) tick rc=")
 RID = r"r\d{8}-\d{6}-[0-9a-f]{4}"
 CHECKING_RE = re.compile(rf"^research queue drive: checking ([0-9a-f]{{12}}) \(([^)]*)\): ({RID})")
@@ -94,8 +94,8 @@ def verdict_at(run_dir: Path, landed: datetime) -> datetime | None:
     return max(ends, default=None)
 
 
-#: how many landings' check records and PRs' marks `rows` reads at once: each is a fetch over ssh or from the store (22 Oct:
-#: one at a time, a day of 30 landings and 134 PRs took over 20 min)
+#: how many landings' check records and PRs' marks `rows` reads at once: each is a fetch over ssh or from the store (one at a
+#: time, a day of 30 landings and 134 PRs took over 20 min)
 READ_JOBS = 8
 
 

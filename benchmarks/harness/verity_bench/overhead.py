@@ -49,8 +49,8 @@ POINTS = ("C", "L")
 @dataclass(frozen=True)
 class Gpu:
     """A GPU the door measures on (its `--card`): what its device reports (`name` within the device's name, `capability`, `sms`), the
-    harness's build target, the L2 the operand sets must pass twice, the occupancy limits the SM-time cross-check reads, host
-    CPU core-seconds' weight in SM-seconds (the node's CPU capacity over its GPUs'), and the scalings and libraries its
+    harness's build target, the L2 the operand sets must pass twice, host CPU core-seconds' weight in SM-seconds (the
+    node's CPU capacity over its GPUs'), and the scalings and libraries its
     fastest stock kernel is chosen among; `bridge`: its CUTLASS and DeepGEMM are vLLM's, through torch (`bench.py --bridge`),
     since the harness's own CUTLASS is sm_120's; `datasheet`: its dense FP8 rate's id in `benchmarks/census/hardware.json`
     (the H200's is the H100's: the same compute with more HBM)."""
@@ -61,10 +61,6 @@ class Gpu:
     sms: int
     arch: str
     l2_bytes: int
-    max_warps_per_sm: int
-    max_blocks_per_sm: int
-    regs_per_sm: int
-    smem_per_sm: int
     cpu_sm_s_per_core_s: float
     precisions: Mapping[str, tuple[str, ...]]
     libraries: tuple[str, ...]
@@ -75,9 +71,9 @@ class Gpu:
 #: each precision's scalings, as the PoUW harness names its baseline families: per-tensor, rowwise and 128-block FP8
 FP8 = ("fp8-e4m3", "fp8-e4m3-rowwise", "fp8-blk128")
 CARDS = {card.gpu: card for card in (
-    Gpu("h200", "H200", "9.0", 132, "sm_90a", 50 << 20, 64, 32, 65536, 233472, 0.48, {"fp8": FP8},
+    Gpu("h200", "H200", "9.0", 132, "sm_90a", 50 << 20, 0.48, {"fp8": FP8},
          ("cublaslt", "cutlass", "deepgemm"), True, "h100-sxm5-80gb/e4m3"),
-    Gpu("rtx-pro-6000", "RTX PRO 6000", "12.0", 188, "sm_120a", 128 << 20, 48, 24, 65536, 102400, 1.64,
+    Gpu("rtx-pro-6000", "RTX PRO 6000", "12.0", 188, "sm_120a", 128 << 20, 1.64,
          {"fp8": FP8, "nvfp4": ("nvfp4",)}, ("cublaslt", "cutlass"), False, "rtx-pro-6000-server/e4m3"),
 )}
 
@@ -472,9 +468,10 @@ def layer_gamma(result: Mapping, busy: Mapping[str, Mapping], card: Gpu, m: int,
 
 def cross_check_why(ratios: Mapping[str, float | None], bound: float = CROSS_CHECK) -> str | None:
     """Why the SMs Active reading can't stand: an entry whose busy SM-time exceeds its kernels' occupied SM-time (each
-    kernel's duration times the SMs its blocks occupy, the most SMs Active can read while they run) by more than `bound`, or
-    one without kernels. Below it, the ratio reads the SMs the kernels left idle (a partial last wave, a persistent grid's
-    uneven tiles), which hides no work: SMs Active counts every cycle an SM holds a warp."""
+    kernel's duration times min(SMs, blocks), the most SMs Active can read while it runs: `nsys.occupied_ns`) by more than
+    `bound`, or one without kernels. Below it, the ratio reads the SMs the kernels left idle (a partial last wave, a
+    persistent grid's uneven tiles, a block that waits on another), which hides no work: SMs Active counts every cycle an
+    SM holds a warp."""
 
     off = {k: r for k, r in ratios.items() if r is None or r - 1 > bound}
     if not off:

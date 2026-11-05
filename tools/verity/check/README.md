@@ -21,10 +21,11 @@ applies `main`'s allowances the same way.
 
 A job in `policy.toml`'s `off_gate` is off the merge gate: a recorded check and its shards leave it out, and `research
 merge` requires it of no check. Today those are `circuit-check` and `ratchet-gate`. Each runs after landing, in the run that
-checks `checked`'s tip, and doesn't hold `main`. A red `circuit-check` reverts its culprit at once and lands no PR touching its
-inputs until it passes; a red `ratchet-gate` reverts its culprit as any other after-landing red does. `circuit-check` goes back
-on the gate once `circuit-check --all` fits inside the rest of the check; `ratchet-gate` is in no shard plan, and reports
-without blocking a merge.
+checks `checked`'s tip, and doesn't hold `main`; under drive.toml's `executor = "on"`, `ratchet-gate` runs with
+`lean-agreement` in a run of their own beside the executor's check of the tip, and `main` waits for that run. A red
+`circuit-check` or `ratchet-gate` reverts its culprit at once, as every after-landing red does, and while `circuit-check` is
+red no PR touching its inputs lands. `circuit-check` goes back on the gate once `circuit-check --all` fits inside
+the rest of the check; `ratchet-gate` is in no shard plan, and reports without blocking a merge.
 
 ## Suites and reuse
 
@@ -51,6 +52,30 @@ part reads something it doesn't declare, and the fix goes in the check.
 `suites.py`'s docstring is the full contract. The testing skill (`.agents/skills/testing/SKILL.md`) has the rules every test
 follows.
 
+## Modules
+
+| File | What it is |
+| --- | --- |
+| `check.py` | `check` itself: every step, its shards, `--deferred`, `--record` |
+| `ci.toml`, `declaration.py` | the jobs `check` runs, and their reader |
+| `suites.py` | every test suite, each run in its own process, with passes cached |
+| `guard/` | the read guard, the pytest plugin `suites.py` loads into every suite |
+| `verdicts.py` | passes carried between machines as one verdict pack |
+| `common.py` | the helpers `check.py` and the Lean check share, apart so the Lean check's key covers them |
+| `plan.py` | `check.py --plan`: what `check` would reuse at a commit and what it would run |
+| `spans.py` | the spans a check run writes beside its steps, which the dashboard reads |
+| `tool.py`, `preflight.py` | the check's store declaration, and whether a machine is prepared for it |
+| `pod_setup.sh` | prepares a check pod once, so every pod of the pool computes the same verdict keys |
+| `slot.py`, `lean_slot.py` | a command in one of a node's merge-check or Lean check slots |
+| `train.sh` | the lander's recorded check of a train |
+| `post_train.py` | the vLLM reference regression's manifest rebuilds after a landing |
+| `drive.toml`, `queue.toml` | the merge queue's flags and its admission rules |
+| `gates/markdown_caps.py` | the landing gate holding Markdown to its caps |
+| `move_check.py`, `anchors.py` | the certificate of a pure move, and that every path a file reaches from its own place survives it |
+| `merge_map.py` | git's merge driver for `fixtures/artifacts.json` |
+| `pins.py` | every file that records a Lean source's digest, with the command that regenerates it |
+| `mutants.py` | deletes each check a verifier source runs, one at a time, and names each deletion its tests miss |
+
 ## Running it
 
 Builds and tests run on the cluster's nodes, not on an agent VM. Ship the checkout with `research run` and sync its tree first:
@@ -65,8 +90,7 @@ uv run tools/verity/check/suites.py --explain SUITE       # why a suite would ru
 ~~~
 
 `research run` returns once the job starts, and `research status RUN` checks back on it. To record a check of a clean
-commit as an Attempt, run `uv run python tools/verity/check/check.py --record --on vy-nebius-cpu-1 --pool research` from
-the checkout.
+commit as an Attempt, run `uv run python tools/verity/check/check.py --record --on auto` from the checkout.
 
 ## Tasks (`tasks/v1`)
 

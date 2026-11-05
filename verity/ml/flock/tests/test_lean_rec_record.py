@@ -1,7 +1,7 @@
 """The coin server's record in its own format, held to Lean's total reader (`Flock.RecRecord`, `flock-verify
 rec-record`), which `Proofs.Flock.Claims.Recursion.RecRecord` proves reads back what `recordW` writes. The record's writer is Python
 (`rec_live.record_bytes`), so these tests are what ties the proof to the deployed record: on the honest records of the
-plain session and of 2d61's candidate-3 session, and on one with every escape a stream name can need, `recordW` writes
+plain session and of `rec-c3-inner`'s candidate-3 session, and on one with every escape a stream name can need, `recordW` writes
 `record_bytes`' bytes up to the rounds' end, and `readRecord` reads each round as Python holds it. A record in another
 layout (compact, or its rounds not first) is refused.
 
@@ -91,7 +91,7 @@ def test_the_transcript_model_shows_the_coin_servers_rounds(tmp_path, record):
 
 
 def test_the_transcript_model_has_the_inner_verifiers_rounds_before_the_last(tmp_path):
-    """At the plain session's inner shape (m 27, k_log 22, 8 claims; `Flock.Test.RecSchedule`), the inner verifier has
+    """At the plain session's inner shape (m 28, k_log 22, 12 claims; `Flock.Test.RecSchedule`), the inner verifier has
     `2 + rounds` rounds, the two reps' rounds between the link and the last. The model shows all but the last: round 0
     the level-0 top's `2^cap₀` nodes (`level0Nodes`), each later round its tops' nodes and one `c_k` where it absorbs a
     message (`nAtSched`), each 128 bytes, with the schedule's coin count."""
@@ -99,10 +99,10 @@ def test_the_transcript_model_has_the_inner_verifiers_rounds_before_the_last(tmp
     rc, out, err = _read(tmp_path, RL.record_bytes(r))
     assert rc == 0, err
     msgs = out["full"]["msgs"]
-    rep = RL.rep_rounds(27, 22, 8)
+    rep = RL.rep_rounds(28, 22, 12)
     sched = rep + rep
     assert len(msgs) == (2 + len(sched)) - 1
-    assert len(msgs[0]["msg"]) == 2 * 128 * (1 << RL.fast100(27).levels[0].cap)
+    assert len(msgs[0]["msg"]) == 2 * 128 * (1 << RL.fast100(28).levels[0].cap)
     assert len(msgs[0]["coins"]) == r["hello"]["link"]["m"] * r["hello"]["link"]["points"]
     for m, (n, tops, _level0, e) in zip(msgs[1:], sched):
         assert (len(m["msg"]), len(m["coins"])) == (2 * 128 * (sum(tops) + int(e > 0)), n)
