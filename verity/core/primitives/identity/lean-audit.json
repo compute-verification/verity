@@ -5,9 +5,9 @@
  },
  "layers": {
   "Identity": {
-   "imports": ["Identity", "Flock.Hash", "Flock.Bytes", "Flock.Canon"],
+   "imports": ["Identity", "Randomness.Domains", "Randomness.Sha512", "Randomness.Tagged"],
    "except": ["Identity.Difftest"],
-   "why": "the identity hash is code: Lean core and C-Flock's executable primitives only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "the identity hash is code: its modules re-export core_randomness's identity hash and domain table, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
   "Identity.Difftest": {
    "imports": ["Identity", "Difftest"],

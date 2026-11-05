@@ -64,6 +64,14 @@
    "inherited": true,
    "dir":
    "../../../protocols/network/lean/../../../primitives/identity/../../difftest/lean",
+   "configFile": "lakefile.toml"},
+  {"type": "path",
+   "scope": "",
+   "name": "core_randomness",
+   "manifestFile": "lake-manifest.json",
+   "inherited": true,
+   "dir":
+   "../../../protocols/network/lean/../../../primitives/identity/../randomness",
    "configFile": "lakefile.toml"}],
  "name": "certifier_device",
  "lakeDir": ".lake",
