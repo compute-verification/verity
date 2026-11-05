@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 import verity_difftest as D
-from verity.core.protocols.pous import memory_challenger as mc
+from verity.core.devices.memory_challenger import memory_challenger as mc
 
 PACKAGE = Path(__file__).resolve().parent
 EXE = "memory-challenger-verdict"

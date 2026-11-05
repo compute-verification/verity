@@ -24,7 +24,7 @@ from hypothesis import strategies as st
 
 import verity_difftest as D
 from verity_difftest import protocol as P
-from verity.core.protocols.pous import memory_challenger as mc
+from verity.core.devices.memory_challenger import memory_challenger as mc
 from verity.ml.crypto import lms
 
 HERE = Path(__file__).resolve().parent

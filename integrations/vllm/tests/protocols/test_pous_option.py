@@ -20,8 +20,8 @@ from concurrent import futures
 import pytest
 import torch
 
-from verity.core.protocols.pous import challenger_party as CP
-from verity.core.protocols.pous import memory_challenger as mc
+from verity.core.devices.memory_challenger import challenger_party as CP
+from verity.core.devices.memory_challenger import memory_challenger as mc
 from verity.core.protocols.pous import period, setup
 from verity.core.protocols.pous.schemes.p2 import P2Params
 from verity_vllm import config

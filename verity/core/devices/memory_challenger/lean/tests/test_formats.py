@@ -17,7 +17,7 @@ from hypothesis import strategies as st
 import mc_cases as M
 import verity_difftest as D
 import wipe_cases as W
-from verity.core.protocols.pous import memory_challenger as mc
+from verity.core.devices.memory_challenger import memory_challenger as mc
 from verity.core.protocols.pous import streamed_wipe as sw
 from verity.ml.crypto import lms
 

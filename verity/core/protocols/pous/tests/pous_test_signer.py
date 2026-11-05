@@ -12,7 +12,7 @@ import tempfile
 from pathlib import Path
 
 from verity.ml.crypto import lms
-from verity.core.protocols.pous import memory_challenger as mc
+from verity.core.devices.memory_challenger import memory_challenger as mc
 
 HEIGHTS = range(1, 11)
 DIR: Path | None = None

@@ -672,7 +672,7 @@ def test_a_disagreement_between_the_verdicts_rejects_the_session(forced, record,
     disagreement, with both verdicts named, whichever one accepted and whichever is the record's."""
     import json
 
-    from verity.core.protocols.pous import memory_challenger as mc
+    from verity.core.devices.memory_challenger import memory_challenger as mc
     from verity.core.protocols.pous.schemes import p2
 
     live = _live()
@@ -712,7 +712,7 @@ def _live():
 def test_the_signed_sessions_are_on_disk_before_any_verdict_runs(tmp_path, monkeypatch):
     """A verdict that fails after the sessions signed (as when `judge` could not import the Lean's server)
     takes nothing with it: every signed session is in `sessions_out` first, whole, and still verifies under its signer."""
-    from verity.core.protocols.pous import memory_challenger as mc
+    from verity.core.devices.memory_challenger import memory_challenger as mc
     from verity.core.protocols.pous import schemes
     from verity.core.protocols.pous.schemes import p2
 
@@ -818,7 +818,7 @@ class _SparseTree:
 def _deployed_signer(tmp_path):
     """An S1 signer at `lms.DEPLOYED` over `_SparseTree`, its leaf state in `tmp_path`, for one session."""
     from verity.ml.crypto import lms
-    from verity.core.protocols.pous import memory_challenger as mc
+    from verity.core.devices.memory_challenger import memory_challenger as mc
 
     I, seed = hashlib.sha512(b"I").digest()[:16], hashlib.sha512(b"seed").digest()[:lms.DEPLOYED.N]
     key = lms.PrivateKey(lms.DEPLOYED, I, seed, _SparseTree(I, seed))
@@ -830,7 +830,7 @@ def test_an_lms_signed_session_at_the_p2_point_is_accepted_and_issues_the_profil
     """With `--signer lms` the verdict is `memory_challenger.SCHEMES`'s and it accepts the honest session: the profile is
     issued under the certificate; the bad-signature control rejects it flipped or edited under the same mapping.  The
     session's id is in the session log, made with the new key."""
-    from verity.core.protocols.pous import memory_challenger as mc
+    from verity.core.devices.memory_challenger import memory_challenger as mc
     from verity.core.protocols.pous.schemes import p2
 
     live, signer = _live(), _deployed_signer(tmp_path)
@@ -854,7 +854,7 @@ def test_an_lms_signed_session_at_the_p2_point_is_accepted_and_issues_the_profil
 def test_an_lms_signed_audit_takes_a_session_log_of_its_own_and_an_existing_key_needs_its_log(tmp_path, monkeypatch):
     """`--session-log FILE`: an LMS-signed audit refuses to start without one or with one inside `--lms-key`, and for a
     key that exists (its `seed` there) it refuses a missing log before any session, with no leaf spent and no log made."""
-    from verity.core.protocols.pous import memory_challenger as mc
+    from verity.core.devices.memory_challenger import memory_challenger as mc
     from verity.core.protocols.pous import schemes
     from verity.core.protocols.pous.schemes import p2
 

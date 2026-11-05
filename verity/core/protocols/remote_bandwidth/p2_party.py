@@ -186,7 +186,7 @@ def registration_of_setup(record: Mapping[str, Any]) -> p2.Registration:
     """The registration of the PoUS setup the memory challenger kept for one session (`challenger_party.keep`): the
     request's node, the setup's P2 parameters, commitment and salt, and the session's binding as the vk root, at
     sketch-sha512's rows; ValueError for a record without a setup, or one `challenger_party.setup_of` refuses."""
-    from verity.core.protocols.pous import challenger_party as CP
+    from verity.core.devices.memory_challenger import challenger_party as CP
 
     request = record["request"]
     s = CP.setup_of(request)
@@ -201,7 +201,7 @@ def registration_of_setup(record: Mapping[str, Any]) -> p2.Registration:
 def pous_record(directory: Path, session_id: str) -> bytes:
     """The registration file's bytes (`registration_json`, every unit its plan) of the setup the memory challenger whose
     device is `directory` kept for the session `session_id` (64 lowercase hex), on this host (`registration_of_setup`)."""
-    from verity.core.protocols.pous import challenger_party as CP
+    from verity.core.devices.memory_challenger import challenger_party as CP
 
     if not re.fullmatch(r"[0-9a-f]{64}", session_id):
         raise ValueError("a session id is 64 lowercase hex digits")

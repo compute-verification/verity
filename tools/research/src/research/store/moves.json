@@ -1516,6 +1516,12 @@
         "benchmarks/e2e_h200/": "examples/h200/",
         "benchmarks/e2e_demo/": "examples/h200/interfaces/"
       }
+    },
+    {
+      "paths": {
+        "verity/core/protocols/pous/memory_challenger.py": "verity/core/devices/memory_challenger/memory_challenger.py",
+        "verity/core/protocols/pous/challenger_party.py": "verity/core/devices/memory_challenger/challenger_party.py"
+      }
     }
   ]
 }

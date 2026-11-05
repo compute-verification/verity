@@ -21,7 +21,7 @@ from pathlib import Path
 
 from verity.ml.commitments.identity import canonical_json_bytes
 from verity.ml.randomness import derive
-from verity.core.protocols.pous import memory_challenger as mc
+from verity.core.devices.memory_challenger import memory_challenger as mc
 from verity.core.protocols.pous import period
 from verity.core.protocols.pous import run as R
 

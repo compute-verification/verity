@@ -19,7 +19,7 @@ import settings
 from verity.core.deploy import sources as S
 from verity.core.deploy.party import Finish
 from verity.core.deploy.runtime import ProtocolDef, run
-from verity.core.protocols.pous import memory_challenger as mc
+from verity.core.devices.memory_challenger import memory_challenger as mc
 from verity.core.protocols.pous import streamed_wipe as sw
 from verity.core.protocols.pous import wipe_parties as WPS
 from verity.core.protocols.pous import wipe_party as WP

@@ -29,7 +29,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.pous import memory_challenger as mc
+from verity.core.devices.memory_challenger import memory_challenger as mc
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[5]

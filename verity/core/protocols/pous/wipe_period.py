@@ -56,7 +56,7 @@ from typing import Any
 from verity.core.deploy.stream import Side
 from verity.ml.commitments.identity import canonical_json_bytes
 
-from . import memory_challenger as mc
+from verity.core.devices.memory_challenger import memory_challenger as mc
 from . import streamed_wipe as sw
 from . import wipe_party, wipe_store
 from .period import serve

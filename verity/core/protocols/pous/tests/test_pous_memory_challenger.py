@@ -15,7 +15,7 @@ import pous_test_signer as ts
 from pous_fakes import Clock
 from verity.ml.commitments import rowleaf
 from verity.ml.crypto import lms
-from verity.core.protocols.pous import memory_challenger as mc
+from verity.core.devices.memory_challenger import memory_challenger as mc
 from verity.core.protocols.pous import schemes
 
 BLOCKS, K, BLOCK_BYTES, LIMIT = 1 << 10, 12, 64, 854_000

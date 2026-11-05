@@ -47,7 +47,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.pous import memory_challenger as mc
+from verity.core.devices.memory_challenger import memory_challenger as mc
 from verity.core.protocols.pous import period
 from verity.core.protocols.pous import run as R
 from verity.core.protocols.pous import wipe_party, wipe_period

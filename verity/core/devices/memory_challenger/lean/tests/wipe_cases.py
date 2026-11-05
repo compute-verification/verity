@@ -20,7 +20,7 @@ from hypothesis import strategies as st
 
 import mc_cases as M
 import verity_difftest as D
-from verity.core.protocols.pous import memory_challenger as mc
+from verity.core.devices.memory_challenger import memory_challenger as mc
 from verity.core.protocols.pous import streamed_wipe as sw
 
 #: Every scheme the port verifies, by id (`MemoryChallenger.KNOWN_SCHEMES`).

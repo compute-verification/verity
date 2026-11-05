@@ -14,7 +14,7 @@ import socket
 import sys
 from pathlib import Path
 
-from verity.core.protocols.pous import memory_challenger as mc
+from verity.core.devices.memory_challenger import memory_challenger as mc
 from verity.core.protocols.pous import wipe_party as WP
 from verity.core.protocols.pous import wipe_stream as WS
 from verity.ml.crypto import lms
