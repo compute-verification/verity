@@ -243,6 +243,9 @@ theorem obj_eq_subsetPrint {m : Std.TreeMap.Raw String Json compare} (hm : m.WF)
   subst hls hks
   exact obj_eq_mkObj4 hm hn hs hlaw hpop hk hus (norm_toJson_subset us.size pop us #[])
 
+theorem eq_true_of_not_not {X : Bool} (h : ¬ (!X) = true) : X = true := by
+  cases X <;> simp_all
+
 set_option maxHeartbeats 4000000 in
 /-- **A subset draw that decodes is its own print**: a value `norm` fixes that decodes (`UnitDraw.ofJson`) to a draw
 `D` by the subset law has `D`'s units ascending below its population, and is `D`'s print at no closure. -/
@@ -275,7 +278,7 @@ theorem ofJson_subset_eq {j : Json} (hn : Flock.norm j = j) {D : Flock.Draw.Unit
     try simp only [Flock.Draw.Law.subset.injEq] at hp
     try simp only [Flock.Draw.Law.subset.injEq] at hl
     subst_vars
-    exact ⟨by simpa [unitsAscending] using ‹¬ (!(List.range _).all _) = true›,
+    exact ⟨eq_true_of_not_not ‹¬ (!(List.range _).all _) = true›,
       obj_eq_subsetPrint hm hn (by simpa using hc) (mem_of_getObjVal hm (str_ok ‹Flock.J.str _ "law" _ = _›)).2 rfl
         (mem_of_getObjVal hm (nat_ok ‹Flock.J.nat _ "population" _ = _›)).2
         (mem_of_getObjVal hm (nat_ok ‹Flock.J.nat _ "k" _ = _›)).2 rfl
