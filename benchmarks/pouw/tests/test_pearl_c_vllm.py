@@ -937,7 +937,6 @@ def test_verify_run_accepts_an_honest_pass_as_the_work_law_does(honest_pass):
     assert VR.main([str(path), *coins_args(path), "--jobs", "2", "--commit", "0" * 7, "--fast", "--cross-check", "1"]) == 0
 
 
-@pytest.mark.slow
 def test_verify_run_counts_the_tiles_it_drew_where_no_tile_is_credited(honest_pass, monkeypatch):
     """A pass with no credited cell, as a no-write control whose rows are all excluded, draws no tile (`clear_work.draw`), so
     its line and counts name none drawn and every exclusion tile, not the draws asked for."""
