@@ -1,7 +1,8 @@
 module
 
 public import Proofs.Pouw.PearlC.TileCheck8
-public import Proofs.Pouw.PearlC.TileProtocol
+public import Proofs.Pouw.PearlC.TileValues
+public import Proofs.Pouw.PearlC.Tile4Circuit
 public import Proofs.Pouw.PearlC.TileGamma
 
 /-!

@@ -14,6 +14,7 @@ public import Definitions.Nci.Transfers
 public import Definitions.Nci.Dark
 public import Definitions.Nci.Packed
 public import Definitions.Nci.Covering
+public import Definitions.Nci.Capability
 public import Definitions.Pous
 public import Definitions.Pous.Guarantees.StreamedWipeFamily
 public import Definitions.Pous.Guarantees.StreamedWipeReads
@@ -36,6 +37,7 @@ public import Definitions.Claims.IndexedTapes
 public import Definitions.Claims.Recursion
 public import Definitions.Claims.RecursionLin
 public import Definitions.Claims.Sampling
+public import Definitions.Claims.SamplingGeneric
 public import Definitions.Claims.ZKOut
 public import Definitions.Hash
 public import Definitions.Flock

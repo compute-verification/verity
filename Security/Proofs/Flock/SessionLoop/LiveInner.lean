@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.SessionLoop.TakenVals
 public import Proofs.Flock.SessionLoop.Inner
+import all Init.Data.String.Defs
 
 /-!
 # The session loop's frame past the inner proof's label
@@ -412,7 +413,7 @@ theorem label_inner_out (c : Cfg) (s : Masker) {q : Masker × ByteArray}
         split at h
         · cases h
         · cases h
-          exact congrArg labelFrame String.toUTF8_eq_toByteArray.symm
+          rfl
       · simp [Masker.label, Ranked.isLabel_self, p1, p2, p3, p4, hi, hd, hon] at h
         cases h
 

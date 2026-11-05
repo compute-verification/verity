@@ -67,8 +67,8 @@ adds input i into accumulator i mod 4, in order. It then combines them as ``((a0
 token-major: q, k and v are the projections' outputs, row i holding token i's heads, and cs's row i is position i's
 [cos | sin]. Query head h reads KV head h / R, R = NH / KVH. `EagerAttentionTorch` applies `RopeHf` to each head of q and k,
 then for each query row i takes the scores of its NH heads, one bmm (`BatchedGemm_v2` over the NH heads, k16 steps
-`HopperBF16WgmmaDot16_v2`) against each head's key rows. `EagerSoftmax` follows on each (i, h), where row i sees n[i] keys
-(i + 1 under the causal mask). The PV bmm then takes P's row against Vᵀ, which `Transpose_v1` tiles of at most 128 x 128 make
+`cublas_bf16.TRAIN_DOT`, `HopperBF16WgmmaDot16_v3`) against each head's key rows. `EagerSoftmax` follows on each (i, h),
+where row i sees n[i] keys (i + 1 under the causal mask). The PV bmm then takes P's row against Vᵀ, which `Transpose_v1` tiles of at most 128 x 128 make
 (`transposes`). o is o_proj's input, and qe, ke, y and p are what autograd saves. `EagerAttentionTorchBackward` runs from
 o_proj's dX (do) to dq, dk and dv in projection space:
 - dP is dO's row against V's rows, and dS is `EagerSoftmaxBackward` of each (i, h);
@@ -84,7 +84,6 @@ from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean.forms import NOT, const_bits, mux, or_reduce
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.ops import fp32 as W
-from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.ops.boolean.elementwise import specialized
 from verity.ml.circuits.ops.boolean.mufu import mufu_ex2
 from verity.ml.circuits.ops.boolean.scalar import gt_u
@@ -404,9 +403,9 @@ def transpose(B, x: Coll, R: int, C: int) -> Coll:
 
 def _bmm(op: str, heads: int, N: int, D: int) -> Any:
     """torch.bmm ``op``'s row over the heads at N tokens (`cublas_bf16.TRAIN_BMM`): `BatchedGemm_v2{heads, K, N}` on the k16
-    step `HopperBF16WgmmaDot16_v2`, the very binding `cublas_bf16.attention_bmm` makes at the (N, D) its capture covers."""
+    step `cublas_bf16.TRAIN_DOT`, the very binding `cublas_bf16.attention_bmm` makes at the (N, D) its capture covers."""
     k, n = CB.TRAIN_BMM[op][2](N, D)
-    return bind(CB.BatchedGemm, B=heads, K=k, N=n, DOT=BG.HopperBF16WgmmaDot16)
+    return bind(CB.BatchedGemm, B=heads, K=k, N=n, DOT=CB.TRAIN_DOT)
 
 
 def _heads(x: Coll, N: int, NH: int, KVH: int, D: int) -> Coll:
