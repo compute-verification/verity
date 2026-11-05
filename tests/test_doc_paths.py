@@ -43,9 +43,6 @@ NOT_PATHS = {
     ("fixtures/proof-format-v3/README.md", "format3_equivalence.rs"): "D-SP1's guest, deleted with the archive",
     ("tools/verity/lean/README.md", "lakefile.lean"): "the file the package deliberately lacks",
     ("verity/core/protocols/pous/DISCREPANCIES.md", "BandPubEncoder.lean"): "the band chain's Lean, outside this tree",
-    ("verity/core/protocols/pous/PROTOCOL.md", "BandPubEncoder.lean"): "the band chain's Lean, outside this tree",
-    ("verity/core/protocols/pous/PROTOCOL.md", "BandEncDec.lean"): "the band chain's Lean, outside this tree",
-    ("verity/core/protocols/pous/PROTOCOL.md", "regate.py"): "the timing red team's script",
 }
 
 _TOKEN = re.compile(r"`([^`\s]+)`|\]\(([^)\s]+)\)")

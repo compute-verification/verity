@@ -13877,7 +13877,7 @@
    "Pous.SecurityProofs.BandPubMeetsFamilyD1": "frozen (no-function,hash): `PubMeets` with the model's `exactCheck`, not the setup check `PousCheck` runs.",
    "Pous.SecurityProofs.BandPubMeetsFamilyD2": "frozen (no-function,hash): `PubMeets` with the model's `exactCheck`, not the setup check `PousCheck` runs.",
    "Pous.SecurityProofs.ChainDenseMeets111": "frozen (no-function,hash): a `Meets` in an ideal model, which no Lean function computes.",
-   "Pous.SecurityProofs.ContinuousAudit": "frozen (no-function): the guarantee `PROTOCOL.md` and `continuous.py` cite, over the model's memory challenger (`contAccepts`), not `MemoryChallenger.verdict`.",
+   "Pous.SecurityProofs.ContinuousAudit": "frozen (no-function): the guarantee `continuous.py` cites, over the model's memory challenger (`contAccepts`), not `MemoryChallenger.verdict`.",
    "Pous.SecurityProofs.DenseMeets": "frozen (no-function,hash): a `Meets` in an ideal model, which no Lean function computes.",
    "Pous.SecurityProofs.DenseMeets64": "frozen (no-function,hash): a `Meets` in an ideal model, which no Lean function computes.",
    "Pous.SecurityProofs.P3ConcreteMeets14GB": "frozen (no-function,hash): a `Meets` in an ideal model, which no Lean function computes.",
