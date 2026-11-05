@@ -257,6 +257,15 @@ def test_a_module_whose_imports_no_longer_reach_what_it_reads_imports_it(tree):
     assert log[-1].startswith("repair: 2 imports")
 
 
+def test_a_local_notation_a_kept_variable_or_notation_names_stays():
+    decl = "theorem t : A = A := rfl\n"
+    text = ('module\n\nlocal notation "𝔽" => Nat\nlocal notation "𝕂" => 𝔽 × 𝔽\nlocal notation "ℍ" => Nat\n'
+            f"variable (A : 𝕂) (B : ℍ)\n\n{decl}")
+    out, gone = M.prune(text, set(), set(), decl)
+    assert 'local notation "𝔽" => Nat\nlocal notation "𝕂" => 𝔽 × 𝔽\nvariable (A : 𝕂)\n' in out
+    assert "ℍ" not in out and 'local notation "ℍ" => Nat' in gone
+
+
 def test_a_local_notation_is_no_atom_an_importer_reads():
     tree = M.Tree(Path("/nonexistent"))
     tree.mods["Proofs.Toy.Syn"] = Path("/nonexistent/Syn.lean")

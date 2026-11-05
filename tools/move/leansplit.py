@@ -327,8 +327,9 @@ def prune(text: str, known: set[str], avail: set[str], used: str | None = None) 
     """`text` without what it can no longer resolve: each namespace of a plain top-level `open` line that is declared in
     the tree (`known`) but by none of the modules it now imports (`avail`), as Lean resolves the name from the
     namespaces open there; a namespace no in-tree module declares (Mathlib's) stays. With `used` (the text of the
-    declarations it holds), a `local` notation or macro whose atom `used` doesn't hold goes too, and so does each named
-    `variable` binder neither `used`, an `include` or `omit` nor a kept binder names. Returns the text and what went."""
+    declarations it holds), each named `variable` binder neither `used`, an `include` or `omit` nor a kept binder names
+    goes too, and so does a `local` notation or macro whose atom nothing kept holds: not `used`, a kept binder, another
+    command or a kept notation. Returns the text and what went."""
     header, body = split_header(text)
     units = units_of(body)
     toks = set(TOKEN.findall(used)) if used is not None else set()
@@ -342,6 +343,13 @@ def prune(text: str, known: set[str], avail: set[str], used: str | None = None) 
                 var[k] = gs
     flags = iter(kept_binders([g for k in sorted(var) for g in var[k]], toks))
     kept = {k: [g for g in var[k] if next(flags)] for k in sorted(var)}
+    syn = {k: a.group(1).strip() for k, u in enumerate(units if used is not None else [])
+           if LOCAL_SYNTAX.match(u.head) and (a := SYNTAX_DEF.search(u.own())) and a.group(1).strip()}
+    ctx = (used or "") + "".join(" ".join(g) for g in kept.values()) + "".join(
+        u.own() for k, u in enumerate(units) if k not in var and not LOCAL_SYNTAX.match(u.head))
+    live: set[int] = set()
+    while (more := {k for k, a in syn.items() if a in ctx + "".join(units[j].own() for j in live)}) != live:
+        live = more
     out, ns, gone = [header], [[]], []
     for k, u in enumerate(units):
         o, e = OPENER.match(u.head), END.match(u.head)
@@ -364,11 +372,9 @@ def prune(text: str, known: set[str], avail: set[str], used: str | None = None) 
             if len(keep) < len(m.group(2).split()):
                 out.append(f"open{m.group(1) or ''} {' '.join(keep)}\n" + "".join(u.blank))
                 continue
-        elif used is not None and LOCAL_SYNTAX.match(u.head):
-            atom = SYNTAX_DEF.search(u.own())
-            if atom and atom.group(1).strip() and atom.group(1).strip() not in used:
-                gone.append(u.head)
-                continue
+        elif k in syn and k not in live:
+            gone.append(u.head)
+            continue
         elif k in var and len(kept[k]) < len(var[k]):
             gone += [g for g in var[k] if g not in kept[k]]
             if kept[k]:
