@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.PlainHJ.Defs
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
+module
+
+public import Proofs.Flock.Soundness.Discharge.PlainHJ.Defs
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
 
 /-!
 # The decoder is right at a plain session of `J` hidden-output tables
@@ -16,6 +18,8 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
   each rep's run and rounds and the salted verdict; `repRun_at` makes each run a `RepRun` for `decJ`, and
   `playsT_of_repRun` a run on its tape.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.PlainHJ
 
@@ -68,7 +72,7 @@ under hidden outputs): the acceptance lemmas without `hh` (`accepts_verdict_leaf
 `setupTables_pointsAny`) at every table `j`, the verdict at `leaf512` under `hm96-sha512/v1` leaves (`leafOfId_hm96`). -/
 theorem accepts_reps_atH {I : Inputs} {t : Exec.Transcript}
     (hrr : I.tags.retainRounds = true) (hl : I.tags.merkleLeaf = "hm96-sha512/v1") (h : Accepts I t) :
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session),
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord),
       setupOf I t.record = .ok (spec, sts) ∧ Record.decode spec t.record = .ok sess ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
         ∀ (hwf : StmtWF sts[j]) (_hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m), ∃ pend : Fin 2 → PendL 𝔽 Dig,

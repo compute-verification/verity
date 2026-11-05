@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Audit.OneStage
+module
+
+public import Proofs.Flock.Soundness.Audit.OneStage
 
 /-!
 # The one-stage audit with a randomized extractor
@@ -7,7 +9,7 @@ The knowledge extractor of a compiled table reruns the prover after its first co
 decodes what it saw (`Knowledge.lean`), so whether it succeeds is a probability over its reruns,
 not a fact about the state. And the table theorems' bounds depend on the prover (its collision
 finders' advantages). This file restates the one-stage audit for that case (`ExtractionAnalysis`),
-in the joint form the table and session theorems state (agreed with lane flock-soundness):
+in the joint form the table and session theorems state:
 
 * `ks S R τ u`: `Pr[the session accepts ∧ extraction of drawn unit u fails]`, from the session state
   `τ`, over the fresh run and the extractor's reruns;
@@ -19,6 +21,8 @@ The named hypotheses bound `ks` and `link` at the unit a rule picks before the s
 averaged over the draw (`KnowledgeSound`, `LinkSound`); the bounds are functions of the prover's
 state. `extraction_audit_le` is `audit_le` in this form; the count curve is `extraction_audit_count`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

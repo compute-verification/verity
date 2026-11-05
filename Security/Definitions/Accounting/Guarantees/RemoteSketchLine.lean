@@ -1,6 +1,8 @@
-import Definitions.Accounting.Remote.SketchLine
-import Definitions.Accounting.Assumptions.RemoteHeld
-import Definitions.Accounting.Assumptions.RemoteOutside
+module
+
+public import Definitions.Accounting.Remote.SketchLine
+public import Definitions.Accounting.Assumptions.RemoteHeld
+public import Definitions.Accounting.Assumptions.RemoteOutside
 
 /-!
 # The receipts' sketch bound on the memory line's coins (trusted)
@@ -22,6 +24,8 @@ block computed on outside the node, which the relay prover meets; that no device
 is `NoOutsideCompute`, the line's own premise. What stays assumed is `SketchBoundDeployed`'s premises, read on
 `T.sketch O`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.Remote
 

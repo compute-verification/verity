@@ -1,20 +1,24 @@
-import Proofs.Flock.Claims.Complete.Replay.RingSwitch
-import Proofs.Flock.Claims.Complete.Discharge
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.RingSwitch
+public import Proofs.Flock.Claims.Complete.Discharge
 
 /-!
 # The honest trace at the deployed relation
 
 At the deployed relation (`Readable.relation`) the readable circuit's inputs in block `b` are every hidden bit of every
 table's block `b` (`Sys.rel`), so the witness's hidden bits are the whole trace, and `traceOf` reads table `0`'s bit
-`a` off hidden value `a`. `RelS` says the circuit maps those inputs to its outputs: its first outputs are every row's
-AND (`Sys.circ_eval`), equal to the trace bits themselves (`Sys.rel`'s `out`), then `1` at every pin and the public
-value of every region bit. So the trace satisfies every row, its pin is `1`, and its region bits are the regions'.
+`a` off hidden value `a`. `RelS` says the circuit maps those inputs to its outputs: its row gates are every row's AND
+(`Sys.bit_row`), equal to the trace bits themselves (`Sys.rel`'s `out`), then `1` at every pin and the public value of
+every region bit. So the trace satisfies every row, its pin is `1`, and its region bits are the regions'.
 
 * `Case.parsed`: the statement the verifier parsed at a good case has the case's tables, and the witness satisfies it.
 * `Case.holds`: at the deployed relation, every block's rows, pin and region bits hold on the witness's bits.
 * `traceR1CS`: each table's trace satisfies the block R1CS (`TraceR1CS`), from `RelS` alone.
 * `zerocheck_goal'`, `lincheck_goal'`, `ringSwitch_goal'`: the goals at the deployed relation, without `TraceR1CS`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

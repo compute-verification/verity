@@ -1,5 +1,7 @@
-import Definitions.Pouw.Assumptions.Dimension.H100W
-import Proofs.Pouw.Dimension.H100Proofs
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.H100W
+public import Proofs.Pouw.Dimension.H100Proofs
 
 /-!
 # `MH100w` and the distinct-writes bound: proofs
@@ -11,6 +13,8 @@ import Proofs.Pouw.Dimension.H100Proofs
 * **The count** (`distinctWritesLegacy`): each target matches on `S` a register that is not free, and distinct
   targets match distinct registers; targets outside `K` match `hiP` registers. Every other bound is an instance.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.H100
 

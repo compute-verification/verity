@@ -1,12 +1,12 @@
-"""Check PROTOCOL.md's transcript against recorded Flock sessions.
+"""Check an independently rebuilt replay transcript against recorded Flock sessions.
 
-Rebuilds every round of each rep's transcript from the spec alone (framing §6.1; order §9.1, §9.2, §10, §12.2, §13.3;
-the batched target T from §12.3, with its own GF(2^128) arithmetic) and compares each round's SHA-256 and coin count
-with the session record. It checks only the transcript and the proof layout (§8), not the verifier's equations.
+Rebuilds every round of each rep's transcript from the spec alone (framing `Flock.Transcript`; order `Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`;
+the batched target T from `Flock.Opening`, with its own GF(2^128) arithmetic) and compares each round's SHA-256 and coin count
+with the session record. It checks only the transcript and the proof layout (`Flock.Proof`), not the verifier's equations.
 
     python transcript_check.py session.json rep0.proof rep1.proof
 
-Vectors: vectors.json (fetch a session with `research data fetch <record> --path <path>`).
+Vectors: vectors.json (each session is fetched from the evidence store by its record and path).
 """
 import hashlib, json, math, struct, sys
 
@@ -125,23 +125,23 @@ Q = [218, 106, 71, 53, 43, 36, 32]
 def replay(rounds, domain, digest, p):
     t = T(rounds, domain); m, k0 = p["m"], p["k0"]; zc, lc, lig = p["zc"], p["lc"], p["lig"]
     k_log = len(lc["rounds"]) + 6
-    # §9.1 binding, §9.2 zerocheck
+    # `Flock.Piop` binding, `Flock.Piop` zerocheck
     t.label(b"flock-r1cs-v0"); t.obs_bytes(digest); t.obs_bytes(b"".join(p["cap"]))
     t.label(b"flock-zerocheck-v0"); t.vec(6); t.vec(m - 13)
     t.obs_slice(zc["ab"]); t.obs_slice(zc["c"]); t.scalar()
     for g1, ginf in zc["rounds"]:
         t.obs(g1); t.obs(ginf); t.scalar()
     t.obs(zc["fa"]); t.obs(zc["fb"])
-    # §10 lincheck
+    # `Flock.Piop` lincheck
     t.label(b"flock-lincheck-v0"); t.scalar(); t.scalar()
     for q1, qinf in lc["rounds"]:
         t.obs(q1); t.obs(qinf); t.scalar()
     t.obs_slice(lc["zp"]); t.scalar()
-    # §12.2 opening
+    # `Flock.Opening` opening
     t.label(b"flock-pcs-open-batch-v0"); betas = []
     for s_k, _nonce in p["rs"]:
         t.label(b"flock-ring-switch-v0"); t.obs_slice(s_k); rpp = t.vec(7)
-        tk = [sum(((s_k[v] >> u) & 1) << v for v in range(128)) for u in range(128)]   # §12.3 column repack
+        tk = [sum(((s_k[v] >> u) & 1) << v for v in range(128)) for u in range(128)]   # `Flock.Opening` column repack
         beta = 0
         for u in range(128):
             w = 1
@@ -152,7 +152,7 @@ def replay(rounds, domain, digest, p):
     gam = t.vec(len(p["rs"]))
     T_ = 0
     for g, b in zip(gam, betas): T_ ^= gmul(g, b)
-    # §13.3 Ligerito
+    # `Flock.Ligerito` Ligerito
     n = m - 7; msgs = iter(lig["sc256"]); ood = iter(lig["ood"]); qn = iter(lig["qn"]); cbn = iter(lig["cbn"]); con = iter(lig["consn"])
     def msg():
         (a0, a1), (b0, b1) = next(msgs); t.obs_slice([a0, a1]); t.obs_slice([b0, b1])

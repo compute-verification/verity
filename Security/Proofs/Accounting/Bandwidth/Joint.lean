@@ -1,6 +1,8 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.Bandwidth
-import Proofs.Accounting.Bandwidth.AuditRO
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.Bandwidth
+public import Proofs.Accounting.Bandwidth.AuditRO
 
 /-!
 # Bandwidth adds, by counting (Mbw): the proof
@@ -11,6 +13,8 @@ named blocks determine, given the oracle, those `k` blocks (replaying the chip r
 `Chip.replay_trace`) and `z` (replaying it recomputes its value, `Chip.replayRun_trace`, and its value is `z`). So the
 code has room for `k·b + n` bits less what the device read, not `k·b`.
 -/
+
+@[expose] public section
 
 namespace Bandwidth
 

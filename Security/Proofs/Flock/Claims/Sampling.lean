@@ -1,33 +1,35 @@
-import Proofs.Flock.Claims.Sampling.Assembled
-import Proofs.Flock.Claims.Sampling.AssembledPlain
-import Proofs.Flock.Claims.Sampling.Bext
-import Proofs.Flock.Claims.Sampling.Committed
-import Proofs.Flock.Claims.Sampling.Count
-import Proofs.Flock.Claims.Sampling.Deployed
-import Proofs.Flock.Claims.Sampling.Down
-import Proofs.Flock.Claims.Sampling.DeployedSha512
-import Proofs.Flock.Claims.Sampling.Draws
-import Proofs.Flock.Claims.Sampling.EndToEndDeploy
-import Proofs.Flock.Claims.Sampling.EndToEndDraw
-import Proofs.Flock.Claims.Sampling.Escape
-import Proofs.Flock.Claims.Sampling.ExecBernoulli
-import Proofs.Flock.Claims.Sampling.PooledPr
-import Proofs.Flock.Claims.Sampling.InputSlot
-import Proofs.Flock.Claims.Sampling.KS
-import Proofs.Flock.Claims.Sampling.Leaf
-import Proofs.Flock.Claims.Sampling.Live
-import Proofs.Flock.Claims.Sampling.Path
-import Proofs.Flock.Claims.Sampling.Raise
-import Proofs.Flock.Claims.Sampling.Reference
-import Proofs.Flock.Claims.Sampling.Select
-import Proofs.Flock.Claims.Sampling.Seq
-import Proofs.Flock.Claims.Sampling.Runs
-import Proofs.Flock.Claims.Sampling.RunsExp
-import Proofs.Flock.Claims.Sampling.Session
-import Proofs.Flock.Claims.Sampling.Tables
-import Proofs.Flock.Claims.Sampling.Universal
-import Proofs.Flock.Claims.Sampling.Wait
-import Proofs.Flock.Claims.Sampling.ZK
+module
+
+public import Proofs.Flock.Claims.Sampling.Assembled
+public import Proofs.Flock.Claims.Sampling.AssembledPlain
+public import Proofs.Flock.Claims.Sampling.Bext
+public import Proofs.Flock.Claims.Sampling.Committed
+public import Proofs.Flock.Claims.Sampling.Count
+public import Proofs.Flock.Claims.Sampling.Deployed
+public import Proofs.Flock.Claims.Sampling.Down
+public import Proofs.Flock.Claims.Sampling.DeployedSha512
+public import Proofs.Flock.Claims.Sampling.Draws
+public import Proofs.Flock.Claims.Sampling.EndToEndDeploy
+public import Proofs.Flock.Claims.Sampling.EndToEndDraw
+public import Proofs.Flock.Claims.Sampling.Escape
+public import Proofs.Flock.Claims.Sampling.ExecBernoulli
+public import Proofs.Flock.Claims.Sampling.PooledPr
+public import Proofs.Flock.Claims.Sampling.InputSlot
+public import Proofs.Flock.Claims.Sampling.KS
+public import Proofs.Flock.Claims.Sampling.Leaf
+public import Proofs.Flock.Claims.Sampling.Live
+public import Proofs.Flock.Claims.Sampling.Path
+public import Proofs.Flock.Claims.Sampling.Raise
+public import Proofs.Flock.Claims.Sampling.Reference
+public import Proofs.Flock.Claims.Sampling.Select
+public import Proofs.Flock.Claims.Sampling.Seq
+public import Proofs.Flock.Claims.Sampling.Runs
+public import Proofs.Flock.Claims.Sampling.RunsExp
+public import Proofs.Flock.Claims.Sampling.Session
+public import Proofs.Flock.Claims.Sampling.Tables
+public import Proofs.Flock.Claims.Sampling.Universal
+public import Proofs.Flock.Claims.Sampling.Wait
+public import Proofs.Flock.Claims.Sampling.ZK
 
 /-! The sampling compiler's lemmas: each registered draw law's miss bound in `Claims.Pr` (`Sampling.Draws`), the
 executable Bernoulli draw's bound (`Sampling.ExecBernoulli`), the audit layer's pooled escape (`Sampling.PooledPr`) and every law's live draw's (`Sampling.Live`); each
@@ -41,11 +43,13 @@ KS (`Sampling.Bext`); the waits' truncation and union bound (`Sampling.Wait`); t
 bits from Flock's KS at the checked units' sessions and the deployed sampled verifier's named facts (`Sampling.KS`);
 Flock's KS at those sessions from `Claims.Flock.KS` (`Sampling.Session`), and at a raised `N₀` with the weight scaled
 by `k` (`Sampling.Raise`); the deployed draw's miss bound and `DrawLaw` from it (`Sampling.Select`); the universal
-unit's gates computing its netlist (`Sampling.Universal`); the block's claims assembled, with what remains as hypotheses
-(`Sampling.Assembled`, at any Flock record; at SHA-512 at the plain one, `Sampling.AssembledPlain`), and at the
+unit's gates running its private circuit (`Sampling.Universal`); the block's claims assembled, with what remains as
+hypotheses (`Sampling.Assembled`, at any Flock record; at SHA-512 at the plain one, `Sampling.AssembledPlain`), and at the
 deployed record over any Flock record (`Sampling.Deployed`); its zero knowledge by sequential composition of the
 masked sessions' at the masked deployed record, the route of record (`Sampling.Seq`), and, the earlier route,
 from a committed-coin protocol given the leaf layer (`Sampling.ZK`), at the sampled masked protocol with every coin
 committed at `Hello` (`Sampling.Committed`), and at the sessions' tables, with the simulator its models give
 (`Sampling.Tables`); and the
 deployed record's reference prover and its completeness from Flock's (`Sampling.Reference`). -/
+
+@[expose] public section

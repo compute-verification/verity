@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
+module
+
+public import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
 
 /-!
 # Exfiltration: the witnesses' facts
@@ -8,6 +10,8 @@ witness file can cite them. `Law.subset n n` draws every unit, so only the empty
 `ℓ ≥ 0` with the harm bound `0` and the count `0` (`certifies_full`). The rest is arithmetic: `locBits 4 1 = log₂ 5`,
 `locBits 4 2 = log₂ 11`, `(1/2)^{1/2} > 7/10`, and `1/2 ≤ ln 2 ≤ 1`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit.Partitioning.SecurityProofs.Exfil
 

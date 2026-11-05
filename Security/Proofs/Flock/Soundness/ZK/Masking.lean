@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.NovelBasis
-import Mathlib.LinearAlgebra.Lagrange
-import Mathlib.GroupTheory.Index
+module
+
+public import Proofs.Flock.Soundness.NovelBasis
+public import Mathlib.LinearAlgebra.Lagrange
+public import Mathlib.GroupTheory.Index
 
 /-!
 # Zero knowledge: masked and padded openings are uniform
@@ -24,6 +26,8 @@ columns of a padded Reed–Solomon codeword when the queries are at most the pad
 * `gk_ratio_le_third`: `3·p·b ≤ 1 − (1 − p)·b` for `b = (1 − p/2)^4` and `p ≤ 1`, the step of T7 after the negative
   binomial's generating function.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK
 

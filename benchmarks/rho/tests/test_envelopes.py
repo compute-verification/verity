@@ -26,7 +26,7 @@ TIERS_KEYS = {"residual": "residual", "clock_share": "clock_share", "eps_w": "ep
 
 def context(fleet: str, registry: Registry = REG, seconds: float | None = None) -> Context:
     f = hardware.fleet(registry, fleet)
-    h = hardware.horizon(registry, "year") if seconds is None else hardware.Horizon("given", seconds)
+    h = hardware.monitoring_period(registry, "year") if seconds is None else hardware.MonitoringPeriod("given", seconds)
     return Context(f, hardware.location(registry, f.location), envelopes.policy(registry, "kimi-k2-1m-raw"), h,
                    hardware.units(registry))
 
@@ -73,14 +73,14 @@ def test_with_sampled_proofs_it_adds_tiers_escape_and_cheating_shares():
     slack = sampled.slack(ctx)
     assert sampled.detection.injected() == pytest.approx(t5["cheat_bits"], rel=1e-12)
     assert sampled.detection.chord == pytest.approx(T.chord(p, t5["cheat_bits"]), rel=1e-7)
-    assert math.fsum(v for k, v in slack.items() if k != "exfil.faulty") == pytest.approx(t5["residual"], rel=1e-9)
-    assert slack["exfil.faulty"] == pytest.approx(t5["cheat"], rel=1e-7)
+    assert math.fsum(v for k, v in slack.items() if k != "exfil.incorrect") == pytest.approx(t5["residual"], rel=1e-9)
+    assert slack["exfil.incorrect"] == pytest.approx(t5["cheat"], rel=1e-7)
 
 
 def test_with_nothing_else_bounding_the_padded_size_ratio_is_lean_dampener_remote_at_full_capacity():
     """Lean's `DampenerRemote` with no declared products (ν_T = 0) and χ = 0 is `max(1, 1/(s + (1 − s) u / MFU₀))`,
     against an unencumbered trainer at `MFU₀`. The bound counts every gate at capacity against the reference at
-    capacity, so its padded size ratio is `DampenerRemote`'s `ρ` at `MFU₀ = 1` (where at least 1), and the overhead is
+    capacity, so its padded size ratio is `DampenerRemote`'s `ρ` at `MFU₀ = 1` (where at least 1), and the slowdown is
     that `ρ` at the reference's MFU."""
     reg = REG.override({"regime.remote.residual": 0.01, "regime.remote.clock_share": 0.0, "regime.remote.host": 0.0})
     ctx = tiers_context(reg)
@@ -110,7 +110,7 @@ def test_the_remote_overhead_is_lean_remote_dampener_at_the_references_mfu():
     hardwareMultiple MFU₀`, at the reference training algorithm's MFU (0.4): free compute counts at peak. Under it free
     compute counts at `MFU₀`, so `ρ = max(1, 1/(s + x))`, the padded size ratio. Hosts carry no compute, so tiers'
     server and the H200 give the same `x = 0.33`, and `ρ = 3.04` (1.22 without reference efficiency), as
-    `benchmarks/nci`'s compute dampener reads it. Without both assumptions tiers' server (host CPUs 12.6% of the GPUs)
+    `benchmarks/nci`'s slowdown reads it. Without both assumptions tiers' server (host CPUs 12.6% of the GPUs)
     has `x = 0.45`, which outruns that developer, so `ρ = 1`; the H200 (2.9%) has 1.12."""
     lean_dir = ROOT / "Security" / "Definitions" / "Nci"
     assert REMOTE_DAMPENER in (lean_dir / "Remote.lean").read_text()
@@ -147,7 +147,7 @@ def test_the_remote_overhead_is_lean_remote_dampener_at_the_references_mfu():
 def test_the_inference_blocks_are_the_certified_work_that_ran():
     ctx = context("reference-h200")
     remote = envelopes.regime(REG, "remote")
-    loc, s = ctx.location, ctx.horizon.seconds
+    loc, s = ctx.location, ctx.period.seconds
     n = (1 - remote.pouw.audited(loc)) * (1 - remote.pouw.eps_w) * loc.phi * s / ctx.c
     assert remote.blocks(ctx, loc.phi * s).count == pytest.approx(n)
     assert remote.blocks(ctx, loc.phi * s).budget == Budget(ctx.c, ctx.policy.k)
@@ -159,8 +159,8 @@ def test_the_layout_gets_only_what_an_abiding_strategy_gets():
     layout = sampled.partition(ctx).serving[0].layout
     assert set(layout.uncertified) == set(Remote.ABIDING)
     assert set(sampled.slack(ctx)) - set(layout.uncertified) == {"skip.certs", "break.lag", "break.escape",
-                                                                 "exfil.faulty"}
-    used = ctx.location.phi * ctx.horizon.seconds * ctx.fleet.mfu_train
+                                                                 "exfil.incorrect"}
+    used = ctx.location.phi * ctx.period.seconds * ctx.fleet.mfu_train
     assert layout.uncertified["undecl.gpu"] == pytest.approx(sampled.pouw.residual * used)
 
 
@@ -235,7 +235,7 @@ def test_the_declared_io_bound_at_w63_is_the_per_server_bounds_per_window_honest
     4 ⌈log₂ 6⌉ = 12 bits, and a request 1,095 out (1,088 id bits and the count). A link-window holds `4 ⌈32 / 28⌉ = 8`
     requests, so a server takes at most 291,440 bits in a 3.2 s window, 91.1 kbit/s in and 2.7 kbit/s out, against the
     warden's line rate of 655 kbit/s each way. That is never less than the rate over many windows, 52.1 kbit/s, which it
-    equals only at T = D + 1. A faulty ingress unit, which this honest-δ form excludes, would add 356,592 bits
+    equals only at T = D + 1. An incorrect ingress unit, which this honest-δ form excludes, would add 356,592 bits
     (8 · 512 · 16 + 2 · 4 · 36,382), 122% of a window. `regime.onsite` doesn't take it."""
     assert envelopes.REQUEST_HEAD == {"connection ordinal": 32, "content-length": 32, "max_tokens": 32, "seed": 32,
                                       "temperature": 24, "top_p": 24, "model": 406, "user": 406}
@@ -397,12 +397,13 @@ def test_pouws_delta_splits_into_coins_and_cryptography():
                                                ("reference-onsite-nvl72-per-device", "devices")])
 def test_delta_sums_every_subprotocol_and_the_wipe_per_server_and_per_wipe(scenario, per):
     """`Σ_a δ_a`: PoUW's `p/ε'` over all windows, and the wipe's `2⁻¹²⁸ + Adv_PRF` once per game, a game per
-    server (or, per device, per device) per wipe over the horizon; the certifier adds nothing (it is the auditor's)."""
+    server (or, per device, per device) per wipe over the monitoring period; the certifier adds nothing (it is the
+    auditor's)."""
     s = build(REG, scenario)
     ctx, r = s.context, s.regime
     d = r.delta(ctx)
     assert set(d.by) == {"pouw", "detection", "wipe", "certifier"}
-    games = ctx.fleet.count * getattr(ctx.location, per) * ctx.horizon.seconds / r.wipe.wipe_s
+    games = ctx.fleet.count * getattr(ctx.location, per) * ctx.period.seconds / r.wipe.wipe_s
     assert d.by["wipe"] == pytest.approx((games * 2**-128, games * r.wipe.prf_advantage))
     assert d.by["pouw"] == pytest.approx(r.pouw.delta(ctx)) and d.by["certifier"] == (0.0, 0.0)
     assert d.coin == pytest.approx(math.fsum(c for c, _ in d.by.values()))

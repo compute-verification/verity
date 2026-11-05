@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.ResLowerDA
-import Proofs.Flock.Claims.Recursion.ResSite
-import Proofs.Flock.Claims.Recursion.LabelsFull
+module
+
+public import Proofs.Flock.Claims.Recursion.ResLowerDA
+public import Proofs.Flock.Claims.Recursion.ResSite
+public import Proofs.Flock.Claims.Recursion.LabelsFull
 
 /-!
 # `ResSite` from the verifier's checks, at part `s`'s decision
@@ -21,6 +23,8 @@ brings `b`:
 The decision is part `s`'s, at its staged statement `xO`, not the inner statement's (`Rows.DecAt`, which reads the inner
 session `xI x` and says nothing of `xO`'s draw). An accepted run gives it at each part it stages (`partDec_run`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.ResLower
 
@@ -79,7 +83,7 @@ theorem partDec_run (H : Msg → Msg) (IV : Claims.Verifier Coin) (st : Stage) (
 def ResSiteDec (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) :
     Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), (DRL rd wE final w b elem).parse x = some st →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (DRL rd wE final w b elem).parse x = some st →
     Claims.Recursion.Form.Dense st.form → ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
     RecDeploy.OpenLower.JointP FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
       (AccP rd wE final w b elem Claims.Recursion.Form.Dense recRead (cmtTr recRead)) x c ws →

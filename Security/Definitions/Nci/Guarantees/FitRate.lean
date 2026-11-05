@@ -1,6 +1,8 @@
-import Definitions.Accounting.Actual
-import Definitions.Accounting.Physical
-import Definitions.Nci.Assumptions.Fit
+module
+
+public import Definitions.Accounting.Actual
+public import Definitions.Accounting.Physical
+public import Definitions.Nci.Assumptions.Fit
 
 /-!
 # NCI over windows: the fit bound on a physical run
@@ -17,6 +19,8 @@ Reads are counted by width (`Placed.stateIn`, `novelReads`), as in `Accounting.G
 bounds information, so plugging a wipe's residual in as `R` needs the read bound in its determination form. `r` bounds
 the links' capacity (`linkCapacity`), not the intake a run measures.
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 

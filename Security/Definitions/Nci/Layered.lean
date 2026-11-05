@@ -1,4 +1,6 @@
-import Definitions.Nci.Threads
+module
+
+public import Definitions.Nci.Threads
 
 /-!
 # NCI over threads: keyed reference circuits
@@ -24,6 +26,8 @@ activation's key path leaves the subcircuit, or to one of at most `E` lookups.
 * `Layered T d e eLk b`: the class, where `e` bounds the counted multiplications whose activations' key paths reach any
   one value and `eLk` those that reach any one lookup.
 -/
+
+@[expose] public section
 
 namespace Nci
 

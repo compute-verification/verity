@@ -1,5 +1,5 @@
 """stage.py UNIT N OUT: N inputs of one served proof-block type's Q_word proof block, from synthetic values at the model's served statics,
-staged for C-Flock as a ``verity/flock-circuit`` statement with hidden outputs.
+staged for Flock as a ``verity/flock-circuit`` statement with hidden outputs.
 
     UNIT  TYPE[:S=V,...]   a type of `UNITS` or `PARTS` at its statics (each type's defaults are its model's: GLM-5.3's at TP8,
                            s8-coord's Llama-3.2-1B's), e.g. fp8-coord:K=2048, router:C=1, s8-coord:K=8192
@@ -12,7 +12,7 @@ lowered once, its input rows hashed in the circuit (the per-call row on ``hm96-s
 A type of `PARTS` is a word Definition whose Q_word proof blocks are parts of it: the Definition as a one-Call Program cut by
 `Q_word` v1 (X = 16, W = 32), its classes ranked by word gates, and the class of rank ``C`` (static ``C``, default 0: the
 largest) staged by `class_statement.stage` with every input's own ``sha512/row/v1`` rows (``share_rows=False``): the class
-lowered once (C-Flock's pieces, and for a primitive without one the registered Boolean Definition's builder), its lanes the
+lowered once (Flock's pieces, and for a primitive without one the registered Boolean Definition's builder), its lanes the
 flat Definition evaluated on uniform synthetic parameters (`class_statement.class_lanes`), the laid-out proof block checked against
 them on every input (``twin`` null: no served twin cuts the same proof block).  The circuit binds the partition's
 ``verity/partition/v1`` digest, so the verifier is given its own copy of the partition object (partition.json,

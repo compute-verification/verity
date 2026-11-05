@@ -5,7 +5,7 @@ provenance and the service's trusted input (the deployment's registration log, t
 gate by gate where the policy check gives a verdict, and `scripts/nci_reference.py`'s `check_baseline` on each. `check`
 runs the Lean half in its Lean audit (`runs` in that package's `lean-audit.json`): `NciCheck/BaselineDifftestMain.lean`
 fails unless `NciCheck.Baseline.check` gives Python's result on every case and `NciCheck.Baseline.checkUnrolled` the same
-on every expansion. As for the other two NCI difftests, the audit checks the data against the record's SHA-256 and caches
+on every expansion. As for the inference-only check's other two difftests, the audit checks the data against the record's SHA-256 and caches
 its pass on the Lean package's files alone, so the first test is what says the data is still what the generator and the
 reference write. The second checks that the random cases reach every refusal code and an acceptance, the third that each
 pinned case gets the code it was built for, gate by gate as well, the fourth that an entry of the `output` kind is

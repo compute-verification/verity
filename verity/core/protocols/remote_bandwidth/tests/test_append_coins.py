@@ -1,7 +1,7 @@
 """The append coin: an appended block's bound key takes a coin the challenger releases after the append's root arrives,
 b_j(c_a) = H(seed ‖ j ‖ d_j ‖ c_a), so no choice the prover makes before committing the append's digests can depend on
 the blocks' encodings.  Each coin is live, committed before the session and hidden until it opens, once, after its
-append's root: a retry never redraws one, and a coin no root follows is a failure in the record."""
+append's root: a retry never resamples one, and a coin no root follows is a failure in the record."""
 
 from __future__ import annotations
 
@@ -62,7 +62,7 @@ def test_a_prover_that_encodes_an_append_before_its_coin_is_rejected(early) -> N
 
 
 def test_an_append_sent_again_draws_no_coin_and_rejects_the_session() -> None:
-    """A retry never redraws: the same append root sent a second time, as a prover that wanted another coin would,
+    """A retry never resamples: the same append root sent a second time, as a prover that wanted another coin would,
     is the session's `coin` rejection, and the challenger opens nothing for it."""
     r = Run(store())
     a = r.append(2)
