@@ -10,6 +10,7 @@ public import Proofs.Flock.ZkAny.RelaySlot
 public import Proofs.Flock.ZkAny.RelayPlace
 public import Proofs.Flock.ZkAny.RelayFollow
 public import Proofs.Flock.ZkAny.RelayLoopCur
+public import Proofs.Flock.ZkAny.RelayLoopL0
 public import Proofs.Flock.SessionLoop.Statement
 
 /-!
@@ -24,12 +25,13 @@ model's release being the loop's own frames':
 * `RealAt`: the model's tables and salts (`real`) are the loop's. **`realAt_of`**: at the loop's own tables
   (`Loop.realOf src`), the loop handed `src`'s bytes (`M.src`), it holds where the table each of the session's level 0s
   gives is `src`'s and the salts the loop keeps are the ones it was handed (`SaltsSrc`, `LoopRead`'s round clause).
+  **`realAt_slot`**: it holds at a frame round's slot, from `LoopJ` (`realAt_h0`) and `SaltsSrc`.
 * `roundPlace_find`: the frame `roundPlace` readies a round on is one the loop's frames hold.
 * `PlaceFacts`: what the model holds at the place `roundPlace` readies a round at: its scheduled round, its masking
   state but for `stopped`, and where `v` fails the crossing. `placeSt_seen`: its masking state at a round of a stream
   seen, from the rep's `SameInv`. **`placeSched_later`**: its scheduled round past a stream's first round, from
   `StreamAt` and `RealAt`, or `placeOf` places the round at the inner proof's own. **`placeSched_seen`**: the same at
-  a round of a stream seen, from `LoopJ` and the model's link on the session's entry.
+  a round of a stream seen, from `LoopJ`.
 * `roundPlace_scheduled_later`: past a stream's first round, on a frame keeping its schedule so far on the loop's
   table, extras and salts, which are the model's, the round's place is the model's scheduled round, or the schedule
   has no round there (the inner proof's own).
@@ -462,11 +464,11 @@ theorem placeSched_later {T : ZKMal.CoinLayer.TableData}
     exact ⟨_, q', hq'⟩
 
 /-- **`PlaceFacts.sched` at a round of a stream seen**: at the slot of a round of `stream`, table `i`'s rep `r`, where
-`LoopFacts` and `LoopJ` hold, `seen` has a round of `stream`, the model's tables and salts are the loop's (`RealAt`)
-and the session's entry carries the model's link, the round's place is the model's scheduled round, or `placeOf`
-places it at the inner proof's own on the rep's frame, the session's entry, the table's name and its level 0
-(`placeSched_later`): `RepJ` gives the rep's `StreamAt`, `SessOn` the entry's setup, and `SeenAt` the round past the
-stream's first. -/
+`LoopFacts` and `LoopJ` hold, `seen` has a round of `stream` and the model's tables and salts are the loop's (`RealAt`),
+the round's place is the model's scheduled round, or `placeOf` places it at the inner proof's own on the rep's frame,
+the session's entry, the table's name and its level 0 (`placeSched_later`): `RepJ` gives the rep's `StreamAt`,
+`SessOn` the entry's setup, `LinkOn` the model's link on it past the `Commit` (`LoopJ.link`, at the rep's level 0),
+and `SeenAt` the round past the stream's first. -/
 theorem placeSched_seen {T : ZKMal.CoinLayer.TableData}
     {M : LoopModel Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
@@ -480,8 +482,6 @@ theorem placeSched_seen {T : ZKMal.CoinLayer.TableData}
     (hsl : slot st pl = some (.round stream n)) (hF : LoopFacts sid spec seen st pl σ)
     (hJ : LoopJ M sid spec sts seen st σ) (hrep : streamRep st stream = (i, r)) (hlt : σ.c < M.τ.length)
     (hseen : seen.contains stream = true) (hR : RealAt M real sid σ)
-    (hlink : ∀ rel, sessAt σ.R sid = some rel →
-      rel.link = some (Loop.wordsAt M.x ((M.hist σ.c).tail.map fun e => ZKMal.CoinLayer.rd e.2) 0))
     {dom content : ByteArray} {q : Rep} {pc : Place} {f : Bool} {nd : Option String}
     (hrp : _root_.Flock.Firewall.Frames.roundPlace σ.R σ.L0 sid i r dom content n = .ok (q, pc, f, nd)) :
     pc = .sched ⟨(M.L.scheduled M.x M.w M.ρ (M.hist σ.c)
@@ -501,7 +501,7 @@ theorem placeSched_seen {T : ZKMal.CoinLayer.TableData}
     | nil =>
       rw [hc, List.length_nil] at hlen
       omega
-    | cons e0 h1 => exact ⟨e0, h1, by first | rfl | exact hc⟩
+    | cons e0 h1 => exact ⟨e0, h1, rfl⟩
   have hq : h1.length = opened st - 1 + 1 := by
     rw [hh, List.length_cons] at hlen
     omega
@@ -515,11 +515,42 @@ theorem placeSched_seen {T : ZKMal.CoinLayer.TableData}
     omega
   obtain ⟨p, rel, name, l0, hfa, hss, hn, hl0, hA⟩ := hJ.reps i r stream hmem hseen
   obtain ⟨hspec, hsts⟩ := (hJ.sess hsent).eq hss
-  have hl := hlink rel hss
+  have hc2 : 2 ≤ σ.c := by
+    rw [hF.count hsent]
+    omega
+  have hl := hJ.link hc2 name l0 hl0 rel hss
   rw [hh, List.tail_cons] at hl
   rcases placeSched_later hD (rep_lt_two hmem) hR hh hq hk hfa hss hn hl0 hA hspec hsts hl hrp with h | h
   · exact .inl h
   · exact .inr ⟨p, rel, name, l0, hfa, hss, hn, hl0, h⟩
+
+/-- **`RealAt` at a frame round's slot of the deployed loop**: at the slot of a round, where `LoopFacts` and `LoopJ`
+hold for the run of the loop's own tables on `src` (`Loop.realOf src`), the loop handed `src`'s bytes (`M.src`), and
+the salts the loop keeps are the ones it was handed (`SaltsSrc`, `LoopRead`'s round clause), the model's tables and
+salts are the loop's (`realAt_of`): past the `Commit` each level 0 bound to the session is the one the loop drew
+(`LoopJ.built`) on the setup's entry (`LoopJ.sess`), so its table is `src`'s (`realAt_h0`). -/
+theorem realAt_slot {M : LoopModel Claims.Flock.Wit
+      ((ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Nonce ×
+        (ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Rand)}
+    {L₀ : LeanRelease Claims.Flock.Wit
+      ((ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Nonce ×
+        (ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Rand)}
+    {src : Msg → Claims.Flock.Wit →
+      (ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Nonce ×
+        (ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Rand →
+      Nat → V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)}
+    {s0 : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hD : LoopModel.Deployed M L₀ (Loop.realOf src) s0 spec sts) (hsrc : M.src = src M.x M.w M.ρ)
+    (hS : Loop.Level0Src src M.x M.w) (hlive : ZKMal.Masked.Live M.x)
+    {sid : Nat} {seen : List String} {st : State} {pl : Placed} {σ : LoopAt} {stream : String} {n : Nat}
+    (hsl : slot st pl = some (.round stream n)) (hF : LoopFacts sid spec seen st pl σ)
+    (hJ : LoopJ M sid spec sts seen st σ) (hsal : SaltsSrc M sid σ) :
+    RealAt M (Loop.realOf src) sid σ := by
+  obtain ⟨hsent, hop, -, -⟩ := slot_round hsl
+  have hc2 : 2 ≤ σ.c := by
+    rw [hF.count hsent]
+    omega
+  exact realAt_of hsrc (realAt_h0 hsrc hD.setup (hJ.sess hsent) hD.names (hJ.built hc2) hS hlive) hsal
 
 /-- **`RoundFacts` at a frame round's slot of the deployed loop**: at the slot of a round of `n` coins of `stream`,
 where `LoopFacts` and `LoopJ` hold, the session's slots took fewer than the run's messages, and the loop ran the round

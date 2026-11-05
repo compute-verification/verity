@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.ZkAny.RelayLoop
+public import Proofs.Flock.ZkAny.RelayLoopLink
 public import Proofs.Flock.ZkAny.RelaySame
 
 /-!
@@ -25,7 +25,9 @@ public import Proofs.Flock.ZkAny.RelaySame
 * `LoopJ`: the session stopped in the loop's frames exactly where its `Hello` left and an earlier round of the model's
   run failed; no stream seen before the `Hello` left; `RepJ` at each rep stream seen; the session's plan the setup's
   (`PlanOk`); `SeenAt` at the model's history so far; no stream seen before the model's link; `BuiltAt` past the
-  `Commit`; and the session's entry the setup's once its `Hello` left (`SessOn`).
+  `Commit`; the session's entry the setup's once its `Hello` left (`SessOn`); its `Hello` and coins at the setup's
+  link points (`LinksOk`); and past the `Commit`, at a level 0 bound to it, its entry linked to the history's link
+  coins (`LinkOn`).
 * `repJ_stays`: updates that keep the rep's frame and what the session's rounds read of it (`Stays`) keep `RepJ`, the
   model's history as it was.
 * **`loopKept_ctl`**, `loopKept_ctl_all`: `LoopJ` is kept at every slot that reads no model message.
@@ -253,8 +255,9 @@ rounds came being `seen`, the loop at `σ`: the session stopped in the loop's fr
 an earlier round of the model's run failed (`liveBefore`); no stream seen before the `Hello` left; `RepJ` at each rep
 stream seen; the session's plan the setup's once its `Hello` left; the streams seen those with a round before the
 model's next (`SeenAt`); none seen while the session's slots took at most the model's `Hello`; past the `Commit`
-every level 0 bound to the session the one the loop drew for its table (`BuiltAt`); and once its `Hello` left the
-session's entry the setup's (`SessOn`). -/
+every level 0 bound to the session the one the loop drew for its table (`BuiltAt`); once its `Hello` left the
+session's entry the setup's (`SessOn`); the session's `Hello` and coins at the setup's link points (`LinksOk`); and past
+the `Commit`, where a level 0 is bound to the session, its entry linked to the history's link coins (`LinkOn`). -/
 structure LoopJ {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec) (sts : Array Stmt)
     (seen : List String) (st : State) (σ : LoopAt) : Prop where
   stop : σ.R.stopped sid = (st.sent && !M.L.toSrv.liveBefore M.wk M.x M.w M.ρ M.κ (M.hist σ.c))
@@ -265,6 +268,8 @@ structure LoopJ {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSp
   early : σ.c ≤ 1 → seen = []
   built : 2 ≤ σ.c → BuiltAt M spec sts σ.L0 sid
   sess : st.sent = true → SessOn spec sts σ.R sid
+  links : LinksOk spec st
+  link : 2 ≤ σ.c → ∀ name l0, _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0 → LinkOn M sid σ
 
 /-- **`RepJ` is kept from one of the session's requests to the next** where the updates between keep the rep's frame
 (`Kept`) and what the session's rounds read of it (`Stays`), and the slot took no model message. -/
@@ -290,7 +295,7 @@ theorem loopKept_ctl {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Sess
     (hr : ∀ st pl e σ σ', LoopRead M sid spec sts nonce k st pl e σ σ' →
       Between sid σ.R σ'.R ∧ σ'.c = σ.c ∧ Stays sid σ σ') :
     LoopKept M sid spec sts nonce (LoopJ M sid spec sts) k := by
-  intro seen st pl e σ σ' _ he _ hJ hra _
+  intro seen st pl e σ σ' _ he hF hJ hra _
   obtain ⟨hbt, hcc, hst⟩ := hr _ _ _ _ _ hra
   have hk : (Except.ok k : Except String _root_.Flock.Firewall.Session.Kind) ≠ .ok .hello := by
     intro h
@@ -301,7 +306,9 @@ theorem loopKept_ctl {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Sess
   refine ⟨?_, fun h => hJ.unsent (by rw [hsent] at h; exact h),
     fun i r s hmem hseen => repJ_stays (hbt.1 i r) hst hcc (hJ.reps i r s hmem hseen), stepK_plan he hJ.plan, ?_,
     fun h => hJ.early (by rwa [hcc] at h), fun h => builtAt_stays hst (hJ.built (by rwa [hcc] at h)),
-    fun h => sessOn_sessKept hbt.2 (hJ.sess (by rw [hsent] at h; exact h))⟩
+    fun h => sessOn_sessKept hbt.2 (hJ.sess (by rw [hsent] at h; exact h)), stepK_links he hJ.links,
+    fun h => linkOn_stays (hJ.sess (sent_of_two hF (by rwa [hcc] at h))) hst (by rwa [hcc] at h) (by omega)
+      (hJ.link (by rwa [hcc] at h))⟩
   · rw [hsent, hcc, stopped_sessKept hbt.2]
     exact hJ.stop
   · rw [hcc]
@@ -334,7 +341,8 @@ theorem loopKept_hello {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Se
   have hseen : seen = [] := hJ.unsent hs0
   have hsent := stepK_hello_sent hgo
   refine ⟨?_, fun h => ?_, fun i r s _ hc => ?_, stepK_plan he hJ.plan, ?_, fun _ => hseen,
-    fun h => absurd h (by rw [hcc, hF.start hs0]; omega), fun _ => hso he⟩
+    fun h => absurd h (by rw [hcc, hF.start hs0]; omega), fun _ => hso he, stepK_links he hJ.links,
+    fun h => absurd h (by rw [hcc, hF.start hs0]; omega)⟩
   · rw [hsent, hlb, stopped_sessKept hbt.2, hJ.stop, hs0]
     rfl
   · rw [hsent] at h
@@ -361,14 +369,17 @@ theorem liveBefore_one {W Rr : Type} (L : LeanRelease W Rr) (wk : L.toSrv.Worker
 
 /-- **`LoopJ` is kept at the `Commit`**: the session's slots took only the model's `Hello` before it, so no stream was
 seen; the updates between keep the session's stop; and every round before the model's next passed, before the link
-and after it, where the worker's link is the firewall's own, below the `Finish` (`liveBefore_one`, `liveBefore_two`).
--/
+and after it, where the worker's link is the firewall's own, below the `Finish` (`liveBefore_one`, `liveBefore_two`);
+and past it the session's entry is linked to the history's link coins, the setup's link points within
+`Frames.COIN_MAX` words (`linkOn_commit`). -/
 theorem loopKept_commit {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
-    {nonce : ByteArray} (hlast : 1 < M.L.last M.x)
+    {nonce : ByteArray} {s0 : FlockDeploy.Ins} (hx : FlockDeploy.setupOf true M.x = some (s0, spec, sts))
+    (hpm : spec.points * spec.mPts ≤ _root_.Flock.Firewall.Frames.COIN_MAX) (hlast : 1 < M.L.last M.x)
     (hwk : M.wk M.x M.w M.ρ (M.hist 1) 0 = some (M.L.ownMsg M.x M.w M.ρ (M.hist 1), false)) :
     LoopKept M sid spec sts nonce (LoopJ M sid spec sts) .commit := by
-  intro seen st pl e σ σ' hsl he hF hJ hra _
-  obtain ⟨⟨hlt, -⟩, ⟨_, -, hL0⟩, -, ⟨_, _, hda, hdr, -⟩, hbt, hcc⟩ := hra
+  intro seen st pl e σ σ' hsl he hF hJ hra hgo
+  have hlk := linkOn_commit hx hpm hsl hF hJ.links hra hgo
+  obtain ⟨⟨hlt, -⟩, ⟨_, -, hL0⟩, -, ⟨_, _, hda, hdr, -⟩, -, hbt, hcc⟩ := hra
   obtain ⟨hs1, -, hop⟩ := slot_commit hsl
   have hbuilt : BuiltAt M spec sts σ'.L0 sid := by
     intro name l0 hl
@@ -392,7 +403,7 @@ theorem loopKept_commit {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : S
   have hlb1 := liveBefore_one M.L M.wk M.x M.w M.ρ M.κ _ hl1 (by omega)
   have hlb2 := liveBefore_two M.L M.wk M.x M.w M.ρ M.κ _ hl2 hlast (by rw [ht]; exact hwk)
   refine ⟨?_, fun _ => hseen, fun i r s _ hc => ?_, stepK_plan he hJ.plan, ?_, fun _ => hseen, fun _ => hbuilt,
-    fun _ => sessOn_sessKept hbt.2 (hJ.sess hs1)⟩
+    fun _ => sessOn_sessKept hbt.2 (hJ.sess hs1), stepK_links he hJ.links, fun _ _ _ _ => hlk⟩
   · rw [hsent, stopped_sessKept hbt.2, hJ.stop, hlb1, hlb2]
   · simp [seenAfter, hseen] at hc
   · show SeenAt spec sts (M.hist σ'.c) seen

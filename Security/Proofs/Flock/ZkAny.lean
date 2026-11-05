@@ -45,6 +45,7 @@ public import Proofs.Flock.ZkAny.RelayLoop
 public import Proofs.Flock.ZkAny.RelayLoopCommit
 public import Proofs.Flock.ZkAny.RelayLoopFinish
 public import Proofs.Flock.ZkAny.RelayLoopRound
+public import Proofs.Flock.ZkAny.RelayLoopLink
 public import Proofs.Flock.ZkAny.RelayLoopJ
 public import Proofs.Flock.ZkAny.RelayLoopKept
 public import Proofs.Flock.ZkAny.RelayReps
@@ -103,6 +104,7 @@ streams seen those before the model's next round, kept at every slot that reads 
 and at a frame round given what the loop's frames and the model hold there and the round's own rep one round on; and
 what the loop's frames and the model hold at a frame round, from that invariant on the deployed loop's model, given
 the model's answer there and what it holds at the round's place, past a stream's first round the model's scheduled
-round where the model's tables and salts are the loop's. -/
+round where the model's tables and salts are the loop's; and past the `Commit` the session's entry linked to the
+coins answering the model's link, at the setup's link points. -/
 
 @[expose] public section
