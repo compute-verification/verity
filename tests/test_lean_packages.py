@@ -12,13 +12,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SKIP = {".lake", ".git", ".venv", "node_modules", "__pycache__"}
+#: the Lean tools' test fixtures, which no audit reads (`modules.FIXTURES`): trees laid out as this one's, roots and all
+FIXTURES = ROOT / "tools/verity/lean/tests/fixtures"
 
 
 def lake_packages() -> list[Path]:
     out = []
     for d, dirs, files in os.walk(ROOT):
         dirs[:] = sorted(x for x in dirs if x not in SKIP)
-        if "lakefile.toml" in files or "lakefile.lean" in files:
+        if ("lakefile.toml" in files or "lakefile.lean" in files) and not Path(d).is_relative_to(FIXTURES):
             out.append(Path(d))
     return out
 
