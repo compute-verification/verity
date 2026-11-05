@@ -23,7 +23,8 @@ then `m′` waits over fresh session coins, each stopping at `k` accepted reruns
 
 No fact about where the sessions end is read: a session's coins past the compiled verifier's last round are coins no run
 reads. At today's compiled record (`Compiled.ofRec`), each session's V\* statement has the session's numbers
-(`SessionNums`), which fix its shape and its `k`, so `CompiledEORunsExp` holds (`compiledEORunsExp`).
+(`SessionNums`), which fix its shape and its `k`, so the bound holds there (`ofRec_EO_runs_exp`) and with it
+`CompiledEORunsExp` (`compiledEORunsExp`).
 -/
 
 @[expose] public section
@@ -335,12 +336,14 @@ section Instance
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {Col' T' : Type} [DecidableEq Col']
 
-/-- **`CompiledEORunsExp` holds at every compiled record**: each session's V\* statement has the session's numbers
-(`SessionNums`), so its public shape and its `k`, and the staged statements read only the inner and staging rounds
-(`ofRec_stages`). `SessionAccepts` is not read: each session's replay is counted whether or not it accepts. -/
-theorem compiledEORunsExp (H : Msg → Msg) (D : RecAt Coin) (DO : Claims.Flock.Deploy Coin Col' T')
-    (IV : Verifier Coin) : CompiledEORunsExp H D DO IV := by
-  intro hN _
+/-- **`Compiled.ofRec`'s `E_O` reruns the prover at most `1 + Σ_s (1 + m′_s·k_s)` times in expectation** wherever
+each session's V\* statement has the session's numbers (`SessionNums`), so its public shape and its `k`, and the staged
+statements read only the inner and staging rounds (`ofRec_stages`). -/
+theorem ofRec_EO_runs_exp (H : Msg → Msg) (D : RecAt Coin) (DO : Claims.Flock.Deploy Coin Col' T')
+    (IV : Verifier Coin) (hN : SessionNums (D.record IV) DO) :
+    ExtractRunsExpLe H (Compiled.ofRec D DO IV).EO fun x =>
+      1 + ∑ s : Fin ((D.record IV).nS x),
+        ((1 + ((D.record IV).nums x s).waits * ((D.record IV).nums x s).k : ℕ) : ℝ) := by
   refine (Compiled.ofRec D DO IV).EO_runs_exp_of H (ofRec_stages D DO IV) (fun x s => ((D.record IV).nums x s).k)
     (fun x s ms => ?_) (fun x s ms => le_of_eq ?_)
   · obtain ⟨hk, hW, hK, hN₀, -, -⟩ :=
@@ -352,6 +355,12 @@ theorem compiledEORunsExp (H : Msg → Msg) (D : RecAt Coin) (DO : Claims.Flock.
       (D.record IV).kS x))).getD s []) = ((D.record IV).nums x s).k
     unfold Claims.Flock.Deploy.k Nums.k
     rw [hN₀]
+
+/-- **`CompiledEORunsExp` holds at every compiled record** (`ofRec_EO_runs_exp`). `SessionAccepts` is not read: each
+session's replay is counted whether or not it accepts. -/
+theorem compiledEORunsExp (H : Msg → Msg) (D : RecAt Coin) (DO : Claims.Flock.Deploy Coin Col' T')
+    (IV : Verifier Coin) : CompiledEORunsExp H D DO IV :=
+  fun hN _ => ofRec_EO_runs_exp H D DO IV hN
 
 end Instance
 
