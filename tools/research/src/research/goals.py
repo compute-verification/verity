@@ -93,8 +93,6 @@ def show(goals: list[dict]) -> str:
         was = f"  (was {_when(g['wasDue'])})" if g.get("wasDue") else ""
         tier = f"  (tier {g['tier']})" if g.get("tier") else ""
         waits = "".join(f"\n{'':<24} {'':<9}    waits on {next(iter(r.values()))}" for r in g.get("waitingOn", []))
-        if g.get("next"):
-            waits += f"\n{'':<24} {'':<9}    next: {g['next']['step']}, by {_when(g['next']['due'])}"
         lines.append(f"{_when(g['due']):<24} {g['status']:<9}  {g['title']}  {' '.join(g.get('tags', []))}{tier}{flag}{was}\n"
                      f"{'':<24} {'':<9}  {g['id']}{waits}")
     return "\n".join(lines) if lines else "No goals yet."
@@ -132,13 +130,6 @@ def edited(current: dict | None, ns: argparse.Namespace) -> dict:
         goal.pop("blockers", None)
     elif ns.blockers is not None:
         goal["blockers"] = _text(ns.blockers)
-    if ns.no_next:
-        goal.pop("next", None)
-    elif ns.next is not None or ns.next_due is not None:
-        step, due = ns.next or goal.get("next", {}).get("step"), ns.next_due or goal.get("next", {}).get("due")
-        if not step or not due:
-            raise SlackError("a next step needs both --next TEXT and --next-due WHEN")
-        goal["next"] = {"step": step, "due": due}
     missing = [f for f in ("title", "status", "due") if not goal.get(f)]
     if missing:
         raise SlackError(f"goal {ns.id} is new, so it needs --{', --'.join(missing)}")
@@ -169,9 +160,6 @@ def main(argv: list[str], route: Route | None = None) -> int:
     waits = s.add_mutually_exclusive_group()
     waits.add_argument("--wait", action="append", metavar="goal:ID|ask:CARD", help="what it waits on; repeat for each, replacing the list")
     waits.add_argument("--no-wait", action="store_true", help="it waits on nothing")
-    s.add_argument("--next", help="its next step, one plain line (a goal due within a week names one)")
-    s.add_argument("--next-due", help="that step's date: 2026-11-05, or 2026-11-05T10:00-08:00")
-    s.add_argument("--no-next", action="store_true", help="it names no next step")
     for name in ("confirm", "done", "remove"):
         sub.add_parser(name).add_argument("id")
     pr = sub.add_parser("priority", help="set a goal's priority (anyone may), or clear it back to the derived one")
