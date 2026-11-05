@@ -1609,8 +1609,8 @@ theorem stream_logs (reg : Option Claims.Msg → Reg) {tables : Array String} {L
   have hlen := hF.length_eq
   have hfo : ∀ m R₁, Lg = m ++ R₁ → L₀.length < m.length → firstOpened m = some i := fun m R₁ he hlt =>
     firstOpened_past h₀ hr₀ (he.symm.trans hL₀) hlt
-  refine filter_logs (by rw [List.map_snd_zip hlen.ge]; exact hpw) (fun a => decide (a.2.1.tab = t ∧ a.2.1.rep = r))
-    fun m => ⟨?_, ?_⟩
+  refine filter_logs (xs := as.zip ms) (by rw [List.map_snd_zip hlen.ge]; exact hpw)
+    (fun a => decide (a.2.1.tab = t ∧ a.2.1.rep = r)) fun m => ⟨?_, ?_⟩
   · rintro ⟨⟨⟨q, sub, cs⟩, m'⟩, hx, hpx, hxm⟩
     have hxm' : m' = m := hxm
     rw [← hxm']
