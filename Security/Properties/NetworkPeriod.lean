@@ -97,9 +97,9 @@ def RowsKBoundsCount : Prop :=
         charged).K
 
 /-- **The period check with its listed circuit files accepts** (`network-period check PARAMS COMMITMENT EVIDENCE
-CIRCUIT…`, `protocolWith`): given the files `fs`, each its SHA-512 and circuit in `Listing.files`' order (a scan's
-file read whole, as its sessions' verifier parses it, `NetworkCheck.CircuitFile.whole`; an audit's its header,
-`NetworkCheck.CircuitFile.read`), `checkWith` accepts the parameters `p` (with the files they list), the commitment `c`
+CIRCUIT…`, `protocolWith`): given the files `fs`, each its SHA-512 and circuit in `Listing.files`' order (each file
+read whole, as its sessions' verifier parses it, `NetworkCheck.CircuitFile.whole`; an audit's trimmed to its header and
+its unit's input rows, `NetworkCheck.Period.trim`), `checkWith` accepts the parameters `p` (with the files they list), the commitment `c`
 and the evidence `e`. It refuses an audit tied to the scan that lists no files (`unlistedTied`), holds the files to the
 listing (`circuitsWhy`) and checks the period at the VUs and bits they charge (`charged`). -/
 def AcceptsWith (fs : Array (ByteArray × Flock.Circuit)) (p : Params × Listing) (c : Commitment) (e : Evidence) :

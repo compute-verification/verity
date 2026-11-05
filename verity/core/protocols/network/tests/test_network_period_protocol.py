@@ -973,8 +973,13 @@ def test_a_listed_audit_counts_its_vus_off_its_circuit_files(server, tmp_path):
     a leaf map past the input rows, a cut input wired by no leaf cut or by two, a wire into the unit, a leaf cut past
     the input rows, a cut input's group over the first group's ports, two row ports of one name, input rows out of the
     parameters' order, output rows that are not the return's words, an input port reading another word than its
-    parameter's (`fieldBit`), a parameter bit past its row's bits, and two instances a VU."""
-    exe = D.build(LEAN, "network-period")
+    parameter's (`fieldBit`), a parameter bit past its row's bits, and two instances a VU.
+
+    Lean here is the test-only `network-period-chunked`, which reads an audit's file in chunks
+    (`NetworkCheck.CircuitFile.read`): the files are small ones written for the check, which the session verifier's
+    parse refuses, so this tests the check's logic, not the deployed reader
+    (`test_a_composed_circuit_file_is_read_whole_and_trimmed`)."""
+    exe = D.build(LEAN, "network-period-chunked")
     for n in range(4):
         case = build("audit-listed", n, small=n % 2 == 0)
         texts = PC.listed_files(case)
@@ -1063,8 +1068,10 @@ def test_a_tied_audit_lists_its_circuit_files(server, tmp_path):
     """Given circuit files, the period check refuses a rows-form period whose audit the scan ties lists none
     (`unlistedTied`), before it holds the files to the listing, so no tied audit escapes `SampledProofs.Bits.check`:
     a small `rows-honest` period, whose scan ties its one audit, given an audit's valid circuit file, is refused by
-    Lean and the mirror at the same reason; with no files it is the check that reads none, and both accept it."""
-    exe = D.build(LEAN, "network-period")
+    Lean and the mirror at the same reason; with no files it is the check that reads none, and both accept it. Lean here
+    is the test-only `network-period-chunked`, as the file is a small one written for the check: this tests the check's
+    logic, not the deployed reader."""
+    exe = D.build(LEAN, "network-period-chunked")
     text = PC.listed_files(build("audit-listed", 0, small=True))[0]
     for n in range(2):
         case = build("rows-honest", n, small=True)

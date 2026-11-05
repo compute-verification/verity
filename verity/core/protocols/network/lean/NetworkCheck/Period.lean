@@ -1971,9 +1971,8 @@ def protocol : Core.Protocol where
 
 `network-period check PARAMS COMMITMENT EVIDENCE CIRCUIT…` reads the circuit files the parameters list, each audit's
 (`audits[i].circuits`) with `i` ascending, then the scan's (`scan_circuits`), each a file a root template of its
-Program, in order; it reads an audit's file's SHA-512, header and unit's input rows (`NetworkCheck.CircuitFile.read`),
-never a computed row, and reads a scan's file whole, as the scan's sessions' verifier parses it
-(`NetworkCheck.CircuitFile.whole`). A proof block is a VU, a file's `units_per_vu` template instances, so a listed
+Program, in order; it reads each file whole, as its sessions' verifier parses it (`NetworkCheck.CircuitFile.whole`),
+and holds a scan's file whole and an audit's trimmed to its SHA-512, header and unit's input rows (`trim`). A proof block is a VU, a file's `units_per_vu` template instances, so a listed
 audit's units are its VUs and a wrong one commits at most `vuBits upv words`; and each VU's input padding, the unit's
 input columns no port holds whose row is not a forced zero (`padCols`), counts among its free inputs (`charged`,
 `padFree`). -/
@@ -2130,6 +2129,7 @@ column 20 that no port holds, and forced zeros. Only column 20 counts; the other
     padCols cf == 1 && forcedZero cf 30 && !forcedZero cf 20 && !forcedZero cf 3 &&
       forcedCols cf == (List.range Flock.WORD).filter (fun c => 16 ≤ c && c != 20) &&
       (forcedCols { (default : Flock.Circuit) with nets := #[("unit", n)], unitNet := 0 }).isEmpty
+  | .error _ => false
 
 /-- **Sparse `m`'s first `k` rows**: `min rows k` rows, each of the first `k` as `m` holds it, and its data cut to the
 bytes those rows read (`Flock.Sparse.row`), so none of `m`'s later rows is held. -/
@@ -2231,7 +2231,6 @@ theorem padCols_trim (cf : Flock.Circuit) : padCols (trim cf) = padCols cf := by
       forcedCols (trim cf) == forcedCols cf
   | .error _ => false
 
-  | .error _ => false
 #guard (circuitsWhy { audits := #[some toyListed] } #[]).isSome
 #guard (circuitsWhy { audits := #[none, some toyListed] } #[(.empty, default), (.empty, default)]) ==
   some s!"audit 1's circuit file for T: its SHA-512 is not its listing's"
@@ -2243,7 +2242,7 @@ def unlistedTied (p : Params × Listing) (c : Commitment) : Option Nat :=
   (List.range p.2.audits.size).find? fun i => (p.2.audits[i]?.join).isNone && tiedOf p.1.form c i
 
 /-- **The period check with its listed circuit files** `fs`, each file's SHA-512 and circuit in the order
-`Listing.files` gives (the scan's read whole, the audits' their headers): a refusal where an audit tied to the scan
+`Listing.files` gives (each read whole, the audits' trimmed, `trim`): a refusal where an audit tied to the scan
 lists no files (`unlistedTied`) or they are not the listed files (`circuitsWhy`), else `check` over the parameters they
 charge (`charged`). -/
 def checkWith (fs : Array (ByteArray × Flock.Circuit)) (p : Params × Listing) (c : Commitment) (e : Evidence) :
@@ -2278,6 +2277,18 @@ def protocolWith (fs : Array (ByteArray × Flock.Circuit)) : Core.Protocol := pr
 
 /-- The period protocol refusing every period for `why`: a listed file that couldn't be read. -/
 def refusing (why : String) : Core.Protocol := protocolBy fun _ _ _ => .reject why
+
+/-- How many of the circuit files given to `network-period check` the parameters at `p` list for the scan
+(`scan_circuits`), the last ones: 0 where they are not canonical JSON (`Core.canonicalJson`) or list none. A miscount
+holds a scan's file as an audit's, without its computed rows, which the check refuses (`fileWhy`), or an audit's file
+whole, more of it than the check needs. -/
+def scanFiles (p : String) : IO Nat := do
+  let b ← tryCatch (IO.FS.readBinFile p) fun _ => pure ByteArray.empty
+  match Core.canonicalJson b with
+  | .ok j => match j.getObjVal? "scan_circuits" with
+    | .ok (.arr a) => return a.size
+    | _ => return 0
+  | .error _ => return 0
 
 /-! ## The clock openings -/
 

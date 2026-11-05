@@ -50,7 +50,7 @@ first VU (`interface._members`), from the record alone, held to `interface.membe
 -/
 
 /-!
-`NetworkCheck.CircuitFile` reads a circuit file in chunks, hashing it whole and parsing only its header, for the period's
+`NetworkCheck.CircuitFile` reads a circuit file whole, as a session's verifier parses it, for the period's
 check with its listed circuit files (`NetworkCheck.Period.protocolWith`, `network-period check … CIRCUIT…`), which
 holds each to its template with `SampledProofs.Bits.check`.
 -/

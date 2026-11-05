@@ -5,19 +5,20 @@ import Flock.ProvedScope
 import Flock.Tags
 
 /-!
-# A circuit file's digest and header, read in chunks, or the file read whole
+# A circuit file read whole, or its digest and header read in chunks
 
-`network-period check P C E CIRCUIT…` reads each circuit file its parameters list in chunks of a fixed size: it hashes
-the whole file (`Hasher`, SHA-512) and keeps only its head line, its META line, each block's keyword line and its
-net's header line, and its unit net's input rows (`Lines`), never a computed row, so a file of any size is read in
-memory of its header and its unit's input columns. `ofHeader` is the `Flock.Circuit` those lines describe, each net its header
-with no rows but the unit's input rows, each a self row or a forced zero as `Flock.Net.ofRows` holds them: what
+`network-period check P C E CIRCUIT…` reads each circuit file its parameters list whole (`whole`, `readWhole`), by the
+very function a session's verifier of `Flock.Tags.circuit`'s statement parses its circuit with
+(`Flock.ProvedScope.circuitOf`, `whole_circuit`), so the period reads the rows its sessions prove; it holds an audit's
+file trimmed to its header and its unit's input rows (`NetworkCheck.Period.trim`).
+
+`read` reads a file in chunks of a fixed size instead, for the test-only `network-period-chunked`: it hashes the whole
+file (`Hasher`, SHA-512) and keeps only its head line, its META line, each block's keyword line and its net's header
+line, and its unit net's input rows (`Lines`), never a computed row, so a file of any size is read in memory of its
+header and its unit's input columns. `ofHeader` is the `Flock.Circuit` those lines describe, each net its header with no
+rows but the unit's input rows, each a self row or a forced zero as `Flock.Net.ofRows` holds them: what
 `SampledProofs.Bits.check` and the period's `circuitsWhy` and `padCols` read of an audit's file. The file is a flat
 `flock-circuit` file (`Flock.Tags.circuit`); a typed or templated block's file is refused by name.
-
-A scan's file is read whole instead (`whole`), by the very function a session's verifier of `Flock.Tags.circuit`'s
-statement parses its circuit with (`Flock.ProvedScope.circuitOf`, `whole_circuit`), so the period reads the rows the
-scan's sessions prove.
 -/
 
 namespace NetworkCheck.CircuitFile
@@ -335,6 +336,16 @@ theorem whole_circuit (bytes : ByteArray) :
 /-- **Read the circuit file at `path` whole** (`whole`). -/
 def readWhole (path : System.FilePath) : IO (Flock.V (ByteArray × Flock.Circuit)) :=
   return whole (← IO.FS.readBinFile path)
+
+/-- The files `files` read whole (`readWhole`), one after another, so one file's text is held at a time; `k` the first
+one's place among the files given. -/
+def readWholes (files : List String) (k : Nat) : IO (Except String (Array (ByteArray × Flock.Circuit))) := do
+  let mut out := #[]
+  for (f, i) in files.zipIdx k do
+    match ← tryCatch (readWhole f) (fun e => pure (.error (toString e))) with
+    | .ok x => out := out.push x
+    | .error why => return .error s!"circuit file {i}: {why}"
+  return .ok out
 
 /-! ## Checks -/
 
