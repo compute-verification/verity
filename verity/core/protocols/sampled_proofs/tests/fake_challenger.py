@@ -94,19 +94,20 @@ class Stream(S.Stream):
         self.fake = coins if isinstance(coins, Challenger) else None
         super().__init__(spec, unit, coins=coins, **kwargs)
 
-    def register(self, record: Mapping[str, Any], ports: Mapping[str, Mapping[str, Any]], **kwargs: Any) -> S.Registration:
+    def register(self, record: Mapping[str, Any], ports: Mapping[str, Mapping[str, Any]],
+                 **kwargs: Any) -> S.WindowCommitmentRecord:
         return super().register(record, ports, **{"window_root": WINDOW["root"], **kwargs})
 
     def register_interiors(self, draw: S.Draw, record: Mapping[str, Any], ports: Mapping[str, Mapping[str, Any]],
-                           **kwargs: Any) -> S.Registration:
+                           **kwargs: Any) -> S.WindowCommitmentRecord:
         return super().register_interiors(draw, record, ports, **{"window_root": WINDOW["root"], **kwargs})
 
-    def select(self, registration: S.Registration, **kwargs: Any) -> S.Draw:
+    def select(self, registration: S.WindowCommitmentRecord, **kwargs: Any) -> S.Draw:
         if self.fake is not None and bytes.fromhex(registration.digest) not in self.fake.sessions:
             self.fake.commit(bytes.fromhex(registration.digest))
         return super().select(registration, **kwargs)
 
-    def _evidence(self, registration: S.Registration) -> dict[str, Any] | None:
+    def _evidence(self, registration: S.WindowCommitmentRecord) -> dict[str, Any] | None:
         after = bytes.fromhex(registration.digest)
         return self.fake.evidence(registration.digest) if self.fake and after in self.fake.sessions else None
 
