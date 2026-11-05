@@ -205,7 +205,8 @@ def main(argv=None) -> int:
     ap.add_argument("--rotate", action="store_true", help="quantize W·R and feed x·R (`rotation.py`)")
     ap.add_argument("--targets", type=Path, default=None,
                     help="a JSON map of tensor name to its own target (a rate, absmax, bf16: left unquantized, or deflR: "
-                    "W·R less its top-R SVD part, served apart, at --target; with --device-map), the rest at --target")
+                    "W·R less its top-R SVD part, served apart, at --target; with --device-map), the rest at --target; "
+                    "out (tables.py --map's served exact) is absmax, served as --serve says")
     ap.add_argument("--calib", type=Path, default=None,
                     help="an earlier arm's result.json on the same weights and targets (with --device-map): each "
                     "matrix's c from its calibration_before instead of solved again (`quant.wrap`'s calib)")
@@ -272,7 +273,7 @@ def main(argv=None) -> int:
     target = None if args.target in ("absmax", "bf16") else float(args.target)
     targets = None
     if args.targets:
-        targets = {k: None if v == "absmax" else v if str(v).startswith("defl") or v == "bf16" else float(v)
+        targets = {k: None if v in ("absmax", "out") else v if str(v).startswith("defl") or v == "bf16" else float(v)
                    for k, v in json.loads(args.targets.read_text()).items()}
         res["targets"] = targets
     calib = None
