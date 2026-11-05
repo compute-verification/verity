@@ -78,7 +78,8 @@ its record's digest, `SampledProofs.Bits.check` lays it out as its template, and
 VUs of its `upv`, the scan's one instance a VU whose rows read no input padding and every bit of its `row` parameter
 (`circuitsWhy`). An audit with
 files counts its VUs as its units, each template's instances over its file's `upv`, charges a VU's bits, and counts
-each VU's input padding, the unit's input columns no port holds, among its free inputs (`charged`, `padCols`).
+each VU's input padding, the unit's input columns no port holds, among its free inputs (`charged`, `padFree`,
+`padCols`).
 The rows form has, in place of `sync_set`,
 
     "circuit": hex,
@@ -97,7 +98,11 @@ descriptor's SHA-512 (`partition_object.program_sha512`), and its `link` the run
 `cells` must be the schedule's caps over the period (`Schedule.caps`): `egress_cells` for each of the
 `lanes · m · window` connections the network certifier can carry in `m` link-windows, since it admits a connection at a
 bucket's start only while fewer than `lanes` are live and serves it in that bucket. Any other list, an empty one
-included, is refused, so `K`'s schedules and cells terms are never read off caps that miss a connection. The
+included, is refused, so `K`'s schedules and cells terms are never read off caps that miss a connection. Before
+that, those `lanes · m · window` connections, the k-th at ordinal k + 1, must have distinct u32 ordinals, and a cell's
+`B` bytes must be under 2^32 (`rowsWf`): a frame names its connection and its payload's length by u32s, so past 2^32
+two frames would encode alike and the record would not read back (`NetTiming.RowsFormat.Wf` at `NetTiming.cellRows`).
+The check refuses such a period too (`rowsWfCheck`), so whatever parameters it accepts, its frames read back. The
 descriptor must decode (`Flock.Program.decode`) and be the scan of the schedule's link-window in the generator form:
 its root batches one instance of a template whose parameters are `row` and a `prog<j>` a lane (`IngressScanFirst`,
 bucket 0), T − 1 of one whose are `row`, `sin` and the `prog<j>` (`IngressScanBucket`; none when T = 1), lane j's
@@ -395,6 +400,19 @@ def Schedule.windowPrograms (s : Schedule) : Nat := s.window / s.every * s.progr
 each is live in its admission bucket. -/
 def Schedule.caps (s : Schedule) (windows : Nat) : Array Nat :=
   Array.replicate (s.lanes * (windows * s.window)) s.egressCells
+
+/-- **The rows form's frames read back** (`NetTiming.RowsFormat.Wf` at the network certifier's frames,
+`NetTiming.cellRows`, `warden.py`'s `encode_frame`: kind u8, ordinal u32, payload length u32, payload, zero fill): a
+cell's `B` bytes are under 2^32, so its payload's length is a u32, and the `lanes · windows · window` connections of a
+period of `windows` link-windows, the k-th at ordinal k + 1 (0 is a refusal's), have distinct u32 ordinals, so no two
+frames encode alike. -/
+def rowsWf (s : Schedule) (windows : Nat) : Bool :=
+  s.cellBytes < 2 ^ 32 && s.lanes * (windows * s.window) < 2 ^ 32
+
+def rowsWfRefusal (s : Schedule) (windows : Nat) : String :=
+  s!"rows format: a frame's ordinal and payload length are u32s, so the lanes · windows · window = \
+    {s.lanes * (windows * s.window)} connections and a cell's {s.cellBytes} bytes must each be under 2^32, or two \
+    frames could encode alike (rowsWf)"
 
 /-- The scan's terms, read off its Program: its monitoring period (`T`, the window's buckets), its own free inputs
 (none: it registers the rows, and its `prog` is a compute audit's output, `progTied`, whose free inputs a link-window's
@@ -960,8 +978,8 @@ def apart (a b : Array (Nat × Nat)) : Bool :=
 #guard apart #[(0, 1), (4, 8)] #[(1, 4)] && apart #[(2, 2)] #[(0, 4)] && apart #[] #[(0, 4)] &&
   !apart #[(0, 2)] #[(1, 3)] && !apart #[(0, 1), (4, 8)] #[(7, 9)] && !apart #[(1, 3)] #[(0, 4)]
 
-/-- The scan's terms from its Program's descriptor (`Flock.Program.decode` of its canonical bytes), which must be the
-registered Program (`program`, its SHA-512), with no two definitions of one key (`keysUnique`) and no template keyed
+/-- The scan's terms from its Program, which must be the registered Program (`program`, its SHA-512), with no two
+definitions of one key (`keysUnique`) and no template keyed
 as an input (`Flock.Program.isInputId`), so the template query (`Flock.TemplateQuery.evaluate`, which finds a
 definition by its key, the first of that key, and skips an input's) reads each template node as this check does, and
 the generator form of the schedule's execution phase: its root batches
@@ -990,8 +1008,7 @@ T / every` counted once among the input gates): bucket `t`'s `prog<j>`, mapped o
 its row `⌊t / every⌋` (`readsEntries`, read off the argument's parts), the
 leaf the period check's `wired` holds to chunk `j` of an audit's `SlotEntry_v1` or `SelectEntry_v1` entries port;
 their bits are the scan's `entries`. -/
-def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
-  let prog ← (Flock.Program.decode (← Flock.canon j).toUTF8).mapError fun e => s!"scan: {e}"
+def scanProg (prog : Flock.Program.Prog) (program : String) (s : Schedule) : V Scan := do
   need (Flock.hexOf prog.sha512 == program) "scan: its SHA-512 is not the registered Program's (program)"
   let root ← needSome prog.defs[prog.root]? "scan: no root"
   let templates := (templateNodes prog).toArray.map fun k => (root.body.nodes[k]!, prog.defs[root.body.nodes[k]!.fn]!)
@@ -1070,7 +1087,13 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
   pure { steps := T, free := 0,
          ingress := vuBits 1 (max (paramWords df.params) ((later.map fun (_, d) => paramWords d.params).getD 0) +
            retWords df.ret),
-         egress := vuBits 1 (paramWords de.params + retWords de.ret), entries := s.lanes * nb * bitsOf ety }
+          egress := vuBits 1 (paramWords de.params + retWords de.ret), entries := s.lanes * nb * bitsOf ety }
+
+/-- The scan's terms from its Program's descriptor `j`: the Program `Flock.Program.decode` reads off its canonical
+bytes, as `scanProg` checks it. -/
+def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
+  let prog ← (Flock.Program.decode (← Flock.canon j).toUTF8).mapError fun e => s!"scan: {e}"
+  scanProg prog program s
 
 /-- The rows form's keys with the scan's listed circuit files (`scan_circuits`, a file a root template of the scan's
 Program, `listedOf`). -/
@@ -1115,6 +1138,7 @@ def paramsWith (j : Json) : V (Params × Listing) := do
   let windows ← Flock.J.nat j "windows" "the object"
   unless 1 ≤ windows do throw "windows: a period has at least one link-window"
   if let .rows s _ _ := form then
+    unless rowsWf s windows do throw (rowsWfRefusal s windows)
     unless cells == s.caps windows do
       throw s!"cells: the rows form's caps are egress_cells = {s.egressCells} for each of the lanes · windows · \
         window = {s.lanes * (windows * s.window)} connections the schedule can carry (Schedule.caps), not these \
@@ -1758,6 +1782,12 @@ def heldChecks (p : Params) (c : Commitment) : Array (Option (Core.Verdict × St
   | .rows .. => c.windows.zipIdx.map fun (reg, i) => heldCheck p c.audits (p.first + i) reg
   | .clock _ => #[]
 
+/-- The rows form's frames finding (`rowsWf`): `paramsOf` refuses such a period before its caps, and the check refuses
+it too, so whatever parameters it accepts, its rows form's frames read back. None in the clock form. -/
+def rowsWfCheck (p : Params) : Option (Core.Verdict × String) := match p.form with
+  | .rows s _ _ => if rowsWf s p.windows then none else some (.reject, rowsWfRefusal s p.windows)
+  | .clock _ => none
+
 def findingOf {α : Type} : Found α → Option (Core.Verdict × String)
   | .error x => some x
   | .ok _ => none
@@ -1905,8 +1935,8 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Pro
       (scans.find? (·.1.delta != f0.delta)).map fun (f, _) =>
         (.reject, s!"a scan's δ {f.delta.toString} is not the period's, {f0.delta.toString}")
     let as := auditChecks p c e
-    match firstFinding (ws.toList.map findingOf ++ [oneDelta] ++ as.toList.map findingOf ++ (wiredChecks p c).toList ++
-        (stateChecks p c).toList ++ (heldChecks p c).toList) with
+    match firstFinding (ws.toList.map findingOf ++ [oneDelta, rowsWfCheck p] ++ as.toList.map findingOf ++
+        (wiredChecks p c).toList ++ (stateChecks p c).toList ++ (heldChecks p c).toList) with
     | some (.reject, r) => .reject r
     | some (_, r) => .undecided r
     | none =>
@@ -1968,7 +1998,7 @@ Program, in order; it reads an audit's file's SHA-512 and header (`NetworkCheck.
 rows, and reads a scan's file whole, as the scan's sessions' verifier parses it (`NetworkCheck.CircuitFile.whole`). A
 proof block is a VU, a file's `units_per_vu` template instances, so a listed audit's units are its VUs and a wrong one
 commits at most `vuBits upv words`; and each VU's input padding, the unit's input columns no port holds (`padCols`),
-counts among its free inputs (`charged`). -/
+counts among its free inputs (`charged`, `padFree`). -/
 
 /-- The owners of listed files, in the order their files are given: each audit that lists files, by index, then the
 scan; each with whether it is the scan and what its files are held to. -/
@@ -2029,22 +2059,28 @@ def circuitsWhy (l : Listing) (fs : Array (ByteArray × Flock.Circuit)) : Option
 
 /-- **A circuit file's unit's input padding**: its unit net's input columns (`SampledProofs.Bits.Rows.ofNet`'s `nIn`)
 that no port holds (`Flock.portCols`), counted as columns. A row may read one, and Δ fills it from no row, so its value
-is the prover's: a free input of each VU, read off the header. -/
+is the prover's: a free input of each VU, read off the header. It marks each port's columns once, so it costs the input
+columns plus the ports' widths, never their product. -/
 def padCols (cf : Flock.Circuit) : Nat :=
   let nIn := min (cf.unit.inWords * Flock.WORD) cf.unit.constPos
   let held := (Flock.portCols cf.unit.inGroups).foldl
-    (fun h (a0, w) => (List.range w).foldl (fun h t => h.set! (a0 + t) true) h) (Array.replicate nIn false)
-  held.foldl (fun n b => if b then n else n + 1) 0
+    (fun h q => (List.range q.2).foldl (fun h t => h.set! (q.1 + t) true) h) (Array.replicate nIn false)
+  ((List.range nIn).filter fun c => !held.getD c false).length
 
-/-- **Audit `a` as its listed files charge it**, `heads` its templates' files' `units_per_vu` and input padding
-(`padCols`) in order: its units its VUs, `Σ members / upv` over its templates; its bits the most a wrong VU commits,
-`vuBits upv words`; and its free inputs, with the scan's state held or not (`free`, `stateFree`), each VU's padding
-more, `Σ members / upv · pad`, which its record's count (`NetworkCheck.Circuit.countsOf`) doesn't see. -/
-def Listed.charge (x : Listed) (a : Audit) (heads : Array (Nat × Nat)) : Audit :=
-  let ts := x.templates.zipIdx.map fun (t, k) => (t, heads.getD k (1, 0))
-  let pad := ts.foldl (fun n (t, u, p) => n + t.members / u * p) 0
-  { a with units := ts.foldl (fun n (t, u, _) => n + t.members / u) 0,
-           bits := ts.foldl (fun b (t, u, _) => max b (vuBits u t.words)) 0,
+/-- **Root templates `ts`' VUs' input padding**, `fs` their circuit files in order: `Σ members / upv · padCols` over
+the templates, each at its file's `units_per_vu` and padding. An audit's is `padFree (chargesOf P) fs` at its Program
+`P`, which its record's count (`NetworkCheck.Circuit.countsOf`) doesn't see. -/
+def padFree (ts : Array Charged) (fs : List Flock.Circuit) : Nat :=
+  ts.zipIdx.foldl (fun n (t, k) => let f := fs.getD k default; n + t.members / f.upv * padCols f) 0
+
+/-- **Audit `a` as its listed files `fs` charge it**, one a template in order: its units its VUs, `Σ members / upv`
+over its templates; its bits the most a wrong VU commits, `vuBits upv words`; and its free inputs, with the scan's
+state held or not (`free`, `stateFree`), its VUs' padding more (`padFree`). -/
+def Listed.charge (x : Listed) (a : Audit) (fs : List Flock.Circuit) : Audit :=
+  let ts := x.templates.zipIdx.map fun (t, k) => (t, (fs.getD k default).upv)
+  let pad := padFree x.templates fs
+  { a with units := ts.foldl (fun n (t, u) => n + t.members / u) 0,
+           bits := ts.foldl (fun b (t, u) => max b (vuBits u t.words)) 0,
            free := a.free + pad, stateFree := a.stateFree + pad }
 
 /-- **The parameters as the files `fs` charge them**: each listed audit charged by its files' headers
@@ -2055,8 +2091,7 @@ def charged (p : Params) (l : Listing) (fs : Array (ByteArray × Flock.Circuit))
   let starts := (l.audits.foldl (fun (acc, n) o => (acc.push n, n + (o.map (·.files.size)).getD 0))
     ((#[] : Array Nat), 0)).1
   { p with audits := (p.audits.zip l.audits).zipIdx.map fun ((a, o), i) => match o with
-      | some x => x.charge a ((Array.range x.files.size).map fun k =>
-          ((fs[starts[i]! + k]?).map fun (_, cf) => (cf.upv, padCols cf)).getD (1, 0))
+      | some x => x.charge a ((fs.extract starts[i]! (starts[i]! + x.files.size)).toList.map (·.2))
       | none => a }
 
 /-- A listing of two root templates: `T`, 6 instances of 5 words, and `U`, 4 of 3, their files `f` and `g`. -/
@@ -2066,11 +2101,19 @@ def toyListed : Listed where
   files := #["f", "g"]
   partition := none
 
-#guard (fun (a : Audit) => a.units == 3 + 4 && a.bits == 2 * 16 * 5 + 2 && a.free == 7 + 3 * 80 + 4 * 112 &&
-    a.stateFree == 5 + 3 * 80 + 4 * 112)
-  (toyListed.charge
+/- `T`'s file at 2 instances a VU, `U`'s at 1, each unit one input word: `T`'s three ports of 16 leave 80 columns of
+padding, `U`'s one 112. -/
+#guard
+  let file (upv : Nat) (bs : Array Nat) : Flock.Circuit :=
+    let n : Flock.Net :=
+      { (default : Flock.Net) with inWords := 1, constPos := Flock.WORD + 1, inGroups := #[⟨0, 1, bs⟩] }
+    { (default : Flock.Circuit) with upv := upv, nets := #[("unit", n)], unitNet := 0 }
+  let fs := [file 2 #[16, 16, 16], file 1 #[16]]
+  let a := toyListed.charge
     { free := 7, steps := 0, program := "", units := 10, bits := vuBits 1 5, entries := #[], record := none,
-      stateFree := 5 } #[(2, 80), (1, 112)])
+      stateFree := 5 } fs
+  padFree toyListed.templates fs == 3 * 80 + 4 * 112 && a.units == 3 + 4 && a.bits == 2 * 16 * 5 + 2 &&
+    a.free == 7 + 3 * 80 + 4 * 112 && a.stateFree == 5 + 3 * 80 + 4 * 112
 
 /- A unit of two input words, ports of 16 at word 0 and two of 16 at word 1: 256 input columns, 208 of them padding. -/
 #guard
@@ -2287,6 +2330,14 @@ def clocksFn (j : Json) : Except String Json := do
 #guard
   let s : Schedule := ⟨100, 512, 27, 5, 16, 12, 47, 4, 4, 4, 32⟩
   s.caps 1 == Array.replicate 128 5 && capsTerm (s.caps 1) == 384 && (s.caps 2).size == 256
+-- w63's frames, B = 512 and 128 connections a link-window, read back over 2^25 − 1 link-windows and not over 2^25,
+-- whose last connection's ordinal is 2^32; the check refuses that period
+#guard
+  let s : Schedule := ⟨100, 512, 27, 65, 16, 12, 47, 4, 4, 4, 32⟩
+  let p := fun (w : Nat) =>
+    (⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", none, .rows s .empty ⟨0, 0, 0, 0, 0⟩, w⟩ : Params)
+  rowsWf s (2 ^ 25 - 1) && !rowsWf s (2 ^ 25) && (rowsWfCheck (p (2 ^ 25 - 1))).isNone &&
+    (rowsWfCheck (p (2 ^ 25))).isSome
 -- a charged audit's δ = 1/10 is in eps beside its scan's 1/15: 1/6
 #guard (rowsTerms #[⟨2, 1, ⟨1, 10⟩, 0⟩] ⟨0, 0, 0, 0, 0⟩ #[(⟨1, 1, ⟨1, 15⟩, 0⟩, 0, 0)] #[] 1 1 #[⟨2, 1, ⟨1, 10⟩, 0⟩]
   ).eps.toString == "1/6"
