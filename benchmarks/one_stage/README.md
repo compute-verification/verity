@@ -180,7 +180,8 @@ negatives.
 - `served_stock.sh` (with `served_overhead.py`): `served_verdicts.sh`'s stock control, the same endpoint, engine and load
   served with `serve-openai --no-commit` and no protocol, once per fresh endpoint for `REPS` endpoints. `served_overhead.py
   table` compares the composed run with it on two clocks, each the same code in both runs: the client's
-  (`serve_load.py --varied`'s timings files) and the engine's step trace (`advice_trace.jsonl`). The trace and the load's
+  (`serve_load.py`'s timings files: `--varied`'s, or with `FIXED` set `--fixed`'s, the composed run's `LOAD=fixed`) and the
+  engine's step trace (`advice_trace.jsonl`). The trace and the load's
   records stay in the serve dir on the node, where `served_overhead.py metrics` reads them. Its aggregate (`overhead.json`)
   holds the load's request and token counts, so a stock run's stays there too, and the composed run publishes its own less
   its load's counts, tokens and span. `table` reads the full ones on the node, the stock runs' and the composed run's
