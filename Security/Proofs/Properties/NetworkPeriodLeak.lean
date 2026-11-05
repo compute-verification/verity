@@ -68,8 +68,9 @@ theorem periodLeakRegistered_strategy (p : NetworkCheck.Period.Params) (c : Netw
     (run : Core.Site.Loc → WardenSchedule (Fin N) × Srv →
       (Fin N → List (ℕ × CellView (FrameCell (s.cellBytes - 9)))) × (Fin p.windows → List (Obs L K S)))
     (htrust : Verity.Assumptions.TrustedHost cert run fun q =>
-      (wardenCode q.1 (arr q.2), (cellRows s.cellBytes N link s.window jitter status).record S p.windows q.1 (arr q.2)
-        (wardenCode q.1 (arr q.2))))
+      (laneWire q.1 (wardenCode q.1 (arr q.2)),
+        (cellRows s.cellBytes N link s.window jitter status).record S p.windows q.1 (arr q.2)
+          (wardenCode q.1 (arr q.2))))
     (Θ : Set (ℕ × ℕ)) (Zs : Set Sec) (view : Sec → V) (strategy : V → WardenSchedule (Fin N)) (srvOf : Sec → Srv)
     (hcov : SchedulesCovered
       {σ | (σ.r, σ.D) ∈ Θ ∧ (cellRows s.cellBytes N link s.window jitter status).Fits S p.windows σ} Zs

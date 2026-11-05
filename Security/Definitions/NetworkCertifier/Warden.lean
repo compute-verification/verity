@@ -91,10 +91,10 @@ def laneFrames {κ Cell : Type} (s : WardenSchedule κ) (v : κ → List (ℕ ×
   (if s.adm c ≤ b ∧ b < s.adm c + s.D then List.replicate s.r .pad else []) ++
     ((v c).filter fun x => x.1 == b).map Prod.snd ++ List.replicate (tailPads s c b) .pad
 
-/-- The buckets connection `c`'s frames fall in: the `D + cells c` from its admission, its `D` of admission padding and
-then its cells', which number at most its cells. -/
+/-- The buckets connection `c`'s frames fall in, from the first: its admission padding ends at `adm c + D`, and its
+cells' buckets, which number at most its cells, follow. -/
 def WardenSchedule.span {κ : Type} (s : WardenSchedule κ) (c : κ) : List ℕ :=
-  List.range' (s.adm c) (s.D + s.cells c)
+  List.range (s.adm c + s.D + s.cells c)
 
 /-- **What crosses the wire on connection `c`**, which is what its client sees: its frames (`laneFrames`), bucket by
 bucket over its span, each with its bucket. The padding is included: the admission padding, and the padding after its

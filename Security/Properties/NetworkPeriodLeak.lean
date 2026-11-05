@@ -13,7 +13,8 @@ A monitoring period is `n` windows, each audited by the sampled verifier at a st
 partition `Pw i` and the values `ρ i` the registration commits at its registered inputs), and its link-windows'
 records are the network certifier's frames in the rows format. `PeriodLeakRegistered` composes the sampled leak bound at
 the network certifier's rows, with the registered inputs at the values the registration opens under the statement's
-roots (`RegOpens`), with the rows format's read-back of the client's view from the record and the schedule's `(r, D)`:
+roots (`RegOpens`), with the rows format's read-back, from the record alone, of the client's view, which is what
+crossed the wire (`NetTiming.laneWire`), padding included:
 
 * each window's audit, at a statement in its scope whose registration opens its registered inputs (`RegOpensAt`), has
   `Pr[acc ∧ ¬RLeakTap δ] ≤ δ + ε_ks + ε_bind + Pr[B_tap] + Pr[B_reg]` (the errors of sampling at the incorrect set,
@@ -39,7 +40,8 @@ every one (`Proofs.Properties.NetworkPeriodLeak`'s `periodLeakRegistered_strateg
 
 The network certifier's LMS parameters, key and session, against which the check verifies its certificates, are the
 period's `p.lms`, `p.key` and `p.session`. The statement says where they come from: the auditor's record of its
-network certifier's deployment (`NetTiming.NetworkCertifierRecord`, `certifier-key/v1`), whose key the auditor's
+network certifier's deployment (`NetTiming.NetworkCertifierRecord`; its key is the auditor challenger's
+`certifier_key`, `CertifierClient` in `verity/core/protocols/certifier/active.py`), whose key the auditor's
 registration `A` holds for the device `cert` (`Core.Site`'s `Owners`: `A.key x.id = some x.key`), the device whose
 run `trusted-host` covers. `A` is read from the auditor's record `aj` as the checks read it
 (`Core.Site.Registration.Auditor.ofJson`, the registration's `auditor`), never supplied beside it.
@@ -59,9 +61,10 @@ statement and prover break it.
 
 namespace NetTiming
 
-/-- **The auditor's record of its network certifier's deployment** (`certifier-key/v1`): the LMS parameters, public key
-and session it read off its own device, never a field of the evidence or the prover's copy of the run. The period
-check's `Params` carry them (`NetworkCheck.Period.Params`: its key, LMS parameters and session are this record's). -/
+/-- **The auditor's record of its network certifier's deployment**: the LMS parameters, public key and session it read
+off its own device, never a field of the evidence or the prover's copy of the run. The auditor challenger holds the
+key as `certifier_key` (`CertifierClient`, `verity/core/protocols/certifier/active.py`). The period check's `Params`
+carry them (`NetworkCheck.Period.Params`: its key, LMS parameters and session are this record's). -/
 structure NetworkCertifierRecord where
   lms : Lms.Params
   key : ByteArray
@@ -84,9 +87,9 @@ of the sampled verifier where sampling at the incorrect set holds at the layout'
 and the trace's commitment binds (`CommitmentScheme.Binds`), with a decoder that lists every trace within Flock's
 radius, the windows registered as `sw i` (`WindowsPlaced`: partition `Pw i`, and `β i` bounding the committed bits of
 each of its possible incorrect sets), the network certifier's openings `tops s` at each statement, and a network
-certifier `cert` that runs its code by `trusted-host`, its one run giving the cells the client receives and its record
-of them, whose LMS parameters, key and session are the auditor's record `r` of it, the key the auditor's registration
-`A` (read from its record `aj`) holds for `cert`:
+certifier `cert` that runs its code by `trusted-host`, its one run giving what crosses the wire to the client, padding
+included (`laneWire`), and its record of it, whose LMS parameters, key and session are the auditor's record `r` of it,
+the key the auditor's registration `A` (read from its record `aj`) holds for `cert`:
 
 * each window's audit, at a statement in its scope whose registration opens its registered inputs (`RegOpensAt`), has
   `Pr[acc ∧ ¬RLeakTap δ] ≤ δ + ε_ks + ε_bind + Pr[B_tap] + Pr[B_reg]` with the registered inputs at the registration's
@@ -124,8 +127,9 @@ def PeriodLeakRegistered : Prop :=
       (run : Core.Site.Loc → WardenSchedule (Fin N) × Srv →
         (Fin N → List (ℕ × CellView (FrameCell (s.cellBytes - 9)))) × (Fin p.windows → List (Obs L K S)))
       (htrust : Verity.Assumptions.TrustedHost cert run fun q =>
-        (wardenCode q.1 (arr q.2), (cellRows s.cellBytes N link s.window jitter status).record S p.windows q.1 (arr q.2)
-          (wardenCode q.1 (arr q.2))))
+        (laneWire q.1 (wardenCode q.1 (arr q.2)),
+          (cellRows s.cellBytes N link s.window jitter status).record S p.windows q.1 (arr q.2)
+            (wardenCode q.1 (arr q.2))))
       (Θ : Set (ℕ × ℕ)) (Zs : Set Z) (schedOf : Z → WardenSchedule (Fin N)) (srvOf : Z → Srv)
       (hcov : SchedulesCovered
         {σ | (σ.r, σ.D) ∈ Θ ∧ (cellRows s.cellBytes N link s.window jitter status).Fits S p.windows σ} Zs schedOf)

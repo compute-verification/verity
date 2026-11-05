@@ -130,7 +130,7 @@ theorem filterMap_flatMap_ite [DecidableEq κ] {β : Type} (X : List β) {c : κ
 
 /-- A lane's cell is in its connection's span. -/
 theorem bucket_mem_span (s : WardenSchedule κ) (c : κ) {j : ℕ} (hj : j < s.cells c) : s.bucket c j ∈ s.span c := by
-  rw [WardenSchedule.span, List.mem_range'_1, WardenSchedule.bucket]
+  rw [WardenSchedule.span, List.mem_range, WardenSchedule.bucket]
   have := Nat.div_le_self j s.r
   omega
 
@@ -148,7 +148,7 @@ theorem filter_laneWire (s : WardenSchedule κ) (v : κ → List (ℕ × CellVie
       simp [hd]
   rw [laneWire, List.filter_flatMap]
   simp only [h]
-  exact filterMap_flatMap_ite _ List.nodup_range' hb
+  exact filterMap_flatMap_ite _ List.nodup_range hb
 
 /-- **A lane's cell `j` is the `(j mod r)`-th of its connection's frames in its bucket**: the admission padding is in
 earlier buckets, and the padding after the lane's last cell follows it. -/

@@ -95,13 +95,14 @@ theorem frames_record (F : RowsFormat κ Cell L K) (hdec : ∀ x, F.dec (F.enc x
 theorem frames_record_past (F : RowsFormat κ Cell L K) (S n : ℕ) (s : WardenSchedule κ) (a : κ → Arrivals Cell)
     (v : κ → List (ℕ × CellView Cell)) {b : ℕ} (hb : n * F.T ≤ b) : F.frames (F.record S n s a v) b = [] := by
   unfold frames
-  split_ifs with h
+  by_cases h : b / F.T < n
   · have hT : F.T = 0 := by
       by_contra hT
       have := (Nat.div_lt_iff_lt_mul (Nat.pos_of_ne_zero hT)).1 h
       omega
+    rw [dif_pos h]
     simp [record, hT]
-  · rfl
+  · rw [dif_neg h]
 
 /-- A connection sends no frames past the buckets that hold its lane's cells and its admission padding. -/
 theorem laneFrames_past (s : WardenSchedule κ) (a : κ → Arrivals Cell) (c : κ) {N b : ℕ}
@@ -120,12 +121,10 @@ theorem laneFrames_past (s : WardenSchedule κ) (a : κ → Arrivals Cell) (c : 
     simp only [beq_iff_eq]
     omega
   have h3 : tailPads s c b = 0 := by
-    unfold tailPads
-    split_ifs with h
-    · obtain ⟨h0, hbk⟩ := h
-      have := hc _ (Nat.sub_lt h0 Nat.one_pos)
-      omega
-    · rfl
+    rw [tailPads, if_neg]
+    rintro ⟨h0, hbk⟩
+    have := hc _ (Nat.sub_lt h0 Nat.one_pos)
+    omega
   rw [laneFrames, if_neg h1, h2, h3]
   simp
 

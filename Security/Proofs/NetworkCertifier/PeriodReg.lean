@@ -185,10 +185,10 @@ records in a rows format `F` that reads back (`RowsFormat.Wf`), on schedules who
 and which fit `F`: each window's audit, at a statement in its scope whose registration opens its registered inputs
 (`RegOpensAt`), has `Pr[acc ∧ ¬RLeakTap δ] ≤ δ + ε_ks + ε_bind + Pr[B_tap] + Pr[B_reg]`, and where the network
 certifier registers its observations (`CertifiersOpen`), a covert sender's secrets whose every window meets
-`WindowGoodReg` number at most `#Θ · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`. The rows
-format reads the client's view back from the record and the schedule's `(r, D)` alone, so the count charges the schedule
-only for its `(r, D)` among `Θ`. `Properties.NetworkPeriodLeak.PeriodLeakRegistered` is this at the network certifier's
-own format (`cellRows`), whose `Wf` the period check's acceptance gives. -/
+`WindowGoodReg` number at most `#Θ · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`. The client
+sees what crosses the wire (`laneWire`), padding included, and the rows format reads it back from the record alone, so
+the count charges the schedule only for its `(r, D)` among `Θ`. `Properties.NetworkPeriodLeak.PeriodLeakRegistered`
+is this at the network certifier's own format (`cellRows`), whose `Wf` the period check's acceptance gives. -/
 def PeriodLeakRegisteredWf : Prop :=
   ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (L K S : ℕ)
@@ -203,7 +203,7 @@ def PeriodLeakRegisteredWf : Prop :=
     (cert : Dev)
     (run : Dev → WardenSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L K S)))
     (htrust : Verity.Assumptions.TrustedHost cert run fun p =>
-      (wardenCode p.1 (arr p.2), F.record S n p.1 (arr p.2) (wardenCode p.1 (arr p.2))))
+      (laneWire p.1 (wardenCode p.1 (arr p.2)), F.record S n p.1 (arr p.2) (wardenCode p.1 (arr p.2))))
     (Θ : Set (ℕ × ℕ)) (Zs : Set Z) (schedOf : Z → WardenSchedule Conn) (srvOf : Z → Srv)
     (hcov : SchedulesCovered {s | (s.r, s.D) ∈ Θ ∧ F.Fits S n s} Zs schedOf)
     (dec : (Conn → List (ℕ × CellView Cell)) → Z) (hdz : SenderDecodes run cert Zs schedOf srvOf dec)
