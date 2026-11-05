@@ -1,6 +1,8 @@
-import Definitions.Pouw.Dimension.Defs
-import Definitions.Pouw.Assumptions.Dimension.Assumptions
-import Definitions.Pouw.Assumptions.NCP.Chain
+module
+
+public import Definitions.Pouw.Dimension.Defs
+public import Definitions.Pouw.Assumptions.Dimension.Assumptions
+public import Definitions.Pouw.Assumptions.NCP.Chain
 
 /-!
 # Theorem D's residue: pinned statements (trusted)
@@ -8,6 +10,8 @@ import Definitions.Pouw.Assumptions.NCP.Chain
 A1's witness, and Theorem D for the protocol's checked values, which are taken mod `2^32` (`Pouw.NCP.Chain`). The
 probabilistic lifting (`Lift_MinRank`) is open.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension
 

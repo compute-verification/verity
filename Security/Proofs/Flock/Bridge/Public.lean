@@ -1,5 +1,7 @@
-import Proofs.Flock.Bridge.KSLive
-import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHiddenM1
+module
+
+public import Proofs.Flock.Bridge.KSLive
+public import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHiddenM1
 
 /-!
 # `SampledKSLiveV2` with a public error
@@ -24,6 +26,8 @@ and one opening's verification `v`), a function of `n`, `k_d`, `K₀`, the analy
 circuit's partition. Its rate hypothesis reads only `k` (`rateM1 k ≤ ρ`) where `SampledKSLiveV2`'s reads the plan, and every other
 hypothesis, named assumption included, is `SampledKSLiveV2`'s.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 
@@ -111,8 +115,8 @@ def SampledKSLivePub : Prop :=
     FlockSoundness.Assumptions.LinkCRZCAt execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ)
       k Rw M t' →
     prob (fun o => LiveAcceptsZK I o ∧
-        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P κ)
-          (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
+        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ (.subset kd) desc q roots)
+          (Bridge.partOf P κ (Bridge.nsOf desc qr)) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
         (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
       ENNReal.ofReal (Bridge.deltaPub n kd K₀ k (2 * (t' + v)) (t' + v) t' M Rw (Bridge.ioSum P) ρ)
 

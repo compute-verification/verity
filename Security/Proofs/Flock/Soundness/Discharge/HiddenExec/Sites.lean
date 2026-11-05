@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Placed
-import Proofs.Flock.Soundness.Discharge.HiddenExec.PinnedLinear
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Placed
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.PinnedLinear
 
 /-!
 # The sites of a one-table hidden-output session
@@ -15,6 +17,8 @@ block R1CS (`Hidden.SpecC.model_eq_unpin`) and holds at every witness (`TableH.s
 session's (`sitesAtHS_parse`). `TableH.acc`, `sitesAtH` and `sitesAtH_parse` are them at a flat session's `HmOut.parse`.
 So `ppH`, `hConstH` and `hZeroH` are `ProgPlaces`, `hConst` and `hZero` for `Placed.keyProg` at the hidden tables.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

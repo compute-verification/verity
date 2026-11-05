@@ -1,6 +1,8 @@
-import Difftest
-import Flock.Annot
-import Flock.AnnotExpand
+module
+
+public import Difftest
+public import Flock.Annot
+public import Flock.AnnotExpand
 
 /-!
 # The annotation check's port: `Flock.Annot` behind `Difftest.serve`
@@ -11,13 +13,15 @@ descriptor's text, `annotation` is `{"query", "tables"}` (`Annot.Desc.ofJson`) a
 `{"tiling", "max_gates", "max_count"}` (`Annot.Meaning.ofJson`):
 
 * `annot.term`: a query document read and written back (`Annot.Term.ofJson`, `toJson`): the codec's canonical form;
-* `annot.check`: `Annot.check`'s verdict `{accept, count, code?}` on `{program, annotation, meaning}`;
+* `annot.check`: `Annot.check`'s result `{accept, count, code?}` on `{program, annotation, meaning}`;
 * `annot.reference`: the same meaning decided gate by gate (`Annot.reference`);
 * `annot.sets`: the family's sets in order, each its root-gate intervals `[[a, b], …]`, and the gates each label holds,
   on `{program, annotation}` (`Annot.sets`, `Annot.labelled`).
 
 A refusal is a reject whose reason starts with its code (`term`, `table`, `plan`, `fuel`, `meaning-unsupported`).
 -/
+
+@[expose] public section
 
 namespace AnnotDifftest
 

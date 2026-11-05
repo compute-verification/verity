@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.KS.PlainDrawKDefs
-import Proofs.Flock.Claims.Recursion.FlockKSDeployK
-import Proofs.Flock.Claims.Recursion.CallsBridgeE
-import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
+module
+
+public import Proofs.Flock.Claims.KS.PlainDrawKDefs
+public import Proofs.Flock.Claims.Recursion.FlockKSDeployK
+public import Proofs.Flock.Claims.Recursion.CallsBridgeE
+public import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
 
 /-!
 # The plain verdict at the statement's draw, at `VK keep`
@@ -25,6 +27,8 @@ digest.
   with no column off `C` has at its live outcome, on every draw-carrying record. At `keep := id` the run is one of
   `V false` (`VK_id`), and at `keep := fun _ => true` one of `VE` (`VK_true`).
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.PlainDraw
 

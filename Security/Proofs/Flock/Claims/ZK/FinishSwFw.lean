@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.FinishSwRows
-import Proofs.Flock.Claims.ZK.FinishSwSv
-import Proofs.Flock.Claims.ZK.InnerTauRep
+module
+
+public import Proofs.Flock.Claims.ZK.FinishSwRows
+public import Proofs.Flock.Claims.ZK.FinishSwSv
+public import Proofs.Flock.Claims.ZK.InnerTauRep
 
 /-!
 # `hinner` at the switched source
@@ -23,6 +25,8 @@ begins at `repSlot … (innerOff 0)`.
 * **`swSrcE_hinner_sv`**: `swSrcE_hinner` with `hsw` from `hpiop`'s switched vectors (`hpsv`): no premise on the
   firewall's runs is left.
 -/
+
+@[expose] public section
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
@@ -100,7 +104,7 @@ theorem swViewMasked (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Clai
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2)
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, v j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1) (k : ℕ) :
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1) (k : ℕ) :
     (Composed.msgAt ((swViewE x c w v τ j).pre.2.1 r) k).val = ((swSrcE x c w v τ j.val).rep r.val).masked k := by
   unfold swSrcE tabSrcCut
   rw [dite_eq_left j.isLt]
@@ -138,7 +142,7 @@ theorem swSrcE_hinner {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : 
       FlockComplete.padsOf (Claims.ZKServer.tapeOfDraws tz (Lr.lay x) (Lr.draws ρ) frep) j.val r.val (layE x j))
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, valsFw x c A B j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1)
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1)
     (st : _root_.Flock.Setup) (hst : st = _root_.Flock.Setup.ofCircuit (stAt x j)) (tPad : ℕ) (dom : ByteArray)
     (g : Array _root_.Flock.F128) (cm0 : FlockComplete.Commit) (extras : Array _root_.Flock.Claim)
     (he : extras.size = spec.points * (stAt x j).regions.size) (ic : FlockComplete.InnerCommit)
@@ -416,7 +420,7 @@ theorem swSrcE_hinner_sv {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ
       FlockComplete.padsOf (Claims.ZKServer.tapeOfDraws tz (Lr.lay x) (Lr.draws ρ) frep) j.val r.val (layE x j))
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, valsFw x c A B j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1)
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1)
     (st : _root_.Flock.Setup) (hst : st = _root_.Flock.Setup.ofCircuit (stAt x j)) (tPad : ℕ) (dom : ByteArray)
     (g : Array _root_.Flock.F128) (cm0 : FlockComplete.Commit) (extras : Array _root_.Flock.Claim)
     (he : extras.size = spec.points * (stAt x j).regions.size) (ic : FlockComplete.InnerCommit)

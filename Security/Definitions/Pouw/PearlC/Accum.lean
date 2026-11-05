@@ -1,4 +1,6 @@
-import Definitions.Pouw.PearlC.Defs
+module
+
+public import Definitions.Pouw.PearlC.Defs
 
 /-!
 # Π's promoted chain over a `Pipeline` (definitions only)
@@ -18,6 +20,8 @@ import Definitions.Pouw.PearlC.Defs
 
 This module imports no proofs, so the named protocol may read it.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Accum
 

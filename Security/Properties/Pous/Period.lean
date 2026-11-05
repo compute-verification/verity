@@ -1,6 +1,8 @@
-import Properties.Pous.EndToEnd
-import Definitions.Accounting.PerRun
-import Definitions.Pous.P2.Clip
+module
+
+public import Properties.Pous.EndToEnd
+public import Definitions.Accounting.PerRun
+public import Definitions.Pous.P2.Clip
 
 /-!
 # PoUS over one period: the deployed check's acceptance certifies the capacity account's space
@@ -55,6 +57,8 @@ capacity over a round. At a window of one tick that is `S = S₀ − S_chip − 
 `S₀/T` bits on average. A certificate of `S₀` on average over a longer window needs a game graded at each round
 boundary (`Pous.Guarantees.ContinuousAudit`), whose verdict is the model's, not yet the deployed check's.
 -/
+
+@[expose] public section
 
 namespace Pous.Period
 

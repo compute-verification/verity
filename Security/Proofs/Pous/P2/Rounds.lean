@@ -1,5 +1,7 @@
-import Definitions.Pous.Assumptions.P2
-import Proofs.Pous.Sanity
+module
+
+public import Definitions.Pous.Assumptions.P2
+public import Proofs.Pous.Sanity
 
 /-!
 # From the per-round conjecture to the graded bound and to today's whole-audit form
@@ -12,6 +14,8 @@ all its answers are correct (`varPassesOn_ofSeq_iff`), so at `2^19` blocks and `
 `P2RingAuditSecure`'s once `(1 − p)^105 + 105·ε₀ ≤ 1% + 2^-129 + 2^-130` (`auditSecure_of_roundSecure`), which
 `p = 0.043` and `ε₀ = 2^-137` meet (`floor_043_eps`).
 -/
+
+@[expose] public section
 
 namespace PousP2Rounds
 

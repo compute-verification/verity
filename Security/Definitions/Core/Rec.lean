@@ -1,5 +1,7 @@
-import Definitions.Core.Compose
-import Definitions.Core.Hm96
+module
+
+public import Definitions.Core.Compose
+public import Definitions.Core.Hm96
 
 /-!
 # A recursion: a proof system's sessions after a committed prefix, and its zero knowledge
@@ -26,6 +28,8 @@ prefix's strings are hm96 commitments (`Rec.Compiled.Commits`), each session's s
 each session's witness is in `O`'s relation unless the stop fired (`Rec.Compiled.WitnessIn`), and the continuation test
 is `goesOn` at every real run (`Rec.Compiled.GoesOnAt`).
 -/
+
+@[expose] public section
 
 namespace Verity
 

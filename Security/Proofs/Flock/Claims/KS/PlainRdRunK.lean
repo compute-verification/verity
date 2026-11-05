@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainRdRun
-import Proofs.Flock.Claims.KS.PlainLeafKSK
+module
+
+public import Proofs.Flock.Claims.KS.PlainRdRun
+public import Proofs.Flock.Claims.KS.PlainLeafKSK
 
 /-!
 # The plain table bound at one tape at `VK keep`, each slot at the run's own level columns
@@ -8,6 +10,8 @@ import Proofs.Flock.Claims.KS.PlainLeafKSK
 `PlainRdRun`'s `plainRel_of`, `plain_accPr_le_rdRun` and `plain_accPr_le_rdAll`, over the verifier `VK keep`: the
 simulator at `plainSimK keep` and the verdict at the draw `plainVerdictAtK keep`.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

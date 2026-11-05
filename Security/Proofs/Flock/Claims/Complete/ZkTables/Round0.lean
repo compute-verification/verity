@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Complete.Zk.Link
-import Proofs.Flock.Claims.Complete.ZkTables.Faithful
-import Proofs.Flock.Claims.Complete.Replay.LigeritoWeight
-import Proofs.Flock.Claims.Complete.Replay.ZerocheckAlgebra
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigPad
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Link
+public import Proofs.Flock.Claims.Complete.ZkTables.Faithful
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoWeight
+public import Proofs.Flock.Claims.Complete.Replay.ZerocheckAlgebra
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigPad
 
 /-!
 # The masked prover's first message, from its level-0 leaves
@@ -22,6 +24,8 @@ the tables' level-0 caps (`honestPR_first`), and each cap is a function of its l
   is the link message of the caps, whatever the session does after its coin.
 * `honestPR_first`: so `ZkTables.honestPR`'s message before any reply is that link message, tagged `0`.
 -/
+
+@[expose] public section
 
 open Flock FlockDeploy
 

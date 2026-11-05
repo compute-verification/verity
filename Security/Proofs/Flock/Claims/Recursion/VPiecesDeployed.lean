@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.NonVacuous
-import Proofs.Flock.Claims.Recursion.CapPieces
-import Proofs.Flock.Claims.Recursion.LayoutBCap
+module
+
+public import Proofs.Flock.Claims.Recursion.NonVacuous
+public import Proofs.Flock.Claims.Recursion.CapPieces
+public import Proofs.Flock.Claims.Recursion.LayoutBCap
 
 /-!
 # The V\* parts' pieces of the verdict, and their owners
@@ -22,6 +24,8 @@ This file fixes the pieces and the owners, and proves `hR`.
 * **`hlowP` by kind** (`piecesComputes_vown`): part `s`'s share of the pieces is each kind's share at that kind's owner,
   and, for `dense`, that the inner statement is a dense one.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VPieces
 

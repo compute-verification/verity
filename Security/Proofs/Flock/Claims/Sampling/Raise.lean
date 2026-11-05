@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.Refit
+module
+
+public import Proofs.Flock.Claims.KS.Refit
 
 /-!
 # Flock's KS at a raised `N₀`
@@ -22,6 +24,8 @@ weight unused, so they fit the same weight with the fork event of weight `k′` 
 * `FlockDeploy.KS.oldEscZ_fitsFork_zk_raise_len`: so for `N₀′ ≤ N₀ + 109·2^{d₀}`, as `Q₀ ≥ 218`; at one table,
   `N₀′ ≤ 110·N₀`.
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 

@@ -1,4 +1,6 @@
-import Definitions.Core.Rec
+module
+
+public import Definitions.Core.Rec
 
 /-!
 # Zero knowledge carries through a recursion
@@ -9,6 +11,8 @@ commitment strings, swapped for zero commitments, and each session's `O` bound, 
 leak at public stop positions, the multiplicative form, is its corollary (`Verity.recZK_leak`, through
 `Claims.zkmalRLeak_of_cuts`).
 -/
+
+@[expose] public section
 
 namespace Verity.Guarantees
 

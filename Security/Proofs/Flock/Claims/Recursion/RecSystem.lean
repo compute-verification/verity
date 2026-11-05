@@ -1,5 +1,7 @@
-import Proofs.Core.Rec
-import Proofs.Flock.Claims.Recursion.SeqDeployStop
+module
+
+public import Proofs.Core.Rec
+public import Proofs.Flock.Claims.Recursion.SeqDeployStop
 
 /-!
 # The deployed recursion as a `Rec.system`, and its release
@@ -25,6 +27,8 @@ is `Verity.Rec.system 𝔒 𝔊 go` at the continuation test `go = fun _ _ => Cl
   `recRelease_leak`: at the deployed record, the release leaks at most `log₂ (VM.k x + 1)` bits beyond `ZKStop`'s bound
   (`Verity.zkStop_leak`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.KSLin2Deployed
-import Proofs.Flock.Claims.KS.PlainKSLin
+module
+
+public import Proofs.Flock.Claims.Recursion.KSLin2Deployed
+public import Proofs.Flock.Claims.KS.PlainKSLin
 
 /-!
 # `KSLin2` at the intended choice, with `KSFlockLin` at `DE` proved
@@ -11,6 +13,8 @@ as `deployPlainTrim` does (`FlockDeploy.KS.plain_KSFlockLin`): `plain_KSFlockLin
 canonicity (`CanonicalProofFiles`), the calls half of the plain verifier's last-message binding
 (`PlainCallsBindOrSlack`), and the code facts of the staging, V*'s parts and the readers.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

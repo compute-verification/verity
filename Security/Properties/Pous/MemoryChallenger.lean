@@ -1,4 +1,6 @@
-import MemoryChallenger.Judge
+module
+
+public import MemoryChallenger.Judge
 
 /-!
 # The memory challenger's verdict's property, stated against the Lean code
@@ -18,6 +20,8 @@ Neither says the signer signed: the conclusion is that the signature verifies, n
 recorded and timed itself, or the run's own data carries a break (an LMS forgery, or a SHA-512 collision). All four are
 proved (`Proofs.Properties.Pous.MemoryChallenger`).
 -/
+
+@[expose] public section
 
 namespace MemoryChallenger.Properties
 

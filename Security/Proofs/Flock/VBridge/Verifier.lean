@@ -1,6 +1,8 @@
-import Proofs.Flock.VBridge.Keyed
-import Proofs.Flock.Soundness.ExecCircuit
-import Flock.RecOpen
+module
+
+public import Proofs.Flock.VBridge.Keyed
+public import Proofs.Flock.Soundness.ExecCircuit
+public import Flock.RecOpen
 
 /-!
 # The verifier's opening unit is V*'s laid-out opening
@@ -20,6 +22,8 @@ verifier's net at `L` and `H` (`RecOpen.check_ok`), so a copy of it in a unit of
 consistency term; `keyProg_parse` is the same for a unit of `Placed.keyProg` of a circuit `HmRow.parse` accepted, which
 ran the check (`ParseFacts.recNet`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge
 

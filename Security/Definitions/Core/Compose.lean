@@ -1,4 +1,6 @@
-import Definitions.Core.Interaction
+module
+
+public import Definitions.Core.Interaction
 
 /-!
 # Composing provers and simulators: sessions in turn, a run in parts, a public stop
@@ -22,6 +24,8 @@ its proofs are written in (`Proofs/Flock/Claims/ZK/`).
   empty message (`stopP`). The simulator cuts its transcript where the stop fires (`stopIdx`, `censorSim`), and a session
   after the stop is at the empty statement and silent (`Layout.stopped`, `stopProgB`, `silentSP`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 
