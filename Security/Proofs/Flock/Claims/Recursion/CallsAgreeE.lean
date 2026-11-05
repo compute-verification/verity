@@ -21,7 +21,7 @@ open Flock FlockSoundness.Refine
 /-- `decode_pubs` at `Record.decodeWithK keep`, whatever the hashes. -/
 theorem decodeWithK_pubs (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
     {sess : RunRecord} (h : Record.decodeWithK keep hs spec text = .ok sess) :
-    ∃ j l pubs, Lean.Json.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.fld l "publics" = .ok pubs ∧
+    ∃ j l pubs, Flock.JsonParse.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.fld l "publics" = .ok pubs ∧
       List.Forall₂ (PubField pubs) spec.tables.toList sess.publics.toList := by
   unfold Record.decodeWithK Record.decodeJWithK at h
   dsimp only at h

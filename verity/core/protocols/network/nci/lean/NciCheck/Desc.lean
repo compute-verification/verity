@@ -5,7 +5,7 @@ import NciCheck.Check
 
 `NciCheck.Desc.evaluate` decides what `NciCheck.evaluate` decides, for a division whose IUs are unions of the root's
 nodes (IUs aligned to Calls), without laying out the circuit: its cost grows with the descriptor, not with the unrolled
-circuit (the rule of 18 Oct, AGENTS.md "Design rules"). `NciCheck.evaluate` stays the reference it is held to: the
+circuit (AGENTS.md "Design rules"). `NciCheck.evaluate` stays the reference it is held to: the
 difftest (`NciCheck.DescDifftest`) checks both on the same declarations, the old one on the division expanded gate by gate.
 
 ## The instance

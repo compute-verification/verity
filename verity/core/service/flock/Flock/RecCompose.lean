@@ -29,9 +29,10 @@ set every part read; each of V*'s statements has exactly one session opened and 
 session is a composed part's (its part and coin key) and every composed part's session is among them; and the close is
 the last event (`checkRun`). `OneRun` states it, and `check_oneRun` proves it of `check`. The record holds no coin:
 each session's coins are its own keyed coin tree's, drawn fresh at its `Hello`, never committed before the run. The
-record is read once, in comparisons quadratic in V*'s statement count (at most 4096, `RecBudget`), never per gate.
+record is read once, in comparisons quadratic in V*'s statement count (at most 16, `RecBudget`), never per gate.
 -/
 import Lean.Data.Json
+import Flock.JsonParse
 import Flock.Bytes
 import Flock.Hash
 
@@ -215,7 +216,7 @@ def Accepts (n : Nat) (rows inner : String) (links : Option (String × Nat)) (vs
 def verdicts (log : String) : Except String (Array Json) :=
   (log.splitOn "\n").foldlM (init := #[]) fun out line =>
     if line.startsWith "VERDICT " then
-      match Json.parse (line.drop 8).toString with
+      match JsonParse.parse (line.drop 8).toString with
       | .ok j => pure (out.push j)
       | .error e => throw s!"a VERDICT line that is not JSON: {e}"
     else pure out
@@ -356,7 +357,7 @@ def eventsOf : Nat → List Json → Except String (List Event)
 /-- **The record** `{"kind": "verity/rec-run/v1", "events": [...]}`: its events, in the order the challenger logged
 them. -/
 def runOf (text : String) : Except String (List Event) :=
-  match Json.parse text with
+  match JsonParse.parse text with
   | .error _ => .error "run record: not JSON"
   | .ok j =>
     if (j.getObjValAs? String "kind").toOption != some RUN_KIND then .error s!"run record: not a {RUN_KIND} record"
