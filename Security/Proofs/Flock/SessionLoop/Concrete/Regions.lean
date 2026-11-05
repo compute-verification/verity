@@ -281,7 +281,7 @@ theorem outBytes_false {b i : ℕ} (hi : i < 128) :
     Discharge.Layout.getD_flatten_const default 0 _ (fun l hl => by
       obtain ⟨k', -, rfl⟩ := List.mem_map.1 hl
       rw [Discharge.Layout.slotBytes_length, F.owords]) (by simp [F.count]) (by omega),
-    hslot, Discharge.Layout.slotBytes, show 0 * (16 * 1) + i / 8 = 0 * 16 + i / 8 by omega,
+    hslot, Discharge.Layout.slotBytes, show i / 8 = 0 * 16 + i / 8 by omega,
     Discharge.Layout.getD_flatten_const default 0 _ (fun l hl => by
       obtain ⟨x, -, rfl⟩ := List.mem_map.1 hl
       simp [F128.toBytes]) (by simpa using hsz) (by omega), hword,
@@ -317,7 +317,7 @@ theorem zIn_bcCol {w : ℕ → Bool} (hw : ∀ y < 2 ^ 22, w y = zIn y)
       zIn_sha (show 262144 ≤ 262656 + HmNets.wordBit (8 * j + t) by omega)
         (show 262656 + HmNets.wordBit (8 * j + t) < 270336 by omega)]
     unfold xS
-    exact if_neg (by omega)
+    exact ite_eq_right (by omega)
   have hsalt : Discharge.Hm.bytesOf w 192 (Discharge.Hm.saltCol c 0 0) = List.replicate 192 0 := by
     refine bytesOf_false fun j hj t ht => ?_
     have e : Discharge.Hm.saltCol c 0 0 j t = 1536 + 8 * j + t := by
@@ -325,7 +325,8 @@ theorem zIn_bcCol {w : ℕ → Bool} (hw : ∀ y < 2 ^ 22, w y = zIn y)
       rw [F.salt]
     rw [e, hw _ (lt22 (show 1536 + 8 * j + t < 4194304 by omega)), zIn_hm (show 1536 + 8 * j + t < 4096 by omega)]
     unfold xH
-    rw [if_neg (show ¬ (1536 + 8 * j + t < 512) by omega), if_neg (show ¬ (1536 + 8 * j + t < 1536) by omega)]
+    rw [ite_eq_right (show ¬ (1536 + 8 * j + t < 512) by omega),
+      ite_eq_right (show ¬ (1536 + 8 * j + t < 1536) by omega)]
   rw [hmsg, hsalt, F.words, commitString_zero] at hbc
   have hb := Discharge.Hm.bitL_bytesOf w (Discharge.Hm.bcCol c 0 0) (N := 128) (show q < 8 * 128 by omega)
   rw [hbc, hw _ h22] at hb
@@ -374,8 +375,9 @@ theorem satisfies_regions (L : FlockSoundness.Layout st) (ht : tags.typed = fals
       rw [← List.length_map (f := Fin.val), Discharge.Layout.regionOf_free_map _ _ _ (fun b hb => hlt b (by
         rw [hfree] at hb; exact Array.mem_toList_iff.1 hb)), hfree, Discharge.Layout.hmFree_toList, F.g, log2_one]
       simp
-    rw [hlen] at hi
-    have hi' : i < 1024 := lt_of_lt_of_eq hi (by norm_num)
+    have hi0 : i < 2 ^ (Refine.regionOf st.c.kLog (st.m - st.c.kLog) reg).free.length := hi
+    rw [hlen] at hi0
+    have hi' : i < 1024 := lt_of_lt_of_eq hi0 (by norm_num)
     have hpv : st.c.perVu.getD st.c.hmNet 0 = 2 ^ (st.c.perVu.getD st.c.hmNet 1).log2 := by
       rw [F.perVu0, F.perVu1, log2_one, pow_zero]
     have hib := Discharge.Layout.inBlock_digest (st.m - st.c.kLog) hmk (g := 0) (j := i / 8) (t := i % 8)
@@ -409,8 +411,9 @@ theorem satisfies_regions (L : FlockSoundness.Layout st) (ht : tags.typed = fals
       rw [← List.length_map (f := Fin.val), Discharge.Layout.regionOf_free_map _ _ _ (fun b hb => hlt b (by
         rw [hfreeA] at hb; exact Array.mem_toList_iff.1 hb)), hfreeA, F.owords, F.count, log2_one]
       simp
-    rw [hlen] at hi
-    have hi' : i < 128 := lt_of_lt_of_eq hi (by norm_num)
+    have hi0 : i < 2 ^ (Refine.regionOf st.c.kLog (st.m - st.c.kLog) reg).free.length := hi
+    rw [hlen] at hi0
+    have hi' : i < 128 := lt_of_lt_of_eq hi0 (by norm_num)
     have hm : i < 2 ^ Discharge.Layout.outLw st.c := by
       unfold Discharge.Layout.outLw
       rw [F.owords, log2_one]
