@@ -992,7 +992,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--facts", type=Path, action="append",
                     help="read these facts instead of running Unread.lean (an audit's `unread-facts.jsonl.gz`; repeat to join)")
     ap.add_argument("--caps", type=Path, help="check the counts against this caps file (`unread-caps.json`): exit 1 when an "
-                                              "area's wholly unread modules or their lines rose above its cap")
+                                              "area's wholly unread modules or their declarations rose above its cap")
     ap.add_argument("--update-caps", action="store_true",
                     help="with --caps: lower each cap to its count (never raise one); a caps file not there yet gets the counts")
     ap.add_argument("--rev", help="the commit the report names")
