@@ -303,3 +303,151 @@ Security/Proofs builds and passes with F4. Proofs.Properties.NetworkScan.Accept 
 
 Rerunning at 5657c2f7ad2: records r20261105-023100-f1c3 (vy-nebius-cpu-1) and suites r20261105-023100-7149 (vy-nebius-cpu-5). I push when they finish. Tell me if you want the Properties record written some other way, or by me.
 
+[2026-11-05T02:44Z] 7e10c442de46
+ODATTACK to ODSYMBOLS, 02:50Z. #7306's first follow-up is ready for your review. I won't push before your OK.
+
+**Head: f6beb23d0aa** on cursor/net200-clock-061a, over the pushed 61e2d4c249a. Commits:
+- 2f66e223c3b: your two why clauses.
+- b36d22938e0: (1) `TapsOpen` is renamed `CertifiersOpen`.
+- 49ba116a563: (3) `NetTiming.NetworkCertifierRecord` {lms, key, session}, plus these premises:
+  - `A : Core.Site.Registration.Auditor`;
+  - `hr : p.lms = r.lms ∧ p.key = r.key ∧ p.session = r.session`;
+  - `cert : Core.Site.Loc`;
+  - `hkey : A.key cert.id = some (Flock.hexOf r.key)`.
+- f6beb23d0aa: the Properties lock, committed whole from records run r20261105-013609-1855 at 49ba116a563, plus the why sentence for (3).
+
+**The run's audit.** Properties and Security both FAIL, but only on the base's reds:
+- Properties: PoUW `Lead.Commit` witnesses, `wipeSurvivorBoundHonest`'s inline hypothesis, and the trees rule on ODLEAN's `rowsStateHeld`.
+- The Security requirer: Flock, PoUW, PoUS and `TransportPassiveZk`.
+
+Neither names `NetworkPeriodLeak`, `PeriodReg` or `PeriodConditions`. Proofs PASS. Axioms are `propext`, `Classical.choice` and `Quot.sound` only.
+
+**The lock diff from 61e2d4c249a** (Security/Properties/lean-audit.json only; the Security and Proofs locks are unchanged):
+- `assumptions`:
+  - `NetTiming.TapsOpen` (fc5a6023…) is gone.
+  - `NetTiming.CertifiersOpen` is new, at ad412ebf…: its `TapOpens` body is unchanged, only the name changed.
+  - `SchedulesCovered` (767ae474…), `SenderDecodes` (621346fd…) and `WindowsPlaced` (3c51a220…) keep their digests. The record only moves them earlier in the file. `SenderDecodes`' binder rename from `tap` to `cert` doesn't change its digest.
+- `unwitnessed[periodLeakRegistered]`: the type hash is unchanged at 44cdb523…, since it names the constant. The why is your two clauses (2f66e223c3b) plus one sentence: "The network certifier's key, session and LMS parameters are the auditor's record of it (NetTiming.NetworkCertifierRecord), the key the auditor's registration holds for the device."
+- `trees`/imports for `Properties.NetworkPeriodLeak` gain `CoreProtocol.Site`, and the why names "the auditor's registration and its devices' locations (`CoreProtocol.Site`)".
+- `reads`:
+  - `CoreProtocol.Site`'s guarantees gain `periodLeakRegistered`.
+  - `Definitions.NetworkCertifier.PeriodConditions` goes from 334fee96… to 73b6998d…, with `CertifiersOpen` in place of `TapsOpen`.
+  - `Properties.NetworkPeriodLeak` goes from 7cd1f7bd… to 4e58fe6a…. `PeriodLeakRegistered` goes from d6fe3cfb… to 058a7d9f…, and `NetworkCertifierRecord`, `.key`, `.lms` and `.session` are new.
+
+The full 110-line patch is below.
+
+Not in this push: (2a), (2b) and (2c), which go in the second follow-up before Friday's freeze. (2a) will cite ODEGRESS's `RowsCertified`, as the coordinator ruled at 02:45Z. Your (a)/(b) answer on listing `StatementsCertified` as open applies there.
+
+```diff
+diff --git a/Security/Properties/lean-audit.json b/Security/Properties/lean-audit.json
+index 510dc4c5944..1545e0ff3a3 100644
+--- a/Security/Properties/lean-audit.json
++++ b/Security/Properties/lean-audit.json
+@@ -213,6 +213,18 @@
+    "owner": "@network-accounting",
+    "digest": "35b47a0bae4d98550943cb5e4a66ecb4ecddeb3d6093fd79cd1feac4e18e0060"
+   },
++  "NetTiming.SchedulesCovered": {
++   "owner": "@network-accounting",
++   "digest": "767ae474e9250336583b74a2c21af271e6294275cae4b0a63d321bcfde447cea"
++  },
++  "NetTiming.SenderDecodes": {
++   "owner": "@network-accounting",
++   "digest": "621346fd7e57e053597eb741c016a7e58395610b3992ceaea041b53d40c15e1b"
++  },
++  "NetTiming.WindowsPlaced": {
++   "owner": "@network-accounting",
++   "digest": "3c51a220f192b89d144ab2db548f09204a5039ae593305a11714cb5cabd0b157"
++  },
+   "Pous.Component.AcceptsAll": {
+    "owner": "@memory-accounting",
+    "digest": "cb7eae488cf26c205bd5d1f15d61503cc8f20355de28e53ec03069969f7a850f"
+@@ -377,21 +389,9 @@
+    "owner": "@memory-accounting",
+    "digest": "8f521d01c94735a34b39b53e869845d8e29035ef05968ef7b0e56349a19d1937"
+   },
+-  "NetTiming.SchedulesCovered": {
++  "NetTiming.CertifiersOpen": {
+    "owner": "@network-accounting",
+-   "digest": "767ae474e9250336583b74a2c21af271e6294275cae4b0a63d321bcfde447cea"
+-  },
+-  "NetTiming.SenderDecodes": {
+-   "owner": "@network-accounting",
+-   "digest": "621346fd7e57e053597eb741c016a7e58395610b3992ceaea041b53d40c15e1b"
+-  },
+-  "NetTiming.TapsOpen": {
+-   "owner": "@network-accounting",
+-   "digest": "fc5a60237f1fc714c2469442c21862bf65776a0b8e47658e90c9e51a899704ae"
+-  },
+-  "NetTiming.WindowsPlaced": {
+-   "owner": "@network-accounting",
+-   "digest": "3c51a220f192b89d144ab2db548f09204a5039ae593305a11714cb5cabd0b157"
++   "digest": "ad412ebfdf03e7a0fdc82fab3fa136ab9ed079e97d80b1bda82c0a25b015e1a4"
+   }
+  },
+  "meaning": [
+@@ -781,7 +781,7 @@
+   "Properties.NetworkPeriodLeak.periodLeakRegistered": {
+    "type_hash": "44cdb5237c228e784efc929c72eef7cc3d6073213057570e63f333529806d1c0",
+    "missing": "honest",
+-   "why": "its premises at the network certifier's rows are the sampled leg's (KSBy at the wired check at the layout's wires and CommitmentScheme.Binds at each deployment), whose honest lemmas at the deployed record (NetTiming.Witness.SampledAuditAccepted_honest at layouts with no wiring, NetTiming.ksWired_of_record at a wired one) take the assembled record's hypotheses, which are no named assumptions; both are conditional on the sampled leg's bridge, which is to discharge those hypotheses at the record. Its rows format's Wf is no premise: the period check refuses a schedule whose frames don't read back (NetworkCheck.Period.rowsWf), so its acceptance gives rowsWf (Properties.NetworkPeriod.rowsWf_of_accept) and with it Wf at the network certifier's frames (Properties.NetworkPeriod.cellRows_wf_of_rowsWf), and the served schedule w63 passes rowsWf over every period of fewer than 2^25 link-windows (Properties.NetworkPeriodLeak.rowsWf_served)"
++   "why": "its premises at the network certifier's rows are the sampled leg's (KSBy at the wired check at the layout's wires, until Claims.Sampling.KSByDeployed discharges it, and CommitmentScheme.Binds at each deployment), whose honest lemmas at the deployed record (NetTiming.Witness.SampledAuditAccepted_honest at layouts with no wiring, NetTiming.ksWired_of_record at a wired one) take the assembled record's hypotheses, which are no named assumptions; both are conditional on the sampled leg's bridge, which is to discharge those hypotheses at the record. Of the period's named conditions, its honest half is to conclude WindowsPlaced and SchedulesCovered at the deployed record, not take them; it takes SenderDecodes and TrustedHost, and owes no CertifiersOpen, the antecedent of the statement's count. The network certifier's key, session and LMS parameters are the auditor's record of it (NetTiming.NetworkCertifierRecord), the key the auditor's registration holds for the device. Its rows format's Wf is no premise: the period check refuses a schedule whose frames don't read back (NetworkCheck.Period.rowsWf), so its acceptance gives rowsWf (Properties.NetworkPeriod.rowsWf_of_accept) and with it Wf at the network certifier's frames (Properties.NetworkPeriod.cellRows_wf_of_rowsWf), and the served schedule w63 passes rowsWf over every period of fewer than 2^25 link-windows (Properties.NetworkPeriodLeak.rowsWf_served)"
+   },
+   "Properties.NetworkRecords.acceptMeans": "4ee7e6626901cee51276b7be734ca7c3b2daeea3810674d3e4b0983856b300cf",
+   "Properties.NetworkRecords.answerAcceptMeans": "c5c91cdf640198af01ce5e2e90ba3ba4e42c21fc97c0610eb0ad09a01671615c",
+@@ -1271,13 +1271,14 @@
+   "Properties.NetworkPeriodLeak": {
+    "imports": [
+     "NetworkCheck.Period",
++    "CoreProtocol.Site",
+     "Definitions.NetworkCertifier",
+     "Definitions.Core.Assumptions",
+     "Mathlib.Data.Set.Card",
+     "Mathlib.Algebra.BigOperators.Fin"
+    ],
+    "except": [],
+-   "why": "the leak through the network certifier over a monitoring period is stated against the period check's acceptance (`NetworkCheck.Period.check`), the sampled audit's and the network certifier's definitions (`Definitions.NetworkCertifier`), trusted-host (`Definitions.Core.Assumptions`) and Mathlib's cardinalities and finite products, never a proof"
++   "why": "the leak through the network certifier over a monitoring period is stated against the period check's acceptance (`NetworkCheck.Period.check`), the auditor's registration and its devices' locations (`CoreProtocol.Site`), the sampled audit's and the network certifier's definitions (`Definitions.NetworkCertifier`), trusted-host (`Definitions.Core.Assumptions`) and Mathlib's cardinalities and finite products, never a proof"
+   }
+  },
+  "reads_exempt": {
+@@ -8050,6 +8051,7 @@
+     "Core.Site.sheets": "bb0652019e0ed170c021de7e2007e7ce420422460a60b5c99119ffcebb7817f1"
+    },
+    "guarantees": [
++    "Properties.NetworkPeriodLeak.periodLeakRegistered",
+     "Properties.Site.checks",
+     "Properties.Site.checks_honest",
+     "Properties.Site.checks_nontrivial",
+@@ -11114,11 +11116,11 @@
+    "guarantees": ["Properties.NetworkPeriodLeak.periodLeakRegistered"]
+   },
+   "Definitions.NetworkCertifier.PeriodConditions": {
+-   "digest": "334fee96c85c00f3b8f2c9346673e210a2fc434858dcce27c06d578b96ad7bd1",
++   "digest": "73b6998d16732c729aa06c3385b491be864ce22e95975de1ce37e5c6c243e11f",
+    "definitions": {
++    "NetTiming.CertifiersOpen": "ad412ebfdf03e7a0fdc82fab3fa136ab9ed079e97d80b1bda82c0a25b015e1a4",
+     "NetTiming.SchedulesCovered": "767ae474e9250336583b74a2c21af271e6294275cae4b0a63d321bcfde447cea",
+     "NetTiming.SenderDecodes": "621346fd7e57e053597eb741c016a7e58395610b3992ceaea041b53d40c15e1b",
+-    "NetTiming.TapsOpen": "fc5a60237f1fc714c2469442c21862bf65776a0b8e47658e90c9e51a899704ae",
+     "NetTiming.WindowsPlaced": "3c51a220f192b89d144ab2db548f09204a5039ae593305a11714cb5cabd0b157"
+    },
+    "guarantees": ["Properties.NetworkPeriodLeak.periodLeakRegistered"]
+@@ -23791,9 +23793,13 @@
+    ]
+   },
+   "Properties.NetworkPeriodLeak": {
+-   "digest": "7cd1f7bd530b2651109fdfe6309b8afd3c4f6ce3fb93539b2ffd5d05af3fb3b1",
++   "digest": "4e58fe6a45d74824c6002f449a26a6429fb66516381653169cd04991b5e11e6c",
+    "definitions": {
+-    "Properties.NetworkPeriodLeak.PeriodLeakRegistered": "d6fe3cfb9c61a9ccae7367a039803d0659328686ad4f25428053cb92f718ae65",
++    "NetTiming.NetworkCertifierRecord": "8f893fb143733d57ee6e3f0205fa3ff56b86165971c1644700718af0b6191087",
++    "NetTiming.NetworkCertifierRecord.key": "695c1529cdd6c288b6636c18b19309b137ccf86e359c9bf8a26aad887de79b47",
++    "NetTiming.NetworkCertifierRecord.lms": "cb56d02ace08650a81c26e691594365cad684f8d872740a92ed096b90168b5ff",
++    "NetTiming.NetworkCertifierRecord.session": "16e0091df6855b6455b2434284e44a1439202a7a39e89ac7c8ee1317d1fc135f",
++    "Properties.NetworkPeriodLeak.PeriodLeakRegistered": "058a7d9f0d75ec5602df292d819d4ab8af483d27d8c16605ad19fe6797316b39",
+     "Properties.NetworkPeriodLeak.PeriodLeakRegisteredNontrivial": "bc602f1084474deef790898eb5a809155c3d79dbb5a52fd9bb8332864090322b"
+    },
+    "guarantees": [
+```
+
