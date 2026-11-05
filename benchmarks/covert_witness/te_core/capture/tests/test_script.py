@@ -178,6 +178,39 @@ def test_windows_cut_at_eval_ctx_refuse_the_windows_only_recording(starts):
         recorded(starts, "--update", "inplace", "--windows", "--own-ctx", "--warm-tokens", str(2 * T))
 
 
+@pytest.mark.parametrize("step_tokens", [T, B * (CTX + 2)])
+def test_a_generation_rounds_decode_positions_are_on_the_token_axis(starts, step_tokens):
+    """A round of 3 tokens a prompt (step 1): its B · (CTX + 2) positions are its tokens, whether its record counts
+    only the prompts (te_core 3's counter) or every position; each decode product indexes its sequences, so decode
+    attention is attention's (left out of M) and the decode GEMMs read no activation as a weight. A training step
+    after it is recorded on ctx alone."""
+    from te_core import formalism
+
+    g = script.record(PROGRAM, ["--batch", str(B), "--update", "inplace", "--generate", "3"], step=1, starts=starts,
+                      wall=[0.1] * 8, step_tokens=step_tokens)
+    assert g.tokens == step_tokens and g.axes == {"ctx": CTX, "sequences": B}
+    assert g.formalism["tokens"] == B * (CTX + 2) and g.formalism["token_factor"] == B * (CTX + 2) / step_tokens
+    fwd = [m for m in g.matmuls if m.phase == "forward"]
+    assert len(fwd) == 12 and all(m.result == "token" for m in fwd)
+    decode = [m for m in fwd if m.dims["m"] == 1]
+    assert len(decode) == 4 and all(sum(d in m.token_dims for d in ("m", "k", "n")) == 2 for m in decode)
+    assert all("m" in m.token_dims for m in fwd if m.op == "aten.mm.default")
+    rows = g.formalism["products"]
+    he = formalism.he_of_rows(rows["rows"], 2 ** 20, tokens=rows["tokens"])
+    assert he["left_out_macs"] == sum(m.macs for m in decode)
+    assert he["trained_weights"] <= H * H + V * H
+    train = script.record(PROGRAM, ["--batch", str(B), "--update", "inplace", "--generate", "3"], step=2,
+                          starts=starts, wall=[0.1] * 8, step_tokens=T)
+    assert train.axes == {"ctx": CTX} and train.formalism["tokens"] == T and train.updated_macs() == T * FWD
+
+
+def test_a_round_whose_prompts_the_capture_cant_batch_is_refused(starts):
+    """Prompts the program reads from the stream itself (``--windows``): the recording with twice the windows leaves
+    them, and so the sampled ids, as they were, and the round's decode positions would be on no token axis."""
+    with pytest.raises(CaptureRefused, match="sampled ids .* keep their shape"):
+        recorded(starts, "--update", "inplace", "--generate", "3", "--windows")
+
+
 def test_the_stub_stream_has_the_parts_its_start_read_then_an_unread_part(starts):
     """ref-data's ``--windows fresh``: a data v3 start's provenance names the parts it read (data.parts, by sha256), which
     the program finds in data_v3.TRAIN's manifest and among the stream's parts and starts, and it reads only the windows

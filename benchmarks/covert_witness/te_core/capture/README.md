@@ -47,7 +47,8 @@ alone.
 `te_core.capture.script` traces a recorded program's measured step and builds it as a `StepCircuit`: one vertex per
 value of the step (and every value it carries from the step before), its gates priced by `te_core.gates`, its phase,
 whether it depends on θ' (the carried values) and on the step's tokens, and the positions of each token input it
-reads. `circuit.measure` reads the formalism's quantities from it, each defined in the module's docstring; `script
+reads, and of each sampled id it feeds back (a generation round's decode, which a recording with twice the stream's
+windows puts on the token axis `sequences`). `circuit.measure` reads the formalism's quantities from it, each defined in the module's docstring; `script
 --circuit F.npz` saves it, and `python -m te_core.capture.circuit F.npz` measures a saved one again. prepare's start,
 data and output calls are stubbed (the module's docstring): the data stream is zeros in prepare's parts, starts and
 order, the data v3 parts the start's provenance names (in a manifest at `data_v3.TRAIN`, as on a node) and then one

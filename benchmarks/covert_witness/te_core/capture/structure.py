@@ -750,6 +750,12 @@ class StepGraph:
                     axes = tuple(axis_names[a] for a, vg in enumerate(vgs) if vg[j].dims[d] != size)
                     if axes:
                         tdims[d] = axes
+                # a decode step's product over its context (one position a sequence, its sequences batched): the
+                # position is the size-1 dim, which the sequences index as they index the batch
+                if "sequences" in tdims.get("batch", ()) and any(d in tdims for d in ("m", "k", "n")):
+                    for d in ("m", "k", "n"):
+                        if d not in tdims and g.dims[d] == 1:
+                            tdims[d] = ("sequences",)
                 raw.append((n, g, tdims))
 
         def result_value(n, g) -> int | None:
@@ -1147,8 +1153,9 @@ def _step_circuit(flow: _Flow, nodes: list, region: int, dep: list[bool], carrie
                   step_tokens: int, positions: int = 0) -> StepCircuit:
     """The measured step `region` as a `StepCircuit` (te_core.capture.circuit): its values and the carried ones it reads,
     each op's gates split over its values by elements, every read of token data through a storage a step-R token
-    input owns or by a token-index op, and (with `positions`, the context's length, from a trace whose variant halves
-    it) which values are quadratic in the context."""
+    input owns or by a token-index op (a sampled id's lookup's ids, ``meta["te_sampled"]``, token data as an input's
+    are), and (with `positions`, the context's length, from a trace whose variant halves it) which values are
+    quadratic in the context."""
     ph = [n for n in nodes if n.op == "placeholder" and int(n.meta.get("te_step", -1)) == region]
     token_names = {n.name for n in ph if n.name.startswith("tokens_")}
     token_in = {v for v, k in flow.source.items() if k[0] == "input" and k[1] in token_names}
@@ -1200,13 +1207,16 @@ def _step_circuit(flow: _Flow, nodes: list, region: int, dep: list[bool], carrie
             if not isinstance(val, torch.Tensor) or not isinstance(key, tuple):
                 continue
             owned = key[0] == "input" and key[1] in token_names
+            sampled = a.name in n.meta.get("te_sampled", ())
             index = name in _TOKEN_INDEX and not val.dtype.is_floating_point and val.dtype != torch.bool \
                 and any(tokdep[x] for x in flow.reads.get((n, a), ()))
             if not owned and not index:
                 continue
             k = keys.setdefault(repr(key), len(keys))
             if k == len(token_key):
-                token_key.append(owned)
+                token_key.append(owned or sampled)
+            elif sampled:
+                token_key[k] = True
             pos = _storage_positions(val)
             tr_op.append(op_id[n])
             tr_key.append(k)
