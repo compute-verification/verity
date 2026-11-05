@@ -73,6 +73,12 @@ reviewed_first = false
 # check keeps in place, so no check's prefix is rebuilt; one that gains its verdict goes after those already moved, so none
 # below it is merged again. On whatever reviewed_first says; false: only reviewed_first's rule
 verdict_first = true
+# the verdict carry (`research.carry`): a member with no land verdict at its head takes its PR's newest verdict at an older head,
+# a land by a non-owner, when each commit since merges, as the queue would, commits on `checked` or `main` or another member's
+# head with a land verdict and no hold, or changes only what the checks regenerate (pins, lock records); a hold at the head, or
+# one newer than that land, keeps it. "off"; "shadow", drive logs `would carry #N's land from OLD to NEW (why)` or `would not
+# carry ...` and writes nothing; "on", it writes the land verdict at the head as ci's, its ref naming both heads
+verdict_carry = "shadow"
 # the low-risk lane: each tick, after the reviewed prefix, land up to `lowrisk_per_tick` members of `next`, in its order, onto
 # `checked` on their ready mark alone (no land verdict, no Lean check), each whose merge onto `checked`'s tip changes nothing
 # `lowrisk_excludes` names, merges with no conflict, contains no unlanded PR and passes `landing_gates` and the compile gate;
