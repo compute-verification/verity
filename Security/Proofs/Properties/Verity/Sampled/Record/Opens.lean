@@ -327,7 +327,7 @@ section Fields
 variable (o : Own) (e : Ext)
 
 theorem parse_at {x : Msg} (hx : x = xOf A o) : (record A o e).parse x = some (stmtA A) :=
-  (record_parse A o e x).trans (ite_eq_left hx)
+  (record_parse_eq A o e x).trans (ite_eq_left hx)
 
 theorem checked_at {x : Msg} (hx : x = xOf A o) (r : Fin ((record A o e).V.k x) → FlockDeploy.Coin) :
     (record A o e).checked x r = drawn A (drawBytes (coinsAt r)) := by

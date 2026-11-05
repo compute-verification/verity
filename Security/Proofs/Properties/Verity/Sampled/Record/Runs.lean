@@ -1,4 +1,4 @@
-import Proofs.Properties.Verity.Sampled.Record
+import Proofs.Properties.Verity.Sampled.Record.Facts
 import Proofs.Flock.Claims.Sampling.Prefix
 
 /-!
@@ -29,9 +29,8 @@ theorem drawOk_of_okAt {as : List Msg} {cs : List FlockDeploy.Coin} (h : okAt A 
   of_decide_eq_true h
 
 /-! The record's fields at a statement `x`, by `rfl` only where `x` is a variable: at `xOf A o` itself,
-`ite_eq_left rfl` takes the branch, since unfolding the record there would evaluate the statement's bytes. -/
-
-theorem record_parse (x : Msg) : (record A o e).parse x = if x = xOf A o then some (stmtA A) else none := rfl
+`ite_eq_left rfl` takes the branch, since unfolding the record there would evaluate the statement's bytes. The parse
+is `record_parse_eq`. -/
 
 theorem record_session (x : Msg) (u : ℕ) (v : Seen) :
     (record A o e).session x u v = if x = xOf A o then some (sessionOf A o v) else none := rfl
