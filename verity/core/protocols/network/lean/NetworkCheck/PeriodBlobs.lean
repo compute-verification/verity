@@ -15,8 +15,8 @@ composite's other subprotocols look those up among the blobs. A period that list
 * `blobProtocol` is the composites' verifier of record. Each listed file is the blob with its listed SHA-512
   (`Core.Blobs.get`, `filesOf`).
 * `readProtocol fs` is what a composite's executable runs when a period's files are too large to hold as blobs. The
-  files are read by path within a budget (`NetworkCheck.PeriodFiles.read`), each as `ofFile` reads its bytes: the last
-  `NetworkCheck.Period.scanCount` of them, the scan's, whole, and the others trimmed.
+  files are read by path within a budget (`NetworkCheck.PeriodFiles.read`), and held as `ofRead` holds their bytes:
+  the last `NetworkCheck.Period.scanCount` of them, the scan's, whole, and the others trimmed.
 
 Where the blobs hold the listed files' bytes, the two give one verdict (`blobProtocol_check`).
 -/
@@ -35,6 +35,13 @@ def ofFile (scan : Bool) (b : ByteArray) : V (ByteArray × Flock.Circuit) :=
 doesn't parse, named by its place. -/
 def ofFiles (l : Listing) (bs : Array ByteArray) : V (Array (ByteArray × Flock.Circuit)) :=
   (l.files.zip bs).zipIdx.mapM fun (((_, scan, _, _), b), i) => (ofFile scan b).mapError (s!"circuit file {i}: " ++ ·)
+
+/-- **The files `bs` as `NetworkCheck.PeriodFiles.read` holds them**, read at their paths on the period's parameters
+`j`: the last `scanCount j`, the scan's, whole, and the others trimmed, each as `ofFile` holds it; or the first that
+doesn't parse, named by its place. -/
+def ofRead (j : Lean.Json) (bs : Array ByteArray) : V (Array (ByteArray × Flock.Circuit)) :=
+  let k := bs.size - scanCount j
+  bs.zipIdx.mapM fun (b, i) => (ofFile (k ≤ i) b).mapError (s!"circuit file {i}: " ++ ·)
 
 /-- **The files listing `l` lists, among the blobs `bs`**, in its order: each the blob whose SHA-512 is its listing's
 (`Core.Blobs.get`); or the first that no blob has, named by its place. -/
@@ -113,7 +120,13 @@ parse, is named by its place. -/
     | .ok _ => false) &&
   (match filesOf l (.ofArray #[b]) with
     | .error e => e.startsWith "circuit file 0: "
-    | .ok _ => false)
+    | .ok _ => false) &&
+  (match ofRead .null #[b] with
+    | .error e => e.startsWith "circuit file 0: "
+    | .ok _ => false) &&
+  (match ofRead .null #[] with
+    | .ok fs => fs.isEmpty
+    | .error _ => false)
 
 /- A file whose SHA-512 is a pinned lookup table's is named by its place and the table; other files are not. -/
 #guard
