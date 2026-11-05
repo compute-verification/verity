@@ -1,0 +1,6 @@
+{
+ "roots": ["Definitions"],
+ "guarantees": {"Core.Guarantees.Spec": {"owner": "@proofs"}},
+ "assumptions": {"Core.Hyp": {"owner": "@lean"}},
+ "reads": {"Core.Guarantees.Spec": ["Core.unusedHelper"]}
+}

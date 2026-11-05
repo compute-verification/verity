@@ -1,0 +1,8 @@
+name = "security"
+defaultTargets = ["Definitions"]
+
+[leanOptions]
+autoImplicit = false
+
+[[lean_lib]]
+name = "Definitions"

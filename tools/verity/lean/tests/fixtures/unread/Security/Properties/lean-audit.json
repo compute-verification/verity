@@ -1,0 +1,4 @@
+{
+ "roots": ["Properties.Code"],
+ "guarantees": {"Properties.Code.CheckOk": {"owner": "@pouw"}}
+}
