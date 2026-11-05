@@ -378,16 +378,29 @@ def _finite_or_zero(C, w, man: int, exp: int):
     return [C.AND(fin, x) for x in w[:man + exp]] + w[man + exp:]
 
 
-def tc_dot16(C, acc, a, b, groups=(8, 8), W: int = 25, F: int = -132):
+def tc_dot16(C, acc, a, b, groups=(8, 8), W: int = 25, F: int = -132, stand_ins: bool = True):
     """``AmpereBF16TcDot16``: ``acc + sum_k a[k] * b[k]`` as ``mma.sync.m16n8k16`` bf16 computes one accumulator coordinate, on
     every encoding (``verity.ml.circuits.silicon.total.tc_dot_total`` on ``AMPERE_BF16_M16N8K16``). The finite part is
     ``tc_step.unit`` (the binary census's circuit of ``GroupSum.step``: groups (8, 8), 25-bit truncating adder, floor -132) on
     operands whose non-finite words are replaced by zero; per group, a NaN term, or infinities of both signs (an overflowed
     group counts as its infinity), give the canonical 0x7FFFFFFF, and one-signed infinities that infinity. Any non-finite
-    operand makes the result non-finite, so the stand-ins never reach the output."""
+    operand makes the result non-finite, so the stand-ins never reach the output.
+
+    With ``stand_ins=False`` the finite part reads the operands and the accumulator as they are, and the function is the same
+    on every encoding. The flags that select the special word are read from the raw words: a NaN operand, an infinity times a
+    zero, or a NaN accumulator sets the NaN flag; an infinity times any other operand, or an infinite accumulator, sets the
+    infinity of its sign; and the flags only grow. The finite part reaches them only through an overflowed group, which sets
+    its sign's infinity when neither infinity is set once the group's own terms are in. On finite inputs the stand-ins are
+    the identity. Otherwise, if the raw words set the NaN flag, the output is 0x7FFFFFFF either way. If they don't, each
+    non-finite input is an infinity (the accumulator, or an operand whose partner is neither zero nor NaN), and the raw words
+    set an infinity in the first group holding a non-finite operand (from the start, for an infinite accumulator) before that
+    group's overflow is read: from there on no overflow sets anything, and in the groups before it every word read is finite,
+    so the stand-ins are the identity there and each group's sum and overflow are the same either way. So the flags, and the
+    output, are the same with and without the stand-ins. No gate of the finite part asserts: `_tc_operand` is the decode
+    without its finiteness assertion."""
     from . import tc_step as U
 
-    return _tc_total(C, acc, a, b, U.BF16, groups, W, F)
+    return _tc_total(C, acc, a, b, U.BF16, groups, W, F, stand_ins)
 
 
 def tc_dot_e4m3(C, acc, a, b, groups=(32,), W: int = 14, F: int = -139):
@@ -420,7 +433,7 @@ def tc_dot_tf32(C, acc, a, b, groups, W: int, F: int):
     return _tc_total(C, acc, a, b, U.TF32, groups, W, F)
 
 
-def _tc_total(C, acc, a, b, fmt, groups, W, F):
+def _tc_total(C, acc, a, b, fmt, groups, W, F, stand_ins: bool = True):
     from . import tc_step as U
 
     k, n = sum(groups), fmt.bits
@@ -445,14 +458,14 @@ def _tc_total(C, acc, a, b, fmt, groups, W, F):
     c_nan, c_inf, _ = _classes(C, acc, 23, 8)
     prods = []
     for x, y in zip(a, b):
-        sa, ea, siga, nza = _tc_operand(C, fmt, stand_in(x))
-        sb, eb, sigb, nzb = _tc_operand(C, fmt, stand_in(y))
+        sa, ea, siga, nza = _tc_operand(C, fmt, stand_in(x) if stand_ins else x)
+        sb, eb, sigb, nzb = _tc_operand(C, fmt, stand_in(y) if stand_ins else y)
         S = add(C, ea, eb, width=fmt.exp_bits + 1)
         S = add(C, S, const_bits((fmt.offset + U.S_BIAS) % 1024, 10), width=10)
         mag = multiply(C, siga, sigb)[: 2 * fmt.sig_bits]
         sh = fmt.product_shift + rescale
         prods.append((sa ^ sb, S, C.AND(nza, nzb), ([ZERO] * sh + mag) if sh >= 0 else mag[-sh:]))
-    c = _finite_or_zero(C, acc, 23, 8)
+    c = _finite_or_zero(C, acc, 23, 8) if stand_ins else list(acc)
     cm, cf, cs = c[:23], c[23:31], c[31]
     hc = or_reduce(C, cf)
     cf_eff = [cf[0] ^ C.AND(NOT(cf[0]), NOT(hc))] + cf[1:]
