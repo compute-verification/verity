@@ -3,6 +3,7 @@ fixture tree's facts kept beside it), and, when `lake` is installed, that those 
 on the fixture's build."""
 from __future__ import annotations
 
+import gzip
 import importlib.util
 import json
 import shutil
@@ -117,7 +118,7 @@ def check_report(rep: dict) -> None:
     got = {m: {n: k for n, k, _ in r["unread_declarations"]} for m, r in mods.items() if r["unread_declarations"]}
     assert got == UNREAD
     core = mods["Definitions.Core"]
-    assert core["kept_only_by"] == {"defeq": 1, "coercion": 1, "lock module": 0, "cited": 1}
+    assert core["kept_only_by"] == {"defeq": 1, "coercion": 1, "lock module": 0, "lock text": 0, "lock doc": 0, "cited": 1}
     assert rep["seeds"]["coercion"] == 1
     assert mods["Proofs.Flock.Main"]["kept_only_by"]["defeq"] == 1
     assert core["unread_cited_in_docs"] == ["Core.unusedHelper"]
@@ -154,6 +155,86 @@ def test_the_fixture_s_closure_keeps_what_is_read_and_finds_the_rest():
     rep = U.analyse(tree, facts)
     check_report(rep)
     assert "Proofs.Flock" in U.markdown(rep, None)
+
+
+def test_facts_files_join_by_name_gzipped_or_not(tmp_path):
+    """Each audit writes its own facts: a module one file only names is the one another found, its foreign attributes are
+    the union, and a constant both hold mentions what either says."""
+    one = [{"module": "A", "found": True, "imports": []}, {"module": "B", "found": False},
+           {"n": "A.a", "m": 0, "k": "def", "r": [1, 1], "f": [], "u": [1]}, {"n": "A.b", "m": 0, "k": "def", "f": [], "u": []}]
+    two = [{"module": "B", "found": True, "imports": ["A"], "foreign": ["A.b"]},
+           {"module": "A", "found": True, "imports": [], "foreign": ["X.x"]},
+           {"n": "B.b", "m": 0, "k": "theorem", "r": [1, 1], "f": [], "u": [1]},
+           {"n": "A.a", "m": 1, "k": "def", "r": [1, 1], "f": [], "u": [0]}]
+    p1, p2 = tmp_path / "one.jsonl", tmp_path / "two.jsonl.gz"
+    p1.write_text("".join(json.dumps(x) + "\n" for x in one))
+    p2.write_bytes(gzip.compress("".join(json.dumps(x) + "\n" for x in two).encode()))
+    f = U.Facts(p1, p2)
+    assert f.name == ["A.a", "A.b", "B.b"] and [list(u) for u in f.used] == [[1, 2], [], [0]]
+    assert [f.modules[f.module[i]]["module"] for i in range(3)] == ["A", "A", "B"]
+    assert f.modules[f.module_index["B"]] == two[0] and f.modules[f.module_index["A"]]["foreign"] == ["X.x"]
+    assert U.names("its witness is 'Dead.lonely', see x.y") == {"Dead.lonely'", "Dead.lonely", "x.y"}
+
+
+def test_a_lock_s_texts_and_the_document_they_name_seed_and_a_module_of_checks_of_a_read_definition_stays(tmp_path):
+    """A lock's text that names a declaration (quoted as a string literal closes it) or a module seeds it, and so does what
+    a document it names holds; with no tool naming it, the module of checks stays, since it tests `Core.double`, which is
+    read."""
+    root = tmp_path / "unread"
+    shutil.copytree(FIXTURE, root, ignore=shutil.ignore_patterns(".lake"))
+    (root / "Security" / "PROTOCOL.md").write_text("The helper is `Core.unusedHelper`.\n")
+    files = [f for f in U.tracked(FIXTURE) if f != "tools/checks.py"] + ["Security/PROTOCOL.md"]
+    tree = U.Tree(root, files)
+    tree.locks["Security"]["guarantees"]["Core.Guarantees.Spec"]["why"] = (
+        "its witness is 'Dead.lonely', Proofs.Flock.Spare states the rest, and PROTOCOL.md says why")
+    rep = U.analyse(tree, U.Facts(FACTS), full=False)
+    mods = rep["modules"]
+    assert rep["lock_docs"] == {"Security/PROTOCOL.md": ["Security/lean-audit.json"]}
+    assert {m: mods[m]["status"] for m in ("Definitions.Dead", "Proofs.Flock.Spare", "Definitions.Checks")} == {
+        "Definitions.Dead": "read", "Proofs.Flock.Spare": "read", "Definitions.Checks": "checks"}
+    assert [n for n, _, _ in mods["Definitions.Dead"]["unread_declarations"]] == ["Dead.lonely_pos"]
+    assert "Core.unusedHelper" not in {n for n, _, _ in mods["Definitions.Core"]["unread_declarations"]}
+    assert rep["totals"]["wholly_unread_modules"] == 0 and rep["chains"] == {} and not mods["Definitions.Core"]["kept_only_by"]
+    assert "Read only because" not in U.markdown(rep, None)
+
+
+def test_the_ratchet_fails_when_an_area_s_wholly_unread_modules_rise_and_its_caps_only_come_down(tmp_path):
+    """No caps is a cap of nothing; caps at the counts pass; caps above them pass and leave the lowered caps; a cap below
+    its count fails naming the area's modules and the fix. `--update-caps` writes the counts when there are no caps, lowers
+    caps above them, and never raises one."""
+    files, caps, out = U.tracked(FIXTURE), tmp_path / "caps.json", tmp_path / "out"
+    now = U.counts(U.analyse(U.Tree(FIXTURE, files), U.Facts(FACTS), full=False))
+    assert now == {"Definitions/Dead": {"modules": 1, "lines": 7}, "Definitions/Gone": {"modules": 1, "lines": 1},
+                   "Proofs/Flock": {"modules": 1, "lines": 9}}
+    r = U.check(FIXTURE, files, [FACTS], out, caps)
+    assert len(r["failures"]) == 3 and not r["lower"] and (out / "unread.json").is_file()
+    caps.write_text(U.caps_text(now))
+    r = U.check(FIXTURE, files, [FACTS], out, caps)
+    assert r["failures"] == [] and not r["lower"] and not (out / "unread-caps.json").exists()
+    higher = {a: {"modules": v["modules"] + 1, "lines": v["lines"] + 5} for a, v in now.items()} | {
+        "Proofs/Gone": {"modules": 2, "lines": 9}}
+    caps.write_text(U.caps_text(higher))
+    r = U.check(FIXTURE, files, [FACTS], out, caps)
+    assert r["failures"] == [] and r["lower"] and U.load_caps(out / "unread-caps.json") == now
+    tight = now | {"Definitions/Dead": {"modules": 1, "lines": 6}}
+    caps.write_text(U.caps_text(tight))
+    (fail,) = U.check(FIXTURE, files, [FACTS], out, caps)["failures"]
+    assert fail.startswith(f"unread: Definitions/Dead has 1 wholly unread modules (7 lines), above its cap of 1 (6 lines) in "
+                           f"{caps}: Definitions.Dead (7 lines). ") and "delete it, or seed it: a lock/code reference" in fail
+    cli = ["--root", str(FIXTURE), "--facts", str(FACTS), "--out", str(tmp_path / "cli"), "--caps", str(tmp_path / "new.json")]
+    assert U.main([*cli, "--update-caps"]) == 0 and U.load_caps(tmp_path / "new.json") == now
+    (tmp_path / "new.json").write_text(U.caps_text(higher))
+    assert U.main(cli) == 0 and U.main([*cli, "--update-caps"]) == 0 and U.load_caps(tmp_path / "new.json") == now
+    (tmp_path / "new.json").write_text(U.caps_text(tight))
+    assert U.main([*cli, "--update-caps"]) == 1 and U.load_caps(tmp_path / "new.json") == tight
+    with pytest.raises(ValueError, match="not a lean-unread-caps/v1 file"):
+        U.load_caps(FACTS.parent / "unread" / "Security" / "lean-audit.json")
+
+
+def test_the_kept_caps_are_a_caps_file_as_update_caps_writes_it():
+    caps = U.load_caps(U.CAPS)
+    assert caps and all(v["modules"] > 0 and v["lines"] > 0 for v in caps.values())
+    assert U.CAPS.read_text() == U.caps_text(caps), "write it with `unread.py --caps ... --update-caps`"
 
 
 @pytest.mark.slow

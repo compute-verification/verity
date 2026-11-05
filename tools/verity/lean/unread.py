@@ -1,13 +1,15 @@
 """`unread`: the Lean nothing reads, per module and per area, and what deleting it would do to the longest import chain.
 
-    python tools/verity/lean/unread.py --out DIR [--root DIR] [--env PKG] [--setup] [--build] [--facts FILE] [--rev REV]
+    python tools/verity/lean/unread.py --out DIR [--root DIR] [--env PKG] [--setup] [--build] [--facts FILE ...]
+                                       [--caps FILE [--update-caps]] [--rev REV]
 
 It reads every module of every Lake package under ``--root`` (default this checkout; `modules.packages`, the auditor's
 fixtures aside) from the `.olean` files of one package's build (``--env``, default `Security/Proofs`, whose `lake env`
 reaches the security analysis's three trees and the code packages they require): `Unread.lean`, compiled with that
 package's toolchain, writes each constant with what its type and value mention, and this holds the policy. ``--setup``
 first runs `setup.sh ENV`, and ``--build`` `lake build` there, with `@NAME` for each other analysis package
-(`ANALYSIS`). ``--facts FILE`` reads facts written before instead.
+(`ANALYSIS`). ``--facts FILE`` reads facts written before instead; given more than once, it joins them (`Facts`), as the
+Lean check's audits of `Security` and `Security/Proofs` each write their own (`check.py`'s `unread_facts`).
 
 **The closure.** Starting from the seeds, it follows what each reached constant's type and value mention
 (`ConstantInfo.getUsedConstants`, an inductive type's constructors, `@[implemented_by]` and `@[csimp]`), and from any
@@ -16,6 +18,8 @@ constant to the declaration it belongs to. The seeds:
 - every key and string value of each package's `lean-audit.json` (`reads` and `dependencies` aside) that names a
   constant: the guarantees, assumptions, witnesses, claims, `shape` and `verifier` entries, escapes;
 - every declaration of the modules a lock names under `roots`, `runs`, `exempt` and `compile_time`;
+- every declaration, and every declaration of each module, that a lock's texts (its strings with a space: a `why`, a
+  reason) name, or that a document those texts name holds (a `PROTOCOL.md` a guarantee relies on; `lock_docs`);
 - every constant with a `SecurityProofs` component, every declaration of `Proofs.Properties.*` and `Properties.*`;
 - every constant of a code package (every package outside `ANALYSIS`: executable code), and every `main`;
 - every constant Lean uses by name rather than through a term: syntax, macros, elaborators, tactics, delaborators,
@@ -28,8 +32,9 @@ constant to the declaration it belongs to. The seeds:
   path's last components, written out or built from string literals), so a test, a generator or a tool that reads one
   keeps it. This tool, its test and the Lean tools' fixtures read none (`NOT_READERS`).
 
-The `@[defeq]` theorems, the coercion instances, the lock-listed modules and the cited names are seeds to be safe
-(`CAUTIOUS`): the report counts what each alone keeps (`kept_only_by`).
+The `@[defeq]` theorems, the coercion instances, the lock-listed modules, the names in the locks' texts and their
+documents, and the cited names are seeds to be safe (`CAUTIOUS`): the report counts what each alone keeps
+(`kept_only_by`).
 
 **Declarations.** A constant with a declaration range is a declaration, unless it belongs to a type (a constructor, a
 recursor, a projection) or Lean generated it from another's command (the same first line as a declaration its name
@@ -37,8 +42,10 @@ extends: `@[ext]`'s lemmas); every other constant (`match_`, `proof_`, `eq_`, `_
 `noConfusion`, `_private`'s aux) belongs to the nearest declaration its name extends. A declaration is read when the
 closure reaches it or any constant of it other than a matcher or an abstracted proof, which Lean shares between the
 declarations of a module and makes again for a reader whose owner is gone. A module is wholly unread when it declares
-something and nothing of it is read or seeded, and it gives no instance or `simp` attribute to another module's
-constant; a module that declares nothing (an aggregator) goes with the modules it imports when all of them go. What
+something and nothing of it is read or seeded, it gives no instance or `simp` attribute to another module's constant,
+and it isn't a module of checks (`CHECKS`: its name ends in `Checks` or `Vectors`) that mentions a read declaration of
+another module, which tests a definition something reads; a module that declares nothing (an aggregator) goes with the
+modules it imports when all of them go. What
 mentions a wholly unread module's constants is unread too, but may sit in a module that stays: a wholly unread module is
 deletable alone when nothing outside the modules deletable alone mentions it (`deletable`, which also reads the files'
 `open` lines), and the rest go only with the unread declarations that mention them (`mentioned_by`).
@@ -49,11 +56,18 @@ deleted module imported.
 
 It writes ``DIR/unread.json`` (every module's counts and unread declarations, by area and by owner, the chains, the
 seeds) and ``DIR/unread.md`` (the summary). The owners of an area are the `owner` handles the locks give the guarantees
-and assumptions its modules declare: the tree has no other map from Lean to lanes. Stdlib only.
+and assumptions its modules declare: the tree has no other map from Lean to lanes.
+
+**The ratchet.** Each area of the analysis's trees has a cap on its wholly unread modules and on their lines
+(`unread-caps.json`, `CAPS`), and a count may only come down: ``--caps FILE`` exits 1 when an area's count rose above its
+cap (an area the file doesn't list has a cap of nothing), and ``--update-caps`` lowers each cap to its count, never
+raising one. The Lean check runs it (`check`, from `lean_audit.py`) on the facts its audits wrote, with no build; there
+the report is the short one (`analyse` without ``full``: no chains or `kept_only_by`). Stdlib only.
 """
 from __future__ import annotations
 
 import argparse
+import gzip
 import importlib.util
 import json
 import os
@@ -61,6 +75,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from array import array
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -93,9 +108,16 @@ SEED_FLAGS = ("meta", "unsafe", "partial", "defeq")
 COERCION = frozenset({"Coe", "CoeTail", "CoeHead", "CoeOut", "CoeHTCT", "CoeHTC", "CoeOTC", "CoeTC", "CoeT", "CoeDep",
                       "CoeFun", "CoeSort"})
 #: the seeds taken to be safe rather than because something reads them: each is reported with what it alone keeps
-CAUTIOUS = ("defeq", "coercion", "lock module", "cited")
+CAUTIOUS = ("defeq", "coercion", "lock module", "lock text", "lock doc", "cited")
 CAUTIOUS_TEXT = {"defeq": "`@[defeq]` theorems", "coercion": "coercion instances", "lock module": "the modules locks list",
+                 "lock text": "names in the locks' texts", "lock doc": "names in the docs the locks name",
                  "cited": "names in files outside Lean"}
+#: a module of checks or vectors (its name's last component): theorems over concrete values that test the definitions
+#: they mention, which nothing reads by design. It is kept when it mentions a declaration that is read (`checks`)
+CHECKS = re.compile(r"(?:Checks|Vectors)$")
+#: the ratchet's caps: each area's wholly unread modules and their lines, which may only come down (`ratchet`)
+CAPS = HERE / "unread-caps.json"
+CAPS_SCHEMA = "lean-unread-caps/v1"
 #: the files outside Lean whose full mention of a declaration keeps it (a test or tool reading it by name)
 CITED_BY = (".py", ".json", ".toml", ".rs", ".sh", ".yaml", ".yml", ".txt", ".ts", ".js", ".cfg")
 #: the files whose naming of a module keeps it: code, and a suite's declared inputs (`pyproject.toml`); data that only
@@ -108,8 +130,11 @@ DOCS = (".md",)
 NOT_READERS = ("tools/verity/lean/unread.py", "tools/verity/lean/Unread.lean", "tools/verity/lean/tests/test_unread.py")
 #: a cited file larger than this is data, not code
 CITE_MAX_BYTES = 4 << 20
-#: a dotted identifier, as a file outside Lean would name a declaration
-DOTTED = re.compile(r"[A-Za-z_][A-Za-z0-9_'!?]*(?:\.[A-Za-z0-9_'!?]+)+")
+#: a dotted identifier, as a file outside Lean would name a declaration: never from inside a word, and possessive, so a
+#: long run of dots and letters is matched once (a quote a string closes with is stripped, `names`)
+DOTTED = re.compile(r"(?<![A-Za-z0-9_])[A-Za-z_][A-Za-z0-9_'!?]*+(?:\.[A-Za-z0-9_'!?]++)+")
+#: a path to a Markdown file, as a lock's text names a document it relies on
+DOC_PATH = re.compile(r"[A-Za-z0-9_./-]*[A-Za-z0-9_-]\.md\b")
 #: a path to a Lean file, as a file outside Lean would name a module
 LEAN_PATH = re.compile(r"[A-Za-z0-9_'!?./-]+\.lean\b")
 #: string literals joined by `/` or `,`, the last a Lean file: a path code builds in pieces (`LEAN / "Prims" / "V.lean"`)
@@ -218,10 +243,18 @@ def write_facts(tree: Tree, env: str, out: Path) -> Path:
     return facts
 
 
-class Facts:
-    """`Unread.lean`'s lines: the modules, then the constants, each by its index."""
+def lines_of(path: Path):
+    """A facts file's lines, gzipped (`.gz`, as an audit keeps them) or not."""
+    with (gzip.open(path, "rt") if path.suffix == ".gz" else open(path)) as f:
+        yield from f
 
-    def __init__(self, path: Path):
+
+class Facts:
+    """`Unread.lean`'s lines: the modules, then the constants, each by its index. Several files (each package's audit writes
+    its own) join by name: a module is the one a file found it in, its foreign attributes the union, and a constant two
+    files hold mentions what either says it does (the same, since each reads the same `.olean`)."""
+
+    def __init__(self, *paths: Path):
         self.modules: list[dict] = []
         self.name: list[str] = []
         self.module: array = array("I")
@@ -231,28 +264,49 @@ class Facts:
         self.parent: dict[int, str] = {}
         self.instance_of: dict[int, str] = {}
         self.used: list[array] = []
+        self.index: dict[str, int] = {}
+        self.module_index: dict[str, int] = {}
         flagsets: dict[tuple, frozenset] = {}
-        with open(path) as f:
-            for line in f:
+        for path in paths:
+            local_module: list[int] = []
+            rows: list[tuple[int, list[int]]] = []
+            for line in lines_of(path):
                 d = json.loads(line)
                 if "module" in d:
-                    self.modules.append(d)
+                    local_module.append(self._module(d))
                     continue
-                self.name.append(d["n"])
-                self.module.append(d["m"])
-                self.kind.append(sys.intern(d["k"]))
-                fl = tuple(d["f"])
-                self.flags.append(flagsets.setdefault(fl, frozenset(fl)))
-                i = len(self.name) - 1
-                if "r" in d:
-                    self.range[i] = (d["r"][0], d["r"][1])
-                if "p" in d:
-                    self.parent[i] = d["p"]
-                if "c" in d:
-                    self.instance_of[i] = d["c"]
-                self.used.append(array("I", d["u"]))
-        self.index = {n: i for i, n in enumerate(self.name)}
-        self.module_index = {m["module"]: i for i, m in enumerate(self.modules)}
+                i = self.index.get(d["n"])
+                if i is None:
+                    i = self.index[d["n"]] = len(self.name)
+                    self.name.append(d["n"])
+                    self.module.append(local_module[d["m"]])
+                    self.kind.append(sys.intern(d["k"]))
+                    fl = tuple(d["f"])
+                    self.flags.append(flagsets.setdefault(fl, frozenset(fl)))
+                    if "r" in d:
+                        self.range[i] = (d["r"][0], d["r"][1])
+                    if "p" in d:
+                        self.parent[i] = d["p"]
+                    if "c" in d:
+                        self.instance_of[i] = d["c"]
+                    self.used.append(array("I"))
+                rows.append((i, d["u"]))
+            for i, used in rows:
+                local = [rows[j][0] for j in used]
+                self.used[i] = array("I", sorted(set(self.used[i]) | set(local))) if self.used[i] else array("I", local)
+
+    def _module(self, d: dict) -> int:
+        k = self.module_index.get(d["module"])
+        if k is None:
+            self.module_index[d["module"]] = len(self.modules)
+            self.modules.append(d)
+            return len(self.modules) - 1
+        old = self.modules[k]
+        if d.get("found") and not old.get("found"):
+            self.modules[k] = d | {"foreign": sorted(set(d.get("foreign") or ()) | set(old.get("foreign") or ()))}
+        elif d.get("found"):
+            old["foreign"] = sorted(set(old.get("foreign") or ()) | set(d.get("foreign") or ()))
+        return k
 
 
 def owners(facts: Facts) -> list[int]:
@@ -300,19 +354,61 @@ def walk_strings(x, out: set[str]) -> None:
             walk_strings(v, out)
 
 
-def lock_seeds(tree: Tree) -> tuple[set[str], set[str]]:
-    """The names and the modules the locks give."""
-    names: set[str] = set()
+def lock_seeds(tree: Tree) -> tuple[set[str], set[str], dict[str, list[str]]]:
+    """The names and the modules the locks give, and each lock's texts, by its package: the strings outside
+    `SKIPPED_SECTIONS` with a space in them (a `why`, a reason). A string without one is a name, a prefix or a path, which
+    seeds only a constant of its exact name."""
+    seeds: set[str] = set()
     mods: set[str] = set()
-    for lock in tree.locks.values():
+    texts: dict[str, list[str]] = {}
+    for pkg, lock in tree.locks.items():
+        out: set[str] = set()
         for k, v in lock.items():
             if k in MODULE_SECTIONS:
                 mods.update(v if isinstance(v, list) else v.keys())
             if k not in SKIPPED_SECTIONS:
-                out: set[str] = set()
                 walk_strings(v, out)
-                names |= out
-    return names, mods
+        seeds |= out
+        texts[pkg] = sorted(s for s in out if " " in s)
+    return seeds, mods, texts
+
+
+def names(text: str) -> set[str]:
+    """The dotted identifiers a text holds (`DOTTED`), each also without the quotes a string literal closes it with."""
+    out = set()
+    for m in DOTTED.findall(text):
+        out.add(m)
+        if m.endswith("'"):
+            out.add(m.rstrip("'"))
+    return out
+
+
+def mentioned(text: str, known, modules: dict[str, str], named) -> tuple[set[str], set[str]]:
+    """The names of ``known`` a text holds in full, and the modules it names: by dotted name or a file's path
+    (``modules``), or by a path `path_namer` reads (``named``)."""
+    dotted = names(text)
+    mods = {modules[d] for d in dotted if d in modules}
+    if ".lean" in text:
+        for path in lean_paths(text):
+            mods |= named(path)
+    return {d for d in dotted if d in known}, mods
+
+
+def lock_docs(tree: Tree, texts: dict[str, list[str]]) -> dict[str, list[str]]:
+    """{a document: the locks whose texts name it} (`DOC_PATH`): a path from the root or from the lock's package, else
+    every tracked document whose path ends with it (a bare `PROTOCOL.md` is each one), the Lean tools' fixtures aside."""
+    files = set(tree.files)
+    docs = [f for f in tree.files if f.endswith(DOCS) and not f.startswith(MODULES.FIXTURES)]
+    out: dict[str, set[str]] = defaultdict(set)
+    for pkg, ts in texts.items():
+        for t in ts:
+            for p in DOC_PATH.findall(t):
+                tail = "/".join(x for x in p.split("/") if x not in ("", ".", ".."))
+                hits = [f for f in (os.path.normpath(p), os.path.normpath(f"{pkg}/{p}")) if f in files] or \
+                    [f for f in docs if f == tail or f.endswith("/" + tail)]
+                for h in hits:
+                    out[h].add(f"{pkg}/lean-audit.json")
+    return {d: sorted(v) for d, v in sorted(out.items())}
 
 
 def lean_paths(text: str) -> list[str]:
@@ -356,12 +452,13 @@ def citations(tree: Tree, candidates: set[str], modules: dict[str, str]) -> tupl
         if not p.is_file() or p.stat().st_size > CITE_MAX_BYTES:
             continue
         text = p.read_text(errors="replace")
-        dotted = {m.rstrip(".") for m in DOTTED.findall(text)}
+        dotted = names(text)
         hits = dotted & candidates
         if suffix in MODULE_CITED_BY or Path(f).name == "pyproject.toml":
             hits |= {modules[d] for d in dotted if d in modules}
-            for path in lean_paths(text):
-                hits |= named(path)
+            if ".lean" in text:
+                for path in lean_paths(text):
+                    hits |= named(path)
         for h in hits:
             (docs if suffix in DOCS else code)[h].append(f)
     return code, docs
@@ -498,14 +595,32 @@ def deletable(facts: Facts, mod_of: list[str], shared: list[bool], gone: set[str
     return alone, mentioned_by
 
 
-def analyse(tree: Tree, facts: Facts) -> dict:
+def analyse(tree: Tree, facts: Facts, full: bool = True) -> dict:
+    """The report (`unread.json`). Without ``full`` (the ratchet), no count of what each cautious seed alone keeps
+    (`kept_only_by`) and no chains."""
     owner = owners(facts)
     n = len(facts.name)
     mod_of = [facts.modules[facts.module[i]]["module"] for i in range(n)]
-    lock_names, lock_mods = lock_seeds(tree)
+    lock_names, lock_mods, lock_texts = lock_seeds(tree)
     is_decl = [owner[i] == i and i in facts.range for i in range(n)]
     candidates = {facts.name[i] for i in range(n) if is_decl[i] and tree.analysis(mod_of[i])}
     named = {k: m for m, f in tree.module_file.items() if tree.analysis(m) for k in (m, f, m.replace(".", "/") + ".lean")}
+    namer = path_namer(named)
+    text_names, text_mods = set(), set()
+    for ts in lock_texts.values():
+        for t in ts:
+            a, b = mentioned(t, facts.index, named, namer)
+            text_names |= a
+            text_mods |= b
+    docs = lock_docs(tree, lock_texts)
+    doc_names, doc_mods = set(), set()
+    for d in docs:
+        p = tree.root / d
+        if p.is_file() and p.stat().st_size <= CITE_MAX_BYTES:
+            a, b = mentioned(p.read_text(errors="replace"), facts.index, named, namer)
+            doc_names |= a
+            doc_mods |= b
+    seeded_mods = lock_mods | text_mods | doc_mods
     cited_code, cited_docs = citations(tree, candidates, named)
     sources: dict[str, set[int]] = defaultdict(set)
     for i, name in enumerate(facts.name):
@@ -514,6 +629,10 @@ def analyse(tree: Tree, facts: Facts) -> dict:
             sources["lock"].add(i)
         if mod in lock_mods:
             sources["lock module"].add(i)
+        if name in text_names or mod in text_mods:
+            sources["lock text"].add(i)
+        if name in doc_names or mod in doc_mods:
+            sources["lock doc"].add(i)
         if ".SecurityProofs." in f".{name}.":
             sources["SecurityProofs"].add(i)
         if any(mod == p or mod.startswith(p + ".") for p in SEEDED_PREFIXES):
@@ -542,7 +661,13 @@ def analyse(tree: Tree, facts: Facts) -> dict:
 
     read_decl, reached = reads(seeds)
     log(f"{len(seeds)} seeds reach {reached} of {n} constants")
-    read_without = {c: reads(set().union(*(v for k, v in sources.items() if k != c)))[0] for c in CAUTIOUS}
+    read_without = {c: reads(set().union(*(v for k, v in sources.items() if k != c)))[0] for c in CAUTIOUS} if full else {}
+    checks = set()
+    for i in range(n):
+        m = mod_of[i]
+        if m not in checks and mod_of[owner[i]] == m and CHECKS.search(m.rsplit(".", 1)[-1]) and \
+                any(read_decl[owner[j]] and mod_of[j] != m for j in facts.used[i]):
+            checks.add(m)
 
     # what a module owns: a copy of another module's equation lemma, which the reader's module realizes again, is not its own
     by_module: dict[str, list[int]] = defaultdict(list)
@@ -580,11 +705,13 @@ def analyse(tree: Tree, facts: Facts) -> dict:
             stack += [(i, False) for i in imports[x] if i not in seen]
     for m in order:
         info = found.get(m)
-        seeded = m in lock_mods
+        seeded = m in seeded_mods
         if not info or not info.get("found"):
             status[m] = "unbuilt"
         elif module_read[m] or seeded:
             status[m] = "read"
+        elif m in checks:
+            status[m] = "checks"
         elif info.get("foreign"):
             status[m] = "attributes"
         elif owns[m]:
@@ -610,7 +737,7 @@ def analyse(tree: Tree, facts: Facts) -> dict:
     for m in sorted(tree.module_file):
         decls = by_module.get(m, [])
         unread = [i for i in decls if not read_decl[i]]
-        kept_only = {c: sum(1 for i in decls if read_decl[i] and not read_without[c][i]) for c in CAUTIOUS}
+        kept_only = {c: sum(1 for i in decls if read_decl[i] and not without[i]) for c, without in read_without.items()}
         span = lambda i: facts.range[i][1] - facts.range[i][0] + 1  # noqa: E731
         kinds = Counter(kind_of(facts, i) for i in unread)
         rec = {"package": tree.module_package[m], "area": tree.area(m), "file": tree.module_file[m], "lines": lines[m],
@@ -684,7 +811,7 @@ def analyse(tree: Tree, facts: Facts) -> dict:
 
     one = {m: 1 for m in nodes}
     chains = {}
-    for name, into in (("overall", None), (CHAIN_TO, CHAIN_TO)):
+    for name, into in (("overall", None), (CHAIN_TO, CHAIN_TO)) if full else ():
         if into is not None and into not in tree.module_file:
             continue
         chains[name] = {
@@ -696,13 +823,74 @@ def analyse(tree: Tree, facts: Facts) -> dict:
             "after_alone_by_modules": chain(one, after_alone, kept_alone, into),
             "after_alone_by_lines": chain(lines, after_alone, kept_alone, into),
         }
-    return {"schema": "lean-unread/v1", "packages": tree.packages, "analysis": list(ANALYSIS),
+    return {"schema": "lean-unread/v1", "full": full, "packages": tree.packages, "analysis": list(ANALYSIS),
             "facts": {"modules": len(facts.modules), "found": sum(1 for m in facts.modules if m.get("found")),
                       "constants": n, "declarations": sum(is_decl)},
             "seeds": {k: len(v) for k, v in sorted(sources.items())}, "seeded": len(seeds),
             "reached": reached, "totals": dict(totals), "areas": dict(sorted(areas.items())),
             "modules": modules, "chains": chains, "clashes": tree.clashes,
-            "cited_by_code": {k: v[:3] for k, v in sorted(cited_code.items())}}
+            "cited_by_code": {k: v[:3] for k, v in sorted(cited_code.items())}, "lock_docs": docs}
+
+
+def counts(rep: dict) -> dict[str, dict[str, int]]:
+    """Each analysis area's wholly unread modules and their lines, the areas with none aside: what the caps bound."""
+    return {a: {"modules": v["wholly_unread_modules"], "lines": v["wholly_unread_lines"]}
+            for a, v in sorted(rep["areas"].items()) if v["package"] in rep["analysis"] and v["wholly_unread_modules"]}
+
+
+def load_caps(path: Path) -> dict[str, dict[str, int]]:
+    """The caps a file holds ({area: {"modules", "lines"}}); ValueError when it isn't a caps file."""
+    doc = json.loads(path.read_text())
+    if not isinstance(doc, dict) or doc.get("schema") != CAPS_SCHEMA or not isinstance(doc.get("areas"), dict):
+        raise ValueError(f"{path} is not a {CAPS_SCHEMA} file")
+    return doc["areas"]
+
+
+def caps_text(areas: dict[str, dict[str, int]]) -> str:
+    return json.dumps({"schema": CAPS_SCHEMA, "areas": dict(sorted(areas.items()))}, indent=1) + "\n"
+
+
+def ratchet(rep: dict, caps: dict[str, dict[str, int]], where: str = str(CAPS.relative_to(ROOT))
+            ) -> tuple[list[str], dict[str, dict[str, int]]]:
+    """(a failure for each area whose wholly unread modules, or their lines, rose above its cap in ``where``; the caps,
+    each lowered to its count). The count only comes down: an area the caps don't list has a cap of nothing."""
+    now, fails = counts(rep), []
+    for area in sorted(set(now) | set(caps)):
+        got, cap = now.get(area, {"modules": 0, "lines": 0}), {"modules": 0, "lines": 0} | caps.get(area, {})
+        if got["modules"] <= cap["modules"] and got["lines"] <= cap["lines"]:
+            continue
+        mods = sorted((m for m, r in rep["modules"].items() if r["area"] == area and r["status"] in ("unread", "unread aggregator")),
+                      key=lambda m: (-rep["modules"][m]["lines"], m))
+        shown = ", ".join(f"{m} ({rep['modules'][m]['lines']} lines)" for m in mods[:12])
+        more = f" and {len(mods) - 12} more" if len(mods) > 12 else ""
+        fails.append(f"unread: {area} has {got['modules']} wholly unread modules ({got['lines']} lines), above its cap of "
+                     f"{cap['modules']} ({cap['lines']} lines) in {where}: {shown}{more}. Nothing "
+                     f"reads such a module: delete it, or seed it: a lock/code reference (name the module, or a declaration "
+                     f"of it, in a lock's text or in code that reads it). A module of checks (its name ending in Checks or "
+                     f"Vectors) is kept once it mentions a declaration that is read, and a module moved to another area "
+                     f"takes its cap with it")
+    lowered = {a: {k: min(v.get(k, 0), now.get(a, {}).get(k, 0)) for k in ("modules", "lines")} for a, v in caps.items()}
+    return fails, {a: v for a, v in lowered.items() if v["modules"]}
+
+
+def check(root: Path, files: list[str], facts: list[Path], out: Path, caps: Path = CAPS) -> dict:
+    """The ratchet, as `lean_audit.py` runs it once the audits that write the facts have passed: the report of ``facts``
+    joined (`Facts`, no chains or `kept_only_by`) in ``out`` (`unread.json`, `unread.md`), against ``caps``. Returns
+    {"failures", "areas": each area's count and cap, "lower": whether a count is below its cap (``out``'s
+    `unread-caps.json` then holds the caps at the counts), "seconds"}."""
+    t = time.monotonic()
+    rep = analyse(Tree(root, files), Facts(*facts), full=False)
+    cap = load_caps(caps) if caps.is_file() else {}
+    fails, lowered = ratchet(rep, cap, str(caps.relative_to(root)) if caps.is_relative_to(root) else str(caps))
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "unread.json").write_text(json.dumps(rep, indent=1) + "\n")
+    (out / "unread.md").write_text(markdown(rep, None))
+    lower = not fails and lowered != cap
+    if lower:
+        (out / "unread-caps.json").write_text(caps_text(lowered))
+    now = counts(rep)
+    return {"failures": fails, "lower": lower, "seconds": round(time.monotonic() - t, 1),
+            "areas": {a: {"count": now.get(a, {"modules": 0, "lines": 0}), "cap": cap.get(a)} for a in sorted(set(now) | set(cap))}}
 
 
 def fmt(n: int) -> str:
@@ -721,8 +909,9 @@ def markdown(rep: dict, rev: str | None) -> str:
            f"(`mentioned_by`). {fmt(t.get('unbuilt_modules', 0))} modules ({fmt(t.get('unbuilt_lines', 0))} lines) have no "
            f"`.olean` (no package root imports them). {fmt(rep['facts']['constants'])} constants read from "
            f"{fmt(rep['facts']['found'])} of {fmt(rep['facts']['modules'])} modules' `.olean` files.", "",
-           "Read only because a cautious seed keeps them (declarations): " +
-           ", ".join(f"{CAUTIOUS_TEXT[c]} {fmt(v)}" for c, v in t.get("kept_only_by", {}).items()) + ".", "",
+           *(["Read only because a cautious seed keeps them (declarations): " +
+              ", ".join(f"{CAUTIOUS_TEXT[c]} {fmt(v)}" for c, v in t.get("kept_only_by", {}).items()) + ".", ""]
+             if rep.get("full", True) else []),
            "| area | modules | lines | declarations | unread | unread lines | wholly unread modules | their lines | "
            "deletable alone (lines) | owners (guarantees, assumptions) |",
            "|---|---:|---:|---:|---:|---:|---:|---:|---:|---|"]
@@ -761,13 +950,18 @@ def markdown(rep: dict, rev: str | None) -> str:
             "proof, and the Lean check says so.",
             "- `@[defeq]` theorems are seeds (kept), since `dsimp` and `simp only [t]` use them with no trace, as are "
             "coercion instances, which elaboration unfolds where it inserts the coercion, every declaration of a module "
-            "a lock lists and each one a file outside Lean names; `kept_only_by` counts what each alone keeps.",
+            "a lock lists, each one (and each module) a lock's text or a document a lock names holds, and each one a "
+            "file outside Lean names; `kept_only_by` counts what each alone keeps.",
             "- An `example`, `#guard` or `#eval` leaves nothing in the environment: a declaration only they use is "
             "reported unread, and a module only they use deletable alone; deleting it means deleting them.",
             "- A module of checks (theorems over concrete values or vectors, which the build checks) is read by nothing "
-            "by design: it is kept only when a file outside Lean names it. A path code builds from string literals "
+            "by design: it is kept when its name ends in `Checks` or `Vectors` and it mentions a declaration that is "
+            "read (`checks`), or when a file outside Lean or a lock names it. A path code builds from string literals "
             "(`LEAN / \"Prims\" / \"Vectors.lean\"`) names it; one it computes otherwise (a glob, a bare file name "
             "under a variable) does not.",
+            "- The ratchet reads the facts the audits of Security and Security/Proofs write: there a module of "
+            "Security/Properties that Security/Proofs doesn't import is `unbuilt`, so a spec definition only such a "
+            "module reads counts as unread (none does today). `--build` builds all three trees.",
             "- A module with no read declaration that gives an instance or `simp` attribute to another module's constant is "
             "kept (`attributes`), and a module no package root imports is `unbuilt`, reported but not read.",
             "- Deleting a wholly unread module that a kept module imports means that importer imports what it imported, "
@@ -784,16 +978,23 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--setup", action="store_true", help="run setup.sh ENV first")
     ap.add_argument("--build", action="store_true", help="lake build ENV and the other analysis packages first")
-    ap.add_argument("--facts", type=Path, help="read these facts instead of running Unread.lean")
+    ap.add_argument("--facts", type=Path, action="append",
+                    help="read these facts instead of running Unread.lean (an audit's `unread-facts.jsonl.gz`; repeat to join)")
+    ap.add_argument("--caps", type=Path, help="check the counts against this caps file (`unread-caps.json`): exit 1 when an "
+                                              "area's wholly unread modules or their lines rose above its cap")
+    ap.add_argument("--update-caps", action="store_true",
+                    help="with --caps: lower each cap to its count (never raise one); a caps file not there yet gets the counts")
     ap.add_argument("--rev", help="the commit the report names")
     a = ap.parse_args(argv)
+    if a.update_caps and not a.caps:
+        ap.error("--update-caps needs --caps")
     a.out.mkdir(parents=True, exist_ok=True)
     tree = Tree(a.root, tracked(a.root))
     if a.build:
         build(tree, a.env, setup=a.setup)
     elif a.setup:
         subprocess.run(["bash", str(HERE / "setup.sh"), str(tree.root / a.env)], check=True)
-    facts = Facts(a.facts or write_facts(tree, a.env, a.out))
+    facts = Facts(*(a.facts or [write_facts(tree, a.env, a.out)]))
     rep = analyse(tree, facts)
     rep["rev"] = a.rev
     (a.out / "unread.json").write_text(json.dumps(rep, indent=1) + "\n")
@@ -802,7 +1003,19 @@ def main(argv: list[str] | None = None) -> int:
     print(f"unread: {t.get('unread', 0)} of {t.get('declarations', 0)} declarations unread ({t.get('unread_lines', 0)} lines), "
           f"{t.get('wholly_unread_modules', 0)} modules wholly unread ({t.get('wholly_unread_lines', 0)} lines); "
           f"{a.out / 'unread.md'}")
-    return 0
+    if not a.caps:
+        return 0
+    if a.update_caps and not a.caps.is_file():
+        a.caps.write_text(caps_text(counts(rep)))
+        print(f"unread: {a.caps} written with the counts")
+        return 0
+    fails, lowered = ratchet(rep, load_caps(a.caps) if a.caps.is_file() else {}, str(a.caps))
+    for f in fails:
+        print(f, file=sys.stderr)
+    if a.update_caps:
+        a.caps.write_text(caps_text(lowered))
+        print(f"unread: {a.caps} lowered to the counts, none raised")
+    return 1 if fails else 0
 
 
 if __name__ == "__main__":
