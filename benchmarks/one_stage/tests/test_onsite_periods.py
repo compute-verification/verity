@@ -1,7 +1,9 @@
-"""onsite_periods.py over stand-in onsite records (`fixtures/onsite_periods/`, cut from the writer's own record): each
-cell's proved or scaled label held to the record's rules, every way a label can break refused, and the tables."""
+"""onsite_periods.py over committed stand-in onsite records (`fixtures/onsite_periods/`, cut from the writer's own
+record; nothing here runs or imports the writer): each cell's proved or scaled label held to the record's rules, every
+way a label can break refused, and the tables."""
 from __future__ import annotations
 
+import ast
 import copy
 import json
 import sys
@@ -22,9 +24,31 @@ def stand_in(name: str) -> dict:
     return json.loads((FIXTURES / f"{name}.json").read_text())
 
 
-@pytest.mark.parametrize("name", ["m2", "m1-week"])
+@pytest.mark.parametrize("name", ["m1", "m2", "m1-week"])
 def test_stand_ins_hold_their_rules(name):
     assert P.check(stand_in(name), LOCK) == []
+
+
+def test_the_reader_imports_only_the_standard_library():
+    tree = ast.parse(Path(P.__file__).read_text())
+    names = {a.name.split(".")[0] for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}
+    names |= {n.module.split(".")[0] for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) and n.module}
+    assert names <= sys.stdlib_module_names | {"__future__"}, names
+
+
+def test_a_signature_wrapped_after_its_colon_is_locked():
+    wrapped = {"guarantees": {"NetTiming.SecurityProofs.PeriodLeakAccepted": {
+        "signature": ["NetTiming.SecurityProofs.PeriodLeakAccepted.{u_1, u_2} :", f"  {STATEMENT}"]}}}
+    assert P.locked(wrapped, STATEMENT) and P.locked(LOCK, STATEMENT)
+    assert not P.locked(wrapped, "NetTiming.Guarantees.Period")
+    assert P.check(stand_in("m1-week"), wrapped) == []
+
+
+def test_a_short_run_proves_no_node_cell():
+    m1 = stand_in("m1")
+    labels = P.expected(m1["periods"], 1, P.Fraction(m1["bound"]["period_s"]))
+    assert labels["run.per_phase"] == ("proved", None)
+    assert all(labels[f"{p}.node"] == ("scaled", "run-to-period") for p in P.PERIODS)
 
 
 def test_k_over_a_phase_is_proved_only_at_one_phase():

@@ -1,11 +1,12 @@
-"""Writes this directory's stand-in onsite records: `onsite_record.py`'s record of its own tests' accepted run
-(`test_onsite_record.accepted`), each cut to the fields `onsite_periods.py` reads, their values as the writer wrote them.
+"""Writes this directory's stand-in onsite records from the onsite record's writer: its record of its own tests'
+accepted run (``test_onsite_record.accepted``, toy inputs), each cut to the fields `onsite_periods.py` reads, their
+values as the writer wrote them. The suite reads the JSON and never runs this; it runs by hand, against a tree that
+holds the writer (``benchmarks/one_stage/onsite_record.py`` and its test), with that tree's packages on the path:
 
-    python benchmarks/one_stage/tests/fixtures/onsite_periods/make.py
+    PYTHONPATH=WRITER_TREE:... python benchmarks/one_stage/tests/fixtures/onsite_periods/make.py WRITER_TREE
 
-``m2.json``: two execution phases, so K/m is scaled. ``m1-week.json``: one phase whose run covers a week, so the
-week's node cell is proved. Run it from a tree holding `onsite_record.py` and its tests, with that tree's packages on
-the path.
+``m1.json``: one execution phase, a short run, so every node cell is scaled. ``m2.json``: two phases, so K/m is
+scaled. ``m1-week.json``: one phase whose run covers a week, so the week's node cell is proved.
 """
 from __future__ import annotations
 
@@ -15,7 +16,6 @@ import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-sys.path[:0] = [str(HERE.parents[1]), str(HERE.parents[2])]
 
 CELL = ("bits", "share", "delta_net", "vacuous", "how", "rule", "statement", "seconds", "phases")
 KEEP = {"format": True, "run": True, "of_record": ("holds", "missing", "not_accepting"),
@@ -49,11 +49,13 @@ def stand_in(rec):
     return out | {k: grid(rec[k]) for k in ("periods", "periods_tight") if k in rec}
 
 
-def main() -> None:
+def main(tree: Path) -> None:
+    sys.path[:0] = [str(tree / "benchmarks" / "one_stage" / "tests"), str(tree / "benchmarks" / "one_stage")]
     import test_onsite_record as T
     two = dict(T.PUBLIC, K=T.PUBLIC["K"] + 9088 + 63 + 1, eps="1/524288", windows=2,
                scans=[T.SCAN, dict(T.SCAN, faulty_sets=1)])
-    cases = {"m2": {"public": two, "windows": 2}, "m1-week": {"schedule": dict(T.SCHEDULE, bucket_ms=10_000_000)}}
+    cases = {"m1": {}, "m2": {"public": two, "windows": 2},
+             "m1-week": {"schedule": dict(T.SCHEDULE, bucket_ms=10_000_000)}}
     for name, kw in cases.items():
         with tempfile.TemporaryDirectory() as tmp:
             rec = T.OR.record(T.accepted(Path(tmp), **kw))
@@ -61,4 +63,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    main(Path(sys.argv[1]).resolve())

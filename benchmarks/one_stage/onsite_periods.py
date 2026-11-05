@@ -1,7 +1,8 @@
-"""The onsite demo's record (`onsite_record.py`'s ``verity/onsite-network-record/v1``) restated per monitoring period: a
-table for a week, a month and a year, columns the node, a datacenter and the world, each cell its leak bound K over the
-period, its share of the weights, δ_net and K over one execution phase beside it, marked **proved** or **scaled** with
-its rule and sources. It reads only the record, and computes nothing the record doesn't state.
+"""The onsite demo's record (``verity/onsite-network-record/v1``) restated per monitoring period: a table for a week, a
+month and a year, columns the node, a datacenter and the world, each cell its leak bound K over the period, its share of
+the weights, δ_net and K over one execution phase beside it, marked **proved** or **scaled** with its rule and sources.
+It reads the record as JSON and nothing else (the lock aside), imports no module of its writer, and computes nothing the
+record doesn't state.
 
     python benchmarks/one_stage/onsite_periods.py OUT/record/onsite.json [--lock Security/lean-audit.json] [--out T.md]
 
@@ -30,10 +31,15 @@ COLUMNS = {"node": "the node", "datacenter": "a datacenter", "world": "the world
 LOCK = Path(__file__).resolve().parents[2] / "Security" / "lean-audit.json"
 
 
+def signature(entry: Mapping[str, Any]) -> str:
+    """A lock entry's signature on one line: the lock wraps a long one over several, often right after its colon."""
+    return " ".join(s.strip() for s in entry.get("signature", []))
+
+
 def locked(lock: Mapping[str, Any], name: str) -> bool:
     """Whether the lock holds ``name``: as a guarantee's key, or as the statement a proof constant's signature proves."""
     g = lock["guarantees"]
-    return name in g or any(s.endswith(f": {name}") for v in g.values() for s in v.get("signature", []))
+    return name in g or any(signature(v).endswith(f" : {name}") for v in g.values())
 
 
 def expected(grid: Mapping[str, Any], m: int, period_s: Fraction) -> dict[str, tuple[str, str | None]]:
@@ -159,7 +165,7 @@ def markdown(rec: Mapping[str, Any]) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("record", type=Path, help="the onsite record (onsite_record.py's OUT/record/onsite.json)")
+    ap.add_argument("record", type=Path, help="the onsite record (its writer's OUT/record/onsite.json)")
     ap.add_argument("--lock", type=Path, default=LOCK, help="the lock a proved cell's statement is held to")
     ap.add_argument("--out", type=Path, help="where the table goes (default stdout)")
     a = ap.parse_args(argv)
