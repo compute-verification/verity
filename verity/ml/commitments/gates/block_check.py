@@ -1,5 +1,5 @@
-"""PoUB's opening of a drawn receipt (`verity.core.protocols.remote_bandwidth`, PROTOCOL.md §6's checks
-1-3 and 5, as §8 deploys them) as one Boolean Definition: what a proof runs on a drawn receipt in place of opening it, so the
+"""PoUB's opening of a drawn receipt (`verity.core.protocols.remote_bandwidth`, the checks of Lean's
+`RemoteAudit.checkOpening`) as one Boolean Definition: what a proof runs on a drawn receipt in place of opening it, so the
 block, its payload, its receipt leaf and every salt and path stay the unit's witness and the verifier reads the unit's
 verdict.
 
@@ -27,29 +27,30 @@ leaf's and the payload's salts (192 bytes each) and their paths, each padded wit
 
 **What it proves**, each check a flag of the verdict:
 
-- *receipt-path* (check 2): the receipt leaf, hidden under ``salts[0]`` (`gates.hm96` over its sha512/row/v2 digest,
+- *receipt-path*: the receipt leaf, hidden under ``salts[0]`` (`gates.hm96` over its sha512/row/v2 digest,
   `receipts.hidden`), opens at rank and position pos >> 4 to ``rroot`` in the tree of domain id ``rdom`` (the pass's seed
   and plan, `receipts.domain`) at depth ``rdepth``; and the plan row holds j at pos: plan[pos] = j (pos < P, j < 2^16).
-- *codec* (check 3): every word w of ``block`` (bytes [S w, S (w + 1)), S = N / 8, of its W = BYTES / S) is below
+- *codec*: every word w of ``block`` (bytes [S w, S (w + 1)), S = N / 8, of its W = BYTES / S) is below
   p = 2^N - C and decodes to ``payload``'s word w (`codec.decode_word`): x -> rho^-1(x) - c_r - t_w mod p for r = K - 1
   ... 0, and, ``MASKED``, x -> sigma_K(x) after each round r >= 1, with t_w = t0 + w tau + b mod p, b = 0 unless
   ``bound``'s bit 0, then b_j(c_a): LE(SHA-512(DOMAIN || u8 len(name) || name || seed || u32be 2^32 - 4 || u64be j || d ||
   coin || u32be 0)) mod p, d = sha512/row/v2 of the payload (`codec.binding`, `codec.digest`). So the block is
   ``codec.decode(block, j, key, d, coin) == payload`` when bound, and ``codec.decode(block, j, key) == payload`` when not.
-- *payload-path* (check 3): the payload, hidden under ``salts[1]`` over the same d, opens at rank ``prank`` and position j
+- *payload-path*: the payload, hidden under ``salts[1]`` over the same d, opens at rank ``prank`` and position j
   to ``proot`` in the tree of domain id ``pdom`` at depth ``pdepth``; and, when bound, at rank and position ``vrank`` to the
   value commitment ``vroot`` in ``vdom`` at ``vdepth``: the payload is the committed KV the circuit wrote to block j, the
   payload row the memory-map unit holds to the step's values under the layout (its ``pay`` row at the place
   `requirement_units.map_value_leaves` names block j).
-- *receipt* (check 5): the sketch-sha512 receipt of the block (`receipts.SketchReceipter`): y = SHA-512(prefix || u64be j ||
+- *receipt*: the sketch-sha512 receipt of the block (`receipts.SketchReceipter`): y = SHA-512(prefix || u64be j ||
   sigma), its chaining value from ``mid``, sigma ROWS int32 little-endian, sigma_r = sum_u (-1)^(signs[r][u]) int8(block[u]),
   is ``leaf[pos & 15]`` (pos & 15 < LEAF).
 
-Check 1 is the unit's shape: every port has its fixed size, and the public row is the verifier's. The verdict word is bit 0
-the four checks' AND (accepted) and bits 1-4 each check's failure in that order (`VERDICT`), bits 5-15 zero, within the 16-bit
-size class, the least public one; `verdict` reads it as §6's names, None for accepted or the first check that failed. A field's name is kv/v0's
-(p512 = 2^512 - 569, p1024 = 2^1024 - 105); ``toy32`` (2^32 - 5) is circuit-check's and the tests' binding with a short block
-(``BYTES`` below 4,096), the same circuit on small words, never deployed.
+The unit's shape is `RemoteAudit.checkOpening`'s first check (malformed): every port has its fixed size, and the public
+row is the verifier's. The verdict word is bit 0 the four checks' AND (accepted) and bits 1-4 each check's failure in
+that order (`VERDICT`), bits 5-15 zero, within the 16-bit size class, the least public one; `verdict` reads it as
+`VERDICT`'s names, None for accepted or the first check that failed. A field's name is kv/v0's (p512 = 2^512 - 569,
+p1024 = 2^1024 - 105); ``toy32`` (2^32 - 5) is circuit-check's and the tests' binding with a short block (``BYTES``
+below 4,096), the same circuit on small words, never deployed.
 
 **The plan link.** The plan row is the one witness row the verifier holds outside the unit: a row's commitment is
 hm96-sha512/row/v2, so under the salt of another commitment of the same words it has that commitment's ``b || c``, and the
@@ -79,7 +80,7 @@ the receipt ROWS sketch rows of about 9 BYTES ANDs each and one compression (0.6
 ceil((64 LEAF + 17) / 128) compressions, each hm96 leaf four, each read's leaf two and each level three, so DR + DP + DV
 levels. The Flock lowering adds about half again, ANDs on identical operands (circuit-check's redundant-gates/boolean).
 At A7's binding (p512/k2 unmasked, 4,096-byte blocks, 16 rows, LEAF 16, P 48, DR 2, DP 5, DV 6) the unit lowers to
-29,142,550 ANDs, k_log 26, within Flock's K_MAX of 27: checks 1-3 and 5 are one unit. p1024/k3/masked would be past K_MAX.
+29,142,550 ANDs, k_log 26, within Flock's K_MAX of 27: the four checks are one unit. p1024/k3/masked would be past K_MAX.
 
 `opening_check` is the reference, over an instance's u16 words; `opening_args` an instance's arguments, `opening_public` its
 public rows' (the verifier's own), `opening_rows` its rows (Flock's ``in_rows`` params), `row_words` its rows' words and
@@ -124,7 +125,7 @@ SALT_BYTES = 192
 PER_LEAF = 16
 #: a read's position is a u32 (uint 1 ... 4 bytes)
 POSITION_BYTES = 4
-#: the verdict word's bits 1 ... 4: each check's failure, in the order §6 checks them (`audit.FAILURES`' names)
+#: the verdict word's bits 1 ... 4: each check's failure in `RemoteAudit.checkOpening`'s order, `audit.FAILURES`' names
 VERDICT = ("receipt-path", "codec", "payload-path", "receipt")
 #: a carry-save tree commits a form longer than this; a ripple carry, one longer than CARRY
 LIMIT, CARRY = 6, 4
@@ -579,7 +580,7 @@ def _opening_body(B, S, *colls):
     pay, jb, pos = X.refs(a["payload"]), X.refs(a["j"]), X.refs(a["pos"])
     j64, zero = X.coll(Array(64, BIT), jb), X.bit[0]
 
-    # check 3: the payload's digest, its block's binding offset and every word's decode
+    # codec: the payload's digest, its block's binding offset and every word's decode
     d = _row_digest(B, X, pay)
     b = B.call(bind(CodecBinding, N=S.N, C=S.C), a["bound"][0], X.coll(Array(256, BIT), X.refs(a["seed"])), j64, d,
                X.coll(Array(256, BIT), X.refs(a["coin"])))
@@ -598,7 +599,7 @@ def _opening_body(B, S, *colls):
         axes += (None,)
     oks = B.batch(bind(CodecWord, N=S.N, C=S.C, K=S.K, MASKED=S.MASKED), *args, X.coll(Array(W, F), pay), axes=axes + (0,))
 
-    # check 5 and the plan entry: the block's sketch receipt from the pass's prefix, entry pos & 15 of the leaf; plan[pos] = j
+    # receipt and the plan entry: the block's sketch receipt from the pass's prefix, entry pos & 15 of the leaf; plan[pos] = j
     sig = X.refs(B.batch(bind(SketchRow, BYTES=S.BYTES), X.coll(Array(8 * S.BYTES, BIT), X.refs(a["block"])),
                          X.coll(Array(S.ROWS, Array(S.BYTES, BIT)), X.refs(a["signs"])), axes=(None, 0)))
     data = _u64be(jb) + _octets(sig)
@@ -608,7 +609,7 @@ def _opening_body(B, S, *colls):
     match = B.call(bind(LeafMatch, LEAF=S.LEAF, P=S.P), y, X.coll(Array(S.LEAF, Array(512, BIT)), leaf),
                    X.coll(U16, pos[:4] + [zero] * 12), X.coll(Array(S.P, U16), X.refs(a["plan"])), a["pos"], j64)
 
-    # check 2: the receipt leaf, hidden under its salt, on its path to the pass's root at rank and position pos >> 4
+    # receipt-path: the receipt leaf, hidden under its salt, on its path to the pass's root at rank and position pos >> 4
     salts = X.refs(a["salts"])
     hl = X.refs(B.call(Hm96Sha512Leaf, _row_digest(B, X, leaf), _salt(X, salts[:8 * SALT_BYTES])))
 
@@ -621,7 +622,7 @@ def _opening_body(B, S, *colls):
 
     r = read(S.DR, "rroot", "rdom", X.coll(DIGEST, hl[1024:]), pos[4:], pos[4:], "rdepth", "rpath")
 
-    # check 3: the payload, hidden under its salt, on its path to the payload root (or its append's) at its rank and position
+    # payload-path: the payload, hidden under its salt, on its path to the payload root (or its append's) at its rank and position
     # j, and, bound, to the value commitment at its rank and position
     hp = X.coll(DIGEST, X.refs(B.call(Hm96Sha512Leaf, d, _salt(X, salts[8 * SALT_BYTES:])))[1024:])
     p = read(S.DP, "proot", "pdom", hp, X.refs(a["prank"]), jb, "pdepth", "ppath")
@@ -633,7 +634,7 @@ def _opening_body(B, S, *colls):
 BlockOpeningCheck = CompositeDefinition(
     "BlockOpeningCheck", 1, ("N", "C", "K", "MASKED", "BYTES", "ROWS", "LEAF", "P", "DR", "DP", "DV"), _opening_signature,
     _opening_body, conformance="exact-model-tested",
-    doc="A drawn receipt's opening (remote_bandwidth §6 checks 1-3 and 5): the receipt leaf on its path to the pass's root "
+    doc="A drawn receipt's opening (`RemoteAudit.checkOpening`'s four checks): the receipt leaf on its path to the pass's root "
         "and plan[pos] = j (receipt-path); every word of block below p and decoding to payload under the codec key at j, with "
         "b_j(c_a) of the payload's own digest and coin if bound (codec); the payload on its path to the payload root or its "
         "append's and, if bound, to the value commitment (payload-path); the block's sketch receipt the leaf's entry pos & 15 "

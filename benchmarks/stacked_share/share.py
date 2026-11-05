@@ -14,7 +14,8 @@ products are the attention row's Q′K′ᵀ, H·D a (query row, key) pair, and 
 s8 step's `PAD` (`products_coefficients`, as `products_pass.py` counts the Program), and nothing else's: a MAC by a weight is
 a linear map, free.
 
-R_cap comes from `units.py`'s units for one model and a served trace (`benchmarks/serve_bandwidth/mix.py`'s mix.json). A step's
+R_cap comes from `units.py`'s units for one model and a served trace's mix.json (each engine step's timed span and
+scheduled rows, with the trace's arguments and the KV pool's size). A step's
 units are
 
     token T + sample X + A (r0 T + b_q Q + b_kv K + w0 n + w_start n0 + b_qp Qp)
@@ -24,7 +25,7 @@ step), n its requests, n0 its prefills from position 0, Q its token rows' keys, 
 attention calls a request makes a step (a layer each, on every rank).
 Over the trace the totals are exact. T and K are measured; X is the output tokens; Q is the sum over the trace's requests of
 P (P + 1) / 2 + the sum over its decodes t = 1 .. O - 1 of P + t (a prompt token at position i reads i keys however vLLM chunks
-the prompt), on the trace's own requests (`benchmarks/kv_filler/serve.py`'s `trace`), and Qp the same sum with each row's keys
+the prompt), on the trace's own requests (`trace`), and Qp the same sum with each row's keys
 padded; n is the decoding requests a step
 (measured) plus one a request's prefill (n0: one a request), plus a bound on the prompts vLLM split over two steps (`exact`: K's excess over the keys
 one prefill a prompt reads is those splits' rereads, which it holds to the bound). A step's own Q and n with prefill aren't
@@ -47,6 +48,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
 import sys
 from collections import Counter
 from fractions import Fraction
@@ -142,18 +144,38 @@ def step_units(m: Mapping[str, Any], *, T: Any, X: Any, Q: Any, K: Any, n: Any, 
     return add(scale(m["token"], T), scale(m["sample"], X), att)
 
 
-def trace_requests(mix: Mapping[str, Any]) -> list[dict]:
-    """The trace mix.json served: `serve.trace` again from its arguments (seeded, so the same requests)."""
-    here = Path(__file__).resolve().parents[1]
-    sys.path.insert(0, str(here / "kv_filler"))
-    from serve import trace  # noqa: E402
+def trace(seed: int, seconds: float, burst_gap_s: float, burst_mean: int, prompts, outputs) -> list[dict]:
+    """Bursts at exponential gaps (mean `burst_gap_s`), each of 1 + Poisson(`burst_mean` − 1) requests arriving
+    together, prompt and output lengths sampled from the lists: the bursty trace the served runs drew, request for
+    request."""
+    rng = random.Random(seed)
+    t, out = rng.expovariate(1 / burst_gap_s) * 0.25, []
+    while t < seconds:
+        n = 1
+        lam = burst_mean - 1
+        # Knuth's Poisson
+        L, k, p = pow(2.718281828459045, -lam), 0, 1.0
+        while True:
+            p *= rng.random()
+            if p <= L:
+                break
+            k += 1
+        n += k
+        for _ in range(n):
+            out.append({"id": f"r{len(out)}", "t": t, "prompt": rng.choice(prompts), "output": rng.choice(outputs),
+                        "tokens_seed": rng.randrange(1 << 30)})
+        t += rng.expovariate(1 / burst_gap_s)
+    return out
 
+
+def trace_requests(mix: Mapping[str, Any]) -> list[dict]:
+    """The trace mix.json served: `trace` again from its arguments (seeded, so the same requests)."""
     a = mix["args"]
     reqs = trace(a["seed"], a["seconds"], a["burst_gap_s"], a["burst_mean"], a["prompts"], a["outputs"])
     t = mix["trace"]
     got = (len(reqs), sum(r["prompt"] for r in reqs), sum(r["output"] for r in reqs))
     if got != (t["requests"], t["prompt_tokens"], t["output_tokens"]):
-        raise ValueError(f"serve.trace gives {got} (requests, prompt, output tokens), mix.json served {t}")
+        raise ValueError(f"trace gives {got} (requests, prompt, output tokens), mix.json served {t}")
     return [{"prompt": r["prompt"], "output": r["output"]} for r in reqs]
 
 

@@ -6,7 +6,7 @@ plus weight-read bytes as an extra. They are the credited lines (``CREDITED``). 
 under ids of their own (README.md): ``topup=False`` (or ``VERITY_VLLM_BENCH_TOPUP=off``) never starts the top-up, and
 ``spans=True`` (or ``VERITY_VLLM_BENCH_SPANS=on``) times each step's parts (`step_spans.py`). Either refuses credit:
 under a credited id its gate fails, so the run has no line. ``topup_sms=F`` (or ``VERITY_VLLM_BENCH_TOPUP_SMS``) places
-the top-up on F SMs of its own and the engine on the rest (`kv_filler/green.py`, green contexts), split before vLLM
+the top-up on F SMs of its own and the engine on the rest (`green.py`, green contexts), split before vLLM
 starts; 0 interleaves it with the engine on every SM. A partition whose confinement check fails, or a run off the
 step's stream, fails the gate.
 
@@ -174,11 +174,11 @@ class _Installed:
 
     def _partition(self, fill_sms: int) -> None:
         """The SMs split before vLLM starts: the step's stream torch's current one, its SM count the device's, and the
-        stack's side streams on its context. The top-up library is opened bare here (kv_filler's bench, which wraps it,
+        stack's side streams on its context. The top-up library is opened bare here (`topup.py`, which wraps it,
         puts word_codec first on sys.path, ahead of the stack's install); `Topup` opens the same one at `ready`."""
         import torch
 
-        from benchmarks.kv_filler import green
+        from benchmarks.vllm_encoded import green
 
         self.green_lib = SimpleNamespace(so=ctypes.CDLL(str(Path(self.libs["topup_lib"]).resolve())))
         self.green, self.step_stream, self.new_stream = green.partition(self.green_lib, torch, fill_sms)
@@ -191,13 +191,13 @@ class _Installed:
     def ready(self, target: Any) -> None:
         import torch
 
-        from benchmarks.kv_filler.bench import FILL_WARPS, RUN_SEED, Topup, mode_of
+        from benchmarks.vllm_encoded.topup import FILL_WARPS, RUN_SEED, Topup, mode_of
         from verity_vllm.engine import handle
 
         if self.install.stack is None:
             raise RuntimeError("bandwidth benchmark arm did not install during model loading")
         if self.green is not None:
-            from benchmarks.kv_filler import green
+            from benchmarks.vllm_encoded import green
 
             self.green["spread"] = green.spread_checks(self.green_lib, torch, self.step_stream, self.new_stream,
                                                        self.green)
@@ -236,7 +236,7 @@ class _Installed:
             HERE / "stack.py",
             HERE / "step_spans.py",
             HERE / "paged.cu",
-            HERE.parent / "kv_filler" / "green.py",
+            HERE / "green.py",
             *(Path(self.libs[name]) for name in ("wt_lib", "reader_lib", "paged_lib", "topup_lib")),
         ])
 

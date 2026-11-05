@@ -12,7 +12,7 @@ appended  a block `kv_append` completes, once its step's forward and frees are d
           taken it back by then, and a block re-keyed: written again in its slot, the same payload at a fresh j, once
           its j is as old as the lifetime cap.  Each step's go out as one append (``on_append``), which the session
           sends and the device encodes in place once its coin arrives (`encoded`)
-written   an appended block, once its encode has landed (deferred residency, remote_bandwidth's ``PROTOCOL.md`` §4):
+written   an appended block, once its encode has landed (deferred residency, remote_bandwidth's ``memory_map``):
           at the step whose line is open when the encode lands, the step before the first whose reads see the block
           encoded.  Until then it is plaintext, in no record and uncredited, as a dirty block is
 freed     an appended block (written since the map began, j >= N) of a page `kv_free` returns, though its bytes stay
@@ -56,7 +56,7 @@ plans before the first pass of window w, the first window that could not hold it
 write waits for its encode.  No margin past L is needed, provided the window of the next pass is open when the line
 closes (the binder takes the verifier's messages before `kv_append`).
 
-The header names the remote audit's `Registration.digest`, the one the verifier gives `NodeMemory.begin_window` for the
+The header names PoUB's `Registration.digest`, the one the verifier gives `NodeMemory.begin_window` for the
 session's first window; without it there is no map.  Its indices are one session's (`audit.AuditRun`: a later session
 over the store starts again from N), so a store records one map.
 
@@ -86,7 +86,7 @@ def record(store: Any, path: str | Path | None = None, registration: bytes | Non
            on_append: Callable[[int, tuple[int, ...], tuple[bytes, ...], list[bytes]], None] | None = None) -> MemoryMap:
     """Start ``store``'s memory map (`NodeMemory.record_memory_map`; ``store`` a `verity_vllm.protocols.remote_bandwidth.registry.NodeMemory`)."""
     if registration is None:
-        raise ValueError("a memory map names the store's registration: pass the remote audit's Registration.digest, "
+        raise ValueError("a memory map names the store's registration: pass PoUB's Registration.digest, "
                          "the one the session's first window chains from (NodeMemory.begin_window)")
     if store.memory_map is not None:
         raise RuntimeError("the store already records a memory map")
