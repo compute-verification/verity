@@ -56,7 +56,7 @@ from hypothesis import strategies as st
 import verity_difftest as D
 from verity_difftest import protocol as PR
 from verity.core.protocols.profile import Bernoulli, Stratified, Stratum
-from verity.core.protocols.sampled_proofs import service
+from verity.core.protocols.sampled_proofs import challenger as CH, service
 from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as DR, hello as H, hidden_draw as HD,
                                                             partition as P, produced as PD, proofs as PF,
                                                             registered as G, registration as R)
@@ -967,6 +967,28 @@ def public_units(j):
     if not (isinstance(indices, list) and all(map(_nat, indices))):
         raise D.Reject("indices is not a list of natural numbers")
     return {"exactly": PF.units_exactly(units, indices)}
+
+
+def file_population(j):
+    """`FilePart.why` (`proofs.population_why`): the registration's strata over the program and query
+    (`partition.strata`), against a public file's units (`units.indices`)."""
+    j = _json(j)
+    if not isinstance(j, dict):
+        raise D.Reject("not an object")
+    desc = _obj(j.get("program"), "program")
+    indices = j.get("indices")
+    if not (isinstance(indices, list) and all(map(_nat, indices))):
+        raise D.Reject("indices is not a list of natural numbers")
+    if not desc:
+        raise D.Reject("not a program descriptor")
+    sha = PO.program_sha512(desc)
+    if sha not in PROGRAMS:
+        raise RuntimeError(f"the strategy drew a descriptor this file has no program for: {sha[:16]}")
+    try:
+        strata = P.strata(PROGRAMS[sha], _obj(j.get("query"), "query"))
+    except (P.QueryRefused, ValueError) as e:
+        raise D.Reject(str(e)) from None
+    return {"why": PF.population_why(indices, strata)}
 
 
 def bound(j):
@@ -1998,6 +2020,8 @@ UNITS = ("units: the public file's units.indices are not the registration's popu
 #: `OneStageZk.POPULATION_ORDER`
 POPULATION_ORDER = ("population-order: the program's proof blocks under the query are not the registration's "
                     "population units in order")
+#: `OneStageZk.sessionTables`: the tables of the one session v2 reads, its statement's (`proofs.STATEMENT`) one
+V2_TABLES = ["circuit"]
 
 
 #: `OneStageZk.KEY_PARAMS`
@@ -2020,11 +2044,12 @@ def decode_params_v2(j) -> dict:
 
 
 def _challenger_draw(rng: random.Random, s: Setup, law: dict, rec: dict, trees: int = 1,
-                     seed: int = 0) -> tuple[Drawn, dict, dict]:
+                     keys: list[str] | None = None, seed: int = 0) -> tuple[Drawn, dict, dict]:
     """A draw under `law` from the coins of a challenger session its ledger opens withheld, under the key of `seed` at
     the deployed parameters, released after `rec`'s digest and read as `draw_first` reads them, the session's
-    challenger sampling and opening `trees` coin trees too (`TreeSession`): the session, the draw, and the evidence's
-    `coins` (the session's record without the key, which the verifier's parameters name)."""
+    challenger sampling and opening `trees` coin trees too (`TreeSession`) on v2's one table (`OneStageZk.sessionTables`),
+    their links opened after `keys` (that table when none): the session, the draw, and the evidence's `coins` (the
+    session's record without the key, which the verifier's parameters name)."""
     mine = DR.derive(s.program, s.query, law, None)
 
     def reads(coins) -> bytes:
@@ -2036,8 +2061,8 @@ def _challenger_draw(rng: random.Random, s: Setup, law: dict, rec: dict, trees: 
             return b
         draw_first(OwnRandomness(source), mine, s.population)
         return bytes(got)
-    d = Drawn(rng, before=True, after=bytes.fromhex(R.digest(rec)), reads=reads, trees=trees, params=[DEPLOYED],
-              seed=seed)
+    d = Drawn(rng, before=True, after=bytes.fromhex(R.digest(rec)), reads=reads, trees=trees, tables=V2_TABLES,
+              keys=keys, params=[DEPLOYED], seed=seed)
     at = [0]
 
     def source(k: int) -> bytes:
@@ -2052,13 +2077,14 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     on the proofs. An audit v1 accepts on the verdict its evidence hands in and its challenger's coins is, in v2: refused
     for naming verdicts; refused, before any tree is read, with them replaced by proofs naming no session or two (the
     drawn units are proved in one session, `oneSession`); rejected by the session's own verdict when its files are not
-    a statement's; refused before the session is verified when its coins are not a tree the challenger logged, the
-    public file is not the registration's (`publicHeld`, its codes Python's `matches_public`'s), or its units are not
-    the population's in order (`unitsHeld`, `proofs.units_exactly`); refused when a file it
-    names is in no blob, as the public file the parameters name is when the blobs hold another, or its sessions are not
-    the evidence's. The public file is the parameters', committed before any coin: evidence naming one of its own, or
-    parameters naming none, are refused. `test_proofs.py` holds the verdicts to `verify`'s on a real session, and
-    `test_challenger_difftest.py` the trees' check to its Python."""
+    a statement's; refused before the session is verified when its coins are not a tree the challenger logged or its
+    link was opened after other keys than its one table (`LINK_TABLES`; the `root_B` length a statement fixes,
+    `LINK_ROOT_LEN`, these files set up none to hold), the public file is not the registration's (`publicHeld`, its
+    codes Python's `matches_public`'s), or its units are not the population's in order (`unitsHeld`,
+    `proofs.units_exactly`); refused when a file it names is in no blob, as the public file the parameters name is when
+    the blobs hold another, or its sessions are not the evidence's. The public file is the parameters', committed before
+    any coin: evidence naming one of its own, or parameters naming none, are refused. `test_proofs.py` holds the verdicts
+    to `verify`'s on a real session, and `test_challenger_difftest.py` the trees' check to its Python."""
     s = SETUPS[3]
     law = {"k": 2, "law": "subset"}
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
@@ -2066,8 +2092,8 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     rng = random.Random("v2-verdicts")
     circuit, public = b"not a circuit file", _public_of(rec)
 
-    def audit(trees: int) -> tuple[Drawn, dict, dict, dict]:
-        ch, d, coins = _challenger_draw(rng, s, law, rec, trees)
+    def audit(trees: int, keys: list[str] | None = None) -> tuple[Drawn, dict, dict, dict]:
+        ch, d, coins = _challenger_draw(rng, s, law, rec, trees, keys)
         proved = DR.proved(d)
         evidence = {"coins": coins, "draw": d, "instances": len(proved), "proved_units": proved,
                     "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
@@ -2134,6 +2160,12 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
         "reject", "evidence: the keys of the evidence's proofs are not sessions")
     got = run(one, p=p2 | {"proofs": {k: v for k, v in p2["proofs"].items() if k != "public"}})
     assert got == ("reject", "params: the keys of proofs are not circuit, public, registered"), got
+    for keys in (["circuit", "z"], ["a", "circuit"], ["circuit-00"], []):
+        ch_k, _, base_k, p_k = audit(1, keys)
+        extra = D.canonical(ch_k.trees[0].record).encode()
+        assert run(base_k | {"proofs": proofs(["s"], extra), "sessions": ["s"]},
+                   blobs_=[circuit.hex(), public.hex(), extra.hex()], p=p_k) == (
+            "reject", f"proofs: session s's coins are not the challenger's: {CH.LINK_TABLES}"), keys
 
 
 def test_v2_refuses_a_population_out_of_order(server, server_v2):
@@ -2733,6 +2765,30 @@ PUBLIC_UNITS = D.Port(PIECES, "public_units", public_units, st.one_of(
     st.builds(lambda u, i: {"indices": i, "units": u}, st.lists(st.lists(st.integers(-1, 6), max_size=3), max_size=3),
               st.lists(st.integers(-1, 6), max_size=6)),
     JSON), package=PACKAGE)
+
+
+@st.composite
+def file_populations(draw) -> dict:
+    """The file_population piece's input on a random partition: the public file's units mostly its population in order,
+    else with one dropped, added or moved, or all shifted by one."""
+    desc, query, n = draw(partitions())
+    indices = list(range(n))
+    kind = draw(st.integers(0, 7))
+    if kind == 4 and n:
+        del indices[draw(st.integers(0, n - 1))]
+    elif kind == 5:
+        indices.insert(draw(st.integers(0, n)), draw(st.integers(0, n + 1)))
+    elif kind == 6 and n > 1:
+        i = draw(st.integers(0, n - 2))
+        indices[i], indices[i + 1] = indices[i + 1], indices[i]
+    elif kind == 7:
+        indices = [u + 1 for u in indices]
+    return {"indices": indices, "program": desc, "query": query}
+
+
+FILE_POPULATION = D.Port(PIECES, "file_population", file_population, st.one_of(file_populations(), file_populations(),
+                                                                                  JSON), package=PACKAGE)
+
 STRATA = st.lists(st.builds(lambda name, size, dk: {"k": max(0, size - dk), "name": name, "size": size},
                             st.sampled_from(["a", "b", "c", "unit"]), st.integers(0, 14), st.integers(0, 14)),
                   min_size=1, max_size=3, unique_by=lambda s: s["name"])
@@ -3410,7 +3466,8 @@ pieces = D.server_fixture(DECODE)
 
 PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (PRODUCED, 500), (KNOWN_PORT, 300),
-              (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500),
+              (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (FILE_POPULATION, 400),
+              (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
               (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (FITS, 400),

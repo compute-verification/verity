@@ -18,6 +18,7 @@ public import SampledProofs.Rate
 public import SampledProofs.HiddenDraw
 public import SampledProofs.Select
 public import SampledProofs.Slots
+public import SampledProofs.FilePart
 public import SampledProofs.Service
 public import SampledProofs.Run
 public import SampledProofs.Stream
@@ -30,6 +31,7 @@ public import SampledProofs.ChallengerSession
 public import SampledProofs.ChallengerCoins
 public import SampledProofs.ChallengerDraw
 public import SampledProofs.ChallengerTrees
+public import SampledProofs.ChallengerInnerTrees
 public import SampledProofs.Wires
 public import SampledProofs.WiresSpan
 public import SampledProofs.WiresSound
