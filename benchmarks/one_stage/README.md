@@ -228,7 +228,8 @@ negatives.
   the auditor's record of its network certifier (`CERTIFIER_KEY`, `certifier-key/v1`) and that the
   auditor's registration of the deployment (`SITE_REGISTRATION`: the registration log's params and the log, which
   checks) holds that key for a network certifier its log places; and `auditor-listing`, that each circuit file the
-  period lists is, by SHA-512, the one its audit's sessions were verified against. `certifier-key` closes only where the
+  period lists is, by SHA-512, the one its sessions were verified against: an audit's as V3c's `period.json` states
+  it, the scan's as the certifier piece's `scan-circuits.json` does. `certifier-key` closes only where the
   lock holds PeriodLeakRegistered at its pinned statement taking hA, hr and hkey as `auditor-record` and that check
   holds; while it is open, an accepted network verdict is not established, its Lean answer's accept beside it, and its
   bound conditional on `certifier-key` by name. Where `auditor-listing` doesn't hold, the verdict is not established

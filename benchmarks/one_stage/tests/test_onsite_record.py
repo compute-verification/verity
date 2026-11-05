@@ -1516,6 +1516,8 @@ def test_auditor_record_doesnt_hold_where_the_periods_params_arent_by_sha512_tho
 
 #: the circuit files the period's one audit lists, as `records_audit` pins them
 FILES = [{"sha512": "e1" * 64, "template": "toy-a"}, {"sha512": "e2" * 64, "template": "toy-b"}]
+#: the scan's circuit files the period lists, as `scan_period.scan_circuits` pins them
+SCAN_FILES = [{"sha512": "f1" * 64, "template": "scan-a"}]
 
 
 @pytest.mark.parametrize("how, why", [
@@ -1527,19 +1529,26 @@ FILES = [{"sha512": "e1" * 64, "template": "toy-a"}, {"sha512": "e2" * 64, "temp
     ("another audit's period", f"audit 0 lists circuit files, and the run's {OR.PERIOD} is another audit's"),
     ("no period", f"the period lists circuit files, and {OR.PERIOD} or its case's commitment can't be read: "
                   "FileNotFoundError"),
-    ("the scan's files", "the period lists the scan's circuit files (scan_circuits), and the run publishes no record "
-                         "of the files the scan's sessions were verified against"),
+    ("scan: the files verified", None),
+    ("scan: no record", f"the period lists the scan's circuit files (scan_circuits), and {OR.SCAN} or its case's "
+                        "commitment can't be read: FileNotFoundError"),
+    ("scan: another scan's record", f"the period lists the scan's circuit files, and the run's {OR.SCAN} is another "
+                                    "scan's"),
+    ("scan: another file", "the scan's listed circuit files aren't, by SHA-512, those its sessions were verified "
+                           f"against ({OR.SCAN}'s circuits)"),
 ])
 def test_an_accepted_network_verdict_is_established_only_where_each_listed_circuit_file_is_the_one_verified(
         tmp_path, capsys, how, why):
-    """auditor-listing on the run: each circuit file the period's audit lists is, by SHA-512, the one its audit's
-    sessions were verified against, V3c's published period (`OR.PERIOD`), whose registration is the one the case's
-    commitment holds for that audit. Where it holds, the network certifier's accepted verdict stands, the run of
-    record. Where it doesn't, whatever else holds, the verdict is not established, its Lean answer's accept beside it,
-    with no bound and nothing conditional on the listing: another file, a file fewer, the period of another audit, no
-    published period, or the scan's files listed, of which the run publishes no record."""
+    """auditor-listing on the run: each circuit file the period lists is, by SHA-512, the one its sessions were
+    verified against: an audit's as V3c's published period (`OR.PERIOD`) states it, whose registration is the one the
+    case's commitment holds for that audit, and the scan's as the certifier piece's record (`OR.SCAN`) does, whose
+    registration is the one the commitment holds for the scan. Where it holds, the network certifier's accepted verdict
+    stands, the run of record. Where it doesn't, whatever else holds, the verdict is not established, its Lean answer's
+    accept beside it, with no bound and nothing conditional on the listing: another file, a file fewer, the period of
+    another audit, no published period, or for the scan's files no record, another scan's record or another file."""
+    scan = how.startswith("scan: ")
     files = FILES if how != "one file fewer" else FILES[:1]
-    listed = {"audits": [{"circuits": files}]} | ({"scan_circuits": FILES} if how == "the scan's files" else {})
+    listed = {"audits": [{"circuits": files}]} | ({"scan_circuits": SCAN_FILES} if scan else {})
     out = accepted(tmp_path, dict(PUBLIC, held=["free", "circuit"]), params=listed)
     verified = [FILES[0], dict(FILES[1], sha512="e3" * 64)] if how == "another file" else FILES
     registration = NO_ADVICE if how != "another audit's period" else {"format": NO_ADVICE["format"],
@@ -1547,6 +1556,12 @@ def test_an_accepted_network_verdict_is_established_only_where_each_listed_circu
     if how != "no period":
         (out / OR.PERIOD).parent.mkdir(parents=True, exist_ok=True)
         (out / OR.PERIOD).write_text(json.dumps({"registration": registration, "circuits": verified}))
+    if scan and how != "scan: no record":
+        held = [dict(SCAN_FILES[0], sha512="f3" * 64)] if how == "scan: another file" else SCAN_FILES
+        window = {} if how != "scan: another scan's record" else {"format": NO_ADVICE["format"],
+                                                                  "window": {"circuit": "ef" * 64}}
+        (out / OR.SCAN).write_text(json.dumps({"format": "verity/scan-circuits/v1", "registration": window,
+                                               "circuits": held}))
     assert main([str(out)]) == 0
     rec = json.loads((out / "record" / "onsite.json").read_text())
     got, nv = rec["checked"][OR.AUDITOR_LISTING], rec["verdicts"]["the network certifier"]
@@ -1555,7 +1570,7 @@ def test_an_accepted_network_verdict_is_established_only_where_each_listed_circu
     line = json.loads(capsys.readouterr().out.strip()[7:])
     if why is None:
         assert (got["listed"], nv["verdict"], rec["of_record"]["holds"], "conditional_on" in rec["of_record"]) == (
-            2, "accept", True, False)
+            len(FILES) + (len(SCAN_FILES) if scan else 0), "accept", True, False)
         assert rec["bound"]["of_record"]["K"] == K and line["verdicts"]["the network certifier"] == "accept"
         return
     assert {k: nv[k] for k in ("protocol", "verdict", "answer", "open", "why")} == {

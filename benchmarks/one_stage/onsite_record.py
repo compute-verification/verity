@@ -52,8 +52,8 @@ registration (``--site-registration``) holds that key for a network certifier it
 inputs, each named by its SHA-512 (``from``), and the period's parameters, held by SHA-512 to those its check read
 (the composite of record's), never the prover's node or its deployment.json; `certifier-key` closes only where it
 holds and the lock holds that guarantee taking them.
-`auditor-listing` (`auditor_listing`): each circuit file the period lists is, by SHA-512, the file its audit's
-sessions were verified against (`PERIOD`).
+`auditor-listing` (`auditor_listing`): each circuit file the period lists is, by SHA-512, the file its sessions were
+verified against, an audit's (`PERIOD`) or the scan's (`SCAN`).
 
 **Sampled proofs' guarantee** (``sampled_proofs``, `SAMPLED`), from its accepted row's answer, else ``missing``: what
 its draw establishes, ε at δ, per window (``per_window``: its bound at its profile's δ over the window's n proof blocks) and
@@ -310,6 +310,10 @@ AUDIT = Path("v3c-audit") / "window" / "audit.json"
 #: V3c's audit as the network certifier's period reads it, as the run publishes it (`records_audit.py period`): its
 #: registration, and each root template's circuit file by the SHA-512 a5 held every session of its members to
 PERIOD = Path("v3c-audit") / "period.json"
+#: the scan's counterpart of `PERIOD`, as the certifier piece publishes it beside the scan's circuit files: the scan's
+#: registration, as the case's commitment holds it (``windows[0]``), and each root template's circuit file by the
+#: SHA-512 every session of its members was held to (`scan_period.scan_circuits`)
+SCAN = CASE.parent / "scan-circuits.json"
 CREDIT = ("sampled proofs credits only the drawn members whose --registered file named every port of their circuit at "
           "the window's committed roots: the audit completed it from the auditor's record before any session "
           "(`a5.complete_drawn`, its record's checks_after_draw.registered_complete), and the member's Lean verdict of "
@@ -412,14 +416,14 @@ CHECKED = {
                      "for the network certifier's case), never the prover's node or its deployment.json. Where an "
                      "input is missing or doesn't match, it doesn't hold, and certifier-key stays open"),
     AUDITOR_LISTING: ("each circuit file the period lists, an audit's (circuits) or the scan's (scan_circuits), is by "
-                      "SHA-512 the file its audit's sessions were verified against: a5's per-template pin, which "
+                      "SHA-512 the file its sessions were verified against: an audit's, a5's per-template pin, which "
                       "records_audit.py period publishes in V3c's period.json (`PERIOD`) for the audit whose "
-                      "registration it is. It compares SHA-512s and doesn't re-hash the files: the period's listing "
-                      "and that period.json are both the auditor's own outputs in OUT. It holds where the period lists "
-                      "none, and not where the run has no case of the period to say what it lists. No published record "
-                      "states the files the scan's sessions were verified against, so it doesn't hold where the period "
-                      "lists the scan's. Where it doesn't hold the network verdict is not established and there is no "
-                      "bound (`LISTING_UNMET`)"),
+                      "registration it is; the scan's, its stagers' pins, which the certifier piece publishes in "
+                      "scan-circuits.json (`SCAN`) for the scan whose registration it is. It compares SHA-512s and "
+                      "doesn't re-hash the files: the period's listing and those records are the auditor's own outputs "
+                      "in OUT. It holds where the period lists none, and not where the run has no case of the period "
+                      "to say what it lists, or no record of the files it lists. Where it doesn't hold the network "
+                      "verdict is not established and there is no bound (`LISTING_UNMET`)"),
 }
 #: the guarantees the tight K rests on, by their names in `LOCKS`: PeriodLeakRegistered's count, at the values the
 #: registration opens at its registered inputs, is K's; PeriodLeakAccepted's is the same count at the trace's values
@@ -1360,8 +1364,9 @@ def auditor_record(params: Any, composed: str | None, key: Path | None, site: Pa
 def auditor_listing(out: Path, case: Any) -> dict[str, Any]:
     """`CHECKED`'s auditor-listing on the run: each audit's circuit files its ``case``'s params list (``circuits``),
     against the run's published V3c period (`PERIOD`) where the case's commitment holds that period's registration at
-    the audit's place, and the scan's (``scan_circuits``), of which the run publishes no record. ``holds``, ``listed``,
-    how many files the period lists, and ``why`` where it doesn't hold."""
+    the audit's place, and the scan's (``scan_circuits``), against the certifier piece's record of them (`SCAN`) where
+    the commitment holds that record's registration as its scan's (``windows[0]``). ``holds``, ``listed``, how many
+    files the period lists, and ``why`` where it doesn't hold."""
     res: dict[str, Any] = {"is": CHECKED[AUDITOR_LISTING], "holds": False}
     try:
         audits = case["params"].get("audits") or []
@@ -1369,24 +1374,36 @@ def auditor_listing(out: Path, case: Any) -> dict[str, Any]:
         scan = case["params"].get("scan_circuits")
     except (KeyError, TypeError, AttributeError):
         return res | {"why": f"the run has no {CASE} whose params list the period's audits"}
-    if scan is not None:
-        return res | {"why": "the period lists the scan's circuit files (scan_circuits), and the run publishes no record "
-                             "of the files the scan's sessions were verified against"}
-    res["listed"] = sum(len(files) if isinstance(files, list) else 1 for _, files in listed)
-    if not listed:
+    lists = [files for _, files in listed] + ([] if scan is None else [scan])
+    res["listed"] = sum(len(files) if isinstance(files, list) else 1 for files in lists)
+    if not lists:
         return res | {"holds": True}
-    try:
-        period = json.loads((out / PERIOD).read_text())
-        regs = json.loads(bytes.fromhex(case["commitment"]))["audits"]
-    except (OSError, KeyError, TypeError, ValueError) as e:
-        return res | {"why": f"the period lists circuit files, and {PERIOD} or its case's commitment can't be read: "
-                             f"{type(e).__name__}"}
-    for i, files in listed:
-        if i >= len(regs) or regs[i] != period.get("registration"):
-            return res | {"why": f"audit {i} lists circuit files, and the run's {PERIOD} is another audit's"}
-        if files != period.get("circuits"):
-            return res | {"why": f"audit {i}'s listed circuit files aren't, by SHA-512, those its audit's sessions were "
-                                 f"verified against ({PERIOD}'s circuits)"}
+    if listed:
+        try:
+            period = json.loads((out / PERIOD).read_text())
+            regs = json.loads(bytes.fromhex(case["commitment"]))["audits"]
+        except (OSError, KeyError, TypeError, ValueError) as e:
+            return res | {"why": f"the period lists circuit files, and {PERIOD} or its case's commitment can't be "
+                                 f"read: {type(e).__name__}"}
+        for i, files in listed:
+            if i >= len(regs) or regs[i] != period.get("registration"):
+                return res | {"why": f"audit {i} lists circuit files, and the run's {PERIOD} is another audit's"}
+            if files != period.get("circuits"):
+                return res | {"why": f"audit {i}'s listed circuit files aren't, by SHA-512, those its audit's sessions "
+                                     f"were verified against ({PERIOD}'s circuits)"}
+    if scan is not None:
+        try:
+            record = json.loads((out / SCAN).read_text())
+            windows = json.loads(bytes.fromhex(case["commitment"]))["windows"]
+        except (OSError, KeyError, TypeError, ValueError) as e:
+            return res | {"why": f"the period lists the scan's circuit files (scan_circuits), and {SCAN} or its case's "
+                                 f"commitment can't be read: {type(e).__name__}"}
+        if not (isinstance(record, Mapping) and isinstance(windows, list) and windows
+                and record.get("registration") == windows[0]):
+            return res | {"why": f"the period lists the scan's circuit files, and the run's {SCAN} is another scan's"}
+        if scan != record.get("circuits"):
+            return res | {"why": f"the scan's listed circuit files aren't, by SHA-512, those its sessions were "
+                                 f"verified against ({SCAN}'s circuits)"}
     return res | {"holds": True}
 
 
