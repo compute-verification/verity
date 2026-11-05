@@ -77,11 +77,11 @@ theorem seg_hmTail (key : ByteArray) : Seg 128 (hmTail key (vars 0 512) (vars 51
     exact seg_hm3
   exact Seg.bind' seg_hm1 (Seg.bind' h2 (Seg.bind' h3 (Seg.pure' _ _)))
 
-theorem length_symm : ∀ (a b : List Var), (symm a b).length ≤ a.length + b.length
-  | [], ys => by simp [symm]
-  | x :: xs, [] => by simp [symm]
+theorem length_symm : ∀ (a b : List Var), (HmNets.symm a b).length ≤ a.length + b.length
+  | [], ys => by simp [HmNets.symm]
+  | x :: xs, [] => by simp [HmNets.symm]
   | x :: xs, y :: ys => by
-    unfold symm
+    unfold HmNets.symm
     split
     · have := length_symm xs (y :: ys)
       simp only [List.length_cons] at this ⊢
