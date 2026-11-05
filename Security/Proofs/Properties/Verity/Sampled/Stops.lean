@@ -39,11 +39,32 @@ there.
   opening has a first one, which the link's slot picks.
 * **The first stop fixes a cut** (`RoundsReach.run_ret`, `firstStop_skip_log`, `firstStop_fixes`): where every cut is
   past at the first stop no round picks in the play's log, so where the log has an opening, not every cut is past.
+* **Each round picks once** (`firstOpened_append`, `helloSpecs_getElem?_append`, `openedOf_lt`,
+  `picksOnce_readingAt`, `covers_of_length`): where each tree of the log names its streams distinctly, each round of
+  the readings at a layout picks at most one release of the log; and picks after as many logs as the rounds but one
+  are every pick.
+* **The rounds a trace's submissions append** (`foldl_addRoundJ`): each stream's rounds are the submissions on it, in
+  order.
+* **The logs before a stream's openings** (`prefixesWhere`, `length_prefixesWhere`, `mem_prefixesWhere`,
+  `pairwise_prefixesWhere`, `countP_prefixesWhere`, `map_countP_prefixesWhere`, `eq_of_mem_iff_of_sorted`,
+  `filter_logs`): the logs of a log before each of its openings of a stream, as many as the openings, each longer
+  than the one before and the `k`-th with `k` of them; and logs each longer than the one before that are exactly where
+  the log opens the stream are those.
 * **The link's release, then the answered stops'** (`prefix_le`, `firstOpened_ne_none`, `readingAt_served`,
-  `firstStop_order`): at the readings and decoders at an injective layout of distinct tables, where each round picks
-  at most one release of the log, the trace from the first stop releases the link points' bits after a log `L₀`, then
-  each answered stop's coins after a longer log, and every release a round picks is one of those, unless the trace
-  answered all its rounds.
+  `forall₂_zip_right`, `firstStop_order`): at the readings and decoders at an injective layout of distinct tables,
+  where each round picks at most one release of the log, the trace from the first stop releases the link points' bits
+  after a log `L₀`, then each answered stop's coins after a longer log; and where the session's rounds but one are at
+  most the trace's budget, every release a round picks is one of those.
+* **An answered stop's modes** (`RoundsReach.stop_modes`, `RoundsReach.stop_modes_noMiss`): each cut fixed at an
+  answered stop has, on the tape the trace ends on, the most likely message the stop decoded; off the misses, the
+  message the play reveals there.
+* **The answered stops of one stream** (`opening_of_opensAt`, `firstOpened_opening`, `firstOpened_past`,
+  `helloSpecs_bind_append`, `stream_eq`, `rep_ne_session`, `firstOpened_link`, `stream_logs`): at a layout with a link
+  slot, the first stop's log has no opening; and where the opening after it is of the session's stream and the layout
+  has a slot for each of the log's openings of a rep stream, the stops submitting on that stream release their coins
+  after the logs before each of its openings, in order.
+* **The rounds of one stream** (`map_fst_filter_zip`, `rounds_of_logs`): so the rounds a trace appends to a stream are
+  one per opening of it, the `k`-th after the log that has opened it `k` times.
 -/
 
 namespace Verity.Game
@@ -328,6 +349,21 @@ theorem RoundsReach.answers {β : Type} {fin : LiveOutJ J mPts → β} {rootB : 
     rcases List.mem_cons.1 ha with rfl | ha
     · exact ⟨hQ, hs, hB, N, _, ho⟩
     · exact h2 a ha
+
+/-- **An answered stop's modes are the cuts' on the trace's tape**: at a position that keeps the invariant at the
+cuts `Ks₀`, where the rest of a trace runs from the stop after it, its tape rewritten and consumed, each cut fixed at
+the stop has, on the tape the trace ends on, the most likely message the stop decoded; every other cut decoded none
+there (`Pos.modes_eq`, as `RoundsReach.toStop_modes` at a trace's first stop). -/
+theorem RoundsReach.stop_modes {β : Type} {fin : LiveOutJ J mPts → β} {rootB : Array ByteArray}
+    {pts : Fin 2 → Fin mPts → 𝔽} {Ks₀ : Fin R → DigestCut Claims.Msg g} {N : ℕ}
+    {rs : Fin J → Fin 2 → List Flock.Round} {q : Pos g σ Claims.Msg (Fin R)} (hq : q.Inv Ks₀)
+    {φ : CoinTape q.toStop.g' q.toStop.s' → CoinTape q.toStop.g' q.toStop.s'} {o : β × CoinTape g σ}
+    (hr : RoundsReach D M dg J B fin rootB pts N rs (q.toStop.rewrite φ).consume o) :
+    q.toStop.modes = fun i => if (q.toStop.Ks i).isHere then (Ks₀ i).modeOn σ o.2 else none := by
+  obtain ⟨_, _, hi⟩ := Pos.toStop_spec hq
+  obtain ⟨q', hq', _, hoq⟩ := hr.through (Pos.inv_consume (Pos.inv_rewrite hi _))
+  rw [hoq]
+  exact Pos.modes_eq hi (((Pos.le_rewrite _ _).trans (Pos.le_consume _)).trans hq') _
 
 end Trace
 
@@ -1420,6 +1456,26 @@ theorem firstStop_order (A : Live) {tables : Array String} {L : Fin A.rounds →
           rw [List.cons_append] at he₂
           obtain ⟨rfl, -⟩ := List.cons.inj he₂
           exact firstOpened_ne_none L₀ (r := ⟨.opening i s n, b, bitsL pts⟩) rfl d hfo
+
+variable {V θ F c} in
+/-- **Off the misses, an answered stop decodes the message the play reveals there**: at a position that keeps the
+invariant at the rounds' cuts, where the rest of a trace runs from the stop after it, its tape rewritten and consumed,
+the tape the trace ends on misses at no round, and its play reveals `w` at the cut of a round fixed at the stop, the
+stop's most likely message for that round is `w` (`RoundsReach.stop_modes`). -/
+theorem RoundsReach.stop_modes_noMiss {A : Live} {rd : Reading A.rounds} {σ : Strategy (V.game θ F c)}
+    {D : Decoders A.rounds A.Reg} {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP} {B : RoundHold} {J N : ℕ}
+    {β : Type} {fin : LiveOutJ J A.mP → β} {rootB : Array ByteArray} {pts : Fin 2 → Fin A.mP → 𝔽}
+    {rs : Fin J → Fin 2 → List Flock.Round} {q : Pos (V.game θ F c) σ Claims.Msg (Fin A.rounds)}
+    (hq : q.Inv (roundCuts V θ F c rd))
+    {φ : CoinTape q.toStop.g' q.toStop.s' → CoinTape q.toStop.g' q.toStop.s'} {o : β × CoinTape (V.game θ F c) σ}
+    (hr : RoundsReach D M A.dg J B fin rootB pts N rs (q.toStop.rewrite φ).consume o)
+    (hn : NoMiss V θ F c rd σ o.2) {i : Fin A.rounds} (hi : (q.toStop.Ks i).isHere = true) {w : Claims.Msg}
+    (hw : (roundCut V θ F c rd i).cut.revealOn σ o.2 = some w) : q.toStop.modes i = some w := by
+  rw [RoundsReach.stop_modes hq hr]
+  dsimp only
+  rw [ite_eq_left hi]
+  by_contra hne
+  exact hn.1 i ((DigestCut.missOn_iff _ _ _).2 ⟨w, hw, hne⟩)
 
 end First
 
