@@ -4857,7 +4857,7 @@ class PreflightPool:
 
     def _read_one(self, rec: dict) -> dict | str | None:
         from . import result
-        from .runs import TERMINAL
+        from .cli import ENDED
 
         rid, d = rec["run"], Path(rec["launch"])
         try:
@@ -4875,7 +4875,7 @@ class PreflightPool:
         if (got := self.status(rid)) is None:
             return f"run {rid} isn't in this machine's run registry"
         state, code, run_dir = got
-        if state not in TERMINAL:
+        if state not in ENDED:
             return None
         res = result.check(run_dir, rid) if run_dir else None
         doc = res.doc if res is not None and res.valid else None
