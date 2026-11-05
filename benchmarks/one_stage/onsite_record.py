@@ -18,13 +18,15 @@ on, and none carried to another's settings; a record stating no serving settings
 run wrote no answer, ``missing`` and ``why``:
 
 * sampled proofs and PoUW: ``record/verdicts.json``'s ``integrity`` and ``work`` rows (`served_verdicts.py record`);
-* inference-only: its case's outcome in remote's composite;
+* inference-only: its case's outcome in remote's composite, or in the composite of record where that is the one
+  without PoUW;
 * remote: remote's Lean verdict, ``composite/remote/composite.json`` (`composite.py`), with what it couldn't establish;
 * the network certifier: the ``communication`` row, `NetworkCheck.Period`'s answer (`NETWORK`), or, where the run's
   product drops it (remote's, with the split certifier behind its front) and its period check answered, the row that
   answer gives (``pieces/certifier/answer.json``, `served_verdicts.piece_row`), as onsite's report composes it;
-* onsite: the Lean composition of remote's three subprotocols and the network certifier over one registration, the
-  composite whose product is `ONSITE`, missing where the run has none.
+* onsite: the composite of record's Lean verdict, its id the verdict's ``protocol``: the network certifier's composite
+  without PoUW where the run has one (`WITHOUT_POUW`), else the Lean composition of remote's three subprotocols and the
+  network certifier over one registration, the composite whose product is `ONSITE`; missing where the run has none.
 
 While `certifier-key` is open (`PREMISES`, `KEY_OPEN`), an accepted network certifier's verdict is ``not
 established``, its Lean answer's accept beside it (``answer``), and its bound conditional on it by name. Sampled proofs'
@@ -32,9 +34,11 @@ established``, its Lean answer's accept beside it (``answer``), and its bound co
 window's committed roots and whose Lean verdict accepted it reporting exactly its reads (the audit's published record,
 `AUDIT`), and lists every other drawn member as not credited, by name, with why; ``missing`` where the record states no
 completion. ``of_record`` holds when every verdict but PoUW's accepted and every drawn member is credited, the condition
-for the demo's run of record, naming the verdicts not established, the members not credited and the verdict it doesn't
-read (``not_claimed``: PoUW's, `NOT_CLAIMED`, listed as it is, missing and development where its row is); ``placement`` is the network
-certifier's answer's, which host ran each party.
+for the demo's run of record, naming its composite of record by id (``composite``), the verdicts not established, the
+members not credited and the verdicts it doesn't read (``not_claimed``: PoUW's, `NOT_CLAIMED`, listed as it is, missing
+and development where its row is, and under a composite without PoUW remote's too, `NOT_CLAIMED_WITHOUT_POUW`), and
+the work it credits, none (``work_credited``, `POUW`); ``placement`` is the network certifier's answer's, which host ran
+each party.
 
 **Sampled proofs' guarantee** (``sampled_proofs``, `SAMPLED`), from its accepted row's answer, else ``missing``: what
 its draw establishes, ε at δ, per window (``per_window``: its bound at its profile's δ over the window's n proof blocks) and
@@ -62,9 +66,10 @@ signed registration log. Beside it, the day each of the run's ADVICE-LINEs says 
 (``not_claimed``), and credited none: the PoUW verdict carries no figure of its row, so no freed compute is in any
 total here. Beside it, ``served``, the PoUW piece each COINS line says the run served.
 
-**The composite's error** (``composite_error``, `COMPOSITE`): the sum over the onsite composite's four subprotocols of
-each one's error, each subprotocol's δ with where the run states it: sampled proofs' and PoUW's from their rows (their
-answers' integrity-profile δ), the network certifier's from its bound (its eps), and inference-only's missing
+**The composite's error** (``composite_error``, `COMPOSITE`): the sum over the composite of record's subprotocols
+(``composite``) of each one's error, each subprotocol's δ with where the run states it: sampled proofs' and, where the
+composite has it, PoUW's from their rows (their answers' integrity-profile δ), the network certifier's from its bound
+(its eps), and inference-only's missing
 (`NO_NCI_DELTA`). ``stated`` sums the δs the run states, a lower bound on the error, which is ``vacuous`` at 1 or
 more; the rest is ``unvalued`` (`COMPOSITE_UNVALUED`).
 
@@ -202,8 +207,9 @@ ERRORS = {
 }
 UNVALUED = ("δ_net is eps plus each execution phase's ε_ks, ε_bind and ε_tap, never eps alone; no check computes those "
             "three, so δ_net has no number here")
-COMPOSITE = (f"{ONSITE}'s error, Verity.Game's SoundnessFor at its compiled verifier: it accepts while the claim of one of "
-             "its four subprotocols fails with probability at most the sum of their errors, each its published δ at the "
+COMPOSITE = ("the composite of record's error (``composite``, `WITHOUT_POUW`), Verity.Game's SoundnessFor at its compiled "
+             "verifier: it accepts while the claim of one of its subprotocols (four, or three without PoUW's) fails "
+             "with probability at most the sum of their errors, each its published δ at the "
              "strategy's SHA-512 calls plus ε_forge(t, Q) plus its loss at its finder's collision probability "
              "(`Verity.Vocab.error`). Each subprotocol's δ is a term of its own, so one draw read at two δs, a tied "
              "audit's at sampled proofs' δ and at the network period's, counts in both")
@@ -264,8 +270,20 @@ POUW = (f"{POUW_OPEN}: the record credits no PoUW freed compute, and no figure o
         "(PouwCheck.Credit.window), a development run under the lane's development key that credits nothing; Pearl+ "
         "(POUW=pearlplus: served_pearlplus.sh, its own seeded load after the window's serve) is a development piece "
         "too, untied, and credits nothing. ``served`` is what each COINS line says the run's PoUW piece was")
-#: the verdicts ``of_record.holds`` doesn't read, since the record claims nothing of them (`POUW`)
+#: the verdicts ``of_record.holds`` doesn't read, since the record claims nothing of them (`POUW`), and under a composite
+#: of record without PoUW (`WITHOUT_POUW`) remote's too, whose composite composes PoUW's case
 NOT_CLAIMED = ("PoUW",)
+NOT_CLAIMED_WITHOUT_POUW = (*NOT_CLAIMED, "remote")
+#: PoUW's subprotocol (`Core.Remote.components`)
+POUW_ID = "verity/pouw/period/v1"
+WITHOUT_POUW = (f"the composite of record where the run has one: the network certifier's composite with remote's "
+                f"subprotocols less PoUW's ({POUW_ID}), registered under its own id in Core.Composites with its own "
+                "soundness instance (Verity.Game's SoundnessFor at its Verity.Registration.Composite), named here by "
+                "the id its composite.json states. Whether the run is of record then reads its verdict and its "
+                "subprotocols', inference-only's from its case there, and neither PoUW's nor remote's "
+                f"(`NOT_CLAIMED_WITHOUT_POUW`); its error sums no PoUW term. Where the run has none, it is {ONSITE}")
+#: ``of_record.work_credited``: the record credits no work under any composite (`POUW`)
+NO_WORK = "none"
 #: the PoUW clause of the run's COINS line (served_verdicts.sh's H1_COINS), which runs up to the bandwidth audit's
 POUW_SAID = re.compile(r"; (PoUW.*?); the bandwidth audit's")
 #: where sampled proofs' audit publishes its record (`served_integrity.public_copy`)
@@ -315,7 +333,7 @@ NOT_POOLED = ("its draw isn't a uniform k-subset of the window's proof blocks, t
               "pooled figure is stated for it")
 MULTI = ("a draw of more than one member of a window, such as one member of each template's stratum (stratified:1, "
          "H1_TIE's default), writes no case of verity/sampled-proofs/v1 (`a5.v2_proof`: v2 verifies one table's "
-         "sessions), so remote's and onsite's composites have none and reject naming it, and Lean's per-member form "
+         "sessions), so no composite has one and each rejects naming it, and Lean's per-member form "
          "refuses it (MULTI_REFUSED) until a guarantee for a draw of several members is in the lock. A run of record "
          "draws one member, subset:1 under --zk (V3C_LAW), and this is that draw's guarantee")
 #: the network certifier's chain report as its piece publishes it (`certifier_piece.PUBLIC`), and its draws by step
@@ -676,8 +694,9 @@ NO_SERVING = ("the run's caller stated no serving settings (--window-steps and -
               "WINDOW_STEPS and MAX_TOKENS)")
 BESIDE = "verity/onsite-network-records-beside/v1"
 BESIDE_IS = ("each run's figures from its own record, beside the others', each labelled with its serving settings "
-             "(`SERVING`), ℓ_a, what its figures are conditional on (`COINS`), what it doesn't claim (`DAY`, `POUW`) "
-             "and the drawn members it doesn't credit (`CREDIT`): its figure of record, what is open under it, "
+             "(`SERVING`), ℓ_a, its composite of record (`WITHOUT_POUW`), what its figures are conditional on "
+             "(`COINS`), what it doesn't claim (`DAY`, `POUW`) and the drawn members it doesn't credit (`CREDIT`): its "
+             "figure of record, what is open under it, "
              "each period's cells (bits and share of the weights), and sampled proofs' guarantee per window and "
              "pooled (`SAMPLED`). No figure is carried from one run's settings to another's")
 UNLABELLED = ("states no serving settings, which label its figures beside another run's: write it again from its OUT "
@@ -721,6 +740,23 @@ def composites(out: Path) -> dict[str, tuple[str, dict[str, Any]]]:
         doc = json.loads(f.read_text())
         found[doc.get("product")] = (str(f.relative_to(out)), doc)
     return found
+
+
+def subprotocols(doc: Mapping[str, Any]) -> set[str]:
+    """A composite.json's subprotocols by id: its cases' and those it names missing."""
+    return {c.get("id") for c in doc.get("cases") or ()} | set(doc.get("missing") or ())
+
+
+def of_record_composite(found: Mapping[str, tuple[str, dict[str, Any]]]) -> tuple[str, bool]:
+    """The composite of record (`WITHOUT_POUW`) by its id, and whether it composes PoUW: the run's composite with the
+    network certifier's subprotocol and not PoUW's, else `ONSITE`. ValueError, naming them, where the run has more than
+    one such."""
+    without = sorted(str(p) for p, (_, doc) in found.items()
+                     if NETWORK in (ids := subprotocols(doc)) and POUW_ID not in ids)
+    if len(without) > 1:
+        raise ValueError(f"the run has {len(without)} composites of the network certifier without PoUW "
+                         f"({', '.join(without)}): the record reads one composite of record")
+    return (without[0], False) if without else (ONSITE, True)
 
 
 def outcome(o: Mapping[str, Any], protocol: str, src: str) -> dict[str, Any]:
@@ -799,13 +835,13 @@ def delta_net(eps: Fraction, phases: int) -> list[dict[str, Any]]:
 
 
 def composite_error(rows: Mapping[str, Any], eps: Fraction | None, why: str = "no accepted bound",
-                    conditional: Sequence[str] = ()) -> dict[str, Any]:
-    """The composite's error term by term (`COMPOSITE`): each subprotocol's δ with where the run states it, or why it
-    doesn't (the network certifier's eps from its bound, else ``why``); ``stated`` sums those stated (None where none
-    is), ``vacuous`` at 1 or more; ``conditional_on`` the conditions sampled proofs' δ and eps rest on where any is
-    open (`COINS`)."""
+                    conditional: Sequence[str] = (), composite: str = ONSITE, pouw: bool = True) -> dict[str, Any]:
+    """The error of ``composite``, the composite of record, term by term (`COMPOSITE`): each subprotocol's δ with where
+    the run states it, or why it doesn't (the network certifier's eps from its bound, else ``why``), PoUW's only where
+    the composite has it (``pouw``); ``stated`` sums those stated (None where none is), ``vacuous`` at 1 or more;
+    ``conditional_on`` the conditions sampled proofs' δ and eps rest on where any is open (`COINS`)."""
     terms: list[dict[str, Any]] = []
-    for name in ("sampled proofs", "PoUW"):
+    for name in ("sampled proofs", "PoUW")[:1 + pouw]:
         t = {"subprotocol": name, "from": f"record/verdicts.json protocols.{ROWS[name]}.delta: its answer's "
                                           "integrity-profile δ"}
         d = (rows.get(ROWS[name]) or {}).get("delta")
@@ -818,7 +854,7 @@ def composite_error(rows: Mapping[str, Any], eps: Fraction | None, why: str = "n
                  | ({"missing": why} if eps is None else {"delta": str(eps)}))
     given = [Fraction(t["delta"]) for t in terms if "delta" in t]
     stated = sum(given, Fraction(0)) if given else None
-    return {"is": COMPOSITE, "terms": terms, "stated": None if stated is None else str(stated),
+    return {"is": COMPOSITE, "composite": composite, "terms": terms, "stated": None if stated is None else str(stated),
             "vacuous": stated is not None and stated >= 1, "unvalued": COMPOSITE_UNVALUED} | (
         {"conditional_on": list(conditional)} if conditional else {})
 
@@ -1255,15 +1291,18 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
     if net is not None:
         rows = {**rows, ROWS["the network certifier"]: net}
     found = composites(out)
+    composite, with_pouw = of_record_composite(found)
+    unread = NOT_CLAIMED if with_pouw else NOT_CLAIMED_WITHOUT_POUW
     v = {name: row_verdict(rows, ROWS[name]) for name in ("sampled proofs", "PoUW")}
-    v["inference-only"] = case_verdict(found, REMOTE, INFERENCE_ONLY)
+    v["inference-only"] = case_verdict(found, REMOTE if with_pouw else composite, INFERENCE_ONLY)
     v["remote"] = composite_verdict(found, REMOTE, "remote's composite didn't run: the run has no "
                                                    "composite/remote/composite.json")
     v["the network certifier"] = nv = row_verdict(rows, ROWS["the network certifier"], net_src)
-    v["onsite"] = composite_verdict(found, ONSITE, f"the run has no composite of {ONSITE}")
+    v["onsite"] = composite_verdict(found, composite, f"the run has no composite of {composite}")
     v = {k: v[k] for k in VERDICTS}
     v["sampled proofs"]["credit"] = paid = credit(out)
-    v["PoUW"]["not_claimed"] = POUW_OPEN
+    for k in unread:
+        v[k]["not_claimed"] = POUW_OPEN
     prem = premises(LOCKS)
     drawn, draws = coins(out), chain_draws(out)
     cond = [COINS_OPEN] if drawn["open"] else []
@@ -1286,18 +1325,19 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
         "serving": {"missing": NO_SERVING} if serving is None else {
             "window_steps": serving[0], "max_tokens": serving[1], "is": SERVING},
         "verdicts": v, "coins": drawn, "one_program_a_day": day(out), "pouw_freed_compute": pouw(out),
-        "of_record": {"holds": all(x["verdict"] == "accept" for k, x in v.items() if k not in NOT_CLAIMED)
-                               and credited(paid),
+        "of_record": {"holds": all(x["verdict"] == "accept" for k, x in v.items() if k not in unread)
+                               and credited(paid), "composite": composite,
                       "missing": [k for k, x in v.items() if x["verdict"] == "missing"],
                       "not_accepting": [k for k, x in v.items()
                                         if x["verdict"] not in ("accept", "missing", NOT_ESTABLISHED)],
                       "not_established": [k for k, x in v.items() if x["verdict"] == NOT_ESTABLISHED],
-                      "not_credited": list(paid.get("not_credited") or ()), "not_claimed": list(NOT_CLAIMED)}
+                      "not_credited": list(paid.get("not_credited") or ()), "not_claimed": list(unread),
+                      "work_credited": NO_WORK}
                      | ({"uncredited": paid["missing"]} if "missing" in paid else {})
                      | ({"conditional_on": held} if held else {}),
         "sampled_proofs": sampled(rows.get(ROWS["sampled proofs"]), v["sampled proofs"], *phase_seconds(out), cond),
         "placement": profile.get("placement"), "advice_charge": advice,
-        "composite_error": composite_error(rows, None, conditional=cond),
+        "composite_error": composite_error(rows, None, conditional=cond, composite=composite, pouw=with_pouw),
         "reproof": reproof(out, copy, listing, tie)}
     cond = cond_net
     if not accepted:
@@ -1312,7 +1352,7 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
     except ValueError as e:
         return rec | {"bound": {"error": str(e)}, "periods": {"missing": "no bound"}}
     b["verdict_line"] = next((x for x in reversed(lines(out, "verdicts.txt")) if x.startswith(LINE)), None)
-    rec["composite_error"] = composite_error(rows, eps_of(b), conditional=cond)
+    rec["composite_error"] = composite_error(rows, eps_of(b), conditional=cond, composite=composite, pouw=with_pouw)
     advice["charged"] = charged(b)
     b["period_s"] = None
     try:
@@ -1341,8 +1381,9 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
 
 
 def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
-    """The ``ONSITE`` line: the run's serving settings, each verdict, whether the run is of record and what every figure
-    is conditional on (`COINS`; open for a record that read no coins), what the record doesn't claim (`DAY`, `POUW`),
+    """The ``ONSITE`` line: the run's serving settings, each verdict, whether the run is of record, its composite of record
+    by id (`WITHOUT_POUW`) and the work it credits, none, and what every figure is conditional on (`COINS`; open for a
+    record that read no coins), what the record doesn't claim (`DAY`, `POUW`),
     the drawn members it doesn't credit (`CREDIT`), K of record and what is open under it, its δ_net's terms, eps's
     split and connections, the composite's stated error, the year's datacenter cell, sampled proofs' guarantee per window
     and pooled (`guarantee`), and the measured advice charge's test run."""
@@ -1351,6 +1392,7 @@ def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
     m, fig = rec["advice_charge"]["measured"], b.get("of_record") or {}
     return {"serving": {k: s[k] for k in ("window_steps", "max_tokens")} if "window_steps" in s else None,
             "verdicts": {k: x["verdict"] for k, x in rec["verdicts"].items()}, "of_record": rec["of_record"]["holds"],
+            **{k: rec["of_record"].get(k) for k in ("composite", "work_credited")},
             "conditional_on": rec["of_record"].get("conditional_on", []) if "coins" in rec else [COINS_OPEN],
             "not_claimed": [DAY_OPEN] * (rec.get("one_program_a_day") or {"open": True})["open"] + [POUW_OPEN],
             "not_credited": rec["of_record"].get("not_credited", []),
@@ -1407,7 +1449,7 @@ def beside(paths: Sequence[Path]) -> dict[str, Any]:
             raise ValueError(f"{path} {UNLABELLED}")
         runs.append({"record": str(path), "run": rec.get("run"), "tree": rec.get("tree"), "serving": line["serving"],
                      "ell_a": (rec["advice_charge"].get("cap") or {}).get("ell_a"), "of_record": line["of_record"],
-                     "conditional_on": line["conditional_on"], "not_claimed": line["not_claimed"],
+                     "composite": line["composite"], "conditional_on": line["conditional_on"], "not_claimed": line["not_claimed"],
                      "not_credited": line["not_credited"], "K": line["K"], "open": line["open"],
                      "periods": cells(rec.get("periods")), "sampled_proofs": line["sampled_proofs"]})
     return {"format": BESIDE, "is": BESIDE_IS, "runs": runs}
