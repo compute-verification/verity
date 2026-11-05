@@ -1,23 +1,18 @@
-"""`answers`: the verifier of record's answers on a window's statements, run once and shared by the steps that judge them
-(credit's window check and the period's, ``--lean-answers``), the drawn ones `fill`ed J at a time. Over the statements kit
-of core's credit tests (`test_pouw_credit_statements`: periods of proof files and a stand-in ``flock-verify`` that
-accepts a session only when it proves every file credit hands it), under the Lean verdict of record and the Python
-reference: two steps over the same statements run the verifier once a statement, the second taking every answer by key;
-an input changed between them is another key, which the verifier answers afresh; the order the fill's runs end in changes
-no answer and no verdict; and a statement the verifier rejects, refuses or can't run refuses both steps, as it does with
-no memo."""
+"""`answers`: the verifier of record's answers on a window's statements, each run once as credit asks for it and shared
+by the steps that judge them (credit's window check and the period's, ``--lean-answers``). Over the statements kit of
+core's credit tests (`test_pouw_credit_statements`: periods of proof files and a stand-in ``flock-verify`` that accepts
+a session only when it proves every file credit hands it), under the Lean verdict of record and the Python reference:
+two steps over the same statements run the verifier once a statement, the second taking every answer by key; an input
+changed between them is another key, which the verifier answers afresh; and a statement the verifier rejects, refuses
+or can't run refuses both steps, as it does with no memo."""
 from __future__ import annotations
 
 import functools
 import importlib.util
 import json
-import random
-import re
 import shutil
 import stat
-import threading
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -25,7 +20,6 @@ from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import verifier as V
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 from verity_vllm.protocols.pouw.h1 import answers as A
-from verity_vllm.protocols.pouw.h1 import drawn as DRAWN
 
 STATEMENTS = Path(__file__).resolve().parents[4] / "verity/core/protocols/pouw/tests/test_pouw_credit_statements.py"
 SEEDS = range(2)
@@ -57,16 +51,17 @@ def exe(tmp_path, monkeypatch) -> Path:
 
 
 class Counted:
-    """`proofs.verify`, or `answer`'s answer where it gives one (not None), each run's public file recorded."""
+    """`proofs.verify`, or `answer`'s answer where it gives one (not None), each run's public file, proof and keywords
+    recorded."""
 
     def __init__(self, answer=None):
         self.runs: list[str] = []
+        self.calls: list[tuple] = []
         self.answer = answer
-        self.lock = threading.Lock()
 
     def __call__(self, proof, **kw):
-        with self.lock:
-            self.runs.append(str(proof.public))
+        self.runs.append(str(proof.public))
+        self.calls.append((proof, kw))
         got = None if self.answer is None else self.answer(proof)
         return PF.verify(proof, **kw) if got is None else got
 
@@ -93,19 +88,6 @@ def period_check(d: dict, windows: list[dict], run) -> tuple:
 
 def steps(d: dict, windows: list[dict], window_run, period_run) -> tuple[list[tuple], tuple]:
     return [window_check(d, w, window_run) for w in windows], period_check(d, windows, period_run)
-
-
-def runs(d: dict, windows: list[dict]) -> list:
-    """`answers.window_runs` of each window's drawn statements, in window order: the runs ``drawn.py fill`` makes."""
-    files, k, _t = committed(d)
-    out = []
-    for w in windows:
-        got, refused = A.window_runs(w["statements"], files, bytes.fromhex(w["descriptor"]), kit()._layout(w),
-                                     w["entries"], w["window"]["root"], kit()._units(w, k), len(w["rounds"]), w["salt"],
-                                     w["draw"])
-        assert refused is None, refused
-        out += got
-    return out
 
 
 def statements(windows: list[dict]) -> list[str]:
@@ -177,7 +159,10 @@ CHANGES = {
 @pytest.mark.parametrize("change", CHANGES)
 def test_a_changed_input_is_another_key(change, exe, tmp_path):
     d, windows = kit()._period(0, tmp_path / "proofs")
-    _label, proof, kw = runs(d, windows)[0]
+    asked = Counted()
+    assert window_check(d, windows[0], asked)[1] is None
+    first = windows[0]["statements"][0]["public"]
+    proof, kw = next(c for c in asked.calls if str(c[0].public) == first)
     before = A.key(proof, exe=exe, **kw)
     assert A.key(proof, exe=exe, **kw) == before
     _done, proof, kw = CHANGES[change](proof, kw, exe)
@@ -200,81 +185,6 @@ def test_a_statement_changed_between_the_steps_is_answered_afresh(record, exe, t
     period = A.Answers(scratch, by="the period check", verify=ran, say=None)
     assert period_check(d, windows, period) == want
     assert ran.runs == [first["public"]] and period.ran == 1
-
-
-def _ending(order: list[int], said: list[str]):
-    """`proofs.verify` whose runs end in `order` (places among the fill's runs, each identified by its public file),
-    and the fill's ``say``: the run after each in `order` starts only once the fill has said the one before it ended."""
-    go = [threading.Event() for _ in order]
-    go[order[0]].set()
-    after = dict(zip(order, order[1:]))
-    place: dict[str, int] = {}
-
-    def verify(proof, **kw):
-        go[place[str(proof.public)]].wait()
-        return PF.verify(proof, **kw)
-
-    def say(line: str) -> None:
-        said.append(line)
-        m = re.match(r"LEAN \d+/\d+ run (\d+) of ", line)
-        if m and int(m[1]) - 1 in after:
-            go[after[int(m[1]) - 1]].set()
-    return verify, say, place
-
-
-@pytest.mark.parametrize("seed", SEEDS)
-def test_the_order_the_fills_runs_end_in_changes_no_answer_and_no_verdict(seed, record, exe, tmp_path):
-    """The fill runs every drawn statement of the period at once and they end in a forced order (in order, reversed and
-    shuffled): its ``LEAN`` lines follow that order, one a verdict, its memo holds the same answers whatever the order,
-    and credit's window checks over it take every drawn answer by key and judge as with no memo. A fill over a full
-    memo runs nothing."""
-    d, windows = kit()._period(seed, tmp_path / "proofs")
-    todo = runs(d, windows)
-    n = len(todo)
-    assert n >= 2
-    want = [window_check(d, w, PF.verify) for w in windows]
-    kept = []
-    for i, order in enumerate([list(range(n)), list(reversed(range(n))), random.Random(seed).sample(range(n), n)]):
-        memo, said = tmp_path / f"memo{i}", []
-        verify, say, place = _ending(order, said)
-        place.update({str(proof.public): j for j, (_l, proof, _kw) in enumerate(todo)})
-        answers = A.Answers(memo, by="the fill", verify=verify, say=None, clock=lambda: 0.0)
-        assert A.fill(answers, todo, n, say=say) == {"ran": n, "held": 0, "unkeyed": 0}
-        assert said[0] == f"LEAN {n} runs: {n} to run, {n} at a time, J set (--jobs) (0 already answered, 0 unkeyed)"
-        assert [int(re.match(r"LEAN \d+/\d+ run (\d+) of ", x)[1]) - 1 for x in said[1:]] == order
-        assert all(x.endswith(": accepted 1 of 1 sessions in 0.0 s") for x in said[1:])
-        kept.append({p.name: p.read_text() for p in sorted(memo.iterdir())})
-        check = A.Answers(memo, by="the challenger check", say=None)
-        assert [window_check(d, w, check) for w in windows] == want
-        assert check.taken == {"the fill": n} and check.ran == sum(len(w["live"]["statements"]) for w in windows)
-    assert kept[1] == kept[0] and kept[2] == kept[0]
-    said = []
-    assert A.fill(A.Answers(tmp_path / "memo0", by="the fill", say=None), todo, 2, say=said.append) == {
-        "ran": 0, "held": n, "unkeyed": 0}
-    assert said == [f"LEAN {n} runs: 0 to run, 2 at a time, J set (--jobs) ({n} already answered, "
-                    "0 unkeyed)"]
-
-
-def test_drawn_fill_answers_a_windows_runs_for_its_window_check_to_take_by_key(record, exe, tmp_path, monkeypatch,
-                                                                               capsys):
-    """``drawn.py fill`` (`drawn.fill`) on a window's statements, its window read as `drawn._checked` reads a serve dir:
-    its header, one ``LEAN`` line a verdict and its counts; credit's window check then takes each drawn answer by key."""
-    d, windows = kit()._period(0, tmp_path / "proofs")
-    w = windows[0]
-    files, k, _t = committed(d)
-    win = {"raw": bytes.fromhex(w["descriptor"]), "layout": kit()._layout(w), "entries": w["entries"],
-           "root": w["window"]["root"], "steps": len(w["rounds"]), "salt": w["salt"], "draw": w["draw"]}
-    monkeypatch.setattr(DRAWN, "_checked", lambda a: (win, kit()._units(w, k), files, w["statements"]))
-    memo = tmp_path / "scratch"
-    assert DRAWN.run("fill", SimpleNamespace(answers=memo, jobs=2, headroom_gb=None)) == 0
-    out, n = capsys.readouterr().out.splitlines(), len(w["statements"])
-    assert out[0] == (f"LEAN {n} runs: {n} to run, 2 at a time, J set (--jobs) (0 already answered, "
-                      "0 unkeyed)")
-    assert len(out) == n + 2 and all(": accepted 1 of 1 sessions in " in x for x in out[1:-1])
-    assert out[-1] == f"LEAN filled: {n} ran, 0 already answered, 0 unkeyed"
-    check = A.Answers(memo, by="the challenger check", say=None)
-    assert window_check(d, w, check) == window_check(d, w, PF.verify)
-    assert check.taken == {"the fill": n}
 
 
 def _tamper(s: dict) -> None:
@@ -331,12 +241,3 @@ def test_a_statement_the_verifier_refuses_refuses_both_steps(failure, record, ex
                     "LeanError": "error LeanError: lake build flock-verify failed", "KeyError": "error KeyError: 'ports'"}
         assert said[-1].split(": ", 1)[1].startswith(verdicts[failure]) and " by key from the challenger check: " in said[-1]
 
-
-def test_j_is_the_available_memory_less_the_headroom_over_one_runs_peak_unless_set(tmp_path):
-    assert A.jobs(memory=190.6) == (3, "floor((190.6 GiB available - 16 GiB headroom) / 47.5 GiB a run)")
-    assert [A.jobs(memory=m)[0] for m in (663.0, 63.5, 40.0)] == [13, 1, 1]
-    assert A.jobs(memory=190.6, headroom=60) == (2, "floor((190.6 GiB available - 60 GiB headroom) / 47.5 GiB a run)")
-    assert A.jobs("7", memory=190.6, headroom=60) == (7, "set (--jobs)") and A.jobs(0)[0] == 1
-    said = []
-    A.fill(A.Answers(by="the fill", exe=lambda: tmp_path, say=None), [], headroom=60, say=said.append)
-    assert " GiB available - 60 GiB headroom) / 47.5 GiB a run) (0 already answered, 0 unkeyed)" in said[0]
