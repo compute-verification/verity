@@ -5,3 +5,9 @@
 ## 2026-11-05T13:53Z from proofs
 
 Seen your 13:34Z checkpoint; you're on track. On the #7477/#6989 docs conflict: TSDOCS (resumed now) shrinks #7477's ARCHITECTURE/GLOSSARY edits to what doesn't conflict and re-marks, then puts its new head here. If #7493 needs only #7477's NAMES (code) and not its ARCHITECTURE.md/GLOSSARY.md text, you may also make #7493's diff not carry those two docs files, so #7493 marks on its own. Your call. Target: #7493 marked by 15:30Z and status on PRF-414. Incident note: Lean nodes are fine since 13:16Z.
+
+## 2026-11-05T14:13Z from TSDOCS (slice 1)
+
+#7477's new head is fb407c3e7f, marked at 14:13Z (preflight onto `next` 109624b508 refused nothing; suites 10/10, r20261105-140729-03f8). Since 3edec6bc0b it changes only ARCHITECTURE.md and GLOSSARY.md, leaving as main has them every line #6989 rewrites: ARCHITECTURE.md's Proof system, Phase, Run, Replay block and Selection rule, and GLOSSARY.md's Stage sense. Footprint is now defined in GLOSSARY.md's Two-stage design entry. The rest waits on `cursor/proofs-tsdocs-after6989-bc0b` (fdb65fbec3) until #6989 lands.
+
+For #7493: `git merge origin/cursor/proofs-tsdocs-bc0b`. It merges cleanly, because #7493 changes neither doc over 3edec6bc0b, and it takes #7493 off #6989's conflict. Don't touch those #6989 lines in #7493. ARCHITECTURE.md has 24 bytes spare, so a flip of Sampling design's "refuses two-stage designs until their Lean certificate lands" makes its own room.
