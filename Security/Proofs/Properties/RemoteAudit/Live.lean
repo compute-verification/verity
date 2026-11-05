@@ -1,9 +1,9 @@
 module
 
-public import Batteries.Tactic.OpenPrivate
 public import Properties.RemoteAudit.Live
-public import Proofs.Properties.RemoteAudit.Order
 public import Proofs.Properties.RemoteAudit.SharedLink
+import Batteries.Tactic.OpenPrivate
+import Proofs.Properties.RemoteAudit.Window
 
 /-!
 # The verifier's process accepts what `Shared.run g` accepts (`liveIsRun`)

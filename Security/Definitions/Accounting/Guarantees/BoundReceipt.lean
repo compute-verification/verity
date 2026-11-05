@@ -4,6 +4,7 @@ public import Definitions.Accounting.BoundReceipt
 public import Definitions.Pouw.Assumptions.Game
 public import Definitions.Pouw.Assumptions.NCP.RouteUAssumptions
 public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Receipts bound to the matmul: co-location and the link relay (trusted)

@@ -19,18 +19,14 @@ module
 
 public import Flock.Statement
 public import Flock.TemplateQuery
-public import Flock.Typed
 public import Flock.Extract
 public import Flock.Qcall
-public import Flock.HmNets
-public import Flock.RecOpen
-public import Flock.RecResiduals
 public import Flock.RecSparse
 public import Flock.RecOpening
 public import Flock.SplitNL
 public import Flock.Norm
-public import Flock.JsonParse
 public import Flock.LinkUnits
+public import Flock.FV3
 
 @[expose] public section
 set_option backward.privateInPublic true

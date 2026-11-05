@@ -1,6 +1,12 @@
 module
 
 public import Definitions.Pouw.Fp8Atom.E4M3
+public import Mathlib.Algebra.Group.Nat.Defs
+public import Mathlib.Algebra.Ring.Int.Defs
+public import Mathlib.Tactic.Attr.Core
+import Mathlib.Tactic.Bound.Init
+import Mathlib.Tactic.Finiteness.Attr
+import Mathlib.Tactic.SetLike
 
 /-!
 # `HOPPER_E4M3_K32`: one Hopper FP8 tensor-core accumulator step, bit-exact (trusted definitions)

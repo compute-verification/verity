@@ -1,11 +1,10 @@
 module
 
-public import Definitions.Accounting.Carrier
 public import Definitions.Accounting.Assumptions.RateAudit
 public import Definitions.Accounting.Assumptions.RateAuditDeployed
 public import Definitions.Accounting.Assumptions.Stacking
 public import Definitions.Accounting.Assumptions.SquaringChain
-public import Definitions.Accounting.Guarantees.Requirement
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Stacking: carriers are a source of bounded capacity in every pass (trusted)

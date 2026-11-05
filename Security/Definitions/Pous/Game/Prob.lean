@@ -1,8 +1,8 @@
 module
 
-public import Mathlib.Basic.ENNReal.Inv
-public import Mathlib.Data.Fintype.Pi
-public import Mathlib.Data.Fintype.Prod
+public import Mathlib.Basic.ENNReal.Basic
+public import Mathlib.Data.Fintype.Card
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Bit strings and uniform probability

@@ -1,8 +1,12 @@
 module
 
-public import Mathlib.Combinatorics.Enumerative.DoubleCounting
-public import Proofs.Nci.Cover.PartialSumCube
-public import Proofs.Nci.Cover.PartialSumRate
+public import Definitions.Nci.Guarantees.CoverPartialSum
+import Mathlib.Combinatorics.Enumerative.DoubleCounting
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Nci.Cover.PartialSumCube
+import Proofs.Nci.Cover.PartialSumRate
+import Proofs.Nci.Cover.PartialSumRead
+import Proofs.Nci.Cover.Paths
 
 /-!
 # The partial-sum bounds: the cover

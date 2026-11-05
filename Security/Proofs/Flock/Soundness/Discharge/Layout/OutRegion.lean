@@ -1,6 +1,9 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Layout.HmRegion
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Layout.Region
+import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
 # The returned outputs that the statement pins at the unit slots' output columns

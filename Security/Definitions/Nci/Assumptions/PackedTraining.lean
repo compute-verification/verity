@@ -1,7 +1,9 @@
 module
 
-public import Definitions.Nci.Assumptions.Packed
 public import Definitions.Nci.Threads
+public import Definitions.Nci.Packed
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Data.NNRat.Floor
 
 /-!
 # Training's incompressibility on a chain with several products to a gate

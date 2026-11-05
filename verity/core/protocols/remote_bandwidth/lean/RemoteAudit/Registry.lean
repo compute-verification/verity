@@ -1,6 +1,5 @@
 module
 
-public import Flock.Canon
 public import RemoteAudit.Flight
 
 /-!

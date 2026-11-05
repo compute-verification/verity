@@ -25,7 +25,6 @@ Flock's `--registered` opens them (`Flock.Registered`).
 -/
 module
 
-public import Flock.Registered
 public import SampledProofs.Registered
 
 @[expose] public section

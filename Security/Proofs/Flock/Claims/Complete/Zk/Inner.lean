@@ -1,6 +1,7 @@
 module
 
-public import Proofs.Flock.Claims.Complete.Zk.Ligerito
+public import Flock.With.Zk
+public import Proofs.Flock.Claims.Complete.Zk.Tape
 
 /-!
 # The masked prover's inner proof

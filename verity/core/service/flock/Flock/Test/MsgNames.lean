@@ -12,7 +12,6 @@ included), at `m27-k24-c8` 80, whose part 1 the honest prover names through `m79
 module
 
 public import Flock.RecVStar
-meta import Flock.RecVStar
 
 @[expose] public section
 

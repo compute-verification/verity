@@ -1,6 +1,9 @@
 module
 
 public import Proofs.Flock.Soundness.Game.LockLin
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game.Lock
 
 /-!
 # Off the chosen table, per position, at the slot's node

@@ -1,12 +1,9 @@
 module
 
-public import Mathlib.Tactic.Linarith
-public import Mathlib.Tactic.Positivity
-public import Mathlib.Tactic.NormNum
-public import Mathlib.Tactic.Ring
 public import Definitions.Pouw.Fp8Atom.H1TPinned
-public import Proofs.Pouw.Fp8Atom.H1TChecks
 public import Proofs.Pouw.Fp8Atom.Fp32Proofs
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Fp8Atom.H1TChecks
 
 /-!
 # Proofs of H-1T's pinned statements

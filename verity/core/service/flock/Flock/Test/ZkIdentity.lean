@@ -8,7 +8,6 @@ writes it.
 module
 
 public import Flock.Zk
-meta import Flock.Zk
 
 @[expose] public section
 

@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Sampled.Defs
 public import VStar.Menu.Pinned
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # F6's pinned menus as `Menu`s

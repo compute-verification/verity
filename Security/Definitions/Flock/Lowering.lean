@@ -2,6 +2,8 @@ module
 
 public import Definitions.Flock.Circuit
 public import Definitions.Flock.Statement
+import Mathlib.Tactic.NormNum.Inv
+import Mathlib.Tactic.NormNum.Pow
 
 /-!
 # The compiled lowering: templates' rows, their placement in a statement, and programs of units

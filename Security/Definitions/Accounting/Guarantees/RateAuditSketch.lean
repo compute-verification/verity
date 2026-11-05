@@ -1,9 +1,9 @@
 module
 
 public import Mathlib.LinearAlgebra.Matrix.Rank
-public import Definitions.Accounting.RateAuditSketch
 public import Definitions.Accounting.RateAuditSketchInteractive
 public import Definitions.Accounting.RateAuditSketchLayout
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The rate audit with a sketch-then-hash tag (trusted)

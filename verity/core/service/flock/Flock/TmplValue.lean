@@ -24,6 +24,7 @@ constant, so the statement is about the copies under its calls.
 module
 
 public import Flock.TmplApart
+public import Flock.TmplRows
 
 @[expose] public section
 

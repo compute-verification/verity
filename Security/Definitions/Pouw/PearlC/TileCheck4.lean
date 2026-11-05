@@ -2,7 +2,7 @@ module
 
 public import Definitions.Pouw.PearlC.WholeCircuit4
 public import Definitions.Pouw.PearlC.TileCheck
-public import Definitions.Pouw.PearlC.RowSem
+public import Definitions.Pouw.PearlC.DeviceFp4
 
 /-!
 # `pc4`'s tile check (definitions only)

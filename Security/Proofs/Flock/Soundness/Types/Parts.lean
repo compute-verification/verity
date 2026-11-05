@@ -1,6 +1,13 @@
 module
 
-public import Proofs.Flock.Soundness.Types.Dag
+public import Aesop.BuiltinRules
+public import Flock.DeriveCheck
+public import Mathlib.Algebra.Group.Nat.Defs
+public import Mathlib.Tactic.Attr.Core
+public import Mathlib.Tactic.Basic
+public import Mathlib.Tactic.ToDual
+import Proofs.Flock.Soundness.Types.Dag
+import Std.Data.HashSet.Lemmas
 
 /-!
 # The unit's parts, as `deriveChecked` checks them (the rows a template statement reads, for 1e's T3)

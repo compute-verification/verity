@@ -1,7 +1,11 @@
 module
 
-public import Proofs.Pouw.PearlC.KernelWrefGamma
 public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnly
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.TileGamma
+import Proofs.Pouw.Prob
 
 /-!
 # γ under the chain-only reading, against the honest kernel's `W_ref` (staged)

@@ -2,9 +2,9 @@ module
 
 public import Definitions.Accounting.Responder
 public import Definitions.Accounting.Window
-public import Definitions.Pous.P2.Cost
 public import Definitions.Pous.Model.SampledAudit
 public import Definitions.Pous.Assumptions.P2
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # B2: a location as PoUS's responder (trusted)

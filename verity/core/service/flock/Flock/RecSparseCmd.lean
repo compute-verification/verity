@@ -1,7 +1,6 @@
 module
 
 public import Flock.HmRow
-public import Flock.RecSparse
 
 /-!
 `flock-rec-sparse`'s command: the verifier's sparse-phase unit (`Flock.RecSparse`), which `test_lean_rec_sparse` holds to

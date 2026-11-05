@@ -3,7 +3,9 @@ module
 public import Proofs.Flock.Soundness.Refine.Exec
 -- `simp` over the range loops below needs `Std.Legacy.Range.mk.congr_simp`; LookupRows declares it, and the kernel
 -- replay rejects a second declaration.
-public import Proofs.Flock.Level3.LookupRows
+public import Flock.Ligerito
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Runs of the executable's Ligerito programs

@@ -2,8 +2,14 @@ module
 
 public import Proofs.Flock.Soundness.Audit.Influence
 public import Mathlib.Data.Fin.VecNotation
-public import Mathlib.Tactic.FinCases
-public import Mathlib.Tactic.Positivity
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Inv
+import Mathlib.Tactic.FinCases
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # The influence theorems are not vacuous

@@ -6,7 +6,6 @@ checks `s_i(β_i) ≠ 0` for `i < 40` on `svTable 40`.
 -/
 module
 
-public import Proofs.Flock.Level3.Nodes
 public import Flock.Ligerito
 public import Mathlib.Algebra.Polynomial.Sequence
 public import Proofs.Flock.Level3.NovelBasis.Steps0
@@ -18,6 +17,11 @@ public import Proofs.Flock.Level3.NovelBasis.Steps31
 public import Proofs.Flock.Level3.NovelBasis.Steps34
 public import Proofs.Flock.Level3.NovelBasis.Steps37
 import all Init.Data.Array.Basic
+public import Proofs.Flock.Level3.GF128Field
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Mathlib.RingTheory.LocalRing.Basic
+import Proofs.Flock.Level3.Nodes
 
 @[expose] public section
 

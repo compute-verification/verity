@@ -1,11 +1,13 @@
 module
 
 public import CoreRemote
-public import Definitions.Core
 public import Properties.Composition
 public import Properties.NciDesc
 public import Properties.Nci.Baseline
 public import Properties.SampledProofs
+public import Definitions.Core.Expand
+public import Definitions.Core.Formalism
+import Mathlib.Data.NNRat.Floor
 
 /-!
 # Remote's acceptance and the inference-only policy

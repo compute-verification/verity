@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Pouw.Barrier.Pinned
+public import Definitions.Pouw.Barrier.Defs
 
 /-!
 # The degenerate-input barrier's guarantee (trusted)

@@ -1,8 +1,13 @@
 module
 
-public import Proofs.Flock.Soundness.OpeningPhase
-public import Proofs.Flock.Soundness.LincheckPhase
-public import Proofs.Flock.Soundness.LigeritoQueries
+public import Definitions.Flock.Game
+public import Mathlib.Data.Fin.VecNotation
+public import Mathlib.Data.Fintype.Pi
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.RingTheory.Henselian
+import Mathlib.RingTheory.RegularLocalRing.Defs
+import Mathlib.RingTheory.SimpleRing.Principal
 
 /-!
 # The `--zk` inner proof is sound (live/PROTOCOL.md §5)

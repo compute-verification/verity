@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Binding.Layout
 public import Proofs.Flock.Level3.RowV2
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # `hm96-sha512/row/v1` and `/row/v2` rows: the registration fact from `HmRowComputes`

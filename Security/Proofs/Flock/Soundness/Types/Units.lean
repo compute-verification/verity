@@ -3,6 +3,8 @@ module
 public import Proofs.Flock.Soundness.E2E
 public import Proofs.Flock.Soundness.ComposeDag
 public import Proofs.Flock.Soundness.Types.Flatten
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Audit.Circuit
 
 /-!
 # A partition's units: correct on its rows, correct on its gates (verified-lowering phase 1, S4)

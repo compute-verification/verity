@@ -1,10 +1,13 @@
 module
 
 public import Definitions.Accounting.Guarantees.PerRun
-public import Proofs.Accounting.PerRunJoint
-public import Proofs.Accounting.PerRunTruncation
-public import Proofs.Pouw.Sampling
 public import Proofs.Pouw.PearlC.W1BudgetAbort
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Accounting.Device
+import Proofs.Accounting.PerRunJoint
+import Proofs.Accounting.PerRunTruncation
+import Proofs.Pouw.Prob
+import Proofs.Pouw.Sampling
 
 /-!
 # Proof of the priced per-run guarantees

@@ -6,6 +6,8 @@ public import Proofs.Pouw.PearlC.Cap.IntForm
 public import Proofs.Pouw.PearlC.Cap.Pins
 public import Proofs.Pouw.PearlC.Cap.SaltDeadStep
 public import Proofs.Pouw.PearlC.Cap.SaltDead
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # The cap circuit's Lean pieces

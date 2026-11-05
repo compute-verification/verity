@@ -1,7 +1,6 @@
 module
 
 public import PouwCheck.Pass
-public import Identity.Domains
 
 /-!
 # A live window's salt (`core_check.window_salt`)

@@ -1,7 +1,12 @@
 module
 
 public import Definitions.Accounting.JointBlocks
-public import Proofs.Pous.Obligation
+public import Definitions.Pous.P2.Cost
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pous.Obligation
 
 /-!
 # The demo's memory share is PoUS's

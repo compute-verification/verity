@@ -1,6 +1,11 @@
 module
 
-public import Proofs.Pous.B5.ExPostFacto
+public import Definitions.Pous.Game.Oracle
+public import Definitions.Pous.Model.Labelling
+public import Mathlib.Data.Fintype.Option
+public import Mathlib.Data.Fintype.Prod
+import Proofs.Pous.B5.ExPostFacto
+import Proofs.Pous.Sanity
 
 /-!
 # Chain work: a hash-chain receipt takes one oracle query a label

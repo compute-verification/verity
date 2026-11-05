@@ -1,7 +1,9 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Compiled
-public import Proofs.Flock.Soundness.Refine.LiveCompiled
+public import Proofs.Flock.Soundness.Refine.LiveSim
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Refine.LiveCompiled
 
 /-!
 # Every message a compiled `--zk` rep receives has an inhabited type

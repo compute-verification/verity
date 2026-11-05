@@ -1,6 +1,7 @@
 module
 
-public import Definitions.Nci.Assumptions.Covering
+public import Definitions.Nci.Covering
+public import Mathlib.Basic.Real.Basic
 
 /-!
 # The covering bound's two assumptions at two costs: `c_w` a weight, `c_a` an activation

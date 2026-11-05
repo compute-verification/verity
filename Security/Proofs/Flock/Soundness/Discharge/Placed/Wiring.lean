@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Placed.Setup
 public import Properties.Flock.Circuit.Keyed
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Placed.Setup
 
 /-!
 # The input gates of a circuit's program

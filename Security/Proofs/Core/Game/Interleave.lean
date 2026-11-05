@@ -1,6 +1,11 @@
 module
 
-public import Proofs.Core.Game.Basic
+public import Definitions.Core.Game
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Inv
+import Proofs.Core.Game.Basic
 
 /-!
 # Two interactions run concurrently

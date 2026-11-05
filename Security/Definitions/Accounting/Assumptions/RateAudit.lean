@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Accounting.RateAuditPartial
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The rate audit's named assumptions (trusted)

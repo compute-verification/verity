@@ -1,7 +1,8 @@
 module
 
-public import Definitions.Nci.Work
 public import Mathlib.Analysis.SpecialFunctions.Log.Base
+public import Definitions.Nci.Threads
+import Mathlib.Data.NNRat.Floor
 
 /-!
 # NCI over threads, each value charged once over its copies: the vocabulary

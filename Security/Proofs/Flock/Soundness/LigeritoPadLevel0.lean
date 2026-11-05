@@ -1,8 +1,13 @@
 module
 
 public import Proofs.Flock.Soundness.PadCode
-public import Proofs.Flock.Soundness.LigeritoPhase
 public import Definitions.Flock.LigeritoPad
+public import Proofs.Flock.Soundness.LigeritoDecode
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Interleave
+import Proofs.Flock.Soundness.Game.Poly
+import Proofs.Flock.Soundness.LigeritoCoins
+import Proofs.Flock.Soundness.NovelBasis
 
 /-!
 # The padded level 0: lane rounds, extra lanes, and decoding

@@ -1,10 +1,17 @@
 module
 
-public import Proofs.Flock.Soundness.Rounds
-public import Proofs.Flock.Soundness.Defs
-public import Proofs.Flock.Soundness.Game.Union
-public import Proofs.Flock.Soundness.Game.Interleave
-public import Mathlib.LinearAlgebra.Lagrange
+public import Definitions.Core.Game
+public import Definitions.Flock.Defs
+public import Mathlib.Algebra.EuclideanDomain.Field
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.LinearAlgebra.Lagrange
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Defs
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Interleave
+import Proofs.Flock.Soundness.Game.Poly
+import Proofs.Flock.Soundness.Game.Union
+import Proofs.Flock.Soundness.Rounds
 
 /-!
 # The lincheck phase (PROTOCOL.md §10)

@@ -6,9 +6,12 @@ each slot type once on `e_lo` and scales it per slot by `eqTable ρ_hi`.
 -/
 module
 
-public import Proofs.Flock.Level3.Assembly
-public import Proofs.Flock.Level3.Nodes
 public import Flock.Statement
+public import Proofs.Flock.Level3.GF128Field
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Level3.Assembly
+import Proofs.Flock.Level3.Nodes
 
 @[expose] public section
 

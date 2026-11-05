@@ -1,7 +1,15 @@
 module
 
-public import Proofs.Flock.Soundness.Refine.Final
 public import Flock.With.Verify
+public import Aesop.BuiltinRules
+public import Mathlib.Algebra.Group.Nat.Defs
+public import Mathlib.Tactic.Basic
+public import Mathlib.Tactic.ToDual
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Soundness.Refine.Final
+import VCVio.Prelude.Core
 
 /-!
 # The rounds the shipped verifier reads

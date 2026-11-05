@@ -1,8 +1,12 @@
 module
 
-public import Proofs.Accounting.Memory.Counting
-public import Proofs.Pous.Thm1.Theorem1iiSeq
 public import Definitions.Accounting.Guarantees.Memory
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.Data.Sym.Sym2.Init
+import Proofs.Accounting.Memory.Counting
+import Proofs.Pous.Sanity
+import Proofs.Pous.Thm1.Theorem1iiSeq
 
 /-!
 # Memory adds: the composition with PoUS's guarantee

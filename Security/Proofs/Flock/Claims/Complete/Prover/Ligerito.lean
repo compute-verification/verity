@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Complete.Prover.Piop
+public import Flock.Ligerito
 
 /-!
 # The honest prover's Ligerito opening

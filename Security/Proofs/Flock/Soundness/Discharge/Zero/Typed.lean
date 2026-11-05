@@ -1,10 +1,13 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Zero.Cols
-public import Proofs.Flock.Soundness.Discharge.Zero.Flat
-public import Proofs.Flock.Soundness.Discharge.Zero.Uniform
 public import Proofs.Flock.Soundness.Discharge.Placed.Typed
-public import Proofs.Flock.Soundness.Types.ProgramE2E
+public import Proofs.Flock.Soundness.Discharge.Aliased.Keys
+public import Proofs.Flock.Soundness.Discharge.Zero.Delta
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Zero.Cols
+import Proofs.Flock.Soundness.Discharge.Zero.Flat
+import Proofs.Flock.Soundness.Discharge.Zero.Uniform
+import Proofs.Flock.Soundness.Types.ProgramE2E
 
 /-!
 # `hZero` on the typed path (e2e, typed flat classes)

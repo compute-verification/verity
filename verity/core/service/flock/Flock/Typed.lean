@@ -21,12 +21,9 @@ which the verifier holds (`hold`): the statement names each table by the SHA-512
 -/
 module
 
-public import Flock.Comp
 public import Flock.DeriveCheck
-public import Flock.Layout
 public import Flock.Net
 public import Flock.Tags
-public import Flock.JsonParse
 
 @[expose] public section
 set_option backward.privateInPublic true

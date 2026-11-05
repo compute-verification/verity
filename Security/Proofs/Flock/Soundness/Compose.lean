@@ -1,7 +1,11 @@
 module
 
 public import Proofs.Flock.Soundness.Types.Flat
-public import Proofs.Flock.Soundness.Lowering
+public import Definitions.Flock.Lowering
+import Mathlib.Data.List.GetD
+import Mathlib.Tactic.NormNum.Inv
+import Mathlib.Tactic.NormNum.Pow
+import Proofs.Flock.Soundness.Audit.Circuit
 
 /-!
 # A unit's rows in logical order (verified-lowering phase 1, 1d step 1)

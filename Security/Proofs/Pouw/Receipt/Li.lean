@@ -1,8 +1,10 @@
 module
 
 public import Definitions.Pouw.Receipt.Li
-public import Proofs.Pouw.Receipt.Duo
-public import Mathlib.Tactic.Ring
+import Mathlib.Data.BitVec
+import Mathlib.Tactic.NormNum.Ineq
+import Mathlib.Tactic.Ring.RingNF
+import Proofs.Pouw.Receipt.Duo
 
 /-!
 # li's words are bound in a checkpoint, at every width and length

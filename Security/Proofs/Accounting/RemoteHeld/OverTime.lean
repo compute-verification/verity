@@ -1,9 +1,11 @@
 module
 
-public import Proofs.Accounting.RemoteHeld
-public import Mathlib.Combinatorics.Enumerative.DoubleCounting
 public import Mathlib.Order.Lattice.Nat
-public import Mathlib.Tactic.Ring
+public import Definitions.Accounting.Guarantees.RemoteHeld
+import Mathlib.Algebra.BigOperators.Intervals
+import Mathlib.Combinatorics.Enumerative.DoubleCounting
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Accounting.RemoteHeld
 
 /-!
 # The time a remote audit shows held

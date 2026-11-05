@@ -9,9 +9,6 @@ program is refused. The programs are `Flock.Test.RegProgram`'s: in `reg`, `TWide
 module
 
 public import Flock.Test.RegProgram
-public import Flock.ProvedScope
-meta import Flock.Test.RegProgram
-meta import Flock.ProvedScope
 
 @[expose] public section
 

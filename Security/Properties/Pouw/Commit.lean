@@ -1,6 +1,5 @@
 module
 
-public import PouwCommit.Coins
 public import PouwCommit.Draws
 public import PouwCommit.Rows
 

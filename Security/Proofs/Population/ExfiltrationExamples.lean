@@ -1,7 +1,15 @@
 module
 
-public import Proofs.Population.Exfiltration
-public import Proofs.Population.Determinacy
+public import Definitions.Population.Dataflow
+public import Definitions.Population.Exfiltration
+meta import Lean.Meta.Tactic.NormCast
+import Mathlib.Algebra.Order.BigOperators.Expect
+import Mathlib.Algebra.Order.Field.Power
+import Mathlib.Analysis.Complex.Order
+import Mathlib.Analysis.Complex.Trigonometric
+import Mathlib.Data.EReal.Inv
+import Proofs.Population.Determinacy
+import Proofs.Population.Exfiltration
 
 /-!
 # Exfiltration before detection: tightness, and what fails without each assumption

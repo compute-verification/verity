@@ -4,7 +4,6 @@ it is alone here, the module `compile_time` lists, apart from the proofs that us
 -/
 module
 
-public import Flock.With.Returns
 
 @[expose] public section
 

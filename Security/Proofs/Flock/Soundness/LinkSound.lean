@@ -1,9 +1,21 @@
 module
 
-public import Proofs.Flock.Soundness.LincheckPhase
-public import Proofs.Flock.Soundness.OpeningPhase
-public import Proofs.Flock.Soundness.ListSize
-public import Mathlib.Data.Nat.BitIndices
+public import Definitions.Core.Game
+public import Definitions.Flock.Defs
+public import Definitions.Flock.Session
+public import Mathlib.Algebra.MvPolynomial.Degrees
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Data.Nat.BitIndices
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.RingTheory.Henselian
+import Mathlib.RingTheory.RegularLocalRing.Defs
+import Mathlib.RingTheory.SimpleRing.Principal
+import Proofs.Flock.Soundness.Defs
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Poly
+import Proofs.Flock.Soundness.LincheckPhase
+import Proofs.Flock.Soundness.OpeningPhase
 
 /-!
 # The link points (PROTOCOL.md §16.2)

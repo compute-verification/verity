@@ -1,7 +1,9 @@
 module
 
-public import Mathlib.Data.Nat.Choose.Basic
 public import Definitions.Pous.Game.Prob
+public import Mathlib.Data.Fintype.Pi
+public import Mathlib.Data.Fintype.Prod
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The streamed-label wipe (experimental)

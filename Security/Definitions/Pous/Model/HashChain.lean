@@ -1,6 +1,11 @@
 module
 
-public import Definitions.Pous.Game.Oracle
+public import Aesop.BuiltinRules
+public import Mathlib.Data.Nat.Notation
+public import Mathlib.Tactic.ToAdditive
+public import Mathlib.Tactic.ToDual
+import Mathlib.Basic.ENNReal.Real
+import Mathlib.Data.Finset.Attr
 
 /-!
 # The index-tweaked hash chain of B3

@@ -1,8 +1,9 @@
 module
 
 public import Properties.RemoteAudit
-public import Proofs.Properties.RemoteAudit.Bisect
-public import Proofs.Properties.RemoteAudit.Sort
+import Proofs.Properties.RemoteAudit.Bisect
+import Proofs.Properties.RemoteAudit.Sort
+import Std.Data.HashMap.Lemmas
 
 /-!
 # The window's draws (`DrawIsSubset`)

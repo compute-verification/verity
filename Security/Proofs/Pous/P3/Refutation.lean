@@ -1,12 +1,7 @@
 module
 
-public import Mathlib.Data.Fintype.BigOperators
-public import Mathlib.Tactic.GCongr
-public import Definitions.Pous
-public import Definitions.Pous.Assumptions
 public import Proofs.Pous.Statements
-public import Proofs.Pous.Sanity
-public import Proofs.Pous.Accounting.Numbers
+import Proofs.Pous.Sanity
 
 /-!
 # Refutation of the forward-only (`q_inv = 0`) P3 lemma

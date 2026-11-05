@@ -1,11 +1,10 @@
 module
 
-public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
-public import Mathlib.Basic.ENNReal.BigOperators
-public import Mathlib.Basic.ENNReal.Inv
-public import Mathlib.Order.CompleteLattice.Basic
 public import Definitions.Core.Game
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Inv
 
 /-!
 # Games: the monad laws, values, and bounds over one coin

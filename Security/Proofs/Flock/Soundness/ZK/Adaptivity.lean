@@ -1,11 +1,8 @@
 module
 
 public import Mathlib.Data.Fintype.Pi
-public import Mathlib.Basic.Finite.Prod
-public import Mathlib.Data.Finset.Card
-public import Mathlib.Logic.Function.Iterate
-public import Mathlib.Algebra.Group.Basic
-public import Mathlib.Tactic.Abel
+import Mathlib.Basic.Finite.Prod
+import Mathlib.Tactic.Abel
 
 /-!
 # Zero knowledge: the bijection lemma's backbone, and adaptivity

@@ -6,7 +6,8 @@ is a root of `Y^2 + Y + x⁻¹`.
 module
 
 public import Proofs.Flock.Level3.GF256
-public import Mathlib.Tactic.LinearCombination
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
 
 @[expose] public section
 

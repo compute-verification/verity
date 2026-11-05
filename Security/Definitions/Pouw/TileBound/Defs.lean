@@ -1,7 +1,14 @@
 module
 
-public import Mathlib.LinearAlgebra.Matrix.Rank
 public import Definitions.Pouw.PearlC.Fp4
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+public import Mathlib.Algebra.Field.Defs
+public import Mathlib.Data.Fintype.Prod
+public import Mathlib.Data.Rat.Defs
+import Mathlib.Data.Nat.Totient
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.Tactic.ContinuousFunctionalCalculus
+import Mathlib.Tactic.NormNum.GCD
 
 /-!
 # The FP4-tile model (trusted definitions)

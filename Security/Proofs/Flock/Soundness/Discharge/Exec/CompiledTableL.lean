@@ -1,7 +1,9 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Exec.CompiledL
-public import Proofs.Flock.Soundness.CompiledAlign
+import Proofs.Flock.Soundness.CompiledAlign
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Lock
 
 /-!
 # The salted compiled bound for any level-0 table

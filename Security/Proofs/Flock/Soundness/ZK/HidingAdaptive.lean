@@ -1,6 +1,11 @@
 module
 
-public import Proofs.Flock.Soundness.ZK.Hiding
+public import Definitions.Claims.Hm96
+public import Definitions.Core.Game
+public import Mathlib.Data.Fintype.Pi
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.ZK.Hiding
 
 /-!
 # Zero knowledge: T1 over adaptive leaves

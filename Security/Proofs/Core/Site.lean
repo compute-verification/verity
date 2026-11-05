@@ -1,6 +1,5 @@
 module
 
-public import Mathlib.Data.List.Induction
 public import Definitions.Core.Site
 import all Init.Data.Repr
 import all Init.Data.ToString.Basic

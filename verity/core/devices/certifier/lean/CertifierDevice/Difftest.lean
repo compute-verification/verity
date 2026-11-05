@@ -1,7 +1,7 @@
 module
 
 public import CertifierDevice.Device
-public import Lean.Data.Json
+public import Lean.Data.Json.Parser
 
 /-!
 # The difftest: `step` against `active.Proxy`, on generated traces

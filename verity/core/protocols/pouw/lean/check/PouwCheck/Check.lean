@@ -1,13 +1,6 @@
 module
 
-public import CoreProtocol.Protocol
-public import PouwWindow.Grid
-public import PouwWindow.Draw
-public import PouwWindow.Public
-public import PouwWindow.Length
-public import PouwCheck.Inputs
 public import PouwCheck.WindowSalt
-public import Identity.Domains
 
 /-!
 # PoUW's rule (`core_check.py`, "the check")

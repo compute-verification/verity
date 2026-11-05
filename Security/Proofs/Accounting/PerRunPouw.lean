@@ -1,9 +1,11 @@
 module
 
 public import Definitions.Accounting.Guarantees.PerRun
-public import Proofs.Accounting.Device
-public import Proofs.Accounting.PerRunTruncation
-public import Proofs.Pouw.Game
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Accounting.Device
+import Proofs.Accounting.PerRunTruncation
+import Proofs.Pouw.Game
+import Proofs.Pouw.Prob
 
 /-!
 # PoUW's guarantee per run, by truncation

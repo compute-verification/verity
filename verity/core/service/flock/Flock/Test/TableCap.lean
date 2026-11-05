@@ -11,7 +11,6 @@ by the stratified law alone.
 module
 
 public import Flock.ProvedScope
-meta import Flock.ProvedScope
 
 @[expose] public section
 

@@ -1,9 +1,15 @@
 module
 
 public import Definitions.Pouw.Assumptions.Dimension.RouteUPipe
-public import Proofs.Pouw.Dimension.PipeProofs
-public import Proofs.Pouw.Dimension.ForestProofs
-public import Proofs.Pouw.Dimension.RouteUProofs
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.Tactic.NormNum.GCD
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Dimension.ForestProofs
+import Proofs.Pouw.Dimension.MixingProofs
+import Proofs.Pouw.Dimension.PipeProofs
+import Proofs.Pouw.Dimension.RouteUProofs
+import Proofs.Pouw.NCP.GameProofs
+import Proofs.Pouw.NCP.RelationWitness
 
 /-!
 # `A1_cost` in the closed scalar pipe on route U: proofs

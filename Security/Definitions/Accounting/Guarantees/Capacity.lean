@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Accounting.Capacity
+public import Mathlib.Data.Fintype.Prod
 
 /-!
 # A state-bounded game's soundness as a joint run's capacity guarantee, and derived state's share of the residual

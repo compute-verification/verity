@@ -4,7 +4,6 @@ whose statement digest `D_b3` the verifier recomputes and compares with the pinn
 -/
 module
 
-public import Lean.Data.Json
 public import Flock.Canon
 public import Flock.Hash
 public import Flock.JsonParse

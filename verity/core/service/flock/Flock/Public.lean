@@ -5,9 +5,8 @@ roots are checked here; the input ports' roots depend on the row leaf's schema a
 -/
 module
 
-public import Flock.Circuit
-public import Flock.JsonParse
 public import Flock.FV3
+public import Flock.Circuit
 
 @[expose] public section
 

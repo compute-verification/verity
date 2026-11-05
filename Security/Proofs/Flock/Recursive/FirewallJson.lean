@@ -2,6 +2,7 @@ module
 
 public import Flock.Firewall
 import all Init.Data.Repr
+import Std.Data.DTreeMap.Internal.WF.Lemmas
 
 /-!
 # A plain value's text parses back to it

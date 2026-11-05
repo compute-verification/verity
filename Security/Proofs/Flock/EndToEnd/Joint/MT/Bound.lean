@@ -1,8 +1,28 @@
 module
 
-public import Proofs.Flock.EndToEnd.Joint.MT.Drawn
-public import Proofs.Flock.EndToEnd.Joint.Prod
-public import Proofs.Flock.Soundness.Game.Union
+public import Proofs.Flock.EndToEnd.Joint.MT.Statement
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.EndToEnd.Joint.MT.Drawn
+import Proofs.Flock.EndToEnd.Joint.Prod
+import Proofs.Flock.EndToEnd.Period.Union
+import Proofs.Flock.Soundness.Audit.HarmBound
+import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game.Union
 
 /-!
 # Proof of the joint stratified bound over sampling blocks of `J` tables, per sampling block and pooled

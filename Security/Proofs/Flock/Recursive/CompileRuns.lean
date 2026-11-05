@@ -1,9 +1,10 @@
 module
 
 public import Proofs.Flock.Recursive.Target
-public import Proofs.Flock.Recursive.ForkRuns
-public import Proofs.Flock.Recursive.ClashFree
-public import Proofs.Flock.Soundness.Refine.LiveCompiled
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Recursive.ClashFree
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Refine.LiveCompiled
 
 /-!
 # Recursion: the compile lemma on the runs of one prover

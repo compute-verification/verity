@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Pous.Model.Audit
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The graded sequential audit: up to `t` late rounds, each within a hard bound

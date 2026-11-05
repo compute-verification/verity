@@ -1,11 +1,19 @@
 module
 
 public import Definitions.Population.Necessity
-public import Proofs.Population.Leakage
-public import Mathlib.Algebra.Order.BigOperators.Ring.Finset
-public import Mathlib.Tactic.Linarith
-public import Mathlib.Tactic.NormNum
-public import Mathlib.Tactic.Abel
+public import Mathlib.Data.Fintype.Option
+public import Mathlib.Data.Fintype.Prod
+public import Proofs.Population.Egress
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Data.Fintype.BigOperators
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.Abel
+import Mathlib.Tactic.Linarith.Frontend
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Proofs.Population.Determinacy
+import Proofs.Population.Leakage
 
 /-!
 # The skeleton theorem: tier 1 gives the sampling certificate, and each tier-1 item is needed

@@ -1,7 +1,11 @@
 module
 
-public import Proofs.Flock.Soundness.Refine.Exec
 public import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckMasked
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Soundness.Refine.Exec
 
 /-!
 # `Zk.replay`'s zerocheck constraints are the `ZerocheckMasked` terms

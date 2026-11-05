@@ -6,8 +6,7 @@ character above U+FFFF as its UTF-16 surrogate pair).
 -/
 module
 
-public import Lean.Data.Json
-meta import Lean.Data.Json
+public import Lean.Data.Json.Basic
 
 @[expose] public section
 set_option backward.privateInPublic true

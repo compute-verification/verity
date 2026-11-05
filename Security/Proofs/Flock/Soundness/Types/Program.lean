@@ -1,7 +1,8 @@
 module
 
 public import Proofs.Flock.Soundness.Types.Units
-public import Proofs.Flock.Soundness.Lowering
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Audit.Circuit
 
 /-!
 # A program of units over circuit types: its rows circuit, its Boolean circuit, and `RowsL1` between them (phase 1, S4c)

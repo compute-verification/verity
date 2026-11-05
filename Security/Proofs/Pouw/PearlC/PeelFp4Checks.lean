@@ -18,6 +18,8 @@ public import Proofs.Pouw.PearlC.PeelFp4Checks.T16nGram1
 public import Proofs.Pouw.PearlC.PeelFp4Checks.T16nGram2
 public import Proofs.Pouw.PearlC.PeelFp4Checks.T16nGram3
 public import Proofs.Pouw.PearlC.PeelFp4Checks.T16nWords
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # Conformance of `Fp4Dev.peelFp4` to `pearl_c4.py` (staging, nothing pinned)

@@ -1,6 +1,8 @@
 module
 
-public import Definitions.Flock.Game.Interleave
+public import Definitions.Flock.Game
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Strategies of a relabelled or composed game

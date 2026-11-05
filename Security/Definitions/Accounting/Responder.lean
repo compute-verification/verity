@@ -2,6 +2,7 @@ module
 
 public import Definitions.Accounting.Confidence
 public import Definitions.Pous.Model.Audit
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # A location as PoUS's responder: the vocabulary (trusted)

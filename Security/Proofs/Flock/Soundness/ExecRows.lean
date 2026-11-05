@@ -1,12 +1,14 @@
 module
 
-public import Proofs.Flock.Soundness.Lowering
-public import Flock.Net
 -- level3 already realizes the lemmas this file's `simp` calls need (`Std.Legacy.Range.mk.congr_simp`), so they are
 -- reused rather than declared a second time, which the audit's kernel replay refuses
-public import Proofs.Flock.Level3.LookupRows
-public import Proofs.Flock.Soundness.SparseRows
 public import Properties.Flock.Circuit.Rows
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Mathlib.Tactic.NormNum.Pow
+import Proofs.Flock.Soundness.SparseRows
 
 /-!
 # The rows the verifier parses, as the audit's `Rows`

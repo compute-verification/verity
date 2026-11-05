@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Properties.RemoteAudit.Shared
+import Proofs.Properties.RemoteAudit.Draw
+import Proofs.Properties.RemoteAudit.Window
 
 /-!
 # The session link windows a draw (`SessionDrawsRecords`, `AcceptedDrawsOpenable`)

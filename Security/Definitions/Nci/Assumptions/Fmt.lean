@@ -1,7 +1,8 @@
 module
 
 public import Definitions.Nci.Work
-public import Mathlib.Analysis.SpecialFunctions.Pow.Real
+public import Definitions.Nci.Info
+import Mathlib.Data.NNRat.Floor
 
 /-!
 # NCI over threads, each thread charged by the work done on it at a format's rate: the named assumption

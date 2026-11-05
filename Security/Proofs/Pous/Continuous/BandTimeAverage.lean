@@ -1,7 +1,11 @@
 module
 
 public import Proofs.Pous.Chain.FamilyRounds
-public import Proofs.Pous.Continuous.TimeAverage
+public import Definitions.Pous.Guarantees
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pous.Chain.Family
+import Proofs.Pous.Continuous.TimeAverage
 
 /-!
 # The time-averaged bound on the band store: `Pous.Guarantees.BandFamilyContinuousTimeAverage`

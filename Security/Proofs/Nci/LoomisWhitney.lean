@@ -1,7 +1,8 @@
 module
 
 public import Definitions.Nci.Guarantees
-public import Proofs.Nci.LoomisWhitneyBase
+import Mathlib.Data.NNRat.Floor
+import Proofs.Nci.LoomisWhitneyBase
 
 /-!
 # The discrete Loomis–Whitney inequality

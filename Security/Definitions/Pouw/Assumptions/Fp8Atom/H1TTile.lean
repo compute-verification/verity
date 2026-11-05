@@ -1,6 +1,5 @@
 module
 
-public import Mathlib.Data.Set.Card
 public import Definitions.Pouw.Assumptions.Fp8Atom.H1TGamma
 
 /-!

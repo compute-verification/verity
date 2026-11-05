@@ -1,9 +1,11 @@
 module
 
-public import Proofs.Pouw.PearlC.DeviceChainCapGamma
 public import Definitions.Pouw.Assumptions.PearlC.DeviceChainCapKernel
-public import Proofs.Pouw.PearlC.KernelWrefGamma
 public import Definitions.Pouw.PearlC.DevicePricesLoop
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.KernelWrefGamma
+import Proofs.Pouw.PearlC.TileGamma
 
 /-!
 # v2 at the chain cap 1/1,000 against the honest kernel's `W_ref`: the exact in-loop values (staged)

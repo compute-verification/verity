@@ -1,8 +1,7 @@
 module
 
-public import Proofs.Population.Determinacy
-public import Proofs.Core.Circuit
 public import Definitions.Population.Partition
+import Proofs.Core.Circuit
 
 /-!
 # Sampled proofs' partitions as populations

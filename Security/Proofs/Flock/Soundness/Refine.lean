@@ -32,5 +32,6 @@ public import Proofs.Flock.Soundness.Refine.Frames
 public import Proofs.Flock.Soundness.Refine.Salted
 public import Proofs.Flock.Soundness.Refine.LincheckConverse
 public import Proofs.Flock.Soundness.Refine.RepConverse
+import Mathlib.Combinatorics.Matroid.Init
 
 @[expose] public section

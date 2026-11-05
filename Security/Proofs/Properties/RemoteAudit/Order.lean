@@ -1,6 +1,7 @@
 module
 
-public import Proofs.Properties.RemoteAudit.Frozen
+public import Proofs.Properties.RemoteAudit.Coins
+import Proofs.Properties.RemoteAudit.Frozen
 
 /-!
 # `Live` under the release order (`LiveUnder`)

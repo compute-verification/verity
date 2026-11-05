@@ -7,7 +7,6 @@ or past the last one is refused; only the first `out` port is read.
 module
 
 public import Flock.RecCoins
-meta import Flock.RecCoins
 
 @[expose] public section
 

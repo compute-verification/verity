@@ -1,6 +1,13 @@
 module
 
 public import Proofs.Properties.NetworkCertifier.Tree
+import Mathlib.Algebra.Order.Group.Nat
+import Mathlib.Algebra.Order.Sub.Basic
+import Mathlib.Data.Finset.Attr
+import Mathlib.Data.List.Basic
+import Mathlib.Tactic.Bound.Init
+import Mathlib.Tactic.SetLike
+import Proofs.Properties.NetworkCertifier.Bytes
 
 /-!
 # A record head determines its grid

@@ -2,7 +2,6 @@ module
 
 public import PouwCommit.Draws
 public import SampledProofs.Challenger
-public import Identity.Domains
 
 /-!
 # A live window's round coins (`window.py`, "Live windows")

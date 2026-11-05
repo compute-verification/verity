@@ -1,13 +1,26 @@
 module
 
 public import Proofs.Flock.VBridge.OfVStar
-public import Proofs.Flock.VBridge.AccUnits
-public import Proofs.Flock.VBridge.RecLinkGadgets
-public import Proofs.Flock.Soundness.Discharge.Hm.Salt
-public import Proofs.Flock.Soundness.Discharge.Hm.Commit
 public import VStar.Link
 public import Flock.RecLinkRef
 import all Init.Data.String.Defs
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.Hm.Mask
+import Proofs.Flock.VBridge.AccUnits
+import Proofs.Flock.VBridge.RecLinkGadgets
 
 /-!
 # V*'s `RecLink{UB, PB}` unit computes its reference

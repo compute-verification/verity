@@ -1,10 +1,17 @@
 module
 
 public import Definitions.Pouw.PearlC.DeviceKernelWref
-public import Proofs.Pouw.PearlC.FormingP
-public import Proofs.Pouw.PearlC.AccumProofs
-public import Proofs.Pouw.PearlC.FreezeP
-public import Proofs.Pouw.PearlC.FreezePPure
+public import Proofs.Pouw.Fp8Atom.Fp32Proofs
+public import Proofs.Pouw.PearlC.Freeze
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Data.Nat.Bitwise
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Fp8Atom.H1TAtomProofs
+import Proofs.Pouw.Fp8Atom.H1TSliceProofs
+import Proofs.Pouw.PearlC.AccumProofs
+import Proofs.Pouw.PearlC.FormingP
+import Proofs.Pouw.PearlC.FreezePPure
+import Proofs.Pouw.PearlC.PeelExactProofs
 
 /-!
 # The honest words are FP32 words

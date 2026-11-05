@@ -2,6 +2,8 @@ module
 
 public import Definitions.Core.Game
 public import Definitions.Accounting.Physical
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Tasks, classes, thresholds and slowdown (trusted)

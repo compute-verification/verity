@@ -1,8 +1,6 @@
 module
 
 public import Mathlib.Data.Finset.Card
-public import Mathlib.Data.Finset.Image
-public import Mathlib.Data.Set.Pairwise.Basic
 
 /-!
 # The cover theorem: the vocabulary

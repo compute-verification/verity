@@ -4,7 +4,8 @@ public import PouwWindow.OwnPorts
 public import PouwWindow.FullDraw
 public import Flock.KnownRead
 public import SampledProofs.Produced
-public import SampledProofs.Record
+public import Flock.WindowRecord
+public import Lean.Data.Json.Parser
 
 /-!
 # A drawn H1 leaf's registered files, from the registration

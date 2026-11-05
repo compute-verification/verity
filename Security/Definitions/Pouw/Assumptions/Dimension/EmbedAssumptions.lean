@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Pouw.Assumptions.Dimension.OpenPipe
+public import Definitions.Pouw.Dimension.Lift
 
 /-!
 # The FP32 pipe, the residual assumption `A1_fp`, and `CanonicalNaN` (draft semantics)

@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkLink.CompiledLink
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # The rows link at the compiled `--zk` value layer

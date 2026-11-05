@@ -1,10 +1,6 @@
 module
 
-public import Flock.Canon
-public import PousCheck.Merkle
-public import PousCheck.Challenge
 public import PousCheck.Certificate
-public import PousCheck.Prim.PyJson
 
 /-!
 # The timed audit's verdict on its record

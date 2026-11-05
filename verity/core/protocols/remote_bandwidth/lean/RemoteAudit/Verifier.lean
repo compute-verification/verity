@@ -2,8 +2,6 @@ module
 
 public import Std.Sync.Mutex
 public import RemoteAudit.Difftest
-public import RemoteAudit.P2Session
-public import RemoteAudit.Wire
 
 /-!
 # The verifier's process: `remote-audit-verifier`

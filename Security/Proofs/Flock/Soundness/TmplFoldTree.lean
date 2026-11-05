@@ -1,6 +1,13 @@
 module
 
-public import Proofs.Flock.Soundness.TmplFoldDef
+public import Flock.TmplFold
+public import Proofs.Flock.Level3.GF128Field
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Soundness.SparseRows
+import Proofs.Flock.Soundness.TmplFoldDef
+import Proofs.Flock.Soundness.TmplFoldRef
 
 /-!
 # The template fold's reference over the call tree

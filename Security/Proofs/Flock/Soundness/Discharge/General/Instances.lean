@@ -1,9 +1,11 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Layout.Scope
-public import Flock.Test.Wires
-meta import Proofs.Flock.Soundness.Discharge.Layout.Scope
-meta import Flock.Test.Wires
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.Positivity.Finset
+import VCVio.Prelude.Core
 
 /-!
 # The general form at the tails' shapes

@@ -2,6 +2,8 @@ module
 
 public import Definitions.Flock.Sparse
 public import Flock.RecAlgebra
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # `RecSparse_v1` over F

@@ -1,10 +1,9 @@
 module
 
 public import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
-public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.FreeCompute
-public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Exfil.Rungs
-public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Exfil.Bernoulli
-public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Exfil.Witnesses
+import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Exfil.Bernoulli
+import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Exfil.Rungs
+import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.FreeCompute
 
 /-!
 # Optimal partitioning against exfiltration: the proofs

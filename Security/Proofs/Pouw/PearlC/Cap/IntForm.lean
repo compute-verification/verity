@@ -1,11 +1,8 @@
 module
 
-public import Mathlib.Tactic.Linarith
-public import Mathlib.Tactic.FieldSimp
-public import Mathlib.Tactic.Positivity
-public import Mathlib.Tactic.Ring
 public import Definitions.Pouw.PearlC.DeviceRev1
 public import Definitions.Pouw.PearlC.DevicePrices
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # The cap circuit's integer tests are rev1's per-tile cap

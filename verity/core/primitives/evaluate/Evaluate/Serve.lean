@@ -1,7 +1,6 @@
 module
 
 public import Evaluate.Walk
-public import Difftest
 
 /-!
 # The difftest function

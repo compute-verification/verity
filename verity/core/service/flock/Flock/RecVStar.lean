@@ -22,15 +22,10 @@ printed.
 -/
 module
 
-public import Flock.HmRow
 public import Flock.ProvedScope
-public import Flock.RecOpening
 public import Flock.Registered
 public import Flock.WindowRecord
 public import VStar.Cli
-public import VStar.Compose
-public import VStar.Stage
-public import Flock.JsonParse
 
 @[expose] public section
 set_option backward.privateInPublic true

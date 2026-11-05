@@ -1,8 +1,15 @@
 module
 
-public import Proofs.Flock.Soundness.LigeritoQueries
-public import Proofs.Flock.Soundness.JohnsonMCA
-public import VCVio.OracleComp.Constructions.SampleableType.NativeMeasure
+public import ArkLib.Data.CodingTheory.ProximityGenerator.Basic
+public import ArkLib.Data.CodingTheory.ReedSolomon
+public import Definitions.Core.Game
+public import Definitions.Flock.Defs
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Interleave
+import Proofs.Flock.Soundness.JohnsonMCA
+import Proofs.Flock.Soundness.LigeritoCoins
+import Proofs.Flock.Soundness.Rounds
+import Proofs.Flock.Soundness.ZerocheckPhase
 
 /-!
 # Mutual correlated agreement at Ligerito's folds (PROTOCOL.md §13.3)

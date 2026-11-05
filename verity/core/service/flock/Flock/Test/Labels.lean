@@ -5,7 +5,6 @@ draw proves, at one table and at two (each table's part of the draw, `tableDraw`
 module
 
 public import Flock.RecVStar
-meta import Flock.RecVStar
 
 @[expose] public section
 

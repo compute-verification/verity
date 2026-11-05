@@ -10,7 +10,8 @@ column) and so are the unit's at the end (`Keeps`), and `canon` keeps a row's XO
 -/
 module
 
-public import Flock.TmplOrder
+public import Flock.Tmpl
+import Flock.TmplOrder
 
 @[expose] public section
 

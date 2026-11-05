@@ -1,7 +1,10 @@
 module
 
 public import Proofs.Flock.Soundness.Headline
-public import Proofs.Flock.Soundness.CROnly.Link
+public import Proofs.Flock.Soundness.CROnly.Defs
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Binding.E2E
+import Proofs.Flock.Soundness.CROnly.Link
 
 /-!
 # The end-to-end theorems under `cr/sha-512` alone

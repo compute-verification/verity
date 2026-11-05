@@ -1,6 +1,13 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.ZkSession.InnerSound
+public import ArkLib.Data.CodingTheory.ReedSolomon
+public import Definitions.Core.Game
+public import Proofs.Flock.Soundness.Discharge.ZkSession.Inner
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.ZkSession.InnerSound
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Interleave
+import VCVio.Prelude.Core
 
 /-!
 # A masked rep followed by the inner proof (live/PROTOCOL.md §5, VEIL Lemma 4.3)

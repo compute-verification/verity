@@ -29,10 +29,8 @@ The difftest's pieces (`Pieces.table`): `challenger_commitment`, `challenger_ope
 module
 
 public import Flock.Hm96
-public import Flock.Net
-public import Flock.Public
-public import Flock.Registered
 public import SampledProofs.Json
+public import Flock.FV3
 
 @[expose] public section
 set_option backward.privateInPublic true

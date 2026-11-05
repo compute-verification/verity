@@ -1,9 +1,12 @@
 module
 
-public import Proofs.Flock.Soundness.Refine.Rep
 public import Proofs.Flock.Soundness.Refine.Frames
-public import Definitions.Flock.HoloCompiled
 public import Proofs.Flock.VBridge.Algebra.Holo
+public import Flock.Verify
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import VCVio.Prelude.Core
 
 /-!
 # One rep with hidden unit circuits, on the transcript

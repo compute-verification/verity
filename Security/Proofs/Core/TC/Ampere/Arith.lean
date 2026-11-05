@@ -1,6 +1,7 @@
 module
 
-public import Proofs.Core.TC.Proofs.Norm
+public import Proofs.Core.TC.Proofs.Fold
+import Proofs.Core.TC.Proofs.Norm
 
 /-!
 # The Ampere adder's arithmetic (`W = 25`, `rho = 1`, `A = 26`, `B = 30`, `K = 35`, floor `-132`)

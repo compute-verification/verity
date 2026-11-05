@@ -1,6 +1,10 @@
 module
 
 public import Definitions.Pouw.H1Zy.Combine
+import Mathlib.Data.Finset.Attr
+import Mathlib.Tactic.Finiteness.Attr
+import Mathlib.Tactic.Push
+import Mathlib.Tactic.SetLike
 
 /-!
 # The combine's `ok` is the receipt check

@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Properties.RemoteAudit.Coins
+public import Proofs.Properties.RemoteAudit.Bisect
 
 /-!
 # A drawn window's record is kept (`RecordKeptAfterDraw`)

@@ -6,7 +6,6 @@ refused by `checkComplete`; with `pub` among the verifier's ports, it passes.
 module
 
 public import Flock.Test.RegFormats
-meta import Flock.Test.RegFormats
 
 @[expose] public section
 

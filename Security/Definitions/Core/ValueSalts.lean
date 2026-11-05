@@ -1,6 +1,10 @@
 module
 
 public import Definitions.Core.Game
+public import Mathlib.Data.Fintype.Pi
+public import Mathlib.Data.Fintype.Prod
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The value commitments' salts, the ZK server's: what a registration shows

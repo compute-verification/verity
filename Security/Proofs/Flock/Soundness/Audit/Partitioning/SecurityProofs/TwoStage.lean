@@ -1,6 +1,9 @@
 module
 
 public import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
+import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # Two-stage detection risk: the proofs

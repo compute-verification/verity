@@ -1,6 +1,13 @@
 module
 
 public import Proofs.Flock.Soundness.TmplSplitVal
+public import Proofs.Flock.Soundness.TmplFoldClassOk
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Soundness.SparseRows
+import Proofs.Flock.Soundness.TmplFoldRef
+import Std.Data.HashMap.Lemmas
 
 /-!
 # What `walk` reads, against `refVal`

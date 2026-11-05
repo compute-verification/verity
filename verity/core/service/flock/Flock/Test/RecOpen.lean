@@ -7,7 +7,6 @@ built verifier (`test_rec_outer.py`).
 module
 
 public import Flock.RecOpen
-meta import Flock.RecOpen
 
 @[expose] public section
 

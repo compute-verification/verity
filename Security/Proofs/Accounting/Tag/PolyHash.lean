@@ -2,6 +2,9 @@ module
 
 public import Proofs.Accounting.Tag.Basic
 public import Definitions.Accounting.Guarantees.Tag
+public import Mathlib.Algebra.Field.ZMod
+import Mathlib.Data.List.GetD
+import Mathlib.NumberTheory.LucasLehmer
 
 /-!
 # The polynomial hash's properties

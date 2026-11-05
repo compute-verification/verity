@@ -2,8 +2,7 @@ module
 
 public import Definitions.Population.Dataflow
 public import Mathlib.Basic.Real.Basic
-public import Mathlib.Algebra.BigOperators.Ring.Finset
-public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 
 /-!
 # The IOP's sampling certificate, and what each policy needs of it

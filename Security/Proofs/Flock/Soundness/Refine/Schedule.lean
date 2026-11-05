@@ -1,7 +1,9 @@
 module
 
-public import Proofs.Flock.Soundness.Model.Compiled
 public import Flock.Schedule
+public import Definitions.Flock.Compiled
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # The executable's schedule, read as the model's

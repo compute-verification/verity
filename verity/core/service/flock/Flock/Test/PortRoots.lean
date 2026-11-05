@@ -9,7 +9,6 @@ under one domain, neither a collision; under a hash with one value every pair of
 module
 
 public import Flock.PortRoots
-meta import Flock.PortRoots
 
 @[expose] public section
 

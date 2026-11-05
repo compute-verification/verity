@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.Layout.Pins
 public import Proofs.Flock.Soundness.Audit.FlockPublic
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Lowering
 
 /-!
 # Readers of rows and single gates

@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Nci.BitView
-public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 
 /-!
 # A declaration bit by bit, as a declaration

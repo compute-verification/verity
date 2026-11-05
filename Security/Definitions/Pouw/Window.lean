@@ -1,14 +1,10 @@
 module
 
-public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
-public import Mathlib.Basic.ENNReal.BigOperators
-public import Mathlib.Basic.ENNReal.Inv
-public import Mathlib.Order.CompleteLattice.Basic
 public import Mathlib.Data.Fintype.Perm
-public import Mathlib.Data.Fintype.Pi
 public import Mathlib.Data.Fintype.Sigma
 public import Definitions.Core.Draw
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # A window of calls: one draw that depends on the registration, then the calls' sessions in order (trusted)

@@ -1,9 +1,9 @@
 module
 
 public import Properties.Nci.Protocol
-public import Proofs.Properties.Nci.BaselineSteps
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
+import Proofs.Properties.Nci.BaselineSteps
 
 /-!
 # NCI's core protocol's property, proved

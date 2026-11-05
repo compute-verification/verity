@@ -1,6 +1,7 @@
 module
 
-public import Proofs.Population.Determinacy
+public import Definitions.Population.Dataflow
+import Proofs.Population.Determinacy
 
 /-!
 # Integrity: what the checker confirms is exactly determinacy for every choice of unit functions

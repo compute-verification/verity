@@ -1,8 +1,11 @@
 module
 
 public import Definitions.Pouw.Assumptions.Dimension.H100Floor
-public import Proofs.Pouw.Dimension.H100WProofs
-public import Proofs.Pouw.Dimension.H100LoopFreeProofs
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.Tactic.NormNum.GCD
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Dimension.H100LoopFreeProofs
+import Proofs.Pouw.Dimension.H100WProofs
 
 /-!
 # `MH100`'s floor table and the hardware citations: proofs

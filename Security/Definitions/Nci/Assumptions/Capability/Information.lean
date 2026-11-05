@@ -1,10 +1,8 @@
 module
 
-public import Definitions.Nci.Capability
 public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 public import Mathlib.Probability.ProbabilityMassFunction.Basic
-public import Mathlib.Basic.ENNReal.Real
-public import Mathlib.Basic.Real.ENatENNReal
+public import Definitions.Nci.Capability.Items
 
 /-!
 # Local bounds: information premises

@@ -7,8 +7,7 @@ opening's ports (`rec-opening-c<k>`) are no `rec-c<k>`, so they are not compared
 -/
 module
 
-public import Flock.RecVStar
-meta import Flock.RecVStar
+public import VStar.Stage
 
 @[expose] public section
 

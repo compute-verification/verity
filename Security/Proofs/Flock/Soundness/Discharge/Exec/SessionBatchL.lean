@@ -1,7 +1,9 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Exec.SessionSoundL
-public import Proofs.Flock.Soundness.SessionBatch
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # Several salted tables in one batched session

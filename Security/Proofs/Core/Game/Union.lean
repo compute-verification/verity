@@ -1,6 +1,11 @@
 module
 
-public import Proofs.Core.Game.Interleave
+public import Definitions.Core.Game
+import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
+import Proofs.Core.Game.Basic
+import Proofs.Core.Game.Interleave
 
 /-!
 # Union bounds and loops

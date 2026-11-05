@@ -1,12 +1,11 @@
 module
 
 public import PousCheck.Run
-public import Properties.Pous
 public import Properties.Pous.TimedAudit
 public import Properties.Pous.MemoryChallenger
 public import Properties.Identity
 public import Definitions.Pous.Assumptions.P2
-public import Definitions.Pous.P2.Cost
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # PoUS end to end: what an accepted run certifies, and P2's audit in the ring model

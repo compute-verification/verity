@@ -1,6 +1,6 @@
 module
 
-public import Definitions.NetworkCertifier
+public import Definitions.NetworkCertifier.Run
 
 /-!
 # The trusted layer: the certifier assumptions

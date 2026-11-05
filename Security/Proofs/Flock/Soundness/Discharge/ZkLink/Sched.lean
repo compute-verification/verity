@@ -1,9 +1,13 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.ZkExec.Statements
-public import Proofs.Flock.Soundness.Discharge.ZkSession.Session
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
+public import Definitions.Flock.Accounting.Padded
+public import Flock.Zk
+public import Proofs.Flock.Soundness.LigeritoPhase
+public import Proofs.Flock.Soundness.Refine.Schedule
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Refine.Rep
 
 /-!
 # `Zk.schedule` at every m it accepts

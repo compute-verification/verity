@@ -1,8 +1,8 @@
 module
 
-public import Definitions.Nci.Capability
-public import Mathlib.Probability.ProbabilityMassFunction.Constructions
 public import Mathlib.Probability.Distributions.Uniform
+public import Definitions.Nci.Capability.Consumers
+public import Definitions.Nci.Capability.Products
 
 /-!
 # Local bounds: the toy instance their witnesses are stated at

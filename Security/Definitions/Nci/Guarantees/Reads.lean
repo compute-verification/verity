@@ -1,8 +1,8 @@
 module
 
 public import Definitions.Nci.Assumptions
-public import Definitions.Core.Partition
 public import Definitions.Nci.Reads
+import Mathlib.Data.NNRat.Floor
 
 /-!
 # NCI's guarantee in reads form

@@ -1,7 +1,15 @@
 module
 
 public import Definitions.Pouw.H1Zy.LaneChunk
-public import Proofs.Pouw.H1Zy.Lane
+public import Mathlib.Algebra.GroupWithZero.Defs
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.Linarith.Frontend
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Mathlib.Tactic.Ring.RingNF
+import Proofs.Pouw.H1Zy.Combine
+import Proofs.Pouw.H1Zy.Lane
 
 /-!
 # A lane's chunks, accepted at one carry chain, check the whole lane (`laneOk_of_chunks`)

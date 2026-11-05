@@ -7,7 +7,6 @@ module
 
 public import Flock.With.Transcript
 public import Flock.Verify
-public import Flock.JsonParse
 
 @[expose] public section
 

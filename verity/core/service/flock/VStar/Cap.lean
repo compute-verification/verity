@@ -1,7 +1,6 @@
 module
 
 public import VStar.Compose
-public import VStar.Unit
 
 /-!
 # `RecCap`: one node of a Ligerito level's committed tops (`verity_flock.rec_cap`)

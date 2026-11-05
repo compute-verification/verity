@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Nci.Guarantees.PartitionCovers
-public import Proofs.Core.Circuit
+import Proofs.Core.Circuit
 
 /-!
 # Proof of Lemma A.1: a `(c, k)`-partition's completed proof blocks cover the circuit

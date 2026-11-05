@@ -1,6 +1,13 @@
 module
 
-public import Proofs.Properties.NetworkRecords.Program
+public import Proofs.Properties.NetworkCertifier.Bytes
+public import Properties.NetworkRecords
+import Mathlib.Data.Finset.Attr
+import Mathlib.Data.List.Basic
+import Mathlib.Tactic.Bound.Init
+import Mathlib.Tactic.Finiteness.Attr
+import Mathlib.Tactic.SetLike
+import Proofs.Properties.NetworkRecords.Bytes
 
 /-!
 # A committed record's digest binds its frames

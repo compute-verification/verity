@@ -8,8 +8,8 @@ read back as (`-0.0`, a float of 10¹⁶ or more, which `Json.parse` reads as an
 -/
 module
 
-public import Lean.Data.Json
 public import CoreProtocol.Ratio
+public import Lean.Data.Json.Basic
 
 @[expose] public section
 set_option backward.privateInPublic true

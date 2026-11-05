@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Pous.Game.Prob
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The bandwidth audit v0 in the random-oracle model

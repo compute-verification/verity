@@ -3,6 +3,8 @@ module
 public import Proofs.Flock.Soundness.Refine.Schedule
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # Seams: the executable's constants are the model's

@@ -1,8 +1,10 @@
 module
 
-public import Proofs.Population.Determinacy
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
-public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Definitions.Population.Dataflow
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Proofs.Population.Determinacy
 
 /-!
 # Skippable work: what the faulty proof blocks' cones and luck bound

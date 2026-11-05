@@ -1,7 +1,5 @@
 module
 
-public import Flock.Hash
-public import Flock.Bytes
 public import Flock.Canon
 public import Identity.Tagged
 

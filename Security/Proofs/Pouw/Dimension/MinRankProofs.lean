@@ -1,7 +1,9 @@
 module
 
 public import Definitions.Pouw.Assumptions.Dimension.Mixing
-public import Proofs.Pouw.NCP.RelationWitness
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.NCP.GameProofs
+import Proofs.Pouw.NCP.RelationWitness
 
 /-!
 # MinRank ≥ 2 for the shift by 24

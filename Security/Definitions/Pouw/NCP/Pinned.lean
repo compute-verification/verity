@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Pouw.NCP.Defs
+import Mathlib.Tactic.Bound.Init
 
 /-!
 # Noise that cancels inside one checked product: pinned statements (trusted)

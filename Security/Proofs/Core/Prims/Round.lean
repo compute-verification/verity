@@ -1,8 +1,12 @@
 module
 
 public import Definitions.Core.Prims
-public import Proofs.Core.Fp32.Round
-public import Proofs.Core.TC.Proofs.Norm
+public import Definitions.Core.Fp32
+public import Proofs.Core.Round
+import Mathlib.Data.Rat.Floor
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Core.Fp32.Round
+import Proofs.Core.TC.Proofs.Norm
 
 /-!
 # `f32ToE4m3Sat` is the nearest E4M3 code, ties to even, saturating

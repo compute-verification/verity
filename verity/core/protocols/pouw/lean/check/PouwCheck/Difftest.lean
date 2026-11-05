@@ -4,7 +4,6 @@ public import Difftest
 public import PouwCheck.Check
 public import PouwCheck.Chunks
 public import PouwCheck.Opening
-public import PouwCheck.Pass
 public import PouwCheck.Rounds
 
 /-!

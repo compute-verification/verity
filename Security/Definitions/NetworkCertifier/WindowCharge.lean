@@ -1,6 +1,7 @@
 module
 
 public import Definitions.NetworkCertifier.AdviceV1
+import Mathlib.Tactic.Finiteness.Attr
 
 /-!
 # Advice v1's whole window charged (`ChargeCount_v2`): decisions, hits and order entries, as `code_v1` codes them

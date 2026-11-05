@@ -1,8 +1,7 @@
 module
 
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
-public import Mathlib.Order.Interval.Finset.Nat
 public import Definitions.Accounting.Guarantees.Requirement
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 /-!
 # A declared circuit's requirement, from what the audit credits

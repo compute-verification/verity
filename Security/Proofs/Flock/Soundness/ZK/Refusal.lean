@@ -1,9 +1,13 @@
 module
 
 public import Definitions.Flock.ZK.Cut
-public import Proofs.Flock.Soundness.ZK.Blocks
 public import Proofs.Flock.Soundness.ZK.Dist
-public import Proofs.Flock.Soundness.ZK.Session
+public import Definitions.Flock.ZK.SHVZK
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.ZK.Blocks
+import Proofs.Flock.Soundness.ZK.SHVZK
+import Proofs.Flock.Soundness.ZK.Session
 
 /-!
 # Zero knowledge: Lemma A at every coin vector, up to and including a refusal

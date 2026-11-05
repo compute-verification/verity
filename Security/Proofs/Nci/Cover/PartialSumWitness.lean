@@ -1,7 +1,9 @@
 module
 
 public import Proofs.Nci.Cover.FanOutWitness
-public import Proofs.Nci.Cover.PartialSumKeyed
+public import Definitions.Nci.Assumptions.CoverPartialSum
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Nci.Cover.PartialSumKeyed
 
 /-!
 # The partial-sum bounds: their hypotheses can hold together

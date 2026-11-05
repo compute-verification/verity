@@ -33,10 +33,10 @@ record is read once, in comparisons quadratic in V*'s statement count (at most 1
 -/
 module
 
-public import Lean.Data.Json
 public import Flock.JsonParse
 public import Flock.Bytes
 public import Flock.Hash
+public import Lean.Data.Json.FromToJson.Basic
 
 @[expose] public section
 

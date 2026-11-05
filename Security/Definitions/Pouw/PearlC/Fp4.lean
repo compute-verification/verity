@@ -1,6 +1,9 @@
 module
 
 public import Definitions.Pouw.Fp8Atom.Atom
+import Mathlib.Tactic.Bound.Init
+import Mathlib.Tactic.Finiteness.Attr
+import Mathlib.Tactic.SetLike
 
 /-!
 # sm_120's block-scaled FP4 step (trusted definitions)

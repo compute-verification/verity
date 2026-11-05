@@ -1,8 +1,12 @@
 module
 
-public import Proofs.Accounting.PerRunPriced
-public import Proofs.Pouw.PearlC.W1Priced
-public import Proofs.Pouw.PearlC.W1Stop
+public import Definitions.Accounting.Guarantees.PerRun
+public import Proofs.Pouw.PearlC.W1BudgetAbort
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Accounting.PerRunPriced
+import Proofs.Pouw.PearlC.W1Priced
+import Proofs.Pouw.PearlC.W1Stop
 
 /-!
 # Proof of the per-run guarantees from the γ-gap property per coin

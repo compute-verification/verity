@@ -1,6 +1,9 @@
 module
 
-public import Proofs.Flock.Soundness.CROnly.Hiding
+public import Mathlib.Data.Fintype.Pi
+public import Proofs.Flock.Soundness.CROnly.Hm96Defs
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # hm96's Hankel family is universal

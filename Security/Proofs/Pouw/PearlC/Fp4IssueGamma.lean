@@ -1,8 +1,10 @@
 module
 
-public import Proofs.Pouw.PearlC.DeviceFp4Gamma
-public import Definitions.Pouw.PearlC.DeviceFp4Issue
 public import Definitions.Pouw.Guarantees.PearlC
+public import Definitions.Pouw.Assumptions.PearlC.TTOutFp4
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.DeviceFp4Gamma
 
 /-!
 # Pearl-C4 at the issue-bound FP32 price (staged)

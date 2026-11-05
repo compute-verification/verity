@@ -1,10 +1,10 @@
 module
 
-public import Definitions.Flock.Session
-public import Definitions.Flock.Accounting.Fast100
 public import Mathlib.Algebra.Polynomial.Degree.Defs
-public import Mathlib.Algebra.Polynomial.Eval.Defs
-public import Mathlib.Algebra.CharP.Defs
+public import Definitions.Flock.Ligerito
+public import Definitions.Flock.Piop
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # Shared definitions of the soundness statement

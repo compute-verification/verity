@@ -2,6 +2,7 @@ module
 
 public import Properties.Pous.WipeSigned
 public import Proofs.Properties.Pous.MemoryChallenger.Tree
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The wipe's records tree binds its values

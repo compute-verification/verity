@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Pous.P2.Cost
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # P2's sequential audit with a state size per round boundary (trusted)

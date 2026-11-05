@@ -1,7 +1,8 @@
 module
 
 public import Proofs.Flock.Soundness.Session
-public import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # Several tables in one batched session (PROTOCOL.md §5)

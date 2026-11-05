@@ -1,6 +1,10 @@
 module
 
 public import Proofs.Flock.Soundness.Audit.Stratified
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Inv
+import Proofs.Flock.Soundness.Audit.Law
 
 /-!
 # The stratified law's count curve

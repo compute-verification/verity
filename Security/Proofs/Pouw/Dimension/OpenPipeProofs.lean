@@ -1,7 +1,14 @@
 module
 
 public import Definitions.Pouw.Assumptions.Dimension.OpenPipe
-public import Proofs.Pouw.Dimension.ForestProofs
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.LinearAlgebra.Dimension.Constructions
+import Mathlib.LinearAlgebra.FreeModule.StrongRankCondition
+import Mathlib.Tactic.NormNum.GCD
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Dimension.ForestProofs
+import Proofs.Pouw.Dimension.MixingProofs
+import Proofs.Pouw.Dimension.PipeProofs
 
 /-!
 # The open quadratic pipe: proofs

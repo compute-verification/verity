@@ -1,8 +1,8 @@
 module
 
-public import Proofs.Properties.Challenger
-public import Proofs.Properties.SampledProofs
-public import VStarRecursive
+public import VStarRecursive.Protocol
+import Proofs.Properties.Challenger
+import Proofs.Properties.SampledProofs
 
 /-!
 # A step of `acc_of_accepts`: what the compiled recursive component's acceptance unfolds to

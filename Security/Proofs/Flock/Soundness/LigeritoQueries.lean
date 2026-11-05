@@ -1,7 +1,11 @@
 module
 
-public import Proofs.Flock.Soundness.LigeritoCoins
-public import Mathlib.Analysis.MeanInequalities
+public import Definitions.Core.Game
+public import Definitions.Flock.Defs
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.ZerocheckPhase
 
 /-!
 # Ligerito's stratified queries (PROTOCOL.md §13.5)

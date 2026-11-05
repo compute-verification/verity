@@ -5,7 +5,6 @@ in full (`k_a = 1 = n_a`) and two of `b`'s four units. A unit reading a round's 
 module
 
 public import Flock.Registered
-meta import Flock.Registered
 
 @[expose] public section
 

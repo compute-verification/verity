@@ -10,7 +10,8 @@ columns unwritten (`foldlM_apart`).
 -/
 module
 
-public import Flock.TmplRows
+public import Flock.Tmpl
+import Flock.TmplRows
 
 @[expose] public section
 

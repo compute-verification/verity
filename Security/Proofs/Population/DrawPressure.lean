@@ -2,7 +2,8 @@ module
 
 public import Mathlib.Analysis.SpecialFunctions.Log.Basic
 public import Definitions.Population.DrawPressure
-public import Proofs.Population.Exfiltration
+public import Definitions.Population.Exfiltration
+import Proofs.Population.Exfiltration
 
 /-!
 # Detection pressure of the deployed draw

@@ -1,13 +1,15 @@
 module
 
-public import Mathlib.Tactic.Linarith
-public import Mathlib.Tactic.Positivity
-public import Mathlib.Tactic.NormNum
-public import Mathlib.Tactic.Ring
-public import Definitions.Pouw.PearlC.Defs
 public import Definitions.Pouw.PearlC.Skip
-public import Proofs.Pouw.Fp8Atom.H1TAtomProofs
-public import Proofs.Pouw.Fp8Atom.Fp32Proofs
+public import Definitions.Pouw.Fp8Atom.H1TLemmas
+public import Proofs.Pouw.Fp8Atom.Proofs
+import Mathlib.Algebra.BigOperators.Fin
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Data.List.GetD
+import Mathlib.Tactic.LinearCombination
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Fp8Atom.H1TAtomProofs
+import Proofs.Pouw.Fp8Atom.H1TProofs
 
 /-!
 # P1: freezing under promotion every `G` atoms (staging)

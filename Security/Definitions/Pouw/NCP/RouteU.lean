@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Pouw.NCP.Protocol
-public import Mathlib.Algebra.BigOperators.Intervals
 
 /-!
 # NCP's checked values on route U (trusted)

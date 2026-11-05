@@ -1,6 +1,8 @@
 module
 
 public import Properties.Flock.Circuit.Keyed
+import Mathlib.Tactic.NormNum.Inv
+import Mathlib.Tactic.NormNum.Pow
 
 /-!
 # The program's own wiring of each unit, and the returned outputs' bits

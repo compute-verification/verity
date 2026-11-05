@@ -2,9 +2,12 @@ module
 
 public import Properties.Pous.Obligation
 public import Definitions.Pous.Guarantees.Obligation
-public import Proofs.Pous.Period
-public import Proofs.Pous.P2.Rounds
-public import Proofs.Pous.Thm1.Theorem1ii
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pous.P2.Rounds
+import Proofs.Pous.Period
+import Proofs.Pous.Sanity
+import Proofs.Pous.Thm1.Theorem1ii
+import Proofs.Pouw.Prob
 
 /-!
 # Proofs of PoUS as an obligation: tag freshness, the snapshot reduction, and the per-window guarantee

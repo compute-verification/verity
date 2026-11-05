@@ -2,6 +2,16 @@ module
 
 public import Definitions.Flock.Extract
 public import Proofs.Flock.Soundness.Game.Runs
+public import Definitions.Flock.Rewinding
+public import Mathlib.Analysis.Complex.Exponential
+meta import Lean.Meta.Tactic.NormCast
+import Mathlib.Algebra.Order.BigOperators.Expect
+import Mathlib.Algebra.Order.Field.Power
+import Mathlib.Analysis.Complex.Order
+import Mathlib.Analysis.Complex.Trigonometric
+import Mathlib.Data.EReal.Inv
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Game.Expect
 
 /-!
 # Extraction by filling: the extractor's own table

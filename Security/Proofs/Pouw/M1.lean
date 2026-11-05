@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Pouw.Assumptions.Pinned
-public import Proofs.Pouw.Prob
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # Facts about the named instance `D1.m1`

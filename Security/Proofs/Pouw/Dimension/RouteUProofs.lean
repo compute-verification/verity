@@ -1,11 +1,14 @@
 module
 
 public import Definitions.Pouw.Assumptions.Dimension.RouteU
-public import Proofs.Pouw.Dimension.Proofs
-public import Proofs.Pouw.Dimension.MixingProofs
-public import Proofs.Pouw.Dimension.CausalProofs
-public import Proofs.Pouw.NCP.RouteUProofs
-public import Proofs.Pouw.NCP.RouteUWordProofs
+import Mathlib.LinearAlgebra.FiniteDimensional.Lemmas
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Dimension.CausalProofs
+import Proofs.Pouw.Dimension.MixingProofs
+import Proofs.Pouw.NCP.GameProofs
+import Proofs.Pouw.NCP.RelationWitness
+import Proofs.Pouw.NCP.RouteUProofs
+import Proofs.Pouw.NCP.RouteUWordProofs
 
 /-!
 # Theorem D on route U's checked words: proofs

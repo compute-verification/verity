@@ -1,6 +1,15 @@
 module
 
-public import Proofs.Flock.Soundness.ExecCircuit
+public import Aesop.BuiltinRules
+public import Flock.HmRow
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.Tactic.ContinuousFunctionalCalculus
+import Mathlib.Tactic.NormNum.GCD
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.ExecCircuit
 
 /-!
 # A unit given ahead of the file

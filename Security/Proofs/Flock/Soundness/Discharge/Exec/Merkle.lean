@@ -1,7 +1,14 @@
 module
 
-public import Proofs.Flock.Soundness.ExecTemplate
-public import Proofs.Flock.Soundness.Discharge.Exec.Tables
+public import Proofs.Flock.Soundness.Discharge.Exec.SessionL
+public import Proofs.Flock.Soundness.Discharge.Exec.Setup
+public import Proofs.Flock.Soundness.Refine.Salted
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Exec.Tables
+import Proofs.Flock.Soundness.ExecLookup
+import Proofs.Flock.Soundness.ExecParse
+import Proofs.Flock.Soundness.ExecTemplate
+import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
 # The leaf scheme of each table flock-verify sets up (`hms`)

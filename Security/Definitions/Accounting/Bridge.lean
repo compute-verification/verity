@@ -2,7 +2,6 @@ module
 
 public import Definitions.Accounting.Device
 public import Definitions.Accounting.Physical
-public import Definitions.Accounting.Confidence
 
 /-!
 # The device's schedule, induced by the actual circuit (trusted)

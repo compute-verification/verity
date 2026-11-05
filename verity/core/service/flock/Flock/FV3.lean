@@ -22,8 +22,6 @@ with `"pad"` leaves and hashes `"node"`s level by level up to its root.
 -/
 module
 
-public import Flock.Hash
-public import Flock.Bytes
 public import Flock.Net
 
 @[expose] public section

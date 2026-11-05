@@ -10,7 +10,6 @@ that consumes another's answer.
 -/
 module
 
-public import Lean.Data.Json
 public import Flock.Canon
 public import CoreProtocol.Ratio
 

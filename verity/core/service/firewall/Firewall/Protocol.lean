@@ -22,10 +22,9 @@ the firewall's state directory.
 -/
 module
 
-public import CoreProtocol.Cli
 public import Flock.Firewall.Contract
-public import Flock.Hash
 public import Firewall.Release
+public import CoreProtocol.Protocol
 
 @[expose] public section
 

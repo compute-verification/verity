@@ -1,7 +1,7 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.ZkLink.OracleP
-public import Proofs.Flock.Soundness.CompiledAlign
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Compiled
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # The compiled masked level 0 in lockstep with the oracle one

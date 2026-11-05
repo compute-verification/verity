@@ -8,7 +8,6 @@ missing.
 module
 
 public import Flock.Record
-meta import Flock.Record
 
 @[expose] public section
 

@@ -1,7 +1,7 @@
 module
 
-public import Definitions.Pouw.PearlC.Row4Circuit
 public import Definitions.Pouw.PearlC.DeviceFp4
+public import Definitions.Pouw.PearlC.RowCircuit
 
 /-!
 # A row's statistics, scales and forming as the Programs compute them (spec)

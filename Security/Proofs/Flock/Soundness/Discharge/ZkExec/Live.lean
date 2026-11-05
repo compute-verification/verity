@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Event
 public import Proofs.Flock.Soundness.Discharge.Exec.Live
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # The live `--zk` audit, and the compiled `--zk` table it is simulated in

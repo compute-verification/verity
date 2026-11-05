@@ -1,13 +1,23 @@
 module
 
-public import Flock.RecVStar
 public import Flock.RecCoins
-public import Flock.Firewall
 public import Definitions.Flock.Recursive.Holo
-public import Proofs.Flock.Soundness.Defs
-public import Proofs.Flock.Recursive.Compile
 public import Proofs.Flock.Recursive.ExecClass
 public import Definitions.Flock.HoloCompiled
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Merkle
 
 /-!
 # Recursion: candidate 3's inner protocol as the executable runs it

@@ -1,8 +1,10 @@
 module
 
-public import Proofs.Pouw.PearlC.DeviceSm120KernelGamma
 public import Definitions.Pouw.Guarantees.PearlC
-public import Proofs.Pouw.PearlC.TTOutW1
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.KernelWrefGamma
+import Proofs.Pouw.PearlC.TTOutW1
 
 /-!
 # v1 under rev1 at a stricter cap, FP32 at the issue-bound add (FP8 security's file)

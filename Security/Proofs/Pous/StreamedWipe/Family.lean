@@ -2,7 +2,11 @@ module
 
 public import Definitions.Pous.Guarantees.StreamedWipeFamily
 public import Definitions.Pous.Guarantees.StreamedWipeReads
-public import Proofs.Pous.StreamedWipe.Deployed
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pous.StreamedWipe.Bound
+import Proofs.Pous.StreamedWipe.Deployed
 
 /-!
 # The streamed-label wipe at any number of reads, for every fill

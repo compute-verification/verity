@@ -1,9 +1,14 @@
 module
 
 public import Proofs.Flock.Soundness.Audit.Extraction
-public import Proofs.Flock.Soundness.Audit.Flock
 public import Proofs.Flock.Soundness.SessionBatch
-public import Proofs.Flock.Soundness.Lowering
+public import Definitions.Flock.Lowering
+public import Proofs.Flock.Soundness.Instance
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Lowering
 
 /-!
 # The Flock audit at the compiled layer, several tables per session

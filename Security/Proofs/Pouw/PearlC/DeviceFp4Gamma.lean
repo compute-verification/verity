@@ -1,7 +1,9 @@
 module
 
-public import Proofs.Pouw.PearlC.TileGamma
 public import Definitions.Pouw.Assumptions.PearlC.TTOutFp4
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.TileGamma
 
 /-!
 # γ at an FP4 record, and Pearl-C4's headline on sm_120 (staged, nothing pinned)

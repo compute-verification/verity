@@ -1,9 +1,9 @@
 module
 
 public import Definitions.Accounting.Physical
-public import Definitions.Core.Partition
 public import Definitions.Nci.Reads
 public import Definitions.Nci.Assumptions
+import Mathlib.Data.NNRat.Floor
 
 /-!
 # The actual circuit's runtime statements (trusted)

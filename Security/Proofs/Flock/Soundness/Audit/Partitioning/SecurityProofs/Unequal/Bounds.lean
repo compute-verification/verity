@@ -1,8 +1,8 @@
 module
 
 public import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
-public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Unequal.Laws
-public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Unequal.Witnesses
+import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Unequal.Laws
 
 /-!
 # Achievability, the granularity optimum and unequal units: the proofs

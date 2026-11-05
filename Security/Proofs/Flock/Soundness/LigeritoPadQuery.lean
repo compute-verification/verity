@@ -1,6 +1,11 @@
 module
 
-public import Proofs.Flock.Soundness.LigeritoPadDecode
+public import Proofs.Flock.Soundness.LigeritoMid
+public import Proofs.Flock.Soundness.LigeritoPadLevel0
+import Proofs.Flock.Soundness.Accounting.Fast100
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.LigeritoPadDecode
+import Proofs.Flock.Soundness.LigeritoQueries
 
 /-!
 # The padded level 0's queries, and on to level 1

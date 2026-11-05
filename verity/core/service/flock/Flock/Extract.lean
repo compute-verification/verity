@@ -10,7 +10,6 @@ inputs are one) without a table of inputs.
 -/
 module
 
-public import Std.Data.HashMap
 public import Flock.Program
 public import Flock.Qword
 

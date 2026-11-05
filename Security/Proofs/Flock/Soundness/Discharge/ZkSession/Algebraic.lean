@@ -2,7 +2,16 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkSession.Level0
 public import Proofs.Flock.Soundness.OpeningPhase
-public import Proofs.Flock.Soundness.Game.Union
+public import Mathlib.RingTheory.Henselian
+public import Mathlib.RingTheory.RegularLocalRing.Defs
+public import Mathlib.RingTheory.SimpleRing.Principal
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Interleave
+import Proofs.Flock.Soundness.Game.Union
+import VCVio.Prelude.Core
 
 /-!
 # C-Flock ZK's masked algebraic phase (live/PROTOCOL.md §1, §2, §4)

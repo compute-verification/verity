@@ -1,6 +1,12 @@
 module
 
 public import Proofs.Pouw.PearlC.HonestWords
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Tactic.IntervalCases
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Fp8Atom.H1TAtomProofs
+import Proofs.Pouw.Fp8Atom.H1TSliceProofs
+import Proofs.Pouw.PearlC.FormingP
 
 /-!
 # One group's step on a flat support: the cast reads a monotone function of the sum

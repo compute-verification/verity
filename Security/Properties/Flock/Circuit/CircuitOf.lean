@@ -1,9 +1,10 @@
 module
 
-public import Definitions.Core.Boolean
 public import Definitions.Core.Partition
 public import Flock.Desc
 public import Properties.Flock.Circuit.Outs
+import Mathlib.Tactic.NormNum.Inv
+import Mathlib.Tactic.NormNum.Pow
 
 /-!
 # The registered circuit file as core's circuit

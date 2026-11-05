@@ -1,6 +1,11 @@
 module
 
 public import Proofs.Flock.Soundness.LigeritoMid
+import Proofs.Flock.Soundness.Accounting.Fast100
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Interleave
+import Proofs.Flock.Soundness.Game.Union
+import Proofs.Flock.Soundness.LigeritoCoins
 
 /-!
 # Ligerito is sound (PROTOCOL.md §13)

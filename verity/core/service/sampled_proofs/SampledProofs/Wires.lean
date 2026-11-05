@@ -31,7 +31,7 @@ template), then `overlap` (some reader row wired twice).
 -/
 module
 
-public import Lean.Data.Json
+public import Lean.Data.Json.FromToJson.Basic
 
 @[expose] public section
 

@@ -2,6 +2,8 @@ module
 
 public import Mathlib.Data.Fintype.Pi
 public import Definitions.Core.Game
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Draws: which units the verifier's coins pick

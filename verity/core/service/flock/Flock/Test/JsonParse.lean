@@ -8,11 +8,10 @@ pairs, numbers, nesting, whitespace, multi-byte characters (offsets are bytes) a
 module
 
 public import Flock.JsonParse
-public import Lean.Data.Json
-meta import Flock.JsonParse
-meta import Lean.Data.Json
 import all Init.Data.Repr
 import all Init.Data.Ord.String
+public import Lean.Data.Json.Parser
+public import Lean.Data.Json.Printer
 
 @[expose] public section
 

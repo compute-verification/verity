@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.Soundness.Discharge.Exec.StrictCRL
 public import Proofs.Flock.Soundness.Discharge.Exec.FlockLinkL
 public import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
-public import Proofs.Flock.Soundness.Discharge.ZkLink.CompiledLink
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # cr/sha-512 at the prover's own finders

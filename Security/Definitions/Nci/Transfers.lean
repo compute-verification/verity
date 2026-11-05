@@ -2,6 +2,7 @@ module
 
 public import Definitions.Core.Partition
 public import Definitions.Nci.Covering
+public import Mathlib.Data.Finset.Union
 
 /-!
 # Transfer gates: what one machine sends another

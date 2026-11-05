@@ -1,6 +1,9 @@
 module
 
-public import Proofs.Flock.Soundness.Game.Expect
+public import Definitions.Flock.Game.Expect
+import Mathlib.Algebra.CharP.Defs
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Game.Expect
 
 /-!
 # Independent runs of a strategy

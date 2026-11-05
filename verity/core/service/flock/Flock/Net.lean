@@ -4,9 +4,7 @@ table), and the text helpers its parser uses.
 -/
 module
 
-public import Lean.Data.Json
 public import Flock.Comp
-public import Flock.JsonParse
 
 @[expose] public section
 set_option backward.privateInPublic true

@@ -1,7 +1,7 @@
 module
 
-public import Mathlib.Data.Fintype.Option
-public import Definitions.Pous.Game.Oracle
+public import Definitions.Pous.Game.Prob
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # One-way data-carrying labels and greedy pebbling (B5)

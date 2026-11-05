@@ -1,8 +1,13 @@
 module
 
-public import Proofs.Flock.Soundness.Game.Basic
-public import Mathlib.Algebra.MvPolynomial.SchwartzZippel
-public import Mathlib.Algebra.Polynomial.Roots
+public import Definitions.Core.Game
+public import Mathlib.Algebra.MvPolynomial.Degrees
+public import Mathlib.Algebra.Polynomial.Degree.Defs
+public import Mathlib.Algebra.Polynomial.Eval.Defs
+import Mathlib.Algebra.MvPolynomial.SchwartzZippel
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Inv
+import Proofs.Flock.Soundness.Game.Basic
 
 /-!
 # A live coin hits a zero of a fixed polynomial rarely

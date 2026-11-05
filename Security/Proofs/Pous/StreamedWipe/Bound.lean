@@ -1,7 +1,9 @@
 module
 
-public import Proofs.Pous.StreamedWipe.Count
 public import Definitions.Pous.Guarantees.StreamedWipe
+import Mathlib.Basic.ENNReal.Inv
+import Mathlib.Data.Fintype.BigOperators
+import Proofs.Pous.StreamedWipe.Count
 
 /-!
 # The streamed-label wipe: the bound

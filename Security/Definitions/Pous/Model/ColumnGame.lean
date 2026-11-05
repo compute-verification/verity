@@ -1,7 +1,8 @@
 module
 
-public import Mathlib.Data.Fintype.Prod
 public import Definitions.Pous.Model.Labelling
+public import Mathlib.Data.Finset.Prod
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The two-directional column game over P3's two-layer labels

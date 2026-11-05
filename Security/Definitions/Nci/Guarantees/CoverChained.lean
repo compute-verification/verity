@@ -1,9 +1,10 @@
 module
 
 public import Definitions.Nci.BitDecl
-public import Definitions.Nci.Dark
 public import Definitions.Nci.Assumptions.Baseline
 public import Definitions.Nci.Assumptions.CoveringTwoCosts
+public import Definitions.Nci
+import Mathlib.Data.NNRat.Floor
 
 /-!
 # The cover theorem on a compliant declaration, counting the covering bound's chained multiplication blocks

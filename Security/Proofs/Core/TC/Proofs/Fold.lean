@@ -1,6 +1,7 @@
 module
 
-public import Proofs.Core.TC.Proofs.Prod
+public import Definitions.Core.TC.Relation
+public import Definitions.Core.TC.Spec
 
 /-!
 # `group_sum`'s two folds, against the relation's terms

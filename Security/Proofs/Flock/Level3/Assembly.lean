@@ -6,7 +6,8 @@ module
 
 public import Proofs.Flock.Level3.GF128Field
 public import Flock.Piop
-public import Mathlib.Algebra.BigOperators.Fin
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
 
 @[expose] public section
 

@@ -1,10 +1,8 @@
 module
 
-public import Mathlib.Algebra.Polynomial.Roots
-public import Mathlib.NumberTheory.LucasLehmer
-public import Mathlib.Probability.Distributions.Uniform
-public import Mathlib.Data.List.GetD
 public import Definitions.Accounting.Tag.PolyHash
+public import Definitions.Accounting.Tag.Prob
+import Mathlib.NumberTheory.LucasLehmer
 
 /-!
 # Shared lemmas for the tag proofs

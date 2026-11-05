@@ -1,7 +1,10 @@
 module
 
 public import Definitions.Population.ChiPool
-public import Proofs.Population.DrawPressure
+public import Definitions.Population.DrawPressure
+public import Mathlib.Analysis.SpecialFunctions.Log.Basic
+import Proofs.Population.DrawPressure
+import Proofs.Population.Exfiltration
 
 /-!
 # The cheating pool with the verdict lag: harm through the halt

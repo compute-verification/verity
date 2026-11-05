@@ -2,6 +2,8 @@ module
 
 public import Definitions.Pouw.PearlC.W1
 public import Definitions.Pouw.PearlC.NoiseSha512
+public import Definitions.Pouw.PearlC.DevicePrices
+public import Definitions.Pouw.PearlC.DevicePricesLoop
 
 /-!
 # Checks of W1's cost model and SHA-512's noise

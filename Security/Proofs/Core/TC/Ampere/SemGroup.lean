@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Core.TC.Ampere.Group
-public import Proofs.Core.TC.Proofs.SemGroup
+public import Definitions.Core.TC.Bridge
 
 /-!
 # One Ampere group, the semantics' side

@@ -1,7 +1,7 @@
 module
 
-public import Flock.With.SimVerify
 public import Flock.With.Log
+import Flock.With.SimWalk
 
 /-!
 # A rep reads its rounds as replay does

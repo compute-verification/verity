@@ -7,7 +7,6 @@ do not register, other than R's tops, is not checked here.
 module
 
 public import Flock.RecVStar
-meta import Flock.RecVStar
 
 @[expose] public section
 

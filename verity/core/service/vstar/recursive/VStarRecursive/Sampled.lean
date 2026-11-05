@@ -14,7 +14,6 @@ Sampled proofs (`verity/sampled-proofs/v1`), a `Core.BlobProtocol`: one-stage v1
 module
 
 public import VStarRecursive.Protocol
-meta import VStarRecursive.Protocol
 
 @[expose] public section
 set_option backward.privateInPublic true

@@ -12,5 +12,6 @@ public import Proofs.Flock.Soundness.CROnly.Hankel
 public import Proofs.Flock.Soundness.CROnly.Hm96Sha512
 public import Proofs.Flock.Soundness.CROnly.ZK
 public import Proofs.Flock.Soundness.CROnly.ZKKey
+import Mathlib.Combinatorics.Matroid.Init
 
 @[expose] public section

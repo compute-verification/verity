@@ -1,8 +1,13 @@
 module
 
 public import Definitions.Pouw.TileBound.Defs
-public import Mathlib.Tactic.IntervalCases
-public import Definitions.Pouw.TileBound.Fp8Defs
+meta import Lean.Meta.Tactic.NormCast
+import Mathlib.Data.Nat.Totient
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.Tactic.ContinuousFunctionalCalculus
+import Mathlib.Tactic.IntervalCases
+import Mathlib.Tactic.Linarith.Frontend
+import Mathlib.Tactic.NormNum.GCD
 
 /-!
 # When a ⟨2,2,2⟩ recursion could pay at E4M3, and the output region it needs

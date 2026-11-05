@@ -1,9 +1,12 @@
 module
 
 public import Definitions.Pouw.PearlC.TileCircuit
-public import Definitions.Pouw.PearlC.PeelExactP
 public import Proofs.Pouw.PearlC.AccumProofs
-public import Proofs.Core.Circuit
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Core.Circuit
+import Proofs.Pouw.Fp8Atom.Fp32Proofs
+import Proofs.Pouw.PearlC.PeelExactProofs
 
 /-!
 # The tile unit computes `C̃` and `U` (proofs)

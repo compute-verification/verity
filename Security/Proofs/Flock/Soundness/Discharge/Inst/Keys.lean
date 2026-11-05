@@ -2,6 +2,9 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.Inst.Prog
 public import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
+public import Proofs.Flock.Soundness.Discharge.Aliased.Keys
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Placed.Wiring
 
 /-!
 # `lay` and `rs` at the program of the whole template instance

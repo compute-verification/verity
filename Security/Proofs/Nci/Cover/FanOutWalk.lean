@@ -1,10 +1,13 @@
 module
 
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
-public import Mathlib.Tactic.Linarith
-public import Mathlib.Tactic.Positivity
 public import Proofs.Nci.Cover.FanOutPlan
-public import Proofs.Nci.Cover.Paths
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.Linarith.Frontend
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Nci.Cover.Paths
 
 /-!
 # The fan-out proof: walks along keys, and what they charge

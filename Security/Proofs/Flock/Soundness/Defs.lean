@@ -1,7 +1,10 @@
 module
 
 public import Definitions.Flock.Defs
-public import Proofs.Flock.Soundness.Accounting.Numbers
+public import Definitions.Flock.Session
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.IntervalCases
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # Shared definitions of the soundness statement

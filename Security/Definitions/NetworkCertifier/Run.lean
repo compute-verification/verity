@@ -1,7 +1,6 @@
 module
 
 public import Definitions.NetworkCertifier.Grid
-public import Mathlib.Data.List.Basic
 
 /-!
 # The interaction, the Program, and acceptance

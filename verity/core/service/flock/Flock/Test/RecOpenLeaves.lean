@@ -15,10 +15,7 @@ port, so a second `acc` reading level-major rows passes it unread.
 -/
 module
 
-public import Flock.RecOpen
 public import Flock.RecVStar
-meta import Flock.RecOpen
-meta import Flock.RecVStar
 
 @[expose] public section
 

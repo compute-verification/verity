@@ -1,7 +1,6 @@
 module
 
 public import Mathlib.Data.Matrix.ColumnRowPartitioned
-public import Batteries.Data.List.Basic
 public import Definitions.Pouw.Fp8Atom.Fp32
 
 /-!

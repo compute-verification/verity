@@ -1,6 +1,13 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Aliased.Keys
+public import Proofs.Flock.Level3.Placed
+public import Proofs.Flock.Soundness.Compose
+public import Properties.Flock.Circuit.Keys
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import VCVio.Prelude.Core
 
 /-!
 # A template instance's rows over every net, joined by Δ's wires

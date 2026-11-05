@@ -3,6 +3,8 @@ module
 public import Proofs.Flock.Soundness.Discharge.Inst.Order
 public import Proofs.Flock.Soundness.Discharge.Inst.Keys
 public import Proofs.Flock.Soundness.Discharge.Layout.KeysRow
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Aliased.Rows
 
 /-!
 # `InstKeysRow` from the parse

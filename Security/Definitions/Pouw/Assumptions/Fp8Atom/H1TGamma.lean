@@ -1,9 +1,7 @@
 module
 
-public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-public import Mathlib.Data.Fintype.Sigma
 public import Definitions.Pouw.Assumptions.Dimension.H100W
-public import Definitions.Pouw.Assumptions.Fp8Atom.H1TAssumptions
+public import Definitions.Pouw.Fp8Atom.H1T
 
 /-!
 # H-1T's γ corollary: several units in `MH100w` (trusted statements)

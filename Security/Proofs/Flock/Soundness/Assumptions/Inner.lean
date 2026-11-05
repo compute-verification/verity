@@ -1,7 +1,6 @@
 module
 
 public import Flock.RecVStar
-public import Flock.Record
 
 /-!
 # live-verifier at the inner session: the coin server's records of it

@@ -1,6 +1,17 @@
 module
 
-public import Proofs.Pouw.TileBound.Proofs
+public import Definitions.Pouw.TileBound.Defs
+public import Mathlib.Algebra.Field.Rat
+public import Mathlib.Algebra.Group.End
+public import Mathlib.Data.Fintype.Sum
+public import Mathlib.Logic.Equiv.Fin.Basic
+meta import Lean.Meta.Tactic.NormCast
+import Mathlib.Data.Nat.Totient
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.LinearAlgebra.Matrix.Notation
+import Mathlib.Tactic.Linarith.Frontend
+import Mathlib.Tactic.NormNum.GCD
+import Proofs.Pouw.TileBound.Proofs
 
 /-!
 # A program that beats the honest count in the abstract slot model (a later bundle; outside the 36 merged pins)

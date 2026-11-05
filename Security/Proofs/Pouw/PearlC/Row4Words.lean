@@ -1,7 +1,9 @@
 module
 
 public import Proofs.Pouw.PearlC.RowCircuit
-public import Proofs.Pouw.PearlC.Tile4Circuit
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.Tile4Circuit
 
 /-!
 # Pearl-C4's row units compute their codes, scale bytes, `P_A` and `P_B` (proofs)

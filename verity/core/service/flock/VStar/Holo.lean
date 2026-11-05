@@ -1,9 +1,6 @@
 module
 
-public import VStar.Compose
-public import VStar.Json
 public import VStar.Stage
-public import Flock.JsonParse
 
 /-!
 # V*'s statements over a holo inner session (`rec_algebra.Shape.holo`, `rec_residuals.statement(..., holo=True)`)

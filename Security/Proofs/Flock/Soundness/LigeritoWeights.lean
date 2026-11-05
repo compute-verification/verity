@@ -1,6 +1,8 @@
 module
 
-public import Proofs.Flock.Soundness.LigeritoFolds
+public import Definitions.Flock.Ligerito
+import Proofs.Flock.Soundness.LigeritoMCA
+import Proofs.Flock.Soundness.ZerocheckPhase
 
 /-!
 # Ligerito's weights: the algebra of the final check (PROTOCOL.md §13.4, §13.6)

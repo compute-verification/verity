@@ -1,7 +1,10 @@
 module
 
-public import Proofs.Pous.Chain.Family
-public import Proofs.Pous.Continuous.PerAnswer
+public import Proofs.Pous.Chain.Flat
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pous.Chain.Family
+import Proofs.Pous.Continuous.PerAnswer
 
 /-!
 # The continuous audit on the 64 KiB band at `D = 5` (an instance, not pinned)

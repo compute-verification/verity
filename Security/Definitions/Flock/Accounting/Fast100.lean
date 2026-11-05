@@ -1,11 +1,8 @@
 module
 
 public import Definitions.Flock.Accounting.Bound
-public import Mathlib.Tactic.NormNum
-public import Mathlib.Tactic.Positivity
-public import Mathlib.Tactic.Linarith
-public import Mathlib.Tactic.IntervalCases
-public import Mathlib.Tactic.GCongr
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # Rational upper bounds for `fast100`'s error, term by term

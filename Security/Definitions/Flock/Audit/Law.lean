@@ -1,10 +1,9 @@
 module
 
-public import Definitions.Flock.Game.Prob
 public import Definitions.Core.Draw
 public import Mathlib.Data.Fintype.Powerset
-public import Mathlib.Data.Nat.Choose.Basic
-public import Mathlib.Data.Fintype.Fin
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Draw laws

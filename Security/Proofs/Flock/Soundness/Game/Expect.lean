@@ -1,8 +1,11 @@
 module
 
 public import Definitions.Flock.Game.Expect
-public import Proofs.Flock.Soundness.Game.Basic
-public import Proofs.Flock.Soundness.Rewinding
+public import Definitions.Flock.Rewinding
+public import Mathlib.Analysis.Real.Sqrt
+import Mathlib.Algebra.Order.Chebyshev
+import Mathlib.Basic.ENNReal.BigOperators
+import Proofs.Flock.Soundness.Game.Basic
 
 /-!
 # Expectations against a strategy, and the rewinding lemma for any run distribution

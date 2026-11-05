@@ -8,8 +8,8 @@ accepted as numbers; anything else is refused rather than guessed.
 module
 
 public import Lean.Data.Json
-public import Std.Data.TreeMap.Raw.Lemmas
 public import Flock.Bytes
+import Std.Data.TreeMap.Raw.Lemmas
 
 @[expose] public section
 set_option backward.privateInPublic true

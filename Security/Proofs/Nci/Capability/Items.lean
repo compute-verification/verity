@@ -1,7 +1,9 @@
 module
 
-public import Definitions.Nci.Capability
-public import Proofs.Core.Formalism
+public import Definitions.Nci.Capability.Items
+import Mathlib.Tactic.NormNum.Inv
+import Mathlib.Tactic.NormNum.Pow
+import Proofs.Core.Circuit
 
 /-!
 # Local bounds: what a block holds

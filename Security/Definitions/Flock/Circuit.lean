@@ -1,7 +1,5 @@
 module
 
-public import Mathlib.Data.Fintype.Card
-public import Mathlib.Data.Finset.Card
 public import Definitions.Core.Boolean
 
 /-!

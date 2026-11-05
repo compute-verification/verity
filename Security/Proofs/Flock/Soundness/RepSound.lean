@@ -1,12 +1,15 @@
 module
 
-public import Proofs.Flock.Soundness.Defs
-public import Proofs.Flock.Soundness.Rounds
-public import Proofs.Flock.Soundness.OpeningPhase
-public import Proofs.Flock.Soundness.ListSize
-public import Proofs.Flock.Soundness.LincheckPhase
-public import Proofs.Flock.Soundness.ZerocheckPhase
-public import Proofs.Flock.Soundness.LigeritoPhase
+public import Definitions.Flock.Accounting.Fast100
+public import Definitions.Flock.Defs
+public import Definitions.Flock.Session
+public import Mathlib.CategoryTheory.Category.Basic
+import Proofs.Flock.Soundness.Accounting.Fast100
+import Proofs.Flock.Soundness.Accounting.Numbers
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.LigeritoPhase
+import Proofs.Flock.Soundness.LincheckPhase
+import Proofs.Flock.Soundness.OpeningPhase
 
 /-!
 # One rep is sound

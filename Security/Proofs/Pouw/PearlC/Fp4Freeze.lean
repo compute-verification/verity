@@ -1,10 +1,12 @@
 module
 
-public import Mathlib.Tactic.Linarith
-public import Mathlib.Tactic.Ring
 public import Definitions.Pouw.PearlC.Fp4Skip
 public import Proofs.Pouw.PearlC.AccumProofs
-public import Proofs.Pouw.PearlC.AtomErr
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Data.Nat.Bitwise
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.AtomErr
+import Proofs.Pouw.PearlC.PeelExactProofs
 
 /-!
 # Pearl-C4's replayed debit: exactness, and the soundness of terms 2 and 3

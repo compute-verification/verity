@@ -1,6 +1,10 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+public import Flock.HmRow
+public import Mathlib.Data.Nat.Notation
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
 
 @[expose] public section
 

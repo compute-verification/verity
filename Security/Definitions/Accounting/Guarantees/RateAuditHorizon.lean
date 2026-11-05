@@ -1,7 +1,7 @@
 module
 
-public import Definitions.Accounting.RateAuditRemote
 public import Definitions.Accounting.RateAuditHorizon
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The causal horizon bound (trusted)

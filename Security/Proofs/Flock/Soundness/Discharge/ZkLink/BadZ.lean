@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkLink.LockRep
 public import Proofs.Flock.Soundness.Discharge.Exec.CompiledL
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Merkle
 
 /-!
 # Where a bad compiled `--zk` run goes wrong

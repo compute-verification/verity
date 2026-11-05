@@ -1,6 +1,5 @@
 module
 
-public import Properties.RemoteAudit
 public import RemoteAudit.Verifier
 
 /-!

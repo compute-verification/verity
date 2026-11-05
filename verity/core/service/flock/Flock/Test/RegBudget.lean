@@ -10,7 +10,6 @@ shared-row tables of `MAX_INNER_ROWS` rows, passes `innerRows`, and one instance
 module
 
 public import Flock.RecBudget
-meta import Flock.RecBudget
 
 @[expose] public section
 

@@ -1,8 +1,7 @@
 module
 
-public import Proofs.Flock.Soundness.Audit.Harm
-public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 public import Mathlib.Analysis.SpecialFunctions.Log.Base
+public import Definitions.Flock.Audit.Harm
 
 /-!
 # Optimal partitioning: the model

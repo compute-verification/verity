@@ -1,7 +1,13 @@
 module
 
-public import Proofs.Population.Oblivious
-public import Proofs.Population.Leakage
+public import Definitions.Population.Oblivious
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+import Mathlib.Tactic.Bound.Init
+import Proofs.Population.Determinacy
+import Proofs.Population.Egress
+import Proofs.Population.Leakage
+import Proofs.Population.Oblivious
+import Proofs.Population.Work
 
 /-!
 # The population theorems for a program, with its padding's public cones

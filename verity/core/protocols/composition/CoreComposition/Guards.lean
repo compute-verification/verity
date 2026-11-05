@@ -7,14 +7,9 @@ also on one store (`tiedSame`): two stores refused unless `same` rejects already
 -/
 module
 
-public import CoreComposition.Cases
-public import CoreComposition.Same
-public import CoreComposition.Tie
-public import CoreComposition.Stubs
-meta import CoreComposition.Cases
-meta import CoreComposition.Same
-meta import CoreComposition.Tie
-meta import CoreComposition.Stubs
+import CoreComposition.Cases
+import CoreComposition.Stubs
+import CoreComposition.Tie
 
 @[expose] public section
 

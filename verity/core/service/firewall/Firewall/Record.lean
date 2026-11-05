@@ -24,9 +24,10 @@ statement name that isn't a string.
 -/
 module
 
-public import Lean.Data.Json
-public import Flock.Canon
 public import Firewall.PyJson
+public import Flock.Bytes
+public import Lean.Data.Json.Parser
+import Flock.Canon
 
 @[expose] public section
 set_option backward.privateInPublic true

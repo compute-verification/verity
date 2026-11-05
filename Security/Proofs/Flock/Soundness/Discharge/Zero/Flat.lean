@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Zero.Delta
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # A typed flat class's inputs that read the zero carry 0 (`hZero`, e2e)

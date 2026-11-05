@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
-public import Definitions.Pouw.PearlC.DeviceFp4
 
 /-!
 # TT_OUT-FP4 at W1 (trusted; named assumptions, `Prop`s taken as hypotheses, never `axiom`s)

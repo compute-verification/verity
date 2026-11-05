@@ -5,10 +5,9 @@ input row, breaks an output group, or places a column past the constant.
 -/
 module
 
-public import Flock.TmplAt
 public import Flock.Test.Tmpl
-meta import Flock.TmplAt
-meta import Flock.Test.Tmpl
+public import Flock.NetAt
+import Flock.TmplAt
 
 @[expose] public section
 

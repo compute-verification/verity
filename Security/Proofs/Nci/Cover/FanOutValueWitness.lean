@@ -1,7 +1,16 @@
 module
 
-public import Proofs.Nci.Cover.FanOutValue
 public import Proofs.Nci.Cover.FanOutWitness
+public import Definitions.Nci.CoverFanOutValue
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Mathlib.Tactic.NormNum.Pow
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Nci.Cover.FanOutValue
+import Proofs.Nci.Cover.FanOutWalk
+import Proofs.Nci.Cover.Witness
 
 /-!
 # The read tier from wiring: its hypotheses can hold together

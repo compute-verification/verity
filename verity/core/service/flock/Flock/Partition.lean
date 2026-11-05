@@ -5,9 +5,8 @@ set is the boundary set. The verifier checks it itself, on its own copy of the c
 -/
 module
 
-public import Lean.Data.Json
-public import Std.Data.HashSet
 public import Flock.Bytes
+public import Lean.Data.Json.Printer
 
 @[expose] public section
 set_option backward.privateInPublic true

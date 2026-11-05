@@ -36,15 +36,9 @@ reads the level's tops `rec-top-L<l>` at row `i` in instance `i`, every node of 
 -/
 module
 
-public import Flock.Registered
 public import Flock.Firewall
-public import Flock.RecOpening
-public import Flock.RecSparse
 public import Flock.RecVStar
-public import Flock.Verify
 public import Flock.Zk
-public import Flock.Norm
-public import Flock.JsonParse
 
 @[expose] public section
 

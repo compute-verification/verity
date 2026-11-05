@@ -1,6 +1,10 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Inst.Rows
+public import Proofs.Flock.Soundness.Discharge.Aliased.Copies
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Aliased.Rows
+import Proofs.Flock.Soundness.ExecLookup
 
 /-!
 # A template instance's rows, placed by the statement the verifier accepted

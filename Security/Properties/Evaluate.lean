@@ -1,9 +1,5 @@
 module
 
-public import Evaluate.Scalar
-public import Evaluate.Fp32
-public import Evaluate.Casts
-public import Evaluate.TC.Dots
 public import Evaluate.Prims
 public import Definitions.Core.Scalar
 public import Definitions.Core.Fp32

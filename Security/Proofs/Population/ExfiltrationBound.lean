@@ -1,7 +1,17 @@
 module
 
-public import Proofs.Population.Exfiltration
-public import Proofs.Population.Leakage
+public import Definitions.Population.Dataflow
+public import Definitions.Population.Exfiltration
+meta import Lean.Meta.Tactic.NormCast
+import Mathlib.Algebra.Order.BigOperators.Expect
+import Mathlib.Algebra.Order.Field.Power
+import Mathlib.Analysis.Complex.Order
+import Mathlib.Analysis.Complex.Trigonometric
+import Mathlib.Data.EReal.Inv
+import Mathlib.Logic.Equiv.PartialEquiv
+import Proofs.Population.Determinacy
+import Proofs.Population.Exfiltration
+import Proofs.Population.Leakage
 
 /-!
 # Exfiltration before detection: from the draw and the population to the probability of theft

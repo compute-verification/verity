@@ -1,8 +1,12 @@
 module
 
 public import Definitions.Pouw.PearlC.HiddenTileGame
-public import Proofs.Pouw.PearlC.HiddenGamma
-public import Proofs.Core.Game
+public import Definitions.Pouw.Assumptions.PearlC.HiddenTile
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Core.Game
+import Proofs.Core.Game.Prob
+import Proofs.Pouw.PearlC.HiddenGamma
 
 /-!
 # The hidden audit's open obligation from what a proof system gives per tile

@@ -8,12 +8,11 @@ module
 
 public import Proofs.Flock.Level3.Seam
 public import Flock.Piop
-public import Mathlib.Data.Fintype.Card
-public import Mathlib.Data.Fintype.Prod
-public import Mathlib.Algebra.Polynomial.Degree.Operations
-public import Mathlib.Algebra.Polynomial.Degree.Support
 import all Init.Data.Array.Basic
 import all Init.Data.Array.DecidableEq
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Mathlib.RingTheory.LocalRing.Basic
 
 @[expose] public section
 

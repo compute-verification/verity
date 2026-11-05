@@ -1,6 +1,13 @@
 module
 
-public import Proofs.Nci.Cover.FanOutWalk
+public import Definitions.Nci.CoverFanOut
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Mathlib.Tactic.NormNum.Pow
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Nci.Cover.FanOutWalk
 
 /-!
 # The fan-out structure: one spent value per key chain

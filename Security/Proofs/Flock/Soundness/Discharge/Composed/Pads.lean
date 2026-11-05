@@ -1,6 +1,9 @@
 module
 
-public import Mathlib.LinearAlgebra.Vandermonde
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+public import Mathlib.Algebra.Field.Defs
+public import Mathlib.Data.Fintype.Basic
+import Mathlib.LinearAlgebra.Vandermonde
 
 /-!
 # The pads code reaches every value at its opened positions

@@ -1,7 +1,8 @@
 module
 
 public import Flock.Derive
-public import Proofs.Flock.Soundness.Audit.Circuit
+public import Definitions.Core.Boolean
+import Proofs.Flock.Soundness.Audit.Circuit
 
 /-!
 # Derived rows compute their circuit type (flat types)

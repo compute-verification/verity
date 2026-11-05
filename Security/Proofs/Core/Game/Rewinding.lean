@@ -1,10 +1,8 @@
 module
 
-public import Mathlib.Algebra.Order.Chebyshev
-public import Mathlib.Combinatorics.Enumerative.DoubleCounting
-public import Mathlib.Data.Fintype.Prod
 public import Mathlib.Analysis.Real.Sqrt
-public import Mathlib.Order.ConditionallyCompleteLattice.Finset
+import Mathlib.Algebra.Order.Chebyshev
+import Mathlib.Combinatorics.Enumerative.DoubleCounting
 
 /-!
 # The rewinding lemma: openings off the plurality table cost collisions

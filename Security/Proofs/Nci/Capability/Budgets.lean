@@ -1,11 +1,9 @@
 module
 
 public import Definitions.Nci.Guarantees.Capability.Budgets
-public import Proofs.Nci.Capability.Items
-public import Mathlib.Algebra.BigOperators.Ring.Finset
-public import Mathlib.Analysis.SpecialFunctions.Pow.Real
-public import Mathlib.Probability.ProbabilityMassFunction.Constructions
-public import Mathlib.Tactic.Linarith
+import Mathlib.Probability.ProbabilityMassFunction.Constructions
+import Proofs.Core.Formalism
+import Proofs.Nci.Capability.Items
 
 /-!
 # Local bounds: proofs of the budgets

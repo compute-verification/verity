@@ -3,6 +3,7 @@ module
 public import Definitions.Accounting.Assumptions.RateAuditDeployed
 public import Definitions.Accounting.Assumptions.RemoteHeld
 public import Definitions.Accounting.Assumptions.RemoteSketch
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The receipts' sketch bound, derived (trusted)

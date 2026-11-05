@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Refine.Salted
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # Leaf schemes with explicit collision extractors

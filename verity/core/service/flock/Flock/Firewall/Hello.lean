@@ -16,7 +16,6 @@ module
 
 public import Flock.Witness
 public import Flock.Firewall.Coins
-public import Flock.JsonParse
 
 @[expose] public section
 

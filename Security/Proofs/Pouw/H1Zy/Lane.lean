@@ -1,10 +1,14 @@
 module
 
 public import Definitions.Pouw.H1Zy.Lane
-public import Proofs.Pouw.H1Zy.Combine
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
-public import Mathlib.Tactic.Linarith
-public import Mathlib.Tactic.Ring
+import Mathlib.Data.Fintype.BigOperators
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.Linarith.Frontend
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Mathlib.Tactic.Ring.RingNF
+import Proofs.Pouw.H1Zy.Combine
 
 /-!
 # What a lane's `ok = 1` gives, on words

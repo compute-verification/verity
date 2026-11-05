@@ -7,7 +7,6 @@ plain session at hidden outputs is still refused at two tables, the form just pa
 module
 
 public import Flock.ProvedScope
-meta import Flock.ProvedScope
 
 @[expose] public section
 

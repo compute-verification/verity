@@ -17,6 +17,7 @@ statements, budget and schedule are checked before the record is read, as Python
 module
 
 public import Firewall.Release
+public import Flock.Canon
 
 @[expose] public section
 set_option backward.privateInPublic true

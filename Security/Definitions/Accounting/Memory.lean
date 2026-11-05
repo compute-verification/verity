@@ -2,6 +2,7 @@ module
 
 public import Definitions.Pous.Model.Audit
 public import Definitions.Pous.Model.SampledAudit
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Memory adds, by counting: the vocabulary (trusted)

@@ -1,7 +1,5 @@
 module
 
-public import Definitions.Pouw.H1Zy.Dequant
-
 /-!
 # `PouwZyDequant_v1` against the Python evaluators (vectors)
 

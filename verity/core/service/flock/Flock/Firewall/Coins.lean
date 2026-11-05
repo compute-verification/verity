@@ -22,7 +22,6 @@ module
 
 public import Flock.CoinTree
 public import Flock.Hm96
-public import Flock.JsonParse
 
 @[expose] public section
 

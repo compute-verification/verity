@@ -1,9 +1,15 @@
 module
 
 public import Definitions.Nci.Guarantees.Capability.Incidence
-public import Proofs.Nci.Capability.Items
-public import Mathlib.Algebra.BigOperators.Ring.Finset
-public import Mathlib.Tactic.Linarith
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.Linarith.Frontend
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Mathlib.Tactic.Ring.RingNF
+import Proofs.Nci.Capability.Items
 
 /-!
 # Local bounds: proofs of the caps from incidence

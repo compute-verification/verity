@@ -4,11 +4,31 @@ FIPS 180-4's three loops as folds (`compress_unfold`), then each fold against th
 -/
 module
 
-public import Mathlib.Tactic
 public import Proofs.Flock.Soundness.Discharge.Hm.Spec
 -- `hash_eq`'s `simp` over `Sha512.hash`'s loops (`Hm.Hash`) needs `Std.Legacy.Range.mk.congr_simp`, which
 -- `FlockLevel3.LookupRows` already realizes; a second copy there is refused by the audit's kernel replay.
-public import Proofs.Flock.Level3.LookupRows
+public import Aesop.BuiltinRules
+public import Mathlib.Data.Nat.Notation
+public import Mathlib.Tactic.Attr.Core
+public import Mathlib.Tactic.Basic
+public import Mathlib.Tactic.ToAdditive
+public import Mathlib.Tactic.ToDual
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.Measurability.Init
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 
 @[expose] public section
 

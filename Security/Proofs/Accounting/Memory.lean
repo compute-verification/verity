@@ -2,6 +2,9 @@ module
 
 public import Proofs.Accounting.Memory.Counting
 public import Proofs.Accounting.Memory.Adds
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.Data.Sym.Sym2.Init
 
 /-!
 # Memory adds, by counting: the guarantees

@@ -7,9 +7,6 @@ commit round `k` with no salted tops, the `kc`-th commit round of the rep schedu
 module
 
 public import Flock.Test.RecReads
-public import Flock.JsonParse
-meta import Flock.Test.RecReads
-meta import Flock.JsonParse
 
 @[expose] public section
 

@@ -62,6 +62,7 @@ public import SampledProofs.ChallengerRecord
 public import SampledProofs.PyJson
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
+public import Lean.Data.Json.Parser
 
 @[expose] public section
 set_option backward.privateInPublic true

@@ -1,9 +1,7 @@
 module
 
-public import Definitions.Nci.Guarantees.Capability.Budgets
-public import Definitions.Nci.Guarantees.Capability.Incidence
-public import Definitions.Nci.Guarantees.Capability.Dependency
 public import Definitions.Nci.Capability.Toy
+public import Definitions.Nci.Assumptions.Capability.Information
 
 /-!
 # Local bounds: their witnesses

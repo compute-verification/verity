@@ -1,7 +1,8 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Aliased.Copies
-public import Properties.Flock.Circuit.Keys
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Aliased.Rows
 
 /-!
 # Δ's source as a key the same at every template instance

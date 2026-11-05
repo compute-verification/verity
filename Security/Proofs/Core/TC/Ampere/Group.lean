@@ -1,7 +1,8 @@
 module
 
 public import Proofs.Core.TC.Ampere.Arith
-public import Proofs.Core.TC.Proofs.Group
+import Proofs.Core.TC.Proofs.Group
+import Proofs.Core.TC.Proofs.Norm
 
 /-!
 # One Ampere group, the relation's side

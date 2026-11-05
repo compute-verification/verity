@@ -3,6 +3,7 @@ module
 public import Definitions.Nci.Support
 public import Definitions.Nci.Threads
 public import Mathlib.Analysis.SpecialFunctions.Log.Base
+import Mathlib.Data.NNRat.Floor
 
 /-!
 # NCI's reads counted by information: the vocabulary

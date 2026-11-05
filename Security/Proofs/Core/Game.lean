@@ -6,6 +6,7 @@ public import Proofs.Core.Game.Interleave
 public import Proofs.Core.Game.Union
 public import Proofs.Core.Game.Batch
 public import Proofs.Core.Game.BatchInduced
+import Mathlib.Tactic.Positivity.Finset
 
 /-! # Proofs that sound games compose (`Verity.Guarantees.Game`) -/
 

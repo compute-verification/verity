@@ -1,6 +1,5 @@
 module
 
-public import CertifierDevice.Device
 public import CertifierDevice.Issuer
 
 /-!

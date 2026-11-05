@@ -1,7 +1,9 @@
 module
 
 public import Definitions.Nci.Guarantees.CompliesCK
-public import Proofs.Core.Padding
+import Mathlib.Data.NNRat.Floor
+import Proofs.Core.Expand
+import Proofs.Core.Padding
 
 /-!
 # Proofs of NCI's policy as a `(c, k)`-partition

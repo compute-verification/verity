@@ -1,7 +1,9 @@
 module
 
-public import Definitions.Nci.Guarantees.Threads
 public import Definitions.Nci.Assumptions.Layered
+public import Definitions.Nci.Assumptions.Baseline
+public import Definitions.Nci.Assumptions.Threads
+import Mathlib.Data.NNRat.Floor
 
 /-!
 # NCI over threads: keyed circuits are threaded

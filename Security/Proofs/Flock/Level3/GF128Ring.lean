@@ -6,8 +6,6 @@ module
 
 public import Proofs.Flock.Level3.GF128
 public import Mathlib.RingTheory.AdjoinRoot
-public import Mathlib.Algebra.Ring.TransferInstance
-public import Mathlib.Tactic.FinCases
 public import Mathlib.Algebra.Field.ZMod
 
 @[expose] public section

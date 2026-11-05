@@ -1,7 +1,6 @@
 module
 
 public import PouwCheck.CreditDifftest
-public import PouwCheck.Verified
 public import PouwCheck.LiveVerified
 public import PouwCheck.CommittedFiles
 

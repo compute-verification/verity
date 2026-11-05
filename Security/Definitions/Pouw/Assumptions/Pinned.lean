@@ -1,10 +1,10 @@
 module
 
-public import Definitions.Pouw.Game.Params
 public import Definitions.Pouw.M1
 public import Definitions.Pouw.Witness.Model
 public import Definitions.Pouw.Witness.Copy
 public import Definitions.Pouw.Assumptions.Game
+public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
 /-!
 # Pinned statements (trusted)

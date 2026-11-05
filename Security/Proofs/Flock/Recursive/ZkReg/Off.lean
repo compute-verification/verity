@@ -1,7 +1,11 @@
 module
 
 public import Proofs.Flock.Soundness.Registered.ReadsX
-public import Proofs.Flock.Soundness.Discharge.Exec.Live
+public import Proofs.Flock.Soundness.Discharge.Exec.Event
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Registered.Binding
 
 /-!
 # Registered reads off the registrant's leaf, at the outcome's draw

@@ -2,6 +2,7 @@ module
 
 public import Properties.Pous.Period
 public import Definitions.Accounting.JointBridge.SpaceOfPeriodHeld
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # PoUS's per-period guarantee as the coins model's `.pous` input

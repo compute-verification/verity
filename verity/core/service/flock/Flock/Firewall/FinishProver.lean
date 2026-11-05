@@ -17,10 +17,7 @@ The proof file's bytes are the analysis's `encZk` (`FlockSoundness.Discharge.ZkV
 -/
 module
 
-public import Flock.With.Verify
 public import Flock.With.Zk
-public import Flock.Zk
-public import Flock.ZkProof
 
 @[expose] public section
 

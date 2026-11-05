@@ -20,22 +20,11 @@ private form (the division committed under hiding leaves, compliance proved, a p
 -/
 module
 
-public import CoreComposition.Blobs
-public import CoreComposition.Cases
 public import CoreComposition.Tie
 public import NciCheck.Protocol
 public import PouwCheck.Period
-public import SampledProofs.OneStage
-public import SampledProofs.OneStageZk
 public import VStarRecursive.Sampled
-meta import CoreComposition.Blobs
-meta import CoreComposition.Cases
-meta import CoreComposition.Tie
-meta import NciCheck.Protocol
-meta import PouwCheck.Period
-meta import SampledProofs.OneStage
-meta import SampledProofs.OneStageZk
-meta import VStarRecursive.Sampled
+import CoreComposition.Cases
 
 @[expose] public section
 

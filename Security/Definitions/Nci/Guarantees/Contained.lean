@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Nci.Assumptions
-public import Definitions.Nci.Dark
+import Mathlib.Data.NNRat.Floor
 
 /-!
 # NCI's partial-sum law on a reference circuit

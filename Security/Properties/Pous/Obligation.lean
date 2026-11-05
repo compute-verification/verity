@@ -2,6 +2,7 @@ module
 
 public import Properties.Pous.Period
 public import Definitions.Pous.P2.Mutable
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # PoUS as an obligation over one audit window: the deployed check's acceptance certifies the snapshot's space

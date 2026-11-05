@@ -1,8 +1,18 @@
 module
 
-public import Proofs.Flock.Soundness.CROnly.Hm96Sha512
-public import Proofs.Flock.Soundness.ZK.Session
-public import Proofs.Flock.Soundness.ZK.AdaptivePrefinal
+public import Definitions.Claims.Hm96
+public import Definitions.Core.Game
+public import Definitions.Flock.ZK.Cut
+public import Definitions.Flock.ZK.RealView
+public import Definitions.Flock.ZK.SHVZK
+public import Proofs.Flock.Soundness.CROnly.Hm96Defs
+public import Proofs.Flock.Soundness.ZK.Adaptivity
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.CROnly.Hiding
+import Proofs.Flock.Soundness.CROnly.Hm96Sha512
+import Proofs.Flock.Soundness.ZK.AdaptivePrefinal
+import Proofs.Flock.Soundness.ZK.Session
 
 /-!
 # The ZK theorems with hm96 hiding discharged

@@ -14,9 +14,8 @@ The proof system's own checks (`service.py`), each with Python's codes, order an
 -/
 module
 
-public import SampledProofs.Registration
 public import SampledProofs.PyJson
-public import Std.Data.HashMap
+public import SampledProofs.Json
 
 @[expose] public section
 

@@ -9,6 +9,11 @@ public import Definitions.Population.Necessity
 public import Definitions.Population.Exfiltration
 public import Definitions.Population.DrawPressure
 public import Definitions.Population.ChiPool
+import Mathlib.Algebra.Order.BigOperators.Expect
+import Mathlib.Algebra.Order.Field.Power
+import Mathlib.Analysis.Complex.Order
+import Mathlib.Analysis.Complex.Trigonometric
+import Mathlib.Data.EReal.Inv
 
 /-! Populations' vocabulary: units over committed value slots with public read and write sets (`Dataflow`), unit
 functions and correctness, what a checker confirms of the dataflow (single assignment, acyclicity), cones and egress,

@@ -1,9 +1,10 @@
 module
 
-public import Mathlib.Algebra.BigOperators.Fin
-public import Mathlib.Data.Matrix.Mul
-public import Definitions.Pouw.Fp8Atom.Fp32
 public import Definitions.Pouw.PearlC.Sm120
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+public import Mathlib.Data.Fintype.Basic
+public import Mathlib.LinearAlgebra.Matrix.Defs
+import Mathlib.Data.Rat.Floor
 
 /-!
 # Exact integer ±1 sketches (trusted definitions)

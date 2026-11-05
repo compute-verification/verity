@@ -1,6 +1,8 @@
 module
 
-public import Proofs.Nci.Fit
+public import Definitions.Nci.Assumptions.Fit
+import Mathlib.Data.NNRat.Floor
+import Proofs.Nci.Fit
 
 /-!
 # The fit bound's hypotheses hold together

@@ -1,13 +1,21 @@
 module
 
 public import Flock.Witness
-public import Proofs.Flock.Recursive.ExecClass
-public import Proofs.Flock.Recursive.Description
-public import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
-public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
-public import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
-public import Proofs.Flock.Soundness.Discharge.ZkHidden.Rate
 public import Proofs.Flock.Recursive.PublicAudit
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.ZkHidden.Rate
 
 /-!
 # `flock-witness`'s checks are the recursive audit's predicates

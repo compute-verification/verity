@@ -1,13 +1,9 @@
 module
 
-public import CoreProtocol.Cli
 public import CoreProtocol.Ratio
 public import PousCheck.Certificate
 public import PousCheck.Run
-meta import CoreProtocol.Cli
-meta import CoreProtocol.Ratio
-meta import PousCheck.Certificate
-meta import PousCheck.Run
+public import CoreProtocol.Protocol.Canonical
 
 /-!
 # A PoUS run as a core protocol

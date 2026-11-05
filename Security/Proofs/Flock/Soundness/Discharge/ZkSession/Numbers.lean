@@ -1,7 +1,8 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkSession.Session
-public import Proofs.Flock.Soundness.Accounting.PaddedNumbers
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game.Basic
 
 /-!
 # The `--zk` table's bound at C-Flock ZK's parameters (live/PROTOCOL.md §5, §7)

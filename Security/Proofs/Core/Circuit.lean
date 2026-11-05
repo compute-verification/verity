@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Core.Guarantees.Circuit
+import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 
 /-!
 # Lemmas about circuits and partitions

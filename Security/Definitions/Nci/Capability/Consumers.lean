@@ -1,6 +1,7 @@
 module
 
-public import Definitions.Nci.Capability.Products
+public import Definitions.Nci.Capability.Items
+public import Definitions.Nci.Covering
 
 /-!
 # Local bounds: consumers and their dependencies

@@ -9,11 +9,7 @@ and each batch member one unit, in node then member order; every listed template
 -/
 module
 
-public import Lean.Data.Json
-public import Flock.Canon
-public import Flock.Hash
 public import Flock.Program
-public import Flock.JsonParse
 
 @[expose] public section
 set_option backward.privateInPublic true

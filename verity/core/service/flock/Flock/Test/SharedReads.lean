@@ -6,7 +6,6 @@
 module
 
 public import Flock.HmRow
-meta import Flock.HmRow
 
 @[expose] public section
 

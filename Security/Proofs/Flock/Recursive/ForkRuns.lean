@@ -1,6 +1,8 @@
 module
 
-public import Proofs.Flock.Recursive.Schedule
+public import Proofs.Flock.Recursive.Defs
+public import Proofs.Flock.Soundness.Refine.LiveSim
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # Recursion: a fork at round 0 is any two runs

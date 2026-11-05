@@ -9,8 +9,7 @@ whose link points are not the coin server's.
 -/
 module
 
-public import Flock.RecSetup
-meta import Flock.RecSetup
+public import Flock.RecCoins
 
 @[expose] public section
 

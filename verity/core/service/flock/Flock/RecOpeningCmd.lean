@@ -1,7 +1,6 @@
 module
 
 public import Flock.HmRow
-public import Flock.RecOpening
 
 /-!
 `flock-rec-opening`'s command: the verifier's registered-opening units (`Flock.RecOpening`), which

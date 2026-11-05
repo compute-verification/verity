@@ -1,6 +1,8 @@
 module
 
 public import Definitions.Core.ValueSalts
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The ZK server's key is its own

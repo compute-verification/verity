@@ -1,9 +1,10 @@
 module
 
-public import Mathlib.Data.Fintype.Card
 public import Proofs.Flock.Sampled.Statements
-meta import Mathlib.Data.Fintype.Card
-meta import Proofs.Flock.Sampled.Statements
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # F2's statements' hypotheses hold together

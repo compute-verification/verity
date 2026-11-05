@@ -3,6 +3,9 @@ module
 public import Proofs.Pouw.PearlC.TileCircuit
 public import Proofs.Pouw.PearlC.PeelExactProofsP
 public import Definitions.Pouw.PearlC.Device
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Fp8Atom.Fp32Proofs
 
 /-!
 # The tile unit computes the ticket and the useful value (proofs)

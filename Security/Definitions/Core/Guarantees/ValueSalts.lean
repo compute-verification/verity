@@ -1,7 +1,8 @@
 module
 
-public import Definitions.Core.ValueSalts
 public import Definitions.Core.Assumptions.ZkServer
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # What a registration leaks: at most `log₂ m` bits, `m` the sessions its epoch opened

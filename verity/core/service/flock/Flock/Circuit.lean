@@ -7,12 +7,9 @@ leaf checks its own ranges (`RowLeaf.checkLayout`). Lookup slots are built from 
 -/
 module
 
-public import Lean.Data.Json
 public import Flock.Lookup
 public import Flock.TmplAt
-public import Flock.Tags
 public import Flock.Typed
-public import Flock.JsonParse
 
 @[expose] public section
 set_option backward.privateInPublic true

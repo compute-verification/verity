@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkCoins.SessionDefs
 public import Proofs.Flock.Soundness.CROnly.Hm96Defs
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # The coin step's guarantees, as statements

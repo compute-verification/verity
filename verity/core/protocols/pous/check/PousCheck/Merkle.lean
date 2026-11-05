@@ -1,6 +1,5 @@
 module
 
-public import Flock.Hash
 public import Flock.HmRow
 
 /-!

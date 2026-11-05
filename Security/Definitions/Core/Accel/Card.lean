@@ -2,7 +2,6 @@ module
 
 public import Definitions.Core.Accel.Isa
 public import Definitions.Accounting.Device
-public import Mathlib.Algebra.Field.Rat
 public import Mathlib.Data.NNRat.Floor
 
 /-!

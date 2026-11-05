@@ -1,7 +1,10 @@
 module
 
 public import Definitions.Pouw.Assumptions.Dimension.H100W
-public import Proofs.Pouw.Dimension.H100Proofs
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.Tactic.NormNum.GCD
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Dimension.H100Proofs
 
 /-!
 # `MH100w` and the distinct-writes bound: proofs

@@ -1,6 +1,8 @@
 module
 
 public import Definitions.Flock.Piop
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Hidden unit circuits: L4′ with h, and the sparse phase H1–H4

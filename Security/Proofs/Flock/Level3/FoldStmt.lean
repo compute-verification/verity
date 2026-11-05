@@ -6,6 +6,12 @@ the block is the base of the last range whose slots cover `c`, scaled by that sl
 module
 
 public import Proofs.Flock.Level3.LookupFold
+public import Flock.Statement
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Level3.Assembly
+import Proofs.Flock.Level3.Fold
+import Proofs.Flock.Level3.Nodes
 
 @[expose] public section
 

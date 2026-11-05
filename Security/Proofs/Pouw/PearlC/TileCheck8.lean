@@ -1,8 +1,10 @@
 module
 
-public import Definitions.Pouw.PearlC.TileCheck8
 public import Proofs.Pouw.PearlC.WholeCircuit
-public import Proofs.Pouw.PearlC.RowCircuit
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Core.Circuit
+import Proofs.Pouw.PearlC.TileCircuit
 
 /-!
 # `pc8`'s tile check: its units are its templates (proofs)

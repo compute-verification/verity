@@ -1,7 +1,6 @@
 module
 
 public import Flock.Canon
-public import Identity.Tagged
 public import PousCheck.Commit
 public import PousCheck.Merkle
 public import PousCheck.Challenge

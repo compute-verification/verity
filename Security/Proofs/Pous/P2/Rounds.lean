@@ -1,7 +1,10 @@
 module
 
-public import Definitions.Pous.Assumptions.P2
-public import Proofs.Pous.Sanity
+public import Definitions.Pous.Guarantees.P2
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.Data.Sym.Sym2.Init
+import Proofs.Pous.Sanity
 
 /-!
 # From the per-round conjecture to the graded bound and to today's whole-audit form

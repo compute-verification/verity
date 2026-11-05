@@ -16,7 +16,8 @@ second ends `.ok`, at the same state, wherever the first does; it walks the two 
 module
 
 public import Flock.With.Log
-public import Flock.JsonParse
+import Flock.With.SimVerify
+import Flock.With.SimWalk
 
 @[expose] public section
 

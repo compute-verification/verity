@@ -1,7 +1,7 @@
 module
 
-public import Mathlib.Data.Nat.Bitwise
-public import Proofs.Flock.Soundness.Audit.Circuit
+public import Definitions.Core.Boolean
+import Mathlib.Data.List.GetD
 
 /-!
 # Rows from a gate circuit (`flock-ir-unit/v2`)

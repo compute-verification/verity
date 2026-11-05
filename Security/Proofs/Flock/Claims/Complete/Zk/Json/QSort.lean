@@ -1,7 +1,7 @@
 module
 
-public import Batteries.Tactic.OpenPrivate
 import all Init.Data.Array.QSort.Basic
+import Batteries.Tactic.OpenPrivate
 
 /-!
 # The coin tree's four names sort to themselves

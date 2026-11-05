@@ -1,7 +1,9 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Exec.Event
-public import Proofs.Flock.Soundness.Refine.Setup
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # flock-verify's acceptance sets up each table with `Stmt.setupH`

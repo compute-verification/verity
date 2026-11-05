@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Soundness.Lowering
 public import Properties.Flock.Circuit.Outs
+import Mathlib.Tactic.NormNum.Inv
+import Mathlib.Tactic.NormNum.Pow
 
 /-!
 # A program's own instance of each unit's rows

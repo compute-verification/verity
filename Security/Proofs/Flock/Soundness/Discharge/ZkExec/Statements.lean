@@ -2,7 +2,8 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Live
 public import Proofs.Flock.Soundness.Discharge.Exec.Setup
-public import Proofs.Flock.Soundness.Discharge.Exec.Retained
+public import Proofs.Flock.Soundness.Refine.Frames
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # The target statements of flock-verify `--zk`'s acceptance and its refinement

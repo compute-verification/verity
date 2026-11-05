@@ -1,8 +1,12 @@
 module
 
 public import Definitions.Pouw.Assumptions.Dimension.Pipe
-public import Proofs.Pouw.Dimension.MixingProofs
-public import Proofs.Pouw.Dimension.MinRankProofs
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Dimension.MinRankProofs
+import Proofs.Pouw.Dimension.MixingProofs
+import Proofs.Pouw.Dimension.Proofs
+import Proofs.Pouw.NCP.GameProofs
+import Proofs.Pouw.NCP.RelationWitness
 
 /-!
 # `A1_cost` in the closed scalar pipe: proofs

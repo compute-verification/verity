@@ -1,8 +1,20 @@
 module
 
-public import Proofs.Nci.Cover.FanOut
-public import Proofs.Nci.Cover.FanOutChain
 public import Definitions.Nci.Guarantees.CoverFanOutValue
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.Linarith.Frontend
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Nci.Cover.Additive
+import Proofs.Nci.Cover.Area
+import Proofs.Nci.Cover.Charge
+import Proofs.Nci.Cover.FanOutChain
+import Proofs.Nci.Cover.FanOutRootCost
+import Proofs.Nci.Cover.FanOutWalk
+import Proofs.Nci.Cover.Paths
 
 /-!
 # The fan-out read tier from wiring

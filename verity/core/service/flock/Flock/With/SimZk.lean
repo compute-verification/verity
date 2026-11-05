@@ -5,8 +5,10 @@ state).
 -/
 module
 
-public import Flock.With.SimVerify
 public import Flock.With.Zk
+public import Flock.With.Sim
+import Flock.With.SimVerify
+import Flock.With.SimWalk
 
 @[expose] public section
 

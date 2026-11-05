@@ -1,7 +1,9 @@
 module
 
 public import Mathlib.Analysis.SpecialFunctions.Log.Basic
-public import Proofs.Population.ExfiltrationBound
+public import Definitions.Population.Exfiltration
+import Proofs.Population.Exfiltration
+import Proofs.Population.ExfiltrationBound
 
 /-!
 # One draw for several claims: the max rule and the union bound

@@ -1,7 +1,12 @@
 module
 
-public import Proofs.Properties.NetworkCertifier.Outcomes
-public import Proofs.Properties.NetworkCertifier.Extract
+public import Proofs.Properties.NetworkCertifier.Tree
+import Mathlib.Data.Finset.Attr
+import Mathlib.Tactic.Bound.Init
+import Mathlib.Tactic.Finiteness.Attr
+import Mathlib.Tactic.SetLike
+import Proofs.Properties.Identity
+import Proofs.Properties.NetworkCertifier.Bytes
 
 /-!
 # What a certificate's digest and message pin down

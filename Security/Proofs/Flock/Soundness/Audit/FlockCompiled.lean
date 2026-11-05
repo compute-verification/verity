@@ -1,9 +1,15 @@
 module
 
 public import Proofs.Flock.Soundness.Audit.Extraction
-public import Proofs.Flock.Soundness.Audit.Flock
 public import Proofs.Flock.Soundness.Knowledge
-public import Proofs.Flock.Soundness.Lowering
+public import Definitions.Flock.Lowering
+public import Proofs.Flock.Soundness.Game.Basic
+public import Proofs.Flock.Soundness.Instance
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Lowering
 
 /-!
 # The Flock audit at the compiled layer, one table: `ε_ks` from `table_knowledge_sound_joint_tight`

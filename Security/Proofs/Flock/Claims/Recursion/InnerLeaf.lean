@@ -1,11 +1,31 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Exec.Merkle
-public import Proofs.Flock.Soundness.Discharge.Hidden.Facts
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 public import Flock.RecVStar
-public import Flock.ProvedScope
 public import Proofs.Flock.Claims.Scope.Check
+public import Aesop.BuiltinRules
+public import Mathlib.Data.Nat.Notation
+public import Mathlib.Tactic.ToAdditive
+public import Mathlib.Tactic.ToDual
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Hidden.Commit
+import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.ExecLookup
+import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
 # The recursion's inner statement and Flock's statement check read one leaf scheme off the circuit file

@@ -1,7 +1,10 @@
 module
 
-public import Proofs.Pouw.PearlC.PeelFp4Checks.Defs
-meta import Proofs.Pouw.PearlC.PeelFp4Checks.Defs
+import Mathlib.Algebra.Order.AbsoluteValue.Basic
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Data.Rat.Floor
+import Mathlib.Tactic.ContinuousFunctionalCalculus
+import Mathlib.Tactic.Positivity.Finset
 
 /-! # `prod-64-nvfp4`: factor chains by evaluation (`#guard`, not a proof) (`PeelFp4Checks`, which joins them) -/
 

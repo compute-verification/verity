@@ -2,6 +2,8 @@ module
 
 public import Flock.Zk
 public import Proofs.Flock.Soundness.Discharge.Exec.Event
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # flock-verify's `--zk` acceptance, as an event of the audit

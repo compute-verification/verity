@@ -2,13 +2,23 @@ module
 
 public import Proofs.Flock.C3.RegLevels.Chain
 public import Proofs.Flock.C3.Compose.Honest
-public import Proofs.Flock.C3.Compose.Plays
-public import Proofs.Flock.VBridge.InnerAccepts
-public import Proofs.Flock.Soundness.Refine.Basis
-public import Proofs.Flock.Soundness.Refine.Paths
-public import Proofs.Flock.Soundness.Refine.Seam
-public import Proofs.Flock.Soundness.Discharge.Exec.Shape
-public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.C3.Compose.Plays
+import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
+import Proofs.Flock.Soundness.Refine.Basis
+import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
 # n5's read fact: R's Ligerito and the openings from the tape

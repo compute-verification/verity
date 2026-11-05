@@ -3,9 +3,15 @@ module
 public import Definitions.Accounting.Guarantees.Localization
 public import Proofs.Accounting.Defs.Localization
 public import Definitions.Accounting.Physical
-public import Proofs.Accounting.Actual.Split
-public import Proofs.Accounting.Actual.Confidence
 public import Mathlib.Tactic.FinCases
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Mathlib.Tactic.NormNum.Pow
+import Proofs.Accounting.Actual.Confidence
+import Proofs.Accounting.Actual.Split
 
 /-!
 # Localization, proved

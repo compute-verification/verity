@@ -1,6 +1,10 @@
 module
 
-public import Proofs.NetworkCertifier.Advice
+public import Definitions.NetworkCertifier.Assumptions
+public import Definitions.NetworkCertifier.Ingress
+public import Mathlib.Data.Set.Card
+import Mathlib.Data.Sym.Sym2.Init
+import Proofs.NetworkCertifier.Occupancy
 
 /-!
 # Satisfiability witnesses (the project's rule: no named hypothesis without one)

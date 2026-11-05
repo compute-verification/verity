@@ -1,11 +1,12 @@
 module
 
-public import Definitions.Core.TC.Spec
-public import Definitions.Core.TC.Relation
 public import Definitions.Core.Assumptions
-public import Proofs.Core.TC.Proofs.Step
-public import Proofs.Core.TC.Proofs.Words
-public import Proofs.Core.TC.Proofs.Complete
+public import Definitions.Core.TC.Bridge
+public import Proofs.Core.TC.Proofs.Group
+public import Proofs.Core.TC.Proofs.Prod
+import Proofs.Core.TC.Proofs.Complete
+import Proofs.Core.TC.Proofs.Step
+import Proofs.Core.TC.Proofs.Words
 
 /-!
 # The step relation is the step semantics

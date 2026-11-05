@@ -1,7 +1,5 @@
 module
 
-public import Definitions.Pouw.Assumptions.Dimension.Pipe
-public import Definitions.Pouw.Assumptions.Dimension.RouteU
 public import Definitions.Pouw.Assumptions.Dimension.RouteUPipeAssumptions
 
 /-!

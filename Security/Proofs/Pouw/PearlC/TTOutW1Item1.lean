@@ -1,8 +1,12 @@
 module
 
 public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
-public import Proofs.Pouw.PearlC.HonestWords
-public import Proofs.Pouw.Copy
+public import Definitions.Pouw.PearlC.DevicePrices
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.HonestWords
+import Proofs.Pouw.Prob
 
 /-!
 # Guessing a `1 × 1 × k` unit's two output words at W1

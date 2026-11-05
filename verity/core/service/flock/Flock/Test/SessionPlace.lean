@@ -7,7 +7,6 @@ and each of them out of its place, is refused; and after a refusal every request
 module
 
 public import Flock.Firewall.Session
-meta import Flock.Firewall.Session
 
 @[expose] public section
 

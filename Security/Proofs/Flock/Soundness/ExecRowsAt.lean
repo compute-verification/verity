@@ -1,8 +1,13 @@
 module
 
-public import Proofs.Flock.Soundness.ExecRows
-public import Proofs.Flock.Soundness.ExecParse
 public import Flock.NetAt
+public import Properties.Flock.Circuit.Rows
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Flock.Soundness.ExecParse
+import Proofs.Flock.Soundness.SparseRows
 
 /-!
 # A net committed at a position map holds exactly when its logical net does

@@ -6,7 +6,7 @@ cuts. The verifier never runs this.
 -/
 module
 
-public import Flock.Qcall
+public import Flock.Program
 
 @[expose] public section
 

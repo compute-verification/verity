@@ -1,10 +1,10 @@
 module
 
-public import Proofs.Pouw.Receipt.Duo
-public import Mathlib.Algebra.BigOperators.Fin
-public import Mathlib.Logic.Equiv.Fin.Basic
-public import Mathlib.Data.BitVec
-public import Mathlib.Tactic.Ring
+public import Definitions.Pouw.Receipt.Duo
+import Mathlib.Algebra.BigOperators.Fin
+import Mathlib.Data.BitVec
+import Mathlib.Tactic.NormNum.Ineq
+import Mathlib.Tactic.Ring.RingNF
 
 /-!
 # duo runs at one start state: three words are never bound

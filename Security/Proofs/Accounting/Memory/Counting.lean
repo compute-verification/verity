@@ -1,8 +1,9 @@
 module
 
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
-public import Mathlib.Data.Fintype.BigOperators
 public import Definitions.Accounting.Memory
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Basic.ENNReal.Real
+import Mathlib.Data.Fintype.BigOperators
 
 /-!
 # The counting core of lemma M

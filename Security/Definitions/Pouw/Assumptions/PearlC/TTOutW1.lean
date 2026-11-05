@@ -1,8 +1,5 @@
 module
 
-public import Definitions.Pouw.PearlC.Instance
-public import Definitions.Pouw.PearlC.Tile
-public import Definitions.Pouw.PearlC.Device
 public import Definitions.Pouw.PearlC.DeviceRev1
 public import Definitions.Pouw.PearlC.W1
 

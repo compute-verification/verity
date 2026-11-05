@@ -1,6 +1,10 @@
 module
 
-public import Definitions.Pous.Model.StreamedWipeServer
+public import Aesop.BuiltinRules
+public import Mathlib.Data.Nat.Notation
+public import Mathlib.Tactic.Attr.Core
+import Mathlib.Basic.ENNReal.Real
+import Mathlib.Data.Finset.Attr
 
 /-!
 # The streamed-label wipe with a server's disks in the fill

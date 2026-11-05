@@ -28,6 +28,19 @@ public import Proofs.Flock.Soundness.Discharge.HiddenExec.RowsAtHP
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.LiveOnP
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExecP
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.SetupP
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # flock-verify's acceptance under hidden outputs, and the headline over hidden-output sessions

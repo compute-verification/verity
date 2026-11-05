@@ -1,8 +1,14 @@
 module
 
-public import Mathlib.Tactic.FinCases
-public import Proofs.Pouw.Fp8Atom.H1TSliceProofs
-public import Proofs.Pouw.Fp8Atom.H1TProofs
+public import Definitions.Pouw.Fp8Atom.H1TLemmas
+public import Proofs.Pouw.Fp8Atom.Proofs
+import Batteries.Data.Nat.Bitwise.Lemmas
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Tactic.FinCases
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Fp8Atom.H1TAtomProofs
+import Proofs.Pouw.Fp8Atom.H1TProofs
+import Proofs.Pouw.Fp8Atom.H1TSliceProofs
 
 /-!
 # The one-flip clauses (`H1TOneFlip`, M4a and M4b)

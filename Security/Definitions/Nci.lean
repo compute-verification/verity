@@ -1,7 +1,9 @@
 module
 
-public import Definitions.Core
 public import Mathlib.Analysis.Real.Sqrt
+public import Definitions.Core.Declaration
+public import Definitions.Core.Partition
+import Mathlib.Data.NNRat.Floor
 
 /-!
 # Novel communication intensity: the policy

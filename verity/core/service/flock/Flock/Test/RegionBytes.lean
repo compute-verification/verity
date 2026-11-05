@@ -5,7 +5,6 @@ blocks. A region one byte short, or one block's bytes short, is refused; so is a
 module
 
 public import Flock.Statement
-meta import Flock.Statement
 
 @[expose] public section
 

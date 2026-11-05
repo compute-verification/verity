@@ -1,7 +1,8 @@
 module
 
-public import Mathlib.Data.Rat.Defs
 public import Definitions.Pous.Game.Oracle
+public import Definitions.Pous.Game.Prob
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Encoding schemes

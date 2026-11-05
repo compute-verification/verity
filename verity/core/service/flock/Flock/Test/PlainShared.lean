@@ -5,10 +5,6 @@ plain SHA-512 leaves (a recursive session's inner statement) it is refused.
 -/
 module
 
-public import Flock.ProvedScope
-public import Flock.Zk
-meta import Flock.ProvedScope
-meta import Flock.Zk
 
 @[expose] public section
 

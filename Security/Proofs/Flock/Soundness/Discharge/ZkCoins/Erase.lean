@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkCoins.SessionDefs
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game.Basic
 
 /-!
 # The session on committed coins, drawn live, is the live session

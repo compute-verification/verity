@@ -7,7 +7,6 @@ verifier's ports and refuses a statement whose header was stripped. The programs
 module
 
 public import Flock.Test.RegComplete
-meta import Flock.Test.RegComplete
 
 @[expose] public section
 

@@ -1,6 +1,9 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.ZkLink.Count
+public import Proofs.Flock.Soundness.Discharge.ZkLink.CompiledLink
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Flock.Soundness.Game.Basic
 
 /-!
 # The compiled `--zk` count curve, "wrong" measured against the registration

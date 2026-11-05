@@ -1,6 +1,16 @@
 module
 
-public import Proofs.Flock.Soundness.ExecFlatCopies
+public import Proofs.Flock.Level3.Placed
+public import Properties.Flock.Circuit.Keys
+public import Properties.Flock.Circuit.Rows
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Soundness.ExecSetup
+import Proofs.Flock.Soundness.SparseRows
+import VCVio.Prelude.Core
 
 /-!
 # The unit net's rows at its input port bits and past its useful rows

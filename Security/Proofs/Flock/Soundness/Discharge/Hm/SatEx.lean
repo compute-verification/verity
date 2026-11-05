@@ -1,7 +1,9 @@
 module
 
-public import Proofs.Flock.Soundness.ExecTyped
 public import Proofs.Flock.Soundness.ExecTemplatePlace
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
 
 /-!
 # Satisfaction off a set of rows

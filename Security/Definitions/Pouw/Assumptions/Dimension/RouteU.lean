@@ -1,6 +1,5 @@
 module
 
-public import Definitions.Pouw.Assumptions.Dimension.Assumptions
 public import Definitions.Pouw.Assumptions.Dimension.Mixing
 public import Definitions.Pouw.Dimension.Causal
 public import Definitions.Pouw.Assumptions.NCP.RouteUWord

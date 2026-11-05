@@ -2,7 +2,8 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.Exec.SessionL
 public import Proofs.Flock.Soundness.Audit.OneStage
-public import Proofs.Flock.Soundness.Game.Union
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Refine.Opening
 
 /-!
 # Decisiveness of the salted batched session

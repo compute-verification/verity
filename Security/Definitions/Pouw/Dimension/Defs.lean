@@ -1,7 +1,7 @@
 module
 
-public import Mathlib.LinearAlgebra.FiniteDimensional.Lemmas
 public import Definitions.Pouw.NCP.Relation
+public import Mathlib.LinearAlgebra.Dimension.Finrank
 
 /-!
 # Theorem D: the dimension bound in AlgM_16 (trusted statements)

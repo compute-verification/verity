@@ -1,6 +1,8 @@
 module
 
 public import Definitions.Core.Game
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Decisive games, and batches that read only one way

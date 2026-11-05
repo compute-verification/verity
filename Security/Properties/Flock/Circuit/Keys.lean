@@ -2,7 +2,6 @@ module
 
 public import Mathlib.Data.Nat.Notation
 public import Flock.Circuit
-public import Flock.Net
 
 /-!
 # Δ's source keys of a circuit's unit inputs

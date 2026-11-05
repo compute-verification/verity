@@ -1,6 +1,7 @@
 module
 
-public import SampledProofs.WiresSound
+public import SampledProofs.Wires
+import SampledProofs.WiresSound
 
 /-!
 The wire check on the drawn units alone: a reader unit is faulty in the wired flattening when its outputs are not its

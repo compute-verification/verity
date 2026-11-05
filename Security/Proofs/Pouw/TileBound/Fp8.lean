@@ -1,7 +1,11 @@
 module
 
-public import Proofs.Pouw.TileBound.Proofs
 public import Definitions.Pouw.TileBound.Fp8Defs
+import Mathlib.Data.Nat.Totient
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.Tactic.ContinuousFunctionalCalculus
+import Mathlib.Tactic.NormNum.GCD
+import Proofs.Pouw.TileBound.Proofs
 
 /-!
 # The FP8-tile model: the E4M3 count from the FP4-tile core (proofs)

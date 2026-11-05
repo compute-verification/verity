@@ -1,7 +1,11 @@
 module
 
 public import Proofs.Flock.Soundness.ComposeDag
-public import Proofs.Flock.Soundness.ExecSetup
+public import Proofs.Flock.Soundness.ExecPlacement
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.List.GetD
+import Mathlib.Data.Nat.Totient
 
 /-!
 # Composed rows, placed: what 1d and 1e hand to a table's class (`dp`)

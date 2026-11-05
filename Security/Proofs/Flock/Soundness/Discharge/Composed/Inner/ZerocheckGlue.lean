@@ -1,8 +1,13 @@
 module
 
-public import Definitions.Flock.Statement
 public import Proofs.Flock.Soundness.Refine.Tapes
 public import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckReplay
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import VCVio.Prelude.Core
 
 /-!
 # The honest `final_c` is the replay's `c` claim's value

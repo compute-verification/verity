@@ -1,6 +1,9 @@
 module
 
-public import Proofs.Pous.Chain.Family
+public import Proofs.Pous.Chain.Flat
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pous.Chain.Family
 
 /-!
 # The band store at fewer rounds: `D = 2` with `k = 97` and `D = 1` with `k = 93`

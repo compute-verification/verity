@@ -1,8 +1,7 @@
 module
 
-public import Mathlib.Analysis.SpecialFunctions.Log.Basic
-public import Mathlib.Order.ConditionallyCompleteLattice.Indexed
-public import Definitions.Pous.Model.Audit
+public import Definitions.Pous.Model.Scheme
+import Mathlib.Analysis.SpecialFunctions.Log.Basic
 
 /-!
 # The continuous audit: a memory challenger, and a responder that runs on its clock

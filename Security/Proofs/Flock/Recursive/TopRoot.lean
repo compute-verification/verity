@@ -2,6 +2,11 @@ module
 
 public import Proofs.Flock.Verifier.Registered
 public import Proofs.Flock.Soundness.Refine.Paths
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import VCVio.Prelude.Core
 
 /-!
 # The registered top root binds its commit strings

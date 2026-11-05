@@ -7,14 +7,14 @@ product row picks one table bit, and each output bit sums them.
 -/
 module
 
-public import Mathlib.Algebra.CharP.Two
-public import Mathlib.Algebra.Field.Basic
-public import Mathlib.Algebra.BigOperators.Group.List.Basic
-public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-public import Mathlib.Tactic.Ring
-public import Mathlib.Tactic.IntervalCases
-public import Mathlib.Tactic.Linarith
 public import Flock.Lookup
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+public import Mathlib.Algebra.CharP.Defs
+public import Mathlib.Algebra.Field.Defs
+import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+import Mathlib.Algebra.CharP.Two
+import Mathlib.Tactic.IntervalCases
+import Mathlib.Tactic.Ring.RingNF
 
 @[expose] public section
 

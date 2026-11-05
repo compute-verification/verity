@@ -1,13 +1,21 @@
 module
 
 public import Proofs.Flock.C3.PubRows.Prefix
-public import Proofs.Flock.C3.HoloValues.Reps
-public import Proofs.Flock.C3.Sparse.Session
-public import Proofs.Flock.C3.Opening.Algebra
-public import Proofs.Flock.C3.RegLevels.Chain
-public import Proofs.Flock.C3.Compose.Honest
 public import Proofs.Flock.C3.PubRows.Frame
 public import Proofs.Flock.C3.PubRows.Check
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # n1: the public rows, the tape and the commitments at the honest family

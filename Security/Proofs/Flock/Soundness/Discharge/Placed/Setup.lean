@@ -3,6 +3,8 @@ module
 public import Proofs.Flock.Soundness.ExecSetup
 public import Proofs.Flock.Soundness.E2E
 public import Properties.Flock.Circuit.Keyed
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Lowering
 
 /-!
 # `ProgPlaces` from `Stmt.setupH`'s accept

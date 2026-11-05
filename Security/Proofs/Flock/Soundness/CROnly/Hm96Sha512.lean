@@ -1,6 +1,11 @@
 module
 
-public import Proofs.Flock.Soundness.CROnly.Hankel
+public import Mathlib.Analysis.Real.Sqrt
+public import Proofs.Flock.Soundness.CROnly.Hm96Defs
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.CROnly.Hankel
+import Proofs.Flock.Soundness.CROnly.Hiding
 
 /-!
 # `hm96-sha512`'s hiding gap

@@ -1,7 +1,11 @@
 module
 
-public import Mathlib.Data.List.Basic
-public import Mathlib.Tactic.DeriveFintype
+public import Mathlib.Data.Nat.Notation
+public import Mathlib.Tactic.Attr.Core
+public import Mathlib.Tactic.ToDual
+import Mathlib.Data.Finset.Attr
+import Mathlib.Tactic.Finiteness.Attr
+import Mathlib.Tactic.SetLike
 
 /-!
 # The `fast100` schedule (PROTOCOL.md §15)

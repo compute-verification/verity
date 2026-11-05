@@ -1,6 +1,13 @@
 module
 
 public import Proofs.Flock.Soundness.Refine.LigeritoRun
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.List.GetD
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Level3.LookupRows
+import Proofs.Flock.Soundness.Refine.Arith
+import VCVio.Prelude.Core
 
 /-!
 # The final check refines the model's (PROTOCOL.md §13.6)

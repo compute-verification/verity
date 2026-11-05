@@ -2,6 +2,7 @@ module
 
 public import Definitions.Flock.HoloCompiled
 public import Proofs.Flock.VBridge.InnerAccepts
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # Piece (b), the model's half: candidate 3's table accepts from its stages

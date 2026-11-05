@@ -1,8 +1,9 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Layout.InRegion
-public import Batteries.Tactic.OpenPrivate
 import all Init.Data.Array.QSort.Basic
+import Batteries.Tactic.OpenPrivate
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # Every public leaf is inside an in region

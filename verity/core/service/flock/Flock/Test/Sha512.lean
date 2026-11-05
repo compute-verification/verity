@@ -4,10 +4,7 @@ reference only) on 200 chained blocks and on blocks at unaligned offsets, and `S
 -/
 module
 
-public import Flock.Bytes
 public import Flock.Hash
-meta import Flock.Bytes
-meta import Flock.Hash
 
 @[expose] public section
 

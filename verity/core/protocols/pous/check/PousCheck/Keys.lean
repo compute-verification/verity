@@ -3,9 +3,6 @@ module
 public import Identity.Sha512
 public import Randomness
 public import PousCheck.P2
-meta import Identity.Sha512
-meta import Randomness
-meta import PousCheck.P2
 
 /-!
 P2 v4's per-block keys (`schemes/p2.py`'s `expand_prefix`, `stream`, `below`, `sha512_keys`):

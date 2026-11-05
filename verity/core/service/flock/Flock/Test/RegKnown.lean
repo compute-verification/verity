@@ -6,7 +6,6 @@ its salt) passes only when its root is the frame-v3-sha512 root of those rows' `
 module
 
 public import Flock.RegKnown
-meta import Flock.RegKnown
 
 @[expose] public section
 

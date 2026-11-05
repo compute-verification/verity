@@ -1,8 +1,12 @@
 module
 
 public import Definitions.Pous.Model.Audit
-public import Proofs.Pous.Sanity
-public import Proofs.Pous.Thm1.Theorem1iTimed
+public import Mathlib.Algebra.Group.End
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.Data.Sym.Sym2.Init
+import Proofs.Pous.Sanity
+import Proofs.Pous.Thm1.Theorem1iTimed
 
 /-!
 # One more round never helps: the sequential audit's acceptance is monotone in `k`

@@ -1,6 +1,9 @@
 module
 
-public import Definitions.Accounting.Guarantees.Stacking
+public import Definitions.Accounting.Assumptions.RateAuditDeployed
+public import Definitions.Accounting.Assumptions.SquaringChain
+public import Definitions.Accounting.Assumptions.Stacking
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # A declared circuit's space and bandwidth from an accepted audit (trusted)

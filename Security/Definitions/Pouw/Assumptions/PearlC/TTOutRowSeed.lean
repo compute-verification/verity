@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+public import Definitions.Pouw.PearlC.DeviceRev1
 
 /-!
 # Per-row seeds (P2) as the per-unit game on the split layout (trusted definitions; nothing assumed)

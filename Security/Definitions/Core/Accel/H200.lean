@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Core.Accel.Machine
+public import Definitions.Core.Accel.Card
 
 /-!
 # The H200 SXM's numbers (trusted)

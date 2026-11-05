@@ -1,7 +1,10 @@
 module
 
-public import Proofs.Nci.Cover.Paths
 public import Definitions.Nci.Assumptions.CoverAdditive
+public import Definitions.Nci.Assumptions.Cover
+public import Definitions.Nci.Assumptions.CoveringTwoCosts
+import Mathlib.Data.Fintype.Card
+import Proofs.Nci.Cover.Paths
 
 /-!
 # The cover theorem's vocabulary on a declaration's gates

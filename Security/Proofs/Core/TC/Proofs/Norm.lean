@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Core.TC.Proofs.Fold
+public import Definitions.Core.TC.Pipeline
 
 /-!
 # Normalisation: the relation's columns against `group_sum`'s shifts

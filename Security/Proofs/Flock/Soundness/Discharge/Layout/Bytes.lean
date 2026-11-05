@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Binding.Layout
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # Bytes from their bits

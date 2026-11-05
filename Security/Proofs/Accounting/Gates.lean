@@ -1,18 +1,10 @@
 module
 
-public import Mathlib.Algebra.BigOperators.Fin
-public import Mathlib.Algebra.BigOperators.Group.Finset.Piecewise
-public import Mathlib.Algebra.BigOperators.Group.Finset.Sigma
-public import Mathlib.Algebra.BigOperators.Ring.Finset
-public import Mathlib.Algebra.Order.Ring.GeomSum
-public import Mathlib.Data.Fintype.BigOperators
-public import Mathlib.Data.Int.Interval
-public import Mathlib.Data.List.GetD
-public import Mathlib.NumberTheory.LegendreSymbol.Basic
-public import Mathlib.Tactic.IntervalCases
-public import Mathlib.Tactic.NormNum.Basic
-public import Mathlib.Tactic.Ring
 public import Definitions.Accounting.Guarantees.Gates
+public import Mathlib.Algebra.Field.ZMod
+import Mathlib.Data.Int.Interval
+import Mathlib.Data.List.GetD
+import Mathlib.NumberTheory.LegendreSymbol.Basic
 
 /-!
 # The circuit model's window and lower bounds, proved

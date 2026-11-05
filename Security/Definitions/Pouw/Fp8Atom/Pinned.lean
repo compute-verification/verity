@@ -1,9 +1,10 @@
 module
 
-public import Mathlib.Data.Fintype.Card
 public import Definitions.Pouw.Fp8Atom.Vectors
 public import Definitions.Pouw.Fp8Atom.Vectors.Ada
 public import Definitions.Pouw.Fp8Atom.Vectors.Add
+public import Mathlib.Data.Finset.Card
+public import Mathlib.Data.Fintype.Basic
 
 /-!
 # `Pouw.Fp8Atom`'s pinned statements (trusted)

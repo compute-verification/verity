@@ -1,6 +1,9 @@
 module
 
 public import Proofs.Flock.Soundness.Audit.HarmBound
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # The stratified law, one stratum at a time

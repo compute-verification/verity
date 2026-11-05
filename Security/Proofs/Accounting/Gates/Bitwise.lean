@@ -1,14 +1,15 @@
 module
 
-public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-public import Mathlib.Algebra.Order.BigOperators.Group.List
-public import Mathlib.Data.Fintype.Pi
-public import Mathlib.Data.List.GetD
-public import Mathlib.Tactic.Linarith
-public import Mathlib.Tactic.NormNum.Basic
-public import Mathlib.Tactic.Positivity
-public import Mathlib.Tactic.Ring
 public import Definitions.Accounting.Guarantees.GatesBitwise
+import Mathlib.Algebra.Order.Field.Basic
+import Mathlib.Data.List.GetD
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.Linarith.Frontend
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Mathlib.Tactic.Positivity.Finset
+import Mathlib.Tactic.Ring.RingNF
 
 /-!
 # Bits for free, proved

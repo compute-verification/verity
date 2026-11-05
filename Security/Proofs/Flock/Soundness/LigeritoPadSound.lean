@@ -1,6 +1,11 @@
 module
 
 public import Proofs.Flock.Soundness.LigeritoPadQuery
+public import Proofs.Flock.Soundness.LigeritoPhase
+import Proofs.Flock.Soundness.Accounting.Fast100
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Union
+import Proofs.Flock.Soundness.LigeritoCoins
 
 /-!
 # Ligerito with the padded level 0 is sound

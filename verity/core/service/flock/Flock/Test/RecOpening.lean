@@ -6,7 +6,6 @@ units per VU but one is refused, before the structure is computed or any net bui
 module
 
 public import Flock.RecOpening
-meta import Flock.RecOpening
 
 @[expose] public section
 

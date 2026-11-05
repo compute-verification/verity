@@ -2,6 +2,7 @@ module
 
 public import Definitions.Accounting.BoundSketch
 public import Mathlib.Analysis.Real.Sqrt
+public import Mathlib.Data.Nat.Prime.Defs
 
 /-!
 # The deployed bound receipt's sketch: what a relay must exchange (trusted)

@@ -1,7 +1,8 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Statements
-public import Proofs.Flock.Soundness.Discharge.Exec.Tables
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Exec.Tables
 
 /-!
 # flock-verify `--zk` accepts, table by table and rep by rep

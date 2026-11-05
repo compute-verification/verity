@@ -1,7 +1,10 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkLink.CompiledLink
-public import Proofs.Flock.Soundness.Binding.E2E
+public import Proofs.Flock.Soundness.StrictCR
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Binding.E2E
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # The compiled `--zk` count curve

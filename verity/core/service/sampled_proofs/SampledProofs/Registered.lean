@@ -23,10 +23,8 @@ gates are then its own nodes' gates.
 -/
 module
 
-public import Flock.Program
-public import Flock.Public
 public import Flock.Registered
-public import SampledProofs.Partition
+public import SampledProofs.Json
 
 @[expose] public section
 

@@ -1,6 +1,9 @@
 module
 
-public import Proofs.Core.Game.Union
+public import Definitions.Core.Game
+public import Mathlib.Data.Fintype.Pi
+import Mathlib.Basic.ENNReal.BigOperators
+import Proofs.Core.Game.Basic
 
 /-!
 # Probabilities for a fixed prover strategy

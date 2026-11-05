@@ -1,7 +1,7 @@
 module
 
-public import Flock.Public
 public import Randomness
+public import Flock.FV3
 
 /-!
 # frame-v3-sha512 over a range of positions

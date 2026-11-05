@@ -1,7 +1,10 @@
 module
 
 public import Definitions.Flock.Game.Prob
-public import Proofs.Flock.Soundness.Game.Union
+public import Definitions.Core.Game
+public import Mathlib.Data.Fintype.Pi
+import Mathlib.Basic.ENNReal.BigOperators
+import Proofs.Flock.Soundness.Game.Basic
 
 /-!
 # Probabilities for a fixed prover strategy

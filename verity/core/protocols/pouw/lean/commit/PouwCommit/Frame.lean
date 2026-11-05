@@ -1,10 +1,7 @@
 module
 
-public import Flock.Hash
-public import Flock.Bytes
 public import Identity.Tagged
-public import PouwCommit.Tagged
-public import Identity.Domains
+public import Randomness
 
 /-!
 # frame-v3 trees (`verity.ml.commitments.merkle`) over range positions

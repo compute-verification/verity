@@ -2,9 +2,6 @@ module
 
 public import Definitions.Accounting.Device
 public import Definitions.Core.DeviceFigures
-public import Mathlib.Data.Finset.Lattice.Fold
-public import Mathlib.Data.List.Perm.Basic
-public import Mathlib.Data.List.Nodup
 public import Mathlib.Data.NNRat.Floor
 
 /-!

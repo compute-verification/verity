@@ -4,6 +4,7 @@ public import Flock.Firewall.Honest
 public import Proofs.Flock.Recursive.FirewallJson
 import all Lean.Data.Json.Basic
 import all Std.Data.Internal.List.Associative
+import Std.Data.DTreeMap.Internal.WF.Lemmas
 
 /-!
 # Objects as the firewall builds, reads and pins them

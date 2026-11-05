@@ -1,7 +1,10 @@
 module
 
-public import Batteries.Tactic.OpenPrivate
 public import Proofs.Properties.RemoteAudit.Session
+public import Proofs.Properties.RemoteAudit.Bisect
+import Batteries.Tactic.OpenPrivate
+import Proofs.Properties.RemoteAudit.Plan
+import Proofs.Properties.RemoteAudit.Sort
 
 /-!
 # Released blocks stay out of every later plan (`ReleasedStayOut`)

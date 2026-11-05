@@ -11,7 +11,6 @@ columns.
 module
 
 public import Flock.Tmpl
-meta import Flock.Tmpl
 
 @[expose] public section
 

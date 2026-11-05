@@ -1,11 +1,8 @@
 module
 
 public import NetworkCheck.Check
-public import Lms.Verify
 public import Flock.Hm96
-public import Flock.Canon
 public import Flock.FV3
-public import Identity.Tagged
 
 /-!
 # N2's execution phase verdict of record

@@ -2,6 +2,9 @@ module
 
 public import Proofs.Flock.Soundness.Audit.Work
 public import Proofs.Flock.Soundness.Audit.Influence
+public import Mathlib.Analysis.SpecialFunctions.Log.Basic
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
 
 /-!
 # The stratified law's harm bound

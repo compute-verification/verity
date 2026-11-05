@@ -1,8 +1,9 @@
 module
 
 public import Definitions.Population.Oblivious
-public import Proofs.Population.Determinacy
 public import Proofs.Population.Pointer
+import Mathlib.Tactic.Bound.Init
+import Proofs.Population.Determinacy
 
 /-!
 # Which programs are as good as circuits

@@ -2,9 +2,26 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkReg.Bind
 public import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
-public import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
-public import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
 import all Init.Data.Array.Basic
+public import Proofs.Flock.Soundness.Registered.Defs
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.QSort
+import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
+import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 
 /-!
 # The registered check at an accepted `--zk --registered` outcome

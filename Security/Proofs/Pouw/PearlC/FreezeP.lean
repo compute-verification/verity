@@ -1,12 +1,14 @@
 module
 
-public import Mathlib.Tactic.Linarith
-public import Mathlib.Tactic.Positivity
-public import Mathlib.Tactic.NormNum
-public import Mathlib.Tactic.Ring
 public import Proofs.Pouw.PearlC.Freeze
 public import Definitions.Pouw.PearlC.SkipP
 public import Definitions.Pouw.PearlC.Sm120
+import Mathlib.Algebra.BigOperators.Fin
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Data.List.GetD
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Fp8Atom.Fp32Proofs
+import Proofs.Pouw.Fp8Atom.H1TAtomProofs
 
 /-!
 # P1 over any accumulator model, and on sm_120 (staging)

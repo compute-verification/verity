@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
+public import Definitions.Pouw.PearlC.DeviceRev1
 
 /-!
 # TT_OUT over U alone, per audit tile (trusted; the named `Prop`s)

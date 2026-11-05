@@ -1,13 +1,6 @@
 module
 
-public import Flock.Zk
-public import Flock.Norm
-public import Flock.ProvedScope
-public import Flock.RecVStar
 public import Flock.RecCoins
-public import Flock.Registered
-public import Flock.Lookup
-public import Flock.JsonParse
 
 /-!
 # `flock-witness`: the recursive audit's predicates, evaluated on recorded sessions

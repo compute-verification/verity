@@ -1,8 +1,13 @@
 module
 
-public import Proofs.Flock.Soundness.Model.Compiled
-public import Proofs.Flock.Soundness.Game.Lock
-public import Proofs.Flock.Soundness.LigeritoMid
+public import Definitions.Flock.Compiled
+public import Definitions.Flock.Game.Lock
+public import Mathlib.RingTheory.Henselian
+public import Mathlib.RingTheory.RegularLocalRing.Defs
+public import Mathlib.RingTheory.SimpleRing.Principal
+public import Proofs.Flock.Soundness.LigeritoQueries
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.LigeritoMid
 
 /-!
 # The compiled Flock verifier runs in lockstep with the oracle verifier

@@ -1,6 +1,7 @@
 module
 
 public import PouwWindow.Record
+import PouwCommit.Py
 
 /-!
 # The window statement (`window.py`, `window_problem`)

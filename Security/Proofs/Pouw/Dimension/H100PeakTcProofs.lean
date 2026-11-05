@@ -1,7 +1,10 @@
 module
 
 public import Definitions.Pouw.Assumptions.Dimension.H100PeakTc
-public import Proofs.Pouw.Dimension.H100WProofs
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.Tactic.NormNum.GCD
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Dimension.H100WProofs
 
 /-!
 # The citation with no measurement at `tc`: proofs

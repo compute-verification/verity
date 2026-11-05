@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Pous.Model.StreamedWipe
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The streamed-label wipe on one server: its threshold, and the 5 GB point

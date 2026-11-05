@@ -1,7 +1,7 @@
 module
 
-public import Mathlib.Basic.ENNReal.Real
 public import Definitions.Pous.Model.Audit
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # `INC(β, π)` and product-form responders

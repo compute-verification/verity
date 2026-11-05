@@ -2,7 +2,15 @@ module
 
 public import Proofs.Flock.Soundness.Audit.TwoStage
 public import Mathlib.Logic.Equiv.Fin.Basic
-public import Mathlib.Tactic.FinCases
+public import Mathlib.Algebra.Group.End
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Inv
+import Mathlib.Tactic.FinCases
+import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # Tightness and insecurity: NOT chains

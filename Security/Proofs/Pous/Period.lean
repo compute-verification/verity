@@ -1,11 +1,16 @@
 module
 
 public import Properties.Pous.Period
-public import Proofs.Pous.EndToEnd
-public import Proofs.Properties.Pous.Run
-public import Proofs.Accounting.Prob
-public import Proofs.Accounting.Capacity
-public import Proofs.Accounting.PerRunJoint
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Accounting.Capacity
+import Proofs.Accounting.PerRunJoint
+import Proofs.Accounting.Prob
+import Proofs.Pous.EndToEnd
+import Proofs.Pouw.Prob
+import Proofs.Properties.Pous.Run
 
 /-!
 # Proof of PoUS's per-period guarantee, and that it is the joint's capacity guarantee

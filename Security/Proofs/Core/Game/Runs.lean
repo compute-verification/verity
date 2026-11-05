@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Core.Game.Expect
+import Mathlib.Algebra.CharP.Defs
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # Independent runs of a strategy

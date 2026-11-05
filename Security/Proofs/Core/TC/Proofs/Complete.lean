@@ -1,6 +1,10 @@
 module
 
-public import Proofs.Core.TC.Proofs.Step
+public import Definitions.Core.TC.Bridge
+public import Proofs.Core.TC.Proofs.Group
+public import Proofs.Core.TC.Proofs.Prod
+import Proofs.Core.TC.Proofs.Norm
+import Proofs.Core.TC.Proofs.Step
 
 /-!
 # Completeness: the honest witness satisfies every predicate

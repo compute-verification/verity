@@ -2,7 +2,6 @@ module
 
 public import Definitions.Pouw.PearlC.WholeCircuit
 public import Definitions.Pouw.PearlC.Row4Circuit
-public import Definitions.Pouw.PearlC.Tile4Circuit
 
 /-!
 # `pc4`'s whole Program as a gate table (definitions only)

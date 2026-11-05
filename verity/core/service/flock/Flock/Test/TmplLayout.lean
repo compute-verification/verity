@@ -7,9 +7,6 @@ group whose start a call's lanes would move, and a call in the input rows to a D
 module
 
 public import Flock.TmplLayout
-public import Flock.Test.Tmpl
-meta import Flock.TmplLayout
-meta import Flock.Test.Tmpl
 
 @[expose] public section
 

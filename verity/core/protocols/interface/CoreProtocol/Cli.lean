@@ -16,8 +16,6 @@ module
 
 public import CoreProtocol.Protocol
 public import CoreProtocol.Protocol.Canonical
-meta import CoreProtocol.Protocol
-meta import CoreProtocol.Protocol.Canonical
 
 @[expose] public section
 set_option backward.privateInPublic true

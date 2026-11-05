@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Nci.Assumptions.CoveringPriced
+public import Definitions.Nci.Assumptions.CoveringTwoCosts
 
 /-!
 # The covering bound at a price per weight

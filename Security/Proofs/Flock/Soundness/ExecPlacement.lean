@@ -1,7 +1,12 @@
 module
 
-public import Proofs.Flock.Soundness.ExecDelta
 public import Proofs.Flock.Level3.Placed
+public import Proofs.Flock.Soundness.ExecRows
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Soundness.Lowering
+import Proofs.Flock.Soundness.SparseRows
 
 /-!
 # An instance's rows, placed by the statement the verifier accepted

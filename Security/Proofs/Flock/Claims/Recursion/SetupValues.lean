@@ -1,6 +1,6 @@
 module
 
-public import Flock.With.SimSetup
+public import Flock.With.Setup
 
 /-!
 # What the setup's parse, load and draw return, in any hash

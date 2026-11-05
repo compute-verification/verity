@@ -1,6 +1,8 @@
 module
 
 public import Definitions.Nci.Dark
+import Mathlib.Analysis.Real.Sqrt
+import Mathlib.Data.NNRat.Floor
 
 /-!
 # NCI's θ rule: the named premise

@@ -1,6 +1,10 @@
 module
 
-public import Proofs.Flock.Soundness.Accounting.Fast100
+public import Definitions.Flock.Accounting.Fast100
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.IntervalCases
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Accounting.Fast100
 
 /-!
 # The numbers

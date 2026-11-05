@@ -36,11 +36,11 @@ module
 public import CoreProtocol.Blobs
 public import SampledProofs.OneStage
 public import SampledProofs.ChallengerTrees
-public import Flock
-meta import CoreProtocol.Blobs
-meta import SampledProofs.OneStage
-meta import SampledProofs.ChallengerTrees
-meta import Flock
+public import Flock.KnownRead
+public import Flock.KsScope
+public import Flock.RecSetup
+public import Flock.RecordText
+public import Flock.RegKnown
 
 @[expose] public section
 set_option backward.privateInPublic true

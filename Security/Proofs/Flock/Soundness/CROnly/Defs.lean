@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Audit.FlockLink
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # Collision resistance alone: the definitions

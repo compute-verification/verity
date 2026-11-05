@@ -1,8 +1,22 @@
 module
 
-public import Proofs.Flock.Soundness.LincheckPhase
-public import Proofs.Flock.Soundness.ListSize
-public import Proofs.Flock.Soundness.OpeningPhase
+public import Definitions.Core.Game
+public import Definitions.Flock.Defs
+public import Mathlib.Algebra.Order.Ring.Star
+public import Mathlib.LinearAlgebra.Lagrange
+public import Mathlib.RingTheory.Henselian
+public import Mathlib.RingTheory.RegularLocalRing.Defs
+public import Mathlib.RingTheory.SimpleRing.Principal
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Soundness.Defs
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Interleave
+import Proofs.Flock.Soundness.Game.Poly
+import Proofs.Flock.Soundness.Game.Union
+import Proofs.Flock.Soundness.LincheckPhase
+import Proofs.Flock.Soundness.OpeningPhase
+import Proofs.Flock.Soundness.Rounds
 
 /-!
 # The zerocheck phase (PROTOCOL.md §9.2)

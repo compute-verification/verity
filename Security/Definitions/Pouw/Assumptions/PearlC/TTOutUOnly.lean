@@ -1,7 +1,7 @@
 module
 
-public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
 public import Definitions.Pouw.PearlC.W1
+public import Definitions.Pouw.PearlC.DeviceRev1
 
 /-!
 # TT_OUT over U alone (trusted; the game under U-only binding, and the named `Prop`)

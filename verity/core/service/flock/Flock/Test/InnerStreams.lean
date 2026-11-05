@@ -5,7 +5,6 @@ top of two nodes and a level-1 top of one): what row `x` of each value the inner
 module
 
 public import Flock.RecSetup
-meta import Flock.RecSetup
 
 @[expose] public section
 

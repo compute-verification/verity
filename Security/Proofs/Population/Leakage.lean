@@ -1,8 +1,14 @@
 module
 
-public import Proofs.Population.Egress
 public import Proofs.Population.Pointer
-public import Proofs.Population.Work
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+public import Mathlib.Data.Fintype.Powerset
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Data.Fintype.BigOperators
+import Proofs.Population.Determinacy
+import Proofs.Population.Egress
+import Proofs.Population.Work
 
 /-!
 # Leakage is the faulty proof blocks' cone egress

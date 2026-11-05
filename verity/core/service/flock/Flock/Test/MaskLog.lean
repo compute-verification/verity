@@ -5,8 +5,6 @@ past the META line are never read, so a file that isn't UTF-8 there still gives 
 -/
 module
 
-public import Flock.Zk
-meta import Flock.Zk
 
 @[expose] public section
 

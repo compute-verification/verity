@@ -1,6 +1,12 @@
 module
 
 public import Proofs.Flock.Claims.ZK.Worker
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.ZK.Hiding
+import Proofs.Flock.Soundness.ZK.RealLeaves
+import Proofs.Flock.Soundness.ZK.SHVZK
+import Proofs.Flock.Soundness.ZK.Session
 
 /-!
 # Lemma B at values read from what the workers see

@@ -1,9 +1,12 @@
 module
 
 public import Proofs.Flock.Soundness.LigeritoDecode
-public import Proofs.Flock.Soundness.LigeritoFolds
-public import Proofs.Flock.Soundness.LigeritoOOD
-public import Proofs.Flock.Soundness.LigeritoQueries
+public import Proofs.Flock.Soundness.LigeritoRes
+import Proofs.Flock.Soundness.Accounting.Fast100
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Interleave
+import Proofs.Flock.Soundness.Game.Union
+import Proofs.Flock.Soundness.LigeritoCoins
 
 /-!
 # Ligerito level by level (PROTOCOL.md §13.3)

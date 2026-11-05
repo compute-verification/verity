@@ -2,8 +2,9 @@ module
 
 public import Definitions.Pouw.PearlC.W1Stop
 public import Proofs.Pouw.PearlC.W1BudgetAbort
-public import Proofs.Pouw.PearlC.W1Priced
-public import Proofs.Pouw.Prob
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.W1Priced
+import Proofs.Pouw.Prob
 
 /-!
 # The stopping machine truncates

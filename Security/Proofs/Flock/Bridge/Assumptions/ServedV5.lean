@@ -1,9 +1,7 @@
 module
 
 public import Flock.Witness
-public import Flock.ProvedScope
 public import Flock.Desc
-public import Flock.Registered
 
 /-!
 # The served registered session's files parse at public inputs

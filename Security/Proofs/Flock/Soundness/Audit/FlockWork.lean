@@ -2,6 +2,8 @@ module
 
 public import Flock.Draw
 public import Proofs.Flock.Soundness.Audit.Work
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
 
 /-!
 # The work law's rule is the executable's

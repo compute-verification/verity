@@ -1,27 +1,13 @@
 module
 
-public import Mathlib.Algebra.BigOperators.Ring.Finset
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
-public import Mathlib.Analysis.SpecialFunctions.Log.Base
-public import Mathlib.Analysis.SpecialFunctions.Pow.Real
-public import Mathlib.Basic.Real.Basic
-public import Mathlib.Data.Fintype.BigOperators
-public import Mathlib.Data.Fintype.Option
-public import Mathlib.Data.Fintype.Powerset
-public import Mathlib.Data.Fintype.Sum
-public import Mathlib.Data.List.Chain
-public import Mathlib.Tactic.FieldSimp
-public import Mathlib.Tactic.GCongr
-public import Mathlib.Tactic.Linarith
-public import Definitions.Pous
-public import Definitions.Pous.Assumptions
-public import Proofs.Pous.Statements
-public import Proofs.Pous.Sanity
-public import Proofs.Pous.Accounting.Numbers
-public import Proofs.Pous.Thm1.Theorem1iTimed
 public import Proofs.Pous.Thm1.Theorem1iiSeq
-public import Proofs.Pous.Thm1.Theorem1iiiTimed
-public import Proofs.Pous.B5.StackedOneWay
+public import Definitions.Pous.Model.Labelling
+public import Definitions.Pous.Model.Pebbling
+public import Mathlib.Algebra.Group.End
+import Proofs.Pous.B5.StackedOneWay
+import Proofs.Pous.Sanity
+import Proofs.Pous.Thm1.Theorem1iTimed
+import Proofs.Pous.Thm1.Theorem1iiiTimed
 
 /-!
 # From "fewer than `k` answerable" to a sampled audit, and the stacked one-way graph's audit bound

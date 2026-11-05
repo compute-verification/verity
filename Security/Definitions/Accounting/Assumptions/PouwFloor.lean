@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Accounting.PouwWork
+public import Definitions.Pouw.Basic.Prob
 
 /-!
 # PoUW's work floor on one node, an open conjecture (trusted)

@@ -2,6 +2,7 @@ module
 
 public import Definitions.Core.TC.Bridge
 public import Proofs.Core.TC.Proofs.Group
+import Proofs.Core.TC.Proofs.Norm
 
 /-!
 # One group, the semantics' side

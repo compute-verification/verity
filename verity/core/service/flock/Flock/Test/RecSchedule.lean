@@ -11,7 +11,6 @@ under the record's link.
 module
 
 public import Flock.RecVStar
-meta import Flock.RecVStar
 
 @[expose] public section
 

@@ -1,6 +1,5 @@
 module
 
-public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 public import Mathlib.Analysis.Real.Sqrt
 public import Definitions.Nci.Assumptions.Cover
 public import Definitions.Nci.Assumptions.CoverFanOut

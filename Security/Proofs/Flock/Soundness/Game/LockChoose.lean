@@ -1,6 +1,8 @@
 module
 
-public import Proofs.Flock.Soundness.Game.Batch
+public import Definitions.Flock.Game.Batch
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Game.Expect
 
 /-!
 # Fork probabilities that do not read the chooser

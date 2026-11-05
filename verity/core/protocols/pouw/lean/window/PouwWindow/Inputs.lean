@@ -2,7 +2,6 @@ module
 
 public import PouwWindow.Side
 public import PouwWindow.Record
-public import Identity.Domains
 
 /-!
 # The tile instances' public inputs (`window.py`, "The tile instances' public inputs")

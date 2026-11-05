@@ -1,7 +1,16 @@
 module
 
-public import Proofs.Flock.Soundness.ZK.Refusal
-public import Proofs.Flock.Soundness.ZK.RealLeaves
+public import Definitions.Claims.Hm96
+public import Definitions.Core.Game
+public import Definitions.Flock.ZK.Cut
+public import Definitions.Flock.ZK.RealView
+public import Definitions.Flock.ZK.SHVZK
+public import Proofs.Flock.Soundness.ZK.Dist
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.ZK.Hiding
+import Proofs.Flock.Soundness.ZK.RealLeaves
+import Proofs.Flock.Soundness.ZK.Refusal
 
 /-!
 # Zero knowledge at a refused coin: the prover's prefix, with real leaves

@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Complete.Prover.Transcript
+public import Flock.Opening
 
 /-!
 # The honest prover's PIOP: zerocheck, lincheck and ring switch

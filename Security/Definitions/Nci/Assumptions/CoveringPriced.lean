@@ -1,6 +1,7 @@
 module
 
-public import Definitions.Nci.Assumptions.CoveringTwoCosts
+public import Definitions.Nci.Covering
+public import Mathlib.Basic.Real.Basic
 
 /-!
 # Parameter-hardness at a price per weight

@@ -11,10 +11,7 @@ unit's slot, D11, or not aligned).
 -/
 module
 
-public import Flock.Test.Tmpl
 public import Flock.TmplUnroll
-meta import Flock.Test.Tmpl
-meta import Flock.TmplUnroll
 
 @[expose] public section
 

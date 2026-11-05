@@ -2,12 +2,10 @@ module
 
 public import Definitions.Core.Accel.H200
 public import Proofs.Core.Accel.Model
-public import Mathlib.Algebra.BigOperators.Intervals
-public import Mathlib.Algebra.BigOperators.Ring.Finset
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
-public import Mathlib.Algebra.Order.Ring.NNRat
-public import Mathlib.Tactic.IntervalCases
-public import Mathlib.Tactic.Linarith
+import Mathlib.Data.Fintype.BigOperators
+import Mathlib.Data.Nat.SuccPred
+import Mathlib.Tactic.IntervalCases
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # The honest lemma: the deployed INT8 GEMM meets the H200's model

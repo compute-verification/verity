@@ -1,9 +1,6 @@
 module
 
-public import PouwWindow.Rounds
-public import PouwCheck.Inputs
 public import PouwCheck.Pass
-public import SampledProofs.ChallengerSession
 
 /-!
 # A live window's salt and round coins (`core_check.py`, "a live window's salt and round coins")

@@ -2,6 +2,8 @@ module
 
 public import Definitions.Core.Fp32
 public import Proofs.Core.Round
+import Mathlib.Data.Rat.Floor
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # `roundRn` is the nearest FP32 word, ties to even

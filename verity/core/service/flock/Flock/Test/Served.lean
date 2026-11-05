@@ -7,7 +7,6 @@ reason; a version before hm96 rows, or typed, is refused earlier by `ProvedScope
 module
 
 public import Flock.ProvedScope
-meta import Flock.ProvedScope
 
 @[expose] public section
 

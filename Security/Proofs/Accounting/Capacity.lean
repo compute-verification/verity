@@ -1,8 +1,11 @@
 module
 
 public import Definitions.Accounting.Guarantees.Capacity
-public import Proofs.Accounting.Joint
-public import Mathlib.Tactic.Linarith
+import Mathlib.Basic.ENNReal.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Accounting.Device
+import Proofs.Accounting.Joint
+import Proofs.Pouw.Prob
 
 /-!
 # Proof that a state-bounded game's soundness is a joint run's capacity guarantee, and that derived state shares the

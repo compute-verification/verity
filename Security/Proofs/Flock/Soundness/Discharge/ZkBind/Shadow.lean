@@ -1,7 +1,8 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkBind.Bind
-public import Proofs.Flock.Soundness.Discharge.Layout.Keyed
+public import Proofs.Flock.Soundness.Binding.Rows
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # A `--zk` layout from a public one at the same statements

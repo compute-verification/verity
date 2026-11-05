@@ -6,6 +6,7 @@ module
 
 public import Flock.Statement
 public import Flock.Ligerito
+public import Flock.Opening
 
 @[expose] public section
 

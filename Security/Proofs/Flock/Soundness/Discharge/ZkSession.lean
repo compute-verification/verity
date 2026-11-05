@@ -9,5 +9,6 @@ public import Proofs.Flock.Soundness.ZK.Hiding
 public import Proofs.Flock.Soundness.ZK.CoinBinding
 public import Proofs.Flock.Soundness.Discharge.ZkSession.Session
 public import Proofs.Flock.Soundness.Discharge.ZkSession.Numbers
+import Mathlib.Combinatorics.Matroid.Init
 
 @[expose] public section

@@ -1,6 +1,15 @@
 module
 
-public import Proofs.Properties.NetworkCertifier.Check
+public import Aesop.BuiltinRules
+public import Mathlib.Tactic.ToDual
+public import Properties.NetworkCertifier
+import Batteries.Tactic.PermuteGoals
+import Mathlib.Data.Finset.Attr
+import Mathlib.Tactic.Bound.Init
+import Mathlib.Tactic.Finiteness.Attr
+import Mathlib.Tactic.SetLike
+import Proofs.Properties.NetworkCertifier.Check
+import Proofs.Properties.NetworkCertifier.Grid
 
 /-!
 # The check's outcomes: refusals, acceptance and undecided

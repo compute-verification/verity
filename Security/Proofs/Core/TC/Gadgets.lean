@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Core.TC.Gadgets
+public import Definitions.Core.TC.Relation
 
 /-!
 # The range and is-zero gadgets hold exactly when their predicates do

@@ -1,8 +1,12 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.ZkCoins.Hybrid
-public import Proofs.Flock.Soundness.Discharge.ZkCoins.Erase
-public import Proofs.Flock.Soundness.Discharge.ZkCoins.Reads
+public import Proofs.Flock.Soundness.Discharge.ZkCoins.Statements
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.ZkCoins.Erase
+import Proofs.Flock.Soundness.Discharge.ZkCoins.Hybrid
+import Proofs.Flock.Soundness.Discharge.ZkCoins.Reads
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Batch
 
 /-!
 # The batched `--zk` session on C-Flock ZK's coin tree

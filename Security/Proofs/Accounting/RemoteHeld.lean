@@ -1,11 +1,10 @@
 module
 
 public import Definitions.Accounting.Guarantees.RemoteHeld
-public import Proofs.Pouw.Prob
-public import Mathlib.Algebra.BigOperators.Intervals
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
-public import Mathlib.Tactic.Linarith
-public import Mathlib.Tactic.Positivity
+import Mathlib.Algebra.BigOperators.Intervals
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Prob
 
 /-!
 # The snapshot a remote audit shows held

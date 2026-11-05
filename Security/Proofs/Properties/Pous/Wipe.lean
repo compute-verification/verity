@@ -1,10 +1,14 @@
 module
 
 public import Properties.Pous.Wipe
-public import Proofs.Pous.StreamedWipe.Family
-public import Proofs.Pous.Sanity
-public import Mathlib.Tactic.SplitIfs
-public import Mathlib.Tactic.DefEqTransformations
+public import Mathlib.Algebra.Group.End
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pous.Sanity
+import Proofs.Pous.StreamedWipe.Family
 
 /-!
 # Proof that an accepted wipe meets the survivor bound it publishes (`Properties.Pous.Wipe`)

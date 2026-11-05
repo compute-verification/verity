@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Flock.Soundness.Types.Program
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Lowering
 
 /-!
 # Each drawn unit's place, for a program of units (verified-lowering phase 1, S4d)

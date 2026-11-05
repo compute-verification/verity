@@ -1,6 +1,10 @@
 module
 
-public import Proofs.Flock.Soundness.LigeritoMCA
+public import ArkLib.Data.CodingTheory.ProximityGenerator.Basic
+public import Definitions.Core.Game
+public import Definitions.Flock.Accounting.Fast100
+public import Proofs.Flock.Soundness.ListSize
+import Proofs.Flock.Soundness.LigeritoMCA
 
 /-!
 # Ligerito's levels meet the Johnson-range MCA bound (PROTOCOL.md §13, §15)

@@ -8,7 +8,6 @@ module
 
 public import Flock.Verify
 public import Flock.ZkLigerito
-public import Flock.JsonParse
 
 @[expose] public section
 set_option backward.privateInPublic true

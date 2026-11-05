@@ -1,6 +1,12 @@
 module
 
-public import Proofs.Flock.Soundness.Assumptions
+public import Definitions.Claims.Hm96
+public import Definitions.Core.Game
+public import Mathlib.Algebra.Group.End
+public import Mathlib.Data.Fintype.Pi
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Assumptions
+import Proofs.Flock.Soundness.Game.Basic
 
 /-!
 # Zero knowledge: T1, an hm96 leaf swapped for an ideal one

@@ -1,7 +1,8 @@
 module
 
 public import NetworkCertifier.WindowCharge
-public import Lean.Data.Json
+public import Lean.Data.Json.FromToJson.Basic
+public import Lean.Data.Json.Parser
 
 /-!
 # The window charge's difftest: advice v1's whole window against `window_charge.reference_window`, on random instances

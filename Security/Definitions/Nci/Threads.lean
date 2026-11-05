@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Nci
+import Mathlib.Data.NNRat.Floor
 
 /-!
 # NCI over threads: the vocabulary

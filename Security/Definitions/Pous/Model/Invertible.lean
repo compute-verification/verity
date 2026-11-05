@@ -1,9 +1,12 @@
 module
 
-public import Mathlib.Data.Finite.Prod
-public import Mathlib.Data.Fintype.Perm
 public import Definitions.Pous.Model.Labelling
 public import Definitions.Pous.Model.Pebbling
+public import Definitions.Pous.Game.Oracle
+public import Mathlib.Algebra.Group.End
+import Mathlib.Basic.ENNReal.Real
+import Mathlib.Basic.Finite.Prod
+import Mathlib.Data.Fintype.Option
 
 /-!
 # P3's invertible two-layer labels, their ideal model, and white/green hardness (N10)

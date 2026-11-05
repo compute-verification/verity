@@ -1,7 +1,10 @@
 module
 
-public import Proofs.Pouw.PearlC.DeviceChainCapGamma
 public import Definitions.Pouw.PearlC.DevicePricesLoop
+public import Definitions.Pouw.Assumptions.PearlC.DeviceChainCap
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.DeviceChainCapGamma
 
 /-!
 # v2 at the chain cap 1/1,000 at sm_120's in-loop prices (staged)

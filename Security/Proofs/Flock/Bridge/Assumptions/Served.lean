@@ -1,7 +1,6 @@
 module
 
 public import Flock.Witness
-public import Flock.ProvedScope
 public import Flock.Desc
 
 /-!

@@ -1,6 +1,7 @@
 module
 
 public import Properties.Pous.EndToEnd
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # PoUS end to end at any point: the composed check and the ring game

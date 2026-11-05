@@ -2,6 +2,9 @@ module
 
 public import Properties.RemoteAudit.Shared
 public import Proofs.Properties.RemoteAudit.Order
+public import Proofs.Properties.RemoteAudit.Frozen
+import Proofs.Properties.RemoteAudit.Draw
+import Proofs.Properties.RemoteAudit.Window
 
 /-!
 # One openings coin per draw: the properties at `g` windows a draw

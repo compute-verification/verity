@@ -1,7 +1,11 @@
 module
 
 public import Definitions.Accounting.Guarantees.PerRun
-public import Proofs.Accounting.Joint
+import Mathlib.Basic.ENNReal.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Accounting.Device
+import Proofs.Accounting.Joint
+import Proofs.Pouw.Prob
 
 /-!
 # Proof of the per-run joint guarantee and its covert residual

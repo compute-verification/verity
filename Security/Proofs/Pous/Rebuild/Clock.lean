@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Pous.Chain.Flat
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # The cumulative chain clock, and the band's hardness from one held label

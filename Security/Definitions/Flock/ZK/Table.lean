@@ -1,22 +1,10 @@
 module
 
-public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-public import Mathlib.Algebra.BigOperators.Ring.Finset
-public import Mathlib.Algebra.CharP.Defs
-public import Mathlib.Algebra.Group.Basic
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
-public import Mathlib.Basic.Finite.Prod
-public import Mathlib.Data.Finset.Card
-public import Mathlib.Data.Fintype.Card
-public import Mathlib.Data.Fintype.Pi
-public import Mathlib.Data.Fintype.Prod
 public import Mathlib.Data.Fin.VecNotation
 public import Mathlib.Data.ZMod.Basic
-public import Mathlib.Logic.Function.Basic
-public import Mathlib.Logic.Function.Iterate
-public import Mathlib.Tactic.Abel
-public import Mathlib.Tactic.FinCases
-public import Mathlib.Tactic.Ring
+public import Mathlib.Algebra.Field.Defs
+import Mathlib.Tactic.NormNum.Inv
+import Mathlib.Tactic.NormNum.Pow
 
 /-!
 # Zero knowledge: one masked table, its reference prover and `S_shvzk`, at fixed verifier coins

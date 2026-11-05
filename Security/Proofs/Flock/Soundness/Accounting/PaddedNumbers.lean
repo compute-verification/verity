@@ -1,7 +1,12 @@
 module
 
 public import Definitions.Flock.Accounting.Padded
-public import Proofs.Flock.Soundness.Accounting.Numbers
+public import Definitions.Flock.Accounting.Fast100
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.IntervalCases
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Accounting.Fast100
+import Proofs.Flock.Soundness.Accounting.Numbers
 
 /-!
 # The numbers with C-Flock ZK's padded level 0
