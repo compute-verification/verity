@@ -55,6 +55,18 @@ def test_wait_replaces_the_links_tier_overrides_the_derived_one_and_blockers_say
     assert goals.main(["set", "demos/both", "--wait", "partition"], fake) == 1
 
 
+def test_next_names_a_step_and_its_date_keeps_the_other_half_and_no_next_clears_it():
+    fake = Fake([GOAL])
+    assert goals.main(["set", "demos/both", "--next", "Run 2's verdicts", "--next-due", "2026-11-05T09:00-08:00"], fake) == 0
+    assert fake.posted[-1]["set"]["next"] == {"step": "Run 2's verdicts", "due": "2026-11-05T09:00-08:00"}
+    fake = Fake([GOAL | {"next": {"step": "Run 2's verdicts", "due": "2026-11-05"}}])
+    assert goals.main(["set", "demos/both", "--next-due", "2026-11-06"], fake) == 0
+    assert fake.posted[-1]["set"]["next"] == {"step": "Run 2's verdicts", "due": "2026-11-06"}
+    assert goals.main(["set", "demos/both", "--no-next"], fake) == 0
+    assert "next" not in fake.posted[-1]["set"]
+    assert goals.main(["set", "demos/both", "--next", "A step with no date"], Fake([GOAL])) == 1
+
+
 def test_a_new_goal_needs_title_status_and_due(capsys, tmp_path):
     fake = Fake()
     assert goals.main(["set", "infra/x", "--title", "Verity holds no infra"], fake) == 1
@@ -108,3 +120,15 @@ def test_a_refusal_is_one_line_naming_the_field(capsys):
 def test_the_command_line_refuses_what_the_site_would(argv):
     with pytest.raises(SystemExit):
         goals.main(argv, Fake())
+
+
+def test_priority_sets_or_clears_a_goal_s_priority_as_its_own_write():
+    fake = Fake([GOAL])
+    assert goals.main(["priority", "demos/both", "1"], fake) == 0
+    assert fake.posted[-1] == {"priority": {"id": "demos/both", "priority": 1}}
+    assert goals.main(["priority", "demos/both", "clear"], fake) == 0
+    assert fake.posted[-1] == {"priority": {"id": "demos/both", "priority": None}}
+    stored = GOAL | {"priority": 1, "prioritySet": True, "prioritySetBy": "top", "prioritySetAt": "2026-11-04T21:40:00.000Z"}
+    fake = Fake([stored])
+    assert goals.main(["set", "demos/both", "--title", "Reworded"], fake) == 0
+    assert not {"priority", "prioritySet", "prioritySetBy", "prioritySetAt"} & set(fake.posted[-1]["set"]), "a goal write never sends priority back"

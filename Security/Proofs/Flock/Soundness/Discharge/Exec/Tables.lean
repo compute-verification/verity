@@ -30,7 +30,7 @@ theorem range'_forIn_each {σ : Type} (n : ℕ) (f : ℕ → σ → V (ForInStep
 schedule is `fast100`'s and both reps' checks accept with one cap. -/
 theorem verify_ok_tables {spec : SessionSpec} {tabs : Array Setup} {record : String} {proofs : Array ByteArray}
     (h : Flock.verify spec tabs record proofs = .ok ()) :
-    ∃ (sess : Session) (schs : Array Flock.Schedule), Record.decode spec record = .ok sess ∧
+    ∃ (sess : RunRecord) (schs : Array Flock.Schedule), Record.decode spec record = .ok sess ∧
       tabs.size = spec.tables.size ∧ 0 < tabs.size ∧ schs.size = tabs.size ∧
       ∀ (i : ℕ) (hi : i < tabs.size), ∃ (hs : i < schs.size) (c : ByteArray), Flock.fast100 tabs[i].m = some schs[i] ∧
         verifyRep spec tabs[i] schs[i] sess i 0 proofs[2 * i]! = .ok c ∧
@@ -85,7 +85,7 @@ theorem verify_ok_tables {spec : SessionSpec} {tabs : Array Setup} {record : Str
 `i` of a session, from both reps' checks accepting with one cap. -/
 theorem table_refines_hm96 (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
-    (hms : st.merkle = MerkleScheme.hm96Sha512) (extra : List (Model.Claim 𝔽 S.m)) (sess : Session)
+    (hms : st.merkle = MerkleScheme.hm96Sha512) (extra : List (Model.Claim 𝔽 S.m)) (sess : RunRecord)
     (hext : ExtraRealizes st S sess.points extra) (hwf : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds)
     (sch : Flock.Schedule) (hf : Flock.fast100 st.m = some sch) (i : ℕ) (b₀ b₁ c : ByteArray)
     (h0 : verifyRep spec st sch sess i 0 b₀ = .ok c) (h1 : verifyRep spec st sch sess i 1 b₁ = .ok c) :
@@ -133,7 +133,7 @@ the unsalted path checks (`opensOK_of`), which at `leafPlain` are its salted one
 theorem table_refines_plain (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
     (hms : st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted") (extra : List (Model.Claim 𝔽 S.m))
-    (sess : Session) (hext : ExtraRealizes st S sess.points extra) (hwf : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds)
+    (sess : RunRecord) (hext : ExtraRealizes st S sess.points extra) (hwf : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds)
     (sch : Flock.Schedule) (hf : Flock.fast100 st.m = some sch) (i : ℕ) (b₀ b₁ c : ByteArray)
     (h0 : verifyRep spec st sch sess i 0 b₀ = .ok c) (h1 : verifyRep spec st sch sess i 1 b₁ = .ok c) :
     ∃ (p₀ p₁ : Proof) (s₀ s₁ : StreamRec) (pend₀ pend₁ : PendL 𝔽 Dig),
@@ -181,7 +181,7 @@ statement's `extraClaims` at link points `pts`, as one run of `tableAfterL` at `
 coins, rep 0's then rep 1's. Its openings and salts are the proofs'. -/
 theorem table_tableAfterL (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
-    (hms : st.merkle = MerkleScheme.hm96Sha512) (ptLocal mPts : ℕ) (pts : Fin 2 → Fin mPts → 𝔽) (sess : Session)
+    (hms : st.merkle = MerkleScheme.hm96Sha512) (ptLocal mPts : ℕ) (pts : Fin 2 → Fin mPts → 𝔽) (sess : RunRecord)
     (hext : ExtraRealizes st S sess.points (Model.extraClaims S ptLocal mPts pts))
     (hwf : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds)
     (sch : Flock.Schedule) (hf : Flock.fast100 st.m = some sch) (i : ℕ) (b₀ b₁ c : ByteArray)
@@ -220,7 +220,7 @@ whose leaves are `hm96-sha512/v1`, its schedule is `fast100`'s and, at the state
 layout and the record's link points, one run of the salted table game `tableAfterL` on the table's two streams' coins,
 with the proof files' openings and salts, accepts. -/
 theorem accepts_tables_hm96 {I : Inputs} {t : Transcript} (hh : I.tags.hiddenOutputs = false) (h : Accepts I t) :
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupOf I t.record = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupOf I t.record = .ok (spec, sts) ∧
       Record.decode spec t.record = .ok sess ∧ sts.size = spec.tables.size ∧ 0 < sts.size ∧
       ∀ (j : ℕ) (hj : j < sts.size),
         (∃ d, Stmt.setupH (tagsAt I.tags I.count j) I.circuitFile I.publicFile I.coins I.tables d I.partition

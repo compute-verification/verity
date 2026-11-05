@@ -43,7 +43,7 @@ variable {Cm Coin : Type}
 session whose points read as the run's link points (`laterCoins_of_held`'s `hdec`, `hu`). -/
 def RecordPoints (wr : List (Cm × Coin) → Lean.Json × String) {e : ExecHolo} (t : List (Cm × Coin))
     (u : C3Run e) : Prop :=
-  ∃ (spec : Flock.SessionSpec) (sess : Flock.Session), Flock.Record.decode spec (wr t).2 = .ok sess ∧
+  ∃ (spec : Flock.SessionSpec) (sess : Flock.RunRecord), Flock.Record.decode spec (wr t).2 = .ok sess ∧
     holoPts e.cls.mPts sess.points = u.pts
 
 /-- **Hypothesis (`stageHeldW_sparse`'s `hh`): the verifier holds the inner transcript** at the history. -/
@@ -91,7 +91,7 @@ theorem laterCoins_holo {st : Flock.Stmt} {hp : HoloParams} {Cm : Type}
       Lean.Json × String}
     {held : Lean.Json × String → Except String RecVStar.InnerCommits} {sparse : Option RecSparse.Shape}
     {ish : RecVStar.Inner} {tbl : String} {bc : Cm → String → Nat → List UInt8} {spec : Flock.SessionSpec}
-    {sess : Flock.Session} {cs : RecVStar.InnerCommits} {c3 : RecCoins.C3} {unit : String}
+    {sess : Flock.RunRecord} {cs : RecVStar.InnerCommits} {c3 : RecCoins.C3} {unit : String}
     {rep rs : Array RecVStar.SchedRound} {sp : RecSparse.Shape} {sh : RecVStar.StackedShape}
     {x : RecVStar.InnerStream} {S : ℕ} {stmt : Fin S → VStar.Stmt} {Vs : Fin S → VStmt} {Reg' : Type}
     {M : FlockC3.Reps.StackedMaps stmt Vs} {zs : (s : Fin S) → (Vs s).Outer Reg'} {Lb : (s : Fin S) → (Vs s).Bits}
