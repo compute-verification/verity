@@ -946,8 +946,10 @@ name and the lookup tables v2 reads off the committed files (`DigestsAt`); the d
 it is v2's (`coinsRead`); the finder is `K`'s read finder and the forger `K`'s, with no loss term; and at each session
 the extractor is the
 session's at the projected strategy (`Live.extract`), the vocabulary's openings hold wherever the session's deployed
-commitment opens (`Live.OpensUnder`), `error`'s condition holds the leg's per-finder premises (`FinderCR`), and the
-published `δ` is at least the session's at the read finder's published bound (`Live.delta`). -/
+commitment opens (`Live.OpensUnder`), `error`'s condition holds the leg's per-finder premises (`FinderCR`), the
+vocabulary's session premises (`Vocab.premises`) are exactly the session's at the projected strategy
+(`Live.FinderCR`), and `True` where `S` holds no session, and the published `δ` is at least the session's at the read
+finder's published bound (`Live.delta`). -/
 structure Deployed (V : Vocab d α) (K : Constructions V) (S : ByteArray → Array ByteArray → Option Live) :
     Prop where
   setsUp : ∀ θ F A, S θ F = some A → SetsUp V θ F A
@@ -960,7 +962,10 @@ structure Deployed (V : Vocab d α) (K : Constructions V) (S : ByteArray → Arr
     HEq (V.extract θ F c σ) ((K.live A θ F c σ).extract (K.project A θ F c σ))
   opens : ∀ θ F A, S θ F = some A → ∀ c, A.OpensUnder (V.read θ F) (V.Opens θ F c)
   finderCR : ∀ θ F A, S θ F = some A → ∀ (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)),
-    V.finderCR .sampled θ F c σ → FinderCR V K A θ F c σ
+    V.finderCR .sampled θ F c σ → V.premises .sampled θ F c σ → FinderCR V K A θ F c σ
+  premises : ∀ θ F (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)),
+    V.premises .sampled θ F c σ ↔
+      ∀ A, S θ F = some A → (K.live A θ F c σ).FinderCR (K.project A θ F c σ) (V.cost θ F c σ)
   delta : ∀ θ F A, S θ F = some A → ∀ t, A.delta t (V.crBound θ .sampled t) ≤ V.delta θ .sampled t
 
 end Verity.Sampled

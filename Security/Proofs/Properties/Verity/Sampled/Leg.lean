@@ -210,7 +210,7 @@ theorem sampledProofsSound_of_targets {K : Constructions V} {S : ByteArray → A
   split_ifs with hE
   swap
   · exact le_top
-  obtain ⟨hfs, hFC, hUf⟩ := hE
+  obtain ⟨hfs, hpr, hFC, hUf⟩ := hE
   by_cases hI : Accounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ) (V.certOf θ).ε
   · calc Verity.Game.prob (fun o => V.Verdict k .sampled o ∧ ¬ V.Holds k θ F c σ .sampled o) (V.game θ F c) σ
           ≤ Verity.Game.prob (fun _ => False) (V.game θ F c) σ :=
@@ -224,7 +224,7 @@ theorem sampledProofsSound_of_targets {K : Constructions V} {S : ByteArray → A
   | none => exact hver.trans ((hCov θ F hS hP c σ hfs).le.trans (zero_le))
   | some A =>
     have hsu := hD.setsUp θ F A hS
-    have hFin := hD.finderCR θ F A hS c σ hfs
+    have hFin := hD.finderCR θ F A hS c σ hfs hpr
     have hε : (K.live A θ F c σ).ε = (V.certOf θ).ε := hsu.share.symm
     have hks := (K.live A θ F c σ).ks hB (r := V.read θ F) hsu.read (V.Opens θ F c) (hD.opens θ F A hS c)
       (fun g b hb v hv => by unfold Vocab.Opens; rw [hb]; exact hv) (V.extract θ F c σ) (K.project A θ F c σ)

@@ -100,7 +100,7 @@ theorem wipe_bound [Fintype V.Seed] [Nonempty V.Seed] [Fintype V.Spots] [Nonempt
       V.error .wipe θ F c σ := by
   unfold Vocab.error Accounting.condError
   split_ifs with hcr
-  · obtain ⟨hcr, hun⟩ := hcr
+  · obtain ⟨-, -, hcr, hun⟩ := hcr
     have hf : ENNReal.ofReal ((V.forger .wipe θ F c σ).Pr lmsVerify) ≤
         ENNReal.ofReal (V.epsForge θ (V.callsMul θ .wipe * V.cost θ F c σ + V.callsAdd θ .wipe) (V.signatures θ)) :=
       ENNReal.ofReal_le_ofReal (hun (V.forger_calls _ θ F c σ) (V.forger_signed _ θ F c σ))

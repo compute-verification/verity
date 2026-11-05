@@ -15,15 +15,18 @@ of `Deployed` and `Covers` either proved or one of the named `Prop`s below.
   its digests `programDigestOf` and `publicDigestOf`), whose declared calls cover the device's reading of what the
   prover sent (`CostsRead`, what the read finder and the forger spend beside the strategy), the device's history at each
   play, and the deployment's session at each parameters (`Instance.session`), the bound's parameters fixed by `θ`.
-* **The sampled names** (`Instance.stage`): v2's log (`coinsRead`), the binding's read finder and forger
-  (`Binding.readFinder`, `Binding.forger`) at `2t` calls, the file finders and the tables' finder (`fileSpecs`) as the
-  further finders, no loss, and the session's δ (`Live.delta`) at the deployment's session. The other subprotocols'
-  names are the base's, so their targets are the base's (`pouwSound_of_base`, `inferenceOnlySound_of_base`).
 * **The sessions** (`Instance.sessions`): the deployment's session wherever v2 sets it up on the committed files
-  (`SetsUp`), and the extractor the session's at the projected strategy (`Instance.vocab`).
-* **What stays open**: the commitment format's openings (`OpensAt`), the strict premises the session's finders and the
-  two-continuation finders read (`StrictAt`), which `Verity.Game.FinderSpec`'s linear form can't carry, the registered
-  files' file check (`RegisteredFiles`) and v2's session at the registered files (`SessionAt`).
+  (`SetsUp`).
+* **The sampled names** (`Instance.stage`, at constructions `K` over the base, whose game and declared calls are the
+  stage's): v2's log (`coinsRead`), the binding's read finder and forger (`Binding.readFinder`, `Binding.forger`) at
+  `2t` calls, the further finders (the file finders and the tables' finder under `ecr/sha-512`, `fileSpecs`, and at a
+  session `K`'s two-continuation finders under `cr/sha-512`, `strictSpecs`), the session's premises at the projected
+  strategy (`premisesOf`), no loss, and the session's δ (`Live.delta`) at the deployment's session. Each premise is
+  asked of the finders built from the one strategy `error` is at. The other subprotocols' names are the base's, so
+  their targets are the base's (`pouwSound_of_base`, `inferenceOnlySound_of_base`).
+* **The extractor** (`Instance.vocab`): the session's at the projected strategy.
+* **What stays open**: the commitment format's openings (`OpensAt`), the registered files' file check
+  (`RegisteredFiles`) and v2's session at the registered files (`SessionAt`).
 -/
 
 @[expose] public section
@@ -238,10 +241,77 @@ def callsAddOf (θ : ByteArray) : Subprotocol → ℕ
   | .sampled => 0
   | a => I.base.callsAdd θ a
 
+open Classical in
+/-- **The deployment's sessions**: at the parameters `θ` and the committed files `F`, the deployment's session where
+v2 sets it up on them (`SetsUp`). -/
+noncomputable def sessions (θ : ByteArray) (F : Array ByteArray) : Option Live :=
+  (I.session θ).bind fun A => if SetsUp I.base θ F A then some A else none
+
+theorem sessions_some {θ : ByteArray} {F : Array ByteArray} {A : Live} (h : I.sessions θ F = some A) :
+    I.session θ = some A ∧ SetsUp I.base θ F A := by
+  unfold sessions at h
+  cases hA : I.session θ with
+  | none => rw [hA] at h; cases h
+  | some B =>
+    rw [hA] at h
+    dsimp only [Option.bind] at h
+    split_ifs at h with hs
+    cases h
+    exact ⟨rfl, hs⟩
+
+theorem sessions_of {θ : ByteArray} {F : Array ByteArray} {A : Live} (hA : I.session θ = some A)
+    (hs : SetsUp I.base θ F A) : I.sessions θ F = some A := by
+  unfold sessions
+  rw [hA]
+  dsimp only [Option.bind]
+  rw [if_pos hs]
+
+variable (K : Constructions I.base)
+
+/-- **A two-continuation finder as a further finder**: `K`'s at round `j` of the session `A`, asked under `cr/sha-512`
+at its `2t + 2h` calls (`Constructions.msg_calls`, `Live.qM`). -/
+noncomputable def msgSpec (A : Live) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (j : Fin A.rounds) :
+    FinderSpec (I.base.game θ F c) (I.base.cost θ F c) where
+  finder σ := K.msgFinder A θ F c σ j
+  budget t := 2 * t + 2 * A.h
+  calls σ x := by
+    have h := K.msg_calls A θ F c σ j x
+    unfold Live.qM at h
+    exact_mod_cast h
+  claim := .cr
+
+/-- **The record's two-continuation finder as a further finder**: `K`'s at the session `A`, asked under `cr/sha-512`
+at its `2t + 2h` calls (`Constructions.record_calls`). -/
+noncomputable def recordSpec (A : Live) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :
+    FinderSpec (I.base.game θ F c) (I.base.cost θ F c) where
+  finder σ := K.recordFinder A θ F c σ
+  budget t := 2 * t + 2 * A.h
+  calls σ x := by
+    have h := K.record_calls A θ F c σ x
+    unfold Live.qM at h
+    exact_mod_cast h
+  claim := .cr
+
+/-- **The session's two-continuation finders as further finders**: at the deployment's session, one per round
+(`msgSpec`) and the record's (`recordSpec`); none elsewhere. -/
+noncomputable def strictSpecs (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :
+    List (FinderSpec (I.base.game θ F c) (I.base.cost θ F c)) :=
+  match I.sessions θ F with
+  | some A => (List.finRange A.rounds).map (I.msgSpec K A θ F c) ++ [I.recordSpec K A θ F c]
+  | none => []
+
 noncomputable def findersOf : Subprotocol → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
     List (FinderSpec (I.base.game θ F c) (I.base.cost θ F c))
-  | .sampled => I.fileSpecs
+  | .sampled => fun θ F c => I.fileSpecs θ F c ++ I.strictSpecs K θ F c
   | a => I.base.finders a
+
+/-- **Sampled proofs' session premises as deployed**: at the deployment's session, the session's at the strategy
+projected there (`Live.FinderCR`), asked of this strategy alone; `True` where there is none. -/
+def premisesOf : Subprotocol → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
+    Verity.Game.Strategy (I.base.game θ F c) → Prop
+  | .sampled => fun θ F c σ =>
+    ∀ A, I.sessions θ F = some A → (K.live A θ F c σ).FinderCR (K.project A θ F c σ) (I.base.cost θ F c σ)
+  | a => I.base.premises a
 
 /-- **Sampled proofs' δ at the parameters `θ`**: the deployment's session's (`Live.delta`) at the read finder's
 published bound; `0` where the deployment runs no session, where no play is covered by one (`Covers`). -/
@@ -295,7 +365,8 @@ theorem forgerOf_signed : ∀ a θ F c σ (x : (I.forgerOf a θ F c σ).S),
   | .wipe, θ, F, c, σ, x => I.base.forger_signed .wipe θ F c σ x
 
 /-- **The deployed vocabulary but for the extractor**: the base with sampled proofs' names (v2's log, the binding's
-read finder and forger, the further finders, the session's δ and no loss). -/
+read finder and forger, the further finders and the session's premises at `K`'s finders and projection, the session's
+δ and no loss). -/
 noncomputable def stage : Vocab d α :=
   { I.base with
     coinsRead := I.coinsReadOf
@@ -303,37 +374,13 @@ noncomputable def stage : Vocab d α :=
     callsMul := I.callsMulOf
     callsAdd := I.callsAddOf
     finder_calls := I.finderOf_calls
-    finders := I.findersOf
+    finders := I.findersOf K
+    premises := I.premisesOf K
     forger := I.forgerOf
     forger_calls := I.forgerOf_calls
     forger_signed := I.forgerOf_signed
     delta := I.deltaOf
     loss := I.lossOf }
-
-open Classical in
-/-- **The deployment's sessions**: at the parameters `θ` and the committed files `F`, the deployment's session where
-v2 sets it up on them (`SetsUp`). -/
-noncomputable def sessions (θ : ByteArray) (F : Array ByteArray) : Option Live :=
-  (I.session θ).bind fun A => if SetsUp I.base θ F A then some A else none
-
-theorem sessions_some {θ : ByteArray} {F : Array ByteArray} {A : Live} (h : I.sessions θ F = some A) :
-    I.session θ = some A ∧ SetsUp I.base θ F A := by
-  unfold sessions at h
-  cases hA : I.session θ with
-  | none => rw [hA] at h; cases h
-  | some B =>
-    rw [hA] at h
-    dsimp only [Option.bind] at h
-    split_ifs at h with hs
-    cases h
-    exact ⟨rfl, hs⟩
-
-theorem sessions_of {θ : ByteArray} {F : Array ByteArray} {A : Live} (hA : I.session θ = some A)
-    (hs : SetsUp I.base θ F A) : I.sessions θ F = some A := by
-  unfold sessions
-  rw [hA]
-  dsimp only [Option.bind]
-  rw [if_pos hs]
 
 /-- A session set up at one vocabulary is set up at another with the same families, files, reading and share. -/
 theorem setsUp_congr {V V' : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A : Live}
@@ -352,20 +399,29 @@ theorem setsUp_congr {V V' : Vocab d α} {θ : ByteArray} {F : Array ByteArray} 
   read := hr.trans h.read
   share := he.trans h.share
 
-variable (K : Constructions I.stage)
-
 open Classical in
 /-- **The extractor at the deployment's sessions**: at a session, the session's at the projected strategy
 (`Live.extract`), read on the committed files' circuit (`SetsUp.read`); elsewhere the base's. -/
 noncomputable def extractOf (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
-    (σ : Verity.Game.Strategy (I.stage.game θ F c)) : (I.base.read θ F).circuit.Transcript :=
+    (σ : Verity.Game.Strategy ((I.stage K).game θ F c)) : (I.base.read θ F).circuit.Transcript :=
   if h : ∃ A, I.sessions θ F = some A then
     cast (congrArg (fun r : Verity.FileRead => r.circuit.Transcript) (I.sessions_some h.choose_spec).2.read.symm)
       ((K.live h.choose θ F c σ).extract (K.project h.choose θ F c σ))
   else I.base.extract θ F c σ
 
 /-- **The deployed vocabulary**: `stage` with the extractor at the deployment's sessions. -/
-noncomputable def vocab : Vocab d α := { I.stage with extract := I.extractOf K }
+noncomputable def vocab : Vocab d α := { I.stage K with extract := I.extractOf K }
+
+/-- **The constructions at the stage**: `K`'s, whose strategies are the same. -/
+noncomputable def liftStage : Constructions (I.stage K) where
+  coins := K.coins
+  project := K.project
+  readFinder := K.readFinder
+  forger := K.forger
+  msgFinder := K.msgFinder
+  recordFinder := K.recordFinder
+  msg_calls := K.msg_calls
+  record_calls := K.record_calls
 
 /-- **The constructions at the deployed vocabulary**: `K`'s, whose strategies are the same. -/
 noncomputable def lift : Constructions (I.vocab K) where
@@ -386,31 +442,43 @@ a gate (C-Flock's `commitDepL`), the base's openings (`Vocab.Opens`, a row leaf 
 def OpensAt : Prop :=
   ∀ θ F A, I.session θ = some A → SetsUp I.base θ F A → ∀ c, A.OpensUnder (I.base.read θ F) (I.base.Opens θ F c)
 
-/-- **The strict premises at the deployment's sessions**: where the further finders meet their premises, the session's
-finders meet theirs (`Live.FinderCR`) and each two-continuation finder the strict birthday bound. `FinderSpec.CR` is
-the linear `ecr` form only, so these aren't among `Vocab.finderCR`'s. -/
-def StrictAt : Prop :=
-  ∀ θ F A, I.sessions θ F = some A → ∀ (c : ByteArray) (σ : Verity.Game.Strategy (I.stage.game θ F c)),
-    I.stage.finderCR .sampled θ F c σ →
-      (K.live A θ F c σ).FinderCR (K.project A θ F c σ) (I.base.cost θ F c σ) ∧
-        (∀ j, Claims.StrictBirthday Verity.sha512Msg (K.msgFinder A θ F c σ j)) ∧
-        Claims.StrictBirthday Verity.sha512Msg (K.recordFinder A θ F c σ)
-
-theorem fileCR {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {σ : Verity.Game.Strategy (I.stage.game θ F c)}
-    (h : I.stage.finderCR .sampled θ F c σ) :
+theorem fileCR {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
+    {σ : Verity.Game.Strategy ((I.stage K).game θ F c)} (h : (I.stage K).finderCR .sampled θ F c σ) :
     (I.base.fileFinder θ F).Pr Verity.sha512Msg < 1 ∧ (I.base.publicFinder θ F).Pr Verity.sha512Msg < 1 ∧
       (tableFinder F (I.base.registered θ)).Pr Verity.sha512Msg < 1 := by
-  have hl : finderCROf (I.fileSpecs θ F c) σ := h
+  have hall := List.forall_iff_forall_mem.1 (show finderCROf (I.fileSpecs θ F c ++ I.strictSpecs K θ F c) σ from h)
+  have hl : finderCROf (I.fileSpecs θ F c) σ :=
+    List.forall_iff_forall_mem.2 fun f hf => hall f (List.mem_append_left _ hf)
   obtain ⟨h1, h2, h3⟩ := hl
   have lt2 : ((2 : ℕ) : ℝ) / 2 ^ (256 : ℝ) < 1 := budget_lt (by norm_num)
   have hT : Flock.MUFU_TABLES.length = 4 := rfl
   have ltT : ((2 * Flock.MUFU_TABLES.length : ℕ) : ℝ) / 2 ^ (256 : ℝ) < 1 := budget_lt (by rw [hT]; norm_num)
   exact ⟨lt_of_le_of_lt h1 lt2, lt_of_le_of_lt h2 lt2, lt_of_le_of_lt h3 ltT⟩
 
-/-- **`Deployed` at the deployed vocabulary**, from the commitment format's openings and the strict premises, at
-constructions whose read finder and forger are the binding's (`Binding.withBinding`, `Constructions.assembled`). -/
+/-- **The two-continuation finders' premises**: at the deployment's session, where the further finders meet theirs,
+each two-continuation finder `K` builds from the strategy meets the strict birthday bound (`strictSpecs`). -/
+theorem strictCR {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {A : Live}
+    {σ : Verity.Game.Strategy ((I.stage K).game θ F c)} (hA : I.sessions θ F = some A)
+    (h : (I.stage K).finderCR .sampled θ F c σ) :
+    (∀ j, Claims.StrictBirthday Verity.sha512Msg (K.msgFinder A θ F c σ j)) ∧
+      Claims.StrictBirthday Verity.sha512Msg (K.recordFinder A θ F c σ) := by
+  have hall := List.forall_iff_forall_mem.1 (show finderCROf (I.fileSpecs θ F c ++ I.strictSpecs K θ F c) σ from h)
+  have hs : I.strictSpecs K θ F c =
+      (List.finRange A.rounds).map (I.msgSpec K A θ F c) ++ [I.recordSpec K A θ F c] := by
+    unfold strictSpecs
+    rw [hA]
+  refine ⟨fun j => hall (I.msgSpec K A θ F c j) (List.mem_append_right _ ?_),
+    hall (I.recordSpec K A θ F c) (List.mem_append_right _ ?_)⟩
+  · rw [hs]
+    exact List.mem_append_left _ (List.mem_map.2 ⟨j, List.mem_finRange j, rfl⟩)
+  · rw [hs]
+    exact List.mem_append_right _ (List.mem_singleton_self _)
+
+/-- **`Deployed` at the deployed vocabulary**, from the commitment format's openings, at constructions whose read
+finder and forger are the binding's (`Binding.withBinding`, `Constructions.assembled`): the leg's per-finder premises
+are `error`'s condition at this strategy (`strictSpecs`, `premisesOf`, `fileSpecs`). -/
 theorem deployed (hKr : ∀ θ F c σ, K.readFinder θ F c σ = Binding.readFinder I.base I.dev θ F c σ)
-    (hKf : ∀ θ F c σ, K.forger θ F c σ = Binding.forger I.base I.dev θ F c σ) (hO : I.OpensAt) (hF : I.StrictAt K) :
+    (hKf : ∀ θ F c σ, K.forger θ F c σ = Binding.forger I.base I.dev θ F c σ) (hO : I.OpensAt) :
     Deployed (I.vocab K) (I.lift K) I.sessions where
   setsUp θ F A h := setsUp_congr (V := I.base) rfl rfl rfl rfl rfl (I.sessions_some h).2
   digests θ := digestsAt_of (I.vocab K) I.programDigest I.publicDigest I.read θ
@@ -428,10 +496,11 @@ theorem deployed (hKr : ∀ θ F c σ, K.readFinder θ F c σ = Binding.readFind
     rw [hc]
     exact HEq.rfl
   opens θ F A h c := hO θ F A (I.sessions_some h).1 (I.sessions_some h).2 c
-  finderCR θ F A h c σ hcr := by
-    obtain ⟨hs, hm, hr⟩ := hF θ F A h c σ hcr
-    obtain ⟨h1, h2, -⟩ := I.fileCR hcr
-    exact ⟨hs, hm, hr, strict_of_zero (pr_unit h1), strict_of_zero (pr_unit h2)⟩
+  finderCR θ F A h c σ hcr hpr := by
+    obtain ⟨hm, hr⟩ := I.strictCR K h hcr
+    obtain ⟨h1, h2, -⟩ := I.fileCR K hcr
+    exact ⟨hpr A h, hm, hr, strict_of_zero (pr_unit h1), strict_of_zero (pr_unit h2)⟩
+  premises _ _ _ _ := Iff.rfl
   delta θ F A h t := by
     show A.delta t _ ≤ ((I.session θ).map fun A => A.delta t (I.base.crBound θ .sampled t)).getD 0
     rw [(I.sessions_some h).1]
@@ -479,7 +548,7 @@ theorem covers (k : Verity.Registration.Composite) (hRg : I.RegisteredFiles) (hS
     rw [hθ, hF] at h1
     exact h1
   have hR := hRg θ hP
-  obtain ⟨h1, h2, h3⟩ := I.fileCR hcr
+  obtain ⟨h1, h2, h3⟩ := I.fileCR K hcr
   obtain ⟨A, hA, hs⟩ := hSa θ F hP (namedFile_eq hreg.1 hR.1 h1) (namedFile_eq hreg.2 hR.2 h2) (tablesAgree_of h3)
     ⟨c, _, hreach, hv'⟩
   rw [I.sessions_of hA hs] at hS
@@ -497,38 +566,40 @@ theorem inferenceOnlySound_of_base (k : Verity.Registration.Composite) (h : I.ba
 /-- **The coupling at the deployed vocabulary is the stage's**: the period's game, the verdict and the constructions are
 the same. -/
 theorem couplingTarget_lift (k : Verity.Registration.Composite) {A : Live} {θ : ByteArray} {F : Array ByteArray}
-    (h : CouplingTarget I.stage k K A θ F) : CouplingTarget (I.vocab K) k (I.lift K) A θ F :=
+    (h : CouplingTarget (I.stage K) k (I.liftStage K) A θ F) : CouplingTarget (I.vocab K) k (I.lift K) A θ F :=
   h
 
 end Instance
 
 /-- **Soundness at remote's verifier of record at the deployed vocabulary**: remote's compiled verifier accepts files
 that passed the commit phase's check while one of its three claims fails with probability at most their errors summed,
-at the vocabulary `Instance.vocab` builds from the deployment, wherever the commitment format's openings (`OpensAt`),
-the strict premises (`StrictAt`), the registered files' file check (`RegisteredFiles`), v2's session at the registered
-files (`SessionAt`), the coupling at each session (`CouplingTarget`, at the stage), the bridge, the recursive form's
-target, and the base's Pearl+ and inference-only targets hold. -/
-theorem remote_soundness_deployed (I : Instance d α) (K : Constructions I.stage)
+at the vocabulary `Instance.vocab` builds from the deployment and `K`, wherever the commitment format's openings
+(`OpensAt`), the registered files' file check (`RegisteredFiles`), v2's session at the registered files (`SessionAt`),
+the coupling at each session (`CouplingTarget`, at the stage), the bridge, the recursive form's target, and the base's
+Pearl+ and inference-only targets hold. The premises at the finders `K` builds from a strategy are `error`'s condition
+at that strategy. -/
+theorem remote_soundness_deployed (I : Instance d α) (K : Constructions I.base)
     (hKr : ∀ θ F c σ, K.readFinder θ F c σ = Binding.readFinder I.base I.dev θ F c σ)
-    (hKf : ∀ θ F c σ, K.forger θ F c σ = Binding.forger I.base I.dev θ F c σ) (hO : I.OpensAt) (hF : I.StrictAt K)
+    (hKf : ∀ θ F c σ, K.forger θ F c σ = Binding.forger I.base I.dev θ F c σ) (hO : I.OpensAt)
     (hRg : I.RegisteredFiles) (hSa : I.SessionAt .remote)
-    (hC : ∀ θ F A, I.sessions θ F = some A → CouplingTarget I.stage .remote K A θ F) (hB : UnboundFaulty)
-    (hR : RecursiveForm (I.vocab K) .remote) (hW : I.base.PouwSound .remote)
+    (hC : ∀ θ F A, I.sessions θ F = some A → CouplingTarget (I.stage K) .remote (I.liftStage K) A θ F)
+    (hB : UnboundFaulty) (hR : RecursiveForm (I.vocab K) .remote) (hW : I.base.PouwSound .remote)
     (hI : I.base.InferenceOnlySound .remote) :
     (I.vocab K).SoundnessAt .remote :=
-  Verity.remote_soundness_of_targets (I.vocab K) (I.deployed K hKr hKf hO hF) (I.covers K .remote hRg hSa)
+  Verity.remote_soundness_of_targets (I.vocab K) (I.deployed K hKr hKf hO) (I.covers K .remote hRg hSa)
     (fun θ F A h => I.couplingTarget_lift K .remote (hC θ F A h)) hB hR (I.pouwSound_of_base K .remote hW)
     (I.inferenceOnlySound_of_base K .remote hI)
 
 /-- **`remote_soundness_deployed` at the binding's constructions** (`Binding.withBinding`): any constructions with
 the binding's read finder and forger, so those two premises hold by definition. -/
-theorem remote_soundness_deployed_withBinding (I : Instance d α) (K₀ : Constructions I.stage) (hO : I.OpensAt)
-    (hF : I.StrictAt (Binding.withBinding K₀ I.dev)) (hRg : I.RegisteredFiles) (hSa : I.SessionAt .remote)
-    (hC : ∀ θ F A, I.sessions θ F = some A → CouplingTarget I.stage .remote (Binding.withBinding K₀ I.dev) A θ F)
+theorem remote_soundness_deployed_withBinding (I : Instance d α) (K₀ : Constructions I.base) (hO : I.OpensAt)
+    (hRg : I.RegisteredFiles) (hSa : I.SessionAt .remote)
+    (hC : ∀ θ F A, I.sessions θ F = some A →
+      CouplingTarget (I.stage (Binding.withBinding K₀ I.dev)) .remote (I.liftStage (Binding.withBinding K₀ I.dev)) A θ F)
     (hB : UnboundFaulty) (hR : RecursiveForm (I.vocab (Binding.withBinding K₀ I.dev)) .remote)
     (hW : I.base.PouwSound .remote) (hI : I.base.InferenceOnlySound .remote) :
     (I.vocab (Binding.withBinding K₀ I.dev)).SoundnessAt .remote :=
-  remote_soundness_deployed I (Binding.withBinding K₀ I.dev) (fun _ _ _ _ => rfl) (fun _ _ _ _ => rfl) hO hF hRg hSa
+  remote_soundness_deployed I (Binding.withBinding K₀ I.dev) (fun _ _ _ _ => rfl) (fun _ _ _ _ => rfl) hO hRg hSa
     hC hB hR hW hI
 
 /-! ## An instance: v2's reading on the idle device -/
@@ -608,10 +679,6 @@ theorem sessions_none (θ : ByteArray) (F : Array ByteArray) : (inst fun _ => no
 
 /-- At no session the openings hold of every session, there being none. -/
 theorem opensAt_none : (inst fun _ => none).OpensAt := fun _ _ _ h => by simp [inst] at h
-
-/-- At no session the strict premises hold at every session, there being none. -/
-theorem strictAt_none (K : Constructions (inst fun _ => none).stage) : (inst fun _ => none).StrictAt K :=
-  fun θ F A h => by rw [sessions_none] at h; cases h
 
 end Instance.Honest
 
