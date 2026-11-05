@@ -1855,6 +1855,71 @@ def test_a_premise_witnesses_assumed_lists_is_taken_and_another_listed_one_is_st
                                 "takes as a premise; remove the entry"]
 
 
+PARTITION = ("namespace Control\ndef Bound (x y : Nat) : Prop := x ≤ y\ndef Fits (n : Nat) : Prop := n ≤ 5\n"
+             "namespace Guarantees\ndef Bounded : Prop := ∀ n : Nat, Fits n → Bound n 5\nend Guarantees\nend Control\n")
+BOUNDED = "theorem bounded : Guarantees.Bounded := by\n  unfold Guarantees.Bounded Bound Fits\n  intro n h\n  exact h\n"
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_bound_a_definition_hides_holds_its_guarantee_to_exclusion_witnesses(tmp_path):
+    """On a real build: `Control.bounded : Guarantees.Bounded`, `∀ n, Fits n → Bound n 5` with `Bound x y := x ≤ y` in
+    `Control.Partition`, concludes a bound of a partition module two definitions deep (as `Nci.Products.Guarantees.Bound`
+    concludes `PartitionBound`, whose `≤` is under its `∀`): `lifted` unfolds `Guarantees.Bounded` to `Bound`, and the
+    `≤` is `Bound`'s. `--update` fails it with `witnesses.missing` of the `exclusion` kind until its honest and
+    nontrivial witnesses are listed. A `chain` that recorded only the definitions it unfolds saw no bound head, and held
+    it to nothing."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    (pkg / "Control" / "Partition.lean").write_text(PARTITION)
+    thms = pkg / "Control" / "Thms.lean"
+    thms.write_text("import Control.Partition\n" + thms.read_text().replace("end Control", (
+        f"{BOUNDED}theorem bounded_honest : Fits 3 ∧ double 1 = 2 := ⟨by unfold Fits; omega, rfl⟩\n"
+        "theorem bounded_nontrivial : ¬ Fits 6 ∧ ¬ Bound 6 5 := ⟨by unfold Fits; omega, by unfold Bound; omega⟩\n"
+        "\nend Control")))
+    pol = A.load(pkg)
+    A.dump(pkg, pol | {"trees": pol["trees"] | {"definitions": [*pol["trees"]["definitions"], "Control.Partition"]},
+                       "layers": pol["layers"] | {"Control.Partition": {"imports": [], "why": "the bound imports nothing"}},
+                       "guarantees": pol["guarantees"] | {"Control.bounded": {"owner": "@lean"}}})
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+
+    def witnessing(update):
+        return [f for f in A.audit(pkg, tmp_path / "out", update=update, replay=False, runs=False, log=lambda *_: None)[
+            "failures"] if f.code.startswith("witnesses")]
+    fails = witnessing(True)
+    assert [f.code for f in fails] == ["witnesses.missing"], fails
+    assert "it concludes a bound and reads Control.Bound of Control.Partition, a partition or covering" in fails[0] and \
+        '"kind": "exclusion"' in fails[0], fails[0]
+    rec = json.loads((pkg / A.POLICY).read_text())
+    names = ("Control.bounded_honest", "Control.bounded_nontrivial")
+    A.dump(pkg, rec | {"guarantees": rec["guarantees"] | {n: {"owner": "@lean"} for n in names},
+                       "witnesses": {"Control.bounded": {"honest": [names[0]], "nontrivial": names[1], "kind": "exclusion"}}})
+    assert witnessing(False) == [] and witnessing(True) == []
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_bound_hidden_in_an_excepted_module_holds_its_guarantee_to_exclusion_witnesses(tmp_path):
+    """On a real build: the same statement in a proofs-tree module under `trees`' `except`, outside `meaning` (as C-Flock's
+    statements are in `Proofs.Flock`): `chain` unfolds through the modules the record follows (`record_scope`), so
+    `--update` fails it with `witnesses.missing` of the `exclusion` kind and lists it under no `unwitnessed`. An entry
+    there at its record's type hash exempts it, and `--update` keeps that entry. A `chain` that stopped outside `meaning`
+    recorded nothing past the statement's own name."""
+    pkg, build, audit, lock = excepted_toy(tmp_path, "Control.Partition", PARTITION, BOUNDED, "Control.bounded")
+    build()
+
+    def witnessing(update):
+        return [f for f in audit(update)["failures"] if f.code.startswith("witnesses")]
+    fails = witnessing(True)
+    assert [f.code for f in fails] == ["witnesses.missing"], fails
+    assert '"kind": "exclusion"' in fails[0] and "reads Control.Bound of Control.Partition" in fails[0], fails[0]
+    rec = lock()
+    assert "Control.bounded" not in rec.get("unwitnessed", {})
+    entry = {"Control.bounded": rec["guarantees"]["Control.bounded"]["type_hash"]}
+    A.dump(pkg, rec | {"unwitnessed": entry})
+    assert witnessing(False) == [] and witnessing(True) == [] and lock()["unwitnessed"] == entry
+
+
 def test_a_statement_whose_premises_could_not_be_read_fails():
     """`Facts.lean` writes `premises: null` when `premisesOf` throws on a statement; read as no premises, every premise of it
     would go unlisted, so it fails instead. Facts without the field (older documents) are not held to it."""
