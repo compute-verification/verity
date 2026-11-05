@@ -324,7 +324,6 @@
     {"file": "tools/verity/circuit_check/src/circuit_check/targets.py", "count": 8},
     {"file": "tools/verity/circuit_check/src/circuit_check/units.py", "count": 4},
     {"file": "tools/verity/circuit_check/tests/test_declared_tables.py", "count": 1},
-    {"file": "tools/verity/circuit_check/tests/test_moe_fp8_split.py", "count": 1},
     {"file": "tools/verity/circuit_check/tests/test_units.py", "count": 1},
     {"file": "tools/verity/lean/cache.py", "count": 2},
     {"file": "tools/verity/lean/check.py", "count": 11},

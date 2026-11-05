@@ -1,6 +1,4 @@
-"""The suite's report: with ``CIRCUIT_CHECK_REPORT=path`` set, every target the suite checked is written there as one
-`verity-circuit-check/v1` report when the session ends.  In an xdist worker, the circuit-checks the tests start
-keep to that worker's share of the suite's memory (`worker_slot_gb`).
+"""In an xdist worker, the circuit-checks the tests start keep to that worker's share of the suite's memory (`worker_slot_gb`).
 
 circuit-check's catalog (`Catalog`: `targets.suite()` and what its roots reach) is built once per session, and only for a test
 that asks for it (the `catalog` or `suite` fixture): when collection ends, before any test runs, as circuit-check builds it
@@ -29,7 +27,6 @@ from typing import Any
 import pytest
 
 from circuit_check import cache as CC
-from circuit_check import checks as CK
 from circuit_check import cli
 from circuit_check import targets as TG
 from circuit_check import units as UN
@@ -73,15 +70,6 @@ def worker_share():
         if (gb := worker_slot_gb(os.environ)) is not None:
             mp.setenv(cli.SLOT_MEM_ENV, str(gb))
         yield
-
-
-@pytest.fixture(scope="session")
-def results():
-    out: list[dict] = []
-    yield out
-    path = os.environ.get("CIRCUIT_CHECK_REPORT")
-    if path and out:
-        Path(path).write_text(json.dumps(CK.report(out, CK.Options()), indent=1, default=str) + "\n")
 
 
 # --- the catalog ----------------------------------------------------------------------------------------------------------------
@@ -145,7 +133,7 @@ def _from_records(cache: Path, handed: bool = False) -> Catalog | None:
     with pytest.MonkeyPatch.context() as mp:
         # suites.py's variables say how the suite runs, not what a check computes: keyed, no record circuit-check stored counts
         mp.setattr(CC, "UNKEYED", CC.UNKEYED | {k for k in os.environ if k.startswith("VERITY_SUITE_")}
-                   | {"CIRCUIT_CHECK_REPORT", "CIRCUIT_CHECK_RECORDS"})
+                   | {"CIRCUIT_CHECK_RECORDS"})
         # the records were made traced, so a function they read (a kernel's) is named by its module's digest, which
         # `cache._where` gives only under the tracer's root: without it, by path and line, and no such record counts
         mp.setattr(CC, "_ROOT", [cli.REPO.resolve()])
@@ -247,36 +235,10 @@ def build() -> Catalog:
     return _BUILT[0]
 
 
-def _marked(item) -> bool:
-    return item.get_closest_marker("slow") is not None or item.get_closest_marker("circuit_suite") is not None
-
-
-def pytest_generate_tests(metafunc):
-    """A `circuit_suite` test taking ``fid`` is one test per suite target; collected only under ``-m circuit_suite``
-    (`pytest_collection_modifyitems`), so only then is the catalog built for it here."""
-    if "fid" in metafunc.fixturenames and metafunc.definition.get_closest_marker("circuit_suite") is not None:
-        metafunc.parametrize("fid", sorted(build().suite) if _suite_selected(metafunc.config) else [])
-
-
-def _suite_selected(config) -> bool:
-    return "circuit_suite" in (config.getoption("markexpr") or "")
-
-
-def pytest_collection_modifyitems(config, items):
-    """The per-target tests are `circuit-check --all` as pytest items, which `check` runs through the CLI: they are collected
-    only when `-m` names `circuit_suite`."""
-    if _suite_selected(config):
-        return
-    dropped = [i for i in items if "circuit_suite" in i.keywords]
-    if dropped:
-        config.hook.pytest_deselected(items=dropped)
-        items[:] = [i for i in items if "circuit_suite" not in i.keywords]
-
-
 def pytest_collection_finish(session):
     """The catalog, when a selected test asks for it (each xdist worker collects them all), before any test runs."""
     wants = [i for i in session.items if "catalog" in getattr(i, "fixturenames", ())]
-    _UNMARKED[:] = [i.nodeid for i in wants if not _marked(i)]
+    _UNMARKED[:] = [i.nodeid for i in wants if i.get_closest_marker("slow") is None]
     if wants and not _UNMARKED and not session.config.option.collectonly:
         build()
 
