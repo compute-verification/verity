@@ -56,6 +56,17 @@ def field? (j : Json) (k : String) : Option Json := (j.getObjVal? k).toOption
 /-- Python's `d.get(k)`: a missing key reads as `null`. -/
 def getD (j : Json) (k : String) : Json := (field? j k).getD Json.null
 
+/-- `j == .str s`, by a match the kernel reduces: `BEq Json` is a `partial def`, opaque to the kernel, so a property of a
+check that compares with it can't be proved. -/
+def jsonStrIs (j : Json) (s : String) : Bool := match j with | .str t => t == s | _ => false
+
+example : jsonStrIs (getD (Json.mkObj [("label", .str "draw")]) "label") "draw" = true := by decide
+example : jsonStrIs (getD (Json.mkObj [("label", .str "other")]) "label") "draw" = false := by decide
+example : jsonStrIs (getD (Json.mkObj [("label", .arr #[.str "draw"])]) "label") "draw" = false := by decide
+example : jsonStrIs (getD (Json.mkObj [("label", .null)]) "label") "" = false := by decide
+example : jsonStrIs (getD (Json.mkObj [("after", .str "draw")]) "label") "draw" = false := by decide
+example : jsonStrIs (getD (Json.str "draw") "label") "draw" = false := by decide
+
 def entries : Json → Array (String × Json)
   | .obj kvs => kvs.toArray
   | _ => #[]

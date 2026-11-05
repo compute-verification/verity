@@ -31,8 +31,10 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   `--program` and `--registered` the verifier's own and one `--session` a session, as `one_stage.proofs.verify` runs it
   (`verdicts`, the C-Flock library calls `verifyCmd` makes on that path, its last the files' ports and roots,
   `Flock.PortRoots.checkOf`, and the form `Flock.Guarantees.SampledKSLiveV3` covers, or at a shared-row public file
-  `SampledKSLiveV5`'s, `Flock.KsScope.checkOf`); then v1's
-  `check` on those verdicts, one of
+  `SampledKSLiveV5`'s, `Flock.KsScope.checkOf`), and a session's verdict holds only where the registration's population
+  is the circuit file's units in order (`FilePart.check`: its strata over the verifier's program and query, read stratum
+  by stratum, are its units in order, and the public file holds exactly those, so slot `u` is the file's unit `u`, as
+  `Flock.Bridge.partOf` reads it); then v1's `check` on those verdicts, one of
   record a session (`flock-verify/<name>`). A session accepted under another program than the partition object's, proved
   units other than the evidence's `proved_units`, or a circuit, public or record file no blob holds, rejects; a rep
   file no blob holds is that session's reject, as a file `flock-verify` can't read is.
@@ -45,11 +47,13 @@ public import CoreProtocol.Blobs
 public import SampledProofs.OneStage
 public import SampledProofs.ChallengerTrees
 public import SampledProofs.Slots
+public import SampledProofs.FilePart
 public import Flock
 meta import CoreProtocol.Blobs
 meta import SampledProofs.OneStage
 meta import SampledProofs.ChallengerTrees
 meta import SampledProofs.Slots
+meta import SampledProofs.FilePart
 meta import Flock
 
 @[expose] public section
@@ -211,7 +215,7 @@ def buildSessionOf (parsed : V Flock.Circuit) (tags : Flock.Tags) (circuitB pubB
 
 /-- `flock-verify`'s `programDigest`: SHA-512 of the canonical descriptor without `annotations`. -/
 def programDigest (b : ByteArray) : Option String := do
-  let j ← (Json.parse (← String.fromUTF8? b)).toOption
+  let j ← (Flock.JsonParse.parse (← String.fromUTF8? b)).toOption
   let bare := match j with
     | .obj kvs => Json.mkObj (kvs.toArray.filter (·.1 != "annotations")).toList
     | x => x
@@ -225,7 +229,7 @@ private def headerLine (b : ByteArray) : ByteArray := Id.run do
 /-- The public file's header as `HmRow.loadPublic` reads it: parsed, then `Flock.norm`. -/
 private def headerOf (pubB : ByteArray) : V Json := do
   let some line := String.fromUTF8? (headerLine pubB) | throw "the public file's header is not UTF-8"
-  Flock.norm <$> (Json.parse line).mapError (s!"the public file's header is not JSON: {·}")
+  Flock.norm <$> (Flock.JsonParse.parse line).mapError (s!"the public file's header is not JSON: {·}")
 
 /-- The public file held to the registration `rec` (module docstring, **public**; `registration.matches_public`, as the
 one-stage drivers hold theirs before the draw): its header's scheme, `frame_v3` roots and their `domain_ids`, and
@@ -241,7 +245,8 @@ record drew (`unit_draw.units`), ascending. -/
 def provedUnits (pubB : ByteArray) (record : String) : V (Array Nat) := do
   let h ← headerOf pubB
   let .arr is := getD (getD h "units") "indices" | throw "the public file's header names no units.indices"
-  let .arr ds := getD (getD (← Json.parse record) "unit_draw") "units" | throw "the record's unit_draw names no units"
+  let .arr ds := getD (getD (← Flock.JsonParse.parse record) "unit_draw") "units"
+    | throw "the record's unit_draw names no units"
   let units ← ds.mapM fun d => match nat? d >>= fun i => is[i]? >>= nat? with
     | some u => pure u
     | none => throw "the record draws an instance the public file's units.indices does not name"
@@ -336,16 +341,18 @@ def coinKeyOf (record : String) (st : SetUp) : Option String :=
   match st with
   | .ok (spec, _, _) =>
     if spec.coinTree.isNone then none
-    else (Json.parse record).toOption.bind fun j =>
+    else (Flock.JsonParse.parse record).toOption.bind fun j =>
       (j.getObjVal? "coin_tree").toOption.bind fun ct => (ct.getObjValAs? String "key").toOption
   | .error _ => none
 
 /-- `verify --zk`'s verdict on one session set up as `st` at `draw`: its proof files, its coin-tree key fresh among
 `coinKeys`, `Zk.verify` and the checks `verifyCmd` makes after it, its last the files' ports and roots
 (`ksFiles`, `Flock.PortRoots.checkOf`) and the form `Flock.Guarantees.SampledKSLiveV4` covers at `draw`
-(`Flock.KsScope.checkOf`). -/
-def verdictOf (I : Flock.Witness.Inputs) (scope ksFiles : V Unit) (coinKeys : Array String) (record : String)
-    (draw : Option Json) (st : SetUp) (files : V (Array ByteArray)) (coinKey : Option String) : V Unit := do
+(`Flock.KsScope.checkOf`); then the registration's population the public file's units in order (`population`,
+`FilePart.check`). -/
+def verdictOf (I : Flock.Witness.Inputs) (scope ksFiles population : V Unit) (coinKeys : Array String)
+    (record : String) (draw : Option Json) (st : SetUp) (files : V (Array ByteArray)) (coinKey : Option String) :
+    V Unit := do
   let proofs ← files
   (match coinKey with | some k => Flock.CoinTree.checkFresh coinKeys k | none => pure () : V Unit)
   let (spec, tabs, _) ← st
@@ -360,6 +367,7 @@ def verdictOf (I : Flock.Witness.Inputs) (scope ksFiles : V Unit) (coinKeys : Ar
   ksFiles
   let tags := Flock.Witness.zkTags I
   Flock.KsScope.checkOf (Flock.ProvedScope.circuitOf tags I.circuitFile I.tables) tags I.publicFile I.count draw
+  population
 
 /-- A session's verdict as `verify` writes it (`flock-verify/<name>`, of record). -/
 def verdictJson (rd : Reads) (programSha : Option String) (s : RunFiles) (st : SetUp) (ok : Bool) (why : String)
@@ -390,17 +398,17 @@ def push (I : Flock.Witness.Inputs) (rd : Reads) (programSha : Option String) (w
 
 /-- One session's `flock-verify verify --zk` on the blobs, after the sessions `r` holds: set up at its record's own draw
 (`setupAt`), its rep files the blobs its `reps` name, its coin-tree key fresh, `Zk.verify` and the checks `verifyCmd`
-makes after it (`verdictOf`), its verdict pushed (`push`). A refusal when its record is in no blob or not UTF-8, or it
-accepted naming another program than the partition object's. -/
-def step (I : Flock.Witness.Inputs) (rd : Reads) (bs : Core.Blobs) (scope ksFiles : V Unit) (programSha : Option String)
-    (want : Json) (r : Run) (s : RunFiles) : V Run := do
+makes after it, the population check last (`verdictOf`), its verdict pushed (`push`). A refusal when its record is in
+no blob or not UTF-8, or it accepted naming another program than the partition object's. -/
+def step (I : Flock.Witness.Inputs) (rd : Reads) (bs : Core.Blobs) (scope ksFiles population : V Unit)
+    (programSha : Option String) (want : Json) (r : Run) (s : RunFiles) : V Run := do
   let some record := String.fromUTF8? (← bs.get s.record s!"session {s.name}'s record")
     | throw s!"session {s.name}'s record is not UTF-8"
   let draw := Flock.Witness.recordDraw record
   let st := setupAt I rd draw
   let coinKey := coinKeyOf record st
   push I rd programSha want r s record st coinKey
-    (verdictOf I scope ksFiles r.coinKeys record draw st (filesOf bs s st) coinKey)
+    (verdictOf I scope ksFiles population r.coinKeys record draw st (filesOf bs s st) coinKey)
 
 /-- The units the accepted sessions proved (`proved`, in session order) held to the evidence's `proved_units` (`want`):
 sorted, they must be it. `want` is strictly ascending (`Draw.checkDrawFull`), so a unit two sessions prove (or one
@@ -411,7 +419,8 @@ def provedHeld (proved want : Array Nat) : V Unit :=
 
 /-- One `flock-verify verify --zk` over the evidence's sessions on the blobs, as `one_stage.proofs.verify` runs it, each
 session set up at its own record's draw: every session's verdict, the units the accepted ones proved and whether all
-accepted. A refusal for what `proofs.verify` refuses: registered values read without the verifier's registered file, a
+accepted. A session accepts only where the registration's population is the public file's units in order
+(`FilePart.check`, last). A refusal for what `proofs.verify` refuses: registered values read without the verifier's registered file, a
 file no blob holds, an accepted session naming another program than the partition object's, or proved units other than
 the evidence's (`provedHeld`). -/
 def run (p : Own) (sessions : Array RunFiles) (provedUnits? : Option (Array Nat)) (bs : Core.Blobs) : V Run := do
@@ -430,7 +439,9 @@ def run (p : Own) (sessions : Array RunFiles) (provedUnits? : Option (Array Nat)
   let scope := Flock.ProvedScope.checkOf (Flock.ProvedScope.circuitOf tags I.circuitFile I.tables) tags true pubB I.count
     false rd.registered.isSome
   let ksFiles := Flock.PortRoots.checkOf (Flock.ProvedScope.circuitOf tags I.circuitFile I.tables) tags pubB
-  let r ← sessions.foldlM (step I rd bs scope ksFiles (programDigest p.program) (getD p.partition "program"))
+  let population := FilePart.check p.program (getD p.partition "query") pubB
+  let r ← sessions.foldlM
+    (step I rd bs scope ksFiles population (programDigest p.program) (getD p.partition "program"))
     ⟨#[], #[], #[], true⟩
   if let some want := provedUnits? then
     if r.all then provedHeld r.proved want
@@ -575,7 +586,8 @@ def main (args : List String) : IO UInt32 := do
 #guard !(oneSession #[⟨"s", "", #[]⟩, ⟨"t", "", #[]⟩]).toBool
 
 private def heldRecord : Json :=
-  (Json.parse "{\"population\":2,\"roots\":[{\"domain\":\"dd\",\"port\":\"x\",\"root\":\"aa\"}],\"scheme\":\"s\"}").toOption.getD
+  (Flock.JsonParse.parse
+    "{\"population\":2,\"roots\":[{\"domain\":\"dd\",\"port\":\"x\",\"root\":\"aa\"}],\"scheme\":\"s\"}").toOption.getD
     .null
 
 private def refusal : V Unit → String
