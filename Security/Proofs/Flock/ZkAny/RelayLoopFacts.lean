@@ -43,11 +43,35 @@ model's release being the loop's own frames':
 * `roundPlace_scheduled_later`: past a stream's first round, on a frame keeping its schedule so far on the loop's
   table, extras and salts, which are the model's, the round's place is the model's scheduled round, or the schedule
   has no round there (the inner proof's own).
+* `slot_masked`: a frame round's slot is the model's masked round below the `Finish`.
 * **`roundFacts_loop`**: `RoundFacts` at a frame round's slot of the deployed loop, given the model's answer there and
   `PlaceFacts` at the round's place.
+* `LeanRelease.CrossPasses`: the named hypothesis on the Rust release that its checks (`cross`) fail no frame round
+  below the `Finish` that the Lean frame passes. It becomes provable once the Rust crossing check is mirrored into the
+  Lean firewall code, which would fix `cross`. `LoopModel.Takes`: the release takes the coins after each of the run's
+  histories, which `LiveRoundEq` and `FillRoundEq` take at the history they ask about (`LoopModel.takes_of_last`), so
+  the model answers each (`LoopModel.answered_of_takes`). `OwnSched`: the inner proof's own place at a round of a
+  stream seen is the model's scheduled round, at each slot.
+* **`roundFacts_deployed`**: `RoundFacts` at each frame round's slot of the deployed loop (`loopKept_round`'s `hA`),
+  given `CrossPasses`, `Takes` and `OwnSched`.
 -/
 
 @[expose] public section
+
+namespace Claims.ZKServer.LeanRelease
+
+/-- **Rust's checks fail no frame round the Lean frame passes**: at every frame round below the `Finish` (masked, before
+`last`), at every statement, witness, tape, history and worker's value, where Rust's own checks on the worker's rep
+(`cross`: the worker failing, the device's level-0 root, the constraints on the pads, the end check on the returned
+proof and Rust's masking cross-checks) fail the value, the Lean frame's pass decision (`pass`) fails it too. A named
+hypothesis on the Rust release: at the deployed loop's release (`ofLoop`) `cross` is the release's own, which no Lean
+code fixes, and `cross`'s contract (each check can only fail a round more) does not give it. It becomes provable once
+the Rust crossing check is mirrored into the Lean firewall code, which would fix `cross`. -/
+def CrossPasses {W R : Type} (L : LeanRelease W R) : Prop :=
+  ∀ (x : Msg) (w : W) (ρ : R) (h : List (Msg × Msg)) (v : Msg), L.kindAt x h.length = .masked →
+    h.length < L.last x → L.cross x h.length w ρ h v = false → L.pass x w ρ h v = false
+
+end Claims.ZKServer.LeanRelease
 
 namespace Claims.ZKServer.Relay
 
@@ -74,6 +98,34 @@ structure LoopModel.Deployed {T : ZKMal.CoinLayer.TableData}
   names : (spec.repStreams.toList.map (·.2.2)).Nodup
   sizes : spec.repStreams.size = 2 * sts.size
   next : M.L.last M.x < M.nN M.x
+
+/-- **The release takes the coins after each of the run's histories** (`refusesCoins`): what `LiveRoundEq` and
+`FillRoundEq` take at the history they ask about, so at each of its prefixes (`LoopModel.takes_of_last`). -/
+def LoopModel.Takes {W Rr : Type} (M : LoopModel W Rr) : Prop :=
+  ∀ j, j < M.τ.length → M.L.refusesCoins M.x M.ρ (M.hist j) = false
+
+/-- **The release takes every coin of a run whose last history's coins it takes**: a refusal stays
+(`refusesCoins_of_take`). -/
+theorem LoopModel.takes_of_last {W Rr : Type} (M : LoopModel W Rr)
+    (h : M.L.refusesCoins M.x M.ρ (M.hist (M.τ.length - 1)) = false) : M.Takes := by
+  intro j hj
+  cases hr : M.L.refusesCoins M.x M.ρ (M.hist j) with
+  | false => rfl
+  | true =>
+    have ht : (M.hist (M.τ.length - 1)).take j = M.hist j :=
+      histOf_take_take M.τ (i := M.τ.length - 1) (i' := j) (by omega)
+    rw [← ht] at hr
+    rw [M.L.refusesCoins_of_take M.x M.ρ _ j hr] at h
+    cases h
+
+/-- **Where the release takes the run's coins, the model answers each of its histories** with a masking state. -/
+theorem LoopModel.answered_of_takes {W Rr : Type} {M : LoopModel W Rr} (hT : M.Takes) {j : Nat}
+    (hj : j < M.τ.length) : ∃ m, M.L.answered M.x M.ρ (M.hist j) = .ok m := by
+  have hr := hT j hj
+  unfold LeanRelease.refusesCoins at hr
+  cases hA : M.L.answered M.x M.ρ (M.hist j) with
+  | ok m => exact ⟨m, rfl⟩
+  | error e => rw [hA] at hr; cases hr
 
 /-- **The frame `roundPlace` readies a round on is one the loop's frames hold.** -/
 theorem roundPlace_find {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i r : Nat}
@@ -986,6 +1038,40 @@ theorem placeFacts_slot {T : ZKMal.CoinLayer.TableData}
     · exact placeSt_first1 hD hsl hF hJ hrep hlt hsn hpc hrp
   · exact placeFacts_seen hD hsl hF hJ hrep hlt hsn hR hcr hrp (hown hsn)
 
+/-- **A frame round's slot is the model's masked round below the `Finish`**: where `LoopFacts` and `LoopJ` hold at the
+deployed loop, the model's history so far is past the `Hello` and the `Commit` and its rounds fill the setup's plan. -/
+theorem slot_masked {T : ZKMal.CoinLayer.TableData}
+    {M : LoopModel Claims.Flock.Wit
+      ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
+    {L₀ : LeanRelease Claims.Flock.Wit
+      ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
+    {real : Msg → Claims.Flock.Wit →
+      (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
+      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)}
+    {s0 : FlockDeploy.Ins} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
+    (hD : LoopModel.Deployed M L₀ real s0 spec sts) {seen : List String} {st : State} {pl : Placed} {σ : LoopAt}
+    {stream : String} {n : Nat} (hsl : slot st pl = some (.round stream n)) (hF : LoopFacts sid spec seen st pl σ)
+    (hJ : LoopJ M sid spec sts seen st σ) (hlt : σ.c < M.τ.length) :
+    M.L.kindAt M.x (M.hist σ.c).length = .masked ∧ (M.hist σ.c).length < M.L.last M.x := by
+  obtain ⟨hsent, hop, -, hq⟩ := slot_round hsl
+  have hlen : (M.hist σ.c).length = opened st + 1 := by
+    rw [M.length_hist (Nat.le_of_lt hlt), hF.count hsent]
+  have hq' : (planOf spec sts)[opened st - 1]? = some (stream, n) := by
+    rw [← hJ.plan hsent]
+    exact hq
+  have hps : opened st - 1 < (planOf spec sts).size := (Array.getElem?_eq_some_iff.mp hq').1
+  have hlast : M.L.last M.x = (planOf spec sts).size + 2 := by
+    rw [hD.rel]
+    show Loop.lastOf M.x = _
+    rw [Loop.lastOf_eq, Loop.refK_of_setup hD.setup, Loop.rounds_eq hD.sizes, ← Loop.plan_size]
+    omega
+  have hlt' : (M.hist σ.c).length < M.L.last M.x := by omega
+  refine ⟨?_, hlt'⟩
+  have h0 : (M.hist σ.c).length ≠ 0 := by omega
+  have h1 : ¬((M.hist σ.c).length = 1 ∨ (M.hist σ.c).length = M.L.last M.x) := by omega
+  unfold LeanRelease.kindAt
+  rw [ite_eq_right h0, ite_eq_right h1]
+
 /-- **`RoundFacts` at a frame round's slot of the deployed loop**: at the slot of a round of `n` coins of `stream`,
 where `LoopFacts` and `LoopJ` hold, the session's slots took fewer than the run's messages, and the loop ran the round
 on table `i`'s rep `r` (`RoundRun`), the rep's frame at the model's configuration and the round out, the model's answer
@@ -1015,16 +1101,7 @@ theorem roundFacts_loop {T : ZKMal.CoinLayer.TableData}
   obtain ⟨hsent, hop, -, hq⟩ := slot_round hsl
   have hlen : (M.hist σ.c).length = opened st + 1 := by
     rw [M.length_hist (Nat.le_of_lt hlt), hF.count hsent]
-  have hq' : (planOf spec sts)[opened st - 1]? = some (stream, n) := by
-    rw [← hJ.plan hsent]
-    exact hq
-  have hps : opened st - 1 < (planOf spec sts).size := (Array.getElem?_eq_some_iff.mp hq').1
-  have hlast : M.L.last M.x = (planOf spec sts).size + 2 := by
-    rw [hD.rel]
-    show Loop.lastOf M.x = _
-    rw [Loop.lastOf_eq, Loop.refK_of_setup hD.setup, Loop.rounds_eq hD.sizes, ← Loop.plan_size]
-    omega
-  have hlt' : (M.hist σ.c).length < M.L.last M.x := by omega
+  obtain ⟨hkind, hlt'⟩ := slot_masked hD hsl hF hJ hlt
   have hcoins : M.L.coins M.x (M.hist σ.c).length = n := by
     rw [hlen, hD.rel]
     show Loop.loopNr M.x (opened st) = n
@@ -1032,11 +1109,6 @@ theorem roundFacts_loop {T : ZKMal.CoinLayer.TableData}
     rw [Loop.reqOf_eq hD.setup, ← hJ.plan hsent]
     unfold reqAt
     rw [ite_eq_right hop, Array.getD_eq_getD_getElem?, hq, Option.getD_some]
-  have hkind : M.L.kindAt M.x (M.hist σ.c).length = .masked := by
-    have h0 : (M.hist σ.c).length ≠ 0 := by omega
-    have h1 : ¬((M.hist σ.c).length = 1 ∨ (M.hist σ.c).length = M.L.last M.x) := by omega
-    unfold LeanRelease.kindAt
-    rw [ite_eq_right h0, ite_eq_right h1]
   obtain ⟨hk, hmem⟩ := round_rep hsl hF hJ hr.rep_eq hlt hD.names
   obtain ⟨o, hro⟩ := ho
   obtain ⟨q, pc, f, nd, hrp⟩ := roundPlace_of_out
@@ -1061,5 +1133,59 @@ theorem roundFacts_loop {T : ZKMal.CoinLayer.TableData}
       obtain ⟨_, _, _, _, _, _, _, _, -, -, -, -, -, -, hI, -⟩ := hS1 hk.symm
       exact (sameInv_place hI hf' hrp).1
   · rw [hJ.stop, hsent, Bool.true_and]
+
+/-- **The inner proof's own place at a round of a stream seen is the model's scheduled round**: at each frame round's
+slot of `stream` as `loopKept_round` reads it, `seen` having a round of `stream`, where `roundPlace` readies the round
+and `placeOf` places it at the inner proof's own, the place `roundPlace` readies is the model's scheduled round
+(`placeFacts_slot`'s `hown`, at each slot). -/
+def OwnSched {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec) (sts : Array Stmt) (stream : String)
+    (n : Nat) : Prop :=
+  ∀ (seen : List String) (st : State) (pl : Placed) (e : Env) (σ σ' : LoopAt) (i r : Nat) (dom : ByteArray)
+    (v : Claims.Msg), slot st pl = some (.round stream n) → LoopFacts sid spec seen st pl σ →
+    LoopJ M sid spec sts seen st σ → σ.c < M.τ.length → M.wk M.x M.w M.ρ (M.hist σ.c) 0 = some (v, false) →
+    RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R →
+    (∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) → SaltsSrc M sid σ →
+    (∃ o, e.round = .ok o) → seen.contains stream = true →
+    ∀ (q : Rep) (pc : Place) (f : Bool) (nd : Option String),
+      _root_.Flock.Firewall.Frames.roundPlace σ.R σ.L0 sid i r dom ⟨v.toArray⟩ n = .ok (q, pc, f, nd) →
+      ∀ (p : Rep) (rel : _root_.Flock.Firewall.Frames.Release) (name : String)
+        (l0 : _root_.Flock.Firewall.Level0.Level0) n' q', frameAt σ.R sid i r = some p → sessAt σ.R sid = some rel →
+        rel.spec.tables[i]? = some name → _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0 →
+        _root_.Flock.Firewall.Frames.placeOf σ.R.salts l0 rel p (rel.spec.domain name r).toUTF8 = .ok (.own, n', q') →
+        pc = .sched ⟨(M.L.scheduled M.x M.w M.ρ (M.hist σ.c)
+          (computedOf (M.L.computed M.x M.w M.ρ (M.hist σ.c)))).toArray⟩
+
+/-- **`RoundFacts` at each frame round's slot of the deployed loop** (`loopKept_round`'s `hA`): at the loop's own tables
+on `src` (`Loop.realOf src`), whose bytes the loop handed (`M.src`), `roundFacts_loop` at the model's answer, which the
+release taking the run's coins gives (`LoopModel.Takes`), and `PlaceFacts` by `placeFacts_slot`, at the loop's tables
+and salts (`realAt_slot`), the crossing at the slot's masked round below the `Finish` (`LeanRelease.CrossPasses`,
+`slot_masked`) and the inner proof's own place (`OwnSched`). -/
+theorem roundFacts_deployed {M : LoopModel Claims.Flock.Wit
+      ((ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Nonce ×
+        (ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Rand)}
+    {L₀ : LeanRelease Claims.Flock.Wit
+      ((ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Nonce ×
+        (ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Rand)}
+    {src : Msg → Claims.Flock.Wit →
+      (ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Nonce ×
+        (ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Rand →
+      Nat → V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)}
+    {s0 : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hD : LoopModel.Deployed M L₀ (Loop.realOf src) s0 spec sts) (hsrc : M.src = src M.x M.w M.ρ)
+    (hS : Loop.Level0Src src M.x M.w) (hlive : ZKMal.Masked.Live M.x) (hT : M.Takes) (hcp : M.L.CrossPasses)
+    {sid : Nat} {stream : String} {n : Nat} (hown : OwnSched M sid spec sts stream n) :
+    ∀ (seen : List String) (st : State) (pl : Placed) (e : Env) (σ σ' : LoopAt) (i r : Nat) (dom : ByteArray)
+      (v : Claims.Msg), slot st pl = some (.round stream n) → LoopFacts sid spec seen st pl σ →
+      LoopJ M sid spec sts seen st σ → σ.c < M.τ.length → M.wk M.x M.w M.ρ (M.hist σ.c) 0 = some (v, false) →
+      RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R →
+      (∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) → SaltsSrc M sid σ →
+      (∃ o, e.round = .ok o) → RoundFacts M sid spec seen stream n i r dom v σ := by
+  intro seen st pl e σ σ' i r dom v hsl hF hJ hlt hv hr hpc hsal ho
+  obtain ⟨hk, hl⟩ := slot_masked hD hsl hF hJ hlt
+  have hans := LoopModel.answered_of_takes hT hlt
+  exact roundFacts_loop hD hsl hF hJ hlt hr hpc ho hans fun q pc f nd hrp =>
+    placeFacts_slot hD hsl hF hJ hr.rep_eq hlt (realAt_slot hD hsrc hS hlive hsl hF hJ hsal) hpc hans
+      (hcp M.x M.w M.ρ (M.hist σ.c) v hk hl) hrp
+      (fun hsn => hown seen st pl e σ σ' i r dom v hsl hF hJ hlt hv hr hpc hsal ho hsn q pc f nd hrp)
 
 end Claims.ZKServer.Relay
