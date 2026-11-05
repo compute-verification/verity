@@ -28,10 +28,6 @@ paths = []
 [drop]
 paths = []
 
-[split]
-# the slot fixture leaves `commit_slots/`; these put the benchmark's code on `sys.path`, which stays
-"examples/h200/e2e_h200/commit.py: benchmarks/torch_gpu/commit_slots" = "imports commit_slots' code, which stays"
-"examples/h200/interfaces/verity_e2e_demo/replay_bundle.py: benchmarks/torch_gpu/commit_slots" = "imports commit_slots' code, which stays"
 
 [rewrite]
 # Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves), and files
