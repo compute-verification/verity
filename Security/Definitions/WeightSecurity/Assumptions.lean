@@ -24,10 +24,10 @@ open WeightSecurity
 
 variable {Ω R X Y M Θ Θ' : Type}
 
-/-- NEW PREMISE. **Honest use doesn't hand out the weights** (`honest-use-hard`). With the weights drawn as `gen ω` on
-uniform coins `ω`, every party of the class `A` that sees the served function `C`'s answers to `q` queries it chooses
-adaptively, on coins `r` of its own, outputs a stolen model (`Stolen θ θ'`, e.g. `θ'` serves a function close to
-`C θ`) with probability at most `p`.
+/-- `honest-use-hard` (proposed; about the served function alone). **Honest use doesn't hand out the weights.** With
+the weights drawn as `gen ω` on uniform coins `ω`, every party of the class `A` that sees the served function `C`'s
+answers to `q` queries it chooses adaptively, on coins `r` of its own, outputs a stolen model (`Stolen θ θ'`, e.g. `θ'`
+serves a function close to `C θ`) with probability at most `p`.
 
 It is the standard black-box model-extraction hardness, about `C`'s behavior on inputs and nothing else: a query sets
 every input that isn't the weights, so a circuit with an input that makes it print its weights, or a trigger only the

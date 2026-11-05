@@ -2173,6 +2173,15 @@
   "Verity.Wipe.SurvivorBound": {
    "owner": "@lean",
    "digest": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9"
+  },
+  "WeightSecurity.Assumptions.HonestUseHard": {
+   "owner": "@proofs"
+  },
+  "WeightSecurity.Assumptions.LeaksThrough": {
+   "owner": "@proofs"
+  },
+  "WeightSecurity.Assumptions.Simulable": {
+   "owner": "@proofs"
   }
  },
  "meaning": [
@@ -2782,6 +2791,11 @@
   "Verity.SecurityProofs.RegisteredLeakage": {
    "honest": ["Verity.SecurityProofs.RegisteredLeakage_honest"],
    "nontrivial": "Verity.SecurityProofs.RegisteredLeakage_nontrivial"
+  },
+  "WeightSecurity.SecurityProofs.Theft": {
+   "honest": ["WeightSecurity.SecurityProofs.TheftHonest"],
+   "nontrivial": "WeightSecurity.SecurityProofs.TheftNontrivial",
+   "kind": "exclusion"
   }
  },
  "unwitnessed": {
@@ -13403,6 +13417,18 @@
    "signature": ["Verity.SecurityProofs.ToCircuitAnd : Verity.Guarantees.ToCircuitAnd"],
    "assumptions": [],
    "type_hash": "d7a46674efa40159e39bed4221c853818c160c91fe491f6e0746b33d2e6b02ab"
+  },
+  "WeightSecurity.SecurityProofs.Theft": {
+   "owner": "@proofs"
+  },
+  "WeightSecurity.SecurityProofs.TheftHonest": {
+   "owner": "@proofs"
+  },
+  "WeightSecurity.SecurityProofs.TheftNontrivial": {
+   "owner": "@proofs"
+  },
+  "WeightSecurity.SecurityProofs.TheftTight": {
+   "owner": "@proofs"
   }
  },
  "shape": {
@@ -14595,7 +14621,11 @@
    "Verity.SecurityProofs.RegisteredLeakage": "frozen (no-function): It is stated over an arbitrary value service, serving stack and event on the record, and says what a registration whose record counts its epoch's sessions leaks through the stack's choice of its session, rather than a Lean function's acceptance.",
    "Verity.SecurityProofs.RegisteredLeakage_honest": "completeness: RegisteredLeakage's honest lemma (its witnesses entry): at a built value service, the stack that commits one session and registers it reads no key (ZkServerOwnUser) and the bound holds there, so the premise is not vacuous.",
    "Verity.SecurityProofs.RegisteredLeakage_nontrivial": "completeness: RegisteredLeakage's nontrivial lemma (its witnesses entry): the bound fails (¬ real … ≤ 1 · (ideal + prfAdvantage) + forgeAdvantage) at the stack of RegisteredLeakage_nontrivial_stack, which makes its record tag from the key, a counterexample for another stack, not a property of a deployed one.",
-   "Verity.SecurityProofs.RegisteredLeakage_nontrivial_stack": "completeness: the stack RegisteredLeakage's nontrivial lemma is at reads the key (¬ ZkServerOwnUser), so that lemma's failing bound is ZkServerOwnUser's to prevent."
+   "Verity.SecurityProofs.RegisteredLeakage_nontrivial_stack": "completeness: the stack RegisteredLeakage's nontrivial lemma is at reads the key (¬ ZkServerOwnUser), so that lemma's failing bound is ZkServerOwnUser's to prevent.",
+   "WeightSecurity.SecurityProofs.Theft": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an arbitrary datacenter, under honest-use hardness (WeightSecurity.Assumptions.HonestUseHard) and the premise that what leaves goes through a covert channel (WeightSecurity.Assumptions.LeaksThrough), which the audit's guarantees are to discharge (Security/Definitions/WeightSecurity/Assumptions.lean); it reads no function's acceptance.",
+   "WeightSecurity.SecurityProofs.TheftHonest": "completeness: Theft's honest witness (its witnesses entry): at the toy instance (Security/Definitions/WeightSecurity/Toy.lean), honest use reveals the first of two uniform weight bits, so HonestUseHard holds for every party at one query and p = 1/2, and the user's view of the honest datacenter goes through the plain channel with ε = 0, so Theft's premises hold together there and its bound is 1/2, below 1.",
+   "WeightSecurity.SecurityProofs.TheftNontrivial": "completeness: Theft's nontrivial witness (its witnesses entry): at the toy instance, the cheating datacenter appends the second weight bit to each answer; through the silent channel HonestUseHard and Simulable hold, LeaksThrough fails at ε = 0, and the thief steals the weights on every coin, above the bound 1/2.",
+   "WeightSecurity.SecurityProofs.TheftTight": "completeness: at the toy instance, the cheating datacenter's view goes through the one-bit channel with ε = 0 and the thief steals the weights with probability 1, Theft's bound 2 · 1/2 + 0: the factor |S| is attained."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
