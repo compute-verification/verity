@@ -104,6 +104,7 @@
   "Proofs.Properties.Verity.Sampled.SampleNamed",
   "Proofs.Properties.Verity.Sampled.Digest",
   "Proofs.Properties.Verity.Sampled.MovesReachAt",
+  "Proofs.Properties.Verity.Sampled.OpenErr",
   "Proofs.Properties.Verity.SampledDraw",
   "Proofs.Properties.Verity.SampledLog",
   "Proofs.Properties.Verity.SampledRead",
