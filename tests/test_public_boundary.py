@@ -260,10 +260,13 @@ def test_a_manifest_loses_the_path_packages_the_export_does_not_copy() -> None:
     doc = {"version": "1.1.0", "packages": [
         {"type": "path", "name": "kept", "dir": "../kept", "configFile": "lakefile.toml"},
         {"type": "path", "name": "priv", "dir": "../../tools/priv", "configFile": "lakefile.toml"},
+        {"type": "path", "name": "via", "dir": "../../tools/priv/../../verity/kept", "configFile": "lakefile.toml",
+         "inherited": True},
         {"type": "git", "name": "mathlib", "url": "https://github.com/leanprover-community/mathlib4", "rev": "abc"}]}
-    new, dropped = PE.rewrite_manifest(json.dumps(doc), "verity/pub", LAKE_COPIED)
-    assert dropped == [("package", "priv")]
-    assert [p["name"] for p in json.loads(new)["packages"]] == ["kept", "mathlib"]
+    new, changed = PE.rewrite_manifest(json.dumps(doc), "verity/pub", LAKE_COPIED)
+    assert changed == [("package", "priv"), ("dir", "via")]
+    assert [(p["name"], p.get("dir")) for p in json.loads(new)["packages"]] == [
+        ("kept", "../kept"), ("via", "../kept"), ("mathlib", None)]
 
 
 WORKSPACE = '''[project]

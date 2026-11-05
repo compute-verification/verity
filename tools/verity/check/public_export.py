@@ -250,17 +250,26 @@ def lean_targets(text: str, here: str, original: dict, copied: set[str]) -> dict
 
 
 def rewrite_manifest(text: str, here: str, copied: set[str]) -> tuple[str, list[tuple[str, str]]]:
-    """A `lake-manifest.json` at ``here`` without the path packages the export doesn't copy."""
+    """A `lake-manifest.json` at ``here`` without the path packages the export doesn't copy.
+
+    An inherited path package's `dir` chains through each package that required it, and Lake resolves it literally,
+    so a kept one gets its normalized `dir`: the chain may pass through a package the export doesn't copy."""
     doc = json.loads(text)
-    keep, dropped = [], []
+    keep, changed = [], []
     for p in doc.get("packages", []):
-        if p.get("type") == "path" and _norm(here, p.get("dir", ""), p.get("configFile", "lakefile.toml")) not in copied:
-            dropped.append(("package", str(p.get("name"))))
-        else:
+        if p.get("type") != "path":
             keep.append(p)
-    if not dropped:
+        elif _norm(here, p.get("dir", ""), p.get("configFile", "lakefile.toml")) not in copied:
+            changed.append(("package", str(p.get("name"))))
+        else:
+            rel = Path(os.path.relpath(_norm(here, p.get("dir", "")) or ".", here or ".")).as_posix()
+            if rel != p.get("dir"):
+                changed.append(("dir", str(p.get("name"))))
+                p = p | {"dir": rel}
+            keep.append(p)
+    if not changed:
         return text, []
-    return json.dumps(doc | {"packages": keep}, indent=1, ensure_ascii=False) + "\n", dropped
+    return json.dumps(doc | {"packages": keep}, indent=1, ensure_ascii=False) + "\n", changed
 
 
 def _at(doc: dict, dotted: str) -> dict:
