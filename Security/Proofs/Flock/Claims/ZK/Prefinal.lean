@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.Shvzk
-import Proofs.Flock.Soundness.ZK.AdaptivePrefinal
+module
+
+public import Proofs.Flock.Claims.ZK.Shvzk
+public import Proofs.Flock.Soundness.ZK.AdaptivePrefinal
 
 /-!
 # Lemma C at tables of their own types
@@ -21,6 +23,8 @@ witness independence at each fixed answer vector (`Session.card_cut_eq`), so:
   bounds from `prefinal_of_ideal`; `Proto.runs_close_sw_of_ideal`, `Proto.refused_close_sw_of_ideal`: the same from
   `prefinal_sw_of_ideal`.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

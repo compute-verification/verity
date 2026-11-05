@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Sampling.Select.Steps
-import Proofs.Flock.Claims.Sampling.Select.Take
-import Proofs.Flock.Soundness.ExecDrawOS
+module
+
+public import Proofs.Flock.Claims.Sampling.Select.Steps
+public import Proofs.Flock.Claims.Sampling.Select.Take
+public import Proofs.Flock.Soundness.ExecDrawOS
 
 /-!
 # `Select.select`'s subset draw is the live draw's (`Law.runOS`) on the same bytes
@@ -21,6 +23,8 @@ tape.
 A stratified or work draw reads one stream per stratum, which the code serves from the one sequence of coins and `runOS`
 from a tape each, so the agreement here is the subset law's, which a rate law resolves to (`Select.Rule.over`).
 -/
+
+@[expose] public section
 
 open SampledProofs
 

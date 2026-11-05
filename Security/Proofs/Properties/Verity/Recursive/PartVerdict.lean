@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.Deploy
-import Proofs.Flock.Claims.Complete.Encode
-import VStarRecursive
+module
+
+public import Proofs.Flock.Claims.Recursion.Deploy
+public import Proofs.Flock.Claims.Complete.Encode
+public import VStarRecursive
 
 /-!
 # A V\* part's compiled verdict is the model's decision at its session (a step of `acc_of_accepts`)
@@ -32,6 +34,8 @@ What the compiled part can't see is a hypothesis:
 verifier's acceptance, as `FlockDeploy.decisionAt`'s verdict at SHA-512, and as the model verifier's answer at the
 session's last round.
 -/
+
+@[expose] public section
 
 namespace Verity.Recursive
 

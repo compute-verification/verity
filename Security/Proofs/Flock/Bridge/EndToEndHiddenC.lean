@@ -1,5 +1,7 @@
-import Proofs.Flock.Bridge.Canon
-import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
+module
+
+public import Proofs.Flock.Bridge.Canon
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
 
 /-!
 # `EndToEndHiddenC`, from `OpeningsCanonTarget`
@@ -13,6 +15,8 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
   `EndToEndHidden` is `zk_session_soundHJ_custody_reg`'s (`Audit.Law.subset_miss`, and `linkBoundZC` at A2);
 * `Flock.Bridge.endToEndHidden_of_c`: `EndToEndHiddenC` gives `EndToEndHidden` (`wrongRegZ_subset_wrongRegZc`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkHidden
 

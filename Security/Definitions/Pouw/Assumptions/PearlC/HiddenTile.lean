@@ -1,4 +1,6 @@
-import Definitions.Pouw.PearlC.Hidden
+module
+
+public import Definitions.Pouw.PearlC.Hidden
 
 /-!
 # The hidden audit's open obligation, a drawn tile's proof is sound (trusted; a `Prop` taken as a hypothesis)
@@ -15,6 +17,8 @@ and the pinned anchors (L8). `tileProofSoundAll_of_tileGame` (`HiddenTileGame`) 
 `TileProofSoundAll` from a `TileGame` per tile, so the rest is C-Flock's `TileGame`. What remains assumed under it is only
 C-Flock's per-finder `cr/sha-512` and `ecr/sha-512`, and the live coins.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Assumptions
 

@@ -1,4 +1,6 @@
-import Mathlib.Data.BitVec
+module
+
+public import Mathlib.Data.BitVec
 
 /-!
 # duo, a receipt fold (trusted)
@@ -16,6 +18,8 @@ the map from runs to final-state functions is injective (no all-state kernel).
 `duoRun` absorbs a run of any length one word at a time, `duoQuadWith` absorbs four words with keys bundled as
 `DuoQuadKeys`, and `duoCheckpoints` absorbs a run of four-word blocks and returns the state after each block.
 -/
+
+@[expose] public section
 
 namespace Pouw.Receipt
 

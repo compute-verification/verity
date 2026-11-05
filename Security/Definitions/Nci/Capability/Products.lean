@@ -1,5 +1,7 @@
-import Definitions.Nci.Capability.Items
-import Definitions.Nci.Covering
+module
+
+public import Definitions.Nci.Capability.Items
+public import Definitions.Nci.Covering
 
 /-!
 # Local bounds: counted products and their incidence
@@ -10,6 +12,8 @@ step). A block **completes** a product when it computes all of its gates, and **
 completes. The **incidence** says which slot and which operand occurrence each product reads, at the granularity a block
 can select.
 -/
+
+@[expose] public section
 
 namespace Nci.Capability
 

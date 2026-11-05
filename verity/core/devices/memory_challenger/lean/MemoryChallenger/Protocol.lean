@@ -1,6 +1,8 @@
-import CoreProtocol.Protocol
-import CoreProtocol.Cli
-import MemoryChallenger.Verdict
+module
+
+public import CoreProtocol.Protocol
+public import CoreProtocol.Cli
+public import MemoryChallenger.Verdict
 
 /-!
 # `verdict` as a core protocol
@@ -20,6 +22,10 @@ string not lowercase hex, an integer negative, or a constant of the header not t
 S1's (`SCHEMES`); `testProtocol`, under an id of its own, accepts the test signers' schemes and only them, as the Python's
 tests pass `pous_test_signer.SCHEMES`.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace MemoryChallenger
 

@@ -1,6 +1,8 @@
-import Properties.Pous.MemoryChallenger
-import Proofs.Properties.Pous.MemoryChallenger.Device
-import Mathlib.Tactic.SplitIfs
+module
+
+public import Properties.Pous.MemoryChallenger
+public import Proofs.Properties.Pous.MemoryChallenger.Device
+public import Mathlib.Tactic.SplitIfs
 
 /-!
 # Proofs of the memory challenger's verdict's properties (`Properties.Pous.MemoryChallenger`)
@@ -13,6 +15,8 @@ rounds gave none and every round passed.
 `VerdictSigned` follows: an accepted verdict's signature verifies over the session's message and its session ended
 `complete`, which is all `Device.signedByDevice_of` reads.
 -/
+
+@[expose] public section
 
 namespace MemoryChallenger.Properties.SecurityProofs
 

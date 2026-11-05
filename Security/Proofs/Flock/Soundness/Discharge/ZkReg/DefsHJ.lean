@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
-import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
+public import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
 
 /-!
 # The registered reads of a hidden-output `verify --zk --registered F` session of `J` tables
@@ -12,6 +14,8 @@ with each read `(u, q)` at the table `u` is drawn into: the draw is that table's
 rank is its rank in that table's draw. At one table they are `OwnReadsH` and `regPathsH` (`ownReadsHJ_one`,
 `regPathsHJ_one`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkReg
 

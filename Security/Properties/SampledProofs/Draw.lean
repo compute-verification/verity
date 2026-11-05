@@ -1,5 +1,7 @@
-import Definitions.Claims.Sampling
-import SampledProofs.Slots
+module
+
+public import Definitions.Claims.Sampling
+public import SampledProofs.Slots
 
 /-!
 # Sampled proofs' draw in the claims' slots: it misses proof units no more often than `P_a` (`SampledProofs.Slots.select`)
@@ -20,6 +22,8 @@ and its bytes, and every input is in it, the `L` bytes included, however few.
 `DesignWellFormed`: that design is well formed on that partition (the claims' `Design.WellFormed`), so its `P_a` is a
 probability, wherever both are given; the draw's own refusals make it so, and it takes no premise either.
 -/
+
+@[expose] public section
 
 open Lean (Json)
 open SampledProofs

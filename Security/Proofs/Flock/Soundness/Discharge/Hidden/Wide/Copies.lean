@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Flat
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Flat
 
 /-!
 # Δ's copies at the rows, for `sha512/row/v1` and `sha512/row/v2` rows
@@ -11,6 +13,8 @@ compressions' messages from block `bits / 1024` on. The rows' wires (`rowWires_a
 `hm96` wire. Every copy into template instance `g`'s row `p` lands in that row's slots (`Dst`), and distinct rows' slots
 are distinct (`dst_inj`), so Δ's copies at a column of row `p` are row `p`'s (`filter_rows`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

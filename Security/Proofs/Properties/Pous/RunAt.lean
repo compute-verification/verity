@@ -1,5 +1,7 @@
-import Properties.Pous.EndToEndAt
-import Proofs.Properties.Pous.Run
+module
+
+public import Properties.Pous.EndToEndAt
+public import Proofs.Properties.Pous.Run
 
 /-!
 # The composed check's property at every point, proved
@@ -11,6 +13,8 @@ are already point-free and are reused; the lemmas on `C*`'s blocks, leaves and t
 `ps`. The one fact the deployed proof read off the point's numbers, `0 < blocksPerSegment`, follows from a challenged
 index being below `ps.blocks`.
 -/
+
+@[expose] public section
 
 namespace Pous.EndToEnd.SecurityProofs
 

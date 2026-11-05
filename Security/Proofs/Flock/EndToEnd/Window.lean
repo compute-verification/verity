@@ -1,5 +1,7 @@
-import Proofs.Flock.EndToEnd
-import Proofs.Flock.EndToEndHidden
+module
+
+public import Proofs.Flock.EndToEnd
+public import Proofs.Flock.EndToEndHidden
 
 /-!
 # A window of member sessions: the union bound over their `EndToEnd` bounds
@@ -21,6 +23,8 @@ Each member's `kd m` is fixed. When the members' draws are shares of one window 
 the corollary to the window conditioned on the share sizes, one `kd m` per member, or to a window whose share sizes are
 fixed. This is the union bound of the members' bounds, not the tight hypergeometric bound of the window's draw.
 -/
+
+@[expose] public section
 
 namespace Flock.SecurityProofs
 

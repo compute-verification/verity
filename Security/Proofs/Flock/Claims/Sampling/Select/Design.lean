@@ -1,4 +1,8 @@
-import Proofs.Flock.Claims.Sampling.Select.Misses
+module
+
+public import Proofs.Flock.Claims.Sampling.Select.Misses
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
 
 /-!
 # The design the draw runs is well formed (`Properties.SampledProofs.DesignWellFormed`)
@@ -9,6 +13,8 @@ import Proofs.Flock.Claims.Sampling.Select.Misses
   a template with no instance of one, and `callRanges` skips a Call with none.
 * `designWellFormed`.
 -/
+
+@[expose] public section
 
 open SampledProofs
 
