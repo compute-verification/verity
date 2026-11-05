@@ -333,6 +333,9 @@ MODULES, HEADERS = "tools/verity/lean/modules.py", "tools/verity/lean/headers.py
 #: the root modules of Security's `Definitions` library and C-Flock's `Flock`, which the port makes modules: a tree holding
 #: the codemod is on the module system when each is a module (`on_modules`)
 PORTED_ROOTS = ("Security/Definitions.lean", "verity/core/service/flock/Flock.lean")
+#: what the codemod's run over a tree reads besides the codemod and its header reader: a merge that changes none of these onto
+#: a tree on the module system leaves its porting as it was (`ported`'s ``base``); pathspecs, each `*` crossing directories
+PORT_INPUTS = ("*.lean", "*lakefile.toml", "*lakefile.lean", "*lake-manifest.json", "*lean-toolchain")
 MARK_TIME_RE = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ")
 #: drive.toml's `after_landing_shards` for the shard planner's N: "auto", or "auto:MAX"
 AUTO_SHARDS_RE = re.compile(r"auto(:[1-9]\d*)?")
@@ -1876,7 +1879,7 @@ class Queue:
                          "porting it to the module system: deleted in the merge")
         elif not _git(self.workdir, "merge-base", "--is-ancestor", head, tip, check=False).returncode:
             return tip, ""                                      # already merged: `merge --no-ff` makes no commit either
-        tree, files, pins, why = ported(self.workdir, tree)
+        tree, files, pins, why = ported(self.workdir, tree, base=tip)
         if tree is None:
             return None, why
         if files:
@@ -2911,7 +2914,7 @@ def _with_json(text: str, key: str, value: dict) -> str:
     return json.dumps({**doc, key: value}, indent=1) + "\n"
 
 
-def ported(repo: Path, tree: str) -> tuple[str | None, list[str], list[str], str]:
+def ported(repo: Path, tree: str, base: str | None = None) -> tuple[str | None, list[str], list[str], str]:
     """(``tree``, a merge's tree, with its Lean on Lean's module system, the files that took the port, the pins that recorded
     one of them, "") or (None, [], [], why not).  Git runs the `.lean` merge driver, which ports a side made before the port,
     only on a file both sides changed, so a `.lean` file either side added before the port stays as it was written (a PR's,
@@ -2919,11 +2922,16 @@ def ported(repo: Path, tree: str) -> tuple[str | None, list[str], list[str], str
     a tree on the module system (`on_modules`) is touched: that tree's `MODULES` runs over all of it, at the root of a
     worktree of it, and leaves a ported tree as it is; each pin's record of a file it rewrote moves with it
     (`_repinned_files`).  No cheaper test stands in for the run: a header check of every `.lean` file would read a script or a
-    test fixture, which the codemod leaves alone, as a file to port.  The codemod, or the header reader, failing is the
-    reason."""
+    test fixture, which the codemod leaves alone, as a file to port.  ``base``, the tree a merge went onto, stands in for it
+    where the merge changed nothing the codemod reads (`PORT_INPUTS`, the codemod and its reader): the merged tree's Lean is
+    ``base``'s, ported as ``base`` was.  The run takes about 20 s on drive's control pod, and a sync merges hundreds of times.
+    The codemod, or the header reader, failing is the reason."""
     on, why = on_modules(repo, tree)
     if not on:
         return (None if why else tree), [], [], why
+    if base is not None and not _git(repo, "diff", "--quiet", base, tree, "--", *PORT_INPUTS, MODULES, HEADERS,
+                                     check=False).returncode:
+        return tree, [], [], ""
     new, files, pins, why = _codemod(repo, tree)
     return new, list(files), list(pins), why
 
@@ -4184,7 +4192,7 @@ class Preflight:
                 if tip_gone:
                     notes.append(Ran(f"{onto} deletes {', '.join(tip_gone)}, which the head changed only by porting it to the "
                                      "module system: deleted in the merge"))
-            tree, files, pins, why = ported(self.repo, tree)
+            tree, files, pins, why = ported(self.repo, tree, base=base)
             if tree is None:
                 found.append(why)
                 notes.append("the merged tree's checks: its Lean doesn't take the module system")
