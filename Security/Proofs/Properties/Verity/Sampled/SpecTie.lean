@@ -83,9 +83,10 @@ theorem checkRecord_spec {sp : Flock.CoinTree.Spec} {nonce key : String} {c : Js
     ∃ s, Flock.canon (getD c "spec") = .ok s ∧ Flock.canon sp.toJson = .ok s := by
   unfold Flock.CoinTree.checkRecord at h
   dsimp only at h
-  try simp only [throw_bind', pure_bind] at h
+  try simp only [throw_bind'] at h
   repeat' walk_step
   all_goals
+    rename_i hc
     simp only [bne_iff_ne, ne_eq, not_not] at hc
     subst hc
     exact ⟨_, ‹Flock.canon ((c.getObjVal? "spec").toOption.getD Json.null) = _›, ‹Flock.canon sp.toJson = _›⟩
@@ -110,6 +111,7 @@ theorem decode_coinTree {spec : Flock.SessionSpec} {text : String} {sess : Flock
       first
         | exact ⟨j, _, _, _, rfl, ‹Flock.Record.fld j "coin_tree" = .ok _›,
             ‹Flock.CoinTree.checkRecord sp _ _ = .ok _›⟩
+        | exact absurd ‹(throw _ : Flock.V _) = Except.ok _› (throw_ne_ok _ _)
         | cases h
 
 /-- What `Record.fld` reads is what v2's `getD` reads. -/
