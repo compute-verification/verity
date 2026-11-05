@@ -34,6 +34,7 @@
   "Properties.NetworkRecords",
   "Properties.NetworkPeriod",
   "Properties.NetworkPeriod.Placed",
+  "Properties.NetworkPeriod.ForcedZero",
   "Properties.Core.Period",
   "Properties.NetworkScan",
   "Properties.SampledProofs",
@@ -661,6 +662,9 @@
   "Properties.NetworkPeriod.scanWindowsPlaced": {
    "nontrivial": "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial"
   },
+  "Properties.NetworkPeriod.forcedZeroUnfilled": {
+   "nontrivial": "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial"
+  },
   "Properties.NetworkPeriod.wrongBoundsDrawn": {
    "honest": ["Properties.NetworkPeriod.wrongBoundsDrawn_honest"],
    "nontrivial": "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial"
@@ -1126,10 +1130,11 @@
     "SampledProofs.Bound",
     "Definitions.Claims.Sampling.Strata",
     "Definitions.NetworkCertifier.PeriodConditions",
-    "Properties.NetworkScan.Flattens"
+    "Properties.NetworkScan.Flattens",
+    "Flock.ProvedScope"
    ],
    "except": [],
-   "why": "what the period check's rows-form K counts is stated against its own terms (`rowsTerms`) and Mathlib's finite products, and what its scan's `faulty_bits` charges against the sampled statement's layout as the code lays it out (`SampledProofs.Bits`, its members' joint program `Properties.NetworkScan.Flattens`), the period's premise it meets (`NetTiming.WindowsPlaced`), and the audit's bound against the code's count bound (`SampledProofs.Bound`) at the claims' strata draw (`Definitions.Claims.Sampling.Strata`), never a proof"
+   "why": "what the period check's rows-form K counts is stated against its own terms (`rowsTerms`) and Mathlib's finite products, and what its scan's `faulty_bits` charges against the sampled statement's layout as the code lays it out (`SampledProofs.Bits`, its members' joint program `Properties.NetworkScan.Flattens`), the period's premise it meets (`NetTiming.WindowsPlaced`), and the audit's bound against the code's count bound (`SampledProofs.Bound`) at the claims' strata draw (`Definitions.Claims.Sampling.Strata`), and that no pair of Δ fills a forced-zero column against the verifier's statement check and setup (`Flock.ProvedScope`), never a proof"
   },
   "Properties.Composition": {
    "imports": ["CoreComposition.Product", "CoreComposition.Registered", "CoreComposition.Tie"],
@@ -2962,6 +2967,12 @@
    "signature": ["Properties.NetworkPeriod.clockKBoundsCount : Properties.NetworkPeriod.ClockKBoundsCount"],
    "assumptions": [],
    "type_hash": "30ac246ed35e00d232bcbf769692a986c35476bf91dadb94f044d3eb7e708d0d"
+  },
+  "Properties.NetworkPeriod.forcedZeroUnfilled": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial": {
+   "owner": "@network-accounting"
   },
   "Properties.NetworkPeriod.rowsCircuitHeld": {
    "owner": "@network-accounting",
@@ -6278,6 +6289,10 @@
    },
    "Properties.NetworkPeriod.scanWindowsPlaced": {
     "function": ["NetworkCheck.Period.scanOf", "Flock.canon"],
+    "outcome": "accept"
+   },
+   "Properties.NetworkPeriod.forcedZeroUnfilled": {
+    "function": ["Flock.ProvedScope.check", "Flock.Stmt.setupTables"],
     "outcome": "accept"
    },
    "Properties.NetworkPeriod.wrongBoundsDrawn": {
