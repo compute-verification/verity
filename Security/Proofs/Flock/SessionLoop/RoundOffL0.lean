@@ -13,12 +13,14 @@ public import Proofs.Flock.SessionLoop.SchedUnrefused
 `ρ_1`'s squeeze alone), where `vs`'s level-0 values are the firewall's (`Loop.L0Fixed`): the release of the worker's
 round is the switched session's message without its leading domain frame.
 
+* `Masked.l0BodyAt_ligTab`: at table `j`, level 0's bodies read the extra lanes only below `2^cols`.
 * **`LeanRelease.release_sched_l0_st`**: where no refusal shows by the round. The frame releases body `i` at the
   loop's table, the basis of its switched vectors at the openings' words, the rep's pads and the opened coins from the
   binding on (`l0_frame`). The
   session sends body `i` at the switched source's pads (`Loop.swMsgAt_l0`), which under `L0Fixed` are the rep's pads
   (`Loop.l0BodyAt_vs`, `Loop.RepSrc.pads`), at the tape's packed table and extra lanes, which are the loop's table's
-  (`Loop.Level0Src.realOf`), the basis of the switched source's vectors at the opened coins, which is the loop's
+  within level 0's sizes (`Loop.Level0Src.realOf`, `Loop.Level0Src.realOf_lanes`, `Masked.l0BodyAt_ligTab`), the
+  basis of the switched source's vectors at the opened coins, which is the loop's
   (`Loop.sws_of_pts`, the loop's extra claims at the session's link points, `Loop.linkPoints_slot`), and the opened
   coins, which are the openings' words (`wordsAt_slot`). Past the binding a body has no domain frame
   (`Loop.dropDom_l0Body`).
@@ -30,6 +32,26 @@ round is the switched session's message without its leading domain frame.
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
+
+namespace Claims.ZKMal.Masked
+
+/-- **`l0BodyAt` at table `j` reads the extra lanes only below `2^cols`**, `cols` level 0's. -/
+theorem l0BodyAt_ligTab (coin : ℕ → ℕ → _root_.Flock.F128) (p0 : ℕ) (x : Msg) (w : Claims.Flock.Wit) (τ : UE.Tape)
+    (j : Fin (jOf x)) (P : List UInt8) (T : _root_.Flock.F128) (cap : ByteArray) (b : Array _root_.Flock.F128)
+    (lay : _root_.Flock.Zk.PadLayout) (h : Array _root_.Flock.F128) (rep : ℕ)
+    {extra extra' : ℕ → ℕ → _root_.Flock.F128} (he : ∀ e c, c < 2 ^ (lv0 x j).cols → extra e c = extra' e c)
+    (nonce : ℕ → ℕ → UInt64) (i : ℕ) :
+    FlockComplete.LigLock.l0BodyAt coin p0 P T cap (zkTab x j).sch (ligTab x w τ j) b lay h rep extra nonce i =
+      FlockComplete.LigLock.l0BodyAt coin p0 P T cap (zkTab x j).sch (ligTab x w τ j) b lay h rep extra' nonce i := by
+  have hA : ∀ e, (Array.range (FlockComplete.LigLock.tabS coin p0 (ligTab x w τ j) (zkTab x j).sch.k0).size).map
+      (extra e) =
+      (Array.range (FlockComplete.LigLock.tabS coin p0 (ligTab x w τ j) (zkTab x j).sch.k0).size).map (extra' e) :=
+    fun e => Array.map_congr_left fun c hc =>
+      he e c (by rw [← tabS_ligTab_size coin p0 x w τ j]; exact Array.mem_range.1 hc)
+  unfold FlockComplete.LigLock.l0BodyAt
+  simp only [hA]
+
+end Claims.ZKMal.Masked
 
 namespace Claims.ZKServer
 
@@ -243,8 +265,8 @@ theorem release_sched_l0_st (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wi
     rw [hP0]
     exact loopNr_l0r hsx hq2 hz (by rw [hst]; omega) (by rw [hst]; exact hk6) ha1 ha2
   -- body `i` at the session's pads, table, extra lanes and basis, then at the opened coins
-  rw [hbasis, hg, hex, hH, Loop.l0BodyAt_vs hL0 ν t (Loop.finS.pad (K := refK x) cs) hN hsx j r hext P' T' cap'
-    (fun _ _ => 0) i]
+  rw [hbasis, hg, Masked.l0BodyAt_ligTab _ _ x w t j _ _ _ _ _ _ _ hex _ i, hH,
+    Loop.l0BodyAt_vs hL0 ν t (Loop.finS.pad (K := refK x) cs) hN hsx j r hext P' T' cap' (fun _ _ => 0) i]
   refine (FlockComplete.LigLock.l0BodyAt_bind_congr h1 [] P' T T' _ cap').trans
     (FlockComplete.LigLock.l0BodyAt_congr_lt ?_ ?_ ?_)
   · intro _ e he
