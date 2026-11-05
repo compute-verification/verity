@@ -85,6 +85,8 @@ PUBLIC = {
     "verity_vllm.protocols.pouw.pearl_c.served_y": "I1: Pearl+'s served y as a retained pass commits it, a call's real rows "
                                                    "under its domain (y_domain, commit_y, retain_y) and on its device "
                                                    "(DeviceTrees), which verify_run opens on each drawn tile",
+    "verity_vllm.scheduler.advice": "I7: advice v0, what a vLLM server decided in a session as one canonical bit string "
+                                    "(encode, decode), its length split by egress window (bits_by_window)",
 }
 
 #: Every other module of the package that outside code imports. Move its importers onto a public interface and delete it.

@@ -985,7 +985,7 @@ step units), and that they agree with the certified I/O (the tie units). N2 is t
 the ingress counts and the advice; no N2 unit does yet. The advice's length is the leak, charged as `A_c` in the
 accepted-runs bound.
 
-This section attacks that claim through its parts: the advice codec (`advice.py`, with `encode`,
+This section attacks that claim through its parts: the advice codec (`verity_vllm.scheduler.advice`, with `encode`,
 `decode` and `bits`), the I/O tie unit (`io_tie`) and the compiler
 (`verity_vllm.program.predict.compile_steps`). It gives the argument, every assumption the argument rests on, what
 each attack costs under the design, and the adversarial cases each part's tests must carry.
@@ -1182,7 +1182,7 @@ window costs P steps and one `ReplayLoad`, P + 2 state rows and two window rows,
 path of depth ⌈log2(P + 2)⌉, or 1 for a window row. A session adds one `ReplayClose` (13 ANDs at the sync
 KV-pressure trace's shape) and its two reads.
 
-## Advice v0's validity (`advice_check`)
+## Advice v0's validity (`verity_vllm.scheduler.advice_check`)
 
 The compile slice's proof block's first part ("The charge, and what is committed", above), that the committed bit string
 decodes to a well-formed v0 advice, is the Boolean Definition

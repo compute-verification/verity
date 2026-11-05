@@ -12,11 +12,10 @@ import random
 
 import pytest
 
-from test_network_certifier_advice import FIXTURE, RANDOM, packed, rebuild
-
+from tests.scheduler.test_advice import FIXTURE, RANDOM, packed, rebuild
 from verity_vllm.scheduler import advice as V
-from verity_vllm.scheduler.advice_check import (DEFERRED, _sort_net, ands, arguments, comparators, decodes,
-                                                          evaluate, evaluate_bits, reference, size, unit)
+from verity_vllm.scheduler.advice_check import (DEFERRED, _sort_net, ands, arguments, comparators, decodes, evaluate,
+                                                evaluate_bits, reference, size, unit)
 
 P, D = "prefill", "decode"
 

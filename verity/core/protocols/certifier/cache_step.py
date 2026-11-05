@@ -57,7 +57,8 @@ masked write to every entry. A call costs KU units plus its range checks: 5,856 
 (8, 4, 8, 4, 32) (5,701 lowered), 18,658 at (8, 16, 17, 10, 64), 5.42M at the difftest's (128, 16, 17, 7, 1168), and
 at smallkv's (511, 16, 17, 10, 2048) 300,049 a unit and 38.4M a call. A linear table is the size class of a slice. The
 full session scales by offline memory checking: it sorts the session's unit operations by key and time, as
-`advice_check` sorts its events, at O(log² E) a unit for E operations in all. PROTOCOL.md has the estimate.
+`verity_vllm.scheduler.advice_check` sorts its events, at O(log² E) a unit for E operations in all. PROTOCOL.md has the
+estimate.
 """
 from __future__ import annotations
 

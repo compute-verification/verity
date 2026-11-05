@@ -28,7 +28,7 @@ steps and 900 requests a window, with Llama-3's V = 128,256 tokens (log2 V ≈ 1
 
 Each part's tests carry these cases, each refused or charged as stated. They are small and CPU-only, and each goes into
 its part's tests as the part lands. Those marked (written) run against the parts' drafts in
-`test_network_certifier_advice_adversarial` and `test_network_certifier_io_tie_adversarial`.
+`integrations/vllm/tests/scheduler/test_advice_adversarial.py` and `test_network_certifier_io_tie_adversarial`.
 - **The advice codec:**
   - `decode(encode(a)) == a`, and `encode(decode(x)) == x` for every x that `decode` accepts: every one-bit flip, cut
     and appended byte of 12 random schedules' encodings. A wider field, a longer length prefix, a set padding bit and
