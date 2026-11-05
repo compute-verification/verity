@@ -75,7 +75,7 @@ SHARED = Registry(__file__, (), *(Setting(*a) for a in (
                                                  "RESEARCH_SOURCE_SHA instead)"),
     ("RESEARCH_LANE", str, None, WHERE, "the lane a run is for (research's runner sets it)"),
     ("RESEARCH", str, "research", WHERE, "the research command a script runs"),
-    ("OUT", str, None, WHERE, "the run's output directory (research's runner sets it: the writing-runs skill)"),
+    ("OUT", str, None, WHERE, "the run's output directory (research's runner sets it: the infra checkout's writing-runs skill)"),
     ("GPU_LEASE_UUID", str, None, WHERE, "the UUID of the GPU gpu-lease leased the process (gpu-lease sets it)"),
     ("GPU_LEASE_WHO", str, None, WHERE, "who holds the process's GPU lease (gpu-lease sets it)"),
     ("CUDA_VISIBLE_DEVICES", str, None, WHERE, "the GPUs CUDA shows the process (gpu-lease sets it)", True),

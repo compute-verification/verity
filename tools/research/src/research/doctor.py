@@ -275,7 +275,7 @@ def check_slack() -> Check:
         api = slack.Slack(os.environ.get("SLACK_BOT_TOKEN"), transport=lambda url, data, headers: slack.post(url, data, headers, timeout=PROBE_TIMEOUT_S))
         api.call("auth.test")
     except slack.SlackError as e:
-        return Check("slack", FINDING, str(e), "the using-slack skill: a Cursor agent goes through the broker with no token; @infra holds the bot's")
+        return Check("slack", FINDING, str(e), "the infra checkout's using-slack skill: a Cursor agent goes through the broker with no token; @infra holds the bot's")
     return Check("slack", OK, f"auth.test is ok ({api.via})")
 
 

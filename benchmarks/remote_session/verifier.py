@@ -79,8 +79,8 @@ Lean answers has come and agreed.
 event as the Lean took it, with the clock it read, the session's coins, and each window's openings where its verdict
 was set, which `replay.py transcript` (verity/core/protocols/remote_bandwidth/lean/tests) replays through both
 verifiers, rejections included. A message the driver couldn't read is in no event: the case ends before it. A run
-keeps DIR in scratch and preserves what it keeps of it (the writing-runs skill): a 60 s window's openings are about
-0.6 GB of JSON.
+keeps DIR in scratch and preserves what it keeps of it (the infra checkout's writing-runs skill): a 60 s window's
+openings are about 0.6 GB of JSON.
 
 A session's coins are an epoch of the proof system's one challenger (`coins.SessionCoins`): from a challenger in this process
 (`--challenger local`, the default), from `benchmarks/live_challenger/serve.py`, started for the session on this

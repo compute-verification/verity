@@ -481,7 +481,7 @@ lane had approved the deletion, so the passes were lost. Here that `rm` is refus
 `research msg` (`slack.py`) is the coordination API on Slack: a handle posts with
 `send` (`--to` names lead it and are woken; `--kind announce` for an announcement, `--kind fyi` or `--quiet` for a note that
 needs no reply) and closes a thread it was asked in with `close` (a status line, ✅, or ❌ with `--declined WHY`). The
-conventions (only handle holders are on Slack, who subscribes to what, the norms) are the `using-slack` skill, and
+conventions (only handle holders are on Slack, who subscribes to what, the norms) are the infra checkout's `using-slack` skill, and
 `.agents/skills/using-slack/registry.json` names the handles (user groups, and the paths each `owns`), the channels and the
 humans the commands check against. It speaks the Web API over `urllib` with `$SLACK_BOT_TOKEN`, never prints a token, and
 `$SLACK_API_URL` points it elsewhere: `tests/test_slack.py` runs every subcommand against a fake Web API on a local port.

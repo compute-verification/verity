@@ -560,6 +560,7 @@
         "README.md",
         "ARCHITECTURE.md",
         "GLOSSARY.md",
+        "DESIGN.md",
         ".agents/skills/",
         "tests/",
         "fixtures/",

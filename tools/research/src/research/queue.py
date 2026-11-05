@@ -3828,7 +3828,7 @@ class LakeBuild:
     `LEAN_BUILD_LINE`.  It runs here when this machine's Lean slot file (``slots``) lists a `build` pool, in a process group
     killed at the step's deadline; else, given ``on`` (`ready`, whatever its tier: `PREFLIGHT_LEAN_ON`), as a `research run` of the
     tree on the first of those nodes that builds them, on its `build` Lean slot, or in ``pool`` (a slot named for ``by``) when one
-    is given, all within the same deadline (an agent VM builds nothing itself: the team skill, "Machines").  A node that can't
+    is given, all within the same deadline (an agent VM builds nothing itself: the infra checkout's AGENTS.md, "Machines").  A node that can't
     start the build (no free `build` slot: each node but the last takes one with `--no-wait`, rather than wait in line; a run
     refused, drained or unreachable; no result line; every package skipped) passes it to the next.  A build that didn't end by
     the deadline is `LeanTimedOut`; when no node built them (or there is no warm tree and no ``on``), a plain string naming each

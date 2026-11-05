@@ -18,7 +18,7 @@ published on the machine that ran it with a minted key, so custody no longer dep
 
 The record uploads the run's own files, everything under out/ (the workload's $OUT), the files matching its `--declared-output`
 globs, and undeclared files up to UNDECLARED_CAP_BYTES; every other file is listed (path, bytes, sha256) without bytes (`select`; how jobs declare outputs:
-.agents/skills/writing-runs/SKILL.md).  The listing is the record's `meta.trimmed` when it fits in TRIMMED_INLINE_BYTES, else the
+the infra checkout's writing-runs skill).  The listing is the record's `meta.trimmed` when it fits in TRIMMED_INLINE_BYTES, else the
 file TRIMMED_LISTING in the record's own tree, named by `meta.trimmed_listing` (`trimmed_of`).  A credential a run may be sent
 (CREDENTIALS) is deleted from the run dir before its record is taken, whatever the run's tool and however it ended, so no record
 holds one; a refused launch deletes it from the request dir (remote.py).
@@ -122,7 +122,7 @@ UNDECLARED_CAP_BYTES = 256 << 20
 #: A trimmed listing bigger than this goes in the record's tree: a manifest's meta is capped at 256 KiB (model.META_MAX_BYTES), and a
 #: `check` run lists thousands of files (r20261001-091202-7aa6: 3719 files, a 561 KB meta, so its passing attempt never published).
 TRIMMED_INLINE_BYTES = 64 << 10
-SKILL = ".agents/skills/writing-runs/SKILL.md"
+SKILL = "the infra checkout's .agents/skills/writing-runs/SKILL.md"
 
 
 def is_run_file(rel: str) -> bool:

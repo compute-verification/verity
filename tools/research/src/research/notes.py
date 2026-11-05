@@ -396,7 +396,7 @@ def render_inbox(lane: str, items: list[dict], limit: int = 15) -> str:
         lines.append(f"  ... and {len(items) - limit} older: research notes inbox {lane} --peek")
     if n := sum(1 for x in items if AGENT_HANDOFF.search(x["path"].name)):
         lines.append(f"  {n} of these came from agents: notes are records, not messages (2026-10-01); act on them, and tell "
-                     "each sender to message you on Slack instead (.agents/skills/using-slack/SKILL.md)")
+                     "each sender to message you on Slack instead (the infra checkout's using-slack skill)")
     return "\n".join(lines)
 
 

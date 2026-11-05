@@ -4,7 +4,7 @@ held to ``allowlists/repo_silent_excepts.json``: S4 of the quality rollout, reco
 A handler swallows when every statement in it is ``pass``, ``continue``, ``break``, a bare constant (``...``), or a ``return``
 or an assignment of a default: nothing, ``None``, a constant other than a string or ``False``, a name other than the caught
 exception's, or an empty container.  Such a handler neither raises, nor logs, nor records what it caught, nor calls anything,
-so the code goes on with less than it had and leaves no trace of why; a guard never fails open (AGENTS.md).  Broad and typed
+so the code goes on with less than it had and leaves no trace of why; a guard never fails open (the infra checkout's AGENTS.md).  Broad and typed
 handlers count alike, and a file that doesn't parse counts one, since its handlers can't be seen.  A string says why (``return "unparseable"``), ``return False`` is a predicate's or a verifier's answer,
 failing closed, and a handler that names what it caught (``return e``) hands it on, so none of those swallows.  This is the
 integration's rule (``integrations/vllm/tests/lint/test_silent_excepts.py``, whose README section "Recorded outcomes" says

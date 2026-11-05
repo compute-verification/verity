@@ -42,8 +42,8 @@ NEW_SLICES = ("vllm", "benchmarks")
 
 HEAD = """\
 You are the {handle} coordinator for Verity (compute-verification/verity), {role}. You are a plain Cursor cloud agent \
-on "{env_name}". Read origin/main's AGENTS.md, its team skill \
-(`.agents/skills/team/SKILL.md`) and the lane contract first.
+on "{env_name}". Read origin/main's AGENTS.md, the team's AGENTS.md in the infra checkout it names, and the lane \
+contract first.
 Your slice: {remit} Your paths: {owns}. Your Linear team: {team}. {scope}
 First hour, in order:
 0. Put the agent guard and research on this VM (the environment's start does so since 18 Oct; this covers a VM booted \

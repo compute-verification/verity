@@ -236,8 +236,8 @@ def test_health_shows_the_vm_workspace_workers_inboxes_prs_off_the_queue_finishe
     assert h[0] == ("- VM: memory 6.0 GiB used, 10.0 GiB available; load 0.50 0.25 0.12 on 4 CPUs; disk /, workspace 8% used, "
                     "234.0 GiB free; notes /home/u/.research/notes absent; OOM kills unreadable (dmesg: read kernel buffer "
                     "failed: Operation not permitted; it may need root)")
-    assert h[1] == ("- WARNING /workspace on branch cursor/coord-93c1, dirty (2 paths), 7 behind origin/main: the shell hook "
-                    "and the inbox run from this checkout")
+    assert h[1] == ("- WARNING /workspace on branch cursor/coord-93c1, dirty (2 paths), 7 behind origin/main: research runs "
+                    "from this checkout")
     assert h[2] == ("- WARNING worker prover bc-1: cursor/a-93c1 3 hours ago 1a2b3c4; inbox: 312 bytes pending since "
                     f"{D.hhmm(NOW - 45 * 60)} (45 min), over 30 min")
     assert h[3] == (f"- worker grader bc-2: no branch cursor/gone-93c1 on origin; inbox: 90 bytes pending since "
@@ -268,7 +268,7 @@ def test_a_failing_health_check_prints_its_error_in_its_place_and_hides_nothing_
     assert out[out.index("## Errors") + 1:] == ["- queue: queue is down"]
     f.fail, f.inbox_list = set(), None
     out, errors = D.digest(LANE, s, f.sources(), [("bc-1", "prover", "cursor/a-93c1")])
-    assert not errors and "- inbox: no tools/agent-guard/inbox.py in /workspace" in health(out)
+    assert not errors and "- inbox: no /opt/agent-guard/inbox.py" in health(out)
     assert "- worker prover bc-1: no branch cursor/a-93c1 on origin; inbox unread" in health(out)
     assert "- WARNING #11 is not in the queue (base main): t" in health(out)
     f.rows = [row(11, "waiting")]

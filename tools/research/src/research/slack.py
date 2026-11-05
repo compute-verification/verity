@@ -1,5 +1,5 @@
 """`research msg`: messages between agents, on Slack (the conventions are
-`.agents/skills/using-slack/SKILL.md`).
+the infra checkout's using-slack skill).
 
 A message is a post in #agent-coordination, sent by a name: a lead's handle in the registry (@infra, @proofs, @lean, ...), which
 `names open` gives an inbox thread. Only leads get names; a worker is reached through its lead. A thread is a conversation. Who a message reaches is one rule (`route_targets`): the names that
@@ -182,7 +182,7 @@ REPLY_CALLOUT = ('<callout icon="✍️" color="yellow_bg">\n'
                  "\t**Your reply.** Write below this line: a decision, a question or a change. "
                  "Top relays it to the lane, which answers under your text starting with its handle.\n"
                  "</callout>\n")                                 # top's asks relay reads the text after the bold line
-SKILL_ASKING = ".agents/skills/asking-daniel/SKILL.md"
+SKILL_ASKING = "the infra checkout's .agents/skills/asking-daniel/SKILL.md"
 WAIT_EVERY_S = 30
 WAIT_GRACE = timedelta(minutes=5)                                # the site's default cron runs every minute
 ROUTES_DIR = "routes.d"                                          # in the notes: one `<name>.json` per inbox
@@ -767,7 +767,7 @@ class Slack:
         self.dry_run, self.log, self.transport, self._oidc = dry_run, log, transport or post, _Identity(BROKER)
         self.base = (base or os.environ.get("SLACK_API_URL") or DEFAULT_API).rstrip("/") + "/"
         if not dry_run and self.via == "direct" and not token and not direct:
-            raise SlackError("SLACK_BOT_TOKEN is not set (a Cursor secret; see the using-slack skill), or pass --dry-run")
+            raise SlackError("SLACK_BOT_TOKEN is not set (a Cursor secret; see the infra checkout's using-slack skill), or pass --dry-run")
 
     def call(self, method: str, **params: Any) -> dict:
         params = {k: v for k, v in params.items() if v is not None}
@@ -2914,7 +2914,7 @@ def render_latency(rep: dict, hours: float) -> str:
 
 VOLUME_WORDS = 80                                                # a post longer than this is a brief: it belongs in its issue
 VOLUME_THREADS = 10                                              # the busiest threads `traffic --volume` names
-POST_WORDS, ANNOUNCE_WORDS = 60, 150                             # the coordinating skill's lengths ("How long, and where")
+POST_WORDS, ANNOUNCE_WORDS = 60, 150                             # the infra checkout's coordinating skill's lengths ("How long, and where")
 LENGTH_FIX = ("put the body in its Linear issue (`research msg linear comment ISSUE --file BODY.md --as ME`), or in a file, "
               "PR or note, and post a short line that links it")
 
@@ -3446,7 +3446,7 @@ def app_token(path: Path | None = None, *, transport=None) -> str:
             out = Slack(None, direct=True, transport=transport).call("tooling.tokens.rotate", refresh_token=state["refresh_token"])
         except SlackError as e:
             if e.code is None:                                     # no answer: whether Slack spent the token is unknown
-                raise SlackError(f"{e}; if Slack refuses the refresh token on the next try, it was spent: see the using-slack skill") from None
+                raise SlackError(f"{e}; if Slack refuses the refresh token on the next try, it was spent: see the infra checkout's using-slack skill") from None
             raise SlackError(f"tooling.tokens.rotate: {e.code}: Slack refused the refresh token in {path}. A refresh token works "
                              "once, so an earlier rotation or another copy of it spent it. " + NEW_PAIR.format(path=path)) from None
         token, refresh, exp = out.get("token"), out.get("refresh_token"), out.get("exp")

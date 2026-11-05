@@ -349,7 +349,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
 - **Lock**: a package's guarantee records in its `lean-audit.json` (`AGENTS.md`, "Lean"). A changed
   record means a guarantee now says something else. It protects only the guarantees
   and what they read, though it lists many lemmas too.
-- **Checking and landing** (the team skill, "Landing"):
+- **Checking and landing** (the infra checkout's AGENTS.md, "Landing"):
   - **Ready mark**: an owner's statement that a PR's head may land; drive admits only marked heads.
   - **Land verdict**: a reviewer's `land` or `hold` on one PR head, recorded as a label; the owner's own doesn't count.
   - **`next`**: drive's branch of admitted PRs, one merge each, above `main`, which fast-forwards to its reviewed prefix.
