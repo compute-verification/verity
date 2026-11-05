@@ -2,26 +2,74 @@ module
 
 public import Proofs.Flock.SessionLoop.SampledRelay
 public import Proofs.Flock.Claims.Prob
+public import Proofs.Flock.Claims.Bridge.Hm96Tree
 
 /-!
 # The session loop's error per outcome as a number, and the sampled audit at it
 
 `Loop.anyErr` reads three things that are not numbers: the session's leaf count, hm96's hiding gap at the pinned key,
 and the go and unswitched provers' collision finders' success (`Fork`). Each is bounded here by a parameter: a leaf cap
-`L`, a hiding bound `δ₁`, and the SHA-512 calls per run of the prover (`c`) and of `V*` (`q`), at which `ecr/sha-512`
-(`ExpectedCR`) bounds each finder's success by `2(c + q)/2^256`.
+`L`, the bound `δ₁` at which hm96 hides (`Claims.Hm96Hiding`), and the SHA-512 calls per run of the prover (`c`) and of
+`V*` (`q`), at which `ecr/sha-512` (`ExpectedCR`) bounds each finder's success by `2(c + q)/2^256`.
 
+* `CROnly.hidingGap_le_of_hiding`: where hm96 hides at a finite `δ₁`, its gap is at most `δ₁`, at the event where the
+  real pair is no less likely than the ideal one (`CROnly.half_sum_abs_eq`).
 * `Fork.pr_le`: `Fork`'s success is at most `2(c + q)/2^256` where it meets `ExpectedCR` and each of its runs makes at
   most `c` prover calls and `q` verifier calls.
 * `Loop.Budget`: that at the go and unswitched provers.
-* `Loop.errAt`: `Loop.anyErr` at the leaf cap, the hiding bound and the calls, a number.
+* `Loop.errAt`: `Loop.anyErr` at the leaf cap, a bound on the gap and the calls, a number.
 * `Loop.anyErr_le`: `anyErr ≤ errAt` at those bounds.
 * **`Flock.SecurityProofs.SampledAuditAnyDeployedAt`** and **`SampledAuditAnyRelayDeployedAt`**:
   `SampledAuditAnyDeployed` and `SampledAuditAnyRelayDeployed` with `errAt` at each session's verdict in place of the
-  premise `εS`, taking the leaf cap at every statement a session may take and `Loop.Budget` at every session.
+  premise `εS`, taking hm96's hiding at `δ₁`, the leaf cap at every statement a session may take and `Loop.Budget` at
+  every session.
 -/
 
 @[expose] public section
+
+namespace FlockSoundness.CROnly
+
+open Finset
+open scoped ENNReal
+
+/-- **Half the ℓ¹ distance of two masses of equal total is one event's advantage**: the event where the first is no
+less than the second. -/
+theorem half_sum_abs_eq {V : Type} (S : Finset V) (μ ν : V → ℝ) (h : ∑ v ∈ S, μ v = ∑ v ∈ S, ν v) :
+    1 / 2 * ∑ v ∈ S, |μ v - ν v| =
+      ∑ v ∈ S, (if ν v ≤ μ v then (1 : ℝ) else 0) * μ v - ∑ v ∈ S, (if ν v ≤ μ v then (1 : ℝ) else 0) * ν v := by
+  have hpt : ∀ v ∈ S, |μ v - ν v| = 2 * ((if ν v ≤ μ v then (1 : ℝ) else 0) * μ v) -
+      2 * ((if ν v ≤ μ v then (1 : ℝ) else 0) * ν v) - (μ v - ν v) := fun v _ => by
+    split_ifs with hv
+    · rw [abs_of_nonneg (sub_nonneg.2 hv)]; ring
+    · rw [abs_of_neg (sub_neg.2 (not_le.1 hv))]; ring
+  rw [sum_congr rfl hpt, sum_sub_distrib, sum_sub_distrib, sum_sub_distrib, ← mul_sum, ← mul_sum, h]
+  ring
+
+/-- **hm96's gap is at most any finite bound it hides at**: `Hm96Hiding My c δ₁` at the event where `(My y, c y)` is
+no less likely than `(U, c y)` bounds the gap, half their ℓ¹ distance (`half_sum_abs_eq`). -/
+theorem hidingGap_le_of_hiding {Y B C : Type} [Fintype Y] [Fintype B] [DecidableEq B] [DecidableEq C] [Nonempty Y]
+    [Nonempty B] {My : Y → B} {c : Y → C} {δ₁ : ℝ≥0∞} (h : Claims.Hm96Hiding My c δ₁) (hδ : δ₁ ≠ ⊤) :
+    hidingGap My c ≤ δ₁.toReal := by
+  have hS : ∀ y, (My y, c y) ∈ (univ : Finset B) ×ˢ univ.image c :=
+    fun y => mem_product.2 ⟨mem_univ _, mem_image_of_mem c (mem_univ y)⟩
+  have hS' : ∀ p : B × Y, (p.1, c p.2) ∈ (univ : Finset B) ×ˢ univ.image c :=
+    fun p => mem_product.2 ⟨mem_univ _, mem_image_of_mem c (mem_univ p.2)⟩
+  have hE : ∀ (e : B × C → Prop) [DecidablePred e],
+      ∑ v ∈ (univ : Finset B) ×ˢ univ.image c,
+          (if e v then (1 : ℝ) else 0) * ((#{y | (My y, c y) = v} : ℝ) / Fintype.card Y) ≤
+        ∑ v ∈ (univ : Finset B) ×ˢ univ.image c,
+          (if e v then (1 : ℝ) else 0) * ((#{p : B × Y | (p.1, c p.2) = v} : ℝ) / Fintype.card (B × Y)) +
+          δ₁.toReal := by
+    intro e _
+    have := Claims.Bridge.hiding_toReal h hδ e
+    rwa [Claims.Bridge.Pr_eq_card, Claims.Bridge.Pr_eq_card, Fintype.card_subtype, Fintype.card_subtype,
+      card_filter_comp_div _ _ hS e, card_filter_comp_div _ _ hS' e] at this
+  unfold hidingGap
+  rw [half_sum_abs_eq _ _ _ ((sum_card_fiber_div _ _ hS).trans (sum_card_fiber_div _ _ hS').symm)]
+  linarith [hE fun v => (#{p : B × Y | (p.1, c p.2) = v} : ℝ) / Fintype.card (B × Y) ≤
+    (#{y | (My y, c y) = v} : ℝ) / Fintype.card Y]
+
+end FlockSoundness.CROnly
 
 namespace Claims
 
@@ -112,15 +160,16 @@ set_option synthInstance.maxHeartbeats 1000000
 
 /-- **A sampled audit's view at any values, at the deployed session loop, its error a number.**
 `SampledAuditAnyDeployed` with its premise `εS` replaced by `Loop.errAt` at a leaf cap `L`, a hiding bound `δ₁` and
-`c` prover and `q` verifier SHA-512 calls per run. In place of that premise it takes that hm96's hiding gap at the
-pinned key is at most `δ₁`, that every statement a session may take has at most `L` leaves, and that at each session
-the go and unswitched provers' runs against its `V*` are at the budget, each prover's `Fork` meeting `ExpectedCR`
-(`Loop.Budget`). Then the bound is `SampledAuditAnyDeployed`'s with `N·2δ₁` for the record and `errAt` at each
-session's verdict. -/
+`c` prover and `q` verifier SHA-512 calls per run. In place of that premise it takes that hm96 hides at the pinned key
+at a finite `δ₁` (`Claims.Hm96Hiding`), that every statement a session may take has at most `L` leaves, and that at
+each session the go and unswitched provers' runs against its `V*` are at the budget, each prover's `Fork` meeting
+`ExpectedCR` (`Loop.Budget`). Then the bound is `SampledAuditAnyDeployed`'s with `N·2δ₁` for the record and `errAt` at
+each session's verdict, at `δ₁` in reals. -/
 def _root_.Flock.Guarantees.SampledAuditAnyDeployedAt : Prop :=
   ∀ {K S V O T R Xs Θ D : Type} [Fintype K] [Fintype S] [Fintype T] [Fintype R] [Nonempty S] [Nonempty T] [Nonempty R]
     [Fintype Xs] {N : ℕ} {CB : ℕ → Type} [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)]
-    (sv : Service K S (Fin N → ZkView.Salt) V O T R) (Hc : ZkView.Bits × ByteArray → D) (dig : V → Fin N → ZkView.Bits) (g : (Fin N → D) → O),
+    (sv : Service K S (Fin N → ZkView.Salt) V O T R) (Hc : ZkView.Bits × ByteArray → D)
+    (dig : V → Fin N → ZkView.Bits) (g : (Fin N → D) → O),
     (∀ v y, sv.out v y = g fun i => Hc (dig v i + ZkView.My (y i), ZkView.saltHash (y i))) →
     ∀ (n m : ℕ) (v v₀ : V) (st : Stack K V S O T R m) (k₀ : K) (ℓ t : ℕ), 0 < t →
     ∀ (Rl : Rel Claims.Flock.Wit), (CoinLayer.session Loop.loopNr Masked.dataE).Complete Rl →
@@ -138,14 +187,14 @@ def _root_.Flock.Guarantees.SampledAuditAnyDeployedAt : Prop :=
       (eC : ∀ j ρ χ b, CB j ≃
         (Loop.anySim Masked.dataE (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) (Loop.realOf src) t).C
           (Q.x j ρ χ b))
-      (L c q : ℕ) (δ₁ : ℝ),
+      (L c q : ℕ) (δ₁ : ℝ≥0∞),
     ZkServerOwnUser st →
     (∀ j p χ π b, (CoinLayer.session Loop.loopNr Masked.dataE).UnCausal (Q.i j p χ π b).1 ∧
       LeanRelease.TrustsStop (CoinLayer.session Loop.loopNr Masked.dataE) (Q.i j p χ π b).1
         (LeanRelease.ofLoopLink L₀ src (Loop.realOf src)) CoinOpen.shaH (Q.i j p χ π b).2 Rl) →
     (∀ j p χ π b, Rl (Q.x j (recOf sv n v st p) χ b) (Q.w j p χ π b)) →
     (∀ j ρ χ b, (Q.Vs j ρ χ b).k (Q.x j ρ χ b) = refK (Q.x j ρ χ b) + 2) →
-    FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash ≤ δ₁ →
+    Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁ → δ₁ ≠ ⊤ →
     (∀ j ρ χ b, (CoinLayer.session Loop.loopNr Masked.dataE).nLeaves (Q.x j ρ χ b) ≤ L) →
     (∀ j p χ π b, Loop.Budget Masked.dataE (Q.i j p χ π b).1
         (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) (Loop.realOf src) (Q.x j (recOf sv n v st p) χ b)
@@ -174,17 +223,20 @@ def _root_.Flock.Guarantees.SampledAuditAnyDeployedAt : Prop :=
               sv.prfAdvantage n m v (fun ρ => E ρ z.1 (Tup.sims (Q.sim (Loop.anySim Masked.dataE
                 (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) (Loop.realOf src) t) CoinOpen.shaH eC ρ z.1) ℓ
                   s z.2))) +
-            N * (2 * ENNReal.ofReal δ₁)) +
-          sv.forgeAdvantage n m v (st k₀ v) + Tup.errs (fun _ o => ENNReal.ofReal (Loop.errAt t L c q δ₁ o)) ℓ s
+            N * (2 * δ₁)) +
+          sv.forgeAdvantage n m v (st k₀ v) +
+            Tup.errs (fun _ o => ENNReal.ofReal (Loop.errAt t L c q δ₁.toReal o)) ℓ s
 
 theorem SampledAuditAnyDeployedAt : Flock.Guarantees.SampledAuditAnyDeployedAt := by
   intro K S V O T R Xs Θ D _ _ _ _ _ _ _ _ N CB _ _ sv Hc dig g hout n m v v₀ st k₀ ℓ t ht Rl hV L₀ src Q eC L c q δ₁
-    hown hok hR hk hδ hL hB s E
+    hown hok hR hk hT1 hδ₁ hL hB s E
+  have hδ := FlockSoundness.CROnly.hidingGap_le_of_hiding hT1 hδ₁
   refine (SampledAuditAnyDeployed sv Hc dig g hout n m v v₀ st k₀ ℓ t ht Rl hV L₀ src Q eC
-    (fun _ o => ENNReal.ofReal (Loop.errAt t L c q δ₁ o)) hown hok hR hk
+    (fun _ o => ENNReal.ofReal (Loop.errAt t L c q δ₁.toReal o)) hown hok hR hk
     (fun j p χ π b o => ENNReal.ofReal_le_ofReal (Loop.anyErr_le _ _ _ _ t (hL _ _ _ _) hδ (hB j p χ π b) o))
     s E).trans ?_
-  have hg := ENNReal.ofReal_le_ofReal hδ
+  have hg : ENNReal.ofReal (FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash) ≤ δ₁ :=
+    (ENNReal.ofReal_le_iff_le_toReal hδ₁).2 hδ
   gcongr
 
 /-- **A sampled audit's view at any values, at the deployed held relay's frames, its error a number.**
@@ -212,7 +264,7 @@ def _root_.Flock.Guarantees.SampledAuditAnyRelayDeployedAt : Prop :=
       (eC : ∀ j ρ χ b, CB j ≃
         (Loop.anySim Masked.dataE (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) (Loop.realOf src) t).C
           (Q.x j ρ χ b))
-      (L c q : ℕ) (δ₁ : ℝ),
+      (L c q : ℕ) (δ₁ : ℝ≥0∞),
     ZkServerOwnUser st →
     (∀ j p χ π b, (CoinLayer.session Loop.loopNr Masked.dataE).UnCausal (Q.i j p χ π b).1 ∧
       LeanRelease.TrustsStop (CoinLayer.session Loop.loopNr Masked.dataE) (Q.i j p χ π b).1
@@ -225,7 +277,7 @@ def _root_.Flock.Guarantees.SampledAuditAnyRelayDeployedAt : Prop :=
       fun ω => (Q.run CoinOpen.shaH (fun i w _ => (LeanRelease.ofLoopLink L₀ src (Loop.realOf src)).toSrv.proverD
           (LeanRelease.ofLoopLink L₀ src (Loop.realOf src)).fillOf (fun x => refK x + 2) i.2 w)
         (recOf sv n v st) p χ j π b ω).msgs.map (·.1)) →
-    FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash ≤ δ₁ →
+    Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁ → δ₁ ≠ ⊤ →
     (∀ j ρ χ b, (CoinLayer.session Loop.loopNr Masked.dataE).nLeaves (Q.x j ρ χ b) ≤ L) →
     (∀ j p χ π b, Loop.Budget Masked.dataE (Q.i j p χ π b).1
         (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) (Loop.realOf src) (Q.x j (recOf sv n v st p) χ b)
@@ -249,17 +301,20 @@ def _root_.Flock.Guarantees.SampledAuditAnyRelayDeployedAt : Prop :=
               sv.prfAdvantage n m v (fun ρ => E ρ z.1 (Tup.sims (Q.sim (Loop.anySim Masked.dataE
                 (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) (Loop.realOf src) t) CoinOpen.shaH eC ρ z.1) ℓ
                   s z.2))) +
-            N * (2 * ENNReal.ofReal δ₁)) +
-          sv.forgeAdvantage n m v (st k₀ v) + Tup.errs (fun _ o => ENNReal.ofReal (Loop.errAt t L c q δ₁ o.1)) ℓ s
+            N * (2 * δ₁)) +
+          sv.forgeAdvantage n m v (st k₀ v) +
+            Tup.errs (fun _ o => ENNReal.ofReal (Loop.errAt t L c q δ₁.toReal o.1)) ℓ s
 
 theorem SampledAuditAnyRelayDeployedAt : Flock.Guarantees.SampledAuditAnyRelayDeployedAt := by
   intro K S V O T R Xs Θ D _ _ _ _ _ _ _ _ N CB _ _ sv Hc dig g hout n m v v₀ st k₀ ℓ t ht Rl hV L₀ src Q eC L c q δ₁
-    hown hok hR hk hE hRd hδ hL hB s E
+    hown hok hR hk hE hRd hT1 hδ₁ hL hB s E
+  have hδ := FlockSoundness.CROnly.hidingGap_le_of_hiding hT1 hδ₁
   refine (SampledAuditAnyRelayDeployed sv Hc dig g hout n m v v₀ st k₀ ℓ t ht Rl hV L₀ src Q eC
-    (fun _ o => ENNReal.ofReal (Loop.errAt t L c q δ₁ o)) hown hok hR hk hE hRd
+    (fun _ o => ENNReal.ofReal (Loop.errAt t L c q δ₁.toReal o)) hown hok hR hk hE hRd
     (fun j p χ π b o => ENNReal.ofReal_le_ofReal (Loop.anyErr_le _ _ _ _ t (hL _ _ _ _) hδ (hB j p χ π b) o))
     s E).trans ?_
-  have hg := ENNReal.ofReal_le_ofReal hδ
+  have hg : ENNReal.ofReal (FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash) ≤ δ₁ :=
+    (ENNReal.ofReal_le_iff_le_toReal hδ₁).2 hδ
   gcongr
 
 end Flock.SecurityProofs
