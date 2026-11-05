@@ -10,16 +10,16 @@ public import Proofs.Flock.Bridge.LeafMap
 # Knowledge soundness at one-stage v2's sampling record (`ksBy_record`, `ks_record`)
 
 `Claims.Sampling.KSBy_of` at the record, at SHA-512 and every check `Ok` on a proof block (`ksBy_record`), its premises
-but `SessionOpensBy` at `Ok` discharged at the deployed record, and at `correctOk`, where that premise is discharged
-too, `KS` (`ks_record`):
+but `SessionOpensBy` at `Ok` discharged at the deployed record, and at `inputOk`, where that premise is discharged too
+(`ks_record`):
 
 * binding: the record's trace commitment is `A`'s at a circuit file of `sha512/row/v2` rows (`record_commit`), and that
   binds since no port of such a file is segmented (`segs_of_rowsV2`, `Flock.Bridge.commitDepL_binds`);
 * `SessionKS`: Flock's masked KS (`FlockDeploy.KS.zk_KS_untrim`), with the draw fixed before the session
   (`drawFixed`), every checked unit's session the record's one (`sessionRuns`) and the inner numbers Flock's
   (`innerNumbers`, where a reference draw file exists);
-* `SessionOpens` at a session v2 sets up (`sessionOpens`), the interior roots the statement's (`interiorFixed`), the
-  draw law (`drawLaw`) and the scope refusal (`refuses_of_scopeOk`).
+* `SessionOpensBy` at `inputOk` at a session v2 sets up (`sessionOpens`), the interior roots the statement's
+  (`interiorFixed`), the draw law (`drawLaw`) and the scope refusal (`refuses_of_scopeSlotsOk`).
 
 Every premise is a fact about the statement and the owner's files, never about a prover: the reference draw file
 exists wherever v2 accepts a session (`refOk_of_accepts`).
@@ -46,23 +46,24 @@ theorem record_binds (A : Live) (o : Own) (e : Ext) (hv2 : Flock.Bridge.RowsV2 A
 
 set_option synthInstance.maxSize 1024 in
 /-- **Knowledge soundness at the record at a check on each proof block**, at SHA-512: at a circuit file of
-`sha512/row/v2` rows, the statement in scope (`ScopeOk`) and a reference draw file (`RefOk`), where each checked unit's
-Flock witness reveals openings that pass `Ok` (`SessionOpensBy` at the statement's interior roots), the record's sampled
-verifier is knowledge sound at the incorrect set at `Ok` (`Claims.Sampling.KSBy_of`). -/
-theorem ksBy_record (A : Live) (o : Own) (e : Ext) (hv2 : Flock.Bridge.RowsV2 A.D.unroll) (hscope : ScopeOk A)
+`sha512/row/v2` rows, the statement in scope (`ScopeSlotsOk`) and a reference draw file (`RefOk`), where each checked
+unit's Flock witness reveals openings that pass `Ok` (`SessionOpensBy` at the statement's interior roots), the record's
+sampled verifier is knowledge sound at the incorrect set at `Ok` (`Claims.Sampling.KSBy_of`). -/
+theorem ksBy_record (A : Live) (o : Own) (e : Ext) (hv2 : Flock.Bridge.RowsV2 A.D.unroll) (hscope : ScopeSlotsOk A)
     (href : ∃ d, RefOk A o d) (Ok : Claims.Sampling.BlockCheck)
     (hopens : Claims.Sampling.SessionOpensBy sha512Msg (record A o e) (fun _ _ _ => A.roots) Ok) :
     Claims.Sampling.KSBy sha512Msg (record A o e) Ok :=
   Claims.Sampling.KSBy_of Ok (fun _ _ _ => A.roots) (record_binds A o e hv2)
     (Claims.Sampling.SessionKS_of FlockDeploy.KS.zk_KS_untrim (drawFixed A o e) (sessionRuns A o e)
       (innerNumbers e href) (SamplingDeploy.deployOf_εtable_nonneg _ (code A o e)))
-    hopens (interiorFixed A o e) (drawLaw A o e) (refuses_of_scopeOk A o e sha512Msg hscope)
+    hopens (interiorFixed A o e) (drawLaw A o e) (refuses_of_scopeSlotsOk A o e sha512Msg hscope)
     (SamplingDeploy.deployOf_εtable_nonneg _ (code A o e))
 
 set_option synthInstance.maxSize 1024 in
-/-- **Knowledge soundness at the record**, at SHA-512: at a session v2 sets up (`SetsUp`, `Names` and v2's reads, as
-`sessionOpens` takes them), a circuit file of `sha512/row/v2` rows, the statement in scope (`ScopeOk`) and a reference
-draw file (`RefOk`), the record's sampled verifier is knowledge sound: `ksBy_record` at `correctOk`. -/
+/-- **Knowledge soundness at the record at `inputOk`**, at SHA-512: at a session v2 sets up (`SetsUp`, `Names` and v2's
+reads, as `sessionOpens` takes them), a circuit file of `sha512/row/v2` rows, the statement in scope (`ScopeSlotsOk`) and
+a reference draw file (`RefOk`), the record's sampled verifier is knowledge sound at the incorrect set at `inputOk`, the
+check that charges an input at its readers: `ksBy_record` at `inputOk`. -/
 theorem ks_record (A : Live) (o : Own) (e : Ext) {ι : Type} {dv : Accounting.Device ι} {α : Type} [Fintype α]
     {V : Vocab dv α} {θ : ByteArray} {F : Array ByteArray} (hsu : SetsUp V θ F A)
     {p : _root_.SampledProofs.OneStageZk.Params} {bs : Core.Blobs}
@@ -71,10 +72,9 @@ theorem ks_record (A : Live) (o : Own) (e : Ext) {ι : Type} {dv : Accounting.De
     (hpart : A.I.partition = some p.own.partition) {is : Array ℕ}
     (his : _root_.SampledProofs.PublicUnits.indicesOf A.pub.header = .ok is)
     (hex : _root_.SampledProofs.PublicUnits.exactly #[(0, A.n)] is = true)
-    (he : e.reveal = revealRec A) (hv2 : Flock.Bridge.RowsV2 A.D.unroll) (hscope : ScopeOk A)
-    (href : ∃ d, RefOk A o d) : Claims.Sampling.KS sha512Msg (record A o e) :=
-  ksBy_record A o e hv2 hscope href Claims.Sampling.correctOk
-    ((Claims.Sampling.sessionOpensBy_correctOk sha512Msg (record A o e) (fun _ _ _ => A.roots)).2
-      (sessionOpens A o e hsu hn hpl hrd hpart his hex (record_commit A o e hv2) he (fun _ _ _ => A.roots)))
+    (he : e.reveal = revealRec A) (hv2 : Flock.Bridge.RowsV2 A.D.unroll) (hscope : ScopeSlotsOk A)
+    (href : ∃ d, RefOk A o d) : Claims.Sampling.KSBy sha512Msg (record A o e) Claims.Sampling.inputOk :=
+  ksBy_record A o e hv2 hscope href Claims.Sampling.inputOk
+    (sessionOpens A o e hsu hn hpl hrd hpart his hex (record_commit A o e hv2) he (fun _ _ _ => A.roots))
 
 end Verity.Sampled.Record

@@ -17,14 +17,15 @@ public import Proofs.Flock.Soundness.Discharge.ZkView.Decode
 # The draw law at one-stage v2's session
 
 * `drawLaw`: the record's draw meets `DrawLaw`. The draw coins are all first-stage (`stage2` is the session's rounds,
-  `coinsAt_congr`), so a set `B`'s weight is its miss indicator at the first-stage coins. Its mean is the probability that
-  v2's challenger draw (`SampledProofs.Draw.drawUnits`) on the draw coins' bytes misses `B`; a draw checks at most the
-  population's `n` units (`kd_le_of_lawOn`), so every position it holds is checked. The bytes of `DRAW_ROUNDS` uniform
-  coins are uniform (`pr_drawBytes`), so that probability is at most the law's `P_a(B)` on the registration's strata
-  (`Flock.Bridge.drawUnits_miss_le`), which is the statement's design's on its partition (`Flock.Bridge.pa_partOf`). A
+  `coinsAt_congr`), so a set `B`'s weight is its miss indicator at the first-stage coins. A draw draws at most the
+  population's `n` units (`drawn_length_le`), so every input slot is checked after it: at a `B` holding an input slot the
+  miss is impossible, and `P_a(B)` is `0` there (`all` on the input class). At a `B` of population slots, `P_a(B)` is the
+  law's on the registration's strata (`pa_partSlots`), and the miss is the probability that v2's challenger draw
+  (`SampledProofs.Draw.drawUnits`) on the draw coins' bytes misses `B`. The bytes of `DRAW_ROUNDS` uniform coins are
+  uniform (`pr_drawBytes`), so that probability is at most the law's `P_a(B)` (`Flock.Bridge.drawUnits_miss_le`). A
   failed draw draws every unit and misses no nonempty `B`.
-* `ScopeOk`, `refuses_of_scopeOk`: the record refuses what is out of scope (`Refuses`) where its statement is in scope,
-  and of that scope `Live` gives the program's order; `ScopeOk` is the rest.
+* `refuses_of_scopeSlotsOk`: the record refuses what is out of scope (`Refuses`) where its statement is in scope, and of
+  that scope `Live` gives the program's order; `ScopeSlotsOk` is the rest.
 * `pr_drawBytes`: the draw coins' bytes, as v2's challenger reads them (`drawBytes`), are a bijective image of the draw
   rounds' coins (`srcOf`: every coin's elements' 16 bytes, in order), so an event of them has its probability on uniform
   bytes.
@@ -193,15 +194,14 @@ theorem kd_le_of_lawOn {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (h : Fl
 variable (A : Live) (o : Own) (e : Ext)
 
 theorem record_checked_xOf (r : Fin ((record A o e).V.k (xOf A o)) → FlockDeploy.Coin) :
-    (record A o e).checked (xOf A o) r = drawn A (drawBytes (coinsAt r)) :=
+    (record A o e).checked (xOf A o) r = drawn A (drawBytes (coinsAt r)) ++ inputSlots A :=
   (record_checked A o e (xOf A o) r).trans (ite_eq_left rfl)
 
-theorem nPU_record : nPU (record A o e) (xOf A o) = A.n := by
-  have hlen : (partA A).blocks.length = A.n :=
-    Flock.Bridge.blocks_length_partOf A.P (Flock.Bridge.nsOf_sum A.hpop)
+theorem nPU_record :
+    nPU (record A o e) (xOf A o) = A.n + (InputSlot.inputsAt (Flock.Bridge.progOf A.Cc A.κ)).length := by
   unfold nPU
   rw [record_parse]
-  exact hlen
+  exact length_blocks_partSlots A
 
 theorem drawn_of_ok {src : ByteArray} {u : Array ℕ} {rd : ℕ}
     (h : _root_.SampledProofs.Draw.drawUnits A.law A.n src = .ok (u, rd)) : drawn A src = u.toList := by
@@ -210,6 +210,16 @@ theorem drawn_of_ok {src : ByteArray} {u : Array ℕ} {rd : ℕ}
 theorem drawn_of_error {src : ByteArray} {err : String}
     (h : _root_.SampledProofs.Draw.drawUnits A.law A.n src = .error err) : drawn A src = List.range A.n := by
   simp only [drawn, h]
+
+/-- **A draw draws at most the population.** -/
+theorem drawn_length_le (src : ByteArray) : (drawn A src).length ≤ A.n := by
+  cases hd : _root_.SampledProofs.Draw.drawUnits A.law A.n src with
+  | error err => rw [drawn_of_error A hd, List.length_range]
+  | ok res =>
+    obtain ⟨units, read⟩ := res
+    rw [drawn_of_ok A hd, Array.length_toList,
+      _root_.Properties.SampledProofs.SecurityProofs.drawUnits_size A.hlaw hd]
+    exact (kd_le_of_lawOn A.hlaw).trans_eq (Flock.Bridge.nsOf_sum A.hpop)
 
 /-- **The record's draw law.** -/
 theorem drawLaw : DrawLaw (record A o e) := by
@@ -223,12 +233,11 @@ theorem drawLaw : DrawLaw (record A o e) := by
   subst hxo
   rw [record_parse] at hx
   cases hx
-  change some (partA A) = some Pt at hP
+  change some (partSlots A) = some Pt at hP
   cases hP
   have hns := Flock.Bridge.nsOf_sum A.hpop
   have hnPU := nPU_record A o e
-  have hlen : (partA A).blocks.length = A.n := Flock.Bridge.blocks_length_partOf A.P hns
-  rw [hlen] at hB
+  rw [length_blocks_partSlots] at hB
   refine ⟨fun r => if (∀ v ∈ B, ∀ p : Fin (nPU (record A o e) (xOf A o)),
       ((record A o e).checked (xOf A o) r)[p.val]? ≠ some v) then 1 else 0,
     fun _ => ite_nonneg zero_le_one le_rfl, fun r => ?_, ?_⟩
@@ -241,10 +250,32 @@ theorem drawLaw : DrawLaw (record A o e) := by
     · exact Pr_le_one _
     · exact (Pr_congr fun _ => iff_false_intro hE).trans_le Pr_false.le
   · refine (Ex_ind _).trans_le ?_
-    have hPa : (stmtA A).design.Pa (partA A) B =
-        (_root_.Properties.SampledProofs.oneStageOf A.law).Pa (Flock.Bridge.nsOf A.desc A.qr) B :=
-      Flock.Bridge.pa_partOf A.P hns _ B hB
+    have hPa : (stmtSlots A).design.Pa (partSlots A) B = _ := pa_partSlots A B
     rw [hPa]
+    by_cases hin : ∃ v ∈ B, A.n ≤ v
+    · obtain ⟨v, hvB, hvn⟩ := hin
+      have hvl : v < A.n + (InputSlot.inputsAt (Flock.Bridge.progOf A.Cc A.κ)).length := Finset.mem_range.1 (hB hvB)
+      have hj : v - A.n < (InputSlot.inputsAt (Flock.Bridge.progOf A.Cc A.κ)).length := by omega
+      have hw : window A.n (InputSlot.inputsAt (Flock.Bridge.progOf A.Cc A.κ)).length B ≠ ∅ := by
+        unfold window
+        exact Finset.nonempty_iff_ne_empty.1
+          ⟨v - A.n, Finset.mem_image.2 ⟨v, Finset.mem_filter.2 ⟨hvB, hvn, hvl⟩, rfl⟩⟩
+      rw [if_neg hw, mul_zero]
+      refine (Pr_congr fun r => iff_false_intro fun hr => ?_).trans_le Pr_false.le
+      have hd := drawn_length_le A (drawBytes (coinsAt r))
+      refine hr v hvB ⟨(drawn A (drawBytes (coinsAt r))).length + (v - A.n), by rw [hnPU]; omega⟩ ?_
+      dsimp only
+      rw [record_checked_xOf, List.getElem?_append_right (by omega), Nat.add_sub_cancel_left, inputSlots,
+        List.getElem?_map, List.getElem?_range hj]
+      exact congrArg some (Nat.add_sub_cancel' hvn)
+    push_neg at hin
+    have hBn : B ⊆ Finset.range A.n := fun v hv => Finset.mem_range.2 (hin v hv)
+    have hw : window A.n (InputSlot.inputsAt (Flock.Bridge.progOf A.Cc A.κ)).length B = ∅ := by
+      simp only [window, Finset.image_eq_empty, Finset.filter_eq_empty_iff]
+      intro v hv h
+      have := hin v hv
+      omega
+    rw [if_pos hw, mul_one, EndToEndDraw.window_zero fun v hv => Finset.mem_range.1 (hBn hv)]
     rcases B.eq_empty_or_nonempty with rfl | ⟨v0, hv0⟩
     · rw [Flock.Bridge.pa_empty_of_lawOn A.hlaw]
       exact Pr_le_one _
@@ -254,44 +285,35 @@ theorem drawLaw : DrawLaw (record A o e) := by
       omega
     refine (Pr_mono fun r hr => ?_).trans ((pr_drawBytes hk fun b => ∃ units read,
       _root_.SampledProofs.Draw.drawUnits A.law A.n b = .ok (units, read) ∧ ∀ u ∈ B, u ∉ units).le.trans
-      (Flock.Bridge.drawUnits_miss_le A.hlaw hns B hB drawLen))
-    have hr' : ∀ v ∈ B, ∀ p : Fin A.n, (drawn A (drawBytes (coinsAt r)))[p.val]? ≠ some v := fun v hv p => by
-      have h := hr v hv ⟨p.val, by rw [hnPU]; exact p.isLt⟩
-      rwa [record_checked_xOf] at h
+      (Flock.Bridge.drawUnits_miss_le A.hlaw hns B hBn drawLen))
+    have hr' : ∀ v ∈ B, v ∉ drawn A (drawBytes (coinsAt r)) := fun v hv hmem => by
+      obtain ⟨p, hp⟩ := List.mem_iff_getElem?.1 hmem
+      have hpl := (List.getElem?_eq_some_iff.1 hp).1
+      have hd := drawn_length_le A (drawBytes (coinsAt r))
+      refine hr v hv ⟨p, by rw [hnPU]; omega⟩ ?_
+      dsimp only
+      rw [record_checked_xOf, List.getElem?_append_left hpl]
+      exact hp
     show ∃ units read, _root_.SampledProofs.Draw.drawUnits A.law A.n (drawBytes (coinsAt r)) = .ok (units, read) ∧
       ∀ u ∈ B, u ∉ units
-    have hv0n : v0 < A.n := Finset.mem_range.1 (hB hv0)
     cases hd : _root_.SampledProofs.Draw.drawUnits A.law A.n (drawBytes (coinsAt r)) with
     | error err =>
-      have h := hr' v0 hv0 ⟨v0, hv0n⟩
-      rw [drawn_of_error A hd] at h
-      exact absurd (List.getElem?_range hv0n) h
+      refine absurd ?_ (hr' v0 hv0)
+      rw [drawn_of_error A hd]
+      exact List.mem_range.2 (hin v0 hv0)
     | ok res =>
       obtain ⟨units, read⟩ := res
-      refine ⟨units, read, rfl, fun u hu hmem => ?_⟩
-      obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hmem
-      have hsz : units.size = A.kd := _root_.Properties.SampledProofs.SecurityProofs.drawUnits_size A.hlaw hd
-      have hkd : A.kd ≤ A.n := (kd_le_of_lawOn A.hlaw).trans_eq hns
-      have h := hr' _ hu ⟨i, by omega⟩
-      rw [drawn_of_ok A hd] at h
-      exact h (by simp [hi])
+      refine ⟨units, read, rfl, fun u hu hmem => hr' u hu ?_⟩
+      rw [drawn_of_ok A hd]
+      exact Array.mem_toList_iff.2 hmem
 
 /-! ## The scope -/
 
-/-- **What `Live` doesn't give of the record's scope** (`InScope`): V5's partition at the session's population
-partitions the lowered program into nonempty proof blocks whose committed values fit their public size classes, and the
-law's one-stage rule is well formed over the population's strata. The program's order is the lowering's own
-(`Flock.Bridge.topological_progOf`). -/
-def ScopeOk : Prop :=
-  (partA A).Partitions (stmtA A).prog ∧
-    (_root_.Properties.SampledProofs.oneStageOf A.law).WellFormed (Flock.Bridge.nsOf A.desc A.qr)
+theorem inScope_of_scopeSlotsOk (h : ScopeSlotsOk A) : InScope (partSlots A) (stmtSlots A) :=
+  ⟨Flock.Bridge.topological_progOf, h.1, designSlots_wellFormed A h.2⟩
 
-theorem inScope_of_scopeOk (h : ScopeOk A) : InScope (partA A) (stmtA A) :=
-  ⟨Flock.Bridge.topological_progOf, h.1,
-    Flock.Bridge.designOf_wellFormed A.P (Flock.Bridge.nsOf_sum A.hpop) h.2⟩
-
-/-- **The record's scope refusal**, where `ScopeOk` holds. -/
-theorem refuses_of_scopeOk (H : Msg → Msg) (h : ScopeOk A) : Refuses H (record A o e) :=
-  refuses_of_inScope A o e H (inScope_of_scopeOk A h)
+/-- **The record's scope refusal**, where `ScopeSlotsOk` holds. -/
+theorem refuses_of_scopeSlotsOk (H : Msg → Msg) (h : ScopeSlotsOk A) : Refuses H (record A o e) :=
+  refuses_of_inScope A o e H (inScope_of_scopeSlotsOk A h)
 
 end Verity.Sampled.Record
