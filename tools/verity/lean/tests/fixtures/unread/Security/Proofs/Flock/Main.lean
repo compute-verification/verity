@@ -1,6 +1,9 @@
 import Definitions.Core
+import Definitions.Dead
 
 namespace Core
+
+theorem usesDead : Dead.lonely = 7 := by decide
 
 theorem helper (n : Nat) : double n = 2 * n := by
   unfold double

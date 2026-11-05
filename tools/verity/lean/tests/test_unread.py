@@ -61,6 +61,26 @@ def test_the_longest_chain_and_the_imports_once_modules_go():
     assert U.contract(sorted(deep), deep, {"A", "B", "C"}) == {"K": ["X"], "X": []}
 
 
+def test_a_wholly_unread_module_is_deletable_alone_only_when_nothing_outside_those_mentions_it(tmp_path):
+    mods = ["K", "A", "B", "C", "D", "E", "F", "G"]
+    names = ["K.k", "A.a", "B.b", "C.c", "D.d", "E.e", "E.e.match_1", "F.Ns.x", "G.y", "G.z"]
+    idx = {n: i for i, n in enumerate(names)}
+    uses = {"K.k": ["A.a", "E.e.match_1"], "A.a": ["B.b"], "C.c": ["D.d"]}
+    homes = {"G.z": "K"}
+    c = [{"n": n, "m": mods.index(homes.get(n, n.split(".")[0])), "k": "def", "f": [], "u": [idx[u] for u in uses.get(n, ())]}
+         for n in names]
+    facts = facts_of(tmp_path, mods, c)
+    mod_of = [facts.modules[facts.module[i]]["module"] for i in range(len(names))]
+    shared = [bool(U.SHARED.search(x)) for x in names]
+    opens = {"K": U.opened("open scoped Ns Std in\nopen G hiding y\n  open Q.R -- open F\nopen H (s)\n")}
+    assert opens["K"] == ["Ns", "Std", "G", "Q.R", "H"]
+    alone, mentioned_by = U.deletable(facts, mod_of, shared, set(mods) - {"K"}, opens)
+    # K mentions A, A mentions B; C mentions D but nothing outside mentions C; a matcher of E's is shared; K opens a
+    # namespace only F holds, and one that K holds too
+    assert alone == {"C", "D", "E", "G"}
+    assert dict(mentioned_by) == {"A": {"K"}, "F": {"K"}}
+
+
 #: what the fixture's closure finds: each module's status, and each read module's unread declarations
 STATUS = {"Code": "read", "Definitions": "read", "Definitions.Attr": "attributes", "Definitions.Checks": "read",
           "Definitions.Core": "read",
@@ -70,7 +90,11 @@ STATUS = {"Code": "read", "Definitions": "read", "Definitions.Attr": "attributes
 UNREAD = {"Definitions.Core": {"Core.pick": "def", "Core.unusedHelper": "def", "Core.Width": "abbrev",
                                "Core.Pair": "structure", "Core.instInhabitedBox": "instance", "Core.unusedLemma": "theorem"},
           "Definitions.Dead": {"Dead.lonely": "def", "Dead.lonely_pos": "theorem"},
+          "Proofs.Flock.Main": {"Core.usesDead": "theorem"},
           "Proofs.Flock.Spare": {"Spare.quadruple": "theorem"}}
+#: each wholly unread module: whether it is deletable alone, and the modules that stay and mention it
+GONE = {"Definitions.Dead": (False, ["Proofs.Flock.Main"]), "Definitions.Gone": (True, []),
+        "Proofs.Flock.Spare": (False, ["Proofs.Flock"])}
 
 
 def check_report(rep: dict) -> None:
@@ -94,8 +118,12 @@ def check_report(rep: dict) -> None:
     assert [m for m, _, _ in flock["before_by_modules"]["chain"]] == [
         "Definitions.Core", "Proofs.Flock.Main", "Proofs.Flock.Spare", "Proofs.Flock"]
     assert [m for m, _, _ in flock["after_by_modules"]["chain"]] == ["Definitions.Core", "Proofs.Flock.Main", "Proofs.Flock"]
+    assert [m for m, _, _ in flock["after_alone_by_modules"]["chain"]] == [
+        "Definitions.Core", "Proofs.Flock.Main", "Proofs.Flock.Spare", "Proofs.Flock"]
+    assert {m: (r["deletable_alone"], r["mentioned_by"]) for m, r in mods.items() if "deletable_alone" in r} == GONE
     t = rep["totals"]
     assert t["wholly_unread_modules"] == 3 and t["unbuilt_modules"] == 1
+    assert (t["alone_modules"], t["alone_lines"]) == (1, mods["Definitions.Gone"]["lines"])
     assert t["unread"] == sum(len(v) for v in UNREAD.values())
 
 

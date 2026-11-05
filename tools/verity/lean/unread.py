@@ -37,10 +37,14 @@ extends: `@[ext]`'s lemmas); every other constant (`match_`, `proof_`, `eq_`, `_
 closure reaches it or any constant of it other than a matcher or an abstracted proof, which Lean shares between the
 declarations of a module and makes again for a reader whose owner is gone. A module is wholly unread when it declares
 something and nothing of it is read or seeded, and it gives no instance or `simp` attribute to another module's
-constant; a module that declares nothing (an aggregator) goes with the modules it imports when all of them go.
+constant; a module that declares nothing (an aggregator) goes with the modules it imports when all of them go. What
+mentions a wholly unread module's constants is unread too, but may sit in a module that stays: a wholly unread module is
+deletable alone when nothing outside the modules deletable alone mentions it (`deletable`, which also reads the files'
+`open` lines), and the rest go only with the unread declarations that mention them (`mentioned_by`).
 
 **The chain.** The longest import chain among the tree's modules, in modules and in lines (each module's file), before
-and after the wholly unread modules go, each importer then importing what the deleted module imported.
+and after the wholly unread modules go, and after only those deletable alone go, each importer then importing what the
+deleted module imported.
 
 It writes ``DIR/unread.json`` (every module's counts and unread declarations, by area and by owner, the chains, the
 seeds) and ``DIR/unread.md`` (the summary). The owners of an area are the `owner` handles the locks give the guarantees
@@ -104,6 +108,10 @@ CITE_MAX_BYTES = 4 << 20
 DOTTED = re.compile(r"[A-Za-z_][A-Za-z0-9_'!?]*(?:\.[A-Za-z0-9_'!?]+)+")
 #: a path to a Lean file, as a file outside Lean would name a module
 LEAN_PATH = re.compile(r"[A-Za-z0-9_'!?./-]+\.lean\b")
+#: what follows an `open` command's keyword, to the end of its line or a parenthesis
+OPEN = re.compile(r"^[ \t]*open[ \t]+(?:scoped[ \t]+)?([^\n(]*)", re.M)
+#: a private name's prefix, `_private.<module>.0.`, before the name it was declared with
+PRIVATE = re.compile(r"^_private\..+?\.0\.")
 #: the constants Lean shares between a module's declarations: a matcher, an abstracted proof
 SHARED = re.compile(r"\.(?:match_\d+|_?proof_\d+)$")
 SKIP_DIRS = {".lake", ".git", ".venv", "node_modules", "__pycache__", "target", ".mypy_cache", ".pytest_cache"}
@@ -401,6 +409,62 @@ def contract(nodes: list[str], imports: dict[str, list[str]], gone: set[str]) ->
             for m in nodes if m not in gone}
 
 
+def opened(text: str) -> list[str]:
+    """The namespaces a Lean file's `open` commands name (`open scoped` too), up to `in`, `hiding`, `renaming` or a
+    parenthesis."""
+    out = []
+    for rest in OPEN.findall(text):
+        for word in rest.split("--", 1)[0].split():
+            if word in ("in", "hiding", "renaming"):
+                break
+            out.append(word)
+    return out
+
+
+def deletable(facts: Facts, mod_of: list[str], shared: list[bool], gone: set[str],
+              opens: dict[str, list[str]]) -> tuple[set[str], dict[str, set[str]]]:
+    """The modules of ``gone`` deletable alone: the largest part of it whose constants nothing outside it mentions (a
+    constant's type or value, a matcher or proof Lean shares aside; an instance or `simp` attribute another module gives;
+    an `open` in another module, ``opens``, of a namespace only modules of ``gone`` hold, a name matching a namespace
+    or its end). And each module of ``gone`` with the modules outside ``gone`` that mention it."""
+    mentions: dict[str, set[str]] = defaultdict(set)
+    for i, used in enumerate(facts.used):
+        a = mod_of[i]
+        for j in used:
+            if mod_of[j] != a and mod_of[j] in gone and not shared[j]:
+                mentions[a].add(mod_of[j])
+    for m in facts.modules:
+        for c in m.get("foreign") or ():
+            j = facts.index.get(c)
+            if j is not None and mod_of[j] in gone and mod_of[j] != m["module"]:
+                mentions[m["module"]].add(mod_of[j])
+    words = {w for ws in opens.values() for w in ws}
+    ends = {w.rsplit(".", 1)[-1] for w in words}
+    holders: dict[str, set[str]] = defaultdict(set)
+    for i, name in enumerate(facts.name):
+        parts = PRIVATE.sub("", name).split(".")[:-1]
+        for k in range(len(parts)):
+            if parts[k] in ends:
+                holders[".".join(parts[:k + 1])].add(mod_of[i])
+    by_end: dict[str, list[str]] = defaultdict(list)
+    for ns in holders:
+        by_end[ns.rsplit(".", 1)[-1]].append(ns)
+    for a, ws in opens.items():
+        for w in ws:
+            held = set().union(*(holders[ns] for ns in by_end.get(w.rsplit(".", 1)[-1], ()) if ns == w or ns.endswith("." + w)))
+            if held and held <= gone:
+                mentions[a] |= held - {a}
+    alone = set(gone)
+    while bad := {b for a, bs in mentions.items() if a not in alone for b in bs if b in alone}:
+        alone -= bad
+    mentioned_by: dict[str, set[str]] = defaultdict(set)
+    for a, bs in mentions.items():
+        if a not in gone:
+            for b in bs:
+                mentioned_by[b].add(a)
+    return alone, mentioned_by
+
+
 def analyse(tree: Tree, facts: Facts) -> dict:
     owner = owners(facts)
     n = len(facts.name)
@@ -497,6 +561,8 @@ def analyse(tree: Tree, facts: Facts) -> dict:
         else:
             status[m] = "aggregator"
     gone = {m for m, s in status.items() if s in ("unread", "unread aggregator")}
+    opens = {m: opened((tree.root / f).read_text(errors="replace")) for m, f in tree.module_file.items() if tree.analysis(m)}
+    alone, mentioned_by = deletable(facts, mod_of, shared, gone, opens)
 
     guarantee_owner: dict[str, str] = {}
     for lock in tree.locks.values():
@@ -520,12 +586,15 @@ def analyse(tree: Tree, facts: Facts) -> dict:
                "kept_only_by": kept_only, "foreign_attributes": (found.get(m) or {}).get("foreign", []),
                "unread_declarations": [[facts.name[i], kind_of(facts, i), span(i)] for i in sorted(unread, key=lambda i: facts.range[i])],
                "unread_cited_in_docs": sorted(facts.name[i] for i in unread if facts.name[i] in cited_docs)}
+        if m in gone:
+            rec["deletable_alone"] = m in alone
+            rec["mentioned_by"] = sorted(mentioned_by.get(m, ()))
         modules[m] = rec
         a = areas.setdefault(rec["area"], {"package": rec["package"], "modules": 0, "lines": 0, "declarations": 0,
                                            "unread": 0, "unread_lines": 0, "unread_kinds": Counter(),
-                                           "wholly_unread_modules": 0, "wholly_unread_lines": 0, "unbuilt_modules": 0,
-                                           "unbuilt_lines": 0, "kept_only_by": Counter(), "unread_cited_in_docs": 0,
-                                           "owners": Counter()})
+                                           "wholly_unread_modules": 0, "wholly_unread_lines": 0, "alone_modules": 0,
+                                           "alone_lines": 0, "unbuilt_modules": 0, "unbuilt_lines": 0,
+                                           "kept_only_by": Counter(), "unread_cited_in_docs": 0, "owners": Counter()})
         for k in ("lines", "declarations", "unread", "unread_lines"):
             a[k] += rec[k]
         a["modules"] += 1
@@ -535,6 +604,9 @@ def analyse(tree: Tree, facts: Facts) -> dict:
         if m in gone:
             a["wholly_unread_modules"] += 1
             a["wholly_unread_lines"] += lines[m]
+        if m in alone:
+            a["alone_modules"] += 1
+            a["alone_lines"] += lines[m]
         if status[m] == "unbuilt":
             a["unbuilt_modules"] += 1
             a["unbuilt_lines"] += lines[m]
@@ -548,7 +620,7 @@ def analyse(tree: Tree, facts: Facts) -> dict:
         a["owners"] = dict(a["owners"].most_common())
         if a["package"] in ANALYSIS:
             for k in ("modules", "lines", "declarations", "unread", "unread_lines", "wholly_unread_modules",
-                      "wholly_unread_lines", "unbuilt_modules", "unbuilt_lines"):
+                      "wholly_unread_lines", "alone_modules", "alone_lines", "unbuilt_modules", "unbuilt_lines"):
                 totals[k] += a[k]
             kinds_total.update(a["unread_kinds"])
             kept_total.update(a["kept_only_by"])
@@ -558,6 +630,8 @@ def analyse(tree: Tree, facts: Facts) -> dict:
     nodes = sorted(m for m in tree.module_file if status[m] != "unbuilt")
     after = contract(nodes, imports, gone)
     kept = [m for m in nodes if m not in gone]
+    after_alone = contract(nodes, imports, alone)
+    kept_alone = [m for m in nodes if m not in alone]
     read_lines = {m: max(0, lines[m] - modules[m]["unread_lines"]) for m in nodes}
 
     def chain(weight, graph, ms, into=None):
@@ -586,6 +660,8 @@ def analyse(tree: Tree, facts: Facts) -> dict:
             "after_by_modules": chain(one, after, kept, into),
             "after_by_lines": chain(lines, after, kept, into),
             "after_by_read_lines": chain(read_lines, after, kept, into),
+            "after_alone_by_modules": chain(one, after_alone, kept_alone, into),
+            "after_alone_by_lines": chain(lines, after_alone, kept_alone, into),
         }
     return {"schema": "lean-unread/v1", "packages": tree.packages, "analysis": list(ANALYSIS),
             "facts": {"modules": len(facts.modules), "found": sum(1 for m in facts.modules if m.get("found")),
@@ -607,26 +683,32 @@ def markdown(rep: dict, rev: str | None) -> str:
            f"{fmt(t.get('lines', 0))} lines, {fmt(t.get('declarations', 0))} declarations. Unread: "
            f"{fmt(t.get('unread', 0))} declarations ({fmt(t.get('unread_lines', 0))} lines); "
            f"{fmt(t.get('wholly_unread_modules', 0))} modules wholly unread ({fmt(t.get('wholly_unread_lines', 0))} lines), "
-           f"deletable whole. {fmt(t.get('unbuilt_modules', 0))} modules ({fmt(t.get('unbuilt_lines', 0))} lines) have no "
+           f"{fmt(t.get('alone_modules', 0))} of them ({fmt(t.get('alone_lines', 0))} lines) deletable alone: nothing outside "
+           f"them mentions them. Each of the rest goes only with the unread declarations of other modules that mention it "
+           f"(`mentioned_by`). {fmt(t.get('unbuilt_modules', 0))} modules ({fmt(t.get('unbuilt_lines', 0))} lines) have no "
            f"`.olean` (no package root imports them). {fmt(rep['facts']['constants'])} constants read from "
            f"{fmt(rep['facts']['found'])} of {fmt(rep['facts']['modules'])} modules' `.olean` files.", "",
            "Read only because a cautious seed keeps them (declarations): " +
            ", ".join(f"{CAUTIOUS_TEXT[c]} {fmt(v)}" for c, v in t.get("kept_only_by", {}).items()) + ".", "",
-           "| area | modules | lines | declarations | unread | unread lines | wholly unread modules | their lines | owners (guarantees, assumptions) |",
-           "|---|---:|---:|---:|---:|---:|---:|---:|---|"]
+           "| area | modules | lines | declarations | unread | unread lines | wholly unread modules | their lines | "
+           "deletable alone (lines) | owners (guarantees, assumptions) |",
+           "|---|---:|---:|---:|---:|---:|---:|---:|---:|---|"]
     rows = sorted(((k, a) for k, a in rep["areas"].items() if a["package"] in rep["analysis"]),
                   key=lambda ka: (-ka[1]["unread_lines"] - ka[1]["wholly_unread_lines"], ka[0]))
     for k, a in rows:
         own = ", ".join(f"{o} {c}" for o, c in list(a["owners"].items())[:3])
         out.append(f"| {k} | {fmt(a['modules'])} | {fmt(a['lines'])} | {fmt(a['declarations'])} | {fmt(a['unread'])} | "
-                   f"{fmt(a['unread_lines'])} | {fmt(a['wholly_unread_modules'])} | {fmt(a['wholly_unread_lines'])} | {own} |")
+                   f"{fmt(a['unread_lines'])} | {fmt(a['wholly_unread_modules'])} | {fmt(a['wholly_unread_lines'])} | "
+                   f"{fmt(a['alone_modules'])} ({fmt(a['alone_lines'])}) | {own} |")
     out += ["", "Unread declarations by kind: " +
             ", ".join(f"{k} {fmt(v)}" for k, v in t.get("unread_kinds", {}).items()) + ".", ""]
     for name, c in rep["chains"].items():
         out += [f"## The longest import chain{'' if name == 'overall' else f' into {name}'}", "",
                 "| | modules | lines |", "|---|---:|---:|"]
         for label, key in (("before, longest in modules", "before_by_modules"), ("before, longest in lines", "before_by_lines"),
-                           ("after, longest in modules", "after_by_modules"), ("after, longest in lines", "after_by_lines")):
+                           ("after, longest in modules", "after_by_modules"), ("after, longest in lines", "after_by_lines"),
+                           ("after only those deletable alone, in modules", "after_alone_by_modules"),
+                           ("after only those deletable alone, in lines", "after_alone_by_lines")):
             ch = c[key]
             out.append(f"| {label} | {fmt(ch['modules'])} | {fmt(ch['lines'])} |" if ch else f"| {label} | gone | |")
         if ch := c["after_by_read_lines"]:
@@ -648,13 +730,16 @@ def markdown(rep: dict, rev: str | None) -> str:
             "coercion instances, which elaboration unfolds where it inserts the coercion, every declaration of a module "
             "a lock lists and each one a file outside Lean names; `kept_only_by` counts what each alone keeps.",
             "- An `example`, `#guard` or `#eval` leaves nothing in the environment: a declaration only they use is "
-            "reported unread, and deleting it means deleting them.",
+            "reported unread, and a module only they use deletable alone; deleting it means deleting them.",
             "- A module of checks (theorems over concrete values or vectors, which the build checks) is read by nothing "
             "by design: it is kept only when a file outside Lean names it, and a file that builds its path in pieces "
             "(`LEAN / \"Prims\" / \"Vectors.lean\"`) does not name it.",
             "- A module with no read declaration that gives an instance or `simp` attribute to another module's constant is "
             "kept (`attributes`), and a module no package root imports is `unbuilt`, reported but not read.",
-            "- Deleting a wholly unread module that a kept module imports means that importer imports what it imported.", ""]
+            "- Deleting a wholly unread module that a kept module imports means that importer imports what it imported, "
+            "and an `open` of a namespace only deleted modules held goes too. `.olean` files don't record an `open`: "
+            "the files' `open` lines are read, a name matching a namespace or its end and no namespace outside the tree "
+            "known, so a module can count as mentioned that isn't, and deletable alone is a lower bound.", ""]
     return "\n".join(out)
 
 
