@@ -630,7 +630,7 @@ def test_remote_v1_ties_pearl_plus_run_to_the_policys_record():
     """Remote v1's `run` tie, as `Core.Remote.V1`'s guards state it: a Pearl+ run naming the digest of the policy's
     record holds, one naming another record's is a stray naming both, and a run whose commitment doesn't decode (an
     extra key, a short digest, none) leaves Pearl+ to refuse it."""
-    assert R.REMOTE_V1.ties == (R.RUN,) and [s for s, _ in R.RUN.names] == [R.INFERENCE_ONLY.id, R.PEARL_PLUS.id]
+    assert R.REMOTE_V1.ties == (R.RUN, R.WINDOW) and [s for s, _ in R.RUN.names] == [R.INFERENCE_ONLY.id, R.PEARL_PLUS.id]
 
     def record(n: int) -> bytes:
         return canonical({"format": "verity/registration/v2", "n": n, "registered": []}).encode()
@@ -639,7 +639,8 @@ def test_remote_v1_ties_pearl_plus_run_to_the_policys_record():
         return R.policy_record(record(n), b"")[0]
 
     def run(on: bytes, **extra) -> bytes:
-        return canonical({"manifests": [{}], "record": on.hex(), **extra}).encode()
+        window = {"dropped": [], "record": json.loads(record(9)), "rounds": None}
+        return canonical({"manifests": [{}], "record": on.hex(), "window": window, **extra}).encode()
 
     def strays(policy: int, commitment: bytes) -> str | None:
         return R.RUN.strays([(R.INFERENCE_ONLY.id, "{}", record(policy), b""),
@@ -650,8 +651,41 @@ def test_remote_v1_ties_pearl_plus_run_to_the_policys_record():
     assert strays(1, run(digest(0))) == (f"record: {R.INFERENCE_ONLY.id} committed {digest(1).hex()}, "
                                          f"{R.PEARL_PLUS.id} committed {digest(0).hex()}")
     for undecoded in (b"", run(digest(0), x=1), run(digest(0)[:32]),
-                      canonical({"manifests": [], "record": digest(0).hex()}).encode()):
+                      canonical({"manifests": [], "record": digest(0).hex()}).encode(),
+                      canonical({"manifests": [{}], "record": digest(0).hex()}).encode()):
         assert not isinstance(R.run_record(undecoded, b""), list) and strays(1, undecoded) is None, undecoded
+
+
+def test_remote_v1_ties_pearl_plus_window_record_to_the_one_the_policys_record_is_chained_after():
+    """Remote v1's `window` tie, as `Core.Remote.V1`'s guards state it: the policy's record chained right after the
+    window record W Pearl+'s check holds the passes to holds; one chained after another record, or after none, is a
+    stray; and a window Pearl+'s decoder refuses (other keys, W not an object, rounds or dropped not lists of
+    nonnegative integers) leaves Pearl+ to refuse it."""
+    assert [s for s, _ in R.WINDOW.names] == [R.INFERENCE_ONLY.id, R.PEARL_PLUS.id]
+
+    def record(n: int, **extra) -> dict:
+        return {"format": "verity/registration/v2", "n": n, "registered": [], **extra}
+
+    def digest(r: dict) -> bytes:
+        return R.policy_record(canonical(r).encode(), b"")[0]
+
+    def run(w: object, **window) -> bytes:
+        return canonical({"manifests": [{}], "record": "00" * 64,
+                          "window": {"dropped": [], "record": w, "rounds": None, **window}}).encode()
+
+    def strays(policy: dict, commitment: bytes) -> str | None:
+        return R.WINDOW.strays([(R.INFERENCE_ONLY.id, "{}", canonical(policy).encode(), b""),
+                                (R.PEARL_PLUS.id, "{}", commitment, b"")])
+
+    w = record(9)
+    assert R.run_window(run(w), b"") == [digest(w)] == [bytes.fromhex(R.REG.digest(w))]
+    assert R.policy_previous(canonical(record(0, previous=digest(w).hex())).encode(), b"") == [digest(w)]
+    assert strays(record(0, previous=digest(w).hex()), run(w)) is None
+    assert strays(record(0, previous=digest(record(8)).hex()), run(w)) == (
+        f"window: {R.INFERENCE_ONLY.id} committed {digest(record(8)).hex()}, {R.PEARL_PLUS.id} committed {digest(w).hex()}")
+    assert strays(record(0), run(w)) == f"window: {R.INFERENCE_ONLY.id} committed , {R.PEARL_PLUS.id} committed {digest(w).hex()}"
+    for undecoded in (run([]), run(w, rounds=[-1]), run(w, rounds=[True]), run(w, dropped=None), run(w, x=1)):
+        assert R.run_window(undecoded, b"") is None and strays(record(0), undecoded) is None, undecoded
 
 
 def test_sampled_proofs_refuses_one_stage_v1(remote_server):
