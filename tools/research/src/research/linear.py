@@ -646,7 +646,7 @@ class Linear:
         return to["name"]
 
     def _issue(self, issue: str, fields: str) -> dict:
-        """The issue an identifier such as `INF-12` names, with `fields`; `NoIssue` when Linear has none."""
+        """The issue a team key and number identify, with `fields`; `NoIssue` when Linear has none."""
         try:
             return self.gql(f"query($id: String!) {{ issue(id: $id) {{ {fields} }} }}", {"id": issue})["issue"]
         except LinearError as e:
@@ -659,7 +659,7 @@ class Linear:
         return self._issue(issue, "id")["id"]
 
     def issue_labels(self, issue: str) -> list[str]:
-        """The names of the issue's labels (an identifier such as `INF-12`), sorted; `NoIssue` when Linear has none."""
+        """The names of the labels of the issue a team key and number identify, sorted; `NoIssue` when Linear has none."""
         return sorted(x["name"] for x in self._issue(issue, "labels { nodes { name } }")["labels"]["nodes"])
 
     def link_pr(self, issue_id: str, url: str) -> bool:
