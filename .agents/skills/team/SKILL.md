@@ -50,8 +50,11 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
 - The worker that made a branch opens its PR, `research queue open --head BRANCH --sha SHA --title T --body-file F
   --issue KEY --by LANE` with `Lane LANE` in the body; `--issue` is required, its Linear issue (written as `Refs KEY` and
   linked through the Linear app, since Linear's GitHub integration is off here; a failed link prints its retry, `research
-  queue link N --issue KEY`), or `none:REASON`. It marks it ready at its head, `research queue ready N --mark --by LANE`. A
-  push makes a new head, which needs a new mark and a new review. `research queue status` says what each PR waits for and
+  queue link N --issue KEY`), or `none:REASON`. The issue carries the label of the goal it serves (its id on the Goals
+  page), which `open` writes as `Goal <id>`, refusing an issue whose labels name no live goal. It marks it ready at its
+  head, `research queue ready N --mark --by LANE`, which refuses a body with neither a `Goal <id>` line naming a live goal
+  nor `Issue: none: REASON` (fix it with `research queue edit N --body-file F`). A push makes a new head, which needs a
+  new mark and a new review. `research queue status` says what each PR waits for and
   lists the PRs naming no issue. A `hold` label, a conflict on `next` or a Markdown file over its cap keeps a PR out, and a
   PR from a fork, or by an author outside the organization but for the team's Apps and Daniel, is refused at its mark and at
   admission.
