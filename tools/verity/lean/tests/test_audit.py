@@ -2649,6 +2649,11 @@ def test_a_guarantee_takes_named_assumptions_other_guarantees_and_plain_ranges_i
     assert inline_codes(pol, owned) == []
     _, inline, offenders = A.inline_failures(pol, f)
     assert inline == {} and offenders == {}
+    hard = {"P.t": f["pins"]["P.t"] | {"inline": [premise("P.Hard n", "P.Hard")]}}
+    assert A.inline_failures(pol, facts(pins=f["pins"] | hard))[2] == {"P.t": ["P.Hard n"]}
+    hard["P.t"]["reads"] = [{"name": "P.Hard", "module": "P.Assumptions"}]
+    assert A.inline_failures(pol, facts(pins=f["pins"] | hard))[2] == {}, \
+        "an assumptions module's Prop the statement takes inside a definition, which its `reads` record holds"
 
 
 def test_an_unnamed_inline_hypothesis_fails_with_the_fix():
@@ -4150,8 +4155,11 @@ def test_a_property_on_a_conjecture_lists_it_and_one_on_a_falsified_conjecture_c
     bad = pol("open") | {"assumptions": {}}
     bad["shape"]["conjectures"]["P.Conj"] = {"status": "open"}
     out = A.shape(bad, facts)
-    assert ["not a named assumption" in out[0], "gives no reason" in out[1], "names no falsification test" in out[2]] \
-        == [True] * 3, out
+    assert ["neither a premise the lock lists" in out[0], "gives no reason" in out[1],
+            "names no falsification test" in out[2]] == [True] * 3, out
+    refuted = {"pins": facts["pins"] | {"P.refuted": {"reads": [{"name": "P.Conj", "module": "P.Assumptions"}]}}}
+    assert [x.code for x in A.shape(bad, refuted)][:1] == ["shape.conjecture-reason"], \
+        "a conjecture a guarantee only reads (one that refutes it) is named by its `reads` record"
     bad["shape"]["conjectures"]["P.Conj"] = {"status": "maybe", "why": "x"}
     assert "has no status" in A.shape(bad, facts)[1]
 

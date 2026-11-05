@@ -1477,16 +1477,12 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     for a, gs in taken.items():
         for g in gs:
             rests.setdefault(g, set()).add(a)
-    home, held = policy.get("assumptions_module"), (policy.get("shape") or {}).get("premises")
-    held = [m for m in held if isinstance(m, str)] if isinstance(held, list) else []
     for name in sorted(recorded):
         r = kept[name]
         takes = rests.get(name, set()) | set(r["assumptions"])
-        seen = {e["name"]: e.get("module") or "" for e in facts["pins"][name].get("reads") or [] if e.get("name")}
         kind = {a: kinds.get(a) or ("assumptions" if a in records else "domain" if a in domains else "open") for a in takes}
         now = {k: sorted(a for a in takes if kind[a] == k) for k in ("assumptions", "domain", "open")}
-        now["reads"] = sorted(d for d, m in seen.items() if d not in takes and (
-            m == home or "Assumptions" in m.split(".") or under(held, m)))
+        now["reads"] = sorted(read_props(facts["pins"][name], policy) - takes)
         kept[name] = {k: v for k, v in r.items() if k != "type_hash"} | {"premises": now, "type_hash": r["type_hash"]}
         if name in compared and (was := policy["guarantees"][name].get("premises")) != now:
             was = was if isinstance(was, dict) else {}
@@ -1795,6 +1791,16 @@ def listed_premises(policy: dict, domain: bool = True) -> dict:
     hypothesis as it stands: its honest one concludes it (`honest_cover`)."""
     a, o, d = policy.get("assumptions"), policy.get("open"), policy.get("domain") if domain else None
     return (d if isinstance(d, dict) else {}) | (o if isinstance(o, dict) else {}) | (a if isinstance(a, dict) else {})
+
+
+def read_props(pin: dict, policy: dict) -> set[str]:
+    """The `Prop`s of `assumptions_module`, of an `Assumptions` module or of one under `shape.premises` that a statement
+    reads (``pin``'s `reads`): what its `premises.reads` record holds, less what it takes. Each is recorded with its
+    digest there, so a statement may take one inside a definition, and a conjecture may be one a guarantee refutes."""
+    home, held = policy.get("assumptions_module"), (policy.get("shape") or {}).get("premises")
+    held = [m for m in held if isinstance(m, str)] if isinstance(held, list) else []
+    return {e["name"] for e in pin.get("reads") or [] if e.get("name") and (
+        (m := e.get("module") or "") == home or "Assumptions" in m.split(".") or under(held, m))}
 
 
 def stated_by(policy: dict, facts: dict) -> dict[str, str]:
@@ -2258,7 +2264,7 @@ def inline_failures(policy: dict, facts: dict) -> tuple[list[Failure], dict, dic
             continue
         unfolds = {k: v for p in stated_premises(pin) for k, v in (p.get("unfolds") or {}).items()}
         premised = {p["head"] for p in stated_premises(pin) if p.get("head") and (
-            "Assumptions" in (m := p.get("module") or "").split(".") or m in own)}
+            "Assumptions" in (m := p.get("module") or "").split(".") or m in own)} | read_props(pin, policy)
 
         def named(h: str | None) -> bool:
             return bool(h) and (h in assumed or h in premised or bool((u := unfolding(h, unfolds, assumed)) and not u[1]))
@@ -2643,8 +2649,9 @@ def shape(policy: dict, facts: dict) -> list[str]:
     spec module that holds statements (`shape.statements`, module prefixes; by default a module with a `Guarantees`
     component) is one that a listed guarantee states (a named assumption aside), or is under `shape.frozen` until
     one does. Each reason starts with its category (`CATEGORIES`). A named conjecture under `shape.conjectures`
-    ({name: {status, test, why}}, a named assumption of the package) is a premise too, of a property that is then
-    conditional and lists it under its entry's `rests_on`; one marked falsified refuses every property resting on it.
+    ({name: {status, test, why}}, a premise the lock lists or an assumptions module's `Prop` a guarantee reads,
+    `read_props`) is a premise too, of a property that is then conditional and lists it under its entry's `rests_on`;
+    one marked falsified refuses every property resting on it.
     An open conjecture names its falsification test, which a suite runs, so a counterexample fails `check` until it is
     marked falsified. Every package is checked: one without a `shape` section has no entries, so each of its
     guarantees is frozen or fails. A claim's witness (`claims.witnesses`) is held to `claim_failures` instead. The landing
@@ -2657,11 +2664,14 @@ def shape(policy: dict, facts: dict) -> list[str]:
         fails.append(Failure("shape.events", None, f"shape: shape.events is {json.dumps(events)}; it lists constants, each a "
                              f"probability whose event argument holds a property's acceptance"))
         events = []
+    known = set(listed_premises(policy))
+    if conjectures:
+        known |= {d for pin in (facts.get("pins") or {}).values() for d in read_props(pin, policy)}
     for name, c in sorted(conjectures.items()):
         c = c if isinstance(c, dict) else {}
-        if name not in listed_premises(policy):
-            fails.append(Failure("shape.conjecture-unnamed", name, f"shape: shape.conjectures lists {name}, which is not a "
-                                 f"named assumption of this package"))
+        if name not in known:
+            fails.append(Failure("shape.conjecture-unnamed", name, f"shape: shape.conjectures lists {name}, which is "
+                                 f"neither a premise the lock lists nor an assumptions module's `Prop` a guarantee reads"))
         if c.get("status") not in CONJECTURE:
             fails.append(Failure("shape.conjecture-status", name, f"shape: shape.conjectures[{name}] has no status "
                                  f"({', '.join(CONJECTURE)})"))
