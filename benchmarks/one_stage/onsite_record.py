@@ -10,9 +10,9 @@ node, a datacenter and the world. It reads only the run's public $OUT and decide
 
 **Serving** (``serving``, `SERVING`): the run's S (served_verdicts.sh's WINDOW_STEPS) and MAX_TOKENS as its caller
 states them, which no file of OUT does, else ``missing`` (`NO_SERVING`); they label every figure of the record and its
-line. ``--beside`` sets runs' records beside each other (`BESIDE`, `BESIDE_IS`): each run's figure of record, tight K,
-ℓ_a and period cells, labelled with its run, tree and serving settings and what they are conditional on, and none
-carried to another's settings; a record stating no serving settings is refused (`UNLABELLED`).
+line. ``--beside`` sets runs' records beside each other (`BESIDE`, `BESIDE_IS`): each run's figure of record, what is
+open under it, ℓ_a and period cells, labelled with its run, tree and serving settings and what they are conditional
+on, and none carried to another's settings; a record stating no serving settings is refused (`UNLABELLED`).
 
 **Verdicts** (`VERDICTS`), each ``{protocol, verdict, from}`` with the answer's ``reason`` or ``refusal``, or, where the
 run wrote no answer, ``missing`` and ``why``:
@@ -26,19 +26,31 @@ run wrote no answer, ``missing`` and ``why``:
 * onsite: the Lean composition of remote's three subprotocols and the network certifier over one registration, the
   composite whose product is `ONSITE`, missing where the run has none.
 
-``of_record`` holds when every one of them accepted, the condition for the demo's run of record; ``placement`` is the
-network certifier's answer's, which host ran each party.
+While `certifier-key` is open (`PREMISES`, `KEY_OPEN`), an accepted network certifier's verdict is ``not
+established``, its Lean answer's accept beside it (``answer``), and its bound conditional on it by name. Sampled proofs'
+``credit`` (`CREDIT`) names the drawn members it credits, those whose --registered file the audit completed at the
+window's committed roots and whose Lean verdict accepted it reporting exactly its reads (the audit's published record,
+`AUDIT`), and lists every other drawn member as not credited, by name, with why; ``missing`` where the record states no
+completion. ``of_record`` holds when every verdict accepted and every drawn member is credited, the condition for the
+demo's run of record, naming the verdicts not established and the members not credited; ``placement`` is the network
+certifier's answer's, which host ran each party.
 
 **Coins** (``coins``, `COINS`): sampled proofs' coins as the run's COINS lines in verdicts.txt name them (the served
-run's, or the follow-on's where it audits), ``open`` unless each names the live challenger (`LIVE_COINS`), and
-``missing`` where the run published none. While they are open, live-coins is named wherever a figure rests on that
-draw: the sampled-proofs verdict's, ``of_record``'s and the composite's error's ``conditional_on``, and the figure of
-record's ``open`` and ``conditional_on`` and its periods'.
+run's, or the follow-on's where it audits), and the network certifier's chain draws as its published report states
+each one's law (``draws``, `CHAIN_DRAWS`); ``open`` unless each COINS line names the live challenger (`LIVE_COINS`) and,
+where the network certifier accepted, each chain draw takes everything, naming each draw that doesn't
+(``open_draws``), and ``missing`` where the run published no COINS line. While they are open, live-coins is named
+wherever a figure rests on that draw: the sampled-proofs verdict's, ``of_record``'s and the composite's error's
+``conditional_on``, and the figure of record's ``open`` and ``conditional_on`` and its periods'.
 
 **One program a day** (``one_program_a_day``, `DAY`): not claimed, and open by its name in the record and its line
 (``not_claimed``): R2's day isn't yet the challenger's signed time, and the audit doesn't yet read the challenger's
 signed registration log. Beside it, the day each of the run's ADVICE-LINEs says the server declared B for, and
 ``missing`` where the run published none; the day's registration and its refusals still run as `DAY` says.
+
+**PoUW's freed compute** (``pouw_freed_compute``, `POUW`): not claimed, by its name in the record and its line
+(``not_claimed``), and credited none: the PoUW verdict carries no figure of its row, so no freed compute is in any
+total here. Beside it, ``served``, the PoUW piece each COINS line says the run served.
 
 **The composite's error** (``composite_error``, `COMPOSITE`): the sum over the onsite composite's four subprotocols of
 each one's error, each subprotocol's δ with where the run states it: sampled proofs' and PoUW's from their rows (their
@@ -69,7 +81,8 @@ tight ℓ_{a,j} rests on (``held``, `CHECKS`) and none of its premises is open (
 assumption but a standing one (`STANDING`) or one its pin names and no premise that is open; and each guarantee it
 rests on in the lock at the statement whose hypotheses and antecedents `RESTS_ON` names, beside what K counts,
 `COUNTS`) and the coins are live (``coins``), and while any is ``open``, by name, K plus ℓ_a + 1 bits for each audit
-tied to each execution phase's scan (``advice``: the bits each phase adds), conditional on the coins while they are open
+tied to each execution phase's scan (``advice``: the bits each phase adds), the figure, with no figure of the tight K
+beside it (``tight``, `TIGHT`), conditional on the coins and on each open premise of `UNCHARGED` while they are open
 (``conditional_on``). Beside the bound, ``advice_charge``: the served run's
 realized advice charge stays out of the record (`ADVICE`, which says what hides it and what doesn't yet); ``charged`` is
 ℓ_{a,j} as the bound charges each execution phase, with its share of K and its source (`CHARGED`: the tied compute
@@ -84,10 +97,8 @@ that run's, never a figure of this one. ``tree`` is the commit the run served fr
 
 **Periods**, of the figure of record: the run's own certification period (``run``), proved, and each monitoring period
 of `leak_bounds.PERIODS` for the serving node, the census's reference datacenter and the world, conditional on the coins
-while they are open (``conditional_on``). Where the figure of record isn't the tight K, ``periods_tight`` gives the same
-cells of the tight K beside them, with the open checks, premises and coins it is conditional on (``conditional_on``),
-never as the result. A node's cell is proved where the run's period
-covers the monitoring period's seconds (its m execution phases), and otherwise scaled from the run to the period; a
+and each open premise of `UNCHARGED` while they are open (``conditional_on``). A node's cell is proved where the run's
+period covers the monitoring period's seconds (its m execution phases), and otherwise scaled from the run to the period; a
 datacenter's and the world's are scaled from the node's. Each scaled cell names its rule, which ``rules`` states with
 its sources (`RULES`): the bound, the case's schedule, and each census line it reads with its SHA-512 (`census`). Each
 cell gives K in bits (the least integer at or above a scaled one), its share of one copy of the weights a deployment
@@ -215,7 +226,9 @@ COINS = (f"{COINS_OPEN}: V3c's tied audit drew its sample on the live challenger
          "or the run published none: "
          "the sampled-proofs verdict and its δ in the composite's error, each tied audit's δ in eps and the slot "
          "entries E_w that k_{skip,j} charges rest on that draw, so every figure here, the figure of record's "
-         "included, holds only on those coins and never as a live draw's")
+         "included, holds only on those coins and never as a live draw's. Open too, naming the draw "
+         "(``open_draws``), wherever the network certifier's chain draws on coins (`CHAIN_DRAWS`), its bound and "
+         "figures then resting on that draw")
 NO_COINS = "the run published no COINS line naming sampled proofs' coins (served_verdicts.sh's)"
 #: the run's published ADVICE-LINE (`served_verdicts.py advice_line`), whose day's declaration of B the record reads
 ADVICE_LINE = "ADVICE-LINE: "
@@ -229,6 +242,42 @@ DAY = (f"{DAY_OPEN}: the record doesn't claim the run served one program a day. 
        "that declaration; and R2 refuses a record whose program isn't its day's declared one (R2-declared) wherever a "
        "verifier passes it the day and the log's declarations, which no verdict here does")
 NO_ADVICE_LINE = "the run published no ADVICE-LINE (served_verdicts.sh's, on a serve-openai --advice run)"
+POUW_OPEN = "pouw-freed-compute"
+POUW = (f"{POUW_OPEN}: the record credits no PoUW freed compute, and no figure of PoUW's row reaches it (`row_verdict`), "
+        "so none is in any total here. Not claimed, by this name: OnsiteFreed (Definitions.Pouw.Guarantees.OnsiteFreed) "
+        "reads Dither's headlines (Pouw.Dither.FreedSound, WorkSound), which are stated for the no-fold round "
+        "(noFoldRound) and describe neither Dither v3.2's proof block nor the PoUW piece the run serves. That piece is "
+        "PoUW H1 + fx1 (eps1-sm120-h1fx1, served_verdicts.sh's default POUW=h1), checked over H1's J10-R period "
+        "(PouwCheck.Credit.window), a development run under the lane's development key that credits nothing; Pearl+ "
+        "(POUW=pearlplus: served_pearlplus.sh, its own seeded load after the window's serve) is a development piece "
+        "too, untied, and credits nothing. ``served`` is what each COINS line says the run's PoUW piece was")
+#: the PoUW clause of the run's COINS line (served_verdicts.sh's H1_COINS), which runs up to the bandwidth audit's
+POUW_SAID = re.compile(r"; (PoUW.*?); the bandwidth audit's")
+#: where sampled proofs' audit publishes its record (`served_integrity.public_copy`)
+AUDIT = Path("v3c-audit") / "window" / "audit.json"
+CREDIT = ("sampled proofs credits only the drawn members whose --registered file named every port of their circuit at "
+          "the window's committed roots: the audit completed it from the auditor's record before any session "
+          "(`a5.complete_drawn`, its record's checks_after_draw.registered_complete), and the member's Lean verdict of "
+          "record, which refuses a file that leaves out a port (Flock.Registered.checkComplete), accepted it reporting "
+          "exactly its reads (registered_reads). A member accepted with no file or a partial one is no evidence of the "
+          "served window, whose inputs it commits afresh, so each other drawn member is listed as not credited, by "
+          "name; one the audit couldn't complete (a port with no committed tree) refuses the audit, which rejects "
+          "naming it, a visible failure")
+NO_COMPLETION = ("the audit's record states no registered-file completion (checks_after_draw.registered_complete), so "
+                 "no member's file is known complete and none is credited")
+UNCOMPLETED = "the audit couldn't complete its --registered file, and refused it"
+UNREPORTED = "its Lean verdict of record didn't accept its completed file reporting exactly that file's reads"
+UNLISTED = "the audit's record lists its Lean verdict but no completion of its --registered file"
+#: the network certifier's chain report as its piece publishes it (`certifier_piece.PUBLIC`), and its draws by step
+CHAIN_REPORT = CASE.parent / "chain" / "report" / "report.json"
+DRAWS = {"n2": "the period draw", "scan": "the scan's draw"}
+CHAIN_DRAWS = (f"the network certifier's chain draws on no live coins. Its period draw (N2's, `LinkWindows.period_draw`) "
+               "takes every window (law all: k None, no coins) or K of them on the verifier's own coins (n2_zk.py's); "
+               "its scan's draw takes every proof block or K of them on the verifier's or the gate's coins, which the "
+               "published report doesn't say. So each draw whose law isn't all is open under "
+               f"{COINS_OPEN}, by its name (``open``), and the network certifier's bound and figures are conditional on "
+               "the coins")
+NO_CHAIN_REPORT = f"the run published no chain report ({CHAIN_REPORT}), whose steps state each draw's law"
 CHARGED = ("PeriodLeakAccepted's ℓ_{a,j}: the free inputs of each compute audit tied to execution phase j's scan, those "
            "its Program neither registers at a pinned root nor ties (NetworkCheck.Period's tiedAudits sums the "
            "parameters' audits[].free, #(freeInputs \\ reg); `records_audit.py period`'s free for V3c's window audit). "
@@ -322,6 +371,13 @@ PREMISES: dict[str, dict[str, Any]] = {
                                  "Property, never a difftest, gives that they are the parsed file's unitReads, in the "
                                  "lock as CircuitCountsAt's tied-audit premise",
                            "discharged_by": ()},
+    "padding-out-of-free": {"is": "that no padding column of a tied audit's units is a free input it charges: the "
+                                  "period check refuses a tied audit whose units read into their padding, and the "
+                                  "lemma that a column no unit reads adds no free input is in the lock. Open, by this "
+                                  "name, until both are: till then a tied audit's free count must hold its padding "
+                                  "columns, which no honest unit reads, or `tied-padding-reads` is open, so the tight K "
+                                  "is no figure and the figure of record is the conservative one (`OPEN`, `TIGHT`)",
+                            "discharged_by": ()},
     "session-tags": {"is": "the read bitmap's bridge to the sampled sessions' tags: the period check counts each tied "
                            "audit's free inputs off the inputs its circuit reads as the reader parses it (circuitOf at "
                            "Tags.circuit, whole_circuit), where the bridge is definitional, while each session proves "
@@ -360,6 +416,16 @@ PREMISES: dict[str, dict[str, Any]] = {
                         "rows at the transfer gates are its observations, its ingress values its operator on the earlier "
                         "ones",
                   "discharged_by": ("Properties.NetworkCertifier.tapsOpen",)},
+    "certifier-key": {"is": "that the network certifier's key, LMS parameters and session every check reads are the "
+                            "auditor's record of its own device (certifier-key/v1, `warden_chain.RECORD`; "
+                            "Registration.Auditor.key), never the evidence's or the prover's copy. The rows audit and "
+                            "the period check both take them from that record and refuse a run whose deployment.json "
+                            "isn't it, but no Property of the period's guarantee yet states that the key and session it "
+                            "reads come from the auditor's record. Open, by this name, beside trusted-host, until that "
+                            "Property is in the lock at the statement `DISCHARGES` pins; while it is open the network "
+                            "verdict is not established (`NOT_ESTABLISHED`), and its bound is conditional on it "
+                            "(`UNCHARGED`)",
+                      "discharged_by": ()},
     "windows-placed": {"is": "WindowsPlaced, PeriodLeakAccepted's hPw and hβ: each window's statement has the partition "
                              "the period read, and each of its faulty sets at δ commits at most the bits β the period "
                              "charges it, from the period check's acceptance of the scan; the tied audits' half is "
@@ -373,7 +439,13 @@ PREMISES: dict[str, dict[str, Any]] = {
     "wrong-bounds": {"is": "WrongBounds, which scanWindowsPlaced takes: each possible incorrect set of a scan statement "
                            "at its partition and δ holds at most b proof blocks, b the bound the audit's answer publishes "
                            "(countBound at the code's strata and δ), from the design's miss at a well-formed design whose "
-                           "rules are strata draws. Open until a theorem stating it at the deployed draw is in the lock",
+                           "rules are strata draws. Open, by this name, until a theorem stating it at the deployed draw is "
+                           "in the lock. Three of its parts are in no lock: RegMatches, that the registration matches the "
+                           "design the bound reads, assumed and the sampled leg's bridge's to give (`sampled-leg-bridge`); "
+                           "the law identity, that OneStage.check's derived v.law is g.rule.lawOver n, which today meet "
+                           "only through R1's Draw.sameLaw, an equality of canonical texts (jeq); and the population "
+                           "lemma, jeq a (toJson n) → nat? a = some n, so R2's population check gives the n the audit's "
+                           "bound reads",
                      "discharged_by": ("Claims.Sampling.Count.countBound_miss_design",)},
     "schedules-held": {"is": "SchedulesHeld, PeriodLeakAccepted's hcap and hfit: each schedule the network certifier may "
                              "run gives each connection at most its cap of cells, and its record format holds it "
@@ -402,6 +474,14 @@ PREMISES: dict[str, dict[str, Any]] = {
                                  "theorem is in the lock",
                            "discharged_by": ()},
 }
+#: the premises no charge covers: while one is open the bound, the figure of record, its periods and the composite's
+#: error are conditional on it by name, never charged for it
+UNCHARGED = ("certifier-key",)
+CERTIFIER_KEY = "certifier-key"
+NOT_ESTABLISHED = "not established"
+KEY_OPEN = (f"{CERTIFIER_KEY} is open: no Property in the lock states that the key and session the period's guarantee "
+            "reads are the auditor's record of the network certifier, so the Lean answer's accept (``answer``) "
+            "establishes no network verdict, and the record cites none with an open condition")
 #: each theorem of `PREMISES`' ``discharged_by`` that has been read, by its name in `LOCKS`, as `RESTS_ON` gives a
 #: guarantee: ``statement``, its statement's digest among the lock's reads, and ``takes``, each antecedent of it that the
 #: deployment must meet, by its Prop's name or its binder's, with the premise, standing assumption or term of what K
@@ -436,9 +516,13 @@ OPEN = ("the figure of record: K as the period's check states it, the tight form
         "every check of `CHECKS` (the public's held), no premise of it is open (`DISCHARGE`) and the run's COINS line "
         "names the live challenger (`COINS`). While any is open it is K plus ℓ_a + 1 bits for each audit tied to each "
         "execution phase's scan, beside that phase's ℓ_{a,j}: an advice of at most ℓ_a bits (`CAP`) is one of fewer "
-        "than 2^(ℓ_a + 1) strings. The tight K's cells go beside the figure of record's, conditional on what is open "
-        "(periods_tight); and while the coins are open, the figure of record and its cells are conditional on them too "
-        "(conditional_on), since no charge here covers a draw on known coins")
+        "than 2^(ℓ_a + 1) strings. That conservative figure is the figure, and no figure of the tight K goes beside it "
+        "(`TIGHT`). While the coins or a premise of `UNCHARGED` are open, the figure of record and its cells are "
+        "conditional on them (conditional_on), since no charge here covers a draw on known coins or a key the auditor "
+        "didn't record")
+TIGHT = ("the tight figure, K alone, returns once padding-out-of-free is discharged in the lock (the period check "
+         "refusing a tied audit's padding reads, and the unread-column lemma) and nothing else is open; until then the "
+         "record states no figure of it")
 CAP = ("ℓ_a, the cap of the advice the run registered: its published advice registration's compiler cap_bits "
        "(`REGISTRATION`, its advice's length padded to it), the length each Commit period's advice is padded to before "
        "it is committed, the same for each tied audit, whose own registration in the case's commitment binds no advice "
@@ -535,10 +619,10 @@ NO_SERVING = ("the run's caller stated no serving settings (--window-steps and -
               "WINDOW_STEPS and MAX_TOKENS)")
 BESIDE = "verity/onsite-network-records-beside/v1"
 BESIDE_IS = ("each run's figures from its own record, beside the others', each labelled with its serving settings "
-             "(`SERVING`), ℓ_a, what its figures are conditional on (`COINS`) and what it doesn't claim (`DAY`): its "
-             "figure of record and tight K, "
-             "and each period's cells (bits and share of the weights). No figure is carried from one run's settings "
-             "to another's")
+             "(`SERVING`), ℓ_a, what its figures are conditional on (`COINS`), what it doesn't claim (`DAY`, `POUW`) "
+             "and the drawn members it doesn't credit (`CREDIT`): its figure of record, what is open under it, and "
+             "each period's cells (bits and share of the weights). No figure is carried from one run's settings to "
+             "another's")
 UNLABELLED = ("states no serving settings, which label its figures beside another run's: write it again from its OUT "
               "with --window-steps and --max-tokens")
 
@@ -809,6 +893,49 @@ def day(out: Path) -> dict[str, Any]:
             | ({} if said else {"missing": NO_ADVICE_LINE}))
 
 
+def pouw(out: Path) -> dict[str, Any]:
+    """PoUW's freed compute, not claimed (`POUW`): credited none, beside each COINS line's PoUW clause (None where it
+    names none)."""
+    said = [m[1] if (m := POUW_SAID.search(x)) else None for x in lines(out, "verdicts.txt") if x.startswith(COINS_LINE)]
+    return {"open": True, "credited": None, "served": said, "from": f"verdicts.txt {COINS_LINE.strip()}", "is": POUW}
+
+
+def credit(out: Path) -> dict[str, Any]:
+    """Sampled proofs' drawn members as its audit's published record credits them (`CREDIT`): ``credited``, each by
+    name, and ``not_credited``, each other drawn member with why; ``missing`` where the record states no completion or
+    the run published none."""
+    try:
+        rec = json.loads((out / AUDIT).read_text())
+    except FileNotFoundError:
+        return {"credited": [], "missing": f"the run published no audit record ({AUDIT})", "is": CREDIT}
+    done = (rec.get("checks_after_draw") or {}).get("registered_complete") if isinstance(rec, Mapping) else None
+    if not isinstance(done, Mapping) or not isinstance(done.get("members"), list):
+        return {"credited": [], "missing": NO_COMPLETION, "from": str(AUDIT), "is": CREDIT}
+    chunks = (rec.get("registered_reads") or {}).get("chunks") or {}
+    credited = sorted(k for k in done["members"] if (chunks.get(k) or {}).get("ok") is True)
+    not_credited = ({k: UNREPORTED for k in done["members"] if k not in credited}
+                    | {k: UNLISTED for k in chunks if k not in done["members"]}
+                    | {k: UNCOMPLETED for k in done.get("codes") or ()})
+    return {"credited": credited, "not_credited": dict(sorted(not_credited.items())), "from": str(AUDIT), "is": CREDIT}
+
+
+def credited(c: Mapping[str, Any]) -> bool:
+    """Whether `credit` credits every drawn member, at least one."""
+    return bool(c.get("credited")) and not c.get("not_credited") and "missing" not in c
+
+
+def chain_draws(out: Path) -> dict[str, Any]:
+    """The network certifier's chain draws as its published report states each one's law (`CHAIN_DRAWS`), by name, and
+    ``open``, each whose law isn't all; ``missing`` where the run published no report, every draw then open."""
+    try:
+        steps = json.loads((out / CHAIN_REPORT).read_text()).get("steps") or {}
+    except FileNotFoundError:
+        return {"missing": NO_CHAIN_REPORT, "open": list(DRAWS.values()), "is": CHAIN_DRAWS}
+    laws = {name: ((steps.get(s) or {}).get("eps_at_delta") or {}).get("law") for s, name in DRAWS.items()}
+    return {"laws": laws, "open": [n for n, law in laws.items() if law != "all"], "from": str(CHAIN_REPORT),
+            "is": CHAIN_DRAWS}
+
+
 def charged(b: Mapping[str, Any]) -> dict[str, Any]:
     """ℓ_{a,j} as the bound charges each execution phase (`CHARGED`), and their share of K."""
     free = [t["bits"] for t in b["terms"] if t["symbol"] == "\\ell_{a,j}"]
@@ -913,13 +1040,13 @@ def of_record(public: Mapping[str, Any], ell: Sequence[int], K: int, prem: Mappi
     advice ℓ_a + 1 charges, summed over each phase's tied audits (the public's ``scans[j].tied``, else every audit:
     `TIED_ALL`), and ``conditional_on``, the conditions, where any is open."""
     held = [c for c in CHECKS if c in (public.get("held") or ())]
-    open_ = [c for c in CHECKS if c not in held] + list(prem["open"]) + list(conditional)
+    open_ = [c for c in CHECKS if c not in held] + list(prem["open"]) + [c for c in conditional if c not in prem["open"]]
     tied = [s.get("tied") for s in public["scans"]]
     per = [sum(ell[int(i)] + 1 for i in (t if t is not None else range(len(ell)))) for t in tied]
     return {"K": K + (sum(per) if open_ else 0), "held": held, "open": open_, "is": OPEN, "premises": prem,
             "advice": {"bits_per_phase": per,
                        "tied": "scans[j].tied" if all(t is not None for t in tied) else TIED_ALL}} | (
-        {"conditional_on": list(conditional)} if conditional else {})
+        {"tight": TIGHT} if open_ else {}) | ({"conditional_on": list(conditional)} if conditional else {})
 
 
 def figure(out: Path, case: Mapping[str, Any], public: Mapping[str, Any], K: int, prem: Mapping[str, Any],
@@ -1001,31 +1128,46 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
     v["inference-only"] = case_verdict(found, REMOTE, INFERENCE_ONLY)
     v["remote"] = composite_verdict(found, REMOTE, "remote's composite didn't run: the run has no "
                                                    "composite/remote/composite.json")
-    v["the network certifier"] = row_verdict(rows, ROWS["the network certifier"], net_src)
+    v["the network certifier"] = nv = row_verdict(rows, ROWS["the network certifier"], net_src)
     v["onsite"] = composite_verdict(found, ONSITE, f"the run has no composite of {ONSITE}")
     v = {k: v[k] for k in VERDICTS}
-    drawn = coins(out)
+    v["sampled proofs"]["credit"] = paid = credit(out)
+    v["PoUW"]["not_claimed"] = POUW_OPEN
+    prem = premises(LOCKS)
+    drawn, draws = coins(out), chain_draws(out)
     cond = [COINS_OPEN] if drawn["open"] else []
     if cond:
         v["sampled proofs"]["conditional_on"] = cond
+    accepted = nv["verdict"] == "accept"
+    open_draws = ["sampled proofs' draw"] * bool(cond) + (draws["open"] if accepted else [])
+    drawn |= {"open": bool(open_draws), "open_draws": open_draws, "draws": draws}
+    cond_net = [COINS_OPEN] * bool(open_draws) + [n for n in UNCHARGED if n in prem["open"]]
+    if accepted and CERTIFIER_KEY in prem["open"]:
+        v["the network certifier"] = nv | {"verdict": NOT_ESTABLISHED, "answer": nv["verdict"], "open": [CERTIFIER_KEY],
+                                           "why": KEY_OPEN}
     net = rows.get(ROWS["the network certifier"]) or {}
     answer = net.get("answer") if isinstance(net.get("answer"), Mapping) else {}
     profile = answer.get("profile") if isinstance(answer.get("profile"), Mapping) else {}
     tree = next((x for x in lines(out, "machine.txt") if re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", x)), None)
+    held = cond + [c for c in cond_net if c not in cond] if accepted else cond
     rec: dict[str, Any] = {
         "format": FORMAT, "extends": EXTENDS, "run": report.get("run"), "tree": tree, "node": report.get("node"),
         "serving": {"missing": NO_SERVING} if serving is None else {
             "window_steps": serving[0], "max_tokens": serving[1], "is": SERVING},
-        "verdicts": v, "coins": drawn, "one_program_a_day": day(out),
-        "of_record": {"holds": all(x["verdict"] == "accept" for x in v.values()),
+        "verdicts": v, "coins": drawn, "one_program_a_day": day(out), "pouw_freed_compute": pouw(out),
+        "of_record": {"holds": all(x["verdict"] == "accept" for x in v.values()) and credited(paid),
                       "missing": [k for k, x in v.items() if x["verdict"] == "missing"],
-                      "not_accepting": [k for k, x in v.items() if x["verdict"] not in ("accept", "missing")]}
-                     | ({"conditional_on": cond} if cond else {}),
+                      "not_accepting": [k for k, x in v.items()
+                                        if x["verdict"] not in ("accept", "missing", NOT_ESTABLISHED)],
+                      "not_established": [k for k, x in v.items() if x["verdict"] == NOT_ESTABLISHED],
+                      "not_credited": list(paid.get("not_credited") or ())}
+                     | ({"uncredited": paid["missing"]} if "missing" in paid else {})
+                     | ({"conditional_on": held} if held else {}),
         "placement": profile.get("placement"), "advice_charge": advice,
         "composite_error": composite_error(rows, None, conditional=cond),
         "reproof": reproof(out, copy, listing, tie)}
-    nv = v["the network certifier"]
-    if nv["verdict"] != "accept":
+    cond = cond_net
+    if not accepted:
         why = (f"the network certifier's verdict is {nv['verdict']}"
                + (f" ({nv['why']})" if nv.get("why") else "") + ": only its accepted answer certifies K")
         return rec | {"bound": {"missing": why}, "periods": {"missing": "no bound"}}
@@ -1049,7 +1191,7 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
     except ValueError as e:
         b["connections"] = b["of_record"] = advice["cap"] = {"error": f"{CASE}: {type(e).__name__}: {e}"}
         return rec | {"periods": b["of_record"]}
-    b["of_record"], advice["cap"] = figure(out, case, answer["public"], b["K"], premises(LOCKS), cond)
+    b["of_record"], advice["cap"] = figure(out, case, answer["public"], b["K"], prem, cond)
     try:
         phase_s, connections, capacity = schedule(case, b["phases"])
     except (KeyError, TypeError, ValueError) as e:
@@ -1062,25 +1204,24 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
         return rec | {"periods": {"missing": f"no figure of record: {why}"}}
     eps, m, K = eps_of(b), b["phases"], b["of_record"]["K"]
     rec["periods"] = ({"conditional_on": cond} if cond else {}) | periods(K, eps, m, phase_s, connections, capacity)
-    if K != b["K"]:
-        rec["periods_tight"] = {"conditional_on": b["of_record"]["open"],
-                                **periods(b["K"], eps, m, phase_s, connections, capacity)}
     return rec
 
 
 def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
     """The ``ONSITE`` line: the run's serving settings, each verdict, whether the run is of record and what every figure
-    is conditional on (`COINS`; open for a record that read no coins), what the record doesn't claim (`DAY`), K of
-    record, the tight K and the checks it is conditional on, its δ_net's terms, eps's split and connections, the
-    composite's stated error, the year's datacenter cell, and the measured advice charge's test run."""
+    is conditional on (`COINS`; open for a record that read no coins), what the record doesn't claim (`DAY`, `POUW`),
+    the drawn members it doesn't credit (`CREDIT`), K of record and what is open under it, its δ_net's terms, eps's
+    split and connections, the composite's stated error, the year's datacenter cell, and the measured advice charge's
+    test run."""
     b, p, s = rec.get("bound") or {}, rec.get("periods") or {}, rec.get("serving") or {}
     year = (p.get("year") or {}).get("datacenter")
     m, fig = rec["advice_charge"]["measured"], b.get("of_record") or {}
     return {"serving": {k: s[k] for k in ("window_steps", "max_tokens")} if "window_steps" in s else None,
             "verdicts": {k: x["verdict"] for k, x in rec["verdicts"].items()}, "of_record": rec["of_record"]["holds"],
             "conditional_on": rec["of_record"].get("conditional_on", []) if "coins" in rec else [COINS_OPEN],
-            "not_claimed": [DAY_OPEN] if (rec.get("one_program_a_day") or {"open": True})["open"] else [],
-            "K": fig.get("K"), "K_tight": b.get("K"), "open": fig.get("open"),
+            "not_claimed": [DAY_OPEN] * (rec.get("one_program_a_day") or {"open": True})["open"] + [POUW_OPEN],
+            "not_credited": rec["of_record"].get("not_credited", []),
+            "K": fig.get("K"), "open": fig.get("open"),
             "delta_net": None if "delta_net" not in b else delta_net(eps_of(b), b["phases"]),
             "delta": None if "delta" not in b else {k: b["delta"][k] for k in ("scan", "charged")},
             "composite_error": {k: rec["composite_error"][k] for k in ("stated", "vacuous")},
@@ -1118,8 +1259,8 @@ def beside(paths: Sequence[Path]) -> dict[str, Any]:
         runs.append({"record": str(path), "run": rec.get("run"), "tree": rec.get("tree"), "serving": line["serving"],
                      "ell_a": (rec["advice_charge"].get("cap") or {}).get("ell_a"), "of_record": line["of_record"],
                      "conditional_on": line["conditional_on"], "not_claimed": line["not_claimed"],
-                     "K": line["K"], "K_tight": line["K_tight"], "open": line["open"],
-                     "periods": cells(rec.get("periods")), "periods_tight": cells(rec.get("periods_tight"))})
+                     "not_credited": line["not_credited"], "K": line["K"], "open": line["open"],
+                     "periods": cells(rec.get("periods"))})
     return {"format": BESIDE, "is": BESIDE_IS, "runs": runs}
 
 
@@ -1164,7 +1305,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         a.to.parent.mkdir(parents=True, exist_ok=True)
         a.to.write_text(json.dumps(doc, indent=1, sort_keys=True, ensure_ascii=False) + "\n")
         print("ONSITE-BESIDE " + json.dumps([{k: r[k] for k in ("run", "serving", "ell_a", "conditional_on",
-                                                                 "not_claimed", "K", "K_tight", "open")}
+                                                                 "not_claimed", "not_credited", "K", "open")}
                                              for r in doc["runs"]], sort_keys=True, ensure_ascii=False), flush=True)
         return 0
     if a.out is None:
