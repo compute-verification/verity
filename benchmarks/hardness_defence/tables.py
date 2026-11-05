@@ -107,6 +107,13 @@ SOURCES = [
     ("r20261104-163633-f732", "8b-*", "8b", {"orders": True}),
     ("r20261104-172736-7a11", "70b-*", "70b", {"orders": True}),
     ("r20261104-172736-7a11", "8b-*", "8b", {"orders": True}),
+    # HT-GENEROUS: svd and rpca in every order on every credited q and k (generous.py)
+    ("r20261105-193551-8b78", "70b-*-trial", "70b", {"orders": True}),
+    ("r20261105-193551-8b78", "8b-*-trial", "8b", {"orders": True}),
+    ("r20261105-194937-f99c", "70b-q-gen-lo", "70b", {"orders": True}),
+    ("r20261105-194955-3c0d", "70b-q-gen-hi", "70b", {"orders": True}),
+    ("r20261105-194501-d467", "70b-k-gen", "70b", {"orders": True}),
+    ("r20261105-194501-d467", "8b-*-gen", "8b", {"orders": True}),
 ]
 
 
