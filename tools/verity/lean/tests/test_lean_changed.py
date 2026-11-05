@@ -372,8 +372,8 @@ def test_a_requirer_failing_for_another_reason_fails_and_without_update_none_is_
 
 def test_a_run_whose_only_failures_are_record_differences_exits_0_as_regenerated_with_each_record_kept(pair, tmp_path,
                                                                                                        monkeypatch):
-    """comms' exit-1 confusion (LEAN-187): a run that found only record differences, here without `--update`, so that
-    check.py fails each package and names the record that settles it, exits 0 with `outcome: regenerated`, each record
+    """A run that found only record differences, here without `--update`, so that check.py fails each package and names
+    the record that settles it, exits 0 with `outcome: regenerated`, each record
     kept under `record/`, the requirer audited on the record kept before it, and `validation.status` passed, which the
     records gate reads as it does for an `--update` run's kept records; a commit of both records then needs no run."""
     root, calls, _ = pair
