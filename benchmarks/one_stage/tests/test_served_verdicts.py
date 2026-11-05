@@ -2727,49 +2727,6 @@ def _composing_tree(tmp_path: Path) -> Path:
     return tmp_path / "stubs"
 
 
-@pytest.mark.parametrize("product", ["remote", "remote-network"])
-def test_a_deferral_with_the_split_certifier_behind_its_front_leaves_the_chain_and_its_period_check_to_the_follow_on(
-        tmp_path, product):
-    """With the network certifier in front, remote takes the split certifier's two commands, whose period case the onsite
-    record reads (remote's record drops the certifier), and so does remote-network, whose composite is the onsite
-    record's verdict. Its deferral carries both and the kept run the chain reads,
-    listed and hashed, and nothing else of the certifier's private/; the follow-on runs the chain after V3c's audit and
-    period rather than beside them (its node has the audit's memory alone), then the certifier's period check on that
-    period.json into its own $OUT/pieces/certifier, the record on the served node's pieces with the certifier's answer
-    from here (remote-network's record reads it), then `served_composite.sh` after that period check, told the served
-    node, and the onsite record last. remote-network's follow-on writes $OUT/composite/remote-network/composite.json,
-    the onsite record's verdict, from the network certifier's case checked here; remote's writes remote's alone."""
-    d = tmp_path / "serve"
-    _kept(tmp_path)
-    run = _deferred(tmp_path, PRODUCT=product, CERTIFIER_FRONT="front", CERTIFIER_CHAIN_CMD=CHAIN,
-                    CERTIFIER_PERIOD_CMD=NETWORK_PERIOD)
-    assert run.returncode == 0, run.stderr
-    dd = d / "private" / "deferred"
-    assert [f for f in (dd / "inputs.txt").read_text().splitlines() if f.startswith("private/certifier/")] == list(KEPT)
-    assert all(f in (dd / "inputs.sha256").read_text() for f in KEPT)
-    stubs = _composing_tree(tmp_path)
-    rc, lines, order, limits = _follow(tmp_path, composite=(HERE.parent / "served_composite.sh").read_text(),
-                                       PATH=f"{_hosts(tmp_path)}:{stubs}:{tmp_path / 'bin'}:{os.defpath}")
-    out, pieces = tmp_path / "out", tmp_path / "out" / "pieces" / "certifier"
-    products = {"remote": ["remote"], "remote-network": ["remote", "remote-network"]}[product]
-    assert rc == 0 and order == ["audit", "period", "chain", "period-check", "record",
-                                 *(f"composite-{x}" for x in products), "onsite"], (lines, order)
-    assert limits == ["180m", "4h", "12h", *["60m"] * len(products)]
-    assert (tmp_path / "order.args").read_text().split() == [str(d), "7", str(pieces), str(d / f"v3c-w7-{VTAG}")]
-    assert json.loads((pieces / "answer.json").read_text()) == {"protocol": "verity/certifier/v9", "verdict": "accept"}
-    record = json.loads((tmp_path / "order.record").read_text())
-    assert (record[record.index("--pieces") + 1], record[record.index("--product") + 1]) == (
-        str(pieces.parent), product)
-    assert (pieces.parent / "pouw" / "answer.json").read_text() == (dd / "pieces" / "pouw" / "answer.json").read_text()
-    assert sorted(f.relative_to(out).as_posix() for f in (out / "composite").rglob("*") if f.is_file()) == sorted(
-        f"composite/{x}/composite.json" for x in products)
-    handed = {x: json.loads((d / "private" / "composite" / x / "private" / "argv.json").read_text()) for x in products}
-    assert handed == ({"remote": [], "remote-network": [str(pieces)]} if product == "remote-network" else {"remote": []})
-    assert ("COMPOSITE: composed on cpu-6, not the served node vy-dc-h200: from a prover-side copy of its serve dir's "
-            "audit inputs and the cases written here from it, not from the parties that produced them") in lines
-    assert not (pieces / "chain.log").exists() and (d / "private" / "pieces" / "certifier" / "period.log").exists()
-
-
 #: a run of record's settings on its served node (`served_verdicts.sh`'s OF_RECORD), untied
 OF_SERVED = {"OF_RECORD": "1", "PRODUCT": "remote-network-no-pouw", "CERTIFIER_FRONT": "front"}
 OF = "of record (OF_RECORD): every input its of_record reads is set"
@@ -2920,6 +2877,60 @@ def test_a_run_of_record_defers_untied_and_its_follow_on_writes_the_onsite_recor
         str(out), "--window-steps", "1", "--max-tokens", "1", "--certifier-key", auditors["CERTIFIER_KEY"],
         "--site-registration", auditors["SITE_REGISTRATION"]]
     assert lines[-1].startswith("ONSITE ") and not _window_data(out, 7), lines
+
+
+
+@pytest.mark.parametrize("product", ["remote", "remote-network"])
+def test_a_deferral_with_the_split_certifier_behind_its_front_leaves_the_chain_and_its_period_check_to_the_follow_on(
+        tmp_path, product):
+    """With the network certifier in front, remote takes the split certifier's two commands, whose period case the onsite
+    record reads (remote's record drops the certifier), and so does remote-network, whose composite is the onsite
+    record's verdict. Its deferral carries both and the kept run the chain reads,
+    listed and hashed, and nothing else of the certifier's private/; the follow-on runs the chain after V3c's audit and
+    period rather than beside them (its node has the audit's memory alone), then the certifier's period check on that
+    period.json into its own $OUT/pieces/certifier, the record on the served node's pieces with the certifier's answer
+    from here (remote-network's record reads it), then `served_composite.sh` after that period check, told the served
+    node, and the onsite record last. remote-network's follow-on writes $OUT/composite/remote-network/composite.json,
+    the onsite record's verdict, from the network certifier's case checked here; remote's writes remote's alone."""
+    d, tree = tmp_path / "serve", tmp_path / "tree"
+    for f in (*KEPT, "private/certifier/attacks/relay.log"):
+        (d / f).parent.mkdir(parents=True, exist_ok=True)
+        (d / f).write_text(f)
+    period = ('echo period-check >> "$ORDER"; test -s "$4/period.json" || exit 1; '
+              'echo \'{"commitment": "7b7d", "evidence": "7b7d", "params": {}}\' > "$3/case.json"; '
+              'echo \'{"protocol": "verity/certifier/v9", "verdict": "accept"}\' > "$3/answer.json"; echo checked')
+    run = _deferred(tmp_path, PRODUCT=product, CERTIFIER_FRONT="front", CERTIFIER_CHAIN_CMD=CHAIN,
+                    CERTIFIER_PERIOD_CMD=period)
+    assert run.returncode == 0, run.stderr
+    dd = d / "private" / "deferred"
+    assert [f for f in (dd / "inputs.txt").read_text().splitlines() if f.startswith("private/certifier/")] == list(KEPT)
+    assert all(f in (dd / "inputs.sha256").read_text() for f in KEPT)
+    (tree / "benchmarks" / "one_stage").mkdir(parents=True, exist_ok=True)
+    (tree / "benchmarks" / "one_stage" / "onsite_record.py").write_text(FAKE_ONSITE_RECORD)
+    (tree / "benchmarks" / "one_stage" / "composite.py").write_text(FAKE_COMPOSITE)
+    for pkg in ("remote", "onsite"):
+        (tree / "verity" / "core" / "protocols" / pkg).mkdir(parents=True)
+    _script(tmp_path / "stubs" / "systemd-run", "exit 1")
+    rc, lines, order, limits = _follow(tmp_path, composite=(HERE.parent / "served_composite.sh").read_text(),
+                                       PATH=f"{_hosts(tmp_path)}:{tmp_path / 'stubs'}:{tmp_path / 'bin'}:{os.defpath}")
+    out, pieces = tmp_path / "out", tmp_path / "out" / "pieces" / "certifier"
+    products = {"remote": ["remote"], "remote-network": ["remote", "remote-network"]}[product]
+    assert rc == 0 and order == ["audit", "period", "chain", "period-check", "record",
+                                 *(f"composite-{x}" for x in products), "onsite"], (lines, order)
+    assert limits == ["180m", "4h", "12h", *["60m"] * len(products)]
+    assert (tmp_path / "order.args").read_text().split() == [str(d), "7", str(pieces), str(d / f"v3c-w7-{VTAG}")]
+    assert json.loads((pieces / "answer.json").read_text()) == {"protocol": "verity/certifier/v9", "verdict": "accept"}
+    record = json.loads((tmp_path / "order.record").read_text())
+    assert (record[record.index("--pieces") + 1], record[record.index("--product") + 1]) == (
+        str(pieces.parent), product)
+    assert (pieces.parent / "pouw" / "answer.json").read_text() == (dd / "pieces" / "pouw" / "answer.json").read_text()
+    assert sorted(f.relative_to(out).as_posix() for f in (out / "composite").rglob("*") if f.is_file()) == sorted(
+        f"composite/{x}/composite.json" for x in products)
+    handed = {x: json.loads((d / "private" / "composite" / x / "private" / "argv.json").read_text()) for x in products}
+    assert handed == ({"remote": [], "remote-network": [str(pieces)]} if product == "remote-network" else {"remote": []})
+    assert ("COMPOSITE: composed on cpu-6, not the served node vy-dc-h200: from a prover-side copy of its serve dir's "
+            "audit inputs and the cases written here from it, not from the parties that produced them") in lines
+    assert not (pieces / "chain.log").exists() and (d / "private" / "pieces" / "certifier" / "period.log").exists()
 
 
 def _script(path: Path, body: str) -> None:
