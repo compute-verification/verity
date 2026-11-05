@@ -11,8 +11,9 @@ sum in blocks). Matrix products and the element-wise ops of `Binary` and `Unary`
 (`Bf16ToF32_v1`, exact), performs the f32 operation and rounds a bf16 result once (`F32ToBf16Rn_v1`), as torch CPU's bf16 kernels
 do; where torch's bf16 kernel rounds otherwise, the rule refuses. At a compute capability `cc`, a bf16 `mm` is instead F.linear's
 GEMM as that GPU's cuBLAS computes it (`Matmul`): the route its capture fitted (`cublas_bf16.train_route`), each k16 step the tensor
-core's dot (`HopperBF16WgmmaDot16_v1`); and `add`, `sub`, `mul` and `div` are the GPU's (`Binary`). A training op with no Definition to lower it to is refused with the Definition it needs
-(`_log_softmax`: a correctly-rounded f32 log, `F32LogRn`).
+core's dot (`HopperBF16WgmmaDot16_v1`); `add`, `sub`, `mul` and `div` are the GPU's (`Binary`); and a vector norm or a sum of a
+whole tensor is its `reduce_kernel`'s (`rules.training_reduce.FullReduce`). A training op with no Definition to lower it to is
+refused with the Definition it needs (`_log_softmax`: a correctly-rounded f32 log, `F32LogRn`).
 
     training_rules(min_view_leaves, cc) -> RuleSet     the training rule set
 
@@ -38,6 +39,7 @@ from verity_vllm.program.frontend.rules.training_emit import (_DT, BIT, F32, _ba
                                                               _operand, _operand_ok, _ones, _per_row, _ref, _rounded, _rows, _shape,
                                                               _tokens, _TrainRule, _widened, aten)
 from verity_vllm.program.frontend.rules.training_matmul import Matmul
+from verity_vllm.program.frontend.rules.training_reduce import FullReduce
 from verity_vllm.program.frontend.rules.training_views import BoxPermute, StaticFloat, StaticFloats, _info, _view_permute
 from verity_vllm.program.frontend.strided_views import _tensor_type
 from verity_vllm.program.frontend.value_types import shape_of
@@ -527,16 +529,18 @@ def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None) 
     that are not one run) and `Matmul` before them, the element-wise, reduction, softmax, loss and embedding rules after.
     `min_view_leaves` is 0 by default: the default views write a permuted view of fewer leaves than their limit as a list of its
     leaves, which the root's replay then substitutes as one reference part per leaf.  `cc` (`cublas_bf16.TRAIN_CC`): bf16 `mm`s as
-    that GPU's cuBLAS computes them (`Matmul`) and every add, sub, mul and div as its kernels do (`Binary`, placed first, before
-    the default rules' CPU kinds), in the rule set ``training-cc<major>.<minor>``."""
+    that GPU's cuBLAS computes them (`Matmul`), every add, sub, mul and div as its kernels do (`Binary`, placed first, before
+    the default rules' CPU kinds) and a whole tensor's vector norm or sum as its `reduce_kernel` does (`FullReduce`, before
+    `Reduce`), in the rule set ``training-cc<major>.<minor>``."""
     from verity_vllm.program.frontend.rules import DEFAULT_RULES
 
     first = [StaticFloats(), BoxPermute(min_view_leaves), Matmul(cc)] + ([Binary(cc)] if cc else [])
-    last = ([] if cc else [Binary()]) + [Unary(), Lerp(), Addcmul(), Reduce(), SafeSoftmax(), SoftmaxBackward(), LogSoftmax(),
-                                         LogSoftmaxBackward(), NllLossForward(), NllLossBackward(), EmbeddingDenseBackward()]
+    last = ([] if cc else [Binary()]) + [Unary(), Lerp(), Addcmul(), FullReduce(cc), Reduce(), SafeSoftmax(), SoftmaxBackward(),
+                                         LogSoftmax(), LogSoftmaxBackward(), NllLossForward(), NllLossBackward(),
+                                         EmbeddingDenseBackward()]
     name = "training" if cc is None else f"training-cc{cc[0]}.{cc[1]}"
     return RuleSet(name, first + list(DEFAULT_RULES.rules) + last, list(DEFAULT_RULES.families))
 
 
-__all__ = ["training_rules", "Matmul", "Binary", "Unary", "Lerp", "Addcmul", "Reduce", "SafeSoftmax", "SoftmaxBackward", "LogSoftmax",
-           "LogSoftmaxBackward", "NllLossForward", "NllLossBackward", "EmbeddingDenseBackward"]
+__all__ = ["training_rules", "Matmul", "Binary", "Unary", "Lerp", "Addcmul", "FullReduce", "Reduce", "SafeSoftmax", "SoftmaxBackward",
+           "LogSoftmax", "LogSoftmaxBackward", "NllLossForward", "NllLossBackward", "EmbeddingDenseBackward"]

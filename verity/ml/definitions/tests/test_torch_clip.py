@@ -93,9 +93,10 @@ def test_a_tensor_of_three_chunks() -> None:
     _same(evaluate_words(bind(TC.ForeachNorm, N=N), x[None]), TB.MODELS["ForeachNorm_v1"]({"N": N}, x[None]))
 
 
-@pytest.mark.parametrize("L", [1, 2, 3, 5, 16, 20, 33, 127, 128, 131, 272, 513])
+@pytest.mark.parametrize("L", [1, 2, 3, 5, 16, 20, 33, 127, 128, 131, 272, 513, 4099])
 def test_the_vector_norm_is_one_cta(L) -> None:
-    """Both input paths of reduce_kernel (L >= 128 in 4-vectors, a tail of L mod 4) and block widths 1 .. 128."""
+    """Both input paths of reduce_kernel (L >= 128 in 4-vectors, a tail of L mod 4), block widths 1 .. 512 and two vectors a
+    thread."""
     rng = np.random.default_rng(L)
     h = _words(rng, L, 100, 40, specials=False) & np.uint16(0x7FFF)
     _same(evaluate_words(bind(TC.VectorNormBf16, L=L), h[None]), TB.MODELS["VectorNormBf16_v1"]({"L": L}, h[None]))
@@ -116,6 +117,14 @@ def test_vector_norm_slots_take_each_element_once(L) -> None:
     assert sorted(e for t in slots for acc in t for e in acc) == list(range(L))
     assert max(len(acc) for t in slots for acc in t) <= TC.SQUARES_MAX
 
+
+def test_reduce_config_is_set_reduce_configs_launch() -> None:
+    """The scalar path under 128 elements, one CTA to 130,560, then ``ceil(values / 16)`` CTAs up to the RTX PRO 6000's grid of
+    564, past which each CTA's threads take up to 256 values (``ceil(values / 256)`` CTAs)."""
+    assert [TK.reduce_config(L) for L in (2, 127, 128, 130560, 130561)] == [
+        (False, 2, 1), (False, 64, 1), (True, 32, 1), (True, 512, 1), (True, 512, 16)]
+    assert [TK.reduce_config(L)[2] for L in (4_194_816, 4_620_288, 4_620_289, 564 * 256 * 512, 564 * 256 * 512 + 1)] == [
+        513, 564, 564, 564, 565]
 
 def test_the_coefficient_on_every_bf16_total() -> None:
     w = np.arange(1 << 16, dtype=np.uint16)
