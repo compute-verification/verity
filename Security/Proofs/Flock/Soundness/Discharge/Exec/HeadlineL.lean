@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Exec.BindingE2EL
-import Proofs.Flock.Soundness.Discharge.Exec.Headline
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.BindingE2EL
+public import Proofs.Flock.Soundness.Discharge.Exec.Headline
 
 /-!
 # The headline over the salted session, and at the executable
@@ -22,6 +24,8 @@ under plain SHA-512 leaves. Every term is generic in `Lp`; its binding is `Lp.bi
 What stays open of R11 is `hRef` itself: a strategy `σ` of this audit built from the live prover `τ`, the challenger's
 per-round coins (A6) as the audit's coins, and the live event `bad` bounded.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 

@@ -9,6 +9,10 @@ place: a format in today's words is a new version and a new entry. An entry carr
 so a proof about code that reads one sees its literal. The entries under "Not yet read from here" are other protocols'
 separators, named before their owners' code reads them.
 -/
+module
+
+@[expose] public section
+
 namespace Domains
 
 -- PoUW: the protocol and its identifier
@@ -182,7 +186,6 @@ abbrev VLLM_PEARL_C_RUN_CERTIFIED : String := "verity-vllm/pouw-pearl-c-run/v3"
 -- Not yet read from here: the commitments' own (`verity.ml.commitments`)
 abbrev BLAKE3_KEYED_ROW_NVFP4 : String := "blake3-keyed/row-nvfp4/v1"
 abbrev BLAKE3_KEYED_ROW : String := "blake3-keyed/row/v2"
-abbrev POSEIDON2_BABYBEAR_W24_ROW : String := "poseidon2-babybear-w24/row/v2h"
 abbrev SHA256_ROW_NVFP4_DIGEST : String := "sha256/row-nvfp4/v1"
 abbrev SHA256_ROW_DIGEST : String := "sha256/row/v1"
 abbrev VLLM_EMPTY : String := "verity-vllm/empty/v1"

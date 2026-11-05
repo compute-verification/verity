@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Exec.Live
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.Live
 
 /-!
 # R11 for one-table sessions, with the decoder right at the law's draws only
@@ -9,6 +11,8 @@ of `DecodesAll`, with the same bound. `DecodesAll` implies it (`decodesOn_of_all
 the same (`simAudit_eq_on`). At a draw the law never makes, the table `T S R` and the decoder are unconstrained; at a
 draw it makes, `T S R` must be the table flock-verify sets up there, `m_pts` included (`Pts.lean`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 

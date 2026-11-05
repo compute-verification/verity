@@ -1,5 +1,7 @@
-import CertifierDevice.Frame
-import CertifierDevice.Shaper
+module
+
+public import CertifierDevice.Frame
+public import CertifierDevice.Shaper
 
 /-!
 # The active network certifier as a pure state machine
@@ -69,6 +71,8 @@ Events the proxy couldn't be waiting for (a second `connected`, bytes on a strea
 waiting, anything after both grids' last ticks) change nothing. Python's floats and Lean's integers agree away from the
 boundaries; the difftest keeps every reading at least 10 µs from one.
 -/
+
+@[expose] public section
 
 namespace CertifierDevice
 

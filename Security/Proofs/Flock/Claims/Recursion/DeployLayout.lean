@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.DeployReg
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployReg
 
 /-!
 # The V* layout off the registered ports (`layoutOf`), and the recursion's KS at it
@@ -38,6 +40,8 @@ message rounds (`PortsCover`), two named facts about the compiled statement. **W
 readers off the witnesses read `[]` at the link message, so `ReadsPub` holds only for readers that read it off the run
 (the staged V* statements show it, `cmtTr`), and the last message, which no part holds, opens only by `FinalOpens`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

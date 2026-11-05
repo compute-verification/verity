@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Tables.Sim
+module
+
+public import Proofs.Flock.Soundness.Discharge.Tables.Sim
 
 /-!
 # A simulation's dead branches, answered with a fixed message
@@ -15,6 +17,8 @@ outcome in `P`, and no dead branch reaches `Q`, the model's `Q` against the simu
 live `P` (`Sim.prob_le_of_all`). A dead branch at the tables' positions answered with `nul` reaches only outcomes whose
 every table's output is at the openings `nul` (`OutN`, `OutN.of_posOf`, `prob_posOf_answerWith`).
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge
 

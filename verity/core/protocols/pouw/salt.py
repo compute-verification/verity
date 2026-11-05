@@ -16,12 +16,12 @@ published, once, and only until its reveal deadline on its own clock after p's e
 * `committed(certifier, p, registration)` is what PoUW recorded with the certifier for p before it sampled p's salt
   (`Proxy.commit_weights`, which takes only a record the prover registered with the certifier signed), given on
   `reveal`'s conditions but the once (`Proxy.committed`), or `Unrevealed` (uncommitted): the `pouw_record` of the
-  weights' root, the stream and the prover. The salt binds no weights, so a certified window passes only weights, a
-  stream and a prover recorded before its salt (`core_check.pass_epoch`).
+  weights' root, the stream and the prover, or the lead's `lead_record`. The salt binds no weights, so a certified
+  window passes only weights, a stream and a prover recorded before its salt (`core_check.pass_epoch`).
 * `pouw_salt(reveal, p, stream, prover)` is the salt PoUW applies in window p, the one function that states its form,
   `pouw_record(weights_root, stream, prover)` what PoUW records for p before the salt, and `prover_id(public_key)` the
   64-byte id of the prover whose key the certifier verifies records under.
-* `Registrations` is the certified windows' once-only registration ledger: one registration per PoUW window, stream and
+* `WindowOpens` is the certified windows' once-only ledger of opens: one open per PoUW window, stream and
   prover, taken when the challenger receives the window, before its draw and any proof. It is not the window's credit,
   which is its outcome's verdict.
 * `unit_reason(unit)` is why a certified window can't credit a sampled proof block: it credits only units that read its salt.
@@ -82,8 +82,8 @@ class Unrevealed(DomainError):
     early, missing or uncommitted."""
 
 
-class Reregistered(DomainError):
-    """A PoUW window already registered under its stream and prover."""
+class Reopened(DomainError):
+    """A PoUW window already opened under its stream and prover."""
 
 
 def _window(window: Any) -> int:
@@ -122,6 +122,33 @@ def pouw_record(weights_root: bytes, stream: bytes, prover: bytes) -> bytes:
     if type(weights_root) is not bytes or len(weights_root) != WEIGHTS_ROOT_BYTES:
         raise DomainError(f"a weights' root is {WEIGHTS_ROOT_BYTES} bytes")
     return hashlib.sha512(RECORD_TAG + weights_root + _bound(stream, prover)).digest()
+
+
+#: `lead_record`'s domain tag
+LEAD_RECORD_TAG = b"verity/pouw-lead-record/v1"
+#: a window's key leaf, the hm96-sha512 leaf over its key ks_w (`lead_record`)
+KEY_LEAF_BYTES = 64
+
+
+def lead_record(weights_root: bytes, stream: bytes, prover: bytes, key_leaf: bytes, calls: int) -> bytes:
+    """What the lead records with the certifier for a PoUW window before its salt is sampled, in `pouw_record`'s place
+    (`Proxy.commit_weights`' slot, which `committed` reads back): SHA-512(`LEAD_RECORD_TAG` ‖ weights_root ‖ stream ‖
+    prover ‖ key_leaf ‖ u64be(calls)), 290 bytes hashed, every part fixed-width, and `test_lead_record_form` pins it.
+
+    `key_leaf` is the window's key leaf: the `hm96.SHA512` tree leaf over the window's key ks_w (64 OS bytes, never
+    published) under 192 OS salt bytes, which a drawn unit's proof opens ks_w against before it keys a digest
+    (`Pouw.Assumptions.SaltDerivation`); `calls` is the window's calls a forward, which fix its instances' positions.
+    The certifier's word orders the weights, the stream, the prover, the key and the call count before the salt
+    (`pouw_record`'s parts and the lead's own), so no key is chosen after it, and the salt keys every instance's digest
+    (`Pouw.Guarantees.KeyedLeaf`)."""
+    if type(weights_root) is not bytes or len(weights_root) != WEIGHTS_ROOT_BYTES:
+        raise DomainError(f"a weights' root is {WEIGHTS_ROOT_BYTES} bytes")
+    if type(key_leaf) is not bytes or len(key_leaf) != KEY_LEAF_BYTES:
+        raise DomainError(f"a window's key leaf is {KEY_LEAF_BYTES} bytes")
+    if not (type(calls) is int and 0 < calls < U64):
+        raise DomainError(f"a window's calls a forward are a positive u64, not {calls!r}")
+    return hashlib.sha512(LEAD_RECORD_TAG + weights_root + _bound(stream, prover) + key_leaf
+                          + calls.to_bytes(8, "big")).digest()
 
 
 def window_open_root(weights_root: bytes, requests_root: bytes, session: str) -> bytes:
@@ -212,32 +239,32 @@ def unit_reason(unit: Any) -> str | None:
 
 # TODO: a window's credit is its outcome's verdict within a period: the period's cap and circuit recorded before
 # window 0's first coin, each window's first coin after the previous window's draw, closed at the first refused window.
-# `Registrations` is none of that.
-class Registrations:
-    """The certified windows' once-only registration ledger: a PoUW window registers once per stream and prover, when
+# `WindowOpens` is none of that.
+class WindowOpens:
+    """The certified windows' once-only ledger of opens: a PoUW window opens once per stream and prover, when
     the challenger receives it, before its draw and before any proof, so a window whose units are never proved, or are
     refused, keeps its entry. A window's tiles are private, so (window, stream, prover) is the finest public key there
-    is. Two registrations of one window under one stream and prover have one salt and so one seed per tile, and `admit`
-    refuses the second (`Reregistered`). Under another stream or prover the salts differ (`pouw_salt`)."""
+    is. Two opens of one window under one stream and prover have one salt and so one seed per tile, and `admit`
+    refuses the second (`Reopened`). Under another stream or prover the salts differ (`pouw_salt`)."""
 
     def __init__(self) -> None:
-        self._registered: dict[tuple[int, bytes], str] = {}
+        self._opened: dict[tuple[int, bytes], str] = {}
 
-    def admit(self, window: int, stream: bytes, prover: bytes, registration: str) -> None:
-        """Record PoUW window `window`'s registration `registration` (its digest) under `stream` and `prover`, or refuse
-        (`Reregistered`) a window already registered under them."""
+    def admit(self, window: int, stream: bytes, prover: bytes, record: str) -> None:
+        """Record PoUW window `window`'s open, its window record's digest `record`, under `stream` and `prover`, or
+        refuse (`Reopened`) a window already opened under them."""
         key = (_window(window), _bound(stream, prover))
-        if key in self._registered:
-            raise Reregistered(f"PoUW window {window} is already registered ({self._registered[key][:16]}) under its "
-                               "stream and prover: a window registers once")
-        self._registered[key] = registration
+        if key in self._opened:
+            raise Reopened(f"PoUW window {window} is already registered ({self._opened[key][:16]}) under its "
+                           "stream and prover: a window registers once")
+        self._opened[key] = record
 
     def __contains__(self, key: tuple[int, bytes, bytes]) -> bool:
         window, stream, prover = key
-        return (_window(window), _bound(stream, prover)) in self._registered
+        return (_window(window), _bound(stream, prover)) in self._opened
 
     def __len__(self) -> int:
-        return len(self._registered)
+        return len(self._opened)
 
 
 def context(prefix: str, window: int, manifest: str) -> str:
@@ -315,7 +342,7 @@ def pouw_window(windows: Sequence[int], k: int) -> int:
 
 
 __all__ = ["ANCHORED_EPOCH_TAG", "ANCHORS_ROOT_BYTES", "EPOCH_OPEN_TAG", "PROVER_BYTES", "PROVER_TAG", "RECORD_TAG",
-           "REQUESTS_ROOT_BYTES", "Registrations", "Reregistered", "SALT_BYTES", "SALT_TAG", "SESSION", "STREAM_BYTES",
-           "Unrevealed", "WEIGHTS_ROOT_BYTES", "WINDOW_OPEN_TAG", "WINDOW_SEGMENT", "anchored_epoch_root", "committed",
+           "REQUESTS_ROOT_BYTES", "Reopened", "SALT_BYTES", "SALT_TAG", "SESSION", "STREAM_BYTES",
+           "Unrevealed", "WEIGHTS_ROOT_BYTES", "WINDOW_OPEN_TAG", "WINDOW_SEGMENT", "WindowOpens", "anchored_epoch_root", "committed",
            "context", "epoch_open_root", "pouw_record", "pouw_salt", "pouw_window", "prover_id", "registered",
-           "revealed", "unit_reason", "window_of", "window_open_root"]
+           "revealed", "unit_reason", "window_of", "window_open_root", "KEY_LEAF_BYTES", "LEAD_RECORD_TAG", "lead_record"]

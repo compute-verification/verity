@@ -1,12 +1,14 @@
-import Proofs.Flock.Claims.Recursion.BoundDeploy
-import Proofs.Flock.Soundness.Discharge.Hm.Row
-import Proofs.Flock.Claims.DeployK
-import Proofs.Flock.Claims.Complete.Encode
-import Proofs.Flock.Claims.Complete.Zk.Run
-import Proofs.Flock.Claims.KS.Width
-import Proofs.Flock.Claims.KS.ConflictRun
-import Proofs.Flock.Claims.KS.PlainStep
-import Proofs.Flock.Claims.Bridge.Custody
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundDeploy
+public import Proofs.Flock.Soundness.Discharge.Hm.Row
+public import Proofs.Flock.Claims.DeployK
+public import Proofs.Flock.Claims.Complete.Encode
+public import Proofs.Flock.Claims.Complete.Zk.Run
+public import Proofs.Flock.Claims.KS.Width
+public import Proofs.Flock.Claims.KS.ConflictRun
+public import Proofs.Flock.Claims.KS.PlainStep
+public import Proofs.Flock.Claims.Bridge.Custody
 
 /-!
 # (P2) and (P4) at the intended choice
@@ -31,6 +33,8 @@ so the checks accept one text per record (`LastGap.checks_record_eq`) and refuse
 
 `JsonTrailingSpace` is a hypothesis, not a lemma: `Json.parse`'s `anyCore` is `partial`, so the kernel doesn't see its
 body. The rest is proved. -/
+
+@[expose] public section
 
 namespace RecDeploy
 

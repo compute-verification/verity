@@ -1,4 +1,6 @@
-import Proofs.Pous.Thm1.Theorem1iiSeq
+module
+
+public import Proofs.Pous.Thm1.Theorem1iiSeq
 
 /-!
 # The tail rule for sequential rounds
@@ -14,6 +16,8 @@ a certified `p₀ ≤ r` may be replaced by `r`.
 Pure probability: no game and no primitive. A round is any function of the history, through a state `x : X` that
 `nxt` advances and `ok` judges.
 -/
+
+@[expose] public section
 
 namespace PousGraded
 

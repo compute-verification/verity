@@ -1,3 +1,5 @@
+module
+
 /-!
 # Scalar primitives: `verity.ml.scalar`
 
@@ -9,6 +11,8 @@ its operands unmasked as the Python does, and is the Python's function on every 
 its operands' widths. The bit operations are Python's (`&&&` is `&`, `^^^` is `^`), and `Int` holds the Python's signed
 integers.
 -/
+
+@[expose] public section
 
 namespace Verity.Scalar
 
