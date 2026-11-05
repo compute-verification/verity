@@ -22,10 +22,9 @@ keeps the old words until its owners rename it, so this scan skips code spans an
 record key stays, and a term written as a quoted mention ("leg"); the table's rows name them too.
 
 PoUB, the protocol over a node's registered store, goes by that name alone (``POUB_TERMS``, GLOSSARY) in every
-scanned file, PENDING's too, but the archive's (``POUB_ELSEWHERE``). Its
-wire constants, domain tags, Lake targets and package path (`verity/remote-bandwidth/v0`, `remote-audit-difftest`,
-`remote_bandwidth`) are hyphenated or underscored, so this scan never reads them; they stay until PoUB's next version
-and its package's move.
+scanned file, PENDING's too, but the archive's (``POUB_ELSEWHERE``). Its wire constants, domain tags, Lake targets
+and package path (`verity/remote-bandwidth/v0`, `remote-audit-difftest`, `remote_bandwidth`) are hyphenated or
+underscored, so this scan never reads them; they stay until PoUB's next version and its package's move.
 """
 from __future__ import annotations
 
@@ -319,8 +318,9 @@ def test_poub_goes_by_its_name():
     assert not bad, (
         "a retired name of PoUB, the protocol over a node's registered store: say "
         + "; ".join(f'{new} for "{old}"' for old, new in POUB_TERMS.items())
-        + f" ({GLOSSARY}); {', '.join(POUB_ELSEWHERE)} keeps its words; a wire constant, a domain tag or a path keeps its hyphen or underscore"
-        + " (`verity/remote-bandwidth/v0`, `remote_bandwidth`), and bytes a digest or a vector hashes go in ALLOWED"
+        + f" ({GLOSSARY}); {', '.join(POUB_ELSEWHERE)} keeps its words; a wire constant, a domain tag or a path keeps"
+        + " its hyphen or underscore (`verity/remote-bandwidth/v0`, `remote_bandwidth`), and bytes a digest or a vector"
+        + " hashes go in ALLOWED"
         + " with their reason:\n"
         + "\n".join(f"  {f}:{n}: {term}" for f, n, term in bad))
 
