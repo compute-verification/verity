@@ -12,9 +12,10 @@ is stated over its verifier of record (`verifier`), which finds the circuit file
 
 `CircuitFilesByPathAgreeAt k` ties the two at composite `k`: where the executable accepts the blobs `bs` with the
 circuit files `cs` read by path, the verifier of record gives the same answer on the blobs `bs ++ cs`, unless two of
-those byte strings collide under SHA-512. `CircuitFilesByPathAgree` is that at all three composites. `byPath` holds what the executable reads as the files' bytes: `NetworkCheck.PeriodFiles.read` reads the
-file at each path as `NetworkCheck.Period.ofRead` holds its bytes. Remote, which has no network certifier's period, has
-no such executable.
+those byte strings collide under SHA-512. `CircuitFilesByPathAgree` is that at all three composites.
+`byPath` holds what the executable reads as the files' bytes: `NetworkCheck.PeriodFiles.read` reads the file at each
+path as `NetworkCheck.Period.ofRead` holds its bytes. Remote, which has no network certifier's period, has no such
+executable.
 -/
 
 namespace Verity
@@ -50,5 +51,45 @@ def CircuitFilesByPathAgreeAt (k : Verity.Registration.Composite) : Prop :=
 network certifier, with PoUW or without. -/
 def CircuitFilesByPathAgree : Prop :=
   ∀ (k : Verity.Registration.Composite), k ≠ .remote → CircuitFilesByPathAgreeAt k
+
+namespace PeriodFiles
+
+/-- The sync set of one value, δ 0 and ρ 1. -/
+def emptySync : NetworkCertifier.SyncSet where
+  deltas := [0]
+  rhos := [1]
+  deltas_nonempty := by simp
+  rhos_nonempty := by simp
+  rhos_pos := by
+    intro ρ h
+    rw [List.mem_singleton] at h
+    subst h
+    decide
+  deltas_nodup := by simp
+  rhos_nodup := by simp
+
+/-- A network certifier's period of no link-window and no audit, in the clock form, under the deployed LMS
+parameters. -/
+def emptyParams : NetworkCheck.Period.Params where
+  audits := #[]
+  cells := #[]
+  first := 0
+  jitter := 0
+  link := ""
+  lms := Lms.deployed
+  key := .empty
+  session := .empty
+  program := ""
+  circuit := none
+  form := .clock emptySync
+  windows := 0
+
+/-- `emptyParams`' commitment: no audit and no link-window registered. -/
+def emptyCommitment : NetworkCheck.Period.Commitment := ⟨#[], #[], .empty⟩
+
+/-- `emptyParams`' evidence: no audit's answer and no link-window's. -/
+def emptyEvidence : NetworkCheck.Period.Evidence := ⟨#[], #[]⟩
+
+end PeriodFiles
 
 end Verity

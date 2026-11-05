@@ -22,7 +22,9 @@ where the blobs `bs` hold every file it reads, so do `bs ++ cs`, at the same dig
 blobs. A composite whose every component accepts as much on the larger blobs answers the same (`BlobCovers`,
 `tiedSameB_covers`), so at onsite, and at remote with the network certifier with PoUW or without, the verifier of
 record answers on `bs ++ cs` as the executable that reads `cs` by path answers on `bs` (`agree_onsite`, `agree_rn`,
-`agree_rnn`, `Verity.circuit_files_by_path_agree`).
+`agree_rnn`, `Verity.circuit_files_by_path_agree`). An executable that accepts everything is not one the verifier of
+record agrees with (`acceptAll_disagrees`), and at a period of no link-window and no audit the period read by path
+and the period among the blobs both accept (`Verity.circuit_files_by_path_agree_honest`).
 -/
 
 namespace Verity.PeriodFiles
@@ -1207,39 +1209,6 @@ theorem acceptAll_disagrees (k : Verity.Registration.Composite) :
 
 /-! ## An empty period -/
 
-/-- The sync set of one value, δ 0 and ρ 1. -/
-def emptySync : NetworkCertifier.SyncSet where
-  deltas := [0]
-  rhos := [1]
-  deltas_nonempty := by simp
-  rhos_nonempty := by simp
-  rhos_pos := by
-    intro ρ h
-    rw [List.mem_singleton] at h
-    subst h
-    decide
-  deltas_nodup := by simp
-  rhos_nodup := by simp
-
-/-- A period with no link-windows and no audits, in the clock form. -/
-def emptyParams : NetworkCheck.Period.Params where
-  audits := #[]
-  cells := #[]
-  first := 0
-  jitter := 0
-  link := ""
-  lms := ⟨64, 8, 1⟩
-  key := .empty
-  session := .empty
-  program := ""
-  circuit := none
-  form := .clock emptySync
-  windows := 0
-
-def emptyCommitment : NetworkCheck.Period.Commitment := ⟨#[], #[], .empty⟩
-
-def emptyEvidence : NetworkCheck.Period.Evidence := ⟨#[], #[]⟩
-
 theorem empty_check : NetworkCheck.Period.check emptyParams emptyCommitment emptyEvidence =
     .accept (NetworkCheck.Period.terms #[] #[] #[] 0 1 0) { link := "", windows := 0 } := by
   simp [NetworkCheck.Period.check, emptyParams, emptyCommitment, emptyEvidence, emptySync,
@@ -1249,9 +1218,10 @@ theorem empty_check : NetworkCheck.Period.check emptyParams emptyCommitment empt
 theorem unlisted_files : ({} : NetworkCheck.Period.Listing).files = #[] :=
   Array.eq_empty_of_size_eq_zero (files_unlisted (by simp [NetworkCheck.Period.Listing.listed]))
 
-/-- **At an empty period, the network certifier's period read by path accepts, and the verifier of record's answers
-the same**: no link-windows, no audits and no circuit files, none read and no blobs. -/
-theorem empty_leg :
+/-- **`Verity.circuit_files_by_path_agree`'s honest lemma, at the network certifier's period**: at a period of no
+link-window and no audit (`emptyParams`), the period with its circuit files read by path, none, accepts, and the
+verifier of record's period, finding them among no blobs, accepts with the same terms. -/
+theorem _root_.Verity.circuit_files_by_path_agree_honest :
     NetworkCheck.Period.readCheck 0 (NetworkCheck.Period.ofRead 0 #[]) (emptyParams, {}) emptyCommitment
         emptyEvidence = .accept (NetworkCheck.Period.terms #[] #[] #[] 0 1 0) { link := "", windows := 0 } ∧
       NetworkCheck.Period.blobProtocol.checkBlobs (emptyParams, {}) emptyCommitment emptyEvidence
