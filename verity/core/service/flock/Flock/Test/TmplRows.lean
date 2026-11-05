@@ -9,8 +9,14 @@ copies meeting). And `Tmpl.groupsOk`, the port groups' and size's checks of `Tmp
 that passes all five description checks unrolls, and the groups `Net.ofRows` refuses fail it (an output group past the
 unit's slot, D11, or not aligned).
 -/
-import Flock.Test.Tmpl
-import Flock.TmplUnroll
+module
+
+public import Flock.Test.Tmpl
+public import Flock.TmplUnroll
+meta import Flock.Test.Tmpl
+meta import Flock.TmplUnroll
+
+@[expose] public section
 
 namespace Flock.Test.TmplRows
 

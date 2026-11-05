@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Facts
-import Proofs.Flock.Soundness.Discharge.Layout.OutShape
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+public import Proofs.Flock.Soundness.Discharge.Layout.OutShape
 
 /-!
 # A unit per template instance, from acceptance
@@ -7,6 +9,8 @@ import Proofs.Flock.Soundness.Discharge.Layout.OutShape
 `HmRow.check` refuses an untyped circuit of `units_per_vu = 0` (PROTOCOL.md §16.10, D8), the one check that does when a
 tail returns the outputs (`check_upv_pos`), and `Stmt.setupHidden` parses its circuit through it (`setupHidden_upv_pos`).
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

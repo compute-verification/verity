@@ -1,4 +1,6 @@
-import Proofs.Pouw.ShaRealize
+module
+
+public import Proofs.Pouw.ShaRealize
 
 /-!
 # An honest prover meets `ShaRealize`'s realization (block I)
@@ -22,6 +24,8 @@ walk-and-log cost 0 (`honest_realization`). So `extract_of_realization` applies 
 It doesn't show `ShaRealize`, a realization for every prover: `toyG`'s programs read the oracle table as data, so
 `Accel.OracleCalls` fails on it, and `ShaRealize` assumes it.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.ShaRealize.Witness
 

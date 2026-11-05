@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Bridge.WrongSet
+module
+
+public import Proofs.Flock.Claims.Bridge.WrongSet
 
 /-!
 # `Binds` or a collision
@@ -10,6 +12,8 @@ that the witness opens every committed, non-constant gate the unit needs (`Cover
 that pass at one position under the statement's roots carry different values (`binds_or_disagree`). Under the
 commitment's binding (`CommitmentScheme.Binds`, proved at the deployed record), the `H` calls of those two openings' checks
 collide (`binds_or_logColl`): a collision among the inputs the two openings hashed, which cr/sha-512 charges per prover. -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink.WrongSet
 

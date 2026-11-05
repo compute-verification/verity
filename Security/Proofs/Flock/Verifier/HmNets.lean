@@ -5,7 +5,11 @@ and the constant in B (`layout_rows`). A committed bit's column is `col`: an inp
 committed `k`-th `inRows + k` (`col_input`, `col_and`). `shaLaid_eq` and `hmLaid_eq` are the two nets' layouts as
 `layout` of the builder's run, stated without running it.
 -/
-import Flock.HmNets
+module
+
+public import Flock.HmNets
+
+@[expose] public section
 
 namespace Flock.HmNets
 

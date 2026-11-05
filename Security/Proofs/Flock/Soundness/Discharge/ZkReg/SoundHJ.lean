@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundJ
-import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
 
 /-!
 # One hidden-output `--zk` sampled session of `J` tables with registered reads
@@ -17,6 +19,8 @@ gives (`regPathsHJ`).
 What it rests on: `zk_session_soundHJ`'s assumptions, and nothing more for the second conjunct, which reads only the
 executable's checks.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkReg
 

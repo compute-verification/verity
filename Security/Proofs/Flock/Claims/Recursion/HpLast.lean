@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.VStarTrace
-import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarTrace
+public import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
 
 /-!
 # hp's last round at the deployed builder (`hpLast`)
@@ -26,6 +28,8 @@ element-level last message's (`OpenRows.elemR`), then the trailer (`OpenRows.las
   and each `rec-open` copy column that is a port's bit (`portCol`) reads the stager's row bit there
   (`colBits_trace`, `colBits_wOs`, `PlacesR.copies`), the columns `finMsg`'s `encLast` part reads (`OpenRows.proofR`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.HpLast
 

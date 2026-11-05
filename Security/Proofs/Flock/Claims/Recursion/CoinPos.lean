@@ -1,4 +1,7 @@
-import Proofs.Flock.Claims.Recursion.CoinTie
+module
+
+public import Proofs.Flock.Claims.Recursion.CoinTie
+import all Init.Data.String.Defs
 
 /-!
 # The coin server's round the coin tie names is the only one of its stream and round number
@@ -18,6 +21,8 @@ such round of `R`. This file proves that from what the verifier checks, with no 
 `staged_coinTie` and `staged_coinTie_drawn` with each round `g` unique.
 -/
 
+@[expose] public section
+
 namespace RecDeploy.CoinPos
 
 open Flock Lean
@@ -25,11 +30,8 @@ open Claims (Msg Out)
 open FlockDeploy (Coin)
 open RecDeploy.CoinTie
 
-theorem qsort_perm {α : Type} (as : Array α) (lt : α → α → Bool) : (as.qsort lt).Perm as := by
-  unfold Array.qsort
-  split
-  · exact ⟨List.Perm.refl _⟩
-  · exact FlockSoundness.Audit.DrawExec.sort_perm lt _ _ _ _ _ _ _ rfl
+theorem qsort_perm {α : Type} (as : Array α) (lt : α → α → Bool) : (as.qsort lt).Perm as :=
+  FlockSoundness.Audit.DrawExec.qsort_perm as lt
 
 theorem utf8_inj {s t : String} (h : s.toUTF8.toList = t.toUTF8.toList) : s = t := by
   rw [byteArray_toList_eq, byteArray_toList_eq] at h

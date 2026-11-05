@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Sampling.Select.Bounds
+module
+
+public import Proofs.Flock.Claims.Sampling.Select.Bounds
 
 /-!
 # `Slots.select` misses a set of slots no more often than the claims' `P_a` (`Properties.SampledProofs.DrawMisses`)
@@ -8,6 +10,8 @@ import Proofs.Flock.Claims.Sampling.Select.Bounds
 * `pa_slots`: the design's `P_a` on `Slots.layout`'s partition, the population's first stage times the input class's.
 * `drawMisses`: the draw is accepted and misses `B` with probability at most `missBound`.
 -/
+
+@[expose] public section
 
 open SampledProofs
 

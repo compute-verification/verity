@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Recursion.VStarParts
-import Proofs.Flock.VBridge.Family.Openings
-import Proofs.Flock.VBridge.OpeningUnit
-import Proofs.Flock.VBridge.Sparse.Laid
-import Proofs.Flock.VBridge.Sparse.Unit
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarParts
+public import Proofs.Flock.VBridge.Family.Openings
+public import Proofs.Flock.VBridge.OpeningUnit
+public import Proofs.Flock.VBridge.Sparse.Laid
+public import Proofs.Flock.VBridge.Sparse.Unit
 
 /-!
 # V*'s parts at the sparse shape
@@ -53,6 +55,8 @@ The rest:
   `SparseLogs` and its `PartOpens` through registered climbs; `vstarParts_sparse_of_links` and
   `vstarPartsStaging_sparse_of_links` take `PartOpens` and `PartLogs` as they are.
 -/
+
+@[expose] public section
 
 namespace Flock.Readable
 

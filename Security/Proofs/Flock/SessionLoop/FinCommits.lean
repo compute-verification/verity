@@ -1,7 +1,9 @@
-import Proofs.Flock.SessionLoop.FinishParts
-import Proofs.Flock.SessionLoop.Link
-import Proofs.Flock.Claims.ZK.CausalExe
-import Proofs.Flock.Claims.ZK.LinkRecheck
+module
+
+public import Proofs.Flock.SessionLoop.FinishParts
+public import Proofs.Flock.SessionLoop.Link
+public import Proofs.Flock.Claims.ZK.CausalExe
+public import Proofs.Flock.Claims.ZK.LinkRecheck
 
 /-!
 # (a) `FinCommits`: the commitments the session reads from the views
@@ -19,6 +21,8 @@ At a statement in the masked scope with a witness (so `Live`, `Masked.live_of`),
   nothing (`commit0Cut_quiet`) and carry the loop's roots (`rootsOf`), and each pads commitment sends nothing
   (`padsTreeCut_quiet`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

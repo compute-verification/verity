@@ -1,4 +1,6 @@
-import Proofs.Pouw.PearlC.ServedRev1Gamma
+module
+
+public import Proofs.Pouw.PearlC.ServedRev1Gamma
 
 /-!
 # v1 under rev1 on a served step's layout, every linear at once (compute accounting's file)
@@ -20,6 +22,8 @@ import Proofs.Pouw.PearlC.ServedRev1Gamma
   projection's: per unit and per audit tile from TT_OUT at 1/1,000, and per unit from TT_OUT at 1/400, 0.38912%
   (Llama-3.1-8B) and 0.38907% (Qwen3-8B); per tile from TT_OUT per tile at 1/400, 0.53869% and 0.53864%.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 
