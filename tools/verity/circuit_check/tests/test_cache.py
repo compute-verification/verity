@@ -323,10 +323,10 @@ def _tree(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def _run(root: Path, harness: str = HARNESS) -> dict:
+def _run(root: Path, harness: str = HARNESS, cwd: Path = REPO) -> dict:
     # no bytecode: an edit that keeps a file's size within the second its bytecode was written would run the old code
     env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
-    r = subprocess.run([sys.executable, "-c", harness, str(root), str(REPO)], capture_output=True, text=True, cwd=REPO, env=env)
+    r = subprocess.run([sys.executable, "-c", harness, str(root), str(REPO)], capture_output=True, text=True, cwd=cwd, env=env)
     assert r.returncode == 0, r.stderr
     out = json.loads(r.stdout.strip().splitlines()[-1])
     assert not out["stats"]["untraced"] and not out["stats"]["errors"] and not out["stats"]["changed"], out
@@ -369,6 +369,22 @@ def test_a_target_holds_its_own_reads_and_resolutions(tmp_path):
     assert set(other["pins"]) == {f"{_pin('SynOther_v1')}#pieces#SynOther_v1"}
     assert "targets.py" not in top["files"] and not [f for f in top["files"] if f.startswith("pins/")]
     assert set(top["enums"]) == {"syn"} and {"top", "other", "idle"} <= set(top["enums"]["syn"])   # `load_registries` listed it
+
+
+def test_a_copy_of_the_tree_at_another_path_reuses_every_target(tmp_path):
+    """Nothing of where the tree is or where the run starts is in a key or a read: a copy of the tree at another path, run from
+    its own root once the first is gone (as each of drive's checks runs in a tree of its own, removed after it), finds every
+    target's key among the first run's entries and reuses it, storing nothing."""
+    import shutil
+
+    first, second = tmp_path / "a", tmp_path / "elsewhere" / "b"
+    assert _run(_tree(first), cwd=first)["hits"] == []
+    entries = sorted(p.relative_to(first / "cache") for p in (first / "cache").glob("*/*/*.json"))
+    shutil.copytree(first, second)
+    shutil.rmtree(first)
+    out = _run(second, cwd=second)
+    assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["stored"] == 0, out["stats"]
+    assert sorted(p.relative_to(second / "cache") for p in (second / "cache").glob("*/*/*.json")) == entries
 
 
 def test_a_target_s_reads_declare_the_paths_their_lookup_takes(tmp_path, monkeypatch):
