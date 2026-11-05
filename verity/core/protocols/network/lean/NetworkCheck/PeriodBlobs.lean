@@ -8,8 +8,9 @@ A composite checks the network certifier's period with the circuit files its par
 the scan's (`NetworkCheck.Period.Listing.files`). Each file is read whole, as a session's verifier parses it
 (`NetworkCheck.CircuitFile.whole`); an audit's is held trimmed (`NetworkCheck.Period.trim`) and the scan's whole
 (`ofFile`, `ofFiles`). The files are then checked with the period (`NetworkCheck.Period.checkWith`), as
-`network-period check` checks them. A period that lists no file is checked as `NetworkCheck.Period.protocol` checks it
-(`filesCheck`). The check has two forms:
+`network-period check` checks them, but a file that is a pinned lookup table is refused (`pinnedTableOf`), since the
+composite's other subprotocols look those up among the blobs. A period that lists no file is checked as
+`NetworkCheck.Period.protocol` checks it (`filesCheck`). The check has two forms:
 
 * `blobProtocol` is the composites' verifier of record. Each listed file is the blob with its listed SHA-512
   (`Core.Blobs.get`, `filesOf`).
@@ -44,14 +45,26 @@ def blobsOf (l : Listing) (bs : Core.Blobs) : V (Array ByteArray) :=
 def filesOf (l : Listing) (bs : Core.Blobs) : V (Array (ByteArray × Flock.Circuit)) :=
   blobsOf l bs >>= ofFiles l
 
-/-- **The period's check with its listed files `fs`**, or why they couldn't be read. A period that lists no file,
-given none, is checked as `protocol` checks it (`check`). Otherwise it is checked with them (`checkWith`), which refuses
-files that are not the listed ones, their count among what it checks. -/
+/-- **The first of the files `fs` that is a pinned lookup table** (`Flock.MUFU_TABLES`) by its SHA-512, its place and
+the table's name, or none. A composite's other subprotocols look the pinned tables up among the blobs
+(`SampledProofs.OneStageZk.tablesOf`), so a listed file that is one would reach them where the files are among the
+blobs, and not where they are read by path. -/
+def pinnedTableOf (fs : Array (ByteArray × Flock.Circuit)) : Option (Nat × String) :=
+  fs.zipIdx.findSome? fun ((sha, _), i) =>
+    (Flock.MUFU_TABLES.find? (·.sha512 == Flock.hexOf sha)).map fun t => (i, t.name)
+
+/-- **The period's check with its listed files `fs`**, or why they couldn't be read. A file that is a pinned lookup
+table is refused (`pinnedTableOf`). A period that lists no file, given none, is checked as `protocol` checks it
+(`check`). Otherwise it is checked with them (`checkWith`), which refuses files that are not the listed ones, their
+count among what it checks. -/
 def filesCheck (fs : V (Array (ByteArray × Flock.Circuit))) (p : Params × Listing) (c : Commitment) (e : Evidence) :
     Core.Outcome Public Profile :=
   match fs with
   | .error why => .reject s!"circuit files: {why}"
-  | .ok fs => if !p.2.listed && fs.isEmpty then check p.1 c e else checkWith fs p c e
+  | .ok fs =>
+    match pinnedTableOf fs with
+    | some (i, t) => .reject s!"circuit files: circuit file {i} is the pinned lookup table {t}, by its SHA-512"
+    | none => if !p.2.listed && fs.isEmpty then check p.1 c e else checkWith fs p c e
 
 /-- **The period protocol with its listed files `fs`, read by path** (`NetworkCheck.PeriodFiles.read`), or with why they
 couldn't be read: `filesCheck fs`. A composite's executable runs it as the network certifier's subprotocol when the files
@@ -101,5 +114,12 @@ parse, is named by its place. -/
   (match filesOf l (.ofArray #[b]) with
     | .error e => e.startsWith "circuit file 0: "
     | .ok _ => false)
+
+/- A file whose SHA-512 is a pinned lookup table's is named by its place and the table; other files are not. -/
+#guard
+  let other := (Flock.Sha512.hash "not a table".toUTF8, (default : Flock.Circuit))
+  match Flock.MUFU_TABLES[1]? >>= fun t => (Flock.unhex t.sha512).toOption with
+  | some d => pinnedTableOf #[other, (d, default)] == some (1, "sqrt") && pinnedTableOf #[other] == none
+  | none => false
 
 end NetworkCheck.Period
