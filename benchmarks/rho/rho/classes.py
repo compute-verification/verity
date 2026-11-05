@@ -9,9 +9,9 @@ the Lean statement it instantiates first, then its named assumptions; `lean.weak
 The statements are about inference blocks of `c` gates reading `k` novel bits; here `k` is `budget.inputs`. Adding a
 class is one more `Argument` in `CLASSES`: a premise set, the profile fields it reads, and its count.
 
-**Counted sets.** Each statement counts its own products: the covering family and the partial-sum and E1 bounds count
-each (weight, token) pair of the forward pass once, `Keyed` counts Dgrad too at `c = 2`, and the cover and thread
-theorems count whatever products their certificate covers. A count on a set `S` is `κ / κ_S` times as many of the
+**Counted sets.** Each statement counts its own products: the covering family and the E1 bounds count each (weight,
+token) pair of the forward pass once, and the cover and thread theorems count whatever products their certificate
+covers. A count on a set `S` is `κ / κ_S` times as many of the
 profile's counted products (`counted`), and where a premise covers only a share of `S` at `k` (the layers deep enough to
 be chained, the layers whose inputs aren't cheap) the count is divided by that share, with no cap where it is 0. Both
 conversions are exact over a whole cover, and per block they assume each block does a representative mix of products.
@@ -28,7 +28,6 @@ from __future__ import annotations
 import math
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
-from functools import lru_cache
 from typing import Literal, Protocol
 
 from rho import lean
@@ -146,10 +145,7 @@ def need(p: Profile, *names: str) -> tuple[float, ...]:
 
 def counted(p: Profile, counts: str) -> float:
     """`κ / κ_S`: the profile's counted products per product of the set `S` a statement counts. `counts` names `S`'s
-    `κ` field (`kappa` is the profile's own set); `keyed` is `Keyed`'s, the forward products at `c = 1` and with Dgrad
-    on the forward's tokens at `c = 2`, which is `κ`'s."""
-    if counts == "keyed":
-        counts = "kappa" if need(p, "per_param")[0] >= 2 else "kappa_forward"
+    `κ` field (`kappa` is the profile's own set)."""
     if counts == "kappa":
         return 1.0
     return p.kappa / need(p, counts)[0]
@@ -212,14 +208,8 @@ def cover(k: float, b: float) -> float:
     return k * k / b + k
 
 
-def cover_aligned(k: float, b: float, f: float) -> float:
-    """`CoverTrainingAligned`: `α₀ b f s ≤ (α²Γ + b f α) size(d)` on activations of whole words at least `f` bits wide,
-    so a block finishes at most `k² / (b f) + k`."""
-    return k * k / (b * f) + k
-
-
 def chained(k: float, c_w: float, c_a: float) -> float:
-    """`CoverTrainingChained`, `CoveringBoundTwoCosts`: `(k/c_w)(k/c_a) + k` products per block."""
+    """`CoveringBoundTwoCosts`: `(k/c_w)(k/c_a) + k` products per block."""
     return (k / c_w) * (k / c_a) + k
 
 
@@ -227,63 +217,6 @@ def covering(k: float, c_w: float, c_a: float) -> float:
     """`CoveringBound`: `(k / c)² + k` at one cost `c = r · b`, which both premises must meet: `c = min(c_w, c_a)`."""
     c = min(c_w, c_a)
     return (k / c) ** 2 + k
-
-
-def covering_additive(k: float, c_w: float, c_a: float) -> float:
-    """`CoveringBoundAdditive`: `(k/c_w)(k/c_a)/4 + k`, the two charges from disjoint inputs (AM–GM)."""
-    return (k / c_w) * (k / c_a) / 4 + k
-
-
-def covering_priced(k: float, c_a: float, price: float, price_max: float) -> float:
-    """`CoveringBoundPriced`: the chained blocks' prices add up to at most `k (k / c_a) + t k` per block, so at a mean
-    price `p̄` a block finishes at most `(k² / c_a + t k) / p̄`. Its depth condition, any `D` weights costing more than
-    `k`, is read at the price floor `c_w` (`chained_share`)."""
-    return (k * k / c_a + price_max * k) / price
-
-
-def lookups(k: float, bcol: float, vocab: float) -> int:
-    """`E`: the least number of a token's embedding lookups with `k < bcol · V · (E + 1)`."""
-    return math.floor(k / (bcol * vocab))
-
-
-def fanout(k: float, b: float, legs: int, aout: float, c: float, vocab: int, bcol: float) -> float:
-    """`FanOutCoverBound`: `k · max(aOut, c k / ((d − E) b)) + k`, while `E < d`."""
-    e = lookups(k, bcol, vocab)
-    if e >= legs:
-        return math.inf
-    return k * max(aout, c * k / ((legs - e) * b)) + k
-
-
-def fanout_read(k: float, b: float, f: float, legs: int, aout: float, c: float, vocab: int, bcol: float) -> float:
-    """`FanOutReadCoverBound`: `k · max(aOut / f, c k / (4 (d − E) f b)) + k`, while `E < d`."""
-    e = lookups(k, bcol, vocab)
-    if e >= legs:
-        return math.inf
-    return k * max(aout / f, c * k / (4 * (legs - e) * f * b)) + k
-
-
-def ps_rate(b: float, f: float, a: float, aout: float, pool: float, mu: float) -> float:
-    """`psRate b f a aOut K μ`, exactly as Lean states it."""
-    c1 = (1 + math.sqrt(mu)) ** 2 * (b * f * a / pool)
-    c2 = 2 * (1 + math.sqrt(mu)) * math.sqrt(1 - mu) * math.sqrt(b * f / (3 * pool))
-    return max(min(c1, c2), mu * f / max(aout, pool / (4 * b * a)))
-
-
-@lru_cache(maxsize=1 << 16)
-def partial_sum(k: float, b: float, f: float, a: float, aout: float, grid: int = 1000) -> float:
-    """`PartialSumCoverBound`: `r(μ) (#P − k #𝓘) ≤ 2k #𝓘` for every `μ ∈ [0, 1]`, so a block finishes at most
-    `k + 2k / r` products at the best `r = max_μ psRate b f a aOut (2k) μ` (over a grid of `μ`)."""
-    r = max(ps_rate(b, f, a, aout, 2 * k, i / grid) for i in range(grid + 1))
-    return k + 2 * k / r if r > 0 else math.inf
-
-
-def partial_sum_keyed(k: float, b: float, legs: int, aout: float, vocab: int, bcol: float, n: float) -> float:
-    """`PartialSumKeyedCoverBound`: `PartialSumCoverBound` at `f = 1` and `a = min(d − E, n)` (`KeyedActivationReads`),
-    while `E < d`."""
-    e = lookups(k, bcol, vocab)
-    if e >= legs:
-        return math.inf
-    return partial_sum(k, b, 1, min(legs - e, n), aout)
 
 
 def threaded(k: float, b_a: float, b_w: float, d: float, e: float, c: float) -> float:
@@ -334,12 +267,6 @@ CLASSES: Mapping[str, Argument] = {a.name: a for a in (
     Formula("cover", ("Nci.Cover.Guarantees.CoverTraining", "Nci.Cover.Assumptions.UpdateHardness",
                       "Nci.Cover.MulBlocks.Upstream", "Nci.Assumptions.ThetaRegistered"),
             ("b",), cover, share=upstream_share, share_reads=("b", *DEPTH)),
-    Formula("cover-aligned", ("Nci.Cover.Guarantees.CoverTrainingAligned", "Nci.Cover.Assumptions.UpdateHardness",
-                              "Nci.Cover.MulBlocks.Upstream", "Nci.Assumptions.ThetaRegistered"),
-            ("b", "f"), cover_aligned, share=upstream_share, share_reads=("b", *DEPTH)),
-    Formula("cover-chained", ("Nci.Cover.Guarantees.CoverTrainingChained", "Nci.Assumptions.ParameterHardAt",
-                              "Nci.Assumptions.ActivationChainedAt", "Nci.Assumptions.ThetaRegistered"),
-            ("c_w", "c_a"), chained, counts="kappa_forward", share=chained_share, share_reads=("c_w", *DEPTH)),
     Formula("covering", ("Nci.Guarantees.CoveringBound", "Nci.Assumptions.ParameterHard",
                          "Nci.Assumptions.ActivationChained"),
             ("c_w", "c_a"), covering, counts="kappa_forward", share=chained_share_one,
@@ -347,28 +274,6 @@ CLASSES: Mapping[str, Argument] = {a.name: a for a in (
     Formula("covering-two-costs", ("Nci.Guarantees.CoveringBoundTwoCosts", "Nci.Assumptions.ParameterHardAt",
                                    "Nci.Assumptions.ActivationChainedAt"),
             ("c_w", "c_a"), chained, counts="kappa_forward", share=chained_share, share_reads=("c_w", *DEPTH)),
-    Formula("covering-additive", ("Nci.Cover.Guarantees.CoveringBoundAdditive",
-                                  "Nci.Cover.Assumptions.ConditionalParameterHardAt",
-                                  "Nci.Assumptions.ActivationChainedAt"),
-            ("c_w", "c_a"), covering_additive, counts="kappa_forward", share=chained_share,
-            share_reads=("c_w", *DEPTH)),
-    Formula("covering-priced", ("Nci.Guarantees.CoveringBoundPriced", "Nci.Assumptions.ParameterHardPricedAt",
-                                "Nci.Assumptions.ActivationChainedAt"),
-            ("c_a", "price", "price_max"), covering_priced, counts="kappa_forward", share=chained_share,
-            share_reads=("c_w", *DEPTH)),
-    Formula("fanout", ("Nci.Cover.Guarantees.FanOutCoverBound", "Nci.Cover.Assumptions.UpdateHardness",
-                       "Nci.Cover.Assumptions.ColumnsIncompressible"),
-            ("b", "legs", "fanout", "per_param", "vocab", "bcol"), fanout, counts="keyed"),
-    Formula("fanout-read", ("Nci.Cover.Guarantees.FanOutReadCoverBound", "Nci.Cover.Assumptions.ValueReadHardness",
-                            "Nci.Cover.Assumptions.ColumnsIncompressible"),
-            ("b", "f", "legs", "fanout", "per_param", "vocab", "bcol"), fanout_read, counts="keyed"),
-    Formula("partial-sum", ("Nci.Cover.Guarantees.PartialSumCoverBound", "Nci.Cover.Assumptions.UpdateHardness",
-                            "Nci.Cover.Assumptions.ActivationReads"),
-            ("b", "f", "width", "fanout"), partial_sum, counts="kappa_forward"),
-    Formula("partial-sum-keyed", ("Nci.Cover.Guarantees.PartialSumKeyedCoverBound",
-                                  "Nci.Cover.Assumptions.UpdateHardness", "Nci.Cover.Assumptions.ColumnsIncompressible",
-                                  "Nci.Cover.Cube.Wide"),
-            ("b", "legs", "fanout", "vocab", "bcol", "entry_width"), partial_sum_keyed, counts="kappa_forward"),
     Formula("threaded", ("Nci.Guarantees.ThreadedThrottled", "Nci.Assumptions.WeightsIncompressible",
                          "Nci.Assumptions.ThetaRegistered", "Nci.Guarantees.ReferenceThreaded",
                          "Nci.Assumptions.ReferenceLayered"),

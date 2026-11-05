@@ -1,7 +1,7 @@
 """Concrete instances: model architectures and the training runs whose target the adversary wants to reach.
 
-A `Model` carries what its architecture fixes for the arguments: sizes, `Keyed`'s token structure (legs, fan-out,
-vocabulary) and its weight matrices by group, from which a family that trains part of the model (an adapter, a subset)
+A `Model` carries what its architecture fixes: sizes, `Keyed`'s token structure (legs, fan-out, vocabulary) and its
+weight matrices by group, from which a family that trains part of the model (an adapter, a subset)
 derives its state and its counted products. A `Run` is a target: train `model` on `tokens` tokens, which the reference
 algorithm does in `compute = 6 · n_active · tokens` FLOPs unless the run says otherwise, of a `kind` in `RUN_KINDS`.
 Families read both (`families.Family.profile`).
