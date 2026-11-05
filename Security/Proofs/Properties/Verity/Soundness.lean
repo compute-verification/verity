@@ -1,4 +1,5 @@
 import Properties.Verity.Soundness
+import Properties.Verity.Subprotocols
 import Properties.Verity.Idle
 import Proofs.Properties.Composition
 import Proofs.Core.Game.Prob
@@ -36,7 +37,10 @@ fails for a verifier that accepts everything (`soundness_at_of_targets_nontrivia
 `remote_soundness_of_subprotocols_nontrivial` at `Idle.exact`, where every error is `0` and PoUW's claim fails on every
 play of the files that pass the commit phase's check; `remote_network_no_pouw_soundness_of_subprotocols_nontrivial` at
 `Idle.exactLeaky`, where every error is `0` and the network certifier's claim fails on every play, since that composite
-has no PoUW subprotocol).
+has no PoUW subprotocol). There the other two hypotheses hold at the compiled composite, the network certifier's target
+fails for a verifier that accepts everything, and so does the conclusion
+(`remote_network_no_pouw_soundness_of_subprotocols_exclusion`); both fail at the compiled composite wherever it accepts
+one input at files that pass the commit phase's check (`Idle.network_fails_of_accepts`).
 -/
 
 namespace Verity
@@ -426,6 +430,99 @@ theorem nontrivial_network (k : Verity.Registration.Composite) (hk : Subprotocol
   exact soundness_nontrivial_of exactLeaky k .empty #[.empty] .empty (exactLeaky.honest .empty #[.empty] .empty)
     ⟨.empty, by simp, rfl⟩ .network hk (network_fails k _ _ _ _) (lt_of_eq_of_lt h0 zero_lt_one)
 
+/-- The idle files parse to nothing: `HmOut.parse` refuses the templated statement's tags before it reads a byte. -/
+theorem parsedOf_fileRead :
+    Flock.Bridge.parsedOf fileRead.tags fileRead.circuitFile fileRead.tables fileRead.publicFile = none := by
+  have hi : fileRead.tags.isTmpl = true := by
+    unfold Flock.Tags.isTmpl
+    exact beq_self_eq_true _
+  unfold Flock.Bridge.parsedOf
+  cases hD : Flock.Desc.parse fileRead.tags fileRead.circuitFile fileRead.tables with
+  | error => rfl
+  | ok D => exact absurd ((Flock.HmOut.parse_isTmpl (Flock.Desc.parse_flat hD)).symm.trans hi) Bool.false_ne_true
+
+/-- The idle files read as no units. -/
+theorem units_fileRead : fileRead.units = 0 := by
+  unfold FileRead.units Flock.Bridge.unitsOfFile
+  rw [parsedOf_fileRead]
+  rfl
+
+/-- The idle files read as the circuit with no gates. -/
+theorem circuit_fileRead_N : fileRead.circuit.N = 0 := by
+  unfold FileRead.circuit Flock.Bridge.circuitOfFile
+  rw [parsedOf_fileRead]
+  rfl
+
+/-- At `exactLeaky`, sampled proofs' claim holds on every play: the idle files have no units, so none is unbound. -/
+theorem holds_sampled_exactLeaky (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray)
+    (c : ByteArray) (σ : Game.Strategy (exactLeaky.game θ F c)) (o : Exchange) :
+    exactLeaky.Holds k θ F c σ .sampled o := by
+  have hu : exactLeaky.units θ F = 0 := units_fileRead
+  have hc : (Accounting.unbound (exactLeaky.partsOf θ F) (exactLeaky.Opens θ F c) (exactLeaky.extract θ F c σ)).card
+      = 0 := Nat.le_zero.1 (((Finset.card_le_univ _).trans_eq (Fintype.card_fin _)).trans_eq hu)
+  show ((Accounting.unbound (exactLeaky.partsOf θ F) (exactLeaky.Opens θ F c) (exactLeaky.extract θ F c σ)).card : ℝ) ≤
+    (exactLeaky.certOf θ).ε * exactLeaky.units θ F
+  rw [hc, hu]
+  simp
+
+/-- At `exactLeaky`, the inference-only policy's claim holds on every play: the declaration's circuit has no gates, so
+it divides into no inference blocks. -/
+theorem holds_inferenceOnly_exactLeaky (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray)
+    (c : ByteArray) (σ : Game.Strategy (exactLeaky.game θ F c)) (o : Exchange) :
+    exactLeaky.Holds k θ F c σ .inferenceOnly o := by
+  have hN : (exactLeaky.declaration θ F).D.N = 0 := circuit_fileRead_N
+  let P : Verity.Partition (exactLeaky.declaration θ F).D 0 :=
+    ⟨fun g => (Fin.cast hN g).elim0, fun g => (Fin.cast hN g).elim0⟩
+  exact Exists.intro 0 (Exists.intro P fun u => u.elim0)
+
+/-- At `exactLeaky`, a subprotocol whose claim holds on every play meets its target at composite `k`. -/
+theorem target_of_holds (k : Verity.Registration.Composite) (a : Subprotocol)
+    (h : ∀ θ F c σ o, exactLeaky.Holds k θ F c σ a o) : exactLeaky.Target k a := by
+  intro θ F c σ
+  rw [error_exactLeaky]
+  exact le_trans (Game.prob_mono (p := fun o => exactLeaky.Verdict k a o ∧ ¬ exactLeaky.Holds k θ F c σ a o)
+    (q := fun _ => False) (fun o ho => ho.2 (h θ F c σ o)) _ σ) (Game.prob_false _ _).le
+
+/-- At `exactLeaky`, the network certifier's target at composite `k` fails for a verifier that accepts everything, at
+the files that are the parameters, for the honest prover: its claim fails on every play, and its error is `0`. -/
+theorem network_target_nontrivial (k : Verity.Registration.Composite) :
+    ¬ exactLeaky.TargetFor (fun _ => True) k .network := by
+  intro h
+  let σ := exactLeaky.honest .empty #[.empty] .empty
+  have h1 := prob_play_eq_one (exactLeaky.rounds .empty) .empty #[.empty] .empty
+    (fun o => True ∧ ¬ exactLeaky.Holds k .empty #[.empty] .empty σ .network o)
+    (fun _ _ => ⟨trivial, network_fails k _ _ _ _ _⟩) σ
+  have h0 := error_exactLeaky .network .empty #[.empty] .empty σ
+  exact lt_irrefl (1 : ℝ≥0∞) ((h1.symm.trans_le (h .empty #[.empty] .empty σ)).trans_lt (lt_of_eq_of_lt h0 zero_lt_one))
+
+/-- **At the compiled verifier, one accepted input is enough**: if composite `k`, with the network certifier among its
+subprotocols, accepts an input whose blobs begin with files that pass the commit phase's check, then at `exactLeaky`
+the network certifier's target and the conclusion both fail at `k`'s compiled verifier, since some strategy sends
+that input on every play (`Vocab.accepts_reachable`) and the network certifier's claim fails on every play. -/
+theorem network_fails_of_accepts (k : Verity.Registration.Composite) (hk : Subprotocol.network ∈ subprotocols k)
+    (θ : ByteArray) (F : Array ByteArray) (c e : ByteArray) (B : Array ByteArray) (hacc : Accepts k ⟨θ, c, e, F ++ B⟩)
+    (hreg : exactLeaky.Registered θ F) :
+    ¬ exactLeaky.NetworkCertifierSound k ∧ ¬ exactLeaky.SoundnessAt k := by
+  obtain ⟨σ, hσ⟩ := exactLeaky.accepts_reachable k θ F c e B hacc hreg
+  refine ⟨fun h => ?_, fun h => ?_⟩
+  · have hle : Game.prob (fun o => Accepts k o.sent ∧ exactLeaky.Registered o.params o.files)
+          (exactLeaky.game θ F c) σ ≤
+        Game.prob (fun o => exactLeaky.Verdict k .network o ∧ ¬ exactLeaky.Holds k θ F c σ .network o)
+          (exactLeaky.game θ F c) σ :=
+      Game.prob_mono (fun o ho => ⟨⟨ho.2, accepts_same ho.1, accepts_components ho.1 hk⟩,
+        network_fails k _ _ _ _ _⟩) _ σ
+    have h1 := hσ.symm.trans_le (hle.trans (h θ F c σ))
+    rw [error_exactLeaky] at h1
+    exact absurd h1 (not_le.2 zero_lt_one)
+  · have hle : Game.prob (fun o => Accepts k o.sent ∧ exactLeaky.Registered o.params o.files)
+          (exactLeaky.game θ F c) σ ≤
+        Game.prob (fun o => Accepts k o.sent ∧ exactLeaky.Registered o.params o.files ∧
+          ∃ a ∈ subprotocols k, ¬ exactLeaky.Holds k θ F c σ a o) (exactLeaky.game θ F c) σ :=
+      Game.prob_mono (fun o ho => ⟨ho.1, ho.2, .network, hk, network_fails k _ _ _ _ _⟩) _ σ
+    have h1 := hσ.symm.trans_le (hle.trans (h θ F c σ))
+    rw [Finset.sum_eq_zero fun a _ => error_exactLeaky a _ _ _ _] at h1
+    exact absurd h1 (not_le.2 zero_lt_one)
+
 end Idle
 
 /-- **`SoundnessOf`'s honest lemma**: its hypotheses hold at the idle deployment's compiled composites, every
@@ -484,12 +581,26 @@ theorem remote_network_no_pouw_soundness_of_subprotocols_honest :
       Idle.unbounded.NetworkCertifierSound .remoteNetworkNoPouw :=
   ⟨Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _⟩
 
+/-- **`RemoteNetworkNoPouwSoundness` rests on the network certifier's premise**: at the idle deployment whose errors are
+all `0` and whose network certifiers' bound fails on every play (`Idle.exactLeaky`), sampled proofs' and the
+inference-only policy's targets hold at the compiled remote-network without PoUW, since their claims hold on every play
+over the idle files' empty circuit, while for a verifier that accepts everything the network certifier's target fails
+and so does the conclusion. At the compiled verifier those two fail too once it accepts one input at files that pass
+the commit phase's check (`Idle.network_fails_of_accepts`); no proof here exhibits that input, since the composite's
+decoders read canonical JSON through well-founded recursion the kernel does not evaluate. -/
+theorem remote_network_no_pouw_soundness_of_subprotocols_exclusion :
+    Idle.exactLeaky.SampledProofsSound .remoteNetworkNoPouw ∧ Idle.exactLeaky.InferenceOnlySound .remoteNetworkNoPouw ∧
+      ¬ Idle.exactLeaky.TargetFor (fun _ => True) .remoteNetworkNoPouw .network ∧
+      ¬ Idle.exactLeaky.SoundnessFor .remoteNetworkNoPouw fun _ => True :=
+  ⟨Idle.target_of_holds _ _ (Idle.holds_sampled_exactLeaky _),
+    Idle.target_of_holds _ _ (Idle.holds_inferenceOnly_exactLeaky _), Idle.network_target_nontrivial _,
+    Idle.nontrivial_network .remoteNetworkNoPouw (Finset.mem_filter.2 ⟨Finset.mem_univ _, rfl⟩)⟩
+
 /-- **`RemoteNetworkNoPouwSoundness`'s nontrivial lemma**: its conclusion fails at remote-network without PoUW for a
-verifier that accepts everything, at the idle deployment whose errors are all `0` and whose network
-certifiers' bound fails on every play (`Idle.exactLeaky`): with no PoUW subprotocol, the failing claim is the network
-certifier's. -/
+verifier that accepts everything, at `Idle.exactLeaky`, where the network certifier's claim is the only one that fails
+(`remote_network_no_pouw_soundness_of_subprotocols_exclusion`). -/
 theorem remote_network_no_pouw_soundness_of_subprotocols_nontrivial :
     ¬ Idle.exactLeaky.SoundnessFor .remoteNetworkNoPouw fun _ => True :=
-  Idle.nontrivial_network .remoteNetworkNoPouw (Finset.mem_filter.2 ⟨Finset.mem_univ _, rfl⟩)
+  remote_network_no_pouw_soundness_of_subprotocols_exclusion.2.2.2
 
 end Verity

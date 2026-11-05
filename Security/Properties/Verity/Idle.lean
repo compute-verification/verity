@@ -6,17 +6,19 @@ import Properties.Verity.Game
 The witnesses of `Verity.Soundness`, `Verity.RemoteSoundness`, `Verity.RemoteNetworkNoPouwSoundness` and
 `Verity.SoundnessOf` read these: a small hand-built
 descriptor, not a parsed file. The device has no on-chip state, no memory, no ops and no bandwidth (`device`); the
-circuit file is read as empty files under the netlist tags (`fileRead`); there are no device rounds, no releases, no
-commitment openings and no gates computed; the world charges nothing over an empty window (`world`); the schedule is one
-empty block (`blocks`), and its wipe fills nothing and accepts nothing (`wipe`). Every finder and forger outputs nothing
-on its one coin. The circuit file's digest in the parameters is the parameters' own SHA-512, so the committed files pass
-the commit phase's check exactly when one of them is the parameters.
+circuit file is read as empty files under the templated statement's tags, whose circuit the verifier reads from its
+template and never from the file, so they read as the empty circuit with no units (`fileRead`); there are no device
+rounds, no releases, no commitment openings and no gates computed; the world charges nothing over an empty window
+(`world`); the schedule is one empty block (`blocks`), and its wipe fills nothing and accepts nothing (`wipe`). Every
+finder and forger outputs nothing on its one coin. The circuit file's digest in the parameters is the parameters' own
+SHA-512, so the committed files pass the commit phase's check exactly when one of them is the parameters.
 
 `vocab δ W` publishes the error `δ` for every subprotocol, the work certificate `W`, and no collision, forgery or loss
 term. At `unbounded` (`δ = ⊤`) every subprotocol's error is `⊤`, so every target holds. At `exact` (`δ = 0`, `W = 1`)
 every error is `0` while PoUW's claim, a gate computed, fails on every play. `exactLeaky` is `exact` in a world where
-no bound on what the network certifiers saw is met (`leaky`), so the network certifier's claim fails on every play: the
-witness at a composite with no PoUW subprotocol.
+no bound on what the network certifiers saw is met (`leaky`), so the network certifier's claim fails on every play
+while sampled proofs' and the inference-only policy's hold on every play, over the empty circuit: the witness at a
+composite with no PoUW subprotocol.
 -/
 
 namespace Verity.Idle
@@ -29,8 +31,9 @@ noncomputable section
 /-- **The device**: no on-chip state, no memory, no ops, no bandwidth, and one side channel that carries nothing. -/
 def device : Device Unit := ⟨0, 0, fun _ => 0, 0, fun _ => 0⟩
 
-/-- **The circuit file as v2 reads it**: empty files under the netlist tags. -/
-def fileRead : FileRead := ⟨Flock.Tags.netlistV1, .empty, [], .empty⟩
+/-- **The circuit file as v2 reads it**: empty files under the templated statement's tags, which `HmOut.parse` refuses
+before it reads a byte, so they parse to nothing. -/
+def fileRead : FileRead := ⟨Flock.Tags.circuitTmpl, .empty, [], .empty⟩
 
 /-- The step that charges nothing. -/
 def step : Step Unit Unit := ⟨fun _ _ => 0, fun _ => 0, fun _ _ => 0, fun _ => 0, fun _ => 0⟩
