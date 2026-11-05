@@ -8,8 +8,9 @@ import Proofs.Core.UnionBound
 /-!
 # The causal game's coins, drawn up front: the coupling and the bounds it carries
 
-`play_couples` proves `Verity.PlayCouples` by induction over the device's recursion (`releases`), from every state whose
-families' coins left `fs` the coin commitment's families `fs₀` reach (`Coupling.Shape`), for every continuation:
+`play_couples` proves the coupling (`Verity.PlayCouples`, a lemma every guarantee here rests on) by induction over the
+device's recursion (`releases`), from every state whose families' coins left `fs` the coin commitment's families `fs₀`
+reach (`Coupling.Shape`), for every continuation:
 
 * at a fresh coin, the coin the device draws is the coin of `t` its family's coins left name, and the rest of the play
   reads no coin of that family it has read already (`Coupling.outK_congr`, over `Coupling.Agree`), so drawing it apart is
@@ -504,6 +505,15 @@ theorem upper (fs₀ : List (String × ℕ)) {β : Type} (q : β → Prop) : ∀
 
 end Coupling
 
+/-- **The coupling of the play to the coins drawn up front.** For every families `fs`, parameters, committed files,
+commitment, strategy `σ` and event `q`, the probability of `q` in the play of `σ` is at least its probability over the
+coins drawn up front at some resolution of the coin trees' coins, and at most its probability at another. -/
+def PlayCouples : Prop :=
+  ∀ (fs : List (String × ℕ)) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Game.Strategy (play fs θ F c)) (q : Exchange → Prop),
+    (∃ ρ : TreeCoins, Game.prCoin (fun t => q (outUp fs θ F c ρ σ t)) ≤ Game.prob q (play fs θ F c) σ) ∧
+      ∃ ρ : TreeCoins, Game.prob q (play fs θ F c) σ ≤ Game.prCoin fun t => q (outUp fs θ F c ρ σ t)
+
 open Game in
 /-- **`PlayCouples`**: the upper half from the device's initial state (`Coupling.upper`), and the lower half from the
 upper half of the complement, whose probabilities with the event's sum to one in the play and at every coins drawn up
@@ -595,11 +605,6 @@ theorem soundness_of_upFront : SoundnessOfUpFront := by
 /-! ## Witnesses, at the idle deployment -/
 
 namespace Idle
-
-instance : Fintype unbounded.Seed := inferInstanceAs (Fintype Unit)
-instance : Nonempty unbounded.Seed := inferInstanceAs (Nonempty Unit)
-instance : Fintype unbounded.Spots := inferInstanceAs (Fintype Unit)
-instance : Nonempty unbounded.Spots := inferInstanceAs (Nonempty Unit)
 
 /-- At `exact`, PoUW's target fails at remote for a verifier that accepts everything. -/
 theorem pouw_nontrivial : ¬ exact.TargetFor (fun _ => True) .remote .pouw :=

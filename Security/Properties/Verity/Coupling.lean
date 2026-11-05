@@ -16,9 +16,9 @@ own coins. This module states the coupling between the two and the bounds it car
 * **The play at those coins** (`outUp fs θ F c ρ σ t`): the play of `σ` with each family coin read from `t` and each coin
   tree's from `ρ`, the device's log and the evidence `σ` sends after it (`outK`). Each family coin is read once: a
   family's coins left only go down.
-* **The coupling** (`PlayCouples`): for every event, the play's probability at `σ` lies between its probabilities over the
-  coins drawn up front at two resolutions of the coin trees' coins. An event that reads no coin tree's coin has the
-  same probability in both.
+* **The coupling**, which every guarantee here rests on and which the proofs tree proves (`play_couples`): for every
+  event, the play's probability at `σ` lies between its probabilities over the coins drawn up front at two resolutions
+  of the coin trees' coins. An event that reads no coin tree's coin has the same probability in both.
 * **Each subprotocol's bound over the coins drawn up front** (`Vocab.UpFrontFor acc k a`, `Vocab.UpFrontBound k a`): at
   every resolution of the coin trees' coins, the probability over the coins drawn up front that `acc` holds while `a`'s
   claim fails is at most `a`'s error at the strategy. It gives `a`'s target at `acc` in the play (`CoinsCouple`), and so
@@ -138,16 +138,6 @@ def outUp (fs : List (String × ℕ)) (θ : ByteArray) (F : Array ByteArray) (c 
     (σ : Game.Strategy (play fs θ F c)) (t : UpFront fs) : Exchange :=
   let o := outK fs t ρ (frames fs) fs [] [] _ σ
   ⟨θ, F, c, o.1, o.2.1.1, o.2.1.2⟩
-
-/-- **The coupling of the play to the coins drawn up front.** For every families `fs`, parameters, committed files,
-commitment, strategy `σ` and event `q`, the probability of `q` in the play of `σ` is at least its probability over the
-coins drawn up front at some resolution of the coin trees' coins, and at most its probability at another. Where `q`
-reads no coin tree's coin, the two are one, and the play's probability equals it. -/
-def PlayCouples : Prop :=
-  ∀ (fs : List (String × ℕ)) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
-    (σ : Game.Strategy (play fs θ F c)) (q : Exchange → Prop),
-    (∃ ρ : TreeCoins, Game.prCoin (fun t => q (outUp fs θ F c ρ σ t)) ≤ Game.prob q (play fs θ F c) σ) ∧
-      ∃ ρ : TreeCoins, Game.prob q (play fs θ F c) σ ≤ Game.prCoin fun t => q (outUp fs θ F c ρ σ t)
 
 namespace Vocab
 

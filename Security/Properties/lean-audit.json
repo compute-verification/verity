@@ -339,6 +339,9 @@
    "owner": "@network-accounting",
    "digest": "5f6f0e28c3d227e17c977a8e9470dcd3131f0719f67a8b665a92c402ecdeeb2e"
   },
+  "Verity.Vocab.PeriodsCouple": {
+   "owner": "@soundness"
+  },
   "Verity.Vocab.PousSound": {
    "owner": "@memory-accounting",
    "digest": "2d0ee7043be3fa3a99503039cef1756e3c3558dd814faa5970bcbd738e037e69"
@@ -351,13 +354,25 @@
    "owner": "@proofs",
    "digest": "c0c0fd13ed91538fbbb0bd8b231e1e0b28c9b1657924dc4272f4739c9c9a55f6"
   },
+  "Verity.Vocab.SubprotocolBound": {
+   "owner": "@soundness"
+  },
   "Verity.Vocab.Target": {
    "owner": "@soundness",
    "digest": "548f5118cb15c0be50546298ea855af1004bbfd85138c2afe31efcaeb602b1cd"
   },
+  "Verity.Vocab.UpFrontFor": {
+   "owner": "@soundness"
+  },
+  "Verity.Vocab.WipeCoupling": {
+   "owner": "@soundness"
+  },
   "Verity.Vocab.WipeSound": {
    "owner": "@memory-accounting",
    "digest": "8f521d01c94735a34b39b53e869845d8e29035ef05968ef7b0e56349a19d1937"
+  },
+  "Verity.Wipe.SurvivorBound": {
+   "owner": "@soundness"
   }
  },
  "meaning": [
@@ -5403,7 +5418,11 @@
    "Properties.Composition.acceptTied_nontrivial": "lemma: AcceptTied's nontrivial lemma: TiedAccepted fails at an outcome that rejected, which a verifier that accepts everything accepts",
    "NciCheck.Properties.SecurityProofs.ProtocolAccepts_nontrivial": "lemma: ProtocolAccepts's nontrivial lemma: the check of record gives no verdict at a case whose α is no fraction, which a verifier that accepts everything accepts",
    "Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial": "lemma: AcceptInferenceOnly's nontrivial lemma: InferenceOnlyHeld fails at no cases, ev = [], which a verifier that accepts everything accepts",
-   "Properties.Remote.SecurityProofs.acceptComplies_nontrivial": "lemma: AcceptComplies' nontrivial lemma: CompliesHeld fails at no cases, ev = [], which a verifier that accepts everything accepts"
+   "Properties.Remote.SecurityProofs.acceptComplies_nontrivial": "lemma: AcceptComplies' nontrivial lemma: CompliesHeld fails at no cases, ev = [], which a verifier that accepts everything accepts",
+   "Verity.coins_couple": "frozen (premise): a subprotocol's target at a verdict in the causal game (Verity.CoinsCouple: Verity.Vocab.TargetFor) from its bound over the coins drawn up front at every resolution of the coin trees' coins (Verity.Vocab.UpFrontFor), the play's probability of the event being at most its probability over those coins at some resolution; at the component's acceptance it is Verity.Vocab.ComponentBound; the bound is a hypothesis until each subprotocol's piece proves it in the coins model",
+   "Verity.target_of_periods": "frozen (premise): an audit's target at a verdict in the causal game (Verity.TargetOfPeriods: Verity.Vocab.TargetFor) from a period run of the coins model coupled to the play (Verity.Vocab.PeriodsCouple: its coins in bijection with the coins drawn up front, its verdict and claim refining the play's, Accounting.PeriodRun.Sound within the published delta, and the rest of the event, a log out of place or the coupling's break, within the forger's and the finder's terms); the coupling is a hypothesis until each audit's piece builds it",
+   "Verity.wipe_target": "frozen (premise): the wipe's target at a verdict in the causal game (Verity.WipeTarget: Verity.Vocab.TargetFor) from the wipe's survivor bound over its own draw (Verity.Wipe.SurvivorBound) and its coupling to the play (Verity.Vocab.WipeCoupling: Verity.Wipe.OfRun.Preserves, which reads the foreign content as uniform on the play, the wipe's verdict refining the verdict, and the survivor error within the wipe's); both are hypotheses until the wipe's piece proves them",
+   "Verity.soundness_of_upFront": "frozen (premise): Verity.soundness_at_of_targets's union bound at every composite's compiled verifier in the causal game (Verity.SoundnessOfUpFront: Verity.Vocab.SoundnessAt), from each of the composite's subprotocols' bound at its compiled component, over the coins drawn up front, or as its target (Verity.Vocab.SubprotocolBound: Verity.Vocab.ComponentBound, Verity.Vocab.UpFrontBound or Verity.Vocab.Target); each bound is a hypothesis until its subprotocol's piece proves it"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {

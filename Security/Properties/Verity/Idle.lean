@@ -137,6 +137,11 @@ noncomputable def unbounded : Vocab device Unit := vocab ⊤ 1
 /-- **The deployment whose errors are all `0`**, publishing a work certificate of one gate, which no play computes. -/
 noncomputable def exact : Vocab device Unit := vocab 0 1
 
+instance instFintypeSeedUnbounded : Fintype unbounded.Seed := inferInstanceAs (Fintype Unit)
+instance instNonemptySeedUnbounded : Nonempty unbounded.Seed := inferInstanceAs (Nonempty Unit)
+instance instFintypeSpotsUnbounded : Fintype unbounded.Spots := inferInstanceAs (Fintype Unit)
+instance instNonemptySpotsUnbounded : Nonempty unbounded.Spots := inferInstanceAs (Nonempty Unit)
+
 /-- **The period run that charges nothing and accepts everything**, on the committed files' circuit over one coin: no
 work, no memory held, nothing read, every bound on what the network certifiers saw met, and every audit's verdict
 accepting. -/
