@@ -3,6 +3,7 @@ module
 public import Proofs.Accounting.Compose.ServiceCovers
 public import Proofs.Accounting.Compose.CircuitWork
 public import Definitions.Accounting.ComposePeriod
+public import Proofs.Accounting.Lemmas.Compose
 
 /-!
 # The period layer's covers: `ServiceCovers` with a window index

@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Accounting.TS.Drawn
-public import Definitions.Accounting.Guarantees.TS.Fixed
+public import Proofs.Accounting.Lemmas.TS.Fixed
 
 /-!
 # An honest run meets option A's hypotheses (non-vacuity)

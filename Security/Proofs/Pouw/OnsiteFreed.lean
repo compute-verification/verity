@@ -3,6 +3,7 @@ module
 public import Definitions.Pouw.Guarantees.OnsiteFreed
 public import Proofs.Pouw.Dither
 public import Proofs.Pouw.DitherWitness
+public import Proofs.Pouw.Lemmas.Dither
 
 /-!
 # The onsite PoUW protocol's freed compute: the proof
