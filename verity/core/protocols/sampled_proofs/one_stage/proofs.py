@@ -61,14 +61,11 @@ SCOPE_WHY = ("a circuit outside the unit's form under --zk (scopeOkH: the unit r
              "outputs)")
 TABLES_WHY = "a shared-row public file (header shared_rows) under --zk"
 #: `OneStageZk.NO_ROW_WHY` and `WIDE_WHY` (`template_why`), v2's refusals of the unit template
-NO_ROW_WHY = ("the circuit's template instance has no computed row (units_per_vu is 0, or the unit net computes none): "
-              "a proof block of no gate")
+NO_ROW_WHY = "the circuit's units_per_vu is 0: a template instance of no unit, a proof block of no gate"
 WIDE_WHY = ("a template instance returns more than 262144 bits (16 per output leaf of its units_per_vu units): past "
             "the widest size class")
 #: `OneStageZk.UNIT_CLASS_MAX`: the widest public size class of a proof block's outputs, in bits
 UNIT_CLASS_MAX = 262144
-#: `Flock.WORD`: the rows of an input word
-WORD = 128
 
 
 class LeanError(RuntimeError):
@@ -168,27 +165,19 @@ def ks_form_why(circuit: Path, public: Path) -> str | None:
 
 
 def template_why(circuit: Path) -> str | None:
-    """`OneStageZk.templateOk`'s refusals on the circuit file's head, with its reasons: a template instance with no
-    computed row (META's ``units_per_vu`` is 0, or the unit net's constant is at its input rows' end:
-    ``const ≤ inWords · WORD``, `inWords` its last input group's column plus its words), else one returning more than
-    `UNIT_CLASS_MAX` bits (16 per entry of META's ``leaves_out`` over its ``units_per_vu`` units); None when neither
-    applies or the head is not in that form. v2 refuses each session of such a circuit with that reason, so `verify`
-    turns a session Lean accepts into one rejected with it."""
+    """`OneStageZk.templateOk`'s refusals on the circuit file's head, with its reasons: a template instance of no unit
+    (META's ``units_per_vu`` is 0), else one returning more than `UNIT_CLASS_MAX` bits (16 per entry of META's
+    ``leaves_out`` over its ``units_per_vu`` units); None when neither applies or the head is not in that form. v2
+    refuses each session of such a circuit with that reason, so `verify` turns a session Lean accepts into one rejected
+    with it."""
     head = _unit_head(circuit)
     if head is None:
         return None
-    meta, unit = head
+    meta, _ = head
     leaves, upv = meta.get("leaves_out", []), meta.get("units_per_vu")
     if not (isinstance(leaves, list) and isinstance(upv, int)):
         return None
-    try:
-        const, at, in_words = int(unit[3]), 5, 0
-        for _ in range(int(unit[4])):
-            col, words, ports = int(unit[at]), int(unit[at + 1]), int(unit[at + 2])
-            in_words, at = col + words, at + 3 + ports
-    except (IndexError, ValueError):
-        return None
-    if upv == 0 or const <= in_words * WORD:
+    if upv == 0:
         return NO_ROW_WHY
     if 16 * sum(len(leaves[u]) if u < len(leaves) and isinstance(leaves[u], list) else 0 for u in range(upv)) \
             > UNIT_CLASS_MAX:
@@ -379,5 +368,5 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
 
 
 __all__ = ["EXE", "NO_ROW_WHY", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY", "UNIT_CLASS_MAX", "V2", "V2_EXE",
-           "WIDE_WHY", "WORD", "Finding", "LeanError", "Proof", "check_v2", "evidence_v2", "executable", "file_sha512",
+           "WIDE_WHY", "Finding", "LeanError", "Proof", "check_v2", "evidence_v2", "executable", "file_sha512",
            "ks_form_why", "proved_units", "reads_registered", "template_why", "v2_executable", "verdicts_v2", "verify"]

@@ -128,14 +128,14 @@ def _template(d: Path, const: int, meta: dict) -> Path:
     return circuit
 
 
-TEMPLATES = {"a computed row, 16 bits": (PF.WORD + 1, {"units_per_vu": 1, "leaves_out": [[0]]}, None),
-             "no computed row": (PF.WORD, {"units_per_vu": 1, "leaves_out": [[0]]}, PF.NO_ROW_WHY),
-             "no unit": (PF.WORD + 1, {"units_per_vu": 0, "leaves_out": []}, PF.NO_ROW_WHY),
-             "the widest class": (PF.WORD + 1, {"units_per_vu": 2, "leaves_out": [list(range(8192))] * 2}, None),
-             "one leaf past it": (PF.WORD + 1, {"units_per_vu": 2,
-                                                "leaves_out": [list(range(8192)), list(range(8193))]}, PF.WIDE_WHY),
+TEMPLATES = {"one unit, 16 bits": (129, {"units_per_vu": 1, "leaves_out": [[0]]}, None),
+             "one unit, no computed row of its net's own": (128, {"units_per_vu": 1, "leaves_out": [[0]]}, None),
+             "no unit": (129, {"units_per_vu": 0, "leaves_out": []}, PF.NO_ROW_WHY),
+             "the widest class": (129, {"units_per_vu": 2, "leaves_out": [list(range(8192))] * 2}, None),
+             "one leaf past it": (129, {"units_per_vu": 2, "leaves_out": [list(range(8192)), list(range(8193))]},
+                                  PF.WIDE_WHY),
              "a leaf map past units_per_vu is no unit's": (
-                 PF.WORD + 1, {"units_per_vu": 1, "leaves_out": [[0], list(range(16384))]}, None)}
+                 129, {"units_per_vu": 1, "leaves_out": [[0], list(range(16384))]}, None)}
 
 
 @pytest.mark.parametrize("const, meta, want", TEMPLATES.values(), ids=TEMPLATES.keys())
@@ -148,7 +148,7 @@ def test_the_mirror_of_the_template_check_refuses_what_lean_refuses(tmp_path, co
 def test_a_session_lean_accepts_on_a_template_the_mirror_refuses_is_rejected_with_its_reason(tmp_path, monkeypatch):
     """`verify` rejects a session the verifier accepts on a circuit `template_why` refuses, with v2's reason, as a
     finding rather than a refusal of the run."""
-    circuit = _template(tmp_path, PF.WORD, {"units_per_vu": 1, "leaves_out": [[0]]})
+    circuit = _template(tmp_path, 129, {"units_per_vu": 0, "leaves_out": []})
     public = tmp_path / "pub.bin"
     public.write_bytes(b"{}\n")
     (tmp_path / "s").mkdir()

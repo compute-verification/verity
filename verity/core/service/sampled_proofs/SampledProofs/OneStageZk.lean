@@ -59,11 +59,9 @@ def NO_CHALLENGER : String :=
   "the parameters name no challenger: the draw's coins are the auditor's challenger's signed release (challenger, " ++
     "with window_root), never the prover's record"
 
-/-- The refusal of a template instance with no computed row: no unit, or a unit net whose rows are its inputs and the
-constant, so each proof block would hold no gate. -/
-def NO_ROW_WHY : String :=
-  "the circuit's template instance has no computed row (units_per_vu is 0, or the unit net computes none): a proof " ++
-    "block of no gate"
+/-- The refusal of a template instance of no unit: each proof block would hold no gate. Every unit holds a computed row,
+its own constant, so `units_per_vu ≥ 1` is all a proof block's gate needs. -/
+def NO_ROW_WHY : String := "the circuit's units_per_vu is 0: a template instance of no unit, a proof block of no gate"
 
 /-- The widest public size class of a proof block's outputs, in bits (`Claims.Sampling.unitClassMax`). -/
 def UNIT_CLASS_MAX : Nat := 262144
@@ -76,11 +74,10 @@ def WIDE_WHY : String :=
 /-- **The bits a template instance returns**: 16 per output leaf of each of its `units_per_vu` units. -/
 def returnedBits (c : Flock.Circuit) : Nat := 16 * ((List.range c.upv).map fun u => (c.leavesOut.getD u #[]).size).sum
 
-/-- **The unit template's refusals** on the parsed circuit: a template instance with no computed row (`NO_ROW_WHY`: no
-unit, or the unit net's constant at its input rows' end; the parser already refuses input rows past the constant), and
-one returning more than `UNIT_CLASS_MAX` bits (`WIDE_WHY`). -/
+/-- **The unit template's refusals** on the parsed circuit: a template instance of no unit (`NO_ROW_WHY`), and one
+returning more than `UNIT_CLASS_MAX` bits (`WIDE_WHY`). -/
 def templateOk (c : Flock.Circuit) : V Unit := do
-  if c.upv = 0 ∨ c.unit.constPos ≤ c.unit.inWords * Flock.WORD then throw NO_ROW_WHY
+  if c.upv = 0 then throw NO_ROW_WHY
   if returnedBits c > UNIT_CLASS_MAX then throw WIDE_WHY
 
 /-- The verifier's own inputs to `flock-verify verify --zk`: the program's descriptor (as JSON and as the bytes
