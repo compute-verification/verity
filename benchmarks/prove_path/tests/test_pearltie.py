@@ -9,8 +9,9 @@ gate/up and down), and its 895 units of 58 templates are proof blocks C-Flock's 
 
 * **Pearl+'s passes**, a pass a round: each call's A rows (its x widened to FP32, then zero rows up to m₁₆) and y (its value
   widened) as the circuit's proof blocks make them (`window_rows.Rows.value`), committed as Pearl+'s reference commits them
-  (`audit.commit_rows`, `served_y.commit_y`) under the prover's salt key, in manifests of the fields W and the verdict's W
-  check read.
+  (`audit.commit_rows`, `served_y.commit_y`) under the prover's salt key, and each layer weight's B rows (a call's
+  weight, random BF16 rows of n x K: no proof block reads B) as PoUW's weights tree commits them, in manifests of the
+  fields W and the verdict's W check read.
 * **W**, Pearl+'s window record over them (`pearl_c.window.record`), which Pearl+'s verdict holds to the roots its passes
   credited (`verify_run.tie`).
 * **R**, the audited window's registration, as window-commit makes it: the cut circuit's units filled from the same
@@ -62,7 +63,7 @@ from verity_vllm.program.predict.window_class import PearlTables, WindowClass
 from verity_vllm.protocols.pouw.pearl_c import served_y as SY
 from verity_vllm.protocols.pouw.pearl_c import window as PWR
 
-from verity.core.protocols.pouw.audit import HM96, activation_binding, commit_rows
+from verity.core.protocols.pouw.audit import HM96, HM96_WEIGHTS, Workload, activation_binding, commit_rows, weight_binding
 from verity.core.protocols.pouw.protocol import Matmul, Shape
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registered as G, registration as REG
 from verity.ml.circuits.codec import canonical_json
@@ -124,12 +125,24 @@ def _shape(c, s: int, call: int) -> tuple[int, int]:
     return (params[PEARL.a(s, call)] // (2 * PEARL.a_rows(CLASS, s)), params[PEARL.y(s, call)] // (2 * PEARL.rows(CLASS, s)))
 
 
+def _b_roots(c) -> dict[int, str]:
+    """Each call's weight's B root (weight id the call's place in its round), as PoUW's weights tree commits its n rows of
+    K FP32 words (`audit.commit_rows` under `weight_binding`, salted at ``HM96_WEIGHTS + w``) under the prover's salt key."""
+    rng, out = np.random.default_rng(5), {}
+    for w in range(CALLS):
+        k, n = _shape(c, 0, w)
+        rows = (rng.standard_normal((n, k)).astype(np.float32).view(np.uint32) & 0xFFFF0000).astype("<u4")
+        out[w] = commit_rows(weight_binding(w), -2, [r.tobytes() for r in rows], HM96, SALT_KEY,
+                             HM96_WEIGHTS + w).commitment.root.hex()
+    return out
+
+
 def _manifests(c, pearl: dict[str, np.ndarray]) -> list[dict]:
     """Pearl+'s passes' manifests, a pass a round, of the fields W and the verdict's W check read: each call's A rows
     ``pearl[pearl-a/<s>/<c>]`` committed as `audit.commit_rows` commits them (salted at the call's index) and its y
     ``pearl[pearl-y/<s>/<c>]`` as `served_y.commit_y` does (its BF16 words, each committed row's high halves), under the
-    epoch's salt and the prover's salt key, the call's index ``s · CALLS + c``."""
-    out = []
+    epoch's salt and the prover's salt key, the call's index ``s · CALLS + c``; and each weight's B root (`_b_roots`)."""
+    out, roots = [], _b_roots(c)
     for s in range(CLASS.outputs):
         mm = []
         for call in range(CALLS):
@@ -140,7 +153,8 @@ def _manifests(c, pearl: dict[str, np.ndarray]) -> list[dict]:
             mm.append({"index": i, "m": len(a), "k": k, "n": n, "weight": call, "real_rows": len(y), "root_a": root_a.hex(),
                        "y": {"root": root_y.hex()}})
         out.append({"entry": f"pouw:{SCHEME}", "scheme": SCHEME, "salt": SALT.hex(), "hm96_salt_key": SALT_KEY.hex(),
-                    "matmuls": mm})
+                    "matmuls": mm, "weights": {str(u["weight"]): {"n": u["n"], "k": u["k"], "root": roots[u["weight"]]}
+                                               for u in mm}})
     return out
 
 
@@ -159,11 +173,21 @@ def _flipped(toy) -> SimpleNamespace:
 
 def _passes(manifests: list[dict]) -> list[SimpleNamespace]:
     """The passes of ``manifests`` as Pearl+'s verdict holds them, the fields its W check reads: the scheme's hashing,
-    each call's matmul, the manifest and the epoch's salt (the toy has no tiles for the verdict to replay)."""
-    return [SimpleNamespace(scheme=SimpleNamespace(commitment_hash=HM96), man=man, epoch=SimpleNamespace(salt=SALT),
-                            records=[SimpleNamespace(matmul=Matmul(u["index"], Shape(u["m"], u["k"], u["n"]), u["weight"]))
-                                     for u in man["matmuls"]])
-            for man in manifests]
+    each call's matmul, the manifest and the epoch's salt, workload and weight roots (the toy has no tiles for the verdict
+    to replay)."""
+    out = []
+    for man in manifests:
+        mm = [Matmul(u["index"], Shape(u["m"], u["k"], u["n"]), u["weight"]) for u in man["matmuls"]]
+        epoch = SimpleNamespace(salt=SALT, workload=Workload(mm),
+                                weight_roots={int(w): bytes.fromhex(x["root"]) for w, x in man["weights"].items()})
+        out.append(SimpleNamespace(scheme=SimpleNamespace(commitment_hash=HM96), man=man, epoch=epoch,
+                                   records=[SimpleNamespace(matmul=u) for u in mm]))
+    return out
+
+
+def _calls(W: dict) -> list[dict]:
+    """W's entries of the calls' values, the ones the audited circuit reads (it reads no B row)."""
+    return [e for e in W["registered"] if not e["value"].startswith("pearl-b/")]
 
 
 def _verify_run():
@@ -216,8 +240,8 @@ def _reads(circuit) -> dict[tuple[str, str, int], tuple[str, int]]:
 def test_the_circuit_reads_each_calls_committed_rows_and_the_verdict_and_reuse_take_w(toy):
     """The circuit takes each call's A rows and y, round by round and call by call, as 32-bit ``row-seg/v1`` values; it reads
     each real row of each once (an A row as a `LinearARow_v1`'s output, a y row as a `LinearOut_v1`'s input) and the A
-    rows' filler rows never. The verdict's W check accepts W on the passes, on all 16 values, and `reuse` makes each value,
-    from the rows its proof blocks make, W's entry."""
+    rows' filler rows never. The verdict's W check accepts W on the passes, on all 16 values and the 4 weights' B rows,
+    and `reuse` makes each value, from the rows its proof blocks make, W's entry."""
     c = toy.low.circuit
     assert c.registered.values == tuple(v for s in range(CLASS.outputs) for k in range(CALLS) for v in (PEARL.a(s, k),
                                                                                                        PEARL.y(s, k)))
@@ -229,8 +253,9 @@ def test_the_circuit_reads_each_calls_committed_rows_and_the_verdict_and_reuse_t
     real = {(v, i) for v in c.registered.values for i in range(PEARL.rows(CLASS, int(v.split("/")[1])))}
     assert sorted(reads.values()) == sorted(real)
     VR = _verify_run()
-    assert VR.tie(toy.W, _passes(toy.manifests)) == {"record": REG.digest(toy.W), "tables": 2 * CALLS * CLASS.outputs}
-    assert {v: x.entry() for v, x in _reuse(toy, toy.W).items()} == {e["value"]: e for e in toy.W["registered"]}
+    assert VR.tie(toy.W, _passes(toy.manifests)) == {"record": REG.digest(toy.W), "tables": (2 * CLASS.outputs + 1) * CALLS}
+    assert [e["value"] for e in toy.W["registered"]][-CALLS:] == [PEARL.b(w) for w in range(CALLS)]
+    assert {v: x.entry() for v, x in _reuse(toy, toy.W).items()} == {e["value"]: e for e in _calls(toy.W)}
 
 
 @pytest.mark.slow
@@ -300,12 +325,12 @@ def test_r_registers_ws_values_and_r1_r7_accept_it_on_w_and_refuse_it_on_a_w_of_
     not the one W' registers (``R7-held``)."""
     R, W = written.R, toy.W
     assert R["format"] == REG.FORMAT_V2 and R["previous"] == REG.digest(W)
-    assert sorted(R["registered"], key=lambda e: e["value"]) == sorted(W["registered"], key=lambda e: e["value"])
+    assert sorted(R["registered"], key=lambda e: e["value"]) == sorted(_calls(W), key=lambda e: e["value"])
     strata, readers = {s["template"]: s for s in R["law"]["strata"]}, {}
     for (tid, _port, _u), (v, _row) in _reads(toy.low.circuit).items():
         readers.setdefault(v, set()).add(tid)
     assert all(strata[t]["k"] >= 1 for ts in readers.values() for t in ts)
-    assert len({t for ts in readers.values() for t in ts}) == sum(len(ts) for ts in readers.values()) == len(W["registered"])
+    assert len({t for ts in readers.values() for t in ts}) == sum(len(ts) for ts in readers.values()) == len(_calls(W))
     assert list(_check(written, W, R).codes) == []
     got = _check(written, _flipped(toy).W, R)
     assert list(got.codes) == ["R6-previous", "R7-held"] and got.detail["R7-held"]["value"] == FLIP[0], got
