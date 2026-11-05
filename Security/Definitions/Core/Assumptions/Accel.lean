@@ -1,4 +1,6 @@
-import Definitions.Core.Accel.Machine
+module
+
+public import Definitions.Core.Accel.Machine
 
 /-!
 # The accelerator model's named assumptions
@@ -7,6 +9,8 @@ The premises that carry a theorem over the machine 𝓜 (`Definitions/Core/Accel
 `AccelProductForm`) and the card premise (`CardWithinAccel`). They sit apart from `Assumptions` so that importing
 the model leaves the other named assumptions' statements as they elaborate without it.
 -/
+
+@[expose] public section
 
 open scoped NNRat
 

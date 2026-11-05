@@ -1,8 +1,10 @@
-import Definitions.Nci.BitView
-import Definitions.Nci.Assumptions.Baseline
-import Definitions.Nci.Assumptions.Cover
-import NciCheck.Baseline
-import Properties.NciDesc.Verdict
+module
+
+public import Definitions.Nci.BitView
+public import Definitions.Nci.Assumptions.Baseline
+public import Definitions.Nci.Assumptions.Cover
+public import NciCheck.Baseline
+public import Properties.NciDesc.Verdict
 
 /-!
 # A verdict of compliance of the check of record carries the cover theorem's factor
@@ -20,6 +22,8 @@ the check of record, on every expansion of the instance gate by gate (`OnExpansi
 `Nci.Cover.SecurityProofs.CoverTraining`) proves it from `DescAgrees` (`SecurityProofs.DescAgrees`,
 `Proofs.Properties.Nci.Agrees`).
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties
 

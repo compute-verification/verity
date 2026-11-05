@@ -1,4 +1,6 @@
-import Definitions.Accounting.Joint
+module
+
+public import Definitions.Accounting.Joint
 
 /-!
 # A state-bounded game as the capacity audit of a joint run (trusted)
@@ -29,6 +31,8 @@ where `S₀` is the state the game is sound against (`Accounting.Guarantees.Capa
 games graded by their peak state: a useful certificate needs a game graded at each round boundary (the continuous
 audit, for P2), and that choice is still open. No table should cite `CapacityOfStateBound` at a session window.
 -/
+
+@[expose] public section
 
 namespace Accounting
 

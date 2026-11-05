@@ -1,5 +1,7 @@
-import Definitions.Flock.Game.Expect
-import Mathlib.Analysis.SpecialFunctions.Exp
+module
+
+public import Definitions.Flock.Game.Expect
+public import Mathlib.Analysis.SpecialFunctions.Exp
 
 /-!
 # Extraction by filling: the extractor's own table
@@ -16,6 +18,8 @@ If every table `T` with a failing property costs at least `ε − ε_c` of such 
 Markov step bounds the probability that the extractor's table fails (`tail_of_fixed`), and the
 product form `ε · Pr[fails] ≤ 2ε_c + 2·E[mass]` needs no condition on `ε` (`joint_of_fixed`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

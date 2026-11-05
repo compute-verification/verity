@@ -1,7 +1,9 @@
-import Definitions.Nci.Guarantees.Contained
-import Proofs.Nci.Reads
-import Proofs.Nci.Pull
-import Proofs.Nci.Support
+module
+
+public import Definitions.Nci.Guarantees.Contained
+public import Proofs.Nci.Reads
+public import Proofs.Nci.Pull
+public import Proofs.Nci.Support
 
 /-!
 # Proofs of the partial-sum law on a reference circuit
@@ -23,6 +25,8 @@ The count is one lemma over what the dark parts absorb, a budget `B` (`matMulOn_
 it by the dark gates' width, training's incompressibility by their reads (`IncompressibleContainedMatMulOn`), and at
 `μ = 1` it goes (`ContainedFanOutOn`).
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

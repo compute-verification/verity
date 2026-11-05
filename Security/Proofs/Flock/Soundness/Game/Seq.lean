@@ -1,5 +1,7 @@
-import Definitions.Flock.Game.Seq
-import Proofs.Flock.Soundness.Game.Runs
+module
+
+public import Definitions.Flock.Game.Seq
+public import Proofs.Flock.Soundness.Game.Runs
 
 /-!
 # Sequencing strategies, and runs as a game
@@ -10,6 +12,8 @@ itself a game with a fixed strategy: `Strategy.bind` plays `s` in `g` and then `
 over `g` against `s` (`expect_bind`). `runsG g n` plays `g` `n` times in a row; against
 `runsStrat g s n` it has the expectation of `n` independent runs (`expect_runsG`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

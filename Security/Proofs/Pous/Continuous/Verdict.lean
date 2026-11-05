@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Sampling.Universal
-import Definitions.Pous.Model.Continuous
+module
+
+public import Proofs.Flock.Claims.Sampling.Universal
+public import Definitions.Pous.Model.Continuous
 
 /-!
 # The PoUS verdict unit decides the continuous audit's verdict
@@ -31,6 +33,8 @@ Composing this with sampling's knowledge soundness into the proof layer's soundn
    writing `j` and its clocks as specified, `LIMIT` standing for the model's `(D, Q)` deadline, and SHA-512's collision
    resistance for a matching `H(block)` to be the right block.
 -/
+
+@[expose] public section
 
 namespace PousVerdict
 

@@ -1,4 +1,6 @@
-import Proofs.Accounting.TS.Session.Tile.Layer
+module
+
+public import Proofs.Accounting.TS.Session.Tile.Layer
 
 /-!
 # The named premise a tile unit's C-Flock session takes for its Definition's checks
@@ -11,6 +13,8 @@ package, so it sits here beside `Accounting.Assumptions.TS`'s other session prem
 `TileOk`, that the circuit computes its Definition (`Accounting.TS.Tile.TileComputes`, which gives it by
 `tileChecks_of_computes`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Assumptions.TS
 

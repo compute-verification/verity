@@ -1,4 +1,6 @@
-import Definitions.Core.Circuit
+module
+
+public import Definitions.Core.Circuit
 
 /-!
 # The Boolean profile
@@ -11,6 +13,8 @@ bit wide (`toCircuit`), so every definition about circuits applies to it as it i
 This is the one Boolean circuit: C-Flock's audit (`Definitions.Flock.Circuit`) partitions it. It keeps the names
 C-Flock's guarantees read it by (`FlockSoundness.Audit`), so their records name these declarations.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

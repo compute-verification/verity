@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.PlainDrawJRun
+module
+
+public import Proofs.Flock.Claims.KS.PlainDrawJRun
 
 /-!
 # The reader's premise at a `nextJ` step, from the step's reader's columns
@@ -18,6 +20,8 @@ and `nextJ`'s verdict reads the coin-substituted value, so its reader reads `liv
   no column off `C` gives `TxNoOffAtJK`: the decoder's rep streams have `liveOfJ`'s coins (`decodeJWithK_live`).
 * `plainVerdictAtJK_of_nextJ_cols`: `plainVerdictAtJK_of_nextJ` with that premise for the reader's.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

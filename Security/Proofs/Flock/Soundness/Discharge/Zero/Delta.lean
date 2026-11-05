@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.ExecFlatCopies
+module
+
+public import Proofs.Flock.Soundness.ExecFlatCopies
 
 /-!
 # The zero as Δ writes it (`hZero`, e2e)
@@ -14,6 +16,8 @@ copy's input bit in two cases only (`HmRow.delta`):
 source there (`Flat.flatSrc`, `flatSrcAt`, the column `HmRow.delta` copies into the input) is one of those forced-zero
 rows. The rows' constant bits that are 0 copy `ur.slot 0 + unit.useful` too, but they are no unit's inputs.
 -/
+
+@[expose] public section
 
 open Flock
 

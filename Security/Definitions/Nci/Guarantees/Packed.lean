@@ -1,5 +1,7 @@
-import Definitions.Nci.Assumptions.Packed
-import Definitions.Nci.Dark
+module
+
+public import Definitions.Nci.Assumptions.Packed
+public import Definitions.Nci.Dark
 
 /-!
 # NCI's fan-out bound on a chain with several products to a gate
@@ -8,6 +10,8 @@ import Definitions.Nci.Dark
 computing in `Dot16` steps (`k = 16`). It counts products, not the gates that hold them, and its bound does not read `k`.
 At `k = 1` it gives `ContainedFanOutOn` (`Nci.SecurityProofs.containedFanOutOn_of_packed`).
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 
