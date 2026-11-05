@@ -2019,17 +2019,11 @@ def premise_names(pin: dict) -> set[str]:
         {p["head"] for p in stated_premises(pin) if p.get("head")}
 
 
-def droppable(pin: dict) -> set[str]:
-    """The premises an exclusion's nontrivial witness may drop: `premise_names` and a conclusion's antecedents the package
-    defines, which no witness need conclude but which the bound rests on all the same (`Nci.Capability.Selects`)."""
-    return premise_names(pin) | {p["head"] for p in pin.get("premises") or [] if p.get("head")}
-
-
 def premise_free(pin: dict) -> bool:
-    """Whether a statement takes no premise: no `droppable` one, and no `→` binder as written or lifted (a hypothesis
+    """Whether a statement takes no premise: no `premise_names`, and no `→` binder as written or lifted (a hypothesis
     whose type no constant heads names no premise, but is one)."""
     body = pin.get("body") or {}
-    return not droppable(pin) and "→" not in [*(body.get("binders") or []),
+    return not premise_names(pin) and "→" not in [*(body.get("binders") or []),
                                                   *((body.get("lifted") or {}).get("binders") or [])]
 
 
@@ -2050,7 +2044,7 @@ def witness_shapes(name: str, pin: dict, policy: dict, own: set[str]) -> str:
                  "one field that can't be built a named assumption.")
     entry = {name: {"honest": [f"{name}_honest"], "nontrivial": f"{name}_nontrivial"}}
     if kind == "exclusion":
-        premises = " or ".join(sorted(droppable(pin))) or "its named premise"
+        premises = " or ".join(sorted(premise_names(pin))) or "its named premise"
         entry[name]["kind"] = "exclusion"
         nontrivial = (f"¬ {shown} c₀ …` (it takes no premise to drop, so a tighter bound fails at an explicit "
                       f"circuit c₀)" if premise_free(pin) else
@@ -2227,8 +2221,7 @@ def exclusion_failures(n: str, g: str, read: dict, np_: dict, pin: dict, heads: 
     """How ``n``, the `nontrivial` witness of the exclusion theorem ``g``, falls short of the form it must have:
     at an explicit circuit, (each other premise of ``g`` holds) ∧ ¬ (a named premise of ``g``) ∧ ¬ (``g``'s bound). Among
     the conjuncts of its conclusion (`Facts.lean`'s `conclusion`, in any order), one is `¬ C …` with C a head of ``g``'s
-    conclusion, one is `¬ P …` with P one of ``g``'s premises or an antecedent its conclusion takes (`droppable`; under
-    its own `∀` binders if it has them), and the others,
+    conclusion, one is `¬ P …` with P one of ``g``'s premises (under its own `∀` binders if it has them), and the others,
     with the named assumptions ``n`` takes, conclude each other premise of ``g``. A bare `¬ bound` reads no premise, and
     is the form only where ``g`` takes none (`premise_free`): there it states that a tighter bound fails at an explicit
     circuit, and no premise is dropped or concluded."""
@@ -2240,13 +2233,12 @@ def exclusion_failures(n: str, g: str, read: dict, np_: dict, pin: dict, heads: 
                            f"explicit circuit: one conjunct of its conclusion is `¬ C …` with C one of "
                            f"{', '.join(heads) or 'its heads (none reported)'}, and it negates "
                            f"{', '.join(sorted(negs)) or 'nothing'}"))
-    dropped = negs & droppable(pin)
+    dropped = negs & premises
     if not dropped and not premise_free(pin):
         out.append(Failure("witnesses.nontrivial-drops", n, f"witnesses: {n} drops no premise of {g}: an exclusion's "
                            f"nontrivial lemma states, at an explicit circuit, (each other premise holds) ∧ ¬ (the dropped "
                            f"premise) ∧ ¬ (the bound), one conjunct `¬ P …` with P one of "
-                           f"{', '.join(sorted(droppable(pin))) or 'its premises (none reported)'}; a bare `¬ bound` reads "
-                           f"none"))
+                           f"{', '.join(sorted(premises)) or 'its premises (none reported)'}; a bare `¬ bound` reads none"))
     covered = {d for k in cs if not k.get("negated") for d in [k.get("head"), *(k.get("defs") or [])]} | \
         {h["named"] for h in np_.get("hypotheses") or [] if h.get("named")}
     if kept := sorted(dropped & premise_names(np_)):
