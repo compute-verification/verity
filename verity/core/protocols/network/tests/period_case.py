@@ -1583,7 +1583,7 @@ class CircuitHeader:
     net's header (`headerNet`): its constant's column, input words and port groups, each `(col, words, bits)`; whether
     META's `out_net` is the unit; its row ports (`rowPorts`), each `(name, words, bits)`, and its output rows' count
     (`outRows`); for a file read whole (the scan's, `NetworkCheck.CircuitFile.whole`), its unit's read input columns
-    (`Bits.unitReads`), else None (`NetworkCheck.CircuitFile.read`, its header and its unit's input rows); and whether
+    (`Bits.unitReads`), else None (an audit's: its header and its unit's input rows, `NetworkCheck.Period.trim`); and whether
     each of its unit's input columns' rows is a self row, not a forced zero (`CircuitFile.withInputs`), None for a
     header whose input rows weren't read."""
     sha512: str
@@ -1664,10 +1664,11 @@ def _input_rows(in_words: int, rows: list[str]) -> list[bool]:
 
 
 def read_circuit(text: str, whole: bool = False) -> CircuitHeader:
-    """`NetworkCheck.CircuitFile.read`: a flat circuit file's SHA-512, its META, each block's net header and its first
-    unit's input rows (`_input_rows`), no computed row; `whole`, the scan's file, its unit's rows too (`unit_reads`),
-    which the mirror doesn't hold to the session verifier's parse (`NetworkCheck.CircuitFile.whole`), so a toy scan file
-    the mirror reads Lean may refuse. A file it can't read is refused (`D.Reject`)."""
+    """What the period holds of a flat circuit file: its SHA-512, its META, each block's net header and its first unit's
+    input rows (`_input_rows`), no computed row (`NetworkCheck.Period.trim`; `NetworkCheck.CircuitFile.read`, the
+    test-only `network-period-chunked`'s); `whole`, the scan's file, its unit's rows too (`unit_reads`). The mirror
+    doesn't hold a file to the session verifier's parse (`NetworkCheck.CircuitFile.whole`), which `network-period` reads
+    every file with, so a toy file the mirror reads Lean may refuse. A file it can't read is refused (`D.Reject`)."""
     lines = text.split("\n")
     if not lines[0].startswith(CIRCUIT_FORMAT + " ") or len(lines) < 2 or not lines[1].startswith("META "):
         raise D.Reject(f"not a {CIRCUIT_FORMAT} file with a META line")
@@ -1960,7 +1961,7 @@ def charged(p: Params, listing: Listing, files: list[CircuitHeader]) -> Params:
             continue
         heads = [(c.upv, pad_cols(c)) for c in files[at:at + len(x.files)]]
         at += len(x.files)
-        pad = sum(n // u * q for (_, n, _), (u, q) in zip(x.templates, heads))
+        pad = sum(n * q for (_, n, _), (_, q) in zip(x.templates, heads))
         audits.append(dataclasses.replace(a, units=sum(n // u for (_, n, _), (u, _) in zip(x.templates, heads)),
                                           bits=max(vu_bits(u, w) for (_, _, w), (u, _) in zip(x.templates, heads)),
                                           free=a.free + pad,

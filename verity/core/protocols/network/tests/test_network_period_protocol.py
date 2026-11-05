@@ -973,8 +973,13 @@ def test_a_listed_audit_counts_its_vus_off_its_circuit_files(server, tmp_path):
     a leaf map past the input rows, a cut input wired by no leaf cut or by two, a wire into the unit, a leaf cut past
     the input rows, a cut input's group over the first group's ports, two row ports of one name, input rows out of the
     parameters' order, output rows that are not the return's words, an input port reading another word than its
-    parameter's (`fieldBit`), a parameter bit past its row's bits, and two instances a VU."""
-    exe = D.build(LEAN, "network-period")
+    parameter's (`fieldBit`), a parameter bit past its row's bits, and two instances a VU.
+
+    Lean here is the test-only `network-period-chunked`, which reads an audit's file in chunks
+    (`NetworkCheck.CircuitFile.read`): the files are small ones written for the check, which the session verifier's
+    parse refuses, so this tests the check's logic, not the deployed reader
+    (`test_a_composed_circuit_file_is_read_whole_and_trimmed`)."""
+    exe = D.build(LEAN, "network-period-chunked")
     for n in range(4):
         case = build("audit-listed", n, small=n % 2 == 0)
         texts = PC.listed_files(case)
@@ -1063,8 +1068,10 @@ def test_a_tied_audit_lists_its_circuit_files(server, tmp_path):
     """Given circuit files, the period check refuses a rows-form period whose audit the scan ties lists none
     (`unlistedTied`), before it holds the files to the listing, so no tied audit escapes `SampledProofs.Bits.check`:
     a small `rows-honest` period, whose scan ties its one audit, given an audit's valid circuit file, is refused by
-    Lean and the mirror at the same reason; with no files it is the check that reads none, and both accept it."""
-    exe = D.build(LEAN, "network-period")
+    Lean and the mirror at the same reason; with no files it is the check that reads none, and both accept it. Lean here
+    is the test-only `network-period-chunked`, as the file is a small one written for the check: this tests the check's
+    logic, not the deployed reader."""
+    exe = D.build(LEAN, "network-period-chunked")
     text = PC.listed_files(build("audit-listed", 0, small=True))[0]
     for n in range(2):
         case = build("rows-honest", n, small=True)
@@ -1075,6 +1082,62 @@ def test_a_tied_audit_lists_its_circuit_files(server, tmp_path):
                 "circuit files: audit 0 is tied to the scan but lists no circuit files"), (n, got)
         got = _check_files(exe, tmp_path / f"{n}-none", case, [])
         assert (got["verdict"], got.get("public")) == (ACCEPT, reference(case)["public"]), (n, got)
+
+
+def _composed(case: dict, out: Path) -> str:
+    """The circuit file the case's one listed audit lists, composed at `out` as a served template's is: its
+    `Gemm_v2{K=16, N=16}` template (`RECORD_GEMM`) staged by C-Flock's `UnitStager` on its Definition's rows
+    (`interface.unit_rows`), bound to its record's partition and its Program."""
+    from verity_flock.class_statement import UnitStager
+
+    (a,) = [a for a in case["params"]["audits"] if "circuits" in a]
+    assert [f["template"] for f in a["circuits"]] == [codec.descriptor_id(PC.RECORD_GEMM)]
+    in_rows, out_rows = IF.unit_rows(PC.RECORD_GEMM)
+    UnitStager(PC.RECORD_GEMM, "unit/serving-rows", in_rows, out_rows, circuit=out,
+               bind={"partition": PC.record_partition(a["circuit"], ""), "program": PC.program_sha512(a["program"])})
+    return out.read_text()
+
+
+@pytest.mark.slow
+def test_a_composed_circuit_file_is_read_whole_and_trimmed(tmp_path):
+    """`network-period check … CIRCUIT`, which reads each file whole by the session verifier's parse
+    (`NetworkCheck.CircuitFile.whole`) and holds an audit's trimmed (`NetworkCheck.Period.trim`), on `audit-listed`'s
+    circuit file composed as a served template's is (`_composed`): accepted with the mirror's public, its padding none
+    (`padCols`: every input column of its unit no port holds is a forced zero); with two of those columns' rows self
+    rows, accepted with two free inputs a VU more, at the mirror's public; and with one of them malformed, or reading
+    another column, refused by both. The tests above run the check on small files the session verifier's parse
+    refuses, so only this one runs the deployed reader, on a file it accepts. It takes about a minute: composing the file
+    about 15 s and each check about 6 s."""
+    exe = D.build(LEAN, "network-period")
+    case = build("audit-listed", 0, small=True)
+    text = _composed(case, tmp_path / "circuit.txt")
+    _, listing = PC.params_listed(case["params"])
+    i = next(i for i, x in enumerate(listing.audits) if x is not None)
+    c = PC.read_circuit(text)
+    pad = [x for x, held in enumerate(PC._port_held(c)) if not held]
+    assert PC.pad_cols(c) == 0 and len(pad) >= 2, (PC.pad_cols(c), len(pad))
+    lines = text.split("\n")
+    unit = next(k for k, ln in enumerate(lines) if ln.startswith(f"{PC.CIRCUIT_BLOCK} unit "))
+
+    def edited(rows: dict[int, str]) -> str:
+        return "\n".join(rows.get(k - unit - 2, ln) if unit + 2 <= k else ln for k, ln in enumerate(lines))
+
+    def answers(t: str, name: str) -> tuple[dict, dict]:
+        c = _relisted(case, [t])
+        return PC.reference_with(c, [t]), _check_files(exe, tmp_path / name, c, [t])
+
+    mirror, got = answers(text, "honest")
+    assert (mirror["verdict"], got["verdict"], got.get("public")) == (ACCEPT, ACCEPT, mirror["public"]), got
+    two = (pad[len(pad) // 2], pad[-1])
+    free, got = answers(edited({x: f"1 {x} 1 {x}" for x in two}), "free")
+    assert (free["verdict"], got["verdict"], got.get("public")) == (ACCEPT, ACCEPT, free["public"]), got
+    assert free["public"]["audits"][i]["free"] == \
+        mirror["public"]["audits"][i]["free"] + PC.RECORD_UNITS[False] * len(two), (free, mirror)
+    x = two[0]
+    for k, (row, fragment) in enumerate([(f"1 {x} 1", f"row {x} is malformed"),
+                                         (f"1 {x + 1} 1 {x + 1}", f"row {x} is not an input row")]):
+        refused = answers(edited({x: row}), f"refused-{k}")
+        assert all(r["verdict"] == REJECT and fragment in r["reason"] for r in refused), (fragment, refused)
 
 
 #: The refusals that hold a compute audit to its Program, in either form, each with what Lean's reason and the

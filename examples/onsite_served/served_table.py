@@ -260,7 +260,7 @@ def _poub_session(cfg, params, bound):
 def _certifier_piece(cfg, params, bound):
     py = ".venv/bin/python"
     return {"CERTIFIER_FRONT": f'{py} {CERTIFIER_PIECE} front "$1" "$2" "$3" --gate {shlex.quote(bound["gate"])}',
-            "CERTIFIER_CMD": f'{py} {CERTIFIER_PIECE} piece "$1" "$2" "$3"'}
+            "CERTIFIER_CMD": f'{py} {CERTIFIER_PIECE} piece "$1" "$2" "$3" --certifier-key "${{CERTIFIER_KEY:-}}"'}
 
 
 SERVE = Piece(SERVED_WINDOW, WORKERS, SERVED_WINDOW, "Execution: serve-openai on the prover node under its GPU lease, the "

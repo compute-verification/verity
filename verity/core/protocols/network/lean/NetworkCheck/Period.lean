@@ -44,7 +44,10 @@ certifier connection's cell cap over the period (`cap_c`), the session's window
 the period starts at (`w₀`: its link-windows are the session's `w₀ … w₀ + m − 1`, so one certifier session spans many
 periods),
 the observations' jitter bound `Dj ≥ 1`, the network certifier's LMS public key and parameters and the certifier session
-(32 bytes) every certificate binds, the link (at most 65,535 UTF-8 bytes), the SHA-512 of N2's registered Program for
+(32 bytes) every certificate binds, which are the auditor's: its own record of its device (`Registration.Auditor.key`,
+the key of each of its own devices), never a field of the evidence or the prover's copy of the run, so a certificate
+under another key or in another session is refused,
+the link (at most 65,535 UTF-8 bytes), the SHA-512 of N2's registered Program for
 the link (the partition object's `program`, `LinkWindows.partition`), Σ_sync, and the period's `m ≥ 1` link-windows.
 An audit's free inputs (`free`) are no parameter: the check counts them off its descriptor, the Program's input gates
 (`inputGates`: its root's input nodes' members times their widths, of either binding time). That is
@@ -314,8 +317,9 @@ which the caps read (`Schedule.caps`; `trusted-host`); that a tied audit's `Sele
 its `ScanSlots_v2` units, and that the units its circuit record reads its `SCAN_STATE` at are those (the check reads
 none of an audit's wires, only its root templates' ids and closure digests and its record's registered reads of the
 scan's state, `anchored`);
-and that the audits' answers are the sampled-proofs component's own,
-which the composition's theorem is to bind.
+and that the audits' answers are the sampled-proofs component's own, which the composition's theorem is to bind;
+and that each listed circuit file is the one the audit's sessions were verified against, which the record checks on its
+run, each file's SHA-512 against its audit's (`auditor-listing`), and the composition is to tie by digest.
 
 **The clock openings**, apart from the period's check: `clocksFn`, `network-records verdicts`' `clocks`, reads the
 syncs the certifier signed for a link through its salted clock certificates' openings, each sync and salt against the
@@ -1968,9 +1972,8 @@ def protocol : Core.Protocol where
 
 `network-period check PARAMS COMMITMENT EVIDENCE CIRCUIT…` reads the circuit files the parameters list, each audit's
 (`audits[i].circuits`) with `i` ascending, then the scan's (`scan_circuits`), each a file a root template of its
-Program, in order; it reads an audit's file's SHA-512, header and unit's input rows (`NetworkCheck.CircuitFile.read`),
-never a computed row, and reads a scan's file whole, as the scan's sessions' verifier parses it
-(`NetworkCheck.CircuitFile.whole`). A proof block is a VU, a file's `units_per_vu` template instances, so a listed
+Program, in order; it reads each file whole, as its sessions' verifier parses it (`NetworkCheck.CircuitFile.whole`),
+and holds a scan's file whole and an audit's trimmed to its SHA-512, header and unit's input rows (`trim`). A proof block is a VU, a file's `units_per_vu` template instances, so a listed
 audit's units are its VUs and a wrong one commits at most `vuBits upv words`; and each VU's input padding, the unit's
 input columns no port holds whose row is not a forced zero (`padCols`), counts among its free inputs (`charged`,
 `padFree`). -/
@@ -2059,11 +2062,12 @@ each VU. A unit whose input rows were not read counts every column no port holds
 def padCols (cf : Flock.Circuit) : Nat :=
   ((unheldCols cf).filter fun c => !forcedZero cf c).length
 
-/-- **Root templates `ts`' VUs' input padding**, `fs` their circuit files in order: `Σ members / upv · padCols` over
-the templates, each at its file's `units_per_vu` and padding. An audit's is `padFree (chargesOf P) fs` at its Program
-`P`, which its record's count (`NetworkCheck.Circuit.countsOf`) doesn't see. -/
+/-- **Root templates `ts`' VUs' input padding**, `fs` their circuit files in order: `Σ members · padCols` over the
+templates, each at its file's padding. Each template instance is its own copy of its file's unit net, with that net's
+padding, at any `units_per_vu`. An audit's is `padFree (chargesOf P) fs` at its Program `P`, which its record's count
+(`NetworkCheck.Circuit.countsOf`) doesn't see. -/
 def padFree (ts : Array Charged) (fs : List Flock.Circuit) : Nat :=
-  ts.zipIdx.foldl (fun n (t, k) => let f := fs.getD k default; n + t.members / f.upv * padCols f) 0
+  ts.zipIdx.foldl (fun n (t, k) => n + t.members * padCols (fs.getD k default)) 0
 
 /-- **Audit `a` as its listed files `fs` charge it**, one a template in order: its units its VUs, `Σ members / upv`
 over its templates; its bits the most a wrong VU commits, `vuBits upv words`; and its free inputs, with the scan's
@@ -2094,7 +2098,7 @@ def toyListed : Listed where
   partition := none
 
 /- `T`'s file at 2 instances a VU, `U`'s at 1, each unit one input word: `T`'s three ports of 16 leave 80 columns of
-padding, `U`'s one 112. -/
+padding in each of its 6 instances, `U`'s one 112 in each of its 4. -/
 #guard
   let file (upv : Nat) (bs : Array Nat) : Flock.Circuit :=
     let n : Flock.Net :=
@@ -2104,8 +2108,8 @@ padding, `U`'s one 112. -/
   let a := toyListed.charge
     { free := 7, steps := 0, program := "", units := 10, bits := vuBits 1 5, entries := #[], record := none,
       stateFree := 5 } fs
-  padFree toyListed.templates fs == 3 * 80 + 4 * 112 && a.units == 3 + 4 && a.bits == 2 * 16 * 5 + 2 &&
-    a.free == 7 + 3 * 80 + 4 * 112 && a.stateFree == 5 + 3 * 80 + 4 * 112
+  padFree toyListed.templates fs == 6 * 80 + 4 * 112 && a.units == 3 + 4 && a.bits == 2 * 16 * 5 + 2 &&
+    a.free == 7 + 6 * 80 + 4 * 112 && a.stateFree == 5 + 6 * 80 + 4 * 112
 
 /- A unit of two input words, ports of 16 at word 0 and two of 16 at word 1: 256 input columns, 208 of them padding. -/
 #guard
@@ -2128,6 +2132,107 @@ column 20 that no port holds, and forced zeros. Only column 20 counts; the other
       forcedCols cf == (List.range Flock.WORD).filter (fun c => 16 ≤ c && c != 20) &&
       (forcedCols { (default : Flock.Circuit) with nets := #[("unit", n)], unitNet := 0 }).isEmpty
   | .error _ => false
+
+/-- **Sparse `m`'s first `k` rows**: `min rows k` rows, each of the first `k` as `m` holds it, and its data cut to the
+bytes those rows read (`Flock.Sparse.row`), so none of `m`'s later rows is held. -/
+def takeRows (m : Flock.Sparse) (k : Nat) : Flock.Sparse :=
+  let e := (List.range k).foldl (fun e i => max e (m.start.getD i 0 + 4 * m.len.getD i 0)) 0
+  { m with rows := min m.rows k, data := m.data.extract 0 e, start := m.start.extract 0 k, len := m.len.extract 0 k }
+
+/-- **A net's input rows' count**, `min (inWords · WORD) constPos`, as `forcedZero` and `unheldCols` count them. -/
+def inRowsOf (n : Flock.Net) : Nat := min (n.inWords * Flock.WORD) n.constPos
+
+/-- **Net `n` with its input rows alone**: its header, and its A and B their first `inRowsOf n` rows (`takeRows`). -/
+def inputNet (n : Flock.Net) : Flock.Net :=
+  { n with aT := .pure (takeRows n.a (inRowsOf n)), bT := .pure (takeRows n.b (inRowsOf n)) }
+
+/-- **An audit's circuit file as the period holds it**, parsed whole (`NetworkCheck.CircuitFile.whole`, the session
+verifier's parse): its unit net with its input rows alone (`inputNet`), every other net its header with no rows, and
+the rest as parsed, so no computed row is held past the file's read. The padding it counts is the parse's
+(`forcedCols_trim`, `padCols_trim`). -/
+def trim (cf : Flock.Circuit) : Flock.Circuit :=
+  { cf with nets := cf.nets.mapIdx fun i p =>
+      (p.1, if i = cf.unitNet then inputNet p.2 else { p.2 with aT := default, bT := default }) }
+
+theorem takeRows_len (m : Flock.Sparse) {k i : Nat} (h : i < k) :
+    (takeRows m k).len.getD i 0 = m.len.getD i 0 := by
+  simp only [takeRows, Array.getD_eq_getD_getElem?, Array.getElem?_extract, Nat.zero_add, Nat.sub_zero]
+  by_cases hs : i < m.len.size
+  · have hk : i < min k m.len.size := by omega
+    rw [ite_eq_left hk]
+  · have hk : ¬ i < min k m.len.size := by omega
+    rw [ite_eq_right hk, Array.getElem?_eq_none (by omega : m.len.size ≤ i)]
+
+theorem takeRows_rows (m : Flock.Sparse) (k : Nat) : (takeRows m k).rows = min m.rows k := rfl
+
+theorem takeRows_row_isEmpty (m : Flock.Sparse) {k i : Nat} (h : i < k) :
+    ((takeRows m k).row i).isEmpty = (m.row i).isEmpty := by
+  simp only [Flock.Sparse.row, Array.isEmpty, Array.size_map, Array.size_range, takeRows_len m h]
+
+theorem inputNet_a (n : Flock.Net) : (inputNet n).a = takeRows n.a (inRowsOf n) := rfl
+
+theorem inputNet_b (n : Flock.Net) : (inputNet n).b = takeRows n.b (inRowsOf n) := rfl
+
+theorem trim_unit (cf : Flock.Circuit) :
+    (trim cf).unit = if cf.unitNet < cf.nets.size then inputNet cf.unit else cf.unit := by
+  unfold trim Flock.Circuit.unit
+  simp only [Array.getD_eq_getD_getElem?, Array.getElem?_mapIdx]
+  by_cases h : cf.unitNet < cf.nets.size
+  · simp [h]
+  · simp [h]
+
+theorem unheldCols_trim (cf : Flock.Circuit) : unheldCols (trim cf) = unheldCols cf := by
+  simp only [unheldCols, trim_unit]
+  by_cases h : cf.unitNet < cf.nets.size
+  · rw [ite_eq_left h]; rfl
+  · rw [ite_eq_right h]
+
+theorem forcedZero_trim (cf : Flock.Circuit) {c : Nat} (hc : c < inRowsOf cf.unit) :
+    forcedZero (trim cf) c = forcedZero cf c := by
+  simp only [forcedZero, trim_unit]
+  by_cases h : cf.unitNet < cf.nets.size
+  · rw [ite_eq_left h, inputNet_a, inputNet_b, takeRows_row_isEmpty _ hc, takeRows_row_isEmpty _ hc, takeRows_rows,
+      takeRows_rows]
+    have hn : min ((inputNet cf.unit).inWords * Flock.WORD) (inputNet cf.unit).constPos = inRowsOf cf.unit := rfl
+    have hn' : min (cf.unit.inWords * Flock.WORD) cf.unit.constPos = inRowsOf cf.unit := rfl
+    rw [hn, hn']
+    simp only [Nat.le_min, Nat.le_refl, and_true]
+  · rw [ite_eq_right h]
+
+theorem mem_unheldCols {cf : Flock.Circuit} {c : Nat} (h : c ∈ unheldCols cf) : c < inRowsOf cf.unit := by
+  simp only [unheldCols, List.mem_filter, List.mem_range] at h
+  exact h.1
+
+/-- **The forced-zero padding of an audit's file as the period holds it is the parse's**: `trim` keeps every input row
+`forcedCols` reads. -/
+theorem forcedCols_trim (cf : Flock.Circuit) : forcedCols (trim cf) = forcedCols cf := by
+  rw [forcedCols, forcedCols, unheldCols_trim]
+  exact List.filter_congr fun c h => forcedZero_trim cf (mem_unheldCols h)
+
+/-- **The padding an audit's file as the period holds it counts is the parse's**: `trim` keeps every input row
+`padCols` reads. -/
+theorem padCols_trim (cf : Flock.Circuit) : padCols (trim cf) = padCols cf := by
+  have h : ((unheldCols cf).filter fun c => !forcedZero (trim cf) c) =
+      (unheldCols cf).filter fun c => !forcedZero cf c :=
+    List.filter_congr fun c h => by rw [forcedZero_trim cf (mem_unheldCols h)]
+  rw [padCols, padCols, unheldCols_trim, h]
+
+/- A unit of one input word, a port of 16 at word 0, a self row at column 20 that no port holds, and two computed rows:
+`trim` keeps its 128 input rows alone, their 17 entries' bytes, and the same padding. -/
+#guard
+  let rows := (Array.range (Flock.WORD + 2)).map fun c =>
+    if c < 16 || c == 20 then #[c] else if Flock.WORD ≤ c then #[0, 1] else #[]
+  match Flock.Sparse.ofRows rows (2 ^ 8) with
+  | .ok m =>
+    let n : Flock.Net :=
+      { (default : Flock.Net) with inWords := 1, constPos := Flock.WORD + 2, inGroups := #[⟨0, 1, #[16]⟩],
+                                   aT := .pure m, bT := .pure m, unitLog := 8 }
+    let cf : Flock.Circuit := { (default : Flock.Circuit) with nets := #[("unit", n)], unitNet := 0 }
+    (trim cf).unit.a.rows == Flock.WORD && cf.unit.a.rows == Flock.WORD + 2 && (trim cf).unit.a.data.size == 4 * 17 &&
+      (trim cf).unit.b.row 20 == #[20] && padCols cf == 1 && padCols (trim cf) == 1 &&
+      forcedCols (trim cf) == forcedCols cf
+  | .error _ => false
+
 #guard (circuitsWhy { audits := #[some toyListed] } #[]).isSome
 #guard (circuitsWhy { audits := #[none, some toyListed] } #[(.empty, default), (.empty, default)]) ==
   some s!"audit 1's circuit file for T: its SHA-512 is not its listing's"
@@ -2139,7 +2244,7 @@ def unlistedTied (p : Params × Listing) (c : Commitment) : Option Nat :=
   (List.range p.2.audits.size).find? fun i => (p.2.audits[i]?.join).isNone && tiedOf p.1.form c i
 
 /-- **The period check with its listed circuit files** `fs`, each file's SHA-512 and circuit in the order
-`Listing.files` gives (the scan's read whole, the audits' their headers): a refusal where an audit tied to the scan
+`Listing.files` gives (each read whole, the audits' trimmed, `trim`): a refusal where an audit tied to the scan
 lists no files (`unlistedTied`) or they are not the listed files (`circuitsWhy`), else `check` over the parameters they
 charge (`charged`). -/
 def checkWith (fs : Array (ByteArray × Flock.Circuit)) (p : Params × Listing) (c : Commitment) (e : Evidence) :
@@ -2174,6 +2279,18 @@ def protocolWith (fs : Array (ByteArray × Flock.Circuit)) : Core.Protocol := pr
 
 /-- The period protocol refusing every period for `why`: a listed file that couldn't be read. -/
 def refusing (why : String) : Core.Protocol := protocolBy fun _ _ _ => .reject why
+
+/-- How many of the circuit files given to `network-period check` the parameters at `p` list for the scan
+(`scan_circuits`), the last ones: 0 where they are not canonical JSON (`Core.canonicalJson`) or list none. A miscount
+holds a scan's file as an audit's, without its computed rows, which the check refuses (`fileWhy`), or an audit's file
+whole, more of it than the check needs. -/
+def scanFiles (p : String) : IO Nat := do
+  let b ← tryCatch (IO.FS.readBinFile p) fun _ => pure ByteArray.empty
+  match Core.canonicalJson b with
+  | .ok j => match j.getObjVal? "scan_circuits" with
+    | .ok (.arr a) => return a.size
+    | _ => return 0
+  | .error _ => return 0
 
 /-! ## The clock openings -/
 
