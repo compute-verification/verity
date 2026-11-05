@@ -203,9 +203,11 @@ def _lakefile(d: Path) -> dict | None:
     return tomllib.loads(f.read_text()) if f.is_file() else None
 
 
-def package_modules(pkg: Path, files: list[str], root: Path = ROOT) -> list[str]:
-    """The tracked `.lean` files (``files``: paths from ``root``) of package ``pkg`` that are modules of one of its
-    `[[lean_lib]]`s (the library's name or under it) or a `[[lean_exe]]`'s root, those of packages nested in it aside."""
+def package_modules(pkg: Path, files: list[str], root: Path | None = None) -> list[str]:
+    """The tracked `.lean` files (``files``: paths from ``root``, default the repository's) of package ``pkg`` that are
+    modules of one of its `[[lean_lib]]`s (the library's name or under it) or a `[[lean_exe]]`'s root, those of packages
+    nested in it aside."""
+    root = ROOT if root is None else root
     cfg = _lakefile(root / pkg)
     if cfg is None:
         raise ValueError(f"{pkg}: no lakefile.toml")
