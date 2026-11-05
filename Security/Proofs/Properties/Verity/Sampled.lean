@@ -932,12 +932,13 @@ def SampleLinkFirst (label : String) (after : ByteArray) (log : List Verity.Rele
         ((helloSpecs pre)[i]?.bind fun sp => sp.streams[s]?) = some _root_.SampledProofs.Challenger.TREE_SESSION)
 
 /-- **The deployment's sessions `S` cover the sampled verdict's one-stage form at composite `k`**: where `S` holds no
-session and the parameters name the one-stage form (`ParamsAt`), no strategy of the period's game makes the sampled
-verdict accept. Parameters naming the recursive form (`VStar.Recursive`) are not this leg's. -/
+session and the parameters name the one-stage form (`ParamsAt`), no strategy of the period's game that meets the
+further finders' premises (`Vocab.finderCR`, the condition of `error` the leg reads it under) makes the sampled verdict
+accept. Parameters naming the recursive form (`VStar.Recursive`) are not this leg's. -/
 def Covers (V : Vocab d α) (k : Verity.Registration.Composite) (S : ByteArray → Array ByteArray → Option Live) :
     Prop :=
   ∀ θ F, S θ F = none → (∃ p, ParamsAt θ p) → ∀ (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)),
-    Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ = 0
+    V.finderCR .sampled θ F c σ → Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ = 0
 
 /-- **Soundness's vocabulary at `.sampled` reads the constructions `K` at the deployment's sessions `S`**: each session
 `S` holds is the one v2 sets up (`SetsUp`); the files the vocabulary reads are v2's, by the digests v2's parameters
