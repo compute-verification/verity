@@ -224,7 +224,8 @@ negatives.
   the run of record needs (sampled proofs, PoUW, inference-only, remote, the network certifier, onsite), each missing
   with its why where the run has no answer. It checks two obligations on the auditor's configuration on each run
   (``checked``), reading only the auditor's inputs: `auditor-record`, that the period's key, LMS parameters and
-  session are the auditor's record of its network certifier (`CERTIFIER_KEY`, `certifier-key/v1`) and that the
+  session, in parameters whose SHA-512 is the one the composite of record states for the network certifier's case, are
+  the auditor's record of its network certifier (`CERTIFIER_KEY`, `certifier-key/v1`) and that the
   auditor's registration of the deployment (`SITE_REGISTRATION`: the registration log's params and the log, which
   checks) holds that key for a network certifier its log places; and `auditor-listing`, that each circuit file the
   period lists is, by SHA-512, the one its audit's sessions were verified against. `certifier-key` closes only where the

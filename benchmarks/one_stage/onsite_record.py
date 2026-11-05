@@ -49,8 +49,9 @@ checks on the auditor's inputs, never a named assumption and never charged, each
 ``why``. `auditor-record` (`auditor_record`): PeriodLeakRegistered's hA, hr and hkey, that the period's LMS parameters,
 key and session are the auditor's record of its network certifier (``--certifier-key``) and that the auditor's
 registration (``--site-registration``) holds that key for a network certifier its log places, read from those two
-inputs, each named by its SHA-512 (``from``), and the period's parameters, never the prover's node or its
-deployment.json; `certifier-key` closes only where it holds and the lock holds that guarantee taking them.
+inputs, each named by its SHA-512 (``from``), and the period's parameters, held by SHA-512 to those its check read
+(the composite of record's), never the prover's node or its deployment.json; `certifier-key` closes only where it
+holds and the lock holds that guarantee taking them.
 `auditor-listing` (`auditor_listing`): each circuit file the period lists is, by SHA-512, the file its audit's
 sessions were verified against (`PERIOD`).
 
@@ -407,8 +408,9 @@ CHECKED = {
                      "its certifier-key record (--certifier-key) and its registration (--site-registration: the "
                      "registration log's params and the log, which the log's check accepts, "
                      "verity.core.protocols.registration), and the parameters the period's check read (its case's "
-                     "params), never the prover's node or its deployment.json. Where an input is missing or doesn't "
-                     "match, it doesn't hold, and certifier-key stays open"),
+                     "params, whose SHA-512 over their canonical JSON must be the one the composite of record states "
+                     "for the network certifier's case), never the prover's node or its deployment.json. Where an "
+                     "input is missing or doesn't match, it doesn't hold, and certifier-key stays open"),
     AUDITOR_LISTING: ("each circuit file the period lists, an audit's (circuits) or the scan's (scan_circuits), is by "
                       "SHA-512 the file its audit's sessions were verified against: a5's per-template pin, which "
                       "records_audit.py period publishes in V3c's period.json (`PERIOD`) for the audit whose "
@@ -1282,13 +1284,15 @@ def premises(locks: Sequence[Path], root: Path = ROOT,
             "unread": unread}
 
 
-def auditor_record(params: Any, key: Path | None, site: Path | None) -> dict[str, Any]:
-    """`CHECKED`'s auditor-record on the run: the period's ``params`` (its case's, the parameters its check read)
-    against the auditor's record of its network certifier at ``key`` (certifier-key/v1, `warden_chain.RECORD`) and its
-    registration at ``site``, ``{"params", "log"}``: the registration log's params, ``{"auditor", "composite"}``, and
-    the log, which its check accepts (`registration.check_log`, held to `Core.Registration` by difftest), whose auditor
-    holds the record's key for a network certifier the log places. ``holds``, that ``certifier`` where it does and
-    ``why`` where it doesn't, and ``from``, each input's SHA-512."""
+def auditor_record(params: Any, composed: str | None, key: Path | None, site: Path | None) -> dict[str, Any]:
+    """`CHECKED`'s auditor-record on the run: the period's ``params``, its case's, held to those its check read by their
+    SHA-512, ``composed``, the composite of record's for its network certifier's case (`composite.canonical`, None
+    where it has none), against the auditor's record of its network certifier at ``key`` (certifier-key/v1,
+    `warden_chain.RECORD`) and its registration at ``site``, ``{"params", "log"}``: the registration log's params,
+    ``{"auditor", "composite"}``, and the log, which its check accepts (`registration.check_log`, held to
+    `Core.Registration` by difftest), whose auditor holds the record's key for a network certifier the log places.
+    ``holds``, that ``certifier`` where it does and ``why`` where it doesn't, and ``from``, each input's SHA-512."""
+    import composite as CO
     import warden_chain as WC
     from verity.core.protocols import registration as REG
 
@@ -1314,6 +1318,12 @@ def auditor_record(params: Any, key: Path | None, site: Path | None) -> dict[str
         p = {"lms": params["lms"], "key": bytes.fromhex(params["key"]), "session": bytes.fromhex(params["session"])}
     except (KeyError, TypeError, ValueError):
         return out | {"why": f"the period's parameters ({CASE}'s params) state no LMS parameters, key and session"}
+    if composed is None:
+        return out | {"why": f"the composite of record has no {NETWORK} case stating the SHA-512 of the parameters the "
+                             "period's check read"}
+    if hashlib.sha512(CO.canonical(params)).hexdigest() != composed:
+        return out | {"why": f"the period's parameters ({CASE}'s params) aren't, by SHA-512, those its check read (the "
+                             f"composite of record's {NETWORK} case's params_sha512)"}
     want = {"lms": {"H": h, "N": n, "W": w, "toy": False}, "key": public, "session": session}
     if differ := [k for k in want if p[k] != want[k]]:
         return out | {"why": f"the period's {' and '.join(differ)} {'isn' if len(differ) == 1 else 'aren'}'t the "
@@ -1479,7 +1489,9 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
     except (FileNotFoundError, ValueError):
         case = None
     case = case if isinstance(case, Mapping) else None
-    checked = {AUDITOR_RECORD: auditor_record((case or {}).get("params"), certifier_key, site_registration),
+    composed = next((c.get("params_sha512") for c in found[composite][1].get("cases") or ()
+                     if c.get("id") == NETWORK), None) if composite in found else None
+    checked = {AUDITOR_RECORD: auditor_record((case or {}).get("params"), composed, certifier_key, site_registration),
                AUDITOR_LISTING: auditor_listing(out, case)}
     prem = premises(LOCKS, checked=checked)
     drawn, draws = coins(out), chain_draws(out)

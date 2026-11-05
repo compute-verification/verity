@@ -56,6 +56,7 @@ import pytest
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
+import composite as CO  # noqa: E402
 import onsite_record as OR  # noqa: E402
 import served_verdicts as SV  # noqa: E402
 import leak_bounds as LB  # noqa: E402
@@ -325,12 +326,25 @@ WITHOUT = "verity/remote-network-no-pouw/v0"
 WITHOUT_IDS = (OR.NETWORK, OR.INFERENCE_ONLY, SAMPLED_V1)
 
 
+def sha512_of(params) -> str:
+    """The SHA-512 `composite.py` states of a case's ``params``, over their canonical JSON (`composite.canonical`)."""
+    return hashlib.sha512(CO.canonical(params)).hexdigest()
+
+
+def composed(out: Path) -> str:
+    """`sha512_of` the params of OUT's network certifier case, "00" where OUT has none."""
+    f = out / OR.CASE
+    return sha512_of(json.loads(f.read_text())["params"]) if f.is_file() else "00"
+
+
 def with_composite(out: Path, name: str, product: str, ids: tuple[str, ...], verdict: str = "accept",
                    missing: tuple[str, ...] = (), inference_only: str = "accept") -> Path:
     """``out`` with ``product``'s composite.json in composite/NAME: a case of each of ``ids`` but those ``missing``,
-    which it names, inference-only's answering ``inference_only`` and each other accepting, and Lean's ``verdict``."""
-    cases = [{"id": i, "verdict": inference_only if i == OR.INFERENCE_ONLY else "accept", "params_sha512": "00",
-              "commitment": "00"} for i in ids if i not in missing]
+    which it names, inference-only's answering ``inference_only`` and each other accepting, the network certifier's
+    with the params of OUT's case (`composed`), and Lean's ``verdict``."""
+    cases = [{"id": i, "verdict": inference_only if i == OR.INFERENCE_ONLY else "accept",
+              "params_sha512": composed(out) if i == OR.NETWORK else "00", "commitment": "00"}
+             for i in ids if i not in missing]
     (out / "composite" / name).mkdir(parents=True, exist_ok=True)
     (out / "composite" / name / "composite.json").write_text(json.dumps(
         {"product": product, "commitment": "00", "missing": list(missing), "exceptions": [], "cases": cases,
@@ -345,6 +359,16 @@ def remote_composite(verdict: str = "accept") -> dict:
             "verdict": {"id": OR.REMOTE, "verdict": verdict}}
 
 
+def with_onsite(out: Path) -> Path:
+    """``out`` with onsite's composite, accepting, its network certifier's case the params of OUT's (`composed`)."""
+    cases = remote_composite()["cases"] + [{"id": OR.NETWORK, "verdict": "accept", "params_sha512": composed(out),
+                                            "commitment": "00"}]
+    doc = remote_composite() | {"product": OR.ONSITE, "cases": cases, "verdict": {"id": OR.ONSITE, "verdict": "accept"}}
+    (out / "composite" / "remote-network").mkdir(parents=True, exist_ok=True)
+    (out / "composite" / "remote-network" / "composite.json").write_text(json.dumps(doc))
+    return out
+
+
 def commitment(*audits: dict) -> str:
     return json.dumps({"audits": list(audits), "windows": [{}]}).encode().hex()
 
@@ -352,12 +376,13 @@ def commitment(*audits: dict) -> str:
 def accepted(tmp_path: Path, public: dict = PUBLIC, windows: int = 1, caps: list[int] | None = None,
              schedule: dict = SCHEDULE, audits: tuple[dict, ...] = (NO_ADVICE,),
              registration: dict | None = PUBLISHED, coins: str | None = GATE,
-             draws: dict | None = ALL, params: dict | None = None) -> Path:
+             draws: dict | None = ALL, params: dict | None = None, onsite: bool = True) -> Path:
     """A run whose network certifier accepted ``public``, its case the period's of ``windows`` execution phases at
     ``schedule``, whose caps are the schedule's (`Schedule.caps`) unless given, the network certifier's key, LMS
     parameters and session the auditor's record's (`CERTIFIER`) and any other ``params``, and whose commitment holds
     ``audits``' registrations, with ``registration`` its published advice registration, none where None, ``coins`` its
-    COINS line's sampled-proofs part (`served_out`) and ``draws`` its chain report, none where None."""
+    COINS line's sampled-proofs part (`served_out`), ``draws`` its chain report, none where None, and remote's
+    composite and, where ``onsite``, onsite's (`with_onsite`), the composite of record that composed its case."""
     pouw = {"protocol": "verity/pouw/period/v1", "owner": "compute-accounting", "verdict": "accept", "reason": None}
     if caps is None:
         caps = [schedule["egress_cells"]] * (schedule["lanes"] * windows * schedule["window"])
@@ -375,7 +400,7 @@ def accepted(tmp_path: Path, public: dict = PUBLIC, windows: int = 1, caps: list
     if draws is not None:
         (out / OR.CHAIN_REPORT).parent.mkdir(parents=True)
         (out / OR.CHAIN_REPORT).write_text(json.dumps(draws))
-    return out
+    return with_onsite(out) if onsite else out
 
 
 def numbers(x) -> list:
@@ -1234,7 +1259,7 @@ def test_the_published_form_which_drops_windows_gives_the_same_record(tmp_path):
     case = json.loads((out / OR.CASE).read_text())
     case["params"].pop("windows")
     (out / OR.CASE).write_text(json.dumps(case))
-    assert record(out) == full
+    assert record(with_onsite(out)) == full
 
 
 @pytest.mark.parametrize("public, why", [
@@ -1273,25 +1298,21 @@ def test_a_test_runs_measured_advice_charge_is_beside_the_bound_as_that_runs(tmp
     assert "not verity/advice-charge/v2" in capsys.readouterr().err
 
 
-def with_onsite(out: Path) -> Path:
-    """``out`` with onsite's composite, accepting."""
-    cases = remote_composite()["cases"] + [{"id": OR.NETWORK, "verdict": "accept", "params_sha512": "00",
-                                            "commitment": "00"}]
-    doc = remote_composite() | {"product": OR.ONSITE, "cases": cases, "verdict": {"id": OR.ONSITE, "verdict": "accept"}}
-    (out / "composite" / "remote-network").mkdir()
-    (out / "composite" / "remote-network" / "composite.json").write_text(json.dumps(doc))
-    return out
-
-
 def test_the_run_is_of_record_only_with_the_onsite_composite_accepting(tmp_path):
-    out = accepted(tmp_path)
+    """With no composite of record, nothing states the parameters the period's check read, so auditor-record doesn't
+    hold and the network certifier's accepted verdict is not established; onsite's composite, accepting, makes the run
+    of record, and its rejection leaves it not."""
+    out = accepted(tmp_path, onsite=False)
     rec = record(out)
     assert {k: v["verdict"] for k, v in rec["verdicts"].items()} == {
         "sampled proofs": "accept", "PoUW": "accept", "inference-only": "accept", "remote": "accept",
-        "the network certifier": "accept", "onsite": "missing"}
+        "the network certifier": OR.NOT_ESTABLISHED, "onsite": "missing"}
     assert rec["verdicts"]["onsite"]["why"] == "the run has no composite of verity/remote-network/v0"
-    assert rec["of_record"] == {"holds": False, "missing": ["onsite"], "not_accepting": [], "not_established": [],
-                                "not_credited": [], "not_claimed": ["PoUW"], **ONSITE_OF_RECORD}
+    assert rec["checked"][OR.AUDITOR_RECORD]["why"] == (
+        f"the composite of record has no {OR.NETWORK} case stating the SHA-512 of the parameters the period's check read")
+    assert rec["of_record"] == {"holds": False, "missing": ["onsite"], "not_accepting": [],
+                                "not_established": ["the network certifier"], "not_credited": [],
+                                "not_claimed": ["PoUW"], "conditional_on": [OR.CERTIFIER_KEY], **ONSITE_OF_RECORD}
     doc = json.loads((with_onsite(out) / "composite" / "remote-network" / "composite.json").read_text())
     assert record(out)["of_record"] == {"holds": True, "missing": [], "not_accepting": [], "not_established": [],
                                            "not_credited": [], "not_claimed": ["PoUW"], **ONSITE_OF_RECORD}
@@ -1352,7 +1373,7 @@ def test_under_the_network_certifiers_composite_without_pouw_the_run_is_of_recor
         record(out)
 
 
-@pytest.mark.parametrize("how", ["unlisted", "restated", "another key", "no registration"])
+@pytest.mark.parametrize("how", ["unlisted", "restated", "another key", "no registration", "a case rewritten"])
 def test_while_certifier_key_is_open_an_accepted_network_verdict_is_not_established_and_its_bound_conditional_on_it(
         tmp_path, lock, capsys, how):
     """certifier-key open, every other premise discharged, both checks held and the coins live: the network
@@ -1360,21 +1381,31 @@ def test_while_certifier_key_is_open_an_accepted_network_verdict_is_not_establis
     condition, so the run isn't of record; its bound stands, the figure of record charging ℓ_a + 1 for the tied audit,
     and it, its cells, the composite's error and the run's being of record are conditional on certifier-key by name.
     It is open where the lock doesn't hold PeriodLeakRegistered at its pinned statement (unlisted or restated, each
-    open too), and where the run's check of the auditor's record fails: a record of another key than the period's, or
-    no registration of the auditor's. A network verdict that didn't accept stays what it was."""
-    out = with_onsite(accepted(tmp_path, dict(PUBLIC, held=["free", "circuit"])))
+    open too), and where the run's check of the auditor's record fails: a record of another key than the period's, no
+    registration of the auditor's, or a case whose key was rewritten after the composite of record composed it, the
+    auditor's record and registration stating the rewritten key. A network verdict that didn't accept stays what it
+    was."""
+    out = accepted(tmp_path, dict(PUBLIC, held=["free", "circuit"]))
     if how == "unlisted":
         write_lock(lock, {OR.PERIOD_REGISTERED: None})
     elif how == "restated":
         write_lock(lock, stated={OR.PERIOD_REGISTERED: "ab" * 32})
     elif how == "another key":
-        auditor_files(out, key=key_record(dict(CERT_KEY, public="d4" * 64)))
-    else:
+        auditor_files(out, key=key_record(dict(CERT_KEY, public=ANOTHER)))
+    elif how == "no registration":
         auditor_args(out)["site_registration"].unlink()
+    else:
+        case = json.loads((out / OR.CASE).read_text())
+        (out / OR.CASE).write_text(json.dumps(case | {"params": case["params"] | {"key": ANOTHER}}))
+        auditor_files(out, key=key_record(dict(CERT_KEY, public=ANOTHER)), site=site_registration(ANOTHER))
     assert main([str(out)]) == 0
     rec, cond = json.loads((out / "record" / "onsite.json").read_text()), [OR.CERTIFIER_KEY]
     by_lock = how in ("unlisted", "restated")
     assert rec["checked"][OR.AUDITOR_RECORD]["holds"] is by_lock
+    if how == "a case rewritten":
+        assert rec["checked"][OR.AUDITOR_RECORD]["why"] == (
+            f"the period's parameters ({OR.CASE}'s params) aren't, by SHA-512, those its check read (the composite of "
+            f"record's {OR.NETWORK} case's params_sha512)")
     assert ("unchecked" in rec["bound"]["of_record"]["premises"]["premises"][OR.CERTIFIER_KEY]) is not by_lock
     nv = rec["verdicts"]["the network certifier"]
     assert {k: nv[k] for k in ("protocol", "verdict", "answer", "open", "why")} == {
@@ -1433,11 +1464,12 @@ REFUSED_INPUTS = {
 
 
 def test_auditor_record_holds_where_the_auditors_record_and_registration_hold_the_periods_key_lms_and_session(tmp_path):
-    """auditor-record on the run (`OR.auditor_record`): the auditor's certifier-key record states the period's key, LMS
-    parameters and session, and its registration, which checks, holds that key for a network certifier its log places;
-    it names that certifier and each input it read by SHA-512."""
+    """auditor-record on the run (`OR.auditor_record`): the period's parameters are, by SHA-512, those the composite of
+    record composed, the auditor's certifier-key record states their key, LMS parameters and session, and its
+    registration, which checks, holds that key for a network certifier its log places; it names that certifier and
+    each input it read by SHA-512."""
     a = auditor_files(tmp_path / "out")
-    assert OR.auditor_record(CERTIFIER, a["certifier_key"], a["site_registration"]) == {
+    assert OR.auditor_record(CERTIFIER, sha512_of(CERTIFIER), a["certifier_key"], a["site_registration"]) == {
         "is": OR.CHECKED[OR.AUDITOR_RECORD], "holds": True, "certifier": "cert0",
         "from": {flag: hashlib.sha512(a[f].read_bytes()).hexdigest()
                  for flag, f in (("--certifier-key", "certifier_key"), ("--site-registration", "site_registration"))}}
@@ -1456,9 +1488,30 @@ def test_auditor_record_doesnt_hold_where_an_input_isnt_given_or_isnt_the_period
         if doc is not None:
             (tmp_path / name).write_text(doc if isinstance(doc, str) else json.dumps(doc))
         files.append(None if doc is None else tmp_path / name)
-    got = OR.auditor_record(params, *files)
+    got = OR.auditor_record(params, sha512_of(params), *files)
     assert (got["is"], got["holds"], got["why"]) == (OR.CHECKED[OR.AUDITOR_RECORD], False, why)
     assert "certifier" not in got
+
+
+@pytest.mark.parametrize("composed, why", [
+    (None, f"the composite of record has no {OR.NETWORK} case stating the SHA-512 of the parameters the period's "
+           "check read"),
+    (sha512_of(dict(CERTIFIER, key=ANOTHER)), f"the period's parameters ({OR.CASE}'s params) aren't, by SHA-512, those "
+                                               f"its check read (the composite of record's {OR.NETWORK} case's "
+                                               "params_sha512)"),
+    (sha512_of({**CERTIFIER, "windows": 1}), f"the period's parameters ({OR.CASE}'s params) aren't, by SHA-512, those "
+                                              f"its check read (the composite of record's {OR.NETWORK} case's "
+                                              "params_sha512)"),
+])
+def test_auditor_record_doesnt_hold_where_the_periods_params_arent_by_sha512_those_the_composite_of_record_composed(
+        tmp_path, composed, why):
+    """The period's parameters are the ones its check read only where their SHA-512 over canonical JSON is the one the
+    composite of record states for the network certifier's case: where it states none, or that of other parameters,
+    whether another key or any field more, auditor-record doesn't hold, though the auditor's record and registration
+    state those parameters' key, LMS parameters and session."""
+    a = auditor_files(tmp_path / "out")
+    got = OR.auditor_record(CERTIFIER, composed, a["certifier_key"], a["site_registration"])
+    assert (got["holds"], got["why"]) == (False, why) and "certifier" not in got
 
 
 #: the circuit files the period's one audit lists, as `records_audit` pins them
@@ -1487,7 +1540,7 @@ def test_an_accepted_network_verdict_is_established_only_where_each_listed_circu
     published period, or the scan's files listed, of which the run publishes no record."""
     files = FILES if how != "one file fewer" else FILES[:1]
     listed = {"audits": [{"circuits": files}]} | ({"scan_circuits": FILES} if how == "the scan's files" else {})
-    out = with_onsite(accepted(tmp_path, dict(PUBLIC, held=["free", "circuit"]), params=listed))
+    out = accepted(tmp_path, dict(PUBLIC, held=["free", "circuit"]), params=listed)
     verified = [FILES[0], dict(FILES[1], sha512="e3" * 64)] if how == "another file" else FILES
     registration = NO_ADVICE if how != "another audit's period" else {"format": NO_ADVICE["format"],
                                                                       "window": {"circuit": "ef" * 64}}
@@ -1552,7 +1605,7 @@ def test_sampled_proofs_credits_only_members_whose_registered_file_was_completed
     completed but not so reported, one reported whose file the audit's record lists no completion of, and one the audit
     couldn't complete are each listed as not credited, by name, with why, and an audit record stating no completion,
     or none published, credits no member. The run is of record only where every drawn member is credited."""
-    out = with_onsite(accepted(tmp_path, dict(PUBLIC, held=["free", "circuit"])))
+    out = accepted(tmp_path, dict(PUBLIC, held=["free", "circuit"]))
     if audit is None:
         (out / OR.AUDIT).unlink()
     else:
@@ -1607,7 +1660,7 @@ def test_whether_the_run_is_of_record_reads_no_pouw_verdict_which_stays_listed_a
     """An otherwise accepted run, every member credited, whose PoUW row is a development piece's (missing, crediting
     nothing) or a rejection: the run is of record, since the record claims nothing of PoUW (`NOT_CLAIMED`), and PoUW's
     verdict is listed as its row states it, missing and development or rejected, and not claimed."""
-    out = with_onsite(accepted(tmp_path))
+    out = accepted(tmp_path)
     report = json.loads((out / "record" / "verdicts.json").read_text())
     report["protocols"]["work"] = {"owner": "compute-accounting", **work}
     (out / "record" / "verdicts.json").write_text(json.dumps(report))
