@@ -837,6 +837,77 @@ def test_remote_runs_no_onsite_piece_and_composes_sampled_proofs_and_pouw_alone(
     assert (line["product"], line["composed"], line["by"]) == ("onsite", "reject", ["the wipe"])
 
 
+#: what `served_verdicts.sh` defers on a node short of V3c's audit's memory, as its record and the split certifier's
+#: step-4 piece say it
+DEFERRED_AUDIT = ("V3c's audit and the composite, to a follow-on on a node with the memory, which composes the final "
+                  "record: this node has 196 GB, under the 290 GB V3c's audit needs (V3C_AUDIT_MEM_GB)")
+DEFERRED_CHAIN = ("its chain and period check, which read V3c's period.json, go with V3c's audit to a follow-on on a node "
+                  "with the memory, which composes the final record: this node has 196 GB, under the 290 GB V3c's audit "
+                  "needs (V3C_AUDIT_MEM_GB)")
+
+
+@pytest.mark.parametrize("product", ["remote-network", "remote-network-no-pouw"])
+@pytest.mark.parametrize("case", ["deferred", "failed", "follow-on", "follow-on failed"])
+def test_a_deferred_split_certifier_leaves_the_served_record_pending_and_one_that_ran_and_failed_rejects(
+        tmp_path, monkeypatch, capsys, product, case):
+    """The split certifier's step-4 piece (`true`, which reads the answer step 6's period check wrote) on a node that
+    defers V3c's audit, whose period.json that check reads, isn't run (`pieces --deferred`): it leaves its refusal
+    naming the deferral, so the certifier is missing beside sampled proofs, the served node's record composes
+    ``pending`` and `record` exits 0, as `served_verdicts.sh` needs. One that ran and wrote no answer (its period check
+    failed) is the certifier's ``error``, and the record rejects with no block record, on the served node and in the
+    deferral's follow-on, which runs the piece about the served node (`pieces --served`): its answer there is composed
+    about the served node, and the record accepts."""
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None, _registration=None: _accepted())
+    pieces, ran, cert = tmp_path / "pieces", tmp_path / "ran", tmp_path / "pieces" / "certifier"
+    pouw = {"verdict": "accept", "reason": None, "commitment": "ef" * 64, **ACCEPTS["pouw"]}
+    env = {"POUW_CMD": f"echo '{json.dumps(pouw)}' > \"$3/answer.json\"", "CERTIFIER_CMD": f"touch {ran}; true"}
+    if case == "deferred":
+        got = S.pieces(tmp_path, 1, pieces, env=env, node="vy-dc-h200", product=product, deferred=DEFERRED_CHAIN)
+        refused = f"its piece refused to run: deferred: {DEFERRED_CHAIN}"
+        assert not ran.exists() and not (cert / S.RAN).exists() and got["certifier"] == {"verdict": "missing", "why": refused}
+    elif case == "failed":
+        got = S.pieces(tmp_path, 1, pieces, env=env, node="vy-dc-h200", product=product)
+        assert got["certifier"] == {"verdict": "error", "rc": 0,
+                                    "reason": "its piece ran (exit 0) and wrote no answer; its log is certifier/piece.log"}
+    else:
+        S.pieces(tmp_path, 1, pieces, env=env, node="vy-dc-h200", product=product, deferred=DEFERRED_CHAIN)
+        shutil.rmtree(cert)
+        cert.mkdir()
+        if case == "follow-on":
+            a = {"verdict": "accept", "reason": None, "commitment": "ef" * 64, **ACCEPTS["certifier"]}
+            (cert / "answer.json").write_text(json.dumps(a))
+        got = S.pieces(tmp_path, 1, pieces, env={"CERTIFIER_CMD": "true"}, node="cpu-6", only=["certifier"],
+                       product=product, served="vy-dc-h200")
+        assert json.loads((cert / S.RAN).read_text())["server"] == "cpu-6"
+        assert json.loads((cert / S.SERVED).read_text()) == {"server": "vy-dc-h200"}
+        assert got["certifier"]["verdict"] == ("accept" if case == "follow-on" else "error")
+    capsys.readouterr()
+    (tmp_path / "serve").mkdir()
+    rc = S.main(["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1", "--sampled-proofs",
+                 str(tmp_path / "audit"), "--registration", str(tmp_path / "registration.json"), "--pieces", str(pieces),
+                 "--out", str(tmp_path / "record"), "--node", "vy-dc-h200", "--product", product,
+                 *(["--deferred", DEFERRED_AUDIT] if case == "deferred" else [])])
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    report = json.loads((tmp_path / "record" / "verdicts.json").read_text())
+    assert report["servers"]["communication"] == (None if case == "deferred" else "vy-dc-h200")
+    if case in ("failed", "follow-on failed"):
+        assert rc == 1 and (line["composed"], line["by"], line["block_record"]) == ("reject", ["the network certifier"], None)
+        assert line["verdicts"]["the network certifier"] == "error"
+        assert not (tmp_path / "record" / "block-record.json").exists()
+        return
+    rec = json.loads((tmp_path / "record" / "block-record.json").read_text())
+    jsonschema.Draft202012Validator(SCHEMA).validate(rec)
+    assert rc == 0 and line["check"] == {} == BR.check(rec) and line["elsewhere"] == {}
+    if case == "deferred":
+        assert (line["composed"], line["deferred"]) == ("pending", DEFERRED_AUDIT)
+        assert line["missing"] == {"sampled proofs": f"deferred: {DEFERRED_AUDIT}", "the network certifier": refused}
+        assert sorted(line["record_missing"]) == ["certifier", "integrity"]
+    else:
+        assert (line["composed"], line["missing"], line["record_missing"]) == ("accept", {}, [])
+        assert rec["legs"]["certifier"]["server"] == "vy-dc-h200"
+
+
 SID = "s20261026T221500Z-ab12"
 GATE = "ssh -i KEY -o BatchMode=yes research@gate"
 
@@ -2321,8 +2392,11 @@ DEFERRED_READS = ("weights_registration.json", f"window-circuit-w7-{VTAG}-tie.js
 FAKE_RECORD = '''import json, os, sys
 a = sys.argv[1:]
 open(os.environ["ORDER"], "a").write(a[0] + "\\n")
-open(os.environ["ORDER"] + ".record", "w").write(json.dumps(a))
-print("RECORD " + json.dumps({"composed": "pending", "window": 7}))
+open(os.environ["ORDER"] + "." + a[0], "w").write(json.dumps(a))
+if a[0] == "pieces":
+    open(os.environ["ORDER"] + ".pieces-cmd", "w").write(os.environ["CERTIFIER_CMD"])
+else:
+    print("RECORD " + json.dumps({"composed": "pending", "window": 7}))
 '''
 FAKE_SERVED_COMPOSITE = '''echo composite >> "$ORDER"
 printf "%s\\n" "$SERVED_NODE" "$PRODUCT" "$@" > "$ORDER.composite"
@@ -2873,7 +2947,7 @@ def test_a_run_of_record_defers_untied_and_its_follow_on_writes_the_onsite_recor
     follow-on, on the live challenger with the auditor's records, says whose coins its audit draws on (the
     challenger's), runs V3c's audit at subset:1 with no tie on the challenger through its peer under its key record,
     the chain and the certifier's period check after it, the record at the product on the served node's pieces and the
-    certifier's answer from here, remote-network-no-pouw's composite alone over the network certifier's case checked
+    certifier's piece run here, remote-network-no-pouw's composite alone over the network certifier's case checked
     here, and the onsite record last, at the served run's WINDOW_STEPS and MAX_TOKENS with the auditor's records and no
     --h1-tie."""
     run = _deferred_of_record(tmp_path)
@@ -2890,7 +2964,7 @@ def test_a_run_of_record_defers_untied_and_its_follow_on_writes_the_onsite_recor
                                        records_audit=GATE_AUDIT,
                                        PATH=f"{_hosts(tmp_path)}:{stubs}:{tmp_path / 'bin'}:{os.defpath}", **auditors)
     pieces = out / "pieces" / "certifier"
-    assert rc == 0 and order == ["audit", "period", "chain", "period-check", "record",
+    assert rc == 0 and order == ["audit", "period", "chain", "period-check", "pieces", "record",
                                  "composite-remote-network-no-pouw", "onsite"], (lines, order)
     assert limits == ["180m", "4h", "12h", "60m"]
     assert ("COINS sampled proofs: the challenger gate:research@auditor (peer cpu-6); the other protocols' as the "
@@ -2919,8 +2993,9 @@ def test_a_deferral_with_the_split_certifier_behind_its_front_leaves_the_chain_a
     record's verdict. Its deferral carries both and the kept run the chain reads,
     listed and hashed, and nothing else of the certifier's private/; the follow-on runs the chain after V3c's audit and
     period rather than beside them (its node has the audit's memory alone), then the certifier's period check on that
-    period.json into its own $OUT/pieces/certifier, the record on the served node's pieces with the certifier's answer
-    from here (remote-network's record reads it), then `served_composite.sh` after that period check, told the served
+    period.json into its own $OUT/pieces/certifier, the certifier's piece there as step 4 runs it (`true`, reading that
+    answer), about the served node (``--served``), the record on the served node's pieces with that piece (remote-network's
+    record reads it), then `served_composite.sh` after that period check, told the served
     node, and the onsite record last. remote-network's follow-on writes $OUT/composite/remote-network/composite.json,
     the onsite record's verdict, from the network certifier's case checked here; remote's writes remote's alone."""
     d, tree = tmp_path / "serve", tmp_path / "tree"
@@ -2946,10 +3021,14 @@ def test_a_deferral_with_the_split_certifier_behind_its_front_leaves_the_chain_a
                                        PATH=f"{_hosts(tmp_path)}:{tmp_path / 'stubs'}:{tmp_path / 'bin'}:{os.defpath}")
     out, pieces = tmp_path / "out", tmp_path / "out" / "pieces" / "certifier"
     products = {"remote": ["remote"], "remote-network": ["remote", "remote-network"]}[product]
-    assert rc == 0 and order == ["audit", "period", "chain", "period-check", "record",
+    assert rc == 0 and order == ["audit", "period", "chain", "period-check", "pieces", "record",
                                  *(f"composite-{x}" for x in products), "onsite"], (lines, order)
     assert limits == ["180m", "4h", "12h", *["60m"] * len(products)]
     assert (tmp_path / "order.args").read_text().split() == [str(d), "7", str(pieces), str(d / f"v3c-w7-{VTAG}")]
+    assert json.loads((tmp_path / "order.pieces").read_text()) == [
+        "pieces", "--serve-run", str(d), "--window", "7", "--out", str(pieces.parent), "--only", "certifier",
+        "--served", "vy-dc-h200", "--product", product]
+    assert (tmp_path / "order.pieces-cmd").read_text() == "true"
     assert json.loads((pieces / "answer.json").read_text()) == {"protocol": "verity/certifier/v9", "verdict": "accept"}
     record = json.loads((tmp_path / "order.record").read_text())
     assert (record[record.index("--pieces") + 1], record[record.index("--product") + 1]) == (
