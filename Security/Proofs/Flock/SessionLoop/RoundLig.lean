@@ -25,7 +25,8 @@ the levels' salts and the coins; the switched session sends the same round from 
 * **`LeanRelease.release_sched_lig`**: the release of the worker's round there is the switched session's message
   without its leading domain frame. The frame's round is `ligeritoPZk` at the history's words (`release_lig_frame`),
   which squeezes the opened coins (`LigCoin.ligeritoPZk_go_coin`) at the switch's basis `ligBasis` (`Loop.basis_lig`)
-  and the tape's table, extras, lane pads and salts (`Loop.Level0Src.realOf`, `Loop.RepSrc.salt`); from round
+  and the tape's table and salts, and extras and lane pads that are the tape's within level 0's sizes, all the
+  restart reads (`Loop.Level0Src.realOf`, `Loop.Level0Src.realOf_lanes`, `Loop.RepSrc.salt`); from round
   `ligP0 + k0 + 4` on its log is the cut opening's (`LigPast.ligeritoCut_lock`, at `Masked.ligY1E`, `Masked.ligYbarE`
   and `Masked.ligSaltE`).
 -/
@@ -219,7 +220,7 @@ theorem release_sched_lig (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit 
   -- the frame's basis is the session's
   subst hswf
   rw [Loop.basis_lig hSc hR hlt.le hsx j r t htabst hext hxs hanchor halg hbcs hcsv hbase (by omega) hpts] at hLf
-  rw [hsch, htp, hgt, hex, hlp, ← htabst] at hLf
+  rw [hsch, htp, hgt, ← htabst] at hLf
   -- the frame's run squeezes the opened coins
   have hG : FlockComplete.LigCoin.Good (fun p k => (Loop.wordsAt x (ops.map fun q => CoinLayer.rd q.2) p)[k]!)
       (Masked.ligCoin (Loop.finCoins x ops)) ops.length l₂.size Lf := by
@@ -234,6 +235,43 @@ theorem release_sched_lig (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit 
   have hLf' := (congrArg Prod.snd hcoin).symm.trans hLf
   -- from `ligP0 + k0 + 4` on, the frame's log is the session's
   have hsz : l₃.size = l₂.size := hl₃.trans (hbase.symm.trans hl₂.symm)
+  -- the restart reads the loop's extra lanes and lane pads only within level 0's sizes, where they are the tape's
+  have hA : ∀ (coin : ℕ → ℕ → F128) (p0 e : ℕ),
+      (Array.range (FlockComplete.LigLock.tabS coin p0 (Masked.ligTab x w t j) (Masked.zkTab x j).sch.k0).size).map
+          (tb.extra e) =
+        (Array.range (FlockComplete.LigLock.tabS coin p0 (Masked.ligTab x w t j) (Masked.zkTab x j).sch.k0).size).map
+          ((Masked.UE.tapeZk t).extra j.val e) := fun coin p0 e =>
+    Array.map_congr_left fun c hc =>
+      hex e c (by rw [← Masked.tabS_ligTab_size coin p0 x w t j]; exact Array.mem_range.1 hc)
+  have hlp' : ∀ l i, l < 2 ^ ((Masked.zkTab x j).sch.levels.getD 0 default).lanes + 4 →
+      i < (Masked.zkTab x j).tPad → tb.lanePad l i = (Masked.UE.tapeZk t).lanePad j.val l i := hlp
+  have hB : ∀ (coin : ℕ → ℕ → F128) (p0 : ℕ),
+      (Array.range (Masked.zkTab x j).tPad).map (fun i =>
+        (List.range (2 ^ ((Masked.zkTab x j).sch.levels.getD 0 default).lanes)).foldl
+          (fun acc e => acc + ((_root_.Flock.eqTableK ((Array.range (Masked.zkTab x j).sch.k0).map
+            (FlockComplete.LigLock.chS coin p0)))[e]!).smul (tb.lanePad e i))
+          ((FlockComplete.LigLock.rhoS coin p0 (Masked.zkTab x j).sch.k0).1.smul
+              (tb.lanePad (2 ^ ((Masked.zkTab x j).sch.levels.getD 0 default).lanes + 2 * r.val) i) +
+            (FlockComplete.LigLock.rhoS coin p0 (Masked.zkTab x j).sch.k0).2.smul
+              (tb.lanePad (2 ^ ((Masked.zkTab x j).sch.levels.getD 0 default).lanes + 2 * r.val + 1) i))) =
+      (Array.range (Masked.zkTab x j).tPad).map (fun i =>
+        (List.range (2 ^ ((Masked.zkTab x j).sch.levels.getD 0 default).lanes)).foldl
+          (fun acc e => acc + ((_root_.Flock.eqTableK ((Array.range (Masked.zkTab x j).sch.k0).map
+            (FlockComplete.LigLock.chS coin p0)))[e]!).smul ((Masked.UE.tapeZk t).lanePad j.val e i))
+          ((FlockComplete.LigLock.rhoS coin p0 (Masked.zkTab x j).sch.k0).1.smul ((Masked.UE.tapeZk t).lanePad j.val
+              (2 ^ ((Masked.zkTab x j).sch.levels.getD 0 default).lanes + 2 * r.val) i) +
+            (FlockComplete.LigLock.rhoS coin p0 (Masked.zkTab x j).sch.k0).2.smul ((Masked.UE.tapeZk t).lanePad j.val
+              (2 ^ ((Masked.zkTab x j).sch.levels.getD 0 default).lanes + 2 * r.val + 1) i))) := by
+    intro coin p0
+    have hr2 := r.isLt
+    generalize 2 ^ ((Masked.zkTab x j).sch.levels.getD 0 default).lanes = L at hlp' ⊢
+    refine Array.map_congr_left fun i hi => ?_
+    have hi' := Array.mem_range.1 hi
+    rw [hlp' (L + 2 * r.val) i (by omega) hi', hlp' (L + 2 * r.val + 1) i (by omega) hi']
+    exact List.foldl_ext _ _ _ fun acc e he => by
+      have := List.mem_range.1 he
+      try dsimp only
+      rw [hlp' e i (by omega) hi']
   have hk := FlockComplete.LigPast.ligeritoCut_lock _root_.Flock.Sha512.hash (Masked.ligCoin (Loop.finCoins x ops))
     ops.length _root_.Flock.MerkleScheme.hm96Sha512 (Masked.zkTab x j).sch T Tf cm tb.cm0.toC (Masked.ligTab x w t j)
     (Masked.ligBasis x (Loop.finCoins x ops) w t j r extras)
@@ -241,17 +279,17 @@ theorem release_sched_lig (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit 
       (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.kLog (Masked.zkTab x j).sch.k0)
     (Array.replicate (_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.m
       (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.kLog (Masked.zkTab x j).sch.k0).len 0)
-    r.val (Masked.zkTab x j).tPad ((Masked.UE.tapeZk t).extra j.val) ((Masked.UE.tapeZk t).lanePad j.val)
+    r.val (Masked.zkTab x j).tPad tb.extra tb.lanePad
     (fun l => _root_.Flock.Firewall.Finish.saltAt (his.getD (l - 1) ByteArray.empty)) (fun _ _ => 0)
     ((Masked.swSrcE x (Loop.finCoins x ops) w (vs x w ν (Loop.finCoins x ops) (Loop.finS.seenOf x t)) t j.val).rep r.val) t₃ tr₂ l₃ l₂
     hsz hk0 hsn hlv
     (fun ha hb => by
       rw [hl₃] at ha hb ⊢
-      rw [(Masked.swSrcE_restart x (Loop.finCoins x ops) w (vs x w ν (Loop.finCoins x ops) (Loop.finS.seenOf x t)) t j.val r.val).1]
+      rw [hA, hA, (Masked.swSrcE_restart x (Loop.finCoins x ops) w (vs x w ν (Loop.finCoins x ops) (Loop.finS.seenOf x t)) t j.val r.val).1]
       exact Masked.ligY1E x hx w hR t (Loop.finCoins x ops) ops.length hN s0 spec hsx j r extras hext ha hb)
     (fun ha hb => by
       rw [hl₃] at ha hb ⊢
-      rw [(Masked.swSrcE_restart x (Loop.finCoins x ops) w (vs x w ν (Loop.finCoins x ops) (Loop.finS.seenOf x t)) t j.val r.val).2.1]
+      rw [hB, (Masked.swSrcE_restart x (Loop.finCoins x ops) w (vs x w ν (Loop.finCoins x ops) (Loop.finS.seenOf x t)) t j.val r.val).2.1]
       exact Masked.ligYbarE x hx w hR t (Loop.finCoins x ops) ops.length hN s0 spec hsx j r extras hext ha hb)
     (fun ha hb l hl1 hl2 p hp => by
       rw [hl₃] at ha hb
