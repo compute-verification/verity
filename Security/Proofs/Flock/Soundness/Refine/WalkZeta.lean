@@ -75,15 +75,18 @@ meta def retZetaStep (g : MVarId) : MetaM (Option (List MVarId)) := g.withContex
   if ← isMatcherApp m then return some (← Split.splitMatch g m)
   return none
 
-/-- Every goal `ret_walk_zeta` leaves from `g`. -/
-meta partial def retZetaAll (g : MVarId) : MetaM (List MVarId) := do
-  match ← retZetaStep g with
-  | none => return [g]
-  | some gs => gs.flatMapM retZetaAll
-
 /-- `ret_walk_zeta` walks the goal `Ret m Q` to every return of `m` (see the module docstring), leaving the goal `Q a`
 at each `pure a` that `rfl` doesn't close, and each goal it has no step for. -/
 elab "ret_walk_zeta" : tactic => do
-  replaceMainGoal (← (← getGoals).flatMapM fun g => retZetaAll g)
+  let mut todo := (← getGoals)
+  let mut left := #[]
+  while true do
+    match todo with
+    | [] => break
+    | g :: rest =>
+      match ← retZetaStep g with
+      | none => left := left.push g; todo := rest
+      | some gs => todo := gs ++ rest
+  replaceMainGoal left.toList
 
 end FlockSoundness.Refine
