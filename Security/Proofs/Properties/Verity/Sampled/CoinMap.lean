@@ -28,18 +28,29 @@ frame's coins are 512 uniform bits, one for one with 64 of the bytes the sample 
   event (`CouplesWithin`). The stops' term carries each held-off event's probability beside the stop's own
   (`avg_le_off`), so `Couples` holds wherever their sum is at most the hiding term (`couples_of_within`,
   `couplingTarget_withProject_of_close`).
+* **A play's outputs** (`exists_playReaches`, `PlayReaches.of_bind`, `playReaches_relK`, `playReaches_closeThen`,
+  `log_of_finish`): every strategy reaches an output, and an output of the device's releases is one of their
+  continuation at some log. A close records the device's log (`RecordsLog`) where every output of its play at a log
+  reads that log; the period's close does (`finish_recordsLog`). Releases continuing as one game to such a close, after
+  two logs and two releases, continue after one log and one release (`relK_log_eq`).
 * **An opening's node** (`OpeningAt`, `openingOf`, `writeOpening`, `openGap`, `EmptyAt`, `openEmpty`): a node described
-  as the releases' opening branch (`relK`), recognised by choice among its descriptions. There the tape's round is
-  replaced by one the device releases as the written bits at every description (`opened_writeOpening`) wherever the
-  fiber holds one, that is off the empty class (`EmptyAt`, `opened_writeOpening_off`), within the opening's gap
-  (`avg_le_writeOpening`).
+  as the releases' opening branch (`relK`) on the frame `.opening i s n` the prover sent, continuing to the play's close
+  `E` after the releases before the frame and the frame's. Where `E` records its log, every description has one log
+  before the frame and one release (`OpeningAt.release_eq`), so one count `n`, the sent frame's (`OpeningAt.n_eq`).
+  The node's class at `bits` is that of its canonical description (`openingOf`, `OpeningAt.classOf`): the rounds every
+  description releases as `bits` (`OpeningAt.mem_classOf_iff`), nonempty wherever one releases them
+  (`OpeningAt.classOf_nonempty`), empty exactly where no round of the fiber does (`OpeningAt.classOf_eq_empty_iff`).
+  There the tape's round is replaced by one of the class, released as the written bits at every description
+  (`opened_writeOpening`) wherever the class is nonempty, that is off the empty class (`EmptyAt`,
+  `opened_writeOpening_off`), within the opening's gap (`avg_le_writeOpening`).
 * **The coin map** (`roundBits`, `linkBits`, `openMap`, `linkEmpty`, `roundEmpty`): each round's live coins and the link
-  points, as bits under an encoding `e` of the field, written into the stop's opening. Held off the empty classes, its
-  premises hold within the openings' gaps and empty classes (`openMap_roundClose`, `openMap_linkClose`,
-  `openMap_couples`), at any widening and start that leave the tape from the first stop fresh (`FirstStopFresh`) and
-  are within `ε₀` of the uniform tape (`StartWithin`).
+  points, as bits under an encoding `e` of the field, written into the stop's opening in a play that ends in `E`. Held
+  off the empty classes, its premises hold within the openings' gaps and empty classes (`openMap_roundClose`,
+  `openMap_linkClose`, `openMap_couples`), at any widening and start that leave the tape from the first stop fresh
+  (`FirstStopFresh`) and are within `ε₀` of the uniform tape (`StartWithin`).
 * **The sample-coupled coin map** (`FreshAt`, `freshSel`, `sampleSel`, `srcCoins`, `sampleStart`, `sampleMap`,
-  `sampleMaps`): widened by a tape of the period's game, its start fills the fresh frames of the sample's family in the
+  `sampleMaps`): the coin map into the openings of the strategy's play, which ends in the close after its request.
+  Widened by a tape of the period's game, its start fills the fresh frames of the sample's family in the
   strategy's play, after its request, with the bytes the sample reads, as coins (`srcCoins`, whose bytes are the
   sample's: `bytesOf_srcCoins`). A fresh frame is pinned to its place in the play: its log ends in the close after the
   strategy's request, with the frame's release after the releases before it. It leaves the tape from the
@@ -177,6 +188,40 @@ theorem pickIn_mem {C : Type} [Fintype C] {S : Finset C} (h : S.Nonempty) (d : C
   split
   · exact Subtype.mem _
   · contradiction
+
+/-! ## A play's outputs -/
+
+/-- **An output a play reaches, at an equal game.** -/
+theorem playReaches_of_eq {g g' : Game α} (e : g = g') (s : Strategy g) {o : α} (h : PlayReaches g s o) :
+    ∃ s' : Strategy g', PlayReaches g' s' o := by
+  subst e
+  exact ⟨s, h⟩
+
+/-- **Every strategy's plays reach an output.** -/
+theorem exists_playReaches : ∀ (g : Game α) (s : Strategy g), ∃ o, PlayReaches g s o
+  | .ret a, _ => ⟨a, rfl⟩
+  | .send _ k, s => exists_playReaches (k s.1) s.2
+  | @Game.coin _ _ _ iN k, s => by
+    obtain ⟨c⟩ := iN
+    obtain ⟨o, h⟩ := exists_playReaches (k c) (s c)
+    exact ⟨o, c, h⟩
+
+/-- **An output a play of `g.bind f` reaches is one a play of some `f b` reaches.** -/
+theorem PlayReaches.of_bind {β : Type} {f : β → Game α} {o : α} :
+    ∀ (g : Game β) (s : Strategy (g.bind f)), PlayReaches (g.bind f) s o →
+      ∃ b, ∃ s' : Strategy (f b), PlayReaches (f b) s' o
+  | .ret b, s, h => ⟨b, s, h⟩
+  | .send _ k, s, h => PlayReaches.of_bind (k s.1) s.2 h
+  | @Game.coin _ _ _ _ k, s, h => by
+    obtain ⟨c, hc⟩ := h
+    exact PlayReaches.of_bind (k c) (s c) hc
+
+/-- **Equal functions on equal types agree at a point and its cast.** -/
+theorem apply_cast_of_heq {C C' : Type} {B : Sort*} {k : C → B} {k' : C' → B} (hC : C = C') (hk : HEq k k') (c : C) :
+    k c = k' (cast hC c) := by
+  subst hC
+  rw [eq_of_heq hk]
+  rfl
 
 /-! ## A filled tape -/
 
@@ -631,10 +676,75 @@ end Session
 
 /-! ## An opening's node -/
 
-/-- **An opening's coin node, described**: `g'` is the device's flip of stream `p.1`'s round `p.2` of the tree `T` among
-the rounds the tree committed to there, on the frame `.opening i s n` answering `b`, with the releases' continuation
-after it (`relK`'s opening branch). -/
-structure OpeningAt {β : Type} (g' : Game β) where
+/-- **An output a play of the device's releases reaches is one a play of the continuation at some log reaches.** -/
+theorem playReaches_relK {β : Type} (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree)
+    (f : List Release → Game β) (s : Strategy (relK k fs ts f)) {o : β} (h : PlayReaches (relK k fs ts f) s o) :
+    ∃ L, ∃ s' : Strategy (f L), PlayReaches (f L) s' o := by
+  obtain ⟨s', h'⟩ := playReaches_of_eq (releases_bind k fs ts f).symm s h
+  exact PlayReaches.of_bind _ s' h'
+
+/-- **The prover that closes the device at once reaches only the continuation at the empty log** (`closeThen`). -/
+theorem playReaches_closeThen {β : Type} (f : List Release → Game β) (t : Strategy (f [])) {o : β} :
+    ∀ (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree),
+      PlayReaches ((releases k fs ts).bind f) (closeThen f t k fs ts) o → PlayReaches (f []) t o
+  | 0, _, _, h => h
+  | _ + 1, _, _, h => h
+
+/-- **The close after a log ends the play at that log.** -/
+theorem log_of_finish {sg : Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray} {log : List Release}
+    {s : Strategy (finish sg θ F c rq log)} {ex : Exchange} (h : PlayReaches (finish sg θ F c rq log) s ex) :
+    ex.log = log := by
+  obtain ⟨ρ, he⟩ : ∃ ρ : Fin sg.draws → Bool, ex = ⟨θ, F, c, rq, log, s.1, List.ofFn ρ,
+      sg.signatures rq log s.1 (List.ofFn ρ), (s.2 ρ).1.1, (s.2 ρ).1.2⟩ := h
+  rw [he]
+
+/-- **A close that records the device's log**: every output a play of `E log` reaches reads, under `lg`, the log
+`log`, and `E log` has a strategy. -/
+structure RecordsLog {β : Type} (lg : β → List Release) (E : List Release → Game β) : Prop where
+  reads : ∀ log (s : Strategy (E log)) o, PlayReaches (E log) s o → lg o = log
+  plays : ∀ log, Nonempty (Strategy (E log))
+
+/-- **The period's close records the device's log** (`log_of_finish`). -/
+theorem finish_recordsLog (sg : Signer) (θ : ByteArray) (F : Array ByteArray) (c rq : ByteArray) :
+    RecordsLog Exchange.log (finish sg θ F c rq) where
+  reads _ _ _ h := log_of_finish h
+  plays _ := ⟨⟨ByteArray.empty, fun _ => ⟨(ByteArray.empty, #[]), PUnit.unit⟩⟩⟩
+
+/-- **The log the device's releases continue to, at a close that records its log**: where the releases from two states,
+continuing to the close after `pre`, the release `r` and theirs, and to the close after `pre'`, `r'` and theirs, are
+one game, the prover that closes the first at once ends it at `pre` and `r`, a log the second reaches. -/
+theorem relK_logs {β : Type} {lg : β → List Release} {E : List Release → Game β} (hE : RecordsLog lg E)
+    {k k' : ℕ} {fs fs' : List (String × ℕ)} {ts ts' : List OpenTree} {pre pre' : List Release} {r r' : Release}
+    (h : relK k fs ts (fun log => E (pre ++ r :: log)) = relK k' fs' ts' (fun log => E (pre' ++ r' :: log))) :
+    ∃ L, pre ++ [r] = pre' ++ r' :: L := by
+  obtain ⟨t⟩ := hE.plays (pre ++ [r])
+  obtain ⟨o, ho⟩ := exists_playReaches _ (closeThen (fun log => E (pre ++ r :: log)) t k fs ts)
+  have h₁ : lg o = pre ++ [r] :=
+    hE.reads _ t o (playReaches_closeThen (fun log => E (pre ++ r :: log)) t k fs ts ho)
+  obtain ⟨s', ho'⟩ := playReaches_of_eq ((releases_bind k fs ts _).trans h) _ ho
+  obtain ⟨L, s'', ho''⟩ := playReaches_relK k' fs' ts' _ s' ho'
+  exact ⟨L, h₁.symm.trans (hE.reads _ s'' o ho'')⟩
+
+/-- **One log before the release, and one release**, where the device's releases continue as one game to a close that
+records its log (`relK_logs` both ways). -/
+theorem relK_log_eq {β : Type} {lg : β → List Release} {E : List Release → Game β} (hE : RecordsLog lg E)
+    {k k' : ℕ} {fs fs' : List (String × ℕ)} {ts ts' : List OpenTree} {pre pre' : List Release} {r r' : Release}
+    (h : relK k fs ts (fun log => E (pre ++ r :: log)) = relK k' fs' ts' (fun log => E (pre' ++ r' :: log))) :
+    pre = pre' ∧ r = r' := by
+  obtain ⟨L, hL⟩ := relK_logs hE h
+  obtain ⟨L', hL'⟩ := relK_logs hE h.symm
+  have e₁ := congrArg List.length hL
+  have e₂ := congrArg List.length hL'
+  simp only [List.length_append, List.length_cons, List.length_nil] at e₁ e₂
+  obtain rfl : L = [] := List.eq_nil_of_length_eq_zero (by omega)
+  obtain ⟨hp, hr⟩ := List.append_inj hL (by omega)
+  exact ⟨hp, (List.cons.inj hr).1⟩
+
+/-- **An opening's coin node, described in the play**: `g'` is the device's flip of stream `p.1`'s round `p.2` of the
+tree `T` among the rounds the tree committed to there, on the frame `.opening i s n` the prover sent answering `b`,
+with the releases' continuation after it (`relK`'s opening branch), ending in `E` at the device's log: the releases
+`pre` before the frame, the frame's, then the rest. -/
+structure OpeningAt {β : Type} (E : List Release → Game β) (g' : Game β) where
   T : OpenTree
   p : Fin T.spec.streams.size × Fin (2 ^ T.spec.roundsLog)
   i : ℕ
@@ -644,93 +754,153 @@ structure OpeningAt {β : Type} (g' : Game β) where
   k : ℕ
   fs : List (String × ℕ)
   ts : List OpenTree
-  f : List Release → Game β
+  pre : List Release
   iF : Fintype (TreeOpenable T.nonce T.spec T.sample p.1 p.2)
   iN : Nonempty (TreeOpenable T.nonce T.spec T.sample p.1 p.2)
   eq : g' = @Game.coin β (TreeOpenable T.nonce T.spec T.sample p.1 p.2) iF iN fun d =>
-    relK k fs (ts.set i (T.bump p.1)) fun log => f (⟨.opening i s n, b, TreeDraw.opened d.1 n⟩ :: log)
+    relK k fs (ts.set i (T.bump p.1)) fun log => E (pre ++ ⟨.opening i s n, b, TreeDraw.opened d.1 n⟩ :: log)
 
 namespace OpeningAt
 
-variable {β : Type} {g' : Game β}
+variable {β : Type} {E : List Release → Game β} {g' : Game β}
 
 /-- The rounds an opening's node flips among. -/
-abbrev Openable (o : OpeningAt g') : Type := TreeOpenable o.T.nonce o.T.spec o.T.sample o.p.1 o.p.2
+abbrev Openable (o : OpeningAt E g') : Type := TreeOpenable o.T.nonce o.T.spec o.T.sample o.p.1 o.p.2
 
-instance instFintypeOpenable (o : OpeningAt g') : Fintype o.Openable := o.iF
+instance instFintypeOpenable (o : OpeningAt E g') : Fintype o.Openable := o.iF
 
-instance instNonemptyOpenable (o : OpeningAt g') : Nonempty o.Openable := o.iN
+instance instNonemptyOpenable (o : OpeningAt E g') : Nonempty o.Openable := o.iN
 
 /-- Two descriptions of one node flip among one type. -/
-theorem openable_eq (o o' : OpeningAt g') : o.Openable = o'.Openable := by
+theorem openable_eq (o o' : OpeningAt E g') : o.Openable = o'.Openable := by
   have h := o.eq.symm.trans o'.eq
   injection h
 
-open Classical in
-/-- **The rounds released as `bits`**: those whose first `n` coins are `bits` at every description of the node. -/
-noncomputable def classOf (o : OpeningAt g') (bits : List Bool) : Finset o.Openable :=
-  Finset.univ.filter fun d => ∀ o' : OpeningAt g', TreeDraw.opened (cast (openable_eq o o') d).1 o'.n = bits
+/-- **Two descriptions of one node continue alike**, from a round and its cast. -/
+theorem cont_eq (o o' : OpeningAt E g') (d : o.Openable) :
+    relK o.k o.fs (o.ts.set o.i (o.T.bump o.p.1))
+        (fun log => E (o.pre ++ ⟨.opening o.i o.s o.n, o.b, TreeDraw.opened d.1 o.n⟩ :: log)) =
+      relK o'.k o'.fs (o'.ts.set o'.i (o'.T.bump o'.p.1)) (fun log =>
+        E (o'.pre ++ ⟨.opening o'.i o'.s o'.n, o'.b, TreeDraw.opened (cast (openable_eq o o') d).1 o'.n⟩ :: log)) := by
+  have h := o.eq.symm.trans o'.eq
+  injection h with hC _ hk
+  exact apply_cast_of_heq hC hk d
+
+/-- **One log before the frame, and one release, at every description** of a node whose play ends in a close that
+records its log (`relK_log_eq`): the frame the prover sent, the bytes it answers and the round's released coins. -/
+theorem release_eq {lg : β → List Release} (hE : RecordsLog lg E) (o o' : OpeningAt E g') (d : o.Openable) :
+    o.pre = o'.pre ∧ (⟨.opening o.i o.s o.n, o.b, TreeDraw.opened d.1 o.n⟩ : Release) =
+      ⟨.opening o'.i o'.s o'.n, o'.b, TreeDraw.opened (cast (openable_eq o o') d).1 o'.n⟩ :=
+  relK_log_eq hE (o.cont_eq o' d)
+
+/-- **One count at every description**: the `n` of the frame the prover sent (`release_eq`). -/
+theorem n_eq {lg : β → List Release} (hE : RecordsLog lg E) (o o' : OpeningAt E g') : o.n = o'.n := by
+  obtain ⟨d⟩ := o.iN
+  exact (Verity.Frame.opening.inj (congrArg Release.frame (o.release_eq hE o' d).2)).2.2
+
+/-- **One release of each round at every description** (`release_eq`). -/
+theorem opened_eq {lg : β → List Release} (hE : RecordsLog lg E) (o o' : OpeningAt E g') (d : o.Openable) :
+    TreeDraw.opened (cast (openable_eq o o') d).1 o'.n = TreeDraw.opened d.1 o.n :=
+  (congrArg Release.coins (o.release_eq hE o' d).2).symm
+
+/-- **The rounds a description releases as `bits`**: those whose first `n` coins are `bits`. -/
+def classOf (o : OpeningAt E g') (bits : List Bool) : Finset o.Openable :=
+  Finset.univ.filter fun d => TreeDraw.opened d.1 o.n = bits
+
+/-- **A node's class is its canonical description's**: at a node whose play ends in a close that records its log, a
+round is in the class of a description `o` exactly where every other description `o'` releases it as `bits`. -/
+theorem mem_classOf_iff {lg : β → List Release} (hE : RecordsLog lg E) (o o' : OpeningAt E g') (bits : List Bool)
+    (d : o.Openable) : d ∈ o.classOf bits ↔ TreeDraw.opened (cast (openable_eq o o') d).1 o'.n = bits := by
+  rw [classOf, Finset.mem_filter, opened_eq hE o o' d]
+  exact and_iff_right (Finset.mem_univ d)
+
+/-- **The class is nonempty where the draw is released there**: a round some description of the node releases as
+`bits` is in the class of each. -/
+theorem classOf_nonempty {lg : β → List Release} (hE : RecordsLog lg E) (o o' : OpeningAt E g') {bits : List Bool}
+    (d' : o'.Openable) (h : TreeDraw.opened d'.1 o'.n = bits) : (o.classOf bits).Nonempty :=
+  ⟨cast (openable_eq o' o) d', (o.mem_classOf_iff hE o' bits _).2 (by rw [cast_cast, cast_eq]; exact h)⟩
+
+/-- **The class is empty exactly where no round releases `bits`** at the description's count. -/
+theorem classOf_eq_empty_iff (o : OpeningAt E g') (bits : List Bool) :
+    o.classOf bits = ∅ ↔ ∀ d : o.Openable, TreeDraw.opened d.1 o.n ≠ bits := by
+  rw [classOf, Finset.filter_eq_empty_iff]
+  exact ⟨fun h d => h (Finset.mem_univ d), fun h d _ => h d⟩
 
 end OpeningAt
 
 open Classical in
-/-- **The node's description**, where `g'` is an opening's coin node. -/
-noncomputable def openingOf {β : Type} (g' : Game β) : Option (OpeningAt g') :=
-  if h : Nonempty (OpeningAt g') then some (Classical.choice h) else none
+/-- **The node's canonical description**, where `g'` is an opening's coin node in a play that ends in `E`: one chosen
+among its descriptions. Where `E` records its log, every description has its log before the frame, its release and its
+count (`OpeningAt.release_eq`, `OpeningAt.n_eq`): the `n` of the frame the prover sent. -/
+noncomputable def openingOf {β : Type} (E : List Release → Game β) (g' : Game β) : Option (OpeningAt E g') :=
+  if h : Nonempty (OpeningAt E g') then some (Classical.choice h) else none
 
-/-- **The release `bits` written into an opening's node**: at an opening's coin node, the tape's round there replaced by
-the round it picks among those released as `bits`; every other tape unchanged. -/
-noncomputable def writeOpening {β : Type} {g' : Game β} (s' : Strategy g') (bits : List Bool) :
-    CoinTape g' s' → CoinTape g' s' :=
-  (openingOf g').elim id fun o => writeCoin o.eq (pickIn (o.classOf bits)) s'
+/-- **A node with a description is one `openingOf` describes.** -/
+theorem openingOf_some {β : Type} {E : List Release → Game β} {g' : Game β} (o' : OpeningAt E g') :
+    ∃ o, openingOf E g' = some o :=
+  ⟨Classical.choice ⟨o'⟩, by
+    unfold openingOf
+    exact dite_eq_left ⟨o'⟩⟩
 
-/-- **The opening's gap** at the node `g'` and the release `bits` of a uniform `P`: the written round's shortfall below
-uniform at an opening's coin node; none at every other node. -/
-noncomputable def openGap {β P : Type} [Fintype P] (g' : Game β) (bits : P → List Bool) : ℝ≥0∞ :=
-  (openingOf g').elim 0 fun o => shortfall fun c => pickIn (o.classOf (bits c))
+/-- **The release `bits` written into an opening's node**: at an opening's coin node in a play that ends in `E`, the
+tape's round there replaced by the round it picks among those the node's canonical description releases as `bits`;
+every other tape unchanged. -/
+noncomputable def writeOpening {β : Type} (E : List Release → Game β) {g' : Game β} (s' : Strategy g')
+    (bits : List Bool) : CoinTape g' s' → CoinTape g' s' :=
+  (openingOf E g').elim id fun o => writeCoin o.eq (pickIn (o.classOf bits)) s'
+
+/-- **The opening's gap** at the node `g'` in a play that ends in `E` and the release `bits` of a uniform `P`: the
+written round's shortfall below uniform at an opening's coin node; none at every other node. -/
+noncomputable def openGap {β P : Type} [Fintype P] (E : List Release → Game β) (g' : Game β)
+    (bits : P → List Bool) : ℝ≥0∞ :=
+  (openingOf E g').elim 0 fun o => shortfall fun c => pickIn (o.classOf (bits c))
 
 /-- **A release written into an opening's node is within the opening's gap of the tape's own**: a reading bounded by 1
 of the uniform tape from the node is at most its mean with the release `bits c` of a uniform `c` written in, plus the
 opening's gap. -/
-theorem avg_le_writeOpening {β P : Type} [Fintype P] [Nonempty P] {g' : Game β} (bits : P → List Bool)
-    (s' : Strategy g') (G : CoinTape g' s' → ℝ≥0∞) (hG : ∀ z, G z ≤ 1) :
-    avg G ≤ avg (fun c : P => avg fun z : CoinTape g' s' => G (writeOpening s' (bits c) z)) + openGap g' bits := by
+theorem avg_le_writeOpening {β P : Type} [Fintype P] [Nonempty P] (E : List Release → Game β) {g' : Game β}
+    (bits : P → List Bool) (s' : Strategy g') (G : CoinTape g' s' → ℝ≥0∞) (hG : ∀ z, G z ≤ 1) :
+    avg G ≤ avg (fun c : P => avg fun z : CoinTape g' s' => G (writeOpening E s' (bits c) z)) + openGap E g' bits := by
   unfold writeOpening openGap
-  cases openingOf g' with
+  cases openingOf E g' with
   | none =>
     refine le_of_eq ?_
     show avg G = avg (fun _ : P => avg fun z : CoinTape g' s' => G z) + 0
     rw [avg_const, add_zero]
   | some o => exact avg_le_writeCoin o.eq (fun c => pickIn (o.classOf (bits c))) s' G hG
 
-open Classical in
-/-- **The written release is `bits`**: at an opening's node whose rounds include one released as `bits`, the written
-tape's round there is released as `bits` at every description of the node. -/
-theorem opened_writeOpening {β : Type} {g' : Game β} (s' : Strategy g') (bits : List Bool) (z : CoinTape g' s')
-    (o : OpeningAt g') (ho : openingOf g' = some o) (h : (o.classOf bits).Nonempty) (o' : OpeningAt g') :
-    TreeDraw.opened (headCoin o'.eq s' (writeOpening s' bits z)).1 o'.n = bits := by
-  have hw : writeOpening s' bits z = writeCoin o.eq (pickIn (o.classOf bits)) s' z := by
+/-- **The written release is `bits` at every description**: at an opening's node whose play ends in a close that records
+its log, where the canonical description's class at `bits` is nonempty, the written tape's round there is released as
+`bits` at every description of the node (`OpeningAt.mem_classOf_iff`). -/
+theorem opened_writeOpening {β : Type} {lg : β → List Release} {E : List Release → Game β} (hE : RecordsLog lg E)
+    {g' : Game β} (s' : Strategy g') (bits : List Bool) (z : CoinTape g' s') (o : OpeningAt E g')
+    (ho : openingOf E g' = some o) (h : (o.classOf bits).Nonempty) (o' : OpeningAt E g') :
+    TreeDraw.opened (headCoin o'.eq s' (writeOpening E s' bits z)).1 o'.n = bits := by
+  have hw : writeOpening E s' bits z = writeCoin o.eq (pickIn (o.classOf bits)) s' z := by
     unfold writeOpening
     rw [ho]
     rfl
   rw [hw, headCoin_congr o.eq o'.eq (OpeningAt.openable_eq o o') s', headCoin_writeCoin]
-  exact (Finset.mem_filter.1 (pickIn_mem h (headCoin o.eq s' z))).2 o'
+  exact (o.mem_classOf_iff hE o' bits _).1 (pickIn_mem h (headCoin o.eq s' z))
 
-/-- **No round of an opening's node is released as `bits`**: `g'` is an opening's coin node and none of the rounds it
-flips among is released as `bits`. Only there does the written release miss `bits` (`opened_writeOpening`). -/
-def EmptyAt {β : Type} (g' : Game β) (bits : List Bool) : Prop :=
-  ∃ o, openingOf g' = some o ∧ ¬ (o.classOf bits).Nonempty
+/-- **No round of an opening's node is released as `bits`**: `g'` is an opening's coin node in a play that ends in
+`E` and none of the rounds its canonical description flips among is released as `bits`. Only there does the written
+release miss `bits` (`opened_writeOpening`). -/
+def EmptyAt {β : Type} (E : List Release → Game β) (g' : Game β) (bits : List Bool) : Prop :=
+  ∃ o, openingOf E g' = some o ∧ ¬ (o.classOf bits).Nonempty
 
-/-- **The opening's empty class** at the node `g'` and the release `bits` of a uniform `P`: the probability that no
-round of the node is released as `bits` of it. -/
-noncomputable def openEmpty {β P : Type} [Fintype P] (g' : Game β) (bits : P → List Bool) : ℝ≥0∞ :=
-  prCoin fun c => EmptyAt g' (bits c)
+/-- **The opening's empty class** at the node `g'` in a play that ends in `E` and the release `bits` of a uniform `P`:
+the probability that no round of the node is released as `bits` of it. -/
+noncomputable def openEmpty {β P : Type} [Fintype P] (E : List Release → Game β) (g' : Game β)
+    (bits : P → List Bool) : ℝ≥0∞ :=
+  prCoin fun c => EmptyAt E g' (bits c)
 
 /-- **The written release is `bits` off the empty class** (`opened_writeOpening`). -/
-theorem opened_writeOpening_off {β : Type} {g' : Game β} (s' : Strategy g') (bits : List Bool) (z : CoinTape g' s')
-    (h : ¬ EmptyAt g' bits) (o : OpeningAt g') (ho : openingOf g' = some o) (o' : OpeningAt g') :
-    TreeDraw.opened (headCoin o'.eq s' (writeOpening s' bits z)).1 o'.n = bits :=
-  opened_writeOpening s' bits z o ho (not_not.1 fun hn => h ⟨o, ho, hn⟩) o'
+theorem opened_writeOpening_off {β : Type} {lg : β → List Release} {E : List Release → Game β} (hE : RecordsLog lg E)
+    {g' : Game β} (s' : Strategy g') (bits : List Bool) (z : CoinTape g' s') (h : ¬ EmptyAt E g' bits)
+    (o : OpeningAt E g') (ho : openingOf E g' = some o) (o' : OpeningAt E g') :
+    TreeDraw.opened (headCoin o'.eq s' (writeOpening E s' bits z)).1 o'.n = bits :=
+  opened_writeOpening hE s' bits z o ho (not_not.1 fun hn => h ⟨o, ho, hn⟩) o'
 
 /-! ## The coin map -/
 
@@ -742,36 +912,39 @@ def roundBits {m : ℕ} (c : Fin m → 𝔽) : List Bool := (List.ofFn fun i => 
 /-- **The live link points as bits**: the first point's, then the second's. -/
 def linkBits {m : ℕ} (pts : Fin 2 → Fin m → 𝔽) : List Bool := roundBits e (pts 0) ++ roundBits e (pts 1)
 
-/-- **The link's empty class, the event the joint law is held off at the first stop**: no round of the stop's opening
-is released as the link points' bits. -/
-def linkEmpty {mPts : ℕ} : LinkHold mPts := fun g' pts => EmptyAt g' (linkBits e pts)
+/-- **The link's empty class, the event the joint law is held off at the first stop**: no round of the stop's opening,
+in a play that ends in `E`, is released as the link points' bits. -/
+def linkEmpty (E : List Release → Game Exchange) {mPts : ℕ} : LinkHold mPts := fun g' pts =>
+  EmptyAt E g' (linkBits e pts)
 
-/-- **A round's empty class, the event the joint law is held off at a later stop**: no round of the stop's opening is
-released as the round's coins' bits. -/
-def roundEmpty : RoundHold := fun g' _ _ c => EmptyAt g' (roundBits e c)
+/-- **A round's empty class, the event the joint law is held off at a later stop**: no round of the stop's opening, in
+a play that ends in `E`, is released as the round's coins' bits. -/
+def roundEmpty (E : List Release → Game Exchange) : RoundHold := fun g' _ _ c => EmptyAt E g' (roundBits e c)
 
 /-- **The coin map that writes the live coins into the openings**, at the widening `T` and the start `start`: at each
-stop, the link points' bits or a round's coins' bits under `e`, written into the stop's opening (`writeOpening`). -/
-noncomputable def openMap {g : Game Exchange} {σ : Strategy g} {Ω : Type} {R mPts : ℕ} (T : Type) [Fintype T]
-    [Nonempty T] (start : Ω × T → CoinTape g σ) : CoinMap g σ Ω R mPts where
+stop, the link points' bits or a round's coins' bits under `e`, written into the stop's opening in a play that ends in
+`E` (`writeOpening`). -/
+noncomputable def openMap {g : Game Exchange} {σ : Strategy g} {Ω : Type} {R mPts : ℕ}
+    (E : List Release → Game Exchange) (T : Type) [Fintype T] [Nonempty T] (start : Ω × T → CoinTape g σ) :
+    CoinMap g σ Ω R mPts where
   T := T
   start := start
-  link p pts := writeOpening p.s' (linkBits e pts)
-  round p _ _ c := writeOpening p.s' (roundBits e c)
+  link p pts := writeOpening E p.s' (linkBits e pts)
+  round p _ _ c := writeOpening E p.s' (roundBits e c)
 
 /-- **The coin map writes each round's coins in within the stop's opening's gap.** -/
-theorem openMap_roundClose {g : Game Exchange} {σ : Strategy g} {Ω : Type} {R mPts : ℕ} (T : Type) [Fintype T]
-    [Nonempty T] (start : Ω × T → CoinTape g σ) :
-    (openMap e (R := R) (mPts := mPts) T start).RoundClose fun q _ s =>
-      openGap q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) := fun q _ _ G hG =>
-  avg_le_writeOpening (roundBits e) q.s' G hG
+theorem openMap_roundClose {g : Game Exchange} {σ : Strategy g} {Ω : Type} {R mPts : ℕ}
+    (E : List Release → Game Exchange) (T : Type) [Fintype T] [Nonempty T] (start : Ω × T → CoinTape g σ) :
+    (openMap e (R := R) (mPts := mPts) E T start).RoundClose fun q _ s =>
+      openGap E q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) := fun q _ _ G hG =>
+  avg_le_writeOpening E (roundBits e) q.s' G hG
 
 /-- **The coin map writes the link points in within the stop's opening's gap.** -/
-theorem openMap_linkClose {g : Game Exchange} {σ : Strategy g} {Ω : Type} {R mPts : ℕ} (T : Type) [Fintype T]
-    [Nonempty T] (start : Ω × T → CoinTape g σ) :
-    (openMap e (R := R) (mPts := mPts) T start).LinkClose fun q =>
-      openGap q.g' (linkBits e : (Fin 2 → Fin mPts → 𝔽) → List Bool) := fun q G hG =>
-  avg_le_writeOpening (linkBits e) q.s' G hG
+theorem openMap_linkClose {g : Game Exchange} {σ : Strategy g} {Ω : Type} {R mPts : ℕ}
+    (E : List Release → Game Exchange) (T : Type) [Fintype T] [Nonempty T] (start : Ω × T → CoinTape g σ) :
+    (openMap e (R := R) (mPts := mPts) E T start).LinkClose fun q =>
+      openGap E q.g' (linkBits e : (Fin 2 → Fin mPts → 𝔽) → List Bool) := fun q G hG =>
+  avg_le_writeOpening E (linkBits e) q.s' G hG
 
 /-! ## The coin map's premise within a term -/
 
@@ -858,22 +1031,22 @@ theorem couples_of_close (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.ga
         ring
 
 /-- **The coin map that writes the live coins into the openings, within the openings' gaps and empty classes**: at
-its widening `T` and start `start`, the joint law's tape off the empty classes (`linkEmpty`, `roundEmpty`) is within the
-start's term and, over the stops, the openings' gaps and empty classes of the uniform tape, wherever the start leaves
-the tape from the first stop fresh and is within `ε₀` of the uniform tape. -/
+the plays' close `E`, its widening `T` and start `start`, the joint law's tape off the empty classes (`linkEmpty`,
+`roundEmpty`) is within the start's term and, over the stops, the openings' gaps and empty classes of the uniform tape,
+wherever the start leaves the tape from the first stop fresh and is within `ε₀` of the uniform tape. -/
 theorem openMap_couples (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
-    (D : Decoders A.rounds A.Reg) (T : Type) [Fintype T] [Nonempty T]
+    (D : Decoders A.rounds A.Reg) (E : List Release → Game Exchange) (T : Type) [Fintype T] [Nonempty T]
     (start : A.Ω × T → CoinTape (V.game θ F c) σ) {ε₀ : ℝ≥0∞}
-    (hF : FirstStopFresh V θ F c A rd σ (openMap e T start))
-    (hS : StartWithin V θ F c A σ (openMap e T start) ε₀) :
-    CouplesWithin V θ F c A rd σ D (openMap e T start) (linkEmpty e) (roundEmpty e)
-      (ε₀ + couplesErr V θ F c A rd σ D (openMap e T start)
-        (fun q _ s => openGap q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
-          openEmpty q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
-        (fun q => openGap q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool) +
-          openEmpty q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool))) :=
-  couples_of_close V θ F c A rd σ D _ (linkEmpty e) (roundEmpty e) (openMap_roundClose e T start)
-    (openMap_linkClose e T start) hF hS
+    (hF : FirstStopFresh V θ F c A rd σ (openMap e E T start))
+    (hS : StartWithin V θ F c A σ (openMap e E T start) ε₀) :
+    CouplesWithin V θ F c A rd σ D (openMap e E T start) (linkEmpty e E) (roundEmpty e E)
+      (ε₀ + couplesErr V θ F c A rd σ D (openMap e E T start)
+        (fun q _ s => openGap E q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
+          openEmpty E q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
+        (fun q => openGap E q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool) +
+          openEmpty E q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool))) :=
+  couples_of_close V θ F c A rd σ D _ (linkEmpty e E) (roundEmpty e E) (openMap_roundClose e E T start)
+    (openMap_linkClose e E T start) hF hS
 
 /-! ## The sample's coins in the fresh frames of the sample's family -/
 
@@ -955,10 +1128,10 @@ noncomputable def sampleStart {R : ℕ} (rd : Reading R) (σ : Strategy (V.game 
 
 /-- **The sample-coupled coin map**: widened by a tape of the period's game, its start writes the sample's coins `κ`
 into the fresh frames of the sample's family (`sampleStart`), and at each stop it writes the live coins into the stop's
-opening (`openMap`). -/
+opening in `σ`'s play, whose log ends in the close after `σ`'s request (`openMap`). -/
 noncomputable def sampleMap (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c)) (label : String)
     (after : ByteArray) {m : ℕ} (κ : A.Ω → Fin m → Fin 512 → Bool) : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP :=
-  openMap e (CoinTape (V.game θ F c) σ) (sampleStart V θ F c rd σ label after κ)
+  openMap e (finish (V.signer θ) θ F c σ.1) (CoinTape (V.game θ F c) σ) (sampleStart V θ F c rd σ label after κ)
 
 /-- The sample at widened coins is the sample at the device's coins. By `dsimp`, not `rfl`: elaborating the two samples
 as definitionally equal reduces their `match` and evaluates `drawUnits`. -/
@@ -1022,14 +1195,16 @@ coins are uniform. -/
 theorem sampleMap_couples (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
     (D : Decoders A.rounds A.Reg) (label : String) (after : ByteArray) {m : ℕ} (κ : A.Ω → Fin m → Fin 512 → Bool)
     (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ ω)) = avg H) :
-    CouplesWithin V θ F c A rd σ D (sampleMap e V θ F c A rd σ label after κ) (linkEmpty e) (roundEmpty e)
+    CouplesWithin V θ F c A rd σ D (sampleMap e V θ F c A rd σ label after κ)
+      (linkEmpty e (finish (V.signer θ) θ F c σ.1)) (roundEmpty e (finish (V.signer θ) θ F c σ.1))
       (couplesErr V θ F c A rd σ D (sampleMap e V θ F c A rd σ label after κ)
-        (fun q _ s => openGap q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
-          openEmpty q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
-        (fun q => openGap q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool) +
-          openEmpty q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool))) := by
-  have h := openMap_couples e V θ F c A rd σ D (CoinTape (V.game θ F c) σ) (sampleStart V θ F c rd σ label after κ)
-    (sampleMap_fresh e V θ F c A rd σ label after κ) (sampleMap_start e V θ F c A rd σ label after κ hκ)
+        (fun q _ s => openGap (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
+          openEmpty (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
+        (fun q => openGap (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool) +
+          openEmpty (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool))) := by
+  have h := openMap_couples e V θ F c A rd σ D (finish (V.signer θ) θ F c σ.1) (CoinTape (V.game θ F c) σ)
+    (sampleStart V θ F c rd σ label after κ) (sampleMap_fresh e V θ F c A rd σ label after κ)
+    (sampleMap_start e V θ F c A rd σ label after κ hκ)
   rwa [zero_add] at h
 
 omit θ F c in
@@ -1055,7 +1230,9 @@ theorem couplingTarget_withProject_of_close (rd : Readings) (K : Constructions V
       Decoders A.rounds A.Reg)
     (M : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
       CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP)
-    (A : Live) (P : Exchange → Prop) (θ : ByteArray) (F : Array ByteArray) (BL : LinkHold A.mP) (B : RoundHold)
+    (A : Live) (P : Exchange → Prop) (θ : ByteArray) (F : Array ByteArray)
+    (BL : (c : ByteArray) → Strategy (V.game θ F c) → LinkHold A.mP)
+    (B : (c : ByteArray) → Strategy (V.game θ F c) → RoundHold)
     (γ : (c : ByteArray) → (σ : Strategy (V.game θ F c)) → Pos (V.game θ F c) σ Claims.Msg (Fin A.rounds) →
       (j : ℕ) → SubmitJ j → ℝ≥0∞)
     (γL : (c : ByteArray) → (σ : Strategy (V.game θ F c)) → Pos (V.game θ F c) σ Claims.Msg (Fin A.rounds) → ℝ≥0∞)
@@ -1065,12 +1242,13 @@ theorem couplingTarget_withProject_of_close (rd : Readings) (K : Constructions V
     (hF : ∀ c σ, FirstStopFresh V θ F c A (rd A θ F c) σ (M A θ F c σ))
     (hS : ∀ c σ, StartWithin V θ F c A σ (M A θ F c σ) (ε₀ c σ))
     (hε : ∀ c σ, ε₀ c σ + couplesErr V θ F c A (rd A θ F c) σ (D A θ F c σ) (M A θ F c σ)
-      (fun q j s => γ c σ q j s + prCoin (B q.g' j s)) (fun q => γL c σ q + prCoin (BL q.g')) ≤ A.hidingTerm)
-    (hD : ∀ c σ, Decodes V θ F c k P A (rd A θ F c) σ (D A θ F c σ) (M A θ F c σ) BL B) :
+      (fun q j s => γ c σ q j s + prCoin (B c σ q.g' j s)) (fun q => γL c σ q + prCoin (BL c σ q.g')) ≤
+        A.hidingTerm)
+    (hD : ∀ c σ, Decodes V θ F c k P A (rd A θ F c) σ (D A θ F c σ) (M A θ F c σ) (BL c σ) (B c σ)) :
     CouplingTarget V k ((K.withProject V rd D M).withMessages rd) A θ F :=
   couplingTarget_withProject V k rd K D M A P θ F BL B ha
     (fun c σ => couples_of_within V θ F c
-      (couples_of_close V θ F c A _ σ _ _ BL B (hR c σ) (hL c σ) (hF c σ) (hS c σ)) (hε c σ)) hD
+      (couples_of_close V θ F c A _ σ _ _ (BL c σ) (B c σ) (hR c σ) (hL c σ) (hF c σ) (hS c σ)) (hε c σ)) hD
 
 omit θ F c in
 /-- **The coupling at the projection with the sample-coupled coin maps**: `couplingTarget_withProject` at
@@ -1086,14 +1264,16 @@ theorem couplingTarget_withProject_of_sample (rd : Readings) (K : Constructions 
     (F : Array ByteArray) (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ A ω)) = avg H)
     (ha : LoggedBound V k (K.withProject V rd D (sampleMaps e V rd label after κ)) P θ F)
     (hε : ∀ c σ, couplesErr V θ F c A (rd A θ F c) σ (D A θ F c σ) (sampleMaps e V rd label after κ A θ F c σ)
-      (fun q _ s => openGap q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
-        openEmpty q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
-      (fun q => openGap q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool) +
-        openEmpty q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool)) ≤ A.hidingTerm)
+      (fun q _ s => openGap (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
+        openEmpty (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
+      (fun q => openGap (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool) +
+        openEmpty (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool)) ≤
+        A.hidingTerm)
     (hD : ∀ c σ, Decodes V θ F c k P A (rd A θ F c) σ (D A θ F c σ) (sampleMaps e V rd label after κ A θ F c σ)
-      (linkEmpty e) (roundEmpty e)) :
+      (linkEmpty e (finish (V.signer θ) θ F c σ.1)) (roundEmpty e (finish (V.signer θ) θ F c σ.1))) :
     CouplingTarget V k ((K.withProject V rd D (sampleMaps e V rd label after κ)).withMessages rd) A θ F :=
-  couplingTarget_withProject V k rd K D (sampleMaps e V rd label after κ) A P θ F (linkEmpty e) (roundEmpty e) ha
+  couplingTarget_withProject V k rd K D (sampleMaps e V rd label after κ) A P θ F
+    (fun c σ => linkEmpty e (finish (V.signer θ) θ F c σ.1)) (fun c σ => roundEmpty e (finish (V.signer θ) θ F c σ.1)) ha
     (fun c σ => couples_of_within V θ F c (sampleMap_couples e V θ F c A (rd A θ F c) σ (D A θ F c σ)
       (label θ F c σ) (after θ F c σ) (κ A) hκ) (hε c σ)) hD
 

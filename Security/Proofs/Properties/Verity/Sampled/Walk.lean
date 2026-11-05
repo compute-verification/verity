@@ -22,8 +22,8 @@ frame a live round picks, when each reading picks only openings (`walk_relK`):
 * **The device's trees, as its log shows them** (`TreesOf`): one tree of each `Hello`'s shape, in order, each stream
   with as many rounds opened as the log shows openings of it, and as many coin-tree lines as the log's releases wrote;
   each release keeps it (`TreesOf.fresh`, `TreesOf.hello`, `TreesOf.opening`).
-* **Where the walk stops** (`StopOf`, `walk_relK`, `walk_cast`, `walk_send_cast`, the last from the prover's
-  request): after releases no live round picks (`NoPick`), the
+* **Where the walk stops** (`StopOf`, `walk_relK`, `walk_cast`, `walk_send_cast`, the last from the request the
+  strategy sends, `cast_send_fst`): after releases no live round picks (`NoPick`), the
   play's end, every cut past there; or the node after an opening frame a live round picks after the device's log before
   the walk and those releases, at the trees that log shows, with the live rounds' cuts there, fixed exactly at the
   rounds that pick it (`isHere_openCuts`). Consuming that stop leaves live the rounds that didn't pick it
@@ -657,17 +657,24 @@ theorem walk_cast (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i 
   subst h
   exact walk_relK hP k fs ts f pre a s' Ks x back hT hKs
 
+/-- **A strategy's first move, cast onto an equal send**, is its own. -/
+theorem cast_send_fst {A : Type} {k k' : A → Game β} (e : Game.send A k = Game.send A k')
+    (s : Strategy (Game.send A k)) : (cast (congrArg Strategy e) s).1 = s.1 := by
+  cases e
+  rfl
+
 /-- **The walk from the prover's request stops as `StopOf` says** (`walk_relK`), from the empty log at the releases
-continuing to `f` at some request, at the cuts after each request cast onto a node the request's is equal to. -/
+continuing to `f` at the request the strategy sends, at the cuts after each request cast onto a node the request's is
+equal to. -/
 theorem walk_send_cast (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i s n) {k : ℕ}
     {fs : List (String × ℕ)} {f : ByteArray → List Release → Game β} {a : ι → Prop} {g' : Game β}
     (h : (Game.send ByteArray fun r => relK k fs [] (f r)) = g') (s' : Strategy g') (Ks : ι → DigestCut Claims.Msg g')
     (x : CoinTape g' s') (back : CoinTape g' s' → CoinTape g σ)
     (hKs : DigestCut.LiveCuts a
       (fun j => ((DigestCut.AgreeCut.send fun r => frameCut (P j) (rv j) k fs [] (f r) []).cast h).cut) Ks) :
-    ∃ r, StopOf P rv [] (f r) a (Pos.walk g' s' Ks x back) := by
+    StopOf P rv [] (f (cast (congrArg Strategy h.symm) s').1) a (Pos.walk g' s' Ks x back) := by
   subst h
-  refine ⟨s'.1, ?_⟩
+  show StopOf P rv [] (f s'.1) a _
   rw [show Pos.walk _ s' Ks x back = _ from Pos.walk_send s' Ks x back (hKs.isHere fun _ _ => rfl)]
   exact walk_relK hP k fs [] (f s'.1) [] a s'.2 _ x back TreesOf.nil (hKs.atSend s'.1)
 
