@@ -203,3 +203,7 @@ network-accounting corrected its ask (VLLM-193, 14:02Z): drawing the tied V3c au
 ## 21:03Z Wed (coordinator): a6f2 ended at its cap
 
 a6f2 ended rc 124 (cap), with no summary.json. Take the timing from the session logs: per session, the template and its size, the proving wall time, Lean verify time, peak memory, and verified or refused; how many of the 63 finished; the median and the 90th percentile. Post on VLLM-193, and **put the same numbers in your final report to me**. The Pearl+ record's tied audit has 561 strata, so the per-session rate sets its timeout. Then move the circuits, write pins.json, and run retention rm on the cpu-6 serve-dir copy once remotetie's 5ff7 (running) has copied its inputs.
+
+## 04:56Z Thu (coordinator): regenerate one large V3c template on cpu-6 by 16:00Z
+
+network-accounting (VLLM-193) needs ONE AttnBlockFirst circuit over 20 GB on cpu-6 for ODLEAN's whole-read timing and META lookups, by **Thu 16:00Z**. I deleted `vllm-v3c-circuits` under VLLM-215. Regenerate m56765 (NVIS 35, 27.48 GB) from run 1's w0 inputs on cpu-6, if they still exist (check `/workspace/research/vllm-served-verdicts`); otherwise stage the largest template you can. Write it under `/workspace/research/vllm-v3c-circuits/regen/`, run `research keep <dir> --owner @network-accounting --expires 2026-11-12 --priority normal`, and post the path and size on VLLM-193.
