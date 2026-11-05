@@ -160,14 +160,16 @@ runs them, one task a step:
 | `lean-build:verity/core/service/flock` | lean | `lake build` there (`suites.LAKE_BUILD`) | the package's files but its `lean-audit.json` | each `lean_exe` of its `defaultTargets`, at `.lake/build/bin/<exe>` |
 | `lean-unit-cut:verity/ml/flock/verifier/unit_cut_agree.py` | py | `unit_cut_agree.py --lean VERIFY --out WORK/lean-unit-cut` | the script and its import closure (the test-file family's `Imports`) | `lean-unit-cut/result.json`, the cuts and how many agreed |
 | `lean-agreement:verity/ml/flock/verifier` | py | `check.py --lean-agreement WORK UPSTREAM INPUTS VERIFY` | that directory, and what `check.py` reads as it starts (`families/build.py`'s `CHECK_READS`) | `flock-agreement/ci/sets.json`, ci.py's verdicts per set |
-| `lean-suites:after-lean` | py | `suites.py SUITE... --lean-built --json ... --timeouts --jobs N --mem-gb G` on `suites.AFTER_LEAN` | the whole tree, as tasks/v1 keys a job that declares no inputs: those suites build and run Lake packages, which no tracer follows | `suites-lean.json`, suites.py's report |
+| `lean-suites:SUITE`, `lean-suites:SUITE:K/M` | py | `suites.py SUITE --lean-built --json ... --timeouts --jobs N --mem-gb G` on each suite of `suites.AFTER_LEAN`, or with `--files K/M` on each part of one `families/build.py`'s `PARTS` splits; a parallel suite on the family's slot, another in one process | the whole tree, as tasks/v1 keys a job that declares no inputs: those suites build and run Lake packages, which no tracer follows | `suites-lean.json`, suites.py's report |
 | `flock-circuit-build:verity/ml/flock/live` | rust | `verity/ml/flock/check_build.sh` | the script, its patches and the live crate (`check.rust_tests_inputs`) | none: `cargo check` builds nothing a reader runs |
 | `flock-rust-tests:verity/ml/flock/live` | rust | `check_build.sh test`, cargo's jobs and test threads at the task's cores | as flock-circuit-build's | none |
 
 `lean-build`'s outputs sit at their paths in a built tree, where the suites that run them look (the Flock suite's
 `artifacts`); `lean-unit-cut` and `lean-agreement` read `flock-verify` and get its path as their var `verify`, and
-`lean-suites` reads every one and puts it at that path in the tree before suites.py runs (its var `bin`). A lean-suites fail
-names each failed suite with its failed tests (`detail.failed`), which drive names, allows and blames as that suite's red. A
+`lean-suites` reads every one and puts it at that path in the tree before suites.py runs (its var `bin`). A part's task
+(its var `files`) hands suites.py a timing record with none of the suite's files (`--timings`), so part K is every M-th test
+file by path from the K-th, the same wherever it runs, and the M parts hold each file once. A lean-suites fail names each
+failed suite with its failed tests (`detail.failed`), which drive names, allows and blames as that suite's red. A
 run that ran nothing is no pass: ci.py skipping every set of the agreement, a partition check that compared no cut, a suite
 suites.py didn't run. Each is an error, so no result. The agreement fetches the upstream
 build and inputs `upstream.json` pins (`research data fetch`, as ci.py fetches what it pins) and holds them to the pin's
@@ -175,7 +177,9 @@ sha256, so the store and its client are no input. Those fetches and ci.py's read
 environment names: a `research run` job on a node with no store config of its own gets one with `--store-read`, and without
 one the task is an error that says so. Each runner reports a fail only for the tree's fault and an error for the
 machine's: a toolchain that didn't set up, a pin that didn't fetch, check.py's `cannot run here`, a command a signal killed,
-and for `check_build.sh` any failing exit whose log shows no refused patch and no crate that didn't compile.
+and for `check_build.sh` any failing exit whose log shows no refused patch and no crate that didn't compile. Drive counts no
+lean-agreement task's result: it takes lean-agreement, and ratchet-gate, which no family lists, from a train.sh run beside
+the executor's check (`research.drive.SLIM_STEPS`).
 
 ## Writing a family
 
