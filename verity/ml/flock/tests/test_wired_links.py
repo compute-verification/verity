@@ -1,4 +1,4 @@
-"""Linking (PROTOCOL.md §16.13) on a small wired class statement: two layers of the universal unit, layer 1 reading layer 0's
+"""Linking (`HmOut`) on a small wired class statement: two layers of the universal unit, layer 1 reading layer 0's
 outputs, one `Q_template_instance` class staged with `class_statement.Wiring`. The honest staging's link rows have their
 writers' output rows' `b || c`; a prover that gives layer 1 a made-up input, and one that commits the right value under a salt
 of its own, stage the same circuit with link rows that differ. The Lean verifier (`flock-verify statement --program`, when a Lean
