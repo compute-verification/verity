@@ -1,7 +1,9 @@
-import Proofs.Flock.C3.Opening.SrcLayer
-import Proofs.Flock.VBridge.PartsCover
-import Proofs.Flock.VBridge.Algebra.RingSwitch
-import Proofs.Flock.Level3.Assembly
+module
+
+public import Proofs.Flock.C3.Opening.SrcLayer
+public import Proofs.Flock.VBridge.PartsCover
+public import Proofs.Flock.VBridge.Algebra.RingSwitch
+public import Proofs.Flock.Level3.Assembly
 
 /-!
 # n7's opening tie at V*'s layer, from V*'s sessions
@@ -14,6 +16,8 @@ one holding ring switch `i`'s 128 slots of w in a run of its row-port elements. 
 `openTieL_of_session` is `OpenTieL` for a source reading the layer there (`ReadsFill`, which w's ring switches are:
 `readsFill_w`), and `openTieL_of_openTie` for a source whose opening is on w's ring switches (`OpenTie`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Opening
 

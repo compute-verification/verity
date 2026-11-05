@@ -1,9 +1,17 @@
-import NetworkCheck.Check
-import CoreProtocol.Profile
-import Flock.Program
-import Flock.Public
-import Flock.WindowRecord
-import NciCheck.Desc
+module
+
+public import NetworkCheck.Check
+public import CoreProtocol.Profile
+public import Flock.Program
+public import Flock.Public
+public import Flock.WindowRecord
+public import NciCheck.Desc
+meta import NetworkCheck.Check
+meta import CoreProtocol.Profile
+meta import Flock.Program
+meta import Flock.Public
+meta import Flock.WindowRecord
+meta import NciCheck.Desc
 
 /-!
 # The network certifier over a period, a core protocol: `verity/certifier/v0`
@@ -215,6 +223,10 @@ digest its certificate signs (`certificate.SignedClocks`, `signedSyncs`). The ce
 window's sync from it, with `certificate.SignedClocks` beside it as the reference (`lean_audit.signed_clocks`).
 -/
 
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
+
 namespace NetworkCheck.Period
 
 open Lean (Json toJson)
@@ -252,7 +264,7 @@ structure Audit where
   bits : Nat
   entries : Array (String × Nat × String)
 
-/-- The network certifier's schedule when it functions as an active warden (`warden.WardenParams`). -/
+/-- The network certifier's schedule when it functions as an active network certifier (`warden.WardenParams`). -/
 structure Schedule where
   bucketMs : Nat
   cellBytes : Nat

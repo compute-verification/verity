@@ -1,8 +1,10 @@
-import Proofs.Flock.Recursive.KSCoinTreeStatement
-import Proofs.Flock.Recursive.KSNontrivial
-import Proofs.Flock.Claims.Recursion.HonestHalfFixture
-import Proofs.Flock.Soundness.CROnly.Hiding
-import Proofs.Flock.Soundness.Discharge.ZkView.Defs
+module
+
+public import Proofs.Flock.Recursive.KSCoinTreeStatement
+public import Proofs.Flock.Recursive.KSNontrivial
+public import Proofs.Flock.Claims.Recursion.HonestHalfFixture
+public import Proofs.Flock.Soundness.CROnly.Hiding
+public import Proofs.Flock.Soundness.Discharge.ZkView.Defs
 
 /-!
 # `RecursiveKSDeployed`'s witnesses (the Lean check's `honest` and `nontrivial`)
@@ -24,6 +26,8 @@ the tree's root and openings.
   and openings, recovers nothing (`Pr_E_none`); and the rest of the bound is `not_ksLin2On_acceptAll`'s, below `1`
   (`not_ksLin2OnC_acceptAll`).
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge
 

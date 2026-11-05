@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.PlainJ.Decode
-import Proofs.Flock.Soundness.Discharge.Tables.Headline
+module
+
+public import Proofs.Flock.Soundness.Discharge.PlainJ.Decode
+public import Proofs.Flock.Soundness.Discharge.Tables.Headline
 
 /-!
 # The soundness half of one plain sampled session of `J` tables
@@ -22,6 +24,8 @@ as `Composed.zk_session_soundJ` makes them under `--zk`:
 The assumptions are `flock_headline_exec`'s: A3 (`hA3`), `cr/sha-512` for the knowledge finders (`hKS`) and
 `ecr/sha-512` for the link finders (`hCR`), with A6 the live session itself.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.PlainJ
 

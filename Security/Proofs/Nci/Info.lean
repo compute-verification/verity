@@ -1,6 +1,8 @@
-import Definitions.Nci.Guarantees.Info
-import Proofs.Nci.Support
-import Proofs.Nci.Threads
+module
+
+public import Definitions.Nci.Guarantees.Info
+public import Proofs.Nci.Support
+public import Proofs.Nci.Threads
 
 /-!
 # Proofs of NCI's guarantees with reads counted by information
@@ -19,6 +21,8 @@ function of `k` bits takes at most `2^k` values (`support_le_of_factor`): that b
 ingress (`InfoOfState`). A set of gates fed by no novel input outside `P` takes at most `2^width(P)` values
 (`support_le_of_feeds`).
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

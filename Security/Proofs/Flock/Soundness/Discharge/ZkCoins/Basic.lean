@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Assumptions
+module
+
+public import Proofs.Flock.Soundness.Game.Basic
+public import Proofs.Flock.Soundness.Assumptions
 
 /-!
 # Interactions with committed coins (live/PROTOCOL.md §9, C-Flock ZK)
@@ -21,6 +23,8 @@ and the paths it receives; at round `i`'s opening it sees the whole block and th
 with every committed round drawn live, as a `Game`, and `Distinct` says that no path opens a round twice (the server
 answers each round once).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkCoins
 

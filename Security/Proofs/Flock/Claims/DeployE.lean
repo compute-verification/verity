@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Deploy
-import Flock.With.VerifyE
+module
+
+public import Proofs.Flock.Claims.Deploy
+public import Flock.With.VerifyE
 
 /-!
 # The element-level inner verifier at the deployment (`FlockDeploy.VE`)
@@ -15,6 +17,8 @@ oracle `H`, on the same messages and coins. The element-level verdict keeps ever
 digests of encodings, and every hash call (`Flock.verifyWithE_of_verifyWith`), so nothing that reads `VE`'s acceptance
 reads one stronger than the deployed verifier's.
 -/
+
+@[expose] public section
 
 namespace Claims
 

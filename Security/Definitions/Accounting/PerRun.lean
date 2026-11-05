@@ -1,6 +1,8 @@
-import Definitions.Accounting.Joint
-import Definitions.Pouw.Game.Defs
-import Definitions.Pouw.PearlC.Game
+module
+
+public import Definitions.Accounting.Joint
+public import Definitions.Pouw.Game.Defs
+public import Definitions.Pouw.PearlC.Game
 
 /-!
 # Per-run audits, and what makes PoUW's cost model truncate (trusted)
@@ -31,6 +33,8 @@ the work and the bits separately. Pearl-C's game is a game of its own, with its 
 truncation for it, and `RealizesPearlCPriced` is a run whose compute audit is Pearl-C's audit, its cost covered by the
 priced sum.
 -/
+
+@[expose] public section
 
 namespace Accounting
 

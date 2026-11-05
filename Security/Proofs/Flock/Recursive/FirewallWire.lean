@@ -1,4 +1,7 @@
-import Flock.Firewall
+module
+
+public import Flock.Firewall
+import all Init.Data.String.Defs
 
 /-!
 # The honest worker's bytes read back as it meant them
@@ -13,6 +16,8 @@ each item fits and the statement is bound once in a rep's first round and nowher
 reading what its writer put there. `split`'s loop is read item by item through `Steps`, its body's action on each frame
 an honest item makes.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion.FirewallWire
 

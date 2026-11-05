@@ -5,8 +5,9 @@ each Call to the Boolean version of its Definition, and refuses Serve_v1: Serve_
 the composites it reaches (Attention_v1, Gemm_v1, Final_v1, …) have no registered Boolean version. `on_bits(fn)` lifts
 every Definition `fn` reaches instead: a Definition with a registered Boolean version becomes that version
 (`boolean_version`, the table `ir="boolean"` reads), a word constant `Const<w>[0x…]` becomes its bits, and any other
-composite is re-emitted on bits with each of its Calls lifted the same way (`boolean._bit_replayer`, the replay `lift`
-uses for one flat body). Node indices and the word-leaf-to-bits correspondence carry over as they do for `lift`.
+composite is re-emitted on bits with each of its Calls lifted the same way (`boolean.lift_body` with `on_bits` as its
+override, the replay `lift` uses for one flat body). Node indices and the word-leaf-to-bits correspondence carry over as
+they do for `lift`.
 
 The result is Boolean throughout (`purity`), but it is this benchmark's construction, not a served Program: no
 `sigma_check` holds it to the word Program's values, and nothing outside `benchmarks/verifier_cost` reads it.
@@ -53,10 +54,8 @@ def on_bits(fn, memo: dict | None = None):
 
 
 def _composite(fn: SpecializedDefinition, memo: dict):
-    body = fn.body
-    callee = {id(n.fn): on_bits(n.fn, memo) for n in body.nodes}
+    body = BB.lift_body(fn, lambda callee: on_bits(callee, memo))
     params, ret = fn.signature()
     bparams, bret = tuple((n, BL.bit_type(t)) for n, t in params), BL.bit_type(ret)
-    defn = CompositeDefinition(fn.name, fn.version, (*fn.defn.statics, "IR"), lambda S: (bparams, bret),
-                               BB._bit_replayer(body, [t for _, t in params], callee), register=False)
+    defn = CompositeDefinition(fn.name, fn.version, (*fn.defn.statics, "IR"), lambda S: (bparams, bret), body, register=False)
     return bind(defn, **fn.bindings, IR="boolean")

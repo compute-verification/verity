@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Zk.Honest
-import Proofs.Flock.Claims.Scope.Split
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Honest
+public import Proofs.Flock.Claims.Scope.Split
 
 /-!
 # The honest masked prover at several tables
@@ -13,6 +15,8 @@ masked prover runs the masked session on those traces (`prog`, `honestP`).
 * `traces_one`: at one table the traces are `tracesOf`'s, so on a statement whose setup has one table the program is
   `progZk`'s (`prog_one`) and the prover's next message `honestPZk`'s (`honestP_one`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 

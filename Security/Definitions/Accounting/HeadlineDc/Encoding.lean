@@ -1,4 +1,6 @@
-import Definitions.Accounting.Headline.Encoding
+module
+
+public import Definitions.Accounting.Headline.Encoding
 
 /-!
 # Exact data for a data-centre headline instance (trusted)
@@ -13,6 +15,8 @@ import Definitions.Accounting.Headline.Encoding
 * `SheetDataQ`: `SheetData` with a rational pipe width, for a pipe no document rates whose width is the census's
   measured line (the uniform datapath's UP line, `DS_uniform`: 128 over 1.96110716 SMSP-cycles a uniform instruction).
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Headline
 

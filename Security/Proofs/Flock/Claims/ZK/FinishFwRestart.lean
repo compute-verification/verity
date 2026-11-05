@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.FinishFwTarget
-import Proofs.Flock.Claims.Complete.ZkTables.LaneRows
+module
+
+public import Proofs.Flock.Claims.ZK.FinishFwTarget
+public import Proofs.Flock.Claims.Complete.ZkTables.LaneRows
 
 /-!
 # A deployed rep's level-0 restart is `Σ y₁'·bFold`
@@ -20,6 +22,8 @@ claims' points.
 
 Neither reads the worker's clear values: `y₁'` reads the witness lanes, the mask slot and the extra lanes.
 -/
+
+@[expose] public section
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000

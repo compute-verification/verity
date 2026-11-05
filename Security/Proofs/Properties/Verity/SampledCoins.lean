@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.ExecDrawOS
-import Proofs.Flock.Soundness.ZK.Hiding
-import Proofs.Properties.CertifierNetwork.Frames
-import Properties.Challenger
+module
+
+public import Proofs.Flock.Soundness.ExecDrawOS
+public import Proofs.Flock.Soundness.ZK.Hiding
+public import Proofs.Properties.CertifierNetwork.Frames
+public import Properties.Challenger
 
 /-!
 # A3 at the game's own bits: the bytes a sampled draw reads are uniform
@@ -19,6 +21,8 @@ there as a theorem, with no premise on the operating system.
 those bits (`bitsOf_injective`), so the bytes a draw reads, when their bits are the game's coins, are
 `streamOf (coinBytes k B ω 0)`. `bitsOf_append` splits the bits of a concatenation of coins.
 -/
+
+@[expose] public section
 
 namespace Verity.Sampled
 

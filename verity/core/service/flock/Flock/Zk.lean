@@ -4,9 +4,15 @@ replayed on masked values, every check an affine constraint on the committed pad
 claims' ring-switch checks and level 0's lane phase become constraints too; the inner proof shows that the pads satisfy every
 constraint at once (`verifyInner`). The session around the reps is `Flock.verify`'s, with the keyed coin tree.
 -/
-import Flock.Verify
-import Flock.ZkLigerito
-import Flock.JsonParse
+module
+
+public import Flock.Verify
+public import Flock.ZkLigerito
+public import Flock.JsonParse
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock.Zk
 
@@ -128,7 +134,7 @@ structure Replayed where
   cons : Array (String × Lin)
   deriving Inhabited
 
-/-- Live PROTOCOL.md §1 and §4: §9.1's binding, then §9.2 and §10 on the masked proof, absorbing exactly what they absorb and
+/-- Live PROTOCOL.md §1 and §4: `Flock.Piop`'s binding, zerocheck and lincheck on the masked proof, absorbing exactly what they absorb and
 drawing exactly their coins, with the pads' root absorbed after the zerocheck's label and every message-dependent check a
 constraint. -/
 def replay (st : Setup) (lay : PadLayout) (p : Proof) (root : ByteArray) : TM Replayed := do
@@ -204,7 +210,7 @@ def replay (st : Setup) (lay : PadLayout) (p : Proof) (root : ByteArray) : TM Re
   let lcOut : LcOut := { w := 0, rPrime, rIn := ts.reverse }
   return { claims := abcClaims m kLog zcOut lcOut, abValue := w, cValue := fc, cons }
 
-/-- §12.2's claim check `⟨w, s_hat_v⟩` on claim `c`'s point (its value is masked, so it is a constraint, §4). -/
+/-- `Flock.Opening`'s claim check `⟨w, s_hat_v⟩` on claim `c`'s point (its value is masked, so it is a constraint, live PROTOCOL.md §4). -/
 def claimCheck (c : Claim) (sv : Array F128) : F128 :=
   let x0 := c.x[0]!
   dot ((Array.range 128).map fun v => c.skip[v % 64]! * (if v / 64 == 1 then x0 else 1 + x0)) sv
