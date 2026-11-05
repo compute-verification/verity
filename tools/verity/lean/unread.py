@@ -616,6 +616,7 @@ def markdown(rep: dict, rev: str | None) -> str:
             out.append(f"| {label} | {fmt(ch['modules'])} | {fmt(ch['lines'])} |" if ch else f"| {label} | gone | |")
         if ch := c["after_by_read_lines"]:
             out.append(f"| after, also without unread declarations' lines | {fmt(ch['modules'])} | {fmt(ch['weight'])} read lines |")
+        out.append("")
         for label, key in (("Before, longest in modules", "before_by_modules"), ("After, longest in modules", "after_by_modules"),
                            ("Before, longest in lines", "before_by_lines"), ("After, longest in lines", "after_by_lines")):
             if ch := c[key]:
