@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Audit.Law
-import Proofs.Flock.Soundness.StrictCR
+module
+
+public import Proofs.Flock.Soundness.Audit.Law
+public import Proofs.Flock.Soundness.StrictCR
 
 /-!
 # Recursion: the model
@@ -37,6 +39,8 @@ for the drawn units and the public coins, accepts.
   before. `leafAvg_relabel` is the simulation: the probability that the inner verifier accepts the relabelled transcript
   is the probability that it accepts against `refStrat`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 

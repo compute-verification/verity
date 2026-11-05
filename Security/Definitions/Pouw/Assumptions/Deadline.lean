@@ -1,4 +1,6 @@
-import Definitions.Pouw.Game.Deadline
+module
+
+public import Definitions.Pouw.Game.Deadline
 
 /-!
 # The deadline's named assumption (trusted; a `Prop` taken as a hypothesis, never an `axiom`)
@@ -8,6 +10,8 @@ which the verifier receives a transcript to the cost model is an assumption abou
 clock is honest. The salt's unpredictability before its release is not restated: preprocessing never reads the salt, by
 `Adversary`'s construction, and the program the assumption names runs after the adversary's own preprocessing.
 -/
+
+@[expose] public section
 
 namespace Pouw.Assumptions
 

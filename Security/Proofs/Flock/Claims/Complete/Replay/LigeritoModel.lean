@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Replay.Steps
-import Proofs.Flock.VBridge.Algebra.Ligerito
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.Steps
+public import Proofs.Flock.VBridge.Algebra.Ligerito
 
 /-!
 # The verifier's Ligerito steps on the model's rounds
@@ -17,6 +19,8 @@ transcript position `k`: its state, and a transcript whose rounds are what the p
   read has the entry; a challenge (`chal`, `Runs.challenge`), `n` of them (`chals`, `Runs.challenges`), an out-of-domain
   intro (`ood`, `Runs.oodIntro`), and a level's query (`query`, `Runs.queryLevel`) when its Merkle check passes.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

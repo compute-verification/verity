@@ -1,5 +1,7 @@
-import Mathlib.Algebra.BigOperators.Fin
-import Definitions.Pous.Model.M1
+module
+
+public import Mathlib.Algebra.BigOperators.Fin
+public import Definitions.Pous.Model.M1
 
 /-!
 # Model M1 on P2's exact domain `[0, p)`
@@ -14,6 +16,8 @@ lies in `[0, p)` whenever `2^b ≤ p`. Block `j` of the code is `Π_j⁻¹` of t
 forward query per block and reduces the answer mod `2^b`. The definitions are total. The side conditions
 (`2^b ≤ p ≤ 2^w`, `b ≤ w`, `20·w ≤ 21·b`) are hypotheses of the theorems that need them.
 -/
+
+@[expose] public section
 
 namespace Pous
 

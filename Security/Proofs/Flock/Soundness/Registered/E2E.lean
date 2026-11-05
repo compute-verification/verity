@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Binding.E2E
-import Proofs.Flock.Soundness.Registered.Binding
+module
+
+public import Proofs.Flock.Soundness.Binding.E2E
+public import Proofs.Flock.Soundness.Registered.Binding
 
 /-!
 # The end-to-end theorem with registered reads
@@ -17,6 +19,8 @@ executable accepts, the registered check held at the prover's registration, thro
 `check_ok`'s conclusion read at the model's leaves, the same link from the executable's openings to the model's (R11) that
 `bc_registered` and `tr` name.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Registered
 

@@ -1,12 +1,16 @@
-import Definitions.Pous.Accounting.LemmaA
-import Definitions.Pous.Model.Inc
-import Definitions.Pous.Assumptions.P2
+module
+
+public import Definitions.Pous.Accounting.LemmaA
+public import Definitions.Pous.Model.Inc
+public import Definitions.Pous.Assumptions.P2
 
 /-!
 # Named assumptions
 
 Each is a `Prop` taken as a hypothesis by the statements that use it, never an `axiom`.
 -/
+
+@[expose] public section
 
 namespace Pous.Assumptions
 

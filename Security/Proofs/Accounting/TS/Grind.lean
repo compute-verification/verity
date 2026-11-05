@@ -1,6 +1,8 @@
-import Definitions.Accounting.Guarantees.TS.Grind
-import Proofs.Accounting.TS.Steer
-import Mathlib.Analysis.MeanInequalitiesPow
+module
+
+public import Definitions.Accounting.Guarantees.TS.Grind
+public import Proofs.Accounting.TS.Steer
+public import Mathlib.Analysis.MeanInequalitiesPow
 
 /-!
 # The grinding premium under hashed seeds: proofs
@@ -19,6 +21,8 @@ is Fubini over the private coins (`Grind.sum_exp_pi`). `TileLuck` takes both AM-
 * pointwise in the shared coins, `∏_k H_k ≤ (1/n)·Σ_k H_k^n` (`Grind.prod_le_mean_pow`), and `H_k^n` is at most the
   mean of its units' `n`th powers (the power mean), each of which is `f^n` off its dead event and `e^{n·rθw}` on it.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS
 

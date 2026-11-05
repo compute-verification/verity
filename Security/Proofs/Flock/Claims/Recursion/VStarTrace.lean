@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.VStarBuild
-import VStar.Trace
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarBuild
+public import VStar.Trace
 
 /-!
 # The trace assigner places the port inputs (`places_assign`)
@@ -19,6 +21,8 @@ into self rows, no leaf cut feeds unit 0, the hm96 salt's columns are self rows,
 each row has its port's words and a 192-byte salt. The parse checks most of these (`Net.ofRows_inputs`, `checkLayout`);
 `TraceOk` names them for the builder's proof to discharge or carry.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarTrace
 

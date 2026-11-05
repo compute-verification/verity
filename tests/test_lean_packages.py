@@ -30,6 +30,24 @@ def test_every_lake_package_is_audited():
     assert not missing, f"Lake packages without a lean-audit.json (tools/verity/lean/README.md): {missing}"
 
 
+def test_every_package_module_is_a_module():
+    """Every in-tree package's Lean is on Lean's module system (`tools/verity/lean/modules.py`), so an importer rebuilds
+    only when what a module exports changes, never for a proof's body."""
+    spec = importlib.util.spec_from_file_location("lean_modules", ROOT / "tools" / "verity" / "lean" / "modules.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    tracked = m.tracked()
+    files = m.modules([], tracked)
+    assert len(files) > 1000, len(files)
+    left = [f for f in files if not m.is_module((ROOT / f).read_text())]
+    assert not left, "not on Lean's module system; port each with `python3 tools/verity/lean/modules.py FILE`:\n  " + \
+        "\n  ".join(left)
+    lakefiles = m.lake_option_missing(tracked)
+    assert not lakefiles, f"without `{m.LAKE_OPTION}` under [leanOptions], so a public statement's proofs become auxiliary " \
+        "theorems and its lock records move; add it with `python3 tools/verity/lean/modules.py PACKAGE`:\n  " + \
+        "\n  ".join(lakefiles)
+
+
 def test_one_toolchain():
     """The jobs' base image installs the same one."""
     pins = {str(p.relative_to(ROOT)): (p / "lean-toolchain").read_text().strip() for p in lake_packages()}
@@ -53,9 +71,9 @@ def test_one_mathlib():
 #: had no `honest` and `nontrivial` witnesses when the witness rule came (`check.py`'s `witness_failures`), with those the
 #: PRs on `next` then brought, the exclusion bounds that read a partition once a derived circuit's registration built
 #: its one-block partition (`RegisteredCircuit.ofCircuit`), the six C-Flock statements whose claim or verifier read
-#: lies in a module of `trees`' `except`, once the rule read through those (LEAN-158), and the two exclusion bounds a
-#: definition hides, once `Facts.lean`'s `chain` recorded the bound it ends at (LEAN-163)
-UNWITNESSED = {"Security": 623, "Security/Properties": 235, "verity/core/service/flock": 8}
+#: lies in a module of `trees`' `except`, once the rule read through those, and C-Flock's `LoopInnerRound0Own`, which
+#: reads a claim, from a PR on `next`
+UNWITNESSED = {"Security": 624, "Security/Properties": 235, "verity/core/service/flock": 8}
 
 
 def test_the_unwitnessed_list_only_shrinks():

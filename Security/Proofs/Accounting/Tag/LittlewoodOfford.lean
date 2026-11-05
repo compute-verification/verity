@@ -1,5 +1,7 @@
-import Mathlib.Combinatorics.SetFamily.LYM
-import Proofs.Accounting.Tag.Signs
+module
+
+public import Mathlib.Combinatorics.SetFamily.LYM
+public import Proofs.Accounting.Tag.Signs
 
 /-!
 # Erdős's Littlewood–Offord bound
@@ -10,6 +12,8 @@ of a `u`-set by `C(u, ⌊u/2⌋)` (`card_level_pos_le`). Nonzero weights reduce 
 weight is negative, which shifts every sum by the same constant (`card_level_le_choose`). `littlewoodOfford` is
 `Accounting.Guarantees.Sketch.LittlewoodOfford`.
 -/
+
+@[expose] public section
 
 namespace Accounting.TagProofs
 

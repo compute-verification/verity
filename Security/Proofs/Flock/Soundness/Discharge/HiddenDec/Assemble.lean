@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
-import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 
 /-!
 # The decoder is right at the hidden-output headline's draws
@@ -21,6 +23,8 @@ outcome flock-verify accepts under hidden outputs:
   reads), makes each rep's run a `RepRun` for `decAt`; `RecordsLive` says the outcome's rounds, link points, root and
   proof files are the record's.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.HiddenDec
 
