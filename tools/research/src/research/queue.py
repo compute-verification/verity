@@ -239,8 +239,9 @@ while nothing below changes, and the PR's reason names the run; a later sync rea
 in the store and admits or refuses by it.  A PR whose run is out isn't merged until a verdict may stand for it.  At most
 drive.toml's `preflight_pool` runs are out at once: the PRs of drive's priority list (`Queue.priority`) and those they contain
 launch first, then those the last sync left waiting (the state's `preflight_waited`), so every PR is reached in turn
-(`Queue._launch_runs`).  A run that ends without a verdict is launched again at the PR's next merge, and after
-`PREFLIGHT_TRIES` the PR enters unpreflighted, as one whose preflight failed to run always did (`Queue._lost`).  The PRs of
+(`Queue._launch_runs`), and a PR that needs a run none is left for isn't merged (`Queue._capped`).  A run that ends without
+a verdict is launched again at the PR's next merge, and after `PREFLIGHT_TRIES` the PR enters unpreflighted, as one whose
+preflight failed to run always did (`Queue._lost`).  The PRs of
 drive's priority list, with those they contain, also go first of what a sync merges anew.  So is a PR a landing gate refuses (drive.toml's `landing_gates` at
 `main`, `gate_refusal`) on its merge onto `next` (`tools/verity/check/gates/markdown_caps.py`: one it puts over a cap),
 with the gate's fix, and a PR whose lock merge drops an entry `next`'s statements still need (`lock_drops`), naming each:
@@ -2175,6 +2176,28 @@ class Queue:
         return (f"{PREFLIGHT_WAIT}: run {rec['run']} judges its merge onto `{self.branch}` at {rec['onto'][:12]} "
                 f"(`research status {rec['run']}`)")
 
+    def _cap_wait(self) -> str:
+        """The reason of a PR that needs a pool run when `preflight_pool` of them are out or go to the PRs before it."""
+        return (f"{PREFLIGHT_WAIT}: {self.preflight_pool} preflight runs are out (drive.toml's `preflight_pool`), so a later "
+                "sync launches its own")
+
+    def _capped(self, ns: list[int], entries: dict[int, Entry], runs: dict[str, dict], waited: set[int], out: set[int],
+                flights: dict) -> set[int]:
+        """The PRs of ``ns`` that wait before the sync merges them, for a pool run none is left for: of those that need one (no
+        verdict of their head onto any base, `_judged`, and no run out or given up, `_lost`), all past the runs `preflight_pool`
+        leaves beside ``runs``, in `_launch_runs`' order, so their merges, gates and codemod aren't made only to be thrown away.
+        A move is regenerated whatever (its `moves_made` record is kept only while a sync uses it), and so is a PR the last
+        sync left out (``out``), told once."""
+        slots = self.preflight_pool - sum(1 for rec in runs.values() if rec.get("run"))
+        rank = {n: i for i, n in enumerate(ns)}
+        need = []
+        for n in ns:
+            rec = runs.get(str(n)) or {}
+            if not (entries[n].pr.move or n in out or rec.get("run") or rec.get("unjudged")
+                    or self._judged(entries[n].pr.head, flights)):
+                need.append(n)
+        return set(sorted(need, key=lambda n: (n not in self._prioritized, n not in waited, rank[n]))[max(slots, 0):])
+
     def _read_runs(self, state: dict, entries: dict[int, Entry], flights: dict, dry_run: bool) -> dict[str, dict]:
         """The state's `preflight_runs` ({PR: its pool run's record, `_launch_runs`}) of the PRs of ``entries`` still at the head
         each was launched for, with each run that ended read (`PreflightPool.read`): one with its verdict is taken into
@@ -2293,8 +2316,7 @@ class Queue:
             for n in sorted(wanted, key=lambda n: (n not in self._prioritized, n not in waited, rank[n])):
                 pr, (at, commit) = entries[n].pr, wanted[n]
                 if len(chosen) >= slots:
-                    why[n] = (f"{PREFLIGHT_WAIT}: {self.preflight_pool} preflight runs are out (drive.toml's `preflight_pool`), "
-                              "so a later sync launches its own")
+                    why[n] = self._cap_wait()
                     continue
                 if at != tip:
                     commit = (self._regenerate(tip, pr, main) if pr.move else self._merge_through(tip, pr, members))[0]
@@ -2580,6 +2602,7 @@ class Queue:
             runs = self._read_runs(state, entries, flights, dry_run)
             self._stored(order[k:], entries, flights)
         waited = {n for n in state.get("preflight_waited") or () if n in entries}
+        capped = self._capped(order[k:], entries, runs, waited, out, flights) if self.pool is not None else set()
         wanted: dict[int, tuple[str, str]] = {}
         unrun: set[int] = set()
         merged = False
@@ -2613,11 +2636,15 @@ class Queue:
                 if state.get("waiting", {}).get(str(n), {}).get("head") != e.pr.head:
                     self.log(f"research queue: #{n} at {e.pr.head[:8]} waits off `{self.branch}`: {e.why}")
                 continue
-            # what the last sync left out is merged again, so its refusal stands, told once
+            # what the last sync left out is merged again, so its refusal stands, told once, and a move is regenerated (`_capped`)
             run = runs.get(str(n)) or {}
-            if self.pool is not None and n not in out and run.get("run") and not self._judged(e.pr.head, flights):
-                wait(n, self._run_wait(run))
-                continue
+            if self.pool is not None and not e.pr.move and n not in out and not self._judged(e.pr.head, flights):
+                if run.get("run"):
+                    wait(n, self._run_wait(run))
+                    continue
+                if n in capped:
+                    wait(n, self._cap_wait())
+                    continue
             if e.pr.move:
                 commit, why = self._regenerate(tip, e.pr, main)
             else:

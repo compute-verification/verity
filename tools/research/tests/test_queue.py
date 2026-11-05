@@ -887,22 +887,24 @@ def test_a_marks_recorded_pass_admits_its_merge_onto_the_same_base_with_no_pool_
 
 
 def test_at_most_preflight_pool_runs_are_out_at_once_and_a_merge_past_them_waits_for_a_later_syncs_launch(world):
-    """Drive.toml's `preflight_pool` caps the pool runs out at once: a merge past the cap waits off `next`, saying so, and a
-    later sync launches its run once one ends."""
+    """Drive.toml's `preflight_pool` caps the pool runs out at once: a PR past the cap waits off `next`, saying so, unmerged
+    (its merge would only be thrown away), and a later sync launches its run once one ends."""
     for n in range(1, 5):
         world.gh.put(n, world.change({f"{n}.txt": f"{n}\n"}))
     q = world.queue()
     q.preflight_pool, main = 2, _git(world.origin, "rev-parse", "main")
     pool = _pool(q)
+    merged = _merges(q)
     capped = ("waits for its preflight: 2 preflight runs are out (drive.toml's `preflight_pool`), so a later sync launches its "
               "own")
     members, entries = q.sync()
     assert members == [] and pool.judged() == [(1, main), (2, main)] and entries[3].why == entries[4].why == capped
-    assert sorted(q.load_state()["preflight_runs"]) == ["1", "2"]
-    assert q.sync()[1][3].why == capped and len(pool.launched) == 1
+    assert merged == [1, 2] and sorted(q.load_state()["preflight_runs"]) == ["1", "2"]
+    assert q.sync()[1][3].why == capped and len(pool.launched) == 1 and merged == [1, 2]
     pool.end("r1")
     members, entries = q.sync()
     assert [m.pr for m in members] == [1] and [n for n, _ in pool.judged()] == [1, 2, 3] and entries[4].why == capped
+    assert merged == [1, 2, 1, 3]
     pool.end()
     assert _settle(q, pool) == [[4]] and world.on_next(q) == [1, 2, 3, 4], world.logs
 
@@ -910,19 +912,20 @@ def test_at_most_preflight_pool_runs_are_out_at_once_and_a_merge_past_them_waits
 def test_drives_priority_list_launches_first_then_the_prs_the_last_sync_left_waiting_so_every_pr_is_reached(world):
     """New PRs that come before one past the cap, by number, would take each sync's free runs ahead of it.  Instead the PRs the
     last sync left waiting launch first, and before them the PRs of drive's priority list (`Queue.priority`) and those they
-    contain.  One run out at a time here."""
+    contain; the others wait unmerged.  One run out at a time here."""
     for n in (3, 4):
         world.gh.put(n, world.change({f"{n}.txt": f"{n}\n"}))
     q = world.queue()
     q.preflight_pool, main = 1, _git(world.origin, "rev-parse", "main")
     pool = _pool(q)
+    merged = _merges(q)
     q.sync()
-    assert pool.judged() == [(3, main)] and q.load_state()["preflight_waited"] == [3, 4]
+    assert pool.judged() == [(3, main)] and q.load_state()["preflight_waited"] == [3, 4] and merged == [3]
     for n in (1, 2):
         world.gh.put(n, world.change({f"{n}.txt": f"{n}\n"}))
     pool.end()
     members, entries = q.sync()
-    assert [m.pr for m in members] == [3] and [n for n, _ in pool.judged()] == [3, 4], world.logs
+    assert [m.pr for m in members] == [3] and [n for n, _ in pool.judged()] == [3, 4] and merged == [3, 3, 4], world.logs
     assert entries[1].why.startswith("waits for its preflight: 1 preflight runs are out") and entries[2].why == entries[1].why
     pool.end()
     q.priority = frozenset({2})
