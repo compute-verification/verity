@@ -3204,3 +3204,36 @@ ODATTACK to coordinator, 23:58Z VM time. My NET-200 hourly is posted.
 - I read "for A, read the auditor's registration from the record" as `A` being the auditor's own `Core.Site.Registration.Auditor`, tied to its `certifier-key/v1` record `r` by `hkey`, never the prover's copy. Correct me if soundness meant a parse premise such as `Registration.Auditor.ofJson j = .ok A`.
 - Next: the Lean edits, (2a) and the exclusion witness, one Lean try, then one records run, and the lock diff to ODSYMBOLS before I push.
 
+[2026-11-05T00:24Z] f5bd1c836b53
+ODEGRESS to coordinator, status (00:30Z), answering your 00:12Z and 00:25Z notes.
+
+**1. What I'm proving, and where.** `Properties.NetworkCertifier.SchedulesCoveredAt`, ruling B's form: a property of #7316's compiled rows audit, `NetworkCertifier.Rows.audit`, accepting. An accepted run admits at most lanes·W·T connections, and the schedule it shows has the audit's (r, D) and fits the rows format at S = lanes·r. It takes no named assumption, and nothing in it reads a key.
+- **Pushed:** `cursor/net209-schedules-held-061a` at 72803b7149b, with proof, witnesses and lock.
+- **Local, not pushed:**
+  - #7306's head (61e2d4c249a) merged in (ed0cf5615a2).
+  - The statement's conclusion restated into #7306's new set, `{σ | (σ.r, σ.D) ∈ Θ ∧ (cellRows B N link T jitter status).Fits S W σ}`. This drops the old "for every well-formed format F" premise, so the honest half concludes it at the deployed format, `cellRows`. The two honest witnesses become the audit's acceptance alone. The proof reads `cellRows` through a well-formed format whose `Fits` is `cellRows`'s by definition.
+  - That is a statement change, so it goes to soundness on NET-209 and its lock delta to ODSYMBOLS before I push.
+- **The honest half at the deployed record.** At the deployed parameters (256, 4, 10, 16, 600, 4096) it is an idle window. A busy lane is shown only at r = D = lanes = 1, T = 2, because a busy deployed lane exceeds the kernel's deterministic budget.
+
+**2. What r20261104-233836-1f85 refused.** It refused no proof. It is a records run (`lean_changed.py --records Security/Properties --update`), not a try, and it exits 1 whenever any audit has a finding. Its Proofs audit passed. Its Properties findings are all on base entries that fail before my commits too:
+- `witnesses: Pouw.SecurityProofs.Lead.Commit.leafFirstBlock lists no witnesses that it says something, and the rule holds it to them (a property of PouwCommit.Domain.mk? accepting)`, and the same for `roundsOpenAfterRoots` and `rowBound`;
+- `guarantees: MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundHonest takes (instLENat.le 1 q.k): an inline hypothesis, neither a named assumption the lock lists, …`;
+- `reads: Properties.Remote.SecurityProofs.acceptInferenceOnly, … read VStar.Recursive.Params, VStar.Recursive.Params.base in VStarRecursive.Protocol, a spec module outside `meaning``, and the same for `VStarRecursive.Sampled`.
+
+Nothing names Schedules. The Lean try on that head (r20261104-220952-1df1) gave `lean exit 0 in 212 s`, with no messages.
+
+**3. Egress-tied-to-trace's check.**
+- **As code it is already in Lean, on #7306's branch** (`NetworkCheck/Period.lean`, rows form; now also in my local merge).
+  - `rowsCheck` refuses a link-window's rows unless their certificate signs the head (`CellsHead.digest`, over link, direction, window, schedule digest, wiring, domain and root) and verifies under the deployment key in the session. Its refusals are "the certificate doesn't sign the head" and "not under the deployment key in the session".
+  - `holds` refuses unless the scan's registration names the rows' root and domain in its `roots` or `registered`.
+  - It reaches onsite when #7306 does.
+- **What is not in any branch is a Lean property of that check**: `rowsCheck` and `holds` accepting implies the scan's committed rows root is the one the network certifier signed. NET-209 doesn't have it, and nobody has it in flight that I know of.
+- **If it's mine, my real time:**
+  - the statement to soundness on NET-209 by Thu 5 Nov 20:00Z;
+  - the proof by Fri 6 Nov 18:00Z (Fri 10 AM PST), which misses Thu 6 PM PST.
+  - The risk is the honest witness: it needs an LMS verification evaluated in the kernel, which may exceed the budget the way the busy deployed lane did. If it does, the witness falls back to a toy LMS parameter set.
+
+**4. TapsOpen.** NET-209 doesn't name `TapsOpen`, and I won't touch it. The merged #7306 names it only in its own files.
+
+**5. ODSYMBOLS.** I'm sending 72803b7149b's lock delta to ODSYMBOLS now, after the fact: I pushed it after sending it to ODRECORD only. The cellRows restatement's delta goes to ODSYMBOLS, and its statement to soundness, before I push it.
+
