@@ -24,7 +24,7 @@ premise `TTOutTilePearlCH100Rev1` reads. Four parts:
 * (b) `Noise` and `Words`: -h3's noise is `NoiseSha512`'s, and a tile's checked words are the reference values.
 * (c) `Rules`, `Keys`, `Debit` and `Cap`: the per-row rules are `RowOK`, a word's replayed inert work is the game's
   (`Keys`: the replay's keys, bisection and carried add; `Debit`: the replay itself, and that it reads the semantics'
-  codes), and a passed tile is within the game's inert-work bound under the band rule and the forming rule (`Cap`).
+  codes), and a passed tile is within the game's inert-work bound, its chain and its forming term (`Cap`).
 * (d) `Assembly`: a passed tile whose openings are its unit's commitment has good words, or SHA-512 collides.
 
 `Draw` reads the run's draw and acceptance as `TileDraw`'s game draws and audits: a passed tile's declaration is
