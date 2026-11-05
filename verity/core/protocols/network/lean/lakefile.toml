@@ -1,5 +1,6 @@
 name = "network_check"
-defaultTargets = ["NetworkCheck", "network-check-difftest", "network-check", "network-records", "network-period"]
+defaultTargets = ["NetworkCheck", "network-check-difftest", "network-check", "network-records", "network-period",
+  "network-rows"]
 
 [leanOptions]
 autoImplicit = false
@@ -56,3 +57,12 @@ root = "NetworkCheck.RecordsMain"
 [[lean_exe]]
 name = "network-period"
 root = "NetworkCheck.PeriodMain"
+
+# Test-only: the network suite's tests of the period's check on small circuit files build it; it is no default target.
+[[lean_exe]]
+name = "network-period-chunked"
+root = "NetworkCheck.PeriodChunkedMain"
+
+[[lean_exe]]
+name = "network-rows"
+root = "NetworkCheck.RowsMain"

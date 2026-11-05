@@ -139,6 +139,8 @@ KEEP = Path(SITE["keep"])
 VOCAB = 128_000
 #: the minutes past `auditor.warden_minutes` a session asks for
 MARGIN = 3
+#: the dry rehearsal's gate (`local`): this tree's gate on a scratch host in this directory of the session's keep
+LOCAL_GATE = "local-gate"
 LATE_S, POLL_S = 60, 15
 SSH = ("ssh", "-T", "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "ServerAliveInterval=15")
 #: the flags the endpoint serves the session with: the network certifier's id form, in its release order, each window
@@ -363,7 +365,7 @@ def pinned() -> str:
 def local(a: argparse.Namespace, data: bytes, keep: Path) -> bytes:
     """The dry rehearsal: this tree's gate on a scratch host under `keep`, the stand-in as its tunnel, or ``a.tunnel``
     (``(ssh, port) -> argv``, a process listening on ``port``) when given."""
-    host = scratch_host(keep / "local-gate", a.peer)
+    host = scratch_host(keep / LOCAL_GATE, a.peer)
     rc, start = A.gate(["--ssh", shlex.join(words(a)), "--key", LANE], host, now=datetime.now(UTC),
                        token=secrets.token_hex(2), own=lambda p: None, certifier_active=lambda r: False,
                        start_certifier=lambda r: None, read=lambda n: data[:n])
