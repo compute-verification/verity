@@ -20,8 +20,8 @@ def test_log2_binom_sum_is_the_stream_bound():
     assert math.isclose(F.log2_binom_sum(3000, 40), math.log2(sum(math.comb(3000, i) for i in range(41))))
 
 
-def _doc(parts=4, ands=1000, n=3) -> dict:
-    return {"staged": {"n": n, "unit_ands": ands, "subcircuit": "s", "unit": "u"},
+def _doc(parts=4, ands=1000, n=3, per_vu=1) -> dict:
+    return {"staged": {"n": n, "units_per_vu": per_vu, "unit_ands": ands, "subcircuit": "s", "unit": "u"},
             "rows": [{"step": "oprove", "stage": f"outer {p}", "proof_bytes": 100} for p in PARTS[:parts]],
             "release": {"ok": True, "schedule_ms": 9000, "parts": [{"part": p, "slack_ms": 500} for p in PARTS[:parts]]}}
 
@@ -68,6 +68,27 @@ def test_the_ks_error_at_the_census_pools_t_eps_over_the_period():
     assert round(fl["datacenter"]["periods"]["year"]["ks"]["datacenter"]["error_log2"], 1) == -100.4
     assert [round(fl[f]["periods"]["year"]["ks"]["world"]["share_per_session_log2"], 1)
             for f in ("datacenter", "world")] == [-121.5, -129.7]
+
+
+def test_the_served_window_counts_every_element_of_its_blocks():
+    """The served window's statement: 3 instances of `SiluMul_v2{I=8192}`, each a VU of 8,192 silu-mul units of 1,380
+    ANDs, so 33,914,880 ANDs, and every per-AND figure over that count."""
+    times = {s: {"wall_s": 10.0, "cpu_s": 60.0} for s in F.SESSION_STEPS}
+    fig = F.figures(_doc(ands=1380, n=3, per_vu=8192), times)
+    assert fig["session"]["statement"]["ands"] == 33_914_880
+    dc = fig["fleets"]["datacenter"]
+    assert dc["window"]["cost"]["cpu_s_per_and"] == 300.0 / 33_914_880
+    assert dc["periods"]["year"]["covered_ands"] == dc["periods"]["year"]["sessions"] * 33_914_880
+    assert "3 x 8192 x u (3.39e+07 ANDs proved)" in F.markdown(fig)
+
+
+def test_a_statement_without_units_per_vu_has_no_and_count():
+    doc = _doc()
+    del doc["staged"]["units_per_vu"]
+    times = {s: {"wall_s": 10.0, "cpu_s": 60.0} for s in F.SESSION_STEPS}
+    fig = F.figures(doc, times)
+    assert fig["session"]["statement"]["ands"] is None
+    assert fig["fleets"]["datacenter"]["window"]["cost"]["cpu_s_per_and"] is None
 
 
 def test_a_session_missing_a_step_has_no_total():
