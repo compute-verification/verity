@@ -3282,6 +3282,9 @@ REALIZED = {
     "O2": "public opaque o : Nat\n",
     "X": "public axiom u : 1 = 1\n",
     "Y": "public theorem u : 1 = 1 := rfl\n",
+    "H": "public theorem hk : 3 = 3 := rfl\n",
+    "I": "public import R.A\nimport R.H\ntheorem i_priv : 3 = 3 := hk\npublic theorem i : k 0 = 1 := by simp [k]\n",
+    "J": "public import R.I\npublic theorem j : k 0 = 1 := i\n",
 }
 
 
@@ -3294,7 +3297,7 @@ def realized(tmp_path_factory) -> Path:
     (pkg / "lakefile.toml").write_text('name = "realized"\n\n[[lean_lib]]\nname = "R"\n')
     for m, text in REALIZED.items():
         (pkg / "R" / f"{m}.lean").write_text("module\n" + text)
-    tops = ("D", "D2", "V", "P", "Q", "G1", "G2", "O1", "O2", "X", "Y")
+    tops = ("D", "D2", "V", "P", "Q", "G1", "G2", "O1", "O2", "X", "Y", "J")
     subprocess.run(["lake", "build", *(f"R.{m}" for m in tops)], cwd=pkg, check=True, capture_output=True,
                    env=A.lake_env())
     return pkg
@@ -3384,6 +3387,21 @@ def test_a_sorry_or_axiom_hidden_behind_either_copy_of_a_name_reaches_its_import
     for order in (["R.W1", "R.W2"], ["R.W2", "R.W1"]):
         rc, log, got = records_replay(realized, tmp_path, "R.V", "--closure-reused", *order, public=("W1", "W2"))
         assert rc == 0 and got["declarations"]["v"] in (hidden["W1"], hidden["W2"]), (order, log, got)
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_public_part_brings_in_none_of_its_modules_private_imports(realized, tmp_path):
+    """`I` imports `H` privately, so `lean` compiles `J` (`public import R.I`) on `I`'s public part without `H`, and the
+    lean-module runner reads no part of `H`: `J`'s replay passes without it, as `CallsDecision`'s didn't on `CallsTop`'s
+    private import of `CallsFast100`. With `I`'s private part, as an `import all` of it has it, `H` is still needed."""
+    pkg = tmp_path / "pkg"
+    shutil.copytree(realized, pkg, symlinks=True)
+    for f in (pkg / ".lake" / "build" / "lib" / "lean" / "R").glob("H.*"):
+        f.unlink()
+    rc, log, _ = records_replay(realized, tmp_path, "R.J", "--closure-reused", "R.I", "R.A", public=("A",))
+    assert rc != 0 and "R.H does not exist" in log, log
+    rc, log, got = records_replay(realized, tmp_path, "R.J", "--closure-reused", "R.I", "R.A", public=("I", "A"))
+    assert rc == 0 and got["replayed"] == 1, log
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

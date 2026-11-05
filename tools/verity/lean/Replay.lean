@@ -50,7 +50,9 @@ rejected declarations.
 each own constant (`declarations`, those with any), and walks no `Eᵢ` that has a record: an `Eᵢ`'s constants take the sets
 its record `DIR/<its path>.json` holds (`{"module": E, "axioms": {name: [axiom, …]}}`, what this writes for `E`, a constant
 with none left out). An `Eᵢ` is read from the parts its files have, so under the module system its public part alone
-serves, where its theorems are axioms; one without a record is walked as those parts have it.
+serves, where its theorems are axioms; one without a record is walked as those parts have it. A module read without its
+private part brings in only what its `public import`s reach, as `lean` loads its importers: `importModulesCore` loads a
+module's other imports only below an `import all`, so the runner reads no more.
 
 `--env FILE` (before the modules) takes the sets of the imported modules' constants from FILE, the lean env's record
 (`verity_graph/runners/lean_env.py` writes it: a line `"sets":[…],` naming each set once, then after a line `"axioms":{`
@@ -440,6 +442,7 @@ unsafe def main (args : List String) : IO UInt32 := do
   let ownSet := own.foldl NameSet.insert {}
   -- each module's imports and the data of its last part (its private one, where it has one), read once
   let mut loaded : Array (Name × Array Import × ModuleData) := #[]
+  let mut publicOnly : NameSet := {}                     -- each `module` read without its private part
   let mut seen : NameSet := {}
   -- the closure's modules first, so that a theorem a dependency and an own module both declare is the dependency's
   let mut todo := (get "--closure" ++ get "--closure-of" ++ get "--closure-reused" ++ own).toList
@@ -457,9 +460,11 @@ unsafe def main (args : List String) : IO UInt32 := do
     let parts ← readModuleDataParts files
     let (some (data, _), some (header, _)) := (parts.back?, parts[0]?) | throw <| IO.userError s!"no module data for {m}"
     let priv := OLeanLevel.private.adjustFileName olean
-    if envOut.isSome && data.isModule && !(← priv.pathExists) then
-      throw <| IO.userError s!"{m} is under the module system and its private part ({priv}) is missing: its public \
-        part makes its theorems axioms"
+    if data.isModule && !(← priv.pathExists) then
+      if envOut.isSome then
+        throw <| IO.userError s!"{m} is under the module system and its private part ({priv}) is missing: its public \
+          part makes its theorems axioms"
+      publicOnly := publicOnly.insert m
     loaded := loaded.push (m, header.imports, data)
     if expand.contains m then
       for i in header.imports do
@@ -496,6 +501,8 @@ unsafe def main (args : List String) : IO UInt32 := do
         if c matches .thmInfo _ && !reusedSet.contains m then
           dups := dups.push (m, c)
     for i in imported do
+      -- a public part mentions nothing a private import declares, and `lean` never loaded it for the importer
+      if publicOnly.contains m && !i.isExported then continue
       if !modSet.contains i.module && !importSet.contains i.module then
         imports := imports.push i
         importSet := importSet.insert i.module
