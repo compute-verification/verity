@@ -61,9 +61,7 @@ theorem roundPlace_placeOf {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slo
     repeat' (first
       | simp only [hs, hn, hl0, hfst, hv, Bool.false_eq_true, ↓reduceIte] at h
       | split at h)
-    all_goals first
-      | (cases h; done)
-      | exact absurd (by assumption) throw_ne_ok
+    all_goals cases h
   · exact ⟨v, rfl⟩
 
 /-- **A round that releases is one `roundPlace` readied.** -/
