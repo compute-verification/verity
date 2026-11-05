@@ -2,7 +2,12 @@
 `RecVStar.fixedRow` on an inner session of two reps of two message rounds each and R's stream (one message round, a level-0
 top of two nodes and a level-1 top of one): what row `x` of each value the inner transcript fixes is.
 -/
-import Flock.RecSetup
+module
+
+public import Flock.RecSetup
+meta import Flock.RecSetup
+
+@[expose] public section
 
 namespace Flock.Test.InnerStreams
 
@@ -305,7 +310,7 @@ def roundsOff (s : String) (n : Nat) : Option String :=
   Flock.RecSetup.boundKey (none, some r23) != Flock.RecSetup.boundKey (some "a", some r23) &&
   Flock.RecSetup.boundKey (some "a", none) != Flock.RecSetup.boundKey (some "a", some r23)
 
-/-! Check 5's sparse refusals on the inner statement (`RecCoins.checkInnerRange`), at 2d61's shape: k_log 22, so 16 inner
+/-! Check 5's sparse refusals on the inner statement (`RecCoins.checkInnerRange`), at `rec-c3-inner`'s shape: k_log 22, so 16 inner
 point coordinates, and its unit range of 64 slots of 2^13 rows at 256 (`rec_vstage stage`'s RANGE). -/
 
 def unitRng (slotLog := 13) (pos0 := 256) (count := 64) : Range := { kind := .net 0, slotLog, pos0, count, role := .none }

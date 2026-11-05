@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.GKProof
+module
+
+public import Proofs.Flock.Claims.ZK.GKProof
 
 /-!
 # The Goldreich–Kahan simulator's cost
@@ -8,6 +10,8 @@ SHVZK simulation), the simulator with `N` rewinds makes at most `simBound` calls
 `(N + 1)·(cSim + K·cChk + k·(1 + k·cChk + cMsg))`, one dummy-witness run and `N` rewinds, each of `k` rounds of one
 question to `V*`, the prover's checks of every opening so far and its message, then a classification of `K` checks.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

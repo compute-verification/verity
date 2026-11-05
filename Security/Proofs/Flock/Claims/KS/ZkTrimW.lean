@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.ZkXferW
-import Proofs.Flock.Claims.KS.Trim
+module
+
+public import Proofs.Flock.Claims.KS.ZkXferW
+public import Proofs.Flock.Claims.KS.Trim
 
 /-!
 # The masked record the claims read: KS at every number of tables, from the full-width bound counted per round
@@ -14,6 +16,8 @@ trimmed masked record follows from every table's bound counted per round at full
 some run accepts (`FlockDeploy.KS.zk_KS_trim_of_liveAccWJ`), so from `ZkXferWJ` there
 (`FlockDeploy.KS.zk_KS_trim_of_xferWJ`).
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.RepFramesBind
-import Proofs.Flock.Claims.KS.Rounds
+module
+
+public import Proofs.Flock.Claims.Recursion.RepFramesBind
+public import Proofs.Flock.Claims.KS.Rounds
 
 /-!
 # The round of a rep's frames that absorbs a recursive cap
@@ -18,6 +20,8 @@ whose rounds there retained the same bytes absorbed one cap.
 * `frame_eq_of_chunk`, `capFr_eq_of_chunk`: two such splits of frame lists with one header list, whose rounds at the
   split have the same bytes, split at one frame, so at one cap.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

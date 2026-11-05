@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Hm.Slot
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hm.Slot
 
 /-!
 # V*'s SHA-512 after a known prefix
@@ -11,6 +13,8 @@ padding is constant forms, and each block is one `Flock.HmNets.compress` of its 
 `q / 8`), the output's bit `t` is bit `t` of `SHA-512(pre ‖ data)` (`Flock.Sha512.hash`), for a prefix `pre` of whole
 blocks whose chaining value is the constant (`preCv`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge
 

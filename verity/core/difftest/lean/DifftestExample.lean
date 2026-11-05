@@ -1,8 +1,12 @@
-import Difftest
+module
+
+public import Difftest
 
 /-! The harness's example port, which its own tests drive: `add` and `div` on integers `a` and `b` (`div` is Lean's `Int`
 division, which rounds so that the remainder is non-negative, and rejects `b = 0`), and `echo`, which returns its input and
 so holds the wire format (parse, then `Flock.canon`) to Python's canonical JSON. -/
+
+@[expose] public section
 
 namespace DifftestExample
 

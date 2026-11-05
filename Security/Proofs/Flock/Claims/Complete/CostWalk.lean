@@ -1,4 +1,6 @@
-import Flock.With.Transcript
+module
+
+public import Flock.With.Transcript
 
 /-!
 # Cost bounds, and the walk that reads them off a definition
@@ -9,6 +11,8 @@ branches, loops, traversals and state actions. `cost_walk` walks a definition wi
 that the walk assigns. A macro is code run while compiling, so it is alone here, the module `compile_time` lists, apart
 from the proofs that use it (`FlockComplete`'s `Count`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

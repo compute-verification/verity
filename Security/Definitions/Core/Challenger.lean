@@ -1,3 +1,5 @@
+module
+
 /-!
 # The challenger and its log
 
@@ -27,6 +29,8 @@ challenger is impractical; there, randomness is derived from a challenger's coin
 
 Neither is a coin of this log: a statement about one reads it through the coin it is derived from.
 -/
+
+@[expose] public section
 
 namespace Verity
 

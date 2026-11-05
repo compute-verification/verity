@@ -4,8 +4,8 @@
 # tree's root:
 #
 #   tar -C BUILD_RUN/out -cf /tmp/p2lib.tar .
-#   research run --on vy-dc-h200-2 --project verity --campaign e2e-demo --source . --cwd source --timeout 90m \
-#     --env GPU_LEASE_WHO=LANE [--env RECEIPTS=1 --env GEMM_LAYER= --env SAMPLE=0] \
+#   research run --on H200_NODE --project verity --source . --cwd source --timeout 90m \
+#     [--env RECEIPTS=1 --env GEMM_LAYER= --env SAMPLE=0] \
 #     --send /tmp/p2lib.tar --send h200-manifest.json --send store-layout.json \
 #     -- bash benchmarks/torch_gpu/p2_stage/full.sh
 #

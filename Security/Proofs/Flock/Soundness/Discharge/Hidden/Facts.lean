@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 
 /-!
 # The facts read off `Spec`
@@ -8,6 +10,8 @@ leaf scheme and well-formedness, `setupHidden_hm96` and `setupHidden_wf`, are `H
 circuit); and of `HmOut.parse`, that an untyped one is `HmRow.parse`'s circuit then `HmOut.checkRows`
 (`parse_untyped`).
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 open Lean (Json)

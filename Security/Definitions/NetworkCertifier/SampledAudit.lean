@@ -1,7 +1,9 @@
-import Definitions.Claims.Sampling
-import Definitions.NetworkCertifier.Run
-import Mathlib.Logic.Relation
-import Mathlib.Order.Interval.Finset.Nat
+module
+
+public import Definitions.Claims.Sampling
+public import Definitions.NetworkCertifier.Run
+public import Mathlib.Logic.Relation
+public import Mathlib.Order.Interval.Finset.Nat
 
 /-!
 # The sampled audit and acceptance: what an accepted audit says about the egress, at `δ`
@@ -37,6 +39,8 @@ by the transfer-gate proof blocks and, beyond them, by the certifier's trust (`t
 `Carries` picks out, inside the conclusion. The statuses are the certifier's published record, which the network check
 reads (`Covered`).
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

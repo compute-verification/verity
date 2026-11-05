@@ -1,4 +1,6 @@
-import Proofs.Flock.Recursive.FirewallZK
+module
+
+public import Proofs.Flock.Recursive.FirewallZK
 
 /-!
 # Recursion: the committed-coin statements' `_hOuter` at V*'s sessions
@@ -23,6 +25,8 @@ session loop's switched prover (`outerSessionsZK_loop`). C-Flock's session-loop 
 deployed loop against every `V*`, but it bounds the real view by twice the simulated one plus its error, so it doesn't
 give `OuterViewZK`'s additive form.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion.OuterZK
 

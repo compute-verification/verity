@@ -1,10 +1,17 @@
-import Flock.Draw
-import PouwCommit.Draws
-import PouwWindow.Rounds
-import PouwCheck.Inputs
-import SampledProofs.ChallengerRecord
-import SampledProofs.ChallengerSession
-import Identity.Domains
+module
+
+public import Flock.Draw
+public import PouwCommit.Draws
+public import PouwWindow.Rounds
+public import PouwCheck.Inputs
+public import SampledProofs.ChallengerRecord
+public import SampledProofs.ChallengerSession
+public import Identity.Domains
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
+import all Init.Data.Array.Basic
+import all Init.Data.Array.DecidableEq
+import all Init.Data.String.Defs
 
 /-!
 # The pass's epoch and the window's draw (`core_check.py`, "the pass's epoch and the window's draw")
@@ -37,6 +44,8 @@ SHA-512, and, only in a replay of a recorded pass, the e2e-service passes', whic
 recorded draw also reads the e2e-service's first coin commitments, named as the current one but on SHA-256 as core was
 then: bound by `taggedSha256`, after the current binding, and drawn by `deriveV1` and `streamV1`.
 -/
+
+@[expose] public section
 
 namespace PouwCheck
 
@@ -87,9 +96,7 @@ def hex? : Json → Option ByteArray
 
 def at? (j : Json) (k : String) : Json := (PouwWindow.field? j k).getD .null
 
-/-- `j == .str s`, by a match the kernel reduces: `BEq Json` is a `partial def`, opaque to the kernel, so a property of a
-check that compares with it can't be proved. -/
-def jsonStrIs (j : Json) (s : String) : Bool := match j with | .str t => t == s | _ => false
+export SampledProofs (jsonStrIs)
 
 /-- `j == .bool true`, by a match the kernel reduces (`jsonStrIs`). -/
 def jsonTrue (j : Json) : Bool := match j with | .bool true => true | _ => false

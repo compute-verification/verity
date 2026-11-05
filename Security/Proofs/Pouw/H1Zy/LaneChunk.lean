@@ -1,5 +1,7 @@
-import Definitions.Pouw.H1Zy.LaneChunk
-import Proofs.Pouw.H1Zy.Lane
+module
+
+public import Definitions.Pouw.H1Zy.LaneChunk
+public import Proofs.Pouw.H1Zy.Lane
 
 /-!
 # A lane's chunks, accepted at one carry chain, check the whole lane (`laneOk_of_chunks`)
@@ -14,6 +16,8 @@ carry-out check, to that state, and each chunk's scales, through its scale check
 checks are the lane's on the joined rows, at `z = gemmAccS8` over the whole `K` (`zRun_zero`), which `laneOk_spec`
 (with `gemmAccS8_eq`, at `32 ∣ K` and `K < 2^17`) makes the exact dot.
 -/
+
+@[expose] public section
 
 namespace Pouw.H1Zy
 

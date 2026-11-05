@@ -36,7 +36,11 @@ is the loop's own, a function of the statement, the table's level 0, the rep's s
 (`Drive.Step.feed`). What it ends with, the opening's switched vectors and batched basis (`Finish.Memo`), the rep's
 proof reads back (`ownOf`) rather than computing them again.
 -/
-import Flock.Firewall.Drive
+module
+
+public import Flock.Firewall.Drive
+
+@[expose] public section
 
 namespace Flock.Firewall.Frames
 

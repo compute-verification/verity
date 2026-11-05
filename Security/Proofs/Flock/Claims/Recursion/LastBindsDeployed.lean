@@ -1,10 +1,12 @@
-import Proofs.Flock.Claims.Recursion.BoundBridge
-import Proofs.Flock.Claims.Recursion.LastBindsEC
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundBridge
+public import Proofs.Flock.Claims.Recursion.LastBindsEC
 
 /-!
 # (P4) at the deployed bound record
 
-`Bound.LastBindsEC`, (P4) modulo what `E*` reads (card ef47c02e), at the deployed bound record: `RecDeploy.bdDeployed`
+`Bound.LastBindsEC`, (P4) modulo what `E*` reads, at the deployed bound record: `RecDeploy.bdDeployed`
 at the deployed plain verifier's steps and columns and the deployed rows' digest input. It comes down to the deployed
 plain verifier binding its own last message.
 
@@ -44,6 +46,8 @@ when the record lists it. So the calls are compared as sets throughout: with the
 its columns half, proved at SHA-512 (`RecDeploy.plainColsBind_sha512`), and its calls half
 (`RecDeploy.PlainCallsBindOrSlack`), proved at SHA-512 too (`RecDeploy.plainCallsBindOrSlack_sha512`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

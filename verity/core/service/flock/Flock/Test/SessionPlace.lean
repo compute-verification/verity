@@ -5,7 +5,12 @@ the second's `Open` and rounds, `Finish`) each leaves once, at its place; a seco
 and each of them out of its place, is refused; after a refusal every request is refused for its reason; and a `Commit`
 or `Round` the auditor answers without coins stops the session (`Session.State.answer`), so it never leaves again.
 -/
-import Flock.Firewall.Session
+module
+
+public import Flock.Firewall.Session
+meta import Flock.Firewall.Session
+
+@[expose] public section
 
 namespace Flock.Test.SessionPlace
 

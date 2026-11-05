@@ -1,6 +1,8 @@
-import Proofs.Flock.SessionLoop.Statement
-import Proofs.Flock.Claims.ZK.FinishSwFrame
-import Proofs.Flock.Claims.ZK.FrameRankFault
+module
+
+public import Proofs.Flock.SessionLoop.Statement
+public import Proofs.Flock.Claims.ZK.FinishSwFrame
+public import Proofs.Flock.Claims.ZK.FrameRankFault
 
 /-!
 # The rep draws as the finish reads them
@@ -17,6 +19,8 @@ the frame reps `Loop.frepOf`:
 At the loop's own release (`ofLoopLink`) the draws are `L₀`'s (`LeanRelease.draws_ofLoopLink`), and where the rep's frame
 starts, its layout is the tape's (`LeanRelease.lay_ofLoopLink`, `swSrcE_repCut`'s `hlayR`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
