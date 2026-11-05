@@ -118,7 +118,8 @@ with one domain at each root, the population, the registration's descriptor and 
 law on the registration's strata and the draw's size), the device's byte stream the draw reads, A3 at those bytes and
 the verify command's tags as fields, and the bound's parameters. The registration, the draw file (the printed one),
 the writer and the rounds' digest are the ones the period's registration fixes (`Live.Reg`, `Live.dj`, `Live.wr`,
-`Live.dg`), and `live-verifier` holds at the writer under the law (`Live.hCust`). -/
+`Live.dg`), and `live-verifier` holds at the writer under the law (`Live.hCust`). The live rounds' count and the tree
+openings the session reads after a digest are its coin tree's (`Live.N`, `Live.rounds`). -/
 structure Live where
   /-- the population: the public file's proof blocks -/
   n : ℕ
@@ -161,7 +162,6 @@ structure Live where
   /-- a table `verify --zk` sets up, whose refused table the plan reads only at a draw `verify --zk` sets up no table
   for (`tableZHJP`), where no witness satisfies it -/
   y₀ : DrawSetupZHJP (inputsJ I 0) own (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀
-  N : ℕ
   /-- the device's bytes the draw reads -/
   Ω : Type
   [fΩ : Fintype Ω]
@@ -185,9 +185,6 @@ structure Live where
   v : ℕ
   /-- one acceptance check, in SHA-512 calls -/
   w : ℕ
-  /-- the tree openings the session reads after a digest of the prover's message: its link points' and each rep
-  round's -/
-  rounds : ℕ
   /-- hashing one message the device or the commitment takes a digest of (a round's message, the record), in SHA-512
   calls -/
   h : ℕ
@@ -220,6 +217,35 @@ theorem avg_fst {Ω T : Type} [Fintype Ω] [Fintype T] [Nonempty T] (G : Ω → 
 namespace Live
 
 variable (A : Live)
+
+/-- **The session's coin tree**: the keyed coin tree `verify --zk` sets the session up on (`ZkExec.zkCoins`), its
+session stream and each table's two rep streams, `2^roundsLog` rounds each (`Flock.Zk.coinSpec`). -/
+def coinSpec : Flock.CoinTree.Spec := Flock.Zk.coinSpec (A.I.tags.tableNames A.I.count)
+
+theorem zkCoins_eq : zkCoins A.I = .tree A.coinSpec := rfl
+
+/-- A stream of the session's coin tree holds `2^9` rounds. -/
+theorem coinSpec_roundsLog : A.coinSpec.roundsLog = 9 := rfl
+
+/-- **The live rounds' count**: the prover submits a round on a table's rep stream, or stops, at most once for each
+round of the session's coin tree's two rep streams, `2 · 2^roundsLog`. -/
+def N : ℕ := 2 * 2 ^ A.coinSpec.roundsLog
+
+/-- **The tree openings the session reads after a digest of the prover's message**: its link points', and each round
+of its coin tree's two rep streams, `2 · 2^roundsLog + 1`. -/
+def rounds : ℕ := 2 * 2 ^ A.coinSpec.roundsLog + 1
+
+/-- **The session's rounds are the live rounds and the link's.** -/
+theorem rounds_eq : A.rounds = A.N + 1 := rfl
+
+/-- **The live session's stops fit the leaves the device's trees hold**: `2 · (1 + N) ≤ maxLeaves`. -/
+theorem stops_le_maxLeaves : 2 * (1 + A.N) ≤ maxLeaves := by
+  rw [Live.N, coinSpec_roundsLog]
+  decide
+
+/-- **The session's rounds hold each round of its coin tree's two rep streams**: `2K + 1 ≤ rounds` at
+`K = 2^roundsLog`. -/
+theorem rounds_tree : 2 * 2 ^ A.coinSpec.roundsLog + 1 ≤ A.rounds := le_rfl
 
 /-- **The registration** the live audit's prover sends before the draw: the registration record's digest, the head of
 the registration log after it (`SampledProofs.Registration.digest`), which the period's composite commitment binds
