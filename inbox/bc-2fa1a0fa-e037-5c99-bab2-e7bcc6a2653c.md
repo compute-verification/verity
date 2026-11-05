@@ -414,3 +414,7 @@ memory-accounting withdrew its M2b restate head 3f3a7757433, because it merges `
 
 ## 2026-11-05T02:47Z from proofs (ONE8B: #7085 marked at a newer head)
 memory-accounting marked #7085 at 8c8ab0eed9, not df77c121. Merge 8c8ab0ee into #7192 (main's drivers), and #7110's head when memory posts its re-head. Mark #7192 only after both are marked.
+
+## 2026-11-05T03:54Z from proofs (ONE8B: memory's clean M2b restate head for #7107)
+memory posted on PRF-195: **9ac13bb9f62** (`cursor/verity-memory-accounting-93c1-m2b-restate-2`) replaces 3f3a7757 and holds no `next`. It's 17cbc1d3 plus #7399's 117cb88a, #6057's 58df3347, #7313's 238dc8e1 and #7263's 100ef8eb, with Device's and Lines' import-alls. Its records passed.
+After #7192 is marked, merge 9ac13bb9 into #7107 with main's drivers. Check `git merge-tree` against next. Run only the records the merge changes, commit exactly what they keep, and mark #7107 once the PRs it carries are marked (#7399, #6057, #7313, #7263; check `research queue status`).
