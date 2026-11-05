@@ -87,7 +87,7 @@ from verity.ml.commitments.window import WINDOW_DOMAIN, window_domain
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.program import Program
 
-from . import draw as D, partition as P, registered as G
+from . import draw as D, link_points as LP, partition as P, registered as G
 from .verdict import Verdict, _Collect
 
 FORMAT = "verity/registration/v1"
@@ -163,7 +163,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           outputs: Mapping[str, Mapping[str, str]] | None = None,
           schemas: Mapping[str, str] | None = None, window_root: str | None = None,
           held: Sequence[str] | None = None, day: int | None = None,
-          declarations: Sequence[Mapping[str, Any]] | None = None) -> Verdict:
+          declarations: Sequence[Mapping[str, Any]] | None = None, members: Sequence[LP.Member] = ()) -> Verdict:
     """R1-R7 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
@@ -190,7 +190,11 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     the log registered under the domain it takes now is a ValueError (`unwindowed`).  `day` and `declarations`: the
     window's day and the registration log's declarations (Declared day), both or neither; R2 holds the record's program
     to the day's one declaration (`_declared`).  R3 reads `ports` by name, so its codes come in the ports' sorted
-    order whatever order the mapping has, as the Lean port reads them."""
+    order whatever order the mapping has, as the Lean port reads them.  `members`: the per-member form's members, each
+    its units (`[lo, hi)` ranges) and its circuit's units a proof block; after R7, `link-points` refuses the record when
+    a member's fewest and most drawn units give different link points (`link_points.refused`), no draw under the sampling
+    design ends (`link_points.NEVER_ENDS`), or the members or the sampling design are not well formed over the
+    population."""
     c = _Collect()
     days = _declarations(day, declarations)
     v2 = bool(registered)
@@ -282,6 +286,14 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     if v2:
         _check_registered(c, rec["registered"], program, registered, pins, rec, sup, earlier, bound, outs, formats, window,
                           fixed)
+    if members:
+        try:
+            refused = LP.refused(*LP.law_of(program, query, law, work_table), members)
+        except (P.QueryRefused, ValueError) as e:
+            c.fail("link-points", str(e))
+        else:
+            if refused:
+                c.fail("link-points", {"members": refused})
     return c.verdict()
 
 
