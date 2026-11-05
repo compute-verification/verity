@@ -29,6 +29,7 @@ from verity_vllm.program.frontend.value_types import shape_of
 aten = torch.ops.aten
 F32, BF16, BIT = Value(32), Value(16), Value(1)
 _DT = {torch.float32: "f32", torch.bfloat16: "bf16"}
+_NAMES = {**_DT, torch.bool: "bool", torch.int64: "int64"}
 
 
 def _bits(x: float) -> int:
@@ -111,14 +112,8 @@ def _operand_ok(ctx, a, dtypes=(torch.float32,)) -> str | None:
         return f"{a.name} is not a value ({type(v).__name__})"
     if ctx.dtype_of(a) not in dtypes:
         return (f"numerics_unregistered: {a.name} has dtype {ctx.dtype_of(a)} (this rule lowers "
-                f"{' and '.join(_DT[d] for d in dtypes)})")
+                f"{' and '.join(_NAMES[d] for d in dtypes)})")
     return None
-
-
-def _bf16_held(ctx, a) -> bool:
-    """Whether a Python number or static float operand is a bf16 value (its f32 word survives rounding to bf16)."""
-    t = torch.as_tensor(a if isinstance(a, (int, float)) else ctx.val(a).tensor, dtype=torch.float32)
-    return torch.equal(t.to(torch.bfloat16).to(torch.float32).view(torch.int32), t.view(torch.int32))
 
 
 def _widened(ctx, node, x: Coll) -> Coll:
@@ -129,22 +124,33 @@ def _widened(ctx, node, x: Coll) -> Coll:
     return _batch(ctx, node, P.Bf16ToF32, x.reshape(Array(math.prod(S), BF16)), axes=(0,)).reshape(_tensor_type(S, 32))
 
 
-def _rounded(ctx, node, y: Coll, S: tuple[int, ...]) -> Coll:
-    """An f32 result `y` of shape `S` in the node's dtype: `y` for f32, each word rounded to bf16 (`F32ToBf16Rn_v1`) for bf16."""
+def _rounded(ctx, node, y: Coll, S: tuple[int, ...], fn=P.F32ToBf16Rn) -> Coll:
+    """An f32 result `y` of shape `S` in the node's dtype: `y` for f32, each word rounded to bf16 by `fn` (torch CPU's
+    `F32ToBf16Rn_v1`, or the GPU's `F2fpBf16_v1`) for bf16."""
     if ctx.dtype_of(node) != torch.bfloat16:
         return y
     if not S:
-        return _call(ctx, node, P.F32ToBf16Rn, Coll(F32, y.refs))
-    return _batch(ctx, node, P.F32ToBf16Rn, y.reshape(Array(math.prod(S), F32)), axes=(0,)).reshape(_tensor_type(S, 16))
+        return _call(ctx, node, fn, Coll(F32, y.refs))
+    return _batch(ctx, node, fn, y.reshape(Array(math.prod(S), F32)), axes=(0,)).reshape(_tensor_type(S, 16))
+
+
+def _from_bits(ctx, node, x: Coll) -> Coll:
+    """A bool value's words as f32, in its shape: 1.0 or +0 (`SelectF32_v1`), as torch converts a bool to a float."""
+    S = shape_of(x.type)[0]
+    one, zero = _const(ctx, node, _bits(1.0)), _const(ctx, node, 0)
+    if x.type.leaves == 1:
+        return Coll(_tensor_type(S, 32), _call(ctx, node, SC.SelectF32, Coll(BIT, x.refs), one, zero).refs)
+    flat = x.reshape(Array(math.prod(S), BIT))
+    return _batch(ctx, node, SC.SelectF32, flat, one, zero, axes=(0, None, None)).reshape(_tensor_type(S, 32))
 
 
 def _operand(ctx, node, a, S: tuple[int, ...]) -> tuple[Coll, int | None]:
     """(collection, batch axis) of an element-wise operand broadcast to the output shape `S`: a shared word, or `S`'s elements;
-    f32 words, a bf16 value's widened."""
+    f32 words, a bf16 value's widened and a bool value's 1.0 or +0. `a` is a Python number, a node or a `StaticFloat`."""
     n = math.prod(S)
     if isinstance(a, (int, float)):
         return _const(ctx, node, _bits(a)), None
-    v = ctx.val(a)
+    v = a if isinstance(a, StaticFloat) else ctx.val(a)
     if isinstance(v, StaticFloat):
         if v.tensor.numel() == 1:
             return _const(ctx, node, _bits(v.tensor.reshape(()).item())), None
@@ -152,6 +158,8 @@ def _operand(ctx, node, a, S: tuple[int, ...]) -> tuple[Coll, int | None]:
     x = ctx.coll(a)
     if ctx.dtype_of(a) == torch.bfloat16:
         x = _widened(ctx, node, x)
+    elif ctx.dtype_of(a) == torch.bool:
+        x = _from_bits(ctx, node, x)
     sx = tuple(shape_of(x.type)[0])
     if x.type.leaves == 1:
         return Coll(F32, x.refs), None

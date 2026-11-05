@@ -11,7 +11,7 @@ sum in blocks). Matrix products and the element-wise ops of `Binary` and `Unary`
 (`Bf16ToF32_v1`, exact), performs the f32 operation and rounds a bf16 result once (`F32ToBf16Rn_v1`), as torch CPU's bf16 kernels
 do; where torch's bf16 kernel rounds otherwise, the rule refuses. At a compute capability `cc`, a bf16 `mm` is instead F.linear's
 GEMM as that GPU's cuBLAS computes it (`Matmul`): the route its capture fitted (`cublas_bf16.train_route`), each k16 step the tensor
-core's dot (`HopperBF16WgmmaDot16_v1`). A training op with no Definition to lower it to is refused with the Definition it needs
+core's dot (`HopperBF16WgmmaDot16_v1`); and `add`, `sub`, `mul` and `div` are the GPU's (`Binary`). A training op with no Definition to lower it to is refused with the Definition it needs
 (`_log_softmax`: a correctly-rounded f32 log, `F32LogRn`).
 
     training_rules(min_view_leaves, cc) -> RuleSet     the training rule set
@@ -34,11 +34,11 @@ from verity.ml.circuits.types import Array, Value
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry import ref_prims as R
 from verity_vllm.program.frontend.rules.base import RuleSet
-from verity_vllm.program.frontend.rules.training_emit import (_DT, BIT, F32, _batch, _bf16_held, _bits, _call, _const, _ew, _flat,
-                                                              _iota, _operand, _operand_ok, _ones, _per_row, _ref, _rounded, _rows,
-                                                              _shape, _tokens, _TrainRule, _widened, aten)
+from verity_vllm.program.frontend.rules.training_emit import (_DT, BIT, F32, _batch, _bits, _call, _const, _ew, _flat, _iota,
+                                                              _operand, _operand_ok, _ones, _per_row, _ref, _rounded, _rows, _shape,
+                                                              _tokens, _TrainRule, _widened, aten)
 from verity_vllm.program.frontend.rules.training_matmul import Matmul
-from verity_vllm.program.frontend.rules.training_views import BoxPermute, StaticFloats, _info, _view_permute
+from verity_vllm.program.frontend.rules.training_views import BoxPermute, StaticFloat, StaticFloats, _info, _view_permute
 from verity_vllm.program.frontend.strided_views import _tensor_type
 from verity_vllm.program.frontend.value_types import shape_of
 
@@ -47,18 +47,34 @@ from verity_vllm.program.frontend.value_types import shape_of
 # element-wise
 # ---------------------------------------------------------------------------------------------------------
 
-_BINARY = {aten.add.Tensor: P.F32Add, aten.add.Scalar: P.F32Add, aten.sub.Tensor: R.F32Sub, aten.sub.Scalar: R.F32Sub,
-           aten.mul.Tensor: P.F32Mul, aten.mul.Scalar: P.F32Mul, aten.div.Tensor: P.F32Div, aten.div.Scalar: P.F32Div}
+_BINARY = {aten.add.Tensor: "add", aten.add.Scalar: "add", aten.sub.Tensor: "sub", aten.sub.Scalar: "sub", aten.mul.Tensor: "mul",
+           aten.mul.Scalar: "mul", aten.div.Tensor: "div", aten.div.Scalar: "div"}
+#: each operation's f32 Definition: torch CPU's, and the GPU's (every NaN result `F32_NAN_PTX`)
+_F32 = {"add": (P.F32Add, P.F32AddV2), "sub": (R.F32Sub, P.F32SubV2), "mul": (P.F32Mul, P.F32MulV2), "div": (P.F32Div, P.F32DivV2),
+        "fma": (P.F32Fma, P.F32FmaV2)}
+
+
+def _alpha(node):
+    """`add` / `sub`'s alpha: keyword-only in `.Tensor`, positional in `.Scalar`."""
+    return node.kwargs.get("alpha", node.args[2] if len(node.args) > 2 else 1)
 
 
 class Binary(_TrainRule):
-    """`add` / `sub` / `mul` / `div` (`.Tensor`, `.Scalar`) of f32 or bf16 values, static float tensors and Python numbers,
-    broadcast: `F32Add_v1`, `F32Sub_v1`, `F32Mul_v1`, `F32Div_v1` (true division) element by element; a number is its f32 word, a
-    bf16 operand is widened and a bf16 result rounded. A bf16 result's numbers are bf16 values: torch rounds a number to bf16
-    for `add` and `sub` and keeps its f32 value for `mul` and `div`, which agree only then."""
-    info = _info("Binary", "aten add/sub/mul/div .Tensor/.Scalar with broadcasting, f32 or bf16", "operands are f32 or bf16 values, "
-                 "static float tensors or Python numbers", "a bf16 result's numbers and static operands are bf16 values",
-                 "alpha == 1, no rounding_mode", "one batch over the output's elements")
+    """`add` / `sub` / `mul` / `div` (`.Tensor`, `.Scalar`) of f32, bf16 or bool values, static float tensors and Python numbers,
+    broadcast, element by element as torch's CPU kernels compute them: `F32Add_v1`, `F32Sub_v1`, `F32Mul_v1`, `F32Div_v1` (true
+    division), and `add` (`sub`) with alpha != 1 one `F32Fma_v1(b, f32(alpha), a)` (`-alpha`). A bf16 operand is widened, a bool
+    one is 1.0 or +0 (`SelectF32_v1`) and a bf16 result rounded once (`F32ToBf16Rn_v1`). A number is its f32 word, but in a bf16
+    `add` or `sub` torch CPU first rounds it (and a 0-d static) to bf16. At a compute capability `cc` they are the GPU's: the same
+    operations with its NaN (`F32Add_v2`, `F32Sub_v2`, `F32Mul_v2`, `F32Div_v2`, `F32Fma_v2`), a bf16 result rounded by
+    `F2fpBf16_v1`, every number its f32 word, and a division by a number the product by its reciprocal, `RN(1 / f32(s))`, which
+    torch's CUDA kernel computes on the host. Refused: a bf16 add with alpha != 1, a rounding mode, and at `cc` a division by a 0-d
+    static tensor (the GPU multiplies by a CPU scalar's reciprocal and divides by a device tensor, and the graph doesn't say which)."""
+    info = _info("Binary", "aten add/sub/mul/div .Tensor/.Scalar with broadcasting, f32 or bf16", "operands are f32, bf16 or bool "
+                 "values, static float tensors or Python numbers", "alpha != 1 only for an f32 add or sub", "no rounding_mode",
+                 "at cc: no division by a 0-d static tensor", "one batch over the output's elements")
+
+    def __init__(self, cc: tuple[int, int] | None = None):
+        self.cc = cc
 
     def targets(self):
         return set(_BINARY)
@@ -66,24 +82,51 @@ class Binary(_TrainRule):
     def applies(self, node, ctx):
         if ctx.dtype_of(node) not in _DT:
             return f"numerics_unregistered: result dtype {ctx.dtype_of(node)}"
-        if node.kwargs.get("alpha", 1) != 1 or node.kwargs.get("rounding_mode") is not None:
-            return "numerics_unregistered: alpha != 1 or a rounding mode"
-        whys = [w for w in (_operand_ok(ctx, a, tuple(_DT)) for a in node.args[:2]) if w]
+        if node.kwargs.get("rounding_mode") is not None:
+            return "numerics_unregistered: a rounding mode"
+        if _alpha(node) != 1 and ctx.dtype_of(node) != torch.float32:
+            return "numerics_unregistered: a bf16 add with alpha != 1"
+        whys = [w for w in (_operand_ok(ctx, a, (*_DT, torch.bool)) for a in node.args[:2]) if w]
         if whys:
             return whys[0]
-        statics = [a for a in node.args[:2] if not (isinstance(a, torch.fx.Node) and isinstance(ctx.val(a), Coll))]
-        if len(statics) == 2:
+        if all(not (isinstance(a, torch.fx.Node) and isinstance(ctx.val(a), Coll)) for a in node.args[:2]):
             return "no operand is a value (a static result: StaticFloats)"
-        if ctx.dtype_of(node) == torch.bfloat16 and not all(_bf16_held(ctx, a) for a in statics):
-            return "numerics_unregistered: a bf16 op with a number that bf16 doesn't hold"
+        b = node.args[1]
+        if (self.cc and _BINARY[node.target] == "div" and isinstance(b, torch.fx.Node) and isinstance(ctx.val(b), StaticFloat)
+                and _shape(ctx, b) == ()):
+            return ("numerics_unregistered: a division by a 0-d static tensor on the GPU (a CPU scalar's reciprocal or a device "
+                    "tensor's quotient)")
         return True
+
+    def _static(self, ctx, node, a):
+        """A value operand as it is; a number or static one as the f32 words this op reads (`StaticFloat`): in a bf16 add or sub
+        on the CPU, a number or 0-d static rounded to bf16."""
+        if isinstance(a, torch.fx.Node) and isinstance(ctx.val(a), Coll):
+            return a
+        t = torch.as_tensor(a if isinstance(a, (int, float)) else ctx.val(a).tensor, dtype=torch.float32)
+        if self.cc is None and ctx.dtype_of(node) == torch.bfloat16 and _BINARY[node.target] in ("add", "sub") and t.numel() == 1:
+            t = t.to(torch.bfloat16).to(torch.float32)
+        return StaticFloat(t.contiguous())
 
     def emit(self, node, ctx):
         S = ctx.shape_of_node(node)
-        fn = _BINARY[node.target]
-        out = _ew(ctx, node, fn, [_operand(ctx, node, a, S) for a in node.args[:2]], S)
-        ctx.define(node, _rounded(ctx, node, out, S))
-        ctx.record(self, node, {"shape": list(S), "dtype": _DT[ctx.dtype_of(node)]}, emitted=f"{fn.id} x{math.prod(S)}")
+        op, gpu = _BINARY[node.target], self.cc is not None
+        a, b = node.args[:2]
+        if gpu and op == "div" and isinstance(b, (int, float)):
+            with np.errstate(all="ignore"):
+                b, op = float(np.float32(1.0) / np.float32(b)), "mul"
+        a, b = (self._static(ctx, node, x) for x in (a, b))
+        alpha = _alpha(node)
+        if alpha != 1:
+            sign = -1 if op == "sub" else 1
+            ops = [_operand(ctx, node, b, S), (_const(ctx, node, _bits(sign * alpha)), None), _operand(ctx, node, a, S)]
+            fn = _F32["fma"][gpu]
+        else:
+            ops, fn = [_operand(ctx, node, x, S) for x in (a, b)], _F32[op][gpu]
+        out = _ew(ctx, node, fn, ops, S)
+        ctx.define(node, _rounded(ctx, node, out, S, P.F2fpBf16 if gpu else P.F32ToBf16Rn))
+        ctx.record(self, node, {"shape": list(S), "dtype": _DT[ctx.dtype_of(node)], "alpha": alpha},
+                   emitted=f"{fn.id} x{math.prod(S)}")
 
 
 class Unary(_TrainRule):
@@ -484,12 +527,13 @@ def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None) 
     that are not one run) and `Matmul` before them, the element-wise, reduction, softmax, loss and embedding rules after.
     `min_view_leaves` is 0 by default: the default views write a permuted view of fewer leaves than their limit as a list of its
     leaves, which the root's replay then substitutes as one reference part per leaf.  `cc` (`cublas_bf16.TRAIN_CC`): bf16 `mm`s as
-    that GPU's cuBLAS computes them (`Matmul`), in the rule set ``training-cc<major>.<minor>``."""
+    that GPU's cuBLAS computes them (`Matmul`) and every add, sub, mul and div as its kernels do (`Binary`, placed first, before
+    the default rules' CPU kinds), in the rule set ``training-cc<major>.<minor>``."""
     from verity_vllm.program.frontend.rules import DEFAULT_RULES
 
-    first = [StaticFloats(), BoxPermute(min_view_leaves), Matmul(cc)]
-    last = [Binary(), Unary(), Lerp(), Addcmul(), Reduce(), SafeSoftmax(), SoftmaxBackward(), LogSoftmax(), LogSoftmaxBackward(),
-            NllLossForward(), NllLossBackward(), EmbeddingDenseBackward()]
+    first = [StaticFloats(), BoxPermute(min_view_leaves), Matmul(cc)] + ([Binary(cc)] if cc else [])
+    last = ([] if cc else [Binary()]) + [Unary(), Lerp(), Addcmul(), Reduce(), SafeSoftmax(), SoftmaxBackward(), LogSoftmax(),
+                                         LogSoftmaxBackward(), NllLossForward(), NllLossBackward(), EmbeddingDenseBackward()]
     name = "training" if cc is None else f"training-cc{cc[0]}.{cc[1]}"
     return RuleSet(name, first + list(DEFAULT_RULES.rules) + last, list(DEFAULT_RULES.families))
 
