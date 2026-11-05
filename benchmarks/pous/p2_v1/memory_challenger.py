@@ -11,7 +11,7 @@ its own secret: `audit_id` from `verity/pous/p2-audit-id/v4` at the audit's coun
 answer's last byte, correct when the label's leaf is the retained one, on time within the limit, and the audit stops at the
 first failure. `k` is 105, the deployment's.
 
-The limit, the calibration, the clocks and the record are the band memory challenger's (`band_gpu/memory_challenger.py`): `--calibrate-only` fixes
+The limit, the calibration, the clocks and the record are the band memory challenger's (`benchmarks/pous/band_gpu/memory_challenger.py`): `--calibrate-only` fixes
 `Δ + allowance` before any load, `--limit-ns` judges every audit against it, the allowance is a loopback one (spec v4 caps it
 at 354 µs), and every audit's secret source and every answer's time are kept.
 
