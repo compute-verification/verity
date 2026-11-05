@@ -36,6 +36,8 @@ python tools/verity/lean/check.py --lift LIFTS.json PKG  write each guarantee {"
                                                   `--update --moved LIFTS.json.moved.json PKG` (below)
 python tools/verity/lean/upstream.py PKG [--lean]        what the pinned dependencies prove about PKG's watched statements
 python tools/verity/lean/unread.py --out DIR --build     the Lean nothing reads, per module and area (its docstring)
+python tools/verity/lean/unread.py --out DIR --facts F --facts G --caps tools/verity/lean/unread-caps.json [--update-caps]
+                                                  the ratchet on the facts two audits wrote; --update-caps only lowers (below)
 python tools/verity/lean/merge.py --install              once per clone: git merges lean-audit.json with merge.py (below)
 ~~~
 
@@ -472,6 +474,30 @@ assumption or replaces the hand proof, then records it with `--ack`: the list sa
 used. To see what upstream has proved since the pinned revision, run `upstream.py PKG --fetch --rev origin/main`; a weekly
 `research run` of it tells us when a bump would gain something. A document's "status upstream" line cites this output
 instead of asserting a status.
+
+## The Lean nothing reads: `unread.py` and its ratchet
+
+`unread.py` follows what each constant's type and value mention, from the seeds: the locks' entries, every declaration
+of a module a lock lists, what the locks' texts (a `why`, a reason) name and what the documents those texts name hold (a
+`PROTOCOL.md` a guarantee relies on), the properties and the `SecurityProofs` proofs, the code, what Lean uses by name,
+and what a file outside Lean names (its docstring has them all). It reports each module's and each area's unread
+declarations, the wholly unread modules, and the longest import chain before and after they go.
+
+The audits of `Security` and `Security/Proofs` write the facts it reads (`Unread.lean`: `unread-facts.jsonl.gz` beside
+their reports, `unread_facts` in `report.json`), and `lean_audit.py` keeps them with each pass. After the audits, check's
+lean-audit step joins the two and runs the ratchet: each area of the analysis (`Proofs/Flock`, `Definitions/Pouw`, ...)
+has a cap on its wholly unread modules and on their lines in `unread-caps.json`, and the step fails when a count rises
+above its cap. A module is wholly unread when nothing of it is read or seeded; a module of checks (its name ends in
+`Checks` or `Vectors`) that mentions a read declaration tests what is read, and stays. The fix the failure names: delete
+the module, or seed it with a lock or code reference (name it, or a declaration of it, in a lock's text or in code that
+reads it). The caps only come down. When a count falls, the step leaves the lowered caps under its `--out`
+(`unread/unread-caps.json`), and `unread.py --caps tools/verity/lean/unread-caps.json --update-caps` on the same facts
+lowers each cap to its count, never raising one. The ratchet builds nothing and takes seconds, and neither `unread.py`
+nor the caps is in any audit's key, so changing them reruns no audit.
+
+The facts come from those two packages' builds alone. A module of `Security/Properties` that `Security/Proofs` doesn't
+import has no `.olean` there and is reported `unbuilt`, so a spec definition that only such a module reads counts as
+unread. None does today; `unread.py --build` builds all three trees.
 
 ## The build cache: `cache.py`
 
