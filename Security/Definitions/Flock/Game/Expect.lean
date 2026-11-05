@@ -1,5 +1,7 @@
-import Definitions.Flock.Game
-import Definitions.Flock.Rewinding
+module
+
+public import Definitions.Flock.Game
+public import Definitions.Flock.Rewinding
 
 /-!
 # Expectations against a strategy
@@ -9,6 +11,8 @@ import Definitions.Flock.Rewinding
 `Rewinding.IsPlurality` for a strategy's run distribution. The lemmas, the rewinding lemma for any run distribution
 among them (`expect_bad_le`), are in `Proofs.Flock.Soundness.Game.Expect`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

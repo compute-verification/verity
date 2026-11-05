@@ -1,4 +1,6 @@
-import Definitions.Flock.ZK.Table
+module
+
+public import Definitions.Flock.ZK.Table
 
 /-!
 # Zero knowledge: the real prover's view and `S_shvzk`'s, with real hm96 leaves
@@ -13,6 +15,8 @@ columns (§3.2 step 6).
   `H(U, c(y))`) and the two codes at the positions nobody opens.
 * `Table.Hm96.viewR`, `Table.Hm96.simR`: the two views with real leaves. `RealLeaves.table_shvzk_hm96` is about them.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK
 

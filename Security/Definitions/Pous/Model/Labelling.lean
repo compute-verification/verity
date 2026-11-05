@@ -1,5 +1,7 @@
-import Mathlib.Data.Fintype.Option
-import Definitions.Pous.Game.Oracle
+module
+
+public import Mathlib.Data.Fintype.Option
+public import Definitions.Pous.Game.Oracle
 
 /-!
 # One-way data-carrying labels and greedy pebbling (B5)
@@ -7,6 +9,8 @@ import Definitions.Pous.Game.Oracle
 The definitions of B5 (Pietrzak 2018/194 §6.1, §7.1, §8), proved in `Security/Proofs/Pous/B5/ExPostFacto.lean`. The
 labels are one-way: nothing here decodes a label.
 -/
+
+@[expose] public section
 
 namespace Pous.Labelling
 

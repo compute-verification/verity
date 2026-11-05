@@ -1,4 +1,6 @@
-import Definitions.Pouw.Window
+module
+
+public import Definitions.Pouw.Window
 
 /-!
 # The service's units read the tile, not the session: its wrong sets are copy-closed
@@ -10,6 +12,8 @@ window's common words, never the session. So at every transcript a tile is wrong
 `WindowEps` and `ServiceEscapes` gives `η = 0`, holds of a wrong set exactly when `harmSets` does
 (`harmSets_copyClosed_iff`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Window
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.C3.Opening.SrcOpening
-import Proofs.Flock.C3.Reps.ReadWhole
+module
+
+public import Proofs.Flock.C3.Opening.SrcOpening
+public import Proofs.Flock.C3.Reps.ReadWhole
 
 /-!
 # n7's opening tie at V*'s layer
@@ -17,6 +19,8 @@ layer's ring switches w's.
 * `OpenTieL`, `openTie_of_layer`: the source's opening steps are the opening's on the ring switches V*'s layer holds,
   which gives `OpenTie`; `openingReadAt_srcL` is `openingReadAt_src` with `OpenTieL` in place of `OpenTie`.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.OfVStar
 

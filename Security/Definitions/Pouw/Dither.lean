@@ -1,4 +1,6 @@
-import Definitions.Pouw.RelativeSecurity
+module
+
+public import Definitions.Pouw.RelativeSecurity
 
 /-!
 # The no-fold Dither protocol's work-soundness: the vocabulary its guarantee reads (trusted)
@@ -32,6 +34,8 @@ Dither's headline (`Definitions.Pouw.Guarantees.Dither.WorkSound`) is stated ove
   luck (`fleetLuck`);
 * the error (`epsWorkSound`, `ε_skip`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Dither
 

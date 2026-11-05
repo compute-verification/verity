@@ -1,5 +1,7 @@
-import Definitions.Core.Draw
-import Definitions.Core.Assumptions.Challenger
+module
+
+public import Definitions.Core.Draw
+public import Definitions.Core.Assumptions.Challenger
 
 /-!
 # The sample from a challenger's coin
@@ -10,6 +12,8 @@ uniform draw of the law misses it, at most the law's `miss K` for a set of `K` b
 a sampled audit: the faulty proof blocks are fixed by the commitments the coin samples, which the challenger recorded
 before it flipped the coin, so the prover can't steer them away from the sample.
 -/
+
+@[expose] public section
 
 namespace Verity.Guarantees
 

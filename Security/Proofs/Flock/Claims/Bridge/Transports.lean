@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Bridge.BindsColl
-import Proofs.Flock.Claims.Sampling.Deployed
-import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
-import Proofs.Flock.C3.RegLevels.ValueTie
+module
+
+public import Proofs.Flock.Claims.Bridge.BindsColl
+public import Proofs.Flock.Claims.Sampling.Deployed
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
+public import Proofs.Flock.C3.RegLevels.ValueTie
 
 /-!
 # The deployed check opens shaped rows only
@@ -22,6 +24,8 @@ hashes only `RowV2.enc` of a row of its place's width. So the openings the deplo
 * `valOf_eq` and `opens_pathCommitRow`: a shaped value is the value of the row bits it agrees with, and the check of
   any path commitment over hm96 leaves of rows is the verifier's, for `Proofs.Flock.Bridge.Transports`.
 -/
+
+@[expose] public section
 
 namespace SamplingDeploy
 

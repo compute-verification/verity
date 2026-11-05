@@ -3,7 +3,12 @@
 (`splitOn_nl`), with the byte positions it walks: the model a parse that splits a file's lines elsewhere (in tasks, from
 byte offsets) is held to. `splitTasks` splits them so, reading each row's numbers in the same task (`Net.Row`).
 -/
-import Flock.Net
+module
+
+public import Flock.Net
+import all Init.Data.String.Legacy
+
+@[expose] public section
 
 namespace Flock.SplitNL
 

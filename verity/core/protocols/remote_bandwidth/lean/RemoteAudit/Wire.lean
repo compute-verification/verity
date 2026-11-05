@@ -1,4 +1,6 @@
-import RemoteAudit.Window
+module
+
+public import RemoteAudit.Window
 
 /-!
 # The openings frame: `verity/core/protocols/remote_bandwidth/wire.py`'s `decode_openings`
@@ -12,6 +14,8 @@ opening   u32be pass ‖ u64be position ‖ block (4096) ‖ u16be len(leaf) ‖
           ‖ u8 d ‖ d × 64 (receipt path) ‖ u8 d ‖ d × 64 (payload path) ‖ u8 bound (0 or 1) ‖ bound × 64 (d_j)
 ~~~
 -/
+
+@[expose] public section
 
 namespace RemoteAudit.Wire
 

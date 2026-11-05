@@ -1,5 +1,7 @@
-import Properties.NciDesc
-import Properties.Nci.Threads
+module
+
+public import Properties.NciDesc
+public import Properties.Nci.Threads
 
 /-!
 # What a verdict of the description-sized check carries
@@ -21,6 +23,8 @@ Each is proved from `DescAgrees` (`SecurityProofs.DescAgrees`, `Proofs.Propertie
 `DescWitnesses` in `Proofs.Properties.Nci.DescVerdict`, and the four bounds in `Proofs.Nci.DescVerdict` (package
 `security_proofs`), whose proofs need the thread bounds'.
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties
 

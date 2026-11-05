@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.ZK.FinishSwLig
-import Proofs.Flock.Claims.ZK.FrameOpenCut
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckMasked
-import Proofs.Flock.Claims.ZK.FinExe
+module
+
+public import Proofs.Flock.Claims.ZK.FinishSwLig
+public import Proofs.Flock.Claims.ZK.FrameOpenCut
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckMasked
+public import Proofs.Flock.Claims.ZK.FinExe
 
 /-!
 # Level 0's bodies pin the source's masked values
@@ -19,6 +21,8 @@ and the cut opening from a source sends the session's bodies at the pads that ma
 * **`repCut_cutL0`**: a rep from a source whose PIOP returns, cut in level 0's opening, stops having sent those bodies,
   at the PIOP's target and basis (`cutStop_of_eraseZ` carries it across level 0's erased rows and salts).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.LigLock
 

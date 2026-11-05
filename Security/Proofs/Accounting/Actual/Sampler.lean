@@ -1,6 +1,8 @@
-import Mathlib
-import Definitions.Accounting.Actual.Sampler
-import Definitions.Pous.Model.StreamedWipe
+module
+
+public import Mathlib
+public import Definitions.Accounting.Actual.Sampler
+public import Definitions.Pous.Model.StreamedWipe
 
 /-!
 # The deployed uniform sampler on one word: its counts
@@ -11,6 +13,8 @@ opening draw is proved with: a count bounds a probability and back (`pr_le_ofRea
 the same over the coins in another order (`pr_comp_equiv`), and the real game is the ideal one plus the PRF's advantage
 (`pr_le_add_prfAdvantage`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Actual
 
