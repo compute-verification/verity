@@ -1396,4 +1396,23 @@ theorem satisfies_zC {tags : Tags} (F : Discharge.Aliased.UnitFacts tags st)
 
 end place
 
+/-- **The trace satisfies the concrete table's statement** (`stW`) at no public region, at any layout and unit facts
+of it: the statement's slots, constants and Δ are the concrete circuit's (`c_stW` and the slot facts). -/
+theorem satisfies_stW (ls lh : HmNets.Laid) (H : ByteArray) (A B A' B' : Sparse) (s1 s3 s4 s6 : String)
+    (hello : ByteArray → Nat → String) (L : FlockSoundness.Layout (stW ls lh H A B A' B' s1 s3 s4 s6 hello))
+    {tags : Tags} (F : Discharge.Aliased.UnitFacts tags (stW ls lh H A B A' B' s1 s3 s4 s6 hello))
+    (hn : Properties.Flock.Nets.FixedNetsBuild) :
+    (L.model []).Satisfies (zC (L.model []).m) := by
+  have hc := c_stW ls lh H A B A' B' s1 s3 s4 s6 hello
+  have hnets := nets_cW ls lh H A B A' B' s1
+  have hiw := inWords_cW ls lh H A B A' B' s1
+  exact satisfies_zC L (da_stW ls lh H A B A' B' s1 s3 s4 s6 hello)
+    (by rw [hc]; exact ranges_cW ls lh H A B A' B' s1) F hn
+    (by rw [hc]; exact kLog_cW ls lh H A B A' B' s1) (pin_stW ls lh H A B A' B' s1 s3 s4 s6 hello)
+    (by rw [hc]; exact tmpl_cW ls lh H A B A' B' s1) (by rw [hc]; exact unit_cW ls lh H A B A' B' s1)
+    (by rw [hc]; exact (unitRange_cW ls lh H A B A' B' s1).1) (by rw [hc]; exact (unitRange_cW ls lh H A B A' B' s1).2)
+    (by rw [hc]; exact shaRange_cW ls lh H A B A' B' s1) (by rw [hc]; exact hmRange_cW ls lh H A B A' B' s1)
+    (by rw [hc, hnets.2.1]; exact hiw.2.1) (by rw [hc, hnets.2.2]; exact hiw.2.2)
+    (by rw [hc, pin_stW]; exact constPairs_cW ls lh H A B A' B' s1)
+
 end FlockDeploy.Concrete.Trace
