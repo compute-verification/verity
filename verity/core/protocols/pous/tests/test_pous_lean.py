@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.pous import adversary as A
+import adversary as A
 from verity.core.protocols.pous.labels import component, join, transpose, w_labels
 from verity.core.protocols.pous.oracle import KeyQuery, Tweak, run
 from verity.core.protocols.pous.params import Params

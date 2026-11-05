@@ -29,11 +29,11 @@ import itertools
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 
-from .labels import component, from_bytes, join, salt_value, tag, w_labels
-from .oracle import PinvQuery, PQuery, Prog, Tweak, run
-from .params import Params
-from .primitives import KeyDerivation, Primitives, key_rounds
-from .scheme import encode_prog
+from verity.core.protocols.pous.labels import component, from_bytes, join, salt_value, tag, w_labels
+from verity.core.protocols.pous.oracle import PinvQuery, PQuery, Prog, Tweak, run
+from verity.core.protocols.pous.params import Params
+from verity.core.protocols.pous.primitives import KeyDerivation, Primitives, key_rounds
+from verity.core.protocols.pous.scheme import encode_prog
 
 
 @dataclass(frozen=True, slots=True)

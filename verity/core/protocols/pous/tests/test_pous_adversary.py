@@ -8,7 +8,7 @@ import random
 
 import pytest
 
-from verity.core.protocols.pous import adversary as A
+import adversary as A
 from verity.core.protocols.pous.audit import challenge_key, simulate
 from verity.core.protocols.pous.params import Params
 from verity.core.protocols.pous.primitives import IdealTweakablePermutation, Primitives, RandomOracleKey, reference
