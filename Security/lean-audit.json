@@ -72937,7 +72937,7 @@
    "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "SampledProofs.Draw": {
-   "digest": "66bc2c426880094b1e74be3c069ae3c40d233a86e98b9947bfaaca2f495a9217",
+   "digest": "e302c2f54725b4d9123bf8ca9f809731c72a675b72cca85d88d4fd386d64210e",
    "definitions": {
     "SampledProofs.Draw.checkDraw": "f0ace14dbcd5fa4fc9a616623b67f88503048732a6bcf3924adc6b0ad262383c",
     "SampledProofs.Draw.checkDrawFull": "520696a6b58435127072e0f3df1a29baa34800efd6ec4df0444f51537afa7c11",
@@ -72949,7 +72949,7 @@
     "SampledProofs.Draw.deriveLaw._sparseCasesOn_1": "06444dffbdc6b43e19a7fbb5921879f7a9ceba2d8bd11de93051c74c0ea5061e",
     "SampledProofs.Draw.deriveLaw._sparseCasesOn_4": "5cff8062fb2ab6a52973a1e0b63a9173449c25c334ca081ca9de17162382bd2b",
     "SampledProofs.Draw.drawUnits": "2a0f8ec96176f4c4c7c75ed0a260d70073d795471b52a1a94d24f0abf4b18340",
-    "SampledProofs.Draw.flockLaw": "fa1e8d695af9a161b92d7b528cefc8fce42d22044ade92e25fedaaf3018bcd13",
+    "SampledProofs.Draw.flockLaw": "df2626e346c35cf93cdba912a82614e8fd9b39d4f658bc3e7c7d3be501db0bfc",
     "SampledProofs.Draw.lawOf": "5e9f1cd98e9e3edae16e0e2bc0580a246fb14292f58970ddbe7acf485e2269c9",
     "SampledProofs.Draw.probability?": "7eb20c0ec772123a9dbfa4e52b8cb5e64ae305eb475f95138f5e66ef599781f8",
     "SampledProofs.Draw.probability?._sparseCasesOn_1": "242fddfc0716e35c82faffb899aa061612f1859b6d73e3c3caeb38ec6c648186",
