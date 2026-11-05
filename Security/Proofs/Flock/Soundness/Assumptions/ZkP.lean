@@ -7,7 +7,9 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJP
 `RecordCustodyZKJP`: `RecordCustodyZKJ` at flock-verify `--zk --public-inputs`, whose acceptance is `AcceptsZKP I own`
 and whose session sets up at `setupOfP (zkInputs I) own`. `RecordCustodyZKJ` is stated at `setupOf (zkInputs I)`, which
 refuses a circuit with public input ports (`HmIn.checkOwn` at `none`), so a session at public inputs needs this form.
-At `own = none` it is `RecordCustodyZKJ` (`recordCustodyZKJP_none`).
+At `own = none` it is `RecordCustodyZKJ` (`recordCustodyZKJP_none`). `RecordCustodyZKJPLaw` is the same custody with
+the draw file under the registration's law, and at the subset law it is `RecordCustodyZKJP`
+(`recordCustodyZKJPLaw_subset`).
 -/
 
 namespace FlockSoundness.Assumptions.Zk
@@ -33,6 +35,26 @@ theorem recordCustodyZKJP_none {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.I
     (Jf : Finset (Fin n) → Reg → ℕ)
     (wr : (S : Finset (Fin n)) → (R : Reg) → Discharge.Tables.LiveOutJ (Jf S R) mPts → Discharge.Exec.Transcript)
     (kd : ℕ) : RecordCustodyZKJP I none dj Jf wr kd ↔ RecordCustodyZKJ I dj Jf wr kd :=
+  Iff.rfl
+
+/-- **The record is the live session's, at `J` tables, at the verifier's public inputs, under the registration's law**
+(`live-verifier`, as `RecordCustodyZKJP`): the record `verify --zk --session-tables J --public-inputs` reads is the one
+the challenger wrote for the live session (`RecordsLiveZKJA` at that command's acceptance and setup), and its draw file
+the one `flock-verify draw` printed for the verifier's own draw under the registration's law `law` (`DrawFileZK` at
+`law` over the `n` proof blocks). Provisional. -/
+def RecordCustodyZKJPLaw {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (own : Option ByteArray)
+    (dj : Finset (Fin n) → Lean.Json) (Jf : Finset (Fin n) → Reg → ℕ)
+    (wr : (S : Finset (Fin n)) → (R : Reg) → Discharge.Tables.LiveOutJ (Jf S R) mPts → Discharge.Exec.Transcript)
+    (law : Flock.Draw.Law) : Prop :=
+  Discharge.Composed.RecordsLiveZKJA (Discharge.ZkHidden.AcceptsZKP I own)
+      (Discharge.Exec.setupOfP (Discharge.ZkExec.zkInputs I) own) dj Jf wr ∧
+    Discharge.ZkLink.DrawFileZK dj law n
+
+/-- At the subset law, `RecordCustodyZKJPLaw` is `RecordCustodyZKJP`. -/
+theorem recordCustodyZKJPLaw_subset {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (own : Option ByteArray)
+    (dj : Finset (Fin n) → Lean.Json) (Jf : Finset (Fin n) → Reg → ℕ)
+    (wr : (S : Finset (Fin n)) → (R : Reg) → Discharge.Tables.LiveOutJ (Jf S R) mPts → Discharge.Exec.Transcript)
+    (kd : ℕ) : RecordCustodyZKJPLaw I own dj Jf wr (.subset kd) ↔ RecordCustodyZKJP I own dj Jf wr kd :=
   Iff.rfl
 
 end FlockSoundness.Assumptions.Zk

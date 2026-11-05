@@ -154,7 +154,7 @@ def test_the_read_rows_are_the_commits_at_the_maps_steps():
     seed = hashlib.sha512(b"commit").digest()
     rows = I.commit_rows(_steps(ACROSS), _tokens(_prompts(ACROSS)), P)
     salts = [IT.fake_salt(b"commit", s) for s in range(count)]
-    root = ADV.register(rows, 32 * P, seed, salts).root
+    root = ADV.commit(rows, 32 * P, seed, salts).root
     assert root == insts[0].port_root
     dom = IT.domain(seed, count)
     ports = I.port_reads([i.map for i in insts], root, dom.domain_id, count, P)
@@ -188,7 +188,7 @@ def test_a_second_tree_of_the_users_ids_is_refused_under_the_commits_registratio
     tokens[2][5] ^= 1
     rows = I.commit_rows(_steps(ACROSS), tokens, P)
     salts, levels, dom_id = I.commit(rows)
-    registered = ADV.register(rows, 32 * P, hashlib.sha512(b"commit").digest(), salts)
+    registered = ADV.commit(rows, 32 * P, hashlib.sha512(b"commit").digest(), salts)
     forged = _link(ACROSS)
     assert registered.root == levels[-1][0] != forged[0].port_root and forged[0].port_domain == dom_id
     assert [I.unit_reference(SHAPE, i) for i in forged] == [1] * BUCKETS

@@ -45,9 +45,9 @@ def load(serving_macs: float, filler_macs: float, ms: float, mhz: float, sms: in
     return w
 
 
-def sigma(pi, entry: dict, mhz: float | None = None, **kw) -> C.Window:
+def sigma(pi, entry: dict, mhz: float | None = None, **kw) -> C.Cell:
     w = load(entry["serving_macs"], entry["filler_macs"], entry["t1_ms"], mhz or entry["mhz"], **kw)
-    return C.window(pi, [(1.0, w)])
+    return C.cell(pi, [(1.0, w)])
 
 
 def lfill_load(rec: dict, arm: str, mhz: float, fold: str = "duo", served_fold: str = "none") -> C.Work:
@@ -74,8 +74,8 @@ def lfill_rows(pi, recs: list[dict], fold: str = "duo", served_fold: str = "none
             if arm not in r:
                 continue
             a = r[arm]
-            run = C.window(pi, [(1.0, lfill_load(r, arm, a["mhz"], fold, served_fold))])
-            top = C.window(pi, [(1.0, lfill_load(r, arm, F_MAX_MHZ, fold, served_fold))])
+            run = C.cell(pi, [(1.0, lfill_load(r, arm, a["mhz"], fold, served_fold))])
+            top = C.cell(pi, [(1.0, lfill_load(r, arm, F_MAX_MHZ, fold, served_fold))])
             rows.append({"B": r["B"], "L": r["L"], "fill_sms": r["fill_sms"], "pf_lane": r.get("pf_lane", 0), "blk": r["blk"],
                          "T": r["T"], "CH": r["CH"], "arm": arm, "slowdown": a["slowdown"], "mhz": a["mhz"],
                          "watt": a.get("watt"), "sigma": top.sigma(), "sigma_run_clock": run.sigma(),
@@ -97,7 +97,7 @@ def dfill_rows(pi, recs: list[dict], fold: str = "duo", served_fold: str = "none
             cyc = 4 * sms * mhz * 1e6
             w = C.tensor_filler(r["window"]["fill_mac_per_s"] / MACS_A_MMA / cyc * C.TENSOR_CYCLES, fold)
             w = w + C.served(r["step_macs"] / (a["ms"] * 1e-3) / MACS_A_MMA / cyc * C.TENSOR_CYCLES, served_fold)
-            return C.window(pi, [(1.0, w)])
+            return C.cell(pi, [(1.0, w)])
 
         top = at(F_MAX_MHZ)
         rows.append({"B": r["B"], "L": r["L"], "place": r["place"], "build": r.get("build"), "NC": r["NC"], "S": r["S"],
@@ -120,7 +120,7 @@ def fstep_rows(pi, recs: list[dict], fold: str = "duo", served_fold: str = "none
             k = r["mhz"] / mhz
             fill = (r["pump"]["share"] + r["fill_share_lin"] + r["fill_share_att"]) * k
             srv = r["step_share_fused"] * k
-            return C.window(pi, [(1.0, C.tensor_filler(fill, rf) + C.served(srv, served_fold))])
+            return C.cell(pi, [(1.0, C.tensor_filler(fill, rf) + C.served(srv, served_fold))])
 
         top = at(F_MAX_MHZ)
         rows.append({"B": r["B"], "L": r["L"], "place": r.get("place", "split"), "build": r.get("build"), "M": r["M"],
