@@ -7,3 +7,7 @@ ci (landing's owner) replied at 9:12 AM PST with levers already in flight that i
 3. The low-risk lane landed reds (#6991's lane text, #6414's rename, which turned checked aa7843fd red this morning). ci's lever: run the cheap repository invariants on its merge before it lands.
 
 Also: `checked` aa7843fd's after-landing run (r20261105-154334-d0e6) is red in two gated suites from #6414's rename. Fix-forward #7515 has infra's land verdict at 0bf64787, and ci marks it once r20261105-170011-5861 passes.
+
+## 9:25 AM PST
+
+CI-436 (lean to ci, filed 9:00 AM PST): the executor graph's Security and Properties lock tasks fail because of the lock runner, not main (check.py passes). `runners/lean_lock.py` links every package's build lib to one shared out/lean and symlinks .lake/packages, which Lake realpaths, so Mathlib's names read as the repo's own premises. L3MEASURE's fix PR (LEAN-145) follows #7193 today, and CI-340's flip should wait for it. Count it on the fine-grained check's critical path.
