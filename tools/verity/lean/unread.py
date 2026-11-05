@@ -52,6 +52,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from array import array
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -191,8 +192,9 @@ def write_facts(tree: Tree, env: str, out: Path) -> Path:
     cfg = out / "unread-config.json"
     facts = out / "unread-facts.jsonl"
     cfg.write_text(json.dumps({"modules": sorted(tree.module_file), "out": str(facts.resolve())}))
-    exe = program(tree.root / env, out)
-    subprocess.run(["lake", "env", str(exe.resolve()), str(cfg.resolve())], cwd=tree.root / env, check=True)
+    with tempfile.TemporaryDirectory(prefix="lean-unread-") as d:
+        exe = program(tree.root / env, Path(d))
+        subprocess.run(["lake", "env", str(exe), str(cfg.resolve())], cwd=tree.root / env, check=True)
     return facts
 
 
