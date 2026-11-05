@@ -527,7 +527,7 @@ def test_the_store_lookup_takes_a_passed_result_on_the_same_inputs_and_fails_clo
     (bin_ / "research").write_text(f'#!/bin/sh\necho "$@" > {argv}\ncat {answer}\necho no index >&2\nexit "$(cat {code})"\n')
     (bin_ / "research").chmod(0o755)
     code.write_text("0")
-    monkeypatch.setenv("PATH", f"{bin_}{os.pathsep}{os.environ.get('PATH', '')}")
+    monkeypatch.setenv("PATH", str(bin_), prepend=os.pathsep)
 
     def row(status="passed", pkg=S, run="r1"):
         return {"id": "art:x", "manifest": {"meta": {"run_id": run, "commit": "c" * 40, "validation": {"status": status},
