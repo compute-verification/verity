@@ -2472,7 +2472,7 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
         f"{tree}; this node holds no row dir to count it from",
         f"COINS sampled proofs: {FOLLOW_COINS}; the other protocols' as the served node's COINS line names them"]
     assert lines[3].startswith(f"WINDOW-COMMIT class {W63K4} at H1's close") and lines[4].endswith("PASS")
-    assert [x.split(" ")[0] for x in lines[5:]] == ["V3C-AUDIT", "V3C-PERIOD", "RECORD", "COMPOSITE:"]
+    assert [x.split(" ")[0] for x in lines[5:]] == ["V3C-AUDIT", "V3C-PERIOD", "V3C-CIRCUITS", "RECORD", "COMPOSITE:"]
     assert lines[-1] == "COMPOSITE: composed on cpu-6" and limits == ["180m"]
     assert _audited(tmp_path) == {"--law": "stratified:1", "--tie": str(d / "h1" / "w7" / "registration.json"),
                                   "--tie-prefix": "h1/", "--ports": "3"}
@@ -2567,8 +2567,8 @@ def test_a_deferral_carries_the_served_nodes_inference_only_verdict_into_the_fol
     assert json.loads((dd / "inference-only.json").read_text()) == verdict
     rc, lines, order, _limits = _follow(tmp_path)
     assert rc == 0 and order == ["audit", "period", "record", "composite"], (lines, order)
-    assert [x.split(" ")[0] for x in lines[5:]] == ["V3C-AUDIT", "V3C-PERIOD", "INFERENCE-ONLY:", "RECORD",
-                                                    "COMPOSITE:"]
+    assert [x.split(" ")[0] for x in lines[5:]] == ["V3C-AUDIT", "V3C-PERIOD", "V3C-CIRCUITS", "INFERENCE-ONLY:",
+                                                    "RECORD", "COMPOSITE:"]
     assert json.loads((tmp_path / "out" / "record" / "inference-only.json").read_text()) == verdict
 
 
@@ -2638,35 +2638,53 @@ COMPOSED_AUDIT = FAKE_RECORDS_AUDIT.replace('    (out / "summary.json").write_te
         (w / "case-v2.json").write_text(json.dumps({"blobs": blobs}))
 ''')
 #: a step that notes the circuit files left under V3c's dir when it runs
-LEFT = '(cd "{at}" && find . -name circuit.txt | sort) > "$ORDER.left-{step}"'
+LEFT = ('(cd "{at}" && find . \\( -name circuit.txt -o -path "./circuits/*" \\) -type f | sort) '
+        '> "$ORDER.left-{step}"')
+#: the split certifier's period step as `certifier_piece.py period --case-only` leaves it: an undecided answer and a case
+#: whose ``circuits`` name the period's circuit files, here V3c's copies under its circuits/
+CASE_ONLY = ('echo period-check >> "$ORDER"; '
+             'printf \'{"circuits": ["%s"], "commitment": "7b7d", "evidence": "7b7d", "params": {}}\\n\' '
+             '"$4"/circuits/*.txt > "$3/case.json"; '
+             'echo \'{"protocol": "verity/certifier/v0", "verdict": "undecided"}\' > "$3/answer.json"; echo case')
 
 
-@pytest.mark.parametrize("v2, first, last", [
-    (None, "4 files, 14 bytes freed", None),
-    ("1", "3 files, 10 bytes freed; 1 the v2 case names, after the composite", "1 file, 4 bytes freed"),
+@pytest.mark.parametrize("keeps, first, last", [
+    (None, "5 files, 40 bytes freed", None),
+    ("v2", "4 files, 36 bytes freed; 1 the composite's cases name, after it", "1 file, 4 bytes freed"),
+    ("certifier", "4 files, 14 bytes freed; 1 the composite's cases name, after it", "1 file, 26 bytes freed"),
 ])
 def test_the_follow_on_removes_the_windows_circuit_files_after_its_period_check_before_the_reproof_copy(
-        tmp_path, v2, first, last):
+        tmp_path, keeps, first, last):
     """Once the period check has read them, the follow-on removes the window's every circuit file under V3c's dir (each
-    member's, links and all, and the warm's cache), so the re-proof copy finds none and the node's next window has the
-    disk, saying how many and the bytes freed; the openings stay. A file the audit's v2 case names waits for the
-    composite, which reads it, and goes after."""
-    assert _deferred(tmp_path).returncode == 0
+    member's, links and all, the warm's cache, and the period's copy under circuits/), so the re-proof copy finds none
+    and the node's next window has the disk, saying how many and the bytes freed; the openings stay. A file the audit's
+    v2 case names, or the network certifier's case does (its period's circuit files, which the composite's network leg
+    reads), waits for the composite and goes after."""
+    split = {}
+    if keeps == "certifier":
+        for f in KEPT:
+            (tmp_path / "serve" / f).parent.mkdir(parents=True, exist_ok=True)
+            (tmp_path / "serve" / f).write_text(f)
+        split = {"CERTIFIER_FRONT": "front", "CERTIFIER_CHAIN_CMD": CHAIN, "CERTIFIER_PERIOD_CMD": CASE_ONLY}
+    assert _deferred(tmp_path, **split).returncode == 0
     vw = tmp_path / "serve" / f"v3c-w7-{VTAG}"
     composite = f"{FAKE_SERVED_COMPOSITE}\n{LEFT.format(at=vw, step='composite')}"
     reproof = f'echo reproof >> "$ORDER"; {LEFT.format(at=vw, step="reproof")}; echo "REPROOF COPY: PASS"'
-    rc, lines, order, _limits = _follow(tmp_path, composite, records_audit=COMPOSED_AUDIT, V2_CASE=v2,
-                                        REPROOF_CMD=reproof)
-    assert rc == 0 and order == ["audit", "period", "reproof", "record", "composite"], (lines, order)
+    rc, lines, order, _limits = _follow(tmp_path, composite, records_audit=COMPOSED_AUDIT,
+                                        V2_CASE="1" if keeps == "v2" else None, REPROOF_CMD=reproof)
+    steps = ["chain", "period-check"] if split else []
+    assert rc == 0 and order == ["audit", "period", *steps, "reproof", "record", "composite"], (lines, order)
     said = "V3C-CIRCUITS removed, the window's circuit files, recomposable and named by their pins: "
     heads = [x.split(" ")[0] for x in lines[5:]]
-    assert heads == ["V3C-AUDIT", "V3C-PERIOD", "V3C-CIRCUITS", "REPROOF", "RECORD", "COMPOSITE:",
-                     *["V3C-CIRCUITS"] * bool(last)], lines
-    assert lines[7] == said + first and (not last or lines[-1] == said + last), lines
-    kept = ["./audit/window/m1/circuit.txt"] if v2 else []
+    assert heads == ["V3C-AUDIT", "V3C-PERIOD", *(["CERTIFIER-CHAIN", "CERTIFIER-PERIOD"] if split else []),
+                     "V3C-CIRCUITS", "REPROOF", "RECORD", "COMPOSITE:", *["V3C-CIRCUITS"] * bool(last)], lines
+    assert lines[5 + heads.index("V3C-CIRCUITS")] == said + first and (not last or lines[-1] == said + last), lines
+    (copy,) = [f"./circuits/{p['sha512']}.txt" for p in json.loads((vw / "period.json").read_text())["circuits"]]
+    kept = {None: [], "v2": ["./audit/window/m1/circuit.txt"], "certifier": [copy]}[keeps]
     left = [(tmp_path / f"order.left-{s}").read_text().split() for s in ("reproof", "composite")]
     assert left == [kept, kept]
-    assert not list(vw.rglob("circuit.txt")) and (vw / "audit" / "window" / "m0-private.bin").read_bytes() == b"\x01"
+    assert not list(vw.rglob("circuit.txt")) and not list((vw / "circuits").iterdir())
+    assert (vw / "audit" / "window" / "m0-private.bin").read_bytes() == b"\x01"
 
 
 #: the network certifier's kept run in `_deferred`'s serve dir: the gate's fetch and the front's session

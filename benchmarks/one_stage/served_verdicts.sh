@@ -231,7 +231,8 @@
 # node's tree (another only with FOLLOW_ANY_TREE=1, which its WINDOW-CIRCUIT line names, since it reads that tree's
 # window-circuit record), needs no row dir, vLLM venv, card or gpu-lease, runs the split certifier's chain and period
 # check after V3c's audit (their answer and case in its own $OUT/pieces/certifier), then removes the window's circuit
-# files, which nothing after reads but the composite a v2 case's (`drop_circuits`, its V3C-CIRCUITS line), then runs
+# files, which nothing after reads but the composite those its cases name (a v2 case's, the network certifier's period's;
+# `drop_circuits`, its V3C-CIRCUITS line), then runs
 # REPROOF_CMD where it is set (`bash -c CMD _ D K VW` in TREE, its log the serve dir's private/reproof.log and its last
 # line the REPROOF line: a command that copies the serve dir's re-proof inputs off the node and writes REPROOF_LISTING, and fails the
 # follow-on where it fails; it runs whatever V3c's audit gave, a failed audit's inputs kept as well), composes the
@@ -599,7 +600,8 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
 }
 # V3c's audit as one compute audit of the network certifier's period: $VW/period.json and $VW/circuits, each circuit file
 # copied into $OUT/v3c-audit/circuits but one over CIRCUIT_OUT_MAX bytes (default 1 GB), which is left where V3c composed
-# it, never in $OUT or custody: period.json names it by its SHA-512, recomposable from the registration and its template
+# it, never in $OUT or custody: period.json names it by its SHA-512, recomposable from the registration and its template.
+# $VW/circuits goes with the window's other circuit files (`drop_circuits`), after the composite where a case names them
 v3c_period() {
   (cd "$TREE" && env -u PYTHONPATH "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py period --window "$VW/window" \
     --audit "$VW/audit" --pins "$WREG" --out "$VW/period.json" --circuits "$VW/circuits") > "$VLOG/period.log" 2>&1
@@ -994,15 +996,19 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
 # copies under circuits/), recomposable from the public registration and the templates, the audit's window/summary.json
 # naming each by the SHA-512 its sessions were held to: removed once the period check has read them, before the re-proof
 # copy (whose inputs name the circuit by that pin alone) and the node's next window; with $1 all, also a file the audit's
-# v2 case names (window/case-v2.json's blobs), which the composite reads first.
+# v2 case names (window/case-v2.json's blobs) or the network certifier's case does (its period's circuits/ copies, which
+# $OUT/pieces/certifier/case.json's circuits name), each of which the composite reads first.
 drop_circuits() {
   local said
-  said=$("$SAY_PY" - "$VW" "${1:-}" <<'EOF'
+  said=$("$SAY_PY" - "$VW" "${1:-}" "$OUT/pieces/certifier/case.json" <<'EOF'
 import json, os, sys
 from pathlib import Path
 vw, keep = Path(sys.argv[1]), set()
-if sys.argv[2] != "all" and (v2 := vw / "audit" / "window" / "case-v2.json").is_file():
-    keep = {os.path.realpath(b) for b in json.loads(v2.read_text())["blobs"]}
+if sys.argv[2] != "all":
+    if (v2 := vw / "audit" / "window" / "case-v2.json").is_file():
+        keep |= {os.path.realpath(b) for b in json.loads(v2.read_text())["blobs"]}
+    if (cert := Path(sys.argv[3])).is_file():
+        keep |= {os.path.realpath(c) for c in json.loads(cert.read_bytes()).get("circuits") or ()}
 gone = held = freed = 0
 for dp, _, fs in os.walk(vw):
     for f in fs:
@@ -1016,7 +1022,7 @@ for dp, _, fs in os.walk(vw):
         p.unlink()
         gone, freed = gone + 1, freed + (st.st_size if st.st_nlink == 1 else 0)
 if gone or held:
-    print(f"{gone} file{'s' * (gone != 1)}, {freed} bytes freed" + (f"; {held} the v2 case names, after the composite" if held else ""))
+    print(f"{gone} file{'s' * (gone != 1)}, {freed} bytes freed" + (f"; {held} the composite's cases name, after it" if held else ""))
 EOF
 )
   local rc=$?
