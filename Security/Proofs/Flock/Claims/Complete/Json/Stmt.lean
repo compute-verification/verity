@@ -18,7 +18,7 @@ to the statement's instances (`DrawOk`), and the statement's draw is the one it 
 setup alone, with no premise on the JSON library: the verifier keeps what it parsed rebuilt (`Flock.norm`), and the coin
 tree its coins name.
 
-* The plain verifier's coins are the OS's or a seed's (`Raw.ins`: only `--zk` keys a coin tree), and the statement
+* The plain verifier's coins are a seed's (`Raw.ins`: only `--zk` keys a coin tree), and the statement
   keeps the coins' tree (`Stmt.coinTree`, `setupOne_stmt`), so it names none (`tree?_none`). The scope check
   (`ProvedScope.check`) reads no coins, so it is `Raw.ins`, not the scope, that keeps a keyed coin tree out of the plain
   verifier's statements.
@@ -43,10 +43,9 @@ open private stratumOfJson from Flock.Draw
 
 /-! ## The statement's inputs -/
 
-/-- What `Raw.ins` reads: the masked verifier or not, the plain verifier's coins (the OS's or a seed's), and the
-draw. -/
+/-- What `Raw.ins` reads: the masked verifier or not, the plain verifier's coins (a seed's), and the draw. -/
 theorem Raw.ins_read {w : Raw} {s : Ins} (h : w.ins = .ok s) :
-    s.read.zk = w.zk ∧ (w.zk = false → s.read.I.coins = .os ∨ s.read.I.coins = .seed) ∧
+    s.read.zk = w.zk ∧ (w.zk = false → s.read.I.coins = .seed) ∧
       ∃ draw, w.draw.mapM (jsonOf "draw") = .ok draw ∧ s.read.draw = draw.map Flock.norm := by
   refine ⟨Raw.ins_zk h, ?_, Raw.ins_draw h⟩
   unfold Raw.ins at h
@@ -333,10 +332,10 @@ theorem good_arr_strs (a : Array String) : Good (Json.arr (a.map Json.str)) :=
     obtain ⟨y, -, rfl⟩ := Array.mem_map.1 hx
     exact .str _
 
-/-- **The plain verifier's coins name no coin tree**: the OS's coins or a seed's (`Coins.tree?`), which the statement
-keeps as its `coinTree`. -/
-theorem tree?_none {coins : Coins} (hc : coins = .os ∨ coins = .seed) : coins.tree? = none := by
-  rcases hc with rfl | rfl <;> rfl
+/-- **The plain verifier's coins name no coin tree**: a seed's (`Coins.tree?`), which the statement keeps as its
+`coinTree`. -/
+theorem tree?_none {coins : Coins} (hc : coins = .seed) : coins.tree? = none := by
+  subst hc; rfl
 
 /-! ## A stratified draw that decodes is printable -/
 
