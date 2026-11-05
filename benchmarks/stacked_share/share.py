@@ -14,7 +14,8 @@ products are the attention row's Q′K′ᵀ, H·D a (query row, key) pair, and 
 s8 step's `PAD` (`products_coefficients`, as `products_pass.py` counts the Program), and nothing else's: a MAC by a weight is
 a linear map, free.
 
-R_cap comes from `units.py`'s units for one model and a served trace (`benchmarks/serve_bandwidth/mix.py`'s mix.json). A step's
+R_cap comes from `units.py`'s units for one model and a served trace's mix.json (each engine step's timed span and
+scheduled rows, with the trace's arguments and the KV pool's size). A step's
 units are
 
     token T + sample X + A (r0 T + b_q Q + b_kv K + w0 n + w_start n0 + b_qp Qp)

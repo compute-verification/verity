@@ -435,11 +435,9 @@ def _lookup(cache: Path, repo: Path, e: Entry) -> tuple[dict, dict[str, list[str
 
 def _took(record: Path) -> float | None:
     """The CPU seconds of the build that last stored the record at ``record``, kept beside it (`store`); None when none was."""
-    try:
-        with CC.internal():
-            return float(record.with_suffix(".seconds").read_text())
-    except (OSError, ValueError):
-        return None
+    seconds = record.with_suffix(".seconds")
+    with CC.internal():
+        return float(seconds.read_text()) if seconds.is_file() else None
 
 
 @dataclass
