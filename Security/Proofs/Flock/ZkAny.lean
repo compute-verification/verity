@@ -41,6 +41,7 @@ public import Proofs.Flock.ZkAny.RelayLast
 public import Proofs.Flock.ZkAny.RelayGap
 public import Proofs.Flock.ZkAny.RelayAlg
 public import Proofs.Flock.ZkAny.RelayFresh
+public import Proofs.Flock.ZkAny.RelayLoop
 
 /-! Zero knowledge at any values: the generic forms, a table's and a release of `J` tables behind the ZK server's
 checks, the ZK server's check as the gate a table's file leaves behind, a release at coins it refuses, the release
@@ -73,6 +74,7 @@ round comes next, its frame its run, holding the history's words for its rounds 
 after a stream's last round, until the next stream's first, the rep's frame kept, holding the history's words for all
 the stream's rounds, as many as its count; and on a frame with no scheduled rounds yet, its algebraic phase as many
 rounds as the placeholder's; and at a stream's first round on a frame as its start pushed it, its round in the place
-its schedule so far gives and the frame after it keeping that schedule. -/
+its schedule so far gives and the frame after it keeping that schedule; and `EnvPre` from the relay's invariant at
+the deployed loop, given its step at the model's slots, the step at every other slot proved. -/
 
 @[expose] public section
