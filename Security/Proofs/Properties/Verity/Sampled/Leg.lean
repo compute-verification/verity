@@ -144,6 +144,7 @@ theorem ks (hB : UnboundFaulty) {r : Verity.FileRead} (hr : r = A.fileRead)
     (tr : r.circuit.Transcript) (τ : FlockSoundness.Game.Strategy A.game) (htr : HEq tr (A.extract τ)) (t : ℕ)
     (hF : A.FinderCR τ t) (hI : ¬ Accounting.IntegrityHolds r.parts op tr A.ε) :
     Verity.Game.prob (fun o => LiveAcceptsZKP A.I A.own o) A.game τ ≤ A.sessionDelta t := by
+  classical
   subst hr
   obtain rfl := eq_of_heq htr
   have hns : (Flock.Bridge.nsOf A.desc A.qr).sum = A.n := Flock.Bridge.nsOf_sum A.hpop
@@ -169,7 +170,8 @@ theorem ks (hB : UnboundFaulty) {r : Verity.FileRead} (hr : r = A.fileRead)
         ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg A.Cd
           ((Flock.Bridge.designOf (_root_.Properties.SampledProofs.oneStageOf A.law)).Pa A.part Fs) A.stmt A.part w)
         A.game τ :=
-    Verity.Game.prob_mono (fun o ho => ⟨ho, fun hR => lt_irrefl _ hR⟩) _ τ
+    Verity.Game.prob_mono (fun o ho => ⟨ho, fun hR =>
+      lt_irrefl ((Flock.Bridge.designOf (_root_.Properties.SampledProofs.oneStageOf A.law)).Pa A.part Fs) hR⟩) _ τ
   refine (hmono.trans hv).trans (add_le_add (add_le_add ?_ ?_) le_rfl)
   · unfold Live.drawMiss
     rw [Flock.Bridge.pa_partOf A.P hns _ Fs hFs]
