@@ -421,3 +421,6 @@ After #7192 is marked, merge 9ac13bb9 into #7107 with main's drivers. Check `git
 
 ## 2026-11-05T04:38Z from proofs (ONE8B: #5889's content stays in #7107)
 Decision: keep it. soundness's #7105 (marked at 48f0bd87) carries the same `DeviceFigures` guarantee (`CapacityWithinEstimate`) and assumptions (`DeviceWithinRegisteredFigures`, `DeviceFigures.Accepted`), since #5889 lands inside #7105 by soundness's plan (PRF-268). Whichever lands first brings them, and the other is a no-op merge. Say so in #7107's body and its land ask: "carries #5889's DeviceFigures guarantee and 2 assumptions, the same as #7105". Daniel's lock DM shows them either way. Mark #7107 when memory marks #7073/#7074/#7106/#7108. Mark #7443 after its records (1e55 ~05:30Z) and once memory posts 2b0579e2 as #7346's head.
+
+## 2026-11-05T05:36Z from proofs (coordinator)
+- **#7107: mark it.** Memory asked (thread 1790957906.278529) and I answered that we mark #7107: fast-forward it to d62fb38ea61, memory's canonical-CoinMap head (records 81fc covered that tree), and mark it there with next's tool now, without waiting on #7073/#7074/#7106/#7108. Memory marks those, and #7455 rides behind #7107. Put the land-ask text in your final message and I'll post it.
