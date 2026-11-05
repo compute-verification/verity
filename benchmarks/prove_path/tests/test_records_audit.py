@@ -16,7 +16,8 @@
   (`pinned`), and refused before any draw without them, a record that lists its members (a served window's) as one that
   states them; one whose program takes values only tied to the earlier registration that registered them first
   (`tie_of`), its readers' reads registered at that record's roots;
-* a window's audit is one compute audit of the network certifier's period (`period`), its scan state's reads registered;
+* a window's audit is one compute audit of the network certifier's period (`period`), its scan state's reads registered
+  and each template's circuit file named by the pin its sessions were held to;
 * `source` and the negatives refuse what the records don't bind, and `fixed_before_draw` refuses advice re-committed after
   the coins;
 * the gate's coins (``--challenger gate:USER@HOST``) reach the challenger's session with the peer and the key record;
@@ -751,13 +752,22 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
 
 
 def _audited(window: Path, out: Path, registration: dict | None = None, accepted: bool = True) -> Path:
-    """What the records audit leaves under its ``--out`` ``out`` for ``window``: the population Program it sampled, its
+    """What the records audit leaves under its ``--out`` ``out`` for ``window``: the population Program it sampled, a5's
+    summary of its members and each template's circuit file (a stand-in's bytes) at its first member under its pin, its
     summary, and an audit record of ``registration`` (default the window's) accepting a subset sample of 2 proof blocks;
     or, not ``accepted``, a check before the sample that failed."""
     mine, _doc, _sets = RA.verifier_window(window, D.parse_law(LAW), None)
     rec = registration or json.loads((window / "registration.json").read_text())
     (out / "window").mkdir(parents=True)
     (out / "window" / "program.json").write_bytes(canonical_json(encode_program(mine.program)))
+    members, circuits = [{"k": k, "template": m.template, "n": m.n, "base": m.base} for k, m in enumerate(mine.members)], {}
+    for m in members:
+        if m["template"] not in circuits:
+            text = f"flock-ir-unit/v2 stand-in of {m['template']}\n".encode()
+            (out / "window" / f"m{m['k']}").mkdir()
+            (out / "window" / f"m{m['k']}" / "circuit.txt").write_bytes(text)
+            circuits[m["template"]] = {"pin": hashlib.sha512(text).hexdigest()}
+    (out / "window" / "summary.json").write_text(json.dumps({"members": members, "circuits": circuits}))
     if not accepted:
         (out / "summary.json").write_text(json.dumps({"checks_before_draw": {"registration": False}}))
         return out
@@ -774,17 +784,22 @@ def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_register
     """`period`: a window whose circuit reads its own scan state (`RA.TIED`) gives the network certifier's period its
     registration, the Program the audit sampled (the one the registration names), the audit's answer, ``steps`` 0 and
     ``free``: the audit's count, but with the state's reads registered (the period ties them to its scan's state tree),
-    where the audit's own count leaves them free. ``records_audit.py period`` writes the same and says it in one line.
-    Refused by name: a registration binding a compiler or an advice (bound at a root, it falls in no term of K), a window
-    that commits no scan state, a circuit the registration doesn't bind, an audit that wrote no Program or another than the
-    registration names, an answer committing to another registration, and an audit that opened the advice
-    (``--opening``, a development check)."""
+    where the audit's own count leaves them free; and ``circuits``, its template's C-Flock circuit file by the pin a5 held
+    its sessions to. ``records_audit.py period`` writes the same, each circuit file into ``--circuits`` under its SHA-512,
+    and says it in one line. Refused by name: a registration binding a compiler or an advice (bound at a root, it falls
+    in no term of K), a window that commits no scan state, a circuit the registration doesn't bind, an audit that wrote no
+    Program or another than the registration names, one that wrote no summary of its members' circuits, a template with
+    no circuit file or one that isn't its pin, an answer committing to another registration, and an audit that opened the
+    advice (``--opening``, a development check)."""
     got = _registered(tmp_path / "w", name=RA.TIED, own=True)
     audit = _audited(got.dir, tmp_path / "a")
     rec, doc = (json.loads((got.dir / f).read_text()) for f in ("registration.json", "circuit.json"))
     p = RA.period(got.dir, audit, {})
     per_unit = sum(16 * w for _p, w in IF.layout(COORD).rows)
     assert p["free"] == 8 * per_unit - 8 * 8 * K and p["steps"] == 0
+    circuit = (audit / "window" / "m0" / "circuit.txt").read_bytes()
+    pin = json.loads((audit / "window" / "summary.json").read_text())["circuits"][TID]["pin"]
+    assert p["circuits"] == [{"template": TID, "sha512": pin}] and hashlib.sha512(circuit).hexdigest() == pin
     assert p["registration"] == rec and p["answer"] == SI.answer(audit, rec) and p["answer"]["verdict"] == "accept"
     assert program_digest(p["program"]) == rec["program"] and p["answer"]["commitment"] == R.digest(rec)
     ties, untied = RA.window_pins(rec["window"], doc)
@@ -792,8 +807,11 @@ def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_register
     audited = RA.declared_count(doc, 0, pins=RA.pin_roots(untied), roots=RA.window_roots(rec["window"]), untied=set(untied))
     assert audited["free"] == 8 * per_unit and audited["untied"] == [RA.TIED]
     capsys.readouterr()
-    assert RA.main(["period", "--window", str(got.dir), "--audit", str(audit), "--out", str(tmp_path / "p.json")]) == 0
+    assert RA.main(["period", "--window", str(got.dir), "--audit", str(audit), "--out", str(tmp_path / "p.json"),
+                    "--circuits", str(tmp_path / "c")]) == 0
     assert json.loads((tmp_path / "p.json").read_text()) == p
+    assert [(f.name, f.read_bytes()) for f in (tmp_path / "c").iterdir()] == [(f"{pin}.txt", circuit)]
+    assert (tmp_path / "c" / f"{pin}.txt").samefile(audit / "window" / "m0" / "circuit.txt")
     assert json.loads(capsys.readouterr().out.splitlines()[-1].removeprefix("PERIOD ")) == {
         "verdict": "accept", "reason": None, "free": p["free"], "commitment": R.digest(rec), "program": rec["program"]}
     refused = RA.period(got.dir, _audited(got.dir, tmp_path / "r", accepted=False), {})["answer"]
@@ -803,12 +821,15 @@ def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_register
     unbound = tmp_path / "u"
     shutil.copytree(got.dir, unbound)
     (unbound / "circuit.json").write_text(json.dumps({**doc, "name": "other"}))
-    bare, renamed = tmp_path / "b", tmp_path / "n"
-    for d in (bare, renamed):
+    bare, renamed, unsummed, uncomposed, edited = (tmp_path / x for x in ("b", "n", "s", "nc", "e"))
+    for d in (bare, renamed, unsummed, uncomposed, edited):
         shutil.copytree(audit, d)
     (bare / "window" / "program.json").unlink()
     (renamed / "window" / "program.json").write_text(json.dumps({**p["program"], "name": "other"}))
-    compiled, advised = tmp_path / "c", tmp_path / "v"
+    (unsummed / "window" / "summary.json").unlink()
+    (uncomposed / "window" / "m0" / "circuit.txt").unlink()
+    (edited / "window" / "m0" / "circuit.txt").write_bytes(circuit + b"\n")
+    compiled, advised = tmp_path / "cw", tmp_path / "v"
     for d, binds in ((compiled, {"compiler": {"name": "c", "digest": "00" * 64}}),
                      (advised, {"advice": {"root": "00" * 64, "bits": 8}})):
         shutil.copytree(got.dir, d)
@@ -820,6 +841,9 @@ def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_register
             (unbound, audit, "is not the circuit record the registration binds"),
             (got.dir, bare, "wrote no Program"),
             (got.dir, renamed, "isn't the one the registration names"),
+            (got.dir, unsummed, "wrote no summary of its members' circuits"),
+            (got.dir, uncomposed, f"composed no circuit for template {TID}"),
+            (got.dir, edited, "hashes to another than its pin"),
             (got.dir, _audited(got.dir, tmp_path / "o", {**rec, "window": {**rec["window"], "label": "other"}}),
              "commits to another registration than the window's")]:
         with pytest.raises(ValueError, match=why):
@@ -830,8 +854,10 @@ def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_register
                                                      "compile": {"ok": True}}))
     with pytest.raises(RuntimeError, match=r"opened the advice \(records_audit.py audit --opening\)"):
         RA.period(got.dir, opened, {})
-    assert RA.main(["period", "--window", str(unbound), "--audit", str(audit), "--out", str(tmp_path / "q.json")]) == 1
+    assert RA.main(["period", "--window", str(unbound), "--audit", str(audit), "--out", str(tmp_path / "q.json"),
+                    "--circuits", str(tmp_path / "qc")]) == 1
     assert "records_audit.py period: " in capsys.readouterr().err and not (tmp_path / "q.json").exists()
+    assert not (tmp_path / "qc").exists()
 
 
 def test_a_window_with_its_wires_order_gives_the_period_its_circuit_record_order_and_held_pins(tmp_path):
@@ -890,15 +916,45 @@ def test_a_period_counts_an_io_shell_window_in_a_process_that_loaded_no_registry
     shell's `ScanSlots_v2` beside the coordinates that read its scan state. `ScanSlots_v2` is a registry Definition,
     which `interface.resolve`'s own walk doesn't import, so the period resolves the circuit's templates in Verity's
     whole catalog (`catalog_resolve`): it counts the shell's state rows free beside the coordinates' own, where
-    `interface.resolve` alone refuses the window ("names no Definition in Verity's catalog")."""
+    `interface.resolve` alone refuses the window ("names no Definition in Verity's catalog"). Its circuits are the two
+    templates', in its root's node order."""
     got = _io_shell_window(tmp_path / "w")
     audit = _audited(got.dir, tmp_path / "a")
     p = subprocess.run([sys.executable, str(HERE.parent / "records_audit.py"), "period", "--window", str(got.dir),
-                        "--audit", str(audit), "--out", str(tmp_path / "p.json")], capture_output=True, text=True)
+                        "--audit", str(audit), "--out", str(tmp_path / "p.json"), "--circuits", str(tmp_path / "c")],
+                       capture_output=True, text=True)
     assert p.returncode == 0, p.stderr[-3000:]
     coord, state = (sum(16 * w for _p, w in IF.layout(fn).rows) for fn in (COORD, got.shell))
     period = json.loads((tmp_path / "p.json").read_text())
     assert period["free"] == 8 * coord - 8 * 8 * K + 3 * state and period["answer"]["verdict"] == "accept"
+    assert [c["template"] for c in period["circuits"]] == [TID, descriptor_id(got.shell)]
+    assert sorted(f.name for f in (tmp_path / "c").iterdir()) == sorted(f"{c['sha512']}.txt" for c in period["circuits"])
+
+
+def test_a_periods_circuits_are_a_file_for_each_root_template_node_in_the_roots_order(tmp_path):
+    """`period_circuits` names a circuit file for each root template node of the audit's Program, in its root body's
+    order, as the period check reads them (``templateNodes``, which refuses a partial list or another order): a template
+    the root calls twice is named twice, by its one composed file, and a node calling a primitive not at all. A root
+    template the audit composed no file for is refused by name."""
+    w, pins = tmp_path / "window", {}
+    for k, t in ((0, "B_v1"), (1, "A_v1")):
+        text = f"flock-ir-unit/v2 stand-in of {t}\n".encode()
+        (w / f"m{k}").mkdir(parents=True)
+        (w / f"m{k}" / "circuit.txt").write_bytes(text)
+        pins[t] = hashlib.sha512(text).hexdigest()
+    members = [{"k": 0, "template": "B_v1", "n": 2, "base": 4}, {"k": 1, "template": "A_v1", "n": 4, "base": 0}]
+    (w / "summary.json").write_text(json.dumps({"members": members, "circuits": {t: {"pin": p} for t, p in pins.items()}}))
+    program = {"root": "Root_v1", "callees": ["A_v1", "add", "B_v1", "C_v1"],
+               "definitions": {"Root_v1": {"form": "composite", "body": {"nodes": [{"fn": f} for f in (0, 1, 2, 0)]}},
+                               "A_v1": {"form": "composite"}, "B_v1": {"form": "composite"}, "C_v1": {"form": "composite"},
+                               "add": {"form": "primitive"}}}
+    assert RA.root_templates(program) == ["A_v1", "B_v1", "A_v1"]
+    got = RA.period_circuits(tmp_path, program)
+    assert [(t, pin) for t, pin, _f in got] == [("A_v1", pins["A_v1"]), ("B_v1", pins["B_v1"]), ("A_v1", pins["A_v1"])]
+    assert [f for _t, _pin, f in got] == [w / "m1" / "circuit.txt", w / "m0" / "circuit.txt", w / "m1" / "circuit.txt"]
+    program["definitions"]["Root_v1"]["body"]["nodes"].append({"fn": 3})
+    with pytest.raises(ValueError, match="composed no circuit for template C_v1"):
+        RA.period_circuits(tmp_path, program)
 
 
 def test_a_windows_committed_activations_are_held_to_domains_binding_its_run():

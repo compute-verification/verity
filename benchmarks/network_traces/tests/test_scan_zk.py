@@ -563,7 +563,12 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     slot entries) as the scan, the block's audit (its descriptor, free inputs and no steps; its registration, whose
     ``SlotEntry_v1{…}/c<j>/o0`` is lane j's ``scan/prog<j>`` root and domain and whose ``scan/state`` is the scan's, and
     its answer), the registration, and its answer, three records' certificates (requests, responses, fails: its own)
-    and two row registrations, each named by the registration's roots. The period's mirror reads the block's
+    and two row registrations, each named by the registration's roots, and the scan's circuit files a file each of the
+    scan's root templates in node order, here as `period_case.circuit_file` lays each out. Given those files the
+    mirror refuses the honest case at the block's audit, which the scan ties and which lists none
+    (`scan_period.UNLISTED`), and with no audit (`scan_period.untied`) at `scan_period.UNTIED`, the files having passed
+    `SampledProofs.Bits.check`, or at the files when two are out of order; without them it is the check that reads
+    none, which refuses the case with its listing (`scan_period.unlisted`'s keeps none). That check reads the block's
     `SlotEntry_v1` template's entries off its descriptor, a stand-in whose closure digest is no pinned Definition's
     (`period_case.SLOT_ENTRY_PINS`), and refuses the honest case at the wiring (`period_case.UNWIRED`); with that digest
     pinned it accepts it, its scan's terms read off the test class's own templates with no free inputs, while the run
@@ -597,6 +602,13 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     sz.entry_reads(program, query, members, cls, nb)
     (scan / "joint").mkdir(parents=True)
     (scan / "joint" / "program.json").write_bytes(canonical_json(encode_program(program)))
+    desc = json.loads((scan / "joint" / "program.json").read_text())
+    texts = {tp: PC.circuit_file(desc, sz.PA.template_id(defs[tp]), None).encode() for tp in sz.TEMPLATES}
+    for tp, text in texts.items():
+        (scan / "joint" / tp).mkdir()
+        (scan / "joint" / tp / "circuit.txt").write_bytes(text)
+    stagers = {f"joint/{tp}": {"template": sz.PA.template_id(defs[tp]), "pin": hashlib.sha512(text).hexdigest(),
+                               "base": k} for k, (tp, text) in enumerate(texts.items())}
     trs, st = [h.at.trees[p] for p in sz.lane_kinds(cls)], h.at.trees["state"]
     progs = [{"root": tr.root.hex(), "leaves": nb, "domain": sz.ADV.domain(tr.binding, nb).domain_id.hex()}
              for tr in trs]
@@ -640,24 +652,29 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
         {"window": 0, "answer": answer, "registrations": registrations}]}
     (scan / "answers.json").write_text(json.dumps(doc))
     (scan / "summary.json").write_text(json.dumps({"rounds": {r: {"audit": {"why": {"x": "y"}}}
-                                                              for r in ("tampered", "chain")}}))
+                                                              for r in ("tampered", "chain")}, "stagers": stagers}))
     dep, regs = json.loads((run / "deployment.json").read_text()), _cells(run)
     auditors = SP.WC.own_record(run)
     case = SP.rows_case(run, scan, record=auditors)
     p = case["params"]
-    assert sorted(p) == PC.ROWS_PARAMS_KEYS
+    assert sorted(p) == PC.ROWS_LISTED_KEYS
     assert (p["key"], p["session"], p["schedule"], p["link"]) == (dep["key"]["public"], dep["session"], dep["params"],
                                                                   WS.LINK)
     assert (p["program"], p["windows"], p["first"]) == (reg["program"], 1, 0)
-    caps = PC.params(p).schedule.caps(1)
+    pp, listing = PC.params_listed(p)
+    assert listing.audits == (None,) and listing.scan.files == tuple(stagers[f"joint/{tp}"]["pin"]
+                                                                     for tp in sz.TEMPLATES)
+    caps = pp.schedule.caps(1)
     assert p["cells"] == caps == [sz.TEST.params.egress_cells] * (sz.TEST.params.lanes * T) and caps
     assert p["audits"] == [{"program": encode_program(block), "steps": 0}]
-    assert PC.params(p).audits[0].free == E * sz.IS.entry_bits(cls)
+    assert pp.audits[0].free == E * sz.IS.entry_bits(cls)
     key = sz.PA.template_id(defs["block"])
     digest = PC.slot_entry_digest(encode_program(block), key)
-    assert PC.params(p).audits[0].entries == ((key, E, digest),) and E == T // cls.EVERY * cls.NR
+    assert pp.audits[0].entries == ((key, E, digest),) and E == T // cls.EVERY * cls.NR
     assert digest not in PC.SLOT_ENTRY_PINS
     assert p["scan"] == json.loads((scan / "joint" / "program.json").read_text())
+    assert p["scan_circuits"] == [{"sha512": stagers[f"joint/{tp}"]["pin"], "template": sz.PA.template_id(defs[tp])}
+                                  for tp in sz.TEMPLATES]
     assert p["jitter"] == SP.LB.JITTER_BOUND
     assert json.loads(bytes.fromhex(case["commitment"])) == {"audits": [audit["registration"]], "windows": [reg]}
     ev = json.loads(bytes.fromhex(case["evidence"]))
@@ -675,14 +692,26 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
 
     ins = {tp: sum(w(b) for _, b in ports[tp][0]) for tp in ports}
     # each parameter and each return field on whole 16-bit words of its own, o0 one
-    assert PC.params(p).scan == PC.Scan(
+    assert pp.scan == PC.Scan(
         T, 0, PC.vu_bits(1, max(ins["first"], ins["ingress"] if T > 1 else 0) + 1 + w(bits["first"]["o1"])
                          + w(bits["first"]["o2"])),
         PC.vu_bits(1, ins["egress"] + 1 + w(bits["egress"]["o1"])), E * bits["first"]["prog0"])
-    out = PC.reference(case)
+
+    def reference(c: dict) -> dict:
+        return PC.reference(SP.unlisted(c))
+
+    out = reference(case)
     assert (out["verdict"], out["reason"]) == ("reject", f"window 0: {PC.UNWIRED}"), out
+    files = [texts[tp].decode() for tp in sz.TEMPLATES]
+    assert "lists circuit files" in PC.reference(case)["reason"]
+    out = PC.reference_with(case, files)
+    assert out["verdict"] == "reject" and SP.UNLISTED in out["reason"], out
+    out = PC.reference_with(SP.untied(case), files)
+    assert (out["verdict"], out["reason"]) == ("reject", f"window 0: {SP.UNTIED}"), out
+    out = PC.reference_with(SP.untied(case), [files[1], files[0], *files[2:]])
+    assert out["verdict"] == "reject" and out["reason"].startswith("circuit files:"), out
     monkeypatch.setattr(PC, "SLOT_ENTRY_PINS", (*PC.SLOT_ENTRY_PINS, digest))
-    out = PC.reference(case)
+    out = reference(case)
     assert (out["verdict"], out["public"]["windows"], out["public"]["scans"][0]["units"]) == ("accept", 1, 2 * T), out
     assert p["circuit"] == audit["registration"]["program"]
     window_record = tmp_path / "window-circuit.json"
@@ -691,7 +720,7 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     with pytest.raises(SystemExit, match="deployment.json names another key than the auditor's record's$"):
         SP.rows_case(resigned, scan, record=auditors)
     (resigned / "deployment.json").write_bytes((run / "deployment.json").read_bytes())
-    got = PC.reference(SP.rows_case(resigned, scan, record=auditors))
+    got = reference(SP.rows_case(resigned, scan, record=auditors))
     why = "window 0: certificates (none of a window in which the network certifier refused a connection)"
     assert (got["verdict"], got["reason"]) == ("reject", why), got
     summary = json.loads((scan / "summary.json").read_text())
@@ -699,38 +728,38 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
         (v3c := tmp_path / f"period-subset-{k}.json").write_text(json.dumps(sampled := block_audit(progs, sampled=k)))
         (scan / "summary.json").write_text(json.dumps({**summary, "v3c": {
             "registration": R.digest(sampled["registration"])}}))
-        got = PC.reference(SP.rows_case(run, scan, v3c=v3c, circuit=SP.circuit_of_record(window_record),
+        got = reference(SP.rows_case(run, scan, v3c=v3c, circuit=SP.circuit_of_record(window_record),
                                          record=auditors))
         assert (got["verdict"], got["public"]["audits"][0]["drawn"], got["public"]["audits"][0]["units"]) == (
             "accept", k, E), got
         assert got["public"]["held"] == ["circuit", "free"], got
-        got = PC.reference(SP.rows_case(run, scan, v3c=v3c, circuit="ab" * 64, record=auditors))
+        got = reference(SP.rows_case(run, scan, v3c=v3c, circuit="ab" * 64, record=auditors))
         assert (got["verdict"], got["reason"]) == ("reject", f"window 0: {PC.UNHELD}"), got
     with pytest.raises(SystemExit, match="held to the verifier's own window-circuit record"):
         SP.rows_case(run, scan, v3c=v3c, record=auditors)
-    refused = {r: PC.reference(SP.rows_case(run, scan, r, record=auditors)) for r in ("forged", "tampered", "chain")}
+    refused = {r: reference(SP.rows_case(run, scan, r, record=auditors)) for r in ("forged", "tampered", "chain")}
     assert {r: (a["verdict"], a["reason"]) for r, a in refused.items()} == {
         "forged": ("reject", "window 0: certificates (none of a window in which the network certifier refused a "
                    "connection)"), "tampered": ("reject", "window 0: registration"),
         "chain": ("reject", "window 0: service: the scan's chain round refused: {'x': 'y'}")}
     elsewhere = [{**o, "root": "dd" * 64} for o in progs]
     (scan / "answers.json").write_text(json.dumps({**doc, "audits": [block_audit(elsewhere)]}))
-    got = PC.reference(SP.rows_case(run, scan, record=auditors))
+    got = reference(SP.rows_case(run, scan, record=auditors))
     assert (got["verdict"], got["reason"]) == ("reject", "window 0: the scan's prog is no compute audit's output")
     at_o1 = [q[:-1] + "1" for q in entries]
     for unwired in ([*progs[1:], progs[0]], [progs[0], {**progs[1], "root": "dd" * 64}], progs[:1]):
         (scan / "answers.json").write_text(json.dumps({**doc, "audits": [block_audit(unwired, entries[:len(unwired)])]}))
-        got = PC.reference(SP.rows_case(run, scan, record=auditors))
+        got = reference(SP.rows_case(run, scan, record=auditors))
         assert (got["verdict"], got["reason"]) == ("reject", f"window 0: {PC.UNWIRED}"), got
     (scan / "answers.json").write_text(json.dumps({**doc, "audits": [block_audit(progs, at_o1)]}))
-    got = PC.reference(SP.rows_case(run, scan, record=auditors))
+    got = reference(SP.rows_case(run, scan, record=auditors))
     assert (got["verdict"], got["reason"]) == ("reject", f"window 0: {PC.UNWIRED}"), got
     rows = [sz._bits(st, t) for t in range(T)]
     skipped = sz.tree("state", rows[:sz.TEST.A + 1] + rows[sz.TEST.A + 2:] + rows[-1:],
                       [w.head for w in h.at.sides["ingress"]], h.at.session)
     for scan_state in ({**state, "root": skipped.root.hex()}, None):
         (scan / "answers.json").write_text(json.dumps({**doc, "audits": [block_audit(progs, scan_state=scan_state)]}))
-        got = PC.reference(SP.rows_case(run, scan, record=auditors))
+        got = reference(SP.rows_case(run, scan, record=auditors))
         assert (got["verdict"], got["reason"]) == ("reject", f"window 0: {PC.UNSTATED}"), got
     off = {**win, "reads": {"scan/state": {**reads, "sin": {**reads["sin"], "leaf": 2}}}}
     unpinned = {**win, "empty": {"scan/state": {**empty, "salt": st.salts[1].hex()}}}
@@ -739,11 +768,61 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
         a = sz.window_answer(r, {**record, "registration": r}, sz.Fraction(1, 100), "unused")
         (scan / "answers.json").write_text(json.dumps({**doc, "registration": r, "windows": [
             {"window": 0, "answer": a, "registrations": registrations}]}))
-        got = PC.reference(SP.rows_case(run, scan, record=auditors))
+        got = reference(SP.rows_case(run, scan, record=auditors))
         assert (got["verdict"], got["reason"]) == ("reject", f"window 0: {why}"), got
     (scan / "answers.json").write_text(json.dumps({"registration": reg, "windows": [{"window": w} for w in (0, 1)]}))
     with pytest.raises(SystemExit, match="a group of 2 link-windows .* scan_zk.py --group 1"):
         SP.rows_case(run, scan, record=auditors)
+
+
+def test_the_scans_circuit_files_are_its_programs_root_templates_in_node_order_each_held_to_its_pin(tmp_path):
+    """`scan_period.scan_circuits`: a file each root template node of the scan's joint Program (``program.json``) calls,
+    in node order (not by the stagers' bases or the summary's key order), a primitive node none and a template called
+    twice twice, with its file and that file's SHA-512, the pin its sessions were held to; another round's stagers
+    aren't the Program's; a stager with no file, no template or pin, or a file of other bytes, and a root template node
+    whose template no stager composed, are refused by name."""
+    import scan_period as SP
+
+    scan, joint = tmp_path / "scan", sz.PROGRAMS[sz.TEMPLATES]
+    texts = {tp: f"flock-ir-unit/v2 {tp}\n".encode() for tp in sz.TEMPLATES}
+    for tp, text in texts.items():
+        (scan / joint / tp).mkdir(parents=True)
+        (scan / joint / tp / "circuit.txt").write_bytes(text)
+    pins = {tp: hashlib.sha512(text).hexdigest() for tp, text in texts.items()}
+    bases = {"egress": 0, "first": 6, "ingress": 7}
+    stagers = {f"{joint}/{tp}": {"template": f"t:{tp}", "pin": pins[tp], "base": bases[tp]} for tp in sz.TEMPLATES}
+    stagers[f"{sz.PROGRAMS[('egress',)]}/egress"] = {"template": "t:solo", "pin": "ab" * 64, "base": 0}
+
+    def program(*calls: str) -> None:
+        callees = ["Input8", "t:other", *(f"t:{tp}" for tp in sz.TEMPLATES)]
+        defs = {k: {"form": "primitive" if k == "Input8" else "composite"} for k in callees}
+        root = {"form": "composite", "body": {"nodes": [{"fn": callees.index(k)} for k in calls]}}
+        (scan / joint / "program.json").write_text(json.dumps({"root": "r", "callees": callees,
+                                                               "definitions": {**defs, "r": root}}))
+
+    def summary(s: dict) -> None:
+        (scan / "summary.json").write_text(json.dumps({"stagers": s}))
+
+    summary(stagers)
+    program("t:first", "Input8", "t:egress", "t:ingress", "t:egress")
+    assert SP.scan_circuits(scan) == [(f"t:{tp}", pins[tp], scan / joint / tp / "circuit.txt")
+                                      for tp in ("first", "egress", "ingress", "egress")]
+    program("t:first", "t:other")
+    with pytest.raises(SystemExit, match="composed no circuit for its Program's root template t:other"):
+        SP.scan_circuits(scan)
+    summary({})
+    with pytest.raises(SystemExit, match="staged no template of its Program"):
+        SP.scan_circuits(scan)
+    summary({**stagers, f"{joint}/first": {**stagers[f"{joint}/first"], "pin": None}})
+    with pytest.raises(SystemExit, match="composed no circuit for its template first"):
+        SP.scan_circuits(scan)
+    summary(stagers)
+    (scan / joint / "ingress" / "circuit.txt").write_bytes(texts["ingress"] + b"requests 2\n")
+    with pytest.raises(SystemExit, match="isn't the circuit template ingress's sessions were held to"):
+        SP.scan_circuits(scan)
+    (scan / joint / "ingress" / "circuit.txt").unlink()
+    with pytest.raises(SystemExit, match="composed no circuit for its template ingress"):
+        SP.scan_circuits(scan)
 
 
 def test_the_scan_leaves_out_each_members_refs_which_the_statement_fixes_and_still_scans_its_b_c(tmp_path):

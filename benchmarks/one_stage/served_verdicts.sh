@@ -138,10 +138,11 @@
 #     V3C_AUDIT_MEM_GB beside the running session's estimate (`a5.SESSION_BYTES_PER_CIRCUIT_BYTE`), a follow-on's default
 #     a5's LEAN_WORKERS, 3, within what its node has free beside that estimate (`a5.LeanPool`); then
 #     `records_audit.py period` writes the audit as the network certifier's period reads it ($D/v3c-w<K>-<class>/period.json,
-#     and a copy in $OUT/v3c-audit: the registration, the Program, its answer and its free inputs), and V3c fails where it
-#     writes none. The record reads that audit ($D/v3c-w<K>-<class>/audit, on the window commit's registration);
-#     $OUT/v3c-audit holds what it reads of it (`served_integrity.py public-copy`), the registration it audited and that
-#     period.json, nothing else (`kind_scan.V3C_DOCS`): the audit's logs and main's first-parent line stay in the serve
+#     and a copy in $OUT/v3c-audit: the registration, the Program, its answer, its free inputs and each template's
+#     circuit file by its SHA-512, the files in circuits/<sha512>.txt beside it), and V3c fails where it writes none. The
+#     record reads that audit ($D/v3c-w<K>-<class>/audit, on the window commit's registration); $OUT/v3c-audit holds what
+#     it reads of it (`served_integrity.py public-copy`), the registration it audited, that period.json and its circuit
+#     files, nothing else (`kind_scan.V3C_DOCS`): the audit's logs and main's first-parent line stay in the serve
 #     dir's private/v3c-audit. Under H1_TIE (below and at `v3c_audit`) the window commit is the one made at H1's close,
 #     its registration held to the record H1 bound and its circuit to the verifier's record reading H1's W's tables (step
 #     3 writes it after the classes, `window-circuit --window-registration W`), none is made here, and the audit is tied
@@ -612,12 +613,20 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
     || say "V3C-AUDIT: no RECORDS line; $(tail -3 "$VLOG/audit.err" | tr '\n' ' ' | cut -c1-800)"
   return $rc
 }
-v3c_period() {  # V3c's audit as one compute audit of the network certifier's period: $VW/period.json
+# V3c's audit as one compute audit of the network certifier's period: $VW/period.json and $VW/circuits, each circuit file
+# copied into $OUT/v3c-audit/circuits but one over CIRCUIT_OUT_MAX bytes (default 1 GB), which is left where V3c composed
+# it, never in $OUT or custody: period.json names it by its SHA-512, recomposable from the registration and its template
+v3c_period() {
   (cd "$TREE" && env -u PYTHONPATH "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py period --window "$VW/window" \
-    --audit "$VW/audit" --pins "$WREG" --out "$VW/period.json") > "$VLOG/period.log" 2>&1
-  local rc=$?
-  [ "$rc" = 0 ] && cp "$VW/period.json" "$OUT/v3c-audit/"
-  say "V3C-PERIOD (records_audit.py period exit $rc): $(tail -1 "$VLOG/period.log" | cut -c1-800)"
+    --audit "$VW/audit" --pins "$WREG" --out "$VW/period.json" --circuits "$VW/circuits") > "$VLOG/period.log" 2>&1
+  local rc=$? max=${CIRCUIT_OUT_MAX:-1000000000} big=0
+  if [ "$rc" = 0 ]; then
+    cp "$VW/period.json" "$OUT/v3c-audit/" && rm -rf "$OUT/v3c-audit/circuits" && mkdir "$OUT/v3c-audit/circuits" \
+      && find "$VW/circuits" -maxdepth 1 -type f -name '*.txt' -size "-$((max + 1))c" -exec cp -t "$OUT/v3c-audit/circuits" {} + \
+      && big=$(find "$VW/circuits" -maxdepth 1 -type f -name '*.txt' -size "+${max}c" | wc -l)
+  fi
+  say "V3C-PERIOD (records_audit.py period exit $rc): $(tail -1 "$VLOG/period.log" | cut -c1-800)$([ "$big" = 0 ] \
+    || echo "; its circuit files over $max bytes, $big, not in \$OUT, recomposable, period.json naming each by its SHA-512")"
   return $rc
 }
 certifier_step() {  # $1 chain|period: the split network certifier's step on V3c's window (step 6), if its command is set
