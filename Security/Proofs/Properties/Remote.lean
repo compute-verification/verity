@@ -278,12 +278,14 @@ theorem stage_zk_at {p : SampledProofs.OneStageZk.Params} {c : SampledProofs.One
   unfold SampledProofs.OneStageZk.checkBlobsAt at h
   split at h
   · cases h
+  split at h
+  · cases h
   · rename_i r _
     refine ⟨r, ?_⟩
     generalize SampledProofs.OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } = o at h ⊢
     cases o with
     | accept pub' prof' =>
-      cases hr : r.all <;> simp [hr] at h
+      cases hr : r.all <;> cases hf : p.form.perMember <;> simp [hr, hf] at h
       obtain ⟨rfl, rfl⟩ := h
       rfl
     | reject s => simp at h
@@ -299,6 +301,36 @@ theorem stage_zk_registered {p : SampledProofs.OneStageZk.Params} {c : SampledPr
   split at h
   · obtain ⟨_, hr⟩ := stage_zk_at h
     exact stage_registered_at hr
+  · cases h
+
+/-- One-stage v2's check at any coins never accepts in the per-member form (`OneStageZk.MULTI_REFUSED`). -/
+theorem stage_zk_at_one_statement {p : SampledProofs.OneStageZk.Params} {c : SampledProofs.OneStage.Commitment}
+    {ξ : ByteArray} {e : SampledProofs.OneStageZk.Evidence} {bs : Blobs} {pub : SampledProofs.OneStage.Public}
+    {prof : Integrity} (h : SampledProofs.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
+    p.form.perMember = false := by
+  unfold SampledProofs.OneStageZk.checkBlobsAt at h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  · rename_i r _
+    generalize SampledProofs.OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } = o at h
+    cases o with
+    | accept pub' prof' =>
+      cases hf : p.form.perMember
+      · rfl
+      · cases hr : r.all <;> simp [hr, hf] at h
+    | reject s => simp at h
+    | undecided s => simp at h
+
+/-- One-stage v2 never accepts in the per-member form: no guarantee in the lock yet covers a sample over several
+members' statements under one draw. -/
+theorem stage_zk_one_statement {p : SampledProofs.OneStageZk.Params} {c : SampledProofs.OneStage.Commitment}
+    {e : SampledProofs.OneStageZk.Evidence} {bs : Blobs} {pub : SampledProofs.OneStage.Public} {prof : Integrity}
+    (h : SampledProofs.OneStageZk.checkBlobs p c e bs = .accept pub prof) : p.form.perMember = false := by
+  unfold SampledProofs.OneStageZk.checkBlobs Core.atCoins at h
+  split at h
+  · exact stage_zk_at_one_statement h
   · cases h
 
 /-- The recursive audit accepts only where one-stage v1's check accepts on the inner statement's params, with the

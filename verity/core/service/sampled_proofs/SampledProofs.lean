@@ -3,6 +3,7 @@ import SampledProofs.Program
 import SampledProofs.Partition
 import SampledProofs.PartitionRef
 import SampledProofs.Draw
+import SampledProofs.LinkPoints
 import SampledProofs.Supplied
 import SampledProofs.Registration
 import SampledProofs.Produced
@@ -10,6 +11,7 @@ import SampledProofs.Bound
 import SampledProofs.PyJson
 import SampledProofs.Record
 import SampledProofs.OneStage
+import SampledProofs.PublicUnits
 import SampledProofs.OneStageZk
 import SampledProofs.Rate
 import SampledProofs.HiddenDraw

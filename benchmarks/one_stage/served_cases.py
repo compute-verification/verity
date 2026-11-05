@@ -57,11 +57,12 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
   and so is handed to neither: remote would reject it on the tie, and onsite, which doesn't check it, would credit
   another record's work beside this window's. Without a period case none is made, and a composite names it missing.
 * **`verity/sampled-proofs/one-stage/v2`** (`v2_case`, only with ``--v2``): a5's ``window/case-v2.json``
-  (`a5.case_v2`: v1's case with the verdicts replaced by the sampled member's proofs' files, and ``blobs``), refused
-  when it commits to another record than v1's case or names a blob that isn't there, and when a5 wrote none (its
-  ``case-v2-error.txt`` says why: v2 verifies one member's `--zk` sessions). Its answer is `sampled-proofs-one-stage-zk
-  check` on the case and its blobs. Neither composite names v2's bare case (remote reads it in its form, above), so
-  it is made only when asked.
+  (`a5.case_v2`: v1's case with the verdicts replaced by the drawn members' proofs' files, and ``blobs``; a window of
+  several members' in the per-member form, which v2 refuses, `OneStageZk.MULTI_REFUSED`), refused here when it commits
+  to another record than v1's case or names a blob that isn't there, and when a5 wrote none (its
+  ``case-v2-error.txt`` says why: v2 verifies `--zk` sessions). Its answer is `sampled-proofs-one-stage-zk check` on the
+  case and its blobs. Neither composite names v2's bare case (remote reads it in its form, above), so it is made only
+  when asked.
 
 Each case goes to its own directory under ``--private`` (``sampled-proofs-v1/``, ``sampled-proofs/``,
 ``inference-only/``, ``pouw-period/``, ``sampled-proofs-v2/``; 0700, files 0600): ``case.json`` (``{"params",
