@@ -11,6 +11,7 @@ public import Proofs.Flock.Bridge.V5.Accepted
 public import Proofs.Flock.Claims.Complete.Json.Parse
 public import Proofs.Properties.SampledProofs
 public import Proofs.Core.QSort
+public import Std.Data.String.ToInt
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
 
@@ -440,10 +441,8 @@ theorem nat_of_jeq {m n : ℕ} {j : Json}
         obtain ⟨k, rfl⟩ := Int.eq_ofNat_of_zero_le hle
         simp only [_root_.SampledProofs.jeq, Flock.canon, beq_self_eq_true, ↓reduceIte, pure, Except.pure,
           beq_iff_eq] at hj
-        have e := congrArg String.toList hj
-        rw [show toString (Int.ofNat m) = toString m from rfl, show toString (k : Int) = toString k from rfl,
-          Nat.toString_eq_repr, Nat.toString_eq_repr, Nat.toList_repr, Nat.toList_repr] at e
-        rw [Int.toNat_natCast, ← Nat.ofDigitChars_ten_toDigits (n := m), e, Nat.ofDigitChars_ten_toDigits]
+        rw [Int.toNat_natCast]
+        exact Int.ofNat.inj (Int.repr_injective hj)
       · cases hn
     · simp [he] at hn
   | _ => simp [_root_.SampledProofs.nat?, _root_.SampledProofs.int?] at hn
@@ -554,6 +553,7 @@ theorem step_proved {I : Flock.Witness.Inputs} {rd : _root_.SampledProofs.OneSta
     refine ⟨recB, record, hb, hrec, verdictOf_population hv, ?_⟩
     rw [hp, Array.empty_append]
     exact hu
+  · cases h
 
 theorem provedHeld_ok {proved want : Array ℕ}
     (h : _root_.SampledProofs.OneStageZk.provedHeld proved want = .ok ()) : proved.qsort (· < ·) = want := by
@@ -705,9 +705,7 @@ theorem units_of_norm {d : Json} (hw : Claims.Json.Wf d) {pop : ℕ} {us : Array
         ("population", Lean.toJson pop), ("k", Lean.toJson us.size),
         ("units", Json.arr (us.map fun x => Lean.toJson x))] compare)) = .obj f := ⟨_, FlockDeploy.jsonForm_obj _⟩
     rw [FlockDeploy.JsonEquiv, hf] at he
-    first
-      | cases he
-      | (obtain ⟨f', hf'⟩ := jsonForm_arr' ‹Array Json›; rw [hf'] at he; cases he)
+    cases he
 
 /-- **The record's draw is its `unit_draw` rebuilt**: where the record holds a draw, the record parses, and the draw is
 `norm` of its `unit_draw`, a well-formed value. -/
@@ -916,7 +914,7 @@ theorem drawHeld (k : Verity.Registration.Composite) : DrawHeld k := by
   have hsorted := qsort_pairwise (unitsAscending_spec hasc).2
   rw [hpr, hsorted, hsorted] at hq
   obtain ⟨_, _, _, hat⟩ := checkBlobsAt_checkAt hck
-  have hv1 : drawnUnits ev.base.draw = ev.base.provedUnits := checkAt_proved hat (evidenceOf_closure hev)
+  have hv1 := checkAt_proved hat (evidenceOf_closure hev)
   exact hq.trans (hv1.symm.trans hu.symm)
 
 end Verity.Sampled
