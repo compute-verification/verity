@@ -246,7 +246,7 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   - `band-chain/d12/v1`, the default;
   - `dense-chain/v1`;
   - `p3/v1`;
-  - `p2-16448/v4` and `p2-16448/v2`, **experimental** (one module, two key expanders).
+  - `p2-16448/v4`, **experimental**.
 - **`protocol.Certificate`** is what an audit at the scheme's parameters establishes, Lean's
   `Meets S .sequential D Q k ε`. It holds:
   - `k`, `rounds` (D), `work` (Q), `call_ns`, `rho`, `delta`, `eps_log2`;
@@ -272,18 +272,14 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
     - every block, payload and key is a fixed-width, unsigned, big-endian integer;
     - the tweak is rejection-sampled below p, never reduced.
   - Its keys are fresh per block and expanded where they are used, so nothing key-sized is stored, which keeps the
-    1.05× space bound. Two codecs differ only in the expander:
-    - `p2-16448/v4`: the spec's §4 counter-mode SHA-512 streams with its v4 framing (`frame` is
-      `verity.ml.randomness.frame`), one for K and one for t's candidates, per `(segment, block)`, each 64-byte
-      chunk one compression after the zero-padded prefix's midstate. This is the expander the spec's setup assumption
-      P2-EXP-IO names (decision F4). The keys are the spec's vectors' given the spec's prefix; the prefix frames the
-      protocol's 24-byte salt (derived from the commitment to W by `setup.draw_salt`) where the spec frames the model
-      commitment and a 32-byte setup salt. That goes with the rest of the spec's setup framing (its leaves and
-      challenge derivation), which the generic protocol does not yet follow;
-    - `p2-16448/v2`: ChaCha8 keyed by a 32-byte seed per segment (`SHAKE256("verity/pous/p2/seed/v1" ‖ tag_s)`), with
-      nonce = the block index. It is **nonconforming** to F4, and its `experimental` reason says so. Its keys cost
-      about 1% of the device's decode work.
-  - Both certificates are the pinned `Pous.SecurityProofs.P2SlackFamilyUncond` at the spec's k = 105 (decision F6):
+    1.05× space bound. The expander is the spec's §4 counter-mode SHA-512 streams with its v4 framing (`frame` is
+    `verity.ml.randomness.frame`), one for K and one for t's candidates, per `(segment, block)`, each 64-byte chunk
+    one compression after the zero-padded prefix's midstate. This is the expander the spec's setup assumption
+    P2-EXP-IO names (decision F4). The keys are the spec's vectors' given the spec's prefix; the prefix frames the
+    protocol's 24-byte salt (derived from the commitment to W by `setup.draw_salt`) where the spec frames the model
+    commitment and a 32-byte setup salt. That goes with the rest of the spec's setup framing (its leaves and challenge
+    derivation), which the generic protocol does not yet follow.
+  - The certificate is the pinned `Pous.SecurityProofs.P2SlackFamilyUncond` at the spec's k = 105 (decision F6):
     its `λ = 128` row, for every block count from 2^8 to 2^23 and every payload width in range, `p2-2054B`'s among
     them, with no hypothesis; the certified store is 2^19 blocks (8 segments of 2^16). It is an abstract-M1 result, and
     the SMS-to-M1 instantiation assumption is not accepted (the spec's decision 8).

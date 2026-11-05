@@ -99,7 +99,7 @@ def test_the_codec_is_pous_registered_point(fixture) -> None:
     assert p2.BLOCK_BYTES == fixture["pous"].block_bytes and p2.UNIT_SECTORS == 257
     assert p2.UNIT_BYTES % p2.SECTOR_BYTES == 0 and p2.BLOCK_BYTES % p2.SECTOR_BYTES != 0
     with pytest.raises(ValueError, match="registered point"):
-        p2.codec_of(P2Params(16448, 21065, 3, 3, pous_p2.CHACHA8))
+        codec.P2Codec(3, 3, expander="chacha8")
     with pytest.raises(ValueError, match="registered point"):
         codec.P2Codec(3, 3, w=8192)
 
