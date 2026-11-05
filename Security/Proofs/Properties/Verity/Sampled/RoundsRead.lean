@@ -1026,7 +1026,7 @@ theorem specOf_streams_arr {j : Json} {sp : Flock.CoinTree.Spec} (h : specOf j =
     obtain ⟨a, -, h⟩ := Option.bind_eq_some_iff.1 h
     obtain ⟨b, -, h⟩ := Option.bind_eq_some_iff.1 h
     obtain rfl := Option.some.inj h
-    rw [mapM_some_str_arr (fun x y hx => by cases x <;> simp at hx <;> simp [hx]) hst]
+    rw [mapM_some_str_arr (fun x y hx => by cases x <;> simp at hx; simp [hx]) hst]
   | _ => simp [hss] at h
 
 /-- **The read's `Hello`s name each tree's streams distinctly**: where `coinTreesOf` accepts the release log `lines`

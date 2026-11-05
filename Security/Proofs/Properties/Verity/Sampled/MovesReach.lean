@@ -617,7 +617,7 @@ theorem recordRound_isSome {trees : Array LoggedTree} {tabsB : Array (String × 
     ∀ k < recordRounds J name, (recordRound J name k).isSome := by
   intro k hk
   by_cases hn : (name == _root_.SampledProofs.Challenger.TREE_SESSION) = true
-  · have h1 : recordRounds J name = 1 := by rw [recordRounds, if_pos hn]
+  · have h1 : recordRounds J name = 1 := by rw [recordRounds, ite_eq_left hn]
     rw [h1] at hk
     obtain rfl := Nat.lt_one_iff.1 hk
     obtain rfl := beq_iff_eq.1 hn
