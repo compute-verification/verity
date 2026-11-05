@@ -27,7 +27,7 @@ spec.loader.exec_module(CHECK)
 
 AGREE, BUILD, CIRCUIT = (f"lean-agreement:{build.VERIFIER}", f"lean-build:{build.LEAN}", f"flock-circuit-build:{build.FLOCK}/live")
 RUST, UNIT, SUITES = f"flock-rust-tests:{build.FLOCK}/live", f"lean-unit-cut:{build.UNIT_CUT}", "lean-suites:a"
-FLOCK_PART = "lean-suites:verity-flock:1/4"
+FLOCK_PART = "lean-suites:verity-flock:1/6"
 
 
 @pytest.fixture(scope="module")

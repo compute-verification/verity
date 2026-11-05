@@ -37,7 +37,7 @@ SUITES = "tools/verity/check/suites.py"
 #: the lean-suites suites listed in parts, {suite: parts}: `suites.py --files K/M` on a timing record that has none of their
 #: files (`lean_suites.run`), so each part is every M-th of the suite's test files in path order, a function of the commit alone,
 #: and the parts of one tree hold each file once whichever machines run them
-PARTS = {"verity-flock": 4}
+PARTS = {"verity-flock": 6}
 #: a lean-suites task's disk: the suites build Lake packages of their own beside the verifier's
 SUITES_DISK_GB = 60
 #: what `check.py --lean-agreement` reads of the tree outside the verifier's directory: check.py, the modules it loads as it
