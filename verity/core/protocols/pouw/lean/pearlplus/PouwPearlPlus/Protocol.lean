@@ -9,11 +9,14 @@ caller's blobs.
 
 **Params**, canonical JSON with exactly these keys, the verifier's own:
 
-    {"coins": coin commitment, "draws": t, "record": {"commitment": hex, "source": hex}}
+    {"coins": epoch coins, "draws": t, "record": {"commitment": hex, "draw": draw, "schema": s, "source": hex}}
 
-the epoch's coin commitment (`CoinCommitment.ofJson`), the number of draws, and the verifier's record of the coin it drew
-on this run's commitment (`CoinRecord`), which pins the source (`after-coin`): a bare source, which `check` also takes, is
-no input here, so the coin is always the one drawn on the run.
+the epoch's coins (`EpochCoins.ofJson`: a live session's on the auditor host's challenger, or an in-process one's), the
+number of draws, and the verifier's record of the coin it drew on this run's commitment (`CoinRecord`, as `verify_run`
+writes it: its schema and its draw), which pins the source (`after-coin`): a bare source, which `check` also takes, is no
+input here, so the coin is always the one drawn on the run. The verdict is of record (`ofRecord`, `--of-record` as
+`served_pearlplus.sh` runs it): only a challenger draw on live coins is taken (`ofRecordReason`), so in-process coins, the
+node's draw and a v1 record are refused as `of-record`.
 
 **Commitment**, canonical JSON with exactly these keys:
 
@@ -50,13 +53,13 @@ open PouwCommit
 def protocolId : String := PROTOCOL
 def commitmentTag : String := "verity/pouw/pearl-plus/manifests/v1"
 def paramsKeys : List String := ["coins", "draws", "record"]
-def recordKeys : List String := ["commitment", "source"]
+def recordKeys : List String := ["commitment", "draw", "schema", "source"]
 def commitmentKeys : List String := ["manifests", "record", "window"]
 def windowKeys : List String := ["dropped", "record", "rounds"]
 def evidenceKeys : List String := ["files"]
 
 structure Params where
-  coins : CoinCommitment
+  coins : EpochCoins
   draws : Nat
   record : CoinRecord
 
@@ -89,7 +92,7 @@ def bytesOf (j : Json) (what : String) : V ByteArray := do
 
 def paramsOf (j : Json) : V Params := do
   unless keys? j == some paramsKeys do throw s!"keys are not {", ".intercalate paramsKeys}"
-  let coins ← match CoinCommitment.ofJson ((get? j "coins").getD .null) with
+  let coins ← match EpochCoins.ofJson ((get? j "coins").getD .null) with
     | .ok c => pure c
     | .error e => throw s!"coins: {e}"
   let some draws := ((get? j "draws").getD .null).getNat?.toOption | throw "draws is not a nonnegative integer"
@@ -97,7 +100,8 @@ def paramsOf (j : Json) : V Params := do
   unless keys? r == some recordKeys do throw s!"record: keys are not {", ".intercalate recordKeys}"
   let commitment ← bytesOf r "commitment"
   let source ← bytesOf r "source"
-  pure { coins, draws, record := { commitment, source } }
+  let some schema := str? r "schema" | throw "record: schema is not a string"
+  pure { coins, draws, record := { commitment, source, schema, draw := (get? r "draw").getD .null } }
 
 def commitmentOf (b : ByteArray) : V Commitment := do
   let j ← Core.canonicalJson b
@@ -135,7 +139,7 @@ def evidenceOf (b : ByteArray) : V Evidence := do
 
 def inputOf (p : Params) (c : Commitment) : Input :=
   { coins := p.coins, manifests := c.manifests, draws := p.draws, held := some p.record, tie := some c.window,
-    rounds := c.rounds, dropped := c.dropped }
+    rounds := c.rounds, dropped := c.dropped, ofRecord := true }
 
 /-- The opener on the caller's blobs: pass `i`'s file at manifest entry `spec` is the blob its evidence names for the
 entry's path, `held` to the entry. -/
@@ -187,9 +191,10 @@ private def coins : String :=
   "{\"epoch\":0,\"root\":\"" ++ String.ofList (List.replicate 128 '0') ++ "\",\"scheme\":\"" ++ SCHEME ++ "\"}"
 private def params (record : String) : ByteArray :=
   ("{\"coins\":" ++ coins ++ ",\"draws\":3,\"record\":" ++ record ++ "}").toUTF8
-private def record : String :=
-  "{\"commitment\":\"" ++ String.ofList (List.replicate 128 '0') ++ "\",\"source\":\"" ++
-    String.ofList (List.replicate 64 '0') ++ "\"}"
+private def recordOf (schema : String) : String :=
+  "{\"commitment\":\"" ++ String.ofList (List.replicate 128 '0') ++ "\",\"draw\":" ++ nodeDraw.compress ++
+    ",\"schema\":" ++ schema ++ ",\"source\":\"" ++ String.ofList (List.replicate 64 '0') ++ "\"}"
+private def record : String := recordOf ("\"" ++ COIN_SCHEMA ++ "\"")
 private def reasonOf (p c e : ByteArray) : Option String := (protocol.answer p c e #[]).reason
 private def windowRec : String := "{\"format\":\"verity/registration/v2\",\"registered\":[]}"
 private def windowOf (w : String) : String := "{\"dropped\":[],\"record\":" ++ w ++ ",\"rounds\":null}"
@@ -201,7 +206,9 @@ private def run (manifests : String) : ByteArray := runIn manifests (windowOf wi
 -- every input gets a verdict: parameters, a commitment or evidence of another shape is refused, naming the input
 #guard protocolId == "verity/pouw/pearl-plus/v1"
 #guard reasonOf "{}".toUTF8 "[]".toUTF8 "{}".toUTF8 == some "params: keys are not coins, draws, record"
-#guard reasonOf (params "{\"source\":\"00\"}") "[]".toUTF8 "{}".toUTF8 == some "params: record: keys are not commitment, source"
+#guard reasonOf (params "{\"source\":\"00\"}") "[]".toUTF8 "{}".toUTF8 ==
+  some "params: record: keys are not commitment, draw, schema, source"
+#guard reasonOf (params (recordOf "1")) "[]".toUTF8 "{}".toUTF8 == some "params: record: schema is not a string"
 #guard reasonOf (params record) "[{}]".toUTF8 "{}".toUTF8 == some "commitment: keys are not manifests, record, window"
 #guard reasonOf (params record) (run "[]") "{}".toUTF8 == some "commitment: the run holds no pass"
 #guard reasonOf (params record) (run "{}") "{}".toUTF8 ==
@@ -229,6 +236,13 @@ private def run (manifests : String) : ByteArray := runIn manifests (windowOf wi
     let i := inputOf p c
     pure (i.tie == some c.window && i.rounds == some [1] && i.dropped == [2] &&
       some (Flock.hexOf c.windowDigest) == (Flock.WindowRecord.digestHex c.window).toOption)).toOption == some true
+-- the verdict is of record, on the record's schema and draw: in-process coins are no verdict of record
+#guard (do
+    let p ← paramsOf (← Core.canonicalJson (params record))
+    let i := inputOf p (← commitmentOf (run "[{}]"))
+    pure (i.ofRecord && i.held.map (·.schema) == some COIN_SCHEMA && i.held.map (fun h => fieldIs (get? h.draw "from") DRAW_NODE) == some true &&
+      (ofRecordReason i.coins i.source i.held).any (·.startsWith "the epoch's coins are an in-process"))).toOption ==
+  some true
 -- well-formed inputs reach the run's verdict, whose refusal is the run's
 #guard (reasonOf (params record) (run "[{}]") "{\"files\":[{}]}".toUTF8).isSome
 #guard (protocol.answer (params record) (run "[{}]") "{\"files\":[{}]}".toUTF8 #[]).verdict == .reject
