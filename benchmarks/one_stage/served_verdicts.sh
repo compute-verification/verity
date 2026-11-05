@@ -68,7 +68,8 @@
 #     certifier: `served_verdicts.py pieces` runs each one's piece
 #     where POUW_CMD, POUS_CMD, BANDWIDTH_CMD or CERTIFIER_CMD names it, one at a time (the certifier's alone, the longest,
 #     from the moment the window is picked, beside step 3, its lines said after the others'; split in two, the answer step
-#     6's period check wrote, V3c having run before this step), each within <COMPONENT>_TIMEOUT
+#     6's period check wrote, V3c having run before this step, and none where step 6 defers V3c's audit, which that
+#     period check reads: the piece refused, naming the deferral, `pieces --deferred`), each within <COMPONENT>_TIMEOUT
 #     (else PIECE_TIMEOUT, default 60m), else names it MISSING with the command it lacks and its owner. No verdict is made
 #     for a piece that didn't run or refused to; one that ran and wrote no answer errs. A piece that needs a GPU takes its
 #     own `gpu-lease`, the serve's being over. POUS_CMD defaults to 'bash benchmarks/pous/served_piece.sh "$@"' where the
@@ -149,7 +150,8 @@
 #     3 writes it after the classes, `window-circuit --window-registration W`), none is made here, and the audit is tied
 #     to H1's W. On a node with less memory than the audit needs, tied or not, the window commit is made (or the tie's
 #     held) here and the audit and the composite are deferred to a follow-on (below), and the record here has sampled
-#     proofs missing. `served_verdicts.sh v3c` runs only that step on an
+#     proofs missing, and the split certifier missing too, its chain and period check going with the audit, so the
+#     record composes pending. `served_verdicts.sh v3c` runs only that step on an
 #     existing serve dir (D and its window K set), the build first, its limits 120m and 180m.
 #     With the network certifier's piece split in two, CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD (both set, CERTIFIER_CMD
 #     unset, and V3C_CLASS the certifier's scan class, which CLASSES holds), the certifier's answer reads V3c's
@@ -248,7 +250,8 @@
 # follow-on where it fails; it runs whatever V3c's audit gave, a failed audit's inputs kept as well), composes the
 # final record (`record --node` the served node, so its composed_on names the
 # host it composed on, served_node false, and that it read a prover-side copy; its pieces the served node's, but for the
-# network certifier's where the split certifier answered here, which remote-network's record reads) and the
+# split certifier's, whose piece runs here as step 4 runs it, about the served node (`pieces --served`), so its answer
+# here, which remote-network's record reads, is composed, and its failure here rejects) and the
 # composite (`served_composite.sh`, SERVED_NODE the served node), and under ONSITE the onsite record, as the served
 # node's run would (with REPROOF_COPY and REPROOF_LISTING); its $OUT is published as every run's is.
 # OF_RECORD set makes the run one of record, and the preflight refuses it lacking any input its onsite record's of_record
@@ -1002,8 +1005,12 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
     mkdir -p "$OUT/record" && cp "$DEFER_DIR/inference-only.json" "$OUT/record/inference-only.json" \
       && say "INFERENCE-ONLY: the served node's verdict, carried into this record as it wrote it (the serve dir's private/deferred/inference-only.json)"
   fi
-  if [ -f "$OUT/pieces/certifier/answer.json" ]; then  # the split certifier answered here: the record reads that answer
+  if [ -n "$SPLIT" ]; then  # the split certifier ran here: the record reads its piece, run as step 4 runs it, about the
+    # served node (its served.json), beside the served node's other pieces
+    mkdir -p "$OUT/pieces" || return 1
     for p in "$DEFER_DIR/pieces"/*; do [ "${p##*/}" = certifier ] || cp -a "$p" "$OUT/pieces/" || return 1; done
+    CERTIFIER_CMD=true "$TPY" benchmarks/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$K" \
+      --out "$OUT/pieces" --only certifier --served "$SERVED_NODE" --product "$PRODUCT" 2>&1 | publish_lines
     pieces=$OUT/pieces
   fi
   "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$VW/audit" \
@@ -1444,9 +1451,11 @@ if [ -n "$DEFER" ]; then v3c_commit
 else v3c_commit && v3c_proved; fi
 [ -z "$SPLIT" ] || export CERTIFIER_CMD=true
 
-# 4. the other subprotocols, each its piece's verdict or MISSING with the command it lacks
+# 4. the other subprotocols, each its piece's verdict or MISSING with the command it lacks; the split certifier's, where
+# step 6 defers V3c's audit, missing, its chain and period check the follow-on's
 TPY=$TREE/.venv/bin/python
 "$TPY" benchmarks/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$K" --out "$OUT/pieces" ${CERT:+--skip certifier} \
+  ${SPLIT:+${DEFER:+--deferred "its chain and period check, which read V3c's period.json, go with V3c's audit to a follow-on on a node with the memory, which composes the final record: $DEFER"}} \
   --product "$PRODUCT" 2>&1 | publish_lines
 [ -z "$CERT" ] || { wait "$CERT"; publish_lines < "$OUT/pieces-certifier.txt"; }
 

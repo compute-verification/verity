@@ -213,7 +213,8 @@ WEIGHTS = {"schema": "verity-vllm/weights-registration/v1", "program": "window-c
 
 
 def _out(tmp_path: Path, period) -> Path:
-    """A served run's OUT as the verifier receives it (`RECEIVED`): the certifier's piece, V3c's audit as the run
+    """A served run's OUT as the verifier receives it (`RECEIVED`): the certifier's piece (with the served.json a
+    deferral's follow-on leaves, naming the served node it audited), V3c's audit as the run
     copies it (its summary and audit record as `served_integrity.public_copy` writes them, the registration it audited
     and its period audit), the registered compiler, the window's advice registration in its public form
     (`served_verdicts.public_registration`), the weights registration and a class's count."""
@@ -221,6 +222,7 @@ def _out(tmp_path: Path, period) -> Path:
     case, answer = _case(period)
     piece = _dir(out / "pieces" / "certifier", case, answer)
     (piece / "piece.json").write_text(json.dumps({"server": "node", "rc": 0, "limit": "CERTIFIER_TIMEOUT"}))
+    (piece / "served.json").write_text(json.dumps({"server": "served-node"}))
     com, ev = (json.loads(bytes.fromhex(case[k])) for k in ("commitment", "evidence"))
     reg, units = com["audits"][0], [0, 1]
     v3c = out / "v3c-audit"
