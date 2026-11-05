@@ -41,8 +41,8 @@ public import Std.Data.String.ToNat
   under its query, has v2's two classes over its layout's population and has the design `designSlots A`, at a subset
   law of at least one unit.
 * **`RegMatches` at the record** (`regMatches_record`): the record's code (`code`) names that registration at its one
-  statement (`regOf`), and `RegMatches`' clauses hold there with the partition clause read as v2's two classes: the
-  population at the layout's strata sizes, then the input class on its own.
+  statement (`regOf`), and `RegMatches` holds there. Its partition is the population at the layout's strata sizes, then
+  the statement's program's input class (`InputSlot.withInputs`), which is `partSlots A` by definition.
 -/
 
 @[expose] public section
