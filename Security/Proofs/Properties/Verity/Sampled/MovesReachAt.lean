@@ -6,16 +6,16 @@ public import Proofs.Properties.Verity.Sampled.SampleNamed
 /-!
 # `MovesReach` at the deployment
 
-`couplingTarget_assembled_src`'s `hM` at the deployment's constructions (`movesReachAt`): the readings and the decoders
-at the session's layout (`readingAt`, `decodersAt`), the sample-coupled coin map under `fieldEnc` at the family v2's
-parameters name (`labelAt`), the digest the strategy's accepted plays bind (`afterAt`) and the session's bytes as
-`MAX_COINS` fresh frames (`srcCoinsAt`), the deployed session's sample (`deployedLb`).
+`couplingTarget_assembled_src`'s `hM` at the deployment's constructions (`movesReachAt`), at the coupling's cut (v2's
+read of the log is the device's, and v2 draws at the strategy's digest `afterAt`, `SampledDigest`): the readings and
+the decoders at the session's layout (`readingAt`, `decodersAt`), the sample-coupled coin map under `fieldEnc` at the
+family v2's parameters name (`labelAt`), the digest `afterAt` and the session's bytes as `MAX_COINS` fresh frames
+(`srcCoinsAt`), the deployed session's sample (`deployedLb`).
 
 At these, `movesReach_layout`'s premises on the sample close: its coins fit `MAX_COINS` frames, and `srcCoinsAt` reads
 the session's bytes (`bytesOf_srcCoinsAt`) wherever the session reads `MAX_COINS` frames' bytes (`hL`, which
-`couplingTarget_assembled_src` takes too); and v2 reads the sample's coins of that family and digest wherever the
-strategy's accepted plays bind the commitment to one list of digests (`sampleNamed_layout`, at `OpensOnce`). What is
-left is `movesReachAt`'s premises, each named there.
+`couplingTarget_assembled_src` takes too); and v2 reads the sample's coins of that family and digest at the cut
+(`sampleNamed_layout`). What is left is `movesReachAt`'s premises, each named there.
 
 The coupling at the deployment (`couplingTargetAt`) is `couplingTarget_assembled_src` there, at the deployed device's
 history (`Device.dev`): the device printed each play's log (`Device.printsLog_dev`), it signed what each play's
@@ -42,25 +42,21 @@ theorem bytesOf_srcCoinsAt {m : ℕ} {A : Live} (hL : A.Lb 0 = m * 64) (ω : A.�
   rw [srcCoinsAt, dite_eq_left hL]
   exact bytesOf_srcCoins A hL ω
 
-/-- **`MovesReach` at the deployment**: `couplingTarget_assembled_src`'s `hM` at `fieldEnc`, the readings at the
-session's layout with the record each commitment's plays reveal and its digest (`record`, `recordDigest`), the decoders
-at that layout (`reg`), the family `labelAt θ`, the digest `afterAt` and the sample's coins `srcCoinsAt MAX_COINS`. It
-holds wherever:
+/-- **`MovesReach` at the deployment**: `couplingTarget_assembled_src`'s `hM` at `fieldEnc`, at the coupling's cut,
+the readings at the session's layout with the record each commitment's plays reveal and its digest (`record`,
+`recordDigest`), the decoders at that layout (`reg`), the family `labelAt θ`, the digest `afterAt` and the sample's
+coins `srcCoinsAt MAX_COINS`. It holds wherever:
 
 * `A` is the session v2 sets up (`hA`), v2's parameters name the vocabulary's digests (`hDg`) and the session reads
   `MAX_COINS` frames' bytes (`hL`), as `couplingTarget_assembled_src` takes them;
-* v2's read shows every coin of the sample's family (`hR`, `DrawReadAll` at `coinsRead`), v2 holds the record's draw
-  to its own (`hH`, `DrawHeld`), and `norm` fixes the session's draw files (`hfix`);
-* each strategy's accepted plays bind the commitment to one list of digests (`hOnce`, `OpensOnce`);
+* v2 holds the record's draw to its own (`hH`, `DrawHeld`);
 * v2's order refusal passes at every accepted play (`hord`, `OrderHeld`);
 * the device's log opens only the record's rounds at every accepted play whose log v2 read is the device's (`hO`,
   `OpenedRecorded`). -/
 theorem movesReachAt {V : Vocab d α} {k : Verity.Registration.Composite} {θ : ByteArray} {F : Array ByteArray}
     {A : Live} (reg : Option Claims.Msg → A.Reg) (record : ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : ByteArray → Claims.Msg) (hA : SetsUp V θ F A) (hDg : DigestsAt V θ)
-    (hL : A.Lb 0 = _root_.SampledProofs.Challenger.MAX_COINS * 64)
-    (hR : DrawReadAll k coinsRead) (hH : DrawHeld k) (hfix : ∀ S, Flock.norm (A.dj S) = A.dj S)
-    (hOnce : ∀ c σ, OpensOnce V k θ F c σ)
+    (hL : A.Lb 0 = _root_.SampledProofs.Challenger.MAX_COINS * 64) (hH : DrawHeld k)
     (hord : ∀ c (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ),
       V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) → OrderHeld (CoinTape.run (V.game θ F c) σ x).sent)
     (hO : ∀ c (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ),
@@ -69,14 +65,14 @@ theorem movesReachAt {V : Vocab d α} {k : Verity.Registration.Composite} {θ : 
       ∀ text Jr, sentRecord (CoinTape.run (V.game θ F c) σ x).sent = some text →
         Flock.JsonParse.parse text = .ok Jr → OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ x).log)
     (c : ByteArray) (σ : Strategy (V.game θ F c)) :
-    MovesReach V θ F c k (Binding.Logged Binding.readsV2) A (readingAt A.tables A.layout (record c) (recordDigest c)) σ
-      (decodersAt reg A.layout)
+    MovesReach V θ F c k (fun o => Binding.Logged Binding.readsV2 o ∧ SampledDigest k o.sent (afterAt V k θ F c σ)) A
+      (readingAt A.tables A.layout (record c) (recordDigest c)) σ (decodersAt reg A.layout)
       (sampleMap fieldEnc V θ F c A (readingAt A.tables A.layout (record c) (recordDigest c)) σ (labelAt θ)
         (afterAt V k θ F c σ) (srcCoinsAt _root_.SampledProofs.Challenger.MAX_COINS A))
       (linkEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) (roundEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) :=
   movesReach_layout (label := labelAt θ) (after := afterAt V k θ F c σ)
-    (κ := srcCoinsAt _root_.SampledProofs.Challenger.MAX_COINS A) hA hDg hR hH hfix reg (record c) (recordDigest c)
-    rfl rfl le_rfl (bytesOf_srcCoinsAt hL) rfl (sampleNamed_layout hA (hOnce c σ)) (hord c σ) (hO c σ)
+    (κ := srcCoinsAt _root_.SampledProofs.Challenger.MAX_COINS A) hA hDg hH reg (record c) (recordDigest c)
+    rfl rfl le_rfl (bytesOf_srcCoinsAt hL) rfl (sampleNamed_layout hA) (hord c σ) (hO c σ)
 
 /-- **The coupling at the deployment**: `couplingTarget_assembled_src` at the deployed device's history
 (`Device.dev`) and `movesReachAt`'s readings, decoders, family, digest and coins, with its `hM` by `movesReachAt`.
@@ -98,8 +94,7 @@ theorem couplingTargetAt {V : Vocab d α} {k : Verity.Registration.Composite} (K
         openEmpty (finish (V.signer θ) θ F c σ.1) q.g' (linkBits fieldEnc : (Fin 2 → Fin A.mP → 𝔽) → List Bool)) ≤
         A.hidingTerm)
     (hA : SetsUp V θ F A) (hDg : DigestsAt V θ) (hL : A.Lb 0 = _root_.SampledProofs.Challenger.MAX_COINS * 64)
-    (hR : DrawReadAll k coinsRead) (hH : DrawHeld k) (hfix : ∀ S, Flock.norm (A.dj S) = A.dj S)
-    (hOnce : ∀ c σ, OpensOnce V k θ F c σ)
+    (hH : DrawHeld k)
     (hord : ∀ c (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ),
       V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) → OrderHeld (CoinTape.run (V.game θ F c) σ x).sent)
     (hO : ∀ c (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ),
@@ -107,15 +102,15 @@ theorem couplingTargetAt {V : Vocab d α} {k : Verity.Registration.Composite} (K
       Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ x) →
       ∀ text Jr, sentRecord (CoinTape.run (V.game θ F c) σ x).sent = some text →
         Flock.JsonParse.parse text = .ok Jr → OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ x).log) :
-    CouplingTarget V k (K.assembled fieldEnc (Device.dev (P.setupOf V.families))
+    CouplingTarget V k (K.assembled fieldEnc (Device.dev (P.setupOf V.families)) k
       (fun A θ F c => readingAt A.tables A.layout (record A θ F c) (recordDigest A θ F c))
       (fun A _ _ _ _ => decodersAt (reg A) A.layout) (fun θ _ _ _ => labelAt θ) (afterAt V k)
       (srcCoinsAt _root_.SampledProofs.Challenger.MAX_COINS)) A θ F :=
   couplingTarget_assembled_src fieldEnc V k K (Device.dev (P.setupOf V.families))
     (fun A θ F c => readingAt A.tables A.layout (record A θ F c) (recordDigest A θ F c))
-    (fun A _ _ _ _ => decodersAt (reg A) A.layout) (fun θ _ _ _ => labelAt θ) (afterAt V k)
+    (fun A _ _ _ _ => decodersAt (reg A) A.layout) (fun θ _ _ _ => labelAt θ)
     _root_.SampledProofs.Challenger.MAX_COINS A θ F (fun o _ => Device.printsLog_dev _ o)
     (fun c => Device.signsPlay_dev V P θ F c hD) hL hε hA hDg (writesView_wrZP A rfl)
-    (movesReachAt (reg A) (record A θ F) (recordDigest A θ F) hA hDg hL hR hH hfix hOnce hord hO)
+    (movesReachAt (reg A) (record A θ F) (recordDigest A θ F) hA hDg hL hH hord hO)
 
 end Verity.Sampled
