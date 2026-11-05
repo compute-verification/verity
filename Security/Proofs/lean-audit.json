@@ -17,6 +17,8 @@
   "Proofs.Properties.Pouw.Strata",
   "Proofs.Properties.Pouw.PearlPlus",
   "Proofs.Properties.Pouw.PearlPlus.Open",
+  "Proofs.Properties.Pouw.PearlPlus.Witnesses",
+  "Proofs.Properties.Pouw.PearlPlus.Verdict",
   "Proofs.Properties.Nci",
   "Proofs.Properties.Nci.DescAgree",
   "Proofs.Properties.Nci.Walk",
