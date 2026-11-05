@@ -6,6 +6,7 @@ public import Proofs.Flock.Claims.Bridge.Custody
 public import Proofs.Flock.Claims.Bridge.CustodyZkP
 public import Proofs.Flock.Soundness.Discharge.Exec.Retained
 public import Proofs.Flock.Soundness.ExecStrataOf
+import all Init.Data.Repr
 
 /-!
 # Sampled proofs' coupling: the live audit's typed moves, from what v2 reads
