@@ -254,7 +254,7 @@ def main() -> int:
         ap.error("--reads lays out a --template unit's reads; an input set's lowering is its own")
     if a.template:
         return template(a)
-    from verity_numerical.bench.input_sets import InputSet
+    from verity_flock.input_sets import InputSet
 
     s = InputSet.open(a.input_set)
     low = FC.lowering_for_set(s)

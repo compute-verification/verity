@@ -204,7 +204,7 @@ def pin_owner(kind: str, key: str) -> str | None:
     or a piece's, the module that defines the Definition its key names (`named`, `owner`).  None when the key alone names none,
     whatever this process has built: then the pin is in ``pins/`` (`shared_pin`)."""
     if kind == "units":
-        from verity_numerical.bench import templates as TM
+        from verity_flock import subcircuit_templates as TM
 
         return TM.__name__ if key.partition("/")[0] in TM.TEMPLATES else None
     fid = key.partition("{")[0]

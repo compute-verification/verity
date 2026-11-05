@@ -1,4 +1,4 @@
-"""circuit-check's bindings of `verity_numerical.bench.templates`'s Definitions, in `circuit_check.targets`' forms
+"""circuit-check's bindings of `verity_flock.subcircuit_templates`'s Definitions, in `circuit_check.targets`' forms
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 

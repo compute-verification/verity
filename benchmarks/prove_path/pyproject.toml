@@ -18,8 +18,8 @@ untraced = [
 inputs = ["verity", "integrations/vllm", "benchmarks/one_stage", "benchmarks/network_traces/leak_scan.py",
           "benchmarks/numerical/python/verity_numerical/__init__.py",
           "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
-          "benchmarks/numerical/python/verity_numerical/bench/input_sets.py",
-          "benchmarks/numerical/python/verity_numerical/bench/templates.py",
+          "verity/ml/flock/python/verity_flock/input_sets.py",
+          "verity/ml/flock/python/verity_flock/subcircuit_templates.py",
           # the network certifier's run the certifier piece kept, which window-commit's scan reads (`kept_scan`):
           # certifier_piece and warden_chain, what they import, and the site.json and host.json that served_session and
           # auditor read on import

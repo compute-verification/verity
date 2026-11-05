@@ -12,7 +12,7 @@
   "benchmarks/numerical/python/verity_flock",
   "benchmarks/numerical/python/verity_flock.py",
   "benchmarks/numerical/python/verity_flock/__init__.py",
-  "benchmarks/numerical/python/verity_numerical/bench/templates.circuit-check.py",
+  "verity/ml/flock/python/verity_flock/subcircuit_templates.circuit-check.py",
   "benchmarks/numerical/python/verity_numerical/bench/templates/__init__.py",
   "benchmarks/pouw/exact_kit/verity",
   "benchmarks/pouw/exact_kit/verity.py",

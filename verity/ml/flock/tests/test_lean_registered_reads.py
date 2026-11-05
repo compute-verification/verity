@@ -50,7 +50,7 @@ pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean t
 
 def _program() -> tuple[Program, dict]:
     pytest.importorskip("verity_numerical")
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
 
     template = TM.rope_head(64).definition()
     (_, xt), (_, ct) = template.signature()[0]
@@ -74,9 +74,9 @@ def stage(d: Path) -> SimpleNamespace:
     """The hidden-output circuit bound to the program and its partition, the registered cs table, x rows and output
     rows, the verifier's own reads file (its program's reads of cs and x, and the output rows), and the statement's
     bindings, under `d`."""
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
     from verity_numerical.bench.generate import generate
-    from verity_numerical.bench.input_sets import InputSet
+    from verity_flock.input_sets import InputSet
 
     subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
     program, query = _program()
