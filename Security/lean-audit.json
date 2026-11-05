@@ -1286,10 +1286,6 @@
    "owner": "@training",
    "digest": "f7d502370c0b00f07fc595e4a3f3c837796aa8596c248dffed41b6719df60bfa"
   },
-  "Nci.Assumptions.InClass": {
-   "owner": "@lean",
-   "digest": "72eb628dea70bf76e1eb55293bcb0a64c66e1b60b95049fc6c650af61906fae0"
-  },
   "Nci.Assumptions.InnerAtLeast": {
    "owner": "@lean",
    "digest": "059897c575e9831e3c9af03ff2cc594122a700130ede71b2555d1ed02ec7d68c"
@@ -1321,10 +1317,6 @@
   "Nci.Assumptions.PartialSumsIncompressible": {
    "owner": "@lean",
    "digest": "961676f2465fdcfa5ce063e16be5a615e30c3f3f13e2dc7ef7603f28228a7522"
-  },
-  "Nci.Assumptions.PartialSumsSupport": {
-   "owner": "@lean",
-   "digest": "40dc1f1a0720b5d2b5ff15110fe91f15a308a94840cb602c1b41f15abca465f4"
   },
   "Nci.Assumptions.PouwPerWindow": {
    "owner": "@training",
@@ -2932,21 +2924,6 @@
    "honest": ["Nci.SecurityProofs.CapabilityFloorHonest"],
    "nontrivial": "Nci.SecurityProofs.CapabilityFloorNontrivial"
   },
-  "Nci.SecurityProofs.ContainedMatMulOn": {
-   "honest": ["Nci.SecurityProofs.ContainedMatMulOn_honest"],
-   "nontrivial": "Nci.SecurityProofs.ContainedMatMulOn_nontrivial",
-   "kind": "exclusion"
-  },
-  "Nci.SecurityProofs.ContainedTraining": {
-   "honest": ["Nci.SecurityProofs.ContainedTraining_honest"],
-   "nontrivial": "Nci.SecurityProofs.ContainedTraining_nontrivial",
-   "kind": "exclusion"
-  },
-  "Nci.SecurityProofs.ContainedTrainingOn": {
-   "honest": ["Nci.SecurityProofs.ContainedTrainingOn_honest"],
-   "nontrivial": "Nci.SecurityProofs.ContainedTrainingOn_nontrivial",
-   "kind": "exclusion"
-  },
   "Nci.SecurityProofs.DampenerRemote": {
    "honest": ["Nci.SecurityProofs.DampenerRemote_honest"],
    "nontrivial": "Nci.SecurityProofs.DampenerRemote_nontrivial",
@@ -2990,11 +2967,6 @@
   "Nci.SecurityProofs.IncompressibleContainedTrainingOn": {
    "honest": ["Nci.SecurityProofs.IncompressibleContainedTrainingOn_honest"],
    "nontrivial": "Nci.SecurityProofs.IncompressibleContainedTrainingOn_nontrivial",
-   "kind": "exclusion"
-  },
-  "Nci.SecurityProofs.Inference": {
-   "honest": ["Nci.SecurityProofs.Inference_honest"],
-   "nontrivial": "Nci.SecurityProofs.Inference_nontrivial",
    "kind": "exclusion"
   },
   "Nci.SecurityProofs.LayeredTraining": {
@@ -3050,21 +3022,6 @@
   "Nci.SecurityProofs.ThreadedTrainingOn": {
    "honest": ["Nci.SecurityProofs.ThreadedTraining_honest"],
    "nontrivial": "Nci.SecurityProofs.ThreadedTrainingOn_nontrivial",
-   "kind": "exclusion"
-  },
-  "Nci.SecurityProofs.Training": {
-   "honest": ["Nci.SecurityProofs.Training_honest"],
-   "nontrivial": "Nci.SecurityProofs.Training_nontrivial",
-   "kind": "exclusion"
-  },
-  "Nci.SecurityProofs.UpdatedMatMul": {
-   "honest": ["Nci.SecurityProofs.UpdatedMatMul_honest"],
-   "nontrivial": "Nci.SecurityProofs.UpdatedMatMul_nontrivial",
-   "kind": "exclusion"
-  },
-  "Nci.SecurityProofs.UpdatedMatMulReads": {
-   "honest": ["Nci.SecurityProofs.UpdatedMatMulReads_honest"],
-   "nontrivial": "Nci.SecurityProofs.UpdatedMatMulReads_nontrivial",
    "kind": "exclusion"
   },
   "Nci.SecurityProofs.WeightedProductCap": {
@@ -3354,7 +3311,6 @@
   "Nci.SecurityProofs.ActivationsChain": "714e334345569e58449896333930509e1d7d4844154c1eabc8b38becd0f99498",
   "Nci.SecurityProofs.ActivationsReads": "b6654137b8f0a7371afc4bf0d99f4065db7f54641684a3c268a42173846a363a",
   "Nci.SecurityProofs.ContainedFanOutOn": "73829ebd967ff8c364d3f61bf5fa17d4876ebd5f88b398444265e0ebe4ec593d",
-  "Nci.SecurityProofs.ContainedMatMul": "b9d4b8b6d2fdf2ba50939440b7537191f8ac4cb348eb67f895331fa42966531e",
   "Nci.SecurityProofs.CoveringBound": "d3f79b9bf0b40f087a3ff732e52168c9d455850f506d37f97e9d327daae4af5c",
   "Nci.SecurityProofs.CoveringBoundPriced": "5136ccf244c834b3c555ffb5f0397740f4acca21e2fba5d1b11ff0869dc461e9",
   "Nci.SecurityProofs.CoveringBoundTwoCosts": "977691a65aeb1cef599392e0fb308271d5502f07cbe550f93624f75e7e1ddc6a",
@@ -3366,6 +3322,7 @@
   "Nci.SecurityProofs.FitRate": "4ad0e8c3c012b570f1e87d47bbda107dce81f9772c33432b68aabccbf103a0da",
   "Nci.SecurityProofs.IncompressibleThreadedThrottled": "3f0744ed7643bc3edea9b8bcf41a99c0a872164d55e92857ae748cac9d1ba7f6",
   "Nci.SecurityProofs.IncompressibleThreadedThrottledOn": "796765adf9071efb9307c0bc132a001510b1a96beab7fb237fdd64013c33899f",
+  "Nci.SecurityProofs.Inference": "9577814bc7cda3860fee9d3428ecde7e11d7299009a1d3bfb405e11c92e5c600",
   "Nci.SecurityProofs.InfoOfState": "9f1583451f17bdeb540e073a017a0ecc297b129c7158de888554305423a979f5",
   "Nci.SecurityProofs.IuReads": "91f216306ca6ee0cc41e360ab97dce90f5f7b96d1d82b3f7cfd507424fd3a005",
   "Nci.SecurityProofs.PackedContainedFanOutOn": "4d2565dacf91227c14474ec7bf24354cc36527de5075976aab9be094e60a3be7",
@@ -3390,6 +3347,7 @@
   "Nci.SecurityProofs.ThreadedThrottledOn": "a7984c474df2870454bd2dfca9bd5e9b030354d05ffbceea7b2f791e14530d65",
   "Nci.SecurityProofs.ThreadedThrottledOnSlots": "1593e5bf02baa087182289a9fedaf463f3d5fdf1bcbc4c08691ceaae7500be91",
   "Nci.SecurityProofs.ThreadedThrottledSlots": "6f1cd5018a0f1fbc06386cb1e9c7c06c3b2ec5b19ac3fa470a40e8f77f26e350",
+  "Nci.SecurityProofs.UpdatedMatMulReads": "3d44d307610a81a4747f64dcc7d3945c2dcfe9ea92f7a0339d49a79417e45c83",
   "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits": "7ccec3c51a3940931ea87fc0b3800d793566789cdc927ea9d9c011bcd1ef9e72",
   "NetTiming.SecurityProofs.EncardAccSeqsLeBlocks": "650045ec93f3bbadeb3f68796211ea24031bfbd9d8e4e0d267e7d5d5728382a6",
   "NetTiming.SecurityProofs.EncardAccSeqsLeBlocksCounts": "823fadfc71bbd70bb7d1b371d8148c6a54e6e63a9a6843d371d743d001f741c8",
@@ -10079,66 +10037,6 @@
    "assumptions": [],
    "type_hash": "73829ebd967ff8c364d3f61bf5fa17d4876ebd5f88b398444265e0ebe4ec593d"
   },
-  "Nci.SecurityProofs.ContainedMatMul": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.ContainedMatMul : Nci.Guarantees.ContainedMatMul"],
-   "assumptions": [],
-   "type_hash": "b9d4b8b6d2fdf2ba50939440b7537191f8ac4cb348eb67f895331fa42966531e"
-  },
-  "Nci.SecurityProofs.ContainedMatMulOn": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.ContainedMatMulOn : Nci.Guarantees.ContainedMatMulOn"],
-   "assumptions": [],
-   "type_hash": "1817ee8015023fdda0b756904a5f06327d953a06ce6ce8ed12312b868477d99b"
-  },
-  "Nci.SecurityProofs.ContainedMatMulOn_honest": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.ContainedMatMulOn_honest : Nci.Guarantees.ContainedMatMulOn_honest"],
-   "assumptions": [],
-   "type_hash": "c4f117a8f460b40a43c37bddb50d4bfc8fbe50c487a9d08651c26a232ff19fc7"
-  },
-  "Nci.SecurityProofs.ContainedMatMulOn_nontrivial": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.ContainedMatMulOn_nontrivial : Nci.Guarantees.ContainedMatMulOn_nontrivial"],
-   "assumptions": [],
-   "type_hash": "af7306c6360ba35908472607f4239883ba62907a7a1c4b5527af675e67b19b44"
-  },
-  "Nci.SecurityProofs.ContainedTraining": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.ContainedTraining : Nci.Guarantees.ContainedTraining"],
-   "assumptions": [],
-   "type_hash": "cc57888b57675154812ec32f76c474386b3fc204b01538efbfbb34c10c54c1e7"
-  },
-  "Nci.SecurityProofs.ContainedTrainingOn": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.ContainedTrainingOn : Nci.Guarantees.ContainedTrainingOn"],
-   "assumptions": [],
-   "type_hash": "18449f5ab8514c9e3daab13c9c8dec476efecfcce491858edadebcdb323403e6"
-  },
-  "Nci.SecurityProofs.ContainedTrainingOn_honest": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.ContainedTrainingOn_honest : Nci.Guarantees.ContainedTrainingOn_honest"],
-   "assumptions": [],
-   "type_hash": "7cfbc2a70a308d12f036d931bc9a2e8e35ad84d14427193fdbef4ab8e35ce0aa"
-  },
-  "Nci.SecurityProofs.ContainedTrainingOn_nontrivial": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.ContainedTrainingOn_nontrivial : Nci.Guarantees.ContainedTrainingOn_nontrivial"],
-   "assumptions": [],
-   "type_hash": "17a092fa224dd542916c431907e3c6f73eef0d67fbc877fc21bca218a2ed7b8e"
-  },
-  "Nci.SecurityProofs.ContainedTraining_honest": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.ContainedTraining_honest : Nci.Guarantees.ContainedTraining_honest"],
-   "assumptions": [],
-   "type_hash": "d8a55207abdf648dfbbb7f7d8d6d2ce7f760f8ea06a78e5a40d34fd345ece70c"
-  },
-  "Nci.SecurityProofs.ContainedTraining_nontrivial": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.ContainedTraining_nontrivial : Nci.Guarantees.ContainedTraining_nontrivial"],
-   "assumptions": [],
-   "type_hash": "762a93651dcdc45ee6d3b3c7103a9bb043c8888185532b82e08c68fdf39eef84"
-  },
   "Nci.SecurityProofs.CoveringBound": {
    "owner": "@compute-accounting",
    "signature": ["Nci.SecurityProofs.CoveringBound : Nci.Guarantees.CoveringBound"],
@@ -10415,18 +10313,6 @@
    "signature": ["Nci.SecurityProofs.Inference : Nci.Guarantees.Inference"],
    "assumptions": [],
    "type_hash": "9577814bc7cda3860fee9d3428ecde7e11d7299009a1d3bfb405e11c92e5c600"
-  },
-  "Nci.SecurityProofs.Inference_honest": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.Inference_honest : Nci.Guarantees.Inference_honest"],
-   "assumptions": [],
-   "type_hash": "401513b3e13b6d6f9442e123986d6162b1ce6522530dcb62d114ba585f326fc2"
-  },
-  "Nci.SecurityProofs.Inference_nontrivial": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.Inference_nontrivial : Nci.Guarantees.Inference_nontrivial"],
-   "assumptions": [],
-   "type_hash": "682a3007370c1d79acf3737aeae56b887397e6aa23b9d3287846e67530ef53c3"
   },
   "Nci.SecurityProofs.InfoOfState": {
    "owner": "@lean",
@@ -10792,59 +10678,11 @@
    "assumptions": [],
    "type_hash": "7c944e2039b59764c3cdf44fbc177332b1958ae79fc81d99e0ed95664eefc4b0"
   },
-  "Nci.SecurityProofs.Training": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.Training : Nci.Guarantees.Training"],
-   "assumptions": [],
-   "type_hash": "b3e344c8c136829d0a3a4130fa3fc8a8d5bb34e0a0fe3f5673183e5e7cd2cf3a"
-  },
-  "Nci.SecurityProofs.Training_honest": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.Training_honest : Nci.Guarantees.Training_honest"],
-   "assumptions": [],
-   "type_hash": "5688549405a8f9f56ef3d97719621a7be1a89499a8cc5be7ff2b2323846e9342"
-  },
-  "Nci.SecurityProofs.Training_nontrivial": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.Training_nontrivial : Nci.Guarantees.Training_nontrivial"],
-   "assumptions": [],
-   "type_hash": "eb2370c954ec5d123c2a7d09adcd2c89ab64633d4192c005c8cf4b25d03bd849"
-  },
-  "Nci.SecurityProofs.UpdatedMatMul": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.UpdatedMatMul : Nci.Guarantees.UpdatedMatMul"],
-   "assumptions": [],
-   "type_hash": "159e7399036e8f45f9a0af577ce7677b603914d42b48a260efc4b24f7b46c55b"
-  },
   "Nci.SecurityProofs.UpdatedMatMulReads": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.UpdatedMatMulReads : Nci.Guarantees.UpdatedMatMulReads"],
    "assumptions": [],
    "type_hash": "3d44d307610a81a4747f64dcc7d3945c2dcfe9ea92f7a0339d49a79417e45c83"
-  },
-  "Nci.SecurityProofs.UpdatedMatMulReads_honest": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.UpdatedMatMulReads_honest : Nci.Guarantees.UpdatedMatMulReads_honest"],
-   "assumptions": [],
-   "type_hash": "d1a72df541350d8a0ad0493870379850524055a15a4e3d0933b7051c04fb2348"
-  },
-  "Nci.SecurityProofs.UpdatedMatMulReads_nontrivial": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.UpdatedMatMulReads_nontrivial : Nci.Guarantees.UpdatedMatMulReads_nontrivial"],
-   "assumptions": [],
-   "type_hash": "0c5490e1385e75426ae1b8e9007be592db73e10dce75e9c97b2de44fbb4d08b9"
-  },
-  "Nci.SecurityProofs.UpdatedMatMul_honest": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.UpdatedMatMul_honest : Nci.Guarantees.UpdatedMatMul_honest"],
-   "assumptions": [],
-   "type_hash": "ef1a4bee89de377e1391f654a76ba2cf87c625fd82f58b0ef0c7406d45227b8a"
-  },
-  "Nci.SecurityProofs.UpdatedMatMul_nontrivial": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.UpdatedMatMul_nontrivial : Nci.Guarantees.UpdatedMatMul_nontrivial"],
-   "assumptions": [],
-   "type_hash": "be23f12c8a44b510d306c4bbe6894443d9476277b57cad787de0c896a196c27a"
   },
   "Nci.SecurityProofs.VerdictLag": {
    "owner": "@lean",
@@ -14541,8 +14379,6 @@
    "Nci.SecurityProofs.LoomisWhitney": "lemma: leaves the list under the 5:11 PM ruling",
    "Nci.SecurityProofs.OtherPositions": "lemma: leaves the list under the 5:11 PM ruling",
    "Nci.SecurityProofs.ReadBound": "lemma: leaves the list under the 5:11 PM ruling",
-   "Nci.SecurityProofs.Training": "falsified (no-function): It applies ActivationsIncompressible and PartialSumsIncompressible to the declared circuit, where they are false: Daniel's \"analysis simplification, known false\" (9 Oct 2026, 02:46Z) is about them on a declared circuit, which card 7d82eba8 (19 Oct) scopes it to; on a reference circuit they stand, as TrainingIncompressible (card 90f5557c). lean restates it on a reference circuit (Nci.SecurityProofs.IncompressibleContainedTraining).",
-   "Nci.SecurityProofs.UpdatedMatMul": "falsified (no-function): It applies ActivationsIncompressible and PartialSumsIncompressible to the declared circuit, whose wiring the prover controls, where they are false: Daniel's \"analysis simplification, known false\" (9 Oct 2026, 02:46Z) is about them on a declared circuit, which card 7d82eba8 (19 Oct) scopes it to; on a reference circuit they stand, as TrainingIncompressible (card 90f5557c). lean restates it on a reference circuit (Nci.SecurityProofs.IncompressibleContainedMatMulOn).",
    "NetTiming.SecurityProofs.EncardDecodableLeConstantRate": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns now carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns now carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.EncardIngressObsDecodableLe": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns now carries an accepted run to NetTiming.Accepted, which is the restatement path.",
@@ -14971,13 +14807,9 @@
    "Nci.SecurityProofs.ThreadedReads": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (Security/Definitions/Nci/Assumptions/Threads.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.ThreadedThrottled": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (Security/Definitions/Nci/Assumptions/Threads.lean), not about the NCI check's code; NciCheck.Properties.SecurityProofs.Throttles (Security/Properties/Nci/Threads.lean) joins it to NciCheck.Properties.Witnesses, so a verdict of compliance of NciCheck.evaluate carries its bound.",
    "Nci.SecurityProofs.ThreadedTraining": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (Security/Definitions/Nci/Assumptions/Threads.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Nci.SecurityProofs.ContainedMatMul": "falsified (no-function): It rests on ActivationsSupport and PartialSumsSupport, both falsified (shape.conjectures, 19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify); it is also about an arbitrary reference circuit, not the NCI check's code.",
-   "Nci.SecurityProofs.ContainedTraining": "falsified (no-function): It rests on ActivationsSupport and PartialSumsSupport, both falsified (shape.conjectures, 19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify); it is also about an arbitrary reference circuit, not the NCI check's code.",
    "Nci.SecurityProofs.ThreadedThrottledOn": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, Security/Definitions/Nci/Assumptions/Baseline.lean), under the named WeightsIncompressible (Security/Definitions/Nci/Assumptions/Threads.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.ThreadedThrottledDark": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, Security/Definitions/Nci/Assumptions/Baseline.lean), under the named WeightsIncompressible (Security/Definitions/Nci/Assumptions/Threads.lean), not about the NCI check's code; NciCheck.Properties.SecurityProofs.ThrottlesDark (Security/Properties/Nci/Threads.lean) joins it to NciCheck.Properties.Witnesses, so a verdict of compliance of NciCheck.evaluate carries its bound.",
    "Nci.SecurityProofs.ThreadedTrainingOn": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, Security/Definitions/Nci/Assumptions/Baseline.lean), under the named WeightsIncompressible (Security/Definitions/Nci/Assumptions/Threads.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Nci.SecurityProofs.ContainedMatMulOn": "falsified (no-function): It rests on ActivationsSupport and PartialSumsSupport, both falsified (shape.conjectures, 19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify); it is also about an arbitrary reference circuit, a chain it runs and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, Security/Definitions/Nci/Assumptions/Baseline.lean), not the NCI check's code.",
-   "Nci.SecurityProofs.ContainedTrainingOn": "falsified (no-function): It rests on ActivationsSupport and PartialSumsSupport, both falsified (shape.conjectures, 19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify); it is also about an arbitrary reference circuit, a chain it runs and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, Security/Definitions/Nci/Assumptions/Baseline.lean), not the NCI check's code.",
    "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains in part (a PartialContainment, Security/Definitions/Nci/Dark.lean), and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start, and the named WeightsIncompressible on the reference circuit, per-run hypotheses rather than a function's acceptance.",
    "Nci.SecurityProofs.IncompressibleContainedTraining": "frozen (no-function): It is about an arbitrary reference circuit, a chain and a threading of it and a declaration that contains it, under the named TrainingIncompressible (Security/Definitions/Nci/Assumptions/Training.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.IncompressibleThreadedThrottled": "frozen (no-function): It is about an arbitrary reference circuit, a chain and a threading of it and a declaration that contains it, under the named TrainingIncompressible (Security/Definitions/Nci/Assumptions/Training.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
@@ -15369,12 +15201,6 @@
    "Nci.SecurityProofs.ActivationsBoundOn_nontrivial": "completeness: ActivationsBoundOn's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ActivationsBoundOn without ThetaRegistered: Dθ, the toy with the token registered, complies at k = 0, and the bound b_a #(M ∩ S) ≤ (k / c) Λ size(d) fails, its right side 0 and gate 2 a counted multiplication Dθ computes, all proved, so ActivationsBoundOn's conclusion is not a tautology and needs the premise it drops.",
    "Nci.SecurityProofs.ActivationsTrainingOn_honest": "completeness: ActivationsTrainingOn's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ActivationsTrainingOn's premises hold together: ActivationsBoundOn_honest's instance at coverage κ = 1, all proved, so ActivationsTrainingOn is not vacuous.",
    "Nci.SecurityProofs.ActivationsTrainingOn_nontrivial": "completeness: ActivationsTrainingOn's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ActivationsTrainingOn without coverage: at the threading T0, with e = 0, κ = 1 is no coverage and the bound fails, Λ being 0 and no gate dark, all proved, so ActivationsTrainingOn's conclusion is not a tautology and needs the premise it drops.",
-   "Nci.SecurityProofs.ContainedMatMulOn_honest": "completeness: ContainedMatMulOn's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ContainedMatMulOn's premises hold together at the toy, with c = 2, k = K = 1, b_w = b_a = 1/2, μ = 1, the chain ch1 at dd = emax = 1, and no dark gate, all proved, so ContainedMatMulOn is not vacuous.",
-   "Nci.SecurityProofs.ContainedMatMulOn_nontrivial": "completeness: ContainedMatMulOn's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ContainedMatMulOn without ThetaRegistered: Dθ complies at k = 0, and the bound fails, its right side 0 and the product at gate 2, which Dθ computes, charged μ b_a / max(emax, K/(4 b_w dd)) = 1/2, all proved, so ContainedMatMulOn's conclusion is not a tautology and needs the premise it drops.",
-   "Nci.SecurityProofs.ContainedTrainingOn_honest": "completeness: ContainedTrainingOn's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ContainedTrainingOn's premises hold together: ContainedMatMulOn_honest's instance at coverage κ = 1, all proved, so ContainedTrainingOn is not vacuous.",
-   "Nci.SecurityProofs.ContainedTrainingOn_nontrivial": "completeness: ContainedTrainingOn's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ContainedTrainingOn without ThetaRegistered: ContainedMatMulOn_nontrivial's instance at coverage κ = 1; the bound's left side is 1/2 · κ size(r) = 1 and its right side 0, all proved, so ContainedTrainingOn's conclusion is not a tautology and needs the premise it drops.",
-   "Nci.SecurityProofs.ContainedTraining_honest": "completeness: ContainedTraining's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ContainedTraining's premises hold together at the toy, with c = 2, k = 1, b_w = b_a = 1/2, κ = 1, the chain ch1 at dd = 1 and the run of the toy with every input 1 as the registered values: the product's value is the token's, two values for one bit of charge, all proved, so ContainedTraining is not vacuous.",
-   "Nci.SecurityProofs.ContainedTraining_nontrivial": "completeness: ContainedTraining's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ContainedTraining without coverage: at the chain ch0 of no multiplication, charging b_w = 1 and b_a = 2, κ = 1 is no coverage, and κ F size(r) ≤ size(d) fails, F ≥ 3/2, all proved, so ContainedTraining's conclusion is not a tautology and needs the premise it drops.",
    "Nci.SecurityProofs.DampenerRemote_honest": "completeness: DampenerRemote's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), DampenerRemote's premises hold together at DampenerThreaded_honest's declaration, threading and charges, over the outcomes Bool drawn uniformly: one PoUW window of capacity C = 2, its certificate never wrong (p = 0), all of it certified (W = 2), no faulty proof block, so that every detection holds at q = 1 and the residual is 0, and one counted multiplication, the declared one, all proved, so DampenerRemote is not vacuous.",
    "Nci.SecurityProofs.DampenerRemote_nontrivial": "completeness: DampenerRemote's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), DampenerRemote without PoUW's soundness: the window's certificate is wrong at every outcome, so the residual holds its capacity, M_r = 2 counted multiplications at the threading T0, all of C = 2 certified, κ = 2, ε' = 1/2 and θ = 1/4. The efficiency 1 exceeds the bound ε' + θ = 3/4 at every outcome, so the event has probability 0, below 1 − δ = 1, all proved, so DampenerRemote's conclusion is not a tautology and needs the premise it drops.",
    "Nci.SecurityProofs.DampenerThreadedSlots_honest": "completeness: DampenerThreadedSlots's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), DampenerThreadedSlots' premises hold together: DampenerThreaded_honest's instance, the weight in its own parameter slot (σ1), all proved, so DampenerThreadedSlots is not vacuous.",
@@ -15387,8 +15213,6 @@
    "Nci.SecurityProofs.IncompressibleContainedTrainingOn_nontrivial": "completeness: IncompressibleContainedTrainingOn's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), IncompressibleContainedTrainingOn without ThetaRegistered: ContainedTrainingOn_nontrivial's instance, all proved, so IncompressibleContainedTrainingOn's conclusion is not a tautology and needs the premise it drops.",
    "Nci.SecurityProofs.IncompressibleContainedTraining_honest": "completeness: IncompressibleContainedTraining's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), IncompressibleContainedTraining's premises hold together at the toy, with c = 2, k = 1, b_w = b_a = 1/2, κ = 1, the chain ch1 and the threading T1, all proved, so IncompressibleContainedTraining is not vacuous.",
    "Nci.SecurityProofs.IncompressibleContainedTraining_nontrivial": "completeness: IncompressibleContainedTraining's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), IncompressibleContainedTraining without coverage: ContainedTraining_nontrivial's instance, at the threading T0, all proved, so IncompressibleContainedTraining's conclusion is not a tautology and needs the premise it drops.",
-   "Nci.SecurityProofs.Inference_honest": "completeness: Inference's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), Inference's premises hold together at the toy: its circuit is Boolean, and its one proof block is a session of c = 2 gates reading the weight, registered, and its prompt, the token, of k = 1 bit, all proved, so Inference is not vacuous.",
-   "Nci.SecurityProofs.Inference_nontrivial": "completeness: Inference's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), Inference without sessions: with no prompt, the toy's proof block is no session at k = 0, and the toy does not comply at (2, 0), its block reading the token, all proved, so Inference's conclusion is not a tautology and needs the premise it drops.",
    "Nci.SecurityProofs.LayeredTraining_honest": "completeness: LayeredTraining's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), LayeredTraining's premises hold together at the toy, with c = 2, k = 1, b_w = b_a = 1/2, κ = 1, the threading T1 keyed with no roots (layered1, d = e = 1, eLk = 0, b = 2) and E = 0, all proved, so LayeredTraining is not vacuous.",
    "Nci.SecurityProofs.LayeredTraining_nontrivial": "completeness: LayeredTraining's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), LayeredTraining without coverage: at the threading T0 keyed with no roots (layered0), κ = 1 is no coverage, and the bound fails, Λ being 0, all proved, so LayeredTraining's conclusion is not a tautology and needs the premise it drops.",
    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn_honest": "completeness: PackedIncompressibleContainedMatMulOn's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), PackedIncompressibleContainedMatMulOn's premises hold together: IncompressibleContainedMatMulOn_honest's instance, ch1 as a packed chain of one product to a gate, all proved, so PackedIncompressibleContainedMatMulOn is not vacuous.",
@@ -15398,12 +15222,6 @@
    "Nci.SecurityProofs.ThreadedTrainingOn_nontrivial": "completeness: ThreadedTrainingOn's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ThreadedTrainingOn without coverage: ThreadedTraining_nontrivial's instance, through the containment with no dark gate, all proved, so ThreadedTrainingOn's conclusion is not a tautology and needs the premise it drops.",
    "Nci.SecurityProofs.ThreadedTraining_honest": "completeness: ThreadedTraining's and ThreadedTrainingOn's honest witness (their witnesses entries): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ThreadedTraining's and ThreadedTrainingOn's premises hold together at the toy, with c = 2, k = 1, b_w = b_a = 1/2, κ = 1, r = d = Toy.D through the containment of the toy in itself, the threading T1 and (dd, e) = (1, 0): a small subcircuit holding gate 2 reads the token, one fresh bit, and is charged half a bit for the weight and half for the token, all proved, so ThreadedTraining and ThreadedTrainingOn are not vacuous.",
    "Nci.SecurityProofs.ThreadedTraining_nontrivial": "completeness: ThreadedTraining's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ThreadedTraining without coverage: at the threading T0 of no counted multiplication, κ = 1 is no coverage, and the bound κ b_a size(r) ≤ 2 (k / c) Λ size(d) fails, Λ being 0, all proved, so ThreadedTraining's conclusion is not a tautology and needs the premise it drops.",
-   "Nci.SecurityProofs.Training_honest": "completeness: Training's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), Training's premises hold together at the toy, at coverage κ = 0: every declaration that implements it and complies runs the chain of no multiplication, all proved, so Training is not vacuous.",
-   "Nci.SecurityProofs.Training_nontrivial": "completeness: Training's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), Training without a computed gate: the declaration of no gates is in the class at κ = 1, every chain's coverage of no gate being complete, and its slowdown factor is 0, below κ F > 0: it implements itself and complies with no proof block, at 0 / 0 = 0, all proved, so Training's conclusion is not a tautology and needs the premise it drops.",
-   "Nci.SecurityProofs.UpdatedMatMulReads_honest": "completeness: UpdatedMatMulReads's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), UpdatedMatMulReads' premises hold together at the toy's one proof block, with c = 2, k = 1, b_w = b_a = 1/2 and the chain ch1, all proved, so UpdatedMatMulReads is not vacuous.",
-   "Nci.SecurityProofs.UpdatedMatMulReads_nontrivial": "completeness: UpdatedMatMulReads's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), UpdatedMatMulReads without incompressible activations: UpdatedMatMul_nontrivial's charges, at which the read factor is at least 3/2, above the one bit the toy's proof block reads, all proved, so UpdatedMatMulReads's conclusion is not a tautology and needs the premise it drops.",
-   "Nci.SecurityProofs.UpdatedMatMul_honest": "completeness: UpdatedMatMul's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), UpdatedMatMul's premises hold together at the toy, with c = 2, k = 1, b_w = b_a = 1/2 and the one-product chain ch1 of inner dimension d = 1: an inference block holding the product reads the token, one fresh bit, and is charged half a bit for its weight entry and half for its input entry, all proved, so UpdatedMatMul is not vacuous.",
-   "Nci.SecurityProofs.UpdatedMatMul_nontrivial": "completeness: UpdatedMatMul's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), UpdatedMatMul without incompressible activations: charging b_w = 1 and b_a = 2, more than the one bit an inference block holding the product reads, F ≥ 3/2 and the bound F · 2G ≤ size(D) fails, G = 1 and size(D) = 2, all proved, so UpdatedMatMul's conclusion is not a tautology and needs the premise it drops.",
    "Flock.SecurityProofs.LoopInnerRound0Own": "frozen (no-function): the loop's obligation (Flock.Guarantees.LoopInnerRound0, which SessionLoopZK and SessionLoopZKDeployed take) at LeanRelease.withInner, the release whose scheduled round of each rep's inner proof is the frame's own (Loop.innerOf: Frame.innerSched at the round's eps, beta and coin count, on the rep's finish's rounds), proved at every table data, base release, level-0 source and finish's rounds, with no premise; it reads LoopInnerRound0Own (Security/Proofs/Flock/SessionLoop/Inner.lean), a statement of the model's release with no acceptance of a Lean function to take, so the lock records its text.",
    "Flock.SecurityProofs.RecursiveKSDeployed": "restatable: a probability statement (KSLin2OnC, through RecursiveKSDeployedAt at the deployed record) bounding the recursive verifier's acceptance at Hello-committed coins by the extractor's success at the simulating prover and RecursiveKS's bound there; KSLin2OnC's probability is not under shape.events, so the shape rule finds no acceptance. It fits once that probability is listed under shape.events or the statement is restated over FlockSoundness.Game.prob.",
    "Verity.SecurityProofs.RegisteredLeakage": "frozen (no-function): It is stated over an arbitrary value service, serving stack and event on the record, and says what a registration whose record counts its epoch's sessions leaks through the stack's choice of its session, rather than a Lean function's acceptance.",
@@ -15449,10 +15267,6 @@
     "status": "open",
     "test": "benchmarks/pouw/tests/test_lean_headline.py::test_bit_exact_folds_meet_fold_opt_at_pi_star",
     "why": "FOLD-OPT per word folded at the one certificate a headline prices at: at pi*, no run folds its words at a price below (1 - mu_f)·folded·phi*(pi*). Open; at every certificate (FoldOptFolded) it is false: the IMAD rotate, a bit-exact fold of LOP3 and four IMAD-pipe instructions a word, costs 14 to the menu's 16 halfway between DS-120's issue and LOP rows (RT2-LOGIC-1). Its test prices each bit-exact fold we know (the menu's, the funnel, shift, IMAD and wide rotates, the wide multiplies) at both sm_120 headlines' pi* against phi*. On the B200's two readings it is false at every certificate too (RT3-LOGIC-6: ♭'s fold with each IMAD as 32 ALU shift-adds); on the H200's three (DC-90-ri's at 1/2 and its (I3) twin at 3/5 among them) that fold breaks it at no certificate, since the H200's menu holds each route with LI's multiplies as IMAD.WIDE and N_w times one of those prices at most that fold on every row. benchmarks/pouw/tests/test_lean_headline_dc.py::test_folds_meet_fold_opt_at_pi_star prices ♭'s fold and that one at each of the five pi* and checks both facts. At those pi* it is open on all five, and every class a fold route issues prices above 0 at each (a free class would make it harder to meet, not easier: HB-PROOF's M1). On the H200 the cheater's menu holds every counted fold known to come near the bit-exact loops, none built: RT4-SHEET-13's and -14's moves of LI on li and each loop (its XORs as a memory round trip of three issue slots, its multiplies as IMAD.WIDE, or both), their classes at the JI90 lines the H200 measured beside the IGMMA (r20261021-070616-d06c, r20261021-074303-da7f, r20261021-161119-62ac), and li-bulk at its measured cost (r20261021-161119-62ac) with its counted BT1024 and trimmed infinite-W members (RT4-SHEET-17, -22), so there it is a premise only about folds off the cheater's menu, and a counted fold priced below what it would cost built only lowers the proved credit (1 - epsilon)·B_flat, which reads w* and phi* at pi* and not B_flat (RT4-SHEET-27); B_flat doesn't move with it, since flat folds by the built routes alone. The two-slot round trip is off the menu: li's XOR has three inputs a half step and one ATOM.E.XOR and one LD.E carry two. At the (I3) twin's pi* it doesn't follow from FOLD-OPT at 1/2's (HB-PROOF's M1), and phi* there is li-bulk's trimmed member."
-   },
-   "Nci.Assumptions.PartialSumsSupport": {
-    "status": "falsified",
-    "why": "PartialSumsIncompressible in support form; false for one honest matrix multiplication with binary additions, inside the caps (19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify, art:d2cc129951081405e9b3f465d03ecc6f2760ce4dec82768125fce5b8052c4c32): with product IUs that fix a column over a block of (i, t) and adder IUs over k x k x k blocks, each entry's products lie in d IUs while each IU's support is bounded by the entries it depends on; the exact 1-bit toy (d = e = N = 8, b_w = b_a = 1) can be charged at most 183 against the 448 required, for every Gamma >= 448 and K >= 512, and at d = 7168, K = 2e7 the division absorbs at most 8.4% (FP4) and 17.8% (FP8) of the charge at (2.5, 4). Nci.SecurityProofs.ContainedMatMul and ContainedTraining rest on it."
    },
    "Nci.Assumptions.ReferenceLayered": {
     "status": "open",

@@ -7,7 +7,6 @@ public import Definitions.Nci.Guarantees
 public import Definitions.Nci.Guarantees.Reads
 public import Definitions.Nci.Guarantees.Threads
 public import Definitions.Nci.Guarantees.Layered
-public import Definitions.Nci.Guarantees.Contained
 public import Definitions.Nci.Guarantees.Fit
 public import Definitions.Nci.Guarantees.FitRate
 public import Definitions.Nci.Guarantees.Dampener

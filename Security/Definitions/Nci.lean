@@ -12,16 +12,16 @@ of its computed gates. Input gates are in no inference block, so an inference bl
 gates `R` of an inference block read `width(in(R) \ θ)` fresh input bits (`novelReads`): registered information is free,
 and so is anything `R` computes itself.
 
-`CompliesRate c α` is the inference-only policy as the verifier's check (`NciCheck`) reads it, on a circuit of any
-widths: `D` divides into inference blocks of at most `c` gates, each reading at most `α` fresh input bits per gate, so
-at most `α c` in all. Where the policy's guarantees assume the policy, they assume it at a rate. `Complies c k` is the
-policy at `(c, k)`, on a Boolean circuit: `D` has a `(c, k)`-partition (`Verity.Partition.IsCK`), inference blocks of at
-most `c` gates, each reading at most `k` fresh input bits; `Inference` concludes it. A `(c, k)`-partition whose
-inference blocks have exactly `c` gates, padding included, complies at rate `k / c`. Without that tiling it need not: a
-smaller inference block may read `k` bits too, more than `k / c` per gate. A policy is a condition on declarations that
-the verifier checks from `D` and `θ` alone (`Policy`), a protocol with no rounds of its own. `slowdown policy t` is the
-factor by which every declaration that complies with `policy` and implements `t` is larger than `t`. `Reads c C` is the
-least total fresh input that the inference blocks of a division of `C` into blocks of at most `c` gates read.
+`Complies c k` is the inference-only policy: `D` has a `(c, k)`-partition (`Verity.Partition.IsCK`), every inference
+block exactly `c` gates, padding included, reading at most `k` fresh input bits. Its rate is `α = k / c`, the most fresh
+input an inference block reads per gate. `CompliesRate c α` is the policy as the verifier's check (`NciCheck`) reads it,
+on a circuit of any widths: inference blocks of at most `c` gates, each reading at most `α` fresh input bits per gate. A
+`(c, k)`-partition complies at rate `k / c`, and an inference block of at most `c` gates at rate `α` reads at most
+`k = α c` fresh input bits. `CompliesAtMost c k n` is its count form on a Boolean declaration: `D` divides into at most
+`n` proof blocks of a `(c, k)`-partition. A policy is a condition on declarations that the verifier checks from `D` and
+`θ` alone (`Policy`), a protocol with no rounds of its own. `slowdown policy t` is the factor by which every declaration
+that complies with `policy` and implements `t` is larger than `t`. `Reads c C` is the least total fresh input that the
+inference blocks of a division of `C` into blocks of at most `c` gates read.
 
 The draft's necessary subcomputation of frontier training is an updated matrix multiplication chain (`Chain`): the
 gates where a circuit computes the products, the complete output entries, and the links between consecutive

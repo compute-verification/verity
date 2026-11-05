@@ -198,34 +198,6 @@ theorem ch0_inputsUsed (D' : Circuit) (R : Finset (Fin D'.N)) : (ch0 D').inputsU
 
 theorem ch0_G (D' : Circuit) : (ch0 D').G = 0 := Finset.sum_eq_zero fun ℓ _ => ℓ.elim0
 
-/-- A registered circuit whose coverage at `κ` asks nothing is in the class at every parameter: every registered circuit
-runs the chain of no multiplication. -/
-theorem inClass_of_le_zero {T : RegisteredCircuit} {Γ : ℕ} {α b_w b_a κ : ℝ} {d : ℕ}
-    (hT : κ * T.D.size T.D.computed ≤ 0) : Assumptions.InClass T Γ α b_w b_a κ d := by
-  intro D' _ _
-  refine ⟨ch0 D'.D, fun ℓ => ℓ.elim0, ?_, ?_, ?_⟩
-  · unfold Assumptions.Coverage
-    rw [ch0_G]
-    simpa using hT
-  · intro R _ _ _
-    rw [ch0_weightsUsed, ch0_inputsUsed]
-    simp
-  · intro n P _
-    refine ⟨fun _ => 0, le_trans (le_of_eq (Finset.sum_eq_zero fun x _ => x.1.elim0)) (Nat.zero_le _), fun u => ?_⟩
-    rw [ch0_weightsUsed]
-    simp
-
-theorem size_E0 : E0.D.size E0.D.computed = 0 := rfl
-
-theorem implements_E0 : E0.Implements E0 := ⟨implE0, fun g => g.elim0⟩
-
-theorem compliesRate_E0 (Γ : ℕ) (α : ℝ) : CompliesRate Γ α E0 :=
-  ⟨0, ⟨fun g => g.elim0, fun g => g.elim0⟩, fun u => u.elim0⟩
-
-/-- The slowdown factor of the registered circuit of no gates is `0`: it implements itself and complies, at `0 / 0 = 0`. -/
-theorem slowdown_E0 (Γ : ℕ) (α : ℝ) : slowdown (CompliesRate Γ α) E0 = 0 :=
-  nonpos_iff_eq_zero.1 ((iInf₂_le E0 ⟨implements_E0, compliesRate_E0 Γ α⟩).trans_eq (by rw [size_E0]; simp))
-
 /-- `ch1` is linked to no whole entry: its one multiplication has no predecessor. -/
 theorem ch1_notLinked (R : Finset (Fin 4)) (x : (ℓ : Fin ch1.L) × Fin ch1.N × Fin (ch1.d ℓ)) :
     ¬ ch1.LinkedWhole R x.1 x.2.1 x.2.2 := by
@@ -566,8 +538,8 @@ theorem not_windowsHold_T0 : ¬ Assumptions.WindowsHold (T0 D) 1 1 (1 / 2) 0 1 1
 theorem dampener_T0_fails :
     ¬ (efficiency 1 1 2 0 ≤
         unmonitoredShare 2 0 +
-            min (residualShare 0 2) (memoryCap (T0 D).reuse 1 0 (1 / 2) 1 (1 / 2) (1 / 2) * (1 + 1 / 1)) +
-          declaredShare 1 (rhoT (1 / 2) (1 / 2) ((T0 D).bound 1 (1 / 2) 1 0)) 2 0 + 0) := by
+            min (residualShare 0 2) (memoryCap (T0 D).reuse 1 0 ((1 : ℕ) / (2 : ℕ) : ℝ) 1 (1 / 2) (1 / 2) * (1 + 1 / 1)) +
+          declaredShare 1 (rhoT ((1 : ℕ) / (2 : ℕ) : ℝ) (1 / 2) ((T0 D).bound 1 (1 / 2) 1 0)) 2 0 + 0) := by
   rw [bound_T0, show (T0 D).reuse = 0 from rfl]
   norm_num [efficiency, unmonitoredShare, residualShare, memoryCap, declaredShare, rhoT]
 
@@ -594,77 +566,6 @@ theorem DampenerThreadedSlots_nontrivial : Guarantees.DampenerThreadedSlots_nont
     by norm_num, by norm_num, compliesRate_D, theta_id D, T0_threaded _ _ _ _ _, T0_weightsSlots _ _ _ _ _,
     by rw [size_D]; norm_num, by decide, by norm_num, by norm_num, by norm_num, by norm_num,
     by norm_num [Assumptions.WindowLength], by norm_num, not_windowsHold_T0, dampener_T0_fails⟩
-
-theorem Inference_honest : Guarantees.Inference_honest :=
-  ⟨boolean_D, by decide, by decide, by decide⟩
-
-theorem Inference_nontrivial : Guarantees.Inference_nontrivial :=
-  ⟨boolean_D, fun ⟨_, h, _⟩ => absurd (h 0) (by decide), not_complies_zero⟩
-
-theorem Training_honest : Guarantees.Training_honest :=
-  ⟨by decide, inClass_of_le_zero (by norm_num)⟩
-
-theorem Training_nontrivial : Guarantees.Training_nontrivial := by
-  refine ⟨by decide, by norm_num, by norm_num, by norm_num, inClass_of_le_zero (by rw [size_E0]; norm_num), ?_⟩
-  rw [slowdown_E0, nonpos_iff_eq_zero, ENNReal.ofReal_eq_zero]
-  have hF := F_ge (α := 1 / 2) (K := 1) (b_w := 1) (b_a := 1) (d := 1)
-    (by norm_num) (by norm_num) (by norm_num) (by norm_num) (by norm_num)
-  norm_num at hF ⊢
-  linarith
-
-theorem UpdatedMatMul_honest : Guarantees.UpdatedMatMul_honest :=
-  ⟨compliesRate_D, fun _ => le_rfl, ch1_activations (by norm_num) (by norm_num) (by norm_num),
-    ch1_partialSums (by norm_num)⟩
-
-theorem UpdatedMatMul_nontrivial : Guarantees.UpdatedMatMul_nontrivial := by
-  refine ⟨by norm_num, by norm_num, by norm_num, fun _ => le_rfl, compliesRate_D, not_ch1_activations,
-    ch1_partialSums le_rfl, ?_⟩
-  have hF := F_ge (α := 1 / 2) (K := 1) (b_w := 1) (b_a := 2) (d := 1)
-    (by norm_num) (by norm_num) (by norm_num) (by norm_num) (by norm_num)
-  rw [ch1_G, size_D]
-  norm_num at hF ⊢
-  linarith
-
-theorem UpdatedMatMulReads_honest : Guarantees.UpdatedMatMulReads_honest :=
-  ⟨fun _ => le_rfl, smallBlocks_P1, ch1_activations (by norm_num) (by norm_num) (by norm_num),
-    ch1_partialSums (by norm_num)⟩
-
-theorem UpdatedMatMulReads_nontrivial : Guarantees.UpdatedMatMulReads_nontrivial := by
-  refine ⟨by norm_num, by norm_num, fun _ => le_rfl, smallBlocks_P1, not_ch1_activations, ch1_partialSums le_rfl, ?_⟩
-  have hF := readFactor_ge (K := 1) (b_w := 1) (b_a := 2) (d := 1) (by norm_num) (by norm_num) (by norm_num)
-    (by norm_num)
-  rw [ch1_G, Fin.sum_univ_one, show novelReads D (P1.gates 0) = 1 by decide]
-  norm_num at hF ⊢
-  linarith
-
-theorem ContainedTraining_honest : Guarantees.ContainedTraining_honest :=
-  ⟨compliesRate_D, theta_id D, ch1_activationsSupport _, ch1_partialSumsSupport _ _, coverage_ch1⟩
-
-theorem ContainedTraining_nontrivial : Guarantees.ContainedTraining_nontrivial := by
-  refine ⟨by norm_num, by norm_num, by norm_num, fun ℓ => ℓ.elim0, compliesRate_D, theta_id D,
-    ch0_activationsSupport _ _ _, ch0_partialSumsSupport _ _ _ _, not_coverage_ch0, ?_⟩
-  have hF := F_ge (α := 1 / 2) (K := 1) (b_w := 1) (b_a := 2) (d := 1)
-    (by norm_num) (by norm_num) (by norm_num) (by norm_num) (by norm_num)
-  rw [size_D]
-  norm_num at hF ⊢
-  linarith
-
-theorem ContainedMatMulOn_honest : Guarantees.ContainedMatMulOn_honest :=
-  ⟨compliesRate_D, theta_id D, darkReads_M1 _, ch1_activationsSupport _, ch1_partialSumsSupport _ _⟩
-
-theorem ContainedMatMulOn_nontrivial : Guarantees.ContainedMatMulOn_nontrivial :=
-  ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
-    fun _ => le_rfl, fun _ => le_rfl, compliesRate_Dθ, not_theta_Dθ, darkReads_Mθ _, ch1_activationsSupport _,
-    ch1_partialSumsSupport _ _, not_bound factor_half (Nat.one_le_cast.2 (by decide)) (by norm_num)⟩
-
-theorem ContainedTrainingOn_honest : Guarantees.ContainedTrainingOn_honest :=
-  ⟨compliesRate_D, theta_id D, darkReads_M1 _, ch1_activationsSupport _, ch1_partialSumsSupport _ _, coverage_ch1⟩
-
-theorem ContainedTrainingOn_nontrivial : Guarantees.ContainedTrainingOn_nontrivial :=
-  ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
-    fun _ => le_rfl, fun _ => le_rfl, compliesRate_Dθ, not_theta_Dθ, darkReads_Mθ _, ch1_activationsSupport _,
-    ch1_partialSumsSupport _ _, coverage_ch1,
-    not_bound factor_half (by rw [size_D, dark_Mθ]; norm_num) (by norm_num)⟩
 
 theorem IncompressibleContainedTraining_honest : Guarantees.IncompressibleContainedTraining_honest :=
   ⟨compliesRate_D, theta_id D, ch1_T1_incompressible, coverage_ch1⟩
