@@ -6,13 +6,18 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from fractions import Fraction
 from math import log2
 from pathlib import Path
 
+import pytest
+
 from verity.ml.circuits.partition import Level
 from verity.core.protocols.profile import Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
-from verity.core.protocols.sampled_proofs.consumers import compute_bound, exfiltration_bound, location_bits
+from verity.core.protocols.sampled_proofs.consumers import (UNPROVED_EXFILTRATION, compute_bound, exfiltration_bound,
+                                                            location_bits)
+from verity.core.protocols.sampled_proofs.service import REPLAY
 
 #: A4 P6's layer 0 (one-stage-e2e): six templates, 6,771,765 proof blocks, in canonical order.
 A4_SIZES = {"rms_triton": 287, "gemm2048": 6_171_648, "rope": 11_480, "rms_fused": 287, "silu_mul": 287,
@@ -143,6 +148,15 @@ def test_compute_is_the_work_weighted_bound():
     assert compute_bound(two, 1) == two.worst_case(lambda m: m)
     work = {"gemm2048": 2048, "gemm8192": 8192, "rope": 128}
     assert compute_bound(one_level(a4_law(FLOOR)), work) == a4_law(FLOOR).harm_bound(work, DELTA)
+
+
+def test_a_two_stage_profile_is_read_for_compute_and_refused_for_exfiltration():
+    """A two-stage design's profile, a level of replay blocks (`service.REPLAY`) above the proof blocks: compute reads
+    it at the footprint, and exfiltration refuses it, since no Lean proof yet bounds what its accepted traces deliver."""
+    two = IntegrityProfile((REPLAY, "unit"), (512, 4), {REPLAY: Bernoulli(Fraction(1, 2)), "unit": Subset(2)}, 0.01)
+    assert compute_bound(two, 1) == two.worst_case(lambda m: m)
+    with pytest.raises(ValueError, match=re.escape(UNPROVED_EXFILTRATION)):
+        exfiltration_bound(two, 1)
 
 
 def test_an_application_reads_nothing_the_profile_does_not_bound():

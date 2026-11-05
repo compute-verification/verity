@@ -11,6 +11,11 @@ from collections.abc import Mapping, Sequence
 from math import floor, inf, log2, nextafter
 
 from verity.core.protocols.profile import MARGIN, IntegrityProfile
+from verity.core.protocols.sampled_proofs.service import REPLAY
+
+UNPROVED_EXFILTRATION = ("a two-stage design's profile is credited for compute and integrity only: no Lean proof yet "
+                         "bounds what its accepted traces deliver")
+"""`exfiltration_bound`'s refusal of a profile with a level of replay blocks (`service.REPLAY`)."""
 
 
 def location_bits(profile: IntegrityProfile) -> float:
@@ -36,7 +41,11 @@ def exfiltration_bound(profile: IntegrityProfile,
     the proof system's terms.  b is the output bits held by incorrect proof blocks, which the prover chose (`harm_bound` weighted by
     `output_bits`), plus which proof blocks are incorrect (`location_bits`).  The soundness package's Lean states this bound as
     `audit_exfiltration`.  `output_bits` is a proof block's output bits: one number for every proof block, or per stratum a number or
-    (bits, proof blocks) pairs."""
+    (bits, proof blocks) pairs.  A two-stage design's profile, which has a level of replay blocks, is refused: no Lean
+    proof yet bounds what its accepted traces deliver (the counting bound over footprints), so it is credited for
+    compute and integrity only."""
+    if any(level.name == REPLAY for level in profile.levels):
+        raise ValueError(UNPROVED_EXFILTRATION)
     return profile.harm_bound(output_bits) + location_bits(profile)
 
 
@@ -46,4 +55,4 @@ def compute_bound(profile: IntegrityProfile, work: float | Mapping[str, float | 
     return profile.harm_bound(work)
 
 
-__all__ = ["compute_bound", "exfiltration_bound", "location_bits"]
+__all__ = ["UNPROVED_EXFILTRATION", "compute_bound", "exfiltration_bound", "location_bits"]
