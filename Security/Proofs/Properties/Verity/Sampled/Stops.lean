@@ -25,9 +25,10 @@ there.
   log; where every round's reading picks only openings the device serves, the play on the tape the trace ends on
   releases, at a stop where not every cut is past, the bits written there (the link points' at the first stop, a
   round's coins at an answered one), at an opening the rounds whose cuts the stop fixes pick.
-* **One round a stop** (`DigestCut.modeHere_eq_none`, `sub_of_single`, `stop_slot`, `LoggedAfter.slot`): at the
-  readings and decoders at an injective layout of distinct tables, a stop's submission is its one fixed round's, a rep
-  round, with its most likely message, and its bits are released at that round's opening of its rep stream.
+* **One round a stop** (`DigestCut.modeHere_eq_none`, `DigestCut.modeHere_some`, `Pos.modes_some`, `sub_of_single`,
+  `stop_slot`, `LoggedAfter.slot`): at the readings and decoders at an injective layout of distinct tables, a stop's
+  submission is its one fixed round's, a rep round, with its most likely message, and its bits are released at that
+  round's opening of its rep stream.
 * **The trace's answered stops, in order in the log** (`PicksIn`, `PicksOnce`, `AnsweredBy`, `AnsweredBy.seg`,
   `opening_log`, `RoundsReach.order`): where each round picks at most one release of the log the play on the trace's
   tape has, the trace's answered stops release their coins after logs each longer than the one before, and every
@@ -38,6 +39,11 @@ there.
   opening has a first one, which the link's slot picks.
 * **The first stop fixes a cut** (`RoundsReach.run_ret`, `firstStop_skip_log`, `firstStop_fixes`): where every cut is
   past at the first stop no round picks in the play's log, so where the log has an opening, not every cut is past.
+* **The link's release, then the answered stops'** (`prefix_le`, `firstOpened_ne_none`, `readingAt_served`,
+  `firstStop_order`): at the readings and decoders at an injective layout of distinct tables, where each round picks
+  at most one release of the log, the trace from the first stop releases the link points' bits after a log `L₀`, then
+  each answered stop's coins after a longer log, and every release a round picks is one of those, unless the trace
+  answered all its rounds.
 -/
 
 namespace Verity.Game
@@ -93,6 +99,15 @@ theorem _root_.Verity.Game.DigestCut.modeHere_eq_none [Nonempty V] {g' : Game α
 /-- **A round whose cut is not fixed at a position decodes nothing there.** -/
 theorem modes_eq_none [Nonempty V] {p : Pos g σ V ι} {i : ι} (h : (p.Ks i).isHere = false) : p.modes i = none :=
   DigestCut.modeHere_eq_none h p.s'
+
+/-- **A cut fixed at a node decodes a message there.** -/
+theorem _root_.Verity.Game.DigestCut.modeHere_some [Nonempty V] {g' : Game α} {K : DigestCut V g'}
+    (h : K.isHere = true) (s : Strategy g') : ∃ m, K.modeHere s = some m := by
+  cases K <;> first | exact ⟨_, rfl⟩ | cases h
+
+/-- **A round whose cut is fixed at a position decodes a message there.** -/
+theorem modes_some [Nonempty V] {p : Pos g σ V ι} {i : ι} (h : (p.Ks i).isHere = true) : ∃ m, p.modes i = some m :=
+  DigestCut.modeHere_some h p.s'
 
 /-- **No cut is fixed at a consumed position.** -/
 theorem isHere_consume (p : Pos g σ V ι) (i : ι) : (p.consume.Ks i).isHere = false := by
@@ -482,7 +497,7 @@ theorem stop_slot {R J : ℕ} {Reg : Type} (reg : Option Claims.Msg → Reg) {ta
     (hP : (readingAt tables L record recordDigest).round j pre (.opening i s n)) :
     ∃ (t : ℕ) (ht : t < J) (r : Fin 2) (k : ℕ) (m : Claims.Msg), L j = .rep t r k ∧ q.modes j = some m ∧
       sub = ⟨⟨t, ht⟩, r, ⟨m.toArray⟩, tailCount m⟩ :=
-  sub_of_single reg L J (fun j' hj' => Pos.modes_eq_none (by
+  sub_of_single reg L J (modes := q.modes) (fun j' hj' => Pos.modes_eq_none (p := q) (i := j') (by
     cases h : (q.Ks j').isHere
     · rfl
     · exact absurd (readingAt_unique hL ht record recordDigest (hall j' h) hP) hj')) hsub
@@ -545,6 +560,41 @@ theorem mid_of_append {α : Type} {pre L L₃ L₁ L₂ : List α} {r : α} (he 
         rw [List.cons_append] at hr'
         obtain ⟨rfl, -⟩ := List.cons.inj hr'
         exact ⟨c', d, rfl, hL⟩
+
+/-- **Of two splits of one list, the one with the longer front extends the other's front.** -/
+theorem prefix_le {α : Type} {L₁ L₀ R₁ R₀ : List α} (h : L₁ ++ R₁ = L₀ ++ R₀) (hle : L₀.length ≤ L₁.length) :
+    ∃ d, L₁ = L₀ ++ d := by
+  rcases List.append_eq_append_iff.1 h with ⟨a', h₀, -⟩ | ⟨c', h₁, -⟩
+  · have hl := congrArg List.length h₀
+    rw [List.length_append] at hl
+    have ha : a' = [] := List.eq_nil_of_length_eq_zero (by omega)
+    subst ha
+    exact ⟨[], by rw [h₀, List.append_nil, List.append_nil]⟩
+  · exact ⟨c', h₁⟩
+
+/-- **A log through an opening has a first opening.** -/
+theorem firstOpened_ne_none (L₀ : List Release) {r : Release} {i s n : ℕ} (hr : r.frame = .opening i s n)
+    (d : List Release) : firstOpened (L₀ ++ r :: d) ≠ none := fun h => by
+  have h' := List.findSome?_eq_none_iff.1 h r (List.mem_append_right _ (List.mem_cons_self ..))
+  simp [hr] at h'
+
+/-- **The readings at a layout pick only openings the device serves.** -/
+theorem readingAt_served {R : ℕ} (tables : Array String) (L : Fin R → Slot) (record : Exchange → Option Claims.Msg)
+    (recordDigest : Claims.Msg) :
+    ∀ j pre i s n, (readingAt tables L record recordDigest).round j pre (.opening i s n) → Served pre i s n := by
+  intro j pre i s n h
+  have h' : slotRound tables (L j) pre (.opening i s n) := h
+  cases hL : L j with
+  | link =>
+    rw [hL] at h'
+    obtain ⟨_, _, _, hfr, hS, -⟩ := h'
+    obtain ⟨rfl, rfl, rfl⟩ := Frame.opening.inj hfr
+    exact hS
+  | rep t r k =>
+    rw [hL] at h'
+    obtain ⟨_, _, _, hfr, hS, -⟩ := h'
+    obtain ⟨rfl, rfl, rfl⟩ := Frame.opening.inj hfr
+    exact hS
 
 section Order
 
@@ -966,6 +1016,118 @@ theorem firstStop_fixes (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.gam
   obtain ⟨L₁', r', L₂', he', hl⟩ :=
     link_picks tables (logServed_run V θ F c σ o.2) _ L₁ (Nat.lt_succ_self _) r L₂ i s n he hr'
   exact hN j₀ trivial L₁' r' L₂' he' (hj₀ _ _ hl)
+
+/-- **The trace from the first stop, in order in the log**, at the readings `rd` and the decoders `D` at a layout `L`,
+injective, of distinct tables, its rep slots of tables before `J`: where each round picks at most one release of the
+log `Lg` of the play on the tape the trace ends on, the coin map writes the link points and a round's coins into a
+stop's opening as their bits, off `BL` and `B` the opening's classes at those bits are not empty, not every cut is past
+at the first stop, and `BL` doesn't hold there: `Lg` has the link points' bits after a log `L₀` (`LoggedAfter`), and the
+trace's answered stops (`RoundsReach.answers`) each release their round's coins after a log, each longer than `L₀` and
+than the one before; and every release of `Lg` a round picks is after `L₀` or one of those, unless the trace answered
+`N` rounds (`RoundsReach.order`). -/
+theorem firstStop_order (A : Live) {tables : Array String} {L : Fin A.rounds → Slot} (hL : Function.Injective L)
+    (ht : tables.toList.Nodup) {J : ℕ} (hJ : ∀ j t r k, L j = .rep t r k → t < J)
+    (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) (reg : Option Claims.Msg → A.Reg)
+    {rd : Reading A.rounds} (hrd : rd = readingAt tables L record recordDigest) {D : Decoders A.rounds A.Reg}
+    (hD : D = decodersAt reg L) (σ : Strategy (V.game θ F c)) (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP)
+    (BL : LinkHold A.mP) {B : RoundHold} (bitsL : (Fin 2 → Fin A.mP → 𝔽) → List Bool)
+    (hML : ∀ q pts, M.link q pts = writeOpening q.s' (bitsL pts))
+    (hBL : ∀ g' pts, ¬ BL g' pts → ¬ EmptyAt g' (bitsL pts)) (bitsOf : (s : SubmitJ J) → (Fin s.n → 𝔽) → List Bool)
+    (hM : ∀ q s c, M.round q J s c = writeOpening q.s' (bitsOf s c))
+    (hB : ∀ g' s c, ¬ B g' J s c → ¬ EmptyAt g' (bitsOf s c)) (ω : (A.extend M.widening).L.Ω)
+    (pts : Fin 2 → Fin A.mP → 𝔽) (hK : ¬ ∀ j, (firstStop V θ F c A rd σ M ω).Ks j = .skip)
+    (hL0 : ¬ BL (firstStop V θ F c A rd σ M ω).g' pts) {N : ℕ} {β : Type} {fin : LiveOutJ J A.mP → β}
+    {rootB : Array ByteArray} {o : β × CoinTape (V.game θ F c) σ}
+    (hr : RoundsReach D M A.dg J B fin rootB pts N (fun _ _ => [])
+      ((firstStop V θ F c A rd σ M ω).rewrite (M.link (firstStop V θ F c A rd σ M ω) pts)).consume o)
+    {Lg : List Release} (hLg : (CoinTape.run (V.game θ F c) σ o.2).log = Lg) (hU : PicksOnce rd.round Lg) :
+    ∃ (L₀ : List Release) (as : List (Pos (V.game θ F c) σ Claims.Msg (Fin A.rounds) ×
+        ((s : SubmitJ J) × (Fin s.n → 𝔽)))) (ms : List (List Release)),
+      LoggedAfter rd.round (firstStop V θ F c A rd σ M ω) L₀ (bitsL pts) Lg ∧
+      o.1 = fin ⟨rootB, pts, as.foldl (fun rs a =>
+        addRoundJ rs a.2.1.tab a.2.1.rep (roundOf A.dg a.2.1.bytes a.2.1.n a.2.2)) (fun _ _ => []),
+          D.proofs (CoinTape.run (V.game θ F c) σ o.2)⟩ ∧
+      List.Forall₂ (fun a m => D.sub J a.1.toStop.modes = some a.2.1 ∧
+        LoggedAfter rd.round a.1.toStop m (bitsOf a.2.1 a.2.2) Lg) as ms ∧
+      (∀ m ∈ ms, L₀.length < m.length) ∧ ms.Pairwise (fun m m' => m.length < m'.length) ∧
+      ((∀ j L₁, PicksIn rd.round Lg j L₁ → L₁ = L₀ ∨ L₁ ∈ ms) ∨ as.length = N) := by
+  subst hrd hD
+  have hP := readingAt_picks tables L record recordDigest
+  have hPS := readingAt_served tables L record recordDigest
+  have hi₀ := (Pos.toStop_spec (Pos.inv_root (roundCuts V θ F c (readingAt tables L record recordDigest))
+    (M.start ω))).2.2
+  have hSO : StopOf (readingAt tables L record recordDigest).round (readingAt tables L record recordDigest).reveal []
+      (evidenceG θ F c) (fun _ => True) (firstStop V θ F c A (readingAt tables L record recordDigest) σ M ω) :=
+    walk_cast hP (game_eq_relK V θ F c).symm σ (roundCuts V θ F c _) (M.start ω) id TreesOf.nil
+      fun _ => Or.inl ⟨trivial, rfl⟩
+  obtain ⟨L₀, hNP, ⟨hK', -⟩ | ⟨k, fs, ts, f', i, s, n, b, hf', hT, ⟨j, -, hj⟩, s'', Ks, x'', back'', hq, hKs⟩⟩ :=
+    hSO
+  · exact absurd hK' hK
+  have hf'' : ∀ log, f' log = evidenceG θ F c (L₀ ++ log) := hf'
+  have hr' := hr
+  rw [hML] at hr'
+  obtain ⟨L', hL'⟩ := RoundsReach.release hq hi₀ hf'' hT (hPS j _ i s n hj) (hBL _ _ hL0) hr'
+  rw [hLg] at hL'
+  have hjK : ((firstStop V θ F c A (readingAt tables L record recordDigest) σ M ω).Ks j).isHere = true := by
+    rw [hq]
+    exact (isHere_openCuts hKs j).2 ⟨trivial, hj⟩
+  have hall : ∀ j', ((firstStop V θ F c A (readingAt tables L record recordDigest) σ M ω).Ks j').isHere = true →
+      (readingAt tables L record recordDigest).round j' L₀ (.opening i s n) := fun j' h' => by
+    rw [hq] at h'
+    exact ((isHere_openCuts hKs j').1 h').2
+  have hA : AnsweredBy (readingAt tables L record recordDigest).round Lg L₀
+      (fun j => True ∧ ¬ (readingAt tables L record recordDigest).round j L₀ (.opening i s n)) [L₀] := by
+    refine ⟨List.mem_singleton_self _, ⟨_, L', hL'⟩,
+      fun j' hj' => ⟨L₀, List.mem_singleton_self _, _, L', hL', not_not.1 fun h => hj' ⟨trivial, h⟩⟩,
+      fun j' L₁ hp hl => ?_, fun j' L₁ hd hp => ?_⟩
+    · obtain ⟨r, L₂, he, hp'⟩ := id hp
+      obtain ⟨c', d, rfl, hLd⟩ := mid_of_append (pre := []) (L₃ := ⟨.opening i s n, b, bitsL pts⟩ :: L')
+        (he.symm.trans hL') (Nat.zero_le _) (by simp only [List.length_nil, Nat.zero_add]; exact hl)
+      exact absurd hp' (hNP j' trivial c' r d hLd)
+    · rw [List.mem_singleton] at hd
+      subst hd
+      obtain ⟨r, L₂, he, hp'⟩ := hp
+      rw [hL'] at he
+      obtain ⟨rfl, -⟩ := List.cons.inj (List.append_cancel_left he)
+      exact fun h => h.2 hp'
+  obtain ⟨as, ms, h1, hF, hgt, hpw, hcov⟩ := RoundsReach.order hP hPS (sub_eq_none reg L J fun _ _ => rfl) bitsOf hM
+    hB hU hr (Pos.inv_consume (Pos.inv_rewrite hi₀ _)) hLg L₀ f' _ [L₀] hf''
+    (stopOf_next hP s'' Ks x'' back'' hq hT hKs _) hA
+  refine ⟨L₀, as, ms, ⟨j, i, s, n, b, L', hjK, hall, hj, hL'⟩, h1, hF, hgt, hpw, ?_⟩
+  rcases hcov with hc | hN | ⟨q, L₁, hnone, hnd, j₁, hj₁, hall₁⟩
+  · exact Or.inl fun j' L₁ hp => (hc j' L₁ hp).imp_left List.mem_singleton.1
+  · exact Or.inr hN
+  · exfalso
+    obtain ⟨r, L₂, he, hp₁⟩ := hall₁ j₁ hj₁
+    have hone : ∀ j', j' ≠ j₁ → q.modes j' = none := fun j' hj' => Pos.modes_eq_none (p := q) (i := j') (by
+      cases h : (q.Ks j').isHere
+      · rfl
+      · obtain ⟨r', L₂', he', hp'⟩ := hall₁ j' h
+        rw [he] at he'
+        obtain ⟨rfl, -⟩ := List.cons.inj (List.append_cancel_left he')
+        exact absurd (readingAt_unique hL ht record recordDigest hp' hp₁) hj')
+    obtain ⟨m, hm⟩ := Pos.modes_some hj₁
+    cases hLj : L j₁ with
+    | rep t r' k =>
+      rw [sub_single reg L J hLj (hJ j₁ t r' k hLj) hm hone] at hnone
+      cases hnone
+    | link =>
+      have hfo : firstOpened L₁ = none := by
+        have h' : slotRound tables (L j₁) L₁ r.frame := hp₁
+        rw [hLj] at h'
+        obtain ⟨-, -, -, -, -, h''⟩ := h'
+        exact h''
+      by_cases hlt : L₁.length < L₀.length
+      · exact hnd (hA.before j₁ L₁ ⟨r, L₂, he, hp₁⟩ hlt)
+      · obtain ⟨d, rfl⟩ := prefix_le (he.symm.trans hL') (by omega)
+        rw [List.append_assoc] at he
+        have he₂ := List.append_cancel_left (he.symm.trans hL')
+        cases d with
+        | nil => exact hnd (by simp)
+        | cons x d =>
+          rw [List.cons_append] at he₂
+          obtain ⟨rfl, -⟩ := List.cons.inj he₂
+          exact firstOpened_ne_none L₀ (r := ⟨.opening i s n, b, bitsL pts⟩) rfl d hfo
 
 end First
 
