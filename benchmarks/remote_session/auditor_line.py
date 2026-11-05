@@ -138,7 +138,6 @@ import copy
 import gzip
 import hashlib
 import json
-import os
 import statistics
 import subprocess
 import sys
@@ -946,9 +945,8 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
                  "verifier_rtt_ms": {k: x / 1e6 for k, x in v.get("rtt", {}).items() if k.endswith("_ns")}}
     if "gate" in kinds:
         if pin is None or period is None or lane is None or desc is None or commit is None:
-            raise SystemExit("auditor_line: a gate run's line needs --pin, --period, --lane (default RESEARCH_LANE) and "
-                             "--commit (the verifier run's recorded commit, whose verifier the period must have "
-                             "committed)")
+            raise SystemExit("auditor_line: a gate run's line needs --pin, --period, --lane and --commit (the verifier "
+                             "run's recorded commit, whose verifier the period must have committed)")
         ran = requested_pin(out)
         if ran is not None and ran != commit:
             raise SystemExit(f"auditor_line: the host run's request.json ran its verifier at {ran} (`pinned`), not "
@@ -1140,9 +1138,8 @@ def main(argv: list[str] | None = None) -> int:
                          "auditor's model registry's shape (`remote_bandwidth.store.read_pin`); without either no session is "
                          "bound")
     ap.add_argument("--table", type=Path, help="write each session's checks and the line here, as Markdown")
-    ap.add_argument("--lane", default=os.environ.get("RESEARCH_LANE"),
-                    help="the lane whose period the audit is, held to the ledger's period and sessions (a gate run; "
-                         "default RESEARCH_LANE)")
+    ap.add_argument("--lane", help="the lane whose period the audit is, held to the ledger's period and sessions (a "
+                    "gate run)")
     ap.add_argument("--peer", help="override the gate sessions' challenger peer, which is otherwise the run's record's "
                     "(`peer_of`: verifier.json's, else a host run's request.json beside OUT)")
     ap.add_argument("--disk-bytes-per-s", type=float, default=RATES["disk_bytes_per_s"], metavar="B/S",

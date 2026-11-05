@@ -12,8 +12,8 @@ HBM and the chip if nothing is reused from L2 (the encoded weights; the KV cache
 fused kernel's chunk partial sums, written and read once; the BF16 LM head, which no arm encodes).
 
 Writes OUT/frontier.json too: the same points in the rate audit's shared schema (`verity/codec-frontier-point/v0`,
-`benchmarks/word_codec/frontier.py`), with ``end_to_end: true``, the context, the model and the lane (RESEARCH_LANE):
-y over stock vLLM compiled (the decode headline's baseline) of the compiled arms, as vLLM serves (-c) or without autotuning (-d, the step its gate ran; a
+`benchmarks/word_codec/frontier.py`), with ``end_to_end: true``, the context, the model and the lane (`compare.py OUT
+LANE`; run.sh passes RESEARCH_LANE): y over stock vLLM compiled (the decode headline's baseline) of the compiled arms, as vLLM serves (-c) or without autotuning (-d, the step its gate ran; a
 little slower than -c, so its y errs high), split by the run's own arms in the same mode into base (the arm's kernel on plain payloads: `plain`, or the wide
 kernel at k = 0) and decode (over base); no arm tags or commits in the step, so tag, commit and τ are 0.  x and Δ are the
 codec lanes' measurements for the same field, k and packing (`CODEC`;
@@ -171,7 +171,7 @@ def encoded(a: dict) -> bool:
 
 
 def main() -> int:
-    out = Path(sys.argv[1])
+    out, lane = Path(sys.argv[1]), sys.argv[2] if len(sys.argv) > 2 else None
     arms = load(out)
     rc = out / "arms.rc"
     fails = [f"arm {line} (exit status)" for line in (rc.read_text().splitlines() if rc.exists() else ["none ran"])
@@ -211,7 +211,7 @@ def main() -> int:
         return x / e if x else None
 
     points, rows, frontier = [], [], []
-    run_id, lane = os.environ.get("RESEARCH_RUN_ID"), os.environ.get("RESEARCH_LANE")
+    run_id = os.environ.get("RESEARCH_RUN_ID")
     passes: dict[int, list[float]] = {}
     for a in arms:
         for p in a.get("native_pass", []):
