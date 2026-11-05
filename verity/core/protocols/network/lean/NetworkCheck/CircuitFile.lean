@@ -8,11 +8,12 @@ import Flock.Tags
 # A circuit file's digest and header, read in chunks, or the file read whole
 
 `network-period check P C E CIRCUIT…` reads each circuit file its parameters list in chunks of a fixed size: it hashes
-the whole file (`Hasher`, SHA-512) and keeps only its head line, its META line and each block's keyword line and its
-net's header line (`Lines`), never a net's rows, so a file of any size is read in memory of its header. `ofHeader` is
-the `Flock.Circuit` those lines describe, each net its header with no rows: what `SampledProofs.Bits.check` and the
-period's `circuitsWhy` read of an audit's file. The file is a flat `flock-circuit` file (`Flock.Tags.circuit`); a typed
-or templated block's file is refused by name.
+the whole file (`Hasher`, SHA-512) and keeps only its head line, its META line, each block's keyword line and its
+net's header line, and its unit net's input rows (`Lines`), never a computed row, so a file of any size is read in
+memory of its header and its unit's input columns. `ofHeader` is the `Flock.Circuit` those lines describe, each net its header
+with no rows but the unit's input rows, each a self row or a forced zero as `Flock.Net.ofRows` holds them: what
+`SampledProofs.Bits.check` and the period's `circuitsWhy` and `padCols` read of an audit's file. The file is a flat
+`flock-circuit` file (`Flock.Tags.circuit`); a typed or templated block's file is refused by name.
 
 A scan's file is read whole instead (`whole`), by the very function a session's verifier of `Flock.Tags.circuit`'s
 statement parses its circuit with (`Flock.ProvedScope.circuitOf`, `whole_circuit`), so the period reads the rows the
@@ -51,65 +52,7 @@ def Hasher.finish (s : Hasher) : ByteArray := Id.run do
     h := Flock.Sha512.compress h data (128 * blk)
   return ⟨Array.ofFn (n := 64) fun i => (h[i.val / 8]! >>> (8 * (7 - i.val % 8)).toUInt64).toUInt8⟩
 
-/-! ## The lines that are a file's header -/
-
-/-- The first newline of `b` at or after `i`, or `b.size`. -/
-def nextNewline (b : ByteArray) (i : Nat) : Nat := Id.run do
-  let mut j := i
-  while j < b.size && b[j]! != 10 do j := j + 1
-  return j
-
-/-- A file's lines as its chunks arrive: those kept (the head, META, and each block's keyword line and its net's header
-line), the current line's bytes while it is kept, the lines still to skip (a net's rows after its header) and whether a
-skipped line has begun, after a block's keyword line its count of lines, and the first refusal. -/
-structure Lines where
-  kept : Array ByteArray := #[]
-  cur : ByteArray := .empty
-  skip : Nat := 0
-  begun : Bool := false
-  block : Option Nat := none
-  err : Option String := none
-
-/-- The current line ends: it is kept, and the next line is kept, or a net's rows are skipped after its header. -/
-def Lines.close (s : Lines) (kw : String) : Lines :=
-  let s := { s with kept := s.kept.push s.cur, cur := .empty }
-  if s.kept.size ≤ 2 then s
-  else match s.block with
-    | some n => { s with block := none, skip := n - 1 }
-    | none =>
-      let h := Flock.tokens ((String.fromUTF8? s.kept.back!).getD "")
-      if h.size != 3 || h[0]! != kw then { s with err := some s!"expected a {kw} line" }
-      else match h[2]!.toNat? with
-        | some (n + 1) => { s with block := some (n + 1) }
-        | _ => { s with err := some s!"{h[1]!}: not a {kw} block of at least one line" }
-
-/-- The chunk `b` read: lines skipped by counting newlines, kept lines' bytes gathered. -/
-def Lines.feed (s : Lines) (kw : String) (b : ByteArray) : Lines := Id.run do
-  let mut s := s
-  let mut i := 0
-  while i < b.size && s.err.isNone do
-    let j := nextNewline b i
-    if j == b.size then
-      if s.skip == 0 then s := { s with cur := s.cur ++ b.extract i j }
-      else s := { s with begun := true }
-      i := j
-    else
-      if 0 < s.skip then s := { s with skip := s.skip - 1, begun := false }
-      else s := { s with cur := s.cur ++ b.extract i j }.close kw
-      i := j + 1
-  return s
-
-/-- The kept lines at the end of the file, a last line without its newline among them, or why the file is not whole. -/
-def Lines.finish (s : Lines) (kw : String) : Flock.V (Array String) := do
-  let s := if 0 < s.skip then (if s.begun then { s with skip := s.skip - 1 } else s)
-    else if s.cur.isEmpty then s else s.close kw
-  if let some e := s.err then throw e
-  if 0 < s.skip || s.block.isSome then throw "a block is truncated"
-  s.kept.mapM fun l => match String.fromUTF8? l with
-    | some t => pure t
-    | none => throw "a header line is not UTF-8"
-
-/-! ## The circuit its header describes -/
+/-! ## A net's header and its input rows -/
 
 private def ctx : String := "circuit META"
 
@@ -154,6 +97,113 @@ def headerNet (line : String) : Flock.V Flock.Net := do
   return { (default : Flock.Net) with name, useful, constPos, inGroups, outGroups, inWords,
                                       unitLog := max 7 (Flock.log2ceil useful) }
 
+/-- **Net `n` with its input rows**, `rows` each line's numbers as `Flock.Net.parse` reads a row (`na a… nb b…`): its A
+and B those rows, `inWords` words of them, each a self row `[c]·[c]` or empty in both, as `Flock.Net.ofRows` holds an
+input row. An empty one is a forced zero: Flock's relation holds its value to `0 · 0`. -/
+def withInputs (n : Flock.Net) (rows : Array (Array Nat)) : Flock.V Flock.Net := do
+  let mut ra := #[]
+  let mut rb := #[]
+  for c in [0:n.inWords * Flock.WORD] do
+    let v := rows.getD c #[]
+    let na := v.getD 0 0
+    let nb := v.getD (1 + na) 0
+    if v.size == 0 || v.size != 2 + na + nb then throw s!"flock-ir-unit/v2: row {c} is malformed"
+    let a := v.extract 1 (1 + na)
+    let b := v.extract (2 + na) (2 + na + nb)
+    if !((a == #[c] && b == #[c]) || (a.isEmpty && b.isEmpty)) then
+      throw s!"flock-ir-unit/v2: row {c} is not an input row"
+    ra := ra.push a
+    rb := rb.push b
+  let a ← Flock.Sparse.ofRows ra (2 ^ n.unitLog)
+  let b ← Flock.Sparse.ofRows rb (2 ^ n.unitLog)
+  return { n with aT := .pure a, bT := .pure b }
+
+/-! ## The lines that are a file's header -/
+
+/-- The first newline of `b` at or after `i`, or `b.size`. -/
+def nextNewline (b : ByteArray) (i : Nat) : Nat := Id.run do
+  let mut j := i
+  while j < b.size && b[j]! != 10 do j := j + 1
+  return j
+
+/-- A file's lines as its chunks arrive: those kept (the head, META, and each block's keyword line and its net's header
+line), the current line's bytes while it is kept or read, the lines still to skip (a net's rows after its header) and
+whether a skipped line has begun, after a block's keyword line its count of lines, the unit's input rows still to read
+and its rows to skip after them, whether the file's first unit block has begun, the input rows read, each line's
+numbers, and the first refusal. -/
+structure Lines where
+  kept : Array ByteArray := #[]
+  cur : ByteArray := .empty
+  skip : Nat := 0
+  begun : Bool := false
+  block : Option Nat := none
+  look : Nat := 0
+  rest : Nat := 0
+  unit : Bool := false
+  inRows : Array (Array Nat) := #[]
+  err : Option String := none
+
+/-- The current line is kept, and the next line is kept, or a net's rows are skipped after its header, the file's first
+unit's input rows (its header's `inWords` words) read first. -/
+def Lines.keep (s : Lines) (kw : String) : Lines :=
+  let s := { s with kept := s.kept.push s.cur, cur := .empty }
+  if s.kept.size ≤ 2 then s
+  else match s.block with
+    | some n =>
+      let isUnit := !s.unit &&
+        (Flock.tokens ((String.fromUTF8? s.kept[s.kept.size - 2]!).getD "")).getD 1 "" == "unit"
+      let look := if isUnit then match headerNet ((String.fromUTF8? s.kept.back!).getD "") with
+          | .ok h => min (h.inWords * Flock.WORD) (n - 1)
+          | .error _ => 0
+        else 0
+      { s with block := none, unit := s.unit || isUnit, look, skip := if look == 0 then n - 1 else 0,
+               rest := n - 1 - look }
+    | none =>
+      let h := Flock.tokens ((String.fromUTF8? s.kept.back!).getD "")
+      if h.size != 3 || h[0]! != kw then { s with err := some s!"expected a {kw} line" }
+      else match h[2]!.toNat? with
+        | some (n + 1) => { s with block := some (n + 1) }
+        | _ => { s with err := some s!"{h[1]!}: not a {kw} block of at least one line" }
+
+/-- The current line ends: an input row of the unit is read, its numbers kept, else the line is kept (`keep`). -/
+def Lines.close (s : Lines) (kw : String) : Lines :=
+  if s.look == 0 then s.keep kw
+  else match Flock.Net.lineNums ((String.fromUTF8? s.cur).getD "") with
+    | some v =>
+      let s := { s with cur := .empty, inRows := s.inRows.push v, look := s.look - 1 }
+      if s.look == 0 then { s with skip := s.rest, rest := 0 } else s
+    | none => { s with err := some s!"unit: flock-ir-unit/v2: row {s.inRows.size} is not numbers" }
+
+/-- The chunk `b` read: lines skipped by counting newlines, kept lines' bytes gathered. -/
+def Lines.feed (s : Lines) (kw : String) (b : ByteArray) : Lines := Id.run do
+  let mut s := s
+  let mut i := 0
+  while i < b.size && s.err.isNone do
+    let j := nextNewline b i
+    if j == b.size then
+      if s.skip == 0 then s := { s with cur := s.cur ++ b.extract i j }
+      else s := { s with begun := true }
+      i := j
+    else
+      if 0 < s.skip then s := { s with skip := s.skip - 1, begun := false }
+      else s := { s with cur := s.cur ++ b.extract i j }.close kw
+      i := j + 1
+  return s
+
+/-- The kept lines and the unit's input rows at the end of the file, a last line without its newline among them, or why
+the file is not whole. -/
+def Lines.finish (s : Lines) (kw : String) : Flock.V (Array String × Array (Array Nat)) := do
+  let s := if 0 < s.skip then (if s.begun then { s with skip := s.skip - 1 } else s)
+    else if s.cur.isEmpty then s else s.close kw
+  if let some e := s.err then throw e
+  if 0 < s.skip || s.block.isSome || 0 < s.look then throw "a block is truncated"
+  let kept ← s.kept.mapM fun l => match String.fromUTF8? l with
+    | some t => pure t
+    | none => throw "a header line is not UTF-8"
+  return (kept, s.inRows)
+
+/-! ## The circuit its header describes -/
+
 private def intLists (j : Json) (k : String) : Flock.V (Array (Array Int)) := do
   (← Flock.J.arr j k ctx).mapM fun u => do (← Flock.J.asArr u s!"{ctx}.{k}").mapM fun x => Flock.J.asInt x s!"{ctx}.{k}"
 
@@ -183,12 +233,12 @@ def outRows (mj : Json) (outPorts : Nat) : Flock.V (Array Nat) := do
   | .error _ => pure (Array.replicate (outPorts - Flock.HmRow.pinnedCount mj) 1)
   | .ok v => (← Flock.J.asArr v "out_row_ports").mapM (Flock.J.asNat · "out_row_ports")
 
-/-- **The circuit file's header as a `Flock.Circuit`**: its name, SHA-512 `sha`, nets (each its header, no rows), units
-per VU, unit net, the net returning the outputs (META `out_net`, the unit by default), row ports (`rowPorts`), output
-ports and output rows (`outRows`), leaf maps, wires and leaf cuts (META `wires` and `leaf_cuts`, read as
-`Flock.Circuit.parse` and `Flock.HmRow` read them) and META. A file of another format than `Flock.Tags.circuit`'s, a
-typed template's (`flock-circuit/types`) among them, is refused. -/
-def ofHeader (sha : ByteArray) (lines : Array String) : Flock.V Flock.Circuit := do
+/-- **The circuit file's header as a `Flock.Circuit`**: its name, SHA-512 `sha`, nets (each its header, no rows, but the
+unit's input rows `inRows`, `withInputs`), units per VU, unit net, the net returning the outputs (META `out_net`, the
+unit by default), row ports (`rowPorts`), output ports and output rows (`outRows`), leaf maps, wires and leaf cuts
+(META `wires` and `leaf_cuts`, read as `Flock.Circuit.parse` and `Flock.HmRow` read them) and META. A file of another
+format than `Flock.Tags.circuit`'s, a typed template's (`flock-circuit/types`) among them, is refused. -/
+def ofHeader (sha : ByteArray) (lines : Array String) (inRows : Array (Array Nat)) : Flock.V Flock.Circuit := do
   let tags := Flock.Tags.circuit
   let head := (lines.getD 0 "").trimAsciiEnd.toString
   if !head.startsWith (tags.fileFormat ++ " ") then
@@ -208,6 +258,9 @@ def ofHeader (sha : ByteArray) (lines : Array String) : Flock.V Flock.Circuit :=
     | .ok n => nets := nets.push (nm, n)
     | .error e => throw s!"{nm}: {e}"
   let some unitNet := nets.findIdx? (·.1 == "unit") | throw "no unit circuit"
+  match withInputs (nets.getD unitNet default).2 inRows with
+  | .ok n => nets := nets.set! unitNet ("unit", n)
+  | .error e => throw s!"unit: {e}"
   let outName := (mj.getObjValAs? String "out_net").toOption.getD "unit"
   let some outNet := nets.findIdx? (·.1 == outName) | throw s!"META: unknown circuit {outName}"
   let leavesOut ← (← intLists mj "leaves_out").mapM fun u => u.mapM fun x =>
@@ -242,7 +295,8 @@ def ofHeader (sha : ByteArray) (lines : Array String) : Flock.V Flock.Circuit :=
 /-- A whole file's SHA-512 and its header's circuit, from its hash and lines. -/
 def result (hs : Hasher) (ls : Lines) : Flock.V (ByteArray × Flock.Circuit) := do
   let sha := hs.finish
-  pure (sha, ← ofHeader sha (← ls.finish Flock.Tags.circuit.blockKeyword))
+  let (lines, inRows) ← ls.finish Flock.Tags.circuit.blockKeyword
+  pure (sha, ← ofHeader sha lines inRows)
 
 /-- The circuit file's bytes `b`, read in chunks of `chunk ≥ 1` bytes: its SHA-512 and its header's circuit, or why not. -/
 def ofChunks (b : ByteArray) (chunk : Nat) : Flock.V (ByteArray × Flock.Circuit) :=
@@ -303,9 +357,9 @@ private def toyNet : Array String :=
         (b.inGroups ++ b.outGroups).map (fun g => (g.col, g.words, g.bits))
   | _, _ => false
 
-/-- A file of that unit net at two units a VU, each instance returning its own output word, an input row `x` of four
+/-- A file of unit net `net` at two units a VU, each instance returning its own output word, an input row `x` of four
 words and an output row `o` of two, its META's other fields `extra`. -/
-private def toyFileWith (extra : List (String × Json)) : ByteArray :=
+private def toyFileOf (net : Array String) (extra : List (String × Json)) : ByteArray :=
   let ns (xs : List Nat) : Json := Json.arr (xs.toArray.map Lean.toJson)
   let mj := Json.mkObj ([("format", .str Flock.Tags.circuit.fileFormat),
     ("statement", .str Flock.Tags.circuit.statement), ("units_per_vu", Lean.toJson (2 : Nat)),
@@ -314,7 +368,9 @@ private def toyFileWith (extra : List (String × Json)) : ByteArray :=
     ("out_ports", Json.arr #[Json.arr #["o", Lean.toJson (2 : Nat)]]),
     ("leaves_in", Json.arr #[ns [0, 1], ns [2, 3]]), ("leaves_out", Json.arr #[ns [0], ns [1]])] ++ extra)
   (String.intercalate "\n" ([s!"{Flock.Tags.circuit.fileFormat} toy", s!"META {mj.compress}",
-    s!"{Flock.Tags.circuit.blockKeyword} unit {toyNet.size}"] ++ toyNet.toList) ++ "\n").toUTF8
+    s!"{Flock.Tags.circuit.blockKeyword} unit {net.size}"] ++ net.toList) ++ "\n").toUTF8
+
+private def toyFileWith (extra : List (String × Json)) : ByteArray := toyFileOf toyNet extra
 
 private def toyFile : ByteArray := toyFileWith []
 
@@ -333,6 +389,24 @@ private def jn (k : Nat) : Json := Lean.toJson k
       c.outNet == 0 && c.unit.constPos == 145 && c.leavesOut == #[#[0], #[1]] && c.leavesIn.size == 2 &&
       c.ports.map (fun p => (p.name, p.words, p.bits)) == #[("x", 4, 64), ("o", 2, 32)] && c.inWords == 6 &&
       c.outPorts == #[("o", 2)] && c.outRowPorts == #[1]
+  | .error _ => false
+
+/- The unit's input rows are read, its ports' self rows and its padding's forced zeros, and none of its computed rows;
+an input row that is neither, or not a row, refuses the file. -/
+#guard [1, 7, 64, 1000, toyFile.size].all fun k => match ofChunks toyFile k with
+  | .ok (_, c) => c.unit.a.rows == Flock.WORD && c.unit.b.rows == Flock.WORD &&
+      (List.range Flock.WORD).all fun i =>
+        if i < 32 then c.unit.a.row i == #[i] && c.unit.b.row i == #[i]
+        else (c.unit.a.row i).isEmpty && (c.unit.b.row i).isEmpty
+  | .error _ => false
+#guard [("1 41 1 41", "unit: flock-ir-unit/v2: row 40 is not an input row"),
+    ("1 40 1", "unit: flock-ir-unit/v2: row 40 is malformed"),
+    ("1 40 x 40", "unit: flock-ir-unit/v2: row 40 is not numbers")].all fun (row, e) =>
+  [1, 7, 64].all fun k => match ofChunks (toyFileOf (toyNet.set! 41 row) []) k with
+    | .error e' => e' == e
+    | .ok _ => false
+#guard match ofChunks (toyFileOf (toyNet.set! 41 "1 40 1 40") []) 64 with
+  | .ok (_, c) => c.unit.a.row 40 == #[40] && c.unit.b.row 40 == #[40]
   | .error _ => false
 #guard match ofChunks (toyFileWith [("row_schemas", Json.arr #[Json.arr #["hm96-sha512/row/v2", jn 60],
     Json.arr #["hm96-sha512/row/v2", jn 32]]), ("out_row_ports", Json.arr #[jn 1])]) 64 with

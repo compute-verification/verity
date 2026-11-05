@@ -79,8 +79,8 @@ its record's digest, `SampledProofs.Bits.check` lays it out as its template, and
 VUs of its `upv`, the scan's one instance a VU whose rows read no input padding and every bit of its `row` parameter
 (`circuitsWhy`). An audit with
 files counts its VUs as its units, each template's instances over its file's `upv`, charges a VU's bits, and counts
-each VU's input padding, the unit's input columns no port holds, among its free inputs (`charged`, `padFree`,
-`padCols`).
+each VU's input padding, the unit's input columns no port holds whose row is not a forced zero (empty in A and B), among
+its free inputs (`charged`, `padFree`, `padCols`).
 The rows form has, in place of `sync_set`,
 
     "circuit": hex,
@@ -1971,11 +1971,12 @@ def protocol : Core.Protocol where
 
 `network-period check PARAMS COMMITMENT EVIDENCE CIRCUIT…` reads the circuit files the parameters list, each audit's
 (`audits[i].circuits`) with `i` ascending, then the scan's (`scan_circuits`), each a file a root template of its
-Program, in order; it reads an audit's file's SHA-512 and header (`NetworkCheck.CircuitFile.read`), never its nets'
-rows, and reads a scan's file whole, as the scan's sessions' verifier parses it (`NetworkCheck.CircuitFile.whole`). A
-proof block is a VU, a file's `units_per_vu` template instances, so a listed audit's units are its VUs and a wrong one
-commits at most `vuBits upv words`; and each VU's input padding, the unit's input columns no port holds (`padCols`),
-counts among its free inputs (`charged`, `padFree`). -/
+Program, in order; it reads an audit's file's SHA-512, header and unit's input rows (`NetworkCheck.CircuitFile.read`),
+never a computed row, and reads a scan's file whole, as the scan's sessions' verifier parses it
+(`NetworkCheck.CircuitFile.whole`). A proof block is a VU, a file's `units_per_vu` template instances, so a listed
+audit's units are its VUs and a wrong one commits at most `vuBits upv words`; and each VU's input padding, the unit's
+input columns no port holds whose row is not a forced zero (`padCols`), counts among its free inputs (`charged`,
+`padFree`). -/
 
 /-- The owners of listed files, in the order their files are given: each audit that lists files, by index, then the
 scan; each with whether it is the scan and what its files are held to. -/
@@ -1996,9 +1997,9 @@ file's members could be laid out by another query than the record's; Bits doesn'
 (`SampledProofs.Bits.check`); the template's instances are not whole VUs of its `units_per_vu`; or a scan's file packs
 more than one instance a VU, while the period counts the scan's units as its `2T` template instances
 (`rowsWindowCheck`). A scan's file is read whole (`NetworkCheck.CircuitFile.whole`), so last its unit net's rows are
-checked: a net whose rows were not read (a header alone, its A or B shorter than its computed rows) is refused, and so is
-a row reading input padding or a bit of the template's `row` parameter that no row reads (`SampledProofs.Bits.readsWhy`
-at `unitReads`). -/
+checked: a net whose rows were not read (a header and input rows alone, its A or B shorter than its computed rows) is
+refused, and so is a row reading input padding or a bit of the template's `row` parameter that no row reads
+(`SampledProofs.Bits.readsWhy` at `unitReads`). -/
 def fileWhy (what : String) (scan : Bool) (x : Listed) (k : Nat) (sha : ByteArray) (cf : Flock.Circuit) :
     Option String :=
   let t := x.templates[k]!
@@ -2034,15 +2035,32 @@ def circuitsWhy (l : Listing) (fs : Array (ByteArray × Flock.Circuit)) : Option
       given"
   else (want.zip fs).findSome? fun ((w, s, x, k), (sha, cf)) => fileWhy w s x k sha cf
 
-/-- **A circuit file's unit's input padding**: its unit net's input columns (`SampledProofs.Bits.Rows.ofNet`'s `nIn`)
-that no port holds (`Flock.portCols`), counted as columns. A row may read one, and Δ fills it from no row, so its value
-is the prover's: a free input of each VU, read off the header. It marks each port's columns once, so it costs the input
-columns plus the ports' widths, never their product. -/
-def padCols (cf : Flock.Circuit) : Nat :=
+/-- **Input column `c` of a circuit file's unit is a forced zero**: the unit's input rows were read (its A and B hold its
+input columns' rows) and row `c` is empty in A and in B, so Flock's relation holds its value to `0 · 0` in every
+block. `Flock.Net.ofRows` lets an input row be only that or a self row `[c]·[c]`, which holds either bit. -/
+def forcedZero (cf : Flock.Circuit) (c : Nat) : Bool :=
+  let nIn := min (cf.unit.inWords * Flock.WORD) cf.unit.constPos
+  nIn ≤ cf.unit.a.rows && nIn ≤ cf.unit.b.rows && (cf.unit.a.row c).isEmpty && (cf.unit.b.row c).isEmpty
+
+/-- **A circuit file's unit's input columns no port holds**: its unit net's input columns
+(`SampledProofs.Bits.Rows.ofNet`'s `nIn`) that no port (`Flock.portCols`) holds, ascending. It marks each port's
+columns once, so it costs the input columns plus the ports' widths, never their product. -/
+def unheldCols (cf : Flock.Circuit) : List Nat :=
   let nIn := min (cf.unit.inWords * Flock.WORD) cf.unit.constPos
   let held := (Flock.portCols cf.unit.inGroups).foldl
     (fun h q => (List.range q.2).foldl (fun h t => h.set! (q.1 + t) true) h) (Array.replicate nIn false)
-  ((List.range nIn).filter fun c => !held.getD c false).length
+  (List.range nIn).filter fun c => !held.getD c false
+
+/-- **A circuit file's unit's forced-zero padding**: its input columns no port holds (`unheldCols`) whose row is a
+forced zero (`forcedZero`), so Flock's relation holds each to 0 and none is a free input. `padCols` counts the rest. -/
+def forcedCols (cf : Flock.Circuit) : List Nat :=
+  (unheldCols cf).filter (forcedZero cf)
+
+/-- **A circuit file's unit's input padding**: its input columns no port holds (`unheldCols`) that are not forced zeros
+(`forcedZero`), counted as columns. Δ fills such a column from no row, so its value is the prover's, a free input of
+each VU. A unit whose input rows were not read counts every column no port holds. -/
+def padCols (cf : Flock.Circuit) : Nat :=
+  ((unheldCols cf).filter fun c => !forcedZero cf c).length
 
 /-- **Root templates `ts`' VUs' input padding**, `fs` their circuit files in order: `Σ members / upv · padCols` over
 the templates, each at its file's `units_per_vu` and padding. An audit's is `padFree (chargesOf P) fs` at its Program
@@ -2098,6 +2116,21 @@ padding, `U`'s one 112. -/
     { (default : Flock.Net) with
       inWords := 2, constPos := 2 * Flock.WORD + 4, inGroups := #[⟨0, 1, #[16]⟩, ⟨1, 1, #[16, 16]⟩] }
   padCols { (default : Flock.Circuit) with nets := #[("unit", n)], unitNet := 0 } == 2 * Flock.WORD - 48
+
+/- A unit of one input word, a port of 16 at word 0, its input rows read: the port's sixteen self rows, a self row at
+column 20 that no port holds, and forced zeros. Only column 20 counts; the other columns past the port are forced. -/
+#guard
+  let rows := (Array.range Flock.WORD).map fun c => if c < 16 || c == 20 then #[c] else #[]
+  match Flock.Sparse.ofRows rows (2 ^ 8) with
+  | .ok m =>
+    let n : Flock.Net :=
+      { (default : Flock.Net) with inWords := 1, constPos := Flock.WORD + 1, inGroups := #[⟨0, 1, #[16]⟩] }
+    let n' := { n with aT := .pure m, bT := .pure m, unitLog := 8 }
+    let cf : Flock.Circuit := { (default : Flock.Circuit) with nets := #[("unit", n')], unitNet := 0 }
+    padCols cf == 1 && forcedZero cf 30 && !forcedZero cf 20 && !forcedZero cf 3 &&
+      forcedCols cf == (List.range Flock.WORD).filter (fun c => 16 ≤ c && c != 20) &&
+      (forcedCols { (default : Flock.Circuit) with nets := #[("unit", n)], unitNet := 0 }).isEmpty
+  | .error _ => false
 #guard (circuitsWhy { audits := #[some toyListed] } #[]).isSome
 #guard (circuitsWhy { audits := #[none, some toyListed] } #[(.empty, default), (.empty, default)]) ==
   some s!"audit 1's circuit file for T: its SHA-512 is not its listing's"
