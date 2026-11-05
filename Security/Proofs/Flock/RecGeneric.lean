@@ -36,6 +36,12 @@ public import Proofs.Flock.RecGeneric.Lift
 public import Proofs.Flock.RecGeneric.BadDev
 public import Proofs.Flock.RecGeneric.StatementProof
 public import Proofs.Flock.RecGeneric.OuterProof
+public import Proofs.Flock.RecGeneric.ZKProof
+public import Proofs.Flock.RecGeneric.ZKHides
+public import Proofs.Flock.RecGeneric.ZKCost
+public import Proofs.Flock.RecGeneric.ZKSessionsProof
+public import Proofs.Flock.RecGeneric.ZKAtFlockProof
+public import Proofs.Flock.RecGeneric.ZKAtRecProof
 
 /-! The recursion as a compiler, generic in Π_in, Π_out and the server, over Π_in with repetition extractors: its
 statements (`Definitions.Claims.RecursionGeneric`: `CompositionKS`, L1, and `CompilerKS`, L2), their honest and
@@ -70,6 +76,18 @@ composition, which bounds the inner stage's failure where every outer extraction
 (`Proofs.Flock.RecGeneric.Lift`), the plurality prover's bad draws bounded by the link
 (`Proofs.Flock.RecGeneric.BadDev`), and L1 with the recursive audit from it (`Proofs.Flock.RecGeneric.StatementProof`).
 `E_O`'s knowledge soundness from the outer argument's (O1), and L2 from L1 and O1
-(`Proofs.Flock.RecGeneric.OuterProof`). -/
+(`Proofs.Flock.RecGeneric.OuterProof`). Zero knowledge (Z1) from the outer phase's and the leaves' hiding
+(`Proofs.Flock.RecGeneric.ZKProof`), the hm96 leaves' hiding (Z2, `Proofs.Flock.RecGeneric.ZKHides`), and the
+compiled simulator's calls (Z1-cost, `Proofs.Flock.RecGeneric.ZKCost`). An outer phase of zero-knowledge sessions in
+turn is zero knowledge per outcome, within the exact sum of the sessions' errors and counted where the session simulator
+is (Z1-S and Z1-S-cost: `Proofs.Flock.RecGeneric.ZKSessions`, proved in `Proofs.Flock.RecGeneric.ZKSessionsProof`),
+and so is the release of a first part and those sessions (Z1 at `ZkRelease.ofSessions`). A proof system whose simulator
+draws its statement's coins is such a session system within its own error (Z1-L, `ZkSess.ofZKOut`), and with Flock's
+ZK server as each session the release is zero knowledge per outcome within the sessions' summed server errors (Z1-F:
+`Proofs.Flock.RecGeneric.ZKAtFlock`, proved in `Proofs.Flock.RecGeneric.ZKAtFlockProof`). The same server is zero
+knowledge per outcome at the recursive outer record, whose statements are the V\* sessions'
+(`Proofs.Flock.RecGeneric.ZKServerRec`), so with it as each of `deployRec`'s V\* sessions the release is zero knowledge
+per outcome too (Z1-F at `deployRec`: `Proofs.Flock.RecGeneric.ZKAtRec`, proved in
+`Proofs.Flock.RecGeneric.ZKAtRecProof`). -/
 
 @[expose] public section
