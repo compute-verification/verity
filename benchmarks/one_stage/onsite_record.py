@@ -2,7 +2,8 @@
 record needs, the network certifier's bound term by term, and that bound over each monitoring period for the serving
 node, a datacenter and the world. It reads only the run's public $OUT and decides nothing:
 
-    python benchmarks/one_stage/onsite_record.py OUT [--window-steps S --max-tokens M] [--advice-charge FILE] [--to FILE]
+    python benchmarks/one_stage/onsite_record.py OUT [--window-steps S --max-tokens M] [--advice-charge FILE]
+        [--certifier-key RECORD --site-registration FILE] [--to FILE]
     python benchmarks/one_stage/onsite_record.py --beside RECORD [RECORD ...] --to FILE
 
 `served_verdicts.sh` runs it after its composite step on a run with the network certifier's piece, and its one
@@ -31,7 +32,8 @@ run wrote no answer, ``missing`` and ``why``:
   network certifier over one registration, the composite whose product is `ONSITE`; missing where the run has none.
 
 While `certifier-key` is open (`PREMISES`, `KEY_OPEN`), an accepted network certifier's verdict is ``not
-established``, its Lean answer's accept beside it (``answer``), and its bound conditional on it by name. Sampled proofs'
+established``, its Lean answer's accept beside it (``answer``), and its bound conditional on it by name; so is it
+where `auditor-listing` doesn't hold (`LISTING_UNMET`), with no bound. Sampled proofs'
 ``credit`` (`CREDIT`) names the drawn members it credits, those whose --registered file the audit completed at the
 window's committed roots and whose Lean verdict accepted it reporting exactly its reads (the audit's published record,
 `AUDIT`), and lists every other drawn member as not credited, by name, with why; ``missing`` where the record states no
@@ -41,6 +43,17 @@ members not credited and the verdicts it doesn't read (``not_claimed``: PoUW's, 
 and development where its row is, and under a composite without PoUW remote's too, `NOT_CLAIMED_WITHOUT_POUW`), and
 the verified compute it credits, none (``verified_compute``, `POUW`); ``placement`` is the network certifier's
 answer's, which host ran each party.
+
+**Checked on the run** (``checked``, `CHECKED`): the auditor's configuration of the run, each an obligation the record
+checks on the auditor's inputs, never a named assumption and never charged, each with ``holds`` and, where it doesn't,
+``why``. `auditor-record` (`auditor_record`): PeriodLeakRegistered's hA, hr and hkey, that the period's LMS parameters,
+key and session are the auditor's record of its network certifier (``--certifier-key``) and that the auditor's
+registration (``--site-registration``) holds that key for a network certifier its log places, read from those two
+inputs, each named by its SHA-512 (``from``), and the period's parameters, held by SHA-512 to those its check read
+(the composite of record's), never the prover's node or its deployment.json; `certifier-key` closes only where it
+holds and the lock holds that guarantee taking them.
+`auditor-listing` (`auditor_listing`): each circuit file the period lists is, by SHA-512, the file its audit's
+sessions were verified against (`PERIOD`).
 
 **Sampled proofs' guarantee** (``sampled_proofs``, `SAMPLED`), from its accepted row's answer, else ``missing``: what
 its draw establishes, ε at δ, per window (``per_window``: its bound at its profile's δ over the window's n proof blocks) and
@@ -95,7 +108,8 @@ verdicts.txt), None where it has none. A public whose terms don't sum to K, or t
 ``error``. ``of_record`` is the figure of record (`OPEN`): that K only where the verdict's public holds every check the
 tight ℓ_{a,j} rests on (``held``, `CHECKS`) and none of its premises is open (``premises``, `DISCHARGE`: each of
 `PREMISES` discharged by theorems in Security's locks, each at the statement `DISCHARGES` pins, taking no named
-assumption but a standing one (`STANDING`) or one its pin names and no premise that is open; and each guarantee it
+assumption but a standing one (`STANDING`) or one its pin names and no premise that is open, or, where a guarantee it
+rests on states it of the auditor's inputs, closed by that guarantee's pin and the run's check (`CHECKED`); and each guarantee it
 rests on in the lock at the statement whose hypotheses and antecedents `RESTS_ON` names, beside what K counts,
 `COUNTS`) and the coins are live (``coins``), and while any is ``open``, by name, K plus ℓ_a + 1 bits for each audit
 tied to each execution phase's scan (``advice``: the bits each phase adds), the figure, with no tighter figure beside
@@ -293,6 +307,9 @@ NO_COMPUTE_CLAIM = "no verified compute is credited: {}'s verdict is no compute 
 POUW_SAID = re.compile(r"; (PoUW.*?); the bandwidth audit's")
 #: where sampled proofs' audit publishes its record (`served_integrity.public_copy`)
 AUDIT = Path("v3c-audit") / "window" / "audit.json"
+#: V3c's audit as the network certifier's period reads it, as the run publishes it (`records_audit.py period`): its
+#: registration, and each root template's circuit file by the SHA-512 a5 held every session of its members to
+PERIOD = Path("v3c-audit") / "period.json"
 CREDIT = ("sampled proofs credits only the drawn members whose --registered file named every port of their circuit at "
           "the window's committed roots: the audit completed it from the auditor's record before any session "
           "(`a5.complete_drawn`, its record's checks_after_draw.registered_complete), and the member's Lean verdict of "
@@ -377,6 +394,33 @@ RESTATE_TIED = ("to be restated before any pin of it counts, and never a dischar
                 "not the frames view. Restated with a scope premise over the frames view, read again at that "
                 "statement (``takes``) and pinned, it leaves ``open``; until then only the tight form rests on it, and "
                 "the figure of record is the conservative one, which doesn't read it (`OPEN`)")
+#: PeriodLeakRegistered, a property of the period check's acceptance, by its name in `LOCKS`
+PERIOD_REGISTERED = "Properties.NetworkPeriodLeak.periodLeakRegistered"
+AUDITOR_RECORD, AUDITOR_LISTING = "auditor-record", "auditor-listing"
+#: the auditor's configuration of the run, each an obligation the record checks on the run's inputs (``checked``), by
+#: the name `RESTS_ON`'s takes and `PREMISES` give it: never a named assumption, and never charged
+CHECKED = {
+    AUDITOR_RECORD: ("PeriodLeakRegistered's hA, hr and hkey, an obligation on the auditor's configuration that the run "
+                     "checks: the auditor's registration A parses from its record (Core.Site.Registration.Auditor.ofJson "
+                     "of the registration's params' auditor), the period's LMS parameters, key and session are the "
+                     "auditor's record of its network certifier (certifier-key/v1), and A holds that key for a network "
+                     "certifier its log places (A.key cert.id = some (hexOf key)). It reads only the auditor's inputs, "
+                     "its certifier-key record (--certifier-key) and its registration (--site-registration: the "
+                     "registration log's params and the log, which the log's check accepts, "
+                     "verity.core.protocols.registration), and the parameters the period's check read (its case's "
+                     "params, whose SHA-512 over their canonical JSON must be the one the composite of record states "
+                     "for the network certifier's case), never the prover's node or its deployment.json. Where an "
+                     "input is missing or doesn't match, it doesn't hold, and certifier-key stays open"),
+    AUDITOR_LISTING: ("each circuit file the period lists, an audit's (circuits) or the scan's (scan_circuits), is by "
+                      "SHA-512 the file its audit's sessions were verified against: a5's per-template pin, which "
+                      "records_audit.py period publishes in V3c's period.json (`PERIOD`) for the audit whose "
+                      "registration it is. It compares SHA-512s and doesn't re-hash the files: the period's listing "
+                      "and that period.json are both the auditor's own outputs in OUT. It holds where the period lists "
+                      "none, and not where the run has no case of the period to say what it lists. No published record "
+                      "states the files the scan's sessions were verified against, so it doesn't hold where the period "
+                      "lists the scan's. Where it doesn't hold the network verdict is not established and there is no "
+                      "bound (`LISTING_UNMET`)"),
+}
 #: the guarantees the tight K rests on, by their names in `LOCKS`: PeriodLeakRegistered's count, at the values the
 #: registration opens at its registered inputs, is K's; PeriodLeakAccepted's is the same count at the trace's values
 #: there; PeriodTiedCount's is to count a phase's tied audits with the scan as one Program, as ℓ_{a,j} does, once it is
@@ -384,8 +428,9 @@ RESTATE_TIED = ("to be restated before any pin of it counts, and never a dischar
 #: takes, so each gives ``statement``, the digest of its statement among the lock's reads (`statement`) at which it was
 #: read, None where none was, ``takes``, each hypothesis, antecedent and condition its good event reads that the
 #: deployed code must meet, by its Prop's name or, stated inline, its binder's, with the premise (`PREMISES`), standing
-#: assumption (`STANDING`) or term of what K counts (`COUNTS`) that names it, and ``restate`` where its statement is to
-#: be restated, why, which keeps it open at any statement. Parameters the record states (δ ≥ 0) aren't listed
+#: assumption (`STANDING`), term of what K counts (`COUNTS`) or obligation the run checks (`CHECKED`) that names it, and
+#: ``restate`` where its statement is to be restated, why, which keeps it open at any statement. Parameters the record
+#: states (δ ≥ 0) aren't listed
 RESTS_ON: dict[str, dict[str, Any]] = {
     "NetTiming.SecurityProofs.PeriodLeakAccepted": {
         "statement": "a0a9c23666273efec9d2ddef896331f0d5a3699e707f317fe3de4e7189f29a17",
@@ -394,16 +439,16 @@ RESTS_ON: dict[str, dict[str, Any]] = {
                   "Verity.Assumptions.TrustedHost": "Verity.Assumptions.TrustedHost",
                   "hPw": "windows-placed", "hβ": "windows-placed", "hcap": "schedules-held",
                   "hfit": "schedules-held", "hs": "schedules-covered", "hdz": "client-decodes",
-                  "NetTiming.ScopeAcc": "wires-fit", "NetTiming.TapOpens": "taps-open"}},
-    "NetTiming.SecurityProofs.PeriodLeakRegistered": {
-        "statement": "2865cabaa8bda7278b8ef4a4811e4c8bf858af621fffa21481551790b29a7a45",
+                  "NetTiming.ScopeAcc": "wires-fit", "NetTiming.TapOpens": "certifiers-open"}},
+    PERIOD_REGISTERED: {
+        "statement": "bbdbdb84ac069b92e1c1a14f4f35f0ba23ec003b0eca2d36baa106da6df71a66",
         "takes": {"Claims.Sampling.KSBy": "sampled-leg-bridge", "Claims.Flock.ListWithin": "sampled-leg-bridge",
                   "Claims.Sampling.CommitmentScheme.Binds": "sampled-leg-bridge",
                   "Verity.Assumptions.TrustedHost": "Verity.Assumptions.TrustedHost",
-                  "NetTiming.WindowsPlaced": "windows-placed", "NetTiming.SchedulesHeld": "schedules-held",
-                  "NetTiming.SchedulesCovered": "schedules-covered", "NetTiming.SenderDecodes": "client-decodes",
-                  "NetTiming.ScopeAcc": "wires-fit",
-                  "NetTiming.RegOpensAt": "reg-opens-at", "NetTiming.TapsOpen": "taps-open"}},
+                  "NetTiming.WindowsPlaced": "windows-placed", "NetTiming.SchedulesCovered": "schedules-covered",
+                  "NetTiming.SenderDecodes": "client-decodes", "NetTiming.ScopeAcc": "wires-fit",
+                  "NetTiming.RegOpensAt": "reg-opens-at", "NetTiming.CertifiersOpen": "certifiers-open",
+                  "hA": AUDITOR_RECORD, "hr": AUDITOR_RECORD, "hkey": AUDITOR_RECORD}},
     "NetTiming.SecurityProofs.PeriodTiedCount": {
         "statement": None,
         "restate": RESTATE_TIED,
@@ -415,11 +460,13 @@ RESTS_ON: dict[str, dict[str, Any]] = {
                   "NetTiming.SchedulesHeld": "schedules-held", "NetTiming.SchedulesCovered": "schedules-covered",
                   "NetTiming.SenderDecodes": "client-decodes", "NetTiming.PhaseParsed": "sampled-leg-bridge",
                   "NetTiming.RowsStateHeld": "rows-state-held", "NetTiming.RowsProgWired": "rows-prog-wired",
-                  "NetTiming.RegOpensAt": "reg-opens-at", "NetTiming.TapsOpen": "taps-open",
+                  "NetTiming.RegOpensAt": "reg-opens-at", "NetTiming.CertifiersOpen": "certifiers-open",
                   "NetTiming.ScopeAcc": "wires-fit"}},
 }
 #: each premise the tight K rests on, by the name ``open`` gives it: what it says, and the theorems that discharge it at
-#: the deployed code by their names in `LOCKS`' guarantees (none named yet leaves it open)
+#: the deployed code by their names in `LOCKS`' guarantees (none named yet leaves it open), or, for one a guarantee of
+#: `RESTS_ON` states of the auditor's inputs, that guarantee (``stated_by``) and the run's check of them (``checked``,
+#: `CHECKED`)
 PREMISES: dict[str, dict[str, Any]] = {
     "wires-fit": {"is": "ScopeAcc whole at the tied audit's statements: the sampling scope (Scope, the sampled verifier's, "
                         "which its scope check gives where ScopeMatches holds of the deployment) and the layout's fit "
@@ -490,23 +537,23 @@ PREMISES: dict[str, dict[str, Any]] = {
                            "pinned part by the sampled leg's bridge with a coverage Property of the registration check at "
                            "OneStageZk's record. Open until both are named",
                      "discharged_by": ()},
-    "taps-open": {"is": "TapsOpen, PeriodLeakAccepted's TapOpens antecedent: at every window's statement the network "
-                        "certifier's openings register its observations at the window's operator. The period check's "
-                        "half: on an accepted rows-form execution phase the scan's rows/<d> root and domain are those the "
-                        "network certifier signed for its link, d and window; the device's, under trusted-host: its "
-                        "rows at the transfer gates are its observations, its ingress values its operator on the earlier "
-                        "ones",
-                  "discharged_by": ("Properties.NetworkCertifier.tapsOpen",)},
+    "certifiers-open": {"is": "CertifiersOpen, PeriodLeakRegistered's antecedent and PeriodLeakAccepted's TapOpens: at "
+                              "every window's statement the network certifier's openings register its observations at "
+                              "the window's operator. The period check's half: on an accepted rows-form execution phase "
+                              "the scan's rows/<d> root and domain are those the network certifier signed for its "
+                              "link, d and window; the device's, under trusted-host: its rows at the transfer gates are "
+                              "its observations, its ingress values its operator on the earlier ones",
+                        "discharged_by": ("Properties.NetworkCertifier.certifiersOpen",)},
     "certifier-key": {"is": "that the network certifier's key, LMS parameters and session every check reads are the "
-                            "auditor's record of its own device (certifier-key/v1, `warden_chain.RECORD`; "
-                            "Registration.Auditor.key), never the evidence's or the prover's copy. The rows audit and "
-                            "the period check both take them from that record and refuse a run whose deployment.json "
-                            "isn't it, but no Property of the period's guarantee yet states that the key and session it "
-                            "reads come from the auditor's record. Open, by this name, beside trusted-host, until that "
-                            "Property is in the lock at the statement `DISCHARGES` pins; while it is open the network "
-                            "verdict is not established (`NOT_ESTABLISHED`), and its bound is conditional on it "
-                            "(`UNCHARGED`)",
-                      "discharged_by": ()},
+                            "auditor's record of its own device (certifier-key/v1, `warden_chain.RECORD`), whose key the "
+                            "auditor's registration holds for the network certifier it placed (Registration.Auditor.key), "
+                            "never the evidence's or the prover's copy. PeriodLeakRegistered states it (``stated_by``) as "
+                            "its hA, hr and hkey, which the run checks of the auditor's inputs (``checked``, "
+                            f"`{AUDITOR_RECORD}`). Open, by this name, beside trusted-host, until the lock holds that "
+                            "guarantee at the statement `RESTS_ON` pins, taking them by that name, and the run's check "
+                            "holds (``unchecked``: why it doesn't); while it is open the network verdict is not "
+                            "established (`NOT_ESTABLISHED`), and its bound is conditional on it (`UNCHARGED`)",
+                      "discharged_by": (), "stated_by": PERIOD_REGISTERED, "checked": AUDITOR_RECORD},
     "windows-placed": {"is": "WindowsPlaced, PeriodLeakAccepted's hPw and hβ: each window's statement has the partition "
                              "the period read, and each of its faulty sets at δ commits at most the bits β the period "
                              "charges it, from the period check's acceptance of the scan; the tied audits' half is "
@@ -562,9 +609,15 @@ PREMISES: dict[str, dict[str, Any]] = {
 UNCHARGED = ("certifier-key",)
 CERTIFIER_KEY = "certifier-key"
 NOT_ESTABLISHED = "not established"
-KEY_OPEN = (f"{CERTIFIER_KEY} is open: no Property in the lock states that the key and session the period's guarantee "
-            "reads are the auditor's record of the network certifier, so the Lean answer's accept (``answer``) "
-            "establishes no network verdict, and the record cites none with an open condition")
+KEY_OPEN = (f"{CERTIFIER_KEY} is open: the lock doesn't hold PeriodLeakRegistered at the statement `RESTS_ON` pins, "
+            f"taking the auditor's record as {AUDITOR_RECORD} (hA, hr and hkey), or the run's check of it doesn't hold "
+            "(``checked``), so the Lean answer's accept (``answer``) establishes no network verdict, and the record "
+            "cites none with an open condition")
+LISTING_UNMET = (f"{AUDITOR_LISTING} doesn't hold (``checked``): a circuit file the period lists isn't, by SHA-512, one "
+                 "the run published as the file its audit's sessions were verified against, so the Lean answer's "
+                 "accept (``answer``) establishes no network verdict, and the record states no bound")
+#: why a premise a guarantee states is open where no run's check was read
+NOT_CHECKED = "no run's inputs were checked"
 #: each theorem of `PREMISES`' ``discharged_by`` that has been read, by its name in `LOCKS`, as `RESTS_ON` gives a
 #: guarantee: ``statement``, its statement's digest among the lock's reads, and ``takes``, each antecedent of it that the
 #: deployment must meet, by its Prop's name or its binder's, with the premise, standing assumption or term of what K
@@ -587,7 +640,10 @@ DISCHARGE = ("the tight K's premises (`PREMISES`), each open until every theorem
              "is in Security's lock at the statement `DISCHARGES` pins (``unpinned``, with the lock's digest, where it "
              "isn't), with no named assumption but a standing one (`STANDING`) or one its pin takes, and every premise "
              "its pins take is discharged (``takes``), so no premises discharge each other; and open while none is "
-             "named; each guarantee of `RESTS_ON` the lock doesn't list, or lists at a statement other than the one "
+             "named. A premise a guarantee of `RESTS_ON` states of the auditor's inputs (``stated_by``) closes with "
+             "no discharge, where that guarantee isn't open and takes it by the name of the run's check (``checked``, "
+             "`CHECKED`) and that check holds (``unchecked`` where it doesn't). Open too: "
+             "each guarantee of `RESTS_ON` the lock doesn't list, or lists at a statement other than the one "
              "whose hypotheses and antecedents it names (``takes``), or whose statement is to be restated "
              "(``restate``) at any statement; and each named assumption the lock gives such a "
              "guarantee that is neither standing nor named there, by its own name. What K counts (`COUNTS`) is no "
@@ -916,6 +972,18 @@ def phase_seconds(out: Path) -> tuple[Fraction | None, str]:
         return None, f"{CASE}: {type(e).__name__}: {e}"
 
 
+def period_case(out: Path) -> tuple[Mapping[str, Any] | None, str]:
+    """OUT's certifier case, whose params are the parameters the period's check read, or None and why the run has
+    none."""
+    try:
+        case = json.loads((out / CASE).read_text())
+    except FileNotFoundError:
+        return None, f"the run has no {CASE}"
+    except ValueError as e:
+        return None, f"{CASE} can't be read: {type(e).__name__}"
+    return (case, "") if isinstance(case, Mapping) else (None, f"{CASE} isn't an object")
+
+
 def horizon(q: Fraction, delta: Fraction, links: int = 1) -> int:
     """⌊ln(links/δ)/q⌋, IntegrityHorizon's count at δ / links (`POOLED`), never below it: ln to 60 digits, raised by a
     part in 10^40 before the floor."""
@@ -1160,16 +1228,19 @@ def statement(lock: Mapping[str, Any], g: str) -> str | None:
                  if stated in (r.get("definitions") or {})), None)
 
 
-def premises(locks: Sequence[Path], root: Path = ROOT) -> dict[str, Any]:
+def premises(locks: Sequence[Path], root: Path = ROOT,
+             checked: Mapping[str, Mapping[str, Any]] | None = None) -> dict[str, Any]:
     """The tight K's premises as ``locks`` record their discharges (`DISCHARGE`): each of `PREMISES` with the theorems
     no lock lists (``missing``), those one lists at a statement `DISCHARGES` doesn't pin (``unpinned``, each with the
     lock's digest), the named assumptions of those one lists that don't stand and their pins don't take (``assumes``)
-    and the premises their pins take (``takes``), each guarantee of `RESTS_ON` with its named assumptions, its
-    statement's digest and what it takes (``restated`` where that digest isn't the one `RESTS_ON` read, `RESTATED`;
-    ``restate`` where its statement is to be restated, why), what K counts (``counts``, `COUNTS`), and ``open``: each
-    premise not discharged, then each named assumption of a guarantee of `RESTS_ON` neither standing nor taken by name,
-    and each such guarantee no lock lists, one lists restated, or one to be restated. A lock that can't be read lists
-    nothing, and ``unread`` names it, by its path under ``root`` (the tree) where it is one, with why."""
+    and the premises their pins take (``takes``), and for one a guarantee states, that guarantee (``stated_by``), the
+    run's check it reads (``checked``, by its name in ``checked``, the run's `CHECKED` checks) and why that check
+    doesn't hold (``unchecked``, `NOT_CHECKED` where ``checked`` has none); each guarantee of `RESTS_ON` with its named
+    assumptions, its statement's digest and what it takes (``restated`` where that digest isn't the one `RESTS_ON`
+    read, `RESTATED`; ``restate`` where its statement is to be restated, why), what K counts (``counts``, `COUNTS`),
+    and ``open``: each premise not closed, then each named assumption of a guarantee of `RESTS_ON` neither standing nor
+    taken by name, and each such guarantee no lock lists, one lists restated, or one to be restated. A lock that can't
+    be read lists nothing, and ``unread`` names it, by its path under ``root`` (the tree) where it is one, with why."""
     listed: dict[str, Any] = {}
     stated: dict[str, str | None] = {}
     unread: list[str] = []
@@ -1182,6 +1253,16 @@ def premises(locks: Sequence[Path], root: Path = ROOT) -> dict[str, Any]:
         except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
             name = lock.relative_to(root) if lock.is_relative_to(root) else lock
             unread.append(f"{name}: {type(e).__name__}: {e.strerror if isinstance(e, OSError) else e}")
+    rests: dict[str, Any] = {}
+    for g, r in RESTS_ON.items():
+        if g not in listed:
+            rests[g] = {"missing": "not in the lock", "takes": r["takes"]}
+        else:
+            rests[g] = {"assumptions": list(listed[g]["assumptions"]), "statement": stated.get(g), "takes": r["takes"]}
+            if r["statement"] is None or stated.get(g) != r["statement"]:
+                rests[g]["restated"] = RESTATED
+        if "restate" in r:
+            rests[g]["restate"] = r["restate"]
     found, ready = {}, {}
     for name, p in PREMISES.items():
         pins = {t: DISCHARGES.get(t) or {"statement": None, "takes": {}} for t in p["discharged_by"]}
@@ -1193,22 +1274,19 @@ def premises(locks: Sequence[Path], root: Path = ROOT) -> dict[str, Any]:
         takes = sorted({v for pin in pins.values() for v in pin["takes"].values()} & set(PREMISES))
         found[name] = {"is": p["is"], "discharged_by": list(p["discharged_by"]), "missing": missing,
                        "unpinned": unpinned, "assumes": assumes, "takes": takes}
-        if not (missing or unpinned or assumes or not p["discharged_by"]):
+        if g := p.get("stated_by"):
+            run = (checked or {}).get(p["checked"]) or {"holds": False, "why": NOT_CHECKED}
+            found[name] |= {"stated_by": g, "checked": p["checked"]} | (
+                {} if run["holds"] else {"unchecked": run["why"]})
+            if run["holds"] and not {"missing", "restated", "restate"} & set(rests[g]) \
+                    and p["checked"] in RESTS_ON[g]["takes"].values():
+                ready[name] = set()
+        elif not (missing or unpinned or assumes or not p["discharged_by"]):
             ready[name] = set(takes)
     done: set[str] = set()
     while new := {n for n, t in ready.items() if n not in done and t <= done}:
         done |= new
     open_ = [n for n in PREMISES if n not in done]
-    rests: dict[str, Any] = {}
-    for g, r in RESTS_ON.items():
-        if g not in listed:
-            rests[g] = {"missing": "not in the lock", "takes": r["takes"]}
-        else:
-            rests[g] = {"assumptions": list(listed[g]["assumptions"]), "statement": stated.get(g), "takes": r["takes"]}
-            if r["statement"] is None or stated.get(g) != r["statement"]:
-                rests[g]["restated"] = RESTATED
-        if "restate" in r:
-            rests[g]["restate"] = r["restate"]
     open_ += sorted({a for g, x in rests.items() for a in x.get("assumptions", ())
                      if a not in RESTS_ON[g]["takes"] and a not in STANDING}
                     | {g for g, x in rests.items() if {"missing", "restated", "restate"} & set(x)})
@@ -1216,6 +1294,100 @@ def premises(locks: Sequence[Path], root: Path = ROOT) -> dict[str, Any]:
                                      "and reads",
             "premises": found, "rests_on": rests, "standing": STANDING, "counts": COUNTS, "open": open_,
             "unread": unread}
+
+
+def auditor_record(params: Any, composed: str | None, key: Path | None, site: Path | None) -> dict[str, Any]:
+    """`CHECKED`'s auditor-record on the run: the period's ``params``, its case's, held to those its check read by their
+    SHA-512, ``composed``, the composite of record's for its network certifier's case (`composite.canonical`, None
+    where it has none), against the auditor's record of its network certifier at ``key`` (certifier-key/v1,
+    `warden_chain.RECORD`) and its registration at ``site``, ``{"params", "log"}``: the registration log's params,
+    ``{"auditor", "composite"}``, and the log, which its check accepts (`registration.check_log`, held to
+    `Core.Registration` by difftest), whose auditor holds the record's key for a network certifier the log places.
+    ``holds``, that ``certifier`` where it does and ``why`` where it doesn't, and ``from``, each input's SHA-512."""
+    import composite as CO
+    import warden_chain as WC
+    from verity.core.protocols import registration as REG
+
+    out: dict[str, Any] = {"is": CHECKED[AUDITOR_RECORD], "holds": False, "from": {}}
+    docs = {}
+    for flag, f in (("--certifier-key", key), ("--site-registration", site)):
+        if f is None:
+            return out | {"why": f"the run gave no {flag}, the auditor's input it reads"}
+        try:
+            data = f.read_bytes()
+            out["from"][flag] = hashlib.sha512(data).hexdigest()
+            docs[flag] = json.loads(data)
+        except (OSError, ValueError) as e:
+            return out | {"why": f"{flag} can't be read: {type(e).__name__}"}
+    r = docs["--certifier-key"]
+    try:
+        (n, w, h), public, session = r["key"]["params"], bytes.fromhex(r["key"]["public"]), bytes.fromhex(r["session"])
+        if r["schema"] != WC.RECORD:
+            raise ValueError(r["schema"])
+    except (KeyError, TypeError, ValueError):
+        return out | {"why": f"--certifier-key isn't a {WC.RECORD} record of a key and a session"}
+    try:
+        p = {"lms": params["lms"], "key": bytes.fromhex(params["key"]), "session": bytes.fromhex(params["session"])}
+    except (KeyError, TypeError, ValueError):
+        return out | {"why": f"the period's parameters ({CASE}'s params) state no LMS parameters, key and session"}
+    if composed is None:
+        return out | {"why": f"the composite of record has no {NETWORK} case stating the SHA-512 of the parameters the "
+                             "period's check read"}
+    if hashlib.sha512(CO.canonical(params)).hexdigest() != composed:
+        return out | {"why": f"the period's parameters ({CASE}'s params) aren't, by SHA-512, those its check read (the "
+                             f"composite of record's {NETWORK} case's params_sha512)"}
+    want = {"lms": {"H": h, "N": n, "W": w, "toy": False}, "key": public, "session": session}
+    if differ := [k for k in want if p[k] != want[k]]:
+        return out | {"why": f"the period's {' and '.join(differ)} {'isn' if len(differ) == 1 else 'aren'}'t the "
+                             "auditor's record's"}
+    try:
+        reg = docs["--site-registration"]
+        if not isinstance(reg, dict) or set(reg) != {"log", "params"}:
+            raise REG.Malformed("not {params, log}")
+        composite, auditor = REG.params_of(reg["params"])
+        verdict = REG.check_log((composite, auditor), REG.log_of(reg["log"]))
+    except (KeyError, TypeError, ValueError) as e:
+        return out | {"why": f"--site-registration isn't a registration's params and log: {type(e).__name__}: {e}"}
+    if verdict[0] != "accept":
+        return out | {"why": f"the auditor's registration log doesn't check: {verdict[1]}"}
+    cert = next((x["id"] for x in verdict[1]["site"]["locs"]
+                 if x["kind"] == "certifier" and auditor.key(x["id"]) == public.hex()), None)
+    if cert is None:
+        return out | {"why": "the auditor's registration holds the record's key for no network certifier its log places"}
+    return out | {"holds": True, "certifier": cert}
+
+
+def auditor_listing(out: Path, case: Any) -> dict[str, Any]:
+    """`CHECKED`'s auditor-listing on the run: each audit's circuit files its ``case``'s params list (``circuits``),
+    against the run's published V3c period (`PERIOD`) where the case's commitment holds that period's registration at
+    the audit's place, and the scan's (``scan_circuits``), of which the run publishes no record. ``holds``, ``listed``,
+    how many files the period lists, and ``why`` where it doesn't hold."""
+    res: dict[str, Any] = {"is": CHECKED[AUDITOR_LISTING], "holds": False}
+    try:
+        audits = case["params"].get("audits") or []
+        listed = [(i, a["circuits"]) for i, a in enumerate(audits) if "circuits" in a]
+        scan = case["params"].get("scan_circuits")
+    except (KeyError, TypeError, AttributeError):
+        return res | {"why": f"the run has no {CASE} whose params list the period's audits"}
+    if scan is not None:
+        return res | {"why": "the period lists the scan's circuit files (scan_circuits), and the run publishes no record "
+                             "of the files the scan's sessions were verified against"}
+    res["listed"] = sum(len(files) if isinstance(files, list) else 1 for _, files in listed)
+    if not listed:
+        return res | {"holds": True}
+    try:
+        period = json.loads((out / PERIOD).read_text())
+        regs = json.loads(bytes.fromhex(case["commitment"]))["audits"]
+    except (OSError, KeyError, TypeError, ValueError) as e:
+        return res | {"why": f"the period lists circuit files, and {PERIOD} or its case's commitment can't be read: "
+                             f"{type(e).__name__}"}
+    for i, files in listed:
+        if i >= len(regs) or regs[i] != period.get("registration"):
+            return res | {"why": f"audit {i} lists circuit files, and the run's {PERIOD} is another audit's"}
+        if files != period.get("circuits"):
+            return res | {"why": f"audit {i}'s listed circuit files aren't, by SHA-512, those its audit's sessions were "
+                                 f"verified against ({PERIOD}'s circuits)"}
+    return res | {"holds": True}
 
 
 def of_record(public: Mapping[str, Any], ell: Sequence[int], K: int, prem: Mapping[str, Any],
@@ -1296,10 +1468,12 @@ def reproof(out: Path, copy: str | None = None, listing: Path | None = None, tie
 
 
 def record(out: Path, advice_charge: Path | None = None, copy: str | None = None,
-           listing: Path | None = None, serving: tuple[int, int] | None = None, tie: bool = False) -> dict[str, Any]:
+           listing: Path | None = None, serving: tuple[int, int] | None = None, tie: bool = False,
+           certifier_key: Path | None = None, site_registration: Path | None = None) -> dict[str, Any]:
     """OUT's onsite record (module docstring), with the re-proof inputs' ``copy`` and its ``listing`` where given
-    (`reproof`, ``tie`` where H1_TIE ties the window), and the run's ``serving`` settings, S and MAX_TOKENS, where its
-    caller states them (`SERVING`); FileNotFoundError where `served_verdicts.py record` wrote no report."""
+    (`reproof`, ``tie`` where H1_TIE ties the window), the run's ``serving`` settings, S and MAX_TOKENS, where its
+    caller states them (`SERVING`), and the auditor's inputs the run's checks read, its ``certifier_key`` record and its
+    ``site_registration`` (`auditor_record`); FileNotFoundError where `served_verdicts.py record` wrote no report."""
     report = json.loads((out / "record" / "verdicts.json").read_text())
     if report.get("format") != EXTENDS:
         raise ValueError(f"record/verdicts.json is {report.get('format')!r}, not {EXTENDS}")
@@ -1322,18 +1496,26 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
     v["sampled proofs"]["credit"] = paid = credit(out)
     for k in unread:
         v[k]["not_claimed"] = POUW_OPEN
-    prem = premises(LOCKS)
+    case, no_case = period_case(out)
+    composed = next((c.get("params_sha512") for c in found[composite][1].get("cases") or ()
+                     if c.get("id") == NETWORK), None) if composite in found else None
+    checked = {AUDITOR_RECORD: auditor_record((case or {}).get("params"), composed, certifier_key, site_registration),
+               AUDITOR_LISTING: auditor_listing(out, case) if case is not None else {
+                   "is": CHECKED[AUDITOR_LISTING], "holds": False, "why": f"no case lists the period's audits: {no_case}"}}
+    prem = premises(LOCKS, checked=checked)
     drawn, draws = coins(out), chain_draws(out)
     cond = [COINS_OPEN] if drawn["open"] else []
     if cond:
         v["sampled proofs"]["conditional_on"] = cond
-    accepted = nv["verdict"] == "accept"
+    unmet = {n: why for n, why, x in ((CERTIFIER_KEY, KEY_OPEN, CERTIFIER_KEY in prem["open"]),
+                                      (AUDITOR_LISTING, LISTING_UNMET, not checked[AUDITOR_LISTING]["holds"])) if x}
+    if nv["verdict"] == "accept" and unmet:
+        v["the network certifier"] = nv | {"verdict": NOT_ESTABLISHED, "answer": nv["verdict"], "open": list(unmet),
+                                           "why": "; ".join(unmet.values())}
+    accepted = nv["verdict"] == "accept" and AUDITOR_LISTING not in unmet
     open_draws = ["sampled proofs' draw"] * bool(cond) + (draws["open"] if accepted else [])
     drawn |= {"open": bool(open_draws), "open_draws": open_draws, "draws": draws}
     cond_net = [COINS_OPEN] * bool(open_draws) + [n for n in UNCHARGED if n in prem["open"]]
-    if accepted and CERTIFIER_KEY in prem["open"]:
-        v["the network certifier"] = nv | {"verdict": NOT_ESTABLISHED, "answer": nv["verdict"], "open": [CERTIFIER_KEY],
-                                           "why": KEY_OPEN}
     net = rows.get(ROWS["the network certifier"]) or {}
     answer = net.get("answer") if isinstance(net.get("answer"), Mapping) else {}
     profile = answer.get("profile") if isinstance(answer.get("profile"), Mapping) else {}
@@ -1343,7 +1525,8 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
         "format": FORMAT, "extends": EXTENDS, "run": report.get("run"), "tree": tree, "node": report.get("node"),
         "serving": {"missing": NO_SERVING} if serving is None else {
             "window_steps": serving[0], "max_tokens": serving[1], "is": SERVING},
-        "verdicts": v, "coins": drawn, "one_program_a_day": day(out), "pouw_freed_compute": pouw(out),
+        "verdicts": v, "checked": checked, "coins": drawn, "one_program_a_day": day(out),
+        "pouw_freed_compute": pouw(out),
         "of_record": {"holds": all(x["verdict"] == "accept" for k, x in v.items() if k not in unread)
                                and credited(paid), "composite": composite,
                       "missing": [k for k, x in v.items() if x["verdict"] == "missing"],
@@ -1360,6 +1543,7 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
         "reproof": reproof(out, copy, listing, tie)}
     cond = cond_net
     if not accepted:
+        nv = v["the network certifier"]
         why = (f"the network certifier's verdict is {nv['verdict']}"
                + (f" ({nv['why']})" if nv.get("why") else "") + ": only its accepted answer certifies K")
         return rec | {"bound": {"missing": why}, "periods": {"missing": "no bound"}}
@@ -1374,15 +1558,6 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
     rec["composite_error"] = composite_error(rows, eps_of(b), conditional=cond, composite=composite, pouw=with_pouw)
     advice["charged"] = charged(b)
     b["period_s"] = None
-    try:
-        case = json.loads((out / CASE).read_text())
-    except FileNotFoundError:
-        b["connections"] = {"missing": f"no {CASE}: they are its params' caps"}
-        b["of_record"] = advice["cap"] = {"missing": f"no {CASE}: its commitment holds the tied audits' registrations"}
-        return rec | {"periods": {"missing": f"no {CASE}: the execution phase's length is its params' schedule"}}
-    except ValueError as e:
-        b["connections"] = b["of_record"] = advice["cap"] = {"error": f"{CASE}: {type(e).__name__}: {e}"}
-        return rec | {"periods": b["of_record"]}
     b["of_record"], advice["cap"] = figure(out, case, answer["public"], b["K"], prem, cond)
     try:
         phase_s, connections, capacity = schedule(case, b["phases"])
@@ -1502,13 +1677,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--h1-tie", action="store_true",
                     help="the run ties its window to H1's W (H1_TIE): the re-proof's circuit is the record reading "
                          "H1's tables (`REPROOF`'s <tie>)")
+    ap.add_argument("--certifier-key", type=Path, metavar="RECORD",
+                    help="the auditor's record of its network certifier (certifier-key/v1, CERTIFIER_KEY), never the "
+                         "prover's node's: the run's auditor-record check holds the period's key, LMS parameters and "
+                         "session to it (`CHECKED`)")
+    ap.add_argument("--site-registration", type=Path, metavar="FILE",
+                    help="the auditor's registration of the deployment, {\"params\": {auditor, composite}, \"log\": "
+                         "{composite, entries}}, whose auditor must hold the record's key for a network certifier the "
+                         "log places (`CHECKED`)")
     ap.add_argument("--to", type=Path,
                     help="the record's path (default OUT/record/onsite.json); with --beside, where the records go "
                          "beside each other")
     a = ap.parse_args(argv)
     if a.beside is not None:
         if a.to is None or a.h1_tie or any(x is not None for x in (a.out, a.advice_charge, a.reproof_copy,
-                                                                     a.reproof_listing, a.window_steps, a.max_tokens)):
+                                                                     a.reproof_listing, a.window_steps, a.max_tokens,
+                                                                     a.certifier_key, a.site_registration)):
             ap.error("--beside reads the records written, with --to alone: where they go beside each other")
         try:
             doc = beside(a.beside)
@@ -1528,7 +1712,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         ap.error("--window-steps and --max-tokens go together: the run's S and MAX_TOKENS label its figures")
     serving = None if a.window_steps is None else (a.window_steps, a.max_tokens)
     try:
-        rec = record(a.out, a.advice_charge, a.reproof_copy, a.reproof_listing, serving, a.h1_tie)
+        rec = record(a.out, a.advice_charge, a.reproof_copy, a.reproof_listing, serving, a.h1_tie,
+                     a.certifier_key, a.site_registration)
     except FileNotFoundError as e:
         print(f"ONSITE: not written: {e.filename} is missing", file=sys.stderr)
         return 1
