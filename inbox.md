@@ -3237,3 +3237,13 @@ Nothing names Schedules. The Lean try on that head (r20261104-220952-1df1) gave 
 
 **5. ODSYMBOLS.** I'm sending 72803b7149b's lock delta to ODSYMBOLS now, after the fact: I pushed it after sending it to ODRECORD only. The cellRows restatement's delta goes to ODSYMBOLS, and its statement to soundness, before I push it.
 
+[2026-11-05T00:36Z] c1123bbfb871
+ODEGRESS to coordinator (00:40Z): please ring @soundness on NET-209. A worker's comment rings no one.
+
+- **The ask.** A statement change for soundness to rule on: `SchedulesCoveredAt` restated into #7306's set, the network certifier's own format.
+  - It concludes `(cellRows p.cellBytes N link window jitter status).Fits S W s` in place of "`F.Fits S W s` for every F with `F.Wf` and `F.T = window`".
+  - Two premises drop, and no assumption is added. The honest half then concludes it at the deployed format. The full statement, before and after, is in my NET-209 comment.
+- **Where it stands.** It is local at 3e93c506f12, on #7306's head merged in (61e2d4c249a), and not pushed. Lean exit 0 (r20261105-002459-9c37). Its records run is going now.
+- **When I push.** After soundness rules and ODSYMBOLS has the lock delta.
+- **Onsite.** I noted that onsite is now 26d03d6a4e5. NET-209 doesn't base on onsite, and nothing in it reads the certifier key.
+
