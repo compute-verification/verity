@@ -1,10 +1,11 @@
-"""`verity/codec-tensor-rates/v0` rows from this lane's rates runs (`codec-tensor.json`): one row a field, the best
-squarings/s on CUDA and tensor cores, decode and encode words/s at each k, and x, Δ and r at the locked clock (so
+"""`verity/codec-tensor-rates/v0` rows from the tensor-core codec's rates runs (`codec-tensor.json`): one row a field,
+the best squarings/s on CUDA and tensor cores, decode and encode words/s at each k, and x, Δ and r at the locked clock (so
 x_boosted is false).
 
-    python points.py --rates RUN_DIR [--rates RUN_DIR ...] --out rates.json
+    python points.py --rates RUN_DIR [--rates RUN_DIR ...] [--lane LANE] --out rates.json
 
-Each field's rates come from the --rates run with its fastest k = 1 encode.
+Each field's rates come from the --rates run with its fastest k = 1 encode; each row's ``lane`` is --lane's, the lane
+that ran them (default none).
 """
 from __future__ import annotations
 
@@ -13,7 +14,6 @@ import json
 from pathlib import Path
 
 RATES_SCHEMA = "verity/codec-tensor-rates/v0"
-LANE = "ra-codec-tensor"
 
 
 def merge_rates(runs: list[tuple[str, dict]]) -> dict:
@@ -30,14 +30,14 @@ def merge_rates(runs: list[tuple[str, dict]]) -> dict:
     return {"libs": libs}
 
 
-def rates_rows(rates: dict, sm_mhz: float) -> list[dict]:
+def rates_rows(rates: dict, sm_mhz: float, lane: str | None = None) -> list[dict]:
     def best(kind: dict) -> float | None:
         return max((v["per_s"] for v in kind.values() if "per_s" in v), default=None)
 
     out = []
     for name, e in rates["libs"].items():
         r, an = e["rates"], e["analysis"]
-        out.append({"schema": RATES_SCHEMA, "lane": LANE, "field": name, "n": e["constants"]["n"],
+        out.append({"schema": RATES_SCHEMA, "lane": lane, "field": name, "n": e["constants"]["n"],
                     "squarings_s_cuda": best(r["square_cuda"]), "squarings_s_tc": best(r["square_tc"]),
                     "decode_words_s": {k: v["per_s"] for k, v in r["decode"].items()},
                     "encode_words_s": {k: v["per_s"] for k, v in r["encode"].items()},
@@ -50,11 +50,12 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--rates", action="append", required=True, help="a rates run's directory (holding out/)")
     ap.add_argument("--sm-mhz", type=float, default=2092.0)
+    ap.add_argument("--lane", help="the lane that ran the rates runs, each row's `lane` (default none)")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
     rates = merge_rates([(Path(d).name, json.loads((Path(d) / "out" / "codec-tensor.json").read_text()))
                          for d in a.rates])
-    rows = rates_rows(rates, a.sm_mhz)
+    rows = rates_rows(rates, a.sm_mhz, a.lane)
     Path(a.out).write_text(json.dumps(rows, indent=1))
     print(f"{len(rows)} fields -> {a.out}")
     return 0

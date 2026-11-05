@@ -2,9 +2,8 @@
 
 Every lane's points are artifacts of kind `codec-frontier-points/v0`: a JSON list of points in the schema below, kept
 with the metadata `{"schema": "verity/codec-frontier-point/v0", "lane": LANE, "run": RUN_ID}`. This script selects them
-all from the store, or reads `--art` ids and
-`--file` paths, adds the tensor-core codec's runs as points (`--tensor`, its `codec-tensor.json`: `tensor_points`), and
-draws:
+all from the store, or reads `--art` ids and `--file` paths, adds the tensor-core codec's runs as points (`--tensor`,
+its `codec-tensor.json`: `tensor_points`, their lane `--tensor-lane`'s), and draws:
 - x, the encode time of one pass's data in native passes, on a log scale, with μ_rebuild = (d − τ)/x on a secondary
   axis (at d = 1 and `--tau`, default the median τ of the points); μ_rebuild's numerator is d − τ, d the step's time in
   passes of E (the red team's F1: the adversary's spare compute is the whole step), so x* = (d − τ)/μ_budget is a
@@ -102,12 +101,12 @@ def load_tensor(src: str) -> tuple[dict, str | None]:
     return json.loads((root / "out" / "codec-tensor.json" if root.is_dir() else root).read_text()), src
 
 
-def tensor_points(docs: list[tuple[dict, str | None]]) -> list[dict]:
+def tensor_points(docs: list[tuple[dict, str | None]], lane: str | None = None) -> list[dict]:
     """The tensor-core codec's runs as points: y from each run's `layer` (per batch, each linear at its best arm over native:
     `plain` the base, `fused_k<k>` − plain the decode; untagged, so tag and commit 0 and τ 0, which the sketch twins
     replace), x and Δ from whichever document's `analysis` names the field: x the adversary's best root at the squaring
-    floor over CUDA cores, tensor cores and both (at the locked clock), Δ the CUDA decode's. A field no `analysis`
-    names is left out."""
+    floor over CUDA cores, tensor cores and both (at the locked clock), Δ the CUDA decode's; ``lane`` the lane that ran
+    them. A field no `analysis` names is left out."""
     rates = {}
     for doc, _ in docs:
         for name, e in doc.get("libs", {}).items():
@@ -128,7 +127,7 @@ def tensor_points(docs: list[tuple[dict, str | None]]) -> list[dict]:
                         continue
                     k, r = int(key[7:]), rates[name][key[7:]]
                     x = min(v for u, v in r.items() if u in ("x_cuda", "x_tc", "x_both"))
-                    out.append({"schema": SCHEMA, "lane": "ra-codec-tensor", "model": model,
+                    out.append({"schema": SCHEMA, "lane": lane, "model": model,
                                 "b": e.get("constants", {}).get("n", int(name.lstrip("pm"))), "k": k,
                                 "arithmetic": f"tensor-lane/wt.cu/{name}/untagged", "batch": int(mb),
                                 "y_total": y, "y_base": row["plain"], "y_decode": y - row["plain"], "y_tag": 0.0,
@@ -343,6 +342,7 @@ def main() -> int:
     ap.add_argument("--only-sketch", action="store_true", help="with --sketch: draw and rank only the twins")
     ap.add_argument("--tensor", action="append", default=[],
                     help="the tensor-core codec's codec-tensor.json, a path or its run's files art (`tensor_points`)")
+    ap.add_argument("--tensor-lane", help="the lane that ran the --tensor runs, their points' `lane` (default none)")
     a = ap.parse_args()
     points = []
     arts = a.art or ([] if a.file else store_arts())
@@ -350,7 +350,7 @@ def main() -> int:
         points += load_art(art)
     for f in a.file:
         points += json.loads(Path(f).read_text())
-    points += tensor_points([load_tensor(s) for s in a.tensor])
+    points += tensor_points([load_tensor(s) for s in a.tensor], a.tensor_lane)
     batches = tuple(int(b) for b in a.batches.split(","))
     if a.p2:
         x, y, tau = (float(v) for v in a.p2.split(","))
