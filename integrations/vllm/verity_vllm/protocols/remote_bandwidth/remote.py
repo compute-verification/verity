@@ -513,7 +513,8 @@ def prove(backend: StoreBackend, verifier: str, plan: str = "serve", *, node: by
     verifier's reason if it refuses the registration.  A prover that fails drops the connection, so the verifier sees
     the session end there."""
     host, port = address(verifier)
-    prover, wire = session_module("prover"), session_module("wire")
+    prover = session_module("prover")
+    wire = prover.wire
     conn = wire.connect(host, port)
     try:
         p = prover.ProverSide(conn, backend, node, prover.parse_plan(plan), log=log, **kw)

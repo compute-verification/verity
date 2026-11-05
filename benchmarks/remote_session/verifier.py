@@ -127,22 +127,20 @@ import threading
 import time
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from verity.core.protocols.remote_bandwidth import audit, coins, ledger, line, timing  # noqa: E402
 from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
 
-import challengers  # noqa: E402
-import lean_verifier as lv  # noqa: E402
-import wire  # noqa: E402
-from checks import Checks  # noqa: E402
+from benchmarks.remote_session import challengers  # noqa: E402
+from benchmarks.remote_session import lean_verifier as lv  # noqa: E402
+from benchmarks.remote_session import wire  # noqa: E402
+from benchmarks.remote_session.checks import Checks  # noqa: E402
 
 CHECK_BATCH = 1024
 """Openings a Lean thread checks at once (`checkWindowChunked`)."""
+#: One RTX PRO 6000's memory, 96 GiB (`benchmarks/census/hardware.json`).
 GPU_HBM_BYTES = 96 * 2 ** 30
-"""One RTX PRO 6000's memory, 96 GiB (`benchmarks/census/hardware.json`)."""
 HBM_BYTES = timing.GPUS * GPU_HBM_BYTES
 DISK_BYTES_PER_S = 4.4e9
 """The node's disks' read ceiling, each disk's highest second summed (4.311e9) and rounded up:
