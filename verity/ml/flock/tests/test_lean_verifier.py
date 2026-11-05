@@ -6,6 +6,7 @@ import fcntl
 import hashlib
 import importlib.util
 import json
+import random
 import re
 import shutil
 import subprocess
@@ -163,13 +164,23 @@ def _ref_bernoulli(a, b, n, stream):
     return out
 
 
+#: the challenger's coins for a draw that names none: the verifier has no coins of its own
+_COINS = random.Random(20261029)
+
+
+def _with_coins(args):
+    return args if "--stream" in args or "--stream-file" in args else [*args, "--stream", _COINS.randbytes(1 << 14).hex()]
+
+
 def _lean_draw_obj(args):
-    p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", *args], capture_output=True, text=True)
+    p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", *_with_coins(args)], capture_output=True,
+                       text=True)
     return json.loads(p.stdout[5:]) if p.stdout.startswith("DRAW ") else None
 
 
 def _lean_draw(args):
-    p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", *args], capture_output=True, text=True)
+    p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", *_with_coins(args)], capture_output=True,
+                       text=True)
     return json.loads(p.stdout[5:])["units"] if p.stdout.startswith("DRAW ") else None
 
 
@@ -190,8 +201,24 @@ def test_unit_draw_samplers_are_the_exact_reduction():
         b = max(b, 1)
         want = _ref_bernoulli(a, b, n % 50 + 1, bytes(stream))
         assert _lean_draw(["--population", str(n % 50 + 1), "--p", f"{a}/{b}", "--stream", stream.hex()]) == want, (a, b, case)
-    units = _lean_draw(["--population", "1000", "--k", "10"])
-    assert len(set(units)) == 10 and units == sorted(units) and all(0 <= u < 1000 for u in units)
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_draw_given_no_coins_is_refused_unless_it_samples_every_unit():
+    """`draw` without `--stream` or `--stream-file`: the verifier has no coins of its own, so a draw that reads coins is
+    refused before any is read, whatever its law, and only a draw of every unit, which reads none, is drawn."""
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+
+    def draw(*args):
+        return subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", *args], capture_output=True, text=True)
+
+    for args in (["--population", "1000", "--k", "10"], ["--population", "8", "--p", "1/2"],
+                 ["--population", "8", "--k", "7"]):
+        p = draw(*args)
+        assert p.returncode == 2 and not p.stdout and "draws no coins of its own" in p.stderr, (args, p)
+    for args, n in ((["--population", "8", "--k", "8"], 8), (["--population", "5", "--p", "3/3"], 5)):
+        p = draw(*args)
+        assert p.returncode == 0 and json.loads(p.stdout[5:])["units"] == list(range(n)), (args, p)
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -236,7 +263,7 @@ def test_a_draw_is_held_to_its_registered_law(tmp_path):
 
     def draw(k, reg, population=512):
         p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", "--population", str(population), "--k", str(k),
-                            "--registration", str(reg)], capture_output=True, text=True)
+                            "--registration", str(reg), "--stream", "a5" * 512], capture_output=True, text=True)
         return p.returncode, p.stdout, p.stderr
 
     for k, other in ((2, 8), (8, 2)):
@@ -268,8 +295,8 @@ def test_a_draw_over_several_tables_has_a_count_they_split():
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
 
     def draw(*args):
-        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", "--population", "8", *args],
-                           capture_output=True, text=True)
+        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", "--population", "8", *args,
+                            "--stream", "a5" * 512], capture_output=True, text=True)
         return p.returncode, p.stdout, p.stderr
 
     rc, out, err = draw("--p", "1/2", "--tables", "2")
@@ -644,7 +671,7 @@ def _one_stage_draw():
 def test_stratified_draw_agrees_with_core(tmp_path):
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     p = subprocess.run(["python3", str(Path(__file__).resolve().parent / "stratified_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
-                        "--out", str(tmp_path), "--random", "20", "--os-draws", "100"], capture_output=True, text=True)
+                        "--out", str(tmp_path), "--random", "20", "--draws", "100"], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
 
 @pytest.mark.skipif(shutil.which("lake") is None or _template_vectors() is None, reason="no Lean toolchain or no template vectors")
@@ -773,7 +800,7 @@ def test_width_refusals_agree_with_the_codec(tmp_path):
     their well-typed neighbours (`desc_difftest_vectors.mistyped`), and a PoUW window's shape reading a word as a
     template's bits and its bits as them (`_tile_window`): the Lean decoder, which C-Flock's verifier, `NciCheck` and
     PoUW's `Credit.programOf` share, refuses as `E_REINTERPRET` exactly those the codec does, with the codec's message
-    (PROTOCOL.md §17.1 D22; `qword_program_agree.py --widths`)."""
+    (`verity/ml/flock/verifier/README.md`'s D22; `qword_program_agree.py --widths`)."""
     spec = importlib.util.spec_from_file_location("desc_difftest_vectors", NCI_SCRIPTS / "desc_difftest_vectors.py")
     V = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(V)
@@ -987,7 +1014,7 @@ def bcOf (l : Nat) (row salt : String) : String := Id.run do
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_row_nets_are_the_verifiers(tmp_path):
     """The `sha512x3` and `hm96` sections come from the prover, so setup refuses either unless it is the net the verifier
-    generates (`Flock.HmNets`, PROTOCOL.md §16.10). A composed RoPE circuit is accepted; one AND row changed in either
+    generates (`Flock.HmNets`, `Flock.HmRow`). A composed RoPE circuit is accepted; one AND row changed in either
     section is refused, naming the row."""
     pytest.importorskip("verity_numerical")
     from verity_flock import circuit as FC
@@ -1022,7 +1049,7 @@ def test_row_nets_are_the_verifiers(tmp_path):
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_rec_open_unit_of_other_bits_is_refused_before_its_net_is_built(tmp_path):
     """A unit named `rec-open/l<LANES>-h<H>` must be the verifier's opening net at those parameters (`Flock.RecOpen`,
-    PROTOCOL.md §16.10), about 4,374 rows a lane, so setup compares the unit's input and output bits with the opening's
+    `Flock.HmRow`), about 4,374 rows a lane, so setup compares the unit's input and output bits with the opening's
     before it builds that net. A toy statement is accepted; with its unit renamed `rec-open/l1000000000-h16` it is refused
     for its bits, in an address space of 8 GiB, far below the net's size. Renamed at the heights `RecOpen_v4` builds, 0
     to 32 (`aux` one row at 0), it is refused for its bits against `max(1, ⌈H/2⌉)` rows of `aux`; at 33, for its height."""
@@ -1209,12 +1236,12 @@ def test_bit_row_statements_are_the_rust_verifier_s_and_a_meta_that_differs_is_r
     """Two statements whose bit-row ports have every residue between them (length 0; length mod 8 of 0, 1 and 7; bytes mod
     128 of 0, 1, 111, 112 and 127) have the statement digests `flock-circuit statement` gives them under its build's identity
     `verity/flock-circuit` (its `row_leaf_in_circuit` naming `hm96-sha512/row/v2`; the output row a bit row of all its words'
-    bits, §16.13), seeded and under `FC_COINS=os` (`--coins os`: the live-OS identity, `Tags.withCoins`, composed with the
-    bit-row and hidden-output text), so the two verifiers' Δ constants, forced-zero leaf bits, row wires and identities
-    agree. A META that differs from what the verifier derives is refused, with the Rust verifier's message: a wrong length
-    (its prefix, or its words and compressions), a length of 2^64 or one past `MAX_COMPS`, a v1 prefix and midstate under v2,
-    a changed padding, both row-schema keys, a v1 schema in `row_schemas`, a schema missing, no row with a compression, and a
-    pinned dummy ``b || c`` that is not the padding instance's row of the port's bits (here, a v1 row's of its words)."""
+    bits, `HmOut`), seeded and on the challenger's coin tree (`COINS`), so the two verifiers' Δ constants, forced-zero leaf
+    bits, row wires and identities agree. A META that differs from what the verifier derives is refused, with the Rust
+    verifier's message: a wrong length (its prefix, or its words and compressions), a length of 2^64 or one past
+    `MAX_COMPS`, a v1 prefix and midstate under v2, a changed padding, both row-schema keys, a v1 schema in `row_schemas`, a
+    schema missing, no row with a compression, and a pinned dummy ``b || c`` that is not the padding instance's row of the
+    port's bits (here, a v1 row's of its words)."""
     from verity.ml.commitments import hm96
     from verity.ml.commitments.rowleaf import ROLE_X, sha512_row_digest
     from verity_flock import circuit as FC
@@ -1230,15 +1257,15 @@ def test_bit_row_statements_are_the_rust_verifier_s_and_a_meta_that_differs_is_r
     for i, bits in enumerate([[0, 1, 881, 887, 889, 895], [1009, 1015, 1024, 1031, 2041, 1905]]):
         d = tmp_path / f"s{i}"
         text = _bit_row_toy(bits, d)
-        for coins in ("seed", "os"):
-            p = statement(d, text, "--coins", coins)
+        for coins in ("seed", "tree"):
+            p = statement(d, text, *COINS[coins])
             assert p.returncode == 0, p.stdout + p.stderr
             digests[i, coins] = json.loads(p.stdout.strip().splitlines()[-1])["statement_digest"]
     assert digests == {
         (0, "seed"): "635ffb22689408f8834ffdd1e05d93942d34a10cf5c6e452714b0e22bf4fd31b5a97a7aaacdc0b46b9f95cf83f8c45cdfeb525d5cc2d820a9f10a3afdc55a5ac",
-        (0, "os"): "8396403516052d38a198f5b58bd3c4fd0928ef6c67592325999d4b3c7123b95fbb86a9cd7444423f1b37a6316495945a732eb95a54e8319bd8941adc0c1a7404",
+        (0, "tree"): "635ffb22689408f8834ffdd1e05d93942d34a10cf5c6e452714b0e22bf4fd31b5a97a7aaacdc0b46b9f95cf83f8c45cdfeb525d5cc2d820a9f10a3afdc55a5ac",
         (1, "seed"): "bc35f9bcfdf662c16eb4c386f0e502fc5c259a4e6914fd0b4571ff2b75ba79d800bd8aa3f975e2ea1d8ba068c2a32d613b490f62813d8978bda443309812c9fd",
-        (1, "os"): "6d101368da356ed6149288af37565e17bfce8807d1be011cb920154edd7ceb4d06cb0d89747e1ddf24455339dd084c531b6c8d7dc333cb30f9472b67fa6f62da"}
+        (1, "tree"): "bc35f9bcfdf662c16eb4c386f0e502fc5c259a4e6914fd0b4571ff2b75ba79d800bd8aa3f975e2ea1d8ba068c2a32d613b490f62813d8978bda443309812c9fd"}
 
     d = tmp_path / "s0"
     head, meta_line, rest = (d / "c.txt").read_text().split("\n", 2)
@@ -1288,10 +1315,11 @@ def test_bit_row_statements_are_the_rust_verifier_s_and_a_meta_that_differs_is_r
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_segmented_row_statements_are_the_rust_verifier_s_and_a_meta_that_differs_is_refused(tmp_path):
     """Statements of `hm96-sha512/row-seg/v1` ports beside v2 ones (lengths 8193 and 65,536 with 881; and 0, 1, 8192 and 24,581
-    all segmented) have the statement digests a proving build of `flock-circuit statement` gives them, seeded and under
-    `FC_COINS=os`, so the two verifiers' segment chains, outer messages, row wires and the per-port `row_leaf_in_circuit`
-    identity agree. A META that differs is refused with the Rust verifier's message: a segmented row's length (its prefix, or
-    its words), a seg port read as v2 or a v2 port as seg (their compressions), its outer padding or midstate."""
+    all segmented) have the statement digests a proving build of `flock-circuit statement` gives them, seeded and on the
+    challenger's coin tree (`COINS`), so the two verifiers' segment chains, outer messages, row wires and the per-port
+    `row_leaf_in_circuit` identity agree. A META that differs is refused with the Rust verifier's message: a segmented row's
+    length (its prefix, or its words), a seg port read as v2 or a v2 port as seg (their compressions), its outer padding or
+    midstate."""
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
 
     def statement(d, text, *extra):
@@ -1303,15 +1331,15 @@ def test_segmented_row_statements_are_the_rust_verifier_s_and_a_meta_that_differ
     for i, (bits, seg) in enumerate([([8193, 881, 65536], {"p0", "p2"}), ([0, 1, 8192, 24581], {"p0", "p1", "p2", "p3"})]):
         d = tmp_path / f"s{i}"
         text = _bit_row_toy(bits, d, seg=frozenset(seg))
-        for coins in ("seed", "os"):
-            p = statement(d, text, "--coins", coins)
+        for coins in ("seed", "tree"):
+            p = statement(d, text, *COINS[coins])
             assert p.returncode == 0, p.stdout + p.stderr
             digests[i, coins] = json.loads(p.stdout.strip().splitlines()[-1])["statement_digest"]
     assert digests == {
         (0, "seed"): "348509682e3aee363435125285302fae230b03453053c0cf0ef57ee780209ad8802f9778a2555bcc718d50b84307c1a5b475e5f8fa7cbb64f1a204b32be46660",
-        (0, "os"): "f9fd111dc2e1e57b542fed4fb965244f8e3b1c894eadad00d1d09b6fabcbab71479ff6974f417d4568bacbeb701378559a76cfc38d8bc58f8b18382272a3f291",
+        (0, "tree"): "348509682e3aee363435125285302fae230b03453053c0cf0ef57ee780209ad8802f9778a2555bcc718d50b84307c1a5b475e5f8fa7cbb64f1a204b32be46660",
         (1, "seed"): "3d46103e12f21b6949b754fe22ea028fb67b226022ecb44be73d3fdae0bf90854919d8266b5d691c1173fde594f39dfa834056da4250bb3a862a177dda98bb7f",
-        (1, "os"): "ecbaca08887e75921fd89d293722af0ae08a053935263a633d798ce22239107eaec2121f6e8f1af5156d0144c1d7d2cf66d8d9eb8f9dbf6339e245e621029418"}
+        (1, "tree"): "3d46103e12f21b6949b754fe22ea028fb67b226022ecb44be73d3fdae0bf90854919d8266b5d691c1173fde594f39dfa834056da4250bb3a862a177dda98bb7f"}
 
     d = tmp_path / "s0"
     head, meta_line, rest = (d / "c.txt").read_text().split("\n", 2)
@@ -1334,24 +1362,25 @@ def test_segmented_row_statements_are_the_rust_verifier_s_and_a_meta_that_differ
         assert p.returncode != 0 and why in p.stdout + p.stderr, (name, p.stdout + p.stderr)
 
 
+#: `flock-verify statement`'s coin flags: a seeded statement's, and one on the challenger's coin tree, whose identity, and so
+#: whose statement digest, is the seeded one's
+COINS = {"seed": (), "tree": ("--coins", "tree")}
+
+
 #: the row-seg writer/reader pairs: each case's output ports' words (PoUW's A′ ‖ P_A: nvfp4-p at k = 4096, its codes, scales
 #: and P; fp8-p at k = 1024, its codes and P), instance 0's row digest and hm96 tree leaf, and the writer's and reader's
-#: statement digests (`flock-circuit statement`'s, seeded and under `FC_COINS=os`)
+#: statement digests (`flock-circuit statement`'s, seeded, which is also the coin tree's: `COINS`)
 ROW_SEG_PAIRS = {
     "row-seg-pair/nvfp4-p-k4096": ([1024, 128, 64], {
         "x": "16d8057b621b6658f26fecb25b40198d94d23c8a4fd0bf76b134400bde35c7cf8eb4ab3741a6c99bcb84489ed4c7d0fb4cd14c9732bcf6e3da448740beaf1c41",
         "tree_leaf": "002d453763e96ffadb7264dddbffcb9f21acdb15d9f77ba7d9af2c3132993143c2d454622247f2a032f4ece37c89f8428f9801397bdadb6a2528545e852575bc",
         ("writer", "seed"): "a9d7cca8ae8efa1d31922dbea1c85fa1c19dfc2b329a01084c4a32eb1714d59fda6dc70090d365e7ffa2f9f181518f5345cf3d732c0b416f2efa9944653353d7",
-        ("writer", "os"): "425d851721e61e3d09d624814a75e58ed5910950609c41364276132a8ce5ce63657bc9ba319771e27a81fa1fb0003ba30484f53016725e65a073f51c73eaa639",
-        ("reader", "seed"): "0bf66fa3fb0a973a38f767234e6a64b96ae3ccc7d16e6f98cd0d4a86faaa04f5836daffcaabc1c63615df80e95ecebc6ed51518e291eaee4a6d1fde764c03791",
-        ("reader", "os"): "3903917da911d19046bac6d706d6c9e2feaa1a5f5ae545d2aeee85dfd7132a7221f316e81f62b02dd58666a57f9c33c75ab0498d95da61c51be714f249353237"}),
+        ("reader", "seed"): "0bf66fa3fb0a973a38f767234e6a64b96ae3ccc7d16e6f98cd0d4a86faaa04f5836daffcaabc1c63615df80e95ecebc6ed51518e291eaee4a6d1fde764c03791"}),
     "row-seg-pair/fp8-p-k1024": ([512, 64], {
         "x": "85b8da5a6bc9542ab5eb4c07f54226866b64d8616fa957a2ba0bcb5f8d3f16170749a88095e67c7ec02ad6086fef1f356c15b77bd3f20118477cf3146952c534",
         "tree_leaf": "16ca66a6e6c34877c7fc2b82d1a2fb57b7d90120244012c969b5f80221fd52e402a41c98cb8d1c8192d3abab8ff87dc8715fbf3693861fa27e2b08a48e1e7848",
         ("writer", "seed"): "deb765047e42afeb5df53136d92917a72ce7599c03c6423a183d6ee53dd94a86acd14bf3b1a79e1a7f25c917e4443b64a9bb479fb58afab670b7793bcbc09b04",
-        ("writer", "os"): "012f9f0f491714a3307c640faa75a231b1a59f5a0444106cd231f7cfc8f957e73aa4bea60bbe8366a36e6ba2b327174ed0a6396a5f0cc91dcad4ecfa39d14c98",
-        ("reader", "seed"): "835f3aeae206289f6864260db608661c7fcb1d87a500376121a51295eaaf8aeafb4656f5fc43e15a0bbabba0939ef9d33ea1bf3435998e958d23e08b4df98c18",
-        ("reader", "os"): "fd567a05a2beb01477091c7398f485cd1a4382f58d69f5563819c8308decb868e49620c2f244b7b4bd0ccaf717d642d19f01470b5afdd205aebdba2768592fa6"}),
+        ("reader", "seed"): "835f3aeae206289f6864260db608661c7fcb1d87a500376121a51295eaaf8aeafb4656f5fc43e15a0bbabba0939ef9d33ea1bf3435998e958d23e08b4df98c18"}),
 }
 
 
@@ -1361,7 +1390,7 @@ def test_a_segmented_row_written_as_several_output_ports_is_the_row_its_reader_c
     """One row written by one unit as several output ports (META `out_row_ports`: one `hm96-sha512/row-seg/v1` row of exactly
     their words) and read by another as one input port has, on both sides, the same row digest (core's
     `sha512_row_seg_word_digest`), commitment ``b || c`` and hm96 tree leaf, so their frame leaves agree under one domain; each
-    side's statement digest is the one `flock-circuit statement` gives it, seeded and under `FC_COINS=os`. A writer's META
+    side's statement digest is the one `flock-circuit statement` gives it, seeded and on the coin tree (`COINS`). A writer's META
     that the statement can't link is refused with the Rust verifier's message: runs that don't cover the output ports once or
     don't match the row's length, no runs (one row per port), a row named after another port, a later port of its run named
     after an input row, and its length or schema changed. The composer refuses a run that isn't consecutive output ports."""
@@ -1388,10 +1417,10 @@ def test_a_segmented_row_written_as_several_output_ports_is_the_row_its_reader_c
         assert sha512_row_seg_word_digest([int(v) for v in got[0]], 16).hex() == want["x"], vid
         assert inst.tree_leaf(inst.default_key, bw[0][1]).hex() == want["tree_leaf"] == inst.tree_leaf(inst.default_key, br[0][0]).hex()
         for side, d, t in (("writer", dw, text), ("reader", dr, rtext)):
-            for coins in ("seed", "os"):
-                p = statement(d, t, "--coins", coins)
+            for coins in ("seed", "tree"):
+                p = statement(d, t, *COINS[coins])
                 assert p.returncode == 0, p.stdout + p.stderr
-                assert json.loads(p.stdout.strip().splitlines()[-1])["statement_digest"] == want[side, coins], (vid, side, coins)
+                assert json.loads(p.stdout.strip().splitlines()[-1])["statement_digest"] == want[side, "seed"], (vid, side, coins)
 
     d = tmp_path / "row-seg-pair/nvfp4-p-k4096" / "writer"
     head, meta_line, rest = (d / "circuit.txt").read_text().split("\n", 2)
@@ -1425,30 +1454,22 @@ ROW_V2_PAIRS = {
         "x": "5bba43fb72473ee2391e7fc71d9f3ec753c6397c80fde57eae6a81c30cd9d4a3522fda587d392d6ddef14ed97b95d76a48cb6748575f089ae802b25e3564f411",
         "tree_leaf": "d96220619679f36cc1864d8a4563b8e626ca22706fbe4a44136ac3299b40dc573a3626c14b4f309581481315a59eeb3ec4d98a6c7464f1a93d4f98b5fec92f0c",
         ("writer", "seed"): "161c31d6830d62436f7118fb8c1119ea1757d468697195fe617c1f0b304ab11333113ec26c281ef516dbc5fd9704721c42a59c938a34d22c29b4171f36079a49",
-        ("writer", "os"): "808c494c9697464974c8a46dd73fc7b579408a708f96cc9aeccb198084a9155972d36c9b52d143c6dda8283986c4a25d4bdcba731ffa116c3c6ca68baae8b0b6",
-        ("reader", "seed"): "ed0936a30be70e4f84b7c3cccc828261fa5ff50be2cd157a53c10fa237a497e5b3963a5f120f9b5d44fb0e5a2d77732f7ad282c63cd79cc92e0bfd7ce15ba572",
-        ("reader", "os"): "8e5fd423dedf4988661c3b2098ad7498e797039f6f1c97a3025b39cfca106077055081343d8521c8e285d64dad162231d1eaec88c48f718ff2b8c87248eb5097"}),
+        ("reader", "seed"): "ed0936a30be70e4f84b7c3cccc828261fa5ff50be2cd157a53c10fa237a497e5b3963a5f120f9b5d44fb0e5a2d77732f7ad282c63cd79cc92e0bfd7ce15ba572"}),
     "row-v2-pair/tile": ([16], {
         "x": "dcf6bf88ec1c4b03b2dccbfc2aa35c24197f25dc9f30918ad3f48c63acce67eb3dc1eef2da7b82f8ab25a50d7ef4e8364b488e6d6967c2e49fa5dc78615934ad",
         "tree_leaf": "5bb689f861dd1a92700580a52755d7f7e3743604dbf7e05b9e497e15547c60552cbeec381b4106062661ebc032afd854e1c2f2b8b3c605209d7b7f618d2b9ecd",
         ("writer", "seed"): "884aa14dbc70f4e1241a97535a0044aff6ad769af1c48cfc4f89af26073eff0332d8cb03141c90bae8097573735e60c98b5abd9dff1da9e2a6165d1385e1cb6a",
-        ("writer", "os"): "46bfc8136542bba3f8bd04898ed3e7848c22549262732ee426b3d6224f2f2d38fcaead829ebc3460508dd5b6c54873b590055769c4ff6fa98ea0f20c53ed4109",
-        ("reader", "seed"): "7c0e7d6f53462266374a319e7f6c9782ea504a348b7f2a589d7dbd2a27f258315ec57732b62123629e381df4fc7797e9c9167e220f3095fe183cf090643d83ff",
-        ("reader", "os"): "d529a246f9980a7737063233431125e50c7d010f663236c97ce3a088647ef29513fadbf8c9a20c20b62ab9a9d79f1ade4f272c436fe5bb944f55ee5bd06ad998"}),
+        ("reader", "seed"): "7c0e7d6f53462266374a319e7f6c9782ea504a348b7f2a589d7dbd2a27f258315ec57732b62123629e381df4fc7797e9c9167e220f3095fe183cf090643d83ff"}),
     "row-v2-pair/nvfp4-p-w-k1024": ([256, 32, 64], {
         "x": "a7c153b39c1a75d0d084a36f2bfd904c426e5e9d5cd10aecef9bff874db9161388fce6403418f852609acdd0025017f9ee8080d03b9b754c9488eef5201d3230",
         "tree_leaf": "e428c85590300f43a826da068c2d855bd61ae044de61a0871a7a944ba55b2ba27fb30ba143369554326e3e328522c02acb6945febc615177f1f24718bd3ba61e",
         ("writer", "seed"): "e5f7356ea3e4486e959021c0b19bb92ca21f6b4502b3ba33de5b6e41f54105154507b3c772ceb8ad798b2c1c47cae59b9ca7cd2df5ad21ff73e68e298699fcca",
-        ("writer", "os"): "aaf9b33f010f5e55fad616aa76cca13c5eccba9de8e229ac19cdeb7a7d72f0fb6e23bf8f1578b5757b109406055729ef8c1ad1d54d270275255e0837a0302526",
-        ("reader", "seed"): "1bf5221c78e2ec2c8a3a5c8ea1795004f21958678db40945307cdb3c48aa2361671971d5dce1d7b0786e2c2e4488984aab53cecd772ae396c13123882c77f928",
-        ("reader", "os"): "8446297f86101915584b97b41cd3bd4fba0c1867dc7face5597e5c14ada7016b42635e84a058e0bcb608df0004f7d61ac396263c647f59efb2f15221f8dee416"}),
+        ("reader", "seed"): "1bf5221c78e2ec2c8a3a5c8ea1795004f21958678db40945307cdb3c48aa2361671971d5dce1d7b0786e2c2e4488984aab53cecd772ae396c13123882c77f928"}),
     "row-v2-pair/fp8-p-w-k1024": ([512, 64], {
         "x": "bc97c0abcf9b6bc376b822f075765c31f605a85b219d95a486b60f7d605168eac1df645ac8c4d5d534007611b2b8d6ff50281d6c6e3cbc8fc227e1f9cfe6891f",
         "tree_leaf": "9cce701f152b279895a52bc92133245075ca902d0b65707540641e026d2bc9b07abf74b53e4436fe1bc247c393f03ad7055e4138c5eb30991119e409ebe9baf8",
         ("writer", "seed"): "7b4ba060f8fcb8c00fbe77e3210823b715134ad2c0962e08d8967ff7d5b4e8b2d90f64fad72bef53df6743fc25c4091ad37a5fcfc12e7d40b3e5184bd61a8c5d",
-        ("writer", "os"): "3f0cefddd757d571461667f32913aa3d12357687361b00cc6c3f7ea4a05ca18dcc465345e15ab8f5a54349e98e32fb68a1e81217d866a5674c1588e3d1ad3924",
-        ("reader", "seed"): "9c27a370fc9178abd83cf754028623d53499353f85f9a89ac4bd738ff0cdb7aa5bd9b013a82a96da27271e8f2a4264fd7b33f3e1bffde57d4c4413fa2e5abe92",
-        ("reader", "os"): "1affe1b4e06d500ae53ef2fbf5a0053846f7145929604dad2d7dbb167a1ced3ee5635ce7afe6ed58e305f75e077290af7407d61e091c8b4c429d74a7d939c14e"}),
+        ("reader", "seed"): "9c27a370fc9178abd83cf754028623d53499353f85f9a89ac4bd738ff0cdb7aa5bd9b013a82a96da27271e8f2a4264fd7b33f3e1bffde57d4c4413fa2e5abe92"}),
 }
 
 
@@ -1459,7 +1480,7 @@ def test_an_exact_v2_output_row_of_one_or_several_ports_is_the_row_its_reader_co
     (PoUW's 1-word ok, its 16-word tile digest) or as a run of them (META `out_row_ports`: the nvfp4-p and fp8-p W rows), and
     read by another unit as one input port has, on both sides, the same row digest (core's `sha512_row_v2_digest`),
     commitment ``b || c`` and hm96 tree leaf; each side's statement digest is the one `flock-circuit statement` gives it,
-    seeded and under `FC_COINS=os`. A run written as a v1 row, or at a length other than its words, is refused."""
+    seeded and on the coin tree (`COINS`). A run written as a v1 row, or at a length other than its words, is refused."""
     import numpy as np
     from verity.ml.commitments import hm96
     from verity.ml.commitments.rowleaf import sha512_row_v2_digest
@@ -1485,10 +1506,10 @@ def test_an_exact_v2_output_row_of_one_or_several_ports_is_the_row_its_reader_co
         assert digest(got[0], sum(out_words)).hex() == want["x"], vid
         assert inst.tree_leaf(inst.default_key, bw[0][1]).hex() == want["tree_leaf"] == inst.tree_leaf(inst.default_key, br[0][0]).hex()
         for side, d, t in (("writer", dw, text), ("reader", dr, rtext)):
-            for coins in ("seed", "os"):
-                p = statement(d, t, "--coins", coins)
+            for coins in ("seed", "tree"):
+                p = statement(d, t, *COINS[coins])
                 assert p.returncode == 0, p.stdout + p.stderr
-                assert json.loads(p.stdout.strip().splitlines()[-1])["statement_digest"] == want[side, coins], (vid, side, coins)
+                assert json.loads(p.stdout.strip().splitlines()[-1])["statement_digest"] == want[side, "seed"], (vid, side, coins)
 
     d = tmp_path / "row-v2-pair/nvfp4-p-w-k1024" / "writer"
     head, meta_line, rest = (d / "circuit.txt").read_text().split("\n", 2)
@@ -1566,3 +1587,33 @@ def test_net_parser_refuses_rows_out_of_order(tmp_path):
     got = {Path(j["file"]).stem: j for j in (json.loads(l.split(" ", 1)[1]) for l in out.splitlines() if l.startswith("NETCHECK "))}
     for name, (_, why) in cases.items():
         assert got[name]["ok"] == (why is None) and (why is None or why in got[name]["error"]), (name, got[name])
+
+
+#: the legacy statements (`ProvedScope.legacyStatements`), by the family `vectors.json`'s honest cells name
+LEGACY = {"flock-pure-block": ["verity/flock-pure-block/v2"],
+          "flock-ir-frame": ["verity/flock-ir-frame/v2", "verity/flock-ir-frame/v3"],
+          "flock-ir-sampling": ["verity/flock-ir-sampling/v1"], "flock-ir-block": ["verity/flock-ir-block/v1"],
+          "flock-vllm-block": ["verity/flock-vllm-block/v1"]}
+
+
+def test_every_honest_cell_is_a_statement_the_lean_verifier_refuses():
+    """`vectors.json`'s honest cells are upstream's: each is a legacy statement, or the netlist one before hm96-sha512 rows,
+    and none is a vector the Lean verifier accepts (`honest_upstream_only`)."""
+    v = json.loads((VERIFIER / "vectors.json").read_text())
+    assert "the Lean verifier refuses each" in v["honest_upstream_only"]
+    for c in v["honest"]:
+        assert c["statement"] in LEGACY or "verity/flock-netlist/v1" in c["detail"], c["cell"]
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_legacy_statement_is_refused_at_every_session(tmp_path):
+    """`verify` refuses every session of a legacy statement before it reads a file, with or without `--zk`."""
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    for name in (n for ns in LEGACY.values() for n in ns):
+        for zk in ((), ("--zk",)):
+            p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "verify", "--statement", name, *zk, "--circuit",
+                                str(tmp_path / "c.txt"), "--public", str(tmp_path / "pub.bin"), "--session",
+                                str(tmp_path / "a"), str(tmp_path / "b")], capture_output=True, text=True)
+            vs = [json.loads(ln.split(" ", 1)[1]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT ")]
+            why = f"refused: {name}, a legacy statement (§16.9): a statement form the soundness proof does not cover"
+            assert p.returncode == 1 and [(x["accepted"], x["why"]) for x in vs] == [(False, why)] * 2, p.stdout + p.stderr
