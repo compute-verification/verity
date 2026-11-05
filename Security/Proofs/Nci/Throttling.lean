@@ -1,7 +1,6 @@
 import Proofs.Nci.Chain
 import Proofs.Nci.Inequalities
 import Proofs.Nci.LoomisWhitney
-import Proofs.Nci.Rate
 
 /-!
 # Updated matrix multiplications are throttled
@@ -274,12 +273,9 @@ theorem UpdatedMatMul_rate :
           field_simp
   rwa [le_div_iff₀ (by positivity)] at hle
 
-/-- **Updated matrix multiplications are throttled** at `(c, k)`: `UpdatedMatMul_rate` at the rate `k / c`. -/
-theorem UpdatedMatMul : Guarantees.UpdatedMatMul := by
-  intro c k b_w b_a D ch d hc hk hw ha hd hD hA hP
-  have h := UpdatedMatMul_rate c (k / c) b_w b_a D ch d (div_pos (Nat.cast_pos.2 hk) (Nat.cast_pos.2 hc)) hw ha hd
-    (compliesRate_of_complies hD) (by rwa [rate_mul _ hc]) (by rwa [rate_mul _ hc])
-  rwa [rate_mul _ hc] at h
+/-- **Updated matrix multiplications are throttled** at `(Γ, α)`. -/
+theorem UpdatedMatMul : Guarantees.UpdatedMatMul :=
+  UpdatedMatMul_rate
 
 /-- **Frontier training is throttled** (the draft, "From updated matrix multiplications to training"). -/
 theorem Training : Guarantees.Training :=

@@ -168,13 +168,13 @@ def Sessions (d : RegisteredCircuit) {B : ℕ} (P : Partition d.D B) (prompt : F
   (∀ u, (P.gates u).card = c) ∧ (∀ u, d.D.into (P.gates u) ⊆ d.θ ∪ prompt u) ∧ (∀ u, d.D.width (prompt u) ≤ k)
 
 /-- **The training circuit `T` is in the class `𝒯`** (the draft, "From updated matrix multiplications to training"):
-every declared circuit `D` that implements `T` and complies at `(c, k)` runs a chain `ch` of updated matrix
-multiplications whose inner dimensions are at least `d` and whose products cover a fraction `κ` of `T`'s size, with
-compute-bounded incompressibility for `ch` on `D`. It carries `ActivationsIncompressible` and
+every declared circuit `D` that implements `T` and complies at `(Γ, α)` (`CompliesRate`) runs a chain `ch` of updated
+matrix multiplications whose inner dimensions are at least `d` and whose products cover a fraction `κ` of `T`'s size,
+with compute-bounded incompressibility for `ch` on `D` at read cap `α Γ`. It carries `ActivationsIncompressible` and
 `PartialSumsIncompressible` on declared circuits, and is false wherever they are. -/
-def InClass (T : RegisteredCircuit) (c k : ℕ) (b_w b_a κ : ℝ) (d : ℕ) : Prop :=
-  ∀ D, T.Implements D → Complies c k D → ∃ ch : Chain D.D,
+def InClass (T : RegisteredCircuit) (Γ : ℕ) (α b_w b_a κ : ℝ) (d : ℕ) : Prop :=
+  ∀ D, T.Implements D → CompliesRate Γ α D → ∃ ch : Chain D.D,
     InnerAtLeast ch d ∧ Coverage κ T (2 * ch.G) ∧
-    ActivationsIncompressible D ch c k b_w b_a ∧ PartialSumsIncompressible D ch c k b_w b_a
+    ActivationsIncompressible D ch Γ (α * Γ) b_w b_a ∧ PartialSumsIncompressible D ch Γ (α * Γ) b_w b_a
 
 end Nci.Assumptions

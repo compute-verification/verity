@@ -7,9 +7,9 @@ import Definitions.Nci.Guarantees.Reads
 The proof of `UpdatedMatMul` (`Throttling.lean`) before it divides by the rate `α`: the same per-block counts
 (`card_products_le`, `iu_reads`), the same charge for split entries (`sum_card_outputsOther_le`) and the same total
 (`sum_card_products`), with the inference blocks' total fresh input in place of `α size(D)`. A division that complies at
-`c` gates per inference block and the rate `α` reads at most `α size(D)` in total and each of its inference blocks at
-most `k = α c`, which gives back `F · 2G ≤ size(D)` through `F = f(k) / (2α)` (`F_eq_readFactor`,
-`updatedMatMul_rate_of_reads`), and at `α = k / c` the policy's form (`updatedMatMul_of_reads`).
+`Γ` gates per inference block and the rate `α` reads at most `α size(D)` in total and each of its inference blocks at
+most `α Γ`, which gives back `F · 2G ≤ size(D)` through `F = f(α Γ) / (2α)` (`F_eq_readFactor`,
+`updatedMatMul_rate_of_reads`, `updatedMatMul_of_reads`).
 -/
 
 namespace Nci.SecurityProofs
@@ -127,11 +127,8 @@ theorem updatedMatMul_rate_of_reads (h : Guarantees.UpdatedMatMulReads) :
     _ ≤ α * D.D.size D.D.computed / α := div_le_div_of_nonneg_right hr hα.le
     _ = D.D.size D.D.computed := by field_simp
 
-/-- The reads form gives back `UpdatedMatMul` at `(c, k)`: `updatedMatMul_rate_of_reads` at the rate `k / c`. -/
-theorem updatedMatMul_of_reads (h : Guarantees.UpdatedMatMulReads) : Guarantees.UpdatedMatMul := by
-  intro c k b_w b_a D ch d hc hk hw ha hd hD hA hP
-  have h' := updatedMatMul_rate_of_reads h c (k / c) b_w b_a D ch d (div_pos (Nat.cast_pos.2 hk) (Nat.cast_pos.2 hc))
-    hw ha hd (compliesRate_of_complies hD) (by rwa [rate_mul _ hc]) (by rwa [rate_mul _ hc])
-  rwa [rate_mul _ hc] at h'
+/-- The reads form gives back `UpdatedMatMul`. -/
+theorem updatedMatMul_of_reads (h : Guarantees.UpdatedMatMulReads) : Guarantees.UpdatedMatMul :=
+  updatedMatMul_rate_of_reads h
 
 end Nci.SecurityProofs

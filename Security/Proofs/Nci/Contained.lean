@@ -2,7 +2,6 @@ import Definitions.Nci.Guarantees.Contained
 import Proofs.Nci.Reads
 import Proofs.Nci.Pull
 import Proofs.Nci.Support
-import Proofs.Nci.Rate
 
 /-!
 # Proofs of the partial-sum law on a reference circuit
@@ -376,26 +375,12 @@ theorem ContainedTrainingOn_rate :
     (ContainedMatMulOn_rate Γ α K b_w b_a μ c d θv ch dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hB hX hA hPS) hκ
     (by exact_mod_cast card_products_le_dark M ch)
 
-theorem ContainedMatMul : Guarantees.ContainedMatMul := by
-  intro c k b_w b_a r d θv ch dd M hc hk hw ha hd hP hB hA hPS
-  have h := ContainedMatMul_rate c (k / c) b_w b_a r d θv ch dd M (div_pos (Nat.cast_pos.2 hk) (Nat.cast_pos.2 hc))
-    hw ha hd (compliesRate_of_complies hP) hB (by rwa [rate_mul _ hc]) (by rwa [rate_mul _ hc])
-  rwa [rate_mul _ hc] at h
+theorem ContainedMatMul : Guarantees.ContainedMatMul := ContainedMatMul_rate
 
-theorem ContainedTraining : Guarantees.ContainedTraining := by
-  intro c k b_w b_a κ r d θv ch dd M hc hk hw ha hd hP hB hA hPS hκ
-  have h := ContainedTraining_rate c (k / c) b_w b_a κ r d θv ch dd M (div_pos (Nat.cast_pos.2 hk) (Nat.cast_pos.2 hc))
-    hw ha hd (compliesRate_of_complies hP) hB (by rwa [rate_mul _ hc]) (by rwa [rate_mul _ hc]) hκ
-  rwa [rate_mul _ hc] at h
+theorem ContainedTraining : Guarantees.ContainedTraining := ContainedTraining_rate
 
-theorem ContainedMatMulOn : Guarantees.ContainedMatMulOn := by
-  intro c k K b_w b_a μ r d θv ch dd emax M hK hw ha hdd hc hkK hμ₀ hμ₁ hd he hP hB hX hA hPS
-  exact ContainedMatMulOn_rate c (k / c) K b_w b_a μ r d θv ch dd emax M (by positivity) hK hw ha hdd (by omega)
-    (by rwa [rate_mul _ hc]) hμ₀ hμ₁ hd he (compliesRate_of_complies hP) hB hX hA hPS
+theorem ContainedMatMulOn : Guarantees.ContainedMatMulOn := ContainedMatMulOn_rate
 
-theorem ContainedTrainingOn : Guarantees.ContainedTrainingOn := by
-  intro c k K b_w b_a μ κ r d θv ch dd emax M hK hw ha hdd hc hkK hμ₀ hμ₁ hd he hP hB hX hA hPS hκ
-  exact ContainedTrainingOn_rate c (k / c) K b_w b_a μ κ r d θv ch dd emax M (by positivity) hK hw ha hdd (by omega)
-    (by rwa [rate_mul _ hc]) hμ₀ hμ₁ hd he (compliesRate_of_complies hP) hB hX hA hPS hκ
+theorem ContainedTrainingOn : Guarantees.ContainedTrainingOn := ContainedTrainingOn_rate
 
 end Nci.SecurityProofs
