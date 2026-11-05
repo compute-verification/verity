@@ -30,7 +30,9 @@ Two closed statements, the second over the first:
   meets Π_out's sessions' contract (`Compiled.Sessions`), at each statement where the contract holds: `E_O` runs Π_out's
   extractor session by session (`Compiled.EO`), and its errors sum the sessions' bounds.
 
-Zero knowledge of the composed system is not stated here: its generic statement is not proved.
+Zero knowledge of the composed system is not stated here. Z1 (`Flock.Guarantees.GenericRecursiveZK`) states it over
+the ZK server's release (`Claims.RecGeneric.ZkRelease`, in `Proofs.Flock.RecGeneric.ZK`), whose definitions live in
+`Proofs`.
 
 The Flock instances: `Flock.Guarantees.RecursiveKSEvery` is `CompositionKS` at today's compiled record, its `E_O`, the
 hm96 server and the element-level Flock (`Claims.RecGeneric.RecoversLinkOn` takes `CompositionKS`), and
