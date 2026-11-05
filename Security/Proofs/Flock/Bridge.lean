@@ -4,6 +4,7 @@ public import Proofs.Flock.Bridge.PortRoots
 public import Proofs.Flock.Bridge.PopMatches
 public import Proofs.Flock.Bridge.Targets
 public import Proofs.Flock.Bridge.Lowers
+public import Proofs.Flock.Bridge.Slots
 public import Proofs.Flock.Bridge.Count
 public import Proofs.Flock.Bridge.CircuitOf
 public import Proofs.Flock.Bridge.Canon
