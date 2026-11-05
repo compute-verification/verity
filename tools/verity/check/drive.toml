@@ -63,6 +63,8 @@ executor = "shadow"
 # executor_enqueue = ["CMD", "ARG"]
 # the most review-landing Lean checks running at once: one, and those stacked above it on `next` for Lean changes it doesn't hold
 max_lean_checks = 10
+# executor_enqueue (above): the control pod's executor, which infra/control/executor_serve.sh serves
+executor_enqueue = ["python3.12", "/root/executor/infra/executor.py", "--db", "/root/executor/queue.db", "enqueue"]
 # a sync merges PRs that change no Lean below Lean changes, so they don't wait for a Lean check (members on `next` never move)
 nonlean_first = false
 # while no Lean check of `next` runs, members with a land verdict go below those waiting for one, so a member waiting for its
