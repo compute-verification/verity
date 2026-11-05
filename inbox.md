@@ -187,3 +187,24 @@ PEARLCAP: py13 (r20261104-222847-eff0, cpu-3) finished at df3b87fcfa1. verity-po
 [2026-11-05T02:22Z] ae9f753bdac8
 PEARLLEAN #7221: not final at 4f5f3d132a6. Its recorded-H200 difftest case computed the Python's verdict live with verify_passes' default scalar replay, which ran >1h50m at 12 cores (r20261105-002100-7d8d, cancelled before its timeout). One test-only commit, a65ea734468, makes it use the batch replay with the every-256th scalar cross-check that served_passes.py verify uses (the recorded verdict was batch too). Difftest at a65e: r20261105-022151-507c. Suites at 4f5f (pouw benchmarks, one_stage, pearlplus_lean): r20261105-013316-a4ff, still running; a65e doesn't touch their inputs except pearlplus_lean, which 507c covers. Final report follows.
 
+[2026-11-05T04:40Z] c6ffcbb45f0f
+PEARLLEAN #7221 FINAL at a65ea734468 (pushed; not marked ready). No suite runs are still going.
+
+Runs on vy-nebius-cpu-1:
+- Difftest at a65ea734468, r20261105-022151-507c: 20 passed, 0 failed. That includes both recorded H200 cases, about 65 and 58 minutes each. The rc of 1 is the job wrapper's, as in every earlier difftest run; pytest's summary is "20 passed".
+- Suites at 4f5f3d132a6, r20261105-013316-a4ff: verity-pouw-benchmarks 1358 passed, 38 skipped; benchmarks/one_stage 656 passed; benchmarks/pouw/pearlplus_lean 18 passed, 2 skipped (the recorded cases, which 507c covers). a65e changes only test_pearlplus_lean.py, so these carry over.
+- Python tests at 4e280de6816, r20261104-235854-b5b8: test_pearl_c_vllm, glm53, and one_stage's test_served_pearlplus_lean with the real Lean executable. 190 passed, 5 skipped (GPU-only), rc 0.
+- Earlier: r20261104-222528-81c4 (Python tests at df3b: 190 passed, 5 skipped); r20261104-222522-c407 (difftest at df3b: 3 failures, all fixed below); r20261104-232600-0713 (the key scan that found the mixed-row case).
+
+What went in after df3b87fcfa1 (a fast-forward):
+- 9d68671203b: RefusedBeforeTheCoin's conclusion now carries overCap := i.overCap and tie := r.tie; proved by unfold check; rw [h].
+- 60a1b3da97b: merge of lean's d0d4ef6e610, no overlap.
+- 157552c0335: the salt-dead test's Python-only call takes test_instance=True.
+- 1de1a8e85a4: the mixed-row forming-term case. On 16 x 1 tiles, key 4, tile 14, one block of four is inert and no element is salt-dead. Debit 168 with the term, 40 without; 424 if the unflagged blocks were read as inert. Lean and Python agree under each over_cap rule.
+- 0edf2b3314f, 4f5f3d132a6, a65ea734468 (test only): the recorded H200 case now holds the Lean to today's Python verdict on the recorded passes, at the recorded draw count and source, under uncredited. Python replays on the batch forms with the every-256th scalar cross-check, as served_passes.py verify does. The case also requires the verdict to accept or reject as recorded. The old reference predates the forming term and band rule: today's credit on that run is 39.78e9 of 40.28e9 MACs over 3,344 tiles; the recorded one was 63.31e9 of 64.12e9 over 6,256. That gap is the band loss from the rows those passes volunteered.
+- 4e280de6816 (docs): served_passes.py verify's docstring says the run of record takes --over-cap uncredited and volunteers no row (volunteer-needed says no, so the pipelines run no volunteer). The reason given is that a volunteered A row uncredits its 64-row band and a B row its 64-column block (UnitRecord.credited). verify_passes' docstring and Check.lean's module docstring say the same in one clause.
+
+Nothing besides tests and docstrings changed after df3b.
+
+Note for the PR body / CMP-331: under the band rule, an honest run loses about 0.4% when the prover volunteers no rows and over-cap tiles credit 0 (run 1: 7.903e12 to 7.871e12; ca34: 6.390e10 to 6.364e10). If the prover still volunteers rows as served, each one zeroes its 64-row band or 64-column block, costing 37 to 40%. So the run of record must use over_cap=uncredited with no volunteered rows. served_passes.py verify's docstring now says so.
+
