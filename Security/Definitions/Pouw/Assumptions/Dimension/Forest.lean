@@ -136,8 +136,7 @@ def GridNear : Prop :=
 
 /-- **Theorem 1 for every family near the words**: under checkpoint independence and MinRank ≥ 5, a quadratic closed
 pipe whose outputs include `|S|` non-final values of a family that differs from the checked words by elements of
-`V₀` has at least `2·|S|` steps. At `w = word` this is `A1_cost_quad 2 0`; at route U's `wordU` it is
-`A1_cost_quad_U 2 0`. -/
+`V₀` has at least `2·|S|` steps. At `w = word` this is `A1_cost_quad 2 0`; route U's `wordU` is such a family. -/
 def A1CostQuadNear : Prop :=
   ∀ (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ)
     (w : ℕ → ℕ → Noise N m n k → ℚ), CheckpointIndependent k 16 R → MinRankGe k R 5 → U ⊆ range N →
