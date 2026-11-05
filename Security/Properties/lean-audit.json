@@ -25,6 +25,7 @@
   "Properties.Pous",
   "Properties.NetworkCertifier",
   "Properties.NetworkCertifier.LinkWindow",
+  "Properties.NetworkCertifier.Wired",
   "Properties.CertifierNetwork",
   "Properties.CertifierNetwork.Runs",
   "Properties.Identity",
@@ -32,6 +33,8 @@
   "Properties.Evaluate",
   "Properties.NetworkRecords",
   "Properties.NetworkPeriod",
+  "Properties.NetworkPeriod.Placed",
+  "Properties.NetworkPeriod.ForcedZero",
   "Properties.Core.Period",
   "Properties.NetworkScan",
   "Properties.SampledProofs",
@@ -289,14 +292,6 @@
    "owner": "@compute-research",
    "digest": "f0e12824cc546338a62a6ffb8bd14f09157e056e8b2143a7e6a6334209ff1c1a"
   },
-  "Properties.NetworkScan.ScopeMatches": {
-   "owner": "@network-accounting",
-   "digest": "034e585f8cf7bd0bc270f3d5d2e503ebd70488b8c972161b8a70c22e12caf7e7"
-  },
-  "Properties.NetworkScan.StmtFlattens": {
-   "owner": "@network-accounting",
-   "digest": "d9457f2011bf51bdb5935b85ce9a848b489c67ef0a02ca412731b2f15d24255a"
-  },
   "Properties.Pouw.Period.DrawIsCoin": {
    "owner": "@compute-accounting",
    "digest": "97c67360debeffd27250e2548d90facc3c355d2356b29afa2b66cb04d9aead7b"
@@ -478,6 +473,7 @@
   "Properties.NetworkRecords",
   "Properties.NetworkPeriod",
   "Properties.NetworkPeriodLeak",
+  "Properties.NetworkPeriod.Placed",
   "Properties.NetworkScan",
   "Properties.SampledProofs",
   "SampledProofs",
@@ -624,14 +620,6 @@
   "Properties.Remote.SecurityProofs.acceptComplies": {
    "nontrivial": "Properties.Remote.SecurityProofs.acceptComplies_nontrivial"
   },
-  "Properties.NetworkScan.scanFits": {
-   "honest": ["Properties.NetworkScan.scan_honest"],
-   "nontrivial": "Properties.NetworkScan.scanFits_nontrivial"
-  },
-  "Properties.NetworkScan.scanScopeAcc": {
-   "honest": ["Properties.NetworkScan.scan_honest"],
-   "nontrivial": "Properties.NetworkScan.scanScopeAcc_nontrivial"
-  },
   "Properties.RemoteAudit.codeLayoutTiles": {
    "honest": ["Properties.RemoteAudit.codeLayoutTiles_honest"],
    "nontrivial": "Properties.RemoteAudit.codeLayoutTiles_nontrivial"
@@ -694,6 +682,21 @@
   "Verity.remote_network_no_pouw_soundness_of_subprotocols": {
    "honest": ["Verity.remote_network_no_pouw_soundness_of_subprotocols_honest"],
    "nontrivial": "Verity.remote_network_no_pouw_soundness_of_subprotocols_nontrivial"
+  },
+  "Properties.NetworkPeriod.rowsWiresChecked": {
+   "honest": ["Properties.NetworkPeriod.rowsWiresChecked_honest"],
+   "nontrivial": "Properties.NetworkPeriod.rowsWiresChecked_nontrivial"
+  },
+  "Properties.NetworkPeriod.rowsHeld": {
+   "honest": ["Properties.NetworkPeriod.rowsHeld_honest"],
+   "nontrivial": "Properties.NetworkPeriod.rowsHeld_nontrivial"
+  },
+  "Properties.NetworkPeriod.forcedZeroUnfilled": {
+   "nontrivial": "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial"
+  },
+  "Properties.NetworkPeriod.wrongBoundsDrawn": {
+   "honest": ["Properties.NetworkPeriod.wrongBoundsDrawn_honest"],
+   "nontrivial": "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial"
   }
  },
  "unwitnessed": {
@@ -909,7 +912,12 @@
   "Properties.SampledProofs.haltCoversOperator": "3f9891aa1693628f5b2c28e35e55a258c71bb962d4e30f5b07407e917973ef86",
   "Properties.SampledProofs.haltEndsOpen": "ded0fc0d7fd329c2e1585319b811ad69f9e24c9fcceed2ab5560f109a9fb9735",
   "Properties.SampledProofs.haltIsFinal": "83d93d8c3f74940f0d7ec870cfb360e861b9fe0b6d842080dc0b57523ad67903",
-  "Properties.SampledProofs.noAcceptAfterHalt": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162"
+  "Properties.SampledProofs.noAcceptAfterHalt": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162",
+  "Properties.NetworkPeriod.forcedZeroUnfilled": {
+   "type_hash": "de536d49537844984131dcad9bb3fe06ef4bca23051decd873d53fed873ff767",
+   "missing": "honest",
+   "why": "its honest instance is a session that Flock.ProvedScope.check and Flock.Stmt.setupTables both accept: a circuit file, its public file and coins, which a proof would evaluate in the kernel through the file's whole parse, its SHA-512 digests and the layout checks; no lemma evaluates either at a literal session yet, and flock-verify's runs at the deployed files are what show that honest serving passes"
+  }
  },
  "layers": {
   "Properties.Pouw": {
@@ -1002,9 +1010,18 @@
    "why": "the bridge is stated against core's identity hash and C-Flock's SHA-512, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.NetworkCertifier": {
-   "imports": ["NetworkCheck.Check", "NetworkCheck.LinkWindow", "Properties.Identity", "Lms.Sign"],
+   "imports": [
+    "NetworkCheck.Check",
+    "NetworkCheck.LinkWindow",
+    "Properties.Identity",
+    "Lms.Sign",
+    "NetworkCheck.Circuit",
+    "Definitions.NetworkCertifier.SampledCharge",
+    "Properties.NetworkScan",
+    "Properties.NetworkPeriod"
+   ],
    "except": [],
-   "why": "the properties are stated against the code's own functions, the check's and N2's link-window verdict of record's, and the certificates the certifier's device signs against LMS's own signer (`CertifierSigned`), never a proof"
+   "why": "the properties are stated against the code's own functions, the check's and N2's link-window verdict of record's, the certificates the certifier's device signs against LMS's own signer (`CertifierSigned`), and a compute audit's wired rows against the circuit record's check, the sampled charge's free inputs (`NetTiming.freeInputs`), the scan's Bits layout (`Properties.NetworkScan`) and the period check's properties (`Properties.NetworkPeriod`), never a proof"
   },
   "Properties.Evaluate": {
    "imports": ["Evaluate", "Definitions.Core.Scalar", "Definitions.Core.Fp32", "Definitions.Core.Prims"],
@@ -1140,9 +1157,18 @@
    "why": "a joint period's PoUW bridge from a credit in words is stated over the joint period (`Definitions.Accounting.JointPeriod`), its realization (`Definitions.Accounting.JointBridge.CreditedWords`) and its named premises (`Definitions.Accounting.Assumptions.CreditedWords`), never a proof or a source protocol's statement"
   },
   "Properties.NetworkPeriod": {
-   "imports": ["NetworkCheck.Period", "Mathlib.Algebra.BigOperators.Fin"],
+   "imports": [
+    "NetworkCheck.Period",
+    "Mathlib.Algebra.BigOperators.Fin",
+    "SampledProofs.Bits",
+    "SampledProofs.Bound",
+    "Definitions.Claims.Sampling.Strata",
+    "Definitions.NetworkCertifier.PeriodConditions",
+    "Properties.NetworkScan.Flattens",
+    "Flock.ProvedScope"
+   ],
    "except": [],
-   "why": "what the period check's rows-form K counts is stated against its own terms (`rowsTerms`) and Mathlib's finite products, never a proof"
+   "why": "what the period check's rows-form K counts is stated against its own terms (`rowsTerms`) and Mathlib's finite products, and what its scan's `faulty_bits` charges against the sampled statement's layout as the code lays it out (`SampledProofs.Bits`, its members' joint program `Properties.NetworkScan.Flattens`), the period's premise it meets (`NetTiming.WindowsPlaced`), and the audit's bound against the code's count bound (`SampledProofs.Bound`) at the claims' strata draw (`Definitions.Claims.Sampling.Strata`), and that no pair of Δ fills a forced-zero column against the verifier's statement check and setup (`Flock.ProvedScope`), never a proof"
   },
   "Properties.Composition": {
    "imports": ["CoreComposition.Product", "CoreComposition.Registered", "CoreComposition.Tie"],
@@ -1175,9 +1201,14 @@
    "why": "the served protocol's onsite freed compute is stated over its remote work guarantee (`Properties.Pouw.ServedWork`) and the accelerator model's period and freed compute (`Definitions.Pouw.Dither`), never a proof"
   },
   "Properties.NetworkScan": {
-   "imports": ["NetworkCheck.Period", "Definitions.NetworkCertifier.SampledAudit", "Properties.NetworkScan"],
+   "imports": [
+    "NetworkCheck.Period",
+    "Definitions.NetworkCertifier.SampledAudit",
+    "Properties.NetworkScan",
+    "SampledProofs.Bits"
+   ],
    "except": [],
-   "why": "the scan's layout and its fit are stated against the period check's `scanOf`, C-Flock's decoder and resolution, the sampled audit's scope (`NetTiming.ScopeAcc`, `NetTiming.BoundaryGates.Fits`) and its own flattening and named deployment premises (`Properties.NetworkScan.Flattens`, `Properties.NetworkScan.Assumptions`), never a proof"
+   "why": "the scan's layout and its fit are stated against the period check's `scanOf`, C-Flock's decoder, Bits' layout of a circuit file (`SampledProofs.Bits`), the sampled audit's scope (`NetTiming.ScopeAcc`, `NetTiming.BoundaryGates.Fits`) and its own flattening (`Properties.NetworkScan.Flattens`), never a proof"
   },
   "Properties.Pous.Wipe": {
    "imports": ["Definitions.Accounting.Wipe", "MemoryChallenger.WipeProtocol"],
@@ -2983,6 +3014,23 @@
    "assumptions": [],
    "type_hash": "30ac246ed35e00d232bcbf769692a986c35476bf91dadb94f044d3eb7e708d0d"
   },
+  "Properties.NetworkPeriod.forcedZeroUnfilled": {
+   "owner": "@network-accounting",
+   "signature": ["Properties.NetworkPeriod.forcedZeroUnfilled : Properties.NetworkPeriod.ForcedZeroUnfilled"],
+   "assumptions": [],
+   "type_hash": "de536d49537844984131dcad9bb3fe06ef4bca23051decd873d53fed873ff767"
+  },
+  "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial :",
+    "  Not",
+    "    (Properties.NetworkPeriod.ForcedZeroUnfilledOf Properties.NetworkPeriod.acceptAllScope",
+    "      Properties.NetworkPeriod.fillForced)"
+   ],
+   "assumptions": [],
+   "type_hash": "8d14e94249f8239abc425628932524c0c3eeb33bc84e8f99b075977da9cdb34e"
+  },
   "Properties.NetworkPeriod.rowsCircuitHeld": {
    "owner": "@network-accounting",
    "signature": ["Properties.NetworkPeriod.rowsCircuitHeld : Properties.NetworkPeriod.RowsCircuitHeld"],
@@ -3035,6 +3083,54 @@
    ],
    "assumptions": [],
    "type_hash": "7ddb22b7d4bcec9f64dfa4cf1e07f6dd5ce55ad67e2409079ed165ea0078f5c3"
+  },
+  "Properties.NetworkPeriod.rowsHeld": {
+   "owner": "@network-accounting",
+   "signature": ["Properties.NetworkPeriod.rowsHeld : Properties.NetworkPeriod.RowsHeld"],
+   "assumptions": [],
+   "type_hash": "b5cff30bb70c041288d6263039ca003fd5365b972ed9cdd1b46acba3ae9e370b"
+  },
+  "Properties.NetworkPeriod.rowsHeld_honest": {
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.NetworkPeriod.rowsHeld_honest :",
+    "  And",
+    "    (Eq",
+    "      (NetworkCheck.Period.check",
+    "        { audits := List.nil.toArray, cells := List.nil.toArray, first := 0, jitter := 1, link := \"\",",
+    "          lms := Lms.deployed, key := ByteArray.empty, session := ByteArray.empty, program := \"\",",
+    "          circuit := Option.some \"c\",",
+    "          form :=",
+    "            NetworkCheck.Period.Form.rows Properties.NetworkPeriod.slotSchedule ByteArray.empty",
+    "              { steps := 0, free := 0, ingress := 0, egress := 0, entries := 0 },",
+    "          windows := 0 }",
+    "        { audits := List.nil.toArray, windows := List.nil.toArray, bytes := ByteArray.empty }",
+    "        { audits := List.nil.toArray, windows := List.nil.toArray })",
+    "      (Core.Outcome.accept",
+    "        (NetworkCheck.Period.rowsTerms List.nil.toArray",
+    "          { steps := 0, free := 0, ingress := 0, egress := 0, entries := 0 } List.nil.toArray List.nil.toArray 1 0)",
+    "        { link := \"\", windows := 0 }))",
+    "    (Eq",
+    "      ((NetworkCheck.Period.publicJson",
+    "            (NetworkCheck.Period.rowsTerms List.nil.toArray",
+    "              { steps := 0, free := 0, ingress := 0, egress := 0, entries := 0 } List.nil.toArray List.nil.toArray 1",
+    "              0)).getObjValD",
+    "        \"held\")",
+    "      (Lean.instToJsonArray.toJson NetworkCheck.Period.heldNames))"
+   ],
+   "assumptions": [],
+   "type_hash": "2733019304f3e31d2a41ecedb78d91d542a28e7e8c5aaa6e17a055cb77f69310"
+  },
+  "Properties.NetworkPeriod.rowsHeld_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.NetworkPeriod.rowsHeld_nontrivial :",
+    "  Not",
+    "    (Properties.NetworkPeriod.RowsHeldOf Properties.NetworkPeriod.acceptAllParams",
+    "      Properties.NetworkPeriod.acceptAllRows)"
+   ],
+   "assumptions": [],
+   "type_hash": "2e7d6b9a3672052e8b763f8a3b4b37f73f2a3fa86d179c17c1ac7923fc475606"
   },
   "Properties.NetworkPeriod.rowsKBoundsCount": {
    "owner": "@network-accounting",
@@ -3179,6 +3275,94 @@
    "assumptions": [],
    "type_hash": "d0d8204ffb2e772003635028c5622784d1ec1a8d0cc8a45ea37e71b1e8fe8d70"
   },
+  "Properties.NetworkPeriod.rowsWiresChecked": {
+   "owner": "@network-accounting",
+   "signature": ["Properties.NetworkPeriod.rowsWiresChecked : Properties.NetworkPeriod.RowsWiresChecked"],
+   "assumptions": [],
+   "type_hash": "1ddd10ef33eafe933a19be056278a638dc481982018ce3cc01eaa8f96bd566a0"
+  },
+  "Properties.NetworkPeriod.rowsWiresChecked_honest": {
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.NetworkPeriod.rowsWiresChecked_honest :",
+    "  And",
+    "    (Eq",
+    "      (NetworkCheck.Period.check",
+    "        { audits := List.nil.toArray, cells := List.nil.toArray, first := 0, jitter := 1, link := \"\",",
+    "          lms := Lms.deployed, key := ByteArray.empty, session := ByteArray.empty, program := \"\",",
+    "          circuit := Option.some \"c\",",
+    "          form :=",
+    "            NetworkCheck.Period.Form.rows Properties.NetworkPeriod.slotSchedule ByteArray.empty",
+    "              { steps := 0, free := 0, ingress := 0, egress := 0, entries := 0 },",
+    "          windows := 0 }",
+    "        { audits := List.nil.toArray, windows := List.nil.toArray, bytes := ByteArray.empty }",
+    "        { audits := List.nil.toArray, windows := List.nil.toArray })",
+    "      (Core.Outcome.accept",
+    "        (NetworkCheck.Period.rowsTerms List.nil.toArray",
+    "          { steps := 0, free := 0, ingress := 0, egress := 0, entries := 0 } List.nil.toArray List.nil.toArray 1 0)",
+    "        { link := \"\", windows := 0 }))",
+    "    (And (Eq (NetworkCheck.Period.isStr (Properties.NetworkPeriod.recordReg.getObjValD \"program\") \"x\") Bool.true)",
+    "      (And",
+    "        (Eq",
+    "          (NetworkCheck.Period.isStr ((Properties.NetworkPeriod.recordReg.getObjValD \"window\").getObjValD \"circuit\")",
+    "            \"d\")",
+    "          Bool.true)",
+    "        (Eq (NetworkCheck.Period.pinHeld Properties.NetworkPeriod.recordReg { fst := \"k\", snd := \"r\" }) Bool.true)))"
+   ],
+   "assumptions": [],
+   "type_hash": "93aa74964bb68b1bc8d2b46e41bd96dceaf40c4ba74f4e56725f508822d0146e"
+  },
+  "Properties.NetworkPeriod.rowsWiresChecked_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.NetworkPeriod.rowsWiresChecked_nontrivial :",
+    "  Not",
+    "    (Properties.NetworkPeriod.RowsWiresCheckedOf Properties.NetworkPeriod.acceptAllParams",
+    "      Properties.NetworkPeriod.acceptAllRows)"
+   ],
+   "assumptions": [],
+   "type_hash": "5f5b5181732246f4c5327aa0aa5575d39df1013371086a4cc8199d23aa239ab8"
+  },
+  "Properties.NetworkPeriod.wrongBoundsDrawn": {
+   "owner": "@network-accounting",
+   "signature": ["Properties.NetworkPeriod.wrongBoundsDrawn : Properties.NetworkPeriod.WrongBoundsDrawn"],
+   "assumptions": [],
+   "type_hash": "a745d80ca365681c75d8cc09a3e38ee87fccc9c2aa10f58adecd25424d42e3db"
+  },
+  "Properties.NetworkPeriod.wrongBoundsDrawn_honest": {
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.NetworkPeriod.wrongBoundsDrawn_honest :",
+    "  Claims.Sampling.StrataDrawn",
+    "    { rules := List.cons (Claims.Sampling.OneStage.subset 1) (List.cons Claims.Sampling.OneStage.all List.nil) }",
+    "    {",
+    "      classes :=",
+    "        List.cons (List.cons (List.cons (List.cons 0 List.nil) (List.cons (List.cons 1 List.nil) List.nil)) List.nil)",
+    "          (List.cons (List.cons (List.cons (List.cons 2 List.nil) List.nil) List.nil) List.nil) }",
+    "    (instHAppendOfAppend.hAppend",
+    "      (List.map (fun x => { fst := x.size, snd := x.k })",
+    "        ((SampledProofs.Bound.strataOf 2 (Core.SamplingDesign.subset 1)).getD List.nil.toArray).toList)",
+    "      (List.map (fun m => { fst := m, snd := m }) (List.cons 1 List.nil)))"
+   ],
+   "assumptions": [],
+   "type_hash": "476118aa91b234127676ae01d2c83cb2ead7bb2a70d90139e352232da26e061f"
+  },
+  "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial :",
+    "  Exists fun strata =>",
+    "    Exists fun x =>",
+    "      Exists fun s =>",
+    "        Exists fun P =>",
+    "          Not",
+    "            (Properties.NetworkPeriod.WrongBounds s P",
+    "              (instHDiv.hDiv { num := 1, den := 2 }.num.cast { num := 1, den := 2 }.den.cast)",
+    "              (SampledProofs.Bound.boundOf 0 (Core.SamplingDesign.stratified List.nil.toArray) { num := 1, den := 2 }))"
+   ],
+   "assumptions": [],
+   "type_hash": "5996c1b8e8f9832cc6dd007d31c601ce8fe9b07777b7c285ae456b395d46be35"
+  },
   "Properties.NetworkPeriodLeak.periodLeakRegistered": {
    "owner": "@network-accounting",
    "signature": ["Properties.NetworkPeriodLeak.periodLeakRegistered : Properties.NetworkPeriodLeak.PeriodLeakRegistered"],
@@ -3217,54 +3401,6 @@
    "signature": ["Properties.NetworkRecords.noGridMeans : Properties.NetworkRecords.NoGridMeans"],
    "assumptions": [],
    "type_hash": "9e643a105f5704513bd184fa62a05149067300421a23658f5650e0bfc18672ee"
-  },
-  "Properties.NetworkScan.scanFits": {
-   "owner": "@network-accounting",
-   "signature": ["Properties.NetworkScan.scanFits : Properties.NetworkScan.ScanFits"],
-   "assumptions": [],
-   "type_hash": "3bc0c8f7cfb2d13135dd40e28b4c705bdbbc93fe4b623452ba8387bbcb3288b2"
-  },
-  "Properties.NetworkScan.scanFits_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "Properties.NetworkScan.scanFits_nontrivial :",
-    "  Exists fun P =>",
-    "    Exists fun C => Exists fun s => Exists fun x => Not ((Properties.NetworkScan.scanLayout P s).Fits C s.window)"
-   ],
-   "assumptions": [],
-   "type_hash": "5ccf17198263d54efef5b88be06b842fdd34a72d3020af7d5c990eeea5ace2f0"
-  },
-  "Properties.NetworkScan.scanScopeAcc": {
-   "owner": "@network-accounting",
-   "signature": ["Properties.NetworkScan.scanScopeAcc : Properties.NetworkScan.ScanScopeAcc"],
-   "assumptions": [],
-   "type_hash": "d70f95c8f051885651c1b727c6f333e519052fb99bdaf4abc4858f12e4d32ab2"
-  },
-  "Properties.NetworkScan.scanScopeAcc_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "Properties.NetworkScan.scanScopeAcc_nontrivial :",
-    "  Exists fun s =>",
-    "    Exists fun j =>",
-    "      Exists fun c =>",
-    "        Exists fun x =>",
-    "          Exists fun D =>",
-    "            Exists fun x =>",
-    "              Exists fun x_1 =>",
-    "                Exists fun x_2 => Not (NetTiming.ScopeAcc D (Properties.NetworkScan.layOf s) (fun x => s.window) x)"
-   ],
-   "assumptions": [],
-   "type_hash": "3d7060b0892062946aea734c751a50d1285d7cdd497598e2d886ae04edf3d590"
-  },
-  "Properties.NetworkScan.scan_honest": {
-   "owner": "@network-accounting",
-   "signature": [
-    "Properties.NetworkScan.scan_honest :",
-    "  And (Eq (Flock.canon Lean.Json.null) (Except.ok \"null\"))",
-    "    (Properties.NetworkScan.Flattens Flock.Program.instInhabitedProg.default { gates := List.nil, outs := List.nil })"
-   ],
-   "assumptions": [],
-   "type_hash": "0c362245031511320743c959fb43f44ed992217b2dee837436de85f0257b643c"
   },
   "Properties.Period.monitoringPeriodIsSpec": {
    "owner": "@network-accounting",
@@ -6173,14 +6309,6 @@
      }
     ]
    },
-   "Properties.NetworkScan.scanFits": {
-    "function": ["NetworkCheck.Period.scanOf", "Flock.canon", "Flock.Program.decode"],
-    "outcome": "accept"
-   },
-   "Properties.NetworkScan.scanScopeAcc": {
-    "function": ["NetworkCheck.Period.scanOf", "Flock.canon"],
-    "outcome": "accept"
-   },
    "Pouw.SecurityProofs.Lead.Commit.leafFirstBlock": {
     "function": "PouwCommit.Domain.mk?",
     "outcome": "accept"
@@ -6239,6 +6367,22 @@
    },
    "Properties.NetworkPeriodLeak.periodLeakRegistered": {
     "function": "NetworkCheck.Period.check",
+    "outcome": "accept"
+   },
+   "Properties.NetworkPeriod.rowsWiresChecked": {
+    "function": ["NetworkCheck.Period.paramsOf", "NetworkCheck.Period.check"],
+    "outcome": "accept"
+   },
+   "Properties.NetworkPeriod.rowsHeld": {
+    "function": ["NetworkCheck.Period.paramsOf", "NetworkCheck.Period.check"],
+    "outcome": "accept"
+   },
+   "Properties.NetworkPeriod.forcedZeroUnfilled": {
+    "function": ["Flock.ProvedScope.check", "Flock.Stmt.setupTables"],
+    "outcome": "accept"
+   },
+   "Properties.NetworkPeriod.wrongBoundsDrawn": {
+    "function": ["SampledProofs.Bound.strataOf", "SampledProofs.Bound.boundOf"],
     "outcome": "accept"
    }
   },
@@ -6351,7 +6495,10 @@
    "Properties.NetworkPeriodLeak.periodLeakRegistered_nontrivial": "lemma: PeriodLeakRegistered's nontrivial witness: its per-window bound fails at the accepting verifier tapD, at SHA-512, at one step at δ = 1/8 with no input registered and a registration with no openings, which opens every registered input (NetTiming.Witness.tapD_reg_bound_fails)",
    "Verity.remote_network_no_pouw_soundness_of_subprotocols": "frozen (premise): Verity.soundness_of_subprotocols's statement restricted to remote-network without PoUW's subprotocols, a subset of onsite's: the union bound at its compiled verifier (Core.RemoteNetworkNoPouw.protocol, tiedSameB over the blobs sent: the committed files, then the evidence's blobs) in the same causal game, from Verity.soundness_at_of_targets at Verity.Registration.Composite.remoteNetworkNoPouw; its three subprotocols are sampled proofs v2 (VStar.Recursive.Sampled), the inference-only policy and the network certifier over the period, the policy and sampled proofs committed to one record and every compute audit of the network certifier's period on it (Properties.Composition.AcceptSame's and AcceptTied's conclusions), with the same claims, errors and Vocab; PoUW is none of its subprotocols, so it credits no verified compute; it takes the three targets (Verity.Vocab.SampledProofsSound, InferenceOnlySound, NetworkCertifierSound at remoteNetworkNoPouw) as hypotheses until each is proved",
    "Verity.remote_network_no_pouw_soundness_of_subprotocols_honest": "completeness: RemoteNetworkNoPouwSoundness's honest lemma: its three targets hold at remote-network without PoUW's compiled composite at the idle deployment Verity.Idle.unbounded",
-   "Verity.remote_network_no_pouw_soundness_of_subprotocols_nontrivial": "lemma: RemoteNetworkNoPouwSoundness's nontrivial lemma: SoundnessFor fails at remote-network without PoUW for a verifier that accepts everything at the idle deployment Verity.Idle.exactLeaky (Verity.Idle.exact with the network certifiers' bound failing on every play), since it has no PoUW subprotocol, whose claim is the one Verity.Idle.exact fails"
+   "Verity.remote_network_no_pouw_soundness_of_subprotocols_nontrivial": "lemma: RemoteNetworkNoPouwSoundness's nontrivial lemma: SoundnessFor fails at remote-network without PoUW for a verifier that accepts everything at the idle deployment Verity.Idle.exactLeaky (Verity.Idle.exact with the network certifiers' bound failing on every play), since it has no PoUW subprotocol, whose claim is the one Verity.Idle.exact fails",
+   "Properties.NetworkScan.ScanFits": "unstated: an accepted scan's layout, at Bits' positions (inBit, outBit) and with no wires, fits its audit's members' joint program at circuit files that read their row parameters (RowsRead); an open statement, whose proof gets a guarantee entry",
+   "Properties.NetworkScan.ScanScopeAcc": "unstated: an accepted scan's statements, each its audit's members' joint program at circuit files that read their row parameters (RowsRead), are in the sampled audit's scope at the scan's Bits layout; an open statement, whose proof gets a guarantee entry",
+   "Properties.NetworkCertifier.CircuitCounts": "unstated: an accepted circuit record's free count bounds its audit's members' joint program's free inputs outside its registered rows, at the record's wires (recordWires) and at circuit files whose units read no input padding (PaddingUnread, a premise of its own); an open statement, whose proof gets a guarantee entry"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -7500,6 +7647,8 @@
     "Properties.NetworkPeriod.clockKBoundsCount",
     "Properties.NetworkPeriod.rowsCircuitHeld",
     "Properties.NetworkPeriod.rowsCircuitHeld_honest",
+    "Properties.NetworkPeriod.rowsHeld",
+    "Properties.NetworkPeriod.rowsHeld_honest",
     "Properties.NetworkPeriod.rowsKBoundsCount",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsProgWired_nontrivial",
@@ -7510,6 +7659,11 @@
     "Properties.NetworkPeriod.rowsStateHeld_nontrivial",
     "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkPeriod.rowsStateTied_nontrivial",
+    "Properties.NetworkPeriod.rowsWiresChecked",
+    "Properties.NetworkPeriod.rowsWiresChecked_honest",
+    "Properties.NetworkPeriod.wrongBoundsDrawn",
+    "Properties.NetworkPeriod.wrongBoundsDrawn_honest",
+    "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
@@ -7664,6 +7818,9 @@
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkPeriod.rowsCircuitHeld",
     "Properties.NetworkPeriod.rowsCircuitHeld_honest",
+    "Properties.NetworkPeriod.rowsHeld",
+    "Properties.NetworkPeriod.rowsHeld_honest",
+    "Properties.NetworkPeriod.rowsHeld_nontrivial",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsProgWired_nontrivial",
     "Properties.NetworkPeriod.rowsStateAnchored",
@@ -7672,6 +7829,9 @@
     "Properties.NetworkPeriod.rowsStateHeld_honest",
     "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkPeriod.rowsStateTied_nontrivial",
+    "Properties.NetworkPeriod.rowsWiresChecked",
+    "Properties.NetworkPeriod.rowsWiresChecked_honest",
+    "Properties.NetworkPeriod.rowsWiresChecked_nontrivial",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
@@ -7859,6 +8019,9 @@
     "Properties.NetworkPeriod.clockKBoundsCount",
     "Properties.NetworkPeriod.rowsCircuitHeld",
     "Properties.NetworkPeriod.rowsCircuitHeld_honest",
+    "Properties.NetworkPeriod.rowsHeld",
+    "Properties.NetworkPeriod.rowsHeld_honest",
+    "Properties.NetworkPeriod.rowsHeld_nontrivial",
     "Properties.NetworkPeriod.rowsKBoundsCount",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsProgWired_nontrivial",
@@ -7869,6 +8032,12 @@
     "Properties.NetworkPeriod.rowsStateHeld_nontrivial",
     "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkPeriod.rowsStateTied_nontrivial",
+    "Properties.NetworkPeriod.rowsWiresChecked",
+    "Properties.NetworkPeriod.rowsWiresChecked_honest",
+    "Properties.NetworkPeriod.rowsWiresChecked_nontrivial",
+    "Properties.NetworkPeriod.wrongBoundsDrawn",
+    "Properties.NetworkPeriod.wrongBoundsDrawn_honest",
+    "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
@@ -9668,16 +9837,13 @@
    },
    "guarantees": [
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
-    "Properties.NetworkPeriodLeak.periodLeakRegistered_nontrivial",
-    "Properties.NetworkScan.scanScopeAcc",
-    "Properties.NetworkScan.scanScopeAcc_nontrivial"
+    "Properties.NetworkPeriodLeak.periodLeakRegistered_nontrivial"
    ]
   },
   "Definitions.Claims.Sampling": {
-   "digest": "daa5a459167c08215c86c5db8ae3ba6e4b56e37b668e0c21b77102e2e5cfd2b4",
+   "digest": "79923a17d5d83f9b16114929300e97612d8e37c8fb00ac1140608c865312a42d",
    "definitions": {
     "Claims.Sampling.AuditStatement": "14dca2945e169db647822bc5ada687c2bc9d3c764e14fe1a86a63ed6862061f8",
-    "Claims.Sampling.AuditStatement.desc": "9aba517d0fa98c7dc8fccb8df71878f443a969a34b856cd0ea175f9a594e0496",
     "Claims.Sampling.AuditStatement.design": "91e2b9592fce2faa8cd2c622f9b00f2a3a45f4a39d15b8793549795948ce108d",
     "Claims.Sampling.AuditStatement.prog": "87b63818a7d980ed2906214d1894f239d7c1f55cf1806d17b654b4b81fcc5108",
     "Claims.Sampling.AuditStatement.roots": "181df3c2630f46600044d273ba021e70dc33a8ec789d3aec36d0fe6f0b234871",
@@ -9715,7 +9881,6 @@
     "Claims.Sampling.Deploy.partition": "3778167b1219a7c66ea0f62ecadb8b9515e47d7ff42b79c088e0ded41721c6fa",
     "Claims.Sampling.Deploy.reveal": "6be44bfb97265a0cbafe950af23e83f0e19b1fcab06c3b71d4858f4b7b180846",
     "Claims.Sampling.Deploy.rounds": "bdc067d59bd2866849eac7c85da7bf78db980494b329141898415b6668756336",
-    "Claims.Sampling.Deploy.scopeCheck": "9b1760dc76ce539fc56fa7456b3507267ba7414d1ec5cbdd2f42d2476db3b3dc",
     "Claims.Sampling.Deploy.session": "d63eaec5dd4af9b6b277442d192ef07ca4d9eb97568cfe0f1c05a4b27eb6abd6",
     "Claims.Sampling.Deploy.sessionCols": "614fc2f0f4a753259205953f2d01dda4f5ba3124c42c5a40607d46be586d4710",
     "Claims.Sampling.Deploy.stage2": "aba75d9d007a2dfcd47ec7df7d66ffc27b6755fb5187c92f3077803021762cf0",
@@ -9766,7 +9931,6 @@
     "Claims.Sampling.Query": "8b0f68d5f4f1e79282adb0797878c15261606d156c382f52a1a52aacb8e609ba",
     "Claims.Sampling.RBy": "01382dd56ba01896436ed1084b1af7f59657f58a9a46154f1ae5f8a0e6b3eec9",
     "Claims.Sampling.Scope": "c86322865f5a384db4b92a4249ffaf091d6f819532151b7cda01648c6ca2847f",
-    "Claims.Sampling.ScopeMatches": "fdfa3c09024fb1004acaf69395fedd3d51621c94a7c3347300b495284753e070",
     "Claims.Sampling.SizeClass": "90d6eaa7a3b185bf3dbd7eb69f0479fa90eb6515e24cd14b3d0ff4a348c63958",
     "Claims.Sampling.Wit": "6590ee24e3986e3cb508f9f39c39524cab60381d1b8fa8b6d746b9f41ce7acdd",
     "Claims.Sampling.Wit.val": "58fb17f19cd5d665e98b008b3a31dcf8d10c6fe98254d25291d752e2ef1732a4",
@@ -9799,16 +9963,22 @@
     "Claims.Sampling.κF": "b16b6f6879030bcd53b3bc53d7eefdd41a2760920c50b413251c17d5d80c61d9"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.wrongBoundsDrawn",
+    "Properties.NetworkPeriod.wrongBoundsDrawn_honest",
+    "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Properties.NetworkPeriodLeak.periodLeakRegistered_nontrivial",
-    "Properties.NetworkScan.scanFits",
-    "Properties.NetworkScan.scanFits_nontrivial",
-    "Properties.NetworkScan.scanScopeAcc",
-    "Properties.NetworkScan.scanScopeAcc_nontrivial",
-    "Properties.NetworkScan.scan_honest",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses"
    ]
+  },
+  "Definitions.Claims.Sampling.Strata": {
+   "digest": "bd9158f5716271a7155bab4995abf6b1a9d1226762f67762845374bae46db1a4",
+   "definitions": {
+    "Claims.Sampling.OneStage.strata": "6884a0da6c3e6ec1157fc6e10af89018dad7cabb24b3330bd6cf067a89cc7ea4",
+    "Claims.Sampling.StrataDrawn": "6b0cc08e3eada10bdd4fac551a2f92419575874d4782685e3b61b6acedefc646"
+   },
+   "guarantees": ["Properties.NetworkPeriod.wrongBoundsDrawn", "Properties.NetworkPeriod.wrongBoundsDrawn_honest"]
   },
   "Definitions.Core.Assumptions": {
    "digest": "0d46163f4287ed39c60ce1a09c45f6f28d4b63b901b03e093f6c3b1209870711",
@@ -9890,8 +10060,6 @@
    "guarantees": [
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Properties.NetworkPeriodLeak.periodLeakRegistered_nontrivial",
-    "Properties.NetworkScan.scanScopeAcc",
-    "Properties.NetworkScan.scanScopeAcc_nontrivial",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols_honest",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols_nontrivial",
@@ -10264,10 +10432,10 @@
     "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_nontrivial",
     "Pous.Period.SecurityProofs.periodHeldSha512",
     "Pous.Period.SecurityProofs.periodHeldSha512At",
+    "Properties.NetworkPeriod.wrongBoundsDrawn",
+    "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Properties.NetworkPeriodLeak.periodLeakRegistered_nontrivial",
-    "Properties.NetworkScan.scanScopeAcc",
-    "Properties.NetworkScan.scanScopeAcc_nontrivial",
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
@@ -10288,7 +10456,7 @@
    ]
   },
   "Definitions.Core.Interaction": {
-   "digest": "c761dfff580aa261030289105b89b8695a21aa9db3629cde3673192b356b4e61",
+   "digest": "26d2cd3538731ab8495d006079abccfa79fb829959bbc2a5cc35f2957b17ab9c",
    "definitions": {
     "Claims.B": "fb3801991ccf043f813b846a36059903571dff8141ca0f402abb8a11582fa105",
     "Claims.BCoins": "dfd5aa495abff4c66b0bfe023034e60f7c9119d9087c0c2f068e5fc89defd0e3",
@@ -10339,7 +10507,6 @@
     "Claims.RP.ret": "64e1dfc2771544bf093250b9889283727a7092cddb9b0a1459501fe566d93c6a",
     "Claims.Rel": "91554708c3efade1d522cd62f7b89ccda5e212508367fd93c4ad46d4f95de84b",
     "Claims.Rel.ext": "d18dbaa4d1b549effe3a906650503081734584d4d026eca072b5b986449f7ac1",
-    "Claims.ScopeMatches": "538116d92383dc3ca64a56e414f5c194316a39ca450d8f8be7637010c20646b8",
     "Claims.Seen": "a5a26fcf9d19ac1d8786011d3c64460317e7aae403a4244fe48b2aee8e809ca1",
     "Claims.Seen.out": "ef0ddab850d3a2fd046517dc3440b26ced80bc8a31cff7b5a7d36288e8eed6ff",
     "Claims.Trace": "93161bdf0f942d3f7ea172c61117f5c8c935a8ad1c58872ae552af50731400d8",
@@ -10365,10 +10532,10 @@
     "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound",
     "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_honest",
     "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_nontrivial",
+    "Properties.NetworkPeriod.wrongBoundsDrawn",
+    "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Properties.NetworkPeriodLeak.periodLeakRegistered_nontrivial",
-    "Properties.NetworkScan.scanScopeAcc",
-    "Properties.NetworkScan.scanScopeAcc_nontrivial",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols_honest",
@@ -11423,12 +11590,10 @@
     "NetTiming.wiredOk": "4672c484a42d5c8b2a3bdc265ad94732eba85fde762870227b7ceb4d48851e2e"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.wrongBoundsDrawn",
+    "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
-    "Properties.NetworkPeriodLeak.periodLeakRegistered_nontrivial",
-    "Properties.NetworkScan.scanFits",
-    "Properties.NetworkScan.scanFits_nontrivial",
-    "Properties.NetworkScan.scanScopeAcc",
-    "Properties.NetworkScan.scanScopeAcc_nontrivial"
+    "Properties.NetworkPeriodLeak.periodLeakRegistered_nontrivial"
    ]
   },
   "Definitions.NetworkCertifier.SampledCharge": {
@@ -11442,6 +11607,8 @@
     "NetTiming.freeInputs": "a6b5c7df10de373cbb94dfa26ab6249d8d550eb38116ad5c392eceacc24784bc"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.wrongBoundsDrawn",
+    "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Properties.NetworkPeriodLeak.periodLeakRegistered_nontrivial"
    ]
@@ -12641,8 +12808,13 @@
     "Properties.NetworkCertifier.malformedEvidenceRejects",
     "Properties.NetworkCertifier.undecidedPending",
     "Properties.NetworkCertifier.undigestedParamsReject",
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.NetworkPeriod.rowsCircuitHeld",
     "Properties.NetworkPeriod.rowsCircuitHeld_honest",
+    "Properties.NetworkPeriod.rowsHeld",
+    "Properties.NetworkPeriod.rowsHeld_honest",
+    "Properties.NetworkPeriod.rowsHeld_nontrivial",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsStateAnchored",
     "Properties.NetworkPeriod.rowsStateAnchored_honest",
@@ -12650,16 +12822,14 @@
     "Properties.NetworkPeriod.rowsStateHeld_honest",
     "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkPeriod.rowsStateTied_nontrivial",
+    "Properties.NetworkPeriod.rowsWiresChecked",
+    "Properties.NetworkPeriod.rowsWiresChecked_honest",
+    "Properties.NetworkPeriod.rowsWiresChecked_nontrivial",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.NetworkRecords.noGridAcceptsMore",
     "Properties.NetworkRecords.noGridMeans",
-    "Properties.NetworkScan.scanFits",
-    "Properties.NetworkScan.scanFits_nontrivial",
-    "Properties.NetworkScan.scanScopeAcc",
-    "Properties.NetworkScan.scanScopeAcc_nontrivial",
-    "Properties.NetworkScan.scan_honest",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -12855,23 +13025,27 @@
     "Properties.NetworkCertifier.malformedEvidenceRejects",
     "Properties.NetworkCertifier.undecidedPending",
     "Properties.NetworkCertifier.undigestedParamsReject",
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.NetworkPeriod.rowsCircuitHeld",
     "Properties.NetworkPeriod.rowsCircuitHeld_honest",
+    "Properties.NetworkPeriod.rowsHeld",
+    "Properties.NetworkPeriod.rowsHeld_honest",
+    "Properties.NetworkPeriod.rowsHeld_nontrivial",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsStateAnchored",
     "Properties.NetworkPeriod.rowsStateAnchored_honest",
     "Properties.NetworkPeriod.rowsStateHeld",
     "Properties.NetworkPeriod.rowsStateHeld_honest",
     "Properties.NetworkPeriod.rowsStateTied",
+    "Properties.NetworkPeriod.rowsWiresChecked",
+    "Properties.NetworkPeriod.rowsWiresChecked_honest",
+    "Properties.NetworkPeriod.rowsWiresChecked_nontrivial",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.NetworkRecords.noGridAcceptsMore",
     "Properties.NetworkRecords.noGridMeans",
-    "Properties.NetworkScan.scanFits",
-    "Properties.NetworkScan.scanScopeAcc",
-    "Properties.NetworkScan.scanScopeAcc_nontrivial",
-    "Properties.NetworkScan.scan_honest",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -13025,6 +13199,8 @@
     "Flock.instInhabitedWire.default": "e9f25bc5c2c2da965cfb4d19d740bd50159c32e1c96797e9df4c8ec6e7b0f5a7"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -13104,6 +13280,8 @@
     "_private.Flock.CircuitType.0.Flock.CircuitType.portsOfJson": "85a1e80d9ab12ab9944d8f9e4ae23e0c8e42bf3a119a63e3d3a46be5c46ee99f"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -13142,6 +13320,8 @@
     "Flock.CoinTree.isHex": "406291475f855f1cab1efe838a5095a30eaec25d9eb2dd981162f4807a8d0081"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -13193,6 +13373,8 @@
     "Flock.rd32": "1023ca573b2f5767610f1a96d09b95c162b412865dc098ab0b52fcfc817c3098"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -13215,6 +13397,8 @@
     "Flock.Derive.ceilPow2": "cff16037ede34ed07b6b641f362f23fe908fb00ef0a5c361b12c3d6a4c1df4e0"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -13312,6 +13496,8 @@
     "Flock.DeriveAll.xorCols": "8513b9a13c7edc534fcea36661c4bb85f82d4a03bbf60a1be1a24956d344412e"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -13376,6 +13562,8 @@
     "Flock.DeriveAll.walk._sparseCasesOn_3": "2287c60cb4cbc4629081a9aa0db5774e702e1de63c7f7352719eae3f5d899bba"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -13505,17 +13693,20 @@
     "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
     "Properties.NetworkPeriod.rowsCircuitHeld",
     "Properties.NetworkPeriod.rowsCircuitHeld_honest",
+    "Properties.NetworkPeriod.rowsHeld",
+    "Properties.NetworkPeriod.rowsHeld_honest",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsStateAnchored",
     "Properties.NetworkPeriod.rowsStateAnchored_honest",
     "Properties.NetworkPeriod.rowsStateHeld",
     "Properties.NetworkPeriod.rowsStateHeld_honest",
     "Properties.NetworkPeriod.rowsStateTied",
+    "Properties.NetworkPeriod.rowsWiresChecked",
+    "Properties.NetworkPeriod.rowsWiresChecked_honest",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
-    "Properties.NetworkScan.scanFits",
-    "Properties.NetworkScan.scanScopeAcc",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -13589,6 +13780,7 @@
     "Flock.Extract.separable": "815381ea7afc2180279d0de0966d787c7114a8ecacb94e698d78e2d8db52e700"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial",
@@ -13720,8 +13912,11 @@
     "Pouw.SecurityProofs.Lead.Commit.roundsOpenAfterRoots",
     "Pouw.SecurityProofs.Lead.Commit.rowBound",
     "Properties.NetworkCertifier.linkWindowAcceptMeans",
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
     "Properties.NetworkPeriod.rowsCircuitHeld",
     "Properties.NetworkPeriod.rowsCircuitHeld_honest",
+    "Properties.NetworkPeriod.rowsHeld",
+    "Properties.NetworkPeriod.rowsHeld_honest",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsStateAnchored",
     "Properties.NetworkPeriod.rowsStateAnchored_honest",
@@ -13729,6 +13924,8 @@
     "Properties.NetworkPeriod.rowsStateHeld_honest",
     "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkPeriod.rowsStateTied_nontrivial",
+    "Properties.NetworkPeriod.rowsWiresChecked",
+    "Properties.NetworkPeriod.rowsWiresChecked_honest",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
@@ -13874,6 +14071,8 @@
     "Flock.phi8Table": "c843996d571e5071f33e1788901951831ea8ffbcfc2f615881a46ee626da9154"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -14046,8 +14245,13 @@
     "Properties.NetworkCertifier.malformedEvidenceRejects",
     "Properties.NetworkCertifier.undecidedPending",
     "Properties.NetworkCertifier.undigestedParamsReject",
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.NetworkPeriod.rowsCircuitHeld",
     "Properties.NetworkPeriod.rowsCircuitHeld_honest",
+    "Properties.NetworkPeriod.rowsHeld",
+    "Properties.NetworkPeriod.rowsHeld_honest",
+    "Properties.NetworkPeriod.rowsHeld_nontrivial",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsStateAnchored",
     "Properties.NetworkPeriod.rowsStateAnchored_honest",
@@ -14055,14 +14259,14 @@
     "Properties.NetworkPeriod.rowsStateHeld_honest",
     "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkPeriod.rowsStateTied_nontrivial",
+    "Properties.NetworkPeriod.rowsWiresChecked",
+    "Properties.NetworkPeriod.rowsWiresChecked_honest",
+    "Properties.NetworkPeriod.rowsWiresChecked_nontrivial",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.NetworkRecords.noGridAcceptsMore",
     "Properties.NetworkRecords.noGridMeans",
-    "Properties.NetworkScan.scanFits",
-    "Properties.NetworkScan.scanScopeAcc",
-    "Properties.NetworkScan.scanScopeAcc_nontrivial",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -14240,8 +14444,12 @@
     "PousCheck.Properties.SecurityProofs.timedAuditAccepts",
     "Pouw.SecurityProofs.Lead.Commit.roundsOpenAfterRoots",
     "Properties.NetworkCertifier.linkWindowAcceptMeans",
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.NetworkPeriod.rowsCircuitHeld",
     "Properties.NetworkPeriod.rowsCircuitHeld_honest",
+    "Properties.NetworkPeriod.rowsHeld",
+    "Properties.NetworkPeriod.rowsHeld_honest",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsStateAnchored",
     "Properties.NetworkPeriod.rowsStateAnchored_honest",
@@ -14249,6 +14457,8 @@
     "Properties.NetworkPeriod.rowsStateHeld_honest",
     "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkPeriod.rowsStateTied_nontrivial",
+    "Properties.NetworkPeriod.rowsWiresChecked",
+    "Properties.NetworkPeriod.rowsWiresChecked_honest",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
@@ -14438,6 +14648,8 @@
     "Flock.HmNets.xorW": "8dc4538d76c03337e641b8cb730139b3debc541f18f34aa95d0d5de93f4aee17"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -14455,7 +14667,7 @@
    ]
   },
   "Flock.HmRow": {
-   "digest": "7ad4519fc06d359c8c9ff757201fc4d09e5a08559c9d9d8acc68a9b2bbf87fcc",
+   "digest": "0e7ae2406d5df2d007561dcb2f805855c61014f59a8b379d63063e34e68bc560",
    "definitions": {
     "Flock.HmIn.FORMAT": "d170c17911f12935b7c639f768d2a51f2df2f502c139d50dafcd92acca7de79a",
     "Flock.HmIn.Ports": "215bbcb52a5c9b82ffa0c34ab9a1e63f466d28f12cb80b3227186587ecca5d72",
@@ -14565,7 +14777,6 @@
     "Flock.HmRow.deriveQwordUnits.match_5": "98b1dfe376202d93d3a0dd2f818e4e7896204060826f7a69d9d0df806d38a031",
     "Flock.HmRow.deriveTemplateUnits": "45c8a768c9ba74397ac8de4f71d2ba488caac84fd87f17caf128e178154cb884",
     "Flock.HmRow.drawn": "4143326c0cda3b366ec5b060fc7654307386fe1d46e01cd7243de5f4305ce244",
-    "Flock.HmRow.drawn.match_1": "d53732ad9f7687c14a93fe77fe8536e81480bcdd632e6dd5655c2ebf3bcc2565",
     "Flock.HmRow.evenRuns": "8765b28ed48180a1441cb56b2b84e098c6b45b99835bd285cfc41977f9e83c49",
     "Flock.HmRow.hex16": "12dc3acaacbb3091b3932a4959ee233f484701d4445c54e9deb5a1cfb15eed6f",
     "Flock.HmRow.isSha512Hex": "d45224822965131f484b3ab4bdf9ab5e2cb311cdb0ff5a8566ff840b77b65734",
@@ -14574,7 +14785,6 @@
     "Flock.HmRow.midstate": "ac9e9689f0fa2eb07799539faf9e96015a64097577dde9c8db12f28c427aa787",
     "Flock.HmRow.midstateOf": "01ed03cd41bf622f7dd471d066d7e7b9770ae0ade0776195af515fda4d9dca17",
     "Flock.HmRow.msgBit": "a2bd5f0110a4eadb3df19b396c2925fe5e75e3eccda5bbb6027bd3953df7cdf7",
-    "Flock.HmRow.msgBit.match_3": "a24b3f566e417ea55377cc3cf6929096662162ba244c4f86635a37c9da13b47c",
     "Flock.HmRow.outNetEntries": "d9f547d31374da40d2594f9f05073fa6d30711d2d64d83bf8e087a080a1ce1a2",
     "Flock.HmRow.outNetEntries._sparseCasesOn_1": "35da03d8a1bb75b7e6b390210173398895e73133f9dbb6db96f2758b4b6a0415",
     "Flock.HmRow.padBlock": "8e70252faaf687b1bebbd47bac5a7f624ae6aee50beb7310c91a096baf33670c",
@@ -14583,8 +14793,6 @@
     "Flock.HmRow.parse._sparseCasesOn_11": "49ca72155eed91fdb609021b6e7da4ab292648c969a08841eaf84148ece42232",
     "Flock.HmRow.parse._sparseCasesOn_22": "8dd1b80092b5b1e8dd69fe13af5b0bf597837efb2685d7eba5902450b69391aa",
     "Flock.HmRow.parseTyped": "08f7a7bc9788806b491cefae2b8d41896635ba7773e2d11e3e6b5f0122513fcc",
-    "Flock.HmRow.parseTyped.match_1": "7df85d39c91830dcc8252f0f1bb89c02f18b08bb7e1470d46b7d304e680f3321",
-    "Flock.HmRow.parseTyped.match_3": "7d69a025bff3b410b0f731d254383487cae0a71f491be4719715ded2f8f8c1d3",
     "Flock.HmRow.partitionDigest": "68267df95776ed7534942c1d87d043397a2e561e47ee6112402cfb9254e478c0",
     "Flock.HmRow.pin": "057f4ace5b39af6e790a197a95edf20f8181e0d316196bc3f6ab368fe367a609",
     "Flock.HmRow.pinnedCount": "94e924ab5efb449542bdbd3261af841f51a164ddb2bf115ededf64be5f1c8689",
@@ -14663,8 +14871,12 @@
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot",
     "PousCheck.Properties.SecurityProofs.timedAuditAccepts",
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.NetworkPeriod.rowsCircuitHeld",
     "Properties.NetworkPeriod.rowsCircuitHeld_honest",
+    "Properties.NetworkPeriod.rowsHeld",
+    "Properties.NetworkPeriod.rowsHeld_honest",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsStateAnchored",
     "Properties.NetworkPeriod.rowsStateAnchored_honest",
@@ -14672,6 +14884,8 @@
     "Properties.NetworkPeriod.rowsStateHeld_honest",
     "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkPeriod.rowsStateTied_nontrivial",
+    "Properties.NetworkPeriod.rowsWiresChecked",
+    "Properties.NetworkPeriod.rowsWiresChecked_honest",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Properties.Pouw.Commit.leafRefusals",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
@@ -14758,9 +14972,12 @@
     "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
-    "Properties.NetworkScan.scanFits",
-    "Properties.NetworkScan.scanScopeAcc",
-    "Properties.NetworkScan.scanScopeAcc_nontrivial",
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
+    "Properties.NetworkPeriod.rowsHeld",
+    "Properties.NetworkPeriod.rowsHeld_nontrivial",
+    "Properties.NetworkPeriod.rowsWiresChecked",
+    "Properties.NetworkPeriod.rowsWiresChecked_nontrivial",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
@@ -14947,6 +15164,8 @@
     "_private.Flock.Layout.0.Flock.BlockLayout.natArr": "8253f40dd7d4d13ff6c6d57e66243b21348d270134124d01d8abaf6319362d4b"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -14977,6 +15196,8 @@
     "Flock.libraryTable?": "2e4f5eb96b2eaa7ac47dad86353794bc75e4ba83998eb37a6b6780b50bc321cf"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -15045,6 +15266,8 @@
     "Flock.whatsGo": "f9caac05639e5876006e083cbb72fb76c62689db2c98ee875127b5c7f5ed1274"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -15070,6 +15293,7 @@
     "Flock.HmLinks.unitAt": "24210a35362cc8c4306b6d02db79a14d04adfe65e049dd88b4108c8f60adf511"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -15116,6 +15340,8 @@
     "Flock.MufuTable.words": "89cf712873d3107f3917070011dc4a22b66cc68311751742ea6645539180175d"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -15157,6 +15383,8 @@
     "Flock.sibsOf": "35ad17c257b59414cec25e4a24c9bcbcf4d5fc94e6451016d84fff8ba8cd403b"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -15287,8 +15515,12 @@
     "Pous.Period.SecurityProofs.pooledShort_log",
     "Pous.Period.SecurityProofs.pooledShort_log_honest",
     "Pouw.SecurityProofs.Lead.Commit.roundsOpenAfterRoots",
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.NetworkPeriod.rowsCircuitHeld",
     "Properties.NetworkPeriod.rowsCircuitHeld_honest",
+    "Properties.NetworkPeriod.rowsHeld",
+    "Properties.NetworkPeriod.rowsHeld_honest",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsStateAnchored",
     "Properties.NetworkPeriod.rowsStateAnchored_honest",
@@ -15296,6 +15528,8 @@
     "Properties.NetworkPeriod.rowsStateHeld_honest",
     "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkPeriod.rowsStateTied_nontrivial",
+    "Properties.NetworkPeriod.rowsWiresChecked",
+    "Properties.NetworkPeriod.rowsWiresChecked_honest",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
@@ -15393,6 +15627,8 @@
     "Flock.instDecidableEqSparse.decEq": "89677e4ac34ed70c798cb332722d6c38084bb3459da314aecf6885db46b14988"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -15421,6 +15657,7 @@
     "Flock.normObj": "7dea20ca2cda7fcb2c4336175d40ce97a4003789c7f4421b2961e294516b16c6"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -15451,6 +15688,8 @@
     "Flock.ringSwitch": "22d2cb107109365c4d8496a90b3d782f016cac1568bc5a0e0c73b4274da6ac8a"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -15516,6 +15755,7 @@
     "Flock.Partition.validate": "258ccfcfd51cf7ddff8d88638763a2e4220507340884be487fc57049d3eba285"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial",
@@ -15576,6 +15816,8 @@
     "Flock.skipWeights": "aff948bf8c5a5b9d23dd040dd3d7887973a997a1c0f68e53c50c56517d9c023a"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -15626,7 +15868,7 @@
    ]
   },
   "Flock.Program": {
-   "digest": "89d779394892b8268ba9a57d5369cc7f19581587ea68a3e96dd828d5a3bdabb0",
+   "digest": "0011e7acfccf2a347d581c0cf1a26d0e25a9499b9f031a5f86cb942a161375c9",
    "definitions": {
     "Flock.Program.Arg": "ec25eed79967a37f47bfab16d75800bb417f725b6060db8885c981bbfb54549d",
     "Flock.Program.Arg.dims": "27996c560a07b5131152e1e961d1ebeae325f7e0e78513b43fe9eb8f0763bb7a",
@@ -15811,8 +16053,6 @@
     "Flock.Program.instInhabitedNode.default": "90087c8548b74aedf2903e98c3d1613b89f1e12e6201d305de1d50467b4e65d8",
     "Flock.Program.instInhabitedPart": "0b7ca048ca1aa72dc8591d2540283ba3927be44e28d1d27d57a7199c92760f07",
     "Flock.Program.instInhabitedPart.default": "b1a4359667fb3f89ac4a78a72bdd01cc8816e7529044348e2d4d048bb0c1accb",
-    "Flock.Program.instInhabitedProg": "5bfd48881a5f8b8cf826da3e1e1138cf3dcd7a1cb9d42e44cbe7265599be3858",
-    "Flock.Program.instInhabitedProg.default": "572d7263a581c92159f3557a5928253fb7a31760c7b3bd707f3b3dc2c469072b",
     "Flock.Program.instInhabitedRef": "875b5fccdcb52dedacbffaab09e93430a18280cd3a79a8456ec68defb16f9f2c",
     "Flock.Program.instInhabitedRef.default": "eef78b2bcb99eb1ec96b276c3c1aa42a2b3b8434101edd5718bf58c7199aac74",
     "Flock.Program.instInhabitedScope": "01a5117ab24799884790559edd75d8852bd4922fa90ebf6855609f15bb347e34",
@@ -15890,11 +16130,11 @@
     "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
-    "Properties.NetworkScan.scanFits",
-    "Properties.NetworkScan.scanFits_nontrivial",
-    "Properties.NetworkScan.scanScopeAcc",
-    "Properties.NetworkScan.scanScopeAcc_nontrivial",
-    "Properties.NetworkScan.scan_honest",
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.rowsHeld",
+    "Properties.NetworkPeriod.rowsHeld_nontrivial",
+    "Properties.NetworkPeriod.rowsWiresChecked",
+    "Properties.NetworkPeriod.rowsWiresChecked_nontrivial",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
@@ -15979,6 +16219,8 @@
     "Flock.instInhabitedLevelProof.default": "c24dfaf930b16ddb743e9ee201747cb8ae5309db4583fa098d57f74067ec2e5c"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -16041,6 +16283,8 @@
     "Flock.ProvedScope.zkTableCap": "ec6007d6fce495b0384b2fbc0d16b18c938728b3227f2b697a9988a849e0a841"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -16079,6 +16323,8 @@
     "Flock.instInhabitedPublic.default": "32d7220c79f8cee269c9c870fbbb12ec7d42e4e3e3c4c03d7555d33400da438b"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -16169,6 +16415,7 @@
     "_private.Flock.Qcall.0.Flock.Qcall.withCall._sparseCasesOn_1": "87d69ec69db9432d52144924fea3a6d9501cd3634b4475d6520cb16d58a8ed55"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial",
@@ -16217,6 +16464,7 @@
     "Flock.Qword.targets": "85c67728bf5e951528d74c58f3267561acde452e7a95447a6eb0f8e5431f9715"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial",
@@ -16485,6 +16733,8 @@
     "Flock.RecAlgebra.zerocheck": "57ec02982b084b99b2a8501a25e48279fc890dcc0c38ebf044791a1ab6e9d3ac"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -16874,6 +17124,8 @@
     "Flock.RecOpen.xorL": "8935e8f3e98775737ddd63b5d3573af33305eb6ccc1f76b2546e9f2d2cd38b2c"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -16930,6 +17182,8 @@
     "Flock.RecOpening.wi": "cee7e58a9e30dab307a4f61b68892b33a01a68a70571b9ec3ef79fc7b7bcd84f"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -17059,6 +17313,8 @@
     "Flock.RecResiduals.unitNet'": "fe90c04ee1382889605928a0735447de609eac613a78b31c168c3fcd92bbdd68"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -17177,6 +17433,8 @@
     "Flock.RecSparse.xorAllL": "c7b62b065a2617c1fac3bf821a126af9c65fab97312c60d98870c1f7710eeaac"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -17404,7 +17662,7 @@
    ]
   },
   "Flock.Record": {
-   "digest": "10043f129008618c807358eaa216ea7fbf02e8bfb28242dc3cc1b0e008f3584d",
+   "digest": "3d39a1ac61d06acde7551529fd11432bf2fe3403bac1539f29e312500358d79a",
    "definitions": {
     "Flock.Record.arr": "9df0e1daf24196fc6e670a3a7f3d4f0a3c82c61e8eee4d5bf3a08271c3106721",
     "Flock.Record.check": "bba52587ec1aba9b29fabcd7a69510dd279175672cb253a09dec230cb8ef566f",
@@ -17445,9 +17703,13 @@
     "Flock.StreamRec.name": "f0f6e20ec3a3ca6f438023bcff69ca5907f03a08d1f3284c604c4650fbf7810c",
     "Flock.StreamRec.parent": "02d418dacd789f28a070431a9a398ff1d0a2714158a27df6488ec3921aa70f9a",
     "Flock.StreamRec.rootSha": "fdc166d0898e32a142599b7c807aee66a189993281ff5890631860513ae4b9bb",
-    "Flock.StreamRec.rounds": "5b146dec61efbb297a72cb7578d80cbb1da9e81ebd64fae52b0edb5b4919f4f3"
+    "Flock.StreamRec.rounds": "5b146dec61efbb297a72cb7578d80cbb1da9e81ebd64fae52b0edb5b4919f4f3",
+    "Flock.instInhabitedSessionSpec": "46cb2f784a49faf77f01f4ae3abe4c81b757dab10464883d867c8ba27d882cf8",
+    "Flock.instInhabitedSessionSpec.default": "7e4a793478f8232ee711632ca785d2b2c45ea71e3c6f0b0abb97b34487075f73"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -17512,6 +17774,8 @@
    "guarantees": [
     "Properties.NetworkPeriod.rowsCircuitHeld",
     "Properties.NetworkPeriod.rowsCircuitHeld_honest",
+    "Properties.NetworkPeriod.rowsHeld",
+    "Properties.NetworkPeriod.rowsHeld_honest",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsStateAnchored",
     "Properties.NetworkPeriod.rowsStateAnchored_honest",
@@ -17519,6 +17783,8 @@
     "Properties.NetworkPeriod.rowsStateHeld_honest",
     "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkPeriod.rowsStateTied_nontrivial",
+    "Properties.NetworkPeriod.rowsWiresChecked",
+    "Properties.NetworkPeriod.rowsWiresChecked_honest",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
@@ -17669,6 +17935,8 @@
     "Flock.mkRegion": "5f114dc12db36808d8d8d876a67e06d165ba81c44eb0ca2cd345fdadd66b5188"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -17711,6 +17979,8 @@
     "Flock.queriesAt": "e5c2e5d88c9efd1ef08a6bb2dd8fab6ccae9de9d90a49d5f64119195e0d3f903"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -17728,7 +17998,7 @@
    ]
   },
   "Flock.Statement": {
-   "digest": "dd1797dfa48820e1114bed23639a40e4817fdfe00f101cf078849c5bd681323f",
+   "digest": "963aec0df70bea5d189ef824e32c54565647e1278235a6e312ba3b4186c621e7",
    "definitions": {
     "Flock.Circuit.delta._sparseCasesOn_3": "d98f2aae193ad64cda368c8a7b171f3fc9d5fccebbdbe6027cf5041084d0d5e8",
     "Flock.Circuit.delta.match_6": "c96c7c9d41ff86bdf3de864f1f206c94e5563938d77176c397af2805c7a20508",
@@ -17745,6 +18015,7 @@
     "Flock.Stmt": "27fb37f0f9296621e8318d636a6f635d50f964cf0200088d9092b504901f2153",
     "Flock.Stmt.addDelta": "5e7f3690c19545d2c6c5a5c041c5f0ec296774248d700695f7c71111490b4eb7",
     "Flock.Stmt.baseOf": "818fde1837d501106d40a231171a3d2a00fa0f32cb629da32e4c0bb448e58624",
+    "Flock.Stmt.blocksReal": "89418bbb7091f4c4bd76dbe3da1167dbeb8ee0e72d301dab015372b9f53e0bf7",
     "Flock.Stmt.c": "db0d4cd68b58e16fbb98b19e1612e5a7755f11bacce22b08c2e4f7c8c96592ac",
     "Flock.Stmt.circuitFold": "66bbe3bd0d31edc98b8340a7d50238c9ec0a39b0bea9dd6f93d1dbb1df18b4cf",
     "Flock.Stmt.coinTree": "0d7d141aa9bd157311324db2b4c1b261cffad5dc5b281bc24228462e6ba9fc88",
@@ -17796,6 +18067,8 @@
     "Flock.instInhabitedStmt.default": "69746fdadc99b28ed08dff66c1dfe7a4610ca4fd06a2205aac8810c3366216cd"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -17841,11 +18114,11 @@
     "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
-    "Properties.NetworkScan.scanFits",
-    "Properties.NetworkScan.scanFits_nontrivial",
-    "Properties.NetworkScan.scanScopeAcc",
-    "Properties.NetworkScan.scanScopeAcc_nontrivial",
-    "Properties.NetworkScan.scan_honest",
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.rowsHeld",
+    "Properties.NetworkPeriod.rowsHeld_nontrivial",
+    "Properties.NetworkPeriod.rowsWiresChecked",
+    "Properties.NetworkPeriod.rowsWiresChecked_nontrivial",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
@@ -17963,6 +18236,8 @@
     "_private.Flock.Tags.0.Flock.Tags.s": "a4a190d4a37066637be18f3ca5b4adc590b08525521438547f56b4222a5775ff"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -18024,8 +18299,7 @@
     "_private.Flock.TemplateQuery.0.Flock.TemplateQuery.showList": "d5a3296879e70e5e0cb3eb37f12c4953792cd600933b0f6bef8905084afc58cd"
    },
    "guarantees": [
-    "Properties.NetworkScan.scanFits",
-    "Properties.NetworkScan.scanScopeAcc",
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial",
@@ -18109,6 +18383,8 @@
     "_private.Flock.Tmpl.0.Flock.Tmpl.num": "307e81d576a7a2482bb896476703f456b05879de60e2c5917dc0175697740856"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -18135,6 +18411,8 @@
     "Flock.Tmpl.ascend._sparseCasesOn_1": "9b141f10244ce06d0ccc813b43d610fd61e4554ba47c2bbd6a443375b1bc098d"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -18168,6 +18446,8 @@
     "Flock.TmplUnit.t": "07c1e0ee77f879f688a79e3fb1b7dd515c5d071666e08b97512ba90c11da2d5b"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -18263,6 +18543,8 @@
     "Flock.Tmpl.up": "f64998158661355c175a5cd80f13b80fc297aead5b35a2d0cba31c4b7c0fb921"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -18325,6 +18607,8 @@
     "Flock.Tmpl.selfRow": "f1d06f07b9e7895740fb85cead3ce97f46bf92536b55d614855eb21256aedceb"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -18401,6 +18685,8 @@
     "Flock.Tmpl.Tmpl.groupsOk": "8b1813655c7d51736052ce2592b4e2cac90a522f80ea04d312d5fe23ae86bc03"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -18515,6 +18801,8 @@
     "_private.Flock.Typed.0.Flock.Typed.ctx": "35fd1c8fb7bc6ab93cf2e1f04c60788cdda858e75b8e305bb3d35a34ee42c844"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -18587,12 +18875,16 @@
     "NciCheck.Properties.SecurityProofs.ProtocolAccepts_nontrivial",
     "Properties.NetworkPeriod.rowsCircuitHeld",
     "Properties.NetworkPeriod.rowsCircuitHeld_honest",
+    "Properties.NetworkPeriod.rowsHeld",
+    "Properties.NetworkPeriod.rowsHeld_honest",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsStateAnchored",
     "Properties.NetworkPeriod.rowsStateAnchored_honest",
     "Properties.NetworkPeriod.rowsStateHeld",
     "Properties.NetworkPeriod.rowsStateHeld_honest",
     "Properties.NetworkPeriod.rowsStateTied",
+    "Properties.NetworkPeriod.rowsWiresChecked",
+    "Properties.NetworkPeriod.rowsWiresChecked_honest",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
@@ -18919,12 +19211,16 @@
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkPeriod.rowsCircuitHeld",
     "Properties.NetworkPeriod.rowsCircuitHeld_honest",
+    "Properties.NetworkPeriod.rowsHeld",
+    "Properties.NetworkPeriod.rowsHeld_honest",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsStateAnchored",
     "Properties.NetworkPeriod.rowsStateAnchored_honest",
     "Properties.NetworkPeriod.rowsStateHeld",
     "Properties.NetworkPeriod.rowsStateHeld_honest",
     "Properties.NetworkPeriod.rowsStateTied",
+    "Properties.NetworkPeriod.rowsWiresChecked",
+    "Properties.NetworkPeriod.rowsWiresChecked_honest",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
@@ -18994,12 +19290,16 @@
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkPeriod.rowsCircuitHeld",
     "Properties.NetworkPeriod.rowsCircuitHeld_honest",
+    "Properties.NetworkPeriod.rowsHeld",
+    "Properties.NetworkPeriod.rowsHeld_honest",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsStateAnchored",
     "Properties.NetworkPeriod.rowsStateAnchored_honest",
     "Properties.NetworkPeriod.rowsStateHeld",
     "Properties.NetworkPeriod.rowsStateHeld_honest",
     "Properties.NetworkPeriod.rowsStateTied",
+    "Properties.NetworkPeriod.rowsWiresChecked",
+    "Properties.NetworkPeriod.rowsWiresChecked_honest",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
@@ -19185,6 +19485,9 @@
     "Properties.NetworkPeriod.rowsCircuitHeld",
     "Properties.NetworkPeriod.rowsCircuitHeld_honest",
     "Properties.NetworkPeriod.rowsCircuitHeld_nontrivial",
+    "Properties.NetworkPeriod.rowsHeld",
+    "Properties.NetworkPeriod.rowsHeld_honest",
+    "Properties.NetworkPeriod.rowsHeld_nontrivial",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsProgWired_nontrivial",
     "Properties.NetworkPeriod.rowsStateAnchored",
@@ -19195,6 +19498,9 @@
     "Properties.NetworkPeriod.rowsStateHeld_nontrivial",
     "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkPeriod.rowsStateTied_nontrivial",
+    "Properties.NetworkPeriod.rowsWiresChecked",
+    "Properties.NetworkPeriod.rowsWiresChecked_honest",
+    "Properties.NetworkPeriod.rowsWiresChecked_nontrivial",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
@@ -20128,8 +20434,10 @@
     "NciCheck.Properties.SecurityProofs.DescWitnesses",
     "NciCheck.Properties.SecurityProofs.ProtocolAccepts",
     "NciCheck.Properties.SecurityProofs.ProtocolAccepts_nontrivial",
-    "Properties.NetworkScan.scanFits",
-    "Properties.NetworkScan.scanScopeAcc",
+    "Properties.NetworkPeriod.rowsHeld",
+    "Properties.NetworkPeriod.rowsHeld_nontrivial",
+    "Properties.NetworkPeriod.rowsWiresChecked",
+    "Properties.NetworkPeriod.rowsWiresChecked_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial",
@@ -20309,6 +20617,9 @@
     "Properties.NetworkPeriod.rowsCircuitHeld",
     "Properties.NetworkPeriod.rowsCircuitHeld_honest",
     "Properties.NetworkPeriod.rowsCircuitHeld_nontrivial",
+    "Properties.NetworkPeriod.rowsHeld",
+    "Properties.NetworkPeriod.rowsHeld_honest",
+    "Properties.NetworkPeriod.rowsHeld_nontrivial",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsProgWired_nontrivial",
     "Properties.NetworkPeriod.rowsStateAnchored",
@@ -20319,6 +20630,9 @@
     "Properties.NetworkPeriod.rowsStateHeld_nontrivial",
     "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkPeriod.rowsStateTied_nontrivial",
+    "Properties.NetworkPeriod.rowsWiresChecked",
+    "Properties.NetworkPeriod.rowsWiresChecked_honest",
+    "Properties.NetworkPeriod.rowsWiresChecked_nontrivial",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
@@ -20440,6 +20754,9 @@
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkPeriod.rowsCircuitHeld",
     "Properties.NetworkPeriod.rowsCircuitHeld_honest",
+    "Properties.NetworkPeriod.rowsHeld",
+    "Properties.NetworkPeriod.rowsHeld_honest",
+    "Properties.NetworkPeriod.rowsHeld_nontrivial",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsProgWired_nontrivial",
     "Properties.NetworkPeriod.rowsStateAnchored",
@@ -20448,6 +20765,9 @@
     "Properties.NetworkPeriod.rowsStateHeld_honest",
     "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkPeriod.rowsStateTied_nontrivial",
+    "Properties.NetworkPeriod.rowsWiresChecked",
+    "Properties.NetworkPeriod.rowsWiresChecked_honest",
+    "Properties.NetworkPeriod.rowsWiresChecked_nontrivial",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
@@ -20567,6 +20887,9 @@
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkPeriod.rowsCircuitHeld",
     "Properties.NetworkPeriod.rowsCircuitHeld_honest",
+    "Properties.NetworkPeriod.rowsHeld",
+    "Properties.NetworkPeriod.rowsHeld_honest",
+    "Properties.NetworkPeriod.rowsHeld_nontrivial",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsProgWired_nontrivial",
     "Properties.NetworkPeriod.rowsStateAnchored",
@@ -20575,6 +20898,9 @@
     "Properties.NetworkPeriod.rowsStateHeld_honest",
     "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkPeriod.rowsStateTied_nontrivial",
+    "Properties.NetworkPeriod.rowsWiresChecked",
+    "Properties.NetworkPeriod.rowsWiresChecked_honest",
+    "Properties.NetworkPeriod.rowsWiresChecked_nontrivial",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
@@ -20595,7 +20921,7 @@
    ]
   },
   "NetworkCheck.Circuit": {
-   "digest": "2fda32af9f9485f20d7a3b802f7171ba0c56608177b7a4ed5aec60a9838c1e66",
+   "digest": "48b8a91798f29b933e266790ba5e4b5fff8c894a9c94fd8667a72727e971bd22",
    "definitions": {
     "NetworkCheck.Circuit.Counts": "34e54af674031640b9114f50b5b0234a50815d870b4a5ba35555404a5b45c98d",
     "NetworkCheck.Circuit.Counts.free": "dfe15cb807836f851759f25cd3a0e118bd4823f18e7be1250cf79d7b73be43d6",
@@ -20668,8 +20994,6 @@
     "NetworkCheck.Circuit.digest": "3ca0396dea44351c1704d99ab1c79fcc084de2b34e7022296f9fbf4a2e77b062",
     "NetworkCheck.Circuit.digitAt": "6ff77acc7dffff14764d25f8780a4e4dbe61832eacc521e561be2a603158dd9c",
     "NetworkCheck.Circuit.fieldOf": "a345d0442521bf08841531f250b971e9e5268eae010cc4abf15d0931cb7b122a",
-    "NetworkCheck.Circuit.fieldsOf": "5599629c5ca4c83a9a33bd766ecd50f6177dd4f1cff4cb0718de2748588e3230",
-    "NetworkCheck.Circuit.fieldsOf._sparseCasesOn_1": "d4b3eb98e96f44c8963576933159abb5fecfc09228cf4ed6ac019b5bd749195d",
     "NetworkCheck.Circuit.hi": "da55a74c786b58aa1925b2b11d793fc88f01fa37a806c8514bb1a3697cb67163",
     "NetworkCheck.Circuit.intsOf": "cad4ce1393af3b7f4d0a6d1733538758f43ebf51d35646b70cdb9ac52f32e537",
     "NetworkCheck.Circuit.leavesOk": "d40af567b05eb55d02d84d539873fdf1ceae733102edc5053357c4619cf70fca",
@@ -20715,7 +21039,6 @@
     "NetworkCheck.Circuit.wireRect": "0e16e9eaa93bfaa3e1a391dbda30c06ff8b9e3afa7cddeb8b0ba6ab9cadca39f",
     "NetworkCheck.Circuit.wireWhy": "b3af566c079448b8f4cee91e46c01f4df56a0bfebe655d19abc9578f5d79bde7",
     "NetworkCheck.Circuit.writerDigits": "ad15e3fcef6ff10aaa31b721f027e2a91df2414c86e88188d5998245f870fed2",
-    "NetworkCheck.Period.bitsOf": "bfa24d57cf13db4bdb0032e9d460ef313ca29a96afa96396acb0b72642570cd8",
     "NetworkCheck.Period.inputArg": "f1016b122de97e9e428423a7b4cd4b3811e2b8e79803aae7f5e59c846792cca7",
     "NetworkCheck.Period.inputArg._sparseCasesOn_3": "d181c62708c8bd85f963a4b6e05674aa680371cd6bbe3e8a294e1dc786fdf84a",
     "NetworkCheck.Period.inputArg._sparseCasesOn_4": "b570ca16f229cdb0b636f8ba2545ae6d815659d41a60a2db6338e36577f8829e",
@@ -20732,6 +21055,9 @@
     "Properties.NetworkPeriod.rowsCircuitHeld",
     "Properties.NetworkPeriod.rowsCircuitHeld_honest",
     "Properties.NetworkPeriod.rowsCircuitHeld_nontrivial",
+    "Properties.NetworkPeriod.rowsHeld",
+    "Properties.NetworkPeriod.rowsHeld_honest",
+    "Properties.NetworkPeriod.rowsHeld_nontrivial",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsProgWired_nontrivial",
     "Properties.NetworkPeriod.rowsStateAnchored",
@@ -20742,11 +21068,10 @@
     "Properties.NetworkPeriod.rowsStateHeld_nontrivial",
     "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkPeriod.rowsStateTied_nontrivial",
+    "Properties.NetworkPeriod.rowsWiresChecked",
+    "Properties.NetworkPeriod.rowsWiresChecked_honest",
+    "Properties.NetworkPeriod.rowsWiresChecked_nontrivial",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
-    "Properties.NetworkScan.scanFits",
-    "Properties.NetworkScan.scanFits_nontrivial",
-    "Properties.NetworkScan.scanScopeAcc",
-    "Properties.NetworkScan.scanScopeAcc_nontrivial",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols_honest",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols_nontrivial",
@@ -20872,7 +21197,7 @@
    "guarantees": ["Properties.NetworkCertifier.linkWindowAcceptMeans"]
   },
   "NetworkCheck.Period": {
-   "digest": "09d5e2a6cadb0560e4801666236d3fc6b3ca9ef9ef816666108df19739bc8029",
+   "digest": "0854101035bb872cd7775b58921c40889c93954f06feeef317f4db832f9c5d25",
    "definitions": {
     "NetworkCheck.Period.Audit": "1d09ddb464aaa4df92f6fa9e898ac284f9c3cb3a691d01573bc237bf94b954e8",
     "NetworkCheck.Period.Audit.bits": "e933e5e70e66fbf6d1a3f868d294c6a0cfc6be8b835a4d117602235327ee4af1",
@@ -21024,7 +21349,6 @@
     "NetworkCheck.Period.atMost": "3df31d5d5297b8a4f0576162646c9449346e9ceb4d2d2f5f49f6fc7693514a84",
     "NetworkCheck.Period.auditCheck": "eb905d40e80a49070b789c48047c34c0b8267dc4eae5ca8e46519655b708b44d",
     "NetworkCheck.Period.auditChecks": "4cca6faa5be27d823ac65a4c0f10dc3a1e133172f0c77b178e1f9a6ef688e2f3",
-    "NetworkCheck.Period.auditOf": "3e6e015a1f2f5de558e4c1263b18880bbaf3e02acf0f36cda5902feb206d9f6e",
     "NetworkCheck.Period.auditWith": "e6add4d21d8e3fb04db2920512f84f9d3e15c3b57e3ea1f2cb5fc17c5d9b6d2f",
     "NetworkCheck.Period.canonText": "f3f56595df2de44e1a87807d7066086208c80a22fdfffa9044b637fa3f43e82e",
     "NetworkCheck.Period.capsTerm": "b0344cf3feee99420207429449a56894f1be391186237460231820aa80faf275",
@@ -21066,6 +21390,7 @@
     "NetworkCheck.Period.findingOf": "44131db49e33c7c229608dc8c49142bcce277c3cdc31d2a3967a13207a33d738",
     "NetworkCheck.Period.firstFinding": "4976491d675431c8ecd02961f5bb72d0ff705497487dfc3f05d872d5e036b77e",
     "NetworkCheck.Period.firstParams": "4cba5348252e0f6afd34f7a65d63e75da7fdce6dfdfec950f5c78753ef353225",
+    "NetworkCheck.Period.forcedCols": "5b6e9904c656b043b78051e89536573c5a928c9f581d419fbdafa95102b32011",
     "NetworkCheck.Period.forcedZero": "b12441596048e29abad93b2236807cabb9bf21b16e7ada4e692fd9d77a7f6530",
     "NetworkCheck.Period.headDigest": "b2484035200a5bef6a2c6423bc939b5aabb6fcb5e9ccbcc75594593704f70008",
     "NetworkCheck.Period.held": "780ba0d45035091512491b9acc55e8f00c7bea7244df9fcc1e3f9aacee6be5b6",
@@ -21140,8 +21465,6 @@
     "NetworkCheck.Period.rowsWindowCheck._sparseCasesOn_5": "2c58e485f9e644f9cd9e74b567cadc01dc61a13c5f701aa82c99b28e36883a1b",
     "NetworkCheck.Period.runsCircuit": "89b9b8ade2cc4820954b6cb56fcea89cd74246f9eb094b40f42fefc3b92f3f7a",
     "NetworkCheck.Period.scanOf": "60ffdb3ed862319f4a4125f8b38ed7b934e1182cbbf8b3dbc07b085cf58de6be",
-    "NetworkCheck.Period.scanOf._sparseCasesOn_5": "6bf338249c5e7bb22f26ed0b39d34712a1df827c055bc07181253f515d0e49e3",
-    "NetworkCheck.Period.scanOf._sparseCasesOn_6": "904a027c9697112c384a5c397bfdd4134044f57bd370519f73dbd4757dbb67f2",
     "NetworkCheck.Period.scanProg": "873af24a60024b00d8a48e9e1a33bb0b82487223a4c220a47a94eea0228fb5cb",
     "NetworkCheck.Period.scanProg._sparseCasesOn_5": "ce364fc915c66e83f7d2f71e704b8f11f16f001835e52aea45a6c560da20502b",
     "NetworkCheck.Period.scanProg._sparseCasesOn_6": "8f3a8f97d71bfd79524c2a648e47341752ecb6c4e4ee0fe7e1de74299c79fe2d",
@@ -21194,9 +21517,14 @@
    },
    "guarantees": [
     "Properties.NetworkPeriod.clockKBoundsCount",
+    "Properties.NetworkPeriod.forcedZeroUnfilled",
+    "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
     "Properties.NetworkPeriod.rowsCircuitHeld",
     "Properties.NetworkPeriod.rowsCircuitHeld_honest",
     "Properties.NetworkPeriod.rowsCircuitHeld_nontrivial",
+    "Properties.NetworkPeriod.rowsHeld",
+    "Properties.NetworkPeriod.rowsHeld_honest",
+    "Properties.NetworkPeriod.rowsHeld_nontrivial",
     "Properties.NetworkPeriod.rowsKBoundsCount",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsProgWired_nontrivial",
@@ -21208,11 +21536,10 @@
     "Properties.NetworkPeriod.rowsStateHeld_nontrivial",
     "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkPeriod.rowsStateTied_nontrivial",
+    "Properties.NetworkPeriod.rowsWiresChecked",
+    "Properties.NetworkPeriod.rowsWiresChecked_honest",
+    "Properties.NetworkPeriod.rowsWiresChecked_nontrivial",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
-    "Properties.NetworkScan.scanFits",
-    "Properties.NetworkScan.scanFits_nontrivial",
-    "Properties.NetworkScan.scanScopeAcc",
-    "Properties.NetworkScan.scanScopeAcc_nontrivial",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols_honest",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols_nontrivial",
@@ -24456,6 +24783,27 @@
    },
    "guarantees": ["Properties.NetworkCertifier.linkWindowAcceptMeans"]
   },
+  "Properties.NetworkCertifier.Wired": {
+   "digest": "8de7da7c05b82db6d0e14663c7fc0af929f96c21992ba290b580ae186ffea002",
+   "definitions": {
+    "Properties.NetworkPeriod.RowsHeld": "58e0b4a5bf758abeec83157622f07ea39e448db4cc963b3fe1992f54e8009356",
+    "Properties.NetworkPeriod.RowsHeldAt": "2f7a7f4a89772222fa96c5745f27a6fd4a26baf8194afabe2e0cd63fbf10ad17",
+    "Properties.NetworkPeriod.RowsHeldOf": "6b4952c3c0a14fc471332a92a95513b88a8e2dae0f68883c1c6e46dd63beb52c",
+    "Properties.NetworkPeriod.RowsWiresChecked": "12a31213276e002ca96217f198f54fe83c20d9bd13555b8b20c664172239808e",
+    "Properties.NetworkPeriod.RowsWiresCheckedAt": "137be104ec27acd7a04f3da32d6b086ab40387fb2e5ce7e77f57915d0e449097",
+    "Properties.NetworkPeriod.RowsWiresCheckedOf": "915e41794b20338681e2e240c31ab87149be04a787cf50d98486d04f67313e85",
+    "Properties.NetworkPeriod.acceptAllParams": "c4e9fa2ecd9a46006c450f0991b449dc8a30daf02646fbe3ad5a65649195ee68",
+    "Properties.NetworkPeriod.recordReg": "f877adc3b1b832d5c787e53fb83bf8ac60ffa3d6156be80fd4c85bbb00c733f1",
+    "Properties.NetworkPeriod.slotPeriod": "68942fcb7a01de75b81c7789949b9cb59febefbf0b80ccccde3cbbbd844b1a7a"
+   },
+   "guarantees": [
+    "Properties.NetworkPeriod.rowsHeld",
+    "Properties.NetworkPeriod.rowsHeld_nontrivial",
+    "Properties.NetworkPeriod.rowsWiresChecked",
+    "Properties.NetworkPeriod.rowsWiresChecked_honest",
+    "Properties.NetworkPeriod.rowsWiresChecked_nontrivial"
+   ]
+  },
   "Properties.NetworkPeriod": {
    "digest": "21ff6df933560b3f1bf88829fffb98bf20565eb948d2af1865cb1fbe2cdf2305",
    "definitions": {
@@ -24497,6 +24845,9 @@
     "Properties.NetworkPeriod.rowsCircuitHeld",
     "Properties.NetworkPeriod.rowsCircuitHeld_honest",
     "Properties.NetworkPeriod.rowsCircuitHeld_nontrivial",
+    "Properties.NetworkPeriod.rowsHeld",
+    "Properties.NetworkPeriod.rowsHeld_honest",
+    "Properties.NetworkPeriod.rowsHeld_nontrivial",
     "Properties.NetworkPeriod.rowsKBoundsCount",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsProgWired_nontrivial",
@@ -24507,8 +24858,33 @@
     "Properties.NetworkPeriod.rowsStateHeld_honest",
     "Properties.NetworkPeriod.rowsStateHeld_nontrivial",
     "Properties.NetworkPeriod.rowsStateTied",
-    "Properties.NetworkPeriod.rowsStateTied_nontrivial"
+    "Properties.NetworkPeriod.rowsStateTied_nontrivial",
+    "Properties.NetworkPeriod.rowsWiresChecked_honest",
+    "Properties.NetworkPeriod.rowsWiresChecked_nontrivial"
    ]
+  },
+  "Properties.NetworkPeriod.ForcedZero": {
+   "digest": "5d9a18ab12b90322ae086d139693ab1cb7ff912090c39ce996adf68bfb61eeab",
+   "definitions": {
+    "Properties.NetworkPeriod.ForcedZeroUnfilled": "276d6bf044e9087f36c7da58b2a31fefa8c7291cb965b013daa47efc4c1c615d",
+    "Properties.NetworkPeriod.ForcedZeroUnfilledAt": "364479638444678a711408249bf60b5374faf61714b388d9713c0d0e1903ce98",
+    "Properties.NetworkPeriod.ForcedZeroUnfilledOf": "7d3e2caeefef869262afcc5471882c97470e8134bcc639361bdd9926955f5bb5",
+    "Properties.NetworkPeriod.ScopeCheck": "6dc8e839c52d146423329575dc750f2a71d96c1b010df17a93e8895117693c3b",
+    "Properties.NetworkPeriod.TablesSetup": "d7e076452a4e01e8135fbe9352c03a52085d199e989efed824dbc892158cb14d",
+    "Properties.NetworkPeriod.acceptAllScope": "22be4e4cc9133e447264358f125a10de849b0b22339e01f6b447e69515350b64",
+    "Properties.NetworkPeriod.fillForced": "5291f328087f39ae940ca9383b16d26835ab00558c07adff44a5924945ee105c",
+    "Properties.NetworkPeriod.forcedNet": "b8e2a664dfd28b650793d8226855cb69e8e732ae8b1c9b3127c1080cf07c43e4",
+    "Properties.NetworkPeriod.forcedStmt": "a1439b03b106637a0628571df066baff183a570fb160ced5741b5f8eb4f4fecf"
+   },
+   "guarantees": ["Properties.NetworkPeriod.forcedZeroUnfilled", "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial"]
+  },
+  "Properties.NetworkPeriod.Placed": {
+   "digest": "2d43f09c7c76cfa2630309b83255052b5f81505f0190900ea1df46ecbbcea64a",
+   "definitions": {
+    "Properties.NetworkPeriod.WrongBounds": "7668c33339b3695f33da552f2a32dbdb6012bb9ed0d849b60aec5bee204b7026",
+    "Properties.NetworkPeriod.WrongBoundsDrawn": "31233e6c9362dfa35fdd3d9e045b7f69b37c42a45a428f15bfe37fbed3081348"
+   },
+   "guarantees": ["Properties.NetworkPeriod.wrongBoundsDrawn", "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial"]
   },
   "Properties.NetworkPeriodLeak": {
    "digest": "a8985b33adc293a3e5827e1464cc3ac645df762765390a504ccc1cc65ac1efbf",
@@ -24558,42 +24934,6 @@
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.NetworkRecords.noGridAcceptsMore",
     "Properties.NetworkRecords.noGridMeans"
-   ]
-  },
-  "Properties.NetworkScan": {
-   "digest": "3da1d8b8e22f7bb297057f8817eddb6c3277fd0db93c4e73904334c5989a7f43",
-   "definitions": {
-    "Properties.NetworkScan.ScanFits": "5f2430c038392abe606d6578beef8615a1e0b800b56c8205341082a209c10906",
-    "Properties.NetworkScan.ScanScopeAcc": "fb8120b5845dcfc226891abe77600ffbe65657129370ba72d7676fa8ed984c8a",
-    "Properties.NetworkScan.gateAt": "e4aebb4c0d3ac773a86f2760eaa99f09c90a0fe73f2465ed07b03be6aa8f9572",
-    "Properties.NetworkScan.layOf": "64d91ce99468857f3d877c2a2b2273851457ff06c7a28be50ea807bf9199b530",
-    "Properties.NetworkScan.scanLayout": "ab30651071a51b97ef5a452bbc5382c0f4d54187be1ef25f1fb2a1a15e3ae260"
-   },
-   "guarantees": [
-    "Properties.NetworkScan.scanFits",
-    "Properties.NetworkScan.scanFits_nontrivial",
-    "Properties.NetworkScan.scanScopeAcc",
-    "Properties.NetworkScan.scanScopeAcc_nontrivial"
-   ]
-  },
-  "Properties.NetworkScan.Assumptions": {
-   "digest": "13f4ca49a49330ea32355b29e579be06559dbbe3a14fec783f751ef7489163f9",
-   "definitions": {
-    "Properties.NetworkScan.ScopeMatches": "034e585f8cf7bd0bc270f3d5d2e503ebd70488b8c972161b8a70c22e12caf7e7",
-    "Properties.NetworkScan.StmtFlattens": "d9457f2011bf51bdb5935b85ce9a848b489c67ef0a02ca412731b2f15d24255a"
-   },
-   "guarantees": ["Properties.NetworkScan.scanScopeAcc"]
-  },
-  "Properties.NetworkScan.Flattens": {
-   "digest": "3f5949648ef80db4b0a7f77b4162c0e1ca3dbf3ed95de83770191adb9f069e12",
-   "definitions": {
-    "Properties.NetworkScan.Flattens": "958b48d427a4799a495e8498981cebdafaf311689c3fefb050bf30006a382055"
-   },
-   "guarantees": [
-    "Properties.NetworkScan.scanFits",
-    "Properties.NetworkScan.scanFits_nontrivial",
-    "Properties.NetworkScan.scanScopeAcc",
-    "Properties.NetworkScan.scan_honest"
    ]
   },
   "Properties.Pous": {
@@ -27424,8 +27764,10 @@
     "SampledProofs.Bits.writers._sparseCasesOn_1": "e71f4fa8b3058282de4bb78561feee207f21d82c9c3d1c3bc66c64f142a2bc92"
    },
    "guarantees": [
-    "Properties.NetworkScan.scanFits",
-    "Properties.NetworkScan.scanScopeAcc",
+    "Properties.NetworkPeriod.rowsHeld",
+    "Properties.NetworkPeriod.rowsHeld_nontrivial",
+    "Properties.NetworkPeriod.rowsWiresChecked",
+    "Properties.NetworkPeriod.rowsWiresChecked_nontrivial",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols_honest",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols_nontrivial",
@@ -27465,6 +27807,9 @@
     "Properties.NetworkPeriod.rowsStateHeld",
     "Properties.NetworkPeriod.rowsStateHeld_honest",
     "Properties.NetworkPeriod.rowsStateTied",
+    "Properties.NetworkPeriod.wrongBoundsDrawn",
+    "Properties.NetworkPeriod.wrongBoundsDrawn_honest",
+    "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
@@ -28399,6 +28744,10 @@
     "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
+    "Properties.NetworkPeriod.rowsHeld",
+    "Properties.NetworkPeriod.rowsHeld_nontrivial",
+    "Properties.NetworkPeriod.rowsWiresChecked",
+    "Properties.NetworkPeriod.rowsWiresChecked_nontrivial",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -28911,6 +29260,9 @@
     "Properties.NetworkPeriod.rowsCircuitHeld",
     "Properties.NetworkPeriod.rowsCircuitHeld_honest",
     "Properties.NetworkPeriod.rowsCircuitHeld_nontrivial",
+    "Properties.NetworkPeriod.rowsHeld",
+    "Properties.NetworkPeriod.rowsHeld_honest",
+    "Properties.NetworkPeriod.rowsHeld_nontrivial",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsProgWired_nontrivial",
     "Properties.NetworkPeriod.rowsStateAnchored",
@@ -28921,6 +29273,9 @@
     "Properties.NetworkPeriod.rowsStateHeld_nontrivial",
     "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkPeriod.rowsStateTied_nontrivial",
+    "Properties.NetworkPeriod.rowsWiresChecked",
+    "Properties.NetworkPeriod.rowsWiresChecked_honest",
+    "Properties.NetworkPeriod.rowsWiresChecked_nontrivial",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols_honest",
