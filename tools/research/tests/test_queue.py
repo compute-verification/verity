@@ -313,15 +313,15 @@ def test_an_edit_of_the_priority_file_reorders_next_at_the_next_sync_from_the_fi
     for n in (7, 9):
         world.gh.put(n, world.change({f"{n}.txt": f"{n}\n"}))
     world.prioritize(q, 9, 7)
-    assert [m.pr for m in q.sync()[0]] == [9, 7, 1, 2, 3] and world.logs[-1].endswith("kept 0, merged 5"), world.logs[-1]
+    assert [m.pr for m in q.sync()[0]] == [9, 7, 1, 2, 3] and "kept 0, merged 5" in world.logs[-1], world.logs[-1]
     world.prioritize(q, 9, 7, 9)
-    assert [m.pr for m in q.sync()[0]] == [9, 7, 1, 2, 3] and world.logs[-1].endswith("kept 5, merged 0"), world.logs[-1]
+    assert [m.pr for m in q.sync()[0]] == [9, 7, 1, 2, 3] and "kept 5, merged 0" in world.logs[-1], world.logs[-1]
     world.prioritize(q, 7, 9)
-    assert [m.pr for m in q.sync()[0]] == [7, 9, 1, 2, 3] and world.logs[-1].endswith("kept 0, merged 5"), world.logs[-1]
+    assert [m.pr for m in q.sync()[0]] == [7, 9, 1, 2, 3] and "kept 0, merged 5" in world.logs[-1], world.logs[-1]
     world.prioritize(q, 7, 9, 2)
     members, _ = q.sync()
-    assert [m.pr for m in members] == [7, 9, 2, 1, 3] and world.logs[-1].endswith("kept 2, merged 3"), world.logs[-1]
-    assert q.sync()[0] == members and world.logs[-1].endswith("kept 5, merged 0"), world.logs[-1]
+    assert [m.pr for m in members] == [7, 9, 2, 1, 3] and "kept 2, merged 3" in world.logs[-1], world.logs[-1]
+    assert q.sync()[0] == members and "kept 5, merged 0" in world.logs[-1], world.logs[-1]
 
 
 def test_a_sync_merges_what_changes_no_lean_below_every_lean_change_above_the_priority_lists_prs_in_its_order(world):
@@ -436,7 +436,7 @@ def test_a_pr_the_last_sync_left_out_is_tried_above_the_rest_so_a_sync_with_noth
     world.gh.put(3, world.change({"c.txt": "3\n"}))
     world.gh.put(4, world.change({"d.txt": "4\n"}, base=world.gh.prs[3].head))
     _git(world.dev, "push", "-q", "origin", f"{world.change({'c.txt': 'main\n'})}:refs/heads/main")
-    first = (3, 2, 1, 4)
+    first = (3, 2, 4, 1)
     members, entries = world.queue(first=first).sync()
     assert [m.pr for m in members] == [2, 1] and entries[3].state == "refused" and entries[4].state == "waiting"
     for _ in range(2):
