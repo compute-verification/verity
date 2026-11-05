@@ -21,6 +21,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/certifier", "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/commitments",
           "verity/ml/crypto", "integrations/vllm/verity_vllm/__init__.py",
           "integrations/vllm/verity_vllm/scheduler/__init__.py", "integrations/vllm/verity_vllm/scheduler/advice.py",
+          "integrations/vllm/verity_vllm/records/__init__.py", "integrations/vllm/verity_vllm/records/advice.py",
           # test_v1 runs the certifier's replay chain (`replay_chain`) over v1's windows, which imports sampled proofs'
           # produced and registered row helpers
           "verity/core/protocols/sampled_proofs/__init__.py",

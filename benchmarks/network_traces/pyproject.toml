@@ -39,6 +39,7 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           "integrations/vllm/verity_vllm/pipeline/advice.py", "integrations/vllm/verity_vllm/pipeline/advice_windows.py",
           "integrations/vllm/verity_vllm/pipeline/cli.py",
           "integrations/vllm/verity_vllm/scheduler/__init__.py", "integrations/vllm/verity_vllm/scheduler/advice.py",
+          "integrations/vllm/verity_vllm/records/advice.py",
           "integrations/vllm/verity_vllm/config.py", "integrations/vllm/verity_vllm/settings.py",
           "integrations/vllm/verity_vllm/engine/__init__.py",
           "integrations/vllm/verity_vllm/engine/hooks.py", "integrations/vllm/verity_vllm/engine/step_trace.py",

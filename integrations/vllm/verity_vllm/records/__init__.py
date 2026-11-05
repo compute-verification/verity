@@ -30,6 +30,8 @@ package imports nothing else from `verity_vllm`, so every stage may import it.
   unknown field and `dump` writes it.
 * `pearl_served` -- a Pearl+ served run's document's schema id (`verity-pouw/pearl-c-served-passes/v1`, ``served.json``) and
   nothing else: its readers read it as the dict it is.
+* `advice` -- advice v0's JSON form's schema id (`verity/advice/v0`) and nothing else: `scheduler.advice` types the form
+  (`to_json`, `from_json`).
 * `predicted_row` -- a predicted row's record (`verity-vllm/predicted-row/v1`, ``predicted.json``): the Build of record the
   ahead-of-time compiler wrote and its manifest's sha256, as ``predict compare --predicted`` reads it; its `of` refuses an
   unknown field and `dump` writes it back.

@@ -51,6 +51,7 @@ from verity_vllm.scheduler.advice import (  # the advice's parts, as `predict.ba
     Source,
     StepAdvice,
 )
+from verity_vllm.scheduler.advice import _Reader, _Writer  # v0's bit reader and writer, a window's too
 
 SCHEMA = "verity-vllm/window-advice/v1"
 VERSION = 1
@@ -320,57 +321,6 @@ def _widths(advice: Advice) -> _Widths:
     src = max((len(row.sources) - 1 for st in advice.steps for row in st.rows if row.cache_hit), default=0)
     return _Widths(max(len(advice.requests) - 1, 0).bit_length(), max(lens, default=0).bit_length(),
                    max(advice.release, default=0).bit_length(), src.bit_length())
-
-
-class _Writer:
-    def __init__(self) -> None:
-        self.out, self.acc, self.held, self.bits = bytearray(), 0, 0, 0
-
-    def put(self, value: int, width: int) -> None:
-        if value >> width:
-            raise AssertionError(f"{value} doesn't fit {width} bits")
-        self.acc = (self.acc << width) | value
-        self.held += width
-        self.bits += width
-        while self.held >= 8:
-            self.held -= 8
-            self.out.append(self.acc >> self.held)
-            self.acc &= (1 << self.held) - 1
-
-    def uvar(self, value: int) -> None:
-        self.put(value.bit_length(), WIDTH_BITS)
-        self.put(value, value.bit_length())
-
-    def finish(self) -> bytes:
-        if self.held:
-            self.out.append(self.acc << (8 - self.held))
-        return bytes(self.out)
-
-
-class _Reader:
-    def __init__(self, data: bytes) -> None:
-        self.data, self.pos, self.size = data, 0, 8 * len(data)
-
-    def left(self) -> int:
-        return self.size - self.pos
-
-    def get(self, width: int) -> int:
-        if width == 0:
-            return 0
-        end = self.pos + width
-        if end > self.size:
-            raise MalformedAdvice(f"truncated: a {width}-bit field at bit {self.pos} of {self.size}")
-        lo, hi = self.pos >> 3, (end + 7) >> 3
-        value = (int.from_bytes(self.data[lo:hi], "big") >> (8 * hi - end)) & ((1 << width) - 1)
-        self.pos = end
-        return value
-
-    def uvar(self) -> int:
-        width = self.get(WIDTH_BITS)
-        value = self.get(width)
-        if value.bit_length() != width:
-            raise MalformedAdvice(f"a {width}-bit length-prefixed field holds {value}: its width isn't its bit length")
-        return value
 
 
 class _Layout(NamedTuple):

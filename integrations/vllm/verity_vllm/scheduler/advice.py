@@ -45,11 +45,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping, NamedTuple
 
+from verity_vllm.records.advice import SCHEMA
+
 __all__ = ["FINISHES", "KINDS", "LIMIT", "SCHEMA", "VERSION", "WIDTH_BITS", "Advice", "MalformedAdvice", "Output",
            "RequestAdvice", "Row", "Source", "StepAdvice", "bits", "bits_by_window", "decode", "encode", "from_json",
            "outputs", "to_json", "total_bits"]
 
-SCHEMA = "verity/advice/v0"
 VERSION = 0
 KINDS = ("prefill", "decode")
 FINISHES = ("eos", "length")

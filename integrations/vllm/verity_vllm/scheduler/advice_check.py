@@ -37,7 +37,7 @@ writes it), and `length` its length in bytes, least significant bit first. Bits 
 """
 from __future__ import annotations
 
-from functools import lru_cache
+from functools import lru_cache, partial
 from types import SimpleNamespace
 from typing import Sequence
 
@@ -61,18 +61,14 @@ BLOCK = 5
 VW = 63  # a field's value bits: every width is at most 63
 
 
-class _Refused(Exception):
-    pass
-
-
 def _need(ok: bool) -> None:
     if not ok:
-        raise _Refused
+        raise MalformedAdvice("refused by the circuit's checks")
 
 
 def _check(data: bytes) -> None:
-    """`advice.decode`'s refusals but `DEFERRED`'s, as the circuit makes them; raises `_Refused` (or `MalformedAdvice`,
-    from the reader's truncation and `uvar` checks)."""
+    """`advice.decode`'s refusals but `DEFERRED`'s, as the circuit makes them; raises `MalformedAdvice` (the reader's
+    truncation and `uvar` checks among them)."""
     rd = _Reader(data)
     _need(rd.get(8) == VERSION)
     n_req, n_steps = rd.uvar(), rd.uvar()
@@ -86,7 +82,7 @@ def _check(data: bytes) -> None:
         try:
             bytes(rd.get(8) for _ in range(size)).decode("utf-8")
         except UnicodeDecodeError:
-            raise _Refused from None
+            raise MalformedAdvice("a request's id isn't UTF-8") from None
         P, O = rd.get(w_len), rd.get(w_len)
         FINISHES[rd.get(1)]
         _need(P >= 1 and O >= 1)
@@ -142,7 +138,7 @@ def reference(data: bytes, L: int) -> bool:
         return False
     try:
         _check(bytes(data))
-    except (_Refused, MalformedAdvice):
+    except MalformedAdvice:
         return False
     return True
 
@@ -273,6 +269,52 @@ def _utf8(C, u, x):
             C.AND(acc, f13), C.AND(acc, e0), C.AND(acc, ed), C.AND(acc, f0), C.AND(acc, f4)]
 
 
+def _wreq(C, nreq, W: int):
+    """w_req = bitlen(nreq − 1) as six bits, and whether it is nonzero."""
+    nm1, nz_borrow = sub(C, nreq, [ONE], W)
+    therm = []
+    acc_or = ZERO
+    for j in reversed(range(W)):
+        acc_or = acc_or ^ nm1[j] ^ C.AND(acc_or, nm1[j])
+        therm.append(acc_or)
+    therm = [C.AND(t, nz_borrow.inv()) for t in reversed(therm)]  # therm[j]: w_req > j
+    wreq = [_x(*therm[(1 << i) - 1::1 << i]) for i in range(6)]  # bit i of a count c: the parity of #{m ≥ 1: m·2^i ≤ c}
+    return wreq, therm[0]
+
+
+def _next_mode(C, st: dict, md: dict, enter: dict, done, consume, v6, wreq):
+    """The parser's next mode, one-hot, and its field's bit count: the entered mode's width once a field is done, else
+    the count less the bit consumed."""
+    keep = done.inv()
+    m_new = [_x(C.AND(md[name], keep) if name != "PAD" else md[name], enter.get(name, ZERO)) for name in MODES]
+
+    groups = [(("NRW", "NSW", "WLEN", "WREL", "WSRC", "IDW"), const_bits(6, 6)), (("NRV", "NSV", "IDV"), v6),
+              (("IDB",), const_bits(8, 6)), (("PL", "OL", "RS", "RN", "RH", "SN"), st["wlen"]),
+              (("FIN", "RK", "RP"), const_bits(1, 6)), (("RC", "RR", "SR"), wreq), (("SC",), st["wsrc"]),
+              (("REL",), st["wrel"])]
+    width = [ZERO] * 6
+    for names, w in groups:
+        g = _x(*(enter[n] for n in names))
+        width = [a ^ C.AND(g, x) for a, x in zip(width, w)]
+    return m_new, mux(C, done, width, _dec_if(C, st["cnt"], consume))
+
+
+def _load(C, cond, new, old):
+    return mux(C, cond, _pad(new, len(old)), old)
+
+
+def _seen(C, st: dict, md: dict, first_bit, b) -> dict:
+    """The flags of a nonzero top bit in a length, release or source-count field: the widths' minimality."""
+    grp_len = _x(md["PL"], md["OL"], md["RS"], md["RN"], md["RH"], md["SN"])
+    top = C.AND(first_bit, b)
+    out = {}
+    for flag, sel in (("seen_len", grp_len), ("seen_rel", md["REL"]), ("seen_src", md["SC"])):
+        f = st[flag][0]
+        t = C.AND(top, sel)
+        out[flag] = [f ^ t ^ C.AND(f, t)]
+    return out
+
+
 def _bit_step(C, Z, st: dict, b, pos):
     """One bit through the parser: the next state and the event it ends (an emit bit, then the event's fields)."""
     W = Z.W
@@ -292,15 +334,7 @@ def _bit_step(C, Z, st: dict, b, pos):
     val_one = C.AND(val_hz.inv(), val[0])
     bad = []  # bits that refuse
 
-    nm1, nz_borrow = sub(C, st["nreq"], [ONE], W)
-    therm = []
-    acc_or = ZERO
-    for j in reversed(range(W)):
-        acc_or = acc_or ^ nm1[j] ^ C.AND(acc_or, nm1[j])
-        therm.append(acc_or)
-    therm = [C.AND(t, nz_borrow.inv()) for t in reversed(therm)]  # therm[j]: w_req > j
-    wreq = [_x(*therm[(1 << i) - 1::1 << i]) for i in range(6)]  # bit i of a count c: the parity of #{m ≥ 1: m·2^i ≤ c}
-    wreq_nz = therm[0]
+    wreq, wreq_nz = _wreq(C, st["nreq"], W)
     wlen_nz, wrel_nz, wsrc_nz = (or_reduce(C, st[k]) for k in ("wlen", "wrel", "wsrc"))
     nreq_nz, steps_nz = or_reduce(C, st["nreq"]), or_reduce(C, st["steps"])
 
@@ -383,21 +417,8 @@ def _bit_step(C, Z, st: dict, b, pos):
         "SC": C.AND(sources_start, wsrc_nz), "SR": C.AND(src_start, wreq_nz),
         "SN": _x(C.AND(src_start, wreq_nz.inv()), D["SR"]), "REL": enter_rel, "PAD": _x(pad_ok, pad_fail),
     }
-    keep = done.inv()
-    m_new = [_x(C.AND(md[name], keep) if name != "PAD" else md[name], enter.get(name, ZERO)) for name in MODES]
-
-    groups = [(("NRW", "NSW", "WLEN", "WREL", "WSRC", "IDW"), const_bits(6, 6)), (("NRV", "NSV", "IDV"), v6),
-              (("IDB",), const_bits(8, 6)), (("PL", "OL", "RS", "RN", "RH", "SN"), st["wlen"]),
-              (("FIN", "RK", "RP"), const_bits(1, 6)), (("RC", "RR", "SR"), wreq), (("SC",), st["wsrc"]),
-              (("REL",), st["wrel"])]
-    width = [ZERO] * 6
-    for names, w in groups:
-        g = _x(*(enter[n] for n in names))
-        width = [a ^ C.AND(g, x) for a, x in zip(width, w)]
-    cnt_new = mux(C, done, width, _dec_if(C, st["cnt"], consume))
-
-    def load(cond, new, old):
-        return mux(C, cond, _pad(new, len(old)), old)
+    m_new, cnt_new = _next_mode(C, st, md, enter, done, consume, v6, wreq)
+    load = partial(_load, C)
 
     new = dict(st)
     new["rem"] = _dec_if(C, st["rem"], live)
@@ -415,12 +436,7 @@ def _bit_step(C, Z, st: dict, b, pos):
     new["wlen"] = load(D["WLEN"], v6, st["wlen"])
     new["wrel"] = load(D["WREL"], v6, st["wrel"])
     new["wsrc"] = load(D["WSRC"], v6, st["wsrc"])
-    grp_len = _x(md["PL"], md["OL"], md["RS"], md["RN"], md["RH"], md["SN"])
-    top = C.AND(first_bit, b)
-    for flag, sel in (("seen_len", grp_len), ("seen_rel", md["REL"]), ("seen_src", md["SC"])):
-        f = st[flag][0]
-        t = C.AND(top, sel)
-        new[flag] = [f ^ t ^ C.AND(f, t)]
+    new.update(_seen(C, st, md, first_bit, b))
     new["F"] = F_new
     new["A"] = load(D["PL"] ^ D["RS"], val, st["A"])
     new["B"] = load(D["RN"], val, st["B"])
