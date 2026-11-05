@@ -38,6 +38,8 @@ public import Proofs.Flock.ZkAny.RelayCount
 public import Proofs.Flock.ZkAny.RelaySame
 public import Proofs.Flock.ZkAny.RelayPrior
 public import Proofs.Flock.ZkAny.RelayLast
+public import Proofs.Flock.ZkAny.RelayGap
+public import Proofs.Flock.ZkAny.RelayAlg
 
 /-! Zero knowledge at any values: the generic forms, a table's and a release of `J` tables behind the ZK server's
 checks, the ZK server's check as the gate a table's file leaves behind, a release at coins it refuses, the release
@@ -66,6 +68,9 @@ configuration kept, and a round's count its frame's schedule's where it is the p
 round of a rep to the same rep's next, the rep's frame at the model's configuration, masking state and words, keeping
 its schedule so far, its round in that schedule's place; and at a rep 1 stream's first round the readied frame its run
 on rep 0's algebraic-phase words, at the model's state for that round; and after a rep's round, whichever rep's
-round comes next, its frame its run, holding the history's words for its rounds so far and keeping its schedule. -/
+round comes next, its frame its run, holding the history's words for its rounds so far and keeping its schedule; and
+after a stream's last round, until the next stream's first, the rep's frame kept, holding the history's words for all
+the stream's rounds, as many as its count; and on a frame with no scheduled rounds yet, its algebraic phase as many
+rounds as the placeholder's. -/
 
 @[expose] public section
