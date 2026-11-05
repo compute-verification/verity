@@ -31,7 +31,9 @@ check allows, one `SOURCE -> TARGET` a line, and only shrinks: an edge it doesn'
 public module instead, move the lemma, or ask to move a file across), then `--prune`. A listed edge no tree has is reported,
 not refused: one list serves every checkout the landing queue holds, and an edge one of them cut another may still have.
 Lists of files a manifest builds (a lakefile's `roots`, the workspace's `members`) are not edges: the export keeps the
-public entries.
+public entries. A path `require`, an extra's entry and a dependency group's (`EXPORT_CUTS`) are edges the export's
+manifest rewrite drops: closed by the export, not open, so the list holds none of them, while `public_export.py --build`
+still builds what it copies without them.
 """
 from __future__ import annotations
 
@@ -176,8 +178,12 @@ class Boundary(NamedTuple):
 
 #: the files whose needs are read: what else a public file holds (data, docs, Rust) needs nothing of the tree here
 PARSED = (".lean", ".py", ".sh", ".bash", "lakefile.toml", "pyproject.toml")
-#: the kinds of edge: what in the source needs the target
-KINDS = frozenset({"lean import", "lake require", "python import", "python dependency", "path", "command", "package"})
+#: the kinds of edge: what in the source needs the target (`python extra`: an extra's or a dependency group's entry)
+KINDS = frozenset({"lean import", "lake require", "python import", "python dependency", "python extra", "path", "command",
+                   "package"})
+#: the kinds the export's manifest rewrite drops (`public_export.py`): closed by the export, not open, while its build of
+#: what it copies still passes
+EXPORT_CUTS = frozenset({"lake require", "python extra"})
 
 
 class Edge(NamedTuple):
@@ -484,13 +490,14 @@ class Tree:
         _, dists, _, _ = self.python
         out = [Edge(f, t, 1, "package", "the workspace's") for t in ("pyproject.toml", "uv.lock") if t in self.files and t != f]
         project = doc.get("project", {})
-        reqs = [*project.get("dependencies", []), *(r for rs in project.get("optional-dependencies", {}).values() for r in rs),
-                *(r for rs in doc.get("dependency-groups", {}).values() for r in rs if isinstance(r, str))]
+        reqs = [*((r, "python dependency") for r in project.get("dependencies", [])),
+                *((r, "python extra") for rs in project.get("optional-dependencies", {}).values() for r in rs),
+                *((r, "python extra") for rs in doc.get("dependency-groups", {}).values() for r in rs if isinstance(r, str))]
         text = self.text(f)
-        for r in reqs:
+        for r, kind in reqs:
             if (t := dists.get(_requirement_name(r))) is not None and t != f:
                 at = text.find(f'"{r}"')
-                out.append(Edge(f, t, text.count("\n", 0, at) + 1 if at >= 0 else 1, "python dependency", r))
+                out.append(Edge(f, t, text.count("\n", 0, at) + 1 if at >= 0 else 1, kind, r))
         for name, entry in project.get("scripts", {}).items():
             if isinstance(entry, str):
                 at = text.find(f'"{entry}"')
@@ -529,7 +536,7 @@ class Tree:
             w.close()
 
     def edges(self, f: str) -> list[Edge]:
-        """What ``f`` needs, each target once with its first site."""
+        """What ``f`` needs, each target once with its first site, one the export's rewrite doesn't cut if it has one."""
         if f not in self._edges:
             name = f.rpartition("/")[2]
             got = (self._lean(f) if f.endswith(".lean") else self._lakefile(f) if name == "lakefile.toml"
@@ -537,7 +544,8 @@ class Tree:
                    else self._shell(f) if f.endswith((".sh", ".bash")) else [])
             first: dict[str, Edge] = {}
             for e in got:
-                if e.target != f and e.target not in first:
+                if e.target != f and (e.target not in first or first[e.target].kind in EXPORT_CUTS
+                                      and e.kind not in EXPORT_CUTS):
                     first[e.target] = e
             self._edges[f] = sorted(first.values(), key=lambda e: (e.line, e.target))
         return self._edges[f]
@@ -546,7 +554,10 @@ class Tree:
 class Judgment(NamedTuple):
     #: {public file: why it is public: its group, or the entry that pulled it in}
     public: dict[str, str]
+    #: the open edges
     edges: list[Edge]
+    #: the edges of a kind the export's rewrite drops (`EXPORT_CUTS`)
+    cut: list[Edge] = []
 
 
 def judge(tree: Tree, boundary: Boundary) -> Judgment:
@@ -593,7 +604,7 @@ def judge(tree: Tree, boundary: Boundary) -> Judgment:
     close(sorted(closed))
     edges = [e for f in sorted(why) for e in tree.edges(f)
              if not (e.target in why if e.target in tree.files else any(t in why for t in tree.under(e.target)))]
-    return Judgment(why, edges)
+    return Judgment(why, [e for e in edges if e.kind not in EXPORT_CUTS], [e for e in edges if e.kind in EXPORT_CUTS])
 
 
 def drags(tree: Tree, boundary: Boundary, judgment: Judgment, target: str) -> tuple[set[str], set[str]]:
@@ -665,7 +676,8 @@ def main(argv: list[str] | None = None) -> int:
                         "edges": [e._asdict() | {"private": boundary.is_private(e.target),
                                                  "group": j.public[e.source].split(":")[0],
                                                  "moves": sorted(moved[e.target][0]),
-                                                 "blocked_by": sorted(moved[e.target][1])} for e in j.edges]})
+                                                 "blocked_by": sorted(moved[e.target][1])} for e in j.edges],
+                        "cut_by_export": [e._asdict() | {"group": j.public[e.source].split(":")[0]} for e in j.cut]})
         print(json.dumps(out, indent=1))
         return 0
     if ns.all:
@@ -673,10 +685,13 @@ def main(argv: list[str] | None = None) -> int:
             by: dict[str, list[Edge]] = defaultdict(list)
             for e in j.edges:
                 by[j.public[e.source].split(":")[0]].append(e)
-            print(f"{t.root}: {len(j.public)} public files, {len(j.edges)} edges")
+            print(f"{t.root}: {len(j.public)} public files, {len(j.edges)} edges, {len(j.cut)} more the export's rewrite cuts")
             for g, es in sorted(by.items()):
                 print(f"\n{g}: {len(es)}")
                 print("\n".join(f"  {e}" for e in es))
+            if j.cut:
+                print(f"\ncut by the export's rewrite (closed while its build passes): {len(j.cut)}")
+                print("\n".join(f"  {e}" for e in j.cut))
         return 0
     allowed_set = set(allowed)
     new = [e for _, j in judged for e in j.edges if e.key not in allowed_set]

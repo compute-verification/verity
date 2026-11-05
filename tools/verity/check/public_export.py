@@ -10,8 +10,9 @@ manifest's entry that names what the export doesn't copy is dropped: a lakefile'
 `require`s (with their `lake-manifest.json` entries), and each pyproject's members, sources, conflicts, extras, dependency
 groups and test paths. A `[project] dependencies` entry stays, and so does the source of a distribution one still needs. Each
 rewrite must read, as TOML or JSON, as the old manifest less exactly those entries. A path `require`, an extra's entry and a
-dependency group's are edges the check reports, which the export cuts this way; every other edge it copies as it stands, so
-a build of DEST fails where a file imports, runs or reads one the export doesn't copy.
+dependency group's are the edges the check counts closed by the export (`EXPORT_CUTS`), and the export fails if its rewrite
+kept one; every other edge it copies as it stands, so a build of DEST fails where a file imports, runs or reads one the
+export doesn't copy.
 
 The report gives:
 
@@ -366,11 +367,16 @@ def export(tree, boundary, judgment, dest: Path) -> dict:
             rewrites[f] = dropped
         if name == "lakefile.toml":
             targets[here or "."] = lean_targets(new, here, tomllib.loads(old), copied)
-    cut = [e for e in judgment.edges
-           if e.kind == "lake require" and ("require", e.what) in rewrites.get(e.source, [])
-           or e.kind == "python dependency"
-           and any(k.startswith(("dependency-groups.", "optional-dependencies.")) and v == e.what
-                   for k, v in rewrites.get(e.source, []))]
+    def dropped(e) -> bool:
+        if e.kind == "lake require":
+            return ("require", e.what) in rewrites.get(e.source, [])
+        return any(k.startswith(("dependency-groups.", "optional-dependencies.")) and v == e.what
+                   for k, v in rewrites.get(e.source, []))
+
+    if kept := [e for e in judgment.cut if not dropped(e)]:
+        raise ValueError("public_export: the boundary counts these edges cut by the export, but its rewrite kept them: "
+                         + "; ".join(map(str, kept)))
+    cut = judgment.cut
     symlinks = sorted(f for f in PB._git_files(tree.root) if (tree.root / f).is_symlink()
                       and boundary.group(f) is not None and not boundary.is_private(f))
     git = ["git", "-c", "user.name=verity-export", "-c", "user.email=export@invalid", "-c", "commit.gpgsign=false"]
@@ -606,7 +612,7 @@ def main(argv: list[str] | None = None) -> int:
         ns.report.parent.mkdir(parents=True, exist_ok=True)
         ns.report.write_text(json.dumps(report, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
     print(f"public_export: {report['copied']} files from {source[:10]} into {dest} ({report['commit'][:10]}); "
-          f"{report['edges']} edges, {len(report['edges_cut'])} cut by the rewrites")
+          f"{report['edges']} open edges, {len(report['edges_cut'])} more cut by the rewrites")
     for f, dropped in report["rewrites"].items():
         print(f"  {f}: dropped {len(dropped)} ({', '.join(dropped[:6])}{', ...' if len(dropped) > 6 else ''})")
     lt = report["lean_targets"]

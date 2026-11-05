@@ -78,7 +78,9 @@ TREE = {
                                   '[tool.hatch.build.targets.wheel]\npackages = ["privpkg"]\n'),
     "tools/priv/privpkg/__init__.py": "def main():\n    pass\n",
     "tools/priv/data.json": "{}\n",
+    "tools/privbench/pyproject.toml": '[project]\nname = "privbench"\n',
     "verity/pub/pyproject.toml": ('[project]\nname = "pub"\ndependencies = ["privtool>=1"]\n'
+                                  '[project.optional-dependencies]\nbench = ["privtool", "privbench"]\n'
                                   '[project.scripts]\npub-run = "privpkg:main"\n'),
     "verity/pub/imports.py": "import json\nimport privpkg\n",
     "verity/pub/reads.py": "from pathlib import Path\n\nDATA = Path(__file__).resolve().parents[2] / 'tools' / 'priv' / 'data.json'\n",
@@ -111,7 +113,6 @@ def judged(tmp_path: Path):
 
 @pytest.mark.parametrize(("source", "kind", "target"), [
     ("verity/pub/Pub.lean", "lean import", "tools/priv/Priv.lean"),
-    ("verity/pub/lakefile.toml", "lake require", "tools/priv/lakefile.toml"),
     ("verity/pub/imports.py", "python import", "tools/priv/privpkg/__init__.py"),
     ("verity/pub/pyproject.toml", "python dependency", "tools/priv/pyproject.toml"),
     ("verity/pub/pyproject.toml", "python import", "tools/priv/privpkg/__init__.py"),
@@ -124,6 +125,18 @@ def judged(tmp_path: Path):
 def test_each_kind_of_need_is_an_edge(judged, source: str, kind: str, target: str) -> None:
     _, _, j = judged
     assert (source, kind, target) in {(e.source, e.kind, e.target) for e in j.edges}, "\n".join(map(str, j.edges))
+
+
+def test_what_the_exports_rewrite_drops_is_cut_not_open(judged) -> None:
+    """A path `require` and an extra's entry are edges the export drops from the manifest, so they count as closed by it;
+    a target the file also needs another way stays open."""
+    _, _, j = judged
+    assert {(e.source, e.kind, e.target) for e in j.cut} == {
+        ("verity/pub/lakefile.toml", "lake require", "tools/priv/lakefile.toml"),
+        ("verity/pub/pyproject.toml", "python extra", "tools/privbench/pyproject.toml")}
+    assert not [e for e in j.edges if e.kind in PB.EXPORT_CUTS]
+    assert ("verity/pub/pyproject.toml", "python dependency", "tools/priv/pyproject.toml") in {
+        (e.source, e.kind, e.target) for e in j.edges}
 
 
 def test_needed_files_follow_their_entry(judged) -> None:
@@ -378,10 +391,22 @@ def test_the_export_is_one_fresh_commit_of_the_public_set(judged, tmp_path_facto
 
     assert sorted(git("ls-files")) == sorted(j.public)
     assert git("rev-list", "--count", "HEAD") == ["1"]
-    assert got["rewrites"] == {"verity/pub/lakefile.toml": ["require priv"]}
-    assert [e.split(": ", 1)[1] for e in got["edges_cut"]] == ["lake require priv -> tools/priv/lakefile.toml"]
+    assert got["rewrites"] == {"verity/pub/lakefile.toml": ["require priv"],
+                               "verity/pub/pyproject.toml": ["optional-dependencies.bench privtool",
+                                                             "optional-dependencies.bench privbench"]}
+    assert [e.split(": ", 1)[1] for e in got["edges_cut"]] == ["lake require priv -> tools/priv/lakefile.toml",
+                                                               "python extra privbench -> tools/privbench/pyproject.toml"]
     assert got["lean_targets"]["verity/pub"]["modules"] == ["Pub"]
     assert "priv" not in (dest / "verity/pub/lakefile.toml").read_text(encoding="utf-8")
+
+
+def test_the_export_refuses_an_edge_counted_cut_that_its_rewrite_kept(judged, tmp_path_factory, monkeypatch) -> None:
+    """The boundary counts a lake `require` or an extra's entry closed only because the export drops it; an export that kept
+    one fails rather than ship the edge."""
+    root, tree, j = judged
+    monkeypatch.setattr(PE, "rewrite_lakefile", lambda text, here, copied: (text, []))
+    with pytest.raises(ValueError, match="rewrite kept them: .*lake require priv"):
+        PE.export(tree, PE.PB.Boundary.load(root / "boundary.toml"), j, tmp_path_factory.mktemp("export"))
 
 
 def test_the_export_refuses_a_destination_it_would_overwrite(tmp_path: Path) -> None:
