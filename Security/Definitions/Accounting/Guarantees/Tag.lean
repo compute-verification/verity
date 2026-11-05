@@ -5,7 +5,7 @@ import Definitions.Accounting.Tag.PolyHash
 # The block tags' statements (trusted)
 
 The tag of the bandwidth audit's uncertified fast check (`gf31-poly/v1`): the keyed polynomial hash over
-`GF(2^31 − 1)` of `benchmarks/pous/hbm_audit/digest.py` (`Security/Definitions/Accounting/Tag/PolyHash.lean`). None of
+`GF(2^31 − 1)` (`Security/Definitions/Accounting/Tag/PolyHash.lean`). None of
 these statements certifies bandwidth: the bandwidth audit's guarantee rests on a random oracle's tag
 (`Bandwidth.Guarantees.AuditRO`). They are inputs to a possible version in the joint model, under a capacity bound.
 
@@ -21,7 +21,7 @@ these statements certifies bandwidth: the bandwidth audit's guarantee rests on a
 * `FoldNonCollision`: changing the list of block hashes (dropping, altering, reordering or inserting one) changes the
   fold except with probability at most `(n − 1)/p` over a uniform `z`, `n` the longer list's length.
 * `DigestNonCollision`: the two together, over a uniform `(g, z)`.
-* `HornerIsBlockHash`: `reference_block_hash`'s Horner loop computes `blockHash`.
+* `HornerIsBlockHash`: Horner's loop (`hornerHash`) computes `blockHash`.
 
 Each takes no hypothesis: a condition on its inputs (the blocks differ, the lists differ) is part of the event it
 bounds. The proofs are in `Security/Proofs/Accounting/Tag/`.
@@ -42,9 +42,8 @@ def PolyNonCollision : Prop :=
       ((W - 1 : ℕ) : ℝ≥0∞) / P
 
 /-- **Non-collision at any key distribution.** As `PolyNonCollision`, with the key drawn from any distribution `ν` on
-`GF(p)`: the probability is at most `W − 1` times `ν`'s largest point mass. `lane_points` in `digest.py` draws
-`g ∈ [2, p − 1]` from a uniform 31-bit value, three points twice as likely as the rest, so its largest point mass is
-`2^-30`. -/
+`GF(p)`: the probability is at most `W − 1` times `ν`'s largest point mass. A key `g ∈ [2, p − 1]` taken from a
+uniform 31-bit value has three points twice as likely as the rest, so its largest point mass is `2^-30`. -/
 def PolyNonCollisionKeyed : Prop :=
   ∀ (W : ℕ) (ν : PMF (ZMod P)) (x y : Chunk W),
     prob ν (fun g => residues x ≠ residues y ∧ blockHash g x = blockHash g y) ≤ ((W - 1 : ℕ) : ℝ≥0∞) * ⨆ g, ν g
@@ -97,8 +96,8 @@ def DigestNonCollision : Prop :=
         (fun k => (∃ r, residues (xs r) ≠ residues (ys r)) ∧ digest k.1 k.2 xs = digest k.1 k.2 ys) ≤
       ((W - 1 + (R - 1) : ℕ) : ℝ≥0∞) / P
 
-/-- **The reference computes the hash.** `reference_block_hash`'s loop, `acc ← acc · g + (w mod p)` over the block's words
-in order from `acc = 0` (`hornerHash`), returns `blockHash g x`. -/
+/-- **Horner's loop computes the hash.** The loop `acc ← acc · g + (w mod p)` over the block's words in order from
+`acc = 0` (`hornerHash`) returns `blockHash g x`. -/
 def HornerIsBlockHash : Prop :=
   ∀ (W : ℕ) (g : ZMod P) (x : Chunk W), hornerHash g (List.ofFn x) = blockHash g x
 
