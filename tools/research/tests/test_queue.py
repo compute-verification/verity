@@ -390,9 +390,9 @@ def test_a_pr_the_last_sync_left_out_is_tried_above_the_rest_so_a_sync_with_noth
     first = (3, 1, 4)
     members, entries = world.queue(first=first).sync()
     assert [m.pr for m in members] == [2, 1] and entries[3].state == "refused" and entries[4].state == "waiting"
-    for _ in range(2):
+    for reused in ("", ", merges reused for 1"):        # #3 tried above the rest, then that conflict taken from its record
         again, entries = world.queue(first=first).sync()
-        assert [m.commit for m in again] == [m.commit for m in members] and world.logs[-1].endswith("kept 2, merged 0")
+        assert [m.commit for m in again] == [m.commit for m in members] and world.logs[-1].endswith(f"kept 2, merged 0{reused}")
         assert entries[3].state == "refused" and entries[4].state == "waiting"
     world.gh.put(3, world.change({"c.txt": "3 on main\n"}))                                       # fixed: first again
     members, entries = world.queue(first=first).sync()
