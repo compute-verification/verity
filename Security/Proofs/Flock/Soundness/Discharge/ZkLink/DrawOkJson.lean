@@ -23,6 +23,8 @@ trees that `ofJson` reads alike.
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace FlockSoundness.Discharge.ZkLink
 
