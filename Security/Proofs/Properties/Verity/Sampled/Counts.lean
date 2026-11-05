@@ -114,10 +114,10 @@ theorem round_counted {trees : Array LoggedTree} {record : Json} {stream : Strin
     · exact fun _ => ⟨(), rfl⟩
   by_cases hsess : (stream == TREE_SESSION && k == 0) = true
   · unfold recordCount at hn
-    rw [if_pos hsess, hr] at hn
+    rw [ite_eq_left hsess, hr] at hn
     have hcount : cs.size / 16 = n := by simpa using hn
     unfold Verity.Sampled.recordRound at hr
-    rw [if_pos hsess] at hr
+    rw [ite_eq_left hsess] at hr
     simp only [Bool.and_eq_true, beq_iff_eq] at hsess
     obtain ⟨rfl, rfl⟩ := hsess
     rw [hps] at hr
@@ -126,11 +126,11 @@ theorem round_counted {trees : Array LoggedTree} {record : Json} {stream : Strin
     simp only [Bool.and_eq_true, beq_iff_eq] at hlinkOk
     exact ⟨o, hlo, hlinkOk.1.1.trans hcount, hlinkOk.2⟩
   · unfold recordCount at hn
-    rw [if_neg hsess] at hn
+    rw [ite_eq_right hsess] at hn
     rw [hst] at hn
     dsimp only at hn
     unfold Verity.Sampled.recordRound at hr
-    rw [if_neg hsess] at hr
+    rw [ite_eq_right hsess] at hr
     rw [hst] at hr
     dsimp only at hr
     obtain ⟨x, hx, hr⟩ := Option.bind_eq_some_iff.1 hr
