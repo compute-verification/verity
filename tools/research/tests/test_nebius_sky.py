@@ -1004,7 +1004,7 @@ def test_the_store_eviction_keeps_the_fixture_registry_of_the_newest_shipped_tre
 def test_retention_gc_runs_hourly_on_the_nodes_outside_a_timed_window(tmp_path):
     """Nothing applied the retention policy on a schedule: on 19 Oct 06:40Z node 2 sat at 80% with 3.5 TiB collectable, and the
     fill runner held every queued run (ci's gates among them) until infra ran `research retention gc` by hand. It reads the node's
-    store, whose catalog records what custody verified on the remote: without it gc kept every preserved path (3 Nov)."""
+    store, whose catalog records what custody verified on the remote: without it gc keeps every preserved path."""
     import subprocess
     unit, timer = (SKY / "retention_gc.service").read_text(), (SKY / "retention_gc.timer").read_text()
     assert "User=research\n" in unit and "python3 -m research retention gc --apply'" in unit and "OnUnitActiveSec=1h\n" in timer

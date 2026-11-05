@@ -567,7 +567,7 @@ def store_check(store_root: str | None = None) -> Callable[[str, Path], str | No
     `preserved.check` in head mode finds it PRESERVED (remote sizes, and the single-part ETag against the local blob's MD5 where
     the blob is here, else a read-back; `LocalStore.verify` would read back every blob). None when both hold, else why not.
     Without a usable remote (a node holds no store key) it is `recorded` mode: the remote replica the store's catalog verified
-    when custody pushed it, which is what the store eviction trusts too (cpu-4, n1 and n2 on 3 Nov: every expired run skipped)."""
+    when custody pushed it, which is what the store eviction trusts too (without it, a node skips every expired run)."""
     st = None
 
     def chk(art: str, path: Path) -> str | None:
