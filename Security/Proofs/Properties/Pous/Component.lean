@@ -5,6 +5,7 @@ public import Proofs.Properties.Pous.RunAt
 public import Proofs.Properties.Pous.MemoryChallenger
 public import Proofs.Properties.CertifierDevice.Lms
 public import Mathlib.Tactic.SplitIfs
+public import Proofs.Core.QSort
 import all Init.Data.Array.QSort.Basic
 import all Init.Data.String.Defs
 import all Lean.Data.Json.Basic
@@ -15,7 +16,6 @@ import all Init.Data.List.Control
 import all Init.Data.Range.Basic
 import all Init.Data.Int.Repr
 import all Init.Data.Repr
-public import Proofs.Core.QSort
 
 /-!
 # Proofs of PoUS's and the wipe's component statements (`Properties.Pous.Component`)

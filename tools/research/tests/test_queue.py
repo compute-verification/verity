@@ -26,7 +26,7 @@ import research.queue as Q
 from research.cli import _custody_ttl_problem, main as research_main
 from research.pods.nebius import slot_only
 from research.queue import (DRIVE_FLAGS, PR, PREFLIGHT_BUDGET_S, SHADOW_BRANCH, Queue, QueueError, Rules, conflicting_files,
-                            credential_args, label_target)
+                            credential_args, deleted_names, label_target)
 from research.store import ids, labels_sync, vocab
 from research.store.local import LocalStore
 from research.store.model import Label
@@ -693,40 +693,67 @@ def test_a_rebuild_that_changes_a_file_a_members_change_touches_preflights_that_
     assert world.logs[-1].endswith("preflights' verdicts reused for 1"), world.logs[-1]
 
 
-def test_a_pass_stands_across_no_base_that_changes_what_the_checks_run_or_deletes_a_path_nor_for_a_change_that_deletes_one(world):
-    """What `Preflight.onto` can't judge from the change's own files: a base that changed what its checks run (a test of
-    `PREFLIGHT_RULES`), one that deleted a path the change may name, and a change that deletes a path the base may name.  Each
-    preflights again."""
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
+def test_a_pass_stands_across_no_base_that_deletes_a_path_its_change_names_nor_for_a_change_that_deletes_one(world):
+    """What `Preflight.onto` can't judge from the change's own files: a change that deletes a path the base may name, and a base
+    that deleted a path a file the change writes names (`Queue._names_deleted`).  Each preflights again.  A member keeps its pass
+    across a base that changed what the checks run (a test of `PREFLIGHT_RULES`), and across a deletion no file of its change
+    names."""
+    world.gh.put(1, world.change({"a.txt": "names c.txt\n"}))
     world.gh.put(2, world.change({"b.txt": None}))
+    world.gh.put(3, world.change({"d.txt": "3\n"}))
+    q = world.queue()
+    q.preflight, calls = _sync_preflight({})
+    assert [m.pr for m in q.sync()[0]] == [1, 2, 3] and sorted(n for n, _ in calls) == [1, 2, 3]
+    _move_main(world, RELOCKED)
+    assert [m.pr for m in q.sync()[0]] == [1, 2, 3] and [n for n, _ in calls[3:]] == [2], world.logs
+    _move_main(world, {"tests/test_pins.py": "def test_no_pin_is_stale():\n    pass\n"})
+    assert [m.pr for m in q.sync()[0]] == [1, 2, 3] and [n for n, _ in calls[4:]] == [2], world.logs
+    _move_main(world, {"c.txt": None})
+    assert [m.pr for m in q.sync()[0]] == [1, 2, 3] and sorted(n for n, _ in calls[5:]) == [1, 2], world.logs
+
+
+def test_a_pr_entering_next_is_preflighted_under_checks_that_changed_since_its_pass(world):
+    """Only a member keeps its pass across a change to what the checks run: a PR out of `next` (here unmarked, then marked again
+    at the same head) whose newest pass is onto a base from before such a change is preflighted again as it enters."""
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, two := world.change({"d.txt": "2\n"}))
     q = world.queue()
     q.preflight, calls = _sync_preflight({})
     assert [m.pr for m in q.sync()[0]] == [1, 2] and sorted(n for n, _ in calls) == [1, 2]
-    _move_main(world, RELOCKED)
+    world.gh.ready.discard((2, two))
+    assert [m.pr for m in q.sync()[0]] == [1] and len(calls) == 2, world.logs
+    _move_main(world, {"tests/test_doc_paths.py": "def test_every_doc_path_exists():\n    pass\n"})
+    world.gh.ready.add((2, two))
     assert [m.pr for m in q.sync()[0]] == [1, 2] and [n for n, _ in calls[2:]] == [2], world.logs
-    _move_main(world, {"tests/test_pins.py": "def test_no_pin_is_stale():\n    pass\n"})
-    assert [m.pr for m in q.sync()[0]] == [1, 2] and sorted(n for n, _ in calls[3:]) == [1, 2], world.logs
-    _move_main(world, {"c.txt": None})
-    assert [m.pr for m in q.sync()[0]] == [1, 2] and sorted(n for n, _ in calls[5:]) == [1, 2], world.logs
+
+
+def test_a_deleted_path_is_named_by_its_file_name_and_by_its_directory_and_stem_as_a_path_and_a_module():
+    """`deleted_names`: the forms `Queue._names_deleted` looks for in the files a change writes."""
+    assert deleted_names("tools/verity/circuit_check/known.py") == {"known.py", "circuit_check/known", "circuit_check.known"}
+    assert deleted_names("Security/Proofs/Flock/Claims/Recursion/KappaEpsTight.lean") == {
+        "KappaEpsTight.lean", "Recursion/KappaEpsTight", "Recursion.KappaEpsTight"}
+    assert deleted_names("tools/verity/foo/__init__.py") == {"foo/", "verity/foo", "verity.foo"}
+    assert deleted_names("README.md") == {"README.md"}
 
 
 def test_a_pass_stands_from_the_base_the_member_had_on_next_though_the_saved_state_sorts_its_records_by_hash(world):
     """The state is saved with its keys sorted, so a head's preflight records come back in the order of their bases' hashes, not
-    of time.  Here the newest by position is of the first base, below a change to what the checks run.  The pass onto the base
-    the member had on `next` is read first (`Queue._next_base`), and a later move of `main` that changes nothing the checks
-    run keeps it."""
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    of time.  Here the newest by position is of the first base, above which `main` deleted a path the change names.  The pass
+    onto the base the member had on `next` is read first (`Queue._next_base`), and a later move of `main` that deletes nothing
+    keeps it."""
+    world.gh.put(1, world.change({"a.txt": "names c.txt\n"}))
     q = world.queue()
     q.preflight, calls = _sync_preflight({})
     assert [m.pr for m in q.sync()[0]] == [1] and len(calls) == 1
     first = _git(world.origin, "rev-parse", "main^{tree}")
+    _move_main(world, {"c.txt": None})
     for i in range(64):                                     # a base whose tree sorts below the first one's
-        moved = _move_main(world, {"tests/test_pins.py": f"# {i}\n"})
+        moved = _move_main(world, {"pad.txt": f"# {i}\n"})
         if _git(world.origin, "rev-parse", f"{moved}^{{tree}}") < first:
             break
     assert _git(world.origin, "rev-parse", "main^{tree}") < first
     assert [m.pr for m in q.sync()[0]] == [1] and len(calls) == 2, world.logs
-    _move_main(world, {"c.txt": "moved\n"})
+    _move_main(world, {"d.txt": "moved\n"})
     assert [m.pr for m in q.sync()[0]] == [1] and len(calls) == 2, world.logs
     assert world.logs[-1].endswith("preflights' verdicts reused for 1"), world.logs[-1]
 
@@ -1094,6 +1121,26 @@ def test_a_landing_gate_left_in_its_directory_still_judges(tmp_path, monkeypatch
     monkeypatch.setattr(os, "rmdir", nfs_rmdir)
     rc, out = run_gate(tmp_path, base, _git(tmp_path, "rev-parse", "HEAD"), "gates/g.py")
     assert rc == 1 and json.loads(out)["failures"][0]["why"] == "touches bad.txt", out
+
+
+def test_a_merged_tree_whose_caller_names_no_root_goes_under_merged_root_not_tmpdir(tmp_path, monkeypatch):
+    """`ported`'s codemod names no root: on drive's control pod its tree went to TMPDIR, a network volume where each worktree add
+    and remove took minutes; --preflight-root (`MERGED_ROOT`) now takes it to the container disk like the preflight's."""
+    import tempfile
+
+    from research import queue
+
+    repo, tmp, fast = tmp_path / "repo", tmp_path / "tmp", tmp_path / "fast"
+    tmp.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp))
+    monkeypatch.setattr(queue, "MERGED_ROOT", fast)
+    _git(tmp_path, "init", "-q", "-b", "main", str(repo))
+    (repo / "f.txt").write_text("x\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "f")
+    with queue.merged_worktree(repo, _git(repo, "rev-parse", "HEAD")) as wt:
+        assert wt.is_relative_to(fast) and (wt / "f.txt").read_text() == "x\n"
+    assert not list(fast.glob(f"{queue.MERGED_PREFIX}*")) and not list(tmp.iterdir())
 
 
 def test_a_pr_a_landing_gate_at_main_refuses_is_left_out_with_its_fix_and_only_the_members_a_sync_merges_are_judged(world, monkeypatch):
@@ -1576,6 +1623,19 @@ def test_the_clone_follows_the_callers_origin_so_a_url_that_stopped_working_does
     members, _ = world.queue().sync()
     assert [m.pr for m in members] == [1]
     assert _git(world.tmp / "q" / "verity", "remote", "get-url", "origin") == str(moved)
+
+
+def test_the_clone_keeps_the_merge_drivers_side_files_of_a_reader_that_let_the_lock_go(world):
+    """`status` and a listing `review` let the queue's lock go once they've fetched, and go on merging in the clone, where git's
+    merge drivers read their sides from `.merge_file_*` at its root.  A command that takes the lock meanwhile cleans the clone:
+    it keeps those, and removes everything else untracked."""
+    q = world.queue()
+    q._clone()
+    side, stray = q.workdir / ".merge_file_Ab12Cd", q.workdir / "stray.txt"
+    side.write_text("a side\n")
+    stray.write_text("left over\n")
+    world.queue()._clone()
+    assert side.read_text() == "a side\n" and not stray.exists()
 
 
 HTTP_BACKEND = Path(subprocess.run(["git", "--exec-path"], capture_output=True, text=True).stdout.strip()) / "git-http-backend"
@@ -2976,6 +3036,26 @@ def test_the_syncs_preflight_runs_no_environment_sync_and_no_lean_build_says_so_
     assert "the checks that ran passed" in said and "nothing refused" not in said, said
     assert entries[3].state == "refused" and "the invariant tests in . fail on the merged tree" in entries[3].why, entries[3].why
     assert not any((world.tmp / "pre").iterdir()) and len(_git(q.workdir, "worktree", "list").splitlines()) == 1
+
+
+def test_the_syncs_preflight_leaves_the_secret_literal_scan_to_the_after_landing_check(world):
+    """The sync's preflight deselects `PREFLIGHT_DESELECT`, the secret-like literal scan: no merge fails it that neither side
+    does, and it took four preflights at once on the control pod past their 45 s before the doc paths reported.  A merge that
+    trips only the scan enters `next`, saying the scan was skipped; one that breaks another test of the same file is refused."""
+    repository = (_invariant("REPORT_GENRE_NAME", 1) + "\n\ndef test_no_secret_like_literals():\n"
+                  "    assert not (Path(__file__).resolve().parents[1] / 'SECRET_LIKE').exists()\n")
+    _preflight_main(world, {"tests/test_repository.py": repository})
+    world.gh.put(2, world.change({"SECRET_LIKE": "", "n2.txt": "x\n"}))
+    world.gh.put(3, world.change({"REPORT_GENRE_NAME": "", "n3.txt": "x\n"}))
+    q = world.queue()
+    q.preflight = _preflight(world, repo=q.workdir).onto
+    world.logs.clear()
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [1, 2], world.logs
+    said = next(s for s in world.logs if "preflight: #2 at" in s)
+    assert "`tests/test_repository.py::test_no_secret_like_literals` among it" in said, said
+    assert "the checks that ran passed" in said and "tests:. not checked" not in said, said
+    assert entries[3].state == "refused" and "the invariant tests in . fail on the merged tree" in entries[3].why, entries[3].why
 
 
 def test_ready_mark_from_an_agent_vm_builds_the_lean_it_reaches_on_a_node_refuses_what_none_can_and_skips_a_timeout(
@@ -4460,10 +4540,11 @@ def test_a_lane_line_names_its_handle_without_a_trailing_period():
 
 
 #: a lock as `check.py --update` writes one: F, G and H listed, F frozen, G's two inline premises and H's one, G and H reading M
-PREMISE_LOCK = {"guarantees": {"F": {"type_hash": "f"}, "G": {"owner": "@lean", "type_hash": "g"}, "H": {"type_hash": "h"}},
+PREMISE_LOCK = {"guarantees": {"F": {"type_hash": "f"}, "G": {"owner": "@lean", "signature": ["G : Guarantees.G"], "type_hash": "g"},
+                               "H": {"signature": ["H : Guarantees.H"], "type_hash": "h"}},
         "shape": {"frozen": {"F": "frozen: a game's bound"},
                   "inline": {"G": {"p1": "a membership", "p2": "a bound"}, "H": {"q": "a bound"}}},
-        "reads": {"M": {"definitions": {"Guarantees.G": "1", "Guarantees.H": "2"}, "guarantees": ["G", "H"]}}}
+        "reads": {"M": {"definitions": {"Guarantees.G": "1", "Guarantees.H": "2"}}}}
 
 
 def _lock_text(edit: Callable[[dict], object] = lambda d: None) -> str:
@@ -4483,12 +4564,10 @@ def _lock_files() -> dict[str, str]:
 def _renamed(d: dict) -> None:
     d["guarantees"]["G2"] = d["guarantees"].pop("G")
     d["shape"]["inline"]["G2"] = d["shape"]["inline"].pop("G")
-    d["reads"]["M"]["guarantees"] = ["G2", "H"]
 
 
 def _removed(d: dict) -> None:
     del d["guarantees"]["G"], d["shape"]["inline"]["G"]
-    d["reads"]["M"]["guarantees"] = ["H"]
 
 
 def _rekeyed(d: dict) -> None:
@@ -4557,7 +4636,8 @@ def test_dropped_entries_reads_a_frozen_reason_reworded_at_its_key_as_kept_and_a
 
 def test_dropped_entries_keeps_a_premise_moved_under_a_new_key_and_one_of_a_guarantee_recorded_otherwise():
     """A premise `next` lists under G that the merged lock lists under a key it adds is renamed, and a guarantee whose record
-    (its owner aside) differs was restated; a new owner alone restates nothing."""
+    (its owner aside) differs, or a definition its signature names has another hash, was restated; a new owner alone, or
+    another guarantee's definition rehashed, restates nothing."""
     from research.queue import dropped_entries
 
     def lock(edit: Callable[[dict], object]) -> dict:
@@ -4567,6 +4647,9 @@ def test_dropped_entries_keeps_a_premise_moved_under_a_new_key_and_one_of_a_guar
     assert dropped_entries(base, lock(lambda d: d["shape"]["inline"].update(G2=d["shape"]["inline"].pop("G")))) == []
     assert dropped_entries(base, lock(lambda d: (d["guarantees"]["G"].update(type_hash="g2"),
                                                  d["shape"]["inline"]["G"].pop("p1")))) == []
+    assert dropped_entries(base, lock(_restated)) == [], "G is lifted into Guarantees.G, rehashed"
+    assert dropped_entries(base, lock(lambda d: (d["reads"]["M"]["definitions"].update({"Guarantees.H": "4"}),
+                                                 d["shape"]["inline"]["G"].pop("p1")))) == ["shape.inline[G]: p1"]
     assert dropped_entries(base, lock(lambda d: (d["guarantees"]["G"].update(owner="@proofs"),
                                                  d["shape"]["inline"]["G"].pop("p1")))) == ["shape.inline[G]: p1"]
     long = "∀ (i : Fin n), " + "x" * 80
