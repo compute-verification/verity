@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkBind.At
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkBind.At
 
 /-!
 # The rows at the `--zk` tables, with or without shared rows
@@ -9,6 +11,8 @@ has them (`Flock.Registered.check` refuses a registered port that is not a table
 `Integrate.table_bcSiteS`, and `laySh`, `rowsSh` are the shadow layout and rows `layZAt` and `rsZAtS` move to the
 `--zk` tables, where the registered reads (`Registered.Reads`) are read.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkReg
 

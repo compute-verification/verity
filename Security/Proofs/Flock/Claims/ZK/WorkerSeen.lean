@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.Worker
+module
+
+public import Proofs.Flock.Claims.ZK.Worker
 
 /-!
 # Lemma B at values read from what the workers see
@@ -23,6 +25,8 @@ stays (`swView_fix`), elsewhere it is `shift`. Then level 0's hidden leaves go i
 * `mix_shvzk_hm96`, `fam_sw_shvzk_hm96`: Lemma B in that order, for one table and jointly at `J` tables, whose values
   read every table's seen randomness.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK.Table
 

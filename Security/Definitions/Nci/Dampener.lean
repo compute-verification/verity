@@ -1,4 +1,6 @@
-import Mathlib
+module
+
+public import Mathlib
 
 /-!
 # The compute dampener: the vocabulary
@@ -17,6 +19,8 @@ training FLOP that are counted multiplications at 2 FLOP each, so the compute ef
 * `μ = 2 reuse · R α/(κ d b_w b_a)`, the memory cap at wipe state `R` (`memoryCap`);
 * `χ`, the cheating share.
 -/
+
+@[expose] public section
 
 namespace Nci.Dampener
 

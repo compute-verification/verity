@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.VerdictAssembly
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictAssembly
 
 /-!
 # Row E at the decision, from the `rec-open` pieces' running sums
@@ -22,6 +24,8 @@ proves both facts from the pieces.
 * **Row E and the table's run** (`rowE_of_pieces`, `runs_assembledE`): `rowE_of_units` at these, and `runs_assembled`
   with E's hypotheses replaced by the pieces' and `acc := accE`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Rows
 

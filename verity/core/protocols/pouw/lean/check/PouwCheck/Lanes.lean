@@ -1,6 +1,8 @@
-import PouwCheck.Credit
-import PouwWindow.KnownRows
-import SampledProofs.Produced
+module
+
+public import PouwCheck.Credit
+public import PouwWindow.KnownRows
+public import SampledProofs.Produced
 
 /-!
 # A drawn leaf past the cap verified as its lanes and the combine (`credit.py`'s lanes form)
@@ -20,6 +22,10 @@ of the window's registered values.
 Only the form `LeafLanesSound` covers is verified (`lanesShape`): a 32 × 32 tile, at a K the lane tile check takes, at
 least `LEAST_K`, of one chunk and not J10-R's; any other drawn lanes-form leaf is refused (`lanes-shape`).
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace PouwCheck.Lanes
 

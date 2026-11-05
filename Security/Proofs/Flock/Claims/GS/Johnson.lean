@@ -1,4 +1,6 @@
-import Mathlib
+module
+
+public import Mathlib
 
 /-!
 # Johnson's bound for a set family
@@ -13,6 +15,8 @@ The proof counts incidences: with `c x` the number of sets holding `x`, `Σ c x 
 `2nt > N` this is `n·t² ≤ N·n·a + N·t`, which the regime contradicts unless `n ≤ N`; and `2nt ≤ N` gives `n ≤ N` at
 once.
 -/
+
+@[expose] public section
 
 namespace Claims.GS
 

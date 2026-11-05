@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.OpenSlots
-import Proofs.Flock.Claims.Recursion.TopsOpens
+module
+
+public import Proofs.Flock.Claims.Recursion.OpenSlots
+public import Proofs.Flock.Claims.Recursion.TopsOpens
 
 /-!
 # The slots' hm96 calls are recorded at `layR` (`SlotsRecorded` off `TopsPorted` and `SlotsFit`)
@@ -18,6 +20,8 @@ has a circuit with port `top`, where a cap's slot sits:
 `slotsRecorded_of` gives `SlotsRecorded elem` from `TopsPorted` and `SlotsFit` (the row prefixes) at each dense compiled
 statement.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.OpenSlots
 

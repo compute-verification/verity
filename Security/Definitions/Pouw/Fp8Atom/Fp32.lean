@@ -1,5 +1,7 @@
-import Mathlib.Data.Rat.Floor
-import Definitions.Pouw.Fp8Atom.Atom
+module
+
+public import Mathlib.Data.Rat.Floor
+public import Definitions.Pouw.Fp8Atom.Atom
 
 /-!
 # The FP32 add of the running words (trusted definitions)
@@ -14,6 +16,8 @@ is every running word of H-1's chains (no overflow and no subnormal in range). I
 * `roundEven m` rounds a rational to the nearest integer, ties to even.
 * `rn x` is `± roundEven (|x| / ulp x) · ulp x`; `Representable x` says `x = m · 2^e` with `|m| < 2^24`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Fp8Atom
 

@@ -20,6 +20,15 @@ part = "circuits"
 group = 2
 halts_on = "error: could not compile"
 
+# Before circuit-check: a group stops at its first failed job, and circuit-check is off the merge gate, so its red must not keep
+# this job, which is on it, from running.
+[[job]]
+name = "flock-rust-tests"
+owner = "proofs"
+part = "circuits"
+group = 2
+needs = ["flock-circuit-build"]
+
 [[job]]
 name = "circuit-check"
 owner = "circuits"
@@ -31,13 +40,6 @@ group = 2
 shards = 4
 # Off the merge gate by drive's policy (policy.toml's `off_gate`): the plans keep it, so putting it back is one line there. Its red
 # in drive's after-landing run reverts its culprit at once and lands no PR touching its inputs until it passes.
-
-[[job]]
-name = "flock-rust-tests"
-owner = "proofs"
-part = "circuits"
-group = 2
-needs = ["flock-circuit-build"]
 
 # Group 3: the Lean verifier, its partition check, then the agreement with upstream's Rust verifier.
 [[job]]

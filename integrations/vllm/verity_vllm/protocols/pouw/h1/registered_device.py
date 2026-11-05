@@ -10,7 +10,7 @@ holds them (64-byte nodes, 128-byte strings, as bytes). `device_hash` launches t
 `Hashing` reading them out once the stream is done. `host_commit` runs
 the same functions on the CPU (`registered_rows_host.cpp`, built with the system C++ compiler): the twin the CPU tests
 hold to `pouw_h1_registered.commit`'s NumPy path on machines without a GPU. Builds share the Commit's row-table builder
-(`row_tables_device._build`, keyed by sources, flags and compiler) and its per-device state (`row_tables_device.Device`);
+(`row_tables_device._build`, keyed by sources, flags and compiler) and its per-device state (`row_tables_device.DeviceLibrary`);
 nvcc is `pouw_device`'s (its `TOOLCHAIN`'s, or the one on the path).
 """
 from __future__ import annotations
@@ -168,8 +168,8 @@ def host_public_salts(head: bytes, first: int, n: int) -> bytes:
     return out.tobytes()
 
 
-def _device(torch: Any) -> RTD.Device:
-    return RTD.Device.of(torch, torch.cuda.current_device(), device_lib, "rr_midstates")
+def _device(torch: Any) -> RTD.DeviceLibrary:
+    return RTD.DeviceLibrary.of(torch, torch.cuda.current_device(), device_lib, "rr_midstates")
 
 
 @cache

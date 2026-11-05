@@ -1,5 +1,7 @@
-import Mathlib.Data.Fintype.BigOperators
-import Mathlib.Data.Rat.Cast.Order
+module
+
+public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Data.Rat.Cast.Order
 
 /-!
 # Aligned exactness: the definitions (trusted)
@@ -18,6 +20,8 @@ What `no-aligned-exact-region/sm120-unpromoted` instantiates them with:
   fresh side is the rows. The transposed predicate `fun j i c r => f i j r c` would make the columns the fresh side,
   which is sound only if E_B were drawn after the activations are fixed. Pearl-C's keying doesn't give that.
 -/
+
+@[expose] public section
 
 namespace Pouw.AlignedExact
 

@@ -1,4 +1,6 @@
-import Proofs.Core.NaiveStrassen.Table
+module
+
+public import Proofs.Core.NaiveStrassen.Table
 
 /-!
 # The check (NaiveStrassen's kernel tables)
@@ -9,6 +11,8 @@ atoms, splits of `A` (rows `e` and `rest i e`), the own-cell split, symmetry (sp
 schemes over the previous level. It also checks the root cell: `has ≥ 8^(l+1) + 32` up to `thmL`, and `lo > 8^l` above.
 `Sound.lean` proves that a passing check bounds the cost of every schedule.
 -/
+
+@[expose] public section
 
 namespace Verity.Accel.NaiveStrassen.Packed
 

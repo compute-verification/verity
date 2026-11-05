@@ -1,5 +1,7 @@
-import Definitions.Core.TC.Bridge
-import Proofs.Core.TC.Proofs.Group
+module
+
+public import Definitions.Core.TC.Bridge
+public import Proofs.Core.TC.Proofs.Group
 
 /-!
 # One group, the semantics' side
@@ -7,6 +9,8 @@ import Proofs.Core.TC.Proofs.Group
 `groupSum_eq` is `group_sum` on the Hopper adder in terms of the relation's total `T` and maximum exponent `E`.
 `finResult_admissible`: its finite result is `Admissible` (`Verity.Protocol.TC.Bridge`).
 -/
+
+@[expose] public section
 
 namespace Verity.TC.Proofs
 

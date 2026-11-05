@@ -1,4 +1,6 @@
-import Proofs.Flock.SoundAtBridge.Reduce
+module
+
+public import Proofs.Flock.SoundAtBridge.Reduce
 
 /-!
 # `SoundAtBridge`'s layer premises hold together, and its event is C-Flock's
@@ -11,6 +13,8 @@ accepts and a drawn unit is wrong or its rows are off at its own reads), so `Sou
 C-Flock's event and no weaker one; and a finite bound on every session's `n · bound` meets the `δ` hypothesis at its
 real value.
 -/
+
+@[expose] public section
 
 namespace Flock.SoundAtBridge
 

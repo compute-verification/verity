@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Link
-import Proofs.Flock.Claims.Complete.Zk.Discharge
+module
+
+public import Proofs.Flock.Claims.Complete.Link
+public import Proofs.Flock.Claims.Complete.Zk.Discharge
 
 /-!
 # The first masked send is the link message
@@ -16,6 +18,8 @@ import Proofs.Flock.Claims.Complete.Zk.Discharge
   the `--zk` schedule keeps fast100's level-0 `d` (`zkSchedule_d0`).
 * `linkFirstZk_goal` (`LinkFirstZk`), for a SHA-512 of 64-byte outputs, as `linkFirst_goal`.
 -/
+
+@[expose] public section
 
 open Flock FlockDeploy
 
