@@ -4,11 +4,11 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
     python certifier_piece.py front PORT SERVE_DIR OUT [--gate USER@HOST | --gate local] [--key KEY] [--peer NAME]
         [--prompts 4] [--prompt-ids 24 | --prompt-ids LO:HI] [--tokens 4] [--vocab 128000] [--scan-class w63k4]
         [--height 10] [--minutes M] [--bucket-ms MS] [--warmup N] [--stop-prompt N] [--attack NAME [--attack-nth K]]
-    python certifier_piece.py piece SERVE_DIR WINDOW DIR [--lean EXE] [--draw K] [--chain-cmd CMD]
-        [CR_K=V ...]
-    python certifier_piece.py chain SERVE_DIR WINDOW DIR V3C [--draw K] [--class w63k4]
+    python certifier_piece.py piece SERVE_DIR WINDOW DIR [--certifier-key RECORD] [--lean EXE] [--rows EXE] [--draw K]
         [--chain-cmd CMD] [CR_K=V ...]
-    python certifier_piece.py period SERVE_DIR WINDOW DIR V3C [--lean EXE]
+    python certifier_piece.py chain SERVE_DIR WINDOW DIR V3C [--certifier-key RECORD] [--rows EXE] [--draw K]
+        [--class w63k4] [--chain-cmd CMD] [CR_K=V ...]
+    python certifier_piece.py period SERVE_DIR WINDOW DIR V3C [--certifier-key RECORD] [--lean EXE] [--rows EXE]
     python certifier_piece.py relay --listen PORT --to PORT
 
 * **front** runs before served_verdicts.sh's requests when ``CERTIFIER_FRONT`` names it: the gate's scan rehearsal
@@ -48,14 +48,27 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   the scan's cells and delay and the front's tick (`attack_relay`), its log the prover's under
   SERVE_DIR/`PRIVATE`/attacks; `attacks.py judge` reads the outcome. Exit as `served_session.session`'s.
 * **piece** writes window WINDOW's core answer to DIR/answer.json (`verity/certifier/v0`, `NetworkCheck.Period`'s rows
-  form): accept only when the chain accepted and ``network-period check`` accepted the period, whose answer it then is.
-  1. The kept network certifier run: exactly one fetch under SERVE_DIR/`PRIVATE`, whose rehearsal the gate's check
-     passed (its ``end.json``: exit 0 and accepted, as the front's exit reads it). With none the run's load didn't go
-     through the front (it wasn't set, or the gate, its tunnel or ssh failed); a rehearsal that failed (each request
-     late past the network certifier's D·τ, or cut) certified no served answer, so there is none for the protocol to
-     reject, and the refusal names the network certifier's own check's problems (`rehearsed`). One whose certified
+  form): accept only when ``network-rows check`` accepted the network certifier's records, the chain accepted and
+  ``network-period check`` accepted the period, whose answer it then is.
+  1. The kept network certifier run: exactly one fetch under SERVE_DIR/`PRIVATE` (with none the run's load didn't go
+     through the front: it wasn't set, or the gate, its tunnel or ssh failed), held to the auditor's record of the
+     run's deployment (`held`: ``--certifier-key RECORD``, a `warden_chain.RECORD` file, the gate's
+     own ``out/deployment.json`` of the run as the auditor read it off the gate, with its SHA-512, key and session).
+     Every ``deployment.json`` the fetch holds must be the record's, and every check below reads the network
+     certifier's key, session and schedule off the record, never off the fetch, which the prover's node holds and
+     `trusted-host` doesn't cover; with no record, or a fetch that isn't the record's (rewritten, or re-signed under
+     another key), the piece refuses. The fetch's rehearsal must be one the gate's check passed (its ``end.json``: exit
+     0 and accepted, as the front's exit reads it): one that failed (each request late past the network certifier's
+     D·τ, or cut) certified no served answer, so there is none for the protocol to reject, and the refusal names the
+     network certifier's own check's problems (`rehearsed`). One whose certified
      egress holds a cell that is neither an id-form cell nor a `FAIL`, bytes the server sent that are no output's, is a
-     reject.
+     reject. Its records are then audited as rows (`rows_check`): `warden_chain.rows_audit_case` of the run, checked
+     by ``network-rows`` (``--rows``, else built in verity/core/protocols/network/lean; `NetworkCheck.RowsAudit`,
+     `ROWS`), which holds each record to its certified head and each certificate to the record's key in its session,
+     then runs the certifier program's rows audit (`NetworkCertifier.Rows.audit`): every egress row must be
+     the one the schedule the records show renders, so cells cut, clocked or ordered otherwise are refused. Its reject
+     is the piece's, with its reason's numbers as N. The case's files go to a 0700 scratch directory beside the
+     unpacked run, removed once the check has answered, so the records reach no hold.
   2. The audited Commit period's requests are certified ones (`bind`): each one's user names one of the network
      certifier's certified requests (`warden_chain.io`), it carries the network certifier's run in its release, with
      the same prompt and streamed ids; and of the requests the endpoint recorded carrying that run, no two name one
@@ -69,7 +82,8 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
      report's verdict ``accepted`` goes on; any other is a reject with its why.
   4. The period's execution phase is the scan's (the one entry of ``answers.json``'s ``windows``): every audited
      request's release and streamed ids lie in it, else reject.
-  5. The period check: `scan_period.rows_case` of the warden run and the chain's scan, checked by ``network-period``
+  5. The period check: `scan_period.rows_case` of the warden run under the auditor's record and the chain's scan,
+     checked by ``network-period``
      (``--lean``, else built in verity/core/protocols/network/lean); its answer is the piece's, an accept's profile
      with its ``placement`` (`placement`): the certifier on the gate's host, and the chain, the period check and
      their proofs' coins in this piece on the prover's node, so `trusted-host` is assumed with the auditor's devices
@@ -86,12 +100,13 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   ``{"commitment", "evidence", "params"}``, the commitment and evidence hex and the params ``params.json``'s canonical
   JSON, all inline, since certifier/v0 reads no blob (about 83 MB on a served window, nearly all of it the params).
   DIR/period then goes, so the case has one copy; the guard reads the files before they are hex, which it searches
-  only for a binary witness file's pieces. Only the protocol rejects: a step that can't run (no kept run, a rehearsal
+  only for a binary witness file's pieces. Only the protocol rejects: a step that can't run (no kept run, no auditor's
+  record or a fetch that isn't the record's, a rehearsal
   the gate's check didn't pass, a build, a tool or the chain failing without a report, an input missing, a field the
   kind scan finds, the leak guard failing, or SIGTERM from the piece's time limit) is `NotRun`, and the piece then
   refuses, releasing nothing
   from the hold: DIR keeps only its logs (`LOGS`) and gets DIR/`REFUSED` naming why, with no answer, which
-  `served_verdicts.py` reads as the certifier missing. Each step it runs (the build, the chain, the check and the leak
+  `served_verdicts.py` reads as the certifier missing. Each step it runs (the builds, the checks, the chain and the leak
   guard) is a process group of its own, which the piece ends however the step ends (`run_group`: SIGTERM, `GRACE_S`,
   SIGKILL), so nothing a step started outlives it; a SIGTERM while a step runs is held until the step's group has
   ended, so a step never outlives the refusal either. ``--draw K`` is the scan's sample, K proof blocks (every proof
@@ -99,8 +114,11 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   and the scan's answers under RESEARCH_RUN_DIR/out).
 * **chain** and **period** are the piece split in two around V3c (`served_verdicts.sh`'s ``CERTIFIER_CHAIN_CMD`` and
   ``CERTIFIER_PERIOD_CMD``, each run as ``bash -c CMD _ D K DIR V3C``, e.g. ``CERTIFIER_CHAIN_CMD='python
-  benchmarks/network_traces/certifier_piece.py chain "$@"'``), so the period's compute audit is V3c's audit of the
-  served window itself. **chain** runs steps 1 to 4 once V3c's window is committed, its scan on V3c's trees
+  benchmarks/network_traces/certifier_piece.py chain "$@" --certifier-key "${CERTIFIER_KEY:-}"'``, the follow-on's
+  CERTIFIER_KEY naming the auditor's record, and the period's alike), so the period's compute audit is V3c's audit of
+  the served window itself, on the run's registration record, which remote with the network certifier's egress tie
+  requires of every compute audit (`Core.RemoteNetwork.egress`); the whole piece's are its scan's own registrations, so
+  ``served_verdicts.sh`` takes only the split at ``PRODUCT=remote-network``. **chain** runs steps 1 to 4 once V3c's window is committed, its scan on V3c's trees
   (``scan_zk.py --class CLASS --v3c V3C/window`` in CR_SCAN_ARGS: the window's committed scan state and slot entries):
   a reject is DIR/answer.json as the piece's, an accept DIR/`CHAINED`. **period** runs once V3c's audit wrote
   V3C/period.json: steps 1, 2 and 4 again on the chain's kept report (no chain runs), then step 5 on the rows case whose
@@ -143,8 +161,13 @@ import served_session as SS  # noqa: E402
 #: where the front keeps the gate's fetch and the piece its private files, under the serve dir
 PRIVATE = Path("private") / "certifier"
 PROTOCOL = "verity/certifier/v0"
+#: the protocol ``network-rows`` answers, step 1's rows audit of the network certifier's records
+ROWS = "verity/network-rows/v1"
 #: the named assumption the certifier's guarantee reads (`NetworkCheck.Period`): the certifier is the auditor's device
 PREMISE = "trusted-host"
+#: the follow-on's variable naming the auditor's record of the kept run's deployment (`warden_chain.RECORD`), which its
+#: hooks pass to piece, chain and period as ``--certifier-key``: they read no environment for it
+CERTIFIER_KEY = "CERTIFIER_KEY"
 #: the front's public outcome, copied beside the kept fetch
 SESSION = "session.json"
 #: What DIR/chain gets of the chain's out/, by file: its JSON with only the key paths named (``a.b`` b under a, ``*``
@@ -421,6 +444,29 @@ def unpack(fetch: Path) -> tuple[Path, Path]:
     return d, run
 
 
+def auditor_record(path: str | None) -> dict:
+    """The auditor's record of the kept run's deployment at ``path`` (`warden_chain.RECORD`); `NotRun` without one,
+    whose key and session would be the kept fetch's."""
+    if not path:
+        raise NotRun(f"no auditor's record of the network certifier's deployment (--certifier-key, {CERTIFIER_KEY}): "
+                     f"its key and session would be the kept fetch's, a file on the prover's node, which {PREMISE} "
+                     "doesn't cover")
+    try:
+        return json.loads(Path(path).read_text())
+    except (OSError, ValueError) as e:
+        raise NotRun(f"the auditor's record {path}: {type(e).__name__}: {e}") from None
+
+
+def held(run: Path, record: dict) -> None:
+    """`NotRun` unless the kept run is ``record``'s, the auditor's record of its deployment
+    (`warden_chain.deployment_of`): naming the copy of ``deployment.json`` that isn't, and the field it differs in."""
+    import warden_chain as WC
+    try:
+        WC.deployment_of(run, record)
+    except (SystemExit, OSError, KeyError, TypeError, ValueError) as e:
+        raise NotRun(f"the kept fetch isn't the auditor's record of the network certifier's deployment: {e}") from None
+
+
 def device_problems(run: Path) -> list[str]:
     """The network certifier's own check of the kept run (`warden_serve.check` on its witness), each problem once with
     its numbers (connections, cells, phases) as N: what refused the rehearsal, none of its counts."""
@@ -593,13 +639,14 @@ def run_chain(keep: Path, run: str, draw: int | None, sets: list[str], cmd: str 
         return run_group(argv, cwd=TREE, env=env, stdout=log, stderr=subprocess.STDOUT)
 
 
-def period_exe(lean: str | None) -> str:
-    if lean:
-        return lean
-    got = captured(["lake", "build", "network-period"], cwd=LEAN_DIR)
-    exe = LEAN_DIR / ".lake" / "build" / "bin" / "network-period"
+def lean_exe(name: str, given: str | None) -> str:
+    """``given``, else the executable ``name`` of `LEAN_DIR`, built here."""
+    if given:
+        return given
+    got = captured(["lake", "build", name], cwd=LEAN_DIR)
+    exe = LEAN_DIR / ".lake" / "build" / "bin" / name
     if got.returncode or not exe.is_file():
-        raise NotRun(f"lake build network-period (exit {got.returncode}): {(got.stdout + got.stderr)[-400:]}")
+        raise NotRun(f"lake build {name} (exit {got.returncode}): {(got.stdout + got.stderr)[-400:]}")
     return str(exe)
 
 
@@ -611,10 +658,34 @@ def period_check(exe: str, case: dict, d: Path) -> dict:
         raise NotRun(f"network-period check: {type(e).__name__}: {e}") from None
 
 
-def case_of(warden: Path, scan: Path, v3c: Path | None = None, circuit: str | None = None) -> dict:
+def rows_check(exe: str, run: Path, record: dict) -> None:
+    """Step 1's rows audit of the network certifier run ``run`` (module docstring) by ``network-rows`` ``exe``, under
+    ``record``, the auditor's record of its deployment: `Rejected` on its reject, `NotRun` where the case can't be read
+    or the check gives no `ROWS` accept or reject."""
+    import scan_period as SP
+    import warden_chain as WC
+    try:
+        case = WC.rows_audit_case(run, record)
+    except (SystemExit, OSError, KeyError, ValueError) as e:
+        raise NotRun(f"the network certifier's rows case: {type(e).__name__}: {e}") from None
+    scratch = Path(tempfile.mkdtemp(dir=run.parent, prefix="rows-"))
+    try:
+        got = SP.lean_check(exe, case, scratch, run=captured)
+    except (SystemExit, OSError, ValueError) as e:
+        raise NotRun(f"network-rows check: {type(e).__name__}: {e}") from None
+    finally:
+        rm(scratch)
+    if got.get("protocol") != ROWS or got.get("verdict") not in ("accept", "reject"):
+        raise NotRun(f"network-rows answered no {ROWS} accept or reject: {json.dumps(got)[:400]}")
+    if got["verdict"] == "reject":
+        why = re.sub(r"[0-9]+", "N", str(got["reason"]))
+        raise Rejected(f"the network certifier's records, audited as rows: {why}")
+
+
+def case_of(warden: Path, scan: Path, v3c: Path | None = None, circuit: str | None = None, *, record: dict) -> dict:
     import scan_period as SP
     try:
-        return SP.rows_case(warden, scan, v3c=v3c, circuit=circuit)
+        return SP.rows_case(warden, scan, v3c=v3c, circuit=circuit, record=record)
     except (SystemExit, OSError, KeyError, ValueError) as e:
         raise NotRun(f"the period's rows case: {type(e).__name__}: {e}") from None
 
@@ -630,10 +701,10 @@ def class_circuit(v3c: Path) -> str:
         raise NotRun(f"the verifier's window-circuit record: {type(e).__name__}: {e}") from None
 
 
-def v3c_case(v3c: Path) -> Callable[[Path, Path], dict]:
-    """The period step's case: `case_of` with V3C/period.json as its one compute audit, held to the verifier's class
-    circuit (`class_circuit`), once the chain's scan read V3C/window's trees (its ``summary.json``'s ``v3c``); `NotRun`
-    for a scan of no V3c window or another, or no window-circuit record."""
+def v3c_case(v3c: Path, record: dict) -> Callable[[Path, Path], dict]:
+    """The period step's case: `case_of` under ``record`` with V3C/period.json as its one compute audit, held to the
+    verifier's class circuit (`class_circuit`), once the chain's scan read V3C/window's trees (its ``summary.json``'s
+    ``v3c``); `NotRun` for a scan of no V3c window or another, or no window-circuit record."""
     def case(warden: Path, scan: Path) -> dict:
         try:
             read = (json.loads((scan / "summary.json").read_text()).get("v3c") or {}).get("window")
@@ -642,7 +713,7 @@ def v3c_case(v3c: Path) -> Callable[[Path, Path], dict]:
         if read != str(v3c / "window"):
             raise NotRun(f"the chain's scan read {read or 'no'} V3c window, not {v3c / 'window'}: run the chain step "
                          "on this V3c")
-        return case_of(warden, scan, v3c / "period.json", class_circuit(v3c))
+        return case_of(warden, scan, v3c / "period.json", class_circuit(v3c), record=record)
     return case
 
 
@@ -667,24 +738,29 @@ def publish(chain_out: Path, d: Path) -> None:
             (d / "chain" / rel).write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
 
 
-def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str, int], int] | None,
-           check: Callable[[dict, Path], dict] | None,
-           case: Callable[[Path, Path], dict] = case_of) -> tuple[dict | None, Path | None]:
+def decide(serve_dir: Path, window: int, d: Path, *, record: dict, chain: Callable[[Path, str, int], int] | None,
+           check: Callable[[dict, Path], dict] | None, rows: Callable[[Path], None],
+           case: Callable[[Path, Path], dict] | None = None) -> tuple[dict | None, Path | None]:
     """Window ``window``'s answer (module docstring) and the unpacked fetch (for the leak guard), its files in ``d``;
-    ``chain`` is given KEEP, the run and the run's link-windows, or is None to read the report
-    of the chain the split's chain step ran; ``check`` None stops once the chain accepted, with no answer (the split's
-    chain step). `NotRun` when a step can't run."""
+    ``record`` is the auditor's record of the kept run's deployment, which the fetch must be (`held`) and whose key,
+    session and schedule every check reads; ``rows`` is step 1's rows audit of the network certifier run
+    (`rows_check`); ``chain`` is given KEEP, the run and the run's link-windows, or is None to read the report of the
+    chain the split's chain step ran; ``check`` None stops once the chain accepted, with no answer (the split's chain
+    step); ``case`` is the period's case (`case_of` under ``record`` by default). `NotRun` when a step can't run."""
     import warden_chain as WC
     keep = serve_dir / PRIVATE
     run = kept_run(serve_dir)
     reqs = window_requests(serve_dir, window)
+    case = case or (lambda warden, scan: case_of(warden, scan, record=record))
     unpacked = None
     try:
         unpacked, warden = unpack(keep / run / "fetch.tar.gz")
+        held(warden, record)
         rehearsed(warden)
+        rows(warden)
         try:
             io = WC.io(warden)
-            dep, params = WC.deployment(warden)
+            dep, params = WC.deployment_of(warden, record)
         except SystemExit as e:
             raise Rejected(f"the kept warden run: {e}") from None
         T = params.window
@@ -848,9 +924,11 @@ def piece(a: argparse.Namespace) -> int:
         return 2
 
     def step(hold: Path) -> tuple[dict | None, Path | None]:
-        exe = period_exe(a.lean)
+        record = auditor_record(a.certifier_key)
+        exe, rows = lean_exe("network-period", a.lean), lean_exe("network-rows", a.rows)
         chain = lambda keep, run, n: run_chain(keep, run, a.draw, sized(n, a.set), a.chain_cmd)  # noqa: E731
-        return decide(serve_dir, a.window, hold, chain=chain, check=lambda c, p: period_check(exe, c, p))
+        return decide(serve_dir, a.window, hold, record=record, chain=chain,
+                      check=lambda c, p: period_check(exe, c, p), rows=lambda run: rows_check(rows, run, record))
     try:
         got = settle(serve_dir, d, "CERTIFIER_TIMEOUT", step)
     except NotRun as e:
@@ -880,8 +958,13 @@ def chain_step(a: argparse.Namespace) -> int:
     try:
         sets = v3c_scan(v3c, a.scan_class, a.set)
         chain = lambda keep, run, n: run_chain(keep, run, a.draw, sized(n, sets), a.chain_cmd)  # noqa: E731
-        got = settle(serve_dir, d, "CERTIFIER_TIMEOUT",
-                     lambda hold: decide(serve_dir, a.window, hold, chain=chain, check=None))
+
+        def step(hold: Path) -> tuple[dict | None, Path | None]:
+            record = auditor_record(a.certifier_key)
+            rows = lean_exe("network-rows", a.rows)
+            return decide(serve_dir, a.window, hold, record=record, chain=chain, check=None,
+                          rows=lambda run: rows_check(rows, run, record))
+        got = settle(serve_dir, d, "CERTIFIER_TIMEOUT", step)
     except NotRun as e:
         return refuse(d, str(e))
     if got is not None:
@@ -904,9 +987,11 @@ def period_step(a: argparse.Namespace) -> int:
     def step(hold: Path) -> tuple[dict | None, Path | None]:
         if not (d / CHAINED).is_file():
             raise NotRun(f"no {CHAINED} in DIR: the chain step (CERTIFIER_CHAIN_CMD) didn't run, or didn't finish")
-        exe = period_exe(a.lean)
-        return decide(serve_dir, a.window, hold, chain=None, check=lambda c, p: period_check(exe, c, p),
-                      case=v3c_case(v3c))
+        record = auditor_record(a.certifier_key)
+        exe, rows = lean_exe("network-period", a.lean), lean_exe("network-rows", a.rows)
+        return decide(serve_dir, a.window, hold, record=record, chain=None,
+                      check=lambda c, p: period_check(exe, c, p), rows=lambda run: rows_check(rows, run, record),
+                      case=v3c_case(v3c, record))
     try:
         got = settle(serve_dir, d, "CERTIFIER_PERIOD_TIMEOUT", step)
     except NotRun as e:
@@ -944,20 +1029,22 @@ def parser() -> argparse.ArgumentParser:
                    help="the prover's relay playing this attack between the gate's tunnel and PORT (attacks.py)")
     f.add_argument("--attack-nth", type=int, default=1, metavar="K",
                    help="the completion request, from 1, an attack on one connection plays on")
-    q = sub.add_parser("piece")
-    q.add_argument("serve_dir", type=Path)
-    q.add_argument("window", type=int)
-    q.add_argument("dir", type=Path)
-    q.add_argument("--lean", help="network-period, built (else built here)")
-    q.add_argument("--draw", type=int, help="the scan's sample, K proof blocks (every proof block by default)")
-    q.add_argument("--chain-cmd", help="replaces served_session.py chain: bash -c CMD _ KEEP RUN CR_K=V ...")
-    q.add_argument("set", nargs="*", help="CR_K=V")
-    for name in ("chain", "period"):
+    for name in ("piece", "chain", "period"):
         q = sub.add_parser(name)
         q.add_argument("serve_dir", type=Path)
         q.add_argument("window", type=int)
         q.add_argument("dir", type=Path)
-        q.add_argument("v3c", type=Path, help="V3c's directory: window/ (window-commit's) and period.json")
+        if name != "piece":
+            q.add_argument("v3c", type=Path, help="V3c's directory: window/ (window-commit's) and period.json")
+        q.add_argument("--certifier-key", metavar="RECORD",
+                       help="the auditor's record of the kept run's deployment, the gate's own (certifier-key/v1; the "
+                            f"hooks pass ${CERTIFIER_KEY}): without it the piece refuses")
+        q.add_argument("--rows", help="network-rows, built (else built here)")
+    q = sub.choices["piece"]
+    q.add_argument("--lean", help="network-period, built (else built here)")
+    q.add_argument("--draw", type=int, help="the scan's sample, K proof blocks (every proof block by default)")
+    q.add_argument("--chain-cmd", help="replaces served_session.py chain: bash -c CMD _ KEEP RUN CR_K=V ...")
+    q.add_argument("set", nargs="*", help="CR_K=V")
     q = sub.choices["chain"]
     q.add_argument("--draw", type=int, help="the scan's sample, K proof blocks (every proof block by default)")
     q.add_argument("--class", dest="scan_class", default=V3C_SCAN_CLASS,

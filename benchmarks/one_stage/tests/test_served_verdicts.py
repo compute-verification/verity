@@ -1465,7 +1465,8 @@ assert [a[a.index(f) + 1].rsplit("/", 1)[-1] for f in ("--compiler", "--registra
 FAKE_PROVE_PATH = f'''import json, os, sys
 a = sys.argv[1:]
 {WINDOW_CIRCUIT}
-c = a[a.index("--class") + 1] if "--class" in a else "record"
+open("argv.jsonl", "a").write(json.dumps(a) + "\\n")
+c = (a[a.index("--class") + 1] if "--class" in a else "record") + ("+tie" if "--window-registration" in a else "")
 answer = json.load(open("answers.json"))[c]
 if answer != "count":
     print("prove_path.py window-circuit: refused at", c, file=sys.stderr)
@@ -1475,10 +1476,11 @@ print(json.dumps({{"count": {{"free": 3, "inputs": 10, "registered": 7, "units":
 '''
 
 
-def _circuits(tmp_path: Path, classes: str, answers: dict) -> tuple[int, list[str], list[str]]:
+def _circuits(tmp_path: Path, classes: str, answers: dict, **extra: str) -> tuple[int, list[str], list[str]]:
     """`served_verdicts.sh circuits 0` in a toy tree whose prove_path.py counts a class, refuses it, or exits 124 as
-    `timeout` does when a count runs out of time (``answers``, by class), under a `timeout` that records the limit it got:
-    the exit status, the verdict lines, and the limits in order."""
+    `timeout` does when a count runs out of time (``answers``, by class, ``C+tie`` for class C reading H1's tables), under
+    a `timeout` that records the limit it got (``extra`` adds to the environment; under H1_TIE the serve dir holds H1's
+    window Program's meta): the exit status, the verdict lines, and the limits in order."""
     tree, bin_, venv = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin"
     for d in (tree / "benchmarks" / "prove_path", bin_, venv, tmp_path / "serve" / "advice" / "w0"):
         d.mkdir(parents=True)
@@ -1486,12 +1488,15 @@ def _circuits(tmp_path: Path, classes: str, answers: dict) -> tuple[int, list[st
     (tree / "answers.json").write_text(json.dumps(answers))
     (tmp_path / "serve" / "weights_registration.json").write_text("{}")
     (tmp_path / "serve" / "advice" / "w0" / "registration.json").write_text(json.dumps(REGISTRATION))
+    if extra.get("H1_TIE"):
+        (tmp_path / "serve" / "h1").mkdir()
+        (tmp_path / "serve" / "h1" / "window-program.meta.json").write_text(json.dumps({"program_digest": "p" * 128}))
     for path, body in ((venv / "python", f'exec {sys.executable} "$@"'),
                        (bin_ / "timeout", f'echo "$1" >> {tmp_path}/limits; shift; exec "$@"')):
         path.write_text(f"#!/bin/sh\n{body}\n")
         path.chmod(0o755)
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent),
-           "D": str(tmp_path / "serve"), "OUT": str(tmp_path / "out"), "CLASSES": classes}
+           "D": str(tmp_path / "serve"), "OUT": str(tmp_path / "out"), "CLASSES": classes, **extra}
     rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "circuits", "0"], cwd=tree, env=env,
                         check=False).returncode
     return rc, (tmp_path / "out" / "verdicts.txt").read_text().splitlines(), (tmp_path / "limits").read_text().split()
@@ -1524,6 +1529,26 @@ def test_any_class_of_classes_that_does_not_count_fails_the_run(tmp_path, classe
     assert any("prove_path.py window-circuit: refused at" in line for line in lines) == (answers.get("8,64,4") == "refuse")
     measured = [line for line in lines if line.startswith("WINDOW-CIRCUIT class record (measurement)")]
     assert len(measured) == (classes != "record") and limits[-1] == ("30m" if classes == "record" else "45m")
+
+
+@pytest.mark.parametrize("tied", ["count", "refuse"])
+def test_under_h1_tie_step_3_writes_v3cs_record_reading_h1s_tables_after_the_classes_and_gates_nothing_on_it(tmp_path, tied):
+    """Under H1_TIE the commit V3c holds is the tie's, whose circuit reads H1's W's tables, so after the classes CLASSES
+    gates on, step 3 writes the verifier's record at V3C_CLASS reading them too (window-circuit --window-registration W,
+    the window's H1 registration, with --h1-meta its Program's meta as the run publishes it; its tag's suffix -tie), the
+    record V3c holds that commit to. It gates nothing."""
+    rc, lines, limits = _circuits(tmp_path, "4,32,4", {"4,32,4": "count", "4,32,4+tie": tied, "record": "count"},
+                                  H1_TIE="1", V3C_CLASS="4,32,4")
+    d, meta = tmp_path / "serve", tmp_path / "out" / "serve" / "h1" / "window-program.meta.json"
+    argv = [json.loads(x) for x in (tmp_path / "tree" / "argv.jsonl").read_text().splitlines()]
+    assert rc == 0 and limits == ["30m", "30m", "45m"], (rc, lines)
+    assert [x[x.index("--out") + 1] for x in argv] == [str(d / f"window-circuit-w0-{t}.json")
+                                                       for t in ("4-32-4", "4-32-4-tie", "record")]
+    assert [x[x.index("--window-registration"):] if "--window-registration" in x else None for x in argv] == [
+        None, ["--window-registration", str(d / "h1" / "w0" / "registration.json"), "--h1-meta", str(meta)], None]
+    assert meta.read_bytes() == (d / "h1" / "window-program.meta.json").read_bytes()
+    head = "WINDOW-CIRCUIT class 4,32,4 reading H1's tables"
+    assert lines[1].startswith(f"{head}: registered 7 bits" if tied == "count" else f"{head} refused (exit 2): "), lines
 
 
 FAKE_INFERENCE_ONLY = '''import json, os, sys
@@ -1659,8 +1684,12 @@ if a[0] != "window-commit":
 {textwrap.indent(WINDOW_CIRCUIT, "    ")}
 out = Path(a[a.index("--out") + 1])
 assert a[a.index("--class") + 1] == "{W63K4}"
+# with W the circuit reads H1's tables, in the verifier's record and the commit alike
+tables = {{"tables": "h1"}} if "--window-registration" in a else {{}}
 if a[0] == "window-circuit":
-    out.write_text("{{}}")
+    if tables:
+        open(os.environ["ORDER"] + ".circuit", "w").write(json.dumps([out.name, *a[a.index("--window-registration"):]]))
+    out.write_text(json.dumps(tables))
     c = {{"count": {{"free": 3, "inputs": 10, "registered": 7, "units": 1}}}}
     print(json.dumps({{"bits": 772, **c}} if os.environ.get("ADVICE_BITS") else c))
 else:
@@ -1668,8 +1697,9 @@ else:
     if os.environ.get("FAIL_COMMIT"):
         print("prove_path.py window-commit: the row dir holds no window 7", file=sys.stderr)
         sys.exit(2)
+    open(os.environ["ORDER"] + ".cap", "w").write(a[a.index("--cap-bits") + 1])
     out.mkdir(parents=True)
-    (out / "circuit.json").write_text(json.dumps({{"run": "ab"}}))
+    (out / "circuit.json").write_text(json.dumps({{"run": "ab", **tables}}))
     if "--window-registration" in a:
         tail = a[a.index("--window-registration"):]
         open(os.environ["ORDER"] + ".commit", "w").write("\\n".join(tail))
@@ -1809,6 +1839,23 @@ def test_v3c_runs_the_certifiers_chain_beside_its_audit_and_its_period_check_on_
     assert not (pieces / "chain.log").exists() and not (pieces / "period.log").exists()
 
 
+@pytest.mark.parametrize("extra", [{"NODE_MEM_GB": "320"}, {"CERTIFIER_CHAIN_MEM_GB": "300"}])
+def test_v3c_runs_the_certifiers_chain_after_its_audit_on_a_node_that_holds_only_one(tmp_path, extra):
+    """On a node with less memory than V3c's audit and the chain take together (NODE_MEM_GB under V3C_AUDIT_MEM_GB plus
+    CERTIFIER_CHAIN_MEM_GB), the chain runs after the audit and its period.json rather than beside them, a line saying
+    why before either starts, and the period check still runs last, on both."""
+    rc, lines, order, limits = _v3c(tmp_path, **extra)
+    assert rc == 0, lines
+    assert order[3:] == ["audit", "period", "chain", "period-check"] and limits[2:] == ["180m", "4h", "60m"]
+    node, chain = extra.get("NODE_MEM_GB", "512"), extra.get("CERTIFIER_CHAIN_MEM_GB", "96")
+    heads = [line.split(" (")[0].split(":")[0] for line in lines]
+    assert heads[3:] == ["CERTIFIER-CHAIN after V3c's audit", f"V3C-AUDIT class {W63K4}", "V3C-PERIOD", "CERTIFIER-CHAIN",
+                         "CERTIFIER-PERIOD"]
+    assert lines[3] == (f"CERTIFIER-CHAIN after V3c's audit: this node has {node} GB, under the 290 GB V3c's audit needs "
+                        f"(V3C_AUDIT_MEM_GB) plus the {chain} GB of the chain beside it (CERTIFIER_CHAIN_MEM_GB)")
+    assert json.loads((tmp_path / "out" / "pieces" / "certifier" / "answer.json").read_text()) == {"verdict": "accept"}
+
+
 def test_what_a_verifier_reads_that_reads_the_advice_fails_the_run_and_stays_on_the_node(tmp_path):
     """A window circuit's count that states the advice's length (as one counted from the advice would): the kind scan
     of what a verifier reads of $OUT finds it, the run fails though every step passed, and each file the scan reads is
@@ -1859,11 +1906,16 @@ def test_pp_main_comes_before_main_file_as_the_line_v3cs_session_pins_on(tmp_pat
     ((), {"V3C_CLASS": "", "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None},
      "PREFLIGHT: sampled proofs' audit of record is V3c's (and the split certifier reads its period.json), and "
      "V3C_CLASS is empty"),
+    ((), {"CERTIFIER_PERIOD_CMD": None},
+     "PREFLIGHT: the split certifier runs its chain and its period check, and CERTIFIER_PERIOD_CMD is unset"),
+    (("v3c",), {"CERTIFIER_CHAIN_CMD": None, "PRODUCT": "remote-network"},
+     "PREFLIGHT: the split certifier runs its chain and its period check, and CERTIFIER_CHAIN_CMD is unset"),
 ])
 def test_the_split_certifier_needs_v3c_and_no_whole_piece_beside_it(tmp_path, args, extra, line):
     """The split's period check writes the certifier's answer from V3c's period.json, so the preflight refuses it beside
-    CERTIFIER_CMD, the whole piece's command; and V3c's audit is sampled proofs' of record, so it refuses a run that leaves
-    V3c out, split or not, before anything runs."""
+    CERTIFIER_CMD, the whole piece's command, and with either of its two commands unset (a chain with no period check
+    answers nothing, and a period check with no chain refuses); and V3c's audit is sampled proofs' of record, so it
+    refuses a run that leaves V3c out, split or not, before anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, args, **extra)
     assert (rc, lines, order) == (3, [line], [])
 
@@ -1875,7 +1927,8 @@ def _tie(tmp_path: Path, committed: bool = True, **extra: str) -> tuple[subproce
     """The ``--h1-window-commit`` that `served_verdicts.sh serve` gives serve-openai under H1_TIE, run as `serve_tie` runs
     it at window 7's close (``bash -c CMD _ SERVE_DIR K W_FILE R_FILE PROVER_DIR``, from elsewhere), in a toy tree whose
     prove_path.py notes each step it runs, on a serve dir where the server committed window 7's advice (unless not
-    ``committed``; ``extra`` adds to the environment): the run and the steps in order."""
+    ``committed``) padded to the ℓ_a the run exports (CAP, 1,008 bits; ``extra`` adds to the environment): the run and the
+    steps in order."""
     rc, argv = _serve_argv(tmp_path, {"H1_GATE": GATE, "H1_CIRCUITS": str(tmp_path / "circuits"), "H1_TIE": "1"})
     assert rc == 10 and "--h1-prover" in argv and argv.count("--h1-window-commit") == 1, (rc, argv)
     cmd = argv[argv.index("--h1-window-commit") + 1]
@@ -1893,7 +1946,7 @@ def _tie(tmp_path: Path, committed: bool = True, **extra: str) -> tuple[subproce
     (d / "weights_registration.json").write_text("{}")
     (d / "h1" / "w7" / "registration.json").write_text(json.dumps(W_OF_7))
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "OUT": str(tmp_path / "tie-out"),
-           "ORDER": str(tmp_path / "order"), "H1_TIE": "1", "V3C_CLASS": W63K4, **extra}
+           "ORDER": str(tmp_path / "order"), "H1_TIE": "1", "V3C_CLASS": W63K4, "CAP": "1008", **extra}
     run = subprocess.run(["bash", "-c", cmd, "_", str(d), "7", str(d / "h1" / "w7" / "registration.json"),
                           str(d / "h1" / "w7" / "record.json"), str(d / "private" / "h1" / "w7")],
                          cwd=tmp_path, env=env, check=False, capture_output=True, text=True)
@@ -1902,12 +1955,14 @@ def _tie(tmp_path: Path, committed: bool = True, **extra: str) -> tuple[subproce
 
 def test_under_h1_tie_each_h1_windows_close_commits_it_on_the_servers_advice_chained_after_its_w_as_its_record_r(tmp_path):
     """serve-openai's tie command, from any directory, runs window-commit on the window's advice as the server committed
-    it, at V3C_CLASS on W, the window's H1 prover key and V3c's law, and copies the registration it wrote to R. It commits
-    no advice of its own, so the window's advice has one commitment, and says nothing in $OUT (its window is H1's, which no
-    published line names); its commit's answer stays in the serve dir."""
+    it, read at the ℓ_a the server padded it to (CAP), at V3C_CLASS on W, the window's H1 prover key and V3c's law, and
+    copies the registration it wrote to R. It commits no advice of its own, so the window's advice has one commitment, and
+    says nothing in $OUT (its window is H1's, which no published line names); its commit's answer stays in the serve
+    dir."""
     run, order = _tie(tmp_path)
     d = tmp_path / "serve"
     assert run.returncode == 0 and order == ["window-commit"], (run.stdout, run.stderr, order)
+    assert (tmp_path / "order.cap").read_text() == "1008"
     assert run.stdout.splitlines()[-1] == f"TIE: window-commit class {W63K4}: its registration is the window's record R"
     vw = d / f"v3c-w7-{W63K4.replace(',', '-')}" / "window"
     assert json.loads((d / "h1" / "w7" / "record.json").read_text()) == json.loads((vw / "registration.json").read_text()) \
@@ -1945,15 +2000,16 @@ TIED_LAW = {"law": "stratified", "k": 1, "strata": [{"template": t, "units": [[3
 
 def _tied_commit(tmp_path: Path, bound: str | None, law: dict | None = TIED_LAW) -> None:
     """Window 7's commit as the tie left it in the toy serve dir: its registration R (its sample ``law``; None, none) and
-    circuit, its answer, and H1's log naming W and, unless ``bound`` is None, the record H1 bound (``same``: R; ``other``:
-    another)."""
+    circuit, which reads H1's tables, its answer, H1's window Program's meta, and H1's log naming W and, unless ``bound``
+    is None, the record H1 bound (``same``: R; ``other``: another)."""
     d = tmp_path / "serve"
     vw = d / f"v3c-w7-{W63K4.replace(',', '-')}" / "window"
     vw.mkdir(parents=True)
     (d / "h1" / "w7").mkdir(parents=True)
     r = {"format": "toy", "previous": REG.digest(W_OF_7), **({"law": law} if law else {})}
     (vw / "registration.json").write_text(json.dumps(r))
-    (vw / "circuit.json").write_text(json.dumps({"run": "ab"}))
+    (vw / "circuit.json").write_text(json.dumps({"run": "ab", "tables": "h1"}))
+    (d / "h1" / "window-program.meta.json").write_text(json.dumps({"program_digest": "p" * 128}))
     (d / "h1" / "w7" / "window-commit.json").write_text(json.dumps({"run": "ab", "circuit": "cd", "population": 37}))
     log = [{"window": 7, "kind": "registration", "file": "w7/registration.json", "digest": "aa" * 64}]
     if bound is not None:
@@ -1964,11 +2020,19 @@ def _tied_commit(tmp_path: Path, bound: str | None, law: dict | None = TIED_LAW)
 
 def test_under_h1_tie_v3c_audits_the_commit_h1_bound_and_makes_none_of_its_own(tmp_path):
     """The window's one commit is the one its close made: V3c holds its registration to the record H1 bound (the log's
-    digest) and its circuit to the verifier's, runs no window-commit, and goes on to its audit."""
+    digest) and its circuit to the verifier's, which reads H1's W's tables as the commit's does (window-circuit
+    --window-registration W, with its Program's meta as the run publishes it; its own record beside the untied one), runs
+    no window-commit, and goes on to its audit."""
     _tied_commit(tmp_path, "same")
     rc, lines, order, _limits = _v3c(tmp_path, H1_TIE="1")
     assert rc == 0 and "window-commit" not in order and order[:2] == ["compiler", "window-circuit"] and "audit" in order, \
         (lines, order)
+    d = tmp_path / "serve"
+    assert json.loads((tmp_path / "order.circuit").read_text()) == [
+        f"window-circuit-w7-{W63K4.replace(',', '-')}-tie.json", "--window-registration", str(d / "h1" / "w7" / "registration.json"),
+        "--h1-meta", str(tmp_path / "out" / "serve" / "h1" / "window-program.meta.json")]
+    assert not (d / f"window-circuit-w7-{W63K4.replace(',', '-')}.json").exists()
+    assert lines[0].startswith(f"WINDOW-CIRCUIT class {W63K4} reading H1's tables: registered 7 bits"), lines
     assert lines[1].startswith(f"WINDOW-COMMIT class {W63K4} at H1's close, its registration the Commit record H1 bound "
                                "before the sample coin (R ") and '"run": "ab"' in lines[1] and "population" not in lines[1]
     assert lines[2] == (f"WINDOW-CIRCUIT-HELD class {W63K4}: the committed circuit.json less its run fields is the "
@@ -2090,6 +2154,8 @@ def test_v3c_runs_no_audit_without_a_line_of_main_for_its_session_to_pin_on(tmp_
 
 
 LOCAL_COINS = "a local development challenger session on vy-dc-h200, the served node, not an auditor's (PP_CHALLENGER local)"
+FOLLOW_COINS = ("a local development challenger session on cpu-6, the follow-on's node, where it runs V3c's audit, "
+                "not an auditor's (PP_CHALLENGER local)")
 @pytest.mark.parametrize("extra, coins", [
     ({}, LOCAL_COINS),
     ({"PP_CHALLENGER": "gate:research@auditor", "PP_PEER": "vy-dc-h200"},
@@ -2193,10 +2259,12 @@ TIES = {"H1_TIE": "1", "H1_GATE": GATE, "H1_CIRCUITS": "circuits"}
      "90m, not 1h"),
     ({**TIES, "NODE_MEM_GB": "196"}, FAKE_V3C_PROVE_PATH, "PREFLIGHT: under H1_TIE, where this node has 196 GB, under the "
      "290 GB V3c's audit needs (V3C_AUDIT_MEM_GB), its audit and the composite are deferred to a follow-on, and onsite's "
-     "composite reads PoUS's case, which needs this node's card: PRODUCT=remote, or a node with the memory"),
+     "composite reads PoUS's and the wipe's cases, which only this node's card writes: PRODUCT=remote or "
+     "remote-network, COMPOSITE set empty, or a node with the memory"),
     ({**TIES, "V3C_AUDIT_MEM_GB": "600"}, FAKE_V3C_PROVE_PATH, "PREFLIGHT: under H1_TIE, where this node has 512 GB, under "
      "the 600 GB V3c's audit needs (V3C_AUDIT_MEM_GB), its audit and the composite are deferred to a follow-on, and onsite's "
-     "composite reads PoUS's case, which needs this node's card: PRODUCT=remote, or a node with the memory"),
+     "composite reads PoUS's and the wipe's cases, which only this node's card writes: PRODUCT=remote or "
+     "remote-network, COMPOSITE set empty, or a node with the memory"),
 ])
 def test_the_preflight_refuses_h1_tie_without_h1s_prover_or_v3c_or_window_commits_tie_or_past_the_sessions_time(
         tmp_path, extra, prove_path, line):
@@ -2237,7 +2305,7 @@ VTAG = W63K4.replace(",", "-")
 SHA = "5a" * 20
 SHORT = "this node has 196 GB, under the 290 GB V3c's audit needs (V3C_AUDIT_MEM_GB)"
 #: what a deferral's follow-on reads in `_deferred`'s serve dir, but for V3c's window dir and the deferral's own files
-DEFERRED_READS = ("weights_registration.json", f"window-circuit-w7-{VTAG}.json", "windows.jsonl", "seals.jsonl",
+DEFERRED_READS = ("weights_registration.json", f"window-circuit-w7-{VTAG}-tie.json", "windows.jsonl", "seals.jsonl",
                   "requests.jsonl", "h1/log.jsonl", "h1/w7/registration.json", "h1/w7/record.json",
                   "h1/w7/window-commit.json", "private/pouw/period/case.json", "private/pouw/period/answer.json")
 FAKE_RECORD = '''import json, os, sys
@@ -2247,7 +2315,7 @@ open(os.environ["ORDER"] + ".record", "w").write(json.dumps(a))
 print("RECORD " + json.dumps({"composed": "pending", "window": 7}))
 '''
 FAKE_SERVED_COMPOSITE = '''echo composite >> "$ORDER"
-printf "%s\\n" "$SERVED_NODE" "$@" > "$ORDER.composite"
+printf "%s\\n" "$SERVED_NODE" "$PRODUCT" "$@" > "$ORDER.composite"
 echo "COMPOSITE: composed on $(hostname -s)" >> "$2/verdicts.txt"'''
 
 
@@ -2266,7 +2334,8 @@ def _deferred(tmp_path: Path, **extra: str) -> subprocess.CompletedProcess:
     _tied_commit(tmp_path, "same")
     vw = d / f"v3c-w7-{VTAG}" / "window"
     files = {"h1/w7/registration.json": W_OF_7, "h1/w7/record.json": json.loads((vw / "registration.json").read_text()),
-             f"window-circuit-w7-{VTAG}.json": {}, "weights_registration.json": {}, "seals.jsonl": {"window": 7},
+             f"window-circuit-w7-{VTAG}.json": {}, f"window-circuit-w7-{VTAG}-tie.json": {"tables": "h1"},
+             "weights_registration.json": {}, "seals.jsonl": {"window": 7},
              "requests.jsonl": {"windows": [7]}, "private/pouw/period/case.json": {"evidence": "beef"},
              "private/pouw/period/answer.json": {"protocol": "verity/pouw/period/v1"},
              "windows/w7/rows.bin": {}, "private/weights.key": {}, "sampled-proofs-served/window/audit.json": {}}
@@ -2289,21 +2358,24 @@ def _deferred(tmp_path: Path, **extra: str) -> subprocess.CompletedProcess:
 
 def test_a_node_short_of_v3cs_audits_memory_defers_it_and_the_composite_listing_and_hashing_each_input(tmp_path):
     """Step 6's deferral leaves in the serve dir's private/deferred the pieces the record read, the settings the
-    follow-on runs at (the window, the product, V3c's class and law, H1_TIE, the composite, the served node and the tree's
-    commit), and the follow-on's every input, listed for the prover's copy and hashed for the follow-on to hold it to:
+    follow-on runs at (the window, the product, V3c's class and law, H1_TIE, the composite, the served node, the tree's
+    commit, and WINDOW_STEPS and MAX_TOKENS, which label the onsite record), and the follow-on's every input, listed for
+    the prover's copy and hashed for the follow-on to hold it to:
     V3c's window dir whole, H1's log and each record it names, the tie's commit answer, the record's and the composite's
     inputs and its own files, and nothing else of the serve dir. Its one line in $OUT names what was deferred, why and the
     follow-on's command, and no window; nothing else lands in $OUT."""
     run = _deferred(tmp_path)
     assert run.returncode == 0, run.stderr
     d, dd, out = tmp_path / "serve", tmp_path / "serve" / "private" / "deferred", tmp_path / "served-out"
-    names = "K PRODUCT V3C_CLASS V3C_LAW H1_TIE COMPOSITE ALPHA GAMMA SERVED_NODE DEFERRED_TREE CR_SCAN_DELTA"
+    names = ("K PRODUCT V3C_CLASS V3C_LAW H1_TIE COMPOSITE ALPHA GAMMA SERVED_NODE DEFERRED_TREE CR_SCAN_DELTA ONSITE "
+             "CERTIFIER_CHAIN_CMD CERTIFIER_PERIOD_CMD WINDOW_STEPS MAX_TOKENS")
     said = subprocess.run(["bash", "-c", f'. "$1"; for v in {names}; do printf "%s=%s\\n" "$v" "${{!v}}"; done', "_",
                            str(dd / "deferred.env")], check=True, capture_output=True, text=True).stdout
     assert dict(x.split("=", 1) for x in said.splitlines()) == {
         "K": "7", "PRODUCT": "remote", "V3C_CLASS": W63K4, "V3C_LAW": "stratified:1", "H1_TIE": "1", "COMPOSITE": "1",
         "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200", "DEFERRED_TREE": SHA,
-        "CR_SCAN_DELTA": "5.421010862427522e-20"}
+        "CR_SCAN_DELTA": "5.421010862427522e-20", "ONSITE": "", "CERTIFIER_CHAIN_CMD": "", "CERTIFIER_PERIOD_CMD": "",
+        "WINDOW_STEPS": "16", "MAX_TOKENS": "4"}
     listed = (dd / "inputs.txt").read_text().splitlines()
     window = [f"v3c-w7-{VTAG}/window/{f}" for f in ("circuit.json", "registration.json", "values/a.bin")]
     own = ["private/deferred/deferred.env", "private/deferred/pieces/pouw/answer.json"]
@@ -2320,11 +2392,13 @@ def test_a_node_short_of_v3cs_audits_memory_defers_it_and_the_composite_listing_
     assert not _window_data(out, 7) and oct(dd.stat().st_mode & 0o777) == "0o700"
 
 
-def _follow(tmp_path: Path, **extra: str | None) -> tuple[int, list[str], list[str], list[str]]:
+def _follow(tmp_path: Path, composite: str = FAKE_SERVED_COMPOSITE, **extra: str | None
+            ) -> tuple[int, list[str], list[str], list[str]]:
     """The follow-on of `_deferred`'s deferral: `served_verdicts.sh v3c` with D alone (no K, class or certifier) on
     cpu-6, a node with V3c's audit's memory, at the served node's tree, in `_v3c`'s toy tree with a record and a
-    composite that note their arguments (``extra`` adds to the environment, None unsetting): `_v3c`'s outcome."""
-    _script(tmp_path / "tree" / "benchmarks" / "one_stage" / "served_composite.sh", FAKE_SERVED_COMPOSITE)
+    composite step (``composite``'s body) that note their arguments (``extra`` adds to the environment, None unsetting):
+    `_v3c`'s outcome."""
+    _script(tmp_path / "tree" / "benchmarks" / "one_stage" / "served_composite.sh", composite)
     (tmp_path / "tree" / "benchmarks" / "one_stage" / "served_verdicts.py").write_text(FAKE_RECORD)
     env = {"K": None, "V3C_CLASS": None, "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None,
            "PATH": f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}", "HOST": "cpu-6", "NODE_MEM_GB": "755",
@@ -2340,21 +2414,23 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
         tmp_path, extra, tree):
     """The follow-on, at the settings the deferral recorded: the copy held to the served node's sums, then no window
     circuit or commit of its own (the served node's record at the class, its tree's, and the commit H1 bound, held as
-    there), V3c's audit and period, the final record about the served node from the pieces it read, and the composite,
-    told the served node, so each says it composed elsewhere. Another tree runs only under FOLLOW_ANY_TREE, which its
-    line names. $OUT names no window."""
+    there), the COINS line of its own audit's coins (its $OUT holds no other), V3c's audit and period, the final record
+    about the served node from the pieces it read, and the composite, told the served node, so each says it composed
+    elsewhere; no onsite record, which the served node's run didn't write. Another tree runs only under
+    FOLLOW_ANY_TREE, which its line names. $OUT names no window."""
     assert _deferred(tmp_path).returncode == 0
     rc, lines, order, limits = _follow(tmp_path, **extra)
     d, out = tmp_path / "serve", tmp_path / "out"
     assert rc == 0 and order == ["audit", "period", "record", "composite"], (lines, order)
-    assert lines[:2] == [
+    assert lines[:3] == [
         "FOLLOW-ON on cpu-6, 755 GB: V3c's audit and the composite, which the served node vy-dc-h200 deferred, from its "
         "serve dir's audit inputs copied here prover-side, each as it hashed them (the serve dir's "
         "private/deferred/inputs.sha256): PASS",
         f"WINDOW-CIRCUIT class {W63K4}: the served node's record at the class (step 3's), from its tree's commit {SHA} "
-        f"{tree}; this node holds no row dir to count it from"]
-    assert lines[2].startswith(f"WINDOW-COMMIT class {W63K4} at H1's close") and lines[3].endswith("PASS")
-    assert [x.split(" ")[0] for x in lines[4:]] == ["V3C-AUDIT", "V3C-PERIOD", "RECORD", "COMPOSITE:"]
+        f"{tree}; this node holds no row dir to count it from",
+        f"COINS sampled proofs: {FOLLOW_COINS}; the other protocols' as the served node's COINS line names them"]
+    assert lines[3].startswith(f"WINDOW-COMMIT class {W63K4} at H1's close") and lines[4].endswith("PASS")
+    assert [x.split(" ")[0] for x in lines[5:]] == ["V3C-AUDIT", "V3C-PERIOD", "RECORD", "COMPOSITE:"]
     assert lines[-1] == "COMPOSITE: composed on cpu-6" and limits == ["180m"]
     assert _audited(tmp_path) == {"--law": "stratified:1", "--tie": str(d / "h1" / "w7" / "registration.json"),
                                   "--tie-prefix": "h1/", "--ports": "3"}
@@ -2363,8 +2439,8 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
         "--registration", str(d / f"v3c-w7-{VTAG}" / "window" / "registration.json"), "--pieces",
         str(d / "private" / "deferred" / "pieces"), "--out", str(out / "record"), "--product", "remote", "--node",
         "vy-dc-h200"]
-    assert (tmp_path / "order.composite").read_text().split() == ["vy-dc-h200", str(d), str(out)]
-    assert not _window_data(out, 7), _window_data(out, 7)
+    assert (tmp_path / "order.composite").read_text().split() == ["vy-dc-h200", "remote", str(d), str(out)]
+    assert not (out / "registration.json").exists() and not _window_data(out, 7), _window_data(out, 7)
 
 
 FOLLOW_FAIL = ("FOLLOW-ON on cpu-6, 755 GB: V3c's audit and the composite, which the served node vy-dc-h200 deferred, "
@@ -2379,6 +2455,7 @@ CLASH = ("PREFLIGHT: the follow-on runs at the deferral's settings (the serve di
     ("case.json", {}, FOLLOW_FAIL),
     (None, {"K": "8"}, f"{CLASH} K: unset it"),
     (None, {"PRODUCT": "onsite", "COMPOSITE": ""}, f"{CLASH} PRODUCT COMPOSITE: unset it"),
+    (None, {"WINDOW_STEPS": "1", "MAX_TOKENS": "4"}, f"{CLASH} WINDOW_STEPS: unset it"),
     (None, {"NODE_MEM_GB": "196"}, f"PREFLIGHT: the follow-on runs the V3c audit the served node deferred, and {SHORT}"),
     (None, {"RESEARCH_SOURCE_SHA": "cd" * 20}, "PREFLIGHT: the follow-on reads the served node's window-circuit record, "
      f"which its tree {SHA} wrote, and this tree is {'cd' * 20}: run it at that commit, or set FOLLOW_ANY_TREE=1"),
@@ -2408,12 +2485,18 @@ DEFERS = "so step 6 defers V3c's audit and the composite to a follow-on"
     ({**TIES, "LEASE_MEM_GB": "64"}, "512 GB: the serve's lease 150 min, capped at 64 GB"),
     ({**TIES, "NODE_MEM_GB": "196", "PRODUCT": "remote", "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None},
      f"196 GB: the serve's lease 150 min, capped at 160 GB; {SHORT}, {DEFERS}"),
+    ({**TIES, "NODE_MEM_GB": "196", "PRODUCT": "remote-network"},
+     f"196 GB: the serve's lease 150 min, capped at 160 GB; {SHORT}, {DEFERS}"),
+    ({**TIES, "NODE_MEM_GB": "196", "COMPOSITE": ""},
+     f"196 GB: the serve's lease 150 min, capped at 160 GB; {SHORT}, so step 6 defers V3c's audit to a follow-on"),
 ])
 def test_preflight_only_says_what_the_run_would_do_and_stops_before_anything_is_kept_built_or_served(
         tmp_path, extra, said):
     """PREFLIGHT_ONLY=1 runs the preflight and stops there, exit 0, with one line: the serve's lease (under H1_TIE 150
     minutes capped at 160 GB, the serve's 128 and window-commit's peak, within a 196 GB node) and, on a node short of
-    V3c's audit's memory, its deferral. Nothing runs, and neither the serve root nor C-Flock's work dir is made."""
+    V3c's audit's memory, its deferral: of the audit alone where COMPOSITE is set empty, under which onsite, whose
+    composite reads the card's cases, defers too. Nothing runs, and neither the serve root nor C-Flock's work dir is
+    made."""
     rc, lines, order, limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
                                     HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", **extra)
     assert (rc, lines, order, limits) == (0, [f"PREFLIGHT passed on vy-dc-h200-2, {said}. {ONLY}"], [], [])
@@ -2442,8 +2525,114 @@ def test_a_deferral_carries_the_served_nodes_inference_only_verdict_into_the_fol
     assert json.loads((dd / "inference-only.json").read_text()) == verdict
     rc, lines, order, _limits = _follow(tmp_path)
     assert rc == 0 and order == ["audit", "period", "record", "composite"], (lines, order)
-    assert [x.split(" ")[0] for x in lines[4:]] == ["V3C-AUDIT", "V3C-PERIOD", "INFERENCE-ONLY:", "RECORD", "COMPOSITE:"]
+    assert [x.split(" ")[0] for x in lines[5:]] == ["V3C-AUDIT", "V3C-PERIOD", "INFERENCE-ONLY:", "RECORD",
+                                                    "COMPOSITE:"]
     assert json.loads((tmp_path / "out" / "record" / "inference-only.json").read_text()) == verdict
+
+
+def test_a_deferral_carries_the_advice_registrations_public_form_into_the_follow_ons_out(tmp_path):
+    """The advice registration's public form the served node published ($OUT/registration.json, whose cap the onsite
+    record charges) goes with the deferral, listed and hashed with the follow-on's inputs, and into the follow-on's $OUT
+    as the served node wrote it."""
+    public = S.public_registration(REGISTRATION)
+    (tmp_path / "served-out").mkdir()
+    (tmp_path / "served-out" / "registration.json").write_text(json.dumps(public))
+    assert _deferred(tmp_path).returncode == 0
+    dd = tmp_path / "serve" / "private" / "deferred"
+    assert "private/deferred/registration.json" in (dd / "inputs.txt").read_text().splitlines()
+    assert "private/deferred/registration.json" in (dd / "inputs.sha256").read_text()
+    rc, lines, order, _limits = _follow(tmp_path)
+    assert rc == 0 and order == ["audit", "period", "record", "composite"], (lines, order)
+    assert json.loads((tmp_path / "out" / "registration.json").read_text()) == public
+
+
+FAKE_ONSITE_RECORD = '''import json, os, sys
+open(os.environ["ORDER"], "a").write("onsite\\n")
+open(os.environ["ORDER"] + ".onsite", "w").write(json.dumps(sys.argv[1:]))
+print("ONSITE " + json.dumps({"written": "record/onsite.json"}))
+'''
+REPROOF = 'echo reproof >> "$ORDER"; printf "%s\\n" "$@" > "$ORDER.reproof"; echo "REPROOF COPY: {said}"; exit {rc}'
+
+
+@pytest.mark.parametrize("rc, said", [(0, "PASS"), (4, "FAIL (rsync)")])
+def test_the_follow_on_runs_reproof_cmd_after_the_audit_then_the_onsite_record_with_its_copy_where_the_served_run_would(
+        tmp_path, rc, said):
+    """A deferral of a run that writes the onsite record (its certifier's front or piece set) records ONSITE, and its
+    follow-on runs REPROOF_CMD once V3c's audit is done, with the serve dir, the window and V3c's dir, its log in the
+    serve dir's private/ and its last line the REPROOF line; then the record and the composite, and last the onsite
+    record at the served run's WINDOW_STEPS and MAX_TOKENS, not the follow-on's defaults, with REPROOF_COPY and
+    REPROOF_LISTING, and --h1-tie, the deferral's being H1-tied, before $OUT is published. A copy that fails fails the
+    follow-on, and every record is still written."""
+    assert _deferred(tmp_path, CERTIFIER_FRONT="front", WINDOW_STEPS="1", MAX_TOKENS="1").returncode == 0
+    d, out, listing = tmp_path / "serve", tmp_path / "out", tmp_path / "serve" / "private" / "reproof-listing.txt"
+    (tmp_path / "tree" / "benchmarks" / "one_stage").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "tree" / "benchmarks" / "one_stage" / "onsite_record.py").write_text(FAKE_ONSITE_RECORD)
+    got, lines, order, _limits = _follow(tmp_path, REPROOF_CMD=REPROOF.format(said=said, rc=rc),
+                                         REPROOF_COPY="vy-nebius-cpu-3:/p/r1", REPROOF_LISTING=str(listing))
+    assert (got == 0) == (rc == 0) and order == ["audit", "period", "reproof", "record", "composite", "onsite"], order
+    assert (tmp_path / "order.reproof").read_text().split() == [str(d), "7", str(d / f"v3c-w7-{VTAG}")]
+    assert f"REPROOF (exit {rc}): REPROOF COPY: {said}" in lines and lines[-1].startswith("ONSITE ")
+    assert oct((d / "private" / "reproof.log").stat().st_mode & 0o777) == "0o600"
+    assert json.loads((tmp_path / "order.onsite").read_text()) == [
+        str(out), "--window-steps", "1", "--max-tokens", "1", "--reproof-copy", "vy-nebius-cpu-3:/p/r1",
+        "--reproof-listing", str(listing), "--h1-tie"]
+
+
+#: the network certifier's kept run in `_deferred`'s serve dir: the gate's fetch and the front's session
+KEPT = ("private/certifier/r1/fetch.tar.gz", "private/certifier/r1/session.json")
+
+
+@pytest.mark.parametrize("product", ["remote", "remote-network"])
+def test_a_deferral_with_the_split_certifier_behind_its_front_leaves_the_chain_and_its_period_check_to_the_follow_on(
+        tmp_path, product):
+    """With the network certifier in front, remote takes the split certifier's two commands, whose period case the onsite
+    record reads (remote's record drops the certifier), and so does remote-network, whose composite is the onsite
+    record's verdict. Its deferral carries both and the kept run the chain reads,
+    listed and hashed, and nothing else of the certifier's private/; the follow-on runs the chain after V3c's audit and
+    period rather than beside them (its node has the audit's memory alone), then the certifier's period check on that
+    period.json into its own $OUT/pieces/certifier, the record on the served node's pieces with the certifier's answer
+    from here (remote-network's record reads it), then `served_composite.sh` after that period check, told the served
+    node, and the onsite record last. remote-network's follow-on writes $OUT/composite/remote-network/composite.json,
+    the onsite record's verdict, from the network certifier's case checked here; remote's writes remote's alone."""
+    d, tree = tmp_path / "serve", tmp_path / "tree"
+    for f in (*KEPT, "private/certifier/attacks/relay.log"):
+        (d / f).parent.mkdir(parents=True, exist_ok=True)
+        (d / f).write_text(f)
+    period = ('echo period-check >> "$ORDER"; test -s "$4/period.json" || exit 1; '
+              'echo \'{"commitment": "7b7d", "evidence": "7b7d", "params": {}}\' > "$3/case.json"; '
+              'echo \'{"protocol": "verity/certifier/v9", "verdict": "accept"}\' > "$3/answer.json"; echo checked')
+    run = _deferred(tmp_path, PRODUCT=product, CERTIFIER_FRONT="front", CERTIFIER_CHAIN_CMD=CHAIN,
+                    CERTIFIER_PERIOD_CMD=period)
+    assert run.returncode == 0, run.stderr
+    dd = d / "private" / "deferred"
+    assert [f for f in (dd / "inputs.txt").read_text().splitlines() if f.startswith("private/certifier/")] == list(KEPT)
+    assert all(f in (dd / "inputs.sha256").read_text() for f in KEPT)
+    (tree / "benchmarks" / "one_stage").mkdir(parents=True, exist_ok=True)
+    (tree / "benchmarks" / "one_stage" / "onsite_record.py").write_text(FAKE_ONSITE_RECORD)
+    (tree / "benchmarks" / "one_stage" / "composite.py").write_text(FAKE_COMPOSITE)
+    for pkg in ("remote", "onsite"):
+        (tree / "verity" / "core" / "protocols" / pkg).mkdir(parents=True)
+    _script(tmp_path / "stubs" / "systemd-run", "exit 1")
+    rc, lines, order, limits = _follow(tmp_path, composite=(HERE.parent / "served_composite.sh").read_text(),
+                                       PATH=f"{_hosts(tmp_path)}:{tmp_path / 'stubs'}:{tmp_path / 'bin'}:{os.defpath}")
+    out, pieces = tmp_path / "out", tmp_path / "out" / "pieces" / "certifier"
+    products = {"remote": ["remote"], "remote-network": ["remote", "remote-network"]}[product]
+    assert rc == 0 and order == ["audit", "period", "chain", "period-check", "record",
+                                 *(f"composite-{x}" for x in products), "onsite"], (lines, order)
+    assert limits == ["180m", "4h", "60m", *["60m"] * len(products)]
+    assert (tmp_path / "order.args").read_text().split() == [str(d), "7", str(pieces), str(d / f"v3c-w7-{VTAG}")]
+    assert json.loads((pieces / "answer.json").read_text()) == {"protocol": "verity/certifier/v9", "verdict": "accept"}
+    record = json.loads((tmp_path / "order.record").read_text())
+    assert (record[record.index("--pieces") + 1], record[record.index("--product") + 1]) == (
+        str(pieces.parent), product)
+    assert (pieces.parent / "pouw" / "answer.json").read_text() == (dd / "pieces" / "pouw" / "answer.json").read_text()
+    assert sorted(f.relative_to(out).as_posix() for f in (out / "composite").rglob("*") if f.is_file()) == sorted(
+        f"composite/{x}/composite.json" for x in products)
+    handed = {x: json.loads((d / "private" / "composite" / x / "private" / "argv.json").read_text()) for x in products}
+    assert handed == ({"remote": [], "remote-network": [str(pieces)]} if product == "remote-network" else {"remote": []})
+    assert ("COMPOSITE: composed on cpu-6, not the served node vy-dc-h200: from a prover-side copy of its serve dir's "
+            "audit inputs and the cases written here from it, not from the parties that produced them") in lines
+    assert not (pieces / "chain.log").exists() and (d / "private" / "pieces" / "certifier" / "period.log").exists()
 
 
 def _script(path: Path, body: str) -> None:
@@ -2502,26 +2691,41 @@ def test_settings_are_read_before_the_defaults_and_an_unreadable_file_is_refused
     assert (got.returncode, got.stderr.strip()) == (3, f"PREFLIGHT: SETTINGS={tmp_path / 'missing.env'} is not a readable file")
 
 
+SPLIT_NO_FRONT = ("PREFLIGHT: PRODUCT=remote runs the split certifier's CERTIFIER_CHAIN_CMD only with the network certifier "
+                  "in front, whose period case it writes: set CERTIFIER_FRONT, or unset it")
+
+
 @pytest.mark.parametrize("product, extra, line", [
     ("remote", {}, None),
     ("remote", {"POUS_CMD": "true"}, "PREFLIGHT: PRODUCT=remote runs no onsite piece, and POUS_CMD is set: unset it"),
-    ("remote", {"CERTIFIER_CHAIN_CMD": "true"},
-     "PREFLIGHT: PRODUCT=remote runs no onsite piece, and CERTIFIER_CHAIN_CMD is set: unset it"),
+    ("remote", {"CERTIFIER_CHAIN_CMD": "true"}, SPLIT_NO_FRONT),
     ("remote", {"CERTIFIER_CMD": "true"},
      "PREFLIGHT: PRODUCT=remote runs no onsite piece, and CERTIFIER_CMD is set: unset it"),
     ("remote", {"LOAD": "front", "CERTIFIER_FRONT": FRONT, "SERVE_ARGS": IDS}, None),
+    ("remote", {"LOAD": "front", "CERTIFIER_FRONT": FRONT, "SERVE_ARGS": IDS, "CERTIFIER_CHAIN_CMD": "true",
+                "CERTIFIER_PERIOD_CMD": "true"}, None),
+    ("remote", {"LOAD": "front", "CERTIFIER_FRONT": FRONT, "SERVE_ARGS": IDS, "CERTIFIER_CMD": "true"},
+     "PREFLIGHT: PRODUCT=remote runs no onsite piece, and CERTIFIER_CMD is set: unset it"),
     ("remote-network", {}, None),
     ("remote-network", {"CERTIFIER_CHAIN_CMD": "true", "CERTIFIER_PERIOD_CMD": "true"}, None),
     ("remote-network", {"POUS_CMD": "true"},
      "PREFLIGHT: PRODUCT=remote-network runs no onsite piece but the network certifier's, and POUS_CMD is set: unset it"),
+    ("remote-network", {"CERTIFIER_CMD": "true"},
+     "PREFLIGHT: PRODUCT=remote-network holds every compute audit of the network certifier's period to the run's "
+     "registration, which only the split certifier's (V3c's) is: set CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD in "
+     "place of CERTIFIER_CMD"),
+    ("onsite", {"CERTIFIER_CMD": "true"}, None),
     ("onsite", {}, None),
     ("offsite", {}, "PREFLIGHT: PRODUCT is onsite, remote or remote-network, not offsite"),
 ])
 def test_remote_sets_no_onsite_default_and_its_preflight_refuses_an_onsite_command(tmp_path, product, extra, line):
     """PRODUCT=remote drops the onsite pieces: in a tree that has the wipe's piece its default WIPE_CMD isn't set, and
     the preflight refuses any onsite piece's command set, before anything runs. The certifier's front is how a run's
-    requests are served, not a piece, so remote takes it. PRODUCT=remote-network takes the network certifier's commands
-    and refuses the other onsite pieces' as remote does."""
+    requests are served, not a piece, so remote takes it, and with it the split certifier's chain and period, which
+    write the period case the onsite record reads; without the front, remote refuses them. PRODUCT=remote-network takes
+    the split certifier's commands and refuses the other onsite pieces' as remote does, and the whole certifier piece's
+    too: its egress tie holds every compute audit of the certifier's period to the run's registration, and the whole
+    piece's are its scan's own."""
     tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
     _script(tree / "benchmarks" / "pous" / "streamed_wipe" / "served_wipe.sh", "exit 0")
     (tree / "benchmarks" / "network_traces").mkdir(parents=True)
@@ -2570,13 +2774,15 @@ def test_the_advice_charge_runs_preflight_refuses_what_serve_openai_or_its_repor
     assert (rc, said) == (3, [line or f"PREFLIGHT: no {row}/manifest.json"])
 
 
-FAKE_COMPOSITE = '''import json, sys
+FAKE_COMPOSITE = '''import json, os, sys
 from pathlib import Path
 COMPONENTS = {"onsite": ("verity/pous/p2/v4/run", "verity/wipe/v0"),
               "remote": ("verity/pouw/v1", "verity/sampled-proofs/one-stage/v2"),
               "remote-network": ("verity/certifier/v9", "verity/pouw/v1", "verity/sampled-proofs/one-stage/v2")}
 if __name__ == "__main__":
     a = sys.argv[1:]
+    if "ORDER" in os.environ:
+        open(os.environ["ORDER"], "a").write(f"composite-{a[0]}\\n")
     Path(a[a.index("--private-out") + 1]).mkdir(parents=True)
     Path(a[a.index("--public-out") + 1]).mkdir(parents=True)
     Path(a[a.index("--public-out") + 1], "composite.json").write_text(json.dumps({"product": a[0]}))

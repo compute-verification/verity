@@ -44,7 +44,10 @@ certifier connection's cell cap over the period (`cap_c`), the session's window
 the period starts at (`w₀`: its link-windows are the session's `w₀ … w₀ + m − 1`, so one certifier session spans many
 periods),
 the observations' jitter bound `Dj ≥ 1`, the network certifier's LMS public key and parameters and the certifier session
-(32 bytes) every certificate binds, the link (at most 65,535 UTF-8 bytes), the SHA-512 of N2's registered Program for
+(32 bytes) every certificate binds, which are the auditor's: its own record of its device (`Registration.Auditor.key`,
+the key of each of its own devices), never a field of the evidence or the prover's copy of the run, so a certificate
+under another key or in another session is refused,
+the link (at most 65,535 UTF-8 bytes), the SHA-512 of N2's registered Program for
 the link (the partition object's `program`, `LinkWindows.partition`), Σ_sync, and the period's `m ≥ 1` link-windows.
 An audit's free inputs (`free`) are no parameter: the check counts them off its descriptor, the Program's input gates
 (`inputGates`: its root's input nodes' members times their widths, of either binding time). That is

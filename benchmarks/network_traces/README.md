@@ -108,9 +108,11 @@ and the gate's fetch is kept in the serve dir's `private/certifier`. A request's
 admission, 2.7 s at the scan's 100 ms tick; for a slower endpoint `--bucket-ms` runs the scan at a longer tick, up to
 4000 ms (108 s). Its `piece` (`CERTIFIER_CMD`) runs the chain's network certifier path on that fetch, which opens no
 endpoint records or advice, its run dir and quarantine private beside the fetch, and answers with `network-period check`
-on the rows form of the scan's execution phase (`scan_period.rows_case`). The answer is accept only when the chain accepted,
-every request of the audited Commit period is a certified one inside that execution phase and carries the network
-certifier's run in its release, every certified request is exactly one served request, and the Lean check accepts;
+on the rows form of the scan's execution phase (`scan_period.rows_case`). The answer is accept only when the network
+certifier's records pass `network-rows check` (each record held to its certified head, then the certifier program's rows
+audit, which refuses cells cut, clocked or ordered otherwise than the schedule), the chain accepted, every request of
+the audited Commit period is a certified one inside that execution phase and carries the network certifier's run in its
+release, every certified request is exactly one served request, and the Lean check accepts;
 beside that answer goes its case, `case.json`, as the one-stage composite reads a piece's (inline, about 83 MB on a
 served window). Only the protocol rejecting the served window is a reject: with no fetch kept, a rehearsal the gate's
 check didn't pass (each request late, say, a connection the network certifier failed closed) or a step that can't run,
@@ -132,7 +134,9 @@ or a φ carrying the requests is a finding too, and on any finding the run fails
 directory. Split in two around V3c (`CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`), its `chain` runs the chain with
 the scan on V3c's committed window (`scan_zk.py --v3c`: its scan state and slot entries are the scan's state and prog
 trees), and its `period` runs the consistency check on the rows case whose one compute audit is V3c's `period.json`, at any sample of
-V3c's; each step releases through its own hold.
+V3c's; each step releases through its own hold. Only the split's period is on the run's registration record, as remote
+with the network certifier's `egress` tie requires of every compute audit, so a `PRODUCT=remote-network` run takes the
+split.
 
 `attacks.py` lists what the served path must refuse or charge (`table`): each attack with its case, the check that
 refuses it or the leak bound's term that charges it, and the reason its verdict names. Its `relay` is the prover's

@@ -95,7 +95,9 @@ negatives.
   of its endpoint, its verdicts unchanged. `PRODUCT=remote-network` composes sampled proofs, PoUW and the network
   certifier, dropping the wipe, PoUS and the bandwidth audit as remote does, and its composites are remote's and
   `verity/remote-network/v0`'s, which refuses a network certifier's period whose compute audits are not all on the run's
-  registration record (its `egress` tie). An accept's clause says when its weights were held and their share of the checkpoint, where its
+  registration record (its `egress` tie). So a remote-network run takes the split certifier below, whose one compute
+  audit is V3c's of the served window, and its preflight refuses `CERTIFIER_CMD`, whose audits are its scan's own
+  registrations. An accept's clause says when its weights were held and their share of the checkpoint, where its
   profile says so (PoUS's), and each δ of the block record's at which its quantity is not established. With the
   certifier's piece split in two (`CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`), V3c's step also runs the chain after
   its window commit, beside its audit (within `CERTIFIER_TIMEOUT`, default 4h), and the period check on its
@@ -230,8 +232,10 @@ negatives.
   the figure of record's: K as the period's check states it only where its Lean verdict held both checks the tight
   ℓ_{a,j} rests on (each tied audit's free inputs computed from its descriptor, and its circuit held fixed whatever its
   advice) and none of its premises is open: each is discharged by theorems `Security/lean-audit.json` or
-  `Security/Properties/lean-audit.json` lists, taking no named assumption but a standing one (an auditor-trusted
-  device's), and no premise about our own Python stands. While
+  `Security/Properties/lean-audit.json` lists, taking no named assumption but a standing one (trusted-host and
+  certifier-coverage), and no premise about our own Python stands; and each guarantee the tight K rests on is in the lock
+  at the statement whose hypotheses and antecedents the record names by hand, each by the premise that covers it, since
+  the lock records a guarantee's named assumptions and never its antecedents. While
   one of those is open, it is K plus ℓ_a + 1 bits for each tied audit of each phase, with the tight K's cells beside
   them, conditional on what is open, by name. The realized advice charge is private: the record states ℓ_{a,j} with its source,
   the tied compute audits' free inputs (no advice length and no cap is in them), beside it ℓ_a, the cap of the advice
@@ -244,7 +248,9 @@ negatives.
   never only on the served node, the public ones in custody and the serve dir's, witness, in a private copy off the
   node, never in `$OUT` or custody. `--reproof-copy NODE:/PATH` with `--reproof-listing` (the copy's listing, kept
   off `$OUT`; `REPROOF_COPY` and `REPROOF_LISTING` in `served_verdicts.sh`) names the copy and checks each serve-dir
-  input against the listing by its path alone.
+  input against the listing by its path alone: each file it names, and at least one file under each directory it names.
+  Under `H1_TIE` (`--h1-tie`, which `served_verdicts.sh` passes) the circuit it names is the record reading H1's tables,
+  `window-circuit-w<K>-<class>-tie.json`.
 - `advice_charge.py ADVICE --run RUN --to FILE`: honest serving's advice charge from `verity-vllm advice`'s output
   over a test run with public inputs: each Commit period's advice bits, unpadded, beside its requests' prompt and
   output lengths and finishes, labelled as that run's. `served_verdicts.sh advice-charge` serves such a run
