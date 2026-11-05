@@ -210,6 +210,8 @@ TERMINAL = {"FINISHED", "ERROR", "CANCELLED", "EXPIRED"}
 # while its agent's `updatedAt` moves (with that still too, the wait is stalled: cancelled and continued)
 STUCK = {"CREATING": 10 * 60, "WAITING_FOR_BACKGROUND_WORK": 2 * 3600}
 GOAL = "run-goal-"              # a goal run's id: the runs endpoint and its stream take only run-<uuid> (400)
+#: the handle a run's sender no route knows is watched under (`ring_run`): its idle and silence ring infra, who finds its owner
+UNOWNED = "infra"
 SUBAGENT = {"tool-call-delta"}          # interaction_update types that report a subagent's progress, not the parent's
 CONTINUE = ("continue: your run was held from {since} (the agent watch saw nothing for {mins} min after {after}, and "
             "cancelled it). Read your inbox and carry on from where you stopped.")
@@ -1305,6 +1307,10 @@ class Watch:
         for agent, d in workers(self.notes, self.log.with_name("workers.d"), self.registry, coords, t).items():
             if agent in listed and d["handle"]:                 # an agent a coordinator launched through the API: it owns it
                 self.owners[agent] = d["handle"]
+            if d["handle"] and (self.children.get(agent) or {}).get("owner"):
+                with self.kids_lock:                            # a stray a note or workers.d now names is its lane's
+                    self.children.pop(agent, None)
+                (self.workers.get(agent) or {}).pop("handle", None)
             w = self.workers.setdefault(agent, {"heard": 0.0})
             w.update(lane=d["lane"] or w.get("lane") or "", handle=d["handle"] or w.get("handle"),
                      heard=max(w["heard"], d["heard"]))
@@ -1320,8 +1326,8 @@ class Watch:
                 continue
             p = c["parent"]
             if p not in parents:
-                parents[p] = self.parent_handle(p, coords)
-            handle = parents[p]
+                parents[p] = self.parent_handle(p, coords) if p else None
+            handle = parents[p] or c.get("owner")
             if agent in listed and handle:
                 self.owners[agent] = handle
             w = self.workers.setdefault(agent, {"heard": 0.0})
@@ -1578,7 +1584,8 @@ class Watch:
             kid = self.children.get(agent) or {}
             if kid:
                 kid["t"] = self.clock()             # a worker still sending runs is never forgotten
-        known = agent in coords or agent in self.owners or w.get("handle") or w.get("parent") or kid
+        stray = bool(kid.get("owner")) and not kid.get("parent")     # watched as infra's until a route claims it: still unknown
+        known = agent in coords or agent in self.owners or w.get("parent") or (kid and not stray) or (w.get("handle") and not stray)
         if agent and not known and not lineage(self.registry, coords, agent) and self.learn_left > 0:
             kid = self.learn(agent, coords, self.clock())
         parent = w.get("parent") or kid.get("parent")
@@ -1588,7 +1595,7 @@ class Watch:
             handle, role, name = h, "coordinator", self.names.get(agent, "")
         elif agent in self.owners:                 # an agent a coordinator launched through the API, a relaunched worker
             handle, role, name = self.owners[agent], "worker", self.names.get(agent, "") or str(kid.get("name") or "")
-        elif w.get("handle"):
+        elif w.get("handle") and not stray:
             handle, role, name = w["handle"], "worker", str(w.get("name") or "")
         elif parent and (h := self.parent_handle(parent, coords)):
             handle, role, name = h, "worker", str(w.get("name") or kid.get("name") or self.names.get(agent, ""))
@@ -1616,6 +1623,9 @@ class Watch:
         if role == "unknown":
             print(f"{iso(self.clock())} run ends: {node} {row.get('run')} sent by {sent or row.get('by') or '?'}, which no "
                   "handle owns: recorded for @infra to route", file=sys.stderr, flush=True)
+            if agent and agent not in coords:
+                with self.kids_lock:                # watched as infra's worker until a route claims it (`watch_workers`)
+                    self.children.setdefault(agent, {"parent": "", "name": "", "t": self.clock(), "owner": UNOWNED})
             return {"run": str(row.get("run")), "node": node, "sender": sent or str(row.get("by") or ""), "what": what[:80],
                     "rc": row.get("rc"), "state": row.get("state"), "after": duration(row.get("wall_s")), "at": iso(ended)}
         self.record("run_ended", Run(agent, str(row.get("run")), name), judged=False, handle=handle, role=role, node=node,
