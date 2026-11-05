@@ -677,16 +677,15 @@ theorem injective_roundBits {m : ℕ} : Function.Injective (roundBits e : (Fin m
   funext i
   exact e.injective (List.ofFn_injective (congrFun (List.ofFn_injective h') i))
 
-/-- A round's bits have the same length at every release. -/
-theorem length_roundBits {m : ℕ} (c : Fin m → 𝔽) :
-    (roundBits e c).length = (List.ofFn fun _ : Fin m => 128).sum := by
-  rw [roundBits, List.length_flatten, map_length_roundBits]
+/-- A round's bits are 128 per challenge, under every encoding. -/
+theorem length_roundBits_enc {m : ℕ} (c : Fin m → 𝔽) : (roundBits e c).length = 128 * m := by
+  rw [roundBits, List.length_flatten, map_length_roundBits, List.ofFn_const, List.sum_replicate_nat, Nat.mul_comm]
 
 /-- **A link's bits determine its two rounds' challenges**, at every count `m`: its first round's bits have the same
-length at every release (`length_roundBits`). -/
+length at every release (`length_roundBits_enc`). -/
 theorem injective_linkBits {m : ℕ} : Function.Injective (linkBits e : (Fin 2 → Fin m → 𝔽) → List Bool) := by
   intro p p' h
-  obtain ⟨h0, h1⟩ := List.append_inj h ((length_roundBits e (p 0)).trans (length_roundBits e (p' 0)).symm)
+  obtain ⟨h0, h1⟩ := List.append_inj h ((length_roundBits_enc e (p 0)).trans (length_roundBits_enc e (p' 0)).symm)
   exact funext (Fin.forall_fin_two.2 ⟨injective_roundBits e h0, injective_roundBits e h1⟩)
 
 /-- **A draw's first `m` coins are a round's release**: in a block of at least `m` coins, the device releases them as
