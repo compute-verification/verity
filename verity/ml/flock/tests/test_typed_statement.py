@@ -63,10 +63,10 @@ def test_a_flat_class_carries_types_not_rows(template, params):
 
 
 def _set(sub, n, tmp_path):
-    from verity_numerical.bench.generate import generate
+    from synthetic_sets import synthetic_set
     from verity_numerical.bench.input_sets import InputSet
 
-    return InputSet.open(generate(sub, n, 20260926, tmp_path)["path"])
+    return InputSet.open(synthetic_set(sub, n, 20260926, tmp_path)["path"])
 
 
 def _root_inputs(s, sub, T):

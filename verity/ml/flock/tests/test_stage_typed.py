@@ -14,7 +14,7 @@ from verity_flock import typed_statement as TS
 pytest.importorskip("verity_numerical")
 pytest.importorskip("verity.ml.definitions.registry.prims")
 from verity_numerical.bench import templates as TM  # noqa: E402
-from verity_numerical.bench.generate import generate  # noqa: E402
+from synthetic_sets import synthetic_set  # noqa: E402
 from verity_numerical.bench.input_sets import InputSet  # noqa: E402
 from test_circuit import assert_public_only  # noqa: E402
 
@@ -23,7 +23,7 @@ KEY = bytes(range(32))
 
 def _staged(sid_or_sub, tmp_path, n=4):
     sub = TM.parse_subcircuit_id(sid_or_sub) if isinstance(sid_or_sub, str) else sid_or_sub
-    s = InputSet.open(generate(sub, n, 20260926, tmp_path / "set")["path"])
+    s = InputSet.open(synthetic_set(sub, n, 20260926, tmp_path / "set")["path"])
     low = FC.lowering_for_set(s)
     flat = FC.stage(low, s, 0, n, tmp_path / "flat", salt_key=KEY)
     typed = TS.stage(low, s, 0, n, tmp_path / "typed", salt_key=KEY)
