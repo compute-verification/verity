@@ -7,6 +7,7 @@ import hashlib
 import importlib.util
 import json
 import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
@@ -15,6 +16,7 @@ import pytest
 HERE = Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location("rename_move_under_test", HERE.parent / "rename.py")
 M = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = M      # `--jobs` hands its workers `M._rewrite`, which pickle finds by its module's name
 spec.loader.exec_module(M)
 
 MAP = HERE / "fixtures" / "rename_map.toml"
@@ -355,6 +357,19 @@ def test_the_move_on_a_toy_tree(toy, capsys):
     assert git(toy, "status", "--porcelain") == "" and git(toy, "rev-parse", "HEAD:") == head
 
 
+def test_the_move_in_many_processes_is_the_move_in_one(toy, tmp_path_factory, capsys, monkeypatch):
+    """`--jobs` splits the rewriting among forked processes: the staged tree and the report are one process's."""
+    monkeypatch.setattr(M, "CHUNK", 2)
+    other = tmp_path_factory.mktemp("other")
+    git(other, "clone", "-q", str(toy), ".")
+    got = {}
+    for root, jobs in ((toy, "1"), (other, "4")):
+        capsys.readouterr()
+        assert M.main(["--map", str(MAP), "--root", str(root), "--jobs", jobs]) == 0
+        got[jobs] = (git(root, "write-tree"), capsys.readouterr().out)
+    assert got["1"] == got["4"] and "files rewritten: 0" not in got["1"][1]
+
+
 def test_the_moves_are_those_of_the_tree_re_recorded(toy, capsys):
     """A branch carried across the move keeps its records under the old names, so the map its `--update --moved` takes is
     `--moves` on its own tree: with a name only its lock records, and none once the lock is re-recorded under the new names."""
@@ -460,6 +475,19 @@ def test_a_prose_map_renames_only_words_in_prose(path, old, new):
     a string, backticks, a link target, a fence, a heredoc or a data file, nor as part of a name, a path, a flag, a call or a
     constant; and a word whose new word is a name (`zk_served`) stays."""
     assert PROSE.sub(old, path) == new
+
+
+def test_a_data_file_under_a_prose_map_is_left_as_it_is():
+    """A file with no prose (a data file, a lock) keeps its bytes and its words go uncounted, while a file with prose counts
+    a word its literal keeps as left standing."""
+    words = M.Words({"scope": "prose", "words": {"draw": "sample", "firewall": "ZK server"},
+                     "keep": {"patterns": [r'"draw"']}})
+    text = '{"draw": "a draw by the firewall", "unit_draw": 1}\n'
+    kept, counts = M.Counter(), M.Counter()
+    assert words.sub(text, "x.json", counts=counts, kept=kept) == text
+    assert not kept and not counts
+    assert words.sub("# a draw\nx = 'a draw by the firewall'\n", "y.py", kept=kept) == "# a sample\nx = 'a draw by the firewall'\n"
+    assert kept == {"draw": 1, "firewall": 1}
 
 
 def test_a_prose_move_moves_nothing_and_leaves_what_a_json_pin_records(toy, capsys):
