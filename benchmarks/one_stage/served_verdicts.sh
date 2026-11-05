@@ -253,13 +253,18 @@
 # reads, naming each: PRODUCT=remote-network-no-pouw untied (H1_TIE empty) at V3C_LAW subset:1 (V3c's audit is C-Flock
 # --zk whatever the run), since untied PoUW's period case can't name R, which step 6 makes after the serve, so a
 # composite with PoUW rejects on it; the split certifier behind its front (CERTIFIER_FRONT, or on a deferral's follow-on
-# its ONSITE, and CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD), whose network case that composite reads; and COMPOSITE
-# not set empty. It doesn't need ALPHA and GAMMA: unset, the inference-only case reads α and Γ off the division it checks
-# (`--from-division`), and its policy.json says so. On the node that runs V3c's audit and writes the onsite record (the
-# served node where nothing is deferred, else the follow-on, which runs at the deferral's OF_RECORD), also
+# its ONSITE, and CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD), whose network case that composite reads; COMPOSITE
+# not set empty; and the chain's draws of record, every link-window and every proof block at the scan's δ of 2^-64:
+# CR_SCAN_DELTA its default, and CERTIFIER_CHAIN_CMD naming no CR_N2_DRAW, CR_N2_CMD, CR_SCAN_DELTA, CR_SCAN_ARGS,
+# CR_SCAN_CMD, --draw or --chain-cmd, since of_record reads each draw's law off the chain's report and holds one whose
+# law isn't all open. It doesn't need ALPHA and GAMMA: unset, the inference-only case reads α and Γ off the division it
+# checks (`--from-division`), and its policy.json says so. On the node that runs V3c's audit, the chain and the onsite
+# record (the served node where nothing is deferred, else the follow-on, which runs at the deferral's OF_RECORD), also
 # PP_CHALLENGER=gate:USER@HOST with PP_PEER and PP_CHALLENGER_KEY, without which V3c's coins are a local session's (or
-# its audit refuses the gate) and of_record is conditional on live coins, and CERTIFIER_KEY and SITE_REGISTRATION, each
-# a non-empty file, without which auditor-record doesn't hold and certifier-key stays open.
+# its audit refuses the gate) and of_record is conditional on live coins; CERTIFIER_KEY and SITE_REGISTRATION, each
+# a non-empty file, without which auditor-record doesn't hold and certifier-key stays open; and the chain's own
+# environment there, which deferred.env doesn't carry, drawing everything: CR_N2_DRAW, CR_N2_CMD and CR_SCAN_CMD
+# unset, and no --draw in CR_SCAN_ARGS.
 # POUW=pearlplus (default h1) makes Pearl+ PoUW's piece instead: H1_GATE defaults empty (set, the preflight refuses
 # it), and POUW_CMD to 'bash benchmarks/one_stage/served_pearlplus.sh "$1" "$2" "$3"' within POUW_TIMEOUT 120m, which
 # once the window is audited serves Pearl+ (pouw:pearl-c-h100-v1-h3, Llama 3.2 1B's BF16 checkpoint) on this card under
@@ -1184,11 +1189,16 @@ if [ -n "${OF_RECORD:-}" ] && [ "${1:-}" != advice-charge ] && { [ "${1:-}" != v
   { [ -n "${CERTIFIER_FRONT:-}" ] || { [ -n "$FOLLOW" ] && [ -n "${ONSITE:-}" ]; }; } && [ -n "$SPLIT" ] \
     || of+=("the split certifier behind its front (CERTIFIER_FRONT, CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD), whose network case the composite reads")
   [ -n "${COMPOSITE-1}" ] || of+=("COMPOSITE unset, not empty: the composite is the record's verdict")
-  if [ -z "$DEFER" ]; then  # this node runs V3c's audit and writes the onsite record
+  draws='CR_N2_DRAW|CR_N2_CMD|CR_SCAN_DELTA|CR_SCAN_ARGS|CR_SCAN_CMD|--draw|--chain-cmd'
+  [ "${CR_SCAN_DELTA:-}" = 5.421010862427522e-20 ] && ! [[ ${CERTIFIER_CHAIN_CMD:-} =~ $draws ]] \
+    || of+=("CR_SCAN_DELTA its default 2^-64, and CERTIFIER_CHAIN_CMD naming none of ${draws//|/, }, the chain's draws of record, without which a chain draw can be open (of_record then conditional on live coins) or the scan's bound at another δ")
+  if [ -z "$DEFER" ]; then  # this node runs V3c's audit, the certifier's chain and the onsite record
     [[ ${PP_CHALLENGER:-} == gate:?*@?* ]] && [ -n "${PP_PEER:-}" ] && [ -s "${PP_CHALLENGER_KEY:-}" ] \
       || of+=("PP_CHALLENGER=gate:USER@HOST with PP_PEER and PP_CHALLENGER_KEY (a non-empty file), the live challenger V3c's audit draws on, without which of_record is conditional on live coins")
     [ -s "${CERTIFIER_KEY:-}" ] && [ -s "${SITE_REGISTRATION:-}" ] \
       || of+=("CERTIFIER_KEY and SITE_REGISTRATION, each a non-empty file (the auditor's record of its network certifier and its registration), without which certifier-key stays open")
+    [ -z "${CR_N2_DRAW:-}${CR_N2_CMD:-}${CR_SCAN_CMD:-}" ] && [[ ${CR_SCAN_ARGS:-} != *--draw* ]] \
+      || of+=("CR_N2_DRAW, CR_N2_CMD and CR_SCAN_CMD unset and no --draw in CR_SCAN_ARGS where the chain runs, without which a chain draw can be open and of_record conditional on live coins")
   fi
   if [ ${#of[@]} -gt 0 ]; then
     printf -v why '%s; ' "${of[@]}"

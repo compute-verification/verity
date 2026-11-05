@@ -2739,6 +2739,11 @@ OF_COINS = ("PP_CHALLENGER=gate:USER@HOST with PP_PEER and PP_CHALLENGER_KEY (a 
             "V3c's audit draws on, without which of_record is conditional on live coins")
 OF_KEY = ("CERTIFIER_KEY and SITE_REGISTRATION, each a non-empty file (the auditor's record of its network certifier "
           "and its registration), without which certifier-key stays open")
+OF_DRAWS = ("CR_SCAN_DELTA its default 2^-64, and CERTIFIER_CHAIN_CMD naming none of CR_N2_DRAW, CR_N2_CMD, "
+            "CR_SCAN_DELTA, CR_SCAN_ARGS, CR_SCAN_CMD, --draw, --chain-cmd, the chain's draws of record, without which "
+            "a chain draw can be open (of_record then conditional on live coins) or the scan's bound at another δ")
+OF_CHAIN = ("CR_N2_DRAW, CR_N2_CMD and CR_SCAN_CMD unset and no --draw in CR_SCAN_ARGS where the chain runs, without "
+            "which a chain draw can be open and of_record conditional on live coins")
 #: `FAKE_RECORDS_AUDIT` on the live challenger gate:research@auditor, its session on cpu-6, under `_auditors`' key
 #: record
 GATE_AUDIT = FAKE_RECORDS_AUDIT.replace(
@@ -2764,17 +2769,17 @@ def _auditors(tmp_path: Path, peer: str, **files: str) -> dict[str, str]:
 
 @pytest.mark.parametrize("extra, said", [
     ({}, f"512 GB: the serve's lease 60 min, capped at 128 GB; {OF}"),
-    ({"NODE_MEM_GB": "196", "PP_CHALLENGER": None, "CERTIFIER_KEY": None},
+    ({"NODE_MEM_GB": "196", "PP_CHALLENGER": None, "CERTIFIER_KEY": None, "CR_N2_DRAW": "8"},
      f"196 GB: the serve's lease 60 min, capped at 128 GB; {SHORT}, {DEFERS}; {OF}, but the follow-on's, which its own "
      "preflight checks"),
 ])
 def test_a_run_of_record_passes_its_preflight_with_every_input_its_onsite_records_of_record_reads(
         tmp_path, extra, said):
     """OF_RECORD makes a run one of record: untied remote-network-no-pouw behind the network certifier's front, with the
-    split certifier, the composite, the live challenger and the auditor's records on the node that runs V3c's audit
-    and writes the onsite record. A node short of V3c's audit's memory defers both to a follow-on, which holds the
-    challenger and the auditor's records in its own preflight, so this node needs neither; PREFLIGHT_ONLY's line says
-    which."""
+    split certifier drawing everything, the composite, the live challenger and the auditor's records on the node that
+    runs V3c's audit, the chain and the onsite record. A node short of V3c's audit's memory defers them to a follow-on,
+    which holds the challenger, the auditor's records and the chain's environment in its own preflight, so this node
+    needs none of them; PREFLIGHT_ONLY's line says which."""
     env = {**OF_SERVED, **_auditors(tmp_path, "vy-dc-h200-2"), **extra}
     rc, lines, order, limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
                                     HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", **env)
@@ -2793,14 +2798,21 @@ def test_a_run_of_record_passes_its_preflight_with_every_input_its_onsite_record
     ({}, {"PP_CHALLENGER_KEY": "missing"}, OF_COINS),
     ({"CERTIFIER_KEY": None}, {}, OF_KEY),
     ({}, {"SITE_REGISTRATION": "empty"}, OF_KEY),
+    ({"CR_SCAN_DELTA": "1e-06"}, {}, OF_DRAWS),
+    ({"CERTIFIER_CHAIN_CMD": f"{CHAIN} CR_N2_DRAW=8"}, {}, OF_DRAWS),
+    ({"CERTIFIER_CHAIN_CMD": f"{CHAIN} --chain-cmd true"}, {}, OF_DRAWS),
+    ({"CR_N2_DRAW": "8"}, {}, OF_CHAIN),
+    ({"CR_SCAN_ARGS": "--group 2 --draw 8"}, {}, OF_CHAIN),
+    ({"CR_SCAN_CMD": "true"}, {}, OF_CHAIN),
     ({"COMPOSITE": "", "PP_PEER": None}, {"CERTIFIER_KEY": "empty"}, f"{OF_COMPOSITE}; {OF_COINS}; {OF_KEY}"),
 ])
 def test_the_preflight_refuses_a_run_of_record_lacking_any_input_its_onsite_records_of_record_reads(
         tmp_path, extra, files, said):
     """A run of record lacking any input its onsite record's of_record reads is refused before anything is kept, built
     or served, with one line naming each it lacks: another product, H1's tie or another law; the network certifier's
-    front or the split certifier; the composite set empty; the live challenger, its peer or its key record; or the
-    auditor's record of its network certifier or its registration, missing or empty."""
+    front or the split certifier; the composite set empty; a chain draw short of everything, by CR_SCAN_DELTA or
+    CERTIFIER_CHAIN_CMD's text, or by the chain's environment here; the live challenger, its peer or its key record; or
+    the auditor's record of its network certifier or its registration, missing or empty."""
     env = {**OF_SERVED, **_auditors(tmp_path, "vy-dc-h200-2", **files), **extra}
     rc, lines, order, limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
                                     HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", **env)
@@ -2823,14 +2835,17 @@ def _deferred_of_record(tmp_path: Path) -> subprocess.CompletedProcess:
     ({}, {"PP_CHALLENGER_KEY": "missing"}, OF_LACKS + OF_COINS),
     ({"CERTIFIER_KEY": None}, {}, OF_LACKS + OF_KEY),
     ({"SITE_REGISTRATION": None}, {}, OF_LACKS + OF_KEY),
+    ({"CR_N2_DRAW": "8"}, {}, OF_LACKS + OF_CHAIN),
+    ({"CR_SCAN_ARGS": "--draw 8"}, {}, OF_LACKS + OF_CHAIN),
     ({"OF_RECORD": ""}, {}, f"{CLASH} OF_RECORD: unset it"),
 ])
 def test_a_run_of_records_follow_on_refuses_to_run_without_the_live_challenger_or_the_auditors_records(
         tmp_path, extra, files, line):
-    """The follow-on of a run of record runs V3c's audit and writes the onsite record, so its own preflight refuses it
-    without the live challenger, its peer or its key record, or the auditor's record of its network certifier or its
-    registration, before its copy's check or V3c's audit; and it runs of record as the deferral was, so an environment
-    that says otherwise is refused as any other setting is."""
+    """The follow-on of a run of record runs V3c's audit, the certifier's chain and the onsite record, so its own
+    preflight refuses it without the live challenger, its peer or its key record, or the auditor's record of its
+    network certifier or its registration, or with a chain environment that draws short of everything, before its
+    copy's check or V3c's audit; and it runs of record as the deferral was, so an environment that says otherwise is
+    refused as any other setting is."""
     assert _deferred_of_record(tmp_path).returncode == 0
     rc, lines, order, _limits = _follow(tmp_path, **{**_auditors(tmp_path, "cpu-6", **files), **extra})
     assert (rc, lines, order) == (3, [line], []), lines
