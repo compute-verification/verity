@@ -1,4 +1,6 @@
-import Proofs.Flock.Bridge.LeafMap
+module
+
+public import Proofs.Flock.Bridge.LeafMap
 
 /-!
 # rel_deploy, proved
@@ -12,6 +14,8 @@ partition (`not_R_of_opens`), whatever the witness:
 * `relDeploy : RelDeployTarget`;
 * `relDeployL`: the same at a leaf map (`LayoutIsL`, `commitDepL`), V5's layout.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

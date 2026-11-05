@@ -1,5 +1,7 @@
-import Definitions.Accounting.Guarantees.TS
-import Proofs.Pouw.RelativeSecurity
+module
+
+public import Definitions.Accounting.Guarantees.TS
+public import Proofs.Pouw.RelativeSecurity
 
 /-!
 # The tensor–scalar model's round lemmas
@@ -9,6 +11,8 @@ The plays' tail bounds: one bet a round under (L), the deficiency against the de
 (`Pouw.RelativeSecurity`): `luck_rounds` conditions on the first round's coins (`prob_eq_expect`, `expect_prod`) as
 `expect_weight_le` does, and `budget_tail` is `prob_accepts_le` at `c = 1/Λ`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS
 

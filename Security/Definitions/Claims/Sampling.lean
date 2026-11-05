@@ -1,4 +1,6 @@
-import Definitions.Claims.IndexedTapes
+module
+
+public import Definitions.Claims.IndexedTapes
 
 /-!
 # Claims: the sampling compiler (frozen before any proof work)
@@ -52,6 +54,8 @@ nothing here reads Flock's former decoding threshold or count (`agree`, `nMin`).
 Frozen by `Flock.Guarantees.SamplingClaimsStated` (`Definitions/Flock/Guarantees/SamplingClaims.lean`), whose statement
 reads every claim here: the lock records each one's text under `reads`, so a changed claim is a changed record.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 

@@ -1,5 +1,9 @@
-import Proofs.Flock.Claims.Sampling.Select.Layout
-import Properties.SampledProofs.Draw
+module
+
+public import Proofs.Flock.Claims.Sampling.Select.Layout
+public import Properties.SampledProofs.Draw
+
+@[expose] public section
 
 open SampledProofs
 

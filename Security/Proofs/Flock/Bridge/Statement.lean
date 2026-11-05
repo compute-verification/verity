@@ -1,6 +1,8 @@
-import Proofs.Flock.EndToEndHidden.Statement
-import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
-import Proofs.Flock.Bridge.Deployed
+module
+
+public import Proofs.Flock.EndToEndHidden.Statement
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
+public import Proofs.Flock.Bridge.Deployed
 
 /-!
 # The sampled audit's knowledge soundness, live (stated, not proved)
@@ -23,13 +25,16 @@ deployed layout (`Slots.fileLayout`) lays the registration's strata, one per tem
 opens only the rows its drawn units read, while registration opens none. So a unit whose owned input row doesn't open is a
 faulty slot, and `δ` bounds those slots with the rest. An input no unit reads is in no slot. The deployed layout has the
 same shape: one class, slot `u` unit `u`'s block of the circuit file (`FilePart.block`), and no input class. That those
-blocks are `partOf`'s is `Bridge.FilePartTarget`, not yet proved.
+blocks are `partOf`'s at a circuit in scope (`unitLog ≤ 32`) is `Bridge.FilePartTarget`, proved
+(`Bridge.filePartTarget`).
 
 `SampledKSLiveStated` freezes the statement and the definitions it reads; no proof of `SampledKSLive` exists yet.
 `SampledKSLive` holds at `kd = 0` (`δ = 1`), and elsewhere follows from `EndToEndHidden` at
 `min K₀ (n − kd + 1)` by `Bridge.TransportsLive`, `Bridge.FaultyRightTarget` and `Bridge.CountTarget`
 (`Bridge.AssemblyTarget`).
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

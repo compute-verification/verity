@@ -1,5 +1,7 @@
-import MemoryChallenger.Judge
-import MemoryChallenger.StreamedWipe
+module
+
+public import MemoryChallenger.Judge
+public import MemoryChallenger.StreamedWipe
 
 /-!
 # The streamed wipe's verdict on a record, as its caller holds it
@@ -18,6 +20,10 @@ id this port doesn't verify is refused. Integers are any sign where the Python's
 fields, the fill's times, the egress), naturals in the parameters. The output is `{"accepted", "egress_mib", "reasons"}`,
 the reasons the Python's word for word.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace MemoryChallenger.StreamedWipe
 

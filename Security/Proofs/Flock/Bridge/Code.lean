@@ -1,9 +1,11 @@
-import Proofs.Flock.Bridge.KeyPartitions
-import Proofs.Flock.Claims.Sampling.Reference.DeployedCode
-import Proofs.Flock.Claims.Sampling.Select.Scope
-import Proofs.Flock.Claims.Sampling.Select.Steps
-import Proofs.Flock.Soundness.Discharge.Hm.Bc
-import Proofs.Flock.Soundness.ExecSetup
+module
+
+public import Proofs.Flock.Bridge.KeyPartitions
+public import Proofs.Flock.Claims.Sampling.Reference.DeployedCode
+public import Proofs.Flock.Claims.Sampling.Select.Scope
+public import Proofs.Flock.Claims.Sampling.Select.Steps
+public import Proofs.Flock.Soundness.Discharge.Hm.Bc
+public import Proofs.Flock.Soundness.ExecSetup
 
 /-!
 # The sampled verifier's code over a registered circuit file
@@ -33,6 +35,8 @@ At such a code:
 * `relDeploy_code`, `relDeployL_code`: `RelDeployTarget` and V5's leaf-map form with the partition hypothesis
   discharged.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

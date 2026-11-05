@@ -1,6 +1,8 @@
-import Definitions.Pouw.Assumptions.Dimension.Pipe
-import Proofs.Pouw.Dimension.MixingProofs
-import Proofs.Pouw.Dimension.MinRankProofs
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.Pipe
+public import Proofs.Pouw.Dimension.MixingProofs
+public import Proofs.Pouw.Dimension.MinRankProofs
 
 /-!
 # `A1_cost` in the closed scalar pipe: proofs
@@ -13,6 +15,8 @@ import Proofs.Pouw.Dimension.MinRankProofs
 * `minRankGeShift16`: a diagonal 16 × 16 minor in each of `minrank.md`'s three cases (`shMinor_diag`, `shMinor_48`,
   `shMinor_24`; the last uses `cycle_sum`); `minRankGeFacts`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension
 

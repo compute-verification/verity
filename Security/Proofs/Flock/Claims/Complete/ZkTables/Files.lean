@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Goals
-import Proofs.Flock.Claims.Complete.Zk.Walk
-import Proofs.Flock.Claims.Complete.Json.Canon
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.Goals
+public import Proofs.Flock.Claims.Complete.Zk.Walk
+public import Proofs.Flock.Claims.Complete.Json.Canon
 
 /-!
 # The honest masked run's proof files, at several tables
@@ -21,6 +23,8 @@ and the record's size, which `ready` gives (`Run.recordFits`).
 * `filesAt`, `filesJ`: `FilesAt` from `RepShapedAt`, `FilesJ` from `RepShapedJ`; so `complete` holds with it for
   `RecordJ` (`completeJR`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 

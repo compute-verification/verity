@@ -1,5 +1,7 @@
-import Mathlib
-import Proofs.Accounting.Bandwidth.Relay
+module
+
+public import Mathlib
+public import Proofs.Accounting.Bandwidth.Relay
 
 /-!
 # The bandwidth audit v0 with interactive side sources: the proof
@@ -15,6 +17,8 @@ device at any one oracle (`RelayDevice.atOracle`).
 What the sends carry never enters the bound, because the compression behind both bounds encodes the bits the chip
 read, not what its sources hold: a source addressed by everything sent may be as large as it likes.
 -/
+
+@[expose] public section
 
 namespace Bandwidth
 

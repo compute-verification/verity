@@ -1,4 +1,6 @@
-import Properties.Nci.Baseline
+module
+
+public import Properties.Nci.Baseline
 
 /-!
 # θ's provenance check, step by step
@@ -11,6 +13,8 @@ with the policy check's θ fold into `BaselineProvenance`.
 The check compares fields with strings through `strOf?`, never with `Json`'s `==`, which is `partial`: what it compares
 is then what these lemmas read. This module imports no Mathlib.
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.BaselineSteps
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.PlainClash0
+module
+
+public import Proofs.Flock.Claims.KS.PlainClash0
 
 /-!
 # The live self-clash at level 0, at `wrPDK keep`
@@ -13,6 +15,8 @@ import Proofs.Flock.Claims.KS.PlainClash0
 The run-level half (`rawCols_plain`, `plainClashQ₀`, `plainClashQ_or`) reads `P`'s run at the verifier, and is not
 restated here.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.PlainDraw
 

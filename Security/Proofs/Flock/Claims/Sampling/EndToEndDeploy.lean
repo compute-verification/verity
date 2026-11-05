@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Sampling.EndToEndDraw
-import Proofs.Flock.Claims.Sampling.Escape
-import Proofs.Flock.Claims.Sampling.Select.Steps
-import Proofs.Flock.Claims.Sampling.Select.Take
-import Proofs.Flock.Claims.Sampling.Reference.DeployedCode
+module
+
+public import Proofs.Flock.Claims.Sampling.EndToEndDraw
+public import Proofs.Flock.Claims.Sampling.Escape
+public import Proofs.Flock.Claims.Sampling.Select.Steps
+public import Proofs.Flock.Claims.Sampling.Select.Take
+public import Proofs.Flock.Claims.Sampling.Reference.DeployedCode
 
 /-!
 # `EndToEndDraw`'s facts as equalities, and the deployed design's shape
@@ -20,6 +22,8 @@ The deployed sampled verifier's statements are of that shape at a population dra
 the population's first stage, and the partition is `Slots.fileLayout`'s one class, the population. So at a first stage
 `subset kd` the statement is a `SubsetDesign` over one class (`deployOf_subsetDesign`), and the facts above are its own.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling.EndToEndDraw
 

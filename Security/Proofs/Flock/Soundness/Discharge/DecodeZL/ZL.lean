@@ -1,4 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
+module
+
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
+import all Init.Data.String.Defs
 
 /-!
 # The zerocheck's and lincheck's rounds carry their messages (R11b)
@@ -7,6 +10,8 @@ import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
 are `zcMsgs ++ lcMsgs`, cut at `zcShape ++ lcShape`'s coins. The frames split into rounds that each close at their last
 frame (`carries_one`), the residual rounds by induction (`carries_pairs`), and the rounds glue (`Carries.append`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.DecodeZL
 

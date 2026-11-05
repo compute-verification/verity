@@ -1,4 +1,6 @@
-import Proofs.Flock.Bridge.Canon
+module
+
+public import Proofs.Flock.Bridge.Canon
 
 /-!
 # A drawn unit's openings are canonical (`Bridge.OpeningsCanonTarget`, proved)
@@ -22,6 +24,8 @@ unit's `io` (`Bridge.owner_ne_none_of_io`).
   `constCols_keyProgH`, `zeroCols_keyProgH`); a constant input no unit reads isn't the unit's;
 * `Bridge.openingsCanon : Bridge.OpeningsCanonTarget`.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

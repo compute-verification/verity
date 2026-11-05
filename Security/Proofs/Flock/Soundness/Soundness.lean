@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.RepSound
-import Proofs.Flock.Soundness.LinkSound
+module
+
+public import Proofs.Flock.Soundness.RepSound
+public import Proofs.Flock.Soundness.LinkSound
 
 /-!
 # Soundness of Flock's interactive protocol, as PROTOCOL.md specifies it
@@ -26,6 +28,8 @@ Both theorems assume the link points' layout (`Statement.LinkLayout`): each regi
 are distinct and read link coordinates below `PT_LOCAL`, and the block coordinates `PT_LOCAL …`
 fit inside the point, as the statements of PROTOCOL.md §16 have them.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

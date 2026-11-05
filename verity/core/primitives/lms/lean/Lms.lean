@@ -1,8 +1,10 @@
-import Lms.Verify
-import Lms.Sign
-import Lms.Hss
-import Lms.Difftest
-import Lms.SignDifftest
+module
+
+public import Lms.Verify
+public import Lms.Sign
+public import Lms.Hss
+public import Lms.Difftest
+public import Lms.SignDifftest
 
 /-!
 # LMS verification and signing
@@ -13,3 +15,5 @@ set `verity/ml/crypto/lms.py` admits (`Lms.Verify`); that derives a key from its
 by `MemoryChallenger.Difftest`); and their difftests against that file (`Lms.Difftest`, `Lms.SignDifftest`). Code: it
 imports only Lean and C-Flock's verifier (`Flock.Hash`, `Flock.Bytes`).
 -/
+
+@[expose] public section

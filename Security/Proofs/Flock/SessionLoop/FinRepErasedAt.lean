@@ -1,9 +1,11 @@
-import Proofs.Flock.SessionLoop.FinRepPads
-import Proofs.Flock.SessionLoop.FinRepView
-import Proofs.Flock.SessionLoop.FinRounds
-import Proofs.Flock.SessionLoop.Tables
-import Proofs.Flock.Claims.ZK.FinishSwVals
-import Proofs.Flock.Claims.ZK.FinishClaimsX
+module
+
+public import Proofs.Flock.SessionLoop.FinRepPads
+public import Proofs.Flock.SessionLoop.FinRepView
+public import Proofs.Flock.SessionLoop.FinRounds
+public import Proofs.Flock.SessionLoop.Tables
+public import Proofs.Flock.Claims.ZK.FinishSwVals
+public import Proofs.Flock.Claims.ZK.FinishClaimsX
 
 /-!
 # `FinRepErased` at one rep stream
@@ -22,6 +24,8 @@ taken as premises:
 * `hxs`: the extra claims from the views have the request's coordinates (`finRepXs`);
 * `hrows`: every table's rows hold at its base (`Loop.FinRows`'s body).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

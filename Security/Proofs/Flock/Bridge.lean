@@ -1,31 +1,33 @@
-import Proofs.Flock.Bridge.PortRoots
-import Proofs.Flock.Bridge.PopMatches
-import Proofs.Flock.Bridge.Targets
-import Proofs.Flock.Bridge.FilePartTarget
-import Proofs.Flock.Bridge.FilePart
-import Proofs.Flock.Bridge.Lowers
-import Proofs.Flock.Bridge.Count
-import Proofs.Flock.Bridge.CircuitOf
-import Proofs.Flock.Bridge.Canon
-import Proofs.Flock.Bridge.OpeningsCanon
-import Proofs.Flock.Bridge.Assembly
-import Proofs.Flock.Bridge.EndToEndHiddenC
-import Proofs.Flock.Bridge.FaultyRightC
-import Proofs.Flock.Bridge.RelSGuards
-import Proofs.Flock.Bridge.Refused
-import Proofs.Flock.Bridge.KSLive
-import Proofs.Flock.Bridge.PublicDeployed
-import Proofs.Flock.Bridge.Honest
-import Proofs.Flock.Bridge.V5
-import Proofs.Flock.Bridge.Public
-import Proofs.Flock.Bridge.BitsRows
-import Proofs.Flock.Bridge.BitsLower
-import Proofs.Flock.Bridge.BitsKeys
-import Proofs.Flock.Bridge.BitsKeyProg
-import Proofs.Flock.Bridge.RelDeploy
-import Proofs.Flock.Bridge.Partitions
-import Proofs.Flock.Bridge.KeyPartitions
-import Proofs.Flock.Bridge.Code
+module
+
+public import Proofs.Flock.Bridge.PortRoots
+public import Proofs.Flock.Bridge.PopMatches
+public import Proofs.Flock.Bridge.Targets
+public import Proofs.Flock.Bridge.FilePartTarget
+public import Proofs.Flock.Bridge.FilePart
+public import Proofs.Flock.Bridge.Lowers
+public import Proofs.Flock.Bridge.Count
+public import Proofs.Flock.Bridge.CircuitOf
+public import Proofs.Flock.Bridge.Canon
+public import Proofs.Flock.Bridge.OpeningsCanon
+public import Proofs.Flock.Bridge.Assembly
+public import Proofs.Flock.Bridge.EndToEndHiddenC
+public import Proofs.Flock.Bridge.FaultyRightC
+public import Proofs.Flock.Bridge.RelSGuards
+public import Proofs.Flock.Bridge.Refused
+public import Proofs.Flock.Bridge.KSLive
+public import Proofs.Flock.Bridge.PublicDeployed
+public import Proofs.Flock.Bridge.Honest
+public import Proofs.Flock.Bridge.V5
+public import Proofs.Flock.Bridge.Public
+public import Proofs.Flock.Bridge.BitsRows
+public import Proofs.Flock.Bridge.BitsLower
+public import Proofs.Flock.Bridge.BitsKeys
+public import Proofs.Flock.Bridge.BitsKeyProg
+public import Proofs.Flock.Bridge.RelDeploy
+public import Proofs.Flock.Bridge.Partitions
+public import Proofs.Flock.Bridge.KeyPartitions
+public import Proofs.Flock.Bridge.Code
 
 /-! `Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated`, by reflexivity: the statement
 of `SampledKSLive` is recorded. `KSLive`: `Flock.SecurityProofs.SampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2`,
@@ -55,6 +57,8 @@ program lays out a circuit and its units, the bridge's lowering, positions and p
 (`Flock.Bridge.keyIdx_eq`). `BitsKeyProg`: Bits' key program lays out a circuit file's and its units, so the bridge's
 program, positions and proof blocks are Bits' (`Flock.Bridge.progOf_keyProg`, `Flock.Bridge.posOf_keyProg`,
 `Flock.Bridge.blockOf_bitsKeyProg`). -/
+
+@[expose] public section
 
 /-- **`SampledKSLive` is stated** (`Flock.Guarantees.SampledKSLiveStated`). -/
 theorem Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated := rfl

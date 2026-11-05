@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.CompiledLink
-import Proofs.Flock.Soundness.Binding.E2E
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.CompiledLink
+public import Proofs.Flock.Soundness.Binding.E2E
 
 /-!
 # The compiled `--zk` count curve
@@ -17,6 +19,8 @@ with
 * `δ_tree = TreeRewind.bound`, under A1 (`cr/sha-512`) for the serving roots' rewinding finder (`hT`), for an
   acceptance event `execAccept` the compiled session's acceptance does not imply.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 

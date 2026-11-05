@@ -1,5 +1,7 @@
-import Proofs.Flock.VBridge.Algebra.Ligerito
-import Proofs.Flock.Soundness.Refine.LigeritoRun
+module
+
+public import Proofs.Flock.VBridge.Algebra.Ligerito
+public import Proofs.Flock.Soundness.Refine.LigeritoRun
 
 /-!
 # The verifier's Ligerito runs where V*'s does
@@ -18,6 +20,8 @@ before each coin (`Fits`, some bytes `F`).
   `vquery`, `vqueryFold`; the level loop (`loop_runs`); `ligerito_of_run`, and `ligerito_refines_of_run`, which feeds
   it to `Refine.ligerito_refines`.
 -/
+
+@[expose] public section
 
 namespace Flock.RecAlgebra
 

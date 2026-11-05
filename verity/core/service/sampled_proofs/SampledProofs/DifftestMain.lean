@@ -1,6 +1,8 @@
-import Difftest
-import SampledProofs.Pieces
-import SampledProofs.OneStageZk
+module
+
+public import Difftest
+public import SampledProofs.Pieces
+public import SampledProofs.OneStageZk
 
 /-!
 # `sampled-proofs-difftest`: the pieces, and the `slots` piece over a circuit file
@@ -11,6 +13,8 @@ SHA-512): this process reads and parses it as the one-stage verifier does (`Slot
 `OneStageZk.STATEMENT`) and answers `Pieces.slotsWith` or `Pieces.filePartWith` on it, a file it can't read or parse a
 reject.
 -/
+
+@[expose] public section
 
 namespace SampledProofs.DifftestMain
 

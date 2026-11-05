@@ -1,7 +1,9 @@
-import SampledProofs.FilePart
-import Properties.Flock.Circuit.Keys
-import Init.Internal.Order.While
-import Std.Data.HashMap.Lemmas
+module
+
+public import SampledProofs.FilePart
+public import Properties.Flock.Circuit.Keys
+public import Init.Internal.Order.While
+public import Std.Data.HashMap.Lemmas
 
 /-!
 # The code's source keys are the claims'
@@ -11,6 +13,8 @@ import Std.Data.HashMap.Lemmas
 `lastLe`'s binary search is the last row-word start at most `x` on the ascending starts (`lastLe_spec`, `starts_mono`),
 and `Index.of`'s maps are the first leaf cut and the first wire into the unit net (`cuts_get`, `wires_get`).
 -/
+
+@[expose] public section
 
 namespace SampledProofs.FilePart
 

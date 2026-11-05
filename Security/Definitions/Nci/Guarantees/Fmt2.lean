@@ -1,4 +1,6 @@
-import Definitions.Nci.Assumptions.Fmt2
+module
+
+public import Definitions.Nci.Assumptions.Fmt2
 
 /-!
 # NCI over threads, each value charged once over its copies: the guarantees
@@ -8,6 +10,8 @@ import Definitions.Nci.Assumptions.Fmt2
 for a set read by a state of `k` bits and an ingress (`ThreadedOfStateFmt2`). Each holds for a reference circuit whose
 sources meet the fan-out bound at `(b_a, e, n)` and keep its counted multiplications `k₀` steps off the baseline.
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 

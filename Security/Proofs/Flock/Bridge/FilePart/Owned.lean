@@ -1,4 +1,6 @@
-import Proofs.Flock.Bridge.FilePart.Keys
+module
+
+public import Proofs.Flock.Bridge.FilePart.Keys
 
 /-!
 # The sources `FilePart.ofCircuit` keeps
@@ -7,6 +9,8 @@ import Proofs.Flock.Bridge.FilePart.Keys
 stacked input `x` whose template column a computed row reads (`RecResiduals.readIns`) and whose key is not the zero's.
 The kept sources ascend (`ofCircuit_srcs_sorted`), and `block_toList` is unit `u`'s block as lists.
 -/
+
+@[expose] public section
 
 namespace SampledProofs.FilePart
 

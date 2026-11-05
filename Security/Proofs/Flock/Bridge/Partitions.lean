@@ -1,4 +1,6 @@
-import Proofs.Flock.Bridge.Lowers
+module
+
+public import Proofs.Flock.Bridge.Lowers
 
 /-!
 # The bridge's partition partitions its program
@@ -14,6 +16,8 @@ no output of `C` is an input, every unit holds a gate, and every proof block out
   `Prog.Unread` (`unread_posOf`).
 * A block that outputs at most `unitClassMax` bits has a class that holds them (`unitClass_of_le`).
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Bridge.FilePart.Inst
-import Proofs.Flock.Bridge.FilePart.Owned
+module
+
+public import Proofs.Flock.Bridge.FilePart.Inst
+public import Proofs.Flock.Bridge.FilePart.Owned
 
 /-!
 # The kept sources, in the claims' terms
@@ -8,6 +10,8 @@ import Proofs.Flock.Bridge.FilePart.Owned
 `FilePart.ofCircuit` keeps (`mem_ofCircuit_srcs`'s form) are exactly the `b` some stacked row's input column has as its
 key (`Aliased.keyIdx`).
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge.FilePart
 

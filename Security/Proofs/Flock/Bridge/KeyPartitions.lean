@@ -1,6 +1,8 @@
-import Proofs.Flock.Bridge.Partitions
-import Proofs.Flock.Bridge.FilePart
-import Proofs.Flock.Soundness.Discharge.Layout.Outs
+module
+
+public import Proofs.Flock.Bridge.Partitions
+public import Proofs.Flock.Bridge.FilePart
+public import Proofs.Flock.Soundness.Discharge.Layout.Outs
 
 /-!
 # The key program's partition partitions its program
@@ -20,6 +22,8 @@ three conditions discharged:
   computed columns of its instance on returned outputs' columns, at most `outBitsAt`'s count of them,
   `card_outCols_le`).
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

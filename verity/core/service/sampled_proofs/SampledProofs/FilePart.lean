@@ -22,10 +22,20 @@ order (`Flock.Bridge.partOf` at the file's key program, `Placed.keyProg`):
   most `UNIT_CLASS_MAX` bits), as `Claims.Sampling.Partition.Partitions` requires of every proof block's outputs
   (`Claims.Sampling.outputs`). The sources a unit owns are input gates, which count toward no class. O(the unit).
 -/
-import Flock.Circuit
-import Flock.RecResiduals
-import Flock.KnownRead
-import SampledProofs.Partition
+module
+
+public import Flock.Circuit
+public import Flock.RecResiduals
+public import Flock.KnownRead
+public import SampledProofs.Partition
+meta import Flock.Circuit
+meta import Flock.RecResiduals
+meta import Flock.KnownRead
+meta import SampledProofs.Partition
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.FilePart
 

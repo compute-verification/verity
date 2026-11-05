@@ -1,4 +1,6 @@
-import Proofs.Flock.Bridge.FilePart.Block
+module
+
+public import Proofs.Flock.Bridge.FilePart.Block
 
 /-!
 # `uniform`'s proof blocks, and who reads a source
@@ -7,6 +9,8 @@ import Proofs.Flock.Bridge.FilePart.Block
 gates, unit `v` reads gate `2 + v·B + b` exactly when some row's input column has source `b`. `stack_reads`: an input of
 stacked copies is read exactly when its template input is.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge.FilePart
 
