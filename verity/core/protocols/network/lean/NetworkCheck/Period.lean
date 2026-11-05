@@ -179,7 +179,8 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   (`holds`): it has an entry of its `roots` at port `rows/<end>/<w>` (`rowsName`), the root its units' reads of the
   end's rows name, or of its `registered` at the rows' value, and each such entry names the rows' root and domain, a
   `roots` one with their T leaves, which bind the session, link, end and window (an answer for another window's rows
-  is refused, and so is one whose rows port is at another root while another port names the rows'); its Programs'
+  is refused, and so is one whose rows port is at another root while another port names the rows'), and every entry
+  of either under the rows' domain is at the rows' root (a second tree under their domain is refused); its Programs'
   rows are a compute audit's output (`progTied`): a lane's `scan/prog<j>` entry names the root and domain of an output port's entry (`<unit>/o<j>`, j ≥ 1) or a `SlotEntry_v1`
   or `SelectEntry_v1` template's entries port's (`<descriptor id>/c<j>/o0`, `entriesPortName`) in the `roots` of an
   audit's registration, so a scan whose `prog` the prover committed alone is refused; and the answer is one-stage's
@@ -1351,18 +1352,20 @@ def rowsName (d : Direction) (w : Nat) : String := s!"rows/{d.value}/{w}"
 
 /-- The scan's registration holds rows `r` of end `d` at window `w` at their port: it has an entry of its `roots` whose
 port is `rowsName d w` or of its `registered` whose value is the rows' (`<link>/<d>/<w>`), and every such entry names
-their root and domain, a `roots` one with their `T` leaves. An entry under another name holds nothing, though it
-names their root: the scan's units read the rows through the port. -/
+their root and domain, a `roots` one with their `T` leaves; and every entry of either under their domain is at their
+root, so their domain names one tree. An entry under another name holds nothing, though it names their root: the
+scan's units read the rows through the port. -/
 def holds (reg : Json) (d : Direction) (w : Nat) (r : Rows) : Bool :=
   let entries := fun (k : String) => match reg.getObjValD k with | .arr xs => xs | _ => #[]
-  let atRows := fun (e : Json) =>
-    isStr (e.getObjValD "root") (Flock.hexOf r.root) && isStr (e.getObjValD "domain") r.domain
+  let atRoot := fun (e : Json) => isStr (e.getObjValD "root") (Flock.hexOf r.root)
+  let atRows := fun (e : Json) => atRoot e && isStr (e.getObjValD "domain") r.domain
   let leaves := fun (e : Json) => match (e.getObjValD "leaves").getNat? with
     | .ok l => l == r.rows
     | .error _ => false
   let ports := (entries "roots").filter fun e => isStr (e.getObjValD "port") (rowsName d w)
   let values := (entries "registered").filter fun e => isStr (e.getObjValD "value") r.value
-  !(ports ++ values).isEmpty && ports.all (fun e => atRows e && leaves e) && values.all atRows
+  let under := (entries "roots" ++ entries "registered").filter fun e => isStr (e.getObjValD "domain") r.domain
+  !(ports ++ values).isEmpty && ports.all (fun e => atRows e && leaves e) && values.all atRows && under.all atRoot
 
 /-- The scan's Programs' rows in its registration, one tree a lane: lane `j`'s is the entry of its `roots` whose port,
 or of its `registered` whose value, is `scan/prog<j>`. -/
@@ -1672,7 +1675,7 @@ def rowsWindowCheck (p : Params) (s : Schedule) (sd : ByteArray) (audits : Array
   for (r, d) in rs.zip #[Direction.ingress, .egress] do
     unless holds reg d w r do
       refuse s!"{what}: the scan's registration doesn't hold the rows at {rowsName d w}: an answer for another \
-        window's rows, or for rows at another port"
+        window's rows, for rows at another port, or beside a second tree under the rows' domain"
   unless progTied audits reg do
     refuse s!"{what}: the scan's prog is no compute audit's output: no scan/prog<j> entry's root and domain are an \
       output port's of an audit's registration"
@@ -2599,9 +2602,10 @@ def clocksFn (j : Json) : Except String Json := do
   let reg := Json.mkObj [("window", Json.mkObj [("registered_roots", Json.mkObj [("w", .str "AB")])])]
   pinHeld reg ("w", "ab") && !pinHeld reg ("w", "ac") && !pinHeld reg ("v", "ab") && !pinHeld (Json.mkObj []) ("w", "ab")
 -- the egress rows at window 3 are held at their port rows/egress/3 with their 4 leaves, or at their value in
--- `registered`; not under another name though it names their root (scan/view, rows/ingress/3, rows/egress/4, a value
--- in `roots`), with their port at another root while scan/view names theirs, with other leaves, or beside a second
--- entry of their port at another root
+-- `registered`, beside entries under another domain or at their root; not under another name though it names their
+-- root (scan/view, rows/ingress/3, rows/egress/4, a value in `roots`), with their port at another root while scan/view
+-- names theirs, with other leaves, beside a second entry of their port at another root, or beside a second tree under
+-- their domain in `roots` or in `registered`
 #guard
   let r : Rows := {
     format := "", value := "l/egress/3", link := "l", direction := "egress", window := 3, parameters := "",
@@ -2611,11 +2615,18 @@ def clocksFn (j : Json) : Except String Json := do
   let port := fun (q root : String) (l : Nat) =>
     Json.mkObj [("port", .str q), ("leaves", toJson l), ("root", .str root), ("domain", .str "d")]
   let entry := fun (v root : String) => Json.mkObj [("value", .str v), ("root", .str root), ("domain", .str "d")]
+  let other := fun (k : String) => Json.mkObj [(k, .str "scan/view"), ("root", .str "ee"), ("domain", .str "e")]
   let roots := fun (os : Array Json) => Json.mkObj [("roots", Json.arr os)]
   let registered := fun (os : Array Json) => Json.mkObj [("registered", Json.arr os)]
+  let both := fun (os vs : Array Json) => Json.mkObj [("roots", Json.arr os), ("registered", Json.arr vs)]
   rowsName .egress 3 == "rows/egress/3" &&
-    holds (roots #[port "scan/view" "ee" 4, port "rows/egress/3" h 4]) .egress 3 r &&
-    holds (registered #[entry "decoy" "ee", entry "l/egress/3" h]) .egress 3 r &&
+    holds (roots #[other "port", port "rows/egress/3" h 4]) .egress 3 r &&
+    holds (registered #[other "value", entry "l/egress/3" h]) .egress 3 r &&
+    holds (both #[port "rows/egress/3" h 4, port "scan/view" h 4] #[entry "decoy" h]) .egress 3 r &&
+    !holds (roots #[port "scan/view" "ee" 4, port "rows/egress/3" h 4]) .egress 3 r &&
+    !holds (registered #[entry "decoy" "ee", entry "l/egress/3" h]) .egress 3 r &&
+    !holds (both #[port "rows/egress/3" h 4] #[entry "decoy" "ee"]) .egress 3 r &&
+    !holds (both #[port "scan/view" "ee" 4] #[entry "l/egress/3" h]) .egress 3 r &&
     !holds (roots #[port "scan/view" h 4, port "rows/egress/3" "ee" 4]) .egress 3 r &&
     !holds (roots #[port "scan/view" h 4]) .egress 3 r &&
     !holds (roots #[port "rows/ingress/3" h 4]) .egress 3 r &&

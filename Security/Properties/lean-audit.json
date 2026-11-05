@@ -21197,7 +21197,7 @@
    "guarantees": ["Properties.NetworkCertifier.linkWindowAcceptMeans"]
   },
   "NetworkCheck.Period": {
-   "digest": "368923c38482ed4b14d58b5bcc5d8d30e6355e47c5eae3c34ff7f2b8bc58f55a",
+   "digest": "487c9540a15003a59381bcaf10a3e975119adc3f2d1ec926d7aee5af6373d093",
    "definitions": {
     "NetworkCheck.Period.Audit": "1d09ddb464aaa4df92f6fa9e898ac284f9c3cb3a691d01573bc237bf94b954e8",
     "NetworkCheck.Period.Audit.bits": "e933e5e70e66fbf6d1a3f868d294c6a0cfc6be8b835a4d117602235327ee4af1",
@@ -21397,7 +21397,7 @@
     "NetworkCheck.Period.heldCheck": "df27d15ec4685ed0ce7a9b4ed6b4263ba973a79abed21d07bb60e9ac14ca78e6",
     "NetworkCheck.Period.heldChecks": "f3659d6f63ef9b189fed22704affd13915f043c647e934676104a015170afb19",
     "NetworkCheck.Period.heldNames": "92c9f64f5875e43942325e49f471fc6010c6f0499ad9821dc2705b231112a3f8",
-    "NetworkCheck.Period.holds": "8d0205a1a62c9bad0af811df5f2c958a4aae6f1e98b4eda342f9ddd2c33064b8",
+    "NetworkCheck.Period.holds": "3657d17d030b52d409c8aaaa06cd3187d523bde9c5d7227335847c44d3bd119a",
     "NetworkCheck.Period.inRowsOf": "121989d6a065d2cf5912bba5f1c9fc493af5661bac038cf1e00cb9ae9a2b39fc",
     "NetworkCheck.Period.indexChars": "9ae4a2685fbd52836f3d116d2567eb0b62bbf3928fbe330b2d8ef8e4b319a406",
     "NetworkCheck.Period.ingressParams": "68483bb6bb24f46819fbb2716ccaa3e98383d35b957eaf1166c469eb457e1c99",
@@ -21461,7 +21461,7 @@
     "NetworkCheck.Period.rowsWf": "9540316ff13b3fd09e301bf584d59de4c3ba14a401c894c1a6728c52dcb5f8d0",
     "NetworkCheck.Period.rowsWfCheck": "1c38c128ec6656e26b54e28f251e86efde7600ff13631d00622e554d26d36e92",
     "NetworkCheck.Period.rowsWfRefusal": "23684a25587955e56641384f8e6053a2b4c717e73e28ae788280b352795a60cb",
-    "NetworkCheck.Period.rowsWindowCheck": "a4db2bf610df52e9306eb33d5a2eaa7c8b186215b2f29fb06aa838bfbd918143",
+    "NetworkCheck.Period.rowsWindowCheck": "65b4a9137db01ff47e9c92f22cc5c973e9becc8c359a92020fdfed384d206dca",
     "NetworkCheck.Period.rowsWindowCheck._sparseCasesOn_5": "2c58e485f9e644f9cd9e74b567cadc01dc61a13c5f701aa82c99b28e36883a1b",
     "NetworkCheck.Period.runsCircuit": "89b9b8ade2cc4820954b6cb56fcea89cd74246f9eb094b40f42fefc3b92f3f7a",
     "NetworkCheck.Period.scanOf": "8d1f29de7a64d804bd9003c322411fc2ae81c82414e48c98b359b07b2ed7aef0",
