@@ -52786,9 +52786,9 @@
    "guarantees": ["Flock.SecurityProofs.SampledKSLiveV5Honest"]
   },
   "Proofs.Flock.Bridge.Canon": {
-   "digest": "ba00de63f4131130b06dca6deb6718343f3ab80d71d045e5eb6d5f372d737dd5",
+   "digest": "1811d6c7f09b75ef55a4288d1090a5e49f25340bcff0e71d0dbf9e3f2d0cbf87",
    "definitions": {
-    "Flock.Guarantees.SampledKSLiveV2": "995bea9404b0d61298c68bee7f28240088f4e0fa62bd9a220b4d8f766816ada1"
+    "Flock.Guarantees.SampledKSLiveV2": "95d8526a7f21f7e0128995fd146b4580dbabcf8ec5eeed0d93fa9880aab4acc5"
    },
    "guarantees": ["Flock.SecurityProofs.SampledKSLiveV2"]
   },
@@ -52918,11 +52918,11 @@
    "guarantees": ["Flock.SecurityProofs.SampledKSLivePub", "Flock.SecurityProofs.SampledKSLiveV2"]
   },
   "Proofs.Flock.Bridge.Public": {
-   "digest": "0d26a6b7f2aaa24486b7a267d2f7591c83bbc59db1adb6a6d8c4a2d7c81e6a3f",
+   "digest": "4716f3198a0b4a8cd073099c26a30ae0384dfdce6ab7f8f84282bc39cf8d5d0d",
    "definitions": {
     "Flock.Bridge.deltaPub": "f7328b16312ac1aaa5d79be966c13bea34c51842c6a59d08d4a497c4e71812f9",
     "Flock.Bridge.ioSum": "25bc1c0dfed0bfd9db998718ea04ee1c6bc793146382d3b4182ce86025fcec2a",
-    "Flock.Guarantees.SampledKSLivePub": "ec448bdce25458bc0caf1f6ad9c4b88813a14a18318be95f979e5f9c14102cd5"
+    "Flock.Guarantees.SampledKSLivePub": "4d87b55e5c6a09ced6d2005a8cad4d229b7ececc2efde0604508bf54822c4690"
    },
    "guarantees": ["Flock.SecurityProofs.DeltaPubDeployed", "Flock.SecurityProofs.SampledKSLivePub"]
   },
@@ -52935,11 +52935,11 @@
    "guarantees": ["Flock.SecurityProofs.DeltaPubDeployed"]
   },
   "Proofs.Flock.Bridge.Refused": {
-   "digest": "951fc2bcebb32ad3c5ab917dcc19e5bcf08021d2a530f8bfbc0494a4b59e6d95",
+   "digest": "9d826ac6e6b53bddba41158a2388cb62f55f0bcbe3d258e35a0afdf6cf27425e",
    "definitions": {
     "Flock.Bridge.LiveAcceptsKS": "ff1729b1b2b29a48f0e3c4f42af32de19e8d6788d41de2e6974ce1ca0f50394a",
     "Flock.Bridge.RunPopOk": "dd047eafc6272926a4f7e7a5d4b7f159d99ec157a6f09947283adfcf55e97c10",
-    "Flock.Guarantees.SampledKSLiveV3": "313b35dbc2db815b71e59a606bd00652f116a3be5594c5d0f593f4889b489366"
+    "Flock.Guarantees.SampledKSLiveV3": "0384159c8bfb4487af7528bce9a46c70782eb8b5953c5cf90878aa3982aefdf2"
    },
    "guarantees": ["Flock.SecurityProofs.SampledKSLiveV3"]
   },
