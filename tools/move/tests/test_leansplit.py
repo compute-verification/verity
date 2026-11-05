@@ -149,6 +149,57 @@ def test_a_second_run_changes_nothing(tree):
     assert {p: p.read_text() for p in root.rglob("*.lean")} == after
 
 
+def test_a_header_after_a_plain_comment_holds_the_imports():
+    text = "/-\nWhat the module proves.\n-/\nmodule\n\npublic import Proofs.Toy.Base\n\nnamespace Toy\nend Toy\n"
+    header, body = M.split_header(text)
+    assert M.imports_of(header) == ["Proofs.Toy.Base"] and body.startswith("\nnamespace Toy")
+    added = M.add_import(text, "Proofs.Toy.Src", None)
+    assert "public import Proofs.Toy.Base\npublic import Proofs.Toy.Src\n" in added and added.startswith("/-\n")
+
+
+OTHER = """module
+
+public import Proofs.Toy.Base
+
+namespace Toy.Inner
+
+def c : Nat := 0
+
+end Toy.Inner
+"""
+
+SRC2 = """module
+
+public import Proofs.Toy.Base
+public import Proofs.Toy.Other
+
+namespace Toy
+open Nat Inner
+local notation "𝔹" => Toy.base
+local notation "ℂ" => Toy.Inner.c
+
+theorem a_le (n : Nat) : n ≤ 𝔹 n := Nat.le_succ n
+
+theorem c_eq : ℂ = 0 := rfl
+
+end Toy
+"""
+
+
+def test_a_new_module_leaves_out_the_namespaces_and_notations_it_cannot_see(tree):
+    d = tree.root / "Security" / "Proofs" / "Toy"
+    (d / "Other.lean").write_text(OTHER)
+    (d / "Src.lean").write_text(SRC2)
+    tree = M.Tree(tree.root)
+    op = dict(SPLIT, importers=[], drop_source=[], uses={})
+    log: list[str] = []
+    M.split(tree, op, log)
+    new = tree.read("Proofs.Toy.SrcA")
+    assert "namespace Toy\nopen Nat\nlocal notation \"𝔹\" => Toy.base\n" in new and "ℂ" not in new
+    assert "open Nat Inner\n" in tree.read("Proofs.Toy.Src")
+    assert any("left out open Inner" in ln for ln in log)
+
+
 def test_every_file_reassembles_from_its_parts(tree):
     for m in tree.mods:
         header, body = M.split_header(tree.read(m))

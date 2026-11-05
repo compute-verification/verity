@@ -14,7 +14,9 @@ A moved declaration takes its docstring, attributes, `set_option … in` and `op
 above it, and the new module replays the sections, namespaces, `open`s, `variable`s and global `set_option`s in force
 where it stood. The new module imports `imports`, the source's untracked imports (Mathlib, Std, ArkLib), and each in-tree
 module of the source's closure defining a tactic or notation whose atom a moved declaration's text holds; it keeps the
-source's header style (`module` and `public import` under the module system). Text-level and refusing: a declaration it
+source's header style (`module` and `public import` under the module system). The new module, and each importer that stops
+importing the source, leaves out of its `open` lines the in-tree namespaces none of its imports declares any more, and the
+new module the `local` notations its declarations don't use (`prune`). Text-level and refusing: a declaration it
 can't place (an unnamed instance, a name it doesn't find, one inside `mutual`) stops it with the name, before anything is
 written. It refuses a dirty worktree, and a second run changes nothing.
 """
@@ -43,6 +45,8 @@ CONT = re.compile(r"^(deriving(?!\s+instance)|where|with|termination_by|decreasi
 IMPORT = re.compile(r"^(public\s+)?(meta\s+)?import\s+(all\s+)?(\S+)")
 SYNTAX_DEF = re.compile(r'^(?:scoped |local )?(?:elab|macro|syntax|notation|infix[lr]?|prefix|postfix)\b[^"\n]*"([^"]+)"',
                         re.M)
+OPEN = re.compile(r"^open(\s+scoped)?((?:[ \t]+[^\s()]+)+)[ \t]*$")
+LOCAL_SYNTAX = re.compile(r"^local\s+(?:elab|macro|syntax|notation|infix[lr]?|prefix|postfix)\b")
 
 
 def nl_lines(text: str) -> list[str]:
@@ -127,7 +131,7 @@ def split_header(text: str) -> tuple[str, str]:
         s = ln.strip()
         if top[k] and (s in ("module", "prelude") or IMPORT.match(s)):
             h = k + 1
-        elif top[k] and s and not s.startswith("--") and not (s.startswith("/-") and s[2:3] not in "-!"):
+        elif top[k] and s and not s.startswith("--") and not (s.startswith("/-") and s[2:3] not in ("-", "!")):
             break
     return "".join(lines[:h]), "".join(lines[h:])
 
@@ -272,6 +276,43 @@ def drop_import(text: str, mod: str) -> str:
     return "".join(keep) + body
 
 
+def prune(text: str, known: set[str], avail: set[str], used: str | None = None) -> tuple[str, list[str]]:
+    """`text` without what it can no longer resolve: each namespace of a plain top-level `open` line that is declared in
+    the tree (`known`) but by none of the modules it now imports (`avail`), as Lean resolves the name from the
+    namespaces open there; a namespace no in-tree module declares (Mathlib's) stays. With `used`, a `local` notation or
+    macro whose atom `used` doesn't hold goes too. Returns the text and what went."""
+    header, body = split_header(text)
+    out, ns, gone = [header], [[]], []
+    for u in units_of(body):
+        o, e = OPENER.match(u.head), END.match(u.head)
+        if o and not u.head.startswith("/-"):
+            ns.append(o.group(2).split(".") if o.group(1) == "namespace" and o.group(2) else [])
+        elif e and len(ns) > 1:
+            ns.pop()
+        m = OPEN.match(u.own().rstrip("\n")) if len(u.lines) == 1 else None
+        if m and not {"in", "hiding", "renaming"} & set(m.group(2).split()):
+            cur = [c for f in ns for c in f]
+            keep = []
+            for n in m.group(2).split():
+                cands = {".".join(cur[:k] + [n]) for k in range(len(cur) + 1)}
+                if cands & known and not cands & avail:
+                    gone.append(f"open {n}")
+                else:
+                    keep.append(n)
+            if not keep:
+                continue
+            if len(keep) < len(m.group(2).split()):
+                out.append(f"open{m.group(1) or ''} {' '.join(keep)}\n" + "".join(u.blank))
+                continue
+        elif used is not None and LOCAL_SYNTAX.match(u.head):
+            atom = SYNTAX_DEF.search(u.own())
+            if atom and atom.group(1).strip() and atom.group(1).strip() not in used:
+                gone.append(u.head)
+                continue
+        out.append(u.full())
+    return "".join(out), gone
+
+
 class Tree:
     def __init__(self, root: Path):
         self.root = root
@@ -283,6 +324,7 @@ class Tree:
         self.files: dict[Path, str | None] = {}
         self._imports: dict[str, list[str]] = {}
         self._atoms: dict[str, list[str]] = {}
+        self._spaces: dict[str, set[str]] = {}
 
     def read(self, m: str) -> str:
         p = self.mods[m]
@@ -296,6 +338,7 @@ class Tree:
         self.files[self.mods[m]] = text
         self._imports.pop(m, None)
         self._atoms.pop(m, None)
+        self._spaces.pop(m, None)
 
     def imports(self, m: str) -> list[str]:
         if m not in self._imports:
@@ -307,6 +350,16 @@ class Tree:
         if m not in self._atoms:
             self._atoms[m] = [a.strip() for a in SYNTAX_DEF.findall(self.read(m)) if a.strip()]
         return self._atoms[m]
+
+    def spaces(self, mods) -> set[str]:
+        """The namespaces the modules `mods` declare into: each proper prefix of a declaration's name."""
+        out: set[str] = set()
+        for m in mods:
+            if m not in self._spaces:
+                self._spaces[m] = {".".join(p[:k]) for n in declared(self, m) for p in [n.split(".")]
+                                   for k in range(1, len(p))}
+            out |= self._spaces[m]
+        return out
 
     def closure(self, m: str) -> list[str]:
         seen: dict[str, None] = {}
@@ -377,8 +430,13 @@ def split(tree: Tree, op: dict, log: list[str]) -> None:
     out = ("module\n\n" if style else "") + "".join(f"{'public ' if style else ''}import {i}\n" for i in imps)
     out += f"\n/-! {shown}: the declarations of `{src}` that its importers read without the rest of it. -/\n"
     out += emit(moved)
+    known = tree.spaces([src, *closure])
     tree.mods[new] = tree.mods[src].with_name(new.split(".")[-1] + ".lean")
     tree.write(new, out)
+    out, gone = prune(out, known, tree.spaces(tree.closure(new)), text)
+    if gone:
+        tree.write(new, out)
+        log.append(f"  {new}: left out {', '.join(gone)}")
     rest = header + re.sub(r"\n{3,}", "\n\n", "".join(u.full() for u in units if u not in moved))
     tree.write(src, add_import(rest, new, None) if op.get("source_imports_new") else rest)
     for imp in op.get("importers", []):
@@ -388,6 +446,7 @@ def split(tree: Tree, op: dict, log: list[str]) -> None:
             log.append(f"  {new}: importer {imp} isn't in the tree")
     uses = op.get("uses", {})
     for imp in op.get("drop_source", []):
+        seen = tree.spaces(tree.closure(imp))
         t = drop_import(tree.read(imp), src)
         tree.write(imp, t)
         reach = set(tree.closure(imp))
@@ -398,6 +457,10 @@ def split(tree: Tree, op: dict, log: list[str]) -> None:
                 t = add_import(t, d, new)
                 reach |= set(tree.closure(d))
         tree.write(imp, t)
+        t, gone = prune(t, seen, tree.spaces(tree.closure(imp)))
+        if gone:
+            tree.write(imp, t)
+            log.append(f"  {imp}: left out {', '.join(gone)}")
     log.append(f"split {src}: {len(moved)} declarations to {new} "
                f"({tree.mods[new].relative_to(tree.root)}), {len(imps)} imports, "
                f"{len(op.get('drop_source', []))} of {len(op.get('importers', []))} importers drop {src.split('.')[-1]}")
