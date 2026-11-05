@@ -1570,18 +1570,24 @@ def test_an_accepted_network_verdict_is_established_only_where_each_listed_circu
     assert (line["verdicts"]["the network certifier"], line["of_record"], line["K"]) == (OR.NOT_ESTABLISHED, False, None)
 
 
-def test_a_period_listing_no_circuit_files_holds_auditor_listing_and_one_with_no_case_doesnt(tmp_path):
+@pytest.mark.parametrize("text, unread", [(None, f"the run has no {OR.CASE}"),
+                                          ("{", f"{OR.CASE} can't be read: JSONDecodeError"),
+                                          ("[]", f"{OR.CASE} isn't an object")])
+def test_a_period_listing_no_circuit_files_holds_auditor_listing_and_one_with_no_case_doesnt(tmp_path, text, unread):
     """A period whose audits list no circuit files holds auditor-listing, listing none, with no published period read;
-    with no certifier case the run can't say what the period lists, so it doesn't hold, the certifier's verdict is not
-    established, both auditor-record and auditor-listing open, and there is no bound."""
+    with no certifier case, or one that can't be read or isn't an object, the run can't say what the period lists, so
+    it doesn't hold, saying why, the certifier's verdict is not established, both auditor-record and auditor-listing
+    open, and there is no bound."""
     out = accepted(tmp_path)
     assert record(out)["checked"][OR.AUDITOR_LISTING] == {"is": OR.CHECKED[OR.AUDITOR_LISTING], "holds": True,
                                                           "listed": 0}
-    (out / OR.CASE).unlink()
+    if text is None:
+        (out / OR.CASE).unlink()
+    else:
+        (out / OR.CASE).write_text(text)
     rec = record(out)
     assert rec["checked"][OR.AUDITOR_LISTING] == {
-        "is": OR.CHECKED[OR.AUDITOR_LISTING], "holds": False,
-        "why": f"the run has no {OR.CASE} whose params list the period's audits"}
+        "is": OR.CHECKED[OR.AUDITOR_LISTING], "holds": False, "why": f"no case lists the period's audits: {unread}"}
     nv = rec["verdicts"]["the network certifier"]
     assert (nv["verdict"], nv["open"], nv["why"]) == (
         OR.NOT_ESTABLISHED, [OR.CERTIFIER_KEY, OR.AUDITOR_LISTING], f"{OR.KEY_OPEN}; {OR.LISTING_UNMET}")

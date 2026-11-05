@@ -972,6 +972,18 @@ def phase_seconds(out: Path) -> tuple[Fraction | None, str]:
         return None, f"{CASE}: {type(e).__name__}: {e}"
 
 
+def period_case(out: Path) -> tuple[Mapping[str, Any] | None, str]:
+    """OUT's certifier case, whose params are the parameters the period's check read, or None and why the run has
+    none."""
+    try:
+        case = json.loads((out / CASE).read_text())
+    except FileNotFoundError:
+        return None, f"the run has no {CASE}"
+    except ValueError as e:
+        return None, f"{CASE} can't be read: {type(e).__name__}"
+    return (case, "") if isinstance(case, Mapping) else (None, f"{CASE} isn't an object")
+
+
 def horizon(q: Fraction, delta: Fraction, links: int = 1) -> int:
     """⌊ln(links/δ)/q⌋, IntegrityHorizon's count at δ / links (`POOLED`), never below it: ln to 60 digits, raised by a
     part in 10^40 before the floor."""
@@ -1484,15 +1496,12 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
     v["sampled proofs"]["credit"] = paid = credit(out)
     for k in unread:
         v[k]["not_claimed"] = POUW_OPEN
-    try:
-        case: Any = json.loads((out / CASE).read_text())
-    except (FileNotFoundError, ValueError):
-        case = None
-    case = case if isinstance(case, Mapping) else None
+    case, unread = period_case(out)
     composed = next((c.get("params_sha512") for c in found[composite][1].get("cases") or ()
                      if c.get("id") == NETWORK), None) if composite in found else None
     checked = {AUDITOR_RECORD: auditor_record((case or {}).get("params"), composed, certifier_key, site_registration),
-               AUDITOR_LISTING: auditor_listing(out, case)}
+               AUDITOR_LISTING: auditor_listing(out, case) if case is not None else {
+                   "is": CHECKED[AUDITOR_LISTING], "holds": False, "why": f"no case lists the period's audits: {unread}"}}
     prem = premises(LOCKS, checked=checked)
     drawn, draws = coins(out), chain_draws(out)
     cond = [COINS_OPEN] if drawn["open"] else []
