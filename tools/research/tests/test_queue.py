@@ -2466,25 +2466,24 @@ def test_a_head_stacked_on_an_open_pr_or_built_on_todays_next_is_not_refused(wor
     assert [m.pr for m in members] == [1, 3] and entries[3].after == (1,) and entries[2].state == "waiting"
 
 
-def test_ready_refuses_to_mark_a_head_carrying_an_old_next_and_tells_one_based_elsewhere_what_main_would_refuse(world, capsys):
-    from research.queue import MarkOnly, StoreLabels, old_next_at, ready
+def test_the_preflight_refuses_a_head_on_main_carrying_an_old_next_before_any_check_and_never_one_based_elsewhere(world, capsys):
+    """At the mark as at admission, in the sync's words, and first, since the fix makes another head; a PR based on another
+    branch (a demo's) isn't judged for it, as drive never admits it."""
+    from research.queue import MarkOnly, StoreLabels, ready
 
     world.with_store_remote()
     _, merge, head = _old_next(world)
     world.gh.put(2, head, ready=False)
-    world.gh.put(3, demo := world.change({"p.txt": "3\n"}, base=head), ready=False)
+    world.gh.put(3, demo := world.change({"p.txt": "3\n"}, base=merge), ready=False)
     world.gh.prs[3] = dataclasses.replace(world.gh.prs[3], base="demo", branch="cursor/w-3")
-    world.gh.put(4, h4 := world.change({"q.txt": "4\n"}), ready=False)
-    carried = lambda pr, prs: old_next_at(world.dev, str(world.origin), pr, prs)          # noqa: E731
-    refusal = f"its head carries 1 merge of an old `next` that `main` doesn't hold, of PRs closed unlanded ({merge[:12]} (#1)), "
-    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), old_next=carried) == 1
-    assert f"research queue ready: #2 is not marked ready at {head[:12]}: {refusal}{OLD_NEXT_FIX}\n" in capsys.readouterr().err
-    assert ready(world.gh, world.store, 3, "lane-3", MarkOnly(), old_next=carried) == 0
-    assert (f"research queue ready: #3 is based on demo, not main, and drive would refuse it on main: {refusal}{OLD_NEXT_FIX}\n"
-            in capsys.readouterr().err)
-    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), old_next=carried) == 0
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 1
+    assert (f"research queue ready: #2 is not marked ready at {head[:12]}: its head carries 1 merge of an old `next` that `main` "
+            f"doesn't hold, of PRs closed unlanded ({merge[:12]} (#1)), {OLD_NEXT_FIX}\n") in capsys.readouterr().err
+    assert not [s for s in world.logs if "merged onto" in s], "no other check ran"
+    assert ready(world.gh, world.store, 3, "lane-3", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
+    assert "old `next`" not in capsys.readouterr().err
     labels = StoreLabels(world.store, log=world.logs.append)
-    assert [labels.ready(2, head), labels.ready(3, demo), labels.ready(4, h4)] == [False, True, True]
+    assert [labels.ready(2, head), labels.ready(3, demo)] == [False, True]
 
 
 def test_ready_without_sha_marks_the_branchs_tip_not_the_head_github_still_shows(world, monkeypatch):
@@ -3456,9 +3455,8 @@ def test_the_lean_step_ships_the_merged_tree_to_a_node_for_ready_on_and_reads_it
 def test_research_queue_ready_runs_the_preflight_unless_no_preflight(world, monkeypatch, capsys):
     from research import queue as Q
 
-    seen, gates, olds = [], [], []
-    monkeypatch.setattr(Q, "ready", lambda *a, preflight=None, records=None, old_next=None, **kw:
-                        seen.append(preflight) or gates.append(records) or olds.append(old_next) or 0)
+    seen, gates = [], []
+    monkeypatch.setattr(Q, "ready", lambda *a, preflight=None, records=None, **kw: seen.append(preflight) or gates.append(records) or 0)
     monkeypatch.chdir(world.dev)
     base = ["queue", "ready", "3", "--mark", "--by", "lane-3", "--remote", str(world.origin), "--repo", "o/r"]
     assert research_main(base) == 0 and research_main([*base, "--no-preflight"]) == 0
@@ -3467,7 +3465,6 @@ def test_research_queue_ready_runs_the_preflight_unless_no_preflight(world, monk
     assert [(p.lean.on, p.lean.by) for p in (seen[0], seen[2])] == [(Q.PREFLIGHT_LEAN_ON, "lane-3")] * 2, \
         "--mark and --local ship the Lean step to a node too"
     assert all(isinstance(g, Q.RecordsGate) for g in gates) and len(gates) == 3        # the records gate isn't the preflight's
-    assert all(callable(o) for o in olds) and len(olds) == 3, "nor is the old-`next` refusal (`old_next_at`)"
     with pytest.raises(SystemExit) as e:
         research_main(["queue", "status", "--no-preflight"])
     assert e.value.code == 2 and "--no-preflight is for ready only" in capsys.readouterr().err

@@ -25,9 +25,8 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    once it ends); or, with
                                                    --mark, on the owner's word alone (`MarkOnly`).  First it refuses a PR
                                                    whose head is on another repository or whose author isn't the
-                                                   organization's or one of `AUTHORS` (`PR.outside`), and one based on `main`
-                                                   whose head carries merges of an old `next` (`old_next`), as admission
-                                                   does, naming the fix; then the records gate
+                                                   organization's or one of `AUTHORS` (`PR.outside`), as admission does; then
+                                                   the records gate
                                                    (`RecordsGate`, which --no-preflight keeps) refuses a head that changes a Lean
                                                    lock against the landing branch unless a records run or Lean check passed
                                                    that package, of the head or of a commit whose files of the package and the
@@ -142,7 +141,8 @@ collaborator's isn't enough) nor one of `AUTHORS` (the team's Apps, the reposito
 admission, naming why and the fix: a maintainer opens it from a branch of this repository (`PR.outside`).  So is a PR whose head
 carries merges of an old `next`, rebuilt since (`old_next`: `Queue: #N` merges the landing branch doesn't hold, of PRs neither open
 nor landed, which would land with it; a demo branch that merged `next` carries hundreds), naming the fix: retarget it to the demo
-branch it builds on, or restack its own commits onto `main` (`old_next_refusal`).  A PR based on another branch is never admitted: `ready` marks it and says so,
+branch it builds on, or restack its own commits onto `main` (`old_next_refusal`; at its mark, the preflight's first refusal:
+`Preflight._old_next`).  A PR based on another branch is never admitted: `ready` marks it and says so,
 and `status` lists it, once marked, as waiting to be retargeted to `main` (a PR containing another waits for it there).  Ready is a store label `ready = true` on `pr:{number}@{head sha}` that
 `research queue ready PR` writes, so a new push needs a new one (a restack too: the tier ran on the old tree; not a head whose tree is a marked head's,
 as a merge of `main` that changes no file leaves it: `ready` marks that one without a tier), and only after the quick tier passes at that
@@ -1630,9 +1630,9 @@ class Queue:
 
     def entries(self, prs: list[PR], state: dict, base: str | None = None, landed: str | None = None,
                 queued: str | None = None, open_numbers: Collection[int] | None = None) -> dict[int, Entry]:
-        """Each open PR's standing.  One whose head carries merges of an old `next` (`old_next`: of PRs neither open, among
-        ``open_numbers``, those of ``prs`` unless given, nor landed) is refused, with the fix (`old_next_refusal`), as `ready`
-        refuses its mark.  A PR P goes after, and waits while it isn't admitted, each other open PR Q whose current
+        """Each open PR's standing.  With ``open_numbers`` (every open PR's number), one whose head carries merges of an old
+        `next` (`old_next`: of PRs neither among them nor landed) is refused, with the fix (`old_next_refusal`), as the
+        preflight refuses its mark (`Preflight._old_next`).  A PR P goes after, and waits while it isn't admitted, each other open PR Q whose current
         head P's head contains, or an older head of Q's, by ancestry alone (never by PR number).  P holds an older head of Q
         when one of P's own commits (those in ``base``.. its head less those below the heads of open PRs it contains, and
         less those `next` already carries without P, below) is
@@ -1664,8 +1664,8 @@ class Queue:
         if self.prefetch is not None:
             self.prefetch([(p.number, p.head) for p in prs if rules.hold_label not in p.labels and p.owner is not None])
         reach = above(self.workdir, base, (p.head for p in prs))
-        old = old_next(self.workdir, (p.head for p in prs if reach[p.head][0]), landed,
-                       {p.number for p in prs} if open_numbers is None else open_numbers)
+        old = {} if open_numbers is None else old_next(self.workdir, (p.head for p in prs if reach[p.head][0]), landed,
+                                                       open_numbers)
         for p in prs:
             e = out[p.number] = Entry(p)
             ejected = state["ejected"].get(str(p.number))
@@ -3270,27 +3270,6 @@ def old_next_refusal(old: list[Member], into: str) -> str:
             f"open PR it needs merged, never `{BRANCH}`) and mark that head")
 
 
-def old_next_at(repo: Path, remote: str, pr: PR, prs: Iterable[PR]) -> str | None:
-    """`ready`'s `old_next_refusal` of ``pr``'s head, or None: judged in ``repo`` (the caller's checkout) on `main`, the
-    landing branch and the head as fetched from ``remote`` under `refs/queue/old-next/`, ``prs`` the open PRs.  What can't be
-    fetched or read refuses nothing, said on stderr: the sync's `Queue.entries` refuses such a head all the same."""
-    ns = "refs/queue/old-next"
-    try:
-        _git(repo, *STALL, "fetch", "-q", remote, f"+refs/heads/main:{ns}/main", f"+refs/pull/{pr.number}/head:{ns}/pr")
-        if _git(repo, "cat-file", "-e", f"{pr.head}^{{commit}}", check=False).returncode and pr.branch:
-            _git(repo, *STALL, "fetch", "-q", remote, f"+refs/heads/{pr.branch}:{ns}/branch", check=False)
-        landed = f"{ns}/main"
-        if (into := into_at(repo, landed)) != "main":
-            _git(repo, *STALL, "fetch", "-q", remote, f"+refs/heads/{into}:{ns}/{into}")
-            landed = f"{ns}/{into}"
-        old = old_next(repo, [pr.head], landed, {p.number for p in prs})
-    except QueueError as e:
-        print(f"research queue: whether #{pr.number}'s head carries an old `{BRANCH}` isn't known ({e}); the sync judges it",
-              file=sys.stderr)
-        return None
-    return old_next_refusal(list(old.values()), into) if old else None
-
-
 def move_of(repo: Path, commit: str) -> str | None:
     """The word map of ``commit`` when it is a move drive regenerated (its `Move:` trailer), else None."""
     m = MOVE_TRAILER_RE.search(_git(repo, "log", "-1", "--format=%B", commit, check=False).stdout)
@@ -4408,7 +4387,8 @@ class Preflight:
         self.root = Path(root or tempfile.gettempdir())
 
     def __call__(self, pr: PR, prs: list[PR]) -> str | None:
-        """None when the head may be marked; else the refusal."""
+        """None when the head may be marked; else the refusal: before any check when the sync would refuse the head for the
+        merges of an old `next` it carries (`_old_next`), since its fix makes another head."""
         start = self.clock()
         try:
             base, onto, members = self._fetch(pr)
@@ -4416,6 +4396,8 @@ class Preflight:
             self.log(f"research queue: preflight: #{pr.number} at {pr.head[:12]}: checks skipped: all ({e}); the after-landing "
                      "run still tests the head")
             return None
+        if why := self._old_next(pr, prs):
+            return why
         notes: list[str] = []
         found = self._contained(pr, prs) + self._gates(pr, notes)
         tree, files, r = None, [], None
@@ -4470,6 +4452,23 @@ class Preflight:
         said = f"checks skipped: {'; '.join(skipped)}; the checks that ran passed" if skipped else "nothing refused"
         self.log(f"research queue: preflight: #{pr.number} at {pr.head[:12]} merged onto {onto}: {said} ({took})")
         return None
+
+    def _old_next(self, pr: PR, prs: list[PR]) -> str | None:
+        """The sync's refusal (`Queue.entries`) of a head based on `main` that carries merges of an old `next` (`old_next`, on
+        the landing branch as `_fetch` fetched it, ``prs`` the open PRs), else None.  One based on another branch isn't judged:
+        drive never admits it (`off_main_note`).  What git can't read refuses nothing, said in the log: the sync judges it."""
+        if pr.base != "main":
+            return None
+        into = into_at(self.repo, "refs/queue/preflight/main")
+        if _git(self.repo, "rev-parse", "-q", "--verify", f"refs/queue/preflight/{into}^{{commit}}", check=False).returncode:
+            into = "main"
+        try:
+            old = old_next(self.repo, [pr.head], f"refs/queue/preflight/{into}", {p.number for p in prs})
+        except QueueError as e:
+            self.log(f"research queue: preflight: whether #{pr.number}'s head carries an old `{BRANCH}` isn't known ({e}); the "
+                     "sync judges it")
+            return None
+        return old_next_refusal(list(old.values()), into) if old else None
 
     def _only_moved(self, base: str, files: list[str]) -> list[str]:
         """The moves drive regenerated below ``base`` (`queue_log`) that ``files``, a merge's conflicts, are all files of, when
@@ -4526,7 +4525,7 @@ class Preflight:
         landed = land if not _git(self.repo, "rev-parse", "-q", "--verify", f"{land}^{{commit}}", check=False).returncode else main
         try:
             entries = q.entries([pr, *(p for p in prs if p.number in inside)], {"ejected": {}}, base=main, landed=landed,
-                                queued=f"refs/queue/preflight/{BRANCH}", open_numbers={p.number for p in prs})
+                                queued=f"refs/queue/preflight/{BRANCH}")
         except QueueError as e:
             self.log(f"research queue: preflight: can't tell whether the open PRs this head contains are admitted ({e})")
             return []
@@ -5384,13 +5383,10 @@ def ejection(store, pr: PR) -> str | None:
 SHA_READS, SHA_WAIT_S = 6, 5.0
 
 
-def off_main_note(pr: PR, prs: list[PR], old_next: str | None = None) -> str | None:
-    """What `ready` tells the owner of ``pr`` when it isn't based on `main` (drive admits only PRs that are), or None; with
-    ``old_next``, the refusal `main` would give its head (`old_next_refusal`) in place of the advice to retarget it there."""
+def off_main_note(pr: PR, prs: list[PR]) -> str | None:
+    """What `ready` tells the owner of ``pr`` when it isn't based on `main` (drive admits only PRs that are), or None."""
     if pr.base == "main":
         return None
-    if old_next:
-        return f"#{pr.number} is based on {based_on(pr, prs)}, not main, and drive would refuse it on main: {old_next}"
     parent = next((p for p in prs if p.branch == pr.base and p.number != pr.number), None)
     until = f"until #{parent.number} lands, one stack level per landing" if parent else "until it is"
     return (f"#{pr.number} is based on {based_on(pr, prs)}, not main: drive won't see it {until}. Retarget it to main (drive orders "
@@ -5401,27 +5397,22 @@ def off_main_note(pr: PR, prs: list[PR], old_next: str | None = None) -> str | N
 def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str | None], again: bool = False,
           preflight: Callable[[PR, list[PR]], str | None] | None = None, sha: str | None = None,
           sleep: Callable[[float], None] = time.sleep, as_json: bool = False,
-          records: Callable[[PR], str | None] | None = None,
-          old_next: Callable[[PR, list[PR]], str | None] | None = None) -> int:
+          records: Callable[[PR], str | None] | None = None) -> int:
     """`research queue ready PR`: run the quick tier at the PR's current head (`tier`, a `RemoteQuickTier` or a `QuickTier`), and once
     it passes write `ready = true` on `pr:{n}@{that head}` and push it to the store's remote.  A head whose tree is that of another
     head marked ready (`same_tree_mark`) is marked without running the tier again.  A head drive or the lander ejected is refused
     unless ``again`` (a re-mark at an ejected head would fail a second train on the same line).  Before any of it, a PR
     `PR.outside` refuses (its head on another repository than ``github``'s, or an author the organization doesn't have) is
-    refused, and so is one based on `main` whose head ``old_next`` (`old_next_at`, which `--no-preflight` keeps) finds carrying
-    merges of an old `next`, with the fix (`old_next_refusal`), as the sync refuses both; then ``records`` (`RecordsGate`,
-    which `--no-preflight` keeps) refuses a head that changes a Lean lock no records run passed, of it or of a commit with the
-    same inputs for that package,
+    refused, then ``records`` (`RecordsGate`, which `--no-preflight` keeps) refuses a head that changes a Lean lock no records run passed, of
+    it or of a commit with the same inputs for that package,
     then ``preflight`` (`Preflight`; None with `--no-preflight`) refuses a head that would break `next`, with the fix.  With ``sha``
     (`--sha`) it marks only that head: GitHub's head lags a push by seconds (`git push && research queue ready N --mark` can mark
     the old head), so it reads again, up to `SHA_READS` times, and refuses when GitHub still has another head.  A PR based
-    on another branch is marked all the same, and told that drive won't see it until it is based on `main` (`off_main_note`),
-    or, when its head carries an old `next`, what `main` would refuse it for.
+    on another branch is marked all the same, and told that drive won't see it until it is based on `main` (`off_main_note`).
     With ``as_json`` (`--json`) the rest goes to stderr, and stdout gets one object: pr, head, base, exit and warning (that note)."""
     with contextlib.redirect_stdout(sys.stderr) if as_json else contextlib.nullcontext():
-        rc, pr, prs = _ready(github, store, number, by, tier, again, preflight, sha, sleep, records, old_next)
-        carried = old_next(pr, prs) if old_next is not None and pr is not None and pr.base != "main" else None
-        note = off_main_note(pr, prs, carried) if pr is not None else None
+        rc, pr, prs = _ready(github, store, number, by, tier, again, preflight, sha, sleep, records)
+        note = off_main_note(pr, prs) if pr is not None else None
         if note:
             print(f"research queue ready: {note}", file=sys.stderr)
     if as_json:
@@ -5431,8 +5422,7 @@ def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str |
 
 def _ready(github, store, number: int | None, by: str, tier: Callable[[PR], str | None], again: bool,
            preflight: Callable[[PR, list[PR]], str | None] | None, sha: str | None,
-           sleep: Callable[[float], None], records: Callable[[PR], str | None] | None = None,
-           old_next: Callable[[PR, list[PR]], str | None] | None = None) -> tuple[int, PR | None, list[PR]]:
+           sleep: Callable[[float], None], records: Callable[[PR], str | None] | None = None) -> tuple[int, PR | None, list[PR]]:
     if not sha and number is not None and (p := next((x for x in github.open_prs() if x.number == number), None)) and p.branch \
             and (tip := getattr(github, "branch_tip", lambda _b: None)(p.branch)):
         sha = tip                                           # a mark seconds after a push would preflight GitHub's old head
@@ -5453,9 +5443,6 @@ def _ready(github, store, number: int | None, by: str, tier: Callable[[PR], str 
         print(f"research queue ready: #{pr.number} is not marked: GitHub has its head at {pr.head[:12]}, not {sha[:12]}, after "
               f"{SHA_READS} reads {SHA_WAIT_S:g} s apart. Push {sha[:12]} to the PR's branch (or pass the head GitHub shows), then "
               "run this again", file=sys.stderr)
-        return 1, pr, prs
-    if pr.base == "main" and old_next is not None and (why := old_next(pr, prs)):
-        print(f"research queue ready: #{pr.number} is not marked ready at {pr.head[:12]}: {why}", file=sys.stderr)
         return 1, pr, prs
     if not again and (why := ejection(store, pr)):
         print(f"research queue ready: #{pr.number} is not marked ready at {pr.head[:12]}: that head was ejected: {why}. Push the fix "
@@ -6213,7 +6200,7 @@ def main(argv: list[str]) -> int:
             pre = None if a.no_preflight else Preflight(top, remote, store, lean=LakeBuild(on=PREFLIGHT_LEAN_ON, by=a.by),
                                                              root=a.preflight_root)
             return ready(GitHub(repo), store, a.pr, a.by, tier, again=a.again, preflight=pre, sha=a.sha, as_json=a.json,
-                         records=RecordsGate(top, remote, store), old_next=lambda pr, prs: old_next_at(top, remote, pr, prs))
+                         records=RecordsGate(top, remote, store))
         labels = StoreLabels(store, log=lambda s: print(s, file=sys.stderr), since=a.marked_after)
         q = Queue(a.workdir, remote=remote, github=GitHub(repo), ready=labels.ready, store=store, shadow=a.shadow,
                   rules=Rules.parse(a.rules.read_text(), str(a.rules)) if a.rules else None,
