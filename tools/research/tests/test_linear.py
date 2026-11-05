@@ -445,7 +445,7 @@ def test_an_ask_lands_on_its_teams_earliest_milestone_not_yet_past_and_in_no_pro
     fake.team_projects = BOARDS
     linear.ask_issue("infra", "top", "one host", lin)
     i = fake.sent("issueCreate")[-1][1]["i"]
-    assert (i["projectId"], i["projectMilestoneId"]) == ("PC", "C1")         # 3 Nov: A1 is past, B0 undated, C1 before B2 in its ladder
+    assert (i["projectId"], i["projectMilestoneId"]) == ("PC", "C1")         # A1 is past, B0 undated, C1 before B2 in its ladder
     assert fake.boards == ["T-infra"] and 'status: {type: {nin: ["completed", "canceled"]}}' in fake.sent("team(id: $id) { projects")[0][0]
     assert capsys.readouterr().err == ""
     fake.team_projects = [BOARDS[0], {**BOARDS[1], "projectMilestones": ladder(("B1", "2026-11-02", 5))}]
