@@ -145,6 +145,7 @@
   "art:8bfe414af3d247db7b062b4c99a13b2d50f757cebeadf6c7411c39387bbed65c": "verity/ml/flock/tests/fixtures/plain-tree",
   "art:5541045ecdba52181d811f6e31e0ce1b9044f3fb1afd3c76dcfececcbedd32f4": "verity/ml/flock/tests/fixtures/rec-c3-inner",
   "art:cc0144301c8d6f1c8c82c22e7eaabc1e7faeccfaa78722e37678183e3004f390": "benchmarks/one_stage/tests/fixtures/bundle-window",
+  "art:b87fde52ae9f7ac0d129141534fcd4e56cc9bd06728bb0b658d155b521c3cdf9": "verity/ml/flock/tests/fixtures/honest-session",
   "previous": {
     "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": [
       "art:d775cc59e5e058b21c9eac5d748fab785ecd6be184782427bead14eb3cc80811"
@@ -197,6 +198,9 @@
       "art:d59791332598d1b33958ed907b08e1cdbebc33c556ea98bc76451f8a709a2df8",
       "art:1a76e7c297d9a6ba73edb349148885b43becd71723acc2c22c245c6794ccc69b",
       "art:bb558d7a1288f1a1f7cc0bb62ce699e36e711928ab4db6b403cd5ac2859dc2bd"
+    ],
+    "art:b87fde52ae9f7ac0d129141534fcd4e56cc9bd06728bb0b658d155b521c3cdf9": [
+      "art:824640c83f0408af007797dc8b5ceb902aafac8aaaeb81ae0f4859f89d5f3560"
     ]
   }
 }
