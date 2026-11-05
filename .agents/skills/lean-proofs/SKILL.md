@@ -62,11 +62,14 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   the landing DM carries, without a build of your own (`lean_changed.py`'s docstring).
 
   ~~~text
-  research run --on auto --mem-gb 32 --max-min 120 --project verity --source . --cwd clone --declared-output 'lean-audit/*' \
-    -- python3 tools/verity/lean/lean_changed.py --records PKG --update
+  research run --on vy-nebius-cpu-1 --pool research --project verity --source . --cwd clone --declared-output 'lean-audit/*' -- \
+    python3 tools/verity/lean/lean_changed.py --records PKG --update
   ~~~
 
-  It also audits every package whose guarantees read PKG's build (`lean-audit/requirer-<path>/`), and with `--update` updates one
+  In cpu-1's research pool the runner takes the check slot: don't wrap it in `slot.py`. On vy-nebius-1 a bare run is
+  refused: wrap it in n1's Lean-record pool, `env CHECK_SLOTS=/workspace/research/locks/leanrec/slots python3
+  tools/verity/check/slot.py --by LANE -- python3 tools/verity/lean/lean_changed.py --records PKG --update`. It also
+  audits every package whose guarantees read PKG's build (`lean-audit/requirer-<path>/`), and with `--update` updates one
   that fails only on record differences. Commit each record it kept, `lean-audit/record/<path>/lean-audit.json` over
   `<path>/lean-audit.json` (its log names each; each package's `audit-*/review.txt` says what changed); a requirer
   failing otherwise fails the run.
@@ -94,8 +97,8 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 
 - **An assumption is a named `Prop`** in its area's `Definitions/<Area>/Assumptions` (Flock's in
   `Proofs/Flock/Soundness/Assumptions` until its spec is extracted), taken as a hypothesis by each theorem that needs it
-  and listed by name in the lock's `assumptions` with its owner. Its docstring gives its rationale, a primitive
-  assumption's opening with its claim id (`verity.core.claims`); a ledger points to it. `--update` lists every premise a guarantee
+  and listed by name in the lock's `assumptions` with its owner. Its docstring opens with its claim id
+  (`verity.core.claims`) and gives its rationale; a ledger points to it. `--update` lists every premise a guarantee
   takes that this repository defines, and every assumption a premise mentions, with a digest, so strengthening a
   premise is a record change. AGENTS.md "Lean" has the rest.
 - **Statement first, then an attack on it, then an ask for each new premise, then the proof.** State the guarantee on
