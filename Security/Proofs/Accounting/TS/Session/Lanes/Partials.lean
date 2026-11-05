@@ -1,5 +1,7 @@
-import Proofs.Accounting.TS.Session.Lanes.KnownRead
-import PouwWindow.OwnPorts
+module
+
+public import Proofs.Accounting.TS.Session.Lanes.KnownRead
+public import PouwWindow.OwnPorts
 
 /-!
 # Lane `l`'s partials row is the combine's `p<l>`
@@ -24,6 +26,8 @@ marks `read_in_full` (`PouwWindow.Lanes.readFull`) to one row of its registered 
 * `fieldBit_partials`, `fieldBit_combine`, `part_eq`: both decodes read the partials words from bit 0, so lane `l`'s
   decoded partials row is the combine's row `l`.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Lanes
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.ZkDecJ
+module
+
+public import Proofs.Flock.Claims.KS.ZkDecJ
 
 /-!
 # The masked live sessions' bound at the deployed decoders
@@ -22,6 +24,8 @@ At `oracleOf C` the verdict's level-0 term reads both reps' extra lanes, which a
 as `0`, so a run whose level-0 opening has a nonzero extra lane is off `C` there (`ZkPads`): the deployed prover's own
 runs, whose extra lanes are uniform, are not the mixture `ZkXferJ` asks for.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

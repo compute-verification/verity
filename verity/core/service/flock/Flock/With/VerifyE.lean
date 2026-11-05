@@ -13,8 +13,12 @@ So the element-level verdict accepts wherever the shipped one does, with the sam
 (`verifyWithE_of_verifyWith`, `verifyLoggedE_of_verifyLogged`). `Sim.impSt` relates two runs of one `StV σ` where the
 second ends `.ok`, at the same state, wherever the first does; it walks the two `keep`s in step.
 -/
-import Flock.With.Log
-import Flock.JsonParse
+module
+
+public import Flock.With.Log
+public import Flock.JsonParse
+
+@[expose] public section
 
 namespace Flock
 

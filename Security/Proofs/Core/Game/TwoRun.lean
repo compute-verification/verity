@@ -1,6 +1,8 @@
-import Proofs.Core.Game.Seq
-import Proofs.Core.Game.Prob
-import Definitions.Core.Interaction
+module
+
+public import Proofs.Core.Game.Seq
+public import Proofs.Core.Game.Prob
+public import Definitions.Core.Interaction
 
 /-!
 # The most likely revealed message, and the two-continuation finder
@@ -26,6 +28,8 @@ collision (`sq_reveal_miss_le`), and by Jensen over the coins before the node th
 * `DigestCut.prob_le_revealMode_add_missP`: at a cut, an event of plays that reveal a message is at most as likely as
   the event with the most likely message revealed, plus the miss.
 -/
+
+@[expose] public section
 
 namespace Verity
 

@@ -1,8 +1,10 @@
-import Proofs.Properties.Verity.Sampled
-import Proofs.Properties.Verity.SampledCoins
-import Proofs.Properties.SampledProofs
-import Proofs.Properties.Challenger
-import Init.Internal.Order.While
+module
+
+public import Proofs.Properties.Verity.Sampled
+public import Proofs.Properties.Verity.SampledCoins
+public import Proofs.Properties.SampledProofs
+public import Proofs.Properties.Challenger
+public import Init.Internal.Order.While
 
 /-!
 # The draw: a sampled verdict's units are the live audit's draw at the play's coins
@@ -36,6 +38,8 @@ coins of the draw's family released after the registration's digest.
   (`extend_draw`, `coupled_draw`). At a session whose bytes are `coinBytes` of the sample's coins, that is a sample
   whose first coins are the play's (`coupled_draw_coins`).
 -/
+
+@[expose] public section
 
 namespace Verity.Sampled
 

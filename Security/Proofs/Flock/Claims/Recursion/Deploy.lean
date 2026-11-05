@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Recursion.DeployOuter
-import Proofs.Flock.Claims.Recursion.Scope
-import Proofs.Flock.Claims.Complete.Zk.Honest
-import Proofs.Flock.Claims.Complete.Zk.Coins
-import Definitions.Claims.Recursion
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployOuter
+public import Proofs.Flock.Claims.Recursion.Scope
+public import Proofs.Flock.Claims.Complete.Zk.Honest
+public import Proofs.Flock.Claims.Complete.Zk.Coins
+public import Definitions.Claims.Recursion
 
 /-!
 # The compiled verifier in public-coin form (`RecDeploy.V`) and its record (`deployRec`)
@@ -72,6 +74,8 @@ the inner session's plain `δc` (`FlockComplete.δc`) plus each V* session's mas
 `FlockComplete.δcZk`'s bad coins at `setupO`), at the V* statements `nums` reads, and `1` wherever one of them cannot
 be accepted (`readyRec`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

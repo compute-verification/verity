@@ -1,4 +1,6 @@
-import Firewall.Release
+module
+
+public import Firewall.Release
 
 /-!
 # The firewall's record: what its Lean code (`Firewall.Record`, `Firewall.Release`) does
@@ -20,6 +22,8 @@ proofs leave.
 `Proofs.Properties.Firewall` proves them, with `AdmitNext`'s and `AfterOnTime`'s honest and nontrivial lemmas at the
 instances below.
 -/
+
+@[expose] public section
 
 namespace Properties.Firewall
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.VBridge.Sparse.Residuals
-import Proofs.Flock.Soundness.Refine.Plays
-import Proofs.Flock.Soundness.Instance
+module
+
+public import Proofs.Flock.VBridge.Sparse.Residuals
+public import Proofs.Flock.Soundness.Refine.Plays
+public import Proofs.Flock.Soundness.Instance
 
 /-!
 # A run of the sparse phase on `RecSparse_v1`'s ports
@@ -10,6 +12,8 @@ import Proofs.Flock.Soundness.Instance
 `sparseVerdict` on the messages and coins read through `fOf`, with H2's and H3's claims the folds of `degNext` over
 the rounds (`degFold`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Sparse
 

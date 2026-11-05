@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Refine.Rep
+module
+
+public import Proofs.Flock.Soundness.Refine.Rep
 
 /-!
 # Two runs of one executable, where one returns what the other returns
@@ -10,6 +12,8 @@ on one scrutinee, a `for` loop over one collection, a `let`) is taken on both, a
 to it uses. It leaves the goals where the two sides differ otherwise. It runs only inside the elaborator, and the kernel
 checks every proof it builds.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 
@@ -73,7 +77,7 @@ theorem okLe_back {α : Type} {x y : V α} {c : α} (hx : x = .ok c) (h : OkLe x
 
 open Lean Elab Tactic Meta in
 /-- One step of `ok_le_walk` on the goal `OkLe m m'`, by the heads of `m` and `m'`; `none` where it takes none. -/
-def okLeStep (g : MVarId) : TacticM (Option (List MVarId)) := g.withContext do
+meta def okLeStep (g : MVarId) : TacticM (Option (List MVarId)) := g.withContext do
   let ty := (← instantiateMVars (← g.getType)).consumeMData
   unless ty.isAppOfArity ``OkLe 3 do return none
   let γ := ty.getArg! 0

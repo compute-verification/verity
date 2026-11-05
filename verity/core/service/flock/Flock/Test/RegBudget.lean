@@ -7,7 +7,12 @@ cap; a shape `RecVStar.statements` refuses (claims not two and two per region) i
 Without an inner shape nothing is refused. The inner statement's public file of `MAX_INNER_ROWS` instances, or of
 shared-row tables of `MAX_INNER_ROWS` rows, passes `innerRows`, and one instance or row more is refused.
 -/
-import Flock.RecBudget
+module
+
+public import Flock.RecBudget
+meta import Flock.RecBudget
+
+@[expose] public section
 
 namespace Flock.Test.RegBudget
 

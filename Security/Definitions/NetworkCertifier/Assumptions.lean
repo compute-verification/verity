@@ -1,4 +1,6 @@
-import Definitions.NetworkCertifier
+module
+
+public import Definitions.NetworkCertifier
 
 /-!
 # The trusted layer: the certifier assumptions
@@ -16,6 +18,8 @@ structure (`winEnd`), the frame length `B`, the jitter bound `D` and the emissio
 any run. The `Certifier` type has no input for the secret, and `view` reads only the step and the observation. So nothing
 in the model can make them depend on the secret or on traffic. A reviewer checks this by reading `NetTiming.Protocol`.
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

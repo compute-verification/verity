@@ -1,11 +1,14 @@
-import Proofs.Properties.Verity.Sampled.Assembled
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsFrames
-import Proofs.Flock.Soundness.Discharge.ZkView.Decode
-import Proofs.Flock.Soundness.Discharge.HiddenExec.AcceptsP
-import Proofs.Flock.Soundness.Discharge.Hidden.SpecP
-import Proofs.Flock.Soundness.Refine.Table
-import Proofs.Flock.Soundness.Refine.Regions
-import Proofs.Flock.Soundness.Refine.Paths
+module
+
+public import Proofs.Properties.Verity.Sampled.Assembled
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsFrames
+public import Proofs.Flock.Soundness.Discharge.ZkView.Decode
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.AcceptsP
+public import Proofs.Flock.Soundness.Discharge.Hidden.SpecP
+public import Proofs.Flock.Soundness.Refine.Table
+public import Proofs.Flock.Soundness.Refine.Regions
+public import Proofs.Flock.Soundness.Refine.Paths
+import all Lean.Data.Json.Basic
 
 /-!
 # Sampled proofs' coupling: the decoders and the field encoding
@@ -33,6 +36,8 @@ both, and holds what they read to the record v2 decodes.
   round's (`rep_tailCount_accepted`, from `zk_rep_counts`: each retained round of a run that consumed every round ends
   with the header of a squeeze of its coin count).
 -/
+
+@[expose] public section
 
 namespace Verity.Sampled
 

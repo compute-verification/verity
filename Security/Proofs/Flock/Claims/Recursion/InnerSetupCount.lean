@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.SetupCount
-import Proofs.Flock.Claims.Recursion.SetupValues
-import Proofs.Flock.Claims.Recursion.AcceptedScope
+module
+
+public import Proofs.Flock.Claims.Recursion.SetupCount
+public import Proofs.Flock.Claims.Recursion.SetupValues
+public import Proofs.Flock.Claims.Recursion.AcceptedScope
 
 /-!
 # The inner session's setup calls at an accepted statement, in any hash
@@ -20,6 +22,8 @@ accepts, and it holds for every hash `h`, not only SHA-512 (`innerSetupCalls_le_
 
 `RecDeploy.lamLin2_R_ge_in` (CallsClosed) takes `hS` and `c_B` from here.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

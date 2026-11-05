@@ -4,7 +4,12 @@
 `ownerRef`) at every unit and gate, the check over the population is the reference walk's (`checkRef`), and a draw that
 proves a unit reads only its wires.
 -/
-import Flock.Test.RegProgram
+module
+
+public import Flock.Test.RegProgram
+meta import Flock.Test.RegProgram
+
+@[expose] public section
 
 namespace Flock.Test.LinkUnits
 

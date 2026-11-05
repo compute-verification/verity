@@ -1,4 +1,6 @@
-import Proofs.Properties.CertifierDevice.Basic
+module
+
+public import Proofs.Properties.CertifierDevice.Basic
 
 /-!
 # The certifier device, proved: one shaper tick
@@ -8,6 +10,8 @@ import Proofs.Properties.CertifierDevice.Basic
 does to a shaper whose certifier has the egress grid's shape: it releases a packed row, padding once faulted, and at a
 window's last bucket returns the window's record, its rows the window's and its status the window's first fault.
 -/
+
+@[expose] public section
 
 namespace Properties.CertifierDevice.Proofs
 

@@ -1,4 +1,6 @@
-import Properties.Verity.Game
+module
+
+public import Properties.Verity.Game
 
 /-!
 # An idle deployment: two instances of the names the subprotocols define, built by hand
@@ -18,6 +20,8 @@ the parameters.
 term. At `unbounded` (`δ = ⊤`) every subprotocol's error is `⊤`, so every target holds. At `exact` (`δ = 0`, `W = 1`)
 every error is `0` while PoUW's claim, a gate computed, fails on every play.
 -/
+
+@[expose] public section
 
 namespace Verity.Idle
 

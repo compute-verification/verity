@@ -1,4 +1,6 @@
-import Definitions.Nci
+module
+
+public import Definitions.Nci
 
 /-!
 # Updated matrix multiplication chains with several products to a gate
@@ -10,6 +12,8 @@ declaration written in `Dot16` contains no per-product reference circuit, and ev
 is `Chain` (`Chain.toPacked`). Its vocabulary is `Chain`'s, word for word, where "`R` holds a product" now means that
 `R` holds the product's gate.
 -/
+
+@[expose] public section
 
 namespace Nci
 

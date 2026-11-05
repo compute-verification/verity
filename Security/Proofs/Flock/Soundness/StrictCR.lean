@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Assumptions
-import Proofs.Flock.Soundness.Game.Seq
-import Proofs.Flock.Soundness.CompiledSound
-import Proofs.Flock.Soundness.Audit.FlockBatchedAcc
+module
+
+public import Proofs.Flock.Soundness.Assumptions
+public import Proofs.Flock.Soundness.Game.Seq
+public import Proofs.Flock.Soundness.CompiledSound
+public import Proofs.Flock.Soundness.Audit.FlockBatchedAcc
 
 /-!
 # The compiled and knowledge terms, and `δ_tree`, under strict-time collision resistance
@@ -24,6 +26,8 @@ finders that the compiled theorem, the knowledge term and `δ_tree` count, and r
 
 The budgets are the hypotheses' to state: the model plays the prover as a strategy and counts no evaluations.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.StrictCR
 
