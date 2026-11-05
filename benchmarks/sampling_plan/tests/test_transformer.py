@@ -140,5 +140,5 @@ def test_large_model_meets_the_target_share():
     assert big.plan is not None
     r = T.recertify(big.plan, big.cands, T.DELTAS[0], exact_count=False)
     assert r["ands"] <= T.TARGET_SHARE * big.dag.work * (1 + 1e-9)
-    assert {c.scale for c in big.cm.serve} >= {"requests", "pouw:h1", "bandwidth"} and big.cm.replay["request"].units \
+    assert {c.scale for c in big.cm.serve} >= {"requests", "pouw:h1", "bandwidth"} and big.cm.replay["request"].replay_blocks \
         == T.LARGE.requests
