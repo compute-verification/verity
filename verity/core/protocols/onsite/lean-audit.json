@@ -10,6 +10,7 @@
     "CoreComposition.Blobs",
     "CoreComposition.Cases",
     "CoreComposition.Tie",
+    "CoreRemote",
     "MemoryChallenger.WipeProtocol",
     "NciCheck.Protocol",
     "NetworkCheck.Period",

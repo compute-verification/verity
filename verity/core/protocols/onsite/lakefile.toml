@@ -65,7 +65,8 @@ path = "../../service/vstar/recursive"
 name = "core_memory_challenger"
 path = "../../devices/memory_challenger/lean"
 
-# Remote, the other composite `product` names.
+# Remote, the other composite `product` names, whose tie of PoUW's windows to the run's record onsite reads
+# (`Core.Remote.windows`).
 [[require]]
 name = "core_remote"
 path = "../remote"
