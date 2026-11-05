@@ -291,6 +291,26 @@ def test_own_rows_is_its_own_stage_cache_entry(monkeypatch, tmp_path: Path):
     assert CS._stage_cache("shape") != shared and CS._stage_cache("shape").parent == shared.parent
 
 
+@pytest.mark.slow
+def test_gemm_tile_tiles_an_s8_accumulator_coordinate(monkeypatch, tmp_path: Path):
+    """FLOCK_GEMM_TILE tiles every coordinate family of `TILED`, GemmAccumulatorS8's s8 coordinate among them: the population
+    of one K = 32 coordinate stages as 2 x 2 tiles, four units over four rows (each 32 u16 leaves, padded to one 64-word
+    block), not untiled under the tile's request."""
+    (tmp_path / "prog.py").write_text(
+        "def program():\n"
+        "    from verity.ml.circuits.defs import bind\n"
+        "    from verity.ml.circuits.ops import gemm as G, s8 as S8\n"
+        "    from verity.ml.circuits.population import population_program\n"
+        "    return population_program(bind(G.GemmAccumulatorS8, K=32, DOT=S8.SMOKE_PLAIN['DOT']), 4)\n")
+    monkeypatch.setattr(CS, "GEMM_TILE", (2, 2))
+    monkeypatch.setenv("FLOCK_STAGE_CACHE", str(tmp_path / "cache"))
+    assert CS.main(["--program-module", f"{tmp_path / 'prog.py'}:program", "--partition", "q-template-instance", "--stage-only",
+                    "--batch", "fixed", "--n", "1", "--selftest", "0", "--out", str(tmp_path / "out")]) == 0
+    (rec,) = [json.loads(ln) for ln in (tmp_path / "out" / "staged.jsonl").read_text().splitlines()]
+    assert rec["definition"].startswith("GemmAccumulatorS8_v1{K=32,")
+    assert rec["stage"]["tile"] == [2, 2] and rec["stage"]["coords_per_instance"] == 4 and rec["stage"]["ports"] == [64] * 4
+
+
 def test_core_rows_stage_and_each_row_recomputes_from_the_prover_file_with_core_alone(tmp_path: Path):
     """E4M3 K=128, the smallest whole-block FP row, staged under FLOCK_CORE_ROWS: META names each row's schema and length in bits
     (the output row's, §16.13, its 64 words') and no single ``row_schema``, its row constants are core's prefixes, and its circuit

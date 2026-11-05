@@ -769,10 +769,12 @@ def _check_bit_rows(uc: UnitCircuit, ins: Sequence[Sequence[int]], groups: list[
                 raise AssertionError(f"class {name}: port p{i} lane {lane} is not core's bit row of its elements")
 
 
-#: FLOCK_GEMM_TILE=PxC: a GemmCoordinate class whose tile fits a block (K = 2048 at 4x4) is staged as P x C tiles, one tile a VU:
-#: C rows of the unit's port 0 and P of its port 1, and P * C units, unit (a, b) reading row b and row C + a, so each row is
-#: hashed once per tile rather than once per coordinate
+#: FLOCK_GEMM_TILE=PxC: a coordinate class (`TILED`) whose tile fits a block (K = 2048 at 4x4) is staged as P x C tiles, one tile
+#: a VU: C rows of the unit's port 0 and P of its port 1, and P * C units, unit (a, b) reading row b and row C + a, so each row
+#: is hashed once per tile rather than once per coordinate
 GEMM_TILE = tuple(int(x) for x in os.environ["FLOCK_GEMM_TILE"].split("x")) if os.environ.get("FLOCK_GEMM_TILE") else None
+#: the coordinate families FLOCK_GEMM_TILE tiles: one output of an `x @ W^T`, x's row and W's row its two ports
+TILED = ("GemmCoordinate", "GemmAccumulator")
 
 
 def tile_lowering(low1: IL.Lowering, P: int, C: int, name: str) -> IL.Lowering:
@@ -1533,7 +1535,7 @@ def _stage_job_fresh(s: str) -> dict:
             rec["ands"] = cc.counts["ands"]
             rec["domain"] = "finite-only" if cc.circuit.asserts else "total"
             rec["table_reads"] = dict(Counter(t for t, _i, _w in cc.circuit.lookups))
-            tile = GEMM_TILE if GEMM_TILE and str(uc.definition).startswith("GemmCoordinate") and _tile_fits(cc, *GEMM_TILE) else None
+            tile = GEMM_TILE if GEMM_TILE and str(uc.definition).startswith(TILED) and _tile_fits(cc, *GEMM_TILE) else None
             if tile:
                 P, C = tile
                 n = (auto_batch(P * C * cc.counts["ands"], max(1, (c["row_units"].get(s) or cl.units) // (P * C)))

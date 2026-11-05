@@ -3,7 +3,8 @@
 # instance's rows hashed in the circuit, on one GPU node. Run from the tree (research run --on NODE --cwd source):
 #   1. build    flock-circuit with the CUDA prover (60-circuit.sh MODE=build), outside any lease
 #   2. stage    each K:N[:R] of STATEMENTS (class_statement --stage-only, N instances of S8Matmul_v1{N=R, K}; R defaults to ROWS),
-#               outside any lease, into data/kK-nN-rR
+#               outside any lease, into data/kK-nN-rR; or K:N:PxC, N P x C tiles of GemmAccumulatorS8_v1{K} (FLOCK_GEMM_TILE,
+#               in its default layout), into data/kK-nN-tPxC, refused if it staged untiled
 #   3. sanity   a loopback --zk session set on the CPU of a K = 64, N = 2 statement (and on the GPU first thing in step 4;
 #               SANITY=0 skips that one)
 #   4. gpu      under one `gpu-lease 1` of at most LEASE_MIN minutes: per statement, a loopback --zk session set (a verifier
@@ -44,19 +45,26 @@ UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $PY ] || { $UV venv -q --python 3.12 $(dirname $(dirname $PY)) && $UV pip install -q --python $PY numpy blake3; } || exit 1
 export PYTHONPATH=$REPO:$REPO/verity/ml/flock/python:$REPO/tools/verity/circuit_check/src:$REPO/integrations/vllm
 
-# spec K:N[:R]: "K N R NAME"
-spec() { local k n r; IFS=: read -r k n r <<< "$1"; r=${r:-$ROWS}; echo "$k $n $r k$k-n$n-r$r"; }
-# stage SPEC: the statement of N instances of R rows at K into $FW/data/NAME (circuit.txt, inst-N.bin, pub-N.bin, rec.json)
+# spec K:N[:R|PxC]: "K N R NAME"
+spec() {
+  local k n r; IFS=: read -r k n r <<< "$1"; r=${r:-$ROWS}
+  case $r in *x*) echo "$k $n $r k$k-n$n-t$r" ;; *) echo "$k $n $r k$k-n$n-r$r" ;; esac
+}
+# stage SPEC: the statement of N instances of R rows (or N P x C tiles) at K into $FW/data/NAME (circuit.txt, inst-N.bin,
+# pub-N.bin, rec.json)
 stage() {
   local k n r name; read -r k n r name <<< "$(spec $1)"
-  local d=$FW/data/$name o=$O/stage/$name
+  local d=$FW/data/$name o=$O/stage/$name lay="ROWS=$r FLOCK_OWN_ROWS=1 FLOCK_PACK_WORDS=1"
+  case $r in *x*) lay="TILE=$r FLOCK_GEMM_TILE=$r" ;; esac
   mkdir -p $d $o
   [ -f $d/rec.json ] && [ -f $d/inst-$n.bin ] && { cp $d/rec.json $o/rec.json; return 0; }   # staged by an earlier run
-  K=$k ROWS=$r N=$n FLOCK_STAGE_CACHE=$d/cache FLOCK_OWN_ROWS=1 FLOCK_PACK_WORDS=1 /usr/bin/time -v -o $o/time-stage.txt \
+  env $lay K=$k N=$n FLOCK_STAGE_CACHE=$d/cache /usr/bin/time -v -o $o/time-stage.txt \
     $PY -m verity_flock.class_statement --program-module $REPO/benchmarks/flock_s8_block/program.py:program \
     --partition q-template-instance --out $o/out --stage-only --batch fixed --n $n --max-ands $((1 << 34)) \
     --max-statement-bits $((1 << 35)) --batch-ands $((1 << 35)) --selftest 0 > $o/stage.log 2>&1 || { tail -5 $o/stage.log; return 1; }
   local C=$(ls -td $d/cache/*/ | head -1)
+  case $r in *x*) $PY -c "import json, sys; sys.exit(json.load(open('$C/rec.json'))['stage'].get('tile') != [int(x) for x in '$r'.split('x')])" \
+    || { echo "$name: staged untiled (the class or its tile is outside FLOCK_GEMM_TILE's)"; return 1; } ;; esac
   for f in circuit.txt inst-$n.bin pub-$n.bin rec.json; do ln -f $C/$f $d/$f; done
   cp $C/rec.json $o/rec.json; du -sb $d/circuit.txt $d/inst-$n.bin $d/pub-$n.bin > $o/sizes.txt
 }
