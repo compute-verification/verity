@@ -18,9 +18,10 @@ What an accepted wipe certifies is `certify`'s: `{"certified", "egress_mib", "ep
 `k` the session's timed reads, which the memory challenger chose (`wipe_party --reads`), and `r = ratio(k)`, the
 largest `r` with `(r − 1)^k · 2^129 ≤ r^k`. When the bound covers the session (`k` from 1 to `MAX_READS`, an egress count
 that isn't saturated) `foreign_bits` is `Pous.Guarantees.StreamedWipeMeetsReads`' threshold
-`512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R + E` at `eps = 2^-128` (`foreign_bits`), with `E` the egress the network
-certifier counted over the session. Off it, `foreign_bits` is `M` and `eps` 0, the vacuous statement, and the profile
-names each gap. `EXPERIMENTAL` says what the bound rests on.
+`512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R + E` at `eps = 2^-128` (`foreign_bits`), with `E` the egress count the
+memory challenger signs, the one its operator gave it. Off it, `foreign_bits` is `M` and `eps` 0, the vacuous statement,
+and the profile names each gap. `EXPERIMENTAL` says what the bound rests on: no verifier holds `E` to a network
+certifier's count over the session, so the bound rests on the deployment's giving at least that count.
 
 `leg(period_dir, node, out)` is the wipe's leg of `benchmarks/all_protocols`: one wipe as `period.json`'s `wipe` says
 (`CONFIG`: `SEGMENTS` 32 MiB segments in host memory by default, or a GPU's memory through `wipe_store`, the whole
@@ -28,8 +29,9 @@ device declared, the driver's reserve included (`wipe_store.Cuda.info`'s `total_
 fill counts in `R`, the server's disks ahead of it in the same session, `wipe.disk`, and the host's DRAM after it,
 `wipe.dram`), the memory challenger on `period.json`'s `challenger_host` (`wipe_party.side_of`; this node by default, a
 process whose key and session log are beside the periods). No network certifier counts the session's egress yet, so the
-challenger signs `UNCOUNTED` and an accepted leg's bound is vacuous: its verdict is real and its quantity isn't. The
-leg's record names what the bound doesn't cover (`uncertified`): the key off its own host, an uncounted egress, the
+challenger signs `UNCOUNTED` and an accepted leg's bound is vacuous: its verdict is real and its quantity isn't. A count
+`wipe.egress_bits` gives it, it signs as given, and nothing checks it. The leg's record names what the bound doesn't
+cover (`uncertified`): the key off its own host, an uncounted egress or one its operator gave, the
 node's memory outside the declared tiers (`undeclared`), a GPU's driver reserve when NVML gave no total, what its disks
 leave outside the boundary (`disk_gaps`) and each link leaving the node that no network certifier counts
 (`wipe_party.link`).
@@ -302,8 +304,9 @@ streamer (`native`, `wipe_stream` on
 `challenger.wipe.command` says. `foreign_bytes` makes the prover the cheat that keeps that much prior content in place
 of the fill's first labels (`foreign_labels`; `"fM"`, one label past the bound at the expected reads), and `placement`
 `"simulated"` names a challenger on this node the stand-in for one on its own host (`wipe_party.placement`).
-`egress_bits` is the network certifier's count over the session, which a challenger on this node signs (`wipe_party
---egress-bits`); `None` signs `UNCOUNTED`. `reads` is the session's timed reads: a challenger on this node is started
+`egress_bits` is the egress count a challenger on this node signs as given (`wipe_party --egress-bits`), which stands
+for a network certifier's count over the session and which nothing checks (`uncertified` names it); `None` signs
+`UNCOUNTED`. `reads` is the session's timed reads: a challenger on this node is started
 with it (`wipe_party --reads`); one on its own host chooses its own (its `challenger.wipe.command`), and the leg refuses
 a session at another count. `None`: whatever the challenger chooses (`READS` here). `links` are the links leaving the
 node besides the one to a challenger on its own host, which the leg adds from the connection it made: each `{"name",
@@ -509,13 +512,17 @@ def disk_gaps(store: Mapping[str, Any] | None) -> list[str]:
 
 def uncertified(where: Mapping[str, Any], signed: sw.SignedWipe | None) -> list[str]:
     """What an accepted wipe's bound doesn't cover, from its placement (`wipe_party.placement`) and signed session: the
-    memory challenger off its own host (its key on the prover's node), an egress signed `UNCOUNTED`, each undeclared
-    tier, a GPU's driver reserve when NVML gave no total (`wipe_store.Cuda.info`; a joint store's GPU part too), what
-    the prover's disks leave outside the boundary (`disk_gaps`) and each link leaving the node that no network
-    certifier counts."""
+    memory challenger off its own host (its key on the prover's node), an egress signed `UNCOUNTED` or a count its
+    operator gave, which no verifier holds to a network certifier's count, each undeclared tier, a GPU's driver reserve
+    when NVML gave no total (`wipe_store.Cuda.info`; a joint store's GPU part too), what the prover's disks leave
+    outside the boundary (`disk_gaps`) and each link leaving the node that no network certifier counts."""
     out = [] if where["kind"] == "own-host" else [f"key custody: {where[wipe_party.PREMISE]}"]
     if signed is not None and signed.egress_bits >= UNCOUNTED:
         out.append("egress: signed UNCOUNTED, no network certifier's count over the session, so the bound is vacuous")
+    elif signed is not None:
+        out.append(f"egress: signed {signed.egress_bits} bits, the count the memory challenger's operator gave it: no "
+                   "verifier holds it to a network certifier's count over the session, so the bound holds only if it "
+                   "is at least that count")
     out += [f"tier {u['tier']}: {u['what']} ({u['bytes']} bytes) is undeclared: the fill doesn't cover it and M doesn't "
             "count it" for u in where["undeclared_tiers"]]
     out += [f"tier {s['tier']}: the memory {s['device']}'s driver reserves is undeclared: the tier is CUDA's total "

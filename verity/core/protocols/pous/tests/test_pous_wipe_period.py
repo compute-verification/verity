@@ -291,6 +291,21 @@ def test_what_the_bound_does_not_cover() -> None:
     assert WP.utc(1_793_088_000_123_456_789) == "2026-10-27T08:00:00.123456Z"
 
 
+def test_an_egress_count_its_operator_gave_is_named() -> None:
+    """The memory challenger signs the egress count its operator gives it, which no verifier holds to a network
+    certifier's count, so the record names it as it names `UNCOUNTED`, though the bound it gives isn't vacuous."""
+    where = WP.placement("n0", "auditor", links=[])
+    given = _run(egress_bits=3 * sw.EGRESS_UNIT_BITS - 5)
+    assert given.answer["public"]["certified"] is True
+    assert W.uncertified(where, given.signed) == [
+        f"egress: signed {3 * sw.EGRESS_UNIT_BITS - 5} bits, the count the memory challenger's operator gave it: no "
+        "verifier holds it to a network certifier's count over the session, so the bound holds only if it is at least "
+        "that count"]
+    assert W.uncertified(where, _run().signed) == [
+        "egress: signed UNCOUNTED, no network certifier's count over the session, so the bound is vacuous"]
+    assert W.uncertified(where, None) == []
+
+
 def test_what_a_joint_store_and_its_disks_leave_out() -> None:
     """A joint store declares each part at its own bytes: DRAM outside a host-dram part, nothing of a device declared
     whole; a virtual disk's backing store, a drive's undeclared spare area and buffered I/O are named."""
