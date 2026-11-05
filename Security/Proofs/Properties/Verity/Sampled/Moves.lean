@@ -309,6 +309,7 @@ theorem step_verified {I : Flock.Witness.Inputs} {rd : _root_.SampledProofs.OneS
   dsimp only at h
   split at h
   · rename_i record hrec
+    obtain ⟨_, -, h⟩ := ebind_ok h
     obtain ⟨proofs, spec, tabs, rest, hf, hst, hv⟩ := verdictOf_ok (push_ok h hall)
     rw [hst] at hf
     exact ⟨recB, record, spec, tabs, rest, proofs, hb, hrec, hst, hf, hv⟩
@@ -333,6 +334,7 @@ theorem run_verified {p : _root_.SampledProofs.OneStageZk.Own} {s : _root_.Sampl
     obtain ⟨_, -, h⟩ := ebind_ok h
     obtain ⟨circuitB, hc, h⟩ := ebind_ok h
     obtain ⟨pubB, hp, h⟩ := ebind_ok h
+    obtain ⟨_, -, h⟩ := ebind_ok h
     obtain ⟨rd, hrd, h⟩ := ebind_ok h
     obtain ⟨r', hr', h⟩ := ebind_ok h
     have e : r' = r := by
@@ -355,6 +357,7 @@ theorem checkBlobsAt_run {p : _root_.SampledProofs.OneStageZk.Params} {c : _root
   · cases h
   · rename_i r hr
     obtain ⟨_, h1, hr⟩ := ebind_ok hr
+    obtain ⟨_, -, hr⟩ := ebind_ok hr
     obtain ⟨_, -, hr⟩ := ebind_ok hr
     obtain ⟨_, -, hr⟩ := ebind_ok hr
     obtain ⟨_, -, hr⟩ := ebind_ok hr
