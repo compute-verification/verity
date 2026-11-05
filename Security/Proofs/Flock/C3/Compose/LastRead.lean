@@ -1,4 +1,6 @@
-import Proofs.Flock.C3.Compose.Tied
+module
+
+public import Proofs.Flock.C3.Compose.Tied
 
 /-!
 # n9: `MsgsReadC3` at the normalized tied source
@@ -15,6 +17,8 @@ R's Ligerito's (`RepsMsgsRead`, `SparseMsgsRead`, `OpenMsgsRead`, `LigMsgsRead`)
 alone where R's Ligerito ends in a coin (`LigWhole`), and the openings are read from the layers stratum by stratum
 (`OpensReadAt`); past it both runs have no messages. `msgsReadC3_tied` is it at the normalized tied source.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 

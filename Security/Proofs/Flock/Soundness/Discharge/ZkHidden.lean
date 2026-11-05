@@ -1,30 +1,34 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Defs
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Statements
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Theorems
-import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Count
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDefs
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundBind
-import Proofs.Flock.Soundness.Discharge.ZkHidden.BindStmt
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundRuns
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Sound
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundCustody
-import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
-import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJP
-import Proofs.Flock.Soundness.Discharge.ZkHidden.RunsJP
-import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJP
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Rate
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundJ
-import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJ
-import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJJson
-import Proofs.Flock.Soundness.Discharge.ZkHidden.View
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundStmt
-import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyStmt
-import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
-import Proofs.Flock.Soundness.Discharge.ZkHidden.NonVacuousJ
-import Proofs.Flock.Soundness.Discharge.ZkHidden.NonVacuousV2
-import Proofs.Flock.Soundness.Discharge.ZkHidden.NonVacuousSeg
-import Proofs.Flock.Soundness.Discharge.ZkHidden.BindInst
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundInst
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Defs
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Statements
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Theorems
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Count
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDefs
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundBind
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.BindStmt
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundRuns
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Sound
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundCustody
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJP
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.RunsJP
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJP
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Rate
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundJ
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJ
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJJson
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.View
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundStmt
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyStmt
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.NonVacuousJ
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.NonVacuousV2
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.NonVacuousSeg
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.BindInst
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundInst
+
+@[expose] public section

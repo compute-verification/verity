@@ -1,4 +1,6 @@
-import Lms.Verify
+module
+
+public import Lms.Verify
 
 /-!
 # LMS signing (RFC 8554 over SHA-512), from the private seed
@@ -10,6 +12,8 @@ signature at leaf q (`lms.sign_at`). Which leaf to use is the signer's state, `l
 the host: `signAt` signs at the leaf it is given, and two messages signed at one leaf give the key away.
 `Lms.SignDifftest` holds these to the Python on generated keys.
 -/
+
+@[expose] public section
 
 namespace Lms
 

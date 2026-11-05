@@ -1,6 +1,11 @@
-import Proofs.Flock.Claims.Recursion.VStarTraceOk
-import Proofs.Flock.VBridge.Family.Names
-import Std.Data.String.ToNat
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarTraceOk
+public import Proofs.Flock.VBridge.Family.Names
+public import Std.Data.String.ToNat
+import all Init.Data.String.Defs
+import all Init.Data.String.Basic
+import all Init.Data.List.SplitOn.Basic
 
 /-!
 # A staged part's circuit has three nets (`nets_three`)
@@ -19,6 +24,8 @@ a newline: the unit's name is the parsed unit's name, a token (`unit_name`, `tok
 line (`pyDumps_noNl`). No proof reads through `Lean.Json.parse`.
 -/
 
+@[expose] public section
+
 namespace RecDeploy.VStarNets
 
 open _root_.Flock
@@ -34,7 +41,7 @@ open RecDeploy.VStarTraceOk (RowsOk)
 /-- Lines, each with its newline. -/
 def joinNl (L : List String) : String := String.join (L.map (· ++ "\n"))
 
-theorem joinNl_nil : joinNl [] = "" := rfl
+theorem joinNl_nil : joinNl [] = "" := (rfl)
 
 theorem joinNl_cons (a : String) (L : List String) : joinNl (a :: L) = a ++ "\n" ++ joinNl L := by
   simp [joinNl, String.join_cons, String.append_assoc]
@@ -685,7 +692,7 @@ theorem nets_three {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x x
   subst hst0
   have hparse : HmRow.parse i.base.read.tags i.base.read.I.circuitFile [] = .ok sts[0].c := by
     rw [← htb]
-    unfold ProvedScope.circuitOf at hc0
+    rw [ProvedScope.circuitOf_eq] at hc0
     split at hc0
     · obtain ⟨_, _, -, -, -, -, hor⟩ := FlockSoundness.Discharge.Hidden.parseCommit_untyped hty hc0
       have hi : i.base.read.tags.isTmpl = false := by

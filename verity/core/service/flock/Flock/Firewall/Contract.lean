@@ -50,9 +50,15 @@ those terms; `holds_coins_binding` is the coins' binding in the fork form: two a
 that relay different coin messages for one committed round give a SHA-512 collision on two inputs computed from them. The release log's JSON form is `ReleaseLog.ofJson`'s and the public input's `PublicInput.ofJson`'s;
 `flock-firewall contract [--public FILE] TRANSCRIPT…` prints `run`'s verdict for each release log.
 -/
-import Flock.Canon
-import Flock.Hm96
-import Flock.JsonParse
+module
+
+public import Flock.Canon
+public import Flock.Hm96
+public import Flock.JsonParse
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock.Firewall.Contract
 

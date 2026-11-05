@@ -1,7 +1,9 @@
-import Proofs.Flock.EndToEndRegisteredRows.Statement
-import Proofs.Flock.EndToEndRegistered
-import Proofs.Flock.Soundness.Registered.ReadsAt
-import Proofs.Flock.Soundness.Discharge.ZkLink.RowsSound
+module
+
+public import Proofs.Flock.EndToEndRegisteredRows.Statement
+public import Proofs.Flock.EndToEndRegistered
+public import Proofs.Flock.Soundness.Registered.ReadsAt
+public import Proofs.Flock.Soundness.Discharge.ZkLink.RowsSound
 
 /-!
 # `EndToEndRegisteredRows` from the rows' extraction bound
@@ -21,6 +23,8 @@ with the registered reads' term removed, at outcomes whose registration is on th
 bound, and `rowsLinkLe` proves it: `zk_session_soundHJR_custody_drawn_reg`'s proof, at an analysis whose wrong set
 and link term carry the registrant's rows too (`ZkLink.analysisZCRows`, `ZkLink.zk_flock_drawnC_rows`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkReg
 

@@ -1,7 +1,11 @@
-import Proofs.Flock.Claims.ZK.Session
-import Proofs.Flock.Claims.Scope.Split
-import Proofs.Flock.Claims.Scope.StmtOf
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Theorems
+module
+
+public import Proofs.Flock.Claims.ZK.Session
+public import Proofs.Flock.Claims.Scope.Split
+public import Proofs.Flock.Claims.Scope.StmtOf
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Theorems
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The deployed masked session's tables: `Tables`, `DummyReg` and `Complete`
@@ -27,6 +31,8 @@ draw, `DrawSetupZHJ.table`), so every table is a table the session sets up (`set
   (`dummyReg_tabC`, `coinedOf_reg_of`) hold at every statement, and `Complete` (`complete_tabC`) at every statement with
   a witness.
 -/
+
+@[expose] public section
 
 /-! ## A `--zk` table from its statement alone -/
 
@@ -186,7 +192,7 @@ theorem tableAt_zk {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts) (h
     have hp := (setupH_spec ht' hd).1
     have hc' : c = sts[j].c := by
       rw [Composed.parse_tagsAt] at hp
-      simp only [ProvedScope.circuitOf, hh, Bool.false_eq_true, ↓reduceIte, hp] at hc
+      simp only [ProvedScope.circuitOf_eq, hh, Bool.false_eq_true, ↓reduceIte, hp] at hc
       exact (Except.ok.inj hc).symm
     exact ⟨Composed.maskSetup_of_setupH ht' hd, Composed.setupH_whole hd (hc' ▸ ho hh) (parse_facts hp).typed⟩
   · rw [hh] at hd

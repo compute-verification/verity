@@ -1,5 +1,7 @@
-import Flock.Zk
-import Proofs.Flock.Soundness.Discharge.Exec.Event
+module
+
+public import Flock.Zk
+public import Proofs.Flock.Soundness.Discharge.Exec.Event
 
 /-!
 # flock-verify's `--zk` acceptance, as an event of the audit
@@ -25,6 +27,8 @@ run used (`CoinTree.checkFresh`), which only shrink the event.
 `AcceptsZK` covers every tag `--statement` names, hidden outputs (`setupTables` calls `setupHidden` per table) and any
 table count and draw: nothing here fixes them. Lemmas that read `setupH`'s statement take `hh : hiddenOutputs = false`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 
@@ -56,11 +60,7 @@ def LiveAcceptsZK (I : Inputs) (o : Reg × Finset (Fin n) × Transcript) : Prop 
 
 /-! ## The `--zk` tags change only the identity -/
 
-theorem withCoins_tree (t : Flock.Tags) (s : Flock.CoinTree.Spec) : t.withCoins (.tree s) = t := by
-  unfold Flock.Tags.withCoins
-  have : ((Flock.Coins.tree s == Flock.Coins.os) && t.liveOs) = false := by
-    cases t.liveOs <;> rfl
-  simp [this]
+theorem withCoins_tree (t : Flock.Tags) (s : Flock.CoinTree.Spec) : t.withCoins (.tree s) = t := rfl
 
 theorem zkTags_eq (I : Inputs) : zkTags I = Flock.Zk.tags I.tags (Flock.Zk.maskLogOf I.circuitFile) I.count := by
   unfold zkTags zkCoins

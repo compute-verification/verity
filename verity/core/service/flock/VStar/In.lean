@@ -1,6 +1,8 @@
-import Flock.RecCoins
-import Flock.RecLinkPart
-import VStar.Stage
+module
+
+public import Flock.RecCoins
+public import Flock.RecLinkPart
+public import VStar.Stage
 
 /-!
 # V*'s per-part port inputs: what `verity_flock.rec_vstage.stage` writes to each part's `inst.bin`
@@ -25,6 +27,8 @@ module computes those tables from what the stager reads of the inner session (`S
 `partIn` dispatches on the statement (`VStar.Stmt`). The difftest (`core_vstar`'s `vstar-difftest`, `part_in`) holds each
 to the stager's `inst.bin`.
 -/
+
+@[expose] public section
 
 namespace VStar.In
 

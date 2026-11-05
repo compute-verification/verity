@@ -1,8 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Commit
-import Proofs.Flock.Claims.Scope.InScope
-import Proofs.Flock.Claims.Scope.Tables
-import Proofs.Flock.Soundness.Refine.Setup
-import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Commit
+public import Proofs.Flock.Claims.Scope.InScope
+public import Proofs.Flock.Claims.Scope.Tables
+public import Proofs.Flock.Soundness.Refine.Setup
+public import Proofs.Flock.Soundness.Discharge.Hidden.Facts
 
 /-!
 # Every table the verifier parses fits the first table's blocks
@@ -14,6 +16,8 @@ blocks (`Tab.Fits`). `relS_layout`: at such a statement, `RelS` of the readable 
 `Layout.model` at `regionsOf`, the statement the soundness proof reads, satisfied by its share of the hidden values
 (`zOf`, the tables' bits interleaved).
 -/
+
+@[expose] public section
 
 namespace Flock.Readable
 
@@ -55,13 +59,13 @@ theorem tableAt {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts) (ht :
     obtain ⟨hp, -⟩ := setupH_scope ht' hd
     rw [Composed.parse_tagsAt] at hp
     refine ⟨?_, setupH_layout ht' hd, Refine.setupH_wf hd⟩
-    simp only [ProvedScope.circuitOf, hh, Bool.false_eq_true, ↓reduceIte, hp]
+    simp only [ProvedScope.circuitOf_eq, hh, Bool.false_eq_true, ↓reduceIte, hp]
   · rw [hh] at hd
     simp only [↓reduceIte] at hd
     have hp := (Hidden.setupHidden_spec' hd).parse
     rw [parseCommit_tagsAt ht] at hp
     refine ⟨?_, Hidden.hidden_layout' ht' hd (HiddenExec.setupTables_pinnedH hh hset j hj), Hidden.setupHidden_wf hd⟩
-    simp only [ProvedScope.circuitOf, hh, ↓reduceIte, hp]
+    simp only [ProvedScope.circuitOf_eq, hh, ↓reduceIte, hp]
 
 /-- **Every table fits the first table's blocks**: the same circuit (so `k_log`), the same link points (so `nbl` and
 `m`), `6 ≤ k_log ≤ m` and the pin in the block. -/

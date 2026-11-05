@@ -1,7 +1,9 @@
-import Definitions.Pouw.PearlC.Game
-import Definitions.Pouw.PearlC.Skip
-import Definitions.Pouw.PearlC.PeelExact
-import Definitions.Pouw.PearlC.SaltDead
+module
+
+public import Definitions.Pouw.PearlC.Game
+public import Definitions.Pouw.PearlC.Skip
+public import Definitions.Pouw.PearlC.PeelExact
+public import Definitions.Pouw.PearlC.SaltDead
 
 /-!
 # Pearl-C's named protocol and error (trusted)
@@ -24,6 +26,8 @@ are `creditOf` minus the replayed debit (`unitDebit`), and `wrefOf`.
 * `alpha`, `beta`, `floor`: a row's scale, noise scale and noise-floor quantity (§5: α from the model's quantizer,
   σ = δ·ρ with ρ over every 8th position, floor σ·α).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

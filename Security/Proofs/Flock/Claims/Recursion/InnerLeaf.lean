@@ -1,9 +1,11 @@
-import Proofs.Flock.Soundness.Discharge.Exec.Merkle
-import Proofs.Flock.Soundness.Discharge.Hidden.Facts
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Flock.RecVStar
-import Flock.ProvedScope
-import Proofs.Flock.Claims.Scope.Check
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.Merkle
+public import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+public import Flock.RecVStar
+public import Flock.ProvedScope
+public import Proofs.Flock.Claims.Scope.Check
 
 /-!
 # The recursion's inner statement and Flock's statement check read one leaf scheme off the circuit file
@@ -24,6 +26,8 @@ cannot both pass.
 * `check_of_innerOf`: so where `ProvedScope.check` passes a circuit file `RecVStar.innerOf` sets up, it ran in the
   plain-leaves form: without `--zk`, at hidden outputs and plain SHA-512 leaves.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.InnerLeaf
 
@@ -222,7 +226,7 @@ theorem check_metaLeaf_tags {t : Tags} {zk : Bool} {cf pf : ByteArray} {tables :
     metaLeaf cf = some t.merkleLeaf ∧ Flock.Readable.LeafOk t zk := by
   obtain ⟨⟨-, htyped, -, hleaf, -⟩, c, -, hc, -⟩ := (Flock.Readable.check_ok_iff t zk cf pf tables count pi reg).1 h
   refine ⟨?_, hleaf⟩
-  unfold ProvedScope.circuitOf at hc
+  rw [ProvedScope.circuitOf_eq] at hc
   split at hc
   · obtain ⟨pre, c₀, hp, -⟩ := Hidden.parseCommit_untyped htyped hc
     exact parse_metaLeaf hp

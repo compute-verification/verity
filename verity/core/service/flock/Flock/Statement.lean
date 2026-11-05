@@ -4,11 +4,15 @@ circuit file and the public file: Δ, the regions and their claims, the lincheck
 Nothing here evaluates the computation: the region values are the layout's constants, the public digests and outputs, and
 hashes of pinned padding constants.
 -/
-import Flock.RowLeaf
-import Flock.Piop
-import Flock.Merkle
-import Flock.Record
-import Flock.TmplSplit
+module
+
+public import Flock.RowLeaf
+public import Flock.Piop
+public import Flock.Merkle
+public import Flock.Record
+public import Flock.TmplSplit
+
+@[expose] public section
 
 namespace Flock
 
@@ -181,9 +185,11 @@ def Coins.tree? : Coins → Option CoinTree.Spec
   | _ => none
 
 /-- The tags a session on `coins` is verified under: on `os` coins, a statement whose prover names its coin mode
-(`Tags.liveOs`) binds the live-OS identity (`Tags.liveOsIdentity`) in its statement digest; otherwise the tags as they are. -/
+(`Tags.liveOs`) binds the live-OS identity (`Tags.liveOsIdentity`) in its statement digest; otherwise the tags as they are.
+Only the identity is chosen by the coins, so a reader of every other field reads `t`'s by definition
+(`ProvedScope.circuitOf_withCoins`). -/
 def Tags.withCoins (t : Tags) (coins : Coins) : Tags :=
-  if coins == .os && t.liveOs then { t with identity := Tags.liveOsIdentity t.identity } else t
+  { t with identity := if coins == .os && t.liveOs then Tags.liveOsIdentity t.identity else t.identity }
 
 /-- Everything a session needs about the statement. -/
 structure Stmt where

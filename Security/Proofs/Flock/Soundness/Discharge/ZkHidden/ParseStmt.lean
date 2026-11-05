@@ -1,7 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Commit
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
-import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
-import Proofs.Flock.Soundness.Discharge.ZkExec.Event
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Commit
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
+public import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Event
+public import Flock.KernelRfl
 
 /-!
 # The hidden-output `--zk` chain's statement circuit
@@ -20,6 +23,8 @@ session it reads of the session's committed circuit (`HmOut.parseCommit`), and t
 * `parseStmtH_identity`, `parseStmtH_tagsAt`, `zkTags_isTmpl`: an untyped `HmOut.parseStmt` reads no identity, so it
   agrees at every table's tags.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 
@@ -155,7 +160,7 @@ theorem parseStmtH_identity {tags : Tags} (ht : tags.typed = false) (x : Lean.Js
     (t : List (String × ByteArray)) : HmOut.parseStmt { tags with identity := x } b t = HmOut.parseStmt tags b t := by
   have hi : ({ tags with identity := x } : Tags).isTmpl = tags.isTmpl := rfl
   have hp : HmOut.parse { tags with identity := x } b t = HmOut.parse tags b t := by
-    simp only [HmOut.parse, Composed.parse_identity, Tags.isTmpl]
+    simp only [HmOut.parse, Flock.ProvedScope.parse_identity, Tags.isTmpl]
     simp only [ht, Bool.not_false, ite_true]
   unfold HmOut.parseStmt
   rw [hi, parseTmpl_identity tags x b t, hp]

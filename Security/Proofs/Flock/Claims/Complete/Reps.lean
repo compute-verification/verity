@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.Runs
-import Proofs.Flock.Soundness.Refine.Setup
-import Proofs.Flock.Soundness.Refine.Arith
+module
+
+public import Proofs.Flock.Claims.Complete.Runs
+public import Proofs.Flock.Soundness.Refine.Setup
+public import Proofs.Flock.Soundness.Refine.Arith
 
 /-!
 # The honest reps return
@@ -17,6 +19,8 @@ through `Hashes.ofSha512` (`commitP_ok`), and every other step is a draw, an abs
 returning lifts, and lifted over a state (`Total.st`). `totS` is it on `PS` from any sends; `totT` and `totL` add the
 transcript and Ligerito's state. The walks apply the steps whose postcondition is `True` (`Total.bind'`, …).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 
@@ -362,7 +366,7 @@ theorem hm_check_kinds {c : Circuit} {tags : Tags} {ls : Lean.Json} (h : HmRow.c
 theorem circuitOf_check {tags : Tags} {file : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
     (ht : tags.typed = false) (h : ProvedScope.circuitOf tags file tables = .ok c) :
     ∃ ls, HmRow.check c tags ls = .ok () := by
-  unfold ProvedScope.circuitOf at h
+  rw [ProvedScope.circuitOf_eq] at h
   split at h
   · exact FlockSoundness.Discharge.Hidden.parseCommit_check ht h
   · exact hm_parse_check h

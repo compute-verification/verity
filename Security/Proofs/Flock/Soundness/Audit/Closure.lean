@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Audit.Work
+module
+
+public import Proofs.Flock.Soundness.Audit.Work
 
 /-!
 # Closure draws
@@ -23,6 +25,8 @@ program.
   `((W − T)/W)^K + ε_ks + δ_link`. `audit_work_closure_harm`: likewise while some wrong unit's harm is at least `T`.
   `audit_work_closure_of_record`: at `K = 27,713`, unsound work of at least 0.1% with at most `2^-40 + ε_ks + δ_link`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

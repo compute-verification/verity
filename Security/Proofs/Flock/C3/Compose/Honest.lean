@@ -1,6 +1,8 @@
-import Proofs.Flock.C3.Compose.Family
-import Proofs.Flock.VBridge.Family.Commits
-import Proofs.Flock.C3.Compose.Leaf
+module
+
+public import Proofs.Flock.C3.Compose.Family
+public import Proofs.Flock.VBridge.Family.Commits
+public import Proofs.Flock.C3.Compose.Leaf
 
 /-!
 # n0: candidate 3's honest family
@@ -20,6 +22,8 @@ from the layers in full (`skLeaf`), and:
 
 R's opening is at `7 ≤ mReg`, which the padding gives (`seven_le_mReg`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 

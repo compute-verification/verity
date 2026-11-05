@@ -1,8 +1,12 @@
-import Proofs.Flock.C3.Compose.HoloEncoded
-import Proofs.Flock.C3.RegLevels.SrcMaps
-import Proofs.Flock.C3.RegLevels.StackedCoins
-import Proofs.Flock.Recursive.AuditC3
-import Proofs.Flock.Soundness.Assumptions.Inner
+module
+
+public import Proofs.Flock.C3.Compose.HoloEncoded
+public import Proofs.Flock.C3.RegLevels.SrcMaps
+public import Proofs.Flock.C3.RegLevels.StackedCoins
+public import Proofs.Flock.Recursive.AuditC3
+public import Proofs.Flock.Soundness.Assumptions.Inner
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # n14: R's Ligerito stage's coins, as the verifier holds R's stream
@@ -31,6 +35,8 @@ At `MapsLeft`'s weave, R's Ligerito's coin steps are `stacked/rep0`'s rounds of 
 stage's start at its first round's history round (`stageStarts`), and its third part from the run's round total
 (`Compose.coins_total_holo`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

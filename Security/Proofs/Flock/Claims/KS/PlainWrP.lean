@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.DecodeHidden
+module
+
+public import Proofs.Flock.Claims.KS.DecodeHidden
 
 /-!
 # The plain table bound at the deployed plain decoders
@@ -19,6 +21,8 @@ the deployed runs. At a plain statement in scope with a draw, `wrP`'s decoders a
   draw; it gives `PlainLiveAcc` where some run accepts (`plainLiveAcc_of_w`), and KS at the trimmed record
   (`plain_KS_of_w`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Facts
-import Proofs.Flock.Soundness.Discharge.Layout.OutSite
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+public import Proofs.Flock.Soundness.Discharge.Layout.OutSite
 
 /-!
 # What a hidden-output statement takes from the public file (`PublicExposes`)
@@ -8,6 +10,8 @@ import Proofs.Flock.Soundness.Discharge.Layout.OutSite
 are `n · 0` of them (`loadPublic_outputs_nil`, `drawn_outputs_nil`). `HmOut.regions` is one `mkRegion` per row, region
 `p` row `p`'s `b ‖ c` at its `hm96` slot, as `HmRow.regions`' region "digest p" (`regions_get`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

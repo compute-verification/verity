@@ -1,10 +1,12 @@
-import Proofs.Flock.Bridge.V5.KSLive
-import Proofs.Flock.Bridge.V5.Refused
-import Proofs.Flock.Bridge.Refused
-import Proofs.Flock.Claims.Recursion.SetupValues
-import Proofs.Flock.Soundness.Discharge.Hidden.Public
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SharedP
-import Flock.With.SetupEq
+module
+
+public import Proofs.Flock.Bridge.V5.KSLive
+public import Proofs.Flock.Bridge.V5.Refused
+public import Proofs.Flock.Bridge.Refused
+public import Proofs.Flock.Claims.Recursion.SetupValues
+public import Proofs.Flock.Soundness.Discharge.Hidden.Public
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SharedP
+public import Flock.With.SetupEq
 
 /-!
 # `SampledKSLiveV5`'s file preconditions, read off acceptance (`SampledKSLiveV5Accepted`)
@@ -30,6 +32,8 @@ checks are V5's.
   `sampledKSLiveV3_of` derives V3 from V2, and `sampledKSLiveV5Accepted` proves it. The session's simulator is V5's:
   its draw files decode to `kd` units whatever the population (`Bridge.lawOn_size`), so it reads no population check.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

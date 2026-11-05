@@ -1,10 +1,12 @@
-import Proofs.Flock.Claims.Scope.Readable
-import Proofs.Flock.Soundness.ExecSetup
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Proofs.Flock.Soundness.Discharge.Hidden.Spec
-import Proofs.Flock.Soundness.Discharge.Hidden.Layout
-import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
-import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
+module
+
+public import Proofs.Flock.Claims.Scope.Readable
+public import Proofs.Flock.Soundness.ExecSetup
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+public import Proofs.Flock.Soundness.Discharge.Hidden.Layout
+public import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 
 /-!
 # What the verifier's setup gives the scope
@@ -14,6 +16,8 @@ table's statement `st` has the circuit the scope check parses (`ProvedScope.circ
 loads (`ProvedScope.publicOf`), `m = k_log + nbl`, `6 ≤ k_log ≤ 27` and `m ≤ 35` (`Stmt.setupH`'s and
 `Stmt.setupHidden`'s refusals), and under `--zk` `25 ≤ m` (`Zk.shapeOk`'s `queries0`).
 -/
+
+@[expose] public section
 
 namespace Flock.Readable
 
@@ -89,7 +93,7 @@ theorem setupH_scope {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables :
 
 theorem parseH_identity {tags : Tags} (ht : tags.typed = false) (x : Lean.Json) (b : ByteArray)
     (t : List (String × ByteArray)) : HmOut.parse { tags with identity := x } b t = HmOut.parse tags b t := by
-  simp only [HmOut.parse, Composed.parse_identity, Tags.isTmpl]
+  simp only [HmOut.parse, Flock.ProvedScope.parse_identity, Tags.isTmpl]
   simp only [ht, Bool.not_false, ite_true]
 
 theorem parseH_tagsAt {tags : Tags} (ht : tags.typed = false) (count j : ℕ) (b : ByteArray)
@@ -187,7 +191,7 @@ theorem table0 {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts) (ht : 
     rw [Composed.parse_tagsAt] at hp
     rw [Composed.loadPublic_tagsAt] at hpop
     refine ⟨?_, ⟨pop, ?_⟩, hm, L.kLog6, hk, hm35, hzk⟩
-    · simp only [ProvedScope.circuitOf, hh, Bool.false_eq_true, ↓reduceIte, hp]
+    · simp only [ProvedScope.circuitOf_eq, hh, Bool.false_eq_true, ↓reduceIte, hp]
     · simp only [ProvedScope.publicOf, hh, Bool.false_eq_true, ↓reduceIte, hpop]
   · rw [hh] at hd
     simp only [↓reduceIte] at hd
@@ -198,7 +202,7 @@ theorem table0 {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts) (ht : 
     obtain ⟨pop, hpop, -⟩ := S.pub
     rw [loadPublicH_tagsAt] at hpop
     refine ⟨?_, ⟨pop, ?_⟩, S.m, L.kLog6, S.kLog, S.m35, hzk⟩
-    · simp only [ProvedScope.circuitOf, hh, ↓reduceIte, hp]
+    · simp only [ProvedScope.circuitOf_eq, hh, ↓reduceIte, hp]
     · simp only [ProvedScope.publicOf, hh, ↓reduceIte, hpop]
 
 end Flock.Readable

@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Recursion.VStar
-import Proofs.Flock.Claims.Scope.Fit
-import Proofs.Flock.Claims.Scope.Matches
-import Proofs.Flock.VBridge.ResUnit
-import Proofs.Flock.VBridge.Verifier
+module
+
+public import Proofs.Flock.Claims.Recursion.VStar
+public import Proofs.Flock.Claims.Scope.Fit
+public import Proofs.Flock.Claims.Scope.Matches
+public import Proofs.Flock.VBridge.ResUnit
+public import Proofs.Flock.VBridge.Verifier
 
 /-!
 # V*'s parts at the Claims relation: a unit copy's semantics, and the algebra parts
@@ -49,6 +51,8 @@ circuit file byte for byte with `RecVStar.circuitFile`, and `RecResiduals.check`
   input they hash is one the setup evaluates or one the part records, so the collision is a registered tie `Br` finds
   or one among the recorded calls (`coll_of_chains`).
 -/
+
+@[expose] public section
 
 namespace Flock.Readable
 
@@ -209,7 +213,7 @@ theorem flat_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} {w 
   rw [hx] at hx'
   cases hx'
   obtain ⟨hc, -⟩ := tableAt (tablesOf_of_parses hp') ht hpi htl
-  unfold ProvedScope.circuitOf at hc
+  rw [ProvedScope.circuitOf_eq] at hc
   split at hc
   · rcases FlockSoundness.Discharge.Hidden.committed_of_commit hc with hc | hc
     · exact (FlockSoundness.parse_facts (FlockSoundness.Discharge.Hidden.parse_untyped ht hc).1).tmpl

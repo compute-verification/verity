@@ -1,6 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundBind
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundRuns
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundBind
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundRuns
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -148,7 +152,7 @@ theorem setupOf_tableJH {I : Inputs} {record : String} {d : Lean.Json} {spec : S
 
 theorem parseH_identity {tags : Tags} (ht : tags.typed = false) (x : Lean.Json) (b : ByteArray)
     (t : List (String × ByteArray)) : HmOut.parse { tags with identity := x } b t = HmOut.parse tags b t := by
-  simp only [HmOut.parse, parse_identity, Tags.isTmpl]
+  simp only [HmOut.parse, Flock.ProvedScope.parse_identity, Tags.isTmpl]
   simp only [ht, Bool.not_false, ite_true]
 
 /-- An untyped `HmOut.parse` reads no identity, so it agrees at every table's tags. -/

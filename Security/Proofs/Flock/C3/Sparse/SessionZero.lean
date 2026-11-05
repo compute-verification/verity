@@ -1,7 +1,9 @@
-import Proofs.Flock.C3.Sparse.SessionReg
-import Proofs.Flock.C3.Sparse.SrcLayer
-import Proofs.Flock.C3.RegLevels.OutRegs
-import Proofs.Flock.Recursive.PartTie
+module
+
+public import Proofs.Flock.C3.Sparse.SessionReg
+public import Proofs.Flock.C3.Sparse.SrcLayer
+public import Proofs.Flock.C3.RegLevels.OutRegs
+public import Proofs.Flock.Recursive.PartTie
 
 /-!
 # `sparseSessionAt_of_regs`' zero outputs, from check 5's `checkZero`
@@ -21,6 +23,8 @@ holds, are registered as 0 (`sparseSessionAt_of_regs`' `hz`):
 * `sparseSessionAt_of_zero`: `sparseSessionAt_of_regs` with `hz` from these, at the session's `out` read (`hout`) and
   off `ValueColl` at the family's sources (`hnc`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Sparse
 

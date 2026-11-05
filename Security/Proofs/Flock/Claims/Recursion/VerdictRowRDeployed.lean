@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.VerdictAssembly
-import Proofs.Flock.Claims.Recursion.VerdictPieces
-import Proofs.Flock.C3.VStarList.Shape
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictAssembly
+public import Proofs.Flock.Claims.Recursion.VerdictPieces
+public import Proofs.Flock.C3.VStarList.Shape
 
 /-!
 # Row R at the deployed reader
@@ -26,6 +28,8 @@ statement the reader reads at the dense form:
   and `hsz` kept: the record's rounds are the prover's JSON (`jAt` substitutes only coins and digests), so their
   sizes need the canonical record or the coin tie.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Rows
 

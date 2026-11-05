@@ -1,4 +1,6 @@
-import Definitions.Pouw.PearlC.DeviceKernelWref
+module
+
+public import Definitions.Pouw.PearlC.DeviceKernelWref
 
 /-!
 # The chain-only reading at a device record (definitions only, staged)
@@ -9,6 +11,8 @@ unit's debit. The cap stays on the full credit, so a unit within it keeps at lea
 Per tile the fixed credit is that times the credited rows' share. `W_ref` is the kernel's (`DeviceKernelWref`), and
 every other field is the record's. TT_OUT at these protocols is stated in `TTOutChainOnly`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

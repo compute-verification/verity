@@ -1,13 +1,17 @@
-import Proofs.Flock.Claims.Scope.StmtOf
-import Proofs.Flock.Claims.Scope.Sizes
-import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
-import Proofs.Flock.Soundness.Discharge.HiddenExec.SiteH
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Flat
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Upv
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Block
-import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
-import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
-import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
+module
+
+public import Proofs.Flock.Claims.Scope.StmtOf
+public import Proofs.Flock.Claims.Scope.Sizes
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.SiteH
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Flat
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Upv
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Block
+public import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
+public import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
+public import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -234,7 +238,7 @@ theorem rows_commit_check {p : Parsed} {w : Claims.Flock.Wit} (hP : Parses p) (h
   have hcst : HmOut.parseCommit p.tags p.I.circuitFile p.I.tables = .ok st.c :=
     (parseCommit_tagsAt ht _ _ _ _).symm.trans s.parse
   have hc0' : c0 = st.c := by
-    unfold ProvedScope.circuitOf at hc0
+    rw [ProvedScope.circuitOf_eq] at hc0
     rw [hh] at hc0
     simp only [↓reduceIte] at hc0
     exact Except.ok.inj (hc0.symm.trans hcst)

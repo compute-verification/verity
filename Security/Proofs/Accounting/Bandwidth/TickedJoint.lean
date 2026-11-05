@@ -1,6 +1,8 @@
-import Mathlib
-import Proofs.Accounting.Bandwidth.Ticked
-import Proofs.Accounting.Bandwidth.Joint
+module
+
+public import Mathlib
+public import Proofs.Accounting.Bandwidth.Ticked
+public import Proofs.Accounting.Bandwidth.Joint
 
 /-!
 # Bandwidth adds, by counting (Mbw), for the chip as a tick transducer
@@ -12,6 +14,8 @@ deliveries in the window) determines `z`". The state, HBM and the rest may depen
 ignores the oracle (`e = 0`). `Ticked.jointDevice` is the transducer as a `JointDevice` whose chip outputs its tags
 and `ζ` of what it observed, through `Ticked.prog`, capped and translated as `Ticked.device` is.
 -/
+
+@[expose] public section
 
 namespace Bandwidth
 
