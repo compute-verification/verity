@@ -112,7 +112,6 @@ theorem decode_coinTree {spec : Flock.SessionSpec} {text : String} {sess : Flock
         | exact ⟨j, _, _, _, rfl, ‹Flock.Record.fld j "coin_tree" = .ok _›,
             ‹Flock.CoinTree.checkRecord sp _ _ = .ok _›⟩
         | exact absurd ‹(throw _ : Flock.V _) = Except.ok _› (throw_ne_ok _ _)
-        | cases h
 
 /-- What `Record.fld` reads is what v2's `getD` reads. -/
 theorem getD_of_fld {j c : Json} {k : String} (h : Flock.Record.fld j k = .ok c) : getD j k = c := by
