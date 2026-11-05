@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Witnesses.SamplingGeneric
-import Proofs.Flock.Claims.CompleteFails
-import Proofs.Flock.Claims.Deploy
+module
+
+public import Proofs.Flock.Claims.Witnesses.SamplingGeneric
+public import Proofs.Flock.Claims.CompleteFails
+public import Proofs.Flock.Claims.Deploy
 
 /-!
 # The sampled compiler's completeness says something
@@ -18,6 +20,8 @@ to its `fails` and `meets` witnesses (the lock's `claims.witnesses`). Each build
   error `0`, so `twoWit` is in its honest relation and it is not complete: `compilerComplete_nontrivial`,
   `Compiled.Complete_fails`.
 -/
+
+@[expose] public section
 
 namespace Claims.Witness.SamplingGeneric
 

@@ -1,5 +1,7 @@
-import Definitions.Claims.SamplingGeneric
-import Proofs.Flock.Claims.Sampling.Reference.Complete
+module
+
+public import Definitions.Claims.SamplingGeneric
+public import Proofs.Flock.Claims.Sampling.Reference.Complete
 
 /-!
 # The sampled compiler preserves completeness
@@ -16,6 +18,8 @@ covers (`CompleteSessions.err`).
 * `Compiled.complete_of`: **`Compiled.Complete H L`**.
 * `compilerComplete`: **`CompilerComplete`**.
 -/
+
+@[expose] public section
 
 namespace Claims.SamplingGeneric.Compiled
 
