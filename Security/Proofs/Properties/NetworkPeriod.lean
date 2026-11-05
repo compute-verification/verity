@@ -1,5 +1,7 @@
 import Properties.NetworkPeriod
 import Proofs.NetworkCertifier.RecordRows
+import Proofs.Properties.NetworkCertifier.Instance
+import Proofs.Properties.NetworkCertifier.LinkWindow
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 /-!
@@ -20,6 +22,15 @@ and each link-window's term is its scan's free inputs and those charges (`tiedFr
 On acceptance a rows-form period has no `rowsWfCheck` finding (`rowsWf_of_accept`), so its frames, the network
 certifier's of `B` bytes for its `lanes · windows · window` connections, read back (`cellRows_wf_of_rowsWf`,
 `NetTiming.RowsFormat.Wf` at `NetTiming.cellRows`).
+
+`RowsCertified` reads each link-window's `rowsWindowCheck` off the check's acceptance (`rowsWindowCheck_of_accept`):
+it shows the ingress rows, then the egress rows, each accepted by `rowsCheck` in its direction and held by the scan's
+registration (`rowsWindowCheck_rows`), and `rowsCheck`'s acceptance is the domain, the head and a certificate of the
+parameters' key that verifies, its identifier the key's because `Certificate.signs` refuses another
+(`rowsCheck_certified`). Its honest lemma is the empty rows-form period beside a toy key's certificate that verifies, by
+LMS's completeness (`Properties.CertifierDevice.Proofs.Lms.lmsCorrect`), and a registration that holds the rows it
+names: `rowsDomain` reads `Flock.canonUtf8`, which the kernel doesn't evaluate, so no lemma here shows a whole
+link-window's rows accepted.
 -/
 
 namespace Properties.NetworkPeriod
@@ -656,5 +667,225 @@ theorem rowsWf_of_accept {p : Params} {c : Commitment} {e : Evidence} {pub : Pub
     split at h0
     · assumption
     · cases h0
+
+/-! ## The rows form's scan holds the rows the network certifier signed -/
+
+/-- A rows-form phase without a finding has its link-window's `rowsWindowCheck` accepted. -/
+theorem rowsWindowCheck_ok {p : Params} {s : Schedule} {sd : ByteArray} {c : Commitment}
+    {q : (Lean.Json × Window) × ℕ} (h : findingOf (rowsPhase p s sd c q) = none) :
+    ∃ f, rowsWindowCheck p s sd c.audits (p.first + q.2) q.1.1 q.1.2 = .ok f := by
+  unfold rowsPhase at h
+  cases hr : rowsWindowCheck p s sd c.audits (p.first + q.2) q.1.1 q.1.2 with
+  | error x =>
+    rw [hr] at h
+    change findingOf (Except.error x : Found (Option (Facts × ℕ))) = none at h
+    cases h
+  | ok f => exact ⟨f, rfl⟩
+
+/-- **A rows-form period the check accepts has each link-window's `rowsWindowCheck` accepted**, at the evidence's
+window of that link-window. -/
+theorem rowsWindowCheck_of_accept {p : Params} {c : Commitment} {e : Evidence} {pub : Public} {prof : Profile}
+    (h : check p c e = .accept pub prof) {s : Schedule} {sd : ByteArray} {scan : Scan}
+    (hform : p.form = .rows s sd scan) {i : ℕ} {reg : Lean.Json} (hreg : c.windows[i]? = some reg) :
+    ∃ (x : Window) (f : Facts), e.windows[i]? = some x ∧
+      rowsWindowCheck p s sd c.audits (p.first + i) reg x = .ok f := by
+  unfold check at h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  rename_i hew
+  split at h
+  · cases h
+  simp only [hform] at h
+  split at h
+  · cases h
+  · cases h
+  · rename_i hF
+    have hok : ∀ w ∈ ((c.windows.zip e.windows).zipIdx.map (rowsPhase p s sd c)).toList, findingOf w = none :=
+      fun w hw => firstFinding_none hF _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _
+        (List.mem_append_left _ (List.mem_append_left _ (List.mem_map_of_mem hw))))))
+    obtain ⟨hi, -⟩ := Array.getElem?_eq_some_iff.mp hreg
+    have hie : i < e.windows.size := by omega
+    have hpair : ((c.windows.zip e.windows).zipIdx)[i]? = some ((reg, e.windows[i]), i) := by
+      rw [Array.getElem?_zipIdx,
+        (Array.getElem?_zip_eq_some (z := (reg, e.windows[i]))).mpr ⟨hreg, Array.getElem?_eq_getElem hie⟩]
+      simp
+    have hwsi : ((c.windows.zip e.windows).zipIdx.map (rowsPhase p s sd c))[i]? =
+        some (rowsPhase p s sd c ((reg, e.windows[i]), i)) := by
+      rw [Array.getElem?_map, hpair]
+      rfl
+    obtain ⟨f, hf⟩ := rowsWindowCheck_ok (hok _ (Array.mem_toList_iff.mpr (Array.mem_of_getElem? hwsi)))
+    exact ⟨e.windows[i], f, Array.getElem?_eq_getElem hie, hf⟩
+
+theorem error_bind' {ε α β : Type} (e : ε) (f : α → Except ε β) :
+    ((Except.error e : Except ε α) >>= f) = .error e :=
+  rfl
+
+theorem and_right {a b : Bool} : (a && b) = true → b = true := by
+  cases a <;> cases b <;> decide
+
+/-- An array of size 2 is a pair. -/
+theorem array_two {α : Type} {xs : Array α} (h : (xs.size == 2) = true) : ∃ a b, xs = #[a, b] := by
+  have h2 : xs.toList.length = 2 := beq_iff_eq.mp h
+  obtain ⟨_ | ⟨a, _ | ⟨b, _ | ⟨_, l⟩⟩⟩⟩ := xs
+  rotate_left 2
+  · exact ⟨a, b, rfl⟩
+  all_goals (simp only [List.length_cons, List.length_nil] at h2; omega)
+
+/-- A `for` loop whose body runs `g` on each member and yields accepted `g` at every member. -/
+theorem forIn_ok {α ε : Type} {g : α → Except ε Unit} {xs : Array α} {u : PUnit}
+    (h : forIn xs PUnit.unit (fun x _ => do g x; pure (ForInStep.yield PUnit.unit)) = (Except.ok u : Except ε PUnit)) :
+    ∀ y ∈ xs.toList, g y = .ok () := by
+  rw [← Array.forIn_toList] at h
+  generalize xs.toList = l at h ⊢
+  induction l with
+  | nil => simp
+  | cons a l ih =>
+    rw [List.forIn_cons] at h
+    obtain ⟨st, hst, h⟩ := Properties.NetworkCertifier.CheckProofs.bind_ok h
+    obtain ⟨v, hv, hp⟩ := Properties.NetworkCertifier.CheckProofs.bind_ok hst
+    cases hp
+    intro y hy
+    cases hy with
+    | head => cases v; exact hv
+    | tail _ hy => exact ih h y hy
+
+/-- `rowsCheck`'s acceptance: the rows' domain is the link-window's, the head over their wiring, domain and root
+carries their certificate, and the certificate, under the parameters' key's identifier, verifies under that key in
+the session. -/
+theorem rowsCheck_certified {p : Params} {s : Schedule} {sd : ByteArray} {w : ℕ} {d : NetworkCheck.Direction}
+    {r : Rows} (h : rowsCheck p s sd w d r = .ok ()) :
+    ∃ (dom head : ByteArray), rowsDomain s sd p.session p.link d w = .ok dom ∧ r.domain = Flock.hexOf dom ∧
+      headDigest p.link d w sd s r.wiring dom r.root = .ok head ∧
+      NetworkCheck.Check.Certificate.signs p.lms p.key p.session
+        ⟨p.key.extract 0 16, p.link, d, w, head, r.signature⟩ = true := by
+  unfold rowsCheck at h
+  dsimp only at h
+  simp only [refuse, error_bind'] at h
+  repeat' split at h
+  all_goals try (cases h; done)
+  rename_i _ _ _ _ dom hdom hd _ head hhead hdig hc
+  unfold certifiesOn at hc
+  have hs := and_right hc
+  have hk : r.key = p.key.extract 0 16 := (Properties.NetworkCertifier.signs_spec hs).1
+  rw [hk, Properties.NetworkCertifier.CheckProofs.ba_beq.mp hdig] at hs
+  exact ⟨dom, head, hdom, beq_iff_eq.mp hd, hhead, hs⟩
+
+/-- `rowsWindowCheck`'s acceptance shows the ingress rows, then the egress rows, each accepted by `rowsCheck` in its
+direction and held by the scan's registration. -/
+theorem rowsWindowCheck_rows {p : Params} {s : Schedule} {sd : ByteArray} {audits : Array Lean.Json} {w : ℕ}
+    {reg : Lean.Json} {x : Window} {f : Facts} (h : rowsWindowCheck p s sd audits w reg x = .ok f) :
+    ∃ ri re : Rows, x.shown = .rows #[ri, re] ∧ rowsCheck p s sd w .ingress ri = .ok () ∧
+      rowsCheck p s sd w .egress re = .ok () ∧ holds reg ri = true ∧ holds reg re = true := by
+  unfold rowsWindowCheck at h
+  dsimp only at h
+  simp only [refuse, error_bind'] at h
+  repeat' split at h
+  all_goals try cases h
+  all_goals try (obtain ⟨_, _, h⟩ := Properties.NetworkCertifier.CheckProofs.bind_ok h; cases h)
+  rename_i _ rs hshown _ _ hsize hall _
+  obtain ⟨u, hfor, -⟩ := Properties.NetworkCertifier.CheckProofs.bind_ok h
+  obtain ⟨ri, re, rfl⟩ := array_two hsize
+  have hrc := forIn_ok (g := fun y : Rows × NetworkCheck.Direction => rowsCheck p s sd w y.2 y.1) hfor
+  exact ⟨ri, re, hshown, hrc (ri, .ingress) (by simp), hrc (re, .egress) (by simp),
+    Array.all_eq_true'.mp hall ri (by simp), Array.all_eq_true'.mp hall re (by simp)⟩
+
+/-- **`RowsCertified`**: each link-window of a rows-form period the check accepts holds, in each direction, rows the
+network certifier signed there under the parameters' key. -/
+theorem rowsCertified : RowsCertified := by
+  intro p c e pub prof h s sd scan hform i reg hreg d
+  obtain ⟨x, f, -, hx⟩ := rowsWindowCheck_of_accept h hform hreg
+  obtain ⟨ri, re, -, hi, he, hhi, hhe⟩ := rowsWindowCheck_rows hx
+  cases d with
+  | ingress =>
+    obtain ⟨dom, head, hdom, hd, hhead, hs⟩ := rowsCheck_certified hi
+    exact ⟨ri, dom, head, hdom, hd, hhead, hs, hhi⟩
+  | egress =>
+    obtain ⟨dom, head, hdom, hd, hhead, hs⟩ := rowsCheck_certified he
+    exact ⟨re, dom, head, hdom, hd, hhead, hs, hhe⟩
+
+/-- A head: 64 bytes. -/
+def certHead : ByteArray := ⟨Array.replicate 64 0⟩
+
+/-- Rows at the empty root and the domain `d`. -/
+def certRows : Rows :=
+  { format := "", value := "", link := "", direction := "", window := 0, parameters := "", cellBytes := 0, rows := 0,
+    words := 0, wordBits := 0, rowSchema := "", domain := "d", wiring := .empty, root := .empty,
+    layout := ⟨0, 0, 0, 0⟩, key := .empty, digest := .empty, signature := .empty }
+
+/-- A scan's registration whose `roots` names `certRows`' root and domain. -/
+def certReg : Lean.Json :=
+  Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj
+    [("port", "scan/egress"), ("root", .str (Flock.hexOf .empty)), ("domain", "d")]])]
+
+theorem certReg_holds : holds certReg certRows = true := by
+  decide +kernel
+
+open Properties.NetworkCertifier.Instance (toyParams toyParams_ok ident ident_size seed toyKey toyKey_eq session) in
+/-- At the toy LMS key (`N = 8`, `W = 8`, `H = 1`), some certificate of link-window `("l", egress, 0)`'s head
+`certHead`, under the key's identifier, verifies under the key in the session. -/
+theorem certHead_signed : ∃ sig, NetworkCheck.Check.Certificate.signs toyParams toyKey.publicKey session
+    ⟨toyKey.publicKey.extract 0 16, "l", .egress, 0, certHead, sig⟩ = true := by
+  have hI : toyKey.I = ident := (Properties.CertifierDevice.Proofs.Lms.key_spec toyKey_eq).2.1
+  have hext : toyKey.publicKey.extract 0 16 = ident := by
+    unfold Lms.PrivateKey.publicKey
+    rw [hI]
+    exact ByteArray.extract_append_eq_left (by rw [ident_size])
+  have hin : (NetworkCheck.messageInput ident session "l" .egress ((0 : ℕ) : ℤ) certHead).toBool = true := by
+    decide +kernel
+  obtain ⟨b, hb⟩ : ∃ b, NetworkCheck.messageInput ident session "l" .egress ((0 : ℕ) : ℤ) certHead = .ok b := by
+    cases hm : NetworkCheck.messageInput ident session "l" .egress ((0 : ℕ) : ℤ) certHead with
+    | ok b => exact ⟨b, rfl⟩
+    | error e => rw [hm] at hin; cases hin
+  have hm : NetworkCheck.certificateMessage ident session "l" .egress ((0 : ℕ) : ℤ) certHead =
+      .ok (Flock.Sha512.hash b) := by
+    unfold NetworkCheck.certificateMessage
+    rw [hb]
+    rfl
+  obtain ⟨sig, hs, hv, -⟩ :=
+    Properties.CertifierDevice.Proofs.Lms.verify_signAt (Flock.Sha512.hash b) toyParams_ok toyKey_eq (q := 0)
+      (by decide)
+  have hdec := (Properties.CertifierDevice.Proofs.Lms.lmsCorrect 8 8 1 true toyParams ident seed toyKey 0 _ sig
+    toyParams_ok toyKey_eq hs).2
+  refine ⟨sig.encode, Properties.NetworkCertifier.signs_of rfl ?_ hdec hv⟩
+  show NetworkCheck.certificateMessage (toyKey.publicKey.extract 0 16) session "l" .egress ((0 : ℕ) : ℤ) certHead = _
+  rw [hext]
+  exact hm
+
+/-- **`RowsCertified`'s honest lemma**: the check accepts a rows-form period of no phase; at the toy LMS key, some
+certificate of a link-window's head under the key's identifier verifies under the key in the session; and a
+registration whose `roots` names rows' root and domain holds them. -/
+theorem rowsCertified_honest :
+    check ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", some "c", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 0⟩
+        ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ =
+      .accept (rowsTerms #[] ⟨0, 0, 0, 0, 0⟩ #[] #[] 1 0 #[]) { link := "", windows := 0 } ∧
+    (∃ sig, NetworkCheck.Check.Certificate.signs Properties.NetworkCertifier.Instance.toyParams
+      Properties.NetworkCertifier.Instance.toyKey.publicKey Properties.NetworkCertifier.Instance.session
+      ⟨Properties.NetworkCertifier.Instance.toyKey.publicKey.extract 0 16, "l", .egress, 0, certHead, sig⟩ = true) ∧
+    holds certReg certRows = true :=
+  ⟨rowsCircuitHeld_honest.1, certHead_signed, certReg_holds⟩
+
+/-- A registration with no entries holds no rows. -/
+theorem holds_null (r : Rows) : holds .null r = false := by
+  cases h : holds .null r
+  · rfl
+  · unfold holds at h
+    obtain ⟨x, hx, -⟩ := Array.any_eq_true'.mp h
+    change x ∈ (#[] : Array Lean.Json) ++ #[] at hx
+    simp at hx
+
+/-- **No period check that accepts every period has `RowsCertified`'s property** (its nontrivial lemma): such a check
+accepts a rows-form period of one link-window whose scan's registration holds no rows. -/
+theorem rowsCertified_nontrivial : ¬ RowsCertifiedOf acceptAllRows := by
+  intro h
+  let p : Params :=
+    ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", none, .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
+  obtain ⟨r, -, -, -, -, -, -, hr⟩ :=
+    h p ⟨#[], #[.null], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 .null rfl .egress
+  rw [holds_null] at hr
+  cases hr
 
 end Properties.NetworkPeriod

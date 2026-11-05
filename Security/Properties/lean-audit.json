@@ -697,6 +697,10 @@
   },
   "Properties.NetworkPeriodLeak.periodLeakRegistered": {
    "nontrivial": "Properties.NetworkPeriodLeak.periodLeakRegistered_nontrivial"
+  },
+  "Properties.NetworkPeriod.rowsCertified": {
+   "honest": ["Properties.NetworkPeriod.rowsCertified_honest"],
+   "nontrivial": "Properties.NetworkPeriod.rowsCertified_nontrivial"
   }
  },
  "unwitnessed": {
@@ -6317,6 +6321,10 @@
    "Properties.NetworkPeriodLeak.periodLeakRegistered": {
     "function": "NetworkCheck.Period.check",
     "outcome": "accept"
+   },
+   "Properties.NetworkPeriod.rowsCertified": {
+    "function": "NetworkCheck.Period.check",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -6425,7 +6433,9 @@
    "Properties.NetworkPeriod.rowsStateAnchored_nontrivial": "lemma: RowsStateAnchored's nontrivial lemma: RowsStateAnchoredAt fails at a rows-form period of one phase whose tied audit's circuit record reads the scan's state from base 3, past its slots' anchors, which a verifier that accepts everything accepts",
    "Properties.NetworkPeriod.rowsStateHeld_honest": "completeness: RowsStateHeld's honest lemma: the period check accepts a rows-form period of no phase, and an audit whose SCAN_STATE is its one phase's scan's state, at its root and domain, is held there and charged its stateFree",
    "Properties.NetworkPeriod.rowsStateHeld_nontrivial": "lemma: RowsStateHeld's nontrivial lemma: RowsStateHeldAt fails at a rows-form period of one phase whose tied audit's SCAN_STATE is at another root than its scan's state, under a public charging that audit its stateFree, 4 of its 9 free inputs, which a verifier that accepts everything could publish",
-   "Properties.NetworkPeriodLeak.periodLeakRegistered_nontrivial": "lemma: PeriodLeakRegistered's nontrivial witness: its per-window bound fails at the accepting verifier tapD, at SHA-512, at one step at δ = 1/8 with no input registered and a registration with no openings, which opens every registered input (NetTiming.Witness.tapD_reg_bound_fails)"
+   "Properties.NetworkPeriodLeak.periodLeakRegistered_nontrivial": "lemma: PeriodLeakRegistered's nontrivial witness: its per-window bound fails at the accepting verifier tapD, at SHA-512, at one step at δ = 1/8 with no input registered and a registration with no openings, which opens every registered input (NetTiming.Witness.tapD_reg_bound_fails)",
+   "Properties.NetworkPeriod.rowsCertified_honest": "completeness: RowsCertified's honest lemma: the period check accepts a rows-form period of no phase, at a toy LMS key some certificate of a link-window's head under the key's identifier verifies in the session, and a registration whose roots names rows' root and domain holds them",
+   "Properties.NetworkPeriod.rowsCertified_nontrivial": "lemma: RowsCertified's nontrivial lemma: RowsCertifiedOf fails at a check that accepts every period, at a rows-form period of one link-window whose scan's registration holds no rows"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
