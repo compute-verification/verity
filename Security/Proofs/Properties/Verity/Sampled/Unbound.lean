@@ -72,9 +72,7 @@ theorem constsOf_eq_ite (c : Flock.Circuit) (hU : FlockSoundness.Built c.unit) (
   have e1 : (FlockSoundness.Discharge.Layout.oneG (c := c) (hU := hU) (n := n)).val = 0 := rfl
   have e0 : (FlockSoundness.Discharge.Layout.zeroG (c := c) (hU := hU) (n := n)).val = 1 := rfl
   unfold constsOf
-  first
-  | (simp only [Fin.ext_iff, e1, e0]; done)
-  | (by_cases h1 : g.val = 0 <;> by_cases h0 : g.val = 1 <;> simp [Fin.ext_iff, e1, e0, h1, h0])
+  simp only [Fin.ext_iff, e1, e0]
 
 end Flock.Bridge
 
@@ -82,11 +80,8 @@ namespace Verity
 
 /-- **A parse's constants at a gate's index**: the constant at gate 0, the zero at gate 1. -/
 theorem parsedConsts_some (r : Flock.Bridge.Parsed) (g : Fin (Flock.Bridge.Parsed.circuit (some r)).N) :
-    parsedConsts (some r) g = if g.val = 0 then some true else if g.val = 1 then some false else none := by
-  first
-  | rfl
-  | (simp only [parsedConsts]; rfl)
-  | simp [parsedConsts, FlockSoundness.Discharge.Placed.oneGate, FlockSoundness.Discharge.Placed.zeroGate]
+    parsedConsts (some r) g = if g.val = 0 then some true else if g.val = 1 then some false else none :=
+  rfl
 
 end Verity
 
@@ -128,9 +123,9 @@ theorem unbound_subset_of_parsed {o : Option Flock.Bridge.Parsed} {r : Flock.Bri
     fun g b hk hv => ?_
   · obtain ⟨i, hi⟩ := i
     obtain rfl : i = 0 := by change i < 1 at hi; omega
-    simp [BitVec.getLsbD_ofBool]
+    exact (by simp : (BitVec.ofBool b).getLsbD 0 = b)
   · obtain ⟨d, hd⟩ := hval _ b hv
-    exact hopen rfl g b d ((hcon g).trans hk) hd (BitVec.ofBool b) (by simp [BitVec.getLsbD_ofBool])
+    exact hopen rfl g b d ((hcon g).trans hk) hd (BitVec.ofBool b) (by simp : (BitVec.ofBool b).getLsbD 0 = b)
 
 namespace Live
 
@@ -167,7 +162,7 @@ theorem P_heq : HEq (Flock.Bridge.keyPartition A.D A.hU A.n) A.P := by
 input ports. -/
 theorem consts_eq (g : Fin A.Cc.N) : Verity.parsedConsts (some ⟨A.D, A.hU, A.n⟩) g = A.κ g := by
   show _ = Flock.Bridge.constsOfP A.D.unroll A.hU A.n {} A.pub g
-  exact (Verity.parsedConsts_some _ g).trans ((Flock.Bridge.constsOf_eq_ite A.D.unroll A.hU A.n g).symm.trans
+  exact (Verity.parsedConsts_some ⟨A.D, A.hU, A.n⟩ g).trans ((Flock.Bridge.constsOf_eq_ite A.D.unroll A.hU A.n g).symm.trans
     (Flock.Bridge.constsOfP_empty A.D.unroll A.hU A.n A.pub g).symm)
 
 /-- **The session's constants fix only inputs.** -/
