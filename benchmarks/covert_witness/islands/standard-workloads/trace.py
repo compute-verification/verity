@@ -1,8 +1,10 @@
 """The standard-workloads panel's traces: chosen steps of published records, recorded by te_core.capture.script under
 this checkout's te_core and measured (te_core.capture.circuit.measure), as the scorer's re-trace does for its records.
 
-    python trace.py pack --out PACK.tar --plan PLAN.json          # here: what each trace reads, into one tar
-    python trace.py node --pack PACK.tar --out DIR [--workers N]   # on a CPU node (job.sh)
+    python trace.py pack --out PACK.tar --plan PLAN.json          # what each trace reads, into one tar
+    python trace.py node --pack PACK.tar --out DIR [--workers N]   # the traces of a pack
+
+job.sh runs both on a CPU node, from a plan sent with the run.
 
 PLAN.json is a list of {"run": RUN, "art": ART, "steps": [STEP, ...]}: each record's `run/run.json`, `island.tar` and
 `candidate.json` come from the evidence store, its measurement commit's covert_witness tree (without te_core) and its
@@ -27,8 +29,8 @@ from pathlib import Path
 
 CW = "benchmarks/covert_witness"
 REPO = Path(__file__).resolve().parents[4]
-#: a step late in a long record replays every step before it
-TRACE_TIMEOUT = 3 * 3600
+#: a step late in a long record replays every step before it; $TRACE_TIMEOUT_S sets another limit
+TRACE_TIMEOUT = int(os.environ.get("TRACE_TIMEOUT_S") or 3 * 3600)
 
 
 def git(*args: str) -> str:

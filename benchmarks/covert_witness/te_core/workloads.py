@@ -1465,10 +1465,19 @@ def records(tables: dict, art: str) -> dict:
     on it at the console's policy (`PUBLISHED`, the details' `published`, which its rho_default and rho_console both
     are), reading B's ρ there (the details' formalism.at, the target), its read's steps and checkpoint, its parts
     (each with its partial gradient and gradient cut) and its traced steps' measured facts, or a generation row's
-    rounds."""
-    cols, rows = tables["columns"], []
+    rounds. A row the panel publishes with no measured read, a model's (its details' ``modelled``) or one it couldn't
+    measure (``unmeasured``, its reason), is no record: it goes under ``skipped`` with its reason, and a row with
+    neither a measured read nor a reason is refused."""
+    cols, rows, skipped = tables["columns"], [], []
     for cells, det in zip(tables["rows"], tables["details"]):
         r = dict(zip(cols, cells))
+        why = f"modelled: {det['modelled']}" if det.get("modelled") else det.get("unmeasured")
+        if why:
+            skipped.append({"workload": r["workload"], "model": r["model"], "run": r["run"], "why": why})
+            continue
+        if r["rho_inputs"] is None or "published" not in det:
+            raise ValueError(f"{r['workload']} {r['model']} {r['run']}: no measured read, and its details give no "
+                             f"reason (modelled or unmeasured)")
         run, rest = r["run"].split(" ", 1)
         ref, about = rest.split(" ", 1)
         one = det["published"]["console"]
@@ -1481,7 +1490,7 @@ def records(tables: dict, art: str) -> dict:
                     | ({"traces": [{"step": t["step"]} | t["measured"] for t in det["read"]["traces"]]}
                        if "traces" in det["read"] else {"rounds": det["read"]["rounds"]}))
     return {"source": f"{tables['id']} ({art}, {tables['updated_at']}): {tables['source']}", "tables": art,
-            "rows": rows}
+            "rows": rows} | ({"skipped": skipped} if skipped else {})
 
 
 def island_checks(workload: str) -> tuple[Check, ...]:
@@ -1958,7 +1967,8 @@ def main(argv=None) -> int:
     ap.add_argument("--json", type=Path, help=f"write the reference points here ({REFERENCE.name} is the pinned copy)")
     ap.add_argument("--records", nargs=2, metavar=("TABLES", "ART"),
                     help=f"only write {RECORDS.name} from the island's training/standard-workloads tables file and "
-                         "its art id (then run again for the reference points, whose checks read it)")
+                         "its art id, its modelled and unmeasured rows listed as skipped with their reasons (then run "
+                         "again for the reference points, whose checks read it)")
     a = ap.parse_args(argv)
     if a.records:
         path, art = a.records
