@@ -644,6 +644,7 @@ KNOWN: dict[str, str] = {
         "duplicate of the Site (`Verity.Site`): becomes its link (network-accounting)",
     "benchmarks/hash/dither/dither_fused.py::Window": "homonym, a Dither kernel's device state: rename (kernels)",
     "benchmarks/hash/dither/dither_one.py::Window": "homonym, a Dither kernel's device state: rename (kernels)",
+    "benchmarks/hash/lib/vclib.py::Opening": "homonym, one vc_open_launch record: rename (kernels)",
     "benchmarks/network_e2e/encodings/code_v1.py::Window":
         "homonym, one certifier window's charge: rename (network-accounting)",
     "benchmarks/network_e2e/encodings/v1.py::Record":
