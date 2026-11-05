@@ -66,7 +66,7 @@ theorem ret_count {α γ β : Type}
     exact ⟨Prod.snd (forIn (m := Id) xs.toList (none, u₀) f), by rw [hs, Array.length_toList], h⟩
 
 /-- **Sessions `sessionsTreeReason` accepts use every tree**: as many as the log shows. -/
-theorem sessions_size {trees : Array LoggedTree} {records : Array (String × Json)}
+theorem sessions_size {trees : Array LoggedTree} {records : Array (String × Array (String × Option Nat) × Json)}
     (h : sessionsTreeReason trees records = none) : trees.size = records.size := by
   unfold sessionsTreeReason at h
   dsimp only [Id.run] at h
@@ -78,19 +78,21 @@ theorem sessions_size {trees : Array LoggedTree} {records : Array (String × Jso
     split at hg
     · exact (beq_iff_eq.1 ‹_›).symm
     · cases hg
-  · rintro ⟨name, record⟩ u s hs
+  · rintro ⟨name, tables, record⟩ u s hs
     split at hs
     case h_1 => exact .inl ⟨_, _, hs.symm⟩
     exact .inr ⟨_, hs.symm⟩
 
 /-- **The trees `treesHeld` holds the evidence's sessions to are one a session.** -/
-theorem treesHeld_size {ts : Array LoggedTree} {e : SampledProofs.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
-    (h : SampledProofs.OneStageZk.treesHeld ts e bs = .ok ()) : ts.size = e.sessions.size := by
+theorem treesHeld_size {p : SampledProofs.OneStageZk.Own} {ts : Array LoggedTree}
+    {e : SampledProofs.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
+    (h : SampledProofs.OneStageZk.treesHeld p ts e bs = .ok ()) : ts.size = e.sessions.size := by
   unfold SampledProofs.OneStageZk.treesHeld at h
   dsimp only at h
   obtain ⟨named, hn, hrest⟩ := Trees.bind_ok h
   rw [← Array.forIn_toList] at hn
-  have hI := Trees.forIn_inv (I := fun pre (named : Array (String × Json)) => named.size = pre.length) ?_
+  have hI := Trees.forIn_inv
+    (I := fun pre (named : Array (String × Array (String × Option Nat) × Json)) => named.size = pre.length) ?_
     e.sessions.toList [] #[] named (by simp) hn
   · have hsess : sessionsTreeReason ts named = none := by
       split at hrest
@@ -120,8 +122,10 @@ theorem eq_of_size_one {β : Type} {xs : Array β} (h : xs.size = 1) {a b : β} 
 
 /-! ## The link's coins -/
 
-/-- **A record `sessionTreeReason` accepts gives its link points' coins**, its session stream's round 0. -/
-theorem link_some {trees : Array LoggedTree} {record : Json} (h : sessionTreeReason trees record = none) :
+/-- **A record `sessionTreeReason` accepts, at any tables, gives its link points' coins**, its session stream's
+round 0. -/
+theorem link_some {trees : Array LoggedTree} {tables : Array (String × Option Nat)} {record : Json}
+    (h : sessionTreeReason trees tables record = none) :
     ∃ cs, Verity.Sampled.recordRound record TREE_SESSION 0 = some cs := by
   unfold sessionTreeReason at h
   dsimp only [Id.run] at h
@@ -132,6 +136,8 @@ theorem link_some {trees : Array LoggedTree} {record : Json} (h : sessionTreeRea
   split at h
   case h_2 => cases h
   rename_i ps hlink
+  split at h
+  case isFalse => cases h
   split at h
   case h_2 => cases h
   rename_i rootF points streams htri

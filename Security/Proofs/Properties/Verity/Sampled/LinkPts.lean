@@ -126,7 +126,7 @@ round 0. -/
 theorem link_read {label : String} {after : ByteArray} {J : Json} {ξ : ByteArray} {lines : List String}
     {pre post : List Verity.Release} {y : Verity.Release} {trees : Array LoggedTree} {i s n : ℕ}
     (hR : readLog label after [J] ξ lines = some (pre ++ y :: post)) (hct : coinTreesOf lines = .ok trees)
-    (h1 : trees.size = 1) (hJ : sessionTreeReason trees J = none)
+    (h1 : trees.size = 1) {tabs : Array (String × Option ℕ)} (hJ : sessionTreeReason trees tabs J = none)
     (hpre : ∀ q ∈ pre, ∀ i' s' n', q.frame ≠ .opening i' s' n') (hy : y.frame = .opening i s n)
     (hO : ((helloSpecs pre)[i]?.bind fun sp => sp.streams[s]?) = some TREE_SESSION) :
     ∃ b, recordRound J TREE_SESSION 0 = some b ∧ y.coins = Verity.bitsOfBytes b := by
@@ -203,7 +203,7 @@ theorem link_pts {V : Vocab d α} {k : Verity.Registration.Composite} {θ : Byte
   have hJp : (Flock.JsonParse.parse record).toOption.getD .null = J := by
     rw [hJ]
     try rfl
-  have hJt : sessionTreeReason ts J = none := Trees.records_held hth (r := rs) (by simp [he]) hgb' hgu hJp
+  obtain ⟨tabs, hJt⟩ := Trees.records_held hth (r := rs) (by simp [he]) hgb' hgu hJp
   obtain ⟨bb, hbb, hyc⟩ := link_read hread hct h1 hJt (noOpening_frames hfr hL₀) (hyr.trans hr)
     (by rw [helloSpecs_frames hfr]; exact hO)
   have hp2 := (hA.setup_one hs).2.2.2.1

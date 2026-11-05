@@ -972,7 +972,8 @@ stream `name` gives coins (`recordRound`), the read opens tree `i`'s stream `si`
 (`Trees.round_held`), below the read's openings of it (`opening_lt_openedOf`). -/
 theorem recordRounds_le_openedOf {label : String} {after : ByteArray} {records : List Json} {ξ : ByteArray}
     {lines : List String} {log : List Verity.Release} {trees : Array LoggedTree} (hT : coinTreesOf lines = .ok trees)
-    (hR : readLog label after records ξ lines = some log) {record : Json} (h : sessionTreeReason trees record = none)
+    (hR : readLog label after records ξ lines = some log) {tables : Array (String × Option ℕ)} {record : Json}
+    (h : sessionTreeReason trees tables record = none)
     {name : String} (hr : ∀ k < recordRounds record name, (recordRound record name k).isSome) {i si : ℕ}
     (hk : KeyAt (heldTrees trees) i si (recordTree record) name) : recordRounds record name ≤ openedOf log i si := by
   rcases Nat.eq_zero_or_pos (recordRounds record name) with h0 | hpos
@@ -1001,7 +1002,7 @@ theorem openedOf_eq_recordRounds {label : String} {after : ByteArray} {records :
     {lines : List String} {log : List Verity.Release} {trees : Array LoggedTree} (hT : coinTreesOf lines = .ok trees)
     (hR : readLog label after records ξ lines = some log) {Lg : List Verity.Release}
     (hl : List.Forall₂ (fun x y => x.frame = y.frame ∧ x.answers = y.answers) log Lg) {record : Json}
-    (h : sessionTreeReason trees record = none) {name : String}
+    {tables : Array (String × Option ℕ)} (h : sessionTreeReason trees tables record = none) {name : String}
     (hr : ∀ k < recordRounds record name, (recordRound record name k).isSome) (hO : OpenedRecorded record Lg)
     (hS : LogServed Lg) {i si : ℕ} (hk : KeyAt (heldTrees trees) i si (recordTree record) name) :
     openedOf Lg i si = recordRounds record name := by
