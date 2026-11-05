@@ -27,7 +27,8 @@ query, digests, profile and reason are private too (a partition's digest is the 
 ``composite.json``: the product, the composite's commitment, each case's id, params digest (SHA-512 of its canonical
 params) and commitment, what is missing, and each piece's and Lean's outcome (`outcome`: the id, the verdict and the
 refusal's name) and its stated exceptions (`EXCEPTIONS`: the policy's v0, composed in the clear for one run of record
-only); and ``verdicts.txt``, its ``PIECE ID VERDICT [NAME]``, ``NOT_ESTABLISHED``, ``VERDICT
+only), and ``"circuit_files": "by path"`` where the check reads circuit files by path (the cases list any), whose
+verdict is the verifier of record's where `Verity.CircuitFilesByPathAgree` holds; and ``verdicts.txt``, its ``PIECE ID VERDICT [NAME]``, ``NOT_ESTABLISHED``, ``VERDICT
 ID VERDICT [NAME]`` and ``EXCEPTION LINE`` lines, which it also prints. Before writing them it refuses (exit 65) public bytes that share 64 bytes or more
 with any case's evidence, raw or hex, the cases' commitments and digests aside. The public directory may not be or
 contain the private one.
@@ -193,10 +194,11 @@ def exceptions(product: str) -> list[str]:
 
 
 def public_record(product: str, commitment: bytes, cases: Sequence[dict[str, Any]], gone: Sequence[str],
-                  verdict: dict[str, str] | None) -> dict[str, Any]:
-    """What ``--public-out`` may hold: no evidence, no params bodies and no answer bodies."""
+                  verdict: dict[str, str] | None, by_path: bool = False) -> dict[str, Any]:
+    """What ``--public-out`` may hold: no evidence, no params bodies and no answer bodies; ``circuit_files`` only where
+    the check reads circuit files by path (``by_path``), naming no path and no digest."""
     return {"product": PRODUCTS[product], "commitment": commitment.hex(), "missing": list(gone), "verdict": verdict,
-            "exceptions": exceptions(product),
+            "exceptions": exceptions(product), **({"circuit_files": "by path"} if by_path else {}),
             "cases": [{"params_sha512": hashlib.sha512(canonical(p["params"])).hexdigest(),
                        "commitment": p["commitment"].hex()} | outcome(p["id"], p["answer"]) for p in cases]}
 
@@ -259,7 +261,7 @@ def run(a: argparse.Namespace) -> int:
         lines.append(line("VERDICT", verdict) + ("" if answer else f" (exit {p.returncode}; its stderr is in --private-out)"))
         rc = p.returncode
     lines += [f"EXCEPTION {x}" for x in exceptions(a.product)]
-    record = canonical(public_record(a.product, commitment, cases, gone, verdict))
+    record = canonical(public_record(a.product, commitment, cases, gone, verdict, by_path=bool(circuits)))
     text = "".join(f"{ln}\n" for ln in lines).encode()
     try:
         check_public(record + b"\n" + text, found)

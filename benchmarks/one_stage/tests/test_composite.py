@@ -274,6 +274,7 @@ def test_the_check_runs_the_products_executable_on_the_private_files_and_blobs(t
     assert got["args"] == ["check", str(priv / "params.json"), str(priv / "commitment.bin"),
                            str(priv / "evidence.json"), "/blob"]
     assert not (priv / "network-answer.json").exists()
+    assert "circuit_files" not in json.loads((tmp_path / "public" / "composite.json").read_bytes())
 
 
 def network_cases(tmp_path: Path) -> list[str]:
@@ -294,6 +295,9 @@ def test_the_network_certifiers_circuit_files_follow_the_blobs_after_circuits(tm
                            "--circuits", "/v3c/m0/circuit.txt", "/scan/circuit.txt"]
     assert (priv / "circuits.txt").read_text() == "/v3c/m0/circuit.txt\n/scan/circuit.txt\n"
     assert not (priv / "network-answer.json").exists()
+    public = (tmp_path / "public" / "composite.json").read_text()
+    assert json.loads(public)["circuit_files"] == "by path"
+    assert "circuit.txt" not in public
 
 
 def test_an_accepted_composite_writes_the_network_certifiers_own_answer(tmp_path):
