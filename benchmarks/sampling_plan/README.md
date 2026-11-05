@@ -25,7 +25,7 @@ their floor.
 - `int8_llama.py`: the int8 Llama-3.1-8B row (vLLM's `cursor/vllm-int8-build-8350`). Its units: every s8 dot checks its
   seed, derives its own noise and opens its rows in circuit. `--model qwen3-8b`
   runs the Qwen3-8B row the same way. A linear's coordinate may be cut into K-chunks that commit their running sums, and
-  r × c tiles are offered, each a unit when its outputs fit a size class. Its replay domain is the window's requests, each
+  r × c tiles are offered, each a unit when its outputs fit a size class. Its replay grain is the window's requests, each
   one prompt of `context` tokens re-run through every layer at `tokens_per_s` (the engine is batch-invariant, so no
   co-scheduled request is re-run with it). It writes the fitted model (`cost-model.json`, a
   cost-model/v1 record), the serve-time commitments, the frontier, the plan at each budget, the tensors committed at
@@ -77,7 +77,10 @@ their floor.
   commitment) at two readings of a hashed byte's cost, through `grain_costs` and `for_target`, and the second mode again
   under a code-based commitment at each rate ρ (codeword columns hashed, 1/ρ the bytes, and no row hashed in circuit),
   each total with the replay of the requests the draw meets, each re-run from its prompt at the stock step's share;
-  then the chunk family's optimum against √(wβhC/(oΛ)). A rung fits when C-Flock's block holds each of its proof blocks (`inputs.cap`). Its
+  then each rung under a two-stage design (`optimize.two_stage`: serving commits only the replay blocks' boundaries, q of
+  them sampled, their interiors committed after that, and k proof blocks sampled in each), at the `request` replay
+  grain for exfiltration and a layer of a token for both targets, beside today's one-stage design at the same scope, also
+  pooled over the census's datacenter and the world's fleet; then the chunk family's optimum against √(wβhC/(oΛ)). A rung fits when C-Flock's block holds each of its proof blocks (`inputs.cap`). Its
   inputs, each with its status and source, are `served_window_inputs.json`; it writes `served_window.json` and
   `served_window.md`.
 
