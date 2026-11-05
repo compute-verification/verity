@@ -4,9 +4,9 @@ predicate). What a recorded honest session meets is asserted; what none meets ye
 change that closes it has to say so here. Two recorded sets, both fetched fixtures:
 
 * `rec-coins/16-16-8-n64` (a recorded inner statement and its honest inner session on the challenger's coin tree,
-  level 3's `pub.bin` and `registered.json` as staging recorded them, and an earlier recording's level-3 outer session),
-  with level 3's statement restaged by `rec_vstage.stage` as `test_lean_rec_coins` restages it, and checked as
-  `verity/flock-circuit`; the outer session was proved before the OS masks and the current coin schedule, over the level
+  and an earlier recording's level-3 outer session), with level 3's statement restaged by `rec_vstage.stage` as
+  `test_lean_rec_coins` restages it (its `pub.bin` and `registered.json` too: the recorded ones register no opened rows,
+  which `Registered.checkComplete` refuses at setup), and checked as `verity/flock-circuit`; the outer session was proved before the OS masks and the current coin schedule, over the level
   of an earlier inner session of the same population, so only its draw is this level's, every identity refuses it at
   its Hello, and only the checks that don't read the Hello are asserted on it. The inner description is not
   registered (no staging runs `inner_registered register`). V*'s sessions hide their outputs, as `ZkOuterR.hTags`
@@ -47,7 +47,7 @@ from types import SimpleNamespace
 import keyed
 import numpy as np
 import pytest
-from test_lean_rec_coins import built, forged  # noqa: F401
+from test_lean_rec_coins import built, restaged  # noqa: F401
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluate import evaluate_call
@@ -120,14 +120,14 @@ def inner(once) -> dict[str, dict]:
 
 
 @pytest.fixture(scope="module")
-def level(inner, forged) -> list[str]:  # noqa: F811
-    """`flock-witness session`'s files and session at the recorded level, its statement restaged (`test_lean_rec_coins`'
-    `forged`, whose circuit, program and partition do not read the coefficients)."""
-    level = forged
+def level(inner, restaged) -> list[str]:  # noqa: F811
+    """`flock-witness session`'s files at the recorded level restaged (`test_lean_rec_coins`' `restaged`, which registers
+    every port the level's outputs read, so `Registered.checkComplete` passes it at setup), and the recorded session."""
+    level = restaged
     assert hashlib.sha512((level / "circuit.txt").read_bytes()).hexdigest() == CIRCUIT_SHA512
-    return ["--circuit", str(level / "circuit.txt"), "--public", str(SET / f"L{LEVEL}" / "pub.bin"), "--partition",
+    return ["--circuit", str(level / "circuit.txt"), "--public", str(level / "pub.bin"), "--partition",
             str(level / "partition.json"), "--program", str(level / "program.json"), "--registered",
-            str(SET / f"L{LEVEL}" / "registered.json"), "--session", str(SET / f"outer-L{LEVEL}" / "session")]
+            str(level / "registered.json"), "--session", str(SET / f"outer-L{LEVEL}" / "session")]
 
 
 @pytest.fixture(scope="module")
