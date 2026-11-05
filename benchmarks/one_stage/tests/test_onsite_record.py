@@ -1199,9 +1199,10 @@ def test_under_the_network_certifiers_composite_without_pouw_the_run_is_of_recor
     """A run with the network certifier's composite without PoUW, under its own id: it is the composite of record, named
     by that id, though remote's and remote-network's, which compose PoUW's case, reject naming it missing. The run is of
     record over its verdict and its subprotocols', inference-only's from its case there, reading neither PoUW's nor
-    remote's; its error sums no PoUW term; and the record and its line credit no verified compute. Its rejection leaves
-    the run not of record; with none, remote-network is the composite of record again, PoUW's term back in its error,
-    since naming PoUW's case missing it composes PoUW; and two such composites refuse the record, naming both."""
+    remote's; its error sums no PoUW term; and the record and its line credit no verified compute, the line saying so in
+    words at the composite's id. Its rejection leaves the run not of record; with none, remote-network is the composite
+    of record again, PoUW's term back in its error, since naming PoUW's case missing it composes PoUW; and two such
+    composites refuse the record, naming both."""
     out = accepted(tmp_path)
     with_composite(out, "remote", OR.REMOTE, REMOTE_IDS, "reject", missing=(OR.POUW_ID,), inference_only="reject")
     with_composite(out, "remote-network", OR.ONSITE, (OR.NETWORK, *REMOTE_IDS), "reject", missing=(OR.POUW_ID,))
@@ -1222,7 +1223,8 @@ def test_under_the_network_certifiers_composite_without_pouw_the_run_is_of_recor
     assert (ce["composite"], [t["subprotocol"] for t in ce["terms"]]) == (
         WITHOUT, ["sampled proofs", "inference-only", "the network certifier"])
     line = json.loads(capsys.readouterr().out.strip()[7:])
-    assert (line["of_record"], line["composite"], line["verified_compute"]) == (True, WITHOUT, "none")
+    assert (line["of_record"], line["composite"], line["verified_compute"], line["compute"]) == (
+        True, WITHOUT, "none", f"no verified compute is credited: {WITHOUT}'s verdict is no compute claim")
     with_composite(out, "remote-network-no-pouw", WITHOUT, WITHOUT_IDS, "reject")
     of = OR.record(out)["of_record"]
     assert (of["holds"], of["not_accepting"]) == (False, ["remote", "onsite"])
@@ -1576,9 +1578,12 @@ def test_runs_at_two_serving_settings_go_beside_each_other_each_figure_labelled_
         assert r["sampled_proofs"] == OR.guarantee(rec["sampled_proofs"]) and "year" in r["sampled_proofs"]["pooled"]
         assert "conditional_on" not in r["periods"] and not {"K_tight", "periods_tight"} & set(r)
     assert runs[1]["periods"]["run"]["bits"] - runs[0]["periods"]["run"]["bits"] == 7432 - 1328
+    said = (OR.ONSITE, "none", f"no verified compute is credited: {OR.ONSITE}'s verdict is no compute claim")
+    assert [(r["composite"], r["verified_compute"], r["compute"]) for r in runs] == [said] * len(SETTINGS)
     line = capsys.readouterr().out.strip()
-    assert line.startswith("ONSITE-BESIDE ") and [(x["serving"], x["K"]) for x in json.loads(line[14:])] == [
-        (r["serving"], r["K"]) for r in runs]
+    assert line.startswith("ONSITE-BESIDE ") and [
+        (x["serving"], x["K"], x["composite"], x["verified_compute"], x["compute"]) for x in json.loads(line[14:])] == [
+        (r["serving"], r["K"], *said) for r in runs]
 
 
 def test_beside_refuses_by_path_a_record_of_another_format_or_one_stating_no_serving_settings(tmp_path, capsys):
