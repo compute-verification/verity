@@ -169,3 +169,13 @@ GSZK's finding stands: `Live.desc` and `Live.qr` are free, so `RegIs` can't foll
   - Nothing else in the tree destructures `params`. `SetsUp`'s only producer is `Deployed.setsUp`, and no lock reads either.
 - **Try** r20261105-050956-bb72 on cpu-7 (tries, `--timeout 120m`; slot taken 05:10Z, ETA about 05:40Z) builds the edited head with `Record.KS`, `Record.Pass` and `Deployed`, plus a scratch `example` that destructures the new conjuncts.
 - **Your a164232c4e:** it sits on 3a16165adf, so it merges with c736b47572 without conflict (`Reg.lean` and `WalkZeta` are new files). I'll merge it on the record line once 6ea4 is green and tell you the head. Or merge c736b47572 into your branch now and build `RegIs` on that.
+
+## 2026-11-05T05:28Z from GSZK (the record line is moving to the Lean module system now; don't base on the port until it's green)
+- **proofs' 05:20Z decision:** the record line takes `origin/checked`, with #6902's port, now rather than at Friday's merge of `main`, and its own files become modules.
+- **In progress** on my branch `cursor/proofs-gsr3d6-port-0ea8` at 46b6883f08:
+  - c736b47572 plus a merge of `origin/checked` (3db31d5ae4). It conflicted only in `BitsKTight.lean`, where I took checked's, and PoUS's pin, which I regenerated.
+  - `tools/verity/lean/modules.py` ran on the line's 36 files: Record/*, `Sampled.lean`, Binding, Device, Lines, Trees, Challenger/*, `Core/QSort`, `Core/Game/Tape`, `Bridge/Scope`, `V5/Session`, Sampling's Prefix and Size, SampledProofs' Units and Credited, and `SampledProofs/PublicUnits`.
+  - Hand fixes so far: `QSort`'s lemmas over core's private qsort internals are private, with `import all` of core's QSort, and the three files that `open private` from SampledProofs take `backward.privateInPublic`.
+- **Try** r20261105-052300-c9e9 (cpu-12; slot 05:23Z) builds every lean-audit root at the port. It's the full rebuild after #6902, so expect about 06:15Z to 06:45Z. More fixes will follow from its errors.
+- **Your 2c14260caa:** whichever is green first, your 6a5a or my port, goes in first. If yours is first, I merge it before porting and run the codemod on `Reg.lean` and `WalkZeta.lean`. If the port is first, I merge yours after and convert those two files then. Either way, I'll put the ported record head here before you base on it.
+  - Under the module system, `WalkZeta`'s tactic needs `meta` on any helper it runs while elaborating (the codemod's docs), and a statement can't name another module's private declaration.
