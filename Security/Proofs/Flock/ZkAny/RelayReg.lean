@@ -17,9 +17,10 @@ connections (a rep's start, and the finish's salts for levels ≥ 1, inner round
   (`Sessions.innerRound`) and proof file (`Sessions.file`), and a session's end (`closeOf`, `Frames.close`'s).
 * `frameAt`, `find_frameAt`: a rep's frame in the registry, as `Sessions.find` finds it; `find_key`: the frame found at
   a rep's key has that key.
-* `KeptStep`, `Kept`: every update but a put at the rep's key and its own session's end, and any run of them.
-  `frameAt_kept`: those leave a rep's frame as it was. `frameAt_put_self`: a put at the rep's key leaves its frame
-  that put.
+* `FreshRep`: a frame as `Frames.startRep` pushes it: its configuration and draws the start's, the rest unset.
+* `KeptStep`, `Kept`: every update but a put at the rep's key and its own session's end, with a start's frame fresh,
+  and any run of them. `frameAt_kept`: those leave a rep's frame as it was. `frameAt_put_self`: a put at the rep's key
+  leaves its frame that put.
 * `frameAt_own`, `find_own`: so where only `Kept` updates come between a request's read of the rep's frame and its put,
   and between that put and the next request's read, the next request reads the frame the first put back.
 * `coinsStep_key`, `roundStep_key`: a round's coins, and a round, put back a frame at the rep's key (through
@@ -89,6 +90,16 @@ def closeOf (R : Sessions) (sid : Nat) (roots : Array ByteArray) : Sessions :=
     files := R.files.filter fun (root, _, _) => !roots.contains root,
     inner := R.inner.filter fun (root, _, _) => !roots.contains root }
 
+/-- **A frame as `Frames.startRep` pushes it**: its configuration and draws the start's, its state the frame's start,
+no scheduled rounds, coins or opening yet. -/
+structure FreshRep (q : Rep) : Prop where
+  st : q.st = {}
+  coins : q.coins = #[]
+  alg : q.alg = #[]
+  opening : q.opening = none
+  opened : q.opened = false
+  toOpening : q.toOpening = false
+
 /-- **The loop's frames' updates**, each as the deployed code computes it; an update that fails leaves them as they
 were. -/
 inductive RegStep : Sessions → Sessions → Prop
@@ -103,12 +114,12 @@ inductive RegStep : Sessions → Sessions → Prop
   | close (R : Sessions) (sid : Nat) (roots : Array ByteArray) : RegStep R (closeOf R sid roots)
 
 /-- **An update that keeps session `sid`'s table `i`'s rep `r`'s frame**: any of `RegStep`'s but a put at the rep's key
-and its own session's end. -/
+and its own session's end, with a start's frame fresh (`FreshRep`, as `Frames.startRep` pushes one). -/
 inductive KeptStep (sid i r : Nat) : Sessions → Sessions → Prop
   | begin (R : Sessions) (sid' : Nat) (spec : SessionSpec) (sts : Array Stmt) :
       KeptStep sid i r R (R.begin sid' spec sts)
   | link (R : Sessions) (sid' : Nat) (c : Array F128) : KeptStep sid i r R (R.link sid' c)
-  | start (R : Sessions) (q : Rep) : KeptStep sid i r R (startAt R q)
+  | start (R : Sessions) (q : Rep) : FreshRep q → KeptStep sid i r R (startAt R q)
   | put (R : Sessions) (p : Rep) : keyOf p ≠ (sid, i, r) → KeptStep sid i r R (R.put p)
   | keep (R : Sessions) (root : ByteArray) (r' : Nat) (s : Array ByteArray) : KeptStep sid i r R (keepOf R root r' s)
   | file {R R' : Sessions} (root : ByteArray) (r' : Nat) (b : ByteArray) : R.file root r' b = .ok R' →
