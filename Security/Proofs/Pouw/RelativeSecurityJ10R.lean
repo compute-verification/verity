@@ -1,7 +1,9 @@
-import Mathlib
-import Definitions.Pouw.RelativeSecurityJ10R
-import Definitions.Pouw.Guarantees.RelativeSecurity
-import Proofs.Pouw.RelativeSecurity
+module
+
+public import Mathlib
+public import Definitions.Pouw.RelativeSecurityJ10R
+public import Definitions.Pouw.Guarantees.RelativeSecurity
+public import Proofs.Pouw.RelativeSecurity
 
 /-!
 # Relative security at call scope under J10-R: the floors of record, proved on the call design
@@ -21,6 +23,8 @@ segment `t`'s frame, so no plane weight enters: any ring map onto `F₂` does.
 The floors per prover take the same chain one adversary and one value of its coins at a time
 (`roundsSlice_of_stagedPJ`, `roundsSlice_of_overlapPJ`) into `serviceFloorPerProver_of_slices`.
 -/
+
+@[expose] public section
 
 namespace Pouw.RelativeSecurity
 

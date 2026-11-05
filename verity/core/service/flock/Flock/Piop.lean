@@ -1,8 +1,12 @@
 /-
 PROTOCOL.md §9–§11: statement binding, zerocheck, lincheck, and the claims handed to the opening.
 -/
-import Flock.Transcript
-import Flock.Proof
+module
+
+public import Flock.Transcript
+public import Flock.Proof
+
+@[expose] public section
 
 namespace Flock
 

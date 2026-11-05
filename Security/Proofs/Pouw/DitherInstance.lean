@@ -1,7 +1,9 @@
-import Definitions.Pouw.Guarantees.DitherInstance
-import Proofs.Pouw.RelativeSecurity
-import Proofs.Pouw.Dither
-import Proofs.Core.Accel.Model
+module
+
+public import Definitions.Pouw.Guarantees.DitherInstance
+public import Proofs.Pouw.RelativeSecurity
+public import Proofs.Pouw.Dither
+public import Proofs.Core.Accel.Model
 
 /-!
 # The headline on the cards from the headline on the model
@@ -28,6 +30,8 @@ import Proofs.Core.Accel.Model
   a witness, not the canonical card accelerator, whose programs are exactly the card's: its programs are any runs within
   the rates, so `SAKMatmul` is false at it.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.DitherInstance
 

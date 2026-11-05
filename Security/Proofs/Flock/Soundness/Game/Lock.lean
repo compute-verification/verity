@@ -1,6 +1,8 @@
-import Definitions.Flock.Game.Lock
-import Proofs.Flock.Soundness.Game.Expect
-import Proofs.Flock.Soundness.Game.Interleave
+module
+
+public import Definitions.Flock.Game.Lock
+public import Proofs.Flock.Soundness.Game.Expect
+public import Proofs.Flock.Soundness.Game.Interleave
 
 /-!
 # Lockstep coupling of an oracle game with its compiled game
@@ -22,6 +24,8 @@ leaf fails the coupling. `leafE_off_le`: per slot, the probability that a run op
 off the table chosen at that slot is at most `√(N · Q · Pr[fork conflict])`: the rewinding lemma
 (`Rewinding.expect_bad_le`) at the slot's node, averaged over prefixes by Jensen.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

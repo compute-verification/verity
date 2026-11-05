@@ -1,7 +1,10 @@
-import Proofs.Flock.Claims.Recursion.VerdictDecision
-import Proofs.Flock.Claims.Recursion.VerdictFramedJson
-import Proofs.Flock.Claims.Recursion.RepSqCounts
-import Proofs.Flock.Claims.Recursion.CallsAgree
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictDecision
+public import Proofs.Flock.Claims.Recursion.VerdictFramedJson
+public import Proofs.Flock.Claims.Recursion.RepSqCounts
+public import Proofs.Flock.Claims.Recursion.CallsAgree
+import all Lean.Data.Json.Basic
 
 /-!
 # Row B's `framed` at a decision
@@ -18,6 +21,8 @@ which a dense inner statement's do (`DecAt.names_nodup_dense`):
   block, the framed bytes of its `j`-th chunk (`decR_framesR`, the `T` unique by `fitUnique`), at its schedule's count,
   which is the chunk's closing squeeze's (`sqCount_repFrames`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

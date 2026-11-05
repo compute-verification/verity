@@ -1,5 +1,7 @@
-import Proofs.Accounting.TS.Session.Tile.Computes
-import Proofs.Accounting.TS.Session.Checked.Guarantees
+module
+
+public import Proofs.Accounting.TS.Session.Tile.Computes
+public import Proofs.Accounting.TS.Session.Checked.Guarantees
 
 /-!
 # A tile unit's proof layer with its Definition's checks is sound through its C-Flock sessions (the statement)
@@ -27,6 +29,8 @@ The bound is `CheckedSessionSound`'s `δ`: an accepted proof whose rows meet `Ch
 so the tile layer's unsound event is inside the checked layer's. It sits in the proofs package because the sessions do
 (`reads_exempt`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.TS
 

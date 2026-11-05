@@ -1,5 +1,8 @@
-import Proofs.Flock.Claims.Recursion.NextSha
-import Proofs.Flock.Soundness.Refine.Rep
+module
+
+public import Proofs.Flock.Claims.Recursion.NextSha
+public import Proofs.Flock.Soundness.Refine.Rep
+import all Lean.Data.Json.Basic
 
 /-!
 # S17 at the substituted value (`decodeJWith_shaSubJ`, `s17_shaSubJ`)
@@ -11,6 +14,8 @@ replaces that key's value in place (`arr_mapKey_const`), each entry an object of
 distinct (`NamesDistinct`), S17's two checks pass (`s17_canonical`): the digests list exactly the rep streams, and each
 file's digest is the one its stream's entry names. `s17_shaSubJ` is the two together, at a decoded session.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

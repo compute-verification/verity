@@ -1,6 +1,8 @@
-import Proofs.Flock.VBridge.ResUnit
-import Proofs.Flock.VBridge.PartsCover
-import Proofs.Flock.VBridge.AccUnits
+module
+
+public import Proofs.Flock.VBridge.ResUnit
+public import Proofs.Flock.VBridge.PartsCover
+public import Proofs.Flock.VBridge.AccUnits
 
 /-!
 # VBridge G items 1–3: `AlgebraHolds` from the parts' units
@@ -19,6 +21,8 @@ registers every part's outputs zero (`rec-residuals-zero`). This file puts those
 * `decode_part_holo`, `ResZeroAtH`, `partCols_of_resZeroAtH`, `algebraHolds_of_decodeH`: the same on a holo statement
   (META `holo: true`), at the holo form of the shape the verifier accepts, whose parts are the hidden units'.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.OfVStar
 

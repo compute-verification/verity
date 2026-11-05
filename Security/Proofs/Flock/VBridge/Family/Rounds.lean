@@ -1,4 +1,6 @@
-import Proofs.Flock.VBridge.Family.Commits
+module
+
+public import Proofs.Flock.VBridge.Family.Commits
 
 /-!
 # The family's reads files, round map and round commitments
@@ -27,6 +29,8 @@ The tops (`rec-top-L<l>`) are no commit strings: a RecOpen instance reads its le
 the verifier's query coins draw after the cap's round, so no digest the round's commitment fixes is registered at a top
 row and `VCommits` cannot hold there.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 

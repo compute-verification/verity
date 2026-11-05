@@ -1,12 +1,14 @@
-import Proofs.Flock.Claims.ZK.FinishRows
-import Proofs.Flock.Claims.ZK.FinishLane
-import Proofs.Flock.Claims.ZK.FinishZc
-import Proofs.Flock.Claims.ZK.FinishRank
-import Proofs.Flock.Claims.ZK.FinishSrc
-import Proofs.Flock.Claims.ZK.PiopSrcLc
-import Proofs.Flock.Claims.ZK.SimLig
-import Proofs.Flock.Claims.Complete.Zk.ConsReplay
-import Proofs.Flock.Claims.Complete.Zk.Json.Session
+module
+
+public import Proofs.Flock.Claims.ZK.FinishRows
+public import Proofs.Flock.Claims.ZK.FinishLane
+public import Proofs.Flock.Claims.ZK.FinishZc
+public import Proofs.Flock.Claims.ZK.FinishRank
+public import Proofs.Flock.Claims.ZK.FinishSrc
+public import Proofs.Flock.Claims.ZK.PiopSrcLc
+public import Proofs.Flock.Claims.ZK.SimLig
+public import Proofs.Flock.Claims.Complete.Zk.ConsReplay
+public import Proofs.Flock.Claims.Complete.Zk.Json.Session
 
 /-!
 # The firewall's seven rows at a worker's values
@@ -30,6 +32,8 @@ level 0's two lane rows are `FinishLane.lanesAt`'s where its Ligerito proof is r
   `tauFw_at` is it at the run's steps, `tauFw_at_replay` its replay's five rows, and **`tauFw_at_coef`** its rows by
   coefficient where level 0's record holds the model's coins (`LaneCoins`), as `FinishSwFw` uses it.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.RankAt
 

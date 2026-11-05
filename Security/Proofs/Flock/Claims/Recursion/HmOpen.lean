@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.SlotsCommit
-import Proofs.Flock.Claims.Recursion.DeployedR
+module
+
+public import Proofs.Flock.Claims.Recursion.SlotsCommit
+public import Proofs.Flock.Claims.Recursion.DeployedR
 
 /-!
 # An hm96 slot's two calls open its commit string (`IVStar`'s salt and row checks)
@@ -13,6 +15,8 @@ import Proofs.Flock.Claims.Recursion.DeployedR
   port's prefix is the one `rowInDeployed` reads off the row's length (`rowCheck_of`): `Φy` is `M·y` (`maskV_filter`,
   `bitL_mask`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.HmOpen
 

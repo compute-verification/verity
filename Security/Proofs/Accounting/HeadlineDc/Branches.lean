@@ -1,7 +1,9 @@
-import Proofs.Accounting.Headline.Encoding
-import Proofs.Accounting.Headline.EpsJl
-import Proofs.Accounting.Headline.Luck
-import Definitions.Accounting.HeadlineDc.Encoding
+module
+
+public import Proofs.Accounting.Headline.Encoding
+public import Proofs.Accounting.Headline.EpsJl
+public import Proofs.Accounting.Headline.Luck
+public import Definitions.Accounting.HeadlineDc.Encoding
 
 /-!
 # The data-centre headlines' shared steps
@@ -22,6 +24,8 @@ On a model with `μ_f = μ_x = 0` both floors only grow with `w*` and `φ*`, so 
   `d̄ = ā = 0`, `χ* ≥ 0` and `Headline.epsJl_le`; `folded_of_lower` is `t = 41·0.6931471808/6000` (`ln(8/7) ≥ 1/8`);
 * `unfolded_of_lower`: the unfolded branch's floor is at least `(N_w w + N_w φ)/B_♭ · (1 − 41/48000)`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS.HeadlineDc
 

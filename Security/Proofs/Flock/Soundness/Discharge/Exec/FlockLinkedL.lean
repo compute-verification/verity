@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Exec.FlockLinkL
-import Proofs.Flock.Soundness.Audit.FlockLinked
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.FlockLinkL
+public import Proofs.Flock.Soundness.Audit.FlockLinked
 
 /-!
 # The compiled-layer audit with `δ_link` discharged
@@ -21,6 +23,8 @@ What it rests on, all named:
 The numeric side conditions are `N₀/(ek) ≤ ρ < 1` for every table (`hr`, `hρ`) and `t'`, the SHA-512 evaluations of one
 session run.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 

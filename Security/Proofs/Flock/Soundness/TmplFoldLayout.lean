@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.TmplFoldPos
-import Proofs.Flock.Soundness.TmplLayOk
-import Proofs.Flock.Soundness.TmplWf
+module
+
+public import Proofs.Flock.Soundness.TmplFoldPos
+public import Proofs.Flock.Soundness.TmplLayOk
+public import Proofs.Flock.Soundness.TmplWf
 
 /-!
 # The template fold is its reference on `layoutM`'s layouts
@@ -10,6 +12,8 @@ import Proofs.Flock.Soundness.TmplWf
 its callee's inputs, its callee earlier and its copies inside the caller, the root's facts, and the column and call counts
 below `2^64` that `locate`'s halving assumes. What remains is the lane count against the transcript's `rho` and `r`.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl FlockLevel3 GF128
 

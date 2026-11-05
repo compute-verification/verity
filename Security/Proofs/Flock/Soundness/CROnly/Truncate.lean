@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.CROnly.Defs
+module
+
+public import Proofs.Flock.Soundness.CROnly.Defs
 
 /-!
 # Expected time from strict time: a finder stopped at `q`
@@ -14,6 +16,8 @@ $$p \le \frac{T}{q} + \frac{q^2}{2^{513}}$$
 The stopped finder is built from the finder, so from the prover when the finder is: the hypothesis stays one about the
 finders of the prover bounded, as both forms are.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.CROnly
 

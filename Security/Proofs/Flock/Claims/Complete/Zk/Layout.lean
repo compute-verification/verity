@@ -1,10 +1,12 @@
-import Proofs.Flock.Claims.Complete.Zk.MaskRank
-import Proofs.Flock.Claims.DeployCode
-import Proofs.Flock.Claims.Bridge.Custody
-import Proofs.Flock.Claims.Scope.Fit
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Proofs.Flock.Soundness.Refine.Setup
-import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.MaskRank
+public import Proofs.Flock.Claims.DeployCode
+public import Proofs.Flock.Claims.Bridge.Custody
+public import Proofs.Flock.Claims.Scope.Fit
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+public import Proofs.Flock.Soundness.Refine.Setup
+public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 
 /-!
 # The mask slot's layout at every in-scope table
@@ -14,6 +16,8 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 block and `m = k_log + nbl` from the table's setup, public (`setupH_mask`) or with hidden outputs (`Hidden.Spec`, whose
 circuit is `HmOut.parse`'s: `hmOut_parse_mask`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.MaskRank
 
