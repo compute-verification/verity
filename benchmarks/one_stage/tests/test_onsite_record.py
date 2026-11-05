@@ -24,7 +24,9 @@ at its pinned statement taking hA, hr and hkey as auditor-record and the run's c
 its certifier-key record's key, LMS parameters and session are the period's, and its registration, which checks,
 holds that key for a network certifier its log places. Where a circuit file the period lists isn't the one V3c's
 published period names, or the scan's files are listed, an accepted network verdict is not established and there is
-no bound. Sampled proofs credits only the drawn members whose
+no bound; so it is, and the composite of record's verdict too, where a file remote's sampled proofs case registers
+isn't, by SHA-512, the one its params name, and where those params name no public file, sampled proofs' verdict is not
+established. Sampled proofs credits only the drawn members whose
 --registered files its audit completed and whose Lean verdicts reported exactly their reads, naming each other member
 as not credited. PoUW's freed compute is never credited or claimed, whatever its row states, and neither is one
 program a day, each open by name beside what the run's lines say. The run's `publish` leaves the record as written.
@@ -126,17 +128,46 @@ def site_registration(held: str = CERT_KEY["public"], placed: str | None = None,
 
 
 def auditor_args(out: Path) -> dict[str, Path]:
-    """The auditor's inputs `served_out` writes beside ``out``, as `OR.record` takes them."""
+    """The auditor's inputs `served_out` writes beside ``out``, and remote's sampled proofs case under the serve dir
+    beside it, as `OR.record` takes them."""
     return {"certifier_key": out.parent / "auditor" / "certifier-key.json",
-            "site_registration": out.parent / "auditor" / "site-registration.json"}
+            "site_registration": out.parent / "auditor" / "site-registration.json",
+            "sampled_case": out.parent / "serve" / "private" / "sampled-proofs" / "case.json"}
+
+
+#: the circuit and public files remote's sampled proofs case registers, its first two blobs (`proofs.evidence_v2`)
+FILES_REGISTERED = (b"toy circuit\n", b"toy public file")
+
+
+def sha512_hex(b: bytes) -> str:
+    return hashlib.sha512(b).hexdigest()
+
+
+def sampled_case(out: Path, proofs: dict | None = None, evidence: dict | None = None) -> Path:
+    """Remote's sampled proofs case beside ``out`` (`auditor_args`), as `served_cases.sampled_case` writes one: its blobs
+    `FILES_REGISTERED` and a session's file, its params θ naming ``proofs`` (both files' SHA-512s unless given) and its
+    ``evidence``."""
+    f = auditor_args(out)["sampled_case"]
+    f.parent.mkdir(parents=True, exist_ok=True)
+    blobs = [f.parent.parent.parent / n for n in ("circuit.txt", "pub-1.bin", "session.json")]
+    for b, data in zip(blobs, (*FILES_REGISTERED, b"{}")):
+        b.write_bytes(data)
+    proofs = {"circuit": sha512_hex(FILES_REGISTERED[0]), "public": sha512_hex(FILES_REGISTERED[1]),
+              "registered": None} if proofs is None else proofs
+    f.write_text(json.dumps({"params": {"form": "one-stage", "proofs": proofs}, "commitment": "00",
+                             "evidence": json.dumps((evidence or {}) | {"form": "one-stage"}).encode().hex(),
+                             "blobs": [str(b) for b in blobs]}))
+    return f
 
 
 def auditor_files(out: Path, key: dict | None = None, site: dict | None = None) -> dict[str, Path]:
-    """`auditor_args`' files: ``key`` (`key_record` unless given) and ``site`` (`site_registration` unless given)."""
+    """`auditor_args`' files: ``key`` (`key_record` unless given), ``site`` (`site_registration` unless given) and
+    `sampled_case`'s."""
     args = auditor_args(out)
     args["certifier_key"].parent.mkdir(parents=True, exist_ok=True)
     args["certifier_key"].write_text(json.dumps(key or key_record()))
     args["site_registration"].write_text(json.dumps(site or site_registration()))
+    sampled_case(out)
     return args
 
 
@@ -149,7 +180,8 @@ def main(argv: list[str]) -> int:
     """`OR.main` on ``argv``, with OUT's auditor's inputs beside it (`auditor_args`) where it names an OUT."""
     if argv and not argv[0].startswith("--"):
         a = auditor_args(Path(argv[0]))
-        argv = [*argv, "--certifier-key", str(a["certifier_key"]), "--site-registration", str(a["site_registration"])]
+        argv = [*argv, "--certifier-key", str(a["certifier_key"]), "--site-registration", str(a["site_registration"]),
+                "--sampled-proofs-case", str(a["sampled_case"])]
     return OR.main(argv)
 
 
@@ -332,9 +364,9 @@ def sha512_of(params) -> str:
     return hashlib.sha512(CO.canonical(params)).hexdigest()
 
 
-def composed(out: Path) -> str:
-    """`sha512_of` the params of OUT's network certifier case, "00" where OUT has none."""
-    f = out / OR.CASE
+def composed(out: Path, f: Path | None = None) -> str:
+    """`sha512_of` the params of OUT's network certifier case (or the case at ``f``), "00" where there is none."""
+    f = out / OR.CASE if f is None else f
     return sha512_of(json.loads(f.read_text())["params"]) if f.is_file() else "00"
 
 
@@ -342,9 +374,11 @@ def with_composite(out: Path, name: str, product: str, ids: tuple[str, ...], ver
                    missing: tuple[str, ...] = (), inference_only: str = "accept") -> Path:
     """``out`` with ``product``'s composite.json in composite/NAME: a case of each of ``ids`` but those ``missing``,
     which it names, inference-only's answering ``inference_only`` and each other accepting, the network certifier's
-    with the params of OUT's case (`composed`), and Lean's ``verdict``."""
+    with the params of OUT's case and remote's sampled proofs' with those of its case beside OUT (`composed`,
+    `sampled_case`), and Lean's ``verdict``."""
+    stated = {OR.NETWORK: composed(out), SAMPLED_V1: composed(out, auditor_args(out)["sampled_case"])}
     cases = [{"id": i, "verdict": inference_only if i == OR.INFERENCE_ONLY else "accept",
-              "params_sha512": composed(out) if i == OR.NETWORK else "00", "commitment": "00"}
+              "params_sha512": stated.get(i, "00"), "commitment": "00"}
              for i in ids if i not in missing]
     (out / "composite" / name).mkdir(parents=True, exist_ok=True)
     (out / "composite" / name / "composite.json").write_text(json.dumps(
@@ -1658,19 +1692,92 @@ def test_a_period_listing_no_circuit_files_holds_auditor_listing_and_one_with_no
     it doesn't hold, saying why, the certifier's verdict is not established, both auditor-record and auditor-listing
     open, and there is no bound."""
     out = accepted(tmp_path)
+    none_read = {"holds": True, "read_by": []}
     assert record(out)["checked"][OR.AUDITOR_LISTING] == {"is": OR.CHECKED[OR.AUDITOR_LISTING], "holds": True,
-                                                          "listed": 0}
+                                                          "listed": 0, "registered_files": none_read}
     if text is None:
         (out / OR.CASE).unlink()
     else:
         (out / OR.CASE).write_text(text)
     rec = record(out)
     assert rec["checked"][OR.AUDITOR_LISTING] == {
-        "is": OR.CHECKED[OR.AUDITOR_LISTING], "holds": False, "why": f"no case lists the period's audits: {unread}"}
+        "is": OR.CHECKED[OR.AUDITOR_LISTING], "holds": False, "why": f"no case lists the period's audits: {unread}",
+        "registered_files": none_read}
     nv = rec["verdicts"]["the network certifier"]
     assert (nv["verdict"], nv["open"], nv["why"]) == (
         OR.NOT_ESTABLISHED, [OR.CERTIFIER_KEY, OR.AUDITOR_LISTING], f"{OR.KEY_OPEN}; {OR.LISTING_UNMET}")
     assert "missing" in rec["bound"] and rec["periods"] == {"missing": "no bound"}
+
+
+NOT_THETAS = "the {} file the case registers (its blob {}) isn't, by SHA-512, θ's proofs.{}"
+
+
+@pytest.mark.parametrize("how, why", [
+    ("both bound", None),
+    ("public unbound", None),
+    ("another circuit file", NOT_THETAS.format("circuit", 0, "circuit")),
+    ("another public file", NOT_THETAS.format("public", 1, "public")),
+    ("public unbound, another circuit file", NOT_THETAS.format("circuit", 0, "circuit")),
+    ("another θ", f"--sampled-proofs-case's params aren't, by SHA-512, those each composite that reads {SAMPLED_V1}'s "
+                  "case states (its params_sha512)"),
+    ("no case", f"the run's composites read {SAMPLED_V1}'s case, and the run gave no --sampled-proofs-case"),
+    ("a file gone", "the case's circuit file (its blob 0) can't be read: FileNotFoundError"),
+])
+def test_the_registered_files_condition_establishes_the_verdicts_it_bears_on_only_where_each_file_is_the_one_theta_names(
+        tmp_path, how, why):
+    """auditor-listing's registered-files condition, the remote theorem's on its sampled leg: each file remote's sampled
+    proofs case registers is, by SHA-512, the one its params θ name, θ the one the composite reading the case states.
+    Where θ names both files and both are its, every verdict stands and the run is of record. Where θ names no public
+    file, the public file isn't bound: sampled proofs' verdict is not established, its accept beside it, so the run
+    isn't of record, the circuit file still compared, and the evidence's digest of the public file never stands in for
+    θ's. Where a file isn't θ's (the circuit file or the public file), θ isn't the one the composite states, the run
+    gave no case or a file it registers is gone, auditor-listing doesn't hold: the network certifier's verdict and the
+    composite of record's are not established, each its Lean accept beside it, with no bound, and the run isn't of
+    record."""
+    out = accepted(tmp_path)
+    circuit, public = (sha512_hex(b) for b in FILES_REGISTERED)
+    unbound = how.startswith("public unbound")
+    if unbound:
+        sampled_case(out, {"circuit": circuit, "registered": None}, evidence={"proofs": {"public": public}})
+    with_composite(out, "remote-network-no-pouw", WITHOUT, WITHOUT_IDS)
+    blobs = json.loads(auditor_args(out)["sampled_case"].read_text())["blobs"]
+    if how.endswith("another circuit file"):
+        Path(blobs[0]).write_bytes(b"another circuit\n")
+    elif how == "another public file":
+        Path(blobs[1]).write_bytes(b"another public file")
+    elif how == "another θ":
+        sampled_case(out, {"circuit": circuit, "public": public, "registered": {"reads": []}})
+    elif how == "a file gone":
+        Path(blobs[0]).unlink()
+    rec = record(out, **({"sampled_case": None} if how == "no case" else {}))
+    v, listing = rec["verdicts"], rec["checked"][OR.AUDITOR_LISTING]
+    files, line = listing["registered_files"], OR.summary(rec)
+    assert (files["holds"], files["read_by"], files.get("why"), files.get("unbound")) == (
+        why is None, [WITHOUT], why, OR.PUBLIC_UNBOUND if unbound else None)
+    assert (listing["holds"], listing.get("why"), listing["listed"]) == (why is None, why, 0)
+    if why is None or how in ("another public file", "a file gone"):
+        assert files["compared"] == (["circuit"] if unbound else ["circuit", "public"])
+    withheld = (["sampled proofs"] if unbound else []) + ([] if why is None else ["the network certifier", "onsite"])
+    assert rec["of_record"]["not_established"] == withheld and rec["of_record"]["holds"] is (not withheld)
+    bears = ("sampled proofs", "the network certifier", "onsite")
+    assert {k: line["verdicts"][k] for k in bears} == {k: OR.NOT_ESTABLISHED if k in withheld else "accept" for k in bears}
+    assert line["of_record"] is (not withheld) and v["remote"]["verdict"] == "accept"
+    if unbound:
+        assert {k: v["sampled proofs"][k] for k in ("verdict", "answer", "open", "why")} == {
+            "verdict": OR.NOT_ESTABLISHED, "answer": "accept", "open": [OR.REGISTERED_FILES], "why": OR.PUBLIC_UNBOUND}
+        assert v["sampled proofs"]["credit"] == CREDITED and rec["sampled_proofs"]["missing"] == (
+            f"sampled proofs' verdict is {OR.NOT_ESTABLISHED}: only its accepted answer states a bound")
+    if why is None:
+        assert "K" in rec["bound"] and line["K"] is not None
+        return
+    assert {k: v["the network certifier"][k] for k in ("verdict", "answer", "open", "why")} == {
+        "verdict": OR.NOT_ESTABLISHED, "answer": "accept", "open": [OR.AUDITOR_LISTING], "why": OR.FILES_UNMET}
+    assert v["onsite"] == {"protocol": WITHOUT, "verdict": OR.NOT_ESTABLISHED, "answer": "accept",
+                           "from": "composite/remote-network-no-pouw/composite.json", "open": [OR.REGISTERED_FILES],
+                           "why": OR.FILES_UNMET}
+    assert rec["bound"] == {"missing": f"the network certifier's verdict is {OR.NOT_ESTABLISHED} ({OR.FILES_UNMET}): "
+                                       "only its accepted answer certifies K"}
+    assert rec["periods"] == {"missing": "no bound"} and line["K"] is None
 
 
 @pytest.mark.parametrize("audit, credited, not_credited, missing", [
