@@ -255,7 +255,8 @@ def serve(a: argparse.Namespace, gate: Gate, reserved: dict[str, Any], out: Path
     its challenge phase's stream to this process (`pouw_h1_handoff.Holder`) and
     exits, ending its lease; then closed and released on no GPU (``pouw_h1_gpu.py --close-from``) on that stream. The
     window's salt key, its saved state and each call's values are the prover's (`pouw_h1_prover`, DRAWN1): kept past the
-    close in ``--prover-root``/SESSION, owner-only and outside the run's directory, under a ``research keep`` record."""
+    close in ``--prover-root``/SESSION, owner-only and outside the run's directory, recorded against retention by
+    ``--keep-with``'s command when one is given."""
     import os
     import shutil
     import time
@@ -272,10 +273,8 @@ def serve(a: argparse.Namespace, gate: Gate, reserved: dict[str, Any], out: Path
     if a.gpu_lease:
         argv = ["gpu-lease", "1", "--wait", "--max-min", str(a.gpu_lease), "--", *argv]
     doc: dict[str, Any] = {"serving_start_unix": round(time.time(), 3), "prover": {"directory": str(prover)}}
-    if shutil.which("research"):
-        keep = subprocess.run(["research", "keep", str(prover), "--owner", "@vllm", "--expires", "never", "--priority",
-                               "keep", "--why", "an H1 window's salt key and values: a drawn unit opens from them (DRAWN1)"],
-                              capture_output=True, text=True)
+    if a.keep_with:
+        keep = subprocess.run([*shlex.split(a.keep_with), str(prover)], capture_output=True, text=True)
         doc["prover"]["keep"] = {"rc": keep.returncode, "out": (keep.stdout + keep.stderr)[-1000:]}
     try:
         with open(out.parent / "serve.log", "wb") as log:
@@ -658,6 +657,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--pin-by", default="vllm", help="pouw_h1_gpu.py's --by")
     ap.add_argument("--prover-root", default="/workspace/vllm-h1-prover", help="the prover's private directories, one a "
                                                                                "session (pouw_h1_prover), outside --out")
+    ap.add_argument("--keep-with", metavar="CMD", help="a command that records the session's prover directory, its last "
+                                                      "argument, against retention (on our nodes: `research keep --owner "
+                                                      "@vllm --expires never --priority keep --why '...'`)")
     ap.add_argument("--red-team", metavar="RUN_OUT", help="CPU only: rerun the red team's edited copies on a run's fetched out/ "
                                                          "(its serve/, gate/ and rehearsal.json), into --out")
     a = ap.parse_args(argv)
