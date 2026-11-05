@@ -19787,22 +19787,18 @@
    ]
   },
   "Definitions.Accounting.Guarantees.ServingBlocks.Witnesses": {
-   "digest": "753f3d7ee750c3cf95e78742eea86d747829a727a75866e9acdd102ed7a3785c",
+   "digest": "7ecd7439a0ae05793229da256cf388e0dadad3f0ef1688ad7901e8f5aad82bba",
    "definitions": {
     "Accounting.Guarantees.ServingBlocks.ServingBlockBoundRemote_honest": "d5be92f9a03b750549983780c78876f22414a3b0e0adaa024fdbc1a04823bfac",
     "Accounting.Guarantees.ServingBlocks.ServingBlockBoundRemote_nontrivial": "65775de1e629af9f3de42c94e01675eabd65f308235c7b21361bb6bd950f32e7",
     "Accounting.Guarantees.ServingBlocks.ServingBlockBound_honest": "ec2488d779ec58535e1fa006e1fb53542082f13d6da8e247ec727817dee660e2",
-    "Accounting.Guarantees.ServingBlocks.ServingBlockBound_nontrivial": "e1ced7caf338f3f45fa0cc4f611572e4a9d93b9d8361ec53b1714b0a874b801d",
-    "Accounting.Guarantees.ServingBlocks.UncertifiedElementary_honest": "903ff0591932848fc978dbc46baff7baa38645fa83c4c48b5102d577a9bf72d5",
-    "Accounting.Guarantees.ServingBlocks.UncertifiedElementary_nontrivial": "f1991a9c7854f9d09636c792c3a58b2885f02cf666ca8f4c1acd33242ad7f3dd"
+    "Accounting.Guarantees.ServingBlocks.ServingBlockBound_nontrivial": "e1ced7caf338f3f45fa0cc4f611572e4a9d93b9d8361ec53b1714b0a874b801d"
    },
    "guarantees": [
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_honest",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest",
-    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial",
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest",
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial"
+    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial"
    ]
   },
   "Definitions.Accounting.Guarantees.Sheet": {
@@ -21553,13 +21549,11 @@
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial",
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary",
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest",
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial"
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary"
    ]
   },
   "Definitions.Accounting.ServingBlocks.Instances": {
-   "digest": "134c1503e5de73b3b2b066783bade03975099cbf2dfee40c3ed8bd0a8e87fc4f",
+   "digest": "df4d34cd0eb7c5ddc1af58ad9e57f107404858e6e872bdee31643c0c87f09b05",
    "definitions": {
     "Accounting.ServingBlocks.Counter.C": "4b847921ab33546fa4f9cfc485025687315111d7af172db34a1c1dcab3289126",
     "Accounting.ServingBlocks.Counter.J": "d1d2495817a80ca4354944ce1ff9ad8b5215a254cfe454241b4bfbfe9f21deb6",
@@ -21575,20 +21569,13 @@
     "Accounting.ServingBlocks.Honest.d": "8585145f67a7b8e75ee6be21681c9d8ec89c1ab8c58732b98b73548832d05140",
     "Accounting.ServingBlocks.Honest.q": "ff10d6a5f6fc4e4e2358b01325aed2926711dee3bdeaf454f1d88b4c42756a63",
     "Accounting.ServingBlocks.Honest.r": "290a74404e57c9ee0ded82f864f042dc81735838406244cb3e969b62cac53b4f",
-    "Accounting.ServingBlocks.Straddle.C": "6760d6505a12f71686f8e5810c122bf99a352b99c958be2d5ee04d22ff381e52",
-    "Accounting.ServingBlocks.Straddle.J": "fcda9fd36597fcab0c46a37dfebeec0356847012d631abc1408808d7c340ff97",
-    "Accounting.ServingBlocks.Straddle.P": "631d178c5563bb145127d496a3fbad65eb93c98c6bc2ba2e2e6ae6eac642bf0b",
-    "Accounting.ServingBlocks.Straddle.d": "f121acaabd57a0d12c77b6f68c1820dee0caf8174567585d2a89855120e8f19e",
-    "Accounting.ServingBlocks.Straddle.r": "568d42d39e4009381f38308d98c60e3d33bcdf134cc57f78dc0e04ea9c7d418d",
     "Accounting.ServingBlocks.refl": "4de4c309977842adf6fe8fc41b7adadf84c1ec44b9953b917376c03d263ec87d"
    },
    "guarantees": [
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_honest",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest",
-    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial",
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest",
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial"
+    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial"
    ]
   },
   "Definitions.Accounting.Slowdown": {
@@ -24015,8 +24002,6 @@
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial",
     "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary",
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest",
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial",
     "Accounting.SecurityProofs.pouwRow",
     "Bandwidth.SecurityProofs.B3",
     "Bandwidth.SecurityProofs.B3Capacity",
@@ -24227,8 +24212,6 @@
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial",
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest",
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
@@ -25502,8 +25485,6 @@
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial",
     "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary",
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest",
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
