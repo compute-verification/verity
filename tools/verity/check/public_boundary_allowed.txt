@@ -1,9 +1,8 @@
 # Each edge from a public file to one the export doesn't copy, `SOURCE -> TARGET`, that the boundary check
 # (`public_boundary.py`) allows. It only shrinks: cut an edge, then `--prune`.
-Security/Definitions/Accounting/Actual/Sampler.lean -> Security/Definitions/Pous/Model/M1p.lean
-Security/Definitions/Accounting/Remote/Draw.lean -> Security/Definitions/Pous/Model/StreamedWipe.lean
 Security/Proofs/Flock/Claims/Recursion/LabelsDeployed.lean -> Security/Proofs/Properties/Nci/ReadsExact.lean
 Security/Proofs/Flock/Claims/Sampling/Path.lean -> Security/Proofs/Properties/NetworkCertifier/Bytes.lean
+Security/Proofs/Pouw.lean -> Security/Proofs/Pouw/PeriodJ10R/Binding.lean
 Security/Proofs/Properties/Pouw/LiveSalt.lean -> Security/Proofs/Properties/NetworkRecords/Bytes.lean
 benchmarks/one_stage/a0.py -> benchmarks/numerical/python/verity_numerical/bench/input_sets.py
 benchmarks/one_stage/a10.sh -> benchmarks/pouw/hidden_zk/job.sh
