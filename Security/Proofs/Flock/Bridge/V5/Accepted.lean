@@ -1,7 +1,8 @@
 module
 
 public import Proofs.Flock.Bridge.V5.KSLive
-public import Proofs.Flock.Bridge.V5.Refused
+public import Proofs.Flock.Bridge.LeafMap
+public import Flock.KsScope
 public import Proofs.Flock.Bridge.Refused
 public import Proofs.Flock.Claims.Recursion.SetupValues
 public import Proofs.Flock.Soundness.Discharge.Hidden.Public

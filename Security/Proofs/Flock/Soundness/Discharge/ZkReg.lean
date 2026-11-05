@@ -3,12 +3,13 @@ module
 public import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
 public import Proofs.Flock.Soundness.Discharge.ZkReg.Bind
 public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
-public import Proofs.Flock.Soundness.Discharge.ZkReg.Sound
+public import Proofs.Flock.Soundness.Discharge.Composed.Sound
 public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
 public import Proofs.Flock.Soundness.Discharge.ZkReg.BindH
-public import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedH
-public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundH
-public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHCustody
+public import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
+import Init.Data.Array.Basic
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Sound
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundCustody
 public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
 public import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
 public import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ

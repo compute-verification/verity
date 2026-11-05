@@ -11,13 +11,12 @@ public import Proofs.Flock.Claims.Sampling.EndToEndDeploy
 public import Proofs.Flock.Claims.Sampling.EndToEndDraw
 public import Proofs.Flock.Claims.Sampling.Escape
 public import Proofs.Flock.Claims.Sampling.ExecBernoulli
-public import Proofs.Flock.Claims.Sampling.PooledPr
+public import Proofs.Flock.Soundness.Audit.Pooled
 public import Proofs.Flock.Claims.Sampling.InputSlot
 public import Proofs.Flock.Claims.Sampling.KS
 public import Proofs.Flock.Claims.Sampling.Leaf
-public import Proofs.Flock.Claims.Sampling.Live
 public import Proofs.Flock.Claims.Sampling.Path
-public import Proofs.Flock.Claims.Sampling.Raise
+public import Proofs.Flock.Claims.KS.Refit
 public import Proofs.Flock.Claims.Sampling.Reference
 public import Proofs.Flock.Claims.Sampling.Select
 public import Proofs.Flock.Claims.Sampling.Seq

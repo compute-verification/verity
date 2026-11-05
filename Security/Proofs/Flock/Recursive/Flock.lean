@@ -2,7 +2,8 @@ module
 
 public import Proofs.Flock.Recursive.Sound
 public import Proofs.Flock.Recursive.Multi
-public import Proofs.Flock.Soundness.Discharge.ZkReg.Sound
+public import Proofs.Flock.Soundness.Discharge.Composed.Sound
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 public import Proofs.Flock.Recursive.ZkReg.Vals
 public import Proofs.Flock.Recursive.ZkReg.Off
 public import Proofs.Flock.Recursive.Finds

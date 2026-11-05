@@ -5,7 +5,9 @@ public import Proofs.Flock.Claims.ZK.FinishSwMkAny
 public import Proofs.Flock.Claims.ZK.FinishSwFrame
 public import Proofs.Flock.Claims.ZK.FrameFree
 public import Proofs.Flock.Claims.ZK.L0PinLive
-public import Proofs.Flock.Claims.ZK.PadsRoot
+public import Proofs.Flock.Claims.ZK.FrameTape
+public import Proofs.Flock.Claims.ZK.Round1Root
+import Init.Data.Nat.Power2.Basic
 public import Proofs.Flock.Claims.ZK.FrameLive
 
 /-!
