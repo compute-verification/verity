@@ -12,7 +12,8 @@ nothing wrong (`facts`), the file has one template instance a VU (`Facts.upv`) a
 check's: `ofNet_nIn`, `ofNet_nComp`). Its unit's input columns are its input words (`Facts.inWords`), and its input
 ports (`Flock.portCols`) are each at least a word wide (`Facts.widths`), in column order with none overlapping the next
 (`Facts.ordered`, `PortsOrdered`; so each ends before every later one starts, `ordered_le`), and as many as the
-Definition's parameters' words, whose bits `SampledProofs.Bits.paramsWhy` passes (`Facts.ports`).
+Definition's parameters' words, whose bits `SampledProofs.Bits.paramsWhy` passes (`Facts.ports`). A port of the first
+group is one word wide (`Facts.first`), and a later port has a leaf cut at instance 0 (`Facts.cut`).
 
 A port's width is its group's bit (`portCols_snd`, `getD_snd`): the first group's port `p` is its bit `p`
 (`portCols_first`). A type's bits (`SampledProofs.Bits.bitsOf`) are its leaves' widths summed, `Flock.Sigma.bits`
@@ -148,7 +149,8 @@ theorem fold_ne {α β : Type} {f : β → α → β} {Q : β → Prop} {P : α 
 template instance a VU, one output leaf map an instance, each of the words of the return of the Definition `find?`
 finds at `tmpl`, and every returned output bit on a computed row of the unit net; the unit's input columns its input
 words, and its input ports each at least a word wide, in column order, and as many as that Definition's parameters'
-words, whose bits `paramsWhy` passes. -/
+words, whose bits `paramsWhy` passes; the first group's ports one word wide, and each later port wired at instance 0 by
+a leaf cut. -/
 structure Facts (c : Flock.Circuit) (P : Flock.Program.Prog) (tmpl : String) : Prop where
   upv : c.upv = 1
   leaves : c.leavesOut.size = c.upv
@@ -160,6 +162,9 @@ structure Facts (c : Flock.Circuit) (P : Flock.Program.Prog) (tmpl : String) : P
   ordered : PortsOrdered c
   ports : ∀ d, P.defs.find? (·.key == tmpl) = some d →
     (Flock.portCols c.unit.inGroups).size = (d.params.toList.map (wordsOf ·.2)).sum ∧ paramsWhy c d = none
+  first : ∀ q < (c.unit.inGroups.getD 0 default).bits.size, ((Flock.portCols c.unit.inGroups).getD q (0, 0)).2 = 16
+  cut : ∀ q < (Flock.portCols c.unit.inGroups).size, (c.unit.inGroups.getD 0 default).bits.size ≤ q →
+    ∃ w, ((0 : ℕ), q, w) ∈ c.leafCuts
 
 /-- **Bits' check, passed, gives its facts.** A port of the first group is one word wide; a later port is wired
 exactly once, by a leaf cut, which the check takes only at a port at least a word wide. -/
@@ -185,7 +190,54 @@ theorem facts {c : Flock.Circuit} {P : Flock.Program.Prog} {tmpl : String} (h : 
   obtain ⟨hrows, h⟩ := ite_none h
   obtain ⟨hdef, hone⟩ := orElse_eq_none h
   have hupv1 : c.upv = 1 := bne_eq_false_iff_eq.1 (ite_eq_none hone)
-  refine ⟨hupv1, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  have hfirst : ∀ q < (c.unit.inGroups.getD 0 default).bits.size,
+      ((Flock.portCols c.unit.inGroups).getD q (0, 0)).2 = 16 := by
+    intro q hlt
+    have h16' : (c.unit.inGroups.getD 0 default).bits[q] = 16 := by
+      apply Classical.byContradiction
+      intro hne
+      apply h16
+      rw [Bool.or_eq_true]
+      exact Or.inl (Array.any_eq_true.2 ⟨q, hlt, bne_iff_ne.2 hne⟩)
+    have hgd : (c.unit.inGroups.getD 0 default).bits.getD q 0 = (c.unit.inGroups.getD 0 default).bits[q] := by
+      rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hlt, Option.getD_some]
+    rw [portCols_first hlt, hgd, h16']
+  have hcut : ∀ q < (Flock.portCols c.unit.inGroups).size, (c.unit.inGroups.getD 0 default).bits.size ≤ q →
+      ∃ w, ((0 : ℕ), q, w) ∈ c.leafCuts := by
+    intro q hq hq'
+    have hq'' : q < pc.size := hq
+    have hcq : cut ≤ q := hq'
+    have hk0 : 0 < c.upv := by omega
+    have hmem : ((0 : ℕ), q) ∈ (List.range c.upv).flatMap fun k =>
+        (List.range (pc.size - cut)).map fun i => (k, cut + i) := by
+      rw [List.mem_flatMap]
+      refine ⟨0, List.mem_range.2 hk0, ?_⟩
+      rw [List.mem_map]
+      exact ⟨q - cut, List.mem_range.2 (by omega), Prod.ext rfl (show cut + (q - cut) = q by omega)⟩
+    have hu' := List.find?_eq_none.1 hu (0, q) hmem
+    have h1 : wired.getD (0, q) 0 = 1 := Classical.byContradiction fun hne => hu' (bne_iff_ne.2 hne)
+    have hne : wired.getD (0, q) 0 ≠ 0 := by omega
+    have hne2 := hne
+    simp only [wired] at hne2
+    rw [← Array.foldl_toList] at hne2
+    rcases fold_ne (Q := fun (m : Std.HashMap (ℕ × ℕ) ℕ) => m.getD (0, q) 0 ≠ 0)
+        (P := fun (e : ℕ × ℕ × ℕ) => (e.1, e.2.1) = (0, q))
+        (by
+          intro m e hme
+          obtain ⟨k', p', w'⟩ := e
+          try dsimp only at hme ⊢
+          rw [Std.HashMap.getD_insert] at hme
+          split at hme
+          · rename_i hkp
+            exact Or.inr (beq_iff_eq.1 hkp)
+          · exact Or.inl hme) _ _ hne2 with h0 | ⟨e, he, hpe⟩
+    · simp at h0
+    · obtain ⟨k', p', w'⟩ := e
+      simp only [Prod.mk.injEq] at hpe
+      obtain ⟨hk0', hpq⟩ := hpe
+      rw [hk0', hpq] at he
+      exact ⟨w', Array.mem_def.2 he⟩
+  refine ⟨hupv1, ?_, ?_, ?_, ?_, ?_, ?_, ?_, hfirst, hcut⟩
   · apply Classical.byContradiction
     intro hne
     apply hleaves
@@ -207,56 +259,17 @@ theorem facts {c : Flock.Circuit} {P : Flock.Program.Prog} {tmpl : String} (h : 
   · exact bne_eq_false_iff_eq.1 (Bool.eq_false_iff.2 hnIn)
   · intro q hq
     by_cases hq' : q < cut
-    · have hlt : q < (c.unit.inGroups.getD 0 default).bits.size := hq'
-      have h16' : (c.unit.inGroups.getD 0 default).bits[q] = 16 := by
-        apply Classical.byContradiction
-        intro hne
-        apply h16
-        rw [Bool.or_eq_true]
-        exact Or.inl (Array.any_eq_true.2 ⟨q, hlt, bne_iff_ne.2 hne⟩)
-      have hgd : (c.unit.inGroups.getD 0 default).bits.getD q 0 = (c.unit.inGroups.getD 0 default).bits[q] := by
-        rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hlt, Option.getD_some]
-      have hpw : ((Flock.portCols c.unit.inGroups).getD q (0, 0)).2 = 16 := by
-        rw [portCols_first hlt, hgd, h16']
+    · have hpw := hfirst q hq'
       omega
-    · have hk0 : 0 < c.upv := by omega
-      have hq'' : q < pc.size := hq
-      have hmem : ((0 : ℕ), q) ∈ (List.range c.upv).flatMap fun k =>
-          (List.range (pc.size - cut)).map fun i => (k, cut + i) := by
-        rw [List.mem_flatMap]
-        refine ⟨0, List.mem_range.2 hk0, ?_⟩
-        rw [List.mem_map]
-        exact ⟨q - cut, List.mem_range.2 (by omega), Prod.ext rfl (show cut + (q - cut) = q by omega)⟩
-      have hu' := List.find?_eq_none.1 hu (0, q) hmem
-      have h1 : wired.getD (0, q) 0 = 1 := Classical.byContradiction fun hne => hu' (bne_iff_ne.2 hne)
-      have hne : wired.getD (0, q) 0 ≠ 0 := by omega
-      have hne2 := hne
-      simp only [wired] at hne2
-      rw [← Array.foldl_toList] at hne2
-      rcases fold_ne (Q := fun (m : Std.HashMap (ℕ × ℕ) ℕ) => m.getD (0, q) 0 ≠ 0)
-          (P := fun (e : ℕ × ℕ × ℕ) => (e.1, e.2.1) = (0, q))
-          (by
-            intro m e hme
-            obtain ⟨k', p', w'⟩ := e
-            try dsimp only at hme ⊢
-            rw [Std.HashMap.getD_insert] at hme
-            split at hme
-            · rename_i hkp
-              exact Or.inr (beq_iff_eq.1 hkp)
-            · exact Or.inl hme) _ _ hne2 with h0 | ⟨e, he, hpe⟩
-      · simp at h0
-      · obtain ⟨k', p', w'⟩ := e
-        simp only [Prod.mk.injEq] at hpe
-        obtain ⟨hk0', hpq⟩ := hpe
-        rw [hk0', hpq] at he
-        apply Classical.byContradiction
-        intro hlt
-        have hlt' : (pc.getD q (0, 0)).2 < 16 := Nat.not_le.1 hlt
-        apply hcuts
-        refine Array.any_eq_true'.2 ⟨(0, q, w'), Array.mem_def.2 he, ?_⟩
-        try dsimp only
-        simp only [Bool.or_eq_true, decide_eq_true_eq]
-        exact Or.inl (Or.inr hlt')
+    · obtain ⟨w', he⟩ := hcut q hq (Nat.not_lt.1 hq')
+      apply Classical.byContradiction
+      intro hlt
+      have hlt' : (pc.getD q (0, 0)).2 < 16 := Nat.not_le.1 hlt
+      apply hcuts
+      refine Array.any_eq_true'.2 ⟨(0, q, w'), he, ?_⟩
+      try dsimp only
+      simp only [Bool.or_eq_true, decide_eq_true_eq]
+      exact Or.inl (Or.inr hlt')
   · intro p hp
     have hp' : p + 1 < pc.size := hp
     have h1 := List.any_eq_false.1 (Bool.eq_false_iff.2 hord) p (List.mem_range.2 (by omega))
