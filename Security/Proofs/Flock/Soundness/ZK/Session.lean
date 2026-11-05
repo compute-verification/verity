@@ -1,6 +1,5 @@
 module
 
-public import Definitions.Claims.Hm96
 public import Definitions.Core.Game
 public import Definitions.Flock.ZK.RealView
 public import Definitions.Flock.ZK.SHVZK

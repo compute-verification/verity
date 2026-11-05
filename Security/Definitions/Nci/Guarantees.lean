@@ -1,7 +1,10 @@
 module
 
 public import Definitions.Nci.Assumptions
-import Mathlib.Data.NNRat.Floor
+public import Definitions.Core.Circuit
+public import Definitions.Core.Declaration
+public import Definitions.Core.Partition
+public import Definitions.Nci
 
 /-!
 # NCI's guarantees

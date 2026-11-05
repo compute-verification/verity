@@ -1,6 +1,5 @@
 module
 
-public import Definitions.Claims.Hm96
 public import Definitions.Core.Game
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Flock.Soundness.Assumptions

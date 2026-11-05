@@ -1,6 +1,5 @@
 module
 
-public import Definitions.Core.Declaration
 public import Definitions.Nci
 import Mathlib.Analysis.Real.Sqrt
 import Mathlib.Data.NNRat.Floor

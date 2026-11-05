@@ -1,9 +1,8 @@
 module
 
-public import Proofs.Flock.Soundness.CROnly.Hm96Defs
-public import Definitions.Claims.Hm96
 public import Definitions.Core.Game
 public import Mathlib.Analysis.Real.Sqrt
+public import Proofs.Flock.Soundness.CROnly.Hm96Defs
 import Mathlib.Algebra.BigOperators.Field
 import Mathlib.Algebra.Order.Chebyshev
 import Proofs.Flock.Soundness.Assumptions

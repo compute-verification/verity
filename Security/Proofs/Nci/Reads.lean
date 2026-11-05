@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Nci.Guarantees.Reads
-public import Definitions.Nci.Guarantees
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

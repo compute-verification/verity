@@ -1,6 +1,5 @@
 module
 
-public import Definitions.Claims.Hm96
 public import Definitions.Core.Game
 public import Mathlib.Data.Fintype.Pi
 public import Proofs.Flock.Soundness.ZK.Hiding

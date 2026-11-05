@@ -1,6 +1,5 @@
 module
 
-public import Definitions.Claims.IndexedTapes
 public import Mathlib.NumberTheory.LucasLehmer
 public import Proofs.Flock.Claims.ZK.Indexed
 public import Proofs.Flock.Claims.ZK.Interact

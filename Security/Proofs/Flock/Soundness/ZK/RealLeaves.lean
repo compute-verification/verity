@@ -1,8 +1,7 @@
 module
 
-public import Definitions.Flock.ZK.RealView
-public import Definitions.Claims.Hm96
 public import Definitions.Core.Game
+public import Definitions.Flock.ZK.RealView
 public import Definitions.Flock.ZK.SHVZK
 public import Proofs.Flock.Soundness.ZK.Dist
 import Mathlib.Analysis.SpecialFunctions.Pow.Real

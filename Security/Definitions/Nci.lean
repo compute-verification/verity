@@ -1,8 +1,8 @@
 module
 
-public import Mathlib.Analysis.Real.Sqrt
-public import Definitions.Core.Declaration
+public import Definitions.Core
 public import Definitions.Core.Partition
+public import Mathlib.Analysis.Real.Sqrt
 import Mathlib.Data.NNRat.Floor
 
 /-!
