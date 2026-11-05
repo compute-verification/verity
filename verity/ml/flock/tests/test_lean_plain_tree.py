@@ -60,10 +60,11 @@ def test_the_sessions_coins_are_the_challengers(fx):
 
     trees = C.coin_trees_of(R.log_lines(fx / "challenger" / R.RELEASES))
     rec = json.loads((fx / "session" / "session.json").read_text())
-    assert len(trees) == 1 and C.sessions_tree_reason(trees, [("session", rec)]) is None
+    tables = dict.fromkeys(rec["link"]["root_b"])
+    assert len(trees) == 1 and C.sessions_tree_reason(trees, [("session", tables, rec)]) is None
     c = rec["link"]["points"][0][0]
     rec["link"]["points"][0][0] = ("0" if c[0] != "0" else "1") + c[1:]
-    assert "link points are not the coins" in C.sessions_tree_reason(trees, [("session", rec)])
+    assert "link points are not the coins" in C.sessions_tree_reason(trees, [("session", tables, rec)])
 
 
 def test_the_plain_session_on_the_tree_at_a_subset_draw_is_accepted(fx):
