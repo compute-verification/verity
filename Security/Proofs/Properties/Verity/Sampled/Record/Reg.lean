@@ -21,7 +21,8 @@ public import Std.Data.String.ToNat
   of the parameters' `"program"` value, and `SampledProofs.OneStage.paramsParsed` parses the verifier's program from the
   canonical form of the same value, so `Program.parse own.program` is the verifier's program.
 * **v2's slots are two classes** (`partSlots_classes`): the population, in the registration's strata, and the input
-  class, at most one stratum. The population's strata have the sizes of the layout's first class.
+  class, at most one stratum. The population's strata have the sizes of the layout's first class. The input class is
+  the lowered program's, read on its own: nothing ties its size to the layout's, the descriptor's input gates.
 * **The registration is v2's parameters'** (`regIs_of_setsUp`): at a session v2 sets up, the statement's descriptor and
   query are the parameters' program bytes and verifier query (`RegIs`, from `SetsUp.params`), so the descriptor parses
   as the parameters' verifier's program.
@@ -39,6 +40,9 @@ public import Std.Data.String.ToNat
   parameters' verifier under the rule `law (lawText A.law)` (`lawReg`) parses as the statement's descriptor, lays out
   under its query, has v2's two classes over its layout's population and has the design `designSlots A`, at a subset
   law of at least one unit.
+* **`RegMatches` at the record** (`regMatches_record`): the record's code (`code`) names that registration at its one
+  statement (`regOf`), and `RegMatches` holds there. Its partition is the population at the layout's strata sizes, then
+  the statement's program's input class (`InputSlot.withInputs`), which is `partSlots A` by definition.
 -/
 
 @[expose] public section
@@ -518,5 +522,38 @@ theorem regMatches_of_setsUp (A : Live) {ι : Type} {dv : Accounting.Device ι} 
     exact hl
   · exact slotDesign_designSlots A (v := p.base.verifier) (by rw [hq]; exact units_of_popMatches A.hpop hparse hl)
       hlaw hk
+
+open Classical in
+/-- **The registration the record's statement names**: `lawReg` at the verifier `v` at the record's one statement,
+none elsewhere. -/
+noncomputable def regOf (A : Live) (o : Own) (v : _root_.SampledProofs.Registration.Verifier)
+    (cl : Option (Array (Int × Array Int))) (x : Claims.Msg) : Option _root_.SamplingDeploy.Reg :=
+  if x = xOf A o then some (lawReg A v cl) else none
+
+/-- **`RegMatches` at the record**: at a session v2 sets up, at the parameters `SetsUp.params` names, the record's code
+and `regOf` at their verifier meet `RegMatches`. The record's one statement names that registration, whose program is
+the statement's descriptor's parse and lays out under its query as `l`. Its partition `partSlots A` is the population, in
+strata of `slotPartition l`'s population's sizes, then the statement's program's input class, and its design is
+`slotDesign`'s. -/
+theorem regMatches_record (A : Live) (o : Own) (e : Ext) {ι : Type} {dv : Accounting.Device ι} {α : Type}
+    [Fintype α] {V : Vocab dv α} {θ : ByteArray} {F : Array ByteArray} (hsu : SetsUp V θ F A)
+    (hk : ∀ k, A.law = .subset k → 1 ≤ k) (cl : Option (Array (Int × Array Int))) :
+    ∃ p, ParamsAt θ p ∧ _root_.SamplingDeploy.RegMatches (code A o e) (regOf A o p.base.verifier cl) := by
+  obtain ⟨p, l, hp, -, hparse, hl, ⟨pop, ins, hc, -, hss⟩, hds⟩ := regMatches_of_setsUp A hsu hk cl
+  have h : [pop, ins] = [(Flock.Bridge.nsOf A.desc A.qr).splitLengths
+      ((List.finRange A.n).map (Flock.Bridge.unitGates A.P)), InputSlot.inputClass (Flock.Bridge.progOf A.Cc A.κ)] :=
+    hc.symm
+  obtain rfl := (List.cons.inj h).1
+  refine ⟨p, hp, ?_⟩
+  intro x s Pt hx hP
+  have hpe : (code A o e).parse x = if x = xOf A o then some (stmtSlots A) else none := rfl
+  have hre : regOf A o p.base.verifier cl x = if x = xOf A o then some (lawReg A p.base.verifier cl) else none := rfl
+  have hpp : (code A o e).partition s = some (partSlots A) := rfl
+  by_cases hxo : x = xOf A o
+  · obtain rfl : stmtSlots A = s := Option.some.inj ((hpe.trans (ite_eq_left hxo)).symm.trans hx)
+    obtain rfl : partSlots A = Pt := Option.some.inj (hpp.symm.trans hP)
+    exact ⟨lawReg A p.base.verifier cl, l, (Flock.Bridge.nsOf A.desc A.qr).splitLengths
+      ((List.finRange A.n).map (Flock.Bridge.unitGates A.P)), hre.trans (ite_eq_left hxo), hparse, hl, rfl, hss, hds⟩
+  · cases (hpe.trans (ite_eq_right hxo)).symm.trans hx
 
 end Verity.Sampled.Record

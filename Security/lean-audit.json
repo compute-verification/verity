@@ -2426,6 +2426,10 @@
     "fails": "Claims.Sampling.KS_fails",
     "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
    },
+   "Claims.Sampling.KSBy": {
+    "fails": "Claims.Sampling.KSBy_fails",
+    "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
+   },
    "Claims.Sampling.KSCount": {
     "fails": "Claims.Sampling.KSCount_fails",
     "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
@@ -2601,10 +2605,12 @@
    "Claims.Sampling.Faulty": "a helper the claims read: a faulty unit, which the sampling relation reads",
    "Claims.Sampling.FaultyBoundary": "proved of every program (`Claims.Sampling.faultyBoundary`), not of a deployment",
    "Claims.Sampling.InScope": "a helper the claims read: the programs and partitions the sampling scope takes",
+   "Claims.Sampling.IncorrectBy": "a helper the claims read: a unit whose proof block fails a check on the values the witness opens, which `KSBy`'s relation reads",
    "Claims.Sampling.LogColl": "a helper the claims read: a collision in a log of `H` calls",
    "Claims.Sampling.OneStage.WellFormed": "a helper the claims read: a well-formed one-stage design",
    "Claims.Sampling.Partition.Partitions": "a helper the claims read: a partition of a program's gates into proof units",
    "Claims.Sampling.Prog.Correct": "a helper the claims read: a correct gate interval on committed values",
+   "Claims.Sampling.Prog.InputBlock": "a helper the claims read: a proof block that is one input gate, which `inputOk` passes",
    "Claims.Sampling.Prog.Topological": "a helper the claims read: a topologically ordered program",
    "Claims.Sampling.RelS": "a helper the claims read: a statement's sampling relation",
    "Claims.Sampling.Scope": "a helper the claims read: the scope the sampling claims read",
@@ -6029,6 +6035,9 @@
    ],
    "assumptions": [],
    "type_hash": "4198130083bf4a4c93fa88d9a4f9a93a5c3b3259d18d82ed0453302fa0f3e6f4"
+  },
+  "Claims.Sampling.KSBy_fails": {
+   "owner": "@proofs"
   },
   "Claims.Sampling.KSCount_fails": {
    "owner": "@proofs",
