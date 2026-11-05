@@ -29856,12 +29856,12 @@
    ]
   },
   "Definitions.NetworkCertifier.Tap": {
-   "digest": "38030e45f405ac271aa77c4b87cf05aa6fbd7e6fccfdf61de810a8ece39e9a8a",
+   "digest": "2ee649706858d004ca7e7a20cdeb0c89d710399864ffab6314158e850926300a",
    "definitions": {
-    "NetTiming.TapRecord": "32b4847d8d23a91fece645b237d23ee2db5a181f72d194e30cf30b1d78b72e39",
+    "NetTiming.TapRecord": "470c51518f98862328ebc013694e846967020f994c51d0d5f3d134aa18d56885",
     "NetTiming.TapRecord.fits": "b1c5e47321838ab2a763e531e9ab3d4e5d05c79ab56416cd8a7ef9335b589075",
     "NetTiming.TapRecord.record": "a89a64449e10fb21db550c50134329e7153d12fff8381c7f12ea84af14d24b32",
-    "NetTiming.tapCode": "e7fe36224fc6527ffca6264f8c5174f7242c48e3acd1586ce3c7b1cb5bcbbc0f"
+    "NetTiming.tapCode": "cead48fff93c0b0a4bb22c887ad91484da5b4f7766f85329f5715b008a26e17e"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
@@ -29887,7 +29887,7 @@
    ]
   },
   "Definitions.NetworkCertifier.Warden": {
-   "digest": "55b2f5945bc1a63ab1ddafe71d25303c58f11545be094fa13afa94d8e93830d4",
+   "digest": "adca91e904021999136bd4a46da46e47a159216583d7aa8a04e5ea4b2b7520c8",
    "definitions": {
     "NetTiming.Arrivals": "a9855f1bf335813d6e9e14389bc8ab6a12f280930f67aa9b05a90a5a61349651",
     "NetTiming.Arrivals.ready": "9072fe2fb441f0c20173208efd9171d9488df5c1e74d998285fa06303bda783a",
@@ -29902,7 +29902,11 @@
     "NetTiming.WardenSchedule.bucket": "e0ce0ff6f053a2e4387e402d84e7a74bf9ea9602b7b00d476186ed8e2fc8820d",
     "NetTiming.WardenSchedule.cells": "f2d947c4b4976dc66943a86b6225976ddc342fbc55ca6ce51caa06937c74aa68",
     "NetTiming.WardenSchedule.r": "945a3aa14d2585cf9cfcdd40e7a5c7699431cb29efe7115d4943315d0b7b8e2f",
+    "NetTiming.WardenSchedule.span": "421de371c047764430af6977bc78a25b5f18671a9b04320f1e4dfafafa4b4eb6",
+    "NetTiming.laneFrames": "878b87026f6d5b020fb475e406de61673a7becb8c60ab9de0283ba23e6ff7a12",
+    "NetTiming.laneWire": "fe95e0057cbecaabb0913f0c4a46cb62fd12392ad2977bb507700c6f71baa278",
     "NetTiming.streamCell": "5099c8817f9762186ef5b7b163aeb9d09fbbd6106b964dacc1f3d757cdfbdd21",
+    "NetTiming.tailPads": "d85fe31df5f90986c15da34aa41903bce451a77db761b9d4d4377436c9a1ded9",
     "NetTiming.wardenCode": "5e86c0bb2c509e1a3cfb9bfa856d1d78a8cb7848d92efa2c0ee0e078bc20cef8",
     "NetTiming.wardenLane": "589292a58aa331c6b10ec7993a4d55215213036b1b0a7f560deac23b35bc65c6"
    },
