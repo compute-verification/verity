@@ -157,7 +157,8 @@
 #     and V3C V3c's $D/v3c-w<K>-<class>. V3c then takes the window commit, the longer of the chain and V3c's audit
 #     (their sum on a node that holds only one), and the period check, which the run's --timeout holds beside the other
 #     steps. The period check writes the
-#     certifier's answer.json in DIR, which step 4's certifier piece reads; the steps' logs (CERTIFIER_PRIVATE) move to the
+#     certifier's answer.json in DIR, which step 4's certifier piece reads (on the served node of a deferral, which runs
+#     neither, that piece leaves the certifier missing, naming the deferral); the steps' logs (CERTIFIER_PRIVATE) move to the
 #     serve dir's private/pieces/certifier before the run exits, `served_verdicts.sh v3c`, which writes no record, included.
 #     The chain's scan proves at CR_SCAN_DELTA (chain_record.sh's), 2^-64 by default, written as the double that is
 #     2^-64 exactly, which scan_zk.py keeps exact: every scan block is drawn, so no δ costs proving or leaves a wrong unit.
@@ -238,7 +239,8 @@
 # follow-on where it fails; it runs whatever V3c's audit gave, a failed audit's inputs kept as well), composes the
 # final record (`record --node` the served node, so its composed_on names the
 # host it composed on, served_node false, and that it read a prover-side copy; its pieces the served node's, but for the
-# network certifier's where the split certifier answered here, which remote-network's record reads) and the
+# network certifier's where the deferral has the split certifier: what its chain and period check left here, beside the
+# served node's piece.json, so its answer is about the served node, which remote-network's record reads) and the
 # composite (`served_composite.sh`, SERVED_NODE the served node), and under ONSITE the onsite record, as the served
 # node's run would (with REPROOF_COPY and REPROOF_LISTING); its $OUT is published as every run's is.
 # POUW=pearlplus (default h1) makes Pearl+ PoUW's piece instead: H1_GATE defaults empty (set, the preflight refuses
@@ -977,8 +979,12 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
     mkdir -p "$OUT/record" && cp "$DEFER_DIR/inference-only.json" "$OUT/record/inference-only.json" \
       && say "INFERENCE-ONLY: the served node's verdict, carried into this record as it wrote it (the serve dir's private/deferred/inference-only.json)"
   fi
-  if [ -f "$OUT/pieces/certifier/answer.json" ]; then  # the split certifier answered here: the record reads that answer
+  if [ -n "${CERTIFIER_CHAIN_CMD:-}" ]; then  # the split certifier ran here: the record reads what it left, about the
+    # served node, whose step 4 ran its piece (piece.json)
+    mkdir -p "$OUT/pieces/certifier" || return 1
     for p in "$DEFER_DIR/pieces"/*; do [ "${p##*/}" = certifier ] || cp -a "$p" "$OUT/pieces/" || return 1; done
+    [ ! -f "$DEFER_DIR/pieces/certifier/piece.json" ] || cp "$DEFER_DIR/pieces/certifier/piece.json" "$OUT/pieces/certifier/" \
+      || return 1
     pieces=$OUT/pieces
   fi
   "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$VW/audit" \
@@ -1389,7 +1395,10 @@ IOV=$!
 # held here, and the audit and the composite are deferred to a follow-on (after the record)
 if [ -n "$DEFER" ]; then v3c_commit
 else v3c_commit && v3c_proved; fi
-[ -z "$SPLIT" ] || export CERTIFIER_CMD=true
+if [ -n "$SPLIT" ] && [ -n "$DEFER" ]; then  # its period check reads the period.json of V3c's audit, which the follow-on runs
+  export CERTIFIER_DEFERRED="deferred with V3c's audit to the follow-on, whose period.json its period check reads"
+  export CERTIFIER_CMD='echo "$CERTIFIER_DEFERRED" > "$3/refused.txt"'
+elif [ -n "$SPLIT" ]; then export CERTIFIER_CMD=true; fi
 
 # 4. the other subprotocols, each its piece's verdict or MISSING with the command it lacks
 TPY=$TREE/.venv/bin/python
