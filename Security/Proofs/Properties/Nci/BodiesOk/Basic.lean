@@ -1,4 +1,7 @@
-import Proofs.Properties.Nci.Resolve
+module
+
+public import Proofs.Properties.Nci.Resolve
+import all Init.Data.Stream
 
 /-!
 # Lemmas for `BodiesOk`: types, loops and streams
@@ -7,6 +10,8 @@ What the decoder's spec (`Proofs.Properties.Nci.BodiesOk.Decode`) reads off `Flo
 `Ty.beq`, the leaves of the types a node computes, the leaves of a batch member mapped over an axis (`axis_spec`), and
 invariants of `for` loops in `Id`, `Except` and the decoder's `StateT` monad, index by index.
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.BodiesOk
 

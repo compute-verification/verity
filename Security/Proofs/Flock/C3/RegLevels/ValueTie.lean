@@ -1,6 +1,8 @@
-import Proofs.Flock.C3.RegLevels.OpensRegs
-import Proofs.Flock.VBridge.Family.Registrants
-import Proofs.Flock.Recursive.ValueSrc
+module
+
+public import Proofs.Flock.C3.RegLevels.OpensRegs
+public import Proofs.Flock.VBridge.Family.Registrants
+public import Proofs.Flock.Recursive.ValueSrc
 
 /-!
 # The value tie: a registrant's row at a value the verifier registers itself is the verifier's, or SHA-512 collides
@@ -34,6 +36,8 @@ verifier's tree once (`4n` for the leaves, row digest, salt digest, `treeLeaf` a
 `2^D - 1` nodes), the two hm96 leaves (3 each), the two frame-v3 leaves (2) and the climb (2 a level, `2D`). A row of
 `w` words hashes `128 · (1 + ⌈w/64⌉)` bytes; every other input is at most 3 blocks.
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

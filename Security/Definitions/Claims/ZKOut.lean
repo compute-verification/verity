@@ -1,4 +1,6 @@
-import Definitions.Core.Interaction
+module
+
+public import Definitions.Core.Interaction
 
 /-!
 # Claims: zero knowledge with a public outcome
@@ -12,6 +14,8 @@ given the outcome, of the event, plus an error of the statement, the witness, th
 * `ZKOutLeak`: the leak form over finitely many outcomes, its corollary: the number of outcomes times the simulator
   that draws the outcome uniformly, plus the sum of the outcomes' errors.
 -/
+
+@[expose] public section
 
 namespace Claims
 

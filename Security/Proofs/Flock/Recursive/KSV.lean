@@ -1,8 +1,10 @@
-import Proofs.Flock.Recursive.KSStatement
-import Proofs.Flock.Claims.Recursion.PartAcceptsSetup
-import Proofs.Flock.Claims.Recursion.RegSetupOpens
-import Proofs.Flock.Claims.Recursion.MoreSlotsAll
-import Proofs.Flock.Claims.Recursion.KSDec
+module
+
+public import Proofs.Flock.Recursive.KSStatement
+public import Proofs.Flock.Claims.Recursion.PartAcceptsSetup
+public import Proofs.Flock.Claims.Recursion.RegSetupOpens
+public import Proofs.Flock.Claims.Recursion.MoreSlotsAll
+public import Proofs.Flock.Claims.Recursion.KSDec
 
 /-!
 # `RecursiveKSAt` from `DecompBV`
@@ -16,6 +18,8 @@ through the setup's openings (`RecDeploy.bc_eq_of_setup`). The extra calls `layR
 relation (`moreSlotsTrue_deployed`), as in `recursiveKSAt_of`. `recursiveKSAt_ofVD` is the same with each part's check
 read at its decision (`ResLower.showsDec`), which the run supplies (`RecDeploy.stagedB_deployRec_dec`).
 -/
+
+@[expose] public section
 
 namespace Flock.SecurityProofs
 

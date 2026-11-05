@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Game.LockLin
+module
+
+public import Proofs.Flock.Soundness.Game.LockLin
 
 /-!
 # Off the chosen table, per position, at the slot's node
@@ -13,6 +15,8 @@ the mass off any other table:
 * `Lock.leafE_off_le_nodeOff`: per slot, the mass off the table chosen there is at most `nodeE` of the per-position
   off mass at that table (`nodeOff`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

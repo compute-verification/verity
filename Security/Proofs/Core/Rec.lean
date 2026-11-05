@@ -1,8 +1,10 @@
-import Definitions.Core.Guarantees.Rec
-import Definitions.Claims.Recursion
-import Proofs.Core.Leak
-import Proofs.Flock.Claims.ZK.Stop
-import Proofs.Flock.Claims.Recursion.SeqPrefix
+module
+
+public import Definitions.Core.Guarantees.Rec
+public import Definitions.Claims.Recursion
+public import Proofs.Core.Leak
+public import Proofs.Flock.Claims.ZK.Stop
+public import Proofs.Flock.Claims.Recursion.SeqPrefix
 
 /-!
 # `RecZK`: zero knowledge carries through a recursion
@@ -18,6 +20,8 @@ import Proofs.Flock.Claims.Recursion.SeqPrefix
 Its corollaries are the leak at public stop positions, the multiplicative form: over any recursion (`recZK_leak`) and
 at the deployed recursion's stop (`zkStop_leak`, from `Claims.Recursion.ZKStop`), through `Claims.zkmalRLeak_of_cuts`.
 -/
+
+@[expose] public section
 
 namespace Verity
 

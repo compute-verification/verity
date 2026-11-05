@@ -1,5 +1,7 @@
-import Proofs.Flock.SamplingGeneric
-import Proofs.Flock.Masked
+module
+
+public import Proofs.Flock.SamplingGeneric
+public import Proofs.Flock.Masked
 
 /-!
 # The sampled compiler over C-Flock's masked record, at SHA-512
@@ -13,6 +15,8 @@ knowledge sound, in both forms, wherever it meets the contract (`ks_masked`, `ks
 record (`SamplingDeploy.compiled`), what is left of the contract is the sampled verifier's four code facts and its
 sessions' runs, scope (`SessionsIn`) and openings (`SamplingDeploy.ks_masked`, `SamplingDeploy.ksReg_masked`).
 -/
+
+@[expose] public section
 
 namespace Claims.SamplingGeneric
 

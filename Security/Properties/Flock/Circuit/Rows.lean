@@ -1,6 +1,8 @@
-import Mathlib.Tactic.Ring
-import Definitions.Flock.Lowering
-import Flock.Net
+module
+
+public import Mathlib.Tactic.Ring
+public import Definitions.Flock.Lowering
+public import Flock.Net
 
 /-!
 # The rows the verifier parses, as the audit's `Rows`
@@ -10,6 +12,8 @@ and from a net `Net.ofRows` built (`Built`, `Rows.ofNet`), and a template instan
 template's, stacked (`Rows.stack`). Moved from `Proofs.Flock.Soundness.ExecRows` unchanged, with the lemmas these
 definitions' bodies use; the other lemmas stay there.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

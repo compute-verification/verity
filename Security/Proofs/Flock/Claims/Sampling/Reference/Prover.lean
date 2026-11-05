@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Faithful
-import Proofs.Flock.Claims.Sampling.Path
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.Faithful
+public import Proofs.Flock.Claims.Sampling.Path
 
 /-!
 # The sampled reference prover
@@ -29,6 +31,8 @@ position with a committed value (`found_covers`).
 `x`, at an honest witness and coins that check the session's unit; the record's completeness error is the sessions'
 count times it at the Flock record's `δc`.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling.Reference
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.C3.Reps.WRead
+module
+
+public import Proofs.Flock.C3.Reps.WRead
 
 /-!
 # C3's rep decoder with its reads: `RepMaps.withReads`
@@ -17,6 +19,8 @@ info). At it:
   (`resZeroAtLH_wRead`, the layers agreeing with their registrants at an accepted proof), `w`'s size S's
   (`wRead_size`, `nwOf_eq`) and the verifier rows at the reads.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

@@ -1,4 +1,7 @@
-import Batteries.Tactic.OpenPrivate
+module
+
+public import Batteries.Tactic.OpenPrivate
+import all Init.Data.Array.QSort.Basic
 
 /-!
 # `Array.qsort` permutes its input
@@ -8,6 +11,8 @@ is a swap of two elements of a vector (`qpartition`'s three pivot swaps and its 
 parts), and a swap permutes, so the result is a permutation of the input (`qsort_perm`): it holds the same elements,
 each as often.
 -/
+
+@[expose] public section
 
 open private Array.qpartition.loop Array.qsort.sort from Init.Data.Array.QSort.Basic
 
@@ -20,7 +25,7 @@ theorem swap_perm' {n : Nat} (as : Vector α n) (i j : Nat) (hi : i < n) (hj : j
   rw [Vector.toArray_swap]
   exact Array.swap_perm _ _
 
-theorem qpartition_loop_perm {n : Nat} (lt : α → α → Bool) {lo hi : Nat} (hhi : hi < n) (pivot : α) :
+private theorem qpartition_loop_perm {n : Nat} (lt : α → α → Bool) {lo hi : Nat} (hhi : hi < n) (pivot : α) :
     ∀ (d : Nat) (as : Vector α n) (i k : Nat) (ilo : lo ≤ i) (ik : i ≤ k) (w : k ≤ hi), hi - k = d →
       (Array.qpartition.loop lt lo hi hhi pivot as i k ilo ik w).2.toArray.Perm as.toArray := by
   intro d
@@ -46,7 +51,7 @@ theorem qpartition_perm {n : Nat} (as : Vector α n) (lt : α → α → Bool) (
   exact (qpartition_loop_perm lt hhi _ _ _ _ _ _ _ _ rfl).trans
     (((ite_swap_perm _ _ _ _ _ _).trans (ite_swap_perm _ _ _ _ _ _)).trans (ite_swap_perm _ _ _ _ _ _))
 
-theorem sort_perm {n : Nat} (lt : α → α → Bool) :
+private theorem sort_perm {n : Nat} (lt : α → α → Bool) :
     ∀ (d : Nat) (as : Vector α n) (lo hi : Nat) (w : lo ≤ hi) (hlo : lo < n) (hhi : hi < n), hi - lo = d →
       (Array.qsort.sort lt as lo hi w hlo hhi).toArray.Perm as.toArray := by
   intro d

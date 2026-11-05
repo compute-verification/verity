@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.NonVacuous
-import Proofs.Flock.Claims.ZK.Interact
+module
+
+public import Proofs.Flock.Claims.ZK.NonVacuous
+public import Proofs.Flock.Claims.ZK.Interact
 
 /-!
 # Refutation witnesses: the shared claim forms
@@ -33,6 +35,8 @@ outputs `([0], [1])`, a collision of the constant hash `constH`, whose outputs a
 
 `ERepCost` is a theorem at every record (`Claims.ERepCost` in `Proofs.Flock.Claims.ERepCost`), so it has no refutation.
 -/
+
+@[expose] public section
 
 namespace Claims.Witness
 

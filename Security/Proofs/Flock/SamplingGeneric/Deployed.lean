@@ -1,5 +1,7 @@
-import Definitions.Claims.SamplingGeneric
-import Proofs.Flock.Claims.Sampling.Deployed
+module
+
+public import Definitions.Claims.SamplingGeneric
+public import Proofs.Flock.Claims.Sampling.Deployed
 
 /-!
 # The sampled compiler at a frozen sampled record
@@ -28,6 +30,8 @@ bounded by the reveal count (`openCallsLe_compiled`), and its errors are within 
 `SamplingDeploy.Code`'s functions (`Code.DrawLaw`, `Code.Refuses`, `Code.InteriorFixed`, `Code.DrawFixed`), each the
 frozen hypothesis at `deployOf F c` (`drawLaw_deployOf`, …, `Iff.rfl`), and `sessions_compiled` reads them.
 -/
+
+@[expose] public section
 
 namespace Claims.SamplingGeneric
 

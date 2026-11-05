@@ -1,5 +1,7 @@
-import Definitions.Claims.SamplingGeneric
-import Proofs.Flock.Claims.Witnesses.Sampling
+module
+
+public import Definitions.Claims.SamplingGeneric
+public import Proofs.Flock.Claims.Witnesses.Sampling
 
 /-!
 # Refutation witnesses: the generic sampled compiler's claims
@@ -26,6 +28,8 @@ The lock's `meets` witnesses of these claims are Flock's decoder bounds at its d
   `twoPart`), block `u`'s session at round `u`, under a commitment whose openings of `true` pass (`trueCm`). It meets
   `Compiled.Sessions` at every hash, its commitment binds, and the silent prover is accepted: `twoSessions_meets`.
 -/
+
+@[expose] public section
 
 namespace Claims.Witness.SamplingGeneric
 

@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.KS.CapChunk
-import Proofs.Flock.Claims.KS.PlainLevels
-import Proofs.Flock.Claims.KS.PlainStep
-import Proofs.Flock.Claims.Recursion.PlainK
-import Proofs.Flock.Claims.Recursion.CallsBridgeE
+module
+
+public import Proofs.Flock.Claims.KS.CapChunk
+public import Proofs.Flock.Claims.KS.PlainLevels
+public import Proofs.Flock.Claims.KS.PlainStep
+public import Proofs.Flock.Claims.Recursion.PlainK
+public import Proofs.Flock.Claims.Recursion.CallsBridgeE
 
 /-!
 # The cap an accepted plain rep absorbs, from the messages before its round
@@ -19,6 +21,8 @@ Merkle scheme), and custody makes those bytes `P`'s message `r · R + j + 1`, `R
 * `plain_capPrefix`: two accepted plain runs sharing the coins before `forkRound` absorb one cap there.
 * `plain_levelTie`: so two different rows they open at one level-`(ℓ + 1)` position tie a collision among their calls.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

@@ -1,5 +1,7 @@
-import Definitions.Accounting.Guarantees.TS
-import Proofs.Pouw.RelativeSecurity
+module
+
+public import Definitions.Accounting.Guarantees.TS
+public import Proofs.Pouw.RelativeSecurity
 
 /-!
 # (I8) from its pieces
@@ -11,6 +13,8 @@ import Proofs.Pouw.RelativeSecurity
 (not `Unsound`): the committed values satisfy every relation, the ideal game accepts (`Of`), they are right (`Pins`),
 and the fixed words follow (`RightFixed`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS
 

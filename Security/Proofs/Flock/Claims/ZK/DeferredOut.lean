@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.Server
-import Definitions.Claims.ZKOut
+module
+
+public import Proofs.Flock.Claims.ZK.Server
+public import Definitions.Claims.ZKOut
 
 /-!
 # The deferred server per outcome
@@ -17,6 +19,8 @@ outcome).
 * `simOutD`, `simOutD_out`: `leaky1` given the outcome.
 * `ZkServer.zkOut_deferred`: the deferred server per outcome.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

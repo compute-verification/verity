@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.SpecP
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.SpecP
 
 /-!
 # The public leaves `HmIn.parse` accepted, and the rows `HmIn.delta` keeps
@@ -12,6 +14,8 @@ import Proofs.Flock.Soundness.Discharge.Hidden.SpecP
   drops (every column but a public leaf's bits keeps its pairs, and every column without public input ports), so its
   level-0 entries are `HmOut.delta`'s in every kept row and zero in the others.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

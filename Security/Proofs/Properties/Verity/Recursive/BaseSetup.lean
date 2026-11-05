@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.DeployInputs
-import SampledProofs.OneStageZk
+module
+
+public import Proofs.Flock.Claims.DeployInputs
+public import SampledProofs.OneStageZk
 
 /-!
 # A step of `acc_of_accepts`: a V\* part's base setup, compiled and model
@@ -23,6 +25,8 @@ calls at its statement's reading `r` (`Readable.Read`): the hm96-sha512 rows che
 The compiled `checkProgram`, `checkComplete`, `checkCover` and `KnownRead.check` have no counterpart in the model's
 setup, so this needs none of them.
 -/
+
+@[expose] public section
 
 open Lean (Json)
 open Flock (V)

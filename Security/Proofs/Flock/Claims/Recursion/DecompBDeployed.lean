@@ -1,13 +1,15 @@
-import Proofs.Flock.Claims.Recursion.NonVacuousRows
-import Proofs.Flock.Claims.Recursion.VPiecesDeployed
-import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
-import Proofs.Flock.Claims.Recursion.CapLower
-import Proofs.Flock.Claims.Recursion.RestRead
-import Proofs.Flock.Claims.Recursion.RestLens
-import Proofs.Flock.Claims.Recursion.RestReadsAt
-import Proofs.Flock.Claims.Recursion.RestVerdictBases
-import Proofs.Flock.Claims.Recursion.VerdictRowEJoint
-import Proofs.Flock.Claims.Recursion.RowDAccept
+module
+
+public import Proofs.Flock.Claims.Recursion.NonVacuousRows
+public import Proofs.Flock.Claims.Recursion.VPiecesDeployed
+public import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
+public import Proofs.Flock.Claims.Recursion.CapLower
+public import Proofs.Flock.Claims.Recursion.RestRead
+public import Proofs.Flock.Claims.Recursion.RestLens
+public import Proofs.Flock.Claims.Recursion.RestReadsAt
+public import Proofs.Flock.Claims.Recursion.RestVerdictBases
+public import Proofs.Flock.Claims.Recursion.VerdictRowEJoint
+public import Proofs.Flock.Claims.Recursion.RowDAccept
 
 /-!
 # `RecKSDecompR` assembled from chain B's pieces, its open leaves named
@@ -44,6 +46,8 @@ positions `Rows.posAt`: `TargetDMerkle` proved (`targetDMerkle_PD`), the last me
 stated, `RoundLens` proved (`roundLens`), `SideSchR` proved (`sideSchR_sideAtR`) and `CopyTopR` from
 `OutBindR` and `SideCapR` (`capTop_of`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.DecompBR
 

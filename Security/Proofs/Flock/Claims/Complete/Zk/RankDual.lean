@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.Zk.MaskRank
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.MaskRank
 
 /-!
 # The rank bound's dual side
@@ -16,6 +18,8 @@ where some `μ` of support `S` survives (`card_deficient_le`).
   `E[min(1, |F|^|S| / |π_S U_Xs|^(|Ys| + 1))]`, the span `U_Xs` over the other coordinates.
 * `card_deficient_le`: the bound summed over the supports, one choice of `Xs` per support.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.MaskRank
 

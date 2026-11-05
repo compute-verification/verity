@@ -1,5 +1,7 @@
-import Proofs.Flock.SamplingGeneric.Split
-import Proofs.Flock.Claims.Sampling.KS
+module
+
+public import Proofs.Flock.SamplingGeneric.Split
+public import Proofs.Flock.Claims.Sampling.KS
 
 /-!
 # The sampled compiler's extraction: assembling and binding
@@ -21,6 +23,8 @@ With `KS_of_sessionKS` it gives `KSOf` (`ksOf`).
   (`Sessions.opens`, with the interior roots fixed by the first stage, `Sessions.interior`).
 * `ksOf`: **`KSOf`**, `KS_of_sessionKS` at `split`.
 -/
+
+@[expose] public section
 
 namespace Claims.SamplingGeneric
 

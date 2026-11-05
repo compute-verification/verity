@@ -1,9 +1,11 @@
-import Proofs.Flock.Claims.Witnesses.SamplingGeneric
-import Proofs.Flock.Claims.Witnesses.BindingMeets
-import Proofs.Flock.Claims.ZK.Compose
-import Proofs.Flock.Claims.ZKOut
-import Proofs.Flock.Claims.Sampling.Assembled
-import Proofs.Flock.Masked
+module
+
+public import Proofs.Flock.Claims.Witnesses.SamplingGeneric
+public import Proofs.Flock.Claims.Witnesses.BindingMeets
+public import Proofs.Flock.Claims.ZK.Compose
+public import Proofs.Flock.Claims.ZKOut
+public import Proofs.Flock.Claims.Sampling.Assembled
+public import Proofs.Flock.Masked
 
 /-!
 # Refutation witnesses: the generic sampled compiler's zero knowledge
@@ -33,6 +35,8 @@ field: `zkL`'s commitment opens nothing, so its sampling relation is empty. A no
 `witness` there, a member of C-Flock's relation (`Flock.Readable.relation`) at each statement the run admits, so a
 statement the deployed parser accepts and a witness its tables hold of, and the tree constructs none.
 -/
+
+@[expose] public section
 
 namespace Claims.Witness.SamplingGeneric
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Scope
-import Proofs.Flock.Claims.Complete.Replay.Trace
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.Scope
+public import Proofs.Flock.Claims.Complete.Replay.Trace
 
 /-!
 # Each table's honest trace at the deployed relation
@@ -16,6 +18,8 @@ a one-table trace of a witness of a one-table statement, and satisfies the block
 * `Case.traceR1CS`, `traceR1CS_goal`: each table's trace (`traces`) satisfies its block R1CS, at every number of
   tables (`TraceR1CS` at `traces`).
 -/
+
+@[expose] public section
 
 open Flock FlockDeploy
 

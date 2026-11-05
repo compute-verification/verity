@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.PartsVStar
-import Proofs.Flock.Claims.Recursion.OpensReads
-import Proofs.Properties.Verity.Recursive.Names
-import VStarRecursive
+module
+
+public import Proofs.Flock.Claims.Recursion.PartsVStar
+public import Proofs.Flock.Claims.Recursion.OpensReads
+public import Proofs.Properties.Verity.Recursive.Names
+public import VStarRecursive
 
 /-!
 # The compiled part's setup is the model's recursive setup
@@ -28,6 +30,8 @@ The inner session's META binding (`InnerHeld.bound`) is read by the setup only a
 at the dense shape the compiled component accepts (`shapeOf`: no sparse shape) the two readings of the inner circuit's
 META need not be compared.
 -/
+
+@[expose] public section
 
 namespace Verity.Recursive
 

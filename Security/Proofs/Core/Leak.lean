@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.Rewind
-import Proofs.Flock.Claims.ZK.Interact
-import Proofs.Flock.Claims.Recursion.Hybrid
+module
+
+public import Proofs.Flock.Claims.ZK.Rewind
+public import Proofs.Flock.Claims.ZK.Interact
+public import Proofs.Flock.Claims.Recursion.Hybrid
 
 /-!
 # The leak of a run released cut at a public position
@@ -10,6 +12,8 @@ A prover `P'` that releases `P`'s run cut at one of `|pos x|` public positions (
 uniformly, runs `P`'s and cuts its transcript there (`leakyAt`): an event of `P'`'s transcript is one at some cut of
 `P`'s, so the union bound over the positions gives `|pos x|` times the leaky simulator's probability.
 -/
+
+@[expose] public section
 
 namespace Claims
 

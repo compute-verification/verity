@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.Reference
+module
+
+public import Proofs.Flock.Claims.ZK.Reference
 
 /-!
 # A reference session's tape bounds its tables
@@ -14,6 +16,8 @@ reference session of the whole `--zk` scope needs a tape read per statement, whi
 type for every statement, the one `Claims.Flock.ZK` reads, does not give, and `Claims.ZKmalRx`'s statement-indexed
 tapes do.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal.RefSession
 
