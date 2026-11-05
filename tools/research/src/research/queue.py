@@ -574,8 +574,9 @@ LANDINGS = ("review",)
 GATE_PATH_RE = re.compile(r"[\w.-]+(?:/[\w.-]+)*\.py")
 #: an entry of `DriveFlags.lowrisk_excludes`: a directory from the repository's root ending in `/`, or a file name glob
 LOWRISK_EXCLUDE_RE = re.compile(r"(?:[\w.-]+/)+|[\w.*?\[\]-]+")
-#: drive.toml's `executor`: off, shadow (beside the after-landing run) or on (in its place)
-EXECUTOR_MODES = ("off", "shadow", "on")
+#: drive.toml's `executor` (off, shadow beside the after-landing run, or on in its place) and `verdict_carry` (off, shadow logged
+#: only, or on written)
+MODES = ("off", "shadow", "on")
 #: the keys a flag of drive's command line can set (`DriveFlags.override`), each as `--KEY` with `_` as `-`
 COMMAND_LINE = ("on", "marked_after", "regenerate_locks", "first", "after_landing_no_cache")
 
@@ -637,6 +638,10 @@ class DriveFlags:
     #: infra's enqueue command, the words of one argv run with no shell (`research.executor.QueueTransport`): it puts
     #: `--priority N --check after-landing:SHA` on the executor's queue; none, each tip "shadow" or "on" enqueues fails, told
     executor_enqueue: tuple[str, ...] = ()
+    #: a land verdict at an older head of a member's PR carries to its head when the commits since only merge trusted ones
+    #: (`research.carry`, `drive.Driver._carry_verdicts`): "off"; "shadow", drive logs what it would carry and writes nothing;
+    #: "on", it writes the land verdict at the head as `CI`
+    verdict_carry: str = "off"
 
     @classmethod
     def parse(cls, text: str, source: str = "drive.toml", strict: bool = False) -> "DriveFlags":
@@ -682,10 +687,11 @@ class DriveFlags:
             if type(doc["max_lean_checks"]) is not int or doc["max_lean_checks"] < 1:
                 raise bad("max_lean_checks", "a whole number, 1 or more")
             got["max_lean_checks"] = doc["max_lean_checks"]
-        if "executor" in doc:
-            if doc["executor"] not in EXECUTOR_MODES:
-                raise bad("executor", f"one of {', '.join(EXECUTOR_MODES)}")
-            got["executor"] = doc["executor"]
+        for k in ("executor", "verdict_carry"):
+            if k in doc:
+                if doc[k] not in MODES:
+                    raise bad(k, f"one of {', '.join(MODES)}")
+                got[k] = doc[k]
         if "executor_enqueue" in doc:
             v = doc["executor_enqueue"]
             if not (isinstance(v, list) and v and all(isinstance(x, str) and x for x in v)):
@@ -6220,7 +6226,7 @@ def main(argv: list[str]) -> int:
                    stale_keep=flags.stale_keep, after_landing_shards=flags.after_landing_shards,
                    lowrisk_lane=flags.lowrisk_lane, lowrisk_per_tick=flags.lowrisk_per_tick,
                    lowrisk_excludes=flags.lowrisk_excludes, executor=flags.executor,
-                   executor_enqueue=flags.executor_enqueue).tick(dry_run=a.dry_run)
+                   executor_enqueue=flags.executor_enqueue, verdict_carry=flags.verdict_carry).tick(dry_run=a.dry_run)
             return 0
         if a.pr is None or not a.reason:
             ap.error("eject needs a PR number and --reason")
