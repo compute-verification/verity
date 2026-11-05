@@ -700,21 +700,22 @@ variable (k : Verity.Registration.Composite)
 
 omit θ F c in
 /-- **(b), the logged coupling, at the projection**: at the constructions with the projection, the logged coupling
-holds at the session `A`, the property `P`, the parameters `θ` and the committed files `F` wherever, at each commitment
-and strategy, off its held-off events `BL` and `B`, the coin map's premise and the decoders' hold. -/
+holds at the session `A`, the parameters `θ`, the committed files `F` and the cut `P` wherever, at each commitment and
+strategy, off its held-off events `BL` and `B`, the coin map's premise and the decoders' hold. -/
 theorem loggedCoupling_withProject (rd : Readings) (K : Constructions V)
     (D : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →
       Decoders A.rounds A.Reg)
     (M : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
       CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP)
-    (A : Live) (P : Exchange → Prop) (θ : ByteArray) (F : Array ByteArray)
+    (A : Live) (θ : ByteArray) (F : Array ByteArray)
+    (P : (c : ByteArray) → Strategy (V.game θ F c) → Exchange → Prop)
     (BL : (c : ByteArray) → Strategy (V.game θ F c) → LinkHold A.mP)
     (B : (c : ByteArray) → Strategy (V.game θ F c) → RoundHold)
     (hC : ∀ c σ, Couples V θ F c A (rd A θ F c) σ (D A θ F c σ) (M A θ F c σ) (BL c σ) (B c σ))
-    (hD : ∀ c σ, Decodes V θ F c k P A (rd A θ F c) σ (D A θ F c σ) (M A θ F c σ) (BL c σ) (B c σ)) :
-    LoggedCoupling V k rd (K.withProject V rd D M) A P θ F := fun c σ => by
+    (hD : ∀ c σ, Decodes V θ F c k (P c σ) A (rd A θ F c) σ (D A θ F c σ) (M A θ F c σ) (BL c σ) (B c σ)) :
+    LoggedCoupling V k rd (K.withProject V rd D M) A θ F P := fun c σ => by
   have h := (hC c σ fun x => V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) ∧
-      NoMiss V θ F c (rd A θ F c) σ x ∧ P (CoinTape.run (V.game θ F c) σ x)).trans
+      NoMiss V θ F c (rd A θ F c) σ x ∧ P c σ (CoinTape.run (V.game θ F c) σ x)).trans
     (add_le_add (jointOff_le_prob V θ F c A (rd A θ F c) σ (D A θ F c σ) (M A θ F c σ) (BL c σ) (B c σ) _
       (FlockSoundness.Discharge.ZkHidden.LiveAcceptsZKP A.I A.own) (hD c σ)) le_rfl)
   rw [← prob_projectOf V θ F c A (rd A θ F c) σ (D A θ F c σ) (M A θ F c σ)
@@ -724,19 +725,23 @@ theorem loggedCoupling_withProject (rd : Readings) (K : Constructions V)
 omit θ F c in
 /-- **The coupling at the projection**: at the constructions with the projection and the messages' finders at the
 readings `rd`, `CouplingTarget` holds at the session `A` wherever the binding's bound holds at one property `P` of the
-play and, at each commitment and strategy off its held-off events `BL` and `B`, the coin map's premise and the
-decoders' hold at `P`. -/
+play, the digest's at one property `Q` at each commitment and strategy, and, at each commitment and strategy off its
+held-off events `BL` and `B`, the coin map's premise and the decoders' hold at the two. -/
 theorem couplingTarget_withProject (rd : Readings) (K : Constructions V)
     (D : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →
       Decoders A.rounds A.Reg)
     (M : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
       CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP)
     (A : Live) (P : Exchange → Prop) (θ : ByteArray) (F : Array ByteArray)
+    (Q : (c : ByteArray) → Strategy (V.game θ F c) → Exchange → Prop)
     (BL : (c : ByteArray) → Strategy (V.game θ F c) → LinkHold A.mP)
     (B : (c : ByteArray) → Strategy (V.game θ F c) → RoundHold) (ha : LoggedBound V k (K.withProject V rd D M) P θ F)
+    (hq : DigestBound V k (K.withProject V rd D M) A θ F Q)
     (hC : ∀ c σ, Couples V θ F c A (rd A θ F c) σ (D A θ F c σ) (M A θ F c σ) (BL c σ) (B c σ))
-    (hD : ∀ c σ, Decodes V θ F c k P A (rd A θ F c) σ (D A θ F c σ) (M A θ F c σ) (BL c σ) (B c σ)) :
+    (hD : ∀ c σ, Decodes V θ F c k (fun o => P o ∧ Q c σ o) A (rd A θ F c) σ (D A θ F c σ) (M A θ F c σ) (BL c σ)
+      (B c σ)) :
     CouplingTarget V k ((K.withProject V rd D M).withMessages rd) A θ F :=
-  couplingTarget_of_logged V k rd _ A P θ F ha (loggedCoupling_withProject V k rd K D M A P θ F BL B hC hD)
+  couplingTarget_of_logged V k rd _ A P θ F Q ha hq
+    (loggedCoupling_withProject V k rd K D M A θ F (fun c σ o => P o ∧ Q c σ o) BL B hC hD)
 
 end Verity.Sampled
