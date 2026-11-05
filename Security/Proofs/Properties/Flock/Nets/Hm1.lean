@@ -38,50 +38,37 @@ def hm1 : Cert :=
   61864, 62644, 63424, 64204, 64984, 65762, 66536, 67315, 68093, 68870, 69650, 70430, 71210, 71988, 72768, 73547,
   74324, 75103, 75882, 76661, 77441, 78219, 78999, 79777, 80555, 81334, 82113, 82891, 83671], 84474⟩
 
--- Each chunk runs the builder in the kernel: some 10 s, over the default budget.
-set_option maxHeartbeats 2000000 in
+-- Each chunk runs the builder in the kernel, past the default heartbeat budget.
+set_option maxHeartbeats 2000000
+
 theorem hm1_s0 : schedOk (hm1Msg) hm1 0 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm1_s1 : schedOk (hm1Msg) hm1 1 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm1_s2 : schedOk (hm1Msg) hm1 2 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm1_s3 : schedOk (hm1Msg) hm1 3 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm1_r0 : roundOk (hm1Cv) (hm1Msg) hm1 0 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm1_r1 : roundOk (hm1Cv) (hm1Msg) hm1 1 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm1_r2 : roundOk (hm1Cv) (hm1Msg) hm1 2 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm1_r3 : roundOk (hm1Cv) (hm1Msg) hm1 3 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm1_r4 : roundOk (hm1Cv) (hm1Msg) hm1 4 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm1_r5 : roundOk (hm1Cv) (hm1Msg) hm1 5 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm1_r6 : roundOk (hm1Cv) (hm1Msg) hm1 6 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm1_r7 : roundOk (hm1Cv) (hm1Msg) hm1 7 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm1_r8 : roundOk (hm1Cv) (hm1Msg) hm1 8 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm1_r9 : roundOk (hm1Cv) (hm1Msg) hm1 9 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm1_f : ffOk (hm1Cv) hm1 = true := by decide +kernel
 
 theorem seg_hm1 : Seg 128 (compress (hm1Cv) (hm1Msg)) 3072 (ffOut (hm1Cv) hm1) 84474 :=

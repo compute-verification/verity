@@ -38,50 +38,37 @@ def sha0 : Cert :=
   62623, 63400, 64180, 64960, 65740, 66520, 67298, 68072, 68851, 69629, 70406, 71186, 71966, 72746, 73524, 74304,
   75083, 75860, 76639, 77418, 78197, 78977, 79755, 80535, 81313, 82091, 82870, 83649, 84427, 85207], 86010⟩
 
--- Each chunk runs the builder in the kernel: some 10 s, over the default budget.
-set_option maxHeartbeats 2000000 in
+-- Each chunk runs the builder in the kernel, past the default heartbeat budget.
+set_option maxHeartbeats 2000000
+
 theorem sha0_s0 : schedOk (sha0Msg) sha0 0 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha0_s1 : schedOk (sha0Msg) sha0 1 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha0_s2 : schedOk (sha0Msg) sha0 2 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha0_s3 : schedOk (sha0Msg) sha0 3 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha0_r0 : roundOk (sha0Cv) (sha0Msg) sha0 0 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha0_r1 : roundOk (sha0Cv) (sha0Msg) sha0 1 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha0_r2 : roundOk (sha0Cv) (sha0Msg) sha0 2 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha0_r3 : roundOk (sha0Cv) (sha0Msg) sha0 3 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha0_r4 : roundOk (sha0Cv) (sha0Msg) sha0 4 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha0_r5 : roundOk (sha0Cv) (sha0Msg) sha0 5 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha0_r6 : roundOk (sha0Cv) (sha0Msg) sha0 6 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha0_r7 : roundOk (sha0Cv) (sha0Msg) sha0 7 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha0_r8 : roundOk (sha0Cv) (sha0Msg) sha0 8 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha0_r9 : roundOk (sha0Cv) (sha0Msg) sha0 9 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha0_f : ffOk (sha0Cv) sha0 = true := by decide +kernel
 
 theorem seg_sha0 : Seg 128 (compress (sha0Cv) (sha0Msg)) 4608 (ffOut (sha0Cv) sha0) 86010 :=

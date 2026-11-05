@@ -41,50 +41,37 @@ def sha2 : Cert :=
   237108, 237887, 238664, 239443, 240222, 241001, 241781, 242559, 243339, 244117, 244895, 245674, 246453, 247231,
   248011], 248814⟩
 
--- Each chunk runs the builder in the kernel: some 10 s, over the default budget.
-set_option maxHeartbeats 2000000 in
+-- Each chunk runs the builder in the kernel, past the default heartbeat budget.
+set_option maxHeartbeats 2000000
+
 theorem sha2_s0 : schedOk (sha2Msg) sha2 0 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha2_s1 : schedOk (sha2Msg) sha2 1 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha2_s2 : schedOk (sha2Msg) sha2 2 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha2_s3 : schedOk (sha2Msg) sha2 3 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha2_r0 : roundOk (sha2Cv) (sha2Msg) sha2 0 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha2_r1 : roundOk (sha2Cv) (sha2Msg) sha2 1 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha2_r2 : roundOk (sha2Cv) (sha2Msg) sha2 2 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha2_r3 : roundOk (sha2Cv) (sha2Msg) sha2 3 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha2_r4 : roundOk (sha2Cv) (sha2Msg) sha2 4 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha2_r5 : roundOk (sha2Cv) (sha2Msg) sha2 5 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha2_r6 : roundOk (sha2Cv) (sha2Msg) sha2 6 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha2_r7 : roundOk (sha2Cv) (sha2Msg) sha2 7 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha2_r8 : roundOk (sha2Cv) (sha2Msg) sha2 8 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha2_r9 : roundOk (sha2Cv) (sha2Msg) sha2 9 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha2_f : ffOk (sha2Cv) sha2 = true := by decide +kernel
 
 theorem seg_sha2 : Seg 128 (compress (sha2Cv) (sha2Msg)) 167412 (ffOut (sha2Cv) sha2) 248814 :=

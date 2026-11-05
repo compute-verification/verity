@@ -41,50 +41,37 @@ def hm2 : Cert :=
   148145, 148923, 149700, 150480, 151260, 152040, 152818, 153598, 154377, 155154, 155933, 156712, 157491, 158271,
   159049, 159829, 160607, 161385, 162164, 162943, 163721, 164501], 165291⟩
 
--- Each chunk runs the builder in the kernel: some 10 s, over the default budget.
-set_option maxHeartbeats 2000000 in
+-- Each chunk runs the builder in the kernel, past the default heartbeat budget.
+set_option maxHeartbeats 2000000
+
 theorem hm2_s0 : schedOk (hm2Msg) hm2 0 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm2_s1 : schedOk (hm2Msg) hm2 1 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm2_s2 : schedOk (hm2Msg) hm2 2 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm2_s3 : schedOk (hm2Msg) hm2 3 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm2_r0 : roundOk (hm2Cv) (hm2Msg) hm2 0 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm2_r1 : roundOk (hm2Cv) (hm2Msg) hm2 1 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm2_r2 : roundOk (hm2Cv) (hm2Msg) hm2 2 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm2_r3 : roundOk (hm2Cv) (hm2Msg) hm2 3 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm2_r4 : roundOk (hm2Cv) (hm2Msg) hm2 4 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm2_r5 : roundOk (hm2Cv) (hm2Msg) hm2 5 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm2_r6 : roundOk (hm2Cv) (hm2Msg) hm2 6 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm2_r7 : roundOk (hm2Cv) (hm2Msg) hm2 7 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm2_r8 : roundOk (hm2Cv) (hm2Msg) hm2 8 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm2_r9 : roundOk (hm2Cv) (hm2Msg) hm2 9 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm2_f : ffOk (hm2Cv) hm2 = true := by decide +kernel
 
 theorem seg_hm2 : Seg 128 (compress (hm2Cv) (hm2Msg)) 84474 (ffOut (hm2Cv) hm2) 165291 :=

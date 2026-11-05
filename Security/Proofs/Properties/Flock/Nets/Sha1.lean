@@ -40,50 +40,37 @@ def sha1 : Cert :=
   149474, 150253, 151031, 151808, 152588, 153368, 154148, 154926, 155706, 156485, 157262, 158041, 158820, 159599,
   160379, 161157, 161937, 162715, 163493, 164272, 165051, 165829, 166609], 167412⟩
 
--- Each chunk runs the builder in the kernel: some 10 s, over the default budget.
-set_option maxHeartbeats 2000000 in
+-- Each chunk runs the builder in the kernel, past the default heartbeat budget.
+set_option maxHeartbeats 2000000
+
 theorem sha1_s0 : schedOk (sha1Msg) sha1 0 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha1_s1 : schedOk (sha1Msg) sha1 1 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha1_s2 : schedOk (sha1Msg) sha1 2 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha1_s3 : schedOk (sha1Msg) sha1 3 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha1_r0 : roundOk (sha1Cv) (sha1Msg) sha1 0 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha1_r1 : roundOk (sha1Cv) (sha1Msg) sha1 1 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha1_r2 : roundOk (sha1Cv) (sha1Msg) sha1 2 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha1_r3 : roundOk (sha1Cv) (sha1Msg) sha1 3 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha1_r4 : roundOk (sha1Cv) (sha1Msg) sha1 4 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha1_r5 : roundOk (sha1Cv) (sha1Msg) sha1 5 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha1_r6 : roundOk (sha1Cv) (sha1Msg) sha1 6 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha1_r7 : roundOk (sha1Cv) (sha1Msg) sha1 7 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha1_r8 : roundOk (sha1Cv) (sha1Msg) sha1 8 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha1_r9 : roundOk (sha1Cv) (sha1Msg) sha1 9 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem sha1_f : ffOk (sha1Cv) sha1 = true := by decide +kernel
 
 theorem seg_sha1 : Seg 128 (compress (sha1Cv) (sha1Msg)) 86010 (ffOut (sha1Cv) sha1) 167412 :=

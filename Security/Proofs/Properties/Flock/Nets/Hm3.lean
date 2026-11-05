@@ -43,50 +43,37 @@ def hm3 : Cert :=
   232856, 233635, 234412, 235191, 235970, 236749, 237529, 238307, 239087, 239865, 240643, 241422, 242201, 242979,
   243759], 244562⟩
 
--- Each chunk runs the builder in the kernel: some 10 s, over the default budget.
-set_option maxHeartbeats 2000000 in
+-- Each chunk runs the builder in the kernel, past the default heartbeat budget.
+set_option maxHeartbeats 2000000
+
 theorem hm3_s0 : schedOk (hm3Msg) hm3 0 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm3_s1 : schedOk (hm3Msg) hm3 1 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm3_s2 : schedOk (hm3Msg) hm3 2 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm3_s3 : schedOk (hm3Msg) hm3 3 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm3_r0 : roundOk (hm3Cv) (hm3Msg) hm3 0 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm3_r1 : roundOk (hm3Cv) (hm3Msg) hm3 1 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm3_r2 : roundOk (hm3Cv) (hm3Msg) hm3 2 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm3_r3 : roundOk (hm3Cv) (hm3Msg) hm3 3 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm3_r4 : roundOk (hm3Cv) (hm3Msg) hm3 4 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm3_r5 : roundOk (hm3Cv) (hm3Msg) hm3 5 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm3_r6 : roundOk (hm3Cv) (hm3Msg) hm3 6 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm3_r7 : roundOk (hm3Cv) (hm3Msg) hm3 7 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm3_r8 : roundOk (hm3Cv) (hm3Msg) hm3 8 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm3_r9 : roundOk (hm3Cv) (hm3Msg) hm3 9 = true := by decide +kernel
 
-set_option maxHeartbeats 2000000 in
 theorem hm3_f : ffOk (hm3Cv) hm3 = true := by decide +kernel
 
 theorem seg_hm3 : Seg 128 (compress (hm3Cv) (hm3Msg)) 165291 (ffOut (hm3Cv) hm3) 244562 :=
