@@ -5794,7 +5794,7 @@ def main(argv: list[str]) -> int:
         if app:
             try:
                 print(f"research queue open: {link_issue(a.issue, url, app)}")
-            except QueueError as e:                         # the PR is open: only an unknown key fails `open`
+            except QueueError as e:                         # the PR is open: a link that fails doesn't fail `open`
                 print(f"research queue: {e}", file=sys.stderr)
         return 0
     if a.command == "edit":
