@@ -69,6 +69,6 @@ theorem check_indices {program : ByteArray} {query : Json} {pubB : ByteArray}
           | some w => rw [hw] at h; cases h
           | none =>
             obtain ⟨ns, hns, rfl⟩ := why_none hw
-            exact ⟨P, strata, ns, hd, hP, hS, hns, hH, hI⟩
+            exact ⟨P, strata, ns, hd, rfl, hS, hns, rfl, hI⟩
 
 end Properties.SampledProofs.FilePart
