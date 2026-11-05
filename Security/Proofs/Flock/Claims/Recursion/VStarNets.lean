@@ -90,6 +90,7 @@ theorem emitNet_run (name : String) (l : Laid) (s : String) :
   simp only [netLs, rowsLs, joinNl_cons, String.append_assoc]
   rfl
 
+set_option maxHeartbeats 1000000 in
 theorem emitSections_run (u : VStar.UnitC) (l : Laid) (s : String) :
     (VStar.emitSections (m := StateM String) (fun x => modify (· ++ x)) u l).run s =
       (PUnit.unit, s ++ joinNl (secLs "unit" u.name l ++ secLs VStar.SHA_NET VStar.SHA_NET (shaLaid ()) ++
