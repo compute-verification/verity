@@ -63,6 +63,7 @@ protocols = [
     "Security/Proofs/Properties/Nci{,.lean}",
     "verity/core/primitives/identity",
     "Security/{Properties,Proofs/Properties}/Identity{,.lean}",
+    "integrations/vllm/tests/pipeline/test_registration_log.py",
 ]
 team = [
     "infra",

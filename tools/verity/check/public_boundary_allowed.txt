@@ -107,7 +107,6 @@ integrations/vllm/tests/pipeline/test_advice_windows.py -> verity/core/protocols
 integrations/vllm/tests/pipeline/test_circuit_db.py -> tools/research/src/research/store/__init__.py
 integrations/vllm/tests/pipeline/test_circuit_db.py -> tools/research/src/research/store/local.py
 integrations/vllm/tests/pipeline/test_memory_map.py -> verity/core/protocols/remote_bandwidth/memory_map.py
-integrations/vllm/tests/pipeline/test_registration_log.py -> verity/core/protocols/network/nci/lean/scripts/nci_reference.py
 integrations/vllm/tests/pipeline/test_research_tools.py -> tools/research/src/research/store/tool.py
 integrations/vllm/tests/pipeline/test_serve_advice.py -> verity/core/protocols/certifier/__init__.py
 integrations/vllm/tests/pipeline/test_serve_openai.py -> verity/core/protocols/certifier/__init__.py
