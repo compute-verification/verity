@@ -1,7 +1,8 @@
 // H1's registered values (`pouw_h1_registered.commit`, core's `registered.Registered.commit` under ``hm96-sha512/row/v2``) as
 // functions that compile for the host (g++, `registered_rows_host.cpp`, the twin the CPU tests hold to the Python reference) and
 // the device (nvcc, `registered_rows.cu`). One thread computes one row's leaf, one pad or one tree node; SHA-512, ChaCha20, the
-// hm96 commit string and the frame-v3-sha512 messages are `row_table.cuh`'s.
+// hm96 commit string and the frame-v3-sha512 leaf, pad and node come through `row_table.cuh` (the last two are the GPU's one
+// row commitment, `row_commit.cuh`).
 //
 // Row j of a value of W u16 words is its 2 W bytes as they sit in memory (the words little-endian). Its leaf:
 //   x    = SHA-512(P(16 W) || row)                                   P = "verity/sha512-row/v2\0" || u64be n_bits, one block
@@ -100,19 +101,19 @@ struct Pub {
   uint64_t first;   // the first salt's position
 };
 static_assert(sizeof(Pub) == 8 * PUB_WORDS + 16, "Pub is 42 words");
-static_assert(8 * PUB_WORDS + 8 + 4 + 17 <= 8 * FRAME_WORDS, "a Frame holds the longest salt message and its padding");
+static_assert((8 * PUB_WORDS + 8 + 4 + 17 + 127) / 128 * 128 <= 8 * PUB_WORDS + 64,
+              "counter_salt's message buffer holds the longest salt message and its padding");
 
 // Position ``pos``'s salt, SHA-512(head || u64be pos || c) for c = 0, 1, 2 as a ``width``-byte big-endian counter, into
 // ``out`` as its 192 bytes.
 HD void counter_salt(const Pub& p, uint64_t pos, int width, uint64_t out[24]) {
   for (int c = 0; c < 3; ++c) {
-    Frame f;
-    for (int i = 0; i < FRAME_WORDS; ++i) f.w[i] = i < PUB_WORDS ? p.w[i] : 0;
-    f.p = p.len;
-    frame_be(f, pos, 8);
-    frame_be(f, (uint64_t)c, width);
+    uint8_t m[8 * PUB_WORDS + 64] = {};  // the head, pos and c, with room for their padding
+    for (uint32_t i = 0; i < p.len; ++i) m[i] = (uint8_t)(p.w[i >> 3] >> (56 - 8 * (i & 7)));
+    rc::be_put(m + p.len, pos, 8);
+    rc::be_put(m + p.len + 8, (uint64_t)c, width);
     uint64_t h[8];
-    frame_hash(f, h);
+    rc::digest_padded(m, (int)p.len + 8 + width, h);
     for (int i = 0; i < 8; ++i) out[8 * c + i] = bswap64(h[i]);
   }
 }

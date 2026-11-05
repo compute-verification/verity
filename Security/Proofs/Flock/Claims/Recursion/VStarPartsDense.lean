@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.VStarParts
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarParts
 
 /-!
 # V*'s parts at the dense shape
@@ -21,6 +23,8 @@ statements showing the run (`Staged`), the parts' checks and calls the inner ver
 setup evaluates (`Decomp`, `LogDecompPub`, `PubReg`), and each inner round before the last public, fixed or held by some part (`HeldPub`), V*'s parts meet `VStarParts` at the dense shape, which
 `codeFacts_of_parts` and `RecDeploy.ksA_deployed_parts` read.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion.VStar
 

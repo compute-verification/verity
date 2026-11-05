@@ -1,10 +1,14 @@
-import NetworkCertifier.Run
+module
+
+public import NetworkCertifier.Run
 
 /-!
 # The certifier program: acceptance as it bears on ingress
 
 The executable form of `StatusComplete` from `Security/Definitions/NetworkCertifier/Ingress.lean`, in `NetworkCertifier`.
 -/
+
+@[expose] public section
 
 namespace NetworkCertifier
 

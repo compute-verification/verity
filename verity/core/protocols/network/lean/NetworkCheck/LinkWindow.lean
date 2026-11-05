@@ -1,9 +1,11 @@
-import NetworkCheck.Check
-import Lms.Verify
-import Flock.Hm96
-import Flock.Canon
-import Flock.FV3
-import Identity.Tagged
+module
+
+public import NetworkCheck.Check
+public import Lms.Verify
+public import Flock.Hm96
+public import Flock.Canon
+public import Flock.FV3
+public import Identity.Tagged
 
 /-!
 # N2's execution phase verdict of record
@@ -24,10 +26,10 @@ the proof as the verifier receives it and the link's public fields, and nothing 
   link, their end (egress first) and the window (`certified`);
 * the window's declared sync is one of Σ_sync.
 
-A warden link (`Kind.warden`, `service.WardenProfile`) is the plain proof block under the active warden's records: both
-ends' grids are the warden's one grid, with no profile, and both carry the warden's parameters digest (`gridBytes`) in
-place of a certifier's; the warden runs no shaper clock, so a window declares no sync and nothing is read of the syncs
-(`synced`). Its outputs are a plain link's.
+A network certifier link (`Kind.warden`, `service.WardenProfile`) is the plain proof block under the active network
+certifier's records: both ends' grids are the network certifier's one grid, with no profile, and both carry the network
+certifier's parameters digest (`gridBytes`) in place of a certifier's; the active network certifier runs no shaper
+clock, so a window declares no sync and nothing is read of the syncs (`synced`). Its outputs are a plain link's.
 
 Its public outputs are `verdict` and the proved `deadline` bit, and `digest` binds them to the registration, the
 sessions and the accept bit (`verdictDigest`). A link is plain, served or a warden's (`service.OF_RECORD`); a case of
@@ -41,6 +43,10 @@ verify it with its one LMS check (`Check.Certificate.signs`). Code: it imports o
 (`Flock.Hash`, `Flock.Bytes`, `Flock.Canon`, `Flock.Hm96`, `Flock.FV3`), the identity hash, the LMS port and v4's
 certificate and its encodings (`NetworkCheck.Check`).
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace NetworkCheck.LinkWindow
 
@@ -246,7 +252,8 @@ def manifestSet (c : Case) : NetworkCheck.SyncSet :=
   ⟨c.deltas.map Int.ofNat, c.rhos.map fun (n, d) => ((n / Nat.gcd n d : Nat), d / Nat.gcd n d)⟩
 
 /-- An end's grid as its head encodes it (`head_check.grid_bytes`): T, r, B and τ_b as u32 big-endian, then the grid's
-parameters digest, which binds Σ_sync on egress; on a warden link, both ends' the warden's (`LinkWindows.grid`). -/
+parameters digest, which binds Σ_sync on egress; on a network certifier link, both ends' the network certifier's
+(`LinkWindows.grid`). -/
 def gridBytes (c : Case) (d : Nat) : V ByteArray := do
   let e := if d = 0 then c.egress else c.ingress
   let g := e.grid
@@ -387,8 +394,8 @@ def certified (c : Case) : Bool :=
     | some x => x.link == c.link && x.direction.code == d && x.window == c.window && x.signs c.lms c.key c.session
     | none => false
 
-/-- The window's declared sync is one of Σ_sync: its δ one of the deltas and its ρ one of the rhos. A warden link
-declares none (the warden runs no shaper clock), so nothing is read of the syncs there. -/
+/-- The window's declared sync is one of Σ_sync: its δ one of the deltas and its ρ one of the rhos. A network certifier
+link declares none (the active network certifier runs no shaper clock), so nothing is read of the syncs there. -/
 def synced (c : Case) : Bool :=
   match c.kind with
   | .warden _ => true

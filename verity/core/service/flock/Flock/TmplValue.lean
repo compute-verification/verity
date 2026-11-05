@@ -21,7 +21,11 @@ clause too, since a row may read a column nothing writes. The proof has two halv
 The root is not a Definition copy like the others: its input rows are the unit's inputs and its last column the
 constant, so the statement is about the copies under its calls.
 -/
-import Flock.TmplApart
+module
+
+public import Flock.TmplApart
+
+@[expose] public section
 
 namespace Flock.Tmpl
 

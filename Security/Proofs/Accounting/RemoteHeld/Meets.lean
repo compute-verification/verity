@@ -1,5 +1,7 @@
-import Proofs.Accounting.RemoteHeld
-import Mathlib.Tactic.NormNum.OfScientific
+module
+
+public import Proofs.Accounting.RemoteHeld
+public import Mathlib.Tactic.NormNum.OfScientific
 
 /-!
 # The premises of `Held` meet on a node that uses every route
@@ -16,6 +18,8 @@ bare-rate form, which over one-tick intervals allowed no rebuild, disk read or l
 
 `w2_meets` and `w2_meets_held` are W2's instance: 8 × Qwen2.5-32B on one node, at the ledger's nanosecond tick.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Remote.Meets
 

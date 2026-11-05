@@ -1,6 +1,8 @@
-import Definitions.Nci.Assumptions.Activations
-import Definitions.Nci.Assumptions
-import Definitions.Nci.Dark
+module
+
+public import Definitions.Nci.Assumptions.Activations
+public import Definitions.Nci.Assumptions
+public import Definitions.Nci.Dark
 
 /-!
 # NCI's activations bound over all of training ([ACTIVATIONS-BOUND])
@@ -23,6 +25,8 @@ computes, with no term for the dark gates: a partial sum added outside the decla
 off the books, enters it as an input, novel by `ThetaRegistered`, and does not make an activation whole in a piece.
 `ActivationsTrainingOn` is the training form, with the counted multiplications off the books as dark gates.
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 

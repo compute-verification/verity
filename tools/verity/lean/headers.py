@@ -1,5 +1,6 @@
 """A Lean file's import header, read as Lean 4.34 reads it: the one reading for every tool that needs a file's imports (the
-per-module cache keys, `module_keys.py`, and the task graph's `lean-module` family). Stdlib only, loaded by path.
+per-module cache keys, `module_keys.py`, and the task graph's `lean-module` family) or rewrites them (the codemod,
+`modules.py`, at `starts`; the merge driver; the lift). Stdlib only, loaded by path.
 
 The header is `module`, then `prelude`, each optional and in that order, then imports, each `[public] [meta] import [all] M`
 with its words in that order. Spaces, line breaks and comments (`--` to the end of the line, nested `/- -/`) may sit between
@@ -82,7 +83,19 @@ def _token(src: str, i: int) -> tuple[str, int]:
 
 def header(src: str) -> Header | None:
     """``src``'s header, or None when it is cut off: a comment left open, or an import without a module's name (`NAME`)."""
-    flags, i, end = {}, 0, 0
+    r = _read(src)
+    return None if r is None else r[0]
+
+
+def starts(src: str) -> tuple[int, ...] | None:
+    """Where each import of ``src``'s header starts (its first word: `public`, `meta` or `import`), in `header`'s order, or
+    None when the header is cut off: where a tool that rewrites a header (`modules.py`, the codemod) edits it."""
+    r = _read(src)
+    return None if r is None else r[1]
+
+
+def _read(src: str) -> tuple[Header, tuple[int, ...]] | None:
+    flags, i, end, at = {}, 0, 0, []
     for word in ("module", "prelude"):
         if (k := skip(src, i)) < 0:
             return None
@@ -102,7 +115,7 @@ def header(src: str) -> Header | None:
                 if (k := skip(src, j)) < 0:
                     return None
         if "import" not in words:
-            return Header(flags["module"], flags["prelude"], tuple(out), end)
+            return Header(flags["module"], flags["prelude"], tuple(out), end), tuple(at)
         t, j = _token(src, k)
         if every := t == "all":
             if (k := skip(src, j)) < 0:
@@ -111,6 +124,7 @@ def header(src: str) -> Header | None:
         if t in WORDS or not NAME.fullmatch(t):
             return None
         out.append(Import(name(t), "public" in words, "meta" in words, every))
+        at.append(start)
         i = end = j
 
 

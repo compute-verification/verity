@@ -1,6 +1,8 @@
-import Definitions.Nci.Support
-import Definitions.Nci.Threads
-import Mathlib.Analysis.SpecialFunctions.Log.Base
+module
+
+public import Definitions.Nci.Support
+public import Definitions.Nci.Threads
+public import Mathlib.Analysis.SpecialFunctions.Log.Base
 
 /-!
 # NCI's reads counted by information: the vocabulary
@@ -17,6 +19,8 @@ the runs the committed baseline allows, whatever their width.
 * `Threading.ThreadedInfo θv Γ S d e`: `(d, e)`-threaded over the subcircuits small by information. Like `Threaded`, it
   is a condition on wiring, over more subcircuits.
 -/
+
+@[expose] public section
 
 namespace Nci
 

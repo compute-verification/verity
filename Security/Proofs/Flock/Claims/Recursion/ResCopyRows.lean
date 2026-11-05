@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.ResLowerDeployed
-import Proofs.Flock.Claims.Recursion.FinalPiece
+module
+
+public import Proofs.Flock.Claims.Recursion.ResLowerDeployed
+public import Proofs.Flock.Claims.Recursion.FinalPiece
 
 /-!
 # A residual copy's row ports read its committed rows
@@ -17,6 +19,8 @@ row at instance `n` (`rowHidden`'s forms, read off the witness), which is the ro
 * `copy_rowElems`: the copy's row port elements are the committed row's, and row port `i` is named for the verifier's
   port `P[i]` (`checkPart_ok`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.ResLower
 

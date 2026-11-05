@@ -250,6 +250,44 @@ def test_what_a_body_build_registers_leaves_every_record_counting(tmp_path):
     assert out["values"] == _fresh(root)["values"] and out["values"]["SynLate_v1"] == [0x0105 - 3]
 
 
+#: the registered roots the catalog starts from, two, each of a module of its own
+TWO_REGISTERED = """def registered():
+    from verity.ml.circuits.defs import bind
+    from syn import idle, xdef
+    return [bind(idle.SynIdle), bind(xdef.SynX)]
+
+
+"""
+
+
+def test_the_registered_roots_are_runs_in_their_order_each_a_record_of_its_own():
+    """`units.registered_entries`: at most `units.REGISTERED_RECORDS` runs of the registered roots, in their order, each keyed
+    and named apart; one when there are none."""
+    from circuit_check import units as UN
+
+    roots = [f"r{i}" for i in range(3 * UN.REGISTERED_RECORDS - 1)]
+    es = UN.registered_entries(roots)
+    assert [r for e in es for r in e.roots] == roots and len(es) == UN.REGISTERED_RECORDS
+    assert len({e.name for e in es}) == len({json.dumps(e.key, sort_keys=True) for e in es}) == len(es)
+    assert all(e.units == UN.REGISTERED for e in es)
+    assert [(e.name, e.roots) for e in UN.registered_entries([])] == [("<registered>:0", [])]
+
+
+def test_an_edit_of_a_registered_roots_module_rebuilds_only_the_record_that_holds_it(tmp_path):
+    """Two registered roots take a record each (`units.registered_entries`): an edit of SynX's module rebuilds SynX's record
+    alone, SynIdle's counts, and the run gives the verdicts a full build gives."""
+    root = _tree(tmp_path / "t")
+    _edit(root, "syn/catalog.py", "BINDINGS = [", TWO_REGISTERED + "BINDINGS = [")
+    first = _run(root)
+    assert first["stats"]["units"] == {"stored": 4}
+    assert {"SynIdle_v1", "SynX_v1", "SynXor_v1"} <= set(first["values"])
+    _edit(root, "syn/xdef.py", "B.call(SynXor, a, b)", "B.call(SynXor, b, a)")
+    out = _run(root)
+    assert out["stats"]["units"]["rebuilt"] == ["<registered>:1"], out["stats"]["units"]
+    assert out["stats"]["units"]["reused"] == 3 and out["stats"]["units"]["stored"] == 1
+    assert out["values"] == _fresh(root)["values"]
+
+
 def test_a_binding_that_makes_no_root_is_held_by_every_record(tmp_path):
     """SynKn's body reads `syn.knob.N`, which a binding that makes no root sets from `syn.ksize`, a module SynKn's binding never
     reads: every record holds that binding, so an edit of `syn.ksize` misses them all, the run builds the whole catalog, and
@@ -450,7 +488,8 @@ def test_records_only_stores_every_record_and_a_forked_run_from_a_copy_of_them_b
     _bindings(root, *BINDINGS)
     first = _records_only(root)
     assert first["reused"] == 0 and first["stored"] == len(first["rebuilt"]) == 5 and first["scratch_bytes"] > 0, first
-    assert len(_records(root)) == len(list((root / "cache").glob("*/*/*.json"))) == 5     # no target's entry, no task list
+    # the records and the catalog's roots record (`units.store_roots`): no target's entry, no task list
+    assert len(_records(root)) == len(list((root / "cache").glob("*/*/*.json"))) == 6
     assert first["bytes"] == sum(p.stat().st_size for p in _records(root))
     assert _records_only(root) == {"reused": 5, "rebuilt": [], "scratch_bytes": 0, "stored": 0, "bytes": first["bytes"]}
 
@@ -470,6 +509,44 @@ def test_records_only_stores_every_record_and_a_forked_run_from_a_copy_of_them_b
     out = _run(edited, FORKED)
     assert out["stats"]["units"] == {"reused": 4, "rebuilt": ["_xor_roots"], "stored": 1}, out["stats"]["units"]
     assert out["values"] == _fresh(edited)["values"]
+
+
+#: `cli._owners` with the CPU seconds it has of each binding written beside the tree (``<root>-seconds.json``)
+OWNERS = """
+owners = cli._owners
+def weighed(plan, tasks, n):
+    (root.parent / f"{root.name}-seconds.json").write_text(json.dumps({e.name: e.seconds for e in plan.entries}))
+    return owners(plan, tasks, n)
+cli._owners = weighed
+"""
+
+
+@pytest.mark.slow
+def test_records_built_again_are_the_same_bytes_with_each_build_s_seconds_beside_its_record(tmp_path):
+    """A record holds what its binding's build gave and read, never how long the build took: ``--records-only`` into a fresh
+    cache stores the very records it stored before, the catalog's roots record (`units.store_roots`) with them, names and
+    bytes, so a tarball of them (the circuit-catalog task's) has one digest.  The CPU seconds of each binding built apart are kept beside its record (``<entry>.seconds``), and a forked run
+    from a copy of the cache weighs each binding by them (`cli._owners`)."""
+    from circuit_check import units as UN
+
+    root = _tree(tmp_path / "t")
+    _bindings(root, *BINDINGS)
+    _records_only(root)
+    first = {p.relative_to(root / "cache"): p.read_bytes() for p in _records(root)}
+    shutil.rmtree(root / "cache")
+    _records_only(root)
+    assert {p.relative_to(root / "cache"): p.read_bytes() for p in _records(root)} == first and len(first) == 6
+    assert not any("seconds" in json.loads(b)["report"] for b in first.values())
+    # by `units.Entry.name`, as `cli._owners` weighs them: a registered record's with its index
+    took = {",".join(t[1]) + (f":{t[2]}" if tuple(t[1]) == UN.REGISTERED else ""): float(s.read_text())
+            for p in _records(root) if (s := p.with_suffix(".seconds")).is_file()
+            for t in [json.loads(p.read_text())["key"]["request"]["target"]]}
+    assert len(took) >= 4, took
+    warm = _copied(root, tmp_path / "warm")
+    out = _run(warm, FORKED.replace("rep = cli.run(", OWNERS + "rep = cli.run("))
+    assert out["stats"]["units"] == {"reused": 5, "rebuilt": [], "stored": 0}
+    weighed = json.loads((tmp_path / "warm-seconds.json").read_text())
+    assert {n: weighed[n] for n in took} == took and all(s is None for n, s in weighed.items() if n not in took)
 
 
 #: a reference two bindings bind at two statics (as `verity.ml.kernels.tc`'s sidecar and the gemm-coordinate template bind
@@ -584,6 +661,20 @@ KBIG_BINDING = """def kbig():
 """
 
 
+def _words_tree(at: Path) -> Path:
+    """A tree of `WORDS`' bindings, each check's value saying whether its word's Boolean Definition is registered (`WORDED`)."""
+    root = _tree(at)
+    (root / "syn/words.py").write_text(WORDS.lstrip("\n"))
+    (root / "syn/wordmod.py").write_text(WORDMOD.lstrip("\n"))
+    _edit(root, "syn/catalog.py", "BINDINGS = [", WORDS_BINDINGS + "BINDINGS = [")
+    _bindings(root, '(("_scale2_roots",), scale2)', '(("_scale3_roots",), scale3)', '(("_wtop_roots",), wtop)',
+              '(("_wprim_roots",), wprim)', '(("_vtop_roots",), vtop)')
+    _edit(root, "syn/check.py", "def check_definition(", WORDED + "def check_definition(")
+    _edit(root, "syn/check.py", "evaluate(fn, 3, 0x0105)", "[evaluate(fn, 3, 0x0105), worded(fn.id)]")
+    _edit(root, "syn/check.py", '"gates": fn.gates', '"gates": getattr(fn, "gates", 1)')
+    return root
+
+
 @pytest.mark.slow
 def test_bindings_built_apart_check_the_reference_and_find_the_boolean_definitions_a_full_build_does(tmp_path):
     """Built apart, a reference two bindings bind at two statics is checked at the statics of the one `targets.reachable`
@@ -593,19 +684,7 @@ def test_bindings_built_apart_check_the_reference_and_find_the_boolean_definitio
     The records hold those Boolean Definitions, so a run from them finds them too."""
     from test_cache import _set_pin
 
-    trees = []
-    for name in ("t", "here"):
-        root = _tree(tmp_path / name)
-        (root / "syn/words.py").write_text(WORDS.lstrip("\n"))
-        (root / "syn/wordmod.py").write_text(WORDMOD.lstrip("\n"))
-        _edit(root, "syn/catalog.py", "BINDINGS = [", WORDS_BINDINGS + "BINDINGS = [")
-        _bindings(root, '(("_scale2_roots",), scale2)', '(("_scale3_roots",), scale3)', '(("_wtop_roots",), wtop)',
-                  '(("_wprim_roots",), wprim)', '(("_vtop_roots",), vtop)')
-        _edit(root, "syn/check.py", "def check_definition(", WORDED + "def check_definition(")
-        _edit(root, "syn/check.py", "evaluate(fn, 3, 0x0105)", "[evaluate(fn, 3, 0x0105), worded(fn.id)]")
-        _edit(root, "syn/check.py", '"gates": fn.gates', '"gates": getattr(fn, "gates", 1)')
-        trees.append(root)
-    root, here = trees
+    root, here = _words_tree(tmp_path / "t"), _words_tree(tmp_path / "here")
     whole = _run(here, FORKED.replace(", jobs=2, isolate=True, fork=True)", ")"))
     values = whole["values"]
     assert values["syn.scale"] == [[3 * 3 + 0x0105], False] and values["SynW_v1"][1] and values["SynV_v1"][1], values
@@ -792,6 +871,28 @@ def test_the_calls_from_records_are_the_catalogs_for_made_on_demand_and_unbound_
     monkeypatch.setattr(TG, "_vocabulary_bindings", lambda: [("b1-eager-v3/dsv4_indexer_compress", "KeyError: 'ROPE'")])
     with pytest.raises(RuntimeError, match=r"b1-eager-v3/dsv4_indexer_compress: KeyError: 'ROPE'"):
         UN.call_families([], nothing, {})
+
+
+#: what `targets.on_demand_boolean_families` registers, in order, given word Call families made on demand
+ON_DEMAND = """
+from circuit_check import targets as TG
+from verity.ml.circuits.defs import REGISTRY
+import verity.ml.definitions.boolean
+
+before = set(dict.keys(REGISTRY.defs))
+TG.on_demand_boolean_families({"Const8[0x0]_v1", "Const16[0x1]_v1", "Const32[0x2]_v1", "Const4[0x3]_v1", "GatherBf16x4_v1",
+                               "GatherBf16x8_v1", "GatherI32x2_v1", "GatherI32x4_v1", "GatherI32x8_v1", "F32Add_v1"})
+print([fid for fid in dict.keys(REGISTRY.defs) if fid not in before])
+"""
+
+
+def test_the_boolean_versions_made_on_demand_register_in_one_order_under_any_hash_seed():
+    """`targets.on_demand_boolean_families` makes the Boolean versions in the same order whatever the process's hash seed: each
+    one made registers, and the catalog's roots record notes the order (`units._noting`), so a set's order would give an
+    unchanged catalog's rebuild other bytes."""
+    got = {subprocess.run([sys.executable, "-c", ON_DEMAND], capture_output=True, text=True, check=True, cwd=REPO,
+                          env={**os.environ, "PYTHONHASHSEED": str(seed)}).stdout for seed in (1, 2, 3, 4)}
+    assert len(got) == 1, got
 
 
 #: the catalog over the synthetic bindings, in a process of its own: built whole (``whole``, `targets.suite`), each binding built

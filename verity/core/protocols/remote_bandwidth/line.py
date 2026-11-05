@@ -7,7 +7,7 @@ rationals.  It is computed here and in its Lean, `lean/RemoteAudit/Line.lean`, h
 clock) read it.  The declared outputs' paced forms (`ledger.memory`) are the same arithmetic in floats, over the whole
 session as one stretch (`session_lost`); floats are otherwise for display only, outside this module.
 
-A paced session is groups g = 0..C, group g's coin σ_g released at s_g, its n_g passes ending at its last root's
+A paced session is groups g = 0..C, group g's coin chal_g released at s_g, its n_g passes ending at its last root's
 arrival a_g, and the registered chunks of each kind its passes read (`Group`).  e_g = max(a_g, s_(g+1)) (a_C for the
 last) and L_g = e_g − s_g hold its reads; Δ_g = s_(g+1) − s_g (L_C for the last).  Stretch m is the `per` groups
 [lo, hi) = [m·per, (m + 1)·per), for each m before the last full stretch, so the group after it (hi) is in the

@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.PlainDrawRColsE
-import Proofs.Flock.Claims.KS.PlainKSLin
-import Proofs.Flock.Claims.Recursion.FlockKSDeployE
+module
+
+public import Proofs.Flock.Claims.KS.PlainDrawRColsE
+public import Proofs.Flock.Claims.KS.PlainKSLin
+public import Proofs.Flock.Claims.Recursion.FlockKSDeployE
 
 /-!
 # The plain record at the deployed reader `VR rd`, and its code facts
@@ -22,6 +24,8 @@ Its code facts, each from `VR rd`'s decision at SHA-512 (`decideR_sha512`), by `
 * `plainR_KSFlockLin`: `KSFlockLin` at the trimmed record and `CpDep`, from conflicts tied to collisions and the table
   bound at the untrimmed record (`plainE_KSFlockLin`'s assembly).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

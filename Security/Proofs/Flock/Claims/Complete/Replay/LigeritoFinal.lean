@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Replay.LigeritoWalk
-import Proofs.Flock.Soundness.Refine.Basis
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoWalk
+public import Proofs.Flock.Soundness.Refine.Basis
 
 /-!
 # Ligerito's final identity from the honest prover's
@@ -20,6 +22,8 @@ level 0, and returns the decoded proof.
 A returning rep runs the honest Ligerito on its own table, at ring switching's `T` and basis (`repP_lig`), so
 `Run.lgFinal_at` is `Lg.Honest` at the rep, and `lgFinal_of` is `LgFinal`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

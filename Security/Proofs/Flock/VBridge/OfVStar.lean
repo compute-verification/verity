@@ -1,5 +1,7 @@
-import Proofs.Flock.VBridge.Unit
-import VStar.Unit
+module
+
+public import Proofs.Flock.VBridge.Unit
+public import VStar.Unit
 
 /-!
 # The bridge over V*'s circuits as core code
@@ -19,6 +21,8 @@ This file proves that its builders are the ones this bridge reasons about, and r
   record's), `laid_recOpenUnit` (the laid-out unit's rows hold, so its output columns are) and `unit_recOpenUnit` (a copy
   of the unit in a unit of any partition), each over `VStar`'s definitions.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.OfVStar
 

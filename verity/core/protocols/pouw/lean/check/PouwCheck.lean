@@ -1,17 +1,21 @@
-import PouwCheck.Json
-import PouwCheck.Tile
-import PouwCheck.Inputs
-import PouwCheck.Check
-import PouwCheck.Protocol
-import PouwCheck.Opening
-import PouwCheck.Pass
-import PouwCheck.Rounds
-import PouwCheck.Credit
-import PouwCheck.Chunks
-import PouwCheck.LeafOwn
-import PouwCheck.Verified
-import PouwCheck.LiveVerified
-import PouwCheck.CommittedFiles
+module
+
+public import PouwCheck.Json
+public import PouwCheck.Tile
+public import PouwCheck.Inputs
+public import PouwCheck.Check
+public import PouwCheck.Protocol
+public import PouwCheck.Opening
+public import PouwCheck.Pass
+public import PouwCheck.Rounds
+public import PouwCheck.Credit
+public import PouwCheck.Period
+public import PouwCheck.Chunks
+public import PouwCheck.LeafOwn
+public import PouwCheck.Lanes
+public import PouwCheck.Verified
+public import PouwCheck.LiveVerified
+public import PouwCheck.CommittedFiles
 
 /-!
 # PoUW's window check as a core protocol
@@ -31,3 +35,5 @@ placement in the window's tables, from its descriptor and round log (`PouwCheck.
 lane's chunks along K, and so the chunk rows a table at K commits a row as (`PouwCheck.Chunks`, `weights.chunks`), are held
 to the Python through `pouw-check-difftest` too.
 -/
+
+@[expose] public section

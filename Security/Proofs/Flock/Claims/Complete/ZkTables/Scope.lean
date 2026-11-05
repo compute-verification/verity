@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Skeleton
-import Proofs.Flock.Claims.Complete.Zk.Discharge
-import Proofs.Flock.Claims.Scope.Fit
-import Proofs.Flock.Claims.Bridge.Custody
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.Skeleton
+public import Proofs.Flock.Claims.Complete.Zk.Discharge
+public import Proofs.Flock.Claims.Scope.Fit
+public import Proofs.Flock.Claims.Bridge.Custody
 
 /-!
 # The masked scope at several tables
@@ -13,6 +15,8 @@ import Proofs.Flock.Claims.Bridge.Custody
 * `maskWords_ge_of_setup`, `Case.maskWords`: every table a masked session sets up has `N = 2^D` mask words with
   `D ≥ 10`, so no in-scope masked table has fewer than `1024`.
 -/
+
+@[expose] public section
 
 open Flock FlockDeploy
 
