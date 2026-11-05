@@ -349,4 +349,92 @@ theorem readOfO_zk {x : Claims.Msg} {r : Readable.Read} (h : readOfO x = some r)
     rw [FlockDeploy.Raw.ins_zk (RecRaw.ins_base hi)]
     simpa using hz
 
+/-! ## Flock's statements and the V* parts' -/
+
+/-- Flock's statement reader reads Flock's format string first. -/
+theorem read_format {x : Claims.Msg} {p : Raw × Claims.Msg} (h : FlockDeploy.Raw.read.run x = some p) :
+    ∃ r, rdStr.run x = some (FlockDeploy.FORMAT, r) := by
+  unfold FlockDeploy.Raw.read at h
+  simp only [StateT.run_bind] at h
+  cases hs : rdStr.run x with
+  | none => simp [hs] at h
+  | some q =>
+    obtain ⟨s, r⟩ := q
+    by_cases e : s = FlockDeploy.FORMAT
+    · exact ⟨r, by rw [e]⟩
+    · (simp [hs, e] at h) <;> cases h
+
+/-- A V* part's statement reader reads its format string first. -/
+theorem RecRaw.read_format {x : Claims.Msg} {p : RecRaw × Claims.Msg} (h : RecRaw.read.run x = some p) :
+    ∃ r, rdStr.run x = some (RFORMAT, r) := by
+  unfold RecRaw.read at h
+  simp only [StateT.run_bind] at h
+  cases hs : rdStr.run x with
+  | none => simp [hs] at h
+  | some q =>
+    obtain ⟨s, r⟩ := q
+    by_cases e : s = RFORMAT
+    · exact ⟨r, by rw [e]⟩
+    · (simp [hs, e] at h) <;> cases h
+
+theorem formats_ne : FlockDeploy.FORMAT ≠ RFORMAT := by decide
+
+/-- **No statement is both Flock's and a V* part's**: the two encodings' first fields, their format strings, differ. -/
+theorem decodeRec_none {x : Claims.Msg} {w : Raw} (h : FlockDeploy.decode x = some w) : decodeRec x = none := by
+  unfold FlockDeploy.decode at h
+  split at h
+  · rename_i w' hr
+    obtain ⟨r, hr'⟩ := read_format hr
+    unfold decodeRec
+    split
+    · rename_i v hv
+      obtain ⟨r', hv'⟩ := RecRaw.read_format hv
+      rw [hr'] at hv'
+      exact absurd (Prod.mk.inj (Option.some.inj hv')).1 formats_ne
+    · rfl
+  · cases h
+
+theorem decode_none {x : Claims.Msg} {w : RecRaw} (h : decodeRec x = some w) : FlockDeploy.decode x = none := by
+  cases hd : FlockDeploy.decode x with
+  | none => rfl
+  | some v => rw [decodeRec_none hd] at h; cases h
+
+/-- A statement that decodes as no V* part's has no recursive setup. -/
+theorem setupO_none {x : Claims.Msg} (h : decodeRec x = none) : setupO x = none := by
+  unfold setupO insO
+  simp [h]
+
+/-- A statement that decodes as no Flock statement sets up no session of Flock's. -/
+theorem setupOf_none {zk : Bool} {x : Claims.Msg} (h : FlockDeploy.decode x = none) : FlockDeploy.setupOf zk x = none := by
+  unfold FlockDeploy.setupOf FlockDeploy.insOf
+  simp [h]
+
+theorem decodeRec_of_setupO {x : Claims.Msg} {p : RecIns × SessionSpec × Array Stmt} (h : setupO x = some p) :
+    ∃ w, decodeRec x = some w := by
+  cases hd : decodeRec x with
+  | none => rw [setupO_none hd] at h; cases h
+  | some w => exact ⟨w, rfl⟩
+
+theorem decodeRec_of_readOfO {x : Claims.Msg} {r : Readable.Read} (h : readOfO x = some r) :
+    ∃ w, decodeRec x = some w := by
+  unfold readOfO insO at h
+  cases hd : decodeRec x with
+  | none => simp [hd] at h
+  | some w => exact ⟨w, rfl⟩
+
+theorem decode_of_readOf {zk : Bool} {x : Claims.Msg} {r : Readable.Read} (h : FlockDeploy.readOf zk x = some r) :
+    ∃ w, FlockDeploy.decode x = some w := by
+  unfold FlockDeploy.readOf FlockDeploy.insOf at h
+  cases hd : FlockDeploy.decode x with
+  | none => simp [hd] at h
+  | some w => exact ⟨w, rfl⟩
+
+/-- What a deployed parser parses, its reader reads. -/
+theorem read_of_parseOf {rel : Readable.Parsed → Readable.Relation} {rd : Claims.Msg → Option Readable.Read}
+    {x : Claims.Msg} {s : Claims.Flock.Stmt} (h : Readable.parseOf rel rd x = some s) : ∃ r, rd x = some r := by
+  unfold Readable.parseOf Readable.parseBytes at h
+  cases hr : rd x with
+  | none => simp [hr] at h
+  | some r => exact ⟨r, rfl⟩
+
 end RecDeploy
