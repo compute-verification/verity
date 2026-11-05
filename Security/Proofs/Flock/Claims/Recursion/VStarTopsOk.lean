@@ -234,8 +234,8 @@ theorem capIn_later_honest {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ :
 /-! ## `hok_shaped`'s `hT` and `hC` -/
 
 /-- **Each cap's `capIn` accepts** at the honest run (`hok_shaped`'s `hC`): where the history holds both reps' stream
-rounds (`hH`) and the two reps' tops differ at each later level (`hTops`, the tape exception: it fails only where two
-192-byte salts collide, `sameTop_false_of_salt`). -/
+rounds (`hH`) and the two reps' tops differ at each later level (`hTops`, the tape exception, a hypothesis: that it
+fails only where two 192-byte salts collide is not proved here). -/
 theorem hC_honest {Ir : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (Ir.fit x).Tape} {hist : List (Msg × Msg)}
     {s : ℕ} (hH : ∀ r rs, readX x = some r → repSched r.shape = some rs → 2 * rs.size ≤ hist.length)
     (hTops : ∀ src, srcOf (Ir.fit x) x w ρ hist = some src → ∀ l, 0 < l → ∀ a b,

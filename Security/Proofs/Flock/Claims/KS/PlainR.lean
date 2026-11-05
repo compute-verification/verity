@@ -22,7 +22,7 @@ Its code facts, each from `VR rd`'s decision at SHA-512 (`decideR_sha512`), by `
 * it accepts only at its last round (`accLast_VR`): custody's count of the record's rounds (`streams_size_plainJ`)
   is the round messages', one per opened round (`readPs_length`);
 * `plainR_KSFlockLin`: `KSFlockLin` at the trimmed record and `CpDep`, from conflicts tied to collisions and the table
-  bound at the untrimmed record (`plainE_KSFlockLin`'s assembly).
+  bound at the untrimmed record.
 -/
 
 @[expose] public section
@@ -415,7 +415,7 @@ theorem decideFree_VR (rd : Claims.Msg → Option FinalP) : DecideFree sha512 (V
 /-- **`KSFlockLin` at the plain record at `VR rd`**, at SHA-512, at the trimmed record and the deployed caps `CpDep`:
 `KSFlockLin_of_tableBoundAbortLin` from conflicts tied to collisions and the table bound at the untrimmed record,
 carried to the trimmed columns (`tableBoundAbortLin_mapCols`), with the record's numbers, one table wherever some run
-accepts (`plainR_hone`) and `ColsOk` (`plainR_colsOk`), as `plainE_KSFlockLin`. -/
+accepts (`plainR_hone`) and `ColsOk` (`plainR_colsOk`). -/
 theorem plainR_KSFlockLin (rel : Readable.Parsed → Readable.Relation) (rd : Claims.Msg → Option FinalP)
     (hconf : Claims.Flock.ConflictTied sha512 (deployPlainR rel rd) (wordLen false))
     (htab : Claims.Recursion.TableBoundAbortLin sha512 (deployPlainR rel rd) (wordLen false) (wide false) CpDep) :
