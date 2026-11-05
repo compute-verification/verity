@@ -78,8 +78,7 @@ than one, so every subcircuit is exercised in every audit. `work:K` keeps those 
 but sizes each stratum by the work its proof blocks are credited: with `W = Σ_s w_s n_s`, stratum `s` draws
 `k_s = min(n_s, max(f_s, ⌈K w_s n_s / W⌉))`, where `w_s` and the floor `f_s ≥ 1` come from the verifier's own work table.
 Each verifier derives the strata from its own program and query, never from the prover. Both verifiers refuse what the
-soundness statement doesn't cover: `bernoulli` at `0 < p < 1` (`shapes`), a closure map (`closure`) and, until its Lean
-certificate lands, a two-stage design.
+soundness statement doesn't cover: `bernoulli` at `0 < p < 1` (`shapes`) and a closure map (`closure`).
 
 **What an accepted audit establishes.** Under a stratified draw, a set of incorrect proof blocks has acceptance probability
 `Π_s C(n_s − m_s, k_s) / C(n_s, k_s)`, `m_s` being its proof blocks in
@@ -87,10 +86,10 @@ stratum `s`, so a subcircuit that is incorrect in every proof block is never mis
 doing a fraction `ε` of the credited work have acceptance probability at most `(1 − ε)^K`; at `K = 27,713`, a 0.1% share
 has at most `2^-40`. The proof system adds, per proof block, its knowledge-soundness and binding errors (ε_ks and ε_bind).
 
-**Two-stage designs.** Those above are one-stage. A two-stage design commits only
-replay-block boundaries while serving and samples `k` proof blocks in each sampled replay block once its interior is
-committed (`ARCHITECTURE.md`'s Glossary, "Replay block"): one of `n` proof blocks and footprint `w` is missed with
-probability at most `C(n − w, k) / C(n, k)`.
+**Two-stage designs** (`TwoStage`). Those above are one-stage. A two-stage design commits only replay-block boundaries
+while serving and samples `k` proof blocks in each sampled replay block once its interior is committed
+(`Stream.register_interiors`; `ARCHITECTURE.md`'s Glossary, "Replay block"): one of `n` proof blocks and footprint `w` is
+missed with probability at most `C(n − w, k) / C(n, k)`, `1 ≤ k < n`.
 
 Not built yet: the security function and its review, and composition checks such as PoUW's tiles
 per proof block matching this partition (the IR checks refinement, `verity.ml.circuits.partition.validate_refinement`).
