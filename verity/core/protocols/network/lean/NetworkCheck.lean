@@ -5,7 +5,10 @@ import NetworkCheck.Records
 import NetworkCheck.RecordsGrid
 import NetworkCheck.RecordsBytes
 import NetworkCheck.Circuit
+import NetworkCheck.Members
+import NetworkCheck.CircuitFile
 import NetworkCheck.Period
+import NetworkCheck.PeriodFiles
 import NetworkCheck.RowsAudit
 import NetworkCheck.LinkWindow
 
@@ -42,5 +45,14 @@ identity hash (`Identity.Tagged`).
 /-!
 `NetworkCheck.Circuit` checks a compute audit's circuit record against its Program at the size of their description:
 the population program, the wires, the registered reads, the wire order and the count of free input bits. Beyond the
-above it imports NCI's layout checks (`NciCheck.Desc`) and the sampled audit's wires (`SampledProofs.Wires`).
+above it imports NCI's layout checks (`NciCheck.Desc`), the sampled audit's wires (`SampledProofs.Wires`) and Bits' leaf
+widths (`SampledProofs.Bits`). `NetworkCheck.Members` derives a stated record's members, each statement's units and
+first VU (`interface._members`), from the record alone, held to `interface.members` by `tests/test_members_difftest.py`.
+-/
+
+/-!
+`NetworkCheck.CircuitFile` reads a circuit file whole, as a session's verifier parses it, for the period's
+check with its listed circuit files (`NetworkCheck.Period.protocolWith`, `network-period check … CIRCUIT…`), which
+holds each to its template with `SampledProofs.Bits.check`. `NetworkCheck.PeriodFiles` reads a period's listed files
+within a budget of files and bytes at once, for `network-period` and for a protocol that composes the period's.
 -/

@@ -23,7 +23,9 @@ each link-window's ingress and egress rows committed and registered under a smal
 (`warden_rows.Cells.commit` and `registration`, signed by the same key), whose caps the parameters' `cells` are
 (`WardenParams.caps`; `bad_caps` are refused), its three records certified (`past-slots`:
 none of them and neither registration, as the warden leaves a window in which it refused a connection), and the scan's
-registration holding both rows' roots and domains and each lane j's `scan/prog<j>` (`prog_name`) at the root and domain
+registration holding both rows at their ports (`rows_name`, of T leaves) in `roots` or at their values in
+`registered` (`_holds`; `port`: the egress rows' root at `scan/view` and their port at another, or the like,
+`UNPORTS`), and each lane j's `scan/prog<j>` (`prog_name`) at the root and domain
 of chunk j's entries port of that link-window's slot entries' template (`slot_entry`, `io_shell.SlotEntry_v1` at its
 smallest circuit-check row, or `select_entry`, `SelectEntry_v1` at its smallest binding beside a stand-in scan slots'
 `ScanSlots_v2`, each a pinned Definition with one member a slot) in its own audit's registration and Program
@@ -72,6 +74,7 @@ import json
 import math
 import random
 import re
+from collections.abc import Callable
 from fractions import Fraction
 from functools import lru_cache
 from pathlib import Path
@@ -115,6 +118,10 @@ ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
 PARAMS_KEYS = ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "session", "sync_set", "windows"]
 ROWS_PARAMS_KEYS = ["audits", "cells", "circuit", "first", "jitter", "key", "link", "lms", "program", "scan",
                     "schedule", "session", "windows"]
+#: `rowsListedKeys`: the rows form's, with the scan's listed circuit files
+ROWS_LISTED_KEYS = sorted([*ROWS_PARAMS_KEYS, "scan_circuits"])
+#: `Flock.HmRow.PARTITION_V1`: the partition rule a circuit record's digest and a listed file's META partition are under
+PARTITION_V1 = "verity/partition/v1"
 SCHEDULE_KEYS = sorted(f.name for f in dataclasses.fields(WardenParams))
 CERTIFICATE_KEYS = ["digest", "direction", "key_id", "link", "signature", "window"]
 CLOCK_WINDOW_KEYS = ["answer", "certificates", "clock"]
@@ -326,6 +333,30 @@ def bits_of(t) -> int:
     return sum(bits_of(f if kind == "Tuple" else f[1]) for f in t[1])
 
 
+def words_of(t) -> int:
+    """`SampledProofs.Bits.wordsOf`: a descriptor type's bits packed on whole 16-bit words."""
+    return -(-bits_of(t) // 16)
+
+
+def ret_words(t) -> int:
+    """`SampledProofs.Bits.retWords`: a return's fields (a tuple's or a record's, else the return), each packed on whole
+    16-bit words of its own."""
+    fields = t[1] if t[0] == "Tuple" else [f[1] for f in t[1]] if t[0] == "Record" else [t]
+    return sum(words_of(f) for f in fields)
+
+
+def def_sig(d: dict) -> tuple[list, list]:
+    """A Definition's parameters and return as `Flock.Program.decode` reads them: a primitive's own, a composite's
+    body's."""
+    return (d["params"], d["ret"]) if d["form"] == "primitive" else (d["body"]["params"], d["body"]["ret_type"])
+
+
+def vu_bits(upv: int, words: int) -> int:
+    """`vuBits`: what a wrong VU of `upv` template instances of `words` 16-bit words each is charged, and its unit's
+    gates 0 and 1."""
+    return upv * 16 * words + 2
+
+
 def program_sha512(desc: dict) -> str:
     """`partition_object.program_sha512`: SHA-512 of the canonical descriptor without `annotations`."""
     return hashlib.sha512(D.canonical({k: v for k, v in desc.items() if k != "annotations"}).encode()).hexdigest()
@@ -425,6 +456,39 @@ def _is_input(x: dict, j: dict) -> bool:
     return j["definitions"][fid]["form"] == "primitive" and bool(INPUT_ID.match(fid))
 
 
+def _vu_strata(j: dict) -> dict[str, list[tuple[int, int]]]:
+    """`vuStrata`: the template query (`TemplatePartition`) over every template the root instantiates, its non-input
+    root nodes' Definitions (each call one unit, each batch member one, in node then member order), its ranges a
+    template at a time with adjacent ones merged (`Flock.Draw.strataOf`)."""
+    callees, nodes = j["callees"], j["definitions"][j["root"]]["body"]["nodes"]
+    tids = [t for x in nodes if not INPUT_ID.match(t := callees[x["fn"]])]
+    strata: dict[str, list[tuple[int, int]]] = {}
+    units, at = set(), 0
+    for k, x in enumerate(nodes):
+        if INPUT_ID.match(tid := callees[x["fn"]]):
+            continue
+        if x["form"] not in ("call", "batch"):
+            raise D.Reject(f"scan: query-refused: root node {k} is a {x['form']} of '{tid}': an instance is a call or "
+                           f"batch of one of {tids!r}")
+        n = x["n"] if x["form"] == "batch" else 1
+        rs = strata.setdefault(tid, [])
+        if rs and rs[-1][1] == at:
+            rs[-1] = (rs[-1][0], at + n)
+        else:
+            rs.append((at, at + n))
+        if n:
+            units.add(tid)
+        at += n
+    if missing := [t for t in tids if t not in units]:
+        raise D.Reject(f"scan: query-refused: the program has no instance of {missing!r}")
+    return strata
+
+
+def _apart(a: list[tuple[int, int]], b: list[tuple[int, int]]) -> bool:
+    """`apart`: ranges `a` and `b`, each `[lo, hi)`, share no unit."""
+    return all(min(hi, hj) <= max(lo, lj) for lo, hi in a for lj, hj in b)
+
+
 def _refs(arg: dict, nodes: list) -> list[tuple[str, int, int]]:
     """`Seq.toArray`: an argument's references in order, each `(space, collection, leaf)`, the space `p` or `n`."""
     out = []
@@ -447,24 +511,112 @@ def _axis_dims(t, ax: int) -> tuple[int, int] | None:
     return (t[1], leaves_of(t[2])) if ax == 0 else _axis_dims(t[2], ax - 1)
 
 
-def _member_ref(x: dict, o: int, m: int, k: int, j: dict) -> tuple[str, int, int] | None:
-    """`Arg.memberRef`: member `m`'s leaf `k` of node `x`'s argument `o`, with the dims the decoder gives a batch
-    argument from its axis; None past the argument's references."""
+def _member_refs(x: dict, o: int, j: dict) -> Callable[[int, int], tuple[str, int, int] | None]:
+    """`Arg.memberRef` of node `x`'s argument `o`: member `m`'s leaf `k`, with the dims the decoder gives a batch
+    argument from its axis; None past the argument's references. They are expanded once (`_refs`), as the decoded
+    argument holds its `Seq`, and every member and leaf read through the function indexes them."""
     a, nodes = x["args"][o], j["definitions"][j["root"]]["body"]["nodes"]
     ax = (x.get("axes") or [None] * len(x["args"]))[o]
     t = j["types"][a["type"]] if isinstance(a["type"], int) else a["type"]
     dims = _axis_dims(t, ax) if ax is not None else None
     refs = _refs(a, nodes)
-    i = k if dims is None else (k // dims[1] * dims[0] + m) * dims[1] + k % dims[1]
-    return refs[i] if i < len(refs) else None
+
+    def ref(m: int, k: int) -> tuple[str, int, int] | None:
+        i = k if dims is None else (k // dims[1] * dims[0] + m) * dims[1] + k % dims[1]
+        return refs[i] if i < len(refs) else None
+    return ref
+
+
+def _reads_entries_walk(x: dict, o: int, t0: int, every: int, E: int, ks: list[int], j: dict) -> bool:
+    """`readsEntries` member by member and leaf by leaf, as it read before it read the arguments' parts: for each lane
+    `i` and member `m` (bucket `t0 + m`), argument `o + i` is row `⌊(t0 + m) / every⌋` of input node `ks[i]`, `E`
+    leaves a row. The reference `test_reads_entries_is_the_walk` holds `_reads_entries` and Lean's to."""
+    def reads(i: int, k: int) -> bool:
+        ref = _member_refs(x, o + i, j)
+        return all(ref(m, ell) == ("n", k, (t0 + m) // every * E + ell) for m in range(x["n"]) for ell in range(E))
+    return all(o + i < len(x["args"]) and reads(i, k) for i, k in enumerate(ks))
+
+
+def _entry_leaf(t0: int, every: int, E: int, q: int) -> int:
+    """`entryLeaf`: reference `q` of a `prog<j>` argument mapped over its leading axis, leaf `q mod E` of row
+    `⌊(t0 + ⌊q / E⌋) / every⌋`."""
+    return (t0 + q // E) // every * E + q % E
+
+
+def _rows_step(t0: int, every: int, a: int, rho: int, a1: int, a2: int) -> bool:
+    """`rowsStep`: `⌊(t0 + m + a) / every⌋ − ⌊(t0 + m) / every⌋ = rho` for every member `m` of `[a1, a2)`, from the
+    first member's residue mod `every` and their count."""
+    if a2 <= a1:
+        return True
+    r, res = a % every, (t0 + a1) % every
+    last = res + a2 - a1 - 1
+    if rho == a // every:
+        return r == 0 or last < every - r
+    return rho == a // every + 1 and r != 0 and every - r <= res and last < every
+
+
+def _steps_by(t0: int, every: int, E: int, I: int, sigma: int, lo: int, hi: int) -> bool:
+    """`stepsBy`: `_entry_leaf(q + I) − _entry_leaf(q) = sigma` for every `q` of `[lo, hi)`, from the members the range
+    touches on each side of leaf `E − I mod E`."""
+    if hi <= lo:
+        return True
+    beta, m1, m2 = I % E, lo // E, (hi - 1) // E
+
+    def side(delta: int, a1: int, a2: int) -> bool:
+        need = sigma - beta + delta * E
+        return a2 <= a1 or (need >= 0 and need % E == 0 and _rows_step(t0, every, I // E + delta, need // E, a1, a2))
+    return side(0, m1 if lo % E < E - beta else m1 + 1, m2 + 1) and \
+        (beta == 0 or side(1, m1, m2 + 1 if E - beta <= (hi - 1) % E else m2))
+
+
+def _part_reads(k: int, t0: int, every: int, E: int, s: int, q: dict) -> bool:
+    """`partReads`: part `q`, its references from `s` on, names leaf `_entry_leaf(q)` of node `k` at each: an affine
+    or strided part by its first reference and its strides, an explicit one reference by reference."""
+    if "affine" in q:
+        sp, i, b, c = q["affine"]
+        return c == 0 or (sp == "n" and i == k and b == _entry_leaf(t0, every, E, s)
+                          and _steps_by(t0, every, E, 1, 1, s, s + c - 1))
+    if "strided" in q:
+        sp, i, b, inner, os, step, c = q["strided"]
+        I = inner or c
+        return c == 0 or (sp == "n" and i == k and b == _entry_leaf(t0, every, E, s)
+                          and _steps_by(t0, every, E, 1, step, s, s + min(I, c) - 1)
+                          and _steps_by(t0, every, E, I, os, s, s + c - I))
+    return all((sp, i, ell) == ("n", k, _entry_leaf(t0, every, E, s + u))
+               for u, (sp, i, ell) in enumerate(q["explicit"]))
+
+
+def _seq_reads(parts: list[dict], N: int, k: int, t0: int, every: int, E: int) -> bool:
+    """`seqReads`: the parts are `N` references, each part's from its start."""
+    at = 0
+    for q in parts:
+        if not _part_reads(k, t0, every, E, at, q):
+            return False
+        at += len(q["explicit"]) if "explicit" in q else (q.get("affine") or q["strided"])[-1]
+    return at == N
 
 
 def _reads_entries(x: dict, o: int, t0: int, every: int, E: int, ks: list[int], j: dict) -> bool:
     """`readsEntries`: for each lane `i` and member `m` (bucket `t0 + m`), argument `o + i` is row
-    `⌊(t0 + m) / every⌋` of input node `ks[i]`, lane `i`'s slot entries, `E` leaves a row, leaf by leaf."""
-    return all(o + i < len(x["args"]) and all(
-        _member_ref(x, o + i, m, ell, j) == ("n", k, (t0 + m) // every * E + ell)
-        for m in range(x["n"]) for ell in range(E)) for i, k in enumerate(ks))
+    `⌊(t0 + m) / every⌋` of input node `ks[i]`, lane `i`'s slot entries, `E` leaves a row, read off the argument's
+    parts (`_seq_reads`): mapped over its leading axis, its `n·E` references are `_entry_leaf`'s; unmapped, its `E`
+    are one row all `n` members share; mapped over an inner axis, refused."""
+    nodes = j["definitions"][j["root"]]["body"]["nodes"]
+    axes = x.get("axes") or [None] * len(x["args"])
+
+    def lane(i: int, k: int) -> bool:
+        if o + i >= len(x["args"]):
+            return False
+        n, a = x["n"], x["args"][o + i]
+        if n == 0 or E == 0:
+            return True
+        t = j["types"][a["type"]] if isinstance(a["type"], int) else a["type"]
+        dims = _axis_dims(t, axes[o + i]) if axes[o + i] is not None else None
+        parts = _parts(a["refs"], nodes)
+        if dims is None:
+            return t0 // every == (t0 + n - 1) // every and _seq_reads(parts, E, k, t0, every, E)
+        return dims[1] == E and _seq_reads(parts, n * E, k, t0, every, E)
+    return all(lane(i, k) for i, k in enumerate(ks))
 
 
 #: `Flock.Steps.FUEL`: the most steps `Prog.gate`'s walk to an operand takes
@@ -533,34 +685,102 @@ def input_gates(j: dict) -> int:
                if defs[k := callees[x["fn"]]]["form"] == "primitive" and (m := INPUT_ID.fullmatch(k)))
 
 
-AUDIT_FORMS = (["program", "steps"], ["circuit", "order", "pins", "program", "steps"])
+AUDIT_FORMS = (["program", "steps"], ["circuit", "order", "pins", "program", "steps"],
+               ["circuit", "circuits", "order", "pins", "program", "steps"])
+
+
+@dataclasses.dataclass(frozen=True)
+class Listed:
+    """`Listed`: what an audit's or the scan's listed circuit files are held to: its Program's SHA-512 and Definitions
+    (`def_sig` by key), its root templates' charges (`charges_of`: descriptor id, members and words), each one's file's
+    SHA-512, in order, and for an audit its circuit record's partition digest (`record_partition`)."""
+    program: str
+    defs: dict[str, tuple[list, list]]
+    templates: tuple[tuple[str, int, int], ...]
+    files: tuple[str, ...]
+    partition: str | None
+
+
+@dataclasses.dataclass(frozen=True)
+class Listing:
+    """`Listing`: each audit's listed files (None for one that lists none) and the scan's (`scan_circuits`)."""
+    audits: tuple[Listed | None, ...] = ()
+    scan: Listed | None = None
+
+    @property
+    def listed(self) -> bool:
+        return any(x is not None for x in self.audits) or self.scan is not None
+
+
+def charges_of(j: dict) -> list[tuple[str, int, int]]:
+    """`chargesOf`: each root template's descriptor id, members and the 16-bit words one instance commits, its
+    parameters' and its return's (`words_of`, `ret_words`)."""
+    defs, callees = j["definitions"], j["callees"]
+    return [(k, _members(x), sum(words_of(t) for _, t in d["body"]["params"]) + ret_words(d["body"]["ret_type"]))
+            for x in defs[j["root"]]["body"]["nodes"] if (d := defs[k := callees[x["fn"]]])["form"] != "primitive"]
+
+
+def _listed(j: dict, fs, ctx: str, partition: str | None) -> Listed:
+    """`listedOf`: a listing `[{"sha512", "template"}, …]` of a file each of the Program's root templates, in order."""
+    ts = charges_of(j)
+    got = []
+    for f in _of(fs, list, ctx):
+        _exactly(f, ["sha512", "template"], f"{ctx}: a file")
+        if not DIGEST.fullmatch(_of(f["sha512"], str, ctx)):
+            raise D.Reject(f"{ctx}: a file's sha512 is not a SHA-512 digest")
+        got.append((_of(f["template"], str, ctx), f["sha512"]))
+    if [t for t, _ in got] != [t for t, _, _ in ts]:
+        raise D.Reject(f"{ctx}: the files' templates are not the Program's root templates in order, a file each")
+    return Listed(program_sha512(j), {k: def_sig(d) for k, d in j["definitions"].items()}, tuple(ts),
+                  tuple(d for _, d in got), partition)
+
+
+def partition_digest(obj: dict) -> str:
+    """`Flock.HmRow.partitionDigest`, hex: SHA-512 of `verity/partition/v1`, a zero byte and the canonical object."""
+    return hashlib.sha512(PARTITION_V1.encode() + b"\0" + D.canonical(obj).encode()).hexdigest()
+
+
+def record_partition(c, ctx: str) -> str:
+    """`recordPartition`: a circuit record's `verity/partition/v1` digest of its program and query, which must be its
+    own `partition`."""
+    d = partition_digest({"format": PARTITION_V1, "program": c.get("program"), "query": c.get("query")})
+    if c.get("partition") != d:
+        raise D.Reject(f"{ctx}: its partition is not the {PARTITION_V1} digest of its program and query")
+    return d
 
 
 def _audit(a, ctx: str) -> Audit:
-    """`auditOf`: the layout terms and the Program's descriptor, whose root's template instances are the audit's units,
-    each committing its template's parameters and return; a root with no template refused; its free inputs the
-    Program's input gates (`input_gates`), never a parameter, or, with its window's circuit record, wire order and the
-    verifier's pins, the record's count (`_record_count`); its slot entries' templates (`ENTRY_IDS`) with their closure
-    digests. It reads
-    the descriptor's root nodes, signatures and the slot entries' Definitions; C-Flock's decoder, which Lean runs on it,
-    refuses no descriptor this module writes."""
+    """`auditOf`: `_audit_listed`'s audit, without its listed files."""
+    return _audit_listed(a, ctx)[0]
+
+
+def _audit_listed(a, ctx: str) -> tuple[Audit, Listed | None]:
+    """`auditWith`: the layout terms and the Program's descriptor, whose root's template instances are the audit's
+    units, each charged `vu_bits` at one instance a VU of its template's parameters' and return's words; a root with no
+    template refused; its free inputs the Program's input gates (`input_gates`), never a parameter, or, with its
+    window's circuit record, wire order and the verifier's pins, the record's count (`_record_count`); its slot entries'
+    templates (`ENTRY_IDS`) with their closure digests; and with its record, its listed circuit files (`_listed`), the
+    record's partition its program's and query's (`record_partition`). It reads the descriptor's root nodes, signatures
+    and the slot entries' Definitions; C-Flock's decoder, which Lean runs on it, refuses no descriptor this module
+    writes."""
     if not isinstance(a, dict) or sorted(a) not in AUDIT_FORMS:
-        raise D.Reject(f"{ctx}: an object whose keys are {AUDIT_FORMS[0]} or {AUDIT_FORMS[1]}")
+        raise D.Reject(f"{ctx}: an object whose keys are {AUDIT_FORMS[0]}, {AUDIT_FORMS[1]} or {AUDIT_FORMS[2]}")
     steps, j = _nat(a["steps"], ctx), a["program"]
     if not isinstance(j, dict) or j.get("schema") != SCHEMA:
         raise D.Reject(f"{ctx}: program: not a Program's descriptor")
     defs, callees = j["definitions"], j["callees"]
     nodes = defs[j["root"]]["body"]["nodes"]
-    units = [(_members(x), sum(bits_of(t) for _, t in d["body"]["params"]) + bits_of(d["body"]["ret_type"]))
-             for x in nodes if (d := defs[callees[x["fn"]]])["form"] != "primitive"]
+    units = charges_of(j)
     if not units:
         raise D.Reject(f"{ctx}: program: no template")
     entries = tuple((k, _members(x), slot_entry_digest(j, k)) for x in nodes
                     if (d := defs[k := callees[x["fn"]]])["form"] != "primitive" and d.get("id") in ENTRY_IDS)
     free, state_free, record, circuit = (input_gates(j), None, None, None) if "circuit" not in a else \
         _record_count(a, f"{ctx}: circuit")
-    return Audit(free, steps, program_sha512(j), sum(n for n, _ in units), max(b for _, b in units), entries, record,
-                 circuit, state_free)
+    listed = _listed(j, a["circuits"], f"{ctx}: circuits", record_partition(a["circuit"], f"{ctx}: circuit")) \
+        if "circuits" in a else None
+    return Audit(free, steps, program_sha512(j), sum(n for _, n, _ in units), max(vu_bits(1, w) for _, _, w in units),
+                 entries, record, circuit, state_free), listed
 
 
 def _record_count(a: dict, ctx: str) -> tuple[int, int, tuple[str, tuple[tuple[str, str], ...]], Stated]:
@@ -588,9 +808,11 @@ def _record_count(a: dict, ctx: str) -> tuple[int, int, tuple[str, tuple[tuple[s
 
 
 def _scan(j, program: str, s: WardenParams) -> Scan:
-    """`scanOf`: the scan's terms from its Program's descriptor, which must be the registered Program and the generator
-    form of the schedule's link-window in the Boolean profile's types (`BOOL_BYTE`, `BOOL_U16`), an egress template
-    with a row among its parameters (the checker form) refused first. Then what `NetTiming.BoundaryGates.Fits` asks: the
+    """`scanOf`: the scan's terms from its Program's descriptor, which must be the registered Program, with no
+    template keyed as an input (`INPUT_ID`; two definitions of one key can't be written, `definitions` being an object),
+    and the generator form of the schedule's link-window in the Boolean profile's types (`BOOL_BYTE`, `BOOL_U16`), its
+    egress template's VUs apart from every other template's (`_vu_strata`, `_apart`) first, then an egress template
+    with a row among its parameters (the checker form) refused. Then what `NetTiming.BoundaryGates.Fits` asks: the
     walk within `FUEL` (`_walkable`), the root returning every egress leaf, the egress template returning only gates it
     computes (`_own_returns`), each ingress row and every template's row, state and egress argument one input node's
     leaves (`_input_arg`), no egress argument an ingress row's, bucket t's `prog<j>` row `⌊t / every⌋` of lane j's
@@ -604,10 +826,16 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
     defs, callees = j["definitions"], j["callees"]
     nodes = defs[j["root"]]["body"]["nodes"]
     templates = [(x, defs[callees[x["fn"]]]["body"]) for x in nodes if defs[callees[x["fn"]]]["form"] != "primitive"]
+    if any(INPUT_ID.fullmatch(callees[x["fn"]]) for x, _ in templates):
+        raise D.Reject("scan: a template is keyed as an input")
     T, row = s.window, ["Array", s.lanes * s.slots * s.cell_bytes, BOOL_BYTE]
     if not templates:
         raise D.Reject("scan: no template")
     (xf, bf), later, (xe, be) = templates[0], templates[1:-1], templates[-1]
+    vus = _vu_strata(j)
+    if not all(_apart(vus.get(callees[x["fn"]], []), vus.get(callees[xe["fn"]], [])) for x, _ in templates[:-1]):
+        raise D.Reject("scan: the egress template's VUs are not apart from the ingress templates' (vuStrata): a "
+                       "stratum of the draw would hold both egress and ingress units")
     if any(k == "row" or t == row for k, t in be["params"]):
         raise D.Reject("scan: the egress template takes its row as an input (the checker form)")
     if len(templates) not in (2, 3):
@@ -658,7 +886,7 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
     if any(_input_arg(a, nodes, j) in rows for a in xe["args"]):
         raise D.Reject("scan: an egress template's argument is an ingress row's input node, so an egress gate would "
                        "depend on the ingress (NetTiming.BoundaryGates.Fits)")
-    r0 = [_member_ref(xf, 1 + i, 0, 0, j) for i in range(L)]
+    r0 = [_member_refs(xf, 1 + i, j)(0, 0) for i in range(L)]
     pks = [r[1] for r in r0 if r is not None]
     if (len(pks) != L or any(r[0] == "p" for r in r0) or len(set(pks)) != L
             or any(k in rows or not (k < len(nodes) and _is_input(nodes[k], j)) for k in pks)):
@@ -672,16 +900,31 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
     if not _topological(j):
         raise D.Reject("scan: a body names a later node (Flock.Program.Prog.orderViolation): the Program is not "
                        "topological, so a gate's operands could be gates after it")
-    return Scan(T, 0, max([bits(bf["params"]), *(bits(b["params"]) for _, b in later)]) + bits_of(bf["ret_type"]),
-                bits(be["params"]) + bits_of(be["ret_type"]), L * nb * bits_of(ety))
+    words = lambda ps: sum(words_of(t) for _, t in ps)  # noqa: E731
+    return Scan(T, 0, vu_bits(1, max([words(bf["params"]), *(words(b["params"]) for _, b in later)])
+                               + ret_words(bf["ret_type"])),
+                vu_bits(1, words(be["params"]) + ret_words(be["ret_type"])), L * nb * bits_of(ety))
 
 
 def params(j) -> Params:
+    """`paramsOf`: `params_listed`'s parameters, a listing of circuit files refused (only `check_with` reads one)."""
+    p, listing = params_listed(j)
+    if listing.listed:
+        raise D.Reject("the period lists circuit files, which only network-period check PARAMS COMMITMENT EVIDENCE "
+                       "CIRCUIT… reads")
+    return p
+
+
+def params_listed(j) -> tuple[Params, Listing]:
+    """`paramsWith`: the parameters, and the circuit files each audit lists and, in the rows form, the scan's
+    (`scan_circuits`)."""
     if not isinstance(j, dict):
         raise D.Reject("the object: not an object")
-    if sorted(j) not in (PARAMS_KEYS, ROWS_PARAMS_KEYS):
-        raise D.Reject(f"the object: the keys must be {PARAMS_KEYS} or {ROWS_PARAMS_KEYS}, not {sorted(j)}")
-    audits = [_audit(a, "an audit") for a in _of(j["audits"], list, "audits")]
+    if sorted(j) not in (PARAMS_KEYS, ROWS_PARAMS_KEYS, ROWS_LISTED_KEYS):
+        raise D.Reject(f"the object: the keys must be {PARAMS_KEYS}, {ROWS_PARAMS_KEYS} or {ROWS_LISTED_KEYS}, not "
+                       f"{sorted(j)}")
+    read = [_audit_listed(a, "an audit") for a in _of(j["audits"], list, "audits")]
+    audits = [a for a, _ in read]
     cells = tuple(_nat(x, "cells") for x in _of(j["cells"], list, "cells"))
     first = _nat(j["first"], "first")
     jitter = _nat(j["jitter"], "jitter")
@@ -722,8 +965,9 @@ def params(j) -> Params:
         raise D.Reject(f"cells: the rows form's caps are egress_cells = {schedule.egress_cells} for each of the "
                        f"lanes · windows · window = {schedule.lanes * windows * schedule.window} connections the "
                        f"schedule can carry, not these {len(cells)}")
-    return Params(tuple(audits), cells, first, jitter, link, LmsKey(lp, key), session, program, sync_set, windows,
-                  schedule, scan, circuit)
+    listed = _listed(j["scan"], j["scan_circuits"], "scan_circuits", None) if "scan_circuits" in j else None
+    return (Params(tuple(audits), cells, first, jitter, link, LmsKey(lp, key), session, program, sync_set, windows,
+                   schedule, scan, circuit), Listing(tuple(x for _, x in read), listed))
 
 
 def _registration(j, ctx: str) -> dict:
@@ -871,11 +1115,21 @@ def _rows_check(p: Params, w: int, d: Direction, doc: dict) -> None:
         raise Finding(REJECT, f"window {w}: the {d.value} rows: {e}") from None
 
 
-def _holds(reg: dict, doc: dict) -> bool:
-    """The scan's registration holds the rows: an entry of its `roots` or `registered` names their root and domain."""
-    entries = [e for k in ("roots", "registered") if isinstance(reg.get(k), list) for e in reg[k]]
-    return any(isinstance(e, dict) and e.get("root") == doc["root"] and e.get("domain") == doc["domain"]
-               for e in entries)
+def rows_name(d: Direction, w: int) -> str:
+    """`rowsName`: the registration's port of the network certifier's rows of end `d` at window `w`."""
+    return f"rows/{d.value}/{w}"
+
+
+def _holds(reg: dict, d: Direction, w: int, doc: dict) -> bool:
+    """`holds`: the scan's registration has an entry of its `roots` at port `rows_name(d, w)` or of its `registered` at
+    the rows' value, and every such entry names their root and domain, a `roots` one with their leaves."""
+    ports = [e for e in _entries(reg, "roots") if e.get("port") == rows_name(d, w)]
+    values = [e for e in _entries(reg, "registered") if e.get("value") == doc["value"]]
+
+    def at(e: dict) -> bool:
+        return e.get("root") == doc["root"] and e.get("domain") == doc["domain"]
+
+    return bool(ports + values) and all(at(e) and _leaves(e) == doc["rows"] for e in ports) and all(map(at, values))
 
 
 #: the scan's Programs' rows in its registration, one tree a lane, `PROG<j>` lane j's (`progName`): its `roots` entry's
@@ -1163,8 +1417,9 @@ def _rows_window_check(p: Params, audits: list[dict], w: int, reg: dict, x: Wind
         raise Finding(REJECT, f"{what}: registrations")
     for doc, d in zip(x.registrations, (INGRESS, EGRESS)):
         _rows_check(p, w, d, doc)
-    if not all(_holds(reg, doc) for doc in x.registrations):
-        raise Finding(REJECT, f"{what}: another window's answer")
+    for doc, d in zip(x.registrations, (INGRESS, EGRESS)):
+        if not _holds(reg, d, w, doc):
+            raise Finding(REJECT, f"{what}: {ROWS_UNHELD} {rows_name(d, w)}")
     if not _prog_tied(audits, reg):
         raise Finding(REJECT, f"{what}: the scan's prog is no compute audit's output")
     prof, pub = _answered(what, reg, x.answer)
@@ -1217,6 +1472,8 @@ def _audit_check(i: int, audit: Audit, reg: dict, a: dict) -> Facts:
     return f
 
 
+#: `holds`' refusal, after its window's number and before the rows' port (`rows_name`).
+ROWS_UNHELD = "the scan's registration doesn't hold the rows at"
 #: `wiredCheck`'s refusal, after its window's number.
 UNWIRED = "the scan's prog is no compute audit's slot entries"
 #: `stateCheck`'s refusals, after its window's number: the state untied, its reads off the chain, its row 0 unopened.
@@ -1351,6 +1608,505 @@ def reference(case) -> dict:
                     digest=lambda c: tagged_sha512(COMMITMENT_TAG, c.bytes))
 
 
+# --- the listed circuit files --------------------------------------------------------------------------------------------
+
+#: a flat circuit file's head and META `format`, its statement and its blocks' keyword (`Flock.Tags.circuit`)
+CIRCUIT_FORMAT, CIRCUIT_STATEMENT, CIRCUIT_BLOCK = "flock-circuit", "verity/flock-circuit", "CIRCUIT"
+WORD = 128
+
+
+@dataclasses.dataclass(frozen=True)
+class CircuitHeader:
+    """What `network-period check` reads of a circuit file: its SHA-512, META, units per VU and leaf maps, and its unit
+    net's header (`headerNet`): its constant's column, input words and port groups, each `(col, words, bits)`; whether
+    META's `out_net` is the unit; its row ports (`rowPorts`), each `(name, words, bits)`, and its output rows' count
+    (`outRows`); for a file read whole (the scan's, `NetworkCheck.CircuitFile.whole`), its unit's read input columns
+    (`Bits.unitReads`), else None (an audit's: its header and its unit's input rows, `NetworkCheck.Period.trim`); and whether
+    each of its unit's input columns' rows is a self row, not a forced zero (`CircuitFile.withInputs`), None for a
+    header whose input rows weren't read."""
+    sha512: str
+    meta: dict
+    upv: int
+    leaves_in: list
+    leaves_out: list
+    const: int
+    in_words: int
+    in_groups: list[tuple[int, int, list[int]]]
+    out_groups: list[tuple[int, int, list[int]]]
+    out_unit: bool
+    ports: list[tuple[str, int, int]]
+    out_rows: int
+    unit_reads: list[bool] | None = None
+    in_self: list[bool] | None = None
+
+
+def _header_net(line: str) -> tuple[int, int, list, list]:
+    """`headerNet`: a `flock-ir-unit/v2` net's header line's constant, input words and port groups."""
+    h = line.split()
+    if not h or h[0] != "flock-ir-unit/v2" or not all(x.isdigit() for x in h[2:]):
+        raise D.Reject("not a flock-ir-unit/v2 circuit")
+
+    def groups(at: int) -> tuple[list, int]:
+        out = []
+        for _ in range(int(h[at])):
+            col, words, n = (int(x) for x in h[at + 1:at + 4])
+            if words & (words - 1) or col % words:
+                raise D.Reject("flock-ir-unit/v2: a port group is not an aligned power of two of words")
+            out.append((col, words, [int(x) for x in h[at + 4:at + 4 + n]]))
+            at += 3 + n
+        return out, at + 1
+    ins, at = groups(4)
+    outs, end = groups(at)
+    useful, const = int(h[2]), int(h[3])
+    in_words = ins[-1][0] + ins[-1][1] if ins else 0
+    if end != len(h) or not outs or const + 1 != useful:
+        raise D.Reject("flock-ir-unit/v2: not a header headerNet reads")
+    if any(sum(bs) > w * WORD or c + w > in_words for c, w, bs in ins) or any(sum(bs) > w * WORD for _, w, bs in outs):
+        raise D.Reject("flock-ir-unit/v2: a port group's ports overrun its words, or an input group the input rows")
+    if in_words * WORD > const:
+        raise D.Reject("flock-ir-unit/v2: not a header headerNet reads")
+    return const, in_words, ins, outs
+
+
+def _unit_reads(const: int, in_words: int, rows: list[str]) -> list[bool]:
+    """`Bits.unitReads`: of the unit net's input columns, those a computed row (`Rows.ofNet`, its rows from the input
+    columns up to the constant) reads in its A or its B, each row `na a… nb b…`."""
+    n_in = min(in_words * WORD, const)
+    reads = [False] * n_in
+    for line in rows[n_in:const]:
+        t = [int(x) for x in line.split()]
+        for x in t[1:1 + t[0]] + t[2 + t[0]:2 + t[0] + t[1 + t[0]]]:
+            if x < n_in:
+                reads[x] = True
+    return reads
+
+
+def _input_rows(in_words: int, rows: list[str]) -> list[bool]:
+    """`CircuitFile.withInputs`: of the unit net's input columns, whether each one's row is a self row `[c]·[c]`, not a
+    forced zero (empty in A and in B); any other input row is refused, as `Flock.Net.ofRows` refuses it."""
+    out = []
+    for c in range(in_words * WORD):
+        t = (rows[c] if c < len(rows) else "").split()
+        if not all(x.isdigit() for x in t):
+            raise D.Reject(f"unit: flock-ir-unit/v2: row {c} is not numbers")
+        v = [int(x) for x in t]
+        na = v[0] if v else 0
+        nb = v[1 + na] if 1 + na < len(v) else 0
+        if not v or len(v) != 2 + na + nb:
+            raise D.Reject(f"unit: flock-ir-unit/v2: row {c} is malformed")
+        a, b = v[1:1 + na], v[2 + na:]
+        if not ((a == [c] and b == [c]) or (not a and not b)):
+            raise D.Reject(f"unit: flock-ir-unit/v2: row {c} is not an input row")
+        out.append(bool(a))
+    return out
+
+
+def read_circuit(text: str, whole: bool = False) -> CircuitHeader:
+    """What the period holds of a flat circuit file: its SHA-512, its META, each block's net header and its first unit's
+    input rows (`_input_rows`), no computed row (`NetworkCheck.Period.trim`; `NetworkCheck.CircuitFile.read`, the
+    test-only `network-period-chunked`'s); `whole`, the scan's file, its unit's rows too (`unit_reads`). The mirror
+    doesn't hold a file to the session verifier's parse (`NetworkCheck.CircuitFile.whole`), which `network-period` reads
+    every file with, so a toy file the mirror reads Lean may refuse. A file it can't read is refused (`D.Reject`)."""
+    lines = text.split("\n")
+    if not lines[0].startswith(CIRCUIT_FORMAT + " ") or len(lines) < 2 or not lines[1].startswith("META "):
+        raise D.Reject(f"not a {CIRCUIT_FORMAT} file with a META line")
+    meta = json.loads(lines[1][5:])
+    if meta.get("format") != CIRCUIT_FORMAT or meta.get("statement") != CIRCUIT_STATEMENT:
+        raise D.Reject(f"META: not {CIRCUIT_STATEMENT}")
+    nets, reads, in_self, i = {}, None, None, 2
+    while i < len(lines) and lines[i]:
+        kw, name, n = lines[i].split()
+        if kw != CIRCUIT_BLOCK or not 0 < int(n) or i + int(n) >= len(lines):
+            raise D.Reject("a block is truncated")
+        nets[name] = _header_net(lines[i + 1])
+        if name == "unit" and in_self is None:
+            in_self = _input_rows(nets[name][1], lines[i + 2:i + 1 + int(n)])
+        if whole and name == "unit":
+            reads = _unit_reads(nets[name][0], nets[name][1], lines[i + 2:i + 1 + int(n)])
+        i += 1 + int(n)
+    if "unit" not in nets or meta.get("out_net", "unit") not in nets:
+        raise D.Reject("no unit circuit, or META's out_net is no circuit")
+    for w in meta.get("wires", []):
+        if len(w) != 6:
+            raise D.Reject("META: a wire is not six fields")
+        if (n := next((n for n in (w[0], w[3]) if n not in nets), None)) is not None:
+            raise D.Reject(f"META: unknown circuit {n}")
+    for x in meta.get("leaf_cuts", []):
+        if len(x) != 4:
+            raise D.Reject("META: a leaf cut is not [circuit, unit, port, leaf]")
+        if x[0] != "unit":
+            raise D.Reject("META: a leaf cut into anything but a unit")
+    out_ports = meta.get("out_ports")
+    if not isinstance(out_ports, list) or any(not isinstance(p, list) or len(p) != 2 for p in out_ports):
+        raise D.Reject("META: an out port is not [name, words]")
+    return CircuitHeader(hashlib.sha512(text.encode()).hexdigest(), meta, _nat(meta.get("units_per_vu"), "META"),
+                         meta["leaves_in"], meta["leaves_out"], *nets["unit"], meta.get("out_net", "unit") == "unit",
+                         _row_ports(meta), len(meta["out_row_ports"]) if "out_row_ports" in meta
+                         else len(out_ports) - len(meta.get("pinned_outputs", [])), reads, in_self)
+
+
+def _row_ports(meta: dict) -> list[tuple[str, int, int]]:
+    """`CircuitFile.rowPorts`: META's row ports, each `(name, words, bits)`, its bits a bit row's length
+    (`row_schemas`) or 16 per word."""
+    ports = meta.get("ports")
+    if not isinstance(ports, list) or any(not isinstance(p, list) or len(p) < 2 for p in ports):
+        raise D.Reject("circuit META: a port is not [name, words, …]")
+    schemas = meta.get("row_schemas")
+    if schemas is not None and len(schemas) != len(ports):
+        raise D.Reject("META: row_schemas is not one [schema, bits] per port")
+    return [(p[0], p[1], schemas[i][1] if schemas is not None else 16 * p[1]) for i, p in enumerate(ports)]
+
+
+def _n_in(c: CircuitHeader) -> int:
+    """`HmOut.nIn`: the input row ports, those before the output rows."""
+    return len(c.ports) - c.out_rows
+
+
+def _starts(c: CircuitHeader) -> list[int]:
+    """`KnownRead.starts`: each row port's first word among the rows'."""
+    return [sum(w for _, w, _ in c.ports[:q]) for q in range(len(c.ports))]
+
+
+def _port_cols(groups) -> list[tuple[int, int]]:
+    """`Flock.portCols`: each port's first column and width, a group's ports from its column on."""
+    out = []
+    for col, _, bits in groups:
+        at = col * WORD
+        for w in bits:
+            out.append((at, w))
+            at += w
+    return out
+
+
+def param_of(name: str) -> str:
+    """`Bits.paramOf`: a row port's parameter, its name up to its first `#`."""
+    return name.split("#")[0]
+
+
+def runs_of(c: CircuitHeader) -> list[tuple[str, int, int]]:
+    """`Bits.runsOf`: the input row ports in order, consecutive ones of one parameter merged, each its parameter, its
+    words and its first word among the rows'."""
+    st, runs = _starts(c), []
+    for q in range(_n_in(c)):
+        nm, w, _ = c.ports[q]
+        if runs and runs[-1][0] == param_of(nm):
+            runs[-1] = (runs[-1][0], runs[-1][1] + w, runs[-1][2])
+        else:
+            runs.append((param_of(nm), w, st[q]))
+    return runs
+
+
+def field_bit(upv: int, words: list[tuple[str, int]], f: str, beta: int) -> tuple[int, int, int] | None:
+    """`Bits.fieldBit`: bit `beta` of field `f`'s rows on the unit, `(k, P + j % w, beta % 16)` with `j = beta / 16`,
+    `k = j / w` and `P` the words of the fields before `f`; None for no such field or a bit past its rows."""
+    i = next((i for i, (nm, _) in enumerate(words) if nm == f), None)
+    if i is None or (w := words[i][1]) == 0 or upv * w <= beta // 16:
+        return None
+    return beta // 16 // w, sum(x for _, x in words[:i]) + beta // 16 % w, beta % 16
+
+
+def _msg_at(c: CircuitHeader, starts: list[int], x: int, t: int, wide: bool) -> bool:
+    """`Bits.msgAt` is a message bit: leaf word `x`'s bit `t` within the bits of the row port holding the word."""
+    q = max(sum(1 for s in starts if s <= x) - 1, 0)
+    s = starts[q] if q < len(starts) else 0
+    return (wide or t < 16) and 16 * max(x - s, 0) + t < (c.ports[q][2] if q < len(c.ports) else 0)
+
+
+def _src_msg(c: CircuitHeader, starts: list[int], cuts: dict, k: int, p: int, t: int) -> bool:
+    """`Bits.srcAt` is a message bit: a leaf port's leaf word's, else its first leaf cut's."""
+    if p < (len(c.in_groups[0][2]) if c.in_groups else 0):
+        row = c.leaves_in[k] if k < len(c.leaves_in) else []
+        x = row[p] if p < len(row) else 0
+        return x >= 0 and _msg_at(c, starts, x, t, True)
+    return (k, p) in cuts and _msg_at(c, starts, cuts[(k, p)], t, False)
+
+
+def params_why(c: CircuitHeader, params: list) -> str | None:
+    """`Bits.paramsWhy`: at each bit of parameter `π`'s rows, its port (`field_bit`) reads the row word it is, and each
+    of `π`'s bits is a message bit of its row."""
+    starts, runs = _starts(c), runs_of(c)
+    cut = len(c.in_groups[0][2]) if c.in_groups else 0
+    cuts: dict[tuple[int, int], int] = {}
+    for _, k, p, w in c.meta.get("leaf_cuts", []):
+        cuts.setdefault((k, p), w)
+    ws = [(nm, words_of(t)) for nm, t in params]
+    for j, (nm, t) in enumerate(params):
+        w, s = words_of(t), runs[j][2] if j < len(runs) else 0
+        for beta in range(16 * c.upv * w):
+            if (fb := field_bit(c.upv, ws, nm, beta)) is None:
+                return f"bit {beta} of parameter {nm}'s rows is on no input port"
+            k, p, b = fb
+            if b == 0:
+                row = c.leaves_in[k] if k < len(c.leaves_in) else []
+                x = (row[p] if p < len(row) else -1) if p < cut else cuts.get((k, p), -1)
+                if x != s + beta // 16:
+                    return (f"template instance {k}'s input port {p} reads row word {x}, not word {beta // 16} of its "
+                            f"parameter {nm}'s rows")
+            at = 16 * (beta // 16 % w) + b
+            if at < bits_of(t) and not _src_msg(c, starts, cuts, k, p, b):
+                return f"bit {at} of parameter {nm} of template instance {k} is no message bit of its rows"
+    return None
+
+
+def bits_why(c: CircuitHeader, defs: dict[str, tuple[list, list]], template: str) -> str | None:
+    """`SampledProofs.Bits.check` on a file's header: why Bits doesn't lay it out as `template` of a Program whose
+    Definitions are `defs` (`def_sig` by key), or None."""
+    n_in = min(c.in_words * WORD, c.const)
+    gi = c.in_groups[0][2] if c.in_groups else []
+    go = c.out_groups[0][2] if c.out_groups else []
+    outs = [x for u in c.leaves_out for x in u]
+    out_col = (c.out_groups[0][0] if c.out_groups else 0) * WORD
+    in_rows = sum(w for _, w, _ in c.ports[:_n_in(c)])
+    if template not in defs:
+        return "the circuit file's template is no Definition of the Program"
+    if c.upv == 0:
+        return "the circuit file's unit holds no template instance"
+    if any(b != 16 for b in gi + go):
+        return "a port of the circuit file's unit is not one 16-bit word"
+    if len(c.leaves_in) != c.upv or len(c.leaves_out) != c.upv or any(
+            len(c.leaves_in[k]) != len(gi) or len(c.leaves_out[k]) != len(go) for k in range(c.upv)):
+        return "the circuit file's leaf maps are not one per template instance over its unit's ports"
+    if any(x >= in_rows for u in c.leaves_in for x in u):
+        return "a leaf map names a word past the circuit file's input rows"
+    if any(w[0] == "unit" for w in c.meta.get("wires", [])):
+        return "a wire into the circuit file's unit"
+    pc = [b for g in c.in_groups for b in g[2]]
+    if any(k >= c.upv or p < len(gi) or p >= len(pc) or pc[p] < 16 or w >= in_rows
+           for _, k, p, w in c.meta.get("leaf_cuts", [])):
+        return "a leaf cut outside the unit's cut inputs or the input rows"
+    cols = _port_cols(c.in_groups)
+    if any(cols[p + 1][0] < cols[p][0] + cols[p][1] for p in range(len(cols) - 1)):
+        return "the circuit file's unit's input ports overlap or are out of column order"
+    wired: dict[tuple[int, int], int] = {}
+    for kp in [(x[1], x[2]) for x in c.meta.get("leaf_cuts", [])]:
+        wired[kp] = wired.get(kp, 0) + 1
+    for k in range(c.upv):
+        for p in range(len(gi), len(pc)):
+            if wired.get((k, p), 0) != 1:
+                return (f"input port {p} of the circuit file's unit, template instance {k}, is not wired exactly once by "
+                        "a leaf cut")
+    if len(set(outs)) != len(outs):
+        return "the circuit file's unit returns an output word twice"
+    if n_in != c.in_words * WORD:
+        return "the circuit file's unit net has its constant among its input words"
+    if not c.out_unit:
+        return "the circuit file returns its outputs from a net other than its unit"
+    if not all(n_in <= out_col + 16 * j + t < c.const for u in c.leaves_out for j in range(len(u)) for t in range(16)):
+        return "a returned output bit of the circuit file's unit sits on no computed row"
+    params, ret = defs[template]
+    rw = ret_words(ret)
+    if len({p[0] for p in c.ports}) != len(c.ports):
+        return "two row ports of the circuit file have one name"
+    if [(nm, w) for nm, w, _ in runs_of(c)] != [(nm, c.upv * words_of(t)) for nm, t in params]:
+        return (f"the circuit file's input rows are not its template's parameters in order, each {c.upv} times its "
+                "packed words")
+    if sum(w for _, w, _ in c.ports[_n_in(c):]) != c.upv * rw:
+        return f"the circuit file's output rows are not {c.upv} times its template's return's packed words"
+    if any(len(u) != rw for u in c.leaves_out):
+        return "a template instance's output leaves are not its template's return's packed words"
+    if len(pc) != sum(words_of(t) for _, t in params):
+        return "the circuit file's unit's input ports are not its template's parameters' packed words"
+    if (why := params_why(c, params)) is not None:
+        return why
+    if c.upv != 1:
+        return f"the circuit file has {c.upv} template instances a VU, not one"
+    return None
+
+
+def _port_held(c: CircuitHeader) -> list[bool]:
+    """Of the unit net's input columns, whether a port holds each (`Flock.portCols`)."""
+    held = [False] * min(c.in_words * WORD, c.const)
+    for a0, w in _port_cols(c.in_groups):
+        for t in range(w):
+            if a0 + t < len(held):
+                held[a0 + t] = True
+    return held
+
+
+def pad_cols(c: CircuitHeader) -> int:
+    """`padCols`: the unit net's input columns no port holds whose row is not a forced zero (every one when its input
+    rows weren't read), each a free input of each VU."""
+    held = _port_held(c)
+    return sum(1 for x, h in enumerate(held) if not h and (c.in_self is None or c.in_self[x]))
+
+
+def reads_why(c: CircuitHeader, params: list, reads: list[bool], names: list[str]) -> str | None:
+    """`SampledProofs.Bits.readsWhy`: the unit's read input columns `reads` are not one per input column, a computed row
+    reads an input column no port holds (input padding), or no row reads a bit of a parameter in `names`."""
+    n_in = min(c.in_words * WORD, c.const)
+    pc = _port_cols(c.in_groups)
+    if len(reads) != n_in:
+        return "the circuit file's unit's read columns are not one per input column"
+    held = _port_held(c)
+    if (x := next((x for x in range(n_in) if reads[x] and not held[x]), None)) is not None:
+        return f"a row of the circuit file's unit reads its input column {x}, which no port holds"
+    at = 0
+    for nm, t in params:
+        if nm in names:
+            for beta in range(bits_of(t)):
+                col = (pc[at + beta // 16][0] if at + beta // 16 < len(pc) else 0) + beta % 16
+                if not (col < len(reads) and reads[col]):
+                    return f"no row of the circuit file's unit reads bit {beta} of its parameter {nm}"
+        at += words_of(t)
+    return None
+
+
+def _listing_files(listing: Listing) -> list[tuple[str, bool, Listed, int]]:
+    """`Listing.files`: every listed file in the order given, each audit's by index, then the scan's."""
+    owners = [(f"audit {i}", False, x) for i, x in enumerate(listing.audits) if x is not None]
+    owners += [("the scan", True, listing.scan)] if listing.scan is not None else []
+    return [(w, s, x, k) for w, s, x in owners for k in range(len(x.files))]
+
+
+def circuits_why(listing: Listing, files: list[CircuitHeader]) -> str | None:
+    """`circuitsWhy`: why the files are not the period's listed circuit files, or None (`fileWhy`, the first in order:
+    its SHA-512, META's `program_sha512`, an audit's file's META partition, `bits_why`, whole VUs, the scan's at one
+    instance a VU, read whole and its unit's rows reading no padding and every bit of a `row` parameter, `reads_why`)."""
+    want = _listing_files(listing)
+    if len(files) != len(want):
+        return f"the period lists {len(want)} circuit files, not the {len(files)} given"
+    for (what, scan, x, k), c in zip(want, files):
+        t, members, _ = x.templates[k]
+        at, part = f"{what}'s circuit file for {t}", c.meta.get("partition")
+        if c.sha512 != x.files[k]:
+            return f"{at}: its SHA-512 is not its listing's"
+        if c.meta.get("program_sha512") != x.program:
+            return f"{at}: META program_sha512 is not the {what}'s Program's SHA-512"
+        if x.partition is not None and not (isinstance(part, dict) and part.get("rule") == PARTITION_V1
+                                            and part.get("digest") == x.partition):
+            return f"{at}: META partition is not {PARTITION_V1} at its circuit record's digest"
+        if (why := bits_why(c, x.defs, t)) is not None:
+            return f"{at}: {why}"
+        if members % c.upv:
+            return f"{at}: its {members} template instances are not whole VUs of {c.upv}"
+        if scan and c.upv != 1:
+            return f"{at}: {c.upv} template instances a VU, not 1"
+        if scan and c.unit_reads is None:
+            return f"{at}: its unit net's rows were not read, so what they read can't be checked"
+        if scan and (why := reads_why(c, x.defs[t][0], c.unit_reads, ["row"])) is not None:
+            return f"{at}: {why}"
+    return None
+
+
+def charged(p: Params, listing: Listing, files: list[CircuitHeader]) -> Params:
+    """`charged`: each listed audit's units its VUs, its templates' members over their files' `units_per_vu`, its
+    bits the most a wrong VU is charged (`vu_bits`), and each VU's input padding (`pad_cols`) more free inputs, with the
+    scan's state held or not."""
+    at, audits = 0, []
+    for a, x in zip(p.audits, listing.audits):
+        if x is None:
+            audits.append(a)
+            continue
+        heads = [(c.upv, pad_cols(c)) for c in files[at:at + len(x.files)]]
+        at += len(x.files)
+        pad = sum(n * q for (_, n, _), (_, q) in zip(x.templates, heads))
+        audits.append(dataclasses.replace(a, units=sum(n // u for (_, n, _), (u, _) in zip(x.templates, heads)),
+                                          bits=max(vu_bits(u, w) for (_, _, w), (u, _) in zip(x.templates, heads)),
+                                          free=a.free + pad,
+                                          state_free=None if a.state_free is None else a.state_free + pad))
+    return dataclasses.replace(p, audits=tuple(audits))
+
+
+def unlisted_tied(p: Params, listing: Listing, c: Commitment) -> int | None:
+    """`unlistedTied`: the first audit some link-window's scan ties (`tiedOf`) that lists no circuit files, or None."""
+    return next((i for i, x in enumerate(listing.audits)
+                 if x is None and p.schedule is not None and _tied_in(c.audits, c.windows, i)), None)
+
+
+def check_with(files: list[CircuitHeader], pl: tuple[Params, Listing], c: Commitment, e) -> tuple:
+    """`checkWith`: an audit tied to the scan that lists no files refused (`unlisted_tied`), the files held to the
+    listing (`circuits_why`), then `check` at what they charge (`charged`)."""
+    p, listing = pl
+    if (i := unlisted_tied(p, listing, c)) is not None:
+        return REJECT, (f"circuit files: audit {i} is tied to the scan but lists no circuit files (its circuits), so no "
+                        "Bits.check holds its templates' files: list a file for each of its Program's root templates")
+    if (why := circuits_why(listing, files)) is not None:
+        return REJECT, f"circuit files: {why}"
+    return check(charged(p, listing, files), c, e)
+
+
+def scan_count(params) -> int:
+    """`scanCount`: how many files the parameters' `scan_circuits` lists, read before the parameters are: 0 for
+    parameters that list none or aren't an object."""
+    sc = params.get("scan_circuits") if isinstance(params, dict) else None
+    return len(sc) if isinstance(sc, list) else 0
+
+
+def reference_with(case: dict, texts: list[str]) -> dict:
+    """`network-period check PARAMS COMMITMENT EVIDENCE CIRCUIT…`'s answer with the circuit files `texts`, in order
+    (`protocolWith`), the last as many as the parameters' `scan_circuits` lists (`scan_count`) read whole; a file it
+    can't read (`read_circuit`) refuses the period (`refusing`). With no files it is the check that reads none
+    (`reference`)."""
+    if not texts:
+        return reference(case)
+    files, why, whole = [], None, len(texts) - scan_count(case["params"])
+    for i, t in enumerate(texts):
+        try:
+            files.append(read_circuit(t, i >= whole))
+        except D.Reject as x:
+            why = f"circuit files: circuit file {i}: {x}"
+            break
+    if why is None:
+        chk = lambda pl, c, e: check_with(files, pl, c, e)  # noqa: E731
+    else:
+        chk = lambda *_: (REJECT, why)  # noqa: E731
+    return P.answer(ID, case, params=params_listed, commitment=commitment, evidence=evidence, check=chk,
+                    digest=lambda c: tagged_sha512(COMMITMENT_TAG, c.bytes))
+
+
+def _pow2(x: int) -> int:
+    """The least power of two at least `x` (1 for `x ≤ 1`)."""
+    return 1 << max(0, (x - 1).bit_length())
+
+
+def circuit_file(desc: dict, template: str, part: str | None, upv: int = 1, cut: bool = False,
+                 cut_group: tuple[int, int] | None = None, in_rows: dict[int, str] | None = None, **meta) -> str:
+    """A flat circuit file laying out `template` of the Program `desc` as `SampledProofs.Bits.check` places it, at `upv`
+    template instances a VU: an input row a parameter, `upv` times its packed words (`words_of`), then an output row `o`
+    of `upv` times its return's (`ret_words`); a unit net of a 16-bit input port a parameter word, each instance's read
+    off its row word by its leaf map (with `cut`, the last port a cut input in an input group of its own, at
+    `cut_group`'s word and width or else one word past the first group's, read through a leaf cut; the last group ends
+    the input rows), and a 16-bit output port a return word, its sixteen computed rows reading the input bits congruent
+    to theirs, so every port bit is read and no padding, each padding row a forced zero; META binding the Program's
+    SHA-512 and, given one, the `verity/partition/v1` digest `part`. `in_rows` overrides input rows by column, `meta`
+    META's keys."""
+    params, ret = def_sig(desc["definitions"][template])
+    pw, rw = [(nm, words_of(t)) for nm, t in params], ret_words(ret)
+    n = sum(w for _, w in pw)
+    starts = [upv * sum(w for _, w in pw[:i]) for i in range(len(pw))]
+    words = [[starts[i] + k * w + j for i, (_, w) in enumerate(pw) for j in range(w)] for k in range(upv)]
+    leaf = n - 1 if cut else n
+    g0 = _pow2(-(-16 * leaf // WORD))
+    ins = [(0, g0, [16] * leaf)] + [(*(cut_group or (g0, 1)), [16])] * cut
+    in_words, ow = ins[-1][0] + ins[-1][1], _pow2(-(-16 * rw // WORD))
+    oc = -(-in_words // ow) * ow
+    const = oc * WORD + 16 * rw
+    held = list(range(16 * leaf)) + [ins[-1][0] * WORD + t for t in range(16 if cut else 0)]
+    groups = lambda gs: [len(gs), *(x for col, w, bs in gs for x in (col, w, len(bs), *bs))]  # noqa: E731
+    head = " ".join(map(str, ["flock-ir-unit/v2", "toy", const + 1, const, *groups(ins), *groups([(oc, ow, [16] * rw)])]))
+    reader = lambda xs: f"{len(xs)} {' '.join(map(str, xs))} 1 {const}"  # noqa: E731
+    hs = set(held)
+    net = [head] + [(in_rows or {}).get(i, f"1 {i} 1 {i}" if i in hs else "0 0") for i in range(in_words * WORD)] + [
+        reader(held[:1] or [const]) for _ in range(in_words * WORD, oc * WORD)] + [
+        reader(held[r::16 * rw] or [const]) for r in range(16 * rw)] + [f"1 {const} 1 {const}"]
+    m = {"format": CIRCUIT_FORMAT, "statement": CIRCUIT_STATEMENT, "units_per_vu": upv,
+         "ports": [[nm, upv * w, 0] for nm, w in pw] + [["o", upv * rw, 0]], "out_ports": [["o", upv * rw]],
+         "leaves_in": [u[:leaf] for u in words], "leaves_out": [[k * rw + j for j in range(rw)] for k in range(upv)],
+         **({"leaf_cuts": [["unit", k, n - 1, words[k][n - 1]] for k in range(upv)]} if cut else {}),
+         "program_sha512": program_sha512(desc),
+         **({"partition": {"rule": PARTITION_V1, "digest": part}} if part else {})}
+    return "\n".join([f"{CIRCUIT_FORMAT} toy", "META " + json.dumps(m | meta, separators=(",", ":")),
+                      f"{CIRCUIT_BLOCK} unit {len(net)}", *net]) + "\n"
+
+
+def listed_files(case: dict, upv: int = 1, cut: bool = False, cut_group: tuple[int, int] | None = None,
+                 in_rows: dict[int, str] | None = None, **meta) -> list[str]:
+    """The circuit files `circuit_file` writes for each file a case's audits list, in `Listing.files`' order: each its
+    template of the audit's Program, bound to its record's partition digest."""
+    return [circuit_file(a["program"], f["template"], record_partition(a["circuit"], ""), upv, cut, cut_group, in_rows,
+                         **meta) for a in case["params"]["audits"] if "circuits" in a for f in a["circuits"]]
+
+
 # --- the generator --------------------------------------------------------------------------------------------------------
 
 #: Small LMS parameter sets (N, W, H, toy): the toy N = 8, and the deployed N = 64 at height 1.
@@ -1393,7 +2149,7 @@ EXPECT = {
     "rows-reg-count": REJECT, "rows-reg-swap": REJECT, "rows-reg-forged": REJECT, "rows-reg-window": REJECT,
     "rows-reg-link": REJECT, "rows-reg-session": REJECT, "rows-reg-key": REJECT, "rows-reg-field": REJECT,
     "rows-schedule": REJECT,
-    "rows-answer-protocol": REJECT, "rows-answer-other": REJECT, "rows-answer-window": REJECT,
+    "rows-answer-protocol": REJECT, "rows-answer-other": REJECT, "rows-answer-window": REJECT, "rows-port": REJECT,
     "rows-answer-reject": REJECT, "rows-answer-undecided": UNDECIDED, "rows-answer-profile": REJECT,
     "rows-answer-bound": REJECT, "rows-delta": REJECT, "rows-units": REJECT, "rows-prog-untied": REJECT,
     "rows-prog-unwired": REJECT, "rows-state-untied": REJECT, "rows-state-misindexed": REJECT,
@@ -1579,13 +2335,14 @@ def _scan_root(members: list[tuple], lanes: int, nb: int, every: int, prog: int,
 @lru_cache(maxsize=None)
 def scan_descriptor(T: int, row: int, widths: tuple[int, int, int, int], counts: tuple[int, ...] | None = None,
                     names: tuple[tuple[str, ...], ...] | None = None, checker: bool = False, lanes: int = 1,
-                    every: int = 1, skew: int = 0, shared: bool = False) -> str:
+                    every: int = 1, skew: int = 0, shared: bool = False, egress: int = 2) -> str:
     """The canonical descriptor of a scan's Program in the generator form: bucket 0's stand-in instance, `T − 1` later
     ingress instances (no template when there are none) and `T` egress instances (or `counts`), each ingress template's
     row `row` bytes, the ingress buckets' state, entry and view bits and the egress bucket's state words `widths`, and
     `lanes` entry ports a bucket, bucket t's `prog<j>` row `⌊t / every⌋` of lane j's input `prog<j>` of the slot
-    entries (`_scan_root`), or `skew` rows on, cyclically, or lane 0's input (`shared`); `checker`: in the checker form
-    instead, `T` ingress and `T` egress instances (or `counts`) that take their rows."""
+    entries (`_scan_root`), or `skew` rows on, cyclically, or lane 0's input (`shared`); `egress`: the template the
+    egress instances are, bucket 0's (0), the later ingress buckets' (1) or the egress bucket's (2); `checker`: in the
+    checker form instead, `T` ingress and `T` egress instances (or `counts`) that take their rows."""
     state, prog, view, words = widths
     ingress = {"ROW": row, "STATE": state, "PROG": prog, "VIEW": view}
     names = names or (first_params(lanes), ingress_params(lanes), EGRESS_PARAMS)
@@ -1596,7 +2353,9 @@ def scan_descriptor(T: int, row: int, widths: tuple[int, int, int, int], counts:
         return D.canonical(codec.encode_program(program))
     templates = (bind(FIRST_BUCKET, NAMES=names[0], **ingress), bind(INGRESS_BUCKET, NAMES=names[1], **ingress),
                  bind(EGRESS_BUCKET, NAMES=names[2], WORDS=words, ROW=row))
-    kept = [(t, n, f) for t, n, f in zip(templates, counts or (1, T - 1, T), (1, 2, len(names[2]))) if n]
+    fixed = (1, 2, len(names[2]))
+    kept = [(t, n, f) for t, n, f in zip((*templates[:2], templates[egress]), counts or (1, T - 1, T),
+                                         (*fixed[:2], fixed[egress])) if n]
     return D.canonical(codec.encode_program(_scan_root(kept, lanes, T // every, every, prog, skew, shared)))
 
 
@@ -1793,6 +2552,11 @@ UNSTATES = ("root", "domain", "missing", "renamed", "other", "untyped", "extra",
 #: phase's tied audit registered under a Program of one more unit, its answer and population that Program's
 #: (`audit`), or the parameters' `circuit` another digest: of no Program, the scan's, or an untied audit's (`params`)
 UNHOLDS = ("audit", "params")
+#: How `rows-port` breaks the scan's registration's hold of the aimed link-window's rows while every other check
+#: holds: the egress rows' root and domain at `scan/view` and their port at another root (`view`), the two ends' names
+#: swapped (`swapped`), one end's at another window's (`window`), of other than T leaves (`leaves`, in `roots`), or
+#: beside a second entry of one end's name at another root (`second`)
+UNPORTS = ("view", "swapped", "window", "leaves", "second")
 #: How `rows-state-misindexed` puts its link-window's scan's state reads off the chain while its state stays tied by
 #: root and domain: unit t's `sin` at leaf t + 1 (a leaf no unit registered) or its `o1` at leaf t (over the state
 #: before it), a run over other units, the two ports' runs swapped, the reads or a port's run missing or under
@@ -1874,6 +2638,38 @@ def _unpinned(rp: random.Random, tree: ADV.Committed, how: str) -> dict | None:
 
 def _present(e: dict) -> dict:
     return {k: v for k, v in e.items() if v is not None}
+
+
+def _rows_entries(rp: random.Random, named: list[dict], where: str, unport: str | None) -> list[dict]:
+    """The scan's registration's entries for the row registrations `named`, each at its own end's and window's port
+    (`rows_name`, of its rows' leaves) in `roots` and at its value in `registered`, broken as `unport` says (the
+    aimed link-window's `named` are its ingress and egress rows)."""
+    def name(x: dict, d: str, w: int) -> dict:
+        if where == "roots":
+            return {"port": rows_name(Direction(d), w), "leaves": x["rows"]}
+        return {"value": f"{x['link']}/{d}/{w}"}
+
+    out = [{"domain": x["domain"], "root": x["root"], **name(x, x["direction"], x["window"])} for x in named]
+    if unport is None:
+        return out
+    j = rp.randrange(2)
+    x = named[j]
+    if unport == "view":
+        x = named[1]
+        view = {"port": "scan/view", "leaves": x["rows"]} if where == "roots" else \
+            {"value": "verity/certifier/scan-view/v1"}
+        out[1] = out[1] | {"root": rp.randbytes(64).hex()}
+        out.append({"domain": x["domain"], "root": x["root"], **view})
+    elif unport == "swapped":
+        out[0], out[1] = (out[0] | name(named[0], named[1]["direction"], named[0]["window"]),
+                          out[1] | name(named[1], named[0]["direction"], named[1]["window"]))
+    elif unport == "window":
+        out[j] = out[j] | name(x, x["direction"], x["window"] + rp.choice([1, -1] if x["window"] else [1]))
+    elif unport == "leaves":
+        out[j] = out[j] | {"leaves": rp.choice([x["rows"] + 1, x["rows"] - 1, None, str(x["rows"]), True])}
+    else:
+        out.insert(rp.randrange(len(out) + 1), out[j] | {"root": rp.randbytes(64).hex()})
+    return [_present(e) for e in out]
 
 
 def _prog_entries(rp: random.Random, tie: dict, where: str, untie: str | None, unwire: bool = False,
@@ -2026,6 +2822,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     unwire = rp.choice(UNWIRES) if m == "prog-unwired" else None
     unstate = rp.choice(UNSTATES) if m == "state-untied" else None
     unhold = rp.choice(UNHOLDS) if m == "circuit-swapped" else None
+    unport = rp.choice(UNPORTS) if m == "port" else None
     unpin = rp.choice(UNPINS) if m == "state-unpinned" else None
     # each audit's `SCAN_STATE`, the state tree of the link-window tied to it, whose leaf 0 the scan opens
     trees = {i: _state_tree(rp, sched.window, not (unpin == "row" and i == ties[first + t]["audit"]))
@@ -2139,9 +2936,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                 recs[j] = sign(on, d, w, recs[j].digest, s=_flip(session, seed))
             elif m == "cert-key":
                 recs[j] = sign(on, d, w, recs[j].digest, k=_key(ki, 1, r.random() < 0.5))
-        entries = [{"domain": x["domain"], "root": x["root"], "value": x["value"]} for x in named]
-        entries.insert(r.randrange(len(entries) + 1),
-                       {"domain": r.randbytes(64).hex(), "root": r.randbytes(64).hex(), "value": "decoy"})
+        decoy_at = r.randrange(len(named) + 1)
+        decoy = {"domain": r.randbytes(64).hex(), "root": r.randbytes(64).hex(), "value": "decoy"}
         T = sched.window
         units = 2 * T + (1 if aimed and m == "units" else 0)
         strata = [{"k": r.randint(1, T), "name": d.value, "size": T} for d in (INGRESS, EGRESS)] \
@@ -2150,6 +2946,10 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         law = {"k": k, "law": "subset"} if strata is None else {"k": k, "law": "stratified", "strata": [
             {"k": s["k"], "template": s["name"], "units": [[j * T, (j + 1) * T]]} for j, s in enumerate(strata)]}
         fmt, where = r.choice(FORMATS), r.choice(["roots", "registered"])
+        if aimed and unport == "leaves":
+            where = "roots"
+        entries = _rows_entries(rp, named, where, unport if aimed else None)
+        entries.insert(decoy_at, decoy)
         entries += _prog_entries(rp, ties[w], where, untie if aimed else None, unwire == "lane" and aimed, hit)
         entries += _state_entries(rp, states, ties[w]["audit"], where, unstate if aimed else None)
         rp.shuffle(entries)
@@ -2286,7 +3086,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             split = r.randint(1, n_prog - 1) if n_prog > 1 and r.random() < 0.3 else None
             outs = r.sample(UNIT_BYTES, 1 if split is None else 2)
         desc = json.loads(audit_descriptor(shape_of(n_prog, split, outs), entries, renamed, i in selects, scan_slots))
-        recorded, bits = i == a and m.startswith("audit-record"), m == "audit-record-bits"
+        listed = i == a and m == "audit-listed"
+        recorded, bits = i == a and m.startswith("audit-record") or listed, m == "audit-record-bits"
         if recorded:
             desc, units = json.loads(record_audit(bits)[0]), RECORD_UNITS[bits]
         elif anchors and in_class:
@@ -2339,6 +3140,11 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                 held = r.choice([hashlib.sha512(b"another circuit record").hexdigest(), held.upper(), None])
             rec["window"] |= {"circuit": held} | ({"registered_roots": roots} if roots else {})
             record = {"circuit": json.loads(doc), "order": json.loads(order), "pins": pins}
+            if listed:
+                part = record_partition(record["circuit"], "")
+                record["circuits"] = [
+                    {"sha512": hashlib.sha512(circuit_file(desc, t, part).encode()).hexdigest(), "template": t}
+                    for t, _, _ in charges_of(desc)]
         elif anchors and in_class:
             _, doc, order = (json.loads(x) for x in anchor)
             if misanchor and i == ties[first + t]["audit"]:
@@ -2478,7 +3284,8 @@ def bad_scans(p: dict) -> list[dict]:
     """Rows-form parameters whose scan `scanOf` refuses, each one change to `p`: not a descriptor, another Program's
     (its SHA-512 not `program`), and, each under its own SHA-512, the checker form (its egress row an input), templates
     with other parameters, another number of instances, rows not the schedule's, a lane's `prog<j>` another row of its
-    input than its bucket's or another lane's input, an input gate no template's, and each negative of a check of what
+    input than its bucket's or another lane's input, an input gate no template's, the egress template keyed as an
+    input, and each negative of a check of what
     `NetTiming.BoundaryGates.Fits` asks (`scan_negatives`)."""
     s, desc = p["schedule"], p["scan"]
     T, row, widths = s["window"], s["lanes"] * s["slots"] * s["cell_bytes"], _scan_widths(desc)
@@ -2492,6 +3299,12 @@ def bad_scans(p: dict) -> list[dict]:
     def scan(*a, **k) -> str:
         return scan_descriptor(*a, **({"lanes": L, "every": every} | k))
 
+    keyed = json.loads(D.canonical(desc))
+    fn = [x["fn"] for x in keyed["definitions"][keyed["root"]]["body"]["nodes"]
+          if keyed["definitions"][keyed["callees"][x["fn"]]]["form"] != "primitive"][-1]
+    old = keyed["callees"][fn]
+    keyed["callees"][fn] = "Input3_v1"
+    keyed["definitions"]["Input3_v1"] = keyed["definitions"].pop(old) | {"id": "Input3_v1", "bindings": {}}
     extra = json.loads(D.canonical(desc))
     extra["types"].append(["Array", 1, ["Value", 1]])
     extra["definitions"][extra["root"]]["body"]["nodes"].append(
@@ -2511,6 +3324,7 @@ def bad_scans(p: dict) -> list[dict]:
             *([own(scan(T, row, widths, skew=1))] if T // every > 1 else []),
             *([own(scan(T, row, widths, shared=True))] if L > 1 else []),
             p | {"scan": extra, "program": program_sha512(extra)},
+            p | {"scan": keyed, "program": program_sha512(keyed)},
             *(q for q, _ in scan_negatives(p).values())]
 
 
@@ -2528,8 +3342,10 @@ def scan_negatives(p: dict) -> dict[str, tuple[dict, str]]:
     template returning its `state`'s first 16 leaves as its u16; `row`, bucket 0's row bound to a constant primitive's
     gates (an input node like it appended, keeping the input count); `argument`, egress member 0's first state leaf the
     last ingress template's first output leaf (a later step's ingress when `T > 1`); `ingress`, the egress state the
-    last ingress template's row input node (resized, the state's node resized to keep the count); and `topological`,
-    the last ingress template's row input node moved after the templates, so the template names a later node."""
+    last ingress template's row input node (resized, the state's node resized to keep the count); `topological`, the
+    last ingress template's row input node moved after the templates, so the template names a later node; and `apart`,
+    the egress instances bucket 0's template's, so one stratum holds bucket 0's VU and the egress buckets' (`vuStrata`),
+    refused before any other check."""
     desc = p["scan"]
 
     def parts() -> tuple[dict, list, list[int]]:
@@ -2618,6 +3434,11 @@ def scan_negatives(p: dict) -> dict[str, tuple[dict, str]]:
     r["ret"] = moved(r["ret"])
     nodes.append(nodes.pop(kr))
     out["topological"] = own(d), "a body names a later node"
+
+    s = p["schedule"]
+    out["apart"] = own(json.loads(scan_descriptor(
+        s["window"], s["lanes"] * s["slots"] * s["cell_bytes"], _scan_widths(desc), lanes=s["lanes"], every=s["every"],
+        egress=0))), "the egress template's VUs are not apart from the ingress templates'"
     return out
 
 

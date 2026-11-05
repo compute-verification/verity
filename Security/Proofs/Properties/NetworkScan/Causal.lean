@@ -526,19 +526,19 @@ the last's, and the input node the second's row reads. -/
 theorem scanOf_facts {j : Lean.Json} {program : String} {s : Schedule} {sc : Scan} {c : String} {P : Prog}
     (h : scanOf j program s = .ok sc) (hc : Flock.canon j = .ok c) (hP : decode c.toUTF8 = .ok P)
     (hT : 2 ≤ s.window) : ∃ kl ke q', Facts P s kl ke q' := by
-  unfold scanOf at h
-  obtain ⟨c', hc', h⟩ := Fits.bind_ok h
-  obtain rfl : c' = c := by rw [hc] at hc'; exact (Except.ok.inj hc').symm
-  obtain ⟨P', hP', h⟩ := Fits.bind_ok h
-  rw [hP] at hP'
-  obtain rfl : P = P' := by cases hP'; rfl
+  replace h := Fits.scanOf_scanProg h hc hP
+  unfold scanProg at h
   obtain ⟨_, -, h⟩ := Fits.bind_ok h
   obtain ⟨root, hroot, h⟩ := Fits.bind_ok h
   obtain rfl : root = P.defs[P.root]! := by
     obtain ⟨hlt, e⟩ := Array.getElem?_eq_some_iff.1 (Fits.needSome_ok hroot)
     rw [getElem!_pos P.defs _ hlt, e]
+  obtain ⟨_, -, h⟩ := Fits.bind_ok h
+  obtain ⟨_, -, h⟩ := Fits.bind_ok h
   obtain ⟨⟨xe, de⟩, hback, h⟩ := Fits.bind_ok h
   replace hback := Fits.needSome_ok hback
+  obtain ⟨_, -, h⟩ := Fits.bind_ok h
+  obtain ⟨_, -, h⟩ := Fits.bind_ok h
   obtain ⟨_, -, h⟩ := Fits.bind_ok h
   obtain ⟨⟨⟨xf, df⟩, later⟩, hm, h⟩ := Fits.bind_ok h
   obtain ⟨_, hnames, h⟩ := Fits.bind_ok h

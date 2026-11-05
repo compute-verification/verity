@@ -1,4 +1,5 @@
 import Properties.NetworkPeriod
+import Proofs.Properties.NetworkPeriod.PadCols
 import Proofs.NetworkCertifier.RecordRows
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
@@ -20,6 +21,9 @@ and each link-window's term is its scan's free inputs and those charges (`tiedFr
 On acceptance a rows-form period has no `rowsWfCheck` finding (`rowsWf_of_accept`), so its frames, the network
 certifier's of `B` bytes for its `lanes · windows · window` connections, read back (`cellRows_wf_of_rowsWf`,
 `NetTiming.RowsFormat.Wf` at `NetTiming.cellRows`).
+
+`padCols` counts the input columns no port covers that are not forced zeros (`padCols_eq`), `forcedCols` lists the
+forced zeros (`forcedCols_eq`), both in `PadCols`.
 -/
 
 namespace Properties.NetworkPeriod
