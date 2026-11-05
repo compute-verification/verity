@@ -516,11 +516,19 @@ def publish(rows: list[dict], now: float, put: Callable[[dict, str], str | None]
 
 
 def store_put(path: Path) -> tuple[str | None, str]:
-    """``path`` into the store (`research data put --kind fleet-samples/v1 --preserve`, $RESEARCH_STORE): its art id, or None and why."""
+    """``path`` into the store (`research data put --kind fleet-samples/v1 --preserve`): its art id, or None and why. The store is
+    $RESEARCH_STORE, else ~/fleet-store, and its remote's credentials are $FLEET_STORE_ENV's KEY=VALUE lines (the pod's r2.env),
+    which the loop's own environment doesn't hold."""
     research = Path(os.environ.get("FLEET_RESEARCH", "/workspace/.venv/bin/research"))
+    env = {**os.environ, "RESEARCH_STORE": os.environ.get("RESEARCH_STORE") or str(Path.home() / "fleet-store")}
+    creds = Path(os.environ.get("FLEET_STORE_ENV", str(Path.home() / ".config" / "verity" / "r2.env")))
+    for line in creds.read_text().splitlines() if creds.is_file() else []:
+        k, sep, v = line.removeprefix("export ").partition("=")
+        if sep and k.strip() and not line.lstrip().startswith("#"):
+            env[k.strip()] = v.strip().strip('"').strip("'")
     try:
         p = subprocess.run([str(research), "data", "put", "--kind", "fleet-samples/v1", "--file", str(path), "--preserve", "--json"],
-                           capture_output=True, text=True, timeout=1800)
+                           capture_output=True, text=True, timeout=1800, env=env)
     except (OSError, subprocess.TimeoutExpired) as e:
         return None, f"{type(e).__name__}: {e}"
     if p.returncode != 0:
