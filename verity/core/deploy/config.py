@@ -2,24 +2,29 @@
 `verity config new | check | hash` writes, checks and hashes.
 
     format = "verity/config/v0"
-    protocols = ["sampled-proofs", "certifier"]      the components, by the six subprotocols' names
+    protocols = ["sampled-proofs", "pouw", "inference-only"]    the subprotocols, by their names
     [workload]  name, params                         the computation audited, and its public shape
     [service]   law                                  the proof system's selection law (no ε, δ or threshold)
     [program]   commit                               the commit of the auditor-trusted code the parties run
-    [params."<id>"]                                  a listed component's public structural parameters
+    [params."<id>"]                                  a listed subprotocol's public structural parameters
     [[party]]   name, machine, principal             machine: `local`, or a name `verity run --on` gives
     [[channel]] from, to, messages, after            after: the messages sent before this channel's
 
-A file states only its choices: a component's parameters and the workload's default to what the component or the
+A file states only its choices: a subprotocol's parameters and the workload's default to what the subprotocol or the
 workload declares (``default_params``), and `check` returns the configuration with them filled, which is what the hash
 covers, so stating a default changes no hash.
 
-What a protocol declares (`Component`: its id, the workload hooks it needs, the components it requires, its parties and
+The subprotocols a configuration lists that the composite takes (a `Component`'s ``product``) are exactly one
+composite's (`COMPOSITES`): onsite's, or remote's (sampled proofs, PoUW and the inference-only policy). Protocol
+soundness covers those two composites and no other, so `check` refuses any other set (``composite``).
+
+What a protocol declares (`Component`: its id, the workload hooks it needs, the subprotocols it requires, its parties and
 channels as its manifest's `Role`s and `Channel`s, the parties that must share a machine, its parameters' schema and the
 service laws it runs under) and what a workload declares (`Workload`: the hooks it provides, its parties as `Role`s, its
 parameters' schema) are handed in by the caller: this module imports no protocol and no workload. `check` refuses by
-name (`verity.core.wire.Refused`) an unknown key or version, a component whose requirements aren't listed or whose needs
-the workload doesn't provide, a party or channel other than the declared ones, and a placement the declarations forbid.
+name (`verity.core.wire.Refused`) an unknown key or version, a subprotocol whose requirements aren't listed or whose
+needs the workload doesn't provide, a set of subprotocols that is no composite's, a party or channel other than the
+declared ones, and a placement the declarations forbid.
 
 The canonical form is canonical JSON of the checked configuration (sorted keys, no whitespace, UTF-8, no float), and its
 hash is SHA-512 of that form without the transport-only fields (`TRANSPORT`: a party's address and listen port, and
@@ -43,26 +48,30 @@ FORMAT = "verity/config/v0"
 #: the transport-only fields, by table: hashed out, so that they can change without changing the configuration
 TRANSPORT = {"party": ("address", "listen"), "channel": ("dial",)}
 TOP = ("channel", "format", "params", "party", "program", "protocols", "service", "workload")
-#: the top-level keys a file must state: the rest default (``params``: each component's own)
+#: the top-level keys a file must state: the rest default (``params``: each subprotocol's own)
 REQUIRED = ("channel", "format", "party", "program", "protocols", "service", "workload")
 PARTY = ("machine", "name", "principal", *TRANSPORT["party"])
 CHANNEL = ("after", "from", "messages", "to", *TRANSPORT["channel"])
 LOCAL = "local"
+#: the composites, by id: the subprotocols each composes, by name (`Core.Composites.ofIds`)
+COMPOSITES = {"verity/onsite/v0": ("bandwidth", "certifier", "inference-only", "pous", "pouw", "sampled-proofs",
+                                    "wipe"),
+              "verity/remote/v0": ("inference-only", "pouw", "sampled-proofs")}
 _COMMIT = re.compile(r"[0-9a-f]{40}")
 _NAME = re.compile(r"[a-z][a-z0-9-]*")
 
 
 def _no_params(params: Mapping[str, Any]) -> dict[str, Any]:
     if params:
-        raise Refused("unknown-key", f"this component takes no parameters, not {sorted(params)}")
+        raise Refused("unknown-key", f"this subprotocol takes no parameters, not {sorted(params)}")
     return {}
 
 
 @dataclass(frozen=True)
 class Component:
     """What a protocol declares for a configuration. ``params`` checks its parameters (the file's, over
-    ``default_params``) and returns them normalized; ``law`` refuses a service law the component can't run under
-    (raising `Refused`), given its checked parameters; ``product``: whether `Core.Composition.product` takes it."""
+    ``default_params``) and returns them normalized; ``law`` refuses a service law the subprotocol can't run under
+    (raising `Refused`), given its checked parameters; ``product``: whether the composite takes it (`COMPOSITES`)."""
 
     name: str
     id: str
@@ -184,13 +193,14 @@ def check(cfg: Mapping[str, Any], components: Mapping[str, Component],
         raise Refused("unknown-format", f"format {fmt!r}, not {FORMAT}")
     names = _names("protocols", cfg["protocols"])
     if not names:
-        raise Refused("no-protocol", "protocols lists no component")
+        raise Refused("no-protocol", "protocols lists no subprotocol")
     if unknown := [n for n in names if n not in components]:
         raise Refused("unknown-protocol", f"{', '.join(unknown)} (known: {', '.join(components)})")
     listed = [components[n] for n in names]
     for c in listed:
         if missing := [r for r in c.requires if r not in names]:
             raise Refused("requires", f"{c.name} requires {', '.join(missing)}, which protocols doesn't list")
+    composite(names, components)
     _keys("[workload]", cfg["workload"], ("name", "params"), ("name",))
     wname = _str("workload.name", cfg["workload"]["name"])
     if wname not in workloads:
@@ -231,6 +241,17 @@ def check(cfg: Mapping[str, Any], components: Mapping[str, Component],
             "party": list(got.values()), "channel": links}
 
 
+def composite(names: Sequence[str], components: Mapping[str, Component]) -> str:
+    """The id of the composite the listed subprotocols ``names`` make (`COMPOSITES`), or `Refused` (``composite``)."""
+    taken = sorted(n for n in names if components[n].product)
+    for cid, want in COMPOSITES.items():
+        if taken == sorted(want):
+            return cid
+    covered = " and ".join(f"{c} ({', '.join(w)})" for c, w in COMPOSITES.items())
+    raise Refused("composite", f"{', '.join(taken) or 'nothing'} is no composite's subprotocols: protocol soundness "
+                               f"covers only {covered}")
+
+
 def _table(where: str, v: Any) -> dict[str, Any]:
     if not isinstance(v, Mapping):
         raise Refused("type", f"{where} is a table, not {type(v).__name__}")
@@ -247,7 +268,7 @@ def _parties(entries: Any, declared_parties: Mapping[str, Role]) -> dict[str, di
         if name in got:
             raise Refused("repeated-party", name)
         if name not in declared_parties:
-            raise Refused("unknown-party", f"{name}: no listed component or the workload declares it (declared: "
+            raise Refused("unknown-party", f"{name}: no listed subprotocol or the workload declares it (declared: "
                                            f"{', '.join(sorted(declared_parties))})")
         if p["principal"] != (principal := declared_parties[name].principal):
             raise Refused("principal", f"{name} is the {principal}'s, not the {p['principal']}'s")
@@ -276,7 +297,7 @@ def _channels(entries: Any, declared_channels: Mapping[tuple[str, str], Channel]
         seen.add(key)
         want = declared_channels.get(key)
         if want is None:
-            raise Refused("undeclared-channel", f"{key[0]} -> {key[1]}: no listed component declares it")
+            raise Refused("undeclared-channel", f"{key[0]} -> {key[1]}: no listed subprotocol declares it")
         messages, after = _names(f"channel {key[0]} -> {key[1]} messages", c["messages"]), _names(
             f"channel {key[0]} -> {key[1]} after", c.get("after", []))
         if set(messages) != set(want.messages) or set(after) != set(want.after):
@@ -312,7 +333,7 @@ def digest(cfg: Mapping[str, Any]) -> str:
 def new(workload: str, protocols: Sequence[str], components: Mapping[str, Component],
         workloads: Mapping[str, Workload], commit: str, machine: str = LOCAL) -> dict[str, Any]:
     """A configuration of ``protocols`` on ``workload`` that states only its choices: every declared party on
-    ``machine``, the declared channels, and the first default law of a listed component that every listed component
+    ``machine``, the declared channels, and the first default law of a listed subprotocol that every listed subprotocol
     runs under; parameters are left to their defaults. Refused by name like `check`, which it passes."""
     if unknown := [n for n in protocols if n not in components]:
         raise Refused("unknown-protocol", f"{', '.join(unknown)} (known: {', '.join(components)})")
@@ -382,5 +403,5 @@ def render(cfg: Mapping[str, Any], header: Sequence[str] = ()) -> str:
     return "\n".join(lines) + "\n"
 
 
-__all__ = ["CHANNEL", "FORMAT", "LOCAL", "PARTY", "REQUIRED", "TOP", "TRANSPORT", "Component", "Workload", "canonical",
-           "check", "declared", "digest", "hashed", "new", "parse", "render"]
+__all__ = ["CHANNEL", "COMPOSITES", "FORMAT", "LOCAL", "PARTY", "REQUIRED", "TOP", "TRANSPORT", "Component", "Workload",
+           "canonical", "check", "composite", "declared", "digest", "hashed", "new", "parse", "render"]

@@ -72,6 +72,12 @@ theorem boundary_of_out {C : Prog} {u : List ℕ} {g : ℕ} (h : g ∈ C.outs) :
   unfold Prog.Boundary
   simp [h]
 
+theorem not_unread_of_read {C : Prog} {g' i : ℕ} {x : BGate} (hx : C.gates[g']? = some x) (hi : i ∈ x.reads) :
+    ¬ C.Unread i :=
+  fun h => h.2.2 x (List.mem_of_getElem? hx) hi
+
+theorem not_unread_of_out {C : Prog} {g : ℕ} (h : g ∈ C.outs) : ¬ C.Unread g := fun hu => hu.2.1 h
+
 theorem read_const {C : Prog} {ref : ℕ → Option Bool} {i : ℕ} {b : Bool} (h : C.gates[i]? = some (.const b)) :
     C.read ref i = some b := by
   simp [Prog.read, h]
@@ -253,7 +259,7 @@ theorem valOver_unit : ∀ g, Good g → ∀ v u, P.blocks[v]? = some u → v �
     exact Option.some.inj hc
   push Not at hconst
   have hilt : i < C.gates.length := hlt.trans hglt
-  obtain ⟨v', u', hu', hiu'⟩ := exists_of_mem_gates (hcover i hilt hconst)
+  obtain ⟨v', u', hu', hiu'⟩ := exists_of_mem_gates (hcover i hilt hconst (not_unread_of_read hx hi))
   rw [read_of_not_const hconst] at hc
   have hgu' : g ∉ u' := fun hgu => hiu (by
     obtain rfl := slot_unique hN hu' hu hgu hg
@@ -281,7 +287,7 @@ theorem valOver_out {g : ℕ} (hout : g ∈ C.outs) (hgd : Good g) :
     rw [valOver_const hfree hb, traceVal, read_const hb]
     rfl
   push Not at hconst
-  obtain ⟨v, u, hu, hg⟩ := exists_of_mem_gates (hP.2.2.1 g hglt hconst)
+  obtain ⟨v, u, hu, hg⟩ := exists_of_mem_gates (hP.2.2.1 g hglt hconst (not_unread_of_out hout))
   have hv : v ∉ F := fun hv => hfg ⟨v, hv, u, hu, hg, boundary_of_out hout⟩
   obtain ⟨b, hb, hrun⟩ := (hι v u hu hv g hg).2 (boundary_of_out hout)
   rw [valOver_unit hT hP ι hι Good hgood hinp g hgd v u hu hv hg, hrun, traceVal, read_of_not_const hconst,

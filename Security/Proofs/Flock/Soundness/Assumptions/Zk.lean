@@ -47,8 +47,8 @@ def RecordCustodyZK {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (dj 
 /-- **The record is the live session's, at `J` tables** (`live-verifier`, as `RecordCustodyZK`): the record
 `verify --zk --session-tables J` reads is the one the challenger wrote for the live session
 (`RecordsLiveZKJ`: its draw, proofs and link points, and each table's root and rounds, are the live outcome's), and its
-draw file the one `flock-verify draw` printed for the verifier's own draw under the subset law, the one law flock-verify
-takes at more than one table (`DrawFileZK` at `subset kd` over the `n` units). -/
+draw file the one `flock-verify draw` printed for the verifier's own draw under the subset law (`DrawFileZK` at
+`subset kd` over the `n` units; `RecordCustodyZKJS` is its stratified form). -/
 def RecordCustodyZKJ {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (dj : Finset (Fin n) → Lean.Json)
     (Jf : Finset (Fin n) → Reg → ℕ)
     (wr : (S : Finset (Fin n)) → (R : Reg) → Discharge.Tables.LiveOutJ (Jf S R) mPts → Discharge.Exec.Transcript)
