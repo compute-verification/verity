@@ -926,6 +926,141 @@ theorem foldl_addRoundJ {J : ℕ} {γ : Type} (tab : γ → Fin J) (rep : γ →
     · have hp : ¬ (decide (tab a = t ∧ rep a = r) = true) := by simpa using h
       rw [addRoundJ_ne _ _ (fun h' => h ⟨h'.1.symm, h'.2.symm⟩), List.filter_cons, if_neg hp]
 
+/-! ## The logs before a stream's openings -/
+
+/-- **The logs before each element of `l` that `q` holds of**, in order. -/
+def prefixesWhere {α : Type} (q : α → Bool) : List α → List (List α)
+  | [] => []
+  | x :: xs => (if q x then [[]] else []) ++ (prefixesWhere q xs).map (x :: ·)
+
+theorem length_prefixesWhere {α : Type} (q : α → Bool) :
+    ∀ l : List α, (prefixesWhere q l).length = l.countP q
+  | [] => rfl
+  | x :: xs => by
+    rw [prefixesWhere, List.length_append, List.length_map, length_prefixesWhere q xs, List.countP_cons]
+    cases q x <;> simp <;> omega
+
+theorem mem_prefixesWhere {α : Type} {q : α → Bool} :
+    ∀ {l pre : List α}, pre ∈ prefixesWhere q l ↔ ∃ r L₂, l = pre ++ r :: L₂ ∧ q r = true
+  | [], pre => by
+    constructor
+    · intro h
+      simp [prefixesWhere] at h
+    · rintro ⟨r, L₂, he, -⟩
+      cases pre <;> cases he
+  | x :: xs, [] => by
+    constructor
+    · intro h
+      rw [prefixesWhere] at h
+      rcases List.mem_append.1 h with h | h
+      · split at h
+        · exact ⟨x, xs, rfl, ‹q x = true›⟩
+        · simp at h
+      · obtain ⟨a, -, e⟩ := List.mem_map.1 h
+        cases e
+    · rintro ⟨r, L₂, he, hr⟩
+      obtain ⟨rfl, rfl⟩ := List.cons.inj he
+      rw [prefixesWhere, if_pos hr]
+      exact List.mem_append_left _ (List.mem_singleton_self _)
+  | x :: xs, y :: p => by
+    constructor
+    · intro h
+      rw [prefixesWhere] at h
+      rcases List.mem_append.1 h with h | h
+      · split at h <;> simp at h
+      · obtain ⟨a, ha, e⟩ := List.mem_map.1 h
+        obtain ⟨rfl, rfl⟩ := List.cons.inj e
+        obtain ⟨r, L₂, he, hr⟩ := mem_prefixesWhere.1 ha
+        exact ⟨r, L₂, by rw [he, List.cons_append], hr⟩
+    · rintro ⟨r, L₂, he, hr⟩
+      rw [List.cons_append] at he
+      obtain ⟨rfl, he⟩ := List.cons.inj he
+      rw [prefixesWhere]
+      exact List.mem_append_right _ (List.mem_map.2 ⟨p, mem_prefixesWhere.2 ⟨r, L₂, he, hr⟩, rfl⟩)
+
+theorem pairwise_prefixesWhere {α : Type} (q : α → Bool) :
+    ∀ l : List α, (prefixesWhere q l).Pairwise (fun a b => a.length < b.length)
+  | [] => List.Pairwise.nil
+  | x :: xs => by
+    rw [prefixesWhere]
+    refine List.pairwise_append.2 ⟨?_, List.pairwise_map.2 ((pairwise_prefixesWhere q xs).imp fun h => by
+      simp only [List.length_cons]
+      omega), fun a ha b hb => ?_⟩
+    · split <;> simp
+    · obtain ⟨c, -, rfl⟩ := List.mem_map.1 hb
+      split at ha
+      · rw [List.mem_singleton.1 ha]
+        exact Nat.succ_pos _
+      · simp at ha
+
+/-- **The `k`-th log before an element `q` holds of has `k` of them.** -/
+theorem countP_prefixesWhere {α : Type} (q : α → Bool) :
+    ∀ (l : List α) (k : ℕ) (pre : List α), (prefixesWhere q l)[k]? = some pre → pre.countP q = k
+  | [], k, pre, h => by simp [prefixesWhere] at h
+  | x :: xs, k, pre, h => by
+    rw [prefixesWhere] at h
+    cases hx : q x
+    · have hx' : ¬ (q x = true) := by simp [hx]
+      rw [if_neg hx', List.nil_append, List.getElem?_map] at h
+      obtain ⟨p, hp, rfl⟩ := Option.map_eq_some_iff.1 h
+      rw [List.countP_cons, countP_prefixesWhere q xs k p hp]
+      simp [hx]
+    · rw [if_pos hx, List.singleton_append] at h
+      cases k with
+      | zero =>
+        rw [List.getElem?_cons_zero] at h
+        obtain rfl := Option.some.inj h
+        rfl
+      | succ k =>
+        rw [List.getElem?_cons_succ, List.getElem?_map] at h
+        obtain ⟨p, hp, rfl⟩ := Option.map_eq_some_iff.1 h
+        rw [List.countP_cons, countP_prefixesWhere q xs k p hp]
+        simp [hx]
+
+/-- **Two lists of logs, each strictly longer than the one before, with the same members are one.** -/
+theorem eq_of_mem_iff_of_sorted {α : Type} : ∀ {l₁ l₂ : List (List α)},
+    l₁.Pairwise (fun a b => a.length < b.length) → l₂.Pairwise (fun a b => a.length < b.length) →
+      (∀ a, a ∈ l₁ ↔ a ∈ l₂) → l₁ = l₂
+  | [], [], _, _, _ => rfl
+  | [], b :: _, _, _, h => absurd ((h b).2 (List.mem_cons_self ..)) List.not_mem_nil
+  | a :: _, [], _, _, h => absurd ((h a).1 (List.mem_cons_self ..)) List.not_mem_nil
+  | a :: l₁, b :: l₂, h₁, h₂, h => by
+    rw [List.pairwise_cons] at h₁ h₂
+    have hab : a = b := by
+      rcases List.mem_cons.1 ((h a).1 (List.mem_cons_self ..)) with e | ha
+      · exact e
+      · rcases List.mem_cons.1 ((h b).2 (List.mem_cons_self ..)) with e | hb
+        · exact e.symm
+        · exact absurd ((h₂.1 a ha).trans (h₁.1 b hb)) (lt_irrefl _)
+    subst hab
+    congr 1
+    refine eq_of_mem_iff_of_sorted h₁.2 h₂.2 fun c => ⟨fun hc => ?_, fun hc => ?_⟩
+    · rcases List.mem_cons.1 ((h c).1 (List.mem_cons_of_mem _ hc)) with e | hc'
+      · exact absurd (h₁.1 c hc) (by rw [e]; exact lt_irrefl _)
+      · exact hc'
+    · rcases List.mem_cons.1 ((h c).2 (List.mem_cons_of_mem _ hc)) with e | hc'
+      · exact absurd (h₂.1 c hc) (by rw [e]; exact lt_irrefl _)
+      · exact hc'
+
+/-- **Logs, each longer than the one before, that are where a log has its openings of a stream, are the logs before
+them**: where the logs of `xs` are each longer than the one before, and one of them whose element `p` holds of is a log
+exactly where `Lg` opens tree `i`'s stream `s` after it, those logs are the ones before each of `Lg`'s openings of that
+stream, in order. -/
+theorem filter_logs {γ : Type} {Lg : List Release} {i s : ℕ} {xs : List (γ × List Release)}
+    (hpw : (xs.map Prod.snd).Pairwise (fun m m' => m.length < m'.length)) (p : γ → Bool)
+    (hp : ∀ m, (∃ x ∈ xs, p x.1 = true ∧ x.2 = m) ↔ ∃ r L₂, Lg = m ++ r :: L₂ ∧ r.frame.opensAt i s = true) :
+    (xs.filter fun x => p x.1).map Prod.snd = prefixesWhere (fun r => r.frame.opensAt i s) Lg := by
+  refine eq_of_mem_iff_of_sorted (hpw.sublist ((List.filter_sublist ..).map _)) (pairwise_prefixesWhere _ Lg)
+    fun m => ?_
+  refine Iff.trans ?_ ((hp m).trans mem_prefixesWhere.symm)
+  rw [List.mem_map]
+  constructor
+  · rintro ⟨x, hx, rfl⟩
+    obtain ⟨hx, hpx⟩ := List.mem_filter.1 hx
+    exact ⟨x, hx, hpx, rfl⟩
+  · rintro ⟨x, hx, hpx, rfl⟩
+    exact ⟨x, List.mem_filter.2 ⟨hx, hpx⟩, rfl⟩
+
 /-! ## Each opening the device logs, served -/
 
 /-- **Each opening of the log `log` is one the device serves after the releases before it.** -/
