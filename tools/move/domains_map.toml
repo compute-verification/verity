@@ -3,9 +3,10 @@
 # change: every `import Identity.Domains` (PoUW's commit, window and check), the layers that list it, and the difftest
 # that reads the table by path. Run it once, on a tree before the move.
 #
-# A pure move leaves `Identity.lean` importing `Randomness.Domains`, which `core_identity` doesn't require, and
-# `Randomness.lean` not importing it, which the Lean check refuses as an orphan: the commit after the move drops the one
-# import and adds the other.
+# A pure move leaves `Identity.lean` importing `Randomness.Domains`, which `core_identity` doesn't require, and nothing in
+# `core_randomness` rooting it, which the Lean check refuses as an orphan: the commit after the move drops that import and
+# adds `Randomness.Domains` to the `Randomness` library's `roots` and its lean-audit roots. `Randomness.lean` stays as it
+# is, since the randomness vectors pin its digest.
 
 [words]
 "primitives/identity/Identity/Domains" = "primitives/randomness/Randomness/Domains"
