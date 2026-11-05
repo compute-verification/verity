@@ -244,6 +244,16 @@ theorem unitRange_cW : (cW ls lh H A B A' B' s1).unitRange.count = 1 ∧
     (cW ls lh H A B A' B' s1).unitRange.slot 0 = 524288 :=
   ⟨by kernel_rfl', by kernel_rfl'⟩
 
+theorem shaRange_cW : ((cW ls lh H A B A' B' s1).rangeOf (cW ls lh H A B A' B' s1).shaNet).count = 1 ∧
+    ((cW ls lh H A B A' B' s1).rangeOf (cW ls lh H A B A' B' s1).shaNet).slotLog = 18 ∧
+    ((cW ls lh H A B A' B' s1).rangeOf (cW ls lh H A B A' B' s1).shaNet).slot 0 = 262144 :=
+  ⟨by kernel_rfl', by kernel_rfl', by kernel_rfl'⟩
+
+theorem hmRange_cW : ((cW ls lh H A B A' B' s1).rangeOf (cW ls lh H A B A' B' s1).hmNet).count = 1 ∧
+    ((cW ls lh H A B A' B' s1).rangeOf (cW ls lh H A B A' B' s1).hmNet).slotLog = 18 ∧
+    ((cW ls lh H A B A' B' s1).rangeOf (cW ls lh H A B A' B' s1).hmNet).slot 0 = 0 :=
+  ⟨by kernel_rfl', by kernel_rfl', by kernel_rfl'⟩
+
 end facts
 
 /-- The unit's computed rows read only its 16 input rows: rows `128 … 143` copy one input each, the rest are empty. -/
@@ -551,6 +561,83 @@ theorem zIn_leaf {t : ℕ} (ht : t < 16) : zIn (leafSrc t) = false := by
   unfold xS
   exact ite_eq_right (show ¬ leafSrc t - 262144 < 512 by omega)
 
+theorem ite_flip (x j : ℕ) : (if x = j then 1 else 0 : ℕ) = if j = x then 1 else 0 := if_congr eq_comm rfl rfl
+
+/-- **Δ at a `cv0` row**, at a statement whose Δ is `E`: its self pair and its copy of the midstate's bit. -/
+theorem delta_cv0 {da : Array (ℕ × ℕ)} (hda : da.toList = E) {off : ℕ} (ho : off < 512) (j : ℕ) :
+    deltaEntry da (262144 + off) j =
+      (((if j = 262144 + off then 1 else 0) + (if j = constSrcW msW off then 1 else 0) : ℕ) : ZMod 2) := by
+  have h4 : [(518144, 518144), (518144, PIN), (524544, 524544), (524544, PIN)].count (262144 + off, j) = 0 :=
+    List.count_eq_zero.2 fun hm => by
+      simp only [List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false] at hm
+      omega
+  rw [deltaEntry_eq_count, hda, count_E, count_run, count_run, count_run, count_run,
+    ite_eq_left (show 262144 ≤ 262144 + off ∧ 262144 + off < 262144 + 512 by omega),
+    ite_eq_right (show ¬ (512 ≤ 262144 + off ∧ 262144 + off < 512 + 1024) by omega),
+    ite_eq_right (show ¬ (524288 ≤ 262144 + off ∧ 262144 + off < 524288 + 16) by omega),
+    ite_eq_right (show ¬ (0 ≤ 262144 + off ∧ 262144 + off < 0 + 512) by omega), h4, Nat.add_sub_cancel_left,
+    ite_flip (262144 + off) j, ite_flip (constSrcW msW off) j]
+  simp only [Nat.zero_add, Nat.add_zero]
+
+/-- **Δ at a `pad` row** of the `hm96` slot: its self pair and its copy of the padding block's bit. -/
+theorem delta_pad {da : Array (ℕ × ℕ)} (hda : da.toList = E) {off : ℕ} (ho : off < 1024) (j : ℕ) :
+    deltaEntry da (512 + off) j =
+      (((if j = 512 + off then 1 else 0) + (if j = constSrcW padW off then 1 else 0) : ℕ) : ZMod 2) := by
+  have h4 : [(518144, 518144), (518144, PIN), (524544, 524544), (524544, PIN)].count (512 + off, j) = 0 :=
+    List.count_eq_zero.2 fun hm => by
+      simp only [List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false] at hm
+      omega
+  rw [deltaEntry_eq_count, hda, count_E, count_run, count_run, count_run, count_run,
+    ite_eq_right (show ¬ (262144 ≤ 512 + off ∧ 512 + off < 262144 + 512) by omega),
+    ite_eq_left (show 512 ≤ 512 + off ∧ 512 + off < 512 + 1024 by omega),
+    ite_eq_right (show ¬ (524288 ≤ 512 + off ∧ 512 + off < 524288 + 16) by omega),
+    ite_eq_right (show ¬ (0 ≤ 512 + off ∧ 512 + off < 0 + 512) by omega), h4, Nat.add_sub_cancel_left,
+    ite_flip (512 + off) j, ite_flip (constSrcW padW off) j]
+  simp only [Nat.zero_add, Nat.add_zero]
+
+/-- **Δ at a `cv` row** of the `hm96` slot: its self pair and its copy of the `sha512x3` slot's first output. -/
+theorem delta_cv {da : Array (ℕ × ℕ)} (hda : da.toList = E) {off : ℕ} (ho : off < 512) (j : ℕ) :
+    deltaEntry da off j = (((if j = off then 1 else 0) + (if j = 516096 + off then 1 else 0) : ℕ) : ZMod 2) := by
+  have h4 : [(518144, 518144), (518144, PIN), (524544, 524544), (524544, PIN)].count (off, j) = 0 :=
+    List.count_eq_zero.2 fun hm => by
+      simp only [List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false] at hm
+      omega
+  rw [deltaEntry_eq_count, hda, count_E, count_run, count_run, count_run, count_run,
+    ite_eq_right (show ¬ (262144 ≤ off ∧ off < 262144 + 512) by omega),
+    ite_eq_right (show ¬ (512 ≤ off ∧ off < 512 + 1024) by omega),
+    ite_eq_right (show ¬ (524288 ≤ off ∧ off < 524288 + 16) by omega),
+    ite_eq_left (show 0 ≤ off ∧ off < 0 + 512 by omega), h4, Nat.sub_zero, ite_flip off j, ite_flip (516096 + off) j]
+  simp only [Nat.zero_add, Nat.add_zero]
+
+/-- A row Δ skips, in the form of a self pair and a copy from itself. -/
+theorem delta_selfForm {d : Array (ℕ × ℕ)} {x : ℕ} (h : ∀ j, deltaEntry d x j = 0) (j : ℕ) :
+    deltaEntry d x j = (((if j = x then 1 else 0) + (if j = x then 1 else 0) : ℕ) : ZMod 2) := by
+  rw [h]
+  split_ifs <;> decide
+
+theorem zIn_sha {x : ℕ} (h1 : 262144 ≤ x) (h2 : x < 270336) : zIn x = xS (x - 262144) := by
+  unfold zIn vS
+  rw [ite_eq_right (show ¬ x < 262144 by omega), ite_eq_left (show x < 524288 by omega),
+    Total.laidVal_input (show x - 262144 < inRowsOf SHA_IN by rw [inRows_SHA_IN]; omega)]
+
+theorem zIn_hm {x : ℕ} (h : x < 4096) : zIn x = xH x := by
+  unfold zIn vH
+  rw [ite_eq_left (show x < 262144 by omega),
+    Total.laidVal_input (show x < inRowsOf HM_IN by rw [inRows_HM_IN]; exact h)]
+
+/-- **The trace at a constant bit's source** is the bit: 1 at the pin, 0 at the forced-zero row. -/
+theorem zIn_constSrc (hn : Properties.Flock.Nets.FixedNetsBuild) (ws : Array ℕ) (t : ℕ) :
+    zIn (constSrcW ws t) = wbit ws t := by
+  unfold constSrcW
+  by_cases h : wbit ws t = true
+  · rw [ite_eq_left h, zIn_pin hn, h]
+  · rw [ite_eq_right h, zIn_unit (i := ZERO) (by decide) (by decide)]
+    exact (Bool.eq_false_iff.2 h).symm
+
+theorem constSrcW_lt (ws : Array ℕ) (t : ℕ) : constSrcW ws t < 2 ^ 22 := by
+  unfold constSrcW
+  split <;> decide
+
 variable {st : Stmt} (L : FlockSoundness.Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
   (hda : st.da.toList = E) (hrs : st.c.ranges.toList.map (fun r => (r.kind, r.slotLog, r.pos0, r.count)) = RS)
 include hda hrs
@@ -675,6 +762,94 @@ theorem holds_unitLeaf (hk : st.c.kLog = 22) (htm : st.c.tmpl = none) (hU : st.c
   refine copyRow_holds (copyRow_unitLeaf L regs hda htm hU hs1 hsl hr ⟨_, hsrc⟩ rfl) ?_
   rw [block_zC (S := L.model regs) hk, block_zC (S := L.model regs) hk, zIn_unit (i := r.val) hr.1 (by omega),
     Fin.val_mk, zIn_leaf (t := r.val - 524288) (by omega)]
+
+omit hda hrs in
+/-- **A `sha512x3` input row copies its source** where Δ's pairs at it are its self pair and the source's: its slot
+entry reads itself (`shaLaid_self`). -/
+theorem copyRow_shaIn (R : RowRanges st.c)
+    (hR : (st.c.rangeOf st.c.shaNet).count = 1 ∧ (st.c.rangeOf st.c.shaNet).slotLog = 18 ∧
+      (st.c.rangeOf st.c.shaNet).slot 0 = 262144)
+    {r : Fin (2 ^ (L.model regs).kLog)} (hr : 262144 ≤ r.val ∧ r.val < 266752) (src : Fin (2 ^ (L.model regs).kLog))
+    (hd : ∀ j, deltaEntry st.da r.val j = (((if j = r.val then 1 else 0) + (if j = src.val then 1 else 0) : ℕ) : ZMod 2)) :
+    CopyRow (L.model regs) r src := by
+  have hat : AtSlot st.c st.c.shaNet 0 (r.val - 262144) r.val :=
+    ⟨lt_of_lt_of_eq Nat.one_pos hR.1.symm,
+      by rw [hR.2.1]; exact lt_of_lt_of_le (show r.val - 262144 < 262144 by omega) (by norm_num),
+      by rw [hR.2.2]; omega⟩
+  have h := inBit_rows R (Or.inl rfl) hat (shaNet_ofRows R.rowNets) (shaLaid_self (off := r.val - 262144) (by omega))
+    r.isLt (fun j => ⟨hd j, by rw [L.delta_b]; exact hd j⟩)
+  exact ⟨fun j => (h j).1.trans (if_congr Fin.ext_iff.symm rfl rfl),
+    fun j => (h j).2.trans (if_congr Fin.ext_iff.symm rfl rfl)⟩
+
+omit hda hrs in
+/-- **An `hm96` input row copies its source** where Δ's pairs at it are its self pair and the source's. -/
+theorem copyRow_hmIn (R : RowRanges st.c)
+    (hR : (st.c.rangeOf st.c.hmNet).count = 1 ∧ (st.c.rangeOf st.c.hmNet).slotLog = 18 ∧
+      (st.c.rangeOf st.c.hmNet).slot 0 = 0)
+    {r : Fin (2 ^ (L.model regs).kLog)} (hr : r.val < 3072) (src : Fin (2 ^ (L.model regs).kLog))
+    (hd : ∀ j, deltaEntry st.da r.val j = (((if j = r.val then 1 else 0) + (if j = src.val then 1 else 0) : ℕ) : ZMod 2)) :
+    CopyRow (L.model regs) r src := by
+  have hat : AtSlot st.c st.c.hmNet 0 r.val r.val :=
+    ⟨lt_of_lt_of_eq Nat.one_pos hR.1.symm,
+      by rw [hR.2.1]; exact lt_of_lt_of_le (show r.val < 262144 by omega) (by norm_num),
+      by rw [hR.2.2]; omega⟩
+  have h := inBit_rows R (Or.inr rfl) hat (hmNet_ofRows R.rowNets) (hmLaid_self (off := r.val) hr)
+    r.isLt (fun j => ⟨hd j, by rw [L.delta_b]; exact hd j⟩)
+  exact ⟨fun j => (h j).1.trans (if_congr Fin.ext_iff.symm rfl rfl),
+    fun j => (h j).2.trans (if_congr Fin.ext_iff.symm rfl rfl)⟩
+
+omit hrs in
+/-- **The `sha512x3` slot's input rows hold** at the trace: `cv0` copies the midstate's bits from the pin or the forced
+zero, and the other inputs copy themselves. -/
+theorem holds_shaIn (hn : Properties.Flock.Nets.FixedNetsBuild) (hk : st.c.kLog = 22) (R : RowRanges st.c)
+    (hR : (st.c.rangeOf st.c.shaNet).count = 1 ∧ (st.c.rangeOf st.c.shaNet).slotLog = 18 ∧
+      (st.c.rangeOf st.c.shaNet).slot 0 = 262144)
+    (o : Fin (2 ^ (L.model regs).nbl)) {r : Fin (2 ^ (L.model regs).kLog)} (hr : 262144 ≤ r.val ∧ r.val < 266752) :
+    ((L.model regs).A₀.mulVec ((L.model regs).block (zC (L.model regs).m) o)) r *
+        ((L.model regs).B₀.mulVec ((L.model regs).block (zC (L.model regs).m) o)) r =
+      (L.model regs).block (zC (L.model regs).m) o r := by
+  by_cases hc : r.val < 262656
+  · have hsrc : constSrcW msW (r.val - 262144) < 2 ^ (L.model regs).kLog := by
+      rw [show (L.model regs).kLog = 22 from hk]; exact constSrcW_lt _ _
+    have hd := delta_cv0 hda (off := r.val - 262144) (by omega)
+    rw [show 262144 + (r.val - 262144) = r.val by omega] at hd
+    refine copyRow_holds (copyRow_shaIn L regs R hR hr ⟨_, hsrc⟩ hd) ?_
+    rw [block_zC (S := L.model regs) hk, block_zC (S := L.model regs) hk, Fin.val_mk, zIn_constSrc hn,
+      zIn_sha (x := r.val) hr.1 (by omega)]
+    unfold xS
+    rw [ite_eq_left (show r.val - 262144 < 512 by omega)]
+  · exact copyRow_holds (copyRow_shaIn L regs R hR hr r (delta_selfForm (delta_free hda (x := r.val) (by omega))))
+      rfl
+
+omit hrs in
+/-- **The `hm96` slot's input rows hold** at the trace: `cv` copies the `sha512x3` slot's first output, `pad` the
+padding block's bits from the pin or the forced zero, and `y` copies itself. -/
+theorem holds_hmIn (hn : Properties.Flock.Nets.FixedNetsBuild) (hk : st.c.kLog = 22) (R : RowRanges st.c)
+    (hR : (st.c.rangeOf st.c.hmNet).count = 1 ∧ (st.c.rangeOf st.c.hmNet).slotLog = 18 ∧
+      (st.c.rangeOf st.c.hmNet).slot 0 = 0)
+    (o : Fin (2 ^ (L.model regs).nbl)) {r : Fin (2 ^ (L.model regs).kLog)} (hr : r.val < 3072) :
+    ((L.model regs).A₀.mulVec ((L.model regs).block (zC (L.model regs).m) o)) r *
+        ((L.model regs).B₀.mulVec ((L.model regs).block (zC (L.model regs).m) o)) r =
+      (L.model regs).block (zC (L.model regs).m) o r := by
+  have hk' : (L.model regs).kLog = 22 := hk
+  by_cases h1 : r.val < 512
+  · have hsrc : 516096 + r.val < 2 ^ (L.model regs).kLog := by
+      rw [hk']; exact lt_of_lt_of_le (show 516096 + r.val < 524288 by omega) (by norm_num)
+    refine copyRow_holds (copyRow_hmIn L regs R hR hr ⟨_, hsrc⟩ (delta_cv hda h1)) ?_
+    rw [block_zC (S := L.model regs) hk, block_zC (S := L.model regs) hk, Fin.val_mk, zIn_hm (x := r.val) (by omega)]
+    unfold xH zIn
+    rw [ite_eq_left h1, ite_eq_right (show ¬ 516096 + r.val < 262144 by omega),
+      ite_eq_left (show 516096 + r.val < 524288 by omega), show 516096 + r.val - 262144 = 253952 + r.val by omega]
+  by_cases h2 : r.val < 1536
+  · have hsrc : constSrcW padW (r.val - 512) < 2 ^ (L.model regs).kLog := by rw [hk']; exact constSrcW_lt _ _
+    have hd := delta_pad hda (off := r.val - 512) (by omega)
+    rw [show 512 + (r.val - 512) = r.val by omega] at hd
+    refine copyRow_holds (copyRow_hmIn L regs R hR hr ⟨_, hsrc⟩ hd) ?_
+    rw [block_zC (S := L.model regs) hk, block_zC (S := L.model regs) hk, Fin.val_mk, zIn_constSrc hn,
+      zIn_hm (x := r.val) (by omega)]
+    unfold xH
+    rw [ite_eq_right h1, ite_eq_left h2]
+  · exact copyRow_holds (copyRow_hmIn L regs R hR hr r (delta_selfForm (delta_free hda (x := r.val) (by omega)))) rfl
 
 end place
 
