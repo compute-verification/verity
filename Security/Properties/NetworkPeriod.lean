@@ -61,17 +61,17 @@ phase's scan's state and is charged its `stateFree`, and an explicit period and 
 audit whose `SCAN_STATE` is at another root (`RowsStateHeldAt` false).
 
 `RowsCertified` says the check accepts no link-window whose scan's registration holds, in either direction, rows the
-network certifier didn't sign at that link-window: an entry of its `roots` or `registered` names their root and domain
-(`holds`), the domain is the link-window's (`rowsDomain`, over the schedule's digest, the session, the link, the
-direction and the window), and the head over them (`headDigest`, which also binds the schedule and the rows' wiring)
-carries a certificate of the link-window that verifies under the parameters' key in their session
-(`Certificate.signs`). The key, its LMS parameters and the session are the parameters' (`Params.key`, `lms`,
-`session`), the auditor's record of the network certifier: the certificate the statement names carries the key's own
-identifier, and nothing in it is read from the evidence. With `RowsProgWired`, which ties the scan's `prog` to a compute
-audit's slot entries, the egress a scan reads is the network certifier's. Its witnesses are an empty rows-form period
-`check` accepts, beside a toy key's certificate that verifies and a registration that holds the rows it names, and a
-period whose one link-window's registration holds no rows, which a check that accepts everything accepts
-(`RowsCertifiedOf acceptAllRows` false).
+network certifier didn't sign at that link-window: an entry of its `roots` or `registered` is under their domain and
+every entry under it is at their root (`regEntries`), so the domain names one tree; the domain is the link-window's
+(`rowsDomain`, over the schedule's digest, the session, the link, the direction and the window), and the head over the
+root and domain (`headDigest`, which also binds the schedule and the rows' wiring) carries a certificate of the
+link-window that verifies under the parameters' key in their session (`Certificate.signs`). The key, its LMS parameters
+and the session are the parameters' (`Params.key`, `lms`, `session`), the auditor's record of the network certifier:
+the certificate the statement names carries the key's own identifier, and nothing in it is read from the evidence. With
+`RowsProgWired`, which ties the scan's `prog` to a compute audit's slot entries, the egress a scan reads is the network
+certifier's. Its nontrivial witness is a period whose one link-window's registration has no entries, which a check
+that accepts everything accepts (`RowsCertifiedOf acceptAllRows` false); it has no honest witness yet, since an
+accepted link-window's rows read `rowsDomain`, over `Flock.canonUtf8`, which the kernel doesn't evaluate.
 -/
 
 namespace Properties.NetworkPeriod
@@ -240,7 +240,8 @@ def RowsStateHeld : Prop :=
 holds, in each direction, rows `r` the network certifier signed at that link-window: their domain is the link-window's
 (`rowsDomain`), the head over their wiring, domain and root (`headDigest`) carries a certificate of the link-window
 under the parameters' key's identifier that verifies under that key in the parameters' session (`Certificate.signs`),
-and an entry of the registration's `roots` or `registered` names their root and domain (`holds`). -/
+some entry of the registration's `roots` or `registered` (`regEntries`) is under their domain, and every entry under
+their domain is at their root, so the domain names one tree, the signed one. -/
 def RowsCertifiedAt (p : Params) (c : Commitment) : Prop :=
   ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
     ∀ (i : ℕ) (reg : Lean.Json), c.windows[i]? = some reg → ∀ d : NetworkCheck.Direction,
@@ -248,7 +249,8 @@ def RowsCertifiedAt (p : Params) (c : Commitment) : Prop :=
         r.domain = Flock.hexOf dom ∧ headDigest p.link d (p.first + i) sd s r.wiring dom r.root = .ok head ∧
         NetworkCheck.Check.Certificate.signs p.lms p.key p.session
           ⟨p.key.extract 0 16, p.link, d, p.first + i, head, r.signature⟩ = true ∧
-        holds reg r = true
+        (∃ e ∈ regEntries reg, e.getObjValD "domain" = .str r.domain) ∧
+        ∀ e ∈ regEntries reg, e.getObjValD "domain" = .str r.domain → e.getObjValD "root" = .str (Flock.hexOf r.root)
 
 /-- `RowsCertified` of the period check `chk`: `RowsCertifiedAt` of every period `chk` accepts. -/
 def RowsCertifiedOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
@@ -257,12 +259,13 @@ def RowsCertifiedOf (chk : Params → Commitment → Evidence → Core.Outcome P
 
 /-- **The rows form accepts no link-window whose scan holds rows the network certifier didn't sign.** If the check
 accepts a period in the rows form, each link-window's scan's registration has, for each direction, an entry of its
-`roots` or `registered` at the root and domain of rows whose head the network certifier signed at that link-window:
-the domain is the link-window's frame-v3-sha512 domain in the session, under the schedule's digest (`rowsDomain`), and
-the head (`headDigest`: the link, the direction, the window, the schedule and its digest, the rows' wiring, the domain
-and the root) carries a certificate of the link-window that verifies under the parameters' LMS key in their session
-(`Certificate.signs`, at the key's identifier). The key, its parameters and the session are the parameters' own, so a
-prover who registers rows the network certifier didn't sign under that key at that link-window is refused. -/
+`roots` or `registered` under the domain of rows whose head the network certifier signed at that link-window, and
+every entry under that domain is at those rows' root: the domain is the link-window's frame-v3-sha512 domain in the
+session, under the schedule's digest (`rowsDomain`), and the head (`headDigest`: the link, the direction, the window,
+the schedule and its digest, the rows' wiring, the domain and the root) carries a certificate of the link-window that
+verifies under the parameters' LMS key in their session (`Certificate.signs`, at the key's identifier). The key, its
+parameters and the session are the parameters' own, so a prover who registers rows the network certifier didn't sign
+under that key at that link-window, or a second tree beside the signed one under its domain, is refused. -/
 def RowsCertified : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsCertifiedAt p c
