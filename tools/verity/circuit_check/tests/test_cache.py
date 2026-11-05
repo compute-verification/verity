@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -13,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from circuit_check import entries as E
+from verity.ml.definitions.numerics import _jit
 
 REPO = Path(__file__).resolve().parents[4]
 
@@ -323,10 +325,10 @@ def _tree(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def _run(root: Path, harness: str = HARNESS) -> dict:
+def _run(root: Path, harness: str = HARNESS, cwd: Path = REPO, env: dict[str, str] | None = None) -> dict:
     # no bytecode: an edit that keeps a file's size within the second its bytecode was written would run the old code
-    env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
-    r = subprocess.run([sys.executable, "-c", harness, str(root), str(REPO)], capture_output=True, text=True, cwd=REPO, env=env)
+    env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1", **(env or {})}
+    r = subprocess.run([sys.executable, "-c", harness, str(root), str(REPO)], capture_output=True, text=True, cwd=cwd, env=env)
     assert r.returncode == 0, r.stderr
     out = json.loads(r.stdout.strip().splitlines()[-1])
     assert not out["stats"]["untraced"] and not out["stats"]["errors"] and not out["stats"]["changed"], out
@@ -340,9 +342,9 @@ def _edit(root: Path, rel: str, old: str, new: str) -> None:
     p.write_text(text.replace(old, new, 1))
 
 
-def _values(root: Path, target: str) -> list:
-    """The values every stored entry of ``target`` reported."""
-    return sorted(e["report"]["value"] for p in (root / "cache").glob("*/*/*.json")
+def _values(root: Path, target: str, field: str = "value") -> list:
+    """The ``field`` every stored entry of ``target`` reported."""
+    return sorted(e["report"][field] for p in (root / "cache").glob("*/*/*.json")
                   if (e := json.loads(p.read_text()))["key"]["request"]["target"][1] == target)
 
 
@@ -496,6 +498,116 @@ def test_a_package_in_the_tree_that_shadows_a_loaded_distribution_reruns_what_ho
         assert CC._dist(root, top) == "tree"
     finally:
         sys.path.remove(str(root))
+
+
+#: the harness with a module object made by hand whose ``__file__`` is a bare name, as torch makes `torch.ops` (``_ops.py``),
+#: imported by every check
+BARE = HARNESS.replace("CC.trace(root)", "import types\n"
+                                         "sys.modules['syn_bare'] = types.ModuleType('syn_bare')\n"
+                                         "sys.modules['syn_bare'].__file__ = '_bare.py'\n"
+                                         "CC.trace(root)")
+
+
+def test_a_module_whose_file_is_a_bare_name_names_no_file_wherever_the_check_runs(tmp_path):
+    """Resolved against the working directory, a bare ``__file__`` would be a module imported from outside the tree for a check
+    run outside it (storing nothing) and a file of the tree for one run at its root, so where a check ran would decide whether
+    its verdict is stored and what it holds.  It names no file: stored from either and reused from the other, each target
+    holds the same reads from both, and none of them is it, nor where `inspect` looked for its source from the tree's root."""
+    root, elsewhere = _tree(tmp_path / "tree"), tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    _edit(root, "syn/check.py", "from syn import reg", "from syn import reg\n    import syn_bare  # noqa: F401")
+    assert BARE != HARNESS
+    held = []
+    for first, then in ((elsewhere, root), (root, elsewhere)):
+        shutil.rmtree(root / "cache", ignore_errors=True)
+        assert _run(root, BARE, cwd=first)["hits"] == [], first
+        held.append({t: _entry(root, t)["reads"] for t in ("SynTop_v1", "SynOther_v1")})
+        assert _run(root, BARE, cwd=then)["hits"] == ["SynOther_v1", "SynTop_v1"], then
+    assert held[0] == held[1], "what a check holds depends on where it ran"
+    assert not [f for r in held[0].values() for f in [*r["files"], *r["probes"]] if "_bare" in f or "<" in f], held[0]
+
+
+#: a C++ model of the synthetic tree, loaded as `_jit.Model` (its library built on first use, in `_jit.lib_path`)
+NATIVE_PY = """
+from pathlib import Path
+
+from verity.ml.definitions.numerics import _jit
+
+SRC = Path(__file__).resolve().parents[1] / "cpp" / "m.cpp"
+_lib = []
+
+
+def answer():
+    if not _lib:
+        lib = _jit.atomic_build(_jit.lib_path("libsyn_model.so"), [SRC], lambda out: _jit.cxx_compile(out, SRC))
+        _lib.append(_jit.Model(lib, [SRC]))
+    return _lib[0].answer()
+"""
+#: the harness with the model built and loaded before tracing, as a process's first check of it would leave it
+NATIVE = HARNESS.replace("CC.trace(root)", "import syn.native\nsyn.native.answer()\nCC.trace(root)")
+
+
+@pytest.mark.skipif(shutil.which(_jit.cxx()) is None, reason="no C++ compiler")
+def test_editing_a_cpp_models_source_reruns_the_check_that_called_it_whatever_its_build_directory(tmp_path):
+    """SynTop's check calls a C++ model whose library was built in ``VERITY_NUMERICS_BUILD_DIR`` and loaded before the check, so
+    no read of its source picks the library or happens in the check: the call itself says the source (`_jit.Model`,
+    `cache.MODEL`).  Its entry holds the source by content, SynOther's (checked before it) doesn't, and an edit reruns SynTop
+    alone."""
+    from circuit_check import cache as CC
+
+    assert CC.MODEL == _jit.CALLED
+    root = _tree(tmp_path / "tree")
+    (root / "cpp").mkdir()
+    (root / "cpp" / "m.cpp").write_text('extern "C" int answer() { return 7; }\n')
+    (root / "syn" / "native.py").write_text(NATIVE_PY.lstrip("\n"))
+    _edit(root, "syn/check.py", "from syn import reg", "from syn import native, reg")
+    _edit(root, "syn/check.py", '"kind": reg.KINDS.get(fn.id)}',
+          '"kind": reg.KINDS.get(fn.id), "native": native.answer() if fn.id == "SynTop_v1" else None}')
+    env = {"VERITY_NUMERICS_BUILD_DIR": str(tmp_path / "libs")}
+    assert _run(root, NATIVE, env=env)["hits"] == []
+    assert "cpp/m.cpp" in _entry(root, "SynTop_v1")["reads"]["files"] and _values(root, "SynTop_v1", "native") == [7]
+    assert "cpp/m.cpp" not in _entry(root, "SynOther_v1")["reads"]["files"]
+    assert _run(root, NATIVE, env=env)["hits"] == ["SynOther_v1", "SynTop_v1"]
+    _edit(root, "cpp/m.cpp", "return 7", "return 8")
+    out = _run(root, NATIVE, env=env)
+    assert out["hits"] == ["SynOther_v1"] and out["stats"]["stored"] == 1 and _values(root, "SynTop_v1", "native") == [7, 8]
+
+
+#: `syn.native` with the model's answer memoized process-wide, as `functools.cache` does: a check it serves calls no model
+MEMO_PY = NATIVE_PY.replace("from pathlib import Path", "import functools\nfrom pathlib import Path") + """
+
+@functools.cache
+def remembered():
+    return answer()
+"""
+
+
+@pytest.mark.skipif(shutil.which(_jit.cxx()) is None, reason="no C++ compiler")
+@pytest.mark.parametrize("forked", [False, True], ids=["one-process", "forked-after-a-build"])
+def test_editing_a_cpp_models_source_reruns_every_check_a_memo_of_its_result_served(tmp_path, forked):
+    """Both checks read the model's answer from a process-wide memo, filled by the process's first call: SynOther's check, the
+    first of the two in the process that checks both, or SynOther's binding's build, in the process each target's own is forked
+    from (as `circuit-check` runs).  SynTop's check is served from it and calls no model, so no call in its check says the source;
+    it holds it all the same (`cache._CALLED`), and an edit of the source reruns both checks with the model's new answer."""
+    root = _tree(tmp_path / "tree")
+    (root / "cpp").mkdir()
+    (root / "cpp" / "m.cpp").write_text('extern "C" int answer() { return 7; }\n')
+    (root / "syn" / "native.py").write_text(MEMO_PY.lstrip("\n"))
+    _edit(root, "syn/check.py", "from syn import reg", "from syn import native, reg")
+    _edit(root, "syn/check.py", '"kind": reg.KINDS.get(fn.id)}', '"kind": reg.KINDS.get(fn.id), "native": native.remembered()}')
+    harness = NATIVE
+    if forked:
+        _edit(root, "syn/catalog.py", "    from syn import other\n", "    from syn import native, other\n    native.remembered()\n")
+        harness = NATIVE.replace("log=None, cache=", "log=None, jobs=2, isolate=True, fork=True, cache=")
+        assert harness != NATIVE
+    env = {"VERITY_NUMERICS_BUILD_DIR": str(tmp_path / "libs")}
+    assert _run(root, harness, env=env)["hits"] == []
+    assert _run(root, harness, env=env)["hits"] == ["SynOther_v1", "SynTop_v1"]
+    _edit(root, "cpp/m.cpp", "return 7", "return 8")
+    out = _run(root, harness, env=env)
+    assert out["hits"] == [], f"reused with the model's old answer: {out['hits']}"
+    assert out["stats"]["stored"] == 2
+    assert {t: _values(root, t, "native") for t in ("SynOther_v1", "SynTop_v1")} == {"SynOther_v1": [7, 8], "SynTop_v1": [7, 8]}
 
 
 def test_editing_a_registry_module_no_target_resolves_reuses_every_target(tmp_path):

@@ -5,6 +5,7 @@ from __future__ import annotations
 import ctypes
 import os
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 
 import numpy as np
 
@@ -13,6 +14,7 @@ from verity.ml.definitions.numerics.mma import TCModel
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CPP_SRC = os.path.join(HERE, "cpp", "tc_model.cpp")
+SOURCES = (Path(CPP_SRC),)
 LIB = str(_jit.lib_path("libtc_model.so"))             # build product (the _jit cache, outside the checkout), compiled on first use
 
 _lib = None
@@ -20,15 +22,13 @@ _lib = None
 
 def build() -> str:
     """Compile cpp/tc_model.cpp; atomic publish + builder lock (``_jit``): no half-written .so for a concurrent dlopen."""
-    from pathlib import Path
-
-    return str(_jit.atomic_build(Path(LIB), [Path(CPP_SRC)], lambda out: _jit.cxx_compile(out, Path(CPP_SRC))))
+    return str(_jit.atomic_build(Path(LIB), SOURCES, lambda out: _jit.cxx_compile(out, Path(CPP_SRC))))
 
 
 def lib() -> ctypes.CDLL:
     global _lib
     if _lib is None:
-        _lib = ctypes.CDLL(build())
+        _lib = _jit.Model(build(), SOURCES)
         _lib.tc_records.restype = None
         _lib.tc_records.argtypes = [
             ctypes.c_int,

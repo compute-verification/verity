@@ -1284,6 +1284,30 @@ def test_the_preflight_runs_first_and_a_failure_there_starts_nothing_else(tmp_pa
     assert CHECK.run(tmp_path, 2)[0] and marker.exists()
 
 
+def test_a_prebuild_that_fails_refuses_the_run_with_its_output_and_exit_status_even_under_keep_going(tmp_path, monkeypatch):
+    """The C++ models' prebuild ran with its output captured and its exit ignored, and fell back to building nothing where the
+    twins didn't import, so a check whose models didn't build ran on, each step compiling them untraced: it refuses now."""
+    import json
+
+    assert "except" not in CHECK.PREBUILD, "a prebuild whose models don't import fails, never falls back to building none"
+    marker = tmp_path / "ran"
+    touch = _py("open(__import__('sys').argv[1], 'w')", marker)
+    for keep_going in (False, True):
+        _fake_run(monkeypatch, [[("pytest", touch, tmp_path)]], pre=[("preflight-lock", _py("pass"), tmp_path)])
+        monkeypatch.setattr(CHECK, "PREBUILD", "import sys\nprint('compiling tc_model.cpp', flush=True)\nsys.exit('g++: not found')")
+        ok, done = CHECK.run(tmp_path, 2, keep_going=keep_going)
+        assert not ok and not marker.exists(), keep_going
+        assert [(s["step"], s["status"], s.get("rc")) for s in done] == [("preflight-lock", "passed", 0), ("prebuild", "failed", 1)]
+        assert done[1]["detail"].startswith("refused: the C++ models' prebuild exited 1 (g++: not found; prebuild.log)")
+        assert (tmp_path / "prebuild.log").read_text().splitlines() == ["compiling tc_model.cpp", "g++: not found"]
+        assert json.loads((tmp_path / "steps.jsonl").read_text().splitlines()[-1])["step"] == "prebuild"
+    _fake_run(monkeypatch, [[("pytest", touch, tmp_path)]], pre=[("preflight-lock", _py("pass"), tmp_path)])
+    monkeypatch.setattr(CHECK, "PREBUILD", "print('{\"tc_model\": \"libtc_model.so\"}')")
+    ok, done = CHECK.run(tmp_path, 2)
+    assert ok and marker.exists() and [s["step"] for s in done] == ["preflight-lock", "pytest"]
+    assert (tmp_path / "prebuild.log").read_text() == '{"tc_model": "libtc_model.so"}\n'
+
+
 def test_a_failed_preflight_starts_nothing_else_even_under_keep_going(tmp_path, monkeypatch):
     """Every train's check runs with --keep-going: a failed preflight must still end it in seconds, not hold its slot."""
     marker = tmp_path / "ran"
