@@ -1,4 +1,6 @@
-import Mathlib
+module
+
+public import Mathlib
 
 /-!
 # Fan-in: a straight-line program's dataflow (trusted)
@@ -9,6 +11,8 @@ order, reading the nodes `src` names and computing its value from theirs alone; 
 when a set of outputs sees every input (the receipt is injective in each word given the others); and the thin fold,
 whose receipt is.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS
 

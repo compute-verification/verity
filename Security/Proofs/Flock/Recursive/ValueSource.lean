@@ -1,4 +1,6 @@
-import Proofs.Flock.Recursive.ValueFinder
+module
+
+public import Proofs.Flock.Recursive.ValueFinder
 
 /-!
 # The verifier's own rows as `valueFinder`'s source
@@ -16,6 +18,8 @@ are their ties:
   (`valueRows_coef`, `valueRows_dirs`, `valueRows_v`), so `valueSrcC3_eq` gives `value_tie_coll`'s `hsrc`;
 * `stackedLevel_of_check`, `openingCheck_of_check`: `RecCoins.check` runs those checks at those units.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

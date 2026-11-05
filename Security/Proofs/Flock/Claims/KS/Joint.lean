@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.Range
-import Proofs.Flock.Claims.Bridge.Transport
-import Proofs.Flock.Soundness.ExtractAcc
+module
+
+public import Proofs.Flock.Claims.KS.Range
+public import Proofs.Flock.Claims.Bridge.Transport
+public import Proofs.Flock.Soundness.ExtractAcc
 
 /-!
 # One wait's bound from a fixed table's bound
@@ -41,6 +43,8 @@ codeword (`wordLen`), no longer than `N₀` (`wordLen_le_N₀`), and `Ok` is a c
 both instances asks the three obligations and one table at every statement some run accepts (`plain_KS_of_tableBound`,
 `zk_KS_of_tableBound`; the plain scope admits one, `plain_hone`, and the masked scope several).
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 

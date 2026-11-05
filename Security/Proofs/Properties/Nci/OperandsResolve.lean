@@ -1,4 +1,6 @@
-import Proofs.Properties.Nci.Resolve
+module
+
+public import Proofs.Properties.Nci.Resolve
 
 /-!
 # Operands resolve on the walk: `Walk.OperandsResolve`, from `Resolve.BodiesOk`
@@ -15,6 +17,8 @@ ends at a gate (`resolve_ok`), and a primitive node's operands, which `Resolve.B
 resolve (`operands_prim`) in every activation `Prog.gate`'s walk reaches (`reach_walkQ`): `operandsResolve_of` proves
 `Walk.OperandsResolve` from `Resolve.BodiesOk`.
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.OperandsResolve
 

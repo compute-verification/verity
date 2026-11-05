@@ -1,6 +1,8 @@
-import Definitions.NetworkCertifier.Guarantees.SampledCharge
-import Proofs.NetworkCertifier.Advice
-import Mathlib.Tactic.Ring
+module
+
+public import Definitions.NetworkCertifier.Guarantees.SampledCharge
+public import Proofs.NetworkCertifier.Advice
+public import Mathlib.Tactic.Ring
 
 /-!
 # The sampled audit's charge (`Guarantees.SampledCharge`)
@@ -13,6 +15,8 @@ bit, and the count is Theorem 3's with that advice (`encard_acceptedFaulty_le`):
 per committed gate of the faulty units, and the jitter code, summed over the possible faulty sets
 (`encard_accSeqsSampled_le`). At `δ ≥ miss(1)` the only possible faulty set is empty (`eq_empty_of_mem_faultySets`).
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

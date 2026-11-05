@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Zero.Delta
+module
+
+public import Proofs.Flock.Soundness.Discharge.Zero.Delta
 
 /-!
 # A VU's stacked inputs that read the zero (`hZero`, e2e, untyped statements)
@@ -16,6 +18,8 @@ copy `x / W`'s input at slot offset `x % W`, with `W = inWords · WORD` the unit
 - `withZero`: a wiring of the units' stacked inputs that puts exactly the `ZeroIn` inputs on the zero gate
   (`withZero_eq_zer`), the zero clause of the program's input wiring.
 -/
+
+@[expose] public section
 
 open Flock
 

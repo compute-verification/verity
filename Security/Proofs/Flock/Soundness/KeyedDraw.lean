@@ -1,8 +1,11 @@
-import Proofs.Flock.Soundness.ExecDrawOS
-import Randomness
-import Proofs.Flock.Soundness.PlanDraw
-import Proofs.Flock.Soundness.Audit.Window
-import Proofs.Flock.Soundness.Audit.RegDraw
+module
+
+public import Proofs.Flock.Soundness.ExecDrawOS
+public import Randomness
+public import Proofs.Flock.Soundness.PlanDraw
+public import Proofs.Flock.Soundness.Audit.Window
+public import Proofs.Flock.Soundness.Audit.RegDraw
+import all Init.Data.String.Defs
 
 /-!
 # The PoUW circuit's keyed draw escapes no more often than the model's
@@ -37,6 +40,8 @@ The window (`PlanDraw.window`, `plan.draw` for each call under one key, admissio
 * `Law.keyedWindowReg_extraction_audit_of_record` (the claim of record), `Law.keyedWindowReg_audit_of_record`: the same on the
   real game, whose key context is the receipt digest, strategy by strategy (`prob_auditReg`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit.KeyedDraw
 

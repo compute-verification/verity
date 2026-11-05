@@ -1,5 +1,7 @@
-import Proofs.Flock.ZeroKnowledgeHidden.Statement
-import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
+module
+
+public import Proofs.Flock.ZeroKnowledgeHidden.Statement
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
 
 /-!
 # Proof of C-Flock's zero-knowledge guarantee under hidden outputs
@@ -8,6 +10,8 @@ import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
 `Flock.SecurityProofs.EndToEndHidden` at the same `dj` and `y₀` it is `zk_session_composedHJ`'s composition: sound and
 zero knowledge on one plan.
 -/
+
+@[expose] public section
 
 namespace Flock.SecurityProofs
 

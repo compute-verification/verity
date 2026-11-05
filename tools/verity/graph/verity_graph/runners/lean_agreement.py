@@ -2,8 +2,9 @@
 its var `verify`) and the upstream build and inputs `upstream.json` pins, fetched from the evidence store as ci.py fetches what
 it pins (`research data fetch`) and held to the pin's sha256.  Those fetches and ci.py's read the store's remote this
 process's environment names: a `research run` job on a node with no store config of its own gets one with --store-read.  An
-error when it couldn't run: a pin that didn't fetch or isn't the pinned bytes, a machine check.py says can't run it, a kill; any
-other failing exit is a fail."""
+error when it couldn't run: a pin that didn't fetch or isn't the pinned bytes, a machine check.py says can't run it, a kill, and
+a pass in which ci.py skipped every set (no upstream binary for any set's prover commit), which compared nothing; any other
+failing exit is a fail."""
 from __future__ import annotations
 
 import hashlib
@@ -49,9 +50,13 @@ def run(task: dict, work: Path) -> dict:
     rc = call([sys.executable, str(ROOT / CHECK), "--lean-agreement", str(work), str(got["upstream"]), str(got["inputs"]),
                str(verify)], work, ROOT)
     if rc == 0:
-        sets = [s for s in json.loads((work / SETS).read_text())["sets"] if "skipped" not in s]
-        return {"status": "pass", "detail": {"sets": len(sets), "sessions": sum(s["sessions"] for s in sets),
-                                             "agree": sum(s["agree"] for s in sets)}}
+        every = json.loads((work / SETS).read_text())["sets"]
+        sets = [s for s in every if "skipped" not in s]
+        detail = {"sets": len(sets), "sessions": sum(s["sessions"] for s in sets), "agree": sum(s["agree"] for s in sets)}
+        if not sets:
+            return {"status": "error", "detail": {**detail, "error": f"ci.py skipped every one of its {len(every)} sets: "
+                                                                     "nothing was compared"}}
+        return {"status": "pass", "detail": detail}
     if rc < 0 or rc > 128 or CANNOT in (work / LOG).read_text(errors="replace"):
         return {"status": "error", "detail": {"error": f"check.py --lean-agreement couldn't run here (exit {rc})"}}
     return {"status": "fail", "detail": {"exit": rc}}

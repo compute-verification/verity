@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
-import Proofs.Flock.Soundness.Discharge.Integrate.Headline
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
+public import Proofs.Flock.Soundness.Discharge.Integrate.Headline
 
 /-!
 # One plain sampled session of `J` tables: the plan, sites, layout and rows
@@ -18,6 +20,8 @@ with no transfer to compiled tables:
 * `layPJ`, `rsPJ`, `rsPJ_computes`: `keyedLayout`, `keyedRowsOuts` and `hHm` at those sites.
 * `DrawOkPJ`, `opnPJ`: the coin server's draw at each table, and table `j`'s openings.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.PlainJ
 

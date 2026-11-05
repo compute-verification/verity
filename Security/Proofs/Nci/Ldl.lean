@@ -1,8 +1,10 @@
-import Definitions.Nci.Guarantees.Ldl
-import Proofs.Core.Circuit
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.Linarith
+module
+
+public import Definitions.Nci.Guarantees.Ldl
+public import Proofs.Core.Circuit
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Tactic.FieldSimp
+public import Mathlib.Tactic.Linarith
 
 /-!
 # Local description length on a `(c,k)`-partition: the proofs
@@ -13,6 +15,8 @@ import Mathlib.Tactic.Linarith
   (Theorem 3).
 * Corollary 4b is Lemma 1, the fan-out count `|𝓙_I| ≤ e |V_I|` and Theorem 3 with unit weights.
 -/
+
+@[expose] public section
 
 namespace Nci.Ldl
 

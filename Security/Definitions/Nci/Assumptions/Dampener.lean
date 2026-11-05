@@ -1,5 +1,7 @@
-import Definitions.Nci.Dampener
-import Definitions.Nci.Threads
+module
+
+public import Definitions.Nci.Dampener
+public import Definitions.Nci.Threads
 
 /-!
 # The compute dampener: the model's accounting, named
@@ -9,6 +11,8 @@ model's accounting of where counted multiplications run, and the shape of the se
 numbers. These name them. None is about the world: each is how the model counts, or what the inference-only policy's
 verdicts give (`RunsThrottled`).
 -/
+
+@[expose] public section
 
 namespace Nci.Assumptions
 
