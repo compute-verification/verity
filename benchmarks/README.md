@@ -23,6 +23,7 @@ What the protocols cost: measured on served inference, and bounded on training.
 | --- | --- | --- |
 | `harness/` | `verity-bench`: specs, recorded runs, sweeps and results for an arm against stock vLLM, and the served table of each protocol's overhead | maintained |
 | `specs/` | the harness's specs and sweeps, one TOML file each | maintained |
+| `overhead/` | `verity bench overhead`, the one front door for overhead: a card's operating points C and L, a scheme's γ over stock at them in busy SM-time, and the table of γ from labelled runs of record | maintained |
 | `served_commit/` | what the Commit, every value of every step committed, adds to served vLLM: throughput, time to first token and per-token latency | maintained |
 | `g2/` | the served Commit's overhead curve over stock, rendered from the evidence store; it measures nothing itself | maintained |
 | `vllm_encoded/` | Llama-3.1-8B in vLLM with its weights and KV cache held as codec words and receipted by PoUB, as `verity-bench` arms beside the plain stack | maintained |
@@ -100,6 +101,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | Directory | What it measures | Status |
 | --- | --- | --- |
 | `ppl/` | the perplexity an intervention on a served model's matmuls or attention costs, against bf16 and plain int8 | maintained |
+| `f32_exhaustive/` | a correctly rounded reference primitive (`F32LogRn_v1`, `F32ExpRn_v1`) against MPFR, or a Boolean version (`F32Sqrt_v2`) against its word, on all 2^32 binary32 words | maintained |
 | `numerical/` | the bench spine (`verity_numerical.bench`) that C-Flock and `circuit-check` import, and the per-unit-type cost inventory; the archived proof systems' tables are in the evidence store | frozen |
 
 ## Census data

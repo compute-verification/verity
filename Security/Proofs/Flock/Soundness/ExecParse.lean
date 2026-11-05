@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.ExecPlacement
+module
+
+public import Proofs.Flock.Soundness.ExecPlacement
 
 /-!
 # What the parsers accepted, and Δ's first loop
@@ -9,6 +11,8 @@ import Proofs.Flock.Soundness.ExecPlacement
 - `delta_split`: `HmRow.delta`'s first loop writes exactly `constPairs` (every net slot's constant other than the pin,
   `(k, k)` and `(k, pin)`), and every later pair's row has one of the input-bit forms (`DeltaIn`).
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Bridge.V5.Statement
-import Proofs.Flock.Bridge.TransportsRefs
+module
+
+public import Proofs.Flock.Bridge.V5.Statement
+public import Proofs.Flock.Bridge.TransportsRefs
 
 /-!
 # Canonical registered openings open the deployed commitment at public inputs (`Bridge.TransportsLiveV5`, proved)
@@ -14,6 +16,8 @@ import Proofs.Flock.Bridge.TransportsRefs
   the datum that opens, `opens_commitDepL`'s `Bridge.dataAt` (the salt, the row's registration path and its bits);
 * `Bridge.transportsLiveV5 : Bridge.TransportsLiveV5`.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.VBridge.Family
-import Proofs.Flock.VBridge.Pinned
-import Proofs.Flock.VBridge.ResLayer
+module
+
+public import Proofs.Flock.VBridge.Family
+public import Proofs.Flock.VBridge.Pinned
+public import Proofs.Flock.VBridge.ResLayer
 
 /-!
 # A rep's values in V*'s layers: `HStruct`, `HShape`, `HResL`
@@ -20,6 +22,8 @@ from facts about V*'s statements, circuits and registrations, each a named `Prop
 establishes it. `HResL` asks each part's row ports for the rep's `w` only at the columns some computed row reads
 (`ResZeroAtL`), so each such bit of `w` is read where it is asked, and `repOf`'s `w` needs no column beyond those.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 

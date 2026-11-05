@@ -39,13 +39,13 @@ BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: partition.json, served.json, registered.json, tables/), session/ (the drawn --zk session's record and proofs), live.json
 #: (the prover's LIVE record)
 FIXTURES = {
-    G.SCHEMA: "art:408690b5428fd1601a203143a5f10e0bcd43e2a435a0b642087c0c0dbb557ba8",
-    G.SCHEMA_V2: "art:9059dbea3724a426dfe4ee371cd7aabd91116595a31bd5e843e757fa33130803",
-    G.SCHEMA_SEG: "art:914ec71e91006bef4486b89dba2f2c936f3bba90d8afbeae3d6016fb8318555c",
+    G.SCHEMA: "art:891ffb0bfc8ae3032e5b113d766ffe594c6e8446d293f0bfe5cba62286437edf",
+    G.SCHEMA_V2: "art:cd47a8fe806ef14308e22d07275d125334595b3a73d63ef8626ed762a7b9c181",
+    G.SCHEMA_SEG: "art:5be3f6b0639f3dda47fe19366da782ffdc0b4b5fc886ccf45b36feb3f4fcfc34",
 }
 #: `pod/89-served-registered.sh ZK=0`'s fixture (row/v1): the same stage, with the verifier's own stratified sample of `PLAIN_K`
 #: (stage/draw.json), and session/ a plain session (no --zk, OS coins) sampled by it; vectors/ is vectors.json's live set
-PLAIN = "art:d1f2e2ffb692f3f631659ca231a429bff0eeecd6a7196d7e186f71001557afa3"
+PLAIN = "art:da138c653377954f4eb906a002814ea73a89a766daa9a0c979f6e31fe18ba60f"
 PLAIN_K = 16
 STATEMENT = "verity/flock-circuit"
 

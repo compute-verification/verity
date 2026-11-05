@@ -1,10 +1,12 @@
-import Proofs.Properties.RemoteAudit.Window
-import Proofs.Properties.RemoteAudit.Draw
-import Proofs.Properties.RemoteAudit.Plan
-import Proofs.Properties.RemoteAudit.Session
-import Proofs.Properties.RemoteAudit.Released
-import Proofs.Properties.RemoteAudit.Lifetime
-import Proofs.Properties.RemoteAudit.Pooled
+module
+
+public import Proofs.Properties.RemoteAudit.Window
+public import Proofs.Properties.RemoteAudit.Draw
+public import Proofs.Properties.RemoteAudit.Plan
+public import Proofs.Properties.RemoteAudit.Session
+public import Proofs.Properties.RemoteAudit.Released
+public import Proofs.Properties.RemoteAudit.Lifetime
+public import Proofs.Properties.RemoteAudit.Pooled
 
 /-!
 # The remote bandwidth audit's verifier: its properties, proved (`Properties.RemoteAudit`)
@@ -20,3 +22,5 @@ appends joined, and from it `lifetimeCapped`. `Pooled`: the pooled bound the cod
 reads, cover the draw's (`pooledCovers`, `pooledCoversSession`, `lineCoversSession`, stated in
 `Properties.RemoteAudit.Pooled`).
 -/
+
+@[expose] public section

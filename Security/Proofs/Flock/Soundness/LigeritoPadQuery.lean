@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.LigeritoPadDecode
+module
+
+public import Proofs.Flock.Soundness.LigeritoPadDecode
 
 /-!
 # The padded level 0's queries, and on to level 1
@@ -11,6 +13,8 @@ The queries are `phaseA`'s on a column function `v` (`value_queryAndBatchV_le`,
 column, since otherwise it decodes to a family of the list (`decode_pad`), whose claim is false
 (`query_bound_pad`). Its mismatch survives the queries with probability at most `(√ρ' + η)^Q`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Accounting.Fast100
+module
+
+public import Proofs.Flock.Soundness.Accounting.Fast100
 
 /-!
 # The numbers
@@ -11,6 +13,8 @@ every statement shape in `Stmt.InRange`:
 The rational bounds are checked by exact arithmetic in Lean's kernel (`decide +kernel`, not
 `native_decide`: no compiled code is trusted).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Accounting
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.Bridge.Lowers
-import Proofs.Flock.Bridge.Deployed
-import Proofs.Flock.Bridge.Canon
+module
+
+public import Proofs.Flock.Bridge.Lowers
+public import Proofs.Flock.Bridge.Deployed
+public import Proofs.Flock.Bridge.Canon
 
 /-!
 # A unit right on its canonical openings is not faulty
@@ -24,6 +26,8 @@ wire's position under `Cm` and `roots`. It reads the transport only at the right
   (`mem_io_of_owner`), so it opens. `faultyRightC` takes `V` the evaluation on `Xr`; `correct_of_local` takes `u`'s
   local evaluation on values `X` that make `u` correct (`Partition.Correct`), which is `X` on `u`'s committed wires.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

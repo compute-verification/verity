@@ -1,11 +1,13 @@
-import Proofs.Flock.Claims.Recursion.HpEarly
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.RowCommit
-import Proofs.Flock.Soundness.Discharge.Hm.Row
-import Proofs.Flock.Soundness.Discharge.Hm.Slot
-import Proofs.Flock.Soundness.Discharge.Hm.Place
-import Proofs.Flock.Soundness.Discharge.Hm.Copy
-import Proofs.Flock.Soundness.ExecRows
-import Proofs.Flock.Soundness.SparseRows
+module
+
+public import Proofs.Flock.Claims.Recursion.HpEarly
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.RowCommit
+public import Proofs.Flock.Soundness.Discharge.Hm.Row
+public import Proofs.Flock.Soundness.Discharge.Hm.Slot
+public import Proofs.Flock.Soundness.Discharge.Hm.Place
+public import Proofs.Flock.Soundness.Discharge.Hm.Copy
+public import Proofs.Flock.Soundness.ExecRows
+public import Proofs.Flock.Soundness.SparseRows
 
 /-!
 # The trace assigner's hm96 slots commit (`slotsOk_assign`)
@@ -20,6 +22,8 @@ What it reads besides `TraceOk`: the circuit's row nets are the verifier's (`HmN
 fit `Sparse`'s 32-bit encoding (`kLog ≤ 32`), and every port is a `sha512/row/v1` row of whole 128-byte chunks
 (`2 · words = 128 · chunks`), as the v1 parse makes it.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.SlotsOkProof
 

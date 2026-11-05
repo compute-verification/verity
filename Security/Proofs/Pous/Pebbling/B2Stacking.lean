@@ -1,14 +1,16 @@
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Basic.Real.Basic
-import Mathlib.Data.Fintype.BigOperators
-import Mathlib.Data.List.Chain
-import Mathlib.Tactic.Linarith
-import Definitions.Pous
-import Definitions.Pous.Assumptions
-import Proofs.Pous.Statements
-import Proofs.Pous.Sanity
-import Proofs.Pous.Accounting.Numbers
+module
+
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Basic.Real.Basic
+public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Data.List.Chain
+public import Mathlib.Tactic.Linarith
+public import Definitions.Pous
+public import Definitions.Pous.Assumptions
+public import Proofs.Pous.Statements
+public import Proofs.Pous.Sanity
+public import Proofs.Pous.Accounting.Numbers
 
 /-!
 # B2: Fisch's stacking lemma, proved
@@ -29,6 +31,8 @@ layer `V_t`. Downward induction gives `|G_i| ≥ n − ρ_i − δn`, where `ρ_
 every `|G_i| < αn`, the `ρ_i` sum past `ℓ(1 − α − δ)n ≥ n`. So some `|G_i| ≥ αn`, and depth robustness gives a path
 of `βn` nodes in `G_i`, which the green path from its end extends to `V_t`.
 -/
+
+@[expose] public section
 
 namespace PousB2
 

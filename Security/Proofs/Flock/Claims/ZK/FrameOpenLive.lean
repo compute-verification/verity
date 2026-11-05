@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.FrameOpenCut
-import Proofs.Flock.Soundness.Discharge.ZkView.Decode
+module
+
+public import Proofs.Flock.Claims.ZK.FrameOpenCut
+public import Proofs.Flock.Soundness.Discharge.ZkView.Decode
 
 /-!
 # Level 0's cut opening at the pads and at zero pads
@@ -21,6 +23,8 @@ pads of an `L0Round`, so the frame releases the live opening's body as the rep's
   the rep's at `d.h` both stop past the openings, having sent bodies that agree where they carry no pad and are sent
   level-0 rounds where they do.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.LigLock
 

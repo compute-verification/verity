@@ -1,13 +1,15 @@
-import Proofs.Flock.Bridge.V5.Statement
-import Proofs.Flock.Bridge.V5.EndToEndHidden
-import Proofs.Flock.Bridge.V5.Assembly
-import Proofs.Flock.Bridge.V5.OpeningsCanon
-import Proofs.Flock.Bridge.V5.Transports
-import Proofs.Flock.Bridge.V5.KSLive
-import Proofs.Flock.Bridge.V5.Honest
-import Proofs.Flock.Bridge.V5.Refused
-import Proofs.Flock.Bridge.V5.Accepted
-import Proofs.Flock.Bridge.V5.Session
+module
+
+public import Proofs.Flock.Bridge.V5.Statement
+public import Proofs.Flock.Bridge.V5.EndToEndHidden
+public import Proofs.Flock.Bridge.V5.Assembly
+public import Proofs.Flock.Bridge.V5.OpeningsCanon
+public import Proofs.Flock.Bridge.V5.Transports
+public import Proofs.Flock.Bridge.V5.KSLive
+public import Proofs.Flock.Bridge.V5.Honest
+public import Proofs.Flock.Bridge.V5.Refused
+public import Proofs.Flock.Bridge.V5.Accepted
+public import Proofs.Flock.Bridge.V5.Session
 
 /-! `Statement`: `Flock.Guarantees.SampledKSLiveV5`, V2 at the verifier's public inputs with or without shared rows, and
 the targets its assembly takes (stated). `EndToEndHidden`: `endToEndHiddenV5_of`, from `OpeningsCanonTargetV5`.
@@ -20,3 +22,5 @@ premise `ServedFilesParseV5`. `Refused`: `verify --zk`'s form check at a shared-
 registration's population, without V5's hypotheses on the files' rows, names and roots or on the population order.
 `Session`: the openings a witness of a drawn unit's table reveals (`revealV5`, from the message packing it, `packZ`),
 which make the unit's proof block correct (`correct_of_revealV5`), and the drawn table at one table (`tabOfZHJP_one`). -/
+
+@[expose] public section

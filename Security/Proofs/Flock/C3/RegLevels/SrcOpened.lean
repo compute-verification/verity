@@ -1,5 +1,7 @@
-import Proofs.Flock.C3.Opening.SessionAcc
-import Proofs.Flock.VBridge.Family.Opened
+module
+
+public import Proofs.Flock.C3.Opening.SessionAcc
+public import Proofs.Flock.VBridge.Family.Opened
 
 /-!
 # n7's levels: `Opened` at R's consistency checks, from the `rec-open-stacked` units
@@ -20,6 +22,8 @@ not parse, so the climb here is `decode_recOpen`'s, at the copy's own row and si
 * `opened_of_units`: the same from R's units in V*'s sessions (`OpensTopAt`), at the messages w holds (`decodedO`) with
   the opened rows' consistency sums (`consO`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 
