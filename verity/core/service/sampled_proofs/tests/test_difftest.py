@@ -4214,3 +4214,32 @@ def test_the_run_refuses_a_population_out_of_order(pieces):
         else:
             assert (out.get("step"), out.get("codes")) == ("register", ["population-order"]), out
     assert not P.in_order(SETUPS[3].program, SETUPS[3].query, SETUPS[3].population + 1)
+
+
+#: The public files C-Flock's producers wrote, recorded in `verity/ml/flock/tests`' fetched fixtures
+#: (`fixtures/artifacts.json`): `verity_flock`'s staging (`json.dumps(sort_keys=True)`), and the selftest's and the
+#: recursive links' (compact, sorted).
+RECORDED = PACKAGE.parents[2] / "ml" / "flock" / "tests" / "fixtures"
+RECORDED_FIXTURES = ("forged-proofs", "public-inputs", "public-inputs-blocks", "rec-coins", "rec-links", "zk-sessions")
+
+
+def _recorded_publics() -> list[Path]:
+    missing = [f"verity/ml/flock/tests/fixtures/{f}" for f in RECORDED_FIXTURES if not (RECORDED / f).is_dir()]
+    assert not missing, f"not fetched: `uv run research data fetch-fixtures {' '.join(missing)}`"
+    return sorted(p for f in RECORDED_FIXTURES for p in (RECORDED / f).rglob("*.bin")
+                  if re.fullmatch(r"(.+\.)?pub(-\d+)?\.bin", p.name))
+
+
+def test_the_recorded_public_files_pass_the_population_check(pieces):
+    """Each public file the producers recorded (`RECORDED`) passes `FilePart.check` against a population of as many units
+    in order as it names, its header read by `FilePart.header` (`Flock.JsonParse.parse`, then `Flock.norm`) as Python's
+    `json.loads` reads it: the check refuses none of them."""
+    files = _recorded_publics()
+    assert len(files) >= 23, files
+    query = P.template_instance_query(MEMBERS[0].id)
+    for p in files:
+        b = p.read_bytes()
+        n = len(json.loads(b.split(b"\n", 1)[0])["units"]["indices"])
+        case = {"program": json.loads(_population(((0, n),))), "query": query, "public": b.hex()}
+        assert file_population(copy.deepcopy(case)) == {"why": None}, p
+        assert D.replay(FILE_POPULATION, case, pieces) == ("output", D.canonical({"why": None})), p
