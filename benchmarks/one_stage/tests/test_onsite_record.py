@@ -24,13 +24,15 @@ verdict is not established and its bound conditional on it. Sampled proofs credi
 as not credited. PoUW's freed compute is never credited or claimed, whatever its row states, and neither is one
 program a day, each open by name beside what the run's lines say. The run's `publish` leaves the record as written.
 The run is of record only when every verdict, the onsite composite's included, accepted and every drawn member is
-credited, PoUW's verdict aside: the record claims nothing of it, and lists it as its row states it. Sampled proofs'
-guarantee is its window's ε at δ beside its pooled count over any number of windows, and that count for each monitoring
-period's node, datacenter and world with its share of their proof blocks, the line stating both; a law other than a
-k-subset has no pooled figure, a draw of several members is named refused, and an answer not accepted states none.
-Its caller's serving settings, S and MAX_TOKENS, both or neither, label the record and its line, missing where it
-states none; runs' records at two settings go beside each other, each run's figures labelled with its own settings and
-ℓ_a, and a record of another format, or stating no settings, is refused by path."""
+credited, PoUW's verdict aside: the record claims nothing of it, and lists it as its row states it. Where the run has
+the network certifier's composite without PoUW, that is the composite of record, named by its id: the run is of record
+over its verdict and its subprotocols', remote's aside too, its error has no PoUW term, and no work is credited.
+Sampled proofs' guarantee is its window's ε at δ beside its pooled count over any number of windows, and that count for
+each monitoring period's node, datacenter and world with its share of their proof blocks, the line stating both; a law
+other than a k-subset has no pooled figure, a draw of several members is named refused, and an answer not accepted
+states none. Its caller's serving settings, S and MAX_TOKENS, both or neither, label the record and its line, missing
+where it states none; runs' records at two settings go beside each other, each run's figures labelled with its own
+settings and ℓ_a, and a record of another format, or stating no settings, is refused by path."""
 from __future__ import annotations
 
 import dataclasses
@@ -245,6 +247,28 @@ ALL_DRAWN = {"laws": {"the period draw": "all", "the scan's draw": "all"}, "open
              "is": OR.CHAIN_DRAWS}
 
 
+#: what ``of_record`` states of a run whose composite of record is onsite's
+ONSITE_OF_RECORD = {"composite": OR.ONSITE, "work_credited": "none"}
+SAMPLED_V1 = "verity/sampled-proofs/v1"
+REMOTE_IDS = (OR.INFERENCE_ONLY, OR.POUW_ID, SAMPLED_V1)
+#: a stand-in for the id the network certifier's composite without PoUW is registered under
+WITHOUT = "verity/toy-network-without-pouw/v0"
+WITHOUT_IDS = (OR.NETWORK, OR.INFERENCE_ONLY, SAMPLED_V1)
+
+
+def with_composite(out: Path, name: str, product: str, ids: tuple[str, ...], verdict: str = "accept",
+                   missing: tuple[str, ...] = (), inference_only: str = "accept") -> Path:
+    """``out`` with ``product``'s composite.json in composite/NAME: a case of each of ``ids`` but those ``missing``,
+    which it names, inference-only's answering ``inference_only`` and each other accepting, and Lean's ``verdict``."""
+    cases = [{"id": i, "verdict": inference_only if i == OR.INFERENCE_ONLY else "accept", "params_sha512": "00",
+              "commitment": "00"} for i in ids if i not in missing]
+    (out / "composite" / name).mkdir(parents=True, exist_ok=True)
+    (out / "composite" / name / "composite.json").write_text(json.dumps(
+        {"product": product, "commitment": "00", "missing": list(missing), "exceptions": [], "cases": cases,
+         "verdict": {"id": product, "verdict": verdict}}))
+    return out
+
+
 def remote_composite(verdict: str = "accept") -> dict:
     cases = [{"id": i, "verdict": "accept", "params_sha512": "00", "commitment": "00"}
              for i in (OR.INFERENCE_ONLY, "verity/pouw/period/v1", "verity/sampled-proofs/one-stage/v1")]
@@ -306,7 +330,7 @@ def test_a_rehearsal_records_each_missing_part_with_its_why_and_no_figure(tmp_pa
     assert v["inference-only"]["verdict"] == v["onsite"]["verdict"] == "missing"
     assert rec["of_record"] == {"holds": False, "missing": ["PoUW", "inference-only", "remote", "the network certifier",
                                                             "onsite"], "not_accepting": [], "not_established": [],
-                                "not_credited": [], "not_claimed": ["PoUW"]}
+                                "not_credited": [], "not_claimed": ["PoUW"], **ONSITE_OF_RECORD}
     assert rec["coins"]["open_draws"] == [] and "missing" in rec["coins"]["draws"]
     assert rec["bound"] == {"missing": "the network certifier's verdict is missing (CERTIFIER_CMD unset: the network "
                                        "certifier in front of the serving endpoint): only its accepted answer certifies K"}
@@ -1155,10 +1179,10 @@ def test_the_run_is_of_record_only_with_the_onsite_composite_accepting(tmp_path)
         "the network certifier": "accept", "onsite": "missing"}
     assert rec["verdicts"]["onsite"]["why"] == "the run has no composite of verity/remote-network/v0"
     assert rec["of_record"] == {"holds": False, "missing": ["onsite"], "not_accepting": [], "not_established": [],
-                                "not_credited": [], "not_claimed": ["PoUW"]}
+                                "not_credited": [], "not_claimed": ["PoUW"], **ONSITE_OF_RECORD}
     doc = json.loads((with_onsite(out) / "composite" / "remote-network" / "composite.json").read_text())
     assert OR.record(out)["of_record"] == {"holds": True, "missing": [], "not_accepting": [], "not_established": [],
-                                           "not_credited": [], "not_claimed": ["PoUW"]}
+                                           "not_credited": [], "not_claimed": ["PoUW"], **ONSITE_OF_RECORD}
     (out / "composite" / "remote-network" / "composite.json").write_text(json.dumps(
         doc | {"missing": [OR.NETWORK], "verdict": {"id": OR.ONSITE, "verdict": "reject", "refusal": "components"}}))
     rec = OR.record(out)
@@ -1166,7 +1190,51 @@ def test_the_run_is_of_record_only_with_the_onsite_composite_accepting(tmp_path)
                                          "from": "composite/remote-network/composite.json",
                                          "not_established": [OR.NETWORK]}
     assert rec["of_record"] == {"holds": False, "missing": [], "not_accepting": ["onsite"], "not_established": [],
-                                "not_credited": [], "not_claimed": ["PoUW"]}
+                                "not_credited": [], "not_claimed": ["PoUW"], **ONSITE_OF_RECORD}
+
+
+def test_under_the_network_certifiers_composite_without_pouw_the_run_is_of_record_over_its_subprotocols_alone(
+        tmp_path, capsys):
+    """A run with the network certifier's composite without PoUW, under its own id: it is the composite of record, named
+    by that id, though remote's and remote-network's, which compose PoUW's case, reject naming it missing. The run is of
+    record over its verdict and its subprotocols', inference-only's from its case there, reading neither PoUW's nor
+    remote's; its error sums no PoUW term; and the record and its line credit no work. Its rejection leaves the run not
+    of record; with none, remote-network is the composite of record again, PoUW's term back in its error, since naming
+    PoUW's case missing it composes PoUW; and two such composites refuse the record, naming both."""
+    out = accepted(tmp_path)
+    with_composite(out, "remote", OR.REMOTE, REMOTE_IDS, "reject", missing=(OR.POUW_ID,), inference_only="reject")
+    with_composite(out, "remote-network", OR.ONSITE, (OR.NETWORK, *REMOTE_IDS), "reject", missing=(OR.POUW_ID,))
+    with_composite(out, "without-pouw", WITHOUT, WITHOUT_IDS)
+    assert OR.main([str(out)]) == 0
+    rec = json.loads((out / "record" / "onsite.json").read_text())
+    v = rec["verdicts"]
+    assert v["onsite"] == {"protocol": WITHOUT, "verdict": "accept", "from": "composite/without-pouw/composite.json"}
+    assert v["inference-only"] == {"protocol": OR.INFERENCE_ONLY, "verdict": "accept",
+                                   "from": "composite/without-pouw/composite.json cases"}
+    assert (v["remote"]["verdict"], v["remote"]["not_claimed"], v["PoUW"]["not_claimed"]) == (
+        "reject", OR.POUW_OPEN, OR.POUW_OPEN)
+    assert rec["of_record"] == {"holds": True, "composite": WITHOUT, "missing": [], "not_accepting": ["remote"],
+                                "not_established": [], "not_credited": [], "not_claimed": ["PoUW", "remote"],
+                                "work_credited": "none"}
+    ce = rec["composite_error"]
+    assert (ce["composite"], [t["subprotocol"] for t in ce["terms"]]) == (
+        WITHOUT, ["sampled proofs", "inference-only", "the network certifier"])
+    line = json.loads(capsys.readouterr().out.strip()[7:])
+    assert (line["of_record"], line["composite"], line["work_credited"]) == (True, WITHOUT, "none")
+    with_composite(out, "without-pouw", WITHOUT, WITHOUT_IDS, "reject")
+    of = OR.record(out)["of_record"]
+    assert (of["holds"], of["not_accepting"]) == (False, ["remote", "onsite"])
+    (out / "composite" / "without-pouw" / "composite.json").unlink()
+    rec = OR.record(out)
+    assert (rec["of_record"]["composite"], rec["verdicts"]["onsite"]["protocol"], rec["of_record"]["not_claimed"]) == (
+        OR.ONSITE, OR.ONSITE, ["PoUW"])
+    assert [t["subprotocol"] for t in rec["composite_error"]["terms"]] == [
+        "sampled proofs", "PoUW", "inference-only", "the network certifier"]
+    with_composite(out, "a", WITHOUT, WITHOUT_IDS)
+    with_composite(out, "b", f"{WITHOUT}-b", WITHOUT_IDS)
+    with pytest.raises(ValueError, match=re.escape(f"2 composites of the network certifier without PoUW ({WITHOUT}, "
+                                                   f"{WITHOUT}-b)")):
+        OR.record(out)
 
 
 def test_while_certifier_key_is_open_an_accepted_network_verdict_is_not_established_and_its_bound_conditional_on_it(
@@ -1185,7 +1253,7 @@ def test_while_certifier_key_is_open_an_accepted_network_verdict_is_not_establis
         "protocol": OR.NETWORK, "verdict": OR.NOT_ESTABLISHED, "answer": "accept", "open": cond, "why": OR.KEY_OPEN}
     assert rec["of_record"] == {"holds": False, "missing": [], "not_accepting": [],
                                 "not_established": ["the network certifier"], "not_credited": [],
-                                "not_claimed": ["PoUW"], "conditional_on": cond}
+                                "not_claimed": ["PoUW"], "conditional_on": cond, **ONSITE_OF_RECORD}
     of = rec["bound"]["of_record"]
     assert (rec["bound"]["K"], of["open"], of["conditional_on"], of["K"]) == (K, cond, cond, KR)
     assert rec["periods"]["conditional_on"] == rec["composite_error"]["conditional_on"] == cond
@@ -1278,7 +1346,7 @@ def test_whether_the_run_is_of_record_reads_no_pouw_verdict_which_stays_listed_a
                                                  "not_claimed": OR.POUW_OPEN}
     gone = ["PoUW"] * (verdict["verdict"] == "missing")
     assert rec["of_record"] == {"holds": True, "missing": gone, "not_accepting": ["PoUW"] * (not gone),
-                                "not_established": [], "not_credited": [], "not_claimed": ["PoUW"]}
+                                "not_established": [], "not_credited": [], "not_claimed": ["PoUW"], **ONSITE_OF_RECORD}
     line = json.loads(capsys.readouterr().out.strip()[7:])
     assert (line["of_record"], line["verdicts"]["PoUW"]) == (True, verdict["verdict"])
     report["protocols"]["integrity"]["verdict"] = "reject"

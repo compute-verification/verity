@@ -225,7 +225,10 @@ negatives.
   committed roots and whose Lean verdict of record reported exactly that file's reads, and lists every other drawn
   member as not credited, by name; PoUW's freed compute is credited nowhere and not claimed, by name, beside the PoUW
   piece the run's COINS line says it served, and whether the run is of record reads every verdict but PoUW's, which
-  stays listed as its row states it (missing and development for a development piece). Sampled proofs' guarantee is
+  stays listed as its row states it (missing and development for a development piece). Its composite of record, named
+  by its id, is the network certifier's composite without PoUW where the run has one (registered under its own id in
+  `Core.Composites`), and then whether the run is of record reads that composite and its subprotocols, and not remote's
+  composite, which composes PoUW's case; else it is remote-network's. Either way the record credits no work. Sampled proofs' guarantee is
   what its draw establishes, ε at δ, per window (its answer's bound over the window's n proof blocks) and pooled, never
   the window's alone: at most ⌊ln(1/δ)/q⌋ incorrect proof blocks over any number of windows each drawing k of n
   (q = k/n, `Flock.Guarantees.IntegrityHorizon`), stated for each monitoring period for the node, a datacenter's and the
@@ -236,7 +239,7 @@ negatives.
   each term's source (the check's `eps`, only its δ part, and each phase's knowledge, binding and collision errors,
   which no check computes), `eps` split into the scans' δ and the charged tied audits' with what sets each and what a
   smaller one costs, k_{skip,j}'s slot entries (every one of a tied audit sampled in part; sampled whole, it adds none
-  and proves each of its proof blocks), the onsite composite's error as the sum of its four subprotocols' errors, each δ with where the
+  and proves each of its proof blocks), the composite of record's error as the sum of its subprotocols' errors (four, or three without PoUW's), each δ with where the
   run states it and the terms no check computes named, and that bound over the
   run's own certification period (proved) and each monitoring period for the node (proved where the run's period
   covers it, else scaled), the census's reference datacenter and the world (scaled), each scaled cell naming its rule,
