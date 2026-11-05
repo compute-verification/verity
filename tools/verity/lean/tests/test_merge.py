@@ -245,8 +245,8 @@ FIXTURES = HERE / "fixtures" / "merge"
 
 
 def test_4406_onto_next_merges_its_reads_as_a_candidate(tmp_path, capsys):
-    """#4406 (cursor/lean-vocab-hash-fc8d at 172198e129) onto `next` at aa5d70a9f1, base main's b6b9338dcb (26 Oct): #4406
-    takes `Hash.Digest` out of `Definitions.Hash.Basic` while `next` adds readers there, and the driver refused the train.
+    """A branch merged onto `next` takes `Hash.Digest` out of `Definitions.Hash.Basic` while `next` adds readers there, a
+    merge the driver once refused.
     The fixture is that group on each side with the records of its readers (a sample of the new ones).  On the side that takes
     it out, the module's readers are the base's, unrestated, and the record reads `Hash.Digest` nowhere, so the removal
     applies: `main`'s record since reads it nowhere either."""
@@ -588,7 +588,7 @@ def test_a_checkout_whose_merge_rules_predate_origin_main_s_merges_by_origin_mai
 
 
 def test_two_branches_that_each_widen_a_layer_merge_its_imports_and_reasons():
-    """#1860 against #1842 (12 Oct): each side added imports to `Definitions.Accounting` and a clause to its `why`."""
+    """Two branches each add imports to `Definitions.Accounting` and a clause to its `why`."""
     base = {"layers": {"D": {"imports": ["Mathlib", "D"], "except": [], "why": "trusted text; they import no proof"},
                        "E": {"imports": ["E"], "except": [], "why": "e"}}}
     ours = {"layers": {"D": {"imports": ["Mathlib", "P.Audit", "D"], "except": [], "why": "trusted text; M reads P; they import no proof"},
