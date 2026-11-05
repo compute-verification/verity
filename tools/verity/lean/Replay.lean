@@ -460,12 +460,12 @@ unsafe def main (args : List String) : IO UInt32 := do
     let parts ← readModuleDataParts files
     let (some (data, _), some (header, _)) := (parts.back?, parts[0]?) | throw <| IO.userError s!"no module data for {m}"
     let priv := OLeanLevel.private.adjustFileName olean
-    if data.isModule && !(← priv.pathExists) then
-      if envOut.isSome then
-        throw <| IO.userError s!"{m} is under the module system and its private part ({priv}) is missing: its public \
-          part makes its theorems axioms"
-      publicOnly := publicOnly.insert m
+    if envOut.isSome && data.isModule && !(← priv.pathExists) then
+      throw <| IO.userError s!"{m} is under the module system and its private part ({priv}) is missing: its public \
+        part makes its theorems axioms"
     loaded := loaded.push (m, header.imports, data)
+    if data.isModule && !(← (OLeanLevel.private.adjustFileName olean).pathExists) then
+      publicOnly := publicOnly.insert m
     if expand.contains m then
       for i in header.imports do
         unless seen.contains i.module do
