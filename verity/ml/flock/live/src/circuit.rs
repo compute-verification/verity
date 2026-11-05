@@ -20,7 +20,7 @@
 //! - every output row's message bits copies of the returned output bits, and its padding words copies of a forced-zero row;
 //! - every other wire of the template's slots, and every slot's constant a copy of the pinned column.
 //!
-//! Public regions, each opened at the verifier's points (drawn after the commitment, both reps), values all the verifier's:
+//! Public regions, each opened at the verifier's points (sampled after the commitment, both reps), values all the verifier's:
 //! every row's `b || c` (its hm96 slot's output). The rows (outputs too), their salts, the chaining values and every word
 //! between slots stay private. A padding instance is the all-zero instance with zero salts, whose rows' `b || c` are pinned and
 //! checked here natively (a zero salt's mask is zero): its input rows are zero, its output rows its outputs (forced by its
@@ -72,7 +72,7 @@ pub struct Tags {
 pub const TAGS: Tags = Tags { statement: STATEMENT, sigma: "verity/flock-circuit/sigma", domain: "flock-circuit/fast100x2/rep" };
 pub const TYPED_TAGS: Tags =
     Tags { statement: crate::typed::STATEMENT, sigma: "verity/flock-circuit/types/sigma", domain: "flock-circuit-types/fast100x2/rep" };
-/// A templated statement (PRF-133, the Lean `Tags.circuitTmpl`): META `template` and `layout` in place of the unit's rows,
+/// A templated statement (the Lean `Tags.circuitTmpl`): META `template` and `layout` in place of the unit's rows,
 /// which the prover reads from `flock-tmpl-unit`'s file, the unit committed at the layout's positions.
 pub const TMPL_FORMAT: &str = "flock-circuit/tmpl";
 pub const TMPL_STATEMENT: &str = "verity/flock-circuit/tmpl";
@@ -205,7 +205,7 @@ pub fn aligned_blocks(words: &BTreeSet<usize>) -> Vec<(usize, usize)> {
 }
 
 /// The leaf-commitment scheme this prover and verifier implement for the proof's own Merkle trees, as the composite circuit
-/// pins it (`verity_flock.circuit.LEAF_SCHEME`: today's id and the `hm96-sha256/v1` room it reserves). `salt_source` names
+/// pins it (`verity_flock.circuit.LEAF_SCHEME`: the current id and the `hm96-sha256/v1` room it reserves). `salt_source` names
 /// `zk_hooks::LeafSalts`'s OS reads, as the Lean verifier pins the object (`Flock/Tags.lean`'s `leafSchemeHm96Os`).
 pub fn leaf_scheme() -> Value {
     let (id, salt) = if cfg!(feature = "sha512") { ("hm96-sha512/v1", 192) } else { ("flock-leaf/sha256-unsalted", 0) };
@@ -216,7 +216,7 @@ pub fn leaf_scheme() -> Value {
 }
 
 /// The leaves of a statement whose trees need no hiding, a recursive session's inner statement (`verity_flock.rec_live`): its
-/// firewall commits every tree top under a salt of its own and the openings stay in V*'s witness, so a leaf is the column's
+/// ZK server commits every tree top under a salt of its own and the openings stay in V*'s witness, so a leaf is the column's
 /// SHA-512 digest (`HashKind::Sha512`) and an opening carries no salt. ZK off only (`verity_flock.circuit.LEAF_SCHEME_PLAIN`).
 pub fn leaf_scheme_plain() -> Value {
     json!({"id": "flock-leaf/sha512-unsalted", "inner": "sha512 column digest", "salt_bytes": 0,
@@ -1677,7 +1677,7 @@ pub struct Instances {
     /// every row's `b || c`, instance-major, ports in order (a shared-row file: its tables' rows, port-major)
     pub bcs: Vec<[u8; BC_BYTES]>,
     /// SHA-512 of the header's compact key-sorted JSON (no newline) and every public byte after the rows and salts
-    /// (`b || c`, refs): what Σ binds. A drawn statement's header is its draw's, which no file holds, so this is no file's hash.
+    /// (`b || c`, refs): what Σ binds. A drawn statement's header is its sample's, which no file holds, so this is no file's hash.
     pub public_sha512: [u8; 64],
     /// SHA-512 of the verifier's own public file of the registered population (`public_file`'s bytes, which is the staged
     /// `pub-<n>.bin` when its writer writes the header as serde does: `verity_flock.circuit.public_file`). A drawn statement
@@ -1829,8 +1829,8 @@ impl Instances {
         h.finalize().into()
     }
 
-    /// The statement of the drawn units (`unit_draw` over this registered population's positions `[0, n)`): instance `i` is the
-    /// population's `units[i]`; its header is the population's with the draw, `instances = K` and the drawn units' indices; its
+    /// The statement of the sampled proof blocks (`unit_draw` over this registered population's positions `[0, n)`): instance `i` is the
+    /// population's `units[i]`; its header is the population's with the sample, `instances = K` and the sampled proof blocks' indices; its
     /// public digest covers that header and the population's public bytes (the frame-v3 roots stay the population's).
     pub fn drawn(&self, c: &Composite, draw: &Value) -> Result<Instances, String> {
         let units = crate::unit_draw::check(draw)?;
@@ -1840,7 +1840,7 @@ impl Instances {
         let np = c.ports.len();
         let rb = c.row_bytes();
         let indices: Vec<usize> = units.iter().map(|&u| self.header["units"]["indices"][u].as_u64().unwrap_or(0) as usize).collect();
-        // the population's header but its units (millions of entries), which the draw's replace
+        // the population's header but its units (millions of entries), which the sample's replace
         let mut header: Value = self.header.as_object().map(|m| m.iter().filter(|(k, _)| k.as_str() != "units").map(|(k, v)| (k.clone(), v.clone()))
             .collect::<serde_json::Map<_, _>>().into()).unwrap_or_default();
         header["unit_draw"] = draw.clone();
@@ -1928,6 +1928,58 @@ impl Instances {
         }
         out.extend(public);
         Some(out)
+    }
+
+    /// The rows whose salts the file holds: every instance's per port, or a shared-row file's table rows.
+    pub fn salt_count(&self, np: usize) -> usize {
+        match &self.tables {
+            Some(t) => t.counts.iter().sum(),
+            None => self.n * np,
+        }
+    }
+
+    /// Puts `salts` in place of the file's row salts, in the file's order ([`Instances::salt_count`] of them): a registered
+    /// population's prover file only.
+    pub fn set_salts(&mut self, np: usize, salts: Vec<u8>) -> Result<(), String> {
+        if !self.has_rows() || self.population.is_some() {
+            return Err("salts are set on a registered population's prover file".into());
+        }
+        if salts.len() != SALT_BYTES * self.salt_count(np) {
+            return Err(format!("{} bytes of salts, where the file's {} rows take {}", salts.len(), self.salt_count(np), SALT_BYTES * self.salt_count(np)));
+        }
+        match &mut self.tables {
+            Some(t) => t.salts = Some(std::sync::Arc::new(salts)),
+            None => self.salts = Some(salts),
+        }
+        Ok(())
+    }
+
+    /// The prover's file of this registered population, as [`Instances::load`] reads it: the header (`rows` true), the rows,
+    /// their salts and the public bytes.
+    pub fn prover_file(&self) -> Result<Vec<u8>, String> {
+        if self.population.is_some() || !self.has_rows() {
+            return Err("a prover's file is a registered population's, with its rows".into());
+        }
+        let mut header = self.header.clone();
+        header["rows"] = Value::Bool(true);
+        let mut b = serde_json::to_vec(&header).map_err(|e| format!("header: {e}"))?;
+        b.push(b'\n');
+        match &self.tables {
+            Some(t) => {
+                b.extend(t.rows.as_deref().into_iter().flatten());
+                b.extend(t.salts.as_deref().into_iter().flatten());
+            }
+            None => {
+                b.extend(self.rows.iter().flatten());
+                b.extend(self.salts.iter().flatten());
+            }
+        }
+        b.extend(self.bcs.iter().flatten());
+        if let Some(t) = &self.tables {
+            b.extend(t.refs.iter().flat_map(|r| r.to_le_bytes()));
+        }
+        b.extend(self.public.iter().flat_map(|w| w.to_le_bytes()));
+        Ok(b)
     }
 
     /// Every instance's row salts, instance-major, ports in order (a shared-row file's gathered by its refs); `None`: the
@@ -3410,6 +3462,38 @@ mod tests {
         assert_ne!(d.public_sha512, inst.public_sha512);
     }
 
+    /// A prover's file with its salts set elsewhere (the ZK server's: `flock-circuit --salt-refs`) is written as `load` reads
+    /// it: the same rows, the new salts and the same public part. Salts of another count, a verifier's file and a drawn
+    /// statement are refused.
+    #[test]
+    fn salts_set_on_a_prover_file_round_trip() {
+        let c = Composite::parse(&typed_statement(), None).unwrap();
+        let (n, np) = (2, c.ports.len());
+        let header = json!({"format": INST_FORMAT, "statement": c.statement(), "circuit_sha512": crate::hex(&c.sha512),
+                            "instances": n, "rows": true, "units": units_entry(&c, &[0, 1])});
+        let mut b = serde_json::to_vec(&header).unwrap();
+        b.push(b'\n');
+        let body = n * c.row_bytes() + n * np * SALT_BYTES + BC_BYTES * n * np + 2 * n * c.public_words();
+        b.extend((0..body).map(|i| i as u8));
+        let p = std::env::temp_dir().join(format!("flock-prover-file-{}.bin", std::process::id()));
+        std::fs::write(&p, &b).unwrap();
+        let inst = Instances::load(p.to_str().unwrap(), &c);
+        let mut inst = inst.unwrap();
+        assert_eq!(inst.prover_file().unwrap(), b, "unchanged, the file as it was read");
+        assert_eq!(inst.salt_count(np), n * np);
+        assert!(inst.set_salts(np, vec![7; SALT_BYTES * n * np - 1]).unwrap_err().contains("bytes of salts"));
+        let salts: Vec<u8> = (0..SALT_BYTES * n * np).map(|i| (i % 251) as u8).collect();
+        inst.set_salts(np, salts.clone()).unwrap();
+        std::fs::write(&p, inst.prover_file().unwrap()).unwrap();
+        let again = Instances::load(p.to_str().unwrap(), &c);
+        std::fs::remove_file(&p).unwrap();
+        let again = again.unwrap();
+        assert_eq!((again.rows.as_ref(), again.salts.as_ref(), &again.bcs, &again.public), (inst.rows.as_ref(), Some(&salts), &inst.bcs, &inst.public));
+        assert_eq!(again.public_file().unwrap(), inst.public_file().unwrap());
+        let mut d = inst.drawn(&c, &json!({"law": "subset", "population": n, "k": 1, "units": [1]})).unwrap();
+        assert!(d.prover_file().is_err() && d.set_salts(np, vec![0; SALT_BYTES * np]).is_err());
+    }
+
     #[test]
     fn lanes_are_the_bitwise_pack() {
         let mut s = 0x9e37_79b9_7f4a_7c15u64;
@@ -3830,7 +3914,7 @@ mod tests {
         assert!(err.contains("vus_per_block is not a power of two"), "{err}");
     }
 
-    /// A writer with no output row (CMP-149's form B): one 1024-bit `sha512/row/v2` input row `x`, read as one 16-bit leaf,
+    /// A writer with no output row (pinned outputs' form B): one 1024-bit `sha512/row/v2` input row `x`, read as one 16-bit leaf,
     /// and one pinned output word `d = x XOR (x rotated by one)`, each bit a linear row (B the constant alone).
     fn pinned_statement(edit: &dyn Fn(&mut Value)) -> String {
         let x = Port { name: "x".into(), words: 64, comps: 1, bits: 1024, v2: true, segs: None };
@@ -3900,7 +3984,7 @@ mod tests {
 
     #[test]
     fn hm96_sha512_default_key_is_core_s() {
-        // hashlib.sha512(verity.ml.commitments.hm96.SHA512.default_key).hexdigest() (PR #93)
+        // hashlib.sha512(verity.ml.commitments.hm96.SHA512.default_key).hexdigest()
         assert_eq!(super::leaf_scheme()["key_sha512"],
                    "afc5a60c85d8aa75cb4c7f726588d299a1712e1c6a621f09ca64809a5fedd744a0f6b0201d05e82b29cd5b274e6c29670cd4e4ab10831911fb1f9e0c7019df22");
     }

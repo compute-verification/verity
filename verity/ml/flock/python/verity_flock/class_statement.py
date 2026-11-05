@@ -17,7 +17,7 @@ M0's statement proves a template's identical units with every instance's input r
 * each source's row is committed once and opened by every instance that reads it (M0's shared rows), rows being keyed by the
   identity of the values they hold, not by value (`class_lanes`);
 * the instances are every unit of the class in its flat Definition (`class_lanes`: synthetic inputs lifted through the flat
-  Definition, a Call's broadcast parameters drawn once per Call), the statement binds the partition's ``verity/partition/v1``
+  Definition, a Call's broadcast parameters sampled once per Call), the statement binds the partition's ``verity/partition/v1``
   digest and the program's SHA-512 (an owner-function partition, which no record can name, binds the SHA-512 of its description
   under the tag ``verity/flock/experimental-owners``).
 
@@ -27,7 +27,7 @@ are committed values whose row a reading unit can open.  Every class is one plai
 Boolean circuit, with no slot type other than M0's row slots: a unit's pinned-table reads (MUFU) are laid out inline as ordinary
 rows by `ir_lower.layout` (the one-hot construction; 154-309 M matrix entries per read, about 20 B of prover memory each), and each
 record carries the class's table reads and its unit's matrix entries. `UnitStager`'s ``reads="slots"`` instead puts a unit's
-MUFU reads in C-Flock's lookup slots (`read_slots`), whose tables count once per statement.  `distinct_calls` builds a served row's workload from its program graph:
+MUFU reads in Flock's lookup slots (`read_slots`), whose tables count once per statement.  `distinct_calls` builds a served row's workload from its program graph:
 a Program with one Call of each distinct Call Definition, whose per-Call partitions have exactly the row's classes.
 """
 from __future__ import annotations
@@ -567,7 +567,7 @@ def _evaluation(act: Activation, key: tuple, words: list[int]) -> dict[int, int]
 
 def class_lanes(units: PartitionUnits, cl, key, n: int, shared: dict[str, tuple[set[int], int]]) -> tuple[list, list, list]:
     """``n`` instances of the class: every unit of that shape in its flat Definition, from as many evaluations as it takes, each
-    evaluation's parameters uniform words, except those the Call shares across members (``shared``), which are drawn once per Call
+    evaluation's parameters uniform words, except those the Call shares across members (``shared``), which are sampled once per Call
     (group of members). Returns (inputs, outputs, rows): per input position every instance's word, and per source group
     (`sources` of the representative) every instance's row identity: the leaves it reads, and the Call they belong to when all
     are parameters the Call broadcasts, else the evaluation. Instances with one identity open one committed row."""
@@ -771,7 +771,7 @@ def _check_bit_rows(uc: UnitCircuit, ins: Sequence[Sequence[int]], groups: list[
 
 #: FLOCK_GEMM_TILE=PxC: a GemmCoordinate class whose tile fits a block (K = 2048 at 4x4) is staged as P x C tiles, one tile a VU:
 #: C rows of the unit's port 0 and P of its port 1, and P * C units, unit (a, b) reading row b and row C + a, so each row is
-#: hashed once per tile rather than once per coordinate (internal/gemm-column-batch-tiles-layout-scope.md)
+#: hashed once per tile rather than once per coordinate
 GEMM_TILE = tuple(int(x) for x in os.environ["FLOCK_GEMM_TILE"].split("x")) if os.environ.get("FLOCK_GEMM_TILE") else None
 
 
@@ -970,7 +970,7 @@ class _UnitCircuit(gf2.Circuit):
 @dataclass
 class _TmplLayout:
     """What `circuit.compose` and `UnitStager` read of a unit's layout, for a unit given as its template: its port groups
-    (`ir_lower.Layout`'s ``(word column, words, port widths)``) and ``counts``, the unrolled rows (`tmpl.totals`, the
+    (`ir_lower.LoweredUnit`'s ``(word column, words, port widths)``) and ``counts``, the unrolled rows (`tmpl.totals`, the
     root's input and output copy rows not ANDs)."""
 
     in_groups: list
@@ -1045,10 +1045,10 @@ class UnitStager:
     row ``(schema, output ports)``, a run of consecutive output ports of exactly their words (`circuit.compose`'s
     ``seg_out_rows`` / ``v2_out_rows``). ``public_inputs`` (``{param: {"seed", "derivation"}}``): parameters that are public
     input ports, not rows (`circuit.compose`; PoUW's anchors, which the verifier recomputes from public seeds), laid out as
-    `unit_lowering`'s ``public``. ``circuit``: where circuit.txt is written, once; else `stage` writes it beside each round's
-    files. ``pin`` and ``class_sha512`` (`circuit.digest`, `circuit.class_digest`) are computed on first read: `stage` reads
-    them after writing circuit.txt, so a streamed circuit (``benchmarks/pouw/hidden_zk/fast_stage.py``) is hashed in the pass
-    that writes it. ``bind`` (``{"partition", "program"}``, `circuit.compose`'s): the statement bound to a partition of another
+    `unit_lowering`'s ``public``. ``circuit``: where circuit.txt is written, once, as it is composed (`circuit.compose_to`: the
+    stager never holds it, and ``text`` reads it back); else `stage` writes it beside each round's files, and ``pin`` and
+    ``class_sha512`` (`circuit.digest`, `circuit.class_digest`) are computed on first read: `stage` reads them after writing
+    circuit.txt, so a streamed circuit (``benchmarks/pouw/hidden_zk/fast_stage.py``) is hashed in the pass that writes it. ``bind`` (``{"partition", "program"}``, `circuit.compose`'s): the statement bound to a partition of another
     Program, a template query's that lists ``definition``, which META ``program_digests`` then names as the circuit's template
     (as `_shims`' does with a ``definition``); `stage` then takes each instance's global unit index (``indices``). The class
     (`circuit.class_digest`) is the unbound stager's. ``layout`` (a layout mode, ``iv/hybrid/4``): the templated statement
@@ -1057,7 +1057,9 @@ class UnitStager:
     (`TmplLowering.evaluate`); else `tmpl.emit`'s of the flat unit. ``reads`` (``inline`` or ``slots``, flat statements only):
     `unit_lowering`'s; under ``slots`` a unit reading a pinned MUFU table is the unit, tail stages and lookup slots of
     `read_slots`, the last stage returning the outputs, its nets' ANDs capped by ``stage_ands`` (`read_slots.split`'s). The
-    proof's own leaves are `LEAF_SCHEME`'s (FLOCK_PLAIN_LEAVES=1: plain SHA-512, a recursive session's inner statement)."""
+    proof's own leaves are `LEAF_SCHEME`'s (FLOCK_PLAIN_LEAVES=1: plain SHA-512, a recursive session's inner statement). A unit
+    whose Definition alone needs more witness bits than C-Flock's proved range is refused before it is lowered
+    (`circuit.refuse_past_range`)."""
 
     def __init__(self, definition, name: str, in_rows: Sequence[tuple[str, str, int, Sequence[str]]],
                  out_rows: Sequence[tuple[str, Sequence[int]]], public_inputs: dict | None = None, circuit: Path | None = None,
@@ -1074,6 +1076,7 @@ class UnitStager:
             raise ValueError(f"{name}: a structural unit is written as its template: name its layout")
         if layout is not None and reads != "inline":
             raise ValueError(f"{name}: a templated statement's unit lays its reads out inline")
+        FC.refuse_past_range(definition, name)
         self.low, self.out_words = unit_lowering(definition, name, [(r, ps) for r, _s, _b, ps in in_rows], tuple(public_inputs),
                                                  structural, reads, stage_ands)
         if sorted(p for _s, ps in out_rows for p in ps) != list(range(len(self.out_words))):
@@ -1091,18 +1094,26 @@ class UnitStager:
                                    outputs=[port(f"o{j}") for j in range(len(self.out_words))],
                                    program_digests=lambda statics: programs, **({"definition": lambda **_: definition} if bind else {}))
         self.iset = SimpleNamespace(subcircuit=self.sub, name=name.replace("/", "-"), content_digest=hashlib.sha256(content).hexdigest())
-        self.text = FC.compose(self.low, self.sub, port_bits=[None] * len(public_inputs) + [b for _r, _s, b, _ps in in_rows],
-                               seg_ports=frozenset(r for r, s, _b, _ps in in_rows if s == SCHEMA_HM96_SHA512_ROW_SEG),
-                               seg_out_rows=seg_out, v2_out_rows=v2_out, public_inputs=public_inputs or None,
-                               partition=bind and bind["partition"], program=bind and bind["program"], layout=layout,
-                               tail=getattr(self.low, "tail", None), leaf_scheme=LEAF_SCHEME)
+        kw = dict(port_bits=[None] * len(public_inputs) + [b for _r, _s, b, _ps in in_rows],
+                  seg_ports=frozenset(r for r, s, _b, _ps in in_rows if s == SCHEMA_HM96_SHA512_ROW_SEG),
+                  seg_out_rows=seg_out, v2_out_rows=v2_out, public_inputs=public_inputs or None,
+                  partition=bind and bind["partition"], program=bind and bind["program"], layout=layout,
+                  tail=getattr(self.low, "tail", None), leaf_scheme=LEAF_SCHEME)
         self.bound = bind is not None
-        self.meta = FC.meta_of(self.text)
-        self.ports = FC._meta_ports(self.meta)
         self.circuit = circuit
-        if circuit is not None:
+        if circuit is None:
+            self._text = self._head = FC.compose(self.low, self.sub, **kw)
+        else:
             circuit.parent.mkdir(parents=True, exist_ok=True)
-            circuit.write_text(self.text)
+            got = FC.compose_to(circuit, self.low, self.sub, **kw)
+            self._text, self._head, self.pin, self.class_sha512 = None, got["head"], got["sha512"], got["class"]
+        self.meta = FC.meta_of(self._head)
+        self.ports = FC._meta_ports(self.meta)
+
+    @property
+    def text(self) -> str:
+        """The circuit's text: the stager's own, or with ``circuit`` read from the file, a fresh copy each read."""
+        return self._text if self.circuit is None else self.circuit.read_bytes().decode()
 
     @functools.cached_property
     def pin(self) -> str:
@@ -1174,13 +1185,13 @@ class UnitStager:
         out_dir.mkdir(parents=True, exist_ok=True)
         if self.circuit is None:
             (out_dir / "circuit.txt").write_text(self.text)
-        FC.write(self.text, iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin", salt_key,
+        FC.write(self._text, iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin", salt_key,
                  rows={r: np.asarray(rows[r], dtype=np.uint16) for r, *_ in self.in_rows}, outs=outs, salts=salts,
                  public_words={p: np.asarray(rows[p], dtype=np.uint16) for p in self.public_inputs},
                  digests=(self.pin, self.class_sha512), indices=None if indices is None else [int(u) for u in indices],
                  share_rows=tables is not None, tables=tables, refs=refs, registered=registered, meta=self.meta)
         counts = getattr(self.low, "counts", None) or self.low.layout.counts
-        return {"meta": FC.meta_of(self.text), "outs": outs, "salts": salts, "ands": counts["ands"],
+        return {"meta": FC.meta_of(self._head), "outs": outs, "salts": salts, "ands": counts["ands"],
                 "unit_nnz": counts["nnz_a"] + counts["nnz_b"], "circuit_sha512": self.pin}
 
 
@@ -1298,7 +1309,7 @@ def _serve(binary: str, d: Path, pub: Path, circ: Path, pin: str, sessions: int,
     at most ``sessions``) processes taking turns (session k the (k mod n)th's), the first on ``port`` and the rest on ports the
     system picks; ``bounded``: each exits once it has served its own sessions (otherwise the caller kills them), for ``points``
     provers one after another, each numbering its sessions from 0 and awaiting every verdict before it exits. FLOCK_DRAW_LAW (a
-    law object's file, `flock-circuit serve --draw-law`): every session proves the units the verifier draws by that law at its
+    law object's file, `flock-circuit serve --draw-law`): every session proves the units the verifier samples by that law at its
     Register, the staged statement their population. FLOCK_ZK=1: M1's masked sessions (`--zk`, server and prover alike)."""
     servers = max(1, min(sessions, int(os.environ.get("FC_VERIFY_SERVERS") or 1)))
     concurrency = -(-(1 + int(os.environ.get("FC_VERIFY_AHEAD") or 0)) // servers)
@@ -1713,7 +1724,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "another pod (FC_VERIFIERS=DIR), then wait for them (FC_SERVE_WAIT_S, default 3600), into served.jsonl")
     ap.add_argument("--serve-points", type=int, default=1, help="with --serve-only: serve that many provers' --warm + --runs "
                     "sessions, one prover after another on the same verifier processes (the points of one GPU session)")
-    ap.add_argument("--sample", type=int, default=0, help="prove only this many classes, drawn by a seeded hash of their shapes (0: all)")
+    ap.add_argument("--sample", type=int, default=0, help="prove only this many classes, sampled by a seeded hash of their shapes (0: all)")
     ap.add_argument("--port", type=int, default=7610)
     ap.add_argument("--gpu", action="store_true", help="prove on the GPU (flock-circuit prove --gpu)")
     ap.add_argument("--warm", type=int, default=0)
@@ -1861,7 +1872,7 @@ def _device(gpu: bool) -> str | None:
 
 
 def write_result(results: Path, a) -> None:
-    """``$RESEARCH_RUN_DIR/result.json`` (research/result/v0.1) when run under ``research run``: the settings as the fingerprint, the
+    """``$RESEARCH_RUN_DIR/result.json`` (research/result/v0.1) when run as a recorded run: the settings as the fingerprint, the
     shapes' counts and summed timings as measurements, and every shape's record (keyed by shape digest) in ``results.jsonl``, copied
     beside it as the measurement file."""
     run_dir = os.environ.get("RESEARCH_RUN_DIR")

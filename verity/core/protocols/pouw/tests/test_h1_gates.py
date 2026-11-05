@@ -32,7 +32,7 @@ from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.program import Program, input_id
 from verity.core.protocols.pouw.circuit import h1tile as H
 
-pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.segment, E2E-120) are not on this tree")
+pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.segment) are not on this tree")
 ROWS = Path(__file__).resolve().parents[5] / "Security" / "Proofs" / "Accounting" / "Gates" / "Rows.lean"
 #: the lanes' Boolean segment dots, s8-family steps in property/v1's table (`PouwSegDot0` is `PouwSegDot` from 0)
 LANE = ("PouwSegDot_v2", "PouwSegDot0_v2")

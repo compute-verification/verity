@@ -1,4 +1,5 @@
-"""Transparent SHA-256 Merkle commitments over verifier-derived domains, and their SHA-512 variant ``frame-v3-sha512``.
+"""Transparent frame-v3 Merkle commitments over verifier-derived domains: ``frame-v3-sha512`` by default, and the SHA-256
+frame where a recorded format carries it (``hash="sha256"``).
 
 A :class:`CommitmentDomain` fixes *which* positions a commitment covers, in
 *which* order, at *which* phase of *which* session.  Both parties derive it
@@ -8,36 +9,15 @@ different session, phase, owner, or position set.
 
 Promoted from veritor ``protocol/merkle.py`` (eb865ce2) with the ``Commitment`` and ``Opening`` records of
 ``protocol/messages.py``.  The frame ``veritor/protocol/merkle/frame/v3`` and every tag below are wire constants
-mirrored by the SP1 kernel (``frame.rs``); every recorded root depends on them.  A domain with ``hash="sha512"`` hashes the
-same bytes with SHA-512, so its domain id, leaves, pads, nodes and roots are 64 bytes, and its domain id absorbs the positions'
-SHA-512 identity (``frame_v3/PROTOCOL.md`` §6), or, for the ``range-u64`` kind, its start and count as u64be words under the tag
-``domain/range-u64``.  Under every frame a ``binding`` is 64 bytes, the caller's SHA-512 identity
-digest, or 32 bytes, a SHA-256 identity digest as recorded statements carry it; every part is length-framed, so the two cannot
-collide.
+mirrored by the SP1 kernel (``frame.rs``); every recorded root depends on them.  Every hash the frame computes is
+`frame_hash`: SHA-512 (or SHA-256) of the frame, the tag and the length-framed parts.  Under SHA-512 the domain id, leaves,
+pads, nodes and roots are 64 bytes, and the domain id absorbs the positions' SHA-512 identity (``frame_v3/PROTOCOL.md`` §6),
+or, for the ``range-u64`` kind, its start and count as u64be words under the tag ``domain/range-u64``.  Under every frame a
+``binding`` is 64 bytes, the caller's SHA-512 identity digest, or 32 bytes, a SHA-256 identity digest as recorded statements
+carry it; every part is length-framed, so the two cannot collide.
 
-A domain with ``hash="blake3"`` (``frame-b3``) is a tree mode for latency.  Its domain id is BLAKE3 over the same framed domain
-message; leaves, pads and the empty root are BLAKE3 keyed by that id, and a level's nodes are BLAKE3 keyed by the level's key.
-Integers are little-endian:
-
-- leaf: ``H = 0x01 ‖ u64 rank ‖ u64 position ‖ u16 len(schema) ‖ schema``, zero-padded to a whole 64-byte block, then the value,
-  which so starts block-aligned and streams through BLAKE3's own chunk tree (a 32 KB value: 33 chunks in parallel, then 6 levels);
-- node at level l: ``left ‖ right`` under the key ``keyed(domain id, 0x02 ‖ u8 l)``: one 64-byte block, one compression (the
-  tree's shape is fixed by the domain's count, so no index is hashed);
-- pad: ``0x03 ‖ u64 rank``; empty root: ``0x04``.
-
-A domain with ``hash="blake3-s256"`` (``frame-b3s``, Pearl-C's hashing format -h2) is ``frame-b3`` with a shallower leaf.  Its
-domain id is BLAKE3 over the framed domain message with the tag ``domain/b3s``.  Nodes, pads and the empty root are
-``frame-b3``'s under that id.  A leaf over a value of L bytes is a Merkle tree over its n = max(1, ⌈L / 256⌉) segments:
-
-- segment j is ``value[256 j : 256 (j + 1)]``, the last at its true length (the empty segment when L = 0), hashed by the
-  standard keyed BLAKE3 under its own key;
-- segment j's key: ``keyed(domain id, 0x05 ‖ u64 rank ‖ u64 position ‖ u64 L ‖ u32 j ‖ u16 len(schema) ‖ schema)``, one
-  block (a schema of at most 33 bytes), so it binds the domain id, rank, position, segment position, byte length and schema;
-- a segment-tree node at level l: ``left ‖ right`` under ``keyed(domain id, 0x06 ‖ u8 l)``, one compression;
-- at a level of odd width, the last node is promoted unchanged to the next level; the leaf is the top node.
-
-The tags 0x05 and 0x06 keep every segment key, segment-level key and ``frame-b3`` level key (0x02) distinct.  L is in
-every segment key, so it fixes the tree's shape.
+A leaf, node or pad hashes its tag and domain id first, so each domain's three prefixes are hashed once (`_head`) and every
+leaf, node and pad of it continues from a copy: `CommitmentDomain`'s, `tree_levels`, `levels` and `root_from_subtrees` alike.
 """
 
 from __future__ import annotations
@@ -45,10 +25,10 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import lru_cache
+from typing import Any
 
 from verity.errors import ProtocolError
 
-from verity.ml.crypto import blake3 as _blake3
 from .identity import JSONValue
 from .indexed import U64_BOUND, IndexedDomain, RangeU64Domain, iter_members
 from .limits import VerificationLimits
@@ -67,23 +47,25 @@ def _uint(value: int) -> bytes:
     return value.to_bytes(max(1, (value.bit_length() + 7) // 8), "big")
 
 
+def _part(part: bytes) -> bytes:
+    return len(part).to_bytes(8, "big") + part
+
+
 def _message(tag: bytes, *parts: bytes) -> bytes:
-    return _FRAME + len(tag).to_bytes(4, "big") + tag + b"".join(len(p).to_bytes(8, "big") + p for p in parts)
+    return _FRAME + len(tag).to_bytes(4, "big") + tag + b"".join(_part(p) for p in parts)
 
 
-def _digest(message: bytes, hash: str) -> bytes:
-    return _blake3.blake3(message) if hash in _BLAKE3_FRAMES else sha(hash)(message).digest()
+def frame_hash(tag: bytes, *parts: bytes, hash: str = "sha512") -> bytes:
+    """The frame's hash of ``tag`` over ``parts``, each length-framed: every domain id, leaf, node, pad and empty root is one."""
+
+    return sha(hash)(_message(tag, *parts)).digest()
 
 
-def _hash(tag: bytes, *parts: bytes, hash: str = "sha256") -> bytes:
-    return _digest(_message(tag, *parts), hash)
+def domain_message(binding: bytes, owner: int, positions: bytes, count: int, hash: str = "sha512") -> bytes:
+    """The framed message whose digest under ``hash`` is `CommitmentDomain.domain_id`, ``positions`` being the positions'
+    identity bytes: for a caller that hashes it with another implementation of the same hash."""
 
-
-def domain_message(binding: bytes, owner: int, positions: bytes, count: int, hash: str = "sha256") -> bytes:
-    """The framed message whose digest under ``hash``'s frame is `CommitmentDomain.domain_id`, ``positions`` being the
-    positions' identity bytes: for a caller that hashes it with another implementation of the same hash."""
-
-    return _message(b"domain/b3s" if hash == "blake3-s256" else b"domain", binding, _uint(owner + 2), positions, _uint(count))
+    return _message(b"domain", binding, _uint(owner + 2), positions, _uint(count))
 
 
 #: The ``range-u64`` domain message's tag and its length in bytes; the count is its last 8 bytes.
@@ -111,61 +93,26 @@ def range_u64_domain_message(binding: bytes, owner: int, start: int, count: int)
 
 
 @lru_cache(maxsize=4096)
-def blake3_node_key(domain_id: bytes, level: int) -> bytes:
-    """The key of a ``frame-b3`` tree's level: ``keyed(domain id, 0x02 ‖ u8 level)``."""
+def _head(domain_id: bytes, tag: bytes, hash: str) -> Any:
+    """The hash state after ``tag`` and the domain id, the start of every ``tag`` message under the domain."""
 
-    return _blake3.keyed(domain_id, b"\x02" + level.to_bytes(1, "little"))
-
-
-def blake3_node(domain_id: bytes, level: int, index: int, left: bytes, right: bytes) -> bytes:
-    """A ``frame-b3`` node: ``left ‖ right`` under its level's key, one compression (module docstring); ``index`` is not hashed."""
-
-    return _blake3.keyed(blake3_node_key(domain_id, level), left + right)
+    return sha(hash)(_message(tag, domain_id))
 
 
-#: ``frame-b3s``: the segment size, and the longest schema name a segment key's one block holds
-B3S_SEGMENT, B3S_MAX_SCHEMA = 256, 33
-_BLAKE3_FRAMES = ("blake3", "blake3-s256")
+def _under(domain_id: bytes, tag: bytes, hash: str, *parts: bytes) -> bytes:
+    """``frame_hash(tag, domain_id, *parts, hash=hash)``, from the domain's hashed prefix."""
+
+    h = _head(domain_id, tag, hash).copy()
+    h.update(b"".join([len(p).to_bytes(8, "big") + p for p in parts]))
+    return h.digest()
 
 
-def b3s_segment_key(domain_id: bytes, rank: int, position: int, schema: str, length: int, segment: int) -> bytes:
-    """A ``frame-b3s`` segment's key: ``keyed(domain id, 0x05 ‖ u64 rank ‖ u64 position ‖ u64 L ‖ u32 j ‖ u16 len ‖ schema)``."""
-
-    name = schema.encode("utf-8")
-    if len(name) > B3S_MAX_SCHEMA:
-        raise ProtocolError(f"a frame-b3s schema name is at most {B3S_MAX_SCHEMA} bytes")
-    return _blake3.keyed(domain_id, b"\x05" + rank.to_bytes(8, "little") + position.to_bytes(8, "little")
-                         + length.to_bytes(8, "little") + segment.to_bytes(4, "little") + len(name).to_bytes(2, "little") + name)
+def _node(domain_id: bytes, hash: str, level: int, index: int, left: bytes, right: bytes) -> bytes:
+    return _under(domain_id, _NODE, hash, _uint(level), _uint(index), left, right)
 
 
-@lru_cache(maxsize=4096)
-def b3s_level_key(domain_id: bytes, level: int) -> bytes:
-    """The key of a ``frame-b3s`` segment tree's level: ``keyed(domain id, 0x06 ‖ u8 level)``."""
-
-    return _blake3.keyed(domain_id, b"\x06" + level.to_bytes(1, "little"))
-
-
-def b3s_segments(length: int) -> int:
-    return max(1, -(-length // B3S_SEGMENT))
-
-
-def b3s_levels(domain_id: bytes, rank: int, position: int, schema: str, value: bytes) -> tuple[tuple[bytes, ...], ...]:
-    """A ``frame-b3s`` leaf's segment tree, level by level: the segment hashes first, the leaf last (module docstring)."""
-
-    length = len(value)
-    level = [_blake3.keyed(b3s_segment_key(domain_id, rank, position, schema, length, j),
-                           value[j * B3S_SEGMENT:(j + 1) * B3S_SEGMENT]) for j in range(b3s_segments(length))]
-    levels = [tuple(level)]
-    depth = 0
-    while len(level) > 1:
-        key = b3s_level_key(domain_id, depth)
-        up = [_blake3.keyed(key, level[i] + level[i + 1]) for i in range(0, len(level) - 1, 2)]
-        if len(level) % 2:
-            up.append(level[-1])
-        level = up
-        levels.append(tuple(level))
-        depth += 1
-    return tuple(levels)
+def _pad(domain_id: bytes, hash: str, rank: int) -> bytes:
+    return _under(domain_id, _PAD, hash, _uint(rank))
 
 
 def merkle_depth(count: int) -> int:
@@ -230,7 +177,7 @@ class CommitmentDomain:
     binding: bytes
     owner: int
     positions: IndexedDomain[int]
-    hash: str = "sha256"
+    hash: str = "sha512"
     domain_id: bytes = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
@@ -240,15 +187,14 @@ class CommitmentDomain:
             raise ProtocolError(
                 "owner must be -2 (weights), -1 (boundary) or a replay unit"
             )
-        if self.hash not in _BLAKE3_FRAMES:
-            sha(self.hash)
+        sha(self.hash)
         if isinstance(self.positions, RangeU64Domain):
             if self.hash != "sha512":
                 raise ProtocolError(f"a range-u64 domain hashes with SHA-512 only, not {self.hash!r}")
             message = range_u64_domain_message(self.binding, self.owner, self.positions.start, self.positions.count)
-            object.__setattr__(self, "domain_id", _digest(message, "sha512"))
+            object.__setattr__(self, "domain_id", sha("sha512")(message).digest())
             return
-        if self.hash in ("sha256", *_BLAKE3_FRAMES):
+        if self.hash == "sha256":
             positions = bytes.fromhex(self.positions.identity_digest)
         elif hasattr(self.positions, "identity_sha512"):
             positions = self.positions.identity_sha512()
@@ -257,7 +203,7 @@ class CommitmentDomain:
         object.__setattr__(
             self,
             "domain_id",
-            _digest(domain_message(self.binding, self.owner, positions, self.positions.count, self.hash), self.hash),
+            sha(self.hash)(domain_message(self.binding, self.owner, positions, self.positions.count, self.hash)).digest(),
         )
 
     @property
@@ -269,50 +215,45 @@ class CommitmentDomain:
         return DIGEST_BYTES[self.hash]
 
     def leaf(self, rank: int, position: int, schema: str, value: bytes) -> bytes:
-        if self.hash == "blake3-s256":
-            return b3s_levels(self.domain_id, rank, position, schema, value)[-1][0]
-        if self.hash == "blake3":
-            return _blake3.keyed(self.domain_id, self.leaf_prefix(rank, position, schema, len(value)) + value)
-        return _hash(
-            _LEAF,
-            self.domain_id,
-            _uint(rank),
-            _uint(position),
-            schema.encode("utf-8"),
-            value,
-            hash=self.hash,
-        )
+        r = _part(_uint(rank))
+        p = r if position == rank and type(position) is int else _part(_uint(position))
+        h = _head(self.domain_id, _LEAF, self.hash).copy()
+        h.update(r + p + _part(schema.encode("utf-8")) + _part(value))
+        return h.digest()
 
     def leaf_prefix(self, rank: int, position: int, schema: str, value_len: int) -> bytes:
-        """Every byte of :meth:`leaf`'s message before the value: ``leaf == H(prefix || value)``, H the domain's hash
-        (for ``frame-b3``, BLAKE3 keyed by the domain id).  A ``frame-b3s`` leaf is a segment tree and has no prefix."""
+        """Every byte of :meth:`leaf`'s message before the value: ``leaf == H(prefix || value)``, H the domain's hash."""
 
-        if self.hash == "blake3-s256":
-            raise ProtocolError("a frame-b3s leaf is a tree over its value's segments, not a hash of a prefix and the value")
-        if self.hash == "blake3":
-            name = schema.encode("utf-8")
-            head = b"\x01" + rank.to_bytes(8, "little") + position.to_bytes(8, "little") + len(name).to_bytes(2, "little") + name
-            return head + bytes(-len(head) % 64)
         parts = (self.domain_id, _uint(rank), _uint(position), schema.encode("utf-8"))
-        out = _FRAME + len(_LEAF).to_bytes(4, "big") + _LEAF
-        for part in parts:
-            out += len(part).to_bytes(8, "big") + part
-        return out + value_len.to_bytes(8, "big")
+        return _FRAME + len(_LEAF).to_bytes(4, "big") + _LEAF + b"".join(_part(p) for p in parts) + value_len.to_bytes(8, "big")
 
     def node(self, level: int, index: int, left: bytes, right: bytes) -> bytes:
-        if self.hash in _BLAKE3_FRAMES:
-            return blake3_node(self.domain_id, level, index, left, right)
-        return _hash(_NODE, self.domain_id, _uint(level), _uint(index), left, right, hash=self.hash)
+        return _node(self.domain_id, self.hash, level, index, left, right)
 
     def pad(self, rank: int) -> bytes:
-        if self.hash in _BLAKE3_FRAMES:
-            return _blake3.keyed(self.domain_id, b"\x03" + rank.to_bytes(8, "little"))
-        return _hash(_PAD, self.domain_id, _uint(rank), hash=self.hash)
+        return _pad(self.domain_id, self.hash, rank)
 
     def empty_root(self) -> bytes:
-        if self.hash in _BLAKE3_FRAMES:
-            return _blake3.keyed(self.domain_id, b"\x04")
-        return _hash(_EMPTY, self.domain_id, hash=self.hash)
+        return frame_hash(_EMPTY, self.domain_id, hash=self.hash)
+
+
+def levels(domain_id: bytes, nodes: Sequence[bytes], first: int = 0, depth: int = 0,
+           hash: str = "sha512") -> tuple[tuple[bytes, ...], ...]:
+    """The levels of the subtree of domain id ``domain_id`` whose nodes at level ``depth`` are ``nodes``, the first at index
+    ``first``, up to its root: ``nodes`` first, its root last.  ``len(nodes)`` is a power of two and ``first`` a multiple of
+    it, so the span is one aligned subtree: `tree_levels` over a whole padded level, or a chunk of one folded on its own."""
+
+    width = len(nodes)
+    if width < 1 or width & (width - 1) or first % width:
+        raise ProtocolError(f"{width} nodes from index {first}: a power of two of them, aligned to it")
+    level = list(nodes)
+    out = [tuple(level)]
+    while len(level) > 1:
+        first >>= 1
+        level = [_node(domain_id, hash, depth, first + j, level[2 * j], level[2 * j + 1]) for j in range(len(level) // 2)]
+        out.append(tuple(level))
+        depth += 1
+    return tuple(out)
 
 
 def tree_levels(domain: CommitmentDomain, leaves: Sequence[bytes]) -> tuple[tuple[bytes, ...], ...]:
@@ -323,14 +264,23 @@ def tree_levels(domain: CommitmentDomain, leaves: Sequence[bytes]) -> tuple[tupl
     if not leaves:
         return ()
     width = 1 << merkle_depth(len(leaves))
-    level = [*leaves, *(domain.pad(rank) for rank in range(len(leaves), width))]
-    levels = [tuple(level)]
-    depth = 0
-    while len(level) > 1:
-        level = [domain.node(depth, index // 2, level[index], level[index + 1]) for index in range(0, len(level), 2)]
-        levels.append(tuple(level))
-        depth += 1
-    return tuple(levels)
+    return levels(domain.domain_id, [*leaves, *(domain.pad(rank) for rank in range(len(leaves), width))], hash=domain.hash)
+
+
+def root_from_subtrees(domain_id: bytes, count: int, have: Mapping[tuple[int, int], bytes],
+                       hash: str = "sha512") -> bytes | None:
+    """The root of the tree of domain id ``domain_id`` over ``count`` leaves, from the subtree roots ``have`` (``(level,
+    index)`` to its root, level 0 a leaf) and the domain's pads past ``count``; None where a node below ``count`` is in
+    none of them."""
+
+    def at(level: int, index: int) -> bytes | None:
+        if (level, index) in have:
+            return have[(level, index)]
+        if level == 0:
+            return _pad(domain_id, hash, index) if index >= count else None
+        left, right = at(level - 1, 2 * index), at(level - 1, 2 * index + 1)
+        return None if left is None or right is None else _node(domain_id, hash, level - 1, index, left, right)
+    return at(merkle_depth(count), 0)
 
 
 class MerkleTree:

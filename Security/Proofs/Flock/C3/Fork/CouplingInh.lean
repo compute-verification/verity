@@ -1,5 +1,7 @@
-import Proofs.Flock.Recursive.CompileRuns
-import Proofs.Flock.C3.Fork.CouplingInhGames
+module
+
+public import Proofs.Flock.Recursive.CompileRuns
+public import Proofs.Flock.C3.Fork.CouplingInhGames
 
 /-!
 # a1l, step 6: every message of the holographic tables has an inhabited type
@@ -8,6 +10,8 @@ So that both tables' values are reached by strategies (`value_le_of_forall_prob`
 (`allInh_holoTable`, which `horc` bounds per strategy) and the compiled one's (`allInh_holoTableCL`), on the pattern
 of `allInh_tableCL`.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Fork
 

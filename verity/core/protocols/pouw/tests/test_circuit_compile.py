@@ -28,7 +28,7 @@ from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.ops.boolean import s8 as BS8
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, array_of, concat
-from verity.ml.circuits.types import Array, Record, Tuple, Value
+from verity.ml.circuits.types import Array, RecordType, Tuple, Value
 from verity.core.protocols.pouw import grind as GR
 from verity.core.protocols.pouw.circuit import compile as C
 from verity.core.protocols.pouw.circuit import hashes as H
@@ -102,7 +102,7 @@ def _tile_params(S):
 
 
 def _tile_ret(S, receipt):
-    return Record(("z", Array(len(S.PAIRS), S.EXACT.signature()[1])), ("receipt", receipt))
+    return RecordType(("z", Array(len(S.PAIRS), S.EXACT.signature()[1])), ("receipt", receipt))
 
 
 def _unit_signature(S):
@@ -661,7 +661,7 @@ def test_qk_grind():
     (GQA) are 4 Q rows and 2 K rows read 4 times each, one row however many query heads read it."""
     e = _refused("cover", Program(bind(HEADS, H=4, N=2)))
     assert "grind term of its DotBf16_v2 dots is " + _grind_pct([(4, 384, 2), (8, 64, 1)], 8) in str(e)
-    assert "decision 36" in str(e)
+    assert "a live per-round coin's, not a seed's" in str(e)
     e = _refused("cover", Program(bind(GQA, H=4, N=2)))
     assert "grind term of its DotBf16_v2 dots is " + _grind_pct([(4, 384, 2), (2, 64, 4)], 8) in str(e)
     assert C.compile(Program(bind(HEADS, H=4, N=2)), QK_OPEN).grind == ({},)

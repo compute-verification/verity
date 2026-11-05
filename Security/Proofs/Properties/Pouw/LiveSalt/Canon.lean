@@ -1,16 +1,26 @@
-import Batteries.Tactic.OpenPrivate
-import Properties.Pouw.LiveSalt
-import Std.Data.String.ToNat
+module
+
+public import Batteries.Tactic.OpenPrivate
+public import Properties.Pouw.LiveSalt
+public import Std.Data.String.ToNat
+import all Init.Data.Array.QSort.Basic
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
+import all Init.Data.Int.Repr
 
 /-!
 # The coins' binding has one canonical form per layout
 
-`liveDomain` hashes `canon` of the binding `{epoch, families, scheme}`. Its canonical form is
+`liveDomain` hashes the identity bytes (`Flock.canonUtf8`) of the binding `{epoch, families, scheme}`. Its form is
 `{"epoch":E,"families":F,"scheme":S}` (`canon_binding`): `canon` sorts the three keys, and they are already in order
 (`qsort3`). That string parses back uniquely (`binding_inj`): a decimal numeral ends at the first non-digit
 (`digits_split`), an escaped string at its first unescaped quote, each escape decoding to one character (`unesc_esc`,
 `canonStr_split`), and the families' list item by item, each a string and a numeral (`fam_split`).
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 open private hex4 from Flock.Canon
 open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.Basic
@@ -22,7 +32,7 @@ open SampledProofs.Challenger (familiesJson)
 
 /-! ## Sorting three keys in order -/
 
-theorem loop02 {β : Type} (lt : β → β → Bool) (x y z : β) (hxy : lt x y = true) (hzy : lt z y = false) :
+private theorem loop02 {β : Type} (lt : β → β → Bool) (x y z : β) (hxy : lt x y = true) (hzy : lt z y = false) :
     Array.qpartition.loop (n := 3) lt 0 2 (by omega) y #v[x, z, y] 0 0 = (⟨1, by omega⟩, #v[x, y, z]) := by
   rw [Array.qpartition.loop.eq_def]
   simp (config := {decide := true}) [hxy]
@@ -31,19 +41,19 @@ theorem loop02 {β : Type} (lt : β → β → Bool) (x y z : β) (hxy : lt x y 
   rw [Array.qpartition.loop.eq_def]
   simp (config := {decide := true})
 
-theorem loop01 {β : Type} (lt : β → β → Bool) (x y z : β) (hyx : lt y x = false) :
+private theorem loop01 {β : Type} (lt : β → β → Bool) (x y z : β) (hyx : lt y x = false) :
     Array.qpartition.loop (n := 3) lt 0 1 (by omega) x #v[y, x, z] 0 0 = (⟨0, by omega⟩, #v[x, y, z]) := by
   rw [Array.qpartition.loop.eq_def]
   simp (config := {decide := true}) [hyx]
   rw [Array.qpartition.loop.eq_def]
   simp (config := {decide := true})
 
-theorem sort_self {β : Type} (lt : β → β → Bool) {n : Nat} (v : Vector β n) (i : Nat) (h : i < n) :
+private theorem sort_self {β : Type} (lt : β → β → Bool) {n : Nat} (v : Vector β n) (i : Nat) (h : i < n) :
     Array.qsort.sort lt v i i (by omega) h h = v := by
   rw [Array.qsort.sort.eq_def]
   simp
 
-theorem sort01 {β : Type} (lt : β → β → Bool) (x y z : β) (hxx : lt x x = false) (hyx : lt y x = false)
+private theorem sort01 {β : Type} (lt : β → β → Bool) (x y z : β) (hxx : lt x x = false) (hyx : lt y x = false)
     (hxy : lt x y = true) :
     Array.qsort.sort (n := 3) lt #v[x, y, z] 0 1 = #v[x, y, z] := by
   rw [Array.qsort.sort.eq_def]
@@ -76,37 +86,37 @@ theorem binding_sort {α : Type} (a b c : α) :
 
 /-! ## `canon`, unfolded -/
 
-theorem canon_arr (a : Array Json) : Flock.canon (.arr a) =
-    (do let parts ← a.mapM Flock.canon; pure ("[" ++ ",".intercalate parts.toList ++ "]")) := by
-  rw [Flock.canon]
+theorem canon_arr (a : Array Json) : Flock.canonUtf8 (.arr a) =
+    (do let parts ← a.mapM Flock.canonUtf8; pure ("[" ++ ",".intercalate parts.toList ++ "]")) := by
+  rw [Flock.canonUtf8]
   simp only [Array.mapM_subtype, Array.unattach_attach]
 
-theorem canon_obj (kvs : Std.TreeMap.Raw String Json) : Flock.canon (.obj kvs) =
+theorem canon_obj (kvs : Std.TreeMap.Raw String Json) : Flock.canonUtf8 (.obj kvs) =
     (do
-      let vals ← kvs.toArray.mapM fun p => do pure (p.1, ← Flock.canon p.2)
+      let vals ← kvs.toArray.mapM fun p => do pure (p.1, ← Flock.canonUtf8 p.2)
       let items := vals.qsort (fun a b => a.1 < b.1)
-      pure ("{" ++ ",".intercalate (items.toList.map fun kv => Flock.canonStr kv.1 ++ ":" ++ kv.2) ++ "}")) := by
-  rw [Flock.canon]
+      pure ("{" ++ ",".intercalate (items.toList.map fun kv => Flock.canonStrUtf8 kv.1 ++ ":" ++ kv.2) ++ "}")) := by
+  rw [Flock.canonUtf8]
   simp only [Array.mapM_subtype, Array.unattach_attach]
 
-theorem canon_str (s : String) : Flock.canon (.str s) = pure (Flock.canonStr s) := by
-  rw [Flock.canon]
+theorem canon_str (s : String) : Flock.canonUtf8 (.str s) = pure (Flock.canonStrUtf8 s) := by
+  rw [Flock.canonUtf8]
 
-theorem canon_nat (n : Nat) : Flock.canon (Lean.toJson n) = pure (toString n) := by
-  show Flock.canon (.num ⟨n, 0⟩) = _
-  rw [Flock.canon]; rfl
+theorem canon_nat (n : Nat) : Flock.canonUtf8 (Lean.toJson n) = pure (toString n) := by
+  show Flock.canonUtf8 (.num ⟨n, 0⟩) = _
+  rw [Flock.canonUtf8]; rfl
 
 /-- A family's canonical form: `[label,count]`. -/
-def itemStr (p : String × Nat) : String := "[" ++ ",".intercalate [Flock.canonStr p.1, toString p.2] ++ "]"
+def itemStr (p : String × Nat) : String := "[" ++ ",".intercalate [Flock.canonStrUtf8 p.1, toString p.2] ++ "]"
 
 /-- The families' canonical form: their items, comma-separated, in brackets. -/
 def famStr (fs : List (String × Nat)) : String := "[" ++ ",".intercalate (fs.map itemStr) ++ "]"
 
-theorem canon_families (fs : List (String × Nat)) : Flock.canon (familiesJson fs) = pure (famStr fs) := by
+theorem canon_families (fs : List (String × Nat)) : Flock.canonUtf8 (familiesJson fs) = pure (famStr fs) := by
   unfold familiesJson
   rw [canon_arr, List.map_toArray, List.mapM_toArray]
   suffices h : ∀ gs : List (String × Nat), (gs.map fun (l, n) => Json.arr #[Json.str l, Lean.toJson n]).mapM
-      Flock.canon = pure (gs.map itemStr) by
+      Flock.canonUtf8 = pure (gs.map itemStr) by
     rw [h]; simp [famStr]
   intro gs
   induction gs with
@@ -122,12 +132,12 @@ def binding (e : Nat) (fs : List (String × Nat)) (s : String) : Json :=
 
 /-- The binding's canonical form. -/
 def bindStr (e : Nat) (fs : List (String × Nat)) (s : String) : String :=
-  "{" ++ ",".intercalate [Flock.canonStr "epoch" ++ ":" ++ toString e, Flock.canonStr "families" ++ ":" ++ famStr fs,
-    Flock.canonStr "scheme" ++ ":" ++ Flock.canonStr s] ++ "}"
+  "{" ++ ",".intercalate [Flock.canonStrUtf8 "epoch" ++ ":" ++ toString e, Flock.canonStrUtf8 "families" ++ ":" ++ famStr fs,
+    Flock.canonStrUtf8 "scheme" ++ ":" ++ Flock.canonStrUtf8 s] ++ "}"
 
 theorem canon_binding (e : Nat) (fs : List (String × Nat)) (s : String) :
-    Flock.canon (binding e fs s) = .ok (bindStr e fs s) := by
-  show Flock.canon (Json.obj _) = _
+    Flock.canonUtf8 (binding e fs s) = .ok (bindStr e fs s) := by
+  show Flock.canonUtf8 (Json.obj _) = _
   rw [canon_obj]
   have ht : (Std.TreeMap.Raw.ofList [("epoch", Lean.toJson e), ("families", familiesJson fs), ("scheme", Json.str s)] :
       Std.TreeMap.Raw String Json).toArray =
@@ -140,7 +150,7 @@ theorem canon_binding (e : Nat) (fs : List (String × Nat)) (s : String) :
 
 /-! ## Escaped strings -/
 
-/-- What `canonStr` writes for one character. -/
+/-- What `canonStrUtf8` writes for one character. -/
 def esc (c : Char) : List Char :=
   match c with
   | '"' => ['\\', '"']
@@ -158,8 +168,8 @@ theorem foldl_esc (f : String → Char → String) (hf : ∀ b a, (f b a).toList
   | nil => intro out; simp
   | cons c cs ih => intro out; rw [List.foldl_cons, ih, hf, List.flatMap_cons, List.append_assoc]
 
-theorem canonStr_toList (s : String) : (Flock.canonStr s).toList = '"' :: s.toList.flatMap esc ++ ['"'] := by
-  unfold Flock.canonStr
+theorem canonStr_toList (s : String) : (Flock.canonStrUtf8 s).toList = '"' :: s.toList.flatMap esc ++ ['"'] := by
+  unfold Flock.canonStrUtf8
   simp only [Id.run, List.forIn_pure_yield_eq_foldl]
   show (List.foldl _ "\"" s.toList ++ "\"").toList = _
   rw [String.toList_append, foldl_esc]
@@ -256,7 +266,7 @@ theorem escs_inj : ∀ (cs cs' r r' : List Char), cs.flatMap esc ++ '"' :: r = c
 
 /-- An escaped string ends where it ends: what follows it doesn't change which string it is. -/
 theorem canonStr_split {s s' : String} {r r' : List Char}
-    (h : (Flock.canonStr s).toList ++ r = (Flock.canonStr s').toList ++ r') : s = s' ∧ r = r' := by
+    (h : (Flock.canonStrUtf8 s).toList ++ r = (Flock.canonStrUtf8 s').toList ++ r') : s = s' ∧ r = r' := by
   simp only [canonStr_toList, List.cons_append, List.append_assoc, List.cons.injEq, true_and] at h
   obtain ⟨h1, h2⟩ := escs_inj _ _ _ _ h
   exact ⟨String.toList_inj.mp h1, h2⟩
@@ -306,7 +316,7 @@ theorem nat_split {n n' : Nat} {c c' : Char} {r r' : List Char} (hc : c.isDigit 
 /-! ## The families -/
 
 theorem item_eq (p : String × Nat) (r : List Char) :
-    (itemStr p).toList ++ r = '[' :: ((Flock.canonStr p.1).toList ++ ',' :: ((toString p.2).toList ++ ']' :: r)) := by
+    (itemStr p).toList ++ r = '[' :: ((Flock.canonStrUtf8 p.1).toList ++ ',' :: ((toString p.2).toList ++ ']' :: r)) := by
   simp [itemStr]
 
 theorem item_split {p p' : String × Nat} {r r' : List Char} (h : (itemStr p).toList ++ r = (itemStr p').toList ++ r') :

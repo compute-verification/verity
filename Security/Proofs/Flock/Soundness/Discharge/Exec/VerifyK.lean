@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.Exec.Retained
-import Proofs.Flock.Soundness.Refine.Regions
-import Flock.With.Deployed
-import Flock.With.VerifyE
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.Retained
+public import Proofs.Flock.Soundness.Refine.Regions
+public import Flock.With.Deployed
+public import Flock.With.VerifyE
 
 /-!
 # flock-verify's acceptance with its digest comparisons read through `keep`
@@ -23,6 +25,8 @@ At `keep := id` the decoder is `Record.decode` (`decodeWithK_id_std`), so each s
 shipped one.
 -/
 
+@[expose] public section
+
 set_option Elab.async false
 
 namespace FlockSoundness.Discharge.Exec
@@ -41,7 +45,7 @@ theorem decodeWithK_id_std (spec : SessionSpec) (text : String) :
 `verify_ok_tables`'s walk at `verifyWithMK keep hs`, with the reps' checks at `hs`. -/
 theorem verifyWithMK_tables_cap (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {tabs : Array Setup}
     {record : String} {proofs : Array ByteArray} (h : verifyWithMK keep hs spec tabs record proofs = .ok ()) :
-    ∃ (sess : Session) (schs : Array Flock.Schedule), Record.decodeWithK keep hs spec record = .ok sess ∧
+    ∃ (sess : RunRecord) (schs : Array Flock.Schedule), Record.decodeWithK keep hs spec record = .ok sess ∧
       tabs.size = spec.tables.size ∧ 0 < tabs.size ∧ schs.size = tabs.size ∧
       ∀ (i : ℕ) (hi : i < tabs.size), ∃ (hs' : i < schs.size) (c : ByteArray),
         Flock.fast100 tabs[i].m = some schs[i] ∧
@@ -99,7 +103,7 @@ and both reps' checks accept with one cap. -/
 theorem verifyK_ok_tables (keep : Bool → Bool) {spec : SessionSpec} {tabs : Array Setup} {record : String}
     {proofs : Array ByteArray} (hN : ∀ st ∈ tabs, st.merkle.Named)
     (h : verifyWithMK keep With.std spec tabs record proofs = .ok ()) :
-    ∃ (sess : Session) (schs : Array Flock.Schedule), Record.decodeWithK keep With.std spec record = .ok sess ∧
+    ∃ (sess : RunRecord) (schs : Array Flock.Schedule), Record.decodeWithK keep With.std spec record = .ok sess ∧
       tabs.size = spec.tables.size ∧ 0 < tabs.size ∧ schs.size = tabs.size ∧
       ∀ (i : ℕ) (hi : i < tabs.size), ∃ (hs : i < schs.size) (c : ByteArray),
         Flock.fast100 tabs[i].m = some schs[i] ∧
@@ -126,7 +130,7 @@ theorem verifyK_one_ok (keep : Bool → Bool) {spec : SessionSpec} {st : Setup} 
 set_option maxHeartbeats 1000000 in
 /-- **`decode_points` at `keep`**: the record's link points have the configured shape (S9). -/
 theorem decodeWithK_points (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
-    {sess : Session} (h : Record.decodeWithK keep hs spec text = .ok sess) :
+    {sess : RunRecord} (h : Record.decodeWithK keep hs spec text = .ok sess) :
     sess.points.size = spec.points ∧ ∀ p ∈ sess.points.toList, p.size = spec.mPts := by
   unfold Record.decodeWithK Record.decodeJWithK at h
   dsimp only at h
@@ -139,7 +143,7 @@ theorem decodeWithK_points (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : 
 set_option maxHeartbeats 1000000 in
 /-- **`decode_roundsWF` at `keep`**: the record's rounds are well formed (S12's coin count). -/
 theorem decodeWithK_roundsWF (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
-    {sess : Session} (h : Record.decodeWithK keep hs spec text = .ok sess) :
+    {sess : RunRecord} (h : Record.decodeWithK keep hs spec text = .ok sess) :
     ∀ s ∈ sess.streams.toList, RoundsWF s.rounds := by
   unfold Record.decodeWithK Record.decodeJWithK at h
   dsimp only at h
@@ -169,7 +173,7 @@ set_option maxHeartbeats 1000000 in
 /-- **`decode_retained` at `keep`**: when the spec retains rounds, every round of every stream has its bytes (S12's
 presence check, which `keep` leaves alone). -/
 theorem decodeWithK_retained (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
-    {sess : Session} (hr : spec.retainRounds = true) (h : Record.decodeWithK keep hs spec text = .ok sess) :
+    {sess : RunRecord} (hr : spec.retainRounds = true) (h : Record.decodeWithK keep hs spec text = .ok sess) :
     ∀ s ∈ sess.streams.toList, ∀ r ∈ s.rounds.toList, ∃ b, r.bytes = some b := by
   unfold Record.decodeWithK Record.decodeJWithK at h
   dsimp only at h
@@ -206,7 +210,7 @@ theorem decodeWithK_retained (keep : Bool → Bool) (hs : Hashes Flock.V) {spec 
 
 /-- `decodeWithK_retained` as `AllRetained`, for every stream (`decode_allRetained` at `keep`). -/
 theorem decodeWithK_allRetained (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
-    {sess : Session} (hr : spec.retainRounds = true) (h : Record.decodeWithK keep hs spec text = .ok sess) :
+    {sess : RunRecord} (hr : spec.retainRounds = true) (h : Record.decodeWithK keep hs spec text = .ok sess) :
     ∀ s ∈ sess.streams.toList, AllRetained s.rounds := fun s hs' i hi => by
   rw [getElem!_pos s.rounds i hi]
   exact decodeWithK_retained keep hs hr h s hs' _ (Array.getElem_mem_toList hi)

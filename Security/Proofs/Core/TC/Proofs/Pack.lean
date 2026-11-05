@@ -1,4 +1,6 @@
-import Proofs.Core.TC.Proofs.Words
+module
+
+public import Proofs.Core.TC.Proofs.Words
 
 /-!
 # The unit boundary: `pack_relation` is `pack_value` then `cvt.rn.bf16.f32`
@@ -7,6 +9,8 @@ For a canonical final state, `pack_relation`'s predicates force the FP32 word to
 (`pack_word`) and the BF16 word to be `cvt_rn_bf16_f32` of it (`pack_sound`), and some columns satisfy them
 (`pack_complete`). None of this depends on the pipeline: the floor enters only through states whose magnitude is zero.
 -/
+
+@[expose] public section
 
 namespace Verity.TC.Proofs
 

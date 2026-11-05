@@ -94,7 +94,7 @@ def test_each_record_binds_its_pinned_step() -> None:
 
 
 def test_the_sm90_record_is_its_data_sheet() -> None:
-    """SMs, the tensor clock, f_max and the dense s8 MACs are DS-90's, and 2 x MACs x SMs x clock is half the H200 data sheet's
+    """SMs, the tensor clock, f_max and the dense s8 MACs are the H200 sheet's, and 2 x MACs x SMs x clock is half the H200 data sheet's
     sparse INT8 3,958 TOPS to within its tolerance."""
     sheet = tomllib.loads(SHEET_90.read_text())
     s8 = sheet["peaks"]["s8"]

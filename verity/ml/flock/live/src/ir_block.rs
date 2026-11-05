@@ -7,7 +7,7 @@
 //! are units of all-zero inputs.
 //!
 //! Public regions: every input word and every output word of every unit (the 128-bit word column, unused bits zero),
-//! each opened at two verifier points drawn after the commitment (both reps). The verifier computes their values from its
+//! each opened at two verifier points sampled after the commitment (both reps). The verifier computes their values from its
 //! own instance file, so the statement is the relation on public inputs and outputs (no commitment scheme binds them).
 
 use std::sync::OnceLock;

@@ -1,4 +1,6 @@
-import Definitions.Pouw.Game.Defs
+module
+
+public import Definitions.Pouw.Game.Defs
 
 /-!
 # The deadline: a timed run and the verifier's rule (trusted)
@@ -18,6 +20,8 @@ deadline: a lower bound on the work (`Pouw.Guarantees.EndToEnd`), freshness (pre
 Time meets the cost model only through the named assumption `Pouw.Assumptions.HonestClock`;
 `Pouw.Guarantees.WorkBetweenSaltAndDeadline` is the guarantee.
 -/
+
+@[expose] public section
 
 namespace Pouw
 

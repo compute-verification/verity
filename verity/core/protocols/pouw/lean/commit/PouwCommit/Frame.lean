@@ -1,7 +1,10 @@
-import Flock.Hash
-import Flock.Bytes
-import Identity.Tagged
-import PouwCommit.Tagged
+module
+
+public import Flock.Hash
+public import Flock.Bytes
+public import Identity.Tagged
+public import PouwCommit.Tagged
+public import Identity.Domains
 
 /-!
 # frame-v3 trees (`verity.ml.commitments.merkle`) over range positions
@@ -13,6 +16,8 @@ tagged hash. A tree pads its leaves to a power of two with `H("pad", id, uint ra
 `H("node", id, uint level, uint index, l, r)`, and an empty tree's root is `H("empty", id)`. Integers are minimal big-endian,
 any size (`natBytes`).
 -/
+
+@[expose] public section
 
 namespace PouwCommit
 
@@ -134,5 +139,11 @@ def Domain.verify (d : Domain) (root : ByteArray) (rank : Nat) (value : ByteArra
     let (dg, cur) := acc
     (if cur % 2 == 0 then d.node lv (cur / 2) dg sib else d.node lv (cur / 2) sib dg, cur / 2)) (leaf, rank)
   return digest == root
+
+/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
+written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : ("veritor/tagged-sha256/v1" : String) = Domains.TAGGED_SHA256 := rfl
+example : FRAME = Domains.FRAME_V3.toUTF8.push 0 := rfl
+example : ("veritor/indexed-domain/range/v1" : String) = Domains.INDEXED_RANGE := rfl
 
 end PouwCommit

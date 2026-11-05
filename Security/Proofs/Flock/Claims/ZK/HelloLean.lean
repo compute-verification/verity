@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.Release
-import Proofs.Flock.Claims.ZK.CoinLayer
-import Flock.Firewall.Hello
+module
+
+public import Proofs.Flock.Claims.ZK.Release
+public import Proofs.Flock.Claims.ZK.CoinLayer
+public import Flock.Firewall.Hello
 
 /-!
 # The `Hello` at Lean's `flock-firewall hello`
@@ -17,6 +19,8 @@ own session parameters at the session's statement, with the nonce it draws in `c
   `Hello` it answers, not about how a `Hello` is made. `Refine`'s `LeanRelease.helloEq_of_helloIs` gives `HelloEq`
   from it.
 -/
+
+@[expose] public section
 
 namespace Flock.Firewall.Hello
 

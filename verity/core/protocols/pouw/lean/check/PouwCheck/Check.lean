@@ -1,10 +1,13 @@
-import CoreProtocol.Protocol
-import PouwWindow.Grid
-import PouwWindow.Draw
-import PouwWindow.Public
-import PouwWindow.Length
-import PouwCheck.Inputs
-import PouwCheck.WindowSalt
+module
+
+public import CoreProtocol.Protocol
+public import PouwWindow.Grid
+public import PouwWindow.Draw
+public import PouwWindow.Public
+public import PouwWindow.Length
+public import PouwCheck.Inputs
+public import PouwCheck.WindowSalt
+public import Identity.Domains
 
 /-!
 # PoUW's rule (`core_check.py`, "the check")
@@ -22,6 +25,8 @@ this order, with `core_check.py`'s reason.
 The service's reject is a reject and its undecided is undecided. On acceptance PoUW publishes `window.PUBLIC` and the
 profile is the service's `Core.Integrity`, passed through.
 -/
+
+@[expose] public section
 
 namespace PouwCheck
 
@@ -175,5 +180,9 @@ def check (p : Params) (c : Registration) (e : Evidence) : Core.Outcome Public C
   match registered p c with
   | .error r => .reject r
   | .ok f => outcome p c f e
+
+/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
+written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : oneStage = Domains.ONE_STAGE_PROTOCOL := rfl
 
 end PouwCheck

@@ -80,23 +80,24 @@ from verity.ml.circuits.silicon.integer import (
     exact_k_limit,
 )
 from verity.ml.circuits.types import Array, Value
-from verity.ml.commitments import hm96
+from verity.ml.commitments import domains, hm96
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.limits import VerificationLimits
 from verity.ml.commitments.merkle import Commitment, CommitmentDomain, Opening, tree_levels, verify_opening
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest
+from verity.ml.commitments.scheme import DIGEST_BYTES
 
 from . import segment as SG
 
 #: a served call's values tree, and a filler's (no O)
-TAG = "verity/pouw/dither/call/v1"
-FILL_TAG = "verity/pouw/dither/fill/v1"
-OPERAND_TAG = "verity/pouw/dither/operand/v1"
-CHECKPOINT_TAG = b"verity/pouw/dither/checkpoint/v1\0"
-SEEDS_TAG = b"verity/pouw/dither/seeds/v1\0"
-FILL_SEEDS_TAG = b"verity/pouw/dither/fill-seeds/v1\0"
+TAG = domains.POUW_DITHER_CALL
+FILL_TAG = domains.POUW_DITHER_FILL
+OPERAND_TAG = domains.POUW_DITHER_OPERAND
+CHECKPOINT_TAG = domains.POUW_DITHER_CHECKPOINT.encode() + b"\0"
+SEEDS_TAG = domains.POUW_DITHER_SEEDS.encode() + b"\0"
+FILL_SEEDS_TAG = domains.POUW_DITHER_FILL_SEEDS.encode() + b"\0"
 #: a call's coin streams; a filler's seeds add the pad's
 STREAMS = ("dA", "dB", "U", "V", "P")
 PAD = "pad"
@@ -242,7 +243,7 @@ Rows = list[list[int]]
 
 
 def _digest(what: str, v: bytes) -> bytes:
-    if len(v) != 64:
+    if len(v) != DIGEST_BYTES["sha512"]:
         raise ValueError(f"{what} is a 64-byte digest, not {len(v)} bytes")
     return bytes(v)
 
@@ -254,7 +255,7 @@ def _x(x: str) -> bytes:
 def seeds(coin: bytes, receipt: bytes, call: int) -> dict[str, bytes]:
     """A served call's seeds: SHA-512(`SEEDS_TAG` ‖ coin ‖ receipt ‖ be64(call) ‖ x) for each stream x, from the
     challenger's raw coin `coin` opened after the operand roots, the digest `receipt` of the certifier's signed receipt
-    of them, and the call's index `call` in its sampling block."""
+    of them, and the call's index `call` in its execution phase."""
     if not 0 <= call < 1 << 64:
         raise ValueError(f"a call's index is a u64, not {call}")
     head = SEEDS_TAG + _digest("the coin", coin) + _digest("the operand-root receipt", receipt) + call.to_bytes(8, "big")
@@ -280,12 +281,12 @@ def _blocks(seed: bytes, tag: str, idx: Iterable[int]) -> bytes:
 def pad_rows(seeds: Mapping[str, bytes], k: int, rows: Sequence[int]) -> Rows:
     """A filler's A: the pad's rows `rows` at contraction k (len(rows) × k int8 values), row i the first k bytes of
     blocks i ceil(k / 64) .. of the pad stream."""
-    kb = -(-k // 64)
+    kb = -(-k // DIGEST_BYTES["sha512"])
     return [array("b", _blocks(seeds[PAD], PAD, range(i * kb, (i + 1) * kb))[:k]).tolist() for i in rows]
 
 
 def _bits(seed: bytes, tag: str, rows: Sequence[int], k: int) -> Rows:
-    kb = -(-k // 512)
+    kb = -(-k // (8 * DIGEST_BYTES["sha512"]))
     out = []
     for i in rows:
         raw = _blocks(seed, tag, range(i * kb, (i + 1) * kb))

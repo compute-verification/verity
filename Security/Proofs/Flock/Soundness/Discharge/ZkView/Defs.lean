@@ -1,8 +1,10 @@
-import Proofs.Flock.Soundness.CROnly
-import Proofs.Flock.Soundness.Discharge.Hm.Mask
-import Proofs.Flock.Verifier.Hash
-import Flock.Zk
-import Proofs.Flock.Level3.ArithFacts
+module
+
+public import Proofs.Flock.Soundness.CROnly
+public import Proofs.Flock.Soundness.Discharge.Hm.Mask
+public import Proofs.Flock.Verifier.Hash
+public import Flock.Zk
+public import Proofs.Flock.Level3.ArithFacts
 
 /-!
 # The `--zk` tables at the executable's leaves, and the honest prover's pre-final messages
@@ -26,6 +28,8 @@ a level-0 leaf is `MerkleScheme.hm96Sha512.leaf` of its row (68 lanes: the `2^k�
   session stops at `c`'s coins, with the leaves at each position given; `honest T out hc` is the prover as a strategy
   against an adaptive verifier, `Causal` saying that its message `i` reads the answers before `i` only.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkView
 
@@ -115,7 +119,8 @@ structure Coined (K W Hi VL : Type) [Field K] (z : Sizes) where
   Gp : Fin z.nS → Fin z.tpad → 𝔽
   rbar : Fin 2 → Fin z.nL → K
   ρ : Fin 2 → Fin 2 → K
-  vals : Fin 2 → W → (Fin z.nMask → Fin 128 → ZMod 2) → (Fin 2 → Fin 2 → Fin z.L → 𝔽) → Fin z.nE → 𝔽
+  vals : Fin 2 → W → (Fin z.nMask → Fin 128 → ZMod 2) →
+    (Fin z.nL → Fin z.tpad → 𝔽) × (Fin 2 → Fin 2 → Fin z.L → 𝔽) × (Fin 2 → Fin 2 → Fin z.tpad → 𝔽) → Fin z.nE → 𝔽
   ia : Fin z.nE
   ib : Fin z.nE
   ζ : Fin 2 → 𝔽

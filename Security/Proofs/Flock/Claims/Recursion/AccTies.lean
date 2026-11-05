@@ -1,13 +1,15 @@
-import Proofs.Flock.Claims.Recursion.VerdictRowEInner
-import Proofs.Flock.Claims.Recursion.VerdictRowEAccR
-import Proofs.Flock.Claims.Recursion.ResPiecesD
-import Proofs.Flock.Claims.Recursion.ResLowerDA
-import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
-import Proofs.Flock.Claims.Recursion.ResLowerDD
-import Proofs.Flock.Claims.Recursion.PartAcceptsSetup
-import Proofs.Flock.Claims.Recursion.DeployedBrings
-import Proofs.Flock.Claims.Recursion.SchedDense
-import Proofs.Flock.Claims.Recursion.AccFits
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRowEInner
+public import Proofs.Flock.Claims.Recursion.VerdictRowEAccR
+public import Proofs.Flock.Claims.Recursion.ResPiecesD
+public import Proofs.Flock.Claims.Recursion.ResLowerDA
+public import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
+public import Proofs.Flock.Claims.Recursion.ResLowerDD
+public import Proofs.Flock.Claims.Recursion.PartAcceptsSetup
+public import Proofs.Flock.Claims.Recursion.DeployedBrings
+public import Proofs.Flock.Claims.Recursion.SchedDense
+public import Proofs.Flock.Claims.Recursion.AccFits
 
 /-!
 # The chain's commit ties at a joint acceptance
@@ -22,9 +24,11 @@ V\* gives its unit count, at most the table's (`instances_le`); and a level or a
 is in `xs` (`getD_mem_of_setup`), and the collision clause is `hcol`, which `PortsAtV` carries beside `JointP`. At the
 dense form a part holds rows only as a level (`acc`) or an algebra part (`acc0`, `acc1`) (`slotAt_of_holding`; R's
 levels are absent, `stacked_none`), at the positions `accRead` names, so any two slots of one row tie
-(`slotCommit_eq`): STEPSW's `AccCommitW` and RESP3's `InnerAccTie` with `xs`, `hxs` and `hcol` after `JointP`
+(`slotCommit_eq`): `AccCommitW` and `InnerAccTie` with `xs`, `hxs` and `hcol` after `JointP`
 (`accCommitV`, `innerAccTieV`), wherever the brings list the registered reads (`RegSetup`, which `deployedB` gives).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.ResLower
 
@@ -39,7 +43,7 @@ noncomputable section
 
 /-- **A dense statement names no R**: candidate 3's statements leave `stacked` empty without a sparse part
 (`RecScope.candidate3_ok`). -/
-theorem stacked_none {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st)
+theorem stacked_none {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st)
     (hd : Claims.Recursion.Form.Dense st.form) {r : XR} (hr : readX x = some r) : r.shape.stacked = none := by
   obtain ⟨r', hr', ha, rfl⟩ := parse_read hst
   rw [hr] at hr'
@@ -67,7 +71,7 @@ theorem fast100_of_read {x : Msg} {r : XR} (hr : readX x = some r) : ∃ sch, fa
 
 /-- **The inner schedule is V\*'s** at a dense statement with a level part (`levelMatch`'s); ResStepsW's
 `schAt_fast100`, here so that this file needs no chain module. -/
-private theorem schAt_fast100A {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st)
+private theorem schAt_fast100A {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st)
     (hd : Claims.Recursion.Form.Dense st.form) {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt}
     (hss : _root_.Flock.RecVStar.statements r.shape = .ok ss) {s lv LANES HH n : ℕ}
     (hsv : ss[s]? = some (.recOpen lv LANES HH n)) :
@@ -98,7 +102,7 @@ private theorem schAt_fast100A {x : Msg} {st : Claims.Recursion.Stmt} (hst : par
 
 /-- **A level's instances are its schedule level's two reps' queries** (`levelMatch`, at `schAt_fast100A`'s
 schedule). -/
-theorem recOpen_n {x : Msg} {st : Claims.Recursion.Stmt} (hx : parse x = some st)
+theorem recOpen_n {x : Msg} {st : Claims.Recursion.CompiledStatement} (hx : parse x = some st)
     (hf : Claims.Recursion.Form.Dense st.form) {r : XR} (hr : readX x = some r) {sch : Schedule}
     (hsch : fast100 r.shape.m = some sch) {s l LANES HH m : ℕ}
     (hsv : (RecVStar.statements r.shape).toOption.bind (·[s]?) = some (.recOpen l LANES HH m)) :
@@ -222,6 +226,11 @@ theorem slotAt_of_holding {r : XR} (hstk : r.shape.stacked = none) {sch : Schedu
       have hA : RecVStar.accReads r.shape (.cap l N) = .ok none := rfl
       unfold accRead at hR
       simp [hA, Except.toOption] at hR
+    | link UB PB N =>
+      exfalso
+      have hA : RecVStar.accReads r.shape (.link UB PB N) = .ok none := rfl
+      unfold accRead at hR
+      simp [hA, Except.toOption] at hR
 
 /-- **A level unit's `acc_out` is its next row's slot**: where it holds row `p` at `acc`, its `acc_out` reads `p + 1`. -/
 theorem slotAt_out {r : XR} (hstk : r.shape.stacked = none) {sch : Schedule} (hsch : fast100 r.shape.m = some sch)
@@ -288,6 +297,7 @@ theorem registered_inner {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st
   have h0 : 0 < sts.size := by subst hp; exact h0p
   have e0 : p.sts[0] = sts[0] := by subst hp; rfl
   obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi h0p
+    (FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0p).2.2)
   have hpar := FlockVBridge.Family.resParams_of_check P.recResiduals
     ((htab 0 h0p).1.trans (DecompBR.inner_named hss hsv'))
   rw [e0] at hpar
@@ -339,7 +349,7 @@ theorem slotCommit_eq {rd : Msg → Option FinalP} {wE : Msg → ℝ}
     {final : Msg → Option (List (List (Msg × Salt)) × Msg)} {w : Msg → ℝ} {b : Brings}
     {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))}
     {shape : Claims.Recursion.Form → Prop} {untr : TrReader} {cmt : Msg → ℕ → Msg → Msg} (hRS : RegSetup b)
-    {x : Msg} {st : Claims.Recursion.Stmt} (hx : (DRL rd wE final w b elem).parse x = some st)
+    {x : Msg} {st : Claims.Recursion.CompiledStatement} (hx : (DRL rd wE final w b elem).parse x = some st)
     (hf : Claims.Recursion.Form.Dense st.form) {c : ℕ → Coin} {ws : List Claims.Flock.Wit}
     (hl : ∀ e ∈ (DeployedR.layR elem).allCalls x ws, FlockDeploy.sha512 e.1 = e.2) {xs : List Msg}
     (hxs : ∀ s' (hs' : s' < ws.length), AccV rd wE final w b elem shape untr cmt s' x c (xs.getD s' []) ws[s']
@@ -402,7 +412,7 @@ theorem slotCommit_eq {rd : Msg → Option FinalP} {wE : Msg → ℝ}
     exact innerInnerCommit_eq hS hS' hxO hxO' hck hck' hr hpc hpc' hsv hsv' hsch hsu hsu' h0 h0' hidx hidx' hown hown' hnm hd
       hnm' hd' hq hq' (by omega) (by omega) (hP.symm.trans hP') hD hl hcol hxs1 hxs1'
 
-/-! ## STEPSW's and RESP3's ties, with every part's acceptance in `xs` and `hcol` -/
+/-! ## The accumulator ties `AccCommitW` and `InnerAccTie`, with every part's acceptance in `xs` and `hcol` -/
 
 /-- **`AccCommitW` with the parts' staged statements**: at `JointP`, and wherever every part accepts at its statement
 in `xs` with its decision (`hxs`, `PortsAtV`'s) and the true calls and the setups' evaluations at `xs` have no
@@ -411,7 +421,7 @@ collision (`hcol`): where part `s`'s unit `u` holds `acc` at row `p`, its `nm` p
 def AccCommitV (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), (DRL rd wE final w b elem).parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (DRL rd wE final w b elem).parse x = some st → shape st.form →
     ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
     RecDeploy.OpenLower.JointP FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
       (AccP rd wE final w b elem shape untr cmt) x c ws →
@@ -453,7 +463,7 @@ not needed: `held_rows_eq` takes prefixes of one length, `rowPfx_length`.) -/
 def InnerAccTieV (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), (DRL rd wE final w b elem).parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (DRL rd wE final w b elem).parse x = some st → shape st.form →
     ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
     RecDeploy.OpenLower.JointP FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
       (AccP rd wE final w b elem shape untr cmt) x c ws →

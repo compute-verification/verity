@@ -1,5 +1,7 @@
-import CertifierDevice.Issuer
-import CertifierDevice.Difftest
+module
+
+public import CertifierDevice.Issuer
+public import CertifierDevice.Difftest
 
 /-!
 # The issuer difftest: `Issuer.certify` against `certificate.Issuer`, on generated records
@@ -19,6 +21,8 @@ certificate (`null` when the reservation is refused) with its sync, salt and cer
 `ClockCertificate.verify` under the key and after the tamper. The Lean audit runs it (`runs` in `lean-audit.json`):
 compiled evaluation, a test and not a proof.
 -/
+
+@[expose] public section
 
 namespace CertifierDevice.IssuerDifftest
 
@@ -193,7 +197,7 @@ def evaluate (j : Json) : Except String (Json × List String) := do
     | .ok (i, none) =>
       issuer := i
       certify := Json.mkObj [("certified", .null)]
-      outcomes := "refused leaf" :: outcomes
+      outcomes := (if (Status.reason? record.status).isSome then "refused status" else "refused leaf") :: outcomes
     | .ok (i, some cr) =>
       issuer := i
       let verified := cr.verify p pub session

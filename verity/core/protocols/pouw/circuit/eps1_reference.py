@@ -8,7 +8,7 @@ reach it.
 
 PoUW is a compile pass over the served Program, not an executor: a matmul `A·Bᵀ` keeps serving its exact
 s8 product, and PoUW adds, around it, a per-call seed, the noise the seed derives, a committed receipt and one spot check.
-Everything else is sampled proofs': hm96 leaves, the live draw coin, one audit, one ε.
+Everything else is sampled proofs': hm96 leaves, the live sampling coin, one audit, one ε.
 
 **The seed**, with its call-index binding:
 
@@ -65,6 +65,7 @@ from typing import Any
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops import s8 as OS8
 from verity.ml.circuits.ops import prims as P
+from verity.ml.commitments import domains
 
 from ..protocol import DomainError
 from . import segment as SG
@@ -73,10 +74,10 @@ from . import segment as SG
 SCHEME = "eps1-sm120-h1fx1"
 KIND = "h1fx1"
 #: the seed's domain separator (`seed`); a byte string, as every SHA-512 tag here is
-TAG = b"eps1-sm120-h1fx1/seed/v1"
+TAG = domains.POUW_EPS1_SEED.encode()
 #: σ_R's domain separator (`receipt_seed`): the receipt folds' keys and their chains' starts, under a tag of
 #: their own (`seeds.PouwUnitSeeds`' RECEIPT_TAG), never the noise seed's, so no fold key is a function of seed_j
-RECEIPT_TAG = b"verity/pouw/receipt/v1"
+RECEIPT_TAG = domains.POUW_RECEIPT.encode()
 #: the fold H1's receipt uses and its receipt layout (`segment.PouwCallCheck`): fx1, the eight chain words a thread
 FOLD, OUT = "fx1", "chains"
 #: the per-dot work the TS conjecture credits is open until proofs link TS to EndToEnd (§5 item 3)
@@ -196,7 +197,7 @@ def check(ks: int):
 
 
 def templates(shape: Shape) -> dict[str, Any]:
-    """The scheme's Definitions by role: the served arm, the fold and the spot check (the drawn unit)."""
+    """The scheme's Definitions by role: the served arm, the fold and the spot check (the sampled proof block)."""
     shape.check()
     return {"arm": arm(shape.k), "fold": SG.PouwFx1Absorb, "check": check(shape.ks)}
 
@@ -211,7 +212,7 @@ def unit(shape: Shape):
 
 def work_ref(shape: Shape) -> dict[str, int]:
     """`W_ref` per dot product: `K` served MACs a output coordinate (`ops.s8.counts`), and the call's and the window's totals.
-    The draw law weights a unit by the MACs its thread's call covers; the closure is empty (`closure`)."""
+    The sample law weights a unit by the MACs its thread's call covers; the closure is empty (`closure`)."""
     shape.check()
     per_dot = OS8.counts({"N": 1, "K": shape.k, "TAIL": _TAIL})["served_macs"]  # = K
     entries = 4 * 8  # 32 accumulator words a thread (4 row slots × 8 column slots)
@@ -270,7 +271,7 @@ def _onehot(n: int, i: int) -> list[int]:
 @dataclass(frozen=True)
 class Eps1Traced:
     """What sampled proofs traces for one H1 + fx1 call of a shape (the EPS1 analogue of `circuit.Traced`): the served arm,
-    the spot check that is the drawn unit, the work table and the empty closure, each from the shape alone.  The verifier
+    the spot check that is the sampled proof block, the work table and the empty closure, each from the shape alone.  The verifier
     builds these itself and never takes the prover's."""
 
     scheme: str

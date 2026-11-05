@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.ResLowerD
-import Proofs.Flock.C3.PubRows.Check
+module
+
+public import Proofs.Flock.Claims.Recursion.ResLowerD
+public import Proofs.Flock.C3.PubRows.Check
 
 /-!
 # P3's halves that read no other part: a part's end reads, and two chains with one step
@@ -18,6 +20,8 @@ per component. The copy's `acc0` and `acc1` are rows of the outer witness's own 
   chain that carries row D's sums at its rep's ends reads `elemReadC (Top.accRC rd key)` plus one offset per component.
   What's left for `AccPorts` is that chain: the outer witness's `rec-acc` rows, which the copy reads at its ends.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.ResLower
 
@@ -172,7 +176,7 @@ carries row D's running sums at its rep's ends (`D.accE` at `W`: `acc0` the run'
 (`chainHolds_off`). The accumulator ports are `w`'s last four (`hjb`). -/
 theorem accPorts_of_chain {rd : Msg → Option FinalP} {key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ} {xi : Msg}
     {ms : List Msg} {cs : List Coin} (D : Rows.DecAt rd xi ms cs) (cls : FlockSoundness.Discharge.Recursion.HClass)
-    {xo : Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto) (hf : Claims.Recursion.Form.Dense sto.form)
+    {xo : Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto) (hf : Claims.Recursion.Form.Dense sto.form)
     (hx : xi = xIOf xo) {W : ℕ → ℕ → Array F128} (hW : Top.ChainHolds rd key xi ms cs W) (kk : ℕ × ℕ × ℕ × ℕ)
     (hn : kk.2.1 + kk.2.2.1 < 2) (copy : ℕ → F128)
     (hjb : ∀ e j, elemPort xi kk.1 e = some j → accBase xi ≤ j → j < accBase xi + 4)

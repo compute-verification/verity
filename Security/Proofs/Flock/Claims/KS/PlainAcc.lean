@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.PlainKS
-import Proofs.Flock.Claims.KS.Escapes
-import Proofs.Flock.Claims.KS.OnAcc
+module
+
+public import Proofs.Flock.Claims.KS.PlainKS
+public import Proofs.Flock.Claims.KS.Escapes
+public import Proofs.Flock.Claims.KS.OnAcc
 
 /-!
 # The plain table bound with escapes on accepted runs
@@ -13,6 +15,8 @@ events to bound read on accepted live runs: the decoded self-clash of a live out
 is `plain_tableBoundθAccAt_live`, and at every statement, from `PlainLiveAcc` where some run accepts,
 `plain_tableBoundθAccAt` (where none does, with no escapes). `plain_KS_of_liveAcc` is `plain_KS_of_live` from it.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

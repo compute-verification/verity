@@ -1,5 +1,5 @@
 /-
-What a Definition of a template computes, as a fact a leaf's proof supplies (PRF-133). `Tmpl.DefComputes t d outs spec`:
+What a Definition of a template computes, as a fact a leaf's proof supplies. `Tmpl.DefComputes t d outs spec`:
 on any inputs, with the constant 1, Definition `d`'s columns `outs` are `spec`'s bits (`Tmpl.evalDef`). A leaf proved
 relationally plugs in through `defComputes_of_rows`: `eval` satisfies the Definition's own rows (`eval_rowsAt`), so a
 proof that any column values satisfying those rows, with the constant at 1, carry `spec` on `outs` proves
@@ -8,7 +8,11 @@ proof that any column values satisfying those rows, with the constant at 1, carr
 `FlockSoundness.Types.Dag.SatAt` reads, so the typed path's `layout_sound` gives `DefComputes` with `spec` its
 `evalT` (`FlockSoundness.TmplValue.defComputes_of_layout`). Nothing on a verifier path reads this file.
 -/
-import Flock.TmplValue
+module
+
+public import Flock.TmplValue
+
+@[expose] public section
 
 namespace Flock.Tmpl
 

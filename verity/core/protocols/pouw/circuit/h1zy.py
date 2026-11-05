@@ -7,7 +7,7 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   y_u = dq(z_u, s_a, s_w) in bf16, row-major, little-endian (`int8_exact.zy_records`; 6,144 bytes at the served 32 × 32).
   As the unit's ``zy`` it is one bit row of 48 R C bits, `RECORD`'s leaves: z's R C words, then y's. It is a run input,
   committed in its call's z table under round s's root before round s's coin (`h1window.table`), not a registered value
-  in the declared circuit's sense, which is committed before coin 0.
+  in the registered circuit's sense, which is committed before coin 0.
 * **Types.** A record's z words are s32 (`S32`, two's complement, [-2^31, 2^31 - 1]) and a row's codes s8 (`S8`): an
   extractor that read z as u32 would see z mod 2^32, and the product of a negative dot would fail. The circuit's types are
   bits either way; the names say how each word reads.
@@ -43,7 +43,7 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   lanes and their combine). Option A is a proof strategy, not a new Served form: a drawn leaf is one Cd
   unit and meets Served as `PouwH1TileZy_v1` does, and `Accounting.Guarantees.TS.LeafLanesSound`'s linked realization carries the 33 statements to it.
   CP-W's receipt is the XOR over the leaf's lanes of their partials (`h1tile.fold`). The partials are proof-layer values,
-  not Cd inputs: the prover commits them after the draw under hiding leaves, like a proof's own outputs, one row per lane
+  not Cd inputs: the prover commits them after the sample under hiding leaves, like a proof's own outputs, one row per lane
   (``partials``, row l lane l; proofs' service piece, `one_stage.produced`), and the 33 statements open that one
   commitment as registered ports of the verifier's own, lane l's ``partials`` at row l and the combine's ``p0`` .. ``p31``
   at rows 0 .. 31 (`pouw.leaf_lanes.reads`; each statement's ok is its ``o0``), since a port ``own`` doesn't name
@@ -83,7 +83,7 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   the digit coins, absorbs O' and D_1 .. D_(m-1), and reads ``admit``, ``zy`` and ``partials``, with the whole lane's
   checks: its words masked by the admit gate are the partials row, and its cells pass `PouwZyCheck_v1{4, 8}`. Each chunk
   past the first holds its rows' scales to the carried ones, so every bit of each chunk row and carry row is read and a
-  token row's chunks agree on its scale. The carries are proof-layer values, committed after the draw like the partials,
+  token row's chunks agree on its scale. The carries are proof-layer values, committed after the sample like the partials,
   never outputs; the partials and the combine are the whole lane's, so such a leaf is 32 n + 1 statements. Over v1 only:
   v3's z corrects O' and the digits over every segment of K.
 * **The unit on chunk rows.** A window at such a K binds `PouwH1TileZyChunks_v1{UNIT, CHUNKS = n}` (`window_unit`), UNIT
@@ -134,7 +134,7 @@ from verity.ml.circuits.ops import prims as P
 from verity.ml.circuits.ops.boolean import elementwise as EW
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.refs import Coll, Explicit, array_of, concat
-from verity.ml.circuits.types import Array, Record, Value
+from verity.ml.circuits.types import Array, RecordType, Value
 
 from verity.core.protocols.pouw.weights import CHUNK_ALIGN, CHUNK_MAX, chunks
 
@@ -148,15 +148,15 @@ S8, S32, F32, BF16 = Array(8, BIT), Array(32, BIT), Array(32, BIT), Array(16, BI
 M32 = (1 << 32) - 1
 
 
-def ROW(k: int) -> Record:
+def ROW(k: int) -> RecordType:
     """An A or B row of the unit: K s8 codes, then the row's f32 scale (8 K + 32 bits, the codes' bytes then the scale's,
     little-endian)."""
-    return Record(("codes", Array(int(k), S8)), ("scale", F32))
+    return RecordType(("codes", Array(int(k), S8)), ("scale", F32))
 
 
-def RECORD(r: int, c: int) -> Record:
+def RECORD(r: int, c: int) -> RecordType:
     """A unit's z/y record: its R C cells' s32 z, row-major, then their bf16 y (48 R C bits)."""
-    return Record(("z", Array(int(r) * int(c), S32)), ("y", Array(int(r) * int(c), BF16)))
+    return RecordType(("z", Array(int(r) * int(c), S32)), ("y", Array(int(r) * int(c), BF16)))
 
 
 # -- the dequant --------------------------------------------------------------------------------------------------------------
@@ -263,7 +263,7 @@ def _signature(S: Any) -> tuple:
     r, c, k = _tile(S)
     params, ret = S.TILE.signature()
     return ((("a", Array(r, ROW(k))), ("b", Array(c, ROW(k))), ("zy", RECORD(r, c)), *params[2:]),
-            Record(("receipt", ret.fields[1][1]), ("ok", BIT)))
+            RecordType(("receipt", ret.fields[1][1]), ("ok", BIT)))
 
 
 def _rows(a: Coll, n: int, field: str) -> Coll:
@@ -350,7 +350,7 @@ def _lane_signature(S: Any) -> tuple:
     params, _ret = S.TILE.signature()
     return ((("a", Array(4, ROW(lay.k))), ("b", Array(8, ROW(lay.k))), ("admit", Array(lay.r, BIT)),
              ("zy", RECORD(lay.r, lay.c)), ("partials", _words(lay)), *params[2:],
-             ("lane", LANE)), Record(("ok", BIT)))
+             ("lane", LANE)), RecordType(("ok", BIT)))
 
 
 def _pick(B: Any, sel: list, cands: list) -> Coll:
@@ -504,7 +504,7 @@ PouwH1LaneZy2 = CompositeDefinition(
 
 def _combine_signature(S: Any) -> tuple:
     lay = _lane_layout(S)
-    return (("partials", Array(lay.lanes, _words(lay))), ("receipt", _words(lay))), Record(("ok", BIT))
+    return (("partials", Array(lay.lanes, _words(lay))), ("receipt", _words(lay))), RecordType(("ok", BIT))
 
 
 def _combine_body(B: Any, S: Any, partials: Coll, receipt: Coll) -> Coll:
@@ -619,13 +619,13 @@ def chunk_words(rows: Sequence[bytes], k: int) -> list[list[int]]:
     return [[leaf[i] | leaf[i + 1] << 8 for i in range(0, len(leaf), 2)] for row in rows for leaf in chunk_leaves(row, k)]
 
 
-def CARRY(lay: H.Layout, n: int, c: int) -> Record:
+def CARRY(lay: H.Layout, n: int, c: int) -> RecordType:
     """What chunk c of a lane in n chunks hands chunk c + 1: after its last segment, its fx1 state (16 u32), each entry's
     prefix sum T (32 u32), each row slot's residue sums (4 × 32 u32), each cell's z (32 s32, by row slot then column slot),
     every chain word so far, unmasked (2 (c + 1) KS_c u32, KS_c = K / 32 n), and its rows' scales (4 and 8 f32):
     880 + 8 (c + 1) KS_c bytes."""
     ks = lay.k // n // 32
-    return Record(("state", Array(16, H.U32)), ("t", Array(32, H.U32)), ("res", Array(4, Array(32, H.U32))),
+    return RecordType(("state", Array(16, H.U32)), ("t", Array(32, H.U32)), ("res", Array(4, Array(32, H.U32))),
                   ("z", Array(32, S32)), ("words", Array(2 * (c + 1) * ks, H.U32)), ("sa", Array(4, F32)),
                   ("sw", Array(8, F32)))
 
@@ -641,7 +641,7 @@ def _chunk_signature(S: Any) -> tuple:
     ps = [("a", Array(4, ROW(kc))), ("b", Array(8, ROW(kc)))] + ([("carry_in", CARRY(lay, n, c - 1))] if c else [])
     ps += ([("admit", Array(lay.r, BIT)), ("zy", RECORD(lay.r, lay.c)), ("partials", _words(lay))] if c == n - 1 else
            [("carry_out", CARRY(lay, n, c))])
-    return (*ps, *params[2:], ("lane", LANE)), Record(("ok", BIT))
+    return (*ps, *params[2:], ("lane", LANE)), RecordType(("ok", BIT))
 
 
 def _refuse_chunk(b: dict, tile: str = "PouwH1Tile_v1") -> str | None:
@@ -921,7 +921,7 @@ PUBLIC_J10R = ("salt", "position", "roots", "call", "blocks", "lane")
 def _fields(path: str, t: Any, bit: int) -> list[tuple[str, int, int]]:
     """``t`` from bit ``bit`` of a row as its fields ``(path, first bit, bits)``: a record by its fields, anything else whole."""
     out = []
-    for p, ft in ([(f"{path}.{n}", ft) for n, ft in t.fields] if isinstance(t, Record) else [(path, t)]):
+    for p, ft in ([(f"{path}.{n}", ft) for n, ft in t.fields] if isinstance(t, RecordType) else [(path, t)]):
         out.append((p, bit, sum(ft.leaf_widths())))
         bit += out[-1][2]
     return out

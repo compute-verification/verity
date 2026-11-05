@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.LevelZero
-import Proofs.Flock.Claims.KS.PlainLevels
+module
+
+public import Proofs.Flock.Claims.KS.LevelZero
+public import Proofs.Flock.Claims.KS.PlainLevels
 
 /-!
 # Every level's request in an accepted Ligerito run
@@ -15,6 +17,8 @@ level `ℓ ≥ 1` is that one (`find?_later`).
 * `ligerito_refines_reqs`, `ligerito_accepts_reqs`, `ligerito_accepts_opening_reqs`, `rep_refines_reqs`: their
   `_req0` versions, with the later requests `LaterAt`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 
@@ -668,7 +672,7 @@ requests after level 0's are `LaterAt`, Ligerito starting after zerocheck's `3 +
 `3 + (kLog − 6)` and the ring switch's `claims + 1`. -/
 theorem rep_refines_reqs {D : Type} (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
     (h15 : 15 ≤ S.m) (sch : Flock.Schedule) (hmS : st.m = S.m) (hkS : st.kLog = S.kLog)
-    (hfold : FoldRealizes st.fold S) (extra : List (Model.Claim 𝔽 S.m)) (sess : Session)
+    (hfold : FoldRealizes st.fold S) (extra : List (Model.Claim 𝔽 S.m)) (sess : RunRecord)
     (hext : ExtraRealizes st S sess.points extra) (hdim : DimSeam sch)
     (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
     (hα1 : ∀ i < sch.levels.size, ceilLog2 (sch.levels.getD i default).q ≠ 1) (hschm : sch.m = S.m)

@@ -1,5 +1,7 @@
-import Definitions.Accounting.Guarantees.Actual.Threaded
-import Definitions.Nci.Dampener
+module
+
+public import Definitions.Accounting.Guarantees.Actual.Threaded
+public import Definitions.Nci.Dampener
 
 /-!
 # The compute dampener's windows from the memory cap over threads (trusted)
@@ -14,6 +16,8 @@ capacity at most `αF` (`r = αF`), when one threading `T` of a reference circui
 reuse (`Nci.Threading.bound`, which is `Nci.Dampener.Lambda`). `ThreadedRuntime` counts the windows as
 `n ((t + ω − 1)/ω)`, which is `n ⌈t/ω⌉₊`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.Actual
 

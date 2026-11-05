@@ -6,7 +6,12 @@ named `rec-residuals/m<m>-k<k_log>-c<claims>-p<j>`, at a shape with no `fast100`
 takes minutes to evaluate interpreted, so the comparison itself is held to V*'s honest parts by the flock suite's
 `test_f1_the_session_meets` (V*'s statements `alg/p0`, `alg/p1` at m = 27, through `checkCircuit`).
 -/
-import Flock.RecVStar
+module
+
+public import Flock.RecVStar
+meta import Flock.RecVStar
+
+@[expose] public section
 
 namespace Flock.Test.Part
 

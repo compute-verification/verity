@@ -2,7 +2,7 @@
 shared harness (`verity_difftest`, `of_record="lean"`): one `Port` per function of `window.py` the Lean states, served by
 `pouw-window-difftest` (`PouwWindow/Difftest.lean`).
 
-The inputs are drawn by the generators below from a Hypothesis-controlled `random.Random` (`st.randoms`), so a run is
+The inputs are sampled by the generators below from a Hypothesis-controlled `random.Random` (`st.randoms`), so a run is
 deterministic and shrinks. The grid's numbers run over bits 0 … 6, n up to 2^60 and the integers at or below 0; K′'s
 parameters over realistic ε and δ (down to 2^-40), grid-derived and random work up to n = 2^60, cases where (1 − p)^K = δ
 exactly, and every way out of its domain.
@@ -85,7 +85,7 @@ def levels_in(rng: random.Random) -> dict:
     return {"bits": bits, "lo": lo, "hi": hi}
 
 
-# ---- the draw -----------------------------------------------------------------------------------------------------------
+# ---- the sample -----------------------------------------------------------------------------------------------------------
 
 def _eps(rng: random.Random) -> Fraction:
     return rng.choice((Fraction(1, 2), Fraction(1, 2), Fraction(1, 1000), Fraction(1), Fraction(1, 3), Fraction(9, 10),
@@ -724,9 +724,10 @@ def public_inputs(v: dict) -> str:
 
 
 #: layouts a live window's coin commitment may have, PoUW's and ones it isn't
-_LIVE_LAYOUTS = [None, None, None, ((Wd.DRAW, 1), (Wd.SALT, 1), (Wd.ROUND, 2)), ((Wd.SALT, 1), (Wd.ROUND, 3)),
-                 ((Wd.SALT, 1), (Wd.DRAW, 1), ("pouw/rounds", 2)), ((Wd.SALT, 2), (Wd.DRAW, 1), (Wd.ROUND, 2)),
-                 ((Wd.SALT, 1), (Wd.DRAW, 1), (Wd.ROUND, 2), ("x", 1))]
+_LIVE_LAYOUTS = [None, None, None, Wd.DRAW_FAMILIES, Wd.DRAW_FAMILIES, ((Wd.ROUND, 2), (Wd.SALT, 1)),
+                 ((Wd.SALT, 1), (Wd.DRAW, 1), (Wd.ROUND, 3)), ((Wd.SALT, 1), ("pouw/rounds", 2)),
+                 ((Wd.SALT, 2), (Wd.ROUND, 2)), ((Wd.SALT, 1), (Wd.ROUND, 2), ("x", 1)), ((Wd.DRAW, 2),),
+                 ((Wd.DRAW, 1), (Wd.SALT, 1)), Wd.SALT_FAMILIES]
 
 
 def live_commitment_in(rng: random.Random) -> dict:
@@ -741,6 +742,12 @@ def live_commitment_in(rng: random.Random) -> dict:
 def live_epoch_reason(v: dict) -> str | None:
     why = Wd.live_epoch_reason(Ch.LiveCommitment.from_json(v["commitment"]))
     SEEN["live_epoch_reason"].add("accept" if why is None else "scheme" if "scheme" in why else "coins")
+    return why
+
+
+def draw_epoch_reason(v: dict) -> str | None:
+    why = Wd.draw_epoch_reason(Ch.LiveCommitment.from_json(v["commitment"]))
+    SEEN["draw_epoch_reason"].add("accept" if why is None else "scheme" if "scheme" in why else "coins")
     return why
 
 
@@ -769,7 +776,8 @@ REACHES = {"k_prime": {"refused", "capped", "k > 10,000", "n > 2^50", "exact"},
            "eps_at": {"refused", "no ε <= 1", "K′ = K", "K′ < K", "the least grid point"},
            "layout_problem": {"accept", *LAYOUT}, "record_problem": {"accept", *RECORD},
            "length_problem": {"accept", *LENGTH},
-           "window_problem": {"accept", "refused", *WINDOW}, "live_epoch_reason": {"accept", "scheme", "coins"}}
+           "window_problem": {"accept", "refused", *WINDOW}, "live_epoch_reason": {"accept", "scheme", "coins"},
+           "draw_epoch_reason": {"accept", "scheme", "coins"}}
 SEEN: dict[str, set[str]] = {fn: set() for fn in REACHES}
 
 
@@ -857,6 +865,7 @@ PORTS = {
                           instance_ts_in), 1000),
     "public_inputs": (_port("public_inputs", public_inputs, public_inputs_in), 500),
     "live_epoch_reason": (_port("live_epoch_reason", live_epoch_reason, live_commitment_in), 300),
+    "draw_epoch_reason": (_port("draw_epoch_reason", draw_epoch_reason, live_commitment_in), 300),
     "round_key": (_port("round_key", round_key, round_key_in, rejects=(ValueError, TypeError)), 300),
     "layout_constants": (D.Port(EXE, "layout_constants", reference=layout_constants, inputs=st.just({}), package=LEAN,
                                 need_rejects=False, of_record=V.RECORD_VERDICT), 1),

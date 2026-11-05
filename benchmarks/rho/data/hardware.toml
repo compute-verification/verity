@@ -1,4 +1,5 @@
-# The physical model: the conversion to gates, locations, fleets (the inventory), horizons (rho/hardware.py).
+# The physical model: the conversion to gates, locations, fleets (the inventory) (rho/hardware.py). Its monitoring
+# periods are core's (rho/params.py PERIODS).
 
 # The one conversion from the FLOP model's inputs to Boolean gates (hardware.Units). The overhead and the time to the
 # target don't depend on it (tests/test_hardware.py); what it sets is the gate counts printed beside them. basis says where it
@@ -126,12 +127,3 @@ eps_dark = { value = 0.001, low = 0.0001, high = 0.01, source = "ruled: mainline
 mfu_train = { value = 0.4, source = "benchmarks/nci/tiers.py DEFAULTS mfu", status = "declared" }
 mfu_serve = { value = 0.4, source = "as fleet.reference-h200 mfu_serve", status = "assumed" }
 mfu_dark = { value = 0.4, source = "as mfu_train", status = "assumed" }
-
-[horizon.week]
-seconds = { value = 604800, unit = "s" }
-
-[horizon.month]
-seconds = { value = 2592000, unit = "s" }
-
-[horizon.year]
-seconds = { value = 31536000, unit = "s" }

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Bridge.Transport
-import Proofs.Flock.Soundness.Discharge.Tables.Sim
+module
+
+public import Proofs.Flock.Claims.Bridge.Transport
+public import Proofs.Flock.Soundness.Discharge.Tables.Sim
 
 /-!
 # Flock's live session as a public-coin verifier
@@ -31,6 +33,8 @@ log. `P*` sees every earlier reply, so the decoded strategy (`stratG`) reads exa
 coin law (`Coins.ex_playOn`) gives each coin uniform, independent, after the message it answers. A stop (`none`) leaves
 the later round coins unread. The round digest `roundOf dg` computes is the coin server's, not an oracle query.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.Live
 
