@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkView.Defs
-import Proofs.Flock.Soundness.Discharge.ZkView.Wire
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkView.Defs
+public import Proofs.Flock.Soundness.Discharge.ZkView.Wire
 
 /-!
 # Zero-knowledge at the `--zk` wire: the target statements
@@ -17,6 +19,8 @@ import Proofs.Flock.Soundness.Discharge.ZkView.Wire
 * `DecodeEncode`: `flock-verify verify --zk`'s parse inverts the file writer: `Zk.decode sh (encZk sh p) = .ok p` for every
   decoded proof of the shape.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkView
 

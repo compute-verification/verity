@@ -1,5 +1,7 @@
-import NciCheck.Baseline
-import NciCheck.DescDifftest
+module
+
+public import NciCheck.Baseline
+public import NciCheck.DescDifftest
 
 /-!
 # The difftest of θ's provenance: against the Python reference, and against the unrolled check
@@ -12,6 +14,8 @@ and its provenance is one entry per θ entry, and `scripts/nci_reference.py`'s `
 IU, or the first refusal's code. The Lean audit runs it (`runs` in `lean-audit.json`): compiled evaluation, a test and not
 a proof.
 -/
+
+@[expose] public section
 
 namespace NciCheck.BaselineDifftest
 

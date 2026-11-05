@@ -1,4 +1,6 @@
-import Definitions.NetworkCertifier.Warden
+module
+
+public import Definitions.NetworkCertifier.Warden
 
 /-!
 # The tap: one auditor device on each server's uplink, the warden and the certifier at once
@@ -22,6 +24,8 @@ neither the client nor the record: the record fixes what the client received, no
 The tap is stated here, over `TrustedHost`'s shape (a device, its run and its code), so that core's device vocabulary
 can lift it as it is: `TapRecord` and `tapCode` read nothing of network accounting but the warden's code.
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

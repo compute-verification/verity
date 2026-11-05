@@ -1,5 +1,10 @@
-import Proofs.Properties.Nci.Lemmas
-import Proofs.Properties.Nci.Desc
+module
+
+public import Proofs.Properties.Nci.Lemmas
+public import Proofs.Properties.Nci.Desc
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
+import all Init.Data.Ord.String
 
 /-!
 # The NCI check's properties, proved
@@ -8,6 +13,8 @@ Each statement of `Properties.Nci`, proved of `NciCheck.evaluate` from the lemma
 (`Proofs.Properties.Nci.Lemmas`), and the description-sized check's summaries against it (`sizes_eq_tally`, with
 `Proofs.Properties.Nci.Desc`).
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs
 
@@ -269,7 +276,7 @@ theorem check_verdict_of_wellFormed (j : Json) (h : WellFormed j) :
   (check_verdict_iff_wellFormed j).2 h
 
 /-- **A refusal's case holds**: `Json.null` is refused, with `instance`. -/
-theorem refused_instance : evaluate Json.null = .error "instance" := rfl
+theorem refused_instance : evaluate Json.null = .error "instance" := (rfl)
 
 /-- `check` refuses `Json.null` with `instance`. -/
 theorem check_refused_instance : (check Json.null).getObjVal? "error" = .ok (.str "instance") :=

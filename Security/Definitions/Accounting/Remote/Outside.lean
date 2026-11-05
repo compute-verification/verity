@@ -1,4 +1,6 @@
-import Definitions.Accounting.Remote.Held
+module
+
+public import Definitions.Accounting.Remote.Held
 
 /-!
 # What devices outside the node compute on, over a remote audit session (trusted)
@@ -15,6 +17,8 @@ A device outside the node is any hardware the node's declaration doesn't list: a
 link. Holding a block and sending it in over a boundary link is not computing on it: the block then comes in by the
 trace's `link` route.
 -/
+
+@[expose] public section
 
 namespace Accounting.Remote.Held
 

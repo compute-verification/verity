@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysStatements
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysStatements
 
 /-!
 # The masked replay's runs
@@ -14,6 +16,8 @@ on them are constraints, so nothing it does after a coin depends on whether a ch
 The replay's claims are `abcClaims` on the coins: `ab`'s point is the lincheck's (its rounds' coins reversed, then the
 zerocheck's residual coins), `c`'s is `(L_s(z), pinned ++ r_rest)`, which `zcVector_eq` reads as the model's `r`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

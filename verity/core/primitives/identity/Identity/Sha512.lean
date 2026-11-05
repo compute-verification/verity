@@ -1,5 +1,9 @@
-import Flock.Bytes
-import Flock.Hash
+module
+
+public import Flock.Bytes
+public import Flock.Hash
+meta import Flock.Bytes
+meta import Flock.Hash
 
 /-!
 Streaming SHA-512 over Flock's compression (`Flock.Sha512.compress`, the only one): absorb bytes in any pieces, then
@@ -7,6 +11,8 @@ finalize. A state is a midstate: a prefix of whole 128-byte blocks absorbed once
 expander), and a long message can be absorbed a piece at a time (a commitment streamed segment by segment).
 `Flock.Sha512.hash m` is `(init.update m).finalize`.
 -/
+
+@[expose] public section
 
 namespace Identity.Sha512
 

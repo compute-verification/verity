@@ -192,7 +192,7 @@ runs its commands through `runners.call(argv, work, cwd)`, which logs them and s
 
 ## Invariants
 
-Each has a test: `test_invariants.py` on the whole tree (slow), `test_graph.py` and `test_local.py` on a toy checkout.
+Each but 5 has a test: `test_invariants.py` on the whole tree (slow), `test_graph.py` and `test_local.py` on a toy checkout.
 
 1. `verity graph` gives the same bytes in two checkouts of one commit at different paths (two `git worktree`s, listed from
    different working directories and environments).
@@ -201,6 +201,8 @@ Each has a test: `test_invariants.py` on the whole tree (slow), `test_graph.py` 
 4. No `owner` field.
 5. It lists the whole graph in under 60 CPU seconds of one core, as the tree is and with its Lean families at their size once
    its modules are `module` files (`tests/ported_listing.py`: of each module a task reads, `olean` and `ir`; seven outputs a
-   module).
+   module). It is measured on an idle machine (`verity graph --json` and `ported_listing.py` under `getrusage`), not in a
+   suite: on a node at load 160 the same listing takes twice the CPU seconds it takes idle (72 against 36), so a suite run
+   beside other work fails it whatever the tree.
 6. Errors never become results; a fail is never retried.
 7. The reference executor lists once: no task's run calls a lister, on a clean tree or a dirty one.

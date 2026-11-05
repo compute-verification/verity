@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.JointJ
-import Proofs.Flock.Claims.GS.Decode
-import Proofs.Flock.Claims.DecodeFamily
+module
+
+public import Proofs.Flock.Claims.KS.JointJ
+public import Proofs.Flock.Claims.GS.Decode
+public import Proofs.Flock.Claims.DecodeFamily
 
 /-!
 # A table with unopened positions extends, at any code
@@ -25,6 +27,8 @@ the fact at its code, and the rest is one argument:
   few by Johnson's bound (`Claims.GS.card_lane0_le`), when the family's lengths summed stay below the field's size.
   `Claims.GS.reg_of_rate` gives Johnson's regime at rate at least `1/2` and `n ≥ 2^10`, which both Flock codes meet.
 -/
+
+@[expose] public section
 
 namespace Claims.GS
 

@@ -1,6 +1,8 @@
-import Proofs.Accounting.TS.Session.Lanes.Assumptions
-import Proofs.Pouw.H1Zy.Combine
-import Proofs.Pouw.H1Zy.CombineBits
+module
+
+public import Proofs.Accounting.TS.Session.Lanes.Assumptions
+public import Proofs.Pouw.H1Zy.Combine
+public import Proofs.Pouw.H1Zy.CombineBits
 
 /-!
 # The combine's part of `LeafChecks` from its Definition
@@ -20,6 +22,8 @@ its pieces (`PouwXor32_v2`, `PouwEq32_v2`, `PouwAndBit_v2`) at their lowerings (
 piece's lowering computes its word view, and so their composition the body on words, is proved
 (`Pouw.H1Zy.combineBits_bitsOf`). The two are equivalent (`combineLowers_iff`).
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Lanes
 

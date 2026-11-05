@@ -1,5 +1,7 @@
-import Flock.Statement
-import Proofs.Flock.Verifier.Registered
+module
+
+public import Flock.Statement
+public import Proofs.Flock.Verifier.Registered
 
 /-!
 # Recursion: the inner statement's description, read from its own rows
@@ -23,6 +25,8 @@ registered private circuit's statement at `st`'s description rows `rowsOf st.c s
 * A hypothesis that the developer's strings open `rt` at every `i` holds of none: the positions past `rt.leaves` open
   nothing (`Flock.Registered.not_opens_all`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

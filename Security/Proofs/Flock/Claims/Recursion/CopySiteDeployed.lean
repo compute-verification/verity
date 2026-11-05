@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.CapOpens
-import Proofs.Flock.Recursive.ValueInner
-import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+module
+
+public import Proofs.Flock.Claims.Recursion.CapOpens
+public import Proofs.Flock.Recursive.ValueInner
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 
 /-!
 # Check 5's site at a staged `rec-open` or `rec-residuals` part
@@ -16,6 +18,8 @@ setup's own checks (`RecIns.setup`):
   (`LabelsAscend`) and check 5's value rows are no more than its instances: the setup's registered check
   (`checkRegistered`) reads row `idx[i]` of check 5's rows at instance `i`, so every label is a row (`idx_lt_rows`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.CopySite
 

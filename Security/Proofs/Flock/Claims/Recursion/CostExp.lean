@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.Cost
-import Proofs.Flock.Claims.Recursion.Hybrid
+module
+
+public import Proofs.Flock.Claims.Recursion.Cost
+public import Proofs.Flock.Claims.Recursion.Hybrid
 
 /-!
 # The recursion's expected cost: Wald's argument over forks
@@ -14,6 +16,8 @@ in expectation (`forkWaits_exp`), once an accepted run shows session `s` accepti
 compiled verifier's reader `D.session`). So `E_O` reruns the prover at most `1 + Σ_s m′_s·k_s` times in expectation
 (`EO_runs_exp`), and with `EO_runs_le`, `Efficient` holds (`efficient`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

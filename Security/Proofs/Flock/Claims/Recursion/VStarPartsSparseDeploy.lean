@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.DeployReg
-import Proofs.Flock.Claims.Recursion.VStarPartsSparse
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployReg
+public import Proofs.Flock.Claims.Recursion.VStarPartsSparse
 
 /-!
 # V*'s parts at the sparse shape, at the compiled verifier
@@ -12,6 +14,8 @@ At the readers of a layout (`RecDeploy.readersOf L`), `deployRec` reads through 
 parts at the sparse shape there, each opening what it holds through registered climbs (`vstarParts_sparse_deployZkRec`),
 are the sparse premise of `RecDeploy.ksA_deployed_parts`.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion.VStar
 

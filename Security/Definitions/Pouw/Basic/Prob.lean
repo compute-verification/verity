@@ -1,7 +1,9 @@
-import Mathlib.Data.Fintype.Pi
-import Mathlib.Data.Fintype.Prod
-import Mathlib.Data.Fintype.Sigma
-import Mathlib.Basic.Real.Basic
+module
+
+public import Mathlib.Data.Fintype.Pi
+public import Mathlib.Data.Fintype.Prod
+public import Mathlib.Data.Fintype.Sigma
+public import Mathlib.Basic.Real.Basic
 
 /-!
 # Uniform probability (trusted)
@@ -13,6 +15,8 @@ Adversaries are deterministic functions. A randomized adversary is an average of
 and each coin value gives a deterministic adversary within the same budget, so every bound proved for all
 deterministic adversaries holds for randomized ones too (`Pouw.Sanity.randomized_of_deterministic`).
 -/
+
+@[expose] public section
 
 namespace Pouw
 

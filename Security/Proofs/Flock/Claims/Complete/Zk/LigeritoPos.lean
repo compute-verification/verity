@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Zk.Lanes
-import Proofs.Flock.Claims.Complete.Zk.ReplayPos
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Lanes
+public import Proofs.Flock.Claims.Complete.Zk.ReplayPos
 
 /-!
 # What the masked Ligerito returns, by coin position
@@ -13,6 +15,8 @@ with the proof's first out-of-domain value, the lane rounds' `K` coins and the p
   `challengeWith_oods`, `oodIntroWith_oods`, `queryLevelWith_oods`, `queryLevel0With_oods`.
 * `RunZk.lg_pos`: the run's masked Ligerito, at table 0's schedule.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

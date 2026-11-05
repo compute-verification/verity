@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.Placed
-import Proofs.Flock.Soundness.Discharge.ZkExec
-import Proofs.Flock.Soundness.Discharge.ZkSession.Session
+module
+
+public import Proofs.Flock.Soundness.Discharge.Placed
+public import Proofs.Flock.Soundness.Discharge.ZkExec
+public import Proofs.Flock.Soundness.Discharge.ZkSession.Session
 
 /-!
 # `--zk` unit placements: each drawn unit's `UnitPlace` from setupH's accept
@@ -18,6 +20,8 @@ e2e-placed's `Placed.Sites.progPlaces_keyProg`, for plans of `TabZK` tables:
   from the sites and the parse alone: its rows the program's (W6 from the parse), its instance the program's own
   (`Const.Prog.instC`), its block the site's (`SitesZ.placeKey_spec`), aliased as Δ copies.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

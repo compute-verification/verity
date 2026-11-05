@@ -1,9 +1,13 @@
-import Proofs.Core.TC.Ampere.SemGroup
-import Proofs.Core.TC.Proofs.Step
+module
+
+public import Proofs.Core.TC.Ampere.SemGroup
+public import Proofs.Core.TC.Proofs.Step
 
 /-!
 # One Ampere group, both sides: `group_sound`
 -/
+
+@[expose] public section
 
 namespace Verity.TC.Proofs.Ampere
 

@@ -1,5 +1,7 @@
-import Definitions.Pous.Model.Labelling
-import Definitions.Pous.Model.M1
+module
+
+public import Definitions.Pous.Model.Labelling
+public import Definitions.Pous.Model.M1
 
 /-!
 # The dense single-layer scheme (S1)
@@ -11,6 +13,8 @@ block indices `Fin (N*B)`, a node's parents being the earlier blocks of its own 
 the implementation keys it (`segTagScheme`): segment `s` is the dense scheme on `B` blocks with oracle `H(tag_s, ·)`,
 `tag_s = salt ‖ u64 s`, and local queries.
 -/
+
+@[expose] public section
 
 namespace Pous.Dense
 

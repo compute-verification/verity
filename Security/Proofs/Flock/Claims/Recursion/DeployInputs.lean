@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.DeployInputs
-import Flock.RecBudget
-import Flock.RecLinkPart
+module
+
+public import Proofs.Flock.Claims.DeployInputs
+public import Flock.RecBudget
+public import Flock.RecLinkPart
 
 /-!
 # A V* part's statement: its bytes, its parser and its recursive setup
@@ -33,6 +35,8 @@ the inner statement), `RecVStar.checkLabels` and the draw's law.
 Like `FlockDeploy.Ins.setup` it refuses a statement without hm96-sha512 rows first, and its SHA-512 calls are the
 shipped ones, outside the oracle.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
