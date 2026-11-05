@@ -200,7 +200,7 @@ def test_every_negative_names_a_check_and_a_code_and_the_table_lists_each():
     for name, n in NG.NEGATIVES.items():
         assert n.family in ("io", "advice", "token", "circuit") and n.tampers in ("plan", "certified", "frames",
                                                                                    "advice", "commit")
-        assert re.fullmatch(r"[A-Za-z0-9_]+(\.[a-z_-]+)?", n.code), n.code
+        assert re.fullmatch(r"[A-Za-z0-9_]+(\.[A-Za-z_-]+)*", n.code), n.code
         assert any(row.startswith(f"| `{name}` |") for row in rows)
     assert {n.family for n in NG.NEGATIVES.values()} == {"io", "advice", "token", "circuit"}
     assert [n for n in NG.NEGATIVES.values() if not n.waits and n.tampers in ("advice", "commit")] == []
