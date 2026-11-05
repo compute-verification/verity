@@ -18,14 +18,14 @@ Its Lean is two packages, code and not analysis:
 
 ## The reference deployment
 
-Where each party runs and how the links go: the workers on the developer's GPU servers, the ZK server on a small
-server of its own, and the verifier with the auditor. Each element names the assumption or guarantee premise it
-realizes, or says that it realizes none yet. None of them is in place today (Today, below).
+Where each party runs and how the links go: the workers on the developer's GPU servers, the ZK server on CPU servers
+of its own, and the verifier with the auditor. Each element names the assumption or guarantee premise it realizes, or
+says that it realizes none yet. None of them is in place today (Today, below).
 
 ~~~text
-GPU servers ──data diode──▶ small server ──releases──▶ verifier
-     ▲                            ▲                        │
-     └──────── live coins ────────┴────── live coins ──────┘
+GPU servers ──data diode──▶ CPU servers ──releases──▶ verifier
+     ▲                           ▲                        │
+     └─────── live coins ────────┴────── live coins ──────┘
 ~~~
 
 - **The workers run on the developer's GPU servers, and nobody trusts them.** They hold the values, run the
@@ -44,9 +44,10 @@ GPU servers ──data diode──▶ small server ──releases──▶ verif
   (`Claims.trustedBase`: each coin uniform, and hidden from the developer's side until the verifier opens it), and
   `trusted-host` for the challenger (`Verity.Assumptions.TrustedHost`). The direct route is what lets the ZK server
   send the workers nothing (below); today the ZK server relays the coins to them (§10.3, §10.4).
-- **The ZK server runs on a small server of its own, from another vendor than the GPU servers'.** A physical machine,
-  not a VM, shared with no one. *Realizes:* A3's scope (`FlockSoundness.Assumptions.UniformRandomBytesTest` doesn't
-  cover a VM whose memory is restored more than once:
+- **The ZK server runs on CPU servers of its own, from another vendor than the GPU servers'.** Physical machines, not
+  VMs, that run nothing else, with as many instances side by side as keep up with the windows (Its size, below).
+  *Realizes:* A3's scope (`FlockSoundness.Assumptions.UniformRandomBytesTest` doesn't cover a VM whose memory is
+  restored more than once:
   [A3's note](../../../../Security/Proofs/Flock/Soundness/assumption-notes/a3-uniform-bytes.md)), and §10.5's public
   release times for honest sessions: on cores of its own, no co-tenant's load can turn one into a missed time and
   spend the stream's failure budget. The other vendor realizes none: no statement names the ZK server's hardware,
@@ -55,7 +56,7 @@ GPU servers ──data diode──▶ small server ──releases──▶ verif
   *Realizes:* the auditor's view in `Flock.Guarantees.RecursiveZK` and `Flock.zk_server_blind`, which is the release
   and the auditor's own coins. None yet physically: the ZK server runs on the workers' machines.
 - **The ZK server runs only the compiled Lean** (`flock-firewall`, `core-firewall`), and nothing else runs on its
-  server. *Realizes:* given the trusted base's Lean compiler and runtime, `Flock.Firewall.Contract.FirewallComputes`
+  servers. *Realizes:* given the trusted base's Lean compiler and runtime, `Flock.Firewall.Contract.FirewallComputes`
   (every value the ZK server reports fixing by its own computation is the specified one), and the hypotheses through
   which `Flock.zk_server_lean_loop` reads the released bytes, not yet proved about the live path
   ([AGENTS.md](../../../../AGENTS.md), "Lean"). Today Rust and Python run beside it: `flock-circuit`'s host side, and
@@ -85,6 +86,19 @@ Two elements are optional:
   and lengths. *Realizes:* no premise; the ZK server already refuses a request it can't read (§10.3), and the filter
   narrows what reaches its parser. None yet.
 
+### Its size
+
+The ZK server proves all of Π_out on CPU, so Π_out's CPU time and peak memory per window set its size: as many
+instances side by side, each with its vCPUs and memory, as keep up with the GPU servers' windows.
+[The recursion benchmark](../../../../benchmarks/recursion_e2e/README.md) times Π_out's steps on a CPU node. Its
+figures are upper bounds where other jobs share the node's vCPUs. A memory total over several instances assumes each
+statement's session frees its memory once its proof is released. The workers prove with zero knowledge off, so the
+figures leave out V\*'s growth under their `--zk`.
+
+The size depends on where Π_out runs. An option that has the workers prove Π_out, or most of it, with `--zk` on their
+GPUs, and leaves the ZK server only the wrap (committing the workers' messages under salts of its own), shrinks it.
+That is an open choice, not a decision.
+
 ### What stays trusted
 
 - **The ZK server's randomness.** Hash-based proofs can't be re-randomized the way Ganesh–Magri–Venturi 2020
@@ -97,8 +111,6 @@ Two elements are optional:
   session reveals one bit (`Flock.zk_server_blind`); a recursive session's stop shows where it fell, at most
   `log₂(1 + Σ_p (M_p + 1))` bits (§10.5, `Flock.Guarantees.RecursiveZKLoopAnySum`), and a stream's failure budget
   bounds their sum. No element above changes that count.
-- **The ZK server's CPU.** The ZK server proves Π_out on its own server, so Π_out's cost on a CPU decides whether a
-  small server is enough; [the recursion benchmark](../../../../benchmarks/recursion_e2e/README.md) measures it.
 
 ### Today
 

@@ -94,7 +94,7 @@ Flock (`verity/ml/flock`) is the proof system's prover: it proves statements ove
 
 ### The reference deployment
 
-The workers' GPU servers send only through a data diode, to the ZK server: a small server of its own and the only exit to the auditor. The challenger sends live coins to both. `verity/core/service/firewall/README.md` gives each element's premise.
+The workers' GPU servers send only through a data diode, to the ZK server, which runs on CPU servers of its own and is the only exit to the auditor. The challenger sends live coins to both. `verity/core/service/firewall/README.md` gives each element's premise.
 
 ### Integrations
 
