@@ -53,7 +53,7 @@ research run --project verity --on vy-nebius-cpu-2 --source . --cwd clone --mem-
 ~~~
 
 `nci_cost.sh` times `NciCheck.Desc` step by step (`nci-phases`, `nci_phases/Main.lean`: decode, summaries, root reads,
-the verdict, the slowest Definitions' summaries and their return pieces) beside `nci-check --policy`, on the NCI suite's
+the verdict, the slowest Definitions' summaries and their return pieces) beside `nci-check --policy`, on the `nci` suite's
 vectors (`suite`), Serve_v1 word-level and on bits (`serve`), and GLM-5.3's rank 0 word-level and lifted to bits (`glm`);
 `nci_cost.py`'s docstring has the cases.
 
