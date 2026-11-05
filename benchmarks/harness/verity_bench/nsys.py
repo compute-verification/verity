@@ -5,8 +5,9 @@ NVTX range the profiled program marked (`bench.py --traced`: one range an item o
 A range's work is the kernels the CUDA calls made inside it launched (CUPTI's runtime and driver records on the range's
 thread, joined to its kernel records by correlation id, a graph's nodes included with `--cuda-graph-trace=node`); its busy
 SM-time is the metric integrated over those kernels' span on the GPU, times the card's SMs. Its cross-check is each kernel's
-duration times the SMs its blocks occupy, min(SMs, ⌈blocks ÷ blocks an SM holds⌉), the blocks an SM holds from the
-kernel's threads, registers and shared memory under the card's limits (`overhead.Gpu`).
+duration times the most SMs its blocks can occupy, min(SMs, blocks): a block is resident on one SM, and the block
+scheduler spreads a small grid over as many SMs as it has blocks, so ⌈blocks ÷ blocks an SM holds⌉ is the fewest SMs a
+grid occupies, not the most.
 
     nsys profile --trace=cuda,nvtx --cuda-graph-trace=node --gpu-metrics-devices=cuda-visible \\
         --gpu-metrics-frequency=10000 --capture-range=cudaProfilerApi --capture-range-end=repeat -o PROF CMD...
@@ -31,9 +32,6 @@ from pathlib import Path
 SM_ACTIVE = ("sms active", "sm active")
 #: the CUDA calls a range's kernels are launched by: the runtime's, and the driver's (a JIT library's cuLaunchKernel)
 CALLS = ("CUPTI_ACTIVITY_KIND_RUNTIME", "CUPTI_ACTIVITY_KIND_DRIVER")
-#: the shared memory the driver reserves per block on sm_80 and later
-RESERVED_SMEM = 1024
-REG_UNIT = 256
 
 
 def _has(db: sqlite3.Connection, table: str) -> bool:
@@ -84,9 +82,6 @@ class Kernel:
     start: int
     end: int
     blocks: int
-    threads: int
-    registers: int
-    smem: int
 
 
 @dataclass(frozen=True)
@@ -127,11 +122,8 @@ def ranges(db: sqlite3.Connection, prefix: str = "") -> list[Range]:
                 calls[int(tid)].append((int(start), int(corr)))
     for on in calls.values():
         on.sort()
-    kcols = _cols(db, "CUPTI_ACTIVITY_KIND_KERNEL")
-    smem = " + ".join(c for c in ("staticSharedMemory", "dynamicSharedMemory") if c in kcols) or "0"
     by_corr: dict[int, list[Kernel]] = defaultdict(list)
-    for row in db.execute("SELECT correlationId, start, end, gridX * gridY * gridZ, blockX * blockY * blockZ, "
-                          f"registersPerThread, {smem} FROM CUPTI_ACTIVITY_KIND_KERNEL"):
+    for row in db.execute("SELECT correlationId, start, end, gridX * gridY * gridZ FROM CUPTI_ACTIVITY_KIND_KERNEL"):
         corr, *rest = (int(x) for x in row)
         by_corr[corr].append(Kernel(*rest))
     out = []
@@ -143,22 +135,10 @@ def ranges(db: sqlite3.Connection, prefix: str = "") -> list[Range]:
     return out
 
 
-def blocks_per_sm(k: Kernel, card) -> int:
-    """The blocks of `k` one SM of `card` holds at once: the tightest of its warps, registers and shared memory."""
-
-    warps = -(-k.threads // 32)
-    limits = [card.max_blocks_per_sm, card.max_warps_per_sm // max(warps, 1)]
-    if k.registers:
-        per_warp = -(-k.registers * 32 // REG_UNIT) * REG_UNIT
-        limits.append(card.regs_per_sm // (per_warp * warps))
-    limits.append(card.smem_per_sm // (k.smem + RESERVED_SMEM))
-    return max(min(limits), 1)
-
-
 def occupied_ns(k: Kernel, card) -> float:
-    """The cross-check's SM-time of one kernel: its duration times the SMs its blocks occupy."""
+    """The cross-check's SM-time of one kernel: its duration times the most SMs its blocks can occupy, one a block."""
 
-    return (k.end - k.start) * min(card.sms, -(-k.blocks // blocks_per_sm(k, card)))
+    return (k.end - k.start) * min(card.sms, k.blocks)
 
 
 def report(db_path: Path, card, prefix: str = "") -> dict:

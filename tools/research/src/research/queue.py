@@ -42,8 +42,8 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    --collect-only` in a suite
                                                    whose inputs its change touches, or breaks the build of a Lean module that
                                                    is or imports what it changes (on a warm Lean tree: here on a node, else
-                                                   on vy-nebius-cpu-9, else vy-nebius-cpu-5, whatever the tier; refused
-                                                   when neither can build them),
+                                                   on the first node of PREFLIGHT_LEAN_ON that starts it, whatever the tier;
+                                                   refused when none can build them),
                                                    naming the PR on `next` that owns it, or
                                                    drops from a Lean lock it changes a shape.inline premise or shape.frozen
                                                    key `next`'s statements still need (naming each; the sync leaves such a
@@ -627,7 +627,8 @@ class DriveFlags:
     #: none, the lane lands nothing
     lowrisk_excludes: tuple[str, ...] = ()
     #: the task executor after landing (`research.executor`, `drive.Driver`): "off"; "shadow", each tip's task graph enqueued beside
-    #: the after-landing run and their verdicts compared (`research queue shadow-report`); "on", its verdicts alone decide
+    #: the after-landing run and their verdicts compared (`research queue shadow-report`); "on", its verdicts decide, with a run
+    #: of `drive.SLIM_STEPS` alone beside it
     executor: str = "off"
     #: infra's enqueue command, the words of one argv run with no shell (`research.executor.QueueTransport`): it puts
     #: `--priority N --check after-landing:SHA` on the executor's queue; none, each tip "shadow" or "on" enqueues fails, told
@@ -2732,13 +2733,17 @@ def forces_cold(files: Iterable[str]) -> bool:
 
 
 def merged_tree(repo: Path, base: str, head: str, *, plain: bool = True,
-                config: tuple[str, ...] = ()) -> tuple[str | None, list[str], subprocess.CompletedProcess]:
-    """``head`` merged onto ``base`` by `git merge-tree` (no worktree touched), with ``base``'s merge drivers (`--attr-source`;
-    ``config``, git's `-c` options, from `base_drivers` to run them from ``base``'s tools): (the merged tree, the conflicted
-    files, `git merge-tree`'s result).  A merge whose every conflict is in a pin, or in a `.lean` file one side deleted that
-    the other changed only by porting it (`port_deletions`), gives the tree with each pin rebuilt (`repinned`) and each such
-    file deleted, and those files (`taken` tells them apart); one that doesn't merge gives None.  A git without
-    `--attr-source` (before 2.40) merges without the drivers, or with ``plain`` False gives None and its refusal (exit 129)."""
+                config: tuple[str, ...] | None = None) -> tuple[str | None, list[str], subprocess.CompletedProcess]:
+    """``head`` merged onto ``base`` by `git merge-tree` (no worktree touched), with ``base``'s merge drivers (`--attr-source`)
+    run from ``base``'s tools (`base_drivers`, unless ``config`` gives git's `-c` options; drive's clone sits at `checked`'s
+    tip, whose own `merge.py` predates one a member of `next` brings): (the merged tree, the conflicted files, `git
+    merge-tree`'s result).  A merge whose every conflict is in a pin, or in a `.lean` file one side deleted that the other
+    changed only by porting it (`port_deletions`), gives the tree with each pin rebuilt (`repinned`) and each such file
+    deleted, and those files (`taken` tells them apart); one that doesn't merge gives None.  A git without `--attr-source`
+    (before 2.40) merges without the drivers, or with ``plain`` False gives None and its refusal (exit 129)."""
+    if config is None:
+        with base_drivers(repo, base) as config:
+            return merged_tree(repo, base, head, plain=plain, config=config)
     r = _git(repo, *config, f"--attr-source={base}", "merge-tree", "--write-tree", "--name-only", "--no-messages", base, head,
              check=False)
     if r.returncode == 129 and "attr-source" in r.stderr:
@@ -3258,7 +3263,7 @@ SLOT = ("python3", "tools/verity/check/slot.py")
 #: `research queue ready`'s exit when the tier never started: nothing failed, and nothing is marked
 READY_NOT_STARTED = 3
 #: a lane's own test run, which no landing needs (a PR lands on `checked` on a review; the full check after decides `main`)
-LANE_RUN = ('`research run --on vy-nebius-cpu-K --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
+LANE_RUN = ('`research run --on auto --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
             'uv run tools/verity/check/suites.py --changed $(git rev-parse origin/main) --quick"`')
 
 
@@ -3552,11 +3557,11 @@ PREFLIGHT_MIN_FREE = 0.25
 PREFLIGHT_LEAN_MODULES = 40
 PREFLIGHT_LEAN_S = 180.0
 #: where the Lean step builds, whatever the mark's tier, when this machine keeps no warm Lean tree: the first of these nodes that
-#: starts the build (each keeps `build` Lean slots, cpu-9 the most; cpu-1's are congested, and cpu-3 and cpu-8 are stopped).  The
-#: one place to move it
+#: starts the build, each keeping `build` Lean slots, which `research run --on auto` doesn't place by (it takes a pool, whose
+#: cold tree builds nothing in the step's budget).  The one place to move it
 PREFLIGHT_LEAN_ON = ("vy-nebius-cpu-9", "vy-nebius-cpu-5")
-#: the `research run` pool it takes there: none, as `verity lean try --on vy-nebius-cpu-9` runs, since the node's `build` Lean slots
-#: are the gate; a node without them would take its `research` pool
+#: the `research run` pool it takes there: none, since the node's `build` Lean slots are the gate; a node without them would take
+#: its `research` pool
 PREFLIGHT_LEAN_POOL: str | None = None
 #: the merged tree's builder (`lean_changed.py --build FILE...`, on a `build` Lean slot's warm tree), and its last line's prefix
 LEAN_BUILDER, LEAN_BUILD_LINE = "tools/verity/lean/lean_changed.py", "lean-build: "
@@ -4095,8 +4100,11 @@ def lock_drops(repo: Path, base: str, head: str, merged: str | None = None) -> l
     """`dropped_entries` of each lock (`lean-audit.json`, `LEAN_FIXTURES` aside) that ``head``'s change from its merge base with
     ``base`` touches, from ``base`` to ``merged`` (a commit or tree; by default ``head`` merged onto ``base`` as the sync merges
     it, with ``base``'s merge drivers, so `tools/verity/lean/merge.py` merges the locks), each prefixed by the lock's path.  A
-    lock either side lacks is the head's to add or remove, one that doesn't parse is named, and a diff or merge git can't make
-    finds nothing: the train's Lean check still fails on a dropped premise."""
+    drop ``head``'s own lock already makes against that merge base is no refusal: its records run regenerated the lock, and
+    `check.py --update` keeps a premise only while a statement prints it, so a premise it dropped is printed nowhere at the head
+    (a stale entry); only what the merge alone drops is named.  A lock either side lacks is the head's to add or remove, one
+    that doesn't parse is named, and a diff or merge git can't make finds nothing: the train's Lean check still fails on a
+    dropped premise."""
     r = _git(repo, "diff", "--name-only", "--no-renames", f"{base}...{head}", check=False)
     locks = [f for f in r.stdout.splitlines() if posixpath.basename(f) == LEAN_LOCK and not f.startswith(LEAN_FIXTURES)]
     if r.returncode or not locks:
@@ -4109,19 +4117,32 @@ def lock_drops(repo: Path, base: str, head: str, merged: str | None = None) -> l
         if m.returncode not in (0, 1) or not m.stdout.split():
             return []
         merged = m.stdout.split()[0]
-    blobs = _blobs(repo, [f"{c}:{f}" for f in locks for c in (base, merged)])
+    fork = _git(repo, "merge-base", base, head, check=False).stdout.strip()
+    blobs = _blobs(repo, [f"{c}:{f}" for f in locks for c in (base, merged, fork, head) if c])
     out = []
     for f in locks:
         if f"{base}:{f}" not in blobs or f"{merged}:{f}" not in blobs:
             continue
         try:
-            was, now = (json.loads(blobs[f"{c}:{f}"]) for c in (base, merged))
+            was, now, had, has = (json.loads(blobs[k]) if k in blobs else None
+                                  for k in (f"{base}:{f}", f"{merged}:{f}", f"{fork}:{f}", f"{head}:{f}"))
         except ValueError as e:
-            out.append(f"{f}: not JSON on `{BRANCH}` or merged ({e}), so what it drops can't be told")
+            out.append(f"{f}: not JSON on `{BRANCH}`, merged, at the merge base or at the head ({e}), so what it drops can't be "
+                       "told")
             continue
         if isinstance(was, dict) and isinstance(now, dict):
-            out += [f"{f}: {d}" for d in dropped_entries(was, now)]
+            own = _own_drops(had, has)
+            out += [f"{f}: {d}" for d in dropped_entries(was, now) if d not in own]
     return out
+
+
+def _own_drops(fork: object, head: object) -> set[str]:
+    """The `shape.inline` premises `dropped_entries` finds from the lock at the merge base (``fork``) to the head's own
+    (``head``), both parsed: what the head's regeneration dropped itself, empty when either is missing.  A frozen key is no
+    regeneration's to drop, so its drop stays refused."""
+    if not (isinstance(fork, dict) and isinstance(head, dict)):
+        return set()
+    return {d for d in dropped_entries(fork, head) if d.startswith("shape.inline[")}
 
 
 def lock_drop_refusal(drops: list[str], onto: str = BRANCH) -> str:
@@ -4189,8 +4210,7 @@ class Preflight:
         found = self._contained(pr, prs) + self._gates(pr, notes)
         tree, files, r = None, [], None
         if not pr.move:
-            with base_drivers(self.repo, base) as config:
-                tree, files, r = merged_tree(self.repo, base, pr.head, config=config)
+            tree, files, r = merged_tree(self.repo, base, pr.head)
         if pr.move:
             notes.append(f"the merged tree's checks: a move ({pr.move}), which drive's sync regenerates on the tip below it and "
                          f"refuses there unless {MOVE_CHECK} certifies it")
@@ -4567,7 +4587,7 @@ class MarkOnly:
 #: the Lean fast path's result kind (`lean_changed.py --records`), and the Lean check's step in a check's result
 FAST_KIND, LEAN_AUDIT_STEP = "lean-fast/v1", "lean-audit"
 #: the fast path's command, which `RecordsGate` names for each package it can't vouch for
-RECORDS_COMMAND = ("research run --on vy-nebius-cpu-1 --pool research --project verity --source . --cwd clone --declared-output "
+RECORDS_COMMAND = ("research run --on auto --mem-gb 32 --max-min 120 --project verity --source . --cwd clone --declared-output "
                    "'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records {pkg} --update")
 #: where a records run keeps, under its `--out`, PKG's record `--update` wrote when it differs from the commit's lock (each
 #: package's, PKG's and a requirer's, is also under `record/<path>/`)
