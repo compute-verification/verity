@@ -2,7 +2,7 @@
 
 From honest runs on the target hardware it picks, per boundary link:
 - the egress allocation r;
-- the clock-sync set Σ_sync, the (δ, ρ) values a window may declare;
+- the clock-sync set 𝒮_sync, the (Δ_sync, r_sync) values a window may declare;
 - the ingress grid.
 
 It reports the honest miss rate, the costs and the capacity. The protocol fixes τ_b, the frame size and the security
@@ -96,17 +96,17 @@ def fraction_at_most(x: Fraction | float, max_denominator: int = MAX_RHO_DENOMIN
 def choose_sync_set(latencies: Sequence[int], low_rates: Sequence[Fraction], typical_rates: Sequence[Fraction],
                     n_delta: int = 16, n_rho: int = 8, typical_weights: Sequence[int] | None = None) -> SyncSet:
     """Σ_sync:
-    - **δ** runs from 0 up to the p99.99 first-frame latency, in `n_delta` steps;
-    - **ρ** runs geometrically from the p0.01 of `low_rates` up to the p50 of `typical_rates` weighted by
-      `typical_weights`, in `n_rho` values, each rounded down to a fraction with denominator at most 1024. ρ is below 1
-      for sessions slower than one frame per bucket.
+    - **Δ_sync** runs from 0 up to the p99.99 first-frame latency, in `n_delta` steps;
+    - **r_sync** runs geometrically from the p0.01 of `low_rates` up to the p50 of `typical_rates` weighted by
+      `typical_weights`, in `n_rho` values, each rounded down to a fraction with denominator at most 1024. r_sync is
+      below 1 for sessions slower than one frame per bucket.
 
     `calibrate` passes one rate per configuration in each: its sessions' p0.01 production rate in `low_rates`, their
     p50 rate in `typical_rates`, and its windows in `typical_weights`, which is 1 + its largest anchor // T, the windows
-    its egress frames span. The top ρ is then the median over windows (`weighted_percentile`): the least typical rate t
-    such that the configurations with a typical rate at most t span at least ⌈W/2⌉ of all W windows. A configuration of
-    n windows counts as n configurations of one window each, so cutting a run into more configurations (at a dropped
-    window, say) doesn't move it. Without `typical_weights`, every configuration counts once."""
+    its egress frames span. The top r_sync is then the median over windows (`weighted_percentile`): the least typical
+    rate t such that the configurations with a typical rate at most t span at least ⌈W/2⌉ of all W windows. A
+    configuration of n windows counts as n configurations of one window each, so cutting a run into more configurations
+    (at a dropped window, say) doesn't move it. Without `typical_weights`, every configuration counts once."""
     hi = math.ceil(percentile(latencies, 99.99)) if latencies else 0
     step = max(1, math.ceil(hi / max(1, n_delta - 1)))
     deltas = tuple(i * step for i in range(n_delta))
@@ -125,18 +125,19 @@ def choose_syncs(links: Sequence[tuple[Sequence[LogicalFrame], Sequence[int]]], 
     """Replay the honest prover's choice for one configuration, window by window. `links` holds each egress link's
     frames and their ready buckets. Under one clock per spatial unit every egress link reads the window's sync, so the
     prover declares one value per window: the value met on every link with the least total hand time over the window's
-    frames on all links, which is their total shaping delay; ties go to the smaller δ, then the larger ρ. (Taking the
-    smallest δ first would pick a slow ρ to save one bucket, and hold every later frame for seconds.) A window that no
-    value meets on every link is a miss, which is a violation; the replay continues with the most lenient value. Returns
-    the chosen syncs, each link's actual hand times (a late frame goes when ready, delaying those behind it) and the
-    number of missed windows.
+    frames on all links, which is their total shaping delay; ties go to the smaller Δ_sync, then the larger r_sync.
+    (Taking the smallest Δ_sync first would pick a slow r_sync to save one bucket, and hold every later frame for
+    seconds.) A window that no value meets on every link is a miss, which is a violation; the replay continues with the
+    most lenient value. Returns the chosen syncs, each link's actual hand times (a late frame goes when ready, delaying
+    those behind it) and the number of missed windows.
 
     Each link's frames are in the Program's canonical order. For a batching engine that order is step-major, so a long
     session anchored in one window interleaves with sessions anchored in later ones, and anchors need not be monotone.
     On each link, each window's first frame must come after the first frame of every earlier window (requests are
-    admitted in order). While window w is chosen, later windows take their most eager value (least δ, largest ρ). That
-    only lowers hand times, so a window found met stays met once later windows are fixed. A larger δ or a smaller ρ
-    only raises hand times, so a value met on every link exists exactly when the most lenient one is met on each."""
+    admitted in order). While window w is chosen, later windows take their most eager value (least Δ_sync, largest
+    r_sync). That only lowers hand times, so a window found met stays met once later windows are fixed. A larger Δ_sync
+    or a smaller r_sync only raises hand times, so a value met on every link exists exactly when the most lenient one is
+    met on each."""
     wins = [[f.anchor // window_buckets for f in frames] for frames, _ in links]
     firsts: list[dict[int, int]] = []
     lasts: list[dict[int, int]] = []
@@ -184,7 +185,7 @@ def choose_syncs(links: Sequence[tuple[Sequence[LogicalFrame], Sequence[int]]], 
                 k0[i] = firsts[i][w]
         best: tuple[int, int, int, ClockSync] | None = None
         for i_rho, rho in enumerate(rhos):
-            # a larger δ only raises hand times, so the least met δ for this ρ is found by bisection
+            # a larger Δ_sync only raises hand times, so the least met Δ_sync for this r_sync is found by bisection
             if (c := cost(w, ClockSync(deltas[-1], rho))) is None:
                 continue
             lo, hi, c_hi = 0, len(deltas) - 1, c

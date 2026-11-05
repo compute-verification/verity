@@ -4,7 +4,7 @@ The Program gives every real frame an **anchor** and a **logical index**:
 - the anchor is the recorded bucket, on the global bucket clock, of the request it answers;
 - the logical index λ is its position within its session, in the Program's canonical gate order.
 
-A window declares one clock-sync value, `ClockSync(delta, rho)`, from the protocol's set `SyncSet`. The rate ρ is a
+A window declares one clock-sync value, `ClockSync(delta, rho)`, from the protocol's set `SyncSet`. The rate r_sync is a
 positive fraction of frames per bucket, and may be below 1 for sessions slower than one frame per bucket. A frame is
 eligible at `anchor + delta + ⌊λ / rho⌋`, using the sync of the window that holds its anchor. The sender's shaper hands frames to
 the certifier in canonical order, each at `h(k) = max(eligible(k), h(k−1))`. The certifier's own rule (FIFO at the allocation
@@ -25,8 +25,8 @@ from verity.core.protocols.certifier.grid import Grid, GridParams, Record, Certi
 
 @dataclass(frozen=True, slots=True, order=True)
 class ClockSync:
-    """One window's clock-sync advice: the offset δ (buckets after the anchor), and the rate ρ (frames per bucket
-    within a session, a positive fraction)."""
+    """One window's clock-sync advice: the offset Δ_sync (`delta`, buckets after the anchor), and the rate r_sync
+    (`rho`, frames per bucket within a session, a positive fraction)."""
 
     delta: int
     rho: Fraction
@@ -86,7 +86,7 @@ class LogicalFrame:
 
 
 def eligible(frame: LogicalFrame, sync: ClockSync) -> int:
-    """The frame's logical release bucket: `anchor + δ + ⌊λ / ρ⌋`."""
+    """The frame's logical release bucket: `anchor + delta + ⌊λ / rho⌋`."""
     return frame.anchor + sync.delta + (frame.index * sync.rho.denominator) // sync.rho.numerator
 
 

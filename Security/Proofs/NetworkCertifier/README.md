@@ -15,7 +15,7 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                LogicalFrame, eligible, handingBuckets, enqueued, expectedRow) and the constant-rate
                                Program it gives (constantRate)
 ../../Definitions/NetworkCertifier/Assumptions.lean     trusted: the named hypotheses W2–W6 (W4's allocation among them)
-                               and J
+                               and `JitterBounded`
 ../../Definitions/NetworkCertifier/Guarantees.lean      trusted: each guarantee as a `def G : Prop` (Proposition 2, Theorem 3, Theorem 3 for
                                the constant-rate Program, the ingress bound)
 ../../Definitions/NetworkCertifier/AdviceV1.lean  trusted: advice v1's charge, `ChargeCount_v1{N}`'s reference one for one: the
@@ -168,11 +168,11 @@ part of the theorem. It is exact under fixed-length frames (W3): N frames of B b
 `Cs` all of them, `log2 #Cs` is the `N·B` bits read.
 
 **The shipped schedule** (`NetTiming.Protocol.Schedule`). `constantRate T W ss frames` is `schedule.py`'s Program:
-windows of `T` buckets, `W` of them with advice, one clock-sync value of `ss` (Σ_sync) per window, and the Program's
+windows of `T` buckets, `W` of them with advice, one clock-sync value of `ss` (𝒮_sync) per window, and the Program's
 frames, anchors and logical indices `frames ins c ℓ`, read from the ingress and the content advice. A frame is eligible
-at `anchor + δ + ⌊λ/ρ⌋`, handed at `h(k) = max(eligible(k), h(k−1))`, and released by `fifoGrid`. Its advice type is
-`Ac × (Fin W → ss.Elem)`, so the sync is its only timing advice by definition, and Theorem 3's clock-sync form holds for
-it with no dataflow hypothesis (`Guarantees.EncardAccSeqsLeConstantRate`).
+at anchor + Δ_sync + ⌊λ/r_sync⌋, handed at `h(k) = max(eligible(k), h(k−1))`, and released by `fifoGrid`. Its advice
+type is `Ac × (Fin W → ss.Elem)`, so the sync is its only timing advice by definition, and Theorem 3's clock-sync form
+holds for it with no dataflow hypothesis (`Guarantees.EncardAccSeqsLeConstantRate`).
 
 ## The trusted layer (`NetTiming.Assumptions`)
 
@@ -185,17 +185,17 @@ it with no dataflow hypothesis (`Guarantees.EncardAccSeqsLeConstantRate`).
 | W4 allocation | `Allocated w r` | link `ℓ`'s every recorded row holds at most `r ℓ` real frames |
 | W5 untimed status | `UntimedStatus w winEnd` | a status other than complete appears only at a window's last step |
 | W6 fail-closed | `FailClosed w winEnd` | after a fault the window's later rows are empty, and a status fails at the window's end |
-| J jitter | `JitterBounded w D` | every step's jitter class is below D |
+| jitter | `JitterBounded w D` | every step's jitter class is below D |
 
-For the ingress bound the same `Prop`s are read inward: `Regenerates` is W2 for what enters X, `Packed` and
-`Allocated` are W4 for the rows the ingress links release into X, and `JitterBounded` is J for their release times.
+For the ingress bound the same `Prop`s are read inward: `Regenerates` is W2 for what enters X, `Packed` and `Allocated`
+are W4 for the rows the ingress links release into X, and `JitterBounded` bounds their release times' jitter.
 
-`NetTiming.SecurityProofs.Sanity` shows every hypothesis is satisfiable: one certifier meets W2–W6 and J together, a
-Program with no timing advice accepts exactly one secret despite a reacting operator (`zP_accepts_one`), and
+`NetTiming.SecurityProofs.Sanity` shows every hypothesis is satisfiable: one certifier meets W2–W6 and `JitterBounded`
+together, a Program with no timing advice accepts exactly one secret despite a reacting operator (`zP_accepts_one`), and
 `ingress_witness` meets every hypothesis of `Guarantees.EncardIngressDecodableLe` at once, with a bound it meets exactly
-(`ingress_witness_tight`).
-`allocated_witness` meets them again with an allocation below the slot count (`r = 1 < S = 2`): its 8 messages meet
-that bound exactly, below the 27 of `r = S` (`allocated_witness_tight`), so `Allocated` has content.
+(`ingress_witness_tight`). `allocated_witness` meets them again with an allocation below the slot count
+(`r = 1 < S = 2`): its 8 messages meet that bound exactly, below the 27 of `r = S` (`allocated_witness_tight`), so
+`Allocated` has content.
 
 ## The records
 
@@ -302,7 +302,7 @@ these say the program computes what the definitions above define. Each is stated
 definitions, relating them by their fields, since `security` requires nothing but Mathlib
 (`tests/test_lean_packages.py`) and so `Definitions/` cannot name the program:
 
-- `CodeExpectedRow`: `NetworkCertifier.expectedRow` is `expectedRow` for clock syncs with the same δ and ρ and frames with the same
+- `CodeExpectedRow`: `NetworkCertifier.expectedRow` is `expectedRow` for clock syncs with the same `delta` and `rho` and frames with the same
   payloads, anchors and logical indices (the difftest's `rows`, `diff` and `mismatch`);
 - `CodeAcceptedConstantRate`: `NetworkCertifier.Accepted` of `NetworkCertifier.constantRate` is `Accepted` of `constantRate` for observations
   with the same rows and complete statuses, operators giving the same ingress on them, related frames and advice naming
@@ -353,11 +353,11 @@ lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The wit
 1. **Steps are buckets across all of ∂X.** The note states its bounds per link-window. The guarantees count steps, and
    Theorem 1(b)'s tree lemma is still stated per step. The per-window ones read the horizon of the run's first `m` whole
    windows of `T` buckets, `n = m·T`, each with its parent's hypotheses at that horizon and no other: the shipped
-   schedule's bound is `#Ac · (#Σ_sync · D^T)^m` (`EncardAccSeqsLeConstantRatePerWindow`,
+   schedule's bound is `#Ac · (ss.size · D^T)^m` (`EncardAccSeqsLeConstantRatePerWindow`,
    `EncardDecodableLeConstantRatePerWindow`), and the ingress bound `(∏_ℓ (r ℓ + 1)^T · D^T)^m` per content assignment
    (`EncardIngressObsDecodableLePerWindow`, and its `Contents` version). The egress factor per window is the bound's,
    not a count per window: content advice and an earlier window's sync can first show in a later window, so one window
-   may continue a given prefix in more than `#Σ_sync · D^T` ways. So the egress bound is cumulative from the run's
+   may continue a given prefix in more than `ss.size · D^T` ways. So the egress bound is cumulative from the run's
    first window, and a temporal unit that starts later is not bounded by its own windows. Ingress is not affected:
    `Packed`, `Allocated` and `JitterBounded` bound every step's branching whatever came before.
 2. **The Program reads ingress up to and including step t.** The note's W1 lag allows only ingress before t. This is
@@ -392,17 +392,18 @@ The ingress bound adds these:
     modelled. Over the first `m` whole windows each execution phase contributes `(r ℓ + 1)^T`
     (`EncardIngressObsDecodableLePerWindow`).
 12. **No Program, no clock.** The bound reads no Program and no advice: the outside sender chooses when frames arrive,
-    so no clock pins ingress timing. Jitter on the inward release adds `D^n` (J, `D = 1` when tested ideal). W3's frame
-    length and the FIFO rule are not used; the FIFO certifier attains the bound (`EncardFifoGrids`, read for the ingress
-    grid).
+    so no clock pins ingress timing. Jitter on the inward release adds `D^n` (`JitterBounded`, `D = 1` when tested
+    ideal). W3's frame length and the FIFO rule are not used; the FIFO certifier attains the bound (`EncardFifoGrids`,
+    read for the ingress grid).
 
 The constant-rate Program adds these:
 
-13. **Exactly `schedule.py`.** Each definition in `NetTiming.Protocol.Schedule` names the Python it mirrors, and computes
-    the same rows: δ is a `ℕ`, ρ a positive `Rat`, `⌊λ/ρ⌋` is Python's `(λ · den) // num`, a frame anchored past the last
-    window with advice is handed at `max(last, W·T, anchor)`, and frames handed at or after the horizon `W·T` are never
-    enqueued. Past the horizon, where Python has no grid, the queue drains with nothing enqueued. The audit checks `W`
-    windows, so the four counts take `n ≤ W·T` (`hn`): every step they count is a step the audit checks.
+13. **Exactly `schedule.py`.** Each definition in `NetTiming.Protocol.Schedule` names the Python it mirrors, and
+    computes the same rows: `delta` is a `ℕ`, `rho` a positive `Rat`, ⌊λ/r_sync⌋ is Python's `(λ · den) // num`, a frame
+    anchored past the last window with advice is handed at `max(last, W·T, anchor)`, and frames handed at or after the
+    horizon `W·T` are never enqueued. Past the horizon, where Python has no grid, the queue drains with nothing
+    enqueued. The audit checks `W` windows, so the four counts take `n ≤ W·T` (`hn`): every step they count is a step
+    the audit checks.
 14. **The frames are the Program's computation, left abstract.** `frames ins c ℓ` gives link `ℓ`'s frames in canonical
     order, with their content, anchors and logical indices, from the ingress and the content advice `c`. Every guarantee
     holds for every such function, so it covers any way the Program fixes anchors (the recorded bucket of the request a
@@ -411,6 +412,6 @@ The constant-rate Program adds these:
     audit enforces it (`Audit.syncs`). A clock per link is a different advice type, covered by
     `EncardAccSeqsLeAdvice` directly.
 16. **The allocation is the slot count `S`** on every egress link, as in Python, where a row has `allocation` slots.
-17. **In-set advice.** The advice ranges over `ss.Elem`, the values of Σ_sync: a run whose declared sync is outside the
+17. **In-set advice.** The advice ranges over `ss.Elem`, the values of 𝒮_sync: a run whose declared sync is outside the
     set is an `advice` violation and rejected, so its advice is never counted. `ExpectedRowCausal` takes any clock-sync
     values, in the set or not, which is what the audit's verdicts on earlier windows rely on.

@@ -86,19 +86,18 @@ id 128001. It runs at a given UTC time when asked. The endpoint is started by ha
 staging at its default, which that exclusion needs. Its `requests.jsonl` and `advice_trace.jsonl` hold request values
 (prompt and streamed ids; prompt lengths, sampling, rows and emitted ids) and stay on the served node, so the chain's
 endpoint step runs there: `io` writes the kept warden run's certified I/O to a 0600 file in the kept fetch's directory,
-and `endpoint`, a run on the served node given that file over a private route, checks the endpoint's trace against it
-in a 0700 copy whose `requests.jsonl` is rebuilt from `request_users.jsonl` (each engine request's `engine_id` and its
+and `endpoint`, a run on the served node given that file over a private route, checks the endpoint's trace against it in
+a 0700 copy whose `requests.jsonl` is rebuilt from `request_users.jsonl` (each engine request's `engine_id` and its
 warden user) and the certified I/O. Its art is the step's report, `windows.jsonl` and `serve.json`; it writes nothing
 unless `serve.json` shows the endpoint's flags and no published file holds a prompt's ids, a trace's arrive, step or
 finish record, or a request-valued field. `chain` reads that report as the served node's. The session's fetch, with
 `witness/`, stays in a 0700 directory outside the run dir, and `$OUT` gets only the bundle less `witness/` and the
-session's outcome. `chain` runs the chain's warden path on the kept fetch, and only from a tree with the record's leak
-guard. `session --gate local` is the dry rehearsal: this tree's gate on a scratch host, with `demo_stub.py serve` as
-the endpoint. `chain --coins gate` draws the scan's units on the gate's coins on the auditor's side, the node the chain
-runs on, which the challenger's coin link reaches through that node's own line of
-`/etc/vy/coin-ports` (ports 7821-7830). It refuses the served node as the draw's peer, since the gate key and the
-warden run's witness never go on the prover's machine. Without the gate's coins the chain draws on the verifier's
-(`--coins verifier`, the default).
+session's outcome. `chain` runs the chain's active-warden path on the kept fetch, and only from a tree with the record's
+leak guard. `session --gate local` is the dry rehearsal: this tree's gate on a scratch host, with `demo_stub.py serve`
+as the endpoint. `chain --coins gate` draws the scan's units on the gate's coins on the auditor's side, the node the
+chain runs on, which the challenger's coin link reaches through that node's own line of `/etc/vy/coin-ports` (ports
+7821-7830). It refuses the served node as the draw's peer, since the gate key and the warden run's witness never go on
+the prover's machine. Without the gate's coins the chain draws on the verifier's (`--coins verifier`, the default).
 
 `certifier_piece.py` is the network certifier's piece of `benchmarks/one_stage/served_verdicts.sh`. Its `front`
 (`CERTIFIER_FRONT`) runs before that run's requests: the gate's scan rehearsal sends one group of the window circuit's
@@ -106,7 +105,7 @@ class (4 prompts of 24 ids, 4 ids out, `--window-per-group`) to serve-openai, al
 closes it into the run's earliest window, the one the run audits, and the gate's fetch is kept in the serve dir's
 `private/certifier`. A request's answer must be whole D·τ after its admission, 2.7 s at the scan's 100 ms tick; for a
 slower endpoint `--bucket-ms` runs the scan at a longer tick, up to 4000 ms (108 s). Its `piece` (`CERTIFIER_CMD`)
-runs the chain's warden path on that fetch with the serve dir's endpoint records, run dir and quarantine private
+runs the chain's active-warden path on that fetch with the serve dir's endpoint records, run dir and quarantine private
 beside the fetch, and answers with `network-period check` on the rows form of the scan's
 link-window (`scan_period.rows_case`). The answer is accept only when the chain accepted, every request
 of the audited window is a certified one inside that link-window, and the Lean check accepts; beside that answer goes
@@ -219,16 +218,16 @@ A run's figures are its published Attempt's. The report's `d1` lists, per sampli
 and the scan accepted.
 
 The terms, in the generator reading of the scan's statement (each proof block's registered rows its boundary values):
-- The schedules and the fail cells, ⌈log2(cap_c + 1)⌉ each a connection (`capsTerm`, charged twice, as
-  `#S_s ≤ ∏_c (cap_c + 1)`; the record's `terms.cap_per_request`). Here cap_c bounds `WardenSchedule.cells c`, the
-  egress cells of connection c's lane, which is egress_cells. The endpoint's slot count isn't a term of the network
-  certifier's schedule: it enters the compute audit's terms, which go into JointPeriodLive.
+- k_sched and k_fail, ⌈log2(cap + 1)⌉ each a connection (`capsTerm`, charged twice, as k_fail and as k_sched read as
+  `Ss.encard ≤ ∏ c, (cap c + 1)`, a known overcount; the record's `terms.cap_per_request`). Here cap bounds
+  `WardenSchedule.cells c`, the egress cells of the connection's lane, which is egress_cells. The endpoint's slot count
+  isn't a term of the network certifier's schedule: it enters the compute audit's terms, which go into JointPeriodLive.
 - The free inputs (`terms.free`): as registered, the tied audit's slot entries, NR·T / EVERY entries of NE bits
   (`ingress_scan.entry_bits`) a sampling block; or an entry's 33 + KO·IDB bits a request if `prog` is an input only at
   its anchored entries.
-- No faulty term with every proof block drawn, and D_j = 1, so the jitter term is 0: assumed (J), `NetTiming.JitterBounded`,
-  not met at D_j = 1 until a run shows the warden's written buckets tell a receiver no more than an idle one. The
-  warden hands each bucket to a pacer that releases it at a time fixed before the bucket is made
+- k_skip is 0 with every proof block drawn, and d_jit = 1, so the jitter term is 0: assumed (`JitterBounded`),
+  `NetTiming.JitterBounded`, not met at d_jit = 1 until a run shows the warden's written buckets tell a receiver no more
+  than an idle one. The warden hands each bucket to a pacer that releases it at a time fixed before the bucket is made
   (`warden.Warden(paced=…)`, `warden_serve.py --paced-ms`).
 
 Each entry carries a read bit (`ingress_scan.entry_layout`: an occupied slot no Program reads is refused). Bucket t
@@ -250,8 +249,8 @@ K charges to the sampling block's term (`tiedAudits`). The egress tie moves the 
 tied audit's inputs; K is unchanged in what it bounds, and the registered reading's free term is those slot entries.
 
 The two forms:
-- The pooled form (`PooledLeakAccepted`) adds Fmax = ⌈ln(1/δ)⌉ incorrect proof blocks of b = NS + NV bits, and
-  Fmax·log2(N + 1) (the record's `terms.fmax` and `terms.b`). The form is conditional: `hesc` and `hleak` await
+- The pooled form (`PooledLeakAccepted`) adds its k_skip: Fmax = ⌈ln(1/δ)⌉ incorrect proof blocks of `b` = NS + NV bits,
+  and Fmax·log2(`N` + 1) (the record's `terms.fmax` and `terms.b`). The form is conditional: `hesc` and `hleak` await
   `SampledKSLive` and P2.
 - The per-period form (`PeriodLeakAccepted`) has no δ term with every proof block drawn.
 - Both are proved: `NetTiming.SecurityProofs.PeriodLeakAccepted` and `NetTiming.SecurityProofs.PooledLeakAccepted`.
@@ -280,8 +279,8 @@ K also rests on these conditions:
   `NetworkCheck.Period` doesn't check.
 - The scan proves sampling block 0. A monitoring period's figures scale its per-sampling-block and per-request terms at
   the run's rate.
-- The jitter term is 0 at D_j = 1, assumed (J), not met until a run shows the paced warden's written buckets tell a
-  receiver no more than an idle one.
+- The jitter term is 0 at d_jit = 1, assumed (`JitterBounded`), not met until a run shows the paced warden's written
+  buckets tell a receiver no more than an idle one.
 - An untied compute audit's (the loop's) free inputs don't enter K: its δ goes into JointPeriodLive's sum. The tied
   audit's (the `SlotEntry_v1` stand-in's) are the sampling block's free inputs above.
 

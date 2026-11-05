@@ -41,9 +41,9 @@ the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
      warden's D·τ, or cut) certified no served answer, so there is none for the protocol to reject (`rehearsed`).
   2. The window's requests are certified ones: each window request's user names one of the warden's certified
      requests (`warden_chain.io`), with the same prompt and streamed ids; else reject.
-  3. The chain (`served_session.py chain`: chain_record.sh's warden path, certs, endpoint, N2, tie and scan) on the
-     kept run, with the serve dir's endpoint records (`ENDPOINT`, copied to SERVE_DIR/`PRIVATE`/RUN/endpoint), its run
-     dir and quarantine under SERVE_DIR/`PRIVATE`/RUN, so nothing of the witness reaches a record. N2 and the tie
+  3. The chain (`served_session.py chain`: chain_record.sh's active-warden path, certs, endpoint, N2, tie and scan) on
+     the kept run, with the serve dir's endpoint records (`ENDPOINT`, copied to SERVE_DIR/`PRIVATE`/RUN/endpoint), its
+     run dir and quarantine under SERVE_DIR/`PRIVATE`/RUN, so nothing of the witness reaches a record. N2 and the tie
      take every link-window of a run of at most 8 (`sized`). Its report's verdict ``accepted`` goes on; any other is a
      reject with its why.
   4. The period's link-window is the scan's (``answers.json``'s one window): every window request's release and

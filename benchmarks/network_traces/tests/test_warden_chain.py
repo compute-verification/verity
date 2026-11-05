@@ -1,13 +1,13 @@
-"""The network chain on an active warden's run (`warden_chain`, `chain_record`'s warden path), here the synthetic run
-published as `warden_serve.Publisher` publishes a served one, in the gate's layout (its witness under ``witness/``, its
-public files under ``out/``, ``certificates.jsonl`` as `auditor.warden_outcome` writes it): the certificates step
+"""The network chain on an active warden's run (`warden_chain`, `chain_record`'s active-warden path), here the synthetic
+run published as `warden_serve.Publisher` publishes a served one, in the gate's layout (its witness under ``witness/``,
+its public files under ``out/``, ``certificates.jsonl`` as `auditor.warden_outcome` writes it): the certificates step
 reruns the warden's own check and holds the public certificates to the certified lines, refusing a changed one and a
 changed cell; the certified I/O read off the cells is the requests and responses served; N2's link is the warden's
 (both heads at its digest, no sync, charge 0) and its references expect honest accepted and tampered refused on its
 signed digest alone. A certifier rehearsal's run (its records through active.Proxy) is refused by name
 (`warden_chain.PROXY`) by every reader: its files, or a certifier's deployment.json in a warden's run. The report on
-the warden path requires the certificates, the endpoint, the tie, N2 and the scan, names its stubs, and refuses a step
-whose input is a certifier rehearsal's or another warden run's."""
+the active-warden path requires the certificates, the endpoint, the tie, N2 and the scan, names its stubs, and refuses a
+step whose input is a certifier rehearsal's or another warden run's."""
 
 from __future__ import annotations
 
@@ -149,8 +149,8 @@ def test_n2_on_a_sampled_warden_period_tampers_every_window_and_proves_another_s
 
 
 def _steps(tmp_path, run: Path) -> SimpleNamespace:
-    """The warden path's step outputs on `run`: its real certificates, and the endpoint, the tie, N2 and the scan as
-    their drivers write them."""
+    """The active-warden path's step outputs on `run`: its real certificates, and the endpoint, the tie, N2 and the scan
+    as their drivers write them."""
     def put(name, doc):
         (tmp_path / name).write_text(json.dumps(doc))
         return str(tmp_path / name)
@@ -173,8 +173,8 @@ def _steps(tmp_path, run: Path) -> SimpleNamespace:
         job=put("job.json", {"path": cr.WARDEN, "rc": {"n2": "0", "scan": "0", "tie": "0"}}), warden_run=str(run))
 
 
-def test_the_warden_path_requires_every_step_on_one_warden_run_and_refuses_a_certifier_rehearsals(tmp_path,
-                                                                                                certifier_run):
+def test_the_active_warden_path_requires_every_step_on_one_warden_run_and_refuses_a_certifier_rehearsals(
+        tmp_path, certifier_run):
     steps = _steps(tmp_path, gate_run(tmp_path / "run"))
     got = cr.report(steps)
     assert got["verdict"] == "accepted" and got["stubbed"] == list(cr.WARDEN_STUBBED)
@@ -182,7 +182,7 @@ def test_the_warden_path_requires_every_step_on_one_warden_run_and_refuses_a_cer
     assert got["steps"]["certificates"]["clock_certificates"] == 0 and got["d1"]["acc"] == [True] * sz.W63.windows
     assert got["steps"]["n2"]["clocks"]["source"] == "none"
     md = cr.markdown(got)
-    assert "on the warden path" in md and "| tie | accepted |" in md and "certified I/O" in md
+    assert "on the active-warden path" in md and "| tie | accepted |" in md and "certified I/O" in md
     ep = json.loads(Path(steps.endpoint).read_text())
     Path(steps.endpoint).write_text(json.dumps(ep | {"at": cr.SERVED_NODE}))
     served = cr.report(steps)

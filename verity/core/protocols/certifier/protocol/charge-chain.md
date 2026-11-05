@@ -39,7 +39,8 @@ leaves the scan's chain as it is.
 - ``cin`` and ``cout`` are the proof block's reads of `replay-charge` rows 0 and 1 (`charge_chain.reads()`).
 - Its charge is `charge_chain.build_link(C, D, book, cin, cout, en, bits)`, `ChargeLink_v1{D}`, over the decisions
   the window loads (next section). `book` is `book_fields(D)`, the public tables without the carry. `bits` are `adv`'s
-  D decisions, and en_i = i < its `count`. Its ok is the verdict's `code` bit, and its bits are held to c_w (`charge`).
+  D decisions, and en_i = i < its `count`. Its ok is the verdict's `code` bit, and its bits are held to the cap ℓ_a,j
+  (`charge`).
 - The verifier runs `charge_chain.check_chain` on the charge rows' openings.
 - The prover commits each window with `commit_window(program, book, carry', registration, carry=previous)`.
 
@@ -67,7 +68,7 @@ a context or a code position.
   proof block. There is no segment and no position: `ArithCountStep` counts the bits a segment would hold, so the slice
   has no ``seg`` and calls neither `ArithEncodeStep_v1` nor `ArithEncodeFinish_v1`.
 - **The end check** is in the same proof block: its ok (each model's and the count's, the finish's, and carry' = row 1)
-  joins ``code``, and bits ≤ c_w is ``charge``. `ReplayClose` checks no charge.
+  joins ``code``, and bits ≤ ℓ_a,j is ``charge``. `ReplayClose` checks no charge.
 - **The reference** is `charge_chain.reference_link` (`arith_encode.reference_charge` with carry' = row 1), and the
   circuit is `build_link`. The replay's 228 carried bits (coder 68, KT counts 3 × 24 each for n0 and n1, `pc` 2,
   position 14) become 0 bits in the state row, and the chain's rows don't change.
@@ -110,32 +111,32 @@ The window's charge is the bits counted, the length of `code_v1`'s segment for t
 `code_v1._State`'s step and index, each + 1, so they start at 0.
 
 **An integer** v ∈ [0, hi] under its table's frequencies f is `code.Binned.put(v, 0, hi)` (`binned_symbols`):
-- **The bin.** Let j = bitlen(v), with bitlen(0) = 0, and top = bitlen(hi). The table is restricted to bins 0 … top,
+- **The bin.** Let e = bitlen(v), with bitlen(0) = 0, and top = bitlen(hi). The table is restricted to bins 0 … top,
   each with f_i ≥ 1, and the escape drops out because nothing feasible lies outside them. So the total is
-  T = Σ_{i ≤ top} f_i ≤ 2^16, and the bin's symbol is (Σ_{i<j} f_i, f_j, T).
-- **The offset.** u = v − a_j is uniform over the bin's n_j = min(2^j − 1, hi) − a_j + 1 values, with a_0 = 0 and
-  a_j = 2^(j−1). It is coded as `code.put_uniform(u, n)`:
+  f_tot = Σ_{i ≤ top} f_i ≤ 2^16, and the bin's symbol is (Σ_{i<e} f_i, f_e, f_tot).
+- **The offset.** u = v − lo_e is uniform over the bin's n_e = min(2^e − 1, hi) − lo_e + 1 values, with lo_0 = 0 and
+  lo_e = 2^(e−1). It is coded as `code.put_uniform(u, n)`:
   - n ≤ 1: nothing;
   - 1 < n ≤ 2^16: (u, 1, n);
   - n > 2^16: put_uniform(⌊u / 2^15⌋, ⌊(n − 1) / 2^15⌋ + 1), then (u mod 2^15, 1, 2^15).
 
-| value | hi | its table's bins in the proof block | offset steps by bin j |
+| value | hi | its table's bins in the proof block | offset steps by bin e |
 |---|---|---|---|
-| a count over S slots (n_arrived, n_hits, n_order) | the book's cap for it | 0 … bitlen(S) | j ≤ 1 none; else one, n_j = 2^(j−1) |
+| a count over its slots (n_arrived, n_hits, n_order) | the book's cap for it | 0 … bitlen(slots) | e ≤ 1 none; else one, n_e = 2^(e−1) |
 | n_resumes, n_lag | the book's cap | 0 | none |
-| a hit | 2^16 (`hit_units`) | 0 … 17 | j ≤ 1 none; 2 … 16 one; 17 none |
-| a gap | 2^24 (`gap`) | 0 … 25 | j ≤ 1 none; 2 … 17 one; 18 … 24 two; 25 none |
-| a rank step | 2^25 + 1 (2·`index` + 1) | 0 … 26 | j ≤ 1 none; 2 … 17 one; 18 … 25 two; 26 one (n = 2) |
+| a hit | 2^16 (`hit_units`) | 0 … 17 | e ≤ 1 none; 2 … 16 one; 17 none |
+| a gap | 2^24 (`gap`) | 0 … 25 | e ≤ 1 none; 2 … 17 one; 18 … 24 two; 25 none |
+| a rank step | 2^25 + 1 (2·`index` + 1) | 0 … 26 | e ≤ 1 none; 2 … 17 one; 18 … 25 two; 26 one (n = 2) |
 
-- **T.** T is always the sum to the cap's top bin, even when the proof block holds fewer bins.
-- **A count's offset.** The book's cap for a count is at least 2^bitlen(S) − 1 (`window_book` refuses one that isn't), so
-  n_j = 2^(j−1) for every bin a count of at most S reaches. The proof block uses 2^bitlen(S) − 1 for hi, with the same
-  n_j.
-- **A wide offset's first chunk.** When n_j = 2^(j−1) > 2^16, that chunk is (⌊u / 2^15⌋, 1, 2^(j−16)).
+- **f_tot.** f_tot is always the sum to the cap's top bin, even when the proof block holds fewer bins.
+- **A count's offset.** The book's cap for a count is at least 2^bitlen(slots) − 1 (`window_book` refuses one that
+  isn't), so n_e = 2^(e−1) for every bin a count of at most its slots reaches. The proof block uses 2^bitlen(slots) − 1
+  for hi, with the same n_e.
+- **A wide offset's first chunk.** When n_e = 2^(e−1) > 2^16, that chunk is (⌊u / 2^15⌋, 1, 2^(e−16)).
 
 **The book** (`window_book`) is the registered book's Exp-Golomb tables (`lo` 0, a frequency for every bin up to the
 cap's), held to v1's value caps (`v1.TABLE_CAPS`: hit_units 2^16, gap and index 2^24, order_len 1), with
-0 ≤ N, H, O < 2^16. The proof block's public inputs are each symbol's frequencies at the bins it reaches, and T, 17 bits
+0 ≤ N, H, O < 2^16. The proof block's public inputs are each symbol's frequencies at the bins it reaches, and f_tot, 17 bits
 each.
 
 **The circuit.** For each value:
@@ -168,16 +169,18 @@ widens with the slots before it, and the build is linear in N + H + O.
 
 **The bound.** The proof block's charge is `code_v1`'s segment length for the whole window, so "The bound" (PROTOCOL.md) covers
 every advice v1 window, not just decisions-only ones: `encode` is injective on the values and its strings are
-prefix-free. The sampled leak bound takes the count this gives, at most `2^c` advice values charged `c` or less, as its
-premise (`hAs` in `Security/Definitions/NetworkCertifier/Guarantees/SampledCharge.lean`). It rests on two facts:
+prefix-free. The sampled count (`NetTiming.SecurityProofs.EncardAccSeqsSampledLe`) and the declared-cap lemma
+`NetTiming.sampledLeak` take the count this gives, at most 2^`c` advice values charged `c` bits or fewer, as their
+premise (`hAs` in `Security/Definitions/NetworkCertifier/Guarantees/SampledCharge.lean`). The network bound charges the
+registered width ℓ_a,j and takes no such premise. It rests on two facts:
 - *Each count's code is prefix-free under a public prior.* The prior is the registered table, fixed before the session.
-  The ideal length of v is ℓ(v) = −log2(f_j / T) + log2 m_j. Here m_j is n_j when n_j ≤ 2^16, and
-  (⌊(n_j − 1) / 2^15⌋ + 1) · 2^15 ≥ n_j for the two chunks. So
+  The ideal length of v is len(v) = −log2(f_e / f_tot) + log2 n′_e. Here n′_e is n_e when n_e ≤ 2^16, and
+  (⌊(n_e − 1) / 2^15⌋ + 1) · 2^15 ≥ n_e for the two chunks. So
 
-  \[ \sum_{v=0}^{hi} 2^{-\ell(v)} = \sum_{j \le top} \frac{f_j}{T} \cdot \frac{n_j}{m_j} \le 1 \]
+  \[ \sum_{v=0}^{hi} 2^{-\mathrm{len}(v)} = \sum_{e \le top} \frac{f_e}{f_{tot}} \cdot \frac{n_e}{n'_e} \le 1 \]
 
-  Equality holds under v1's caps. They are powers of two (with 2·`index` + 1 for the rank step), so every n_j is at
-  most 2^16 or a power of two at least 2^17, and m_j = n_j.
+  Equality holds under v1's caps. They are powers of two (with 2·`index` + 1 for the rank step), so every n_e is at
+  most 2^16 or a power of two at least 2^17, and n′_e = n_e.
 - *The window's symbols form a prefix-free sequence code given the carry-in.* Each symbol's model is fixed by the book,
   the caps and the symbols before it:
   - a count comes before the values it counts and fixes how many follow;
@@ -187,7 +190,7 @@ premise (`hAs` in `Security/Definitions/NetworkCertifier/Guarantees/SampledCharg
 
   So `code_v1._window` decodes the symbols back one by one, and no window's sequence is a proper prefix of another's.
   At each step the coder splits its interval among the alphabet in proportion to the frequencies, which sum to at most
-  the total: bins 0 … bitlen(S) of a count's table reach at most T.
+  the total: bins 0 … bitlen(slots) of a count's table reach at most f_tot.
 
 The Lean definitions (`Security/Definitions/NetworkCertifier/WindowCharge.lean`) mirror `reference_window` one for one,
 and the window difftest holds them to it: the certifier program's `NetworkCertifier.WindowCharge`, proved equal to them
@@ -203,8 +206,8 @@ A class whose windows send hits or order entries does the following:
   disabled slot's value: the charge counts only enabled slots, so a slot arrangement or a disabled value the prover
   chose would pass log2(C(H, h) · C(O, o)) bits and those values uncharged (`test_network_certifier_window_charge_slots.py`:
   every arrangement and disabled values past every cap give one charge and one carry).
-- It holds the returned bits to c_w as now. The tests check this inline: c_w equal to the charge accepts, and one bit
-  less refuses.
+- It holds the returned bits to the cap ℓ_a,j as now. The tests check this inline: a cap equal to the charge accepts,
+  and one bit less refuses.
 - Its H and O are fixed per class, like D. A window that sends more hits or entries than its slots can't be charged,
   so that window's proof block fails.
 

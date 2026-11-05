@@ -2,18 +2,19 @@ Part of the certifier's [PROTOCOL.md](../PROTOCOL.md).
 
 ## The clock certificate (`certificate.CertifiedClock`)
 
-A floor computed from an egress window's declared sync (δ, ρ) is only as tight as that sync: a δ below the one the
-window's traffic was certified under loosens it. The clock certificate makes the sync the certifier ran each egress
-window under its signed record, so a reader holds the declared syncs to the certifier's, never to the prover's word.
+A floor computed from an egress window's declared sync (Δ_sync, r_sync) is only as tight as that sync: a Δ_sync below
+the one the window's traffic was certified under loosens it. The clock certificate makes the sync the certifier ran each
+egress window under its signed record, so a reader holds the declared syncs to the certifier's, never to the prover's
+word.
 
 - **What the certifier signs.** At each egress window's close, beside the window's record certificate, the certifier
   signs the sync its own shaper ran the window under (`active.Shaper.syncs`, the sync it computed each frame's
   eligibility with), salted as a record digest is, as `Issuer.salted_clock(link, window, sync)`:
 
-      clock digest  = tagged_sha512("verity-network-certifier/clock/v1", u64be δ ‖ u64be p ‖ u64be q)
+      clock digest  = tagged_sha512("verity-network-certifier/clock/v1", u64be Δ_sync ‖ u64be num ‖ u64be den)
       signed digest = SHA-512("verity/net-cert/v1" ‖ salt_c ‖ clock digest)        (clock_commitment)
 
-  with ρ = p/q in lowest terms, and `salt_c` 64 fresh bytes of the certifier's own coins.
+  with r_sync = num/den in lowest terms, and `salt_c` 64 fresh bytes of the certifier's own coins.
 
   It signs that digest under the record certificate's message (`certificate_message`: the key, the certifier session,
   the link, `egress` and the window). `CertifiedClock` is the sync, the salt and that certificate. A rehearsal's

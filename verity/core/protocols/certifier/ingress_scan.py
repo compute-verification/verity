@@ -4,8 +4,8 @@ egress view, its outputs beside an ok bit (the generator form); the first bucket
 and starts from the empty one. Every switch is computed from the state and the rows; none is witness. Nothing here is
 in a Spec.
 
-**The row** is `warden_rows.window_rows`' row t of the ingress link: S = lanes·r slots of B-byte cells, lane block ρ
-(slots ρ·r … ρ·r + r − 1) the ρ-th live connection by ordinal and a block no connection holds r·B zero bytes. Its cells
+**The row** is `warden_rows.window_rows`' row t of the ingress link: S = lanes·r slots of B-byte cells, lane block ν
+(slots ν·r … ν·r + r − 1) the ν-th live connection by ordinal and a block no connection holds r·B zero bytes. Its cells
 are the warden's (`warden.read_cell`): `DATA` of P = B − 9 bytes, `END` with the request's last 1 … P bytes, `PAD` of
 none, each on the connection's ordinal q. A connection's ingress is one warden-form id request
 (`active.id_request(..., offset=0)`: no LENGTH, its length the content-length plus the head), cut by `warden.cells`, so

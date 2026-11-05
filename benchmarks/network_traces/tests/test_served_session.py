@@ -7,8 +7,8 @@ nothing when late; io writes the kept run's certified I/O 0600 in KEEP; endpoint
 node's records in a private copy whose requests.jsonl is rebuilt from the users map and the certified I/O (moved out of
 the run dir first), publishes only its report, windows.jsonl and serve.json, and writes nothing from an endpoint that
 didn't serve the session's flags or when a published file would carry a request's values (a planted prompt length,
-seed or trace record); chain runs chain_record.sh's warden path on the kept fetch with the endpoint's art or a dry
-rehearsal's records, and is refused without the leak guard; its draw on the gate's coins names the auditor's node as
+seed or trace record); chain runs chain_record.sh's active-warden path on the kept fetch with the endpoint's art or a
+dry rehearsal's records, and is refused without the leak guard; its draw on the gate's coins names the auditor's node as
 the coin link's peer, and the served node is refused."""
 from __future__ import annotations
 
@@ -395,7 +395,8 @@ def test_endpoint_publishes_nothing_that_carries_a_planted_prompt_length_or_seed
         (tmp_path / f).rename(src / f)
 
 
-def test_chain_runs_chain_records_warden_path_on_the_kept_fetch_and_needs_the_leak_guard(tmp_path, monkeypatch):
+def test_chain_runs_chain_records_active_warden_path_on_the_kept_fetch_and_needs_the_leak_guard(tmp_path,
+                                                                                                monkeypatch):
     here = tmp_path / "here"
     here.mkdir()
     (here / "chain_record.sh").write_text('env | grep "^CR_" | sort > "$SEEN"\n')

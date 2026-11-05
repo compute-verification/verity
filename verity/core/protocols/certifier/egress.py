@@ -23,7 +23,7 @@ output ids of IB bits, output k at bit 112 + k·IB, the slot zero-padded to whol
 live, q and admitted, the anchored Programs n and the ids (the scan note's §1).
 
 **The map** (`bucket_map`): the live slots at b are the j with live_j, admitted_j ≤ b and b ≤ admitted_j + D +
-⌊n_j / r⌋, ranked by (q, j) as ρ, lane ρ rank ρ's. Slot ρ·r + i of the row is a `PAD` on q_j before admitted_j + D;
+⌊n_j / r⌋, ranked by (q, j) as ν, lane ν rank ν's. Slot ν·r + i of the row is a `PAD` on q_j before admitted_j + D;
 else, with k = (b − admitted_j − D)·r + i, the `DATA` cell of output k's id on q_j for k < n_j, the `END` on q_j for
 k = n_j and a `PAD` on q_j past it. The lanes past the live ones are B zero bytes (a `PAD` on 0). More live slots than
 R / r lanes, or a `DATA` cell of an output k ≥ K, renders no row, and o0 is 0; o1 is then what the gates compute
@@ -160,7 +160,7 @@ FREE = Slot(0, 0, 0, 0, ())
 
 def bucket_map(b: int, slots: Sequence[Request | None], R: int, r: int, D: int) -> tuple[tuple[Occupancy, ...], bool]:
     """Bucket b's records and whether it overflows: the live request slots at b, the j with a request admitted at or
-    before b and b ≤ admitted_j + D + ⌊n_j / r⌋, ranked by (q, j) as ρ. Slot ρ·r + i is (q_j, j, `EMPTY`) before
+    before b and b ≤ admitted_j + D + ⌊n_j / r⌋, ranked by (q, j) as ν. Slot ν·r + i is (q_j, j, `EMPTY`) before
     admitted_j + D; else, with k = (b − admitted_j − D)·r + i, (q_j, j, k) for k < n_j, (q_j, j, `END_ENTRY`) for
     k = n_j and (q_j, j, `EMPTY`) past it. The slots past the live ones are `UNHELD`. It overflows when more than
     R / r slots are live; the records are then the first R / r's."""

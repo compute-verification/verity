@@ -1,8 +1,8 @@
 """warden-chain: the network chain's reads of an active warden's run (`warden_serve.py`'s directory, or the gate's
 ``warden-rehearse``'s: its witness under ``witness/``, its public files under ``out/``), in place of a certifier
 rehearsal's. A certifier rehearsal's run (`certifier_serve.py`, whose records come through `active.Proxy` in front of
-the endpoint, under a certifier key with salted clock certificates) is refused by name (`PROXY`): on the warden path
-none of its records enters the chain.
+the endpoint, under a certifier key with salted clock certificates) is refused by name (`PROXY`): on the active-warden
+path none of its records enters the chain.
 
 * `deployment`: ``deployment.json``, a warden's (its link, its schedule and their digest, its key and session), never a
   certifier's (``certifier_key``, ``links``), in a run holding no certifier rehearsal's file (`CERTIFIER_FILES`).
@@ -43,7 +43,7 @@ from verity.core.protocols.certifier.schedule import SyncSet
 from verity.ml.crypto import lms
 
 PROXY = ("a certifier rehearsal's run (certifier_serve.py, its records through active.Proxy in front of the endpoint): "
-         "the warden path reads an active warden's own run (warden_serve.py's, or the gate's warden-rehearse)")
+         "the active-warden path reads an active warden's own run (warden_serve.py's, or the gate's warden-rehearse)")
 #: what only a certifier rehearsal's run holds (`certifier_serve.py rehearse`'s, per strategy under ``out/``)
 CERTIFIER_FILES = ("plan.json", "calibration.json", "proxy.json.gz")
 #: an id request's fields (`active.id_request`'s keywords but the frame's)
