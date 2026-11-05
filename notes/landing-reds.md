@@ -118,7 +118,7 @@ REDS final (landing-speed). Note: lanes/top/20261105T1720Z-report-landing-reds.m
    - Why it went unnoticed: a hand run keeps no per-suite red ledger, and #7499's check never reran the tip's red suites.
    - Why it landed: the prefix Lean check runs only `lean-audit` (`LEAN_STEP`), never the Lean–Python difftests.
    - What it held: `main` unmoved for 7.5 h, with 45 PRs on `checked` (32 behind the red batches), 253 PR-hours by 18:18Z.
-5. Simulation: reverting is the lever, and a check on the serial pass is a loss. Revert at once saves 5.7–10.8 h a PR (3,400–6,300 PR-h/week) at a 4 h fix wait, and 19–32 h at 6 h. A changed-suites check adding 30 min to each landing pass is 17–20 h a PR worse (throughput drops from 91 to 83 a day). Run asynchronously it saves 4–8 h alone, but under 0.5 h once reverts work. ci's lever 3, run inside the pass, is 0.5–5.7 h worse.
+5. Simulation: reverting is the lever, and a check on the serial pass is a loss. Revert at once saves 5.7–10.8 h a PR (3,400–6,300 PR-h/week) at a 4 h fix wait, and 19–32 h at 6 h. A changed-suites check adding 30 min to each landing pass is 17–20 h a PR worse (throughput drops from 91 to 83 a day). Run asynchronously it saves 4–8 h alone, but adds nothing measurable once reverts work (−0.7 to +1.1 h). ci's lever 3, run inside the pass, is 0.5–5.7 h worse.
 
 **Levers, ranked**
 L1. Revert at once, as ruled.
