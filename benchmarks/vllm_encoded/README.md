@@ -15,7 +15,8 @@ libraries from the dispatched commit.
 | `PLAIN_NO_TOPUP`, `AUDIT_NO_TOPUP` | `bandwidth-plain-no-topup`, `bandwidth-audit-no-topup` | the same, the top-up never started |
 | `PLAIN_SPANS`, `AUDIT_SPANS` | `bandwidth-plain-spans`, `bandwidth-audit-spans` | the same with the top-up, each step timed by part |
 
-The top-up is the fill-sk16 filler (`benchmarks/kv_filler/topup.cu`) over the paged KV pool on a low-priority stream,
+The top-up is the fill-sk16 filler (`topup.cu`, with `readers.cu` and `fill.cu`, through `topup.py`) over the paged KV
+pool on a low-priority stream,
 on every SM or on a partition of its own (`topup_sms`, below).
 `bandwidth-plain` and `bandwidth-audit` are the credited lines (`bench_arm.CREDITED`): a table cites them as the audit's
 cost. Every other arm is an ablation and measures cost only.
@@ -36,7 +37,7 @@ topup_sms=None)` builds an arm. A setting left None is read from the environment
 
 `VERITY_VLLM_BENCH_FILLER_CTAS` (32) and `VERITY_VLLM_BENCH_SELECT_TRIALS` (5) are environment-only.
 
-**Partition.** With `topup_sms` F > 0 the arm splits the SMs before vLLM starts (`benchmarks/kv_filler/green.py`,
+**Partition.** With `topup_sms` F > 0 the arm splits the SMs before vLLM starts (`green.py`,
 `topup.cu`'s `sq_green`, green contexts): the top-up's stream is on the filler's F, and the step's stream, the stack's
 side streams and every CUDA graph's capture are on the rest, whose count the device's SM count then reads as (it sizes
 the stack's grids, and the attention's splits with them). The gate fails unless every stream of the step's ran within
