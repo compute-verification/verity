@@ -70,7 +70,8 @@
   "Properties.Challenger",
   "Properties.Firewall",
   "Properties.Core.Site",
-  "Properties.Verity.Subprotocols"
+  "Properties.Verity.Subprotocols",
+  "Properties.Verity.Coupling"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -1068,7 +1069,10 @@
     "Properties.Composition",
     "Properties.Flock.Circuit.CircuitOf",
     "Properties.Verity.Game",
+    "Properties.Verity.Subprotocols",
+    "Properties.Verity.Coupling",
     "Definitions.Accounting.JointLive",
+    "Definitions.Accounting.JointPeriod",
     "Definitions.Core.Game",
     "Definitions.Hash.RowLeaf",
     "Flock.Hash",
@@ -1082,7 +1086,7 @@
     "Flock.Hm96"
    ],
    "except": [],
-   "why": "soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 and LMS verifier, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; the blocks and the wipe; the site; the inference-only policy; the hash area's named assumptions), the shared game and the row-leaf opening it reads the commitment through, and the coin device's tree as the code builds it (Flock.CoinTree's spec, Flock.Hm96's leaf and commit string), never over a proof"
+   "why": "soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 and LMS verifier, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; Accounting.PeriodRun, the coins model a subprotocol's period guarantee is stated in; the blocks and the wipe; the site; the inference-only policy; the hash area's named assumptions), the shared game and the row-leaf opening it reads the commitment through, and the coin device's tree as the code builds it (Flock.CoinTree's spec, Flock.Hm96's leaf and commit string), never over a proof"
   },
   "Properties.Core": {
    "imports": ["Definitions.Core", "CoreProtocol.Site"],
