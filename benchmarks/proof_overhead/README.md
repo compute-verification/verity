@@ -1,18 +1,24 @@
 # Proof overhead against proof-block width (`proof_overhead/`)
 
 How proof overhead moves with a proof block's output width, and what the sampled audit's exfiltration bound makes of each
-curve. A block of R rows of an int8 matmul at depth K computes R·K MACs and outputs 32·R bits. A block opens its committed
-inputs and outputs, a cost that doesn't shrink with its work, and this benchmark shows where that cost takes over.
+curve. A block opens its committed inputs and outputs, a cost set by the bytes it reads rather than the work it does, and
+this benchmark shows where that cost takes over and what amortizes it. Two block shapes of int8 matmul:
+
+- **Row blocks:** one row of x against R rows of W at depth K (R·K MACs, 32·R output bits), packed, every instance's own
+  rows. Each weight byte is read once per block, so widening the block amortizes only x's row.
+- **Tiles:** C rows of x against P rows of W (P·C·K MACs, 32·P·C output bits), each row hashed once per tile, one u16 leaf an
+  s8 (the tile's layout). A square tile amortizes both operands.
 
 Three parts, run in order:
 
-1. **Flock with hm96 rows opened in the circuit (measured).** `benchmarks/flock_s8_block` at one K, with two instance counts
-   at each rows-per-block R, so the analysis separates each block's seconds from the session's:
+1. **Flock with hm96 rows hashed in the circuit (measured).** `benchmarks/flock_s8_block` with two instance counts for each
+   shape, so the analysis separates each block's seconds from the session's:
 
    ~~~sh
    research run --on vy-dc-h200 --project verity --source . --cwd source -- bash benchmarks/flock_s8_block/run.sh \
      "STEPS=build stage gpu" SANITY=0 NSYS=0 LEASE_MIN=30 \
-     "STATEMENTS=4096:1024:1 4096:2048:1 4096:512:2 4096:1024:2 4096:256:4 4096:512:4 4096:128:8 4096:256:8 4096:64:16 4096:128:16 4096:32:32 4096:64:32 4096:16:64 4096:32:64"
+     "STATEMENTS=4096:1024:1 4096:2048:1 4096:512:2 4096:1024:2 4096:256:4 4096:512:4 4096:128:8 4096:256:8 4096:64:16 4096:128:16
+                 512:2048:1x1 512:4096:1x1 512:1024:2x2 512:2048:2x2 512:512:4x4 512:1024:4x4 512:256:8x8 512:512:8x8 512:64:16x16 512:128:16x16 512:256:16x1 512:512:16x1"
    ~~~
 
 2. **A commitment Flock opens by linear claims (measured on the CPU).** `served_pcs/run.sh` builds `served_pcs/crate` inside
@@ -34,13 +40,15 @@ Three parts, run in order:
 
 What each curve is:
 
-- **Flock, hm96 in the circuit:** measured GPU seconds per block, over the card's peak s8 MAC rate (`verity.hardware`).
-- **The split:** the block's own ANDs, from its staged record, and its hm96 openings' ANDs, modeled from the row format. A
-  two-rate fit of the per-block seconds over both gives seconds per AND of each kind.
-- **The floor:** the block's own ANDs at the fitted rate, with its commitment opened for free, which no commitment scheme
-  beats. A linear-claim commitment's real costs are part 2's. Its opening work grows with the committed polynomial's size,
-  so where it lands between the curve and the floor depends on how much data one commitment covers.
-- **The exfiltration bound:** the 3-pager's model (one year of world inference, 1% budget), at each width's unit size,
+- **Measured:** GPU seconds per block, over the card's peak s8 MAC rate (`verity.hardware`).
+- **The split:** Flock's prover pays for cells. Each instance's block is 2^k_log of them, holding the rows' SHA-512
+  compressions, one hm96 slot a row and the block's own units, as `verity_flock.circuit` lays them out (`overhead.layout`,
+  checked against every record's k_log). The commitment's share is its slots' share of the used cells.
+- **The floor:** the units' own cells at the rate fitted over every shape (seconds per block cell), with the commitment
+  opened for free, which no commitment scheme beats with this prover. A linear-claim commitment's real costs are part 2's.
+  Its opening work grows with the committed polynomial's size, so where it lands between the curve and the floor depends on
+  how much data one commitment covers.
+- **The exfiltration bound:** the 3-pager's model (one year of world inference, 1% budget), at each shape's unit size,
   output bits and overhead.
 
 Status: maintained.
