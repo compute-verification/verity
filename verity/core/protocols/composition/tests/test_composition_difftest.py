@@ -709,8 +709,8 @@ def _paths(j) -> list[str]:
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(not SERVED, reason="VERITY_COMPOSITION_SERVED names no served run (its Lean check hashes its 2.2 GB "
-                                       "of pass files and replays 470 tiles: about an hour on a CPU node)")
+@pytest.mark.skipif(not SERVED, reason="VERITY_COMPOSITION_SERVED names no served run (its Lean check hashes 2.1 GB of "
+                                       "distinct pass files and replays 470 tiles: about an hour on a CPU node)")
 def test_remote_v1_on_a_served_pearl_plus_run(tmp_path, monkeypatch):
     """Remote v1 on a served Pearl+ run with live coins and the challenger's draw: Pearl+ accepts in Lean, both ties
     hold, and the composite is undecided only because sampled proofs is (`_empty_audit`, as everywhere here), in Lean
@@ -718,8 +718,9 @@ def test_remote_v1_on_a_served_pearl_plus_run(tmp_path, monkeypatch):
     retained passes, the epoch coins, the coin record and the window record W the passes are tied to, with the verdict
     ``served_passes.py verify`` recorded on them (``verify.json``), which is Pearl+'s Python answer here
     (`reference.pearl_plus_answer`); the Lean replays the passes. `VERITY_COMPOSITION_SERVED` names a directory holding
-    them, as ``research data fetch art:ART --path 'out/served/*'`` lays them out under ``out/served``:
-    ``passes/pass-0000{0..3}/``, ``passes/coins.json``, ``coin.json``, ``verify.json`` and ``window-record.json``.
+    them, as ``research data fetch art:e76bdb5195f7d82bfbb073e50fa76b10dbd0b25417e20f430073e4d86a135ac0 --path
+    out/served`` lays them out under ``out/served`` (run r20261105-155828-663b's record): ``passes/pass-0000{0..3}/``,
+    ``passes/coins.json``, ``coin.json``, ``verify.json`` and ``window-record.json``.
 
     The registration record R the policy and sampled proofs commit to is constructed here, the empty audit's record
     chained right after W (``previous`` = digest(W), W the one record of its log), because the dress ran no follow-on
