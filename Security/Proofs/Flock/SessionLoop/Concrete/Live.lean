@@ -1,16 +1,15 @@
 module
 
 public import Proofs.Flock.SessionLoop.Concrete.Scope
-public import Proofs.Flock.SessionLoop.Concrete.Trace
+public import Proofs.Flock.SessionLoop.Concrete.Regions
 public import Proofs.Flock.Claims.ZK.MaskedTables
 
 /-! # The concrete statement is `Live`
 
 `live_concreteStmt`: where the verifier's two fixed nets build (`FixedNetsBuild`), the concrete statement is in the
 masked session's scope with a witness (`Masked.live_of`), so its session has one table (`jOf_concreteStmt`). The witness
-`wC` is the trace `Trace.zC` bit for bit. The deployed relation reads the statement's one table (`relS_relation`), whose
-rows and pin the trace satisfies (`Trace.satisfies_stW`). What the trace holds at the table's public regions, each row's
-`b ‖ c`, is the hypothesis `RegionsC`.
+`wC` is the trace `Trace.zC` bit for bit. The deployed relation reads the statement's one table (`relS_relation`), which
+the trace satisfies, its rows, pin and public regions included (`Trace.satisfies_regions_stW`).
 -/
 
 @[expose] public section
@@ -34,10 +33,6 @@ noncomputable def pC : _root_.Flock.Readable.Parsed :=
 noncomputable def wC : _root_.Claims.Flock.Wit :=
   ⟨List.ofFn fun a : Fin (2 ^ stC.m) => Concrete.Trace.zIn (a.val % 2 ^ 22)⟩
 
-/-- What the trace holds at the concrete table's public regions, each row's `b ‖ c`. -/
-def RegionsC : Prop :=
-  ∀ L : Layout stC, Discharge.Composed.RegionsHold (L.model (Refine.regionsOf stC)) (Concrete.Trace.zC stC.m)
-
 theorem parseBytes_concreteStmt (hn : FixedNetsBuild) :
     _root_.Flock.Readable.parseBytes (readOf true) concreteStmt = some pC := by
   have hp := fixedNets_parse hn
@@ -55,9 +50,8 @@ theorem zOf_wC : _root_.Flock.Readable.zOf 1 wC 0 stC.m = Concrete.Trace.zC stC.
   simp only [_root_.Flock.Readable.zOf, wC, Nat.mul_one, Nat.add_zero, List.getD_eq_getElem?_getD,
     List.getElem?_ofFn, a.isLt, dite_true, Option.getD_some, _root_.Flock.Readable.toZ, Concrete.Trace.zC]
 
-/-- **The concrete statement is in the deployed relation** with the trace as its witness, where the trace holds the
-table's public regions (`RegionsC`). -/
-theorem rel_concreteStmt (hn : FixedNetsBuild) (hreg : RegionsC) :
+/-- **The concrete statement is in the deployed relation** with the trace as its witness. -/
+theorem rel_concreteStmt (hn : FixedNetsBuild) :
     _root_.Claims.Flock.R (deployZk _root_.Flock.Readable.relation).parse concreteStmt wC := by
   have ht : Concrete.tz.typed = false := rfl
   have hp := fixedNets_parse hn
@@ -68,11 +62,10 @@ theorem rel_concreteStmt (hn : FixedNetsBuild) (hreg : RegionsC) :
     (fun c h1 h2 => Concrete.check_of hp.1.1 hp.2.1 c h1 h2) Concrete.hu1_of (Concrete.hu2_of _ _ _ _ _ _ _ _)
     (Concrete.hd_of _) Concrete.hid_of Concrete.hhello_of
   have L : Layout stC := setupH_layout ht hset
-  have F : Discharge.Aliased.UnitFacts Concrete.tz stC := Discharge.Aliased.setupH_unitFacts ht hset
-  have hS := Concrete.Trace.satisfies_stW (HmNets.shaLaid ()) (HmNets.hmLaid ()) concreteHash
+  have hS := Concrete.Trace.satisfies_regions_stW (HmNets.shaLaid ()) (HmNets.hmLaid ()) concreteHash
     (sparseOf (HmNets.shaLaid ()).ra) (sparseOf (HmNets.shaLaid ()).rb) (sparseOf (HmNets.hmLaid ()).ra)
     (sparseOf (HmNets.hmLaid ()).rb) Concrete.s1C Concrete.s3C (Concrete.s4Of concreteHash) Concrete.s6C
-    Concrete.helloC L F hn
+    Concrete.helloC ht hset L hn
   refine ⟨_root_.Flock.Readable.toReadable _root_.Flock.Readable.relation pC, ?_, ?_⟩
   · change (_root_.Flock.Readable.parseBytes (readOf true) concreteStmt).map
       (_root_.Flock.Readable.toReadable _root_.Flock.Readable.relation) = _
@@ -84,17 +77,16 @@ theorem rel_concreteStmt (hn : FixedNetsBuild) (hreg : RegionsC) :
   have hz : _root_.Flock.Readable.zOf pC.sts.size wC 0 pC.sts[0]!.m = Concrete.Trace.zC stC.m := zOf_wC
   refine ⟨⟨rfl, rfl, (L.model []).hk6, (L.model []).hk, (L.model []).pin.isLt⟩, ?_⟩
   rw [hz]
-  exact (⟨hS.1, hS.2.1, hreg L⟩ : (L.model (Refine.regionsOf stC)).Satisfies (Concrete.Trace.zC stC.m))
+  exact (hS : (L.model (Refine.regionsOf stC)).Satisfies (Concrete.Trace.zC stC.m))
 
-/-- **The concrete statement is `Live`** where the fixed nets build and the trace holds the table's public regions
-(`RegionsC`). -/
-theorem live_concreteStmt (hn : FixedNetsBuild) (hreg : RegionsC) : _root_.Claims.ZKMal.Masked.Live concreteStmt :=
-  _root_.Claims.ZKMal.Masked.live_of (concreteStmt_scope hn) (rel_concreteStmt hn hreg)
+/-- **The concrete statement is `Live`** where the fixed nets build. -/
+theorem live_concreteStmt (hn : FixedNetsBuild) : _root_.Claims.ZKMal.Masked.Live concreteStmt :=
+  _root_.Claims.ZKMal.Masked.live_of (concreteStmt_scope hn) (rel_concreteStmt hn)
 
 /-- **The concrete statement's masked session has one table.** -/
-theorem jOf_concreteStmt (hn : FixedNetsBuild) (hreg : RegionsC) : _root_.Claims.ZKMal.Masked.jOf concreteStmt = 1 := by
+theorem jOf_concreteStmt (hn : FixedNetsBuild) : _root_.Claims.ZKMal.Masked.jOf concreteStmt = 1 := by
   unfold _root_.Claims.ZKMal.Masked.jOf
-  rw [ite_eq_left (live_concreteStmt hn hreg)]
+  rw [ite_eq_left (live_concreteStmt hn)]
   unfold _root_.Claims.ZKMal.Masked.stsOf
   rw [concreteStmt_setupOf hn]
   exact concreteSetup_tables
