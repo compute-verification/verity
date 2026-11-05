@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 
 from research.pods.nebius import fleet as F
 
@@ -187,3 +188,70 @@ def test_a_running_vm_unread_ten_minutes_is_alerted_once_with_its_serial_tail_an
     assert F.registry()["vy-node-x"]["unreachable_since"] == F.utc(t0)
     F.watch_unreachable([{**row, "read": True}], t0 + 1200, lambda a, t: sent.append(t), tail)
     assert "unreachable_since" not in F.registry()["vy-node-x"] and len(synced) == 2
+
+
+def _sample(t, name, rate, platform="cpu-d3", preset="192vcpu-768gb", read=True, gpu=(), load=0.0, cores=192, deadline=None):
+    return {"t": F.utc(t), "name": name, "platform": platform, "preset": preset, "rate_usd_per_hour": rate, "read": read,
+            **({"gpu_util": list(gpu), "load": load, "cores": cores, "deadline": deadline} if read else {})}
+
+
+def test_the_online_panel_names_each_running_vm_with_its_class_lane_rate_and_busy_share():
+    """The console's Online tab: one row per VM the last pass saw, a GPU machine busy by its GPUs, a CPU one by load over cores
+    (at most 1), an unread one with no share, and a VM with no rate left out and named in the note."""
+    t = 1_800_000_000
+    rows = [_sample(t, "h200", 5.4, platform="gpu-h200-sxm", preset="1gpu-16vcpu-200gb", gpu=[40], deadline=1_800_036_000),
+            _sample(t, "cpu", 6.34, load=384.0), _sample(t, "gone", 6.34, read=False), _sample(t, "new", None)]
+    reg = {"h200": {"lane": "network-accounting"}, "cpu": {"deadline": "2026-11-14T02:00:00Z"}}
+    p = F.online_panel(rows, reg, t)
+    assert p["id"] == "compute/online" and p["kind"] == "table"
+    by = {r[0]: dict(zip(p["columns"], r)) for r in p["rows"]}
+    assert by["h200"] == {"machine": "h200", "class": "H200", "hardware": "1× H200", "provider": "Nebius",
+                               "lane": "network-accounting", "holder": None, "usd_per_hour": 5.4, "busy": 0.4, "busy_of": "gpu",
+                               "stops_at": F.utc(1_800_036_000), "sampled_at": F.utc(t)}
+    assert by["cpu"]["busy"] == 1.0 and by["cpu"]["busy_of"] == "cores" and by["cpu"]["lane"] == "infra"
+    assert by["cpu"]["hardware"] == "192 CPUs" and by["cpu"]["stops_at"] == "2026-11-14T02:00:00Z"
+    assert by["gone"]["busy"] is None and "new" not in by and "No rate registered, so left out: new." in p["note"]
+    assert F.hardware({"platform": "gpu-rtx6000-a", "preset": "8gpu-192vcpu-1744gb"}) == "8× RTX PRO 6000"
+    assert F.machine_class("gpu-rtx6000") == F.machine_class("gpu-rtx6000-a") == "RTX PRO 6000"
+
+
+def test_hourly_and_daily_panels_price_each_sample_and_weight_busy_by_cost(tmp_path, monkeypatch):
+    """compute/hourly and compute/daily: a sample costs its 5 minutes at its rate; busy dollars are each read sample's cost times
+    its share, an unread sample at its slot's mean share; `minutes` counts what was sampled. A Pacific day spans two UTC days."""
+    t0 = int(datetime(2026, 11, 5, 7, 0, tzinfo=timezone.utc).timestamp())          # 11 PM PST on 4 Nov
+    samples = [_sample(t0 + i * F.INTERVAL_S, "cpu", 6.0, load=96.0) for i in range(11)]     # half busy
+    samples.append(_sample(t0 + 11 * F.INTERVAL_S, "cpu", 6.0, read=False))
+    samples += [_sample(t0 + 3600 + i * F.INTERVAL_S, "cpu", 6.0, load=0.0) for i in range(12)]  # midnight PST: a new day
+    samples.append(_sample(t0, "new", None))
+    hourly, daily = F.bucket_panels(samples, {"cpu": {"lane": "training"}}, t0 + 7200)
+    rows = [dict(zip(hourly["columns"], r)) for r in hourly["rows"]]
+    assert rows == [{"hour": "2026-11-05T07:00:00Z", "machine": "cpu", "class": "CPU", "lane": "training", "usd": 6.0,
+                     "busy_usd": 3.0, "minutes": 60},
+                    {"hour": "2026-11-05T08:00:00Z", "machine": "cpu", "class": "CPU", "lane": "training", "usd": 6.0,
+                     "busy_usd": 0.0, "minutes": 60}]
+    days = {r[0]: dict(zip(daily["columns"], r)) for r in daily["rows"]}
+    assert days["2026-11-04"]["usd"] == 6.0 and days["2026-11-05"]["usd"] == 6.0 and days["2026-11-04"]["busy_usd"] == 3.0
+
+
+def test_a_panel_over_the_sites_body_limit_drops_its_oldest_slots_and_says_so(monkeypatch):
+    monkeypatch.setattr(F, "PANEL_MAX_BYTES", 1200)
+    rows = [[f"2026-11-0{d}T00:00:00Z", f"m{i}", "CPU", "infra", 1.0, 0.5, 60] for d in range(1, 6) for i in range(5)]
+    p = F.fitted(F._panel("compute/hourly", "t", ["hour", "machine", "class", "lane", "usd", "busy_usd", "minutes"], rows, 0, "n"))
+    assert len(json.dumps(p).encode()) <= 1200 and p["rows"] and p["rows"][-1][0] == "2026-11-05T00:00:00Z"
+    assert p["note"].startswith(f"From {p['rows'][0][0]} only") and min(r[0] for r in p["rows"]) > "2026-11-01"
+
+
+def test_publish_sends_the_three_panels_with_the_key_and_nothing_without_one(tmp_path, monkeypatch):
+    monkeypatch.setattr(F, "FLEET_DIR", tmp_path)
+    monkeypatch.setattr(F, "MACHINES_D", tmp_path / "machines.d")
+    monkeypatch.setattr(F, "PANELS_KEY", tmp_path / "panels.key")
+    t = 1_800_000_000
+    rows = [_sample(t, "cpu", 6.34, load=10.0)]
+    (tmp_path / f"samples-{F.utc(t)[:10].replace('-', '')}.jsonl").write_text(json.dumps(rows[0]) + "\n")
+    sent = []
+    assert F.publish(rows, t, put=lambda p, k: sent.append(p)) == [f"no panels key at {tmp_path / 'panels.key'}"] and not sent
+    (tmp_path / "panels.key").write_text("k\n")
+    assert F.publish(rows, t, put=lambda p, k: sent.append((p["id"], len(p["rows"]), k)) or None) == []
+    assert sent == [("compute/online", 1, "k"), ("compute/hourly", 1, "k"), ("compute/daily", 1, "k")]
+    assert F.publish(rows, t, put=lambda p, k: f"{p['id']}: HTTP 413") == [
+        "compute/online: HTTP 413", "compute/hourly: HTTP 413", "compute/daily: HTTP 413"]

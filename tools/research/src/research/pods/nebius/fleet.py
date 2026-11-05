@@ -8,6 +8,9 @@
                                  under 15%)
     fleet.py instances           every VM in the tenant's projects as JSON (the control pod's cloud watch reads it)
     fleet.py quota               each tenant quota at >= 80% of its limit, and the card's day so far against $FLEET_CARD_DAILY_USD
+    fleet.py panels [--dry-run]  the usage record as the console's compute tabs read it: compute/online (the last pass's VMs),
+                                 compute/hourly (each VM's $ and busy $ per UTC hour, 7 days) and compute/daily (per Pacific day,
+                                 30 days), PUT to the site with $FLEET_PANELS_KEY; the loop sends them after each sample
     fleet.py report --lanes      what the daily post rings each owning lane with: its own machines' idle hours and idle $
     fleet.py loop                sample every 5 min, quota every 30 (an alert in #agent-alerts once per quota and UTC day, kept in
                                  $FLEET_DIR/quota-told-YYYY-MM-DD.json across restarts), and at 15:00Z (08:00 PDT) the last
@@ -39,9 +42,12 @@ import subprocess
 import sys
 import time
 import tomllib
+import urllib.error
+import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable
+from zoneinfo import ZoneInfo
 
 HERE = Path(__file__).resolve().parent
 FLEET_DIR = Path(os.environ.get("FLEET_DIR", str(Path.home() / ".research" / "fleet")))
@@ -60,6 +66,18 @@ UNREACH_S, SERIAL_LINES = 600, 40
 KERNEL_TROUBLE = re.compile(r"soft lockup|hung_task|blocked for more than|out of memory|oom-kill|watchdog: BUG|"
                             r"rcu_sched self-detected|kernel panic", re.I)
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
+#: the usage record as the console's compute tabs read it: three table panels PUT to the site with its panels key
+PANELS_URL = os.environ.get("FLEET_PANELS_URL", "https://website-docs-sage.vercel.app")
+PANELS_KEY = Path(os.environ.get("FLEET_PANELS_KEY", str(Path.home() / ".config" / "verity" / "panels.key")))
+PANEL_ONLINE, PANEL_HOURLY, PANEL_DAILY = "compute/online", "compute/hourly", "compute/daily"
+HOURLY_DAYS, DAILY_DAYS = 7, 30
+PACIFIC = ZoneInfo("America/Los_Angeles")
+#: the site refuses a body over this (its MAX_BODY_BYTES): a panel that doesn't fit drops its oldest slots and says so
+PANEL_MAX_BYTES = 64 * 1024
+PANELS_NOTE = "Nebius VMs only: RunPod pods aren't sampled."
+#: a platform's GPU, for the machine class the usage tab groups by; any other `gpu-` platform is named from its own name
+GPU_CLASS = {"gpu-h200-sxm": "H200", "gpu-h100-sxm": "H100", "gpu-b200-sxm": "B200", "gpu-l40s-a": "L40S", "gpu-l40s-d": "L40S",
+             "gpu-rtx6000": "RTX PRO 6000", "gpu-rtx6000-a": "RTX PRO 6000"}
 OWNER_DEFAULT = "infra"          # registry.OWNER_DEFAULT (this file runs standalone)
 PROBE = ("echo gpu=$(nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null | tr '\\n' ,); "
          "echo cores=$(nproc); echo load=$(cut -d' ' -f1 /proc/loadavg); "
@@ -338,6 +356,132 @@ def card_finding(rows_today: list[dict]) -> dict | None:
     return {"spent": round(spent, 2), "cap": cap} if cap and spent >= QUOTA_ALERT * cap else None
 
 
+def machine_class(platform: str | None) -> str:
+    p = platform or ""
+    if not p.startswith("gpu-"):
+        return "CPU"
+    return GPU_CLASS.get(p) or p[len("gpu-"):].split("-")[0].upper()
+
+
+def hardware(row: dict) -> str:
+    """What a VM is, from its preset: "8× H200", or "192 CPUs" for a machine with no GPU."""
+    preset = row.get("preset") or ""
+    if m := re.match(r"(\d+)gpu", preset):
+        return f"{m.group(1)}× {machine_class(row.get('platform'))}"
+    cores = (m.group(1) if (m := re.search(r"(\d+)vcpu", preset)) else None) or row.get("cores")
+    return f"{cores} CPUs" if cores else preset or "?"
+
+
+def busy(row: dict) -> tuple[float | None, str]:
+    """A sample's busy share and what it is a share of: its GPUs' mean utilization, or for a machine with no GPU its load over its
+    cores (at most 1). None when the sample wasn't read."""
+    gpu = machine_class(row.get("platform")) != "CPU"
+    if not row.get("read"):
+        return None, "gpu" if gpu else "cores"
+    if gpu:
+        util = row.get("gpu_util") or []
+        return (round(sum(util) / len(util) / 100, 4) if util else None), "gpu"
+    return round(min(row.get("load", 0) / max(row.get("cores") or 1, 1), 1.0), 4), "cores"
+
+
+def _parse(t: str) -> datetime:
+    return datetime.strptime(t, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+
+
+def _panel(pid: str, title: str, columns: list[str], rows: list[list], now: float, note: str) -> dict:
+    return {"id": pid, "title": title, "kind": "table", "note": note, "updated_at": utc(now),
+            "source": "tools/research/src/research/pods/nebius/fleet.py on the control pod", "columns": columns, "rows": rows}
+
+
+def online_panel(rows: list[dict], reg: dict[str, dict], now: float) -> dict:
+    """One row per RUNNING VM in the last sample pass; one with no rate registered is left out and named in the note."""
+    out, unpriced = [], []
+    for r in rows:
+        m = reg.get(r["name"], {})
+        if r.get("rate_usd_per_hour") is None:
+            unpriced.append(r["name"])
+            continue
+        share, of = busy(r)
+        stops = utc(r["deadline"]) if r.get("deadline") else m.get("deadline")
+        out.append([r["name"], machine_class(r.get("platform")), hardware(r), "Nebius", m.get("lane") or OWNER_DEFAULT,
+                    m.get("holder"), r["rate_usd_per_hour"], share, of, stops, r["t"]])
+    note = PANELS_NOTE + (f" No rate registered, so left out: {', '.join(sorted(unpriced))}." if unpriced else "")
+    return _panel(PANEL_ONLINE, "Machines online", ["machine", "class", "hardware", "provider", "lane", "holder", "usd_per_hour",
+                                                     "busy", "busy_of", "stops_at", "sampled_at"], out, now, note[:500])
+
+
+def bucket_panels(samples: list[dict], reg: dict[str, dict], now: float) -> tuple[dict, dict]:
+    """Each VM's cost per UTC hour over `HOURLY_DAYS` and per Pacific day over `DAILY_DAYS`: `usd` (each sample's interval at its
+    rate), `busy_usd` (each sample's cost times its busy share; an unread sample takes its slot's mean share of read ones, else
+    none) and `minutes` sampled, so a gap in sampling shows as fewer minutes rather than as a cheaper slot."""
+    hour_from = now - HOURLY_DAYS * 86400
+    slots: dict[tuple[str, str, str], dict] = {}
+    for r in samples:
+        if r.get("rate_usd_per_hour") is None:
+            continue
+        t = _parse(r["t"])
+        cost = r["rate_usd_per_hour"] * INTERVAL_S / 3600
+        share = busy(r)[0]
+        keys = [("day", t.astimezone(PACIFIC).strftime("%Y-%m-%d"), r["name"])]
+        if t.timestamp() >= hour_from:
+            keys.append(("hour", t.replace(minute=0, second=0).strftime("%Y-%m-%dT%H:%M:%SZ"), r["name"]))
+        for k in keys:
+            s = slots.setdefault(k, {"usd": 0.0, "read_usd": 0.0, "busy_usd": 0.0, "n": 0, "platform": r.get("platform")})
+            s["usd"] += cost
+            s["n"] += 1
+            if share is not None:
+                s["read_usd"] += cost
+                s["busy_usd"] += cost * share
+
+    def row(slot: str, name: str, s: dict) -> list:
+        busy_usd = s["busy_usd"] * s["usd"] / s["read_usd"] if s["read_usd"] else 0.0
+        return [slot, name, machine_class(s["platform"]), reg.get(name, {}).get("lane") or OWNER_DEFAULT, round(s["usd"], 4),
+                round(min(busy_usd, s["usd"]), 4), s["n"] * INTERVAL_S // 60]
+    hourly = sorted(row(slot, name, s) for (kind, slot, name), s in slots.items() if kind == "hour")
+    first_day = (datetime.fromtimestamp(now, PACIFIC) - timedelta(days=DAILY_DAYS - 1)).strftime("%Y-%m-%d")
+    daily = sorted(row(slot, name, s) for (kind, slot, name), s in slots.items() if kind == "day" and slot >= first_day)
+    cols = ["machine", "class", "lane", "usd", "busy_usd", "minutes"]
+    return (_panel(PANEL_HOURLY, "Compute by machine and hour", ["hour", *cols], hourly, now, PANELS_NOTE),
+            _panel(PANEL_DAILY, "Compute by machine and Pacific day", ["day", *cols], daily, now, PANELS_NOTE))
+
+
+def fitted(panel: dict) -> dict:
+    """``panel`` within `PANEL_MAX_BYTES`: its oldest slots (the first column) dropped until it fits, its note saying from when."""
+    rows, size = panel["rows"], lambda p: len(json.dumps(p).encode())
+    if size(panel) <= PANEL_MAX_BYTES:
+        return panel
+    slots = sorted({r[0] for r in rows})
+    for i in range(1, len(slots)):
+        p = {**panel, "rows": [r for r in rows if r[0] >= slots[i]],
+             "note": f"From {slots[i]} only: the site takes at most {PANEL_MAX_BYTES // 1024} KiB. {panel['note']}"[:500]}
+        if size(p) <= PANEL_MAX_BYTES:
+            return p
+    return {**panel, "rows": []}
+
+
+def put_panel(panel: dict, key: str) -> str | None:
+    """PUT one panel; None when the site took it, else why not."""
+    req = urllib.request.Request(f"{PANELS_URL}/api/panels/{panel['id']}", data=json.dumps(panel).encode(), method="PUT",
+                                 headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=30):
+            return None
+    except urllib.error.HTTPError as e:
+        return f"{panel['id']}: HTTP {e.code} {e.read()[:300].decode(errors='replace')}"
+    except (urllib.error.URLError, OSError) as e:
+        return f"{panel['id']}: {e}"
+
+
+def publish(rows: list[dict], now: float, put: Callable[[dict, str], str | None] = put_panel) -> list[str]:
+    """The three usage panels from this pass's ``rows`` and the stored samples, PUT to the site; what failed. Nothing is sent
+    without a panels key."""
+    if not PANELS_KEY.exists():
+        return [f"no panels key at {PANELS_KEY}"]
+    key, reg = PANELS_KEY.read_text().strip(), registry()
+    hourly, daily = bucket_panels(load_samples(now - (DAILY_DAYS + 1) * 86400, now + 1), reg, now)
+    return [e for p in (online_panel(rows, reg, now), hourly, daily) if (e := put(fitted(p), key))]
+
+
 def post(args: list[str], text: str) -> None:
     research = Path(os.environ.get("FLEET_RESEARCH", "/workspace/.venv/bin/research"))
     subprocess.run([str(research), "msg", "send", "--as", "infra", *args, "--text", text], cwd="/workspace", timeout=120,
@@ -377,11 +521,18 @@ def loop(clock: Callable[[], float] = time.time, sleep: Callable[[float], None] 
     last_quota, told, reported = 0.0, load_told(clock()), ""
     while passes is None or passes > 0:
         passes = None if passes is None else passes - 1
-        now = clock()
+        now, rows = clock(), None
         try:
-            watch_unreachable(sample(now), now, send)
+            rows = sample(now)
+            watch_unreachable(rows, now, send)
         except Exception as e:  # noqa: BLE001 (a failed pass is logged, the loop goes on)
             print(f"{utc(now)} sample failed: {e}", file=sys.stderr, flush=True)
+        if rows is not None:
+            try:
+                for e in publish(rows, now):
+                    print(f"{utc(now)} panels: {e}", file=sys.stderr, flush=True)
+            except Exception as e:  # noqa: BLE001
+                print(f"{utc(now)} panels failed: {e}", file=sys.stderr, flush=True)
         day = utc(now)[:10]
         if now - last_quota >= QUOTA_EVERY_S:
             last_quota = now
@@ -418,9 +569,26 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("instances")
     sub.add_parser("quota")
     sub.add_parser("loop")
+    pp = sub.add_parser("panels")
+    pp.add_argument("--dry-run", action="store_true", help="print each panel's rows and size instead of sending it")
     a = ap.parse_args(argv)
     if a.cmd == "sample":
         print(json.dumps(sample(), indent=1))
+    elif a.cmd == "panels":
+        now = time.time()
+        latest = load_samples(now - 2 * INTERVAL_S, now + 1)
+        last = max((r["t"] for r in latest), default=None)
+        rows = [r for r in latest if r["t"] == last]
+        if a.dry_run:
+            reg = registry()
+            for p in (online_panel(rows, reg, now), *bucket_panels(load_samples(now - (DAILY_DAYS + 1) * 86400, now + 1), reg, now)):
+                f = fitted(p)
+                print(f"{p['id']}: {len(p['rows'])} rows, {len(json.dumps(p).encode())} bytes; sent: {len(f['rows'])} rows; "
+                      f"note: {f['note']}")
+            return 0
+        errors = publish(rows, now)
+        print("\n".join(errors) or "published")
+        return 1 if errors else 0
     elif a.cmd == "report":
         end = datetime.strptime(a.now, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp() if a.now else time.time()
         rep = report(load_samples(end - a.hours * 3600, end), a.hours)
