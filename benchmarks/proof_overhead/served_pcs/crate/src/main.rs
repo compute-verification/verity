@@ -12,6 +12,7 @@ use flock_core::{
     challenger::FsChallenger,
     pcs::{
         LOG_PACKING, OpeningGrinding, PcsParams, commit,
+        ligerito::LigeritoProfile,
         open_batch_mixed_ligerito_with_precomputed_s_hat_v_and_grinding,
         verify_opening_batch_ligerito_mixed_with_grinding,
     },
@@ -82,7 +83,7 @@ fn pcs_point(m: usize, log_inv_rate: usize, claims: usize, hash: &str) {
         m,
         log_inv_rate,
         log_batch_size: INITIAL_K,
-        profile: Default::default(),
+        profile: if log_inv_rate == 2 { LigeritoProfile::Slim } else { LigeritoProfile::Fast },
         num_lanes: None,
         merkle_hash,
     };
