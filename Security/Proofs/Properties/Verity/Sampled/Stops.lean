@@ -228,8 +228,7 @@ theorem log_of_opening {sg : Signer} {θ : ByteArray} {F : Array ByteArray} {c r
     rw [hrun]
     exact run_reaches _ s₀ y
   obtain ⟨L, s₁, h₁⟩ := playReaches_relK k fs (ts.set i (T.bump p.1)) _ s₀ h₀
-  obtain ⟨s₂, h₂⟩ := playReaches_of_eq (hf _) s₁ h₁
-  exact ⟨L, log_of_finish h₂⟩
+  exact ⟨L, log_of_finish h₁⟩
 
 /-- **The release of a coin a tape keeps from a written one is the written bits**: at the node after an opening frame
 the device answers, its releases continuing to a close `E` that records its log after the log `pre` and them, off the
