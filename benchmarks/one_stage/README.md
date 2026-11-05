@@ -218,7 +218,13 @@ negatives.
   `served_verdicts.sh` writes after its composite step when the network certifier is in the run: its piece
   (`CERTIFIER_CMD`, or the split's `CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`) or its front (`CERTIFIER_FRONT`). It holds every verdict
   the run of record needs (sampled proofs, PoUW, inference-only, remote, the network certifier, onsite), each missing
-  with its why where the run has no answer. Beside them are the network certifier's bound term by term in the notation
+  with its why where the run has no answer. While `certifier-key` is open (no Property yet states that the key and
+  session the period's guarantee reads are the auditor's record of the network certifier), an accepted network verdict
+  is not established, its Lean answer's accept beside it, and its bound conditional on `certifier-key` by name.
+  Sampled proofs credits only the drawn members whose `--registered` file its audit completed at the window's
+  committed roots and whose Lean verdict of record reported exactly that file's reads, and lists every other drawn
+  member as not credited, by name; PoUW's freed compute is credited nowhere and not claimed, by name, beside the PoUW
+  piece the run's COINS line says it served. Beside them are the network certifier's bound term by term in the notation
   table's symbols, with its overcount, the seconds it covers, the connections it counts and δ_net term by term with
   each term's source (the check's `eps`, only its δ part, and each phase's knowledge, binding and collision errors,
   which no check computes), `eps` split into the scans' δ and the charged tied audits' with what sets each and what a
@@ -238,9 +244,16 @@ negatives.
   at the statement whose hypotheses and antecedents the record names by hand, each by the premise that covers it, since
   the lock records a guarantee's named assumptions and never its antecedents; and the run's COINS line names the live
   challenger (PP_CHALLENGER gate:USER@HOST at a named peer). While one of those is open, it is K plus ℓ_a + 1 bits for
-  each tied audit of each phase, with the tight K's cells beside them, conditional on what is open, by name; and while
-  the coins are a local development session's, or no line names them, the condition live-coins is named on every figure
-  that rests on the draw (the sampled-proofs verdict, the figure of record and its cells), never as a live draw's.
+  each tied audit of each phase, added to its ℓ_{a,j}, what is open named, and no tighter figure goes beside it. It
+  tightens in place: to ℓ_a + 1 in place of each tied audit's ℓ_{a,j} once a general cut lemma bounding a tied audit's
+  leak by ℓ_a + 1 is in the lock and a check verifying that cut has run on the period's case (the record written again
+  from the same OUT, with no re-serving), and to K alone once `padding-out-of-free` (the period check refusing a tied
+  audit's padding reads, and the lemma that a column no unit reads adds no free input) is in the lock and nothing else
+  is open. While the coins are a local
+  development session's, or no line names them, or the network certifier's period draw or its scan's draw takes K of
+  what it draws from (or the run published no chain report), the condition live-coins is named, with each such draw,
+  on every figure that rests on the draw (the sampled-proofs verdict where its draw is the one open, the figure of
+  record and its cells), never as a live draw's.
   The realized advice charge is private: the record states ℓ_{a,j} with its source,
   the tied compute audits' free inputs (no advice length and no cap is in them), beside it ℓ_a, the cap of the advice
   the run registered (its published `registration.json`'s compiler `cap_bits`), as a cap, in no term of K, and
