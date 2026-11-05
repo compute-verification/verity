@@ -656,7 +656,7 @@
       "owns": [
         "benchmarks/rho/",
         "benchmarks/circuit_properties/",
-        "benchmarks/covert_witness/"
+        "benchmarks/training_slowdown/"
       ],
       "branch_suffixes": [
         "4207"
