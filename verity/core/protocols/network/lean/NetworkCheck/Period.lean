@@ -2130,6 +2130,107 @@ column 20 that no port holds, and forced zeros. Only column 20 counts; the other
     padCols cf == 1 && forcedZero cf 30 && !forcedZero cf 20 && !forcedZero cf 3 &&
       forcedCols cf == (List.range Flock.WORD).filter (fun c => 16 ≤ c && c != 20) &&
       (forcedCols { (default : Flock.Circuit) with nets := #[("unit", n)], unitNet := 0 }).isEmpty
+
+/-- **Sparse `m`'s first `k` rows**: `min rows k` rows, each of the first `k` as `m` holds it, and its data cut to the
+bytes those rows read (`Flock.Sparse.row`), so none of `m`'s later rows is held. -/
+def takeRows (m : Flock.Sparse) (k : Nat) : Flock.Sparse :=
+  let e := (List.range k).foldl (fun e i => max e (m.start.getD i 0 + 4 * m.len.getD i 0)) 0
+  { m with rows := min m.rows k, data := m.data.extract 0 e, start := m.start.extract 0 k, len := m.len.extract 0 k }
+
+/-- **A net's input rows' count**, `min (inWords · WORD) constPos`, as `forcedZero` and `unheldCols` count them. -/
+def inRowsOf (n : Flock.Net) : Nat := min (n.inWords * Flock.WORD) n.constPos
+
+/-- **Net `n` with its input rows alone**: its header, and its A and B their first `inRowsOf n` rows (`takeRows`). -/
+def inputNet (n : Flock.Net) : Flock.Net :=
+  { n with aT := .pure (takeRows n.a (inRowsOf n)), bT := .pure (takeRows n.b (inRowsOf n)) }
+
+/-- **An audit's circuit file as the period holds it**, parsed whole (`NetworkCheck.CircuitFile.whole`, the session
+verifier's parse): its unit net with its input rows alone (`inputNet`), every other net its header with no rows, and
+the rest as parsed, so no computed row is held past the file's read. The padding it counts is the parse's
+(`forcedCols_trim`, `padCols_trim`). -/
+def trim (cf : Flock.Circuit) : Flock.Circuit :=
+  { cf with nets := cf.nets.mapIdx fun i p =>
+      (p.1, if i = cf.unitNet then inputNet p.2 else { p.2 with aT := default, bT := default }) }
+
+theorem takeRows_len (m : Flock.Sparse) {k i : Nat} (h : i < k) :
+    (takeRows m k).len.getD i 0 = m.len.getD i 0 := by
+  simp only [takeRows, Array.getD_eq_getD_getElem?, Array.getElem?_extract, Nat.zero_add, Nat.sub_zero]
+  by_cases hs : i < m.len.size
+  · have hk : i < min k m.len.size := by omega
+    rw [ite_eq_left hk]
+  · have hk : ¬ i < min k m.len.size := by omega
+    rw [ite_eq_right hk, Array.getElem?_eq_none (by omega : m.len.size ≤ i)]
+
+theorem takeRows_rows (m : Flock.Sparse) (k : Nat) : (takeRows m k).rows = min m.rows k := rfl
+
+theorem takeRows_row_isEmpty (m : Flock.Sparse) {k i : Nat} (h : i < k) :
+    ((takeRows m k).row i).isEmpty = (m.row i).isEmpty := by
+  simp only [Flock.Sparse.row, Array.isEmpty, Array.size_map, Array.size_range, takeRows_len m h]
+
+theorem inputNet_a (n : Flock.Net) : (inputNet n).a = takeRows n.a (inRowsOf n) := rfl
+
+theorem inputNet_b (n : Flock.Net) : (inputNet n).b = takeRows n.b (inRowsOf n) := rfl
+
+theorem trim_unit (cf : Flock.Circuit) :
+    (trim cf).unit = if cf.unitNet < cf.nets.size then inputNet cf.unit else cf.unit := by
+  unfold trim Flock.Circuit.unit
+  simp only [Array.getD_eq_getD_getElem?, Array.getElem?_mapIdx]
+  by_cases h : cf.unitNet < cf.nets.size
+  · simp [h]
+  · simp [h]
+
+theorem unheldCols_trim (cf : Flock.Circuit) : unheldCols (trim cf) = unheldCols cf := by
+  simp only [unheldCols, trim_unit]
+  by_cases h : cf.unitNet < cf.nets.size
+  · rw [ite_eq_left h]; rfl
+  · rw [ite_eq_right h]
+
+theorem forcedZero_trim (cf : Flock.Circuit) {c : Nat} (hc : c < inRowsOf cf.unit) :
+    forcedZero (trim cf) c = forcedZero cf c := by
+  simp only [forcedZero, trim_unit]
+  by_cases h : cf.unitNet < cf.nets.size
+  · rw [ite_eq_left h, inputNet_a, inputNet_b, takeRows_row_isEmpty _ hc, takeRows_row_isEmpty _ hc, takeRows_rows,
+      takeRows_rows]
+    have hn : min ((inputNet cf.unit).inWords * Flock.WORD) (inputNet cf.unit).constPos = inRowsOf cf.unit := rfl
+    have hn' : min (cf.unit.inWords * Flock.WORD) cf.unit.constPos = inRowsOf cf.unit := rfl
+    rw [hn, hn']
+    simp only [Nat.le_min, Nat.le_refl, and_true]
+  · rw [ite_eq_right h]
+
+theorem mem_unheldCols {cf : Flock.Circuit} {c : Nat} (h : c ∈ unheldCols cf) : c < inRowsOf cf.unit := by
+  simp only [unheldCols, List.mem_filter, List.mem_range] at h
+  exact h.1
+
+/-- **The forced-zero padding of an audit's file as the period holds it is the parse's**: `trim` keeps every input row
+`forcedCols` reads. -/
+theorem forcedCols_trim (cf : Flock.Circuit) : forcedCols (trim cf) = forcedCols cf := by
+  rw [forcedCols, forcedCols, unheldCols_trim]
+  exact List.filter_congr fun c h => forcedZero_trim cf (mem_unheldCols h)
+
+/-- **The padding an audit's file as the period holds it counts is the parse's**: `trim` keeps every input row
+`padCols` reads. -/
+theorem padCols_trim (cf : Flock.Circuit) : padCols (trim cf) = padCols cf := by
+  have h : ((unheldCols cf).filter fun c => !forcedZero (trim cf) c) =
+      (unheldCols cf).filter fun c => !forcedZero cf c :=
+    List.filter_congr fun c h => by rw [forcedZero_trim cf (mem_unheldCols h)]
+  rw [padCols, padCols, unheldCols_trim, h]
+
+/- A unit of one input word, a port of 16 at word 0, a self row at column 20 that no port holds, and two computed rows:
+`trim` keeps its 128 input rows alone, their 17 entries' bytes, and the same padding. -/
+#guard
+  let rows := (Array.range (Flock.WORD + 2)).map fun c =>
+    if c < 16 || c == 20 then #[c] else if Flock.WORD ≤ c then #[0, 1] else #[]
+  match Flock.Sparse.ofRows rows (2 ^ 8) with
+  | .ok m =>
+    let n : Flock.Net :=
+      { (default : Flock.Net) with inWords := 1, constPos := Flock.WORD + 2, inGroups := #[⟨0, 1, #[16]⟩],
+                                   aT := .pure m, bT := .pure m, unitLog := 8 }
+    let cf : Flock.Circuit := { (default : Flock.Circuit) with nets := #[("unit", n)], unitNet := 0 }
+    (trim cf).unit.a.rows == Flock.WORD && cf.unit.a.rows == Flock.WORD + 2 && (trim cf).unit.a.data.size == 4 * 17 &&
+      (trim cf).unit.b.row 20 == #[20] && padCols cf == 1 && padCols (trim cf) == 1 &&
+      forcedCols (trim cf) == forcedCols cf
+  | .error _ => false
+
   | .error _ => false
 #guard (circuitsWhy { audits := #[some toyListed] } #[]).isSome
 #guard (circuitsWhy { audits := #[none, some toyListed] } #[(.empty, default), (.empty, default)]) ==
