@@ -546,6 +546,12 @@
   "Properties.Firewall.afterOnTime": {
    "honest": ["Properties.Firewall.afterOnTime_honest"],
    "nontrivial": "Properties.Firewall.afterOnTime_nontrivial"
+  },
+  "Properties.SampledProofs.heldCovered": {
+   "nontrivial": "Properties.SampledProofs.heldCovered_nontrivial"
+  },
+  "Properties.SampledProofs.gatesHeld": {
+   "nontrivial": "Properties.SampledProofs.gatesHeld_nontrivial"
   }
  },
  "unwitnessed": {
@@ -3976,6 +3982,18 @@
    ],
    "assumptions": [],
    "type_hash": "5331eb5f08954cebb0c4dda27e710eeab5c3ec3baba428f68d214b1f2d74f91d"
+  },
+  "Properties.SampledProofs.heldCovered": {
+   "owner": "@network-accounting"
+  },
+  "Properties.SampledProofs.gatesHeld": {
+   "owner": "@network-accounting"
+  },
+  "Properties.SampledProofs.heldCovered_nontrivial": {
+   "owner": "@network-accounting"
+  },
+  "Properties.SampledProofs.gatesHeld_nontrivial": {
+   "owner": "@network-accounting"
   }
  },
  "shape": {
@@ -5223,6 +5241,14 @@
    },
    "Properties.Firewall.afterOnTime": {
     "function": "Core.Firewall.Decision.after",
+    "outcome": "accept"
+   },
+   "Properties.SampledProofs.heldCovered": {
+    "function": "SampledProofs.OneStageZk.checkBlobsAt",
+    "outcome": "accept"
+   },
+   "Properties.SampledProofs.gatesHeld": {
+    "function": "SampledProofs.OneStageZk.checkBlobsAt",
     "outcome": "accept"
    }
   },
