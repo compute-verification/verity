@@ -2673,6 +2673,10 @@
    "honest": ["RecDeploy.HonestHalfFixture.honest_half_fixture"],
    "nontrivial": "Flock.Guarantees.recursiveKS_nontrivial"
   },
+  "Flock.SecurityProofs.ZeroRowForced": {
+   "honest": ["Flock.SecurityProofs.ZeroRowForced_honest"],
+   "nontrivial": "Flock.SecurityProofs.ZeroRowForced_nontrivial"
+  },
   "Pouw.SecurityProofs.Dither.FleetSound": {
    "honest": ["Pouw.SecurityProofs.Dither.FleetSound_honest"],
    "nontrivial": "Pouw.SecurityProofs.Dither.FleetSound_nontrivial"
@@ -3438,9 +3442,9 @@
    "sealed": true
   },
   "Definitions.Flock.Guarantees": {
-   "imports": ["Mathlib", "Definitions.Claims", "Definitions.Flock.Guarantees"],
+   "imports": ["Mathlib", "Definitions.Claims", "Definitions.Flock.Statement", "Definitions.Flock.Guarantees"],
    "except": [],
-   "why": "a guarantee is a Prop over Mathlib, never over a proof",
+   "why": "a guarantee is a Prop over Mathlib and the Flock statement's vocabulary (Definitions.Flock.Statement), never over a proof",
    "sealed": true
   },
   "Definitions.Accounting": {
@@ -7260,6 +7264,15 @@
    "signature": ["Flock.SecurityProofs.ZeroKnowledgeHidden : Flock.Guarantees.ZeroKnowledgeHidden"],
    "assumptions": [],
    "type_hash": "84c0e48cb401d6662d94c2c1f395aeedc6aeeac630cd5e87ee5bb6e6e09009d0"
+  },
+  "Flock.SecurityProofs.ZeroRowForced": {
+   "owner": "@network-accounting"
+  },
+  "Flock.SecurityProofs.ZeroRowForced_honest": {
+   "owner": "@network-accounting"
+  },
+  "Flock.SecurityProofs.ZeroRowForced_nontrivial": {
+   "owner": "@network-accounting"
   },
   "Flock.SecurityProofs.recursiveZK_os_gap": {
    "owner": "@proofs",
@@ -13886,6 +13899,10 @@
       "outcome": "none"
      }
     ]
+   },
+   "Flock.SecurityProofs.ZeroRowForced": {
+    "function": "FlockSoundness.Model.Statement.Satisfies",
+    "outcome": "accept"
    }
   },
   "frozen": {
