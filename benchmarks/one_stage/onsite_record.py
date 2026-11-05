@@ -268,7 +268,8 @@ TIED_READ = ("the tied audits the period's check reads at δ_i (NetworkCheck.Per
              "2^-64), fixed before any coin and set by no params, evidence or answer; each adds its δ_i to eps, Σ_i δ_i "
              "by the union bound. A tied audit drawn whole is read at no δ_i, and adds nothing to eps")
 POOLED_EPS = ("eps, δ_net's δ part (`EPS`), over each monitoring period at the deployment's window count, a window an "
-              "execution phase (`WINDOW_S`): each cell's windows, its phases times its links, times the per-window "
+              "execution phase (`WINDOW_S`): each cell's windows (``phases``: its phases times its links, never a "
+              "Commit window's count, which `publish` holds) times the per-window "
               "term (``per_window``: eps / m, the scans' δ_scan and the charged part, Σ_i δ_i / m), as its cell's rule "
               "scales the run's (`RULES`) and its delta_net states; the run's own period (``run``) is proved. Each "
               "window's δ_net adds ε_ks, ε_bind and ε_tap to it (`ERRORS`), which no check computes")
@@ -1151,10 +1152,10 @@ def pooled_eps(delta: Mapping[str, Any], m: int, p: Mapping[str, Any]) -> dict[s
     read = None if isinstance(readings, Mapping) else len(readings)
     scan, charged = Fraction(delta["scan"]), Fraction(delta["charged"]) / m
 
-    def at(windows: int) -> dict[str, Any]:
-        return {"windows": windows, "eps": str(windows * (scan + charged)), "scan": str(windows * scan),
-                "charged": str(windows * charged)} | (
-            {} if read is None else {"tied_audits_read": str(Fraction(read * windows, m))})
+    def at(phases: int) -> dict[str, Any]:
+        return {"phases": phases, "eps": str(phases * (scan + charged)), "scan": str(phases * scan),
+                "charged": str(phases * charged)} | (
+            {} if read is None else {"tied_audits_read": str(Fraction(read * phases, m))})
 
     tied = {"missing": NO_READINGS} if read is None else {
         "read": read, "delta_i": sorted({r["delta"] for r in readings}), "is": TIED_READ}

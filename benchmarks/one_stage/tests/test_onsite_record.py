@@ -998,7 +998,7 @@ def test_eps_is_pooled_over_each_monitoring_period_at_its_windows_with_the_tied_
     at δ_i = 2^-64: three tied audits read, so eps a window is the scan's δ and one δ_i, and over each monitoring
     period's cell its windows (its phases times its links) times that, the cell's own eps, with the tied audits read
     over those windows. Drawn whole, none is read and eps is the scans' δ alone. The ONSITE line states the count and
-    each period's pooled eps beside the per-window term."""
+    each period's pooled eps beside the per-window term, and the record and its line leave the node as written."""
     sys.path.insert(0, str(HERE.parent.parent / "network_traces"))
     import scan_zk as SZ
     schedule = dataclasses.asdict(SZ.W63K4.params) | {"bucket_ms": 4000}
@@ -1011,18 +1011,19 @@ def test_eps_is_pooled_over_each_monitoring_period_at_its_windows_with_the_tied_
                   held=["free", "circuit"])
     out = accepted(tmp_path, public, windows=3, schedule=schedule)
     assert main([str(out)]) == 0
-    p = json.loads((out / "record" / "onsite.json").read_text())["periods"]
+    text, said = (out / "record" / "onsite.json").read_text(), capsys.readouterr().out.strip()
+    assert SV.public_doc(text) == text and SV.public_line(said) == said
+    p, line = json.loads(text)["periods"], json.loads(said[len("ONSITE "):])["eps_pooled"]
     read, d = len(charged), Fraction(1, 2 ** 64)
 
     def at(w: int) -> dict:
-        return {"windows": w, "eps": str(w * d * (3 + read) / 3), "scan": str(w * d),
+        return {"phases": w, "eps": str(w * d * (3 + read) / 3), "scan": str(w * d),
                 "charged": str(w * d * read / 3), "tied_audits_read": str(Fraction(read * w, 3))}
 
     e = p["eps"]
     assert e["tied_audits"] == {"read": read, "delta_i": [f"1/{2 ** 64}"] * bool(read), "is": OR.TIED_READ}
     assert (e["is"], e["per_window"], e["run"]) == (OR.POOLED_EPS, at(1), at(3))
     assert e["run"]["eps"] == public["eps"] == p["run"]["delta_net"][0]["value"]
-    line = json.loads(capsys.readouterr().out.strip()[len("ONSITE "):])["eps_pooled"]
     assert (line["tied_audits_read"], line["per_window"]) == (read, at(1)["eps"])
     for name in LB.PERIODS:
         for where in ("node", "datacenter", "world"):
@@ -1102,7 +1103,7 @@ def test_eps_is_split_into_the_scans_and_the_charged_audits_delta_beside_each_ce
     assert rec["bound"]["delta"] == {"scan": "1/1048576", "charged": "1/2", "eps_per_phase": "524289/1048576",
                                      "is": OR.DELTA, "charged_audits": {"missing": OR.NO_READINGS}}
     assert (rec["periods"]["eps"]["tied_audits"], rec["periods"]["eps"]["per_window"]) == (
-        {"missing": OR.NO_READINGS}, {"windows": 1, "eps": "524289/1048576", "scan": "1/1048576", "charged": "1/2"})
+        {"missing": OR.NO_READINGS}, {"phases": 1, "eps": "524289/1048576", "scan": "1/1048576", "charged": "1/2"})
     run, year = rec["periods"]["run"], rec["periods"]["year"]["datacenter"]
     assert (run["vacuous"], run["eps_per_phase_below"]) == (False, "1")
     assert year["vacuous"] and Fraction(year["eps_per_phase_below"]) < Fraction(public["eps"])
