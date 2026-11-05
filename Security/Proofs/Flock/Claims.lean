@@ -275,6 +275,7 @@ public import Proofs.Flock.Claims.Recursion.VStarDense
 public import Proofs.Flock.Claims.Recursion.VStarTopsOk
 public import Proofs.Flock.Claims.Recursion.VStarRowsFit
 public import Proofs.Flock.Claims.Recursion.HonestHalf
+public import Proofs.Flock.Claims.Recursion.IrDep
 public import Proofs.Flock.Claims.Recursion.HonestHalfTops
 public import Proofs.Flock.Claims.Recursion.Assumptions.HonestFixture
 public import Proofs.Flock.Claims.Recursion.HonestHalfFixture
