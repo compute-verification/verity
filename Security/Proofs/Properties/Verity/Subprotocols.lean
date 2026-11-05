@@ -374,7 +374,7 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [De
 /-- **The network certifier's refinement: the network certifier's per-window bound at its compiled component.** At every
 window `i` and every value `ξ` of the other coins, the probability over the network audit's own coins that
 its verdict `A .network` holds (at the code, `Vocab.Coupling.verdict`: onsite's network component,
-`NetworkCheck.Period.protocol`, accepts its case in what the prover sent, its releases are logged, and the coupling's
+`NetworkCheck.Period.blobProtocol`, accepts its case in what the prover sent, its releases are logged, and the coupling's
 break is absent) while window `i` fails its good event
 (`WindowGood`) is at most the sampled verifier's `PrBad` at the leak relation at the network certifier's rows, at the
 window's statement and prover: `RealizesCommOfPeriodLeakAccepted.window_le` (and `PeriodClaim.realizes`'s `window_le`)

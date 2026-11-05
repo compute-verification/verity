@@ -21,13 +21,16 @@ import composite as C
 SAMPLED = "verity/sampled-proofs/v1"
 POUW = "verity/pouw/period/v1"
 POLICY = "verity/inference-only/v0"
+NETWORK = "verity/certifier/v0"
 
 
 def put(d: Path, id: str, params: dict, commitment: bytes, evidence: bytes, digest: bytes | None,
-        blobs: list[str] | None = None, verdict: str = "undecided", reason: str | None = None) -> Path:
+        blobs: list[str] | None = None, verdict: str = "undecided", reason: str | None = None,
+        circuits: list[str] | None = None) -> Path:
     d.mkdir(parents=True, mode=0o700)
     case = {"commitment": commitment.hex(), "evidence": evidence.hex(), "params": params}
-    (d / "case.json").write_text(json.dumps(case | ({"blobs": blobs} if blobs else {})))
+    case |= ({"blobs": blobs} if blobs else {}) | ({"circuits": circuits} if circuits else {})
+    (d / "case.json").write_text(json.dumps(case))
     (d / "answer.json").write_text(json.dumps({"commitment": digest.hex() if digest else None, "protocol": id,
                                                "reason": reason, "verdict": verdict}))
     return d
@@ -270,3 +273,42 @@ def test_the_check_runs_the_products_executable_on_the_private_files_and_blobs(t
     got = json.loads((priv / "answer.json").read_text())
     assert got["args"] == ["check", str(priv / "params.json"), str(priv / "commitment.bin"),
                            str(priv / "evidence.json"), "/blob"]
+    assert not (priv / "network-answer.json").exists()
+    assert "circuit_files" not in json.loads((tmp_path / "public" / "composite.json").read_bytes())
+
+
+def network_cases(tmp_path: Path) -> list[str]:
+    """remote-network-no-pouw's three cases, the network certifier's listing two circuit files."""
+    cert = put(tmp_path / "cert", NETWORK, {"w": 1}, b"\x04", b"{}", b"\xdd" * 64, ["/cert.blob"],
+               circuits=["/v3c/m0/circuit.txt", "/scan/circuit.txt"])
+    v1 = put(tmp_path / "v1", SAMPLED, {}, b"\x01", b"{}", b"\xaa" * 64, ["/c.txt"])
+    return ["--cases", str(cert), "--cases", str(v1), "--cases", str(policy(tmp_path))]
+
+
+def test_the_network_certifiers_circuit_files_follow_the_blobs_after_circuits(tmp_path):
+    exe = lean(tmp_path, {"protocol": "verity/remote-network-no-pouw/v0", "verdict": "reject", "reason": "x"}, 1)
+    assert C.main(["remote-network-no-pouw", *network_cases(tmp_path), *outs(tmp_path), "--exe", exe]) == 1
+    priv = tmp_path / "private"
+    got = json.loads((priv / "answer.json").read_text())
+    assert got["args"] == ["check", str(priv / "params.json"), str(priv / "commitment.bin"),
+                           str(priv / "evidence.json"), "/cert.blob", "/c.txt",
+                           "--circuits", "/v3c/m0/circuit.txt", "/scan/circuit.txt"]
+    assert (priv / "circuits.txt").read_text() == "/v3c/m0/circuit.txt\n/scan/circuit.txt\n"
+    assert not (priv / "network-answer.json").exists()
+    public = (tmp_path / "public" / "composite.json").read_text()
+    assert json.loads(public)["circuit_files"] == "by path"
+    assert "circuit.txt" not in public
+
+
+def test_an_accepted_composite_writes_the_network_certifiers_own_answer(tmp_path):
+    """Every subprotocol of an accepted composite accepted, so the period's answer is its public outputs and profile
+    under its id, with the digest its case's answer binds, in `Core.Answer.toJson`'s form."""
+    public = {NETWORK: {"K": 7, "terms": [1, 2]}, POLICY: {"g": 1}, SAMPLED: {"units": 3}}
+    profile = {NETWORK: {"links": 2}, POLICY: None, SAMPLED: {"levels": []}}
+    exe = lean(tmp_path, {"protocol": "verity/remote-network-no-pouw/v0", "verdict": "accept", "reason": None,
+                          "public": public, "profile": profile}, 0)
+    assert C.main(["remote-network-no-pouw", *network_cases(tmp_path), *outs(tmp_path), "--exe", exe]) == 0
+    assert (tmp_path / "private" / "network-answer.json").read_bytes() == \
+        b'{"commitment":"' + b"dd" * 64 + b'","profile":{"links":2},"protocol":"verity/certifier/v0",' \
+        b'"public":{"K":7,"terms":[1,2]},"reason":null,"verdict":"accept"}\n'
+    assert not (tmp_path / "public" / "network-answer.json").exists()

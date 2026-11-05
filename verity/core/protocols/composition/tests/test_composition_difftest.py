@@ -834,6 +834,65 @@ def test_remote_network_without_pouw_is_the_network_certifiers_verdict_beside_th
         assert out["reason"] == f"params: {R.POUW_PERIOD.id} is not a component of this composition", out
 
 
+def _check_composite(exe: Path, d: Path, params: dict, evidence: list[dict], *args: str) -> dict:
+    """`EXE check params.json commitment.bin evidence.json ARGS…` on the composite's params and its components' cases
+    `evidence`, under a commitment that binds nothing: its answer, its exit status its verdict's."""
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "params.json").write_text(canonical(params))
+    (d / "commitment.bin").write_bytes(bytes(64))
+    (d / "evidence.json").write_text(canonical({"components": evidence}))
+    p = subprocess.run([exe, "check", *(str(d / n) for n in ("params.json", "commitment.bin", "evidence.json")), *args],
+                       capture_output=True, text=True)
+    out = json.loads(p.stdout)
+    assert p.returncode == {R.ACCEPT: 0, R.REJECT: 1, R.UNDECIDED: 2}[out["verdict"]], (p.returncode, p.stderr)
+    return out
+
+
+@pytest.mark.slow
+def test_the_network_certifiers_circuit_files_are_read_by_path_or_among_the_blobs(tmp_path):
+    """`remote-network-no-pouw check P C E [BLOB …] --circuits CIRCUIT … [--read-gb N]` (`Core.PeriodFiles.main`, which
+    onsite's and remote with the network certifier's executables share) on a period that lists `audit-listed`'s circuit
+    file composed as a served template's is (the network certifier's `_composed`), beside refused cases of the policy
+    and sampled proofs. The period accepts with its file read by path, at any budget, as it does with the file among the
+    blobs (the verifier of record's `NetworkCheck.Period.blobProtocol`), so the composite's rejection names only the other
+    two. With no file, a file that can't be read, or a file of another SHA-512 than the listing's, by path or among the
+    blobs, the period is refused by name; and a misuse of `--circuits` or `--read-gb` exits 64. Only this test runs the
+    composites' executables on a period's circuit files. It takes about a minute: composing the file about 15 s and each
+    check about 6 s."""
+    exe = D.build(PROTOCOLS / "onsite", "remote-network-no-pouw")
+    period = R.PERIOD.build("audit-listed", 0, small=True)
+    text = R.PERIOD._composed(period, tmp_path / "circuit.txt")
+    circuit = str(tmp_path / "circuit.txt")
+    net = R.PERIOD._relisted(period, [text])
+    assert R.PERIOD.PC.reference_with(net, [text])["verdict"] == R.ACCEPT
+
+    def composite(net: dict) -> tuple[dict, list[dict]]:
+        ps = {C.id: {} for C in R.REMOTE_NETWORK_NO_POUW.components} | {R.CERTIFIER.id: net["params"]}
+        cert = lambda i, k: net[k] if i == R.CERTIFIER.id else ""  # noqa: E731
+        return ({"components": [{"id": i, "params": p} for i, p in ps.items()]},
+                [{"commitment": cert(i, "commitment"), "evidence": cert(i, "evidence"), "id": i, "params": p}
+                 for i, p in ps.items()])
+
+    listed, other = composite(net), composite(R.PERIOD._relisted(period, [text + "\n"]))
+    certifier = f"{R.CERTIFIER.id} reject: "
+    for k, args in enumerate([("--circuits", circuit), (circuit,), ("--circuits", circuit, "--read-gb", "0")]):
+        out = _check_composite(exe, tmp_path / f"accepted-{k}", *listed, *args)
+        assert out["verdict"] == R.REJECT and out["reason"].startswith(f"{R.INFERENCE_ONLY.id} reject: "), (args, out)
+        assert certifier not in out["reason"], (args, out)
+    for k, (case, args, fragment) in enumerate([
+            (listed, (), "circuit files: circuit file 0: no blob has the SHA-512"),
+            (listed, ("--circuits", str(tmp_path / "absent.txt")), "circuit files: circuit file 0: "),
+            (other, ("--circuits", circuit), "is not its listing's"),
+            (other, (circuit,), "circuit files: circuit file 0: no blob has the SHA-512")]):
+        out = _check_composite(exe, tmp_path / f"refused-{k}", *case, *args)
+        assert out["reason"].startswith(certifier) and fragment in out["reason"], (k, out)
+    files = [str(tmp_path / "accepted-0" / n) for n in ("params.json", "commitment.bin", "evidence.json")]
+    for args in (["--read-gb", "1"], ["--circuits", circuit, "--read-gb", "x"], ["--circuits", circuit, "--read-gb"],
+                 ["--circuits", circuit, "--circuits", circuit]):
+        p = subprocess.run([exe, "check", *files, *args], capture_output=True, text=True)
+        assert p.returncode == 64 and "usage: " in p.stderr, (args, p.returncode, p.stderr)
+
+
 @pytest.mark.slow
 def test_remote_network_agrees(remote_network_server):
     """Remote with the network certifier's policy and integrity meet on one record (left to the components) and on two

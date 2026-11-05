@@ -258,14 +258,18 @@ def test_the_pieces_certifier_row_is_the_period_checks_accept_and_composes_into_
     assert where[CP.PREMISE].startswith("assumed, the auditor's devices not placed")
     assert [(x["name"], x["counted"]) for x in where["links"]] == [("certified", True), ("gate", False)]
     assert json.loads((piece / "chain" / "report" / "report.json").read_text())["verdict"] == "accepted"
-    assert {p.name for p in piece.iterdir()} - {"piece.json"} == {"answer.json", CP.CASE, CP.CIRCUITS, "chain",
-                                                                  "piece.log"}
+    assert {p.name for p in piece.iterdir()} - {"piece.json"} == {"answer.json", CP.CASE, CP.CIRCUITS, CP.SCAN_CIRCUITS,
+                                                                  "chain", "piece.log"}
     assert [(f.file, f.path) for f in KS.scan(piece)[0]] == [("piece.log", "")]  # served_verdicts.sh's CERTIFIER_PRIVATE
     seen = {f.name: f.read_bytes() for f in (tmp_path / "seen").iterdir()}
     raw = (piece / CP.CASE).read_bytes()
     case = json.loads(raw)
-    assert sorted(case) == ["commitment", "evidence", "params"] and raw == canonical_json(case) + b"\n"
+    assert sorted(case) == ["circuits", "commitment", "evidence", "params"] and raw == canonical_json(case) + b"\n"
+    assert case["circuits"] == [str((piece / CP.CIRCUITS / f"{SCAN_PIN}.txt").resolve())]
     assert case["params"]["scan_circuits"] == [{"sha512": SCAN_PIN, "template": "t:first"}]
+    (reg,) = json.loads(bytes.fromhex(case["commitment"]))["windows"]
+    assert reg == {"program": "ab" * 64} and json.loads((piece / CP.SCAN_CIRCUITS).read_text()) == {
+        "circuits": case["params"]["scan_circuits"], "format": CP.SCAN_CIRCUITS_FORMAT, "registration": reg}
     assert seen["argv"].split() == [f"{SCAN_PIN}.txt".encode()] and seen[f"{SCAN_PIN}.txt"] == SCAN_CIRCUIT
     assert [p.name for p in (piece / CP.CIRCUITS).iterdir()] == [f"{SCAN_PIN}.txt"]
     assert (piece / CP.CIRCUITS / f"{SCAN_PIN}.txt").read_bytes() == SCAN_CIRCUIT
@@ -330,8 +334,8 @@ def _decide(tmp_path, warden, verdict="accepted", w=None, records=None, check=No
     (tmp_path / "dir").mkdir()
     a, unpacked = CP.decide(d, K, tmp_path / "dir", record=_auditors(warden), chain=chain,
                             check=check or (lambda c, f, p: pytest.fail("no check")), rows=lambda run: None,
-                            case=lambda run, scan: {"params": {"audits": [], "scan_circuits": []}, "commitment": "",
-                                                    "evidence": ""})
+                            case=lambda run, scan: {"params": {"audits": [], "scan_circuits": []}, "evidence": "",
+                                                    "commitment": canonical_json({"audits": [], "windows": [{}]}).hex()})
     assert unpacked is not None and unpacked.parent == d / CP.PRIVATE / RUN
     return a
 
@@ -823,12 +827,15 @@ def test_the_split_piece_chains_on_v3cs_window_and_checks_its_period_json(tmp_pa
     assert (tmp_path / "seen" / "argv").read_text().split() == [f"{pin}.txt", f"{SCAN_PIN}.txt"]
     assert sorted(p.name for p in (piece / CP.CIRCUITS).iterdir()) == [f"{SCAN_PIN}.txt"]
     assert params["circuit"] == CIRCUIT["program"]
-    assert json.loads(bytes.fromhex(json.loads((piece / CP.CASE).read_text())["commitment"]))["audits"] == [
-        PERIOD["registration"]]
+    case = json.loads((piece / CP.CASE).read_text())
+    assert json.loads(bytes.fromhex(case["commitment"]))["audits"] == [PERIOD["registration"]]
+    assert case["circuits"] == [str((v3c / CP.CIRCUITS / f"{pin}.txt").resolve()),
+                                str((piece / CP.CIRCUITS / f"{SCAN_PIN}.txt").resolve())]
     got = S.pieces(d, K, tmp_path / "pieces", env=dict(os.environ, CERTIFIER_CMD="true"))
     assert (got["certifier"]["verdict"], got["certifier"]["rc"]) == ("accept", 0)
-    assert {p.name for p in piece.iterdir()} - {"piece.json"} == {"answer.json", CP.CASE, CP.CHAINED, CP.CIRCUITS,
-                                                                  "chain", "chain.log", "period.log", "piece.log"}
+    assert {p.name for p in piece.iterdir()} - {"piece.json"} == {
+        "answer.json", CP.CASE, CP.CHAINED, CP.CIRCUITS, CP.SCAN_CIRCUITS, "chain", "chain.log", "period.log",
+        "piece.log"}
     rec, line = _record(monkeypatch, capsys, d, tmp_path / "pieces")
     assert BR.check(rec) == {} and line["verdicts"]["the network certifier"] == "accept"
 
@@ -841,6 +848,46 @@ def test_a_chain_the_split_rejects_stands_and_its_period_step_checks_nothing(tmp
     assert a["verdict"] == "reject" and a["reason"].startswith("the chain refused") and not (piece / CP.CHAINED).exists()
     assert _hook("period", d, piece, v3c, *_lean(tmp_path, {})) == 1
     assert json.loads((piece / "answer.json").read_text()) == a and not (tmp_path / "seen").exists()
+
+
+def test_a_case_only_period_step_checks_nothing_and_binds_the_case_the_composites_network_leg_reads(tmp_path, warden):
+    """Where V3c's window-circuit record and its H1_TIE ``-tie`` one both lie beside V3C, which one V3c's audit is held
+    to is the run's to name (``--circuit``), else the step refuses. With ``--case-only`` the period step runs no
+    ``network-period``: it writes the case, whose ``circuits`` are the period's circuit files in the listing's order
+    (V3c's in circuits/ beside ``--period``'s period.json, then the scan's in DIR), and an undecided answer binding the
+    case's commitment by the digest ``network-period`` gives it, which `composite.py` binds in its stead and whose files it
+    hands its executable; it exits 0, and again on a rerun."""
+    import composite as C
+    from verity.ml.commitments.identity import tagged_sha512
+    d = _serve_dir(tmp_path / "serve", warden)
+    v3c, piece = _v3c(d), tmp_path / "pieces" / "certifier"
+    tied = d / "window-circuit-w3-8-32-4-4-16-tie.json"
+    tied.write_text(json.dumps({**CIRCUIT, "program": "7e" * 64}))
+    with pytest.raises(CP.NotRun, match="2 beside .*-tie.json\\): name V3c's with --circuit$"):
+        CP.class_circuit(v3c)
+    assert CP.class_circuit(v3c, tied) == "7e" * 64
+    assert _hook("chain", d, piece, v3c, *_chained(tmp_path, v3c, w=warden["w"])) == 0
+    text = b"flock-ir-unit/v2 v3c stand-in\n"
+    pin = hashlib.sha512(text).hexdigest()
+    scratch = tmp_path / "scratch"
+    (scratch / CP.CIRCUITS).mkdir(parents=True)
+    (scratch / CP.CIRCUITS / f"{pin}.txt").write_bytes(text)
+    (scratch / "period.json").write_text(json.dumps({**PERIOD, "circuits": [{"sha512": pin, "template": "t:v3c"}]}))
+    args = [*_lean(tmp_path, {}), "--period", str(scratch / "period.json"), "--circuit", str(tied), "--case-only"]
+    for _ in range(2):
+        assert _hook("period", d, piece, v3c, *args) == 0, (piece / "period.log").read_text()
+        assert (piece / "period.log").read_text().splitlines()[-1].startswith("CERTIFIER-CASE {")
+    assert not (tmp_path / "seen").exists()
+    case = json.loads((piece / CP.CASE).read_text())
+    assert case["circuits"] == [str((scratch / CP.CIRCUITS / f"{pin}.txt").resolve()),
+                                str((piece / CP.CIRCUITS / f"{SCAN_PIN}.txt").resolve())]
+    assert case["params"]["circuit"] == "7e" * 64
+    digest = tagged_sha512(CR.PERIOD_TAG, bytes.fromhex(case["commitment"]))
+    assert json.loads((piece / "answer.json").read_text()) == {
+        **CP.answer("undecided", CP.CASE_ONLY), "commitment": digest.hex()}
+    leg = C.piece(piece)
+    assert (leg["id"], leg["digest"], leg["circuits"]) == (CP.PROTOCOL, digest, case["circuits"])
+    assert sorted((f.file, f.path) for f in KS.scan(piece)[0]) == [("chain.log", ""), ("period.log", "")]
 
 
 @pytest.mark.parametrize("case", ["no v3c window", "time limit", "no chain step", "a scan of no v3c", "no period.json",

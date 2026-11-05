@@ -2,10 +2,11 @@
 # inference-only policy (`verity/inference-only/v0`), work (PoUW's period credit, `verity/pouw/period/v1`), space (PoUS's
 # run check), bandwidth (the remote bandwidth session), communication (the network certifier over the period,
 # `verity/certifier/v0`) and the wipe (`verity/wipe/v0`). Its executable is the core CLI (`onsite id | check | serve`),
-# which the difftest drives. Code: no Mathlib.
+# which the difftest drives, whose `check` also takes the period's circuit files by path (CorePeriodFiles.lean). Code: no
+# Mathlib.
 name = "core_onsite"
 defaultTargets = ["CoreOnsite", "onsite", "CoreRemoteNetwork", "remote-network", "CoreRemoteNetworkNoPouw",
-  "remote-network-no-pouw", "CoreComposites", "product"]
+  "remote-network-no-pouw", "CoreComposites", "product", "CorePeriodFiles"]
 
 [leanOptions]
 autoImplicit = false
@@ -73,7 +74,7 @@ root = "OnsiteMain"
 
 # Remote with the network certifier (`verity/remote-network/v0`): remote's subprotocols and the network certifier's
 # period, under remote's ties and its own (CoreRemoteNetwork.lean). Its executable is the core CLI (`remote-network id | check |
-# serve`).
+# serve`), whose `check` also takes the period's circuit files by path (CorePeriodFiles.lean).
 [[lean_lib]]
 name = "CoreRemoteNetwork"
 
@@ -83,7 +84,8 @@ root = "RemoteNetworkMain"
 
 # Remote with the network certifier, without PoUW (`verity/remote-network-no-pouw/v0`): its subprotocols but PoUW's period,
 # under remote's record subprotocols and its egress tie (CoreRemoteNetworkNoPouw.lean). Its executable is the core CLI
-# (`remote-network-no-pouw id | check | serve`).
+# (`remote-network-no-pouw id | check | serve`), whose `check` also takes the period's circuit files by path
+# (CorePeriodFiles.lean).
 [[lean_lib]]
 name = "CoreRemoteNetworkNoPouw"
 
@@ -99,3 +101,9 @@ name = "CoreComposites"
 [[lean_exe]]
 name = "product"
 root = "ProductMain"
+
+# The command line of the composites with the network certifier's period, whose `check` takes the circuit files the
+# period lists by path after `--circuits`, within a budget (`--read-gb N`), in place of among the blobs
+# (CorePeriodFiles.lean).
+[[lean_lib]]
+name = "CorePeriodFiles"

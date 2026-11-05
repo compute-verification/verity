@@ -14,7 +14,7 @@ sampled proofs, and the one record of every verdict (the block record).
     served_verdicts.py pearlplus DIR --served FILE --verify FILE [--unretained FILE] [--gate CMD] [--key-sha512 HEX]
                                  [--main FILE]
     served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --registration FILE --pieces DIR --out DIR
-                              [--node NAME] [--product P] [--deferred WHY]
+                              [--node NAME] [--product P] [--deferred WHY] [--network-answer FILE]
     served_verdicts.py public-registration REGISTRATION
     served_verdicts.py advice-line SERVE_DIR --window K --compiler FILE --coins-after T
     served_verdicts.py front-line SESSION
@@ -115,7 +115,11 @@ audit that opened the advice (`prove_path/run.sh`'s ``PP_RECORDS=1``, a developm
 isn't there and an answer committing to another registration than it are each an ``error`` row; with ``--deferred``
 that audit is left to a follow-on, and sampled proofs' row is ``missing``, naming why; each other
 subprotocol's from
-``--pieces/<component>/answer.json`` (`piece_row`), else a ``missing`` row naming why. Each answer is about the server
+``--pieces/<component>/answer.json`` (`piece_row`), else a ``missing`` row naming why. With ``--network-answer``, the
+network certifier's row where its period step wrote the case alone, its answer undecided (`certifier_piece.py period
+--case-only`), is the period's own answer as the composite's network leg gave it (`network_row`: `composite.py`'s
+``network-answer.json``, which must bind the commitment the piece's answer binds), or ``missing`` where there is no
+such file (`NO_NETWORK_ANSWER`: that leg didn't accept); any other row of it stands. Each answer is about the server
 `piece_server` names: sampled proofs' the record's node, a piece's the one its ``served.json`` names, else the node it ran
 on, and the wipe's the one its ``served.json`` names. They go into the window report (``verdicts.json``, `row_of`'s rows,
 with each one's server) and from it the block record (``block-record.json``, `block_record.from_period`, held by
@@ -1306,6 +1310,33 @@ def piece_server(key: str, pieces_dir: Path) -> tuple[str | None, str]:
     return served.get("server") or ran.get("server"), served.get("source") or "real"
 
 
+#: the network certifier's row where its period step wrote the case alone and the composite's network leg wrote no answer
+NO_NETWORK_ANSWER = ("its period step wrote the case alone (--case-only), and the composite's network leg didn't accept: "
+                     "not established, the composite's verdict stands")
+
+
+def network_row(row: Mapping[str, Any], answer: Path, pieces_dir: Path, run: str | None = None) -> dict[str, Any]:
+    """The network certifier's row ``row`` (`piece_row`'s) under ``record --network-answer``: where its period step left
+    it undecided (``--case-only``), the period's own answer as the composite's network leg gave it, the file
+    ``answer`` (`composite.py`'s ``network-answer.json``, written only where that composite accepted), which must bind
+    the commitment the piece's answer binds; ``missing`` (`NO_NETWORK_ANSWER`) where there is no such file. Any other
+    row stands: a piece that refused, rejected or erred is its own verdict."""
+    owner = PIECES["communication"][2]
+    if row.get("verdict") != "undecided":
+        return dict(row)
+    if not answer.is_file():
+        return {"verdict": "missing", "owner": owner, "why": NO_NETWORK_ANSWER}
+    try:
+        got = row_of(owner, json.loads(answer.read_text()), pieces_dir / PIECES["communication"][1], run)
+    except ValueError as e:
+        return {"verdict": "error", "owner": owner,
+                "reason": f"the composite's network answer: {type(e).__name__}: {e}"[:2000]}
+    if got["commitment"] != row.get("commitment"):
+        return {"verdict": "error", "owner": owner,
+                "reason": "the composite's network answer binds another commitment than the period step's case"}
+    return got
+
+
 def _ratio(e: Fraction, deltas: Sequence[Fraction]) -> str:
     """``e`` exactly, as ``d + 2^-n`` where it is one of ``deltas`` plus a power of two."""
     for d in deltas:
@@ -1513,6 +1544,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     r.add_argument("--pieces", type=Path, required=True)
     r.add_argument("--out", type=Path, required=True)
     r.add_argument("--deferred", help="what the run left to a follow-on and why, which the record carries")
+    r.add_argument("--network-answer", type=Path, help="composite.py's network-answer.json: the network certifier's "
+                   "period answer where its period step wrote the case alone (`network_row`)")
     for q in (p, r):
         q.add_argument("--node", default=socket.gethostname())
         q.add_argument("--product", default="onsite")
@@ -1640,6 +1673,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     run = os.environ.get("RESEARCH_RUN_ID")
     keys = [*PIECES, "wipe"]
     got = {k: piece(k, a.pieces, run) for k in keys}
+    if a.network_answer is not None:
+        row, at = got["communication"]
+        got["communication"] = (network_row(row, a.network_answer, a.pieces, run), at)
     integrity = ({"verdict": "missing", "owner": INTEGRITY_OWNER, "why": f"deferred: {a.deferred}"[:2000]} if a.deferred
                  else sampled_proofs_row(a.sampled_proofs, run, a.registration))
     rows = {"integrity": integrity, **{k: row for k, (row, _) in got.items()}}

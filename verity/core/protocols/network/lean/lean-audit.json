@@ -84,6 +84,11 @@
    "imports": ["NetworkCheck.Circuit", "Std.Data.HashMap"],
    "except": [],
    "why": "a stated record's members are code: the circuit check's stated record and Lean's hash map, no Mathlib and nothing of Security"
+  },
+  "NetworkCheck.PeriodBlobs": {
+   "imports": ["NetworkCheck.Period", "NetworkCheck.CircuitFile", "CoreProtocol.Blobs"],
+   "except": [],
+   "why": "the period's check with its listed circuit files among the caller's blobs or read by path is code: the period's listing, trim and check, the circuit file reader, and the core interface's blobs, no Mathlib and nothing of Security"
   }
  },
  "reads_exempt": {

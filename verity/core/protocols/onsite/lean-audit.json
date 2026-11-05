@@ -1,10 +1,10 @@
 {
- "roots": ["CoreOnsite", "CoreRemoteNetwork", "CoreRemoteNetworkNoPouw", "CoreComposites"],
+ "roots": ["CoreOnsite", "CoreRemoteNetwork", "CoreRemoteNetworkNoPouw", "CoreComposites", "CorePeriodFiles"],
  "exempt": {
-  "OnsiteMain": "the onsite executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol",
+  "OnsiteMain": "the onsite executable's entry point, one line; its command is Core.PeriodFiles.main of Core.Onsite.protocolWith, audited under CorePeriodFiles",
   "ProductMain": "the product executable's entry point, one line; its command is Core.Composites.main, audited under CoreComposites",
-  "RemoteNetworkMain": "the remote-network executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol",
-  "RemoteNetworkNoPouwMain": "the remote-network-no-pouw executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol"
+  "RemoteNetworkMain": "the remote-network executable's entry point, one line; its command is Core.PeriodFiles.main of Core.RemoteNetwork.protocolWith, audited under CorePeriodFiles",
+  "RemoteNetworkNoPouwMain": "the remote-network-no-pouw executable's entry point, one line; its command is Core.PeriodFiles.main of Core.RemoteNetworkNoPouw.protocolWith, audited under CorePeriodFiles"
  },
  "layers": {
   "CoreOnsite": {
@@ -14,7 +14,7 @@
     "CoreComposition.Tie",
     "MemoryChallenger.WipeProtocol",
     "NciCheck.Protocol",
-    "NetworkCheck.Period",
+    "NetworkCheck.PeriodBlobs",
     "PousCheck.RunProtocol",
     "PouwCheck.Period",
     "RemoteAudit.P2Protocol",
@@ -25,9 +25,14 @@
    "why": "the program is code: the core interface, C-Flock's Lean and its components' ports, no Mathlib and nothing of Security"
   },
   "CoreRemoteNetwork": {
-   "imports": ["CoreComposition.Cases", "CoreComposition.Stubs", "CoreRemote", "NetworkCheck.Period"],
+   "imports": ["CoreComposition.Cases", "CoreComposition.Stubs", "CoreRemote", "NetworkCheck.PeriodBlobs"],
    "except": [],
    "why": "remote with the network certifier: code over remote's composite and the network certifier's period, no Mathlib and nothing of Security"
+  },
+  "CorePeriodFiles": {
+   "imports": ["CoreComposition.Blobs", "NetworkCheck.PeriodBlobs", "NetworkCheck.PeriodFiles"],
+   "except": [],
+   "why": "the command line of the composites with the network certifier's period, whose check reads the period's listed circuit files by path within a budget: code over the core interface's blobs and the period's file reader and check, no Mathlib and nothing of Security"
   },
   "CoreRemoteNetworkNoPouw": {
    "imports": ["CoreComposition.Cases", "CoreComposition.Stubs", "CoreRemoteNetwork"],

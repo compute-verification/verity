@@ -1,4 +1,4 @@
-import CoreProtocol.Cli
 import CoreRemoteNetworkNoPouw
+import CorePeriodFiles
 
-def main (args : List String) : IO UInt32 := Core.RemoteNetworkNoPouw.protocol.main args
+def main (args : List String) : IO UInt32 := Core.PeriodFiles.main Core.RemoteNetworkNoPouw.protocolWith args
