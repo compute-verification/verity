@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.ZK.RealLeaves
+module
+
+public import Proofs.Flock.Soundness.ZK.RealLeaves
 
 /-!
 # An opening's empty class at one hm96 leaf
@@ -12,6 +14,8 @@ release `bits u`. That is T1's bound twice. T1 makes the leaf ideal, so the even
 `bits u` may be swapped for the release `P ω`. T1 on the complement then makes the leaf real again, where the leaf's
 own coins and salt release `P ω`.
 -/
+
+@[expose] public section
 
 namespace Verity.Game
 
