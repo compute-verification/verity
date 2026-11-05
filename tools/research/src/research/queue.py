@@ -3938,27 +3938,25 @@ def lock_drops(repo: Path, base: str, head: str, merged: str | None = None) -> l
         if f"{base}:{f}" not in blobs or f"{merged}:{f}" not in blobs:
             continue
         try:
-            was, now = (json.loads(blobs[f"{c}:{f}"]) for c in (base, merged))
+            was, now, had, has = (json.loads(blobs[k]) if k in blobs else None
+                                  for k in (f"{base}:{f}", f"{merged}:{f}", f"{fork}:{f}", f"{head}:{f}"))
         except ValueError as e:
-            out.append(f"{f}: not JSON on `{BRANCH}` or merged ({e}), so what it drops can't be told")
+            out.append(f"{f}: not JSON on `{BRANCH}`, merged, at the merge base or at the head ({e}), so what it drops can't be "
+                       "told")
             continue
         if isinstance(was, dict) and isinstance(now, dict):
-            own = _own_drops(blobs.get(f"{fork}:{f}"), blobs.get(f"{head}:{f}"))
+            own = _own_drops(had, has)
             out += [f"{f}: {d}" for d in dropped_entries(was, now) if d not in own]
     return out
 
 
-def _own_drops(fork: bytes | None, head: bytes | None) -> set[str]:
+def _own_drops(fork: object, head: object) -> set[str]:
     """The `shape.inline` premises `dropped_entries` finds from the lock at the merge base (``fork``) to the head's own
-    (``head``): what the head's regeneration dropped itself, empty when either is missing or doesn't parse.  A frozen key is
-    no regeneration's to drop, so its drop stays refused."""
-    try:
-        was, now = (json.loads(b) if b is not None else None for b in (fork, head))
-    except ValueError:
+    (``head``), both parsed: what the head's regeneration dropped itself, empty when either is missing.  A frozen key is no
+    regeneration's to drop, so its drop stays refused."""
+    if not (isinstance(fork, dict) and isinstance(head, dict)):
         return set()
-    if not (isinstance(was, dict) and isinstance(now, dict)):
-        return set()
-    return {d for d in dropped_entries(was, now) if d.startswith("shape.inline[")}
+    return {d for d in dropped_entries(fork, head) if d.startswith("shape.inline[")}
 
 
 def lock_drop_refusal(drops: list[str], onto: str = BRANCH) -> str:
