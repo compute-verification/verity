@@ -27,9 +27,11 @@ side link's `L` bits with the stream's `ρ` among them, the `q` queries, the sam
 `RateAudit.lean`'s, and a run's world is `Rate.World`, whose `store` answers completions.
 
 `RealizesRatePartial` is `RealizesRate` (`RateAuditJoint.lean`) for a joint run whose bandwidth audit a partial device
-plays, without `RealizesRate`'s compute field: that the game's compute and the compute account's work share no work is
-the named assumption `Accounting.Assumptions.RateComputeAdditive` (the actual-circuit model's W), which the guarantees take
-as a hypothesis.
+plays, its compute field at `c_tag` per tag and `cost x` per completion of `x` bits: the game's compute is charged to
+the accounts other than the compute account, so it shares no work with what the compute audit certifies (W). In the
+device model that is how ops are charged (`Step.Fits` charges each op once). On the actual circuit, whose gates carry
+no account, it is the conjecture that PoUW's work and the completions share no gate, the remote audit's
+`Accounting.Remote.Assumptions.ComputeAdditive`.
 -/
 
 @[expose] public section
@@ -172,12 +174,13 @@ end Accounting.Rate
 
 namespace Accounting
 
-/-- Run `r`'s bandwidth audit is the rate audit's game with partial completion, played at each value of the other
-audits' coins by a partial device within the device model's limits over the bandwidth window, whose ingress the
-bandwidth account's reads from device memory cover. Unlike `RealizesRate`, it says nothing of the game's compute: that
-it shares no work with the compute account is `Accounting.Assumptions.RateComputeAdditive`. -/
-structure RealizesRatePartial {N b h ρ s : ℕ} {ι : Type} [Fintype ι] {d : Device ι} {α ΩW ΩS : Type} [Fintype α]
-    (r : Run d α ΩW (RateCoins N b h ρ s) ΩS) where
+/-- Run `r` realizes the rate audit's game with partial completion at price `p`, `c_tag` per tag and `cost x` per
+completion of `x` bits: its bandwidth audit is the game, played at each value of the other audits' coins by a partial
+device within the device model's limits over the bandwidth window, whose ingress the bandwidth account's reads from
+device memory cover and whose compute the work of the accounts other than the compute account covers, as in
+`RealizesRate`. -/
+structure RealizesRatePartial (p : Price) (cTag : ℕ) (cost : ℕ → ℕ) {N b h ρ s : ℕ} {ι : Type} [Fintype ι]
+    {d : Device ι} {α ΩW ΩS : Type} [Fintype α] [DecidableEq α] (r : Run d α ΩW (RateCoins N b h ρ s) ΩS) where
   /-- the device of the game at the other audits' coins -/
   dev : ΩW × ΩS → Rate.PartialDevice N b h ρ d.chip (∑ i, d.cap i * (r.win .bandwidth).len)
     (d.rate .oracle * (r.win .bandwidth).len)
@@ -185,5 +188,7 @@ structure RealizesRatePartial {N b h ρ s : ℕ} {ι : Type} [Fintype ι] {d : D
   accepts_iff : ∀ x y s', r.accepts .bandwidth (x, y, s') ↔ (dev (x, s')).Accepts y.1 y.2.1 y.2.2.1 y.2.2.2
   /-- the bandwidth account's reads from device memory cover the game's ingress -/
   ingress_le : ∀ x y s', (dev (x, s')).ingress y.1 y.2.1 y.2.2.1 ≤ r.read (x, y, s')
+  /-- the work of the accounts other than the compute account covers the game's tags and completions -/
+  compute_le : ∀ x y s', (dev (x, s')).compute cTag cost y.1 y.2.1 y.2.2.1 ≤ r.othersWork p (x, y, s')
 
 end Accounting

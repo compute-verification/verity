@@ -12,9 +12,6 @@ What the rate audit with partial completion (`Definitions/Accounting/RateAuditPa
   `rounds · c_root` (claim `rate-codec-work`, `WorkHardness(p, k)` in partial-completion form, at `k = rounds`). The
   price is a parameter. The remote audit's route `Accounting.Remote.Run.Rebuild` (`rebuilt · c_word ≤ b · rebuildWork`)
   is what it gives a run (`Accounting.Guarantees.RatePartialRebuild`).
-* `RateComputeAdditive`: a joint run's compute account and its bandwidth game share no work (the actual-circuit
-  model's compute additivity, W), the remote audit's `Accounting.Remote.Assumptions.ComputeAdditive` for the device
-  model's joint run.
 -/
 
 @[expose] public section
@@ -68,23 +65,5 @@ outside the claim: a guarantee taking it says nothing about a deployed one-round
 holds only for words whose payload is unknown, under `Incompressible(W)`, which no guarantee here takes. -/
 def WorkHardness (b rounds cRoot : ℕ) (cost : ℕ → ℕ) : Prop :=
   ∀ x, x ≤ b → x * (rounds * cRoot) ≤ b * cost x
-
-/-- **W, compute additivity, for a joint run's bandwidth game** (the actual-circuit model's obligation W:
-compute adds by a direct-sum conjecture). At every
-value of the audits' coins, the compute account's work over the compute window and the compute of the run's bandwidth
-game (its tags at `c_tag` and its completions at `cost x` for `x` bits), which falls in the compute window, together
-fit in the device's priced work over that window:
-
-  `work + game compute ≤ F·T`.
-
-So what the compute audit certifies is not available to complete words, and the adversary's idle compute, `F·T − W`
-when the compute account did `W`, is all a window's completions get. In the device model it holds whenever the game's
-ops are charged to the accounts other than the compute account (`Step.Fits` charges each op once), which is
-`RealizesRate`'s compute field; on the actual circuit, whose gates carry no account, it is the conjecture that PoUW's
-work and the completions share no gate. -/
-def RateComputeAdditive (p : Price) (cTag : ℕ) (cost : ℕ → ℕ) {N b h ρ s : ℕ} {ι : Type} [Fintype ι] {d : Device ι}
-    {α ΩW ΩS : Type} [Fintype α] {r : Run d α ΩW (RateCoins N b h ρ s) ΩS} (real : RealizesRatePartial r) : Prop :=
-  ∀ x y s', r.work p (x, y, s') + (real.dev (x, s')).compute cTag cost y.1 y.2.1 y.2.2.1 ≤
-    d.priced p * (r.win .compute).len
 
 end Accounting.Assumptions

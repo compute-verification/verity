@@ -9,13 +9,13 @@ public import Proofs.Accounting.RateAudit.Partial
 
 At a value of the other audits' coins, the run's bandwidth audit is a partial device of `RateAuditPartial`'s class at
 `S = S_chip`, `L = ∑ cap_i · T_bw` and `q = rate_oracle · T_bw`. On a bandwidth coin where the compute account did at
-least `W`, W (`RateComputeAdditive`) puts the game's compute within `F·T − W`, and the game's footprint is at most its
-ingress, which the bandwidth account's reads cover: the joint event is inside `RateAuditPartial`'s at `F = F·T − W`
-(`RateOfAuditPartial`). The passes form follows from the floor by `x₁ · b · F ≤ c_root · BW` (`passes_floor`).
+least `W`, the game's compute, covered by the other accounts' work (W, the realization's `compute_le`), is within
+`F·T − W` (`computeAdditive`), and the game's footprint is at most its ingress, which the bandwidth account's reads
+cover: the joint event is inside `RateAuditPartial`'s at `F = F·T − W` (`RateOfAuditPartial`). The passes form follows
+from the floor by `x₁ · b · F ≤ c_root · BW` (`passes_floor`).
 
-In the device model W holds whenever the game's compute is charged to the accounts other than the compute account
-(`computeAdditive_of_othersWork`, `RealizesRate`'s `compute_le`), and `WorkHardness` holds for a game whose every
-completion costs a whole word (`workHardness_whole`), `RateAudit`'s all-or-nothing rebuild.
+`WorkHardness` holds for a game whose every completion costs a whole word (`workHardness_whole`), `RateAudit`'s
+all-or-nothing rebuild.
 -/
 
 @[expose] public section
@@ -24,14 +24,14 @@ namespace Accounting.SecurityProofs
 
 open Accounting Accounting.Rate
 
-/-- W holds for a joint run whose bandwidth game's compute the work of the accounts other than the compute account
-covers: every op is charged once (`Step.Fits`). -/
-theorem computeAdditive_of_othersWork {N b h ρ s : ℕ} {ι : Type} [Fintype ι] {d : Device ι} {α ΩW ΩS : Type}
-    [Fintype α] [DecidableEq α] {r : Run d α ΩW (RateCoins N b h ρ s) ΩS} (real : RealizesRatePartial r) (p : Price)
-    (cTag : ℕ) (cost : ℕ → ℕ)
-    (hle : ∀ x y s', (real.dev (x, s')).compute cTag cost y.1 y.2.1 y.2.2.1 ≤ r.othersWork p (x, y, s')) :
-    Assumptions.RateComputeAdditive p cTag cost real := fun x y s' => by
-  have h1 := hle x y s'
+/-- The compute account's work and the game's compute fit in the device's priced work over the compute window: the
+game's compute is charged to the other accounts, and every op is charged once (`Step.Fits`). -/
+theorem computeAdditive {N b h ρ s : ℕ} {ι : Type} [Fintype ι] {d : Device ι} {α ΩW ΩS : Type}
+    [Fintype α] [DecidableEq α] {r : Run d α ΩW (RateCoins N b h ρ s) ΩS} {p : Price} {cTag : ℕ} {cost : ℕ → ℕ}
+    (real : RealizesRatePartial p cTag cost r) (x : ΩW) (y : RateCoins N b h ρ s) (s' : ΩS) :
+    r.work p (x, y, s') + (real.dev (x, s')).compute cTag cost y.1 y.2.1 y.2.2.1 ≤
+      d.priced p * (r.win .compute).len := by
+  have h1 := real.compute_le x y s'
   have h2 := r.work_add_othersWork p (x, y, s')
   omega
 
@@ -40,13 +40,13 @@ theorem workHardness_whole (b rounds cRoot : ℕ) :
     Assumptions.WorkHardness b rounds cRoot (fun _ => rounds * cRoot) := fun _ hx => Nat.mul_le_mul_right _ hx
 
 theorem RateOfAuditPartial : Accounting.Guarantees.RateOfAuditPartial := by
-  intro N b h ρ s k cTag rounds cRoot lam W cost p ι α ΩW ΩS _ _ d r real hw hadd x s'
+  intro N b h ρ s k cTag rounds cRoot lam W cost p ι α ΩW ΩS _ _ _ d r real hw x s'
   refine (Bandwidth.pr_mono (fun y hy => ?_)).trans
     (RateAuditPartial N b h ρ d.chip (∑ i, d.cap i * (r.win .bandwidth).len) (d.rate .oracle * (r.win .bandwidth).len)
       s k (d.priced p * (r.win .compute).len - W) cTag rounds cRoot lam cost (real.dev (x, s')) hw)
   obtain ⟨hacc, hW, hread⟩ := hy
   refine ⟨(real.accepts_iff x y s').1 hacc, ?_, ?_⟩
-  · have h1 := hadd x y s'
+  · have h1 := computeAdditive real x y s'
     omega
   · have h1 := PChip.card_addrs_le ((real.dev (x, s')).world y.1 y.2.1 y.2.2.1)
       ((real.dev (x, s')).chip ((real.dev (x, s')).state y.1))
@@ -102,9 +102,9 @@ theorem passes_floor {b ρ S L P T W cTag rounds cRoot x₁ k lam bw read : ℕ}
   omega
 
 theorem RateOfAuditPartialPasses : Accounting.Guarantees.RateOfAuditPartialPasses := by
-  intro N b h ρ s k cTag rounds cRoot x₁ lam W cost p ι α ΩW ΩS _ _ d r real hw hadd hx x s'
+  intro N b h ρ s k cTag rounds cRoot x₁ lam W cost p ι α ΩW ΩS _ _ _ d r real hw hx x s'
   refine (Bandwidth.pr_mono (fun y hy => ?_)).trans
-    (RateOfAuditPartial N b h ρ s k cTag rounds cRoot lam W cost p ι α ΩW ΩS d r real hw hadd x s')
+    (RateOfAuditPartial N b h ρ s k cTag rounds cRoot lam W cost p ι α ΩW ΩS d r real hw x s')
   obtain ⟨hacc, hW, hread⟩ := hy
   exact ⟨hacc, hW, passes_floor hx hread⟩
 
