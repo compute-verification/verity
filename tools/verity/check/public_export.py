@@ -7,10 +7,11 @@
 
 DEST gets the files `public_boundary.py` judges public (`public_boundary.toml`), in a new repository with one commit. A
 manifest's entry that names what the export doesn't copy is dropped: a lakefile's roots, executables, input files and path
-`require`s (with their `lake-manifest.json` entries), and the root pyproject's members, sources, conflicts, dev dependencies
-and test paths. Each rewrite must read, as TOML or JSON, as the old manifest less exactly those entries. A path `require` and
-a dev dependency are edges the check reports, which the export cuts this way; every other edge it copies as it stands, so a
-build of DEST fails where a file imports, runs or reads one the export doesn't copy.
+`require`s (with their `lake-manifest.json` entries), and each pyproject's members, sources, conflicts, extras, dependency
+groups and test paths. A `[project] dependencies` entry stays, and so does the source of a distribution one still needs. Each
+rewrite must read, as TOML or JSON, as the old manifest less exactly those entries. A path `require`, an extra's entry and a
+dependency group's are edges the check reports, which the export cuts this way; every other edge it copies as it stands, so
+a build of DEST fails where a file imports, runs or reads one the export doesn't copy.
 
 The report gives:
 
@@ -18,6 +19,7 @@ The report gives:
 * per area of the tree, the leftovers a reader of the public tree shouldn't meet, by kind, over whole files: `art:` ids, and
   the lane-text lint's kinds (`tests/lint/test_repo_lane_text.py`: Linear, Slack, Notion and PR ids and links, agent ids,
   lane handles, dates, names);
+* the known residue (`public_boundary.toml`'s `[[residue]]`), each entry's sites, and the change that removes it;
 * the third-party code DEST pins: the Lean packages its manifests pin, the Python distributions its lock resolves, and the
   Rust upstream C-Flock patches;
 * with `--build`, each Lake package's `lake build` and the workspace's `uv sync` (a node's work: `research run`), and the
@@ -278,14 +280,18 @@ def _at(doc: dict, dotted: str) -> dict:
     return doc
 
 
-def rewrite_workspace(text: str, copied: set[str], dists: set[str], workspace: set[str]) -> tuple[str, list[tuple[str, str]]]:
-    """The root pyproject without what names a member, distribution or test path the export doesn't copy: ``dists`` are the
-    copied workspace distributions, ``workspace`` all of them."""
+def rewrite_pyproject(text: str, here: str, copied: set[str], dists: set[str], workspace: set[str],
+                      required: set[str] = frozenset()) -> tuple[str, list[tuple[str, str]]]:
+    """A pyproject at ``here`` without what names a member, distribution or test path the export doesn't copy: ``dists`` are
+    the copied workspace distributions, ``workspace`` all of them. A `[project] dependencies` entry stays, an edge the build
+    fails on, and so does the source of any distribution ``required`` names (one a kept dependency anywhere still needs):
+    without its source, uv would look for it on the package index."""
     doc = tomllib.loads(text)
     expect, dropped, out = copy.deepcopy(doc), [], []
 
     def there(p: str) -> bool:
-        return p in copied or any(c.startswith(p.rstrip("/") + "/") for c in copied)
+        p = _norm(here, p)
+        return p in copied or any(c.startswith(p + "/") for c in copied)
 
     def foreign(name: str) -> bool:
         return PB._norm_dist(name) in workspace and PB._norm_dist(name) not in dists
@@ -302,12 +308,12 @@ def rewrite_workspace(text: str, copied: set[str], dists: set[str], workspace: s
     for b in _tables(text, "pyproject.toml"):
         body, t = b.text, b.value
         if b.name == "tool.uv.workspace" and isinstance(t.get("members"), list):
-            keep = [m for m in t["members"] if "*" in m or f"{m.rstrip('/')}/pyproject.toml" in copied]
+            keep = [m for m in t["members"] if "*" in m or f"{_norm(here, m)}/pyproject.toml" in copied]
             if keep != t["members"]:
                 dropped += [("member", m) for m in t["members"] if m not in keep]
                 body, _at(expect, b.name)["members"] = _set_array(body, "members", keep), keep
         if b.name == "tool.uv.sources":
-            gone = [k for k in t if foreign(k)]
+            gone = [k for k in t if foreign(k) and PB._norm_dist(k) not in required]
             dropped += [("source", k) for k in gone]
             for k in gone:
                 del _at(expect, b.name)[k]
@@ -316,10 +322,10 @@ def rewrite_workspace(text: str, copied: set[str], dists: set[str], workspace: s
             dropped += [("conflict", json.dumps(c)) for c in t["conflicts"] if conflict(c)]
             _at(expect, b.name)["conflicts"] = [c for c in t["conflicts"] if not conflict(c)]
             body = lines_without(body, lambda line: any(foreign(n) for n in re.findall(r'package[ \t]*=[ \t]*"([^"]+)"', line)))
-        if b.name == "dependency-groups":
+        if b.name in ("dependency-groups", "project.optional-dependencies"):
             for group, reqs in t.items():
                 if isinstance(reqs, list) and any(map(dep, reqs)):
-                    dropped += [(f"dependency-groups.{group}", r) for r in reqs if dep(r)]
+                    dropped += [(f"{b.name.rpartition('.')[2]}.{group}", r) for r in reqs if dep(r)]
                     keep = [r for r in reqs if not dep(r)]
                     body, _at(expect, b.name)[group] = _set_array(body, group, keep), keep
         for table, keys in (("tool.pytest.ini_options", ("testpaths",)), ("tool.verity.tests", ("testpaths", "untraced"))):
@@ -331,7 +337,7 @@ def rewrite_workspace(text: str, copied: set[str], dists: set[str], workspace: s
         out.append(body)
     if not dropped:
         return text, []
-    return _checked("".join(out), expect, "pyproject.toml"), dropped
+    return _checked("".join(out), expect, _norm(here, "pyproject.toml")), dropped
 
 
 def export(tree, boundary, judgment, dest: Path) -> dict:
@@ -342,16 +348,19 @@ def export(tree, boundary, judgment, dest: Path) -> dict:
         shutil.copy2(tree.root / f, dest / f)
     _, dists, _, _ = tree.python
     exported = {d for d, p in dists.items() if p in copied}
+    required = {n for f in copied if f.rpartition("/")[2] == "pyproject.toml"
+                for r in tomllib.loads((dest / f).read_text(encoding="utf-8")).get("project", {}).get("dependencies", [])
+                if (n := PB._norm_dist(PB._requirement_name(r))) in dists and n not in exported}
     rewrites: dict[str, list[tuple[str, str]]] = {}
     targets: dict[str, dict] = {}
     for f in sorted(copied):
         name, here = f.rpartition("/")[2], os.path.dirname(f)
-        if name not in ("lakefile.toml", "lake-manifest.json") and f != "pyproject.toml":
+        if name not in ("lakefile.toml", "lake-manifest.json", "pyproject.toml"):
             continue
         old = (dest / f).read_text(encoding="utf-8")
         new, dropped = (rewrite_lakefile(old, here, copied) if name == "lakefile.toml"
                         else rewrite_manifest(old, here, copied) if name == "lake-manifest.json"
-                        else rewrite_workspace(old, copied, exported, set(dists)))
+                        else rewrite_pyproject(old, here, copied, exported, set(dists), required))
         if dropped:
             (dest / f).write_text(new, encoding="utf-8")
             rewrites[f] = dropped
@@ -359,8 +368,9 @@ def export(tree, boundary, judgment, dest: Path) -> dict:
             targets[here or "."] = lean_targets(new, here, tomllib.loads(old), copied)
     cut = [e for e in judgment.edges
            if e.kind == "lake require" and ("require", e.what) in rewrites.get(e.source, [])
-           or e.kind == "python dependency" and e.source == "pyproject.toml"
-           and any(k.startswith("dependency-groups.") and v == e.what for k, v in rewrites.get(e.source, []))]
+           or e.kind == "python dependency"
+           and any(k.startswith(("dependency-groups.", "optional-dependencies.")) and v == e.what
+                   for k, v in rewrites.get(e.source, []))]
     symlinks = sorted(f for f in PB._git_files(tree.root) if (tree.root / f).is_symlink()
                       and boundary.group(f) is not None and not boundary.is_private(f))
     git = ["git", "-c", "user.name=verity-export", "-c", "user.email=export@invalid", "-c", "commit.gpgsign=false"]
@@ -395,6 +405,21 @@ def scrub(dest: Path, files: list[str]) -> dict:
             "by_area": {a: dict(c.most_common()) for a, c in sorted(by_area.items(), key=lambda kv: -sum(kv[1].values()))
                         if c},
             "files": dict(per_file.most_common(40)), "not_read_binary_or_large": unread}
+
+
+def residue(dest: Path, files: list[str], boundary) -> list[dict]:
+    """Each known residue's (`public_boundary.toml` `[[residue]]`) sites in ``files`` of ``dest``: the lines under its
+    paths that its pattern matches."""
+    out = []
+    for r in boundary.residue:
+        sites = Counter()
+        for f in files:
+            if r.paths.fullmatch(f) and (dest / f).stat().st_size <= SCRUB_MAX_BYTES:
+                text = (dest / f).read_text(encoding="utf-8", errors="replace")
+                sites[f] = sum(1 for line in text.splitlines() if r.pattern.search(line))
+        out.append({"what": r.what, "until": r.until, "sites": sum(sites.values()),
+                    "files": dict(sorted(((f, n) for f, n in sites.items() if n), key=lambda kv: -kv[1]))})
+    return out
 
 
 def licenses_static(dest: Path, files: list[str]) -> dict:
@@ -571,6 +596,7 @@ def main(argv: list[str] | None = None) -> int:
     report = {"source": {"root": str(root), "commit": source}, "dest": str(dest), "edges": len(judgment.edges)}
     report |= export(tree, boundary, judgment, dest)
     report["scrub"] = scrub(dest, files)
+    report["residue"] = residue(dest, files, boundary)
     report["third_party"] = licenses_static(dest, files)
     if ns.build:
         report["build"] = build(dest, (ns.report.parent if ns.report else dest.parent) / "export-logs", report["lean_targets"])
@@ -589,6 +615,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"leftovers by kind: {report['scrub']['by_kind']}")
     for area, kinds in list(report["scrub"]["by_area"].items())[:25]:
         print(f"  {area}: {kinds}")
+    for r in report["residue"]:
+        print(f"known residue, until {r['until']}: {r['sites']} sites in {len(r['files'])} files: {r['what']}")
     tp = report["third_party"]
     print(f"third party: {len(tp['lean'])} Lean packages ({', '.join(sorted({str(x['name']) for x in tp['lean']}))}); "
           f"{len(tp['python_locked'])} locked Python distributions; upstream {[(u['url'], u['rev']) for u in tp['upstream']]}")

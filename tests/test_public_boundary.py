@@ -304,7 +304,7 @@ untraced = [
 
 def test_the_workspace_loses_what_names_a_distribution_or_path_the_export_does_not_copy() -> None:
     """A line of a nested array that starts with `[` is no table's header."""
-    new, dropped = PE.rewrite_workspace(WORKSPACE, {"pyproject.toml", "verity/pub/pyproject.toml", "tests/test_a.py"},
+    new, dropped = PE.rewrite_pyproject(WORKSPACE, "", {"pyproject.toml", "verity/pub/pyproject.toml", "tests/test_a.py"},
                                         {"pubdist", "root"}, {"pubdist", "privdist", "root"})
     assert sorted(dropped) == sorted([
         ("conflict", json.dumps([{"extra": "cpu"}, {"package": "privdist", "extra": "gpu"}])), ("member", "tools/priv"),
@@ -319,6 +319,41 @@ def test_the_workspace_loses_what_names_a_distribution_or_path_the_export_does_n
     assert "# the dev group" in new
 
 
+MEMBER = '''[project]
+name = "pubdist"
+dependencies = ["verity", "hardpriv"]
+
+[project.optional-dependencies]
+torch = ["torch>=2.4"]
+bench = ["privdist"]
+
+[tool.uv.sources]
+verity = { workspace = true }
+hardpriv = { workspace = true }
+privdist = { workspace = true }
+
+[tool.verity.tests]
+untraced = ["tests/test_kept.py", "tests/test_gone.py"]
+'''
+
+
+def test_a_members_extras_lose_what_the_export_does_not_copy_but_a_dependency_and_its_source_stay() -> None:
+    """A dropped extra takes its source with it, or uv would look for the name on the package index; a `[project]
+    dependencies` entry is an edge the build fails on, so it and its source stay, at the member and at the root."""
+    copied = {"pyproject.toml", "verity/pub/pyproject.toml", "verity/pub/tests/test_kept.py"}
+    new, dropped = PE.rewrite_pyproject(MEMBER, "verity/pub", copied, {"pubdist", "verity"},
+                                        {"pubdist", "verity", "hardpriv", "privdist"}, {"hardpriv"})
+    assert dropped == [("optional-dependencies.bench", "privdist"), ("source", "privdist"), ("untraced", "tests/test_gone.py")]
+    old = tomllib.loads(MEMBER)
+    assert tomllib.loads(new) == old | {
+        "project": old["project"] | {"optional-dependencies": {"torch": ["torch>=2.4"], "bench": []}},
+        "tool": {"uv": {"sources": {"verity": {"workspace": True}, "hardpriv": {"workspace": True}}},
+                 "verity": {"tests": {"untraced": ["tests/test_kept.py"]}}}}
+    root, _ = PE.rewrite_pyproject(WORKSPACE.replace("privdist = { workspace = true }", "hardpriv = { workspace = true }"),
+                                   "", {"pyproject.toml"}, set(), {"hardpriv"}, {"hardpriv"})
+    assert tomllib.loads(root)["tool"]["uv"]["sources"]["hardpriv"] == {"workspace": True}
+
+
 @pytest.mark.parametrize("text", [
     '[tool.uv]\nconflicts = [\n    [\n        { package = "privdist" },\n        { extra = "cpu" },\n    ],\n]\n',
     '[dependency-groups]\ndev = ["privdist", { include-group = "x" }]\n',
@@ -326,7 +361,7 @@ def test_the_workspace_loses_what_names_a_distribution_or_path_the_export_does_n
 def test_a_rewrite_it_cannot_lay_out_fails_closed(text: str) -> None:
     """A layout the line-wise rewrite would get wrong is an error, never a manifest that reads as something else."""
     with pytest.raises(ValueError, match="public_export"):
-        PE.rewrite_workspace(text, {"pyproject.toml"}, set(), {"privdist"})
+        PE.rewrite_pyproject(text, "", {"pyproject.toml"}, set(), {"privdist"})
 
 
 def test_the_export_is_one_fresh_commit_of_the_public_set(judged, tmp_path_factory) -> None:
@@ -366,6 +401,19 @@ def test_leftovers_are_counted_by_area_and_kind(tmp_path: Path) -> None:
     got = PE.scrub(tmp_path, ["verity/pub/x/a.py", "verity/pub/x/b.bin"])
     assert got["by_area"] == {"verity/pub/x": {"art": 1, "agent": 1, "branch": 1}}
     assert got["not_read_binary_or_large"] == ["verity/pub/x/b.bin"]
+
+
+def test_known_residue_is_reported_by_its_sites_under_its_paths(tmp_path: Path) -> None:
+    doc = {"residue": [{"what": "the ledger's field", "pattern": r"\bperiod\b[^\n]*\blane\b", "paths": ["verity/pub"],
+                        "until": "the v3 ledger"}]}
+    for f, text in {"verity/pub/a.py": '{"period": "p", "lane": "x"}\nlane = 1\n', "verity/other/b.py": "period lane\n"}.items():
+        (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / f).write_text(text, encoding="utf-8")
+    got = PE.residue(tmp_path, ["verity/pub/a.py", "verity/other/b.py"], PE.PB.Boundary.load(doc))
+    assert got == [{"what": "the ledger's field", "until": "the v3 ledger", "sites": 1, "files": {"verity/pub/a.py": 1}}]
+    with pytest.raises(ValueError, match="exactly what, pattern, paths and until"):
+        PE.PB.Boundary.load({"residue": [{"what": "x", "pattern": "x", "paths": []}]})
+    assert [r.what for r in PE.PB.Boundary.load().residue], "this tree's boundary names its known residue"
 
 
 def test_third_party_pins_are_read_without_fetching(tmp_path: Path) -> None:
