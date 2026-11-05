@@ -1241,3 +1241,37 @@ network-accounting's ODLEAN reads `v3c-w0-4-32-4/compose-cache/e9a7e9…/circuit
 6. **`remote`** now has #7267 (c85eb44fd8) and #7372 (7e0d3072a5). I rebase onto it at the 18:05Z cut.
 
 **I wait on:** the 18:05Z tree cut.
+
+## 20:16Z Thu (vllm-pearlplus): **Your 19:48Z items are done. The record's tree is FROZEN at `44b0c741c930`, on `remote` `b72f5a8fb7d`, with its tests passing. It is posted on VLLM-182, VLLM-216 and VLLM-217. Neither record-night fix needs code: the coin's failed put is by design, and I re-put the coin from here after the fetch; the timed-out measurement isn't at the record's class. R's path and digest are on CMP-313, with my correction.**
+
+1. **The tree** is `44b0c741c930e422ee870696a51fec46a8b2ebf3` on `cursor/vllm-pprecord-496a`: pprecord's 31 commits rebased onto `remote` `b72f5a8fb7d`. There were no conflicts, and the lane's diff is unchanged (range-diff all `=`). I pushed it with a lease over `3e22002872`.
+   - **Tests at it** (r20261105-194906-4480, h200-3):
+     - `pouw-pearlplus` builds.
+     - pearl_c_vllm with its Lean: 165 passed, 5 skipped. All the skips are triton, and all 8 Lean tests ran.
+     - one_stage: 590 passed.
+     - serve_seal: 37 passed.
+   - **Posted** on VLLM-182, VLLM-216 and VLLM-217 at 20:15Z.
+   - **The code holds the follow-on to this tree.** `defer()` writes the serve's commit as `DEFERRED_TREE`, and the follow-on's preflight exits 3 on any other tree unless `FOLLOW_ANY_TREE=1`, which I won't set. Both runs launch with `--source` at this SHA.
+   - **VLLM-216:** benchmarks' stock control runs from #7222, because the record's tree has no fixed load in `served_stock.sh`. #7222's `integrations/vllm`, serve-openai included, differs from the record's. I told them the control's serve path isn't byte-identical to the record's.
+2. **The coin's failed store upload is neither a missing setting nor infra's.** A node's workload holds no store write key by design (the writing-runs skill; `research run --store-read` is read-only), so a put inside a run fails on any node. The coin's designed fallback is its run's custody, and that worked on the dress rehearsal.
+   - **The record-night step:** after the serve's fetch, I put the custody copy from this VM with `--preserve`. I tried it on the dress rehearsal's copy, and it preserved as `art:f188b997…`.
+   - **A bug, for after the record:** `served_verdicts.py coin` says a put of the custody copy "preserves that id". But publishing rewrites the window number in the coin's pass paths, so the bytes and the id differ (on the dress, SHA-512 `6a1540…` against `45caa5…`).
+     - On a node that did hold a store key, the put would also push the window's number into the store.
+     - The fix is to put the published form. It would move the frozen tree, so it waits. Say if you want it in the record's tree.
+3. **`WC_RECORD_TIMEOUT`: the record doesn't need it raised.** It stays at 45m.
+   - **Not the record's class:** the measurement counts the window circuit at `CLASS_OF_RECORD` (8 slots, 1,024 prompt ids, 64 outputs, the certifier's envelope), not the record's 4,32,4.
+   - **Nothing reads it:** `measure()` gates nothing, and VLLM-217's tables read the composite. Every verdict of the record reads the 4,32,4 circuit, which counted in 148.5 s on the dress.
+   - **It delays nothing that matters:** in the deferred flow it runs after the deferral is written, so it holds up only h200-3's release (at most 45 min), not the follow-on.
+   - The one_stage README's "default 20m" is stale. I'll fix it after the record.
+4. **CMP-313, posted 20:01Z: R's path and digest, with my correction.** I was wrong at 14:44Z: there was an R.
+   - **Where it was:** pearl-tie's window-commit wrote it at serve time to `…/r20261105-082550-ed23/v3c-wK-4-32-4/window/registration.json`, chained right after W.
+   - **Its digest:** `7c282e878ab88bbe…`. Only those 16 hex survive, in the run record's `piece.log` and `verdicts.txt`.
+   - **Why it's gone:** my 11:27Z cleanup deleted it along with its inputs, under the order to drop the window and keep the passes.
+   - **No copy remains:** none on h200-3 (1,688 files searched; only W's two copies), cpu-3, cpu-5 or in the run record. It can't be rebuilt.
+5. **Noted for the follow-on:**
+   - The draw is stratified as served.
+   - The composite of record waits for the multi-member lift, and anything composed before it is a development composite.
+   - ASK-239 is A unless you say otherwise.
+   - INF-531 gives cpu-3 1.6 TB and about 8M inodes from Fri 07:00Z, against the follow-on's 1.28 TB and about 1.0M inodes, so the archive watcher isn't needed. I launch it only if cpu-3 falls short at preflight.
+
+**I wait on:** the 6 PM PST (Fri 02:00Z) preflight timer, when I also delete cpu-5's `e9a7e9…` (due after 21:30Z).
