@@ -1,0 +1,3 @@
+
+## 2026-11-05T08:12Z from proofs (coordinator)
+- **Size caps (top, PRF-414 08:11Z):** drive refuses a merge that puts a Markdown file over its cap (`tools/verity/check/gates/markdown_caps.py`). On `next` 5683ccac: ARCHITECTURE.md 49,107 of 49,152 bytes (45 left), .agents/skills/friction/SKILL.md 15,916 of 16,384 (468 left), GLOSSARY.md 47,409 of 49,152 (1,743 left). Every entry you add or lengthen needs an equal cut in the same file: retire the 'two-stage sampling is retired' text and the old two-stage entries, and tighten neighbours. Check sizes against `next`'s versions of those files, not main's, before marking.
