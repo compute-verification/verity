@@ -179,11 +179,13 @@ def path_deps(pkg: str, read=read_here) -> list[str]:
 
 
 def provers(pkg: str, read=read_here) -> list[str]:
-    """The packages ``pkg``'s `lean-audit.json` names under `proved_in`, as `lean_audit.provers` reads them, through ``read``."""
+    """The packages ``pkg``'s `lean-audit.json` names under `proved_in`, as `lean_audit.provers` reads them, through ``read``:
+    none when it can't be read (said on stderr), and the audit then fails its policy."""
     try:
         b = read(f"{pkg}/lean-audit.json")
         named = json.loads(b).get("proved_in", []) if b is not None else []
-    except (OSError, ValueError, AttributeError):
+    except (OSError, ValueError, AttributeError) as e:
+        print(f"lean_changed: {pkg}/lean-audit.json can't be read ({e!r}); it is taken to name no proved_in", file=sys.stderr)
         return []
     return sorted({posixpath.normpath(posixpath.join(pkg, d)) for d in named if isinstance(d, str)})
 
@@ -642,19 +644,25 @@ def git(*args: str) -> str | None:
 STORE_WAIT_S = 60
 
 
-def stored(pkg: str, key: str) -> dict | None:
+def stored(pkg: str, key: str, log=print) -> dict | None:
     """{`run`, `commit`} of a `FAST_KIND` result that passed ``pkg``'s records on inputs ``key`` (its `passes`), by `research
     data select`, which reads the store's index where this machine has one and its catalog otherwise (on a node, the
-    results of that node's runs); None when the store holds none or can't be asked, and the run then builds: a lookup never
-    fails open."""
+    results of that node's runs); None when the store holds none or can't be asked (said), and the run then builds: a
+    lookup never fails open."""
     research = shutil.which("research")
     if research is None:
+        log(f"lean-records: {pkg}: no `research` on PATH, so the store isn't asked for a pass on these inputs")
         return None
     try:
         r = subprocess.run([research, "data", "select", "--kind", FAST_KIND, "--where", f"passes.{key}={pkg}", "--json"],
                            capture_output=True, text=True, timeout=STORE_WAIT_S, stdin=subprocess.DEVNULL)
-        rows = json.loads(r.stdout) if r.returncode == 0 else []
-    except (OSError, ValueError, subprocess.SubprocessError):
+        if r.returncode:
+            log(f"lean-records: {pkg}: the store couldn't be asked for a pass on these inputs (`research data select` exit "
+                f"{r.returncode}: {r.stderr.strip()[-300:]})")
+            return None
+        rows = json.loads(r.stdout)
+    except (OSError, ValueError, subprocess.SubprocessError) as e:
+        log(f"lean-records: {pkg}: the store couldn't be asked for a pass on these inputs ({e!r})")
         return None
     for row in rows if isinstance(rows, list) else []:
         meta = (row.get("manifest") or {}).get("meta") if isinstance(row, dict) else None
@@ -664,10 +672,11 @@ def stored(pkg: str, key: str) -> dict | None:
     return None
 
 
-def kept(pkg: str, files: list[str], read=read_here, store: bool = False) -> tuple[str, dict | None] | None:
+def kept(pkg: str, files: list[str], read=read_here, store: bool = False, log=print) -> tuple[str, dict | None] | None:
     """(why ``pkg``'s records need no run on these inputs, {`run`, `commit`} of the pass that says so or None), or None: a
-    records run passed on the same inputs (`passes_dir`; with ``store``, also one the store holds, `stored`), or the Lean
-    check's audit did (its kept pass, `lean_audit.key`). ``read``: the inputs, this checkout's by default."""
+    records run passed on the same inputs (`passes_dir`; with ``store``, also one the store holds, `stored`, which says
+    through ``log`` when it can't be asked), or the Lean check's audit did (its kept pass, `lean_audit.key`). ``read``: the
+    inputs, this checkout's by default."""
     key = inputs_key(pkg, files, read)
     try:
         doc = json.loads((passes_dir() / f"{key}.json").read_text())
@@ -677,7 +686,7 @@ def kept(pkg: str, files: list[str], read=read_here, store: bool = False) -> tup
         pass
     if read is read_here and (LA.COMMON.cache_dir() / "lean-audit" / f"{LA.key(pkg, files, LA.FLAGS)}.json").is_file():
         return "the Lean check's audit, kernel replay included, passed on the same inputs here", None
-    if store and (src := stored(pkg, key)):
+    if store and (src := stored(pkg, key, log)):
         return (f"its records passed on the same Lean inputs in {src['run']} at {str(src['commit'])[:12]}, a result the "
                 "store holds"), src
     return None
@@ -845,7 +854,7 @@ def reused(todo: list[str], files: list[str], log=print) -> dict[str, tuple[str,
     out = {}
     for p in todo:
         try:
-            got = kept(p, files, store=True) or ((why, None) if (why := merged(p, files)) else None)
+            got = kept(p, files, store=True, log=log) or ((why, None) if (why := merged(p, files)) else None)
         except (OSError, ValueError, subprocess.CalledProcessError) as e:
             log(f"lean-records: {p}: whether its records ran on these inputs could not be read ({e!r}); they run")
             got = None

@@ -478,6 +478,16 @@ def test_a_run_that_runs_nothing_is_refused_with_a_result(pair, tmp_path, monkey
     assert outcome_line(said) == {"outcome": LC.REFUSED, "package": "nothing-matches", "records": {}, "passes": {}}
 
 
+def test_a_lock_that_cant_be_read_names_no_prover_and_says_so(capsys):
+    """`provers` reads a lock that isn't JSON, or isn't an object, as naming no `proved_in` (the audit then fails its policy),
+    as `lean_audit.provers` does, and says so on stderr."""
+    for bad in (b"not json", b"[1]"):
+        assert LC.provers("s", {"s/lean-audit.json": bad}.get) == []
+        assert "s/lean-audit.json can't be read" in capsys.readouterr().err
+    assert LC.provers("s", {"s/lean-audit.json": b'{"proved_in": ["../p", 1]}'}.get) == ["p"]
+    assert LC.provers("s", {}.get) == [] and capsys.readouterr().err == ""
+
+
 def test_the_inputs_key_at_a_commit_is_read_from_git_alone_and_is_the_runs(tmp_path, monkeypatch, capsys):
     """`--inputs-key PKG --head SHA` (`keys_at`) reads the commit's objects alone, so in a clone with no worktree checked out
     it gives the key a records run of that commit computes in its checkout (`inputs_key`), over the package's closure (the
@@ -509,27 +519,33 @@ def test_the_inputs_key_at_a_commit_is_read_from_git_alone_and_is_the_runs(tmp_p
 
 def test_the_store_lookup_takes_a_passed_result_on_the_same_inputs_and_fails_closed(tmp_path, monkeypatch):
     """`stored` asks `research data select` for a `lean-fast/v1` result whose `passes` holds the key for the package and
-    takes a passed one; with no `research`, an answer it can't read, or none for this package, it finds nothing."""
+    takes a passed one; with no `research`, a failed or unreadable answer, or none for this package, it finds nothing, and
+    says why when it couldn't ask."""
     bin_ = tmp_path / "bin"
     bin_.mkdir()
-    answer, argv = tmp_path / "answer.json", tmp_path / "argv"
-    (bin_ / "research").write_text(f'#!/bin/sh\necho "$@" > {argv}\ncat {answer}\n')
+    answer, argv, code = tmp_path / "answer.json", tmp_path / "argv", tmp_path / "code"
+    (bin_ / "research").write_text(f'#!/bin/sh\necho "$@" > {argv}\ncat {answer}\necho no index >&2\nexit "$(cat {code})"\n')
     (bin_ / "research").chmod(0o755)
+    code.write_text("0")
     monkeypatch.setenv("PATH", f"{bin_}{os.pathsep}{os.environ.get('PATH', '')}")
 
     def row(status="passed", pkg=S, run="r1"):
         return {"id": "art:x", "manifest": {"meta": {"run_id": run, "commit": "c" * 40, "validation": {"status": status},
                                                      "passes": {"k1": pkg}}}}
 
+    said: list[str] = []
     answer.write_text(json.dumps([row("failed", run="r0"), row()]))
-    assert STORED(S, "k1") == {"run": "r1", "commit": "c" * 40}
+    assert STORED(S, "k1", said.append) == {"run": "r1", "commit": "c" * 40}
     assert argv.read_text().split() == ["data", "select", "--kind", LC.FAST_KIND, "--where", f"passes.k1={S}", "--json"]
     answer.write_text(json.dumps([row(pkg=P)]))
-    assert STORED(S, "k1") is None
+    assert STORED(S, "k1", said.append) is None and said == [], "none for this package is an answer, not a failure"
     answer.write_text("not json")
-    assert STORED(S, "k1") is None
+    assert STORED(S, "k1", said.append) is None and "couldn't be asked" in said.pop() and said == []
+    answer.write_text(json.dumps([row()]))
+    code.write_text("3")
+    assert STORED(S, "k1", said.append) is None and "exit 3: no index" in said.pop() and said == []
     monkeypatch.setenv("PATH", str(tmp_path / "nowhere"))
-    assert STORED(S, "k1") is None
+    assert STORED(S, "k1", said.append) is None and "no `research` on PATH" in said.pop() and said == []
 
 
 def test_a_pass_the_store_holds_on_the_same_inputs_is_reused_and_says_where_it_came_from(pair, tmp_path, monkeypatch):
@@ -537,7 +553,7 @@ def test_a_pass_the_store_holds_on_the_same_inputs_is_reused_and_says_where_it_c
     the run passes on the `reused` path, and each record names the run and commit it reuses."""
     root, calls, _ = pair
     src, asked = {"run": "r-other", "commit": "c" * 40}, []
-    monkeypatch.setattr(LC, "stored", lambda p, k: asked.append((p, k)) or src)
+    monkeypatch.setattr(LC, "stored", lambda p, k, log: asked.append((p, k)) or src)
     run_dir = tmp_path / "run"
     run_dir.mkdir()
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(run_dir))
