@@ -72,7 +72,7 @@ theorem slotCase_commit {W Rr : Type} {M : LoopModel W Rr} {J : List String → 
   | step k' hk' hra hrest =>
     obtain rfl : Session.Kind.commit = k' := Option.some.inj (hsl.symm.trans hk')
     have hJ' := hJ seen st pl e σ _ hsl (hset e List.mem_cons_self) hF hj hra
-    obtain ⟨⟨hlt, -⟩, ⟨f, hf, -⟩, ⟨ct, hok⟩, ⟨ls, publics, hda, -, hlk, hb1, hb2, hb3, hb4⟩, hbt, hcc⟩ := hra
+    obtain ⟨⟨hlt, -⟩, ⟨f, hf, -⟩, ⟨ct, hok⟩, ⟨ls, publics, hda, -, hlk, hb1, hb2, hb3, hb4⟩, -, hbt, hcc⟩ := hra
     have hk : (Except.ok Session.Kind.commit : Except String Session.Kind) ≠ .ok .hello := fun h => by cases h
     refine ⟨fun _ => ?_, fun hgo => ?_⟩
     · have hlen : (M.hist σ.c).length = 1 := by rw [M.length_hist (Nat.le_of_lt hlt), hc1]

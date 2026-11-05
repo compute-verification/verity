@@ -27,8 +27,9 @@ the `Hello`'s proved:
 * `LoopRead`: what the relay reads at a slot as the loop answers it, and the loop at the session's next request: the
   `Hello`'s nonce the relay drew, the model's `Hello` round passing and the session's entry on the setup (`SessOn`);
   the `Commit`'s roots `commitRead` reads off
-  the slots, the level 0s it binds kept, the coin tree's streams the session's, and the firewall's own link at the
-  level 0s the loop drew for the session, each `Level0.ofDraws` on the host's and the operating system's bytes; a
+  the slots, the level 0s it binds kept, the coin tree's streams the session's, the firewall's own link at the
+  level 0s the loop drew for the session, each `Level0.ofDraws` on the host's and the operating system's bytes, and
+  the session's entry linked to the words of the coins the prover receives (`Frame.words`); a
   frame round as the loop ran it (`RoundRun`) on the worker's value at the model's history, the rep's frame
   at the model's configuration there and the loop's salts `SaltsSrc`; at the `Finish`, once the hold's barrier passes,
   the session not stopped, the run at its last round, the firewall's own `Finish` not stopping, the worker's value the
@@ -201,7 +202,9 @@ slot leaves passed, `liveBefore`), and where the relay's setup is `spec` and `st
 the session's tables' level 0 at its next request those `commitRead` left, the coin tree's streams the session's
 (`streamsOk`), and the firewall's own message the link at the roots of the level 0s `ls` the loop drew for the session
 (`AfterDraw`), table `j`'s being `Level0.ofDraws` at its statement's `m` on what the host and the operating system
-handed the loop for rep stream `2j` (`LoopModel.src`, as `Session.level0` draws it); at a frame round a `RoundRun` from
+handed the loop for rep stream `2j` (`LoopModel.src`, as `Session.level0` draws it), and where the auditor answered
+coins the session goes on past, the session's entry at its next request linked to the words of what the prover
+receives (`Frame.words` after its tag and count, as the loop links them); at a frame round a `RoundRun` from
 `σ`'s frames and level 0s to `σ'`'s frames, its content the worker's value at the model's history so far, the rep's
 frame at the model's configuration there (as the loop started it, on the draws the model's tapes hold), and the salts
 the loop holds at the session's level 0s those the host handed it for each rep stream (`SaltsSrc`); at the `Finish`,
@@ -217,7 +220,7 @@ def LoopRead {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec)
     e.nonce = nonce ∧ Between sid σ.R σ'.R ∧ σ'.c = σ.c + 1 ∧
       M.L.toSrv.liveBefore M.wk M.x M.w M.ρ M.κ (M.hist σ'.c) = true ∧
       (e.setup = .ok (spec, sts) → SessOn spec sts σ'.R sid)
-  | .commit, _, _, e, σ, σ' =>
+  | .commit, st, _, e, σ, σ' =>
     M.Ans σ.c e ∧ (∃ f, e.commit = (commitRead σ.L0 sid (spec.tables.zip (sts.map (·.m))) f).1 ∧
         ∀ name, _root_.Flock.Firewall.Level0.ofSession σ'.L0 sid name =
           _root_.Flock.Firewall.Level0.ofSession (commitRead σ.L0 sid (spec.tables.zip (sts.map (·.m))) f).2 sid name) ∧
@@ -228,6 +231,10 @@ def LoopRead {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec)
         M.L.ownMsg M.x M.w M.ρ (M.hist σ.c) = 0 :: FlockDeploy.linkBody (ls.toList.map (·.root)) publics ∧
         ls.size < 2 ^ 64 ∧ publics.length < 2 ^ 64 ∧ (∀ l ∈ ls, l.root.size < 2 ^ 64) ∧
         ∀ b ∈ publics, b.size < 2 ^ 64) ∧
+      (∀ a, e.ans = some a → byte? a 0 = some 2 → (st.answer .commit a).1.stop = none →
+        ∀ rel, sessAt σ'.R sid = some rel →
+          rel.link = some (_root_.Flock.Firewall.Frame.words (st.answer .commit a).2 5
+            (((st.answer .commit a).2.size - 5) / 16))) ∧
       Between sid σ.R σ'.R ∧ σ'.c = σ.c + 1
   | .round stream n, st, pl, e, σ, σ' =>
     M.Ans σ.c e ∧ (∃ i r dom, ∃ v : Claims.Msg, M.wk M.x M.w M.ρ (M.hist σ.c) 0 = some (v, false) ∧
