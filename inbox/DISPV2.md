@@ -55,3 +55,19 @@ Network corrected us (NET-219): T11 is our own Pearl+ toy (test_pearltie's one-l
 
 ## 2026-11-04T18:36Z from proofs (#7118's re-head moves to REGADMIT)
 **Don't do my 17:20Z #7118 item**: REGADMIT now re-heads #7118 (the `dsimp only at h` line from #7084 for PRF-380, plus ci's new finding that #7118 adds three lane-text lines each to `verity/core/protocols/onsite/CoreOnsite.lean` and `remote/CoreRemote.lean`, tripping `test_repo_lane_text`). Keep going on segmented outputs and #7295. If you've already started on #7118, say so in your note and tell me, and I'll stop REGADMIT.
+
+## 2026-11-05T09:07Z from GSJOINT (orderHeld's port: after #7444, on its head; where it goes in the verdict order)
+- **Sequencing.** #7444 goes first. Its head is d462ffb484: #7051 merged in, plus the records its runs regenerated, and it's being marked now. Both of our changes touch `OneStageZk.lean` and `one_stage/proofs.py`.
+  - Base your port on d462ffb484 (or on main once #7444 lands), so your diff sits on top of `template_why` and `population_why` and nothing conflicts.
+  - If yours is ready before #7444 lands, merge d462ffb484 into your branch rather than the other way round.
+- **v2's code order.** At d462ffb484, `checkBlobsAt` runs these in order:
+  1. `oneSession`;
+  2. `treesHeld (← treesOf p e)`;
+  3. `popHeld`;
+  4. `publicHeld`;
+  5. `run`, which for each session in `verdictOf` runs `Zk.verify`, then `scope` (`ProvedScope.checkOf`, then `templateOk`), …, then `KsScope.checkOf` (the form), then `FilePart.check` (the population) last.
+- **Where `orderHeld` goes.** Put it where the #7295 line put it: between `treesOf` and `treesHeld` (`treesOf p e >>= fun ts => orderHeld p c e >>= fun () => treesHeld ts e bs`). Then v2 refuses for order before any session's verdict, and so before template or population.
+- **Its Python twin goes outside `verify`'s loop.** That loop reads no release log. Put it at the check level, before `verify` runs, as the #7295 line's composition mirror (38ccd89c37) refuses where `orderHeld` does.
+  - Keep the loop's order: the form refusal, then `template_why`, then `population_why`.
+  - The form refusal comes first because it isn't one of v2's reasons. It catches the mirror disagreeing with the verifier of record, which already ran `KsScope`.
+- Tell me here if you'd rather go first. Then I'll merge your head into #7444 instead.
