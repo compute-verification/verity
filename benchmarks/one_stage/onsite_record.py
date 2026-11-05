@@ -1286,9 +1286,9 @@ def auditor_record(params: Any, key: Path | None, site: Path | None) -> dict[str
     """`CHECKED`'s auditor-record on the run: the period's ``params`` (its case's, the parameters its check read)
     against the auditor's record of its network certifier at ``key`` (certifier-key/v1, `warden_chain.RECORD`) and its
     registration at ``site``, ``{"params", "log"}``: the registration log's params, ``{"auditor", "composite"}``, and
-    the log, which its check accepts (`registration.check`), whose auditor holds the record's key for a network
-    certifier the log places. ``holds``, that ``certifier`` where it does and ``why`` where it doesn't, and ``from``,
-    each input's SHA-512."""
+    the log, which its check accepts (`registration.check_log`, held to `Core.Registration` by difftest), whose auditor
+    holds the record's key for a network certifier the log places. ``holds``, that ``certifier`` where it does and
+    ``why`` where it doesn't, and ``from``, each input's SHA-512."""
     import warden_chain as WC
     from verity.core.protocols import registration as REG
 
@@ -1323,15 +1323,13 @@ def auditor_record(params: Any, key: Path | None, site: Path | None) -> dict[str
         if not isinstance(reg, dict) or set(reg) != {"log", "params"}:
             raise REG.Malformed("not {params, log}")
         composite, auditor = REG.params_of(reg["params"])
-        theirs, log = REG.log_of(reg["log"])
-        if theirs != composite:
-            return out | {"why": f"the auditor's registration log is {theirs}'s, not its params' {composite}'s"}
-        placed = REG.check(auditor, composite, log).view().site.locs
-    except REG.Refused as e:
-        return out | {"why": f"the auditor's registration log doesn't check: {e}"}
+        verdict = REG.check_log((composite, auditor), REG.log_of(reg["log"]))
     except (KeyError, TypeError, ValueError) as e:
         return out | {"why": f"--site-registration isn't a registration's params and log: {type(e).__name__}: {e}"}
-    cert = next((x.id for x in placed if x.kind == "certifier" and auditor.key(x.id) == public.hex()), None)
+    if verdict[0] != "accept":
+        return out | {"why": f"the auditor's registration log doesn't check: {verdict[1]}"}
+    cert = next((x["id"] for x in verdict[1]["site"]["locs"]
+                 if x["kind"] == "certifier" and auditor.key(x["id"]) == public.hex()), None)
     if cert is None:
         return out | {"why": "the auditor's registration holds the record's key for no network certifier its log places"}
     return out | {"holds": True, "certifier": cert}

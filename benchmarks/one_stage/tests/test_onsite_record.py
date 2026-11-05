@@ -1422,7 +1422,8 @@ REFUSED_INPUTS = {
     "a log its check refuses": (key_record(), site_registration(placed=ANOTHER), CERTIFIER,
                                 "the auditor's registration log doesn't check: entry 0: owner"),
     "another composite": (key_record(), site_registration() | {"params": site_registration(composite="onsite")["params"]},
-                          CERTIFIER, "the auditor's registration log is remote-network's, not its params' onsite's"),
+                          CERTIFIER, "the auditor's registration log doesn't check: composite: the log is "
+                                     "remote-network's, not onsite's"),
     "another form": (key_record(), {"auditor": site_registration()["params"]["auditor"], "log": site_registration()["log"]},
                      CERTIFIER, "--site-registration isn't a registration's params and log: Malformed: not {params, log}"),
     "no certifier holding the key": (key_record(), site_registration(ANOTHER), CERTIFIER,
