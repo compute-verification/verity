@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.FitsR
-import Proofs.Flock.Claims.KS.ZkAccJ
+module
+
+public import Proofs.Flock.Claims.KS.FitsR
+public import Proofs.Flock.Claims.KS.ZkAccJ
 
 /-!
 # The masked escapes with level 0's fork event fit the weight, counted per round
@@ -17,6 +19,8 @@ twice, and the tables' weights leave less than `1` for `k`'s ceiling). Counted p
 only round `0`'s events are charged twice, and those weigh at least `2` less than the whole per table, so the joined
 escapes fit the deployed weight with the fork event of weight `k` (`joinEscW_fitsForkR_zk`).
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 

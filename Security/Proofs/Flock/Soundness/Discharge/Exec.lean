@@ -1,39 +1,41 @@
-import Proofs.Flock.Soundness.Discharge.Exec.Event
-import Proofs.Flock.Soundness.Discharge.Exec.SessionL
-import Proofs.Flock.Soundness.Discharge.Exec.Setup
-import Proofs.Flock.Soundness.Discharge.Exec.Tables
-import Proofs.Flock.Soundness.Discharge.Exec.Headline
-import Proofs.Flock.Soundness.Discharge.Exec.CompiledL
-import Proofs.Flock.Soundness.Discharge.Exec.CompiledTableL
-import Proofs.Flock.Soundness.Discharge.Exec.SessionSoundL
-import Proofs.Flock.Soundness.Discharge.Exec.SessionAccL
-import Proofs.Flock.Soundness.Discharge.Exec.SessionBatchL
-import Proofs.Flock.Soundness.Discharge.Exec.SessionBatchAccL
-import Proofs.Flock.Soundness.Discharge.Exec.FlockBatchedL
-import Proofs.Flock.Soundness.Discharge.Exec.FlockBatchedAccL
-import Proofs.Flock.Soundness.Discharge.Exec.StrictCRL
-import Proofs.Flock.Soundness.Discharge.Exec.FlockLinkL
-import Proofs.Flock.Soundness.Discharge.Exec.FlockLinkedL
-import Proofs.Flock.Soundness.Discharge.Exec.FlockPublicL
-import Proofs.Flock.Soundness.Discharge.Exec.E2EL
-import Proofs.Flock.Soundness.Discharge.Exec.BindingE2EL
-import Proofs.Flock.Soundness.Discharge.Exec.HeadlineL
-import Proofs.Flock.Soundness.Discharge.Exec.Live
-import Proofs.Flock.Soundness.Discharge.Exec.Merkle
-import Proofs.Flock.Soundness.Discharge.Exec.Retained
-import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
-import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
-import Proofs.Flock.Soundness.Discharge.Exec.Decode
-import Proofs.Flock.Soundness.Discharge.Exec.Emit
-import Proofs.Flock.Soundness.Discharge.Exec.FramesLigerito
-import Proofs.Flock.Soundness.Discharge.Exec.FramesRep
-import Proofs.Flock.Soundness.Discharge.Exec.Rounds
-import Proofs.Flock.Soundness.Discharge.Exec.Verdict
-import Proofs.Flock.Soundness.Discharge.Exec.Shape
-import Proofs.Flock.Soundness.Discharge.Exec.Pts
-import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
-import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
-import Proofs.Flock.Soundness.Discharge.Exec.SessionLDecisive
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.Event
+public import Proofs.Flock.Soundness.Discharge.Exec.SessionL
+public import Proofs.Flock.Soundness.Discharge.Exec.Setup
+public import Proofs.Flock.Soundness.Discharge.Exec.Tables
+public import Proofs.Flock.Soundness.Discharge.Exec.Headline
+public import Proofs.Flock.Soundness.Discharge.Exec.CompiledL
+public import Proofs.Flock.Soundness.Discharge.Exec.CompiledTableL
+public import Proofs.Flock.Soundness.Discharge.Exec.SessionSoundL
+public import Proofs.Flock.Soundness.Discharge.Exec.SessionAccL
+public import Proofs.Flock.Soundness.Discharge.Exec.SessionBatchL
+public import Proofs.Flock.Soundness.Discharge.Exec.SessionBatchAccL
+public import Proofs.Flock.Soundness.Discharge.Exec.FlockBatchedL
+public import Proofs.Flock.Soundness.Discharge.Exec.FlockBatchedAccL
+public import Proofs.Flock.Soundness.Discharge.Exec.StrictCRL
+public import Proofs.Flock.Soundness.Discharge.Exec.FlockLinkL
+public import Proofs.Flock.Soundness.Discharge.Exec.FlockLinkedL
+public import Proofs.Flock.Soundness.Discharge.Exec.FlockPublicL
+public import Proofs.Flock.Soundness.Discharge.Exec.E2EL
+public import Proofs.Flock.Soundness.Discharge.Exec.BindingE2EL
+public import Proofs.Flock.Soundness.Discharge.Exec.HeadlineL
+public import Proofs.Flock.Soundness.Discharge.Exec.Live
+public import Proofs.Flock.Soundness.Discharge.Exec.Merkle
+public import Proofs.Flock.Soundness.Discharge.Exec.Retained
+public import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
+public import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
+public import Proofs.Flock.Soundness.Discharge.Exec.Decode
+public import Proofs.Flock.Soundness.Discharge.Exec.Emit
+public import Proofs.Flock.Soundness.Discharge.Exec.FramesLigerito
+public import Proofs.Flock.Soundness.Discharge.Exec.FramesRep
+public import Proofs.Flock.Soundness.Discharge.Exec.Rounds
+public import Proofs.Flock.Soundness.Discharge.Exec.Verdict
+public import Proofs.Flock.Soundness.Discharge.Exec.Shape
+public import Proofs.Flock.Soundness.Discharge.Exec.Pts
+public import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
+public import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
+public import Proofs.Flock.Soundness.Discharge.Exec.SessionLDecisive
 
 /-!
 # R11: flock-verify's acceptance and the audit as Lean defines it
@@ -106,3 +108,5 @@ since with hidden outputs flock-verify sets up its tables with `setupHidden`, ab
   (`batchedSessionL_decisive`, `audit_tile_decisive`, `audit_tile_decisive_verdict`). These are existential over the
   coins; completeness of the reference prover stays open.
 -/
+
+@[expose] public section

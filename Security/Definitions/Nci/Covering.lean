@@ -1,4 +1,6 @@
-import Definitions.Core.RegisteredCircuit
+module
+
+public import Definitions.Core.RegisteredCircuit
 
 /-!
 # Coverings by inference blocks, and multiplication blocks
@@ -23,6 +25,8 @@ baseline). The statement counts gates; in the Boolean profile (`w = 1`) a gate i
   `S` **completes** `m` when `m ⊆ S \ in(S)`, and `θ'_S` (`weightsCompleted`) is the set of weights `i` for which `S`
   completes some `m_{i,j}`.
 -/
+
+@[expose] public section
 
 namespace Nci.Covering
 

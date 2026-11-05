@@ -3,7 +3,12 @@
 its salt) passes only when its root is the frame-v3-sha512 root of those rows' `hm96-sha512/row/v2` leaves, as
 `registered.Registered.commit` roots them; ports without `known` are untouched.
 -/
-import Flock.RegKnown
+module
+
+public import Flock.RegKnown
+meta import Flock.RegKnown
+
+@[expose] public section
 
 namespace Flock.Test.RegKnown
 

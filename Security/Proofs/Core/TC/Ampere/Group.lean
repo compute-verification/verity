@@ -1,5 +1,7 @@
-import Proofs.Core.TC.Ampere.Arith
-import Proofs.Core.TC.Proofs.Group
+module
+
+public import Proofs.Core.TC.Ampere.Arith
+public import Proofs.Core.TC.Proofs.Group
 
 /-!
 # One Ampere group, the relation's side
@@ -8,6 +10,8 @@ import Proofs.Core.TC.Proofs.Group
 the finite path. The maximum exponent (`estar_eq`) and the output state (`out_poly`) do not depend on the parameters and
 are reused.
 -/
+
+@[expose] public section
 
 namespace Verity.TC.Proofs.Ampere
 

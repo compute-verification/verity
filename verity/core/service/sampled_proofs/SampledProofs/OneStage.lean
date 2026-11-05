@@ -48,12 +48,18 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   and each template's own under a stratified or work law), and the **profile** is `audit.profile`'s `IntegrityProfile`:
   one level `unit`, the partition's units, drawn by the verifier's law.
 -/
-import CoreProtocol.Cli
-import CoreProtocol.Profile
-import CoreProtocol.Live
-import SampledProofs.Registration
-import SampledProofs.Record
-import SampledProofs.ChallengerDraw
+module
+
+public import CoreProtocol.Cli
+public import CoreProtocol.Profile
+public import CoreProtocol.Live
+public import SampledProofs.Registration
+public import SampledProofs.Record
+public import SampledProofs.ChallengerDraw
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.OneStage
 

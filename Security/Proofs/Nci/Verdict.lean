@@ -1,6 +1,8 @@
-import Properties.Nci.Threads
-import Proofs.Properties.Nci
-import Proofs.Nci.Threads
+module
+
+public import Properties.Nci.Threads
+public import Proofs.Properties.Nci
+public import Proofs.Nci.Threads
 
 /-!
 # A verdict of compliance carries the thread bound, proved
@@ -10,6 +12,8 @@ Each statement of `Properties.Nci.Threads`, from the verdict's compliance at its
 (`Nci.SecurityProofs.ThreadedThrottled_rate`, `ThreadedThrottledDark_rate` and their `Slots` forms, in
 `Proofs.Nci.Threads`), at `c = gamma` and `α = num / den`, so `k = α c`.
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs
 

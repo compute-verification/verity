@@ -1,5 +1,7 @@
-import Definitions.Nci.BitView
-import Definitions.Nci.Assumptions.Cover
+module
+
+public import Definitions.Nci.BitView
+public import Definitions.Nci.Assumptions.Cover
 
 /-!
 # The cover theorem on a compliant declaration: the parameters it is taken at
@@ -9,6 +11,8 @@ circuit `r` bit by bit, at a block size `s` and an upstream depth `D`. These nam
 cover theorem's per-block count to apply to an inference block of a division at `(c, k)`: each is checkable on `r`, and
 none is about the world.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.Assumptions
 

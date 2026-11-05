@@ -1,4 +1,6 @@
-import Proofs.Flock.Recursive.FirewallRun
+module
+
+public import Proofs.Flock.Recursive.FirewallRun
 
 /-!
 # `flock-firewall live` is the firewall's run
@@ -15,6 +17,8 @@ to it, and the coin server receives only what it sends. Its loop takes each requ
 a request that returns at a state returns at it with more salts after its own and more messages before its own,
 drawing and sending the same (`Grow`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion.FirewallLive
 

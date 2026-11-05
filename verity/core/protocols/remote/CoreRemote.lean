@@ -17,14 +17,26 @@ fresh-input bits) in the clear. Remote composes it for one run of record only, a
 everything-zero-knowledge, and v1's private form (the division committed under hiding leaves, compliance proved, a
 padded profile) replaces it.
 -/
-import CoreComposition.Blobs
-import CoreComposition.Cases
-import CoreComposition.Tie
-import NciCheck.Protocol
-import PouwCheck.Period
-import SampledProofs.OneStage
-import SampledProofs.OneStageZk
-import VStarRecursive.Sampled
+module
+
+public import CoreComposition.Blobs
+public import CoreComposition.Cases
+public import CoreComposition.Tie
+public import NciCheck.Protocol
+public import PouwCheck.Period
+public import SampledProofs.OneStage
+public import SampledProofs.OneStageZk
+public import VStarRecursive.Sampled
+meta import CoreComposition.Blobs
+meta import CoreComposition.Cases
+meta import CoreComposition.Tie
+meta import NciCheck.Protocol
+meta import PouwCheck.Period
+meta import SampledProofs.OneStage
+meta import SampledProofs.OneStageZk
+meta import VStarRecursive.Sampled
+
+@[expose] public section
 
 namespace Core.Remote
 

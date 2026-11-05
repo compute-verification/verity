@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.RepFramesFields
+module
+
+public import Proofs.Flock.Claims.Recursion.RepFramesFields
 
 /-!
 # What a rep's Ligerito frames fix of its proof
@@ -18,6 +20,8 @@ at every index the sizes allow:
 With `rep_bind_fields`, two proofs `verifyRep` accepts as one rep on one retained stream agree in every field but
 `params`, `zerocheck.finalC`, `ligerito.initialCap` and the openings (`rep_bind_lig`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 

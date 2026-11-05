@@ -1,5 +1,7 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.RateAuditSketch
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.RateAuditSketch
 
 /-!
 # The honest device: the sketch rate audit is not vacuous
@@ -9,6 +11,8 @@ the store from device memory once, and queries the oracle at each tile's digest 
 every signs, oracle, data and sample; its footprint is the store, `N·m·w` bits, its link carries exactly the stream, and
 its compute is `N` tags (`honest_accepts`; the guarantee `Accounting.SecurityProofs.RateSketchHonest`).
 -/
+
+@[expose] public section
 
 namespace Accounting.RateSketch.Completeness
 

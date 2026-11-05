@@ -27,7 +27,13 @@ A decision is `{"refused": codes}` or `{"ok": value}`: `unattached` (no stream o
 halted: an op naming it or one of its streams is refused and changes nothing). An error is an op or a state this port
 doesn't read.
 -/
-import SampledProofs.Stream
+module
+
+public import SampledProofs.Stream
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Fleet
 

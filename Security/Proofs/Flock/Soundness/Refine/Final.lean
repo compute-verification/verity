@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Refine.LigeritoRun
+module
+
+public import Proofs.Flock.Soundness.Refine.LigeritoRun
 
 /-!
 # The final check refines the model's (PROTOCOL.md §13.6)
@@ -13,6 +15,8 @@ The two compute the same sum term by term:
 * the executable's out-of-domain and consistency loops are folds (`forIn_yield_fold`), whose words are the model's
   sums (`oodFold_get`, `consFold_get`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

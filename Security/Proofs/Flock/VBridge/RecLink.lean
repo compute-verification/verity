@@ -1,10 +1,13 @@
-import Proofs.Flock.VBridge.OfVStar
-import Proofs.Flock.VBridge.AccUnits
-import Proofs.Flock.VBridge.RecLinkGadgets
-import Proofs.Flock.Soundness.Discharge.Hm.Salt
-import Proofs.Flock.Soundness.Discharge.Hm.Commit
-import VStar.Link
-import Flock.RecLinkRef
+module
+
+public import Proofs.Flock.VBridge.OfVStar
+public import Proofs.Flock.VBridge.AccUnits
+public import Proofs.Flock.VBridge.RecLinkGadgets
+public import Proofs.Flock.Soundness.Discharge.Hm.Salt
+public import Proofs.Flock.Soundness.Discharge.Hm.Commit
+public import VStar.Link
+public import Flock.RecLinkRef
+import all Init.Data.String.Defs
 
 /-!
 # V*'s `RecLink{UB, PB}` unit computes its reference
@@ -32,6 +35,8 @@ The gadgets and the check are in `Proofs.Flock.VBridge.RecLinkGadgets`.
   laid-out unit's output columns hold `linkB` wherever its rows and input columns hold) and `unit_linkUnit` (a copy of it
   in a unit of any partition).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.RecLink
 

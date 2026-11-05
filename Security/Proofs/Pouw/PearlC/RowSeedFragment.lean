@@ -1,5 +1,7 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
-import Definitions.Pouw.Guarantees.PearlC
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
+public import Definitions.Pouw.Guarantees.PearlC
 
 /-!
 # The fragment argument: the counting theorem (staging, nothing pinned)
@@ -18,6 +20,8 @@ atoms form a skip set (`SkipSetU`).
 The draw side is in `RowSeedSkip.lean`: `ttOutRowSeed_skipClass` bounds a skip-class program's saving under the named
 assumption `Assumptions.FragDraw` at `Λ = 100`, (C4) and (C6), through the union bound `qtree_union_bound`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.GS.Elim
-import Proofs.Flock.Claims.GS.Basic
-import Proofs.Flock.Claims.Decode
+module
+
+public import Proofs.Flock.Claims.GS.Elim
+public import Proofs.Flock.Claims.GS.Basic
+public import Proofs.Flock.Claims.Decode
 
 /-!
 # Guruswami–Sudan interpolation by Gaussian elimination, counted
@@ -21,6 +23,8 @@ of the points. `interpCost` counts the step's field operations, `x^e` as `e` mul
 coefficient's image in the field as one operation (`entryCost`), with the elimination's count (`kernelCost`); in the
 regime it is at most `20·N^9` (`interpCost_le`).
 -/
+
+@[expose] public section
 
 namespace Claims.GS
 

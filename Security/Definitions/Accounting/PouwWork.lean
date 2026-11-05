@@ -1,5 +1,7 @@
-import Definitions.Accounting.Confidence
-import Definitions.Pouw.Basic.Prob
+module
+
+public import Definitions.Accounting.Confidence
+public import Definitions.Pouw.Basic.Prob
 
 /-!
 # PoUW's work on one node, on the actual circuit (trusted)
@@ -22,6 +24,8 @@ they take; each coin reaches the node only through what crosses from `V`, at the
   verifier's coins are placed at `V`, so they are no help; nor is what the node itself holds (its inputs and its own
   gates).
 -/
+
+@[expose] public section
 
 namespace Accounting.PouwWork
 

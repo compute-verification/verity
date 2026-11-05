@@ -1,4 +1,6 @@
-import Proofs.Pouw.PearlC.HonestWords
+module
+
+public import Proofs.Pouw.PearlC.HonestWords
 
 /-!
 # One group's step on a flat support: the cast reads a monotone function of the sum
@@ -22,6 +24,8 @@ The pieces of the salt-dead two-ends lemma (`Cap/SaltDead.lean`) that do not men
   finite word or `+inf`; so `e4m3Word (f32Word y)` and `e4m3Word (f32Word (−y))` differ in the sign bit alone, below
   `126` in their other bits.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Cap
 

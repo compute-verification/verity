@@ -1,6 +1,8 @@
-import Mathlib.Data.Fintype.Perm
-import Mathlib.Logic.Equiv.Fin.Basic
-import Definitions.Pous.Model.Scheme
+module
+
+public import Mathlib.Data.Fintype.Perm
+public import Mathlib.Logic.Equiv.Fin.Basic
+public import Definitions.Pous.Model.Scheme
 
 /-!
 # Model M1: independent ideal permutations, and its encoding
@@ -8,6 +10,8 @@ import Definitions.Pous.Model.Scheme
 The pinned A2, A3′, A7′ and `M1Meets` statements are about this model (tradeoff §1.1). Moved verbatim from the targets
 file, with `codeEquiv` from `Sanity.lean`.
 -/
+
+@[expose] public section
 
 namespace Pous
 

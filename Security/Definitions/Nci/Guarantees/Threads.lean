@@ -1,7 +1,9 @@
-import Definitions.Nci.Assumptions
-import Definitions.Nci.Assumptions.Threads
-import Definitions.Nci.Assumptions.Baseline
-import Definitions.Nci.Dark
+module
+
+public import Definitions.Nci.Assumptions
+public import Definitions.Nci.Assumptions.Threads
+public import Definitions.Nci.Assumptions.Baseline
+public import Definitions.Nci.Dark
 
 /-!
 # The inference-only policy over threads: the guarantees
@@ -19,6 +21,8 @@ The `Slots` forms take `WeightsIncompressibleSlots`, weights charged per paramet
 `WeightsIncompressible`, with the same bound: a subcircuit that spans several optimizer steps on a parameter is charged
 for it once.
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 

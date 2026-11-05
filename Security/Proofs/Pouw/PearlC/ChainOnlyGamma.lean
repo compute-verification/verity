@@ -1,5 +1,7 @@
-import Proofs.Pouw.PearlC.KernelWrefGamma
-import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnly
+module
+
+public import Proofs.Pouw.PearlC.KernelWrefGamma
+public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnly
 
 /-!
 # γ under the chain-only reading, against the honest kernel's `W_ref` (staged)
@@ -13,6 +15,8 @@ import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnly
   (`pearlCSampledDevKChainOnlyAt`, `pearlCSampledDevRev1KChainOnlyAt`). The game is the kernel protocol's: neither
   `G_γ` nor `GγSampled` reads the credit.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

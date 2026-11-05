@@ -1,5 +1,9 @@
-import Mathlib.Data.List.Induction
-import Definitions.Core.Site
+module
+
+public import Mathlib.Data.List.Induction
+public import Definitions.Core.Site
+import all Init.Data.Repr
+import all Init.Data.ToString.Basic
 
 /-!
 # The registration: its check, and the Site along it
@@ -23,6 +27,8 @@ import Definitions.Core.Site
   (`Registration.Example.gpu0_device`); and the onsite site with day 0 declared, a second declaration of the day refused
   (`Registration.Example.declaration_refusals`).
 -/
+
+@[expose] public section
 
 namespace Verity
 

@@ -1,6 +1,8 @@
-import Flock.Program
-import Evaluate.Fp32
-import Evaluate.GeluErfTable
+module
+
+public import Flock.Program
+public import Evaluate.Fp32
+public import Evaluate.GeluErfTable
 
 /-!
 # The activations, the rotation and the registered tables
@@ -15,6 +17,10 @@ double, the double arithmetic around them, then one rounding to FP32 (numpy's `f
 `Float.toFloat32` the same conversion, so these words are the Python's on the host both run on. Neither library function is
 correctly rounded, so another host's library may give other words.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Evaluate.Act
 
