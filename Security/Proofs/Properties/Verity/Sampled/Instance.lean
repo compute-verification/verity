@@ -519,4 +519,99 @@ theorem remote_soundness_deployed (I : Instance d α) (K : Constructions I.stage
     (fun θ F A h => I.couplingTarget_lift K .remote (hC θ F A h)) hB hR (I.pouwSound_of_base K .remote hW)
     (I.inferenceOnlySound_of_base K .remote hI)
 
+/-- **`remote_soundness_deployed` at the binding's constructions** (`Binding.withBinding`): any constructions with
+the binding's read finder and forger, so those two premises hold by definition. -/
+theorem remote_soundness_deployed_withBinding (I : Instance d α) (K₀ : Constructions I.stage) (hO : I.OpensAt)
+    (hF : I.StrictAt (Binding.withBinding K₀ I.dev)) (hRg : I.RegisteredFiles) (hSa : I.SessionAt .remote)
+    (hC : ∀ θ F A, I.sessions θ F = some A → CouplingTarget I.stage .remote (Binding.withBinding K₀ I.dev) A θ F)
+    (hB : UnboundFaulty) (hR : RecursiveForm (I.vocab (Binding.withBinding K₀ I.dev)) .remote)
+    (hW : I.base.PouwSound .remote) (hI : I.base.InferenceOnlySound .remote) :
+    (I.vocab (Binding.withBinding K₀ I.dev)).SoundnessAt .remote :=
+  remote_soundness_deployed I (Binding.withBinding K₀ I.dev) (fun _ _ _ _ => rfl) (fun _ _ _ _ => rfl) hO hF hRg hSa
+    hC hB hR hW hI
+
+/-! ## An instance: v2's reading on the idle device -/
+
+namespace Instance.Honest
+
+/-- Any circuit's schedule as one empty block, as `Idle.blocks` is the empty file's. -/
+def blocks (C : Verity.Circuit) : Verity.Blocks C 1 where
+  block _ := ⟨⟨0, 0⟩, ∅⟩
+  ordered _ _ _ := Nat.le_refl 0
+  disjoint _ _ _ := Finset.disjoint_empty_left _
+
+/-- `Idle.wipe` at `blocks C`: it fills nothing, nothing leaves the device, and the challenger accepts nothing. -/
+def wipe (C : Verity.Circuit) : Verity.Wipe Verity.Idle.device (blocks C) 0 Unit Unit where
+  fill := 0
+  fill_le := Nat.zero_le _
+  egress := 0
+  carry _ _ := 0
+  filled σ _ := (σ, fun i => i.elim0)
+  accepts _ _ _ := False
+  after σ _ _ := σ
+
+/-- `Idle.ofRun` at `wipe C`. -/
+def ofRun (C : Verity.Circuit) {O : Type} (G : Verity.Game O) : (wipe C).OfRun G where
+  S_φ := 0
+  hold _ := ⟨fun _ => false, fun _ => false⟩
+  keep _ _ _ i := i.elim0
+  view _ := (fun i => i.elim0, (), ())
+
+/-- The device's history at every play: no run and no ledger line. -/
+def dev : Exchange → Properties.Challenger.History := fun _ => ⟨fun _ => [], fun _ => []⟩
+
+/-- **The declared calls**: the most, over the play's tapes, of what the device's reading of what the prover sent
+hashes (`Binding.breakCalls`) and one per blob it sent. -/
+noncomputable def cost (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Verity.Game.Strategy (Verity.play [] Verity.Idle.signer θ F c)) : ℕ :=
+  Finset.univ.sup fun t : Verity.Game.Tape (Verity.play [] Verity.Idle.signer θ F c) σ =>
+    Binding.breakCalls (dev (Verity.Game.Tape.out _ σ t)) (Verity.Game.Tape.out _ σ t).sent +
+      (Verity.Game.Tape.out _ σ t).sent.blobs.size
+
+/-- **The idle deployment at v2's reading**: `Idle.vocab 0 1` with v2's reading of the committed files and its
+digests, the declared calls `cost`, and every name that reads the committed circuit at it. -/
+noncomputable def base : Vocab Verity.Idle.device Unit :=
+  { Verity.Idle.vocab 0 1 with
+    read := readOf
+    programDigest := programDigestOf
+    publicDigest := publicDigestOf
+    place := fun _ _ _ _ => none
+    extract := fun _ _ _ _ _ => 0
+    cost := cost
+    finder_calls := fun _ _ _ _ _ _ => Nat.zero_le _
+    finders := fun _ _ _ _ => []
+    forger_calls := fun _ _ _ _ _ _ => Nat.zero_le _
+    computed := fun _ _ _ _ _ => ∅
+    theta := fun _ _ => ∅
+    theta_input := fun _ _ _ h => absurd h (Finset.notMem_empty _)
+    schedule := fun θ F => blocks (readOf θ F).circuit
+    wipe := fun θ F => wipe (readOf θ F).circuit
+    wipeRun := fun θ F c _ => ofRun (readOf θ F).circuit (Verity.play [] Verity.Idle.signer θ F c) }
+
+theorem costs : CostsRead base dev := fun θ F c σ t =>
+  Finset.le_sup (f := fun t : Verity.Game.Tape (Verity.play [] Verity.Idle.signer θ F c) σ =>
+    Binding.breakCalls (dev (Verity.Game.Tape.out _ σ t)) (Verity.Game.Tape.out _ σ t).sent +
+      (Verity.Game.Tape.out _ σ t).sent.blobs.size) (Finset.mem_univ t)
+
+/-- **The instance at the deployment's session `session`**: `base`, whose reading and digests are v2's by definition. -/
+noncomputable def inst (session : ByteArray → Option Live) : Instance Verity.Idle.device Unit where
+  base := base
+  dev := dev
+  read _ _ := rfl
+  programDigest _ := rfl
+  publicDigest _ := rfl
+  costs := costs
+  session := session
+
+theorem sessions_none (θ : ByteArray) (F : Array ByteArray) : (inst fun _ => none).sessions θ F = none := rfl
+
+/-- At no session the openings hold of every session, there being none. -/
+theorem opensAt_none : (inst fun _ => none).OpensAt := fun _ _ _ h => by simp [inst] at h
+
+/-- At no session the strict premises hold at every session, there being none. -/
+theorem strictAt_none (K : Constructions (inst fun _ => none).stage) : (inst fun _ => none).StrictAt K :=
+  fun θ F A h => by rw [sessions_none] at h; cases h
+
+end Instance.Honest
+
 end Verity.Sampled
