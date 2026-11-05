@@ -2,6 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.Binding
 public import Proofs.Properties.Verity.SampledRead
+public import Proofs.Properties.Verity.Sampled.Walk
 
 /-!
 # Every round a session's coin tree opens is a round of its record
@@ -20,9 +21,10 @@ a Prop over the device's log:
   names exactly its `rounds.size` times, `TREE_SESSION` once (round 0, the link points), and a stream the record doesn't
   name never. Honest sessions pass it: the challenger opens a round only as the session records it.
 * **On the device's log** (`OpenedRecorded`): before each opening of a coin tree's stream, the log opens that stream
-  fewer times than the rounds the record gives it. The device opens a stream's rounds in order (`Verity.Frame.opening`),
-  so that count is the round opened. It reads only frames, so it holds of the device's log wherever it holds of v2's
-  read and the read is the device's log (`openedRecorded_congr`, `openedRecorded_logged`: `Binding.Logged
+  (`Verity.openedOf`) fewer times than the rounds the record gives it. The device opens a stream's rounds in order
+  (`Verity.Frame.opening`), so that count is the round opened. It reads only frames (`openedOf_congr`), so it holds of
+  the device's log wherever it holds of v2's read and the read is the device's log (`openedRecorded_congr`,
+  `openedRecorded_logged`: `Binding.Logged
   Binding.readsV2`, `MovesReach`'s premise). On a play v2 accepts the log shows one coin tree, the record's: v2 takes
   one session (`SampledProofs.OneStageZk.oneSession`) and every tree a session's (`sessionsTreeReason`).
 -/
@@ -55,28 +57,23 @@ def recordRounds (record : Json) (stream : String) : ℕ :=
 def openedRecorded (t : _root_.SampledProofs.Challenger.LoggedTree) (record : Json) : Bool :=
   t.opened.all fun o => o.round < recordRounds record o.stream
 
-/-- The openings of stream `s` of the `i`-th coin tree among the releases `l`. -/
-def streamOpenings (i s : ℕ) (l : List Verity.Release) : ℕ :=
-  l.countP fun q => match q.frame with
-    | .opening i' s' _ => i' == i && s' == s
-    | _ => false
-
 /-- **Every round the device's log `log` opens is a round of the record `record`**: before each opening of stream `s`
-of the `i`-th coin tree, named `name` in that tree's spec (`helloSpecs`), the log opens that stream fewer times than the
-rounds `record` gives `name` (`recordRounds`). The device opens a stream's rounds in order, each once, so the count is
-the round opened. -/
+of the `i`-th coin tree, named `name` in that tree's spec (`helloSpecs`), the log opens that stream (`openedOf`) fewer
+times than the rounds `record` gives `name` (`recordRounds`). The device opens a stream's rounds in order, each once, so
+the count is the round opened. -/
 def OpenedRecorded (record : Json) (log : List Verity.Release) : Prop :=
   ∀ pre r post, log = pre ++ r :: post → ∀ i s n, r.frame = .opening i s n →
     ∀ name, ((helloSpecs pre)[i]?.bind fun sp => sp.streams[s]?) = some name →
-      streamOpenings i s pre < recordRounds record name
+      openedOf pre i s < recordRounds record name
 
-theorem streamOpenings_congr {i s : ℕ} :
+/-- **Logs of the same frames open each stream equally often.** -/
+theorem openedOf_congr {i s : ℕ} :
     ∀ {l l' : List Verity.Release}, List.Forall₂ (fun x y => x.frame = y.frame ∧ x.answers = y.answers) l l' →
-      streamOpenings i s l = streamOpenings i s l'
+      openedOf l i s = openedOf l' i s
   | _, _, .nil => rfl
   | _ :: _, _ :: _, .cons h t => by
-    have e := streamOpenings_congr (i := i) (s := s) t
-    simp only [streamOpenings, List.countP_cons, h.1] at e ⊢
+    have e := openedOf_congr (i := i) (s := s) t
+    simp only [openedOf, List.countP_cons, h.1] at e ⊢
     rw [e]
 
 /-- **Releases of the same frames, answering the same bytes, open only the record's rounds together**:
@@ -88,7 +85,7 @@ theorem openedRecorded_congr {record : Json} {l l' : List Verity.Release}
   subst heq
   obtain ⟨pre, r, post, rfl, hpre, hr, -⟩ := forall₂_split hl
   rw [← helloSpecs_congr hpre] at hname
-  rw [← streamOpenings_congr hpre]
+  rw [← openedOf_congr hpre]
   exact hP pre r post rfl i s n (hr.1.trans hr') name hname
 
 /-- **Through the binding**: where the log v2's check read is the device's (`Binding.Logged Binding.readsV2`), a read
