@@ -128,10 +128,10 @@ theorem set_set : ∀ {fs₀ : List (String × ℕ)} (t : UpFront fs₀) (l : St
   | [], _, _, _, _, _ => rfl
   | (l', c) :: fs₀, t, l, n, x, y => by
     by_cases hl : l' = l
-    · simp only [UpFront.set, hl, ite_true]
+    · simp only [UpFront.set, hl]
       refine Prod.ext (funext fun m => ?_) rfl
       by_cases hm : m.val = n <;> simp [hm]
-    · simp only [UpFront.set, hl, ite_false]
+    · simp only [UpFront.set, hl]
       exact Prod.ext rfl (set_set t.2 l n x y)
 
 theorem coinsLeft_le : ∀ {fs₀ fs : List (String × ℕ)} (l : String), Shape fs₀ fs → coinsLeft fs l ≤ coinsLeft fs₀ l
@@ -203,10 +203,10 @@ theorem agree_set : ∀ {fs₀ fs : List (String × ℕ)} (t : UpFront fs₀) (l
     subst h1
     by_cases hl : l₁ = l
     · simp only [coinsLeft, hl, ite_true] at h
-      simp only [Agree, UpFront.set, hl, ite_true]
+      simp only [Agree, UpFront.set, hl]
       exact ⟨fun m hm => by simp [show m.val ≠ n by omega], agree_refl _ _ _⟩
     · simp only [coinsLeft, hl, ite_false] at h
-      simp only [Agree, UpFront.set, hl, ite_false]
+      simp only [Agree, UpFront.set, hl]
       exact ⟨fun _ _ => rfl, agree_set t.2 l n x h3 h⟩
 
 
@@ -278,7 +278,7 @@ theorem prCoin_or_le {C : Type} [Fintype C] (p q : C → Prop) :
   rw [← avg_add]
   refine avg_mono fun c => ?_
   by_cases hp : p c
-  · simp only [hp, true_or, if_true]
+  · simp only [hp, true_or, ite_true]
     exact le_self_add
   · by_cases hq : q c <;> simp [hp, hq]
 
@@ -604,7 +604,7 @@ instance : Nonempty unbounded.Spots := inferInstanceAs (Nonempty Unit)
 /-- At `exact`, PoUW's target fails at remote for a verifier that accepts everything. -/
 theorem pouw_nontrivial : ¬ exact.TargetFor (fun _ => True) .remote .pouw :=
   exact.sound_of_nontrivial .remote .pouw .empty #[.empty] .empty (exact.honest .empty #[.empty] .empty)
-    (pouw_fails .remote _ _ _ _) (by rw [error_exact]; exact zero_lt_one)
+    (pouw_fails .remote _ _ _ _) (lt_of_eq_of_lt (error_exact _ _ _ _ _) zero_lt_one)
 
 end Idle
 
@@ -620,14 +620,14 @@ theorem coins_couple_honest :
 at the idle deployment whose errors are all `0`. -/
 theorem coins_couple_nontrivial : ¬ Idle.exact.TargetFor (fun _ => True) .remote .pouw := Idle.pouw_nontrivial
 
-/-- **`TargetOfPeriods`' honest lemma**: at the idle deployment, PoUW's plays at remote couple to the period run that
-charges nothing and accepts everything (`Idle.coupling`), within `δ = 1` against a published `⊤`; no check reads the
-device's log, and the coupling has no break, so the rest of the event is empty. -/
+/-- **`TargetOfPeriods`' honest lemma**: at the idle deployment publishing `⊤` (`Idle.unbounded`), PoUW's plays at
+remote couple to the period run that charges nothing and accepts everything (`Idle.coupling`), within `δ = 1`; no check
+reads the device's log, and the coupling has no break, so the rest of the event is empty. -/
 theorem target_of_periods_honest :
-    Idle.unbounded.PeriodsCouple (fun o => ComponentAccepts .remote .pouw o.sent) .remote .pouw := by
+    (Idle.vocab ⊤ 1).PeriodsCouple (fun o => ComponentAccepts .remote .pouw o.sent) .remote .pouw := by
   intro θ F c σ ρ
   refine ⟨Idle.coupling ⊤ _ .remote θ F c σ ρ, 1, fun _ => Pouw.pr_le_one _, le_top, fun _ => ?_⟩
-  refine le_trans (Game.prCoin_mono (q := fun _ => False) ?_) (by rw [Game.prCoin_false]; exact zero_le _)
+  refine le_trans (Game.prCoin_mono (q := fun _ => False) ?_) (by rw [Game.prCoin_false]; exact zero_le)
   rintro ξ ⟨-, hl | hk⟩
   · exact hl fun log h => by simp [Idle.unbounded, Idle.vocab] at h
   · exact hk
@@ -642,7 +642,7 @@ foreign content, one seed and one spot read. -/
 theorem wipe_target_honest :
     (∀ θ F, (Idle.unbounded.wipe θ F).SurvivorBound (Idle.unbounded.foreignBits θ) fun _ _ _ => 0) ∧
       Idle.unbounded.WipeCoupling (fun _ => False) fun _ _ _ _ _ => 0 := by
-  refine ⟨fun θ F S_φ _ hold keep => ?_, ⟨fun θ F c σ P => ?_, fun _ _ _ _ _ h => h.elim, fun _ _ _ _ => zero_le _⟩⟩
+  refine ⟨fun θ F S_φ _ hold keep => ?_, ⟨fun θ F c σ P => ?_, fun _ _ _ _ _ h => h.elim, fun _ _ _ _ => zero_le⟩⟩
   · refine (Game.value_mono (q := fun _ => False) (fun x hx => hx.1) _).trans (le_of_eq ?_)
     rw [show Game.draw ((Fin S_φ → Bool) × Idle.unbounded.Seed × Idle.unbounded.Spots) =
       .coin _ fun x => .ret (id x) from rfl, Game.value_coin_ret, Game.prCoin_false]
@@ -653,7 +653,7 @@ theorem wipe_target_honest :
 at the idle deployment whose errors are all `0`, where every play keeps its (empty) foreign content. -/
 theorem wipe_target_nontrivial : ¬ Idle.exact.TargetFor (fun _ => True) .onsite .wipe :=
   Idle.exact.sound_of_nontrivial .onsite .wipe .empty #[.empty] .empty (Idle.exact.honest .empty #[.empty] .empty)
-    (fun _ h => h ⟨Nat.le_refl 0, funext fun i => i.elim0⟩) (by rw [Idle.error_exact]; exact zero_lt_one)
+    (fun _ h => h ⟨Nat.le_refl 0, funext fun i => i.elim0⟩) (lt_of_eq_of_lt (Idle.error_exact _ _ _ _ _) zero_lt_one)
 
 /-- **`SoundnessOfUpFront`'s honest lemma**: its hypotheses hold at the idle deployment's compiled remote composite,
 sampled proofs, PoUW and the inference-only policy each meeting its bound at its component. -/
