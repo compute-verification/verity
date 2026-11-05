@@ -337,6 +337,35 @@ def test_the_lanes_merge_takes_a_members_deletion_of_lean_the_tip_only_ported_as
     assert h.d._clean_merge(tip, edited) == (None, "conflict in Lib/Edited.lean")
 
 
+def test_the_lanes_merge_is_the_syncs_record_and_a_tick_keeps_its_own_for_the_next(world, monkeypatch):
+    """The lane merges onto `checked`'s tip through the sync's merge records (`Queue._recorded`): `next`'s lowest member, which
+    the sync merged onto that tip, lands with no merge of its own, and `next` rebuilt the next tick on the landing, a commit
+    with the tree of that merge, merges nothing again.  A merge the lane makes and leaves out (it doesn't compile) is kept in
+    the queue's state by drive's tick, and the next tick's lane, in a new process, takes it."""
+    from test_queue import _merge_trees
+
+    h = _lane(world, monkeypatch, per_tick=1)
+    world.gh.put(1, h1 := world.change({"x.txt": "1\n"}))
+    world.gh.put(2, h2 := world.change({"y.txt": "2\n"}))
+    calls = _merge_trees(monkeypatch)
+    assert h.tick().endswith("landed #1 on the low-risk lane"), world.logs
+    assert calls == [h1, h2]
+    calls.clear()
+    h.q._merge_records = {}
+    assert h.tick().endswith("landed #2 on the low-risk lane"), world.logs
+    assert calls == [] and _subject(world, "checked") == "Queue: #2 change 2"
+
+    world.gh.put(3, h3 := world.change({"verity/core/v.py": "3\n"}))     # a verifier: waits for its review
+    world.gh.put(4, h4 := world.change({"bad.py": "def (\n"}))
+    h.tick()
+    assert calls == [h3, h4, h4], calls                         # the sync's two, and #4 onto `checked`'s tip, under #3
+    assert _skipped(world)[-1].startswith("research queue drive: low-risk lane skipped #4 (compile: bad.py"), world.logs
+    calls.clear()
+    h.q._merge_records = {}
+    h.tick()
+    assert h4 not in calls and _skipped(world)[-1].startswith("research queue drive: low-risk lane skipped #4 (compile"), calls
+
+
 def test_the_lane_waits_while_a_lean_check_drive_didnt_launch_runs(world, monkeypatch):
     """A hand check's run is of the commit it runs on, which a landing off `next` takes off it: (a) can't be shown for it."""
     h = _lane(world, monkeypatch)

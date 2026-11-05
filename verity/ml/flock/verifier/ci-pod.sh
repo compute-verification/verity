@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The recorded agreement job (PROTOCOL.md §17.1) on a CPU pod: build both verifiers from source, then run ci.py on every
+# The recorded agreement job (`verity/ml/flock/verifier/README.md`) on a CPU pod: build both verifiers from source, then run ci.py on every
 # replayable set of vectors.json.
 #
 #   bash verity/ml/flock/verifier/ci-pod.sh SEED=20260926 FUZZ=20 JOBS=4
