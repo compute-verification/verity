@@ -12,8 +12,11 @@ while [ "$1" != "--" ]; do
   if [ "$1" = "--ro" ]; then ro+=("$2"); shift 2; else rw+=("$1"); shift; fi
 done
 shift
+# at their real paths, as mountinfo names the mounts: an RW_DIR reached through a symlink is otherwise remounted read-only
+for i in "${!rw[@]}"; do mkdir -p "${rw[$i]}"; rw[$i]=$(readlink -f "${rw[$i]}"); done
+for i in "${!ro[@]}"; do ro[$i]=$(readlink -f "${ro[$i]}"); done
 mount --make-rprivate /
-for d in "${rw[@]}"; do mkdir -p "$d"; mount --bind "$d" "$d"; done
+for d in "${rw[@]}"; do mount --bind "$d" "$d"; done
 keep=" ${rw[*]} "
 seen=" ${rw[*]} ${ro[*]} "
 awk '{print $5}' /proc/self/mountinfo | sort -u | while read -r m; do

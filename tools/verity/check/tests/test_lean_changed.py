@@ -308,9 +308,11 @@ def test_the_facts_are_read_in_the_sandbox(tmp_path, monkeypatch):
     assert (pkg / ".lake" / "lean-changed-facts" / "facts.json").is_file()
 
 
-def test_the_sandbox_keeps_the_dependencies_read_only_and_the_build_writable(tmp_path):
+@pytest.mark.parametrize("through_link", [False, True])
+def test_the_sandbox_keeps_the_dependencies_read_only_and_the_build_writable(tmp_path, through_link):
     """The audit's own sandbox (`tools/verity/lean/sandbox.sh`): what this build may write is its `.lake` but not the hard links in
-    `.lake/packages`, which share their files with the dependencies the audit keeps."""
+    `.lake/packages`, which share their files with the dependencies the audit keeps. A tree reached through a symlink (a slot
+    tree under a node's symlinked check cache) is writable alike."""
     if not LC.sandboxed():
         pytest.skip("no unprivileged user namespaces here (`unshare`); lean_changed skips its builds where there are none")
     pkg = tmp_path / "tree" / "a"
@@ -323,7 +325,9 @@ def test_the_sandbox_keeps_the_dependencies_read_only_and_the_build_writable(tmp
     lake.write_text("#!/usr/bin/env bash\nmkdir -p .lake/build && echo built > .lake/build/A.olean\n"
                     "echo tampered > .lake/packages/dep/Dep.olean 2>/dev/null && echo WROTE-DEPS\nexit 0\n")
     lake.chmod(0o755)
-    rc, text = LC.build("a", tmp_path / "tree", str(lake))
+    if through_link:
+        (tmp_path / "link").symlink_to(tmp_path / "tree")
+    rc, text = LC.build("a", tmp_path / ("link" if through_link else "tree"), str(lake))
     assert rc == 0 and "WROTE-DEPS" not in text, text
     assert (pkg / ".lake" / "build" / "A.olean").read_text() == "built\n"
     assert (store / "dep" / "Dep.olean").read_text() == "kept"
