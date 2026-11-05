@@ -162,8 +162,7 @@ NOT_READ = {
     "run_daily.py": "the build cache's daily publish",
     "tool.py": "the store's declarations of the scheduled runs",
     "Upstream.lean": "`upstream.py --lean`, the exact pass; the audit runs the no-build one",
-    "unread.py": "the report of the Lean nothing reads, run by hand",
-    "Unread.lean": "`unread.py`'s facts",
+    "unread.py": "the ratchet on wholly unread modules, which `run` runs after the audits on the facts they wrote",
     "pyproject.toml": "the tools/verity/lean suite's settings",
 }
 

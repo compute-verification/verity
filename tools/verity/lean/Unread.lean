@@ -3,9 +3,10 @@ import Lean
 /-!
 # The facts of what each declaration reads, from the `.olean` files as data
 
-Compiled and run under `lake env` with a JSON file `CONFIG` (`unread.py` does both), it reads the modules `CONFIG` names
-(`modules`) from their `.olean` files as `Replay.lean` reads them (each part, the private one where there is one, with
-no import and no initializer, so Mathlib's and ArkLib's modules are never loaded) and writes to the path it names (`out`)
+Compiled and run under `lake env` with a JSON file `CONFIG` (`unread.py` and `check.py`'s audit do both), it reads the
+modules `CONFIG` names (`modules`), and each module of `follow` they import, transitively, from their `.olean` files as
+`Replay.lean` reads them (each part, the private one where there is one, with no import and no initializer, so Mathlib's
+and ArkLib's modules are never loaded) and writes to the path it names (`out`)
 one JSON line per module and then one per constant those modules declare, for `unread.py`, which holds the policy: it
 makes no judgement.
 
@@ -129,11 +130,24 @@ unsafe def main (args : List String) : IO UInt32 := do
   let some cfgPath := args.head? | throw <| IO.userError "usage: Unread.lean CONFIG"
   let cfg ← IO.ofExcept (Json.parse (← IO.FS.readFile cfgPath))
   let mods ← IO.ofExcept (cfg.getObjValAs? (Array String) "modules")
+  let follow : NameSet := ((cfg.getObjValAs? (Array String) "follow").toOption.getD #[]).foldl
+    (fun s m => s.insert m.toName) {}
   let out ← IO.ofExcept (cfg.getObjValAs? String "out")
   let t0 ← IO.monoMsNow
   let mut loaded : Array (Name × Option (Array Import × ModuleData)) := #[]
-  for m in mods do
-    loaded := loaded.push (m.toName, ← load m.toName)
+  let mut queue : Array Name := mods.map (·.toName)
+  let mut queued : NameSet := queue.foldl NameSet.insert {}
+  let mut k := 0
+  while k < queue.size do
+    let m := queue[k]!
+    k := k + 1
+    let l ← load m
+    loaded := loaded.push (m, l)
+    if let some (imports, _) := l then
+      for i in imports do
+        if follow.contains i.module && !queued.contains i.module then
+          queued := queued.insert i.module
+          queue := queue.push i.module
   let mut attrs : Attrs := {}
   let mut index : Std.HashMap Name Nat := {}
   let mut order : Array (Nat × ConstantInfo) := #[]
