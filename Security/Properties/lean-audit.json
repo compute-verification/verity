@@ -483,6 +483,7 @@
   "CoreRemote",
   "CoreRemoteNetwork",
   "CoreRemoteNetworkNoPouw",
+  "CorePeriodFiles",
   "Properties.Remote",
   "Properties.NciDesc",
   "Definitions.Pouw.Window",
