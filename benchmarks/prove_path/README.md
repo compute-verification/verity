@@ -23,8 +23,9 @@ commitments and never published.
    `verity/registration/v1` item `window`, which the record's digest covers) carries `compiler: {name, digest}` and
    `advice: {root, bits}` (`pipeline.advice_windows.binding`). The compiler's digest is `Capped`'s: the inner compiler's digest
    and ℓ, the public cap on the advice's length. The root is the advice's hiding commitment (`advice_windows.commit_advice`:
-   I1's canonical encoding in 256-bit rows, hm96-sha512 leaves in one frame-v3-sha512 tree, its domain bound to the compiler).
-   `bits` is the advice's length, the leak the certifier charges. Every rank binds the same root: the prover commits the advice
+   I1's canonical encoding padded to ℓ bits, `advice_windows.pad`, in 256-bit rows, hm96-sha512 leaves in one
+   frame-v3-sha512 tree, its domain bound to the compiler). `bits` is ℓ, the leak the certifier charges, so neither it nor
+   the row count says the advice's own length. Every rank binds the same root: the prover commits the advice
    once. The record gains no field.
 2. **Each step's Programs are the compiler's output.** The window's `served_programs` are the digests the compiler produced
    for the advice, and the population program and partition the registration is checked against (R1–R7) are over those
@@ -124,8 +125,8 @@ history would discharge, and doesn't discharge them yet.
 **The charge terms the run prints** (`summary.json` of `prove_path.py audit`; each rank's `ranks.<r>.charge` holds
 `advice_bits`, `delta`, `wrong_units`, `location_bits`, `harm_bound` and `exfiltration_bound`):
 - c, which the run doesn't print. Once the advice is the only free input outside the registration, c is `advice.bits`,
-  the registration's `window.advice.bits`: the I1 advice's length, which `prove_path.py advice` prints as `bits`. Over
-  several windows, c is their sum.
+  the registration's `window.advice.bits`: ℓ, the length the I1 advice is padded to before it is committed and compiled
+  (`advice_windows.pad`), which `prove_path.py advice` prints as `bits`. Over several windows, c is their sum.
 - δ is `delta`. Per rank, `ranks.<r>.audit.wrong_units` is `{delta, of, bound, rule, per_template}` (the
   `wrong_units` function in `verity/core/protocols/sampled_proofs/one_stage/audit.py`). Except with probability δ, at most
   `bound` of the `of` units are incorrect, and at most `per_template[t]` of them are in template t (`Stratified.count_bound`,
@@ -170,7 +171,8 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
 - **Public inputs.** Only kinds AGENTS.md allows (protocol structure and hiding commitments):
   - d_C, the registered compiler's digest (`Capped.digest`), which fixes the compiler's code and ℓ;
   - ρ, the advice's root (`window.advice.root`);
-  - b, the advice's length in bits (`window.advice.bits`, which is public and is the length term the certifier charges);
+  - b, the advice's length in bits as committed, ℓ (`window.advice.bits`, which is public and is the length term the
+    certifier charges);
   - Π, what the window's Programs commit to: either the window's `served_programs` (request id ↦ Program digest) with the
     population Program's and partition's digests that R1–R7 hold the registration to, or, with the compiler's padded public
     step templates, the root of a hiding commitment to the routing (which committed row of each step feeds which public template
@@ -216,19 +218,19 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
     `own_builds`; no vLLM, and `--vllm-python` is ignored) into `--builds` (default `OUT/builds`, never under the row dir),
     each held to I2's digest. The prover's Builds are its row dir's. The audit summary's `i2` holds I2's Programs beside the
     Build's `build_request_LP*` digests.
-  - on a served window, the same over φ of the served engine as vllm's registered compiler compiles under (`phi_of_serve`:
+  - on a served window, the same over φ of the served engine as vllm's registered compiler compiles under (`served_compiler.phi_of_serve`:
     `serve.json`'s model, revision, target profile and execution label, the checkpoint's `config.json`), the public default
-    seed (`registered_seed`: `engine.served_seed.DEFAULT_SEED`; a run whose `serve.json` records another or none is refused,
+    seed (`served_compiler.registered_seed`: `engine.served_seed.DEFAULT_SEED`; a run whose `serve.json` records another or none is refused,
     as vllm's registered compiler refuses it), and each request's body as that compiler gives it (`serve_ingress`: the sampling
     fields its ingress record says it brought, with its prompt ids, by its I1 id: its `user`, else its HTTP id). It is named
-    as `verity-vllm advice` names it and runs the server's code (`served_identity`: `compile_steps` by module path, its
+    as `verity-vllm advice` names it and runs the server's code (`served_compiler.served_identity`: `compile_steps` by module path, its
     digest over `source_identity.code_identity`, which covers `integrations/vllm` and `verity`), so the audit runs on a tree
     whose two are the server's. Its digest is the single-GPU one (`I2Compiler.digest`) with that code in place of this
     tree's: it covers φ (`serve.json`'s model and revision, that pin's `config.json`, the target and the execution), the
     default seed, ℓ and the transfer gates, so a `serve.json` whose model, revision, target or execution differs from the
     one the advice was registered under names another compiler, refused before the sample (`serve_check`'s `compiler`), and
-    one recording another default seed is refused outright (`registered_seed`). `prove_path.py compiler --serve-run DIR`
-    prints the binding's compiler. I2's Programs are held to the ones vllm's registered compiler wrote into the row dir
+    one recording another default seed is refused outright (`served_compiler.registered_seed`). `prove_path.py compiler --serve-run DIR`
+    prints the binding's compiler, the one serve-openai `--advice` registers before its first window. I2's Programs are held to the ones vllm's registered compiler wrote into the row dir
     (`manifest.json`, by I1 id).
 - **A served window** binds the root serve-openai published: the advice is committed once, by the server, and the prover
   commits the window under the published binding. Before any commit and before the sample (folded into the source check a5

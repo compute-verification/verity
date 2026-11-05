@@ -5,13 +5,15 @@ binding both.
 The binding is two keys of the registration's window provenance (`binding`, `tp.serving_rows.BINDING`), beside the served Programs:
 
     compiler   {"name", "digest"}   the registered compiler: model and code fixed before the run
-    advice     {"root", "bits"}     the advice it read, private: the root of its hiding commitment, and its length in bits
+    advice     {"root", "bits"}     the advice it read, private: the root of its hiding commitment, and its length in bits (ℓ
+                                    under a `Capped` compiler, whatever the encoding's)
 
 Core's ``verity/registration/v1`` record carries the window's provenance as one public item (``window``), which the record's digest
 covers and the coins commit to before sampling, so the sample comes after both are fixed and the record gains no field.  The advice
-is not published: its canonical encoding is committed as hiding rows (`commit_advice`: ``ROW_BITS``-bit rows,
-zero-padded, under `verity.ml.commitments.advice`, hm96-sha512 leaves in one frame-v3-sha512 tree, its domain bound to the
-compiler), and only the root and the length are public.  The rows and their salts are the prover's (`opening`).
+is not published: its canonical encoding, under a `Capped` compiler padded to ℓ bits (`pad`), is committed as hiding rows
+(`commit_advice`: ``ROW_BITS``-bit rows, zero-padded, under `verity.ml.commitments.advice`, hm96-sha512 leaves in one
+frame-v3-sha512 tree, its domain bound to the compiler), and only the root and the length are public.  The rows and their salts
+are the prover's (`opening`).
 
 * **The prover** commits the window from a rank's sealed bundle over the compiler's Programs for the advice (`commit_window`:
   `tp.serving_rows.from_bundle` with ``programs`` and ``binding``).  Advice naming a request the Commit didn't serve fails there by
@@ -142,15 +144,18 @@ def commit_advice(compiler: Any, data: bytes, salts: Sequence[bytes] | None = No
 
 def of_advice(compiler: Any, data: bytes, codec: Any = None,
               salts: Sequence[bytes] | None = None) -> tuple[list[dict[str, Any]], dict[str, Any], AC.Committed]:
-    """The advice's bytes read by ``codec`` (`codec_of`), refused unless they are its canonical encoding: the compiler's requests
-    (`requests_of`), the binding (`binding`: the root of `commit_advice` and the length, ``codec.total_bits``) and the commitment,
-    whose rows and salts are the prover's."""
+    """The advice's bytes read by ``codec`` (`codec_of`), refused unless they are its canonical encoding, or for a `Capped`
+    compiler its encoding at ℓ bits (`Capped.pad`): the compiler's requests (`requests_of`), the binding (`binding`: the root
+    of `commit_advice` over the bytes as given and the length, ℓ for a `Capped` compiler, else ``codec.total_bits``) and the
+    commitment, whose rows and salts are the prover's."""
     c = codec_of(codec)
-    advice = c.decode(data)
-    if c.encode(advice) != data:
+    capped = isinstance(compiler, Capped)
+    enc = compiler.unpad(data) if capped else data
+    advice = c.decode(enc)
+    if c.encode(advice) != enc:
         raise ValueError("the advice's bytes are not its canonical encoding")
     reg = commit_advice(compiler, data, salts)
-    return requests_of(advice), binding(compiler, reg.root.hex(), int(c.total_bits(advice))), reg
+    return requests_of(advice), binding(compiler, reg.root.hex(), 8 * len(data) if capped else int(c.total_bits(advice))), reg
 
 
 def report(compiler: Any, data: bytes, T: int, codec: Any = None) -> dict[str, Any]:
@@ -246,24 +251,61 @@ class Traced:
                         "requests": [dict(q) for q in requests]}, int(rank), int(world), definitions=False)
 
 
-CAPPED = "verity/prove-path/capped-compiler/v0"
+CAPPED = "verity/prove-path/capped-compiler/v1"
 #: ℓ when a registration names none, the public cap on the advice's encoding in bits: 1 MiB, far above a session's few hundred
-#: requests (I1 spends tens of bits a row)
+#: requests (I1 spends tens of bits a row); a served run's is the least that pads every window within its limits (`least_cap`
+#: of `window_advice.max_bits`)
 CAP_BITS = 1 << 23
+
+
+def pad(data: bytes, bits: int) -> bytes:
+    """``data`` at ``bits`` bits whatever its length: its bytes, a 0x80 byte, then zero bytes. Refused past ``bits`` − 8."""
+    if bits % 8 or 8 * len(data) + 8 > bits:
+        raise ValueError(f"the advice is {8 * len(data)} bits, over the registered cap ℓ = {bits} bits less its 8-bit end mark")
+    return bytes(data) + b"\x80" + bytes(bits // 8 - len(data) - 1)
+
+
+def least_cap(bits: int) -> int:
+    """The least ℓ at which `pad` takes an encoding of ``bits`` bits: its whole bytes and the 8-bit end mark."""
+    if isinstance(bits, bool) or not isinstance(bits, int) or bits < 0:
+        raise ValueError(f"an encoding's length is a natural number of bits, not {bits!r}")
+    return 8 * -(-bits // 8) + 8
+
+
+def unpad(data: bytes, bits: int) -> bytes:
+    """`pad`'s inverse: the bytes ``data`` pads to ``bits`` bits, refused unless it is exactly that long and ends 0x80 then
+    zero bytes."""
+    if 8 * len(data) != bits:
+        raise ValueError(f"the advice is read at ℓ = {bits} bits, padded (`advice_windows.pad`), not at {8 * len(data)}")
+    body = bytes(data).rstrip(b"\0")
+    if not body.endswith(b"\x80"):
+        raise ValueError("the advice's padding isn't a 0x80 byte then zero bytes")
+    return body[:-1]
 
 
 @dataclass(frozen=True)
 class Capped:
     """A registered compiler with ℓ, the public cap on the advice's length in bits. Its digest names the inner compiler's and ℓ,
-    so the registration's ``compiler`` fixes ℓ before sampling as it fixes the code; `load` is the inner compiler's."""
+    so the registration's ``compiler`` fixes ℓ before sampling as it fixes the code; `load` is the inner compiler's.
+
+    It reads the advice at ℓ bits whatever its length (`pad`: the encoding, a 0x80 byte, zero bytes), so the advice's
+    commitment has the rows ℓ fixes, its registration charges ℓ, and nothing public says how long the encoding is."""
 
     inner: Any
     cap_bits: int = CAP_BITS
     name: str = CAPPED
 
     def __post_init__(self) -> None:
-        if isinstance(self.cap_bits, bool) or not isinstance(self.cap_bits, int) or self.cap_bits < 8:
-            raise ValueError(f"the cap ℓ is a whole number of bits, at least 8, not {self.cap_bits!r}")
+        if isinstance(self.cap_bits, bool) or not isinstance(self.cap_bits, int) or self.cap_bits < 8 or self.cap_bits % 8:
+            raise ValueError(f"the cap ℓ is a whole number of bits, a multiple of 8 and at least 8, not {self.cap_bits!r}")
+
+    def pad(self, data: bytes) -> bytes:
+        """The advice's encoding ``data`` as this compiler reads it: at ℓ bits (`pad`)."""
+        return pad(data, self.cap_bits)
+
+    def unpad(self, data: bytes) -> bytes:
+        """The encoding inside advice read at ℓ bits (`unpad`)."""
+        return unpad(data, self.cap_bits)
 
     @property
     def digest(self) -> str:

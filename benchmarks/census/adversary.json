@@ -8,6 +8,9 @@
     "tokens_per_request": 4500,
     "model": "DeepSeek-V4-Pro",
     "active_params": 49e9,
+    "total_params": 1.6e12,
+    "weights_bytes": 864704792696,
+    "weights_datatype": "FP4 + FP8 mixed: the routed experts' weights E2M1, two a byte, with UE8M0 block scales; most other weights E4M3 with 128x128 UE8M0 block scales; the rest BF16 and F32",
     "datatype": "e4m3",
     "flop_per_active_param_per_token": 2,
     "flop_per_request": 4.41e14,
@@ -24,6 +27,14 @@
       },
       {
         "label": "its figure script exfiltration_and_skipped_work.py (art:3a91517e8ac10b37c2fd248ac2d0cb32f19c06ee93b4a88a39999a02a5a314f6): R = int(1e16*104/49) requests over the one-year horizon, FLOP_REQ = 4500 * 2 * 49e9 (DeepSeek-V4-Pro, ~2 FLOP/active param/token), H100_HOUR_FLOP = 1979e12 * 3600 (FP8 dense peak at 100% utilization); the base (30M H100-equivalents at 2e15 FP8 FLOP/s, 3.3x/yr growth to Sept 2027) is its docstring's; total_flop = R * FLOP_REQ and monitoring_period_s = 365 * 86400 are this entry's"
+      },
+      {
+        "label": "DeepSeek-V4-Pro's model card: 1.6T total parameters, 49B activated a token; precision FP4 + FP8 mixed, its MoE expert parameters FP4 and most others FP8 (total_params, weights_datatype)",
+        "href": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro"
+      },
+      {
+        "label": "its checkpoint at revision b5968e9190ef611bbf34a7229255be88a0e937c1, one copy of the weights as published: model.safetensors.index.json's metadata.total_size, 864704792696 bytes over its 64 shards (weights_bytes); each routed expert's weight I8 [3072, 3584] for 3072 x 7168 E2M1 values with an F8_E8M0 scale, config.json's expert_dtype fp4 and quantization_config fp8 e4m3 at 128x128 ue8m0 blocks (weights_datatype)",
+        "href": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/blob/b5968e9190ef611bbf34a7229255be88a0e937c1/model.safetensors.index.json"
       }
     ]
   }

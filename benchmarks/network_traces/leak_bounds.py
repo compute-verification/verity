@@ -1,7 +1,8 @@
 """leak-bounds: K, the bits a covert sender in the server can move through the network certifier's accepted transcripts
 over a monitoring period, for one link (`per_link`), summed over a datacenter's links (`datacenter`; the census's
 reference datacenter has `datacenter_links`) and over the world's (`world`, the adversary resource model's), each beside
-its share of one copy of the weights (`WEIGHTS`) and ε, the union of its scans' δ. It is the one calculator of K:
+its share of one copy of the weights a deployment protects (`WEIGHTS`, the adversary resource model's, `protected`;
+the demo's served model is `SERVED`) and ε, the union of its scans' δ. It is the one calculator of K:
 `chain_record.py leak` reads it on a warden run, and the slowdown ρ is derived from both bounds.
 
 A link is one network certifier on one uplink (its load a `LinkLoad`, made by `link`), certifying ``rate`` requests a
@@ -69,9 +70,9 @@ class Weights(NamedTuple):
     label: str
 
 
-#: Llama-3.2-1B's parameters (128,256 × 2,048 tied embedding, 16 layers of 60,821,504, the final norm) in BF16. The
-#: served checkpoint is int8, so a share is of this BF16 copy, as its label says.
-WEIGHTS = Weights(1_235_814_400 * 16, "Llama-3.2-1B in BF16")
+#: the demo's served model, Llama-3.2-1B's parameters (128,256 × 2,048 tied embedding, 16 layers of 60,821,504, the
+#: final norm) in BF16. The served checkpoint is int8, so its share is of this BF16 copy, as its label says.
+SERVED = Weights(1_235_814_400 * 16, "the demo's served model (Llama-3.2-1B) in BF16")
 #: each reading of the sampling block's free inputs (the scan's `prog`, the tied audit's free inputs), as a report
 #: labels it
 READINGS = {"registered": "`prog` as registered, the tied audit's slot entries (the record's K)",
@@ -215,6 +216,18 @@ def world_links() -> int:
     world, dc = _reference("adversary.json"), _reference("deployments.json")
     return math.ceil(world["total_flop"] / (world["flop_per_s_per_h100"] * world["monitoring_period_s"]
                                             * dc["gpus_per_machine"]))
+
+
+def protected() -> Weights:
+    """One copy of the weights a deployment protects: the adversary resource model's (`adversary.json`), its
+    ``weights_bytes`` as published, at ``weights_datatype``."""
+    d = _reference("adversary.json")
+    return Weights(8 * d["weights_bytes"], f"{d['model']} as published, {d['total_params'] / 1e12:g}T parameters "
+                                           f"({d['weights_datatype']})")
+
+
+#: the copy every share is of unless a caller names another: the deployment's (`protected`), never the served model's
+WEIGHTS = protected()
 
 
 def link(cls: Any, rate: float | Fraction, *, T: int | None = None, tau: float | Fraction = TAU,

@@ -45,6 +45,7 @@ from verity.core.protocols.certifier import audit, lean_audit
 HERE = Path(__file__).resolve().parents[1]
 PERIOD_CASE = HERE.parents[1] / "verity" / "core" / "protocols" / "network" / "tests" / "period_case.py"
 BLOCK_SCHEMA = HERE.parents[1] / "examples" / "h200" / "interfaces" / "verity_e2e_demo" / "schemas" / "block-record.v1.schema.json"
+PATH = os.environ["PATH"]
 
 
 def _load(name: str):
@@ -223,10 +224,31 @@ def test_job_keeps_no_gate_runs_witness(tmp_path):
         (run / name).write_text("{}")
     (tmp_path / "OUT" / "gates").mkdir(parents=True)
     subprocess.run(["bash", "-c", copy], check=True, env={"G": str(tmp_path / "G"), "OUT": str(tmp_path / "OUT"),
-                                                          "PATH": os.environ["PATH"]})
+                                                          "PATH": PATH})
     kept = sorted(p.relative_to(tmp_path / "OUT" / "gates" / "g2" / run.name).as_posix()
                   for p in (tmp_path / "OUT").rglob("*") if p.is_file())
     assert kept == ["end.json", "out/deployment.json"]
+
+
+@pytest.mark.parametrize("delta", [None, "5.421010862427522e-20"])
+def test_the_scan_proves_at_cr_scan_delta(tmp_path, delta):
+    """chain_record.sh hands CR_SCAN_DELTA to scan_zk.py prove as --delta, ahead of CR_SCAN_ARGS, and no --delta
+    without it; served_verdicts.sh's 2^-64 reaches scan_zk.py's float --delta as the double that is 2^-64 exactly."""
+    lines = (HERE / "chain_record.sh").read_text().splitlines()
+    i = next(k for k, line in enumerate(lines) if line.lstrip().startswith('if [ -n "${CR_SCAN_CMD:-}" ]'))
+    py = tmp_path / "py"
+    py.write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$ARGV"\n')
+    py.chmod(0o755)
+    env = {"PY": str(py), "ARGV": str(tmp_path / "argv"), "OUT": str(tmp_path), "BIN": "b", "LEAN": "l",
+           "SCANOUT": "s", "CR_SCAN_ARGS": "--draw 8", "PATH": PATH}
+    subprocess.run(["bash", "-c", "\n".join(lines[i:i + 3])], check=True,
+                   env=env | ({"CR_SCAN_DELTA": delta} if delta else {}))
+    argv = (tmp_path / "argv").read_text().splitlines()
+    assert argv[:2] == ["benchmarks/network_traces/scan_zk.py", "prove"] and argv[-2:] == ["--draw", "8"]
+    if delta is None:
+        assert "--delta" not in argv
+    else:
+        assert argv[argv.index("--delta") + 1] == delta and Fraction(float(delta)) == Fraction(1, 2 ** 64)
 
 
 def _steps(tmp_path, job: dict, endpoint: bool = True) -> SimpleNamespace:

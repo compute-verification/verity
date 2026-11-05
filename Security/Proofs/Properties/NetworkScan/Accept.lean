@@ -115,6 +115,8 @@ theorem scanOf_accepted {j : Lean.Json} {program : String} {s : Schedule} {sc : 
   obtain rfl : root = P.defs[P.root]! := by
     obtain ⟨hlt, e⟩ := Array.getElem?_eq_some_iff.1 hroot
     rw [getElem!_pos P.defs _ hlt, e]
+  obtain ⟨_, -, h⟩ := bind_ok h
+  obtain ⟨_, -, h⟩ := bind_ok h
   obtain ⟨⟨xe, de⟩, hback, h⟩ := bind_ok h
   replace hback := needSome_ok hback
   obtain ⟨_, h2, h⟩ := bind_ok h

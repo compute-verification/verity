@@ -1,6 +1,8 @@
 import Flock.Circuit
 import Flock.HmRow
+import Flock.KnownRead
 import Flock.Program
+import Std.Data.HashMap
 
 /-!
 # A sampled statement's bits
@@ -9,10 +11,14 @@ The one layout of a sampled statement's gates, as code: the Boolean-profile prog
 describes, where each of its gates sits, and each unit's gates and inputs. The sampled leg's bridge,
 `Properties.NetworkScan.Flattens` and NetworkCheck read these definitions and hold no second copy of them.
 
+* `Src`, `Index`, `srcAt`, `srcKey`, `keyIdx`: Δ's source keys (`Aliased.srcKey`), the one definition of them in the
+  code: the column Δ copies into each unit input, read through the circuit's `Index` of row ports, leaf cuts and wires,
+  and each input's key, the first input of its source.
 * `keyProg c n`: the circuit's program on Δ's source keys, for `n` units. Its input gates are the constant (gate 0), the
   zero (gate 1) and `B` source gates per unit, unit `u`'s input column `x` on its key's (`keyIdx`), or on the zero's where
   it has none. Then come the units, each the unit net's rows (`Rows.ofNet`) stacked `upv` times (`Rows.stack`), a row
-  reading earlier gates. Its outputs are the gates on the returned outputs' bits.
+  reading earlier gates, built one unit after another as the bridge's `Placed.keyProg` is (`uniform`, `KeyProg.snoc`).
+  Its outputs are the gates on the returned outputs' bits.
 * `gateSize`, `off`, `posOf`, `lower`, `prog`: that program lowered to the Boolean profile (`LGate`), gate by gate in
   order. A row `(⊕ a) ∧ (⊕ b)` is three gates, the two XORs then their AND, and an input is one, `.const b` where the
   constants `κ` fix it to `b`. Gate `g` sits at `posOf`, its last lowered gate.
@@ -22,11 +28,17 @@ describes, where each of its gates sits, and each unit's gates and inputs. The s
   `(u, k)` being unit `u`'s template instance `k < upv`.
 * `RowPos`, `rowBit`, `outRowBit`: a commitment position (a registered row, its leaf and a bit), where a source gate
   reads and where an output bit is committed.
+* `consts`: the key program's constants, its constant set, and its zero and every input gate no unit reads clear.
 * `Members`, `base`, `wiresOf`: an audit's members, each a statement on a circuit file over some of the partition's VUs,
   side by side, and each source bit's wire to the first claims position at its commitment position, compared at the
   partition's VUs: the writer's output bit, else the first copy.
-* `width P g`: the width of the leaf a Program's layout gate `g` produces.
+* `defWidth d`, `bitsOf`, `fieldsOf`, `wordsOf`, `retWords`: the width of a primitive's leaf, a type's bits, a return's
+  fields, and the 16-bit words a parameter and a return are packed on, a return each field on words of its own.
+* `runsOf`, `paramsWhy`: a file's input rows run by parameter, and whether its unit's input ports read each parameter's
+  words off them.
 * `check c P tmpl`: why Bits doesn't lay `c` out as template `tmpl` of `P`, or none.
+* `unitReads`, `readsWhy`: the unit's input columns its rows read, and whether they read input padding or leave a bit of
+  a named parameter unread; a check of the unit net's rows, which `check` never reads.
 
 The circuit file holds each unit's Boolean circuit as a whole, not each primitive's: no row is a primitive's own, so a
 packed primitive's bits are placed through its unit's ports, never through its Definition.
@@ -92,63 +104,78 @@ def Rows.stack (R : Rows) (k : Nat) : Rows :=
 
 /-! ## Δ's source keys of the unit's inputs -/
 
-/-- Each row word's first message leaf (`HmRow.delta`'s `starts`). -/
-def starts (c : Flock.Circuit) : Array Nat :=
-  (c.ports.foldl (fun (acc : Array Nat × Nat) p => (acc.1.push acc.2, acc.2 + p.words)) (#[], 0)).1
-
-/-- A net's input port bits, port by port: each port's columns. -/
-def portBits (gs : Array Flock.Group) : List Nat :=
-  (Flock.portCols gs).toList.flatMap fun q => List.range' q.1 q.2
-
-/-- The port a column of the input rows is a bit of: the first whose columns hold it. -/
-def portOf (pc : Array (Nat × Nat)) (off : Nat) : Nat :=
-  ((List.range pc.size).find? fun p => decide (pc[p]!.1 ≤ off ∧ off < pc[p]!.1 + pc[p]!.2)).getD 0
-
-/-- **The column Δ copies into a unit input**, without the template instance: a forced-zero row, message bit `bit` of
-byte `byte` of row port `p`, output column `col` of net `net`'s slot `slot`, the fixed column `col`, or input padding row
-`off` of copy `k`. -/
-inductive Src where
+/-- **The column Δ copies into a unit input, without the template instance** (`Aliased.Src`): a forced-zero row,
+message bit `bit` of byte `byte` of row port `p`, output column `col` of net `net`'s slot `slot`, literal column `col`,
+or input padding row `off` of copy `k`. -/
+inductive Src
   | zero
   | msg (p byte bit : Nat)
   | wire (net slot col : Nat)
   | lit (col : Nat)
   | pad (k off : Nat)
-  deriving DecidableEq, Inhabited, Repr
+  deriving DecidableEq, Hashable, Inhabited, Repr
 
-/-- Copy `k`'s input port `p`, bit `t`: its source, without the template instance. -/
-def srcAt (c : Flock.Circuit) (k p t : Nat) : Src :=
+/-- The last index of the ascending `s` whose entry is at most `x`, or 0
+(`((List.range s.size).reverse.find? (s[·]! ≤ x)).getD 0`). -/
+def lastLe (s : Array Nat) (x : Nat) : Nat := Id.run do
+  let mut lo := 0
+  let mut hi := s.size
+  while lo < hi do
+    let mid := (lo + hi) / 2
+    if s.getD mid 0 ≤ x then lo := mid + 1 else hi := mid
+  return lo - 1
+
+/-- What `srcAt` looks up once a circuit: the row ports' first words, each `(copy, port)`'s first leaf cut and its first
+wire into the unit net. -/
+structure Index where
+  starts : Array Nat
+  cuts : Std.HashMap (Nat × Nat) Nat
+  wires : Std.HashMap (Nat × Nat) (Nat × Nat × Nat)
+
+def Index.of (c : Flock.Circuit) : Index :=
+  { starts := Flock.KnownRead.starts c
+    cuts := c.leafCuts.foldl (fun m (k, p, w) => if m.contains (k, p) then m else m.insert (k, p) w) {}
+    wires := c.wires.foldl (fun m w =>
+      if w.dst.1 == c.unitNet && !m.contains (w.dst.2.1, w.dst.2.2) then m.insert (w.dst.2.1, w.dst.2.2) w.src else m) {} }
+
+/-- Leaf word `x`'s bit `t` as row port `q`'s message bit, where `q` is the port holding word `x`: within its bits, or
+the zero. -/
+def msgAt (c : Flock.Circuit) (ix : Index) (x t : Nat) (wide : Bool) : Src :=
+  let q := lastLe ix.starts x
+  let s := ix.starts.getD q 0
+  if (wide || t < 16) && 16 * (x - s) + t < (c.ports.getD q default).bits then .msg q (2 * (x - s) + t / 8) (t % 8)
+  else .zero
+
+/-- Copy `k`'s input port `p`, bit `t` (`Aliased.srcAt`): its leaf's message bit for a leaf port, else its first leaf
+cut's, else its first wire's output column, else `.lit 0`; `check` makes the last two unreachable by refusing a wire
+into the unit and an input port past the leaf ports that no one leaf cut wires. -/
+def srcAt (c : Flock.Circuit) (ix : Index) (k p t : Nat) : Src :=
   if p < (c.unit.inGroups.getD 0 default).bits.size then
-    if (c.leavesIn.getD k #[])[p]! < 0 then .zero else
-      let x := ((c.leavesIn.getD k #[])[p]!).toNat
-      let q := ((List.range (starts c).size).reverse.find? (fun q => (starts c)[q]! ≤ x)).getD 0
-      if 16 * (x - (starts c)[q]!) + t < c.ports[q]!.bits then
-        .msg q (2 * (x - (starts c)[q]!) + t / 8) (t % 8)
-      else .zero
-  else
-    match c.leafCuts.toList.filter (fun e => decide (e.1 = k ∧ e.2.1 = p)) with
-    | e :: _ =>
-      let q := ((List.range (starts c).size).reverse.find? (fun q => (starts c)[q]! ≤ e.2.2)).getD 0
-      if t < 16 && 16 * (e.2.2 - (starts c)[q]!) + t < c.ports[q]!.bits then
-        .msg q (2 * (e.2.2 - (starts c)[q]!) + t / 8) (t % 8)
-      else .zero
-    | [] => match c.wires.toList.filter (fun w => decide (w.dst = (c.unitNet, k, p))) with
-      | w :: _ => .wire w.src.1 w.src.2.1
-          (((Flock.portCols (c.nets.getD w.src.1 default).2.outGroups).getD w.src.2.2 default).1 + t)
-      | [] => .lit 0
+    let l := (c.leavesIn.getD k #[]).getD p 0
+    if l < 0 then .zero else msgAt c ix l.toNat t true
+  else match ix.cuts[(k, p)]? with
+    | some w => msgAt c ix w t false
+    | none => match ix.wires[(k, p)]? with
+      | some (net, slot, j) =>
+        .wire net slot (((Flock.portCols (c.nets.getD net default).2.outGroups).getD j default).1 + t)
+      | none => .lit 0
 
-/-- **Stacked input `x`'s key**: copy `x / W`'s input at slot offset `x % W` (`W = inWords · WORD`), `srcAt` at the port
-bit it is, or the padding row it is. -/
-def srcKey (c : Flock.Circuit) (x : Nat) : Src :=
+/-- **Stacked input `x`'s key** (`Aliased.srcKey`): copy `x / W`'s input at slot offset `x % W` (`W = inWords · WORD`),
+`srcAt` at the port bit it is, or the padding row it is. -/
+def srcKey (c : Flock.Circuit) (ix : Index) (x : Nat) : Src :=
   let W := c.unit.inWords * Flock.WORD
   let pc := Flock.portCols c.unit.inGroups
-  if x % W ∈ portBits c.unit.inGroups then
-    srcAt c (x / W) (portOf pc (x % W)) (x % W - pc[portOf pc (x % W)]!.1)
-  else .pad (x / W) (x % W)
+  let off := x % W
+  let col := fun p => pc.getD p (0, 0)
+  match (List.range pc.size).find? fun p => decide ((col p).1 ≤ off ∧ off < (col p).1 + (col p).2) with
+  | some p => srcAt c ix (x / W) p (off - (col p).1)
+  | none => .pad (x / W) off
 
-/-- **Equal sources are equal keys**: of `n` inputs, input `x`'s key is `none` at the zero, else the first input with the
-same source. -/
+/-- **Equal sources are equal keys** (`Aliased.keyIdx`): of `n` inputs, input `x`'s key is `none` at the zero, else the
+first input with the same source. -/
 def keyIdx (c : Flock.Circuit) (n x : Nat) : Option Nat :=
-  if srcKey c x = .zero then none else (List.range n).find? fun i => srcKey c i = srcKey c x
+  let ix := Index.of c
+  if srcKey c ix x = .zero then none else (List.range n).find? fun i => srcKey c ix i = srcKey c ix x
 
 /-! ## The circuit's program -/
 
@@ -168,6 +195,34 @@ def KeyProg.size (kp : KeyProg) : Nat := kp.inputs + kp.rows.size
 /-- Gate `g`'s row, or none for an input. -/
 def KeyProg.row? (kp : KeyProg) (g : Nat) : Option (List Nat × List Nat) :=
   if g < kp.inputs then none else kp.rows[g - kp.inputs]?
+
+/-- **The program `kp` and one more unit of rows `R`** (`Lowering.Prog.snoc`, its columns `Prog.colWire`): `R`'s computed
+rows after `kp`'s gates, an input column `c` on gate `ins c`, computed column `nIn + i` on the unit's row `i`, and the
+constant on gate `one`. -/
+def KeyProg.snoc (kp : KeyProg) (R : Rows) (ins : Nat → Nat) (one : Nat) : KeyProg :=
+  let N := kp.size
+  let col := fun c => if c < R.nIn then ins c else if c < R.nIn + R.nComp then N + (c - R.nIn) else one
+  { kp with
+    units := kp.units + 1
+    rows := kp.rows ++ ((List.range R.nComp).map fun i => ((R.a.getD i []).map col, (R.b.getD i []).map col)).toArray }
+
+/-- **`n` units of rows `R` on `k` input gates** (`Placed.uniform`): unit `u`'s input column `c` on gate `ins u c`, its
+constant on gate `one`, one unit after another (`KeyProg.snoc`). -/
+def uniform (k : Nat) (R : Rows) (ins : Nat → Nat → Nat) (one : Nat) : Nat → KeyProg
+  | 0 => { inputs := k, units := 0, perUnit := R.nComp, rows := #[], outs := [] }
+  | n + 1 => (uniform k R ins one n).snoc R (ins n) one
+
+theorem uniform_inputs (k : Nat) (R : Rows) (ins : Nat → Nat → Nat) (one : Nat) :
+    ∀ n, (uniform k R ins one n).inputs = k
+  | 0 => rfl
+  | n + 1 => by simp only [uniform, KeyProg.snoc]; exact uniform_inputs k R ins one n
+
+theorem uniform_rows_size (k : Nat) (R : Rows) (ins : Nat → Nat → Nat) (one : Nat) :
+    ∀ n, (uniform k R ins one n).rows.size = n * R.nComp
+  | 0 => by simp [uniform]
+  | n + 1 => by
+    simp only [uniform, KeyProg.snoc, Array.size_append, List.size_toArray, List.length_map, List.length_range,
+      uniform_rows_size k R ins one n, Nat.add_mul, Nat.one_mul]
 
 /-- Column `16 j + t` of the unit's returned-output group, in the unit net's rows (`Layout.outCol`). -/
 def outCol (c : Flock.Circuit) (j t : Nat) : Nat := (c.unit.outGroups.getD 0 default).col * Flock.WORD + (16 * j + t)
@@ -190,23 +245,24 @@ def outGate (c : Flock.Circuit) (n u k j t : Nat) : Option Nat :=
 /-- **The circuit's program on Δ's source keys**, for `n` units (`Placed.keyProg`, its outputs `Layout.outsOf`): the
 constant, the zero and `B` source gates per unit, `B` the stacked rows' inputs; then unit by unit the unit net's rows
 stacked `upv` times, an input column on its key's source gate `2 + u·B + b` (the zero's where it has no key), a computed
-column on the unit's own gate, the constant on gate 0. The outputs are the gates on each instance's returned output
-leaves' bits `t < 16`. -/
+column on the unit's own gate, the constant on gate 0: `uniform` on those input gates. The outputs are the gates on each
+instance's returned output leaves' bits `t < 16`. -/
 def keyProg (c : Flock.Circuit) (n : Nat) : KeyProg :=
-  let R0 := Rows.ofNet c.unit
-  let R := R0.stack c.upv
+  let R := (Rows.ofNet c.unit).stack c.upv
   let B := R.nIn
   let keys := (Array.range B).map (keyIdx c B)
-  let inputs := 2 + n * B
-  let wire := fun (u col : Nat) =>
-    if col < R.nIn then (match keys.getD col none with | some b => 2 + u * B + b | none => 1)
-    else if col < R.nIn + R.nComp then inputs + u * R.nComp + (col - R.nIn)
-    else 0
-  let rows := ((List.range n).flatMap fun u => (List.range R.nComp).map fun i =>
-    ((R.a.getD i []).map (wire u), (R.b.getD i []).map (wire u))).toArray
+  let ins := fun (u col : Nat) => match keys.getD col none with | some b => 2 + u * B + b | none => 1
   let outs := (List.range n).flatMap fun u => (List.range c.upv).flatMap fun k =>
     (List.range (c.leavesOut.getD k #[]).size).flatMap fun j => (List.range 16).filterMap (outGate c n u k j)
-  { inputs, units := n, perUnit := R.nComp, rows, outs := (outs.mergeSort fun x y => decide (x ≤ y)).eraseDups }
+  { uniform (2 + n * B) R ins 0 n with outs := (outs.mergeSort fun x y => decide (x ≤ y)).eraseDups }
+
+theorem keyProg_inputs (c : Flock.Circuit) (n : Nat) :
+    (keyProg c n).inputs = 2 + n * ((Rows.ofNet c.unit).stack c.upv).nIn := by
+  simp only [keyProg, uniform_inputs]
+
+theorem keyProg_rows_size (c : Flock.Circuit) (n : Nat) :
+    (keyProg c n).rows.size = n * ((Rows.ofNet c.unit).stack c.upv).nComp := by
+  simp only [keyProg, uniform_rows_size]
 
 /-! ## The program lowered to the Boolean profile -/
 
@@ -297,18 +353,24 @@ structure RowPos where
   deriving DecidableEq, Inhabited, Repr
 
 /-- **Where unit `u` reads source `s`**: message bit `bit` of byte `byte` of port `p` is bit `8 byte + bit` of the unit's
-leaf of that row; a forced zero, a wire, a fixed column and padding are no commitment position. -/
+leaf of that row; a forced zero, a wire, a literal and padding are no commitment position. -/
 def srcPos (c : Flock.Circuit) (u : Nat) : Src → Option RowPos
   | .msg p byte bit => some { row := (c.ports.getD p default).name, leaf := u, bit := 8 * byte + bit }
   | _ => none
 
 /-- **Source gate `g`'s commitment position** (the row map), for `n` units: gate `2 + u·B + b`, where `b` is its own key,
-is unit `u`'s read of `srcKey c b`. None for the constant, the zero, a row, an unread source gate, and a key no row holds.
-An input gate's claims position is the gate itself. -/
+is unit `u`'s read of `srcKey c b`. None for the constant, the zero, a row, a source gate whose key is another input's
+(`keyIdx`), and a source no row port holds. An input gate's claims position is the gate itself. -/
 def rowBit (c : Flock.Circuit) (n g : Nat) : Option RowPos :=
   let B := ((Rows.ofNet c.unit).stack c.upv).nIn
   if g < 2 || B == 0 || 2 + n * B ≤ g || keyIdx c B ((g - 2) % B) != some ((g - 2) % B) then none
-  else srcPos c ((g - 2) / B) (srcKey c ((g - 2) % B))
+  else srcPos c ((g - 2) / B) (srcKey c (Index.of c) ((g - 2) % B))
+
+/-- **The key program's constants**, for `n` units: gate 0, the constant, set; gate 1, the zero, and every other input
+gate no unit reads (`owner`), clear; no other gate fixed. Bound at `c` and `n`, it builds the key program once. -/
+def consts (c : Flock.Circuit) (n : Nat) : Nat → Option Bool :=
+  let kp := keyProg c n
+  fun g => if g == 0 then some true else if g == 1 || (g < kp.inputs && owner kp g == none) then some false else none
 
 /-- **Where unit `u` commits output word `x`'s bit `t`**: bit `16 (x − at) + t` of its leaf of the output row whose run
 of output ports holds the word (`HmOut.outGroup`, `at` the run's first word). -/
@@ -337,14 +399,15 @@ def RowPos.globalize (idx : Array Nat) (r : RowPos) : RowPos := { r with leaf :=
 def base (ms : Members) (m : Nat) : Nat :=
   ((ms.take m).map fun ci => off (keyProg ci.1 ci.2.size) (keyProg ci.1 ci.2.size).size).sum
 
-/-- **Every source bit**: each read source gate's claims position and commitment position at the partition's VUs,
-member by member. -/
+/-- **Every source bit**: each source gate the constants leave free (`consts`, so a unit reads it) that has a
+commitment position, its claims position and that position at the partition's VUs, member by member. -/
 def sources (ms : Members) : List (Nat × RowPos) :=
   (List.range ms.length).flatMap fun m =>
     let ci := ms.getD m default
     let b := base ms m
+    let κ := consts ci.1 ci.2.size
     (List.range (keyProg ci.1 ci.2.size).inputs).filterMap fun g =>
-      (rowBit ci.1 ci.2.size g).map fun r => (b + g, r.globalize ci.2)
+      if (κ g).isSome then none else (rowBit ci.1 ci.2.size g).map fun r => (b + g, r.globalize ci.2)
 
 /-- **Every written bit**: each returned output leaf bit's claims position (`outBit`) and commitment position at the
 partition's VUs, member by member. -/
@@ -372,33 +435,191 @@ def wiresOf (ms : Members) (x : Nat) : Option Nat :=
 
 /-! ## A Program's leaf widths -/
 
-/-- **The width of the leaf a Program's layout gate `g` produces**: its primitive's `Value<w>`, and 0 where the layout has
-no gate `g`. -/
-def width (P : Flock.Program.Prog) (g : Nat) : Nat :=
-  match P.gate g with
-  | .ok (p, _, _) => match (P.defs[p]!).ret with
-    | .value w => w
-    | _ => 0
-  | .error _ => 0
+/-- **The width of a primitive's leaf**: its `Value<w>` return's `w`, and 0 for any other return. An input primitive's
+id names the same width, which `Flock.Program.decode` holds it to. -/
+def defWidth (d : Flock.Program.Defn) : Nat :=
+  match d.ret with
+  | .value w => w
+  | _ => 0
+
+/-- **A type's bits**: its leaves' widths summed. -/
+def bitsOf (t : Flock.Program.Ty) : Nat := t.widths.foldl (· + ·) 0
+
+/-- **A return's fields**: a tuple's or a record's, else the return itself. -/
+def fieldsOf : Flock.Program.Ty → List Flock.Program.Ty
+  | .tuple fs => fs.toList
+  | .record fs => fs.toList.map (·.2)
+  | t => [t]
+
+/-- **A value's 16-bit words**: its bits packed sixteen to a word, least significant first, the last word's high bits
+padding. A parameter is one value. -/
+def wordsOf (t : Flock.Program.Ty) : Nat := (bitsOf t + 15) / 16
+
+/-- **A return's words**: each field packed on words of its own (`wordsOf`). -/
+def retWords (t : Flock.Program.Ty) : Nat := ((fieldsOf t).map wordsOf).sum
 
 /-! ## The file against its Program -/
 
-/-- **Why Bits doesn't lay out the circuit file `c` as template `tmpl` of the Program `P`**, or none: the template is
-no Definition of `P`, no template instance makes a unit, the unit net's constant sits among its input words (`Rows.ofNet`
-and `srcKey` split the inputs at different columns), a net other than the unit returns the outputs (`keyProg`'s
-outputs are the unit net's), or a returned output bit sits on no computed row, so that every writer is a copy row and
-none an input or a constant. -/
+/-- **A row port's parameter**: its name up to its first `#`, so a parameter's rows are named `π` or `π#0`, `π#1`, …. -/
+def paramOf (name : String) : String := (name.splitOn "#").headD name
+
+/-- **The input rows' runs**: the input row ports (`HmOut.nIn`) in order, consecutive ones of one parameter (`paramOf`)
+merged, each run its parameter, its words and its first word among the rows' (`KnownRead.starts`). -/
+def runsOf (c : Flock.Circuit) : List (String × Nat × Nat) :=
+  let st := Flock.KnownRead.starts c
+  ((List.range (Flock.HmOut.nIn c)).foldl (fun (acc : List (String × Nat × Nat)) q =>
+    let p := c.ports.getD q default
+    match acc with
+    | (nm, w, s) :: rest =>
+      if nm == paramOf p.name then (nm, w + p.words, s) :: rest else (paramOf p.name, p.words, st.getD q 0) :: acc
+    | [] => [(paramOf p.name, p.words, st.getD q 0)]) []).reverse
+
+/-- **Bit `β` of field `f`'s rows, on the unit**, of fields `words` (each its name and its words a template instance, in
+order: a template's parameters, as `Template.rows` gives them, or its return's fields, `Template.outs`): the rows hold
+`c.upv` instances' `w` words each, so their word `j = β / 16` is instance `k = j / w`'s input port, or output leaf,
+`P + j % w`, `P` the words of the fields before `f`, at bit `β % 16`: `(k, P + j % w, β % 16)`. None for no such field
+or a bit past its rows. `paramsWhy` holds a file's input ports to it. -/
+def fieldBit (c : Flock.Circuit) (words : List (String × Nat)) (f : String) (β : Nat) : Option (Nat × Nat × Nat) :=
+  (words.findIdx? (·.1 == f)).bind fun i =>
+    let w := (words.getD i default).2
+    if w == 0 || c.upv * w ≤ β / 16 then none
+    else some (β / 16 / w, ((words.take i).map (·.2)).sum + β / 16 % w, β % 16)
+
+/-- **Why the unit's input ports don't read the Definition `d`'s parameters off their rows**, or none, for a file whose
+input rows are `d`'s parameters in order (`runsOf`), each its packed words (`wordsOf`) an instance: at each bit of
+parameter `π`'s rows, its port (`fieldBit`) reads the row word it is, `s + β / 16` with `s` the rows' first word (its
+leaf map's word at a leaf port, else its leaf cut's), and each of `π`'s bits there, not the padding past them in an
+instance's last word, is a message bit of its row (`srcAt`), not the zero past the row's bits. -/
+def paramsWhy (c : Flock.Circuit) (d : Flock.Program.Defn) : Option String := Id.run do
+  let ix := Index.of c
+  let runs := (runsOf c).toArray
+  let cut := (c.unit.inGroups.getD 0 default).bits.size
+  let ws := d.params.toList.map fun (nm, t) => (nm, wordsOf t)
+  for j in [0:d.params.size] do
+    let (nm, t) := d.params[j]!
+    let w := wordsOf t
+    let s := (runs.getD j default).2.2
+    for β in [0:16 * (c.upv * w)] do
+      let some (k, p, b) := fieldBit c ws nm β | return some s!"bit {β} of parameter {nm}'s rows is on no input port"
+      if b == 0 then
+        let x : Int :=
+          if p < cut then (c.leavesIn.getD k #[]).getD p (-1) else ((ix.cuts[(k, p)]?).map Int.ofNat).getD (-1)
+        if x != ((s + β / 16 : Nat) : Int) then
+          return some s!"template instance {k}'s input port {p} reads row word {x}, not word {β / 16} of its parameter \
+            {nm}'s rows"
+      if 16 * (β / 16 % w) + b < bitsOf t then
+        unless (srcAt c ix k p b matches .msg _ _ _) do
+          return some s!"bit {16 * (β / 16 % w) + b} of parameter {nm} of template instance {k} is no message bit of \
+            its rows"
+  return none
+
+/-- **Why Bits doesn't lay out the circuit file `c` as template `tmpl` of the Program `P`**, or none: the template
+(its descriptor id, as a circuit record names it) is no Definition of `P`, no template instance makes a unit, a port of
+the unit's first input or output group is not one 16-bit word (`srcAt` and `outCol` place a port's bits in one), the
+leaf maps are not one per template instance over the unit's ports (a typed template's block, whose wiring is derived,
+has none), a leaf map names a word past the input rows (`HmOut.inWords`, so no unit reads a row it writes), a wire
+runs into the unit (a `.wire` source, which `wiresOf` doesn't place), a leaf cut is outside the unit's cut inputs or the
+input rows, two of the unit's input ports overlap or are out of column order (`srcKey` reads a column off the first
+port holding it, so each port's columns must be its own), an instance's input port past its leaf ports is not wired exactly once by a leaf cut (the three are
+`HmRow.check`'s wiring rule with no wire into the unit, so `srcAt` reaches neither `.wire` nor `.lit 0`), two
+instances return one output word (`writers` would hold two claims positions at one commitment position), the unit net's
+constant sits among its input words (`Rows.ofNet` and `srcKey` split the inputs at different columns), a net other than
+the unit returns the outputs (`keyProg`'s outputs are the unit net's), or a returned output bit sits on no computed row,
+so that every writer is a copy row and none an input or a constant. Then it holds the file to the template's Definition
+`d`: it refuses two row ports of one name (so a commitment position names one row), input rows that are not `d`'s
+parameters in order, each `upv` times its packed words (`runsOf`, `wordsOf`), output rows that are not `upv` times its
+return's (`retWords`, each field on words of its own), an instance's output leaves other than its return's words, unit
+input ports other than its parameters' words, and an input port that doesn't read its parameter's word or a parameter
+bit that is no message bit (`paramsWhy`). Last, it refuses more than one template instance a VU (`upv`): the layouts
+the proofs read place one. It reads only the unit net's header (`Rows.ofNet`'s `nIn` and `nComp`), never its rows. -/
 def check (c : Flock.Circuit) (P : Flock.Program.Prog) (tmpl : String) : Option String :=
-  let R0 := Rows.ofNet c.unit
-  if !P.defs.any (·.id == tmpl) then some s!"the circuit file's template {tmpl} is no Definition of the Program"
+  let nIn := min (c.unit.inWords * Flock.WORD) c.unit.constPos
+  let nComp := c.unit.constPos - nIn
+  let gi := (c.unit.inGroups.getD 0 default).bits
+  let go := (c.unit.outGroups.getD 0 default).bits
+  let outs := c.leavesOut.toList.flatMap (·.toList)
+  let wired : Std.HashMap (Nat × Nat) Nat :=
+    c.leafCuts.foldl (fun m (k, p, _) => m.insert (k, p) (m.getD (k, p) 0 + 1)) {}
+  let cut := gi.size
+  let pc := Flock.portCols c.unit.inGroups
+  let unwired := ((List.range c.upv).flatMap fun k =>
+    (List.range (pc.size - cut)).map fun i => (k, cut + i)).find?
+    fun kp => wired.getD kp 0 != 1
+  if !P.defs.any (·.key == tmpl) then some s!"the circuit file's template {tmpl} is no Definition of the Program"
   else if c.upv == 0 then some "the circuit file's unit holds no template instance"
-  else if R0.nIn != c.unit.inWords * Flock.WORD then
+  else if gi.any (· != 16) || go.any (· != 16) then
+    some "a port of the circuit file's unit is not one 16-bit word"
+  else if c.leavesIn.size != c.upv || c.leavesOut.size != c.upv || (List.range c.upv).any fun k =>
+      (c.leavesIn.getD k #[]).size != gi.size || (c.leavesOut.getD k #[]).size != go.size then
+    some "the circuit file's leaf maps are not one per template instance over its unit's ports"
+  else if c.leavesIn.any (·.any ((Flock.HmOut.inWords c : Int) ≤ ·)) then
+    some "a leaf map names a word past the circuit file's input rows"
+  else if c.wires.any (·.dst.1 == c.unitNet) then some "a wire into the circuit file's unit"
+  else if c.leafCuts.any fun (k, p, w) =>
+      c.upv ≤ k || p < cut || pc.size ≤ p || (pc.getD p (0, 0)).2 < 16 || Flock.HmOut.inWords c ≤ w then
+    some "a leaf cut outside the unit's cut inputs or the input rows"
+  else if (List.range (pc.size - 1)).any fun p =>
+      (pc.getD (p + 1) (0, 0)).1 < (pc.getD p (0, 0)).1 + (pc.getD p (0, 0)).2 then
+    some "the circuit file's unit's input ports overlap or are out of column order"
+  else if let some (k, p) := unwired then
+    some s!"input port {p} of the circuit file's unit, template instance {k}, is not wired exactly once by a leaf cut"
+  else if !decide outs.Nodup then
+    some "the circuit file's unit returns an output word twice"
+  else if nIn != c.unit.inWords * Flock.WORD then
     some "the circuit file's unit net has its constant among its input words"
   else if c.outNet != c.unitNet then some "the circuit file returns its outputs from a net other than its unit"
   else if (List.range c.upv).any fun k => (List.range (c.leavesOut.getD k #[]).size).any fun j =>
-      (List.range 16).any fun t => !(decide (R0.nIn ≤ outCol c j t) && decide (outCol c j t < R0.nIn + R0.nComp)) then
+      (List.range 16).any fun t => !(decide (nIn ≤ outCol c j t) && decide (outCol c j t < nIn + nComp)) then
     some "a returned output bit of the circuit file's unit sits on no computed row (an input or the constant)"
-  else none
+  else (match P.defs.find? (·.key == tmpl) with
+    | none => none
+    | some d =>
+      let rw := retWords d.ret
+      if !decide (c.ports.toList.map (·.name)).Nodup then some "two row ports of the circuit file have one name"
+      else if (runsOf c).map (fun r => (r.1, r.2.1)) != d.params.toList.map fun (nm, t) => (nm, c.upv * wordsOf t) then
+        some s!"the circuit file's input rows are not its template's parameters in order, each {c.upv} times its \
+          packed words"
+      else if ((c.ports.toList.drop (Flock.HmOut.nIn c)).map (·.words)).sum != c.upv * rw then
+        some s!"the circuit file's output rows are not {c.upv} times its template's return's packed words"
+      else if c.leavesOut.any (·.size != rw) then
+        some "a template instance's output leaves are not its template's return's packed words"
+      else if pc.size != (d.params.toList.map (wordsOf ·.2)).sum then
+        some "the circuit file's unit's input ports are not its template's parameters' packed words"
+      else paramsWhy c d) <|>
+    if c.upv != 1 then some s!"the circuit file has {c.upv} template instances a VU, not one" else none
+
+/-! ## The unit's rows -/
+
+/-- **The unit's read input columns**: of the unit net's input columns (`Rows.ofNet`'s `nIn`), those a computed row
+reads in its A or its B. -/
+def unitReads (c : Flock.Circuit) : Array Bool :=
+  let R := Rows.ofNet c.unit
+  (R.a ++ R.b).foldl (fun m r => r.foldl (fun m x => if x < R.nIn then m.set! x true else m) m)
+    (Array.replicate R.nIn false)
+
+/-- **Why the unit's rows don't read the Definition `d`'s inputs as Bits counts them**, or none, `reads` the unit's read
+input columns (`unitReads`): there is not one per unit input column, a computed row reads an input column no port holds
+(input padding, which Δ fills from no row, so its value is the prover's, a source with no commitment position), or no
+row reads a bit of a parameter in `names` (`consts` fixes it, so it is no source). -/
+def readsWhy (c : Flock.Circuit) (d : Flock.Program.Defn) (reads : Array Bool) (names : List String) :
+    Option String := Id.run do
+  let pc := Flock.portCols c.unit.inGroups
+  let nIn := min (c.unit.inWords * Flock.WORD) c.unit.constPos
+  if reads.size != nIn then return some "the circuit file's unit's read columns are not one per input column"
+  let mut held := Array.replicate nIn false
+  for (a0, w) in pc do
+    for t in [0:w] do held := held.set! (a0 + t) true
+  for x in [0:nIn] do
+    if reads[x]! && !held[x]! then
+      return some s!"a row of the circuit file's unit reads its input column {x}, which no port holds"
+  let mut P := 0
+  for (nm, t) in d.params do
+    if names.contains nm then
+      for β in [0:bitsOf t] do
+        unless reads.getD ((pc.getD (P + β / 16) (0, 0)).1 + β % 16) false do
+          return some s!"no row of the circuit file's unit reads bit {β} of its parameter {nm}"
+    P := P + wordsOf t
+  return none
 
 /-! ## Checks -/
 
@@ -427,23 +648,46 @@ private def mixed : String :=
   "{\"annotations\":{},\"callees\":[\"Input16_v1\",\"Input1_v1\",\"TMix_v1\"],\"definitions\":{\"Input16_v1\":{\"form\":\"primitive\",\"id\":\"Input16_v1\",\"params\":[],\"ret\":[\"Value\",16]},\"Input1_v1\":{\"form\":\"primitive\",\"id\":\"Input1_v1\",\"params\":[],\"ret\":[\"Value\",1]},\"Root[TMix_v1]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"axes\":[],\"fn\":0,\"form\":\"batch\",\"n\":2,\"out\":0},{\"args\":[],\"axes\":[],\"fn\":1,\"form\":\"batch\",\"n\":3,\"out\":1},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,2]},\"type\":0},{\"refs\":{\"affine\":[\"n\",1,0,3]},\"type\":1}],\"fn\":2,\"form\":\"primitive\",\"out\":2}],\"params\":[],\"ret\":{\"affine\":[\"n\",2,0,1]},\"ret_type\":[\"Value\",32]},\"form\":\"composite\",\"id\":\"Root[TMix_v1]_v1\"},\"TMix_v1\":{\"form\":\"primitive\",\"id\":\"TMix_v1\",\"params\":[[\"a\",[\"Array\",2,[\"Value\",16]]],[\"b\",[\"Array\",3,[\"Value\",1]]]],\"ret\":[\"Value\",32]}},\"program_fn\":\"TMix_v1\",\"root\":\"Root[TMix_v1]_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types\":[[\"Array\",2,[\"Value\",16]],[\"Array\",3,[\"Value\",1]],[\"Value\",32]]}"
 
 #guard match Flock.Program.decode mixed.toUTF8 with
-  | .ok P => (List.range 7).map (width P) == [16, 16, 1, 1, 1, 32, 0]
+  | .ok P => P.defs.all fun d => !d.prim ||
+      defWidth d == (if d.key == "Input16_v1" then 16 else if d.key == "Input1_v1" then 1 else 32)
   | .error _ => false
 
-#guard match Flock.Program.decode mixed.toUTF8 with
-  | .ok P => check { (default : Flock.Circuit) with upv := 1 } P "TMix_v1" == none &&
-      (check { (default : Flock.Circuit) with upv := 1 } P "TOther_v1").isSome &&
-      (check default P "TMix_v1").isSome &&
-      (check { (default : Flock.Circuit) with upv := 1, outNet := 1 } P "TMix_v1").isSome &&
-      (check { (default : Flock.Circuit) with upv := 1, leavesOut := #[#[0]] } P "TMix_v1").isSome
-  | .error _ => false
+/-- A file of one template instance on a unit of no ports. -/
+private def bare : Flock.Circuit := { (default : Flock.Circuit) with upv := 1, leavesIn := #[#[]], leavesOut := #[#[]] }
+
+private def refuses (why : String) : Option String → Bool := Option.any (·.startsWith why)
+
+/-- A primitive template of `Value` parameters `ps` (name, width) returning `Value ret`. -/
+private def toyDef (key : String) (ps : List (String × Nat)) (ret : Nat) : Flock.Program.Defn :=
+  { key, id := key, prim := true, params := (ps.map fun (p, w) => (p, Flock.Program.Ty.value w)).toArray,
+    ret := .value ret, gates := 1, paramLeaves := ps.length, outLeaves := 1 }
+
+/-- Templates on 16-bit parameters `x` and `y` returning 16 bits or 32, on three returning 16, and on a 32-bit `x` and a
+16-bit `y`. -/
+private def toyP : Flock.Program.Prog :=
+  { defs := #[toyDef "TPair_v1" [("x", 16), ("y", 16)] 16, toyDef "TWide_v1" [("x", 16), ("y", 16)] 32,
+      toyDef "TTri_v1" [("x", 16), ("y", 16), ("z", 16)] 16, toyDef "TBig_v1" [("x", 32), ("y", 16)] 16]
+    index := {}, root := 0, programFn := "", sha512 := .empty }
+
+#guard bitsOf (.array 3 (.value 1)) == 3 && wordsOf (.array 3 (.value 1)) == 1 &&
+  wordsOf (.tuple #[.value 16, .value 17]) == 3 && retWords (.tuple #[.value 16, .value 17]) == 3 &&
+  retWords (.tuple #[.value 1, .value 1]) == 2 &&
+  retWords (.record #[("a", .value 8), ("b", .array 2 (.value 8))]) == 2 &&
+  paramOf "x#3" == "x" && paramOf "x" == "x"
+
+#guard refuses "the circuit file's template" (check bare toyP "TOther_v1") &&
+  refuses "the circuit file's unit holds no" (check default toyP "TPair_v1") &&
+  refuses "the circuit file returns" (check { bare with outNet := 1 } toyP "TPair_v1") &&
+  refuses "the circuit file's leaf maps" (check { bare with leavesOut := #[#[0]] } toyP "TPair_v1") &&
+  refuses "the circuit file's leaf maps" (check { bare with leavesIn := #[] } toyP "TPair_v1") &&
+  refuses "the circuit file's input rows" (check bare toyP "TPair_v1")
 
 #guard wiresOf [] 0 == none
 
-/-- A unit net of one input word holding two 16-bit ports, and 16 computed rows, row `i` the XOR of the ports' bit `i`
-times the constant, returned from column 128 as one 16-bit leaf. -/
-private def toyNet : Flock.Net :=
-  let a := Array.replicate Flock.WORD #[] ++ (Array.range 16).map fun i => #[i, 16 + i]
+/-- A unit net of one input word holding two 16-bit ports, and 16 computed rows, row `i` the XOR of the input columns
+`r i` times the constant, returned from column 128 as one 16-bit leaf. -/
+private def netOf (r : Nat → Array Nat) : Flock.Net :=
+  let a := Array.replicate Flock.WORD #[] ++ (Array.range 16).map r
   let b := Array.replicate Flock.WORD #[] ++ Array.replicate 16 #[Flock.WORD + 16]
   match Flock.Sparse.ofRows a (Flock.WORD + 17), Flock.Sparse.ofRows b (Flock.WORD + 17) with
   | .ok a, .ok b =>
@@ -451,6 +695,9 @@ private def toyNet : Flock.Net :=
       constPos := Flock.WORD + 16, inWords := 1, aT := .pure a, bT := .pure b,
       inGroups := #[⟨0, 1, #[16, 16]⟩], outGroups := #[⟨1, 1, #[16]⟩] }
   | _, _ => default
+
+/-- `netOf` with row `i` reading both ports' bit `i`. -/
+private def toyNet : Flock.Net := netOf fun i => #[i, 16 + i]
 
 private def toyPort (name : String) : Flock.Port := { name, words := 1, chunks := 1, nb := 1, v2 := true }
 
@@ -472,15 +719,144 @@ private def toyMs : Members := [(toyA, #[0, 1]), (toyB, #[0, 1])]
 #guard rowBit toyA 2 149 == some (RowPos.mk "y" 1 3) && rowBit toyA 2 40 == none && rowBit toyA 2 1 == none
 #guard outBit toyA 2 0 0 0 0 == some 263 && outBit toyA 2 1 0 0 5 == some 329 && outBit toyB 2 0 0 0 0 == none
 #guard outRowBit toyA 1 0 0 4 == some (RowPos.mk "o" 1 4)
-#guard let gs := (prog (keyProg toyA 2) toyκ).1
+#guard let gs := (prog (keyProg toyA 2) (consts toyA 2)).1
   (writers [(toyA, #[0, 1])]).all fun (x, _) => match gs[x]? with | some (.and _) => true | _ => false
+#guard consts toyA 2 0 == some true && consts toyA 2 1 == some false && consts toyA 2 149 == none &&
+  consts toyA 2 40 == some false && consts toyA 2 258 == none
+
+/-- Member A on a unit whose rows read only row `x`'s port. -/
+private def toyX : Flock.Circuit := { toyA with nets := #[("unit", netOf fun i => #[i])] }
+
+/-- Member B reading row `y` in place of row `x`. -/
+private def toyY : Flock.Circuit := { toyB with ports := #[toyPort "o", toyPort "y"] }
+
+#guard rowBit toyX 2 21 == some (RowPos.mk "y" 0 3) && consts toyX 2 21 == some false && consts toyX 2 5 == none &&
+  (sources [(toyX, #[0, 1])]).all (·.1 != 21) && (sources [(toyX, #[0, 1])]).any (·.1 == 5)
+#guard wiresOf [(toyA, #[0, 1]), (toyY, #[0, 1])] (360 + 2 + 19) == some 21 &&
+  wiresOf [(toyX, #[0, 1]), (toyY, #[0, 1])] (360 + 2 + 19) == none
+#guard lastLe #[0, 1, 2] 0 == 0 && lastLe #[0, 1, 2] 5 == 2 && lastLe #[0, 4] 3 == 0
+#guard srcAt toyA (Index.of toyA) 0 1 3 == .msg 1 0 3 && srcAt toyA (Index.of toyA) 0 1 9 == .msg 1 1 1
+#guard srcKey toyA (Index.of toyA) 19 == .msg 1 0 3 && srcKey toyA (Index.of toyA) 40 == .pad 0 40
+#guard keyIdx toyA 128 19 == some 19 && keyIdx toyA 128 40 == some 40 &&
+  keyIdx { toyA with leavesIn := #[#[1, 1]] } 128 19 == some 3
+
+/-- `toyNet` with a second input group of one cut port, so its constant past two input words. -/
+private def cutNet : Flock.Net :=
+  { toyNet with
+    inWords := 2, constPos := 2 * Flock.WORD + 16, inGroups := #[⟨0, 1, #[16, 16]⟩, ⟨1, 1, #[16]⟩]
+    outGroups := #[⟨2, 1, #[16]⟩] }
+
+/-- Member A with `cutNet`'s unit and a row `z`, its cut port 2 the row word 2 (row `z`'s). -/
+private def toyCut : Flock.Circuit :=
+  { toyA with
+    nets := #[("unit", cutNet)], ports := #[toyPort "x", toyPort "y", toyPort "z", toyPort "o"]
+    leafCuts := #[(0, 2, 2)] }
+
+#guard srcAt toyCut (Index.of toyCut) 0 2 3 == .msg 2 0 3 && srcAt toyCut (Index.of toyCut) 0 2 16 == .zero
+#guard srcAt { toyCut with leafCuts := #[] } (Index.of { toyCut with leafCuts := #[] }) 0 2 3 == .lit 0
 #guard wiresOf toyMs (360 + 2 + 128 + 5) == some 329
 #guard wiresOf toyMs (360 + 2 + 16 + 5) == some 7
 #guard wiresOf toyMs 7 == none && wiresOf toyMs 263 == none
 #guard wiresOf [(toyA, #[0, 1]), (toyB, #[2, 3])] (360 + 2 + 128 + 5) == none
 #guard wiresOf [(toyA, #[0, 1]), (toyB, #[1, 3])] (360 + 2 + 5) == some 329
-#guard match Flock.Program.decode mixed.toUTF8 with
-  | .ok P => check toyA P "TMix_v1" == none
-  | .error _ => false
+/-- Member A at two template instances a VU: row `x` as the rows `x#0` and `x#1`, a word each, and rows `y` and `o` two
+words each. -/
+private def toyA2 : Flock.Circuit :=
+  { toyA with
+    upv := 2, outPorts := #[("o", 2)], leavesIn := #[#[0, 2], #[1, 3]], leavesOut := #[#[0], #[1]]
+    ports := #[toyPort "x#0", toyPort "x#1", { toyPort "y" with words := 2, bits := 32 },
+      { toyPort "o" with words := 2, bits := 32 }] }
+
+#guard fieldBit toyA2 [("x", 1), ("y", 2)] "y" 0 == some (0, 1, 0) &&
+  fieldBit toyA2 [("x", 1), ("y", 2)] "y" 16 == some (0, 2, 0) &&
+  fieldBit toyA2 [("x", 1), ("y", 2)] "y" 37 == some (1, 1, 5) &&
+  fieldBit toyA2 [("x", 1), ("y", 2)] "x" 17 == some (1, 0, 1) &&
+  fieldBit toyA2 [("x", 1), ("y", 2)] "y" 64 == none && fieldBit toyA2 [("x", 1), ("y", 2)] "z" 0 == none
+
+#guard check toyA toyP "TPair_v1" == none && paramsWhy toyA2 toyP.defs[0]! == none &&
+  refuses "the circuit file has 2 template instances a VU, not one" (check toyA2 toyP "TPair_v1") &&
+  check toyCut toyP "TTri_v1" == none &&
+  refuses "a port of the circuit file's unit"
+    (check { toyA with nets := #[("unit", { toyNet with inGroups := #[⟨0, 1, #[16, 8]⟩] })] } toyP "TPair_v1") &&
+  refuses "the circuit file's leaf maps" (check { toyA with leavesIn := #[#[]] } toyP "TPair_v1") &&
+  refuses "the circuit file's unit returns an output word twice"
+    (check { toyA2 with leavesOut := #[#[0], #[0]] } toyP "TPair_v1") &&
+  refuses "a returned output bit"
+    (check { toyA with nets := #[("unit", { toyNet with outGroups := #[⟨0, 1, #[16]⟩] })] } toyP "TPair_v1") &&
+  refuses "input port 2 of the circuit file's unit, template instance 0, is not wired exactly once"
+    (check { toyCut with leafCuts := #[] } toyP "TTri_v1") &&
+  refuses "input port 2 of the circuit file's unit, template instance 0"
+    (check { toyCut with leafCuts := #[(0, 2, 2), (0, 2, 1)] } toyP "TTri_v1") &&
+  [(0, 0, 1), (0, 0, 2)].all (fun d =>
+    refuses "a wire into the circuit file's unit" (check { toyCut with wires := #[⟨d, (0, 0, 0)⟩] } toyP "TTri_v1")) &&
+  check { toyCut with wires := #[⟨(1, 0, 0), (0, 0, 0)⟩] } toyP "TTri_v1" == none &&
+  [(0, 1, 0), (1, 2, 0), (0, 3, 0), (0, 2, 3)].all (fun e =>
+    refuses "a leaf cut outside the unit's cut inputs or the input rows"
+      (check { toyCut with leafCuts := #[e] } toyP "TTri_v1")) &&
+  refuses "a leaf cut outside the unit's cut inputs or the input rows"
+    (check { toyCut with nets := #[("unit", { cutNet with inGroups := #[⟨0, 1, #[16, 16]⟩, ⟨1, 1, #[8]⟩] })] }
+      toyP "TTri_v1") &&
+  [#[⟨0, 1, #[16, 16]⟩, ⟨0, 1, #[16]⟩], #[⟨1, 1, #[16, 16]⟩, ⟨0, 1, #[16]⟩]].all (fun gs =>
+    refuses "the circuit file's unit's input ports overlap or are out of column order"
+      (check { toyCut with nets := #[("unit", { cutNet with inGroups := gs })] } toyP "TTri_v1")) &&
+  refuses "a leaf map names a word past the circuit file's input rows"
+    (check { toyA with leavesIn := #[#[0, 2]] } toyP "TPair_v1")
+
+#guard refuses "two row ports of the circuit file have one name"
+    (check { toyA with ports := #[toyPort "x", toyPort "x", toyPort "o"] } toyP "TPair_v1") &&
+  refuses "the circuit file's input rows are not its template's parameters in order, each 1 times"
+    (check { toyA with ports := #[toyPort "y", toyPort "x", toyPort "o"] } toyP "TPair_v1") &&
+  refuses "the circuit file's input rows" (check toyA toyP "TBig_v1") &&
+  refuses "the circuit file's input rows"
+    (check { toyA2 with upv := 1, leavesIn := #[#[0, 2]], leavesOut := #[#[0]] } toyP "TPair_v1") &&
+  refuses "the circuit file's output rows are not 1 times" (check toyA toyP "TWide_v1") &&
+  refuses "a template instance's output leaves"
+    (check { toyA with ports := #[toyPort "x", toyPort "y", { toyPort "o" with words := 2, bits := 32 }] }
+      toyP "TWide_v1") &&
+  refuses "the circuit file's unit's input ports"
+    (check { toyA with ports := #[{ toyPort "x" with words := 2, bits := 32 }, toyPort "y", toyPort "o"] }
+      toyP "TBig_v1") &&
+  refuses "template instance 0's input port 0 reads row word 1, not word 0 of its parameter x's rows"
+    (check { toyA with leavesIn := #[#[1, 0]] } toyP "TPair_v1") &&
+  refuses "template instance 0's input port 0 reads row word -1"
+    (check { toyA with leavesIn := #[#[-1, 1]] } toyP "TPair_v1") &&
+  refuses "template instance 1's input port 1 reads row word 2, not word 1 of its parameter y's rows"
+    (check { toyA2 with leavesIn := #[#[0, 2], #[1, 2]] } toyP "TPair_v1") &&
+  refuses "template instance 0's input port 2 reads row word 0"
+    (check { toyCut with leafCuts := #[(0, 2, 0)] } toyP "TTri_v1") &&
+  refuses "bit 8 of parameter x of template instance 0 is no message bit of its rows"
+    (check { toyA with ports := #[{ toyPort "x" with bits := 8 }, toyPort "y", toyPort "o"] } toyP "TPair_v1")
+
+/-- `toyA` with a row reading input column 40, which neither port holds. -/
+private def toyPad : Flock.Circuit := { toyA with nets := #[("unit", netOf fun i => #[i, 40])] }
+
+#guard unitReads toyA == (Array.range 128).map (fun x => decide (x < 32)) &&
+  readsWhy toyA toyP.defs[0]! (unitReads toyA) ["x", "y"] == none &&
+  readsWhy toyX toyP.defs[0]! (unitReads toyX) ["x"] == none &&
+  refuses "no row of the circuit file's unit reads bit 0 of its parameter y"
+    (readsWhy toyX toyP.defs[0]! (unitReads toyX) ["y"]) &&
+  refuses "a row of the circuit file's unit reads its input column 40"
+    (readsWhy toyPad toyP.defs[0]! (unitReads toyPad) []) &&
+  refuses "the circuit file's unit's read columns" (readsWhy toyA toyP.defs[0]! #[] [])
+
+/-- `keyProg`'s rows as one formula over its `n` units: unit `u`'s input column on its key's source gate (the zero's
+where it has none), its computed column on its own gate after the `2 + n·B` inputs and the units before it, the
+constant on gate 0. -/
+private def flatRows (c : Flock.Circuit) (n : Nat) : Array (List Nat × List Nat) :=
+  let R := (Rows.ofNet c.unit).stack c.upv
+  let B := R.nIn
+  let keys := (Array.range B).map (keyIdx c B)
+  let wire := fun (u col : Nat) =>
+    if col < R.nIn then (match keys.getD col none with | some b => 2 + u * B + b | none => 1)
+    else if col < R.nIn + R.nComp then 2 + n * B + u * R.nComp + (col - R.nIn)
+    else 0
+  ((List.range n).flatMap fun u => (List.range R.nComp).map fun i =>
+    ((R.a.getD i []).map (wire u), (R.b.getD i []).map (wire u))).toArray
+
+#guard [(toyA, 0), (toyA, 1), (toyA, 2), (toyB, 3), (toyX, 2), (toyCut, 2), (toyA2, 2)].all fun (c, n) =>
+  let R := (Rows.ofNet c.unit).stack c.upv
+  let kp := keyProg c n
+  kp.rows == flatRows c n && kp.inputs == 2 + n * R.nIn && kp.units == n && kp.perUnit == R.nComp &&
+    kp.rows.size == n * R.nComp
 
 end SampledProofs.Bits
