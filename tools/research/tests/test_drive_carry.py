@@ -94,6 +94,18 @@ def test_a_hold_at_an_older_head_newer_than_the_land_keeps_it(world, monkeypatch
                                  f"{mid[:12]} (the merge breaks x) is newer)"]
 
 
+def test_a_hold_standing_at_the_older_head_keeps_it_though_the_land_there_is_newer(world, monkeypatch):
+    """Another reviewer's hold at ``old`` stands beside the land there, so ``old`` doesn't land on its verdicts, nor does the
+    head the land would carry to."""
+    h, old, main = _reviewed(world, monkeypatch, "on")
+    world.store.add_label(label_target(1, old), vocab.REVIEWED, "hold", "other", ref="x is wrong", ts="2026-10-31T00:00:00Z")
+    world.gh.put(1, new := _merge(world, old, main))
+    assert h.tick().startswith(f"nothing reviewed lands: #1 at {new[:8]}: no land verdict"), world.logs
+    assert _said(world, new) == [f"research queue drive: did not carry #1's land from {old[:12]} to {new[:12]} (held by other "
+                                 f"(x is wrong) at {old[:12]})"]
+    assert _verdicts(world, 1, new) == []
+
+
 @pytest.mark.parametrize("marked, land, hold", [(False, True, False), (True, False, False), (True, True, True),
                                                 (True, True, False)],
                          ids=["unmarked", "marked with no land verdict", "marked with a land verdict and a hold",
