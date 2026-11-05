@@ -57,7 +57,7 @@ when_closed = ["tests"]
 a = ["verity/pub"]
 b = ["verity/other"]
 [private]
-team = ["tools/secret", "verity/pub/hidden.py"]
+team = ["tools/secret", "verity/pub/hidden.py", "verity/pub/pkg/hidden_mod.py"]
 [[needed]]
 why = "structure"
 paths = ["**/{lakefile.toml,pyproject.toml,__init__.py}"]
@@ -88,8 +88,12 @@ TREE = {
     "verity/pub/run.sh": "#!/bin/bash\nset -e\nresearch status x\npython3 tools/priv/privpkg/__init__.py\n",
     "verity/pub/pkg/__init__.py": "",
     "verity/pub/pkg/mod.py": "X = 1\n",
+    "verity/pub/pkg/hidden_mod.py": "Z = 1\n",
     "verity/pub/hidden.py": "Y = 1\n",
     "verity/pub/sees.py": "import hidden\n",
+    "verity/pub/from_pkg.py": "from pkg import mod, hidden_mod\nfrom pkg.mod import X\n",
+    "tools/priv/privpkg/sub.py": "",
+    "verity/pub/from_priv.py": "from privpkg import sub\n",
     "verity/pub/wants.py": "import shared.s\n",
     "verity/other/wants.py": "import shared.t\n",
     "shared/__init__.py": "",
@@ -121,10 +125,19 @@ def judged(tmp_path: Path):
     ("verity/pub/run.sh", "command", "tools/priv/pyproject.toml"),
     ("verity/pub/run.sh", "path", "tools/priv/privpkg/__init__.py"),
     ("verity/pub/sees.py", "python import", "verity/pub/hidden.py"),
+    ("verity/pub/from_pkg.py", "python import", "verity/pub/pkg/hidden_mod.py"),
 ])
 def test_each_kind_of_need_is_an_edge(judged, source: str, kind: str, target: str) -> None:
     _, _, j = judged
     assert (source, kind, target) in {(e.source, e.kind, e.target) for e in j.edges}, "\n".join(map(str, j.edges))
+
+
+def test_a_from_import_names_its_module_only_past_an_open_package(judged) -> None:
+    """`from M import a` needs M and the module M.a: while M's edge is open, M.a's is the same cut."""
+    _, _, j = judged
+    assert {(e.source, e.target) for e in j.edges if e.source.startswith("verity/pub/from_")} == {
+        ("verity/pub/from_pkg.py", "verity/pub/pkg/hidden_mod.py"),
+        ("verity/pub/from_priv.py", "tools/priv/privpkg/__init__.py")}
 
 
 def test_what_the_exports_rewrite_drops_is_cut_not_open(judged) -> None:

@@ -124,6 +124,7 @@ integrations/vllm/tests/program/predict/test_window_rows.py -> verity/core/proto
 integrations/vllm/tests/program/predict/test_window_rows.py -> verity/core/protocols/certifier/active.py
 integrations/vllm/tests/program/test_io_shell.py -> verity/core/protocols/certifier/__init__.py
 integrations/vllm/tests/program/test_sampling_split.py -> tools/verity/circuit_check/tests/data/sampling_split_tasks.json
+integrations/vllm/tests/program/test_target_cards.py -> verity/hardware/__init__.py
 integrations/vllm/tests/protocols/challenger_host.py -> benchmarks/live_challenger/models.py
 integrations/vllm/tests/protocols/pous_gpu.sh -> benchmarks/torch_gpu/p2_stage/build.sh
 integrations/vllm/tests/protocols/pous_gpu.sh -> tools/research/pyproject.toml

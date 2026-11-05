@@ -13,7 +13,8 @@ says which files it holds. A file needs another when it:
 
 * imports it: a Lean `import` (any of `public`, `meta`, `all`), resolved through the Lake packages' sources and roots
   (`tools/verity/lean/module_keys.py`); a Python import, a string an import call takes or a ``"module:attr"`` string
-  (`tests/test_boundaries.py`'s ``_imports``), resolved to a repository path through the file's own directory (the first
+  (`tests/test_boundaries.py`'s ``_imports``, and each `a` of a `from M import a` that is a module ``M.a``), resolved to a
+  repository path through the file's own directory (the first
   above it outside a package, as a script or pytest puts it on the path), its suite's `pythonpath`, the workspace's
   distributions and the root, with the `__init__.py` of each package above the target;
 * is a lakefile whose package `require`s the other's by path, or a pyproject whose distribution depends on the other's or
@@ -430,6 +431,12 @@ class Tree:
                     d = os.path.dirname(d)
         for name, line, _ in IMPORTS._imports(self.root / f, self.root, (), nodes):
             out += [Edge(f, t, line, "python import", name) for t in self._module(name, f) if t != f]
+        # `from M import a` also loads M.a when that is a module, which a private file of a public package can be
+        for n in nodes:
+            if isinstance(n, ast.ImportFrom) and n.level == 0 and n.module:
+                out += [Edge(f, t, n.lineno, "python import", f"from {n.module} import {a.name}")
+                        for a in n.names for t in self._module(f"{n.module}.{a.name}", f)[:1]
+                        if t != f and t.endswith((f"/{a.name}.py", f"/{a.name}/__init__.py", f"/{a.name}"))]
         for line, reached in ANCHORS.joins(f, text):
             out += self._path(f, line, reached)
         _, _, commands, _ = self.python
@@ -604,6 +611,10 @@ def judge(tree: Tree, boundary: Boundary) -> Judgment:
     close(sorted(closed))
     edges = [e for f in sorted(why) for e in tree.edges(f)
              if not (e.target in why if e.target in tree.files else any(t in why for t in tree.under(e.target)))]
+    # `from M import a`'s edge to the module M.a is one more to cut only while the file's edge to M isn't open
+    open_ = {(e.source, e.target) for e in edges}
+    edges = [e for e in edges if not (e.kind == "python import" and e.what.startswith("from ")
+                                      and (e.source, next(iter(tree._module(e.what.split()[1], e.source)), "")) in open_)]
     return Judgment(why, [e for e in edges if e.kind not in EXPORT_CUTS], [e for e in edges if e.kind in EXPORT_CUTS])
 
 
