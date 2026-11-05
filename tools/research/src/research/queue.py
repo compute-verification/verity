@@ -226,7 +226,9 @@ twice, and a pass stands onto a rebuilt base that changed nothing its change tou
 while its change deletes none (`Queue._standing`); a verdict read back takes neither a preflight's place nor its time.  A
 sync's preflights start only within `PREFLIGHT_BUDGET_S` of wall time together (four at once for a minute spend a minute of
 it), and a PR whose preflight hasn't run waits off `next`, untold, for a later sync, with the PRs that contain it; those the
-last sync left waiting take the budget first (the state's `preflight_waited`), so every PR is reached in turn.  The PRs of
+last sync left waiting take the budget first (the state's `preflight_waited`), so every PR is reached in turn.  One whose
+preflight can't start and has no verdict recorded at its head waits before the sync merges it (`Queue._unflown`), unless the
+last sync left it out.  The PRs of
 drive's priority list (`Queue.priority`), with those they contain, go first of what a sync merges anew, and their preflights
 start whatever the budget and the PRs left waiting.  So is a PR a landing gate refuses (drive.toml's `landing_gates` at
 `main`, `gate_refusal`) on its merge onto `next` (`tools/verity/check/gates/markdown_caps.py`: one it puts over a cap),
@@ -2078,18 +2080,35 @@ class Queue:
             flights["now"][key] = {"pr": pr.number, "head": pr.head, "tree": tree, "why": None}
             self._preflights_reused += 1
             return True, None
-        if pr.number not in self._prioritized:
-            if self._preflight_ahead and pr.number not in self._preflight_first:
-                return False, (f"its preflight onto `{self.branch}` hasn't run: the PRs the last sync left waiting for theirs go "
-                               f"first ({' '.join(f'#{n}' for n in sorted(self._preflight_ahead))}), so a later sync runs it")
-            if self._preflight_spent() >= PREFLIGHT_BUDGET_S:
-                return False, (f"its preflight onto `{self.branch}` hasn't run: this sync's preflights took their "
-                               f"{PREFLIGHT_BUDGET_S:g} s, so a later sync runs it")
+        if why := self._waits(pr):
+            return False, why
         f = _Flight(pr, key, tree, self.clock())
         f.future = pool.submit(self._fly, f, tip, commit, list(members))
         self._flown.append(f)
         self._running.append(f)
         return f, None
+
+    def _waits(self, pr: PR) -> str | None:
+        """Why ``pr``'s preflight can't start in this sync (`_preflighted`'s budget and order), or None: one of drive's priority
+        list, or one it contains (`_prioritized`), never waits."""
+        if pr.number in self._prioritized:
+            return None
+        if self._preflight_ahead and pr.number not in self._preflight_first:
+            return (f"its preflight onto `{self.branch}` hasn't run: the PRs the last sync left waiting for theirs go "
+                    f"first ({' '.join(f'#{n}' for n in sorted(self._preflight_ahead))}), so a later sync runs it")
+        if self._preflight_spent() >= PREFLIGHT_BUDGET_S:
+            return (f"its preflight onto `{self.branch}` hasn't run: this sync's preflights took their "
+                    f"{PREFLIGHT_BUDGET_S:g} s, so a later sync runs it")
+        return None
+
+    def _unflown(self, pr: PR, flights: dict) -> str | None:
+        """Why ``pr`` waits off `next` before the sync merges it, or None: its preflight can't start in this sync (`_waits`)
+        and no verdict is recorded for its head in ``flights``, the only thing that could admit or refuse it without one
+        (`_preflighted`), so its merge, the gates and the port's codemod on it would be thrown away."""
+        prefix = f"{pr.head}:"
+        if any(key.startswith(prefix) for got in (flights["now"], flights["before"]) for key in got):
+            return None
+        return self._waits(pr)
 
     def _fly(self, f: _Flight, tip: str, commit: str, members: list[Member]) -> str | None:
         """`preflight` of ``f``'s merge ``commit`` onto ``tip``, in a thread of the sync's pool; ``f`` gets when it ended."""
@@ -2423,6 +2442,12 @@ class Queue:
                     waits[str(n)] = {"head": e.pr.head, "why": e.why, "handle": self.handle(e.pr)}
                     if state.get("waiting", {}).get(str(n), {}).get("head") != e.pr.head:
                         self.log(f"research queue: #{n} at {e.pr.head[:8]} waits off `{self.branch}`: {e.why}")
+                    continue
+                # what the last sync left out is merged again whatever the budget, so its refusal stands, told once
+                if self.preflight is not None and not e.pr.move and n not in out and (why := self._unflown(e.pr, flights)):
+                    e.state, e.why = "waiting", why
+                    dropped.add(n)
+                    unrun.add(n)
                     continue
                 if e.pr.move:
                     commit, why = self._regenerate(tip, e.pr, main)
