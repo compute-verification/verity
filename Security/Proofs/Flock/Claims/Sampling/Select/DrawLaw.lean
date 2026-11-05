@@ -162,7 +162,8 @@ theorem popOf_length_le (l : Slots.Layout) : (Slots.popOf l).length ≤ l.blocks
 
 theorem blocks_length_withInputs (pop : List (List (List ℕ))) (C : Prog) :
     (InputSlot.withInputs ⟨[pop]⟩ C).blocks.length = pop.flatten.length + (InputSlot.inputsAt C).length := by
-  simp [InputSlot.blocks_withInputs, Partition.blocks]
+  simp only [InputSlot.blocks_withInputs, List.length_append, List.length_map]
+  simp [Partition.blocks]
 
 theorem window_eq_empty {o n : ℕ} {B : Finset ℕ} (h : ∀ v ∈ B, v < o) : window o n B = ∅ := by
   simp only [window, Finset.image_eq_empty, Finset.filter_eq_empty_iff]
