@@ -94,6 +94,18 @@ names, used = {}, set(cl)
 N = lambda u: names.get(u, u)
 inv = {}
 U = lambda n: inv.get(n, n)
+imp = {m: set(graph.imports(m)) for m in cl}
+
+
+def reach(m):
+    """`m` and every module its imports reach, in `imp`: leansplit's imports after the operations so far."""
+    seen, stack = set(), [m]
+    while stack:
+        x = stack.pop()
+        if x not in seen:
+            seen.add(x)
+            stack.extend(imp.get(x, ()))
+    return seen
 if mtime:
     t0, _ = longest(a.root, P.deps, P.weight)
 body, kept, splits = [], 0, 0
@@ -107,6 +119,13 @@ for i, op in enumerate(ops):
             continue
         body += ["[[op]]", 'kind = "merge"', f'module = "{N(A)}"', f'into = "{N(B)}"', ""]
         P.merge(A, B)
+        a_, b_ = N(A), N(B)
+        imp[b_] = (imp.get(b_, set()) | imp.pop(a_, set())) - {a_, b_}
+        for m, s in imp.items():
+            if a_ in s:
+                s.discard(a_)
+                if m != b_:
+                    s.add(b_)
         kept += 1
         continue
     up = U(op["for_importer"])
@@ -143,11 +162,30 @@ for i, op in enumerate(ops):
         body.append("[op.uses]")
         body += [f'"{N(u)}" = {q(sorted(N(d) for d in P.deps[u]))}' for u in drop]
     body.append("")
+    imp[nm] = {N(u) for u in dl}
+    if lo in dr:
+        imp.setdefault(N(unit), set()).add(nm)
+    for i in importers:
+        imp.setdefault(i, set()).add(nm)
+    for u in drop:
+        s = imp.setdefault(N(u), set())
+        s.discard(N(unit))
+        r = reach(N(u))
+        for d in sorted(N(x) for x in P.deps[u]):
+            if d not in r:
+                s.add(d)
+                r |= reach(d)
     kept += 1
     splits += 1
 if mtime:
     t, _ = longest(a.root, P.deps, P.weight)
     print(f"model: shaken path {t0 / 60:.2f} min, {t / 60:.2f} after the {kept} operations")
+repair = {}
+for u, ds in P.deps.items():
+    m = N(u)
+    if m in imp and (miss := sorted({N(d) for d in ds} - reach(m) - {m})):
+        repair[m] = miss
+body += ["[repair]"] + [f'"{m}" = {q(ds)}' for m, ds in sorted(repair.items())] + [""]
 head = [f"# The {a.root} split map: {kept} operations ({splits} splits, {kept - splits} merges), applied in order.",
         "# kind = \"split\": `decls` (each with its docstring, attributes and equation lemmas) leave `source` for `new`;",
         "# `imports` are the in-tree modules they use (the constant graph: shake's minimal imports) and `external_imports`",
@@ -155,6 +193,9 @@ head = [f"# The {a.root} split map: {kept} operations ({splits} splits, {kept - 
         "# and import `new`; `drop_source` use nothing else of `source` and stop importing it, importing instead the",
         "# modules their constants use (`uses`) that they reached only through it. `source_imports_new` when the rest of",
         "# `source` uses `decls`. kind = \"merge\": `module` goes to the top of `into`, and its importers import `into`.",
-        "# `python3 tools/move/split_plan/splitmap.py --refresh` rederives it on a tree (`split_plan/refresh.sh`).", ""]
+        "# `[repair]`: the modules of `root`'s closure whose imports, after the operations, no longer reach some of the",
+        "# modules their constants use, and those modules, which they import directly.",
+        "# `python3 tools/move/split_plan/splitmap.py --refresh` rederives it on a tree (`split_plan/refresh.sh`).", "",
+        f'root = "{a.root}"', ""]
 Path(a.out).write_text("\n".join(head + body))
-print(f"wrote {a.out}: {kept} of {len(ops)} operations")
+print(f"wrote {a.out}: {kept} of {len(ops)} operations, {len(repair)} modules to repair")

@@ -5,7 +5,11 @@
 # and import `new`; `drop_source` use nothing else of `source` and stop importing it, importing instead the
 # modules their constants use (`uses`) that they reached only through it. `source_imports_new` when the rest of
 # `source` uses `decls`. kind = "merge": `module` goes to the top of `into`, and its importers import `into`.
+# `[repair]`: the modules of `root`'s closure whose imports, after the operations, no longer reach some of the
+# modules their constants use, and those modules, which they import directly.
 # `python3 tools/move/split_plan/splitmap.py --refresh` rederives it on a tree (`split_plan/refresh.sh`).
+
+root = "Proofs.Flock"
 
 [[op]]
 kind = "split"
@@ -1417,3 +1421,55 @@ into = "Proofs.Flock.Recursive.BitsKTight"
 kind = "merge"
 module = "Proofs.Flock.VBridge.AccUnits"
 into = "Proofs.Flock.VBridge.AlgHolds"
+
+[repair]
+"Proofs.Flock.Claims.KS.ConflictTied" = ["Proofs.Flock.Claims.KS.Flock", "Proofs.Flock.Claims.KS.Joint", "Proofs.Flock.Claims.KS.Width"]
+"Proofs.Flock.Claims.KS.Deploy" = ["Proofs.Flock.Claims.DeployCode", "Proofs.Flock.Claims.Numbers", "Proofs.Flock.Claims.NumbersTable"]
+"Proofs.Flock.Claims.KS.Joint" = ["Proofs.Flock.Claims.DeployCode"]
+"Proofs.Flock.Claims.KS.PlainDraw" = ["Proofs.Flock.Claims.KS.Width"]
+"Proofs.Flock.Claims.KS.PlainDrawJCols" = ["Proofs.Flock.Claims.Recursion.NextCs"]
+"Proofs.Flock.Claims.KS.PlainEvent" = ["Proofs.Flock.Claims.KS.Width"]
+"Proofs.Flock.Claims.KS.PlainRCapPrefix" = ["Proofs.Flock.Claims.KS.PlainAccPrR"]
+"Proofs.Flock.Claims.KS.PlainRCaps" = ["Proofs.Flock.Claims.KS.PlainAccPrR"]
+"Proofs.Flock.Claims.KS.Range" = ["Proofs.Flock.Claims.DeployCode", "Proofs.Flock.Claims.Numbers"]
+"Proofs.Flock.Claims.KS.TableBound" = ["Proofs.Flock.Claims.KS.Width"]
+"Proofs.Flock.Claims.KS.Trace" = ["Proofs.Flock.Claims.DeployCode"]
+"Proofs.Flock.Claims.KS.Trim" = ["Proofs.Flock.Claims.KS.Width"]
+"Proofs.Flock.Claims.KS.Width" = ["Proofs.Flock.Claims.DeployCode", "Proofs.Flock.Claims.ZkCols"]
+"Proofs.Flock.Claims.KS.ZkAbortR" = ["Proofs.Flock.Claims.KS.Width"]
+"Proofs.Flock.Claims.KS.ZkClashRaw" = ["Proofs.Flock.Claims.KS.Width"]
+"Proofs.Flock.Claims.KS.ZkLiveJ" = ["Proofs.Flock.Claims.KS.ZkKS"]
+"Proofs.Flock.Claims.KS.ZkPadsPair" = ["Proofs.Flock.Claims.KS.ZkKS"]
+"Proofs.Flock.Claims.KS.ZkPlanHJ" = ["Proofs.Flock.Claims.KS.ZkKS"]
+"Proofs.Flock.Claims.KS.ZkPlanJ" = ["Proofs.Flock.Claims.KS.ZkKS"]
+"Proofs.Flock.Claims.KS.ZkSched" = ["Proofs.Flock.Claims.KS.ZkKS"]
+"Proofs.Flock.Claims.KS.ZkSim" = ["Proofs.Flock.Claims.KS.ZkKS"]
+"Proofs.Flock.Claims.KS.ZkTables" = ["Proofs.Flock.Claims.KS.Width"]
+"Proofs.Flock.Claims.KS.ZkTauFork" = ["Proofs.Flock.Claims.KS.ZkKS"]
+"Proofs.Flock.Claims.KS.ZkXferW" = ["Proofs.Flock.Claims.KS.ZkKS"]
+"Proofs.Flock.Claims.Recursion.FlockKSRecord" = ["Proofs.Flock.Claims.KS.Width"]
+"Proofs.Flock.Claims.Recursion.HonestVerdictJson" = ["Proofs.Flock.Claims.Recursion.NextCs"]
+"Proofs.Flock.Claims.Recursion.KSFlockLinR" = ["Proofs.Flock.Claims.KS.PlainAccPrR"]
+"Proofs.Flock.Claims.Recursion.KSLin2E" = ["Proofs.Flock.Claims.Recursion.SlotsCheck"]
+"Proofs.Flock.Claims.Recursion.KSLin2LayR" = ["Proofs.Flock.Claims.KS.PlainAccPrR"]
+"Proofs.Flock.Claims.Recursion.KSLin2R" = ["Proofs.Flock.Claims.KS.PlainAccPrR", "Proofs.Flock.Claims.Recursion.SlotsCheck"]
+"Proofs.Flock.Claims.Recursion.NextS" = ["Proofs.Flock.Claims.Recursion.NextJ", "Proofs.Flock.Claims.Recursion.PartAccepts"]
+"Proofs.Flock.Claims.Recursion.NextSha" = ["Proofs.Flock.Claims.Complete.Json.Record", "Proofs.Flock.Claims.Complete.Verdict"]
+"Proofs.Flock.Claims.Recursion.PartAccepts" = ["Proofs.Flock.Claims.Recursion.SlotsCheck"]
+"Proofs.Flock.Claims.Recursion.RestVerdictCustody" = ["Proofs.Flock.Claims.Recursion.NextCs"]
+"Proofs.Flock.Claims.Recursion.SameJAt" = ["Proofs.Flock.Claims.Recursion.NextCs"]
+"Proofs.Flock.Claims.Recursion.VerdictFramedJson" = ["Proofs.Flock.Claims.Recursion.NextCs"]
+"Proofs.Flock.Claims.Recursion.VerdictRowDCoin" = ["Proofs.Flock.Claims.Recursion.NextCs"]
+"Proofs.Flock.Claims.Sampling.Raise" = ["Proofs.Flock.Claims.KS.ConflictTied", "Proofs.Flock.Claims.KS.TableBound", "Proofs.Flock.Claims.KS.Width"]
+"Proofs.Flock.Recursive.Guarantees" = ["Proofs.Flock.Recursive.Registrants"]
+"Proofs.Flock.Recursive.Private" = ["Proofs.Flock.Recursive.Registrants"]
+"Proofs.Flock.Recursive.Statements" = ["Proofs.Flock.Recursive.Registrants"]
+"Proofs.Flock.Soundness.Assumptions.CustodyZk" = ["Proofs.Flock.Soundness.Discharge.Composed.DefsJ"]
+"Proofs.Flock.Soundness.Discharge.ZkExec.RunsCarries" = ["Proofs.Flock.Soundness.Discharge.DecodeZL.LIG", "Proofs.Flock.Soundness.Discharge.DecodeZL.OP"]
+"Proofs.Flock.Soundness.Discharge.ZkHidden.SoundJ" = ["Proofs.Flock.Soundness.Discharge.Composed.DefsJ"]
+"Proofs.Flock.Soundness.Discharge.ZkHidden.SoundStmt" = ["Proofs.Flock.Soundness.Discharge.Composed.DefsJ"]
+"Proofs.Flock.Soundness.Discharge.ZkHidden.View" = ["Proofs.Flock.Soundness.Discharge.Composed.DefsJ"]
+"Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJ" = ["Proofs.Flock.Soundness.Discharge.Composed.DefsJ"]
+"Proofs.Flock.Soundness.Refine.ArithK" = ["Definitions.Flock.Ligerito"]
+"Proofs.Flock.Soundness.Refine.Opening" = ["Proofs.Flock.Level3.Pinned"]
+"Proofs.Flock.Soundness.Refine.Setup" = ["Proofs.Flock.Soundness.LinkSound"]

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # `bash tools/move/split_plan/refresh.sh MAP OUT`, at the root of a tree that may be written (a research run's `--cwd clone`):
 # builds Proofs.Flock from the Lean cache, extracts its constant graph (Extract.lean), rederives MAP's operations on it
-# (`splitmap.py --refresh`), applies them (`leansplit.py`) and builds the result. OUT gets the graph (deps.tsv.gz), the
+# (`splitmap.py --refresh`), applies them (`leansplit.py`) and builds the result, Proofs.Flock first and then all of
+# Proofs, whose modules outside Proofs.Flock's closure the graph doesn't cover. OUT gets the graph (deps.tsv.gz), the
 # rederived map (map.toml), what leansplit did (leansplit.log), the split's diff (split.patch) and each step's log;
 # steps.log has each step's exit status, and the script's is the first that failed.
 set -uo pipefail
@@ -31,4 +32,5 @@ step refresh python3 "$here/splitmap.py" --repo . --deps "$out/deps.tsv.gz" --re
 git status --porcelain > "$out/status-before-split.txt"
 step leansplit python3 tools/move/leansplit.py . --map "$out/map.toml" || exit
 git add -A -N && git diff > "$out/split.patch" && git diff --stat > "$out/split.stat"
-step build-split bash -c 'cd Security/Proofs && lake build Proofs.Flock'
+step build-split bash -c 'cd Security/Proofs && lake build Proofs.Flock' || exit
+step build-all bash -c 'cd Security/Proofs && lake build'

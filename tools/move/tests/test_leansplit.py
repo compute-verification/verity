@@ -229,6 +229,34 @@ def test_a_new_module_keeps_only_the_variables_its_declarations_name(tree):
     assert "(Hs : Inner.Hashes F)" in tree.read("Proofs.Toy.Src")
 
 
+TOP = """module
+
+public import Proofs.Toy.User
+
+namespace Toy
+
+theorem top (n : Nat) : n ≤ base n + 1 := b_le n
+
+end Toy
+"""
+
+
+def test_a_module_whose_imports_no_longer_reach_what_it_reads_imports_it(tree):
+    d = tree.root / "Security/Proofs/Toy"
+    (d / "Top.lean").write_text(TOP)
+    (d / "Out.lean").write_text(TOP.replace("theorem top", "theorem out"))
+    tree = M.Tree(tree.root)
+    before = {m: tree.imports(m) for m in tree.mods}
+    M.split(tree, SPLIT, [])
+    log: list[str] = []
+    M.repair(tree, before, [SPLIT], {"Proofs.Toy.Top": ["Proofs.Toy.Src"]}, "Proofs.Toy.Top", log)
+    imports = lambda m: M.imports_of(M.split_header(tree.read(m))[0])
+    assert imports("Proofs.Toy.Top") == ["Proofs.Toy.User", "Proofs.Toy.Src"]
+    assert imports("Proofs.Toy.Out") == ["Proofs.Toy.User", "Proofs.Toy.Src"]
+    assert imports("Proofs.Toy.User") == ["Proofs.Toy.SrcA"]
+    assert log[-1].startswith("repair: 2 imports")
+
+
 def test_a_local_notation_is_no_atom_an_importer_reads():
     tree = M.Tree(Path("/nonexistent"))
     tree.mods["Proofs.Toy.Syn"] = Path("/nonexistent/Syn.lean")

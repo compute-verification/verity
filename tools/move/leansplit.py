@@ -8,7 +8,10 @@ A split: `source` and `new` (module names), `decls` (full declaration names, aux
 modules whose constants they use), `source_imports_new` (the source's remaining declarations use them), `importers` (the
 other modules using one of them, which import `new` beside the source's import, in its form), `drop_source` (importers
 that use nothing else of the source and stop importing it) and `uses` (for each of those, the in-tree modules its
-constants use: each one it no longer reaches is imported directly). A merge: `module`, `into`.
+constants use: each one it no longer reaches is imported directly). A merge: `module`, `into`. After every operation, each
+module of the map's `[repair]` (module = [modules its constants use]) imports those its imports no longer reach, and each
+module of `root`'s closure the tactic and notation modules its imports reached before and don't now, whose atoms its text
+holds; a module outside it, which the constant graph doesn't cover, imports back all it reached before.
 
 A moved declaration takes its docstring, attributes, `set_option … in` and `open … in` prefixes and the comments directly
 above it, and the new module replays the sections, namespaces, `open`s, `variable`s and global `set_option`s in force
@@ -521,6 +524,58 @@ def split(tree: Tree, op: dict, log: list[str]) -> None:
                f"{len(op.get('drop_source', []))} of {len(op.get('importers', []))} importers drop {src.split('.')[-1]}")
 
 
+def repair(tree: Tree, before: dict[str, list[str]], ops: list[dict], table: dict[str, list[str]], root: str | None,
+           log: list[str]) -> None:
+    """Each module whose imports no longer reach one it reads imports it directly. In `root`'s closure (all of the tree
+    without one), what it reads is the map's `[repair]` (what the constant graph says its constants use) and each tactic
+    or notation module its imports reached before the operations, whose atom its text holds; outside it, which the graph
+    doesn't cover, every module its imports reached before and every new module split from one of them. Bottom-up, so a
+    module sees what its imports gained, and never an import that would close a cycle."""
+    origin = {o["new"]: o["source"] for o in ops if o["kind"] == "split"}
+
+    def first(d):
+        while d in origin and d not in before:
+            d = origin[d]
+        return d
+
+    memo: dict[str, frozenset] = {}
+    sys.setrecursionlimit(max(sys.getrecursionlimit(), 20000))
+
+    def old(m):
+        if m not in memo:
+            s = {m}
+            for i in before.get(m, ()):
+                s |= old(i)
+            memo[m] = frozenset(s)
+        return memo[m]
+
+    alive = [m for m in tree.mods if tree.files.get(tree.mods[m], "") is not None]
+    covered = old(root) if root in before else set(before)
+    syn = {m for m in alive if tree.atoms(m)}
+    added = 0
+    for m in sorted(alive, key=lambda x: (len(old(x)) if x in before else 0, x)):
+        reach = set(tree.closure(m))
+        want = [d for d in table.get(m, []) if d not in reach]
+        lost = old(m) - reach if m in before else set()
+        if m in covered:
+            text = tree.read(m)
+            want += [s for s in sorted(lost & syn) if any(a in text for a in tree.atoms(s))]
+        elif m in before:
+            lost |= {d for d in origin if first(d) in old(m)}
+            want += sorted(lost, key=lambda d: (-len(old(first(d))), d))
+        t = tree.read(m)
+        for d in want:
+            if (d in tree.mods and d not in reach and tree.files.get(tree.mods[d], "") is not None
+                    and m not in tree.closure(d)):
+                t = add_import(t, d, None)
+                reach |= set(tree.closure(d))
+                added += 1
+                log.append(f"  repair: {m} imports {d}")
+        if t != tree.read(m):
+            tree.write(m, t)
+    log.append(f"repair: {added} imports, where a module's imports no longer reach what it reads")
+
+
 def merge(tree: Tree, op: dict, log: list[str]) -> None:
     mod, into = op["module"], op["into"]
     if mod not in tree.mods:
@@ -575,12 +630,16 @@ def main() -> int:
     dirty = subprocess.run(["git", "status", "--porcelain"], cwd=tree.root, capture_output=True, text=True)
     if not a.dry_run and dirty.returncode == 0 and dirty.stdout.strip():
         raise SystemExit(f"{tree.root}: the worktree has changes; commit or stash them first")
-    ops = tomllib.loads(Path(a.map).read_text())["op"]
+    spec = tomllib.loads(Path(a.map).read_text())
+    ops = spec["op"]
     idx = [int(x) for x in a.ops.split(",")] if a.ops else list(range(len(ops)))[:a.first]
+    before = {m: tree.imports(m) for m in tree.mods}
     log: list[str] = []
     for i in idx:
         (split if ops[i]["kind"] == "split" else merge)(tree, ops[i], log)
         log[-1] = f"{i}: {log[-1]}"
+    repair(tree, before, [ops[i] for i in idx], spec.get("repair", {}) if len(idx) == len(ops) else {},
+           spec.get("root"), log)
     print("\n".join(log))
     if not a.dry_run:
         for p, txt in tree.files.items():
