@@ -3639,14 +3639,14 @@ def _tree(repo: Path, commit: str) -> str:
 
 #: the invariant tests the preflight runs on the merged tree, from the root, each a common way a train breaks: a module string
 #: naming a module only an unlanded PR adds, stale Lake pins, a doc path, a workspace member without its REAL_ROOTS entry, and
-#: `check`'s preflight-lints on test_repository.py (a skill over the Markdown cap, a report-genre name); about 16 s on one core
-#: of the control pod, less `PREFLIGHT_DESELECT`
+#: `check`'s preflight-lints on test_repository.py (a skill over the Markdown cap, a report-genre name); a pool run's preflight
+#: (`Preflight.onto`) runs them less `PREFLIGHT_DESELECT`
 PREFLIGHT_TEST_PATHS = ("tests/test_module_strings.py", "tests/test_pins.py", "tests/test_doc_paths.py",
                         "tests/test_repository.py", "tools/research/tests/test_pythonpath.py")
-#: tests of `PREFLIGHT_TEST_PATHS` the sync's preflight run (`Preflight.onto`) leaves to the after-landing check: no merge makes
-#: what they find that neither side has, and the secret-like literal scan alone takes about 14 s of the other tests' 16 s
+#: tests of `PREFLIGHT_TEST_PATHS` a pool run's preflight (`Preflight.onto`) leaves to the after-landing check: no merge makes
+#: what they find that neither side has, and the secret-like literal scan takes most of their time
 PREFLIGHT_DESELECT = ("tests/test_repository.py::test_no_secret_like_literals",)
-#: what the sync's preflight runs rather than judges: `PREFLIGHT_TEST_PATHS` and what they load from the tree (pytest's settings
+#: what a pool run's preflight runs rather than judges: `PREFLIGHT_TEST_PATHS` and what they load from the tree (pytest's settings
 #: for the two directories they run in, the conftest of `tools/research/tests` (one added beside the root's tests belongs here
 #: too), `waits.py`, `pins.py` and the `suites.py` the module strings take the members' packages from, under
 #: `tools/verity/check/`, and the `research` on their PYTHONPATH), and the workspace's members (the root `pyproject.toml`); a
@@ -3692,10 +3692,10 @@ PREFLIGHT_LINTS = (("tests/test_no_wall_clock.py", ("tests/",)), ("integrations/
 PREFLIGHT_UNCOLLECTED: dict[str, str] = {}
 #: the merged tree's environment, as the quick tier's `uv run --locked` has it (a fresh tree syncs from uv's cache in seconds)
 PREFLIGHT_SYNC = ("uv", "sync", "--locked", "--all-packages", "--extra", "torch-cpu", "-q")
-#: the interpreter the sync's preflight (`Preflight.onto`) runs `PREFLIGHT_TESTS` with, with no environment synced: they need only
-#: the standard library, pytest and the merged tree's `research` (put on PYTHONPATH); uv keeps the environment it makes
+#: the interpreter a pool run's preflight (`Preflight.onto`) runs `PREFLIGHT_TESTS` with, with no environment synced: they need
+#: only the standard library, pytest and the merged tree's `research` (put on PYTHONPATH); uv keeps the environment it makes
 PREFLIGHT_PYTEST = ("uv", "run", "-q", "--no-project", "--with", "pytest", "python")
-#: what the sync's preflight leaves to others, said under "checks skipped" for each PR
+#: what a pool run's preflight leaves to others, said under "checks skipped" for each PR
 ONTO_SKIPS = ("the merged tree's environment and Lean build (`uv sync --locked`, the touched suites' `pytest --collect-only`, "
               "the lints, the Lean modules it reaches): the mark's preflight ran them at the head, the Lean checks of `next` "
               "build its Lean, and the after-landing run tests it all, " + ", ".join(f"`{n}`" for n in PREFLIGHT_DESELECT)
