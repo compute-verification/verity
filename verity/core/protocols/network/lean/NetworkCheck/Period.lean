@@ -1,10 +1,13 @@
 import NetworkCheck.Check
 import NetworkCheck.Circuit
 import CoreProtocol.Profile
+import SampledProofs.Bound
 import Flock.HmRow
+import Flock.Draw
 import Flock.Program
 import Flock.Public
 import Flock.RegKnown
+import Flock.TemplateQuery
 import Flock.WindowRecord
 import NciCheck.Desc
 import SampledProofs.Bits
@@ -262,12 +265,21 @@ its `prog`, one input node of `E_w` entry bits a link-window (`wired`, `scanOf`)
 slot's entry, a `ScanSlots_v2` one setting the `occ` and prompts its slots' Programs read, or any other its entries
 read, changes at most those `E_w` bits; the scan reads an entry only where its own state has the slot due and occupied,
 and refuses one there whose `read` is 0, so no `occ` the audit computes drops a request. The check accepts a tied audit
-at any sample; sampled in part, its at most `b` incorrect proof blocks can set any of its link-window's entries, so that
-link-window's term charges every entry bit (`faulty_entries`: `β_w ≤ 1[b ≥ 1] · E_w`) when `b ≥ 1`, and its δ is in
-`eps`:
+at any sample; sampled in part, the period reads its draw at its own `δ_i` = 2^-64 (`tiedDelta`, fixed before any coin),
+where its at most `b` incorrect proof blocks can set any of its phase's entries, so that phase's term charges
+every entry bit (`faulty_entries`: `β_w ≤ 1[b ≥ 1] · E_w`) when `b ≥ 1`, and `δ_i` is in `eps`:
 
-    {"K": K, "audits": [{"delta", "drawn", "units", "wrong_units"}, …], "cells": c, "eps": m · δ + Σ δ_i,
+    {"K": K, "audits": [{"delta", "drawn", "units", "wrong_units"}, …], "cells": c,
+     "charged": [{"delta": δ_i, "drawn", "units", "wrong_units"}, …], "eps": m · δ + Σ δ_i,
      "held": ["circuit", "free"], "scans": [terms, …], "schedules": c, "windows": m}
+
+* `audits` are the compute audits' facts as their answers give them: each at the δ sampled proofs reads its draw at, and
+  its answer's `bound` there.
+* `charged` are the tied audits drawn in part, in the order of `audits`, each read at `δ_i` off the same draw
+  (`Facts.readAt`: one-stage's `IntegrityProfile.bound` at `δ_i`, no second draw): `wrong_units` is `b` at `δ_i`, which
+  `faulty_entries` reads. Sampled proofs' reading stays its own, at its own δ, so the composite's error
+  (`Verity.SoundnessOf`, the union over the subprotocols) has each reading as its own term: `δ_i` in this protocol's
+  `eps`, the answer's δ in sampled proofs'.
 
 * `schedules` is `cells`, c = Σ_c ⌈log2 (cap_c + 1)⌉, as the statement multiplies `#Ss` and `∏_c (cap_c + 1)`. A
   schedule (`WardenSchedule`) is r and D, fixed, and each connection's admission bucket and lane length. The server
@@ -290,11 +302,11 @@ link-window's term charges every entry bit (`faulty_entries`: `β_w ≤ 1[b ≥ 
   unit is drawn, `drawn` its draw's `Σ k`, and `faulty_sets` every set of at most `b` of its 2T units, which holds the
   sets a stratified draw leaves possible too. `faulty_entries` is `E_w`, its slot entries' bits (`Scan.entries`:
   `lanes · T / every` entries of its `prog` ports' type, 8 · 112 = 896 at w63k4), when an audit its `prog` is tied to
-  is drawn in part with a `bound` of at least one wrong unit (`faultyEntries`), else 0. `tied` names the audits its
-  `free` sums, by their index in `audits` (`tiedAudits`, ascending).
-* `eps` is the scans' δ summed, `m · δ`, and each tied audit's drawn in part (`chargedOf`), whose bound
-  `faulty_entries` reads: the δ part of the union over the monitoring period's windows that
-  `CommOfPeriodLeakAccepted` states, each window at δ plus its knowledge error and its collision errors.
+  is drawn in part with a bound at `δ_i` of at least one wrong unit (`faultyEntries`), else 0. `tied` names the audits
+  its `free` sums, by their index in `audits` (`tiedAudits`, ascending).
+* `eps` is the scans' δ summed, `m · δ`, and `δ_i` for each charged audit (`chargedOf`), whose bound `faulty_entries`
+  reads: the δ part of the union over the monitoring period's windows that `CommOfPeriodLeakAccepted` states, each
+  window at δ plus its knowledge error and its collision errors. Each δ is a ratio, summed exactly in lowest terms.
 * `held` names, sorted, the checks of a tied audit the rows form holds (`heldNames`): `circuit`, its Program is the
   class circuit (`heldChecks`), and `free`, the free inputs its phase's term counts are that Program's input
   gates, counted off its registered descriptor (`inputGates`), or, with the circuit record its registration's window
@@ -505,12 +517,20 @@ structure Evidence where
   audits : Array Core.Answer
   windows : Array Window
 
-/-- What an accepted audit establishes: its proof blocks, its sample, its δ, and its bound on faulty proof blocks. -/
+/-- What an accepted audit establishes: its proof blocks, its sample, its δ, its bound on faulty proof blocks at that δ,
+and the draw that bound is read off (`draw`), which bounds them at any other δ (`Facts.readAt`). -/
 structure Facts where
   units : Nat
   drawn : Nat
   delta : Core.Ratio
   wrong : Nat
+  /-- The sample's design; `subset 0`, none drawn, where none is read, at which every unit may be faulty at any δ. -/
+  draw : Core.SamplingDesign := .subset 0
+
+/-- The same draw's bound at `δ`, one-stage's `IntegrityProfile.bound` (`SampledProofs.Bound.boundOf`): its faulty proof
+blocks at `δ`, read off the draw the facts were established by, with no second draw. -/
+def Facts.readAt (f : Facts) (δ : Core.Ratio) : Facts :=
+  { f with delta := δ, wrong := SampledProofs.Bound.boundOf f.units f.draw δ }
 
 /-! ## Decoding -/
 
@@ -962,6 +982,24 @@ def readsEntriesFn (j : Json) : Except String Json := do
   return .bool (readsEntries x (← Flock.J.nat j "o" ctx) (← Flock.J.nat j "t0" ctx) (← Flock.J.nat j "every" ctx)
     (← Flock.J.nat j "E" ctx) ks)
 
+/-- The Program `P`'s VUs a template at a time, as the sampled verifier's draw reads them: the template query
+(`Flock.TemplateQuery.evaluate`, on its reading of `P`, `Desc.ofProg`) over every template `P`'s root instantiates, its
+non-input root nodes' Definitions, so it accepts `P` exactly when a template query does and then with that query's
+ranges; grouped by `Flock.Draw.strataOf`, one stratum a template, its units as ascending, disjoint ranges `[lo, hi)`. -/
+def vuStrata (P : Flock.Program.Prog) : V (Array (String × Array (Nat × Nat))) := do
+  let tids := (P.defs.getD P.root default).body.nodes.filterMap fun x =>
+    let k := (P.defs.getD x.fn default).key
+    if Flock.TemplateQuery.isInput k then none else some k
+  let rs ← Flock.TemplateQuery.evaluate (.ofProg P) tids
+  pure (Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)))
+
+/-- Whether ranges `a` and `b`, each `[lo, hi)`, share no unit. -/
+def apart (a b : Array (Nat × Nat)) : Bool :=
+  a.all fun (lo, hi) => b.all fun (lo', hi') => min hi hi' ≤ max lo lo'
+
+#guard apart #[(0, 1), (4, 8)] #[(1, 4)] && apart #[(2, 2)] #[(0, 4)] && apart #[] #[(0, 4)] &&
+  !apart #[(0, 2)] #[(1, 3)] && !apart #[(0, 1), (4, 8)] #[(7, 9)] && !apart #[(1, 3)] #[(0, 4)]
+
 /-- The scan's terms from its Program, which must be the registered Program (`program`, its SHA-512), with no two
 definitions of one key (`keysUnique`) and no template keyed
 as an input (`Flock.Program.isInputId`), so the template query (`Flock.TemplateQuery.evaluate`, which finds a
@@ -970,9 +1008,11 @@ the generator form of the schedule's execution phase: its root batches
 one instance of bucket 0's template, `T - 1` of the later ingress buckets' (no such template when `T = 1`), both
 returning the same and each one's `row` the schedule's row (`S · B` bytes), then `T` of the egress template, which
 returns a u16 and the schedule's row, and every input gate is a template's parameter. The types are the Boolean profile's, as the
-scan's Definitions have them: a byte 8 bits, a u16 16. An egress template with a row among its parameters, the checker
-form, is refused first, by name: there the egress row is an input gate, which `NetTiming.BoundaryGates.Fits` refuses, and `K`
-would count the free inputs of a Program that only compares its egress rows.
+scan's Definitions have them: a byte 8 bits, a u16 16. First the egress template's VUs are apart from every other
+template's, in the strata the sampled verifier's draw reads (`vuStrata`, `apart`), so no stratum holds both egress and
+ingress units. Then an egress template with a row among its parameters, the checker form, is refused by name: there
+the egress row is an input gate, which `NetTiming.BoundaryGates.Fits` refuses, and `K` would count the free inputs of a
+Program that only compares its egress rows.
 
 Then what `NetTiming.BoundaryGates.Fits` asks of the layout the templates give (`Properties.NetworkScan.scanLayout`), read off
 the description, at the cost of its nodes and returns: the Program is laid out as C-Flock's decoder lays one out and
@@ -1000,6 +1040,10 @@ def scanProg (prog : Flock.Program.Prog) (program : String) (s : Schedule) : V S
   let T := s.window
   let row : Flock.Program.Ty := .array (s.allocation * s.cellBytes) (.array 8 (.value 1))
   let (xe, de) ← needSome templates.back? "scan: no template"
+  let strata ← (vuStrata prog).mapError (s!"scan: " ++ ·)
+  let vus := fun (k : String) => ((strata.find? (·.1 == k)).map (·.2)).getD #[]
+  need (templates.pop.all fun (_, d) => apart (vus d.key) (vus de.key)) "scan: the egress template's VUs are not \
+    apart from the ingress templates' (vuStrata): a stratum of the draw would hold both egress and ingress units"
   need (!de.params.any (fun p => p.1 == "row" || p.2 == row)) "scan: the egress template takes its row as an input \
     (the checker form): no egress gate is an input (NetTiming.BoundaryGates.Fits)"
   let ((xf, df), later) ← ingressTemplates templates.pop.toList
@@ -1604,7 +1648,7 @@ def factsOf (what : String) (prof : Core.Integrity) (pub : Json) : Found Facts :
     | some (.stratified ss) => pure (ss.foldl (fun n st => n + st.k) 0)
     | _ => refuse s!"{what}: profile: not a subset or stratified draw"
   match Flock.J.nat pub "bound" "public" with
-  | .ok b => pure { units := l.size, drawn, delta := prof.delta, wrong := b }
+  | .ok b => pure { units := l.size, drawn, delta := prof.delta, wrong := b, draw := l.draw.getD (.subset 0) }
   | .error e => refuse s!"{what}: {e}"
 
 /-- A link-window's tied audits' free inputs, its scan's registration `reg` among the commitment's `windows`: what the
@@ -1826,8 +1870,8 @@ structure Public where
   rows : Bool := false
   schedules : Nat
   windows : Nat
-  /-- The facts of the rows form's tied audits drawn in part (`chargedOf`), whose bounds `faulty_entries` reads, so
-  whose δ is in `eps`. -/
+  /-- The facts of the rows form's tied audits drawn in part, each read at `tiedDelta` (`chargedOf`), whose bounds
+  `faulty_entries` reads, so whose `δ_i` is in `eps`. -/
   charged : Array Facts := #[]
   /-- Each of the rows form's link-windows' tied audits, by index (`tiedAudits`), the audits its scan's `free` sums;
   none in the clock form. -/
@@ -1863,11 +1907,17 @@ def rowsTerms (facts : Array Facts) (scan : Scan) (scans : Array (Facts × Nat �
   { audits := facts, cells := capsTerm cells, units := scans.map fun (f, t, b) => scan.terms f t b jitter,
     rows := true, schedules := capsTerm cells, windows, charged }
 
+/-- `δ_i` = 2^-64, the δ at which the rows form reads a tied audit's draw (`chargedOf`): a constant of the check, so
+fixed before any coin, and its own reading of the draw, beside the δ sampled proofs reads the same draw at (the audit's
+answer's, in `audits`). -/
+def tiedDelta : Core.Ratio := ⟨1, 2 ^ 64⟩
+
 /-- Audit `i`'s facts when the rows form charges it: accepted, tied to a link-window's scan (`tiedOf`) and drawn in
-part, so its at most `b` wrong units are in its link-windows' terms (`faultyEntries`) and its δ in `eps`. -/
+part, read at `tiedDelta` (`Facts.readAt`), so its at most `b` wrong units at `δ_i` are in its phases' terms
+(`faultyEntries`) and `δ_i` in `eps`. -/
 def chargedOf (p : Params) (c : Commitment) (as : Array (Found Facts)) (i : Nat) : Option Facts :=
   match as[i]? with
-  | some (.ok f) => if tiedOf p.form c i && f.drawn < f.units then some f else none
+  | some (.ok f) => if tiedOf p.form c i && f.drawn < f.units then some (f.readAt tiedDelta) else none
   | _ => none
 
 /-- A link-window's `β_w`: every slot entry bit of its scan (`Scan.entries`, `E_w`) when an audit its `prog` is tied
@@ -1948,7 +1998,9 @@ def publicJson (x : Public) : Json :=
   Json.mkObj ([
     ("K", toJson x.K), ("audits", if x.rows then factsJson x.audits else termsJson x.units), ("cells", toJson x.cells),
     ("eps", .str x.eps.toString), ("schedules", toJson x.schedules), ("windows", toJson x.windows)] ++
-    (if x.rows then [("held", toJson heldNames), ("scans", termsJson x.units true x.tied)] else []))
+    (if x.rows then
+      [("charged", factsJson x.charged), ("held", toJson heldNames), ("scans", termsJson x.units true x.tied)]
+    else []))
 
 def profileJson (pr : Profile) : Json :=
   Json.mkObj [("link", .str pr.link), ("windows", toJson pr.windows)]
@@ -2426,7 +2478,8 @@ def clocksFn (j : Json) : Except String Json := do
 -- eps over audits at δ = 1/10, 1/15 and 1/6 is 1/3; over none it is 0
 #guard (terms #[⟨0, 0, "", 1, 16, #[], none, none, 0⟩, ⟨0, 0, "", 1, 16, #[], none, none, 0⟩,
   ⟨0, 0, "", 1, 16, #[], none, none, 0⟩]
-  #[⟨1, 1, ⟨1, 10⟩, 0⟩, ⟨1, 1, ⟨1, 15⟩, 0⟩, ⟨1, 1, ⟨1, 6⟩, 0⟩] #[] 1 1 1).eps.toString == "1/3"
+  #[⟨1, 1, ⟨1, 10⟩, 0, .subset 1⟩, ⟨1, 1, ⟨1, 15⟩, 0, .subset 1⟩, ⟨1, 1, ⟨1, 6⟩, 0, .subset 1⟩] #[] 1 1 1
+  ).eps.toString == "1/3"
 #guard (terms #[] #[] #[] 1 1 1).eps.toString == "0"
 -- the rows form over 1 link-window: 7 cells on one connection and 2 on another (3 + 2 bits, for the schedules and
 -- again for the fail cells), an audit whose own terms are in none, and one scan of 20 units (T = 10) drawn at
@@ -2445,8 +2498,8 @@ def clocksFn (j : Json) : Except String Json := do
 #guard (rowsTerms #[{ units := 8, drawn := 8, delta := ⟨1, 100⟩, wrong := 0 }] ⟨32, 0, 300, 512, 0⟩
   #[({ units := 64, drawn := 64, delta := ⟨1, 100⟩, wrong := 0 }, 8 * 1136, 0)] #[] 1 1).K == 9088
 -- eps over the scans' δ = 1/15 and 1/15 is 2/15; the audit's 1/10 is in it no more
-#guard (rowsTerms #[⟨1, 1, ⟨1, 10⟩, 0⟩] ⟨0, 0, 0, 0, 0⟩ #[(⟨1, 1, ⟨1, 15⟩, 0⟩, 0, 0), (⟨1, 1, ⟨1, 15⟩, 0⟩, 0, 0)] #[]
-  1 2).eps.toString == "2/15"
+#guard (rowsTerms #[⟨1, 1, ⟨1, 10⟩, 0, .subset 1⟩] ⟨0, 0, 0, 0, 0⟩
+  #[(⟨1, 1, ⟨1, 15⟩, 0, .subset 1⟩, 0, 0), (⟨1, 1, ⟨1, 15⟩, 0, .subset 1⟩, 0, 0)] #[] 1 2).eps.toString == "2/15"
 -- w63k4: T = 32, 4 lanes, every 16, so 8 slot entries of 112 bits a link-window; its tied audit drawn in part, with at
 -- most 2 wrong units, which can set any entry: its link-window's term charges E_w = 896 bits beside its free inputs
 #guard (rowsTerms #[{ units := 16, drawn := 9, delta := ⟨1, 100⟩, wrong := 2 }] ⟨32, 0, 300, 512, 8 * 112⟩
@@ -2465,10 +2518,21 @@ def clocksFn (j : Json) : Except String Json := do
   rowsWf s (2 ^ 25 - 1) && !rowsWf s (2 ^ 25) && (rowsWfCheck (p (2 ^ 25 - 1))).isNone &&
     (rowsWfCheck (p (2 ^ 25))).isSome
 -- a charged audit's δ = 1/10 is in eps beside its scan's 1/15: 1/6
-#guard (rowsTerms #[⟨2, 1, ⟨1, 10⟩, 0⟩] ⟨0, 0, 0, 0, 0⟩ #[(⟨1, 1, ⟨1, 15⟩, 0⟩, 0, 0)] #[] 1 1 #[⟨2, 1, ⟨1, 10⟩, 0⟩]
-  ).eps.toString == "1/6"
--- w63k4's tied audit of 16 proof blocks sampled at one (`subset:1`), with a bound of 2 incorrect ones: charged, its
--- link-window's β_w every one of the scan's E_w = 896 entry bits; sampled whole, uncharged and β_w = 0
+#guard (rowsTerms #[⟨2, 1, ⟨1, 10⟩, 0, .subset 1⟩] ⟨0, 0, 0, 0, 0⟩ #[(⟨1, 1, ⟨1, 15⟩, 0, .subset 1⟩, 0, 0)] #[] 1 1
+  #[⟨2, 1, ⟨1, 10⟩, 0, .subset 1⟩]).eps.toString == "1/6"
+-- the same draw read at δ_i = 2^-64: one of 16 drawn (`subset:1`, 8 at δ = 1/2) leaves 15 possibly faulty, all 16 drawn
+-- none, and facts with no draw every unit; a stratified draw's bound at δ = 1/2 is `countBound`'s
+#guard (Facts.readAt ⟨16, 1, ⟨1, 2⟩, 8, .subset 1⟩ tiedDelta).wrong == 15 &&
+  (Facts.readAt ⟨16, 1, ⟨1, 2⟩, 8, .subset 1⟩ ⟨1, 2⟩).wrong == 8 &&
+  (Facts.readAt ⟨16, 16, ⟨1, 2⟩, 0, .subset 16⟩ tiedDelta).wrong == 0 &&
+  (Facts.readAt { units := 16, drawn := 1, delta := ⟨1, 2⟩, wrong := 8 } tiedDelta).wrong == 16 &&
+  (Facts.readAt
+    ⟨9, 5, ⟨1, 10⟩, 0, .stratified #[{ name := "a", size := 4, k := 4 }, { name := "b", size := 5, k := 1 }]⟩
+    ⟨1, 2⟩).wrong == 2
+-- w63k4's tied audit of 16 proof blocks sampled at one (`subset:1`), its answer's bound 8 at δ = 1/2: charged, read at
+-- δ_i = 2^-64 with a bound of 15, its phase's β_w every one of the scan's E_w = 896 entry bits; sampled whole,
+-- uncharged and β_w = 0. The public keeps the answer's δ and bound in `audits` and the period's reading in `charged`,
+-- and its eps is the scan's δ = 2^-64 and δ_i: 2^-63
 #guard
   let scan : Scan := ⟨32, 0, 300, 512, 8 * 112⟩
   let p : Params := ⟨#[⟨0, 0, "", 16, 0, #[], none, none, 0⟩], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", none,
@@ -2476,10 +2540,14 @@ def clocksFn (j : Json) : Except String Json := do
   let at_ := fun (q : String) => Json.mkObj [("roots", Json.arr #[
     Json.mkObj [("port", .str q), ("root", .str "r"), ("domain", .str "d")]])]
   let c : Commitment := ⟨#[at_ (entriesPort "SelectEntry_v1{KO=4}" 0)], #[at_ (progName 0)], .empty⟩
-  let one : Array (Found Facts) := #[.ok ⟨16, 1, ⟨1, 100⟩, 2⟩]
-  let whole : Array (Found Facts) := #[.ok ⟨16, 16, ⟨1, 100⟩, 0⟩]
-  tiedIn c.audits c.windows 0 && (chargedOf p c one 0).isSome && faultyEntries p c one scan (at_ (progName 0)) == 896 &&
-    (chargedOf p c whole 0).isNone && faultyEntries p c whole scan (at_ (progName 0)) == 0
+  let one : Array (Found Facts) := #[.ok ⟨16, 1, ⟨1, 2⟩, 8, .subset 1⟩]
+  let whole : Array (Found Facts) := #[.ok ⟨16, 16, ⟨1, 2⟩, 0, .subset 16⟩]
+  let pub := rowsPublic p c one scan #[(⟨64, 64, tiedDelta, 0, .subset 64⟩, 0)]
+  tiedIn c.audits c.windows 0 && (chargedOf p c one 0).map (fun f => (f.delta, f.wrong)) == some (tiedDelta, 15) &&
+    faultyEntries p c one scan (at_ (progName 0)) == 896 &&
+    (chargedOf p c whole 0).isNone && faultyEntries p c whole scan (at_ (progName 0)) == 0 &&
+    pub.audits.map (fun f => (f.delta, f.wrong)) == #[((⟨1, 2⟩ : Core.Ratio), 8)] &&
+    pub.charged.map (fun f => (f.delta, f.wrong)) == #[(tiedDelta, 15)] && pub.eps == (⟨1, 2 ^ 63⟩ : Core.Ratio)
 -- a unit's output port past o0, its index in ASCII digits without a leading zero; never o0, an input, or no unit's
 #guard outputPort "block-3/o1" && outputPort "a/b/o10" && outputPort "/o2"
 #guard !(outputPort "o1" || outputPort "u/o0" || outputPort "u/o01" || outputPort "u/o" || outputPort "u/O1" ||

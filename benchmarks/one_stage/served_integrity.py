@@ -5,13 +5,14 @@
 commitment is the registration's digest, the verdict the audit record's, and on acceptance the public outputs and profile
 are the ones `SampledProofs.OneStage.check` makes public (the drawn and proved units, the bound on wrong units at δ, each
 template's under a stratified or work law; `audit.profile` as `Core.Integrity`, δ an exact ratio). A refusal before the
-sample (the records, a check on the registration, the sample) rejects with its codes; an audit record that doesn't accept,
-with its failed checks and the first of Lean's refusals by member (a registered read that doesn't open its root names
-its port). An audit that ended with no summary is an error (RuntimeError), not a verdict, and so is one that opened the
-advice (`opened`), whatever its verdict.
+sample (the records, a check on the registration, the sample) rejects with its codes, and so does one after it that
+left no audit record (a drawn member whose ``--registered`` file the audit couldn't complete, by name); an audit record
+that doesn't accept, with its failed checks and the first of Lean's refusals by member (a registered read that doesn't
+open its root names its port). An audit that ended with no summary is an error (RuntimeError), not a verdict, and so is
+one that opened the advice (`opened`), whatever its verdict.
 
-`public_copy` writes what `answer` reads of an audit, and nothing else (`SUMMARY`, `RECORD`): the copy a verifier on
-another machine reads, from which `answer` makes the same answer.
+`public_copy` writes what `answer` reads of an audit and what the onsite record credits its members by, and nothing
+else (`SUMMARY`, `RECORD`): the copy a verifier on another machine reads, from which `answer` makes the same answer.
 
     python benchmarks/one_stage/served_integrity.py public-copy AUDIT DST
 """
@@ -28,13 +29,17 @@ from verity.core.protocols.sampled_proofs.one_stage import audit as A, registrat
 
 PROTOCOL = R.PROTOCOL
 #: what `answer` reads of the audit's ``summary.json``, by key (its value whole, or of those keys alone): whether it
-#: opened the advice, its refusal, its checks before and after the draw, and the audit's verdict, outcome and Lean's
-#: refusals
+#: opened the advice, its refusal, its checks before and after the draw (each one's outcome, ``checks`` where one
+#: after the draw refused), and the audit's verdict, outcome and Lean's refusals
 SUMMARY = {"compile": None, "refused": None, "checks_before_draw": None, "fixed_before_draw": ("ok", "codes"),
-           "audit": ("accepted", "outcome", "why")}
+           "checks": None, "audit": ("accepted", "outcome", "why")}
 #: what `answer` reads of the audit record ``window/audit.json``: its verdict, each check's outcome and the proved units
-#: its statement covers, the draw, the registration, the bound on wrong units and the units proved
-RECORD = {"accepted": None, "checks": None, "draw": None, "registration": None, "wrong_units": None, "proved_units": None}
+#: its statement covers, the draw, the registration, the bound on wrong units and the units proved; and what the onsite
+#: record credits members by: each check after the draw's outcome, with the drawn members whose ``--registered`` files
+#: the audit completed (``registered_complete``), and whether each drawn member's Lean verdict of record reported
+#: exactly its file's reads (``registered_reads``)
+RECORD = {"accepted": None, "checks": None, "draw": None, "registration": None, "wrong_units": None,
+          "proved_units": None, "checks_after_draw": None, "registered_reads": None}
 
 
 def _only(doc: Mapping[str, Any], keys: Mapping[str, Any]) -> dict[str, Any]:
@@ -61,6 +66,24 @@ def _checks(checks: Any) -> Any:
     return out
 
 
+def _after(checks: Any) -> Any:
+    """`_checks` of the checks after the draw, with the drawn members ``registered_complete`` completed, by name."""
+    out = _checks(checks)
+    done = checks.get("registered_complete") if isinstance(checks, Mapping) else None
+    if isinstance(done, Mapping) and isinstance(done.get("members"), Mapping):
+        out["registered_complete"]["members"] = sorted(done["members"])
+    return out
+
+
+def _reads(reads: Any) -> Any:
+    """``registered_reads``' outcome and each drawn member's, not the ports, values and roots it compared."""
+    if not isinstance(reads, Mapping):
+        return reads
+    chunks = reads.get("chunks") or {}
+    return {"ok": reads.get("ok"),
+            "chunks": {k: {"ok": v.get("ok")} for k, v in chunks.items() if isinstance(v, Mapping)}}
+
+
 def public_copy(out: Path, dst: Path) -> None:
     """What `answer` reads of the audit under ``out`` (`SUMMARY`, `RECORD`) written under ``dst``: its ``summary.json``
     and, where the sample ran, ``window/audit.json``. A missing summary or record is left missing, as `answer` reads it,
@@ -71,12 +94,15 @@ def public_copy(out: Path, dst: Path) -> None:
     summary = _only(_object(out / "summary.json"), SUMMARY)
     if summary.get("compile") is None:
         summary.pop("compile", None)
+    if "checks" in summary:
+        summary["checks"] = _after(summary["checks"])
     (dst / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str) + "\n")
     if not (out / "window" / "audit.json").is_file():
         return
     rec = _only(_object(out / "window" / "audit.json"), RECORD)
-    if "checks" in rec:
-        rec["checks"] = _checks(rec["checks"])
+    for k, keep in (("checks", _checks), ("checks_after_draw", _after), ("registered_reads", _reads)):
+        if k in rec:
+            rec[k] = keep(rec[k])
     (dst / "window").mkdir(exist_ok=True)
     (dst / "window" / "audit.json").write_text(json.dumps(rec, indent=1, sort_keys=True, default=str) + "\n")
 
@@ -151,6 +177,11 @@ def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
         return _refusal("before the draw: " + ", ".join(_codes(before)), commitment)
     rec_file = out / "window" / "audit.json"
     if not rec_file.exists():
+        checks = summary.get("checks") or {}
+        if refused := [c for c in _codes(checks) if c not in before]:
+            said = [c + (f" ({', '.join(map(str, codes))})" if (codes := (checks[c] or {}).get("codes")) else "")
+                    for c in refused]
+            return _refusal("after the draw: " + "; ".join(said), commitment)
         audit = summary.get("audit") or {}
         if audit.get("accepted") is False:
             return _refusal("no audit record: " + json.dumps(audit.get("outcome"), sort_keys=True, default=str),

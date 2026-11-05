@@ -9,9 +9,10 @@ registered before it served.
 **The policy** (`policy`, `POLICY_FORMAT`) is written before the serve's lease from the run's settings alone, and fixes
 (c, k, n) with every input to them and its source:
 
-- the session: the class's circuit under the registered φ (`window_circuit.class_circuit` of `prove_path.registered_of_serve`
-  on `serve_facts`, the facts an H200 int8 serve records in its ``serve.json``), read from its description (`class_doc`),
-  whose one block Definition is a slot's session over every position (`block_counts.session`);
+- the session: the class's circuit under the registered φ (`window_circuit.class_circuit` of
+  `served_compiler.registered_of_serve` on `serve_facts`, the facts an H200 int8 serve records in its ``serve.json``),
+  read from its description (`class_doc`), whose one block Definition is a slot's session over every position
+  (`block_counts.session`);
 - c, that Definition's Boolean gates by the gate table (`table_of`), and k, its fresh-input bits (`block_counts.fresh`) with
   θ every weight parameter the circuit registers held (`weights_of_record.PARAM`), B's k (`inference_blocks.budgets`): what
   the weights registration pins before the first request, so a run whose pins hold fewer weights reads more fresh bits
@@ -185,7 +186,8 @@ def digest(doc: Any) -> str:
 # -- the session and the policy ---------------------------------------------------------------------------------------
 
 def serve_facts(model: str, revision: str) -> dict[str, Any]:
-    """What φ reads of an H200 int8 serve (`prove_path.phi_of_serve`, `registered_seed`), as its ``serve.json`` records it."""
+    """What φ reads of an H200 int8 serve (`served_compiler.phi_of_serve`, `registered_seed`), as its ``serve.json`` records
+    it."""
     from verity_vllm import TargetProfile
     from verity_vllm.engine.served_seed import DEFAULT_SEED
 
@@ -198,11 +200,11 @@ def class_doc(serve: Mapping[str, Any], cls: Any) -> tuple[dict[str, Any], list[
     --class` records for a window the class takes) as the description its session and fresh bits are read from, the way
     `inference_blocks.budgets` reads B's k (no member stated, which is work per template the counts don't read), and the
     parameters it registers."""
-    sys.path.insert(0, str(ROOT / "benchmarks" / "prove_path"))
-    import prove_path as PP
+    from verity_vllm.pipeline.advice_windows import CAP_BITS
+    from verity_vllm.program.predict.served_compiler import registered_of_serve
     from verity_vllm.program.predict.window_circuit import class_circuit
 
-    circuit = class_circuit(PP.registered_of_serve(serve, None, None, PP.CAP_BITS), cls)
+    circuit = class_circuit(registered_of_serve(serve, None, None, CAP_BITS), cls)
     doc = {**circuit.description(), "name": circuit.name, "partition": "",
            "blocks": circuit.blocks.doc(sum(circuit.units.values()), "")}
     return doc, sorted(circuit.registered.params if circuit.registered is not None else ())

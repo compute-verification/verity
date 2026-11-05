@@ -109,7 +109,10 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   stream's outcome on the honest draw's bytes: the evidence with a tampered opening, with the coin opened before the
   registration, with a segment that skips a released coin, with the pin off main, with no pins log, none, and for another
   window. Every rank of the step draws from the one session, so `--jobs` covers every rank. The verifier samples no coins of
-  its own: a stream's sample is the challenger's (`service.NO_OWN_COINS`).
+  its own: a stream's sample is the challenger's (`service.NO_OWN_COINS`). The challenger's release of the draw's coins
+  (`drawn_by`: its key, the window root and the coins, the segment settled) is kept beside the audit's case in
+  ``out/release.json`` (`RELEASE`) whenever the session gave evidence, and v2's case names it (`case_v2`), so a later
+  case of the window's units reads the same draw.
 * **Transfer gates opened under the warden's signed roots** (`audit`'s ``registered``): a member whose port's rows are an outside
   registered value's (a warden link-window's cells, `certifier.warden_rows`), committed under that value's salts
   (`ml.windows.rows.commit`'s ``salts_of``), is verified with the verifier's own reads of it (``--registered``, the port at
@@ -173,9 +176,11 @@ import multiprocessing
 import os
 import shutil
 import sys
+import threading
 import time
 from collections.abc import Iterator, Sequence
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
@@ -242,6 +247,7 @@ def link(src: Path, dst: Path) -> None:
 
 SELECT_COINS = AC.SELECT_COINS
 CHALLENGER = "a5.py on the auditor's challenger's coins"
+RELEASE = "release.json"
 
 
 def tie(a: argparse.Namespace) -> dict[str, Any]:
@@ -954,7 +960,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
 
     def member_checks(s: dict) -> dict:
         """Lean's verdicts on member session ``s`` (`member_session`) and what the audit takes from it. They read only the
-        session's archive, so they run while the next member is proved."""
+        session's archive, so they run beside the next member's session, `LeanPool`'s workers at a time."""
         mm, sdir, record, live, draw_t, v = s["mm"], s["sdir"], s["record"], s["live"], s["draw_t"], s["draw_check"]
         m, k, session_s = mm["m"], mm["k"], s["session_s"]
         lean_u = a0.lean_draw_test(a.lean, [{"record": draw_t or None, "statement": (live or {}).get("unit_draw"),
@@ -981,10 +987,13 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                 "sessions": [a0.sha512_file(f) for f in sorted((sdir / "sessions").glob("*/session.json"))]}
 
     # outer proofs go through the ZK server one at a time (`ONE_AT_A_TIME`): the sessions run here in the members' order, and
-    # only Lean's checks of one member, outside the ZK server, overlap the next member's session
-    with ThreadPoolExecutor(1) as lean:
-        checks = [lean.submit(member_checks, member_session(i, mm, local)) for i, (mm, local) in enumerate(drawn)]
-        done = [c.result() for c in checks]
+    # only Lean's checks of finished members, outside the ZK server, overlap the next member's session
+    with LeanPool(getattr(a, "lean_workers", LEAN_WORKERS), audit_memory(a, available_memory), available_memory) as lean:
+        for i, (mm, local) in enumerate(drawn):
+            with lean.session(session_need(mm["circuit"])):
+                s = member_session(i, mm, local)
+            lean.submit(member_checks, s, lean_need(mm["st"]))
+        done = lean.results()
     for got in done:
         mm = got["mm"]
         summary["staging"]["drawn_s"] = round(summary["staging"].get("drawn_s", 0) + got["staged_s"], 1)
@@ -1014,6 +1023,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         result, coin_neg, summary["coins"] = coins_outcome(
             a, stream, draw, counts_of, rec, mine, members, want, leaf_layer, read, segment, sessions, verdicts, statement,
             given)
+        drawn = drawn_by(AC.evidence(a.coins.evidence(), segment), a.window_root)
+        if drawn is not None:
+            (out / RELEASE).write_text(json.dumps(drawn, sort_keys=True))
         if result is None:
             summary.update(audit={"accepted": False, "outcome": summary["coins"]["outcome"]}, draw=union_draw["units"],
                            negatives={x: y["refused"] for x, y in coin_neg.items()})
@@ -1025,7 +1037,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_draw, "proved_units": given["proved_units"], "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
-                   served=given["served"], v2=v2_proof(done, not plain(a)), partition=part, tied=tie(a))
+                   served=given["served"], v2=v2_proof(done, not plain(a), drawn), partition=part, tied=tie(a))
     result["draw_counts"] = counts
     if row_verdicts:
         result["registered_reads"] = TB.reported_reads(reads, row_verdicts)
@@ -1154,37 +1166,56 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
 
 
 def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, registered: dict | None,
-            tables: Sequence[Path]) -> dict:
+            tables: Sequence[Path], drawn: dict | None = None) -> dict:
     """v1's ``case`` as `SampledProofs.OneStageZk` reads it: the params with ``proofs`` (the auditor's circuit digest and
     the verifier's registered file), the evidence with its ``verdicts`` replaced by the proofs' files
     (`proofs.evidence_v2`, under the evidence's ``sessions``), and ``blobs``, the paths of the files those name and of the
-    pinned lookup tables, which onsite reads after the evidence (`compose.onsite_check`)."""
+    pinned lookup tables, which onsite reads after the evidence (`compose.onsite_check`). With ``drawn`` (`drawn_by`), the
+    params name the auditor's challenger and its window root and the evidence carries the draw's coins; without, the case
+    names no challenger, which v2 refuses (`OneStageZk.NO_CHALLENGER`)."""
     import replay as RP
     from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
     pr, blobs = PF.evidence_v2(proof, sessions)
-    evidence = {k: v for k, v in json.loads(bytes.fromhex(case["evidence"])).items() if k != "verdicts"} | {"proofs": pr}
+    drawn = drawn or {"params": {}, "evidence": {}}
+    evidence = ({k: v for k, v in json.loads(bytes.fromhex(case["evidence"])).items() if k != "verdicts"}
+                | drawn["evidence"] | {"proofs": pr})
     return {"blobs": [str(b) for b in (*blobs, *tables)], "commitment": case["commitment"],
             "evidence": RP.DT.canonical(evidence).encode().hex(),
-            "params": {**case["params"], "proofs": {"circuit": circuit, "registered": registered}}}
+            "params": {**case["params"], **drawn["params"], "proofs": {"circuit": circuit, "registered": registered}}}
 
 
-def v2_proof(done: Sequence[dict], zk: bool) -> dict | str:
-    """`case_v2`'s files from the drawn members' sessions (`member_checks`'s), or why the audit has no v2 case: v2 verifies
-    one table's `--zk` sessions on its circuit and public file."""
+def drawn_by(ev: dict | None, window_root: str) -> dict | None:
+    """The draw's coins as v2's case names them (`case_v2`): the params' ``challenger``, the key of the auditor's
+    challenger the coins' evidence ``ev`` (`a5_coins.evidence`) is under and the family every rank's draw reads
+    (`a5_coins.FAMILY`), with the ``window_root`` the session opened on; and the evidence's ``coins``, ``ev`` less its
+    key. None when the challenger's session gave no evidence."""
+    if ev is None:
+        return None
+    return {"params": {"challenger": {"key": ev["key"], "label": AC.FAMILY}, "window_root": window_root},
+            "evidence": {"coins": {k: v for k, v in ev.items() if k != "key"}}}
+
+
+def v2_proof(done: Sequence[dict], zk: bool, drawn: dict | None = None) -> dict | str:
+    """`case_v2`'s files from the drawn members' sessions (`member_checks`'s) and the draw's coins ``drawn``
+    (`drawn_by`), or why the audit has no v2 case: v2 verifies one table's `--zk` sessions on its circuit and public file,
+    on a draw from the auditor's challenger's coins."""
     from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
     if not zk:
         return "v2 verifies --zk sessions; this audit's are plain"
     if len(done) != 1:
         return f"v2 verifies one table's sessions on its circuit and public file; this audit drew {len(done)} members"
+    if drawn is None:
+        return "v2's draw reads the auditor's challenger's coins (OneStageZk.NO_CHALLENGER); this audit has none of record"
     mm, sdir = done[0]["mm"], done[0]["sdir"]
     st, n = mm["st"], mm["m"].n
     tables = sorted(f for f in (st["dir"] / "tables").glob("*") if f.is_file()) if (st["dir"] / "tables").is_dir() else []
     reads = st.get("registered_file")
     return {"proof": PF.Proof(st["dir"] / "circuit.txt", st["dir"] / f"pub-{n}.bin",
                               tuple(f.parent for f in sorted((sdir / "sessions").glob("*/session.json")))),
-            "circuit": mm["pin"], "registered": json.loads(reads.read_text()) if reads else None, "tables": tables}
+            "circuit": mm["pin"], "registered": json.loads(reads.read_text()) if reads else None, "tables": tables,
+            "drawn": drawn}
 
 
 def streamed(a: argparse.Namespace) -> bool:
@@ -1201,6 +1232,121 @@ def one_session(s: str) -> int:
     if s.strip() != "1":
         raise argparse.ArgumentTypeError(f"{s}: {ONE_AT_A_TIME}, so an audit runs its sessions one at a time; pass 1 or omit it")
     return 1
+
+
+#: Lean checks of finished members at once (`LeanPool`): they read a session's archive outside the ZK server, which
+#: `ONE_AT_A_TIME` doesn't cover
+LEAN_WORKERS = 3
+#: a Lean check's memory estimate per byte of its member's circuit file, which `flock-verify verify` reads, hashes and
+#: parses whole
+LEAN_BYTES_PER_CIRCUIT_BYTE = 5
+#: a member's session's memory estimate per byte of its circuit file (its prover, its server and the audit's Python at
+#: their peak), which the Lean checks beside it leave it (`LeanPool.session`). A node the audit shares still runs one check
+#: at a time (served_verdicts.sh)
+SESSION_BYTES_PER_CIRCUIT_BYTE = 20
+
+
+class LeanPool:
+    """Member checks on ``workers`` threads beside the caller's sessions, which stay one at a time (`ONE_AT_A_TIME`). Checks
+    start in the order submitted, each once its memory estimate ``need`` fits: with the running checks' estimates and the
+    running session's (`session`) within ``budget`` bytes, and ``available()`` bytes free now. With no check and no session
+    running the next starts whatever its estimate, so one over the budget runs alone. `results` are the checks' in the
+    order submitted."""
+
+    def __init__(self, workers: int, budget: float, available: Callable[[], float]):
+        self.budget, self.available = budget, available
+        self.ex = ThreadPoolExecutor(workers)
+        self.cv = threading.Condition()
+        self.futures: list[Future] = []
+        self.next = self.running = 0
+        self.used = 0.0
+        self.held: float | None = None
+
+    def __enter__(self) -> LeanPool:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.ex.shutdown(wait=True)
+
+    @contextmanager
+    def session(self, need: float) -> Iterator[None]:
+        """The caller's session, its memory estimate ``need`` held from the budget while it runs: it starts once the running
+        checks leave ``need`` within the budget, or none runs, and no check starts beside it that doesn't fit with it."""
+        with self.cv:
+            self.cv.wait_for(lambda: not self.running or self.used + need <= self.budget)
+            self.held = need
+        try:
+            yield
+        finally:
+            with self.cv:
+                self.held = None
+                self.cv.notify_all()
+
+    def submit(self, check: Callable[[Any], Any], arg: Any, need: float) -> None:
+        self.futures.append(self.ex.submit(self._run, len(self.futures), check, arg, need))
+
+    def results(self) -> list:
+        return [f.result() for f in self.futures]
+
+    def _fits(self, turn: int, need: float) -> bool:
+        return turn == self.next and ((not self.running and self.held is None) or
+                                      (self.used + (self.held or 0) + need <= self.budget and self.available() >= need))
+
+    def _run(self, turn: int, check: Callable[[Any], Any], arg: Any, need: float) -> Any:
+        with self.cv:
+            self.cv.wait_for(lambda: self._fits(turn, need))
+            self.next, self.running, self.used = self.next + 1, self.running + 1, self.used + need
+            self.cv.notify_all()
+        try:
+            return check(arg)
+        finally:
+            with self.cv:
+                self.running, self.used = self.running - 1, self.used - need
+                self.cv.notify_all()
+
+
+def available_memory() -> int:
+    """The node's available memory now, in bytes (/proc/meminfo's MemAvailable)."""
+    for line in Path("/proc/meminfo").read_text().splitlines():
+        if line.startswith("MemAvailable:"):
+            return int(line.split()[1]) * 1024
+    raise OSError("/proc/meminfo has no MemAvailable")
+
+
+def audit_memory(a: argparse.Namespace, available: Callable[[], float]) -> float:
+    """The audit's memory in bytes, which its sessions and the Lean checks beside them share (`LeanPool`): ``--audit-mem-gb``,
+    else what ``available()`` gives as its sessions start."""
+    gb = getattr(a, "audit_mem_gb", None)
+    return gb * 2**30 if gb is not None else available()
+
+
+def lean_need(st: dict) -> int:
+    """A member's Lean check's memory estimate in bytes, `LEAN_BYTES_PER_CIRCUIT_BYTE` of its circuit file (none: 0)."""
+    f = st["dir"] / "circuit.txt"
+    return LEAN_BYTES_PER_CIRCUIT_BYTE * f.stat().st_size if f.is_file() else 0
+
+
+def session_need(circuit: Path) -> int:
+    """A member's session's memory estimate in bytes, `SESSION_BYTES_PER_CIRCUIT_BYTE` of ``circuit``, the circuit file it is
+    staged with (`stage`; none: 0)."""
+    return SESSION_BYTES_PER_CIRCUIT_BYTE * circuit.stat().st_size if circuit.is_file() else 0
+
+
+def positive(s: str) -> int:
+    """``--lean-workers``: at least 1."""
+    if int(s) < 1:
+        raise argparse.ArgumentTypeError(f"{s}: Lean checks at once is at least 1")
+    return int(s)
+
+
+def lean_options(p: argparse.ArgumentParser) -> None:
+    """The Lean checks' flags (`LeanPool`), on a5's parser and its callers'."""
+    p.add_argument("--lean-workers", type=positive, default=LEAN_WORKERS,
+                   help="Lean checks of finished members at once, beside the next member's session (sessions stay one at a time)")
+    p.add_argument("--audit-mem-gb", type=float,
+                   help=f"the audit's memory: a Lean check starts only within it beside the running session, estimated at "
+                        f"{SESSION_BYTES_PER_CIRCUIT_BYTE}x its circuit file, and the running checks, each at "
+                        f"{LEAN_BYTES_PER_CIRCUIT_BYTE}x (default: what is available as the sessions start)")
 
 
 def plain(a: argparse.Namespace) -> bool:
@@ -1423,6 +1569,7 @@ def main() -> int:
     ap.add_argument("--delta", type=float, default=0.5)
     ap.add_argument("--port", type=int, default=7551)
     ap.add_argument("--session-jobs", type=one_session, default=1, help="1 only: the sessions run one at a time (ONE_AT_A_TIME)")
+    lean_options(ap)
     ap.add_argument("--session-timeout", type=float, default=14400,
                     help="each drawn member's prover limit in seconds, and each template's compose: one firewalled session of a MoE "
                          "w2 coordinate chunk (MoeExpertFp8GemmW_v2{N=1}, k_log 26) takes ~8 min, and over an hour on a loaded "

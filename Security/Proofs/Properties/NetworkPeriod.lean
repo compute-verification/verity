@@ -1,6 +1,10 @@
 import Properties.NetworkPeriod
 import Proofs.Properties.NetworkPeriod.PadCols
 import Proofs.NetworkCertifier.RecordRows
+import Properties.NetworkPeriod.Placed
+import Proofs.Properties.NetworkScan
+import Proofs.Flock.Claims.Sampling.Count
+import Proofs.NetworkCertifier.SampledCharge
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 /-!
@@ -13,10 +17,16 @@ connections and the windows (the compute audits, or the scans) are sums over `Fi
 `RowsProgWired`, `RowsStateTied` and `RowsCircuitHeld` read the check's refusals off its findings: on acceptance every
 finding is none (`firstFinding_none`), each phase's `wiredCheck`, `stateCheck` and `heldCheck` among them.
 `rowsCircuitHeld_honest` and `rowsCircuitHeld_nontrivial` are `RowsCircuitHeld`'s witnesses: an empty rows-form period
-the check accepts, beside a tied audit that runs the class circuit, and a period whose tied audit runs another.
+the check accepts, where the hold is vacuous, beside a tied audit that runs the class circuit, and a period whose tied
+audit runs another. That the check accepts a period with a held tied audit is the difftest's (`rows-honest`, through
+Lean).
 `RowsStateHeld` reads the accepted public off the check: on acceptance every phase has no finding, so each is its
 scan's facts and its tied audits' charges (`rowsPhase_ok`), the scans keep the phases' indices (`filterMap_getElem?`),
 and each link-window's term is its scan's free inputs and those charges (`tiedFree`).
+
+`WrongBounds` holds at the bound the audit publishes, at strata that are the design's strata draw
+(`wrongBoundsDrawn`, at `StrataDrawn`): a set of more blocks is accepted with probability at most
+`miss(countBound + 1) < δ`.
 
 On acceptance a rows-form period has no `rowsWfCheck` finding (`rowsWf_of_accept`), so its frames, the network
 certifier's of `B` bytes for its `lanes · windows · window` connections, read back (`cellRows_wf_of_rowsWf`,
@@ -334,7 +344,8 @@ theorem tiedWindow_swapped : held (some "c") #[heldReg "d"] tiedWindow = false :
   decide +kernel
 
 /-- **`RowsCircuitHeld`'s honest lemma**: the check accepts a rows-form period of no phase under the class circuit
-`c`, and a phase whose tied audit is registered under `c` holds it. -/
+`c`, where the hold is vacuous, and a phase whose tied audit is registered under `c` holds it. That the check accepts
+a period with a held tied audit is the difftest's (`rows-honest`, through Lean). -/
 theorem rowsCircuitHeld_honest :
     check ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", some "c", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 0⟩
         ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ =
@@ -581,6 +592,87 @@ theorem rowsStateHeld_nontrivial :
     rfl
   rw [h4] at hfree
   exact absurd hfree (by decide +kernel)
+
+/-- Where a draw reads as strata, the bound the audit publishes is their count bound: `boundOf` takes `countBound` of
+`strataOf`'s strata at every draw but a Bernoulli one, which reads as none. -/
+theorem boundOf_of_strataOf {population : ℕ} {draw : Core.SamplingDesign} {strata : Array Core.Stratum}
+    (h : SampledProofs.Bound.strataOf population draw = some strata) (δ : Core.Ratio) :
+    SampledProofs.Bound.boundOf population draw δ = SampledProofs.Bound.countBound strata δ := by
+  cases draw <;> simp_all [SampledProofs.Bound.boundOf, SampledProofs.Bound.strataOf]
+
+/-- **`WrongBoundsDrawn`**: at strata that, then strata drawn whole, are the design's strata draw, every possible
+incorrect set at `δ` holds at most `countBound strata δ` proof blocks, since `miss(countBound strata δ + 1) < δ`
+(`countBound_miss_design`), and that is the bound the audit publishes (`boundOf_of_strataOf`). -/
+theorem wrongBoundsDrawn : WrongBoundsDrawn := fun _ _ strata hs _ _ ns δ h hδ hδd _ hF =>
+  (boundOf_of_strataOf hs δ).symm ▸ NetTiming.card_le_of_mem_faultySets _ _
+    (Claims.Sampling.Count.countBound_miss_design strata ns h δ hδ hδd).le hF
+
+/-- A statement of one input gate, with `null`'s bytes as its descriptor and a design of no rule, which draws no slot,
+so every set of slots is accepted with probability `1` (`Design.Pa`). -/
+def oneInputStmt : Claims.Sampling.AuditStatement :=
+  { Properties.NetworkScan.nullStmt with prog := ⟨[.input], []⟩, design := ⟨[]⟩ }
+
+/-- `oneInputStmt`'s gate as a proof block of its own. -/
+def oneInputPart : Claims.Sampling.Partition := ⟨[[[[0]]]]⟩
+
+/-- `oneInputStmt`'s one proof block is a possible incorrect set at `δ = 1/2`: its design draws nothing, so the block
+is accepted with probability `1`. -/
+theorem oneInput_faulty : ({0} : Finset ℕ) ∈ NetTiming.faultySets oneInputStmt.design oneInputPart (1 / 2) := by
+  have hPa : Claims.Sampling.Design.Pa oneInputStmt.design oneInputPart {0} = 1 := rfl
+  have hall : NetTiming.allSlots oneInputStmt.design oneInputPart = ∅ := rfl
+  classical
+  simp only [NetTiming.faultySets, Finset.mem_filter, Finset.mem_powerset]
+  refine ⟨fun v hv => ?_, ?_, ?_⟩
+  · rw [Finset.mem_singleton.1 hv, Finset.mem_range]
+    decide
+  · show (1 / 2 : ℝ) < Claims.Sampling.Design.Pa oneInputStmt.design oneInputPart {0}
+    rw [hPa]
+    norm_num
+  · rw [hall]
+    exact Finset.disjoint_empty_right _
+
+/-- **`WrongBoundsDrawn`'s premise holds at a deployed law** (the two-lemma rule's `_honest`): on a layout's partition of
+a population class of two proof blocks and an input class of one, the code's strata of a `subset:1` draw over the two
+units (`SampledProofs.Bound.strataOf`), then the input class drawn whole, are the strata draw of the design a `subset:1`
+draw runs: `subset 1`, then the input class `all`. -/
+theorem wrongBoundsDrawn_honest :
+    Claims.Sampling.StrataDrawn ⟨[.subset 1, .all]⟩ ⟨[[[[0], [1]]], [[[2]]]]⟩
+      ((((SampledProofs.Bound.strataOf 2 (.subset 1)).getD #[]).toList.map fun x => (x.size, x.k)) ++
+        [1].map fun m => (m, m)) := by
+  refine ⟨⟨rfl, fun p hp => ?_⟩, [[(2, 1)], [(1, 1)]], rfl, fun p hp => ?_, rfl⟩
+  · simp only [List.zip_cons_cons, List.zip_nil_left, List.mem_cons, List.not_mem_nil, or_false] at hp
+    rcases hp with rfl | rfl
+    · show 1 ≤ 1 ∧ 1 ≤ ([2] : List ℕ).sum
+      decide
+    · trivial
+  · simp only [List.zip_cons_cons, List.zip_nil_left, List.mem_cons, List.not_mem_nil, or_false] at hp
+    rcases hp with rfl | rfl <;> rfl
+
+/-- The code's strata of no stratum, then any strata drawn whole, are not `oneInputStmt`'s strata draw on
+`oneInputPart`: its design of no rule is not well formed on a partition of one class. -/
+theorem oneInput_not_strataDrawn (ns : List ℕ) :
+    ¬ Claims.Sampling.StrataDrawn oneInputStmt.design oneInputPart
+      (((#[] : Array Core.Stratum).toList.map fun x => (x.size, x.k)) ++ ns.map fun m => (m, m)) := fun h => by
+  obtain ⟨⟨hl, _⟩, _⟩ := h
+  exact absurd hl (by decide)
+
+/-- **`WrongBoundsDrawn`'s conclusion is not trivial** (the two-lemma rule's `_nontrivial`): a stratified draw of no
+strata reads as no strata, and at `oneInputStmt`, whose design of no rule draws nothing, its one proof block is a
+possible incorrect set at `δ = 1/2` (`oneInput_faulty`), so the bound the audit publishes for that draw, `0`, is no
+`WrongBounds` bound there. Every other premise holds at `δ = ⟨1, 2⟩`, and the strata draw (`StrataDrawn`) fails,
+whatever strata drawn whole follow (`oneInput_not_strataDrawn`). -/
+theorem wrongBoundsDrawn_nontrivial :
+    ∃ (strata : Array Core.Stratum) (_ : SampledProofs.Bound.strataOf 0 (.stratified #[]) = some strata)
+      (s : Claims.Sampling.AuditStatement) (P : Claims.Sampling.Partition),
+      ¬ WrongBounds s P (((⟨1, 2⟩ : Core.Ratio).num : ℝ) / (⟨1, 2⟩ : Core.Ratio).den)
+        (SampledProofs.Bound.boundOf 0 (.stratified #[]) ⟨1, 2⟩) := by
+  refine ⟨#[], rfl, oneInputStmt, oneInputPart, fun h => ?_⟩
+  have h0 : SampledProofs.Bound.boundOf 0 (.stratified #[]) ⟨1, 2⟩ = 0 := by
+    rw [boundOf_of_strataOf rfl]
+    simp [SampledProofs.Bound.countBound]
+  have hδ : (((⟨1, 2⟩ : Core.Ratio).num : ℝ) / (⟨1, 2⟩ : Core.Ratio).den) = 1 / 2 := by norm_num
+  rw [h0, hδ] at h
+  simpa using h {0} oneInput_faulty
 
 /-! ## The rows form's frames read back -/
 

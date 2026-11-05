@@ -7,10 +7,10 @@ import Proofs.Flock.Claims.Finder
 /-!
 # The leak bound at the registration's values
 
-`RAcc` pins the circuit's inputs to the trace's committed values, and holds every faulty proof block's committed gate as
-advice. At a registered input that is a free input:
+`RAcc` pins the circuit's inputs to the trace's committed values, and holds every incorrect proof block's committed gate
+as advice. At a registered input that is a free input:
 
-* in a faulty proof block, the gate is held (`FaultyGate`: an input is on its proof block's boundary), so its input
+* in an incorrect proof block, the gate is held (`FaultyGate`: an input is on its proof block's boundary), so its input
   value is never read;
 * in any other proof block, the proof block is correct on its committed values, so the trace opens the gate
   (`val_some_of_input`) and its value there is the opened one (`traceVal_of_val`).
@@ -55,25 +55,6 @@ theorem inputOf_congr_at {L S : ℕ} (lay : BoundaryGates L S) (k : ℕ) (ins : 
   · rfl
   · rw [h]
 
-theorem valOver_congr_held (C : Prog) {inp inp' : ℕ → Bool} (free : ℕ → Option Bool)
-    (h : ∀ i, C.gates[i]? = some .input → free i = none → inp i = inp' i) (g : ℕ) :
-    valOver C inp free g = valOver C inp' free g := by
-  induction g using Nat.strong_induction_on with
-  | _ g ih =>
-    rcases hf : free g with _ | b
-    · rcases hx : C.gates[g]? with _ | x
-      · rw [valOver_of_none_none C inp hf hx, valOver_of_none_none C inp' hf hx]
-      · rw [valOver_of_none_some C inp hf hx, valOver_of_none_some C inp' hf hx]
-        have hrd : ∀ i ∈ x.reads, (if _h : i < g then some (valOver C inp free i) else some false) =
-            if _h : i < g then some (valOver C inp' free i) else some false := by
-          intro i _
-          split_ifs with hig
-          · rw [ih i hig]
-          · rfl
-        rw [bgate_val_congr x _ hrd]
-        cases x <;> first | rfl | rw [h g hx hf]
-    · rw [valOver_of_some C inp hf, valOver_of_some C inp' hf]
-
 /-- **At the registration's values**: on a partitioned program, `RAcc δ` at a trace that opens each registered input,
 where it opens one, to the registration's value `ρ` there gives the leak relation at the inputs pinned at `ρ`. -/
 theorem rLeak_reg_of_rAcc {H : Msg → Msg} {Cm : CommitmentScheme Bool} {parse : Msg → Option AuditStatement}
@@ -83,8 +64,8 @@ theorem rLeak_reg_of_rAcc {H : Msg → Msg} {Cm : CommitmentScheme Bool} {parse 
     (hagree : ∀ s, parse x = some s → ∀ g ∈ reg s, ∀ b, w.val H Cm s g = some b → b = ρ s g)
     (h : RAcc H Cm parse partition L K S lay k δ x w) :
     RLeak H Cm parse partition L K S lay k δ (fun s _ => AsReg s.prog (lay s) (k s) (reg s) (ρ s)) Dj x w := by
-  obtain ⟨s, P, hs, hP, hRel, hdisj, free, hfree, hheld, hacc⟩ := h
-  have hF := faulty_mem_faultySets hRel hdisj
+  obtain ⟨s, P, hs, hP, hM, hdisj, free, hfree, hheld, hacc⟩ := h
+  have hF := incorrect_mem_faultySets hM hdisj
   have hPart := hpart s P hs hP
   set tv := traceVal s.prog (w.val H Cm s) with htv
   set G := freeInputs s.prog (lay s) (k s) with hG
@@ -97,7 +78,8 @@ theorem rLeak_reg_of_rAcc {H : Msg → Msg} {Cm : CommitmentScheme Bool} {parse 
     · rw [ite_eq_left hiG, ite_eq_left hiG]
       by_cases hir : i ∈ reg s
       · rw [ite_eq_left hir]
-        have hnf : ¬ FaultyGate s.prog P (faulty H Cm s P w) i := fun hfg => hheld i hfg hfi
+        have hnf : ¬ FaultyGate s.prog P (faulty H Cm s P w) i := fun ⟨v, hv, hr⟩ =>
+          hheld i ⟨v, Finset.mem_union_left _ hv, hr⟩ hfi
         obtain ⟨b, hb⟩ := val_some_of_input hPart hi hnf
         rw [htv, traceVal_of_val hi hb]
         exact hagree s hs i hir b hb
@@ -110,11 +92,13 @@ theorem rLeak_reg_of_rAcc {H : Msg → Msg} {Cm : CommitmentScheme Bool} {parse 
   · intro t ht
     obtain ⟨h, hr, hst⟩ := hacc op o hC hCov t ht
     refine ⟨h, ?_, hst⟩
-    have hv : valOver s.prog ((lay s).inputOf (k s) (ingressUpTo op o t) tv) free =
-        valOver s.prog ((lay s).inputOf (k s) (ingressUpTo op o t) a') free :=
-      funext (valOver_congr_held s.prog free fun i hi hfi =>
-        (inputOf_restrict s.prog (lay s) (k s) _ tv hi).trans
-          (inputOf_congr_at (lay s) (k s) _ (hpt i hi hfi)))
+    have hv : valOver s.prog (resolveWires s.prog (lay s).wires ((lay s).inputOf (k s) (ingressUpTo op o t) tv) free
+          s.prog.gates.length) free =
+        valOver s.prog (resolveWires s.prog (lay s).wires ((lay s).inputOf (k s) (ingressUpTo op o t) a') free
+          s.prog.gates.length) free :=
+      funext (valOver_congr_held s.prog free (resolveWires_congr_held s.prog (lay s).wires free
+        (fun i hi hfi hw => (inputOf_restrict s.prog (lay s) (k s) _ tv hi hw).trans
+          (inputOf_congr_at (lay s) (k s) _ (hpt i hi hfi))) _))
     rw [hr]
     simp only [circuitProgram, hv]
 
@@ -227,15 +211,16 @@ theorem Pr_regColl_le_Breg (H : Msg → Msg) (D : Deploy Coin Col T) (decode : L
     | none => rw [hx] at hp; exact absurd hp (by simp)
     | some st => rw [hx] at hp; exact regLog_valid H D.commit st.roots (ops st) p hp
 
-/-- **The leak bound at the registration's values**, at any deployment `D` of the sampled verifier where `KS` holds and
-the trace's commitment binds, given `SampledAuditAccepted`. Take a public layout `lay` and horizon `k`, `δ ≥ 0`, a
+/-- **The leak bound at the registration's values**, at any deployment `D` of the sampled verifier where sampling at the
+incorrect set holds at the layout's wiring (`KSBy` at the wired check, which is `KS` with no wires) and the trace's commitment binds, given `SampledAuditAccepted`. Take a public layout `lay` and horizon `k`, `δ ≥ 0`, a
 decoder that lists every trace within Flock's radius, each statement's registered inputs `reg` and the registration's
 openings `ops` of them. On the statements in scope whose registration opens their registered inputs:
 
 `Pr[acc ∧ ¬RLeak] ≤ δ + ε_ks + ε_bind + Pr[B_reg]`, with the leak relation at the inputs pinned at the registration's
 values (`AsReg` at `regVal`), a set the statement and the registration fix. -/
 theorem sampledLeak_registered (hSA : Guarantees.SampledAuditAccepted) (H : Msg → Msg) (D : Deploy Coin Col T)
-    (hks : KS H D) (hb : D.commit.Binds H) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ)
+    (hb : D.commit.Binds H) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S)
+    (hks : KSBy H D (wiredOk fun s => (lay s).wires)) (k : AuditStatement → ℕ) (δ : ℝ)
     (decode : List (ℕ × Col) → List T) (hδ : 0 ≤ δ)
     (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (reg : AuditStatement → Finset ℕ)
     (ops : AuditStatement → List (Opening Bool)) (Dj : ℕ) (x : Msg) (hx : ScopeAcc D lay k x)

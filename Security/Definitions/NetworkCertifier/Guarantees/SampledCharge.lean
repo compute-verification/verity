@@ -6,14 +6,15 @@ import Definitions.NetworkCertifier.Guarantees.SampledAudit
 # The sampled audit's charge: the leak bound when step proof blocks are sampled
 
 Theorem 3's bounds on `constantRate` (`Guarantees`) count runs that the Program accepts exactly. A sampled
-audit gives that only at `δ ≥ miss(1)`, where no unit may be faulty. At a smaller `δ` it gives `Accepted` by the
-circuit's Program (`circuitProgram`) with advice also held at the faulty proof blocks' committed gates
+audit gives that only at `δ ≥ miss(1)`, where no proof block may be incorrect. At a smaller `δ` it gives `Accepted` by
+the circuit's Program (`circuitProgram`) with advice also held at the incorrect proof blocks' committed gates
 (`SampledAuditAccepted`, `Guarantees/SampledAudit`). `EncardAccSeqsSampledLe` counts those runs: the charge adds the
-faulty proof blocks' committed bits and `log2` of the number of possible faulty sets.
+incorrect proof blocks' committed bits and `log2` of the number of possible incorrect sets.
 
 **Composed with `SampledAuditAccepted`.** On the statements in its scope, which include that the layout fits the program
 (`BoundaryGates.Fits`), an accepted audit meets `RAcc δ` except with probability `δ + ε_ks + ε_bind` over the selection.
-On `RAcc δ`, the faulty set is one of `faultySets d P δ`. Every observation sequence the trace's transfer gates carry,
+On `RAcc δ`, the incorrect set (the faulty and the wire-wrong proof blocks) is one of `faultySets d P δ`. Every
+observation sequence the trace's transfer gates carry,
 with every status complete, is then `Accepted` with advice held only at that set's committed gates. So, with its inputs
 other than the ingress among `As`, the run's observations are among the sequences this guarantee counts. The leak is
 then at most `c + log2 #faultySets + β + n·log2 D` bits, except with that probability. That the transfer gates carry the
@@ -21,7 +22,8 @@ run's observations is the certifier's trust (`trusted-host`), and the statuses a
 `NetTiming.sampledLeak` (`Proofs.NetworkCertifier.SampledLeak`), with `SampledAuditAccepted` a hypothesis. `RAcc` pins
 the inputs besides the ingress to the trace's committed values, so it takes that inputs among `As` suffice for the
 trace's (`AdviceIn`); `sampledLeak_reg` proves that for every circuit at the inputs pinned to the trace at the
-registered inputs `reg` and `false` off the free inputs (`AsReg`), with `c` the number of free inputs not in `reg`.
+registered inputs `reg` and `false` off the free inputs (`AsReg`), with `c` the number of free inputs not in `reg`. The
+wired gates are no free inputs: each reads its writer.
 `SampledLeakAccepted` is that bound as a guarantee, with `SampledAuditAccepted` its one open hypothesis.
 `SampledLeakRegistered` is the same bound with the registered inputs at the registration's values (`regVal`), which it
 opens under the statement's roots (`RegOpens`), and binding (`CommitmentScheme.Binds`) in place of the trace's: the values the
@@ -43,11 +45,11 @@ set_option linter.unusedVariables false
 
 /-- **The leak bound under a sampled audit.** Take the circuit's Program of `C` over a layout `lay` that fits it up to
 the horizon `n`, a partition `P` and a design `d`. The observation sequences of length `n`, with jitter below `D`, that
-are accepted with some possible faulty set at `δ` (`AccSeqsSampled`) number at most
+are accepted with some possible incorrect set at `δ` (`AccSeqsSampled`) number at most
 `2^c · #faultySets · 2^β · D^n`. Here the inputs other than the ingress range over `As`, at most `2^c` values, and each
-possible faulty set's proof blocks commit at most `β` bits (`faultyBits`). That is
-`c + log2 #(faulty sets) + Σ_{v faulty} committed bits + n·log2 D` bits. At `δ ≥ miss(1)` no non-empty faulty set
-is possible, and the bound is `c + n·log2 D`, as when the Program is accepted exactly. -/
+possible incorrect set's proof blocks commit at most `β` bits (`faultyBits`). That is
+`c + log2 #(incorrect sets) + Σ_{v incorrect} committed bits + n·log2 D` bits. At `δ ≥ miss(1)` no non-empty
+incorrect set is possible, and the bound is `c + n·log2 D`, as when the Program is accepted exactly. -/
 def EncardAccSeqsSampledLe : Prop :=
   ∀ {L K S : ℕ} (C : Prog) (P : Partition) (d : Design) (lay : BoundaryGates L S) (n : ℕ) (hfits : lay.Fits C n)
     (δ : ℝ) (As : Set (ℕ → Bool)) (c : ℕ) (hAs : As.encard ≤ ((2 ^ c : ℕ) : ℕ∞)) (β : ℕ)
@@ -56,8 +58,11 @@ def EncardAccSeqsSampledLe : Prop :=
       ((2 ^ c * (faultySets d P δ).card * 2 ^ β * D ^ n : ℕ) : ℕ∞)
 
 /-- **An accepted sampled audit bounds the leak, given `SampledAuditAccepted`.** At every deployment `D` of the sampled
-verifier where `Claims.Sampling.KS` holds, every public layout `lay` and horizon `k` of its statements, `δ ≥ 0`, a
-decoder that lists every trace within Flock's radius, and `β` bounding each possible faulty set's committed bits
+verifier, every public layout `lay` at whose wiring sampling at the incorrect set holds (`Claims.Sampling.KSBy` at the
+wired check `wiredOk`, which is `Claims.Sampling.KS` with no wires; at a wired layout it follows from `KS_of`'s
+hypotheses with `WiresRevealed`, `ksWired_of_revealed`, at the deployed record `WiredReads`, `ksWired_of_record`, which
+the verifier of record's check of each session's wired reads is to give) and horizon `k` of its statements, `δ ≥ 0`, a
+decoder that lists every trace within Flock's radius, and `β` bounding each possible incorrect set's committed bits
 (`faultyBits`), on the statements in scope:
 
 * `Pr[acc ∧ ¬RLeak δ] ≤ δ + ε_ks + ε_bind`: except with that probability, every observation sequence of length `k` with
@@ -73,7 +78,8 @@ public only where something binds them, as the registration's commitment binds t
 def SampledLeakAccepted : Prop :=
   SampledAuditAccepted →
     ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
-      (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (hks : KS H D) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
+      (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S)
+      (hks : KSBy H D (wiredOk fun s => (lay s).wires)) (k : AuditStatement → ℕ)
       (δ : ℝ) (decode : List (ℕ × Col) → List T) (hδ : 0 ≤ δ)
       (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (reg : AuditStatement → Finset ℕ) (β : AuditStatement → ℕ)
       (Dj : ℕ) (hβ : ∀ s P, D.partition s = some P → ∀ F ∈ faultySets s.design P δ, faultyBits s.prog P F ≤ β s),
@@ -87,7 +93,8 @@ def SampledLeakAccepted : Prop :=
                 Dj ^ k s : ℕ) : ℕ∞)
 
 /-- **An accepted sampled audit bounds the leak at the registration's values, given `SampledAuditAccepted`.** As
-`SampledLeakAccepted`, where the trace's commitment also binds (`CommitmentScheme.Binds`) and each statement's registration
+`SampledLeakAccepted` (with `KSBy` at the wired check, at a wired layout from `WiresRevealed`, `ksWired_of_revealed`,
+at the deployed record `WiredReads`), where the trace's commitment also binds (`CommitmentScheme.Binds`) and each statement's registration
 opens its registered inputs `reg` under the statement's roots (`RegOpens`, openings `ops`), on the statements in scope:
 
 * `Pr[acc ∧ ¬RLeak δ] ≤ δ + ε_ks + ε_bind + Pr[B_reg]`, with the inputs besides the ingress pinned at the registration's
@@ -97,8 +104,10 @@ opens its registered inputs `reg` under the statement's roots (`RegOpens`, openi
 def SampledLeakRegistered : Prop :=
   SampledAuditAccepted →
     ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
-      (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (hks : KS H D) (hb : D.commit.Binds H) (L K S : ℕ)
-      (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T) (hδ : 0 ≤ δ)
+      (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (hb : D.commit.Binds H) (L K S : ℕ)
+      (lay : AuditStatement → BoundaryGates L S) (hks : KSBy H D (wiredOk fun s => (lay s).wires))
+      (k : AuditStatement → ℕ)
+      (δ : ℝ) (decode : List (ℕ × Col) → List T) (hδ : 0 ≤ δ)
       (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (reg : AuditStatement → Finset ℕ)
       (ops : AuditStatement → List (Opening Bool)) (β : AuditStatement → ℕ) (Dj : ℕ)
       (hβ : ∀ s P, D.partition s = some P → ∀ F ∈ faultySets s.design P δ, faultyBits s.prog P F ≤ β s),

@@ -79,7 +79,8 @@ negatives.
   `WC_RECORD_TIMEOUT` (default 20m), after the record: a timeout or refusal there is reported and never fails the run. Then
   comes V3c, sampled proofs' audit of record, within `V3C_TIMEOUT` and `V3C_AUDIT_TIMEOUT`: the window committed as the
   class circuit's units (`prove_path.py window-commit`), then its records audit (`records_audit.py audit --circuit`, on a
-  challenger's coins), which is C-Flock `--zk` on the drawn proof blocks and the Lean verifier. The class circuit is the
+  local development challenger session's coins unless `PP_CHALLENGER` names the live challenger, as the run's COINS line
+  says, a deferral's follow-on its own), which is C-Flock `--zk` on the drawn proof blocks and the Lean verifier. The class circuit is the
   class's, whatever the window's requests, and reads no advice, so no advice opening reaches the verifier. V3c writes its audit as the network
   certifier's period reads it (`period.json`). Then come PoUW, PoUS, the bandwidth audit and the network certifier. Each runs its piece where
   `POUW_CMD`, `POUS_CMD`, `BANDWIDTH_CMD` or `CERTIFIER_CMD` names one, within its own limit; otherwise its `MISSING` line
@@ -130,13 +131,16 @@ negatives.
   `composite.py` leaves it out: an H1 window has no `v1` case, and no `period` case outside a period or without its drawn
   units' proof outcomes.
 - `v2_case.py`: sampled proofs v2's `--cases` directory from a served window's kept files (`case_v2` of its v1 case,
-  partition, public file, sessions and circuit file), with its own Lean answer with `--exe`. A circuit file the run didn't
+  partition, public file, sessions and circuit file, and the challenger's release of the draw's coins, `release.json`),
+  naming the challenger v2 requires by the auditor's own key record (`--challenger-key`), never by the key the release
+  names: a release naming another key is refused. With its own Lean answer with `--exe`. A circuit file the run didn't
   keep is rebuilt by the command its `m0/compose.log` records and used only at the log's pin.
 - `kept_composite.sh SRC [K]`: remote's and onsite's Lean verdicts on a served run's kept records (`served_verdicts.sh`'s
   `out/`, or a tarball of it) on a CPU node: it builds the products and the pieces' checks, writes PoUW's pieces
   (`pouw_piece.py`; the period from the kept `pieces/pouw/`, `main.txt`, `H1_KEY_SHA512` and the drawn and live legs'
-  statements, `POUW_STATEMENTS` and `POUW_LIVE`), v2's (`v2_case.py`) and every kept piece holding a case beside its
-  answer, all private in scratch, and runs `composite.py remote` and `onsite`; `$OUT` gets only their public output.
+  statements, `POUW_STATEMENTS` and `POUW_LIVE`), v2's (`v2_case.py`, under the auditor's key record
+  `PP_CHALLENGER_KEY`) and every kept piece holding a case beside its answer, all private in scratch, and runs
+  `composite.py remote` and `onsite`; `$OUT` gets only their public output.
 - `a8.sh`: run A8's entry point, on the same builds. A8 is one window of the remote bandwidth audit over a registered store of
   a few thousand blocks with every opening proved by the opening unit (`remote_bandwidth.opening`) under `--zk` and held by
   Lean, honest and with a tampered block, a scan of everything the verifier received for the sampled proof blocks' bytes, and the
@@ -216,16 +220,53 @@ negatives.
   (PoUS's `served_case.sh`), then gets remote's, remote-network's and onsite's Lean verdicts, or remote-network-no-pouw's
   alone, on the run's cases (soundness's composite
   reader), all on the node. Only the verdict lines reach the run's `verdicts.txt`, and a tree without those two scripts skips the step.
-- `onsite_record.py OUT [--advice-charge FILE]`: the onsite demo's record of a served run (`record/onsite.json`), which
+- `onsite_record.py OUT [--advice-charge FILE] [--certifier-key RECORD --site-registration FILE]
+  [--inference-only-case-policy FILE]`: the onsite demo's record of a served run (`record/onsite.json`), which
   `served_verdicts.sh` writes after its composite step when the network certifier is in the run: its piece
   (`CERTIFIER_CMD`, or the split's `CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`) or its front (`CERTIFIER_FRONT`). It holds every verdict
   the run of record needs (sampled proofs, PoUW, inference-only, remote, the network certifier, onsite), each missing
-  with its why where the run has no answer. Beside them are the network certifier's bound term by term in the notation
-  table's symbols, with its overcount, the seconds it covers, the connections it counts and δ_net term by term with
-  each term's source (the check's `eps`, only its δ part, and each phase's knowledge, binding and collision errors,
-  which no check computes), `eps` split into the scans' δ and the charged tied audits' with what sets each and what a
-  smaller one costs, k_{skip,j}'s slot entries (every one of a tied audit sampled in part; sampled whole, it adds none
-  and proves each of its proof blocks), the onsite composite's error as the sum of its four subprotocols' errors, each δ with where the
+  with its why where the run has no answer. The inference-only verdict says where its case's α and Γ came from, never
+  a registered policy: off the run's own division, so the verdict confirms the division against itself, where the
+  case's private `policy.json` says so (its `read`, the one field the record reads), else the run's `ALPHA` and `GAMMA`.
+  It checks two obligations on the auditor's configuration on each run (``checked``), reading only the auditor's inputs: `auditor-record`, that the period's key, LMS parameters and
+  session, in parameters whose SHA-512 is the one the composite of record states for the network certifier's case, are
+  the auditor's record of its network certifier (`CERTIFIER_KEY`, `certifier-key/v1`) and that the
+  auditor's registration of the deployment (`SITE_REGISTRATION`: the registration log's params and the log, which
+  checks) holds that key for a network certifier its log places, reading none of its link figures (beta and latency,
+  stated parameters, not measured; that the node has no egress but the uplink the network certifier splits, which the
+  registration asserts, is the auditor's placement under trusted-host, which no file establishes); and
+  `auditor-listing`, that each circuit file the period lists is, by SHA-512, the one its sessions were verified
+  against: an audit's as V3c's `period.json` states it, the scan's as the certifier piece's `scan-circuits.json` does.
+  `certifier-key` closes only where the
+  lock holds PeriodLeakRegistered at its pinned statement taking hA, hr and hkey as `auditor-record` and that check
+  holds; while it is open, an accepted network verdict is not established, its Lean answer's accept beside it, and its
+  bound conditional on `certifier-key` by name. Where `auditor-listing` doesn't hold, the verdict is not established
+  and there is no bound. Where the composite of record read the period's circuit files by path (its composite.json's
+  `circuit_files`), the verdict is the composed executable's: until the lock holds
+  `Verity.circuit_files_by_path_agree`, `composite-congruence` is open and its accept and bound are conditional on it
+  by name.
+  Sampled proofs credits only the drawn members whose `--registered` file its audit completed at the window's
+  committed roots and whose Lean verdict of record reported exactly that file's reads, and lists every other drawn
+  member as not credited, by name; PoUW's freed compute is credited nowhere and not claimed, by name, beside the PoUW
+  piece the run's COINS line says it served, and whether the run is of record reads every verdict but PoUW's, which
+  stays listed as its row states it (missing and development for a development piece). Its composite of record, named
+  by its id, is the network certifier's composite without PoUW where the run has one (registered under its own id in
+  `Core.Composites`), and then whether the run is of record reads that composite and its subprotocols, and not remote's
+  composite, which composes PoUW's case; else it is remote-network's. Either way the record credits no verified compute,
+  and its `ONSITE` line, like each run's in `--beside`'s `ONSITE-BESIDE` line, names the composite by its id and says so
+  in words: "no verified compute is credited: <id>'s verdict is no compute claim".
+  Sampled proofs' guarantee is what its draw establishes, ε at δ, per window (its answer's bound over the window's n
+  proof blocks) and pooled, never the window's alone: at most ⌊ln(1/δ)/q⌋ incorrect proof blocks over any number of
+  windows each drawing k of n (q = k/n, `Flock.Guarantees.IntegrityHorizon`), stated for each monitoring period for the
+  node, a datacenter's and the world's links (each link's at δ / links, summed), with its share of their proof blocks at
+  a window an execution phase; a law other than a k-subset has no pooled figure, and a draw of several members
+  (stratified:1, H1_TIE's default) is named refused, since it writes no sampled-proofs case. Beside them are the network
+  certifier's bound term by term in the notation table's symbols, with its overcount, the seconds it covers, the
+  connections it counts and δ_net term by term with each term's source (the check's `eps`, only its δ part, and each
+  phase's knowledge, binding and collision errors, which no check computes), `eps` split into the scans' δ and the
+  charged tied audits' with what sets each and what a smaller one costs, k_{skip,j}'s slot entries (every one of a tied
+  audit sampled in part; sampled whole, it adds none and proves each of its proof blocks), the composite of record's
+  error as the sum of its subprotocols' errors (four, or three without PoUW's), each δ with where the
   run states it and the terms no check computes named, and that bound over the
   run's own certification period (proved) and each monitoring period for the node (proved where the run's period
   covers it, else scaled), the census's reference datacenter and the world (scaled), each scaled cell naming its rule,
@@ -238,15 +279,25 @@ negatives.
   `Security/Properties/lean-audit.json` lists, taking no named assumption but a standing one (trusted-host and
   certifier-coverage), and no premise about our own Python stands; and each guarantee the tight K rests on is in the lock
   at the statement whose hypotheses and antecedents the record names by hand, each by the premise that covers it, since
-  the lock records a guarantee's named assumptions and never its antecedents. While
-  one of those is open, it is K plus ℓ_a + 1 bits for each tied audit of each phase, with the tight K's cells beside
-  them, conditional on what is open, by name. The realized advice charge is private: the record states ℓ_{a,j} with its source,
+  the lock records a guarantee's named assumptions and never its antecedents; and the run's COINS line names the live
+  challenger (PP_CHALLENGER gate:USER@HOST at a named peer). While one of those is open, it is K plus ℓ_a + 1 bits for
+  each tied audit of each phase, added to its ℓ_{a,j}, what is open named, and no tighter figure goes beside it. It
+  tightens in place: to ℓ_a + 1 in place of each tied audit's ℓ_{a,j} once a general cut lemma bounding a tied audit's
+  leak by ℓ_a + 1 is in the lock and a check verifying that cut has run on the period's case (the record written again
+  from the same OUT, with no re-serving), and to K alone once `padding-out-of-free` (the period check refusing a tied
+  audit's padding reads, and the lemma that a column no unit reads adds no free input) is in the lock and nothing else
+  is open. While the coins are a local
+  development session's, or no line names them, or the network certifier's period draw or its scan's draw takes K of
+  what it draws from (or the run published no chain report), the condition live-coins is named, with each such draw,
+  on every figure that rests on the draw (the sampled-proofs verdict where its draw is the one open, the figure of
+  record and its cells), never as a live draw's.
+  The realized advice charge is private: the record states ℓ_{a,j} with its source,
   the tied compute audits' free inputs (no advice length and no cap is in them), beside it ℓ_a, the cap of the advice
   the run registered (its published `registration.json`'s compiler `cap_bits`), as a cap, in no term of K, and
   `--advice-charge` states a test
   run's measurement beside the bound as that run's. It lists the re-proof inputs, what a later re-proof of the sampled
   units with each wire read inside its session needs (the committed values and openings of every sampled unit and of
-  the units that write what it reads, the registration, the live draw and its receipt, and the public files), by
+  the units that write what it reads, the registration, the draw and its receipt, and the public files), by
   where each is and whether the run wrote each public one, and how each must be kept: past the week after the run,
   never only on the served node, the public ones in custody and the serve dir's, witness, in a private copy off the
   node, never in `$OUT` or custody. `--reproof-copy NODE:/PATH` with `--reproof-listing` (the copy's listing, kept
@@ -254,6 +305,14 @@ negatives.
   input against the listing by its path alone: each file it names, and at least one file under each directory it names.
   Under `H1_TIE` (`--h1-tie`, which `served_verdicts.sh` passes) the circuit it names is the record reading H1's tables,
   `window-circuit-w<K>-<class>-tie.json`.
+- `site_registration.py CERTIFIER_KEY OUT --node NODE --certifier ID --beta BITS --latency TICKS [--site SITE]`: the
+  auditor's registration of its network certifier's deployment, `SITE_REGISTRATION` (`onsite_record.py`'s
+  `--site-registration`), written on the auditor's side from its own `certifier-key/v1` record, `CERTIFIER_KEY`, and the
+  ids and uplink figures it is given, never from the prover's node or its deployment.json: remote-network's params,
+  their auditor holding the record's public key under ID, and a log of one site entry placing ID, the auditor's network
+  certifier with that key, on NODE's uplink, a link from NODE to ID and one from ID to the outside, each of capacity
+  BITS a tick each way and latency TICKS ticks. It writes OUT only where `registration.params_of` reads the params back
+  and `registration.check_log` accepts the log under them, and refuses a record of a run in front of another node.
 - `advice_charge.py ADVICE --run RUN --to FILE`: honest serving's advice charge from `verity-vllm advice`'s output
   over a test run with public inputs: each Commit period's advice bits, unpadded, beside its requests' prompt and
   output lengths and finishes, labelled as that run's. `served_verdicts.sh advice-charge` serves such a run

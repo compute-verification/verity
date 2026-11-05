@@ -24,10 +24,11 @@
 #      pins the job to, so that runs in two slots of one machine never share a session's port)
 #      SC_TIE=1 (the egress tie instead, `scan_tie.py prove`: execution phase 0 through `scan_service.EgressTie`,
 #      its honest and tampered rounds; SC_CLASS, SC_WARDEN_RUN, SC_DRY and SC_PORT as above, the others unread)
-# Kept in $OUT/sczk: the driver's summary and logs and everything the verifier received; never a prover's file (inst-*)
-# nor a circuit (its pin is kept), nor a session's archive, nor a signer's state (the deployment's or the tamper's). A
-# rehearsal's public files go in $OUT/warden; its records and salts (the prover's) and its request values (traffic.json's
-# requests, client.json's responses) nowhere.
+# Kept in $OUT/sczk: the driver's summary and logs and everything the verifier received, the joint Program's class
+# circuits (joint/<template>/circuit.txt, which the period check reads) among them; never a prover's file (inst-*) nor
+# a member's circuit (its pin is kept), nor a session's archive, nor a signer's state (the deployment's or the tamper's).
+# A rehearsal's public files go in $OUT/warden; its records and salts (the prover's) and its request values
+# (traffic.json's requests, client.json's responses) nowhere.
 set -uo pipefail
 export HZ_CONFIGS=sczk HZ_MEM_GB=${SC_MEM_GB:?}
 SC_CACHE=${SC_CACHE:-/workspace/research/cache/pouw-hidden-zk}
@@ -106,7 +107,9 @@ log "sczk: proving${SC_CLASS:+ at $SC_CLASS}${SC_GROUP:+, group $SC_GROUP}${SC_D
   | tee -a "$OUT/sczk.log" | cut -c1-4000
 rc=${PIPESTATUS[0]}
 mkdir -p "$OUT/sczk"
-(cd "$W/sczk" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'instances.bin' ! -path '*/archive/*' \
+(cd "$W/sczk" && find . -type f \
+  \( ! -name circuit.txt -o -path './joint/*/circuit.txt' ! -path './joint/*/*/circuit.txt' \) \
+  ! -name 'inst-*' ! -name 'instances.bin' ! -path '*/archive/*' \
   ! -name '*signer-state.json*' -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/sczk/")
 log "sczk: done, rc $rc"
 exit "$rc"

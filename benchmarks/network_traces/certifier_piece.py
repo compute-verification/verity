@@ -9,6 +9,7 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
     python certifier_piece.py chain SERVE_DIR WINDOW DIR V3C [--certifier-key RECORD] [--rows EXE] [--draw K]
         [--class w63k4] [--chain-cmd CMD] [CR_K=V ...]
     python certifier_piece.py period SERVE_DIR WINDOW DIR V3C [--certifier-key RECORD] [--lean EXE] [--rows EXE]
+        [--period PERIOD_JSON] [--circuit CIRCUIT_RECORD] [--case-only]
     python certifier_piece.py relay --listen PORT --to PORT
 
 * **front** runs before served_verdicts.sh's requests when ``CERTIFIER_FRONT`` names it: the gate's scan rehearsal
@@ -83,14 +84,18 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   4. The period's execution phase is the scan's (the one entry of ``answers.json``'s ``windows``): every audited
      request's release and streamed ids lie in it, else reject.
   5. The period check: `scan_period.rows_case` of the warden run under the auditor's record and the chain's scan,
-     checked by ``network-period``
-     (``--lean``, else built in verity/core/protocols/network/lean); its answer is the piece's, an accept's profile
+     checked by ``network-period`` (``--lean``, else built in verity/core/protocols/network/lean) with the case's
+     circuit files (`scan_period.circuit_files`: its compute audits', then the scan's, shipped into DIR/`CIRCUITS` as
+     ``<sha512>.txt``, `scan_period.ship`); its answer is the piece's, an accept's profile
      with its ``placement`` (`placement`): the certifier on the gate's host, and the chain, the period check and
      their proofs' coins in this piece on the prover's node, so `trusted-host` is assumed with the auditor's devices
      not placed.
   DIR also gets the chain's public part (`PUBLIC`: its report's verdicts and ε at δ, and the scan's answers; never the
-  report's counts or a step's summary, which are private) and the check's three input files in
-  DIR/period. All of them and the answer are written to a fresh hold under SERVE_DIR/`PRIVATE`/held (0700), where the
+  report's counts or a step's summary, which are private), the check's three input files in
+  DIR/period, the scan's class circuit files in DIR/`CIRCUITS`, which a verifier of the case reads beside it, and the
+  scan's circuit record DIR/`SCAN_CIRCUITS` (`scan_record`: its registration as the case's commitment holds it and each
+  file by the SHA-512 its sessions were held to, the scan's counterpart of V3c's period.json). All of
+  them and the answer are written to a fresh hold under SERVE_DIR/`PRIVATE`/held (0700), where the
   kind scan (`kind_scan.py`) must find every field of them one of the four public kinds or the network certifier's
   certificate, else the piece refuses (its findings in the hold's `KIND_SCAN`), and reach
   DIR only through the record's leak guard (`leak_guard.py`), which reads DIR and the hold against the warden run's
@@ -98,7 +103,9 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   holds a piece of it or lies at another path to SERVE_DIR/`PRIVATE`/quarantine and only then releases the rest. The
   period files it releases become DIR/`CASE` (`write_case`), the case as `composite.py` reads a piece's:
   ``{"commitment", "evidence", "params"}``, the commitment and evidence hex and the params ``params.json``'s canonical
-  JSON, all inline, since certifier/v0 reads no blob (about 83 MB on a served window, nearly all of it the params).
+  JSON, all inline, since certifier/v0 reads no blob (about 83 MB on a served window, nearly all of it the params), and
+  ``circuits``, the paths of the circuit files the period lists, in its listing's order (its compute audits', then the
+  scan's in DIR/`CIRCUITS`), which the composite's network leg reads (`composite.py`'s ``--circuits``).
   DIR/period then goes, so the case has one copy; the guard reads the files before they are hex, which it searches
   only for a binary witness file's pieces. Only the protocol rejects: a step that can't run (no kept run, no auditor's
   record or a fetch that isn't the record's, a rehearsal
@@ -123,7 +130,12 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   a reject is DIR/answer.json as the piece's, an accept DIR/`CHAINED`. **period** runs once V3c's audit wrote
   V3C/period.json: steps 1, 2 and 4 again on the chain's kept report (no chain runs), then step 5 on the rows case whose
   one compute audit is V3C/period.json (`scan_period.rows_case`), held to the class circuit of the verifier's own
-  window-circuit record beside V3C (`class_circuit`); its answer is DIR/answer.json. It answers nothing
+  window-circuit record beside V3C (`class_circuit`; ``--circuit RECORD`` names it, which it must where both the record and
+  its H1_TIE ``-tie`` one are there), its circuit files V3C/`CIRCUITS`'s (`records_audit.py period --circuits`;
+  ``--period PERIOD_JSON`` reads another period.json, its circuit files in `CIRCUITS` beside it); its answer is
+  DIR/answer.json. With ``--case-only`` it runs no ``network-period``: it writes the case with its circuit files'
+  paths, and an undecided answer binding its commitment by the digest ``network-period`` gives it (`case_only`), so the
+  composite's network leg, which reads the listed files, is the period's one check, and exits 0. It answers nothing
   where the chain step refused (DIR/`REFUSED`) or rejected (its answer stands), and refuses where it left no
   DIR/`CHAINED`, the chain's scan read no V3c window or another, or V3C has no window-circuit record beside it. Each
   releases through its own hold and refuses as
@@ -197,10 +209,20 @@ CHAINED = "chain.json"
 KIND_SCAN = "kind-scan.txt"
 #: the logs `served_verdicts.sh` and `served_verdicts.py` write in DIR, which a refusal keeps
 LOGS = ("piece.log", "chain.log", "period.log")
-#: every file DIR may hold when the leak guard reads it and the hold (its ``--public``): the answer, the logs, the
-#: split's `CHAINED`, the period check's three input files and `PUBLIC`'s
+#: the period's circuit files in DIR (and in V3C, V3c's own), each ``<sha512>.txt``: the C-Flock circuit the auditor
+#: composed from a template's public Definition, which ``network-period check`` reads beside the case
+CIRCUITS = "circuits"
+#: the scan's circuit record in DIR (`scan_record`): its registration and each of its circuit files by the SHA-512 its
+#: sessions were held to, the scan's counterpart of V3c's period.json, which the record's auditor-listing check reads
+SCAN_CIRCUITS = "scan-circuits.json"
+SCAN_CIRCUITS_FORMAT = "verity/scan-circuits/v1"
+#: ``--case-only``'s reason (`case_only`)
+CASE_ONLY = ("case only: the period lists circuit files, which the composite's network leg reads; this piece ran no "
+             "network-period")
+#: every file DIR may hold when the leak guard reads it and the hold (its ``--public`` globs): the answer, the logs, the
+#: split's `CHAINED`, the period check's three input files, the scan's circuit files and record, and `PUBLIC`'s
 PIECE_FILES = ("answer.json", *LOGS, CHAINED, "period/commitment.bin", "period/evidence.json", "period/params.json",
-               *(f"chain/{rel}" for rel in PUBLIC))
+               f"{CIRCUITS}/*.txt", SCAN_CIRCUITS, *(f"chain/{rel}" for rel in PUBLIC))
 LEAN_DIR = TREE / "verity" / "core" / "protocols" / "network" / "lean"
 #: the window circuit's class (4 slots, prompts of at most 32 ids, 4 outputs) and the scan's lanes
 PROMPTS, PROMPT_IDS, TOKENS = 4, 24, 4
@@ -650,10 +672,10 @@ def lean_exe(name: str, given: str | None) -> str:
     return str(exe)
 
 
-def period_check(exe: str, case: dict, d: Path) -> dict:
+def period_check(exe: str, case: dict, files: list[Path], d: Path) -> dict:
     import scan_period as SP
     try:
-        return SP.lean_check(exe, case, d, run=captured)
+        return SP.lean_check(exe, case, d, files, run=captured)
     except (SystemExit, OSError, ValueError) as e:
         raise NotRun(f"network-period check: {type(e).__name__}: {e}") from None
 
@@ -682,6 +704,17 @@ def rows_check(exe: str, run: Path, record: dict) -> None:
         raise Rejected(f"the network certifier's records, audited as rows: {why}")
 
 
+def circuits_of(case: dict, scan: Path, d: Path, audits: Path | None) -> list[Path]:
+    """The case's circuit files for its check (`scan_period.circuit_files`): the scan's shipped into ``d``/`CIRCUITS`
+    (`scan_period.ship`), its compute audits' read in ``audits``; `NotRun` for one missing or not its pin."""
+    import scan_period as SP
+    try:
+        SP.ship(scan, d / CIRCUITS)
+        return SP.circuit_files(case, audits, d / CIRCUITS)
+    except (SystemExit, OSError) as e:
+        raise NotRun(f"the period's circuit files: {type(e).__name__}: {e}") from None
+
+
 def case_of(warden: Path, scan: Path, v3c: Path | None = None, circuit: str | None = None, *, record: dict) -> dict:
     import scan_period as SP
     try:
@@ -690,21 +723,33 @@ def case_of(warden: Path, scan: Path, v3c: Path | None = None, circuit: str | No
         raise NotRun(f"the period's rows case: {type(e).__name__}: {e}") from None
 
 
-def class_circuit(v3c: Path) -> str:
-    """The class circuit V3c's audit is held to: the Program of the verifier's own window-circuit record beside V3C
-    (`served_verdicts.sh`'s ``window-circuit-w<K>-<class>.json`` beside ``v3c-w<K>-<class>``,
-    `scan_period.circuit_of_record`); `NotRun` without one."""
+def class_circuit(v3c: Path, given: Path | None = None) -> str:
+    """The class circuit V3c's audit is held to: the Program of the verifier's own window-circuit record ``given``, else
+    the one beside V3C (`served_verdicts.sh`'s ``window-circuit-w<K>-<class>.json`` beside ``v3c-w<K>-<class>``, or under
+    H1_TIE its ``-tie`` record, `scan_period.circuit_of_record`); `NotRun` without one, or where both are there, since
+    which one V3c is held to is the run's choice (``--circuit``)."""
     import scan_period as SP
+    if given is None:
+        tag = v3c.name.removeprefix("v3c-")
+        found = [f for f in (v3c.parent / f"window-circuit-{tag}.json", v3c.parent / f"window-circuit-{tag}-tie.json")
+                 if f.is_file()]
+        if len(found) != 1:
+            raise NotRun(f"the verifier's window-circuit record: {len(found)} beside {v3c} "
+                         f"({', '.join(f.name for f in found) or f'window-circuit-{tag}[-tie].json'}): name V3c's with "
+                         "--circuit")
+        given = found[0]
     try:
-        return SP.circuit_of_record(v3c.parent / f"window-circuit-{v3c.name.removeprefix('v3c-')}.json")
+        return SP.circuit_of_record(given)
     except (SystemExit, OSError, ValueError) as e:
         raise NotRun(f"the verifier's window-circuit record: {type(e).__name__}: {e}") from None
 
 
-def v3c_case(v3c: Path, record: dict) -> Callable[[Path, Path], dict]:
-    """The period step's case: `case_of` under ``record`` with V3C/period.json as its one compute audit, held to the
-    verifier's class circuit (`class_circuit`), once the chain's scan read V3C/window's trees (its ``summary.json``'s
-    ``v3c``); `NotRun` for a scan of no V3c window or another, or no window-circuit record."""
+def v3c_case(v3c: Path, record: dict, period: Path | None = None,
+             circuit: Path | None = None) -> Callable[[Path, Path], dict]:
+    """The period step's case: `case_of` under ``record`` with ``period`` (V3C/period.json by default) as its one
+    compute audit, held to the verifier's class circuit (`class_circuit` of ``circuit``), once the chain's scan read
+    V3C/window's trees (its ``summary.json``'s ``v3c``); `NotRun` for a scan of no V3c window or another, or no
+    window-circuit record."""
     def case(warden: Path, scan: Path) -> dict:
         try:
             read = (json.loads((scan / "summary.json").read_text()).get("v3c") or {}).get("window")
@@ -713,8 +758,35 @@ def v3c_case(v3c: Path, record: dict) -> Callable[[Path, Path], dict]:
         if read != str(v3c / "window"):
             raise NotRun(f"the chain's scan read {read or 'no'} V3c window, not {v3c / 'window'}: run the chain step "
                          "on this V3c")
-        return case_of(warden, scan, v3c / "period.json", class_circuit(v3c), record=record)
+        return case_of(warden, scan, period or v3c / "period.json", class_circuit(v3c, circuit), record=record)
     return case
+
+
+def case_only(case: dict, d: Path) -> dict:
+    """``--case-only``'s answer on ``case``, its three files written to ``d`` (`scan_period.case_files`) and no check
+    run: undecided, binding the case's commitment by the digest ``network-period`` gives it (`chain_record.PERIOD_TAG`'s),
+    so the composite's network leg, which reads the listed circuit files, is the period's one check."""
+    import chain_record as CR
+    import scan_period as SP
+    from verity.ml.commitments.identity import tagged_sha512
+    SP.case_files(case, d)
+    return answer("undecided", CASE_ONLY) | {
+        "commitment": tagged_sha512(CR.PERIOD_TAG, bytes.fromhex(case["commitment"])).hex()}
+
+
+def scan_record(case: dict, scan: Path) -> dict:
+    """`SCAN_CIRCUITS` of the period's ``case``: the scan's registration as the case's commitment holds it (its one
+    ``windows`` entry, as V3c's period.json holds its audit's ``registration``) and each root template node's circuit
+    file by the SHA-512 every session of its members was held to (`scan_period.scan_circuits`, the scan's
+    ``summary.json``'s ``stagers``), in node order, the order the period's ``scan_circuits`` lists them in."""
+    import scan_period as SP
+    try:
+        (reg,) = json.loads(bytes.fromhex(case["commitment"]))["windows"]
+        listed = SP.scan_circuits(scan)
+    except (SystemExit, OSError, KeyError, ValueError) as e:
+        raise NotRun(f"the scan's circuit record: {type(e).__name__}: {e}") from None
+    return {"format": SCAN_CIRCUITS_FORMAT, "registration": reg,
+            "circuits": [{"template": t, "sha512": pin} for t, pin, _f in listed]}
 
 
 def public(doc: dict, keys: tuple[str, ...]) -> dict:
@@ -739,14 +811,17 @@ def publish(chain_out: Path, d: Path) -> None:
 
 
 def decide(serve_dir: Path, window: int, d: Path, *, record: dict, chain: Callable[[Path, str, int], int] | None,
-           check: Callable[[dict, Path], dict] | None, rows: Callable[[Path], None],
-           case: Callable[[Path, Path], dict] | None = None) -> tuple[dict | None, Path | None]:
+           check: Callable[[dict, list[Path], Path], dict] | None, rows: Callable[[Path], None],
+           case: Callable[[Path, Path], dict] | None = None,
+           audits: Path | None = None) -> tuple[dict | None, Path | None]:
     """Window ``window``'s answer (module docstring) and the unpacked fetch (for the leak guard), its files in ``d``;
     ``record`` is the auditor's record of the kept run's deployment, which the fetch must be (`held`) and whose key,
     session and schedule every check reads; ``rows`` is step 1's rows audit of the network certifier run
     (`rows_check`); ``chain`` is given KEEP, the run and the run's link-windows, or is None to read the report of the
     chain the split's chain step ran; ``check`` None stops once the chain accepted, with no answer (the split's chain
-    step); ``case`` is the period's case (`case_of` under ``record`` by default). `NotRun` when a step can't run."""
+    step), else is given the case, its circuit files (`circuits_of`, its compute audits' in ``audits``) and
+    ``d``/period; ``case`` is the period's case (`case_of` under ``record`` by default). `NotRun` when a step can't
+    run."""
     import warden_chain as WC
     keep = serve_dir / PRIVATE
     run = kept_run(serve_dir)
@@ -785,7 +860,10 @@ def decide(serve_dir: Path, window: int, d: Path, *, record: dict, chain: Callab
         in_link_window(certified, T, w)
         if check is None:
             return None, unpacked
-        got = check(case(warden, out / "scan"), d / "period")
+        c = case(warden, out / "scan")
+        files = circuits_of(c, out / "scan", d, audits)
+        (d / SCAN_CIRCUITS).write_text(json.dumps(scan_record(c, out / "scan"), indent=1, sort_keys=True) + "\n")
+        got = check(c, files, d / "period")
         if got.get("protocol") != PROTOCOL or got.get("verdict") not in ("accept", "reject", "undecided"):
             raise NotRun(f"network-period answered no {PROTOCOL} verdict: {json.dumps(got)[:400]}")
         return got, unpacked
@@ -810,19 +888,31 @@ def guard(d: Path, hold: Path, unpacked: Path | None, quarantine: Path) -> int:
     return got.returncode
 
 
-def write_case(d: Path) -> None:
-    """DIR/`CASE` from DIR/period's three files, when the leak guard left all three, and DIR/period gone."""
+def write_case(d: Path, audits: Path | None = None) -> None:
+    """DIR/`CASE` from DIR/period's three files, when the leak guard left all three, and DIR/period gone. Its
+    ``circuits`` are the paths of the circuit files the period lists, in its listing's order (`scan_period.circuit_files`:
+    its compute audits' in ``audits``, then the scan's in DIR/`CIRCUITS`), which the composite's network leg reads
+    (`composite.py`'s ``--circuits``); none where it lists none."""
+    import scan_period as SP
     p = d / "period"
     commitment, evidence, params = p / "commitment.bin", p / "evidence.json", p / "params.json"
     if not all(f.is_file() for f in (commitment, evidence, params)):
         return
+    try:
+        files = SP.circuit_files({"params": json.loads(params.read_bytes())}, audits and audits.resolve(),
+                                 d.resolve() / CIRCUITS)
+    except (SystemExit, KeyError) as e:
+        raise NotRun(f"the case's circuit files: {type(e).__name__}: {e}") from None
     with open(d / CASE, "wb") as out, open(params, "rb") as src:
-        out.write(b'{"commitment":"%s","evidence":"%s","params":' % (commitment.read_bytes().hex().encode(),
-                                                                     evidence.read_bytes().hex().encode()))
+        out.write(b"{")
+        if files:
+            out.write(b'"circuits":%s,' % SP.canonical_json([str(f) for f in files]))
+        out.write(b'"commitment":"%s","evidence":"%s","params":' % (commitment.read_bytes().hex().encode(),
+                                                                    evidence.read_bytes().hex().encode()))
         shutil.copyfileobj(src, out, 1 << 24)
         out.write(b"}\n")
     rm(p)
-    print(f"case: {CASE}, {(d / CASE).stat().st_size} bytes", flush=True)
+    print(f"case: {CASE}, {(d / CASE).stat().st_size} bytes, {len(files)} circuit files", flush=True)
 
 
 def rm(*paths: Path) -> None:
@@ -876,11 +966,12 @@ def kind_scan(hold: Path) -> None:
 
 
 def settle(serve_dir: Path, d: Path, limit: str,
-           step: Callable[[Path], tuple[dict | None, Path | None]]) -> dict | None:
+           step: Callable[[Path], tuple[dict | None, Path | None]], audits: Path | None = None) -> dict | None:
     """``step``'s answer: its files written to a fresh hold under SERVE_DIR/`PRIVATE`/held (``step`` is given it), an
     accept's profile with its `placement`, each field of every file of one public kind or a certificate (`kind_scan`),
-    all released to DIR by the leak guard and the case written; None where the split's chain step accepted. `NotRun`
-    (SIGTERM included, naming ``limit``) for a step that can't run or a field the kind scan finds."""
+    all released to DIR by the leak guard and the case written (`write_case`, its compute audits' circuit files in
+    ``audits``); None where the split's chain step accepted. `NotRun` (SIGTERM included, naming ``limit``) for a step
+    that can't run or a field the kind scan finds."""
     was, unpacked, hold = signal.signal(signal.SIGTERM, ended(limit)), None, None
     try:
         if not any((serve_dir / PRIVATE).glob("*/fetch.tar.gz")):
@@ -897,7 +988,7 @@ def settle(serve_dir: Path, d: Path, limit: str,
         g = guard(d, hold, unpacked, serve_dir / PRIVATE / "quarantine")
         if g not in (0, 3) or got is not None and not (d / "answer.json").is_file():
             raise NotRun(f"the leak guard failed (exit {g}): DIR withheld, the piece's files left in {hold}")
-        write_case(d)
+        write_case(d, audits)
         return got
     except (OSError, ValueError, tarfile.TarError) as e:
         traceback.print_exc()
@@ -928,7 +1019,7 @@ def piece(a: argparse.Namespace) -> int:
         exe, rows = lean_exe("network-period", a.lean), lean_exe("network-rows", a.rows)
         chain = lambda keep, run, n: run_chain(keep, run, a.draw, sized(n, a.set), a.chain_cmd)  # noqa: E731
         return decide(serve_dir, a.window, hold, record=record, chain=chain,
-                      check=lambda c, p: period_check(exe, c, p), rows=lambda run: rows_check(rows, run, record))
+                      check=lambda c, f, p: period_check(exe, c, f, p), rows=lambda run: rows_check(rows, run, record))
     try:
         got = settle(serve_dir, d, "CERTIFIER_TIMEOUT", step)
     except NotRun as e:
@@ -953,6 +1044,7 @@ def chain_step(a: argparse.Namespace) -> int:
     d.mkdir(parents=True, exist_ok=True)
     for f in ("answer.json", CHAINED, REFUSED, CASE):
         (d / f).unlink(missing_ok=True)
+    rm(d / CIRCUITS)
     if not sets_ok(a.set):
         return 2
     try:
@@ -982,21 +1074,38 @@ def period_step(a: argparse.Namespace) -> int:
         print(f"CERTIFIER refused at the chain: {(d / REFUSED).read_text().strip()}", flush=True)
         return 3
     if (d / "answer.json").is_file():
-        return said(json.loads((d / "answer.json").read_text()))
+        return period_said(d, json.loads((d / "answer.json").read_text()))
+
+    period = a.period.resolve() if a.period else v3c / "period.json"
+    audits = period.parent / CIRCUITS
 
     def step(hold: Path) -> tuple[dict | None, Path | None]:
         if not (d / CHAINED).is_file():
             raise NotRun(f"no {CHAINED} in DIR: the chain step (CERTIFIER_CHAIN_CMD) didn't run, or didn't finish")
         record = auditor_record(a.certifier_key)
-        exe, rows = lean_exe("network-period", a.lean), lean_exe("network-rows", a.rows)
-        return decide(serve_dir, a.window, hold, record=record, chain=None,
-                      check=lambda c, p: period_check(exe, c, p), rows=lambda run: rows_check(rows, run, record),
-                      case=v3c_case(v3c, record))
+        rows = lean_exe("network-rows", a.rows)
+        if a.case_only:
+            check = lambda c, f, p: case_only(c, p)  # noqa: E731
+        else:
+            exe = lean_exe("network-period", a.lean)
+            check = lambda c, f, p: period_check(exe, c, f, p)  # noqa: E731
+        return decide(serve_dir, a.window, hold, record=record, chain=None, check=check,
+                      rows=lambda run: rows_check(rows, run, record),
+                      case=v3c_case(v3c, record, period, a.circuit and a.circuit.resolve()), audits=audits)
     try:
-        got = settle(serve_dir, d, "CERTIFIER_PERIOD_TIMEOUT", step)
+        got = settle(serve_dir, d, "CERTIFIER_PERIOD_TIMEOUT", step, audits)
     except NotRun as e:
         return refuse(d, str(e))
-    return said(got)
+    return period_said(d, got)
+
+
+def period_said(d: Path, got: dict) -> int:
+    """The period step's exit on its answer ``got``: `said`'s, but 0 on `case_only`'s, which the composite decides."""
+    if got.get("verdict") != "undecided" or got.get("reason") != CASE_ONLY:
+        return said(got)
+    print(f"CERTIFIER-CASE {json.dumps({'case': str(d / CASE), 'commitment': got['commitment']})}: undecided here, "
+          "the composite's network leg checks it", flush=True)
+    return 0
 
 
 def parser() -> argparse.ArgumentParser:
@@ -1051,7 +1160,15 @@ def parser() -> argparse.ArgumentParser:
                    help=f"the scan's class, V3c's window class's (default {V3C_SCAN_CLASS})")
     q.add_argument("--chain-cmd", help="replaces served_session.py chain: bash -c CMD _ KEEP RUN CR_K=V ...")
     q.add_argument("set", nargs="*", help="CR_K=V")
-    sub.choices["period"].add_argument("--lean", help="network-period, built (else built here)")
+    q = sub.choices["period"]
+    q.add_argument("--lean", help="network-period, built (else built here)")
+    q.add_argument("--period", type=Path, metavar="PERIOD_JSON",
+                   help="V3c's period.json, its circuit files in circuits/ beside it (default V3C/period.json)")
+    q.add_argument("--circuit", type=Path, metavar="CIRCUIT_RECORD",
+                   help="the verifier's window-circuit record V3c's audit is held to (default the one beside V3C)")
+    q.add_argument("--case-only", action="store_true",
+                   help="write the case and its circuit files' paths, run no network-period: the composite's network "
+                        "leg checks it")
     r = sub.add_parser("relay")
     r.add_argument("--listen", type=int, required=True)
     r.add_argument("--to", type=int, required=True)
