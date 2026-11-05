@@ -828,7 +828,7 @@ def test_a_paced_group_is_drawn_as_its_k_th_root_arrives(k):
 @pytest.mark.parametrize("k", [1, 3])
 def test_a_k_1_paced_root_asks_the_challenger_for_its_two_coins_in_one_round_trip(tmp_path, monkeypatch, k):
     """At k = 1 a group's root closes it and the next boundary is due at once, so the group's openings coin and the
-    challenge the boundary releases, σ_(g+2), go to the challenger in one round trip, in that order, both after that
+    challenge the boundary releases, chal_(g+2), go to the challenger in one round trip, in that order, both after that
     root (`coins.SessionCoins.ahead`); the last two groups' boundaries release no coin, so their openings coins go alone. At
     k = 3 a coin leaves at the following group's second root, so every coin goes alone. The session's transcript
     replays to its verdict through both verifiers. The clock ticks as each pass starts as well as when it ends, so
@@ -882,7 +882,7 @@ def test_the_auditor_line_reads_each_groups_coin_and_last_root_off_the_challenge
     """`auditor_line.auditor_seen`: group g's coin at challenge coin g's release, and its last root at the first request
     on the challenger's log that names the root openings coin g was asked after. On a log that is the verifier's stamps
     shifted, the line's groups are the verifier's; a later openings request lengthens them by as much; and an earlier
-    request naming that root, σ_(g+2)'s at k = 1, is the one read."""
+    request naming that root, chal_(g+2)'s at k = 1, is the one read."""
     import json
 
     import auditor_line as al
@@ -991,8 +991,8 @@ def test_the_line_of_record_deducts_at_least_the_auditors_s_chip():
 
 def test_the_auditor_line_reads_a_last_root_by_its_request_not_by_its_value():
     """A prover that repeats a root doesn't make a group's last root early on the challenger's clock: window 2's last
-    root is also its boundary σ_3's (asked before it came), and window 4's is window 1's, but `auditor_seen` reads each
-    at its openings request, so every L is the honest 1.5 coin intervals."""
+    root is also its boundary chal_3's (asked before it came), and window 4's is window 1's, but `auditor_seen` reads
+    each at its openings request, so every L is the honest 1.5 coin intervals."""
     import json
 
     import auditor_line as al

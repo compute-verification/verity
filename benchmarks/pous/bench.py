@@ -452,11 +452,6 @@ def main(argv: list[str] | None = None, **kw: Any) -> int:
     ap.add_argument("--mc-lms-key", default="",
                     help="p2-v3-mc-gpu: sign the memory challenger's sessions with S1's LMS key in this directory (made "
                          "there when absent); without one they are test-signed and the verdict rejects them all")
-    ap.add_argument("--bandwidth-salt", default="",
-                    help="p2-v3-gpu, p2-v3-mc-gpu, joint runs only: set C up under the bandwidth audit's salt for this GPU (as "
-                         "nvidia-smi's -i takes it), bandwidth.audit.draw_salt over W's commitment and the id the challenger "
-                         "reads (audit.read_device), so the bandwidth verifier accepts C as the device's store; without it, "
-                         "PoUS's own salt (protocol.draw_salt)")
     ap.add_argument("--mc-session-log", default="",
                     help="p2-v3-mc-gpu with --mc-lms-key: the memory challenger's used-session log, a file of its own outside "
                          "the key's directory (made with a new key; for a key that exists, a missing log is refused)")
