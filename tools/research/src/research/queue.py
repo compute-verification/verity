@@ -6302,7 +6302,7 @@ def main(argv: list[str]) -> int:
         workdir = a.workdir or (WORKDIR.with_name(repo.split("/")[1].lower()) if a.repo else WORKDIR)
         store = LocalStore(a.store)
         here = _git(Path.cwd(), "rev-parse", "--show-toplevel", check=False).stdout.strip()
-        main_ref, keys = "refs/remotes/origin/main", a.workdir.parent / f"{a.workdir.name}.issuer-keys.json"
+        main_ref, keys = "refs/remotes/origin/main", workdir.parent / f"{workdir.name}.issuer-keys.json"
         if a.command == "delegate":
             return delegate(store, a.pr, a.by, a.days, holders_at(Path(here), main_ref) if here else None)
         if a.command in ("judge", "ready"):
