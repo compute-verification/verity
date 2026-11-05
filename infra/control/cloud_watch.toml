@@ -68,7 +68,7 @@ name = "Drive"
 started_by = "/data/infra/drive.sh"
 file = "/data/drive/drive.log"
 pattern = '^(\S+Z) (?:tick rc=0 |stopped: )'   # a tick, then 2 min of sleep; stopped, a line every 10 min
-period_s = 1800                      # a tick that launches several trains waits on each launch (train.sh: up to 10 min)
+period_s = 3600                      # a tick that launches several trains waits on each launch (train.sh: up to 10 min); ticks ran 50-75 min on 5 Nov
 
 [[loop]]
 name = "Agent watch"
