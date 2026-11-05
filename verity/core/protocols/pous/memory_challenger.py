@@ -438,8 +438,8 @@ class SaltLog:
     64-byte commitment to `W` the salt was drawn after, and the salt, each in lowercase hex. `record` takes the file's
     lock, reads it again, refuses an audit already in it and appends the entry, fsynced, before it returns, so an audit
     has one salt and a retry never redraws one. On the deployed party an audit's session id is derived from its binding,
-    commitment and salt (`challenger_party.session_id`), so the `SessionLog` refuses its second session. It rests on
-    `trusted-host` as the session log does: its host never restores an earlier copy of it."""
+    commitment and salt (`challenger_session.session_id`), so the `SessionLog` refuses its second session. It rests
+    on `trusted-host` as the session log does: its host never restores an earlier copy of it."""
 
     def __init__(self, path: str | os.PathLike) -> None:
         self.path = Path(path)
