@@ -1,6 +1,7 @@
 """Pearl+'s window record W: a ``verity/registration/v2`` record of every call's A rows and y of the rounds the prover
-retains, written after the retention and before the verifier's coin and the one-stage audit's sample, so a sampled proof
-block reads them as output values of W (`registration`'s reused values) under the roots Pearl+'s verdict credits.
+retains and every weight's B rows they read, written after the retention and before the verifier's coin and the
+one-stage audit's sample, so a sampled proof block reads them as output values of W (`registration`'s reused values)
+under the roots Pearl+'s verdict credits.
 
 Round s is a pass's place among ``served.json``'s passes with calls (the verdict's numbering, `verify_run.tie`), so the
 warm-up's passes are rounds 0 and 1 and a dropped pass keeps its number; call c is the c-th call of the pass's manifest.
