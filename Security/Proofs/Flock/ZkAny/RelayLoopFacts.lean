@@ -9,6 +9,7 @@ public import Proofs.Flock.ZkAny.RelaySession
 public import Proofs.Flock.ZkAny.RelaySlot
 public import Proofs.Flock.ZkAny.RelayPlace
 public import Proofs.Flock.ZkAny.RelayFollow
+public import Proofs.Flock.SessionLoop.Statement
 
 /-!
 # What the loop's frames and the model hold at a frame round
@@ -19,10 +20,13 @@ model's release being the loop's own frames':
 
 * `LoopModel.Deployed`: the model's release is `LeanRelease.ofLoop` on the statement's setup, whose rep streams' names
   are distinct and two a table statement (`helloOf_some`), with a message past its last round.
-* `RealAt`: the model's tables and salts (`real`) are the loop's, the assembly's hypothesis.
+* `RealAt`: the model's tables and salts (`real`) are the loop's. **`realAt_of`**: at the loop's own tables
+  (`Loop.realOf src`), the loop handed `src`'s bytes (`M.src`), it holds where the table each of the session's level 0s
+  gives is `src`'s and the salts the loop keeps are the ones it was handed (`SaltsSrc`, `LoopRead`'s round clause).
 * `roundPlace_find`: the frame `roundPlace` readies a round on is one the loop's frames hold.
 * `PlaceFacts`: what the model holds at the place `roundPlace` readies a round at: its scheduled round, its masking
-  state but for `stopped`, and where `v` fails the crossing.
+  state but for `stopped`, and where `v` fails the crossing. `placeSt_seen`: its masking state at a round of a stream
+  seen, from the rep's `SameInv`.
 * `roundPlace_scheduled_later`: past a stream's first round, on a frame keeping its schedule so far on the loop's
   table, extras and salts, which are the model's, the round's place is the model's scheduled round, or the schedule
   has no round there (the inner proof's own).
@@ -85,6 +89,56 @@ def RealAt {T : ZKMal.CoinLayer.TableData}
     _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t →
     ∃ hi, real M.x M.w M.ρ (2 * i + r) = .ok (t, hi) ∧ ∀ r0 q0 hi',
       σ.R.salts.find? (fun x => x.1 == l0.root && x.2.1 == r) = some (r0, q0, hi') → hi' = hi
+
+/-- **The loop's own tables' salts are the source's**: where `Loop.realOf src` gives a rep stream a table and salts,
+the salts are the ones `src` gives it. -/
+theorem realOf_hi {R : Type}
+    {src : Msg → Claims.Flock.Wit → R → Nat → V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)}
+    {x : Msg} {w : Claims.Flock.Wit} {ρ : R} {k : Nat} {t : _root_.Flock.Firewall.Finish.Tab}
+    {hi : Array ByteArray} (h : Loop.realOf src x w ρ k = .ok (t, hi)) : ∃ g d, src x w ρ k = .ok (g, d, hi) := by
+  unfold Loop.realOf at h
+  split at h
+  · rcases hs : src x w ρ k with e | ⟨g, d, hi'⟩
+    · rw [hs] at h
+      cases h
+    · refine ⟨g, d, ?_⟩
+      rw [hs] at h
+      simp only [bind, Except.bind] at h
+      split at h
+      · cases h
+      · split at h
+        · cases h
+        · simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
+          rw [h.2]
+  · cases h
+
+/-- **`RealAt` at the loop's own tables** (`Loop.realOf src`), where the loop's host and operating system hand it
+`src`'s bytes at the model's statement, witness and tapes (`M.src`): where each table of the session's entry that its
+level 0 gives is the one `Loop.realOf src` gives the table's reps (the level-0 half), and the salts the loop keeps are
+the ones it was handed (`SaltsSrc`), the model's tables and salts are the loop's (`realOf_hi`). -/
+theorem realAt_of {T : ZKMal.CoinLayer.TableData}
+    {M : LoopModel Claims.Flock.Wit
+      ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
+    {src : Msg → Claims.Flock.Wit →
+      (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
+      Nat → V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)} {sid : Nat} {σ : LoopAt}
+    (hsrc : M.src = src M.x M.w M.ρ)
+    (h0 : ∀ (i r : Nat) (rel : _root_.Flock.Firewall.Frames.Release) (name : String)
+      (l0 : _root_.Flock.Firewall.Level0.Level0) (stm : Stmt) (t : _root_.Flock.Firewall.Finish.Tab), r < 2 →
+      sessAt σ.R sid = some rel → rel.spec.tables[i]? = some name →
+      _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0 → rel.sts[i]? = some stm →
+      _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t →
+      ∃ hi, Loop.realOf src M.x M.w M.ρ (2 * i + r) = .ok (t, hi))
+    (hS : SaltsSrc M sid σ) : RealAt M (Loop.realOf src) sid σ := by
+  intro i r rel name l0 stm t hr hss hn hl0 hst ht
+  obtain ⟨hi, hre⟩ := h0 i r rel name l0 stm t hr hss hn hl0 hst ht
+  refine ⟨hi, hre, fun r0 q0 hi' hf => ?_⟩
+  obtain ⟨g, d, hs⟩ := hS i r rel name l0 r0 q0 hi' hr hss hn hl0 hf
+  obtain ⟨g', d', hs'⟩ := realOf_hi hre
+  rw [hsrc] at hs
+  rw [hs] at hs'
+  simp only [Except.ok.injEq, Prod.mk.injEq] at hs'
+  exact hs'.2.2
 
 /-- **Past a stream's first round, the round's place is the model's scheduled round**, or the schedule so far has no
 round there (the inner proof's own): at the loop's own frames, after the history `e0 :: h1` whose next round is table
@@ -284,6 +338,22 @@ structure PlaceFacts {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (v : Claims.
   st : ∀ m, M.L.answered M.x M.ρ (M.hist σ.c) = .ok m → unstop q.st.m = unstop m
   cross : nd.isSome = σ.R.stopped sid → M.L.cross M.x (M.hist σ.c).length M.w M.ρ (M.hist σ.c) v = false →
     M.L.pass M.x M.w M.ρ (M.hist σ.c) v = false
+
+/-- **`PlaceFacts.st` at a round of a stream seen**: at the slot of a round of `stream`, table `i`'s rep `r`, where
+`LoopFacts` and `LoopJ` hold and `seen` has a round of `stream`, the frame `roundPlace` readies is at the model's
+masking state but for `stopped`, by the rep's `SameInv` (`round_rep`, `sameInv_place`). -/
+theorem placeSt_seen {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
+    {seen : List String} {st : State} {pl : Placed} {σ : LoopAt} {stream : String} {n i r : Nat}
+    (hsl : slot st pl = some (.round stream n)) (hF : LoopFacts sid spec seen st pl σ)
+    (hJ : LoopJ M sid spec sts seen st σ) (hrep : streamRep st stream = (i, r)) (hlt : σ.c < M.τ.length)
+    (hnd : (spec.repStreams.toList.map (·.2.2)).Nodup) (hseen : seen.contains stream = true)
+    {dom content : ByteArray} {q : Rep} {pc : Place} {f : Bool} {nd : Option String}
+    (hrp : _root_.Flock.Firewall.Frames.roundPlace σ.R σ.L0 sid i r dom content n = .ok (q, pc, f, nd)) :
+    ∀ m, M.L.answered M.x M.ρ (M.hist σ.c) = .ok m → unstop q.st.m = unstop m := by
+  obtain ⟨hk, hmem⟩ := round_rep hsl hF hJ hrep hlt hnd
+  obtain ⟨p, rel, name, l0, hfa, -, -, -, hA⟩ := hJ.reps i r stream hmem hseen
+  obtain ⟨j, c, stm, t, xs, hi, pre, ev, -, -, -, -, -, -, hI, -⟩ := hA.1 hk.symm
+  exact (sameInv_place hI hfa hrp).2.2.2.1
 
 /-- **`RoundFacts` at a frame round's slot of the deployed loop**: at the slot of a round of `n` coins of `stream`,
 where `LoopFacts` and `LoopJ` hold, the session's slots took fewer than the run's messages, and the loop ran the round
