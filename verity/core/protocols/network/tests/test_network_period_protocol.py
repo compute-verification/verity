@@ -953,16 +953,23 @@ def _relisted(case: dict, texts: list[str]) -> dict:
     return case | {"params": params}
 
 
+#: Two of `audit-listed`'s file's unit's input padding columns, past its ports' 4352 bits and below its 8192 columns.
+PAD_SELF = (5000, 6001)
+
+
 def test_a_listed_audit_counts_its_vus_off_its_circuit_files(server, tmp_path):
     """A record-form audit that lists its circuit file (`audit-listed`: its `Gemm_v2{K=16,N=16}` template's 8
     instances, its parameters `x` and `w` 16 and 256 packed words, its return 16, at one instance a VU) is accepted by
     `network-period check … CIRCUIT` with the mirror's public, its units its VUs, each wrong one charged
-    `vu_bits(1, words)`, and each VU's input padding (`padCols`, its unit's input columns no port holds) counted free;
-    so is the file with its last input port a cut input that one leaf cut wires. With no files, or
+    `vu_bits(1, words)`, and each VU's input padding (`padCols`, its unit's input columns no port holds whose row is not
+    a forced zero) counted free: none for the file's forced zeros, two a VU for the file with two padding rows that are
+    self rows, at one public in Lean and the mirror; so is the file with its last input port a cut input that one leaf
+    cut wires. With no files, or
     through `serve`, Lean and the mirror refuse its parameters, as only the check given its files reads a listing. Each
     set of files that is not the listing's is refused by both, at the same reason: a file of another SHA-512, a file too
     many, META naming another Program or another partition, a unit input group running past the last one's end (the
-    header `headerNet` reads); and, as `SampledProofs.Bits.check` refuses them, a unit returning one output word twice,
+    header `headerNet` reads), a unit input row that is neither a self row nor a forced zero, or not a row
+    (`withInputs`); and, as `SampledProofs.Bits.check` refuses them, a unit returning one output word twice,
     a leaf map past the input rows, a cut input wired by no leaf cut or by two, a wire into the unit, a leaf cut past
     the input rows, a cut input's group over the first group's ports, two row ports of one name, input rows out of the
     parameters' order, output rows that are not the return's words, an input port reading another word than its
@@ -980,11 +987,20 @@ def test_a_listed_audit_counts_its_vus_off_its_circuit_files(server, tmp_path):
         units = PC.RECORD_UNITS[False]
         assert (members, words, charged.units, charged.bits) == (units, 288, units, 16 * words + 2), (n, charged)
         pad = PC.pad_cols(PC.read_circuit(texts[0]))
-        assert pad > 0 and charged.free == p.audits[i].free + units * pad, (n, pad, charged)
+        assert pad == 0 and charged.free == p.audits[i].free, (n, pad, charged)
         term = out["public"]["audits"][i]
         assert (term["units"], term["faulty_bits"]) == (units, term["wrong_units"] * charged.bits), (n, term)
         got = _check_files(exe, tmp_path / f"{n}-accept", case, texts)
         assert (got["verdict"], got.get("public")) == (ACCEPT, out["public"]), (n, got)
+        free = PC.listed_files(case, in_rows={c: f"1 {c} 1 {c}" for c in PAD_SELF})
+        free_case = _relisted(case, free)
+        assert PC.pad_cols(PC.read_circuit(free[0])) == len(PAD_SELF), n
+        assert PC.charged(p, listing, [PC.read_circuit(t) for t in free]).audits[i].free == \
+            p.audits[i].free + units * len(PAD_SELF), n
+        mirror = PC.reference_with(free_case, free)
+        got = _check_files(exe, tmp_path / f"{n}-free", free_case, free)
+        assert (mirror["verdict"], got["verdict"], got.get("public")) == (ACCEPT, ACCEPT, mirror["public"]), (n, got)
+        assert mirror["public"]["audits"][i]["free"] > term["free"], (n, mirror["public"]["audits"][i], term)
         verdict, served = D.replay(PORT, case, server)
         assert verdict == REJECT and "lists circuit files" in json.loads(served)["reason"], (n, served)
         assert reference(case)["reason"].startswith("params:"), (n, reference(case))
@@ -1013,6 +1029,10 @@ def test_a_listed_audit_counts_its_vus_off_its_circuit_files(server, tmp_path):
              "a leaf cut outside the unit's cut inputs or the input rows"),
             (None, PC.listed_files(case, cut=True, cut_group=(0, 1)),
              "flock-ir-unit/v2: a port group's ports overrun its words, or an input group the input rows"),
+            (None, PC.listed_files(case, in_rows={PAD_SELF[0]: f"1 {PAD_SELF[0] + 1} 1 {PAD_SELF[0] + 1}"}),
+             f"unit: flock-ir-unit/v2: row {PAD_SELF[0]} is not an input row"),
+            (None, PC.listed_files(case, in_rows={PAD_SELF[0]: f"1 {PAD_SELF[0]} 1"}),
+             f"unit: flock-ir-unit/v2: row {PAD_SELF[0]} is malformed"),
             (None, PC.listed_files(case, cut=True, cut_group=(0, 64)),
              "the circuit file's unit's input ports overlap or are out of column order"),
             (None, PC.listed_files(case, ports=ports(("x", 16), ("x", 256), ("o", 16))),
