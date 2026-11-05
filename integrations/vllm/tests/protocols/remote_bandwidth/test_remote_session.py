@@ -35,7 +35,8 @@ from .test_memory_map import BLOCK, PAGES, SLOT_BYTES, SLOTS, kv_payload
 from .test_registry import CODEC, RECEIPT
 
 P512 = rcodec.Codec(rcodec.P512, 2, False)
-verifier, wire = remote.session_module("verifier"), remote.session_module("wire")
+verifier = remote.session_module("verifier")
+wire = verifier.wire
 VLLM = Path(__file__).resolve().parents[3]
 
 
