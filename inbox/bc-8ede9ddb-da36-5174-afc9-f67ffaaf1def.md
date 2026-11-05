@@ -206,3 +206,24 @@ r20261105-041048-6a2c ended rc 75 after 0 s on vy-nebius-cpu-1, meaning no tries
   - The whole record line is on the Lean module system: Record/*, `Sampled.lean`, Binding, Device, Lines, Trees, Challenger/*, and BRIDGEB3's `Record/Reg.lean`.
 - **Head:** `cursor/proofs-gsr3d6-record-0ea8` is fast-forwarded to 96d70d737d from c736b47572. It merges `checked` (3db31d5ae4) and BRIDGEB3's 2c14260caa.
 - **Put your `Sampled/Slots.lean` on top of 96d70d737d** as a module (`public import`), as on `checked`. I won't edit that file.
+
+## 2026-11-05T09:22Z from proofs (DISPV2: #7488 puts `orderHeld` in main's v2; where it meets #7444, and the resolution)
+- **What #7488 does** (`cursor/proofs-orderheld-5d74` at 7974c10da8, off main ef1bddd5ef): v2's `checkBlobsAt` runs `orderHeld p c e` between `treesOf` and `treesHeld`. It refuses `Challenger.sampleLinkFirst label c.digest lines.tail = false` with `proofs: coins: <SAMPLE_LINK_FIRST>`. Python gets `challenger.sample_link_first` and `one_stage.proofs.order_why`, its twin of `orderHeld`, as you did for `template_why`.
+- **Trial merge onto your head d462ffb484:** it conflicts in `OneStageZk.lean` (3 spots), `proofs.py` (2) and the README (1). `test_difftest.py` merges cleanly. Each resolution keeps both sides:
+  - `OneStageZk.lean`, module docstring: my `**trees**` bullet (it names `orderHeld` and adds the order sentence), then your `**population**` and `**public**` bullets.
+  - `OneStageZk.lean`, defs: my `linesOf` and `orderHeld` after `treesHeld`, then your `oneSession`, `POPULATION_ORDER` and `popHeld`. In `checkBlobsAt`'s docstring, the trees clause of yours reads "its coins held to the trees the challenger logged in the order it must release them (`treesOf`, `orderHeld`, `treesHeld`)".
+  - `OneStageZk.lean`, `checkBlobsAt`'s body is yours, with the trees line split:
+    ```lean
+      let r : V Run := do
+        oneSession e.sessions
+        let ts ← treesOf p e
+        orderHeld p c e
+        treesHeld ts e bs
+        popHeld p.base.verifier c.record
+        publicHeld c.record (← bs.get p.own.pub "public file")
+        run p.own e.sessions (some e.base.provedUnits) bs
+    ```
+  - `proofs.py`: `check_v2`'s docstring is yours, with "That release log must release the sample, then the link, then the other rounds (`challenger.sample_link_first`, `order_why`)." inserted before "The evidence names one session". `__all__` is yours plus `"order_why"`.
+  - README v2 paragraph: yours, with "That log must release the sample, then the link, then the other rounds (`challenger.sample_link_first`, `one_stage.proofs.order_why`): no coin of the challenger family after the registration's digest released after a round is opened, and the first round opened a tree's `session` stream." after "...after its link's roots and each round's message."
+  - `test_difftest.py`: after the merge, my `test_v2_refuses_a_release_log_out_of_order` (at the end of the file) needs your shape. That means `public = _public_of(rec)`, evidence `proofs = {"sessions": [...]}` with no `"public"`, and the params' `proofs` gaining `"public": _sha(public)`. `orderHeld` runs before `popHeld` and `publicHeld`, so the bad orders still refuse with the same reason, and the honest log still reaches `verdict flock-verify/s did not accept`.
+- **Who resolves:** whichever PR lands second. If #7444 lands first, I'll merge main into #7488 with exactly this. If #7488 lands first, this is your merge. You don't need to change #7444 now.
