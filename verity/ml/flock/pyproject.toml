@@ -35,12 +35,11 @@ untraced = [
     "tests/test_lean_coin_tree.py",
     "tests/test_lean_forged_proofs.py",
     "tests/test_lean_hidden_outputs.py",
-    "tests/test_lean_honest_plain.py",
-    "tests/test_lean_live_os.py",
     "tests/test_lean_out_group_slot.py",
     "tests/test_lean_plain_hidden_tables.py",
     "tests/test_lean_public_inputs.py",
     "tests/test_lean_rec_cap_guards.py",
+    "tests/test_lean_record_checks.py",
     "tests/test_lean_region_words.py",
     "tests/test_lean_registered_bit_rows.py",
     "tests/test_lean_registered_reads.py",
@@ -80,8 +79,9 @@ inputs = [
     "verity/core/protocols/sampled_proofs", "verity/core/primitives/randomness", "verity/ml/randomness/tests",
     # the Lean decoder's width refusals against the codec, on the NCI difftest's mistyped descriptors
     "verity/core/protocols/network/nci/lean/scripts",
-    # test_coin_schedule.py holds the prover's coin schedule to the Lean verifier's
-    "verity/core/service/flock/Flock/Zk.lean",
+    # test_coin_schedule.py holds the prover's coin schedule to the Lean verifier's, and test_rec_live.py the inner coin
+    # tree to RecVStar's
+    "verity/core/service/flock/Flock/Zk.lean", "verity/core/service/flock/Flock/RecVStar.lean",
     # test_lean_rec_cap_guards.py builds Flock.Test.RecCap, which the Lean check no longer does; its imports reach it through
     # the flock-verify artifact
     "verity/core/service/flock/Flock/Test/RecCap.lean",
@@ -170,9 +170,8 @@ paths = [
 tests = [
     "tests/test_lean_draw_laws.py",
     "tests/test_lean_ks_form.py",
-    "tests/test_lean_live_os.py",
-    "tests/test_lean_plain_hidden.py",
     "tests/test_lean_plain_hidden_tables.py",
+    "tests/test_lean_record_checks.py",
     "tests/test_lean_region_words.py",
     "tests/test_lean_registered_reads.py",
     "tests/test_lean_served_registered.py",

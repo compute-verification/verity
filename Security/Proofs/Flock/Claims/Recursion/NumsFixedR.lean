@@ -225,15 +225,13 @@ theorem staged_one {st : Stage} {x : Msg} {ms : List (Msg × Out)} {s : ℕ} {i 
   have hC := RecIns.setup_checks hset
   rw [hinner, insO_staged_part hins] at hC
   have hn := ResLower.checkStmt_name (checks_stmt hC 0 (by omega))
-  obtain ⟨⟨nm, hf⟩, coins, hI⟩ := ResLower.insO_tags hins
+  obtain ⟨⟨nm, hf⟩, hI⟩ := ResLower.insO_tags hins
   have hnm : nm = Flock.Tags.circuit.name := by rw [← Flock.Tags.byName?_name hf, hn]
   subst hnm
   rw [Flock.Tags.byName?_of_find? FlockSoundness.Discharge.Recursion.find?_circuit] at hf
   have hT : i.base.stmtTags = Flock.Tags.circuit := (Option.some.inj hf).symm
   have hI' : i.base.read.I.tags.hiddenOutputs = true := by
-    rw [hI, hT]
-    unfold Flock.Tags.withCoins
-    split <;> rfl
+    rw [hI, hT] <;> rfl
   show i.base.read.tags.hiddenOutputs = true
   unfold Flock.Readable.Read.tags
   split
