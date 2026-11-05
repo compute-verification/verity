@@ -52,6 +52,8 @@ step to the model statement (`forced_A₀_zero`), and that step composed with `F
 - `session_circuit`, `session_block_zero`: so is every table's of an accepted `--zk` session there
   (`Flock.Witness.scope`, `Flock.Witness.setupOf`), and every satisfying witness holds 0 at that circuit's forced-zero
   columns;
+- `forcedZeroUnfilled_iff`: `ForcedZeroUnfilled` is `ForcedZeroUnfilledOf` at `ProvedScope.check` and
+  `Stmt.setupTables`;
 - `forcedZeroUnfilled_nontrivial`: `ForcedZeroUnfilledOf` fails at `acceptAllScope` and `fillForced`.
 -/
 
@@ -439,6 +441,11 @@ theorem session_block_zero {I : Witness.Inputs} (ht : I.tags = Tags.circuit) (hT
   have e : c = sts[j].c := Except.ok.inj (hc.symm.trans (session_circuit ht hT hck hset hj))
   rw [e] at hs₀ hp hr
   exact forced_block_zero hck hset hj hwf regions hz hs₀ hp r hr o
+
+/-- **`ForcedZeroUnfilled` is `ForcedZeroUnfilledOf` at the verifier's statement check and setup**, so
+`forcedZeroUnfilled_nontrivial` refutes the guarantee's own form, at another check and setup. -/
+theorem forcedZeroUnfilled_iff : ForcedZeroUnfilled ↔ ForcedZeroUnfilledOf ProvedScope.check @Stmt.setupTables :=
+  Iff.rfl
 
 /-- **`ForcedZeroUnfilledOf` is not trivially true**: at a check that accepts everything and a setup whose one table's
 Δ has the pair `(0, 0)`, at the forced-zero column 0 of `forcedStmt`'s one unit slot, it fails. -/
