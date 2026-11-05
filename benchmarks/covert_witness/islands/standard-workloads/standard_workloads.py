@@ -406,7 +406,7 @@ def measured(row: dict, traced: dict[int, dict]) -> tuple[formalism.Measured, di
     steps), ingested with the run's `traced` steps' structures, each structure's its latest traced step's
     (`structures` in what the row read); the start's shape and what the row read, a distillation run's student's shape
     among it (`student`, from the run's notes), a rounds row's traced rounds' tokens beside their forward positions
-    (`axis`) and a learner row's parts and their shares of its gates (`part_names`, `shares`)."""
+    (`axis`) and a learner row's parts, their shares of its gates (`part_names`, `shares`) and its learner's tokens."""
     root = fetch(row["art"], "run/run.json", "meta.json")
     record = json.loads((root / "run" / "run.json").read_text())
     meta = json.loads((root / "meta.json").read_text())
@@ -463,7 +463,8 @@ def measured(row: dict, traced: dict[int, dict]) -> tuple[formalism.Measured, di
         if len(parts) != len(m.parts) or {"rollouts", "learner"} - set(parts):
             raise ValueError(f"rl {row['run']}: parts {parts} beside the slowdown code's {len(m.parts)}: not the "
                              f"rollouts and the learner")
-        read |= {"parts": parts, "shares": shares(m, parts)}
+        read |= {"parts": parts, "shares": shares(m, parts),
+                 "learner_tokens": sum(p.tokens for p, n in zip(m.parts, parts) if n == "learner")}
     return (no_backward(m) if row.get("rounds") and not learner else m), shape, read
 
 
@@ -567,17 +568,19 @@ def modelled_status(m: formalism.Measured, b: dict[str, dict]) -> dict[str, str]
     return out | {"products": f"modelled: the workload model's matrix products{rest}"}
 
 
-def token_dials(dials: dict, tokens: float, whose: str = "te_core measured") -> list[str]:
+def token_dials(dials: dict, tokens: float, whose: str = "te_core measured", rollouts: float | None = None) -> list[str]:
     """Where `dials`' token counts (`tokens`, and `tokens_per_param` over `student_params` or `n_params`) miss the run's
     measured `tokens` (formalism.Measured's: each step's count scaled by its traced structure's consumed tokens over its
-    count, so a step of micro-batches counts them all; a rounds row's forward positions, `whose` the notes) by more
-    than 1%: te_core leaves a step before the run's first update at the counter's count, which counts one micro-batch
-    of a step's."""
-    want = {"tokens": tokens}
+    count, so a step of micro-batches counts them all; a rounds row's forward positions, `whose` the notes; a learner
+    row's learner's, with `samples_per_trained` its `rollouts`' forward positions over them) by more than 1%: te_core
+    leaves a step before the run's first update at the counter's count, which counts one micro-batch of a step's."""
+    want = {"tokens": (tokens, whose)}
     if "tokens_per_param" in dials:
-        want["tokens_per_param"] = tokens / dials.get("student_params", dials.get("n_params"))
-    return [f"its dial {k} is {dials[k]:g}, {whose} {algorithm_policy.num(v)}: the dial is the run's"
-            for k, v in want.items() if k in dials and not math.isclose(dials[k], v, rel_tol=1e-2)]
+        want["tokens_per_param"] = (tokens / dials.get("student_params", dials.get("n_params")), whose)
+    if rollouts is not None:
+        want["samples_per_trained"] = (rollouts / tokens, "its rounds' forward positions over its learner's tokens are")
+    return [f"its dial {k} is {dials[k]:g}, {w} {algorithm_policy.num(v)}: the dial is the run's"
+            for k, (v, w) in want.items() if k in dials and not math.isclose(dials[k], v, rel_tol=1e-2)]
 
 
 def priced(m: formalism.Measured, w_fwd: float, at: dict[str, dict]) -> str:
@@ -649,7 +652,8 @@ def build(spec: dict, revs: tuple[str, str, str], stamp: str | None = None) -> t
         else:
             m, shape, read = measured(r, tr.get(r["run"], {}))
             fwd = read.get("forward_positions")
-            if bad := (token_dials(r["dials"], m.tokens) if fwd is None else
+            if bad := (token_dials(r["dials"], read["learner_tokens"], "its learner's tokens are", fwd)
+                       if r.get("learner") else token_dials(r["dials"], m.tokens) if fwd is None else
                        token_dials(r["dials"], fwd, "its rounds' forward positions are")):
                 raise SystemExit(f"{PANEL}: {what}: {'; '.join(bad)}")
             session, pts = own(shape)

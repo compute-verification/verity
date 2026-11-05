@@ -776,7 +776,7 @@ def test_a_learner_row_is_its_rollouts_plus_its_learner_each_from_its_own_traced
     assert rollouts.gates == gates_of(marked, 2) and rollouts.token_gates == pytest.approx(0.8 * rollouts.gates)
     assert read["shares"] == {"setup": setup.gates / m.gates, "learner": learner.gates / m.gates,
                               "rollouts": rollouts.gates / m.gates}
-    assert sum(read["shares"].values()) == pytest.approx(1.0)
+    assert sum(read["shares"].values()) == pytest.approx(1.0) and read["learner_tokens"] == learner.tokens
     for only in ({1: traced[1], 3: traced[3]}, {0: trace(learn, 64), 1: traced[1]}):
         with pytest.raises(SystemExit, match="rl r1: no learner step is traced: trace a training step after its "
                                              "first update"):
@@ -786,7 +786,8 @@ def test_a_learner_row_is_its_rollouts_plus_its_learner_each_from_its_own_traced
 def test_a_learner_rows_run_cell_gives_its_parts_shares_and_its_status_the_rollouts_substitutions(monkeypatch):
     """A learner row's run cell ends with its two parts' shares of its gates, and its input_status carries the
     rollouts' substitutions beside the learner's measured quantities (`LEARNER`), w_fit the rollouts' where theirs is
-    the least w, else measured; its Δ_grad is the learner's, measured."""
+    the least w, else measured; its Δ_grad is the learner's, measured. Its token dials are its learner's tokens and
+    its rollouts' forward positions per learner token, each refused where it misses the run's."""
     fx = json.loads(PINNED.read_text())
     m = formalism.from_json(fx["measured"])
     setup, learn = m.parts
@@ -795,9 +796,13 @@ def test_a_learner_rows_run_cell_gives_its_parts_shares_and_its_status_the_rollo
     names = ["setup", "learner", "rollouts"]
     share = SW.shares(m, names)
     assert share["rollouts"] == pytest.approx(0.01, rel=1e-6) and sum(share.values()) == pytest.approx(1.0)
-    row = fx["row"] | {"workload": "rl", "rounds": True, "learner": True, "dials": {"n_params": 10}}
-    read = fx["read"] | {"forward_positions": 8, "axis": [{"step": 1, "traced": 8, "forward": 8}], "parts": names,
-                         "shares": share}
+    dials = {"n_params": 10, "tokens": learn.tokens, "samples_per_trained": roll.tokens / learn.tokens}
+    row = fx["row"] | {"workload": "rl", "rounds": True, "learner": True, "dials": dials}
+    read = fx["read"] | {"forward_positions": roll.tokens, "axis": [{"step": 1, "traced": 8, "forward": 8}],
+                         "parts": names, "shares": share, "learner_tokens": learn.tokens}
+    for k, v in (("tokens", roll.tokens + learn.tokens), ("samples_per_trained", 1.0)):
+        with pytest.raises(SystemExit, match=re.escape(f"its dial {k} is {v:g}, its ")):
+            build(m, fx | {"row": row | {"dials": dials | {k: v}}, "read": read}, monkeypatch)
     _, details, cells = build(m, fx | {"row": row, "read": read}, monkeypatch)
     assert cells["run"] == f"{row['run']} {row['art']} ({row['about']}; {SW.split(share)})"
     assert SW.split(share) == "the rollouts 1% of its gates and the learner 99%"
