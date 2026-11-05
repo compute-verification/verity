@@ -2633,13 +2633,9 @@
    "Claims.SamplingGeneric.FlockKSReg": "proved of every Flock record, decoder and compiled verifier over it (`Claims.SamplingGeneric.flockKSReg`)",
    "Claims.SamplingGeneric.Compiled.OpenCallsLe": "a helper the claims read: the opening checks' count, which `CompilerBits` and `CompilerEfficient` read",
    "Claims.SamplingGeneric.ZkCompiled.ZkSessions": "a helper the claims read: the compiler's zero-knowledge contract, the code facts `CompilerZK` takes of a masked compiled verifier",
-   "Claims.Encodings.ByPosBinds": "a closed statement over every pair of commitment schemes (the sum by position binds when its parts do), no claim of a deployment; stated, not yet proved",
    "Claims.Encodings.CodeScheme.Distance": "a helper the claims read: an encoding's distance, which `CodeBinds` reads",
    "Claims.Encodings.CodeScheme.ColBinds": "a helper the claims read: an encoding's column check binds, as a collision reduction, which `CodeBinds` reads",
-   "Claims.Encodings.CodeBinds": "a closed statement over every encoding (it binds within the unique decoding radius), no claim of a deployment; stated, not yet proved",
    "Claims.Encodings.Linked": "a helper the claims read: pairs that link positions, which `RegLink.Opens`, `RelinkR` and `LinkBinds` read",
-   "Claims.Encodings.LinkBinds": "a closed statement over every record, encoding and pairs (a linked position binds the two), no claim of a deployment; stated, not yet proved",
-   "Claims.Encodings.RelinkR": "a closed statement over every trace and pairs (the sampling relation carries over the link), no claim of a deployment; stated, not yet proved",
    "Claims.Encodings.RegLink.Opens": "a helper the claims read: a registration link's contract, the code fact the linked compiler's statements take of a link",
    "Claims.Encodings.CompilerKSLinked": "a closed statement over every proof system, compiled verifier and link, no claim of a deployment; stated, not yet proved",
    "Claims.Encodings.CompilerKSRegLinked": "a closed statement over every proof system, compiled verifier and link, no claim of a deployment; stated, not yet proved"
@@ -2651,6 +2647,10 @@
    "Claims.SamplingGeneric.CompilerBits": "Claims.SamplingGeneric.compilerBits",
    "Claims.SamplingGeneric.CompilerEfficient": "Claims.SamplingGeneric.compilerEfficient",
    "Claims.SamplingGeneric.CompilerZK": "Claims.SamplingGeneric.compilerZK",
+   "Claims.Encodings.ByPosBinds": "Claims.Encodings.byPosBinds",
+   "Claims.Encodings.CodeBinds": "Claims.Encodings.codeBinds",
+   "Claims.Encodings.LinkBinds": "Claims.Encodings.linkBinds",
+   "Claims.Encodings.RelinkR": "Claims.Encodings.relinkR",
    "Claims.ZKOutLeak": "Claims.zkOutLeak"
   }
  },
@@ -2781,6 +2781,22 @@
   "Claims.SamplingGeneric.compilerZK": {
    "honest": ["Claims.SamplingGeneric.compilerZK_honest"],
    "nontrivial": "Claims.SamplingGeneric.compilerZK_nontrivial"
+  },
+  "Claims.Encodings.byPosBinds": {
+   "honest": ["Claims.Encodings.byPosBinds_honest"],
+   "nontrivial": "Claims.Encodings.byPosBinds_nontrivial"
+  },
+  "Claims.Encodings.codeBinds": {
+   "honest": ["Claims.Encodings.codeBinds_honest"],
+   "nontrivial": "Claims.Encodings.codeBinds_nontrivial"
+  },
+  "Claims.Encodings.linkBinds": {
+   "honest": ["Claims.Encodings.linkBinds_honest"],
+   "nontrivial": "Claims.Encodings.linkBinds_nontrivial"
+  },
+  "Claims.Encodings.relinkR": {
+   "honest": ["Claims.Encodings.relinkR_honest"],
+   "nontrivial": "Claims.Encodings.relinkR_nontrivial"
   },
   "Claims.zkOutLeak": {
    "honest": ["Claims.Witness.SamplingGeneric.zkOutLeak_honest"],
@@ -5779,6 +5795,42 @@
    ],
    "assumptions": [],
    "type_hash": "e86b6a5c8d782b36c2d267a21922072d48ac66e3c6d0bf33243e0c456d4f4f7c"
+  },
+  "Claims.Encodings.byPosBinds": {
+   "owner": "@proofs"
+  },
+  "Claims.Encodings.byPosBinds_honest": {
+   "owner": "@proofs"
+  },
+  "Claims.Encodings.byPosBinds_nontrivial": {
+   "owner": "@proofs"
+  },
+  "Claims.Encodings.codeBinds": {
+   "owner": "@proofs"
+  },
+  "Claims.Encodings.codeBinds_honest": {
+   "owner": "@proofs"
+  },
+  "Claims.Encodings.codeBinds_nontrivial": {
+   "owner": "@proofs"
+  },
+  "Claims.Encodings.linkBinds": {
+   "owner": "@proofs"
+  },
+  "Claims.Encodings.linkBinds_honest": {
+   "owner": "@proofs"
+  },
+  "Claims.Encodings.linkBinds_nontrivial": {
+   "owner": "@proofs"
+  },
+  "Claims.Encodings.relinkR": {
+   "owner": "@proofs"
+  },
+  "Claims.Encodings.relinkR_honest": {
+   "owner": "@proofs"
+  },
+  "Claims.Encodings.relinkR_nontrivial": {
+   "owner": "@proofs"
   },
   "Claims.Flock.Bits_fails": {
    "owner": "@proofs",
