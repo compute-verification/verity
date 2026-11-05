@@ -12,9 +12,9 @@ the bound as that run's. The figure of record, every period's cells included, is
 both checks the tight ℓ_{a,j} rests on and the lock (a toy one in Security's lock's place) lists every premise's
 discharge, taking no assumption but a standing one, and otherwise charges ℓ_a + 1 bits for each tied audit of each
 phase, ℓ_a the cap of the run's published advice registration (no figure where it published none, and an error where an
-audit's own registration binds an advice), with what is open named and no tighter figure beside it. A tied
-audit drawn in part charges its slot entries in k_{skip,j}; each cell states its
-share of the schedule's egress capacity, and the served egress is missing. Sampled proofs' coins are live only where
+audit's own registration binds an advice), with what is open named and no tighter figure beside it. A tied audit
+drawn in part charges its slot entries in k_{skip,j}; each cell states its share of the schedule's egress capacity,
+and the served egress is missing. Sampled proofs' coins are live only where
 every COINS line names the live challenger at a named peer, and the network certifier's chain draws only where each
 takes everything; otherwise, or with none, live-coins is open by name (each chain draw by its own), the figure of
 record charges ℓ_a + 1 for each tied audit whatever else holds, and it and its cells are conditional on the coins, and
@@ -24,12 +24,17 @@ verdict is not established and its bound conditional on it. Sampled proofs credi
 as not credited. PoUW's freed compute is never credited or claimed, whatever its row states, and neither is one
 program a day, each open by name beside what the run's lines say. The run's `publish` leaves the record as written.
 The run is of record only when every verdict, the onsite composite's included, accepted and every drawn member is
-credited, PoUW's verdict aside: the record claims nothing of it, and lists it as its row states it. Its caller's serving settings, S and MAX_TOKENS, both or neither, label the record and its line, missing
-where it states none; runs' records at two settings go beside each other, each run's figures labelled with its own
-settings and ℓ_a, and a record of another format, or stating no settings, is refused by path."""
+credited, PoUW's verdict aside: the record claims nothing of it, and lists it as its row states it. Sampled proofs'
+guarantee is its window's ε at δ beside its pooled count over any number of windows, and that count for each monitoring
+period's node, datacenter and world with its share of their proof blocks, the line stating both; a law other than a
+k-subset has no pooled figure, a draw of several members is named refused, and an answer not accepted states none.
+Its caller's serving settings, S and MAX_TOKENS, both or neither, label the record and its line, missing where it
+states none; runs' records at two settings go beside each other, each run's figures labelled with its own settings and
+ℓ_a, and a record of another format, or stating no settings, is refused by path."""
 from __future__ import annotations
 
 import dataclasses
+import decimal
 import hashlib
 import json
 import math
@@ -46,6 +51,7 @@ sys.path.insert(0, str(HERE.parent))
 import onsite_record as OR  # noqa: E402
 import served_verdicts as SV  # noqa: E402
 import leak_bounds as LB  # noqa: E402
+from verity.core.protocols.sampled_proofs.one_stage import audit as A  # noqa: E402
 
 NODE = "computeinstance-toy"
 SCAN = {"delta": "1/1048576", "drawn": 126, "units": 126, "wrong_units": 0, "free": 9088, "faulty_sets": 0,
@@ -166,6 +172,21 @@ def coins_line(said: str, lead: str = "") -> str:
 #: sampled proofs' one drawn member, and its audit's published record (`served_integrity.public_copy`) crediting it:
 #: its --registered file completed and its Lean verdict of record reporting exactly its reads
 MEMBER = "ToyGemm"
+#: sampled proofs' window, N proof blocks, and its profile's δ
+N, DELTA = 16, Fraction(1, 2 ** 40)
+#: the run of record's draw, one member (subset:1), and a member of each of two templates' strata (stratified:1)
+SUBSET1 = {"law": "subset", "k": 1, "units": [3]}
+STRATIFIED1 = {"law": "stratified", "k": 2, "units": [3, 12],
+               "strata": [{"template": "A", "units": [[0, 8]], "k": 1}, {"template": "B", "units": [[8, 16]], "k": 1}]}
+
+
+def integrity_answer(draw: dict, bound: int) -> dict:
+    """Sampled proofs' accepted answer as `served_integrity.answer` writes it: its audit's profile under ``draw`` over
+    N proof blocks at DELTA, and ``bound`` incorrect proof blocks there."""
+    profile = A.profile({"population": N, "partition": "toy", "program": "ab" * 64}, draw, float(DELTA)).to_json()
+    return {"protocol": "verity/sampled-proofs/one-stage/v1", "verdict": "accept", "reason": None, "commitment": "ab" * 64,
+            "profile": profile | {"delta": str(DELTA)},
+            "public": {"bound": bound, "drawn": draw["units"], "per_template": None, "proved": draw["units"]}}
 
 
 def audit_record(completed: tuple[str, ...] = (MEMBER,), reported: dict[str, bool] | None = None,
@@ -185,13 +206,13 @@ CREDITED = {"credited": [MEMBER], "not_credited": {}, "from": str(OR.AUDIT), "is
 
 def served_out(tmp_path: Path, *, network: dict | None = None, work: dict | None = None, case: dict | None = None,
                composites: dict[str, dict] | None = None, coins: str | None = GATE,
-               audit: dict | None = AUDITED) -> Path:
-    """A toy $OUT: sampled proofs accepted, its audit's record ``audit`` (none where None), PoUW and the network
-    certifier missing unless given, the given composites and certifier case, and its COINS line, its sampled-proofs part
-    ``coins`` (none where None)."""
+               audit: dict | None = AUDITED, draw: dict = SUBSET1, bound: int = N - 1) -> Path:
+    """A toy $OUT: sampled proofs accepted under ``draw`` with ``bound`` (`integrity_answer`), its audit's record
+    ``audit`` (none where None), PoUW and the network certifier missing unless given, the given composites and
+    certifier case, and its COINS line, its sampled-proofs part ``coins`` (none where None)."""
     out = tmp_path / "out"
     rows = {"integrity": {"protocol": "verity/sampled-proofs/one-stage/v1", "owner": "compute-accounting",
-                          "verdict": "accept", "reason": None, "answer": {}},
+                          "verdict": "accept", "reason": None, "answer": integrity_answer(draw, bound)},
             "work": work or {"owner": "compute-accounting", "verdict": "missing", "why": "POUW_CMD unset: toy"},
             "communication": network or {"owner": "network-accounting", "verdict": "missing",
                                          "why": "CERTIFIER_CMD unset: the network certifier in front of the serving "
@@ -1265,6 +1286,98 @@ def test_whether_the_run_is_of_record_reads_no_pouw_verdict_which_stays_listed_a
     assert OR.record(out)["of_record"]["holds"] is False
 
 
+def test_sampled_proofs_guarantee_is_its_windows_epsilon_at_delta_beside_its_pooled_count_over_each_period(
+        tmp_path, capsys):
+    """subset:1 over a window's 16 proof blocks at δ = 2^-40: the window's bound is 15, ε = 15/16, and pooled at most
+    ⌊16 · ln 2^40⌋ = 443 incorrect proof blocks over any number of windows (IntegrityHorizon). Each monitoring period
+    states that count for the node, and each link's at δ / links summed for a datacenter and the world, with its share of
+    the period's proof blocks at a window an execution phase of 63/50 s, scaled by its rule. The line states the
+    window's ε beside each pooled cell, never alone."""
+    out = accepted(tmp_path)
+    assert OR.main([str(out)]) == 0
+    g = json.loads((out / "record" / "onsite.json").read_text())["sampled_proofs"]
+    assert (g["is"], g["refused"], g["from"], "conditional_on" in g) == (
+        OR.SAMPLED, OR.MULTI, "record/verdicts.json protocols.integrity.answer", False)
+    assert g["window"] == {"units": N, "law": {"subset": 1}, "delta": str(DELTA), "bound": N - 1, "epsilon": "15/16",
+                           "statement": "Flock.Guarantees.EndToEndHidden"}
+    p, phase = g["pooled"], Fraction(63 * 20, 1000)
+    assert (p["statement"], p["is"], p["q"], p["incorrect_at_most"]) == (
+        "Flock.Guarantees.IntegrityHorizon", OR.POOLED, "1/16", 443)
+    assert (p["error"]["delta"], p["gates"], p["window_s"]) == (
+        str(DELTA), {"missing": OR.NO_GATES}, {"seconds": str(phase), "is": OR.WINDOW_S})
+    links = {"node": 1, "datacenter": LB.datacenter_links(), "world": LB.world_links()}
+    for name, seconds in LB.PERIODS.items():
+        w = math.ceil(Fraction(seconds) / phase)
+        assert (p[name]["seconds"], p[name]["windows"]) == (seconds, w)
+        for where, n in links.items():
+            f = n * math.floor(N * math.log(n * 2 ** 40))
+            assert p[name][where] == {"links": n, "windows": w * n, "proof_blocks": N * w * n, "incorrect_at_most": f,
+                                      "share": f / (N * w * n), "how": "scaled",
+                                      "rule": "window-to-period" if where == "node" else where}
+    assert {k: r["sources"] for k, r in p["rules"].items()} == {
+        "window-to-period": [OR.SAMPLED_FROM, OR.FROM_SCHEDULE],
+        "datacenter": [census_line("deployments.json", "machines")],
+        "world": [census_line("adversary.json", "total_flop", "flop_per_s_per_h100", "monitoring_period_s"),
+                  census_line("deployments.json", "gpus_per_machine")]}
+    line = json.loads(capsys.readouterr().out.strip()[7:])["sampled_proofs"]
+    assert line["window"] == {"epsilon": "15/16", "delta": str(DELTA), "units": N, "law": {"subset": 1}}
+    assert line["pooled"] == {"incorrect_at_most": 443, **{
+        name: {where: {k: p[name][where][k] for k in ("incorrect_at_most", "share")} for where in links}
+        for name in LB.PERIODS}}
+
+
+def test_the_pooled_count_is_the_floor_of_ln_links_over_delta_over_q_past_a_floats_precision():
+    """⌊ln(links/δ)/q⌋: at q = 1 and δ = 2^-40, ⌊40 ln 2⌋ = 27; at q = 1/16 over 12,500 links, ⌊16 ln(12,500 · 2^40)⌋ =
+    594; and at δ a part in 10^20 above e^-k, where ln(1/δ) is k less a part in 10^20 that a float's log can't see, k − 1,
+    and below it, k."""
+    assert (OR.horizon(Fraction(1), DELTA), OR.horizon(Fraction(1, 16), DELTA, 12_500)) == (27, 594)
+    with decimal.localcontext() as c:
+        c.prec = 60
+        for k in (1, 7, 30):
+            e = decimal.Decimal(-k).exp()
+            above, below = (Fraction(e * (1 + s * decimal.Decimal(10) ** -20)) for s in (1, -1))
+            assert (OR.horizon(Fraction(1), above), OR.horizon(Fraction(1), below)) == (k - 1, k)
+
+
+def test_a_run_with_no_certifier_case_states_the_pooled_count_and_no_period_cells(tmp_path):
+    g = OR.record(served_out(tmp_path))["sampled_proofs"]
+    assert (g["window"]["epsilon"], g["pooled"]["incorrect_at_most"]) == ("15/16", 443)
+    assert g["pooled"]["periods"] == {"missing": f"no {OR.CASE}: a window's length is an execution phase's, its params' "
+                                                 "schedule (`WINDOW_S`)"}
+    assert not set(LB.PERIODS) & set(g["pooled"])
+    assert OR.guarantee(g)["pooled"] == {"incorrect_at_most": 443, "periods": g["pooled"]["periods"]}
+
+
+def test_a_draw_of_a_member_of_each_stratum_has_no_pooled_figure_and_is_named_refused(tmp_path):
+    """stratified:1, H1_TIE's default, draws one member of each template's stratum: its window's bound is stated, but
+    IntegrityHorizon pools only a uniform k-subset, so it has no pooled figure, and the record names such a draw as one
+    a run of record doesn't make, which writes no sampled-proofs case and which Lean's per-member form refuses."""
+    g = OR.record(served_out(tmp_path, draw=STRATIFIED1, bound=14))["sampled_proofs"]
+    assert g["window"]["law"] == {"law": "stratified", "strata": [{"name": "A", "size": 8, "k": 1},
+                                                                  {"name": "B", "size": 8, "k": 1}]}
+    assert (g["window"]["epsilon"], g["pooled"]) == ("7/8", {"missing": OR.NOT_POOLED})
+    assert all(s in OR.MULTI for s in ("stratified:1", "`a5.v2_proof`", "MULTI_REFUSED", "subset:1 under --zk"))
+    assert OR.guarantee(g)["pooled"] == {"missing": OR.NOT_POOLED}
+
+
+@pytest.mark.parametrize("coins", [None, "a local development challenger session"])
+def test_sampled_proofs_guarantee_rests_on_its_coins_and_is_missing_but_for_an_accepted_answer(tmp_path, coins):
+    out = served_out(tmp_path, coins=coins)
+    g = OR.record(out)["sampled_proofs"]
+    assert (g["conditional_on"], g["window"]["epsilon"]) == ([OR.COINS_OPEN], "15/16")
+    f = out / "record" / "verdicts.json"
+    report = json.loads(f.read_text())
+    report["protocols"]["integrity"]["answer"] = {}
+    f.write_text(json.dumps(report))
+    assert OR.record(out)["sampled_proofs"]["error"] == ("its answer's profile or public lacks a field: KeyError: "
+                                                         "'profile'")
+    report["protocols"]["integrity"]["verdict"] = "reject"
+    f.write_text(json.dumps(report))
+    g = OR.record(out)["sampled_proofs"]
+    assert g["missing"] == "sampled proofs' verdict is reject: only its accepted answer states a bound"
+    assert "window" not in g and OR.guarantee(g) == {"missing": g["missing"]}
+
+
 @pytest.mark.parametrize("n2, scan, named", [("subset:8", "all", ["the period draw"]),
                                              ("all", "stratified:4", ["the scan's draw"]),
                                              (None, None, ["the period draw", "the scan's draw"])])
@@ -1388,6 +1501,7 @@ def test_runs_at_two_serving_settings_go_beside_each_other_each_figure_labelled_
                                        "per_phase": run["per_phase"]["bits"]}
         assert all(r["periods"][n][w] == {k: rec["periods"][n][w][k] for k in ("bits", "share", "how")}
                    for n in LB.PERIODS for w in ("node", "datacenter", "world"))
+        assert r["sampled_proofs"] == OR.guarantee(rec["sampled_proofs"]) and "year" in r["sampled_proofs"]["pooled"]
         assert "conditional_on" not in r["periods"] and not {"K_tight", "periods_tight"} & set(r)
     assert runs[1]["periods"]["run"]["bits"] - runs[0]["periods"]["run"]["bits"] == 7432 - 1328
     line = capsys.readouterr().out.strip()
