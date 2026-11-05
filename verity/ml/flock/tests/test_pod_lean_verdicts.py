@@ -278,7 +278,7 @@ def _shared(d: Path, inner: str | None, session: str, transcript: str) -> dict:
     rec_inner = inner.encode() if inner is not None else (d / "rec-inner.json").read_bytes()
     return RC.shared(rec_inner=rec_inner, inner_circuit=b"c", inner_public=b"p", inner_partition=b"{}",
                      inner_session=session.encode(), inner_transcript=transcript.encode(), inner_statement="i",
-                     inner_statement_coins="os", inner_tables=[])
+                     inner_tables=[])
 
 
 def _vpart(d: Path, name: str, j: int, digest: str, rc: int = 0, accepted: bool = True, inner: str | None = None,

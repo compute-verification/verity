@@ -110,8 +110,8 @@ def tampered : List Shared :=
     { sh with innerPublic := some (hex 'f') }, { sh with innerPartition := none },
     { sh with innerCoins := some (hex 'f') }, { sh with innerSession := some (hex 'f') },
     { sh with transcript := some (hex 'f') }, { sh with registration := none },
-    { sh with innerStatement := some "unbatched" }, { sh with innerStatementCoins := some false },
-    { sh with innerTables := some [("range8", hex 'f')] }, { sh with innerDraw := some (hex 'f') },
+    { sh with innerStatement := some "unbatched" }, { sh with innerTables := some [("range8", hex 'f')] },
+    { sh with innerDraw := some (hex 'f') },
     { sh with links := table }, { sh with innerProgram := some (hex 'f') }]
 
 #guard tampered.all fun s => s != sh
@@ -125,7 +125,7 @@ def tampered : List Shared :=
 #guard [{ sh with recInner := some (hex 'f') }, { sh with recInner := none }, { sh with innerCircuit := none },
     { sh with innerPublic := none }, { sh with innerPartition := none }, { sh with innerCoins := some (hex 'f') },
     { sh with innerSession := none }, { sh with transcript := none }, { sh with innerStatement := none },
-    { sh with innerStatementCoins := none }, { sh with innerTables := none }].all fun s =>
+    { sh with innerTables := none }].all fun s =>
   !passes 2 [("L0", log 0 (verdict 0 s)), ("L1", log 1 (verdict 1 s))]
 -- what the compiled verifier leaves optional may be absent, alike in every part
 #guard passes 2 [("L0", log 0 (verdict 0 { sh with registration := none })),

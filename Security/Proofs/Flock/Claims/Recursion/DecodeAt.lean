@@ -89,9 +89,8 @@ theorem inner_drawn {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScope.ac
       some (innerFormOf r.innerRaw), r.innerRaw.program⟩) := by rw [filesOf, hp]; rfl
   rw [hfs] at hsh
   obtain ⟨spec', st', hstm, -, -, -, -, hform⟩ := checkShape_files hsh
-  obtain ⟨hs1, hs2, -, b, d, D, hb, hjd, -, -⟩ := checkForm_ok hform
+  obtain ⟨hs1, -, b, d, D, hb, hjd, -, -⟩ := checkForm_ok hform
   have hs1 : r.innerRaw.statement = Tags.circuitPlainLeaves.name := hs1
-  have hs2 : r.innerRaw.osCoins = false := hs2
   have hb : r.innerRaw.draw = some b := hb
   obtain ⟨hdec, -, -⟩ := readX_inner hr
   obtain ⟨hins, -⟩ := FlockDeploy.setupOf_some hset
@@ -104,7 +103,7 @@ theorem inner_drawn {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScope.ac
     · cases hw
     change r.innerRaw.ins.toOption = some s at hw
     exact ⟨not_not.1 hz, toOption_eq_some hw⟩
-  obtain ⟨-, -, -, -, -, -, -, -, ⟨dr, hm, hd9⟩, -⟩ := ins_plainLeaves hw.2 hw.1 hs1 hs2
+  obtain ⟨-, -, -, -, -, -, -, -, ⟨dr, hm, hd9⟩, -⟩ := ins_plainLeaves hw.2 hw.1 hs1
   rw [hb] at hm
   simp only [Option.mapM_some, hjd, Functor.map, Except.map, Except.ok.injEq] at hm
   rw [hd9, ← hm]

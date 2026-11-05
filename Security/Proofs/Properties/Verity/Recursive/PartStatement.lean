@@ -645,7 +645,7 @@ theorem innerHeld_ok {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs
       bs.get o.draw "the inner statement's draw" = .ok drawB ∧
       h.src = .files
         { circuit := circuitB, pub := pubB, partition := o.partition, record := record,
-          form := some { statement := VStar.Recursive.INNER_STATEMENT, os := false, tables := [], draw := some drawB },
+          form := some { statement := VStar.Recursive.INNER_STATEMENT, tables := [], draw := some drawB },
           program := some o.program } ∧
       h.bound = (do RecSetup.metaBound (← VStar.Recursive.metaOf circuitB)) ∧
       bs.get pr.transcript "rec inner transcript" = .ok trB ∧ String.fromUTF8? trB = some t ∧
@@ -827,7 +827,7 @@ theorem ins_partRaw {r : XR} {st : Stage} {x : Claims.Msg} {ms : List (Claims.Ms
     (hbindC : RecVStar.ownBindingsOfJson pj.bindings = .ok bindings)
     (hIc : bs.get o.circuit "the inner circuit" = .ok r.innerRaw.circuit)
     (hIp : bs.get o.pub "the inner public file" = .ok r.innerRaw.publicFile)
-    (hIstmt : r.innerRaw.statement = VStar.Recursive.INNER_STATEMENT) (hIos : r.innerRaw.osCoins = false)
+    (hIstmt : r.innerRaw.statement = VStar.Recursive.INNER_STATEMENT)
     (hItab : r.innerRaw.tables = [])
     (hIpart : r.innerRaw.partition.map (jsonOf "partition") = some (.ok o.partition))
     (hIprog : r.innerRaw.program = some o.program)
@@ -907,7 +907,7 @@ theorem ins_partRaw {r : XR} {st : Stage} {x : Claims.Msg} {ms : List (Claims.Ms
     rw [hPbind]
     exact hbindC
   have h4 : sourceOf (partRaw r st x ms s q) = .ok (some h.src) := by
-    simp only [sourceOf, formOf, partRaw, hpq, hIstmt, hIos, hItab, hIprog, edraw, ecI, epI, erec, jsonOf_what hpqj,
+    simp only [sourceOf, formOf, partRaw, hpq, hIstmt, hItab, hIprog, edraw, ecI, epI, erec, jsonOf_what hpqj,
       textOf, hu, ok_bind, Option.getD_some]
     rw [hsrc]
     rfl
@@ -985,7 +985,7 @@ theorem insO_staged_partIns {x : Claims.Msg} {r : XR} (hr : readX x = some r) {s
     (hbindC : RecVStar.ownBindingsOfJson pj.bindings = .ok bindings)
     (hIc : bs.get o.circuit "the inner circuit" = .ok r.innerRaw.circuit)
     (hIp : bs.get o.pub "the inner public file" = .ok r.innerRaw.publicFile)
-    (hIstmt : r.innerRaw.statement = VStar.Recursive.INNER_STATEMENT) (hIos : r.innerRaw.osCoins = false)
+    (hIstmt : r.innerRaw.statement = VStar.Recursive.INNER_STATEMENT)
     (hItab : r.innerRaw.tables = [])
     (hIpart : r.innerRaw.partition.map (jsonOf "partition") = some (.ok o.partition))
     (hIprog : r.innerRaw.program = some o.program)
@@ -1008,7 +1008,7 @@ theorem insO_staged_partIns {x : Claims.Msg} {r : XR} (hr : readX x = some r) {s
     insO (staged st x ms s) = some (partIns tags0 circuitB pubB pj registered draw h s bindings (some h.rows)) := by
   have hfit := partRaw_fits hr hq hPform hIlinks (by rw [hSp]; exact hpub) hrec htr hrows
   rw [insO_staged hr hq hfit hPform.2.1,
-    ins_partRaw hh htags hplain hregC hbindC hIc hIp hIstmt hIos hItab hIpart hIprog hIdraw hIshape hIreg hIlinks hPform
+    ins_partRaw hh htags hplain hregC hbindC hIc hIp hIstmt hItab hIpart hIprog hIdraw hIshape hIreg hIlinks hPform
       hPc hPpart hPprog hPreg hPbind hPdraw hSp hSr hSt hSrows]
   rfl
 

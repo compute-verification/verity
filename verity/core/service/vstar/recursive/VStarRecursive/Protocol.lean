@@ -300,7 +300,7 @@ def innerHeld (o : Own) (pr : Proofs) (bs : Core.Blobs) : V InnerHeld := do
   (innerOk o circuitB pubB drawB).mapError (s!"rec inner statement: Flock's plain verifier refuses it: " ++ ·)
   let src : Flock.RecCoins.Source := .files
     { circuit := circuitB, pub := pubB, partition := o.partition, record,
-      form := some { statement := INNER_STATEMENT, os := false, tables := [], draw := some drawB },
+      form := some { statement := INNER_STATEMENT, tables := [], draw := some drawB },
       program := some o.program }
   let bound : V (Option String × Option Flock.RecVStar.StackedShape) := do Flock.RecSetup.metaBound (← metaOf circuitB)
   let transcriptB ← bs.get pr.transcript "rec inner transcript"

@@ -23,7 +23,7 @@ open Flock
 
 /-- **What V*'s parts share** of their recursive statements, as files: the verifier's own inner shape, V*'s shared
 rows, the inner statement's three files, a record of check 5's coins, the inner session's record, the coin server's
-transcript, the circuit registration, and how the inner statement is set up (its id, coins, lookup tables and draw);
+transcript, the circuit registration, and how the inner statement is set up (its id, lookup tables and draw);
 the inner population's link table (`--rec-links`, its root and row count); and the verifier's program of the inner
 statement (`--rec-inner-program`). -/
 structure RecShared where
@@ -37,7 +37,6 @@ structure RecShared where
   transcript : Option ByteArray
   registration : Option ByteArray
   innerStatement : Option String
-  innerStatementCoins : Option Bool
   innerTables : Option (List (String × ByteArray))
   innerDraw : Option ByteArray
   links : Option (ByteArray × Nat)
@@ -52,14 +51,14 @@ def RecShared.files (S : RecShared) : List ByteArray :=
 /-- The digests a `VERDICT`'s `rec_shared` names of it (`RecCompose.Shared.ofFiles`). -/
 def RecShared.digests (S : RecShared) : RecCompose.Shared :=
   RecCompose.Shared.ofFiles S.recInner S.innerCircuit S.innerPublic S.innerPartition S.innerCoins S.innerSession
-    S.transcript S.registration S.innerStatement S.innerStatementCoins S.innerTables S.innerDraw S.links S.innerProgram
+    S.transcript S.registration S.innerStatement S.innerTables S.innerDraw S.links S.innerProgram
 
 /-- **The compiled verifier's form** (`RecDeploy.partRaw`): every input a part reads is held, and no record of check
 5's coins. -/
 def RecShared.Form (S : RecShared) : Prop :=
   S.recInner.isSome ∧ S.recRows.isSome ∧ S.innerCircuit.isSome ∧ S.innerPublic.isSome ∧ S.innerPartition.isSome ∧
     S.innerCoins = none ∧ S.innerSession.isSome ∧ S.transcript.isSome ∧ S.innerStatement.isSome ∧
-    S.innerStatementCoins.isSome ∧ S.innerTables.isSome
+    S.innerTables.isSome
 
 /-- **One part's run as `rec-compose` reads it**: the shared inputs its `verify` read, its index (`--rec-part`),
 whether it ran `--zk`, its session's verdict and reason, its coin key, and whether `verify` held an identifier. -/
