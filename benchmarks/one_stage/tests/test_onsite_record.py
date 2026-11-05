@@ -12,7 +12,7 @@ the bound as that run's. The figure of record, every period's cells included, is
 both checks the tight ℓ_{a,j} rests on and the lock (a toy one in Security's lock's place) lists every premise's
 discharge, taking no assumption but a standing one, and otherwise charges ℓ_a + 1 bits for each tied audit of each
 phase, ℓ_a the cap of the run's published advice registration (no figure where it published none, and an error where an
-audit's own registration binds an advice), with what is open named and no figure of the tight K beside it. A tied
+audit's own registration binds an advice), with what is open named and no tighter figure beside it. A tied
 audit drawn in part charges its slot entries in k_{skip,j}; each cell states its
 share of the schedule's egress capacity, and the served egress is missing. Sampled proofs' coins are live only where
 every COINS line names the live challenger at a named peer, and the network certifier's chain draws only where each
@@ -336,8 +336,9 @@ def test_an_accepted_rows_form_answer_is_K_term_by_term_with_its_overcount_and_c
 def test_the_served_audits_cap_is_charged_while_a_check_is_open_and_no_tight_K_is_beside_it(tmp_path, capsys):
     """The served shape: one V3c audit, its class window binding no advice, tied to the one phase's scan, and the run's
     advice registration published padded to its compiler's cap ℓ_a = 2^23. With neither check held, the figure of
-    record charges ℓ_a + 1 beside ℓ_{a,j}, and every cell is that figure's; no figure of the tight K is beside it, in
-    the record or its line, only the line saying when it returns (`TIGHT`)."""
+    record charges ℓ_a + 1 beside ℓ_{a,j}, and every cell is that figure's; no tighter figure is beside it, in the
+    record or its line, only the line saying how it tightens in its place (`TIGHT`): ℓ_a + 1 in place of ℓ_{a,j} under
+    the cut lemma and its check, and K alone once padding-out-of-free is in the lock."""
     out = accepted(tmp_path)
     assert OR.main([str(out)]) == 0
     rec = json.loads((out / "record" / "onsite.json").read_text())
@@ -346,7 +347,9 @@ def test_the_served_audits_cap_is_charged_while_a_check_is_open_and_no_tight_K_i
         K + 2 ** 23 + 1, ["free", "circuit"], [2 ** 23], [2 ** 23 + 1])
     assert rec["advice_charge"]["charged"]["bits_per_phase"] == [9088]
     assert rec["bound"]["K"] == K and of["tight"] == OR.TIGHT and "periods_tight" not in rec
-    assert all(x in OR.TIGHT for x in ("padding-out-of-free", "padding reads", "unread-column lemma"))
+    assert all(x in OR.TIGHT for x in ("cut lemma", "verifying that cut", "in place of each tied audit's ℓ_{a,j}",
+                                       "without re-serving", "padding-out-of-free", "padding reads",
+                                       "unread-column lemma"))
     line = json.loads(capsys.readouterr().out.strip()[7:])
     assert (line["K"], line["open"], "K_tight" in line) == (K + 2 ** 23 + 1, ["free", "circuit"], False)
     assert K not in numbers(line)

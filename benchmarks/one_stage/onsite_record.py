@@ -81,8 +81,8 @@ tight ℓ_{a,j} rests on (``held``, `CHECKS`) and none of its premises is open (
 assumption but a standing one (`STANDING`) or one its pin names and no premise that is open; and each guarantee it
 rests on in the lock at the statement whose hypotheses and antecedents `RESTS_ON` names, beside what K counts,
 `COUNTS`) and the coins are live (``coins``), and while any is ``open``, by name, K plus ℓ_a + 1 bits for each audit
-tied to each execution phase's scan (``advice``: the bits each phase adds), the figure, with no figure of the tight K
-beside it (``tight``, `TIGHT`), conditional on the coins and on each open premise of `UNCHARGED` while they are open
+tied to each execution phase's scan (``advice``: the bits each phase adds), the figure, with no tighter figure beside
+it, only how it tightens (``tight``, `TIGHT`), conditional on the coins and on each open premise of `UNCHARGED` while they are open
 (``conditional_on``). Beside the bound, ``advice_charge``: the served run's
 realized advice charge stays out of the record (`ADVICE`, which says what hides it and what doesn't yet); ``charged`` is
 ℓ_{a,j} as the bound charges each execution phase, with its share of K and its source (`CHARGED`: the tied compute
@@ -516,13 +516,16 @@ OPEN = ("the figure of record: K as the period's check states it, the tight form
         "every check of `CHECKS` (the public's held), no premise of it is open (`DISCHARGE`) and the run's COINS line "
         "names the live challenger (`COINS`). While any is open it is K plus ℓ_a + 1 bits for each audit tied to each "
         "execution phase's scan, beside that phase's ℓ_{a,j}: an advice of at most ℓ_a bits (`CAP`) is one of fewer "
-        "than 2^(ℓ_a + 1) strings. That conservative figure is the figure, and no figure of the tight K goes beside it "
-        "(`TIGHT`). While the coins or a premise of `UNCHARGED` are open, the figure of record and its cells are "
+        "than 2^(ℓ_a + 1) strings. That conservative figure, ℓ_a + 1 added to ℓ_{a,j}, is the figure, and no tighter "
+        "figure goes beside it (`TIGHT`). While the coins or a premise of `UNCHARGED` are open, the figure of record and its cells are "
         "conditional on them (conditional_on), since no charge here covers a draw on known coins or a key the auditor "
         "didn't record")
-TIGHT = ("the tight figure, K alone, returns once padding-out-of-free is discharged in the lock (the period check "
-         "refusing a tied audit's padding reads, and the unread-column lemma) and nothing else is open; until then the "
-         "record states no figure of it")
+TIGHT = ("how the figure tightens, each in place of the figure of record and never beside it: to ℓ_a + 1 in place of "
+         "each tied audit's ℓ_{a,j}, once a general cut lemma bounding a tied audit's leak by ℓ_a + 1 is in the lock "
+         "and a check verifying that cut has run on the period's case, so the run's record, written again from its "
+         "OUT, moves to it without re-serving; and to K alone, once padding-out-of-free is discharged in the lock (the "
+         "period check refusing a tied audit's padding reads, and the unread-column lemma) and nothing else is open. "
+         "Until then the record states no figure of either")
 CAP = ("ℓ_a, the cap of the advice the run registered: its published advice registration's compiler cap_bits "
        "(`REGISTRATION`, its advice's length padded to it), the length each Commit period's advice is padded to before "
        "it is committed, the same for each tied audit, whose own registration in the case's commitment binds no advice "

@@ -244,9 +244,12 @@ negatives.
   at the statement whose hypotheses and antecedents the record names by hand, each by the premise that covers it, since
   the lock records a guarantee's named assumptions and never its antecedents; and the run's COINS line names the live
   challenger (PP_CHALLENGER gate:USER@HOST at a named peer). While one of those is open, it is K plus ℓ_a + 1 bits for
-  each tied audit of each phase, what is open named, and no figure of the tight K goes beside it: the tight figure
-  returns once `padding-out-of-free` (the period check refusing a tied audit's padding reads, and the lemma that a
-  column no unit reads adds no free input) is in the lock and nothing else is open. While the coins are a local
+  each tied audit of each phase, added to its ℓ_{a,j}, what is open named, and no tighter figure goes beside it. It
+  tightens in place: to ℓ_a + 1 in place of each tied audit's ℓ_{a,j} once a general cut lemma bounding a tied audit's
+  leak by ℓ_a + 1 is in the lock and a check verifying that cut has run on the period's case (the record written again
+  from the same OUT, with no re-serving), and to K alone once `padding-out-of-free` (the period check refusing a tied
+  audit's padding reads, and the lemma that a column no unit reads adds no free input) is in the lock and nothing else
+  is open. While the coins are a local
   development session's, or no line names them, or the network certifier's period draw or its scan's draw takes K of
   what it draws from (or the run published no chain report), the condition live-coins is named, with each such draw,
   on every figure that rests on the draw (the sampled-proofs verdict where its draw is the one open, the figure of
