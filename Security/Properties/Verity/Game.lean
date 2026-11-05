@@ -33,7 +33,7 @@ the five that decide a period are one per `Accounting.Audit` (`Subprotocol.ofAud
 | the inference-only policy | | `NciCheck.Protocol.protocol` (`verity/inference-only/v0`) | the same | the same | the same |
 | PoUS | `.pous` | `PousCheck.RunProtocol.protocol` | | | |
 | PoUB-P2 | `.poub` | `RemoteAudit.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | | | |
-| the network certifier | `.network` | `NetworkCheck.Period.protocol` | | onsite's | onsite's |
+| the network certifier | `.network` | `NetworkCheck.Period.blobProtocol` (the period's check with its listed circuit files among the blobs sent) | | onsite's | onsite's |
 | the wipe | | `MemoryChallenger.WipeProtocol.protocol` (`verity/wipe/v0`) | | | |
 
 The statement's form is the causal game, the committed files, one fixed extractor and one adversary form:
@@ -172,7 +172,7 @@ def component : Verity.Registration.Composite → Subprotocol → Option BlobPro
   | .onsite, .inferenceOnly => some NciCheck.Protocol.protocol
   | .onsite, .pous => some PousCheck.RunProtocol.protocol
   | .onsite, .poub => some RemoteAudit.P2Protocol.protocol
-  | .onsite, .network => some NetworkCheck.Period.protocol
+  | .onsite, .network => some NetworkCheck.Period.blobProtocol
   | .onsite, .wipe => some MemoryChallenger.WipeProtocol.protocol
   | .remote, .sampled => some VStar.Recursive.Sampled.protocol
   | .remote, .pouw => some PouwCheck.Period.protocol
@@ -181,11 +181,11 @@ def component : Verity.Registration.Composite → Subprotocol → Option BlobPro
   | .remoteNetwork, .sampled => some VStar.Recursive.Sampled.protocol
   | .remoteNetwork, .pouw => some PouwCheck.Period.protocol
   | .remoteNetwork, .inferenceOnly => some NciCheck.Protocol.protocol
-  | .remoteNetwork, .network => some NetworkCheck.Period.protocol
+  | .remoteNetwork, .network => some NetworkCheck.Period.blobProtocol
   | .remoteNetwork, _ => none
   | .remoteNetworkNoPouw, .sampled => some VStar.Recursive.Sampled.protocol
   | .remoteNetworkNoPouw, .inferenceOnly => some NciCheck.Protocol.protocol
-  | .remoteNetworkNoPouw, .network => some NetworkCheck.Period.protocol
+  | .remoteNetworkNoPouw, .network => some NetworkCheck.Period.blobProtocol
   | .remoteNetworkNoPouw, _ => none
 
 /-- Composite `k`'s subprotocols: those it has a component for. Remote's and remote with the network certifier's, with

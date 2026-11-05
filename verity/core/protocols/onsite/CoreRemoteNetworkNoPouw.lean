@@ -1,7 +1,8 @@
 /-
 Remote with the network certifier, without PoUW (`verity/remote-network-no-pouw/v0`): remote with the network
 certifier's subprotocols but PoUW's period credit, registered as a composite of its own. Its subprotocols are the
-network certifier over the period (`NetworkCheck.Period.protocol`, `verity/certifier/v0`), the inference-only policy
+network certifier over the period (`NetworkCheck.Period.blobProtocol`, `verity/certifier/v0`, with the circuit files
+the period lists among the caller's blobs, or read by path in its executable, `protocolWith`), the inference-only policy
 (`NciCheck.Protocol.protocol`, `verity/inference-only/v0`) and sampled proofs (`VStar.Recursive.Sampled.protocol`,
 `verity/sampled-proofs/v1`), each as remote with the network certifier reads it. `Core.Composition.tiedSameB` composes
 them on the caller's blobs under remote's record subprotocols (`Core.Remote.tied`) and remote with the network
@@ -30,15 +31,24 @@ open Composition
 
 def protocolId : String := "verity/remote-network-no-pouw/v0"
 
-/-- The subprotocols, in the order of their ids: the network certifier's period, the policy and sampled proofs. -/
-def components : List BlobProtocol :=
-  [NetworkCheck.Period.protocol, NciCheck.Protocol.protocol, VStar.Recursive.Sampled.protocol]
+/-- The subprotocols, in the order of their ids: the network certifier's period `net`, the policy and sampled proofs. -/
+def componentsWith (net : BlobProtocol) : List BlobProtocol :=
+  [net, NciCheck.Protocol.protocol, VStar.Recursive.Sampled.protocol]
+
+/-- The subprotocols, the network certifier's period with its listed files among the caller's blobs
+(`NetworkCheck.Period.blobProtocol`). -/
+def components : List BlobProtocol := componentsWith NetworkCheck.Period.blobProtocol
 
 /-- Every compute audit of the network certifier's period on the policy's record; no window tie, since no
 subprotocol reads a PoUW period. -/
 def ties : List Tie := [Core.RemoteNetwork.egress]
 
-def protocol : BlobProtocol := tiedSameB protocolId Core.Remote.tied ties components
+/-- The composite with `net` as the network certifier's period: `NetworkCheck.Period.readProtocol` on the files read by
+path, in the executable (`Core.PeriodFiles.main`). -/
+def protocolWith (net : BlobProtocol) : BlobProtocol := tiedSameB protocolId Core.Remote.tied ties (componentsWith net)
+
+/-- The verifier of record: the composite with the period's listed files among the caller's blobs. -/
+def protocol : BlobProtocol := protocolWith NetworkCheck.Period.blobProtocol
 
 /-- A case of the subprotocol `id` that its own `answer` refuses: empty parameters, commitment and evidence. -/
 private def refusedAs (id : String) : Case :=

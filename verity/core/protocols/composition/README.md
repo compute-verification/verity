@@ -26,7 +26,11 @@ verdict over a list of subprotocols. Three Lake packages hold them, each on Floc
 The rule and the formats are written once, over any list of subprotocols, and the composites are values of it that
 differ in their id and subprotocols. Each composite's executable is the core CLI (`onsite id | check | serve`,
 `remote id | check | serve`, `remote-network id | check | serve`, `remote-network-no-pouw id | check | serve`), and its
-`serve` is what the difftest drives.
+`serve` is what the difftest drives. Those with network certification also take the circuit files its period lists by
+path, too large to hold as blobs: `check P C E [BLOB ...] --circuits CIRCUIT ... [--read-gb N]` reads them in the
+listing's order within a budget of `N` GB at once (`../onsite/CorePeriodFiles.lean`, `Core.PeriodFiles.main`) and
+checks the period on them (`NetworkCheck.Period.readProtocol`), the verdict the verifier of record gives with them
+among the blobs (`NetworkCheck.Period.blobProtocol_check`).
 
 These are the only composites a verifier runs (`Core.Composites`). `product IDS id | check | serve`
 (`../onsite/CoreComposites.lean`, `Core.Composites.ofIds`), which `verity run`'s verifier runs over a configuration's
@@ -73,7 +77,7 @@ subprotocol accepts its own case, and the commitment is `bind` of the subprotoco
 
 | subprotocol | onsite | remote | remote with the network certifier | remote-network without PoUW | `Core.Protocol` | id |
 | --- | --- | --- | --- | --- | --- | --- |
-| network certification (over the period: its sampling blocks of transfer blocks certified and proved, and the bound `K` on what left the site) | yes | | yes | yes | `NetworkCheck.Period.protocol` (`network_check`, `../network/lean`) | `verity/certifier/v0` |
+| network certification (over the period: its sampling blocks of transfer blocks certified and proved, and the bound `K` on what left the site) | yes | | yes | yes | `NetworkCheck.Period.blobProtocol` (`network_check`, `../network/lean`: the period's check with its listed circuit files among the blobs) | `verity/certifier/v0` |
 | PoUW (its period credit: the period's windows credited all or nothing) | yes | yes | yes | | `PouwCheck.Period.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/period/v1` |
 | sampled proofs at remote (the audit on the proofs themselves, one-stage v2's or the recursive audit's, which it reads as blobs, as the params' `form` names it; one-stage v1 refused) | | yes | yes | yes | `VStar.Recursive.Sampled.protocol` (`core_vstar_recursive`, `../../service/vstar/recursive`) | `verity/sampled-proofs/v1` |
 | sampled proofs at onsite (the one-stage audit, whose verdicts are the evidence's) | yes | | | | `SampledProofs.OneStage.protocol` (`core_sampled_proofs`, `../../service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v1` |

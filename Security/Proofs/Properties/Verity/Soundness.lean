@@ -51,7 +51,8 @@ open scoped ENNReal
 theorem component_mem {k : Verity.Registration.Composite} {a : Subprotocol} {P : BlobProtocol}
     (h : component k a = some P) : P ∈ componentsOf k := by
   cases k <;> cases a <;> simp [component] at h <;> subst h <;>
-    simp [componentsOf, Onsite.components, Remote.components, RemoteNetwork.components, RemoteNetworkNoPouw.components]
+    simp [componentsOf, Onsite.components, Onsite.componentsWith, Remote.components, RemoteNetwork.components,
+      RemoteNetwork.componentsWith, RemoteNetworkNoPouw.components, RemoteNetworkNoPouw.componentsWith]
 
 /-- **Each composite's verifier of record is the one the composites' table lists for it**, with its subprotocols'
 ids. -/

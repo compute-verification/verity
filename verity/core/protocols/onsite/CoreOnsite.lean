@@ -8,8 +8,9 @@ budgets), work by proof of useful work over the period (`PouwCheck.Period.protoc
 period's windows credited all or nothing), space by PoUS's check of a run (`PousCheck.RunProtocol.protocol`), bandwidth
 by the remote bandwidth audit's P2 session on PoUS's store (`RemoteAudit.P2Protocol.protocol`,
 `verity/remote-bandwidth/p2/v0`), communication by the network certifier over the period
-(`NetworkCheck.Period.protocol`, `verity/certifier/v0`: the period's link-windows certified and proved, and the bound
-`K` on what left the site), and the wipe by the memory challenger's streamed-label wipe of the period
+(`NetworkCheck.Period.blobProtocol`, `verity/certifier/v0`: the period's link-windows certified and proved, and the
+bound `K` on what left the site, with the circuit files the period lists among the caller's blobs, or read by path in
+its executable, `protocolWith`), and the wipe by the memory challenger's streamed-label wipe of the period
 (`MemoryChallenger.WipeProtocol.protocol`, `verity/wipe/v0`). `Core.Composition.tiedSameB` composes them on the caller's
 blobs: every subprotocol accepts or onsite doesn't, and any subprotocol's rejection rejects onsite whatever the others
 answer. The policy's commitment and the one-stage audit's are the run's registration record, and both must commit to the
@@ -27,7 +28,7 @@ import CoreComposition.Cases
 import CoreComposition.Tie
 import MemoryChallenger.WipeProtocol
 import NciCheck.Protocol
-import NetworkCheck.Period
+import NetworkCheck.PeriodBlobs
 import PousCheck.RunProtocol
 import PouwCheck.Period
 import RemoteAudit.P2Protocol
@@ -38,10 +39,14 @@ namespace Core.Onsite
 
 open Composition
 
-/-- Onsite's subprotocols, in the order of their ids. -/
-def components : List BlobProtocol :=
-  [NetworkCheck.Period.protocol, NciCheck.Protocol.protocol, PousCheck.RunProtocol.protocol, PouwCheck.Period.protocol,
+/-- Onsite's subprotocols, in the order of their ids, with `net` as the network certifier's period. -/
+def componentsWith (net : BlobProtocol) : List BlobProtocol :=
+  [net, NciCheck.Protocol.protocol, PousCheck.RunProtocol.protocol, PouwCheck.Period.protocol,
     RemoteAudit.P2Protocol.protocol, SampledProofs.OneStage.protocol, MemoryChallenger.WipeProtocol.protocol]
+
+/-- Onsite's subprotocols, the network certifier's period with its listed files among the caller's blobs
+(`NetworkCheck.Period.blobProtocol`). -/
+def components : List BlobProtocol := componentsWith NetworkCheck.Period.blobProtocol
 
 /-- The subprotocols that must commit to one record: the policy and the one-stage audit. -/
 def tied : List String := [NciCheck.Protocol.protocolId, SampledProofs.OneStage.protocol.id]
@@ -56,7 +61,12 @@ def store : Tie :=
       (RemoteAudit.P2Protocol.protocol.id,
         fun k => (RemoteAudit.P2Protocol.decodeCommitment k.commitment).toOption.map ([·.held.reg.root]))]⟩
 
-def protocol : BlobProtocol := tiedSameB "verity/onsite/v0" tied [store] components
+/-- Onsite with `net` as the network certifier's period: `NetworkCheck.Period.readProtocol` on the files read by path,
+in the executable (`Core.PeriodFiles.main`). -/
+def protocolWith (net : BlobProtocol) : BlobProtocol := tiedSameB "verity/onsite/v0" tied [store] (componentsWith net)
+
+/-- The verifier of record: onsite with the period's listed files among the caller's blobs. -/
+def protocol : BlobProtocol := protocolWith NetworkCheck.Period.blobProtocol
 
 /-- A case its subprotocol's own `answer` refuses: empty parameters, commitment and evidence. -/
 private def refused (P : BlobProtocol) : Case :=

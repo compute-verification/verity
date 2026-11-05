@@ -2,8 +2,10 @@
 Remote with the network certifier (`verity/remote-network/v0`): remote's accounting (`Core.Remote.protocol`) and
 communication through the auditor's network certifiers at the site's boundary, with no memory challenger. Its
 subprotocols are remote's three (`Core.Remote.components`: the inference-only policy, PoUW's period credit and
-sampled proofs) and the network certifier over the period (`NetworkCheck.Period.protocol`, `verity/certifier/v0`: the
-period's execution phases certified and proved, and the bound `K` on what left the site).
+sampled proofs) and the network certifier over the period (`verity/certifier/v0`: the period's execution phases
+certified and proved, and the bound `K` on what left the site), with the circuit files the period lists among the
+caller's blobs (`NetworkCheck.Period.blobProtocol`). Its executable reads those files by path when they are given after
+`--circuits`, within the period's budget (`Core.PeriodFiles.main`, `protocolWith`).
 `Core.Composition.tiedSameB` composes them on the caller's blobs under remote's record subprotocols
 (`Core.Remote.tied`), remote's tie (`Core.Remote.windows`) and its own (`egress`), so its verdict is the AND of
 remote's and the network certifier's over one registration: it accepts when both accept and the network certifier's
@@ -25,7 +27,7 @@ division and each inference block's profile in the clear, remote's stated except
 import CoreComposition.Cases
 import CoreComposition.Stubs
 import CoreRemote
-import NetworkCheck.Period
+import NetworkCheck.PeriodBlobs
 
 namespace Core.RemoteNetwork
 
@@ -33,8 +35,12 @@ open Composition
 
 def protocolId : String := "verity/remote-network/v0"
 
-/-- The subprotocols, in the order of their ids: the network certifier's period, then remote's. -/
-def components : List BlobProtocol := NetworkCheck.Period.protocol :: Core.Remote.components
+/-- The subprotocols, in the order of their ids: the network certifier's period `net`, then remote's. -/
+def componentsWith (net : BlobProtocol) : List BlobProtocol := net :: Core.Remote.components
+
+/-- The subprotocols, the network certifier's period with its listed files among the caller's blobs
+(`NetworkCheck.Period.blobProtocol`). -/
+def components : List BlobProtocol := componentsWith NetworkCheck.Period.blobProtocol
 
 /-- The digests of the registrations the network certifier's period reads its compute audits' answers against (its
 commitment's `audits`, as `NetworkCheck.Period.protocol` decodes it), in order. A period with no compute audit names
@@ -50,7 +56,12 @@ def egress : Tie :=
 
 def ties : List Tie := [Core.Remote.windows, egress]
 
-def protocol : BlobProtocol := tiedSameB protocolId Core.Remote.tied ties components
+/-- The composite with `net` as the network certifier's period: `NetworkCheck.Period.readProtocol` on the files read by
+path, in the executable (`Core.PeriodFiles.main`). -/
+def protocolWith (net : BlobProtocol) : BlobProtocol := tiedSameB protocolId Core.Remote.tied ties (componentsWith net)
+
+/-- The verifier of record: the composite with the period's listed files among the caller's blobs. -/
+def protocol : BlobProtocol := protocolWith NetworkCheck.Period.blobProtocol
 
 /-- A case of the subprotocol `id` that its own `answer` refuses: empty parameters, commitment and evidence. -/
 private def refusedAs (id : String) : Case :=
