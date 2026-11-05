@@ -249,8 +249,9 @@ theorem couplingTarget_assembled (K : Constructions V) (dev : Exchange → Prope
     (hS : ∀ c, Binding.SignsPlay V dev θ F c)
     (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ A ω)) = avg H)
     (hε : ∀ c σ, couplesErr V θ F c A (rd A θ F c) σ (D A θ F c σ) (sampleMaps e V rd label after κ A θ F c σ)
-      (fun q _ s => openGap q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
-      (fun q => openGap q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool)) ≤ A.hidingTerm)
+      (fun q _ s => openGap (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
+      (fun q => openGap (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool)) ≤
+        A.hidingTerm)
     (hA : SetsUp V θ F A) (hDg : DigestsAt V θ) (hW : WritesView A)
     (hM : ∀ c σ, MovesReach V θ F c k (Binding.Logged Binding.readsV2) A (rd A θ F c) σ (D A θ F c σ)
       (sampleMaps e V rd label after κ A θ F c σ)) :
@@ -273,8 +274,9 @@ theorem couplingTarget_assembled_src (K : Constructions V) (dev : Exchange → P
     (hS : ∀ c, Binding.SignsPlay V dev θ F c) (hL : A.Lb 0 = m * 64)
     (hε : ∀ c σ, couplesErr V θ F c A (rd A θ F c) σ (D A θ F c σ)
       (sampleMaps e V rd label after (srcCoinsAt m) A θ F c σ)
-      (fun q _ s => openGap q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
-      (fun q => openGap q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool)) ≤ A.hidingTerm)
+      (fun q _ s => openGap (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
+      (fun q => openGap (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool)) ≤
+        A.hidingTerm)
     (hA : SetsUp V θ F A) (hDg : DigestsAt V θ) (hW : WritesView A)
     (hM : ∀ c σ, MovesReach V θ F c k (Binding.Logged Binding.readsV2) A (rd A θ F c) σ (D A θ F c σ)
       (sampleMaps e V rd label after (srcCoinsAt m) A θ F c σ)) :
