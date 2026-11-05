@@ -721,7 +721,13 @@ def cellDec (v : Unit → List (ℕ × CellView ℕ)) : ℕ :=
   | (_, .data z) :: _ => z
   | _ => 0
 
-theorem cellDec_run (z : ℕ) : cellDec (blindRun () (oneSched, z)).1 = z := rfl
+theorem blindRun_wire (z : ℕ) : (blindRun () (oneSched, z)).1 () = [(0, .data z)] := by
+  simp [blindRun, laneWire, WardenSchedule.span, laneFrames, tailPads, oneSched, cellArr, wardenCode, wardenLane,
+    WardenSchedule.bucket, streamCell]
+
+theorem cellDec_run (z : ℕ) : cellDec (blindRun () (oneSched, z)).1 = z := by
+  unfold cellDec
+  rw [blindRun_wire] <;> rfl
 
 theorem blindRun_length (z : ℕ) (i : Fin 1) : ((blindRun () (oneSched, z)).2 i).length = 1 := rfl
 
