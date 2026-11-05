@@ -9,8 +9,8 @@ import Flock.Tags
 
 `network-period check P C E CIRCUIT…` reads each circuit file its parameters list whole (`whole`, `readWhole`), by the
 very function a session's verifier of `Flock.Tags.circuit`'s statement parses its circuit with
-(`Flock.ProvedScope.circuitOf`, `whole_circuit`), so the period reads the rows its sessions prove; it holds an audit's
-file trimmed to its header and its unit's input rows (`NetworkCheck.Period.trim`).
+(`Flock.ProvedScope.circuitOf`, `whole_circuit`), so the period reads the rows its sessions prove, when the listed file
+is theirs; it holds an audit's file trimmed to its header and its unit's input rows (`NetworkCheck.Period.trim`).
 
 `read` reads a file in chunks of a fixed size instead, for the test-only `network-period-chunked`: it hashes the whole
 file (`Hasher`, SHA-512) and keeps only its head line, its META line, each block's keyword line and its net's header

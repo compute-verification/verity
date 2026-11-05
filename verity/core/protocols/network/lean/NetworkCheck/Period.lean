@@ -317,8 +317,8 @@ which the caps read (`Schedule.caps`; `trusted-host`); that a tied audit's `Sele
 its `ScanSlots_v2` units, and that the units its circuit record reads its `SCAN_STATE` at are those (the check reads
 none of an audit's wires, only its root templates' ids and closure digests and its record's registered reads of the
 scan's state, `anchored`);
-and that the audits' answers are the sampled-proofs component's own,
-which the composition's theorem is to bind.
+and that the audits' answers are the sampled-proofs component's own, and that each listed circuit file is the one the
+audit's sessions were verified against, which the composition's theorem is to bind.
 
 **The clock openings**, apart from the period's check: `clocksFn`, `network-records verdicts`' `clocks`, reads the
 syncs the certifier signed for a link through its salted clock certificates' openings, each sync and salt against the
