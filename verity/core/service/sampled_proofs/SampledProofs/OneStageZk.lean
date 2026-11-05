@@ -59,6 +59,28 @@ def NO_CHALLENGER : String :=
   "the parameters name no challenger: the draw's coins are the auditor's challenger's signed release (challenger, " ++
     "with window_root), never the prover's record"
 
+/-- The refusal of a unit net with no computed row: its rows are its inputs and the constant, so each proof block would
+hold no gate. -/
+def NO_ROW_WHY : String := "the circuit's unit net has no computed row: a proof block of no gate"
+
+/-- The widest public size class of a proof block's outputs, in bits (`Claims.Sampling.unitClassMax`). -/
+def UNIT_CLASS_MAX : Nat := 262144
+
+/-- The refusal of a template instance that returns more bits than the widest size class holds. -/
+def WIDE_WHY : String :=
+  "a template instance returns more than 262144 bits (16 per output leaf of its units_per_vu units): past the " ++
+    "widest size class"
+
+/-- **The bits a template instance returns**: 16 per output leaf of each of its `units_per_vu` units. -/
+def returnedBits (c : Flock.Circuit) : Nat := 16 * ((List.range c.upv).map fun u => (c.leavesOut.getD u #[]).size).sum
+
+/-- **The unit template's refusals** on the parsed circuit: a unit net with no computed row (`NO_ROW_WHY`; the parser
+already refuses input rows past the constant), and a template instance returning more than `UNIT_CLASS_MAX` bits
+(`WIDE_WHY`). -/
+def templateOk (c : Flock.Circuit) : V Unit := do
+  if c.unit.constPos ≤ c.unit.inWords * Flock.WORD then throw NO_ROW_WHY
+  if returnedBits c > UNIT_CLASS_MAX then throw WIDE_WHY
+
 /-- The verifier's own inputs to `flock-verify verify --zk`: the program's descriptor (as JSON and as the bytes
 `--program` reads), the partition object, the circuit file's committed SHA-512 and the registered file. -/
 structure Own where
@@ -392,8 +414,10 @@ def run (p : Own) (pub : String) (sessions : Array RunFiles) (provedUnits? : Opt
   let I := inputsOf tags0 p circuitB pubB bs
   let rd ← readsOf p.registered
   let tags := Flock.Witness.zkTags I
-  let scope := Flock.ProvedScope.checkOf (Flock.ProvedScope.circuitOf tags I.circuitFile I.tables) tags true pubB I.count
-    false rd.registered.isSome
+  let scope : V Unit := do
+    Flock.ProvedScope.checkOf (Flock.ProvedScope.circuitOf tags I.circuitFile I.tables) tags true pubB I.count false
+      rd.registered.isSome
+    templateOk (← Flock.ProvedScope.circuitOf tags I.circuitFile I.tables)
   let ksFiles := Flock.PortRoots.checkOf (Flock.ProvedScope.circuitOf tags I.circuitFile I.tables) tags pubB
   let r ← sessions.foldlM (step I rd bs scope ksFiles (programDigest p.program) (getD p.partition "program"))
     ⟨#[], #[], #[], true⟩
