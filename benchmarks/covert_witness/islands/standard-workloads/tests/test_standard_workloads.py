@@ -8,7 +8,8 @@ ids), and two sensitivities, the console's default (rho_default and rho_console)
 each (page_rho) and whose input_status says which inputs te_core measured (an unmeasured Δ_grad's steps and which ρ
 columns' Fit verdict rests on it, and the products kind's input); a generation run's row is its traced rounds alone,
 each GEMM on the served codes priced as NVFP4, with no backward, and null with its reason where a traced round's trace
-counts fewer tokens than its forward positions; a workload no run measures is a modelled row,
+counts fewer tokens than its forward positions, and an RL run's learner row those rollouts plus its traced learner,
+each part's share of the gates in its run cell; a workload no run measures is a modelled row,
 te_core.workloads' model priced the same way; it reads traces from te_core 4.4 on; the panel keeps to the panels
 route's limits, a cell up to 4,096
 characters, never replaces a served panel with one that drops its rows, and cites its tables in the research run's
@@ -24,7 +25,7 @@ import pytest
 
 pytest.importorskip("matplotlib")
 
-from te_core import VERSION, algorithm_policy, console, formalism, panels, policy, workloads
+from te_core import VERSION, algorithm_policy, annotate, console, formalism, panels, policy, workloads
 from te_core.gates import of_log
 
 #: the builder, loaded from its file: on sys.path, the island's directory would hide the standard library's trace
@@ -500,7 +501,8 @@ def test_the_builders_own_words_in_a_published_string_name_no_code():
     notes = [SW.note({"rows": [[{"reading": x, "model": "20M"}.get(c) for c in SW.COLUMNS]]}, TABLES, student)
              for x in ("A", "B")]
     assert "; distill at its student's session: 20M 110,662. " in notes[0]
-    words = [SW.IDLE, SW.NO_AXIS, *SW.ROUNDS.values(), *gaps, *st.values(), *said, *notes]
+    words = [SW.IDLE, SW.NO_AXIS, *SW.ROUNDS.values(), *SW.LEARNER.values(), SW.LEARNER_W_FIT,
+             SW.split({"rollouts": 0.01, "learner": 0.99}), *gaps, *st.values(), *said, *notes]
     assert len(gaps) == 3 and [s for s in words if SW.CODE.search(s)] == []
 
 
@@ -592,6 +594,12 @@ def test_a_generation_runs_record_is_its_rounds_with_gemms_on_served_codes_price
     assert got["setup"]["by"] == got["tail"]["by"] == {} and got["setup"]["macs"] == got["tail"]["macs"] == 0
     assert got["checkpoints"] == [{"step": 4}]
     assert set(SW.ROUNDS) <= set(SW.KEYS) and all(v.startswith("assumed: ") for v in SW.ROUNDS.values())
+    assert set(SW.LEARNER) <= set(SW.KEYS) and all(v.startswith("assumed: ") for v in SW.LEARNER.values())
+    whole = SW.rounds(rec, NOTES, SERVED, learner=True)
+    assert whole["steps"] == rec["steps"] and whole["checkpoints"] == [{"step": 4}]
+    assert (whole["setup"], whole["tail"]) == (rec["setup"], rec["tail"])
+    assert whole["structures"] == rec["structures"] | {"round": st}
+    assert SW.coded(rec["structures"]["train"]["log"][0], SERVED)
 
 
 def test_a_rounds_row_has_no_backward_and_its_token_dials_count_its_forward_positions(monkeypatch):
@@ -689,6 +697,8 @@ def test_a_rounds_row_with_no_traced_round_is_refused(tmp_path, monkeypatch):
     (record(round_tokens=8), "8 tokens counted, not its prompts'"),
     (record() | {"steps": record()["steps"][:3]}, "not generate.py's layout"),
     (record(round_log=[*ROUND_LOG, ["bwd", "grad", "mm", json.dumps([[U, 8], [8, U]]), 1, 8 * U * U]]), "a backward"),
+    (record() | {"steps": [s | {"struct": "train"} if s["step"] == 3 else s for s in record()["steps"]]},
+     "round structure train is a training step's too"),
 ])
 def test_a_record_not_in_generate_pys_layout_or_with_a_round_that_trains_is_refused(rec, match):
     with pytest.raises(ValueError, match=match):
@@ -703,6 +713,105 @@ def test_a_rounds_delta_is_the_served_update():
     assert SW.round_formalism(NOTES, tensors)["delta_bits"] == NOTES["served_code_bits"] + 16 * 2 * U
     bf16_head = NOTES | {"args": NOTES["args"] | {"head": "bf16"}}
     assert SW.round_formalism(bf16_head, tensors)["delta_bits"] == NOTES["served_code_bits"] + 16 * (2 * U + 1000 * U)
+
+
+#: a traced step's quantities (te_core.capture.circuit.measure's) beside each traced structure's own
+TRACE = {"tau_ids": 1.0, "tau_other_bits": 0.0, "a_bits": 256.0, "u_in": [[0.0, 0.0], [1.0, 1024.0]], "u1_bits": 1024.0,
+         "tail_share": 0.0, "data_dependent": [], "carried_scalars": []}
+
+
+def gates_of(log: list, n: int) -> float:
+    """A structure's op log over `n` steps in gates, as te_core.formalism.of_record counts a part's."""
+    return of_log({"ops": {" ".join(str(x) for x in r[:4]): [r[4] * n, r[5] * n] for r in log}})["gates"]
+
+
+def test_a_learner_row_is_its_rollouts_plus_its_learner_each_from_its_own_traced_step(tmp_path, monkeypatch):
+    """An RL run's learner row is the whole run: its rounds the rollouts, as a rounds row reads them (each GEMM on the
+    served codes priced as NVFP4, Δ_grad, partial gradient and gradient cut 0 whatever their trace's cut), and its
+    training steps the learner, as its traced step after the first update measured them (its GEMMs as counted, though
+    a forward's operand has a served matrix's shape), so Fit binds on the learner's Δ_grad, and Δ is the run's E; its
+    parts are named in te_core's order, each with its share of the gates. A row with no training step traced after the
+    first update is refused."""
+    rec = record()
+    rec["structures"]["round"] = rec["structures"]["round"] | {"updated": [[1]]}
+    for s in rec["steps"]:
+        s["macs"] = 100 if s["struct"] == "round" else 1000
+    rec |= {"start": {"name": "s-t20"}, "checkpoints": [{"step": 2}, {"step": 4, "e_bytes": 100}]}
+    (tmp_path / "run").mkdir()
+    (tmp_path / "run" / "run.json").write_text(json.dumps(rec))
+    (tmp_path / "meta.json").write_text(json.dumps({"notes": NOTES}))
+    monkeypatch.setattr(SW, "fetch", lambda art, *paths: tmp_path)
+    tensors = {"embed": ["bfloat16", [1000, U]], "blocks.0.w": ["bfloat16", [U, 2 * U]]}
+    monkeypatch.setattr(SW, "start", lambda name: ({"vocab": 1000, "d_model": U}, tensors))
+
+    def ingest(d, ledger, *, structures=None, **kw):
+        """te_core.ledger.ingest's row at the run's last checkpoint, past its last step: its formalism block of the
+        record with the traced structures, and E's size."""
+        r = json.loads((d / "run.json").read_text())
+        cp = r["checkpoints"][-1]
+        return [{"formalism": formalism.of_record(annotate.with_structures(r, structures)),
+                 "output": {"e_bytes": cp["e_bytes"]}, "checkpoint_step": cp["step"], "invalid": []}]
+    monkeypatch.setattr(SW, "ingest", ingest)
+    learn = {"updated": [[50, 0, 800, 16, 16]], "cut_bits": 640, "formalism": TRACE | {
+        "sigma": 0.9, "affected_share": 0.75, "token_factor": 1.0, "delta_grad_bits": 640, "partial_cut_bits": 320,
+        "grad_cut_bits": 640}}
+    roll = {"updated": [[20, 0, 160, 8, 16]], "cut_bits": 96, "formalism": TRACE | {
+        "sigma": 0.8, "affected_share": 0.5, "token_factor": 8 / 6, "delta_grad_bits": 96, "partial_cut_bits": 96,
+        "grad_cut_bits": 96}}
+
+    def trace(structure: dict, tokens: int) -> dict:
+        return {"trace": {"structure": structure}, "measured": {"tokens": tokens}, "from": "art:t", "te_core": VERSION}
+    traced = {1: trace(roll, 8), 2: trace(learn, 64), 3: trace(roll, 8)}
+    row = {"workload": "rl", "run": "r1", "art": "art:x", "rounds": True, "learner": True}
+    m, _, read = SW.measured(row, traced)
+    assert read["parts"] == ["setup", "learner", "rollouts"] and read["round_steps"] == [1, 3]
+    assert read["axis"] == [{"step": 1, "traced": 8, "forward": 8}, {"step": 3, "traced": 8, "forward": 8}]
+    setup, learner, rollouts = m.parts
+    assert (learner.delta_grad_bits, learner.partial_bits, learner.grad_bits) == (640, 320, 640)
+    assert (rollouts.delta_grad_bits, rollouts.partial_bits, rollouts.grad_bits) == (0.0, 0.0, 0.0)
+    assert m.fit_delta_grad_bits == 640 and m.delta_bits == 8 * 100
+    assert (learner.tokens, rollouts.tokens) == (2 * 64, 2 * SW.positions(NOTES["rounds"][0]))
+    marked = SW.rounds(record(), NOTES, SERVED)["structures"]["round"]["log"]
+    assert learner.gates == gates_of(rec["structures"]["train"]["log"], 2)
+    assert rollouts.gates == gates_of(marked, 2) and rollouts.token_gates == pytest.approx(0.8 * rollouts.gates)
+    assert read["shares"] == {"setup": setup.gates / m.gates, "learner": learner.gates / m.gates,
+                              "rollouts": rollouts.gates / m.gates}
+    assert sum(read["shares"].values()) == pytest.approx(1.0) and read["learner_tokens"] == learner.tokens
+    for only in ({1: traced[1], 3: traced[3]}, {0: trace(learn, 64), 1: traced[1]}):
+        with pytest.raises(SystemExit, match="rl r1: no learner step is traced: trace a training step after its "
+                                             "first update"):
+            SW.measured(row, only)
+
+
+def test_a_learner_rows_run_cell_gives_its_parts_shares_and_its_status_the_rollouts_substitutions(monkeypatch):
+    """A learner row's run cell ends with its two parts' shares of its gates, and its input_status carries the
+    rollouts' substitutions beside the learner's measured quantities (`LEARNER`), w_fit the rollouts' where theirs is
+    the least w, else measured; its Δ_grad is the learner's, measured. Its token dials are its learner's tokens and
+    its rollouts' forward positions per learner token, each refused where it misses the run's."""
+    fx = json.loads(PINNED.read_text())
+    m = formalism.from_json(fx["measured"])
+    setup, learn = m.parts
+    roll = formalism.Part(learn.gates / 99, 1e6, 0.9 * learn.gates / 99, 0.5 * learn.gates / 99, 3, 0.0, 0.0, 0.0)
+    m = dataclasses.replace(m, parts=(setup, learn, roll))
+    names = ["setup", "learner", "rollouts"]
+    share = SW.shares(m, names)
+    assert share["rollouts"] == pytest.approx(0.01, rel=1e-6) and sum(share.values()) == pytest.approx(1.0)
+    dials = {"n_params": 10, "tokens": learn.tokens, "samples_per_trained": roll.tokens / learn.tokens}
+    row = fx["row"] | {"workload": "rl", "rounds": True, "learner": True, "dials": dials}
+    read = fx["read"] | {"forward_positions": roll.tokens, "axis": [{"step": 1, "traced": 8, "forward": 8}],
+                         "parts": names, "shares": share, "learner_tokens": learn.tokens}
+    for k, v in (("tokens", roll.tokens + learn.tokens), ("samples_per_trained", 1.0)):
+        with pytest.raises(SystemExit, match=re.escape(f"its dial {k} is {v:g}, its ")):
+            build(m, fx | {"row": row | {"dials": dials | {k: v}}, "read": read}, monkeypatch)
+    _, details, cells = build(m, fx | {"row": row, "read": read}, monkeypatch)
+    assert cells["run"] == f"{row['run']} {row['art']} ({row['about']}; {SW.split(share)})"
+    assert SW.split(share) == "the rollouts 1% of its gates and the learner 99%"
+    st = json.loads(cells["input_status"])
+    assert {k: st[k] for k in SW.LEARNER} == SW.LEARNER and st["w_fit_gates"] == SW.LEARNER_W_FIT
+    assert st["delta_grad_bits"] == "measured" and m.fit_delta_grad_bits == learn.delta_grad_bits
+    assert details[0]["read"]["shares"] == share and len(details[0]["parts"]) == 3
+    slow = dataclasses.replace(m, parts=(setup, learn, dataclasses.replace(roll, tokens=1.0)))
+    assert "w_fit_gates" not in SW.learner_status(slow, names)
 
 
 def test_the_route_takes_a_cell_of_4096_characters_and_refuses_a_longer_one_a_long_note_or_a_long_body():

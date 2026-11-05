@@ -2,7 +2,8 @@
 # trace.py on a CPU node, torch and numpy as the scorer's trace40 runs them: its pack from the plan sent with the run,
 # read from the store (--store-read) and this checkout's history, then its node step on the pack:
 #   research run --on vy-nebius-cpu-9 --project verity --source . --cwd source --store-read --send PLAN.json -- \
-#       bash benchmarks/covert_witness/islands/standard-workloads/job.sh      (WORKERS, default 16)
+#       bash benchmarks/covert_witness/islands/standard-workloads/job.sh      (WORKERS, default 16; TRACE_TIMEOUT_S,
+#       a trace's limit, default 3 h)
 set -euo pipefail
 S=$(mktemp -d)
 trap 'rm -rf "$S"' EXIT

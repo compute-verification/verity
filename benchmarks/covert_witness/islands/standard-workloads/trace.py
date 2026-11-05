@@ -29,8 +29,8 @@ from pathlib import Path
 
 CW = "benchmarks/covert_witness"
 REPO = Path(__file__).resolve().parents[4]
-#: a step late in a long record replays every step before it
-TRACE_TIMEOUT = 3 * 3600
+#: a step late in a long record replays every step before it; $TRACE_TIMEOUT_S sets another limit
+TRACE_TIMEOUT = int(os.environ.get("TRACE_TIMEOUT_S") or 3 * 3600)
 
 
 def git(*args: str) -> str:
