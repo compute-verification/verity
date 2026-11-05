@@ -460,10 +460,11 @@ def coinsOf (p : Params) (c : OneStage.Commitment) (e : Evidence) : V ByteArray 
   | none => throw s!"coins: {NO_CHALLENGER}"
 
 /-- The coin trees the window's challenger session shows it sampled and opened (module docstring, **trees**): read from
-the evidence's `coins` under the parameters' challenger's key, on the verifier's window. -/
-def treesOf (p : Params) (e : Evidence) : V (Array Challenger.LoggedTree) :=
-  match p.base.challenger, p.base.verifier.windowRoot with
-  | some (key, _), some w => (Challenger.trustedTreesOf key w e.base.coins).mapError (s!"coins: {·}")
+the evidence's `coins` under the parameters' challenger's key, on the verifier's window: v1's parameters and evidence,
+which the recursive audit's trees are read from too (`VStar.Recursive.innerCoinsHeld`). -/
+def treesOf (p : OneStage.Params) (e : OneStage.Evidence) : V (Array Challenger.LoggedTree) :=
+  match p.challenger, p.verifier.windowRoot with
+  | some (key, _), some w => (Challenger.trustedTreesOf key w e.coins).mapError (s!"coins: {·}")
   | _, _ => throw s!"coins: {NO_CHALLENGER}"
 
 /-- The evidence's sessions held to the challenger's trees `ts` (module docstring, **trees**): each session's record
@@ -503,7 +504,7 @@ def checkBlobsAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Ev
     Core.Outcome OneStage.Public Core.Integrity :=
   let r : V Run := do
     oneSession e.sessions
-    treesHeld (← treesOf p e) e bs
+    treesHeld (← treesOf p.base e.base) e bs
     popHeld p.base.verifier c.record
     publicHeld c.record (← bs.get p.own.pub "public file")
     run p.own e.sessions (some e.base.provedUnits) bs
