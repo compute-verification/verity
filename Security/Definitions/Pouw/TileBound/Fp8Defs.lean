@@ -1,4 +1,6 @@
-import Definitions.Pouw.TileBound.Defs
+module
+
+public import Definitions.Pouw.TileBound.Defs
 
 /-!
 # The FP8-tile model at sm_120's E4M3 atom (trusted definitions)
@@ -34,6 +36,8 @@ cheapest multiplier; NVFP4 is.
 * **The honest program** `honest8` is stated here, self-contained, so that the pins reading it read only trusted
   definitions.
 -/
+
+@[expose] public section
 
 namespace Pouw.TileBound
 

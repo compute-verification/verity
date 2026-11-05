@@ -1,5 +1,7 @@
-import Definitions.Pous.Accounting.Rebuild
-import Proofs.Pous.Chain.Flat
+module
+
+public import Definitions.Pous.Accounting.Rebuild
+public import Proofs.Pous.Chain.Flat
 
 /-!
 # The rebuild cost and the graded window
@@ -8,6 +10,8 @@ import Proofs.Pous.Chain.Flat
 non-decreasing in `d`. The rounds of every row of `Pous.Guarantees.BandGradedMeetsFamily` last under
 `240·6 + 3·13 = 1,479` call-times.
 -/
+
+@[expose] public section
 
 namespace PousRebuild
 

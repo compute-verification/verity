@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Recursion.VerdictRowDCoin
-import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
-import Proofs.Flock.VBridge.Algebra.RunSkel
-import Proofs.Flock.VBridge.Algebra.Zerocheck
-import Proofs.Flock.VBridge.PartS
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRowDCoin
+public import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
+public import Proofs.Flock.VBridge.Algebra.RunSkel
+public import Proofs.Flock.VBridge.Algebra.Zerocheck
+public import Proofs.Flock.VBridge.PartS
 
 /-!
 # Row D's ties at the deployed layout: the side's schedule and check 5's positions
@@ -21,6 +23,8 @@ is handed. This file gives two of them at row D's readers `RecDeploy.Rows.sideAt
   reads the same positions at check 5's shape (`RecResiduals.shape?`) as at the reader's (`shapeOf`), which differ only
   in the Merkle widths it doesn't read (`verifierRows_congr`), and at any comb (`verifierRows_comb`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.OpenLower
 
@@ -323,7 +327,7 @@ def PosTieR (untr : TrReader) (b : Brings) (pieces : Msg → List OpenPiece)
 /-- **`PosTieR` at row D's position reader**, from `InnerCoinsR`, at a statement the reader reads at the dense form
 and pieces in range. -/
 theorem posTieR_of {untr : TrReader} {b : Brings} {pieces : Msg → List OpenPiece} {Bk : Msg → ℕ} {s : ℕ}
-    {x : Msg} {c : ℕ → Coin} {st : Claims.Recursion.Stmt} (hst : parse x = some st)
+    {x : Msg} {c : ℕ → Coin} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st)
     (hd : Claims.Recursion.Form.Dense st.form) (hR : PiecesInRangeR pieces)
     (hI : InnerCoinsR untr b Bk s x c) : PosTieR untr b pieces posAt Bk s x c := by
   intro xO hsh i spec sts hsu ht f inn hf hload r ss lv LANES HH n hr hss hsv cr dr hop q hq ho

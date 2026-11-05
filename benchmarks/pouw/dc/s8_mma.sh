@@ -3,8 +3,8 @@
 # forms inside one short lease, the check against verity.ml.circuits.silicon.integer after it. The bulk words stay in
 # scratch (their sha256 is kept; s8_mma.py gen rebuilds the cases from the seed).
 #
-#   research run --on vy-dc-h200 --project verity --campaign pouw --source <tree> --cwd source --custody-ttl 12h \
-#     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/dc/s8_mma.sh sm90 [FAMILY ...]      (sm100 on vy-dc-b200)
+#   research run --on H200 --project verity --campaign pouw --source <tree> --cwd source --custody-ttl 12h \
+#     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/dc/s8_mma.sh sm90 [FAMILY ...]      (sm100 on a B200)
 #
 # sm90 runs families mma (mma.sync m16n8k32), wg (wgmma m64n8k32) and wg64, wg128, wg256 (wgmma m64nNk32); sm100 runs mma
 # and tc (tcgen05.mma kind::i8); FAMILY ... runs those alone. `s8_mma.sh build sm90|sm100` on a CPU node only compiles:

@@ -5,7 +5,7 @@
 its callee's id: instances, units by class, and the gates property/v1 refuses. On a Program it also sums them by step (the
 census/v1 steps at `ends`) and checks every step against `stacking.analyze`, so the table reads property/v1's own numbers.
 
-The attention of one request-step-layer (`Window`) is the exact-int8 profile's two calls: `Int8KvQuant_v1{S, D}` once a KV head
+The attention of one request-step-layer (`AttentionWindow`) is the exact-int8 profile's two calls: `Int8KvQuant_v1{S, D}` once a KV head
 (G of them) over the window's S keys, then `Int8LutAttentionRow_v1{D, s, SCALE}` once a (row, head), H heads a row, for its N last
 rows s = S - N + 1 .. S. `fit(count, points, checks)` writes it as units(N, S) = r0 N + b_q R + b_kv S + w0 + w_start [N = S]
 with R = N S - N (N - 1) / 2, the rows' keys, and [N = S] a window from position 0 (its first row reads one key: that row's max
@@ -219,7 +219,7 @@ KV, ROW = "Int8KvQuant_v1", "Int8LutAttentionRow_v1"
 ATTENTION = (KV, ROW)
 
 
-class Window:
+class AttentionWindow:
     """One request-step-layer's attention over its window of S keys and its N last rows: G calls of `kv` at S, and H calls of
     `row` at each row's keys s = S - N + 1 .. S, each with its first call's run dependence. ``units``, ``primitives`` and
     ``families`` give its units by class, by ``primitive|class`` (every composite expanded) and by the family of each callee of
@@ -264,13 +264,13 @@ class Window:
 
 
 def window(program: Any, rows: Mapping[str, dict], arg_dyn: Mapping[int, list[bool]], G: int, H: int,
-           spec: Mapping[str, Any] | None = None) -> tuple[Window, int]:
-    """The Program's attention as a `Window` of G KV heads and H heads (or `spec`'s: one TP rank's), and the calls a
+           spec: Mapping[str, Any] | None = None) -> tuple[AttentionWindow, int]:
+    """The Program's attention as an `AttentionWindow` of G KV heads and H heads (or `spec`'s: one TP rank's), and the calls a
     request-step makes (its layers, ``L``). Held to the Program: every `KV` callee is G L instances and every `ROW` callee H L
     (a window's S keys once a step, each row's keys once), and each callee's units an instance are the Definition's own at its
     statics (so the window's counts hold at the Program's ranges)."""
     fns = first_calls(program, arg_dyn)
-    w = Window(fns[KV], fns[ROW], G, H)
+    w = AttentionWindow(fns[KV], fns[ROW], G, H)
     Ls = set()
     for cid, r in rows.items():
         if r["family"] not in ATTENTION:
@@ -286,7 +286,7 @@ def window(program: Any, rows: Mapping[str, dict], arg_dyn: Mapping[int, list[bo
     if len(Ls) != 1:
         raise ValueError(f"the attention callees give {sorted(Ls)} calls a request-step (G={G}, H={H}), not one")
     if spec:
-        w = Window(fns[KV], fns[ROW], spec["G"], spec["H"])
+        w = AttentionWindow(fns[KV], fns[ROW], spec["G"], spec["H"])
     return w, Ls.pop()
 
 
@@ -304,7 +304,7 @@ def windows_of(rows: Mapping[str, dict]) -> list[tuple[int, int]]:
     return out
 
 
-def attention_fit(w: Window, own: Iterable[tuple[int, int]] = ()) -> dict:
+def attention_fit(w: AttentionWindow, own: Iterable[tuple[int, int]] = ()) -> dict:
     """The window's fit (`fit`), held to `FIT_CHECKS` and the Program's own windows `own`."""
     checks = [(N, S, None) for N, S in dict.fromkeys(tuple(FIT_CHECKS) + tuple(own))]
     return fit(w.units, FIT_POINTS, checks)
@@ -349,7 +349,7 @@ def by_primitive(fn: Any, dyn: Sequence[bool]) -> dict[str, int]:
     return out
 
 
-def per_key(w: Window, S0: int = 128) -> dict[str, dict[str, Fraction]]:
+def per_key(w: AttentionWindow, S0: int = 128) -> dict[str, dict[str, Fraction]]:
     """A one-row attention window's units a key, by the family of each callee of its Definitions' bodies: the slope between S0
     and 2 S0 keys."""
     a, b = w.families(S0), w.families(2 * S0)
@@ -446,7 +446,7 @@ LINEAR = ("Int8Linear_v1", "Int8RowQuant_v1")
 LINEAR_INNER = ("Int8RowQuant_v1",)
 
 
-def levers(program: Any, rows: Mapping[str, dict], arg_dyn: Mapping[int, list[bool]], w: Window, *, token: str,
+def levers(program: Any, rows: Mapping[str, dict], arg_dyn: Mapping[int, list[bool]], w: AttentionWindow, *, token: str,
            sample: Sequence[str]) -> dict:
     """What the levers act on, from the Program's own Definitions at `rows`' statics (a modeled variant's rows, with its window
     `w`): the attention window's units a key and a call by inner family (``attention_per_key``, ``attention_per_call``: a K'
@@ -486,7 +486,7 @@ def levers(program: Any, rows: Mapping[str, dict], arg_dyn: Mapping[int, list[bo
     return out
 
 
-def describe(program: Any, rows: Mapping[str, dict], *, token: str, sample: Sequence[str], w: Window,
+def describe(program: Any, rows: Mapping[str, dict], *, token: str, sample: Sequence[str], w: AttentionWindow,
              co: Mapping[str, Mapping[str, Fraction]], layers: int, extra: Mapping[str, Any] | None = None) -> dict:
     parts = components(rows, token=token, sample=sample, attention=ATTENTION)
     tok = Counter(parts["token"])

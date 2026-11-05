@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.ZkPlanHJ
-import Proofs.Flock.Claims.KS.ZkEntries
+module
+
+public import Proofs.Flock.Claims.KS.ZkPlanHJ
+public import Proofs.Flock.Claims.KS.ZkEntries
 
 /-!
 # The deployed `--zk` decoders at the statement's draw
@@ -26,6 +28,8 @@ statement's draw instead, so no draw in the record is read:
   `zkTabs` on the outcomes `verify --zk` accepts at the setup at the empty draw at `wrS`, at public and hidden
   outputs (`ZkPlanJ`'s and `ZkPlanHJ`'s plans at the law of that one draw).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 
@@ -129,7 +133,7 @@ output's level-0 openings verify against `cap` at `width₀` below level 0's `2^
 reps' `zkRepColsOf` entries at `2·|regions|` extra claims on the streams' rounds and table `j`'s proof files. -/
 def OpensEntries (I : Inputs) (d : Lean.Json) (t : Exec.Transcript) (j : ℕ) (T : TabZK 𝔽 mPts) (cap : Cap Dig)
     (out : OutZC 𝔽 Dig (List UInt8)) : Prop :=
-  ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session) (sch : Flock.Schedule) (tPad : ℕ)
+  ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord) (sch : Flock.Schedule) (tPad : ℕ)
     (s₀ s₁ : StreamRec) (h : j < sts.size),
     FlockDeploy.KS.setupAt (zkInputs I) (some d) = .ok (spec, sts) ∧ Record.decode spec t.record = .ok sess ∧
     Zk.schedule sts[j].m = .ok (sch, tPad) ∧

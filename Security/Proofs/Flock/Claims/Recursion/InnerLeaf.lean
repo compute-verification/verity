@@ -1,9 +1,11 @@
-import Proofs.Flock.Soundness.Discharge.Exec.Merkle
-import Proofs.Flock.Soundness.Discharge.Hidden.Facts
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Flock.RecVStar
-import Flock.ProvedScope
-import Proofs.Flock.Claims.Scope.Check
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.Merkle
+public import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+public import Flock.RecVStar
+public import Flock.ProvedScope
+public import Proofs.Flock.Claims.Scope.Check
 
 /-!
 # The recursion's inner statement and Flock's statement check read one leaf scheme off the circuit file
@@ -16,7 +18,7 @@ cannot both pass.
   walks `parse` as `Exec.parse_leafScheme_pre` does, keeping the reads of the META line.
 * `innerOf_metaLeaf`: a circuit file `RecVStar.innerOf` sets up (`Stmt.setupTables` at `RecVStar.innerTags`, through
   `Stmt.setupHidden` and `HmOut.parse`) has `flock-leaf/sha512-unsalted` as its META id, the inner tags' plain leaves
-  (§16.16).
+  (`Tags.withPlainLeaves`).
 * `check_metaLeaf_tags`, `check_metaLeaf`: a circuit file `ProvedScope.check` passes, whatever its public-input and
   registered flags, has the tags' leaf scheme as its META id, one `ProvedScope.leafOk` covers: `hm96-sha512/v1`, or
   `flock-leaf/sha512-unsalted` at hidden outputs without `--zk`. The check requires those leaves and an untyped
@@ -24,6 +26,8 @@ cannot both pass.
 * `check_of_innerOf`: so where `ProvedScope.check` passes a circuit file `RecVStar.innerOf` sets up, it ran in the
   plain-leaves form: without `--zk`, at hidden outputs and plain SHA-512 leaves.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.InnerLeaf
 
@@ -36,7 +40,7 @@ def metaLeaf (bytes : ByteArray) : Option String := do
   let text ← String.fromUTF8? bytes
   let lines0 := (text.splitOn "\n").toArray
   let lines := if lines0.back? == some "" then lines0.pop else lines0
-  let mj ← (Json.parse (((lines.getD 1 "").trimAsciiEnd.toString).drop 5).toString).toOption
+  let mj ← (Flock.JsonParse.parse (((lines.getD 1 "").trimAsciiEnd.toString).drop 5).toString).toOption
   let ls ← (mj.getObjVal? "leaf_scheme").toOption
   (ls.getObjVal? "id" >>= Json.getStr?).toOption
 
@@ -61,7 +65,7 @@ theorem str_ok {j : Json} {k ctx s : String} (h : J.str j k ctx = .ok s) : (j.ge
 
 theorem metaLeaf_of {bytes : ByteArray} {text : String} {mj ls : Json} {ctx₁ ctx₂ s : String}
     (ht : String.fromUTF8? bytes = some text)
-    (hj : Json.parse
+    (hj : Flock.JsonParse.parse
       (((if ((text.splitOn "\n").toArray).back? == some "" then ((text.splitOn "\n").toArray).pop
           else (text.splitOn "\n").toArray).getD 1 "").trimAsciiEnd.toString.drop 5).toString = .ok mj)
     (hl : J.get mj "leaf_scheme" ctx₁ = .ok ls) (hs : J.str ls "id" ctx₂ = .ok s) : metaLeaf bytes = some s := by

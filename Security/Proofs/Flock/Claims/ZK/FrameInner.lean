@@ -1,8 +1,11 @@
-import Proofs.Flock.Claims.ZK.FrameOwn
-import Proofs.Flock.Claims.ZK.FramePass
-import Proofs.Flock.Claims.ZK.FrameLoop
-import Proofs.Flock.Claims.ZK.FrameProg
-import Proofs.Flock.Soundness.Refine.Arith
+module
+
+public import Proofs.Flock.Claims.ZK.FrameOwn
+public import Proofs.Flock.Claims.ZK.FramePass
+public import Proofs.Flock.Claims.ZK.FrameLoop
+public import Proofs.Flock.Claims.ZK.FrameProg
+public import Proofs.Flock.Soundness.Refine.Arith
+import all Init.Data.String.Defs
 
 /-!
 # What the frame takes at the inner proof's rounds
@@ -27,6 +30,8 @@ At the inner proof's rounds the frame fixes every frame and value it computes fr
   but `hO`, the placeholder's pad row within a `u64`'s count (`hRow`) and `L₀`'s round at the inner proof's round 0
   the firewall's own at some `final_c'` (`hL0`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
@@ -1481,6 +1486,7 @@ theorem ofLoop_progChecks_own (T : ZKMal.CoinLayer.TableData)
     · cases hA
   rw [ofLoop_frameAnswer_same T L₀ real x ρ (m0, r0) h1 hx (by rw [← hcs1, List.length_map] at hq1; exact hq1) hj,
     hcs1] at hF
+  replace hF := (bind_rankStop_ok hF).1
   have hsch : schedOf (real x w ρ) x cs = none :=
     schedOf_none (real x w ρ) x cs hx hq1 (by rw [hk1]; exact hreal) (by rw [hk1, hj]; exact hrs0)
       (by rw [hj]; exact hle)

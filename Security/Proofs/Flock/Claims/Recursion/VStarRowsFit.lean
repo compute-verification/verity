@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Recursion.HpEarlyStaged
-import Proofs.Flock.Claims.Recursion.VStarFitRow
-import Proofs.Flock.Claims.Recursion.VStarTopsOk
-import Proofs.Flock.Claims.Recursion.RoundWords
-import Proofs.Flock.Claims.Recursion.SchedDense
+module
+
+public import Proofs.Flock.Claims.Recursion.HpEarlyStaged
+public import Proofs.Flock.Claims.Recursion.VStarFitRow
+public import Proofs.Flock.Claims.Recursion.VStarTopsOk
+public import Proofs.Flock.Claims.Recursion.RoundWords
+public import Proofs.Flock.Claims.Recursion.SchedDense
 
 /-!
 # The fitted rows at every round with pieces (`rowsFit_tops`), and hp before the last round from them (`hpEarly_tops`)
@@ -25,6 +27,8 @@ held whole, `msgAt`). There `piecesOf` is empty too, so hp is vacuous, and `hpEa
 `rowsFit_tops` holds at every history holding both reps' stream rounds (`hH`), with every part staged and accepted by
 the stager (`hS`, `hok`), which the honest run has (`honest_half`'s `hH`, `stagedPart_run`, `hok_honest`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarBuild
 
@@ -183,7 +187,7 @@ at `layR elemR` are not empty (a stream round committing tops) has `RowsFit` at 
 `H` holds both reps' stream rounds (`hH`), every part is staged (`hS`) and the stager accepts every part (`hok`), and
 the two reps' tops differ at each later level (`hTops`, the tape exception). -/
 theorem rowsFit_tops {Ir : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (Ir.fit x).Tape} {H : List (Msg × Msg)}
-    {st : Claims.Recursion.Stmt} {stg : Stage} (hx : parse x = some st) (hf : Claims.Recursion.Form.Dense st.form)
+    {st : Claims.Recursion.CompiledStatement} {stg : Stage} (hx : parse x = some st) (hf : Claims.Recursion.Form.Dense st.form)
     (hH : ∀ r rs, readX x = some r → repSched r.shape = some rs → 2 * rs.size ≤ H.length)
     (hS : ∀ s < nS x, ∃ xO, StagedPart stg s x xO)
     (hok : ∀ s sv c src, partAt x s = some (sv, c) → srcOf (Ir.fit x) x w ρ H = some src →

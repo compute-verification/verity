@@ -1,5 +1,7 @@
-import Definitions.Pouw.Dither
-import Properties.Pouw.ServedWork
+module
+
+public import Definitions.Pouw.Dither
+public import Properties.Pouw.ServedWork
 
 /-!
 # The served PoUW protocol's freed compute, in the onsite form
@@ -34,6 +36,8 @@ provider is `trusted-host`.
 
 The proof is `Proofs.Pouw.ServedFreed`; `Proofs.Pouw.ServedFreed.Honest` has its honest and nontrivial lemmas.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Served
 
@@ -96,7 +100,7 @@ def ServedFreed : Prop :=
     (opened : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → ℕ → ℕ → V) (enc : C → ByteArray)
     (place : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → Fin (tileCount σ sT) → Place)
     (tile : Noise → List (List ℕ) → Fin (tileCount σ sT) → (ℕ → V) → Prop)
-    (Wp : Period C (Coin C Ξ Cd.rounds σ sT) (Fin (tileCount σ sT)) Cd.rounds n)
+    (Wp : WindowPlay C (Coin C Ξ Cd.rounds σ sT) (Fin (tileCount σ sT)) Cd.rounds n)
     (Pl : Play (Coin C Ξ Cd.rounds σ sT) n K T L U)
     (folded : Paths (Coin C Ξ Cd.rounds σ sT) n → ℝ) (ρ δs δbind δks : ℝ)
     (G : Pouw.Dither.Accel) (μ : G.Res → ℝ) (Reg : Set I) (hon : I → C → Fin (tileCount σ sT) → W) (p : ℝ) (lam : I → ℝ)

@@ -1,6 +1,8 @@
-import Definitions.Pouw.PearlC.DeviceFp4
-import Proofs.Pouw.PearlC.Fp4Freeze
-import Proofs.Pouw.PearlC.PeelExactProofs
+module
+
+public import Definitions.Pouw.PearlC.DeviceFp4
+public import Proofs.Pouw.PearlC.Fp4Freeze
+public import Proofs.Pouw.PearlC.PeelExactProofs
 
 /-!
 # P2 on Pearl-C4's U, `Fp4Dev.peelFp4` (staging, nothing pinned)
@@ -31,6 +33,8 @@ alone, and it loses the inexact words. `peelFp4_err` itself needs no exactness.
 pin's scales (`α = 1344`, `β = f32(336·f32(16/√2346.125))`), formed by `formRow` and served by `peelFp4` with
 `Ẽ = eTilde E a_E`, under two salts whose lines differ in one code: the served words differ.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.PeelFp4Proofs
 

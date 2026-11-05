@@ -1,10 +1,12 @@
-import Proofs.Flock.Claims.Recursion.SideCapUp
-import Proofs.Flock.Claims.Recursion.DecompBDeployed
-import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
-import Proofs.Flock.Claims.Recursion.RowDLevels
-import Proofs.Flock.Claims.Recursion.NextRFits
-import Proofs.Flock.Claims.Complete.Replay.LigeritoMerkle
-import Proofs.Flock.Recursive.HoloRepCoins
+module
+
+public import Proofs.Flock.Claims.Recursion.SideCapUp
+public import Proofs.Flock.Claims.Recursion.DecompBDeployed
+public import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
+public import Proofs.Flock.Claims.Recursion.RowDLevels
+public import Proofs.Flock.Claims.Recursion.NextRFits
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoMerkle
+public import Proofs.Flock.Recursive.HoloRepCoins
 
 /-!
 # The opened positions' range (`PosCap0`, `PosCapUp`) at row D's pieces and `Rows.posAt`
@@ -25,6 +27,8 @@ piece's position, below its `HH` siblings, is one of its cap's nodes. Both hold 
 `sideCapR_rowD` is `SideCapR` at row D's pieces and `Rows.posAt`, at the deployed layout and bound record, from
 `ReadsAt` alone, and `sideCapR_leaf` is `recursiveKSAt_of_leaves`' `hCap` at its records.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.CapLower
 
@@ -130,7 +134,7 @@ the table's two reps, `HH = d - cap` at that level (`levelMatch`), and the posit
 (`posAt_lt`, at table 0's setup, `inner_m`). -/
 theorem pieceCtx {D : Claims.Recursion.Deploy Coin} {shape : Claims.Recursion.Form → Prop}
     (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (hP : ∀ x, D.parse x = parse x)
-    (hS : ∀ f, shape f → Claims.Recursion.Form.Dense f) {x : Msg} {st : Claims.Recursion.Stmt}
+    (hS : ∀ f, shape f → Claims.Recursion.Form.Dense f) {x : Msg} {st : Claims.Recursion.CompiledStatement}
     (hx : D.parse x = some st) (hf : shape st.form) {r : XR} {ss : Array VStar.Stmt} {s lv LANES HH n : ℕ}
     (hr : readX x = some r) (hss : RecVStar.statements r.shape = .ok ss)
     (hsv : ss[s]? = some (.recOpen lv LANES HH n)) {q : OpenPiece}

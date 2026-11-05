@@ -27,9 +27,9 @@ THETA = 7_000 * MS
 
 def loop(rtt: int, passes: list[int], *, tau: int = MS // 2, gap: int = MS // 5) -> tuple[dict, list[str], dict]:
     """The record of a k = 1 session whose every exchange with the challenger is `rtt` ns, half each way, and whose
-    passes take `passes`: verifier.json's session, the challenger's release log and the prover's session. σ_0's fetch
-    holds the loop until it returns, then σ_1's; at root g the verifier asks openings coin g, and σ_(g+2) behind it,
-    once it has sent window g's boundary, draws for d after the reply and sends the boundary s after that."""
+    passes take `passes`: verifier.json's session, the challenger's release log and the prover's session. chal_0's fetch
+    holds the loop until it returns, then chal_1's; at root g the verifier asks openings coin g, and chal_(g+2) behind
+    it, once it has sent window g's boundary, draws for d after the reply and sends the boundary s after that."""
     n, h = len(passes), rtt // 2
     c0, po, fsync, ps, d, s = 40_000, 30_000, 2 * MS, 20_000, 300_000, 100_000
     R, A, D, C, b = [0] * n, [0] * n, [0] * n, [0] * n, [0] * n
@@ -67,7 +67,7 @@ def loop(rtt: int, passes: list[int], *, tau: int = MS // 2, gap: int = MS // 5)
     return {"k": 0, "pace": {"k": 1}, "window_ns": 1, "windows_seen": seen}, lines, proved
 
 
-def recorded(rtt: int, passes: list[int], tau: int = MS // 2) -> tuple[gw.Record, dict]:
+def recorded(rtt: int, passes: list[int], tau: int = MS // 2) -> tuple[gw.SessionTimes, dict]:
     s, lines, proved = loop(rtt, passes, tau=tau)
     auditor, _ = al.auditor_seen(lines, s["windows_seen"])
     rec = gw.record(s, lines, auditor, proved, tau)
@@ -79,9 +79,10 @@ PASSES = [50 * MS if g % 5 == 4 else 110 * MS for g in range(24)]
 
 
 def test_a_record_replayed_at_its_own_round_trip_is_itself_and_at_another_is_the_loops_record_there():
-    """The session's round trip is read off both clocks (the least exchange less the challenger's own time, σ_0's fetch
-    here, which has no samples to compute), whatever the clocks' offset. At it the replay is the record; at 2 ms it is
-    the record of the same loop at 2 ms, on both clocks, where the short passes' roots no longer wait on the verifier."""
+    """The session's round trip is read off both clocks (the least exchange less the challenger's own time, chal_0's
+    fetch here, which has no samples to compute), whatever the clocks' offset. At it the replay is the record; at 2 ms
+    it is the record of the same loop at 2 ms, on both clocks, where the short passes' roots no longer wait on the
+    verifier."""
     rec, own = recorded(100 * MS, PASSES)
     assert rec.r0 == 100 * MS and min(rec.net) == 100 * MS + 300_000
     assert sum(x > 0 for x in rec.queue()) == 4
@@ -112,7 +113,7 @@ def test_a_record_replayed_at_faster_passes_is_the_loops_record_at_them_and_says
 
 @pytest.mark.parametrize("broken", ["alone", "k3", "short"])
 def test_a_record_of_another_loop_is_refused_by_name(broken):
-    """A σ_(g+2) asked on its own, a pace of k = 3 and a prover's record short of its groups are refused, each with
+    """A chal_(g+2) asked on its own, a pace of k = 3 and a prover's record short of its groups are refused, each with
     what the replay models."""
     s, lines, proved = loop(100 * MS, PASSES)
     if broken == "alone":

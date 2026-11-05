@@ -1,10 +1,15 @@
 /-
-§3 and §9–§14 over the hash oracle (`Flock.With.Hashes`): `verifyWithM` is `Flock.verify` with every hash call the oracle's,
+`Flock.Verify`, `Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`, `Flock.Merkle` over the hash oracle (`Flock.With.Hashes`): `verifyWithM` is `Flock.verify` with every hash call the oracle's,
 in a verdict monad `M`, and `verifyWith h` runs it in `V` with SHA-512 replaced by `h`. The copies keep the originals' text;
 what hashes nothing is the compiled verifier's own, lifted (`liftTM`, `liftLM`).
 -/
-import Flock.With.Transcript
-import Flock.Verify
+module
+
+public import Flock.With.Transcript
+public import Flock.Verify
+public import Flock.JsonParse
+
+@[expose] public section
 
 namespace Flock
 
@@ -219,7 +224,7 @@ def ligeritoWith (hs : Hashes M) (ms : MerkleScheme) (sch : Schedule) (T : F128)
         liftLM (claimPow p)
         let bb ← liftW (sampleWith hs)
         modify fun st => { st with s := st.s + e.smul bb, conss := st.conss.push ⟨ext, pos, al, bb, R⟩ }
-    -- §13.6 final check
+    -- `Flock.Ligerito` final check
     let st ← get
     let orig := levels.foldl (fun acc l => acc ++ l.extract 1 l.size) initCh
     if orig.size + ext != n then throw "ligerito: |orig| + ext ≠ n"
@@ -266,7 +271,7 @@ def ligeritoWith (hs : Hashes M) (ms : MerkleScheme) (sch : Schedule) (T : F128)
   return ()
 
 /-- `verifyRep` with the oracle's hashes. -/
-def verifyRepWith (hs : Hashes M) (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session) (i r : Nat)
+def verifyRepWith (hs : Hashes M) (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : RunRecord) (i r : Nat)
     (bytes : ByteArray) : M ByteArray := do
   let t := spec.tables[i]!
   let name := s!"{t}/rep{r}"
@@ -293,9 +298,9 @@ def repFileShape (st : Setup) (sch : Schedule) (n : Nat) : Shape :=
   { m := st.m, kLog := st.kLog, claims := 2 + n, sched := sch, hashLen := st.merkle.digestLen, saltLen }
 
 /-- **`verifyRepWith` at the decoded proof `p`**: everything after the decode, on the rep's stream with the statement's
-extra claims: the pinned PCS parameters (R7/F2), §9–§14, every recorded round consumed (S15/R2) and the cap the committed
+extra claims: the pinned PCS parameters (R7/F2), `Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`, `Flock.Merkle`, every recorded round consumed (S15/R2) and the cap the committed
 `root_B` (S16/R1). -/
-def verifyRepPWith (hs : Hashes M) (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session) (i r : Nat)
+def verifyRepPWith (hs : Hashes M) (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : RunRecord) (i r : Nat)
     (stream : StreamRec) (extras : Array Claim) (p : Proof) : M ByteArray := do
   let t := spec.tables[i]!
   let name := s!"{t}/rep{r}"
@@ -313,7 +318,7 @@ def verifyRepPWith (hs : Hashes M) (spec : SessionSpec) (st : Setup) (sch : Sche
 
 /-- **`verifyRepWith` splits at the decode**: the rep's stream (S11) and the extra claims, the proof file decoded at
 `repFileShape`, then `verifyRepPWith` at the decoded proof. -/
-theorem verifyRepWith_split (hs : Hashes M) (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session)
+theorem verifyRepWith_split (hs : Hashes M) (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : RunRecord)
     (i r : Nat) (bytes : ByteArray) :
     verifyRepWith hs spec st sch sess i r bytes = (do
       let name := s!"{spec.tables[i]!}/rep{r}"
@@ -368,7 +373,7 @@ def verifyJWithM (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup) (j : 
     if c0 != c1 then throw s!"S18/R1: {spec.tables[i]!}: the reps' caps differ"
 
 theorem verifyWithM_of_parse [LawfulMonad M] (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup)
-    {record : String} {j : Lean.Json} (proofs : Array ByteArray) (h : Lean.Json.parse record = .ok j) :
+    {record : String} {j : Lean.Json} (proofs : Array ByteArray) (h : JsonParse.parse record = .ok j) :
     verifyWithM hs spec tabs record proofs = verifyJWithM hs spec tabs j proofs := by
   simp only [verifyWithM, verifyJWithM, Record.decodeWith_of_parse hs spec h]
 

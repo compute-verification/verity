@@ -1,6 +1,8 @@
-import Proofs.Pouw.PeriodJ10R
-import Proofs.Accounting.ComposePeriod.Honest
-import Proofs.Accounting.TS.Keyed
+module
+
+public import Proofs.Pouw.PeriodJ10R
+public import Proofs.Accounting.ComposePeriod.Honest
+public import Proofs.Accounting.TS.Keyed
 
 /-!
 # An honest J10-R period meets `H1J10RCheckedCreditPeriod`'s premises
@@ -34,6 +36,8 @@ and its `window-drawn` entry draw the Python verifier's units on generated coins
 The conclusion then speaks of the whole period: its accepted prefix is all `n` windows (`prefixLen_all`) and its live
 words are `N·n` (`creditLive_all`), so `j10r_credit` is the statement's bound at `N·n` live words, not at none.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.PeriodJ10R.SecurityProofs.HonestJ10R
 
@@ -147,7 +151,7 @@ def stages (N : ℕ) : SplitStages Bool (Fin N) 1 :=
 abbrev WCoin (N : ℕ) (B : Type) : Type := Paths Bool (circuit N).rounds × (Equiv.Perm (Fin N) × B)
 
 /-- The honest period of `n` windows: every tile live, each window's stages `stages`, whatever the past. -/
-def period (Ω : Type) (N : ℕ) : (n : ℕ) → Period Bool Ω (Fin N) (circuit N).rounds n
+def period (Ω : Type) (N : ℕ) : (n : ℕ) → WindowPlay Bool Ω (Fin N) (circuit N).rounds n
   | 0 => .done
   | n + 1 => .window (fun _ => true) (stages N) fun _ => period Ω N n
 

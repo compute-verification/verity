@@ -1,5 +1,7 @@
-import Proofs.Pous.Chain.Family
-import Proofs.Pous.Continuous.PerAnswer
+module
+
+public import Proofs.Pous.Chain.Family
+public import Proofs.Pous.Continuous.PerAnswer
 
 /-!
 # The continuous audit on the 64 KiB band at `D = 5` (an instance, not pinned)
@@ -13,6 +15,8 @@ stopped union costs `n·(β + 1)·π ≤ n·2^-1098`. The scope is the continuou
 (`Security/Definitions/Pous/Model/Continuous.lean`): conditional on the arrivals, storage at send times, and `g`
 normalized by the realized number of challenges, never `λT`.
 -/
+
+@[expose] public section
 
 namespace PousContinuous
 

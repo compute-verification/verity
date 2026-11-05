@@ -1,10 +1,14 @@
-import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
-import Proofs.Flock.Claims.Recursion.RestFinal
-import Proofs.Flock.Claims.Recursion.PartsVStar
-import Proofs.Flock.Claims.Recursion.BoundAccepts
-import Proofs.Flock.Claims.Recursion.SlotsCommit
-import Proofs.Flock.VBridge.RecOpen
-import Proofs.Flock.Soundness.Refine.Paths
+module
+
+public import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
+public import Proofs.Flock.Claims.Recursion.RestFinal
+public import Proofs.Flock.Claims.Recursion.PartsVStar
+public import Proofs.Flock.Claims.Recursion.BoundAccepts
+public import Proofs.Flock.Claims.Recursion.SlotsCommit
+public import Proofs.Flock.VBridge.RecOpen
+public import Proofs.Flock.Soundness.Refine.Paths
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The element-level last message at the `rec-open` copies (`elemR`), and `CopyOpensR` there (U8)
@@ -28,6 +32,8 @@ it, so a `rec-open` copy reads exactly the row and siblings the last message car
 * `copyOpensR_elemR`: `CopyOpensR` at any layout with `layAt (restR elemR)`'s messages and pieces, the deployed
   `final`, `opened` and `k`, and `sideAtR rdR`, for pieces in range; `copyOpensR_layR` at the layout of record.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.OpenRows
 
@@ -625,7 +631,7 @@ theorem mem_proofPieces (r : XR) (h : 0 < r.w.parts.length) (k : ℕ) {ℓ : ℕ
 
 /-! ## `CopyOpensR` at `elemR` -/
 
-theorem stmtOf_xIOf {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st) {r : XR}
+theorem stmtOf_xIOf {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st) {r : XR}
     (hr : readX x = some r) : xIOf x = stmtOf r := by
   obtain ⟨r', hr', ha, rfl⟩ := parse_read hst
   rw [hr] at hr'

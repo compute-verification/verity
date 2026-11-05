@@ -21,8 +21,7 @@ def _units(*draws):
 
 
 def _stream(rounds=2, budget=4, clock=None, sampler=None, spec=None) -> S.Stream:
-    return S.Stream(spec or _spec(), PAIR, budget=budget, delta=DELTA, challenger="challenger-test",
-                    coins=lambda n: b"\x07" * n, clock=clock or Clock(),
+    return S.Stream(spec or _spec(), PAIR, budget=budget, delta=DELTA, challenger="challenger-test", clock=clock or Clock(),
                     sampler=sampler or _units([0, 1], [2, 3], [4, 5], [0, 5], [1, 2]), rounds=rounds)
 
 
@@ -38,7 +37,7 @@ def _record(row: int, previous: str | None) -> dict:
                     {"kind": "served", "run": RUN, "row": row}, previous=previous)
 
 
-def _register(stream: S.Stream) -> S.Registration:
+def _register(stream: S.Stream) -> S.WindowCommitmentRecord:
     row = len(stream._entries)
     previous = stream._entries[-1].registration.digest if stream._entries else None
     return stream.register(_record(row, previous), _ports(N))
@@ -180,7 +179,7 @@ def test_a_stream_of_rounds_states_them_and_runs_one_round_as_before():
     for rounds in (0, 5, 2.0, True):
         with pytest.raises(ValueError, match="rounds"):
             _stream(rounds=rounds)
-    one = S.Stream(_spec(), PAIR, budget=4, delta=DELTA, challenger="challenger-test")
+    one = S.Stream(_spec(), PAIR, budget=4, delta=DELTA, challenger="challenger-test", sampler=_units())
     assert one.digest == S._sha512({"format": S.STREAM, "spec": _spec().digest(), "budget": 4, "delta": DELTA,
                                     "challenger": "challenger-test"})
     assert _stream(rounds=1).digest == one.digest != _stream(rounds=2).digest

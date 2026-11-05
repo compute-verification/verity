@@ -1,5 +1,7 @@
-import Flock.With.SimSetup
-import Proofs.Flock.Claims.Complete.CostWalk
+module
+
+public import Flock.With.SimSetup
+public import Proofs.Flock.Claims.Complete.CostWalk
 
 /-!
 # The setup's hash calls, counted function by function, in any hash
@@ -12,6 +14,8 @@ partition's checks and laws, and the links check. Each proof walks the definitio
 assigns each bound, and `omega` closes what it leaves. The walk is spelled out in each proof rather than kept as a
 macro, which only a `compile_time` module may hold.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.SetupCount
 
@@ -1412,7 +1416,7 @@ theorem root_cost (dom : ByteArray) (leaves : Array ByteArray) :
     countC.P (FV3.rootWith (Hashes.counted h) dom leaves)
       ((nextPow2 leaves.size - leaves.size)
         + log2ceil (nextPow2 leaves.size) * (leaves.size + (nextPow2 leaves.size - leaves.size))) := by
-  unfold FV3.rootWith
+  unfold FV3.rootWith FV3.rootM
   dsimp only
   refine bindQ (mapM_array_cost _ (c := 1) fun _ => hash_cost h _ _) (mapM_array_ok _ _) (fun pads hp => ?_)
     (m := log2ceil (nextPow2 leaves.size) * (leaves.size + (nextPow2 leaves.size - leaves.size)) + 0) ?_

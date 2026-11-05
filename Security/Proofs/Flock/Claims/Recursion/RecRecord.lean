@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.VStarCross
-import Flock.RecRecord
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarCross
+public import Flock.RecRecord
 
 /-!
 # The coin server's record reads back
@@ -8,7 +10,7 @@ import Flock.RecRecord
 (`readFull_recordFullW`): the rounds, the record's kind and tops' format, the prover's Hello (`readHello_helloW`) and
 the link's level-0 tops and points (`readObj_objW`), piece by piece: literals, hex strings, escaped strings, decimal
 numbers, lists and objects at their indentation and coins. No JSON library is involved, so no property of one is
-assumed (`Claims.JsonSpec` stays a completeness premise).
+assumed.
 
 At the deployment's model (`recTr`, `recRead`) the coin server's transcript of the inner rounds is that record, as
 `rec_live`'s coin server writes it (`recOf`): round 0's message, the link, as its table's level-0 top (one node a
@@ -23,6 +25,8 @@ the rounds `Record.msgs` shows are the link's and the recorded rounds', one fewe
 schedule's count of commit strings. The model before it, which listed every inner round, set up no staged statement
 (`Flock.Test.RecSchedule`: `RecSetup.commits` holds the staged record to the schedule's rounds).
 -/
+
+@[expose] public section
 
 namespace Flock.RecRecord
 

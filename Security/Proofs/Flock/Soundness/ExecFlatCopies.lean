@@ -1,5 +1,8 @@
-import Proofs.Flock.Soundness.ExecFlatClass
-import Proofs.Flock.Soundness.Types.ProgramPlaces
+module
+
+public import Proofs.Flock.Soundness.ExecFlatClass
+public import Proofs.Flock.Soundness.Types.ProgramPlaces
+public import Properties.Flock.Circuit.Keys
 
 /-!
 # A typed flat class's input copies and forced-zero rows (1e for flat classes)
@@ -15,6 +18,8 @@ pair, over the net's self row there:
 - `Layout.placed_zero`: each unit slot's row past its useful rows is a forced-zero row;
 - `setupH_flatTableClass`: the flat class's `TableClass`, from the statement `Stmt.setupH` accepted.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 
@@ -244,9 +249,6 @@ theorem delta_flat (c : Circuit) (pin : ℕ) (ht : c.typed = none) : FlatDelta c
 
 /-! ## A net's input port bits -/
 
-/-- A net's input port bits, port by port: each port's columns. -/
-def portBits (gs : Array Group) : List ℕ := (portCols gs).toList.flatMap fun q => List.range' q.1 q.2
-
 /-- Distinct input port bits are distinct columns. -/
 theorem portBits_inj {gs : Array Group} (hnd : (portBits gs).Nodup) {p p' t t' : ℕ} (hp : p < (portCols gs).size)
     (hp' : p' < (portCols gs).size) (ht : t < (portCols gs)[p]!.2) (ht' : t' < (portCols gs)[p']!.2)
@@ -269,10 +271,6 @@ theorem portBits_inj {gs : Array Group} (hnd : (portBits gs).Nodup) {p p' t t' :
   · exact absurd he (key p p' hp hp' h t t' ht ht')
   · exact ⟨rfl, by omega⟩
   · exact absurd he.symm (key p' p hp' hp h t' t ht' ht)
-
-/-- The port a column of the input rows is a bit of: the first whose columns hold it. -/
-def portOf (pc : Array (ℕ × ℕ)) (off : ℕ) : ℕ :=
-  ((List.range pc.size).find? fun p => decide (pc[p]!.1 ≤ off ∧ off < pc[p]!.1 + pc[p]!.2)).getD 0
 
 theorem portOf_eq {gs : Array Group} (hnd : (portBits gs).Nodup) {p t : ℕ} (hp : p < (portCols gs).size)
     (ht : t < (portCols gs)[p]!.2) : portOf (portCols gs) ((portCols gs)[p]!.1 + t) = p := by
@@ -1054,7 +1052,7 @@ theorem setupH_flatCopy (g : Fin st.c.unitRange.count)
           ite_eq_right (by have := j.isLt; intro he; exact hlt (he ▸ this))]
     rw [hZ.block_eq hz o, flatZero_block ht h hr regs g hz o]
 
-/-- **A flat class's table class** (the soundness lane's `TableClass`), from the statement `Stmt.setupH` accepted: its
+/-- **A flat class's table class** (the soundness model's `TableClass`), from the statement `Stmt.setupH` accepted: its
 unit slots, the unit's composed rows placed at each (`setupH_flatPlacement`), each input's copy position
 (`setupH_flatCopy`) and the slots' forced-zero rows (`setupH_flatZero`). -/
 def setupH_flatTableClass : TableClass ((setupH_flatLayout ht h hr).2.2.model regs) where

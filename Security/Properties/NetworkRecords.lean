@@ -1,5 +1,7 @@
-import NetworkCheck.RecordsGrid
-import Properties.NetworkCertifier
+module
+
+public import NetworkCheck.RecordsGrid
+public import Properties.NetworkCertifier
 
 /-!
 # The records check: what acceptance by its Lean code (`NetworkCheck.Records.protocol`) means
@@ -27,6 +29,8 @@ hash have one SHA-256 digest. A certified record's certificate verifies under th
 their certifier session (LMS's verifier accepts it; that only the key's holder could sign is not claimed), and its head
 is the record head of the Program's grid, or two distinct strings the two heads' digests hash have one SHA-512 digest.
 -/
+
+@[expose] public section
 
 open NetworkCheck hiding Params
 open NetworkCheck.Check (Params Certified Link Evidence Grid Profile LinkWindow)

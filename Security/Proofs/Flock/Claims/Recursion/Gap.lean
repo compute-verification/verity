@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.Inner
-import Proofs.Flock.Claims.Recursion.Abort
-import Proofs.Flock.Claims.Recursion.Registered
+module
+
+public import Proofs.Flock.Claims.Recursion.Inner
+public import Proofs.Flock.Claims.Recursion.Abort
+public import Proofs.Flock.Claims.Recursion.Registered
 
 /-!
 # `InnerKS` does not follow from `Inner.KS` and the code facts; `Inner.KSAbort` excludes the deployment
@@ -18,6 +20,8 @@ inner prover makes the inner verifier reject on a coin it never reads, so `Inner
 fresh coin of its own does make `gI`'s one rerun rejected half the time, so `gI` fails `Inner.KSAbort`
 (`gI_not_KSAbort`), the one hypothesis of `KS_of_flockKS` the deployment lacks.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 
@@ -84,7 +88,7 @@ def gVerdict (h : Msg) (as : List Msg) (cs : List Bool) : Out :=
 def gV : Verifier Bool := ⟨fun _ => 2, fun _ as cs => .query [] fun h => .ret (gVerdict h as cs)⟩
 
 /-- The recursion's statement: the empty inner statement, no circuit commitment. -/
-def gStmt : Stmt := ⟨[], none, none, ⟨0, 0, 0, 0, false, none, none, false⟩, []⟩
+def gStmt : CompiledStatement := ⟨[], none, none, ⟨0, 0, 0, 0, false, none, none, false⟩, [], none⟩
 
 /-- The compiled verifier's deployment: one outer session, its view the run's second round. -/
 noncomputable def gD (H : Msg → Msg) : Deploy Bool where

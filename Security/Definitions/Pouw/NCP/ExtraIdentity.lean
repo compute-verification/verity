@@ -1,4 +1,6 @@
-import Definitions.Pouw.NCP.Protocol
+module
+
+public import Definitions.Pouw.NCP.Protocol
 
 /-!
 # An admissible R with a checkpoint identity other than the final one (trusted)
@@ -13,6 +15,8 @@ depth `32` is not identically zero on noise in `[−31, 32]`. The last clause: t
 `2k + 64t` (`1 ≤ t ≤ k/64`) is identically `0`, so the constant rule `0` is an identity there. With the sum rule that
 is `k/64 + 1` identity positions per output entry out of `3k/16`, the final one included.
 -/
+
+@[expose] public section
 
 namespace Pouw.NCP.ExtraIdentity
 

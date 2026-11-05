@@ -8,9 +8,13 @@ With the oracles of `Flock.With.Log`: forgetting the log gives back setup at `h`
 the log's length is `Stmt.setupCalls h`, the number of SHA-512 calls a run with the counting oracle makes
 (`Stmt.setupLogged_size`).
 -/
-import Flock.With.SimWalk
-import Flock.With.Setup
-import Flock.With.Log
+module
+
+public import Flock.With.SimWalk
+public import Flock.With.Setup
+public import Flock.With.Log
+
+@[expose] public section
 
 namespace Flock.With
 
@@ -55,7 +59,7 @@ theorem fv3LeafWith_sim (S : Sim M N) {hs : Flock.Hashes M} {hs' : Flock.Hashes 
 theorem fv3RootWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] {hs : Flock.Hashes M} {hs' : Flock.Hashes N}
     (hh : S.Hashes hs hs') (dom : ByteArray) (leaves : Array ByteArray) :
     S.R (FV3.rootWith hs dom leaves) (FV3.rootWith hs' dom leaves) := by
-  unfold FV3.rootWith
+  unfold FV3.rootWith FV3.rootM
   sim_walk [fv3HashWith_sim S hh]
 
 theorem typeDigestWith_sim (S : Sim M N) {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs')

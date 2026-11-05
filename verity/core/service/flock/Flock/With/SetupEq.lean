@@ -2,8 +2,12 @@
 Setup's oracle copies under the deployed hashes: run in `V` with `Hashes.ofSha512 Sha512.hash`, each `…With` of
 `Flock.With.Setup` is the compiled verifier's function it copies, so `Stmt.setupTablesWith` at SHA-512 is `Stmt.setupTables`.
 -/
-import Flock.With.Setup
-import Flock.With.Eq
+module
+
+public import Flock.With.Setup
+public import Flock.With.Eq
+
+@[expose] public section
 
 namespace Flock
 
@@ -138,7 +142,7 @@ theorem fv3LeafWith_std (dom : ByteArray) (i : Nat) (schema : String) (payload :
 
 theorem rootWith_std (dom : ByteArray) (leaves : Array ByteArray) :
     FV3.rootWith std dom leaves = pure (FV3.root dom leaves Sha512.hash) := by
-  unfold FV3.rootWith FV3.root
+  unfold FV3.rootWith FV3.rootM FV3.root
   simp only [hashWith_std, Array.mapM_pure, pure_bind, Std.Legacy.Range.forIn_eq_forIn_range',
     List.forIn_pure_yield_eq_foldl]
   rfl

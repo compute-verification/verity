@@ -125,7 +125,7 @@ def circuit_registry(name: str) -> ModuleType | None:
 
 def traced_as(entry: str, m: int, k: int, n: int) -> Any:
     """The circuit sampled proofs traces for one executed call of ``entry`` (``pouw:ncp-v2``) of shape m × k → n: its
-    Definition, partition query, served outputs and draw layout.  None when the scheme has no circuit; a shape outside the
+    Definition, partition query, served outputs and sampling layout.  None when the scheme has no circuit; a shape outside the
     circuit raises the protocol package's ``DomainError``."""
     name, _, scheme = entry.partition(":")
     reg = circuit_registry(name)
