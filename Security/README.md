@@ -404,8 +404,9 @@ None of these is assumed silently; each would restate the conclusion:
 ## Three trees
 
 - `Definitions/` (package `security`, with `Models.lean`): the spec, the part a reader reads. Each area (`Core`, `Pouw`,
-  `Pous`, `NetworkCertifier`, `Accounting`, ...) has its vocabulary, its named assumptions (`Assumptions`) and its
-  guarantee statements (`Guarantees`), each a `def G : Prop`.
+  `Pous`, `NetworkCertifier`, `Accounting`, ...) has its vocabulary, its premises (`Assumptions`) and its guarantee
+  statements (`Guarantees`), each a `def G : Prop`. The real assumptions, the few the guarantees rest on without proof,
+  are declared in one module, `Definitions/Assumptions.lean`; a premise declared anywhere else is open (The lock).
 - `Properties/` (package `security_properties`): statements about the code's Lean functions, the checks each protocol
   runs, one `Properties.<Protocol>` module per protocol.
 - `Proofs/` (package `security_proofs`): every proof, `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for each
@@ -420,15 +421,22 @@ guarantees and assumptions are still in `Proofs/Flock`, which `trees` lists by m
 
 ## The lock
 
-Each package's `lean-audit.json` is its lock. For each guarantee it records the signature, the named assumptions among
-its hypotheses and a SHA-256 hash of its type, and, per module, every definition the statements read with a digest. The
+Each package's `lean-audit.json` is its lock. For each guarantee it records the signature, its premises (the named
+assumptions, the domain hypotheses, the open premises, and the `Prop`s of an assumptions module its statement only reads) and a SHA-256 hash of
+its type, and, per module, every definition the statements read with a digest. A named assumption, under `assumptions`, is
+declared in `Definitions/Assumptions.lean` (`assumptions_module`); every other named premise is open, under `open` with
+the Linear issue that discharges it and its due date, and `--update` adds none on its own, so that list only shrinks. A
+hypothesis that is part of what its guarantee says (a domain, a scope, the layer below's guarantee) is under `domain`
+with a one-line `why` instead, and a guarantee with an honest witness must have that witness conclude it. The
 Lean check (`tools/verity/lean/check.py`) builds every file, replays every declaration through Lean's kernel, and fails
 when:
 
 - a declaration uses an axiom other than `propext`, `Classical.choice` and `Quot.sound` (so no `sorry`, `axiom` or
   `native_decide`), or an option that skips the kernel;
-- a guarantee has a `Prop` hypothesis that is not a named assumption: a `Prop` listed by name in the lock, with an owner
+- a guarantee has a `Prop` hypothesis that is not a named premise: a `Prop` listed by name in the lock, with an owner
   and its definition's digest;
+- a premise is listed under the wrong kind (a named assumption declared outside `Definitions/Assumptions.lean`), or an
+  open premise is not listed;
 - a statement reads a definition outside the spec, or breaks `layers` or `trees`;
 - a claim definition lacks its witnesses: a theorem that it fails at a toy instance, and one per deployed record that its
   checkable antecedents hold there;

@@ -83,7 +83,7 @@ def test_each_proof_step_needs_its_evidence():
     _says(_ex("moved", "proved", proof=PROOF), "proof stated: add [evidence] guarantee")
     assert not E.problems(_ex("moved", "proved", **STATED, proof=PROOF), ROOT)
     _says(_ex("moved", "measured", **STATED, proof=PROOF), "add [evidence.premises]")
-    _says(_ex("moved", "measured", **STATED, proof=PROOF, premises={"Nope.Premise": "soon"}), "'Nope.Premise' is an assumption no",
+    _says(_ex("moved", "measured", **STATED, proof=PROOF, premises={"Nope.Premise": "soon"}), "'Nope.Premise' is a premise no",
           "'soon' is neither")
 
 

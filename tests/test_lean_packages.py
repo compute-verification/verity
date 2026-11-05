@@ -70,11 +70,10 @@ def test_one_mathlib():
     assert revs and len(set(revs.values())) == 1, revs
 
 
-#: the size of each lock's `unwitnessed`: the guarantees stating what an acceptance means, or an exclusion's bound, that
-#: had no `honest` and `nontrivial` witnesses when the witness rule came (`check.py`'s `witness_failures`), with those the
-#: PRs on `next` then brought, and the exclusion bounds that read a partition once a derived circuit's registration built
-#: its one-block partition (`RegisteredCircuit.ofCircuit`)
-UNWITNESSED = {"Security": 381, "Security/Properties": 195, "verity/core/service/flock": 7}
+#: the size of each lock's `unwitnessed`, as the regeneration that recorded every guarantee's premises left it: the
+#: guarantees stating what an acceptance means, or an exclusion's bound, that have no `honest` and `nontrivial` witnesses
+#: (`check.py`'s `witness_failures`)
+UNWITNESSED = {"Security": 140, "Security/Properties": 150, "verity/core/service/flock": 6}
 
 
 def test_the_unwitnessed_list_only_shrinks():
@@ -237,8 +236,8 @@ def test_the_inline_list_only_shrinks():
     longer printed, `--update` drops its entry, and its lock's number here comes down with it (`_held`)."""
     _held("INLINE", INLINE, {_rel(p): sum(map(len, _lock(p).get("shape", {}).get("inline", {}).values()))
                              for p in lake_packages()},
-          "`shape.inline`", "it only shrinks; name the hypothesis as a Prop in an Assumptions module and list it in the "
-          "lock, or state it as a lock-listed guarantee's conclusion")
+          "`shape.inline`", "it only shrinks; name the hypothesis as a Prop and list it in the lock (under `open`, with "
+          "its issue and due date), or state it as a lock-listed guarantee's conclusion")
 
 
 #: how far a cap here may stand above its count ({"CAP key": room}): changes queued on `next` when the caps came to equal
