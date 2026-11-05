@@ -25,7 +25,9 @@ art:410b0b76284443025d92c55d6dbe01c76ddb636ab454f15bedae5e11aeafdef0 (kind landi
 2. **The after-landing run is green on its gated steps at 9 of 50 tips (18%)** (`after_landing_reds.json`). The
    whole-tree invariant suites (repository 211 s, verity-check 215 s, verity-graph 447 s, research 71 s on d0e6) were red at
    24 of 50 tips and the only gated red at 7. They are ratchets a batch trips together ("no new silent excepts" 7 tips,
-   "direct reads only shrink" 6, "no new lane text" 5, the graph's check reads 4, `test_infra_paths` for #6414). Nothing
+   "direct reads only shrink" 6, "no new lane text" 5, the graph's check reads 4, `test_infra_paths` for #6414); 19 tips
+   brought a test red in them that the tip before didn't have (4 of those the graph's timing tests, deleted since in
+   38a93b32), so about 15 new invariant reds in 7 days. Nothing
    runs them on `next`: before landing only Lean changes get a check (`_lean_check`), and the author's own run is
    `suites.py --changed origin/main`, against a `main` 10 h behind.
 3. **Drive's tick is the clock of every handoff.** Ticks on Nov 4-5: 2,176-9,930 s, median ~58 min (`Queue._merge`
@@ -92,4 +94,22 @@ against 12.3 h observed, scaled by 0.82; 197 landings a week)
    min).
 6. **Automation back on** (ci): delete `ci-no-postland` once 1-3 land; then `main` moves without `queue baseline`.
 
-Target after 1-4: a typical run ~30 min, R ~35 min, p ~0.5: mean landed-to-main ~1.5 h (model).
+Target after 1-4: a typical run ~30 min, R ~37 min, p ~0.4: mean landed-to-main ~1.5 h (model). The levers interact,
+so their savings don't add. Cold under 45 min is not reachable by Sat on this evidence: the best cold Proofs audit is
+1,743 + 1,010 s run one after the other (46 min, cpu-13), typical 50-65 min; it needs replay overlapped with the build.
+
+## Lever 1 priced (process-design)
+
+**Failure.** ~15 new whole-tree invariant reds in 7 days (19 of 50 tips, `after_landing_reds.json`), each holding `main`
+at least one cycle (~2.5 h) plus the 60-min revert clock, for every landing behind it.
+**Mechanism.** Drive runs repository, verity-check, verity-graph and research plus `suites.py --changed <checked tip>
+--quick` on the merged tip of what lands, beside the Lean check of `next`; a red ejects its member by the Lean check's
+walk. Smaller one tried: the team skill's prose rule for authors, run against a stale `main`; it doesn't fire.
+**Walkthrough** (Oct 30-Nov 5): 197 landings, most on the low-risk lane. Each batch: one run, 4-8 min, beside a Lean
+check (44-65 min median) or alone; blocks only its culprit; machine acts.
+**Price per week.** Human: 0. Merge path: +0 min beside a Lean check, up to ~8 min per batch without one. Shared files or
+queues: none new. Always-read words: one prose rule retired. Pods: ~30 batches x 8 min, ~4 slot-hours.
+**Tests.** A flaky test ejects a good member: the red names it and the flake rule deletes it.
+**Budget.** Within it: automatic, no human gate, no new file.
+**Owner and exit.** ci; it retires when the executor's check of `next` runs the same tests per commit.
+**Pilot.** The low-risk lane (ci's lever 3) for 8 h: green rate of the after-landing runs, and the ejections it makes.
