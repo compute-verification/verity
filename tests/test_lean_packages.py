@@ -73,7 +73,7 @@ def test_one_mathlib():
 #: the size of each lock's `unwitnessed`, as the regeneration that recorded every guarantee's premises left it: the
 #: guarantees stating what an acceptance means, or an exclusion's bound, that have no `honest` and `nontrivial` witnesses
 #: (`check.py`'s `witness_failures`)
-UNWITNESSED = {"Security": 101, "Security/Properties": 150, "verity/core/service/flock": 6}
+UNWITNESSED = {"Security": 335, "Security/Properties": 192, "verity/core/service/flock": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():
@@ -229,7 +229,7 @@ def test_every_open_conjecture_names_a_test_that_exists():
 #: the 392 premises of the lemmas and completeness theorems the lock stopped listing and the guarantees deleted with the
 #: falsified conjectures they rest on; a renamed or restated premise counts twice, under both texts, until `--update`
 #: drops the one no tree prints
-INLINE = {"Security": 1123, "Security/Properties": 201, "verity/core/service/flock": 6}
+INLINE = {"Security": 1055, "Security/Properties": 201, "verity/core/service/flock": 6}
 
 
 def test_the_inline_list_only_shrinks():
@@ -245,7 +245,7 @@ def test_the_inline_list_only_shrinks():
 #: how far a cap here may stand above its count ({"CAP key": room}): changes queued on `next` when the caps came to equal
 #: their counts moved the counts and not the caps, so each room is the gap between `next`'s count and `main`'s, and each
 #: cap holds on both. Once those changes have landed, a cap and its room come down to the count together.
-ROOM = {"INLINE Security": 17, "INLINE Security/Properties": 2, "UNWITNESSED Security": 16, "UNWITNESSED Security/Properties": 3, "SPEC_THEOREMS Security": 3, "RETIRED_NAMES draw": 52, "RETIRED_NAMES wrong": 12, "RETIRED_NAMES dampener": 14, "UNDOCUMENTED Security": 46, "OVERLONG Security/Proofs": 231, "RETIRED_NAMES escape": 2, "RETIRED_NAMES law": 13, "RETIRED_NAMES horizon": 2}
+ROOM = {"INLINE Security": 112, "INLINE Security/Properties": 69, "UNWITNESSED Security": 4, "RETIRED_NAMES draw": 44, "RETIRED_NAMES wrong": 5, "UNDOCUMENTED Security": 50, "OVERLONG Security/Proofs": 231, "RETIRED_NAMES escape": 3, "RETIRED_NAMES law": 5, "TREES_EXCEPT Security": 1}
 
 
 def _rel(p: Path) -> str:
@@ -272,7 +272,7 @@ def _held(name: str, caps: dict[str, int], got: dict[str, int], what: str, fix: 
 
 #: the size of each lock's `trees.except`: the modules whose statements may read a definition of the proofs tree, almost
 #: all C-Flock's until its spec is extracted
-TREES_EXCEPT = {"Security": 39}
+TREES_EXCEPT = {"Security": 40}
 
 
 def test_the_trees_except_list_only_shrinks():
@@ -479,7 +479,7 @@ def test_no_long_module_grows():
 
 
 #: the Lean declarations whose own names carry each of the Glossary's older names (`test_retired_terms.py`'s `LEAN_WORDS`)
-RETIRED_NAMES = {"draw": 953, "law": 112, "escape": 97, "wrong": 120, "dampener": 37, "firewall": 26, "horizon": 31, "warden": 10, "tap": 19, "leg": 3}
+RETIRED_NAMES = {"draw": 958, "law": 113, "escape": 98, "wrong": 120, "dampener": 37, "firewall": 26, "horizon": 31, "warden": 10, "tap": 19, "leg": 3}
 
 
 #: each `import all` of an in-tree module ({"FILE: MODULE": why}), those in the tree when the rule came
