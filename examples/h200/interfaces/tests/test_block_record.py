@@ -153,7 +153,8 @@ def test_remote_composes_sampled_proofs_and_pouw_alone_its_other_legs_dropped() 
     assert set(R.check(unnamed)) == {"composed:verdict", "composed:missing"}
     unknown = copy.deepcopy(rec)
     unknown["composed"]["product"] = "offsite"
-    assert R.check(unknown) == {"composed:product": "not one of ['onsite', 'remote', 'remote-network']"}
+    assert R.check(unknown) == {
+        "composed:product": "not one of ['onsite', 'remote', 'remote-network', 'remote-network-no-pouw']"}
 
 
 def test_remote_network_composes_remotes_legs_and_the_network_certifiers() -> None:
@@ -172,6 +173,24 @@ def test_remote_network_composes_remotes_legs_and_the_network_certifiers() -> No
     del report["protocols"][R.RUNNER_KEYS["certifier"]]
     c = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, product="remote-network")["composed"]
     assert (c["verdict"], c["missing"]) == ("pending", ["certifier"])
+
+
+def test_remote_network_no_pouw_composes_sampled_proofs_and_the_network_certifier_alone() -> None:
+    """Remote-network-no-pouw's product: sampled proofs and the network certifier accepted on the block's server compose
+    to accept, PoUW dropped beside the wipe, PoUS and bandwidth; a PoUW leg the block ran is refused, as remote's
+    dropped legs are."""
+    report, _ = _accepting_report()
+    keep = {R.RUNNER_KEYS[leg] for leg in R.PRODUCTS["remote-network-no-pouw"]}
+    rec = R.from_period({**report, "protocols": {k: v for k, v in report["protocols"].items() if k in keep}},
+                        steps=(4, 6), deployment=R.REFERENCE, product="remote-network-no-pouw")
+    jsonschema.Draft202012Validator(SCHEMA).validate(rec)
+    assert R.check(rec) == {}
+    c = rec["composed"]
+    assert (c["verdict"], c["product"], c["missing"], c["dropped"]) == (
+        "accept", "remote-network-no-pouw", [], ["bandwidth", "pous", "pouw", "wipe"])
+    assert c["legs"] == {"certifier": "accept", "integrity": "accept"}
+    with pytest.raises(ValueError, match="legs the remote-network-no-pouw product drops"):
+        R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, product="remote-network-no-pouw")
 
 
 def test_a_leg_carries_its_answers_placement_and_no_other_profile() -> None:

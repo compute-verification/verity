@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Each composite's Lean verdict on a served run's cases (remote's, remote-network's and onsite's), `served_verdicts.sh`'s
-# step after its record, with the tree as cwd (a clone: it builds Lean in it):
+# Each composite's Lean verdict on a served run's cases (remote's, remote-network's, with PoUW or without, and
+# onsite's), `served_verdicts.sh`'s step after its record, with the tree as cwd (a clone: it builds Lean in it):
 #
 #   bash benchmarks/one_stage/served_composite.sh SERVE_DIR OUT
 #
@@ -18,9 +18,10 @@
 # through R's previous record; and PoUW's period case (`served_pouw.sh`'s SERVE_DIR/private/pouw/period) once every
 # window of it names R as its Commit record, refused otherwise. Each CASE line's protocol and verdict go to
 # OUT/verdicts.txt, and α and Γ, which count the block's gates, stay in the case's private policy.json. Then
-# `composite.py` remote, remote-network and onsite,
-# each with `--exe` its product's Lean (`remote`, `remote-network` and `onsite`, built here, remote-network's in onsite's
-# package), over the directories under SERVE_DIR/private and OUT/pieces/certifier (the network certifier's piece, whose
+# `composite.py` remote, remote-network and onsite (or remote-network-no-pouw alone),
+# each with `--exe` its product's Lean (`remote`, `remote-network`, `onsite` and `remote-network-no-pouw`, built here,
+# remote-network's and remote-network-no-pouw's in onsite's package), over the directories under SERVE_DIR/private and
+# OUT/pieces/certifier (the network certifier's piece, whose
 # case its leak guard released there) that hold a case.json and an answer.json whose protocol is one of that product's
 # subprotocols (composite.py's COMPONENTS), but for SERVE_DIR/private/pouw, whose period case only served_cases.py
 # hands on, tied to R; each within COMPOSITE_TIMEOUT (default 60m) and, where a systemd user scope is available,
@@ -34,7 +35,10 @@
 # serve dir's audit inputs to), headed COMPOSITE, and nothing else. Without served_case.sh or composite.py
 # in the tree it says so and exits 1, since no product's Lean answered. It makes no verdict: exit 0 when each product's
 # Lean answered, else 1. PRODUCT=remote (`served_verdicts.sh`'s) writes neither PoUS's case nor the wipe's, needs no
-# served_case.sh, and runs remote's Lean alone; PRODUCT=remote-network the same with remote-network's Lean beside it.
+# served_case.sh, and runs remote's Lean alone; PRODUCT=remote-network the same with remote-network's Lean beside it;
+# PRODUCT=remote-network-no-pouw the same with remote-network-no-pouw's Lean alone, in onsite's package, over the
+# network certifier's, the policy's and sampled proofs' cases and never PoUW's period case, which none of its
+# subprotocols is (composite.py's COMPONENTS), so it credits no verified compute.
 set -uo pipefail
 D=${1:?usage: served_composite.sh SERVE_DIR OUT}
 OUT=${2:?usage: served_composite.sh SERVE_DIR OUT}
@@ -49,9 +53,10 @@ case $PRODUCT in
   onsite) products=(remote remote-network onsite) need=(benchmarks/pous/served_case.sh benchmarks/one_stage/composite.py) ;;
   remote) products=(remote) need=(benchmarks/one_stage/composite.py) ;;
   remote-network) products=(remote remote-network) need=(benchmarks/one_stage/composite.py) ;;
-  *) say "COMPOSITE: not run, PRODUCT is onsite, remote or remote-network, not $PRODUCT"; exit 1 ;;
+  remote-network-no-pouw) products=(remote-network-no-pouw) need=(benchmarks/one_stage/composite.py) ;;
+  *) say "COMPOSITE: not run, PRODUCT is onsite, remote, remote-network or remote-network-no-pouw, not $PRODUCT"; exit 1 ;;
 esac
-pkg() { case $1 in remote-network) echo onsite ;; *) echo "$1" ;; esac; }  # the Lean package a product's executable is in
+pkg() { case $1 in remote-network | remote-network-no-pouw) echo onsite ;; *) echo "$1" ;; esac; }  # the Lean package a product's executable is in
 for f in "${need[@]}"; do
   [ -f "$f" ] || { say "COMPOSITE: not run, this tree has no $f"; exit 1; }
 done

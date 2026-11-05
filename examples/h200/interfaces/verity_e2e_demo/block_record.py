@@ -22,8 +22,8 @@ steps, every leg in one shape, the composed verdict with the JointHorizonLive er
   block, the composed legs' errors summed, and at each δ of `DELTAS` that δ times the legs established at it. The
   statement names five audits; the wipe is ``outside_statement``. The product (`PRODUCTS`) is onsite's, every leg, unless
   ``product`` names another: remote's composes sampled proofs and PoUW, remote-network's those and the network
-  certifier, and their other legs are ``dropped``, not run and not composed, so they leave its verdict neither pending
-  nor missing.
+  certifier, remote-network-no-pouw's those but PoUW, so it credits no verified compute, and their other legs are
+  ``dropped``, not run and not composed, so they leave its verdict neither pending nor missing.
  * ``monitoring_period``: the census deployment (a parameter: ``{id, machines, window_s, ...}``) and, per period of
   core's `PERIODS`, its blocks over all compute (machines × blocks a machine, core's `block_count`) and
   JointHorizonLive's union bound over them at this block's errors (``error_sum`` × blocks), and the per-block error each
@@ -51,8 +51,9 @@ LEGS = ("integrity", "pouw", "pous", "bandwidth", "certifier", "wipe")
 #: the runner's protocol keys, by leg
 RUNNER_KEYS = {"integrity": "integrity", "pouw": "work", "pous": "space", "bandwidth": "bandwidth", "certifier": "communication"}
 #: the legs each product composes: onsite every leg, remote those that need no hardware of the auditor's at the site,
-#: and remote-network remote's beside the network certifier's
-PRODUCTS = {"onsite": LEGS, "remote": ("integrity", "pouw"), "remote-network": ("integrity", "pouw", "certifier")}
+#: remote-network remote's beside the network certifier's, and remote-network-no-pouw those but PoUW's
+PRODUCTS = {"onsite": LEGS, "remote": ("integrity", "pouw"), "remote-network": ("integrity", "pouw", "certifier"),
+            "remote-network-no-pouw": ("integrity", "certifier")}
 JOINT_HORIZON = {"name": "Accounting.Guarantees.JointHorizonLive", "proved": True,
                  "file": "Security/Definitions/Accounting/Guarantees/JointLive.lean",
                  "audits": ["integrity", "pouw", "pous", "bandwidth", "certifier"]}

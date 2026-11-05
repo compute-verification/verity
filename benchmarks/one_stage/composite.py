@@ -1,7 +1,8 @@
-"""Onsite's, remote's or remote's with the network certifier's case from its subprotocols' cases, and the Lean verdict on
-it (`onsite check`, `remote check`, `remote-network check`).
+"""Onsite's, remote's or remote's with the network certifier's, with PoUW or without, case from its subprotocols' cases,
+and the Lean verdict on it (`onsite check`, `remote check`, `remote-network check`, `remote-network-no-pouw check`).
 
-    composite.py onsite|remote|remote-network --cases DIR ... --private-out DIR --public-out DIR [--exe PATH]
+    composite.py onsite|remote|remote-network|remote-network-no-pouw --cases DIR ... --private-out DIR --public-out DIR
+                 [--exe PATH]
 
 Each ``--cases`` is a private directory (0700, its files 0600, as the pieces write it) holding one subprotocol's case,
 or a directory whose subdirectories each hold one. A case is the subprotocol's case as its own `serve` reads it,
@@ -10,7 +11,7 @@ of the files it reads; beside its own Lean answer on that case,
 ``answer.json``, whose ``protocol`` is its id and ``commitment`` its digest (null when its commitment didn't decode, and
 then the case's own commitment stands in, which a rejection never binds). The inference-only policy's case
 (`verity/inference-only/v0`) is one subprotocol's like any other; its record's digest must be the one sampled proofs'
-case commits to (and PoUW's, at remote), which the product checks.
+case commits to (and PoUW's, at remote and remote-network), which the product checks.
 
 A case's evidence is witness, and so are its params' bodies, so the output is split. ``--private-out`` (created 0700,
 its files 0600) gets the product's params (``params.json``), commitment (``commitment.bin``: `bind` of the digests in
@@ -44,15 +45,18 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any
 
-PRODUCTS = {"onsite": "verity/onsite/v0", "remote": "verity/remote/v0", "remote-network": "verity/remote-network/v0"}
-#: Each product's subprotocols, as `Core.Onsite.components`, `Core.Remote.components` and `Core.RemoteNetwork.components`
-#: list them; read only to name the missing ones.
+PRODUCTS = {"onsite": "verity/onsite/v0", "remote": "verity/remote/v0", "remote-network": "verity/remote-network/v0",
+            "remote-network-no-pouw": "verity/remote-network-no-pouw/v0"}
+#: Each composite's subprotocols, as `Core.Onsite.components`, `Core.Remote.components`, `Core.RemoteNetwork.components`
+#: and `Core.RemoteNetworkNoPouw.components` list them; read to name the missing ones, and by `served_composite.sh` to
+#: hand each composite only its own subprotocols' cases (remote-network-no-pouw's leaves PoUW's period out).
 COMPONENTS = {
     "onsite": ("verity/certifier/v0", "verity/inference-only/v0", "verity/pous/p2/v4/run", "verity/pouw/period/v1",
                "verity/remote-bandwidth/p2/v0", "verity/sampled-proofs/one-stage/v1", "verity/wipe/v0"),
     "remote": ("verity/inference-only/v0", "verity/pouw/period/v1", "verity/sampled-proofs/v1"),
     "remote-network": ("verity/certifier/v0", "verity/inference-only/v0", "verity/pouw/period/v1",
                        "verity/sampled-proofs/v1"),
+    "remote-network-no-pouw": ("verity/certifier/v0", "verity/inference-only/v0", "verity/sampled-proofs/v1"),
 }
 #: The subprotocols a product composes in the clear, as a stated exception to everything-zero-knowledge, each with the
 #: line its record carries (`Core.Remote`'s and `Core.Onsite`'s docstrings say the same).
