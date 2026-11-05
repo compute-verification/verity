@@ -31,6 +31,13 @@ structure Pair where
 
 instance : Inhabited Box := ⟨⟨0⟩⟩
 
+structure Wrap where
+  n : Nat
+
+def unwrap (w : Wrap) : Nat := w.n
+
+instance : Coe Wrap Nat := ⟨unwrap⟩
+
 theorem double_eq (n : Nat) : double n = n + n := rfl
 
 theorem unusedLemma (n : Nat) : n + 0 = n := Nat.add_zero n

@@ -19,13 +19,14 @@ constant to the declaration it belongs to. The seeds:
 - every constant with a `SecurityProofs` component, every declaration of `Proofs.Properties.*` and `Properties.*`;
 - every constant of a code package (every package outside `ANALYSIS`: executable code), and every `main`;
 - every constant Lean uses by name rather than through a term: syntax, macros, elaborators, tactics, delaborators,
-  simprocs, attributes, options and `IO` (`meta`), unsafe and partial ones (compiled code), and `@[defeq]` theorems,
-  which `dsimp` and `simp only [t]` use with no trace in the proof term;
+  simprocs, attributes, options and `IO` (`meta`), unsafe and partial ones (compiled code), `@[defeq]` theorems,
+  which `dsimp` and `simp only [t]` use with no trace in the proof term, and the instances of the coercion classes
+  (`COERCION`), which elaboration unfolds where it inserts a coercion (`(w : Nat)` becomes `unwrap w`);
 - every declaration of the analysis trees that a file outside Lean names in full (`.py`, `.json`, `.toml`, `.rs`, `.sh`,
   ...; `CITED_BY`), so a test or tool that reads one by name keeps it.
 
-The `@[defeq]` theorems, the lock-listed modules and the cited names are seeds to be safe (`CAUTIOUS`): the report counts
-what each alone keeps (`kept_only_by`).
+The `@[defeq]` theorems, the coercion instances, the lock-listed modules and the cited names are seeds to be safe
+(`CAUTIOUS`): the report counts what each alone keeps (`kept_only_by`).
 
 **Declarations.** A constant with a declaration range is a declaration, unless it belongs to a type (a constructor, a
 recursor, a projection) or Lean generated it from another's command (the same first line as a declaration its name
@@ -81,9 +82,12 @@ SKIPPED_SECTIONS = ("reads", "dependencies")
 SEEDED_PREFIXES = ("Properties", "Proofs.Properties")
 #: the flags `Unread.lean` writes that make a constant a seed
 SEED_FLAGS = ("meta", "unsafe", "partial", "defeq")
+#: the classes whose instances elaboration unfolds where it inserts a coercion, so no term that uses one mentions it
+COERCION = frozenset({"Coe", "CoeTail", "CoeHead", "CoeOut", "CoeHTCT", "CoeHTC", "CoeOTC", "CoeTC", "CoeT", "CoeDep",
+                      "CoeFun", "CoeSort"})
 #: the seeds taken to be safe rather than because something reads them: each is reported with what it alone keeps
-CAUTIOUS = ("defeq", "lock module", "cited")
-CAUTIOUS_TEXT = {"defeq": "`@[defeq]` theorems", "lock module": "the modules locks list",
+CAUTIOUS = ("defeq", "coercion", "lock module", "cited")
+CAUTIOUS_TEXT = {"defeq": "`@[defeq]` theorems", "coercion": "coercion instances", "lock module": "the modules locks list",
                  "cited": "names in files outside Lean"}
 #: the files outside Lean whose full mention of a declaration keeps it (a test or tool reading it by name)
 CITED_BY = (".py", ".json", ".toml", ".rs", ".sh", ".yaml", ".yml", ".txt", ".ts", ".js", ".cfg")
@@ -209,6 +213,7 @@ class Facts:
         self.flags: list[frozenset] = []
         self.range: dict[int, tuple[int, int]] = {}
         self.parent: dict[int, str] = {}
+        self.instance_of: dict[int, str] = {}
         self.used: list[array] = []
         flagsets: dict[tuple, frozenset] = {}
         with open(path) as f:
@@ -227,6 +232,8 @@ class Facts:
                     self.range[i] = (d["r"][0], d["r"][1])
                 if "p" in d:
                     self.parent[i] = d["p"]
+                if "c" in d:
+                    self.instance_of[i] = d["c"]
                 self.used.append(array("I", d["u"]))
         self.index = {n: i for i, n in enumerate(self.name)}
         self.module_index = {m["module"]: i for i, m in enumerate(self.modules)}
@@ -415,6 +422,8 @@ def analyse(tree: Tree, facts: Facts) -> dict:
         for fl in SEED_FLAGS:
             if fl in facts.flags[i]:
                 sources[fl].add(i)
+        if facts.instance_of.get(i) in COERCION:
+            sources["coercion"].add(i)
         if name in cited_code:
             sources["cited"].add(i)
     seeds = set().union(*sources.values())
@@ -630,8 +639,10 @@ def markdown(rep: dict, rev: str | None) -> str:
             "defeq target, a `decide` that reduced through it) leaves no constant in the term: deleting it breaks the "
             "proof, and the Lean check says so.",
             "- `@[defeq]` theorems are seeds (kept), since `dsimp` and `simp only [t]` use them with no trace, as are "
-            "every declaration of a module a lock lists and each one a file outside Lean names; `kept_only_by` counts "
-            "what each alone keeps.",
+            "coercion instances, which elaboration unfolds where it inserts the coercion, every declaration of a module "
+            "a lock lists and each one a file outside Lean names; `kept_only_by` counts what each alone keeps.",
+            "- An `example`, `#guard` or `#eval` leaves nothing in the environment: a declaration only they use is "
+            "reported unread, and deleting it means deleting them.",
             "- A module with no read declaration that gives an instance or `simp` attribute to another module's constant is "
             "kept (`attributes`), and a module no package root imports is `unbuilt`, reported but not read.",
             "- Deleting a wholly unread module that a kept module imports means that importer imports what it imported.", ""]

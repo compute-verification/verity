@@ -78,7 +78,8 @@ def check_report(rep: dict) -> None:
     got = {m: {n: k for n, k, _ in r["unread_declarations"]} for m, r in mods.items() if r["unread_declarations"]}
     assert got == UNREAD
     core = mods["Definitions.Core"]
-    assert core["kept_only_by"] == {"defeq": 1, "lock module": 0, "cited": 1}
+    assert core["kept_only_by"] == {"defeq": 1, "coercion": 1, "lock module": 0, "cited": 1}
+    assert rep["seeds"]["coercion"] == 1
     assert mods["Proofs.Flock.Main"]["kept_only_by"]["defeq"] == 1
     assert core["unread_cited_in_docs"] == ["Core.unusedHelper"]
     assert mods["Definitions.Attr"]["foreign_attributes"] == ["Core.unusedLemma"]
@@ -96,10 +97,15 @@ def check_report(rep: dict) -> None:
 
 def test_the_fixture_s_closure_keeps_what_is_read_and_finds_the_rest():
     """The fixture's kept facts: the guarantee's proof and what it reads, the properties, the code, a notation, a
-    name a tool reads and the `@[defeq]` theorems are kept; a matcher another declaration shares, a name in `reads` or
-    in a README, and an instance nothing uses keep nothing; a module that gives another's theorem `simp` stays."""
+    name a tool reads, the `@[defeq]` theorems and a coercion instance, which no term names, are kept; a matcher another
+    declaration shares, a name in `reads` or in a README, and an instance nothing uses keep nothing; a module that gives
+    another's theorem `simp` stays."""
     tree = U.Tree(FIXTURE, U.tracked(FIXTURE))
-    rep = U.analyse(tree, U.Facts(FACTS))
+    facts = U.Facts(FACTS)
+    coe = facts.index["Core.instCoeWrapNat"]
+    assert facts.instance_of[coe] == "Coe" and not any(coe in u for u in facts.used)
+    assert facts.index["Core.unwrap"] in facts.used[facts.index["Properties.Code.Unwraps"]]
+    rep = U.analyse(tree, facts)
     check_report(rep)
     assert "Proofs.Flock" in U.markdown(rep, None)
 

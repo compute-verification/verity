@@ -3,19 +3,20 @@ import Lean
 /-!
 # The facts of what each declaration reads, from the `.olean` files as data
 
-`lake env lean --run Unread.lean CONFIG` reads the modules a JSON file `CONFIG` names (`modules`) from their `.olean`
-files as `Replay.lean` reads them (each part, the private one where there is one, with no import and no initializer, so
-Mathlib's and ArkLib's modules are never loaded) and writes to the path it names (`out`) one JSON line per module and then
-one per constant those modules declare, for `unread.py`, which holds the policy: it makes no judgement.
+Compiled and run under `lake env` with a JSON file `CONFIG` (`unread.py` does both), it reads the modules `CONFIG` names
+(`modules`) from their `.olean` files as `Replay.lean` reads them (each part, the private one where there is one, with
+no import and no initializer, so Mathlib's and ArkLib's modules are never loaded) and writes to the path it names (`out`)
+one JSON line per module and then one per constant those modules declare, for `unread.py`, which holds the policy: it
+makes no judgement.
 
 - a module's line: `module` (its name), `found` (an `.olean` on the search path), `imports`, and `foreign`: the constants
   it gives an instance or `simp` attribute that it does not declare (`attribute [instance] c` in it changes its importers);
 - a constant's line, in the order the modules and their constants come: `n` its name, `m` its module's index, `k` its kind
   (`theorem`, `def`, `abbrev`, `opaque`, `axiom`, `inductive`, `ctor`, `rec`, `quot`), `r` the first and last line of its
   declaration range when it has one (what Lean generates has none), `p` the type it belongs to (a constructor's, a
-  recursor's, a projection's), `f` its flags, and `u` the indices of the constants of these modules that its type and
-  value mention (an inductive type's constructors, a constructor's type, an `@[implemented_by]` target, the `@[csimp]`
-  theorem that replaces it in compiled code), itself left out.
+  recursor's, a projection's), `c` an instance's class, `f` its flags, and `u` the indices of the constants of these
+  modules that its type and value mention (an inductive type's constructors, a constructor's type, an
+  `@[implemented_by]` target, the `@[csimp]` theorem that replaces it in compiled code), itself left out.
 
 The flags: `unsafe`, `partial`, `instance`, `class`, `structure` (a type with projections), `defeq` (`@[defeq]` or
 `@[backward_defeq]`, which `dsimp` uses with no trace in the proof term), `meta` (its type mentions syntax, a macro, an
@@ -165,10 +166,13 @@ unsafe def main (args : List String) : IO UInt32 := do
       | .ctorInfo v => some v.induct
       | .recInfo _ => some c.name.getPrefix
       | _ => attrs.structOf[c.name]?
+    let cls : Option Name :=
+      if attrs.instances.contains c.name then c.type.getForallBody.getAppFn.constName? else none
     let fields := [("n", str c.name), ("m", toJson i), ("k", toJson (kindOf c)), ("f", toJson flags),
       ("u", toJson used)] ++
       (match attrs.ranges[c.name]? with | some (a, b) => [("r", toJson #[a, b])] | none => []) ++
-      (match parent with | some p => [("p", str p)] | none => [])
+      (match parent with | some p => [("p", str p)] | none => []) ++
+      (match cls with | some k => [("c", str k)] | none => [])
     return (Json.mkObj fields).compress
   let chunk := 4096
   let mut tasks := #[]
