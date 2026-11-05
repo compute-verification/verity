@@ -1,5 +1,6 @@
 // The C ABI over the baselines' tables (cutlass_3x.cu, cutlass_2x.cu, nvf4_plain.cu).  Built with -DPH_NO_CUTLASS it has
-// only nvf4_plain.cu's, so the harness still loads where CUTLASS isn't built.
+// only nvf4_plain.cu's, so the harness still loads where CUTLASS isn't built; with -DPH_NO_PLAIN (an sm_90a build, all of
+// whose tables are sm_120 kernels) it has none.
 #include <cuda_runtime.h>
 
 #include <cstdio>
@@ -7,14 +8,22 @@
 #include "cutlass_api.h"
 
 namespace {
+const phc_entry* phc_table_none(int* n) {
+  *n = 0;
+  return nullptr;
+}
+
 const phc_entry* entry(int i, int* total) {
   using table = const phc_entry* (*)(int*);
   const table tables[] = {
-#ifndef PH_NO_CUTLASS
+#if !defined(PH_NO_CUTLASS) && !defined(PH_NO_PLAIN)
       phc_table_3x_0, phc_table_3x_1, phc_table_3x_2, phc_table_3x_3, phc_table_3x_4, phc_table_2x, phc_table_3x_5,
       phc_table_3x_6,
 #endif
-      phc_table_nvf4, phc_table_fp8};
+#ifndef PH_NO_PLAIN
+      phc_table_nvf4, phc_table_fp8,
+#endif
+      phc_table_none};
   const phc_entry* found = nullptr;
   *total = 0;
   for (table t : tables) {

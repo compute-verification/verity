@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.Stop
-import Proofs.Flock.Claims.Recursion.SeqPrefix
+module
+
+public import Proofs.Flock.Claims.ZK.Stop
+public import Proofs.Flock.Claims.Recursion.SeqPrefix
 
 /-!
 # The recursion's zero knowledge with the prover's public stop, by sequential composition
@@ -16,6 +18,8 @@ only at a history where the stop hasn't fired, and there only at a live first pa
   function with the stop (`Claims.ZKMal.interact_censor`).
 * `Claims.ZKMal.foldl_silent`: silent sessions in turn are as many silent rounds.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

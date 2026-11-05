@@ -1,4 +1,6 @@
-import Lean.Data.Json
+module
+
+public import Lean.Data.Json
 
 /-!
 # The record's printer
@@ -8,6 +10,8 @@ import Lean.Data.Json
 `"`, `\`, newline and carriage return escaped and a character below `0x20` as `\u` and four hex digits, `escC`), and an
 array's elements and an object's fields (in its tree's order, sorted by key) between commas.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

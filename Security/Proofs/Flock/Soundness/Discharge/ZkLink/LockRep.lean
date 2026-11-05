@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.AlignLevel
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.AlignLevel
 
 /-!
 # The primed `--zk` table in lockstep with the compiled one, every committed object a table
@@ -15,6 +17,8 @@ On openings that agree with the fixed tables (`AgreeZ` on the rows, `PadsAgreeAt
 the queries drew, `TauAgree` on `τ`), the compiled verdict implies the primed one (`RepRelZ`, `TopRelZ`). The locksteps
 for two level-0 tables are aligned (`aligned_lockSessZ`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 

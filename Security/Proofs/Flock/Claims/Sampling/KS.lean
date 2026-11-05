@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Sampling.Bext
-import Proofs.Flock.Claims.Sampling.Escape
-import Proofs.Flock.Claims.Aggregate
+module
+
+public import Proofs.Flock.Claims.Sampling.Bext
+public import Proofs.Flock.Claims.Sampling.Escape
+public import Proofs.Flock.Claims.Aggregate
 
 /-!
 # The sampling block's KS from Flock's KS
@@ -29,6 +31,8 @@ the deployed sampled verifier, each a hypothesis to discharge there.
 * `KS_of`, `Bits_of`, `KSCount_of_KS`: **the claims**: `KS` through `KSLin_of_ownColl`; `Bits` with the extractor's
   costs; and the count form, at the miss clamped at `0`.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 

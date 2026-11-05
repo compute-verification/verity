@@ -1,5 +1,7 @@
-import Flock.Zk
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.Zerocheck
+module
+
+public import Flock.Zk
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.Zerocheck
 
 /-!
 # The masked zerocheck's forms evaluate to the clear replay
@@ -16,6 +18,8 @@ builds affine forms `Lin` in the pads. This file restates its zerocheck terms ve
 At any coins, for any clear proof. With `Zerocheck.c_eval` and `Zerocheck.final_ab`, both constraints evaluate to 0 at the
 honest prover's pads (`c_eval_zero`, `final_zero`). `evalL_combo` evaluates `verifyInner`'s batched form.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed.ZerocheckMasked
 

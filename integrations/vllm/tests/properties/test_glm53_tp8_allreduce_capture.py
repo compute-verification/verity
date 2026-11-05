@@ -798,7 +798,7 @@ def test_the_capture_map_claims_no_all_reduce_capture_has_not_covered() -> None:
     (`workload_setting`) up to the 2048 tokens a step batches: the fused path to FlashInfer's budget and each all-reduce on the route
     `expected_comm` names, NCCL's never.  Every H200 `CAPTURED` Definition is one its Program lists, and both notes cite `CAPTURED`."""
     from verity.ml.circuits.defs import REGISTRY as DEFS
-    from verity_vllm.program.frontend.conformance import status_of
+    from verity.ml.circuits.defs import conformance_label
 
     cmap = json.loads(CMAP.read_text())
     setting = X.workload_setting()["setting"]
@@ -811,9 +811,9 @@ def test_the_capture_map_claims_no_all_reduce_capture_has_not_covered() -> None:
         assert "tp_allreduce.CAPTURED" in p["note"], pid
         if uncovered:
             assert p["status"] != "exists", (pid, setting, uncovered[:3])
-            assert all(status_of(DEFS.defs[d].conformance) == "not-yet-established" for d in p["definitions"]), pid
+            assert all(conformance_label(DEFS.defs[d].conformance) == "not-yet-established" for d in p["definitions"]), pid
         else:
-            assert all(status_of(DEFS.defs[d].conformance) == "exact-model-tested" for d in p["definitions"]), pid
+            assert all(conformance_label(DEFS.defs[d].conformance) == "exact-model-tested" for d in p["definitions"]), pid
     for c in (c for c in T.CAPTURED if c.setting in T.SETTINGS):
         assert c.definition in cmap["programs"]["fused-allreduce-rmsnorm" if c.route == "fused" else "tp-allreduce"]["definitions"]
 

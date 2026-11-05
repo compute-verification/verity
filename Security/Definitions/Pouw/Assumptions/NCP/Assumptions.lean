@@ -1,10 +1,14 @@
-import Definitions.Pouw.Game.Defs
+module
+
+public import Definitions.Pouw.Game.Defs
 
 /-!
 # NCP's named assumption (trusted)
 
 A `Prop` taken as a hypothesis by the statements that use it, never an `axiom`.
 -/
+
+@[expose] public section
 
 namespace Pouw.NCP.Assumptions
 

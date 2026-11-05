@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.VerdictAssembly
-import Proofs.Flock.Claims.Recursion.NextShaDec
-import Proofs.Flock.Claims.Recursion.NextRRows
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictAssembly
+public import Proofs.Flock.Claims.Recursion.NextShaDec
+public import Proofs.Flock.Claims.Recursion.NextRRows
 
 /-!
 # The decision's facts `runs_assembled` takes
@@ -15,6 +17,8 @@ import Proofs.Flock.Claims.Recursion.NextRRows
 At an inner statement read at the dense form, the setup returns one statement (`DecAt.sts_dense`), so table `0` is
 the one table `runs_assembled` is at (`DecAt.zero_lt`, `DecAt.zero_lt_tables`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Rows
 

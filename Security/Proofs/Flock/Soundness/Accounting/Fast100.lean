@@ -1,4 +1,6 @@
-import Definitions.Flock.Accounting.Fast100
+module
+
+public import Definitions.Flock.Accounting.Fast100
 
 /-!
 # The bound for `fast100` run twice on one root
@@ -19,6 +21,8 @@ bound, and the mutual-correlated-agreement numerator of BCHKS25 Theorem 4.6 by a
 form (its terms sit below 2^-180, against about 2^-102.5 for the queries). The rational bound is then
 checked by exact arithmetic for each `m`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Accounting
 

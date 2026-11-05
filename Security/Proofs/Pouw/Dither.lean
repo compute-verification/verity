@@ -1,6 +1,8 @@
-import Definitions.Pouw.Guarantees.Dither
-import Proofs.Pouw.RelativeSecurity
-import Proofs.Pouw.ShaRealize
+module
+
+public import Definitions.Pouw.Guarantees.Dither
+public import Proofs.Pouw.RelativeSecurity
+public import Proofs.Pouw.ShaRealize
 
 /-!
 # The no-fold Dither protocol's work-soundness: the headline's proof
@@ -30,6 +32,8 @@ import Proofs.Pouw.ShaRealize
   `τ_w = (w + 1)(⌈Q⌉ + V)` (`sum_segments`).
 * `FleetSound` is in `Proofs.Pouw.Pool`: the replicas' moments pooled by convexity.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Dither
 

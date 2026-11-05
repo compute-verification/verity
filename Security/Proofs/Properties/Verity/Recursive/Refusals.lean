@@ -1,10 +1,13 @@
-import Proofs.Properties.Verity.Recursive.Names
-import Proofs.Properties.Verity.Recursive.BaseSetup
-import Proofs.Properties.Verity.Recursive.Compiled
-import Proofs.Properties.Verity.Recursive.PartStatement
-import Proofs.Flock.Claims.Recursion.DeployChecked
-import Proofs.Flock.Claims.Recursion.RestVerdictBasesHold
-import Proofs.Flock.Soundness.Refine.Walk
+module
+
+public import Proofs.Properties.Verity.Recursive.Names
+public import Proofs.Properties.Verity.Recursive.BaseSetup
+public import Proofs.Properties.Verity.Recursive.Compiled
+public import Proofs.Properties.Verity.Recursive.PartStatement
+public import Proofs.Flock.Claims.Recursion.DeployChecked
+public import Proofs.Flock.Claims.Recursion.RestVerdictBasesHold
+public import Proofs.Flock.Soundness.Refine.Walk
+import all Init.Data.String.Defs
 
 /-!
 # The compiled component's refusals, as `acc_of_accepts` reads them (`Refusals`)
@@ -28,6 +31,8 @@ words. Each is the compiled component's own refusal:
   component refuses at `2 ^ 56` bytes or more (`statementFits`): `pub_of_compiled` gives `x` with each part's public file
   under `2 ^ 64` bytes at every part `nS x` counts, with no hypothesis on `x`.
 -/
+
+@[expose] public section
 
 namespace Verity.Recursive.RefusalsOf
 

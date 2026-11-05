@@ -1,5 +1,7 @@
-import Proofs.Flock.SessionLoop.FinRepRows
-import Proofs.Flock.Claims.ZK.FinishFwTarget
+module
+
+public import Proofs.Flock.SessionLoop.FinRepRows
+public import Proofs.Flock.Claims.ZK.FinishFwTarget
 
 /-!
 # `FinRepTarget`: the ring switch's `T` is the opening's
@@ -13,6 +15,8 @@ view's `ν + maskHom`.
 draws from the tape, `FinRepTarget` holds. It reads the firewall's run, its coins and the witness, never the workers'
 clear values or the rows: `openT`'s `ν` reads the witness alone.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

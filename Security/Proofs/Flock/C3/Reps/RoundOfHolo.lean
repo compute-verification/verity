@@ -1,4 +1,6 @@
-import Proofs.Flock.C3.Reps.RoundSel
+module
+
+public import Proofs.Flock.C3.Reps.RoundSel
 
 /-!
 # A rep's message rounds along `holoRepShape`
@@ -17,6 +19,8 @@ top and absorbs elements is two messages there.
 * `roundOf_holoRepShape`: `hm`'s equation at each of those messages, at any Ligerito schedule (`roundOfB_append`: a
   message of the head is placed by the head alone).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps.RoundOfHolo
 

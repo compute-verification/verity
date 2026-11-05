@@ -37,8 +37,8 @@ overstates the commit's share of a whole step. The whole step (the model's layer
     by_slot              the same rows slot-major, one table a sequence slot (its every op of every layer as rows) as one
                          subtree each, EMULATED with the kernels as they are: a table takes one row width, so every row has
                          the layer's mean width (value bytes equal to within rounding)
-    need_gbs             the whole step's value bytes over the estimated step time (`STEP_S`), beside their
-                         figures for mha8k: 134 GB/s every op, 93 fused
+    need_gbs             the whole step's value bytes over the estimated step time (`STEP_S`), beside the
+                         estimated rates for mha8k (`NEED_MHA8K_GBS`)
 
     python commit.py --out OUT [--models mqa16k,mha8k] [--ms 64,256,1023,4096] [--sets quantize,fused,every] [--reps 15]
 Writes commit.jsonl (a row per model, set and M) and commit.json; exits 4 when a check fails.
@@ -68,7 +68,7 @@ from verity_vllm.engine import int8_fused as X  # noqa: E402
 
 CTX, KEY = bytes(range(64)), bytes(range(100, 132))
 SETS = FX.TABLE_SETS
-#: the estimated decode step (s): mha8k 195 ms, mqa16k 1.44 s
+#: each model's estimated decode step (s)
 STEP_S = {"mha8k": 0.195, "mqa16k": 1.44}
 #: the estimated committed-value rates for mha8k (GB/s): every op, fused cuts
 NEED_MHA8K_GBS = {"every": 134.0, "fused": 93.0}

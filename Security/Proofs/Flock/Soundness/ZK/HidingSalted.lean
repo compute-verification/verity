@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.ZK.Hiding
+module
+
+public import Proofs.Flock.Soundness.ZK.Hiding
 
 /-!
 # Zero knowledge: T1 over leaves whose digests read the earlier salts
@@ -10,6 +12,8 @@ read by the last leaf alone, so `ideal_leaf_swap` replaces that leaf, with the e
 ideal leaf reads its salt only through `c(y)`, so the leaves before it form an experiment of the same shape, one leaf
 shorter.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK
 
