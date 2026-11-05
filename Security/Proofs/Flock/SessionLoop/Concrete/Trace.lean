@@ -561,6 +561,56 @@ theorem zIn_leaf {t : ℕ} (ht : t < 16) : zIn (leafSrc t) = false := by
   unfold xS
   exact ite_eq_right (show ¬ leafSrc t - 262144 < 512 by omega)
 
+/-- **The layout's input padding rows are empty**: those of the input group past the input bits, in A and in B. -/
+theorem layout_inGap (st : HmNets.St) (inBits outBits : Array ℕ) (outs : Array HmNets.Lin) {i : ℕ}
+    (h1 : inBits.foldl (· + ·) 0 ≤ i) (h2 : i < groupWords (inBits.foldl (· + ·) 0) * WORD) :
+    (layout st inBits outBits outs).ra.getD i #[] = #[] ∧ (layout st inBits outBits outs).rb.getD i #[] = #[] := by
+  let nIn := inBits.foldl (· + ·) 0
+  let inRows := groupWords nIn * WORD
+  let span := groupWords (outBits.foldl (· + ·) 0) * WORD
+  let start := (inRows + st.rows.length + span - 1) / span * span
+  let rows := st.rows.reverse.toArray
+  let e := fun (n : ℕ) => Array.replicate n (#[] : Array ℕ)
+  let ins := (Array.range nIn).map fun i => #[i]
+  have h1' : nIn ≤ i := h1
+  have h2' : i < inRows := h2
+  have hra : (layout st inBits outBits outs).ra = ins ++ e (inRows - nIn) ++
+      rows.map (cols nIn inRows (start + span) ·.a) ++ e (start - inRows - st.rows.length) ++
+      outs.map (cols nIn inRows (start + span)) ++ e (span - outs.size) ++ #[#[start + span]] := by
+    simp only [layout, rows, e, ins, start, span, inRows, nIn, List.size_toArray, List.length_reverse]
+  have hrb : (layout st inBits outBits outs).rb = ins ++ e (inRows - nIn) ++
+      rows.map (cols nIn inRows (start + span) ·.b) ++ e (start - inRows - st.rows.length) ++
+      outs.map (fun _ => #[start + span]) ++ e (span - outs.size) ++ #[#[start + span]] := by
+    simp only [layout, rows, e, ins, start, span, inRows, nIn, List.size_toArray, List.length_reverse]
+  have hs : ∀ n, (e n).size = n := fun n => Array.size_replicate
+  have hr : rows.size = st.rows.length := by simp [rows]
+  have hi : ins.size = nIn := by simp [ins]
+  constructor
+  · rw [hra]
+    simp (disch := (simp only [Array.size_append, Array.size_map, hs, hr, hi, List.size_toArray, Array.size_singleton]; omega))
+      only [getD_append_left, getD_append_right]
+    simp only [Array.size_append, Array.size_map, hs, hi, hr]
+    simp only [e, Array.getD_eq_getD_getElem?, Array.getElem?_replicate]
+    split <;> rfl
+  · rw [hrb]
+    simp (disch := (simp only [Array.size_append, Array.size_map, hs, hr, hi, List.size_toArray, Array.size_singleton]; omega))
+      only [getD_append_left, getD_append_right]
+    simp only [Array.size_append, Array.size_map, hs, hi, hr]
+    simp only [e, Array.getD_eq_getD_getElem?, Array.getElem?_replicate]
+    split <;> rfl
+
+theorem shaLaid_gap {off : ℕ} (h1 : 4608 ≤ off) (h2 : off < 8192) :
+    (HmNets.shaLaid ()).ra.getD off #[] = #[] ∧ (HmNets.shaLaid ()).rb.getD off #[] = #[] := by
+  rw [HmNets.shaLaid_eq]
+  exact layout_inGap _ _ _ _ (by rw [sum_SHA_IN]; exact h1)
+    (show off < inRowsOf SHA_IN by rw [inRows_SHA_IN]; exact h2)
+
+theorem hmLaid_gap {off : ℕ} (h1 : 3072 ≤ off) (h2 : off < 4096) :
+    (HmNets.hmLaid ()).ra.getD off #[] = #[] ∧ (HmNets.hmLaid ()).rb.getD off #[] = #[] := by
+  rw [HmNets.hmLaid_eq]
+  exact layout_inGap _ _ _ _ (by rw [sum_HM_IN]; exact h1)
+    (show off < inRowsOf HM_IN by rw [inRows_HM_IN]; exact h2)
+
 theorem ite_flip (x j : ℕ) : (if x = j then 1 else 0 : ℕ) = if j = x then 1 else 0 := if_congr eq_comm rfl rfl
 
 /-- **Δ at a `cv0` row**, at a statement whose Δ is `E`: its self pair and its copy of the midstate's bit. -/
@@ -850,6 +900,72 @@ theorem holds_hmIn (hn : Properties.Flock.Nets.FixedNetsBuild) (hk : st.c.kLog =
     unfold xH
     rw [ite_eq_right h1, ite_eq_left h2]
   · exact copyRow_holds (copyRow_hmIn L regs R hR hr r (delta_selfForm (delta_free hda (x := r.val) (by omega)))) rfl
+
+omit hda hrs in
+/-- **A row net's row whose laid rows are empty and that Δ skips is zero.** -/
+theorem zeroRow_netEmpty (R : RowRanges st.c) {n s off : ℕ} (hn : n = st.c.shaNet ∨ n = st.c.hmNet)
+    {r : Fin (2 ^ (L.model regs).kLog)} (hat : AtSlot st.c n s off r.val) {l : Flock.HmNets.Laid} {name : String}
+    (hl : Net.ofRows name l.useful l.constPos l.inGroups l.outGroups l.ra l.rb = .ok (st.c.nets.getD n default).2)
+    (he : l.ra.getD off #[] = #[] ∧ l.rb.getD off #[] = #[]) (hd : ∀ j, deltaEntry st.da r.val j = 0) :
+    ZeroRow (L.model regs) r := by
+  obtain ⟨hm, hk, -, hsl⟩ := R.range (R.rowNet_lt hn)
+  have h32 : (st.c.nets.getD n default).2.unitLog ≤ 32 := by
+    rw [← hsl]; exact le_trans (hat.slotLog_le R.bound hm) R.kLog
+  have hw : 2 ^ (st.c.nets.getD n default).2.unitLog ≤ 2 ^ 32 := Nat.pow_le_pow_right (by norm_num) h32
+  obtain ⟨-, ha, hb, -, -, -, -, -, -, -, -, -, hlk, -⟩ := Net.ofRows_ok hl
+  refine ⟨fun j => ?_, fun j => ?_⟩
+  · show rangesEntry st (slotEntryA st) r.val j.val + deltaEntry st.da r.val j.val = 0
+    rw [hd, add_zero, rangesEntry_at R.disj hm hk hat]
+    refine ite_eq_right_iff.2 fun _ => ?_
+    show sparseEntry (st.c.nets.getD n default).2.a off _ = 0
+    rw [sparseEntry_ofRows ha, ofRows_row ha hw, he.1]
+    simp
+  · show rangesEntry st (slotEntryB st) r.val j.val + deltaEntry st.db r.val j.val = 0
+    rw [L.delta_b, hd, add_zero, rangesEntry_at R.disj hm hk hat]
+    refine ite_eq_right_iff.2 fun _ => ?_
+    show sparseEntry (st.c.nets.getD n default).2.b off _ + lookupEntry (st.c.nets.getD n default).2.lookup off _ = 0
+    rw [hlk, sparseEntry_ofRows hb, ofRows_row hb hw, he.2]
+    simp [lookupEntry]
+
+omit hrs in
+/-- **The `sha512x3` slot's input padding rows hold** at the trace: they are zero, and so is the trace there. -/
+theorem holds_shaGap (hk : st.c.kLog = 22) (R : RowRanges st.c)
+    (hR : (st.c.rangeOf st.c.shaNet).count = 1 ∧ (st.c.rangeOf st.c.shaNet).slotLog = 18 ∧
+      (st.c.rangeOf st.c.shaNet).slot 0 = 262144)
+    (o : Fin (2 ^ (L.model regs).nbl)) {r : Fin (2 ^ (L.model regs).kLog)} (hr : 266752 ≤ r.val ∧ r.val < 270336) :
+    ((L.model regs).A₀.mulVec ((L.model regs).block (zC (L.model regs).m) o)) r *
+        ((L.model regs).B₀.mulVec ((L.model regs).block (zC (L.model regs).m) o)) r =
+      (L.model regs).block (zC (L.model regs).m) o r := by
+  have hat : AtSlot st.c st.c.shaNet 0 (r.val - 262144) r.val :=
+    ⟨lt_of_lt_of_eq Nat.one_pos hR.1.symm,
+      by rw [hR.2.1]; exact lt_of_lt_of_le (show r.val - 262144 < 262144 by omega) (by norm_num),
+      by rw [hR.2.2]; omega⟩
+  refine zeroRow_holds (zeroRow_netEmpty L regs R (Or.inl rfl) hat (shaNet_ofRows R.rowNets)
+    (shaLaid_gap (off := r.val - 262144) (by omega) (by omega)) (delta_free hda (x := r.val) (by omega))) ?_
+  rw [block_zC (S := L.model regs) hk, zIn_sha (x := r.val) (by omega) hr.2]
+  unfold xS
+  rw [ite_eq_right (show ¬ r.val - 262144 < 512 by omega)]
+  rfl
+
+omit hrs in
+/-- **The `hm96` slot's input padding rows hold** at the trace: they are zero, and so is the trace there. -/
+theorem holds_hmGap (hk : st.c.kLog = 22) (R : RowRanges st.c)
+    (hR : (st.c.rangeOf st.c.hmNet).count = 1 ∧ (st.c.rangeOf st.c.hmNet).slotLog = 18 ∧
+      (st.c.rangeOf st.c.hmNet).slot 0 = 0)
+    (o : Fin (2 ^ (L.model regs).nbl)) {r : Fin (2 ^ (L.model regs).kLog)} (hr : 3072 ≤ r.val ∧ r.val < 4096) :
+    ((L.model regs).A₀.mulVec ((L.model regs).block (zC (L.model regs).m) o)) r *
+        ((L.model regs).B₀.mulVec ((L.model regs).block (zC (L.model regs).m) o)) r =
+      (L.model regs).block (zC (L.model regs).m) o r := by
+  have hat : AtSlot st.c st.c.hmNet 0 r.val r.val :=
+    ⟨lt_of_lt_of_eq Nat.one_pos hR.1.symm,
+      by rw [hR.2.1]; exact lt_of_lt_of_le (show r.val < 262144 by omega) (by norm_num),
+      by rw [hR.2.2]; omega⟩
+  refine zeroRow_holds (zeroRow_netEmpty L regs R (Or.inr rfl) hat (hmNet_ofRows R.rowNets)
+    (hmLaid_gap (off := r.val) hr.1 hr.2) (delta_free hda (x := r.val) (by omega))) ?_
+  rw [block_zC (S := L.model regs) hk, zIn_hm (x := r.val) hr.2]
+  unfold xH
+  rw [ite_eq_right (show ¬ r.val < 512 by omega), ite_eq_right (show ¬ r.val < 1536 by omega)]
+  rfl
 
 end place
 
