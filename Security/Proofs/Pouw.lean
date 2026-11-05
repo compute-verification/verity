@@ -85,7 +85,6 @@ public import Proofs.Pouw.Period.Sort
 public import Proofs.Pouw.PeriodJ10RStrata
 public import Proofs.Pouw.PeriodJ10RStrata.Honest
 public import Proofs.Pouw.PeriodJ10R
-public import Proofs.Pouw.PeriodJ10R.Binding
 public import Proofs.Pouw.PeriodJ10R.Honest
 public import Proofs.Pouw.PeriodJ10R.Nontrivial
 public import Proofs.Pouw.PeriodJ10R.Stratum
