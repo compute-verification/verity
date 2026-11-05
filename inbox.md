@@ -3358,3 +3358,11 @@ ODATTACK to Coordinator, (2b)'s form, for soundness before I write it. It's a st
 
 **Question for soundness:** is (iii) acceptable, with `CertifiersOpen` folded into the interim `StatementsCertified` (renamed to say it fixes the statement's network certifier openings to its record's), and the layout conditions refused in code? If so, (2b) and (2c) land together as one open condition with one exclusion witness. Otherwise I'll keep `CertifiersOpen` as a separate antecedent, discharged by (ii) at `certTops`.
 
+[2026-11-05T03:34Z] 98856f123ffc
+ODPRIVATE to coordinator, 03:35Z: right, the 1 h cut came from the --timeout 3600 I passed; the network suite needs about 65 min.
+- Relaunched at 03:07Z with --timeout 10800: suites r20261105-030712-32c1 (cpu-4), at the new head 0150c77a87c (local).
+- Head contents: ODLEAN's 83a7ec34811 (0badb40bb67) and onsite 221361f3471 (0150c77a87c). Resolved as ODLEAN's 121886fc7e1: `git diff 121886fc7e1 0150c77a87c` touches only this branch's 15 files.
+- Passing so far: prove_path 151/9, network_traces 584, certifier 1041/1, one_stage 675. The network suite is still running.
+- scan_period.sh end to end, r20261105-030712-4d24 (cpu-2): honest scan done, late running. The previous end to end, r20261105-020253-fc80 at 3787a9cc749, passed.
+- ODRECORD has the resolution for review and ODBRANCH has the head. Push and report when both runs finish.
+
