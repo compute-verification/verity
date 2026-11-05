@@ -94,6 +94,8 @@ ALLOWED = {
     # The bandwidth audit's store is PoUS's `C*`,
     # under its setup and `vk`, reused as they are.
     "core.protocols.bandwidth": {"ml.crypto", "ml.randomness", "core.protocols.pous"},
+    # The memory challenger, an auditor-trusted device, over PoUS's protocol and verifier.
+    "core.devices.memory_challenger": {"core.protocols.pous"},
     # The verifier's side runs where `period.json` puts it, a side of the deployment layer (`verity.core.deploy.stream`).
     # The remote bandwidth audit commits receipts in frame-v3-sha512
     # trees, draws from the verifier's secret, and records its openings as an integrity profile.  Its coins are the
