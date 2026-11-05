@@ -58,6 +58,8 @@ The facts both statements' witnesses read:
 * `jointOf_nil`, `not_fits_of_no_members`: an audit of no members has the empty joint program, so no layout fits it.
 * `bareProg`, `scanFits_nontrivial`: a Program of no templates, which the template query over no templates accepts
   with no ranges, so at a scan check that accepts every Program, `ScanFitsOf` fails.
+* `scanFits_honest` (`Proofs.Properties.NetworkScan.Honest`, a root of its own, since its `cbv` takes minutes): at a
+  Program of one ingress and one egress template, `scanProg` accepts and every other hypothesis of `ScanFits` holds.
 * `oneSlot`: a schedule of one slot and one step.
 * `nullStmt`, `acceptAllDeploy`: the statement whose descriptor is `null`'s bytes and whose circuit is empty, and a
   deployment whose scope check takes everything and which parses every message to it.
