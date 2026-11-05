@@ -213,11 +213,11 @@ class Committed(G.Registered):
 def reuse(w: Mapping[str, Any], manifests: Sequence[Mapping[str, Any]],
           rows_of: Callable[[str, int, np.ndarray], np.ndarray], rounds: Sequence[int] | None = None) -> dict[str, Committed]:
     """The calls' values W registers (``w``, the window record of ``manifests`` at ``rounds``: `record`; its B rows are no
-    value of the audited circuit), each as the audited circuit's registered value: the rows ``rows_of(name, rows, empty)`` gives (`window_rows.Rows.value`: u16 words, an
-    FP32 word's two low first, every row no proof block makes ``empty``, zero), each salted with `audit.hm96_salt` under
-    its pass's ``hm96_salt_key`` at the call's index for A and `served_y.HM96_Y` past it for y. ValueError unless ``w`` is
-    the record of ``manifests`` and each value's entry is W's: the proof blocks don't make the rows Pearl+ committed, or
-    the key is another."""
+    value of the audited circuit), each as the audited circuit's registered value: the rows ``rows_of(name, rows,
+    empty)`` gives (`window_rows.Rows.value`: u16 words, an FP32 word's two low first, every row no proof block makes
+    ``empty``, zero), each salted with `audit.hm96_salt` under its pass's ``hm96_salt_key`` at the call's index for A and
+    `served_y.HM96_Y` past it for y. ValueError unless ``w`` is the record of ``manifests`` and each value's entry is W's:
+    the proof blocks don't make the rows Pearl+ committed, or the key is another."""
     if dict(w) != record(manifests, w.get("previous"), rounds):
         raise ValueError("W is not the window record of these passes (`record`), whose calls' values the audited window reads")
     out: dict[str, Committed] = {}
