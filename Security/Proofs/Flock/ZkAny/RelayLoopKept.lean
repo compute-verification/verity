@@ -455,7 +455,8 @@ theorem loopKept_round {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Se
     omega
   obtain ⟨e', he'⟩ := LoopModel.hist_succ M hlt
   refine ⟨?_, fun h => ?_, fun i' r' s' hmem' hseen => ?_, stepK_plan he hJ.plan,
-    seenAt_round hnd hmem hkr hl hl' hJ.seenAt, fun h => absurd h (by rw [hcc, hF.count hsent]; omega)⟩
+    seenAt_round hnd hmem hkr hl hl' hJ.seenAt, fun h => absurd h (by rw [hcc, hF.count hsent]; omega),
+    fun _ => built_stays hst (hJ.built (by rw [hF.count hsent]; omega))⟩
   · rw [hsent', hsent, hcc, he', Bool.true_and]
     exact stopped_roundRun hRA hv hr hreq hro hae hb hsa hco e'
   · rw [hsent', hsent] at h
