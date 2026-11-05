@@ -8,9 +8,12 @@
   reads no data), its output the script's result.json.
 - `lean-agreement:verity/ml/flock/verifier`: `check.py --lean-agreement` on the flock-verify it reads, against upstream's Rust
   verifier on the upstream build and inputs `upstream.json` pins; its output is ci.py's per-set verdicts.
-- `lean-suites:after-lean`: `suites.py` on the suites check runs after lean-build (`suites.AFTER_LEAN`, read from its source),
-  on every executable lean-build outputs; its inputs are the whole tree, as tasks/v1 keys a job that declares none, since those
-  suites build and run Lake packages no tracer follows; its output is suites.py's report.
+- `lean-suites:SUITE`: `suites.py` on one of the suites check runs after lean-build (`suites.AFTER_LEAN`, read from its source),
+  on every executable lean-build outputs, and `lean-suites:SUITE:K/M` on part K of `PARTS`' M of one split by test file, so no
+  task holds a suite a slot can't run inside an hour; its inputs are the whole tree, as tasks/v1 keys a job that declares none,
+  since those suites build and run Lake packages no tracer follows; its output is suites.py's report. A suite that declares
+  `parallel` takes the family's slot, and one that doesn't one process (`suites.TEST_PROCESS_GB`, or its `worker_gb`); its
+  timeout is its own `timeout_s`, else the family's.
 - `flock-circuit-build:verity/ml/flock/live`: `check_build.sh`, `cargo check` of flock-circuit in each CPU feature set a pod
   builds. It outputs nothing: `cargo check` builds nothing a reader runs.
 - `flock-rust-tests:verity/ml/flock/live`: `check_build.sh test`, the Rust tests in release on the same checkout, which it makes
@@ -24,13 +27,19 @@ import ast
 import tomllib
 from pathlib import Path
 
-from .test_file import Imports, Layout, Tree
+from .test_file import Imports, Layout, Tree, discover
 
 LEAN = "verity/core/service/flock"
 VERIFIER = "verity/ml/flock/verifier"
 FLOCK = "verity/ml/flock"
 UNIT_CUT = f"{VERIFIER}/unit_cut_agree.py"
 SUITES = "tools/verity/check/suites.py"
+#: the lean-suites suites listed in parts, {suite: parts}: `suites.py --files K/M` on a timing record that has none of their
+#: files (`lean_suites.run`), so each part is every M-th of the suite's test files in path order, a function of the commit alone,
+#: and the parts of one tree hold each file once whichever machines run them
+PARTS = {"verity-flock": 6}
+#: a lean-suites task's disk: the suites build Lake packages of their own beside the verifier's
+SUITES_DISK_GB = 60
 #: what `check.py --lean-agreement` reads of the tree outside the verifier's directory: check.py, the modules it loads as it
 #: starts and the job declaration and policy they read, with the Slack registry the declaration checks its handles against
 #: (`tests/test_build.py` holds this list to what an audit hook sees it open)
@@ -69,14 +78,52 @@ def rust_inputs(files: list[str]) -> list[str]:
             or (f.startswith(pre + "flock-") and f.endswith("-b684b12.patch"))]
 
 
+def suites_literals(root: Path, files: list[str], *names: str) -> dict[str, object]:
+    """The module-level literals ``names`` as suites.py's source writes them, read without running it (those it lacks left out)."""
+    out: dict[str, object] = {}
+    if SUITES not in files:
+        return out
+    for node in ast.parse((root / SUITES).read_text()).body:
+        if isinstance(node, ast.Assign) and (hit := [t.id for t in node.targets if isinstance(t, ast.Name) and t.id in names]):
+            out[hit[0]] = ast.literal_eval(node.value)
+    return out
+
+
 def after_lean(root: Path, files: list[str]) -> list[str]:
     """`suites.AFTER_LEAN` as suites.py's source writes it, the suites check's lean-suites step runs; none when it has none."""
-    if SUITES not in files:
+    return [str(s) for s in suites_literals(root, files, "AFTER_LEAN").get("AFTER_LEAN", ())]
+
+
+def suite_tasks(root: Path, files: list[str], build: str, bin_: str, exes: list[str]) -> list[dict]:
+    """A lean-suites task for each suite of `after_lean`, or one for each of its `PARTS` (`suites.py NAME --files K/M`), each
+    with its suite's resources and timeout: a suite that declares `[tool.verity.tests] parallel` the family's slot, else one
+    process of its `worker_gb` (`suites.TEST_PROCESS_GB` undeclared); its `timeout_s`, else the family's.  A name no suite has
+    is listed all the same, so suites.py's refusal of it is the task's error."""
+    names = after_lean(root, files)
+    if not names:
         return []
-    for node in ast.parse((root / SUITES).read_text()).body:
-        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "AFTER_LEAN" for t in node.targets):
-            return [str(s) for s in ast.literal_eval(node.value)]
-    return []
+    tree = Tree(root, files)
+    by = {k: s for s in discover(tree) for k in (s.name, s.path)}
+    one_gb = suites_literals(root, files, "TEST_PROCESS_GB").get("TEST_PROCESS_GB")
+    out = []
+    for name in names:
+        s = by.get(name)
+        tests = tree.toml(s.dir + "/pyproject.toml" if s.dir else "pyproject.toml").get("tool", {}).get(
+            "verity", {}).get("tests", {}) if s else {}
+        gb = (s.mem_gb if s else None) or one_gb
+        resources = {"disk_gb": SUITES_DISK_GB} if tests.get("parallel") is True else {
+            "cores": 1, **({"mem_gb": gb} if gb else {}), "disk_gb": SUITES_DISK_GB}
+        task = {"kind": "lean-suites", "env": "py", "inputs": list(files), "reads": [{"task": build, "output": e} for e in exes],
+                "outputs": [{"name": "report", "path": "suites-lean.json"}], "resources": resources,
+                **({"timeout_s": s.timeout_s} if s and s.timeout_s else {})}
+        if m := PARTS.get(s.name if s else name):
+            out += [{"id": f"lean-suites:{name}:{k}/{m}", **task, "vars": {"suites": name, "files": f"{k}/{m}", "bin": bin_},
+                     "about": f"suites.py --lean-built on part {k} of {m} of {name}'s test files (every {m}th by path)"}
+                    for k in range(1, m + 1)]
+        else:
+            out.append({"id": f"lean-suites:{name}", **task, "vars": {"suites": name, "bin": bin_},
+                        "about": f"suites.py --lean-built on {name}, as check's lean-suites step runs it"})
+    return out
 
 
 def unit_cut_inputs(root: Path, files: list[str]) -> list[str]:
@@ -114,11 +161,4 @@ def tasks(root: Path, files: list[str]) -> list[dict]:
                     "inputs": sorted({*(f for f in files if f.startswith(VERIFIER + "/")), *(f for f in CHECK_READS if f in files)}),
                     "reads": [{"task": build, "output": "flock-verify"}],
                     "outputs": [{"name": "sets", "path": "flock-agreement/ci/sets.json"}]})
-    if suites := after_lean(root, files):
-        out.append({"id": "lean-suites:after-lean", "kind": "lean-suites", "env": "py",
-                    "about": f"suites.py --lean-built on the {len(suites)} suites check runs after lean-build",
-                    "vars": {"suites": " ".join(suites), "bin": bin_}, "inputs": list(files),
-                    "reads": [{"task": build, "output": e} for e in exes],
-                    "outputs": [{"name": "report", "path": "suites-lean.json"}],
-                    "resources": {"disk_gb": 60}, "timeout_s": 14400})
-    return out
+    return out + suite_tasks(root, files, build, bin_, exes)

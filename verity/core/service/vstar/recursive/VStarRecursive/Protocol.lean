@@ -17,6 +17,12 @@ verifier the auditor runs (`flock-verify verify --zk` once per V* part with that
   server's transcript of the inner session, and for each part `{"public", "record", "reps"}`: its staged public file's
   SHA-512, its `session.json`'s and `{file: SHA-512}` naming at least each rep file its session reads;
 * **blobs**: the files those digests name (`Core.Blobs`);
+* **inner coins** (`innerCoinsHeld`): v1's `challenger`, with its `window_root`, must be named
+  (`OneStageZk.NO_CHALLENGER`), and the inner session's coins are the challenger's: the window's challenger session, as
+  the evidence's `coins` show it under the challenger's key (`OneStageZk.treesOf`), logs exactly one coin tree, the inner
+  record's `coin_tree`, and opened every round of it the coin server's transcript lists, as it lists it, after the bytes
+  the coin server opens it after, and no other (`Challenger.innerTreesReason`); else the check refuses, before any part
+  is verified;
 * **check**: the verifier's inner shape from the inner statement's files (`RecVStar.innerOf`, as `flock-verify
   rec-inner --program` writes it), and Flock's plain verifier's own checks on the inner statement at its draw
   (`innerOk`, `RecDeploy.innerOk`); then, for each part `j`, `flock-verify verify --zk --statement verity/flock-circuit`
@@ -26,8 +32,7 @@ verifier the auditor runs (`flock-verify verify --zk` once per V* part with that
   --rec-inner-statement-coins os --rec-inner-draw`), `--rec-inner-session`, `--rec-inner-transcript` and
   `--rec-inner-registration`, no link table (no `--rec-links`), and one `--session`
   (`partVerdict`, the C-Flock library calls `verifyCmd` makes on that path, as `recursion_e2e`'s lean step runs it); then
-  v1's live check (`OneStage.checkLive`: at the coins `OneStage.coinsOf` reads, the challenger's when the params name
-  one) on one verdict of record (`flock-verify/<session>`), accepted exactly when every part's is, whose units are the
+  v1's live check (`OneStage.checkLive`: at the coins `OneStage.coinsOf` reads, the challenger's) on one verdict of record (`flock-verify/<session>`), accepted exactly when every part's is, whose units are the
   inner public file's units at the inner record's draw.
 
 **Form.** Only the dense form, the one `Flock.Guarantees.RecursiveKSAt`'s statements (`RecDeploy.DenseAt`) cover: the
@@ -41,11 +46,13 @@ Without blobs (`toProtocol`) every check rejects: no blob holds the inner circui
 module
 
 public import CoreProtocol.Blobs
+public import SampledProofs.ChallengerInnerTrees
 public import SampledProofs.OneStageZk
 public import Flock
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 meta import CoreProtocol.Blobs
+meta import SampledProofs.ChallengerInnerTrees
 meta import SampledProofs.OneStageZk
 meta import Flock
 
@@ -556,12 +563,42 @@ def verdicts (o : Own) (session : String) (pr : Proofs) (provedUnits? : Option (
     "the units the recursive session proved are not the evidence's proved_units"
   pure #[(s!"flock-verify/{session}", verdictJson ok session why units (parts.map partJson) programSha)]
 
+/-- A blob as JSON: refused where no blob holds it or it isn't UTF-8, `null` where it isn't JSON. -/
+private def jsonBlob (bs : Core.Blobs) (d what : String) : V Json := do
+  let some s := String.fromUTF8? (← bs.get d what) | throw s!"{what} is not UTF-8"
+  pure ((Json.parse s).toOption.getD Json.null)
+
+/-- **The inner session's coins are the challenger's**: the coin trees the window's challenger session shows it sampled
+and opened (`OneStageZk.treesOf`: from the evidence's `coins` under the parameters' challenger, which must be named), and
+the inner session `session` held to them (`Challenger.innerTreesReason`): its record's `coin_tree` the one tree logged,
+the coin server's transcript's link points and every round it lists opened as it says, after the bytes the coin server
+opens it after (`rec_live.link_after`, `round_after`), and every opening the log shows one the transcript reads. Every
+part's check then holds the record's coins to the transcript's (`Flock.RecVStar.innerCommits`, `innerLink`), so the
+inner coins every part reads are the ones the challenger's signed release log shows. -/
+def innerCoinsHeld (p : Params) (session : String) (e : Evidence) (bs : Core.Blobs) : V Unit := do
+  let ts ← OneStageZk.treesOf p.base e.base
+  let record ← jsonBlob bs e.proofs.record "the inner session's record"
+  let transcript ← jsonBlob bs e.proofs.transcript "rec inner transcript"
+  if let some why := Challenger.innerTreesReason ts #[(session, getD record "coin_tree", transcript)] then throw why
+
+/-- The verdict of record (`verdicts`) once the inner session's coins are held (`innerCoinsHeld`). -/
+def heldVerdicts (p : Params) (session : String) (e : Evidence) (bs : Core.Blobs) : V (Array (String × Json)) := do
+  innerCoinsHeld p session e bs
+  verdicts p.own session e.proofs (some e.base.provedUnits) bs
+
+theorem heldVerdicts_ok {p : Params} {session : String} {e : Evidence} {bs : Core.Blobs} {vs : Array (String × Json)}
+    (h : heldVerdicts p session e bs = .ok vs) : verdicts p.own session e.proofs (some e.base.provedUnits) bs = .ok vs := by
+  unfold heldVerdicts at h
+  cases hc : innerCoinsHeld p session e bs with
+  | error err => rw [hc] at h; cases h
+  | ok u => cases u; rw [hc] at h; exact h
+
 def checkBlobs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
   match e.base.sessions[0]? with
   | none => .reject "proofs: a recursive audit is one recursive session"
   | some session =>
-  match verdicts p.own session e.proofs (some e.base.provedUnits) bs with
+  match heldVerdicts p session e bs with
   | .error err => .reject s!"proofs: {err}"
   | .ok vs => OneStage.checkLive p.base c { e.base with verdicts := vs }
 
