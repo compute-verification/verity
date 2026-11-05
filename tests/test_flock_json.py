@@ -16,6 +16,10 @@ TREE = "verity/core/service/flock/"
 ALLOWED = {
     "verity/core/service/flock/Flock/JsonParse.lean": "the total parser, whose docstring names the source it mirrors",
     "verity/core/service/flock/Flock/Test/JsonParse.lean": "the test holding the total parser to Lean.Json.parse",
+    "verity/core/service/flock/Flock/RecCompose.lean": "`runOf`, the reader of the challenger's run record (`--rec-run`), "
+                                                       "calls Lean.Json.parse; no proof reads it",
+    "verity/core/service/flock/Flock/RecLinksCmd.lean": "the `flock-rec-links` command, whose verdicts no proof reads",
+    "verity/core/service/flock/Flock/Test/RecCompose.lean": "a test of rec-compose's verdicts, which no proof reads",
 }
 
 #: `/- … -/` and `-- …`, blanked so that line numbers stay
