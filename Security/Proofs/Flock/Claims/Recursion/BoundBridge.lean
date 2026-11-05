@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.BoundRoute
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundRoute
 
 /-!
 # The bridge at the bound record (option (d))
@@ -26,6 +28,8 @@ At the deployed bound record `ans` is a coin's bytes, which a decoder inverts, s
 choice the code side makes (`RecDeploy.bridge_bdDeployed`), which `KSBoundRouteCols`' route takes
 (`RecDeploy.ksBoundRoute_of_bridge_cols`, at the deployed outer relation `RecDeploy.ksBoundRouteCols_outer`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

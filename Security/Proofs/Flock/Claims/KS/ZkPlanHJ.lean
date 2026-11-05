@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.ZkPlanJ
-import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
+module
+
+public import Proofs.Flock.Claims.KS.ZkPlanJ
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
 
 /-!
 # The old hidden-output `--zk` plan at the deployed masked statement is `zkTabs`
@@ -19,6 +21,8 @@ that plan is `zkTabs` too, so the old hidden-output decoders are right at `zkTab
 * `drawOkZKHJ_empty`: at no drawn units, `DrawOkZKHJ` is the tables' link points (`setupTables_pointsAny`).
 * `opnAtZHJ_eq_opnD`: the old hidden-output openings at the plan are `opnD` where `verify --zk` sets the session up.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

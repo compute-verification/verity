@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.Zk.RingSwitch
-import Proofs.Flock.Claims.Complete.Zk.LigeritoProverPos
-import Proofs.Flock.Claims.Complete.Zk.InnerGo
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.RingSwitch
+public import Proofs.Flock.Claims.Complete.Zk.LigeritoProverPos
+public import Proofs.Flock.Claims.Complete.Zk.InnerGo
 
 /-!
 # A returning masked rep's sends, and the refusals it passed
@@ -16,6 +18,8 @@ number of bodies, and each of its refusals that can fire did not:
   `claims + 1` (`repPZk_rs`'s closed forms), then Ligerito and the inner proof; its rank check passed on its
   transcript after the lincheck.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

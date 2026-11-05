@@ -1,4 +1,6 @@
-import MemoryChallenger.Protocol
+module
+
+public import MemoryChallenger.Protocol
 
 /-!
 # The verdict on a record, as its caller holds it
@@ -21,6 +23,8 @@ extra, a byte string not lowercase hex, a negative integer or a header constant 
 is a scheme id this port doesn't verify. The output is `{"accepted", "late", "reasons", "wrong"}`, the reasons the
 Python's word for word.
 -/
+
+@[expose] public section
 
 namespace MemoryChallenger.Judge
 

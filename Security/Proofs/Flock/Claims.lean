@@ -1,361 +1,366 @@
-import Definitions.Flock.Guarantees.Claims
-import Proofs.Flock.Claims.RecursionStated
-import Proofs.Flock.Claims.Prob
-import Proofs.Flock.Claims.Finder
-import Proofs.Flock.Claims.Aggregate
-import Proofs.Flock.Claims.Bits
-import Proofs.Flock.Claims.ERep
-import Proofs.Flock.Claims.ERepCost
-import Proofs.Flock.Claims.Bridge
-import Proofs.Flock.Claims.Numbers
-import Proofs.Flock.Claims.NumbersTable
-import Proofs.Flock.Claims.NumbersPads
-import Proofs.Flock.Claims.NumbersGamma
-import Proofs.Flock.Claims.NumbersNMin
-import Proofs.Flock.Claims.Recursion
-import Proofs.Flock.Claims.NumbersDeploy
-import Proofs.Flock.Claims.NumbersRadius
-import Proofs.Flock.Claims.Recursion.InnerAccepts
-import Proofs.Flock.Claims.Recursion.InnerAcceptsKS
-import Proofs.Flock.Claims.Recursion.DeployInputs
-import Proofs.Flock.Claims.Recursion.DeployOuter
-import Proofs.Flock.Claims.Recursion.Deploy
-import Proofs.Flock.Claims.Recursion.ComposeParts
-import Proofs.Flock.Claims.Recursion.DeployComplete
-import Proofs.Flock.Claims.Recursion.DeployScope
-import Proofs.Flock.Claims.Recursion.DeployFacts
-import Proofs.Flock.Claims.Recursion.DeploySessions
-import Proofs.Flock.Claims.Recursion.DeployScopeRuns
-import Proofs.Flock.Claims.Recursion.DeployMargin
-import Proofs.Flock.Claims.Recursion.DeployPremises
-import Proofs.Flock.Claims.Recursion.DeployHonest
-import Proofs.Flock.Claims.Recursion.DeployZK
-import Proofs.Flock.Claims.Recursion.Seq
-import Proofs.Flock.Claims.Recursion.SeqSim
-import Proofs.Flock.Claims.Recursion.SeqSession
-import Proofs.Flock.Claims.Recursion.SeqPrefix
-import Proofs.Flock.Claims.Recursion.SeqCap
-import Proofs.Flock.Claims.Recursion.SeqKey
-import Proofs.Flock.Claims.Recursion.SeqDeploy
-import Proofs.Flock.Claims.Recursion.DeployStop
-import Proofs.Flock.Claims.Recursion.SeqStop
-import Proofs.Flock.Claims.Recursion.SeqDeployStop
-import Proofs.Flock.Claims.Recursion.VStar
-import Proofs.Flock.Claims.Recursion.VStarBound
-import Proofs.Flock.Claims.Recursion.BoundDeploy
-import Proofs.Flock.Claims.Recursion.BoundDeployE
-import Proofs.Flock.Claims.Recursion.FlockKSDeployE
-import Proofs.Flock.Claims.Recursion.ConflictTiedE
-import Proofs.Flock.Claims.Recursion.RepErase
-import Proofs.Flock.Claims.Recursion.CallsBridgeE
-import Proofs.Flock.Claims.Recursion.PlainKSAbortFails
-import Proofs.Flock.Claims.Recursion.BoundRun
-import Proofs.Flock.Claims.Recursion.BoundForks
-import Proofs.Flock.Claims.Recursion.PlainKSAbortDeployed
-import Proofs.Flock.Claims.Recursion.BindsDeployed
-import Proofs.Flock.Claims.Recursion.BoundAccepts
-import Proofs.Flock.Claims.Recursion.BoundRoute
-import Proofs.Flock.Claims.Recursion.BoundBridge
-import Proofs.Flock.Claims.Recursion.LastBindsEC
-import Proofs.Flock.Claims.Recursion.BoundRouteCols
-import Proofs.Flock.Claims.Recursion.BoundWeight
-import Proofs.Flock.Claims.Recursion.BoundMerged
-import Proofs.Flock.Claims.Recursion.BoundRouteMerged
-import Proofs.Flock.Claims.Recursion.BoundMergedLin
-import Proofs.Flock.Claims.Recursion.BoundRouteMergedLin
-import Proofs.Flock.Claims.Recursion.KSLin2
-import Proofs.Flock.Claims.Recursion.KSLinks
-import Proofs.Flock.Claims.Recursion.BitsLin2
-import Proofs.Flock.Claims.Recursion.BoundRouteKSLin2
-import Proofs.Flock.Claims.Recursion.SetupCalls
-import Proofs.Flock.Claims.Recursion.KSLin2Deployed
-import Proofs.Flock.Claims.Recursion.KSLin2Plain
-import Proofs.Flock.Claims.Recursion.LamDeployed
-import Proofs.Flock.Claims.Recursion.FlockKSLin
-import Proofs.Flock.Claims.Recursion.CapLink
-import Proofs.Flock.Claims.Recursion.CapLinkRd
-import Proofs.Flock.Claims.Recursion.LastBindsDeployed
-import Proofs.Flock.Claims.Recursion.LastColsDeployed
-import Proofs.Flock.Claims.Recursion.RepFramesBind
-import Proofs.Flock.Claims.Recursion.RepFramesFields
-import Proofs.Flock.Claims.Recursion.RepFramesLig
-import Proofs.Flock.Claims.Recursion.RepOpenings
-import Proofs.Flock.Claims.Recursion.RepBindProof
-import Proofs.Flock.Claims.Recursion.CallsBridge
-import Proofs.Flock.Claims.Recursion.LogWalk
-import Proofs.Flock.Claims.Recursion.DecodeLog
-import Proofs.Flock.Claims.Recursion.VerdictLog
-import Proofs.Flock.Claims.Recursion.CallsAgree
-import Proofs.Flock.Claims.Recursion.CallsAgreeE
-import Proofs.Flock.Claims.Recursion.LastColsE
-import Proofs.Flock.Claims.Recursion.CallsOfProofs
-import Proofs.Flock.Claims.Recursion.LastBindsClosed
-import Proofs.Flock.Claims.Recursion.KSLin2PlainClosed
-import Proofs.Flock.Claims.Recursion.VStarParts
-import Proofs.Flock.Claims.Recursion.VStarPartsHolo
-import Proofs.Flock.Claims.Recursion.VStarPartsDense
-import Proofs.Flock.Claims.Recursion.DeployReg
-import Proofs.Flock.Claims.Recursion.VStarPartsSparse
-import Proofs.Flock.Claims.Recursion.VStarPartsSparseDeploy
-import Proofs.Flock.Claims.Recursion.VStarLinks
-import Proofs.Flock.Claims.Recursion.PartsVStar
-import Proofs.Flock.Claims.Recursion.VStarBDeploy
-import Proofs.Flock.Claims.Recursion.KSLin2Staged
-import Proofs.Flock.Claims.Recursion.LayoutBDeployed
-import Proofs.Flock.Claims.Recursion.VStarCross
-import Proofs.Flock.Claims.Recursion.DeployChecked
-import Proofs.Flock.Claims.Recursion.DeployLayout
-import Proofs.Flock.Claims.Recursion.SchedHolo
-import Proofs.Flock.Claims.Recursion.SchedCount
-import Proofs.Flock.Claims.Recursion.InnerForm
-import Proofs.Flock.Claims.Recursion.SchedDense
-import Proofs.Flock.Claims.Recursion.LayoutBCap
-import Proofs.Flock.Claims.Recursion.LayoutBTops
-import Proofs.Flock.Claims.Recursion.SetupTagged
-import Proofs.Flock.Claims.Recursion.RowsCover
-import Proofs.Flock.Claims.Recursion.CapPorts
-import Proofs.Flock.Claims.Recursion.TopsStaged
-import Proofs.Flock.Claims.Recursion.FinOpen
-import Proofs.Flock.Claims.Recursion.RecRecord
-import Proofs.Flock.Claims.Recursion.RecOpen
-import Proofs.Flock.Claims.Recursion.OpenedPlain
-import Proofs.Flock.Claims.Recursion.OpenedDecode
-import Proofs.Flock.Claims.Recursion.VerdictRowD
-import Proofs.Flock.Claims.Recursion.SlotsCommit
-import Proofs.Flock.Claims.Recursion.SlotsCheck
-import Proofs.Flock.Claims.Recursion.OpensReads
-import Proofs.Flock.Claims.Recursion.RoundWords
-import Proofs.Flock.Claims.Recursion.CoinTie
-import Proofs.Flock.Claims.Recursion.CoinPos
-import Proofs.Flock.Claims.Recursion.CapOpens
-import Proofs.Flock.Claims.Recursion.TopsOpens
-import Proofs.Flock.Claims.Recursion.KSLin2E
-import Proofs.Flock.Claims.Recursion.PartAccepts
-import Proofs.Flock.Claims.Recursion.VStarPartsB
-import Proofs.Flock.Claims.Recursion.PartsCompose
-import Proofs.Flock.Claims.Recursion.NextCs
-import Proofs.Flock.Claims.Recursion.NextShaRep
-import Proofs.Flock.Claims.Recursion.NextJ
-import Proofs.Flock.Claims.Recursion.NextP
-import Proofs.Flock.Claims.Recursion.NextSha
-import Proofs.Flock.Claims.Recursion.NextShaS17
-import Proofs.Flock.Claims.Recursion.NextShaDec
-import Proofs.Flock.Claims.Recursion.NextS
-import Proofs.Flock.Claims.Recursion.NextR
-import Proofs.Flock.Claims.Recursion.DecodeTiesVals
-import Proofs.Flock.Claims.Recursion.DecodeTiesW
-import Proofs.Flock.Claims.Recursion.DecodeTies
-import Proofs.Flock.Claims.Recursion.VerdictRows
-import Proofs.Flock.Claims.Recursion.RecordCanon
-import Proofs.Flock.Claims.Recursion.VerdictRowG
-import Proofs.Flock.Claims.Recursion.VerdictRowE
-import Proofs.Flock.Claims.Recursion.VerdictRowR
-import Proofs.Flock.Claims.Recursion.VerdictParts
-import Proofs.Flock.Claims.Recursion.NextRHonest
-import Proofs.Flock.Claims.Recursion.NextRFits
-import Proofs.Flock.Claims.Recursion.NextRShaped
-import Proofs.Flock.Claims.Recursion.NextRSetup
-import Proofs.Flock.Claims.Recursion.NextRRep
-import Proofs.Flock.Claims.Recursion.NextRSession
-import Proofs.Flock.Claims.Recursion.NextRRows
-import Proofs.Flock.Claims.Recursion.NextRCoins
-import Proofs.Flock.Claims.Recursion.NextRTables
-import Proofs.Flock.Claims.Recursion.ResAccepts
-import Proofs.Flock.Claims.Recursion.RowSlots
-import Proofs.Flock.Claims.Recursion.FinalPiece
-import Proofs.Flock.Claims.Recursion.VerdictPieces
-import Proofs.Flock.Claims.Recursion.OpenPieces
-import Proofs.Flock.Claims.Recursion.NextRCounts
-import Proofs.Flock.Claims.Recursion.VerdictRowDPieces
-import Proofs.Flock.Claims.Recursion.VerdictRun
-import Proofs.Flock.Claims.Recursion.VerdictAssembly
-import Proofs.Flock.Claims.Recursion.DecodeAt
-import Proofs.Flock.Claims.Recursion.CapPieces
-import Proofs.Flock.Claims.Recursion.DeployedR
-import Proofs.Flock.Claims.Recursion.RestFinal
-import Proofs.Flock.Claims.Recursion.RestLens
-import Proofs.Flock.Claims.Recursion.RestLive
-import Proofs.Flock.Claims.Recursion.RestRead
-import Proofs.Flock.Claims.Recursion.RestReadR
-import Proofs.Flock.Claims.Recursion.RestReadsAt
-import Proofs.Flock.Claims.Recursion.RestElemR
-import Proofs.Flock.Claims.Recursion.RestOpenedSized
-import Proofs.Flock.Claims.Recursion.RestVerdictBases
-import Proofs.Flock.Claims.Recursion.RestVerdictCustody
-import Proofs.Flock.Claims.Recursion.RestVerdictDraw
-import Proofs.Flock.Claims.Recursion.VerdictRowDCoin
-import Proofs.Flock.Claims.Recursion.VerdictRowRDeployed
-import Proofs.Flock.Claims.Recursion.VerdictRowDCover
-import Proofs.Flock.Claims.Recursion.NonVacuous
-import Proofs.Flock.Claims.Recursion.VerdictRowEAcc
-import Proofs.Flock.Claims.Recursion.VerdictRowEAccR
-import Proofs.Flock.Claims.Recursion.PartAcceptsPin
-import Proofs.Flock.Claims.Recursion.PartAcceptsSetup
-import Proofs.Flock.Claims.Recursion.OpenLowerJointV
-import Proofs.Flock.Claims.Recursion.VerdictRowEJoint
-import Proofs.Flock.Claims.Recursion.VerdictRowEFree
-import Proofs.Flock.Claims.Recursion.VerdictRowEBytes
-import Proofs.Flock.Claims.Recursion.VPiecesDeployed
-import Proofs.Flock.Claims.Recursion.VerdictRowL
-import Proofs.Flock.Claims.Recursion.RoundCounts
-import Proofs.Flock.Claims.Recursion.VerdictTargetL
-import Proofs.Flock.Claims.Recursion.NonVacuousRows
-import Proofs.Flock.Claims.Recursion.VerdictLoop
-import Proofs.Flock.Claims.KS.PlainR
-import Proofs.Flock.Claims.Recursion.LastBindsR
-import Proofs.Flock.Claims.Recursion.KSLin2R
-import Proofs.Flock.Claims.Recursion.RoundSizes
-import Proofs.Flock.Claims.Recursion.DecRRecJ
-import Proofs.Flock.Claims.Recursion.LayoutBAcc
-import Proofs.Flock.Claims.Recursion.LastCallsR
-import Proofs.Flock.Claims.Recursion.CallsLe
-import Proofs.Flock.Claims.Recursion.CallsRep
-import Proofs.Flock.Claims.Recursion.CallsTop
-import Proofs.Flock.Claims.Recursion.CallsDecision
-import Proofs.Flock.Claims.Recursion.CallsR
-import Proofs.Flock.Claims.Recursion.CallsClosed
-import Proofs.Flock.Claims.Recursion.VerdictRowDTie
-import Proofs.Flock.Claims.Recursion.InnerAtCoins
-import Proofs.Flock.Claims.Recursion.InnerSetupSame
-import Proofs.Flock.Claims.Recursion.InnerExtras
-import Proofs.Flock.Claims.Recursion.VVTieOf
-import Proofs.Flock.Claims.Recursion.ResTieVV
-import Proofs.Flock.Claims.Recursion.RowDLevels
-import Proofs.Flock.Claims.Recursion.RowDMerkle
-import Proofs.Flock.Claims.Recursion.RowDAccept
-import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
-import Proofs.Flock.Claims.Recursion.CapLower
-import Proofs.Flock.Claims.Recursion.ResLowerDeployed
-import Proofs.Flock.Claims.KS.PlainRConflict
-import Proofs.Flock.Claims.KS.PlainRCapPrefix
-import Proofs.Flock.Claims.Recursion.HonestVerdictFinal
-import Proofs.Flock.Claims.Recursion.LastSharedR
-import Proofs.Flock.Claims.Recursion.LastFilesR
-import Proofs.Flock.Claims.Recursion.KSFlockLinR
-import Proofs.Flock.Claims.Recursion.VerdictFramed
-import Proofs.Flock.Claims.Recursion.RestVerdictBasesHold
-import Proofs.Flock.Claims.Recursion.DecompBDeployed
-import Proofs.Flock.Claims.Recursion.VerdictRowRDep
-import Proofs.Flock.Claims.Recursion.HonestIVStarR
-import Proofs.Flock.Claims.Recursion.HonestPartsR
-import Proofs.Flock.Claims.Recursion.HonestRepR
-import Proofs.Flock.Claims.Recursion.HonestAccR
-import Proofs.Flock.Claims.Recursion.HonestPartsLayR
-import Proofs.Flock.Claims.Recursion.VStarWit
-import Proofs.Flock.Claims.Recursion.VStarBuild
-import Proofs.Flock.Claims.Recursion.VStarTrace
-import Proofs.Flock.Claims.Recursion.HpLast
-import Proofs.Flock.Claims.Recursion.VStarTraceOk
-import Proofs.Flock.Claims.Recursion.VStarNets
-import Proofs.Flock.Claims.Recursion.VStarDeployed
-import Proofs.Flock.Claims.Recursion.HpEarly
-import Proofs.Flock.Claims.Recursion.SlotsOk
-import Proofs.Flock.Claims.Recursion.HpEarlyTrace
-import Proofs.Flock.Claims.Recursion.VStarFit
-import Proofs.Flock.Claims.Recursion.VStarHh
-import Proofs.Flock.Claims.Recursion.VStarPorts
-import Proofs.Flock.Claims.Recursion.VStarPin
-import Proofs.Flock.Claims.Recursion.VStarHonest
-import Proofs.Flock.Claims.Recursion.VStarCap0
-import Proofs.Flock.Claims.Recursion.VStarCapL
-import Proofs.Flock.Claims.Recursion.HhHeld
-import Proofs.Flock.Claims.Recursion.VStarPortsM
-import Proofs.Flock.Claims.Recursion.VStarFitHeld
-import Proofs.Flock.Claims.Recursion.VStarFitPin
-import Proofs.Flock.Claims.Recursion.VStarFitRow
-import Proofs.Flock.Claims.Recursion.VStarFinal
-import Proofs.Flock.Claims.Recursion.SlotsDeployed
-import Proofs.Flock.Claims.Recursion.VStarTraceAt
-import Proofs.Flock.Claims.Recursion.HpEarlyStaged
-import Proofs.Flock.Claims.Recursion.VStarAccept
-import Proofs.Flock.Claims.Recursion.VStarPortNames
-import Proofs.Flock.Claims.Recursion.VStarDense
-import Proofs.Flock.Claims.Recursion.VStarTopsOk
-import Proofs.Flock.Claims.Recursion.VStarRowsFit
-import Proofs.Flock.Claims.Recursion.HonestHalf
-import Proofs.Flock.Claims.Recursion.HonestHalfTops
-import Proofs.Flock.Claims.Recursion.Assumptions.HonestFixture
-import Proofs.Flock.Claims.Recursion.HonestHalfFixture
-import Proofs.Flock.Claims.Recursion.NumsFixedR
-import Proofs.Flock.Claims.Recursion.ResSite
-import Proofs.Flock.Claims.Recursion.VerdictRowEOpens
-import Proofs.Flock.Claims.Recursion.LabelsFull
-import Proofs.Flock.Claims.Recursion.VerdictRowECommit
-import Proofs.Flock.Claims.Recursion.VerdictRowEInner
-import Proofs.Flock.Claims.Recursion.BoundDeployOuter
-import Proofs.Flock.Claims.Counted
-import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
-import Proofs.Flock.Claims.Recursion.BoundReaders
-import Proofs.Flock.Claims.Decode
-import Proofs.Flock.Claims.DecodeFlock
-import Proofs.Flock.Claims.ZkDecode
-import Proofs.Flock.Claims.DecodeFamily
-import Proofs.Flock.Claims.ZkDecodeFlock
-import Proofs.Flock.Claims.ZkCols
-import Proofs.Flock.Claims.ZkQueryRound
-import Proofs.Flock.Claims.Scope
-import Proofs.Flock.Claims.DeployOC
-import Proofs.Flock.Claims.DeployInputs
-import Proofs.Flock.Claims.JsonEq
-import Proofs.Flock.Claims.JsonNorm
-import Proofs.Flock.Claims.CanonEq
-import Proofs.Flock.Claims.Deploy
-import Proofs.Flock.Claims.DeployE
-import Proofs.Flock.Claims.DeployVK
-import Proofs.Flock.Claims.Recursion.FlockKSDeployK
-import Proofs.Flock.Claims.Recursion.PlainK
-import Proofs.Flock.Claims.Recursion.SlotsCalls
-import Proofs.Flock.Claims.Recursion.SlotsPorted
-import Proofs.Flock.Claims.Recursion.ElemRead
-import Proofs.Flock.Claims.Recursion.VerdictRowRLeaf
-import Proofs.Flock.Claims.DeployPlainCode
-import Proofs.Flock.Claims.DeployCode
-import Proofs.Flock.Claims.DeployTables
-import Proofs.Flock.Claims.KS
-import Proofs.Flock.Claims.RootFindGF128
-import Proofs.Flock.Claims.GS
-import Proofs.Flock.Claims.DeployRounds
-import Proofs.Flock.Claims.DeployRoundsZk
-import Proofs.Flock.Claims.DeployK
-import Proofs.Flock.Claims.DeployEfficient
-import Proofs.Flock.Claims.Assembled
-import Proofs.Flock.Claims.ZK
-import Proofs.Flock.Claims.KS.ZkAcceptsAt
-import Proofs.Flock.Claims.KS.ZkAcceptsRun
-import Proofs.Flock.Claims.CompleteFails
-import Proofs.Flock.Claims.Sampling
-import Proofs.Flock.Claims.KS.ZkAccepts
-import Proofs.Flock.Claims.Witnesses
-import Proofs.Flock.Claims.WrongUnits
-import Proofs.Flock.Claims.Recursion.OutTopRows
-import Proofs.Flock.Claims.Recursion.ResPiecesD
-import Proofs.Flock.Claims.Recursion.SideCapPos
-import Proofs.Flock.Claims.Recursion.ResLowJD
-import Proofs.Flock.Claims.Recursion.ResLowerD
-import Proofs.Flock.Claims.Recursion.ResLowerDA
-import Proofs.Flock.Claims.Recursion.ResSiteD
-import Proofs.Flock.Claims.Recursion.ResLowerDD
-import Proofs.Flock.Claims.Recursion.KSDec
-import Proofs.Flock.Claims.Recursion.ResAccPorts
-import Proofs.Flock.Claims.Recursion.ResChainW
-import Proofs.Flock.Claims.Recursion.ResStepsW
-import Proofs.Flock.Claims.Recursion.ResEndsW
-import Proofs.Flock.Claims.Recursion.OpenLevW
-import Proofs.Flock.Claims.Recursion.AccTies
-import Proofs.Flock.Claims.Recursion.HresAsm
-import Proofs.Flock.Claims.Recursion.ResFrameElems
-import Proofs.Flock.Claims.Recursion.ResFramePorts
-import Proofs.Flock.Claims.Recursion.ResStepsWV
-import Proofs.Flock.Claims.Recursion.ResStepsWD
-import Proofs.Flock.Claims.Recursion.ResNextW
-import Proofs.Flock.Claims.Recursion.ResAccEnd
-import Proofs.Flock.Claims.Recursion.OpenCoefTie
+module
+
+public import Definitions.Flock.Guarantees.Claims
+public import Proofs.Flock.Claims.RecursionStated
+public import Proofs.Flock.Claims.Prob
+public import Proofs.Flock.Claims.Finder
+public import Proofs.Flock.Claims.Aggregate
+public import Proofs.Flock.Claims.Bits
+public import Proofs.Flock.Claims.ERep
+public import Proofs.Flock.Claims.ERepCost
+public import Proofs.Flock.Claims.Bridge
+public import Proofs.Flock.Claims.Numbers
+public import Proofs.Flock.Claims.NumbersTable
+public import Proofs.Flock.Claims.NumbersPads
+public import Proofs.Flock.Claims.NumbersGamma
+public import Proofs.Flock.Claims.NumbersNMin
+public import Proofs.Flock.Claims.Recursion
+public import Proofs.Flock.Claims.NumbersDeploy
+public import Proofs.Flock.Claims.NumbersRadius
+public import Proofs.Flock.Claims.Recursion.InnerAccepts
+public import Proofs.Flock.Claims.Recursion.InnerAcceptsKS
+public import Proofs.Flock.Claims.Recursion.DeployInputs
+public import Proofs.Flock.Claims.Recursion.DeployOuter
+public import Proofs.Flock.Claims.Recursion.Deploy
+public import Proofs.Flock.Claims.Recursion.ComposeParts
+public import Proofs.Flock.Claims.Recursion.DeployComplete
+public import Proofs.Flock.Claims.Recursion.DeployScope
+public import Proofs.Flock.Claims.Recursion.DeployFacts
+public import Proofs.Flock.Claims.Recursion.DeploySessions
+public import Proofs.Flock.Claims.Recursion.DeployScopeRuns
+public import Proofs.Flock.Claims.Recursion.DeployMargin
+public import Proofs.Flock.Claims.Recursion.DeployPremises
+public import Proofs.Flock.Claims.Recursion.DeployHonest
+public import Proofs.Flock.Claims.Recursion.DeployZK
+public import Proofs.Flock.Claims.Recursion.Seq
+public import Proofs.Flock.Claims.Recursion.SeqSim
+public import Proofs.Flock.Claims.Recursion.SeqSession
+public import Proofs.Flock.Claims.Recursion.SeqPrefix
+public import Proofs.Flock.Claims.Recursion.SeqCap
+public import Proofs.Flock.Claims.Recursion.SeqKey
+public import Proofs.Flock.Claims.Recursion.SeqDeploy
+public import Proofs.Flock.Claims.Recursion.DeployStop
+public import Proofs.Flock.Claims.Recursion.SeqStop
+public import Proofs.Flock.Claims.Recursion.SeqDeployStop
+public import Proofs.Flock.Claims.Recursion.VStar
+public import Proofs.Flock.Claims.Recursion.VStarBound
+public import Proofs.Flock.Claims.Recursion.BoundDeploy
+public import Proofs.Flock.Claims.Recursion.BoundDeployE
+public import Proofs.Flock.Claims.Recursion.FlockKSDeployE
+public import Proofs.Flock.Claims.Recursion.ConflictTiedE
+public import Proofs.Flock.Claims.Recursion.RepErase
+public import Proofs.Flock.Claims.Recursion.CallsBridgeE
+public import Proofs.Flock.Claims.Recursion.PlainKSAbortFails
+public import Proofs.Flock.Claims.Recursion.BoundRun
+public import Proofs.Flock.Claims.Recursion.BoundForks
+public import Proofs.Flock.Claims.Recursion.PlainKSAbortDeployed
+public import Proofs.Flock.Claims.Recursion.BindsDeployed
+public import Proofs.Flock.Claims.Recursion.BoundAccepts
+public import Proofs.Flock.Claims.Recursion.BoundRoute
+public import Proofs.Flock.Claims.Recursion.BoundBridge
+public import Proofs.Flock.Claims.Recursion.LastBindsEC
+public import Proofs.Flock.Claims.Recursion.BoundRouteCols
+public import Proofs.Flock.Claims.Recursion.BoundWeight
+public import Proofs.Flock.Claims.Recursion.BoundMerged
+public import Proofs.Flock.Claims.Recursion.BoundRouteMerged
+public import Proofs.Flock.Claims.Recursion.BoundMergedLin
+public import Proofs.Flock.Claims.Recursion.BoundRouteMergedLin
+public import Proofs.Flock.Claims.Recursion.KSLin2
+public import Proofs.Flock.Claims.Recursion.KSLinks
+public import Proofs.Flock.Claims.Recursion.BitsLin2
+public import Proofs.Flock.Claims.Recursion.BoundRouteKSLin2
+public import Proofs.Flock.Claims.Recursion.SetupCalls
+public import Proofs.Flock.Claims.Recursion.KSLin2Deployed
+public import Proofs.Flock.Claims.Recursion.KSLin2Plain
+public import Proofs.Flock.Claims.Recursion.LamDeployed
+public import Proofs.Flock.Claims.Recursion.FlockKSLin
+public import Proofs.Flock.Claims.Recursion.CapLink
+public import Proofs.Flock.Claims.Recursion.CapLinkRd
+public import Proofs.Flock.Claims.Recursion.LastBindsDeployed
+public import Proofs.Flock.Claims.Recursion.LastColsDeployed
+public import Proofs.Flock.Claims.Recursion.RepFramesBind
+public import Proofs.Flock.Claims.Recursion.RepFramesFields
+public import Proofs.Flock.Claims.Recursion.RepFramesLig
+public import Proofs.Flock.Claims.Recursion.RepOpenings
+public import Proofs.Flock.Claims.Recursion.RepBindProof
+public import Proofs.Flock.Claims.Recursion.CallsBridge
+public import Proofs.Flock.Claims.Recursion.LogWalk
+public import Proofs.Flock.Claims.Recursion.DecodeLog
+public import Proofs.Flock.Claims.Recursion.VerdictLog
+public import Proofs.Flock.Claims.Recursion.CallsAgree
+public import Proofs.Flock.Claims.Recursion.CallsAgreeE
+public import Proofs.Flock.Claims.Recursion.LastColsE
+public import Proofs.Flock.Claims.Recursion.CallsOfProofs
+public import Proofs.Flock.Claims.Recursion.LastBindsClosed
+public import Proofs.Flock.Claims.Recursion.KSLin2PlainClosed
+public import Proofs.Flock.Claims.Recursion.VStarParts
+public import Proofs.Flock.Claims.Recursion.VStarPartsHolo
+public import Proofs.Flock.Claims.Recursion.VStarPartsDense
+public import Proofs.Flock.Claims.Recursion.DeployReg
+public import Proofs.Flock.Claims.Recursion.VStarPartsSparse
+public import Proofs.Flock.Claims.Recursion.VStarPartsSparseDeploy
+public import Proofs.Flock.Claims.Recursion.VStarLinks
+public import Proofs.Flock.Claims.Recursion.PartsVStar
+public import Proofs.Flock.Claims.Recursion.VStarBDeploy
+public import Proofs.Flock.Claims.Recursion.KSLin2Staged
+public import Proofs.Flock.Claims.Recursion.LayoutBDeployed
+public import Proofs.Flock.Claims.Recursion.VStarCross
+public import Proofs.Flock.Claims.Recursion.DeployChecked
+public import Proofs.Flock.Claims.Recursion.DeployLayout
+public import Proofs.Flock.Claims.Recursion.SchedHolo
+public import Proofs.Flock.Claims.Recursion.SchedCount
+public import Proofs.Flock.Claims.Recursion.InnerForm
+public import Proofs.Flock.Claims.Recursion.SchedDense
+public import Proofs.Flock.Claims.Recursion.LayoutBCap
+public import Proofs.Flock.Claims.Recursion.LayoutBTops
+public import Proofs.Flock.Claims.Recursion.SetupTagged
+public import Proofs.Flock.Claims.Recursion.RowsCover
+public import Proofs.Flock.Claims.Recursion.CapPorts
+public import Proofs.Flock.Claims.Recursion.TopsStaged
+public import Proofs.Flock.Claims.Recursion.FinOpen
+public import Proofs.Flock.Claims.Recursion.RecRecord
+public import Proofs.Flock.Claims.Recursion.RecOpen
+public import Proofs.Flock.Claims.Recursion.OpenedPlain
+public import Proofs.Flock.Claims.Recursion.OpenedDecode
+public import Proofs.Flock.Claims.Recursion.VerdictRowD
+public import Proofs.Flock.Claims.Recursion.SlotsCommit
+public import Proofs.Flock.Claims.Recursion.SlotsCheck
+public import Proofs.Flock.Claims.Recursion.OpensReads
+public import Proofs.Flock.Claims.Recursion.RoundWords
+public import Proofs.Flock.Claims.Recursion.CoinTie
+public import Proofs.Flock.Claims.Recursion.CoinPos
+public import Proofs.Flock.Claims.Recursion.CapOpens
+public import Proofs.Flock.Claims.Recursion.TopsOpens
+public import Proofs.Flock.Claims.Recursion.KSLin2E
+public import Proofs.Flock.Claims.Recursion.PartAccepts
+public import Proofs.Flock.Claims.Recursion.VStarPartsB
+public import Proofs.Flock.Claims.Recursion.PartsCompose
+public import Proofs.Flock.Claims.Recursion.NextCs
+public import Proofs.Flock.Claims.Recursion.NextShaRep
+public import Proofs.Flock.Claims.Recursion.NextJ
+public import Proofs.Flock.Claims.Recursion.NextP
+public import Proofs.Flock.Claims.Recursion.NextSha
+public import Proofs.Flock.Claims.Recursion.NextShaS17
+public import Proofs.Flock.Claims.Recursion.NextShaDec
+public import Proofs.Flock.Claims.Recursion.NextS
+public import Proofs.Flock.Claims.Recursion.NextR
+public import Proofs.Flock.Claims.Recursion.DecodeTiesVals
+public import Proofs.Flock.Claims.Recursion.DecodeTiesW
+public import Proofs.Flock.Claims.Recursion.DecodeTies
+public import Proofs.Flock.Claims.Recursion.VerdictRows
+public import Proofs.Flock.Claims.Recursion.RecordCanon
+public import Proofs.Flock.Claims.Recursion.VerdictRowG
+public import Proofs.Flock.Claims.Recursion.VerdictRowE
+public import Proofs.Flock.Claims.Recursion.VerdictRowR
+public import Proofs.Flock.Claims.Recursion.VerdictParts
+public import Proofs.Flock.Claims.Recursion.NextRHonest
+public import Proofs.Flock.Claims.Recursion.NextRFits
+public import Proofs.Flock.Claims.Recursion.NextRShaped
+public import Proofs.Flock.Claims.Recursion.NextRSetup
+public import Proofs.Flock.Claims.Recursion.NextRRep
+public import Proofs.Flock.Claims.Recursion.NextRSession
+public import Proofs.Flock.Claims.Recursion.NextRRows
+public import Proofs.Flock.Claims.Recursion.NextRCoins
+public import Proofs.Flock.Claims.Recursion.NextRTables
+public import Proofs.Flock.Claims.Recursion.ResAccepts
+public import Proofs.Flock.Claims.Recursion.RowSlots
+public import Proofs.Flock.Claims.Recursion.FinalPiece
+public import Proofs.Flock.Claims.Recursion.VerdictPieces
+public import Proofs.Flock.Claims.Recursion.OpenPieces
+public import Proofs.Flock.Claims.Recursion.NextRCounts
+public import Proofs.Flock.Claims.Recursion.VerdictRowDPieces
+public import Proofs.Flock.Claims.Recursion.VerdictRun
+public import Proofs.Flock.Claims.Recursion.VerdictAssembly
+public import Proofs.Flock.Claims.Recursion.DecodeAt
+public import Proofs.Flock.Claims.Recursion.CapPieces
+public import Proofs.Flock.Claims.Recursion.DeployedR
+public import Proofs.Flock.Claims.Recursion.RestFinal
+public import Proofs.Flock.Claims.Recursion.RestLens
+public import Proofs.Flock.Claims.Recursion.RestLive
+public import Proofs.Flock.Claims.Recursion.RestRead
+public import Proofs.Flock.Claims.Recursion.RestReadR
+public import Proofs.Flock.Claims.Recursion.RestReadsAt
+public import Proofs.Flock.Claims.Recursion.RestElemR
+public import Proofs.Flock.Claims.Recursion.RestOpenedSized
+public import Proofs.Flock.Claims.Recursion.RestVerdictBases
+public import Proofs.Flock.Claims.Recursion.RestVerdictCustody
+public import Proofs.Flock.Claims.Recursion.RestVerdictDraw
+public import Proofs.Flock.Claims.Recursion.VerdictRowDCoin
+public import Proofs.Flock.Claims.Recursion.VerdictRowRDeployed
+public import Proofs.Flock.Claims.Recursion.VerdictRowDCover
+public import Proofs.Flock.Claims.Recursion.NonVacuous
+public import Proofs.Flock.Claims.Recursion.VerdictRowEAcc
+public import Proofs.Flock.Claims.Recursion.VerdictRowEAccR
+public import Proofs.Flock.Claims.Recursion.PartAcceptsPin
+public import Proofs.Flock.Claims.Recursion.PartAcceptsSetup
+public import Proofs.Flock.Claims.Recursion.OpenLowerJointV
+public import Proofs.Flock.Claims.Recursion.VerdictRowEJoint
+public import Proofs.Flock.Claims.Recursion.VerdictRowEFree
+public import Proofs.Flock.Claims.Recursion.VerdictRowEBytes
+public import Proofs.Flock.Claims.Recursion.VPiecesDeployed
+public import Proofs.Flock.Claims.Recursion.VerdictRowL
+public import Proofs.Flock.Claims.Recursion.RoundCounts
+public import Proofs.Flock.Claims.Recursion.VerdictTargetL
+public import Proofs.Flock.Claims.Recursion.NonVacuousRows
+public import Proofs.Flock.Claims.Recursion.VerdictLoop
+public import Proofs.Flock.Claims.KS.PlainR
+public import Proofs.Flock.Claims.Recursion.LastBindsR
+public import Proofs.Flock.Claims.Recursion.KSLin2R
+public import Proofs.Flock.Claims.Recursion.RoundSizes
+public import Proofs.Flock.Claims.Recursion.DecRRecJ
+public import Proofs.Flock.Claims.Recursion.LayoutBAcc
+public import Proofs.Flock.Claims.Recursion.LastCallsR
+public import Proofs.Flock.Claims.Recursion.CallsLe
+public import Proofs.Flock.Claims.Recursion.CallsRep
+public import Proofs.Flock.Claims.Recursion.CallsTop
+public import Proofs.Flock.Claims.Recursion.CallsDecision
+public import Proofs.Flock.Claims.Recursion.CallsR
+public import Proofs.Flock.Claims.Recursion.CallsClosed
+public import Proofs.Flock.Claims.Recursion.VerdictRowDTie
+public import Proofs.Flock.Claims.Recursion.InnerAtCoins
+public import Proofs.Flock.Claims.Recursion.InnerSetupSame
+public import Proofs.Flock.Claims.Recursion.InnerExtras
+public import Proofs.Flock.Claims.Recursion.VVTieOf
+public import Proofs.Flock.Claims.Recursion.ResTieVV
+public import Proofs.Flock.Claims.Recursion.RowDLevels
+public import Proofs.Flock.Claims.Recursion.RowDMerkle
+public import Proofs.Flock.Claims.Recursion.RowDAccept
+public import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
+public import Proofs.Flock.Claims.Recursion.CapLower
+public import Proofs.Flock.Claims.Recursion.ResLowerDeployed
+public import Proofs.Flock.Claims.KS.PlainRConflict
+public import Proofs.Flock.Claims.KS.PlainRCapPrefix
+public import Proofs.Flock.Claims.Recursion.HonestVerdictFinal
+public import Proofs.Flock.Claims.Recursion.LastSharedR
+public import Proofs.Flock.Claims.Recursion.LastFilesR
+public import Proofs.Flock.Claims.Recursion.KSFlockLinR
+public import Proofs.Flock.Claims.Recursion.VerdictFramed
+public import Proofs.Flock.Claims.Recursion.RestVerdictBasesHold
+public import Proofs.Flock.Claims.Recursion.DecompBDeployed
+public import Proofs.Flock.Claims.Recursion.VerdictRowRDep
+public import Proofs.Flock.Claims.Recursion.HonestIVStarR
+public import Proofs.Flock.Claims.Recursion.HonestPartsR
+public import Proofs.Flock.Claims.Recursion.HonestRepR
+public import Proofs.Flock.Claims.Recursion.HonestAccR
+public import Proofs.Flock.Claims.Recursion.HonestPartsLayR
+public import Proofs.Flock.Claims.Recursion.VStarWit
+public import Proofs.Flock.Claims.Recursion.VStarBuild
+public import Proofs.Flock.Claims.Recursion.VStarTrace
+public import Proofs.Flock.Claims.Recursion.HpLast
+public import Proofs.Flock.Claims.Recursion.VStarTraceOk
+public import Proofs.Flock.Claims.Recursion.VStarNets
+public import Proofs.Flock.Claims.Recursion.VStarDeployed
+public import Proofs.Flock.Claims.Recursion.HpEarly
+public import Proofs.Flock.Claims.Recursion.SlotsOk
+public import Proofs.Flock.Claims.Recursion.HpEarlyTrace
+public import Proofs.Flock.Claims.Recursion.VStarFit
+public import Proofs.Flock.Claims.Recursion.VStarHh
+public import Proofs.Flock.Claims.Recursion.VStarPorts
+public import Proofs.Flock.Claims.Recursion.VStarPin
+public import Proofs.Flock.Claims.Recursion.VStarHonest
+public import Proofs.Flock.Claims.Recursion.VStarCap0
+public import Proofs.Flock.Claims.Recursion.VStarCapL
+public import Proofs.Flock.Claims.Recursion.HhHeld
+public import Proofs.Flock.Claims.Recursion.VStarPortsM
+public import Proofs.Flock.Claims.Recursion.VStarFitHeld
+public import Proofs.Flock.Claims.Recursion.VStarFitPin
+public import Proofs.Flock.Claims.Recursion.VStarFitRow
+public import Proofs.Flock.Claims.Recursion.VStarFinal
+public import Proofs.Flock.Claims.Recursion.SlotsDeployed
+public import Proofs.Flock.Claims.Recursion.VStarTraceAt
+public import Proofs.Flock.Claims.Recursion.HpEarlyStaged
+public import Proofs.Flock.Claims.Recursion.VStarAccept
+public import Proofs.Flock.Claims.Recursion.VStarPortNames
+public import Proofs.Flock.Claims.Recursion.VStarDense
+public import Proofs.Flock.Claims.Recursion.VStarTopsOk
+public import Proofs.Flock.Claims.Recursion.VStarRowsFit
+public import Proofs.Flock.Claims.Recursion.HonestHalf
+public import Proofs.Flock.Claims.Recursion.HonestHalfTops
+public import Proofs.Flock.Claims.Recursion.Assumptions.HonestFixture
+public import Proofs.Flock.Claims.Recursion.HonestHalfFixture
+public import Proofs.Flock.Claims.Recursion.NumsFixedR
+public import Proofs.Flock.Claims.Recursion.ResSite
+public import Proofs.Flock.Claims.Recursion.VerdictRowEOpens
+public import Proofs.Flock.Claims.Recursion.LabelsFull
+public import Proofs.Flock.Claims.Recursion.VerdictRowECommit
+public import Proofs.Flock.Claims.Recursion.VerdictRowEInner
+public import Proofs.Flock.Claims.Recursion.BoundDeployOuter
+public import Proofs.Flock.Claims.Counted
+public import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
+public import Proofs.Flock.Claims.Recursion.BoundReaders
+public import Proofs.Flock.Claims.Decode
+public import Proofs.Flock.Claims.DecodeFlock
+public import Proofs.Flock.Claims.ZkDecode
+public import Proofs.Flock.Claims.DecodeFamily
+public import Proofs.Flock.Claims.ZkDecodeFlock
+public import Proofs.Flock.Claims.ZkCols
+public import Proofs.Flock.Claims.ZkQueryRound
+public import Proofs.Flock.Claims.Scope
+public import Proofs.Flock.Claims.DeployOC
+public import Proofs.Flock.Claims.DeployInputs
+public import Proofs.Flock.Claims.JsonEq
+public import Proofs.Flock.Claims.JsonNorm
+public import Proofs.Flock.Claims.CanonEq
+public import Proofs.Flock.Claims.Deploy
+public import Proofs.Flock.Claims.DeployE
+public import Proofs.Flock.Claims.DeployVK
+public import Proofs.Flock.Claims.Recursion.FlockKSDeployK
+public import Proofs.Flock.Claims.Recursion.PlainK
+public import Proofs.Flock.Claims.Recursion.SlotsCalls
+public import Proofs.Flock.Claims.Recursion.SlotsPorted
+public import Proofs.Flock.Claims.Recursion.ElemRead
+public import Proofs.Flock.Claims.Recursion.VerdictRowRLeaf
+public import Proofs.Flock.Claims.DeployPlainCode
+public import Proofs.Flock.Claims.DeployCode
+public import Proofs.Flock.Claims.DeployTables
+public import Proofs.Flock.Claims.KS
+public import Proofs.Flock.Claims.RootFindGF128
+public import Proofs.Flock.Claims.GS
+public import Proofs.Flock.Claims.DeployRounds
+public import Proofs.Flock.Claims.DeployRoundsZk
+public import Proofs.Flock.Claims.DeployK
+public import Proofs.Flock.Claims.DeployEfficient
+public import Proofs.Flock.Claims.Assembled
+public import Proofs.Flock.Claims.ZK
+public import Proofs.Flock.Claims.KS.ZkAcceptsAt
+public import Proofs.Flock.Claims.KS.ZkAcceptsRun
+public import Proofs.Flock.Claims.CompleteFails
+public import Proofs.Flock.Claims.Sampling
+public import Proofs.Flock.Claims.KS.ZkAccepts
+public import Proofs.Flock.Claims.Witnesses
+public import Proofs.Flock.Claims.WrongUnits
+public import Proofs.Flock.Claims.Recursion.OutTopRows
+public import Proofs.Flock.Claims.Recursion.ResPiecesD
+public import Proofs.Flock.Claims.Recursion.SideCapPos
+public import Proofs.Flock.Claims.Recursion.ResLowJD
+public import Proofs.Flock.Claims.Recursion.ResLowerD
+public import Proofs.Flock.Claims.Recursion.ResLowerDA
+public import Proofs.Flock.Claims.Recursion.ResSiteD
+public import Proofs.Flock.Claims.Recursion.ResLowerDD
+public import Proofs.Flock.Claims.Recursion.KSDec
+public import Proofs.Flock.Claims.Recursion.ResAccPorts
+public import Proofs.Flock.Claims.Recursion.ResChainW
+public import Proofs.Flock.Claims.Recursion.ResStepsW
+public import Proofs.Flock.Claims.Recursion.ResEndsW
+public import Proofs.Flock.Claims.Recursion.OpenLevW
+public import Proofs.Flock.Claims.Recursion.AccTies
+public import Proofs.Flock.Claims.Recursion.HresAsm
+public import Proofs.Flock.Claims.Recursion.ResFrameElems
+public import Proofs.Flock.Claims.Recursion.ResFramePorts
+public import Proofs.Flock.Claims.Recursion.ResStepsWV
+public import Proofs.Flock.Claims.Recursion.ResStepsWD
+public import Proofs.Flock.Claims.Recursion.ResNextW
+public import Proofs.Flock.Claims.Recursion.ResAccEnd
+public import Proofs.Flock.Claims.Recursion.OpenCoefTie
+public import Proofs.Flock.Claims.ZKOut
 
 /-! `Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated`, by reflexivity: the guarantee is there for its
 record, which holds the claims' text.
 
 The claims' lemmas sit under `Proofs.Flock.Claims`, one module per piece, imported above; each module's docstring
 says what it proves. -/
+
+@[expose] public section
 
 /-- **The claims are stated** (`Flock.Guarantees.ClaimsStated`). -/
 theorem Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated := rfl

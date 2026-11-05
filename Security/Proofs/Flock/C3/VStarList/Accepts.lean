@@ -1,10 +1,12 @@
-import Flock.RecSetup
-import Proofs.Flock.C3.VStarList.Range
-import Proofs.Flock.Recursive.HoloExec
-import Proofs.Flock.Recursive.VStarCheck
-import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+module
+
+public import Flock.RecSetup
+public import Proofs.Flock.C3.VStarList.Range
+public import Proofs.Flock.Recursive.HoloExec
+public import Proofs.Flock.Recursive.VStarCheck
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 
 /-!
 # Piece (h): `AcceptsC3` from the verifier's acceptance
@@ -29,6 +31,8 @@ covers check (`RecVStar.checkCovers`). So:
   accepted candidate-3 session check 5's source is the files of the record the verifier holds the inner transcript
   against, never a record of what check 5 reads (`Source.coins`), which `checkAtC3` refuses there.
 -/
+
+@[expose] public section
 
 namespace FlockC3.VStarList
 

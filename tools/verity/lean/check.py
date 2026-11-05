@@ -42,7 +42,10 @@ environment extension loaded, so none of the package's code runs), and replays t
     layers       a module under a `layers` prefix (other than its `except` modules) imports a module outside the layer's
                  `imports` prefixes; a `sealed` layer's modules are ruled only by the layers at or under it, and an
                  `imports` prefix that holds a sealed layer below it doesn't admit that layer's modules (a vocabulary
-                 `Definitions.Pouw` imports no `Definitions.Pouw.Guarantees`, which sits under it)
+                 `Definitions.Pouw` imports no `Definitions.Pouw.Guarantees`, which sits under it). A module no package of
+                 this repository builds (the toolchain's, a fetched dependency's) that the admitted imports and `Init`
+                 already reach is no import outside the layer: it brings nothing in (an `import all Init.Data.Array.Basic`
+                 a proof takes to see a body)
     assumptions  a named assumption (listed by name under `assumptions`: a definition of the spec stated as a `Prop`, taken
                  as a hypothesis or read in a guarantee's statement) has no `owner`, no guarantee reads it, or its
                  definition no longer has the digest its record holds; or the policy still lists assumption modules,
@@ -78,7 +81,9 @@ environment extension loaded, so none of the package's code runs), and replays t
     trees        (`trees`: which module prefixes are the definitions, properties and proofs trees, its own and those of
                  the packages it requires by path) a guarantee's statement reads a definition of a module of the proofs
                  tree, or an audited module of the definitions or properties tree imports one, unless a prefix of `trees`'
-                 `except` lists the read module or the importing one with a reason (an entry that excepts nothing fails)
+                 `except` lists the read module or the importing one with a reason (an entry that excepts nothing fails);
+                 the record follows a statement through an excepted module's definitions as through `meaning`'s
+                 (`record_scope`), so the definitions it reads there, a premise among them, are in `reads`
     proved_in    (a spec package whose guarantees another package proves) a package `proved_in` names does not require this
                  one by path, holds guarantees in its own policy, shares a module root with a package it requires, or
                  imports modules of its own outside its roots; or a guarantee is proved by none of this package and those, or
@@ -201,9 +206,10 @@ UNCHECKED = re.compile(r"\b(debug\.skipKernelTC|skipKernelTC|debug\.byAsSorry|de
                        r"|bootstrap\.\w+|addDeclWithoutChecking|addDeclCore)\b")
 #: code a Lean file runs while it is compiled (an initializer, an `#eval`, a command or an elaborator: each can do IO, and a
 #: macro can expand to one); refused in a package's sources unless its module is listed under `compile_time`
-COMPILE_TIME = re.compile(r"(?m)^[ \t]*(?:@\[[^\]\n]*\][ \t]*)*(?:(?:private|protected|noncomputable|scoped|local|partial|unsafe)"
-                          r"[ \t]+)*(#eval!?|run_cmd|run_elab|run_meta|run_tac|initialize|builtin_initialize|elab|elab_rules|macro"
-                          r"|macro_rules|syntax|declare_syntax_cat)\b|@\[[^\]\n]*\b(command_elab|term_elab|tactic|macro|init"
+COMPILE_TIME = re.compile(r"(?m)^[ \t]*(?:@\[[^\]\n]*\][ \t]*)*(?:(?:private|public|protected|meta|noncomputable|scoped|local"
+                          r"|partial|nonrec|unsafe)[ \t]+)*(#eval!?|run_cmd|run_elab|run_meta|run_tac|initialize"
+                          r"|builtin_initialize|elab|elab_rules|macro|macro_rules|syntax|declare_syntax_cat)\b"
+                          r"|@\[[^\]\n]*\b(command_elab|term_elab|tactic|macro|init"
                           r"|builtin_init|builtin_command_elab|builtin_term_elab|builtin_tactic|builtin_macro)\b")
 #: held by the first `setup.sh` of each toolchain in a run (`setup`)
 SETUP = threading.Lock()
@@ -213,6 +219,9 @@ _INSTALLED: set[str] = set()
 UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--pid", "--fork", "--kill-child"]
 #: the controls' own packages; `--all` does not audit them as the repository's
 FIXTURES = HERE / "tests" / "fixtures"
+#: each package of the controls with the violations its copies add: `modules` is written in Lean's module system, where
+#: proofs and unexposed bodies are only in each `.olean`'s private part
+CONTROLS = {"control": "violations.json", "modules": "module-violations.json"}
 #: name components of the declarations Lean generates for a definition (listed under `reads` with it, not by name)
 GENERATED = re.compile(r"^(_.*|match_\d+|proof_\d+|eq_\d+|eq_def|mk|rec|recOn|casesOn|noConfusion|noConfusionType|below|brecOn"
                        r"|binductionOn|ibelow|ctorIdx|inj|injEq|sizeOf_spec)$")
@@ -1004,9 +1013,23 @@ def facts_program(pkg: Path) -> str:
     return str(program)
 
 
+def record_scope(policy: dict) -> list[str]:
+    """The module prefixes a guarantee's record follows its statement through (`Facts.lean`'s `recorded`): `meaning`, and
+    each prefix of `trees`' `except`.  An excepted module holds definitions a statement reads from the proofs tree (a `def G :
+    Prop` and its premises, until they move into the definitions tree), and the trees check passes them; outside `meaning`
+    the walk would stop at the first, its record holding only that name, so a premise added or dropped there would change
+    no record."""
+    meaning = policy.get("meaning", policy.get("roots", []))
+    trees = policy.get("trees")
+    excepted = trees.get("except") if isinstance(trees, dict) else None
+    extra = [p for p in excepted if isinstance(p, str) and p] if isinstance(excepted, dict) else []
+    return list(dict.fromkeys([*meaning, *sorted(extra)]))
+
+
 def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None = None) -> dict:
     """Run `Facts.lean` on the package (its `.olean` files as data: no initializer, attribute handler or other package code
-    runs): the facts document it writes.  A guarantee whose type is a definition under `meaning`, applied under binders, gets
+    runs): the facts document it writes, each guarantee's `reads` walked through `record_scope`.  A guarantee whose type is
+    a definition under `meaning`, applied under binders, gets
     `lift`: that definition (`head`), its module, and the SHA-256 of its type with the definition unfolded once
     (`unfolded_sha256`, `Facts.lean`'s `liftOf`).  With ``moved`` ({old name: new name}), each guarantee and read definition
     also gets `moved`: its name before the move (`as`) and the SHA-256 of its text under the old names, and a guarantee with a
@@ -1018,7 +1041,7 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
     config = work / "facts-config.json"
     premises = (policy.get("shape") or {}).get("premises")
     config.write_text(json.dumps({"roots": policy["roots"], "meaning": policy.get("meaning", policy["roots"]),
-                                  "allowed": policy.get("axioms", STANDARD), "pins": sorted(policy.get("guarantees", {})),
+                                  "recorded": record_scope(policy), "allowed": policy.get("axioms", STANDARD), "pins": sorted(policy.get("guarantees", {})),
                                   "spec": spec_of(policy),
                                   "premises": [p for p in premises if isinstance(p, str)] if isinstance(premises, list) else [],
                                   "assumptions": sorted(a for a in policy.get("assumptions", {}) if isinstance(a, str)),
@@ -1275,6 +1298,15 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
 
     def admits(prefixes: list[str], i: str) -> bool:
         return any(under([p], i) and not any(s != p and under([p], s) and under([s], i) for s in sealed) for p in prefixes)
+    graph = {m: g["imports"] for m, g in facts.get("graph", {}).items()}
+
+    def reached(start: list[str]) -> set[str]:
+        seen, stack = set(), list(start)
+        while stack:
+            if (x := stack.pop()) not in seen:
+                seen.add(x)
+                stack += graph.get(x, [])
+        return seen
     for layer, rule in sorted(layers.items()):
         inside = [m for m in sorted(modules) if under([layer], m)
                   and not any(under([s], m) and not under([s], layer) for s in sealed)]
@@ -1287,8 +1319,10 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
         for m in inside:
             if m in rule.get("except", []):
                 continue
+            held = [i for i in facts["imports"].get(m, []) if admits(rule["imports"], i) or i == "Init"]
+            reach = reached(held)
             for i in facts["imports"].get(m, []):
-                if not admits(rule["imports"], i) and i != "Init":
+                if i not in held and (i in own or i not in reach):
                     fails.append(Failure("layers.import", m, f"layers: {m} imports {i}, outside {layer}'s layer "
                                          f"({', '.join(rule['imports'])})"))
     if conflicts := facts.get("moved_conflicts"):
@@ -1720,7 +1754,12 @@ def witness_scope(name: str, policy: dict, pin: dict) -> tuple[str, str] | None:
     (a bound on a hash, a count, a device), where neither form means anything."""
     if fns := accepted(policy, name):
         return "acceptance", f"a property of {' or '.join(fns)} accepting"
-    reads = sorted(pin.get("reads") or [], key=lambda r: r.get("name", ""))
+    # what a statement reads only through `trees`' `except` (`record_scope`: the reads outside `meaning_reads`) is
+    # recorded, but brings no guarantee into scope: `unwitnessed` only shrinks, and the statements still in the proofs
+    # tree carry no witnesses
+    inner = None if pin.get("meaning_reads") is None else set(pin["meaning_reads"])
+    reads = sorted((r for r in pin.get("reads") or [] if inner is None or r.get("name") in inner),
+                   key=lambda r: r.get("name", ""))
     for r in reads:
         m = r.get("module") or ""
         if SCOPE_COMPONENT in m.split("."):
@@ -2146,7 +2185,8 @@ def inline_failures(policy: dict, facts: dict) -> tuple[list[Failure], dict, dic
                                  f"{'; '.join(f'({b})' for b in new)}: an inline hypothesis, neither a named assumption "
                                  f"the lock lists, another listed guarantee's statement nor a plain range (`0 < x`, "
                                  f"`0 ≤ x`, `x ≤ 1`, `x ≤ y`, `∀ i, 0 ≤ f i`, over bound variables and numerals); "
-                                 f"{INLINE_FIX}"))
+                                 f"{INLINE_FIX}; or, where a merge or an older tree's `--update` dropped an entry the "
+                                 f"lock had for it, put that entry back as the earlier lock has it"))
     return fails, dict(sorted(kept.items())), offenders
 
 
@@ -2890,7 +2930,7 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
         qwork = work / f"proved-in-{re.sub(r'[^A-Za-z0-9]+', '_', entry)}"
         qwork.mkdir(parents=True, exist_ok=True)
         qf = facts_of(q, {"roots": qpol["roots"], "meaning": policy.get("meaning", policy["roots"]),
-                          "axioms": policy.get("axioms", STANDARD), "guarantees": policy.get("guarantees", {}),
+                          "trees": policy.get("trees", {}), "axioms": policy.get("axioms", STANDARD), "guarantees": policy.get("guarantees", {}),
                           "assumptions": policy.get("assumptions", {}), "shape": policy.get("shape", {})}, qwork, moved)
         lib = (q / ".lake" / "build" / "lib" / "lean").resolve()
         loaded = {".".join(r.relative_to(lib).with_suffix("").parts) for r in (Path(o).resolve() for o in qf["oleans"])
@@ -3764,13 +3804,18 @@ def packages(root: Path) -> list[Path]:
 
 
 def controls(toolchain: str, out: Path, install: bool = False, log=print) -> list[str]:
-    """Build the fixture package with ``toolchain``: it must pass clean, and fail each check once a violation is added
-    (and with none of the failures its `not` lists, by prefix).  ``install`` (`--build`) first installs elan and the
-    toolchain with `setup.sh`."""
+    """Build each package of the controls (`CONTROLS`) with ``toolchain``: it must pass clean, and fail each check once a
+    violation is added (and with none of the failures its `not` lists, by prefix).  ``install`` (`--build`) first installs
+    elan and the toolchain with `setup.sh`."""
+    return [f for fixture in CONTROLS for f in controls_of(fixture, toolchain, out, install, log)]
+
+
+def controls_of(fixture: str, toolchain: str, out: Path, install: bool = False, log=print) -> list[str]:
+    """`controls` of the package ``fixture``."""
     fails = []
-    work = out / f"controls-{re.sub(r'[^A-Za-z0-9]+', '_', toolchain)}"
+    work = out / f"controls-{re.sub(r'[^A-Za-z0-9]+', '_', toolchain)}" / fixture
     shutil.rmtree(work, ignore_errors=True)
-    shutil.copytree(FIXTURES / "control", work / "pkg")
+    shutil.copytree(FIXTURES / fixture, work / "pkg")
     pkg = work / "pkg"
     (pkg / "lean-toolchain").write_text(toolchain + "\n")
     if install:
@@ -3779,13 +3824,13 @@ def controls(toolchain: str, out: Path, install: bool = False, log=print) -> lis
             return [f"controls: installing {toolchain} failed:\n{text[-2000:]}"]
     rc, text = run(in_sandbox(pkg, ["lake", "build"]), pkg, work / "build.log")
     if rc:
-        return [f"controls: the clean fixture does not build with {toolchain}:\n{text[-2000:]}"]
+        return [f"controls: the clean fixture {fixture} does not build with {toolchain}:\n{text[-2000:]}"]
     reports = work / "reports"
     audit(pkg, reports, update=True, log=lambda *_: None)
     clean = audit(pkg, reports)["failures"]
     if clean:
-        fails.append("controls: the clean fixture fails the audit:\n" + "\n".join(clean))
-    expect = json.loads((FIXTURES / "violations.json").read_text())
+        fails.append(f"controls: the clean fixture {fixture} fails the audit:\n" + "\n".join(clean))
+    expect = json.loads((FIXTURES / CONTROLS[fixture]).read_text())
 
     def beside(failures: list[str]) -> list[str]:
         """The failures other than the dependency record's: it covers the imported modules, so a violation that adds an
@@ -3835,8 +3880,8 @@ def controls(toolchain: str, out: Path, install: bool = False, log=print) -> lis
             fails.append(f"controls: `{name}` should fail `{v['fails']}`; the audit said:\n" + ("\n".join(got) or "PASS"))
         if wrong := [f for f in got if any(f.startswith(n) for n in v.get("not", []))]:
             fails.append(f"controls: `{name}` should not fail these:\n" + "\n".join(wrong))
-    log(f"audit: controls with {toolchain}: {'PASS' if not fails else 'FAIL'} (clean, {', '.join(expect)}; builds "
-        f"{'in the sandbox' if sandboxed() else 'without a sandbox'})")
+    log(f"audit: controls of {fixture} with {toolchain}: {'PASS' if not fails else 'FAIL'} (clean, {', '.join(expect)}; "
+        f"builds {'in the sandbox' if sandboxed() else 'without a sandbox'})")
     return fails
 
 

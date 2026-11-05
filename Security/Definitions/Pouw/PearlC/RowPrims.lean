@@ -1,4 +1,6 @@
-import Definitions.Pouw.PearlC.Tile4Circuit
+module
+
+public import Definitions.Pouw.PearlC.Tile4Circuit
 
 /-!
 # PoUW's own primitives in the row units, as word functions (definitions only)
@@ -18,6 +20,8 @@ words as naturals with the Python's arithmetic:
 `PouwETilde_v1` on its whole domain), written by `verity/protocols/accounting/work/pouw/lean/scripts/row_prims_vectors.py` from each primitive's `evaluate`;
 `tests/test_row_prims_lean.py` checks that the script still writes them.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.RowCircuit
 

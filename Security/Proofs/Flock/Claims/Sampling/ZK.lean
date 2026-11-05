@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.Hypotheses
-import Proofs.Flock.Claims.Sampling.Deployed
-import Proofs.Flock.Claims.ZK.Indexed
+module
+
+public import Proofs.Flock.Claims.ZK.Hypotheses
+public import Proofs.Flock.Claims.Sampling.Deployed
+public import Proofs.Flock.Claims.ZK.Indexed
 
 /-!
 # Sampling's zero knowledge from a committed-coin protocol
@@ -36,6 +38,8 @@ whole sampled run, reads models of that protocol (`Proto.TMsgLink` and the rest)
   prover on the masked tape is the protocol's (`Honest`); and `SamplingDeploy.sampling_deployed_models`,
   `sampling_deployed` with its zero knowledge from them.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 

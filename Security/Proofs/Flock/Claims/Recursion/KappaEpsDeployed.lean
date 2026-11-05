@@ -1,5 +1,8 @@
-import Proofs.Flock.Claims.Recursion.LamDeployedTight
-import Proofs.Flock.Claims.Recursion.BitsLin2
+module
+
+public import Proofs.Flock.Claims.Recursion.LamDeployedTight
+public import Proofs.Flock.Claims.Recursion.BitsLin2
+public import Proofs.Flock.Claims.Recursion.DeployedCounts
 
 /-!
 # Route 2C's split bound at the deployment's sizes: `κ ≤ 2^{−167.7}` and `ε ≤ 2^{−174.95}`
@@ -11,7 +14,8 @@ bounds `n` and `v` `BitsLin2KOn` is read at:
 
 * the inner statement is one plain table (`FlockDeploy.PlainIn` at `|sts| = 1`), so the inner verifier's rounds are at
   most `4402`, `k_I ≤ 12343986` (`k_le_one`) and `κ_I ≤ 2^{−202.98}`;
-* `x` stages at most `16` V\* parts, each one `--zk` table (`PartIn` at `|sts'| = 1`), so each part's rounds are at most
+* `x` stages at most `16` V\* parts, the verifier's cap (`RecBudget.MAX_STATEMENTS`, which a part's setup refuses past:
+  `nS_le_of_partIn`), each one `--zk` table (`PartIn` at `|sts'| = 1`), so each part's rounds are at most
   `4402`, `k_O ≤ 12343986`, `κ_O ≤ 2^{−202.98}` and `γ_O ≤ 2^{51}` (`numsOf_γ_le_one`), `c_Be ≤ 82951585924` and the
   compiled verifier's rounds `k(x) ≤ 74835`;
 * `|S(x_I)|`, `n` and `v` are each at most `2^{32}`, so `c_S = c_Be + |S(x_I)| + 2(n + v) ≤ 104426422404`;
@@ -21,6 +25,8 @@ bounds `n` and `v` `BitsLin2KOn` is read at:
 `u·2^{−255}` at `a ≥ 255` and `y ≤ u` (`two_rpow_neg_sub_le`; `γ`'s at `y ≤ u²`), and the five `u` sum to at most
 `2^{80.05}`. `Fdev`'s, `β₂·c_S`, is all but about `2^{−11}` of the sum: it is the term that sets `ε`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -222,15 +228,25 @@ theorem numsOf_γ_le_one (h : PartIn xO s spec sts) (h1 : sts.size = 1) : (numsO
 
 end Part
 
+/-- **At most `16` V\* parts wherever each staged part is in scope**: a part's setup refuses a V\* list of more than
+`RecBudget.MAX_STATEMENTS = 16` statements (`nS_le_of_partIn`). -/
+theorem nS_le_sixteen {st : Stage} {x : Msg}
+    (hO : ∀ j < nS x, ∃ i spec' sts', PartIn (staged st x (pick st x j) j) i spec' sts' ∧ sts'.size = 1) :
+    nS x ≤ 16 :=
+  nS_le_of_partIn fun j hj =>
+    let ⟨i, spec', sts', hp, _⟩ := hO j hj
+    ⟨i, spec', sts', hp⟩
+
 /-- **Route 2C's split bound at the deployment's sizes: `κ ≤ 2^{−167.7}` and `ε ≤ 2^{−174.95}`**, at the compiled
 record whose inner view runs the deployed bound record's `IVStar` (`recBoundAt rel b L`, `bdDeployed`), the bound
 record's inner Flock and the deployed caps `CpDep`, at every statement `x` whose inner statement is one plain table
-(`hin`, `h1`), which stages at most `16` V\* parts (`hn`), each one `--zk` table (`hO`), whose inner setup has at most
-`2^32` calls (`hS`), and at call bounds `n ≤ 2^32` and `v ≤ 2^32` (`hU`, `hV`). With `bitsLin2KOn_of_ksLin2On` it
-makes `Pr[acc ∧ ¬R] ≤ 2^{−167.7} + t·2^{−174.95}`.
+(`hin`, `h1`), each of whose V\* parts is one `--zk` table (`hO`), whose inner setup has at most `2^32` calls (`hS`),
+and at call bounds `n ≤ 2^32` and `v ≤ 2^32` (`hU`, `hV`). With `bitsLin2KOn_of_ksLin2On` it makes
+`Pr[acc ∧ ¬R] ≤ 2^{−167.7} + t·2^{−174.95}`. The parts are at most `16` with no condition on `x`: a part's setup
+refuses a V\* list of more than `RecBudget.MAX_STATEMENTS = 16` statements (`nS_le_of_partIn`, from `hO`).
 
 The size conditions are on public data and none is a hash premise or says anything about the prover's behaviour:
-`h1`, `hO`, `hn` and `hS` are read off `x` by the verifier's own setups (`PlainIn`'s and `PartIn`'s `setupO`), and `n`
+`h1`, `hO` and `hS` are read off `x` by the verifier's own setups (`PlainIn`'s and `PartIn`'s `setupO`), and `n`
 and `v` are the call bounds `BitsLin2KOn` quantifies over, which `hU` and `hV` cap (`v` at the deployed brings is at
 most `nS x` times one statement's `deployedSetup` inputs, `setupCalls_deployedB_le`). -/
 theorem kappa_eps_deployed (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
@@ -241,7 +257,7 @@ theorem kappa_eps_deployed (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
     {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
     (hin : FlockDeploy.PlainIn (xIOf x) s spec sts) (h1 : sts.size = 1)
     (hO : ∀ j < nS x, ∃ i spec' sts', PartIn (staged b.st x (pick b.st x j) j) i spec' sts' ∧ sts'.size = 1)
-    (hn : nS x ≤ 16) (hS : (innerSetupIns (xIOf x)).length ≤ 2 ^ 32) {n : ℕ} (hU : n ≤ 2 ^ 32) {v : ℕ}
+    (hS : (innerSetupIns (xIOf x)).length ≤ 2 ^ 32) {n : ℕ} (hU : n ≤ 2 ^ 32) {v : ℕ}
     (hV : v ≤ 2 ^ 32) :
     Claims.Recursion.κ ((recBoundAt rel b L).record (bdDeployed rel nextE colsE wE join rowIn final w).IVStar)
         (Claims.Recursion.Inner.ofFlock (bdDeployed rel nextE colsE wE join rowIn final w).deploy decI) x ≤
@@ -250,6 +266,7 @@ theorem kappa_eps_deployed (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
         ((recBoundAt rel b L).record (bdDeployed rel nextE colsE wE join rowIn final w).IVStar)
         (Claims.Recursion.Inner.ofFlock (bdDeployed rel nextE colsE wE join rowIn final w).deploy decI)
         FlockDeploy.KS.CpDep x n v ≤ 2 ^ (-(174.95 : ℝ)) := by
+  have hn := nS_le_sixteen hO
   have hVI : (FlockDeploy.deployPlain rel).V.k (xIOf x) ≤ 4402 := by
     have := FlockDeploy.Vk_plain_le rel hin
     omega
@@ -286,11 +303,16 @@ theorem kappa_eps_deployed (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
     exact k_le_one (N := N₀O (staged b.st x (pick b.st x j) j)) hhi
 
 /-- **The deployment's sizes at a statement `x`**, `kappa_eps_deployed`'s side conditions on `x`: its inner statement
-is one plain table, it stages at most `16` V\* parts, each one `--zk` table, and its inner setup has at most `2^32`
-calls. -/
+is one plain table, each V\* part it stages is one `--zk` table, and its inner setup has at most `2^32` calls. The
+parts' count is none: the verifier refuses more than `RecBudget.MAX_STATEMENTS = 16` (`nS_le_of_partIn`). Every
+statement the compiled verifier accepts is at these sizes (`sizesAt_of_run_acc`). -/
 def SizesAt (b : Brings) (x : Msg) : Prop :=
   (∃ s spec sts, FlockDeploy.PlainIn (xIOf x) s spec sts ∧ sts.size = 1) ∧
     (∀ j < nS x, ∃ i spec' sts', PartIn (staged b.st x (pick b.st x j) j) i spec' sts' ∧ sts'.size = 1) ∧
-    nS x ≤ 16 ∧ (innerSetupIns (xIOf x)).length ≤ 2 ^ 32
+    (innerSetupIns (xIOf x)).length ≤ 2 ^ 32
+
+/-- **At the deployment's sizes `x` stages at most `16` V\* parts** (`nS_le_sixteen`). -/
+theorem SizesAt.nS_le {b : Brings} {x : Msg} (h : SizesAt b x) : nS x ≤ 16 :=
+  nS_le_sixteen h.2.1
 
 end RecDeploy

@@ -1,6 +1,8 @@
-import Proofs.Flock.Bridge.V5.Statement
-import Proofs.Flock.Bridge.Assembly
-import Proofs.Flock.Bridge.Count
+module
+
+public import Proofs.Flock.Bridge.V5.Statement
+public import Proofs.Flock.Bridge.Assembly
+public import Proofs.Flock.Bridge.Count
 
 /-!
 # V5's assembly (`Bridge.AssemblyTargetV5`, proved)
@@ -15,6 +17,8 @@ doesn't fix). Inside `RelS` the event is empty. No count of faulty slots enters,
 `constsOfP_isInput`: `constsOfP` fixes only input gates, the constant, the zero and the public gates, each below
 `2 + n·B` (`Layout.keyPubOf_spec`), the program inputs of `keyProgP` (`Layout.unit_uniform_input`).
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

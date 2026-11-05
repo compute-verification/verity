@@ -1,4 +1,6 @@
-import Proofs.Core.NaiveStrassen.Check
+module
+
+public import Proofs.Core.NaiveStrassen.Check
 
 /-!
 # Soundness of the tables (NaiveStrassen)
@@ -7,6 +9,8 @@ import Proofs.Core.NaiveStrassen.Check
 proves from it, by induction on the schedule, that `lo` bounds every schedule's cost and `has` every fast schedule's,
 at any grid cells below the operand ranges.
 -/
+
+@[expose] public section
 
 namespace Verity.Accel.NaiveStrassen.Packed
 

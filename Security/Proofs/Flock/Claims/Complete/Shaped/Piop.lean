@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.Shaped.Walk
+module
+
+public import Proofs.Flock.Claims.Complete.Shaped.Walk
 
 /-!
 # The honest PIOP's lengths
@@ -8,6 +10,8 @@ The honest rep's first three phases return messages of the lengths `decodeProof`
 `kLog − 6` rounds and a 64-entry partial table, at a circuit whose fold returns at every challenge; the loop halves the
 folded table `2^kLog` once a round, `halve_size`) and `ringSwitchP_shape` (one 128-entry switch vector per claim).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

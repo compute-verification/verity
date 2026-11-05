@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.PartAccepts
-import Proofs.Flock.Claims.Recursion.VStarPartsB
-import Proofs.Flock.Claims.Recursion.VStarLinks
+module
+
+public import Proofs.Flock.Claims.Recursion.PartAccepts
+public import Proofs.Flock.Claims.Recursion.VStarPartsB
+public import Proofs.Flock.Claims.Recursion.VStarLinks
 
 /-!
 # The circuit at a staged part, from `PartAccepts`
@@ -20,6 +22,8 @@ file reads the circuit's semantics off that, with no premise beyond `PartAccepts
 What is left of a residuals piece's `hlow` is not the circuit's: the input tie (the elements the copy reads are the held
 messages' rows and the coins' coefficients) and the output tie (the residuals there give the piece).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

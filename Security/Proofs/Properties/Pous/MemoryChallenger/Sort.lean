@@ -1,5 +1,8 @@
-import Mathlib.Data.List.Perm.Basic
-import Batteries.Tactic.OpenPrivate
+module
+
+public import Mathlib.Data.List.Perm.Basic
+public import Batteries.Tactic.OpenPrivate
+import all Init.Data.Array.QSort.Basic
 
 /-!
 # `qsort` commutes with a map its order reads through, and keeps every element
@@ -8,6 +11,8 @@ import Batteries.Tactic.OpenPrivate
 pulled back through `g`, then mapping (`qsort_map`); and each swap is a permutation, so the result holds every element
 of the input (`mem_qsort`).
 -/
+
+@[expose] public section
 
 open private Array.qpartition.loop Array.qsort.sort from Init.Data.Array.QSort.Basic
 
@@ -25,7 +30,7 @@ theorem map_ite_swap {n : Nat} (g : α → β) (as : Vector α n) (b : Bool) (i 
     (if b then (as.map g).swap i j hi hj else as.map g) = (if b then as.swap i j hi hj else as).map g := by
   split <;> simp [map_swap]
 
-theorem loop_map {n : Nat} (g : α → β) (lt : β → β → Bool) {lo hi : Nat} (hhi : hi < n) (pivot : α) :
+private theorem loop_map {n : Nat} (g : α → β) (lt : β → β → Bool) {lo hi : Nat} (hhi : hi < n) (pivot : α) :
     ∀ (d : Nat) (as : Vector α n) (i k : Nat) (ilo : lo ≤ i) (ik : i ≤ k) (w : k ≤ hi), hi - k = d →
       Array.qpartition.loop lt lo hi hhi (g pivot) (as.map g) i k ilo ik w =
         let r := Array.qpartition.loop (fun x y => lt (g x) (g y)) lo hi hhi pivot as i k ilo ik w
@@ -53,7 +58,7 @@ theorem qpartition_map {n : Nat} (g : α → β) (lt : β → β → Bool) (as :
   simp only [Vector.getElem_map, map_ite_swap]
   exact loop_map g lt hhi _ _ _ _ _ _ _ _ rfl
 
-theorem sort_map {n : Nat} (g : α → β) (lt : β → β → Bool) :
+private theorem sort_map {n : Nat} (g : α → β) (lt : β → β → Bool) :
     ∀ (d : Nat) (as : Vector α n) (lo hi : Nat) (w : lo ≤ hi) (hlo : lo < n) (hhi : hi < n), hi - lo = d →
       Array.qsort.sort lt (as.map g) lo hi w hlo hhi =
         (Array.qsort.sort (fun x y => lt (g x) (g y)) as lo hi w hlo hhi).map g := by
@@ -74,7 +79,7 @@ theorem sort_map {n : Nat} (g : α → β) (lt : β → β → Bool) :
         rw [ih (mid - lo) (by omega) _ _ _ _ _ _ rfl, ih (hi - (mid + 1)) (by omega) _ _ _ _ _ _ rfl]
     · rfl
 
-theorem sort_congr {n n' : Nat} (h : n = n') (lt : β → β → Bool) (v : Vector β n) (v' : Vector β n')
+private theorem sort_congr {n n' : Nat} (h : n = n') (lt : β → β → Bool) (v : Vector β n) (v' : Vector β n')
     (hv : v.toArray = v'.toArray) {lo hi lo' hi' : Nat} (hl : lo = lo') (hh : hi = hi') (w : lo ≤ hi) (hlo : lo < n)
     (hhi : hi < n) (w' : lo' ≤ hi') (hlo' : lo' < n') (hhi' : hi' < n') :
     (Array.qsort.sort lt v lo hi w hlo hhi).toArray = (Array.qsort.sort lt v' lo' hi' w' hlo' hhi').toArray := by
@@ -97,7 +102,7 @@ theorem qsort_map (g : α → β) (lt : β → β → Bool) (as : Array α) :
     rw [← Vector.toArray_map, ← sort_map g lt _ _ _ _ _ _ _ rfl]
     exact sort_congr hs lt _ _ (by simp) (by rw [hs]) (by rw [hs]) _ _ _ _ _ _
 
-theorem loop_perm {n : Nat} (lt : α → α → Bool) {lo hi : Nat} (hhi : hi < n) (pivot : α) :
+private theorem loop_perm {n : Nat} (lt : α → α → Bool) {lo hi : Nat} (hhi : hi < n) (pivot : α) :
     ∀ (d : Nat) (as : Vector α n) (i k : Nat) (ilo : lo ≤ i) (ik : i ≤ k) (w : k ≤ hi), hi - k = d →
       (Array.qpartition.loop lt lo hi hhi pivot as i k ilo ik w).2.Perm as := by
   intro d
@@ -123,7 +128,7 @@ theorem qpartition_perm {n : Nat} (lt : α → α → Bool) (as : Vector α n) (
   exact (loop_perm lt hhi _ _ _ _ _ _ _ _ rfl).trans
     (((ite_swap_perm _ _ _ _ _ _).trans (ite_swap_perm _ _ _ _ _ _)).trans (ite_swap_perm _ _ _ _ _ _))
 
-theorem sort_perm {n : Nat} (lt : α → α → Bool) :
+private theorem sort_perm {n : Nat} (lt : α → α → Bool) :
     ∀ (d : Nat) (as : Vector α n) (lo hi : Nat) (w : lo ≤ hi) (hlo : lo < n) (hhi : hi < n), hi - lo = d →
       (Array.qsort.sort lt as lo hi w hlo hhi).Perm as := by
   intro d
