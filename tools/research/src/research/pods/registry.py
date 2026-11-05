@@ -16,11 +16,12 @@ agents registering two pods write two files, so nothing is ever hand-merged; in 
 them to every machine.  `<dir>/_families.toml` carries the `[families.<fam>]` VRAM references `pods check-part` reads.
 
 Where it is read and written (`registry_dir`, the one directory `register`, `unregister`, `registry import` and `research run --on`
-use): `$RESEARCH_MACHINES_D` when set, else `<notes>/machines.d`, whether or not machines.toml exists (with RESEARCH_NOTES_TOKEN
-set, a missing notes clone is cloned first: `notes_sync.ensure_clone`).  `RESEARCH_MACHINES_D=none` turns the registry off: run
-reads machines.toml alone, and the commands that write refuse, since nothing would read what they wrote.  With
-`$RESEARCH_MACHINES_D` pointing elsewhere, `research run --on` still takes a machine only the notes clone's machines.d lists:
-a hand-copied override never hides a machine registered since it was copied (vy-nebius-cpu-1 from the lander's VM, 8 Oct 03:43Z).
+use): `$RESEARCH_MACHINES_D` when set, else `<notes>/machines.d`, whether or not machines.toml exists (with a notes
+token, `notes_sync.notes_token`, a missing notes clone is cloned first: `notes_sync.ensure_clone`).  `RESEARCH_MACHINES_D=none`
+turns the registry off: run reads machines.toml alone, and the commands that write refuse, since nothing would read what they
+wrote.  With `$RESEARCH_MACHINES_D` pointing elsewhere, `research run --on` still takes a machine only the notes clone's
+machines.d lists: a hand-copied override never hides a machine registered since it was copied (vy-nebius-cpu-1 from the lander's
+VM, 8 Oct 03:43Z).
 Both sources merge (`merged`); a name both define with different pod ids is dropped from the result, so it is refused
 as unlisted and the refusal says why, never silently resolved to either pod.  A file that does not parse, names an invalid
 machine, or lacks provider / pod_id (host for an ssh machine) / project is dropped the same way.

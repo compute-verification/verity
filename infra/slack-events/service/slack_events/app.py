@@ -24,7 +24,8 @@ HEALTH_NOTE = ("from Vercel's Runtime Cache, best effort: null is unknown (a col
                "oldest_unprocessed_age_s is reconcile's last finding, dead_letter_count counts since dead_letter_since; "
                "last_done_at is the consumer's alone (last_success_at counts the crons too), and a last_enqueued_at "
                "after it means events wait; canary_* is the watchdog's hourly synthetic event and its consumption; "
-               "notes_token_source is where the notes token comes from now: broker, env (RESEARCH_NOTES_TOKEN) or null, and "
+               "notes_token_source is where the notes token comes from now: broker, agent-broker (a Cursor agent's), "
+               "env (RESEARCH_NOTES_TOKEN) or null, and "
                "notes_token_why why it isn't the broker: no OIDC identity, or the broker's refusal")
 
 
