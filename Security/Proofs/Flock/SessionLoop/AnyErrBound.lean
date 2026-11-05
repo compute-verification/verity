@@ -47,18 +47,18 @@ theorem half_sum_abs_eq {V : Type} (S : Finset V) (μ ν : V → ℝ) (h : ∑ v
 
 /-- **hm96's gap is at most any finite bound it hides at**: `Hm96Hiding My c δ₁` at the event where `(My y, c y)` is
 no less likely than `(U, c y)` bounds the gap, half their ℓ¹ distance (`half_sum_abs_eq`). -/
-theorem hidingGap_le_of_hiding {Y B C : Type} [Fintype Y] [Fintype B] [DecidableEq B] [DecidableEq C] [Nonempty Y]
-    [Nonempty B] {My : Y → B} {c : Y → C} {δ₁ : ℝ≥0∞} (h : Claims.Hm96Hiding My c δ₁) (hδ : δ₁ ≠ ⊤) :
+theorem hidingGap_le_of_hiding {A B C : Type} [Fintype A] [Fintype B] [DecidableEq B] [DecidableEq C] [Nonempty A]
+    [Nonempty B] {My : A → B} {c : A → C} {δ₁ : ℝ≥0∞} (h : Claims.Hm96Hiding My c δ₁) (hδ : δ₁ ≠ ⊤) :
     hidingGap My c ≤ δ₁.toReal := by
   have hS : ∀ y, (My y, c y) ∈ (univ : Finset B) ×ˢ univ.image c :=
     fun y => mem_product.2 ⟨mem_univ _, mem_image_of_mem c (mem_univ y)⟩
-  have hS' : ∀ p : B × Y, (p.1, c p.2) ∈ (univ : Finset B) ×ˢ univ.image c :=
+  have hS' : ∀ p : B × A, (p.1, c p.2) ∈ (univ : Finset B) ×ˢ univ.image c :=
     fun p => mem_product.2 ⟨mem_univ _, mem_image_of_mem c (mem_univ p.2)⟩
   have hE : ∀ (e : B × C → Prop) [DecidablePred e],
       ∑ v ∈ (univ : Finset B) ×ˢ univ.image c,
-          (if e v then (1 : ℝ) else 0) * ((#{y | (My y, c y) = v} : ℝ) / Fintype.card Y) ≤
+          (if e v then (1 : ℝ) else 0) * ((#{y | (My y, c y) = v} : ℝ) / Fintype.card A) ≤
         ∑ v ∈ (univ : Finset B) ×ˢ univ.image c,
-          (if e v then (1 : ℝ) else 0) * ((#{p : B × Y | (p.1, c p.2) = v} : ℝ) / Fintype.card (B × Y)) +
+          (if e v then (1 : ℝ) else 0) * ((#{p : B × A | (p.1, c p.2) = v} : ℝ) / Fintype.card (B × A)) +
           δ₁.toReal := by
     intro e _
     have := Claims.Bridge.hiding_toReal h hδ e
@@ -66,8 +66,8 @@ theorem hidingGap_le_of_hiding {Y B C : Type} [Fintype Y] [Fintype B] [Decidable
       card_filter_comp_div _ _ hS e, card_filter_comp_div _ _ hS' e] at this
   unfold hidingGap
   rw [half_sum_abs_eq _ _ _ ((sum_card_fiber_div _ _ hS).trans (sum_card_fiber_div _ _ hS').symm)]
-  linarith [hE fun v => (#{p : B × Y | (p.1, c p.2) = v} : ℝ) / Fintype.card (B × Y) ≤
-    (#{y | (My y, c y) = v} : ℝ) / Fintype.card Y]
+  linarith [hE fun v => (#{p : B × A | (p.1, c p.2) = v} : ℝ) / Fintype.card (B × A) ≤
+    (#{y | (My y, c y) = v} : ℝ) / Fintype.card A]
 
 end FlockSoundness.CROnly
 
@@ -143,7 +143,7 @@ theorem anyErr_le (T : CoinLayer.TableData) (vs : (CoinLayer.session loopNr T).S
     linarith
   · have h24t := mul_le_mul_of_nonneg_left hnd (by positivity : (0 : ℝ) ≤ 24 * t)
     have hF := mul_le_mul_of_nonneg_left hPg h4
-    simp only [anyErr, errAt, eq_self_iff_true, ↓reduceIte]
+    simp only [anyErr, errAt, ↓reduceIte]
     linarith
 
 end Claims.ZKServer.Loop
