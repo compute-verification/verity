@@ -113,7 +113,7 @@ theorem checkBlobsAt_trees {p : _root_.SampledProofs.OneStageZk.Params} {c : _ro
     {ξ : ByteArray} {e : _root_.SampledProofs.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
     {pub : _root_.SampledProofs.OneStage.Public} {prof : _root_.Core.Integrity}
     (h : _root_.SampledProofs.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
-    ∃ ts, _root_.SampledProofs.OneStageZk.treesOf p e = .ok ts ∧
+    ∃ ts, _root_.SampledProofs.OneStageZk.treesOf p.base e.base = .ok ts ∧
       _root_.SampledProofs.OneStageZk.treesHeld p.own ts e bs = .ok () := by
   unfold _root_.SampledProofs.OneStageZk.checkBlobsAt at h
   dsimp only at h
@@ -303,7 +303,7 @@ theorem checkBlobsAt_link {p : _root_.SampledProofs.OneStageZk.Params} {c : _roo
     ∃ record spec tabs rest proofs sess t o rb st, V2Verified p e bs record spec tabs rest proofs ∧
       Flock.Record.decode spec record = .ok sess ∧ sess.rootB = #[rb] ∧
       tabs[0]? = some st ∧ _root_.SampledProofs.OneStageZk.rootBLen st = .ok rb.size ∧
-      _root_.SampledProofs.OneStageZk.treesOf p e = .ok #[t] ∧
+      _root_.SampledProofs.OneStageZk.treesOf p.base e.base = .ok #[t] ∧
       t.opening _root_.SampledProofs.Challenger.TREE_SESSION 0 = some o ∧
       linkMsg record spec.tables = some (spec.sigma ++ rb).data.toList ∧
       o.after = Flock.hexOf ⟨(sha512Msg (spec.sigma ++ rb).data.toList).toArray⟩ := by

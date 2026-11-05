@@ -375,7 +375,7 @@ theorem bind_ok {ε α β : Type} {x : Except ε α} {g : α → Except ε β} {
 theorem accepted_trees {p : SampledProofs.OneStageZk.Params} {c : SampledProofs.OneStage.Commitment}
     {e : SampledProofs.OneStageZk.Evidence} {bs : Core.Blobs} {pub : SampledProofs.OneStage.Public}
     {prof : Core.Integrity} (h : SampledProofs.OneStageZk.checkBlobs p c e bs = .accept pub prof) :
-    ∃ ts, SampledProofs.OneStageZk.treesOf p e = .ok ts ∧
+    ∃ ts, SampledProofs.OneStageZk.treesOf p.base e.base = .ok ts ∧
       SampledProofs.OneStageZk.treesHeld p.own ts e bs = .ok () := by
   unfold SampledProofs.OneStageZk.checkBlobs Core.atCoins at h
   split at h

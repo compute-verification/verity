@@ -967,7 +967,7 @@ theorem trustedTreesOf_ok {key : ChallengerKey} {w : String} {coins : Json} {ts 
   all_goals exact fun h => ⟨_, _, ‹_›, mapM_str (fun j s h => logStr j s h) ‹_›, h⟩
 
 theorem treesOf_ok {p : _root_.SampledProofs.OneStageZk.Params} {e : _root_.SampledProofs.OneStageZk.Evidence}
-    {ts : Array LoggedTree} (h : _root_.SampledProofs.OneStageZk.treesOf p e = .ok ts) :
+    {ts : Array LoggedTree} (h : _root_.SampledProofs.OneStageZk.treesOf p.base e.base = .ok ts) :
     ∃ key w, trustedTreesOf key w e.base.coins = .ok ts := by
   unfold _root_.SampledProofs.OneStageZk.treesOf at h
   rcases hch : p.base.challenger with _ | ⟨key, l⟩ <;> rcases hw : p.base.verifier.windowRoot with _ | w <;>
@@ -984,7 +984,7 @@ theorem trees_of_checkBlobsAt {p : _root_.SampledProofs.OneStageZk.Params}
     {c : _root_.SampledProofs.OneStage.Commitment} {ξ : ByteArray} {e : _root_.SampledProofs.OneStageZk.Evidence}
     {bs : _root_.Core.Blobs} {pub : _root_.SampledProofs.OneStage.Public} {prof : _root_.Core.Integrity}
     (h : _root_.SampledProofs.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
-    ∃ ts, _root_.SampledProofs.OneStageZk.treesOf p e = .ok ts ∧
+    ∃ ts, _root_.SampledProofs.OneStageZk.treesOf p.base e.base = .ok ts ∧
       _root_.SampledProofs.OneStageZk.treesHeld p.own ts e bs = .ok () := by
   unfold _root_.SampledProofs.OneStageZk.checkBlobsAt at h
   try simp only [] at h
