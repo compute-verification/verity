@@ -40,10 +40,11 @@ verdict accepts, that misses nowhere and whose log v2's check read is the device
 sample, the decoded registration and an outcome whose moves are those v2's files decode to (`MovesOf`). It takes, for
 the record's sample (`recordDraw_firstStop`), that v2 reads the sample's coins of the family `label` answering
 `after` (`hN`) and that every release of that family precedes every opening (`hP`); and, for the rep rounds
-(`firstStop_reps_verdict`), of the device's log that it has an opening, that its trees name their streams distinctly,
-that its first opening is the session stream's, that the layout has a slot for each opening of a rep stream and that
-it opens only the record's rounds, and of v2's read and the record the three statements `hsome`, `hkey` and `hans`.
-The roots (`firstStop_rootB`) and the link points (`link_pts`) read the same first opening. -/
+(`firstStop_reps_verdict`), of the device's log that its first opening is the session stream's, that the layout has a
+slot for each opening of a rep stream and that it opens only the record's rounds, and of v2's read and the record the
+statement `hans`. That the log has an opening and that its trees name their streams distinctly come from the verdict
+(`verdict_opens`, `verdict_nodup`). The roots (`firstStop_rootB`) and the link points (`link_pts`) read the same first
+opening. -/
 theorem ReachesOff.movesOf {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V θ) (h0r : 0 < A.rounds)
     (hRN : A.rounds ≤ A.N + 1) (ht : PopTied θ A) (hR : DrawReadAll k coinsRead) (hH : DrawHeld k)
@@ -63,8 +64,6 @@ theorem ReachesOff.movesOf {V : Vocab d α} {θ : ByteArray} {F : Array ByteArra
     (hN : SampleNamed k (CoinTape.run (V.game θ F c) σ o.2).sent label after)
     (hP : ∀ pre r post, (CoinTape.run (V.game θ F c) σ o.2).log = pre ++ r :: post → ∀ i s n,
       r.frame = .opening i s n → ∀ q ∈ post, ¬ (q.frame = .fresh label ∧ q.answers = after))
-    (hop : ∃ L₁ r L₂ i s n, (CoinTape.run (V.game θ F c) σ o.2).log = L₁ ++ r :: L₂ ∧ r.frame = .opening i s n)
-    (hnd : ∀ sp ∈ helloSpecs (CoinTape.run (V.game θ F c) σ o.2).log, sp.streams.toList.Nodup)
     (hfirst : ∀ pre r post, (CoinTape.run (V.game θ F c) σ o.2).log = pre ++ r :: post → ∀ i s n,
       r.frame = .opening i s n → (∀ q ∈ pre, ∀ i' s' n', q.frame ≠ .opening i' s' n') →
         ((helloSpecs pre)[i]?.bind fun sp => sp.streams[s]?) = some TREE_SESSION)
@@ -74,12 +73,6 @@ theorem ReachesOff.movesOf {V : Vocab d α} {θ : ByteArray} {F : Array ByteArra
       ∀ k < openedOf (CoinTape.run (V.game θ F c) σ o.2).log i s, ∃ j, A.layout j = .rep 0 r k)
     (hO : ∀ text Jr, sentRecord (CoinTape.run (V.game θ F c) σ o.2).sent = some text →
       Flock.JsonParse.parse text = .ok Jr → OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ o.2).log)
-    (hsome : ∀ {trees : Array LoggedTree} {tabsB : Array (String × Option ℕ)} {J : Json},
-      sessionTreeReason trees tabsB J = none → ∀ (name : String), ∀ k < recordRounds J name,
-        (recordRound J name k).isSome)
-    (hkey : ∀ {lines : List String} {trees : Array LoggedTree}, coinTreesOf lines = .ok trees →
-      ∀ {tabsB : Array (String × Option ℕ)} {J : Json}, sessionTreeReason trees tabsB J = none →
-      ∀ {name : String}, 0 < recordRounds J name → ∃ i si, KeyAt (heldTrees trees) i si (recordTree J) name)
     (hans : ∀ {label : String} {after : ByteArray} {J : Json} {ξ : ByteArray} {lines : List String}
       {pre post : List Release} {y : Release} {trees : Array LoggedTree} {i s n : ℕ} {name : String}
       {spec : Flock.SessionSpec} {record : String} {sess : Flock.RunRecord} {st : Flock.StreamRec},
@@ -95,7 +88,10 @@ theorem ReachesOff.movesOf {V : Vocab d α} {θ : ByteArray} {F : Array ByteArra
   subst hrd hD hM
   obtain ⟨ω, pts, hL0, hr⟩ := h
   obtain ⟨reps, ho, hreps⟩ := firstStop_reps_verdict hA hDg h0r hRN reg record recordDigest rfl rfl rfl ω pts hL0 hr
-    hv hn hl hop hnd hfirst hcovL hO hsome hkey hans
+    hv hn hl hfirst hcovL hO hans
+  obtain ⟨_, _, _, _, hrec₀, -⟩ := accepts_sent hA (play_ends V θ F c σ o.2).1 hv (filesOn_play hA hDg hv)
+  have hop := verdict_opens hA (play_ends V θ F c σ o.2).1 hv hl hrec₀
+  have hnd := verdict_nodup hA (play_ends V θ F c σ o.2).1 hv hl hrec₀
   have hjl := A.layout_link h0r
   have hK := firstStop_fixes V θ F c A (readingAt A.tables A.layout record recordDigest) σ
     (sampleMap fieldEnc V θ F c A (readingAt A.tables A.layout record recordDigest) σ label after κ)
@@ -143,12 +139,6 @@ theorem movesReach_layout {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray
       Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ x) →
       ∀ pre r post, (CoinTape.run (V.game θ F c) σ x).log = pre ++ r :: post → ∀ i s n,
         r.frame = .opening i s n → ∀ q ∈ post, ¬ (q.frame = .fresh label ∧ q.answers = after))
-    (hop : ∀ x : CoinTape (V.game θ F c) σ, V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) →
-      Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ x) →
-      ∃ L₁ r L₂ i s n, (CoinTape.run (V.game θ F c) σ x).log = L₁ ++ r :: L₂ ∧ r.frame = .opening i s n)
-    (hnd : ∀ x : CoinTape (V.game θ F c) σ, V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) →
-      Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ x) →
-      ∀ sp ∈ helloSpecs (CoinTape.run (V.game θ F c) σ x).log, sp.streams.toList.Nodup)
     (hfirst : ∀ x : CoinTape (V.game θ F c) σ, V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) →
       Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ x) →
       ∀ pre r post, (CoinTape.run (V.game θ F c) σ x).log = pre ++ r :: post → ∀ i s n,
@@ -163,12 +153,6 @@ theorem movesReach_layout {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray
       Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ x) →
       ∀ text Jr, sentRecord (CoinTape.run (V.game θ F c) σ x).sent = some text →
         Flock.JsonParse.parse text = .ok Jr → OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ x).log)
-    (hsome : ∀ {trees : Array LoggedTree} {tabsB : Array (String × Option ℕ)} {J : Json},
-      sessionTreeReason trees tabsB J = none → ∀ (name : String), ∀ k < recordRounds J name,
-        (recordRound J name k).isSome)
-    (hkey : ∀ {lines : List String} {trees : Array LoggedTree}, coinTreesOf lines = .ok trees →
-      ∀ {tabsB : Array (String × Option ℕ)} {J : Json}, sessionTreeReason trees tabsB J = none →
-      ∀ {name : String}, 0 < recordRounds J name → ∃ i si, KeyAt (heldTrees trees) i si (recordTree J) name)
     (hans : ∀ {label : String} {after : ByteArray} {J : Json} {ξ : ByteArray} {lines : List String}
       {pre post : List Release} {y : Release} {trees : Array LoggedTree} {i s n : ℕ} {name : String}
       {spec : Flock.SessionSpec} {record : String} {sess : Flock.RunRecord} {st : Flock.StreamRec},
@@ -182,6 +166,6 @@ theorem movesReach_layout {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray
     MovesReach V θ F c k (Binding.Logged Binding.readsV2) A rd σ D M
       (linkEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) (roundEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) :=
   fun _ h ⟨hv, hn, hl⟩ => h.movesOf hA hDg h0r hRN ht hR hH hfix reg record recordDigest hrd hD hm hsrc hM hv hn hl
-    (hN _ hv hl) (hP _ hv hl) (hop _ hv hl) (hnd _ hv hl) (hfirst _ hv hl) (hcovL _ hv hl) (hO _ hv hl) hsome hkey hans
+    (hN _ hv hl) (hP _ hv hl) (hfirst _ hv hl) (hcovL _ hv hl) (hO _ hv hl) hans
 
 end Verity.Sampled

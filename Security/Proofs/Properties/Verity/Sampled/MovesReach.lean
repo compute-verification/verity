@@ -32,8 +32,13 @@ the tape beside it, clause by clause of `MovesOf`:
   (`firstStop_fixes`), the trace's answered stops are in order in the log (`firstStop_order`), the link's opening is the
   log's first (`firstOpened_link`), and `rep_rounds` at each rep. It is stated at the witness, so that `MovesReach`
   reads every clause at one sample, one set of link points and one set of rep rounds.
-* **v2's read on an accepted play** (`verdict_read`): where the sampled verdict accepts and the log v2's check read is
-  the device's, v2 read one coin tree's release log at the record it parsed, which `sessionTreeReason` holds to it.
+* **The rounds a record `sessionTreeReason` accepts** (`recordRound_isSome`, `keyAt_of_record`): each round it gives a
+  stream gives coins (`rep_rounds`'s `hsome`), and each stream it gives rounds of is a stream of the tree v2's read
+  holds (`hkey`), the line opening its round 0 naming that stream of that tree.
+* **v2's read on an accepted play** (`verdict_read`, `verdict_nodup`, `verdict_opens`): where the sampled verdict
+  accepts and the log v2's check read is the device's, v2 read one coin tree's release log at the record it parsed,
+  which `sessionTreeReason` holds to it; the log's trees name their streams distinctly, and it has an opening, of the
+  record's link points.
 * **Clause (iv) at the session's layout, from the verdict** (`firstStop_reps_verdict`): at `Live.layout` and
   `Live.tables`, the rep rounds at a `ReachesOff` witness are those of the session v2's record decodes to at the
   session `--zk` sets up at `A`, for every record and session `MovesOf` reads; v2's read, the spec's tables, digests
@@ -518,6 +523,142 @@ theorem firstStop_reps {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {
       rw [htz] at hs ⊢
       exact hcovL i s r hs k hk) hV hread hct h1 hJt hrec hJ hd hv hret h512 hdg htab h0 hO hsome hkey hans
 
+/-! ## The rounds a record `sessionTreeReason` accepts -/
+
+/-- **Each round of each stream a record `sessionTreeReason` accepts gives, gives coins, and is opened after its
+digest**: the record's coin tree is a tree `t` of the log's, the record gives its streams as an array, and each round
+of a stream of it named `name` gives coins (`recordCoins?`) and is a round `t` shows opened (`LoggedTree.opening`)
+after the round's `msg_sha512`. -/
+theorem rounds_held {trees : Array LoggedTree} {tables : Array (String × Option ℕ)} {record : Json}
+    (h : sessionTreeReason trees tables record = none) :
+    ∃ t ∈ trees, recordTree record = t.root ∧ ∃ streams, _root_.SampledProofs.getD record "streams" = .arr streams ∧
+      ∀ s ∈ streams, ∀ name rounds, _root_.SampledProofs.getD s "stream" = .str name →
+        _root_.SampledProofs.getD s "rounds" = .arr rounds → ∀ x ∈ rounds.zipIdx,
+          (recordCoins? (_root_.SampledProofs.getD x.1 "coins")).isSome ∧
+            ∃ o, t.opening name x.2 = some o ∧ _root_.SampledProofs.getD x.1 "msg_sha512" = .str o.after := by
+  unfold sessionTreeReason at h
+  dsimp only [Id.run] at h
+  split at h
+  case h_2 => cases h
+  rename_i t ht
+  refine ⟨t, Array.mem_of_find?_eq_some ht, ?_, ?_⟩
+  · have hp := Array.find?_some ht
+    unfold recordTree
+    rw [Trees.strIs hp]
+  split at h
+  case isFalse => cases h
+  split at h
+  case h_2 => cases h
+  split at h
+  case isFalse => cases h
+  split at h
+  case h_2 => cases h
+  rename_i rootF points streams htri
+  simp only [Prod.mk.injEq] at htri
+  refine ⟨streams, htri.2.2, ?_⟩
+  rcases hlo : t.opening _root_.SampledProofs.Challenger.TREE_SESSION 0 with _ | o
+  · simp only [hlo, Bool.false_eq_true, ↓reduceIte] at h
+    all_goals (split at h <;> (try split at h) <;> cases h)
+  simp only [hlo] at h
+  split at h
+  case isFalse => cases h
+  split at h
+  case isFalse => cases h
+  split at h
+  case isFalse => cases h
+  refine Trees.ret_held (P := fun s => ∀ name rounds, _root_.SampledProofs.getD s "stream" = .str name →
+    _root_.SampledProofs.getD s "rounds" = .arr rounds → ∀ x ∈ rounds.zipIdx,
+      (recordCoins? (_root_.SampledProofs.getD x.1 "coins")).isSome ∧
+        ∃ o, t.opening name x.2 = some o ∧ _root_.SampledProofs.getD x.1 "msg_sha512" = .str o.after) ?_
+    (fun w _ hw => by cases hw) h
+  intro s u res hres
+  split at hres
+  case h_2 => exact .inl ⟨_, _, hres.symm⟩
+  rename_i name rounds hsr
+  refine Or.imp id ?_ (Trees.step_held (P := fun x : Json × ℕ =>
+    (recordCoins? (_root_.SampledProofs.getD x.1 "coins")).isSome ∧
+      ∃ o, t.opening name x.2 = some o ∧ _root_.SampledProofs.getD x.1 "msg_sha512" = .str o.after) ?_ ?_ ?_ hres)
+  · rintro ⟨u', hy, hrs⟩
+    refine ⟨u', hy, fun name' rounds' hn hr' => ?_⟩
+    simp only [Prod.mk.injEq] at hsr
+    cases hn.symm.trans hsr.1
+    cases hr'.symm.trans hsr.2
+    exact hrs
+  · intro x u res' hres'
+    split at hres'
+    case h_2 => exact .inl ⟨_, _, hres'.symm⟩
+    rename_i coins n hcn
+    rcases ho : t.opening name x.2 with _ | o
+    · simp only [ho, Bool.false_eq_true, ↓reduceIte] at hres'
+      all_goals (split at hres' <;> exact .inl ⟨_, _, hres'.symm⟩)
+    simp only [ho] at hres'
+    split at hres'
+    case isFalse => exact .inl ⟨_, _, hres'.symm⟩
+    split at hres'
+    case isFalse => exact .inl ⟨_, _, hres'.symm⟩
+    rename_i hok
+    simp only [Prod.mk.injEq] at hcn
+    simp only [Bool.and_eq_true, beq_iff_eq] at hok
+    exact .inr ⟨_, hres'.symm, Option.isSome_iff_exists.2 ⟨coins, hcn.1⟩, o, ho, Trees.strIs hok.1.2⟩
+  · exact fun _ _ => ⟨(), rfl⟩
+  · exact fun _ => ⟨(), rfl⟩
+
+/-- A record's stream named `name`, as `recordRound` and `recordRounds` find it. -/
+def streamNamed (name : String) (x : Json) : Bool :=
+  match _root_.SampledProofs.getD x "stream" with
+  | .str n => n == name
+  | _ => false
+
+/-- **Each round a record `sessionTreeReason` accepts gives a stream gives coins** (`recordRound`), below the rounds it
+gives that stream (`recordRounds`): the session stream's round 0 its link points' (`LinkTrees.link_some`), and each
+other stream's its round's (`rounds_held`). -/
+theorem recordRound_isSome {trees : Array LoggedTree} {tabsB : Array (String × Option ℕ)} {J : Json}
+    (h : sessionTreeReason trees tabsB J = none) (name : String) :
+    ∀ k < recordRounds J name, (recordRound J name k).isSome := by
+  intro k hk
+  by_cases hn : (name == _root_.SampledProofs.Challenger.TREE_SESSION) = true
+  · have h1 : recordRounds J name = 1 := by rw [recordRounds, if_pos hn]
+    rw [h1] at hk
+    obtain rfl := Nat.lt_one_iff.1 hk
+    obtain rfl := beq_iff_eq.1 hn
+    obtain ⟨cs, hcs⟩ := LinkTrees.link_some h
+    rw [hcs]
+    rfl
+  have hf := Bool.eq_false_iff.2 hn
+  obtain ⟨_, _, _, streams, hst, hall⟩ := rounds_held h
+  simp only [recordRounds, hf, Bool.false_eq_true, ↓reduceIte, hst] at hk
+  simp only [recordRound, hf, Bool.false_and, Bool.false_eq_true, ↓reduceIte, hst]
+  rw [find?_congr (q' := streamNamed name) ?_] at hk
+  on_goal 2 => intro a _; unfold streamNamed; rfl
+  rw [find?_congr (q' := streamNamed name) ?_]
+  on_goal 2 => intro a _; unfold streamNamed; rfl
+  split at hk
+  case h_2 => exact absurd hk (Nat.not_lt_zero _)
+  rename_i x hx
+  have hname := Array.find?_some hx
+  unfold streamNamed at hname
+  split at hname
+  case h_2 => cases hname
+  rename_i n hxn
+  cases beq_iff_eq.1 hname
+  split at hk
+  case h_2 => exact absurd hk (Nat.not_lt_zero _)
+  rename_i rs hrs
+  have hrk : rs[k]? = some rs[k] := Array.getElem?_eq_getElem hk
+  simp only [hx, Option.bind_some, hrs, hrk]
+  exact (hall x (Array.mem_of_find?_eq_some hx) _ rs hxn hrs (rs[k], k) (Array.mem_zipIdx_iff_getElem?.2 hrk)).1
+
+/-- **Each stream a record `sessionTreeReason` accepts gives rounds of is a stream of the tree read**: where
+`coinTreesOf` reads the release log `lines` as `trees`, its round 0 (`recordRound_isSome`) is opened on a line of the
+log naming the record's tree and that stream (`Trees.open_held`), which names that stream of that tree among the trees
+v2's read holds (`heldTrees`, `coinTreesOf_fold`, `treeFold_keyAt`). -/
+theorem keyAt_of_record {lines : List String} {trees : Array LoggedTree} (hT : coinTreesOf lines = .ok trees)
+    {tabsB : Array (String × Option ℕ)} {J : Json} (h : sessionTreeReason trees tabsB J = none) {name : String}
+    (hpos : 0 < recordRounds J name) : ∃ i si, KeyAt (heldTrees trees) i si (recordTree J) name := by
+  obtain ⟨cs, hcs⟩ := Option.isSome_iff_exists.1 (recordRound_isSome h name 0 hpos)
+  obtain ⟨l, hl, _, _, htl, d, hev, hTE, hroot, hs, -⟩ := Trees.open_held hT h hcs
+  exact treeFold_keyAt (records := []) lines [] _ (coinTreesOf_fold [] hT) l hl htl d hev hTE hroot hs
+
 /-! ## At the session's layout, from the verdict -/
 
 /-- **v2's read on an accepted play**: where `A` is the session v2 sets up on the parameters, the sampled verdict
@@ -566,17 +707,48 @@ theorem verdict_read {V : Vocab d α} {k : Verity.Registration.Composite} {θ : 
   obtain ⟨tabsB, hJt⟩ := Trees.records_held hth (r := rs) (by simp [he]) hgb' hgu hJp
   exact ⟨dr.label, c.digest, ξ, lines, lr, ts, J, tabsB, hlog, hread, hct, h1, hJt, hJ⟩
 
+/-- **An accepted play's trees name their streams distinctly**: where the sampled verdict accepts and the log v2's
+check read is the device's, each `Hello` of the device's log names distinct streams, as v2's read of it does
+(`verdict_read`, `readLog_nodup`). -/
+theorem verdict_nodup {V : Vocab d α} {k : Verity.Registration.Composite} {θ : ByteArray} {F : Array ByteArray}
+    {A : Live} {x : Exchange} (hA : SetsUp V θ F A) (hθ : x.params = θ) (hv : V.Verdict k .sampled x)
+    (hl : Binding.Logged Binding.readsV2 x) {text : String} (hrec : sentRecord x.sent = some text) :
+    ∀ sp ∈ helloSpecs x.log, sp.streams.toList.Nodup := by
+  obtain ⟨_, _, _, _, lr, _, _, _, hV, hread, hct, -⟩ := verdict_read hA hθ hv hl hrec
+  have hlg : List.Forall₂ (fun x y => x.frame = y.frame ∧ x.answers = y.answers) lr x.log :=
+    (List.forall₂_map_left_iff.1 hV).imp fun _ _ h => ⟨h.1, h.2.1⟩
+  rw [← helloSpecs_congr hlg]
+  exact readLog_nodup hct hread
+
+/-- **An accepted play's log has an opening**: where the sampled verdict accepts and the log v2's check read is the
+device's, the record v2 parsed gives its link points' coins (`LinkTrees.link_some`), which the release log opens on a
+line (`Trees.open_held`) that v2's read reads as an opening (`readLog_opens`), whose frame the device's log has. -/
+theorem verdict_opens {V : Vocab d α} {k : Verity.Registration.Composite} {θ : ByteArray} {F : Array ByteArray}
+    {A : Live} {x : Exchange} (hA : SetsUp V θ F A) (hθ : x.params = θ) (hv : V.Verdict k .sampled x)
+    (hl : Binding.Logged Binding.readsV2 x) {text : String} (hrec : sentRecord x.sent = some text) :
+    ∃ L₁ r L₂ i s n, x.log = L₁ ++ r :: L₂ ∧ r.frame = .opening i s n := by
+  obtain ⟨_, _, _, _, lr, _, _, _, hV, hread, hct, -, hJt, -⟩ := verdict_read hA hθ hv hl hrec
+  have hlg : List.Forall₂ (fun x y => x.frame = y.frame ∧ x.answers = y.answers) lr x.log :=
+    (List.forall₂_map_left_iff.1 hV).imp fun _ _ h => ⟨h.1, h.2.1⟩
+  obtain ⟨cs, hcs⟩ := LinkTrees.link_some hJt
+  obtain ⟨l, hlm, _, _, htl, _, hev, hTE, -⟩ := Trees.open_held hct hJt hcs
+  obtain ⟨y, hy, i, s, n, hyo⟩ := readLog_opens hread hlm htl hev hTE
+  obtain ⟨q, hq, hyq⟩ := forall₂_mem_left hlg y hy
+  obtain ⟨L₁, L₂, he⟩ := List.append_of_mem hq
+  exact ⟨L₁, q, L₂, i, s, n, he, hyq.1.symm.trans hyo⟩
+
 /-- **The rep rounds at a `ReachesOff` witness are the record's, at the session's layout** (`MovesOf`'s clause (iv) as
 `MovesReach` reads it): at the readings and the decoders at the session's layout (`Live.layout`, `Live.tables`), with
 a round and at most the trace's `N` rounds but one, and at the sample-coupled coin map under `fieldEnc`, an outcome
 reached at a widened sample `ω` and link points `pts` off the link's and the rounds' empty classes, where the play
 beside it is accepted by the sampled verdict, misses nowhere, and the log v2's check read is the device's, is the
 writer's at `ω`, `pts` and rep rounds that are those of the session v2's record decodes to (`repRounds`) at the session
-`--zk` sets up at `A`, at every table and rep. It takes, of the device's log, that it has an opening, that its trees
-name their streams distinctly, that its first opening is the session stream's, that the layout has a slot for each
-opening of a rep stream, and that it opens only the record's rounds (`OpenedRecorded`); and of v2's read and the
-record, the three statements `rep_rounds`'s premises `hsome`, `hkey` and `hans` are instances of (`verdict_read`,
-`SetsUp.setup_one`, `setup_sha512Digests`, `firstStop_reps`). -/
+`--zk` sets up at `A`, at every table and rep. It takes, of the device's log, that its first opening is the session
+stream's, that the layout has a slot for each opening of a rep stream, and that it opens only the record's rounds
+(`OpenedRecorded`); and of v2's read and the record, the statement `rep_rounds`'s premise `hans` is an instance of
+(`verdict_read`, `SetsUp.setup_one`, `setup_sha512Digests`, `firstStop_reps`). That the log has an opening and that
+its trees name their streams distinctly come from the verdict (`verdict_opens`, `verdict_nodup`), and its premises
+`hsome` and `hkey` from the record `sessionTreeReason` accepts (`recordRound_isSome`, `keyAt_of_record`). -/
 theorem firstStop_reps_verdict {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V θ) (h0r : 0 < A.rounds)
     (hRN : A.rounds ≤ A.N + 1) (reg : Option Claims.Msg → A.Reg) (record : Exchange → Option Claims.Msg)
@@ -594,8 +766,6 @@ theorem firstStop_reps_verdict {V : Vocab d α} {θ : ByteArray} {F : Array Byte
       ((firstStop V θ F c A rd σ M ω).rewrite (M.link (firstStop V θ F c A rd σ M ω) pts)).consume o)
     (hv : V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ o.2)) (hn : NoMiss V θ F c rd σ o.2)
     (hl : Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ o.2))
-    (hop : ∃ L₁ r L₂ i s n, (CoinTape.run (V.game θ F c) σ o.2).log = L₁ ++ r :: L₂ ∧ r.frame = .opening i s n)
-    (hnd : ∀ sp ∈ helloSpecs (CoinTape.run (V.game θ F c) σ o.2).log, sp.streams.toList.Nodup)
     (hfirst : ∀ pre r post, (CoinTape.run (V.game θ F c) σ o.2).log = pre ++ r :: post → ∀ i s n,
       r.frame = .opening i s n → (∀ q ∈ pre, ∀ i' s' n', q.frame ≠ .opening i' s' n') →
         ((helloSpecs pre)[i]?.bind fun sp => sp.streams[s]?) = some _root_.SampledProofs.Challenger.TREE_SESSION)
@@ -605,12 +775,6 @@ theorem firstStop_reps_verdict {V : Vocab d α} {θ : ByteArray} {F : Array Byte
       ∀ k < openedOf (CoinTape.run (V.game θ F c) σ o.2).log i s, ∃ j, A.layout j = .rep 0 r k)
     (hO : ∀ text Jr, sentRecord (CoinTape.run (V.game θ F c) σ o.2).sent = some text →
       Flock.JsonParse.parse text = .ok Jr → OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ o.2).log)
-    (hsome : ∀ {trees : Array LoggedTree} {tabsB : Array (String × Option ℕ)} {J : Json},
-      sessionTreeReason trees tabsB J = none → ∀ (name : String), ∀ k < recordRounds J name,
-        (recordRound J name k).isSome)
-    (hkey : ∀ {lines : List String} {trees : Array LoggedTree}, coinTreesOf lines = .ok trees →
-      ∀ {tabsB : Array (String × Option ℕ)} {J : Json}, sessionTreeReason trees tabsB J = none →
-      ∀ {name : String}, 0 < recordRounds J name → ∃ i si, KeyAt (heldTrees trees) i si (recordTree J) name)
     (hans : ∀ {label : String} {after : ByteArray} {J : Json} {ξ : ByteArray} {lines : List String}
       {pre post : List Release} {y : Release} {trees : Array LoggedTree} {i s n : ℕ} {name : String}
       {spec : Flock.SessionSpec} {record : String} {sess : Flock.RunRecord} {st : Flock.StreamRec},
@@ -643,8 +807,9 @@ theorem firstStop_reps_verdict {V : Vocab d α} {θ : ByteArray} {F : Array Byte
     rw [htab]
     exact Nat.one_pos
   obtain ⟨reps, ho, hreps⟩ := firstStop_reps reg A.layout_injective A.tables_nodup record recordDigest hA.layout_lt
-    hA.J_eq (A.layout_link h0r) hRN hrd hD hM ω pts hL0 hr hn hop hnd hfirst hcovL hV hread hct h1 hJt hrec₀ hJ
-    hd₀ hver hret h512 hdg htab.symm h0 (hO _ _ hrec₀ hJ) (hsome hJt) (fun _ hpos => hkey hct hJt hpos)
+    hA.J_eq (A.layout_link h0r) hRN hrd hD hM ω pts hL0 hr hn (verdict_opens hA hθ hv hl hrec₀)
+    (verdict_nodup hA hθ hv hl hrec₀) hfirst hcovL hV hread hct h1 hJt hrec₀ hJ hd₀ hver hret h512 hdg htab.symm h0
+    (hO _ _ hrec₀ hJ) (recordRound_isSome hJt) (fun _ hpos => keyAt_of_record hct hJt hpos)
     (fun hlr hy hO' hn' hst hk => hans (hlr ▸ hread) hct h1 hJt hy hO' hn' hd₀ hJ h512 hst hk)
   refine ⟨reps, ho, fun text proofs spec sts sess hrec _ hs hd => ?_⟩
   obtain rfl : text = text₀ := Option.some.inj (hrec.symm.trans hrec₀)
