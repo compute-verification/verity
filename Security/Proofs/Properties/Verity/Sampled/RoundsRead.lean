@@ -22,7 +22,9 @@ per-round bridge between the two:
   round (`Lines.openCoins`), its count of coins and the bytes it answers. Tree `i`'s stream `si` is the stream of the
   tree it names (`KeyAt`), and the read opens each stream as often as the lines before it do.
 * **The bridge** (`readLog_round`): so the round each opening the read shows names is the count of its stream's openings
-  in the log before it (`Verity.openedOf`), as `Verity.Frame.opening` numbers a stream's rounds.
+  in the log before it (`Verity.openedOf`), as `Verity.Frame.opening` numbers a stream's rounds. And each round a tree
+  shows opened (`LoggedTree.opening`) is below the read's openings of that stream (`opening_lt_openedOf`), which with a
+  record's last round opened bounds the record's rounds by the read's.
 -/
 
 @[expose] public section
@@ -751,5 +753,35 @@ theorem readLog_round {label : String} {after : ByteArray} {records : List Json}
   refine ⟨l, ρ, name, k, by rw [hls]; simp, hro, hkey, hname, ?_⟩
   rw [hcnt i si ρ name hkey]
   exact coinTreesOf_round hT hls hro.1
+
+/-- The `i`-th tree is the first of its root, where the trees' roots are distinct. -/
+theorem findIdx?_root {trees : Array LoggedTree} (hn : (trees.toList.map (·.root)).Nodup) {i : ℕ} {t : LoggedTree}
+    (h : trees[i]? = some t) : trees.findIdx? (·.root == t.root) = some i := by
+  have hm : (trees.toList.map (·.root))[i]? = some t.root := by
+    rw [List.getElem?_map, Array.getElem?_toList, h]
+    rfl
+  have e := Lines.findIdx_nodup hn hm
+  rw [List.findIdx?_map] at e
+  rw [← findIdx?_toList]
+  exact e
+
+/-- **A round a tree shows opened is below the read's openings of its stream**: where `coinTreesOf` accepts the
+release log `lines` and `readLog` reads it, round `k` of stream `name` that a tree `t` of `coinTreesOf`'s shows opened
+(`LoggedTree.opening`) is below the openings the read shows of tree `i`'s stream `si`, that stream of `t` (`KeyAt`). -/
+theorem opening_lt_openedOf {label : String} {after : ByteArray} {records : List Json} {ξ : ByteArray}
+    {lines : List String} {log : List Verity.Release} {trees : Array LoggedTree} (hT : coinTreesOf lines = .ok trees)
+    (hR : readLog label after records ξ lines = some log) {t : LoggedTree} (ht : t ∈ trees) {name : String} {k : ℕ}
+    {o : TreeOpening} (ho : t.opening name k = some o) {i si : ℕ} (hk : KeyAt (heldTrees trees) i si t.root name) :
+    k < openedOf log i si := by
+  unfold LoggedTree.opening at ho
+  have hmem : o ∈ t.opened := Array.mem_of_find?_eq_some ho
+  have hp := Array.find?_some ho
+  simp only [Bool.and_eq_true, beq_iff_eq] at hp
+  obtain ⟨hs, rfl⟩ := hp
+  have hTr := Lines.trees_log hT
+  obtain ⟨j, hj⟩ := Array.mem_iff_getElem?.1 ht
+  have hc := (coinTreesOf_counted hT).held j t hj (findIdx?_root hTr.nodup hj) name
+  rw [readLog_openedOf hR (coinTreesOf_fold records hT) hk, ← hc, ← hs]
+  exact hTr.rounds t ht o hmem
 
 end Verity.Sampled
