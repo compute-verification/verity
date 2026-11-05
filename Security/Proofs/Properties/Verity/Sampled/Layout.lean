@@ -18,7 +18,8 @@ statement's, for any record, so the session alone fixes the layout, before any p
   table's rep `r` stream. It is injective (`Live.layout_injective`), its round 0 is the link's (`Live.layout_link`),
   each of its rep rounds is of the one table (`Live.layout_rep`), below the plan's tables (`SetsUp.layout_lt`), and it
   has a slot for each of a rep stream's first `K` rounds wherever the session has at least `2K + 1` rounds
-  (`Live.layout_covers`, `SetsUp.layout_covers`).
+  (`Live.layout_covers`, `SetsUp.layout_covers`), so for each round a stream of the session's coin tree holds
+  (`SetsUp.layout_covers_tree`).
 * **The stream names** (`Live.tables_nodup`, `SetsUp.tables_at`, `SetsUp.tables_rep`): the session's tables are
   distinct, and the readings' name for table `t`'s rep `r` stream is the one the decoded record's stream has,
   `repStreamName spec.tables[0]! r`.
@@ -155,6 +156,13 @@ theorem SetsUp.layout_covers {V : Vocab d α} {θ : ByteArray} {F : Array ByteAr
   intro k hk
   rw [ht]
   exact A.layout_covers hK r k (by omega)
+
+/-- **The layout has a slot for each of a rep stream's first `n` rounds** at every draw and registration, wherever v2
+sets `A` up and `n` is at most the `2^roundsLog` rounds a stream of the session's coin tree holds (`Live.rounds_tree`). -/
+theorem SetsUp.layout_covers_tree {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A : Live}
+    (hA : SetsUp V θ F A) {S : Finset (Fin A.n)} {R : A.Reg} (t : Fin (A.J S R)) (r : Fin 2) {n : ℕ}
+    (hn : n ≤ 2 ^ A.coinSpec.roundsLog) : ∀ k < n, ∃ j, A.layout j = .rep t.val r k :=
+  hA.layout_covers t A.rounds_tree r hn
 
 /-! ## The stream names -/
 
