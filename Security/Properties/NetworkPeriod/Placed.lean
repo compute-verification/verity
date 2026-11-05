@@ -81,7 +81,11 @@ descriptor decodes to), and `fs` are `P`'s templates' circuit files, each laid o
 and reading no input padding (`PaddingUnread`), then at every deployment `D`, for `n` windows whose scan statements
 `sw i`, each one `D` partitions as `Pw i` and laid out by Bits over `fs` (`StmtBits`), have at `δ` possible incorrect
 sets of at most `b i` proof blocks (`WrongBounds`), each such set commits at most `b i · max(b_ing, b_eg)` bits:
-`WindowsPlaced` at `β i = b i · max sc.ingress sc.egress`, the check's `faulty_bits` (`Scan.terms`). -/
+`WindowsPlaced` at `β i = b i · max sc.ingress sc.egress`, the check's `faulty_bits` (`Scan.terms`).
+
+A window's statement meets the scan only through `StmtBits`' file tie (each member's circuit file is one `fs` lists),
+so the one gap left is the listed file against the file the window's sessions were held to: no statement ties the two
+until the composite ties them by digest. -/
 def ScanWindowsPlaced : Prop :=
   ∀ (P : Flock.Program.Prog) (program : String) (s : Schedule) (sc : Scan) (fs : List Flock.Circuit),
     scanProg P program s = .ok sc → FilesOf P fs → PaddingUnread P fs →
