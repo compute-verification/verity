@@ -30,10 +30,11 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # demo_stub's endpoint records are read as network-e2e's endpoint step (the certifier-only path's) reads them:
 # `verity-vllm advice` (with the step trace and the records it imports, and its CLI, which that step runs it through)
 # and network-e2e's chain. certifier_piece is the network certifier's piece of
-# one_stage's served_verdicts, whose pieces and record test_certifier_piece runs it through into the block record.
-# leak_bounds counts K over the census's reference datacenter and the adversary resource model's world, one link a
-# machine. attacks' registry names one_stage's A5 warden tests as the refusal of record of the reads it lists, and
-# prove_path's tests as the advice cap's, which test_attacks checks are there.
+# one_stage's served_verdicts, whose pieces and record test_certifier_piece runs it through into the block record, and
+# whose composite.py reads a case-only period step's case as test_certifier_piece holds it to. leak_bounds counts K
+# over the census's reference datacenter and the adversary resource model's world, one link a machine. attacks'
+# registry names one_stage's A5 warden tests as the refusal of record of the reads it lists, and prove_path's tests as
+# the advice cap's, which test_attacks checks are there.
 inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.json", "integrations/vllm/workloads",
           "integrations/vllm/verity_vllm/__init__.py",
           "integrations/vllm/verity_vllm/pipeline/__init__.py", "integrations/vllm/verity_vllm/pipeline/window_advice.py",
@@ -55,6 +56,7 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           "examples/h200/interfaces/verity_e2e_demo/schemas/block-record.v1.schema.json",
           "examples/h200/interfaces/verity_e2e_demo/block_record.py", "benchmarks/census/deployments.json",
           "examples/h200/interfaces/verity_e2e_demo/__init__.py", "benchmarks/one_stage/served_verdicts.py",
+          "benchmarks/one_stage/composite.py",
           "examples/h200/interfaces/tests/fixtures/block-record-r2-period0.json",
           "verity/core/protocols/network/tests/period_case.py", "verity/core/difftest/python/verity_difftest"]
 # The Lean verifier, whose statement setup test_warden_zk and test_egress_zk run on their staged members (`check` builds
