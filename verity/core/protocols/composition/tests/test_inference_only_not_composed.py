@@ -3,7 +3,8 @@ with its reason. The inference-only policy's public form, `verity/inference-only
 publishes the division, and each inference block's gates and fresh-input bits, so it isn't zero-knowledge; every
 composite composes it for one run of record only, a stated exception, and v1's private form replaces it. The
 composites' components are read wherever they are listed: their Lean (`Core.Onsite.components`, `Core.Remote.components`,
-`Core.RemoteNetwork.components`, which extends remote's with `::`, and `Core.RemoteNetworkNoPouw.components`, with the
+`Core.RemoteNetwork.components`, which extends remote's with `::`, and `Core.RemoteNetworkNoPouw.components`, the three
+with the network certifier's period listing theirs in `componentsWith` and naming the period they compose, with the
 ids each one's `#guard` pins), the reference's mirror of them (`reference.ONSITE`, `REMOTE`, `REMOTE_NETWORK`,
 `REMOTE_NETWORK_NO_POUW`), and the ids a configuration may name as components (`parties.IDS`, which step0's
 `MANIFESTS` lists), read from its source: importing `parties` would read the deploy runtime, which this suite doesn't
@@ -45,15 +46,19 @@ def v0_names() -> set[str]:
 
 def lean_components(path: Path) -> tuple[list[str], list[str]]:
     """A composite's `components`, the Lean names it lists (through the `components` of a composite of `COMPOSITES` it
-    extends, `P :: Core.X.components`), and the ids its `#guard` pins them to."""
+    extends, `P :: Core.X.components`, and through `componentsWith NET`, its list with the network certifier's period
+    as the parameter, read as NET), and the ids its `#guard` pins them to."""
     text = path.read_text()
-    names = re.search(r"^def components\s*:[^\n]*?:=\s*\[(.*?)\]", text, re.M | re.S)
-    cons = re.search(r"^def components\s*:[^\n]*?:=\s*([\w.]+) :: ([\w.]+)\.components\s*$", text, re.M)
+    net = re.search(r"^def components\s*:[^\n]*?:=\s*componentsWith ([\w.]+)\s*$", text, re.M)
+    sig = r"componentsWith \((\w+) :[^)]*\)" if net else r"components()"
+    names = re.search(rf"^def {sig}\s*:[^\n]*?:=\s*\[(.*?)\]", text, re.M | re.S)
+    cons = re.search(rf"^def {sig}\s*:[^\n]*?:=\s*([\w.]+) :: ([\w.]+)\.components\s*$", text, re.M)
     ids = re.search(r"^#guard components\.map \(·\.id\) ==\s*\[(.*?)\]", text, re.M | re.S)
-    assert (names or cons) and ids, (f"{path.name}: no `def components : ... := [...]` or `P :: Core.X.components`, or "
-                                     "no `#guard` on their ids")
-    listed = [cons[1], *lean_components(COMPOSITES[cons[2]])[0]] if cons else [n.strip() for n in names[1].split(",")]
-    return listed, re.findall(r'"([^"]*)"', ids[1])
+    assert (names or cons) and ids, (f"{path.name}: no `def components : ... := [...]`, `P :: Core.X.components` or "
+                                     "`componentsWith NET` over one of those, or no `#guard` on their ids")
+    listed = [cons[2], *lean_components(COMPOSITES[cons[3]])[0]] if cons else [n.strip() for n in names[2].split(",")]
+    bound = {(names or cons)[1]: net[1]} if net else {}
+    return [bound.get(n, n) for n in listed], re.findall(r'"([^"]*)"', ids[1])
 
 
 def configuration_ids() -> list[str]:
