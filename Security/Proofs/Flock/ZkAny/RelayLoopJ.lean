@@ -378,7 +378,7 @@ session has sent its `Hello`, the model's `Hello` round passed, and the updates 
 theorem loopKept_hello {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
     {nonce : ByteArray} : LoopKept M sid spec sts nonce (LoopJ M sid spec sts) .hello := by
   intro seen st pl e σ σ' hsl he hF hJ hra hgo
-  obtain ⟨-, hbt, hcc, hlb, hso⟩ := hra
+  obtain ⟨-, -, hbt, hcc, hlb, hso⟩ := hra
   have hs0 : st.sent = false := (slot_hello hsl).2
   have hseen : seen = [] := hJ.unsent hs0
   have hsent := stepK_hello_sent hgo

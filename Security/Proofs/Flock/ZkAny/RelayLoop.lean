@@ -34,12 +34,11 @@ the `Hello`'s proved:
   the session's entry linked to the words of the coins the prover receives (`Frame.words`); a
   frame round as the loop ran it (`RoundRun`) on the worker's value at the model's history, the rep's frame
   at the model's configuration there, its rounds of the inner proof `InnerSrc` and the loop's salts `SaltsSrc`; at the
-  `Finish`, once the hold's barrier passes,
-  the session not stopped, the run at its last round, the firewall's own `Finish` not stopping, the worker's value the
-  firewall's own, and that message the `Final` of the loop's proof files as `Proof` frames; at the `Commit` and each
-  frame round the auditor
-  answering as `V*` did, and at the `Finish` the run having a message there; at every other slot only the updates
-  between the session's requests (`Between`); and at a frame round and every other slot `Stays`.
+  `Finish`, once the hold's barrier passes, the session not stopped, the run at its last round, the firewall's own
+  `Finish` not stopping, the worker's value the firewall's own, and that message the `Final` of the loop's proof files
+  as `Proof` frames; at the `Hello`, the `Commit` and each frame round the auditor answering as `V*` did, and at the
+  `Finish` the run having a message there; at every other slot only the updates between the session's requests
+  (`Between`); and at a frame round and every other slot `Stays`.
 * `LoopReads`: the requests to come, each read so, up to the session's stop or end.
 * `LoopFacts`: the session going on (`Reach`, no stop), its Σ, domain frames, reps and labels the setup's, each rep
   whose stream had no round yet with its frame absent or fresh (`FreshAt`), and the model's messages the slots took:
@@ -227,14 +226,14 @@ the inner proof the loop's finish computed so far for the rep the model's finish
 loop holds at the session's level 0s those the host handed it for each rep stream (`SaltsSrc`); at the `Finish`,
 once the hold's barrier passes, the session not stopped, the run at its last round, the firewall's own `Finish` not
 stopping, the worker's value the firewall's own, and that message the `Final` of the loop's proof files as `Proof`
-frames. At the `Commit` and each frame round the auditor answers as `V*` did (`LoopModel.Ans`), and at the `Finish` the
-run has a message. Between the session's requests only the updates of the loop's other requests come (`Between`), at a
-frame round and every other slot keeping what the session's rounds read of it (`Stays`), and each slot that reads a
-model message takes one. -/
+frames. At the `Hello`, the `Commit` and each frame round the auditor answers as `V*` did (`LoopModel.Ans`), and at
+the `Finish` the run has a message. Between the session's requests only the updates of the loop's other requests come
+(`Between`), at a frame round and every other slot keeping what the session's rounds read of it (`Stays`), and each
+slot that reads a model message takes one. -/
 def LoopRead {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec) (sts : Array Stmt)
     (nonce : ByteArray) : Session.Kind → State → Placed → Env → LoopAt → LoopAt → Prop
   | .hello, _, _, e, σ, σ' =>
-    e.nonce = nonce ∧ Between sid σ.R σ'.R ∧ σ'.c = σ.c + 1 ∧
+    M.Ans σ.c e ∧ e.nonce = nonce ∧ Between sid σ.R σ'.R ∧ σ'.c = σ.c + 1 ∧
       M.L.toSrv.liveBefore M.wk M.x M.w M.ρ M.κ (M.hist σ'.c) = true ∧
       (e.setup = .ok (spec, sts) → SessOn spec sts σ'.R sid)
   | .commit, st, _, e, σ, σ' =>
@@ -624,7 +623,7 @@ theorem slotCase_hello {W Rr : Type} {M : LoopModel W Rr} {J : List String → S
   | step k' hk' hra hrest =>
     obtain rfl : Session.Kind.hello = k' := Option.some.inj (hsl.symm.trans hk')
     have hJ' := hJ seen st pl e σ _ hsl (hset e List.mem_cons_self) hF hj hra
-    obtain ⟨hn, hbt, hcc, -⟩ := hra
+    obtain ⟨-, hn, hbt, hcc, -⟩ := hra
     refine ⟨fun _ => ?_, fun hgo => ?_⟩
     · show _root_.Flock.Firewall.Hello.msg spec e.nonce = ms.headD []
       rw [hn, hms, hc0, List.drop_zero, h0]
