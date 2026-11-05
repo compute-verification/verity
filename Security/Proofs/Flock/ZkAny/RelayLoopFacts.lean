@@ -48,7 +48,8 @@ model's release being the loop's own frames':
 * `rep_seen`: at a frame round's slot, the stream is seen exactly where the model's last round was the same rep's.
 * **`answered_of_round`**: the model answers a frame round's slot's history where the loop took the coins so far
   (`LoopModel.TookAt`), given the next rep's start at a stream's first round and, at a stream seen, the round's place
-  the model's scheduled round, the opening's first wherever the rank stop fails (`rank_of_release`).
+  the model's scheduled round, the empty round or the opening's first wherever the rank stop fails
+  (`rank_of_release`).
 * **`roundFacts_loop`**: `RoundFacts` at a frame round's slot of the deployed loop, given the model's answer there and
   `PlaceFacts` at the round's place.
 * `LeanRelease.CrossPasses`: the named hypothesis on the Rust release that its checks (`cross`) fail no frame round
@@ -1143,10 +1144,10 @@ theorem rep_seen {T : ZKMal.CoinLayer.TableData}
 `i`'s rep `r`, where `LoopFacts` and `LoopJ` hold at the deployed loop, the loop took the coins so far
 (`LoopModel.TookAt`) and the round goes out, the model answers its history so far, given the next rep's start at a
 stream's first round (`hfr`) and, at a round of a stream seen, the round's place the model's scheduled round (`hsc`),
-the opening's first wherever the rank stop fails at the model's coin-step state (`hal`). The transport's check, the
-frame's earlier takings and its coin step are the loop's (`LeanRelease.answered_of_took`); at a round of a stream seen
-the frame is at that state but for `stopped` (`placeSt_seen`) and releases the round (`roundStep_out`), so the rank
-stop passes (`rank_of_release`). -/
+the empty round or the opening's first, at any count, wherever the rank stop fails at the model's coin-step state
+(`hal`). The transport's check, the frame's earlier takings and its coin step are the loop's
+(`LeanRelease.answered_of_took`); at a round of a stream seen the frame is at that state but for `stopped`
+(`placeSt_seen`) and releases the round (`roundStep_out`), so the rank stop passes (`rank_of_release`). -/
 theorem answered_of_round {T : ZKMal.CoinLayer.TableData}
     {M : LoopModel Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
@@ -1169,8 +1170,9 @@ theorem answered_of_round {T : ZKMal.CoinLayer.TableData}
         (computedOf (M.L.computed M.x M.w M.ρ (M.hist σ.c)))).toArray⟩)
     (hal : seen.contains stream = true → ∀ m, M.L.answeredR M.x M.ρ (M.hist σ.c) = .ok m →
       LeanRelease.rankFails (M.L.cfg M.x M.ρ (M.hist σ.c)) m = true →
-      Flags.PcsRound (⟨(M.L.scheduled M.x M.w M.ρ (M.hist σ.c)
-        (computedOf (M.L.computed M.x M.w M.ρ (M.hist σ.c)))).toArray⟩, n)) :
+      M.L.scheduled M.x M.w M.ρ (M.hist σ.c) (computedOf (M.L.computed M.x M.w M.ρ (M.hist σ.c))) = [] ∨
+        ∃ n', Flags.PcsRound (⟨(M.L.scheduled M.x M.w M.ρ (M.hist σ.c)
+          (computedOf (M.L.computed M.x M.w M.ρ (M.hist σ.c)))).toArray⟩, n')) :
     ∃ m, M.L.answered M.x M.ρ (M.hist σ.c) = .ok m := by
   obtain ⟨hsent, -, -, -⟩ := slot_round hsl
   obtain ⟨C, hC⟩ := Option.isSome_iff_exists.mp (hF.reach.sess hsent)
@@ -1191,7 +1193,8 @@ theorem answered_of_round {T : ZKMal.CoinLayer.TableData}
     obtain ⟨out, vd, hst, -⟩ := roundStep_out hrp hout
     exact rank_of_release (placeSt_seen hsl hF hJ hr.rep_eq hlt hD.names hsn hrp)
       ((roundPlace_cfg hfd hrp).trans (hpc p hfa)) (Prod.ext hst rfl)
-      (fun m' hm' hrk => ⟨_, hsc hsn q pc f nd hrp, hal hsn m' hm' hrk⟩) m hm
+      (fun m' hm' hrk => ⟨_, hsc hsn q pc f nd hrp,
+        (hal hsn m' hm' hrk).imp_left fun he => by rw [he]; rfl⟩) m hm
 
 /-- **`RoundFacts` at a frame round's slot of the deployed loop**: at the slot of a round of `n` coins of `stream`,
 where `LoopFacts` and `LoopJ` hold, the session's slots took fewer than the run's messages, and the loop ran the round
