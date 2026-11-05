@@ -51,7 +51,9 @@ key and session are the auditor's record of its network certifier (``--certifier
 registration (``--site-registration``) holds that key for a network certifier its log places, read from those two
 inputs, each named by its SHA-512 (``from``), and the period's parameters, held by SHA-512 to those its check read
 (the composite of record's), never the prover's node or its deployment.json; `certifier-key` closes only where it
-holds and the lock holds that guarantee taking them.
+holds and the lock holds that guarantee taking them. The registration's link figures (beta, latency) are stated, not
+measured, and nothing here reads them; that the node has no egress but the uplink the network certifier splits, which
+the registration asserts, is the auditor's placement under trusted-host (`STANDING`), which no file establishes.
 `auditor-listing` (`auditor_listing`): each circuit file the period lists is, by SHA-512, the file its audit's
 sessions were verified against (`PERIOD`).
 
@@ -410,7 +412,11 @@ CHECKED = {
                      "verity.core.protocols.registration), and the parameters the period's check read (its case's "
                      "params, whose SHA-512 over their canonical JSON must be the one the composite of record states "
                      "for the network certifier's case), never the prover's node or its deployment.json. Where an "
-                     "input is missing or doesn't match, it doesn't hold, and certifier-key stays open"),
+                     "input is missing or doesn't match, it doesn't hold, and certifier-key stays open. The "
+                     "registration's link figures (each link's beta and latency) are the auditor's stated parameters, "
+                     "not measured, and nothing here reads them. That the network certifier splits the node's uplink "
+                     "is what the registration asserts; that the node has no other egress is the auditor's placement, "
+                     "under trusted-host (`STANDING`), and no file establishes it"),
     AUDITOR_LISTING: ("each circuit file the period lists, an audit's (circuits) or the scan's (scan_circuits), is by "
                       "SHA-512 the file its audit's sessions were verified against: a5's per-template pin, which "
                       "records_audit.py period publishes in V3c's period.json (`PERIOD`) for the audit whose "
@@ -441,7 +447,7 @@ RESTS_ON: dict[str, dict[str, Any]] = {
                   "hfit": "schedules-held", "hs": "schedules-covered", "hdz": "client-decodes",
                   "NetTiming.ScopeAcc": "wires-fit", "NetTiming.TapOpens": "certifiers-open"}},
     PERIOD_REGISTERED: {
-        "statement": "bbdbdb84ac069b92e1c1a14f4f35f0ba23ec003b0eca2d36baa106da6df71a66",
+        "statement": "808274afd667f0e04b4758786bf29fedb31a024e4a2a92147a7003fa9cc4d59f",
         "takes": {"Claims.Sampling.KSBy": "sampled-leg-bridge", "Claims.Flock.ListWithin": "sampled-leg-bridge",
                   "Claims.Sampling.CommitmentScheme.Binds": "sampled-leg-bridge",
                   "Verity.Assumptions.TrustedHost": "Verity.Assumptions.TrustedHost",
@@ -628,14 +634,20 @@ DISCHARGES: dict[str, dict[str, Any]] = {}
 #: the named assumptions that may stand under the figure of record, each on an auditor-trusted device or the auditor's
 #: placement of one, named beside the bound
 STANDING = {"Verity.Assumptions.TrustedHost": "trusted-host: the network certifier and its host are the auditor's, "
-                                              "which covers only that the records it signs are the traffic that "
-                                              "crossed, at the times it crossed, not what the device's code computes",
+                                              "which covers that the records it signs are the traffic that crossed, "
+                                              "at the times it crossed, not what the device's code computes, and, "
+                                              "with the auditor's placement of it (certifier-coverage), that the "
+                                              "node has no egress but through it",
             "Accounting.Covered": "certifier-coverage: the links in the room are the registered ones, each through the "
-                                  "network certifier (a listed physical premise, the auditor's placement)"}
+                                  "network certifier (a listed physical premise, the auditor's placement, under "
+                                  "trusted-host). The site registration asserts that the network certifier splits the "
+                                  "node's uplink; that the node has no other egress is this placement, which the "
+                                  "registration doesn't establish"}
 #: what K counts: the hypotheses on the covert sender's strategy that its guarantee quantifies, which no deployment
 #: discharges, so none is open
-COUNTS = {"client-decodes": "the secrets a decoder recovers from the client's view, the cells the network certifier's "
-                            "run gives the client: SenderDecodes, PeriodLeakAccepted's hdz"}
+COUNTS = {"client-decodes": "the secrets a decoder recovers from the client's view, the frames the network certifier's "
+                            "run sends across the wire to the client, padding included (NetTiming.laneWire): "
+                            "SenderDecodes, PeriodLeakAccepted's hdz"}
 DISCHARGE = ("the tight K's premises (`PREMISES`), each open until every theorem that discharges it at the deployed code "
              "is in Security's lock at the statement `DISCHARGES` pins (``unpinned``, with the lock's digest, where it "
              "isn't), with no named assumption but a standing one (`STANDING`) or one its pin takes, and every premise "
