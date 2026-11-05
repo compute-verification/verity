@@ -1178,3 +1178,48 @@ network-accounting's ODLEAN reads `v3c-w0-4-32-4/compose-cache/e9a7e9…/circuit
 5. **What ec10 won't measure now.** The large AttnBlockFirst sessions (circuits up to 27.5 GB) never ran. So the record's 72 h `V3C_AUDIT_TIMEOUT` and whether cpu-3's 503 GB of RAM holds those sessions remain projections from the small sessions. ec10's largest prover peak was 74.5 GB, for a 2.8 GB circuit.
 
 **I wait on:** the dress rehearsal's verdicts (you resume me about 11:23Z).
+
+## 12:12Z Thu (vllm-pearlplus): **Your 11:21Z items are done. #7221's rule didn't lose credit on the dress rehearsal. The record's tree is pprecord rebased onto `remote` and pushed at `3e22002872`, its tests passing; it keeps all 31 commits, because `remote` has none of them. Remote's settings file is on h200-3, and the archive watcher is ready and tested.**
+
+1. **The dress rehearsal** (r20261105-082550-ed23, development) ended rc 0 at 11:04Z. Its verdicts are on VLLM-182 (11:25Z).
+   - No row was given up.
+   - One draw landed on a tile over its cap, raising ε from 0.00998 to 0.01437 (459 draws, δ 1/100).
+   - **#7221 credits 0.57e9 more MACs than the rehearsal, not fewer.** It credited 133,595,589,727 of 135,895,449,600 MACs (98.31%). The rehearsal credited 98.75% of a claim 1.18e9 MACs smaller, after its give-up.
+     - As a share, that is 0.44 points lower, the cost of the one over-cap draw.
+     - Each further over-cap draw costs about 0.37–0.38 points (about 0.51e9 MACs), so the margin is about one draw.
+     - Nothing went on CMP-331.
+   - Pearl+'s first Lean verdict on a served run: ACCEPT, the same as Python's.
+   - **Cleaned** in r20261105-112728-0845, after a dry run: 44 of 44 paths, 4.5 GiB. The passes stay (`pearl`, `pearlplus`, `private/pearlplus`, `private/pearlplus-cubin`). At 12:06Z h200-3 had 941k free inodes, against the record's 772k, and 338 GB free.
+   - **Two things for the record night**, neither a verdict:
+     - **The coin's own store upload failed inside the run.** R2_ENDPOINT and R2_BUCKET aren't in the run's shell on h200-3. The run record still holds `coin.json`, as the rehearsal's did, so the coin is kept. The record will do the same unless infra puts those settings in research's environment there.
+     - **The window circuit's class measurement timed out** at its 45 min cap (`WC_RECORD_TIMEOUT`), so the dress has no count. It is a measurement only; raise the cap on the record if you want the count.
+2. **The record's tree** is `3e22002872` on `cursor/vllm-pprecord-496a`. It is rebased onto `remote` `ea2130a1bda`, pushed with a lease over `c9f664ebe0`, and posted on VLLM-182.
+   - **All 31 commits stay, not only the case and label ones.** `git cherry` finds none of them on `remote`, and `remote` lacks what they add. Besides the 3 case and 2 label commits, the record's serve runs on the other 26: PEARLPLUS_TIE's preflight, close and inode check, the served compare step, the lane's gate key, the seal's manifest digest, the inference-only φ at Pearl+, and the B4 row with its pins.
+   - **One conflict, composite.py's docstring,** took `remote`'s exception text. `EXCEPTIONS` is `remote`'s word for word ("composed for the demos' runs until v1's private form … replaces it"). If ASK-239 goes to B, I redo the rebase.
+   - **Tests at the head** (r20261105-113438-b020, h200-3):
+     - `pouw-pearlplus` builds in 72 s.
+     - pearl_c_vllm: 165 passed, 5 skipped. The skips are triton, absent on the CPU install; all 8 Lean tests ran.
+     - one_stage's served tests, with composite and inference-only: 590 passed.
+     - serve_seal: 37 passed.
+   - **#7267 and #7372** weren't on `remote` at 12:05Z. If they land by 18:00Z, I rebase, rerun these tests and post the new head.
+3. **VLLM-219** is answered as vllm (11:47Z).
+   - **The settings file** is at `/workspace/research/vllm-served-verdicts/settings-remote/settings.env` on h200-3 (0600, its dir 0700; r20261105-114508-8e89). It holds remote's run-1 counts, `served_verdicts.sh`'s defaults, which is the file remoterun made as remote's.
+     - h200-2's own bytes couldn't be read, and h200-stage.sh only checks that the file exists.
+     - h200-2's copy may be an older one with one output token per request. I asked onsite to compare ℓ_a with h200-2's (1,328 and 7,432 bits) before relying on it.
+   - **H1's peer there is `vy-dc-h200-3`.** The gate ran live sessions for that peer at 08:40Z and 09:25Z. `served_verdicts.sh` still defaults `H1_PEER` to vy-dc-h200, so onsite sets it.
+4. **The record night: the archive watcher is ready**, outside the tree (`archive-watch.sh WINDOW`; a copy is in r20261105-115649-d9ac's inputs).
+   - **What it deletes:** each drawn session's `session-mK/archive`, with `retention rm --approved-by @vllm`, once that session's `lean-verify.log` has its VERDICT.
+   - **What it keeps:** the first registered-reads member's archive, which the registered negatives verify again at the end, and every record, log and member dir.
+   - **When it refuses or stops:** it refuses a draw that isn't stratified with k 1, and two sessions sharing a circuit (one's archive would then link the other's). It stops on the audit's summary, when the follow-on ends, or after 80 h.
+   - **Tested** on cpu-5, 14 of 14 checks:
+     - a dry pass over ec10's real window plans 94 of its 95 archives (48.9 GB) and keeps 1;
+     - on a synthetic window it deletes only verdicted sessions' archives, waits on the rest, and stops on the summary;
+     - it refuses a subset draw, a shared circuit and a path outside the serve root.
+   - **Launch:** if INF-518 says no by Fri 02:00Z, I launch it on cpu-3 beside the follow-on (`APPLY=1 FOLLOW_RUN=` the follow-on's id). The peak is then about 1.07 TB instead of 1.28 TB.
+   - **cpu-3 at 11:53Z:** still 3.0 TB, with 666 GB and 4.06M inodes free. infra hasn't answered the 1.6 TB ask.
+
+**I wait on:**
+- `remote`, for #7267 and #7372, until 18:00Z;
+- cpu-5's `e9a7e9…` delete after 21:30Z;
+- INF-518's answer, by Fri 02:00Z;
+- the record's preflight, Fri 02:30Z.
