@@ -13,7 +13,9 @@ not the rows the verifier registered. The two circuits and the link unit's progr
 `statement` (setup alone) does. Both refuse, at setup and with one reason, the honest part at another root, at another
 row count, without the table, and the forgery at the honest table. What the #guards of `Flock/Test/RecLinks.lean` and
 `Flock/Test/RecLinkPart.lean` can't catch: the binary's own reading of the table's flag and of the files a link part's
-check reads, on a proved session."""
+check reads, on a proved session; and V*'s own link file through the link part's checks, which the interpreter can't
+build: `rec-statements` holds the fixture's link circuit to V*'s bytes and META (`RecVStar.checkFile`, `checkParsed`), and
+`verify` and `statement` on the honest part run `RecLinkPart.checkUnit` and `outsOk` on it."""
 from __future__ import annotations
 
 import gzip
@@ -103,7 +105,22 @@ def statement(plain: Path, name: str, t: tuple[str, int] | None) -> tuple[int, s
     return p.returncode, p.stdout.strip().splitlines()[-1]
 
 
+def test_vstars_own_link_file_passes_vstars_checks(plain):
+    """The link circuit is V*'s own file for statement J at the inner shape under the verifier's bindings, byte for byte,
+    and what the verifier parses from it carries V*'s rows and leaves (`RecVStar.checkCircuit`: `checkFile`,
+    `checkParsed`). `rec-statements` reads no reads file, so this runs on the fixture's first staging too."""
+    _root, n = table("links")
+    p = subprocess.run([str(BIN), "rec-statements", "--rec-inner", str(SET / "vstar" / "rec-inner.json"),
+                        "--circuit", str(plain / "link" / "circuit.txt"), "--rec-bindings", str(SET / "links" / "bindings.json"),
+                        "--instances", str(n), "--rec-part", (SET / "links" / "part.txt").read_text().strip()],
+                       capture_output=True, text=True)
+    (line,) = [json.loads(ln[9:]) for ln in p.stdout.splitlines() if ln.startswith("RECVSTAR ")]
+    assert (p.returncode, line["ok"], line.get("checked")) == (0, True, ["rec-link/u2-p2", n]), line
+
+
 def test_the_honest_link_part_is_accepted(plain):
+    """Every check of a link part on V*'s own file, `RecLinkPart.checkUnit` (its unit is V*'s net) and `outsOk` (its
+    outputs are V*'s layout) among them."""
     _current()
     rc, v = verify(plain, "links", table("links"))
     assert (rc, v["accepted"], v["why"]) == (0, True, ""), v
