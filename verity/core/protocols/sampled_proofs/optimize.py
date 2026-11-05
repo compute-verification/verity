@@ -14,14 +14,15 @@ whose incorrect output can forfeit downstream work (a noise or form proof block 
 `influence`, which its harm counts.
 
 **Cost.**  Per touched statement plus per proved proof block, as Flock does: subcircuit `s` cut into statements of `c` proof blocks costs
-`touched_s(k; c) * (a0 + a1 c) + k * (b + replay)`, a statement being touched when the draw meets it.  A plan is a
-one-stage design, so everything is committed at serve time whatever the draw: every proof block's outputs (`commit_bits`,
-`commit_rows`), and the fixed serve-time commitments of every scale (`Commitment`: the Commit's taps, PoUW's work blocks,
-the remote audit's receipts, the bits a work block pins), so a plan's cost is the whole serve-time and proving total.  One
-tensor committed at several scales is counted once per scale, and `overlaps` prices what committing it once would save.  A
-sampled proof block's witness is built by replaying the replay block of its `ReplayGrain` it lies in from the values the
-prover keeps, which commits nothing: a commitment is a hash, so unless serving retained intermediates a replay block starts
-at the external inputs and the registration's constants.
+`touched_s(k; c) * (a0 + a1 c) + k * (b + replay)`, a statement being touched when the draw meets it.  Everything is
+committed at serve time whatever the draw: every proof block's outputs (`commit_bits`, `commit_rows`),
+and the fixed serve-time commitments of every scale (`Commitment`: the Commit's taps, PoUW's work blocks, the remote audit's
+receipts, the bits a work block pins), so a plan's cost is the whole serve-time and proving total.  One tensor committed
+at several scales is counted once per scale, and `overlaps` prices what committing it once would save.  A plan is thus a
+one-stage design (`two_stage` prices a two-stage one, below).  A sampled proof block's witness is built by replaying the
+replay block of its `ReplayGrain` it lies in from the values the prover keeps, which commits nothing: a commitment is a
+hash, so unless serving retained intermediates a replay block starts at the external inputs and the registration's
+constants.
 A subcircuit's costs are measured (`TemplateCost`) or derived from the model's rates and its features: ANDs, and the hm96
 rows a proved proof block opens (`row_ands`).
 
