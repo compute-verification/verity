@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Game.Batch
+module
+
+public import Proofs.Flock.Soundness.Game.Batch
 
 /-!
 # Fork probabilities that do not read the chooser
@@ -11,6 +13,8 @@ with its table case over any two tables) have the same fork probability under an
 * `AlignedT.bind`, `.map`, `.mono`, `.mapL`, `.same`, `.leftSame`, `.rightSame`, `.batchLock`, `.embedLeft`,
   `.embedRight`, `.lockWith`, `.interleaveLock`: the combinators that build the compiled sessions' locksteps preserve it.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

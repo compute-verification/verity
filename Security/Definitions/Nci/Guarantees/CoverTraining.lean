@@ -1,9 +1,11 @@
-import Definitions.Nci.BitView
-import Definitions.Nci.Dark
-import Definitions.Nci.Assumptions.Baseline
-import Definitions.Nci.Assumptions
-import Definitions.Nci.Assumptions.Cover
-import Definitions.Nci.Assumptions.CoverTraining
+module
+
+public import Definitions.Nci.BitView
+public import Definitions.Nci.Dark
+public import Definitions.Nci.Assumptions.Baseline
+public import Definitions.Nci.Assumptions
+public import Definitions.Nci.Assumptions.Cover
+public import Definitions.Nci.Assumptions.CoverTraining
 
 /-!
 # The cover theorem on a declaration that complies with the inference-only policy
@@ -31,6 +33,8 @@ product), and `UpdateHardness` is needed at the block size in bits, `s = w₀ c 
 the blocks are whole words too, so each use of their whole products costs them `f` bits of its region, and the factor is
 `α₀ b f c / (k² + b f k)`, up to `f` times `CoverTraining`'s, with no premise beyond `UpdateHardness`.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.Guarantees
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Recursive.TopFinder
+module
+
+public import Proofs.Flock.Recursive.TopFinder
 
 /-!
 # The held salts' finder: a registrant's read of R's level-0 top against the salts its nodes were committed under
@@ -18,6 +20,8 @@ computable only with `salt i` in hand.
   `qS²/2^513`; its union with `regFinder`, `topFinder` and `valueFinder` is `prob_regTopValueSalt_le`
   (`Recursive/ValueFinder.lean`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

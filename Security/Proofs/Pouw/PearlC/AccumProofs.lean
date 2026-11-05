@@ -1,6 +1,10 @@
-import Definitions.Pouw.PearlC.Accum
-import Definitions.Pouw.PearlC.PeelExactP
-import Proofs.Pouw.PearlC.PeelExactProofs
+module
+
+public import Definitions.Pouw.PearlC.Accum
+public import Definitions.Pouw.PearlC.PeelExactP
+public import Proofs.Pouw.PearlC.PeelExactProofs
+
+@[expose] public section
 
 namespace Pouw.PearlC.Accum
 

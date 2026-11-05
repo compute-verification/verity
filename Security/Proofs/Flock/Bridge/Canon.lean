@@ -1,9 +1,11 @@
-import Proofs.Flock.Bridge.Targets
-import Proofs.Flock.Bridge.PortRoots
-import Proofs.Flock.Bridge.PopMatches
-import Proofs.Flock.Bridge.RightRegZc
-import Proofs.Flock.Soundness.Discharge.Layout.RowEnc
-import Proofs.Flock.Soundness.Assumptions.Finders
+module
+
+public import Proofs.Flock.Bridge.Targets
+public import Proofs.Flock.Bridge.PortRoots
+public import Proofs.Flock.Bridge.PopMatches
+public import Proofs.Flock.Bridge.RightRegZc
+public import Proofs.Flock.Soundness.Discharge.Layout.RowEnc
+public import Proofs.Flock.Soundness.Assumptions.Finders
 
 /-!
 # The bridge's targets with canonical openings (targets, not proved)
@@ -35,6 +37,8 @@ targets read them:
 `SampledKSLiveV3` (`Refused`) reads V2's file preconditions off the verifiers' acceptance, which refuses files that fail
 them.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

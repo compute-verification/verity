@@ -1,7 +1,9 @@
-import Definitions.Nci.Guarantees.Capability.Dependency
-import Proofs.Nci.Capability.Items
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Tactic.Linarith
+module
+
+public import Definitions.Nci.Guarantees.Capability.Dependency
+public import Proofs.Nci.Capability.Items
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Tactic.Linarith
 
 /-!
 # Local bounds: proofs of the caps from dependency
@@ -16,6 +18,8 @@ import Mathlib.Tactic.Linarith
 * `WeightedProductCap`: the completed products lie in the rectangle of their slots and uses, whose weighted sum factors,
   and their slots are a selection the block holds.
 -/
+
+@[expose] public section
 
 namespace Nci.Covering.FeedsWithin
 

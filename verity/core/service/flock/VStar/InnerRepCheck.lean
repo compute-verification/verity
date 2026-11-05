@@ -1,4 +1,6 @@
-import VStar.Unit
+module
+
+public import VStar.Unit
 
 /-!
 # `InnerRepCheck{S}`: one part of a rep's inner algebraic checks (`verity_flock.rec_residuals`)
@@ -7,6 +9,8 @@ import VStar.Unit
 words, then zero words up to 128. Each row port of `n` elements is `P(n) = 64 ⌈8 n / 64⌉` words (whole 64-word M0 rows),
 `v` is `P(nv)`.
 -/
+
+@[expose] public section
 
 namespace VStar
 

@@ -1,5 +1,9 @@
-import Proofs.Flock.Soundness.ZK.GK.Rand
-import Proofs.Flock.Soundness.ZK.GK.Extract
-import Proofs.Flock.Soundness.ZK.GK.Sim
-import Proofs.Flock.Soundness.ZK.GK.Theorem
-import Proofs.Flock.Soundness.ZK.GK.Link
+module
+
+public import Proofs.Flock.Soundness.ZK.GK.Rand
+public import Proofs.Flock.Soundness.ZK.GK.Extract
+public import Proofs.Flock.Soundness.ZK.GK.Sim
+public import Proofs.Flock.Soundness.ZK.GK.Theorem
+public import Proofs.Flock.Soundness.ZK.GK.Link
+
+@[expose] public section

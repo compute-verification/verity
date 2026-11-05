@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.Split
-import Proofs.Flock.Claims.ZK.Blind
+module
+
+public import Proofs.Flock.Claims.ZK.Split
+public import Proofs.Flock.Claims.ZK.Blind
 
 /-!
 # The switched prover's rep source
@@ -18,6 +20,8 @@ is the switched prover's at the workers' values: the same reading of the switche
 * **`swCutE_masked_of_rowsAt`**: so where table `j`'s rows hold at its base, the switched cut's masked values are the
   worker's view's.
 -/
+
+@[expose] public section
 
 /-- **Where the worker's rows hold, the switched pre-final view's masked values are its own.** -/
 theorem FlockSoundness.ZK.Table.swPre_masked {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Zk.ConsZerocheck
-import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.ConsZerocheck
+public import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
 
 /-!
 # The lincheck's constraint vanishes at the masked prover's pads
@@ -21,6 +23,8 @@ For the lincheck (`Zk.replay`'s "lincheck final", restated by `Lincheck.lcFinal`
 * `lcFinal_zero`: at the masked prover's proofs the row vanishes, at any pads and every coin where the circuit fold
   returns, for a trace of a witness (`Lc.lcAlgebra_of`'s hypotheses).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

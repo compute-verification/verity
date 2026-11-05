@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkCoins.Hybrid
-import Proofs.Flock.Soundness.Discharge.ZkCoins.Erase
-import Proofs.Flock.Soundness.Discharge.ZkCoins.Reads
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkCoins.Hybrid
+public import Proofs.Flock.Soundness.Discharge.ZkCoins.Erase
+public import Proofs.Flock.Soundness.Discharge.ZkCoins.Reads
 
 /-!
 # The batched `--zk` session on C-Flock ZK's coin tree
@@ -10,6 +12,8 @@ import Proofs.Flock.Soundness.Discharge.ZkCoins.Reads
 live, has `sessionZK`'s value (`er_sessionZKC`, `value_erase`), which table `j`'s bound bounds (`value_sessionZK_le`,
 `sessionZK_sound`'s argument). The session has `1 + 2·J·R` committed rounds (`card_sessIdx`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkCoins
 

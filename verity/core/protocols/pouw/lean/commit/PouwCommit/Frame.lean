@@ -1,8 +1,10 @@
-import Flock.Hash
-import Flock.Bytes
-import Identity.Tagged
-import PouwCommit.Tagged
-import Identity.Domains
+module
+
+public import Flock.Hash
+public import Flock.Bytes
+public import Identity.Tagged
+public import PouwCommit.Tagged
+public import Identity.Domains
 
 /-!
 # frame-v3 trees (`verity.ml.commitments.merkle`) over range positions
@@ -14,6 +16,8 @@ tagged hash. A tree pads its leaves to a power of two with `H("pad", id, uint ra
 `H("node", id, uint level, uint index, l, r)`, and an empty tree's root is `H("empty", id)`. Integers are minimal big-endian,
 any size (`natBytes`).
 -/
+
+@[expose] public section
 
 namespace PouwCommit
 

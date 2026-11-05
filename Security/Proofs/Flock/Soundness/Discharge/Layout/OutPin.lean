@@ -1,7 +1,11 @@
-import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
-import Proofs.Flock.Soundness.Discharge.Layout.OutSite
-import Proofs.Flock.Soundness.Discharge.Layout.OutShape
-import Properties.Flock.Circuit.Outs
+module
+
+public import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
+public import Proofs.Flock.Soundness.Discharge.Layout.OutSite
+public import Proofs.Flock.Soundness.Discharge.Layout.OutShape
+public import Properties.Flock.Circuit.Outs
+
+@[expose] public section
 
 set_option Elab.async false
 

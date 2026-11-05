@@ -1,4 +1,6 @@
-import Definitions.Nci.Assumptions.CoveringPriced
+module
+
+public import Definitions.Nci.Assumptions.CoveringPriced
 
 /-!
 # The covering bound at a price per weight
@@ -7,6 +9,8 @@ import Definitions.Nci.Assumptions.CoveringPriced
 place of one weight cost `c_w`, beside it. The activations keep one cost `c_a`. At `p = fun _ => c_w` it gives
 `CoveringBoundTwoCosts`.
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 

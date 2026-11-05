@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Zk.ConsLincheck
-import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.ConsLincheck
+public import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
 
 /-!
 # The ring switch's two constraints vanish at the masked prover's pads
@@ -16,6 +18,8 @@ values as affine forms in the pads (`Lincheck.lcAbValue`, `ZerocheckMasked.fcL`)
 * `rsAb_zero`, `rsC_zero`: the rows vanish wherever the plain check meets the clear value;
 * `rsAb_zero_of`, `rsC_zero_of`: at the honest `ŝ` of a statement's table, by `claims_switch`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

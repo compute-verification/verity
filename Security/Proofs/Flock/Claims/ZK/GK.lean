@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.Statement
+module
+
+public import Proofs.Flock.Claims.ZK.Statement
 
 /-!
 # A committed-coin protocol, its honest prover and its Goldreich–Kahan simulator
@@ -26,6 +28,8 @@ What the theorem needs of the protocol, each named: `PrefixHides` (the dummy-wit
 the last coin), `SHVZK` (at every fixed coin vector, the honest prover's messages are close to `sim`'s), `Binding` (two
 openings of one coin that pass `chk` and differ show a collision in `chk`'s calls).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

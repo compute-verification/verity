@@ -1,6 +1,8 @@
-import Proofs.Population.NecessitySkeleton
-import Proofs.Population.Transfer
-import Mathlib.Data.Fintype.Powerset
+module
+
+public import Proofs.Population.NecessitySkeleton
+public import Proofs.Population.Transfer
+public import Mathlib.Data.Fintype.Powerset
 
 /-!
 # The policy × property matrix: what each policy needs beyond tier 1, and what each property buys
@@ -31,6 +33,8 @@ amplification is unbounded).
   case `R` = the padding. Necessity is `DynPopulation.leak_of_moved_read`: a corruptible address that moves a read onto
   a slot no honest run reads leaks that slot through one faulty proof block.
 -/
+
+@[expose] public section
 
 namespace Population.Iop
 

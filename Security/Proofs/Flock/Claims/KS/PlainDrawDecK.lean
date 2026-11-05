@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.PlainDrawAccK
+module
+
+public import Proofs.Flock.Claims.KS.PlainDrawAccK
 
 /-!
 # The deployed plain decoders at the statement's draw, at `VK keep`
@@ -18,6 +20,8 @@ and `wrPD` `PlainDrawDec`'s for `plainVerdictAt`:
 * `plain_hdecAtK_of`, `plain_hdecHAtK_of`: at `plainTab`; `plain_hdecAtK`, `plain_hdecHAtK` at `wrPDK`, with
   `plainVerdictAtK keep`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.PlaysCoin
 

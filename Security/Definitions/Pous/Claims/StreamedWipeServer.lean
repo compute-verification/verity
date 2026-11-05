@@ -1,4 +1,6 @@
-import Definitions.Pous.Model.StreamedWipeServer
+module
+
+public import Definitions.Pous.Model.StreamedWipeServer
 
 /-!
 # The streamed-label wipe per server, as claims of an acceptance rule
@@ -12,6 +14,8 @@ antecedents hold at the deployed, measured `StreamedWipe.h200`. The PRF term in 
 `StreamedWipe.wipeDistinguisherBy V P`, a distinguisher built from the prover `P` (at `V = Accepts`,
 `StreamedWipe.wipeDistinguisher P`).
 -/
+
+@[expose] public section
 
 namespace Pous.Claims
 

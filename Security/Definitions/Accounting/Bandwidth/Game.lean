@@ -1,4 +1,6 @@
-import Definitions.Pous.Game.Prob
+module
+
+public import Definitions.Pous.Game.Prob
 
 /-!
 # The bandwidth audit v0 in the random-oracle model
@@ -28,6 +30,8 @@ measurement that falsifies each for a deployed device (`bandwidth-s-chip`, `band
 `bandwidth-regen-time`). Treating the stored blocks as uniform, apart from regeneration, is the claim
 `bandwidth-instantiation`; reading the deployed tag as the random oracle is `random-oracle`.
 -/
+
+@[expose] public section
 
 namespace Bandwidth
 
