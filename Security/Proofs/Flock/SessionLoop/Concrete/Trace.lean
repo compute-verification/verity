@@ -236,7 +236,21 @@ theorem constPairs_cW :
     constPairs (cW ls lh H A B A' B' s1) PIN = [(518144, 518144), (518144, PIN), (524544, 524544), (524544, PIN)] := by
   kernel_rfl'
 
+theorem unit_cW : (cW ls lh H A B A' B' s1).unit = UN := by kernel_rfl'
+
+theorem tmpl_cW : (cW ls lh H A B A' B' s1).tmpl = none := by kernel_rfl'
+
+theorem unitRange_cW : (cW ls lh H A B A' B' s1).unitRange.count = 1 ∧
+    (cW ls lh H A B A' B' s1).unitRange.slot 0 = 524288 :=
+  ⟨by kernel_rfl', by kernel_rfl'⟩
+
 end facts
+
+/-- The unit's computed rows read only its 16 input rows: rows `128 … 143` copy one input each, the rest are empty. -/
+theorem UN_a_lt : ∀ c < 128, ∀ y ∈ (UN.a.row (128 + c)).toList, y < 16 := by decide +kernel
+
+/-- The unit's input rows past its 16 inputs are empty. -/
+theorem UN_empty : ∀ c < 112, UN.a.row (16 + c) = #[] ∧ UN.b.row (16 + c) = #[] := by decide +kernel
 
 /-! ## The trace -/
 
@@ -373,6 +387,81 @@ theorem holds_pins {st : Stmt} (L : FlockSoundness.Layout st) (regs : List (Mode
     rw [block_pin L regs hn hk hpin o, block_zC (S := L.model regs) hk, hr, zIn_unitConst]
     rfl
 
+theorem xorRow_false {v : ℕ → Bool} {cs : Array ℕ} (h : ∀ j ∈ cs.toList, v j = false) : xorRow v cs = false := by
+  unfold xorRow
+  generalize cs.toList = l at h
+  induction l with
+  | nil => rfl
+  | cons a l ih =>
+    have ha : v a = false := h a (by simp)
+    have hl := ih fun j hj => h j (by simp [hj])
+    simp [List.foldr_cons, ha, hl]
+
+/-- **A unit slot's computed row holds** where the block is 0 at the row and at every column its A row reads. -/
+theorem holds_unitComp {st : Stmt} (L : FlockSoundness.Layout st)
+    (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) (hU : Built st.c.unit) {s₀ c : ℕ}
+    (hs : s₀ < st.c.unitRange.count) (hlo : st.c.unit.inWords * WORD ≤ c) (hhi : c < st.c.unit.constPos)
+    {z : Model.Witness (L.model regs).m} (o : Fin (2 ^ (L.model regs).nbl)) {r : Fin (2 ^ (L.model regs).kLog)}
+    (hr : r.val = st.c.unitRange.slot s₀ + c)
+    (hz : ∀ y ∈ (st.c.unit.a.row c).toList, blockBit (L.model regs) z o (st.c.unitRange.slot s₀ + y) = false)
+    (hr0 : blockBit (L.model regs) z o r.val = false) :
+    ((L.model regs).A₀.mulVec ((L.model regs).block z o)) r * ((L.model regs).B₀.mulVec ((L.model regs).block z o)) r =
+      (L.model regs).block z o r := by
+  have hlt := L.unit_row_lt hU hlo hhi (L.unitLog_le hs)
+  have hcl : ∀ rr : Array ℕ, (∀ x ∈ rr.toList, x < 2 ^ st.c.unit.unitLog) →
+      ∀ y ∈ rr.toList.map (st.c.unitRange.slot s₀ + ·), y < 2 ^ (L.model regs).kLog := fun rr h y hy => by
+    obtain ⟨x, hx, rfl⟩ := List.mem_map.1 hy
+    exact L.unit_slot_lt hs (h x hx)
+  refine netRow_holds (b := st.c.unitRange.slot s₀) (ra := st.c.unit.a.row c) (rb := st.c.unit.b.row c)
+    (fun j => L.placedA_comp hU hs hlo hhi r j hr) (fun j => L.placedB_comp hU hs hlo hhi r j hr)
+    (hcl _ hlt.1) (hcl _ hlt.2) ?_
+  rw [xorRow_false (v := fun j => blockBit (L.model regs) z o (st.c.unitRange.slot s₀ + j)) hz, Bool.false_and, hr0]
+
+/-- **A unit row whose rows are empty and that Δ skips is zero.** -/
+theorem zeroRow_unitEmpty {st : Stmt} (L : FlockSoundness.Layout st)
+    (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) (hU : Built st.c.unit) {s₀ c : ℕ}
+    (hs : s₀ < st.c.unitRange.count) (hc : c < 2 ^ st.c.unit.unitLog) (ha : st.c.unit.a.row c = #[])
+    (hb : st.c.unit.b.row c = #[]) {r : Fin (2 ^ (L.model regs).kLog)} (hr : r.val = st.c.unitRange.slot s₀ + c)
+    (hd : ∀ j, deltaEntry st.da r.val j = 0) : ZeroRow (L.model regs) r := by
+  refine ⟨fun j => ?_, fun j => ?_⟩
+  · show rangesEntry st (slotEntryA st) r.val j.val + deltaEntry st.da r.val j.val = 0
+    rw [hd, add_zero, hr, L.rangesEntry_unit hs hc]
+    refine ite_eq_right_iff.2 fun _ => ?_
+    show sparseEntry st.c.unit.a c _ = 0
+    rw [sparseEntry_built_a hU, ha]
+    simp
+  · show rangesEntry st (slotEntryB st) r.val j.val + deltaEntry st.db r.val j.val = 0
+    rw [L.delta_b, hd, add_zero, hr, L.rangesEntry_unit hs hc]
+    refine ite_eq_right_iff.2 fun _ => ?_
+    show sparseEntry st.c.unit.b c _ + lookupEntry st.c.unit.lookup c _ = 0
+    rw [sparseEntry_built_b hU, hb, L.unit_lookup]
+    simp [lookupEntry]
+
+theorem zIn_unit {i : ℕ} (h1 : 524288 ≤ i) (h2 : i ≠ 524544) : zIn i = false := by
+  unfold zIn
+  rw [ite_eq_right (show ¬ i < 262144 by omega), ite_eq_right (show ¬ i < 524288 by omega)]
+  exact decide_eq_false h2
+
+/-- **The unit's computed rows hold** at the trace: they read only its inputs, which are 0. -/
+theorem holds_unitComp_cW {st : Stmt} (L : FlockSoundness.Layout st)
+    (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) (hk : st.c.kLog = 22) (htm : st.c.tmpl = none)
+    (hU : st.c.unit = UN) (hs1 : st.c.unitRange.count = 1) (hsl : st.c.unitRange.slot 0 = 524288)
+    (o : Fin (2 ^ (L.model regs).nbl)) {r : Fin (2 ^ (L.model regs).kLog)} (hr : 524416 ≤ r.val ∧ r.val < 524544) :
+    ((L.model regs).A₀.mulVec ((L.model regs).block (zC (L.model regs).m) o)) r *
+        ((L.model regs).B₀.mulVec ((L.model regs).block (zC (L.model regs).m) o)) r =
+      (L.model regs).block (zC (L.model regs).m) o r := by
+  have hc : r.val = st.c.unitRange.slot 0 + (r.val - 524288) := by rw [hsl]; omega
+  have hlo : st.c.unit.inWords * WORD ≤ r.val - 524288 := by rw [hU]; show 1 * 128 ≤ _; omega
+  have hhi : r.val - 524288 < st.c.unit.constPos := by rw [hU]; show _ < 256; omega
+  refine holds_unitComp L regs (L.built_flat htm) (by omega) hlo hhi o hc (fun y hy => ?_) ?_
+  · rw [hU] at hy
+    have hy' : y < 16 := UN_a_lt (r.val - 524416) (by omega) y
+      (by rwa [show 128 + (r.val - 524416) = r.val - 524288 by omega])
+    rw [hsl, blockBit_zC (S := L.model regs) hk o (lt_of_lt_of_le (show 524288 + y < 524304 by omega) (by norm_num))]
+    exact zIn_unit (by omega) (by omega)
+  · rw [blockBit_zC (S := L.model regs) hk o (lt_of_lt_of_le (show r.val < 524544 by omega) (by norm_num))]
+    exact zIn_unit (by omega) (by omega)
+
 theorem count_E (x j : ℕ) : E.count (x, j) =
     [(518144, 518144), (518144, PIN), (524544, 524544), (524544, PIN)].count (x, j) +
       (run 262144 512 (constSrcW msW)).count (x, j) + (run 512 1024 (constSrcW padW)).count (x, j) +
@@ -469,6 +558,23 @@ theorem holds_gapMask (hk : st.c.kLog = 22) (o : Fin (2 ^ (L.model regs).nbl)) {
   by_cases hm : 1048576 ≤ r.val ∧ r.val < 1064960
   · exact copyRow_holds (copyRow_mask L regs hda hrs hm) rfl
   · exact zeroRow_holds (zeroRow_gap L regs hda hrs (by omega)) (by rw [block_zC (S := L.model regs) hk, zIn_gap hr]; rfl)
+
+omit hrs in
+/-- **The unit's input rows past its 16 inputs hold** at the trace: they are zero, and so is the trace there. -/
+theorem holds_unitPad (hk : st.c.kLog = 22) (htm : st.c.tmpl = none) (hU : st.c.unit = UN)
+    (hs1 : st.c.unitRange.count = 1) (hsl : st.c.unitRange.slot 0 = 524288) (o : Fin (2 ^ (L.model regs).nbl))
+    {r : Fin (2 ^ (L.model regs).kLog)} (hr : 524304 ≤ r.val ∧ r.val < 524416) :
+    ((L.model regs).A₀.mulVec ((L.model regs).block (zC (L.model regs).m) o)) r *
+        ((L.model regs).B₀.mulVec ((L.model regs).block (zC (L.model regs).m) o)) r =
+      (L.model regs).block (zC (L.model regs).m) o r := by
+  have he := UN_empty (r.val - 524304) (by omega)
+  rw [show 16 + (r.val - 524304) = r.val - 524288 by omega, ← hU] at he
+  refine zeroRow_holds (zeroRow_unitEmpty L regs (L.built_flat htm) (s₀ := 0) (by omega) ?_ he.1 he.2 ?_
+    (delta_free hda (x := r.val) (by omega))) ?_
+  · rw [hU]; show _ < 512; omega
+  · rw [hsl]; omega
+  · rw [block_zC (S := L.model regs) hk, zIn_unit (i := r.val) (by omega) (by omega)]
+    rfl
 
 end place
 
