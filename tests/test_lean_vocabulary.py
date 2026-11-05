@@ -15,7 +15,7 @@ Each hit is one of:
   `[[lean_exe]]` of a tracked lakefile) that tests them against each other. The pair counts once, as its Lean.
 - **reading the canonical**: an `abbrev` whose body is a canonical declaration, or a list, array or option of it, or a
   pair of an id and it.
-- **a protocol's slot**: a type a `Core.Protocol` value names in its `Params`, `Commitment`, `Evidence` or `Public` field
+- **a protocol's slot**: a type a `Core.Protocol` or `Core.BlobProtocol` value names in its `Params`, `Commitment`, `Evidence` or `Public` field
   (read from its `Field := X` lines), one per protocol by design.
 - **known**: everything else, listed in ``KNOWN`` as ``"path::Qualified.Name": "reason (owner)"``, where the reason is
   "duplicate of X: becomes …" or "homonym, what it is: rename …", and the owner is a handle of the registry
@@ -195,7 +195,7 @@ _PY_HEADER = re.compile(r"^([ \t]*)(?:async[ \t]+)?(class|def)[ \t]+(\w+)", re.M
 _DECL = re.compile(rf"^[ \t]*(?:@\[[^\]\n]*\][ \t]*)*{_MODS}{_KEYWORD}\s+{_NAME}", re.M)
 _SCOPE = re.compile(rf"^[ \t]*(?:{_MODS}(namespace|section)\b[ \t]*(\S*)|(mutual)\b|end\b)", re.M)
 _OPEN = re.compile(r"^[ \t]*open\s+((?:[\w.]+[ \t]+)*[\w.]+)", re.M)
-_PROTOCOL = re.compile(r"^[ \t]*(?:@\[[^\]\n]*\][ \t]*)*" + _MODS + r"(?:def|abbrev)\s+[^\n]*:\s*(?:Core\.)?Protocol\s+where\b",
+_PROTOCOL = re.compile(r"^[ \t]*(?:@\[[^\]\n]*\][ \t]*)*" + _MODS + r"(?:def|abbrev)\s+[^\n]*:\s*(?:Core\.)?(?:Blob)?Protocol\s+where\b",
                        re.M)
 _FIELD = re.compile(rf"^[ \t]+({'|'.join(SLOT_FIELDS)})\s*:=\s*([\w.']+)[ \t]*$", re.M)
 _TOP = re.compile(r"^\S", re.M)
@@ -1294,6 +1294,9 @@ def test_readings_and_slots_are_exempt():
     assert reads == {f"{pouw}::Pouw.Coins"}
     assert not reads_canonical(s.hits["Draw"][0], {f"{core}::Verity.Coins"}, s)
     assert slots(s) == {f"{pouw}::Pouw.Registration"}
+    blob = scan({pouw: "namespace Pouw\nstructure Commitment where\n  x : Nat\n"
+                       "def protocol : Core.BlobProtocol where\n  Commitment := Commitment\nend Pouw\n"})
+    assert slots(blob) == {f"{pouw}::Pouw.Commitment"}
 
 
 def test_a_canonical_under_another_name():

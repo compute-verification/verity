@@ -893,7 +893,7 @@ IDS = {**parties.IDS, "pouw-period": period_check.ID, "wipe": wipe_period.PROTOC
 """Each subprotocol's id as the composites run it (`products`): integrity is the one-stage audit (`SampledProofs.OneStage`)
 at onsite and sampled proofs (`SAMPLED`) at remote, the work PoUW's period in both, onsite's PoUB is the one over PoUS's
 P2 store, and onsite's memory challenger also runs a wipe."""
-SAMPLED = {name: parties.SUBPROTOCOLS[f"verity/{name}/v0"]["sampled-proofs"] for name in ("onsite", "remote")}
+SAMPLED = {"onsite": parties.SUBPROTOCOLS["verity/onsite/v0"]["sampled-proofs"], "remote": parties.COMPOSED}
 """Each composite's integrity subprotocol, under whose id sampled proofs' answer goes: onsite's the one-stage audit, and
 remote's sampled proofs (`VStar.Recursive.Sampled`, `verity/sampled-proofs/v1`, one-stage v2's audit or the recursive
 audit)."""

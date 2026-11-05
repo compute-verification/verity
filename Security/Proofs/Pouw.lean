@@ -148,6 +148,7 @@ import Proofs.Pouw.PearlC.TileCapRev1Gamma
 import Proofs.Pouw.PearlC.TileCircuit
 import Proofs.Pouw.PearlC.TileValues
 import Proofs.Pouw.PearlC.TileGamma
+import Proofs.Pouw.PearlC.TileGammaTol
 import Proofs.Pouw.PearlC.UOnlyGamma
 import Proofs.Pouw.PearlC.UOnlyLoopGamma
 import Proofs.Pouw.PearlC.W1BudgetAbort
@@ -165,6 +166,7 @@ import Proofs.Pouw.PearlC.RowStats
 import Proofs.Pouw.PearlC.PeelExists
 import Proofs.Pouw.PearlC.PeelExists4
 import Proofs.Pouw.PearlC.TileCheckWords
+import Proofs.Pouw.PearlC.TileCheckWordsRev1
 import Proofs.Pouw.Pool
 import Proofs.Pouw.PoolWitness
 import Proofs.Pouw.Prob
@@ -177,6 +179,7 @@ import Proofs.Pouw.RelativeSecurityGuarantees
 import Proofs.Pouw.RelativeSecurityJ10R
 import Proofs.Pouw.SakLb
 import Proofs.Pouw.Sampling
+import Proofs.Pouw.Sampling.ClopperPearson
 import Proofs.Pouw.Sanity
 import Proofs.Pouw.ServedFreed
 import Proofs.Pouw.ServedFreed.Honest
