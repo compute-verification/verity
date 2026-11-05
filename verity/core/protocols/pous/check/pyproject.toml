@@ -50,6 +50,10 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/service/flock/lean-toolchain", "benchmarks/pous/p2_v1/vectors.json",
           "benchmarks/pous/p2_v1/__init__.py", "benchmarks/pous/p2_v1/reference.py", "benchmarks/pous/p2_v1/wire.py",
           "benchmarks/pous/p2_v1/audit-vectors.json", "benchmarks/pous/p2_v1/audit-negative-vectors.json",
+          # the memory challenger's code, which PoUS's period.py, run.py and wipe modules import
+          "verity/core/devices/__init__.py", "verity/core/devices/memory_challenger/__init__.py",
+          "verity/core/devices/memory_challenger/memory_challenger.py",
+          "verity/core/devices/memory_challenger/challenger_party.py",
           "benchmarks/pous/band_gpu/__init__.py",
           "benchmarks/pous/band_gpu/memory_challenger.py", "benchmarks/pous/band_gpu/harness.py",
           "verity/core/devices/memory_challenger/lean", "verity/core/attest/lean", "verity/core/primitives/lms/lean",

@@ -18,4 +18,8 @@ inputs = ["Security/lean-audit.json", "Security/Properties/lean-audit.json", "be
           "benchmarks/nci/catalog.py", "benchmarks/nci/algorithms.json",
           "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/pous", "verity/core/claims", "verity/ml/__init__.py", "verity/ml/commitments",
-          "verity/ml/crypto", "verity/ml/randomness", "verity/core/deploy", "verity/core/wire"]
+          "verity/ml/crypto", "verity/ml/randomness", "verity/core/deploy", "verity/core/wire",
+          # the memory challenger's code, which PoUS's modules import
+          "verity/core/devices/__init__.py", "verity/core/devices/memory_challenger/__init__.py",
+          "verity/core/devices/memory_challenger/memory_challenger.py",
+          "verity/core/devices/memory_challenger/challenger_party.py"]
