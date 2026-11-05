@@ -25,9 +25,14 @@ declared tier in bits, the fill's `n · 512` and `R` past it (`outsideBits`, mem
 session's timed reads, which the memory challenger chose and its commitment names; `r = ratio k`, the largest `r` with
 `(r − 1)^k · 2^129 ≤ r^k`. When the bound covers the session (`1 ≤ k ≤ MAX_READS`, an egress count that isn't saturated)
 `foreign_bits` is `Pous.Guarantees.StreamedWipeMeetsReads`' threshold `512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R + E`
-(`foreignBits`) with `E` the egress the network certifier counted, in bits, at `eps = 2^-128`. Off it, `foreign_bits`
-is `M` and `eps` 0, the vacuous statement, and the profile names each gap. The bound and what it rests on are
-`EXPERIMENTAL`.
+(`foreignBits`) with `E` the egress count the memory challenger signs (`egress_mib`, `StreamedWipe.egressUnits` of the
+signed `egressBits`), in bits, at `eps = 2^-128`. Off it, `foreign_bits` is `M` and `eps` 0, the vacuous statement, and
+the profile names each gap. The bound and what it rests on are `EXPERIMENTAL`.
+
+The memory challenger signs the egress count its operator gives it, and `wipe_party`'s `UNCOUNTED` without one, which
+saturates the count (a gap). No verifier holds a given count to a network certifier's count over the session, so the
+bound at an accepted session rests on a premise on the deployment: the signed count is at least the egress a network
+certifier counts over the session, from link-windows that cover it.
 
 `protocol` (`verity/wipe/v0`) accepts S1's LMS (`SCHEMES`) only; `testProtocol`, under an id of its own, the test
 signers' schemes and only them.

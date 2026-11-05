@@ -6,8 +6,8 @@ import Definitions.Accounting.Wipe
 
 For a session it accepts and certifies, `MemoryChallenger.WipeProtocol.check` (`verity/wipe/v0`, whose verdict is
 `StreamedWipe.verdict`) publishes `foreign_bits = 512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R + E` at `eps = 2^-128`
-(`certify`): `n` labels, `k` timed reads, `r = ratio k`, `R` the declared memory past the fill, `E` the network
-certifiers' count of the egress, `egress_mib` whole MiB. `WipeSurvivorBound` says that every prover strategy `τ` of the
+(`certify`): `n` labels, `k` timed reads, `r = ratio k`, `R` the declared memory past the fill, `E` the egress count the
+memory challenger signs, `egress_mib` whole MiB. `WipeSurvivorBound` says that every prover strategy `τ` of the
 device model (`Accounting.Wipe.Strategy`), with the labels `prf K` of the challenger's key `K`, meets the survivor bound
 (`Verity.Wipe.SurvivorBound`) at `foreign_bits` and
 
@@ -19,8 +19,16 @@ label, as the memory challenger signs it, and the certifiers' count of the egres
 * the labels' PRF advantage (`Pous.StreamedWipe.prfAdvantage`) against the distinguisher the adversary's moves make
   (`Accounting.Wipe.Strategy.distinguisher`), SHA-512's under `prf/sha-512`;
 * `δ_net` (`Accounting.Wipe.Strategy.deltaNet`), the probability that the observed event holds while the egress is
-  outside a set `A` of at most `2^E` strings, which the network certifier's guarantee bounds
-  (`NetTiming.Guarantees.SampledLeakAccepted`).
+  outside a set `A` of at most `2^E` strings, which the network certifier's guarantee bounds for link-windows that
+  cover the session (`NetTiming.Guarantees.SampledLeakAccepted`).
+
+**What `E` is.** `E` is the count the memory challenger signs when it closes the session (`StreamedWipe.Signed`'s
+`egressBits`), and the challenger signs the count its operator gives it. Without one it signs `wipe_party`'s
+`UNCOUNTED`, which saturates `StreamedWipe.egressUnits` at `EGRESS_MAX_UNITS`, so the bound is vacuous (`certify`'s
+gaps). No verifier holds a given count to a network certifier's count over the session, and nothing places the session
+in a certifier's link-windows. So an acceptance gives the observed event's reads but not its count clause, and the bound
+at an accepted wipe rests on a premise on the deployment: the signed `E` is at least a network certifier's count of the
+egress over the session, from link-windows that cover it, whose miss is `δ_net`.
 
 The strategy is arbitrary, its fill any bits of the store up to `memory_bits`. The state the fill leaves out
 (`Verity.Wipe.unfilled`) is counted beside `foreign_bits`, as `SurvivorBound` counts it. The commitment is the one its
@@ -47,7 +55,9 @@ the commitment `c` and `check` accepts the signed session `e` of `c` and publish
 `eps`, `foreign_bits` and `memory_bits`, every strategy `τ` of a device for `c`'s labels and reads whose fill is at most
 `memory_bits`, with the labels `prf` of the challenger's key, every count `count` of the egress by the network
 certifiers and every set `A` of at most `2^(egress_mib MiB)` egress strings, meets `SurvivorBound foreign_bits` on the
-observed event at `eps` plus the PRF's advantage against the adversary's distinguisher plus `δ_net` at `A`. -/
+observed event at `eps` plus the PRF's advantage against the adversary's distinguisher plus `δ_net` at `A`. Its
+`egress_mib` is the count the memory challenger signs, which no verifier holds to the network certifiers' `count`: that
+the count is at most `egress_mib` on an accepted session is the deployment's premise (the module docstring). -/
 def WipeSurvivorBound : Prop :=
   ∀ (schemes : Schemes) (p : WipeProtocol.Params) (bytes : ByteArray) (c : StreamedWipe.Commitment)
     (e : WipeProtocol.Evidence) (egressMib : Int) (eps : Core.Ratio) (foreignBits k memoryBits r : Nat)
