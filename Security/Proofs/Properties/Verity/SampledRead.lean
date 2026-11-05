@@ -565,7 +565,7 @@ theorem law_of_setsUp {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A
     {units : Array ℕ} (hS : Verity.SameAccepts k s) (hθ : s.params = θ) (hd : Drew k s dr L n ξ units)
     (hn : A.n = n) : A.law = L := by
   obtain ⟨a, b, e, p, c, ev, hcase, hacc, hL, -, -⟩ := hd
-  obtain ⟨p', hp', -, -, hlaw⟩ := hA.params
+  obtain ⟨p', hp', -, -, hlaw, -⟩ := hA.params
   rw [← hθ] at hp'
   rw [paramsAt_case hS hcase hacc hp', hn, lawAt_of_lawOf hL] at hlaw
   exact (Except.ok.inj hlaw).symm

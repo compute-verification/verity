@@ -256,11 +256,11 @@ private theorem if_throw_ok {b : Bool} {e : String} (h : (if b then (throw e : F
 `verdictOf` at `A`'s inputs on `s` set up at its record's draw is `.ok`. -/
 theorem verdict_of_accepts (hacc : _root_.SampledProofs.OneStageZk.checkBlobsAt p c ξ ev bs = .accept pub prof)
     (hn : Names A o p bs) :
-    ∃ s rd B record ksFiles, ev.sessions = #[s] ∧ A.I.tags.plainLeaves = false ∧
+    ∃ s rd B record ksFiles population, ev.sessions = #[s] ∧ A.I.tags.plainLeaves = false ∧
       _root_.SampledProofs.OneStageZk.readsOf p.own.registered = .ok rd ∧
       bs.get s.record s!"session {s.name}'s record" = .ok B ∧ String.fromUTF8? B = some record ∧
-      _root_.SampledProofs.OneStageZk.verdictOf (inputsAt A p bs) (scopeOf (inputsAt A p bs) rd) ksFiles #[]
-        record (Flock.Witness.recordDraw record)
+      _root_.SampledProofs.OneStageZk.verdictOf (inputsAt A p bs) (scopeOf (inputsAt A p bs) rd) ksFiles population
+        #[] record (Flock.Witness.recordDraw record)
         (_root_.SampledProofs.OneStageZk.setupAt (inputsAt A p bs) rd (Flock.Witness.recordDraw record))
         (_root_.SampledProofs.OneStageZk.filesOf bs s
           (_root_.SampledProofs.OneStageZk.setupAt (inputsAt A p bs) rd (Flock.Witness.recordDraw record)))
@@ -337,7 +337,7 @@ theorem verdict_of_accepts (hacc : _root_.SampledProofs.OneStageZk.checkBlobsAt 
       obtain rfl := Except.ok.inj hstep
       cases hall
     · rename_i hvd
-      exact ⟨s, rd, B, record, _, hs, if_throw_ok hpl, hrd, hB, hu, hvd⟩
+      exact ⟨s, rd, B, record, _, _, hs, if_throw_ok hpl, hrd, hB, hu, hvd⟩
 
 /-- **v2's acceptance bounds the lengths its length refusal reads** (`fitsWhy` at `WORD`): `A`'s circuit and public
 files, its lookup tables (their number, names and bytes) and its program, and the printed text of the verifier's
@@ -623,10 +623,11 @@ theorem filesOf_eq {bs : Core.Blobs} {s : _root_.SampledProofs.OneStageZk.RunFil
     exact get_what hget
 
 /-- `setupAt` is `.ok` where `verdictOf` on it is. -/
-theorem setupAt_of_verdictOf {I : Flock.Witness.Inputs} {scope ksFiles : Flock.V Unit} {coinKeys : Array String}
-    {record : String} {draw : Option Json} {st : _root_.SampledProofs.OneStageZk.SetUp}
+theorem setupAt_of_verdictOf {I : Flock.Witness.Inputs} {scope ksFiles population : Flock.V Unit}
+    {coinKeys : Array String} {record : String} {draw : Option Json} {st : _root_.SampledProofs.OneStageZk.SetUp}
     {files : Flock.V (Array ByteArray)} {coinKey : Option String}
-    (h : _root_.SampledProofs.OneStageZk.verdictOf I scope ksFiles coinKeys record draw st files coinKey = .ok ()) :
+    (h : _root_.SampledProofs.OneStageZk.verdictOf I scope ksFiles population coinKeys record draw st files coinKey
+      = .ok ()) :
     ∃ spec tabs pj oj, st = .ok (spec, tabs, pj, oj) := by
   unfold _root_.SampledProofs.OneStageZk.verdictOf at h
   obtain ⟨_, -, h⟩ := bind_ok h
@@ -651,7 +652,7 @@ theorem acc_of_pass (A : Live) (o : Own) {p : _root_.SampledProofs.OneStageZk.Pa
     (hpass : drawOk A o (drawOf (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen) (coinsAt r)) :
     (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).out = .acc := by
   have hfits := fits_of_drawOk hpass
-  obtain ⟨s, rd, B, record, ksFiles, hs, hpl, hrd, hB, hu, hv⟩ := verdict_of_accepts hacc hn
+  obtain ⟨s, rd, B, record, ksFiles, population, hs, hpl, hrd, hB, hu, hv⟩ := verdict_of_accepts hacc hn
   have hreach := reach FlockDeploy.sha512 P ω r hpass
   have hsm : (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen.msgs =
       (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).msgs := by
