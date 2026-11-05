@@ -90,7 +90,11 @@ ALLOWED = {
     # deployment layer (`wipe_parties`), their messages the wire's. The
     # memory challenger reports its sessions under its party's per-period root (`core.attest`).
     "core.protocols.pous": {"core.claims", "core.attest", "core.wire", "core.deploy", "ml.circuits", "ml.commitments",
-                            "ml.crypto", "ml.randomness"},
+                            "ml.crypto", "ml.randomness", "core.devices.memory_challenger"},
+    # The memory challenger, an auditor-trusted device: its rounds, verdicts and signed session log over PoUS's scheme and
+    # verifier key, and its party of the deployment layer, which runs PoUS's setup and period hook.
+    "core.devices.memory_challenger": {"core.protocols.pous", "core.wire", "core.deploy", "ml.commitments", "ml.crypto",
+                                       "ml.randomness"},
     # 2026-10-11 (Daniel, decision 7 of the resource-accounting agenda): the bandwidth audit's store is PoUS's `C*`,
     # under its setup and `vk`, reused as they are.
     "core.protocols.bandwidth": {"ml.crypto", "ml.randomness", "core.protocols.pous"},
@@ -102,7 +106,7 @@ ALLOWED = {
     # The session's verifier and prover are parties of the deployment layer (`session_parties`), their messages the wire's.
     "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness", "core.protocols.profile",
                                         "core.protocols.sampled_proofs", "core.protocols.pous", "core.wire",
-                                        "core.deploy"},
+                                        "core.deploy", "core.devices.memory_challenger"},
     # PoUW's tile check is a sampled proof (`.agents/skills/friction/SKILL.md`).  Its schemes and
     # circuits are stated over the catalog's silicon models and Definitions (the tensor-core steps, FP32 and the casts its
     # verifier recomputes): the one edge into the catalog.
@@ -161,6 +165,8 @@ CORE_ML_EDGES = {
     "core.protocols.profile": {"ml.circuits"},
     "core.protocols.sampled_proofs": {"ml.circuits", "ml.commitments", "ml.randomness"},
     "core.protocols.pous": {"ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness"},
+    # the memory challenger's leaves and trees, its LMS signatures and its coins, which PoUS's verifier reads the same way
+    "core.devices.memory_challenger": {"ml.commitments", "ml.crypto", "ml.randomness"},
     "core.protocols.bandwidth": {"ml.crypto", "ml.randomness"},
     "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness"},
     "core.protocols.pouw": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.commitments", "ml.crypto",
