@@ -1,9 +1,13 @@
-import Definitions.Claims.Sampling
+module
+
+public import Definitions.Claims.Sampling
 
 /-! **The confidence set is closed downward** at a one-class uniform `kd`-subset design (`d.rules = [.subset kd]`, as
 `designOf kd` is): a subset of a set in `M_δ` is in `M_δ`, since dropping members of `B` only raises
 `P_a(B) = C(n − |B|, kd)/C(n, kd)`. `RelS` is `faulty ∈ M_δ`, so where one commitment's faulty set holds another's,
 `RelS` failing at the smaller fails it at the larger. -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 

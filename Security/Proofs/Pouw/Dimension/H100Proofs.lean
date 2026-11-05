@@ -1,5 +1,7 @@
-import Definitions.Pouw.Assumptions.Dimension.H100
-import Proofs.Pouw.Dimension.EmbedProofs
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.H100
+public import Proofs.Pouw.Dimension.EmbedProofs
 
 /-!
 # `MH100` and its per-word bound: proofs
@@ -12,6 +14,8 @@ import Proofs.Pouw.Dimension.EmbedProofs
   translation; `count_le` gives one priced instruction per target, and `hc_cost` `c` per priced instruction
   (`perWordMH100Floor`; `perWordMH100` is `c = 32`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.H100
 

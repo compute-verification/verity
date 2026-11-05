@@ -1,10 +1,12 @@
-import Proofs.Flock.Soundness.Lowering
-import Flock.Net
+module
+
+public import Proofs.Flock.Soundness.Lowering
+public import Flock.Net
 -- level3 already realizes the lemmas this file's `simp` calls need (`Std.Legacy.Range.mk.congr_simp`), so they are
 -- reused rather than declared a second time, which the audit's kernel replay refuses
-import Proofs.Flock.Level3.LookupRows
-import Proofs.Flock.Soundness.SparseRows
-import Properties.Flock.Circuit.Rows
+public import Proofs.Flock.Level3.LookupRows
+public import Proofs.Flock.Soundness.SparseRows
+public import Properties.Flock.Circuit.Rows
 
 /-!
 # The rows the verifier parses, as the audit's `Rows`
@@ -15,6 +17,8 @@ the constant or an earlier column that is not input padding (`RowOrder`). `check
 accepted check into that property, and `Rows.ofOrdered` builds the audit's `Rows` from rows that
 have it, with `topo` proved: the parser checks it.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 
@@ -88,7 +92,7 @@ theorem parse_built {lines : Array String} {net : Net} (h : Net.parse lines = .o
   refine ⟨(tokens (lines.getD 0 "")).getD 1 "", useful, constPos, ig.1, og.1, s.1, s.2, ?_⟩
   by_cases hL : (lines.getD (1 + useful) "").startsWith "LEAVES " = true
   · rw [ite_eq_left_of_eq_true _ _ (eq_true hL)] at h
-    rcases hj : Lean.Json.parse ((lines.getD (1 + useful) "").drop 7).toString with e | j
+    rcases hj : Flock.JsonParse.parse ((lines.getD (1 + useful) "").drop 7).toString with e | j
     · rw [hj] at h; exact absurd h throw_bind_ne
     · rw [hj] at h
       exact ite_throw_ok (ite_throw_ok h)

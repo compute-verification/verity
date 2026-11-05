@@ -1,10 +1,12 @@
-import Definitions.Accounting.Guarantees.Confidence
-import Proofs.Accounting.Actual.Split
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Data.Fintype.Pi
-import Mathlib.Data.Fintype.BigOperators
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Tactic.Linarith
+module
+
+public import Definitions.Accounting.Guarantees.Confidence
+public import Proofs.Accounting.Actual.Split
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Data.Fintype.Pi
+public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Tactic.Linarith
 
 /-!
 # Composition and fit, proved
@@ -19,6 +21,8 @@ when its inputs don't (causality from tick 0, where the state is the inputs, `st
 of the state as seen, `content_congr`). A state's content has at most `mem` bits (`content_length_le`). `Fit` is
 additivity at the run that implements `P`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs
 

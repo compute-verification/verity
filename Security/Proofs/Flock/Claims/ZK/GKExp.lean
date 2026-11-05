@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ERepCost
-import Proofs.Flock.Claims.ZK.GKCost
-import Proofs.Flock.Soundness.ZK.GK.Theorem
+module
+
+public import Proofs.Flock.Claims.ERepCost
+public import Proofs.Flock.Claims.ZK.GKCost
+public import Proofs.Flock.Soundness.ZK.GK.Theorem
 
 /-!
 # The Goldreich–Kahan simulator with estimation, in expected polynomial time
@@ -34,6 +36,8 @@ the rewinds' `3^{-t}`, and only the worst case grows with it.
 the nonce and the first run's tape, `M` dummy-witness tapes and `4M` SHVZK tapes, each read at most once (`gkT`). The
 two have one law (`ev_gkT`, from `ev_estimateT` and `ev_rewindsT`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

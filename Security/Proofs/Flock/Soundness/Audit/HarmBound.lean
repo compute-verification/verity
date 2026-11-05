@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Audit.Work
-import Proofs.Flock.Soundness.Audit.Influence
+module
+
+public import Proofs.Flock.Soundness.Audit.Work
+public import Proofs.Flock.Soundness.Audit.Influence
 
 /-!
 # The stratified law's harm bound
@@ -32,6 +34,8 @@ closed form. Stratum `s` has `n_s` units of which `k_s` are drawn uniformly with
   `verity.core.protocols.profile.Stratified.harm_bound` is that knapsack's value over the exact risk increments: below the
   closed form's, and a harm bound by this theorem at the price its greedy fill stops at, not by the closed form.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

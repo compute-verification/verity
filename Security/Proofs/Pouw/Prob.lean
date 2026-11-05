@@ -1,16 +1,20 @@
-import Definitions.Pouw.Basic.Prob
-import Mathlib.Algebra.Order.Field.Basic
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Logic.Equiv.Prod
-import Mathlib.Tactic.Positivity
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.Ring
-import Mathlib.Data.Fintype.BigOperators
+module
+
+public import Definitions.Pouw.Basic.Prob
+public import Mathlib.Algebra.Order.Field.Basic
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Logic.Equiv.Prod
+public import Mathlib.Tactic.Positivity
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.FieldSimp
+public import Mathlib.Tactic.Ring
+public import Mathlib.Data.Fintype.BigOperators
 
 /-!
 # Lemmas about `pr`
 -/
+
+@[expose] public section
 
 namespace Pouw
 

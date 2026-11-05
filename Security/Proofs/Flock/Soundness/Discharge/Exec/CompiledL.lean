@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.CompiledSound
+module
+
+public import Proofs.Flock.Soundness.CompiledSound
 
 /-!
 # Compiled soundness of one table under a leaf scheme (README.md §1.2, PROTOCOL.md §14)
@@ -18,6 +20,8 @@ message; the reps' locksteps (`lockRep`) are unchanged.
   + Pr[self-clash]`, with each `Adv` and the self-clash a collision of `H` (`op₀L_conflict_collision`,
   `opRL_conflict_collision`, `SelfClashL.collision`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 

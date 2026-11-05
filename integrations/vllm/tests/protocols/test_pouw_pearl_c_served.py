@@ -250,7 +250,7 @@ def test_a_session_bound_to_another_commitment_is_closed_and_refused_before_its_
 
 
 def test_a_session_of_h1s_layout_is_closed_and_refused_before_its_first_coin(tmp_path, monkeypatch):
-    """A challenge phase reserved with H1's layout (salt, draw and round coins) would release only its salt coin under a Pearl-C
+    """A challenge phase reserved with H1's layout (salt and round coins) would release only its salt coin under a Pearl-C
     pass and end incomplete, which counts nothing: the install closes it before its salt coin and refuses, patching
     nothing and starting no run."""
     host, model = _host(tmp_path, monkeypatch, challenger=Wd.live_challenger(0, 1, CH.entropy(1))), _model()
@@ -259,7 +259,7 @@ def test_a_session_of_h1s_layout_is_closed_and_refused_before_its_first_coin(tmp
         PO.install(model, _served(host.open))
     assert host.ended() is None and RUNS == []
     assert R.released_roots(host.directory / R.RELEASES, host.challenger.commitment) == {
-        Wd.SALT: (), Wd.DRAW: (), Wd.ROUND: ()}
+        Wd.SALT: (), Wd.ROUND: ()}
     _untouched(model)
 
 
@@ -468,7 +468,7 @@ def test_a_salt_session_counts_only_reserved_salt_only_and_ended_closed_and_comp
     h1 = {"scheme": SCHEME, "coin_source": "challenger", "weights_root": root.hex(), "pass_index": 0,
           "coins": coins.to_json(), "salt_opening": opening.to_json(), "salt": salt_of(coins, opening.coin, root).hex(),
           "session": PHC.carried(PHC.session_of(answer))}
-    released = {Wd.DRAW: 0, Wd.ROUND: 0, Wd.SALT: 1}
+    released = {Wd.ROUND: 0, Wd.SALT: 1}
     assert (_ended(gate)["complete"], _ended(gate)["released"]) == (False, released)
     fetch = {SID: s.tree}.get
     assert PHC.session_reason(h1, gate.ledger(), fetch) == (

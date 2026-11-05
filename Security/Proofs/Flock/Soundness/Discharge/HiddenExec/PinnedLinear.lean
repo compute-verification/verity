@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.PinnedOne
-import Proofs.Flock.Soundness.Discharge.Inst.Order
-import Proofs.Flock.Soundness.ExecLookup
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.PinnedOne
+public import Proofs.Flock.Soundness.Discharge.Inst.Order
+public import Proofs.Flock.Soundness.ExecLookup
 
 /-!
 # Every pinned bit of an accepted statement is a linear row
@@ -13,6 +15,8 @@ the constant alone. With `HmOut.outCol` the column of `outRow`'s row in `outSlot
 column is a `LinearBit` (`pinned_linear`), which `sat_pinned` reads. Nothing here reads a row size, a `G` or a producer
 family.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.DeployInputs
-import Flock.RecBudget
-import Flock.RecLinkPart
+module
+
+public import Proofs.Flock.Claims.DeployInputs
+public import Flock.RecBudget
+public import Flock.RecLinkPart
 
 /-!
 # A V* part's statement: its bytes, its parser and its recursive setup
@@ -33,6 +35,8 @@ the inner statement), `RecVStar.checkLabels` and the draw's law.
 Like `FlockDeploy.Ins.setup` it refuses a statement without hm96-sha512 rows first, and its SHA-512 calls are the
 shipped ones, outside the oracle.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -157,7 +161,7 @@ def metaLine : ℕ → List (List UInt8) → Except String String
 /-- **The inner circuit's META** (`innerMeta`): its header's first nine lines, up to its `META` line. -/
 def metaOf (c : ByteArray) : Except String Json := do
   let t ← metaLine 9 (linesAux c.data.toList [])
-  match Json.parse (t.drop 5).toString with
+  match Flock.JsonParse.parse (t.drop 5).toString with
   | .error e => throw s!"rec inner circuit: META is not JSON: {e}"
   | .ok m => pure m
 
@@ -221,7 +225,7 @@ points to the coin server's; none without either. -/
 def linkInputOf (w : RecRaw) (src : Option RecCoins.Source) : Except String (Option RecVStar.InnerLink) :=
   match w.transcript, src.map (·.record) with
   | some t, some record => do
-    match Json.parse (← textOf "rec inner transcript" t) with
+    match Flock.JsonParse.parse (← textOf "rec inner transcript" t) with
     | .ok j => some <$> RecVStar.innerLink j record
     | .error e => .error s!"rec inner transcript: not JSON: {e}"
   | _, _ => .ok none

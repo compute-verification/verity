@@ -1,10 +1,12 @@
-import Proofs.Flock.Claims.Recursion.VStarBuild
-import Proofs.Flock.Claims.Recursion.NextRCounts
-import Proofs.Flock.Recursive.HoloSchedCheck
-import Proofs.Flock.C3.Reps.RoundOfHolo
-import Proofs.Flock.C3.Reps.RoundLinks
-import Proofs.Flock.C3.Reps.AtList
-import Proofs.Flock.VBridge.Family.Structure
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarBuild
+public import Proofs.Flock.Claims.Recursion.NextRCounts
+public import Proofs.Flock.Recursive.HoloSchedCheck
+public import Proofs.Flock.C3.Reps.RoundOfHolo
+public import Proofs.Flock.C3.Reps.RoundLinks
+public import Proofs.Flock.C3.Reps.AtList
+public import Proofs.Flock.VBridge.Family.Structure
 
 /-!
 # V\*'s inner parts' port names (`innerPorts_named`)
@@ -22,6 +24,8 @@ Every port of an inner part at the compiled statement (`partAt x s = some (.inne
 * **The count** (`vrounds_size`, `repRounds_countP`, `holoRepRounds_countP`): `repRounds` absorbs at `N` of its rounds
   (`m ≥ 22`), and `holoRepRounds` at one more.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarBuild
 

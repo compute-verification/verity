@@ -1,5 +1,7 @@
-import Definitions.Accounting.JointPeriod
-import Definitions.Accounting.Compose
+module
+
+public import Definitions.Accounting.JointPeriod
+public import Definitions.Accounting.Compose
 
 /-!
 # A credit in words, priced as work on the device model (trusted)
@@ -40,6 +42,8 @@ time, and the joint period's PoUW claim is priced ops.
 * `receiptUnitMacs`: the multiply-adds an H1 + fx1 tile's credited receipt words stand for together.
 * `Compose.minWordMacs`: the fewest multiply-adds any credited word of a declared circuit stands for.
 -/
+
+@[expose] public section
 
 namespace Accounting
 

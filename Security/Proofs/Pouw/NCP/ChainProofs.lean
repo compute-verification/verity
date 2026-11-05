@@ -1,9 +1,13 @@
-import Definitions.Pouw.Assumptions.NCP.Chain
-import Proofs.Pouw.NCP.RelationWitness
+module
+
+public import Definitions.Pouw.Assumptions.NCP.Chain
+public import Proofs.Pouw.NCP.RelationWitness
 
 /-!
 # The chain end to end: proofs
 -/
+
+@[expose] public section
 
 namespace Pouw.NCP.ChainProofs
 

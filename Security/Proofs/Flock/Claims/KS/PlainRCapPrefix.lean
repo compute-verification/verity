@@ -1,6 +1,10 @@
-import Proofs.Flock.Claims.KS.PlainRCaps
-import Proofs.Flock.C3.Compose.HoloStreamSizes
-import Proofs.Flock.Claims.Recursion.NextRHonest
+module
+
+public import Proofs.Flock.Claims.KS.PlainRCaps
+public import Proofs.Flock.C3.Compose.HoloStreamSizes
+public import Proofs.Flock.Claims.Recursion.NextRHonest
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The cap two accepted runs of `VR rd` absorb, from the rows before its round
@@ -21,6 +25,8 @@ the round's sumcheck message and the cap (`repFrames_capChunk`): the message is 
 * `capPrefixR`: `CapPrefixR rd`. `plainR_tableBoundAbortLin_R`, `plainR_KSFlockLin_R`: the table bound and
   `KSFlockLin` at the deployed reader from `PlainRdInR` alone.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

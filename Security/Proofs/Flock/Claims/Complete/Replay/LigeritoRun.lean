@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.Replay.LigeritoModel
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoModel
 
 /-!
 # The verifier's Ligerito returns on the model's rounds
@@ -19,6 +21,8 @@ dimensions, each level's Merkle check at its query coins (`MerkleOk`), and the f
 * **The final check** (`finalProg_of`): its dimension checks from the contexts' (`origE_size`, `oodFixed_size`,
   `consFixed_size`), its value check the hypothesis `hfin`, and its leftover check from `Done`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

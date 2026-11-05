@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.Interact
+module
+
+public import Proofs.Flock.Claims.ZK.Interact
 
 /-!
 # What a run opens
@@ -11,6 +13,8 @@ import Proofs.Flock.Claims.ZK.Interact
 * `allOk_log`, `strat_log_cons`: the check of an opening after a passing prefix is among the committed-coin prover's
   calls for that round.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

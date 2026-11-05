@@ -1,6 +1,11 @@
-import Proofs.Flock.Claims.Recursion.InnerAtCoins
-import Proofs.Flock.Claims.Recursion.InnerSetupSame
-import Proofs.Flock.Claims.Bridge.Custody
+module
+
+public import Proofs.Flock.Claims.Recursion.InnerAtCoins
+public import Proofs.Flock.Claims.Recursion.InnerSetupSame
+public import Proofs.Flock.Claims.Bridge.Custody
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
+import all Init.Data.Array.Basic
 
 /-!
 # Check 5's extra claims and comb are the deployed table's
@@ -17,6 +22,8 @@ points, which are `pointsOf` the first coin:
 * the record decodes at a spec of two points of the files' `m_pts`, whatever full draw it carries (`drawnSpec_shape`),
   as the deployed spec (`innerSetup_same`), so its points are `pointsOf` the first coin (`points_of_flat`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.InnerExtras
 
@@ -141,7 +148,7 @@ theorem getArr_ok {q : Lean.Json} {a : Array Lean.Json} (h : q.getArr? = .ok a) 
 /-- **The inner session's record's link points are the coin server's**: `RecVStar.innerLink` reads the record's
 `link.points` as hex coins and refuses them unless they are the transcript's (`lk.points`). -/
 theorem innerLink_points {tr : Lean.Json} {record : String} {lk : RecVStar.InnerLink} {j l : Lean.Json}
-    (hj : Lean.Json.parse record = .ok j) (hl : j.getObjVal? "link" = .ok l)
+    (hj : Flock.JsonParse.parse record = .ok j) (hl : j.getObjVal? "link" = .ok l)
     (h : RecVStar.innerLink tr record = .ok lk) :
     ∃ rp, l.getObjValAs? (Array (Array String)) "points" = .ok rp ∧
       List.Forall₂ (fun xs pt => List.Forall₂ (fun s y => f128OfHex s = .ok y) xs.toList pt.toList)
@@ -168,7 +175,7 @@ theorem innerLink_points {tr : Lean.Json} {record : String} {lk : RecVStar.Inner
 /-- **The decoded link points are the record's `link.points`, read as `innerLink` reads them.** -/
 theorem held_eq {spec : SessionSpec} {text : String} {sess : RunRecord} {j l : Lean.Json}
     {rp : Array (Array String)} {pts : Array (Array F128)}
-    (hdec : Record.decode spec text = .ok sess) (hj : Lean.Json.parse text = .ok j)
+    (hdec : Record.decode spec text = .ok sess) (hj : Flock.JsonParse.parse text = .ok j)
     (hl : j.getObjVal? "link" = .ok l) (hrp : l.getObjValAs? (Array (Array String)) "points" = .ok rp)
     (hh : List.Forall₂ (fun xs pt => List.Forall₂ (fun s y => f128OfHex s = .ok y) xs.toList pt.toList)
       rp.toList pts.toList) :
