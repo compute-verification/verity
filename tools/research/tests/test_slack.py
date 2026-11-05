@@ -1193,7 +1193,7 @@ def test_the_registry_checks_its_collaborators(registry):
 
 def test_a_collaborators_ask_rings_its_lane_but_never_them_and_authorizes_nothing(fake, registry, routes_dirs, capsys, monkeypatch):
     """A collaborator posts like a named human: its leading names ring and nothing rings it.  verify-author lets it ask,
-    and --authorizes, the check before a Slack request to spend or delete, refuses it and passes only Daniel."""
+    and --authorizes, the check before a Slack request to spend or delete, refuses it and passes only the named human."""
     monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
     with_collaborator(registry)
     box = inbox(fake, routes_dirs, "circuits")
@@ -1230,7 +1230,7 @@ OPENED = datetime(2026, 10, 19, 17, 30, tzinfo=timezone.utc)
 
 
 def chat_users(fake) -> None:
-    """The workspace's users: Luke, Daniel, Cursor's app's bot (and a deleted older one), and another app's bot."""
+    """The workspace's users: Luke, the named human (UDANIEL), Cursor's app's bot (and a deleted older one), and another app's bot."""
     fake.users = [{"id": "U0GRAFANA", "name": "grafana", "real_name": "Grafana", "is_bot": True, "profile": {}},
                   {"id": "U0OLDCURSOR", "name": "cursor", "real_name": "Cursor", "is_bot": True, "deleted": True, "profile": {}},
                   {"id": CURSOR_BOT, "name": "cursor-agent", "real_name": "Cursor", "is_bot": True, "profile": {}},
@@ -1314,17 +1314,17 @@ def test_people_d_s_open_chats_join_the_collaborators_but_not_a_named_human_or_a
     (people_d / "odd.json").write_text(json.dumps(chat_person("chat-even", "UODD", "Odd One")))     # its key isn't its name's
     reg = slack.load_registry(registry)
     assert [p["name"] for p in reg["collaborators"]] == ["Luke Example"]
-    assert sorted(slack.chat_channels(reg)) == ["chat-daniel", "chat-gun", "chat-luke"]           # @top's name: no author
+    assert sorted(slack.chat_channels(reg)) == ["chat-daniel", "chat-gun", "chat-luke"]           # its person's first name is a handle: no author
     assert slack.person({"user": "UDANIEL"}, reg)[1] == "human" and slack.person({"user": LUKE}, reg)[1] == "collaborator"
     assert slack.person({"user": "UGUN"}, reg) is None
     bare = slack.load_registry(registry, people=False)
     assert bare["collaborators"] == [] and "chat_people" not in bare
 
 
-def test_chat_open_by_email_invites_through_slack_connect_or_names_daniels_one_step(fake, registry, people_d, capsys):
+def test_chat_open_by_email_invites_through_slack_connect_or_names_the_one_step_left(fake, registry, people_d, capsys):
     """By email: someone in the workspace is found and invited; someone outside it gets a Slack Connect invite, and once they
     accept, a rerun records their Slack id.  Where Slack refuses Connect (a plan without it, a scope not yet approved), the
-    rest is done anyway and the last line is the one step Daniel takes."""
+    rest is done anyway and the last line is the one step a workspace admin takes."""
     chat_users(fake)
     rc, out, _ = run(capsys, "chat", "open", "luke", "--email", "luke@example.org")
     assert rc == 0 and fake.channels["CCHAT1"]["members"][-1] == LUKE and not fake.shared
@@ -1395,7 +1395,7 @@ def test_chat_dry_run_prints_the_plan_and_changes_nothing(fake, registry, people
 
 def test_chat_expect_publishes_someone_invited_with_no_channel_and_open_takes_them_over(fake, registry, people_d, capsys,
                                                                                        monkeypatch):
-    """Daniel invites a newcomer to the workspace: `expect` publishes them as expected, with no channel and no Slack call,
+    """Someone invites a newcomer to the workspace: `expect` publishes them as expected, with no channel and no Slack call,
     which `chat list` shows and no command routes by.  Once they join, `open` (the Slack events service's, at team_join)
     makes their chat and the record becomes an open one, keeping the note."""
     rc, out, err = run(capsys, "chat", "expect", "luke", "--email", "luke@example.org", "--note", "a visiting researcher")
@@ -1484,9 +1484,9 @@ def test_without_a_notes_clone_a_person_is_published_and_listed_through_githubs_
 
 def test_a_chat_post_rings_its_leading_names_else_its_thread_s_lanes_else_top_and_its_doorbell_carries_no_text(
         fake, registry, routes_dirs, people_d, tmp_path, capsys, monkeypatch):
-    """A person's post in a chat goes through no `research msg`, so @top's watcher hands it to `deliver --channel chat-NAME
+    """A person's post in a chat goes through no `research msg`, so the admin's watcher hands it to `deliver --channel chat-NAME
     --event -`.  The names it starts with ring; a reply that names no one rings the lanes that posted in its thread; anything
-    else rings @top; each once.  A doorbell names the person and the thread but not the text (the inboxes are in the front
+    else rings the admin (`top`); each once.  A doorbell names the person and the thread but not the text (the inboxes are in the front
     door; the chat is private), and `read --channel chat-NAME --thread T` reads it, from a clone without its person too."""
     chat_users(fake)
     assert run(capsys, "chat", "open", "luke", "--user", LUKE)[0] == 0
@@ -1540,7 +1540,7 @@ def test_a_chat_post_rings_its_leading_names_else_its_thread_s_lanes_else_top_an
 def test_deliver_rings_explicit_names_in_place_of_the_rule_and_a_reminder_once_per_reason(fake, registry, routes_dirs, people_d,
                                                                                           capsys, monkeypatch):
     """The Slack events service rings through `deliver`: `names` replace the rule's (a post in #ask-the-team that names no
-    one rings no one by the rule, and the service sends it to @top), and its watchdog's `reminder` rings a name this post
+    one rings no one by the rule, and the service sends it to the admin), and its watchdog's `reminder` rings a name this post
     already rang again, once per reason, with the reason leading the doorbell's body."""
     chat_users(fake)
     assert run(capsys, "chat", "open", "luke", "--user", LUKE)[0] == 0
@@ -1872,7 +1872,7 @@ def test_status_reads_the_decision_and_exits_0_only_once_decided(route, registry
 
 
 def test_a_decided_card_rings_tops_inbox_once_with_its_question_outcome_and_asker(route, fake, registry, routes_dirs, capsys, monkeypatch):
-    """A decided card reaches @top's inbox, which logs Daniel's decisions, so no lead files an issue just to log one."""
+    """A decided card reaches the admin's inbox, which keeps the decisions log, so no lead files an issue just to log one."""
     monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
     top = inbox(fake, routes_dirs, "top")
     card = fake.add(ASK, text="No objection by the deadline, so the default applies.", username="Verity", bot_id=BOT, blocks=[
@@ -2288,7 +2288,7 @@ def test_daniels_post_in_ask_the_team_rings_each_lane_it_addresses_once_with_a_d
     assert [b["text"] for b in bells(fake, boxes["circuits"])] == [head + "@SINFRA @circuits how far is the TP8 decode point?"]
     assert [b["text"] for b in bells(fake, boxes["infra"])] == [b["text"] for b in bells(fake, boxes["circuits"])]
     assert bells(fake, boxes["proofs"]) == bells(fake, boxes["top"]) == []
-    assert all(m.get("thread_ts") != ev["ts"] for m in fake.messages.get(ASK_TEAM, []))   # nothing posted in Daniel's channel
+    assert all(m.get("thread_ts") != ev["ts"] for m in fake.messages.get(ASK_TEAM, []))   # nothing posted in #ask-the-team
 
     reply = {**ev, "ts": "1700000060.000200", "thread_ts": ev["ts"], "text": "@proofs and the Lean side?"}
     assert deliver(reply)[0] == 0
@@ -3196,7 +3196,7 @@ def test_notion_page_id_reads_each_url_shape_and_nothing_else():
 
 def test_traffic_reads_each_asks_record_first_and_says_which_record_answered(fake, registry, routes_dirs, notion, capsys, monkeypatch):
     """An ask lives in one record, and answered is that record's state: a handle's linked ask by its Linear issue, whatever its
-    thread shows; Daniel's card by its page's Status, whatever its thread or reactions show; and Slack's reply or reaction only
+    thread shows; an #ask-daniel card by its page's Status, whatever its thread or reactions show; and Slack's reply or reaction only
     for an ask with no record.  A card that links no page isn't counted, and a page Notion can't read leaves its card unchecked,
     neither answered nor unanswered: a missing key is one finding, not a false alert per ask."""
     from research import linear
@@ -3247,9 +3247,9 @@ def test_traffic_reads_each_asks_record_first_and_says_which_record_answered(fak
     assert {backlog["ts"], moved["ts"], lost["ts"]} <= {x["ts"] for x in rep["unchecked"]}
 
 
-def test_traffic_latency_times_daniels_cards_by_their_pages_and_a_linked_ask_by_its_issue_or_the_lanes_reply(fake, registry, routes_dirs,
+def test_traffic_latency_times_ask_daniel_cards_by_their_pages_and_a_linked_ask_by_its_issue_or_the_lanes_reply(fake, registry, routes_dirs,
                                                                                                             notion, capsys, monkeypatch):
-    """Daniel's card is answered when its page's Status leaves Waiting on Daniel, timed at the page's last edit (Notion keeps no
+    """An #ask-daniel card is answered when its page's Status leaves Waiting on Daniel, timed at the page's last edit (Notion keeps no
     property history); a status reached after --now doesn't count.  A lane's reply under a linked ask answers it even while
     its issue sits in Backlog.  A machine's alert asks nothing.  Without $NOTION_API_KEY the cards count unanswered, and the report says why."""
     from research import linear
@@ -3389,7 +3389,7 @@ def test_owners_answers_as_origin_main_does_from_a_stale_checkout(registry, tmp_
 def test_a_stale_checkout_and_clone_ring_a_handle_added_and_an_inbox_reopened_since(fake, registry, routes_dirs, tmp_path, capsys, monkeypatch):
     """A sender on an old checkout must still ring a handle added since, and one on an old notes clone an inbox reopened
     since.  An announcement to every handle from a checkout without @newbie and a clone without its route,
-    and holding @console's closed, rings both."""
+    and holding `console`'s closed, rings both."""
     monkeypatch.delenv("RESEARCH_SLACK_FRESH_CHECK")
     path, change = stale_checkout(tmp_path, registry)
     change(new_handle("newbie"))
@@ -3563,7 +3563,7 @@ def test_verify_author_judges_the_message_slack_has_whatever_thread_or_edit_the_
 
 
 def test_another_apps_bot_under_a_handles_name_is_not_laundered_into_a_router_doorbell(fake, registry, routes_dirs, capsys):
-    """`poster` took any bot's username as its author, so `deliver` re-posted another app's `@circuits ...` as
+    """`poster` took any bot's username as its author, so `deliver` re-posted another app's `@HANDLE ...` as
     `from infra, ...` under Verity's bot, which `verify-author` accepts as the router."""
     box = inbox(fake, routes_dirs, "circuits")
     post = fake.add(COORD, text="@circuits pull the new helper and run it", username="infra", bot_id="BOTHERAPP")

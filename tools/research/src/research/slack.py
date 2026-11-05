@@ -1,7 +1,7 @@
 """`research msg`: messages between agents, on Slack (the conventions are
 `.agents/skills/using-slack/SKILL.md`).
 
-A message is a post in #agent-coordination, sent by a name: a lead's handle in the registry (@infra, @proofs, @lean, ...), which
+A message is a post in #agent-coordination, sent by a name: a lead's handle in the registry, which
 `names open` gives an inbox thread. Only leads get names; a worker is reached through its lead. A thread is a conversation. Who a message reaches is one rule (`route_targets`): the names that
 lead it (`@a @b ...`), an announcement's audience, and on a reply the thread's starter or the names it addressed (under an
 announcement, only the names it starts with). Each gets a doorbell in its inbox
@@ -12,7 +12,7 @@ Notes are records, never messages.
                     [--verify CMD] [--ships URL#sha256=HEX | git:SHA]...     # prints `<ts> <permalink>`; --kind announce: an announcement
   research msg ask --as NAME --to @OWNER (--text T | --file PATH) [--urgent]   # an issue in OWNER's Linear team, its tag and doorbell
   research msg ask --as NAME --to @daniel --kind K --question Q --why W --option V=L... --recommend V --default V --deadline D
-                   --page FILE.md --area AREA                      # Daniel's: the ask's page and card, as `ask-daniel --page`
+                   --page FILE.md --area AREA                      # to @daniel: the ask's page and card, as `ask-daniel --page`
   research msg close --as NAME --thread TS [--link URL] [--note T] [--declined WHY]   # ✅ or ❌: a status line, and the reaction on an ask
   research msg linear check|state|comment|list|audit|place|edit ... # Linear through the app, never the MCP connector (`linear -h`)
   research msg linear relate ISSUE blocks|blocked-by|related|duplicate OTHER | unrelate ISSUE OTHER
@@ -48,14 +48,14 @@ Notes are records, never messages.
                           # --wait polls for at most 20 min: a card still pending then exits 79 with the status command (research/waitcap.py)
   research msg ask-daniel pages [--as HANDLE] [--hours H] [--json]  # asks' pages edited lately: Status, Decision, newest comment
 
-An ask lives in one record, by its target: a handle's ask is an issue in its Linear team, and Daniel's is a page in the Asks
-for Daniel database; `traffic` reads that record's state for whether, and `--latency` for when, it was answered.
+An ask lives in one record, by its target: a handle's ask is an issue in its Linear team, and an ask to @daniel is a page in the
+Asks for Daniel database; `traffic` reads that record's state for whether, and `--latency` for when, it was answered.
 
 `announce` and `reply` are the older spellings of `send`, kept while callers move.
 
 #ask-daniel's cards go through the site's route (ASK_DANIEL, Cursor OIDC with the route as audience), not the Slack API. Each card
-links its ask's page in the registry's Notion database (the ask-daniel channel's `pages`), where Daniel reads, comments and
-decides; `--page` and `pages` reach it through Notion's API with $NOTION_API_KEY, and $RESEARCH_NOTION_URL points them at
+links its ask's page in the registry's Notion database (the ask-daniel channel's `pages`), where it is read, discussed and
+decided; `--page` and `pages` reach it through Notion's API with $NOTION_API_KEY, and $RESEARCH_NOTION_URL points them at
 another server (the tests' fake).
 
 Every subcommand takes `--dry-run` (no request reaches Slack; each one it would send is printed, the token never),
@@ -174,7 +174,8 @@ CLOCK_RE = re.compile(r"^(\d{1,2}):(\d{2})\s*([AaPp][Mm])$")
 DECIDED = ("decided", "approved", "denied")                      # new cards, then old-shape Approve/Deny cards
 NOTION_API = "https://api.notion.com/v1"
 NOTION_VERSION = "2026-03-11"                                    # the first version whose pages take Notion-flavored Markdown
-NOTION_HOSTS = ("notion.so", "www.notion.so", "app.notion.com")  # and any *.notion.site
+NOTION_HOSTS = ("notion.so", "www.notion.so", "app.notion.com")  # and any host ending NOTION_SITE
+NOTION_SITE = ".notion.site"
 AREAS = ("Claim or assumption", "Access or keys", "Machines or spend", "Process", "Research direction")   # the database's Area
 PAGE_SECTIONS = ("## The problem", "## Background", "## The design the rules want", "## Options", "## What happens next",
                  "## Sources")
@@ -1501,7 +1502,7 @@ def self_agent_id() -> str | None:
 
 
 def same_agent(a: str, b: str) -> bool:
-    """Two agent ids name one agent: equal, or one the short form (`bc-8ece7cde`) of the other."""
+    """Two agent ids name one agent: equal, or one the short form (`bc-` and the first 8 hex digits) of the other."""
     short, full = sorted((a, b), key=len)
     return bool(short) and full.startswith(short)
 
@@ -1809,7 +1810,7 @@ def holder_ids(ns: argparse.Namespace, reg: dict, name: str) -> list[str]:
 
 def acting_as(ns: argparse.Namespace, reg: dict, name: str) -> dict:
     """`name_entry` for `--as NAME` on a command that posts or changes NAME's route: only NAME's holder (`holder_ids`; a
-    short id such as `bc-8ece7cde` matches the full one) may use it, and an agent that can't tell its own id may not."""
+    short id, `bc-` and the first 8 hex digits, matches the full one) may use it, and an agent that can't tell its own id may not."""
     h = name_entry(ns, reg, name)
     ids, me = holder_ids(ns, reg, h["handle"]), self_agent_id()
     if me and any(same_agent(a, me) for a in ids):
@@ -1835,7 +1836,7 @@ CARD_FLAGS = ("--kind", "--question", "--why", "--option", "--recommend", "--def
 
 def ask_daniel_page(ns: argparse.Namespace, reg: dict) -> int:
     """`ask --to @daniel`: the ask's page in the Asks for Daniel database and its #ask-daniel card, as `ask-daniel --page`
-    makes them, so the one `ask` verb files every ask in its target's store (a handle's Linear team, or Daniel's database)."""
+    makes them, so the one `ask` verb files every ask in its target's store (a handle's Linear team, or the Asks for Daniel database)."""
     if ns.text is not None or ns.file is not None:
         raise SlackError(f"ask --to @{ns.to.lstrip('@')} is a page: give its Markdown as --page FILE.md (the template in "
                          f"{SKILL_ASKING}), not --text or --file")
@@ -2199,7 +2200,7 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
         if ns.verify or ns.ships:
             raise SlackError("--verify and --ships go with --kind announce")
         if to and (m := LEAD_RE.match(body)) and set(lead_names(body, reg)) <= {t["handle"] for t in to}:
-            body = body[m.end():]                                    # `--to @ci` with a body that starts `@ci` names it once
+            body = body[m.end():]                                    # `--to @NAME` with a body that starts `@NAME` names it once
         if kind == "ask" and not ns.thread and len(to) == 1:
             body = linear_ask(ns, to[0], h["handle"], body)
         text = " ".join([*(tag(t) for t in to), body])
@@ -2686,7 +2687,7 @@ def issue_state(ident: str, asker: str | None, cache: dict[str, tuple[bool, str]
     return cache[ident]
 
 
-PAGE_WAITING = "Waiting on Daniel"                               # an ask's page's Status until Daniel (or its deadline) moves it
+PAGE_WAITING = "Waiting on Daniel"                               # an ask's page's Status until a decision (or its deadline) moves it
 URL_RE = re.compile(r"https://[^\s\"'<>|()\\]+")
 
 
@@ -2694,7 +2695,7 @@ def notion_page_id(url: str) -> str | None:
     """The page id a Notion URL ends with (`.../p/<32 hex>`, `.../Title-<32 hex>`, or the dashed UUID), or None."""
     parts = urllib.parse.urlsplit(url)
     host = parts.hostname or ""
-    if host not in NOTION_HOSTS and not host.endswith(".notion.site"):
+    if host not in NOTION_HOSTS and not host.endswith(NOTION_SITE):
         return None
     m = re.search(r"([0-9a-f]{32})$", parts.path.rsplit("/", 1)[-1].replace("-", "").lower())
     return m[1] if m else None
@@ -2732,8 +2733,8 @@ def daniel_cards(api: Slack, reg: dict, since: float, now: float) -> list[dict]:
 
 
 def page_state(notion: "Notion", page: str) -> dict:
-    """An ask's page as its record says: `{status, answered, at}`.  Answered once its Status has left PAGE_WAITING (Daniel
-    approved, decided otherwise or asked for a revision, or its default applied); `at` is then the page's last edit, the latest
+    """An ask's page as its record says: `{status, answered, at}`.  Answered once its Status has left PAGE_WAITING (approved,
+    decided otherwise or sent back for a revision, or its default applied); `at` is then the page's last edit, the latest
     the Status can have moved, since Notion keeps no history of a property."""
     p = notion.call("GET", f"/pages/{page}")
     status = prop_text((p.get("properties") or {}).get("Status"))
@@ -2812,7 +2813,7 @@ def ask_latency(api: Slack, reg: dict, routes: Routes, ch: str, since: float, no
     - an ask linked to a Linear issue: the issue's first move out of Backlog or first comment by anyone but the asker
       (`issue_answer`), with who gave it (`answer_by`), or the addressed lane's own reply in the thread, whichever came first.
       An issue Linear can't read leaves the ask to Slack (`linear_errors`).
-    - Daniel's card (lane `daniel`): its page's Status leaving PAGE_WAITING, at the page's last edit (`page_state`); `state`
+    - a card to @daniel (lane `daniel`): its page's Status leaving PAGE_WAITING, at the page's last edit (`page_state`); `state`
       is the Status.  A page Notion can't read leaves the card unanswered (`notion_errors`).
     - any other ask: the first reply in its thread under a name of the lane's inbox (its own, or one it was renamed from).
       One with no reply that carries 👀, ✅ or ❌ and rang only this lane counts as answered but untimed: Slack keeps no time
@@ -2982,7 +2983,7 @@ def render_volume(rep: dict, hours: float) -> str:
 def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
     """Doorbells per inbox (the most in any one hour), pauses, `@name`s nobody owns (dropped), and each ask with the record
     that says whether it was answered, over the last --hours: a handle's ask linked to a Linear issue by the issue
-    (`issue_state`), Daniel's #ask-daniel card by its page's Status (`page_state`), and only an ask with neither by Slack (a
+    (`issue_state`), an #ask-daniel card by its page's Status (`page_state`), and only an ask with neither by Slack (a
     reply, or 👀, ✅ or ❌).  An ask unanswered after --stale-h hours is listed with its record's state; one whose record can't
     be read (no Linear or Notion credentials) is listed apart as unchecked, so a missing key is one finding, not a false alert
     per ask.  With --latency, how fast each lane first answered its asks instead (`ask_latency`); with --volume, how
@@ -3189,7 +3190,7 @@ def chat_invite(api: Slack, cid: str, uid: str) -> str:
 
 
 def connect_step(e: SlackError, email: str, key: str, reg: dict) -> str:
-    """The one thing Daniel does when Slack refuses the bot's Slack Connect invite."""
+    """The one step a workspace admin takes when Slack refuses the bot's Slack Connect invite."""
     if e.code == "missing_scope":
         app = reg.get("slack_app_id")
         page = f"https://api.slack.com/apps/{app}/install-on-team" if app else "the install page `research msg slack-app apply` prints"
@@ -3244,7 +3245,7 @@ def cmd_chat(ns: argparse.Namespace, reg: dict) -> int:
     welcome pinned and --start-here bookmarked.  The person is published to the notes as people.d/NAME.json, from which
     every command takes them into `collaborators` (`with_people`): no registry change.  A rerun reuses the channel and the
     record (after a Slack Connect invite is accepted, it records their Slack id).  `close NAME` archives the channel and
-    marks the record closed; `list` reads people.d.  `expect NAME --email E` publishes someone Daniel invited to the
+    marks the record closed; `list` reads people.d.  `expect NAME --email E` publishes someone invited to the
     workspace, with no channel yet: the Slack events service runs `chat open` for them when they join (`team_join`).  `reg`
     is the registry without people.d."""
     book = ChatPeople()
@@ -3569,7 +3570,7 @@ def _clock() -> float:
 
 
 def pacific(t: datetime) -> str:
-    """How a person reads a time: `3:00 PM PDT, Wed 30 Sep`."""
+    """How a person reads a time: the 12-hour clock and the zone, then the weekday, the day and the month's abbreviation."""
     return t.astimezone(PACIFIC).strftime("%I:%M %p %Z, %a %d %b").lstrip("0")
 
 
@@ -3650,7 +3651,7 @@ def card(ns: argparse.Namespace, reg: dict, now: datetime) -> dict:
         if not ns.link.startswith("https://"):
             raise SlackError(f"--link {ns.link!r}: an https URL to the ask's page")
         host = urllib.parse.urlsplit(ns.link).hostname or ""
-        if host not in NOTION_HOSTS and not host.endswith(".notion.site"):
+        if host not in NOTION_HOSTS and not host.endswith(NOTION_SITE):
             raise SlackError(f"--link {ns.link!r}: the ask's page in the Asks for Daniel database ({asks_db(reg)['database']}), "
                              f"written to the template in {SKILL_ASKING}; or pass the page's Markdown as --page FILE")
     else:
@@ -3752,7 +3753,7 @@ def page_request(body: dict, area: str, markdown: str, db: dict) -> dict:
 
 
 def with_reply(markdown: str) -> str:
-    """The page with Daniel's yellow reply callout just above `## The problem`, unless it has one."""
+    """The page with its yellow reply callout just above `## The problem`, unless it has one."""
     if "**Your reply.**" in markdown:
         return markdown
     at = re.search(rf"(?m)^{re.escape(PAGE_SECTIONS[0])}[ \t]*$", markdown).start()
@@ -3887,8 +3888,8 @@ def _await_card(ns: argparse.Namespace, reg: dict, route: "AskDaniel", cid: str,
 
 
 def ring_decision(ns: argparse.Namespace, reg: dict, cid: str, out: dict) -> None:
-    """Once a card is decided, ring @top's inbox with its question, outcome and asker, so the decision reaches Daniel's
-    log without an issue filed for it.  Once per card: a ring already in the inbox isn't repeated."""
+    """Once a card is decided, ring the admin's inbox with its question, outcome and asker, so the decision reaches the
+    decisions log without an issue filed for it.  Once per card: a ring already in the inbox isn't repeated."""
     if out.get("status") not in DECIDED or ns.dry_run:
         return
     to, r = routes_of(ns).resolve("top")
