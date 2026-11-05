@@ -5,6 +5,7 @@ current marked head whose verdicts then landed it (each reviewer's newest; a hol
 trusting any head the verdicts land, marked or not, to show what the mark requirement removes.
 
     uv run --no-sync python study/landing-human/carry_study.py LABELS.json ACT_DIR OUT.json [--jobs N] [--marks | --holds]
+        [--since TS]
 
 --marks judges every re-head instead (each PR's consecutive marked heads, as of the newer one's mark); --holds each head whose
 first verdict was a hold, over the PR's last land-verdict head (the false-positive test).
@@ -241,6 +242,8 @@ def main() -> None:
         if r["key"] == "ready":
             marks[r["pr"]].append((r["ts"], r["head"], r["value"] is True))
     ps = mark_pairs(labels) if "--marks" in sys.argv else hold_pairs(labels) if "--holds" in sys.argv else pairs(labels)
+    if "--since" in sys.argv:
+        ps = [p for p in ps if p["ts"] >= sys.argv[sys.argv.index("--since") + 1]]
     excludes = tomllib.loads(git("show", "origin/main:tools/verity/check/drive.toml").stdout)["lowrisk_excludes"]
     init = (tips(Path(act_dir)), dict(verdicts), dict(marks), excludes)
     with ProcessPoolExecutor(jobs, initializer=_init, initargs=init) as ex:

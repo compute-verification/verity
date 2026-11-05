@@ -8,7 +8,8 @@ ev=[]
 for lt,ms in sorted(G.items()):
     rv=[o for o in ms if o["verdict"] and o["mark"]]
     if not rv: continue
-    ready=lambda o: max(T(o["verdict"]),T(o["mark"]))
+    def ready(o):
+        return max(T(o["verdict"]),T(o["mark"]))
     last=max(rv,key=ready); vs=ready(last)
     gap=(T(lt)-vs).total_seconds()/3600
     waited=[(vs-ready(o)).total_seconds()/3600 for o in rv if o is not last]

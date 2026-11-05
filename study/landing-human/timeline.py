@@ -1,5 +1,5 @@
 import json, collections, statistics as S
-from datetime import datetime, timezone
+from datetime import datetime
 def T(s): return datetime.fromisoformat(s.replace("Z","+00:00")) if s else None
 rows=json.load(open("labels.json"))
 L=collections.defaultdict(list)
@@ -24,7 +24,8 @@ json.dump(out,open("heads_landed.json","w"))
 print(len(out),"landed in window;", sum(1 for o in out if o["verdict"]),"with verdict;", sum(1 for o in out if not o["verdict"]),"without (low-risk lane or own)")
 def h(a,b): return (T(b)-T(a)).total_seconds()/3600
 lat=[max(0,h(o["mark"],o["verdict"])) for o in out if o["verdict"] and o["mark"]]
-q=lambda xs,p: sorted(xs)[int(p*(len(xs)-1))]
+def q(xs, p):
+    return sorted(xs)[int(p*(len(xs)-1))]
 for name,xs in [("mark->verdict",lat),
    ("verdict->landed",[h(max(o["verdict"],o["mark"]),o["landed"]) for o in out if o["verdict"] and o["mark"]]),
    ("mark->landed(reviewed)",[h(o["mark"],o["landed"]) for o in out if o["verdict"] and o["mark"]]),

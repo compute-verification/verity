@@ -1,10 +1,10 @@
 import json,re,collections
-from datetime import datetime,timezone
+from datetime import datetime,UTC
 d=json.load(open('thread.json'))
 E=[]
 for m in d:
     t=re.sub(r"<!subteam\^\w+>\s*","",m.get("text",""))
-    ts=datetime.fromtimestamp(float(m["ts"]),timezone.utc).isoformat()
+    ts=datetime.fromtimestamp(float(m["ts"]),UTC).isoformat()
     for mm in re.finditer(r"#(\d+) at ([0-9a-f]{7,40}) is out of `next`: (.*?)(?:\n|$)",t):
         pr,sha,why=int(mm.group(1)),mm.group(2),mm.group(3)
         kind="other"; files=[]

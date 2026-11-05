@@ -1,11 +1,11 @@
 import json,re,collections
-from datetime import datetime,timezone
+from datetime import datetime,UTC
 d=json.load(open('thread.json'))
 snaps=[]
 for m in d:
     t=m.get("text","")
     if "and not landed on `checked`" not in t: continue
-    ts=datetime.fromtimestamp(float(m["ts"]),timezone.utc)
+    ts=datetime.fromtimestamp(float(m["ts"]),UTC)
     thr=re.search(r"marked ready ([\d.]+) h ago",t)
     body=re.sub(r"\n\n_\(quiet\)_","",t.split(":",1)[1])
     groups=[]
