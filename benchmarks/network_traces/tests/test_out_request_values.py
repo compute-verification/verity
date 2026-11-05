@@ -1,7 +1,8 @@
 """No request value reaches a job's $OUT, which custody uploads. Each script's copy into $OUT runs on stand-in records,
 with a prompt planted in every file a request's values are in (the endpoint's requests.jsonl, advice_trace.jsonl,
-windows.jsonl and served rows, a rehearsal's plan.json, probe.json, io.json and out-witness.jsonl, a warden rehearsal's
-traffic.json and client.json): $OUT gets the public records and no file holding the prompt or a request's id fields."""
+windows.jsonl and served rows, a rehearsal's plan.json, probe.json, io.json and out-witness.jsonl, a network certifier
+rehearsal's traffic.json and client.json): $OUT gets the public records and no file holding the prompt or a request's id
+fields."""
 from __future__ import annotations
 
 import json

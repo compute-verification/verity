@@ -1,8 +1,13 @@
-import Proofs.Flock.Claims.Deploy
-import Proofs.Flock.Soundness.Assumptions.Zk
-import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
-import Proofs.Flock.Soundness.Refine.Walk
-import Proofs.Flock.Soundness.Refine.Table
+module
+
+public import Proofs.Flock.Claims.Deploy
+public import Proofs.Flock.Soundness.Assumptions.Zk
+public import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
+public import Proofs.Flock.Soundness.Refine.Walk
+public import Proofs.Flock.Soundness.Refine.Table
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
+import all Init.Data.Ord.String
 
 /-!
 # `Deploy.V`'s custody checks, as the old theorems' `RecordsLiveZKJ`
@@ -37,6 +42,8 @@ the record's roots, link points and rounds are the run's link message, first coi
   `LiveZk.Pr_acc_zk_le`'s `hdec`) on untyped inputs under `TagsOkZJ` where every draw sets each table up at `mPts`
   link points (`DrawOkZKJ`), as the draw file half of `RecordCustodyZKJ` gives.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.Custody
 
@@ -232,14 +239,14 @@ theorem stream_pred {x : Json} {name w : String} (h : Record.str x "stream" = .o
 /-- **What `liveOf` reads**: the record's JSON, its link, its streams, each table's `root_B`, the link points and each
 rep stream's rounds, field by field. -/
 theorem liveOf_ok {spec : SessionSpec} {record : String} {lv : Live} (h : liveOf spec record = .ok lv) :
-    ∃ j l recs, Json.parse record = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.arr j "streams" = .ok recs ∧
+    ∃ j l recs, Flock.JsonParse.parse record = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.arr j "streams" = .ok recs ∧
       List.Forall₂ (RootField l) spec.tables.toList lv.rootB.toList ∧
       (∃ ps, Record.arr l "points" = .ok ps ∧ List.Forall₂ PointField ps.toList lv.points.toList) ∧
       List.Forall₂ (LiveStream recs) spec.repStreams.toList lv.streams.toList := by
   revert lv
   show Ret (liveOf spec record) _
   rw [liveOf.eq_def]
-  cases hp : Json.parse record with
+  cases hp : Flock.JsonParse.parse record with
   | error e => intro lv h; cases h
   | ok j =>
     dsimp only
@@ -289,15 +296,15 @@ theorem liveOf_ok {spec : SessionSpec} {record : String} {lv : Live} (h : liveOf
 /-- **What `Record.decode` reads**, of what `liveOf` reads: the record's JSON, its link, its streams, each table's
 `root_B`, the link points, and each stream's name and rounds, with a retained round's recorded digest that of its bytes
 (S12). -/
-theorem decode_ok {spec : SessionSpec} {text : String} {sess : Session} (h : Record.decode spec text = .ok sess) :
-    ∃ j l recs, Json.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.arr j "streams" = .ok recs ∧
+theorem decode_ok {spec : SessionSpec} {text : String} {sess : RunRecord} (h : Record.decode spec text = .ok sess) :
+    ∃ j l recs, Flock.JsonParse.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.arr j "streams" = .ok recs ∧
       List.Forall₂ (RootField l) spec.tables.toList sess.rootB.toList ∧
       (∃ ps, Record.arr l "points" = .ok ps ∧ List.Forall₂ PointField ps.toList sess.points.toList) ∧
       List.Forall₂ (DecStream spec) recs.toList sess.streams.toList := by
   revert sess
   show Ret (Record.decode spec text) _
   rw [Record.decode.eq_def]
-  cases hp : Json.parse text with
+  cases hp : Flock.JsonParse.parse text with
   | error e => intro sess h; cases h
   | ok j =>
     simp only []
@@ -351,7 +358,7 @@ theorem decode_ok {spec : SessionSpec} {text : String} {sess : Session} (h : Rec
 /-- **The decoded session's live part is `liveOf`'s**: the same `root_B` and link points, and at each rep stream the
 stream `Record.decode` finds by its name, whose rounds are `liveOf`'s with each retained round's recorded digest that
 of its bytes. -/
-theorem decode_live {spec : SessionSpec} {text : String} {sess : Session} {lv : Live}
+theorem decode_live {spec : SessionSpec} {text : String} {sess : RunRecord} {lv : Live}
     (hd : Record.decode spec text = .ok sess) (hl : liveOf spec text = .ok lv) :
     sess.rootB = lv.rootB ∧ sess.points = lv.points ∧ lv.streams.size = spec.repStreams.size ∧
       ∀ q (hq : q < spec.repStreams.size), ∃ y, sess.streams.find? (·.name == spec.repStreams[q].2.2) = some y ∧

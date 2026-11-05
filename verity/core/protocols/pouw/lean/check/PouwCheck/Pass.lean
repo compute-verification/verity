@@ -1,10 +1,17 @@
-import Flock.Draw
-import PouwCommit.Draws
-import PouwWindow.Rounds
-import PouwCheck.Inputs
-import SampledProofs.ChallengerRecord
-import SampledProofs.ChallengerSession
-import Identity.Domains
+module
+
+public import Flock.Draw
+public import PouwCommit.Draws
+public import PouwWindow.Rounds
+public import PouwCheck.Inputs
+public import SampledProofs.ChallengerRecord
+public import SampledProofs.ChallengerSession
+public import Identity.Domains
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
+import all Init.Data.Array.Basic
+import all Init.Data.Array.DecidableEq
+import all Init.Data.String.Defs
 
 /-!
 # The pass's epoch and the window's draw (`core_check.py`, "the pass's epoch and the window's draw")
@@ -37,6 +44,8 @@ SHA-512, and, only in a replay of a recorded pass, the e2e-service passes', whic
 recorded draw also reads the e2e-service's first coin commitments, named as the current one but on SHA-256 as core was
 then: bound by `taggedSha256`, after the current binding, and drawn by `deriveV1` and `streamV1`.
 -/
+
+@[expose] public section
 
 namespace PouwCheck
 
@@ -87,9 +96,7 @@ def hex? : Json → Option ByteArray
 
 def at? (j : Json) (k : String) : Json := (PouwWindow.field? j k).getD .null
 
-/-- `j == .str s`, by a match the kernel reduces: `BEq Json` is a `partial def`, opaque to the kernel, so a property of a
-check that compares with it can't be proved. -/
-def jsonStrIs (j : Json) (s : String) : Bool := match j with | .str t => t == s | _ => false
+export SampledProofs (jsonStrIs)
 
 /-- `j == .bool true`, by a match the kernel reduces (`jsonStrIs`). -/
 def jsonTrue (j : Json) : Bool := match j with | .bool true => true | _ => false
@@ -503,8 +510,8 @@ def SEEDED_PINNED : String :=
 
 /-- `core_check.draw`: none when `units` are the window's draw, else the refusal. Seeded coins (`coinsOf`) have their
 `draw` coin, and are refused (`coin-key`) when the window's parameters pin a challenger key; live ones
-(`PouwWindow.LIVE_SCHEME`, a certified window's) are read only from the challenger's signed record with the key it is
-signed under, `{key, record}`: that key must be `key`, the challenger key the window's parameters pin (`coin-key`, so a
+(`PouwWindow.LIVE_SCHEME`, a certified window's) are read only from its draw session's (`PouwWindow.DRAW_FAMILIES`)
+signed record with the key it is signed under, `{key, record}`: that key must be `key`, the challenger key the window's parameters pin (`coin-key`, so a
 record the prover signed under a key of its own, over coins it holds, is refused), this check verifies the record under
 it (`SampledProofs.Challenger.recordReason`; a bare live commitment is refused, `SIGNED_LIVE`), and they have their
 `pouw/draw` coin 0 (`SampledProofs.Challenger.liveReason`). -/
@@ -525,7 +532,7 @@ def drawCheck (coins : Json) (recorded : Bool) (opening stream registration rece
       let record := SampledProofs.getD coins "record"
       if let some why ← port (SampledProofs.Challenger.recordReason want record) then coin why
       let c := (← port (SampledProofs.Challenger.ChallengerRecord.ofJson record)).commitment
-      if let some why := PouwWindow.liveEpochReason c then coin why
+      if let some why := PouwWindow.drawEpochReason c then coin why
       pure (.inr c)
     else match key with
       | .null => .inl <$> (coinsOf coins recorded).mapError malformed

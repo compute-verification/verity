@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.DeployEfficient
-import Definitions.Claims.Sampling
+module
+
+public import Proofs.Flock.Claims.DeployEfficient
+public import Definitions.Claims.Sampling
 
 /-!
 # What the claims ask of a record holds at the deployed ones
@@ -19,14 +21,16 @@ record, the sampling record's `flock`, and their antecedents are of that record 
 * `Flock.scope_meets_plain`, `_zk`: the record's readable scope (`Flock.InScope` at the record's `zk`) holds a statement
   with a witness in its relation (`RelS`), the readable part of `Complete`'s antecedent (`Scope x`, `R x w`), what
   `ScopeMatches` equates with the scope check, and what each of `Nontrivial`'s recorded runs is of. That some bytes
-  parse to it is beyond Lean: the verifier's parser reads the circuit file's header with `Lean.Json.parse`, a
-  `partial` function.
+  parse to it is beyond Lean: the verifier's parser reads the circuit file's rows with `HmRow.parse`, which
+  regenerates the `hm96` nets, beyond what the kernel evaluates.
 * `Sampling.scope_meets`: the sampling scope's readable form (`Sampling.InScope`) holds a program, partition and
   design; it reads no field of the record, of which the tree has no concrete one. It is the readable part of the
   sampling `Complete`'s antecedent, of what its `ScopeMatches` equates, and of `Nontrivial`'s runs.
 * `Sampling.universal_meets`: some private circuit fits its size class, on inputs of the class's width, the antecedent
   of `Universal`, which reads no field of the record either.
 -/
+
+@[expose] public section
 
 open FlockDeploy
 

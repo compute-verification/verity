@@ -1,6 +1,10 @@
-import Properties.NetworkCertifier.LinkWindow
-import Proofs.Properties.CertifierDevice.Lms
-import Std.Data.TreeMap.Raw.WF
+module
+
+public import Properties.NetworkCertifier.LinkWindow
+public import Proofs.Properties.CertifierDevice.Lms
+public import Std.Data.TreeMap.Raw.WF
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
 
 /-!
 # N2's link-window verdict: what an acceptance establishes
@@ -16,14 +20,16 @@ Its two lemmas:
   verdict's digest always computes, `verdictDigest_ok`); and `linkWindowAcceptMeans_honest_warden`, that on a warden
   link a window proved and opened whose two certificates the certifier's device signed (`CertifierSigned`, under a key
   `Lms.key` derives at parameters `Lms.Params.make` admits) is accepted whatever syncs it declares, by LMS's
-  completeness (`Properties.CertifierDevice.Proofs.Lms.lmsCorrect`). What stays a hypothesis is the proof service's:
+  completeness (`Properties.CertifierDevice.Proofs.Lms.lmsCorrect`). What stays a hypothesis is the proof system's:
   the findings of its run of C-Flock's verifier (`WindowProved`) and the statement's public file holding the drawn
-  unit's row commitments (`WindowOpened`, whose header line `commitments` reads through `Json.parse`, which the kernel
-  doesn't evaluate, so no concrete file is shown to open here; the replays over recorded runs exhibit them);
+  unit's row commitments (`WindowOpened`, whose header line `commitments` reads through C-Flock's JSON parser, which no proof
+  here evaluates, so no concrete file is shown to open here; the replays over recorded runs exhibit them);
 * nontrivial: `linkWindowAcceptMeans_nontrivial`, that a verifier accepting every link-window doesn't have the property
   (`LinkWindowAcceptMeansBy`, which is the property at the verdict, `linkWindowAcceptMeans_by`): it accepts a warden
   link-window with no findings, which isn't proved.
 -/
+
+@[expose] public section
 
 open NetworkCheck NetworkCheck.LinkWindow
 open Lean (Json toJson)

@@ -1,5 +1,7 @@
-import Mathlib
-import Properties.CertifierDevice
+module
+
+public import Mathlib
+public import Properties.CertifierDevice
 
 /-!
 # LMS, proved: a key's signatures verify
@@ -13,6 +15,8 @@ and the verifier runs it the remaining `2^W − 1 − a_i` steps, which ends whe
 the verifier recomputes leaf q, and the path's siblings climb it to the root `T[1]` (`climb`). The signature's encoding
 is `4 + N(1 + P + H)` bytes, and its blocks decode back to it (`decode_encode`).
 -/
+
+@[expose] public section
 
 namespace Properties.CertifierDevice.Proofs.Lms
 

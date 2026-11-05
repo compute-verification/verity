@@ -1,5 +1,7 @@
-import Proofs.Pous.Rebuild.Clock
-import Proofs.Pous.Rebuild.Window
+module
+
+public import Proofs.Pous.Rebuild.Clock
+public import Proofs.Pous.Rebuild.Window
 
 /-!
 # The background-rebuild exclusion
@@ -10,6 +12,8 @@ the band is `(1, D, 2^9)`-hard for every `D ≤ 1505` (`band_hard_one`), which i
 freshness term is `2 · (nPos²·2^9·2)² / 2^524288` and the collision term `nPos² / 2^524800`, each at most `2^-129`
 for `Q ≤ 2^128`.
 -/
+
+@[expose] public section
 
 namespace PousRebuild
 

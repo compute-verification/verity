@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.RestRead
-import Proofs.Flock.Claims.Recursion.DeployedR
+module
+
+public import Proofs.Flock.Claims.Recursion.RestRead
+public import Proofs.Flock.Claims.Recursion.DeployedR
 
 /-!
 # `ReadsAt` at the deployed readers: the last step reads the opened messages
@@ -14,6 +16,8 @@ The fits are the one part that reads the rows' contents. `FitsLift` is what they
 at every rows of the same byte sizes, at a setup that folds at its own `k_log` (`RestFitsLift.fitsLift` proves it).
 The honest proof fits the honest rows (`RepFits`), so every rows the layout reads at the honest rows' sizes fit.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.RestRead
 

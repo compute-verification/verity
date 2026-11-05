@@ -4,8 +4,12 @@ column values `v`, a row's `A` and `B` the XOR of `v` over its columns, and its 
 every row of the builder holds under `v ∘ col` (`laid_rows`), and output `j`'s column holds output `j`'s form
 (`laid_outs`).
 -/
-import Proofs.Flock.Soundness.Discharge.Hm.Fresh
-import Proofs.Flock.Verifier.HmNets
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hm.Fresh
+public import Proofs.Flock.Verifier.HmNets
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Hm
 

@@ -1,11 +1,13 @@
-import Proofs.Flock.Claims.Recursion.OutSlotRead
-import Proofs.Flock.Claims.Recursion.OpenDirsDeployed
-import Proofs.Flock.Claims.Recursion.TopsOpens
-import Proofs.Flock.Claims.Recursion.InnerExtras
-import Proofs.Flock.Claims.Recursion.SchedDense
-import Proofs.Flock.Claims.Recursion.VerdictRowDTie
-import Proofs.Flock.C3.Opening.SessionCoins
-import Proofs.Flock.C3.Reps.AtList
+module
+
+public import Proofs.Flock.Claims.Recursion.OutSlotRead
+public import Proofs.Flock.Claims.Recursion.OpenDirsDeployed
+public import Proofs.Flock.Claims.Recursion.TopsOpens
+public import Proofs.Flock.Claims.Recursion.InnerExtras
+public import Proofs.Flock.Claims.Recursion.SchedDense
+public import Proofs.Flock.Claims.Recursion.VerdictRowDTie
+public import Proofs.Flock.C3.Opening.SessionCoins
+public import Proofs.Flock.C3.Reps.AtList
 
 /-!
 # The level's `out` slot and RecCap's `top` slot carry one commit string (`OutCommitTie` at `layR`)
@@ -29,6 +31,8 @@ at `N` and RecCap's `top` slot at `capIdx` carry one commit string. Both are row
 `outCommitTie_deployed` assembles them at `layR`, the dense form, pieces in range and the inner verifier's coins
 within the bound's.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -609,7 +613,7 @@ theorem laterCap_size {x : Msg} {st0 : Claims.Recursion.CompiledStatement} (hst 
     cases hs : r.shape.sparse with
     | none => rfl
     | some _ => simp [hs] at h2
-  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, hA, hC, K, n0, hK, hT, rfl⟩ := FlockC3.Reps.list_ok hss
+  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, hA, hC, K, Lk, n0, hK, hT, hLk, rfl⟩ := FlockC3.Reps.list_ok hss
   obtain rfl := (FlockC3.VStarList.candidate3_ok hC).1 hsp
   obtain ⟨sch, sp, ps, hsch, -, -, hAe⟩ := FlockVBridge.Family.statementsOf_eq hA
   have hge : A.size ≤ s' := by
@@ -618,7 +622,7 @@ theorem laterCap_size {x : Msg} {st0 : Claims.Recursion.CompiledStatement} (hst 
     have hm := Array.mem_of_getElem? hsv
     rw [hAe] at hm
     simp at hm
-  rw [Array.append_assoc, Array.getElem?_append_right hge, Array.empty_append] at hsv
+  rw [Array.append_assoc, Array.getElem?_append_right hge, Array.empty_append, Array.append_assoc] at hsv
   have hsz := topsListed_size hT hrs
   by_cases hgK : s' - A.size < K.size
   · rw [Array.getElem?_append_left hgK, Array.getElem?_eq_getElem hgK] at hsv
@@ -651,12 +655,10 @@ theorem laterCap_size {x : Msg} {st0 : Claims.Recursion.CompiledStatement} (hst 
     rw [hg, hnn, e, hnn2, ← hl1]
   · exfalso
     rw [Array.getElem?_append_right (by omega)] at hsv
-    by_cases he : s' - A.size - K.size = 0
-    · rw [he] at hsv
-      simp at hsv
+    rcases Array.mem_append.1 (Array.mem_of_getElem? hsv) with hm | hm
+    · rcases FlockC3.VStarList.linkStatements_ok hLk with ⟨-, rfl⟩ | ⟨_, -, rfl⟩ <;> simp at hm
+    · simp at hm
       omega
-    · rw [Array.getElem?_eq_none (by simp; omega)] at hsv
-      cases hsv
 
 /-- **Rep 0's level-`g + 1` top in the link has the schedule's `g`-th top's nodes** (`round_view`, `topSizes_at`). -/
 theorem top0_eq {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {r : XR} (hr : readX x = some r)

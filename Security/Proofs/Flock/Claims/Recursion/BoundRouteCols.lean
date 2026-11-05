@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.BoundRoute
-import Proofs.Flock.Claims.Recursion.LastBindsEC
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundRoute
+public import Proofs.Flock.Claims.Recursion.LastBindsEC
 
 /-!
 # `KSBoundDeployed`'s ∀-form from the bridge, the last message bound modulo what `E*` reads (R1′)
@@ -26,6 +28,8 @@ its optional digest of a table's empty publics change the list of calls the depl
 `RecDeploy.KSBoundRouteCols` is `KSBoundDeployed`'s ∀-form; `RecDeploy.ksBoundRoute_of_bridge_cols` proves it from the
 bridge. At the deployed plain verifier's own steps `LastCoinFree` holds (`RecDeploy.lastCoinFree_deployed`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 
@@ -570,13 +574,11 @@ extracts. `PartOpensB` makes every holder of a
 round hold the run's commit string there, which the readers read, so each part's check reaches the readers' messages.
 
 `Bridge` is a lemma on the way, not a premise. At the deployed bound record (`bdCover`, `γ`'s weight `wCover` at
-`IVStar`) (P3) holds and the route is `ksBoundRouteCols_cover`. Its level (`Claims.Recursion.lam`) is about 65
-bits per SHA-512 call at the deployed shape (one inner table at `m = 35`, `γ`'s weight at `IVStar` at `coverW`), below
-the 100-bit floor and the `2^-128` target under every weight. Route 2C's bound λ₂ (`lamLin2`) evaluates to at
-least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment's dense
-statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises still open (`RecDeploy.ksLin2_deployed_open`),
-Holo statements being candidate 3's own model, and `BitsLin2` at those statements follows from it
-(`bitsLin2On_of_ksLin2On`). -/
+`IVStar`) (P3) holds and the route is `ksBoundRouteCols_cover`. No theorem evaluates its level
+(`Claims.Recursion.lam`) at the deployment. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 135.7 at the deployed
+records (`RecDeploy.lamLin2_deployed_ge_dep_tight`), and `KSLin2` at the deployment's dense statements (`KSLin2On` at
+`RecDeploy.DenseAt`) is proved (`Flock.SecurityProofs.RecursiveKS`), Holo statements being candidate 3's own model, and
+`BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). -/
 def KSBoundRouteCols (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) : Prop :=
   ∀ (nextE : Msg → List Msg → List Coin → Claims.OC Out)

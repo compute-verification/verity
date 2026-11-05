@@ -161,20 +161,30 @@ def stand_in(set_dir: str) -> dict:
 def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_file: Path | None = None,
             zk: bool = False, env: dict | None = None, prove_timeout: float = 3600) -> tuple[dict | None, dict | None]:
     """One live session: `serve --draw` (the verifier's side: registration, the sample, coins, the verdict) and `prove`.
+    Under FLOCK_CHALLENGER=1 a session on the keyed coin tree (`zk`, or `FC_COINS=tree`) takes its tree from a challenger of
+    its own under ``out/challenger`` (`verity_flock.challengers`, `serve --tree-from`): ``live["challenger"]`` is its exit
+    and its audit of the session's record, and a session whose challenger failed is refused.
     `draw_file`: the server serves the verifier's own draw from that file (`--draw-file`) instead of sampling one. `zk`: both
     sides run the masked protocol (`--zk`); without it the Lean verifier accepts a subset sample at hidden outputs and one table
-    (verifier PROTOCOL §16.15). `env`: added to
+    (`Flock.ProvedScope`). `env`: added to
     both sides' environment (a firewalled prover's, `firewall_env`). `prove_timeout`: the prover's limit in seconds."""
     out.mkdir(parents=True, exist_ok=True)
     d = st["dir"]
     tables = d / "tables"
     zf = ["--zk"] if zk else []
+    senv = {**os.environ, **(env or {})}
+    ch = None
+    if senv.get("FLOCK_CHALLENGER") == "1" and (zk or senv.get("FC_COINS") == "tree"):
+        from verity_flock import challengers as CH
+        ch = CH.start(out / "challenger")
     serve_log = open(out / "serve.log", "w")
     serve = subprocess.Popen([bin_, "serve", *zf, "--listen", f"127.0.0.1:{port}", "--out", str(out / "sessions"),
                               "--instances", str(d / f"pub-{n}.bin"), "--circuit", str(d / "circuit.txt"), "--tables", str(tables),
                               "--pin", st["pin"], "--operator", "one-stage-a0",
-                              *(["--draw-file", str(draw_file)] if draw_file else ["--draw", law]), "--sessions", "1"],
-                             stdout=serve_log, stderr=subprocess.STDOUT, text=True, env={**os.environ, **(env or {})})
+                              *(["--draw-file", str(draw_file)] if draw_file else ["--draw", law]), "--sessions", "1",
+                              *(ch[1] if ch else [])],
+                             stdout=serve_log, stderr=subprocess.STDOUT, text=True, env=senv)
+    got = None
     try:
         for _ in range(1800):
             if "SERVING" in (out / "serve.log").read_text() or serve.poll() is not None:
@@ -192,6 +202,12 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
         if serve.poll() is None:
             serve.kill()
         serve_log.close()
+        if ch:
+            got = CH.end(out / "challenger", ch[0], CH.records(out / "sessions"))
+    if got is not None:
+        live = {**live, "challenger": got}
+        if not got["ok"]:
+            live.update(accepted=False, why=f"challenger: {json.dumps(got)[:600]}")
     recs = sorted((out / "sessions").glob("*/session.json"))
     return (json.loads(recs[-1].read_text()) if recs else None), live
 
@@ -215,7 +231,7 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
     """The verifier of record: Lean `flock-verify verify` on the session's record, with the circuit and the public file
     held by content (`--archive`, SHA-512 keys), and the verifier's own registered reads (`st["registered_file"]`,
     `hold_registered`) when the statement reads registered values; `zk`, a `--zk` session's. `log` names its logs under
-    `out` (a negative's own, beside the honest verdict's). `flags`: more of `verify`'s (a plain session's ``--coins os
+    `out` (a negative's own, beside the honest verdict's). `flags`: more of `verify`'s (a plain session's ``--coins tree
     --stratified K``). ``st["archived"]``, a dict a run's members share: a circuit file archived once, by its file's
     identity (members' ``circuit.txt`` are links of one file), is linked into every later archive rather than put again;
     Lean holds the object to its key when it reads it (`archiveGet`)."""
@@ -370,7 +386,9 @@ def main() -> int:
     ap.add_argument("--port", type=int, default=7511)
     ap.add_argument("--bind", action="store_true", help="run A1's M0 half: the statement binds the partition, program and unit indices")
     ap.add_argument("--statement", default=STATEMENT_ID,
-                    help="the Lean verifier's statement name (verity/flock-circuit@967b8d06 for files staged at M0 68ae79f2 or later)")
+                    help="the Lean verifier's statement name; verify takes only verity/flock-circuit and "
+                         "verity/flock-circuit+plain-leaves, and refuses a superseded one (verity/flock-circuit@967b8d06, "
+                         "for files staged at M0 68ae79f2 or later) once every check has passed")
     ap.add_argument("--binding", default=STAND_IN_BINDING, choices=sorted(STAND_IN_BINDINGS),
                     help="M0's frame-domain binding tag (verity/flock-ir-frame/binding/v1 for an M0 tree before 64-byte bindings)")
     a = ap.parse_args()

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.ForkAlign
-import Proofs.Flock.Soundness.Game.LockOff
+module
+
+public import Proofs.Flock.Claims.KS.ForkAlign
+public import Proofs.Flock.Soundness.Game.LockOff
 
 /-!
 # A slot's off mass at its node, aligned with the off mass after a number of coins
@@ -18,6 +20,8 @@ the prefix:
 * `Lock.nodeE_nodeOff_le_offC`: the alignment, at the fork event `SlotAt` is stated for, so every `SlotAt` proof of the
   √ chain applies unchanged; `Lock.nodeE_congr`: aligned locksteps have the same `nodeE`, as `forkE_congr`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 
