@@ -13,7 +13,9 @@ connections and the windows (the compute audits, or the scans) are sums over `Fi
 `RowsProgWired`, `RowsStateTied` and `RowsCircuitHeld` read the check's refusals off its findings: on acceptance every
 finding is none (`firstFinding_none`), each phase's `wiredCheck`, `stateCheck` and `heldCheck` among them.
 `rowsCircuitHeld_honest` and `rowsCircuitHeld_nontrivial` are `RowsCircuitHeld`'s witnesses: an empty rows-form period
-the check accepts, beside a tied audit that runs the class circuit, and a period whose tied audit runs another.
+the check accepts, where the hold is vacuous, beside a tied audit that runs the class circuit, and a period whose tied
+audit runs another. That the check accepts a period with a held tied audit is the difftest's (`rows-honest`, through
+Lean).
 `RowsStateHeld` reads the accepted public off the check: on acceptance every phase has no finding, so each is its
 scan's facts and its tied audits' charges (`rowsPhase_ok`), the scans keep the phases' indices (`filterMap_getElem?`),
 and each link-window's term is its scan's free inputs and those charges (`tiedFree`).
@@ -334,7 +336,8 @@ theorem tiedWindow_swapped : held (some "c") #[heldReg "d"] tiedWindow = false :
   decide +kernel
 
 /-- **`RowsCircuitHeld`'s honest lemma**: the check accepts a rows-form period of no phase under the class circuit
-`c`, and a phase whose tied audit is registered under `c` holds it. -/
+`c`, where the hold is vacuous, and a phase whose tied audit is registered under `c` holds it. That the check accepts
+a period with a held tied audit is the difftest's (`rows-honest`, through Lean). -/
 theorem rowsCircuitHeld_honest :
     check ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", some "c", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 0⟩
         ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ =

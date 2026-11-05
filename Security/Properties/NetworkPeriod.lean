@@ -33,9 +33,9 @@ charged (`charged`).
 The rows form's terms charge a tied audit (one a scan's `prog` is an output of) its free inputs, and its incorrect
 proof blocks only as the slot entries they can set, since the scan reads the audit only through its `prog` and its
 state is the scan's own. The check accepts a tied audit at any sample; the consistency check of one is `RowsProgWired`,
-`RowsStateTied` and `RowsCircuitHeld`. `RowsProgWired` says it accepts no link-window whose scan's `prog` is not a
+`RowsStateTied` and `RowsCircuitHeld`. `RowsProgWired` says it accepts no phase whose scan's `prog` is not a
 compute audit's slot entries, a lane's tree the entries port of its chunk of a `SlotEntry_v1` or `SelectEntry_v1`
-template of that audit's own Program. `RowsStateTied` says it accepts no link-window whose scan's state is not the
+template of that audit's own Program. `RowsStateTied` says it accepts no phase whose scan's state is not the
 `SCAN_STATE` of an audit its `prog` is wired to, read where the scan's units chain it from row 0, the empty state, so a
 state that skips or alters one of the scan's transitions, or starts from a state the prover chose, is no Program's
 input. Each says its conclusion (`RowsProgWiredAt`, `RowsStateTiedAt`) of every period `check` accepts, and so is, by definition,
