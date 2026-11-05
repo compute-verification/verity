@@ -1,4 +1,8 @@
-"""Import graph of every in-tree Lean package: longest chains by module count, lines, or measured seconds."""
+"""Import graph of every in-tree Lean package: longest chains by module count, lines, or measured seconds.
+
+    python3 graph.py REPO [ROOT] [count|lines|TIMES.json|mods]
+
+`mods` lists ROOT's in-tree import closure, one module a line (Extract.lean's MODS)."""
 from __future__ import annotations
 
 import json
@@ -94,6 +98,9 @@ def closure(root):
 if __name__ == "__main__":
     root = sys.argv[2] if len(sys.argv) > 2 else "Proofs.Flock"
     mode = sys.argv[3] if len(sys.argv) > 3 else "count"
+    if mode == "mods":
+        print("\n".join(sorted(closure(root))))
+        sys.exit(0)
     if mode == "count":
         w = lambda m: 1
     elif mode == "lines":

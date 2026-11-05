@@ -5,6 +5,7 @@
 # and import `new`; `drop_source` use nothing else of `source` and stop importing it, importing instead the
 # modules their constants use (`uses`) that they reached only through it. `source_imports_new` when the rest of
 # `source` uses `decls`. kind = "merge": `module` goes to the top of `into`, and its importers import `into`.
+# `python3 tools/move/split_plan/splitmap.py --refresh` rederives it on a tree (`split_plan/refresh.sh`).
 
 [[op]]
 kind = "split"
