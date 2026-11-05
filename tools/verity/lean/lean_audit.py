@@ -264,8 +264,8 @@ def unread_ratchet(pkgs: list[str], failed: list[str], facts: dict[str, Path], f
     try:
         u = _module(ROOT / UNREAD, "lean_unread_for_lean_audit")
         r = u.check(ROOT, files, [facts[p] for p in UNREAD_FACTS], out / "unread")
-    except Exception as e:                              # the ratchet's own failure fails the step, never passes it
-        return {"failures": [f"unread: {type(e).__name__}: {e}"]}
+    except (OSError, EOFError, ValueError, LookupError, TypeError, AttributeError, ImportError, SyntaxError) as e:
+        return {"failures": [f"unread: {type(e).__name__}: {e}"]}  # anything else raises, which fails the step too
     for f in r["failures"]:
         log(f"lean-audit: FAIL: {f}")
     if r["lower"]:
