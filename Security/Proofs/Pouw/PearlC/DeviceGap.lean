@@ -1,4 +1,6 @@
-import Proofs.Pouw.PearlC.TileGap
+module
+
+public import Proofs.Pouw.PearlC.TileGap
 
 /-!
 # TT_OUT and g at a device record
@@ -12,6 +14,8 @@ Staged; nothing pinned.
   (`pearlCGapDevAt`) and `GGapSampled` from TT_OUT per tile (`pearlCSampledDevAt`), both at `g = 1 − (399/400)/ω`.
   `pearlCTilesDev_total`: the audit tiles' `W_ref` is the layout's `∑_u wrefDev`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

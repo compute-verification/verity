@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.VStarPorts
-import Proofs.Flock.Claims.Recursion.VStarPin
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarPorts
+public import Proofs.Flock.Claims.Recursion.VStarPin
 
 /-!
 # Round 0's rows at RecCap's port `top` (`portRow_cap0`)
@@ -11,6 +13,8 @@ instances read them back whole (`topRows_top`, `capIn_ok`, `portRow_ownRows`). A
 nothing changes, as the rows are already of the port's words and the salts 192 bytes, so RecCap's instance `n` reads
 round 0's `n`-th row under its salt.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarBuild
 

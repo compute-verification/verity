@@ -1,5 +1,7 @@
-import Proofs.Nci.Cover.FanOutValue
-import Proofs.Nci.Cover.FanOutWitness
+module
+
+public import Proofs.Nci.Cover.FanOutValue
+public import Proofs.Nci.Cover.FanOutWitness
 
 /-!
 # The read tier from wiring: its hypotheses can hold together
@@ -12,6 +14,8 @@ The counted product (gate 14) reads the root (gates 12–13), its activation, wh
 exit reaches gate 14 through gate 12 and through gate 13, so a cut inside the root needs both. The product's parameter
 (gate 7) lies outside every value. The block that spends the root is handed both of its gates, `f` of them.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.SecurityProofs
 

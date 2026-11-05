@@ -1,9 +1,11 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Flat
-import Proofs.Flock.Soundness.Discharge.Hidden.Layout
-import Proofs.Flock.Soundness.Discharge.Hidden.ParseCommit
-import Proofs.Flock.Soundness.Discharge.Hidden.SpecOf
-import Proofs.Flock.Soundness.Discharge.Hidden.Unpin
-import Proofs.Flock.Soundness.TmplLayout
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Flat
+public import Proofs.Flock.Soundness.Discharge.Hidden.Layout
+public import Proofs.Flock.Soundness.Discharge.Hidden.ParseCommit
+public import Proofs.Flock.Soundness.Discharge.Hidden.SpecOf
+public import Proofs.Flock.Soundness.Discharge.Hidden.Unpin
+public import Proofs.Flock.Soundness.TmplLayout
 
 /-!
 # A hidden-output session on the committed circuit
@@ -18,6 +20,8 @@ reads here of `HmOut.parseCommit … = .ok st.c`: the circuit is `HmRow.parse`'s
 A templated circuit carries its template, so `ParseFactsPre` (whose `tmpl` is `none`) and `Aliased.UnitFactsPre` hold of
 the circuit `c₀` it was read from (`parseCommit_untyped`), never of the committed circuit itself.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 open Lean (Json)

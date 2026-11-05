@@ -1,12 +1,14 @@
-import Definitions.Pouw.PearlC.DevicePrices
-import Proofs.Pouw.PearlC.DeviceCapGap
-import Proofs.Pouw.PearlC.DeviceChainCapGap
-import Proofs.Pouw.PearlC.UOnlyGap
-import Proofs.Pouw.PearlC.TileUOnlyGap
-import Proofs.Pouw.PearlC.FreezeP
-import Definitions.Pouw.Guarantees.PearlC
-import Proofs.Pouw.PearlC.TTOutW1
-import Proofs.Pouw.PearlC.TTOutW1Variants
+module
+
+public import Definitions.Pouw.PearlC.DevicePrices
+public import Proofs.Pouw.PearlC.DeviceCapGap
+public import Proofs.Pouw.PearlC.DeviceChainCapGap
+public import Proofs.Pouw.PearlC.UOnlyGap
+public import Proofs.Pouw.PearlC.TileUOnlyGap
+public import Proofs.Pouw.PearlC.FreezeP
+public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.PearlC.TTOutW1
+public import Proofs.Pouw.PearlC.TTOutW1Variants
 
 /-!
 # g at the RTX PRO 6000 (sm_120) records (staging, nothing pinned)
@@ -32,6 +34,8 @@ and sm_120's measured prices. This file adds no definitions.
   - v2 at the chain cap 1/1,000: per unit `26921/7493750` (0.35925%) and `367519/103656250` (0.35456%), per audit tile
     the 1/1,000 row's.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

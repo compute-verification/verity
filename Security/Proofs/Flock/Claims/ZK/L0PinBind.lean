@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.L0PinSwitch
-import Proofs.Flock.Claims.ZK.L0PinRec
+module
+
+public import Proofs.Flock.Claims.ZK.L0PinSwitch
+public import Proofs.Flock.Claims.ZK.L0PinRec
 
 /-!
 # The frame at a rep's binding
@@ -21,6 +23,8 @@ rep's schedule so far:
 * **Level 0's rounds** (`sched_binding`, `sched_l0`): fed level 0's first `j` coins as well, the schedule's next
   rounds are level 0's first `j + 1` bodies at zero pads (`openStep_l0`), the binding first, with the opening's counts.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer.Bind
 

@@ -1,5 +1,7 @@
-import Definitions.Pouw.Assumptions.Pinned
-import Proofs.Pouw.Prob
+module
+
+public import Definitions.Pouw.Assumptions.Pinned
+public import Proofs.Pouw.Prob
 
 /-!
 # Facts about the named instance `D1.m1`
@@ -7,6 +9,8 @@ import Proofs.Pouw.Prob
 Its parameters and sharing, noise range, query bound and unit-specific `E_L` queries, a 16-unit workload in its
 domain, and the bound on its explicit `W_ref`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Proofs
 

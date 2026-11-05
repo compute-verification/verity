@@ -1,7 +1,9 @@
-import Lean.Data.Json
-import Flock.Canon
-import Difftest
-import CircuitRequirement
+module
+
+public import Lean.Data.Json
+public import Flock.Canon
+public import Difftest
+public import CircuitRequirement
 
 /-!
 # The requirement difftest: `CircuitRequirement` behind `Difftest.serve`
@@ -29,6 +31,8 @@ the store and the plan are `W`'s (`storeMatches`, `planMatches`), with `held` an
 window, PoUW's over the placed execution: the region at its ticks and at its engine steps, its ingress and its credits
 at the pricing `price`.
 -/
+
+@[expose] public section
 
 namespace CircuitRequirement.Difftest
 

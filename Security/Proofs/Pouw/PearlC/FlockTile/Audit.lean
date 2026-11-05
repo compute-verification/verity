@@ -1,5 +1,7 @@
-import Definitions.Pouw.PearlC.HiddenTileGame
-import Proofs.Pouw.PearlC.FlockTile.Bridge
+module
+
+public import Definitions.Pouw.PearlC.HiddenTileGame
+public import Proofs.Pouw.PearlC.FlockTile.Bridge
 
 /-!
 # C-Flock's hidden audit: the TileRead session per drawn tile
@@ -16,6 +18,8 @@ soundness speaks of, and the event that soundness bounds. From it:
 * `TileReadSession.tileGame`: a `TileGame` for every tile of every in-domain workload, from the two open obligations
   `TileReadSound` (T3, giving `bad_le`) and `TileReadBinds` (the binding, giving `good_of_accept`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.FlockTile
 

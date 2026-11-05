@@ -1,10 +1,14 @@
-import Definitions.Pouw.Game.Defs
+module
+
+public import Definitions.Pouw.Game.Defs
 
 /-!
 # Named assumptions (trusted)
 
 Each is a `Prop` taken as a hypothesis by the statements that use it, never an `axiom`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Assumptions
 

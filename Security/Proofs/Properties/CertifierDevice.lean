@@ -1,7 +1,9 @@
-import Mathlib
-import Properties.CertifierDevice
-import Proofs.Properties.CertifierDevice.Complete
-import Proofs.Properties.CertifierDevice.Issuer
+module
+
+public import Mathlib
+public import Properties.CertifierDevice
+public import Proofs.Properties.CertifierDevice.Complete
+public import Proofs.Properties.CertifierDevice.Issuer
 
 /-!
 # The certifier device's properties, proved
@@ -12,6 +14,8 @@ the handing buckets' (`Proofs.CertifierDevice.Fifo`, `Proofs.CertifierDevice.Lat
 the issuer's from LMS's correctness (`Proofs.CertifierDevice.Lms`, `Proofs.CertifierDevice.Issuer`), which is
 completeness and no guarantee (`Proofs.CertifierDevice.Lms.lmsCorrect`).
 -/
+
+@[expose] public section
 
 namespace Properties.CertifierDevice
 

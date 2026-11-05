@@ -1,8 +1,10 @@
-import Properties.Pous.EndToEndAt
-import Proofs.Pous.EndToEnd
-import Proofs.Pous.P2.Rounds
-import Proofs.Flock.Soundness.KeyedDraw
-import Proofs.Pous.Obligation
+module
+
+public import Properties.Pous.EndToEndAt
+public import Proofs.Pous.EndToEnd
+public import Proofs.Pous.P2.Rounds
+public import Proofs.Flock.Soundness.KeyedDraw
+public import Proofs.Pous.Obligation
 
 /-!
 # PoUS's ring game at any block count, proved
@@ -20,6 +22,8 @@ import Proofs.Pous.Obligation
   reads the per-round floor only at that `N`) from `P2RingRoundSecureWide`, and at Demo B's `N` with its state bound
   (`Pous.SecurityProofs.stateBound_p2ring_demo`).
 -/
+
+@[expose] public section
 
 namespace Pous.EndToEnd.SecurityProofs
 

@@ -1,4 +1,6 @@
-import Definitions.Pouw.PearlC.Tile
+module
+
+public import Definitions.Pouw.PearlC.Tile
 
 /-!
 # The honest tiles' measured cap rate, completeness's one assumption (trusted; a `Prop` taken as a hypothesis)
@@ -51,6 +53,8 @@ whatever the table's number. How the rate is measured and cited:
 
 Until that art id lands with `Served`, `m` and the per-input bounds, no table or ledger cites a completeness number.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Assumptions
 

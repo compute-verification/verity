@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainLeafClashK
-import Proofs.Flock.Claims.KS.PlainClashRunK
+module
+
+public import Proofs.Flock.Claims.KS.PlainLeafClashK
+public import Proofs.Flock.Claims.KS.PlainClashRunK
 
 /-!
 # The live self-clash at plain SHA-512 leaves, at `VK keep`
@@ -7,6 +9,8 @@ import Proofs.Flock.Claims.KS.PlainClashRunK
 `PlainLeafClash`'s run-level half over the verifier `VK keep`: `plainDecQUK`, `PlainClashQUK`, `plainClashQ₀UK`,
 `plainClashQ_orUK`, `plainClashQLUK` and `plainSimClashHUK`, from `PlainLeafClashK`'s clashes at the draw.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

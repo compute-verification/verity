@@ -1,7 +1,9 @@
-import Proofs.Pouw.PearlC.DeviceCapGap
-import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
-import Definitions.Pouw.Guarantees.PearlC
-import Proofs.Pouw.PearlC.TTOutW1Variants
+module
+
+public import Proofs.Pouw.PearlC.DeviceCapGap
+public import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
+public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.PearlC.TTOutW1Variants
 
 /-!
 # TT_OUT over U alone: it asserts more than the (C̃, U) row, and g from it
@@ -16,6 +18,8 @@ Staged; nothing pinned.
 * `gapU_implies_gap`: `G_g^U` gives `G_g`, since a unit the (C̃, U) verifier accepts is one the U-only verifier
   accepts.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

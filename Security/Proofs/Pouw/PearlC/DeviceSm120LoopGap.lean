@@ -1,7 +1,9 @@
-import Proofs.Pouw.PearlC.DeviceSm120Gap
-import Proofs.Pouw.PearlC.CapLoopGap
-import Proofs.Pouw.PearlC.ChainCapLoopGap
-import Proofs.Pouw.PearlC.UOnlyLoopGap
+module
+
+public import Proofs.Pouw.PearlC.DeviceSm120Gap
+public import Proofs.Pouw.PearlC.CapLoopGap
+public import Proofs.Pouw.PearlC.ChainCapLoopGap
+public import Proofs.Pouw.PearlC.UOnlyLoopGap
 
 /-!
 # g at the RTX PRO 6000 (sm_120) records at the in-loop prices (staged)
@@ -23,6 +25,8 @@ rule publishes these. `Prices.sm120Loop` rounds the A-only forming up to a whole
 Every g here is an upper bound on the in-loop g: `Prices.sm120Loop` rounds the A-only forming (1.047) up to 2. The
 exact in-loop values for v1 under rev1 and v2 at the cap are `DeviceSm120KernelGap`'s `…LoopCast8…` pins.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

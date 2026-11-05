@@ -1,8 +1,10 @@
-import Properties.Verity.Soundness
-import Properties.Verity.Idle
-import Proofs.Properties.Composition
-import Proofs.Core.Game.Prob
-import Proofs.Core.Game.Seq
+module
+
+public import Properties.Verity.Soundness
+public import Properties.Verity.Idle
+public import Proofs.Properties.Composition
+public import Proofs.Core.Game.Prob
+public import Proofs.Core.Game.Seq
 
 /-!
 # Soundness at the verifier of record, from its subprotocols' targets
@@ -32,6 +34,8 @@ composites: its hypotheses hold at `Idle.unbounded` (`soundness_at_of_targets_ho
 (`soundness_at_of_targets_nontrivial`, `soundness_of_subprotocols_nontrivial`, `remote_soundness_of_subprotocols_nontrivial`): there
 every error is `0` and PoUW's claim fails on every play of the files that pass the commit phase's check.
 -/
+
+@[expose] public section
 
 namespace Verity
 

@@ -1,4 +1,6 @@
-import Definitions.Pouw.PearlC.Tile
+module
+
+public import Definitions.Pouw.PearlC.Tile
 
 /-!
 # The sampled audit's completeness on a population of activations (trusted)
@@ -13,6 +15,8 @@ The cap is what can fail. Activations aligned against it pass Π's rules and exc
 every activation input. `CompleteSampled` therefore names its population `Served`, the activation inputs it speaks of,
 and bounds the audit's rejection by `t·ε` over `t` draws: `ε` per draw, by the union bound.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

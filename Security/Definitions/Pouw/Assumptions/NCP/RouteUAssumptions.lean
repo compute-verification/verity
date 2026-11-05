@@ -1,4 +1,6 @@
-import Definitions.Pouw.NCP.RouteU
+module
+
+public import Definitions.Pouw.NCP.RouteU
 
 /-!
 # NCP's named assumption on route U (trusted)
@@ -9,6 +11,8 @@ values are route U's int32 accumulator at bias `β` (`mmWU β`, from `c₀ = −
 named assumption is its instance at ncp-v1's `β = 128`. Neither variant
 reduces to the other in W1 cost: converting one checked word into the other costs one priced add.
 -/
+
+@[expose] public section
 
 namespace Pouw.NCP.Assumptions
 

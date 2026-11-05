@@ -1,5 +1,7 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOut
-import Definitions.Pouw.Assumptions.PearlC.TTOutW1
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOut
+public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 
 /-!
 # The cap on the chain's share (trusted; definitions and the named `Prop`)
@@ -19,6 +21,8 @@ At W1 (`TTOutPearlCDevChainCapW1`, `TTOutTilePearlCDevChainCapW1`) the cost mode
 `TTOutW1`'s and `TTOutTileW1`'s game at the chain-share cap's protocol and tiles. They are stated here, not in
 `Definitions`, because the protocol is.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

@@ -1,5 +1,7 @@
-import Definitions.Accounting.Assumptions.TS
-import Definitions.Accounting.TS.Receipt
+module
+
+public import Definitions.Accounting.Assumptions.TS
+public import Definitions.Accounting.TS.Receipt
 
 /-!
 # (I7) from the receipt (trusted)
@@ -29,6 +31,8 @@ The luck premise (I7) `LuckAt` split at the receipt (LEDGER §1.3–§1.5), each
 * `LuckCaseAKeyed`: case (a) when each round's share counts wrong words only (the B200 heavy design's keyed rounds in
   the li fold), (I7) at 0.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.TS
 

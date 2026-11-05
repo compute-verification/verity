@@ -1,5 +1,7 @@
-import Proofs.Pouw.PearlC.DeviceRev1Gap
-import Definitions.Pouw.PearlC.DeviceKernelWref
+module
+
+public import Proofs.Pouw.PearlC.DeviceRev1Gap
+public import Definitions.Pouw.PearlC.DeviceKernelWref
 
 /-!
 # g against the honest kernel's `W_ref`, from the record's TT_OUT (staged)
@@ -12,6 +14,8 @@ import Definitions.Pouw.PearlC.DeviceKernelWref
   (`pearlCGapDevKAt`, `pearlCGapDevRev1KAt`) and `GGapSampled` from TT_OUT per tile (`pearlCSampledDevKAt`,
   `pearlCSampledDevRev1KAt`), where `wrefDevK d c = ω·(1 − ρ)·creditDev` (rev1: `wrefDevRev1K`, `creditDevRev1`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

@@ -3,9 +3,13 @@
 and the session record's digests are the oracle's. A transcript action that hashes nothing is the compiled verifier's own,
 lifted (`liftTM`).
 -/
-import Flock.With.Hashes
-import Flock.Record
-import Flock.JsonParse
+module
+
+public import Flock.With.Hashes
+public import Flock.Record
+public import Flock.JsonParse
+
+@[expose] public section
 
 namespace Flock
 

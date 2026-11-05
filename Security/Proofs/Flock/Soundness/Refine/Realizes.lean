@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Refine.Tapes
+module
+
+public import Proofs.Flock.Soundness.Refine.Tapes
 
 /-!
 # How the executable's statement denotes a model statement
@@ -11,6 +13,8 @@ statement's circuit fold, which computes `α·A₀ᵀe + B₀ᵀe` from the stat
 builder, not a verifier check. The refinement takes it as a hypothesis, and the statement decoding discharges it for
 `Setup.ofCircuit` (level 3's `fold_get` describes the fold entry by entry).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

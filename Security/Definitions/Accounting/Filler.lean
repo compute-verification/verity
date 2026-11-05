@@ -1,4 +1,6 @@
-import Definitions.Pouw.RelativeSecurity
+module
+
+public import Definitions.Pouw.RelativeSecurity
 
 /-!
 # The filler's cell check (trusted)
@@ -28,6 +30,8 @@ What the filler's per-check luck is about, as `benchmarks/pouw/filler/pfill_ref.
   full, at one uniform tile, or at one uniform tile beside another block. The round's share is the share of tiles whose
   committed receipt isn't the recomputed one.
 -/
+
+@[expose] public section
 
 namespace Accounting.Filler
 

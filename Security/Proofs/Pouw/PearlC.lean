@@ -1,15 +1,17 @@
-import Definitions.Pouw.Guarantees.PearlC
-import Proofs.Pouw.PearlC.DeviceCapRev1Gap
-import Proofs.Pouw.PearlC.DeviceFp4Gap
-import Proofs.Pouw.PearlC.Fp4IssueGap
-import Proofs.Pouw.PearlC.RowSeedGap
-import Proofs.Pouw.PearlC.RowSeedSkip
-import Proofs.Pouw.PearlC.ServedFadd8Rev1Gap
-import Proofs.Pouw.PearlC.ServedMixedRev1Gap
-import Proofs.Pouw.PearlC.UOnlyGap
-import Proofs.Pouw.PearlC.TTOutW1
-import Proofs.Pouw.PearlC.TTOutFp4W1
-import Proofs.Pouw.PearlC.TTOutW1Item1
+module
+
+public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.PearlC.DeviceCapRev1Gap
+public import Proofs.Pouw.PearlC.DeviceFp4Gap
+public import Proofs.Pouw.PearlC.Fp4IssueGap
+public import Proofs.Pouw.PearlC.RowSeedGap
+public import Proofs.Pouw.PearlC.RowSeedSkip
+public import Proofs.Pouw.PearlC.ServedFadd8Rev1Gap
+public import Proofs.Pouw.PearlC.ServedMixedRev1Gap
+public import Proofs.Pouw.PearlC.UOnlyGap
+public import Proofs.Pouw.PearlC.TTOutW1
+public import Proofs.Pouw.PearlC.TTOutFp4W1
+public import Proofs.Pouw.PearlC.TTOutW1Item1
 
 /-!
 # Proofs of Pearl-C's guarantees
@@ -18,6 +20,8 @@ One theorem `Pouw.SecurityProofs.PearlC.G : Pouw.Guarantees.PearlC.G` per guaran
 `Pouw.PearlC` (`DeviceCapRev1Gap`) that proves the same statement under its old name, or, for a guarantee stated at
 W1, that theorem at the cost model `W1.w1Priced` (`Proofs.Pouw.PearlC.TTOutW1`).
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.PearlC
 

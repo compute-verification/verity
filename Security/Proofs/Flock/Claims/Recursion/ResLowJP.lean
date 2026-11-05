@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.DecompBDeployed
-import Proofs.Flock.Claims.Recursion.PartAcceptsPin
+module
+
+public import Proofs.Flock.Claims.Recursion.DecompBDeployed
+public import Proofs.Flock.Claims.Recursion.PartAcceptsPin
 
 /-!
 # `ResLowJ` with each part's check at its own witness
@@ -13,6 +15,8 @@ accumulator rows only the joint chain ties (`ResLower.PortsAt`).
 * `ResLowJP`: the residual groups' share of `hlowP` at `JointP`.
 * `resLowJP_of_resLowJ`: `ResLowJ` gives it.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.DecompBR
 

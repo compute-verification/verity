@@ -1,8 +1,10 @@
-import Definitions.Pouw.Game.Params
-import Definitions.Pouw.M1
-import Definitions.Pouw.Witness.Model
-import Definitions.Pouw.Witness.Copy
-import Definitions.Pouw.Assumptions.Game
+module
+
+public import Definitions.Pouw.Game.Params
+public import Definitions.Pouw.M1
+public import Definitions.Pouw.Witness.Model
+public import Definitions.Pouw.Witness.Copy
+public import Definitions.Pouw.Assumptions.Game
 
 /-!
 # Pinned statements (trusted)
@@ -10,6 +12,8 @@ import Definitions.Pouw.Assumptions.Game
 The headline statements, each a `Prop`; the proofs are theorems `Pouw.Proofs.* : Pinned.X`, recorded in
 `lean-audit.json`. (b), (c) and (d) are guarantees, in `Pouw.Guarantees.Game`. Plain-language map: `STATEMENTS.md`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Pinned
 

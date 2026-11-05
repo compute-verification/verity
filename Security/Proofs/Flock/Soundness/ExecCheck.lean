@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.ExecPlacement
+module
+
+public import Proofs.Flock.Soundness.ExecPlacement
 
 /-!
 # What `HmRow.check` accepted
@@ -8,6 +10,8 @@ ranges inside the block, pairwise apart, in slots of their nets' rows; the unit 
 `vus_per_block × units_per_vu` slots and a group of 16-bit leaf ports; the row slots' ports; every net range's slots per
 template instance; one range per net; the wires' and leaf cuts' bounds; the leaf maps.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

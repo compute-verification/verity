@@ -1,5 +1,7 @@
-import Definitions.Nci.Threads
-import Definitions.Nci.Fit
+module
+
+public import Definitions.Nci.Threads
+public import Definitions.Nci.Fit
 
 /-!
 # NCI over threads: the named assumption
@@ -10,6 +12,8 @@ whose weights are computed after the commitment, not about the declared circuit:
 through containment. `WeightsIncompressibleSlots` is the same assumption with weights charged per parameter slot
 (`Threading.Slots`), once per parameter however many of its optimizer steps a subcircuit spans.
 -/
+
+@[expose] public section
 
 namespace Nci.Assumptions
 

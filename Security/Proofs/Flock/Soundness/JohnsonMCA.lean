@@ -1,4 +1,6 @@
-import ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.Johnson.Probability
+module
+
+public import ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.Johnson.Probability
 
 /-!
 # Mutual correlated agreement up to the Johnson bound, proved (DKT26)
@@ -14,6 +16,8 @@ MCA event (`mcaError_top_eq_zero`).
 
 So the soundness proof keeps BCHKS25's numerator in its accounting, and names no assumption for it.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

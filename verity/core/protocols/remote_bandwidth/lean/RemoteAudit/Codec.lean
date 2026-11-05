@@ -1,4 +1,6 @@
-import RemoteAudit.Basic
+module
+
+public import RemoteAudit.Basic
 
 /-!
 # The store's codec, decoding: `codec.py`
@@ -22,6 +24,8 @@ d_j        sha512/row/v2 of the payload: SHA512(P(32768) ‖ payload)
 the digest `d_j` it was decoded under. Arguments `codec.py` raises on (a block of another size, an index past
 `max_blocks`, a digest or coin of another size) are an `.error`.
 -/
+
+@[expose] public section
 
 namespace RemoteAudit.Codec
 
