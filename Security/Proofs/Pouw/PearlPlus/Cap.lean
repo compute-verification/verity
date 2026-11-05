@@ -666,7 +666,8 @@ theorem endsAgree_of {c d : Code} (h : c = d ∨ (c.val % 128 = 0 ∧ d.val % 12
 /-- **An element the game finds salt-dead the check finds salt-dead**: on a row whose α and β are step words, β
 positive, where `flat_code` and `salt_dead` are values, the support's two ends agree in the game
 (`saltDeadP_iff_ends_hopper`'s `EndsAgree`) only where the check's `ends_agree` holds. -/
-theorem saltDead_of_ends {αw βw cb w d : ℕ} {y : ℚ} (hα : AccumProofs.StepWord αw) (hβ : AccumProofs.StepWord βw)
+theorem saltDead_of_ends {αw βw cb w : ℕ} {d : Bool} {y : ℚ} (hα : AccumProofs.StepWord αw)
+    (hβ : AccumProofs.StepWord βw)
     (hβpos : 0 < PearlC.wordVal βw) (hw : w < 2 ^ 32) (hy : wordQ w = some y) (hcb : Rule.flatCode βw = .ok cb)
     (hd : Rule.saltDead αw cb w = .ok d)
     (hE : Pouw.PearlC.Cap.EndsAgree hopperE4m3K32 (PearlC.wordVal αw) y (PearlC.wordVal βw)) : d = true := by
@@ -686,10 +687,12 @@ theorem saltDead_of_ends {αw βw cb w d : ℕ} {y : ℚ} (hα : AccumProofs.Ste
       cb = (lineCodes (PearlC.wordVal βw) (Pouw.PearlC.SaltDead.flatLine fun _ => false) q).val := by
     intro q
     refine Eq.trans ?_ (WholeCircuit.eTilde8_line hops hβ hβpos (e := Pouw.PearlC.SaltDead.flatLine fun _ => false) q
-      (by rw [hfl]; exact hnan44))
-    rw [hcb, RowCircuit.eTilde8, WholeCircuit.encCodes_of_lt q.isLt, PeelSim.eval_e4m3ToF32,
+      hnan44)
+    have henc : RowCircuit.encCodes (r := Params.pi.r) (Pouw.PearlC.SaltDead.flatLine fun _ => false) q =
+        (e4m3 (44 : ℚ)).val := WholeCircuit.encCodes_of_lt q.isLt
+    rw [hcb, RowCircuit.eTilde8, henc, PeelSim.eval_e4m3ToF32,
       Nat.mod_eq_of_lt (PeelSim.e4m3ToF32_lt _), StatsSim.eval_mul, Nat.mod_eq_of_lt (PeelSim.mulV2_lt _ _),
-      PeelSim.eval_toE4m3, Nat.mod_eq_of_lt (PeelSim.toE4m3_lt _), hfl, h44]
+      PeelSim.eval_toE4m3, Nat.mod_eq_of_lt (PeelSim.toE4m3_lt _), h44]
   have hcb256 : cb < 256 := by
     rw [hcb]
     exact lt_of_lt_of_eq (PeelSim.toE4m3_lt _) (by norm_num)
