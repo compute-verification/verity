@@ -164,7 +164,7 @@ theorem checkUnit_refuses {c : Circuit} {UB PB : Nat} {g : Net} (hg : RecLinkPar
   unfold RecLinkPart.checkUnit
   rw [hg]
   dsimp only
-  rw [if_neg h]
+  rw [ite_eq_right h]
   rfl
 
 /-- V\*'s link layout at `UB = PB = 0`, from the statement's port names and `VStar.linkRows` rather than V\*'s file (which
