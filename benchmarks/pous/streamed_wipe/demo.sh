@@ -214,7 +214,7 @@ EOF
   if [ "$STORE" = cuda ] && [ -z "${GPU_LEASE_UUID:-}" ] && command -v gpu-lease >/dev/null 2>&1; then
     LEASE_MEM=()
     [ "$DRAM" = 1 ] && LEASE_MEM=(--mem-gb "$(awk '/^MemTotal:/ {printf "%d", $2 / 1048576 - 2}' /proc/meminfo)")
-    GPU_LEASE_WHO=memory-accounting gpu-lease 1 --wait --max-min "$LEASE_MIN" ${LEASE_MEM[@]+"${LEASE_MEM[@]}"} \
+    gpu-lease 1 --wait --max-min "$LEASE_MIN" ${LEASE_MEM[@]+"${LEASE_MEM[@]}"} \
       -- bash "$SELF" leased || rc=$?
   else
     bash "$SELF" leased || rc=$?

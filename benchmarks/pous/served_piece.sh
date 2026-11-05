@@ -38,7 +38,7 @@ if [ -n "${GPU_LEASE_UUID:-}" ] || ! command -v gpu-lease > /dev/null 2>&1; then
   "$PY" "${ARGS[@]}" 2>> "$DIR/pous.log"
 else
   # shellcheck disable=SC2016
-  GPU_LEASE_WHO=${GPU_LEASE_WHO:-memory-accounting} gpu-lease 1 --wait --max-min "${LEASE_MIN:-40}" --mem-gb "${MEM_GB:-32}" -- \
+  gpu-lease 1 --wait --max-min "${LEASE_MIN:-40}" --mem-gb "${MEM_GB:-32}" -- \
     bash -c 'echo "leased $GPU_LEASE_UUID at $(date -u +%H:%M:%SZ)" >&2; export CUDA_VISIBLE_DEVICES=$GPU_LEASE_UUID; exec "$@"' \
     _ "$PY" "${ARGS[@]}" 2>> "$DIR/pous.log"
 fi

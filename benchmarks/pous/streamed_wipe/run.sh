@@ -43,6 +43,6 @@ sha256sum labels.cu "$ROOT/verity/ml/kernels/sha512.cuh" bench.py "$S/wipelabels
   || { tail -30 "$O/build.txt"; echo "REFUSED: the Lean verdict doesn't build"; exit 3; }
 
 rc=0
-GPU_LEASE_WHO=memory-accounting gpu-lease 1 --wait --max-min 20 -- bash "$PWD/run.sh" leased "$S" || rc=$?
+gpu-lease 1 --wait --max-min 20 -- bash "$PWD/run.sh" leased "$S" || rc=$?
 [ -f "$O/timing.json" ] && "$PY" -c "import json,sys; print(json.dumps(json.load(open(sys.argv[1])).get('summary'), indent=1))" "$O/timing.json"
 exit $rc
