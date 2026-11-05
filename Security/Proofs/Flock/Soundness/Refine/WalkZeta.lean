@@ -61,7 +61,9 @@ def retZetaStep (g : MVarId) : MetaM (Option (List MVarId)) := g.withContext do
       let found ← forallTelescope (← instantiateMVars d.type) fun _ r =>
         pure (r.isAppOfArity ``Ret 3 && (r.getArg! 1).getAppFn == m.getAppFn)
       if found then
-        g.assign (mkAppN d.toExpr m.getAppArgs)
+        let pf := mkAppN d.toExpr m.getAppArgs
+        unless ← isDefEq (← inferType pf) ty do return none
+        g.assign pf
         return some []
     return none
   if ← isMatcherApp m then return some (← Split.splitMatch g m)
