@@ -47,6 +47,8 @@ SYNTAX_DEF = re.compile(r'^(?:scoped |local )?(?:elab|macro|syntax|notation|infi
                         re.M)
 OPEN = re.compile(r"^open(\s+scoped)?((?:[ \t]+[^\s()]+)+)[ \t]*$")
 LOCAL_SYNTAX = re.compile(r"^local\s+(?:elab|macro|syntax|notation|infix[lr]?|prefix|postfix)\b")
+TOKEN = re.compile(r"[\w'!?]+")
+BRACKETS = {"(": ")", "{": "}", "[": "]", "⦃": "⦄"}
 
 
 def nl_lines(text: str) -> list[str]:
@@ -276,12 +278,56 @@ def drop_import(text: str, mod: str) -> str:
     return "".join(keep) + body
 
 
+def binders(text: str) -> list[str] | None:
+    """A `variable` command's binder groups, or None when it holds anything else (a comment, an `in`)."""
+    rest, out, k = text[len("variable"):], [], 0
+    while k < len(rest):
+        if rest[k].isspace():
+            k += 1
+            continue
+        close = BRACKETS.get(rest[k])
+        if close is None:
+            return None
+        stack, j = [close], k + 1
+        while stack and j < len(rest):
+            c = rest[j]
+            if c in BRACKETS:
+                stack.append(BRACKETS[c])
+            elif c == stack[-1]:
+                stack.pop()
+            j += 1
+        if stack:
+            return None
+        out.append(rest[k:j])
+        k = j
+    return out
+
+
+def kept_binders(groups: list[str], used: set[str]) -> list[str]:
+    """The groups a declaration whose text holds the tokens `used` can read: an anonymous one (an instance), and a named one
+    whose name it or a kept group's type names. A named variable is included only where it is named, so the rest change
+    nothing but must still elaborate."""
+    def names(g):
+        head = g[1:-1].split(":", 1)
+        return TOKEN.findall(head[0]) if len(head) == 2 and g[0] != "[" else []
+    keep = [not names(g) or bool(set(names(g)) & used) for g in groups]
+    while True:
+        need = {t for g, k in zip(groups, keep) if k for t in TOKEN.findall(g.split(":", 1)[-1])}
+        more = [k or bool(set(names(g)) & need) for g, k in zip(groups, keep)]
+        if more == keep:
+            return [g for g, k in zip(groups, keep) if k]
+        keep = more
+
+
 def prune(text: str, known: set[str], avail: set[str], used: str | None = None) -> tuple[str, list[str]]:
     """`text` without what it can no longer resolve: each namespace of a plain top-level `open` line that is declared in
     the tree (`known`) but by none of the modules it now imports (`avail`), as Lean resolves the name from the
-    namespaces open there; a namespace no in-tree module declares (Mathlib's) stays. With `used`, a `local` notation or
-    macro whose atom `used` doesn't hold goes too. Returns the text and what went."""
+    namespaces open there; a namespace no in-tree module declares (Mathlib's) stays. With `used` (the text of the
+    declarations it holds), a `local` notation or macro whose atom `used` doesn't hold goes too, and so does each named
+    `variable` binder neither `used`, an `include` or `omit` nor a kept binder names. Returns the text and what went."""
     header, body = split_header(text)
+    toks = set(TOKEN.findall(used)) if used is not None else set()
+    toks |= {t for u in units_of(body) if re.match(r"(include|omit)\s", u.head) for t in TOKEN.findall(u.own())}
     out, ns, gone = [header], [[]], []
     for u in units_of(body):
         o, e = OPENER.match(u.head), END.match(u.head)
@@ -308,6 +354,14 @@ def prune(text: str, known: set[str], avail: set[str], used: str | None = None) 
             atom = SYNTAX_DEF.search(u.own())
             if atom and atom.group(1).strip() and atom.group(1).strip() not in used:
                 gone.append(u.head)
+                continue
+        elif used is not None and re.match(r"variable\s", u.head) and (gs := binders(u.own().strip())) is not None:
+            keep = kept_binders(gs, toks)
+            if len(keep) < len(gs):
+                gone += [g for g in gs if g not in keep]
+                if not keep:
+                    continue
+                out.append("variable " + " ".join(keep) + "\n" + "".join(u.blank))
                 continue
         out.append(u.full())
     return "".join(out), gone
@@ -346,9 +400,10 @@ class Tree:
         return self._imports[m]
 
     def atoms(self, m: str) -> list[str]:
-        """The atoms of the tactics and notations `m` defines."""
+        """The atoms of the tactics and notations `m` defines for its importers (not its `local` ones)."""
         if m not in self._atoms:
-            self._atoms[m] = [a.strip() for a in SYNTAX_DEF.findall(self.read(m)) if a.strip()]
+            self._atoms[m] = [a.group(1).strip() for a in SYNTAX_DEF.finditer(self.read(m))
+                              if a.group(1).strip() and not a.group(0).startswith("local ")]
         return self._atoms[m]
 
     def spaces(self, mods) -> set[str]:

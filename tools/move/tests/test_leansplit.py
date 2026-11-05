@@ -200,6 +200,42 @@ def test_a_new_module_leaves_out_the_namespaces_and_notations_it_cannot_see(tree
     assert any("left out open Inner" in ln for ln in log)
 
 
+SRC3 = """module
+
+public import Proofs.Toy.Base
+public import Proofs.Toy.Other
+
+namespace Toy
+variable (F : Type) (Hs : Inner.Hashes F) [Inhabited F] (x : F) {k : Nat}
+variable (y : F)
+include y
+
+theorem a_le (n : Nat) : x = x ∧ n ≤ base n := ⟨rfl, Nat.le_succ n⟩
+
+theorem b_le (n : Nat) (h : Hs = Hs) : n ≤ base n + k := by omega
+
+end Toy
+"""
+
+
+def test_a_new_module_keeps_only_the_variables_its_declarations_name(tree):
+    (tree.root / "Security/Proofs/Toy/Other.lean").write_text(OTHER)
+    (tree.root / "Security/Proofs/Toy/Src.lean").write_text(SRC3)
+    tree = M.Tree(tree.root)
+    M.split(tree, dict(SPLIT, importers=[], drop_source=[], uses={}), [])
+    new = tree.read("Proofs.Toy.SrcA")
+    assert "variable (F : Type) [Inhabited F] (x : F)\nvariable (y : F)\ninclude y\n" in new
+    assert "Hs" not in new and "{k" not in new
+    assert "(Hs : Inner.Hashes F)" in tree.read("Proofs.Toy.Src")
+
+
+def test_a_local_notation_is_no_atom_an_importer_reads():
+    tree = M.Tree(Path("/nonexistent"))
+    tree.mods["Proofs.Toy.Syn"] = Path("/nonexistent/Syn.lean")
+    tree.write("Proofs.Toy.Syn", 'local notation "𝔽" => Nat\nmacro "toy_tac" : tactic => `(tactic| rfl)\n')
+    assert tree.atoms("Proofs.Toy.Syn") == ["toy_tac"]
+
+
 def test_every_file_reassembles_from_its_parts(tree):
     for m in tree.mods:
         header, body = M.split_header(tree.read(m))
