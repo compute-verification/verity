@@ -1,5 +1,8 @@
-import Definitions.Accounting.Guarantees.TS.SharedNoise
-import Proofs.Accounting.TS.Grind
+module
+
+public import Proofs.Accounting.TS.Grind
+public import Proofs.Accounting.Lemmas.TS.SharedNoise
+public import Proofs.Accounting.Lemmas.TS.Grind
 
 /-!
 # One noise seed a call: proofs
@@ -17,6 +20,8 @@ is `1` at `e = 0`), above it by concavity of `y ↦ y^{64/e}` (the alive term's 
 `SharedNoise.grid_point`, from `Grind.alive_le` squared and `e^{1/4} ≤ 1.2842`. `GridTemplateMoment` is `GridLuck` at
 `θ = 1/(4·max(64·r, n))`, with `r·θ = 1/(4·max(64, n/r))`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS
 

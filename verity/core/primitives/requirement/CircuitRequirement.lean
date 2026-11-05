@@ -1,4 +1,6 @@
-import Std.Data.HashSet
+module
+
+public import Std.Data.HashSet
 
 /-!
 # A declared circuit's requirement, computed
@@ -6,7 +8,7 @@ import Std.Data.HashSet
 `Accounting.Requirement` (`Security/Definitions/Accounting/Requirement.lean`) on one instance: a declared circuit's
 wiring, one scheduled execution of it and a layout of its values (`Instance`), the audit's store (`Store`), and a
 placement of the execution on devices (`Placement`), whose regions, ingress and credits are PoUW's over the placed
-execution (`Definitions/Accounting/Guarantees/RequirementPouw.lean`). A step is always an engine step, never a device tick.
+execution (`Proofs/Accounting/Lemmas/RequirementPouw.lean`). A step is always an engine step, never a device tick.
 This is code, so it requires nothing of `Security/`: `Properties.Accounting.Requirement` states that each function here
 is the definition it computes, on the wiring, execution, layout, store and placement an instance denotes, and
 `Proofs.Properties.Accounting.Requirement` proves it. `requirement-difftest` serves these functions to the difftest, which
@@ -18,6 +20,8 @@ ascending where a function returns one, and membership goes through a hash set b
 time linear in the wiring, and `packs` sorts the values by block and offset and compares neighbours: a registry row of
 tens of thousands of gates runs in seconds.
 -/
+
+@[expose] public section
 
 namespace CircuitRequirement
 

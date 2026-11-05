@@ -1,11 +1,13 @@
-import Definitions.Pouw.Assumptions.Pinned
-import Mathlib.Data.ZMod.Basic
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Tactic.Ring
-import Mathlib.Tactic.Abel
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.NormNum
+module
+
+public import Definitions.Pouw.Assumptions.Pinned
+public import Mathlib.Data.ZMod.Basic
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Tactic.Ring
+public import Mathlib.Tactic.Abel
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.NormNum
 
 /-!
 # (e) Usefulness and int32 exactness
@@ -14,6 +16,8 @@ The int32 facts go through `ZMod (2^32)`: `wrap32` is the identity there, so eve
 the exact computation mod `2^32`, where the decode identity holds in any commutative ring; two int32 values that
 agree mod `2^32` are equal.
 -/
+
+@[expose] public section
 
 namespace Pouw.Proofs
 

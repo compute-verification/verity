@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Complete.ZkTables.ShapeGo
-import Proofs.Flock.Claims.Complete.Zk.Level0Premises
-import Proofs.Flock.Claims.Complete.Zk.Level0Verifier
-import Proofs.Flock.Claims.Complete.Zk.RankDeployed
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.ShapeGo
+public import Proofs.Flock.Claims.Complete.Zk.Level0Premises
+public import Proofs.Flock.Claims.Complete.Zk.Level0Verifier
+public import Proofs.Flock.Claims.Complete.Zk.RankDeployed
 
 /-!
 # Masked completeness
@@ -18,6 +20,8 @@ the tape's mask words, which `maskFree_relation` keeps in the relation. Its refu
 mask rank) are `BadZk`'s, so the error is `εZk`'s with no further term. `complete_jsonT_honestPR` and
 `complete_jsonT_honestPR_of_rank` state it with the prover and the error written out.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.L0
 

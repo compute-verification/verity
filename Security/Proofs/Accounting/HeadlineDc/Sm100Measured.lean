@@ -1,4 +1,7 @@
-import Proofs.Accounting.HeadlineDc.Sm100
+module
+
+public import Proofs.Accounting.HeadlineDc.Sm100
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # The B200's headline on its measured vector
@@ -17,6 +20,8 @@ row (`sm100m_lamStar`), `p = 7/8`, `p₀ = ½` and `Λ = max(κ/ln(8/7), (κ + f
 * the unfolded branch (`unfolded_of_lower`): below `900/100000` by `decide` (`sm100m_unfolded_q`);
 * (I7) at `7/8` is the receipt split's (`luck_of_receipt_half`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS.HeadlineDc
 

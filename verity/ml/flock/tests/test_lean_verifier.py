@@ -54,15 +54,16 @@ def test_no_escape_hatches():
 
 
 AUDIT = PROOFS / "Flock" / "Soundness" / "Audit"
-AUDIT_STATEMENTS = PROOFS.parent / "Definitions" / "Flock" / "Guarantees" / "Audit.lean"
-AUDIT_IMPORTS = re.compile(r"import (Mathlib\.|Definitions\.Flock\.|Proofs\.Flock\.Soundness\.Game\.|"
-                           r"Proofs\.Flock\.Soundness\.Audit\.|Definitions\.Flock\.Guarantees\.Audit$)")
+AUDIT_STATEMENTS = PROOFS / "Flock" / "Lemmas" / "Audit.lean"
+AUDIT_IMPORTS = re.compile(r"(Mathlib\.|Definitions\.Flock\.|Proofs\.Flock\.Soundness\.Game\.|"
+                           r"Proofs\.Flock\.Soundness\.Audit\.|Proofs\.Flock\.Lemmas\.Audit$)")
+IMPORT = re.compile(r"(?:public )?(?:meta )?import (?:all )?(\S+)")
 
 
 def test_audit_layer_is_abstract():
     """The audit theorems import only the interaction model, Mathlib, each other, Flock's spec (`Definitions.Flock.*`, which
     the lock's layers hold to itself and Mathlib) and their lifted statements
-    (`Definitions.Flock.Guarantees.Audit`, which imports only Mathlib), so any backend can instantiate them
+    (`Proofs.Flock.Lemmas.Audit`, which imports only Mathlib), so any backend can instantiate them
     (`Security/Proofs/Flock/Soundness/DESIGN.md` §12). The Flock instantiations are the only files that import Flock's theorems:
     `Flock.lean` (oracle layer), `FlockCompiled.lean` (one table), `FlockBatched.lean` (several tables),
     `FlockBatchedAcc.lean` (the expected-time extractor), `FlockLink.lean` (the link theorem), `FlockLinked.lean` (the
@@ -72,10 +73,10 @@ def test_audit_layer_is_abstract():
              "FlockLinked.lean", "FlockWork.lean"}
     assert files and flock <= {p.name for p in files}
     bad = [f"{p.name}: {line}" for p in files if p.name not in flock for line in p.read_text().splitlines()
-           if line.startswith("import ") and not AUDIT_IMPORTS.match(line)]
+           if (m := IMPORT.match(line)) and not AUDIT_IMPORTS.match(m[1])]
     assert not bad, bad
-    statements = [line for line in AUDIT_STATEMENTS.read_text().splitlines() if line.startswith("import ")]
-    assert statements and all(line.startswith("import Mathlib.") for line in statements), statements
+    statements = [m[1] for line in AUDIT_STATEMENTS.read_text().splitlines() if (m := IMPORT.match(line))]
+    assert statements and all(s.startswith("Mathlib.") for s in statements), statements
     admitted = [p.name for p in files if re.search(r"\b(sorry|admit)\b|^axiom ", p.read_text(), re.M)]
     assert not admitted, admitted
 

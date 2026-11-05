@@ -1,11 +1,13 @@
-import Mathlib.Data.Nat.Bitwise
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.Positivity
-import Mathlib.Tactic.NormNum
-import Mathlib.Tactic.Ring
-import Definitions.Pouw.Fp8Atom.H1TLemmas
-import Proofs.Pouw.Fp8Atom.Proofs
-import Proofs.Pouw.Fp8Atom.H1TProofs
+module
+
+public import Mathlib.Data.Nat.Bitwise
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.Positivity
+public import Mathlib.Tactic.NormNum
+public import Mathlib.Tactic.Ring
+public import Definitions.Pouw.Fp8Atom.H1TLemmas
+public import Proofs.Pouw.Fp8Atom.Proofs
+public import Proofs.Pouw.Fp8Atom.H1TProofs
 
 /-!
 # The atom as two truncations (`H1TAtomValue`)
@@ -16,6 +18,8 @@ are summed exactly, and the sum is truncated toward zero to 14 significant bits 
 has an exponent in `[−12, 16]` and every aligned product is below `2^15`, so the sum's exponent is in `[−25, 23]`: no
 saturation, no subnormal, and `packTerm` writes the term exactly.
 -/
+
+@[expose] public section
 
 namespace Pouw.Fp8Atom.H1T.Proofs
 

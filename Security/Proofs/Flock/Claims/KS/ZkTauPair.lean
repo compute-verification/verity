@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.ZkTauFork
+module
+
+public import Proofs.Flock.Claims.KS.ZkTauFork
 
 /-!
 # The masked `τ` fork's two-run clash
@@ -20,6 +22,8 @@ that agree collide in the two runs' joined logs (`tiedColl_of_tauLogged`): at `�
   reps' `τ` openings.
 * `zkTauClash`: `ZkTauClash` holds; `zkSimForkLeTau_of_align`: the `τ` fork bound from `ZkTauAlign`.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

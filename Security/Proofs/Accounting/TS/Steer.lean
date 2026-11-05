@@ -1,5 +1,7 @@
-import Definitions.Accounting.Guarantees.TS.Steer
-import Proofs.Accounting.TS.Stages
+module
+
+public import Proofs.Accounting.TS.Stages
+public import Proofs.Accounting.Lemmas.TS.Steer
 
 /-!
 # Steering under one σ: proofs
@@ -15,6 +17,8 @@ independent of each other and of `ω₀` (`Steer.prob_pi_mem`), so all `n` hit t
 `μ^n`. The grinding bound is that union over the `T` queries: split query `q`'s seed off the coins (`Steer.splitAt`),
 and since its target doesn't read its own seed, `SteerUnion` with one configuration bounds it by `C(G, n)·μ^n`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS
 

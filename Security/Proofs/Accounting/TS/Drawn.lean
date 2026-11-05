@@ -1,4 +1,7 @@
-import Proofs.Accounting.TS.Fork
+module
+
+public import Proofs.Accounting.TS.Fork
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # (I8) for a sampled window
@@ -23,6 +26,8 @@ with every continuation that opens the position, except those opening `v₁` alo
 (`moved_sq_le`), and the moved alone give `M²` forked pairs. Cauchy–Schwarz over the coins before the cut, then over
 `L`, gives `|L|²`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS
 

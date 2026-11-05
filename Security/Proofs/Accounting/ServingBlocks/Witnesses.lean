@@ -1,5 +1,8 @@
-import Proofs.Accounting.ServingBlocks
-import Definitions.Accounting.Guarantees.ServingBlocks.Witnesses
+module
+
+public import Proofs.Accounting.ServingBlocks
+public import Definitions.Accounting.Guarantees.ServingBlocks.Witnesses
+public import Proofs.Accounting.Lemmas.ServingBlocks.Witnesses
 
 /-!
 # The serving-block bound: honest and nontrivial lemmas
@@ -9,6 +12,8 @@ The proofs of `Security/Definitions/Accounting/Guarantees/ServingBlocks/Witnesse
 count is a number of operations, which `decide` computes. The `example`s at the end apply each guarantee to its lemmas,
 so the lemmas are the premises as the guarantee states them.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.ServingBlocks
 

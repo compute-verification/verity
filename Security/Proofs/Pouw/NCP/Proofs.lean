@@ -1,10 +1,15 @@
-import Definitions.Pouw.NCP.Pinned
-import Proofs.Pouw.Exact
-import Definitions.Pouw.Guarantees.NCP
+module
+
+public import Definitions.Pouw.NCP.Pinned
+public import Proofs.Pouw.Exact
+public import Definitions.Pouw.Guarantees.NCP
+public import Proofs.Pouw.Lemmas.NCP
 
 /-!
 # Noise that cancels inside one checked product: proofs
 -/
+
+@[expose] public section
 
 namespace Pouw.NCP.Proofs
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.NonVacuousJ
-import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.NonVacuousJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
 
 /-!
 # `zk_session_soundHJR`'s draw hypotheses hold together
@@ -8,6 +10,8 @@ import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
 `zk_session_soundHJR_custody` take the hidden-output `y₀ : DrawSetupZHJ` at table 0's inputs and the draw hypotheses
 of `zk_session_soundHJ` and its custody form, and `drawHypsZHJ` builds them together at one accepted session.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkReg
 

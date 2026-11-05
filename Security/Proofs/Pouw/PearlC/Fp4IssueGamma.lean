@@ -1,6 +1,9 @@
-import Proofs.Pouw.PearlC.DeviceFp4Gamma
-import Definitions.Pouw.PearlC.DeviceFp4Issue
-import Definitions.Pouw.Guarantees.PearlC
+module
+
+public import Proofs.Pouw.PearlC.DeviceFp4Gamma
+public import Definitions.Pouw.PearlC.DeviceFp4Issue
+public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.Lemmas.PearlC
 
 /-!
 # Pearl-C4 at the issue-bound FP32 price (staged)
@@ -16,6 +19,8 @@ the sub-grid flags and the salt-dead predicate, which make up the domain rules' 
 statements read the domain rules only through `pearlCProtocolFp4`, `pearlCTilesFp4` and `pearlCDomainFp4At`, as the
 general `pearlCGammaFp4At` does. `{ devFp4Sm120 with prices := Fp4Prices.sm120Issue }` meets `hp` by `rfl`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

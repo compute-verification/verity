@@ -1,6 +1,8 @@
-import Proofs.Flock.C3.Sparse.SrcLayer
-import Proofs.Flock.C3.Reps.RepsRead
-import Proofs.Flock.C3.Compose.PartRead
+module
+
+public import Proofs.Flock.C3.Sparse.SrcLayer
+public import Proofs.Flock.C3.Reps.RepsRead
+public import Proofs.Flock.C3.Compose.PartRead
 
 /-!
 # The sparse phases' committed rounds, from each message's stage
@@ -15,6 +17,8 @@ each phase's steps are `stepsOf` (`SparseTieL`'s) and its message `m` is read of
 `c₀ + i · nS + roundOf m`'s commit strings (`SparseMsgsOfLayers`, named). `sparseMsgsRead_of_layers`: `SparseMsgsRead`,
 through H's `sparseMsgsRead_of_stage` at the reps' part's `c₀` coins ending in one (`PartEnds repPart`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Sparse
 

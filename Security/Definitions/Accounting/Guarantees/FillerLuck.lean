@@ -1,5 +1,7 @@
-import Definitions.Accounting.Filler
-import Definitions.Accounting.Assumptions.TS
+module
+
+public import Definitions.Accounting.Filler
+public import Definitions.Accounting.Assumptions.TS
 
 /-!
 # The filler's per-check luck (trusted)
@@ -7,12 +9,8 @@ import Definitions.Accounting.Assumptions.TS
 Lemma P2 over `Accounting.Filler`, each `def G : Prop` proved as `Accounting.SecurityProofs.FillerLuck.G` in
 `Proofs.Accounting.FillerLuck`:
 
-* `ParityLuck`: Lemma P2 at a cell, in any word ring read mod 2 and any column of uniform parity: a value with `R`
-  two-sided products equals the cell's word with probability at most `luck (K − R) = ½ + 2^(−(K−R)/2−1)`.
 * `FillerCellLuck`: the filler's own cell check, a cell of a tile with every other row's and column's noise its own,
   at pfill-bits and pfill-bU, in the s32 word (`ZMod (2 ^ 32)`) and over `ℤ`.
-* `FillerParityBalanced`: those four columns have uniform parity, so the statements below, stated at any balanced
-  column, hold at each of them.
 * `FillerLuckAt`: a full-checking filler window meets (I7) `LuckAt` at `luck 1 ≤ 0.854`.
 * `FillerBudget`: a spot-checked filler window meets `BudgetAt (1/(1 − 0.854))`, Lemma C's budget at the filler's luck.
 * `FillerBlocksDeficit`: Theorem S with each block at its own `p`, the budget `eps.py`'s cheater LP reads: beside any
@@ -28,18 +26,11 @@ Probability statements put acceptance in the event: the probability that the win
 at most `δ`.
 -/
 
+@[expose] public section
+
 namespace Accounting.Guarantees.FillerLuck
 
 open Accounting.Filler Accounting.TS Pouw.RelativeSecurity
-
-/-- **Lemma P2 at a cell**. Let the row's bits `x ∈ {0,1}^K` be uniform and the column's noise `y` uniform on `Y`, with
-its entries' parity uniform. A value with `R` two-sided products over `A`, its factors any functions of their side,
-equals the cell's word `Σ_k x_k·c_k(y)` with probability at most `luck (K − R) = ½ + 2^(−(K−R)/2−1)`, at every `K`. -/
-def ParityLuck : Prop :=
-  ∀ {Y A : Type} [Fintype Y] [CommRing A] (φ : A →+* ZMod 2) {K : ℕ} (c : Y → Fin K → A) (R : ℕ)
-    (P : (Fin K → ZMod 2) → Y → A),
-    ParityBalanced φ c → Products R P →
-      prob (fun xy : (Fin K → ZMod 2) × Y => P xy.1 xy.2 = cellWord c xy.1 xy.2) ≤ luck (K - R)
 
 /-- **The filler's cell check**. On a tile of rows `ρ` and columns `ν` with the round's noise uniform, a cell `(r, s)`
 whose run word takes `R` two-sided products in the cell projection is right with probability at most `luck (K − R)`: at
@@ -55,12 +46,6 @@ def FillerCellLuck : Prop :=
       prob (fun ω => W ω = cellWord buCol (ω.1 r) (ω.2 s)) ≤ luck (K - R)) ∧
     (∀ W : Noise K ρ ν (Fin K → Fin 256) → ℤ, CellProducts W r s R →
       prob (fun ω => W ω = cellWord buCol (ω.1 r) (ω.2 s)) ≤ luck (K - R))
-
-/-- **The filler's columns have uniform parity**: pfill-bits' (its bits) and pfill-bU's (`uOf t ≡ t₀ ⊕ t₆`), in the s32
-word and over `ℤ`, at every `K`. -/
-def FillerParityBalanced : Prop :=
-  ∀ K : ℕ, ParityBalanced toF2 (bitsCol (K := K)) ∧ ParityBalanced (Int.castRingHom (ZMod 2)) (bitsCol (K := K)) ∧
-    ParityBalanced toF2 (buCol (K := K)) ∧ ParityBalanced (Int.castRingHom (ZMod 2)) (buCol (K := K))
 
 /-- **A full-checking filler window meets (I7) at `luck 1`**: when every round checks every cell of the tile and the
 column's parity is uniform, the window's game is one bet a round, a round with a short cell passing with probability

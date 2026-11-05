@@ -1,7 +1,9 @@
-import Definitions.Core.Guarantees.Formalism
-import Proofs.Core.Formalism
-import Proofs.Core.Expand
-import Mathlib.Tactic.Linarith
+module
+
+public import Definitions.Core.Guarantees.Formalism
+public import Proofs.Core.Formalism
+public import Proofs.Core.Expand
+public import Mathlib.Tactic.Linarith
 
 /-!
 # Proofs of padding and of Theorem 3 at the serving blocks
@@ -12,16 +14,18 @@ import Mathlib.Tactic.Linarith
   and computing `0`. `Padding` pads the chosen proof blocks to `c` gates and the others by none.
 -/
 
+@[expose] public section
+
 namespace Verity
 
 open Finset
 
 /-- A padded proof block reads the unregistered gates its proof block read. -/
-theorem Pad.unregistered {d d' : Declaration} {B : ℕ} {P : Partition d.D B} {P' : Partition d'.D B}
+theorem Pad.unregistered {d d' : RegisteredCircuit} {B : ℕ} {P : Partition d.D B} {P' : Partition d'.D B}
     (X : Pad d P d' P') (u : Fin B) :
     d'.unregistered (P'.gates u) = (d.unregistered (P.gates u)).map ⟨X.M.emb, X.M.emb_inj⟩ := by
   ext a'
-  simp only [Declaration.unregistered, mem_sdiff, Circuit.into, mem_filter, mem_univ, true_and, mem_map,
+  simp only [RegisteredCircuit.unregistered, mem_sdiff, Circuit.into, mem_filter, mem_univ, true_and, mem_map,
     Function.Embedding.coeFn_mk]
   constructor
   · rintro ⟨⟨hout, g', hg', hr⟩, hθ⟩
@@ -41,10 +45,10 @@ theorem Pad.unregistered {d d' : Declaration} {B : ℕ} {P : Partition d.D B} {P
 
 namespace PadBuild
 
-variable {d : Declaration} {B : ℕ} (P : Partition d.D B) (n : Fin B → ℕ)
+variable {d : RegisteredCircuit} {B : ℕ} (P : Partition d.D B) (n : Fin B → ℕ)
 
 /-- The number of padding gates: `n u` in proof block `u`. -/
-abbrev T {d : Declaration} {B : ℕ} (_P : Partition d.D B) (n : Fin B → ℕ) : ℕ := ∑ u : Fin B, n u
+abbrev T {d : RegisteredCircuit} {B : ℕ} (_P : Partition d.D B) (n : Fin B → ℕ) : ℕ := ∑ u : Fin B, n u
 
 /-- `d`'s gate `g`. -/
 @[reducible] def emb (g : Fin d.D.N) : Fin (d.D.N + 1 + T P n) := ⟨g, by have := g.2; omega⟩
@@ -176,10 +180,8 @@ variable (hB : d.D.Boolean)
   outputs := d.D.outputs.map (embE P n)
 
 /-- The padded declaration: `d`'s registered gates and `z`. -/
-@[reducible] def decl : Declaration where
-  D := circuit P n hB
-  θ := d.θ.map (embE P n) ∪ {z P n}
-  θ_input b hb := by
+@[reducible] def decl : RegisteredCircuit :=
+  .ofCircuit (circuit P n hB) (d.θ.map (embE P n) ∪ {z P n}) fun b hb => by
     rcases mem_union.1 hb with hb | hb
     · obtain ⟨g, hg, rfl⟩ := mem_map.1 hb
       show isIn P n (emb P n g) = true
