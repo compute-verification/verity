@@ -11,7 +11,8 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   for each of v1's `sessions` in order, `{"name", "record", "reps"}`: its name, its `session.json`'s SHA-512 and
   `{file: SHA-512}` naming at least each rep file the statement's session reads (`<stream with / as .>.bin`);
 * **blobs**: the files those digests name (`Core.Blobs`), and the MUFU tables any lookup reads, found under their pinned
-  SHA-512 as `flock-verify --archive` finds them;
+  SHA-512 as `flock-verify --archive` finds them. The verifier is handed only the tables the circuit file's META
+  `lookups` names (`tablesFor`), so a blob holding another pinned table is ignored, as the parse ignores it;
 * **coins** (`coinsOf`): v1's (`OneStage.coinsOf`), what `Challenger.drawCoins` reads from the evidence's `coins` under
   the challenger's key, on the verifier's window; none read refuses. The check below runs at them (`checkBlobsAt`): v1's
   `checkAt` refuses a draw other than the one they give before v1's `check`;
@@ -224,12 +225,46 @@ def tablesOf (bs : Core.Blobs) : List (String × ByteArray) :=
   Flock.MUFU_TABLES.filterMap fun t =>
     (bs.entries.find? fun (d, _) => Flock.hexOf d == t.sha512).map fun (_, b) => (t.name, b)
 
+/-- A circuit file's META line as `HmRow.parse` reads it off the file's text: its second line, trailing whitespace
+trimmed. -/
+def metaLineOf (text : String) : String :=
+  let lines0 := (text.splitOn "\n").toArray
+  let lines := if lines0.back? == some "" then lines0.pop else lines0
+  (lines.getD 1 "").trimAsciiEnd.toString
+
+/-- The keys of META's `lookups` object in `HmRow.parse`'s order; none where it is not an object. -/
+def lookupsOf (mj : Json) : Array String :=
+  match mj.getObjVal? "lookups" with
+  | .ok (Json.obj kvs) => (kvs.toArray.qsort (fun a b => a.1 < b.1)).map (·.1)
+  | _ => #[]
+
+/-- The tables the circuit file's lookups name, as `HmRow.parse` reads them before it finds each one's table among those
+it is handed: the file as UTF-8, its META line (`metaLineOf`) `META ` then JSON, and that JSON's `lookups` keys
+(`lookupsOf`). None where the parse reads no table: META with no `lookups` object, or a file the parse refuses before
+its lookups. -/
+def lookupNames (circuitB : ByteArray) : Array String :=
+  match String.fromUTF8? circuitB with
+  | none => #[]
+  | some text =>
+    let metaLine := metaLineOf text
+    if !metaLine.startsWith "META " then #[] else
+    match Flock.JsonParse.parse (metaLine.drop 5).toString with
+    | .error _ => #[]
+    | .ok mj => lookupsOf mj
+
+/-- The lookup tables `flock-verify` is handed (`inputsOf`): of the pinned MUFU tables the blobs hold (`tablesOf`), the
+ones the circuit file's lookups name (`lookupNames`). The parse of the statement's untyped circuit reads no other, so a
+blob holding another pinned table changes no verdict, and the tables a session reads are the circuit's. -/
+def tablesFor (circuitB : ByteArray) (bs : Core.Blobs) : List (String × ByteArray) :=
+  let names := lookupNames circuitB
+  (tablesOf bs).filter fun e => names.contains e.1
+
 /-- What `flock-verify verify --zk` reads besides a session's directory, as `verdicts` runs it: the statement's tags
-`tags`, the circuit and public files, one table, the lookup tables the blobs hold, and the verifier's own partition
-object and program. -/
+`tags`, the circuit and public files, one table, the lookup tables the circuit's lookups name that the blobs hold
+(`tablesFor`), and the verifier's own partition object and program. -/
 def inputsOf (tags : Flock.Tags) (p : Own) (circuitB pubB : ByteArray) (bs : Core.Blobs) : Flock.Witness.Inputs :=
-  { tags, circuitFile := circuitB, publicFile := pubB, count := 1, tables := tablesOf bs, partition := some p.partition,
-    program := some p.program }
+  { tags, circuitFile := circuitB, publicFile := pubB, count := 1, tables := tablesFor circuitB bs,
+    partition := some p.partition, program := some p.program }
 
 /-- The verifier's registered reads, as `verifyCmd` derives them from its registered file: its own ports, the reads it
 knows, and the registered parameters. -/
@@ -509,5 +544,16 @@ def main (args : List String) : IO UInt32 := do
 #guard (provedUnits "{\"units\":{\"indices\":[7,3,9]}}\nrest".toUTF8 "{\"unit_draw\":{\"units\":[2,0]}}").toOption
   == some #[7, 9]
 #guard (provedUnits "{\"units\":{\"indices\":[7]}}".toUTF8 "{\"unit_draw\":{\"units\":[1]}}").toOption.isNone
+#guard lookupNames "flock-circuit u\nMETA {\"lookups\":{\"rcp\":{},\"ex2\":{}}}\nCIRCUIT unit 0\n".toUTF8 == #["ex2", "rcp"]
+#guard lookupNames "flock-circuit u\nMETA {\"lookups\":{}}  \n".toUTF8 == #[]
+#guard lookupNames "flock-circuit u\nMETA {\"lookups\":null}\n".toUTF8 == #[]
+#guard lookupNames "flock-circuit u\nMETA {\"lookups\":[\"rcp\"]}\n".toUTF8 == #[]
+#guard lookupNames "flock-circuit u\nMETA {\"format\":\"flock-circuit\"}\n".toUTF8 == #[]
+#guard lookupNames "flock-circuit u\nMETA [\"rcp\"]\n".toUTF8 == #[]
+#guard lookupNames "flock-circuit u\nMETAX {\"lookups\":{\"rcp\":{}}}\n".toUTF8 == #[]
+#guard lookupNames "flock-circuit u\n".toUTF8 == #[]
+#guard lookupNames (ByteArray.mk #[0xff]) == #[]
+-- `tablesFor` hands only the lookups' tables: an untyped statement reads no table a type names (`Typed.hold`).
+#guard (Flock.Tags.find? STATEMENT).any (!·.typed)
 
 end SampledProofs.OneStageZk

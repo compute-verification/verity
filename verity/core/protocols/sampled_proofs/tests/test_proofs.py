@@ -132,12 +132,13 @@ def fx(tmp_path_factory) -> Path:
     return root
 
 
-def _verify(fx: Path, session: Path, circuit: str = CIRCUIT, public: str = "pub-32.bin", own: bool = True):
+def _verify(fx: Path, session: Path, circuit: str = CIRCUIT, public: str = "pub-32.bin", own: bool = True,
+            tables: tuple[Path, ...] = ()):
     st = fx / "stage"
     return PF.verify(PF.Proof(st / "circuit.txt", st / public, (session,)), circuit_sha512=circuit,
                      program=(st / "program.json").read_bytes(),
                      partition=json.loads((st / "partition.json").read_text()),
-                     registered=json.loads((st / "registered.json").read_text()) if own else None)
+                     registered=json.loads((st / "registered.json").read_text()) if own else None, tables=tables)
 
 
 @lean
@@ -235,12 +236,13 @@ def test_missing_proof_files_are_refused(fx, tmp_path):
     assert got is None and why[0] == "proof", why
 
 
-def _v2(fx: Path, session: Path, circuit: str = CIRCUIT, public: str = "pub-32.bin", own: bool = True):
+def _v2(fx: Path, session: Path, circuit: str = CIRCUIT, public: str = "pub-32.bin", own: bool = True,
+        tables: tuple[Path, ...] = ()):
     st = fx / "stage"
     return PF.verdicts_v2(PF.Proof(st / "circuit.txt", st / public, (session,)), circuit_sha512=circuit,
                           program=json.loads((st / "program.json").read_bytes()),
                           partition=json.loads((st / "partition.json").read_text()),
-                          registered=json.loads((st / "registered.json").read_text()) if own else None)
+                          registered=json.loads((st / "registered.json").read_text()) if own else None, tables=tables)
 
 
 def _same(v1, v2):
@@ -267,6 +269,52 @@ def test_the_v2_audits_own_run_on_blobs_agrees_with_verify(fx, tmp_path):
         if own and session == fx / "session":
             (f,) = mine
             assert (f.accepted, f.why, f.units) == (True, "", DRAWN), f
+
+
+@pytest.fixture(scope="module")
+def mufu_tables(tmp_path_factory) -> tuple[Path, ...]:
+    """The four pinned MUFU tables in `PF.MUFU_TABLES`' order, as a lookup-slot statement's prover writes them beside its
+    circuit file (`verity_flock.ir_lower.write_tables`)."""
+    from verity_flock.ir_lower import write_tables
+
+    d = tmp_path_factory.mktemp("tables")
+    write_tables(d)
+    return tuple(d / f"{n}.u32" for n in PF.MUFU_TABLES)
+
+
+def test_only_the_tables_the_circuits_lookups_name_are_handed(tmp_path, mufu_tables):
+    """`lookup_tables` (`OneStageZk.tablesFor`): of the files offered, each pinned table the circuit's lookups name, found
+    by its words' SHA-512 whatever the file is called, the first one offered, in `MUFU_TABLES`' order. A pinned table no
+    lookup names, a name with no pinned table offered (or none pinned) and a file that is no pinned table are not
+    handed, and a circuit naming no lookup is handed none."""
+    circuit, _ = _files(tmp_path, meta={"lookups": {"rcp": {}, "ex2": {}, "tanh_mufu": {}}})
+    rsq, sqrt, rcp, ex2 = mufu_tables
+    fake = tmp_path / "rcp.u32"
+    fake.write_bytes(bytes(16))
+    renamed = tmp_path / "t"
+    renamed.symlink_to(ex2)
+    assert PF.lookup_names(circuit) == ["ex2", "rcp", "tanh_mufu"]
+    assert PF.lookup_tables(circuit, [fake, renamed, rsq, sqrt, rcp, ex2]) == [("rcp", rcp), ("ex2", renamed)]
+    assert PF.lookup_tables(circuit, [sqrt, ex2]) == [("ex2", ex2)]
+    (tmp_path / "none").mkdir()
+    assert PF.lookup_tables(_files(tmp_path / "none", meta={"lookups": {}})[0], mufu_tables) == []
+
+
+@lean
+@pytest.mark.slow
+def test_tables_the_circuit_reads_none_of_change_no_finding(fx, mufu_tables):
+    """The honest session's circuit names no lookup, so every pinned table offered is left out (`lookup_tables`,
+    `OneStageZk.tablesFor`): `verify` and the v2 audit's own run on blobs give it one finding with all four tables
+    offered, as a lookup-slot statement's prover writes them, and with none, accepted and proving its drawn proof blocks.
+    It catches what the agreement test above can't: a table offered beside a circuit that reads none changing a verdict
+    on either path."""
+    assert PF.lookup_names(fx / "stage" / "circuit.txt") == []
+    found = [run(fx, fx / "session", tables=t) for run in (_verify, _v2) for t in (mufu_tables, ())]
+    assert all(why is None for _, why in found), found
+    for got, _ in found[1:]:
+        _same(found[0][0], got)
+    (f,) = found[0][0]
+    assert (f.accepted, f.why, f.units) == (True, "", DRAWN), f
 
 
 @lean
