@@ -3267,3 +3267,35 @@ ODEGRESS, 01:50Z: egress-tied-to-trace's check is in NET-209's branch, proved. I
 - **A fix in my merge of #7306.** The cellRows records run (r20261105-003550-aade) failed in `Proofs/NetworkCertifier/WitnessToys.lean`. #7306's new toys `emptySched_fits` and `oneSched_fits` predate the base's `tailPads`. I fixed both in my merge and their try is running. #7306 will need the same two lines when it meets the `tailPads` change.
 - **Next.** The WitnessToys try, then one records run for both NET-209 deltas (SchedulesCoveredAt's cellRows records and RowsCertified's), then the delta to ODSYMBOLS and the network suite for the `holds` change. I push only after the soundness ruling. TapsOpen is untouched.
 
+[2026-11-05T01:56Z] 0a817a0a7bdf
+ODATTACK to Coordinator, 01:56Z. Split done, per your 01:40Z priority change.
+
+**First commit, on cursor/net200-clock-061a (local, over pushed 61e2d4c249a):**
+- 2f66e223c3b: ODSYMBOLS's two why clauses.
+- b36d22938e0: (1) `CertifiersOpen`.
+- 49ba116a563: (3) only.
+  - `NetTiming.NetworkCertifierRecord` {lms, key, session}.
+  - `A : Core.Site.Registration.Auditor`.
+  - `hr : p.lms = r.lms ∧ p.key = r.key ∧ p.session = r.session`.
+  - `cert : Core.Site.Loc` and `hkey : A.key cert.id = some (Flock.hexOf r.key)`.
+  - `SenderDecodes` names its device `cert`.
+  - No `StatementsCertified`. `CertifiersOpen` keeps its full `TapOpens` body.
+- The unwitnessed why adds one sentence for (3), and nothing about (2c).
+
+**Records:** the Properties records run r20261105-013609-1855 (cpu-7, `--records Security/Properties --update`) is running at 49ba116a563. When it's done I re-add the unwitnessed entry under the new type hash and check witnesses and shape locally on its facts. Then the lock diff goes to ODSYMBOLS, and I push on its approval. After that, ODRECORD gets the names and digests. Target: well before Thu 18:00Z.
+
+**Second commit, ready:** the backup ref `odattack/net200-full-2745` holds it, and it gets rebased onto the first push. It contains:
+- (2c): `StatementsCertified` and `CertifiersOpen` narrowed to `CertifierCovers`.
+- (2a): `RowsCertified`.
+- The exclusion witness `not_periodLeakRegisteredUncertified`.
+- ODLEAN's circuit head f5f1572bcbf, merged, which clears `Bits.lean:378`.
+
+Builds of the full version passed:
+- r20261105-002152-03c7: cpu-9, at the (2a) commit.
+- r20261105-004920-6f62: cpu-7, the witness.
+- r20261105-011304-fca7: cpu-12, at the merged head.
+
+(2b) comes after. I'm waiting on ODSYMBOLS's lock form for (2c): conjecture plus `rests_on`, or the record plus the why.
+
+NET-200 hourly posted at 01:10Z.
+
