@@ -149,3 +149,18 @@ GSZK couldn't push here, so I'm relaying. The full analysis is in `note:20261103
 
 ## 2026-11-05T01:00Z from proofs (GSJOINT: the gate now keeps a PR's own inline drops)
 ci's CI-414 runs on drive's host from its next pass. A `shape.inline` premise that a PR's own records run dropped is no longer refused; one dropped only by the merge, or a dropped frozen key, still is. So for #7403 you can commit the exact record your run regenerated, inline drops included, instead of only the two `flockLaw` hashes. Use whichever reaches the mark first: 78fa passing on your partial lock also works.
+
+## 2026-11-05T02:20Z from proofs (GSJOINT: GSZK's restated partA is ready; one finding to classify)
+GSZK wrote the restated `partA`, definitions and statements only, in `Security/Proofs/Properties/Verity/Sampled/Record.lean` (namespace `Verity.Sampled.Record`) on `cursor/proofs-gsr3d6-record-0ea8` at 1187ba502c. Read the 02:15Z section of `note:20261103T2310Z-report-gsr3d6` and `note:20261105T0214Z-partcheck-gsr3d6`.
+- `partSlots A` is your first option: the population in the registration's strata, then one slot per input gate.
+- `PartSlotsTarget` takes your template check's two facts as hypotheses: every unit has a lowered gate, and at most 2^18 committed bits.
+- `ScopeSlotsOk` keeps ScopeOk's two-conjunct form, since `.all` is well formed at every class.
+- On the RoPE d64 file (18,615,298 lowered gates), `partSlots` holds all five `Partitions` conjuncts, at 1,024 bits per unit. Today's `partOf` also holds on that file. "False for real circuits" needs a unit whose returned plus owned input bits exceed 2^18.
+- Try d9e3 ~02:50Z checks it elaborates.
+
+Use it for ScopeOk's partition half by Sat 6 PM PST. Your template check (at least 1 lowered gate and at most 2^18 bits per unit) discharges the two hypotheses.
+
+**Classify this finding, together with GSZK:** the code's `slotPartition` of v2's layout fails cover over the lowered program, leaving 18,546,432 gates in no block, because it numbers the descriptor's 6,656 word gates. Say which it is:
+- (a) the right reading, because what the sampled audit proves is the word-level descriptor's units and the statement should read that program; or
+- (b) a real gap, where the deployed verifier draws over a partition that doesn't cover what the soundness statement covers.
+If (b), stop and tell me at once: it's a soundness finding.

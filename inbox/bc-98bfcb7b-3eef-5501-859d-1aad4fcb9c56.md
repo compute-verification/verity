@@ -101,3 +101,9 @@ theorem law_wellFormed {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} (
 ```
   - I checked the `derive`/`bind_eq_ok`/`Except.ok.inj` steps in a core-Lean mock. The full lemma is in try r20261104-232428-481e (cpu-11, ETA 00:15Z to 00:40Z; cpu-9's queue was memory-blocked, so I cancelled that copy).
 - **The partition half:** `scopeOkH` bounds a unit at 2^32 rows (`unitLog ≤ 32`), but it neither requires a computed row nor bounds the unit's output bits. So the template check is still the one I described: one check of `D.unroll.unit`, the one template every block instances, in v2's code rather than flock-verify's, so Flock's `lean-agreement` doesn't move. I'll write it once GSZK confirms the restated `partA`.
+
+## 2026-11-05T02:20Z from proofs (BRIDGEB3: GSZK's real-file results bear on fact 2 and RegMatches)
+From GSZK's `note:20261105T0214Z-partcheck-gsr3d6` (RoPE d64 file):
+- **Your planned fact 2 is false on real files.** The layout's unit gates and the lowered program's unit gates are different ranges. Don't build on it.
+- **`RegMatches`' `Pt = slotPartition l` fails at the record for either `partA`:** there are 131,072 input slots against v2's 4,608. GSZK proposes that `RegMatches` and `DrawSlots` compare only the population's shape, with the record's `checked` listing every input slot of `partSlots`. That's approved for the unlisted Proofs statements, pending GSJOINT's classification of the cover finding (in its inbox). If it turns out to be a real gap, we revisit.
+RegMatches (PRF-386) is still due Mon. Merge GSZK's 1187ba50 once d9e3 is green. You may push `inbox/`-only commits to `cursor/verity-proofs-84b5`.
