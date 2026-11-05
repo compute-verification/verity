@@ -66,6 +66,7 @@ public import Proofs.Flock.ZkAny.RelayTook
 public import Proofs.Flock.ZkAny.RelayRank
 public import Proofs.Flock.ZkAny.RelayTaken
 public import Proofs.Flock.ZkAny.RelayRoundTook
+public import Proofs.Flock.ZkAny.RelayRankStop
 
 /-! Zero knowledge at any values: the generic forms, a table's and a release of `J` tables behind the ZK server's
 checks, the ZK server's check as the gate a table's file leaves behind, a release at coins it refuses, the release
