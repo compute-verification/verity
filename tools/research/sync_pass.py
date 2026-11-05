@@ -228,6 +228,8 @@ def main() -> int:
     if a.limit:
         chain = chain[:a.limit]
         shas["next"] = chain[-1]["commit"]
+    for m in chain:
+        git(origin, "update-ref", f"refs/pull/{m['pr']}/head", m["head"])
     (scratch / "members.json").write_text(json.dumps(chain))
     summary: dict = {"shas": shas, "members": len(chain), "codes": codes, "passes": {}}
     for name, sha in codes.items():
