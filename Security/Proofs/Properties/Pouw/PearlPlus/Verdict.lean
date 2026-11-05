@@ -5,10 +5,10 @@ import Proofs.Properties.Pouw.Commit
 /-!
 # What Pearl+'s run verdict establishes (`Properties.Pouw.PearlPlus`)
 
-`PlanMeans`, `AcceptMeans`, `LoadedGivesUp`, `TileAcceptMeans`, `TileKeepsTheCap` and `YIsTheUnscale`, by unfolding
-the port's definitions step by step: each `Except` chain one bind at a time (`bind_ok`), each `for` loop by induction
-over its list with the loop's state as the invariant's, and the replay's tasks by their pure model (a task's `get` is
-its function's value). The unscale is the Definition's through `Properties.Evaluator`'s FP32 equalities. A tile
+`PlanMeans`, `AcceptMeans`, `RefusedBeforeTheCoin`, `LoadedGivesUp`, `TileAcceptMeans`, `TileKeepsTheCap` and
+`YIsTheUnscale`, by unfolding the port's definitions step by step: each `Except` chain one bind at a time (`bind_ok`),
+each `for` loop by induction over its list with the loop's state as the invariant's, and the replay's tasks by their
+pure model (a task's `get` is its function's value). The unscale is the Definition's through `Properties.Evaluator`'s FP32 equalities. A tile
 `checkOpened` passes keeps the inert-work bound (`TileKeepsTheCap`); one over it is `checkTile`'s `overCap`, which the
 run accepts only when it credits such a tile nothing (`AcceptMeans`).
 -/
@@ -685,25 +685,31 @@ theorem tileKeepsTheCap : TileKeepsTheCap := by
     exact (hE.elim hcr hcc).elim
   split at hc
   · cases hc
-  rename_i words hw
+  rename_i rowDebit hrd
+  obtain ⟨words, hw, hrd⟩ := bind_ok hrd
+  obtain ⟨elems, he, hrd⟩ := bind_ok hrd
+  obtain rfl := (Except.ok.inj hrd).symm
   split at hc
   · cases hc
   rename_i hcap
-  refine ⟨words, hw, Nat.not_lt.mp hcap, ?_⟩
+  refine ⟨words, elems, hw, he, Nat.not_lt.mp hcap, ?_⟩
   obtain ⟨st, hst, hc⟩ := bind_ok hc
-  have hall := forIn_ok_all (fun x : Nat × Nat => x.2 * (Rule.CAP_DEN * r.matmul.n) ≤
+  have hall := forIn_ok_all (fun x : Nat × Nat => x.2 * Rule.CAP_DEN ≤
       Rule.CAP_NUM * creditOf 1 r.kKept r.matmul.n * cc.length * (if s.censusKs.contains r.matmul.k then 4 else 1)) _
     (by
       intro x g
-      by_cases hb : x.2 * (Rule.CAP_DEN * r.matmul.n) ≤
+      by_cases hb : x.2 * Rule.CAP_DEN ≤
           Rule.CAP_NUM * creditOf 1 r.kKept r.matmul.n * cc.length * (if s.censusKs.contains r.matmul.k then 4 else 1)
       · exact .inl ⟨_, by rw [ite_eq_right_of_eq_false _ _ (eq_false (Nat.not_lt.mpr hb))]; rfl, hb⟩
       · exact .inr ⟨_, _, by rw [ite_eq_left_of_eq_true _ _ (eq_true (Nat.lt_of_not_le hb))]; rfl⟩) _ _ _ hst (by
       intro v hv
       rw [hv] at hc
       cases hc)
+  have hlw : words.length = cr.length := mapM_ok_length hw
+  have hle : elems.length = cr.length := by rw [mapM_ok_length he, List.length_zip, hlw, Nat.min_self]
   intro d hd
-  obtain ⟨i, hi⟩ := mem_zip_snd (l := cr) (Nat.le_of_eq (by rw [List.length_map, mapM_ok_length hw])) d hd
+  obtain ⟨i, hi⟩ := mem_zip_snd (l := cr)
+    (Nat.le_of_eq (by rw [List.length_map, List.length_zip, hlw, hle, Nat.min_self])) d hd
   exact hall (i, d) hi
 
 /-! ## The run's acceptance -/
@@ -766,6 +772,12 @@ theorem verdictOf_ok {pl : Plan} {opener : Nat → Nat → Except String TileOpe
     | fail why => intro h; cases h
   · rw [getElem!_neg pl.passes pi hj, default_tile?] at ht
     cases ht
+
+/-- A refusal of `plan` is `check`'s whole answer. -/
+theorem refusedBeforeTheCoin : RefusedBeforeTheCoin := by
+  intro i opener r h
+  unfold check
+  rw [h]
 
 theorem acceptMeans : AcceptMeans := by
   intro i opener hacc

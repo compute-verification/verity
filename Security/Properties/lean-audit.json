@@ -3362,6 +3362,12 @@
    "assumptions": [],
    "type_hash": "3824aad752bcde7f7623cbf22f9be6692c3423041bbb695ccbffdf3504ac7449"
   },
+  "Properties.Pouw.PearlPlus.refusedBeforeTheCoin": {
+   "owner": "@proofs",
+   "signature": ["Properties.Pouw.PearlPlus.refusedBeforeTheCoin : Properties.Pouw.PearlPlus.RefusedBeforeTheCoin"],
+   "assumptions": [],
+   "type_hash": "04a994afa72912a80e8367b3a327cd717d628c83ee8ad19f3ec1f9c4a2ff6feb"
+  },
   "Properties.Pouw.PearlPlus.tileAcceptMeans": {
    "owner": "@proofs",
    "signature": ["Properties.Pouw.PearlPlus.tileAcceptMeans : Properties.Pouw.PearlPlus.TileAcceptMeans"],
@@ -5277,6 +5283,10 @@
     "function": "PouwCheck.PearlPlus.plan",
     "outcome": "accept"
    },
+   "Properties.Pouw.PearlPlus.refusedBeforeTheCoin": {
+    "function": "PouwCheck.PearlPlus.plan",
+    "outcome": "accept"
+   },
    "Properties.Pouw.PearlPlus.tileAcceptMeans": {
     "function": "PouwCheck.PearlPlus.checkTile",
     "outcome": "accept"
@@ -6041,7 +6051,6 @@
    "Properties.Served.DrawMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.drawMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.SeededScheduleNotLive": "unstated: Compose's UnitsOfLayout and LayerCommitted exclude each other on a circuit with a read run input, proved by Properties.Served.seededScheduleNotLive; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.TieScope": "unstated: the served tie gives Compose's Scope, proved by Properties.Served.tieScope; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
-   "Properties.Pouw.PearlPlus.RefusedBeforeTheCoin": "unstated: where `plan` refuses (a pass retained or given up after the coin, a pass that doesn't load, passes that share a call), the run's answer is that refusal, with no plan, verdicts or work; a draft statement, unproved, which gets a guarantee entry once red team has read it",
    "Properties.Pouw.PearlPlus.OpeningBinds": "unstated: two openings of one position of an hm96 tree, both accepted against its root, open one value, or two different messages hashed in checking them (`rowsHashed`) have one SHA-512 digest; proved (`Properties.Pouw.PearlPlus.openingBinds`), and listed under guarantees once it has its witnesses",
    "Properties.Pouw.PearlPlus.WorkIsTheCredit": "unstated: the work an accepted run publishes is `creditAtAssumption` over the plan's passes at the run's draws, the draws that landed on a tile over its inert-work bound (X_O) and δ = 1/100, crediting nothing on a test instance's input, and a refused or rejected run publishes none; a draft statement, unproved, which gets a guarantee entry once red team has read it",
    "Properties.Pouw.PearlPlus.DrawIsOnItsStreams": "unstated: Pearl+'s run draw names, for draw j, the tile of the ticket (Pouw.Ticket, in finSigmaFinEquiv's order) its key's stream j numbers, the law Pouw.MissBound reads, unproved; PLUSCOMP's draft statement, which gets a guarantee entry once red team has read it",

@@ -9,7 +9,8 @@ What the prover declares for each matmul of a pass before the coin, and the root
 
 * **`UnitRecord`**: the call's real rows (the rest are zero filler), its kept width |K|, the A rows and its weight's B rows
   that fail the per-row rules (excluded), and the rows it gives up (voluntary, V-EX). `UnitRecord.reason` is its
-  constructor's refusal, in `UnitRecord.__post_init__`'s words.
+  constructor's refusal, in `UnitRecord.__post_init__`'s words. `UnitRecord.credited` is the band rule: a voluntary A
+  row takes its band of 64 A rows' credit, and an excluded or voluntary B row its block of 64 columns'.
 * **V-EX's count caps** (`checkRecords`): at most ⌈m/64⌉ voluntary A rows per record and ⌈n/64⌉ voluntary B rows per weight,
   and every unit of a weight declares the same excluded and the same voluntary B rows.
 * **`recordsRoot`**: `tagged("verity/pouw/pearl-c/records/v2", salt, weights_root, (w, split(w))…, record…)`, each split
@@ -63,10 +64,15 @@ def reason (r : UnitRecord) : Option String :=
     some "a row is excluded or voluntary, not both"
   else none
 
-/-- The tile's credited rows and columns: real, neither excluded nor voluntary. -/
+/-- The band rule's band of A rows and block of B rows, at absolute indices: the game's 64 × 64 tiling. -/
+def BAND : Nat := 64
+
+/-- The tile's credited rows and columns, by the band rule (`UnitRecord.credited`): an A row that is real, not excluded,
+and whose band of `BAND` rows holds no voluntary A row; a column whose block of `BAND` B rows holds no excluded or
+voluntary B row. At the deployed 64 × 64 tile, a tile holding a voluntary row or an excluded B row has no credited cell. -/
 def credited (r : UnitRecord) (rows cols : List Nat) : List Nat × List Nat :=
-  (rows.filter fun i => i < r.realRows && !r.excludedA.contains i && !r.voluntaryA.contains i,
-   cols.filter fun j => !r.excludedB.contains j && !r.voluntaryB.contains j)
+  (rows.filter fun i => i < r.realRows && !r.excludedA.contains i && !r.voluntaryA.any (· / BAND == i / BAND),
+   cols.filter fun j => !(r.excludedB ++ r.voluntaryB).any (· / BAND == j / BAND))
 
 end UnitRecord
 

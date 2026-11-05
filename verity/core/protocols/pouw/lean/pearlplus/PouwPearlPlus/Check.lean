@@ -22,7 +22,8 @@ import PouwPearlPlus.Credit
   opened after it (`drawReason`, refused as `draw`), a verdict of record takes only a challenger draw on live coins
   (`ofRecordReason`, refused as `of-record`), the draw over every pass's tickets names the drawn tiles, each pass adds one
   tile per excluded row, and the run accepts iff every one of them passes `checkTile`, or is over its inert-work bound
-  with every other check passed under `over_cap` `uncredited` (the default; `reject` rejects such a run). A rejected
+  with every other check passed under `over_cap` `uncredited` (the default, and the run of record's, whose passes hold
+  no voluntary row; `reject` rejects such a run). A rejected
   tile's reason is `pass i tile t: why`, joined by `; `.
 * **The work** an accepted run publishes: its credit at Pearl's assumption at δ = 1/100 (`creditAtAssumption`), at X_O,
   the number of draws on tiles over their bound, which are credited nothing. A test instance's credits nothing
