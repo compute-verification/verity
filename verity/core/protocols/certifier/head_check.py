@@ -61,10 +61,10 @@ from types import SimpleNamespace
 from typing import Callable, Sequence
 
 from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean import trace as TR
+from verity.ml.circuits.boolean.build import Consts as _Consts, ands, coll as _coll, refs as _refs
 from verity.ml.circuits.boolean.forms import and_reduce
 from verity.ml.circuits.boolean.trace import part as _part
-from verity.ml.circuits.census import BooleanWork, NoBooleanWork
+from verity.ml.circuits.census import BooleanWork
 from verity.ml.circuits.codec import program_digest
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
@@ -167,26 +167,6 @@ NetworkHeadFields = _part(
 
 
 # --- the circuit: the opening -----------------------------------------------------------------------------------------
-
-class _Consts:
-    """The constant bits a body reads, one node each."""
-
-    def __init__(self, B):
-        self.B, self.ref = B, {}
-
-    def bits(self, value: int, w: int) -> list:
-        for b in sorted({value >> j & 1 for j in range(w)} - self.ref.keys()):
-            self.ref[b] = self.B.call(BL.constant(b)).refs[0]
-        return [self.ref[value >> j & 1] for j in range(w)]
-
-
-def _refs(c: Coll) -> list:
-    return [c.refs[k] for k in range(c.refs.count)]
-
-
-def _coll(t, refs: list) -> Coll:
-    return Coll(t, TR._refs(list(refs)))
-
 
 def _words(data: Sequence[Sequence]) -> list[list]:
     """Bytes (8 bits each, least significant first) as SHA-512 words: 64 bits least significant first, bytes
@@ -514,19 +494,6 @@ def evaluate(*insts: Instance) -> list[int]:
     return [int(b) for b in evaluate_bits(insts[0].unit, *args).reshape(-1).tolist()]
 
 
-def _ands(work: BooleanWork, fn) -> int:
-    got = work.of(fn)
-    if isinstance(got, str):
-        raise NoBooleanWork({fn.id: f"it reaches {got}, which is not a Boolean gate, a constant bit or an input"})
-    return sum(a for _g, a in got.values())
-
-
-def ands(fn) -> int:
-    """A Boolean Definition's AND gates: the ANDs of its Boolean work as its census counts it (`census.BooleanWork`),
-    every facet's."""
-    return _ands(BooleanWork(), fn)
-
-
 _GROUPS = {"NetworkHidingRead": "opening", "NetworkHeadFields": "fields", "NetworkHeadCounts": "counts",
            "NetworkRecordDigest": "signed", "NetworkSignedDigest": "signed"}
 
@@ -537,7 +504,7 @@ def size(target) -> dict:
     work = BooleanWork()
     out = dict.fromkeys(("opening", "fields", "counts", "signed", "other"), 0)
     for nd in target.body.nodes:
-        out[_GROUPS.get(getattr(nd.fn, "name", ""), "other")] += nd.n * _ands(work, nd.fn)
+        out[_GROUPS.get(getattr(nd.fn, "name", ""), "other")] += nd.n * ands(nd.fn, work)
     out["ands"] = sum(out.values())
     return out
 
