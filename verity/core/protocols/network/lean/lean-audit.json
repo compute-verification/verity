@@ -59,6 +59,11 @@
    "except": [],
    "why": "the period's check is code: v4's certificate and sync decoders, the LMS verifier, the core interface with its integrity profile (to read one-stage's answers), C-Flock's program decoder (the scan's Program, whose templates give its terms), C-Flock's frame-v3 hash (the rows' domain), the window record's digest, NCI's description-sized layout checks (the scan's layout read off its description), C-Flock's hm96 leaf of a value at known content (the scan's state's row 0, the empty state, `stateEmpty`) and its partition digest (a circuit record's, `recordPartition`), C-Flock's template query and its draw's strata (the scan's VUs a template at a time, as the sampled verifier's draw reads them, `vuStrata`), and Bits' check of a circuit file against its template (`fileWhy`), no Mathlib and nothing of Security"
   },
+  "NetworkCheck.PeriodFiles": {
+   "imports": ["NetworkCheck.Period", "NetworkCheck.CircuitFile"],
+   "except": [],
+   "why": "reading a period's listed circuit files within a budget is code: the period's listing and trim, and the circuit file reader, no Mathlib and nothing of Security"
+  },
   "NetworkCheck.Records": {
    "imports": ["NetworkCheck.Check", "Difftest"],
    "except": [],
@@ -78,11 +83,6 @@
    "imports": ["NetworkCheck.Period", "NetworkCheck.Records", "NetworkCertifier.Rows"],
    "except": [],
    "why": "the audit of the active network certifier's run over its certified records is code: the period's schedule and its digest, the records' encoding and the certificate check, and the certifier program's rows audit, no Mathlib and nothing of Security"
-  },
-  "NetworkCheck.PeriodFiles": {
-   "imports": ["NetworkCheck.Period", "NetworkCheck.CircuitFile"],
-   "except": [],
-   "why": "reading a period's listed circuit files within a budget is code: the period's listing and trim, and the circuit file reader, no Mathlib and nothing of Security"
   }
  },
  "reads_exempt": {
