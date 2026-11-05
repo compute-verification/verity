@@ -215,7 +215,7 @@ COMPOSITE = ("the composite of record's error (``composite``, `WITHOUT_POUW`), V
 COMPOSITE_UNVALUED = ("each subprotocol's ε_forge(t, Q) and its loss at its finder's collision probability, and the "
                       "network certifier's m(ε_ks + ε_bind + ε_tap) (`ERRORS`): no check computes them, so the composite's "
                       "error has no number here, and ``stated`` is the sum of the δs the run states, a lower bound on it")
-NO_NCI_DELTA = "no published file states it: remote's composite publishes each case's params by their SHA-512 alone"
+NO_NCI_DELTA = "no published file states it: each composite publishes each case's params by their SHA-512 alone"
 DELTA = ("what sets eps: m · δ_scan, every phase's scan at one δ, its one-stage answer's stated δ (its integrity "
          "profile's, a sampling-design parameter in (0, 1) and not C-Flock's soundness error, which is in ε_ks), plus "
          "δ_i for each tied audit drawn in part (NetworkCheck.Period's chargedOf). Where the public lists those "
