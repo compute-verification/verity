@@ -4,8 +4,8 @@ public import Difftest
 public import PousCheck.TimedAudit
 
 /-! `pous-timed-audit READY.json LEAVES.bin AUDIT.json`: `PousCheck.TimedAudit.verdict` on a strict audit's record, the
-verdict of record that `memory_challenger.VERDICT = "lean"` reads. With the one argument `serve`, the same verdict behind
-`Difftest.serve`, which `timed_audit.py` drives against `memory_challenger.verdict`. -/
+verdict of record that the memory challenger's `timed_audit.VERDICT = "lean"` reads. With the one argument `serve`, the
+same verdict behind `Difftest.serve`, which `timed_audit.py` drives against `timed_audit.verdict`. -/
 
 @[expose] public section
 
