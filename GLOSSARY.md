@@ -286,7 +286,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   `sliding_window`).
 - In `integrations/vllm`, "family" and "kind" name circuit Definitions and query families, many of them serialized fields (its README's vocabulary).
 - Six words still carry two senses in the code:
-  - **Footprint**: a replay block's is where sampled proofs read harm (Two-stage design, below). An HBM footprint
+  - **Footprint**: a replay block's is where sampled proofs read harm (`ARCHITECTURE.md`'s Glossary). An HBM footprint
     (`Accounting.BoundReceipt.footprint`) and a theorem's (its hypotheses, in Flock's `ASSUMPTIONS.md`) keep the word.
   - **Row**: a commitment row, the bits one leaf hashes (`hm96` rows, the `*/row/*` leaf schemes, the row-form
     statements). A matrix's row stays plain English. A workload or a server block is never a row (Older names).
@@ -294,8 +294,8 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
     The values of a run's gates are its trace; `evaluate_call`'s `transcript` argument and `ExecutionTranscript` keep
     the old word until they are renamed.
   - **Stage**: to stage a statement is to fix and write it before any coin draws (the firewall's staged statements).
-    A step of a run is a phase (Older names); a stage of a Boolean lowering is a level; a pipeline stage keeps its
-    sense (above).
+    A sampling design's stages are its rounds of sampling (`ARCHITECTURE.md`'s Glossary, "Sampling design"). A step of a
+    run is a phase (Older names); a stage of a Boolean lowering is a level; a pipeline stage keeps its sense (above).
   - **Window**: the code's windows (`verity.ml.windows`, a served window circuit and its window record, PoUW's window and
     its salt) are one period's served steps, and keep the word until renamed. A span of time is a period, a
     server's gates between two memory wipes are a server block, and a sliding window is a model's term (above).
@@ -323,13 +323,13 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   `gemm_coordinate(K=1536, semantics=sm90.wgmma.m64n8k32.e4m3)`. The proof system proves subcircuits.
 - **Input** and **input set**: one assignment of values to a subcircuit's input gates, with the chip's output beside
   it; an input set is a batch of them for one subcircuit, with provenance (captured or synthetic).
-- **Two-stage design** (`ARCHITECTURE.md`'s Glossary, "Sampling design"): serving commits only the values read across
-  replay-block boundaries (the *boundary commitment*, in the registration); the *first stage* samples replay blocks (the
-  *replay sample*); the prover replays each sampled one from its boundary values and the registered information and
-  commits its *interior*, the other values its proof blocks read and write (the *interior commitment*, in the *interior
-  registration*); the *second stage* samples k of its n_ρ proof blocks (or k per template stratum) on fresh coins, and
-  misses every incorrect one with probability at most C(n_ρ − w(ρ), k)/C(n_ρ, k) (stratified, the product over strata).
-  Harm is read at ρ's *footprint* w(ρ), the fewest incorrect proof blocks of any interior its boundary commitment allows.
+- **Two-stage design** (`ARCHITECTURE.md`'s Glossary, "Sampling design" and "Replay block"): serving commits only the
+  values read across replay-block boundaries (the *boundary commitment*, in the registration); the *first stage* samples
+  replay blocks (the *replay sample*); the prover replays each sampled one from its boundary values and the registered
+  information and commits its *interior*, the other values its proof blocks read and write (the *interior commitment*, in
+  the *interior registration*); the *second stage* samples k of its proof blocks (or k per template stratum) on fresh
+  coins, and misses every incorrect one with probability at most C(n_ρ − w(ρ), k)/C(n_ρ, k) (stratified, the product
+  over strata).
 - **Cell**: one benchmark result: a proof system (or an archived one's backend id) × statement × input set × prover
   hardware.
 - **Input block** (`INPUT_UNIT` in `verity.ml.circuits.partition`): the part of a partition that holds every input gate.
