@@ -3,9 +3,9 @@
 Each part is a `Protocol` below, listing exactly what the integration reads of it, and its accessor (`active`,
 `io_tie`, `release`, `ingress_scan`, `compile_slice`, `served_rows`) gives the implementation installed for it: the entry
 point of that name in the ``verity_vllm.certifier`` group, which the certifier's side declares. Nothing here names the
-certifier's modules, and the certifier never imports the integration. Where no part is installed its accessor refuses
-(`errors.Refused`), and only the paths that serve the network certifier need one: the ``ids`` protocol
-(`pipeline.serve_protocol.IdsProtocol`) and the scan state (`program.predict.scan_state`)."""
+certifier's modules, and the certifier never imports the integration. Where a part has no implementation installed, or
+more than one, its accessor refuses (`errors.Refused`), and only the paths that serve the network certifier need one:
+the ``ids`` protocol (`pipeline.serve_protocol.IdsProtocol`) and the scan state (`program.predict.scan_state`)."""
 from __future__ import annotations
 
 import functools
@@ -71,10 +71,12 @@ class ServedRows(Protocol):
 
 @functools.cache
 def _part(name: str) -> Any:
-    for ep in entry_points(group=GROUP, name=name):
-        return ep.load()
-    raise Refused(f"the network certifier isn't installed (no {name!r} entry point in the {GROUP!r} group): install its "
-                  "distribution, which declares them, or serve without it", what=f"verity_vllm.ports.{name}")
+    eps = list(entry_points(group=GROUP, name=name))
+    if len(eps) != 1:
+        found = ", ".join(f"{ep.value} from {ep.dist.name if ep.dist else '?'}" for ep in eps) or "none"
+        raise Refused(f"the {GROUP!r} entry point group has {len(eps)} {name!r} parts ({found}), not one: install exactly "
+                      "one network certifier, or serve without it", what=f"verity_vllm.ports.{name}")
+    return eps[0].load()
 
 
 def active() -> Active:
