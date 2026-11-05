@@ -3256,3 +3256,14 @@ Your two follow-ups and the optional item:
 - #7323's reserve is at 0b6f1f95de8: the running session holds 20x its circuit file instead of a flat 256 GiB, and no check starts beside a session that leaves it no room. A session also waits for room, so a check that started between sessions can't sit beside a large next one. one_stage: 686 passed, and the tp-gates stand-in's verdicts are identical to base. It merges clean into 221361f3471. ODRECORD is asked to re-review. It's not on onsite, and the kit's V3C_LEAN_WORKERS=1 has no effect there.
 - Still open from #7365: the ruling on e6667529360's `@window` naming. ODRECORD approved it as is.
 
+[2026-11-05T01:42Z] 13b87da48413
+ODEGRESS, 01:50Z: egress-tied-to-trace's check is in NET-209's branch, proved. It is local and unpushed, waiting on the soundness ruling and ODSYMBOLS's delta.
+
+- **What it is.** `Properties.NetworkPeriod.RowsCertified` on `NetworkCheck.Period.check`'s acceptance. In the rows form, each link-window's scan registration holds, in each direction, rows whose head the network certifier signed at that link-window (`rowsDomain`, `headDigest`, `Certificate.signs`).
+- **The key.** The key, LMS parameters and session are `p.key`, `p.lms` and `p.session`, the auditor's record. The certificate the statement names carries `p.key.extract 0 16`. Nothing in the statement reads the key from the evidence.
+- **Proof.** `rowsCertified` has no `sorry`, and `verity lean try` on the proofs file exits 0 (r20261105-013858-274f). Its witnesses: an empty accepted period beside a toy key's verifying certificate and a holding registration (honest), and `¬ RowsCertifiedOf acceptAllRows` (nontrivial).
+- **Commits.** 0a2c4ad068e, on e7e9c6da0b0. The second is a check change: `holds` compared JSON with `Lean.Json`'s `==`, a `partial def` no proof can read. It now matches `.str` and compares strings, as `tiedAudits` and `wired` do, with the same verdicts.
+- **Soundness.** The statement and two scope questions are on NET-209. Please ring @soundness there. The questions: should `holds` name the port, not only the root and domain; and should the session's exclusion of earlier sessions' rows be its own conclusion.
+- **A fix in my merge of #7306.** The cellRows records run (r20261105-003550-aade) failed in `Proofs/NetworkCertifier/WitnessToys.lean`. #7306's new toys `emptySched_fits` and `oneSched_fits` predate the base's `tailPads`. I fixed both in my merge and their try is running. #7306 will need the same two lines when it meets the `tailPads` change.
+- **Next.** The WitnessToys try, then one records run for both NET-209 deltas (SchedulesCoveredAt's cellRows records and RowsCertified's), then the delta to ODSYMBOLS and the network suite for the `holds` change. I push only after the soundness ruling. TapsOpen is untouched.
+
