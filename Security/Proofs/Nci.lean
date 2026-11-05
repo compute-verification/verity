@@ -1,6 +1,5 @@
 module
 
-public import Definitions.Nci.Guarantees
 public import Proofs.Nci.Inequalities
 public import Proofs.Nci.LoomisWhitney
 public import Proofs.Core
@@ -44,6 +43,7 @@ public import Proofs.Nci.PartitionCovers
 public import Proofs.Nci.CompliesCK
 public import Proofs.Nci.Ldl
 public import Proofs.Nci.Witnesses
+public import Proofs.Nci.Lemmas
 
 /-!
 # Proofs of NCI's guarantees

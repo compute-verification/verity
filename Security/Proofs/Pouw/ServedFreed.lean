@@ -3,6 +3,7 @@ module
 public import Properties.Pouw.ServedFreed
 public import Proofs.Pouw.ServedWork
 public import Proofs.Pouw.OnsiteFreed
+public import Proofs.Pouw.Lemmas.Dither
 
 /-!
 # Proof of `ServedFreed`
