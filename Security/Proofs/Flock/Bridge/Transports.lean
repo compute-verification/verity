@@ -1,7 +1,9 @@
-import Proofs.Flock.Bridge.Canon
-import Proofs.Flock.Bridge.PortRoots
-import Proofs.Flock.Claims.Bridge.Transports
-import Proofs.Flock.Soundness.Discharge.PlainReg.Checked
+module
+
+public import Proofs.Flock.Bridge.Canon
+public import Proofs.Flock.Bridge.PortRoots
+public import Proofs.Flock.Claims.Bridge.Transports
+public import Proofs.Flock.Soundness.Discharge.PlainReg.Checked
 
 /-!
 # A shaped registered opening opens the deployed commitment
@@ -27,6 +29,8 @@ At the session's binding (`vbOf`), `transports_shaped` reads a registered openin
 files that name each port once and `PortRoots.RootFixesDomain` registrations, and `transportsLiveC` is
 `Bridge.TransportsLiveC`.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

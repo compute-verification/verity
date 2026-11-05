@@ -1,10 +1,14 @@
-import Definitions.Pouw.PearlC.Game
+module
+
+public import Definitions.Pouw.PearlC.Game
 
 /-!
 # Pearl-C's accounting (proofs)
 
 A unit's replayed debit is nonnegative (`debitOf_nonneg`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

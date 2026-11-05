@@ -1,5 +1,7 @@
-import Definitions.Pouw.KeyedLeaf
-import Definitions.Pouw.Assumptions.LeadCommit
+module
+
+public import Definitions.Pouw.KeyedLeaf
+public import Definitions.Pouw.Assumptions.LeadCommit
 
 /-!
 # The keyed leaf hides and binds (trusted)
@@ -20,6 +22,8 @@ salt `salt` (`Hash.Keyed`), and records the key leaf, the hm96 leaf over `ks`, b
 * `Binds`: under the premises `SubtreeLayout` and `SaltDerivation`, two values a drawn unit's proofs open at one rank of
   one instance are equal, or the messages those openings hashed hold a collision of `H`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Guarantees.KeyedLeaf
 

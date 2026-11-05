@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainClash0
-import Proofs.Flock.Claims.KS.LevelsAll
+module
+
+public import Proofs.Flock.Claims.KS.PlainClash0
+public import Proofs.Flock.Claims.KS.LevelsAll
 
 /-!
 # The live self-clash past level 0
@@ -42,6 +44,8 @@ coins only.
 * `plainClashQL`, `plainSimLaterClashAt`: so a self-clash past level 0 at the concrete simulator's outcome gives
   `P`'s accepting run a raw clash, at every statement.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.AtDraw
 

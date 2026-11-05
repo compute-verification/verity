@@ -1,5 +1,7 @@
-import Definitions.Accounting.Requirement
-import CircuitRequirement
+module
+
+public import Definitions.Accounting.Requirement
+public import CircuitRequirement
 
 /-!
 # The requirement's code: each function is the definition it computes
@@ -15,6 +17,8 @@ layout, store and placement the instance denotes (`wiring`, `execution`, `layout
 An instance's values are the natural numbers, of which it describes `0 … n - 1`, and a gate uses, at any circuit's
 values, the operands it uses at the execution's: the definitions read `uses` only at `Execution.value`.
 -/
+
+@[expose] public section
 
 namespace Properties.Requirement
 

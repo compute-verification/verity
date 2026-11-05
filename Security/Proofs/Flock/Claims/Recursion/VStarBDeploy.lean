@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.BoundBridge
-import Proofs.Flock.Claims.Recursion.VStarLinks
-import Proofs.Flock.Claims.Recursion.DeployChecked
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundBridge
+public import Proofs.Flock.Claims.Recursion.VStarLinks
+public import Proofs.Flock.Claims.Recursion.DeployChecked
 
 /-!
 # V*'s bound-layout premises at the deployment
@@ -31,6 +33,8 @@ record `deployRec IVStar scope {b with rd := L.readers}`. What holds of them the
 The outer parse (`readOfO`) runs none of them, so off `StagedPart` a statement whose public rows disagree with its
 transcript still parses. `StagedB` holds at `showsPart` (`stagedB_deployRec_part`): an accepted run stages every part.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion.VStarB
 

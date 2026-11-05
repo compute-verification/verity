@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.FlockKSDeployE
-import Proofs.Flock.Claims.KS.ConflictTied
+module
+
+public import Proofs.Flock.Claims.Recursion.FlockKSDeployE
+public import Proofs.Flock.Claims.KS.ConflictTied
 
 /-!
 # Conflicts tied to collisions at the element-level inner verifier (`FlockDeploy.VE`)
@@ -17,6 +19,8 @@ That discharges (P1)'s first premise at `VE`: (P1) at the bound record at `VE`'s
 (`RecDeploy.plainKSAbort_bdE`) rests on the table bound counted per round at `deployPlainE rel` alone, proved at
 `deployPlain rel` (`plain_tableBoundθOnAccR`'s) and not yet at `VE`.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Aggregate
-import Proofs.Flock.Claims.ERepCost
+module
+
+public import Proofs.Flock.Claims.Aggregate
+public import Proofs.Flock.Claims.ERepCost
 
 /-!
 # The finders' events, covered by `B`
@@ -16,6 +18,8 @@ with linear weights. When they fit `C` (at most `mult` fork events at one round,
 their term averages, over the tape, to at most `√((√(2·k(x)·C) + k(x))² · Pr[B])` (`Escapes.le`), so four times it is
 at most `√(γ · Pr[B])` with Flock's `γ = 16·(√(2·k(x)·C) + k(x))²`.
 -/
+
+@[expose] public section
 
 namespace Claims
 

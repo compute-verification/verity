@@ -1,65 +1,67 @@
-import Proofs.Flock.Claims.Complete.Zk.Tape
-import Proofs.Flock.Claims.Complete.Zk.Piop
-import Proofs.Flock.Claims.Complete.Zk.Ligerito
-import Proofs.Flock.Claims.Complete.Zk.Inner
-import Proofs.Flock.Claims.Complete.Zk.Session
-import Proofs.Flock.Claims.Complete.Zk.Honest
-import Proofs.Flock.Claims.Complete.Zk.Run
-import Proofs.Flock.Claims.Complete.Zk.Sim
-import Proofs.Flock.Claims.Complete.Zk.Coins
-import Proofs.Flock.Claims.Complete.Zk.Verdict
-import Proofs.Flock.Claims.Complete.Zk.Skeleton
-import Proofs.Flock.Claims.Complete.Zk.Discharge
-import Proofs.Flock.Claims.Complete.Zk.Link
-import Proofs.Flock.Claims.Complete.Zk.Json.QSort
-import Proofs.Flock.Claims.Complete.Zk.Json.Record
-import Proofs.Flock.Claims.Complete.Zk.Json.Decode
-import Proofs.Flock.Claims.Complete.Zk.Json.Session
-import Proofs.Flock.Claims.Complete.Zk.Json.Goals
-import Proofs.Flock.Claims.Complete.Zk.Json.Files
-import Proofs.Flock.Claims.Complete.Zk.Json.Runs
-import Proofs.Flock.Claims.Complete.Zk.Count
-import Proofs.Flock.Claims.Complete.Zk.ProverOk
-import Proofs.Flock.Claims.Complete.Zk.RepRounds
-import Proofs.Flock.Claims.Complete.Zk.Lanes
-import Proofs.Flock.Claims.Complete.Zk.Consumed
-import Proofs.Flock.Claims.Complete.Zk.Transfer
-import Proofs.Flock.Claims.Complete.Zk.Walk
-import Proofs.Flock.Claims.Complete.Zk.Replay
-import Proofs.Flock.Claims.Complete.Zk.PiopGo
-import Proofs.Flock.Claims.Complete.Zk.ReplayPos
-import Proofs.Flock.Claims.Complete.Zk.RingSwitch
-import Proofs.Flock.Claims.Complete.Zk.Extras
-import Proofs.Flock.Claims.Complete.Zk.LigeritoPos
-import Proofs.Flock.Claims.Complete.Zk.LigeritoProverPos
-import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
-import Proofs.Flock.Claims.Complete.Zk.InnerMerkle
-import Proofs.Flock.Claims.Complete.Zk.InnerGo
-import Proofs.Flock.Claims.Complete.Zk.Exact
-import Proofs.Flock.Claims.Complete.Zk.Stops
-import Proofs.Flock.Claims.Complete.Zk.ConsZerocheck
-import Proofs.Flock.Claims.Complete.Zk.ConsLincheck
-import Proofs.Flock.Claims.Complete.Zk.ConsRingSwitch
-import Proofs.Flock.Claims.Complete.Zk.ConsReplay
-import Proofs.Flock.Claims.Complete.Zk.ConsCoins
-import Proofs.Flock.Claims.Complete.Zk.MaskRank
-import Proofs.Flock.Claims.Complete.Zk.Layout
-import Proofs.Flock.Claims.Complete.Zk.RankBridge
-import Proofs.Flock.Claims.Complete.Zk.RankDual
-import Proofs.Flock.Claims.Complete.Zk.RankPrimal
-import Proofs.Flock.Claims.Complete.Zk.RankDeployed
-import Proofs.Flock.Claims.Complete.Zk.Complete
-import Proofs.Flock.Claims.Complete.Zk.Level0Pad
-import Proofs.Flock.Claims.Complete.Zk.Level0Run
-import Proofs.Flock.Claims.Complete.Zk.Level0Lanes
-import Proofs.Flock.Claims.Complete.Zk.Level0Shape
-import Proofs.Flock.Claims.Complete.Zk.Level0Premises
-import Proofs.Flock.Claims.Complete.Zk.Level0Model
-import Proofs.Flock.Claims.Complete.Zk.Level0Honest
-import Proofs.Flock.Claims.Complete.Zk.Level0HonestRun
-import Proofs.Flock.Claims.Complete.Zk.Level0Opens
-import Proofs.Flock.Claims.Complete.Zk.Level0Verifier
-import Proofs.Flock.Claims.Complete.Zk.Level0Complete
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Tape
+public import Proofs.Flock.Claims.Complete.Zk.Piop
+public import Proofs.Flock.Claims.Complete.Zk.Ligerito
+public import Proofs.Flock.Claims.Complete.Zk.Inner
+public import Proofs.Flock.Claims.Complete.Zk.Session
+public import Proofs.Flock.Claims.Complete.Zk.Honest
+public import Proofs.Flock.Claims.Complete.Zk.Run
+public import Proofs.Flock.Claims.Complete.Zk.Sim
+public import Proofs.Flock.Claims.Complete.Zk.Coins
+public import Proofs.Flock.Claims.Complete.Zk.Verdict
+public import Proofs.Flock.Claims.Complete.Zk.Skeleton
+public import Proofs.Flock.Claims.Complete.Zk.Discharge
+public import Proofs.Flock.Claims.Complete.Zk.Link
+public import Proofs.Flock.Claims.Complete.Zk.Json.QSort
+public import Proofs.Flock.Claims.Complete.Zk.Json.Record
+public import Proofs.Flock.Claims.Complete.Zk.Json.Decode
+public import Proofs.Flock.Claims.Complete.Zk.Json.Session
+public import Proofs.Flock.Claims.Complete.Zk.Json.Goals
+public import Proofs.Flock.Claims.Complete.Zk.Json.Files
+public import Proofs.Flock.Claims.Complete.Zk.Json.Runs
+public import Proofs.Flock.Claims.Complete.Zk.Count
+public import Proofs.Flock.Claims.Complete.Zk.ProverOk
+public import Proofs.Flock.Claims.Complete.Zk.RepRounds
+public import Proofs.Flock.Claims.Complete.Zk.Lanes
+public import Proofs.Flock.Claims.Complete.Zk.Consumed
+public import Proofs.Flock.Claims.Complete.Zk.Transfer
+public import Proofs.Flock.Claims.Complete.Zk.Walk
+public import Proofs.Flock.Claims.Complete.Zk.Replay
+public import Proofs.Flock.Claims.Complete.Zk.PiopGo
+public import Proofs.Flock.Claims.Complete.Zk.ReplayPos
+public import Proofs.Flock.Claims.Complete.Zk.RingSwitch
+public import Proofs.Flock.Claims.Complete.Zk.Extras
+public import Proofs.Flock.Claims.Complete.Zk.LigeritoPos
+public import Proofs.Flock.Claims.Complete.Zk.LigeritoProverPos
+public import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
+public import Proofs.Flock.Claims.Complete.Zk.InnerMerkle
+public import Proofs.Flock.Claims.Complete.Zk.InnerGo
+public import Proofs.Flock.Claims.Complete.Zk.Exact
+public import Proofs.Flock.Claims.Complete.Zk.Stops
+public import Proofs.Flock.Claims.Complete.Zk.ConsZerocheck
+public import Proofs.Flock.Claims.Complete.Zk.ConsLincheck
+public import Proofs.Flock.Claims.Complete.Zk.ConsRingSwitch
+public import Proofs.Flock.Claims.Complete.Zk.ConsReplay
+public import Proofs.Flock.Claims.Complete.Zk.ConsCoins
+public import Proofs.Flock.Claims.Complete.Zk.MaskRank
+public import Proofs.Flock.Claims.Complete.Zk.Layout
+public import Proofs.Flock.Claims.Complete.Zk.RankBridge
+public import Proofs.Flock.Claims.Complete.Zk.RankDual
+public import Proofs.Flock.Claims.Complete.Zk.RankPrimal
+public import Proofs.Flock.Claims.Complete.Zk.RankDeployed
+public import Proofs.Flock.Claims.Complete.Zk.Complete
+public import Proofs.Flock.Claims.Complete.Zk.Level0Pad
+public import Proofs.Flock.Claims.Complete.Zk.Level0Run
+public import Proofs.Flock.Claims.Complete.Zk.Level0Lanes
+public import Proofs.Flock.Claims.Complete.Zk.Level0Shape
+public import Proofs.Flock.Claims.Complete.Zk.Level0Premises
+public import Proofs.Flock.Claims.Complete.Zk.Level0Model
+public import Proofs.Flock.Claims.Complete.Zk.Level0Honest
+public import Proofs.Flock.Claims.Complete.Zk.Level0HonestRun
+public import Proofs.Flock.Claims.Complete.Zk.Level0Opens
+public import Proofs.Flock.Claims.Complete.Zk.Level0Verifier
+public import Proofs.Flock.Claims.Complete.Zk.Level0Complete
 
 /-! Flock's completeness at the deployed masked (`--zk`) verifier at one table (`ZkTables` lifts it to any number, at
 the masked record's prover `ZkTables.honestPR`): the honest masked prover (`Honest`: `honestPZk`, on
@@ -130,3 +132,5 @@ checks, level 0's over rows `EXTRA_LANES` wider (`ligeritoPZk_opens`, `merkleOkZ
 premise, the verifier returning the prover's record at its transcript (`verifier`); `Level0Complete` the four in
 `complete_jsonT_of_level0`, leaving the JSON specification and `MaskRankBound` (`complete_jsonT_closed`), and with
 `maskRankBound` the JSON specification alone (`complete_jsonT_of_spec`). -/
+
+@[expose] public section

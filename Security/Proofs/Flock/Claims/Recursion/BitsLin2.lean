@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.KSLin2
-import Proofs.Flock.Claims.Sampling.Bext
+module
+
+public import Proofs.Flock.Claims.Recursion.KSLin2
+public import Proofs.Flock.Claims.Sampling.Bext
 
 /-!
 # Route 2C's bits from its KS
@@ -40,6 +42,8 @@ collision assumptions. At the deployed records `λ₂ ≥ 135.7` (`RecDeploy.lam
 `bitsLin2KOn_of_ksLin2On`, with `RecDeploy.sessionAccepts`; `RecDeploy.recursiveBitsK`). Holo statements are candidate
 3's own model.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 
