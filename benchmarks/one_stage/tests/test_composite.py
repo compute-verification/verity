@@ -116,6 +116,13 @@ def test_remote_network_is_remotes_subprotocols_and_the_network_certifiers(tmp_p
     assert "VERDICT verity/remote-network/v0 reject params" in lines
 
 
+def test_the_block_record_names_exactly_the_composites_composite_py_composes():
+    """`served_verdicts.py --product` takes the block record's products (`block_record.PRODUCTS`), which are exactly the
+    composites composite.py composes, so the record names no composite served_composite.sh doesn't compose."""
+    from verity_e2e_demo import block_record as BR
+    assert sorted(BR.PRODUCTS) == sorted(C.PRODUCTS) == sorted(C.COMPONENTS)
+
+
 def test_remote_network_no_pouw_is_remote_networks_subprotocols_but_pouws_period(tmp_path):
     """Its three cases make its whole case, bound under its own id, with nothing missing: PoUW's period is none of its
     subprotocols, so without a period case it is established, and the record it composes credits no verified compute."""
