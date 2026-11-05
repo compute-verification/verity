@@ -12,12 +12,13 @@ change that closes it has to say so here. Two recorded sets, both fetched fixtur
   registered (no staging runs `inner_registered register`). V*'s sessions hide their outputs, as `ZkOuterR.hTags`
   (`TagsOkZHJ`) takes them, and their shared-row public file passes `ScopeZR`, `Typable`'s statement check; the
   public-output one-table checks, `TagsOk` and `ScopeZ`, refuse them.
-* `f1-gate`, the F1 gate (`PublicAudit`, the recursive audit at public units): 85 at K = 4096, N = 2, one firewalled
-  run of `benchmarks/recursion_e2e` (MODES=firewall) built, proved and verified it, its inner statement staged with
-  every instance's own rows under `Q_template_instance` (`85-rec-reprice.sh`'s `stage_inner`), its inner session on the
-  challenger's coin tree and V*'s statements staged with the inner program, RecCap's included (`85-rec-reprice.sh`
-  STEP=vcap and STEP=oprove); the fixture holds the files these tests read, the circuits and V*'s large programs
-  xz-compressed, the inner transcript is tracked beside it (`f1-gate-transcript`), and each is checked against the run's
+* `f1-gate`, the F1 gate (`PublicAudit`, the recursive audit at public units): 85 at K = 4096, N = 2, two firewalled
+  runs of `benchmarks/recursion_e2e` (MODES=firewall). The first staged its inner statement with every instance's own
+  rows under `Q_template_instance` (`85-rec-reprice.sh`'s `stage_inner`) and proved its inner session on the
+  challenger's coin tree; the second, over that inner session (`STAGE=0`, its partition, program and draw kept), staged
+  V*'s statements with the inner program, every level registering its opened rows and their siblings, RecCap's
+  included, and proved and verified them (`85-rec-reprice.sh` STEP=vstage, vcap, oprove and lean). The fixture holds
+  the files these tests read, the circuits and V*'s large programs xz-compressed, the inner transcript is tracked beside it (`f1-gate-transcript`), and each is checked against the run's
   own listing (`prover.sha256`) once decompressed. Lean's verifier
   builds the inner statement from its own partition object and program (`AcceptsPublic`), V*'s ten staged statements
   are the ones `outerStatementsAt` lists, each session is one of them byte for byte (`RecVStar.checkStmt`) and draws every unit,
