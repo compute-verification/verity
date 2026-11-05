@@ -1,4 +1,6 @@
-import Properties.SampledProofs.Bits
+module
+
+public import Properties.SampledProofs.Bits
 
 /-! # Bits' layout as the claims' program (`Properties.SampledProofs.Bits`)
 
@@ -7,6 +9,8 @@ order, gate `g` to `gateSize kp g` gates (`lower_length`) after the `off kp g` l
 `bitsProg kp κ`'s `off kp kp.size` gates (`bitsProg_length`), the one at `posOf kp g` is the last of gate `g`'s
 (`bitsProg_gate`).
 -/
+
+@[expose] public section
 
 open _root_.SampledProofs
 

@@ -1,5 +1,7 @@
-import Definitions.Claims.Sampling
-import SampledProofs.Bits
+module
+
+public import Definitions.Claims.Sampling
+public import SampledProofs.Bits
 
 /-!
 # A sampled statement's bits as the claims' program (`SampledProofs.Bits`)
@@ -14,6 +16,8 @@ the map between them, so a statement's program is Bits' layout read as the claim
 `Proofs.Properties.SampledProofs.Bits` proves that the two maps are inverse and keep the gates read, that `bitsProg`'s
 gates are `Bits.off kp kp.size`, and that gate `g` of `kp` sits at `Bits.posOf kp g`, the last of its lowered gates.
 -/
+
+@[expose] public section
 
 namespace Properties.SampledProofs
 

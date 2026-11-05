@@ -1,7 +1,9 @@
-import Proofs.Flock.Bridge.BitsLower
-import Proofs.Flock.Bridge.BitsRows
-import Proofs.Flock.Bridge.BitsKeys
-import Proofs.Flock.Bridge.Statement
+module
+
+public import Proofs.Flock.Bridge.BitsLower
+public import Proofs.Flock.Bridge.BitsRows
+public import Proofs.Flock.Bridge.BitsKeys
+public import Proofs.Flock.Bridge.Statement
 
 /-!
 # Bits' key program lays out the bridge's (`SampledProofs.Bits.keyProg`)
@@ -19,6 +21,8 @@ import Proofs.Flock.Bridge.Statement
 * `constsOf_eq_consts`, `progOf_keyProg`, `blockOf_bitsKeyProg`: the circuit's constants (`constsOf`) are Bits'
   (`SampledProofs.Bits.consts`), so the bridge's program and proof blocks are Bits'.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 
