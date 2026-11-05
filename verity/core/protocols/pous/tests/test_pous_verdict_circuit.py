@@ -16,7 +16,7 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import bits as EB
 from verity.ml.circuits.evaluation.reference import standalone_call
 from verity.ml.commitments import rowleaf
-from verity.core.protocols.pous import memory_challenger as mc
+from verity.core.devices.memory_challenger import memory_challenger as mc
 from verity.core.protocols.pous import verdict_circuit as V
 
 RNG = random.Random(27)

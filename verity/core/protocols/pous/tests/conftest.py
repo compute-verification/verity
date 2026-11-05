@@ -12,7 +12,8 @@ import shutil
 import pytest
 
 import pous_test_signer
-from verity.core.protocols.pous import audit, memory_challenger, streamed_wipe, wipe_stream
+from verity.core.protocols.pous import audit, streamed_wipe, wipe_stream
+from verity.core.devices.memory_challenger import memory_challenger
 from verity.core.protocols.pous.continuous import ContinuousMemoryChallenger
 
 

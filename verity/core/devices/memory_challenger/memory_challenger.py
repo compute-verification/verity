@@ -85,9 +85,9 @@ from verity.ml.commitments.rowleaf import sha512_row_v2_digest
 from verity.ml.crypto import lms
 from verity.ml.randomness import derive
 
-from .params import SALT_BITS
-from .protocol import Certificate, Scheme
-from .verifier import DIGEST_BYTES
+from verity.core.protocols.pous.params import SALT_BITS
+from verity.core.protocols.pous.protocol import Certificate, Scheme
+from verity.core.protocols.pous.verifier import DIGEST_BYTES
 
 PROTOCOL = "verity-pous/memory-challenger/v1"
 COIN_DOMAIN = "verity/pous/memory-challenger-coins/v1"

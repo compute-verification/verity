@@ -40,7 +40,7 @@ from typing import Any, BinaryIO
 
 from verity.core.deploy.stream import Side
 
-from . import memory_challenger as mc
+from verity.core.devices.memory_challenger import memory_challenger as mc
 from . import streamed_wipe as sw
 from . import wipe_stream
 

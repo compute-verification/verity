@@ -15,7 +15,7 @@ import threading
 import pous_test_signer as ts
 from test_pous_memory_challenger import SESSION, judge, session
 from verity.ml.crypto import lms
-from verity.core.protocols.pous import memory_challenger as mc
+from verity.core.devices.memory_challenger import memory_challenger as mc
 from verity.core.protocols.pous import period
 
 
@@ -82,7 +82,7 @@ def test_concurrent_sessions_on_one_leaf_state_each_sign_at_a_leaf_of_their_own(
 CRASH = """
 import hashlib, os, sys
 from verity.ml.crypto import lms
-from verity.core.protocols.pous import memory_challenger as mc
+from verity.core.devices.memory_challenger import memory_challenger as mc
 signer = mc.LmsSigner(lms.keygen(lms.Params(64, 1, 3), hashlib.sha512(b"crash key").digest()), sys.argv[1], sys.argv[2])
 lms.sign_at = lambda *a: os._exit(17)
 signer.sign(bytes(32), b"record")

@@ -195,7 +195,7 @@ class MC(V3):
                                          else ("--signer", "test")))
 
     def leaf(self, i: int, block: bytes) -> bytes:
-        from verity.core.protocols.pous.memory_challenger import block_digest
+        from verity.core.devices.memory_challenger.memory_challenger import block_digest
         return block_digest(block)
 
 

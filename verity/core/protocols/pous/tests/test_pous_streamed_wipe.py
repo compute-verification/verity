@@ -13,7 +13,7 @@ import pytest
 
 import pous_test_signer as ts
 from pous_fakes import Clock
-from verity.core.protocols.pous import memory_challenger as mc
+from verity.core.devices.memory_challenger import memory_challenger as mc
 from verity.core.protocols.pous import streamed_wipe as sw
 from verity.ml.randomness import derive
 

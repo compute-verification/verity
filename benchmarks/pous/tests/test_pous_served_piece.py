@@ -30,8 +30,8 @@ from pathlib import Path
 import pytest
 
 from verity.core.deploy.stream import Side
-from verity.core.protocols.pous import challenger_party as CP
-from verity.core.protocols.pous import memory_challenger as mc
+from verity.core.devices.memory_challenger import challenger_party as CP
+from verity.core.devices.memory_challenger import memory_challenger as mc
 from verity.core.protocols.pous import period
 from verity.core.protocols.pous.schemes.p2 import POINT, P2Params
 from verity.core.protocols.remote_bandwidth import p2_case, p2_lean

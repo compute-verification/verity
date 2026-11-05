@@ -14,7 +14,7 @@ from hypothesis import strategies as st
 
 import mc_cases as M
 import verity_difftest as D
-from verity.core.protocols.pous import memory_challenger as mc
+from verity.core.devices.memory_challenger import memory_challenger as mc
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 

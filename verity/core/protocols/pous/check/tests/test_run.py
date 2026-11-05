@@ -25,7 +25,7 @@ import pytest
 from hypothesis import strategies as st
 
 import verity_difftest as D
-from verity.core.protocols.pous import memory_challenger as mc
+from verity.core.devices.memory_challenger import memory_challenger as mc
 from verity.core.protocols.pous import period, run
 from verity.core.protocols.pous import setup as pous_setup
 from verity.core.protocols.pous.schemes import p2 as P2

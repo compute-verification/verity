@@ -14,7 +14,7 @@ from types import ModuleType
 
 import pytest
 
-from verity.core.protocols.pous import memory_challenger as mc
+from verity.core.devices.memory_challenger import memory_challenger as mc
 from verity.core.protocols.pous import period as pous
 from verity.core.protocols.pous import run as R
 from verity.core.protocols.pous import setup

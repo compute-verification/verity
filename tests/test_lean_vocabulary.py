@@ -156,9 +156,9 @@ MIRRORS: dict[str, tuple[str, str, str]] = {
     f"{RA_PY}::Registration": (f"{RA}Window.lean::RemoteAudit.Registration", "remote-audit-difftest", "the remote audit's port"),
     f"{RA_PY}::Registry": (f"{RA}Registry.lean::RemoteAudit.Registry", "remote-audit-difftest", "the remote audit's port"),
     f"{RA_PY}::Verdict": (f"{RA}Window.lean::RemoteAudit.Verdict", "remote-audit-difftest", "the remote audit's port"),
-    "verity/core/protocols/pous/memory_challenger.py::CoinTree":
+    "verity/core/devices/memory_challenger/memory_challenger.py::CoinTree":
         (f"{MC}Records.lean::MemoryChallenger.CoinTree", "memory-challenger-difftest", "the memory challenger's port"),
-    "verity/core/protocols/pous/memory_challenger.py::Verdict":
+    "verity/core/devices/memory_challenger/memory_challenger.py::Verdict":
         (f"{MC}Verdict.lean::MemoryChallenger.Verdict", "memory-challenger-difftest", "the memory challenger's port"),
     f"{MC_PY}streamed_wipe.py::Verdict": (f"{MC}StreamedWipe.lean::MemoryChallenger.StreamedWipe.Verdict",
                                           "memory-challenger-difftest", "the memory challenger's port, for the streamed wipe"),
@@ -896,7 +896,7 @@ KNOWN: dict[str, str] = {
     "verity/core/protocols/network/nci/lean/NciCheck/Check.lean::NciCheck.Circuit":
         "duplicate of `Flock.Program`: becomes a reading of it: one gate-level Boolean type beside `Flock.Program.Prog`, which both read (proofs)",
     "verity/core/protocols/pous/audit.py::Answer": "homonym, a challenge's answer: rename (memory-accounting)",
-    "verity/core/protocols/pous/challenger_party.py::Challenger":
+    "verity/core/devices/memory_challenger/challenger_party.py::Challenger":
         "duplicate of `parties.Challenger`: becomes a reading of it (memory-accounting)",
     "verity/core/protocols/pous/check/PousCheck/Certificate.lean::PousCheck.Certificate.Certificate":
         "homonym, what a PoUS audit establishes: rename (memory-accounting)",

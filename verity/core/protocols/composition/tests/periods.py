@@ -18,7 +18,7 @@ from pathlib import Path
 
 import reference as R
 from verity_difftest import protocol as P
-from verity.core.protocols.pous import memory_challenger as mc
+from verity.core.devices.memory_challenger import memory_challenger as mc
 from verity.core.protocols.pous import period as pous
 from verity.core.protocols.pous import run as RUN
 from verity.core.protocols.pous import setup

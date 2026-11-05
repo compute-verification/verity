@@ -20,7 +20,7 @@ from pathlib import Path
 import pytest
 
 from test_p2_party import Lying, Prover, exe, request, run, store  # noqa: F401
-from verity.core.protocols.pous import memory_challenger as mc
+from verity.core.devices.memory_challenger import memory_challenger as mc
 from verity.core.protocols.pous import period as pous
 from verity.core.protocols.pous import run as R
 from verity.core.protocols.remote_bandwidth import p2_case, p2_lean, p2_party, receipts

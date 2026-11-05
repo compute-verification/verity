@@ -12,7 +12,7 @@ from verity.core.protocols.pous import setup
 from verity.core.protocols.pous.audit import HonestResponder, UnsignedRounds, challenge_key, run_timed
 from verity.core.protocols.pous.codec import Codec, encode_segments, split
 from verity.core.protocols.pous.layout import Layout, decode_tensor
-from verity.core.protocols.pous.memory_challenger import block_digest
+from verity.core.devices.memory_challenger.memory_challenger import block_digest
 from verity.core.protocols.pous.params import Params
 from verity.core.protocols.pous.primitives import reference
 from verity.core.protocols.pous.scheme import P3, decode_segment, encode, encode_segment

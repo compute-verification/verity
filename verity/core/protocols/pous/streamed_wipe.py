@@ -53,7 +53,7 @@ from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
 from verity.ml.commitments.scheme import DIGEST_BYTES
 from verity.ml.randomness import derive
 
-from .memory_challenger import CLOCK_RESOLUTION_NS, SCHEMES, SessionLog, Signer, Verify
+from verity.core.devices.memory_challenger.memory_challenger import CLOCK_RESOLUTION_NS, SCHEMES, SessionLog, Signer, Verify
 
 PROTOCOL = "verity-pous/streamed-wipe/v1"
 KEY_DOMAIN = "verity/pous/streamed-wipe-labels/v1"

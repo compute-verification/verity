@@ -81,7 +81,7 @@ sessions. `period_reports.PERIOD` is not in `memory_challenger.SCHEMES` until `P
 
 ~~~python
 from verity.ml.crypto import lms
-from verity.core.protocols.pous import memory_challenger as mc
+from verity.core.devices.memory_challenger import memory_challenger as mc
 
 signer = mc.LmsSigner(key, state_path)  # key = lms.keygen(lms.DEPLOYED, seed); lms.LeafState.create(state_path, ...) once
 log = mc.SessionLog(log_path)                     # its own file (mc.SessionLog.create once), never in the key's directory
