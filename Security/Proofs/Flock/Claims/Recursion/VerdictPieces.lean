@@ -32,7 +32,7 @@ checks hold and every piece does, `verifyJPWith` accepts. The `rec-residuals` pi
 (`RunsFrom`'s decode fields) and the Ligerito openings (`Opened`), each a piece of its own owner. The rounds' frames
 (`FramedAt`) are custody's (`.after`: each recorded round retains its message, and `decR` reads the messages as the
 proof's framed bytes). VBridge's chain (`FlockVBridge.Family.runs_of_files`) assembles them at `sh.holo = false`, the
-only form the route covers (`SchedMatches`; `not_schedMatches_holo`).
+only form the route covers (`SchedMatches`, whose round count `2 + 2R` is the plain schedule's).
 -/
 
 @[expose] public section

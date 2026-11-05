@@ -26,7 +26,7 @@ sees what `E^rep` at `IVStar` sees, off the runs that open otherwise (`Bound.Bad
 
 At the deployed bound record `ans` is a coin's bytes, which a decoder inverts, so the bridge holds there at every
 choice the code side makes (`RecDeploy.bridge_bdDeployed`), which `KSBoundRouteCols`' route takes
-(`RecDeploy.ksBoundRoute_of_bridge_cols`, at the deployed outer relation `RecDeploy.ksBoundRouteCols_outer`).
+(`RecDeploy.ksBoundRoute_of_bridge_cols`); no theorem takes it at the deployed outer relation.
 -/
 
 @[expose] public section
