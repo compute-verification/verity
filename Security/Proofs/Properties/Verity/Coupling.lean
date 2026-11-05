@@ -629,7 +629,7 @@ theorem target_of_periods_honest :
   refine ⟨Idle.coupling ⊤ _ .remote θ F c σ ρ, 1, fun _ => Pouw.pr_le_one _, le_top, fun _ => ?_⟩
   refine le_trans (Game.prCoin_mono (q := fun _ => False) ?_) (by rw [Game.prCoin_false]; exact zero_le)
   rintro ξ ⟨-, hl | hk⟩
-  · exact hl fun log h => by simp [Idle.unbounded, Idle.vocab] at h
+  · exact hl fun log h => by simp [Idle.vocab] at h
   · exact hk
 
 /-- **`TargetOfPeriods`' nontrivial lemma**: its conclusion fails at remote's PoUW for a verifier that accepts

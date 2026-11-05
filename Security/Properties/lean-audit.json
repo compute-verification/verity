@@ -555,6 +555,22 @@
   "Properties.Firewall.afterOnTime": {
    "honest": ["Properties.Firewall.afterOnTime_honest"],
    "nontrivial": "Properties.Firewall.afterOnTime_nontrivial"
+  },
+  "Verity.coins_couple": {
+   "honest": ["Verity.coins_couple_honest"],
+   "nontrivial": "Verity.coins_couple_nontrivial"
+  },
+  "Verity.target_of_periods": {
+   "honest": ["Verity.target_of_periods_honest"],
+   "nontrivial": "Verity.target_of_periods_nontrivial"
+  },
+  "Verity.wipe_target": {
+   "honest": ["Verity.wipe_target_honest"],
+   "nontrivial": "Verity.wipe_target_nontrivial"
+  },
+  "Verity.soundness_of_upFront": {
+   "honest": ["Verity.soundness_of_upFront_honest"],
+   "nontrivial": "Verity.soundness_of_upFront_nontrivial"
   }
  },
  "unwitnessed": {
@@ -3896,6 +3912,15 @@
    "assumptions": [],
    "type_hash": "18aa0be157689c21712bf3aeb5199fb4b9b22378baf5efaf9efb9df44d38cb47"
   },
+  "Verity.coins_couple": {
+   "owner": "@soundness"
+  },
+  "Verity.coins_couple_honest": {
+   "owner": "@soundness"
+  },
+  "Verity.coins_couple_nontrivial": {
+   "owner": "@soundness"
+  },
   "Verity.remote_soundness_of_subprotocols": {
    "owner": "@soundness",
    "signature": ["Verity.remote_soundness_of_subprotocols : Verity.RemoteSoundness"],
@@ -4011,6 +4036,33 @@
    ],
    "assumptions": [],
    "type_hash": "5331eb5f08954cebb0c4dda27e710eeab5c3ec3baba428f68d214b1f2d74f91d"
+  },
+  "Verity.soundness_of_upFront": {
+   "owner": "@soundness"
+  },
+  "Verity.soundness_of_upFront_honest": {
+   "owner": "@soundness"
+  },
+  "Verity.soundness_of_upFront_nontrivial": {
+   "owner": "@soundness"
+  },
+  "Verity.target_of_periods": {
+   "owner": "@soundness"
+  },
+  "Verity.target_of_periods_honest": {
+   "owner": "@soundness"
+  },
+  "Verity.target_of_periods_nontrivial": {
+   "owner": "@soundness"
+  },
+  "Verity.wipe_target": {
+   "owner": "@soundness"
+  },
+  "Verity.wipe_target_honest": {
+   "owner": "@soundness"
+  },
+  "Verity.wipe_target_nontrivial": {
+   "owner": "@soundness"
   }
  },
  "shape": {
