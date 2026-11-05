@@ -657,19 +657,12 @@ The lock lists both as the property's `witnesses`, so each builds its instance: 
 nontrivial lemma's one `∀` stands for its property's `∃`), and its statement reads only the spec and the code, its
 instance written out rather than named by a definition of this file. -/
 
-theorem size_qsort {α : Type} (as : Array α) (lt : α → α → Bool) (lo hi : ℕ) :
-    (as.qsort lt lo hi).size = as.size := by
-  unfold Array.qsort
-  split
-  · rfl
-  · simp
-
 /-- **`PlanBlocks` meets the deployed plan.** The plan of the deployed passes, the whole store as one run, is one
 `Plan.make?` makes, and it is `Plan.whole`, the second conjunct's plan. -/
 theorem planBlocks_honest : Plan.make? #[((0 : ℤ), (130023424 : ℤ))] 130023424 = some (Plan.whole 130023424) := by
   have h : (Plan.make? #[((0 : ℤ), (130023424 : ℤ))] 130023424).map (fun pl => (pl.blocks, pl.runs, pl.ends)) =
       some (130023424, #[(0, 130023424)], #[130023424]) := by
-    simp only [Plan.make?, size_qsort]
+    simp only [Plan.make?, Array.Perm.size_eq (qsort_perm _ _)]
     decide +kernel
   cases e : Plan.make? #[((0 : ℤ), (130023424 : ℤ))] 130023424 with
   | none => rw [e] at h; cases h
@@ -694,6 +687,23 @@ theorem runBlocks_whole (B : ℕ) : runBlocks (Plan.whole B).runs = List.range' 
 theorem tileAt_whole {B i : ℕ} (hi : i < B) : tileAt B #[] (Plan.whole B).runs i = some (0, i) := by
   rw [tileAt, runBlocks_whole, List.getElem?_range' hi]
   simp [position, hi]
+
+/-- Position `p` of the whole store's plan is block `p`. -/
+theorem block_whole {B p : ℕ} (hp : p < B) : (Plan.whole B).block p = p := by
+  obtain ⟨hlen, hget⟩ := planBlocks.2 B
+  have hL : (Plan.whole B).length = B := by rw [hlen, runBlocks_whole, List.length_range']
+  have h := hget p (by rw [hL]; exact hp)
+  rw [runBlocks_whole, List.getElem?_range' hp] at h
+  have := Option.some.inj h
+  omega
+
+theorem bisectRight_empty (x : ℕ) : bisectRight #[] x = 0 := by
+  have h := (bisectRight_spec #[] x fun _ _ _ hb => by simp at hb).1
+  simpa using h
+
+/-- With no appends, a store index past the registered blocks has no position. -/
+theorem position_past {blocks j : ℕ} (hj : blocks ≤ j) : position blocks #[] j = none := by
+  simp [position, Nat.not_lt.mpr hj, bisectRight_empty]
 
 /-- **`CodeLayoutTiles` meets the deployed pass.** At the deployed plan, made by `Plan.make?`, its runs hold the
 store's 130023424 blocks, tile `i` at `(0, i)`, a position below `(1, 130023424)`: the registration's tree, at its own
@@ -1010,11 +1020,7 @@ theorem honest_checks (reg : Registration) (challenge previous : ByteArray) (hB 
     show 0 < 0 + reg.blocks
     rw [hB]
     decide
-  have hb0 : (Plan.whole 130023424).block 0 = 0 := by
-    first
-      | rfl
-      | decide
-      | decide +kernel
+  have hb0 : (Plan.whole 130023424).block 0 = 0 := block_whole (by decide)
   have hj : 0 < reg.key.codec.maxBlocks := by
     rw [hk]
     decide
@@ -1075,9 +1081,8 @@ theorem opensAtPosition_nontrivial :
     ∀ t, ¬ (position 130023424 #[] ((Plan.whole 130023425).block 130023424) =
       some (t, (Plan.whole 130023425).block 130023424)) := by
   intro t h
-  have hn : position 130023424 #[] ((Plan.whole 130023425).block 130023424) = none := by
-    decide +kernel
-  exact Option.some_ne_none _ (h.symm.trans hn)
+  rw [block_whole (show 130023424 < 130023425 by decide), position_past (Nat.le_refl _)] at h
+  exact Option.noConfusion h
 
 /-! ### The scheduled layout -/
 
