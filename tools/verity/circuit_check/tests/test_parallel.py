@@ -277,3 +277,62 @@ def test_the_catalog_s_build_keeps_to_what_the_session_s_workers_were_given(monk
     assert _budget(four, 8) == 10.0
     monkeypatch.setenv(cli.SLOT_MEM_ENV, "320")
     assert _budget({cli.SLOT_MEM_ENV: "320"}, 8) == cli.budget_gb(None) == 10
+
+
+class _Admitted(Exception):
+    pass
+
+
+def _scheduled(monkeypatch, log, mem_gb: int | None, jobs: int = 12) -> dict:
+    """`cli._checked_all` over a target with no recorded peak and one with, in a process holding 43.1 GiB after building its
+    task list: what `parallel` is handed (each item's weight, the budget), stopped there."""
+    monkeypatch.delenv(cli.SLOT_MEM_ENV, raising=False)
+    monkeypatch.setattr(cli, "_rss_gb", lambda: 43.1)
+    monkeypatch.setattr(cli, "memory_gb", lambda root=None: 500)
+    monkeypatch.setattr(cli, "heavy", lambda: {"Measured_v1": 26.5})
+    handed: dict = {}
+
+    def parallel(fn, items, jobs, initializer=None, initargs=(), *, weight, budget, **_):
+        handed.update(weights=[weight(x) for x in items], budget=budget())
+        raise _Admitted
+
+    monkeypatch.setattr(cli, "parallel", parallel)
+    tasks = [("definition", "Unmeasured_v1", dict), ("definition", "Measured_v1", dict)]
+    with pytest.raises(_Admitted):
+        cli._checked_all(tasks, [], None, True, None, log, jobs, None, mem_gb, None, True, False, None)
+    return handed
+
+
+def test_a_negative_budget_says_why_and_what_to_do_and_counts_an_unmeasured_target_as_admission_does(monkeypatch, capsys):
+    """Under a -3.1 GiB budget (a process holding 43.1 GiB once it has built the catalog, in a 40 GB check slot), a target
+    with no recorded peak is weighed at `HEAVY_GB`, as `admit` weighs it, and never looked up in the peaks; a budget under
+    `HEAVY_GB` is one warning, on stderr under ``-q`` too, naming what took the memory and the two ways out, and the
+    targets still run, alone."""
+    lines: list[str] = []
+    handed = _scheduled(monkeypatch, lines.append, 40)
+    assert handed["weights"] == [26.5, cli.HEAVY_GB] and handed["budget"] == pytest.approx(-3.1)
+    (said,) = lines
+    for part in ("holds 43.1 GiB after building its task list", "allows circuit-check 40 GiB in all",
+                 "leaves its targets -3.1 GiB", "each runs alone", "over its memory", "--all --records-only --cache DIR",
+                 "--catalog-units --cache DIR", f"raise --mem-gb to {44 + cli.HEAVY_GB * 12}"):
+        assert part in said, (part, said)
+    _scheduled(monkeypatch, None, 40)
+    assert capsys.readouterr().err == said + "\n"
+    lines.clear()
+    _scheduled(monkeypatch, lines.append, 60)
+    assert lines == ["warn Measured_v1 peaked at 26.5 GiB, over the 16.9 GiB budget: it runs alone"]
+    monkeypatch.setattr(cli, "memory_gb", lambda root=None: 2)
+    said = cli.short_budget(cli.budget_gb(None), None, 4)
+    assert "this machine has 2 GiB free" in said and "--records-only" not in said and "over its memory" not in said
+    assert cli.short_budget(cli.HEAVY_GB, 40, 4) is None
+
+
+def test_jobs_under_1_are_refused_rather_than_waiting_forever(capsys):
+    """`admit` starts nothing at ``jobs`` < 1, so `parallel` would wait for an item that never started; a budget, however
+    negative, never stops it (the first item starts when nothing runs)."""
+    assert cli.admit([cli.HEAVY_GB], [], jobs=1, budget=-3.1) == [0] and cli.admit([1.0], [], jobs=0, budget=100) == []
+    with pytest.raises(ValueError, match="jobs=0 starts no item"):
+        list(cli.parallel(abs, [-1], jobs=0))
+    with pytest.raises(SystemExit) as e:
+        cli.main(["--all", "-j", "-1"])
+    assert e.value.code == 2 and "--jobs -1 would start no target and wait forever" in capsys.readouterr().err
