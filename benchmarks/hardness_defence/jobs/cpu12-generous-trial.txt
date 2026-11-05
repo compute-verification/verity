@@ -1,0 +1,6 @@
+# The generous bound in all orders (HT-GENEROUS), a trial for each shape's peak memory and time per route: one matrix
+# of each, at the largest rank and with rpca, as the full jobs run them
+70b-q-trial --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 1 --match q_proj --no-isvd --ranks 1024 --orders none,fold,sort --workers 1
+70b-k-trial --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 1 --match k_proj --ranks 8,256 --orders none,fold,sort --workers 1
+8b-q-trial --hf unsloth/Meta-Llama-3.1-8B --target 0.02 --layers 0 --match q_proj --ranks 8,512 --orders none,fold,sort --workers 1
+8b-k-trial --hf unsloth/Meta-Llama-3.1-8B --target 0.02 --layers 0 --match k_proj --ranks 8,256 --orders none,fold,sort --workers 1
