@@ -30,62 +30,62 @@ open scoped ENNReal
 
 /-- No coins `ω` and salt `y` whose leaf `H(x(ω) + M·y, c(y))` is `ℓ` release `r`: at a leaf whose hash is `ℓ`, the
 class of an opening that releases `P ω` is empty at `r`. -/
-def FiberMisses {Ω Y B C D R : Type} [Add B] (My : Y → B) (c : Y → C) (H : B × C → D) (x : Ω → B) (P : Ω → R)
+def FiberMisses {Ω Salt B C D R : Type} [Add B] (My : Salt → B) (c : Salt → C) (H : B × C → D) (x : Ω → B) (P : Ω → R)
     (ℓ : D) (r : R) : Prop :=
   ∀ ω y, H (x ω + My y, c y) = ℓ → P ω ≠ r
 
 /-- **An opening's class is empty with probability at most `2·δ₁`** at one hm96 leaf. Over the leaf's uniform coins `ω`
 and salt `y`, and live coins `u` drawn independently whose bits `bits u` have the law of the release `P ω` (`hlaw`),
 this is the probability that no coins and salt with the leaf's hash release `bits u`. -/
-theorem fiberMisses_le {Ω Q Y B C D R : Type} [Fintype Ω] [Nonempty Ω] [Fintype Q] [Nonempty Q] [Fintype Y]
-    [Nonempty Y] [AddCommGroup B] [Fintype B] (My : Y → B) (c : Y → C) {δ₁ : ℝ≥0∞}
+theorem fiberMisses_le {Ω Q Salt B C D R : Type} [Fintype Ω] [Nonempty Ω] [Fintype Q] [Nonempty Q] [Fintype Salt]
+    [Nonempty Salt] [AddCommGroup B] [Fintype B] (My : Salt → B) (c : Salt → C) {δ₁ : ℝ≥0∞}
     (hT1 : Claims.Hm96Hiding My c δ₁) (H : B × C → D) (x : Ω → B) (P : Ω → R) (bits : Q → R)
     (hlaw : ∀ g : R → ℝ≥0∞, avg (fun ω => g (P ω)) = avg fun u => g (bits u)) :
-    prCoin (fun p : (Ω × Q) × Y => FiberMisses My c H x P (H (x p.1.1 + My p.2, c p.2)) (bits p.1.2))
+    prCoin (fun p : (Ω × Q) × Salt => FiberMisses My c H x P (H (x p.1.1 + My p.2, c p.2)) (bits p.1.2))
       ≤ 2 * δ₁ := by
   have : Nonempty B := ⟨0⟩
   have h1 := FlockSoundness.ZK.ideal_leaf_swap My c hT1 H (fun w : Ω × Q => x w.1)
     (fun w ℓ => FiberMisses My c H x P ℓ (bits w.2))
   have h2 := FlockSoundness.ZK.ideal_leaf_swap My c hT1 H (fun w : Ω × Q => x w.1)
     (fun w ℓ => ¬ FiberMisses My c H x P ℓ (P w.1))
-  have hno : ∀ p : (Ω × Q) × Y, ¬ FiberMisses My c H x P (H (x p.1.1 + My p.2, c p.2)) (P p.1.1) :=
+  have hno : ∀ p : (Ω × Q) × Salt, ¬ FiberMisses My c H x P (H (x p.1.1 + My p.2, c p.2)) (P p.1.1) :=
     fun p h => h p.1.1 p.2 rfl rfl
-  have hown : prCoin (fun p : (Ω × Q) × Y => ¬ FiberMisses My c H x P (H (x p.1.1 + My p.2, c p.2)) (P p.1.1))
+  have hown : prCoin (fun p : (Ω × Q) × Salt => ¬ FiberMisses My c H x P (H (x p.1.1 + My p.2, c p.2)) (P p.1.1))
       = 1 := by
     unfold prCoin
-    calc avg _ = avg (fun _ : (Ω × Q) × Y => (1 : ℝ≥0∞)) := by
+    calc avg _ = avg (fun _ : (Ω × Q) × Salt => (1 : ℝ≥0∞)) := by
           congr 1
           funext p
           simp [hno p]
       _ = 1 := FlockSoundness.Game.avg_const _
-  have hl : avg (fun w : Ω × Q => prCoin fun u : B × Y => FiberMisses My c H x P (H (u.1, c u.2)) (bits w.2))
-      = avg fun q : Q => prCoin fun u : B × Y => FiberMisses My c H x P (H (u.1, c u.2)) (bits q) :=
+  have hl : avg (fun w : Ω × Q => prCoin fun u : B × Salt => FiberMisses My c H x P (H (u.1, c u.2)) (bits w.2))
+      = avg fun q : Q => prCoin fun u : B × Salt => FiberMisses My c H x P (H (u.1, c u.2)) (bits q) :=
     (FlockSoundness.ZK.avg_prod_split _).trans (FlockSoundness.Game.avg_const
-      (avg fun q : Q => prCoin fun u : B × Y => FiberMisses My c H x P (H (u.1, c u.2)) (bits q)))
-  have hr : avg (fun w : Ω × Q => prCoin fun u : B × Y => FiberMisses My c H x P (H (u.1, c u.2)) (P w.1))
-      = avg fun ω : Ω => prCoin fun u : B × Y => FiberMisses My c H x P (H (u.1, c u.2)) (P ω) :=
+      (avg fun q : Q => prCoin fun u : B × Salt => FiberMisses My c H x P (H (u.1, c u.2)) (bits q)))
+  have hr : avg (fun w : Ω × Q => prCoin fun u : B × Salt => FiberMisses My c H x P (H (u.1, c u.2)) (P w.1))
+      = avg fun ω : Ω => prCoin fun u : B × Salt => FiberMisses My c H x P (H (u.1, c u.2)) (P ω) :=
     (FlockSoundness.ZK.avg_prod_split _).trans (congrArg avg (funext fun ω => FlockSoundness.Game.avg_const
-      (prCoin fun u : B × Y => FiberMisses My c H x P (H (u.1, c u.2)) (P ω))))
-  have hswap : prCoin (fun p : (Ω × Q) × (B × Y) => FiberMisses My c H x P (H (p.2.1, c p.2.2)) (bits p.1.2))
-      = prCoin (fun p : (Ω × Q) × (B × Y) => FiberMisses My c H x P (H (p.2.1, c p.2.2)) (P p.1.1)) := by
+      (prCoin fun u : B × Salt => FiberMisses My c H x P (H (u.1, c u.2)) (P ω))))
+  have hswap : prCoin (fun p : (Ω × Q) × (B × Salt) => FiberMisses My c H x P (H (p.2.1, c p.2.2)) (bits p.1.2))
+      = prCoin (fun p : (Ω × Q) × (B × Salt) => FiberMisses My c H x P (H (p.2.1, c p.2.2)) (P p.1.1)) := by
     rw [FlockSoundness.ZK.prCoin_prod_split
-        (fun (w : Ω × Q) (u : B × Y) => FiberMisses My c H x P (H (u.1, c u.2)) (bits w.2)),
+        (fun (w : Ω × Q) (u : B × Salt) => FiberMisses My c H x P (H (u.1, c u.2)) (bits w.2)),
       FlockSoundness.ZK.prCoin_prod_split
-        (fun (w : Ω × Q) (u : B × Y) => FiberMisses My c H x P (H (u.1, c u.2)) (P w.1))]
-    exact hl.trans ((hlaw fun r => prCoin fun u : B × Y => FiberMisses My c H x P (H (u.1, c u.2)) r).symm.trans
+        (fun (w : Ω × Q) (u : B × Salt) => FiberMisses My c H x P (H (u.1, c u.2)) (P w.1))]
+    exact hl.trans ((hlaw fun r => prCoin fun u : B × Salt => FiberMisses My c H x P (H (u.1, c u.2)) r).symm.trans
       hr.symm)
-  have hideal : prCoin (fun p : (Ω × Q) × (B × Y) => FiberMisses My c H x P (H (p.2.1, c p.2.2)) (P p.1.1))
+  have hideal : prCoin (fun p : (Ω × Q) × (B × Salt) => FiberMisses My c H x P (H (p.2.1, c p.2.2)) (P p.1.1))
       ≤ δ₁ := by
     have a := FlockSoundness.ZK.prCoin_add_not
-      (fun p : (Ω × Q) × (B × Y) => FiberMisses My c H x P (H (p.2.1, c p.2.2)) (P p.1.1))
+      (fun p : (Ω × Q) × (B × Salt) => FiberMisses My c H x P (H (p.2.1, c p.2.2)) (P p.1.1))
     have hfin := FlockSoundness.ZK.prCoin_ne_top
-      (fun p : (Ω × Q) × (B × Y) => ¬ FiberMisses My c H x P (H (p.2.1, c p.2.2)) (P p.1.1))
+      (fun p : (Ω × Q) × (B × Salt) => ¬ FiberMisses My c H x P (H (p.2.1, c p.2.2)) (P p.1.1))
     refine (ENNReal.add_le_add_iff_right hfin).1 ?_
     rw [a, add_comm δ₁]
     exact hown.symm.le.trans h2
-  calc prCoin (fun p : (Ω × Q) × Y => FiberMisses My c H x P (H (x p.1.1 + My p.2, c p.2)) (bits p.1.2))
-      ≤ prCoin (fun p : (Ω × Q) × (B × Y) => FiberMisses My c H x P (H (p.2.1, c p.2.2)) (bits p.1.2)) + δ₁ := h1
-    _ = prCoin (fun p : (Ω × Q) × (B × Y) => FiberMisses My c H x P (H (p.2.1, c p.2.2)) (P p.1.1)) + δ₁ := by
+  calc prCoin (fun p : (Ω × Q) × Salt => FiberMisses My c H x P (H (x p.1.1 + My p.2, c p.2)) (bits p.1.2))
+      ≤ prCoin (fun p : (Ω × Q) × (B × Salt) => FiberMisses My c H x P (H (p.2.1, c p.2.2)) (bits p.1.2)) + δ₁ := h1
+    _ = prCoin (fun p : (Ω × Q) × (B × Salt) => FiberMisses My c H x P (H (p.2.1, c p.2.2)) (P p.1.1)) + δ₁ := by
         rw [hswap]
     _ ≤ δ₁ + δ₁ := add_le_add hideal le_rfl
     _ = 2 * δ₁ := (two_mul δ₁).symm
@@ -118,8 +118,8 @@ theorem flatten_take_length {w : ℕ} : ∀ (L : List (List Bool)) (n : ℕ), (�
 theorem ofFn_lengths {block : ℕ} (d : TreeDraw block) :
     ∀ x ∈ List.ofFn (fun i => List.ofFn (d.1 i)), x.length = 128 := by
   intro x hx
-  obtain ⟨j, hj, rfl⟩ := List.mem_iff_getElem.1 hx
-  simp
+  obtain ⟨i, rfl⟩ := List.mem_ofFn.1 hx
+  exact List.length_ofFn
 
 /-- A draw's first `n + 1` coins' bits, cut to `128 · n`, are its first `n` coins' bits. -/
 theorem opened_take_succ {block : ℕ} (d : TreeDraw block) (n : ℕ) :
@@ -131,6 +131,13 @@ theorem opened_length_eq {block : ℕ} (d : TreeDraw block) {n : ℕ} (h : n ≤
     (TreeDraw.opened d n).length = 128 * n := by
   unfold TreeDraw.opened
   rw [flatten_take_length _ n (ofFn_lengths d), List.length_ofFn, min_eq_left h]
+
+end Verity.Game
+
+namespace Verity.Sampled
+
+open Verity.Game
+open scoped ENNReal
 
 /-- **The node's description that opens one coin more**: `o`'s node, as the releases' continuation at no frame (`relK`
 at `0`) that reads the release's first `o.n` coins as `o`'s continuation does. It describes the node wherever `o`
@@ -172,7 +179,7 @@ coins than a block, `EmptyAt` holds at every release (`OpeningAt.classOf_eq_empt
 theorem emptyAt_of_lt_block {β : Type} {g' : Game β} (o' : OpeningAt g') (h : o'.n < o'.T.spec.block)
     (bits : List Bool) : EmptyAt g' bits := by
   have hn : Nonempty (OpeningAt g') := ⟨o'⟩
-  refine ⟨Classical.choice hn, by unfold openingOf; rw [dif_pos hn], ?_⟩
+  refine ⟨Classical.choice hn, by unfold openingOf; rw [dite_eq_left hn], ?_⟩
   rw [OpeningAt.classOf_eq_empty _ o' h bits]
   exact Finset.not_nonempty_empty
 
@@ -186,4 +193,4 @@ theorem openEmpty_eq_one {β P : Type} [Fintype P] [Nonempty P] {g' : Game β} (
         simp [emptyAt_of_lt_block o' h (bits c)]
     _ = 1 := FlockSoundness.Game.avg_const _
 
-end Verity.Game
+end Verity.Sampled
