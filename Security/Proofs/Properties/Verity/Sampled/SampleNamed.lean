@@ -17,7 +17,8 @@ name, at the coins of its family released after the registration's digest (`sour
   (`BindsAt`, `Core.Composition.bind`), where the composition accepted. The commitment is fixed before any coin, and
   the cases are sent at the close, so two of a strategy's plays can draw at two digests only where the two lists of
   digests they bind into the one commitment differ, which SHA-512 colliding on two different messages of `bind`
-  gives (`opensOnce_or_collides`, by `Properties.Composition.bindCollision`).
+  gives (`collides_of_binds`, at two given plays, and `opensOnce_or_collides`, by
+  `Properties.Composition.bindCollision`).
 
 So `SampleNamed` holds at the family `labelAt θ` and the digest `afterAt` of the strategy's accepted plays wherever
 those plays bind the commitment to one list of digests (`OpensOnce`, `sampleNamed_run`); v2's acceptance gives no more.
@@ -72,7 +73,7 @@ def BindsAt (k : Verity.Registration.Composite) (s : Verity.Sent) (ds : List (St
     Core.Composition.bind (Verity.verifier k).id ds = c
 
 /-- A `mapM` whose values each carry their entry's key lists the entries' keys. -/
-theorem mapM_keys {β : Type} {f : β → Option (String × ByteArray)} {key : β → String}
+theorem mapM_keys {β : Type _} {f : β → Option (String × ByteArray)} {key : β → String}
     (hk : ∀ x y, f x = some y → y.1 = key x) :
     ∀ {l : List β} {ys : List (String × ByteArray)}, l.mapM f = some ys → ys.map Prod.fst = l.map key
   | [], ys, h => by
@@ -150,8 +151,31 @@ def OpensOnce (V : Vocab d α) (k : Verity.Registration.Composite) (θ : ByteArr
       BindsAt k (CoinTape.run (V.game θ F c) σ x).sent ds → BindsAt k (CoinTape.run (V.game θ F c) σ x').sent ds' →
         ds = ds'
 
+/-- **Two of `σ`'s plays that bind two lists of digests give a SHA-512 collision**: both bind them into the game's
+commitment, fixed before any coin, so `bind`'s messages of the two differ and have one SHA-512 digest. A finder that
+holds the two plays outputs that pair. -/
+theorem collides_of_binds (V : Vocab d α) (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray)
+    (c : ByteArray) (σ : Strategy (V.game θ F c)) (x x' : CoinTape (V.game θ F c) σ)
+    {ds ds' : List (String × ByteArray)} (hB : BindsAt k (CoinTape.run (V.game θ F c) σ x).sent ds)
+    (hB' : BindsAt k (CoinTape.run (V.game θ F c) σ x').sent ds') (hne : ds ≠ ds') :
+    Properties.Composition.bindMessage (Verity.verifier k).id ds ≠
+        Properties.Composition.bindMessage (Verity.verifier k).id ds' ∧
+      Flock.Sha512.hash (Properties.Composition.bindMessage (Verity.verifier k).id ds) =
+        Flock.Sha512.hash (Properties.Composition.bindMessage (Verity.verifier k).id ds') := by
+  obtain ⟨_, c₀, _, ⟨-, hc0, -⟩, -, hb⟩ := hB
+  obtain ⟨_, c₀', _, ⟨-, hc0', -⟩, -, hb'⟩ := hB'
+  have e1 : (CoinTape.run (V.game θ F c) σ x).sent.commitment = c := play_commitment V θ F c σ x
+  have e2 : (CoinTape.run (V.game θ F c) σ x').sent.commitment = c := play_commitment V θ F c σ x'
+  rw [e1] at hc0
+  rw [e2] at hc0'
+  have hcc : c₀' = c₀ := Except.ok.inj (hc0'.symm.trans hc0)
+  rcases Properties.Composition.bindCollision (Verity.verifier k).id ds ds' with hb₁ | hb₁ | hb₁
+  · exact (hb₁ (by rw [hb, hb', hcc])).elim
+  · exact (hne hb₁).elim
+  · exact hb₁
+
 /-- **`σ`'s accepted plays bind one list of digests, or SHA-512 collides**: else two of them bind two different lists
-into the one commitment, and `bind`'s messages of the two differ and have one SHA-512 digest. -/
+into the one commitment, and `bind`'s messages of the two differ and have one SHA-512 digest (`collides_of_binds`). -/
 theorem opensOnce_or_collides (V : Vocab d α) (k : Verity.Registration.Composite) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Strategy (V.game θ F c)) :
     OpensOnce V k θ F c σ ∨ ∃ ds ds', ds ≠ ds' ∧
@@ -165,22 +189,10 @@ theorem opensOnce_or_collides (V : Vocab d α) (k : Verity.Registration.Composit
         Flock.Sha512.hash (Properties.Composition.bindMessage (Verity.verifier k).id ds') := by
   by_cases h : OpensOnce V k θ F c σ
   · exact Or.inl h
-  refine Or.inr ?_
-  unfold OpensOnce at h
-  push_neg at h
-  obtain ⟨x, x', hv, hv', ds, ds', hB, hB', hne⟩ := h
-  refine ⟨ds, ds', hne, ⟨x, hv, hB⟩, ⟨x', hv', hB'⟩, ?_⟩
-  obtain ⟨_, c₀, _, ⟨-, hc0, -⟩, -, hb⟩ := hB
-  obtain ⟨_, c₀', _, ⟨-, hc0', -⟩, -, hb'⟩ := hB'
-  have e1 : (CoinTape.run (V.game θ F c) σ x).sent.commitment = c := play_commitment V θ F c σ x
-  have e2 : (CoinTape.run (V.game θ F c) σ x').sent.commitment = c := play_commitment V θ F c σ x'
-  rw [e1] at hc0
-  rw [e2] at hc0'
-  have hcc : c₀' = c₀ := Except.ok.inj (hc0'.symm.trans hc0)
-  rcases Properties.Composition.bindCollision (Verity.verifier k).id ds ds' with hb₁ | hb₁ | hb₁
-  · exact (hb₁ (by rw [hb, hb', hcc])).elim
-  · exact (hne hb₁).elim
-  · exact hb₁
+  refine Or.inr (Classical.byContradiction fun hn => h ?_)
+  intro x x' hv hv' ds ds' hB hB'
+  by_contra hne
+  exact hn ⟨ds, ds', hne, ⟨x, hv, hB⟩, ⟨x', hv', hB'⟩, collides_of_binds V k θ F c σ x x' hB hB' hne⟩
 
 /-- **`dg` is sampled proofs' digest in an accepted play of `σ`**: the sampled verdict accepts the play at some tape,
 and the digests its commitment binds give sampled proofs `dg`. -/
