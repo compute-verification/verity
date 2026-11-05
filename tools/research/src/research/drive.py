@@ -118,10 +118,10 @@ names (`suite_paths`: failing tests, its log's failures, the read guard's `outsi
 (`_input_rule`); several are bisected by landing, each step a run of one landing's commit judged by that suite alone, while
 landing goes on.  The ring (`_ring`) quotes the run, the first error line
 (`first_error`) and what a cancel stopped (`not_run`, "not run"), to the culprit's lane and the owner of what failed in one
-post (`_red_owners`: the suite's in the registry, else the step's in ci.toml); the culprit is
-reverted on `checked`, never on `main`, `FIX_WINDOW_S` after it (`_red_clock`), and the same two told, unless a fix is marked (`_fix`); a red
-circuit-check's culprit at once (`CIRCUIT_RED`), and while circuit-check is red on `checked` no PR whose own change touches
-its inputs lands (`_circuit_held`), every other one landing on.  A red run moves nothing on `main`.  The runners report each
+post (`_red_owners`: the suite's in the registry, else the step's in ci.toml); the culprit is reverted on `checked` at once,
+never on `main`, a marked fix or not (`_revert_reds`), and the same two told; while circuit-check is red on `checked`
+(`CIRCUIT_RED`) no PR whose own change touches its inputs lands (`_circuit_held`), every other one landing on.  A red run
+moves nothing on `main`.  The runners report each
 failure as it is; a failure an unexpired allowance of the tip's policy covers (policy.toml's `allow`, `research.policy`:
 `_allowed`) is not red: it names no culprit, reverts nothing and holds no promotion, and a run that failed only on such failures
 verifies its tip (`_only_allowed`).  An expired allowance is as if absent, and the ring of the red it no longer covers names it
@@ -252,13 +252,10 @@ LEAN_SETTLE_TICKS = 1
 BOTTOM_WAIT_S = 1800
 #: how long a run may show no readable state (`unknown`) before drive takes it as lost (`Driver._lost`)
 LOST_AFTER_S = 3 * 3600
-#: how long the owners rung for a red suite or step have to mark a fix before drive reverts its culprit (`Driver._red_clock`;
-#: without it PRs keep landing on a `main` no after-landing run passed, and its failures reach only `CI`)
-FIX_WINDOW_S = 3600
 #: how long after its mark a low-risk fix of a red on `checked` holds the after-landing run for it to land (`Driver._fix_wait`)
 FIX_WAIT_S = 45 * 60
-#: the red record reverted at once, with no `FIX_WINDOW_S`, and while it stands no PR touching what it reads lands
-#: (`Driver._circuit_held`): circuit-check runs only after landing, so every landing on its red would go unchecked
+#: the red record while which no PR touching what it reads lands (`Driver._circuit_held`): circuit-check runs only after
+#: landing, so every landing on its red would go unchecked
 CIRCUIT_RED = "step circuit-check"
 #: the ci.toml job a graph/v2 task's kind checks (`verity graph`'s families, tools/verity/graph/tasks.toml), by which drive's
 #: policy takes it off the merge gate (`off_gate`) and its red is named `step JOB` (a test-file task's `suite NAME`); a kind
@@ -1665,7 +1662,7 @@ class Driver:
         Once it ended, whether it passed each of its steps (or failed only on what an allowance covers), kept in it with the
         steps it passed.  It judges only `SLIM_JUDGED` of its records (`_red`): each such step it failed is named red with its
         culprit as a run's is, ratchet-gate's the change its gate's log fails (`_name`), at once while it runs and once it
-        ended, its revert waiting for its owners' fix (`_red_clock`); a baseline's failure is named nothing.  One whose
+        ended, and its culprit reverted at once (`_revert_reds`); a baseline's failure is named nothing.  One whose
         records name no failure of those steps, that passed without passing one, or that was killed again is told to `CI`."""
         tip, base = run["tip"], bool(run.get("baseline"))
         slim = pl.get("slim")
@@ -1799,7 +1796,7 @@ class Driver:
         inputs and envs' spec files, and those of each task they read, transitively).  A lean-suites task, whose inputs are the
         whole tree, stands for suite ``key`` by its report row, as a run's suite does (`_name`): its failed test files, else,
         touching none, the suite's declared inputs (`suite_inputs`).  The executor's check bisects nothing, so several, or none,
-        are rung and nothing is reverted.  The ring (`_ring`), the record, the expired allowances and the revert (`_red_clock`)
+        are rung and nothing is reverted.  The ring (`_ring`), the record, the expired allowances and the revert (`_revert_reds`)
         are a run's red's (`_name`); a key already named for this tip, or whose culprit is still on `checked` unreverted, is left
         as it is."""
         red, tip = pl.setdefault("red", {}), run["tip"]
@@ -1840,7 +1837,7 @@ class Driver:
             why = f"which is under {key}'s declared inputs"
         since = f"{len(members)} landing(s) since `{self.q.into}` {base[:12]}, where it last passed"
         if len(hits) == 1:
-            r.update(culprit=[hits[0].pr, hits[0].head, hits[0].owner, hits[0].commit], rung=self.now(),
+            r.update(culprit=[hits[0].pr, hits[0].head, hits[0].owner, hits[0].commit],
                      why=f"its change touches {', '.join(r['paths'][:4])}, {why}")
             self._ring(drive, r, key, f"Culprit: #{hits[0].pr} ({r['why']}), of the {since}")
         elif hits:
@@ -1983,8 +1980,8 @@ class Driver:
         """A post-landing run of ``run["tip"]`` that failed.  Killed by the machine (``signalled``: by a signal or 128+N, or a
         failure that names no file and was a kill: `implicated`, `killed`), it runs again once, on `main`'s tip then, and killed
         again is told to `CI`.  A baseline run's failure is `_red_baseline`'s.  Else each failed suite or step is named red with
-        its culprit (`_red`), whose revert waits for its owners' fix (`_red_clock`); a run whose records name none is told to
-        `CI`.  The next run checks `main`'s tip."""
+        its culprit (`_red`), reverted at once (`_revert_reds`); a run whose records name none is told to `CI`.  The next run
+        checks `main`'s tip."""
         tip, ids, base = run["tip"], " ".join(run["ids"]), pl["verified"]
         members = self.landed_since(base, tip)
         was_killed = signalled or (bool(members) and any(implicated(d) is None and killed(d, why)
@@ -2061,8 +2058,8 @@ class Driver:
 
     # -- a red after-landing run (review landing): each failed suite and step is its own record in `postland["red"]`, keyed
     #    `suite NAME` or `step NAME`: {"tip", "ids": the run's, "first": its first error line, "base": where it last passed,
-    #    "culprit": [pr, head, owner, commit] or None, "cands": the landings a bisection decides among, "rung": when its
-    #    culprit was rung, "fix": what holds its revert, "reverted"}.  `postland["green"]`: {key: the newest tip a run passed it at}
+    #    "culprit": [pr, head, owner, commit] or None, "cands": the landings a bisection decides among, "reverted"}.
+    #    `postland["green"]`: {key: the newest tip a run passed it at}
 
     def _red(self, drive: dict, pl: dict, run: dict, ended: bool = False, steps: tuple[str, ...] | None = None) -> int:
         """Read an after-landing run's records, still running or ``ended``: each suite and step it passed is green at its tip
@@ -2207,14 +2204,14 @@ class Driver:
         and the test modules that read it), else the one that touches its declared inputs (`_input_rule`); for ratchet-gate,
         the oldest whose merge the gate's log says it fails (`ratchet_failures`) before either; several, a bisection
         by landing decides (`_start_bisect`).  Ring the culprit's lane and the owner of what failed (`_ring`): drive
-        reverts the culprit `FIX_WINDOW_S` after unless a fix is marked (`_red_clock`).  The ``expired`` allowances that covered
+        reverts the culprit at once (`_revert_reds`).  The ``expired`` allowances that covered
         it are kept with the record (``expired``: each one's text, ``allowed_by``: its owner), so the ring names them and rings
         their owners too.  A key already named for this tip, or whose culprit is still on `main` unreverted, is left as it is."""
         red, tip = pl.setdefault("red", {}), run["tip"]
         if (old := red.get(key)) and (old["tip"] == tip or (pl.get("bisect") or {}).get("key") == key
                                       or (old.get("culprit") and not old.get("reverted") and not self._undone(old["culprit"][3]))):
             if old["tip"] != tip:
-                old["seen"] = tip                       # red again here: a fix that landed below this tip didn't fix it (`_fix`)
+                old["seen"] = tip                       # red again here (`_behind`)
             return
         step = rec.get("step") or ""
         r = {"tip": tip, "ids": run["ids"], "first": first_error(d, rec), "step": step, "culprit": None,
@@ -2245,7 +2242,7 @@ class Driver:
             r["paths"] += sorted({f for x in hits for f in self._own(x) if ok(f)})
         since = f"{len(members)} landing(s) since `{self.q.into}` {base[:12]}, where it last passed"
         if len(hits) == 1:
-            r.update(culprit=[hits[0].pr, hits[0].head, hits[0].owner, hits[0].commit], why=why, rung=self.now())
+            r.update(culprit=[hits[0].pr, hits[0].head, hits[0].owner, hits[0].commit], why=why)
             self._ring(drive, r, key, f"Culprit: #{hits[0].pr} ({why}), of the {since}")
         elif hits and REVERTS_RE.search(_out(self.repo, "log", "--format=%B", f"{base}..{tip}")):
             self._ring(drive, r, key, f"{' '.join(f'#{x.pr}' for x in hits)} each touch it ({since}), and a revert lies in "
@@ -2267,15 +2264,12 @@ class Driver:
         if r.get("expired"):
             nr += (f" Its allowance in policy.toml expired, so it is red again: {'; '.join(r['expired'])}. Fix it, or extend "
                    "the allowance in a reviewed change.")
-        clock = ("" if not c else
-                 f" Drive reverts #{c[0]} now, and lands no PR touching circuit-check's inputs until it passes on "
-                 f"`{self.q.into}`" if key == CIRCUIT_RED else
-                 f" Drive reverts #{c[0]} at {time.strftime('%H:%MZ', time.gmtime(r['rung'] + FIX_WINDOW_S))} unless a fix is "
-                 f"marked by then: a ready PR whose body names #{c[0]} or says `fixes {key}`, or whose change touches what "
-                 f"failed, or a new head of #{c[0]}")
+        then = ("" if not c else f" Drive reverts #{c[0]} now" + (
+            f", and lands no PR touching circuit-check's inputs until it passes on `{self.q.into}`" if key == CIRCUIT_RED else "")
+            + ".")
         self.tell(drive, [f"red:{key}:{c[3] if c else r['tip']}{tag}"],
                   f"{key} is red on `{self.q.into}` {r['tip'][:12]} (run {' '.join(r['ids'])}): {r['first']}. {what[:1].upper()}{what[1:]}."
-                  f"{clock}{nr}", *self._red_owners(key, r))
+                  f"{then}{nr}", *self._red_owners(key, r))
 
     def _red_owners(self, key: str, r: dict) -> tuple[str | None, ...]:
         """Who red record ``r`` of ``key`` rings, first the one who acts: its culprit's lane (`_owner`), then the owner of
@@ -2308,74 +2302,35 @@ class Driver:
         got = {s["status"] for d in self.evidence(self.repo, ids) for n, s in suite_rows(d).items() if n == suite}
         return "failed" if "failed" in got else "passed" if "passed" in got else None
 
-    def _red_clock(self, drive: dict) -> None:
-        """Revert each red record's culprit `FIX_WINDOW_S` after its ring, unless a fix is marked (`_fix`) or `main` undid it
-        already: `git revert -m 1` of its merge onto `next` (`_revert_landed`), its owner told.  A red circuit-check's culprit
-        (`CIRCUIT_RED`) is reverted at once, a marked fix or not."""
+    def _revert_reds(self, drive: dict) -> None:
+        """Revert each red record's culprit at once, a marked fix or not, unless the landing branch undid it already: `git
+        revert -m 1` of its merge onto `next` (`_revert_landed`), its culprit's lane and the owner of what failed told
+        (`_red_owners`)."""
         pl = drive.get("postland") or {}
         if self.dry_run or self.q.shadow:
             return
         for key, r in list((pl.get("red") or {}).items()):
-            now = key == CIRCUIT_RED
-            if not (c := r.get("culprit")) or r.get("reverted") or not now and self.now() - r["rung"] < FIX_WINDOW_S:
+            if not (c := r.get("culprit")) or r.get("reverted"):
                 continue
             one = Member(*c)
             if self._undone(one.commit):
                 r["reverted"] = "undone"
                 continue
-            if not now and (fix := self._fix(key, r)):
-                if r.get("fix") != fix:
-                    r["fix"] = fix
-                    self.q.log(f"research queue drive: not reverting #{one.pr} for {key}: a fix is marked, {fix}")
-                continue
-            r.pop("fix", None)
             head = f"{key} is red on `{self.q.into}` {r['tip'][:12]} (run {' '.join(r['ids'])}): {r['first']}"
-            blame = (f"#{one.pr} is its culprit ({r['why']}), and a red circuit-check is reverted at once" if now else
-                     f"#{one.pr} is its culprit ({r['why']}), and no fix was marked within {FIX_WINDOW_S // 60} min of the "
-                     "ring")
-            if self._revert_landed(drive, pl, r["tip"], r["base"], one, head, f"revert:{key}:{one.commit}", blame,
-                                   self._red_owners(key, r)):
+            if self._revert_landed(drive, pl, r["tip"], r["base"], one, head, f"revert:{key}:{one.commit}",
+                                   f"#{one.pr} is its culprit ({r['why']})", self._red_owners(key, r)):
                 r["reverted"] = self.now()
 
-    def _fix(self, key: str, r: dict) -> str | None:
-        """A marked fix of red ``key``: an open PR marked ready at its head that is a new head of the culprit, or whose body names
-        the culprit (`#N`) or says `fixes suite NAME` (case aside), or whose diff touches a path the failure named (`r["paths"]`,
-        those the culprit was named by).  A body that merely mentions the suite doesn't count: `research` or `check` is in
-        almost any body, and would hold the revert for good.  A fix that landed on `main` after the last tip a run found it red
-        at (`seen`, else the record's tip) counts too, by its merge's title or its change: once landed it is no open PR, and
-        drive would otherwise ask for a revert of a culprit whose fix already landed.  None when there is none."""
-        pr = r["culprit"][0]
-        says = self._says_fix(key, r)
-        for p in sorted(self._open().values(), key=lambda p: p.number):
-            if self.q.ready(p.number, p.head) and (why := self._fixes(key, r, p, lambda p=p: self._pr_files(p))):
-                return why
-        main, since = self.q.base, r.get("seen") or r["tip"]
-        if not self._ancestor(since, main):
-            return None
-        for m in self.landed_since(since, main):
-            if m.pr == pr:
-                continue
-            if says.search(_out(self.repo, "log", "-1", "--format=%s", m.commit)):
-                return f"#{m.pr}, landed at {m.commit[:8]}"
-            if r.get("paths") and (hit := touches(changed(self.repo, f"{m.commit}^1", m.commit), set(r["paths"]))):
-                return f"#{m.pr}, landed at {m.commit[:8]}, whose change touches {', '.join(sorted(hit)[:3])}"
-        return None
-
-    @staticmethod
-    def _says_fix(key: str, r: dict) -> re.Pattern:
-        """What a body or a merge's title says to fix red ``key``: `#N` of its culprit, or `fixes suite NAME` (`_fix`)."""
-        name = key.split(" ", 1)[1]
-        pr = rf"#{r['culprit'][0]}\b|" if r.get("culprit") else ""
-        return re.compile(rf"{pr}\bfixes\s+(?:suite|step)\s+`?{re.escape(name)}(?![\w/.-])", re.I)
-
     def _fixes(self, key: str, r: dict, p: PR, files: Callable[[], set[str]]) -> str | None:
-        """Why open PR ``p`` at its head is a fix of red ``key`` by `_fix`'s rule for an open PR (a new head of the culprit, its
-        body naming the culprit or saying `fixes suite NAME`, or ``files``, its change, touching a path the failure named), or
-        None; its ready mark is the caller's to ask."""
+        """Why open PR ``p`` at its head is a fix of red ``key``: a new head of the culprit, a body naming the culprit (`#N`) or
+        saying `fixes suite NAME` (case aside; one that merely mentions the suite doesn't count: `research` or `check` is in
+        almost any body), or ``files``, its change, touching a path the failure named (`r["paths"]`, those the culprit was
+        named by); else None.  Its ready mark is the caller's to ask."""
         pr, head = (r.get("culprit") or (None, None))[:2]
         if p.number == pr:
             return None if p.head == head else f"#{p.number} at {p.head[:8]}, a new head of the culprit"
-        if self._says_fix(key, r).search(p.body or ""):
+        names = rf"#{pr}\b|" if pr else ""
+        if re.search(rf"{names}\bfixes\s+(?:suite|step)\s+`?{re.escape(key.split(' ', 1)[1])}(?![\w/.-])", p.body or "", re.I):
             return f"#{p.number} at {p.head[:8]}"
         if r.get("paths") and (hit := touches(files(), set(r["paths"]))):
             return f"#{p.number} at {p.head[:8]}, whose change touches {', '.join(sorted(hit)[:3])}"
@@ -2447,17 +2402,6 @@ class Driver:
                    f"`{self.q.into}`, without rebuilding `{self.q.branch}`: the next sync rebuilds it, and each Lean check of it "
                    "moves with its prefix")
         return landed
-
-    def _pr_files(self, p) -> set[str]:
-        """The files an open PR's head changes against `main` (from their merge base), read once per tick; none when its head
-        can't be fetched."""
-        cache = self.__dict__.setdefault("_own_files", {})
-        if (k := f"pr:{p.head}") not in cache:
-            if _git(self.repo, "cat-file", "-e", f"{p.head}^{{commit}}", check=False).returncode:
-                _git(self.repo, "fetch", "-q", "origin", f"+refs/pull/{p.number}/head:refs/queue/fix/{p.number}", check=False)
-            mb = _git(self.repo, "merge-base", "origin/main", p.head, check=False)
-            cache[k] = changed(self.repo, mb.stdout.strip(), p.head) if not mb.returncode and mb.stdout.strip() else set()
-        return cache[k]
 
     def _tail_left(self, run: dict) -> bool:
         """Whether every step of an after-landing run but `TAIL` (and those it skips by name) has ended, by its steps.jsonl, and,
@@ -3343,7 +3287,7 @@ class Driver:
         drive["tick"] = drive.get("tick", 0) + 1
         self._follow_lean(drive)
         self._bisect_step(drive)
-        self._red_clock(drive)
+        self._revert_reds(drive)
         self._promote(drive)
         self._absorb(drive)
         running = self._running_lean(drive)
@@ -3596,12 +3540,12 @@ class Driver:
         self.q.save_state({**self.q.load_state(), "drive": drive})
 
     def _bisected(self, drive: dict, pl: dict, b: dict, one: Member | None, why: str) -> None:
-        """End a bisection of red record ``b["key"]``: ``one`` is its culprit, rung now with its revert's clock started, or
-        None, rung as unnamed; then the next red record with candidates is bisected."""
+        """End a bisection of red record ``b["key"]``: ``one`` is its culprit, rung now and reverted at once (`_revert_reds`),
+        or None, rung as unnamed; then the next red record with candidates is bisected."""
         del pl["bisect"]
         if (r := (pl.get("red") or {}).get(b["key"])) is not None:
             if one is not None:
-                r.update(culprit=[one.pr, one.head, one.owner, one.commit], why=why, rung=self.now())
+                r.update(culprit=[one.pr, one.head, one.owner, one.commit], why=why)
                 self._ring(drive, r, b["key"], f"Culprit: #{one.pr}, by bisection: {why}")
             else:
                 self._ring(drive, r, b["key"], f"Bisected {' '.join(f'#{c[0]}' for c in b['cands'])}: {why}, so none of them is "
