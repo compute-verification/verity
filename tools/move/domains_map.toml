@@ -1,0 +1,29 @@
+# The table of domain separators' move (`python3 tools/move/rename.py --map tools/move/domains_map.toml`): the one table,
+# `Identity/Domains.lean` (module `Identity.Domains`), moves whole into core's randomness package as
+# `Randomness/Domains.lean` (module `Randomness.Domains`), beside the challenge derivation, which every reader of the table
+# already requires (`pouw_commit`, and through it `pouw_window` and `pouw_check`). Its declarations keep the `Domains`
+# namespace, so no lock record moves. Nothing of identity imports the table, which identity's lock roots: the lock's root
+# moves with it, the two [[words_in]] below, so each package's Lean check builds and audits what it holds. The rules for
+# [words] are `tests/fixtures/rename_map.toml`'s.
+
+[rewrite]
+exclude = [
+    "archive/**",
+    "tools/move/**",
+    "**/CHANGELOG.md",
+    "tools/research/src/research/store/moves.json",
+    "**/fixtures/**",
+]
+
+[words]
+"identity/Identity/Domains.lean" = "randomness/Randomness/Domains.lean"
+"Identity/Domains.lean" = "Randomness/Domains.lean"
+"Identity.Domains" = "Randomness.Domains"
+
+[[words_in]]
+files = ["verity/core/primitives/identity/lean-audit.json"]
+words = { '"Identity.Difftest", "Identity.Domains"' = '"Identity.Difftest"' }
+
+[[words_in]]
+files = ["verity/core/primitives/randomness/lean-audit.json"]
+words = { '"roots": ["Randomness"]' = '"roots": ["Randomness", "Randomness.Domains"]' }
