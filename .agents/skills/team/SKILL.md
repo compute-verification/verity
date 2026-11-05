@@ -91,9 +91,10 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
 
 ## Outside the tree
 
-- **Work and its status** are Linear issues in the owner's team, each in a project and milestone; the projects, grouped
-  by Goal, are the campaign map. Slack carries rings and conversation, never the brief or status (the coordinating
-  skill).
+- **The plan is the Goals page**, Daniel's interface and the record of what is being done: every lead keeps its goals
+  there as current as the work (the writing-goals skill). Work is Linear issues in the owner's team, each labelled
+  with the goal it serves, and a PR names its issue. Slack carries rings and conversation, never the brief or status
+  (the coordinating skill).
 - **Notes** (lane reports, checkpoints, findings, drafts, friction notes) are Markdown under
   `~/.research/notes/lanes/<lane>/<YYYYMMDDTHHMMZ>-<kind>-<slug>.md` with YAML front-matter (`id`, `campaign`, `lane`,
   `kind`, `status`, `repo`, `origin`), cited as `note:<id>` and published with `research notes sync --path lanes/<lane>`.
