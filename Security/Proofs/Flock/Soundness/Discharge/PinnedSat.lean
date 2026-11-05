@@ -8,7 +8,7 @@ public import Definitions.Flock.Statement
 Δ's copies of the forced-zero row onto the pinned bits (`(r, r)` and `(r, zero)`, on both sides) add, at row `r`,
 `μ r · (e_r + e_zero)` to `A` and to `B`, `μ r` the copies' count mod 2 (`PinRows`). In a satisfying witness whose
 forced-zero row carries 0, a row with `μ r = 0` is its row without them, and a row with `μ r = 1` whose `B` without
-them evaluates to 1 is `(a·z + z_r)(1 + z_r) = z_r`, so `z_r = 0` and `a·z = 0` (`pinned_rule`): its row without
+them evaluates to 1 is `(a·z + z_r)(1 + z_r) = z_r`, so `z_r = 0` and `a·z = 0` (`pin_row`): its row without
 them holds too. So the witness satisfies the statement without the copies, and carries 0 on every bit copied an odd
 number of times (`sat_unpin`). Nothing here reads a row size, a `G` or a producer family.
 -/
