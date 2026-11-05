@@ -2,6 +2,7 @@ module
 
 public import Proofs.Accounting.ServingBlocks
 public import Definitions.Accounting.Guarantees.ServingBlocks.Witnesses
+public import Proofs.Accounting.Lemmas.ServingBlocks.Witnesses
 
 /-!
 # The serving-block bound: honest and nontrivial lemmas
@@ -260,24 +261,15 @@ theorem ServingBlockBoundRemote_nontrivial : Guarantees.ServingBlocks.ServingBlo
   rw [Counter.total_eq]
   norm_num [Counter.q]
 
-theorem UncertifiedElementary_honest : Guarantees.ServingBlocks.UncertifiedElementary_honest := by
-  refine ⟨?_, ?_⟩
-  · rw [Counted.outside_eq Honest.J Honest.ω_one, Counted.split_eq Honest.J Honest.ω_one]
-    norm_cast
-  · rw [Counted.split_eq Honest.J Honest.ω_one]
-    norm_cast
+theorem UncertifiedElementary_honest : Guarantees.ServingBlocks.UncertifiedElementary_honest := ⟨Honest.r⟩
 
 theorem UncertifiedElementary_nontrivial : Guarantees.ServingBlocks.UncertifiedElementary_nontrivial := by
-  refine ⟨?_, fun h => ?_⟩
-  · rw [Counted.outside_eq Straddle.J Straddle.ω_one, Counted.split_eq Straddle.J Straddle.ω_one]
-    norm_cast
-  · rw [UncertifiedCap, Counted.outside_eq Straddle.J Straddle.ω_one] at h
-    norm_cast at h
+  refine ⟨by decide, fun h => ?_⟩
+  rw [UncertifiedCap, Counted.outside_eq Counter.J Counter.ω_one, Counted.split_eq Counter.J Counter.ω_one] at h
+  exact absurd (Nat.cast_le.1 h) (by decide)
 
 /-! Each lemma is its guarantee's premises as the guarantee states them: the guarantee applies at the honest instance,
-and at a counter-example the dropped premise would give the bound the lemma's last conjunct negates.
-`UncertifiedElementary` takes no premise: at `Honest` it gives the cap at `1`, and at `Straddle` it holds at the split
-weight while every smaller right-hand side fails. -/
+and at a counter-example the dropped premise would give the bound the lemma's last conjunct negates. -/
 
 example : Honest.J.total ≤ ∑ u ∈ Honest.S, min (Honest.q 1 1 + 1 * (1 : ℕ) * (1 : ℕ))
     (((univ.filter fun i => Honest.r.parent i = u).card : ℝ) * Honest.q 1 1 + 1) + 1 := by
@@ -311,20 +303,14 @@ example (h2 : PerBlockCap Counter.d Counter.J Counter.q 1 0) : False := by
   exact hlt (ServingBlockBoundRemote Counter.d Counter.J Counter.q 1 0 1 1 Counter.P Counter.S Counter.P
     Counter.r (fun _ => 0) 0 h1 h2 h3 h4)
 
-example : UncertifiedCap Honest.J (Honest.P.gates 1) (fun i : {i // Honest.r.parent i = 1} => Honest.P.gates i) 1 := by
-  obtain ⟨-, h1⟩ := UncertifiedElementary_honest
-  rw [← h1]
-  exact UncertifiedElementary _ Honest.J _ _ Honest.P Honest.P Honest.r 1
+example : ∃ r : Honest.P.Refines Honest.P, ∀ u, UncertifiedCap Honest.J (Honest.P.gates u)
+    (fun i : {i // r.parent i = u} => Honest.P.gates i)
+    (Honest.J.split (Honest.P.gates u) (fun i : {i // r.parent i = u} => Honest.P.gates i)) := by
+  obtain ⟨r⟩ := UncertifiedElementary_honest
+  exact ⟨r, UncertifiedElementary _ Honest.J _ _ _ _ r⟩
 
-example (q : ℝ)
-    (hq : q < Straddle.J.split (Straddle.P.gates 1) (fun i : {i // Straddle.r.parent i = 1} => Straddle.P.gates i)) :
-    UncertifiedCap Straddle.J (Straddle.P.gates 1) (fun i : {i // Straddle.r.parent i = 1} => Straddle.P.gates i)
-      (Straddle.J.split (Straddle.P.gates 1) (fun i : {i // Straddle.r.parent i = 1} => Straddle.P.gates i)) ∧
-    ¬ UncertifiedCap Straddle.J (Straddle.P.gates 1) (fun i : {i // Straddle.r.parent i = 1} => Straddle.P.gates i)
-      q := by
-  obtain ⟨heq, -⟩ := UncertifiedElementary_nontrivial
-  refine ⟨UncertifiedElementary _ Straddle.J _ _ Straddle.P Straddle.P Straddle.r 1, fun h => ?_⟩
-  rw [UncertifiedCap, heq] at h
-  exact not_le.2 hq h
+example (h : ∀ g, Counter.P₂.unit g = (Counter.P.unit g).map Counter.away) : False := by
+  obtain ⟨-, hcap⟩ := UncertifiedElementary_nontrivial
+  exact hcap (UncertifiedElementary _ Counter.J _ _ Counter.P Counter.P₂ ⟨Counter.away, h⟩ 0)
 
 end Accounting.SecurityProofs.ServingBlocks
