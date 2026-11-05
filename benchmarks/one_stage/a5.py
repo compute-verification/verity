@@ -847,7 +847,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         publics[m.key] = body(st_dir / f"pub-{m.n}.bin")
         members.append({"k": k, "m": m, "defn": defn, "header": header, "circuit": circuit, "circ": circ, "read": read,
                         "st": {"dir": st_dir, "meta": meta, "pin": made["pin"], "partition_file": out / "partition.json",
-                               "program_file": out / "program.json"},
+                               "program_file": out / "program.json",
+                               "public": a0.sha512_file(st_dir / f"pub-{m.n}.bin")},
                         "compose_s": compose_s, "pin": made["pin"], "class": made.get("class_sha512")})
     summary["staging"] = {"before_draw_s": round(time.time() - t_stage, 1), "public_files": len(members)}
     leaf_layer = CS.leaf_layer(publics)
@@ -1165,14 +1166,16 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
         (out / "case-v2-error.txt").write_text(f"{type(x).__name__}: {x}\n")
 
 
-def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, registered: dict | None,
+def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public: str, registered: dict | None,
             tables: Sequence[Path], drawn: dict | None = None) -> dict:
-    """v1's ``case`` as `SampledProofs.OneStageZk` reads it: the params with ``proofs`` (the auditor's circuit digest and
-    the verifier's registered file), the evidence with its ``verdicts`` replaced by the proofs' files
-    (`proofs.evidence_v2`, under the evidence's ``sessions``), and ``blobs``, the paths of the files those name and of the
-    pinned lookup tables, which onsite reads after the evidence (`compose.onsite_check`). With ``drawn`` (`drawn_by`), the
-    params name the auditor's challenger and its window root and the evidence carries the draw's coins; without, the case
-    names no challenger, which v2 refuses (`OneStageZk.NO_CHALLENGER`)."""
+    """v1's ``case`` as `SampledProofs.OneStageZk` reads it: the params with ``proofs`` (the auditor's circuit digest, the
+    public file's, taken when it was staged before the draw, and the verifier's registered file), the evidence with its
+    ``verdicts`` replaced by the proofs' files (`proofs.evidence_v2`, under the evidence's ``sessions``), and ``blobs``,
+    the paths of the files those name and of the pinned lookup tables, which onsite reads after the evidence
+    (`compose.onsite_check`). v2 holds the public file's header to the registration (`registration.matches_public`), so
+    it refuses a windowed registration, whose ports are its members' (``<member>/<port>``). With ``drawn`` (`drawn_by`),
+    the params name the auditor's challenger and its window root and the evidence carries the draw's coins; without, the
+    case names no challenger, which v2 refuses (`OneStageZk.NO_CHALLENGER`)."""
     import replay as RP
     from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
@@ -1182,7 +1185,8 @@ def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, registe
                 | drawn["evidence"] | {"proofs": pr})
     return {"blobs": [str(b) for b in (*blobs, *tables)], "commitment": case["commitment"],
             "evidence": RP.DT.canonical(evidence).encode().hex(),
-            "params": {**case["params"], **drawn["params"], "proofs": {"circuit": circuit, "registered": registered}}}
+            "params": {**case["params"], **drawn["params"],
+                       "proofs": {"circuit": circuit, "public": public, "registered": registered}}}
 
 
 def drawn_by(ev: dict | None, window_root: str) -> dict | None:
@@ -1198,14 +1202,14 @@ def drawn_by(ev: dict | None, window_root: str) -> dict | None:
 
 def v2_proof(done: Sequence[dict], zk: bool, drawn: dict | None = None) -> dict | str:
     """`case_v2`'s files from the drawn members' sessions (`member_checks`'s) and the draw's coins ``drawn``
-    (`drawn_by`), or why the audit has no v2 case: v2 verifies one table's `--zk` sessions on its circuit and public file,
-    on a draw from the auditor's challenger's coins."""
+    (`drawn_by`), or why the audit has no v2 case: v2 verifies one table's one `--zk` session on its circuit and public
+    file, on a draw from the auditor's challenger's coins."""
     from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
     if not zk:
         return "v2 verifies --zk sessions; this audit's are plain"
     if len(done) != 1:
-        return f"v2 verifies one table's sessions on its circuit and public file; this audit drew {len(done)} members"
+        return f"v2 verifies one table's session on its circuit and public file; this audit drew {len(done)} members"
     if drawn is None:
         return "v2's draw reads the auditor's challenger's coins (OneStageZk.NO_CHALLENGER); this audit has none of record"
     mm, sdir = done[0]["mm"], done[0]["sdir"]
@@ -1214,8 +1218,8 @@ def v2_proof(done: Sequence[dict], zk: bool, drawn: dict | None = None) -> dict 
     reads = st.get("registered_file")
     return {"proof": PF.Proof(st["dir"] / "circuit.txt", st["dir"] / f"pub-{n}.bin",
                               tuple(f.parent for f in sorted((sdir / "sessions").glob("*/session.json")))),
-            "circuit": mm["pin"], "registered": json.loads(reads.read_text()) if reads else None, "tables": tables,
-            "drawn": drawn}
+            "circuit": mm["pin"], "public": st["public"], "registered": json.loads(reads.read_text()) if reads else None,
+            "tables": tables, "drawn": drawn}
 
 
 def streamed(a: argparse.Namespace) -> bool:

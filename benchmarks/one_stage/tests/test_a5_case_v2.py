@@ -1,6 +1,6 @@
 """a5's case for the audit on the proofs themselves, `SampledProofs.OneStageZk`'s: v1's case with the evidence's verdicts
-replaced by the proofs' files named by SHA-512, the params naming the auditor's circuit digest, and blobs the paths of
-those files and the pinned tables; and the audits v2 can't verify say why."""
+replaced by the proofs' files named by SHA-512, the params naming the auditor's circuit and public files' digests, and
+blobs the paths of those files and the pinned tables; and the audits v2 can't verify say why."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import hashlib
 import importlib.util
 import json
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -48,13 +49,13 @@ def test_case_v2_names_the_proofs_files_in_place_of_verdicts(tmp_path, RP):
     evidence = {"draw": {"units": [1]}, "sessions": [sha(s / "session.json")], "verdicts": {"m0": {"accepted": True}}}
     case = {"commitment": "ab", "evidence": RP.DT.canonical(evidence).encode().hex(), "params": {"delta": "1/100"}}
     got = a5.case_v2(case, evidence["sessions"], proof=PF.Proof(tmp_path / "circuit.txt", tmp_path / "pub-4.bin", (s,)),
-                     circuit="cc" * 64, registered=None, tables=[table])
+                     circuit="cc" * 64, public=sha(tmp_path / "pub-4.bin"), registered=None, tables=[table])
     assert got["commitment"] == "ab"
-    assert got["params"] == {"delta": "1/100", "proofs": {"circuit": "cc" * 64, "registered": None}}
+    assert got["params"] == {"delta": "1/100", "proofs": {"circuit": "cc" * 64, "public": sha(tmp_path / "pub-4.bin"),
+                                                          "registered": None}}
     e = json.loads(bytes.fromhex(got["evidence"]))
     assert "verdicts" not in e and e["draw"] == evidence["draw"] and e["sessions"] == evidence["sessions"]
-    assert e["proofs"] == {"public": sha(tmp_path / "pub-4.bin"),
-                           "sessions": [{"name": evidence["sessions"][0], "record": sha(s / "session.json"),
+    assert e["proofs"] == {"sessions": [{"name": evidence["sessions"][0], "record": sha(s / "session.json"),
                                          "reps": {"rep-0.bin": sha(s / "rep-0.bin")}}]}
     assert got["evidence"] == RP.DT.canonical(e).encode().hex()
     assert got["blobs"] == [str(p) for p in (tmp_path / "circuit.txt", tmp_path / "pub-4.bin", s / "session.json",
@@ -85,12 +86,28 @@ def test_case_v2_with_the_release_names_the_challenger_v2_requires(tmp_path, RP)
     case = {"commitment": "ab", "evidence": RP.DT.canonical(evidence).encode().hex(), "params": {"delta": "1/100"}}
     proof = PF.Proof(tmp_path / "circuit.txt", tmp_path / "pub-4.bin", (s,))
     drawn = a5.drawn_by(EV, "ab" * 64)
-    got = a5.case_v2(case, evidence["sessions"], proof=proof, circuit="cc" * 64, registered=None, tables=[], drawn=drawn)
+    got = a5.case_v2(case, evidence["sessions"], proof=proof, circuit="cc" * 64, public="ee" * 64, registered=None,
+                     tables=[], drawn=drawn)
     assert got["params"] == {"delta": "1/100", "challenger": drawn["params"]["challenger"], "window_root": "ab" * 64,
-                             "proofs": {"circuit": "cc" * 64, "registered": None}}
+                             "proofs": {"circuit": "cc" * 64, "public": "ee" * 64, "registered": None}}
     assert json.loads(bytes.fromhex(got["evidence"]))["coins"] == drawn["evidence"]["coins"]
-    none = a5.case_v2(case, evidence["sessions"], proof=proof, circuit="cc" * 64, registered=None, tables=[])
+    none = a5.case_v2(case, evidence["sessions"], proof=proof, circuit="cc" * 64, public="ee" * 64, registered=None,
+                      tables=[])
     assert "challenger" not in none["params"] and "coins" not in json.loads(bytes.fromhex(none["evidence"]))
+
+
+def test_v2_names_the_public_file_as_it_was_staged_before_the_draw(tmp_path):
+    """The case's public digest is the one a5 took when it staged the member, before the draw, never the file's digest
+    read after it: a public file changed since names another file, which v2 finds in no blob."""
+    (tmp_path / "pub-4.bin").write_bytes(b"public, changed after the draw")
+    s = tmp_path / "sessions" / "a"
+    s.mkdir(parents=True)
+    (s / "session.json").write_bytes(b"{}")
+    mm = {"st": {"dir": tmp_path, "public": "ee" * 64}, "m": types.SimpleNamespace(n=4), "pin": "cc" * 64}
+    drawn = a5.drawn_by(EV, "ab" * 64)
+    got = a5.v2_proof([{"mm": mm, "sdir": tmp_path}], zk=True, drawn=drawn)
+    assert got["public"] == "ee" * 64 and got["proof"].public == tmp_path / "pub-4.bin" and got["proof"].sessions == (s,)
+    assert got["drawn"] == drawn
 
 
 def test_v2_says_why_an_audit_has_no_case():
