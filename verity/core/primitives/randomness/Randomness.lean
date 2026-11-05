@@ -1,6 +1,5 @@
 import Flock.Hash
 import Flock.Draw
-import Randomness.Domains
 
 /-!
 # `verity.ml.randomness` v2, as a Lean spec

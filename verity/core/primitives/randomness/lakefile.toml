@@ -14,3 +14,4 @@ path = "../../service/flock"
 
 [[lean_lib]]
 name = "Randomness"
+roots = ["Randomness", "Randomness.Domains"]
