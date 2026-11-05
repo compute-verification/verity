@@ -64,7 +64,9 @@ exits 1 when an area's count rose above its cap (an area the file doesn't list h
 ``--update-caps`` lowers each cap to its count, never raising one. The Lean check runs it (`check`, from
 `lean_audit.py`) on the facts its audits wrote, with no build; there the report is the short one (`analyse` without
 ``full``: no chains or `kept_only_by`). Neither this file nor the caps is in an audit's key (`lean_audit.NOT_READ`), so
-changing them reruns no audit. Those facts come from the builds of `Security` and `Security/Proofs` alone: a module of
+changing them reruns no audit, and nor are the seeds outside Lean (`cited_kind`, `lock_docs`): drive's landing gate
+(`unread_gate.py`) runs the ratchet on a change to them before it lands, from the facts a check of its Lean left
+(`lean_audit.facts_file`). Those facts come from the builds of `Security` and `Security/Proofs` alone: a module of
 `Security/Properties` that `Security/Proofs` doesn't import has no `.olean` there and is reported `unbuilt`, so a spec
 definition that only such a module reads counts as unread. None does today (``--build`` builds all three trees). Stdlib
 only.
@@ -360,14 +362,14 @@ def walk_strings(x, out: set[str]) -> None:
             walk_strings(v, out)
 
 
-def lock_seeds(tree: Tree) -> tuple[set[str], set[str], dict[str, list[str]]]:
-    """The names and the modules the locks give, and each lock's texts, by its package: the strings outside
-    `SKIPPED_SECTIONS` with a space in them (a `why`, a reason). A string without one is a name, a prefix or a path, which
-    seeds only a constant of its exact name."""
+def lock_seeds(locks: dict[str, dict]) -> tuple[set[str], set[str], dict[str, list[str]]]:
+    """The names and the modules the locks (by package, `Tree.locks`) give, and each lock's texts, by its package: the
+    strings outside `SKIPPED_SECTIONS` with a space in them (a `why`, a reason). A string without one is a name, a prefix or
+    a path, which seeds only a constant of its exact name."""
     seeds: set[str] = set()
     mods: set[str] = set()
     texts: dict[str, list[str]] = {}
-    for pkg, lock in tree.locks.items():
+    for pkg, lock in locks.items():
         out: set[str] = set()
         for k, v in lock.items():
             if k in MODULE_SECTIONS:
@@ -400,11 +402,11 @@ def mentioned(text: str, known, modules: dict[str, str], named) -> tuple[set[str
     return {d for d in dotted if d in known}, mods
 
 
-def lock_docs(tree: Tree, texts: dict[str, list[str]]) -> dict[str, list[str]]:
+def lock_docs(tracked: list[str], texts: dict[str, list[str]]) -> dict[str, list[str]]:
     """{a document: the locks whose texts name it} (`DOC_PATH`): a path from the root or from the lock's package, else
     every tracked document whose path ends with it (a bare `PROTOCOL.md` is each one), the Lean tools' fixtures aside."""
-    files = set(tree.files)
-    docs = [f for f in tree.files if f.endswith(DOCS) and not f.startswith(MODULES.FIXTURES)]
+    files = set(tracked)
+    docs = [f for f in tracked if f.endswith(DOCS) and not f.startswith(MODULES.FIXTURES)]
     out: dict[str, set[str]] = defaultdict(set)
     for pkg, ts in texts.items():
         for t in ts:
@@ -442,17 +444,34 @@ def path_namer(modules: dict[str, str]):
     return named
 
 
+def module_names(tree: Tree) -> dict[str, str]:
+    """{each name a file outside Lean may give an analysis module by: its dotted name, its file's path from the root and
+    from its package's source directory: the module}."""
+    return {k: m for m, f in tree.module_file.items() if tree.analysis(m) for k in (m, f, m.replace(".", "/") + ".lean")}
+
+
+def cited_kind(path: str) -> str | None:
+    """What a file outside Lean keeps by naming it (`citations`): "module" for code and a suite's `pyproject.toml`
+    (`MODULE_CITED_BY`), the declarations and the modules it names; "code" for the rest of `CITED_BY`, the declarations;
+    "doc" for a document (`DOCS`), nothing unless a lock's text names it (`lock_docs`); None for a file that keeps nothing
+    (a lock, a manifest, `NOT_READERS`, the Lean tools' fixtures, any other kind)."""
+    suffix = Path(path).suffix
+    if (path.endswith(("lean-audit.json", "lake-manifest.json")) or suffix not in CITED_BY + DOCS or path in NOT_READERS
+            or path.startswith(MODULES.FIXTURES)):
+        return None
+    if suffix in DOCS:
+        return "doc"
+    return "module" if suffix in MODULE_CITED_BY or Path(path).name == "pyproject.toml" else "code"
+
+
 def citations(tree: Tree, candidates: set[str], modules: dict[str, str]) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
-    """The candidate names files outside Lean mention in full, and the modules code names (`MODULE_CITED_BY`;
-    ``modules``: a module's dotted name and its file's paths, from the root and from its package's source directory, each
-    to the module; a path as `path_namer` reads it): by code (`CITED_BY`), and by docs (`DOCS`), each with the files."""
+    """The candidate names files outside Lean mention in full, and the modules code names (`cited_kind`; ``modules``:
+    `module_names`; a path as `path_namer` reads it): by code (`CITED_BY`), and by docs (`DOCS`), each with the files."""
     code: dict[str, list[str]] = defaultdict(list)
     docs: dict[str, list[str]] = defaultdict(list)
     named = path_namer(modules)
     for f in tree.files:
-        suffix = Path(f).suffix
-        if (f.endswith(("lean-audit.json", "lake-manifest.json")) or suffix not in CITED_BY + DOCS or f in NOT_READERS
-                or f.startswith(MODULES.FIXTURES)):
+        if (kind := cited_kind(f)) is None:
             continue
         p = tree.root / f
         if not p.is_file() or p.stat().st_size > CITE_MAX_BYTES:
@@ -460,13 +479,13 @@ def citations(tree: Tree, candidates: set[str], modules: dict[str, str]) -> tupl
         text = p.read_text(errors="replace")
         dotted = names(text)
         hits = dotted & candidates
-        if suffix in MODULE_CITED_BY or Path(f).name == "pyproject.toml":
+        if kind == "module":
             hits |= {modules[d] for d in dotted if d in modules}
             if ".lean" in text:
                 for path in lean_paths(text):
                     hits |= named(path)
         for h in hits:
-            (docs if suffix in DOCS else code)[h].append(f)
+            (docs if kind == "doc" else code)[h].append(f)
     return code, docs
 
 
@@ -607,10 +626,10 @@ def analyse(tree: Tree, facts: Facts, full: bool = True) -> dict:
     owner = owners(facts)
     n = len(facts.name)
     mod_of = [facts.modules[facts.module[i]]["module"] for i in range(n)]
-    lock_names, lock_mods, lock_texts = lock_seeds(tree)
+    lock_names, lock_mods, lock_texts = lock_seeds(tree.locks)
     is_decl = [owner[i] == i and i in facts.range for i in range(n)]
     candidates = {facts.name[i] for i in range(n) if is_decl[i] and tree.analysis(mod_of[i])}
-    named = {k: m for m, f in tree.module_file.items() if tree.analysis(m) for k in (m, f, m.replace(".", "/") + ".lean")}
+    named = module_names(tree)
     namer = path_namer(named)
     text_names, text_mods = set(), set()
     for ts in lock_texts.values():
@@ -618,7 +637,7 @@ def analyse(tree: Tree, facts: Facts, full: bool = True) -> dict:
             a, b = mentioned(t, facts.index, named, namer)
             text_names |= a
             text_mods |= b
-    docs = lock_docs(tree, lock_texts)
+    docs = lock_docs(tree.files, lock_texts)
     doc_names, doc_mods = set(), set()
     for d in docs:
         p = tree.root / d
