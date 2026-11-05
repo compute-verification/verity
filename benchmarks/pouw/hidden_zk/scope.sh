@@ -3,7 +3,7 @@
 # under MemoryMax=MEM without swap, as this user and with this environment, for a node whose sessions carry a CPU mask narrower
 # than CPUS (node 2's are 0-91): the scope's AllowedCPUs widen the cgroup and the inner `taskset -c CPUS` the mask. Run it as job.sh
 # is run, from the source tree's root; a SIGTERM stops the whole scope.  HZ_JOB names another job script to run so (served_zk's).
-#   research run --on vy-nebius-2 --cwd source ... -- bash benchmarks/pouw/hidden_zk/scope.sh 48-79 420G
+#   research run --on MACHINE --cwd source ... -- bash benchmarks/pouw/hidden_zk/scope.sh 48-79 420G
 set -euo pipefail
 cpus=${1:?CPUS} mem=${2:?MEM}
 unit=hidden-zk-${RESEARCH_RUN_ID:-$$}

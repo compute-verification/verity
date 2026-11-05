@@ -1,5 +1,5 @@
-// The exact MMA configurations of ../../fp_exact/ beside int8 IMMA: 16 warps, 8 independent accumulators a warp, one
-// MMA each an iteration, so the rate is the tensor pipe's and not one chain's latency. Operands are on fp_exact's exact
+// The exact FP8 and FP4 MMA configurations beside int8 IMMA: 16 warps, 8 independent accumulators a warp, one
+// MMA each an iteration, so the rate is the tensor pipe's and not one chain's latency. Operands are on the formats' exact
 // grids (E4M3 integers, E2M1 x2 values) with unit block scales. Each format also has a `_data` probe: the same opcode on
 // the sweep's drawn operands and mix block scales, whose rate (and SM clock) against the fixed probe rules out a
 // data-dependent clock. Joint points: rows.jsonl only (machine_model has one MMA kind, the honest GEMM's). MACs an

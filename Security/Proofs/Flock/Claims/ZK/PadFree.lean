@@ -10,7 +10,7 @@ on `v'` at the pads `h`, evaluates to what it does on `v` at zero pads (`rows_pa
 switch rows by their masked evaluations (`ZerocheckMasked.c_eval_eval`, `final_eval`, `FlockComplete.Replay`'s
 `lcRunning_eval`, `lcAbValue_eval`), applied once at `(v, v', h)` and once at `(v, v, 0)`; the lane rows by the lane run
 at the pads (`laneRun_padFree`) and their coordinates (`limb_padFree`); the triple's rows vanish at both. So the batched
-residual `⟨λ, h⟩ − θ` at a draw is a function of the witness, the worker's values, the mask slot and the extra lanes
+residual `⟨λ, h⟩ − θ` at a draw is a function of the witness, the worker's values, the mask slot and level 0's hiding
 alone (`resid_padFree`), and the constraint holds at the drawn pads exactly where it holds at every pad
 (`rowsAt_iff_pass`): the firewall's own check of the drawn pads decides `Table.RowsAt`, and its stop reveals
 `1[¬RowsAt (w, v)]`, a function of the witness and the worker's values, `0` for the honest prover's (`innerOf_holds`).
@@ -316,13 +316,13 @@ variable (P : LigProver) {mPts : ℕ}
 
 /-- **The residual at a draw reads no pad**: at a `--zk` table of a setup, on any clear values a worker supplies
 (`Table.onVals`), rep `r`'s batched residual `⟨λ, h⟩ − θ` at the draw `ω` is a function of the witness, the worker's
-values, the mask slot and the extra lanes alone: the ten rows on the clear values at zero pads. -/
+values, the mask slot and level 0's hiding alone: the ten rows on the clear values at zero pads. -/
 theorem resid_padFree (Tz : TabZK 𝔽 mPts) (st : Stmt) :
     let C := coinedOf P Tz st
     ∀ c (r : Fin 2) p ω,
       ∑ i, (C.T c).tab.onVals.lam r ((C.T c).tab.onVals.view p ω).pre i * (C.T c).tab.onVals.hFull (ω.2.2.1 r) i -
           (C.T c).tab.onVals.theta r ((C.T c).tab.onVals.view p ω).pre =
-        ∑ k, innerGamma Tz st c r k * (rowsOf Tz st c r ((C.T c).tab.onVals.vals r p ω.1 ω.2.1.2.1)
+        ∑ k, innerGamma Tz st c r k * (rowsOf Tz st c r ((C.T c).tab.onVals.vals r p ω.1 ω.2.1)
           ((C.T c).tab.onVals.nu p + (C.T c).tab.onVals.maskHom ω.1)
           (∑ col, (C.T c).tab.onVals.y1' p ω.1 ω.2.1.2.1 r col * bFold Tz st c r col.val) (0, 0) k).eval 0 := by
   intro C c r p ω
@@ -336,7 +336,7 @@ theorem resid_padFree (Tz : TabZK 𝔽 mPts) (st : Stmt) :
       (((C.T c).tab.onVals.view p ω).pre.2.2.2.2.2 r).1 (((C.T c).tab.onVals.view p ω).pre.2.2.2.2.1 r))
     ((C.T c).tab.onVals.hFull (ω.2.2.1 r))).trans ?_
   refine Finset.sum_congr rfl fun k _ => congrArg (innerGamma Tz st c r k * ·) ?_
-  have hvv : ∀ i, (((C.T c).tab.onVals.view p ω).pre.2.1 r) i = (C.T c).tab.onVals.vals r p ω.1 ω.2.1.2.1 i +
+  have hvv : ∀ i, (((C.T c).tab.onVals.view p ω).pre.2.1 r) i = (C.T c).tab.onVals.vals r p ω.1 ω.2.1 i +
       ((C.T c).tab.onVals.hFull (ω.2.2.1 r) ∘ (padEquiv (C.T c).tab.onVals.nE).symm) (Fin.castAdd 4 i) := fun i => by
     show _ + _ = _ + _
     refine congrArg (_ + ·) ?_
@@ -375,17 +375,17 @@ theorem resid_padFree (Tz : TabZK 𝔽 mPts) (st : Stmt) :
     rw [htw, htx, hty, comp_symm_tail _ 1 (by omega), comp_symm_tail _ 2 (by omega), comp_symm_tail _ 3 (by omega)]
     rfl
   rw [hinner]
-  exact rows_padFree Tz st c r ((C.T c).tab.onVals.vals r p ω.1 ω.2.1.2.1) (((C.T c).tab.onVals.view p ω).pre.2.1 r)
+  exact rows_padFree Tz st c r ((C.T c).tab.onVals.vals r p ω.1 ω.2.1) (((C.T c).tab.onVals.view p ω).pre.2.1 r)
     _ hE hvv hab htw' _ _ k
 
 /-- **Passing at the drawn pads is passing at every pad**: where a worker's values pass rep `r`'s inner constraint at
-one draw for every rep, the rows hold at its mask slot and extra lanes (`Table.RowsAt`), at every pad. -/
+one draw for every rep, the rows hold at its mask slot and level 0's hiding (`Table.RowsAt`), at every pad. -/
 theorem rowsAt_of_pass (Tz : TabZK 𝔽 mPts) (st : Stmt) :
     let C := coinedOf P Tz st
     ∀ c p (ω₀ : (C.T c).tab.onVals.Rand),
       (∀ r, ∑ i, (C.T c).tab.onVals.lam r ((C.T c).tab.onVals.view p ω₀).pre i *
           (C.T c).tab.onVals.hFull (ω₀.2.2.1 r) i = (C.T c).tab.onVals.theta r ((C.T c).tab.onVals.view p ω₀).pre) →
-      (C.T c).tab.onVals.RowsAt p ω₀.1 ω₀.2.1.2.1 := by
+      (C.T c).tab.onVals.RowsAt p ω₀.1 ω₀.2.1 := by
   intro C c p ω₀ h0 ω hu hR r
   have e := resid_padFree P Tz st c r p ω
   have e0 := resid_padFree P Tz st c r p ω₀
@@ -393,13 +393,13 @@ theorem rowsAt_of_pass (Tz : TabZK 𝔽 mPts) (st : Stmt) :
   exact sub_eq_zero.mp (e.trans (e0.symm.trans (sub_eq_zero.mpr (h0 r))))
 
 /-- **The constraint at the drawn pads decides `RowsAt`**: a worker's values pass rep `r`'s inner constraint at the
-draw `ω₀`, for both reps, exactly where its rows hold at `ω₀`'s mask slot and extra lanes at every pad. The firewall's
-own `Finish` check at the drawn pads therefore stops exactly on `¬RowsAt (w, v)`, a function of the witness and the
-worker's values. -/
+draw `ω₀`, for both reps, exactly where its rows hold at `ω₀`'s mask slot and level 0's hiding at every pad. The
+firewall's own `Finish` check at the drawn pads therefore stops exactly on `¬RowsAt (w, v)`, a function of the witness
+and the worker's values. -/
 theorem rowsAt_iff_pass (Tz : TabZK 𝔽 mPts) (st : Stmt) :
     let C := coinedOf P Tz st
     ∀ c p (ω₀ : (C.T c).tab.onVals.Rand),
-      (C.T c).tab.onVals.RowsAt p ω₀.1 ω₀.2.1.2.1 ↔
+      (C.T c).tab.onVals.RowsAt p ω₀.1 ω₀.2.1 ↔
         ∀ r, ∑ i, (C.T c).tab.onVals.lam r ((C.T c).tab.onVals.view p ω₀).pre i *
           (C.T c).tab.onVals.hFull (ω₀.2.2.1 r) i = (C.T c).tab.onVals.theta r ((C.T c).tab.onVals.view p ω₀).pre :=
   fun c p ω₀ => ⟨fun h => h ω₀ rfl rfl, rowsAt_of_pass P Tz st c p ω₀⟩
