@@ -55,7 +55,9 @@ The defences of design U against the split (HT-DEFENCE) are priced here too:
 - `--kcap`: K cut into natural.py's equal chunks of at most kcap, each its own product with its output committed, so
   the leaf is 1 + 32·chunks/K and each chunk takes its own route (none or its own split);
 - `--orders`: every residual, and q, priced in HT-USEFUL's row and column orders too (`price.permute`), the least kept;
-- `--fast`: the exact routes only (none, isvd, tiles), without the svd, rpca, prov and floor bounds.
+- `--fast`: the exact routes only (none, isvd, tiles), without the svd, rpca, prov and floor bounds;
+- `--no-isvd`, `--no-rpca`: without the exact split, or without rpca, for the generous bound at ranks whose exact split
+  another record prices, or a matrix's ranks split across jobs.
 """
 
 from __future__ import annotations
@@ -400,6 +402,8 @@ def work(job) -> dict:
                     tot = routes.lowrank(r, n, K) + p
                     rec["prov"][str(r)][f"{chip}@{aname}"] = {"p": tot, "a": a, "over_leaf": (tot + 32 / K) / leaf}
             del S
+        if not opts.get("isvd", True):
+            continue
         S, A, B, d = integer_split(q, s, Vt, r)
         if lrx(r, n, K, d) < budget:
             rec["isvd"][str(r)] = {"d": d, "Amax": int(np.abs(A).max()), "Bmax": int(np.abs(B).max()),
@@ -408,7 +412,7 @@ def work(job) -> dict:
                 rec["noise"]["isvd"][str(r)] = {"d": d, "routes": residual_routes(S + (qn - q), alus, orders)}
         del S, A, B
     rec["rpca"] = {}
-    for r_spec, a in () if fast else RPCA:
+    for r_spec, a in () if fast or not opts.get("rpca", True) else RPCA:
         r = m // 8 if r_spec == "m/8" else r_spec
         if r >= m or lr1(r, n, K) >= budget:
             continue
@@ -418,7 +422,7 @@ def work(job) -> dict:
             L = rsvd(np.where(out, L, qf), r, seed=it)
         S = np.rint(qf - L).astype(np.int32)
         del L
-        rec["rpca"][f"{r}/{a}"] = {"lr1": lr1(r, n, K), **residual_stats(S), "routes": residual_routes(S, alus)}
+        rec["rpca"][f"{r}/{a}"] = {"lr1": lr1(r, n, K), **residual_stats(S), "routes": residual_routes(S, alus, orders)}
         del S
     del U
     rec["floor"] = {}
@@ -622,6 +626,8 @@ def main(argv=None) -> int:
     ap.add_argument("--kcap", type=int, default=0, help="K in chunks of at most this, each committed (0 = served K)")
     ap.add_argument("--orders", default="none", help="comma-separated orders of n and K (`price.permute`)")
     ap.add_argument("--fast", action="store_true", help="exact routes only (none, isvd, tiles)")
+    ap.add_argument("--no-isvd", action="store_true", help="without the exact split")
+    ap.add_argument("--no-rpca", action="store_true", help="without rpca")
     ap.add_argument("--no-split", action="store_true", help="no SVD and no split: the none and tile routes only")
     ap.add_argument("--ranks", default=None, help="comma-separated split ranks (default nat_ranks)")
     ap.add_argument("--alus", default=ALUS)
@@ -642,7 +648,7 @@ def main(argv=None) -> int:
         j for t in targets for j in hf_jobs(args.hf, t, layers, args.deflate, args.rot)]
     ranks = [int(x) for x in args.ranks.split(",")] if args.ranks else None
     opts = {"fast": args.fast, "orders": tuple(args.orders.split(",")), "kcap": args.kcap,
-            "live_noise": args.live_noise, "nosplit": args.no_split}
+            "live_noise": args.live_noise, "nosplit": args.no_split, "isvd": not args.no_isvd, "rpca": not args.no_rpca}
     if args.match:
         jobs = [j for j in jobs if keep(j[0], None, args.match.split(","))]
     jobs.sort(key=lambda j: (-math.prod(load_shape(j[1])), j[0]))
