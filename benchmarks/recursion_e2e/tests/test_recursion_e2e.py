@@ -435,7 +435,7 @@ def test_e2e_is_one_pass_with_its_negative(capsys) -> None:
     assert "WARM=0" in cmd and "RUNS=1" in cmd and "NEG=challenge,query" in cmd
 
 
-def test_store_writes_each_result_the_merge_and_the_table_and_prints_the_put(tmp_path: Path, monkeypatch, capsys) -> None:
+def test_store_puts_each_result_the_merge_and_the_table(tmp_path: Path, monkeypatch, capsys) -> None:
     (tmp_path / "a.json").write_text(json.dumps(RP.read(job(tmp_path / "a")) | {"ref": "rA"}))
     monkeypatch.setattr(RUN.subprocess, "run", lambda *a, **k: pytest.fail("store ran a command"))
     art = tmp_path / "art"
