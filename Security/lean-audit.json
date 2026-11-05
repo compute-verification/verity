@@ -25853,6 +25853,12 @@
     "Claims.ZKMal.strat": "b1e8f3c50a51ef914f488bc7ae973a0c63ac8adeb979f6a0e2e0fe2590405e2f"
    }
   },
+  "Proofs.Flock.Claims.ZK.HelloLean": {
+   "digest": "e6715d1f064cf1ad0ed31580dce1abf2d9c2e6a437f3eb62325ecb0b364bb6ef",
+   "definitions": {
+    "Claims.ZKMal.CoinLayer.helloMsg": "b9fcb577caf64ca123406e3b8db53df697981be39ade62394117ec812d8d6d92"
+   }
+  },
   "Proofs.Flock.Claims.ZK.Prefinal": {
    "digest": "51ff416f5eb3df891f789ebd1e12bda5919d8f8cce4edabd4413b60e96c574e2",
    "definitions": {
@@ -25862,7 +25868,7 @@
    }
   },
   "Proofs.Flock.Claims.ZK.Reference": {
-   "digest": "22c815b557b94a7597930f4e94649a2397376f5e8bc3a6c2b7e54628fcaad1d0",
+   "digest": "44d3a78f537619dad01733dfd863b64cc397623441b639afeeb8418b61d79828",
    "definitions": {
     "Claims.ZKMal.RefSession": "69ec3eb2136987397b6364620ba5a054642ea7f7e0d56523a47387640bb1eebf",
     "Claims.ZKMal.RefSession.Admits": "88a22846edbf74db8147cbd96db819c11d06de799acc6e7c1f72932b7076c1d1",
@@ -25918,7 +25924,8 @@
     "Claims.ZKMal.RefSession.zkD": "9266d1744fbb1b0185f209eb8c6f5d0c55ddb7caa6968a1bcadd5d8deeaadd0b",
     "Claims.ZKMal.baseWith": "930be06884ee2efb6e782aaecc9e9b2f9777a3e0f947e6beefc337fa333074a7",
     "Claims.ZKMal.hidOf": "eb7a5f3605f37c2a19500a004364975b66b156d42f7d4543fcd65634f37dbda3",
-    "Claims.ZKMal.refK": "14cf05f384338994da20e0795db10f7bcf8d519a43bd0f370d0374edc4cb0e69",
+    "Claims.ZKMal.refK": "b005f954ef58e18b9f56d61dd7e398b864e2752a26d739064d991bf55879d36f",
+    "Claims.ZKMal.sessOf": "9286f6fdf54cb64f6fc59e6f69b1bc1d882e93833460d554ca411d8a7e6ace85",
     "Claims.ZKMal.viewPre": "9b0a754e49830dd3e557a859cc42db7674a2dc189fce2659f770450b0d6a530d"
    }
   },
