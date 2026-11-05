@@ -1892,7 +1892,7 @@ def test_runs_at_two_serving_settings_go_beside_each_other_each_figure_labelled_
     assert [(r["record"], r["run"], r["tree"], r["serving"], r["ell_a"]) for r in runs] == [
         (str(p), "toy-run", TREE, {"window_steps": s, "max_tokens": m}, [cap]) for p, (s, m, cap) in zip(paths, SETTINGS)]
     assert [(r["of_record"], r["conditional_on"], r["not_claimed"], r["not_credited"], r["K"], r["open"])
-            for r in runs] == [(False, [], [OR.DAY_OPEN, OR.POUW_OPEN], [], K + cap + 1, ["free", "circuit"])
+            for r in runs] == [(True, [], [OR.DAY_OPEN, OR.POUW_OPEN], [], K + cap + 1, ["free", "circuit"])
                                for _, _, cap in SETTINGS]
     for p, r in zip(paths, runs):
         rec = json.loads(p.read_text())

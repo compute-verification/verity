@@ -1496,12 +1496,12 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
     v["sampled proofs"]["credit"] = paid = credit(out)
     for k in unread:
         v[k]["not_claimed"] = POUW_OPEN
-    case, unread = period_case(out)
+    case, no_case = period_case(out)
     composed = next((c.get("params_sha512") for c in found[composite][1].get("cases") or ()
                      if c.get("id") == NETWORK), None) if composite in found else None
     checked = {AUDITOR_RECORD: auditor_record((case or {}).get("params"), composed, certifier_key, site_registration),
                AUDITOR_LISTING: auditor_listing(out, case) if case is not None else {
-                   "is": CHECKED[AUDITOR_LISTING], "holds": False, "why": f"no case lists the period's audits: {unread}"}}
+                   "is": CHECKED[AUDITOR_LISTING], "holds": False, "why": f"no case lists the period's audits: {no_case}"}}
     prem = premises(LOCKS, checked=checked)
     drawn, draws = coins(out), chain_draws(out)
     cond = [COINS_OPEN] if drawn["open"] else []
