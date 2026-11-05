@@ -12,8 +12,9 @@ there.
 * **The walk keeps a coin it passes** (`Pos.walk_le`, `Pos.le_toStop`, `Pos.walk_coin_keeps`): the walk extends the
   position at any cuts, and below a coin node no cut fixes, every tape through the walk's stop holds there the coin the
   node's tape holds.
-* **A trace keeps the coin at its start** (`RoundsReach.le_tape`, `RoundsReach.head`): the tape a trace ends on is one
-  through its start, and from a coin node no cut fixes, it holds there the coin the node's tape holds.
+* **A trace keeps the coin at its start** (`RoundsReach.le_tape`, `RoundsReach.playReaches`, `RoundsReach.head`,
+  `firstStop_playReaches`): the tape a trace ends on is one through its start, so its play is one the start's node
+  reaches, and from a coin node no cut fixes, it holds there the coin the node's tape holds.
 * **An opening the device serves, at its coin** (`optOpenK_next`, `OpeningAt.ofNext`, `run_headCoin`): the node after
   an opening frame the device answers is that opening's coin node, described at the close its releases continue to,
   and the play from it is the play after the coin a tape holds there.
@@ -266,6 +267,16 @@ theorem RoundsReach.le_tape {β : Type} {fin : LiveOutJ J mPts → β} {rootB : 
   | round N rs p s c o _ _ _ ih =>
     obtain ⟨q, hq, ho⟩ := ih
     exact ⟨q, ((Pos.le_toStop p).trans ((Pos.le_rewrite _ _).trans (Pos.le_consume _))).trans hq, ho⟩
+
+/-- **A trace's start reaches the play of the tape it ends on**, where the start keeps the play's start (`Pos.Inv`):
+the tape is one through the start, whose play is the play from the start's node. -/
+theorem RoundsReach.playReaches {β : Type} {fin : LiveOutJ J mPts → β} {rootB : Array ByteArray}
+    {pts : Fin 2 → Fin mPts → 𝔽} {N : ℕ} {rs : Fin J → Fin 2 → List Flock.Round} {Ks₀ : Fin R → DigestCut Claims.Msg g}
+    {p : Pos g σ Claims.Msg (Fin R)} {o : β × CoinTape g σ} (hr : RoundsReach D M dg J B fin rootB pts N rs p o)
+    (hp : p.Inv Ks₀) : PlayReaches p.g' p.s' (CoinTape.run g σ o.2) := by
+  obtain ⟨q, ⟨h, hh⟩, hoq⟩ := hr.le_tape
+  rw [hoq, Pos.tape, hh, hp.run]
+  exact run_reaches _ _ _
 
 /-- **A trace from a coin node no cut fixes keeps the node's coin**: the tape it ends on is one through the node,
 holding there the coin the node's tape holds. -/
@@ -1377,6 +1388,21 @@ theorem firstStop_logged (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.ga
   rw [hML] at hr
   exact RoundsReach.stop_logged hPS (Pos.toStop_spec (Pos.inv_root (roundCuts V θ F c rd) (M.start ω))).2.2
     (stopsAt_firstStop V θ F c A rd σ M ω hP) hK (hBL _ _ hL) hr
+
+/-- **The first stop reaches the play a trace from it ends on**, any rewriting of its tape consumed
+(`RoundsReach.playReaches`). -/
+theorem firstStop_playReaches (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
+    {D : Decoders A.rounds A.Reg} (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP) {B : RoundHold}
+    (ω : (A.extend M.widening).L.Ω)
+    {f : CoinTape (firstStop V θ F c A rd σ M ω).g' (firstStop V θ F c A rd σ M ω).s' →
+      CoinTape (firstStop V θ F c A rd σ M ω).g' (firstStop V θ F c A rd σ M ω).s'}
+    {J N : ℕ} {β : Type} {fin : LiveOutJ J A.mP → β} {rootB : Array ByteArray} {pts : Fin 2 → Fin A.mP → 𝔽}
+    {rs : Fin J → Fin 2 → List Flock.Round} {o : β × CoinTape (V.game θ F c) σ}
+    (hr : RoundsReach D M A.dg J B fin rootB pts N rs ((firstStop V θ F c A rd σ M ω).rewrite f).consume o) :
+    PlayReaches (firstStop V θ F c A rd σ M ω).g' (firstStop V θ F c A rd σ M ω).s'
+      (CoinTape.run (V.game θ F c) σ o.2) :=
+  hr.playReaches (Pos.inv_consume (Pos.inv_rewrite
+    (Pos.toStop_spec (Pos.inv_root (roundCuts V θ F c rd) (M.start ω))).2.2 f))
 
 /-- **Each opening a play logs is one the device serves** after the releases before it (`logServed_relK`). -/
 theorem logServed_run (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ) :
