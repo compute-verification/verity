@@ -349,7 +349,7 @@ def test_periods_scale_gamma_to_the_datacenter_and_the_world():
 
 
 def test_busy_sm_time_integrates_sms_active_over_each_ranges_kernels_and_checks_it_against_their_occupancy(tmp_path):
-    """Two ranges on one thread: a graph launch of two kernels (one of 32 blocks, which two SMs hold), and a JIT library's
+    """Two ranges on one thread: a graph launch of two kernels (one of 32 blocks, on 32 SMs), and a JIT library's
     driver launch; a third range on another thread launched nothing. A range's text may sit in StringIds. SMs Active is
     integrated over the kernels' span between samples, and a range reading busier than its kernels occupy is flagged."""
 
@@ -365,9 +365,9 @@ def test_busy_sm_time_integrates_sms_active_over_each_ranges_kernels_and_checks_
     db.executemany("INSERT INTO CUPTI_ACTIVITY_KIND_KERNEL VALUES (?, ?, ?, ?, 1, 1, 128, 1, 1, 32, 0, 0)",
                    [(1000, 5000, 11, H200.sms * 16), (5000, 6000, 11, 32), (21000, 29000, 12, H200.sms * 16),
                     (15000, 16000, 13, 1)])
-    # SMs Active: full over the first kernel, 2 of 132 SMs over the second, then 100% sampled every 2 µs over the third
+    # SMs Active: full over the first kernel, 32 of 132 SMs over the second, then 100% sampled every 2 µs over the third
     # but reading 110% of the SMs (a metric that over-reads)
-    samples = [(1000, 0.0), (5000, 100.0), (6000, 100 * 2 / H200.sms), (21000, 0.0)]
+    samples = [(1000, 0.0), (5000, 100.0), (6000, 100 * 32 / H200.sms), (21000, 0.0)]
     samples += [(t, 110.0) for t in range(23000, 29001, 2000)]
     db.executemany("INSERT INTO GPU_METRICS VALUES (?, 3, ?)", samples)
     db.commit()
@@ -378,8 +378,9 @@ def test_busy_sm_time_integrates_sms_active_over_each_ranges_kernels_and_checks_
     assert rep["ranges"] == 3 and rep["stray"] == 1
     assert set(got) == {"item 0", "item 1", "item 2"}
     assert got["item 0"]["kernels"] == 2 and got["item 0"]["span_ns"] == 5000
-    assert got["item 0"]["sm_ns"] == pytest.approx(H200.sms * 4000 + 2 * 1000)
-    assert got["item 0"]["occupied_sm_ns"] == pytest.approx(H200.sms * 4000 + 2 * 1000) and got["item 0"]["ratio"] == 1
+    assert got["item 0"]["sm_ns"] == pytest.approx(H200.sms * 4000 + 32 * 1000)
+    assert got["item 0"]["occupied_sm_ns"] == pytest.approx(H200.sms * 4000 + 32 * 1000)
+    assert got["item 0"]["ratio"] == pytest.approx(1)
     assert got["item 1"]["sm_ns"] == pytest.approx(H200.sms * 8000 * 1.1)
     assert got["item 2"] == {"sm_ns": None, "occupied_sm_ns": None, "ratio": None, "kernels": 0}
     sqlite3.connect(tmp_path / "prime.sqlite").close()
@@ -390,11 +391,12 @@ def test_busy_sm_time_integrates_sms_active_over_each_ranges_kernels_and_checks_
     assert "exceeds their kernels' occupied SM-time by over 5% (over: 1.07)" in O.cross_check_why({"over": 1.07, "a": 1.02})
 
 
-def test_blocks_an_sm_holds_are_the_tightest_of_warps_registers_and_shared_memory():
-    assert nsys.blocks_per_sm(nsys.Kernel(0, 1, 1, 128, 32, 0), H200) == 16
-    assert nsys.blocks_per_sm(nsys.Kernel(0, 1, 1, 384, 168, 0), H200) == 1
-    assert nsys.blocks_per_sm(nsys.Kernel(0, 1, 1, 128, 32, 200 * 1024), H200) == 1
-    assert nsys.occupied_ns(nsys.Kernel(0, 10, 1000, 128, 32, 0), H200) == 10 * 63
+def test_a_kernel_occupies_at_most_one_sm_a_block():
+    """The scheduler spreads a grid of fewer blocks than the card's SMs over one SM a block, however many an SM could hold:
+    24 small blocks read 24 SMs Active, not the one SM they would fit in."""
+
+    assert nsys.occupied_ns(nsys.Kernel(0, 10, 1000), H200) == 10 * H200.sms
+    assert nsys.occupied_ns(nsys.Kernel(0, 10, 24), H200) == 10 * 24
 
 
 # ---- the node side ----------------------------------------------------------------------------------------------------------------
