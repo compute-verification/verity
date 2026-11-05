@@ -4,6 +4,7 @@ import Proofs.Properties.NetworkPeriod.Keys
 import Proofs.NetworkCertifier.RecordRows
 import Properties.NetworkPeriod.Placed
 import Proofs.Properties.NetworkScan
+import Proofs.Properties.NetworkPeriod.Placed
 import Proofs.Flock.Claims.Sampling.Count
 import Proofs.NetworkCertifier.SampledCharge
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
@@ -23,9 +24,10 @@ the check accepts, beside a tied audit that runs the class circuit, and a period
 scan's facts and its tied audits' charges (`rowsPhase_ok`), the scans keep the phases' indices (`filterMap_getElem?`),
 and each link-window's term is its scan's free inputs and those charges (`tiedFree`).
 
-`ScanWindowsPlaced`'s `WrongBounds` holds at the bound the audit publishes, at strata that are the design's strata draw
-(`wrongBoundsDrawn`, at `StrataDrawn`): a set of more blocks is accepted with probability at most
-`miss(countBound + 1) < δ`.
+`ScanWindowsPlaced` (`scanWindowsPlaced`) bounds each incorrect proof block from its member's circuit file alone and
+sums the bound over the at most `b` blocks `WrongBounds` allows (`Placed`). Its `WrongBounds` holds at the bound the
+audit publishes, at strata that are the design's strata draw (`wrongBoundsDrawn`, at `StrataDrawn`): a set of more
+blocks is accepted with probability at most `miss(countBound + 1) < δ`.
 
 On acceptance a rows-form period has no `rowsWfCheck` finding (`rowsWf_of_accept`), so its frames, the network
 certifier's of `B` bytes for its `lanes · windows · window` connections, read back (`cellRows_wf_of_rowsWf`,
@@ -605,8 +607,23 @@ theorem wrongBoundsDrawn : WrongBoundsDrawn := fun _ _ strata hs _ _ ns δ h hδ
   (boundOf_of_strataOf hs δ).symm ▸ NetTiming.card_le_of_mem_faultySets _ _
     (Claims.Sampling.Count.countBound_miss_design strata ns h δ hδ hδd).le hF
 
+/-- **`ScanWindowsPlaced`**: a window's incorrect set holds at most `b i` blocks (`WrongBounds`), each a member's
+unit's (`StmtBits`), which commits at most `max sc.ingress sc.egress` bits from its member's file alone
+(`Placed.committed_le_terms`), so the set commits at most `b i · max sc.ingress sc.egress` (`Placed.faultyBits_le`). -/
 theorem scanWindowsPlaced : ScanWindowsPlaced := by
-  sorry
+  intro P program s sc fs hscan hfs hpad Coin Col T _ _ _ _ _ D n sw Pw δ b hst hpart hwb
+  refine ⟨hpart, fun i F hF => ?_⟩
+  obtain ⟨Q, ms, hQ, hflat, hblocks, hfiles⟩ := hst i
+  obtain rfl : Q = Pw i := Option.some.inj (hQ.symm.trans (hpart i))
+  have hsub : F ⊆ Finset.range (Pw i).blocks.length := by
+    classical
+    simp only [NetTiming.faultySets, Finset.mem_filter, Finset.mem_powerset] at hF
+    exact hF.1
+  refine Placed.faultyBits_le hsub (fun v hv => ?_) (hwb i F hF)
+  obtain ⟨m, hm, u, hu, hv⟩ := hblocks v hv
+  obtain ⟨j, hj, hfile⟩ := hfiles m hm
+  rw [hv, hflat]
+  exact Placed.committed_le_terms hscan hfs hpad hm hu hj hfile
 
 /-- A statement of one input gate, with `null`'s bytes as its descriptor and a design of no rule, which draws no slot,
 so every set of slots is accepted with probability `1` (`Design.Pa`). -/
