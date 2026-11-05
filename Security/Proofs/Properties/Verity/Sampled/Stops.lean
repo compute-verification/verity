@@ -139,7 +139,7 @@ end Verity.Game
 namespace Verity.Sampled
 
 open Verity.Game
-open FlockSoundness.Discharge.Tables (SubmitJ LiveOutJ addRoundJ)
+open FlockSoundness.Discharge.Tables (SubmitJ LiveOutJ addRoundJ addRoundJ_self addRoundJ_ne)
 open FlockSoundness.Refine (roundOf)
 
 local notation "𝔽" => FlockLevel3.GF128
@@ -795,6 +795,101 @@ theorem RoundsReach.order {P : Fin R → List Release → Frame → Prop}
         · exact Or.inr (Or.inr ⟨q, L₁, h1', fun h => h2' (List.mem_cons_of_mem _ h), h3'⟩)
 
 end Order
+
+/-! ## Each round picks once -/
+
+/-- **A log's first opening stays first** as the log grows. -/
+theorem firstOpened_append {L₁ : List Release} {i : ℕ} (h : firstOpened L₁ = some i) (d : List Release) :
+    firstOpened (L₁ ++ d) = some i := by
+  unfold firstOpened at h ⊢
+  rw [List.findSome?_append, h]
+  rfl
+
+/-- **A tree's spec stays as the log grows.** -/
+theorem helloSpecs_getElem?_append {L₁ : List Release} {i : ℕ} {sp : Flock.CoinTree.Spec}
+    (h : (helloSpecs L₁)[i]? = some sp) (d : List Release) : (helloSpecs (L₁ ++ d))[i]? = some sp := by
+  rw [Verity.Sampled.helloSpecs_append, List.getElem?_append_left (List.getElem?_eq_some_iff.1 h).1, h]
+
+/-- **A log through an opening of a stream has opened it more often than the log before it.** -/
+theorem openedOf_lt (L₁ : List Release) {r : Release} {i s n : ℕ} (hr : r.frame = .opening i s n)
+    (d : List Release) : openedOf L₁ i s < openedOf (L₁ ++ r :: d) i s := by
+  have hp : r.frame.opensAt i s = true := by simp [hr, Frame.opensAt]
+  have e : openedOf (L₁ ++ r :: d) i s = openedOf L₁ i s + (openedOf d i s + 1) := by
+    unfold openedOf
+    rw [List.countP_append, List.countP_cons, if_pos hp]
+  omega
+
+/-- **Each round of the readings at a layout picks at most one release of a log** whose trees each name their streams
+distinctly: the link's picks the first opening, and a rep round's picks an opening of the first tree opened, of its
+one stream of that name, after a count of that stream's openings that each opening of it raises. -/
+theorem picksOnce_readingAt {R : ℕ} (tables : Array String) (L : Fin R → Slot) (record : Exchange → Option Claims.Msg)
+    (recordDigest : Claims.Msg) {Lg : List Release} (hn : ∀ sp ∈ helloSpecs Lg, sp.streams.toList.Nodup) :
+    PicksOnce (readingAt tables L record recordDigest).round Lg := by
+  suffices h : ∀ j L₁ L₁', PicksIn (readingAt tables L record recordDigest).round Lg j L₁ →
+      PicksIn (readingAt tables L record recordDigest).round Lg j L₁' → L₁.length < L₁'.length → False by
+    intro j L₁ L₁' h₁ h₁'
+    rcases Nat.lt_trichotomy L₁.length L₁'.length with hl | hl | hl
+    · exact (h j L₁ L₁' h₁ h₁' hl).elim
+    · obtain ⟨r, L₂, he, -⟩ := h₁
+      obtain ⟨r', L₂', he', -⟩ := h₁'
+      exact (List.append_inj (he.symm.trans he') hl).1
+    · exact (h j L₁' L₁ h₁' h₁ hl).elim
+  intro j L₁ L₁' h₁ h₁' hl
+  obtain ⟨r, L₂, he, hp⟩ := h₁
+  obtain ⟨r', L₂', he', hp'⟩ := h₁'
+  obtain ⟨d, rfl⟩ := prefix_le (he'.symm.trans he) hl.le
+  rw [List.append_assoc] at he'
+  have he₂ := List.append_cancel_left (he.symm.trans he')
+  cases d with
+  | nil => simp at hl
+  | cons x d =>
+    rw [List.cons_append] at he₂
+    obtain ⟨hx, -⟩ := List.cons.inj he₂
+    subst hx
+    have hq : slotRound tables (L j) L₁ r.frame := hp
+    have hq' : slotRound tables (L j) (L₁ ++ r :: d) r'.frame := hp'
+    cases hLj : L j with
+    | link =>
+      rw [hLj] at hq hq'
+      obtain ⟨i, s, n, hfr, -, -⟩ := hq
+      obtain ⟨-, -, -, -, -, hnone⟩ := hq'
+      exact firstOpened_ne_none L₁ hfr d hnone
+    | rep t q k =>
+      rw [hLj] at hq hq'
+      obtain ⟨i, s, n, hfr, ⟨sp, hsp, hs, -⟩, hfo, hname, hk⟩ := hq
+      obtain ⟨i', s', n', -, -, hfo', hname', hk'⟩ := hq'
+      rw [firstOpened_append hfo] at hfo'
+      obtain rfl := Option.some.inj hfo'
+      rw [helloSpecs_getElem?_append hsp, Option.bind_some] at hname'
+      rw [hsp, Option.bind_some] at hname
+      have hX : sp.streams.toList[s]? = some sp.streams[s] := by
+        rw [Array.getElem?_toList, Array.getElem?_eq_getElem hs]
+      have hX' : sp.streams.toList[s']? = some sp.streams[s] := by
+        rw [Array.getElem?_toList, hname', ← hname, Array.getElem?_eq_getElem hs]
+      have hmem : sp ∈ helloSpecs Lg := by
+        rw [he]
+        exact List.mem_of_getElem? (helloSpecs_getElem?_append hsp _)
+      obtain rfl := nodup_getElem?_inj (hn sp hmem) hX hX'
+      have := openedOf_lt L₁ hfr d
+      omega
+
+/-! ## The rounds a trace's submissions append -/
+
+/-- **The rounds a list of submissions appends to a stream**: the stream's rounds before, then the rounds of the
+submissions on it, in order. -/
+theorem foldl_addRoundJ {J : ℕ} {γ : Type} (tab : γ → Fin J) (rep : γ → Fin 2) (rd : γ → Flock.Round) :
+    ∀ (as : List γ) (rs₀ : Fin J → Fin 2 → List Flock.Round) (t : Fin J) (r : Fin 2),
+      as.foldl (fun rs a => addRoundJ rs (tab a) (rep a) (rd a)) rs₀ t r =
+        rs₀ t r ++ (as.filter fun a => tab a = t ∧ rep a = r).map rd
+  | [], _, _, _ => by simp
+  | a :: as, rs₀, t, r => by
+    rw [List.foldl_cons, foldl_addRoundJ tab rep rd as]
+    by_cases h : tab a = t ∧ rep a = r
+    · obtain ⟨rfl, rfl⟩ := h
+      have hp : decide (tab a = tab a ∧ rep a = rep a) = true := by simp
+      rw [addRoundJ_self, List.filter_cons, if_pos hp, List.map_cons, List.append_assoc, List.singleton_append]
+    · have hp : ¬ (decide (tab a = t ∧ rep a = r) = true) := by simpa using h
+      rw [addRoundJ_ne _ _ (fun h' => h ⟨h'.1.symm, h'.2.symm⟩), List.filter_cons, if_neg hp]
 
 /-! ## Each opening the device logs, served -/
 
