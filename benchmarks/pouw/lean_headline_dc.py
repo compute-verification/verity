@@ -674,7 +674,9 @@ def _bullets(items: list[str]) -> str:
 
 
 def _header(fam: Family, what: str, imports: str, reads: str) -> str:
-    return f'''import {imports}
+    return f'''module
+
+public import {imports}
 
 /-!
 # {fam.gpu} ({fam.key})'s {what} (trusted; generated)
@@ -744,6 +746,8 @@ def render_sheet(fam: Family, r: Reading) -> str:
                    f"{fam.ns}SheetHeadline") + f'''
 {_bullets(bullets)}
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Headline.{fam.ns}
 
@@ -875,6 +879,8 @@ def render_measured(fam: Family, r: Reading, s: Reading) -> str:
 {_bullets(bullets)}
 -/
 
+@[expose] public section
+
 namespace Accounting.TS.Headline.{fam.ns}Measured
 
 open Accounting.TS
@@ -948,6 +954,8 @@ def render_twin(fam: Family, t: Reading, r: Reading) -> str:
                    f"Definitions.Accounting.HeadlineDc.{fam.ns}Measured", f"{fam.ns}MeasuredI3Headline") + f'''
 {_bullets(bullets)}
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Headline.{fam.ns}MeasuredI3
 

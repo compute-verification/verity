@@ -1,7 +1,9 @@
-import Proofs.Flock.Recursive.PublicAudit
-import Proofs.Flock.Recursive.FirewallZK
-import Proofs.Flock.Recursive.Loads
-import Proofs.Flock.Recursive.ForkInnerC
+module
+
+public import Proofs.Flock.Recursive.PublicAudit
+public import Proofs.Flock.Recursive.FirewallZK
+public import Proofs.Flock.Recursive.Loads
+public import Proofs.Flock.Recursive.ForkInnerC
 
 /-!
 # The recursive audit at public units: its proof
@@ -30,6 +32,8 @@ VBridge G is about (`FlockVBridge.Family.vbridge_of_family`), and `Recursion.vbr
 the same way. The compiled table ignores the last round's coin, as its pick does (`schedInner_lastFree`,
 `clashPickCL_lastFree`), so gap 2 is read at VBridgeC (`zk_sessions_recursive_fork_innerC`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

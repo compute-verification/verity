@@ -1,4 +1,6 @@
-import SampledProofs.WiresSpan
+module
+
+public import SampledProofs.WiresSpan
 
 /-! **`check` is sound against its unrolled reference.** Whenever `check` accepts a circuit's wires:
 
@@ -9,6 +11,8 @@ import SampledProofs.WiresSpan
 * the wired rows and bits, multiplied through, are the expanded rows' counts (`wiredRows_eq`, `wiredBits_eq`).
 
 The converse, that `check` accepts whatever `checkRef` accepts, is `check_complete`'s. -/
+
+@[expose] public section
 
 namespace SampledProofs.Wires
 

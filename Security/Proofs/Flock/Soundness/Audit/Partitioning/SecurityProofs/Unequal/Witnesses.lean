@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Audit.Partitioning.Model
+module
+
+public import Proofs.Flock.Soundness.Audit.Partitioning.Model
 
 /-!
 # Proofs of three of `Partitioning.Witness`'s instances
@@ -8,6 +10,8 @@ import Proofs.Flock.Soundness.Audit.Partitioning.Model
 import it. `Law.subset n n` draws every unit, so every set doing positive work escapes it with probability 0
 (`meetsTarget_subset_self`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit.Partitioning.SecurityProofs.Unequal
 

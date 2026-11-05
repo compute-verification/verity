@@ -1,4 +1,6 @@
-import Definitions.Claims.Sampling
+module
+
+public import Definitions.Claims.Sampling
 
 /-!
 # The sampling scope: what it excludes, and that `KS` keeps content in it
@@ -15,6 +17,8 @@ import Definitions.Claims.Sampling
   `Pr[acc ∧ faulty ∉ M_{1/4}]` below `1` (`ks_lt_one`). `toyD` is such a deployment, with a decoder its Flock spec
   admits (`listWithin_toyD`).
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling.ScopeWitness
 

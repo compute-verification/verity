@@ -4,7 +4,11 @@ returns exactly the recorded coins of the next round, and only after the framed 
 bytes (or hash to its recorded digest when the server kept none). So every coin the verifier reads came after, and is bound
 to, the prover's messages before it.
 -/
-import Flock.Transcript
+module
+
+public import Flock.Transcript
+
+@[expose] public section
 
 namespace Flock
 

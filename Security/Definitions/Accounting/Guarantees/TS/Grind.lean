@@ -1,4 +1,6 @@
-import Definitions.Pouw.RelativeSecurity
+module
+
+public import Definitions.Pouw.RelativeSecurity
 
 /-!
 # The grinding premium under hashed seeds (trusted)
@@ -49,6 +51,8 @@ a cheater that sees its luck after the seed and picks which units to skip pays `
 share a coin (`HMu`), and the binding term `δb` itself, which is per prover (SHA-512 frame-v3 roots: about `T²/2^513`
 for a prover that holds no SHA-512 collision, and `1` for one that does).
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.TS
 

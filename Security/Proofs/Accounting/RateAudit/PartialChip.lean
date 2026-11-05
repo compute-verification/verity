@@ -1,6 +1,8 @@
-import Mathlib
-import Definitions.Accounting.Assumptions.RateAudit
-import Proofs.Accounting.RateAudit.Chip
+module
+
+public import Mathlib
+public import Definitions.Accounting.Assumptions.RateAudit
+public import Proofs.Accounting.RateAudit.Chip
 
 /-!
 # Chip programs with partial completion: congruence, replay from a footprint trace, counting, and the price
@@ -12,6 +14,8 @@ completion of `x` bits costs the compression `x` bits, not `b`. `completed_mul_l
 completed, at `rounds · c_root / b` each, cost at most the completions' compute. `Chip.toPartial`: `RateAudit.lean`'s
 programs are partial ones, a rebuild the completion of all `b` bits.
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate
 

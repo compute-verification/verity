@@ -1,8 +1,12 @@
-import Definitions.Pouw.Barrier.Defs
+module
+
+public import Definitions.Pouw.Barrier.Defs
 
 /-!
 # The degenerate-input barrier: pinned statements (trusted)
 -/
+
+@[expose] public section
 
 namespace Pouw.Barrier.Pinned
 

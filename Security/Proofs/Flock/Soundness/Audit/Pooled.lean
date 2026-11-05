@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Audit.Law
-import Proofs.Flock.Soundness.Audit.Periods
-import Mathlib.Analysis.SpecialFunctions.Log.Basic
+module
+
+public import Proofs.Flock.Soundness.Audit.Law
+public import Proofs.Flock.Soundness.Audit.Periods
+public import Mathlib.Analysis.SpecialFunctions.Log.Basic
 
 /-!
 # The pooled escape: wrong units that escape every period's draw
@@ -33,6 +35,8 @@ The network certifier's leak bound composes `pooled_escape_log` with the per-per
 second term grows with the number of windows in the monitoring period. That composition is `PooledLeakAccepted`'s,
 not this file's.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

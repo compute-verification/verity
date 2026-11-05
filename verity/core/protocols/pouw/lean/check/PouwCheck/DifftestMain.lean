@@ -1,4 +1,6 @@
-import PouwCheck.VerifiedDifftest
+module
+
+public import PouwCheck.VerifiedDifftest
 
 /-!
 # `pouw-check-difftest`: PoUW's checks of record, and the challenger's coins
@@ -12,6 +14,8 @@ more request, `{"fn": "coins", "input": n}`: `n` bytes of the operating system's
 `pouw.window.live_challenger`, through `pouw.verifier.coins`) reads its entropy from here, so the Python never reads it
 from the operating system itself.
 -/
+
+@[expose] public section
 
 namespace PouwCheck.DifftestMain
 

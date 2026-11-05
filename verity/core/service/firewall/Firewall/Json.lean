@@ -14,7 +14,13 @@ write them (`live/src/firewall_record_vectors.json`):
 A record the firewall can't read, and an op that isn't one of these with arguments of their types, are rejected. An open's
 statements, budget and schedule are checked before the record is read, as Python checks them.
 -/
-import Firewall.Release
+module
+
+public import Firewall.Release
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Core.Firewall
 

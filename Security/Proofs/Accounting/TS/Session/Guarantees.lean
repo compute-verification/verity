@@ -1,4 +1,6 @@
-import Proofs.Accounting.TS.Session.Assumptions
+module
+
+public import Proofs.Accounting.TS.Session.Assumptions
 
 /-!
 # The served layer is sound through its C-Flock sessions (the statement)
@@ -7,6 +9,8 @@ import Proofs.Accounting.TS.Session.Assumptions
 bridge's `AcceptedLive`, `WindowLaw`, `RelOfRows` and `OpenedPlurAt` taken from named premises
 (`Accounting.Assumptions.TS`). Its conclusion is `pf.SoundAt`, so `BindingAt`, `Of` and `RightFixed` keep reading `pf`'s
 served openings. It sits in the proofs package because the sessions do (`reads_exempt`). -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.TS
 

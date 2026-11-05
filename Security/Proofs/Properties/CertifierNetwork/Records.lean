@@ -1,4 +1,6 @@
-import Proofs.Properties.CertifierNetwork.Bucketer
+module
+
+public import Proofs.Properties.CertifierNetwork.Bucketer
 
 /-!
 # The records a run publishes
@@ -8,6 +10,8 @@ shaper closed, and likewise on the ingress link for the bucketer; each is of its
 (`Inv`, kept by every step, `step_inv`). On a closed run both counted all `W` windows (`closed_records`), so each link
 has exactly one record of each window `w < W` (`filter_one`).
 -/
+
+@[expose] public section
 
 namespace Properties.CertifierNetwork.Proofs
 

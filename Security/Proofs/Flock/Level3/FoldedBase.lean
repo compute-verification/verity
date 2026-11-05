@@ -5,7 +5,11 @@ at `ts` in turn (`halve`, the lincheck rounds' column fold) leaves at `s < 64` t
 `folded_eq`: when `Stmt.folded` succeeds, its vector is `Stmt.fold`'s with `β` at the pin, halved at `ts` in turn, whether
 it read the block's structure (`foldedPartial`) or folded flat.
 -/
-import Proofs.Flock.Level3.FoldStmt
+module
+
+public import Proofs.Flock.Level3.FoldStmt
+
+@[expose] public section
 
 open Flock
 

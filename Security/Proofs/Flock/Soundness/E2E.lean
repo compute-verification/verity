@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Audit.FlockPublic
+module
+
+public import Proofs.Flock.Soundness.Audit.FlockPublic
 
 /-!
 # The end-to-end theorem: a skeleton, every gap a named hypothesis
@@ -41,6 +43,8 @@ The headline, gives each one's kind):
   committed transcript is 0 there, so the profile is about the zero padding at 0. This is the zero's binding;
 * `vb : ValueBinding`: the binding of wires to registered commit strings, already named on `main`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

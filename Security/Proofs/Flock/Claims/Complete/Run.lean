@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.Honest
+module
+
+public import Proofs.Flock.Claims.Complete.Honest
 
 /-!
 # The honest run against the plain verifier
@@ -17,6 +19,8 @@ whose sends are all of tag `0`.
   decodes as the link message and the last message as `Final`, and the shipped verdict and the custody checks pass on
   that last message, `honestP` is accepted.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 
