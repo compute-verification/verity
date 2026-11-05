@@ -59,12 +59,16 @@ def test_proving_only_picks_the_finest_rung_at_every_scope(out):
 
 
 def test_the_commitment_moves_the_work_optimum_coarser_as_the_period_grows(out):
+    """The scopes are the window and core's monitoring periods (`wipe_monitoring.PERIODS`); pooled over a longer one the
+    work optimum is never finer, and from a week on it is coord in both views."""
     order = list(out["rungs"])
+    assert list(S.scopes()) == ["window"] + [name for name, _ in S.wipe_monitoring.PERIODS]
     for h in S.readings():
-        window, week = (_results(out, target="work", scope=s, h=h, weight=1.0)[0] for s in ("window", "week"))
-        assert order.index(window["best_lean"]) > order.index("chunk 32")
-        assert order.index(week["best_lean"]) > order.index(window["best_lean"])
-        assert week["best_lean"] == week["best_planner"] == "coord"
+        best = [order.index(_results(out, target="work", scope=s, h=h, weight=1.0)[0]["best_lean"]) for s in S.scopes()]
+        assert order.index("chunk 32") < best[0] < best[1] and best == sorted(best), (h, best)
+        for s in list(S.scopes())[1:]:
+            r = _results(out, target="work", scope=s, h=h, weight=1.0)[0]
+            assert r["best_lean"] == r["best_planner"] == "coord", (s, h)
 
 
 def test_the_chunk_familys_optimum_tracks_the_root_law(out):

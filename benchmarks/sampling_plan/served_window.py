@@ -29,11 +29,11 @@ work (free compute) or by width (exfiltration), through `grain_costs`, the laws 
 `ExfiltrationOptimum`.  `planner`: the rung's parts as strata through `for_target` under the density bound, its
 statements shared (`CostModel.shared`), at `commit_weight` 0 or w.
 
-**Targets.**  Free compute: C = `EPS` of the scope's MACs, at the window and pooled over a week and a year of windows at the
-stock step; the draws are about Λ/ε whatever the scope, the commitment grows with it.  Exfiltration: ℓ = `LEAK_BITS` a
-window.
+**Targets.**  Free compute: C = `EPS` of the scope's MACs, at the window and pooled over each monitoring period
+(`wipe_monitoring.PERIODS`: a week, a month and a year) of windows at the stock step; the draws are about Λ/ε whatever
+the scope, the commitment grows with it.  Exfiltration: ℓ = `LEAK_BITS` a window.
 
-    uv run python benchmarks/sampling_plan/served_window.py --out DIR [--weight W]
+    uv run python benchmarks/sampling_plan/served_window.py --out DIR [--weight W] [--no-planner]
 """
 from __future__ import annotations
 
@@ -48,6 +48,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from inputs import EPILOGUE, I, K_MAX, KEY, S8_STEP, block_k_log, cap, observations
 
+from verity.core.protocols.pous import wipe_monitoring
 from verity.core.protocols.profile import WINDOW_DELTA
 from verity.core.protocols.sampled_proofs.costfit import Fitted, fit
 from verity.core.protocols.sampled_proofs.one_stage.partition import UNIT_CLASS_MAX
@@ -77,7 +78,6 @@ LLAMA_1B = {"layers": 16, "hidden": 2048, "heads": 32, "kv_heads": 8, "head_dim"
 LINEARS = {"qkv": (2048, 3072), "o_proj": (2048, 2048), "gate_up": (2048, 16384), "down": (8192, 2048)}
 CHUNKS = (32, 64, 128, 256, 512, 1024)
 TILES = ((2, 2), (4, 4), (16, 16), (64, 64), (128, 128))
-WEEK_S = 7 * 86400
 
 
 @dataclass(frozen=True)
@@ -319,7 +319,7 @@ def readings() -> dict[str, float]:
 
 
 def scopes() -> dict[str, float]:
-    return {"window": 1.0, "week": WEEK_S / IN["step_s"].value, "year": 365 * 86400 / IN["step_s"].value}
+    return {"window": 1.0} | {name: seconds / IN["step_s"].value for name, seconds in wipe_monitoring.PERIODS}
 
 
 def run(weight: float = 1.0, *, plan: bool = True) -> dict:
