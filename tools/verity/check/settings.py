@@ -88,6 +88,8 @@ SETTINGS: dict[str, Setting] = _declare(
       "(`research.drive.POSTLAND_SLOT_RANK`), none for its Lean checks", "placement: the order drive's checks take slots in"),
     S("CHECK_STORE_CUSTODY", str, None, WHERE, "the recording run's custody dir, which check gives its steps in place of the "
       "RESEARCH_* that named the store (`store_io`)", "where the store's key is, not what a step computes"),
+    S("RESEARCH_STORE_CONFIG", str, None, WHERE, "the evidence store's config: set, the suites' fixture fetch uses it, not the "
+      "run's custody key (`suites.fetch_env`)", "which store serves a fetch; every byte is checked against its id"),
     # ---- the Lean slots (lean_slot.py)
     S("LEAN_SLOT", str, None, WHERE, "the Lean audit slot this process holds, POOL/I (lean_slot.py sets it)",
       "placement: the slot held"),
