@@ -3,8 +3,9 @@
     python3 tools/verity/lean/apply_seed.py PACKAGE_DIR...
 
 For each package's `lean-audit.json` it moves each seeded `domain` entry the lock lists (under `assumptions` or `open`)
-to `domain` with the seed's owner and `why`, and writes an `open_seed`: the seed's issue and due date under every owner the
-lock names and under each seeded module prefix with its owner. `check.py --update` then records the domain entries' digests,
+to `domain` with the seed's owner and `why`, adds one whose `lock` names the package (a premise no lock lists yet), and
+writes an `open_seed`: the seed's issue and due date under every owner the lock names and under each seeded module
+prefix with its owner. `check.py --update` then records the domain entries' digests,
 moves a domain entry whose guarantee's honest witnesses don't conclude it to `open` under its owner's ticket, and consumes
 `open_seed`. The regeneration's commit deletes this file and the seed.
 """
@@ -20,12 +21,12 @@ from check import text  # noqa: E402
 SEED = Path(__file__).parents[3] / "Security" / "lean-186-seed.json"
 
 
-def apply(policy: dict, seed: dict) -> list[str]:
-    """Seed ``policy`` in place; the domain entries it moved."""
+def apply(policy: dict, seed: dict, pkg: str) -> list[str]:
+    """Seed ``policy``, package ``pkg``'s lock, in place; the domain entries it moved or added."""
     ticket = {"issue": seed["issue"], "due": seed["due"]}
     moved = []
     for name, entry in sorted(seed["domain"].items()):
-        if any(name in (policy.get(s) or {}) for s in ("assumptions", "open")):
+        if entry.get("lock") == pkg or any(name in (policy.get(s) or {}) for s in ("assumptions", "open")):
             for s in ("assumptions", "open"):
                 (policy.get(s) or {}).pop(name, None)
             policy.setdefault("domain", {})[name] = {"owner": entry["owner"], "why": entry["why"]}
@@ -42,7 +43,7 @@ def main(argv: list[str]) -> int:
     for pkg in argv:
         lock = Path(pkg) / "lean-audit.json"
         policy = json.loads(lock.read_text())
-        moved = apply(policy, seed)
+        moved = apply(policy, seed, Path(pkg).as_posix().rstrip("/"))
         lock.write_text(text(policy))
         print(f"{pkg}: {len(moved)} domain entries seeded, open_seed under {len(policy['open_seed'])} keys")
     return 0

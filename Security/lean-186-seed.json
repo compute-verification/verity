@@ -39,6 +39,11 @@
    "owner": "@proofs",
    "why": "The statements the session loop serves; at any other it refuses `Hello` and releases nothing."
   },
+  "Core.Protocol.Accepts": {
+   "owner": "@lean",
+   "why": "The protocol accepts: the event the statement conditions on.",
+   "lock": "Security/Properties"
+  },
   "Flock.Guarantees.TablesAdmitUnrefused": {
    "owner": "@proofs",
    "why": "A hypothesis of the generic `SessionLoopZK` on its tables; the deployed tables meet it. (met by `LeanRelease.tablesAdmitUnrefused_dataE`)"
