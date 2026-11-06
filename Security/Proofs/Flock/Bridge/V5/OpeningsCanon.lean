@@ -153,7 +153,7 @@ theorem _root_.Flock.Bridge.openingsCanonV5_const
   obtain ⟨x, hx⟩ := Discharge.Layout.exists_col_of_io
     ((Discharge.HiddenExec.keyPlaceHP (sitesShHJP_parse (Reg := Reg) dj y₀ ht (Flock.Desc.parse_flat hD) hscope) hpi
       (Discharge.Layout.outsOfP D.unroll hU n pi)) S R u hu).inst hg
-  rcases hcs : Bridge.constsOf D.unroll hU n g with _ | b'
+  rcases hcs : Bridge.constWiresOf D.unroll hU n g with _ | b'
   · simp only [Bridge.constsOfP, hcs] at hb
     obtain ⟨⟨u', q, t⟩, hpq, rfl⟩ := Option.map_eq_some_iff.1 hb
     subst hx
@@ -188,7 +188,7 @@ theorem _root_.Flock.Bridge.openingsCanonV5_const
     exact hgate
   · have hbb : b' = b := by simpa [Bridge.constsOfP, hcs] using hb
     subst hbb
-    simp only [Bridge.constsOf] at hcs
+    simp only [Bridge.constWiresOf] at hcs
     split_ifs at hcs with h1 h2
     · cases hcs
       have hone := Discharge.HiddenExec.constCols_keyProgHP hU
@@ -213,10 +213,10 @@ theorem _root_.Flock.Bridge.openingsCanonV5 : Bridge.OpeningsCanonTargetV5 := by
   refine ⟨fun b hb => Bridge.openingsCanonV5_const n Reg I own ht D hD hU pi hpi pub hpub hscope kd dj S₀ d₀ y₀ S R u
     hu M hM g hg b hb, fun hk => ?_⟩
   have hk' : Bridge.constsOfP D.unroll hU n pi pub g = none := hk
-  rcases hcs : Bridge.constsOf D.unroll hU n g with _ | b'
+  rcases hcs : Bridge.constWiresOf D.unroll hU n g with _ | b'
   · have hp : Discharge.Layout.keyPubOf D.unroll hU n pi g = none := by
       simpa [Bridge.constsOfP, hcs] using hk'
-    simp only [Bridge.constsOf] at hcs
+    simp only [Bridge.constWiresOf] at hcs
     split_ifs at hcs with h1 h2
     refine Bridge.openingsCanonV5_row n Reg I own ht D hD hU pi hpi pub hpub hscope kd dj S₀ d₀ y₀ S R u M g ?_
     have hr := Discharge.HiddenExec.rowOfHP_ne_none_of_io (R := R)
