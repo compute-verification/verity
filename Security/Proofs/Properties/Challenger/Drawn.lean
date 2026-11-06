@@ -25,9 +25,11 @@ open SampledProofs SampledProofs.Challenger
 variable {dev : History} {key : ChallengerKey} {label : String} {coins : Json}
 
 /-- **A draw `drawCoins` accepts reads the coins a run of the device released, and that run's log**, a run the device's
-own ledger opens withheld on the draw's window, or the finder outputs a break. -/
+own ledger opens withheld on the draw's window, whose release log reads as its coin commitment's (`releasedRootsOf`),
+or the finder outputs a break. -/
 theorem drawn_log {w : String} {after ξ : ByteArray} (h : drawCoins key w label after coins = .ok ξ) :
     (∃ s ∈ dev.runs key.pub, OpensOn dev key.pub w s.id ∧ ξ = s.released label after ∧
+      (∃ c roots, s.commitment = some c ∧ releasedRootsOf c s.log = .ok roots) ∧
       ∃ ls : Array Json, getD (getD coins "session") "log" = .arr ls ∧ ls.toList = s.log.map Json.str) ∨
       Break dev key label coins := by
   obtain ⟨c, roots, ht, hall⟩ := Coins.drawn_released (dev := dev) h
@@ -36,7 +38,7 @@ theorem drawn_log {w : String} {after ξ : ByteArray} (h : drawCoins key w label
   rcases Window.window_opens (dev := dev) (label := label) hp (Window.drawCoins_withheld h) with hopen | b
   · rcases Session.sessionOf_run (dev := dev) (label := label) ho with ⟨s, hs, hc, hid, -, hr, hlog⟩ | b
     · rcases hall s hs hc hr with e | b
-      · exact .inl ⟨s, hs, hid ▸ hopen, e, hlog⟩
+      · exact .inl ⟨s, hs, hid ▸ hopen, e, ⟨_, _, hc, hr⟩, hlog⟩
       · exact .inr b
     · exact .inr b
   · exact .inr b

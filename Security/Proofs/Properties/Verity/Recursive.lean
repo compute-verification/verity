@@ -764,13 +764,13 @@ theorem sampledProofsRecursive_nontrivial (q : Dep) (V : Vocab d α) (k : Verity
     (σ : Game.Strategy (V.game θ F c)) (S : SessionIn V q k θ F c σ)
     (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl : ℕ)
     (nI vS : Msg → ℕ) (δs lam : ℝ)
-    (hbad : ¬ V.Holds k θ F c σ .sampled ⟨θ, F, c, [], ByteArray.empty, #[]⟩)
+    (hbad : ¬ V.Holds k θ F c σ .sampled ⟨θ, F, c, .empty, [], .empty, [], [], .empty, #[]⟩)
     (hcr : q.FinderCR V S collOf dColl nI vS) (hlt : q.delta V S dColl δs lam < 1) :
     ¬ Game.prob (fun o => True ∧ ¬ V.Holds k θ F c σ .sampled o) (V.game θ F c) σ ≤
       q.errAt V S collOf dColl nI vS δs lam := by
   intro h
   have h1 : Game.prob (fun o => True ∧ ¬ V.Holds k θ F c σ .sampled o) (V.game θ F c) σ = 1 :=
-    prob_play_eq_one (V.families θ) θ F c (fun o => True ∧ ¬ V.Holds k θ F c σ .sampled o)
+    prob_play_eq_one (V.families θ) (D := V.signer θ) θ F c (fun o => True ∧ ¬ V.Holds k θ F c σ .sampled o)
       (fun _ _ => ⟨trivial, hbad⟩) σ
   rw [Dep.errAt, if_pos hcr] at h
   exact lt_irrefl (1 : ℝ≥0∞) ((h1.symm.trans_le h).trans_lt hlt)
