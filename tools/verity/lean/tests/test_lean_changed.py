@@ -67,6 +67,24 @@ def fast(tmp_path, monkeypatch):
     return root, tree, calls
 
 
+def test_a_slot_tree_linked_to_a_removed_directory_is_made_again(fast, tmp_path, monkeypatch):
+    """A slot's tree that links to a directory removed since (a node's cache moved to a larger volume, then cleaned) is made
+    again at the link's target, where `mkdir` on the link itself raised FileExistsError and failed every run on that slot."""
+    target = tmp_path / "volume" / "lean-records_build-1"
+    link = tmp_path / "cache" / LC.RECORDS / "build-1"
+    link.symlink_to(target, target_is_directory=True)
+    monkeypatch.setattr(LC, "records_tree", lambda: link)
+
+    def sync(_closure, _files, t):
+        (t / "pkg").mkdir(parents=True, exist_ok=True)
+        (t / "pkg" / "lean-audit.json").write_text(OLD)
+        return 0
+
+    monkeypatch.setattr(LC, "sync", sync)
+    assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out") == 0
+    assert link.is_symlink() and target.is_dir(), "the link stays and its target is made"
+
+
 def test_a_recorded_update_keeps_the_regenerated_record_in_the_run_outputs(fast, tmp_path, monkeypatch):
     root, _, _ = fast
     run_dir = tmp_path / "run"
