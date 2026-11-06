@@ -1,10 +1,12 @@
 module
 
 public import Proofs.Flock.ZkAny.RelayLoop
+public import Proofs.Flock.ZkAny.RelayLoopFacts
+public import Proofs.Flock.SessionLoop.Inner
 public import Proofs.Flock.SessionLoop.TakenVals
 
 /-!
-# The deployed worker at the link and the `Finish`
+# The deployed worker, and Rust's checks as the worker's
 
 The ZK server passes a worker's value at the link and the `Finish` only where it is the firewall's own message
 (`LeanRelease.ownMsg`), and the relay sends the firewall's own there: the firewall computes the link and the `Finish`
@@ -18,6 +20,18 @@ rounds at the frame rounds and the firewall's own message at every other round:
   the device).
 * **`LoopModel.link_deployed`**, **`LoopModel.finish_deployed`**: where the model's worker is `deployedWk` at some
   device, it answers the link and the `Finish` with the firewall's own message.
+
+Rust's checks on a worker's rep (`LeanRelease.cross`: the worker failing, the device's level-0 root, the masking
+cross-checks, the end check on the returned proof and the constraints on the pads) run in `flock-circuit` on the
+prover's side of the loop's connection, before a round is sent: a rep a check failed sends each later round as its
+place with no device round in it (`Firewall::round`, `Firewall::scheduled`), and the checks at the `Finish` and on the
+coins of a round already sent change only the rounds after it. What reaches the loop at a frame round is the round they
+leave, the content `LiveChallenger::round` sends, so they are the worker's, and the release's decision is the frame's
+alone:
+
+* `LeanRelease.withoutCross`: the release with `cross` passing every value.
+* `LeanRelease.crossPasses_of_cross`, **`LoopModel.Deployed.crossPasses`**: where `cross` passes every value,
+  `CrossPasses` holds, so it holds by definition at the deployed loop over `withoutCross`.
 -/
 
 @[expose] public section
@@ -73,6 +87,18 @@ theorem ownMsg_withDevice {W R : Type} (L : LeanRelease W R)
     (h : List (Msg × Msg)) : (L.withDevice d).ownMsg x w ρ h = L.ownMsg x w ρ h :=
   rfl
 
+/-- **The release without Rust's checks beside the frame**: `L` with `cross` passing every value, Rust's checks being
+the worker's. -/
+def withoutCross {W R : Type} (L : LeanRelease W R) : LeanRelease W R :=
+  { L with cross := fun _ _ _ _ _ _ => true }
+
+/-- **Where `cross` passes every value, `CrossPasses` holds.** -/
+theorem crossPasses_of_cross {W R : Type} {L : LeanRelease W R} (hcr : ∀ x j w ρ h v, L.cross x j w ρ h v = true) :
+    L.CrossPasses := by
+  intro x w ρ h v _ _ hc
+  rw [hcr] at hc
+  cases hc
+
 end LeanRelease
 
 namespace Loop
@@ -120,6 +146,32 @@ theorem LoopModel.finish_deployed {W Rr : Type} {M : LoopModel W Rr} {dv : M.L.t
     M.wk M.x M.w M.ρ h 0 = some (M.L.ownMsg M.x M.w M.ρ h, false) := by
   rw [hwk]
   exact M.L.deployedWk_own dv (by rw [hl]; exact M.L.kindAt_finish M.x)
+
+open _root_.Flock (V SessionSpec Stmt) in
+/-- **`CrossPasses` by definition**: at the deployed loop over the release with the session loop's own rounds of the
+inner proof over `L₁.withoutCross`, `cross` passes every value. -/
+theorem LoopModel.Deployed.crossPasses
+    {L₁ : LeanRelease Claims.Flock.Wit
+      ((ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Nonce ×
+        (ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Rand)}
+    {src : Msg → Claims.Flock.Wit →
+      (ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Nonce ×
+        (ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Rand →
+      Nat → V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)}
+    {fin : Msg → Claims.Flock.Wit →
+      (ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Nonce ×
+        (ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Rand →
+      List (Msg × Msg) → Array ByteArray}
+    {M : LoopModel Claims.Flock.Wit
+      ((ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Nonce ×
+        (ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Rand)}
+    {s0 : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hD : LoopModel.Deployed M (LeanRelease.withFiles (LeanRelease.withLink
+      (LeanRelease.withInner ZKMal.Masked.dataE L₁.withoutCross (Loop.realOf src) fin) src) src) (Loop.realOf src) s0
+      spec sts) :
+    M.L.CrossPasses := by
+  rw [hD.rel]
+  exact LeanRelease.crossPasses_of_cross fun _ _ _ _ _ _ => rfl
 
 end Relay
 
