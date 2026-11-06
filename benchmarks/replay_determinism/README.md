@@ -42,9 +42,9 @@ research run --on NODE --project verity --source . --cwd source --env GPU_LEASE_
 ~~~
 
 `fetch` downloads the model to `MODEL_DIR` (default `/workspace/research/scratch/replay-determinism/moonlight`),
-refuses unless 50 GB and 100,000 inodes stay free on `/workspace`, and registers `MODEL_DIR` with `research keep`: owner
-`@vllm`, never expiring, priority `keep` (`KEEP_OWNER`, `KEEP_EXPIRES`, `KEEP_PRIORITY`; lowering it takes top's yes),
-with the fetch as its regenerate command; it is deleted only by `research retention rm`. The run writes the window
+refuses unless 50 GB and 100,000 inodes stay free on `/workspace`, and registers `MODEL_DIR` with `research keep` under
+`run.sh`'s default owner, never expiring, priority `keep` (`KEEP_OWNER`, `KEEP_EXPIRES`, `KEEP_PRIORITY`; lowering it
+takes top's yes), with the fetch as its regenerate command; it is deleted only by `research retention rm`. The run writes the window
 (`workload.json`), each phase's steps, tokens, timing and logits rows, `lease.json` (the lease's wall time, its
 GPU-seconds) and `compare.json` and `compare.md` to `$OUT`; the per-row fingerprints go to `SCRATCH`, a `mktemp -d` under
 `WORK` that the run removes when it exits, passed or failed (a `SCRATCH` you set is left in place). `N`, `PHASES`, `PY` (a

@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import compare as c  # noqa: E402
+import compare as c
 
 
 def gqa_labels(layers: int) -> list[str]:
