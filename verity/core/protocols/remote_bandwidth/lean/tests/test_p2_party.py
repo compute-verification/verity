@@ -298,7 +298,7 @@ def test_the_registration_is_the_challengers_record_of_the_pous_session_it_names
     """`--pous-record DIR --pous-session SID`: the registration of the setup the memory challenger kept for PoUS session
     SID (`challenger_party.keep`), its whole store the plan; refused for an id out of form, a record of another session,
     or one without a setup."""
-    from verity.core.protocols.pous import challenger_party as CP
+    from verity.core.devices.memory_challenger import challenger_party as CP
     from verity.core.protocols.pous import challenger_session as CS
     from verity.core.protocols.pous import run as R
 

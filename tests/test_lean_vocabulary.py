@@ -950,7 +950,7 @@ KNOWN: dict[str, str] = {
     "verity/core/protocols/network/nci/lean/NciCheck/Check.lean::NciCheck.Circuit":
         "duplicate of `Flock.Program`: becomes a reading of it: one gate-level Boolean type beside `Flock.Program.Prog`, which both read (proofs)",
     "verity/core/protocols/pous/audit.py::Answer": "homonym, a challenge's answer: rename (memory-accounting)",
-    "verity/core/protocols/pous/challenger_party.py::Challenger":
+    "verity/core/devices/memory_challenger/challenger_party.py::Challenger":
         "duplicate of `parties.Challenger`: becomes a reading of it (memory-accounting)",
     "verity/core/protocols/pous/check/PousCheck/Certificate.lean::PousCheck.Certificate.Certificate":
         "homonym, what a PoUS audit establishes: rename (memory-accounting)",

@@ -56,7 +56,7 @@ from .schemes.p2 import P2Params
 END = 2 ** 64 - 1
 #: the untimed exchanges before round 0 (`challenger_party`'s docstring); the index is public, so they reveal no coin
 WARMUPS, WARMUP_INDEX = 8, 0
-MODULE = "verity.core.protocols.pous.challenger_party"
+MODULE = "verity.core.devices.memory_challenger.challenger_party"
 PREMISE = "trusted-host"
 ID = "verity/pous/memory-challenger"
 VERSION = 1
