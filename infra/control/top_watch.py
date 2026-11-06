@@ -273,11 +273,6 @@ def asks_pass(state: dict, notion, ring: Ringer | None, ds: str, now: float, dry
 
 # ---- sweep ----
 
-def _slip(f: dict) -> str:
-    """A slipped ask's ring key: its issue and its dates (in its fix), so each further slip rings again."""
-    return f"linear-slip:{f['issue']}:{f['fix']}"
-
-
 def once_each(state: dict, fid: str, ring: Ringer | None, name: str, body: str, thread: str | None, now: float,
               reply: str | None = None) -> None:
     rung = state.setdefault("rung", {})
@@ -415,21 +410,16 @@ def linear_audit(state, ring, now, audit: Callable[[], list[dict]], volume: Call
         once_each(state, f"linear:{lane}:{bucket}", ring, name,
                   f"{name}: the Linear audit finds {sum(c.values())} on {whose} ({', '.join(f'{k} {n}' for k, n in c.items())}): "
                   f"`research msg linear audit --lane {lane}` lists them, one line each with its fix.", None, now)
-    rung = state.setdefault("rung", {})
     due: dict[str, list[dict]] = {}
-    for f in found:                          # a slip can't be undone, only delivered: it rings once per new date
-        if f["kind"] in linear.ASK_KINDS and (f["kind"] != "slipped" or _slip(f) not in rung):
+    for f in found:
+        if f["kind"] in linear.ASK_KINDS:
             due.setdefault(f["lane"], []).append(f)
     for lane, fs in due.items():
         c = {k: n for k in linear.ASK_KINDS if (n := sum(f["kind"] == k for f in fs))}
-        window, slips = f"linear-ask:{lane}:{bucket}", sorted(_slip(f) for f in fs if f["kind"] == "slipped")
-        fid = ":".join([window, *slips])
-        once_each(state, fid, ring, "top" if lane == linear.NO_LANE else lane,
+        once_each(state, f"linear-ask:{lane}:{bucket}", ring, "top" if lane == linear.NO_LANE else lane,
                   f"{lane}: a person's ask is off track on {', '.join(dict.fromkeys(f['issue'] for f in fs))} "
                   f"({', '.join(f'{k} {n}' for k, n in c.items())}): `research msg linear audit --lane {lane}` gives each fix; "
-                  "this rings every 12 hours until it holds (a slip, once per new date).", None, now)
-        if fid in rung:
-            rung.update({k: now for k in (window, *slips)})
+                  "this rings every 12 hours until it holds (a slip, until a `slip:` comment follows its last move).", None, now)
     if time.gmtime(now).tm_hour < REPORT_HOUR_UTC:
         return
 
