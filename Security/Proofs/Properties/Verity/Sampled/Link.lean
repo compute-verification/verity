@@ -123,6 +123,7 @@ theorem checkBlobsAt_trees {p : _root_.SampledProofs.OneStageZk.Params} {c : _ro
   · rename_i r hr
     obtain ⟨_, -, hr⟩ := ebind_ok hr
     obtain ⟨ts, hts, hr⟩ := ebind_ok hr
+    obtain ⟨⟨⟩, -, hr⟩ := ebind_ok hr
     obtain ⟨⟨⟩, hth, -⟩ := ebind_ok hr
     exact ⟨ts, hts, hth⟩
 

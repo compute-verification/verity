@@ -32,9 +32,12 @@ round of no tree sampled earlier, of a stream the tree lacks, out of order, open
 block; a record on no logged tree or on another than the one logged under its root, its link's roots or points edited,
 a ``root_B`` not its table's length (`LINK_ROOT_LEN`), its link's roots split at other points with the hashed message
 kept among them, a round's coins, count or message edited, a round added or swapped, a stream renamed, each malformed form, its link
-unopened, a tree two sessions use, or one none does. The release logs of `RELEASED`, `READ` and `DRAW_COINS` hold tree
-lines among their roots and releases too, and `RELEASED` a root or a release relabelled a tree's. Each piece answers
-``{"refused": why}`` where the challenger refuses, so the reasons are compared too.
+unopened, a tree two sessions use, or one none does. A sample's release log's order (`SAMPLE_LINK_FIRST`:
+`sample_link_first`, `SampledProofs.Challenger.sampleLinkFirst`) is a sample's coins as `READ`'s with every tree round
+after the sample and each tree's link first (`_release_log`), then a link opened before the sample's last coin, a round
+of another stream opened first, each malformed request. The release logs of `RELEASED`, `READ` and `DRAW_COINS` hold
+tree lines among their roots and releases too, and `RELEASED` a root or a release relabelled a tree's. Each piece
+answers ``{"refused": why}`` where the challenger refuses, so the reasons are compared too.
 """
 
 from __future__ import annotations
@@ -1585,12 +1588,13 @@ class Drawn:
     the commitment (drawn, by default), and `reads` reads the coins (`reads(coins)`, the bytes read), by default in one
     or two reads of random lengths.  The ledger opens the session withheld unless `withheld` is false.  The challenger
     samples and opens `trees` coin trees too (`TreeSession` on `tables`, its link opened after `keys`; sampled, by
-    default), their lines among the others.  Its key is the key of `seed` at one of `params`."""
+    default), their lines among the others in `order` (`_release_log`; the sample, then the link, then the other rounds,
+    by default).  Its key is the key of `seed` at one of `params`."""
 
     def __init__(self, rng: random.Random, before: bool = False, after: bytes | None = None,
                  reads: Callable[[Callable[[int], bytes]], bytes] | None = None, withheld: bool = True,
                  trees: int | None = None, tables: list[str] | None = None, keys: list[str] | None = None,
-                 params=LEDGER_PARAMS, seed: int = 0) -> None:
+                 params=LEDGER_PARAMS, seed: int = 0, order: str = "honest") -> None:
         s = self.s = _ledger_session(rng, params=params, seed=seed)
         s.ch = _challenger(rng, [("other", 2), ("draw", 12)])
         s.ch.sign_record(s.host, s.pub, lambda m: lms.sign_at(s.k, s.q, m).encode())
@@ -1611,11 +1615,12 @@ class Drawn:
                                  for _ in range(rng.choice([1, 1, 2])))
         else:
             self.read = self._step("draw", lambda: reads(coins))
+        cut = len(s.lines)
         for _ in range(rng.randint(0, 2)):
             self._step("draw", lambda: self.records["draw"].record(rng.randbytes(64)))
         self.trees = [TreeSession(rng, s.ch, tables, keys)
                       for _ in range(rng.choice([0, 0, 1, 2]) if trees is None else trees)]
-        s.lines = _interleave(rng, s.lines, [t.lines for t in self.trees])
+        s.lines = _release_log(rng, s.lines, cut, [t.lines for t in self.trees], order)
         s.close = s.signed(None)
         self.ledger = Ledger(rng, s, withheld=withheld)
         self.pins, self.main = _pinned(rng, self.ledger, "honest")
@@ -1858,6 +1863,15 @@ def session_trees(j: Any) -> Any:
     return _refusing(lambda: {"reason": Ch.sessions_tree_reason(Ch.coin_trees_of(log), records)})
 
 
+def sample_link_first(j: Any) -> Any:
+    _request(j, ["after", "label", "log"])
+    log = _log(j["log"])
+    if type(j["label"]) is not str:
+        raise D.Reject("label is not a string")
+    after = _hex(j["after"])
+    return {"reason": None if Ch.sample_link_first(j["label"], after, log[1:]) else Ch.SAMPLE_LINK_FIRST}
+
+
 TABLES = ["circuit", "circuit-00", "circuit-01", "circuit-63"]
 
 
@@ -1866,14 +1880,43 @@ def _f128(w: int) -> str:
     return format(w, "032x")
 
 
-def _interleave(rng: random.Random, lines: list[str], runs: Sequence[list[str]]) -> list[str]:
-    """`lines` with each of `runs` merged in after its head, as one release log writes them: the rest of `lines` and
-    each run in its own order."""
-    queues = [list(lines[1:])] + [list(r) for r in runs]
-    out = list(lines[:1])
+def _merge(rng: random.Random, runs: Sequence[list[str]]) -> list[str]:
+    """`runs` merged at random, each in its own order."""
+    queues = [list(r) for r in runs]
+    out: list[str] = []
     while any(queues):
         out.append(rng.choice([q for q in queues if q]).pop(0))
     return out
+
+
+def _interleave(rng: random.Random, lines: list[str], runs: Sequence[list[str]]) -> list[str]:
+    """`lines` with each of `runs` merged in after its head, as one release log writes them: the rest of `lines` and
+    each run in its own order."""
+    return list(lines[:1]) + _merge(rng, [lines[1:], *runs])
+
+
+#: the orders `_release_log` writes a sample's release log in: the sample, then the link, then the other rounds
+#: (`challenger.sample_link_first`), and the two it refuses
+ORDERS = ["honest", "sample-late", "link-late"]
+
+
+def _release_log(rng: random.Random, lines: list[str], cut: int, trees: Sequence[list[str]],
+                 order: str = "honest") -> list[str]:
+    """`lines`, a session's head, roots and releases whose sample is released by line `cut`, with each coin tree's lines
+    of `trees` (`TreeSession.lines`: its own line, then its link, then its other rounds) merged in as one release log
+    writes them in `order`: a tree's own line anywhere before its rounds and every round after the sample (`honest`);
+    a tree's link opened before the sample's last coin (`sample-late`); or a round of a tree's other stream opened
+    first, after the sample (`link-late`)."""
+    first = rng.randrange(len(trees)) if order != "honest" else -1
+    early = [i == first or rng.random() < 0.5 for i in range(len(trees))]
+    runs = [list(t[1:]) if e else list(t) for t, e in zip(trees, early)]
+    head = _interleave(rng, lines[:cut - 2 if order == "sample-late" else cut], [t[:1] for t, e in zip(trees, early) if e])
+    if order == "sample-late":
+        head += [runs[first].pop(0), *lines[cut - 2:cut]]
+    elif order == "link-late":
+        k = next(i for i, line in enumerate(runs[first]) if json.loads(line)["stream"] != CT.SESSION)
+        head.append(runs[first].pop(k))
+    return head + _merge(rng, [lines[cut:], *runs])
 
 
 class TreeSession:
@@ -2205,6 +2248,26 @@ def session_trees_case(rng: random.Random, name: str) -> Any:
     return j
 
 
+SAMPLE_LINK_FIRST_NAMES = ["honest", "sample-late", "link-late", "request"]
+
+
+def sample_link_first_case(rng: random.Random, name: str) -> Any:
+    """A sample's release log (`Drawn`) in order `name` (`_release_log`), at least one coin tree in a refused order, at
+    the sample's family and commitment; or (`request`) a malformed request."""
+    rng = _seeded(rng)
+    order = name if name in ORDERS else "honest"
+    d = Drawn(rng, trees=None if order == "honest" else rng.randint(1, 2), order=order)
+    j = {"after": d.after.hex(), "label": "draw", "log": d.s.lines}
+    if name == "request":
+        k = rng.choice(["after", "label", "log", None])
+        if k is None:
+            j = rng.choice([_body(j, label=DROP), {**j, "x": 1}])
+        else:
+            j[k] = {"after": rng.choice(["AB", "0", 5, None]), "label": rng.choice([5, None, ["draw"]]),
+                    "log": rng.choice([None, "x", d.s.lines + [5]])}[k]
+    return j
+
+
 COMMITMENT = D.Port(PIECES, "challenger_commitment", commitment, _cases(commitment_case, COMMITMENT_NAMES),
                     package=PACKAGE, need_rejects=False, of_record="lean")
 OPENING = D.Port(PIECES, "challenger_opening", opening, _cases(opening_case, OPENING_NAMES), package=PACKAGE,
@@ -2239,6 +2302,8 @@ COIN_TREES = D.Port(PIECES, "challenger_coin_trees", coin_trees, _cases(coin_tre
                     package=PACKAGE, of_record="lean")
 SESSION_TREES = D.Port(PIECES, "challenger_session_trees", session_trees,
                        _cases(session_trees_case, SESSION_TREES_NAMES), package=PACKAGE, of_record="lean")
+SAMPLE_LINK_FIRST = D.Port(PIECES, "challenger_sample_link_first", sample_link_first,
+                           _cases(sample_link_first_case, SAMPLE_LINK_FIRST_NAMES), package=PACKAGE, of_record="lean")
 
 pieces = D.server_fixture(COMMITMENT)
 
@@ -2251,7 +2316,8 @@ RUNS = [(COMMITMENT, commitment_case, COMMITMENT_NAMES, 300), (OPENING, opening_
         (PINNED, pinned_case, PINNED_NAMES, 200), (READ, read_case, READ_NAMES, 200),
         (DRAW_COINS, draw_coins_case, DRAW_COINS_NAMES, 200), (WITHIN, within_case, WITHIN_NAMES, 100),
         (COIN_TREES, coin_trees_case, COIN_TREES_NAMES, 200),
-        (SESSION_TREES, session_trees_case, SESSION_TREES_NAMES, 200)]
+        (SESSION_TREES, session_trees_case, SESSION_TREES_NAMES, 200),
+        (SAMPLE_LINK_FIRST, sample_link_first_case, SAMPLE_LINK_FIRST_NAMES, 200)]
 
 
 @pytest.mark.parametrize("port, make, names, examples", RUNS, ids=[r[0].fn for r in RUNS])

@@ -8,8 +8,8 @@ public import Definitions.Core.Blocks
 public import Definitions.Core.DeviceFigures
 public import Definitions.Core.Site
 public import Definitions.Core.Period
-public import Definitions.Core.Rec
 public import Definitions.Core.Structure
+public import Definitions.Core.Rec
 public import Definitions.Nci
 public import Definitions.Nci.Support
 public import Definitions.Nci.Reads
