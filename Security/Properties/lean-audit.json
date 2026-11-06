@@ -20833,7 +20833,7 @@
    "guarantees": ["Properties.NetworkCertifier.linkWindowAcceptMeans"]
   },
   "NetworkCheck.Period": {
-   "digest": "7b0b338c9b7e152c34efee90582617bfe84e695e5a63a6982928ad123524f079",
+   "digest": "efc731fc3d393e3659616f000e54e85fd980d030e4910809a26e0abf9947fbdb",
    "definitions": {
     "NetworkCheck.Period.Audit": "1d09ddb464aaa4df92f6fa9e898ac284f9c3cb3a691d01573bc237bf94b954e8",
     "NetworkCheck.Period.Audit.bits": "e933e5e70e66fbf6d1a3f868d294c6a0cfc6be8b835a4d117602235327ee4af1",
@@ -20969,6 +20969,7 @@
     "NetworkCheck.Period.auditCheck": "eb905d40e80a49070b789c48047c34c0b8267dc4eae5ca8e46519655b708b44d",
     "NetworkCheck.Period.auditChecks": "4cca6faa5be27d823ac65a4c0f10dc3a1e133172f0c77b178e1f9a6ef688e2f3",
     "NetworkCheck.Period.auditOf": "3e6e015a1f2f5de558e4c1263b18880bbaf3e02acf0f36cda5902feb206d9f6e",
+    "NetworkCheck.Period.auditStateEntries": "e3e53a0ba614ba12360f3cf8e073412a146c1ba7eb144be53810be7027644996",
     "NetworkCheck.Period.canonText": "f3f56595df2de44e1a87807d7066086208c80a22fdfffa9044b637fa3f43e82e",
     "NetworkCheck.Period.capsTerm": "b0344cf3feee99420207429449a56894f1be391186237460231820aa80faf275",
     "NetworkCheck.Period.cellHeader": "f04237327101973963b6ee30720f48e4c16191271e40e8d0c30eb33c0132a99f",
@@ -21078,10 +21079,10 @@
     "NetworkCheck.Period.stateChecks": "2ff59f3777ce5aa172e857e0c520d2e02a77525d4edce7adb6fe7a319918ac3a",
     "NetworkCheck.Period.stateEmpty": "e3961cb8471a11129c2aeb496cb51f48bd9597310d77fc109167f5a3b77a2e2a",
     "NetworkCheck.Period.stateEntries": "a7c8123beed3f6e036818652a4c5bca16f9b8a994fb5b074d052d5a8f55469e4",
-    "NetworkCheck.Period.stateHeldIn": "3bc7c62645dfe4b9cdba648b1a0aeb1c5c6d2a1cd1f80b5d95c3a3dd221ee4bf",
+    "NetworkCheck.Period.stateHeldIn": "f034cfeb8082ba6a91f8d2d851c0f4aeda7145051f564a8312d76276b964925d",
     "NetworkCheck.Period.stateName": "d4a0d1b2f034d66eabb427424fdb2398ed17d6426b838438552f05fd58440d17",
     "NetworkCheck.Period.stateRead": "97b90a46698d8eb4f232859b185cecac03fc8135fdebed629b08797d4675d9ce",
-    "NetworkCheck.Period.stateTied": "2935e9c63b3abc01f3e138463a68371e0763e781124b6bf663a62bb93710bfe0",
+    "NetworkCheck.Period.stateTied": "c02e0f32554be36d9f762b2a7e6cd557cb602e8f0f118caddafd4af5d711a269",
     "NetworkCheck.Period.stateValue": "63dac99dda2ed22004eb242aca27e62efa0d2209fb416e4313afdd52cf162a76",
     "NetworkCheck.Period.syncSetOf": "38a1c9522a1f13b82396f0c5f7254f562ead2ab5c4394643f16e17a5fad06c7e",
     "NetworkCheck.Period.terms": "e9b09adbb5f1e3a2a5c2f537c4e8c6c6213e5f320b896b68244e64430ca50452",
