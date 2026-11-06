@@ -65,7 +65,8 @@ environment extension loaded, so none of the package's code runs), and replays t
                  verifier that accepts everything) under `witnesses`; or an exclusion theorem (a bound over a partition
                  or covering, reading no acceptance) names no `honest` lemma at the deployed partition and parameters
                  and `nontrivial` one at an explicit circuit where its other premises hold, a named premise fails and
-                 the bound fails (with no premise, where a tighter bound fails); or a
+                 the bound fails (with no premise, where a tighter bound fails; further `nontrivial` lemmas, a list,
+                 are each in that exclusion form and drop a premise no earlier one drops); or a
                  witness doesn't have that form, ranges over its instance instead of building it, takes a hypothesis
                  that is no named assumption the lock lists, or is an honest one at an accept-all verifier
                  (`witness_failures`), unless `unwitnessed`, which only shrinks, lists the guarantee with its
@@ -1552,7 +1553,17 @@ def claim_witnesses(policy: dict) -> set[str]:
     return {n for w in ws.values() if isinstance(w, dict)
             for n in [w.get("fails"), *(w.get("meets") if isinstance(w.get("meets"), list) else [])] if isinstance(n, str)} | \
         {n for w in (gs.values() if isinstance(gs, dict) else []) if isinstance(w, dict)
-         for n in [w.get("nontrivial"), *(w.get("honest") if isinstance(w.get("honest"), list) else [])] if isinstance(n, str)}
+         for n in [*(nontrivials(w) or []), *(w.get("honest") if isinstance(w.get("honest"), list) else [])]
+         if isinstance(n, str)}
+
+
+def nontrivials(w) -> list[str] | None:
+    """A `witnesses` entry's `nontrivial` lemmas, first to last: its one theorem, or its non-empty list of them; None
+    for any other form."""
+    n = w.get("nontrivial") if isinstance(w, dict) else None
+    if isinstance(n, str):
+        return [n]
+    return list(n) if isinstance(n, list) and n and all(isinstance(x, str) for x in n) else None
 
 
 def generic_claims(policy: dict) -> dict[str, str]:
@@ -1959,10 +1970,10 @@ def witness_shapes(name: str, pin: dict, policy: dict, own: set[str]) -> str:
 
 def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
     """Every guarantee in scope (`witness_scope`) has two witnesses beside it (`witnesses`: {guarantee: {honest: [theorem],
-    nontrivial: theorem, kind?}}), each a guarantee, as a claim has its `fails` and `meets` (`claim_failures`), so
-    a statement that says nothing fails. Each witness constructs its instance: it takes no `∀` binder before its
-    conclusion (`instance_binders`; a `nontrivial` one, a `∀` for each `∃` of the conclusion) and no hypothesis beyond the
-    named assumptions the lock lists (`assumes`). Read as `statement_read` reads them:
+    nontrivial: theorem or [theorem, …], kind?}}), each a guarantee, as a claim has its `fails` and `meets`
+    (`claim_failures`), so a statement that says nothing fails. Each witness constructs its instance: it takes no `∀`
+    binder before its conclusion (`instance_binders`; a `nontrivial` one, a `∀` for each `∃` of the conclusion) and no
+    hypothesis beyond the named assumptions the lock lists (`assumes`). Read as `statement_read` reads them:
 
     - `honest`: together their conclusions conclude, at the honest deployed instance, each premise of the guarantee outside
       a named assumption's module and `witnesses_assumed` (`honest_premises`) and, for a property, its function's
@@ -1974,7 +1985,11 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
       `∃` of the conclusion: a conclusion with an `∃` the prover picks, and a bound whose break (`C ∨ Break`) always
       holds, fail here. For the `exclusion` kind, a conjunction at an explicit circuit: (each other premise holds) ∧
       ¬ (a named premise) ∧ ¬ (the bound) (`exclusion_failures`), so a bare `¬ bound` fails; of a guarantee that takes
-      no premise (`premise_free`), the bare `¬ bound` at an explicit circuit, where a tighter bound fails.
+      no premise (`premise_free`), the bare `¬ bound` at an explicit circuit, where a tighter bound fails;
+    - further `nontrivial` lemmas, when it is a list: the first is held as above, and each after it is in the exclusion
+      form whatever the guarantee's kind, dropping a premise that no earlier one drops (`dropped_premises`; a repeat is
+      `witnesses.nontrivial-repeat`), so each shows another premise matters, and a premise-free guarantee has none to
+      drop. Each builds its instance and assumes nothing more, as the first does.
 
     A guarantee in scope without witnesses fails unless `unwitnessed` ({guarantee: its record's type hash}, the
     guarantees in scope when the rule came) lists it with the hash of its statement as built, or, under `--moved`, with that
@@ -1989,7 +2004,7 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
     ws, allow = policy.get("witnesses", {}), policy.get("unwitnessed", {})
     if not isinstance(ws, dict) or not isinstance(allow, dict):
         return [Failure("witnesses.form", None, "witnesses: `witnesses` is {guarantee: {honest: [theorem], nontrivial: "
-                        "theorem}} and `unwitnessed` {guarantee: its type hash}")]
+                        "theorem or [theorem, …]}} and `unwitnessed` {guarantee: its type hash}")]
     guarantees, wit, fails = policy.get("guarantees", {}), claim_witnesses(policy), []
     for g in sorted(set(ws) - set(guarantees)):
         fails.append(Failure("witnesses.stale", g, f"witnesses: `witnesses` lists {g}, which is not a guarantee of this "
@@ -2030,12 +2045,13 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
             continue
         w = ws[g]
         honest = w.get("honest") if isinstance(w, dict) else None
-        if not (isinstance(w, dict) and (isinstance(w.get("nontrivial"), str) or skip == "nontrivial")
+        if not (isinstance(w, dict) and (nontrivials(w) is not None or skip == "nontrivial")
                 and ((isinstance(honest, list) and honest and all(isinstance(n, str) for n in honest)) or skip == "honest")
                 and set(w) <= {"honest", "nontrivial", "kind"}
                 and w.get("kind", kind or "acceptance") in WITNESS_KINDS):
             fails.append(Failure("witnesses.witness-form", g, f"witnesses: witnesses[{g}] is {{honest: [theorem], "
-                                 f"nontrivial: theorem, kind: {' or '.join(WITNESS_KINDS)} (optional)}}"))
+                                 f"nontrivial: theorem or [theorem, …], kind: {' or '.join(WITNESS_KINDS)} "
+                                 f"(optional)}}"))
             continue
         if kind and w.get("kind", kind) != kind:
             fails.append(Failure("witnesses.witness-form", g, f"witnesses: witnesses[{g}] says kind {w['kind']}, and {g} is "
@@ -2075,43 +2091,70 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
                                  f"say nothing)"))
         if skip == "nontrivial":
             continue
-        n = w["nontrivial"]
-        np_, why_not = witness_pin("witnesses", n, g, "nontrivial", policy, facts)
-        fails += why_not
-        if np_ is None:
-            continue
-        read, (heads, exists) = statement_read(np_), concluded(pin)
-        got = f"{'¬ ' if read.get('negated') else ''}{read.get('head') or 'no application'} …"
-        where = "the verifier that accepts everything" if kind == "acceptance" else "an explicit circuit"
-        if kind == "exclusion":
-            fails += exclusion_failures(n, g, read, np_, pin, heads)
-        elif not (read.get("negated") and {read.get("head"), *(read.get("chain") or [])} & set(heads)):
-            fails.append(Failure("witnesses.nontrivial-form", n, f"witnesses: {n} does not state that {g}'s conclusion "
-                                 f"fails at {where}: past its ∀ and ∃ binders its statement must be `¬ C …` with C one of "
-                                 f"{', '.join(heads) or 'its heads (none reported)'} or a definition unfolding to one, and "
-                                 f"it is {got}" + (" (for a bound with a break, `¬ (C … ∨ Break …)`: the break fails too)"
-                                                   if "Or" in heads else "")))
-        elif (k := trailing_foralls(list(read.get("binders") or []))) < exists:
-            fails.append(Failure("witnesses.nontrivial-exists", n, f"witnesses: {n} negates {read['head']} under {k} `∀` "
-                                 f"after its last `∃`, and {g}'s conclusion has {exists} `∃`: each is a `∀` before the `¬` "
-                                 f"(`∀ X, ¬ C … X`), since `∃ X, ¬ C … X` holds whenever the prover can pick a bad X"))
-        if (b := instance_binders(np_)) > exists:
-            fails.append(instance_failure(n, g, "nontrivial", b, exists))
-        for v in [*(["takes `False` as a hypothesis, so it proves anything"] if read.get("absurd") else []),
-                  *assumes(np_, policy, own)]:
-            fails.append(Failure("witnesses.nontrivial-assumes", n, f"witnesses: {n}, {g}'s `nontrivial` witness, {v}: it "
-                                 f"assumes nothing beyond named assumptions the lock lists"))
+        (heads, exists), dropped = concluded(pin), {}
+        for i, n in enumerate(nontrivials(w)):
+            np_, why_not = witness_pin("witnesses", n, g, "nontrivial", policy, facts)
+            fails += why_not
+            if np_ is None:
+                continue
+            read = statement_read(np_)
+            got = f"{'¬ ' if read.get('negated') else ''}{read.get('head') or 'no application'} …"
+            where = "the verifier that accepts everything" if kind == "acceptance" else "an explicit circuit"
+            if i:
+                fails += exclusion_failures(n, g, read, np_, pin, heads, "each further nontrivial lemma", further=True)
+            elif kind == "exclusion":
+                fails += exclusion_failures(n, g, read, np_, pin, heads)
+            elif not (read.get("negated") and {read.get("head"), *(read.get("chain") or [])} & set(heads)):
+                fails.append(Failure("witnesses.nontrivial-form", n, f"witnesses: {n} does not state that {g}'s "
+                                     f"conclusion fails at {where}: past its ∀ and ∃ binders its statement must be "
+                                     f"`¬ C …` with C one of {', '.join(heads) or 'its heads (none reported)'} or a "
+                                     f"definition unfolding to one, and it is {got}"
+                                     + (" (for a bound with a break, `¬ (C … ∨ Break …)`: the break fails too)"
+                                        if "Or" in heads else "")))
+            elif (k := trailing_foralls(list(read.get("binders") or []))) < exists:
+                fails.append(Failure("witnesses.nontrivial-exists", n, f"witnesses: {n} negates {read['head']} "
+                                     f"under {k} `∀` after its last `∃`, and {g}'s conclusion has {exists} `∃`: each "
+                                     f"is a `∀` before the `¬` (`∀ X, ¬ C … X`), since `∃ X, ¬ C … X` holds whenever "
+                                     f"the prover can pick a bad X"))
+            drops = dropped_premises(read, pin)
+            if i and drops and drops <= set(dropped):
+                left = sorted(premise_names(pin) - set(dropped))
+                fix = (f"drop one of {', '.join(left)} in {n} instead, or remove it" if left else
+                       "every premise is dropped already, so remove it")
+                fails.append(Failure("witnesses.nontrivial-repeat", n, f"witnesses: {n}, {g}'s `nontrivial` "
+                                     f"witness {i + 1}, drops only {', '.join(sorted(drops))}, already dropped by "
+                                     f"{', '.join(sorted({dropped[p] for p in drops}))}: each further nontrivial "
+                                     f"lemma drops a premise of {g} that no earlier one drops, so each shows another "
+                                     f"premise matters; {fix} from witnesses[{g}].nontrivial"))
+            for p in drops:
+                dropped.setdefault(p, n)
+            if (b := instance_binders(np_)) > exists:
+                fails.append(instance_failure(n, g, "nontrivial", b, exists))
+            for v in [*(["takes `False` as a hypothesis, so it proves anything"] if read.get("absurd") else []),
+                      *assumes(np_, policy, own)]:
+                fails.append(Failure("witnesses.nontrivial-assumes", n, f"witnesses: {n}, {g}'s `nontrivial` "
+                                     f"witness, {v}: it assumes nothing beyond named assumptions the lock lists"))
     return fails
 
 
-def exclusion_failures(n: str, g: str, read: dict, np_: dict, pin: dict, heads: list[str]) -> list[Failure]:
-    """How ``n``, the `nontrivial` witness of the exclusion theorem ``g``, falls short of the form it must have:
+def dropped_premises(read: dict, pin: dict) -> set[str]:
+    """The premises of the guarantee ``pin`` (`premise_names`) that a `nontrivial` lemma's statement ``read`` drops:
+    each P of a `¬ P …` conjunct of its conclusion."""
+    negs = {k.get("inner") for k in read.get("conclusion") or [] if k.get("negated") and k.get("inner")}
+    return negs & premise_names(pin)
+
+
+def exclusion_failures(n: str, g: str, read: dict, np_: dict, pin: dict, heads: list[str],
+                       lemma: str = "an exclusion's nontrivial lemma", further: bool = False) -> list[Failure]:
+    """How ``n``, the `nontrivial` witness of the exclusion theorem ``g`` (or a further one of any guarantee, ``further``,
+    ``lemma`` naming it in the failures), falls short of the form it must have:
     at an explicit circuit, (each other premise of ``g`` holds) ∧ ¬ (a named premise of ``g``) ∧ ¬ (``g``'s bound). Among
     the conjuncts of its conclusion (`Facts.lean`'s `conclusion`, in any order), one is `¬ C …` with C a head of ``g``'s
     conclusion, one is `¬ P …` with P one of ``g``'s premises (under its own `∀` binders if it has them), and the others,
     with the named assumptions ``n`` takes, conclude each other premise of ``g``. A bare `¬ bound` reads no premise, and
     is the form only where ``g`` takes none (`premise_free`): there it states that a tighter bound fails at an explicit
-    circuit, and no premise is dropped or concluded."""
+    circuit, and no premise is dropped or concluded. A further lemma drops a premise all the same, so a premise-free
+    guarantee lists none."""
     cs, out = read.get("conclusion") or [], []
     negs = {k.get("inner") for k in cs if k.get("negated") and k.get("inner")}
     premises = premise_names(pin)
@@ -2121,17 +2164,17 @@ def exclusion_failures(n: str, g: str, read: dict, np_: dict, pin: dict, heads: 
                            f"{', '.join(heads) or 'its heads (none reported)'}, and it negates "
                            f"{', '.join(sorted(negs)) or 'nothing'}"))
     dropped = negs & premises
-    if not dropped and not premise_free(pin):
-        out.append(Failure("witnesses.nontrivial-drops", n, f"witnesses: {n} drops no premise of {g}: an exclusion's "
-                           f"nontrivial lemma states, at an explicit circuit, (each other premise holds) ∧ ¬ (the dropped "
-                           f"premise) ∧ ¬ (the bound), one conjunct `¬ P …` with P one of "
+    if not dropped and (further or not premise_free(pin)):
+        out.append(Failure("witnesses.nontrivial-drops", n, f"witnesses: {n} drops no premise of {g}: {lemma} states, "
+                           f"at an explicit circuit, (each other premise holds) ∧ ¬ (the dropped premise) ∧ ¬ (the "
+                           f"bound), one conjunct `¬ P …` with P one of "
                            f"{', '.join(sorted(premises)) or 'its premises (none reported)'}; a bare `¬ bound` reads none"))
     covered = {d for k in cs if not k.get("negated") for d in [k.get("head"), *(k.get("defs") or [])]} | \
         {h["named"] for h in np_.get("hypotheses") or [] if h.get("named")}
     if kept := sorted(dropped & premise_names(np_)):
         out.append(Failure("witnesses.nontrivial-assumes", n, f"witnesses: {n}, {g}'s `nontrivial` witness, takes "
-                           f"{', '.join(kept)}, the premise it drops: an exclusion's nontrivial lemma drops the named "
-                           f"premise, and an explicit circuit then beats the bound"))
+                           f"{', '.join(kept)}, the premise it drops: {lemma} drops the named premise, and an explicit "
+                           f"circuit then beats the bound"))
     if dropped and (missing := sorted(premises - dropped - covered)):
         out.append(Failure("witnesses.nontrivial-premises", n, f"witnesses: {n} concludes nothing of {', '.join(missing)} "
                            f"at its circuit: {g}'s premises other than the one it drops ({', '.join(sorted(dropped))}) "
