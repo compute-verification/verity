@@ -12,11 +12,17 @@ proves it by walking `x`'s do block with reducible steps only, so a setup is nev
 -/
 module
 
-public import Flock.With.ReturnsWalk
 public import Flock.HmRow
-public import Flock.Witness
 public import Flock.With.Eq
+public import Flock.With.Returns
+public import Flock.With.ReturnsWalk
+public import Flock.With.Zk
 public import Flock.With.ZkEq
+public import Flock.Witness
+import Flock.Sizes
+import Std.Data.HashMap
+import Std.Data.HashSet
+import Std.Data.TreeMap.Raw.Lemmas
 
 @[expose] public section
 

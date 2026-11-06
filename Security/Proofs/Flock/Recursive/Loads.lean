@@ -1,9 +1,26 @@
 module
 
-public import Proofs.Flock.Recursive.Raw
 public import Proofs.Flock.Recursive.VStarCheck
-public import Proofs.Flock.Recursive.Written
-public import Proofs.Flock.Soundness.Discharge.FailClosed.One
+public import Proofs.Flock.Recursive.Stage
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Recursive.Written
+import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
+import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+import Proofs.Flock.Soundness.Discharge.ZkHidden.NonVacuousJ
+import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # Recursion: where V*'s statement enters a session (gap 8)

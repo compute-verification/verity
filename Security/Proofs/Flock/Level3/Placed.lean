@@ -12,6 +12,9 @@ Where no range covers `j` the matrices are Δ alone. No layout hypothesis is use
 module
 
 public import Proofs.Flock.Level3.FoldStmt
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
 
 @[expose] public section
 

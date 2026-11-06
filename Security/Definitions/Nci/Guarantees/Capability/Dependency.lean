@@ -1,6 +1,7 @@
 module
 
-public import Definitions.Nci.Capability
+public import Definitions.Nci.Capability.Consumers
+public import Definitions.Nci.Capability.Products
 
 /-!
 # Local bounds: caps from dependency

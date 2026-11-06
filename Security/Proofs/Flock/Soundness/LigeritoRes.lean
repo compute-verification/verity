@@ -1,6 +1,9 @@
 module
 
-public import Proofs.Flock.Soundness.LigeritoWeights
+public import Proofs.Flock.Soundness.LigeritoFolds
+import Proofs.Flock.Soundness.LigeritoMCA
+import Proofs.Flock.Soundness.LigeritoWeights
+import Proofs.Flock.Soundness.Rounds
 
 /-!
 # How Ligerito's weights fold (PROTOCOL.md §13.3, §13.6)

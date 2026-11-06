@@ -1,8 +1,12 @@
 module
 
+public import Definitions.Flock.Compiled
 public import Proofs.Flock.Soundness.Refine.Live
 public import Proofs.Flock.Soundness.Refine.Plays
-public import Proofs.Flock.Soundness.Model.Compiled
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import VCVio.Prelude.Core
 
 /-!
 # The table's simulation (the transfer, R11c)

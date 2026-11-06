@@ -1,8 +1,10 @@
 module
 
 public import Proofs.Flock.Soundness.ZK.GK.Sim
-public import Proofs.Flock.Soundness.ZK.Masking
 public import Proofs.Flock.Soundness.Assumptions
+import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.ZK.Masking
+import VCVio.Prelude.Core
 
 /-!
 # Zero knowledge: Theorem GK, the simulator's output is close to `V*`'s real view

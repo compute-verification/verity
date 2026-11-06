@@ -1,8 +1,15 @@
 module
 
-public import Proofs.Flock.Soundness.ZK.Refusal
+public import Definitions.Core.Game
+public import Definitions.Flock.ZK.Cut
 public import Proofs.Flock.Soundness.ZK.Adaptivity
+public import Proofs.Flock.Soundness.ZK.Dist
 public import Proofs.Flock.Soundness.ZK.RealLeaves
+public import Proofs.Flock.Soundness.ZK.Refusal
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.ZK.Hiding
 
 /-!
 # Zero knowledge: Lemma C, the pre-final views against an adaptive verifier

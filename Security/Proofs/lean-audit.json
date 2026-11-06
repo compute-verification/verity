@@ -108,31 +108,31 @@
   },
   "Proofs.Flock.Claims.KS.PushSched": {
    "why": "push_unfold and lead_unfold, local tactics that unfold the primed prover one node (a `simp only` over Lock's rightSame, leftSame, lockWith, interleaveLock, bind and oracleStrat) in the pushing chooser's proofs (firstS_push, followR_push, lead_push and the rest of the module). They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
-   "digest": "e62b9b13b899c98d9350d2ddac80bb50c62be51b376b83b2febc121dab31a393"
+   "digest": "35b23a0303b98e31542ed97b467ee2955a9f0b00a9e3bd5526090cdc0e0fe343"
   },
   "Proofs.Flock.Claims.Recursion.CallsLe": {
    "why": "keep_walk, a macro that expands to repeated refine/exact of the module's keepL/keepT bind, pure and get lemmas (a logged computation keeps its log's prefix). It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds.",
-   "digest": "92dcca8d0bd7762513d11e21511ce6591c930c57ffae5f937bbbbdf9ba2c4ea5"
+   "digest": "6a91a9fd1c68baf6988e15a9bea8d16933e8fd8a3014029eee696979c2b09d2a"
   },
   "Proofs.Flock.Claims.Recursion.CallsRep": {
    "why": "tw_walk, tw_step and lw_step, macros that expand to first/repeat' over refine/exact of the module's calcCS/calcCS2 bind, pure, throw and sample lemmas (the call bound of a rep's verification). They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
-   "digest": "6298cc1a478b999ad84a38c910d956f0e2887506ce3784f8365bb081e93d3f5b"
+   "digest": "049fc3085ea59c26316ab16d901abbc94c05a869452d842255df9111af5931e1"
   },
   "Proofs.Flock.Claims.Recursion.CallsTop": {
    "why": "cl_step, dec_step and ret_step, macros that expand to first over refine/exact of the module's CL/Ret bind, pure and throw lemmas, and cl_bind_of and cl_head, elabs that only read the goal and fail unless its program's head is the named constant. They run only inside the elaborator, read no files and do no IO, and the kernel replays every proof they build.",
-   "digest": "2310e14f7b7c1f2404df7fd10852a8e052c791e786f8493dc6f0805add075da2"
+   "digest": "026c54a0366ac1584a9019a4e248c87c2e5ec67d27e22397ed7086aed2c74562"
   },
   "Proofs.Flock.Claims.Recursion.LogWalk": {
    "why": "retl_walk, the tactic (an elab) that walks RetL goals at elaboration, step by step on the logged computation's head (retlStep, in Recursion/DecodeLog.lean's proofs and the module's own). It reads no files and does no IO, and the kernel replays every proof it builds.",
-   "digest": "690aa56388b181e93d141f7ab4d7ee926e9c0cf0b3e64c0c81ccb37daa44913b"
+   "digest": "7576ea7e0346460f3d1f421b726125ff639f4fc0f5ad1636ea68d7f3f681dd30"
   },
   "Proofs.Flock.Claims.ZK.FinishLigEnd": {
    "why": "end_l and keep_l, local tactics (two macro_rules) that walk a Ligerito step by its head to its last squeeze (EndL) or through steps that only update its state (KeepL), trying the module's endL_*/keepL_* lemmas with refine, exact and split, in ligeritoCut_end's proof. They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
-   "digest": "86eeee557231869acc7fd3a518924a3884e3879885a9015c8ea1c00eeabe16cc"
+   "digest": "51a8fe6abc030463b04e7e518d95090f7f763ed3fcd7b43bb3d6a7a021ee89eb"
   },
   "Proofs.Flock.Soundness.Refine.Walk": {
    "why": "walk_step and ret_walk, the tactics that step through a computation of the executable by its head (Refine/Setup.lean's proofs of the setups' well-formedness), and kernel_rfl, which leaves an equation to the kernel (Composed/TagsJ.lean). They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
-   "digest": "43cef63eede2b83794053d51590b5d92c6bbbe72dcc21eb9fae89de357e7545e"
+   "digest": "8c25658ddef81ef4560f6184b4272ec7f4ab7e2c4b0567e8a13410d46c83c52e"
   }
  },
  "layers": {

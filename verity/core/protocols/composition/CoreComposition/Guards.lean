@@ -9,12 +9,12 @@ module
 
 public import CoreComposition.Cases
 public import CoreComposition.Same
-public import CoreComposition.Tie
 public import CoreComposition.Stubs
+public import CoreComposition.Tie
 meta import CoreComposition.Cases
 meta import CoreComposition.Same
-meta import CoreComposition.Tie
 meta import CoreComposition.Stubs
+meta import CoreComposition.Tie
 
 @[expose] public section
 

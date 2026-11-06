@@ -2,6 +2,8 @@ module
 
 public import Definitions.Flock.Game.Seq
 public import Proofs.Flock.Soundness.Game.Runs
+import Mathlib.Analysis.Real.Sqrt
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # Sequencing strategies, and runs as a game

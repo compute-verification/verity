@@ -9,6 +9,11 @@ public import Proofs.Pouw.H1Zy.LaneBits
 public import Proofs.Pouw.H1Zy.Stream
 public import Proofs.Pouw.H1Zy.Tile
 public import Proofs.Pouw.H1Zy.LaneChunk
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Mathlib.Tactic.NormNum.Pow
 
 /-!
 # H1's drawn-leaf statements: their Definitions on words mean what `LeafChecks` reads

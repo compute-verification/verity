@@ -1,6 +1,5 @@
 module
 
-public import Std.Data.HashSet
 public import Flock.Program
 
 /-!

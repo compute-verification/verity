@@ -1,12 +1,11 @@
 module
 
-public import Mathlib.Algebra.Order.Floor.Semifield
-public import Mathlib.Tactic.Linarith
-public import Mathlib.Tactic.Positivity
-public import Mathlib.Tactic.NormNum
-public import Mathlib.Tactic.Ring
 public import Definitions.Pouw.Fp8Atom.Pinned
-public import Proofs.Pouw.Fp8Atom.Checks
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Fp8Atom.Checks.Ada
+import Proofs.Pouw.Fp8Atom.Checks.C00
+import Proofs.Pouw.Fp8Atom.Checks.C01
 
 /-!
 # Proofs of `Pouw.Fp8Atom`'s pinned statements

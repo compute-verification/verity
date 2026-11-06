@@ -1,9 +1,13 @@
 module
 
-public import Definitions.Nci.Guarantees.Covering
 public import Mathlib.Data.Fin.VecNotation
 public import Mathlib.Data.Fintype.Prod
-public import Mathlib.Tactic.NormNum
+public import Definitions.Nci.Assumptions.Covering
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Mathlib.Tactic.NormNum.Pow
 
 /-!
 # The covering bound is not vacuous

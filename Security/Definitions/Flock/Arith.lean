@@ -1,11 +1,14 @@
 module
 
 public import Mathlib.Algebra.BigOperators.Fin
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 public import Mathlib.Algebra.Field.Basic
+public import Mathlib.Algebra.Field.Defs
 public import Mathlib.Algebra.Ring.Hom.Defs
-public import Mathlib.Data.ZMod.Basic
 public import Mathlib.Data.Nat.Bitwise
+public import Mathlib.Data.ZMod.Defs
 public import Mathlib.LinearAlgebra.Matrix.Defs
+import Mathlib.Tactic.Bound.Init
 
 /-!
 # The arithmetic the verifier uses

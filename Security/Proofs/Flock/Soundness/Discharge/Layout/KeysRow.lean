@@ -1,7 +1,10 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Layout.OutShape
 public import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Aliased.Rows
+import Proofs.Flock.Soundness.Discharge.Layout.OutShape
+import Proofs.Flock.Soundness.ExecFlatCopies
 
 @[expose] public section
 

@@ -1,6 +1,21 @@
 module
 
-public import Proofs.Flock.Soundness.Refine.Lincheck
+public import Mathlib.RingTheory.Henselian
+public import Mathlib.RingTheory.RegularLocalRing.Defs
+public import Mathlib.RingTheory.SimpleRing.Principal
+public import Proofs.Flock.Soundness.Refine.Tapes
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.List.GetD
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Level3.Assembly
+import Proofs.Flock.Level3.Fold
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Refine.Arith
+import Proofs.Flock.Soundness.Refine.Exec
+import Proofs.Flock.Soundness.Refine.Plays
+import Proofs.Flock.Soundness.Refine.Zerocheck
+import VCVio.Prelude.Core
 
 /-!
 # Ring switching and batching refine the model's opening (PROTOCOL.md §12)

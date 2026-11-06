@@ -1,7 +1,13 @@
 module
 
-public import Proofs.Flock.VBridge.Algebra.RingSwitch
 public import Proofs.Flock.Soundness.Refine.Final
+public import Proofs.Flock.VBridge.Algebra.Eval
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Soundness.Refine.Arith
+import Proofs.Flock.VBridge.Algebra.Zerocheck
+import VCVio.Prelude.Core
 
 /-!
 # V*'s Ligerito residuals are zero only when Ligerito's final check passes

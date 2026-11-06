@@ -1,10 +1,8 @@
 module
 
-public import Mathlib.Algebra.Order.Chebyshev
-public import Mathlib.Combinatorics.Enumerative.DoubleCounting
 public import Mathlib.Data.Fintype.Prod
-public import Mathlib.Analysis.Real.Sqrt
-public import Mathlib.Order.ConditionallyCompleteLattice.Finset
+import Mathlib.Analysis.Real.Sqrt
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # Plurality tables, off-plurality runs and conflicting pairs

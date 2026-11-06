@@ -1,6 +1,9 @@
 module
 
 public import Definitions.Flock.Accounting.Fast100
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.IntervalCases
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # The bound for `fast100` run twice on one root

@@ -3,6 +3,7 @@ module
 public import Flock.HmRow
 public import VStar.Stream
 public import VStar.Unit
+public import VStar.PyJson
 
 /-!
 # The `flock-circuit` file of a unit (`verity_flock.circuit.compose`)

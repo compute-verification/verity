@@ -3,7 +3,6 @@ module
 public import Definitions.Pouw.PearlC.Defs
 public import Definitions.Pouw.Basic.Prob
 public import Definitions.Pouw.Basic.QTree
-public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 
 /-!
 # Pearl-C's γ-gap game and accounting (trusted)

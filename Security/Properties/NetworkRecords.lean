@@ -1,7 +1,7 @@
 module
 
-public import NetworkCheck.RecordsGrid
 public import Properties.NetworkCertifier
+public import NetworkCheck.RecordsGrid
 
 /-!
 # The records check: what acceptance by its Lean code (`NetworkCheck.Records.protocol`) means

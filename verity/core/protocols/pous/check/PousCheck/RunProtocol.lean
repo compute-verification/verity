@@ -1,6 +1,7 @@
 module
 
 public import CoreProtocol.Cli
+public import CoreProtocol.Protocol.Canonical
 public import CoreProtocol.Ratio
 public import PousCheck.Certificate
 public import PousCheck.Run

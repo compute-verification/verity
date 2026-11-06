@@ -1,10 +1,8 @@
 module
 
 public import Definitions.Nci.Guarantees.Ldl
-public import Proofs.Core.Circuit
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
-public import Mathlib.Tactic.FieldSimp
-public import Mathlib.Tactic.Linarith
+import Mathlib.Data.NNRat.Floor
+import Proofs.Core.Circuit
 
 /-!
 # Local description length on a `(c,k)`-partition: the proofs

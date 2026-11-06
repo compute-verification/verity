@@ -1,16 +1,7 @@
 module
 
-public import Mathlib.Algebra.BigOperators.Ring.Finset
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
-public import Mathlib.Data.Fintype.BigOperators
-public import Mathlib.Data.Fintype.Option
-public import Mathlib.Data.Fintype.Sum
-public import Mathlib.Tactic.GCongr
-public import Definitions.Pous
-public import Definitions.Pous.Assumptions
 public import Proofs.Pous.Statements
-public import Proofs.Pous.Sanity
-public import Proofs.Pous.Accounting.Numbers
+import Proofs.Pous.Sanity
 
 /-!
 # B5, Pietrzak's ex post facto reduction: a proof of `Pous.Guarantees.B5ExPostFacto(Bounded)`

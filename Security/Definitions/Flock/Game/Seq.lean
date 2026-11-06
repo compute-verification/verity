@@ -1,6 +1,8 @@
 module
 
-public import Definitions.Flock.Game.Expect
+public import Definitions.Flock.Game
+import Mathlib.Analysis.Real.Sqrt
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # Sequencing strategies, and runs as a game

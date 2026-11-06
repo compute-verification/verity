@@ -1,6 +1,6 @@
 module
 
-public import Flock.With.Verify
+public import Flock.With.Transcript
 
 /-!
 # The honest prover's transcript

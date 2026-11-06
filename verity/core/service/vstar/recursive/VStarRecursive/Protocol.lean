@@ -41,13 +41,14 @@ Without blobs (`toProtocol`) every check rejects: no blob holds the inner circui
 module
 
 public import CoreProtocol.Blobs
-public import SampledProofs.OneStageZk
 public import Flock
-import all Lean.Data.Json.Basic
+public import Flock.RecLinkPart
+public import SampledProofs.OneStageZk
 import all Init.Data.Ord.String
+import all Lean.Data.Json.Basic
 meta import CoreProtocol.Blobs
-meta import SampledProofs.OneStageZk
 meta import Flock
+meta import SampledProofs.OneStageZk
 
 @[expose] public section
 set_option backward.privateInPublic true

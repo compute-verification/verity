@@ -1,7 +1,5 @@
 module
 
-public import Lean
-
 /-!
 # The grader's registry, compiled into the grader
 

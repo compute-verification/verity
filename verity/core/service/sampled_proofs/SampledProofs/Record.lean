@@ -19,17 +19,19 @@ The one-stage audit record (`audit.audit_record`), whole, and what the drivers c
 -/
 module
 
+public import CoreProtocol.Profile
+public import Flock.WindowRecord
 public import SampledProofs.Bound
 public import SampledProofs.Draw
 public import SampledProofs.PyJson
-public import Flock.WindowRecord
-public import CoreProtocol.Profile
 public import Std.Data.HashMap
+import Lean.Data.Json.Parser
+import Std.Data.HashMap.Lemmas
+meta import CoreProtocol.Profile
+meta import Flock.WindowRecord
 meta import SampledProofs.Bound
 meta import SampledProofs.Draw
 meta import SampledProofs.PyJson
-meta import Flock.WindowRecord
-meta import CoreProtocol.Profile
 meta import Std.Data.HashMap
 
 @[expose] public section

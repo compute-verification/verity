@@ -1,10 +1,8 @@
 module
 
-public import Mathlib.Algebra.BigOperators.Fin
-public import Mathlib.Algebra.Order.Floor.Ring
 public import Mathlib.Data.Fintype.Pi
-public import Definitions.Pouw.Fp8Atom.H1T
 public import Definitions.Pouw.Fp8Atom.H1TVec
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 
 /-!
 # H-1T's M3 statements (trusted)

@@ -1,6 +1,8 @@
 module
 
 public import Definitions.Pous.Model.StreamedWipeDisk
+public import Definitions.Pous.Model.StreamedWipeServer
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The streamed-label wipe with a server's disks in the fill, as claims of an acceptance rule
