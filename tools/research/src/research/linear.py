@@ -472,20 +472,29 @@ class Linear:
         p = self.gql("mutation($i: ProjectCreateInput!) { projectCreate(input: $i) { project { url } } }", {"i": i})
         return f"project {name} created: {said({**shown, **opt})} {p['projectCreate']['project']['url']}"
 
-    def project_teams(self, project: str, teams: list[str]) -> str:
-        """Add `teams` (keys or names) to the active `project` (a prefix of its name), so their issues can be placed in it;
-        the teams it has stay. A line naming what was added, or that it had them all."""
-        if not teams:
-            raise LinearError("project edit: give the team to add, --team KEY (more: repeat it)")
+    def project_edit(self, project: str, teams: list[str] = (), date: str | None = None, status: str | None = None) -> str:
+        """Edit the active `project` (a prefix of its name): add `teams` (keys or names, so their issues can be placed in it;
+        the teams it has stay), set its target `date` (YYYY-MM-DD, or `none`) and its `status` (a prefix of a project
+        status's name: Backlog, Planned, In Progress, Completed, Canceled). A line with its name, target and status after,
+        and the teams it added."""
+        if not (teams or date or status):
+            raise LinearError("project edit: give --team KEY, --date YYYY-MM-DD or --status STATUS")
         p = self.project(project)
-        have = self.gql("query($id: String!) { project(id: $id) { teams { nodes { id key } } } }",
-                        {"id": p["id"]})["project"]["teams"]["nodes"]
+        fields = "name targetDate status { name } teams { nodes { id key } }"
+        now = self.gql(f"query($id: String!) {{ project(id: $id) {{ {fields} }} }}", {"id": p["id"]})["project"]
+        have, i = now["teams"]["nodes"], _input(targetDate=("--date", date))
         new = [t for t in (self.team(x) for x in teams) if t["id"] not in {h["id"] for h in have}]
-        if not new:
-            return f"{p['name']}: has every team given already"
-        self.gql("mutation($id: String!, $i: ProjectUpdateInput!) { projectUpdate(id: $id, input: $i) { success } }",
-                 {"id": p["id"], "i": {"teamIds": [h["id"] for h in have] + [t["id"] for t in new]}})
-        return f"{p['name']}: added teams {' '.join(t['key'] for t in new)}"
+        if new:
+            i["teamIds"] = [h["id"] for h in have] + [t["id"] for t in new]
+        if status:
+            i["statusId"] = _pick(self.gql("{ projectStatuses { nodes { id name } } }")["projectStatuses"]["nodes"], status,
+                                  "project status")["id"]
+        if i:
+            now = self.gql(f"mutation($id: String!, $i: ProjectUpdateInput!) {{ projectUpdate(id: $id, input: $i) "
+                           f"{{ success project {{ {fields} }} }} }}", {"id": p["id"], "i": i})["projectUpdate"]["project"]
+        return (f"{now['name']}: target {now.get('targetDate') or 'none'}, status {(now.get('status') or {}).get('name', '-')}"
+                + (f", added teams {' '.join(t['key'] for t in new)}" if new else "")
+                + ("" if i else " (nothing to change)"))
 
     def milestone(self, project: str, name: str, date: str | None = None, description: str | None = None,
                   rename: str | None = None, create: bool = False) -> str:
