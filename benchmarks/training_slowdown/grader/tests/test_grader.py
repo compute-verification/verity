@@ -25,7 +25,7 @@ from conftest import CC, LF, STEP, STRUCTURE, dot_alone, k16_steps, route_factor
 import grader as G
 from verity.ml.circuits.census import census
 from verity.ml.circuits.codec import canonical_json
-from verity.ml.circuits.program import is_input
+from verity.ml.circuits.program import REGISTRATION, input_prim
 from verity_vllm.program.frontend.train_step import primitives
 
 aten = torch.ops.aten
@@ -292,6 +292,12 @@ def test_each_class_is_priced_at_its_primitives_boolean_prices() -> None:
         "gates": 100, "ands": 30, "word_gates": 20, "unpriced_word_gates": {"q": 10}}
 
 
+def test_inputs_have_no_boolean_price() -> None:
+    """A step's inputs, a bool one among them (whose Boolean Definition is itself, no composite to compile), are bound, not
+    computed: `boolean_prices` leaves them out."""
+    assert G.boolean_prices({p.id: p for p in (input_prim(1), input_prim(32), input_prim(64, REGISTRATION))}) == {}
+
+
 @pytest.mark.slow
 def test_circuit_size_on_the_tiny_step(steps) -> None:
     """|C| of the tiny f32 step, read off its hand-over as `read` reads it: each root class at its primitives' Boolean prices,
@@ -301,6 +307,6 @@ def test_circuit_size_on_the_tiny_step(steps) -> None:
     C = G.circuit_size(G.load_handover(s.path).step)
     assert C["gates"] == sum(r["gates"] for r in C["classes"]) > 0 and C["ands"] == sum(r["ands"] for r in C["classes"])
     assert all(r["gates"] > 0 for r in C["classes"] if r["class"].startswith(G.CELL))
-    prices = G.boolean_prices({pid: fn for pid, fn in primitives(s.program).items() if not is_input(fn)})
+    prices = G.boolean_prices(primitives(s.program))
     assert set(C["unpriced_word_gates"]) == {pid for pid, p in prices.items() if p["boolean"] is None}
     assert G.priced(census(s.program), prices) == C

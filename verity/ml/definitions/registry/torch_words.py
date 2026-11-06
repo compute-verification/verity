@@ -4,6 +4,9 @@ k-th smallest value), each as torch's CUDA kernels compute it, which is torch CP
 
     I64Add_v1       (a, b: I64) -> I64            a + b modulo 2^64 (torch's int64 add wraps)
     I64Le_v1        (a, b: I64) -> BIT            signed a <= b
+    I64Shl_v1       (a, b: I64) -> I64            a << b modulo 2^64 (``bitwise_left_shift``), 0 for b < 0 or b >= 64
+    I64Shr_v1       (a, b: I64) -> I64            a >> b, the sign shifted in (``bitwise_right_shift``), by 63 for b < 0 or b >= 63
+    I64And_v1       (a, b: I64) -> I64            a & b
     SelectI64_v1    (c: BIT, a, b: I64) -> I64    c ? a : b
     I64ToU8_v1      (t: I64) -> U8                the low byte: C++'s conversion to uint8_t, modulo 2^8
     U8ToI64_v1      (t: U8) -> I64                zero-extended
@@ -31,8 +34,8 @@ import numpy as np
 from verity.ml.circuits.defs import primitive
 from verity.ml.circuits.types import Value
 
-__all__ = ["F16ToF32", "F32OrderKey", "F32ToF16Rn", "F32ToI64Rz", "I64Add", "I64Le", "I64ToF32Rn", "I64ToU8", "OrderKeyF32",
-           "SelectI64", "U8ToI64", "TORCH_WORDS", "f32_rn_of_int"]
+__all__ = ["F16ToF32", "F32OrderKey", "F32ToF16Rn", "F32ToI64Rz", "I64Add", "I64And", "I64Le", "I64Shl", "I64Shr", "I64ToF32Rn",
+           "I64ToU8", "OrderKeyF32", "SelectI64", "U8ToI64", "TORCH_WORDS", "f32_rn_of_int"]
 
 I64, U8, F16, F32, BIT = Value(64), Value(8), Value(16), Value(32), Value(1)
 M64, M32 = (1 << 64) - 1, 0xFFFFFFFF
@@ -74,6 +77,26 @@ def I64Add(a: int, b: int) -> int:
 def I64Le(a: int, b: int) -> int:
     """a <= b as signed 64-bit integers."""
     return 1 if _s64(a) <= _s64(b) else 0
+
+
+@primitive("I64Shl", 1, [("a", I64), ("b", I64)], I64, conformance=_EXACT)
+def I64Shl(a: int, b: int) -> int:
+    """a shifted left by b modulo 2^64, as unsigned; 0 for b < 0 or b >= 64 (torch's kernels test the amount first)."""
+    b = _s64(b)
+    return 0 if b < 0 or b >= 64 else (a << b) & M64
+
+
+@primitive("I64Shr", 1, [("a", I64), ("b", I64)], I64, conformance=_EXACT)
+def I64Shr(a: int, b: int) -> int:
+    """a shifted right by b with its sign shifted in; by 63 for b < 0 or b >= 63, every bit the sign."""
+    b = _s64(b)
+    return (_s64(a) >> (63 if b < 0 or b >= 63 else b)) & M64
+
+
+@primitive("I64And", 1, [("a", I64), ("b", I64)], I64, conformance=_EXACT)
+def I64And(a: int, b: int) -> int:
+    """a & b on 64-bit words."""
+    return a & b & M64
 
 
 @primitive("SelectI64", 1, [("c", BIT), ("a", I64), ("b", I64)], I64, conformance=_EXACT)
@@ -155,5 +178,5 @@ def OrderKeyF32(k: int) -> int:
     return k ^ 0x80000000 if k >> 31 else k ^ M32
 
 
-TORCH_WORDS = [I64Add, I64Le, SelectI64, I64ToU8, U8ToI64, I64ToF32Rn, F32ToI64Rz, F32ToF16Rn, F16ToF32, F32OrderKey,
-               OrderKeyF32]
+TORCH_WORDS = [I64Add, I64Le, I64Shl, I64Shr, I64And, SelectI64, I64ToU8, U8ToI64, I64ToF32Rn, F32ToI64Rz, F32ToF16Rn, F16ToF32,
+               F32OrderKey, OrderKeyF32]
