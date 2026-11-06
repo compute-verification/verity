@@ -41,7 +41,7 @@ from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, array_of, concat, runs
 from verity.ml.definitions.registry import b1, b1_tp2
 from verity_vllm.pipeline import cli
-from verity.ml.circuits.types import Array, Record, Value
+from verity.ml.circuits.types import Array, RecordType, Value
 
 BF16, I32 = Value(16), Value(32)
 BF, I32D, I64D = "bfloat16", "int32", "int64"
@@ -429,7 +429,7 @@ def test_fold_rule_resolves_both_ranks():
         assert r.tp == {"rank": rank, "world": WORLD}
         assert [n for n, _ in r.params] == ["prompt", "peers", "weights"]          # weights LAST; peers between the request inputs and them
         peers_t = dict(r.params)["peers"]
-        assert isinstance(peers_t, Record)
+        assert isinstance(peers_t, RecordType)
         assert [(n, t.n, t.elem.n) for n, t in peers_t.fields] == [("s0_k0", 2, H), ("s0_k1", 2, H), ("s0_k2", 1, VS), ("s1_k0", 1, H), ("s1_k1", 1, H), ("s1_k2", 1, VS)]
         assert [(c["step"], c["k"], c["kind"], c["site"], c["rows"], c["N"]) for c in r.collectives] == [
             (0, 0, "all_reduce", "model.embed_tokens", 2, H), (0, 1, "all_reduce", "model.layers.0.self_attn.o_proj", 2, H),
@@ -471,7 +471,7 @@ def test_persisted_record_states_the_layout(tmp_path):
     pj = json.loads((tmp_path / "program.json").read_text())
     assert [n for n, _ in pj["params"]] == ["prompt", "peers", "weights"] and pj["tp"] == {"rank": 0, "world": 2}
     assert [f["name"] for f in pj["peers_layout"][0]["fields"]] == ["s0_k0", "s0_k1", "s0_k2", "s1_k0", "s1_k1", "s1_k2"]
-    assert pj["n_input_nodes"] == 3       # prompt, peers (one homogeneous Record), weights (one homogeneous Record)
+    assert pj["n_input_nodes"] == 3       # prompt, peers (one homogeneous RecordType), weights (one homogeneous RecordType)
     rows = [json.loads(l) for l in (tmp_path / "instances.jsonl").read_text().splitlines()[1:]]
     coll = [o for o in rows if o.get("collective")]
     assert len(coll) == 2 + 2 + 1 + 1 + 1 + 1 and coll[0]["collective"]["site"] == "model.embed_tokens"

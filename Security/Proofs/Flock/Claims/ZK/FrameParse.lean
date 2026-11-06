@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkView.Decode
-import Flock.Firewall.Frame
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkView.Decode
+public import Flock.Firewall.Frame
 
 /-!
 # The frame's round over a round's frames
@@ -20,6 +22,8 @@ loop on those bytes:
   `absorb1` over the values its body holds (`observe_loop`), read through the frame's own byte reads (`header_at`,
   `body_at`, `word_lo`, `word_hi`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

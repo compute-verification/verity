@@ -1,4 +1,6 @@
-import Proofs.Flock.C3.Sparse.Read
+module
+
+public import Proofs.Flock.C3.Sparse.Read
 
 /-!
 # A play of a rep's sparse phase is a RecSparse unit
@@ -10,6 +12,8 @@ message ports' offsets (`swOf`), and its coins are words (`coins_ofFn`). The uni
 steps (`sparse_refines`, `playsT_stepsOf`), and a game plays on at most one prefix of a tape to one output
 (`playsT_prefix`), so that row ends at the play's claim, which is the registered one at the `claim` port.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Sparse
 

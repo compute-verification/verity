@@ -1,5 +1,7 @@
-import Definitions.Pous.P2.Cost
-import Proofs.Pous.P2.Domain
+module
+
+public import Definitions.Pous.P2.Cost
+public import Proofs.Pous.P2.Domain
 
 /-!
 # Slack rows: an adversary with `λ` extra state bits per block
@@ -9,6 +11,8 @@ import Proofs.Pous.P2.Domain
 state of `⌊ρ·|C|⌋ + λ·B` bits and a target error `2^-e` (`P2RowE`, `slack_of_row`). The rows at `B = 2^19` are certified
 with the largest `g` the exact 1% inequality allows (`row_b19_*`), and the families with a uniform `g = ⌊c·B⌋ + 1`
 (`row_uniform_gen`). -/
+
+@[expose] public section
 
 namespace PousMargin
 

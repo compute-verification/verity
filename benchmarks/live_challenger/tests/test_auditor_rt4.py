@@ -15,17 +15,19 @@ are the verifier's tests."""
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import os
 import shutil
 import subprocess
 import sys
+import tarfile
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.sampled_proofs import remote as R
+from verity.core.protocols.sampled_proofs import challenger as Ch, remote as R
 from verity.ml.crypto import lms
 
 HERE = Path(__file__).resolve().parent
@@ -179,6 +181,53 @@ def test_the_open_answer_status_and_end_carry_the_coin_commitment_the_hello_answ
     assert end["body"]["commitment"] == hello[0] == A.await_commitment(host, session, active=lambda s: True)
     rc, out = ssh(host, signer, f"status {session}")
     assert rc == 0 and json.loads(out)["commitment"] == hello[0]
+
+
+def test_a_withheld_sessions_gate_gives_no_coin_commitment_root_and_fetches_no_record_before_its_end(host, signer, tmp_path,
+                                                                                                    monkeypatch):
+    """A sampled-proofs window's session (`reserve --withhold`): its reserve and open say `withheld: true` (so
+    `challenger.withheld_on` takes its window), serve.py runs it `--withhold`, and its hello answers the layout alone.
+    Until its end entry the gate hands out no root: the open's answer, though `ready` has one, and `status` carry
+    `commitment` null, and `fetch` refuses, though serve.py has written out/record.json. Once its end is in, `status`
+    gives the root the challenger released at the client's close, and `fetch` the directory with its record."""
+    rc, out = ssh(host, signer, RESERVE + " --withhold")
+    assert rc == 0 and json.loads(out)["withheld"] is True, out
+    session = json.loads(out)["session"]
+    rc, out = ssh(host, signer, f"open --session {session} --root {COMMIT}", ready=lambda s: "ef" * 64)
+    got = json.loads(out)
+    assert rc == 0 and got["withheld"] is True and got["signed"] is True and got["commitment"] is None, got
+    assert "ef" * 64 not in out.decode()
+    lines = A.read_ledger(host.ledger)
+    s = A.sessions_of(lines)[session]
+    assert s["reserve"]["body"]["withheld"] is True and s["open"]["body"]["withheld"] is True
+    assert Ch.withheld_on([ln.decode() for ln in lines], COMMIT)
+    assert A.serve_argv(host, session, s["open"]["body"])[-1] == "--withhold"
+
+    seen = {}
+
+    def client(c):
+        seen.update(client=c, hello=(c.withheld, c.commitment))
+        c.open(SALT, 0, bytes.fromhex(COMMIT))
+        seen["record"] = (host.sessions / session / "out" / R.RECORD).is_file()
+        seen["status"] = json.loads(ssh(host, signer, f"status {session}")[1])
+        seen["fetch"] = ssh(host, signer, f"fetch {session}")
+
+    end = serve(host, signer, session, client, tmp_path, monkeypatch)
+    assert seen["hello"] == (True, None) and seen["record"]
+    assert seen["status"]["end"] is None and seen["status"]["commitment"] is None, seen["status"]
+    rc, out = seen["fetch"]
+    assert rc == 3 and "withheld, and its end is not in the ledger" in json.loads(out)["refused"]
+
+    released = seen["client"].commitment.root.hex()
+    assert end["body"]["closed"] is True and end["body"]["commitment"] == released
+    rc, out = ssh(host, signer, f"status {session}")
+    assert rc == 0 and json.loads(out)["commitment"] == released
+    rc, out = ssh(host, signer, f"fetch {session}")
+    assert rc == 0
+    with tarfile.open(fileobj=io.BytesIO(out)) as tar:
+        assert f"{session}/out/{R.RECORD}" in tar.getnames()
+    I, verify = verify_under(host)
+    assert A.verify_ledger(A.read_ledger(host.ledger), I, verify)[COMMIT]["end"] == end
 
 
 def test_rt4_int_30_a_trailing_newline_or_a_period_opens_nothing_and_an_uppercase_root_is_refused(host, signer, capsys):

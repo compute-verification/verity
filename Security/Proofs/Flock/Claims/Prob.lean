@@ -1,4 +1,6 @@
-import Definitions.Claims
+module
+
+public import Definitions.Claims
 
 /-!
 # Uniform averages over finite coin spaces
@@ -6,6 +8,8 @@ import Definitions.Claims
 Lemmas on `Claims.Pr` and `Claims.Ex`: bounds, congruence, events of some coordinates of a product, a product of
 independent events, and the uniform round guess.
 -/
+
+@[expose] public section
 
 namespace Claims
 

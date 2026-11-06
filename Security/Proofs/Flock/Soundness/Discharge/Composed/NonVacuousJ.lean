@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Composed.CustodyJJson
-import Proofs.Flock.Soundness.Assumptions.CustodyZk
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.CustodyJJson
+public import Proofs.Flock.Soundness.Assumptions.CustodyZk
 
 /-!
 # The `J`-table statements' draw hypotheses hold together
@@ -26,6 +28,8 @@ What none of this covers: that a session `verify --zk` accepts exists at a draw 
 the kernel can't evaluate: setupH hashes and parses the inputs), `RecordsLiveZKJ` (custody of `wr`), the input facts
 `hU`, `hpub`, `hpt`, `hscope`, `hkd`, A3, and the count curve's parameters and `TableCRZ`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 

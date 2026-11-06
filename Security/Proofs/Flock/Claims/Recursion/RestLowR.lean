@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.DecompBDeployed
-import Proofs.Flock.Claims.Recursion.CapLowerPin
-import Proofs.Flock.Claims.Recursion.ResLowJP
+module
+
+public import Proofs.Flock.Claims.Recursion.DecompBDeployed
+public import Proofs.Flock.Claims.Recursion.CapLowerPin
+public import Proofs.Flock.Claims.Recursion.ResLowJP
 
 /-!
 # The rest's lowering (`RestLowR`, `SaltRowRest`) at the layout of record, and its joint form
@@ -37,6 +39,8 @@ true and free of collisions. The facts that don't read across parts stay at `Joi
   where `SaltRowsJ` alone stands for both leaves and the cap tie is `OutBindRP` and `SideCapR` (`capTop_ofP`).
 -/
 
+@[expose] public section
+
 namespace RecDeploy.RestLow
 
 open Flock
@@ -70,10 +74,10 @@ theorem decompBP_lastSplitP_sharesJR (ownB : Msg → VerdictR → Option ℕ) (o
     (rel' : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings) (L : LayoutB)
     (IV : Claims.Verifier Coin) (shape : Claims.Recursion.Form → Prop) {Col' T' : Type}
     (DO : Claims.Flock.Deploy Coin Col' T') (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg)
-    (hR : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+    (hR : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recBound rel' b L IV).parse x = some st → shape st.form →
       ∀ r ∈ (lastSplitP H rd pieces pholds hpieces).checks (Claims.Recursion.xI (recBound rel' b L IV) x), ∀ s,
         ownP ownB ownQ x r = some s → s < (recBound rel' b L IV).nS x)
-    (hrest : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+    (hrest : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recBound rel' b L IV).parse x = some st → shape st.form →
       ∀ q ∈ ivChecks (bdDeployed rel (nextR rd) colsE wE FlockDeploy.joinR rowIn final w)
           (deploySplit H rel (nextR rd) colsE wE FlockDeploy.joinR rowIn final w (nextR_coin rd H)
             (lastSplitP H rd pieces pholds hpieces).toLast)
@@ -86,7 +90,7 @@ theorem decompBP_lastSplitP_sharesJR (ownB : Msg → VerdictR → Option ℕ) (o
             (deploySplit H rel (nextR rd) colsE wE FlockDeploy.joinR rowIn final w (nextR_coin rd H)
               (lastSplitP H rd pieces pholds hpieces).toLast)
             (Claims.Recursion.xI (recBound rel' b L IV) x) c (L.msgs x ws))
-    (hlowR : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+    (hlowR : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recBound rel' b L IV).parse x = some st → shape st.form →
       ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
         JointP H (recBound rel' b L IV) L (PartAcceptsP H (recBound rel' b L IV) DO L shape shows cmt) x c ws →
         ∀ s < (recBound rel' b L IV).nS x,
@@ -95,7 +99,7 @@ theorem decompBP_lastSplitP_sharesJR (ownB : Msg → VerdictR → Option ℕ) (o
               (lastSplitP H rd pieces pholds hpieces).toLast)
             (ownHolders (recBound rel' b L IV) L (ownDeploy (ownJ (recBound rel' b L IV) L (ownP ownB ownQ))))
             s x c (L.msgs x ws))
-    (hlowP : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+    (hlowP : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recBound rel' b L IV).parse x = some st → shape st.form →
       ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
         JointP H (recBound rel' b L IV) L (PartAcceptsP H (recBound rel' b L IV) DO L shape shows cmt) x c ws →
         ∀ s < (recBound rel' b L IV).nS x,
@@ -126,10 +130,10 @@ theorem decompBV_lastSplitP_sharesJRV (ownB : Msg → VerdictR → Option ℕ) (
     (IV : Claims.Verifier Coin) (shape : Claims.Recursion.Form → Prop) {Col' T' : Type}
     (DO : Claims.Flock.Deploy Coin Col' T') (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg)
     (ok : Msg → List Msg → List Claims.Flock.Wit → Prop)
-    (hR : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+    (hR : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recBound rel' b L IV).parse x = some st → shape st.form →
       ∀ r ∈ (lastSplitP H rd pieces pholds hpieces).checks (Claims.Recursion.xI (recBound rel' b L IV) x), ∀ s,
         ownP ownB ownQ x r = some s → s < (recBound rel' b L IV).nS x)
-    (hrest : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+    (hrest : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recBound rel' b L IV).parse x = some st → shape st.form →
       ∀ q ∈ ivChecks (bdDeployed rel (nextR rd) colsE wE FlockDeploy.joinR rowIn final w)
           (deploySplit H rel (nextR rd) colsE wE FlockDeploy.joinR rowIn final w (nextR_coin rd H)
             (lastSplitP H rd pieces pholds hpieces).toLast)
@@ -142,7 +146,7 @@ theorem decompBV_lastSplitP_sharesJRV (ownB : Msg → VerdictR → Option ℕ) (
             (deploySplit H rel (nextR rd) colsE wE FlockDeploy.joinR rowIn final w (nextR_coin rd H)
               (lastSplitP H rd pieces pholds hpieces).toLast)
             (Claims.Recursion.xI (recBound rel' b L IV) x) c (L.msgs x ws))
-    (hlowR : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+    (hlowR : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recBound rel' b L IV).parse x = some st → shape st.form →
       ∀ (c : ℕ → Coin) (xs : List Msg) (ws : List Claims.Flock.Wit),
         OpenLower.JointV H (recBound rel' b L IV) L (PartAcceptsV H (recBound rel' b L IV) DO L shape shows cmt) x c
           xs ws →
@@ -152,7 +156,7 @@ theorem decompBV_lastSplitP_sharesJRV (ownB : Msg → VerdictR → Option ℕ) (
               (lastSplitP H rd pieces pholds hpieces).toLast)
             (ownHolders (recBound rel' b L IV) L (ownDeploy (ownJ (recBound rel' b L IV) L (ownP ownB ownQ))))
             s x c (L.msgs x ws))
-    (hlowP : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+    (hlowP : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recBound rel' b L IV).parse x = some st → shape st.form →
       ∀ (c : ℕ → Coin) (xs : List Msg) (ws : List Claims.Flock.Wit),
         OpenLower.JointV H (recBound rel' b L IV) L (PartAcceptsV H (recBound rel' b L IV) DO L shape shows cmt) x c
           xs ws → ok x xs ws →
@@ -220,7 +224,7 @@ def SaltRowsJ : Prop :=
 accepts at the parts' own messages, part `s`'s salts and rows of the rounds it holds first, and the record's reading
 where it holds the last round first, there. -/
 def RestLowJ : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), parse x = some st → Claims.Recursion.Form.Dense st.form →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), parse x = some st → Claims.Recursion.Form.Dense st.form →
     ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
       Joint FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L) L
         (acceptsL rd b aux nOf hd rest wE final w L) x c ws →
@@ -278,7 +282,7 @@ theorem recKSDecompLV_of_leavesJS (shows : ℕ → Msg → Msg → (ℕ → Coin
     (hB : BasesHold rd) (hF : FinalReadsL final L) (hLn : RoundLensL L) (hRd : ReadsAtL rd final L)
     (hSR : SaltRowRest rd b aux nOf hd rest wE final w L) (hOwn : PiecesOwned resP key ownR)
     (hlowR : RestLowJ rd b aux nOf hd rest wE final w L)
-    (hres : ∀ (x : Msg) (st : Claims.Recursion.Stmt), parse x = some st → Claims.Recursion.Form.Dense st.form →
+    (hres : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), parse x = some st → Claims.Recursion.Form.Dense st.form →
       ∀ (c : ℕ → Coin) (xs : List Msg) (ws : List Claims.Flock.Wit),
         OpenLower.JointV FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L) L
           (PartAcceptsV FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L)

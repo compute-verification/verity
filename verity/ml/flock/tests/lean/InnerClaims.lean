@@ -8,9 +8,10 @@ the batched target `T` and the batching coins `γ`). It runs each rep's zerochec
 `verifyRep` does, Merkle openings included, and writes nothing unless every check passes. For
 `tests/fixtures/inner_claims.json` (`verity_flock.rec_algebra`'s tests); regenerate with `tests/lean/generate_inner_claims.sh`.
 
-    lean --run InnerClaims.lean [--partition FILE] STATEMENT CIRCUIT PUBLIC SESSION_DIR [os]
+    lean --run InnerClaims.lean [--partition FILE] STATEMENT CIRCUIT PUBLIC SESSION_DIR [tree]
 
-`os`: a session on the verifier's live OS coins (`verify --coins os`, recursion's inner session), else seeded coins.
+`tree`: a session on the challenger's coin tree, as a recursive session's inner statement is (`RecVStar.innerTree`),
+else seeded coins.
 A record that keeps a draw of every unit (the recursion's inner session, `rec_live --draw`) is read at the drawn
 statement, as V*'s check 5 reads it (`RecCoins.drawnSpec`).
 `--partition`: the verifier's copy of the `verity/partition/v1` object a circuit binds (`verify --partition`).
@@ -52,7 +53,7 @@ def lincheckComb (c : CircuitFold) (zc : ZcOut) (p : LincheckProof) : TM (LcOut 
 
 def claimJson (c : Claim) : Json := Json.mkObj [("value", hx c.value), ("skip", hxs c.skip), ("x", hxs c.x)]
 
-def dumpRep (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session) (r : Nat) (bytes : ByteArray) : V Json := do
+def dumpRep (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : RunRecord) (r : Nat) (bytes : ByteArray) : V Json := do
   let t := spec.tables[0]!
   let name := s!"{t}/rep{r}"
   let some stream := sess.streams.find? (·.name == name) | throw s!"no stream {name}"
@@ -83,12 +84,11 @@ def main (args : List String) : IO UInt32 := do
     | "--partition" :: f :: rest => (rest, some f)
     | _ => (args, none)
   let (args, coins) := match args with
-    | [sid, circuit, pub, dir, "os"] => ([sid, circuit, pub, dir], Coins.os)
+    | [sid, circuit, pub, dir, "tree"] => ([sid, circuit, pub, dir], RecVStar.innerTree)
     | _ => (args, Coins.seed)
   let [sid, circuit, pub, dir] := args
-    | IO.eprintln "usage: lean --run InnerClaims.lean [--partition FILE] STATEMENT CIRCUIT PUBLIC SESSION_DIR [os]"; return 2
+    | IO.eprintln "usage: lean --run InnerClaims.lean [--partition FILE] STATEMENT CIRCUIT PUBLIC SESSION_DIR [tree]"; return 2
   let some tags := Tags.find? sid | IO.eprintln s!"unknown statement {sid}"; return 2
-  let tags := tags.withCoins coins
   let circuitB ← IO.FS.readBinFile circuit
   let pubB ← IO.FS.readBinFile pub
   let record ← IO.FS.readFile (dir ++ "/session.json")

@@ -5,7 +5,7 @@ counted by name, and the client's own reader (`remote._Wire`) reads the re-cut s
 forged, replayed, out-of-order, unrequested or non-canonical opening, and a frame of another type, are each counted and
 never exempt; the challenger's and the prover's timing within a bucket is re-clocked away, so the other side sees the same
 cells in the same buckets; and a prover that stops reading or hangs up, a queue past its bound, a frame `remote` refuses
-whole, cells queued when their connection is cut and a late tick each fail the link-window closed."""
+whole, cells queued when their connection is cut and a late tick each fail the execution phase closed."""
 
 from __future__ import annotations
 
@@ -288,7 +288,7 @@ def test_an_honest_session_passes_with_its_coins_exempt_and_every_other_frame_co
     """hello, three opens of two families and close: the prover's own reader takes the commitment, three openings that
     open against the committed root for what it asked, and closed; the challenger's reader takes the prover's five
     frames as it sent them; the coins' bytes are exactly the three opening frames', the commitment and closed frames
-    are counted by name, every write is whole cells, at most r a bucket, and every link-window is complete."""
+    are counted by name, every write is whole cells, at most r a bucket, and every execution phase is complete."""
     link, (prover,), ch = session([{"frames": honest_frames(ASKS)}])
     heads = wire_heads(prover.received())
     assert [h["type"] for h in heads] == ["commitment", "opening", "opening", "opening", "closed"]
@@ -425,7 +425,7 @@ def test_timing_within_a_bucket_is_re_clocked_away(seed):
 
 
 def test_the_link_stops_at_its_window_boundary():
-    """Stopped at tick 7 with no connection, the link ticks on to the end of its link-window and no further."""
+    """Stopped at tick 7 with no connection, the link ticks on to the end of its execution phase and no further."""
     link, _, _ = session([], stop_at=7)
     assert link.ticks == PARAMS.window and statuses(link) == [(None, None)] and link.summary()["complete"]
 

@@ -1,18 +1,20 @@
-import Proofs.Flock.C3.RegLevels.ROpens
-import Proofs.Flock.C3.RegLevels.SrcUnits
-import Proofs.Flock.C3.RegLevels.Maps
-import Proofs.Flock.C3.Reps.SrcOpens
-import Proofs.Flock.C3.Reps.IoCols
-import Proofs.Flock.C3.Reps.ReadSib
-import Proofs.Flock.C3.Reps.SrcOK
-import Proofs.Flock.C3.PubRows.Shape
-import Proofs.Flock.C3.VStarList.Statements
-import Proofs.Flock.Soundness.Refine.Seam
+module
+
+public import Proofs.Flock.C3.RegLevels.ROpens
+public import Proofs.Flock.C3.RegLevels.SrcUnits
+public import Proofs.Flock.C3.RegLevels.Maps
+public import Proofs.Flock.C3.Reps.SrcOpens
+public import Proofs.Flock.C3.Reps.IoCols
+public import Proofs.Flock.C3.Reps.ReadSib
+public import Proofs.Flock.C3.Reps.SrcOK
+public import Proofs.Flock.C3.PubRows.Shape
+public import Proofs.Flock.C3.VStarList.Statements
+public import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
 # n11: R's openings at `pR`, read from the layers (`ROpensOfLayers`, `RRowsPinned`)
 
-At the proof G's lig lane builds (`pR` over `StackedMaps.ops`), R's openings are `ligOfRead`'s at R's rows and siblings.
+At the proof Lig.lean builds (`pR` over `StackedMaps.ops`), R's openings are `ligOfRead`'s at R's rows and siblings.
 Where those are the read of R's map's units (`StackedReads`, by construction) and that read's columns are input columns
 a row reads (`StackedOpenCols`, `RepMaps.OpenCols`' form at R's map), `opensReadAt_two_of_layers`' hypotheses both hold.
 `StackedOpenCols` is `RepMaps.openCols_of_readCol`'s at R's map (`stackedOpenCols_of`), from its units' parameters
@@ -40,6 +42,8 @@ and R's shape at `fast100`'s schedule at R's `m` (`shape?_opening`).
   the woven steps have its kinds, messages and coin steps (`levelTie_of_maps`' `hk`, `hl` and its coins), and no tie
   changes them (`lg_tied_repsOfVals_ligOfVals`); `os_two_tied_repsOfVals_ligOfVals` is its `ho`.
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 
@@ -576,7 +580,7 @@ theorem ligSteps_of_plays {u : C3Run (holoAt st hp)} {ms : List FlockSoundness.G
   FlockC3.Reps.Woven.steps ⟨hu, FlockC3.Reps.tapeAlong_of_plays
     (FlockSoundness.Discharge.Exec.ligeritoC_spine (D := Dig) FlockSoundness.execArith 2 _ T₀ b) h⟩
 
-/-- **R's Ligerito steps at the reps' tied source over `ligOfVals`** are its weave (`MapsLeft`'s, where `ms` and `cs`
+/-- **R's Ligerito steps at the reps' tied source over `ligOfVals`** are its weave (where `ms` and `cs`
 are R's proof's messages and `stacked/rep0`'s rounds from the ring switches' `k₂`): no tie changes the steps. -/
 theorem lg_tied_repsOfVals_ligOfVals
     (stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))

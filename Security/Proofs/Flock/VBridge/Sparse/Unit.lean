@@ -1,4 +1,6 @@
-import Flock.RecSparse
+module
+
+public import Flock.RecSparse
 
 /-!
 # The verifier's `rec-sparse/…` unit
@@ -7,6 +9,8 @@ import Flock.RecSparse
 itself at the shape its name gives (`RecSparse.unitNet`, `rec_sparse.lowering` as `Flock.RecSparse` states it), and
 `HmRow.parse` calls it on every circuit (`ParseFacts.recSparse`). `check_sparse` states what it accepted.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Sparse
 

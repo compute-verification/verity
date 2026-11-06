@@ -1,5 +1,7 @@
-import Definitions.Claims.Recursion
-import Proofs.Flock.Claims.Recursion.Compose
+module
+
+public import Definitions.Claims.Recursion
+public import Proofs.Flock.Claims.Recursion.Compose
 
 /-!
 # The recursion's cost, from the outer extractor's
@@ -11,6 +13,8 @@ claim (`Claims.Recursion.Efficient`) is the composed extractor's at the outer ex
 so the worst-case half of `Efficient` is proved (`efficient_le`); `CostExp` proves `E_O`'s expectation, and so
 `Efficient` (`efficient`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

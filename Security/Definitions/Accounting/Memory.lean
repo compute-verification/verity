@@ -1,5 +1,7 @@
-import Definitions.Pous.Model.Audit
-import Definitions.Pous.Model.SampledAudit
+module
+
+public import Definitions.Pous.Model.Audit
+public import Definitions.Pous.Model.SampledAudit
 
 /-!
 # Memory adds, by counting: the vocabulary (trusted)
@@ -16,6 +18,8 @@ acceptance of the rest.
 one for each `z`, that the state held before every challenge reads back as `z`. The statements are in
 `Security/Definitions/Accounting/Guarantees/Memory.lean`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Memory
 

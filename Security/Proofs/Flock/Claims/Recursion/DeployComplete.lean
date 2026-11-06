@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.Deploy
+module
+
+public import Proofs.Flock.Claims.Recursion.Deploy
 
 /-!
 # The compiled verifier's completeness error is below `1`
@@ -9,6 +11,8 @@ numbers are stated at (`FlockDeploy.PlainIn`: at most `200` tables at `m ≤ 35`
 `m ≤ 35`, and at most `2^64` parts, it is at most `(44·n_I + 50·n_S)/2^128 < 1` (`δcRec_le`, `δcRec_lt_one`): at most
 `44` outer coins per inner table (`ε_le`), and `50` coins at each V* session's one table (`εO_le`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

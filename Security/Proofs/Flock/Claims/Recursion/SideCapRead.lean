@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.CapLower
-import Proofs.Flock.Claims.Recursion.RestFinal
+module
+
+public import Proofs.Flock.Claims.Recursion.CapLower
+public import Proofs.Flock.Claims.Recursion.RestFinal
 
 /-!
 # The reader's cap at level 0 (`SideCapR`), at the deployed `finalR` and `DeployedR.layR`
@@ -20,6 +22,8 @@ row carries (`CapEntryR`). At level 0 the side's cap is `capR`: the nodes of the
 position at level 0 is below the cap's `N` nodes, at one of the table's two reps (`PosCap0`), and the levels above
 0 (`SideCapUp`), whose caps are the stream rounds' tops (`topGroups` of the `capOpenAt` openings).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.CapLower
 

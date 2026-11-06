@@ -1,8 +1,12 @@
-import Definitions.Pouw.Game.Defs
+module
+
+public import Definitions.Pouw.Game.Defs
 
 /-!
 # The chain's parameters (trusted)
 -/
+
+@[expose] public section
 
 namespace Pouw
 

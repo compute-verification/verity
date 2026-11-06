@@ -49,4 +49,4 @@ Seed authored by {{policy.seed_author}} {{policy.seed_utc}} from the rulings in 
 ## Classification
 - Rows report in {{count_word:classification.states}} states: {{slashlist:classification.states}}, plus the sub-state "{{classification.sub_state}}".
 - GENUINELY BLOCKED requires a reproduced, quantitative failure under the best known implementation on a named resource class, with the kill reason and peak evidence recorded; a mechanism claim additionally requires a controlled experiment.
-- Padded rows carry their actual population and query (`{{classification.padded_query}}`), labelled separately from active-reference rows; equal draw counts are an engineering-cost comparison, not an integrity claim.
+- Padded rows carry their actual population and query (`{{classification.padded_query}}`), labelled separately from active-reference rows; equal sample counts are an engineering-cost comparison, not an integrity claim.

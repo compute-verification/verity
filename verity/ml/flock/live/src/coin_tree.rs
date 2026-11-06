@@ -1,7 +1,7 @@
-//! The verifier's per-session coin commitment (lane flock-zk, C-Flock ZK; soundness ASSUMPTIONS.md §2 and §6, DESIGN.md §11.1), keyed
+//! The verifier's per-session coin commitment (C-Flock ZK; soundness ASSUMPTIONS.md §2 and §6, DESIGN.md §11.1), keyed
 //! (`coin-tree/hm96-sha512/v2`, docs/coin-tree-v2.md).
 //!
-//! At `Hello`, before the prover's first message, the verifier draws every coin of the session and commits to all of them
+//! At `Hello`, before the prover's first message, the verifier samples every coin of the session and commits to all of them
 //! at once: one SHA-512 Merkle root over Halevi–Micali commitments, one leaf per (stream, round), each stream (a table's
 //! repetition, or the session's own link points) a subtree. Each round's coins are opened with the round's answer, and the
 //! prover checks the opening against the root before it uses a coin ([`Checked`]). No coin is derived from another: no PRF.
@@ -27,7 +27,7 @@ pub const SCHEME: &str = "coin-tree/hm96-sha512/v2";
 pub const SALT_BYTES: usize = 192;
 pub const KEY_BYTES: usize = 256;
 pub const NONCE_BYTES: usize = 32;
-/// The session's own stream: round 0 is the link points drawn at `Commit`.
+/// The session's own stream: round 0 is the link points sampled at `Commit`.
 pub const SESSION: &str = "session";
 // hm96-sha512/v1's prefixes (verity/ml/commitments/hm96/PROTOCOL.md §2), zero-padded to 128 bytes
 const SALT_TAG: &[u8] = b"verity/hm96-sha512/salt/v1\0";
@@ -337,6 +337,62 @@ impl CoinTree {
             w.extend(words64(bytes(&h)));
         }
         Ok((coins, w))
+    }
+}
+
+/// A session's committed coins as the verifier's coin server holds them: drawn here ([`CoinTree`]), or sampled by the
+/// challenger ([`crate::tree_from`]), which keeps the coins and salts on its host and opens each round after what it follows.
+/// Either way `Hello` is answered with the root and the session key, and each round with its coins and their opening.
+pub struct Held {
+    pub spec: Spec,
+    root: [u8; 64],
+    key: Box<[u8; KEY_BYTES]>,
+    source: Source,
+}
+
+enum Source {
+    Here(CoinTree),
+    Challenger(crate::tree_from::Shared),
+}
+
+impl Held {
+    pub fn here(t: CoinTree) -> Self {
+        Held { spec: t.spec.clone(), root: t.root(), key: Box::new(*t.key()), source: Source::Here(t) }
+    }
+
+    /// The tree the challenger samples of `spec` under the prover's `nonce`.
+    pub fn challenger(spec: Spec, nonce: &[u8; NONCE_BYTES], c: crate::tree_from::Shared) -> Result<Self, String> {
+        let (root, key) = c.lock().unwrap_or_else(std::sync::PoisonError::into_inner).tree(&spec, nonce)?;
+        Ok(Held { spec, root, key: Box::new(key), source: Source::Challenger(c) })
+    }
+
+    pub fn root(&self) -> [u8; 64] {
+        self.root
+    }
+
+    /// The session key (in the record, and in `Hello`'s answer: never before it).
+    pub fn key(&self) -> &[u8; KEY_BYTES] {
+        &self.key
+    }
+
+    /// `Hello`'s answer: the root's 4 words, then the session key's 16.
+    pub fn answer_words(&self) -> Vec<F128> {
+        let mut w = words64(&self.root);
+        w.extend(words64(self.key()));
+        w
+    }
+
+    /// Round `round` of `stream`'s first `n` coins, and their opening words: the challenger's, opened after `after` and
+    /// checked against the tree ([`crate::tree_from::Challenger::tree_open`]), or this host's ([`CoinTree::open`], where
+    /// `after` orders nothing).
+    pub fn open(&self, stream: usize, round: usize, n: usize, after: &[u8; 64]) -> Result<(Vec<F128>, Vec<F128>), String> {
+        match &self.source {
+            Source::Here(t) => t.open(stream, round, n),
+            Source::Challenger(c) => {
+                let name = self.spec.streams.get(stream).ok_or(format!("coin tree: stream {stream} is outside the committed schedule"))?;
+                c.lock().unwrap_or_else(std::sync::PoisonError::into_inner).tree_open(&self.root, name, round, n, after)
+            }
+        }
     }
 }
 

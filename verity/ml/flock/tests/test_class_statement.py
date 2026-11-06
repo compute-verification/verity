@@ -67,7 +67,7 @@ def test_table_free_classes_compose_and_prove(units, tmp_path: Path):
         if binary and Path(binary).exists():
             live = CS.prove(binary, d, st["n"], 7690 + i)
             assert live["accepted"] is True and live["proof_bytes"]
-            assert live["coins"] == ("live-os" if os.environ.get("FC_COINS") == "os" else "os-seed-prf")
+            assert live["coins"] == ("coin-tree" if os.environ.get("FC_COINS") == "tree" else "os-seed-prf")
 
 
 def _gemm_fp():
@@ -262,7 +262,7 @@ def test_a_class_of_whole_activations_names_its_definition_as_the_circuits_templ
 def test_a_class_staged_without_shared_rows_opens_every_instances_own_rows_under_the_same_circuit(tmp_path: Path):
     """``share_rows=False``: the same circuit, and public and prover files without ``shared_rows`` (the form Lean's
     ``ProvedScope.sharedRowsOk`` covers without registered reads), every instance's rows its own, one per port, so the prover's
-    file is the shared one's with every table as long as the instances; a wired class keeps its link rows shared."""
+    file is the shared one's with every table as long as the instances (a wired class's: `test_wired_links`)."""
     units, s, cl, _act, _uc, _groups = _fp_class("e4m3", 128)
     lanes, key = _lanes(units, cl), hashlib.sha256(b"test").digest()
     shared = CS.stage(units, "q-word", s, cl, lanes, tmp_path / "shared", key)
@@ -275,8 +275,6 @@ def test_a_class_staged_without_shared_rows_opens_every_instances_own_rows_under
     n, words = own["n"], sum(w for _p, w, _c in meta["ports"])
     body = (tmp_path / "own" / f"inst-{n}.bin").read_bytes().split(b"\n", 1)[1]
     assert len(body) == n * (2 * words + (192 + 128) * len(meta["ports"]))
-    with pytest.raises(ValueError, match="share_rows"):
-        CS.stage(units, "q-word", s, cl, lanes, tmp_path / "wired", key, wiring=SimpleNamespace(), share_rows=False)
 
 
 def test_own_rows_is_its_own_stage_cache_entry(monkeypatch, tmp_path: Path):
@@ -293,7 +291,7 @@ def test_own_rows_is_its_own_stage_cache_entry(monkeypatch, tmp_path: Path):
 
 def test_core_rows_stage_and_each_row_recomputes_from_the_prover_file_with_core_alone(tmp_path: Path):
     """E4M3 K=128, the smallest whole-block FP row, staged under FLOCK_CORE_ROWS: META names each row's schema and length in bits
-    (the output row's, §16.13, its 64 words') and no single ``row_schema``, its row constants are core's prefixes, and its circuit
+    (the output row's, `HmOut`, its 64 words') and no single ``row_schema``, its row constants are core's prefixes, and its circuit
     is neither other frame's. From the prover's file, every committed row's elements give core's bit-row digest, ``b || c`` with its salt, the frame leaf under the
     hiding schema, and the header's root under the domain its binding names, using ``verity.ml.commitments`` only."""
     from verity.ml.commitments import hm96
@@ -345,7 +343,7 @@ def test_core_rows_stage_and_each_row_recomputes_from_the_prover_file_with_core_
 
 def test_core_rows_stage_partial_blocks_and_refuse_tiles_and_sources_that_are_not_whole_parameters(monkeypatch, tmp_path: Path):
     """A bit row of any length stages, its leaves ``ceil(bits / 16)`` words: NVF4 K=256's rows are 1152 bits, 144 bytes, one
-    compression and then a last block that holds 16 row bytes and SHA-512's padding; the output row (§16.13) is a bit row of its
+    compression and then a last block that holds 16 row bytes and SHA-512's padding; the output row (`HmOut`) is a bit row of its
     64 words. NVF4 K=128's (576 bits, 72 bytes) fit the padding block with no compression before it, so the output row's is the
     statement's one (with none, the circuit's ``sha512x3`` range, the pin's, would hold no slot). A source that is not one whole
     parameter, a row length that is not its leaves', and tiling are refused."""
@@ -415,7 +413,7 @@ def test_core_row_prefixes_name_the_row_length_only_and_no_old_frames_prefix():
     each new prefix is core's ``P(l)`` for the row's own bits (codes then scales), so a prefix names a length and nothing else, x
     and W rows of one shape share it (by design: the frame leaf binds the port's domain), and none equals an old-frame prefix.
     Every shape stages, MXF4 K=2048's partial last block among them: rows that fit SHA-512's padding block (at most 111 bytes)
-    have no compression before it, and the output row's (§16.13) is the statement's. The derivation agrees with the stager's
+    have no compression before it, and the output row's (`HmOut`) is the statement's. The derivation agrees with the stager's
     own lowering and `element_rows` at K=128."""
     from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
 
@@ -690,11 +688,14 @@ def test_a_live_statement_is_accepted_only_if_every_session_is_and_prove_exits_0
                                  for i, v in enumerate(st["verdicts"])))
             self.returncode = st["rc"]
 
+        def poll(self):
+            return self.returncode
+
         def wait(self):
             return self.returncode
 
     monkeypatch.delenv("FC_VERIFIERS", raising=False)
-    monkeypatch.setattr(CS, "_serve", lambda *_a, **_kw: ([], ["127.0.0.1:1"]))
+    monkeypatch.setattr(CS, "_serve", lambda *_a, **_kw: ([], ["127.0.0.1:1"], []))
     monkeypatch.setattr(CS.subprocess, "Popen", Prove)
     cases = [([True] * 4, 0, True, None), ([True] * 3, 0, False, "3 LIVE records, not warm + runs = 4"),
              ([False, True, True, True], 0, False, "sessions [0] not accepted"), ([True, True, False, True], 0, False, "sessions [2] not accepted"),
@@ -708,8 +709,8 @@ def test_a_live_statement_is_accepted_only_if_every_session_is_and_prove_exits_0
 
 def test_a_live_statement_records_the_coins_its_sessions_ran_on(monkeypatch, tmp_path: Path):
     (tmp_path / "circuit.txt").write_text("circuit")
-    seed, os_ = {"verdict": {"coin_seed": {"commitment": "ab"}}}, {"identity": {"coins": "live-os (every round's coins ...)"}}
-    tree = {"identity": {"hooks": {"zk": True}}}
+    seed = {"verdict": {"coin_seed": {"commitment": "ab"}}}
+    tree, zk = {"identity": {"hooks": {"tables": "os"}}}, {"identity": {"hooks": {"zk": True}}}
     st: dict = {}
 
     class Prove:
@@ -719,13 +720,17 @@ def test_a_live_statement_records_the_coins_its_sessions_ran_on(monkeypatch, tmp
             stdout.write("".join(f"LIVE\t{json.dumps({'run': i, 'warm': i == 0, 'accepted': True, **x})}\n" for i, x in enumerate(st["live"])))
             self.returncode = 0
 
+        def poll(self):
+            return 0
+
         def wait(self):
             return 0
 
     monkeypatch.delenv("FC_VERIFIERS", raising=False)
-    monkeypatch.setattr(CS, "_serve", lambda *_a, **_kw: ([], ["127.0.0.1:1"]))
+    monkeypatch.setattr(CS, "_serve", lambda *_a, **_kw: ([], ["127.0.0.1:1"], []))
     monkeypatch.setattr(CS.subprocess, "Popen", Prove)
-    for live, coins in (([seed] * 2, "os-seed-prf"), ([os_] * 2, "live-os"), ([tree] * 2, None), ([seed, os_], None)):
+    for live, coins in (([seed] * 2, "os-seed-prf"), ([tree] * 2, "coin-tree"), ([zk] * 2, None), ([{}] * 2, None),
+                        ([seed, tree], None), ([tree, zk], None)):
         st["live"] = live
         assert CS.prove("flock-circuit", tmp_path, 4, 0, warm=1, runs=1)["coins"] == coins, live
 
@@ -754,3 +759,110 @@ def test_serve_wait_accepts_only_every_session_served_and_accepted(tmp_path: Pat
                           served("none", [])], 1.0)
     assert [(r["served"], r["accepted"]) for r in recs] == [(3, True), (2, False), (3, False), (0, False)]
     assert not any((tmp_path / n / "addrs.json").exists() for n in ("all", "short", "rejected", "none"))
+
+
+class _Proc:
+    """A process that has exited with ``rc``."""
+
+    def __init__(self, pid: int = 0, rc: int = 0):
+        self.pid, self.returncode = pid, rc
+
+    def poll(self):
+        return self.returncode
+
+    def wait(self, timeout=None):
+        return self.returncode
+
+    def kill(self):
+        pass
+
+
+def test_a_challenged_verifier_process_is_bounded_and_takes_its_coin_trees_from_its_own_challenger(monkeypatch, tmp_path: Path):
+    """FLOCK_CHALLENGER=1: every verifier process gets its own challenger's `--tree-from` and secret, and `--sessions`, since a
+    challenger's session closes after its server's last; without it, a loopback server is neither."""
+    argvs, made = [], []
+
+    def popen(argv, stdout, **_kw):
+        stdout.write(f"SERVING 127.0.0.1:{9000 + len(argvs)}\n")
+        stdout.flush()
+        argvs.append(argv)
+        return _Proc()
+
+    def challenger(d: Path):
+        made.append(d.name)
+        return _Proc(rc=0), ["--tree-from", f"127.0.0.1:{7000 + len(made)}", "--tree-secret-file", str(d / "secret")]
+
+    monkeypatch.setattr(CS.subprocess, "Popen", popen)
+    monkeypatch.setattr(CS, "_challenger", challenger)
+    monkeypatch.setenv("FC_VERIFY_SERVERS", "2")
+    monkeypatch.delenv("FLOCK_CHALLENGER", raising=False)
+    srvs, addrs, chs = CS._serve("flock-circuit", tmp_path, tmp_path / "pub", tmp_path / "circuit.txt", "pin", 5, "127.0.0.1", 0, "loopback")
+    assert (len(srvs), chs, made) == (2, [], []) and not any("--sessions" in a or "--tree-from" in a for a in argvs)
+    argvs.clear()
+    monkeypatch.setenv("FLOCK_CHALLENGER", "1")
+    srvs, addrs, chs = CS._serve("flock-circuit", tmp_path, tmp_path / "pub", tmp_path / "circuit.txt", "pin", 5, "127.0.0.1", 0, "loopback")
+    assert made == ["challenger-0", "challenger-1"] and len(chs) == 2
+    assert [int(a[a.index("--sessions") + 1]) for a in argvs] == [3, 2]
+    assert [a[a.index("--tree-from") + 1] for a in argvs] == ["127.0.0.1:7001", "127.0.0.1:7002"]
+    assert [a[a.index("--tree-secret-file") + 1] for a in argvs] == [str(tmp_path / f"challenger-{i}" / "secret") for i in (0, 1)]
+
+
+def test_a_challenged_statement_is_accepted_only_if_its_challengers_pass(monkeypatch, tmp_path: Path):
+    (tmp_path / "circuit.txt").write_text("circuit")
+
+    class Prove(_Proc):
+        def __init__(self, cmd, stdout, stderr):
+            super().__init__()
+            if "-o" in cmd:
+                Path(cmd[cmd.index("-o") + 1]).write_text("1024\n")
+            stdout.write("".join(f"LIVE\t{json.dumps({'run': i, 'warm': i == 0, 'accepted': True})}\n" for i in range(2)))
+
+    monkeypatch.delenv("FC_VERIFIERS", raising=False)
+    monkeypatch.setattr(CS, "_serve", lambda *_a, **_kw: ([_Proc()], ["127.0.0.1:1"], [_Proc()]))
+    monkeypatch.setattr(CS.subprocess, "Popen", Prove)
+    for ok in (True, False):
+        audit = [{"exit": 0, "sessions": 2, "audit": ok, "ok": ok}]
+        monkeypatch.setattr(CS, "_challengers_end", lambda *_a: audit)
+        live = CS.prove("flock-circuit", tmp_path, 4, 0, warm=1, runs=1)
+        assert (live["accepted"], live["challengers"]) == (ok, audit), live
+
+
+def test_each_challenger_audits_its_own_servers_sessions(monkeypatch, tmp_path: Path):
+    """A server's sessions are the record directories named for its pid (`l<k>-<pid>`); a challenger that exits nonzero or
+    audits no session fails."""
+    for name in ("l0000-11", "l0001-11", "l0000-22"):
+        (tmp_path / "sessions" / name).mkdir(parents=True)
+        (tmp_path / "sessions" / name / "session.json").write_text("{}")
+    audited = []
+    monkeypatch.setattr(CS.subprocess, "run", lambda argv, **_kw: audited.append(argv[4:]) or SimpleNamespace(returncode=0, stdout="", stderr=""))
+    out = CS._challengers_end(tmp_path, [_Proc(11), _Proc(22), _Proc(33)], [_Proc(rc=0), _Proc(rc=1), _Proc(rc=0)])
+    assert audited == [[str(tmp_path / "challenger-0"), str(tmp_path / "sessions" / "l0000-11"), str(tmp_path / "sessions" / "l0001-11")],
+                       [str(tmp_path / "challenger-1"), str(tmp_path / "sessions" / "l0000-22")], [str(tmp_path / "challenger-2")]]
+    assert [(c["exit"], c["sessions"], c["ok"]) for c in out] == [(0, 2, True), (1, 1, False), (0, 0, False)]
+
+    class Open(_Proc):
+        """A challenger whose session never closes: its server was killed before its last session."""
+
+        def wait(self, timeout=None):
+            if timeout is not None and self.returncode is None:
+                raise CS.subprocess.TimeoutExpired("challenger", timeout)
+            return self.returncode
+
+        def kill(self):
+            self.returncode = -9
+
+    (out,) = CS._challengers_end(tmp_path, [_Proc(11)], [Open(rc=None)])
+    assert (out["exit"], out["ok"]) == (-9, False)
+
+
+def test_serve_wait_accepts_a_challenged_entry_only_if_its_challengers_pass(monkeypatch, tmp_path: Path):
+    def served(name: str) -> dict:
+        d = tmp_path / name
+        (d / "sessions").mkdir(parents=True)
+        (d / "sessions" / "index.jsonl").write_text("".join(json.dumps({"accepted": True, "verify_s": 0.5}) + "\n" for _ in range(3)))
+        (d / "addrs.json").write_text("{}")
+        return {"file": d / "addrs.json", "srvs": [_Proc()], "chs": [_Proc()], "doc": {"sessions": 3}, "d": d, "t0": 0.0}
+
+    monkeypatch.setattr(CS, "_challengers_end", lambda d, *_a: [{"ok": d.name == "passes"}])
+    recs = CS.serve_wait([served("passes"), served("fails")], 1.0)
+    assert [(r["accepted"], r["challengers"]) for r in recs] == [(True, [{"ok": True}]), (False, [{"ok": False}])]

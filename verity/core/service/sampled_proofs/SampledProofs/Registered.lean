@@ -14,16 +14,21 @@ gates are then its own nodes' gates.
   value's row format when the verifier names one), as many of its leaves as `words` leaves of `width` bits hold
   (`row_leaves`; H1's A, K int8 codes in K/2 u16 words);
 * `width`: its leaf width rounded up to whole u16 words, one width of at most 32 bits;
-* `domain`: `CommitmentDomain(B, -2, RangeIndexedDomain(0, rows), hash="sha512").domain_id`, `B` the bytes of
-  `identity_digest("verity/one-stage/registered-domain/v0", {"program", "value", "schema", "words", "leaves"})` with
+* `domain`: `CommitmentDomain(B, -2, RangeIndexedDomain(0, rows), hash="sha512").domain_id`, `B` the 64 bytes of
+  `identity_digest_sha512("verity/one-stage/registered-domain/v1", {"program", "value", "schema", "words", "leaves"})` with
   `"word_bits"` beside them when it is not 16: SHA-512 of the frame-v3 `domain` message over `B`, `uint(-2 + 2)`, the range's
   identity `identity_digest_sha512("veritor/indexed-domain/range/v1", {"start": 0, "step": 1, "stop": rows})` and
   `uint(rows)`; a per-window value's binding adds `"window": R`, the window's open root (`domainAt`), so a root
   registered in one window opens under no other window's domain, and a value held across windows leaves it out.
 -/
-import Flock.Program
-import Flock.Public
-import SampledProofs.Partition
+module
+
+public import Flock.Program
+public import Flock.Public
+public import Flock.Registered
+public import SampledProofs.Partition
+
+@[expose] public section
 
 namespace SampledProofs.Registered
 
@@ -32,14 +37,11 @@ open Flock (V)
 open Flock.Program (Ty)
 open Flock.TemplateQuery (Desc)
 
-def REGISTERED_DOMAIN : String := "verity/one-stage/registered-domain/v0"
+/- A registered value's domain, its leaf widths, its row formats (`registered.SCHEMAS`) and the default width, which the
+domain and the entry name only by leaving `word_bits` out: C-Flock's, which reads the same registered values. -/
+export Flock.Registered (REGISTERED_DOMAIN SCHEMAS WORD_BITS WIDTHS WIDTH_KEY domain)
+
 def SCHEMA : String := Flock.HmRow.ROW_SCHEMA
-/-- The row formats a registered value may be read in (`registered.SCHEMAS`). -/
-def SCHEMAS : List String := [Flock.HmRow.ROW_SCHEMA, Flock.HmRow.ROW_SCHEMA_V2, Flock.HmRow.ROW_SCHEMA_SEG]
-/-- The default leaf width, which the domain and the entry name only by leaving `word_bits` out. -/
-def WORD_BITS : Nat := 16
-def WIDTHS : List Nat := [16, 32]
-def WIDTH_KEY : String := "word_bits"
 /-- The domain binding's key a per-window value adds: the window's open root. -/
 def WINDOW_KEY : String := "window"
 def ENTRY_KEYS : Array String := sortStrings #["value", "root", "leaves", "words", "domain"]
@@ -135,33 +137,10 @@ def width (p : Param) : V Nat :=
   | [w] => if 0 < w && w ≤ 32 then pure (16 * ((w + 15) / 16)) else throw s!"parameter {p.name}: its leaves are {w} bits"
   | ws => throw s!"parameter {p.name}: its leaves are not one width ({ws})"
 
-private def tagged (frame : String) (H : ByteArray → ByteArray) (tag : String) (manifest : Json) : V ByteArray := do
-  let t := tag.toUTF8
-  let m := (← Flock.canon manifest).toUTF8
-  return H (frame.toUTF8.push 0 ++ Flock.be32 t.size.toUInt32 ++ t ++ Flock.be64 m.size.toUInt64 ++ m)
-
-/-- `registered.domain(program, value, words, leaves, word_bits).domain_id`, `leaves` the value's rows. -/
-def domain (program value : String) (words leaves wordBits : Nat) : V ByteArray := do
-  if !WIDTHS.contains wordBits then throw s!"a registered value's leaves are 16 or 32 bits, not {wordBits}"
-  let manifest := Json.mkObj ([("program", Json.str program), ("value", Json.str value), ("schema", Json.str SCHEMA),
-    ("words", Lean.toJson words), ("leaves", Lean.toJson leaves)] ++
-    (if wordBits == WORD_BITS then [] else [(WIDTH_KEY, Lean.toJson wordBits)]))
-  let binding ← tagged "veritor/tagged-sha256/v1" Flock.Sha256.hash REGISTERED_DOMAIN manifest
-  let positions ← tagged "verity/tagged-sha512/v1" Flock.Sha512.hash "veritor/indexed-domain/range/v1"
-    (Json.mkObj [("start", Lean.toJson (0 : Nat)), ("step", Lean.toJson (1 : Nat)), ("stop", Lean.toJson leaves)])
-  return Flock.FV3.hash "domain" [binding, Flock.FV3.uint 0, positions, Flock.FV3.uint leaves] Flock.Sha512.hash
-
 /-- `domain` with `(key, hex)` beside its binding's keys: a per-window value's `"window"`, a produced value's
 `"produced"` (`SampledProofs.Produced`). -/
-def domainBound (program value : String) (words leaves wordBits : Nat) (key r : String) : V ByteArray := do
-  if !WIDTHS.contains wordBits then throw s!"a registered value's leaves are 16 or 32 bits, not {wordBits}"
-  let manifest := Json.mkObj ([("program", Json.str program), ("value", Json.str value), ("schema", Json.str SCHEMA),
-    ("words", Lean.toJson words), ("leaves", Lean.toJson leaves)] ++
-    (if wordBits == WORD_BITS then [] else [(WIDTH_KEY, Lean.toJson wordBits)]) ++ [(key, Json.str r)])
-  let binding ← tagged "veritor/tagged-sha256/v1" Flock.Sha256.hash REGISTERED_DOMAIN manifest
-  let positions ← tagged "verity/tagged-sha512/v1" Flock.Sha512.hash "veritor/indexed-domain/range/v1"
-    (Json.mkObj [("start", Lean.toJson (0 : Nat)), ("step", Lean.toJson (1 : Nat)), ("stop", Lean.toJson leaves)])
-  return Flock.FV3.hash "domain" [binding, Flock.FV3.uint 0, positions, Flock.FV3.uint leaves] Flock.Sha512.hash
+def domainBound (program value : String) (words leaves wordBits : Nat) (key r : String) : V ByteArray :=
+  Flock.Registered.domainWith program value words leaves wordBits [(key, Json.str r)]
 
 /-- `registered.domain(program, value, words, leaves, word_bits, window).domain_id`: `domain`, and for a per-window value
 (`some r`, `r` the window's open root) the same with `"window": r` in the binding. -/

@@ -1,8 +1,10 @@
-import Definitions.Pouw.H1Zy.Lane
-import Proofs.Pouw.H1Zy.Combine
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.Ring
+module
+
+public import Definitions.Pouw.H1Zy.Lane
+public import Proofs.Pouw.H1Zy.Combine
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.Ring
 
 /-!
 # What a lane's `ok = 1` gives, on words
@@ -16,6 +18,10 @@ import Mathlib.Tactic.Ring
   `32 ∣ K` and `K < 2^17`, every partial sum within `K · 2^14 < 2^31`);
 * its partials row is its chain's words masked by the admit bits' OR.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Pouw.H1Zy
 

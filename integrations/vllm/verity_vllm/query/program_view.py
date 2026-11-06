@@ -506,8 +506,8 @@ class _Builder:
 # ---------------------------------------------------------------------------------------------------------------------------------
 
 def ports_of_type(t) -> tuple[Port, ...]:
-    """The output ports of a `verity.ml.circuits.types.Type`: one `out` for a Value / Array, `"0"`.. for a Tuple, field names for a Record."""
-    from verity.ml.circuits.types import Record, Tuple as TupleT
+    """The output ports of a `verity.ml.circuits.types.Type`: one `out` for a Value / Array, `"0"`.. for a Tuple, field names for a RecordType."""
+    from verity.ml.circuits.types import RecordType, Tuple as TupleT
 
     def one(name: str, lo: int, ty) -> Port:
         n = ty.leaves
@@ -519,25 +519,13 @@ def ports_of_type(t) -> tuple[Port, ...]:
             out.append(one(str(i), lo, f))
             lo += f.leaves
         return tuple(out)
-    if isinstance(t, Record):
+    if isinstance(t, RecordType):
         out, lo = [], 0
         for k, f in t.fields:
             out.append(one(k, lo, f))
             lo += f.leaves
         return tuple(out)
     return (one("out", 0, t),)
-
-
-def _registry():
-    """(REGISTRY, import errors) of the integration's registry, every module loaded (`verity.ml.definitions.registry.catalog.load`); a module that
-    fails to import is reported with the lookup that needed it, never treated as "not registered"."""
-    try:
-        from verity.ml.circuits.defs import REGISTRY  # noqa: F401
-    except Exception as e:  # the core package missing is an ENVIRONMENT fault, named (never a "not registered" answer)
-        from verity_vllm.query.manifest.format import RegistryUnavailable
-        raise RegistryUnavailable(e) from e
-    from verity.ml.definitions.registry.catalog import load
-    return load()
 
 
 _PORTS_CACHE: dict[str, tuple[Port, ...]] = {}
@@ -550,7 +538,8 @@ def definition_ports(spec: str) -> tuple[Port, ...]:
     if hit is not None:
         return hit
     from verity.ml.circuits.codec import lookup_primitive
-    reg, errors = _registry()
+    from verity.ml.definitions.registry.catalog import load
+    reg, errors = load()
     base = spec_base(spec)
     d = reg.defs.get(base)
     if d is None:
@@ -716,7 +705,8 @@ def from_descriptor(desc: dict[str, Any] | str, registry=None) -> ProgramView:
     from verity.ml.circuits.codec import decode_program, descriptor_id
     from verity.ml.circuits.refs import runs
     if registry is None:
-        registry, _errors = _registry()
+        from verity.ml.definitions.registry.catalog import load
+        registry, _errors = load()
     from verity.ml.circuits.program import is_input
     decoded = decode_program(desc, registry)
     hints = {int(k): str(v) for k, v in decoded.annotations.get("node_hints", {}).items()}

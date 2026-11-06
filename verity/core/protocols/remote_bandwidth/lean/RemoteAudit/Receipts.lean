@@ -1,6 +1,8 @@
-import Flock.Hm96
-import RemoteAudit.Codec
-import RemoteAudit.Plan
+module
+
+public import Flock.Hm96
+public import RemoteAudit.Codec
+public import RemoteAudit.Plan
 
 /-!
 # Receipts, seeds and the receipt tree: `receipts.py`, and `audit.py`'s chain over appends
@@ -22,6 +24,10 @@ root_(t,i)    frame-v3-sha512: CommitmentDomain(SHA512(TREE_DOMAIN ‖ seed ‖ 
 Receipts here are of a block alone: a registration that binds PoUW's tile outputs (`bind`) is refused before any
 receipt is computed (`Registration.make?`).
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace RemoteAudit
 

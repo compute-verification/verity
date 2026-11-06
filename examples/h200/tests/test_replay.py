@@ -1,6 +1,6 @@
 """The CPU replay (`replay`): each template's function is circuits' semantics (a scalar composition of main's word
 primitives' own evaluators, and main's Definition wherever one is importable), every template keys and parses at the frozen
-shape's parameters, the draw is core's draw object from live coins, and a replay of seeded W8A8 coordinates, of a tiny instance
+shape's parameters, the sample is core's sample object from live coins, and a replay of seeded W8A8 coordinates, of a tiny instance
 of the frozen architecture (`cpu_step` on the seeded weights) and of a bundle in the drawn-unit bundle's form matches unit for unit and
 catches one flipped bit."""
 from __future__ import annotations
@@ -257,7 +257,7 @@ def test_a_key_not_in_canonical_form_is_refused(bad: str) -> None:
         R.template(bad)
 
 
-# ---- the draw ----------------------------------------------------------------------------------------------------------
+# ---- the sample ----------------------------------------------------------------------------------------------------------
 
 POP = [("A_v1", 10), ("B_v1{K=2}", 1000), ("C_v1", 3)]
 CTX = {"step_root": "00" * 64}

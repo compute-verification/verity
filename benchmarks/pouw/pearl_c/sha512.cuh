@@ -1,12 +1,12 @@
-// Pearl-C's names for sha512_rows' SHA-512 (benchmarks/torch_gpu/sha512_rows/sha512x.cuh), every word big-endian: the
+// Pearl-C's names for the GPU's one SHA-512 (verity/ml/kernels/sha512.cuh), every word big-endian: the
 // round constants, the IV, one compression of 16 message words (w is the schedule's ring, overwritten; sx::compress<0, 0>,
 // straight-line with funnel shifts) and the byte-order helpers that load a message word from two little-endian u32.
-// hash_h3.cuh (Pearl-C's -h3), pearl_c4.cu (Pearl-C4's seeds and noise lines), pearl_c_sm120's pd and compute-accounting's
+// hash_h3.cuh (Pearl-C's -h3), pearl_c4.cu (Pearl-C4's seeds and noise lines), pearl_c_sm120's pd and
 // masked_gemm/sha_noise.cuh and filler/pfill.cuh include it; RS_K and rs_rotr serve the round forms of their own.
 #pragma once
 #include <cstdint>
 
-#include "../../torch_gpu/sha512_rows/sha512x.cuh"
+#include "../../../verity/ml/kernels/sha512.cuh"
 
 #ifndef DEV
 #define DEV __device__ __forceinline__

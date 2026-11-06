@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLane
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLane
 
 /-!
 # The masked replay's rows are the executable's
@@ -12,6 +14,8 @@ zerocheck and lincheck compute, at pads placed as the executable's layout places
 * `prod_rel`: the product row `a'b' + a'·h_fb + b'·h_fa + h_ab`.
 * `folded_rel`: the circuit's 64 entries are the model's `foldAll` of `comb`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.NonVacuousRows
-import Proofs.Flock.Claims.Recursion.RowDLevels
-import Proofs.Flock.Claims.Recursion.VPiecesDeployed
-import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
+module
+
+public import Proofs.Flock.Claims.Recursion.NonVacuousRows
+public import Proofs.Flock.Claims.Recursion.RowDLevels
+public import Proofs.Flock.Claims.Recursion.VPiecesDeployed
+public import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
 
 /-!
 # `TargetDMerkle` from what the parts accept
@@ -30,6 +32,8 @@ own checks: row D's `rec-open` pieces among `P` (`openHolds`, each query's `Quer
   `Rows.sideAt rd` (`DecAt.sideAt_eq`) or the assembly's `OpenLower.sideAtR rd` (`DecAt.sideAtR_opens`), and at
   `Rows.posAt` (`DecAt.posAt_eq`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

@@ -1,4 +1,6 @@
-import Mathlib.Algebra.Order.Field.Rat
+module
+
+public import Mathlib.Algebra.Order.Field.Rat
 
 /-!
 # The OCP E4M3 codec (trusted definitions)
@@ -15,6 +17,8 @@ A finite code has the value `(−1)^sign · sig · 2^lsbExp`, with `sig = m` (su
 `lsbExp = max e 1 − 10`: `decode_e4m3`'s `(sign, exp, sig)`, whose `exp` is `1 − 7 − 3 = −9` for `e = 0` and
 `e − 7 − 3` otherwise.
 -/
+
+@[expose] public section
 
 namespace Pouw.Fp8Atom
 

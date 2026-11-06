@@ -2,8 +2,14 @@
 The straight-line `Sha512.compress` against the three loops it replaced (`compressLoops`, kept here as the test's
 reference only) on 200 chained blocks and on blocks at unaligned offsets, and `Sha512.hash` on the FIPS 180-4 "abc" digest.
 -/
-import Flock.Bytes
-import Flock.Hash
+module
+
+public import Flock.Bytes
+public import Flock.Hash
+meta import Flock.Bytes
+meta import Flock.Hash
+
+@[expose] public section
 
 namespace Flock.Test.Sha512
 

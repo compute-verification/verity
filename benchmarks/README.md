@@ -23,13 +23,14 @@ What the protocols cost: measured on served inference, and bounded on training.
 | --- | --- | --- |
 | `harness/` | `verity-bench`: specs, recorded runs, sweeps and results for an arm against stock vLLM, and the served table of each protocol's overhead | maintained |
 | `specs/` | the harness's specs and sweeps, one TOML file each | maintained |
+| `overhead/` | `verity bench overhead`, the one front door for overhead: a card's operating points C and L, a scheme's γ over stock at them in busy SM-time, and the table of γ from labelled runs of record | maintained |
 | `served_commit/` | what the Commit, every value of every step committed, adds to served vLLM: throughput, time to first token and per-token latency | maintained |
 | `g2/` | the served Commit's overhead curve over stock, rendered from the evidence store; it measures nothing itself | maintained |
 | `vllm_encoded/` | Llama-3.1-8B in vLLM with its weights and KV cache held as codec words and receipted by PoUB, as `verity-bench` arms beside the plain stack | maintained |
 | `resource_accounting/` | a chain of dependent matmuls at Llama-3.1-8B's shapes on one RTX PRO 6000, natively and under each protocol, with what each run certifies | maintained |
 | `load_time/` | the time from spawn to engine-ready for a large model under vLLM at TP 8, by page-cache, compile-cache and loader state | frozen |
-| `rho/` | a lower bound on the overhead a training run pays under the regime, and the time to its target, per scenario and monitoring period | maintained |
-| `nci/` | the sources, parameters and policies NCI's bounds rest on, and a board of training methods with their slowdown brackets | maintained |
+| `rho/` | a lower bound on the slowdown a training run pays under the regime, and the time to its target, per scenario and monitoring period | maintained |
+| `nci/` | the sources, parameters and policies the inference-only policy's bounds rest on, and a board of training methods with their slowdown brackets | maintained |
 
 ## Kernels
 
@@ -49,10 +50,12 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
-| `one_stage/` | the one-stage audit end to end: committed values, registration, the draw, C-Flock's circuit prover and the Lean verifier, to the audit record and its integrity profile, with its negatives | maintained |
-| `prove_path/` | a served run's proof blocks proved after the fact: the compiler's Programs, a draw on live coins, C-Flock `--zk` behind the Lean firewall, and the Lean verifier | maintained |
+| `one_stage/` | the one-stage audit end to end: committed values, registration, the sample, C-Flock's circuit prover and the Lean verifier, to the audit record and its integrity profile, with its negatives | maintained |
+| `prove_path/` | a served run's proof blocks proved after the fact: the compiler's Programs, a sample on live coins, C-Flock `--zk` behind the Lean ZK server, and the Lean verifier | maintained |
 | `served_units/` | a served model's proof blocks proved one type at a time from synthetic values, the Lean verifier accepting the honest run and refusing forgeries | maintained |
 | `multi_unit/` | an FP8 GEMM's proof blocks staged as C-Flock statements in several layouts: prover and verifier time, peak memory and proof bytes | maintained |
+| `flock_s8_block/` | C-Flock `--zk`'s price for a proof block of adjacent cells of one int8 GEMM output row, on one GPU node and on the CPU | maintained |
+| `unit_block/` | a word primitive's Boolean version built as one C-Flock proof block: the select's slot alone and with its rows' openings, against the 2^27 block | maintained |
 | `proof_throughput/` | the proof blocks a second C-Flock proves and the Lean verifier accepts on GLM-5.3's dot products, over the batch size | maintained |
 | `commitments/` | the commitment schemes' cost: hashing leaves and building the tree, hiding leaves per row, and serving's per-step row tables | maintained |
 | `sampling_plan/` | the sampling plan for one served workload: a cost model fitted to proving measurements, and ε at δ over the verification overhead (a model, not a measurement) | maintained |
@@ -67,6 +70,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | --- | --- | --- |
 | `bool_build_cost/` | a workload's Boolean Build against its word Build: the descriptor's size and each Definition's proof-block rule | maintained |
 | `circuit_properties/` | structural properties of a Boolean circuit's counted operations, measured exactly: fan-out, fan-in, their count and s_× | maintained |
+| `unit_lowering/` | writing a PoUW H1 circuit file (a leaf's lane and combine, or the whole tile unit, at any tile R × C): peak memory and wall time by K, the file's AND rows, bytes and block (k_log), its SHA-512 held to a reference, and where the memory goes | maintained |
 
 ## Network
 
@@ -83,11 +87,10 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | --- | --- | --- |
 | `pous/` | every PoUS implementation on one dataset, by its effective weight bandwidth | maintained |
 | `bandwidth/` | the bandwidth audit's GPU tagger: each chunk's tag over the store in device memory, their leaves and root | maintained |
-| `remote_session/` | PoUB's session harness (proof of useful bandwidth): a verifier's and a prover's process over TCP, end to end. The remote protocol's demo is the vLLM demo, not this | maintained |
+| `remote_session/` | PoUB's session harness: a verifier's and a prover's process over TCP, end to end. The remote protocol's demo is the vLLM demo, not this | maintained |
 | `live_verifier/` | PoUB's verifier as a service on an auditor host | maintained |
 | `kv_filler/` | the filler top-up beside vLLM serving, and what it costs inference | maintained |
 | `stacked_share/` | the share of a node's live KV a prover could hold as encoded carriers inside the audit's compute budget | maintained |
-| `serve_bandwidth/` | where a served mix's DRAM read bandwidth goes on the RTX PRO 6000, by phase and kernel class | maintained |
 | `word_codec/` | the store's Sloth codecs (the word codec, the KV codec that PoUB's `codec.py` mirrors, the wide codecs): each a byte-exact reference, a CUDA kernel and its benchmark | maintained |
 | `codec_tensor/` | PoUB's receipts, leaves and receipt tree on the GPU, and the tensor-core wide-word codec | maintained |
 | `property_redteam/` | attacks on the stacking property and on the gate model's counts behind the encode bound | maintained |
@@ -98,6 +101,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | Directory | What it measures | Status |
 | --- | --- | --- |
 | `ppl/` | the perplexity an intervention on a served model's matmuls or attention costs, against bf16 and plain int8 | maintained |
+| `f32_exhaustive/` | a correctly rounded reference primitive (`F32LogRn_v1`, `F32ExpRn_v1`) against MPFR, or a Boolean version (`F32Sqrt_v2`) against its word, on all 2^32 binary32 words | maintained |
 | `numerical/` | the bench spine (`verity_numerical.bench`) that C-Flock and `circuit-check` import, and the per-unit-type cost inventory; the archived proof systems' tables are in the evidence store | frozen |
 
 ## Census data

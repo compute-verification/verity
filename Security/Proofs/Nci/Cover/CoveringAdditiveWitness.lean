@@ -1,5 +1,7 @@
-import Proofs.Nci.Cover.CoveringAdditive
-import Proofs.Nci.CoveringTwoCostsWitness
+module
+
+public import Proofs.Nci.Cover.CoveringAdditive
+public import Proofs.Nci.CoveringTwoCostsWitness
 
 /-!
 # The additive covering bound is not vacuous
@@ -10,6 +12,8 @@ multiplication block (`coveringBoundAdditive_nonvacuous`). The weight gates a bl
 its inputs and outside the token computation, which holds only computed gates, so it is conditionally parameter-hard at
 `c_w = 1/2` at every `s` (`tc_conditional`).
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.SecurityProofs.CoveringAdditive
 

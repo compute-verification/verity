@@ -3,15 +3,16 @@
 # engine behind the OpenAI API, writing serve-openai's records), the certifier rehearsal against it on varied traffic
 # (certifier_serve.py rehearse, honest and the tampers), the rehearsal kept as the gate keeps a certifier run
 # (request.json, out/, end.json with each file's SHA-512, as auditor.certifier_run writes them), then chain_record.sh on
-# it with the endpoint's records and CR_PATH=certifier-only. Off-host, from a clone, in one of the network slots, as a
-# job of at most 240 minutes on a CPU node:
+# it with the endpoint's records and CR_PATH=certifier-only. Varied traffic is the advice profile, whose egress counts
+# no N2 unit holds, so chain_record.sh runs no N2 and its report isn't accepted. Off-host, from a clone, in one of the
+# network slots, as a job of at most 240 minutes on a CPU node:
 #   env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py --by LANE -- \
-#     env CR_MEM_GB=128 CR_N2_ARGS="--draw 3" bash benchmarks/network_traces/demo_chain.sh
+#     env CR_MEM_GB=128 bash benchmarks/network_traces/demo_chain.sh
 # With DC_UPSTREAM the endpoint is that one (the H200's) and none is started here; CR_ENDPOINT then names its records.
 # The endpoint's records hold request values (requests.jsonl's prompt and streamed ids, advice_trace.jsonl's arrivals and
 # rows, windows.jsonl's users, served_rows/'s salts), so the endpoint writes them in DC_KEEP/endpoint, 0700 and outside
 # the run dir and the tree, which chain_record.sh reads; $OUT/endpoint-records gets only serve.json and summary.json.
-# env: CR_MEM_GB and chain_record.sh's own (CR_N2_ARGS, CR_DEPLOYED, ...)
+# env: CR_MEM_GB and chain_record.sh's own (CR_DEPLOYED, ...)
 #      DC_KEEP (the private dir, /workspace/research/lanes/network-accounting/demo-chain/RUN by default)
 #      DC_ENGINE (demo_endpoint's --engine, seeded:phase1)  DC_SEED (its --seed, 0)  DC_EOS (its --eos and the plan's
 #      --eos-ids, 0)  DC_UPSTREAM (an endpoint already serving)  DC_REQUESTS (24)  DC_TOKENS (16)  DC_PROMPTS (1:16, the

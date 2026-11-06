@@ -1,13 +1,15 @@
-import Proofs.Flock.Claims.Recursion.NonVacuousRows
-import Proofs.Flock.Claims.Recursion.VPiecesDeployed
-import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
-import Proofs.Flock.Claims.Recursion.CapLower
-import Proofs.Flock.Claims.Recursion.RestRead
-import Proofs.Flock.Claims.Recursion.RestLens
-import Proofs.Flock.Claims.Recursion.RestReadsAt
-import Proofs.Flock.Claims.Recursion.RestVerdictBases
-import Proofs.Flock.Claims.Recursion.VerdictRowEJoint
-import Proofs.Flock.Claims.Recursion.RowDAccept
+module
+
+public import Proofs.Flock.Claims.Recursion.NonVacuousRows
+public import Proofs.Flock.Claims.Recursion.VPiecesDeployed
+public import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
+public import Proofs.Flock.Claims.Recursion.CapLower
+public import Proofs.Flock.Claims.Recursion.RestRead
+public import Proofs.Flock.Claims.Recursion.RestLens
+public import Proofs.Flock.Claims.Recursion.RestReadsAt
+public import Proofs.Flock.Claims.Recursion.RestVerdictBases
+public import Proofs.Flock.Claims.Recursion.VerdictRowEJoint
+public import Proofs.Flock.Claims.Recursion.RowDAccept
 
 /-!
 # `RecKSDecompR` assembled from chain B's pieces, its open leaves named
@@ -44,6 +46,8 @@ positions `Rows.posAt`: `TargetDMerkle` proved (`targetDMerkle_PD`), the last me
 stated, `RoundLens` proved (`roundLens`), `SideSchR` proved (`sideSchR_sideAtR`) and `CopyTopR` from
 `OutBindR` and `SideCapR` (`capTop_of`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.DecompBR
 
@@ -224,7 +228,7 @@ def RestLowR : Prop :=
 /-- **The residual groups' share at the parts' own messages** (`hlowP`'s `rec-residuals` kind): where every part
 accepts at the parts' own messages, each group `ownR` gives part `s` holds. -/
 def ResLowJ : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), parse x = some st → Claims.Recursion.Form.Dense st.form →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), parse x = some st → Claims.Recursion.Form.Dense st.form →
     ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
       Joint FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L) L
         (acceptsL rd b aux nOf hd rest wE final w L) x c ws →

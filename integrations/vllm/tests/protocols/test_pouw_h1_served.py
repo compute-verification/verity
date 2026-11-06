@@ -38,7 +38,7 @@ from verity.core.protocols.sampled_proofs.one_stage import partition as P, regis
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind  # noqa: E402
 from verity.ml.circuits.ports import In, Out, Ports  # noqa: E402
 from verity.ml.circuits.refs import Coll, coll_concat  # noqa: E402
-from verity.ml.circuits.types import Array, Record, Value  # noqa: E402
+from verity.ml.circuits.types import Array, RecordType, Value  # noqa: E402
 from verity.ml.commitments import hm96  # noqa: E402
 from verity.ml.commitments.merkle import tree_levels  # noqa: E402
 from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest  # noqa: E402
@@ -65,7 +65,7 @@ FOLD1 = PrimitiveDefinition("H1ServedTestFold1", 1, (("key", V1), ("x", V1)), V1
                             register=False, ports=Ports(params={"key": In(kind="coin")}, ret=Out(sink=True)))
 #: the stand-in's receipt: 16 bits, one u16 word a proof block (a receipt is bits, as the tile's u32 words are)
 RECEIPT = Array(16, V1)
-OUT = Record(("receipt", RECEIPT), ("ok", V1))
+OUT = RecordType(("receipt", RECEIPT), ("ok", V1))
 
 
 def _sig(S):
@@ -698,7 +698,7 @@ def test_round_r_lists_step_rs_a_tables_whole_under_its_root():
 
 
 class _Receipts(dict):
-    """A stand-in receipt producer: each proof block of the call one receipt of the stand-in's width (one u16 word), drawn from
+    """A stand-in receipt producer: each proof block of the call one receipt of the stand-in's width (one u16 word), sampled from
     the call's served codes and weight, kept by call (with the codes it was given, and the order it was asked in) so a
     test recomputes each table from them."""
 
@@ -1058,11 +1058,11 @@ def test_k_up_to_4096_roots_are_unchanged():
         period = _period(ws)
         run, _ws, _got = _window(W1, weights=period)
     got = {v: r.root.hex()[:32] for v, r in run.served.registered.items() if "/a/" in v or "/b/" in v}
-    assert period.root().hex()[:32] == "0b889e954429d1cdac365f8e23e8153c"
+    assert period.root().hex()[:32] == "1ece0ea710f8c4eb2928eab685ffb566"
     assert got == {SV.PREFIX + v: h for v, h in {
-        "a/16@0": "04b9eb08e826e1494240fc36ab0bc5e4", "a/16@1": "e899d34fbfa90038cbdf2585410f56b5",
-        "a/32@0": "3087ac7de2b46030df6a89c0dde76fca", "a/32@1": "9d7cca0084a5daad92b6536fba6fd31c",
-        "b/16": "9af66bcd442455a00f1bbc66995815c7", "b/32": "da3a215e48a1fa5f72401e28e5791cc6"}.items()}
+        "a/16@0": "c8b921b78bada773a56c50d86e4b18e5", "a/16@1": "8b4037635004312a565d50e90ad1d1f1",
+        "a/32@0": "717c4bda4f5b9a14963d83c2f4684b97", "a/32@1": "6aefc8db5b8a0da8ceea92ba37934975",
+        "b/16": "a226c1160a24925da82ea5fcdf038552", "b/32": "434e13142ae61afb78f47ce2b04661c7"}.items()}
 
 
 #: kernels' SPLITK vectors (``tests/vectors/splitk_rows.json``, `splitk_rows_vectors`): their
@@ -1071,11 +1071,11 @@ def test_k_up_to_4096_roots_are_unchanged():
 VECTORS_LABEL = b"verity/pouw/splitk-rows-vectors/v1"
 VECTORS = [
     ("a-14336-s0", "a/14336@0", 14336, 64, (1 << 61) + (1 << 42), True, 256, 1794,
-     "8acce5e4bf00be8d31e84814e2b349dd5e0906103d55748662898e15e1501c93a50a993b29b5add3c21e89a8e984942ec4a943b0ee4df17e5ea4e239bee20e56",
-     "b2e05799b4fad2b3795b165d5e262d2b35e8776ef3d41eabc132aa160a0fbed537e53927727063f844054ddcce12cb1a5e0e941e4442a4ba50231f7ab72cc369"),
+     "6b893709e728b3f92b578c12d0ef87fc8f452525fc8742e26264a9a32d4d0ca72f0d34fdb8e228219ce52bb896177aa7cac27431f19b823fc069478905b6d88a",
+     "45186fd0067bd7687af889999cedf0c93c5e95816b72aebdd0a51ff2946a59c11cfbc7560c9206ea05c359def2f4aeb39c819ec390c6a004a31b469efa62855b"),
     ("b-6144", "b/6144", 6144, 64, Wt.B_NONCE, False, 128, 1538,
-     "ee06cb8014a9ea97fa6e3c319a61ac9094dfa6727b6a8bca92c9c6daf8098080499f505edeb236c03264fb695e79f2f2c9985ae9250712ae33de36591fbf5358",
-     "f93f07478d0900b061ffc2a6d6b24aa342a7b0247380bd95b2aa3f80fffc8567bed58d4be497b41321d288a33bdd910062e394dbf70444582a7e8f014b49e7ad"),
+     "b8a8b4de9a55053ef37e5d61c493fd54247c43ea3078bcee2be05bb8bfd56f2efe269ec5a09273cb5281c4ce529d62d83b0b5114e5f5ff8240ef8ee89df45195",
+     "2ffd8e4b05f031a1ae596a63248734f1a7f57188cfeaeba0fe24cde018e25e1df52d6258cfa2f54aaa3744e5bf5e5ccc0191681c5f3341ab5bb0c8fc68c6e983"),
 ]
 
 

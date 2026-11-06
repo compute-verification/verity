@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.View
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.View
 
 /-!
 # C-Flock's one-stage audit under hidden outputs is zero knowledge (trusted)
@@ -11,6 +13,8 @@ C-Flock's definitions are still in its proofs package, so this module imports
 `Proofs.Flock.Soundness.Discharge.ZkHidden.View`, and `Models.lean`, which the `security` package builds without
 `security_proofs`, does not import it: `Proofs.Flock.ZeroKnowledgeHidden` does.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 
@@ -36,7 +40,7 @@ valid witness and admitted coins it never fires if the clear protocol is complet
 which `inner_complete` takes as a hypothesis), and nothing here proves that.
 
 Which verifiers: honest-verifier zero knowledge at each fixed coin vector, a zerocheck outer coin `1` among the refused.
-A verifier that chooses its coins is `Claims.Flock.ZK`'s (`Definitions/Claims.lean`, `ZKmalR`): zero knowledge against
+A verifier that chooses its coins is `Claims.Flock.ZK`'s (`Definitions/Claims.lean`, at `Definitions/Core/Interaction.lean`'s `ZKmalR`): zero knowledge against
 every malicious verifier of the deployed interaction's rounds, the masked verifier committing to every coin at `Hello`
 before the prover's first message, with a coin opened two ways charged to a collision among the honest prover's SHA-512 calls
 in two real runs (`Fork`).

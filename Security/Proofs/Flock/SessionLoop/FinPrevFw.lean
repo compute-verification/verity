@@ -1,7 +1,9 @@
-import Proofs.Flock.SessionLoop.FinPiopRet
-import Proofs.Flock.SessionLoop.FinRepOpen
-import Proofs.Flock.SessionLoop.FinRepRows
-import Proofs.Flock.Claims.ZK.RepCutFw
+module
+
+public import Proofs.Flock.SessionLoop.FinPiopRet
+public import Proofs.Flock.SessionLoop.FinRepOpen
+public import Proofs.Flock.SessionLoop.FinRepRows
+public import Proofs.Flock.Claims.ZK.RepCutFw
 
 /-!
 # The views' cut rep returns where the firewall's rep did, with no rows
@@ -19,6 +21,8 @@ No premise on the views' masked values, and none on the rows.
 `swSrcE_hmk_fw` and `swSrcE_l0_views` take as `hprev`: at table `j`'s rep `r`, every stream below `2j + r` returns
 from its base and ends at the next one's, at any pads commitment.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
@@ -130,13 +134,13 @@ theorem prevCut_views (vs : finS.SwVals)
         (((_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (Masked.stsOf x))[k / 2]!.m
           (FlockDeploy.tabsOf (Masked.stsOf x))[k / 2]!.kLog schs[k / 2]!.1.k0).len +
           _root_.Flock.Zk.K_PAD).nextPowerOfTwo * 2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE)
-        ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t (k / 2)).rep (k % 2))).go l =
+        ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t (k / 2)).rep (k % 2))).go l =
           (.ok ic, l)) →
       ∀ l : Array Msg, l.size = Masked.repBase x k →
       ∃ p tr l', ((FlockComplete.repCut (FlockComplete.asksCut (Masked.ligCoin (finCoins x ops)) (refK x)) Masked.hsE
           (FlockDeploy.tabsOf (Masked.stsOf x))[k / 2]! schs[k / 2]!.1 (k % 2)
           (spec.domain spec.tables[k / 2]! (k % 2)).toUTF8 cms[k / 2]! extras ic
-          ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t (k / 2)).rep (k % 2))
+          ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t (k / 2)).rep (k % 2))
           (Masked.priorE (finCoins x ops) (k / 2) (k % 2))
           (FlockComplete.MaskRank.masksOf (Masked.stsOf x))[k / 2]!).run
           (_root_.Flock.Transcript.init #[] (spec.domain spec.tables[k / 2]! (k % 2)).toUTF8)).go l =

@@ -1,4 +1,6 @@
-import Proofs.Flock.C3.Reps.Steps
+module
+
+public import Proofs.Flock.C3.Reps.Steps
 
 /-!
 # `RepStepsWoven` and the openings from the reps' parts
@@ -12,6 +14,8 @@ have the same messages. They are the source's definition at the reps, so they ho
 with its reps' steps and openings read off the values (`repWeaveAt_repsOfVals`, `hos_repsOfVals`); there `StepsOfVals`
 needs only the other parts and the cap (`stepsOfVals_repsOfVals`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

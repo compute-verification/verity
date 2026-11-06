@@ -174,6 +174,22 @@ def test_a_change_no_key_reads_plans_as_the_checked_commit_and_one_a_suite_reads
     assert "suite:" not in why_c and why_c.startswith(f"{len(unpassed)} of ")
 
 
+def test_a_job_off_the_merge_gate_is_planned_and_required_of_no_check(P, tmp_path):
+    """circuit-check and ratchet-gate are off the merge gate (policy.toml's `off_gate`): their parts are listed, none required, so
+    `research merge --verdicts` admits a commit whose targets no check passed."""
+    root = tmp_path / "tree"
+    _tree(root)
+    parts = P.plan_tree(root, [], False, circuit=lambda C, s: [P.Part("circuit-check:t", "circuit-check", "v1/k", "must-run")])
+    doc = P.document(parts, _git(root, "rev-parse", "HEAD"), _git(root, "rev-parse", "HEAD^{tree}"), None, [], [])
+    by = {p["part"]: p for p in doc["parts"]}
+    assert by["circuit-check:t"]["state"] == "must-run" and by["circuit-check:t"]["required"] is False
+    assert by["ratchet-gate"]["required"] is False
+    off = ("circuit-check:t", "ratchet-gate", "lean-changed", "lean-agreement")
+    assert all(p.get("required", True) for n, p in by.items() if n not in off)
+    _cited, why = _judged(doc, {})
+    assert why and "circuit-check" not in why and "ratchet-gate" not in why
+
+
 def test_lean_agreement_is_required_for_a_change_its_merge_requires_covers_in_the_commits_own_ci_toml(P, tmp_path):
     root = tmp_path / "repo"
     (root / "tools" / "verity" / "check").mkdir(parents=True)
@@ -274,8 +290,8 @@ def test_a_circuit_targets_pass_names_its_entry_and_the_task_list_that_keys_it(P
 
 
 def test_a_plan_on_a_machine_ships_the_commit_with_this_plan_and_the_packs_and_reads_back_what_it_wrote(P, tmp_path, monkeypatch):
-    """`--on MACHINE` (`on_machine`): a `research run --wait` of a worktree of the commit, sent this plan.py, verdicts.py and
-    each gathered pack under a name of its own, runs the inner plan in that tree's environment on those packs; the plan it
+    """`--on MACHINE` (`on_machine`): a `research run --wait` of a worktree of the commit, sent this plan.py, verdicts.py, the
+    settings both read and each gathered pack under a name of its own, runs the inner plan in that tree's environment on those packs; the plan it
     writes comes back, and the worktree is gone.  The run's command goes through a real shell here, a fake `uv` its end; not a
     login shell, whose profile would change the PATH the steps' keys read from the one a check's steps see."""
     import json
@@ -319,7 +335,7 @@ def test_a_plan_on_a_machine_ships_the_commit_with_this_plan_and_the_packs_and_r
     assert P.on_machine("auto", first, tmp_path, packs, [], out, notes, run=run) == 2
     assert P.on_machine("m", first, tmp_path, packs, ["--packs-only", "--base", "B"], out, notes, run=run) == 1
     assert seen == {"head": first, "on": "m", "wait": True, "pool": "research", "shell": ["bash", "-c"],
-                    "sent": ["pack-0.tar.gz", "pack-1.tar.xz", "plan.py", "verdicts.py"]}
+                    "sent": ["pack-0.tar.gz", "pack-1.tar.xz", "plan.py", "settings.py", "verdicts.py"]}
     i = f"{run_dir}/inputs"
     assert json.loads(out.read_text()) == [f"{i}/plan.py", "--tree", ".", "--out", f"{run_dir}/out/plan.json", "--packs-only",
                                            "--base", "B", f"--pack=r1={i}/pack-0.tar.gz", f"--pack=={i}/pack-1.tar.xz"]

@@ -1,4 +1,6 @@
-import Proofs.Flock.C3.Reps.ReadCol
+module
+
+public import Proofs.Flock.C3.Reps.ReadCol
 
 /-!
 # The opening unit reads its row columns (`openRowRead`)
@@ -15,6 +17,8 @@ import Proofs.Flock.C3.Reps.ReadCol
 * The net (`readCol_of_laid`): a laid-out row below the constant is a computed row of `Rows.ofNet`, reading the same
   columns, at `unitLog ≤ 32`.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps.RowRead
 

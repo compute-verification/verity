@@ -9,6 +9,10 @@ place: a format in today's words is a new version and a new entry. An entry carr
 so a proof about code that reads one sees its literal. The entries under "Not yet read from here" are other protocols'
 separators, named before their owners' code reads them.
 -/
+module
+
+@[expose] public section
+
 namespace Domains
 
 -- PoUW: the protocol and its identifier
@@ -182,7 +186,6 @@ abbrev VLLM_PEARL_C_RUN_CERTIFIED : String := "verity-vllm/pouw-pearl-c-run/v3"
 -- Not yet read from here: the commitments' own (`verity.ml.commitments`)
 abbrev BLAKE3_KEYED_ROW_NVFP4 : String := "blake3-keyed/row-nvfp4/v1"
 abbrev BLAKE3_KEYED_ROW : String := "blake3-keyed/row/v2"
-abbrev POSEIDON2_BABYBEAR_W24_ROW : String := "poseidon2-babybear-w24/row/v2h"
 abbrev SHA256_ROW_NVFP4_DIGEST : String := "sha256/row-nvfp4/v1"
 abbrev SHA256_ROW_DIGEST : String := "sha256/row/v1"
 abbrev VLLM_EMPTY : String := "verity-vllm/empty/v1"
@@ -226,8 +229,8 @@ abbrev CHALLENGER_COMMITMENT : String := "verity/challenger/commitment/v1"
 abbrev CHALLENGER_RELEASE_LOG : String := "verity/challenger/release-log/v1"
 abbrev INTEGRITY_PROFILE : String := "verity/integrity-profile/v1"
 abbrev ONE_STAGE_AUDIT : String := "verity/one-stage/audit/v0"
-abbrev ONE_STAGE_REGISTERED_DOMAIN : String := "verity/one-stage/registered-domain/v0"
-abbrev ONE_STAGE_SUPPLIED_SALT : String := "verity/one-stage/supplied-salt/v0"
+abbrev ONE_STAGE_REGISTERED_DOMAIN : String := "verity/one-stage/registered-domain/v1"
+abbrev ONE_STAGE_SUPPLIED_SALT : String := "verity/one-stage/supplied-salt/v1"
 abbrev ONE_STAGE_PERIOD_SALT : String := "verity/one-stage/window-salt/v1"
 abbrev PROOF_SERVICE_OUTCOME : String := "verity/proof-service/outcome/v0"
 abbrev PROOF_SERVICE_STREAM : String := "verity/proof-service/stream/v0"
@@ -258,8 +261,6 @@ abbrev FLOCK_ZK_TAU : String := "verity/flock-zk/tau/v1"
 abbrev LAYOUT : String := "verity/layout/v1"
 abbrev REC_COINS : String := "verity/rec-coins/v1"
 abbrev REC_INNER : String := "verity/rec-inner/v1"
-abbrev REC_V0_VERIFIER_SALT : String := "verity/rec-v0/verifier-salt/v0"
-abbrev REC_V0_ZERO_RESIDUAL_SALT : String := "verity/rec-v0/zero-residual-salt/v0"
 
 -- Not yet read from here: PoUS, the wipe and the memory challenger
 abbrev CHAIN_DENSE_H : String := "chain-dense-H/v1"
@@ -308,17 +309,6 @@ abbrev WIPE_MONITORING_PERIOD : String := "verity/wipe-monitoring-period/v1"
 abbrev WIPE_PROTOCOL : String := "verity/wipe/v0"
 abbrev WIPE_EGRESS : String := "wipe-egress/v1"
 
--- Not yet read from here: the bandwidth audit
-abbrev GF31_POLY : String := "gf31-poly/v1"
-abbrev RO_BLAKE3 : String := "ro-blake3/v1"
-abbrev RO_SHA512 : String := "ro-sha512/v1"
-abbrev BANDWIDTH_CHALLENGER_STATE : String := "verity/bandwidth/challenger-state/v1"
-abbrev BANDWIDTH_OPENINGS : String := "verity/bandwidth/openings/v1"
-abbrev BANDWIDTH_SALT : String := "verity/bandwidth/salt/v2"
-abbrev BANDWIDTH_TAG_LEAF : String := "verity/bandwidth/tag-leaf/v1"
-abbrev BANDWIDTH_TAG : String := "verity/bandwidth/tag/v1"
-abbrev BANDWIDTH_PERIOD : String := "verity/bandwidth/window/v2"
-
 -- Not yet read from here: the remote bandwidth audit
 abbrev REMOTE_BANDWIDTH_P2_BLOCK4 : String := "p2-unit4/v0"
 abbrev STORE_ORDER : String := "store-order/v0"
@@ -346,7 +336,7 @@ abbrev REMOTE_BANDWIDTH_TIMING_JITTER : String := "verity/remote-bandwidth/timin
 abbrev REMOTE_BANDWIDTH_PROTOCOL : String := "verity/remote-bandwidth/v0"
 abbrev REMOTE_BANDWIDTH_PERIOD : String := "verity/remote-bandwidth/window/v1"
 abbrev REMOTE_SESSION_PAYLOAD_SALTS : String := "verity/remote-session/payload-salts/v0"
-abbrev STORE_SALT : String := "verity/store/salt/v0"
+abbrev STORE_SALT : String := "verity/store/salt/v1"
 
 -- Not yet read from here: the network certifier and network accounting
 abbrev CERTIFIER_ADVISED_ADVICE : String := "verity-network-certifier/advised-advice/v2"
@@ -364,7 +354,7 @@ abbrev CERTIFIER_OUT : String := "verity-network-certifier/out/v1"
 abbrev CERTIFIER_PAIR_ENC : String := "verity-network-certifier/pair/v1/enc"
 abbrev CERTIFIER_PAIR_MAC : String := "verity-network-certifier/pair/v1/mac"
 abbrev CERTIFIER_PARAMETERS_V1 : String := "verity-network-certifier/parameters/v1"
-abbrev CERTIFIER_PERIOD_SAMPLING : String := "verity-network-certifier/period-draw/v0"
+abbrev CERTIFIER_PERIOD_SAMPLING : String := "verity-network-certifier/period-draw/v1"
 abbrev CERTIFIER_PERIOD : String := "verity-network-certifier/period/v0"
 abbrev CERTIFIER_RECORD_V2 : String := "verity-network-certifier/record/v2"
 abbrev CERTIFIER_RECORDS : String := "verity-network-certifier/records/v2"
@@ -399,9 +389,8 @@ abbrev NETWORK_CERTIFICATE : String := "verity/network-certificate/v4"
 abbrev NETWORK_RECORDS : String := "verity/network-records/v3"
 abbrev PERIOD_CIRCUIT : String := "verity/window-circuit/v1"
 
--- Not yet read from here: composition (onsite, remote, product)
+-- Not yet read from here: composition (onsite, remote)
 abbrev ONSITE_PROTOCOL : String := "verity/onsite/v0"
-abbrev PRODUCT_PROTOCOL : String := "verity/product/v0"
 abbrev REMOTE_PROTOCOL : String := "verity/remote/v0"
 
 -- Not yet read from here: served periods (`verity.ml.windows`, the bytes say window)

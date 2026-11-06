@@ -1,26 +1,28 @@
-import Proofs.Flock.Claims.Complete.Honest
-import Proofs.Flock.Claims.Complete.Run
-import Proofs.Flock.Claims.Complete.Sim
-import Proofs.Flock.Claims.Complete.Ready
-import Proofs.Flock.Claims.Complete.Coins
-import Proofs.Flock.Claims.Complete.Encode
-import Proofs.Flock.Claims.Complete.Verdict
-import Proofs.Flock.Claims.Complete.Skeleton
-import Proofs.Flock.Claims.Complete.Discharge
-import Proofs.Flock.Claims.Complete.Shape
-import Proofs.Flock.Claims.Complete.Link
-import Proofs.Flock.Claims.Complete.Count
-import Proofs.Flock.Claims.Complete.Json
-import Proofs.Flock.Claims.Complete.Custody
-import Proofs.Flock.Claims.Complete.Files
-import Proofs.Flock.Claims.Complete.Runs
-import Proofs.Flock.Claims.Complete.Reps
-import Proofs.Flock.Claims.Complete.Zk
-import Proofs.Flock.Claims.Complete.Replay
-import Proofs.Flock.Claims.Complete.Walk
-import Proofs.Flock.Claims.Complete.WalkPacked
-import Proofs.Flock.Claims.Complete.Shaped
-import Proofs.Flock.Claims.Complete.Zk
+module
+
+public import Proofs.Flock.Claims.Complete.Honest
+public import Proofs.Flock.Claims.Complete.Run
+public import Proofs.Flock.Claims.Complete.Sim
+public import Proofs.Flock.Claims.Complete.Ready
+public import Proofs.Flock.Claims.Complete.Coins
+public import Proofs.Flock.Claims.Complete.Encode
+public import Proofs.Flock.Claims.Complete.Verdict
+public import Proofs.Flock.Claims.Complete.Skeleton
+public import Proofs.Flock.Claims.Complete.Discharge
+public import Proofs.Flock.Claims.Complete.Shape
+public import Proofs.Flock.Claims.Complete.Link
+public import Proofs.Flock.Claims.Complete.Count
+public import Proofs.Flock.Claims.Complete.Json
+public import Proofs.Flock.Claims.Complete.Custody
+public import Proofs.Flock.Claims.Complete.Files
+public import Proofs.Flock.Claims.Complete.Runs
+public import Proofs.Flock.Claims.Complete.Reps
+public import Proofs.Flock.Claims.Complete.Zk
+public import Proofs.Flock.Claims.Complete.Replay
+public import Proofs.Flock.Claims.Complete.Walk
+public import Proofs.Flock.Claims.Complete.WalkPacked
+public import Proofs.Flock.Claims.Complete.Shaped
+public import Proofs.Flock.Claims.Complete.Zk
 
 /-! Flock's completeness at the deployed plain verifier: the honest prover (`Honest`: `honestP`, on the session prover
 of `Prover/`: the transcript, the PIOP, Ligerito and the session record), its run against the verifier (`Run`:
@@ -41,3 +43,5 @@ goals into `Claims.Flock.Complete` at the deployed relation from named premises 
 every rep on the trace's packed table (`Run.repWalkP`), so the premise `LgFinal` rests on the honest Ligerito's final
 identity alone (`lgFinal_walk`, `complete_plain_honest`), which holds (`Lg.honest`), so completeness rests on the
 record's JSON alone (`complete_plain_json`), beside the oracle's 64-byte outputs that `Claims.Complete` reads itself. -/
+
+@[expose] public section

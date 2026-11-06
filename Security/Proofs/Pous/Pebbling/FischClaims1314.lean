@@ -1,15 +1,17 @@
-import Proofs.Pous.Pebbling.B2Stacking
-import Definitions.Pous
-import Definitions.Pous.Assumptions
-import Proofs.Pous.Statements
-import Proofs.Pous.Sanity
-import Proofs.Pous.Accounting.Numbers
+module
+
+public import Proofs.Pous.Pebbling.B2Stacking
+public import Definitions.Pous
+public import Definitions.Pous.Assumptions
+public import Proofs.Pous.Statements
+public import Proofs.Pous.Sanity
+public import Proofs.Pous.Accounting.Numbers
 
 /-!
 # Fisch 2018/702, Claims 13–14, proved
 
-The definitions and statements are copied verbatim from `FischClaims1314Draft.lean` (under red-team review), whose
-header lists the modelling choices. Only the `sorry`s are replaced.
+The definitions and statements are copies of the trusted ones (`Security/Definitions/Pous/Model/Pebbling.lean`,
+`Pous.Guarantees.FischClaim13` and `FischClaim14`).
 
 * **Claim 13** from Claim 12 (`PousB2.b2_stacking`). Let `E` be the set of endpoints. If `|E| < εn/2`, pebble
   every node of `E` black as well. That is at most `(1 − ε/2)n` black pebbles, and `δ < (ε/2)/2`, so Claim 12 gives
@@ -22,6 +24,8 @@ header lists the modelling choices. Only the `sorry`s are replaced.
   The reverse rule at a node of `P` would need the next node of its green path pebbled first, which
   `green_before` forbids. So each node of `P` is pebbled forward, after its predecessor.
 -/
+
+@[expose] public section
 
 namespace PousFisch
 

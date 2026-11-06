@@ -173,7 +173,7 @@ def test_the_difftest_vectors(name) -> None:
 
 
 def test_size() -> None:
-    """Each pinned class's ANDs (`cache_step.circuit-check.json`, its C-Flock lowering's, which merges the ANDs a unit
+    """Each pinned class's ANDs (`cache_step.circuit-check.json`, its Flock lowering's, which merges the ANDs a unit
     repeats on identical operands) within 3% of the Definition's, and a unit's growth in N: a comparison against each
     entry and a masked write to it, 2·(U·TW + EW) + 2·RW ANDs and a few more."""
     pins = json.loads((Path(CS.__file__).with_name("cache_step.circuit-check.json")).read_text())["definitions"]

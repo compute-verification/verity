@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.ResAccPorts
-import Proofs.Flock.Claims.Recursion.ResLowerDA
-import Proofs.Flock.Claims.Recursion.LayoutBAcc
+module
+
+public import Proofs.Flock.Claims.Recursion.ResAccPorts
+public import Proofs.Flock.Claims.Recursion.ResLowerDA
+public import Proofs.Flock.Claims.Recursion.LayoutBAcc
 
 /-!
 # P3 from the outer witness's own `rec-acc` chain
@@ -18,6 +20,8 @@ holds it (`accCanon`, `accSegs`), read as two elements (`chainW`). P3 splits in 
 
 `accPorts_of_W` is `AccPorts` at the dense form from the two.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.ResLower
 
@@ -43,7 +47,7 @@ def StepsW (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → �
     (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), (DRL rd wE final w b elem).parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (DRL rd wE final w b elem).parse x = some st → shape st.form →
     ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
     RecDeploy.OpenLower.JointP FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
       (AccP rd wE final w b elem shape untr cmt) x c ws →
@@ -68,7 +72,7 @@ def StepsWX (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → 
     (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), (DRL rd wE final w b elem).parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (DRL rd wE final w b elem).parse x = some st → shape st.form →
     ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
     RecDeploy.OpenLower.JointP FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
       (AccP rd wE final w b elem shape untr cmt) x c ws →
@@ -105,7 +109,7 @@ copy's accumulator ports are `w`'s last four, and at every decision `D` the copy
 def EndsW (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), (DRL rd wE final w b elem).parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (DRL rd wE final w b elem).parse x = some st → shape st.form →
     ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
     RecDeploy.OpenLower.JointP FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
       (AccP rd wE final w b elem shape untr cmt) x c ws →

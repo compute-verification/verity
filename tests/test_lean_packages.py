@@ -30,6 +30,24 @@ def test_every_lake_package_is_audited():
     assert not missing, f"Lake packages without a lean-audit.json (tools/verity/lean/README.md): {missing}"
 
 
+def test_every_package_module_is_a_module():
+    """Every in-tree package's Lean is on Lean's module system (`tools/verity/lean/modules.py`), so an importer rebuilds
+    only when what a module exports changes, never for a proof's body."""
+    spec = importlib.util.spec_from_file_location("lean_modules", ROOT / "tools" / "verity" / "lean" / "modules.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    tracked = m.tracked()
+    files = m.modules([], tracked)
+    assert len(files) > 1000, len(files)
+    left = [f for f in files if not m.is_module((ROOT / f).read_text())]
+    assert not left, "not on Lean's module system; port each with `python3 tools/verity/lean/modules.py FILE`:\n  " + \
+        "\n  ".join(left)
+    lakefiles = m.lake_option_missing(tracked)
+    assert not lakefiles, f"without `{m.LAKE_OPTION}` under [leanOptions], so a public statement's proofs become auxiliary " \
+        "theorems and its lock records move; add it with `python3 tools/verity/lean/modules.py PACKAGE`:\n  " + \
+        "\n  ".join(lakefiles)
+
+
 def test_one_toolchain():
     """The jobs' base image installs the same one."""
     pins = {str(p.relative_to(ROOT)): (p / "lean-toolchain").read_text().strip() for p in lake_packages()}
@@ -47,6 +65,27 @@ def test_one_mathlib():
                 if dep["name"] == "mathlib":
                     revs[str(p.relative_to(ROOT))] = dep["rev"]
     assert revs and len(set(revs.values())) == 1, revs
+
+
+#: the size of each lock's `unwitnessed`: the guarantees stating what an acceptance means, or an exclusion's bound, that
+#: had no `honest` and `nontrivial` witnesses when the witness rule came (`check.py`'s `witness_failures`), with those the
+#: PRs on `next` then brought, the exclusion bounds that read a partition once a derived circuit's registration built
+#: its one-block partition (`RegisteredCircuit.ofCircuit`), the six C-Flock statements whose claim or verifier read
+#: lies in a module of `trees`' `except`, once the rule read through those, and C-Flock's `LoopInnerRound0Own`, which
+#: reads a claim, from a PR on `next`; and the two exclusion bounds a definition hides, once `Facts.lean`'s `chain`
+#: recorded the bound it ends at
+UNWITNESSED = {"Security": 624, "Security/Properties": 237, "verity/core/service/flock": 8}
+
+
+def test_the_unwitnessed_list_only_shrinks():
+    """A lock's `unwitnessed` never grows. A new guarantee of what an acceptance means, and one whose statement
+    changed, carries its witnesses instead; when a guarantee gets them, its entry goes, and its lock's number here may
+    come down with it."""
+    got = {str(p.relative_to(ROOT)): len(json.loads((p / "lean-audit.json").read_text()).get("unwitnessed", {}))
+           for p in lake_packages()}
+    grown = {p: f"{n} > {UNWITNESSED.get(p, 0)}" for p, n in got.items() if n > UNWITNESSED.get(p, 0)}
+    assert not grown, (f"`unwitnessed` grew in {grown}: it only shrinks (LEAN-66); give the guarantee you added its "
+                       f"`honest` and `nontrivial` witnesses under `witnesses` (check.py's failure names both) instead")
 
 
 def test_the_randomness_assumption_cites_this_toolchain():
@@ -185,3 +224,21 @@ def test_every_open_conjecture_names_a_test_that_exists():
             if not (ROOT / path).is_file() or not re.search(rf"^def {re.escape(node)}\(", (ROOT / path).read_text(), re.M):
                 bad.append(f"{p.relative_to(ROOT)}: {name}'s test {c.get('test')!r} is not PATH::NAME of a test in the tree")
     assert not bad, bad
+
+
+#: the size of each lock's `shape.inline`, in premises: the inline hypotheses lock-listed guarantees took that are neither
+#: a named assumption, another listed guarantee's statement nor a plain range when the inline rule came (`check.py`'s
+#: `inline_failures`), with those the PRs on `next` then brought and those `main` landed before the rule reached them; a
+#: renamed or restated premise counts twice, under both texts, until `--update` drops the one no tree prints
+INLINE = {"Security": 1960, "Security/Properties": 530, "verity/core/service/flock": 6}
+
+
+def test_the_inline_list_only_shrinks():
+    """A lock's `shape.inline` never grows: a guarantee's new inline hypothesis is named as an assumption or stated as
+    another listed guarantee's conclusion instead; when a grandfathered one is named, or a renamed one's old text is no
+    longer printed, `--update` drops its entry, and its lock's number here may come down with it."""
+    got = {str(p.relative_to(ROOT)): sum(map(len, json.loads((p / "lean-audit.json").read_text()).get("shape", {})
+                                             .get("inline", {}).values())) for p in lake_packages()}
+    grown = {p: f"{n} > {INLINE.get(p, 0)}" for p, n in got.items() if n > INLINE.get(p, 0)}
+    assert not grown, (f"`shape.inline` grew in {grown}: it only shrinks; name the hypothesis as a Prop in an "
+                       f"Assumptions module and list it in the lock, or state it as a lock-listed guarantee's conclusion")

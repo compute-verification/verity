@@ -1,4 +1,6 @@
-import Definitions.Nci.CoverPartialSum
+module
+
+public import Definitions.Nci.CoverPartialSum
 
 /-!
 # The cover theorem's partial-sum tightening: the new premise
@@ -9,6 +11,8 @@ keyed structure (`Guarantees.KeyedActivationReads`); above that it is a named `P
 activation costs is visible. It is a statement about the training circuit `C`, its products, a keyed token structure
 (`Keyed`) and a cube (`Cube`), at block size `s` and read cap `k`.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.Assumptions
 

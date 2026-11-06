@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.Placed.Setup
-import Proofs.Flock.Soundness.Types.ProgramPlaces
-import Proofs.Flock.Soundness.ExecFlatCopies
+module
+
+public import Proofs.Flock.Soundness.Discharge.Placed.Setup
+public import Proofs.Flock.Soundness.Types.ProgramPlaces
+public import Proofs.Flock.Soundness.ExecFlatCopies
 
 /-!
 # `ProgPlaces` on the typed path
@@ -16,6 +18,8 @@ unit of a program of units (`UProg`) at a slot of its table's class, as `Derived
   block, given that the unit reads the class's derivation inputs (`Reads`) and the slot's copies (`Copies`);
 * `TypedAccepted`, `UProg.progPlaces_of_setupH`: the same, each class from `setupH_flatTableClass`.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3 Flock.DeriveAll
 
@@ -50,7 +54,7 @@ def ofRowsAt (q : Prog N n) (outs : Finset (Fin N)) (inst : ∀ u, (q.partition 
   inst := inst
   o S R u h := (pl S R u h).o
   col S R u h := (pl S R u h).col
-  placed S R u h := (pl S R u h).placed
+  placed S R u h := (pl S R u h).placed.sat
   aliased := hal
 
 end OfRowsAt

@@ -1,4 +1,4 @@
-# Protocol soundness, the envelopes (rho/envelopes.py): the NCI check's registration (a policy) and each regime's envelopes, one
+# Protocol soundness, the envelopes (rho/envelopes.py): the inference-only check's registration (a policy) and each regime's envelopes, one
 # flat table per regime whose every key is a field of one envelope (Pouw, Detection, Wipe, Certifier) or the regime's
 # own form. A regime's `base` is a table it inherits and overrides.
 
@@ -57,7 +57,7 @@ side = { value = 1e3, unit = "bit/s/host", low = 0.1, high = 1e6, source = "rule
 form = "certified"
 
 # The onsite envelopes with each server's ingress at its inference blocks' declared inputs at the warden form's W63
-# parameters, per link-window as the bound is stated, in its honest-delta form, with no faulty ingress unit
+# parameters, per link-window as the bound is stated, in its honest-delta form, with no incorrect ingress unit
 # (draft:per-server-ingress): a toy cadence (4 lanes, at most two requests a lane a 3.2 s link-window), so its ingress,
 # 0.028 alpha Phi on an H200 server at v4-pro-session, feeds the serving this package credits only if outputs outnumber
 # prompts more than 20:1. A deployment's own cadence replaces it once it

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.VerdictAssembly
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictAssembly
 
 /-!
 # Row E at the decision, from the `rec-open` pieces' running sums
@@ -22,6 +24,8 @@ proves both facts from the pieces.
 * **Row E and the table's run** (`rowE_of_pieces`, `runs_assembledE`): `rowE_of_units` at these, and `runs_assembled`
   with E's hypotheses replaced by the pieces' and `acc := accE`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Rows
 
@@ -286,7 +290,7 @@ theorem rowE_of_pieces (chainAt : Claims.Msg → List Claims.Msg → ℕ → ℕ
 the chain `chainAt x ms i` from `r · N` for rep `r`, its `UnitSums` from row D's pieces holding `accHolds` (at D's
 `sideAt`, `hside` and `hcover`, and the coin tie `hcoef`) and its `ReadsEnds` from `accE`. Every other hypothesis is
 `runs_assembled`'s. -/
-theorem runs_assembledE {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+theorem runs_assembledE {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size)
     (hti : i < D.spec.tables.size) (chainAt : Claims.Msg → List Claims.Msg → ℕ → ℕ → Array F128)
     (hframed : ∀ r : Fin 2, FramedAt ((D.files cls i).stream r).rounds 0 (repFrames (D.files cls i).st

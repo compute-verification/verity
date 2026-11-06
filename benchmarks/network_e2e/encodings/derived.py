@@ -2,11 +2,11 @@
 because the certified I/O, the committed values, the registered config or the advice's own history already fix them, and
 the advice that remains.
 
-The advice is public and its length is the leak (`A_c`): LEAK-LEAN's `BitsCount` needs at most 2^c accepted advice
-strings charged ≤ c bits, so the encoding must be injective on everything the audit accepts. A field leaves the string
-only when it is *canonical and checked*: a function of the config, the rest of the string and the certified I/O that the
-unit holding that I/O recomputes and holds the advice to, so for a given I/O no choice hides in it. Any other field is
-sent and charged, a *forced* one (fixed by witness, but by a rule no unit checks yet) included.
+The advice is public and its length is the leak (`A_c`): the sampled leak bound (`hAs`) needs at most 2^c accepted
+advice strings charged ≤ c bits, so the encoding must be injective on everything the audit accepts. A field leaves the
+string only when it is *canonical and checked*: a function of the config, the rest of the string and the certified I/O
+that the unit holding that I/O recomputes and holds the advice to, so for a given I/O no choice hides in it. Any other
+field is sent and charged, a *forced* one (fixed by witness, but by a rule no unit checks yet) included.
 
 **What each checker holds.** In the clear: the residual below and the registered config (`Config`: block size, the KV
 pool's size, the token budget, the stop ids, the scheduler mode). As witness, inside proofs only: the certified ingress
@@ -718,8 +718,8 @@ def residual(advice: Advice, cfg: Config, held: Holdings, *, order: Sequence[int
 
 
 def reconstruct(res: Residual, cfg: Config, held: Holdings) -> Walk:
-    """I1's steps from the residual, the config and the tokens: the compile unit's derivation, which the compiler and
-    N2's advised counts then read."""
+    """I1's steps from the residual, the config and the tokens: the compile unit's derivation, which the compiler then
+    reads."""
     values = {"hit": iter(res.hits), "n": iter(res.ns), "lag": iter(res.lag or ())}
     resumes = iter(res.resumes or ())
     later, resume = [0], [next(resumes, None)]
@@ -790,7 +790,7 @@ def tie_fields(walk: Walk, res: Residual, held: Holdings, cfg: Config) -> list[R
 
 def rebuild(res: Residual, cfg: Config, held: Holdings, release: Sequence[int]) -> Advice:
     """The whole of v0 from the residual, the config and the tie's witness: `rebuild(residual(a), …) == a`. `release` is
-    read only on a shaped egress, where N2's advised counts derive it."""
+    read only on a shaped egress, where it is derived (`served.derive`)."""
     walk = reconstruct(res, cfg, held)
     requests = tie_fields(walk, res, held, cfg)
     for i, lag in zip(walk.lag_requests, res.lag or (), strict=True):
@@ -998,7 +998,7 @@ FIELDS = [
      "cost": "a 16-bit equality of the certified count with a public value: 15 ANDs a request"},
     {"field": "output_len", "verdict": "derived", "bits": "0", "from": "rows (public); forced by the committed sampled ids",
      "derivation": "the request's sampling rows (async: less the lag bit)",
-     "checker": "compiler, N2's advised counts; tie",
+     "checker": "compiler; tie",
      "cost": "0 in the clear; the tie's stop rule: is_stop on each committed id (3 stop ids of 17 bits: 3*16 + 2 = 50 ANDs), "
              "L <= max_tokens and L == max_tokens (16 + 15): 50 L + 31 ANDs a request"},
     {"field": "finish", "verdict": "derived", "bits": "0", "from": "committed sampled ids, certified max_tokens",
@@ -1048,8 +1048,8 @@ FIELDS = [
     {"field": "release", "verdict": "stays (unshaped); derived (shaped)", "bits": "w_rel a kept output / 0",
      "from": "unshaped: the egress head (witness), whose choices are the timing channel; shaped: the ingress anchors, the "
              "output lengths and the declared sync", "derivation": "shaped: served.derive with per-request output lengths",
-     "checker": "N2's advised counts",
-     "cost": "shaped: N2's advised counts' derive circuit (served.size: 678,795 ANDs at T = 600, FIXLEN)"},
+     "checker": "none yet: no N2 unit holds a shaped egress's counts to the advice",
+     "cost": "shaped: served.derive's circuit (served.size: 678,795 ANDs at T = 600, FIXLEN)"},
 ]
 
 

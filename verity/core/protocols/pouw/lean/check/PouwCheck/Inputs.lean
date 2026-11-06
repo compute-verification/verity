@@ -1,10 +1,12 @@
-import CoreProtocol.Protocol
-import CoreProtocol.Profile
-import Flock.Hash
-import PouwCheck.Json
-import PouwCheck.Tile
-import PouwWindow.Length
-import Identity.Domains
+module
+
+public import CoreProtocol.Protocol
+public import CoreProtocol.Profile
+public import Flock.WindowRecord
+public import PouwCheck.Json
+public import PouwCheck.Tile
+public import PouwWindow.Length
+public import Identity.Domains
 
 /-!
 # The check's three inputs (`core_check.py`, "the three inputs")
@@ -14,12 +16,14 @@ import Identity.Domains
   that template's tile work and query; and the rows' fixed length: stop mode `fixed` and each slot's max_tokens.
 * `Registration`: one-stage's record of the window (`registration.record`), canonical JSON, with what PoUW's rule reads;
   its digest is the record's own, `registration.digest`.
-* `Evidence`: the proof service's answer for a registration, read by `Core.Answer.ofJson`: the protocol, the
+* `Evidence`: the proof system's answer for a registration, read by `Core.Answer.ofJson`: the protocol, the
   registration it is for, and what it said (on acceptance, the integrity profile and the verifier's draw as one-stage's
   `draw.py` writes it).
 
 Each decoder refuses with `core_check.py`'s message, and `Core.Protocol.answer` prefixes it with the input's name.
 -/
+
+@[expose] public section
 
 namespace PouwCheck
 
@@ -193,9 +197,9 @@ def registrationOf (b : ByteArray) : V Registration := do
         "and registered")
   pure { bytes := b, format, program, query, partition, scheme, population, law, roots, window }
 
-/-- `registration.digest`: SHA-512(format ‖ 0 ‖ the canonical record). -/
-def Registration.digest (c : Registration) : ByteArray :=
-  Flock.Sha512.hash (c.format.toUTF8 ++ ByteArray.mk #[0] ++ c.bytes)
+/-- `registration.digest`: the window record's digest (`Flock.WindowRecord.digestOf`) of its format and the canonical
+bytes it was read from. -/
+def Registration.digest (c : Registration) : ByteArray := Flock.WindowRecord.digestOf c.format c.bytes
 
 /-! The service's draw, as one-stage's `draw.py` writes it. -/
 

@@ -198,8 +198,7 @@ def test_a_known_port_opens_only_its_content():
     assert not opens([7, 3], bytes(192)), "the verifier's content under another salt"
     f = LL.registered_file({}, {}, {}, known_ports={LL.PUB: port})
     assert f["ports"] == {LL.PUB: port} and port["reads"] == [0]
-    assert f[LL.COMPLETE] is True, "the verifier holds the circuit's every port to the file's (Registered.checkComplete)"
-    assert LL.COMPLETE not in LL.registered_file({}, {}, {}, known_ports={LL.PUB: port}, complete=False)
+    assert set(f) == {"format", "ports"}, "the verifier holds the circuit's every port to the file's, with no switch"
     with pytest.raises(ValueError, match="both reads and known"):
         LL.registered_file({LL.PUB: ("x", 0)}, {"x": port}, {"x": port["root"]}, known_ports={LL.PUB: port})
 
@@ -263,7 +262,7 @@ def _j10r_definition(t, n: int, st: tuple):
 @pytest.mark.parametrize("k", [448, 8192, 12288])
 def test_a_j10r_leafs_statements_and_every_port_are_its_v2_definitions(k):
     """A J10-R leaf's statements are `h1zy.lane_statements` lane by lane, then the combine, and each one's registered
-    ports (`own`) are exactly its Definition's C-Flock ports (`h1zy.statement_ports`), ``o0`` among them; statement i's
+    ports (`own`) are exactly its Definition's Flock ports (`h1zy.statement_ports`), ``o0`` among them; statement i's
     ``o0`` reads row i of ``oks`` and the combine's ``ok<i>`` the same row."""
     from verity.core.protocols.pouw.circuit import h1window as HW
 

@@ -1,4 +1,6 @@
-import Definitions.Hash.RowLeaf
+module
+
+public import Definitions.Hash.RowLeaf
 
 /-!
 # `EmbeddingRead_v1{V, H}`: the embedding's row read at a hidden position (trusted)
@@ -16,6 +18,8 @@ The read's verifier (`verifier`) is the registered domain, the hm96 key and the 
 read's checks are `Tree.accepts`'s. Nothing ties this text to the gates yet: they are held to the Python reference by
 `verity/ml/commitments/tests/test_boolean_embedding.py`, and the reference to this model by nothing but its reading.
 -/
+
+@[expose] public section
 
 namespace Hash.EmbeddingRead
 

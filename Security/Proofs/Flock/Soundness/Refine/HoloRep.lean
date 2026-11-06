@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Refine.Rep
-import Proofs.Flock.Soundness.Refine.Frames
-import Definitions.Flock.HoloCompiled
-import Proofs.Flock.VBridge.Algebra.Holo
+module
+
+public import Proofs.Flock.Soundness.Refine.Rep
+public import Proofs.Flock.Soundness.Refine.Frames
+public import Definitions.Flock.HoloCompiled
+public import Proofs.Flock.VBridge.Algebra.Holo
 
 /-!
 # One rep with hidden unit circuits, on the transcript
@@ -13,7 +15,7 @@ elements) and squeezes `r'`. The rounds end at `dot (comb + h) z_partial` (`RecA
 `holoLincheck`'s check (`RecAlgebra.fOf_dot_holo`).
 
 * `closeEmpty`: a squeeze of no coins that closes its round. `Transcript.squeeze 2 0` only frames its header; the record
-  keeps the round, so the program consumes it, as `RecAlgebra.Coins.ofRounds` skips it.
+  keeps the round, so the program consumes it, as `RecAlgebra.CoinSource.ofRounds` skips it.
 * `holoLincheckT`: `Flock.lincheck` with `z_partial`'s round closed, `h` absorbed and the check at `comb + h`.
 * `holoRepProg`: the zerocheck, `holoLincheckT`, ring switching and Ligerito.
 * `holoLcMsgs`, `holoRepMsgs`: the model's messages, `lcMsgs` and `repMsgs` with `h` after `z_partial`.
@@ -21,6 +23,8 @@ elements) and squeezes `r'`. The rounds end at `dot (comb + h) z_partial` (`RecA
 `HoloRefines.lean` refines the program to the model's `holoRepC`; `HoloRepConverse.lean` gives its run from its
 stages' checks.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

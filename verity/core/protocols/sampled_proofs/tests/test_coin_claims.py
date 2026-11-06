@@ -1,7 +1,7 @@
 """Every coin source is named by a claim instance (`challenger.coin_claim`): its ``claim``, a ``uniform/<instance>``
 assumption of `verity.core.claims`.  The Lean verifier's `coins` is A3's ``uniform/io-getrandombytes``; a served
 challenger refuses a source no claim instance names (`served_claim`), `os.urandom` among them, and a misnamed one is
-refused wherever it is read; a test's seeded stream stays unnamed, and the challenger keeps the claim it drew under."""
+refused wherever it is read; a test's seeded stream stays unnamed, and the challenger keeps the claim it sampled under."""
 
 from __future__ import annotations
 

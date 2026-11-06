@@ -1,5 +1,7 @@
-import Definitions.Claims.Sampling
-import Proofs.Flock.Claims.ERepCost
+module
+
+public import Definitions.Claims.Sampling
+public import Proofs.Flock.Claims.ERepCost
 
 /-!
 # Coins fresh on a set of rounds, and the extractor's waits
@@ -16,6 +18,8 @@ The sampled extractor (`Claims.Sampling.E`) reruns the judged run fresh on some 
   most `m·K` times.
 * `NoHash`, `calls_le_of_noHash`: a program without SHA-512 calls of its own calls at most `t` times per rerun.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 

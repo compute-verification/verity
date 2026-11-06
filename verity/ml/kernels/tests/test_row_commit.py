@@ -1,8 +1,13 @@
 """``row_commit.cuh`` against ``verity.ml.commitments``: its frame-v3-sha512 leaf, pad and node are `CommitmentDomain`'s at
-every length of uint below 2^32, through the compile-time and the run-time forms, and its builders' leaf at a rank and a
-position apart is too; its trees give ``frame_v3/vectors_sha512.json``'s leaves, pads and roots; its hm96-sha512 leaf, through
-every table and loop of the mask, gives ``hm96/vectors_sha512.json``'s commit strings and leaves under both keys, the gates'
-reference on fresh rows and salts and the vectors' hiding leaves; and the gates' Definitions compute what it does.
+every length of uint below 2^32, through the compile-time and the run-time forms (the leaf's also a body a length,
+`frame_leaf_nb`, and the node's also through `Compact`), and the forms with no plan (`pad_of`, `node_at`, and the whole
+messages through a sink, `put_leaf`, `put_pad` and `put_node`, hashed as they are built or from the sink) past it too; its
+leaf at a rank and a position apart, by the builders and from its head (`leaf_head`, `leaf_tail`, at schemas up to 95 bytes
+and ranks below 2^64), is too; its trees give ``frame_v3/vectors_sha512.json``'s leaves, pads and roots; its hm96-sha512
+leaf, through every table and loop of the mask (`mask_lanes` over a strided salt in two column orders, and
+`mask_positions` over hm96's byte tables as a position table, as bytes and as words, too), gives
+``hm96/vectors_sha512.json``'s commit strings and leaves under both keys, the gates' reference on fresh rows and salts and
+the vectors' hiding leaves; and the gates' Definitions compute what it does.
 ``row_commit_cases.cu`` runs the cases, built by the host's C++ compiler and, where nvcc and a GPU are present, on the
 device; the device build is cached (`cuda_build`), so a GPU job builds it (``cuda_lib``) before it leases a GPU."""
 from __future__ import annotations
@@ -40,6 +45,10 @@ ROW, SEG = "hm96-sha512/row/v2", "hm96-sha512/row-seg/v1"
 SCHEMAS = (ROW, SEG, "sha512/row/v2", "sha512/row-seg/v1")
 #: both sides of every step of uint's length below 2^32
 EDGES = (0, 1, 255, 256, 65535, 65536, (1 << 24) - 1, 1 << 24, (1 << 32) - 1)
+#: ranks, pads and indices past 2^32, which only the forms with no plan take
+WIDE = (1 << 32, (1 << 40) - 1, 1 << 48, (1 << 56) + 5, (1 << 64) - 1)
+#: a head's rank and position: its tail and the value in one block (under an 18-byte schema) and in two
+HEADS = ((0, 0), (255, 1 << 40), ((1 << 48) - 1, (1 << 48) - 1), (1 << 48, 3), (7, (1 << 56) + 1), ((1 << 64) - 1, (1 << 64) - 1))
 LEAF, PAD, NODE, HM96, EMPTY, LEAF_AT = range(6)
 
 u8 = ctypes.c_uint8
@@ -47,7 +56,7 @@ u8 = ctypes.c_uint8
 
 class Case(ctypes.Structure):
     _fields_ = [("kind", ctypes.c_int32), ("form", ctypes.c_int32), ("sl", ctypes.c_int32), ("level", ctypes.c_int32),
-                ("pos", ctypes.c_uint64), ("position", ctypes.c_uint64), ("did", u8 * 64), ("schema", u8 * 32),
+                ("pos", ctypes.c_uint64), ("position", ctypes.c_uint64), ("did", u8 * 64), ("schema", u8 * 96),
                 ("value", u8 * 64), ("L", u8 * 64), ("R", u8 * 64), ("x", u8 * 64), ("y", u8 * 192)]
 
 
@@ -65,6 +74,14 @@ def case(kind: int, form: int = 0, *, did: bytes = b"", schema: str = ROW, pos: 
 
 
 Run = Callable[..., list]
+
+
+def _position_tables(key: bytes) -> tuple[ctypes.Array, ctypes.Array]:
+    """`PosTab`'s table: hm96's byte tables, an entry of 64 little-endian bytes a salt byte position and byte value; and
+    the same as words (`PosTab<LDG, true>`'s): each entry's 8 big-endian words, as 64-bit words in memory."""
+    raw = b"".join(v.to_bytes(64, "little") for row in INST.byte_tables(key) for v in row)
+    as_words = np.frombuffer(raw, dtype=">u8").astype("<u8").tobytes()
+    return ctypes.create_string_buffer(raw), ctypes.create_string_buffer(as_words)
 
 
 def _load(path: Path) -> ctypes.CDLL:
@@ -88,7 +105,7 @@ def _runner(lib: ctypes.CDLL, cuda: bool = False) -> Run:
         if key not in tables:
             t = (ctypes.create_string_buffer(8192), ctypes.create_string_buffer(256 * 272), ctypes.create_string_buffer(256 * 256))
             lib.rc_tables(key, *t)
-            tables[key] = t
+            tables[key] = (*t, *_position_tables(key))
         n = len(cases)
         outs = (Out * n)()
         if cuda:
@@ -119,13 +136,18 @@ def _check_leaves(run: Run) -> None:
         did = rng.randbytes(64)
         for pos in EDGES:
             v = rng.randbytes(64)
-            for form in (0, 1) if schema in (ROW, SEG) else (0,):
+            for form in (0, 1, 2) if schema in (ROW, SEG) else (0, 2):
                 cases.append(case(LEAF, form, did=did, schema=schema, pos=pos, value=v))
                 want.append(F.leaf_ref(did, schema, v, pos))
     for rank, position in ((0, 7), (3, 65536), (1 << 20, 5), ((1 << 32) - 1, (1 << 40) + 3)):
         did, v = rng.randbytes(64), rng.randbytes(64)
-        cases.append(case(LEAF_AT, did=did, pos=rank, position=position, value=v))
-        want.append(F.leaf_at_ref(did, ROW, v, rank, position))
+        cases += [case(LEAF_AT, form, did=did, pos=rank, position=position, value=v) for form in (0, 1, 2)]
+        want += [F.leaf_at_ref(did, ROW, v, rank, position)] * 3
+    for schema in SCHEMAS + ("frame-v3-sha512/root/v1", "s" * 64, "t" * 95):
+        for rank, position in HEADS:
+            did, v = rng.randbytes(64), rng.randbytes(64)
+            cases += [case(LEAF_AT, form, did=did, schema=schema, pos=rank, position=position, value=v) for form in (1, 2)]
+            want += [F.leaf_at_ref(did, schema, v, rank, position)] * 2
     assert [bytes(o.out) for o in run(cases)] == want
 
 
@@ -133,13 +155,19 @@ def _check_pads_and_nodes(run: Run) -> None:
     rng = random.Random("row-commit/nodes")
     d = domain(1 << 20, "row-commit/nodes")
     did = d.domain_id
-    cases = [case(PAD, form, did=did, pos=rank) for rank in EDGES for form in (0, 1)]
-    want = [d.pad(rank) for rank in EDGES for _ in (0, 1)]
+    cases = [case(PAD, form, did=did, pos=rank) for rank in EDGES for form in (0, 1, 2, 3)]
+    want = [d.pad(rank) for rank in EDGES for _ in range(4)]
+    cases += [case(PAD, form, did=did, pos=rank) for rank in WIDE for form in (2, 3)]
+    want += [d.pad(rank) for rank in WIDE for _ in (2, 3)]
     for level in (0, 1, 7, 31, 32):
         for index in EDGES:
             left, right = rng.randbytes(64), rng.randbytes(64)
-            cases += [case(NODE, form, did=did, level=level, pos=index, L=left, R=right) for form in (0, 1)]
-            want += [d.node(level, index, left, right)] * 2
+            cases += [case(NODE, form, did=did, level=level, pos=index, L=left, R=right) for form in range(6)]
+            want += [d.node(level, index, left, right)] * 6
+    for level, index in zip((0, 3, 40, 63, 255), WIDE):
+        left, right = rng.randbytes(64), rng.randbytes(64)
+        cases += [case(NODE, form, did=did, level=level, pos=index, L=left, R=right) for form in (3, 4, 5)]
+        want += [d.node(level, index, left, right)] * 3
     cases.append(case(EMPTY, did=did))
     want.append(d.empty_root())
     assert [bytes(o.out) for o in run(cases)] == want
@@ -165,7 +193,7 @@ def _check_trees(run: Run) -> None:
     for t in trees:
         assert t["domain"]["range"][0] == 0
         did = _hex(t["domain"]["domain_id"])
-        for form in (0, 1):
+        for form in (0, 1, 2):
             leaves, pads, root = _tree(run, did, t["schema"], [_hex(v) for v in t["digests"]], form)
             assert (leaves, pads, root) == ([_hex(v) for v in t["leaves"]], [_hex(v) for v in t["pads"]], _hex(t["root"]))
     e = FV["empty_root"]
@@ -234,7 +262,7 @@ def test_the_hm96_plan_is_the_prefixes_midstates(host: ctypes.CDLL) -> None:
 
 
 def test_hm96_leaves_through_every_mask_are_the_vectors_and_the_reference(host: ctypes.CDLL) -> None:
-    assert host.rc_hm96_forms() == 5
+    assert host.rc_hm96_forms() == 9
     _check_hm96(_runner(host), host.rc_hm96_forms())
 
 

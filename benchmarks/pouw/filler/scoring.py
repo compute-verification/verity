@@ -1,4 +1,4 @@
-"""The filler scorer's suite and arithmetic (locked; owner compute-accounting; note:20261016T0435Z-report-filler-spec).
+"""The filler scorer's suite and arithmetic (locked).
 Stdlib only: it runs on the node after the lease and in the pouw suite's CPU test. `score.py` measures; this module turns
 the driver's rows (`dscore.cu`) and the gates' outputs into SCORE, the per-entry minimum, the gates and the secondary
 metrics.
@@ -45,10 +45,10 @@ V2, V3, V4, V5 = "filler-scorer/v2", "filler-scorer/v3", "filler-scorer/v4", "fi
 #: the active lock. V3 adds the arm's record checked before its lease (`arms.record_problems`), each point's slowdown
 #: margin (`margins`), and the filler read at its proved entry (`FILLER_ENTRIES`, `filler_entry`) with SCORE under CH
 #: beside it. V4 reads the filler wherever it's called from, filler warps inside serving kernels included
-#: (`program_facts`, `filler_entry_v4`, `credit_fixed`, `paths_gate`, `whole_of_peak`). V5 (active, coordinator 12:10Z:
-#: its fold check is a soundness correction, decision 43) reads the receipt's fold (`fold_reading`), the served products
-#: at the MODELLED edited design's reading (`score_v5`), and the TP entries (`tp_score`); a v5 correction (coordinator
-#: 13:09Z, RS-E-REF r7) reads the XOR-family folds at Theorem K's proved half (`FOLDS`, `SELECT_LEMMA`).
+#: (`program_facts`, `filler_entry_v4`, `credit_fixed`, `paths_gate`, `whole_of_peak`). V5 (active; its fold check
+#: is a soundness correction) reads the receipt's fold (`fold_reading`), the served products
+#: at the MODELLED edited design's reading (`score_v5`), and the TP entries (`tp_score`); a v5 correction
+#: reads the XOR-family folds at Theorem K's proved half (`FOLDS`, `SELECT_LEMMA`).
 #: `score.py report OUT --as v2|v3|v4` reads a run as that version does
 SCORER = V5
 LIMIT = 1.05  # serving slowdown, every entry
@@ -72,7 +72,7 @@ CERTIFIED = {
 #: first that applies and is active is SCORE's, and an inactive one that applies ahead of it is reported with the SCORE
 #: it would give. ``noise`` is the declarations an entry covers and ``kinds`` its MMA kinds, each with the most products
 #: a word may sum; "chained" and "unproven" are the proved floor, 0, for what no theorem's setting covers
-#: (decisions of 16 Oct 08:35Z: the primary SCORE is the proved reading).
+#: (the primary SCORE is the proved reading).
 FILLER_ENTRIES = {
     "theorem-k": {
         "fraction": 0.9, "status": "proved", "active": True, "noise": ("bits01", "bitsU", "dither"), "kinds": {"int8": 32},
@@ -99,11 +99,11 @@ FILLER_ENTRIES = {
         "source": "the trivial floor: no proved setting covers this filler (its declaration or its build's SASS)"},
 }
 #: SCORE under CH, a secondary readout beside v3's SCORE: every filler at CH's 0.99, the reading of filler-scorer/v2's
-#: SCORE, so earlier results stay comparable. CH is withdrawn (decision 27), so this is never SCORE
+#: SCORE, so earlier results stay comparable. CH is withdrawn, so this is never SCORE
 UNDER_CH = {"fraction": 0.99, "status": "under CH (withdrawn, decision 27)",
             "source": "CH: a straight-line program that gets a filler tile's receipt right more often than chance pays at "
                       "least (1 − ε) of its int8 MMAs, 0.99 at 2,759 checks a window (note:20261016T0418Z-draft-filler-floor)"}
-#: VF's honest MAC price over a MAC's tensor-peak time: τ = 0.2447 at 1.18 u (note:20261015T1814Z-draft-rs-machine-model §12)
+#: VF's honest MAC price over a MAC's tensor-peak time: τ = 0.2447 at 1.18 u
 A_VF = 0.2447 * 1.18 / (300.08 / 256)
 
 DECODE = [(1, 2048), (1, 8192), (1, 32768), (32, 2048), (32, 8192), (32, 24576), (128, 2048), (128, 6144), (256, 2048),
@@ -488,7 +488,7 @@ def certified(entry: str | dict, entries: dict = FILLER_ENTRIES) -> dict:
 #: opcodes (their base) that can write global memory, where receipts are: stores (global, generic, surface), reductions,
 #: atomics, and the TMA and bulk copies out of shared memory. Shared memory's (STS, ATOMS) and the stack's (STL) can't
 STORE_OPS = frozenset("ST STG RED REDG ATOM ATOMG SUST SURED SUATOM UTMASTG UTMAREDG UBLKCP UBLKRED".split())
-#: what a dfill_k device function that writes global memory may run (coordinator 11:05Z: a store-only __noinline__
+#: what a dfill_k device function that writes global memory may run (a store-only __noinline__
 #: dfill_k function, `dfill_k_put`, may take the receipt and step-count pointers if its body holds stores and address
 #: arithmetic only): plain stores, address arithmetic and moves, constant-bank loads (parameters, the memory descriptor)
 #: and its return. Reductions and atomics combine values, so they aren't stores here
@@ -660,7 +660,7 @@ def program_facts(listings: dict[str, str], names: tuple = FILLER_KERNELS) -> di
       a register; a caller with a branch whose target isn't named; and a dfill_k device function (not a kernel) that
       writes global memory, itself or through what it calls, unless it is store-only (``stores``, `_put_bad`: stores,
       address arithmetic and moves alone, storing its arguments unmodified; such a function, `dfill_k_put`, may take
-      the receipt and step-count pointers, coordinator 11:05Z), so an MMA function's inputs stay coins, tile and step.
+      the receipt and step-count pointers), so an MMA function's inputs stay coins, tile and step.
       A guarded instruction counts as run: a warp-role split by predication instead of a branch is refused.
     - ``serving_mma``: every other function's MMAs (a serving kernel's consumer warps, kernels with no filler), outside
       the filler warps' paths, credited at the serving reading.
@@ -841,7 +841,7 @@ def whole_of_peak(row: dict) -> float | None:
 
 # ---- filler-scorer/v5: the fold ----------------------------------------------------------------------------------------------
 
-#: the receipt folds filler-scorer/v5 reads (decision 43): ``share`` is the part of a filler's committed words its
+#: the receipt folds filler-scorer/v5 reads: ``share`` is the part of a filler's committed words its
 #: receipt binds, which multiplies a theorem entry's fraction; ``nc`` the NC pfill.cuh runs the fold at, ``flag`` the
 #: build flag that selects it, ``sass`` how its MMA words enter the state (`fold_facts`; ``rotations`` the state's
 #: rotations into each word's XOR, 0 none), ``provisional`` why the reading isn't settled (the record flags it);
@@ -886,7 +886,7 @@ FOLDS = {
                   "provisional": "P2-FF r9's DP_M ≈ 0 over Λ8 is measured, not proved, and pairwise only; (HO) is the "
                                  "rows' hashing, not a check"},
 }
-#: the lineage tags FILL-SEC's arms declare their fold with (pfill_arm.py: receipt:ram-k32, receipt:duo-k32,
+#: the lineage tags the receipt-fold arms declare their fold with (pfill_arm.py: receipt:ram-k32, receipt:duo-k32,
 #: receipt:xin-k32; r5's -DPFILL_XIN13 and -DPFILL_LI arms as receipt:xin13-… and receipt:li-…)
 RECEIPT_TAGS = {"ram": "ram", "duo": "duo", "xin": "xor-in", "xin13": "xor-in-13", "li": "lop3-imad"}
 #: what `fold_reading` can't confirm from the SASS, stated with every reading
@@ -1106,7 +1106,7 @@ def declared_fold(filler: dict | None, lineage: dict | None) -> tuple[str | None
 
 def fold_reading(declared: str | None, nc: int | None, flags: str | None, ff: dict | None,
                  how: str = "Filler.fold") -> dict:
-    """The fold filler-scorer/v5 reads the filler at (decision 43): duo in full; XOR-in (7, 19; superseded), XOR-in
+    """The fold filler-scorer/v5 reads the filler at: duo in full; XOR-in (7, 19; superseded), XOR-in
     (13, 19) or LOP3+IMAD at Theorem K's proved half, with ``share_if`` (in full) under ``if`` (`SELECT_LEMMA`) as a
     secondary readout; each only when the arm declares it and the build confirms it (`_fold_problems`). Otherwise ram,
     halved: an undeclared fold, a declared ram, or a declaration the build doesn't confirm, provided the build shows a
@@ -1203,28 +1203,28 @@ def certified_v5(e: dict, which: str = "active") -> dict:
 
 # ---- filler-scorer/v5: the modelled served reading ------------------------------------------------------------------------
 
-#: the served products' reading under v5 (decisions 29 and 36): the dither X = ⌊x/s⌋ + b puts the served design under
+#: the served products' reading under v5: the dither X = ⌊x/s⌋ + b puts the served design under
 #: Theorem K, c = 1, so a noised served product reads 0.9 (it read E½ ±1's 0.225). The harness serves plain int8, so
 #: the served part is MODELLED: the plain run's served MACs at this reading, its time adjusted by the factors below
 SERVED_V5 = {"fraction": 0.9, "status": "proved (modelled served component)",
              "source": "decision 29 (Theorem K, c = 1 at φ = 0.9, the dither X = ⌊x/s⌋ + b) and decision 36 (decode's "
                        "deferred edit at T = 4096, prefill's per-stage live coins)"}
-#: the edited GEMM ÷ plain cuBLASLt int8: edited:e_l2q 0.640 ms at o_proj (m 8192, n = k = 4096), duo receipts at L = 32
-#: (r20261016-104404-700b, note:20261016T0857Z-draft-egemm); 1.478-1.50x with the quantizer on both sides
+#: the edited GEMM ÷ plain cuBLASLt int8: edited:e_l2q 0.640 ms at o_proj (m 8192, n = k = 4096), duo receipts
+#: at L = 32; 1.478-1.50x with the quantizer on both sides
 EGEMM = 1.570
-#: decode's deferred noised pass (decision 36, at T = DEFER_T tokens a sub-round): the model's unit of pass time is its
-#: served MACs at DEFER_OF_PEAK of the int8 peak, the compute-bound plateau of 0.97 µs a token-layer
-#: (r20261016-100833-1b7c, note:20261016T0846Z-draft-stage-cost), and the edited pass takes EGEMM of those. A share s
+#: decode's deferred noised pass (at T = DEFER_T tokens a sub-round): the model's unit of pass time is its
+#: served MACs at DEFER_OF_PEAK of the int8 peak, the compute-bound plateau of 0.97 µs a token-layer,
+#: and the edited pass takes EGEMM of those. A share s
 #: of the pass's time shows as step time, and each ms of the rest displaces u·C filler MACs: s and u are measured
 #: against that unit (`defer_measured`), so the model at EGEMM = 1 gives back each measured point within its fit
 DEFER_T, DEFER_OF_PEAK, DEFER_US_TOKEN_LAYER = 4096, 0.71, 0.97
-#: one GPU (STAGE-COST, r20261016-100833-1b7c): the pass paced beside dcap's b32 decode step (12.14 ms), by T: the
+#: one GPU: the pass paced beside dcap's b32 decode step (12.14 ms), by T: the
 #: step's slowdown (no forming) and the pass's µs a token-layer alone. B 32 is the one batch measured
 DEFER_STEP_MS, DEFER_B = 12.14, 32
 DEFER_1GPU = {1024: (0.074, 1.54), 2048: (0.056, 1.18), 4096: (0.053, 1.09), 16384: (0.048, 0.97), 32768: (0.041, 0.95)}
-#: TP (HC-COMM r3 at T = 1024 and 4096, note:20261016T0948Z-draft-hc-comm-r3; r4 at 8192 and 16384, TP 2 alone, its
-#: TP 4 run having failed its filler gate, note:20261016T1216Z-draft-hc-comm-r4): each arm's step over the slowest rank
-#: (`_slowest`), beside HC-COMM r2's filler-only phase arm at the same point (note:20261016T0846Z-draft-hc-comm-r2), per
+#: TP (round 3 at T = 1024 and 4096; round 4 at 8192 and 16384, TP 2 alone, its TP 4 run having failed its filler
+#: gate): each arm's step over the slowest rank
+#: (`_slowest`), beside round 2's filler-only phase arm at the same point, per
 #: GPU; r4 ran no dalone arm (None)
 DEFER_TP_RUNS = {"r3": {2: "r20261016-112405-267e@88c35d347", 4: "r20261016-112756-b2a5@cbc89fb16"},
                  "r4": {2: "r20261016-121907-6830@c286d4f81"},
@@ -1269,9 +1269,9 @@ DEFER_TP = [dict(zip(DEFER_TP_FIELDS, p)) for p in (
     (16384, 2, 64, 8192, 71.7421, 79.2344, None, 2092, 2.567652e+12, 2.576298e+12, 1.01809, 3.028382e+12),
     (16384, 2, 128, 2048, 66.4212, 79.0456, None, 2089, 4.619908e+12, 4.353902e+12, 1.01812, 5.069118e+12),
     (16384, 2, 256, 2048, 100.1074, 123.2141, None, 2055, 9.239817e+12, 7.506000e+12, 1.01282, 9.252450e+12))]
-#: HC-COMM r6's deferred pass (note:20261016T1432Z-draft-hc-comm-r6, d6d0e4e57): the duo fold's put-split filler at
+#: round 6's deferred pass (d6d0e4e57): the duo fold's put-split filler at
 #: T = 4096 and TPC_DMAXC 1 (r3's), its base, phase, defer and dalone arms in one set, over the slowest rank; its fill
-#: counters are d6d0e4e57's (76c68bcf2's, HC-COMM r5's, kept each collective's last count, 22-35x low)
+#: counters are d6d0e4e57's (76c68bcf2's, tpcomm's, kept each collective's last count, 22-35x low)
 DEFER_TP_RUNS["r6"] = {2: "r20261016-142613-eff2@d6d0e4e57, r20261016-143248-9563@d6d0e4e57",
                        4: "r20261016-142933-e6c4@d6d0e4e57"}
 DEFER_TP_R6 = [dict(zip(DEFER_TP_FIELDS, p)) for p in (
@@ -1292,7 +1292,7 @@ DEFER_B_RANGE, DEFER_L_RANGE = (32, 256), (2048, 8192)
 
 
 def defer_shown_1gpu(T: int = DEFER_T) -> float:
-    """One GPU's shown share at T (STAGE-COST): the b32 step's slowdown over the pass's 32 × LAYERS token-layers at
+    """One GPU's shown share at T (stage_cost): the b32 step's slowdown over the pass's 32 × LAYERS token-layers at
     the model's pass rate (0.648 at T = 4096)."""
     return DEFER_1GPU[T][0] * DEFER_STEP_MS / (DEFER_B * share.LAYERS * DEFER_US_TOKEN_LAYER * 1e-3)
 
@@ -1371,7 +1371,7 @@ def defer_fit(T: int = DEFER_T, points: list[dict] | None = None, form: str = "u
 
 #: one GPU's displacement: r3's fit (the ram fold) in the u form, TP 2's u the floor of `defer_rates`'s one-GPU rule
 DEFER_FIT = defer_fit()
-#: TP's deferred pass (coordinator 14:42Z): s and d fitted jointly to HC-COMM r3 (ram) and r6 (duo) at T = 4096 in the
+#: TP's deferred pass: s and d fitted jointly to rounds 3 (ram) and 6 (duo) at T = 4096 in the
 #: d form, displacement per ms of the whole pass, since u = d ÷ (1 − s) is ill-conditioned where s ≈ 1 (r6's TP 2 B 32)
 DEFER_FIT_TP = defer_fit(points=DEFER_TP + DEFER_TP_R6, form="d")
 
@@ -1390,7 +1390,7 @@ def defer_rates(tp: int = 1, B: int | None = None, L: int | None = None, fit: di
                 fit_tp: dict = DEFER_FIT_TP) -> dict:
     """The deferred pass's shown share s (in [0, 1]) and displacement d (filler MACs lost a ms of the whole pass, over
     C) at (TP, B, L), T = DEFER_T, read at B and L clamped to the points' range. TP: `DEFER_FIT_TP` (r3 and r6, the d
-    form). One GPU: STAGE-COST's share, measured at B 32 only and held flat in B and L (the TP points' share falls with
+    form). One GPU: stage_cost's share, measured at B 32 only and held flat in B and L (the TP points' share falls with
     B at T = 4096, so this overstates it above B 32); its displacement, which no one-GPU run measured, is u(1 − s) at
     u the larger of TP 2's r3 fit (`DEFER_FIT`, the smallest TP measured) and the MAC-for-MAC rule's DEFER_OF_PEAK (the
     hidden time was the filler's, displaced at the pass's own rate)."""
@@ -1401,8 +1401,8 @@ def defer_rates(tp: int = 1, B: int | None = None, L: int | None = None, fit: di
         u = max(DEFER_OF_PEAK, defer_at(fit, "u", min(fit["tps"]), b, l))
         return {"s": s, "u": u, "d": u * (1 - s), "B": b, "L": l}
     return {"s": min(1.0, defer_at(fit_tp, "s", tp, b, l)), "d": defer_at(fit_tp, "d", tp, b, l), "B": b, "L": l}
-#: prefill's per-stage live coins over its GEMMs at 32K tokens a draw (commit then GEMM a stage: +13%,
-#: r20261016-101324-cab4, note:20261016T0846Z-draft-stage-cost; STAGE-OVL and STAGE-COST r2 may lower it): a parameter
+#: prefill's per-stage live coins over its GEMMs at 32K tokens a draw (commit then GEMM a stage: +13%;
+#: overlapping the stages may lower it): a parameter
 PREFILL_COINS = 0.13
 
 
@@ -1513,9 +1513,9 @@ def score_v5(stats: dict, filler_fraction: float, coins: float = PREFILL_COINS) 
     return out
 
 
-# ---- filler-scorer/v5: SCORE-TP ----------------------------------------------------------------------------------------------
+# ---- filler-scorer/v5: the TP score ------------------------------------------------------------------------------------------
 
-#: HC-COMM's TP suite (note:20261016T0846Z-draft-hc-comm-r2, round 2): Llama-3.1-70B decode under tensor parallelism on
+#: The TP suite: Llama-3.1-70B decode under tensor parallelism on
 #: GPUs of one NUMA node, at (TP, B, L); TP 2 can't hold B 128 at 8K (its KV wraps)
 TP_SUITE = [(4, 32, 2048), (4, 64, 2048), (4, 128, 2048), (4, 256, 2048), (4, 32, 8192), (4, 128, 8192),
             (2, 32, 2048), (2, 64, 2048), (2, 128, 2048), (2, 256, 2048), (2, 32, 8192), (2, 64, 8192)]
@@ -1586,7 +1586,7 @@ def tp_entry(by_arm: dict, key: tuple[int, int, int], filler_fraction: float) ->
 
 
 def tp_gates(sets: list[dict], entries: dict, pf: dict | None) -> dict:
-    """SCORE-TP's gates, per rank (HC-COMM's round-2 proposal): the slowdown of the slowest rank's step ≤ LIMIT at every
+    """The TP score's gates, per rank: the slowdown of the slowest rank's step ≤ LIMIT at every
     entry with ≥ TP_REPS reps a record and base and phase interleaved (≥ 2 repeats each); every rank's pre-timing
     pf_gate records ok, of every kind in TP_PF_KINDS (whole tiles against dfill_ref, cut warps against kf_ref_warp);
     every rank's receipts after every phase repeat (checked, none bad, no shape error, no control equal); and every
@@ -1623,9 +1623,10 @@ def tp_gates(sets: list[dict], entries: dict, pf: dict | None) -> dict:
 
 
 def tp_score(entries: list[dict]) -> dict:
-    """SCORE-TP over the TP entries present, per GPU: the mean of their coverage weighted by TP × wall time (`tp_entry`'s
-    ``time``), in its filler and served parts, beside v4's form (served plain at 0.225, weighted by v4's own wall time,
-    ``time_v4``); per TP as well. Missing `TP_SUITE` entries are listed, and SCORE-TP needs them all."""
+    """The TP score over the TP entries present, per GPU: the mean of their coverage weighted by TP × wall time
+    (`tp_entry`'s ``time``), in its filler and served parts, beside v4's form (served plain at 0.225, weighted by v4's
+    own wall time, ``time_v4``); per TP as well. Missing `TP_SUITE` entries are listed, and the TP score needs them
+    all."""
     def mean(es, k):
         w = [e["time_v4" if k == "coverage_v4_form" else "time"] for e in es]
         return sum(e[k] * x for e, x in zip(es, w)) / sum(w) if es else None

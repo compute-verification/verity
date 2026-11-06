@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Bridge.CustodyPlain
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Assemble
-import Proofs.Flock.Soundness.Discharge.DecodeZL.OP
-import Proofs.Flock.Soundness.Discharge.DecodeZL.LIG
+module
+
+public import Proofs.Flock.Claims.Bridge.CustodyPlain
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Assemble
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.OP
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.LIG
 
 /-!
 # The deployed plain decoders at `wrP`, at one table
@@ -20,6 +22,8 @@ tables (`LiveOutJ`, `DecodesTable`). At `J = 1` the two meet:
   tags (`TagsOk`), the deployed decoders are right at `wrP` (`DecodesTable`, `Pr_acc_plain_le`'s `hdec`), from
   `decodesOn_exec` at the law of the one draw `S`.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.DecodePlain
 
