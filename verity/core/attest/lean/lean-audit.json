@@ -7,7 +7,6 @@
    "why": "the period and liveness checks are code: Lean core, C-Flock's hashes and bytes, core's randomness and LMS's HSS only, no Mathlib and nothing of Security; the attest guarantees' statements read them, so they are spec"
   }
  },
- "guarantees": {},
  "dependencies": {
   "toolchain": "9861e83df7e59cd690a56f1b1123a7d6cfeca7df65d05a986f3a0c9794f60079"
  }

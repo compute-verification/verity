@@ -201,10 +201,13 @@ to a commit whose records are the regenerated ones and whose gated steps all pas
   `Pouw`, `Pous`, `NetworkCertifier`, `Flock`, `Accounting`). All packages share one toolchain and one Mathlib revision,
   bumped together in a PR of their own.
 - **The Lean check** (`tools/verity/lean/check.py`) builds every file and replays every declaration through the kernel:
-  only `propext`, `Classical.choice` and `Quot.sound`; no `sorry`, `axiom`, `native_decide` or kernel bypass; an
-  assumption is a named `Prop`, taken as a hypothesis or read in a guarantee's statement, listed by name in the lock.
+  only `propext`, `Classical.choice` and `Quot.sound`; no `sorry`, `axiom`, `native_decide` or kernel bypass; a
+  premise is a named `Prop`, taken as a hypothesis or read in a guarantee's statement, listed by name in the lock: a
+  named assumption (`assumptions`) is declared in `Security/Definitions/Assumptions.lean`, and every other premise is
+  open (`open`, with the Linear issue that discharges it and its due date), a list `--update` never adds to, unless it
+  is part of what its guarantee says (`domain`, with a one-line why; an honest witness must conclude it).
 - **The lock.** Each package's `lean-audit.json` lists its guarantees, and `check.py --update` records each one's
-  statement, the definitions it reads and the named assumptions it takes, so a changed statement is a changed record.
+  statement, the definitions it reads and the premises it takes, so a changed statement is a changed record.
   A guarantee that only moved keeps its record (`--update --moved MOVES.json`).
 - How to work on Lean (the edit loop, why two agents never share a writable `.lake`, `upstream` watch entries): the
   lean-proofs skill.

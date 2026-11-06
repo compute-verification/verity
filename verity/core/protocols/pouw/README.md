@@ -88,16 +88,16 @@ Guarantees are stated in `Security/Definitions/Pouw` and proved in `Security/Pro
 `Pouw.SecurityProofs.G : Pouw.Guarantees.G`; `Security/lean-audit.json` lists each proved one with what its statement
 reads. Proved:
 
-- **The audit game:** `Pouw.SecurityProofs.Theorem1` (if a scheme's γ holds with error η and the sample misses more than
-  a share ε_s of the reference work with probability at most δ_s, then the verifier accepts while the work done is below
-  (1 − γ)(1 − ε_s)·W with probability at most δ_s + η), `Pouw.SecurityProofs.WorkWeightedSampling`,
-  `Pouw.SecurityProofs.EndToEnd` and `Pouw.SecurityProofs.GammaFromTT`.
+- **The audit game:** `Pouw.SecurityProofs.EndToEnd` and `Pouw.SecurityProofs.GammaFromTT`, through two lemmas in
+  `Security/Proofs/Pouw/Lemmas/Game.lean`: Theorem 1 (if a scheme's γ holds with error η and the sample misses more
+  than a share ε_s of the reference work with probability at most δ_s, then the verifier accepts while the work done is
+  below (1 − γ)(1 − ε_s)·W with probability at most δ_s + η) and work-weighted sampling.
 - **The deadline:** `Pouw.SecurityProofs.WorkBetweenSaltAndDeadline`, `Pouw.SecurityProofs.SpareCapacityAtDeadline` and
   `Pouw.SecurityProofs.PearlCSampledByDeadline`.
 - **The schemes' γ:** NCP's `Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1`; Pearl-C's at the served point,
   `Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192` and its sampled twin
-  `Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192`; the row seed's reduction
-  `Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut`; the barrier `Pouw.SecurityProofs.Barrier.Generic`.
+  `Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192`. The row seed's reduction and the barrier
+  are lemmas, in `Security/Proofs/Pouw/Lemmas/PearlC.lean` and `Security/Proofs/Pouw/Lemmas/Barrier.lean`.
 - **The served credit's relative security:** `Pouw.SecurityProofs.RelativeSecurity.TheoremSStaged` and
   `Pouw.SecurityProofs.RelativeSecurity.TheoremSOverlap`.
 - **Compute accounting reads PoUW** through `Accounting.SecurityProofs.ComputeOfPouw`,
@@ -115,7 +115,7 @@ The guarantees rest on named assumptions, each a hypothesis of the statement: th
 proved (`Pouw.NCP.Assumptions.TTNCP_U`, and Pearl-C's TT_OUT forms such as
 `Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1`; Pearl-C4's `Pouw.PearlC.Assumptions.TTOutFp4Sm120W1`), the seeded noise's forms
 (`Pouw.PearlC.RowSeedNoise`, `Pouw.PearlC.CodeSeedNoise`), the receipt clock (`Pouw.Assumptions.HonestClock`), the sampled
-tile's proof (`Pouw.PearlC.Assumptions.TileProofSound`), and the claims `trusted-host`, `live-verifier`, `cr/sha-512`
+tile's proof (`Pouw.PearlC.Assumptions.TileProofSoundAll`), and the claims `trusted-host`, `live-verifier`, `cr/sha-512`
 and `prf/sha-512` (`verity.core.claims`).
 
 ## Core API

@@ -41,7 +41,6 @@
    "why": "HSS's role digests and two-level verification are code: Lean core and the verifier's definitions only, no Mathlib and nothing of Security; the attest guarantees' statements read them, so they are spec"
   }
  },
- "guarantees": {},
  "dependencies": {
   "toolchain": "78627506b0eba58539b8ba426eb906cc3998cb22ad864639422484f3a0928310"
  }

@@ -5,6 +5,7 @@ public import Proofs.Flock.SessionLoop.TakenVals
 public import Proofs.Flock.SessionLoop.FinalC
 public import Proofs.Flock.SessionLoop.TakesTau
 public import Proofs.Flock.SessionLoop.Inner
+public import Proofs.Flock.SessionLoop.InnerWitness
 public import Proofs.Flock.SessionLoop.LiveInner
 public import Proofs.Flock.Claims.ZK.FrameUnrefused
 public import Proofs.Flock.SessionLoop.Link
