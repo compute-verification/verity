@@ -272,6 +272,28 @@ def test_every_handle_names_exactly_one_holder_and_a_predecessor_goes_in_its_lin
         slack.check_registry({**reg, "handles": [{**reg["handles"][0], "lineage": ["gen-3"]}, *reg["handles"][1:]]}, "r")
 
 
+@pytest.mark.parametrize("holder", [
+    "the proofs coordinator (bc-a26cefd0-716d-595d-bf02-8f8a47a711bd, generation 4, up 17:33Z on 19 Oct)",
+    "bc-a26cefd0-716d-595d-bf02-8f8a47a711bd, bc-8f4b652b-17bc-5055-a120-b56940b7c7a9",
+    "bc-a26cefd0", "proofs", "", None])
+def test_a_holder_is_one_agent_id_with_no_prose(registry, holder):
+    reg = json.loads(REAL_REGISTRY.read_text())
+    with pytest.raises(slack.SlackError, match=r"@infra's holder .*its coordinator's agent id alone .*--poster BC_ID"):
+        slack.check_registry({**reg, "handles": [{**reg["handles"][0], "holder": holder}, *reg["handles"][1:]]}, "r")
+    for ok in ("bc-a26cefd0-716d-595d-bf02-8f8a47a711bd", "f7772a12-d61f-4bbb-8c4f-e79e8d6d30dc"):   # a desktop agent's UUID too
+        slack.check_registry({**reg, "handles": [{**reg["handles"][0], "holder": ok}, *reg["handles"][1:]]}, "r")
+
+
+@pytest.mark.parametrize("key", ["charter", "remit"])
+def test_a_charter_or_remit_never_cites_an_agents_store(registry, key):
+    """An agent's store is its scratch (AGENTS.md "Where writing goes"): nobody else can open it."""
+    reg = json.loads(REAL_REGISTRY.read_text())
+    store = "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (proof)"
+    with pytest.raises(slack.SlackError, match=rf"@infra's {key} cites an agent store \(/cursor/stores/...\).*cite a note \(note:<id>\)"):
+        slack.check_registry({**reg, "handles": [{**reg["handles"][0], key: store}, *reg["handles"][1:]]}, "r")
+    assert not any(slack.STORE_PATH in h[k] for h in reg["handles"] for k in ("charter", "remit"))
+
+
 def test_a_handles_examples_are_a_few_one_line_questions(registry):
     reg = json.loads(registry.read_text())
     reg["handles"][0]["examples"] = ["How does the verifier check a sampled proof?", "What does PoUW prove?"]
