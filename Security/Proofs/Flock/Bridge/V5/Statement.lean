@@ -122,7 +122,8 @@ def _root_.Flock.Bridge.EndToEndHiddenV5 : Prop :=
       (rsZHJP_computes dj y₀ ht (Flock.Desc.parseStmt_stmt hD) hscope hU hpi hpub)
     let σ := simZJA execArith hs512 (planZHJP dj y₀) (AcceptsZKP I own) wr (opnAtZHJP (planZHJP dj y₀) I own dj) dg
       (decAtZJ (planZHJP dj y₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
-      (decodesZCJH_custodyP I own ht (Flock.Desc.parseStmt_stmt hD) kd hdiv dj y₀ wr _ hTags hCust) τ
+      (decodesZCJH_custodyP I own ht (Flock.Desc.parseStmt_stmt hD) law kd hdiv dj y₀ wr _ hTags hCust
+        (Bridge.lawOn_size hlaw hCust.2)) τ
     let Cc := (keyProgP D.unroll pi hU n).circuit (Discharge.Layout.outsOfP D.unroll hU n pi)
     let Lm := Bridge.LeafMap.ofPublic D.unroll pub n
     let rows : Fin Cc.N → Option Bridge.RowAt := fun g =>
@@ -178,7 +179,7 @@ def _root_.Flock.Bridge.TransportsLiveV5 : Prop :=
       (rsZHJP_computes dj y₀ ht (Flock.Desc.parseStmt_stmt hD) hscope hU hpi hpub)
     let σ := simZJA execArith hs512 (planZHJP dj y₀) (AcceptsZKP I own) wr (opnAtZHJP (planZHJP dj y₀) I own dj) dg
       (decAtZJ (planZHJP dj y₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
-      (decodesZCJH_custodyP I own ht (Flock.Desc.parseStmt_stmt hD) kd hdiv dj y₀ wr _ hTags hCust) τ
+      (decodesZCJH_custodyP I own ht (Flock.Desc.parseStmt_stmt hD) law kd hdiv dj y₀ wr L hTags hCust hsz) τ
     let Cc := (keyProgP D.unroll pi hU n).circuit (Discharge.Layout.outsOfP D.unroll hU n pi)
     let Lm := Bridge.LeafMap.ofPublic D.unroll pub n
     let rows : Fin Cc.N → Option Bridge.RowAt := fun g =>
@@ -243,7 +244,8 @@ def SampledKSLiveV5 : Prop :=
       (rsZHJP_computes dj y₀ ht (Flock.Desc.parseStmt_stmt hD) hscope hU hpi hpub)
     let σ := simZJA execArith hs512 (planZHJP dj y₀) (AcceptsZKP I own) wr (opnAtZHJP (planZHJP dj y₀) I own dj) dg
       (decAtZJ (planZHJP dj y₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
-      (decodesZCJH_custodyP I own ht (Flock.Desc.parseStmt_stmt hD) kd hdiv dj y₀ wr _ hTags hCust) τ
+      (decodesZCJH_custodyP I own ht (Flock.Desc.parseStmt_stmt hD) law kd hdiv dj y₀ wr _ hTags hCust
+        (Bridge.lawOn_size hlaw hCust.2)) τ
     let Xr := XplurZC execArith hs512 P (planZHJP dj y₀) (tabZHJP dj y₀) vb (reg σ) (cont σ) k Rw
     -- the deployed commitment's layout: the game's rows, read off the circuit file, at the public file's leaf map
     let Cc := (keyProgP D.unroll pi hU n).circuit (Discharge.Layout.outsOfP D.unroll hU n pi)

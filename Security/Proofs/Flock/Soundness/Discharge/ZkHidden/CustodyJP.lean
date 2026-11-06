@@ -68,10 +68,12 @@ end MPts
 
 variable {n : ℕ} {Reg : Type}
 
-/-- **The coin server's draws are `DrawOkZKHJP`** (`ZkReg.drawOkZKHJ_of_file` at `own`). -/
-theorem drawOkZKHJP_of_file (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false) {c : Flock.Circuit}
-    (hcS : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c) (kd pop : ℕ) (hdiv : kd % nTab I = 0)
-    (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj (.subset kd) pop) (S : Finset (Fin n)) :
+/-- **The coin server's draws are `DrawOkZKHJP` at a draw of `kd` units, under any law** (`drawOkZKHJ_of_size` at
+`own`). -/
+theorem drawOkZKHJP_of_size (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false) {c : Flock.Circuit}
+    (hcS : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c) (law : Draw.Law) (kd pop : ℕ)
+    (hdiv : kd % nTab I = 0) (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj law pop) (S : Finset (Fin n))
+    (hq : ∀ D, Draw.UnitDraw.ofJson (dj S) = .ok D → D.units.size = kd) :
     DrawOkZKHJP I own dj (mPtsOf c.g (kd / nTab I)) S := by
   intro j
   have hty : ∀ j : ℕ, (tagsAt (zkTags I) I.count j).typed = false := fun j =>
@@ -166,7 +168,8 @@ theorem drawOkZKHJP_of_file (I : Inputs) (own : Option ByteArray) (ht : I.tags.t
 only to `kd` units under the registration's law, the coin server's draws (`drawOkZKHJP_of_size`), at
 `mPtsOf c.g (kd / nTab I)` link points. -/
 theorem decodesZCJH_custodyP (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false) {c : Flock.Circuit}
-    (hcS : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c) (kd : ℕ) (hdiv : kd % nTab I = 0)
+    (hcS : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c) (law : Draw.Law) (kd : ℕ)
+    (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : DrawSetupZHJP (inputsJ I 0) own (mPtsOf c.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
@@ -178,7 +181,8 @@ theorem decodesZCJH_custodyP (I : Inputs) (own : Option ByteArray) (ht : I.tags.
     DecodesOnZKJA (K := 𝕂) execArith hs512 (planZHJP dj y₀) (AcceptsZKP I own) wr
       (opnAtZHJP (planZHJP dj y₀) I own dj) (decAtZJ (planZHJP dj y₀)) (fun _ _ _ _ => true)
       (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) L :=
-  decodesZCJH_liveIP I own ht dj y₀ wr L hT hCust.1 fun _ => drawOkZKHJP_of_file I own ht hcS kd n hdiv dj hCust.2 _
+  decodesZCJH_liveIP I own ht dj y₀ wr L hT hCust.1 fun ω =>
+    drawOkZKHJP_of_size I own ht hcS law kd n hdiv dj hCust.2 (L.draw ω) (hsz (L.draw ω))
 
 /-- **The coin server's draws are `DrawOkZKHJP` at one table, at the draw's own count**: at a session of one table, a draw
 `S` whose file decodes only to the verifier's draw of `S` under the law `law S` is `DrawOkZKHJP` at `mPtsOf c.g |S|` link
