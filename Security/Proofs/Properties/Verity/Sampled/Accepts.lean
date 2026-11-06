@@ -317,15 +317,13 @@ theorem pinnedTables_extend {s : Verity.Sent} {circuitB : ByteArray} {names : Li
     · rw [if_neg hc, if_neg fun h => hc h.2]
   rw [hp, tablesOf_ofArray]
   refine extend_filterMap mufu_nodup (fun t x h => ?_) (fun t x h => ?_) (fun t x h => ?_)
-  · dsimp only at h
-    split at h
+  · split at h
     · obtain ⟨_, -, rfl⟩ := Option.map_eq_some_iff.1 h
       rfl
     · cases h
   · obtain ⟨_, -, rfl⟩ := Option.map_eq_some_iff.1 h
     rfl
-  · dsimp only at h
-    split at h
+  · split at h
     · rename_i hc
       obtain ⟨b, hb, rfl⟩ := Option.map_eq_some_iff.1 h
       have hm : t.name ∈ names := by simpa using hc.2
