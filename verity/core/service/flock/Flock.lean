@@ -94,6 +94,8 @@ public import Flock.Firewall.Link
 public import Flock.Firewall.Level0
 public import Flock.Firewall.Hello
 public import Flock.Firewall.Session
+public import Flock.Firewall.Salts
+public import Flock.Firewall.Values
 public import Flock.Firewall.Skeleton
 public import Flock.Firewall.Drive
 public import Flock.Witness

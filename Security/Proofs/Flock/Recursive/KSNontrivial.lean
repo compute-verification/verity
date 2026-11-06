@@ -419,7 +419,7 @@ theorem denseAt_of_parses {x : Msg} (h : RecDeploy.DeployedParses x) : RecDeploy
 (`setupView`). -/
 theorem plainIn_of_parses {x : Msg} (h : RecDeploy.DeployedParses x) :
     ∃ s spec sts, FlockDeploy.PlainIn (RecDeploy.xIOf x) s spec sts := by
-  have h3 := h.2.2
+  have h3 := h.2.2.1
   cases hs : FlockDeploy.setupOf false (RecDeploy.xIOf x) with
   | none => rw [hs] at h3; simp at h3
   | some t =>
@@ -432,13 +432,23 @@ theorem plainIn_of_parses {x : Msg} (h : RecDeploy.DeployedParses x) :
     obtain ⟨a, b, c, d, e⟩ := ht st hst
     exact ⟨a, b, show st.c.kLog ≤ 27 ∧ st.regions.size ≤ 1026 ∧ spec.mPts ≤ 64 from ⟨c, d, e⟩⟩
 
+/-- **The fixture's inner statement is in the plain scope with one table** (`plainIn_of_parses`, and
+`DeployedParses`' table count). -/
+theorem plainIn_one_of_parses {x : Msg} (h : RecDeploy.DeployedParses x) :
+    ∃ s spec sts, FlockDeploy.PlainIn (RecDeploy.xIOf x) s spec sts ∧ sts.size = 1 := by
+  obtain ⟨s, spec, sts, hin⟩ := plainIn_of_parses h
+  have h4 := h.2.2.2
+  rw [hin.setup] at h4
+  exact ⟨s, spec, sts, hin, Option.some.inj h4⟩
+
 /-- **`RecursiveKS`'s nontrivial lemma**: `RecursiveKS`'s conclusion, `RecursiveKSAtRec` at the deployed
 values, is false at the verifier that accepts everything (`RecAt.acceptAll` of the deployment's compiled record), at
 every brings, from the named assumption
 `RecDeploy.KSFixture`: some bytes the deployed readers read as a dense compiled statement with a V\* session whose
 inner statement is in the plain scope (`DeployedParses`), with a coin-server record at whose transcript its V\* parts
-are in scope (`PartsInScope`). Everything else is proved here: the statement is dense (`denseAt_of_parses`) and in the
-plain scope (`plainIn_of_parses`); the silent prover is accepted on every run, and the accepting record stages no V\*
+are in scope at the deployment's sizes (`PartsInScope`), within `lamLin2_deployed_ge_dep`'s. Everything else is proved
+here: the statement is dense (`denseAt_of_parses`) and in the plain scope (`plainIn_of_parses`); the silent prover is
+accepted on every run, and the accepting record stages no V\*
 statement, which the outer Flock's parser refuses (`RecDeploy.zkRec_parse_nil`), so `E*` extracts nothing and
 `Pr[accept ∧ ¬extract] = 1`; every finder term is `0`; the tails are below `1/4` each; and `λ₂ ≥ 100` there
 (`RecDeploy.lamLin2_deployed_ge_dep`) gives `κ < 1/2`. `E*` is the one `KSLin2On` names at that record, and the
@@ -457,7 +467,9 @@ theorem recursiveKS_nontrivial (h : RecDeploy.KSFixture) :
   have hO' : ∀ j < RecDeploy.nS x, ∃ i spec' sts', RecDeploy.PartIn
       (RecDeploy.staged ({ RecDeploy.deployedB b with tr := RecDeploy.recTr aux nOf hd recRest } : RecDeploy.Brings).st
         x (RecDeploy.pick ({ RecDeploy.deployedB b with tr := RecDeploy.recTr aux nOf hd recRest } :
-          RecDeploy.Brings).st x j) j) i spec' sts' := hO
+          RecDeploy.Brings).st x j) j) i spec' sts' := fun j hj => by
+    obtain ⟨i, spec', sts', hp, -⟩ := hO j hj
+    exact ⟨i, spec', sts', hp⟩
   exact RecDeploy.not_ksLin2On_acceptAll _root_.Flock.Readable.relation _root_.Flock.Readable.relation
     { RecDeploy.deployedB b with tr := RecDeploy.recTr aux nOf hd recRest }
     (RecDeploy.DeployedR.layR RecDeploy.OpenRows.elemR) (FlockDeploy.nextR RecDeploy.DeployedR.rdR)
@@ -470,6 +482,7 @@ theorem recursiveKS_nontrivial (h : RecDeploy.KSFixture) :
         (RecDeploy.DeployedR.layR RecDeploy.OpenRows.elemR) (FlockDeploy.nextR RecDeploy.DeployedR.rdR)
         (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation RecDeploy.DeployedR.rdR).cols
         RecDeploy.DeployedR.wER FlockDeploy.joinR RecDeploy.rowInDeployed RecDeploy.DeployedR.finalR
-        RecDeploy.DeployedR.wR Claims.GS.plainDecodeRD hin hO' hn hS (n := 0) (by norm_num) (v := 0) (by norm_num)))
+        RecDeploy.DeployedR.wR Claims.GS.plainDecodeRD hin hO' (hn.trans (by norm_num)) (hS.trans (by norm_num))
+        (n := 0) (by norm_num) (v := 0) (by norm_num)))
 
 end Flock.Guarantees

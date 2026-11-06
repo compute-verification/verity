@@ -37,12 +37,14 @@ from verity_numerical.bench import contract
 from . import instances as I
 from .workloads import Workload
 
-SECURITY = {"target": -100, "profile": "fast100", "reps": 2, "coins": "live-os: the verifier's OS draws, round by round"}
+SECURITY = {"target": -100, "profile": "fast100", "reps": 2}
+#: a point's coins, as its sweep record names them (`verity_flock.circuit.coins`)
+COINS = {"coin-tree": "coin-tree: every round's coins the challenger's keyed coin tree's (serve --tree-from)"}
 PREPROCESSING = ("the population is lowered and staged once for every B (fixed.setup_seconds); every timed session builds "
                  "its drawn statement and witness and proves both reps afresh")
 CONFIGS = {"plain": "C-Flock native prover, ZK off (flock-circuit prove --gpu), live coins and the stratified draw of B units "
                     "from a loopback flock-circuit serve --draw-law; then the compiled Lean verifier (flock-verify verify "
-                    "--coins os --stratified B) on each timed session"}
+                    "--coins tree --stratified B) on each timed session"}
 
 
 #: the prover's per-rep phases (``flock-circuit``'s ``gpu_buckets``) beyond the contract's buckets, each kept as ``prove.*_s``
@@ -100,8 +102,8 @@ def prover_measurements(w: Workload, B: int, rec: Mapping[str, Any], gpu_peak_mi
 
 
 #: The Lean verifier's refusal of a session without a sample, issued only once every check has passed and the statement's form is
-#: covered (verity/ml/flock/verifier/PROTOCOL.md §16.15, D12). A session counts toward throughput only when the Lean verifier
-#: accepts it (the proofs ruling of 17 Oct): a point whose sessions meet this refusal fails, labelled ``D12_LABEL``, and gives
+#: covered (``Flock.ProvedScope``, D12). A session counts toward throughput only when the Lean verifier
+#: accepts it: a point whose sessions meet this refusal fails, labelled ``D12_LABEL``, and gives
 #: no headline. Its result still counts them (``verify.lean_drawless``).
 DRAWLESS = "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
 D12_LABEL = "checks pass, refused under D12 (no draw)"
@@ -143,7 +145,8 @@ def fingerprint(w: Workload, B: int, rec: Mapping[str, Any], *, hardware: Mappin
     lv = rec.get("live") or {}
     return contract.fingerprint(
         profile=w.profile, domain=rec.get("domain") or "total", K=w.K, B=B, proof_class="NON_ZK_PROOF",
-        authentication="included-hash", zk_mode=contract.ZK_NONE, security=SECURITY, hardware=hardware, software=software,
+        authentication="included-hash", zk_mode=contract.ZK_NONE, hardware=hardware, software=software,
+        security=SECURITY | {"coins": COINS.get(lv.get("coins"), lv.get("coins"))},
         preprocessing=PREPROCESSING, retention="retained", instances=None, population=I.population_ref(w),
         draw={"law": "stratified", "k": B, "population": w.n_max, "verifier": "flock-verify --stratified B, its own law"},
         workload=w.name, vu=w.vu, sites=w.sites, config=config, configuration=CONFIGS[config],

@@ -10,7 +10,7 @@ public import Proofs.Flock.Recursive.ValueBridge
 # Recursion: gap 2 at the word the prover's runs open (the knowledge form)
 
 `RecursiveAuditHolo`'s hidden statement is the word the transported prover's own runs open at R's level 0 against R's
-cap at each draw (`Flock.Guarantees.regStmt`), not a registrant's (`note:41519fce`). No registrant's openings are taken,
+cap at each draw (`Flock.Guarantees.regStmt`), not a registrant's. No registrant's openings are taken,
 so a run that opens R's level 0 off a word (`RegClash`) is no collision by itself. It is one against another of the
 prover's runs at the same draw, the one whose opening defines the word at that position (`regWord`): two runs at one
 draw that open one position of R's level 0 to different rows against one cap conflict at R's stream's level-0 cap

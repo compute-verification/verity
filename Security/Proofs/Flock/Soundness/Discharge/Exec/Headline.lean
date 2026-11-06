@@ -5,12 +5,12 @@ public import Proofs.Flock.Soundness.Discharge.Exec.Event
 public import Proofs.Flock.Soundness.Discharge.Exec.SessionL
 
 /-!
-# A draft of the headline at the executable (R11)
+# A draft of the headline at the executable
 
 `Prog.flock_headline` bounds an event `execAccept` of the audit as Lean defines it, and carries the gap between that
 audit and flock-verify as `tr`, a rewinding that covers `execAccept ∧ o.1 = false`. This file states the headline the
 other way round: on the live audit (`auditLive`, whose outcome carries the session directory), for flock-verify's
-verdict (`LiveAccepts I`), with the gap a named refinement `ExecRefines` (R11 at one strategy pair, `Event.lean`).
+verdict (`LiveAccepts I`), with the gap a named refinement `ExecRefines` (at one strategy pair, `Event.lean`).
 
 * `exec_le_of_refines`: a bound on the audit as Lean defines it, for its acceptance conjoined with a fact `Q` fixed by
   its strategy, carries to the live event conjoined with `Q`, plus the refinement's live event `bad`.
@@ -27,8 +27,9 @@ as likely as acceptance itself. For those statements the refinement targets `bat
 (`SessionL.lean`; under a tag without hidden outputs, each accepted table is one accepting run of `tableAfterL`,
 `accepts_tables_hm96`), and what is open
 is the headline restated there: knowledge soundness and the link theorem over `Merkle.Leaf`, the bound
-`flock_headline_exec_L` takes as `hB`. The other open half of R11 is `hRef` itself: a strategy of the audit built from
-the live prover, the challenger's per-round coins (A6) as the audit's coins, and the live event `bad` bounded.
+`flock_headline_exec_L` takes as `hB`. The other open half of the refinement is `hRef` itself: a strategy of the audit
+built from the live prover, the challenger's per-round coins (A6) as the audit's coins, and the live event `bad`
+bounded.
 -/
 
 @[expose] public section
@@ -78,8 +79,8 @@ live stratified draw under A3), and let the live audit `auditLive Lx Reg live`, 
 audit with `batchedSession` played by `σ`, up to the live event `bad` (`hRef`). If `σ`'s committed values have at least
 `K` wrong units, then flock-verify accepts with probability at most
 `miss(K) + ε_ks + δ_link + Pr[bad]`, the headline's bound at `δ_tree = 0` plus the refinement's event. `pp`, `hConst`,
-`hZero`, `lay`, `rs` and `hHm` are open as in `Prog.flock_headline`; `hRef` is R11. For `hm96Rows` statements `hRef`
-needs the salted session in place of `batchedSession` (the module docstring, `flock_headline_exec_L`). -/
+`hZero`, `lay`, `rs` and `hHm` are open as in `Prog.flock_headline`; `hRef` is the refinement. For `hm96Rows` statements
+`hRef` needs the salted session in place of `batchedSession` (the module docstring, `flock_headline_exec_L`). -/
 theorem _root_.FlockSoundness.Prog.flock_headline_exec
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)

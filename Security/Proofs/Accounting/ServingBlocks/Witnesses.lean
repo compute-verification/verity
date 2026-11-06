@@ -2,6 +2,7 @@ module
 
 public import Proofs.Accounting.ServingBlocks
 public import Definitions.Accounting.Guarantees.ServingBlocks.Witnesses
+public import Proofs.Accounting.Lemmas.ServingBlocks.Witnesses
 
 /-!
 # The serving-block bound: honest and nontrivial lemmas

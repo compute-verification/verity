@@ -2,6 +2,7 @@ module
 
 public import Definitions.Accounting.Guarantees.TS.Stages
 public import Proofs.Accounting.TS
+public import Proofs.Accounting.Lemmas.TS.Stages
 
 /-!
 # Sampled proofs under per-stage coins: proofs
@@ -24,6 +25,8 @@ draw probability prices the share at `r` (`Stages.prob_comp`).
 -/
 
 @[expose] public section
+
+open Claims renaming Ex → expect
 
 namespace Accounting.SecurityProofs.TS
 

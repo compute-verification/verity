@@ -4,6 +4,9 @@ public import Definitions.Accounting.Guarantees.ComposePeriod
 public import Proofs.Accounting.TS.Rounds
 public import Proofs.Accounting.Compose.CircuitWork
 public import Proofs.Accounting.ComposePeriod.Covers
+public import Proofs.Accounting.Lemmas.TS.Receipt
+public import Proofs.Accounting.Lemmas.ComposePeriod
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # PoUW's work over a monitoring period: proofs
@@ -37,6 +40,8 @@ prefix's live tiles:
 -/
 
 @[expose] public section
+
+open Claims renaming Ex → expect
 
 namespace Accounting.SecurityProofs.ComposePeriod
 

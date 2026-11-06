@@ -5,8 +5,8 @@ public import Proofs.Flock.Claims.ZK.Interact
 /-!
 # A run cut at a round
 
-`cutT ask stop t n τ` is the transcript `τ` cut at round `t`: `n` rounds against `ask` of `τ`'s messages before `t`,
-then the message `stop`. `stopAt pm t stop` is the prover `pm` stopped at round `t`, and its run is its own run cut
+`cutT ask stop t n τ` (Core's) is the transcript `τ` cut at round `t`: `n` rounds against `ask` of `τ`'s messages
+before `t`, then the message `stop`. `stopAt pm t stop` is the prover `pm` stopped at round `t`, and its run is its own run cut
 there (`interact_stopAt`).
 -/
 
@@ -15,14 +15,6 @@ there (`interact_stopAt`).
 namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
-
-/-- The cut prover: `τ`'s messages before round `t`, then the stop. -/
-def cutMsg (stop : Msg) (t : ℕ) (τ : List (Msg × Out)) (h : List (Msg × Msg)) : Msg :=
-  if h.length < t then ((τ[h.length]?).map Prod.fst).getD stop else stop
-
-/-- **The transcript `τ` cut at round `t`**: `n` rounds of `τ`'s messages before `t`, then the stop, against `ask`. -/
-def cutT (ask : List Msg → Out) (stop : Msg) (t n : ℕ) (τ : List (Msg × Out)) : List (Msg × Out) :=
-  interact ask (cutMsg stop t τ) n []
 
 /-- The prover `pm` stopped at round `t`. -/
 def stopAt (pm : List (Msg × Msg) → Msg) (t : ℕ) (stop : Msg) (h : List (Msg × Msg)) : Msg :=

@@ -91,7 +91,8 @@ noncomputable def simZ (hdec : DecodesOnZK A Hs T I wr opn dec one fin capOf L)
   cast (congrArg (fun g => Strategy (audit L Reg g)) (sessionZC_planOf A Hs T))
     (simAuditZKOn A Hs T I wr opn dg dec one fin capOf N hdec τ)
 
-/-- **R11 at `--zk` from the decoder at the law's draws** (`execRefinesZK_one`'s proof, reading `hdec` only there). -/
+/-- **The refinement at `--zk` from the decoder at the law's draws** (`execRefinesZK_one`'s proof, reading `hdec` only
+there). -/
 theorem execRefinesZK_on (hdec : DecodesOnZK A Hs T I wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOf dg mPts N wr))) :
     ExecRefines (auditLive L Reg (liveOf dg mPts N wr)) τ (LiveAcceptsZK I) (fun _ => False)

@@ -1,4 +1,4 @@
-"""V*'s statements over one inner session (hiding model architectures, lane rec-v0): each Ligerito level's `RecOpen`
+"""V*'s statements over one inner session (hiding model architectures): each Ligerito level's `RecOpen`
 statement (`verity_flock.rec_outer`) and the algebra's `InnerRepCheck` (`verity_flock.rec_residuals`), staged from the inner
 session's directory (`verity_flock.rec_live.Proxy.write`: ``public.json``, ``private.json``, ``session/``). The algebra is
 staged as its parts (`rec_residuals.parts`, ``alg/p<j>/``), each within --zk's coin schedule, and holds when every part does.
@@ -6,7 +6,7 @@ With each level, that level's committed tops are staged too, every node held at 
 ``root_B`` under ``cap/``, a later level ``l``'s both reps' tops under ``cap/L<l>/``, `stage_cap`).
 
     python -m verity_flock.rec_vstage points INNER CIRCUIT PUBLIC > points.json
-    inner-fold [--partition FILE] verity/flock-circuit CIRCUIT PUBLIC points.json os > fold.json    (tests/lean/InnerFold.lean)
+    inner-fold [--partition FILE] verity/flock-circuit CIRCUIT PUBLIC points.json tree > fold.json    (tests/lean/InnerFold.lean)
     python -m verity_flock.rec_vstage stage INNER fold.json OUT [--levels all|none|0,1,..] [--no-algebra] [--forge KIND]
         [--salts FILE] [--part-jobs N]
     python -m verity_flock.rec_vstage stage-links CIRCUIT INST LINKS OUT [--forge link]
