@@ -18,7 +18,10 @@ import json
 import os
 import sys
 
-from verity.ml.protocols.pouw.circuit import h1tile as HT
+try:
+    from verity.ml.protocols.pouw.circuit import h1tile as HT
+except ModuleNotFoundError:  # a pinned TREE (H1V3_SHA, J10R_SHA) from before the builders left core has h1tile there
+    from verity.core.protocols.pouw.circuit import h1tile as HT
 
 
 def main() -> int:
