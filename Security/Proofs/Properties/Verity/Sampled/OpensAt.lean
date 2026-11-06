@@ -131,7 +131,9 @@ theorem opens_rowLeaf {A : Live} (hA : A.OpensReady) {i : ℕ} {b : Bool} {m : C
       simpa [Live.roots, Flock.Bridge.rootsOfL] using (List.getElem?_eq_some_iff.mp hrt).1
     have hqr : q = r.port := by
       have e1 : bs reg.root = A.roots.getD q [] := by rw [← hreg]; exact Claims.Sampling.bs_bytes _
-      have e2 : bs reg.root = ri.1 := of_decide_eq_true (Array.find?_some hfind)
+      have e2 : bs reg.root = ri.1 := by
+        have h2 := Array.find?_some hfind
+        exact of_decide_eq_true h2
       have e3 : A.roots.getD r.port [] = ri.1 := by simp [List.getD_eq_getElem?_getD, hrt, ← hrti]
       have he : A.roots.getD q [] = A.roots.getD r.port [] := e1.symm.trans (e2.trans e3.symm)
       rcases Nat.lt_trichotomy q r.port with hlt | heq | hgt
