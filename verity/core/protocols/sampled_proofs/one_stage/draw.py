@@ -5,11 +5,12 @@
     {"law": "stratified", "population": N, "k": K, "strata": [<stratum>, ...], "units": [...]}
     {"law": "work", "population": N, "k": K, "strata": [<work stratum>, ...], "units": [...], ["closure": [...]]}
 
-This is the Lean verifier's `Flock.Draw` object and `flock-circuit`'s `unit_draw`. A stream samples it from the auditor's
-challenger's coins (`service.Stream.select`, Lean `Select.select`); `flock-verify draw` without `--stream` still samples the
-operating system's randomness (`Flock.Draw`'s OS draw); nothing here samples, and no sample is derived from a
-commitment. `check_draw` holds a sample to the registration and to the verifier's own sampling design, and `check_proved` holds the
-proved statement's proof blocks to the sample.
+This is the Lean verifier's `Flock.Draw` object and `flock-circuit`'s `unit_draw`. A stream samples it from the
+auditor's challenger's coins (`service.Stream.select`, Lean `Select.select`); `flock-verify draw` reads them too
+(`--stream`, `--stream-file`), and without them refuses any sample that reads coins: the verifier has no randomness of
+its own. Nothing here samples, and no sample is derived from a commitment. `check_draw` holds a sample to the
+registration and to the verifier's own sampling design, and `check_proved` holds the proved statement's proof blocks to
+the sample.
 
 **The stratified sampling design**: one stratum per template, a uniform k_s-subset drawn
 without replacement inside each, independently.
