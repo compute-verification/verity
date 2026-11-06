@@ -13,7 +13,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
                                            | --traffic varied [--rate R] [--prompt-range LO:HI | --prompts < PROMPTS]
                                              [--seed S] [--eos-ids ID,...] [--compact B] [--margin M])
     vy-challenger-gate warden-rehearse --peer NAME --port PORT --minutes M [--requests N] [--tokens N] [--height H]
-                                       [--temperature T] [--top-p P]
+                                       [--temperature T] [--top-p P] [--watermark]
                                        [--scan [--bucket-ms MS]
                                         [--prompts [--scan-class w63|w63k4] [--window-per-group]] < PROMPTS]
     vy-challenger-gate weights-write [--shape h200|tiny]
@@ -197,7 +197,10 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   (G = `scan_group_windows` of the tokens), so that group g's cells are exactly windows g·G … (g+1)·G − 1, which
   `out/groups.json` publishes, and `--minutes` must cover `warden_group_minutes` of its groups. The demo's stand-in (`benchmarks/network_traces/demo_stub.py`) serves the demo's class, prompts of exactly 8
   byte ids and exactly 24 out, id-form, and prints its prompts: `demo_stub.py prompts | … warden-rehearse --scan
-  --prompts --tokens 24`. Its request carries `device: warden`; it
+  --prompts --tokens 24`. `--watermark` (recorded and passed on only when given) has the warden also send the
+  endpoint, through the same tunnel, the watermark stream an engine admitting at certified ticks waits on
+  (`verity.core.protocols.certifier.release`: `POST /verity/watermark`, one line `t n` a tick); the warden reads nothing
+  back, and nothing it signs, certifies or publishes changes. Its request carries `device: warden`; it
   shares the certifier rehearsal's directory, run names, unit, `status` and `fetch`, and one of either runs at a time.
   The warden writes to `witness/` (0700): its three records, `certified.jsonl` (each record's head and certifier salt
   with its certificate), the cells' salts (each link-window's rows' and wiring's), the traffic, the client's log and
@@ -1309,7 +1312,8 @@ def parse_warden(argv: list[str], host: Host, *, load: bool = False) -> dict:
     the sampling (`sampling`) and the key's height. `--prompts` (with `--scan`) marks the request's prompts as the gate's stdin,
     `--scan-class` (with `--prompts`, recorded only when given) the scan's class they are of (`SCAN_CLASSES`: its
     schedule, prompt ids and tokens), and `--window-per-group` (with `--prompts`) sends them a group a link-window's
-    span; `warden_prompts` reads them and checks what depends on them. With `load` (`load-relay`) it is the serving session with its load first
+    span; `warden_prompts` reads them and checks what depends on them. `--watermark` (recorded only when given) sends
+    the endpoint the watermark stream. With `load` (`load-relay`) it is the serving session with its load first
     (`parse_load`: the request's ``load``), whose minutes come out of `--minutes` before the rehearsal's."""
     p = argparse.ArgumentParser(prog=f"vy-challenger-gate {'load-relay' if load else 'warden-rehearse'}",
                                 exit_on_error=False, add_help=False, allow_abbrev=False)
@@ -1323,6 +1327,7 @@ def parse_warden(argv: list[str], host: Host, *, load: bool = False) -> dict:
     p.add_argument("--prompts", action="store_true")
     p.add_argument("--scan-class", default=None)
     p.add_argument("--window-per-group", action="store_true")
+    p.add_argument("--watermark", action="store_true")
     if load:
         p.add_argument("--sink-port", required=True)
         p.add_argument("--program", required=True)
@@ -1343,6 +1348,7 @@ def parse_warden(argv: list[str], host: Host, *, load: bool = False) -> dict:
         raise Refused(f"--scan-class {a.scan_class!r}: one of {sorted(SCAN_CLASSES)}")
     tick = {} if a.bucket_ms is None else {"bucket_ms": bounded("--bucket-ms", a.bucket_ms, *SCAN_BUCKET_MS)}
     loaded = {"load": parse_load(a, host, port)} if load else {}
+    watermark = {"watermark": True} if a.watermark else {}
     spent = loaded["load"]["minutes"] if load else 0
     if minutes <= spent:
         raise Refused(f"--minutes {minutes}: the {loaded['load']['shape']} load takes {spent} minutes (its weights "
@@ -1355,7 +1361,7 @@ def parse_warden(argv: list[str], host: Host, *, load: bool = False) -> dict:
                 "requests": None if a.requests is None else bounded("--requests", a.requests, *WARDEN_PROMPT_REQUESTS),
                 **({} if a.tokens is None else {"tokens": bounded("--tokens", a.tokens, *tokens)}),
                 "scan": True, **tick, "prompts": True, **cls,
-                **({"window_per_group": True} if a.window_per_group else {})} | a.sampling | loaded
+                **({"window_per_group": True} if a.window_per_group else {})} | a.sampling | watermark | loaded
     requests = bounded("--requests", a.requests or "100", *WARDEN_REQUESTS)
     given = ({} if a.tokens is None else {"tokens": bounded("--tokens", a.tokens, *WARDEN_TOKENS)}) | \
         ({"scan": True} if a.scan else {}) | tick
@@ -1366,7 +1372,7 @@ def parse_warden(argv: list[str], host: Host, *, load: bool = False) -> dict:
     warden_key(warden_windows(requests, a.scan, tick.get("bucket_ms", SCAN["--bucket-ms"])), a.height,
                f"{requests} requests", load_heads(loaded["load"]["shape"]) if load else 0)
     return {"device": "warden", "peer": a.peer, "port": port, "minutes": minutes, "requests": requests,
-            "height": a.height} | a.sampling | given | loaded
+            "height": a.height} | a.sampling | given | watermark | loaded
 
 
 def _after_load(spent: int) -> str:
@@ -1577,7 +1583,7 @@ USAGE = ("verbs: reserve --peer NAME --scheme S --families JSON [--epoch E] [--m
          "[--traffic varied [--rate R] [--prompt-range LO:HI | --prompts: the prompts on stdin] [--seed S] "
          "[--eos-ids ID,...] [--compact B] [--margin M]: no --in-flight, --profile or sampling] "
          "| warden-rehearse --peer NAME --port PORT --minutes M [--requests N] [--tokens N] [--temperature T] "
-         "[--top-p P] [--scan [--bucket-ms MS] [--prompts [--window-per-group]]: the prompts on stdin] "
+         "[--top-p P] [--watermark] [--scan [--bucket-ms MS] [--prompts [--window-per-group]]: the prompts on stdin] "
          "(a lane's own gate key, or vy-admin) "
          "| weights-write [--shape h200|tiny] "
          "| load-relay --peer NAME --port PORT --sink-port PORT --program SHA512 --minutes M [--shape h200|tiny] "
@@ -2119,12 +2125,14 @@ def warden_command(req: dict, out: Path, url: str, tree: Path = TREE, *, sinks: 
     requests on the gate's traffic (`WARDEN_RATE`, `WARDEN_SEED`, `WARDEN_TAIL_S`) at its sampling (`sampling_argv`),
     for a scan rehearsal id requests (`--ids`) at the scan's schedule at the request's tick and class
     (`scan_schedule`), of its prompts (`--prompts`, the gate's `PROMPTS` in `out`, the witness) and in groups
-    (`--window-per-group`) when the request says so, and the most tokens a request asks for only when the request has
-    it. A `load-relay` request's load goes first: the `store`'s stream of its shape relayed to `sinks` (the sink
-    tunnels' local ends) for its program, the endpoint given `LOAD_READY_S` to come up after it."""
+    (`--window-per-group`) when the request says so, the watermark stream (`--watermark`) when it says so, and the most
+    tokens a request asks for only when the request has it. A `load-relay` request's load goes first: the `store`'s
+    stream of its shape relayed to `sinks` (the sink tunnels' local ends) for its program, the endpoint given
+    `LOAD_READY_S` to come up after it."""
     scan = ["--ids", *scan_schedule(req.get("bucket_ms"), req.get("scan_class"))] if req.get("scan") else []
     prompts = ["--prompts", str(out / PROMPTS)] if req.get("prompts") else []
     grouped = ["--window-per-group"] if req.get("window_per_group") else []
+    watermark = ["--watermark"] if req.get("watermark") else []
     given = ["--max-tokens", str(req["tokens"])] if "tokens" in req else []
     load = req.get("load")
     loaded = [] if not load else ["--load-store", str(store), "--load-shape", load["shape"], "--load-sinks",
@@ -2134,7 +2142,7 @@ def warden_command(req: dict, out: Path, url: str, tree: Path = TREE, *, sinks: 
             "--upstream", url.removeprefix("http://"), "--out", str(out), *height_argv(req),
             "--requests", str(req["requests"]),
             "--rate", str(WARDEN_RATE), "--seed", str(WARDEN_SEED), "--tail", str(WARDEN_TAIL_S), *sampling_argv(req),
-            *scan, *prompts, *grouped, *given, *loaded]
+            *scan, *prompts, *grouped, *watermark, *given, *loaded]
 
 
 def weights_command(req: dict, out: Path, store: Path, tree: Path = TREE) -> list[str]:
