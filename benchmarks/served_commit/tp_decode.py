@@ -37,6 +37,7 @@ import json
 import statistics
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 #: arm -> (row bytes, per-layer acquisition)
@@ -228,6 +229,54 @@ def summarize(rows: list[dict[str, Any]], arm: str, batches: list[int]) -> dict[
     return out
 
 
+def open_engine(a: argparse.Namespace, out: Path, *, max_num_seqs: int, prefix_caching: bool) -> SimpleNamespace:
+    """The TP engine, eager, of ``a``'s workload, case, checkpoints, tp, engine args and RPC timeout: the workload's target
+    applied and its ranks required, served vLLM checked (`served.require`, which writes into ``out``), and every request decoding
+    to its cap (``ignore_eos``)."""
+    from verity_vllm.engine import engine_profile as prof
+    prof.apply_env()
+    from vllm import LLM
+
+    from verity_vllm import protocols as PO
+    from verity_vllm.engine import served as SV
+    from verity_vllm.engine import vllm_adapter as va
+    from verity_vllm.pipeline.tp.rank_worker import EXTENSION
+    from verity_vllm.pipeline.commit import git_head, run_workload  # noqa: F401 - imported before the engine, as the drivers always have
+    from verity_vllm.pipeline.tp import phases as PH
+    from verity_vllm.pipeline.tp import target as TT
+    from verity_vllm.pipeline.tp import trace as TRACE  # noqa: F401
+    from verity_vllm.pipeline.tp import warmup as WU  # noqa: F401
+    from verity_vllm.pipeline.tp.capture import parse_engine_args
+
+    wl = va.load_workload(a.workload, None)
+    target = PO.commit_guard(va.target_of_workload(wl), world=a.tp, installs=False)
+    target_env, target_kw = TT.apply(target, wl["execution"])
+    case = va.case_of(wl, a.case)
+    env_flags = {**prof.apply_env(), **target_env}
+    cp = prof.checkpoint_for(case, a.checkpoints)
+    kw = prof.engine_kwargs(cp, replay=False, seed=prof.ENGINE_SEED, enforce_eager=True, tensor_parallel_size=a.tp)
+    kw.update({"enable_prefix_caching": prefix_caching, "max_num_seqs": max_num_seqs, **target_kw})
+    kw.update({k: v for k, v in (wl.get("engine_args_required") or {}).items() if k != "tensor_parallel_size"})
+    kw.update(parse_engine_args(a.engine_arg), worker_extension_cls=EXTENSION)
+    llm, build_s, topo = PH.engine(lambda: LLM(**kw), a.tp, a.rpc_timeout, model=cp["repo"], enforce_eager=True, case=case, max_num_seqs=max_num_seqs)
+    TT.require_ranks(llm, target, a.rpc_timeout)
+    served = SV.require(llm, wl, target, out, a.rpc_timeout)
+    eng = va.Engine(llm=llm, runner=None, model=None, cp=cp, kwargs=kw, env_flags=env_flags, build_s=build_s, case=case, target=target)
+    to_cap = va.sampling_params
+
+    def capped(req: dict[str, Any], sampling: dict[str, Any]) -> Any:
+        p = to_cap(req, sampling)
+        p.ignore_eos = True
+        return p
+
+    va.sampling_params = capped
+    engine_kwargs = {k: v for k, v in kw.items() if k not in ("model", "tokenizer", "worker_extension_cls")}
+    versions = {"git_head": git_head(), "args": vars(a), "tp": a.tp, "build_s": round(build_s, 1),
+                "engine_kwargs": engine_kwargs, "target": TT.as_json(target), "served": served, "ranks": topo}
+    return SimpleNamespace(llm=llm, eng=eng, wl=wl, cp=cp, case=case, kw=kw, engine_kwargs=engine_kwargs, world=len(topo),
+                           build_s=build_s, versions=versions)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="stock against one rows-sha512 Commit arm in one TP engine (eager), B1/B8/B32 interleaved")
     ap.add_argument("--workload", required=True, help="the row (its first request is every batch's prompt)")
@@ -243,52 +292,21 @@ def main() -> None:
     ap.add_argument("--rpc-timeout", type=float, default=3600.0)
     a = ap.parse_args()
 
-    from verity_vllm.engine import engine_profile as prof
-    prof.apply_env()
-    from vllm import LLM
-
-    from verity_vllm import protocols as PO
-    from verity_vllm.engine import served as SV
-    from verity_vllm.engine import vllm_adapter as va
-    from verity_vllm.pipeline.tp.rank_worker import EXTENSION
-    from verity_vllm.pipeline.commit import git_head, run_workload
-    from verity_vllm.pipeline.tp import phases as PH
-    from verity_vllm.pipeline.tp import target as TT
-    from verity_vllm.pipeline.tp import trace as TRACE
-    from verity_vllm.pipeline.tp import warmup as WU
-    from verity_vllm.pipeline.tp.capture import parse_engine_args
-
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     batches = [int(b) for b in a.batches.split(",")]
-    wl = va.load_workload(a.workload, None)
-    target = PO.commit_guard(va.target_of_workload(wl), world=a.tp, installs=False)
-    target_env, target_kw = TT.apply(target, wl["execution"])
-    case = va.case_of(wl, a.case)
-    env_flags = {**prof.apply_env(), **target_env}
-    cp = prof.checkpoint_for(case, a.checkpoints)
-    kw = prof.engine_kwargs(cp, replay=False, seed=prof.ENGINE_SEED, enforce_eager=True, tensor_parallel_size=a.tp)
-    kw.update({"enable_prefix_caching": False, "max_num_seqs": max(batches), **target_kw})
-    kw.update({k: v for k, v in (wl.get("engine_args_required") or {}).items() if k != "tensor_parallel_size"})
-    kw.update(parse_engine_args(a.engine_arg), worker_extension_cls=EXTENSION)
-    llm, build_s, topo = PH.engine(lambda: LLM(**kw), a.tp, a.rpc_timeout, model=cp["repo"], enforce_eager=True, case=case, max_num_seqs=max(batches))
-    TT.require_ranks(llm, target, a.rpc_timeout)
-    served = SV.require(llm, wl, target, out, a.rpc_timeout)
-    eng = va.Engine(llm=llm, runner=None, model=None, cp=cp, kwargs=kw, env_flags=env_flags, build_s=build_s, case=case, target=target)
-    world = len(topo)
-    to_cap = va.sampling_params
+    E = open_engine(a, out, max_num_seqs=max(batches), prefix_caching=False)
 
-    def capped(req: dict[str, Any], sampling: dict[str, Any]) -> Any:
-        p = to_cap(req, sampling)
-        p.ignore_eos = True
-        return p
+    from verity_vllm.engine import vllm_adapter as va
+    from verity_vllm.pipeline.commit import run_workload
+    from verity_vllm.pipeline.tp import phases as PH
+    from verity_vllm.pipeline.tp import trace as TRACE
+    from verity_vllm.pipeline.tp import warmup as WU
 
-    va.sampling_params = capped
+    llm, eng, wl, kw, cp, case, world = E.llm, E.eng, E.wl, E.kw, E.cp, E.case, E.world
     sampling = wl["sampling"]
     reqs = {b: requests_at(wl, b, a.rotate) for b in batches}
-    engine_kwargs = {k: v for k, v in kw.items() if k not in ("model", "tokenizer", "worker_extension_cls")}
-    versions = {"git_head": git_head(), "args": vars(a), "tp": a.tp, "build_s": round(build_s, 1),
-                "engine_kwargs": engine_kwargs, "target": TT.as_json(target), "served": served, "ranks": topo}
+    engine_kwargs, versions = E.engine_kwargs, E.versions
     (out / "versions.json").write_text(json.dumps(versions, indent=1, default=str) + "\n")
     _row_bytes, layer = ARMS[a.arm]
     manifest = None
