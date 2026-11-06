@@ -3091,6 +3091,16 @@
   "Claims.RecGeneric.compilerKS": {
    "honest": ["Claims.RecGeneric.compilerKS_honest"],
    "nontrivial": "Claims.RecGeneric.compilerKS_nontrivial"
+  },
+  "Verity.SecurityProofs.ExpandSize": {
+   "honest": ["Verity.SecurityProofs.ExpandSize_honest"],
+   "nontrivial": "Verity.SecurityProofs.ExpandSize_nontrivial",
+   "kind": "exclusion"
+  },
+  "Verity.SecurityProofs.ExpandAndSize": {
+   "honest": ["Verity.SecurityProofs.ExpandAndSize_honest"],
+   "nontrivial": "Verity.SecurityProofs.ExpandAndSize_nontrivial",
+   "kind": "exclusion"
   }
  },
  "unwitnessed": {
@@ -3375,8 +3385,6 @@
   "Verity.SecurityProofs.BlockDescription": "80baa463fd43086b3ca137b50dc78ace3b4400bfbabdb344ddc3c090d1f6dbeb",
   "Verity.SecurityProofs.Counting": "34e0729bbd40c2fd7311fc30725f7d8bb1f2fb2daed521891c0dada5afd70f77",
   "Verity.SecurityProofs.CountingSum": "1b2f164ab74dfac250ebe357db6363a1d52294716405d3ed10596cb21004e4ef",
-  "Verity.SecurityProofs.ExpandAndSize": "03966908eadf7f2df4b6715764c0a881097cb6d8a2ea801f44df28194c7d2e60",
-  "Verity.SecurityProofs.ExpandSize": "ba20fed6329ddf69ec6358b50a84b4245f08fbbd3cd9543a994231dcfd64ab9f",
   "Verity.SecurityProofs.InferenceCap": "0035c5e37498f2d808d066ae0a6d0bd50791b4ad147383f0feba37bf8362c9fc",
   "Verity.SecurityProofs.PrivateOutBitsLe": "a595e2305f68fd4b90134f54bc1e597de991458da482ef92bfbc67d7d7a782f3",
   "Verity.SecurityProofs.RefineWrong": "52a2253ccd78c6339acebc6fe4e9ea3afaaff0120bb36457ff76a2a605ce5ad6",
@@ -11799,6 +11807,18 @@
    "assumptions": [],
    "type_hash": "03966908eadf7f2df4b6715764c0a881097cb6d8a2ea801f44df28194c7d2e60"
   },
+  "Verity.SecurityProofs.ExpandAndSize_honest": {
+   "owner": "@lean",
+   "signature": ["Verity.SecurityProofs.ExpandAndSize_honest : Verity.Guarantees.ExpandAndSize_honest"],
+   "assumptions": [],
+   "type_hash": "a7ff419aad4a9cf8d50732831b3856b9501fdfc57986427ef7bbeb2120bcf3f5"
+  },
+  "Verity.SecurityProofs.ExpandAndSize_nontrivial": {
+   "owner": "@lean",
+   "signature": ["Verity.SecurityProofs.ExpandAndSize_nontrivial : Verity.Guarantees.ExpandAndSize_nontrivial"],
+   "assumptions": [],
+   "type_hash": "89a901361a665320505aa9113c71097e2f44b8489bc0896f6c832b6488acd783"
+  },
   "Verity.SecurityProofs.ExpandBits": {
    "owner": "@lean",
    "signature": ["Verity.SecurityProofs.ExpandBits : Verity.Guarantees.ExpandBits"],
@@ -11822,6 +11842,18 @@
    "signature": ["Verity.SecurityProofs.ExpandSize : Verity.Guarantees.ExpandSize"],
    "assumptions": [],
    "type_hash": "ba20fed6329ddf69ec6358b50a84b4245f08fbbd3cd9543a994231dcfd64ab9f"
+  },
+  "Verity.SecurityProofs.ExpandSize_honest": {
+   "owner": "@lean",
+   "signature": ["Verity.SecurityProofs.ExpandSize_honest : Verity.Guarantees.ExpandSize_honest"],
+   "assumptions": [],
+   "type_hash": "8ca0392c708102f72c1b1e0231296e28a075671b385e3dee15a2ac6567cde84a"
+  },
+  "Verity.SecurityProofs.ExpandSize_nontrivial": {
+   "owner": "@lean",
+   "signature": ["Verity.SecurityProofs.ExpandSize_nontrivial : Verity.Guarantees.ExpandSize_nontrivial"],
+   "assumptions": [],
+   "type_hash": "112a8c90c018aebd4028397748512fca09566c34295f1a1479fc82c38fe3c058"
   },
   "Verity.SecurityProofs.HopperStepComplete": {
    "owner": "@proofs",
@@ -13314,7 +13346,11 @@
    "Flock.SecurityProofs.JointShareV5": "frozen (no-function): A window's sample over several members (JointAuditV5): every member registered at one registration, one live draw (Bridge.execSel on the verifier's bytes under the registration's law on its strata, LawOn) over all their proof blocks, then one SampledKSLiveV5 session per member in order (MemberV5: flock-verify --zk --public-inputs at keyProgP, under RecordCustodyZKJPLaw at subset |S| for its part S, at one link-point count per member, hcls), with A3 for the draw's bytes and TableCRZAt and LinkCRZCAt at each member's session played alone; it bounds the event that every session accepts with more than an eps share of the window's proof blocks incorrect by the law's largest miss of such a set plus the members' eps_ks and eps_bind, a Verity.Game.prob event of the joint game rather than a run of a Lean function; it reads JointShareV5 (Security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean), so the lock records its text, and it takes the shape when SampledKSLiveV5's statement moves into a Guarantees module of the spec. It sits in `unwitnessed` beside SampledKSLiveV5: its acceptance is fixed to flock-verify's AcceptsZKP, so no acceptance-kind witness (the statement false at a verifier that accepts everything) can be stated; restated over a verifier record, as RecursiveKSAtRec is, it takes its witnesses, and its entry leaves `unwitnessed`.",
    "Flock.SecurityProofs.JointHorizonV5": "frozen (no-function): JointSampledV5's window audit (JointAuditV5) over a monitoring period of T windows played as one causal game against one adaptive prover (periodG): the probability that every window accepts and the windows' incorrect proof blocks lie outside the period's confidence set at delta (the windows' laws miss them together with probability at least delta, and their ANDs and output bits in all are at most the most any choice in that set holds) is at most delta plus the sum of the windows' eps, under A3 at every window and TableCRZAt and LinkCRZCAt at each member's session played alone at every strategy the period plays its window with (JointPeriodV5.Plays); a Verity.Game.value event over the period's run rather than a run of a Lean function; it reads JointHorizonV5 (Security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean), so the lock records its text, and it takes the shape when SampledKSLiveV5's statement moves into a Guarantees module of the spec. It sits in `unwitnessed` beside SampledKSLiveV5: its acceptance is fixed to flock-verify's AcceptsZKP, so no acceptance-kind witness (the statement false at a verifier that accepts everything) can be stated; restated over a verifier record, as RecursiveKSAtRec is, it takes its witnesses, and its entry leaves `unwitnessed`.",
    "Pouw.PearlC.pearlCSampledH100v1RowSeedRowCap100_6144x256Tol": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCH100Rev1, at the row cap 1/100, given the model conditions RowSeedNoise and SplitClosed, which are definitions, not assumptions (Security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
-   "Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256Tol": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCH100Rev1, at the row cap 1/100, given the model conditions CodeSeedNoise, RelabelClosed, RowSeedNoise and SplitClosed, which are definitions, not assumptions (Security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function."
+   "Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256Tol": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCH100Rev1, at the row cap 1/100, given the model conditions CodeSeedNoise, RelabelClosed, RowSeedNoise and SplitClosed, which are definitions, not assumptions (Security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Verity.SecurityProofs.ExpandAndSize_honest": "completeness: ExpandAndSize's honest lemma: at AndPair (as ExpandSize_honest's) the expansion's AND counts are at most the widths of the computed gates and of the unit. It states facts of an instance, not a property of a Lean function, and rests on no run and no art:.",
+   "Verity.SecurityProofs.ExpandAndSize_nontrivial": "lemma: ExpandAndSize's nontrivial lemma: at AndPair both bits of gate 2 are AND gates, each the AND of a bit of gate 0 and one of gate 1, so the expansion's AND count 2 is above the bound's right-hand side lowered by one (gate 2's width 2, less 1), and the bound is tight there. A counterexample at an instance, not a property of a Lean function.",
+   "Verity.SecurityProofs.ExpandSize_honest": "completeness: ExpandSize's honest lemma: at AndPair (Verity.Expand.AndPair, Security/Definitions/Core/Expand/Instances.lean), a declaration whose two-bit input gates 0 and 1 feed a bitwise AND at gate 2, its one unit, with gate 0 registered, its conclusion holds: the expansion's computed bits and its unit's bits are as many as their widths, and its unit's unregistered reads at most the width of the unit's. It states facts of an instance, not a property of a Lean function, and rests on no run and no art:.",
+   "Verity.SecurityProofs.ExpandSize_nontrivial": "lemma: ExpandSize's nontrivial lemma: at AndPair the unit's expansion reads gate 1's two unregistered bits, above the bound's right-hand side lowered by one (gate 1's width 2, less 1), so the bound is tight there. A counterexample at an instance, not a property of a Lean function."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -16803,6 +16839,14 @@
     "Verity.OperandClass.zero": "fa8184d9fccd6741ab95294c43bda2707e7952f427b2fb2319b6ea22fef40ccc"
    }
   },
+  "Definitions.Core.Expand.Instances": {
+   "digest": "4271299471ede4407f15f48af9e1f5d9ab04d3ef3ab9d6cc6142b540d28f7321",
+   "definitions": {
+    "Verity.Expand.AndPair.C": "623c103c289bc7444a4490de211d76215835bd9a6ebbf45bcb52283e6cc99f45",
+    "Verity.Expand.AndPair.P": "9d6b7de13a801e00bb7e1bdde96252546c66cf1fb9039c8405b4713338735576",
+    "Verity.Expand.AndPair.d": "aedceab34e76fbeb0d45cbd92e33dea063a2b78afbf99912ffe6a9dcd0e94ad5"
+   }
+  },
   "Definitions.Core.Formalism": {
    "digest": "03c0096bf9448681d9feeaabb783779deec109d7f0fc3329b27bd8c65f15b813",
    "definitions": {
@@ -16934,6 +16978,15 @@
     "Verity.Game.drawStrat": "a90a41279fcd1d64277b99cc405a6dee1d985ec78dbf3bc75fab24d87330e335",
     "Verity.Game.runsG": "bbc8fc5f477b5509bbe3ac830743db287a4d4bb60e806f50fd439ef39acc9463",
     "Verity.Game.runsStrat": "252d77524f0829877a146c1bd1235eb4346db1c8eea52cb4064d8cf14b110794"
+   }
+  },
+  "Definitions.Core.Guarantees.Expand.Witnesses": {
+   "digest": "5103e95bf3a33c6441bf16c83264a135e8377ad27861df2e244bb9c828bff945",
+   "definitions": {
+    "Verity.Guarantees.ExpandAndSize_honest": "d52a4131d19e781bd1a2164f7d052e95a801b153d7fdae35dca75daf4c1f89a2",
+    "Verity.Guarantees.ExpandAndSize_nontrivial": "b6428fe1ba2e9cd120afff2fdd33bf8bb7e594024af4b9e685c3e094f9dd0e60",
+    "Verity.Guarantees.ExpandSize_honest": "25dd69b64ae784cbfa89c3952dc0524122ec9db6a3caab13b4adfc1489d9ca82",
+    "Verity.Guarantees.ExpandSize_nontrivial": "272145232223b83e9fa1ac10afcec4ffadcc61e1e1375baa75e153449fed9d53"
    }
   },
   "Definitions.Core.Guarantees.Formalism": {
