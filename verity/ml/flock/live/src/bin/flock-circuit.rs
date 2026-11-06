@@ -49,6 +49,9 @@ use flock_live::gpu_circuit::HostSlots;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha512};
 
+#[global_allocator]
+static ALLOC: flock_live::huge_pages::HugePages = flock_live::huge_pages::HugePages;
+
 const TABLE: &str = "circuit";
 /// The most tables in one session (`--session-tables`); their names sort in table order (`circuit-00` to `circuit-63`).
 const MAX_TABLES: usize = 64;
