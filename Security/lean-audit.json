@@ -15267,24 +15267,6 @@
    "Accounting.SecurityProofs.RequirementStepsOuter": {
     "∀ (x : L), SetLike.instMembership.mem X x → And (instLENat.le (p.ticks x w.start) ts) (instLENat.le td (p.ticks x (instHAdd.hAdd w.start w.len)))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound": {
-    "∀ (u : Fin B), SetLike.instMembership.mem S u → And (instLENat.le (P.gates u).card (cS u)) (instLENat.le (d.unregistered (P.gates u)).card (kS u))": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion",
-    "∀ (v : Fin d.D.N), SetLike.instMembership.mem J.V v → Real.instLE.le (J.ω v) ωmax": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
-   },
-   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_honest": {
-    "SetLike.instMembership.mem Accounting.ServingBlocks.Honest.S u": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
-   },
-   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial": {
-    "SetLike.instMembership.mem Accounting.ServingBlocks.Counter.S u": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
-   },
-   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest": {
-    "SetLike.instMembership.mem Accounting.ServingBlocks.Honest.S u": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion",
-    "SetLike.instMembership.mem Accounting.ServingBlocks.Honest.J.V v": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
-   },
-   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial": {
-    "SetLike.instMembership.mem Accounting.ServingBlocks.Counter.S u": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion",
-    "SetLike.instMembership.mem Accounting.ServingBlocks.Counter.J.V v": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
-   },
    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_bodies": {
     "SetLike.instMembership.mem Accounting.ServingBlocks.Detached.S u": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion",
     "SetLike.instMembership.mem Accounting.ServingBlocks.Detached.J.V v": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
@@ -17203,6 +17185,24 @@
    },
    "Verity.SecurityProofs.RegisteredMeets": {
     "Eq (Verity.Advice.Registration.root H F A r) root": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound": {
+    "∀ (u : Fin B), SetLike.instMembership.mem S u → And (instLENat.le (P.gates u).card (cS u)) (instLENat.le (d.unregistered (P.gates u)).card (kS u))": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion",
+    "∀ (v : Fin d.D.N), SetLike.instMembership.mem J.V v → Real.instLE.le (J.ω v) ωmax": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
+   },
+   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_honest": {
+    "SetLike.instMembership.mem Accounting.ServingBlocks.Honest.S u": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
+   },
+   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial": {
+    "SetLike.instMembership.mem Accounting.ServingBlocks.Counter.S u": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
+   },
+   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest": {
+    "SetLike.instMembership.mem Accounting.ServingBlocks.Honest.S u": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion",
+    "SetLike.instMembership.mem Accounting.ServingBlocks.Honest.J.V v": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
+   },
+   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial": {
+    "SetLike.instMembership.mem Accounting.ServingBlocks.Counter.S u": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion",
+    "SetLike.instMembership.mem Accounting.ServingBlocks.Counter.J.V v": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
    }
   }
  },
@@ -21260,10 +21260,10 @@
    }
   },
   "Definitions.Claims.SamplingGeneric": {
-   "digest": "ed54637624f994e30c8fcb1100129e8372462814db3e08c35b3a77f1900e081f",
+   "digest": "c954a7a7ea469f0b34b21d5055ab53f4d481154de1a2f4d16059eccce39c7841",
    "definitions": {
     "Claims.SamplingGeneric.Arg": "a3523e27db94bc0fc6aa14e539db934e8b8be4d90fc860bd46115063083b28bf",
-    "Claims.SamplingGeneric.Arg.E": "33fd5cd4f925464b000b7ed7b2708cd2e5da6609dcca240896287609849a8b55",
+    "Claims.SamplingGeneric.Arg.E": "af0ca8a8061e3a89bb9774829557e74a7af338ec04da1c21cfd55abc0da27f8e",
     "Claims.SamplingGeneric.Arg.EC": "f4942852069688db0fdb3faf44c80ce7059067e8964a9633b0f7472de6f7c553",
     "Claims.SamplingGeneric.Arg.KS": "3c1a24cf577163684ee286a639b91a2e7f460eb0acf3c31997fde367092651dc",
     "Claims.SamplingGeneric.Arg.Op": "bb997ef3fbb0b1a3faccede5bcf0e26e8ba6709c9421f0181aa1fe818baf130b",
@@ -21275,7 +21275,7 @@
     "Claims.SamplingGeneric.Arg.cap": "369495b7f57ea6e34dd914a1ed6a96134d165d6bfda1e2fc9eff18357f7f63bc",
     "Claims.SamplingGeneric.Arg.check": "ee8d971d64d271fd2f335a7e88ea215aa9e6f98c4db08d5cd9dbd1009363e63e",
     "Claims.SamplingGeneric.Arg.ext": "4246dd55727dd9cc09fc615df3dcd63e1fa01dd92eab99ee3621f0b79f0fafe7",
-    "Claims.SamplingGeneric.Arg.instFintypeEC": "9a12b46f7e2fc2721024f1d077a660e667ace38d65f5bfc040a9192aaf9d97a6",
+    "Claims.SamplingGeneric.Arg.instFintypeEC": "9250b1dd34677cb1232ee460c97723f229b1eb31ed51e5511f1192007d395df9",
     "Claims.SamplingGeneric.Arg.k": "c60f87b22c8a5523ab2a60ff3da024c54b37485c69b01c4b617671770f5e9f48",
     "Claims.SamplingGeneric.Arg.opens": "dfd094c45e849cb4f8d2420f3831609512a16db2a007f4390d24948e3b4ba498",
     "Claims.SamplingGeneric.Arg.rounds": "1b09b3c641e4a23878a92f94571c5da5f06ca0491c79d10c58af199c4e83ac53",
@@ -21284,13 +21284,13 @@
     "Claims.SamplingGeneric.Arg.γ": "d855c6d66b3164d131ceff97e0e3076e56fdbf5f5d4f298d502acaabf8a0b2d3",
     "Claims.SamplingGeneric.Arg.κ": "c4c9d77f552d983057694cccfc6dde520827f56856b787af915c0a8141c1d478",
     "Claims.SamplingGeneric.Compiled": "6a63d23efd1ef2f18e55f876f0bfe7d0dd81ba3c47fa99274a183c869321a9d8",
-    "Claims.SamplingGeneric.Compiled.Bconf": "7acd7dd820d37ca4b9ee7107ccc13fd09d62e9a285b3959cbafff158f4810b95",
+    "Claims.SamplingGeneric.Compiled.Bconf": "b98d5f14469666f10fc45fcbb66432161bf825e5f87dcf73f6b0ba01e477a7ef",
     "Claims.SamplingGeneric.Compiled.Bits": "a5614b5261d320b5eea83a35573aed21907a188a68f6996f58ef6bcffa5524a6",
     "Claims.SamplingGeneric.Compiled.BlockEC": "4340886298e4e90cfd88a740710174a5bedcaadb72a6ad81944b7ebf2d3368c7",
-    "Claims.SamplingGeneric.Compiled.E": "ee001d714f934cc80167a8be9c90f05002865c134e207e968b5537193f592777",
+    "Claims.SamplingGeneric.Compiled.E": "d6fb476ceef6742355df22420bb39aefe4b26f74ba5da3cd9d3caac80ca036ee",
     "Claims.SamplingGeneric.Compiled.ECoins": "34cbb608f6dbc649a0515e740757063367a5df7e8a60578471566f454c0b5a5d",
     "Claims.SamplingGeneric.Compiled.Efficient": "99f067b1e70867ac86d97f47b0f667fd06de22993c022cd73dbbe99661116801",
-    "Claims.SamplingGeneric.Compiled.Freg": "76e610248de68dbedae4c5a4e94ac48442d6aed150be03621109c2e2e5c88e78",
+    "Claims.SamplingGeneric.Compiled.Freg": "4ee711bd01f4b6fd3ee2e63eb3adc550692dd5452067cd9c9f89ec1159d8c158",
     "Claims.SamplingGeneric.Compiled.KS": "5fe4c60da5a86ce4b72a64a9414fac7f0d8e0455e99a68722901a8e01f8188e2",
     "Claims.SamplingGeneric.Compiled.KSCount": "bd12c6d6e9b95cefdb5b49bcaab7709aed20d5f4a5c9bf2d4a2ac24384ddbbc5",
     "Claims.SamplingGeneric.Compiled.KSReg": "bf81a27b20c4efe1a9ec09d91b82bcee6601c11df0c379279d42619ccbfaf070",
@@ -21305,19 +21305,19 @@
     "Claims.SamplingGeneric.Compiled.checked": "b2bc82c22073a67a6ba4428e72ca2b9effdfd1ffa55e9ff5e3f82ad4bd93fb5b",
     "Claims.SamplingGeneric.Compiled.coinsOf": "351edc67b2f15c2aba9dcd2493edff20e080beca60aec53c9bb8ca0a362c93c1",
     "Claims.SamplingGeneric.Compiled.commit": "7f5e721c2fdcce5806a3c0646907478a92e8e0d14a73cc85c1a950d81bc9f32d",
-    "Claims.SamplingGeneric.Compiled.emb": "6c6a173f3da01db2f9b4ebbd56dd63d6c975eb7ae3810aa6c57009ca8e7efe03",
+    "Claims.SamplingGeneric.Compiled.emb": "517718682c42a8d5f86a25f7f503cc9a1f8a7ea2fb73ebd59228565393487341",
     "Claims.SamplingGeneric.Compiled.es": "53501b99977c2eca45c5ca68f7f72aa41b1a447364eef658e76b2795e574ea4c",
     "Claims.SamplingGeneric.Compiled.iroots": "812fc1b84868eb5d7331210feab7bdb1c9ba9e58e1c553276fc89ac74be6b1bb",
     "Claims.SamplingGeneric.Compiled.k": "949f87d0c61e6e5f341d45a3dda5b720529766d7560add5a3fb8d401dd7f6bec",
-    "Claims.SamplingGeneric.Compiled.missAt": "28ff102cee1c914268b1d52528e44e8312bea386fba3aa28f7eb17a3da3aeccc",
-    "Claims.SamplingGeneric.Compiled.nG": "d6195a4828129c9c6b87ee9769b30f78ddc970dae202e4bcec4fd73038c1477a",
-    "Claims.SamplingGeneric.Compiled.nPU": "f33d609015b9fa3529faa95238d740a8d412520931e95691eecb891714d9385a",
+    "Claims.SamplingGeneric.Compiled.missAt": "12a976d6bab31365f3d74b81227e878365987eadc4825e2d55d2d29a5d64498c",
+    "Claims.SamplingGeneric.Compiled.nG": "89cfd6b6ce52606242ff7716ce7a285d8759c96d493de0dfe30218f1aa17ef30",
+    "Claims.SamplingGeneric.Compiled.nPU": "24e247301d7f0bacfd35935522778a6c27b3344bb8a51c837e8b228d6016a6ee",
     "Claims.SamplingGeneric.Compiled.openCalls": "81a5c86a588097da28e174dd73672fa16407bbf79c1339d02cedf12809b72406",
-    "Claims.SamplingGeneric.Compiled.opensAt": "a87e5a59e0046589c3e2a9ca1ad9345a17ec70502c18d0b4ac724988dad91cb8",
+    "Claims.SamplingGeneric.Compiled.opensAt": "312dd55e1b010c82f5a3cebf94794ae66402194e36b347ac21db4dbcd638748f",
     "Claims.SamplingGeneric.Compiled.parse": "4504637f7cf40386256ec9a31b59843a16c6fb791f155f3175f1720696aa6511",
     "Claims.SamplingGeneric.Compiled.part": "2affae9c861f44cf664de6d8b3152924f2c5b2212c9c84bfa77e6066ad783926",
     "Claims.SamplingGeneric.Compiled.partition": "b4c9e96ee6686e83a0526245863e4c433599cc0a0e3e6fa2284fe6ab0b5dca47",
-    "Claims.SamplingGeneric.Compiled.place": "d1eeb234b0d59f05ab23c868fb4c964c6481951f6adf8f7007decbffc4584614",
+    "Claims.SamplingGeneric.Compiled.place": "95348c058c984ead2297b80de0a404bae47ba3a6df9564832b9ecb4bb2834e7c",
     "Claims.SamplingGeneric.Compiled.regVal": "dc4177345325eb6ba4a4d2d4e977b4e6a1390027013ddb51296ccf9cf1b810b2",
     "Claims.SamplingGeneric.Compiled.reveal": "3364c51d694bcfe9342d3b3befcf99fe8d88f1ba575b926eb4e49521fb5600c4",
     "Claims.SamplingGeneric.Compiled.rounds": "1b9fef9a22df85adb87c219c6c64f278082c0c062201b936b2cc406ffb1adcf3",
@@ -21325,14 +21325,14 @@
     "Claims.SamplingGeneric.Compiled.session": "b2245c4ede14b650d7ac2058dffa7e6a4628bbd72dac675628b008b27127a9a6",
     "Claims.SamplingGeneric.Compiled.sh": "d1eb194a3292234b62a43e8fe9ca43fceecc97868faef5fdd271681052e84f67",
     "Claims.SamplingGeneric.Compiled.stage2": "03d521dec6bc7d21abc766bb14c0508589cd31fd42232e03aba4eeb4f9a3eb47",
-    "Claims.SamplingGeneric.Compiled.unitExt": "749e5b98f4d70adb74dd47f3935b8c1f9054f17c934a44ee9e0913822564dcbe",
+    "Claims.SamplingGeneric.Compiled.unitExt": "ef9b18157227e807af69a893413c480796a00c86794a9d2596c3ecd9306eecb8",
     "Claims.SamplingGeneric.Compiled.view": "bd0bb6cb47018a3f8ffdb6de47d2fe7d5ab72fa60811bb6687a35b6c191f7215",
     "Claims.SamplingGeneric.Compiled.work": "98b08c01f01daccb09f1f8006f85ec6122790d11a260fb607bff99312a356c2e",
     "Claims.SamplingGeneric.Compiled.γ": "008585514aa21b37e8dd18aabf17408ae4b1237700fcb1d176e911eedccc9e4e",
     "Claims.SamplingGeneric.Compiled.γb": "5c7a214028e1fb48003af269b5e77dccbb8b80d60d59dd986ae8917f1f83b6d2",
     "Claims.SamplingGeneric.Compiled.γs": "fe5bf6b026e23611a0f7bbb6bfd3f6de5e7654d9e557eacca1438ab4a824a552",
     "Claims.SamplingGeneric.Compiled.εreg": "319db40121955316d771a9abeb026ceab37238c8205b1864e4324da841c18ed3",
-    "Claims.SamplingGeneric.Compiled.κ": "9bad1ee634c18b5aef15726337bb991505c9d5584eb609fb477fcd891f3ec4a8",
+    "Claims.SamplingGeneric.Compiled.κ": "ac01743b990f0fff2cbda9fa5c9a41b92df1f3079ede83be74b3ba3ff293506f",
     "Claims.SamplingGeneric.Compiled.κb": "a56f97768830ec102f69bcfecfc923f65c01344afac98a865a109cbc01dfffb1",
     "Claims.SamplingGeneric.Compiled.κs": "febf751edb3d8ac654777c3253f8af6172ea659553c5530f7762215eae25d51c",
     "Claims.SamplingGeneric.Compiled.ρs": "dad68d287ec75731a88864a01230590e35fe24fc0e7af5cde7210617c5471152",
@@ -21345,10 +21345,10 @@
     "Claims.SamplingGeneric.Step": "ed0e1433c9da221834a30ec29a9d62d5c97b968b46db05f4791c92aaf44be715",
     "Claims.SamplingGeneric.Step.casesOn": "a0c65b92b0435a7cb415e5d65ad8e5cd9055d8a3528b0514dd65d5e958f2ac93",
     "Claims.SamplingGeneric.Step.rec": "4f5890988df7c4f245b9ac55fb0193338610416f373e6777ccc041af67c2888e",
-    "Claims.SamplingGeneric.Step.said": "b0ff517f25ef62fa24bddcb7b0d4dd7ce31a0a6aa5494d2e4f4a9cc35538d927",
+    "Claims.SamplingGeneric.Step.said": "feb918d151189398d6db03f7f523a6b748630837ca70e4a4effd585588f51b65",
     "Claims.SamplingGeneric.Step.say": "3e129d1deb4a49c1a67e9bb8d4511f06fc040be4eb850762a7d1a313d8ed1f22",
     "Claims.SamplingGeneric.Step.session": "f47527dfabe4a30ce341a1e088fa1c0b29e8ec047a461dd6e14139ddf7d6e1f8",
-    "Claims.SamplingGeneric.Step.stmt": "2668fc07e8886cbb3670f6848fa84ab846bc02ff250b5f86230ddc1e5a71d1a8",
+    "Claims.SamplingGeneric.Step.stmt": "bd1e9e555d13d0e92f17579a56fd5beb07ef2e5c4b7cc1e80a6ba9ad9f13367c",
     "Claims.SamplingGeneric.ZkArg": "ae2887ea14bf3971e6b39681bff94faf2bd069d196b07d458dc66515b8f99198",
     "Claims.SamplingGeneric.ZkArg.Nonce": "859256edccdf5743f133c2a166f2ac2aa6a86bf2db8ba778e92683bd9f2217d8",
     "Claims.SamplingGeneric.ZkArg.P": "aef823baf8b98ea960a76a2b8289e66e4dc6b5731dfb08860ba0d20bd4f13141",
@@ -21365,26 +21365,23 @@
     "Claims.SamplingGeneric.ZkCompiled": "fc09eddd8c0338d235113cd6ad3fff1f537edec873a77a9f01c1b90e68fcfc65",
     "Claims.SamplingGeneric.ZkCompiled.CB": "b30de723747d0b9d605dce35df6736d7b7c7d548a54faa56daffbce1b9f528e3",
     "Claims.SamplingGeneric.ZkCompiled.M": "17e28c4deee72ec54457fb89dd7b2c2a2baeebcd9b5b6d73bbf4db3048bf1086",
-    "Claims.SamplingGeneric.ZkCompiled.ZK": "15e65a2a76a35995742bb962ee0163ab06235387c0b14efc45b9cebd58622686",
+    "Claims.SamplingGeneric.ZkCompiled.ZK": "368cf9db3aa49ff4a6272e803ac644abc52ad71e4f413853dea49f75a5b18154",
     "Claims.SamplingGeneric.ZkCompiled.ZkSessions": "3eaa17424bd52d59b856195fc919ec2a7b136733b1427bcd5f67a41d3662c2c4",
     "Claims.SamplingGeneric.ZkCompiled.cbFin": "e61d20696cedf4c01538712c0a21008fe3cff263eac3f00945f95be2a6a07d61",
-    "Claims.SamplingGeneric.ZkCompiled.composed": "48ccadaccc8f9b0a63d070344362450f48e0c0d794ce701fc1a2bedab91c9939",
-    "Claims.SamplingGeneric.ZkCompiled.err": "e4cee7d496018c584e3bf3c8cc7b40c67b1ae7fff1d9cf0b6e5d6c91f19556e4",
+    "Claims.SamplingGeneric.ZkCompiled.composed": "4e73a84185079758802ed0f52771e4b0ada81e760b292d86689b8f7aace3a349",
+    "Claims.SamplingGeneric.ZkCompiled.err": "a033097ff19d1c2447466c3cbe05e81b8379be4f6d503e0c0ca975fcf6f6504a",
     "Claims.SamplingGeneric.ZkCompiled.k₀": "a3925f01cb7320e67d27f4d6d7f897385732dab580a74b5c6d1c3602fc87734d",
     "Claims.SamplingGeneric.ZkCompiled.n": "f6fc0f7ad85000b352e461b93dd6caddaac9f71aa2643acd04eae2a7c2e2a5f5",
     "Claims.SamplingGeneric.ZkCompiled.outOf": "855dd9f3e52735c1b7515c00cd12715b261e8710d91648f465f504c0e6517c80",
     "Claims.SamplingGeneric.ZkCompiled.prover": "7be5ed48414d6a79b535b4910179384813323f440ee222c8a07ccfeac25cf1d0",
-    "Claims.SamplingGeneric.ZkCompiled.sim": "20b24582b72a69aea8df523bb452376e5757d5b526c7ff0e7784ad4c1ee09371",
-    "Claims.SamplingGeneric.ZkCompiled.simSessions": "93c5e004d1ef7e3034e8debde276ee171c89405e6e7d6b6469053e5e7f8c2890",
-    "Claims.SamplingGeneric.ZkCompiled.simSessions._sparseCasesOn_1": "e8f31902b1997468f043b8b215295bda1b89f517447a221cb0b8e3b3d1681983",
-    "Claims.SamplingGeneric.ZkCompiled.simSessions._sparseCasesOn_2": "eaeffc08c8cb0f5c2dcc5df961f2f50e7b48f933987c10267331de3541a93f59",
+    "Claims.SamplingGeneric.ZkCompiled.sim": "d4f52626924f07b8aeccc11fd96a6ce42f9b5245286de9a867e6b8c0603a0033",
+    "Claims.SamplingGeneric.ZkCompiled.simSessions": "1edf6b9049f63efce27b42a73996faa5ab182d7d544faaed2c40054f40be0b8f",
     "Claims.SamplingGeneric.ZkCompiled.start": "7945d72609d3d2c1336660e74b970651b555417ead7391fad6162b32cb6b6f96",
     "Claims.SamplingGeneric.ZkCompiled.step": "6b007aef372328b7829506ef714eeb7dcd1afed4dbb110ec67186faddee4c9e1",
     "Claims.SamplingGeneric.ZkCompiled.tapeOf": "cc5fbc25ef0a2997373fba10d6181989da076e1acb4f2d12f480d47287a2e957",
     "Claims.SamplingGeneric.ZkCompiled.toCompiled": "ccf948edc5f449c46b04864831669652cdc5e9103a827a6360eac1ece796543b",
     "Claims.SamplingGeneric.ZkCompiled.wit": "5391b3487ec9636e092ee53e554262276e439d8656e829d264031e2461a0e635",
-    "Claims.SamplingGeneric.histOf": "f7ca01b8a632b9ce90648183b9ac3e227e4f0bfca7cee0c2dcd082d3d5f082cf",
-    "Claims.SamplingGeneric.histOf._sparseCasesOn_1": "c72c91582646797923e0a566005d86160f47b2e0f458e2ca20de2bc98c45a9cd",
+    "Claims.SamplingGeneric.histOf": "163fc30876ffb380512591903c611f2399c6804ed506fd0efe5142cb66ca7bed",
     "Claims.SamplingGeneric.maxBelow": "c0f5e775c1995b9019e236561947aa40620d4e2924f2b5d15afff4f1a02262f5",
     "Claims.SamplingGeneric.maxBelowN": "ba180d87623d7643470a14bacb8c92162bdc4a8dffc37bb3f5c1ba4217afe3de",
     "Claims.SamplingGeneric.residual": "3fc2f3fb6d0c9ec98b3f698e953ecf5cf663875694a43515f80d31f529eea238",
@@ -22549,7 +22546,7 @@
    }
   },
   "Definitions.Core.ValueSalts": {
-   "digest": "2f211ea670939f09eeb1a974cbdfc965b20dc4e4896e7b043e17687979dc5daa",
+   "digest": "29e69603813af67fbc31221b99c70ad84d74e50a53f8495a921656b1a404226f",
    "definitions": {
     "Verity.ValueSalts.Choice": "20e67df2c4b0b113928795d348bc5e923929981f31c58e5d0f9d4e17f75998c6",
     "Verity.ValueSalts.RegistrationRecord": "da4d5cbb7b9c919ff940c4cfcb53a1691f3081852374f454d1121e0e1335b356",
@@ -22557,7 +22554,7 @@
     "Verity.ValueSalts.Service.admits": "5704c70a23f5aa94c67eafac62ea674752e8f1351e93f54ae6326d21433665db",
     "Verity.ValueSalts.Service.forgeAdvantage": "bf894b927dacbf393bdd340b51f7cbf5d9a95d965652a37714c60edbfa8367c6",
     "Verity.ValueSalts.Service.genuine": "df13262ce9930bb378a379090e6cf5157ea6626fa64e8c57098e508133c3c77e",
-    "Verity.ValueSalts.Service.handed": "049f359f86bc501b86bd09eb7542fddf06a9e150fbb993977d11800427c38a64",
+    "Verity.ValueSalts.Service.handed": "c25d9867c11bde846e039150589bb67f24b5fd29dcbe4ceb3cbe58b7feaa12e9",
     "Verity.ValueSalts.Service.ideal": "1cc3299cccdf8e1d8316cd726b561b4d136505fc7635e05fc82093b692ec99b8",
     "Verity.ValueSalts.Service.out": "d6548ae859c5f180db37b64a4c04fa73487c815026f0875f50a15b0589a0ed45",
     "Verity.ValueSalts.Service.prfAdvantage": "5779f8de9753dc013d78218871997ecf469f07a9b9a6ea3069b1f5f8dec86ef6",
@@ -30449,7 +30446,7 @@
    }
   },
   "Flock.RecBudget": {
-   "digest": "5edb679060041e63f337db64a7309652ec76928605d731775b0146e53bfc4ec9",
+   "digest": "6959339e8d4d6858bc97ecde1de983dcb1e08de266b68f6d979a9618f6d2fa6a",
    "definitions": {
     "Flock.RecBudget.MAX_DEPTH": "f959294d54f7cc019e5cfe1eb1afa671fc401095b2782618bebc491816f9dcef",
     "Flock.RecBudget.MAX_INNER_ROWS": "21b6371029b701384a7f0b924760ca8ad2d086fc1dd59080a1924c1f64fc559d",
@@ -30457,7 +30454,7 @@
     "Flock.RecBudget.MAX_PORTS": "e5bbbb3d0d4cf2306ecb22769d1014ad652b09a854a5abf418f65d8f8a2d9e1f",
     "Flock.RecBudget.MAX_STATEMENTS": "d31f477d79ac8cf50b2f29c92c27d9bcd156acc74c4abb6b01febddddf89cd07",
     "Flock.RecBudget.count": "2e5156dff654c07a93d4ee2442e8c97a057409039f50dfbc1fb721c408ad4807",
-    "Flock.RecBudget.innerRows": "9d9f02af1b3113733a16fc2e335b8635e25fc80c4ac54937cd59c96a1a7aa9fb",
+    "Flock.RecBudget.innerRows": "b19e4233a34e4125306d28ad06ddcc55d2b7c6a899fff718527c4c35cf8a1ae7",
     "Flock.RecBudget.regs": "8ee9dea0e887dc3afe61892982235adec10ea5521bb2a948d3db219802c16d73",
     "Flock.RecBudget.statements": "cf58c0b75b752607bca16f20584d930bc60f9eb5176f3c42647d87116fbf1df1",
     "Flock.RecBudget.table": "79f1527ada8d39130fccf1633b5312c0ed2cc0f59ac5ec445ad533c80ef30561",
@@ -34044,10 +34041,10 @@
    }
   },
   "Proofs.Flock.Bridge.PublicDeployed": {
-   "digest": "2da37fbc8a0e2f26d2f49a586137f607bd57df6dd40f2993a676c998ddc53a23",
+   "digest": "17d7e897882f98a625068063f992031c6eb35f857769279a912966bbaf3079eb",
    "definitions": {
     "Flock.Bridge.kDep": "f2a617de4982a008c2b281ce8d23fc3b6a3b35a38b9b475588b29a75f8e11cf4",
-    "Flock.Guarantees.DeltaPubDeployed": "f9b7320313ffab7a2f59098ad18dafda606a174954470a5fa82d57f81fb40bc1"
+    "Flock.Guarantees.DeltaPubDeployed": "f27f9f6609c73bf72f57f6498db7aa563053ec49e2316ff43183b7a170d25da8"
    }
   },
   "Proofs.Flock.Bridge.Refused": {
@@ -36034,14 +36031,14 @@
    }
   },
   "Proofs.Flock.Claims.Witnesses.SamplingGeneric": {
-   "digest": "69309c771e18c087ba5a6749602cd5550caf05d03ebf158d236c4634f35e590e",
+   "digest": "a2be20627e669ce9d57dce95e75a6b2c1d6a8df8a5343251793cb10dd53ab721",
    "definitions": {
     "Claims.Witness.SamplingGeneric.sesOut": "b956e7da8e45999b2e446fd9277eaf79ec642be82a8b3a957c7a776fd49bb78e",
     "Claims.Witness.SamplingGeneric.sesV": "2780f1c4f24fb1acd696e0d2d55c4a56ede52d35a76df81d85c7a2065caa06d3",
     "Claims.Witness.SamplingGeneric.sksL": "c8b9f369ae0aeaa413d7e60395b271e9b062ddffe2843be10e886e85b7a87afd",
-    "Claims.Witness.SamplingGeneric.toyA": "374dd16969844772404d25ffd292bcdc983bcf11dc3b652a2f0569b4f64fea80",
+    "Claims.Witness.SamplingGeneric.toyA": "0f24d1fec82ec83f95338cb52554887dd0c1a50383023485bf088547125b872f",
     "Claims.Witness.SamplingGeneric.trueCm": "97a249a518b21f0e8d881f9cd8864a5228a7b226c03620d7e833437fcb9bed49",
-    "Claims.Witness.SamplingGeneric.twoA": "01abf6fc2bc8f68915caa0b0505fe7f9492c7f4e09a321ea905003888e4d6038",
+    "Claims.Witness.SamplingGeneric.twoA": "b16cef13140e0c3773039e852aaec00057ddc279b077bf2a8bc1dc8277c7255c",
     "Claims.Witness.SamplingGeneric.twoL": "a0c58755a3c6c983150db50d4b9354432b87778dbae3ccbd7cee96885dd07525",
     "Claims.Witness.SamplingGeneric.twoPart": "f76b31d337b830824d111688875714174338b843ee973cf985533c47639cd1dc",
     "Claims.Witness.SamplingGeneric.twoProg": "512bd7233fa78542a8de02dccc5c760f1ef4bc8cd343fcc905127c5607489f76",
@@ -36060,15 +36057,15 @@
    }
   },
   "Proofs.Flock.Claims.Witnesses.SamplingGenericZK": {
-   "digest": "d20839c63671f8465b8e0a61ec6b715fb9f5d21febf44be92e2fdce049f946fb",
+   "digest": "2c21fdb769d64f6842c29af101a47b70b3c856a975cebda57e184a280972314a",
    "definitions": {
     "Claims.Witness.SamplingGeneric.acceptAllVs": "b9a284f7d3879b8fe81d6a1f0f4386139fe5c6c3b0e4ca8450b737b20cf1196d",
     "Claims.Witness.SamplingGeneric.echoArg": "22fb79bde4adf4b7732492c3a7b49db91e2a7a2d49f88631efff4915194ffd40",
-    "Claims.Witness.SamplingGeneric.echoL": "a9ac7f52a1ea3ef1bec3c661a4e86c0a5e22573210a77c82df2b84e3a50e10bc",
+    "Claims.Witness.SamplingGeneric.echoL": "5d0e8956632114ddf90e19047a724be85ff3e90fe8848573fb62a0116fb16a6d",
     "Claims.Witness.SamplingGeneric.echoSimOut": "e71e3fc1d14dc6610b63ae2b4d7b8433a31b78cabaf843799718d92bf6e19f66",
     "Claims.Witness.SamplingGeneric.silentSimOut": "f32db8033bd09376e59a142eb88381233e70bb1ceb54aff6122c4a28b8d61d99",
     "Claims.Witness.SamplingGeneric.talkArg": "612304a69da5df09ee94d2efacb23a9620fc3c41f0a63bac6144de3544aaed21",
-    "Claims.Witness.SamplingGeneric.talkL": "a72e1bcf9715b30feae53ef595717f2b9b5fe6daea0b1d53e67f215e339d24a0",
+    "Claims.Witness.SamplingGeneric.talkL": "cfa72d961980b1a0aafcfd395fc346cc5251e1039882b283e1a44045a0916690",
     "Claims.Witness.SamplingGeneric.talkP": "a9f4e7f9b7794af0c138932edf1e5402e25d61eb017f6a2ca27844692852e962",
     "Claims.Witness.SamplingGeneric.talkStep": "2759cbaabfb8059120d6a6b7d229d5cea60220c75453426a5ece1e9c47bb8cd2"
    }
@@ -41257,7 +41254,7 @@
    }
   },
   "Proofs.Properties.Verity.Recursive": {
-   "digest": "0e367fbf4ced71b3b35609b1f53d033e85b91af687a4a949d01839c66751aa52",
+   "digest": "168bd81b465eac2d92253406c17be887e5e3bcd52a24ed10b2288beade05e0ad",
    "definitions": {
     "Verity.Recursive.Dep": "c3514fcc465eb6f95c65f836d9e46823a4f839810af5713e98d5f58c51f99fb0",
     "Verity.Recursive.Dep.Bd": "a8b0b26fffefc7fa2b053b6a4374ddc83b96ca0f3c7b84ab631cd759e28ea88d",
@@ -41279,7 +41276,7 @@
     "Verity.Recursive.Dep.errAt": "34223853720366262b4f1657cf2661bd7a8fcf3db71f666af7c1c106fd5f8bb9",
     "Verity.Recursive.Dep.extract": "4ffbaad485ef5c692b8d9857818da686418684c57248f15cb96e0be12581496e",
     "Verity.Recursive.Dep.hd": "529d85dc1d3bb163b10766391478000c87e1d4f5afd8634780e864efbb1d0254",
-    "Verity.Recursive.Dep.ksAt": "a3b0e442cba61e03b781874809be082fa0598595f052d84b07a9b655fe734be8",
+    "Verity.Recursive.Dep.ksAt": "8807ff74cd2415e4f4eababf931579498f94fea43947d5367057f13cde1be91d",
     "Verity.Recursive.Dep.nOf": "3f2c4c445cfca27b81857c7ce504f2a72edecda392a2e311310951c28279fa65",
     "Verity.Recursive.Dep.recRest": "8e0b534bbde16ec1185f66e11a5da75f3c198b5d331df6ec18ea0077ff0061b1",
     "Verity.Recursive.Dep.runs": "867baff3a89fb4d05e12cff68e9e2611130852f8291ee6aa5b84ac236e6eb8ae",
