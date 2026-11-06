@@ -70,6 +70,8 @@ protocols = [
     "verity/core/primitives/identity",
     "Security/{Properties,Proofs/Properties}/Identity{,.lean}",
     "integrations/vllm/tests/pipeline/test_registration_log.py",
+    # vLLM's PoUS option test runs the memory challenger's party in process
+    "integrations/vllm/tests/protocols/test_pous_option.py",
     # J10-R's binding reads PoUS's model, through Accounting's remote draw and sampler
     "Security/Proofs/Pouw/PeriodJ10R/Binding.lean",
 ]
