@@ -24805,6 +24805,13 @@
     "Flock.Guarantees.MemberV5.ρ": "d7e97ec339bd5e9be346fbb990150469d28ec5f9cee6e0737aef0b8295715711"
    }
   },
+  "Proofs.Flock.EndToEndRegisteredRows.Statement": {
+   "digest": "210b5ad66b172ee86f7642971e558399f09966f426b67d88a11278b8f09bdc7c",
+   "definitions": {
+    "Flock.Guarantees.EndToEndRegisteredRows": "cf70978600da2363c925fa1a894ab9dbc4fe9df3aa91ebe6a048f7f2864cf845",
+    "Flock.Guarantees.EndToEndRegisteredRowsFlat": "3a0b85a15bd235b302846cec59cfab62938720efc16f9156a62e10f3eb2a7cf2"
+   }
+  },
   "Proofs.Flock.Level3.ArithFacts": {
    "digest": "c5d39259a865879648ed50fb4d97145a017c65a2101788cf22f905a171e38598",
    "definitions": {
@@ -25019,6 +25026,21 @@
    "digest": "69775dde755469801e15f6c95127da762be79159d074d892da7af348dc817c56",
    "definitions": {
     "Flock.Guarantees.SessionLoopZKDeployed": "c7685e2c22a39c9a3d1c5979dbdde92feb603559e07b8e3c702e00604a2e9aa8"
+   }
+  },
+  "Proofs.Flock.SoundAtBridge.Session": {
+   "digest": "3f99f3af37538469bbced89cb3b74a2b65950c8b7f20025fdfe689d9e6566d47",
+   "definitions": {
+    "Flock.SoundAtBridge.RowsSession": "04f38d2547aa0588b327b108a0d2026567cc49fe8a8b1755fcd0d86da6369160",
+    "Flock.SoundAtBridge.RowsSession.G": "a52455c2b7d8531aa372d14134a2347851aebe9e9acdc7dff7f02d9fbae081fb",
+    "Flock.SoundAtBridge.RowsSession.σ": "4ff40576980cc30a4840fd50eae534fb3c0f142a89382257b110129400887b65",
+    "Flock.SoundAtBridge.RowsSession.τ": "18941c028a74bfde56aa1540bfa95815bacdbdc994ffd994cc7cb6afef8f6f91"
+   }
+  },
+  "Proofs.Flock.SoundAtBridge.Union": {
+   "digest": "70bc02b3f94458a3ae2e3165d13371da8e522abd2a13ec825436f6cd6dcdffac",
+   "definitions": {
+    "Flock.SoundAtBridge.SessionLaw": "54d825b34e48fc5e76097914bbf0fce9ac98241dd1495c68a3a8414ca5e055ac"
    }
   },
   "Proofs.Flock.Soundness.Accounting.PaddedNumbers": {
