@@ -89,17 +89,17 @@ On each link:
 ## The published record (`commitment`)
 
 A raw grid is 2.3 GiB per execution phase at r = 1,024, B = 4 KiB and T = 600. The certifier publishes one digest and
-the status instead, which is 32 bytes per execution phase, or about 46 KB per link per day.
+the status instead, which is 64 bytes per execution phase, or about 92 KB per link per day.
 
 - **Padding is elided.** Left-packing (W4) fixes a row by its count n and its n real frames, so a row's digest covers
-  only those: `tagged_sha256("verity-network-warden/row/v1", u32be(n) ‖ f_0 ‖ … ‖ f_{n−1})`. A row that isn't
-  left-packed has no encoding.
-- **The record digest** is `tagged_sha256("verity-network-warden/record/v1", …)`. It covers:
+  only those: `tagged_sha512("verity-network-certifier/row-sha512/v1", u32be(n) ‖ f_0 ‖ … ‖ f_{n−1})`. A row that
+  isn't left-packed has no encoding.
+- **The record digest** is `tagged_sha512("verity-network-certifier/record-sha512/v1", …)`. It covers:
   - the canonical JSON of the link, the window, (T, r, B, τ_b) and the status;
-  - then the T row digests.
+  - then the T 64-byte row digests.
 
-  `tagged_sha256` is `verity.ml.commitments.identity`'s.
-- **The check** recomputes the digest from the Program's grid, with a complete status, and compares. Under `cr/sha-256`,
+  `tagged_sha512` is `verity.ml.commitments.identity`'s, and the Lean check's is `Identity.taggedSha512`.
+- **The check** recomputes the digest from the Program's grid, with a complete status, and compares. Under `cr/sha-512`,
   equal digests mean equal records, so the audit stays exact. The verifier never needs the raw grid, because the
   Program fixes every egress frame.
 - **The status in the clear** is only for classifying a violation. The digest binds it too, so a published status that
@@ -164,7 +164,7 @@ signature verifies (`CertifiedRecord.verify`; the signature alone is `Certificat
 and D). On egress the audit recomputes the record digest from the Program's grid, with a complete status, the deadline
 bit set and the parameters digest of `params` and Σ_sync, and compares it with the head's. Under `cr/sha-512`, equal
 digests mean equal records, so the audit stays exact. A certified record rests on `cr/sha-512`,
-on the signature's unforgeability, and on an honest certifier; not on `cr/sha-256`.
+on the signature's unforgeability, and on an honest certifier.
 
 ## Through the proof system (`service`)
 
@@ -866,7 +866,7 @@ if every execution phase of every link the audit checks is, so an accepted verdi
 window audited.
 
 Every capacity bound holds on accepted runs only. A rejected window may already have carried up to its unbound capacity,
-about 8·T·r·B bits (`capacity.unbound_bits`). On committed records, the bounds also assume `cr/sha-256`; on certified
+about 8·T·r·B bits (`capacity.unbound_bits`). On committed records, the bounds also assume `cr/sha-512`; on certified
 records, `cr/sha-512`, the signature's unforgeability and an honest network certifier.
 
 ## Capacity (`capacity`)
