@@ -96,7 +96,7 @@ missed with probability at most `C(n − w, k) / C(n, k)`, `1 ≤ k < n`. Its co
 difftest's executable) and its tests run under the test hook `verifier.UNCERTIFIED_RULES`, off in every deployment.
 
 Not built yet: the security function and its review, and composition checks such as PoUW's tiles
-per proof block matching this partition (the IR checks refinement, `verity.ml.circuits.partition.validate_refinement`).
+per proof block matching this partition (a tile family built with `each` over the proof blocks nests in them by construction).
 
 Serving's record is not yet the scheme the audit proves: the benchmark's first run (`benchmarks/one_stage/a0.py`)
 registers a stand-in, a fresh commitment to values captured from serving, and says so (`window.kind = "stand-in"`). Its
