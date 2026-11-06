@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
+import re
 from collections import defaultdict
 from pathlib import Path
 
@@ -73,7 +73,7 @@ def cut(spec: str, f: dict) -> tuple[str, list[dict], str | None]:
     e = f["estimate"]
     if f.get("word_gates") == 0:
         return "no gates", [], None
-    if "block" in e and not sum(e["block"]["in_bits"]):
+    if (f.get("ports") is not None and not f["ports"]["in"]) or ("block" in e and not sum(e["block"]["in_bits"])):
         return "const", [], None
     why = misfit(e)
     if why is None:
@@ -132,8 +132,9 @@ def census(docs: list[dict]) -> dict:
                     g = gaps.setdefault(spec, {"family": spec_base(spec), "why": why, "ands": e.get("ands"), **dict.fromkeys(PHASES, 0)})
                     for p in PHASES:
                         g[p] += by[p]
+                        rows[p]["gap_ands"] += by[p] * e.get("ands", 0)
                 elif kind in ("no gates", "const"):
-                    o = other.setdefault(spec, {"kind": kind, **dict.fromkeys(PHASES, 0)})
+                    o = other.setdefault(spec, {"family": spec_base(spec), "kind": kind, **dict.fromkeys(PHASES, 0)})
                     for p in PHASES:
                         o[p] += by[p]
                 for u in units:
@@ -163,6 +164,14 @@ def census(docs: list[dict]) -> dict:
             "not_blocks": other, "undescribed": dict(undescribed)}
 
 
+def _by_family(rows: dict[str, dict]) -> list[tuple[str, list[dict]]]:
+    """``rows`` grouped by family (a primitive's bracketed constant dropped), the most rows first."""
+    out: dict[str, list[dict]] = defaultdict(list)
+    for s, r in rows.items():
+        out[re.sub(r"\[[^\]]*\]", "", spec_base(s))].append(r)
+    return sorted(out.items(), key=lambda kv: (-sum(r["prefill"] + r["decode"] for r in kv[1]), kv[0]))
+
+
 def _n(x: float) -> str:
     if isinstance(x, float) and not x.is_integer():
         return f"{x:,.1f}" if abs(x) < 1e6 else f"{x:.3e}"
@@ -176,7 +185,8 @@ def table(c: dict) -> str:
     keys = (("blocks", "proof blocks"), ("out_bits", "output bits"), ("class_bits", "output bits at size class"),
             ("ands", "proof blocks' ANDs (estimate)"), ("open_ands", "ANDs opening their rows"),
             ("row_bytes", "opened row bytes"), ("circuit_ands", "the circuit's ANDs (rows unsplit)"),
-            ("circuit_macs", "served MACs"), ("rows", "Program rows"), ("rows gap", "rows in a gap"))
+            ("circuit_macs", "served MACs"), ("rows", "Program rows"), ("rows gap", "rows in a gap"),
+            ("gap_ands", "their ANDs"))
     out = [f"Ranks {c['ranks'][0]}-{c['ranks'][-1]}, one request: a prefill step of {t['prefill']} prompt tokens and "
            f"{t['decode']} decode steps.", "",
            "| quantity | prefill token | decode token | request |", "| --- | ---: | ---: | ---: |"]
@@ -188,14 +198,18 @@ def table(c: dict) -> str:
         of = ", ".join(f"{k} ({v})" for k, v in sorted(d["of"].items()))
         out.append(f"| `{s}` | {of} | {_n(d['prefill'] / t['prefill'])} | {_n(d['decode'] / t['decode'])} | {d['out_bits']:,} | "
                    f"{d['class_bits']:,} | {d['in_bits']:,} | {d['ands']:,} | {d['macs']:,} | {d['row_bytes']:,} | 2^{d['k_log']} |")
-    out += ["", "Gaps: rows no cut fits.", "", "| row Definition | prefill rows | decode rows | ANDs a row | why |",
-            "| --- | ---: | ---: | ---: | --- |"]
-    for s, g in c["gaps"].items():
-        out.append(f"| `{s}` | {g['prefill']:,} | {g['decode']:,} | {_n(g['ands']) if g['ands'] is not None else '-'} | {g['why']} |")
-    out += ["", "No proof block: rows of no gate or no input.", "", "| row Definition | kind | prefill rows | decode rows |",
-            "| --- | --- | ---: | ---: |"]
-    for s, o in sorted(c["not_blocks"].items()):
-        out.append(f"| `{s}` | {o['kind']} | {o['prefill']:,} | {o['decode']:,} |")
+    out += ["", "Gaps: rows no cut fits, by family (each Definition in `census.json`).", "",
+            "| row family | Definitions | prefill rows | decode rows | their ANDs | why (its most rows' Definition) |",
+            "| --- | ---: | ---: | ---: | ---: | --- |"]
+    for fam, gs in _by_family(c["gaps"]):
+        top = max(gs, key=lambda g: g["prefill"] + g["decode"])
+        ands = sum((g["prefill"] + g["decode"]) * (g["ands"] or 0) for g in gs)
+        out.append(f"| `{fam}` | {len(gs)} | {sum(g['prefill'] for g in gs):,} | {sum(g['decode'] for g in gs):,} | {_n(ands)} | "
+                   f"{top['why']} |")
+    out += ["", "No proof block: rows of no gate or no input, by family.", "",
+            "| row family | kind | Definitions | prefill rows | decode rows |", "| --- | --- | ---: | ---: | ---: |"]
+    for fam, os_ in _by_family(c["not_blocks"]):
+        out.append(f"| `{fam}` | {os_[0]['kind']} | {len(os_)} | {sum(o['prefill'] for o in os_):,} | {sum(o['decode'] for o in os_):,} |")
     if c["undescribed"]:
         out += ["", "Rows the serving rows can't address (`describe`), counted above: "
                 + ", ".join(f"`{s}` {n:,}" for s, n in sorted(c["undescribed"].items()))]

@@ -88,8 +88,14 @@ def test_a_row_with_a_slot_no_option_fits_is_a_gap_with_its_finest_options_reaso
 
 
 def test_a_row_of_no_gate_or_no_input_is_no_proof_block():
+    """A gather has no gate; a constant has no input, a Definition's parameters or, for a primitive constant that binds to
+    no Definition, its row's argument groups."""
     assert B.cut("AllGather_v1{WORLD=8}", family("AllGather_v1{WORLD=8}", gates=0))[0] == "no gates"
     assert B.cut("Const_v1{}", family("Const_v1{}", ins=()))[0] == "const"
+    const = {"rows": 2, "steps": {"0": 2}, "word_gates": None, "ports": {"in": [], "members": []},
+             "estimate": {"error": "does not bind", "units": []}}
+    assert B.cut("Const32[0x00000001]_v1", const) == ("const", [], None)
+    assert B.cut("Const32[0x00000001]_v1", {**const, "ports": {"in": [16], "members": []}})[0] == "gap"
 
 
 def doc(rank, families, prompt=4, steps=3):
@@ -115,7 +121,7 @@ def test_the_census_counts_each_definition_per_phase_token_and_request_over_the_
     assert (t["prefill"]["ands"], t["decode"]["ands"]) == (2 * 30 + 5 * 10, 2 * 30 + 8 * 10)
     assert (t["prefill"]["out_bits"], t["prefill"]["class_bits"]) == (2 * 64 + 5 * 16, 2 * 64 + 5 * 16)
     assert t["decode"]["circuit_ands"] == 2 * 30 + 3 * 7 + 2 * 30 and t["decode"]["circuit_macs"] == 4 * 8
-    assert (t["decode"]["rows gap"], t["prefill"]["rows split"]) == (3, 1)
+    assert (t["decode"]["rows gap"], t["decode"]["gap_ands"], t["prefill"]["rows split"]) == (3, 3 * 7, 1)
     assert c["per_token"]["prefill"]["blocks"] == 7 / 4 and c["per_token"]["decode"]["blocks"] == 10 / 2
     assert c["per_request"]["blocks"] == 17 and c["per_request"]["rows"] == 4 + 7
     assert c["per_rank"][1]["decode"]["blocks"] == 8 and c["per_rank"][0]["prefill"]["blocks"] == 3
@@ -123,7 +129,14 @@ def test_the_census_counts_each_definition_per_phase_token_and_request_over_the_
     card = B.card(c)
     assert card["definitions"]["Lin_v1{N=1}"] == {"family": "Lin_v1", "prefill": 5, "decode": 8, "out_bits": 16, "ands": 10,
                                                   "macs": 0, "rows": [8, 4, 2], "k_log": 22, "of": ["Lin_v1"]}
-    assert "Big_v1{}" in B.table(c) and "| proof blocks | 1.8 | 5 | 17 |" in B.table(c)
+    md = B.table(c)
+    assert "| proof blocks | 1.8 | 5 | 17 |" in md and "| `Big_v1` | 1 | 0 | 3 | 21 | a 2^30 block at 7 ANDs |" in md
+
+
+def test_the_tables_group_gaps_and_constants_by_family():
+    consts = {f"Const32[0x0000000{i}]_v1": {"family": f"Const32[0x0000000{i}]_v1", "kind": "const", "prefill": 2, "decode": 1}
+              for i in range(3)}
+    assert B._by_family(consts) == [("Const32_v1", list(consts.values()))]
 
 
 def test_the_census_refuses_ranks_of_two_request_shapes():
