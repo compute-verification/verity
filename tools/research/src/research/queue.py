@@ -1442,9 +1442,10 @@ class Queue:
         self.priority: frozenset[int] = frozenset()
         self.priority_file: Path | None = None
         self._prioritized: set[int] = set()
-        #: the Goals page's goals (`goal_records`), by which each sync that reads `priority_file` lists after its PRs the
-        #: admitted ones it doesn't name (`_goal_order`); None: the file's PRs alone (a sync off drive's, a test)
-        self.goals: Callable[[], dict[str, dict]] | None = None
+        #: the Goals page's goals (`goal_records`, whose ``say`` takes what a read says), by which each sync that reads
+        #: `priority_file` lists after its PRs the admitted ones it doesn't name (`_goal_order`); None: the file's PRs alone (a
+        #: sync off drive's, a test)
+        self.goals: Callable[..., dict[str, dict]] | None = None
         #: the Linear app that reads the labels of the issue a PR names when its body names no goal (`_issue_labels`)
         self.linear: Callable[[], linear.Linear] = linear.Linear
         #: releases the workdir's lock (`_lock`): a command that only reads calls it once its clone and fetches are done, so a
@@ -2451,20 +2452,23 @@ class Queue:
         due (soonest first), then the PR's place on `next`, then the other admitted PRs by their place on `next`; those off it
         by number.  A PR's goal is a `Goal <id>` line of its body (`GOAL_RE`), else a label of the Linear issue it names
         (`named_issue`, `_issue_labels`) that is a goal's id; of several, the most urgent live one.  While the goals can't be
-        read, the file's PRs alone, said once (the state's `priority_goals_error`); the list is logged when it changes
-        (`priority_goals`)."""
+        read, the file's PRs alone; what their read says (a copy of the page standing in for it, or none) is said once while it
+        stays the same (the state's `priority_goals_said`), and the list is logged when it changes (`priority_goals`)."""
         from .goals import due_time
 
-        listed = list(dict.fromkeys(self.priority))
+        listed, said = list(dict.fromkeys(self.priority)), []
         try:
-            goals = self.goals()
+            goals = self.goals(say=said.append)
         except QueueError as e:
-            if state.get("priority_goals_error") != str(e):
-                self.log(f"research queue: {e}: drive's priority list is the file's PRs alone until the goals can be read")
-            state["priority_goals_error"] = str(e)
+            goals, said = None, [f"research queue: {e}: drive's priority list is the file's PRs alone until the goals can be read"]
+        if said != state.pop("priority_goals_said", []):
+            for line in said:
+                self.log(line)
+        if said:
+            state["priority_goals_said"] = said
+        if goals is None:
             state.pop("priority_goals", None)
             return tuple(listed)
-        state.pop("priority_goals_error", None)
         named = {n: GOAL_RE.findall(e.pr.body) for n, e in sorted(entries.items()) if e.state == "ready" and n not in listed}
         teams = self.issue_teams()
         issues = {n: k for n, g in named.items() if not g and (k := named_issue(entries[n].pr.body, teams))
@@ -5830,12 +5834,15 @@ def link_issue(key: str, url: str, app: tuple[linear.Linear, str] | Exception | 
                          f"`research queue link {n or 'N'} --issue {key}`") from None
 
 
-def goal_records(cache: Path | None = None) -> dict[str, dict]:
+def goal_records(cache: Path | None = None, say: Callable[[str], None] | None = None) -> dict[str, dict]:
     """Each goal on the Goals page (`research.goals`), its id to its status and, where it has them, its priority and due,
     written to ``cache`` (`GOALS_CACHE`) at each read.  When the page can't be read, the goals last written there, whatever
-    their age, said in one line on stderr; with neither, QueueError naming the outage, to which each caller adds its escape."""
+    their age, said in one line (``say``, else on stderr); with neither, QueueError naming the outage, to which each caller adds
+    its escape."""
     from . import goals
     from .slack import SlackError
+
+    say = say or (lambda line: print(line, file=sys.stderr))
 
     def record(g: dict) -> dict:
         return {"status": str(g["status"]), **{k: g[k] for k in ("priority", "due") if g.get(k) is not None}}
@@ -5849,8 +5856,8 @@ def goal_records(cache: Path | None = None) -> dict[str, dict]:
             got = {str(g["id"]): record(g) for g in kept["goals"]}
         except (OSError, ValueError, KeyError, TypeError):
             raise QueueError(f"the Goals page can't be read ({e}) and this machine has no copy of it ({path})") from None
-        print(f"research queue: the Goals page can't be read ({e}): using its {len(got)} goals as this machine read them at "
-              f"{kept.get('read') or 'an unrecorded time'} ({path})", file=sys.stderr)
+        say(f"research queue: the Goals page can't be read ({e}): using its {len(got)} goals as this machine read them at "
+            f"{kept.get('read') or 'an unrecorded time'} ({path})")
         return got
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -5859,7 +5866,7 @@ def goal_records(cache: Path | None = None) -> dict[str, dict]:
                                    "goals": [{"id": k, **v} for k, v in sorted(got.items())]}, indent=1) + "\n")
         tmp.replace(path)
     except OSError as e:
-        print(f"research queue: the Goals page's goals aren't cached at {path} ({e})", file=sys.stderr)
+        say(f"research queue: the Goals page's goals aren't cached at {path} ({e})")
     return got
 
 

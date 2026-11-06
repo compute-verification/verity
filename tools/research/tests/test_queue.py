@@ -2453,7 +2453,7 @@ def test_drives_priority_list_goes_on_past_the_files_prs_by_the_goals_the_admitt
     `next`, then the rest by their places on `next`, then by number.  A PR's goal is its body's `Goal` line, else a label of the
     Linear issue it names, read a team at a time (one moved to another team since by its key) and kept `ISSUE_LABELS_TTL_S`, and
     as last read while Linear is down.  While the page is down its last read stands; with no copy of it, the list is the file's
-    PRs alone, said once."""
+    PRs alone; each said once."""
     page = serve(monkeypatch, world.tmp, {
         "ci/faster-landing": {"status": "on-track", "priority": 1, "due": "2026-11-07T18:00-08:00"},
         "ci/merge-speed": {"status": "off-track", "priority": 2, "due": "2026-11-20"},
@@ -2467,14 +2467,14 @@ def test_drives_priority_list_goes_on_past_the_files_prs_by_the_goals_the_admitt
     def put(n: int, body: str, ready: bool = True) -> None:
         world.gh.put(n, world.change({f"{n}.txt": f"{n}\n"}), body=f"Lane `lane-{n}`.\n\n{body}", ready=ready)
 
-    def sync(goals: Callable[[], dict[str, dict]] | None = Q.goal_records) -> tuple[tuple[int, ...], list[int]]:
+    def sync(goals: Callable[..., dict[str, dict]] | None = Q.goal_records) -> tuple[tuple[int, ...], list[int]]:
         q = world.queue()
         q.priority_file, q.goals, q.linear, q.now = path, goals, lambda: app, lambda: now[0]
         members, _ = q.sync()
         return tuple(q.priority), [m.pr for m in members]
 
     def said() -> list[str]:
-        return [line for line in world.logs if "then by the goals" in line or "until the goals" in line or "Linear app" in line]
+        return [line for line in world.logs if "then by the goals" in line or "Goals page" in line or "Linear app" in line]
 
     put(6, "Goal ci/faster-landing\n")
     assert sync(goals=None)[1] == [6] and said() == [] and app.reads == []
@@ -2497,16 +2497,17 @@ def test_drives_priority_list_goes_on_past_the_files_prs_by_the_goals_the_admitt
     assert sync()[0] == sync()[0] == order and len(app.reads) == 10
     assert said()[1:] == ["research queue: the Linear app can't read the labels of the issues PRs name (Linear: a test's Linear "
                           "is down): drive's priority list takes them as last read until it can"]
-    page.goals = None
-    assert sync()[0] == order and len(said()) == 2
-    cache = world.tmp / "cache" / "goals.json"
+    page.goals, cache = None, world.tmp / "cache" / "goals.json"
+    assert sync()[0] == sync()[0] == order
+    assert said()[2:] == [f"research queue: the Goals page can't be read ({DOWN}): using its 5 goals as this machine read them "
+                          f"at {json.loads(cache.read_text())['read']} ({cache})"]
     cache.unlink()
     assert sync()[0] == sync()[0] == (9,)
-    assert said()[2:] == [f"research queue: the Goals page can't be read ({DOWN}) and this machine has no copy of it ({cache}): "
+    assert said()[3:] == [f"research queue: the Goals page can't be read ({DOWN}) and this machine has no copy of it ({cache}): "
                           "drive's priority list is the file's PRs alone until the goals can be read"]
     page.goals, app.down = {"ci/merge-speed": {"status": "on-track", "priority": 1, "due": "2026-11-06"}}, False
     again = (9, 2, *(n for n in world.on_next(world.queue()) if n not in (9, 2)))
-    assert sync()[0] == again and said()[3:] == [f"research queue: drive's priority list ({path}, then by the goals the "
+    assert sync()[0] == again and said()[4:] == [f"research queue: drive's priority list ({path}, then by the goals the "
                                                  "admitted PRs serve): " + " ".join(f"#{n}" for n in again)]
 
 
