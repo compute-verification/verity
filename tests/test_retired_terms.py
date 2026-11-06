@@ -129,6 +129,7 @@ PENDING: dict[str, str] = {
     "Security/Proofs/NetworkCertifier/README.md": "#4690 adds lines",
     "examples/h200/interfaces/README.md": "#4719 rewrites its lines",
     "examples/h200/README.md": "#4680 rewrites its lines",
+    "benchmarks/stacked_share/README.md": "#4514 rewrites its lines",
     "integrations/vllm/README.md": "#4773 adds lines",
     "verity/README.md": "#4502 rewrites its lines",
     "verity/core/protocols/certifier/boundary.py": "#4721 rewrites its lines",
