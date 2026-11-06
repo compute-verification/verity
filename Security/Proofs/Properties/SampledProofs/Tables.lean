@@ -20,7 +20,7 @@ open SampledProofs
 
 namespace Properties.SampledProofs.SecurityProofs
 
-theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : (x >>= f) = .ok b) :
+private theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : (x >>= f) = .ok b) :
     ∃ a, x = .ok a ∧ f a = .ok b := by
   cases x with
   | error e => cases h
