@@ -88,6 +88,47 @@ def test_a_new_run_starts_from_zero_and_unnumbered_requests_pass():
     assert sched.order == [eid("a", 0), eid("b", 0), "plain-request"]
 
 
+class Rows:
+    def __init__(self, n: int, k: int):
+        self.shape = (n, k)
+
+    def __getitem__(self, s: slice) -> "Rows":
+        return Rows(len(range(*s.indices(self.shape[0]))), self.shape[1])
+
+
+class Launched:
+    def __init__(self):
+        self.done = False
+
+    def ready(self) -> bool:
+        return self.done
+
+    def kernel_ms(self) -> float:
+        return 2.0
+
+
+def test_kv_edge_keeps_at_most_inflight_chunks_out_and_reports_each_edge_once():
+    now, got, out = [0.0], [], []
+
+    def launch(edge, rows):
+        out.append((edge, rows.shape[0], Launched()))
+        return out[-1][2]
+
+    kv = P.KvEdge(10.0, got.append, chunk_rows=2, inflight=1, clock=lambda: now[0], launch=launch)
+    kv.rows = lambda caches: [Rows(5, 8)]
+    kv.tick(None)
+    assert out == []
+    now[0] = 10.0
+    for _ in range(3):
+        kv.tick(None)
+        assert sum(not o[2].done for o in out) == 1
+        out[-1][2].done = True
+    kv.tick(None)
+    assert [o[:2] for o in out] == [(0, 2), (0, 2), (0, 1)]
+    assert got == [{"edge": 0, "bytes": 40, "chunks": 3, "kernel_ms": 6.0, "gb_per_s": round(40 / 6.0 / 1e6, 1), "span_s": 0.0,
+                    "t": got[0]["t"]}]
+
+
 def test_token_commit_commits_each_window_prompt_and_sampled_ids_in_order():
     now, got, seen = [0.0], [], []
     tc = P.TokenCommit(10.0, got.append, clock=lambda: now[0], commit=lambda w, data: (seen.append(data), b"\x01" * 64)[1])

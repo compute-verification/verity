@@ -174,18 +174,24 @@ class KvEdge:
     hashed where it lies: each distinct storage under its layers' tensors, viewed as rows of ``row_bytes``, hashed by the
     GPU's row-table kernels (`row_tables_device.step_roots`: SHA-512 row digests, hm96 leaves, frame trees) on their side
     stream, behind an event on the serving stream, in chunks of at most ``chunk_rows`` rows, so that nothing waits on the
-    host. The kernels' work is per 1,024-byte segment, so the row size changes the planning on the host, not the hashing.
-    The whole pool is hashed, free blocks too: an upper bound on hashing the blocks live at the edge. A block that a step
-    after the edge writes before the side stream reads it is hashed as written: a measurement of the cost, not a commitment
-    of the state. ``sink`` gets each edge's record once its last chunk is done (bytes, kernel ms)."""
+    host. The kernels' work is per 1,024-byte segment, so the row size changes the planning on the host, not the hashing;
+    their scratch is 64 bytes a segment, so at most ``inflight`` chunks are out at a time, the next launched at a later
+    step once one is done. The whole pool is hashed, free blocks too: an upper bound on hashing the blocks live at the
+    edge. A block that a step after the edge writes before the side stream reads it is hashed as written: a measurement of
+    the cost, not a commitment of the state. ``sink`` gets each edge's record once its last chunk is done (bytes, kernel
+    ms, the edge's span from its first launch to its last chunk's reaping). ``launch(edge, rows)`` hashes one chunk and
+    returns what `row_tables_device.step_roots` returns (``ready()``, ``kernel_ms()``)."""
 
     def __init__(self, window_s: float, sink: Callable[[dict], None], row_bytes: int = 1 << 20, chunk_rows: int = 4096,
-                 clock: Callable[[], float] = time.monotonic) -> None:
-        self.window_s, self.sink, self.clock = float(window_s), sink, clock
-        self.row_bytes, self.chunk_rows = int(row_bytes), int(chunk_rows)
+                 inflight: int = 2, clock: Callable[[], float] = time.monotonic,
+                 launch: Callable[[int, Any], Any] | None = None) -> None:
+        self.window_s, self.sink, self.clock, self.launch = float(window_s), sink, clock, launch or launch_rows
+        self.row_bytes, self.chunk_rows, self.inflight = int(row_bytes), int(chunk_rows), int(inflight)
         self.edge = 0
         self.last = clock()
-        self.pending: list[tuple[int, int, list[Any]]] = []
+        self.todo: list[tuple[int, Any]] = []        # (edge, chunk) not yet launched
+        self.out: list[tuple[int, Any, int]] = []    # (edge, pending, bytes) launched, not yet reaped
+        self.edges: dict[int, dict[str, Any]] = {}   # edge -> its totals until its last chunk is reaped
 
     def rows(self, kv_caches: Iterable[Any]) -> list[Any]:
         """Each distinct storage under the KV cache as (n, row_bytes) int8 rows (a last partial row dropped)."""
@@ -204,34 +210,44 @@ class KvEdge:
 
     def tick(self, kv_caches: Iterable[Any]) -> None:
         self.reap()
-        if self.clock() - self.last < self.window_s:
-            return
-        from verity_vllm.commit import row_tables_device as RTD
-
-        self.last = self.clock()
-        launched, nbytes = [], 0
-        for r in self.rows(kv_caches):
-            for lo in range(0, r.shape[0], self.chunk_rows):
-                c = r[lo:lo + self.chunk_rows]
-                ids = [("kv", lo + i) for i in range(c.shape[0])]
-                scales = c.new_zeros(c.shape[0], dtype=_f32())
-                launched.append(RTD.step_roots(bytes(64), self.edge, {"kv": (ids, c, scales)}, bytes(32), timing=True))
-                nbytes += c.numel()
-        self.pending.append((self.edge, nbytes, launched))
-        self.edge += 1
+        if self.clock() - self.last >= self.window_s:
+            self.last = self.clock()
+            chunks = [r[lo:lo + self.chunk_rows] for r in self.rows(kv_caches) for lo in range(0, r.shape[0], self.chunk_rows)]
+            self.edges[self.edge] = {"chunks": len(chunks), "left": len(chunks), "bytes": 0, "kernel_ms": 0.0,
+                                     "start": self.clock()}
+            self.todo += [(self.edge, c) for c in chunks]
+            self.edge += 1
+        while self.todo and len(self.out) < self.inflight:
+            edge, c = self.todo.pop(0)
+            self.out.append((edge, self.launch(edge, c), c.shape[0] * c.shape[1]))
 
     def reap(self, wait: bool = False) -> None:
-        while self.pending and (wait or all(p.ready() for p in self.pending[0][2])):
-            edge, nbytes, launched = self.pending.pop(0)
-            ms = sum(p.kernel_ms() for p in launched)
-            self.sink({"edge": edge, "bytes": nbytes, "chunks": len(launched), "kernel_ms": round(ms, 3),
-                       "gb_per_s": round(nbytes / ms / 1e6, 1) if ms else None, "t": time.time()})
+        while self.out and (wait or self.out[0][1].ready()):
+            edge, p, nbytes = self.out.pop(0)
+            e = self.edges[edge]
+            e["bytes"] += nbytes
+            e["kernel_ms"] += p.kernel_ms()
+            e["left"] -= 1
+            if e["left"] == 0:
+                del self.edges[edge]
+                ms = e["kernel_ms"]
+                self.sink({"edge": edge, "bytes": e["bytes"], "chunks": e["chunks"], "kernel_ms": round(ms, 3),
+                           "gb_per_s": round(e["bytes"] / ms / 1e6, 1) if ms else None,
+                           "span_s": round(self.clock() - e["start"], 4), "t": time.time()})
+            if wait and not self.out and self.todo:
+                edge, c = self.todo.pop(0)
+                self.out.append((edge, self.launch(edge, c), c.shape[0] * c.shape[1]))
 
 
-def _f32() -> Any:
+def launch_rows(edge: int, rows: Any) -> Any:
+    """One chunk of (n, K) int8 rows hashed by the row-table kernels on their side stream, timed."""
     import torch
 
-    return torch.float32
+    from verity_vllm.commit import row_tables_device as RTD
+
+    ids = [("kv", i) for i in range(rows.shape[0])]
+    scales = rows.new_zeros(rows.shape[0], dtype=torch.float32)
+    return RTD.step_roots(bytes(64), edge, {"kv": (ids, rows, scales)}, bytes(32), timing=True)
 
 
 def _kv_runner(execute: Callable[..., Any], cfg: Mapping[str, Any]) -> Callable[..., Any]:
