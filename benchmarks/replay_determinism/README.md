@@ -41,8 +41,8 @@ research run --on NODE --project verity --source . --cwd source --env GPU_LEASE_
     -- bash benchmarks/replay_determinism/run.sh
 ~~~
 
-`fetch` downloads the model to `MODEL_DIR` (default `/workspace/research/scratch/replay-determinism/moonlight`) and refuses unless 50 GB and
-100,000 inodes stay free on `/workspace`. The run writes the window (`workload.json`), each phase's steps, tokens, timing
+`fetch` downloads the model to `MODEL_DIR` (default `/workspace/research/scratch/replay-determinism/moonlight`) and
+refuses unless 50 GB and 100,000 inodes stay free on `/workspace`. The run writes the window (`workload.json`), each phase's steps, tokens, timing
 and logits rows, `lease.json` (the lease's wall time, its GPU-seconds) and `compare.json` and `compare.md` to `$OUT`; the
 per-row fingerprints stay in `SCRATCH` under `WORK`. `N`, `PHASES`, `PY` (a Python with vLLM at the pin), `WORK` and
 `LEASE_MIN` are settable.
