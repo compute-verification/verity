@@ -1,4 +1,4 @@
-// EPS1 DC r7 (TMEM-EXTRACT): the issue price of tcgen05.ld.32x32b.x128 (LDTM.x128, 4096 words a warp instruction, the
+// The issue price of tcgen05.ld.32x32b.x128 (LDTM.x128, 4096 words a warp instruction, the
 // widest load) beside uniform.cuh's issue-saturated streams, as sm100_sat.cu prices a uniform instruction. One block a
 // SM; each of 8 stream warps (2 a SMSP: a load's 128 destination registers leave no room for more) issues K loads of
 // its lane quarter (columns 256-511) an iteration, spread over the stream's IADD3 pairs (LVec). Each load adds its LDTM,

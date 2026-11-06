@@ -1,6 +1,8 @@
-import Proofs.Flock.Recursive.Guarantees
-import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Hides
-import Proofs.Flock.Verifier.Registered
+module
+
+public import Proofs.Flock.Recursive.Guarantees
+public import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Hides
+public import Proofs.Flock.Verifier.Registered
 
 /-!
 # Proofs of the recursive audit's circuit privacy, and that it ran the registered private circuit
@@ -27,6 +29,8 @@ import Proofs.Flock.Verifier.Registered
   string), and two of one port at `i` to different rows collide, in hm96's leaf (`ExplicitLeaf.hm96`) or along the
   registered path (`Flock.Registered.opensLeaf_binding`).
 -/
+
+@[expose] public section
 
 namespace Flock.SecurityProofs
 

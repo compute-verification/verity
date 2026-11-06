@@ -30,7 +30,7 @@ from verity_flock import rec_vstar as V
 HERE = Path(__file__).resolve().parent
 SET = HERE / "fixtures" / "hidden-outputs" / "flat" / "gemm-coordinate"
 INNER = json.loads((HERE / "fixtures" / "inner_claims.json").read_text())
-LEAN = HERE.parents[2] / "core" / "service" / "flock"
+LEAN = HERE.parents[3] / "verity/core/service/flock"
 
 
 def test_staging_pauses_the_collector_and_restores_it():

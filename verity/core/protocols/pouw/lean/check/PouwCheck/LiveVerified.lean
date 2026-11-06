@@ -1,4 +1,6 @@
-import PouwCheck.Verified
+module
+
+public import PouwCheck.Verified
 
 /-!
 # A served window's live statements verified (`credit._live_verified`)
@@ -29,6 +31,8 @@ Before any run: the circuit files' form (`FILES_FORM`), a committed live circuit
 form (`LIVE_STATEMENTS_FORM`), and one statement a round of the window's (a retry never reproves). Every refusal is
 (code, why), the first rule the input breaks, with Python's words.
 -/
+
+@[expose] public section
 
 namespace PouwCheck.LiveVerified
 
@@ -120,8 +124,7 @@ tables' roots `roots` (`liveRoots`), each step's m_s `ms`, the window Program's 
 its session `session` and the period's committed max_tokens `maxTokens`. -/
 def asks (files statements : Json) (got : Live) (roots : List (String × String)) (ms : List Nat)
     (program window session : String) (maxTokens : List Nat) : R (Array Verified.Ask × Option (String × String)) := do
-  unless isObj files && (fields files).all (fun (_, v) => (digest? v).isSome) do
-    throw ("circuit", Verified.FILES_FORM)
+  if let some why := Verified.filesRefusal files then throw why
   let some (.str sha) := PouwWindow.field? files LIVE | throw ("circuit", noLiveFiles)
   let some ss := (match statements with
     | .arr xs => xs.toList.mapM round?

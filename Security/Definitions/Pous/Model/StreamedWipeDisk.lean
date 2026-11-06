@@ -1,4 +1,6 @@
-import Definitions.Pous.Model.StreamedWipeServer
+module
+
+public import Definitions.Pous.Model.StreamedWipeServer
 
 /-!
 # The streamed-label wipe with a server's disks in the fill
@@ -21,6 +23,8 @@ in full, whatever it holds:
 
 So `Disks.bytes` is every byte the disks can hold, their raw media and caches included, not the capacity they expose.
 -/
+
+@[expose] public section
 
 namespace Pous.StreamedWipe
 

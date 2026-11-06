@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.FirstRefusal
-import Proofs.Flock.Claims.Complete.Replay.ZerocheckAlgebra
-import Proofs.Flock.Soundness.Discharge.Composed.Inner
+module
+
+public import Proofs.Flock.Claims.ZK.FirstRefusal
+public import Proofs.Flock.Claims.Complete.Replay.ZerocheckAlgebra
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner
 
 /-!
 # The masked zerocheck's first round, the model's values against the executable's
@@ -18,6 +20,8 @@ Round `3` of the masked session absorbs the padded `round1_ab` and `round1_c`, w
 * `Masked.outerAt_eq`: a rep's outer coin at the opened coins is the coin of the round after its first
   (`repBase + 1`), the one the session's second zerocheck squeeze reads.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay.Zc
 

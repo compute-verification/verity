@@ -2,7 +2,7 @@
 
     uv run benchmarks/pouw/period_cost.py [--json OUT] [--md OUT]
 
-**The bound.** An accepted period of n windows (#2722's `ComposePeriod`) has ε(n) = ε_♭ + Λ·ln(1/δ_s)/(u·n), with Λ the
+**The bound.** An accepted period of n windows (`ComposePeriod`) has ε(n) = ε_♭ + Λ·ln(1/δ_s)/(u·n), with Λ the
 sharp split rate (`SplitRateExp`) at K_d draws a window, M rounds and credit ratio r:
 
     x = K_d/(r·M),  Λ = max(a/(M·(−ln(p + (1 − p)e^{−x}))), b/(M·(−ln(p0 + (1 − p0)e^{−x})))),
@@ -10,11 +10,11 @@ sharp split rate (`SplitRateExp`) at K_d draws a window, M rounds and credit rat
 at the lucks a = 0.218, b = 0.998, p = 7/8, p0 = ½, δ_s = 2^-40 and ε_♭ = 0.571% (sm_120 sheet, H1 + fx1). u is the
 period's admitted rows over its declared rows, so the first period at ε < 1% is n = ⌈Λ·ln(1/δ_s)/(u·(1% − ε_♭))⌉ windows.
 At small x, Λ ≈ b·r/((1 − p0)·K_d): what counts is the period's total draws n·K_d, and M past 18 buys nothing.
-A period's credit is (1 − ε(j))₊ of its accepted prefix's live words, at the realized prefix j (RT4-INT-8), so a prefix
+A period's credit is (1 − ε(j))₊ of its accepted prefix's live words, at the realized prefix j, so a prefix
 earns nothing until ε(j) < 1 (`first_credit`: 202 windows today). A window that skips every drawn tile passes with
 p0^K_d, which past 1 − b (K_d ≤ 8) would out-earn an honest window if credited without that discount (`all_skip_pays`).
 
-**The served window** (r20261018-234409-19cd, SERVE-H1 on vy-nebius-2): 18 rounds, 16 served steps and 2 empty, 64 rows a
+**The served window** (served_h1 on an RTX PRO 6000 node): 18 rounds, 16 served steps and 2 empty, 64 rows a
 step; 2,304 GEMM calls and 1,548,288 units of 32×32 outputs (86,016 a step: qkv 384, o 256, gate_up 1,792 at K = 4,096
 and down 256 at K = 14,336, a layer, 32 layers). 5 sequences fill 119 of its 1,152 row slots (u = 119/1152; 731,136 units
 live). Its 485.5 s serve is 439.1 s of receipts (284 µs a unit, launch-bound torch, on a node at load 500 to 615), 1.7 s of
@@ -31,8 +31,8 @@ circuit file and its teardown, and Lean's session check) plus a part a lane. `RA
 
 **Node-days** are memory-packed: a node runs ⌊node GB / process GB⌋ provers (prover and session verifier) or Lean checks
 at once, and a window's node-seconds are its prove seconds over the prove slots plus its Lean seconds over the Lean
-slots. Process-days are the same seconds unpacked (INT-PERIOD's node-days). Windows certify in parallel on N nodes, but
-one stream serves the period (#2722: disjoint periods, one stream each), and a window's draw comes only once it is
+slots. Process-days are the same seconds unpacked (node-days). Windows certify in parallel on N nodes, but
+one stream serves the period (disjoint periods, one stream each), and a window's draw comes only once it is
 served, so the period takes max(serving, certifying its first n − 1 windows on N nodes) plus its last window's
 certification: its statements in parallel, but no sooner than one statement's prove and check.
 
@@ -57,9 +57,14 @@ import sys
 from dataclasses import dataclass, replace
 from pathlib import Path
 
+from verity_machine_model.headline import row
+
 A, B, P, P0 = 0.218, 0.998, 7 / 8, 0.5
 DELTA_S_LOG2 = 40
-EPS_FLAT = 0.00571
+#: ε_♭ + ε_μ on sm_120's data sheet (H1 + fx1), the machine model's sheet row: ε_skip + ε_machine is Compose's ε_♭ and
+#: ε_mand its ε_μ (`epsFlat`, `epsMu`); the row's ε_luck is Λ's term here
+SHEET = row("sm_120", "sheet")
+EPS_FLAT = SHEET.skip + SHEET.machine + SHEET.mand
 TARGET = 0.01
 DAY = 86_400.0
 
@@ -204,7 +209,7 @@ def eps(n: int, c: Config) -> float:
 
 
 def windows(c: Config) -> int:
-    """The least n with ε(n) < 1% (INT-PERIOD's n_min)."""
+    """The least n with ε(n) < 1% (the period's n_min)."""
     budget = TARGET - c.eps_flat
     if budget <= 0:
         raise ValueError(f"ε_♭ = {c.eps_flat:.3%} leaves no logical budget under {TARGET:.0%}")
@@ -212,7 +217,7 @@ def windows(c: Config) -> int:
 
 
 def credit(j: int, c: Config) -> float:
-    """The share of an accepted prefix of j windows' live words credited, (1 − ε(j))₊ (RT4-INT-8)."""
+    """The share of an accepted prefix of j windows' live words credited, (1 − ε(j))₊."""
     return max(0.0, 1.0 - eps(j, c))
 
 
@@ -223,7 +228,7 @@ def first_credit(c: Config) -> int:
 
 def all_skip_pays(c: Config) -> bool:
     """Whether a window that skips every drawn tile whole passes (p0^K_d) more often than its credit is wrong (1 − b), so
-    that, credited without ε's discount, it out-earns an honest window (RT4-INT-8: at K_d = 8, 1.95×)."""
+    that, credited without ε's discount, it out-earns an honest window (at K_d = 8, 1.95×)."""
     return P0 ** c.draws > 1 - B
 
 
@@ -390,7 +395,7 @@ def near_term(base: Config = TODAY) -> list[Config]:
 
 
 def configurations(base: Config = TODAY) -> list[Config]:
-    """INT-PERIOD's line, `base`, and `route`'s steps, each on the last."""
+    """The period's line, `base`, and `route`'s steps, each on the last."""
     line = Config("INT-PERIOD's line: per-draw rates, W2's tile a draw", rates="int-period", unit_outputs=LANE_OUTPUTS,
                   k=1.0, receipts_per_unit=False)
     return [line, base, *route(base)]
@@ -451,7 +456,7 @@ def sensitivity() -> dict:
     base = Config("sensitivity", u=1.0)
     return dict(
         delta_s_log2={str(d): windows(replace(base, delta_s_log2=d)) for d in (20, 30, 40, 64, 80)},
-        eps_flat={f"{e:.3%}": windows(replace(base, eps_flat=e)) for e in (0.003, 0.00571, 0.007, 0.008, 0.009)},
+        eps_flat={f"{e:.3%}": windows(replace(base, eps_flat=e)) for e in (0.003, EPS_FLAT, 0.007, 0.008, 0.009)},
     )
 
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Types.Program
+module
+
+public import Proofs.Flock.Soundness.Types.Program
 
 /-!
 # Each drawn unit's place, for a program of units (verified-lowering phase 1, S4d)
@@ -18,6 +20,8 @@ class's rows placed at each slot, each slot input's copy position and the forced
   (`TableClass.Copies`), the place is aliased (`aliased_of_copies`). A unit's instance wires each input to its source's
   gate (`instOf_wire`), and inputs on one gate read one source (`srcGate_inj`).
 -/
+
+@[expose] public section
 
 open Flock Flock.DeriveAll
 
@@ -233,7 +237,7 @@ noncomputable def derivedPlaces (hk : one < k) {outs : List ℕ} (p : UProg k on
     (hal : ∀ S R u (h : u ∈ S), (at_ S R u h).Aliased (p.instOf hk u).wire) :
     (p.P hk).DerivedPlaces plan tab (p.rowsOf hk) where
   place S R u h :=
-    ⟨p.rowsOf hk u, p.instOf hk u, (at_ S R u h).o, (at_ S R u h).col, (at_ S R u h).placed, hal S R u h⟩
+    ⟨p.rowsOf hk u, p.instOf hk u, (at_ S R u h).o, (at_ S R u h).col, (at_ S R u h).placed.sat, hal S R u h⟩
   rows _ _ _ _ := rfl
 
 /-- **A slot's copies make its place aliased**: unit `u`, at slot `g` of block `o` of a class whose derivation inputs it

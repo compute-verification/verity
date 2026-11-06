@@ -10,7 +10,8 @@ import json
 
 import pytest
 
-from test_verifier_party import COINS, Clock, Entropy
+from remote_bandwidth_fakes import Clock, Entropy
+from test_verifier_party import COINS
 from verity.core.protocols.pous import period as pous_period
 from verity.core.protocols.remote_bandwidth import period as P
 from verity.core.protocols.sampled_proofs import challenger as C
@@ -50,7 +51,7 @@ class Ledger:
             at[f"reserve {s}"] = self.add("reserve", s, reserve)
             at[f"open {s}"] = self.add("open", s, {
                 **reserve, "reserve": at[f"reserve {s}"], "opened_by": LANE, "window": {"root": root(s)},
-                "host": "vy-challenger-1", "pinned": "ab" * 20, "key_sha512": self.key_sha512})
+                "host": "challenger-host", "pinned": "ab" * 20, "key_sha512": self.key_sha512})
             self.leaf += 1
             at[f"end {s}"] = self.add("end", s, {
                 "closed": True, "complete": True, "files": {f: "00" * 64 for f in C.SEALED_FILES},
@@ -125,7 +126,7 @@ def test_the_bandwidth_session_accepts_the_cut_store_as_the_whole(tmp_path):
         (p.relative_to(tmp_path).as_posix(), p.read_bytes()) for p in sorted(tmp_path.rglob("*")) if p.is_file()))
     blocks = {}
     for name, store in (("whole", whole), ("cut", P.records(tmp_path))):
-        c = Clock()
+        c = Clock(10 ** 9, 1_000)
         got = P.run("n0", store, COINS, clock=c, sleep_until=c.sleep_until, entropy=Entropy(name.encode()))
         assert got.verdict == "accept", got.answer
         blocks[name] = len(P.payloads(store))

@@ -1,4 +1,6 @@
-import Proofs.Properties.NetworkCertifier.Check
+module
+
+public import Proofs.Properties.NetworkCertifier.Check
 
 /-!
 # The check's outcomes: refusals, acceptance and undecided
@@ -7,6 +9,8 @@ The proofs of properties (1) to (3) of `Properties.NetworkCertifier`, from the i
 (`answer_accepts_iff`, `accepts_iff`, `undecided_iff`). The converse halves, and the honest transcript's acceptance
 (`HonestAccepted`), are completeness, at the end.
 -/
+
+@[expose] public section
 
 open NetworkCheck hiding Params
 open NetworkCheck.Check

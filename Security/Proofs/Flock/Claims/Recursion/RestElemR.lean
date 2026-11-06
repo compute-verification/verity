@@ -1,10 +1,12 @@
-import Proofs.Flock.Claims.Recursion.RestReadsAt
-import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
-import Proofs.Flock.Claims.Recursion.VerdictRowG
-import Proofs.Flock.Claims.Recursion.NextRTables
-import Proofs.Flock.Claims.Complete.Shaped
-import Proofs.Flock.Claims.Recursion.NextRFits
-import Proofs.Flock.Claims.Recursion.RestFitsLift
+module
+
+public import Proofs.Flock.Claims.Recursion.RestReadsAt
+public import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
+public import Proofs.Flock.Claims.Recursion.VerdictRowG
+public import Proofs.Flock.Claims.Recursion.NextRTables
+public import Proofs.Flock.Claims.Complete.Shaped
+public import Proofs.Flock.Claims.Recursion.NextRFits
+public import Proofs.Flock.Claims.Recursion.RestFitsLift
 
 /-!
 # `ElemFramed` and `OpenedShaped` at the deployed last message `elemR`
@@ -28,6 +30,8 @@ sizes (`openedFit_of`): the honest proof fits its own rows (`repFits`), and a fi
 sizes (`RestRead.fitsLift`), so it is enough that the opened rounds have an honest rep's sizes (`OpenedSized`).
 `readsAt_elemR'` takes that one.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.RestElem
 
@@ -82,7 +86,11 @@ def readTail : Rd RecX := do
   let recInner ← rdBytes
   let registration ← rdOpt rdBytes
   let parts ← rdList PartX.read
-  pure ⟨inner, recInner, registration, parts⟩
+  let links ← rdOpt (do
+    let t ← rdBytes
+    let n ← rdNat
+    pure (t, n))
+  pure ⟨inner, recInner, registration, parts, links⟩
 
 theorem read_eq : RecX.read = (do
     if (← rdStr) ≠ XFORMAT then failure
@@ -95,6 +103,7 @@ theorem tail_inner_lt {s s' : Msg} {w : RecX} (h : readTail.run s = some (w, s')
   obtain ⟨_, s₃, -, h⟩ := rd_bind h
   obtain ⟨_, s₄, -, h⟩ := rd_bind h
   obtain ⟨_, s₅, -, h⟩ := rd_bind h
+  obtain ⟨_, s₆, -, h⟩ := rd_bind h
   rw [StateT.run_pure] at h
   obtain ⟨rfl, -⟩ := Prod.mk.inj (Option.some.inj h)
   show inner.length < 2 ^ 64

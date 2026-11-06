@@ -82,14 +82,14 @@ M = 35
 INSTANCES = {2048: 2048, 4096: 2048, 8192: 1024, 16384: 512, 32768: 256}
 #: a session's coins, as the sweep's record names them (`verity_flock.circuit.coins`): `os-seed-prf` (the binary's default: the
 #: verifier's 256-bit OS-random seed, committed at Hello and opened in the verdict, every round's coins its SHA-256 counter-mode
-#: PRF) or `live-os` (FC_COINS=os, 70-class-sweep.sh's default: the verifier's OS draws, round by round); points under different
-#: coin modes are never compared
+#: PRF) or `coin-tree` (FC_COINS=tree, 70-class-sweep.sh's default: the challenger's keyed coin tree); points under different coin
+#: modes are never compared
 COINS = {"os-seed-prf": "os-seed-prf: the verifier's OS-random seed under a SHA-512 commitment, its coins a SHA-256 counter-mode PRF",
-         "live-os": "live-os: the verifier's OS draws, round by round"}
+         "coin-tree": "coin-tree: every round's coins the keyed coin tree's, the challenger's under serve --tree-from"}
 #: the proof-system scheme a point measured, from its coins (docs/protocol-schemes.md): flock-i-v1 is M0's configuration (SHA-512
 #: Merkle, two Fast100 repetitions, os-seed-prf coins, the batched session, the tile layout); written into every point, never
 #: inferred later
-SCHEMES = {"os-seed-prf": "flock-i-v1", "live-os": "flock-i-v1+livecoins"}
+SCHEMES = {"os-seed-prf": "flock-i-v1", "coin-tree": "flock-i-v1+cointree"}
 POINT_SCHEMA, ROLLUP_SCHEMA = "verity/hillclimb-point/v0", "verity/hillclimb-rollup/v0"
 def definition(dtype: str) -> re.Pattern:
     name, dot = DTYPES[dtype][:2]
@@ -332,10 +332,9 @@ def _commit(root: Path) -> dict:
 
 
 #: per verifier source, its mark, the flag a version nobody reviewed carries, and the git blob ids of the reviewed versions with
-#: the flags each still carries. The column-major fold as granted (d1775df80 = cde1c7ac1, art:90b53162093c43559020e115d72d500225d8af62466cbbcedb7e63aada983fd8)
-#: and the structured lincheck as granted (8db1cb550 = e71789ed7 = f7d1e297d, art:f865ea7822990772c557751642e3c0c17212b6703ec2f8f5292f5f63fe5dd1f1)
-#: carry none, alone or with ab5087cd4 (= 750e344fd = acca35385, C0 = I checked once per statement, granted as
-#: art:2aef6594e7d5510a22c7cb7e7afa54fd20d954ceabf3d910a7437567ba204686)
+#: the flags each still carries. The column-major fold as granted (d1775df80 = cde1c7ac1)
+#: and the structured lincheck as granted (8db1cb550 = e71789ed7 = f7d1e297d)
+#: carry none, alone or with ab5087cd4 (= 750e344fd = acca35385, C0 = I checked once per statement, as granted)
 VERIFIER_SOURCES = (
     ("circuit.rs", "CscCircuit", "verifier-fold-unreviewed",
      {"1528b2ea3ede6998491ad0254c1a7917cd953263": (),
@@ -524,7 +523,7 @@ def metrics(a) -> None:
         # the GPU held while this job staged the statement itself (74-gemm-hill.sh STAGE_ONLY=1 stages it in a job without one)
         if not rec.get("stage_cached"):
             flags.append("staged-on-gpu")
-    # #554's untiled statements are reviewed (red-team-proofs-554's Q1 grant at 8a0b17250); a tiled one is a cost, not a claim,
+    # untiled GEMM statements are reviewed (at 8a0b17250); a tiled one is a cost, not a claim,
     # and a record without its stage can't show it isn't tiled. A changed statement digest starts a new curve
     if st.get("tile"):
         flags.append("tile-statement-unreviewed")

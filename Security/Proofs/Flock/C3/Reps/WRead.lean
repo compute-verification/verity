@@ -1,4 +1,6 @@
-import Proofs.Flock.C3.Reps.SentKeys
+module
+
+public import Proofs.Flock.C3.Reps.SentKeys
 
 /-!
 # `rep₀`'s `w` read off the layers: `WDecodes`, and each part's `hres` at it
@@ -18,6 +20,8 @@ touch, and first-fit packing can leave elements of a touched port that none of t
 shape `m = 25, k = 22, c = 8`, part 1 reads no bit of `m76`'s first four elements), so `ResReadCol` asks only of the
 bits some part reads.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

@@ -1,4 +1,6 @@
-import Proofs.Accounting.TS.Session.Held.Layer
+module
+
+public import Proofs.Accounting.TS.Session.Held.Layer
 
 /-!
 # A tile unit's proof layer with its Definition's checks, through its C-Flock sessions
@@ -24,6 +26,8 @@ What ties the circuit to the Definition is the premise `Accounting.TS.Tile.TileC
 These definitions read `RowsSession`, in the proofs package, so they sit here under `reads_exempt`'s
 `Proofs.Accounting.TS.Session`, as `Accounting.TS.Held`'s do.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Tile
 
@@ -55,8 +59,8 @@ def TileRel {R C K : ℕ} (s : RowsSession) (o : s.Out) (ok : String) (dq : List
 
 /-- **The tile layer through its C-Flock sessions**: proof `i` of round `w` is accepted where flock-verify
 `--zk --registered` accepts its session at the registered file's known content `known x w i` (`LiveAcceptsZKR`, and
-`Registered.checkKnownAll`) and under its complete check (`Registered.checkComplete`, run when the `--registered` file
-sets `complete`: every port of the circuit is a port of `own`), opens the committed rows at the registered reads
+`Registered.checkKnownAll`) and under its complete check (`Registered.checkComplete`, run whenever `--registered` is
+given: every port of the circuit is a port of `own`), opens the committed rows at the registered reads
 (`openedReg`), and its relation is `TileRel` at the decode `dec x w i`. -/
 noncomputable def tileLayer {Ω : Type} {S nπ R C K : ℕ} (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
     (out : ∀ x w i, (sess x w i).Out) (ok : String)

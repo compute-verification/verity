@@ -1,5 +1,7 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Definitions.Pouw.PearlC.Fp4Chain
+module
+
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Definitions.Pouw.PearlC.Fp4Chain
 
 /-!
 # Pearl-C4's replayed debit: the lone-skip flags and the dead × dead block pairs (definitions only)
@@ -21,6 +23,8 @@ imports no proofs, so the device record may read it.
 * **A block's contribution** (`blockTerms`): the group terms of k-block `β`'s groups, as the atom holding it reads them;
   what a dead × dead pair lets a program precompute. `blockOf` is one operand's codes and scale byte of the block.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Fp4Skip
 

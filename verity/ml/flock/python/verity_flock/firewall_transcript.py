@@ -41,8 +41,9 @@ def public(schedule, relations=(), statement=None, computes=(), coins=None) -> d
 
 
 def canon(v) -> bytes:
-    """`Flock.canon`'s form: compact, keys sorted, integers only (a float here makes the item differ from the schedule's)."""
-    return json.dumps(v, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    """`Flock.canon`'s form: compact, keys sorted, every character outside printable ASCII escaped, integers only (a float
+    here makes the item differ from the schedule's)."""
+    return json.dumps(v, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
 
 
 def row_message(row: list[int]) -> bytes:

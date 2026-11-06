@@ -1,4 +1,4 @@
-//! Zero knowledge for `verity/flock-circuit` (lane flock-zk, M1): VEIL's compiler (Dalal–Hemo–Rabinovich–Rothblum, ePrint
+//! Zero knowledge for `verity/flock-circuit` (M1): VEIL's compiler (Dalal–Hemo–Rabinovich–Rothblum, ePrint
 //! 2026/683, §4.1 and Remark 4.4) applied to Flock's algebraic phase, over GF(2^128).
 //!
 //! **Exposed messages.** Every value the zerocheck and the lincheck send (round-1 skip evaluations, the multilinear rounds, the
@@ -1523,7 +1523,7 @@ mod tests {
             rank(all) - rank(rand)
         }
 
-        /// Coins and query sets a malicious verifier could choose (red-team-m1-zk's variant): with a pair per rep nothing
+        /// Coins and query sets a malicious verifier could choose: with a pair per rep nothing
         /// leaks, and the shared-pair control leaks wherever the reps' coins differ.
         #[test]
         fn adversarial_coins_and_queries_leak_nothing() {
@@ -1564,7 +1564,7 @@ mod tests {
         }
     }
 
-    /// The estimate runs until `t` successes whatever `p` (red-team-m2-zk G2: a cap of 64t runs let a tiny `p` stop it at one
+    /// The estimate runs until `t` successes whatever `p` (a cap of 64t runs let a tiny `p` stop it at one
     /// success), lands within `[p/2, 2p]`, and the rewinds it allows all fail with probability `(1 − p)^(4·runs) ≈ e^-4t`.
     #[test]
     fn the_gk_estimate_is_uncapped_and_its_rewinds_suffice() {

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.ZkBatchSim
-import Proofs.Flock.Claims.KS.ZkPadsPair
+module
+
+public import Proofs.Flock.Claims.KS.ZkBatchSim
+public import Proofs.Flock.Claims.KS.ZkPadsPair
 
 /-!
 # The masked simulated fork's alignment at the pads
@@ -18,6 +20,8 @@ schedule (`ZkBatch`, `ZkBatchSim`) at distance `0`.
 * `zkPadsAlign`: `ZkPadsAlign` holds at every message, the simulated strategy following `SchedC` there
   (`schedC_simAtJZ`), so the pads fork bound holds outright (`zkSimForkLePads`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

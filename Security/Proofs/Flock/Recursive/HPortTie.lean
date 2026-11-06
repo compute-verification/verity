@@ -1,9 +1,11 @@
-import Proofs.Flock.C3.Compose.Tied
-import Proofs.Flock.C3.Compose.HoloEncoded
-import Proofs.Flock.C3.Sparse.SessionAt
-import Proofs.Flock.VBridge.Family.Registrants
-import Proofs.Flock.C3.RegLevels.SharedRows
-import Std.Data.String.ToNat
+module
+
+public import Proofs.Flock.C3.Compose.Tied
+public import Proofs.Flock.C3.Compose.HoloEncoded
+public import Proofs.Flock.C3.Sparse.SessionAt
+public import Proofs.Flock.VBridge.Family.Registrants
+public import Proofs.Flock.C3.RegLevels.SharedRows
+public import Std.Data.String.ToNat
 
 /-!
 # The sparse phase's `h` from the rep's, across two units' reads of one registered row
@@ -43,6 +45,8 @@ excludes and `regFinder` prices once per audit: no new event, no guarantee recor
   `i`'s `h` (`HAlgRows`, which `FlockC3.Reps.hAlgRows_of_res` proves at a holo shape from the verifier's checks and
   the algebra parts' `ResZeroAtLH`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 
@@ -315,10 +319,10 @@ theorem rowPort_of_checkRows {s : VStar.Stmt} {own : Array Flock.Registered.Port
 /-- **A V* circuit's rows are unsegmented** (`scopeOk`'s `v1Ports`). -/
 theorem segs_of_scopeOk {c : Flock.Circuit} (h : Layout.scopeOk c = true) (q : Fin c.ports.size) :
     c.ports[q.val]!.segs = none := by
-  unfold Layout.scopeOk Layout.v1Ports at h
+  unfold Layout.scopeOk Layout.v1Ports Layout.v1Rows at h
   simp only [Bool.and_eq_true, Array.all_eq_true', Bool.not_eq_true', beq_iff_eq, decide_eq_true_eq] at h
   rw [getElem!_pos c.ports q.val q.isLt]
-  obtain ⟨⟨⟨-, hs⟩, -⟩, -⟩ := h.2 _ (Array.getElem_mem q.isLt)
+  obtain ⟨⟨⟨-, hs⟩, -⟩, -⟩ := h.2.1 _ (Array.getElem_mem q.isLt)
   simpa using hs
 
 end checks

@@ -1,5 +1,4 @@
-"""V*'s sparse phase (F4 candidate 3, deployment B; `note:proofs/20261010T0250Z-draft-f4-bitsumcheck` §1.3, §1.5 and §5.4
-"10 Oct, 10:00Z"): on one rep of an inner session whose unit circuits are hidden, the inner verifier's checks H1 to H4 at the
+"""V*'s sparse phase (the opening-only candidate, deployment B): on one rep of an inner session whose unit circuits are hidden, the inner verifier's checks H1 to H4 at the
 rep's coins, as a Boolean Definition and its plain-integer reference.
 
     U16 = Array<16, Value<1>>

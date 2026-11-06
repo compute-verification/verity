@@ -1,18 +1,20 @@
-import Proofs.Flock.Claims.Recursion.VStarFinal
-import Proofs.Flock.Claims.Recursion.HpEarlyStaged
-import Proofs.Flock.Claims.Recursion.HhHeld
-import Proofs.Flock.Claims.Recursion.HmsgRun
-import Proofs.Flock.Claims.Recursion.HonestRun
-import Proofs.Flock.Claims.Recursion.MoreSlotsAll
-import Proofs.Flock.Claims.Recursion.HonestPartsLayR
-import Proofs.Flock.Claims.Recursion.SchedDense
-import Proofs.Flock.Claims.Recursion.DeployedBrings
-import Proofs.Flock.Claims.Recursion.VStarDense
-import Proofs.Flock.Claims.Recursion.HonestWitR
-import Proofs.Flock.Claims.Recursion.NumsFixedR
-import Proofs.Flock.Claims.Recursion.VStarTopsOk
-import Proofs.Flock.Claims.Recursion.RoundWords
-import Proofs.Flock.Claims.Recursion.VStarPortNames
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarFinal
+public import Proofs.Flock.Claims.Recursion.HpEarlyStaged
+public import Proofs.Flock.Claims.Recursion.HhHeld
+public import Proofs.Flock.Claims.Recursion.HmsgRun
+public import Proofs.Flock.Claims.Recursion.HonestRun
+public import Proofs.Flock.Claims.Recursion.MoreSlotsAll
+public import Proofs.Flock.Claims.Recursion.HonestPartsLayR
+public import Proofs.Flock.Claims.Recursion.SchedDense
+public import Proofs.Flock.Claims.Recursion.DeployedBrings
+public import Proofs.Flock.Claims.Recursion.VStarDense
+public import Proofs.Flock.Claims.Recursion.HonestWitR
+public import Proofs.Flock.Claims.Recursion.NumsFixedR
+public import Proofs.Flock.Claims.Recursion.VStarTopsOk
+public import Proofs.Flock.Claims.Recursion.RoundWords
+public import Proofs.Flock.Claims.Recursion.VStarPortNames
 
 /-!
 # The honest half of `RecursiveKSAt`'s non-vacuity at the deployed V\* (`honest_half`)
@@ -51,6 +53,8 @@ names from `VStar.parts`, `innerPorts_named`), and the holders of one round's ro
 exception (`hTops`).
 `bringsAt_deployedB`: the brings here are `RecursiveKS`'s `deployedB` at `bringsAt mask Ir b0 x`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.HonestHalf
 
@@ -112,7 +116,7 @@ that read it refused.
 
 Only Python joins the 10 per-part verdicts, so what the run witnesses is that every part's session accepted, not that
 one compiled verifier accepted the whole outer statement. -/
-def HonestRunAccepted (w : Claims.Flock.Wit) (st : Claims.Recursion.Stmt)
+def HonestRunAccepted (w : Claims.Flock.Wit) (st : Claims.Recursion.CompiledStatement)
     (ω : Tape (bLAt mask Ir b0 x aux nOf hd recRest))
     (r : Fin ((DAt mask Ir b0 x aux nOf hd recRest).V.k x) → Coin) : Prop :=
   Claims.Recursion.R (DAt mask Ir b0 x aux nOf hd recRest) (IAt decI) x w ∧
@@ -138,7 +142,7 @@ def NoCollAt (w : Claims.Flock.Wit) (ω : Tape (bLAt mask Ir b0 x aux nOf hd rec
 /-- **The honest run's staging sets up** (`StagedSetsUp` at the honest run's statement `x`), from
 `HonestRunAccepted`: the compiled verifier accepting the reference prover's run means each part's recursive setup passed
 (`stagedSetsUp_run`). -/
-theorem stagedSetsUp_accepted {w : Claims.Flock.Wit} {st : Claims.Recursion.Stmt}
+theorem stagedSetsUp_accepted {w : Claims.Flock.Wit} {st : Claims.Recursion.CompiledStatement}
     {ω : Tape (bLAt mask Ir b0 x aux nOf hd recRest)} {r : Fin ((DAt mask Ir b0 x aux nOf hd recRest).V.k x) → Coin}
     (h : HonestRunAccepted mask Ir b0 x aux nOf hd recRest decI w st ω r) :
     ∀ s < nS x, (setupO (staged (bLAt mask Ir b0 x aux nOf hd recRest).st x
@@ -171,7 +175,7 @@ theorem honest_half (mask : ℕ → ℕ → Bool) (Ir : InnerRec) (b0 : Brings) 
     let bL := bLAt mask Ir b0 x aux nOf hd recRest
     let I := IAt decI
     let D := DAt mask Ir b0 x aux nOf hd recRest
-    ∀ {w : Claims.Flock.Wit} {st : Claims.Recursion.Stmt} (ω : Tape bL) (r : Fin (D.V.k x) → Coin),
+    ∀ {w : Claims.Flock.Wit} {st : Claims.Recursion.CompiledStatement} (ω : Tape bL) (r : Fin (D.V.k x) → Coin),
     HonestRunAccepted mask Ir b0 x aux nOf hd recRest decI w st ω r →
     HonestWitSatisfies FlockDeploy.sha512 I.V bL x w ω r →
     NoCollAt mask Ir b0 x aux nOf hd recRest decI w ω r →

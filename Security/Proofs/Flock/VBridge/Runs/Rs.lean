@@ -1,6 +1,8 @@
-import Proofs.Flock.VBridge.Compiled
-import Proofs.Flock.VBridge.Algebra.RingSwitch
-import Proofs.Flock.Soundness.Refine.RepConverse
+module
+
+public import Proofs.Flock.VBridge.Compiled
+public import Proofs.Flock.VBridge.Algebra.RingSwitch
+public import Proofs.Flock.Soundness.Refine.RepConverse
 
 /-!
 # Ring switching's checks at a rep, from E
@@ -19,6 +21,8 @@ carries the messages w holds (`decoded`):
 * the batched value `T` (Opening.lean:86) is the one w holds, and the switched claims (Opening.lean:87) are
   `verifierRows`', the two Ligerito reads.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Runs
 
@@ -70,7 +74,7 @@ claims `claimsF`:
 * the ring-switching rounds from `k₂` issued `r''_k` and `γ`, answering the bytes framed before them (hypotheses);
 * the batched sum is the `T` w holds, and the switched claims are `verifierRows`'. -/
 theorem rs_of_residuals {sh : Shape} {d : RepData} {v : Array F128} {info : Info Lin}
-    {kappa : Array (Array (Array F128))} {S : GfS} {res : Array F128}
+    {kappa : Array (Array (Array F128))} {S : Flock.RecAlgebra.GfS} {res : Array F128}
     (hrows : verifierRows sh d.rounds d.extras d.comb = .ok (v, info, kappa)) (hS : structureOf sh = .ok S)
     (hw : d.w.size = S.nw) (hc : d.comb.size = 64)
     (hacc : ∀ r < 2, valOf sh d.w d.comb d.cons (.acc1 r) + valOf sh d.w d.comb d.cons (.acc0 r) =

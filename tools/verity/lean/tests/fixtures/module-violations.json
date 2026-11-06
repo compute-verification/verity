@@ -1,0 +1,56 @@
+{
+ "private_sorry": {
+  "replace": {"Modular/Hidden.lean": ["by\n  unfold double\n  omega", "by sorry"]},
+  "replay": true,
+  "fails": "sorry: sorryAx is used by Modular.double_add",
+  "not": ["replay: "]
+ },
+ "private_axiom": {
+  "replace": {"Modular/Secret.lean": ["public theorem triple_add (n : Nat) : triple n = n + n + n := by\n  rw [triple_eq]\n  omega",
+                                      "axiom magic (n : Nat) : triple n = n + n + n\n\npublic theorem triple_add (n : Nat) : triple n = n + n + n := magic n"]},
+  "replay": true,
+  "fails": "axiom: _private.Modular.Secret.0.Modular.magic is used by Modular.main_thm, Modular.triple_add",
+  "not": ["replay: "]
+ },
+ "private_native_decide": {
+  "replace": {"Modular/Hidden.lean": ["end Modular", "public theorem big : 2 ^ 20 = 1048576 := by native_decide\n\nend Modular"]},
+  "fails": "native_decide: "
+ },
+ "private_implemented_by": {
+  "replace": {"Modular/Defs.lean": ["end Modular", "def slowImpl (n : Nat) : Nat := n\n\n@[implemented_by slowImpl] def slowF (n : Nat) : Nat := n\n\nend Modular"]},
+  "fails": "escape: _private.Modular.Defs.0.Modular.slowF (implemented_by"
+ },
+ "private_extern": {
+  "replace": {"Modular/Defs.lean": ["end Modular", "@[extern \"c_id\"] def cId (n : Nat) : Nat := n\n\nend Modular"]},
+  "fails": "escape: _private.Modular.Defs.0.Modular.cId (extern"
+ },
+ "private_kernel_option": {
+  "replace": {"Modular/Hidden.lean": ["public theorem double_add", "set_option debug.skipKernelTC true in\npublic theorem double_add"]},
+  "fails": "unchecked: Modular/Hidden.lean:10 names debug.skipKernelTC"
+ },
+ "private_kernel": {
+  "write": {"Modular/Bad.lean": "module\n\nmeta import Lean\n\nopen Lean Elab Command in\n#eval show CommandElabM Unit from liftCoreM do\n  let opt := Name.mkStr (Name.mkStr .anonymous \"debug\") (\"skipKernel\" ++ \"TC\")\n  withOptions (fun o => o.setBool opt true) <| addDecl\n    (.thmDecl { name := `Modular.bogus, levelParams := [], type := mkConst ``False, value := mkConst ``True.intro })\n"},
+  "replace": {"Modular.lean": ["public import Modular.Uses", "public import Modular.Uses\nimport Modular.Bad"]},
+  "policy": {"compile_time": {"Modular.Bad": {"why": "the kernel control: its #eval adds the declaration",
+   "digest": "40969f183120a87f681bf8a62a4b5bb3bed30b52fd61898eca0bff3c80488741"}}},
+  "replay_only": true,
+  "fails": "replay: the kernel rejected a declaration under Modular, in Modular.Bad (exit 1)"
+ },
+ "meaning_exposed": {
+  "replace": {"Modular/Defs.lean": ["Nat := 2 * n", "Nat := n + n"]},
+  "fails": "guarantees: definitions in Modular.Defs that Modular.main_thm read changed (changed: Modular.double)"
+ },
+ "meaning_unexposed": {
+  "replace": {"Modular/Defs.lean": ["Nat := 3 * n", "Nat := n + n + n"]},
+  "fails": "guarantees: definitions in Modular.Defs that Modular.main_thm read changed (changed: Modular.triple)"
+ },
+ "plain": {
+  "write": {"Modular.lean": "import Modular.Uses\n",
+            "Modular/Defs.lean": "namespace Modular\n\ndef double (n : Nat) : Nat := 2 * n\n\ndef triple (n : Nat) : Nat := 3 * n\n\ntheorem triple_eq (n : Nat) : triple n = 3 * n := by\n  unfold triple\n  omega\n\nend Modular\n",
+            "Modular/Hidden.lean": "import Modular.Defs\n\nnamespace Modular\n\ntheorem double_add (n : Nat) : double n = n + n := by\n  unfold double\n  omega\n\nend Modular\n",
+            "Modular/Secret.lean": "import Modular.Defs\n\nnamespace Modular\n\ntheorem triple_add (n : Nat) : triple n = n + n + n := by\n  rw [triple_eq]\n  omega\n\nend Modular\n",
+            "Modular/Uses.lean": "import Modular.Defs\nimport Modular.Hidden\nimport Modular.Secret\n\nnamespace Modular\n\ntheorem main_thm (n : Nat) : double n + n = triple n := by\n  rw [double_add, triple_add]\n\nend Modular\n"},
+  "replay": true,
+  "passes": true
+ }
+}
