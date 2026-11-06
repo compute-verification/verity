@@ -54,8 +54,11 @@ and requests a second, goodput at the SLO (TTFT and time per output token), TTFT
 reps with a 95% interval, the requests sent and not served, and each arm's tax, its compute per token over the
 reference's at the same load less one, against `compiled` and against its parent. Below capacity the throughput is set
 by the arrivals, so the tax there reads the drain and the cost shows in the latencies; a tax beside unserved requests
-isn't over the same requests. `replay-{compiled,eager}/replay.json` has the replay's counts and wall time
-beside the served window's.
+isn't over the same requests. `replay-{compiled,eager}/replay.json` has the replay's counts, its differing requests and
+its wall time beside the served window's, and `replay_tokens.jsonl.gz` its tokens. Each request decodes to its cap, so the
+schedule doesn't depend on the tokens: a replay with no differing step can still sample other tokens. A mode listed twice
+in `REPLAY_MODES` replays again and compares its tokens with the first replay's too, which tells a replay that differs from
+serving from one that differs from itself; `REPLAY_FROM` with no `ARMS` replays an earlier job's window alone.
 
 The `kv` arm hashes the whole pool, free blocks too, at each edge: an upper bound on hashing the blocks live there, and a
 measurement of the cost, not a commitment of the state (a block written after the edge before the side stream reads it

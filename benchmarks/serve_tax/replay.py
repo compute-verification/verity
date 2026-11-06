@@ -1,6 +1,6 @@
 """Replay one served window of a ``record`` arm (`serve_tax`) under its recorded schedule, and say how close it came.
 
-    replay.py --arm-dir OUT/record --load NAME [--rep 1] [--checkpoint DIR] [--eager] --out DIR
+    replay.py --arm-dir OUT/record --load NAME [--rep 1] [--checkpoint DIR] [--eager] [--against EARLIER_OUT] --out DIR
 
 The window is the load's requests: its step trace's steps from the first one's arrival to the last one's finish, all of them
 the load's own (each load starts from an empty prefix cache and ends drained). The replay builds the served engine again
@@ -9,12 +9,15 @@ caching, async scheduling, block size and block count), compiled unless ``--eage
 engine id with its served prompt and sampling, right before the scheduled step it arrived before in the trace (a wrapper of
 the scheduler's ``schedule``); the scheduler decides the rest as it did while serving. Its own step trace (`StepTrace`) is
 then compared with the served one, step by step: the rows (request, first position, tokens) that differ and the first step
-that does, and each request's sampled tokens against the ones the client received. replay.json has the counts and the
-replay's wall time beside the served window's (first arrival to last step).
+that does, and each request's sampled tokens against the ones the client received. replay.json has the counts, the
+differing requests (each one's lengths and first differing position) and the replay's wall time beside the served window's
+(first arrival to last step); replay_tokens.jsonl.gz has every request's replayed tokens, which ``--against`` compares a
+later replay's with, to tell a replay that differs from serving from one that differs from itself.
 """
 from __future__ import annotations
 
 import argparse
+import gzip
 import json
 import os
 import sys
@@ -130,6 +133,22 @@ def replay(w: dict, checkpoint: Path, eager: bool) -> dict:
     return {"ready_s": ready, "wall_s": wall, "steps": [r for r in trace.records if r["kind"] == "step"], "tokens": tokens}
 
 
+#: the differing requests replay.json lists, each with its lengths and first differing position
+DIFFERING_MAX = 100
+
+
+def token_diff(want: dict[str, list[int]], got: dict[str, list[int]]) -> list[dict]:
+    """Each request of ``want`` whose tokens in ``got`` differ: both lengths, the first position that differs and how many do."""
+    out = []
+    for rid, a in want.items():
+        b = got.get(rid, [])
+        if a != b:
+            first = next((i for i, (x, y) in enumerate(zip(a, b)) if x != y), min(len(a), len(b)))
+            out.append({"request": rid, "tokens": len(a), "tokens_replayed": len(b), "first_position": first,
+                        "positions": sum(x != y for x, y in zip(a, b)) + abs(len(a) - len(b))})
+    return out
+
+
 def compare(w: dict, got: dict) -> dict:
     served = {s["step"]: s["rows"] for s in w["steps"]}
     mine = {s["step"]: s["rows"] for s in got["steps"]}
@@ -137,14 +156,24 @@ def compare(w: dict, got: dict) -> dict:
     differ = [s for s in steps if served.get(s) != mine.get(s)]
     rows = sum(len(set(map(tuple, served.get(s, ()))) ^ set(map(tuple, mine.get(s, ())))) for s in differ)
     reqs = {r["engine_id"]: r["served"] for r in w["requests"]}
-    tok_differ = [rid for rid, t in reqs.items() if got["tokens"].get(rid) != t]
-    positions = sum(sum(a != b for a, b in zip(got["tokens"].get(rid, []), reqs[rid])) +
-                    abs(len(got["tokens"].get(rid, [])) - len(reqs[rid])) for rid in tok_differ)
+    tok_differ = token_diff(reqs, got["tokens"])
     return {"steps_served": len(served), "steps_replayed": len(mine), "steps_differing": len(differ),
             "rows_served": sum(map(len, served.values())), "rows_differing": rows, "first_differing_step": differ[0] if differ else None,
-            "requests": len(reqs), "requests_tokens_differing": len(tok_differ), "token_positions_differing": positions,
+            "requests": len(reqs), "requests_tokens_differing": len(tok_differ),
+            "token_positions_differing": sum(d["positions"] for d in tok_differ),
             "tokens_served": sum(map(len, reqs.values())), "bit_exact": not differ and not tok_differ,
-            "first_differing_request": tok_differ[0] if tok_differ else None}
+            "requests_differing": tok_differ[:DIFFERING_MAX]}
+
+
+def read_tokens(replay_dir: Path) -> dict[str, list[int]]:
+    with gzip.open(replay_dir / "replay_tokens.jsonl.gz", "rt") as f:
+        return {r["request"]: r["tokens"] for r in map(json.loads, f) if r}
+
+
+def write_tokens(replay_dir: Path, tokens: dict[str, list[int]]) -> None:
+    with gzip.open(replay_dir / "replay_tokens.jsonl.gz", "wt") as f:
+        for rid in sorted(tokens):
+            f.write(json.dumps({"request": rid, "tokens": tokens[rid]}, separators=(",", ":")) + "\n")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -154,6 +183,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--rep", type=int, default=1)
     ap.add_argument("--checkpoint", type=Path)
     ap.add_argument("--eager", action="store_true")
+    ap.add_argument("--against", type=Path, help="an earlier replay's --out, whose tokens this one's are compared with too")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args(argv)
     if sys.flags.hash_randomization:
@@ -168,13 +198,18 @@ def main(argv: list[str] | None = None) -> int:
            "served_mode": "eager" if "--enforce-eager" in meta["server_argv"] else "compiled", "requests": len(w["requests"]),
            "served_window_s": w["served_s"], "replay_wall_s": got["wall_s"], "replay_over_served": got["wall_s"] / w["served_s"],
            "engine_ready_s": got["ready_s"], **compare(w, got)}
+    if a.against:
+        d = token_diff(read_tokens(a.against), got["tokens"])
+        out["against"] = {"replay": str(a.against), "requests_tokens_differing": len(d), "requests_differing": d[:DIFFERING_MAX]}
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "replay.json").write_text(json.dumps(out, indent=1))
+    write_tokens(a.out, got["tokens"])
     with open(a.out / "replay_steps.jsonl", "w") as f:
         for s in got["steps"]:
             f.write(json.dumps(s, separators=(",", ":")) + "\n")
-    print(json.dumps({k: out[k] for k in ("mode", "requests", "steps_served", "steps_differing", "rows_differing",
-                                          "requests_tokens_differing", "bit_exact", "served_window_s", "replay_wall_s")}))
+    print(json.dumps({**{k: out[k] for k in ("mode", "requests", "steps_served", "steps_differing", "rows_differing",
+                                             "requests_tokens_differing", "bit_exact", "served_window_s", "replay_wall_s")},
+                      **({"against_requests_differing": out["against"]["requests_tokens_differing"]} if a.against else {})}))
     return 0
 
 

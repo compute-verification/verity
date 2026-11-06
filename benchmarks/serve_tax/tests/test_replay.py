@@ -59,3 +59,16 @@ def test_compare_counts_steps_rows_and_tokens_that_differ(tmp_path: Path):
     c = R.compare(w, other)
     assert (c["steps_differing"], c["rows_differing"], c["first_differing_step"]) == (1, 1, 1)
     assert (c["requests_tokens_differing"], c["token_positions_differing"], c["bit_exact"]) == (1, 1, False)
+    assert c["requests_differing"] == [{"request": rid("sat1", 1), "tokens": 2, "tokens_replayed": 2, "first_position": 1,
+                                        "positions": 1}]
+
+
+def test_token_diff_counts_a_shorter_replay_from_where_it_stops():
+    assert R.token_diff({"a": [1, 2, 3], "b": [4]}, {"a": [1, 2], "b": [4]}) == [
+        {"request": "a", "tokens": 3, "tokens_replayed": 2, "first_position": 2, "positions": 1}]
+
+
+def test_replay_tokens_round_trip(tmp_path: Path):
+    tokens = {rid("sat1", 1): [7, 9], rid("sat1", 0): [7, 0]}
+    R.write_tokens(tmp_path, tokens)
+    assert R.read_tokens(tmp_path) == tokens
