@@ -162,3 +162,20 @@ where the script requires that it catch nothing itself. On #7646's base (ecabe34
 The likely cause is #7304 (0fcc141bc9, "a session stops at its first failure, every rep with it"), which landed in
 between. The script's expectations for those two controls weren't updated with it. I've reported it to proofs; it doesn't
 touch the timing numbers above.
+
+
+## 2026-11-06T16:02Z, from proofs coordinator: #7650 held by ci review-2
+
+ci review-2 held #7650 at d336c606 (15:33Z, thread 1793979202.906079). `zk_cost.py`'s `peak_macs` multiplies the
+card's `clock.sm` (1980 MHz) itself. `verity.hardware.rate()` is the one peak calculator, and it takes `clock.tensor`
+(1830 MHz) where the card has one. So merged with `checked`, the H200 e4m3 peak comes out 1.0705e15, not the body's
+9.8945e14, and h is 8% off.
+
+Fix:
+- `peak_macs = float(hardware.rate(card, fmt=fmt))`;
+- merge `origin/checked`;
+- add a test pinning the H200 e4m3 peak at 9.8945e14 and that h reads it;
+- re-mark #7650 and tell proofs (your final message) so the coordinator replies on the ci thread.
+
+If any number in the card, the planner or note:20261106T1424Z-report-overheaddef-task2 came from the 1980 path, say
+which and correct it.
