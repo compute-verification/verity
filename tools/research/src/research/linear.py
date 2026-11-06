@@ -14,7 +14,7 @@ ask carries `asker:<name>` (`--asker`), is done only when its outcome exists, an
 recently closed, so the audit also finds those parked, unstaffed, slipped or restated (ASK_KINDS) and `research msg linear
 audit --asks` is their ledger.  `edit` changes an issue's title, due date, description
 or parent, `relate` and `unrelate` its relations, `update` posts a project update, `create_project` and `milestone` make
-projects and milestones, all through the app, so nobody writes through the Linear MCP connector, which acts as Daniel.  None
+projects and milestones, all through the app, so nobody writes through the Linear MCP connector, which acts as whoever connected it.  None
 of them sends a state. Stdlib only."""
 from __future__ import annotations
 
@@ -111,7 +111,7 @@ def first_line(body: str) -> str:
 
 
 def unsigned(text: str) -> str:
-    """`text` without its leading ring tags and the sender's signature (`@infra memory-accounting, 12:15Z, `)."""
+    """`text` without its leading ring tags and the sender's signature (`@HANDLE NAME, 12:15Z, `)."""
     text = text.lstrip()
     if m := RING_TAGS_RE.match(text):
         text = text[m.end():]
@@ -122,7 +122,7 @@ def unsigned(text: str) -> str:
 
 def title(body: str) -> str:
     """An issue's title from a Slack post's body: its first line without the leading ring tags and the sender's signature
-    (`@infra memory-accounting, 12:15Z, an ask…` is `An ask…`), capitalized and capped; the first line as it is when nothing
+    (`@HANDLE NAME, 12:15Z, an ask…` is `An ask…`), capitalized and capped; the first line as it is when nothing
     else is left."""
     line = next((s.strip() for s in unsigned(body).splitlines() if s.strip()), "")
     if not line:
@@ -185,7 +185,7 @@ def said(i: dict) -> str:
 
 
 def _says(r: dict) -> str:
-    """A relation as a sentence: `INF-1 blocks INF-2`."""
+    """A relation as a sentence: `TEAM-1 blocks TEAM-2`."""
     return f"{r['issue']['identifier']} {SAYS.get(r['type'], r['type'])} {r['relatedIssue']['identifier']}"
 
 
@@ -336,7 +336,7 @@ class Linear:
     def file(self, team: str, sender: str, body: str, parent: str | None = None, title: str | None = None,
              asker: str | None = None) -> dict:
         """The ask as an issue in `team`, from `sender`: {id, identifier, url, project, projectMilestone}. With `parent` (an
-        identifier such as CMP-92) it is that issue's sub-issue, on its project and milestone, so it lands on the board of the
+        identifier such as TEAM-92) it is that issue's sub-issue, on its project and milestone, so it lands on the board of the
         deliverable it serves; where Linear refuses the project (the team isn't in it), under the parent alone, said on stderr.
         `title` replaces the one derived from the body. `asker` names the person who asked for its outcome (`asker_label`)."""
         i = {"teamId": self.team(team)["id"], "title": title.strip() if title else _title(body), "description": body,
@@ -379,7 +379,7 @@ class Linear:
         return _pick(self.projects(), prefix, "active project")
 
     def place(self, issue: str, project: str, milestone: str | None = None) -> dict:
-        """Put the issue (an identifier such as CMP-92) in the active `project` (a prefix of its name), and with `milestone`
+        """Put the issue (an identifier such as TEAM-92) in the active `project` (a prefix of its name), and with `milestone`
         in that project's milestone whose name starts with it (`M3`, `F2`): {issue, project, milestone}."""
         p = self.project(project)
         i, m = {"projectId": p["id"]}, None
@@ -394,7 +394,7 @@ class Linear:
              parent: str | None = None, send: bool = True) -> dict:
         """Change the issue's title, due date (YYYY-MM-DD, or `none` to clear it), description (replaced whole, as markdown) or
         parent (an identifier), at least one, through these credentials rather than a person's (the MCP connector acts as
-        Daniel): the IssueUpdateInput it sends, which `send=False` only builds."""
+        whoever connected it): the IssueUpdateInput it sends, which `send=False` only builds."""
         i = _input(title=("--title", title), dueDate=("--due", due), description=("--file", description))
         if parent is not None:
             i["parentId"] = self.issue_id(parent) if send else parent
@@ -669,7 +669,7 @@ class Linear:
         self._quiet(issue_id)
 
     def move(self, issue_id: str, state: str) -> str:
-        """Move the issue (its id, or an identifier such as `INF-12`) to its team's state named `state` (any case), else to the
+        """Move the issue (its id, or an identifier such as `TEAM-12`) to its team's state named `state` (any case), else to the
         team's first state of that type (`completed`, `canceled`); that state's name. By name, `In Progress` is never the
         `started` state that happens to come first (In Review)."""
         issue = self.gql("query($id: String!) { issue(id: $id) { id team { states { nodes { id name type } } } } }",
@@ -693,7 +693,7 @@ class Linear:
             raise
 
     def issue_id(self, issue: str) -> str:
-        """The id of the issue an identifier such as `INF-12` names; `NoIssue` when Linear has none."""
+        """The id of the issue a team key and number identify; `NoIssue` when Linear has none."""
         return self._issue(issue, "id")["id"]
 
     def issue_labels(self, issue: str) -> list[str]:
