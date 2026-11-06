@@ -2013,12 +2013,15 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
                         and (not ns.asker or a["asker"] == ns.asker.strip().lower())]
                 print(json.dumps(rows, indent=2) if ns.json else render_asks(rows, now))
                 return 0
-            found = [] if teams and not readable else lin.audit(linear.owners(reg), readable or None, now)
+            from .queue import landing_waiter
+            found = [] if teams and not readable else lin.audit(linear.owners(reg), readable or None, now, waiting=landing_waiter())
+            landing = lin.landing
             if ns.lane:
                 found = [f for f in found if f["lane"] == ns.lane.lstrip("@")]
+                landing = [x for x in landing if x["lane"] == ns.lane.lstrip("@")]
             counts = linear.tally(found)
-            print(json.dumps({"findings": found, "counts": counts, "unread": unread}, indent=2) if ns.json
-                  else render_audit(found, counts))
+            print(json.dumps({"findings": found, "counts": counts, "unread": unread, "landing": landing}, indent=2) if ns.json
+                  else render_audit(found, counts) + render_landing(landing))
             return 1 if found else 0
         if ns.verb == "update":
             print(lin.update(need(" ".join(filter(None, [ns.target, *ns.value])), "the PROJECT (a prefix of its name)"),
@@ -2922,6 +2925,15 @@ VOLUME_THREADS = 10                                              # the busiest t
 POST_WORDS, ANNOUNCE_WORDS = 60, 150                             # the coordinating skill's lengths ("How long, and where")
 LENGTH_FIX = ("put the body in its Linear issue (`research msg linear comment ISSUE --file BODY.md --as ME`), or in a file, "
               "PR or note, and post a short line that links it")
+
+
+def render_landing(landing: list[dict]) -> str:
+    """The audit's line on issues that wait only on landing (`Linear.audit`'s `landing`), or nothing when there are none."""
+    if not landing:
+        return ""
+    late = [x["late_h"] for x in landing if x["late_h"] > 0]
+    return (f"\nwaiting on landing: {len(landing)} issue(s), not findings; ci and top see the total"
+            + (f" ({len(late)} past their date, the oldest by {max(late):.0f} h)" if late else ""))
 
 
 def check_length(reg: dict, ch: str, text: str, limit: int) -> None:
