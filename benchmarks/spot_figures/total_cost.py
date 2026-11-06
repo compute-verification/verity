@@ -6,9 +6,9 @@ that bounds it, skipped work.
 A configuration (`CONFIGURATIONS`) is what serving commits at serve time, the replay block that follows from it and the
 design the audit samples with.  Its serve tax, what that change to the production server costs on every token, is one
 number in the model's `serve_tax` card, priced (`priced_card`) or measured.  A line's x is its tax plus β, the share
-of the scope's compute the audit spends on replays, interior commitments and proofs of the drawn units, and its y the
-bound at β, every cost at the `proof_overhead` card's marginal overhead on Figure 1's model (`figure1.model`).  So each
-line starts at its own tax.
+of the scope's compute the audit spends on replays, interior commitments and proofs of the sampled proof blocks, and
+its y the bound at β, every cost at the `proof_overhead` card's marginal overhead on Figure 1's model
+(`figure1.model`).  So each line starts at its own tax.
 
 * `tokens` (A): serving commits the token ids, the schedule record and the KV cache at each window edge; a replay block
   is a request, and the design the width-stratified two-stage one.  Exfiltration is its capped sets' form
@@ -242,9 +242,9 @@ def captions(out: dict, scope: str) -> dict[str, str]:
         return f"serve tax {_share(t['tax'])} ({_share(t['low'])} to {_share(t['high'])}; {kind}: {parts})"
 
     head = ("x is the serve tax, what each configuration's change to the production server costs on every token, plus "
-            "β, the share of compute spent on replays and proofs of the drawn units; each line starts at its tax, "
-            f"hollow where the tax is priced. At the measured marginal proof overhead, {out['overhead']:.3g}×. Every "
-            "β has its own plan, the one with the least bound.")
+            "β, the share of compute spent on replays and proofs of the sampled proof blocks; each line starts at its "
+            f"tax, hollow where the tax is priced. At the measured marginal proof overhead, {out['overhead']:.3g}×. "
+            "Every β has its own plan, the one with the least bound.")
     a, b, c = CONFIGURATIONS["tokens"], CONFIGURATIONS["layer_of_token"], CONFIGURATIONS["every_block"]
     exfil = (f" {a.label}: serving commits {a.commits}, a replay block is {a.replay_block}, {priced('tokens')}; the "
              f"capped sets' form (card_influenceTwo_le_served_min) at most the {sc['served_bits']:.2g} bits the scope "
@@ -263,8 +263,8 @@ def captions(out: dict, scope: str) -> dict[str, str]:
              f"they sit. {c.label} (dashed): the K incorrect blocks the plan detects, each the widest block's bits. "
              "The two-stage write forms need a harm bound at the footprint, which no lemma states yet; one-stage's "
              "rests on audit_profile.")
-    work = (f" Only {c.label} bounds skipped work: serving commits {c.commits}, so a drawn block's inputs and outputs "
-            f"were fixed at serve time; {priced('every_block')}; the work target's plan.")
+    work = (f" Only {c.label} bounds skipped work: serving commits {c.commits}, so a sampled block's inputs and "
+            f"outputs were fixed at serve time; {priced('every_block')}; the work target's plan.")
     return {"exfiltration": head + exfil, "infiltration": head + infil, "skipped_work": head + work}
 
 
@@ -463,7 +463,7 @@ def main(argv=None) -> None:
     pc = sub.add_parser("priced-card", help="write the model's priced serve_tax card")
     pc.add_argument("--model", choices=spot_cards.MODELS, default=spot_cards.MODELS[0])
     pc.add_argument("--out", type=Path, required=True)
-    rd = sub.add_parser("render", help="draw Figure 1 from its JSON")
+    rd = sub.add_parser("render", help="plot Figure 1 from its JSON")
     rd.add_argument("json", type=Path)
     rd.add_argument("--scope", action="append", help="a scope's name, as the JSON's `scopes` has it; default all")
     rd.add_argument("--out", type=Path, help="default: the JSON's directory")

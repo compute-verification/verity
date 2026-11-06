@@ -40,11 +40,11 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   A `serve_tax` card gives each server configuration's serve tax, what its change to the production server costs on
   every token against its `baseline`, as one number with its range, `priced` or `measured`, a lower bound or not, and
   its parts. `total_cost.py priced-card` prices one from the model's cards; a measured value replaces a priced one
-  configuration by configuration, and the figure draws a priced tax hollow.
+  configuration by configuration, and the figure plots a priced tax hollow.
 - **Figure 1** (`total_cost.py`): what an adversary serving the model on all of a scope's compute over a monitoring
   period can exfiltrate or infiltrate while evading detection with probability above δ, against total cost as a share
-  of serving compute, the serve tax plus β (the share spent on replays, interior commitments and proofs of the drawn
-  units), at the `proof_overhead` card's marginal overhead; skipped work is a figure of its own.
+  of serving compute, the serve tax plus β (the share spent on replays, interior commitments and proofs of the sampled
+  proof blocks), at the `proof_overhead` card's marginal overhead; skipped work is a figure of its own.
   - One line per server configuration (`CONFIGURATIONS`), each starting at its own tax, hollow while the tax is
     priced, with its range as a bar: (A) tokens only (the token ids, the schedule record and the KV cache at window
     edges committed; a replay block is a request), (B) each layer's state (a replay block is one layer of one token),

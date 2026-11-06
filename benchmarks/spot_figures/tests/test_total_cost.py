@@ -100,7 +100,7 @@ def measured(tmp_path_factory) -> dict:
 @pytest.mark.slow
 def test_each_line_starts_at_its_own_tax(measured, tmp_path):
     """The planned scope: each line's x is its tax plus β, a measured tax as it comes; the exfiltration lines never
-    above the served bits, saying which term binds; both infiltration lines drawn; skipped work only for (C); the
+    above the served bits, saying which term binds; both infiltration lines plotted; skipped work only for (C); the
     captions name what each rests on; and it renders.  It plans every configuration at four shares, about 20 s, the
     only test of the series end to end."""
     out, scope = measured, "datacenter week"

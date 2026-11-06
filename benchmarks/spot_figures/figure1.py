@@ -65,7 +65,7 @@ from concurrent.futures import ProcessPoolExecutor
 from contextlib import nullcontext
 from dataclasses import dataclass, replace
 from itertools import repeat
-from math import ceil, inf, log, log2, sqrt
+from math import inf, log, sqrt
 from pathlib import Path
 
 import cards as spot_cards
