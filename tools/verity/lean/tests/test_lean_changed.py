@@ -586,6 +586,38 @@ def test_try_forgets_both_modules_an_import_clash_names_so_the_next_try_rebuilds
     assert other.exists() and not any("clash" in s for s in said), "any other error forgets nothing"
 
 
+def test_try_with_siblings_compiles_the_file_then_imports_it_beside_its_built_siblings(trying, tmp_path, monkeypatch):
+    tree, calls = trying
+    (tree / "Sec" / "Proofs" / "Flock").mkdir(parents=True)
+    (tree / "Sec" / "Proofs" / "lakefile.toml").write_text('name = "p"\nsrcDir = ".."\n\n[[lean_lib]]\nname = "Proofs"\n')
+    (tree / "Sec" / "Proofs" / "Flock" / "X.lean").write_text("module\n")
+    (tree / "Sec" / "Proofs" / "Y.lean").write_text("module\n")
+    olean = tree / "Sec" / "Proofs" / LC.SIBLINGS.LIB / "Proofs" / "Y.olean"
+    olean.parent.mkdir(parents=True)
+    olean.write_bytes(b"olean")
+    os.utime(olean, (2_000_000_000.0,) * 2)
+    ran = []
+
+    def run(argv, cwd):
+        ran.append(argv)
+        return 1, "error: import Proofs.Y failed, environment already contains 'f' from Proofs.Flock.X\n", 2.0, 700
+
+    monkeypatch.setattr(LC.SIBLINGS, "run", run)
+    said = []
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append, siblings=True) == 1
+    lean = calls["build"][1][4]
+    assert lean[:3] == ["env", "lean", "-R"] and lean[3].startswith(".lake/axiom-probe/siblings-") and lean[4] == "-o"
+    assert lean[5].endswith("/Proofs/Flock/X.olean") and lean[6] == f"{lean[3]}/Proofs/Flock/X.lean", \
+        "the probed copy, at its module's path under -R"
+    assert ran[0][1:4] == ["env", "lean", "--setup"]
+    assert any("siblings: Proofs.Flock.X and Proofs.Y both declare 'f'" in s for s in said), said
+    assert not list((tree / "Sec" / "Proofs" / LC.SIBLINGS.COPIES).iterdir()), "the scratch build is removed"
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=lambda _: None) == 0 and len(ran) == 1, \
+        "no check without --siblings"
+    with pytest.raises(SystemExit):
+        LC.main(["--records", "Sec", "--siblings"])
+
+
 def test_try_runs_no_lean_when_the_imports_fail_to_build(trying, tmp_path):
     _, calls = trying
     calls["deps_rc"] = 3
