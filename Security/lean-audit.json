@@ -16753,7 +16753,8 @@
     "Eq (Flock.Registered.dupName D.unroll) Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.Desc.parseStmt (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, the grandfathered premise `Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D` restated as `Flock.Desc.parseStmt … = .ok D` so V5 reads templated statements, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.ZeroKnowledgeHidden": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -23476,7 +23477,7 @@
    }
   },
   "Definitions.Core.Site": {
-   "digest": "b16a103be8beba45ccf02a7f5d53ac99b1a7192efb699293d4f9578ffb6033ce",
+   "digest": "8a30ce3d04a1feea5c7f6cc935d4416630781a01e5a5f9856869a62d4bf494be",
    "definitions": {
     "Verity.Registration": "19abeebc07b97795968bf46f58273cd0f421c08a96fa7f67c8af825c0732d9c1",
     "Verity.Registration.Builder": "330557dcf94849eb4e17a37f661f7dcf381868026d5c68952c525352731fbdad",
@@ -23486,11 +23487,13 @@
     "Verity.Registration.Composite.onsite": "3a7e6bf56f4c7e7efa3a155b116410f9fb147c0d4516e8a421d4cb3a7cc14656",
     "Verity.Registration.Composite.rec": "d51de7befd20e2119ca04658efc6fa59d92972919de3142c0dc5fda4474855e1",
     "Verity.Registration.Composite.remote": "90abf5816d63155166f790644bba00602853bdd5a59cdb49e6a91cbdc25392a0",
+    "Verity.Registration.Declared": "19ec364a529867d84086e19a86d2eb55146219369a71933ddddb1c4db9868d49",
     "Verity.Registration.Entry": "cf77aec916a338f85f7b9c3ac5858168d0d2d430f39e7d80ac70509511aa69ae",
-    "Verity.Registration.Entry.casesOn": "c1fcb2fa8ec1c51ea58f6144b0869ccd7e6816351346cae6e3f05471710ac390",
+    "Verity.Registration.Entry.casesOn": "ff6f8e6cf4c7dad0c3a08f31e6ce45170a8125ccf8cb2db93278d281a349d76a",
+    "Verity.Registration.Entry.declaration": "ba37f3a00672c5e04f349d9d47f5260e004dd98f1d5683e91ca18627700aa440",
     "Verity.Registration.Entry.information": "9028bdb4ec51ebb417f1fa5be855d880e60a787b00b6bb7429dbcc7860aa3b3f",
     "Verity.Registration.Entry.items": "7f51d1fe7e163233d2a8aeecfd251dccf0137527aa2ceca66f867936d4d0b7de",
-    "Verity.Registration.Entry.rec": "e7fecb709ae951659ad8320f95ee1aef4303661a1599c9e0f68bfadfe54095c7",
+    "Verity.Registration.Entry.rec": "6eae3570a3bc160f1a27a3840980e90dbcc967c3956ee329bba856c1d7ad8ad7",
     "Verity.Registration.Entry.site": "8deec6ad8d76cc90bf17eb90f2d707bc7f1409c1366a1d1900e3157e10b0a5c1",
     "Verity.Registration.Item": "d3d0837256154918a98cb2ea1d91c1e11cd0a08d95b965a3d79721d90352715b",
     "Verity.Registration.Item.builder": "1b9f60a01f96bf9b20aebcfe7dc84d3c6c4524a56e6f1ac9b4c8c58fbaf27fe7",
@@ -44010,7 +44013,7 @@
    }
   },
   "SampledProofs.OneStage": {
-   "digest": "db3c66a63257dec1b743a4c090bb68ab5f1b49a64d0716d63938d0d4e454362a",
+   "digest": "62e7b29c2ea8433a8ee453d630b2a33e2529485a0d0adccea87d84471e2b6200",
    "definitions": {
     "SampledProofs.OneStage.Commitment": "d744e6fb2fdff36157845bc9fb3224434ff1f62fc26396f87b4393a0af67c01b",
     "SampledProofs.OneStage.Commitment.digest": "8f1997edbf41ef170699331a03a0ea01ec0eeefb3a34a36d521c4eb1673c6f01",
@@ -44048,6 +44051,8 @@
     "SampledProofs.OneStage.evidenceParsed": "a449e63206bb91d6d937a037002e302dfd38d6ebe6433f7fcedf051f9cd3d644",
     "SampledProofs.OneStage.paramsOfJson": "eb0d1903ac9d06f34b776012524afbf4238ba55660dce074e9318674830827f9",
     "SampledProofs.OneStage.paramsParsed": "e7e5556c77f5d92f392f0246064b56f3eb4458d2b4300603c0e5e4bf958ac8b7",
+    "SampledProofs.OneStage.paramsParsed._sparseCasesOn_27": "f4cb8215966aadb754d74fbb78d538951ccfbbe7b81fd6cba97c97b9fb827ee0",
+    "SampledProofs.OneStage.paramsParsed._sparseCasesOn_30": "cea58cee393016ff902ef396de8e51f718b9587e686cfcb196801ec05ebda8d3",
     "SampledProofs.OneStage.publicJson": "c5221f841fa847941e11d42119a7f08d525f093721671f60d7473358e0c5b8a1",
     "SampledProofs.OneStage.recordChecks": "93e3a5def02fc91a7e8cb18ea34bedd5146aaa1e8d0848540abebb593a87bfe1",
     "SampledProofs.OneStage.rule": "3810df4edcc0f1b3a55f69639f978bc4cff5a60832c7771bcb03741e1d005a6a",
@@ -44239,7 +44244,7 @@
    }
   },
   "SampledProofs.Registration": {
-   "digest": "24bbb2351453d4076ae5ed5f986483086b1ca5ae36cc4e4107b71ed85ea0b1e6",
+   "digest": "f61c02bd0d5a9c15032133e2d2e6f269b51a80198415a2714c7003b04d798057",
    "definitions": {
     "SampledProofs.Registration.Earlier": "a6c800e33087ca1d2e8dcc062c157253cb817fa424a5b9d5500ae0d932b4b596",
     "SampledProofs.Registration.Earlier.casesOn": "dae9b507fab3f140482ee46e5ea4110baad1606f3425e5af88fd2735558cb111",
@@ -44259,9 +44264,10 @@
     "SampledProofs.Registration.PortIndex.last": "de2a14f9603723dea8445c129fa41e29a36cd68a1aa733f71cd90bd3ed2fca46",
     "SampledProofs.Registration.PortIndex.rec": "c4131932f4f587b839bd276463cfe59d99c185135b6c7d596dea9f16619bc328",
     "SampledProofs.Registration.ROOT_KEYS": "4e5afaadaadc032c975782e2e1259c22d8e9209b3e1f49007d10a1933693aa3e",
-    "SampledProofs.Registration.Verifier": "279df13d0cfebf46bfb684c27d5c994820faaea1fdd4c828a33a20cc7b000f97",
+    "SampledProofs.Registration.Verifier": "dd6ebabed7d4ee2315e004f2dc808d48d34b300f85c408942c443e19fc865b1a",
     "SampledProofs.Registration.Verifier.anchors": "235c4658e510c0218908aefc6c48048826677229d5effab6151229560e3159ed",
     "SampledProofs.Registration.Verifier.binding": "4cd5a3bb6a87fda41ee46f39619e6cefff9b110b29213cca4eb7e09c7b91504a",
+    "SampledProofs.Registration.Verifier.declared": "28e905ee4f744d0b2ad35e013c9e924ba42197c92dfd37062381b68f46c422f1",
     "SampledProofs.Registration.Verifier.held": "1a5aaf20a74597b0adf3fb892c46791eaed7efda4bd1828d85ecbf30bb38292a",
     "SampledProofs.Registration.Verifier.law": "e567c7f019ac9a3643e006d39f2e85f4057c1410bc76f62578db10f87af01c97",
     "SampledProofs.Registration.Verifier.leafLayer": "094e645bff9f602e4fb2c2cffdcbebb195eb1c478b671e2db7ab41b8c1ca764e",
@@ -44284,6 +44290,9 @@
     "SampledProofs.Registration.check": "e9556fdf4dad5d59d7e6d8b87c108117a77155a9f7f805ed8203a0dbde2cf96d",
     "SampledProofs.Registration.checkOutputs": "ff58800573ebcd71226b6691a5e692bbce20ab060b30fbad6025495ffeae1290",
     "SampledProofs.Registration.checkRegistered": "898179107ceddb7cfce3b617d29f8a96ce02a3202db2141759e7bd702bcf8de6",
+    "SampledProofs.Registration.declaredCode": "779ea7af4a21b0201645bf98d8d2cd598838dacb9471d14e10e2fb8650d78435",
+    "SampledProofs.Registration.declaredCode._sparseCasesOn_1": "f4002e986d24a8aea14e87770ab6bcd0289e45fb7f6b1a9a7d0ef86c08c3ec0e",
+    "SampledProofs.Registration.declaredOf": "d60f639ff93cd6b05167ca63901bc6b93cc3a7e45ce458546fe5ba4eaae5e776",
     "SampledProofs.Registration.earlierRoot": "eb9edbb84265eb1ed9791eeb64ca54543b3527403002ae9252e11f4eae0fed2f",
     "SampledProofs.Registration.fixedOf": "f27dde6217b6b4108fe15bed5b3d0254302c04e585d0bae1135c54ac46cb3dfc",
     "SampledProofs.Registration.heldRoots": "73e7eb418ea5c5331bb43618c42531c701ffc9d982d348371e4685200de2af94",
