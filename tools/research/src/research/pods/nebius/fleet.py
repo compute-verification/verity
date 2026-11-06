@@ -362,7 +362,9 @@ def daily(now: float, send: Callable[[list[str], str], str | None] | None = None
     rep = report(load_samples(now - 86400, now), 24)
     text = brief(rep, 24, now)
     posts = [(["--thread", STATUS_THREAD, "--kind", "fyi"], text), (["--to", "@top", "--kind", "fyi"], text)]
-    posts += [(["--to", f"@{lane}", "--kind", "fyi"], render_lane(rows, 24, now))
+    # posts go out as infra, and `research msg` refuses a message to the sender's own inbox: infra's machines go to its thread
+    posts += [(["--thread", STATUS_THREAD, "--kind", "fyi"] if lane == "infra" else ["--to", f"@{lane}", "--kind", "fyi"],
+               render_lane(rows, 24, now))
               for lane, rows in sorted(idle_by_lane(rep, registry()).items())]
     failed = [f"{' '.join(args[:2])}: {err}" for args, body in posts if (err := send(args, body))]
     if failed:

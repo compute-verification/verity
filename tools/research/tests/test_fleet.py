@@ -87,13 +87,13 @@ def test_the_daily_post_rings_each_owning_lane_with_only_its_own_idle_machines(t
     F.daily(now)
     assert [a for a, _ in sent[:2]] == [["--thread", F.STATUS_THREAD, "--kind", "fyi"], ["--to", "@top", "--kind", "fyi"]]
     rings = {a[1]: text for a, text in sent[2:]}
-    assert all(a[0] == "--to" and a[2:] == ["--kind", "fyi"] for a, _ in sent[2:])
-    assert sorted(rings) == ["@circuits", "@infra", "@kernels"]
+    assert all(a[0] == ("--thread" if a[1] == F.STATUS_THREAD else "--to") and a[2:] == ["--kind", "fyi"] for a, _ in sent[2:])
+    assert sorted(rings) == sorted(["@circuits", "@kernels", F.STATUS_THREAD]), "posts go out as infra, so its own ring is its thread"
     assert rings["@circuits"].startswith("Your machines sat idle 3.0 h ($93) in the 24 h to")
     assert "vy-glm53-eu 2.0 h of 2.0 h ($86)" in rings["@circuits"] and "vy-glm53-cpu-2 1.0 h of 1.0 h ($6)" in rings["@circuits"]
     assert "vy-nebius-1" not in rings["@circuits"] and "vy-dc-h200" not in rings["@circuits"]
     assert "plus machines with no rate registered" in rings["@kernels"] and "vy-dc-h200 0.5 h of 0.5 h ($?)" in rings["@kernels"]
-    assert "vy-nebius-1 1.0 h" in rings["@infra"] and "vy-unregistered 1.0 h" in rings["@infra"]
+    assert "vy-nebius-1 1.0 h" in rings[F.STATUS_THREAD] and "vy-unregistered 1.0 h" in rings[F.STATUS_THREAD]
     assert not any("@" in text for _, text in sent[2:]), "a body naming a handle past its start is refused by msg send"
     assert sent[0][1].startswith("Compute, the 24 h to") and "Idlest: vy-glm53-eu 2.0 h ($86), vy-nebius-1 1.0 h ($14)" in sent[0][1]
     assert all(len(text.split()) <= 60 for _, text in sent), "research msg refuses a post in #agent-coordination past 120 words"
@@ -114,7 +114,7 @@ def test_a_daily_post_that_fails_is_alerted_on_and_a_long_list_stays_short(tmp_p
 
     def send(args, text):
         sent.append((args, text))
-        return "exit 1: research msg: 397 words" if args[0] == "--thread" else None
+        return "exit 1: research msg: 397 words" if text.startswith("Compute,") and args[0] == "--thread" else None
     assert F.daily(t0 + 86400, send) == ["--thread 1791351683.780959: exit 1: research msg: 397 words"]
     assert all(len(text.split()) <= 60 for args, text in sent if args[0] != "--channel")
     assert "and 16 more" in sent[0][1] and "and 16 more" in sent[2][1]
