@@ -303,7 +303,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "prover can slow, a receipt it can backdate), or if the cost model charges that computation less than the run "
           "spent on it. The PoUW form is proved on the actual model's clock (Accounting.SecurityProofs.Actual."
           "honestClock); the Pearl-C form is not proved", "Honest clock", "standard"),
-    # the min-cut bound's cut conjectures (Security/Definitions/Nci/Assumptions/Cut.lean): (H) is
+    # the min-cut bound's cut conjectures (Security/Definitions/Assumptions.lean): (H) is
     # `Nci.Cut.Assumptions.Hardness`, (E) `Nci.Cut.Assumptions.Exports`
     Entry("training-cut-hardness", "assumption",
           "(H), cut hardness: every set S of words of the registered circuit with κ(S) ≤ k has "
@@ -544,7 +544,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "The loop runs on the developer's own host, whose operating system's random bytes are the uniform draws the "
           "tape models; the host is the developer's, not an auditor-trusted one, and that is the host to trust here, "
           "since zero knowledge protects the developer", "Firewall OS source", "standard"),
-    # the training formalism v2's assumptions (Security/Definitions/Nci/Assumptions/Formalism.lean): A1 is
+    # the training formalism v2's assumptions (Security/Definitions/Assumptions.lean): A1 is
     # `Nci.Formalism.Assumptions.CutCost`, the token-work bound `Nci.Formalism.Assumptions.TokenWork`, A2
     # `Nci.Formalism.Assumptions.EfficiencyFloor`
     Entry("training-cut-cost", "assumption",
