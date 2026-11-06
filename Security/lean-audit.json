@@ -2382,7 +2382,6 @@
   "Proofs.Flock.Bridge",
   "Proofs.Flock.ZeroKnowledgeHidden",
   "Proofs.Flock.Masked",
-  "Proofs.Pouw.PearlC.FlockTile",
   "Proofs.Accounting.JointBridge.Guarantees",
   "PouwWindow.Lanes",
   "PouwWindow.KnownRows",
@@ -3540,9 +3539,16 @@
    "sealed": true
   },
   "Definitions.Pouw": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Claims", "Definitions.Hash", "Definitions.Pouw"],
+   "imports": [
+    "Mathlib",
+    "Definitions.Core",
+    "Definitions.Claims",
+    "Definitions.Flock.Game",
+    "Definitions.Hash",
+    "Definitions.Pouw"
+   ],
    "except": ["Definitions.Pouw.PearlC.Defs"],
-   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof; relative security's per-prover break term reads the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ecrBound), the one break term the areas share; the lead's keyed commitments read the hash area's keyed leaf and hm96 leaf (Definitions.Hash.Keyed, Definitions.Hash.Hm96)"
+   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof; relative security's per-prover break term reads the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ecrBound), the one break term the areas share; the lead's keyed commitments read the hash area's keyed leaf and hm96 leaf (Definitions.Hash.Keyed, Definitions.Hash.Hm96); C-Flock's hidden audit carries C-Flock's games to core's (Pouw.PearlC.FlockTile.toVerity), so the protocol's definitions read C-Flock's games (Definitions.Flock.Game)"
   },
   "Definitions.Pouw.Basic": {
    "imports": ["Mathlib", "Definitions.Pouw.Basic"],
@@ -3793,7 +3799,6 @@
    "Proofs.Flock.EndToEndHidden": "C-Flock is excepted until its spec is extracted",
    "Proofs.Flock.EndToEndRegistered": "C-Flock is excepted until its spec is extracted",
    "Proofs.Flock.ZeroKnowledgeHidden": "C-Flock is excepted until its spec is extracted",
-   "Proofs.Pouw.PearlC.FlockTile": "the PoUW × C-Flock statement reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT); lean's Q3 ruling, 6 Oct",
    "Proofs.Flock.Claims": "the claims' witnesses read C-Flock's deployed records (FlockDeploy, the radius decoders, the readable relation) and the toy records a claim fails at, which are in Proofs; C-Flock is excepted until its spec is extracted",
    "Proofs.Flock.Claims.Deploy": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until its spec is extracted",
    "Proofs.Flock.Claims.DeployCode": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until its spec is extracted",
@@ -26910,6 +26915,12 @@
     "Pouw.Guarantees.PearlC.TTOutRowSeedOfTTOut": "c302df776cd74fb27fbc745c5dc3391fdb0ac49ee0072e298e51af4f87ff09c0"
    }
   },
+  "Definitions.Pouw.Guarantees.PearlCFlockTile": {
+   "digest": "465f5655deb1bcd97a1eeb02d07f26aa53a6a8db3b9f91d54e2dbbd0ee083284",
+   "definitions": {
+    "Pouw.Guarantees.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192": "e6e7094d949ae08c4d2d27d03cc844cdb92cab1a89752f6479547017446e67fb"
+   }
+  },
   "Definitions.Pouw.Guarantees.PearlCTileCheck": {
    "digest": "2ba4420d18b5d99c6d7e424f79800220826122eeca2a8004b06c603801622d1e",
    "definitions": {
@@ -27593,6 +27604,33 @@
     "Pouw.PearlC.pearlCTilesDevRev1": "e4cb0c810a1a6fed510a49e646b94247e317ea96e749c19c1334ea1d6a162ccb",
     "Pouw.PearlC.prefixCols": "3d2f6160477b8290eb7b68a17f646b7d44bf7a4e1c6054e25b4f1bebd5f96697",
     "Pouw.PearlC.wrefDevRev1": "82090ae714a525de44db217cfd62d293cf628d4e03e99c22b990179b706dd0ab"
+   }
+  },
+  "Definitions.Pouw.PearlC.FlockTile.Audit": {
+   "digest": "6e9e754d4baaf728ba7ce3359422cc1a760a7664c4f297201cbb055ef1801c12",
+   "definitions": {
+    "Pouw.PearlC.FlockTile.TileReadBinds": "a7b2e2e657e18ad621a78896024942ffb3fb63c9da3a8f017ba28d3a3fbd4a9c",
+    "Pouw.PearlC.FlockTile.TileReadSession": "596084b52f1b2adb8f1b71d395f6bded1958f764f9878fb9cef837ebcec57862",
+    "Pouw.PearlC.FlockTile.TileReadSession.Bad": "35f54adb51bc322577fa9e4a14e26cd330786a507f85771effb29ad8971d5f92",
+    "Pouw.PearlC.FlockTile.TileReadSession.Cls": "b0fc9130b6fe99db5d537dccb4c98e40c5c3139b8681e09fc7b3f812740e04bb",
+    "Pouw.PearlC.FlockTile.TileReadSession.Opening": "9f063602942fc6400184de0e0167bb4e98ab28803d95eacff8a3e01e7d737c88",
+    "Pouw.PearlC.FlockTile.TileReadSession.Out": "f6c706a62b67f10819dec6ed800a3cd5dae1b6f0f201e331de48d64cf8df05da",
+    "Pouw.PearlC.FlockTile.TileReadSession.Root": "ad2af8cf0e288fbdb057aa7af4c9079b0a684635c7db307f0ef1936d087d4bb9",
+    "Pouw.PearlC.FlockTile.TileReadSession.audit": "46c7662dddb9cc2a61fa356e393e0dfd3433b44c500618399121428b39be1f0f",
+    "Pouw.PearlC.FlockTile.TileReadSession.cls": "9b2dea0e11c7120be18407d8f48d6d4879e5331214a27088ee58f0ab5053ce87",
+    "Pouw.PearlC.FlockTile.TileReadSession.game": "d50a43581fc6132f85a5914bb978ed0b0f8ce1e60cf52ca61d9c53edabf2ba36",
+    "Pouw.PearlC.FlockTile.TileReadSession.proofGame": "4e1a13aa3d26c94437e074f0c159b930b089f977dcf88dbb062e5fac27895c2e",
+    "Pouw.PearlC.FlockTile.TileReadSession.root": "70a7514fe1bafa582fb699efd60b91d0da6ad6554d302f4475abb6b8a0f2d628",
+    "Pouw.PearlC.FlockTile.TileReadSession.stratOf": "cf7f5d27ad1b46977528379e2727e85ea2998c7e6b777d565408e4c94a03a840",
+    "Pouw.PearlC.FlockTile.TileReadSession.verdict": "df77b12a1559204c0313d434a44435376545abdc9ed4b4842ba05fe62c4e022c",
+    "Pouw.PearlC.FlockTile.TileReadSound": "1af3ce33570d3fe952d8f6efb3b91b5b9eb96a578c05cd2fec7a86e4dbbddbe9"
+   }
+  },
+  "Definitions.Pouw.PearlC.FlockTile.Bridge": {
+   "digest": "d0344d6b5e85d2b01ed9d4238a3d69fd7fc2b3381c5bdfce76500e3b32b891f1",
+   "definitions": {
+    "Pouw.PearlC.FlockTile.stratOfVerity": "6a391e9477ff29b36ae07e6ff1ce37296c0e9264b90cacd12583f6d996a815ab",
+    "Pouw.PearlC.FlockTile.toVerity": "197b76f7384bd0ef06f1c257c88b47368636089c37774cd5c355e2ee6dd7cd85"
    }
   },
   "Definitions.Pouw.PearlC.FormingPDefs": {
@@ -42651,39 +42689,6 @@
     "Pouw.SecurityProofs.OnsiteFreedWitness.twF": "4f9446506ba51369978548c44cf4a47c79723bf3425a8c80220d912da4ab1a29",
     "Pouw.SecurityProofs.OnsiteFreedWitness.twNet": "c61095c3a2c19598e0d67ea70ee2dab548dd605bb71c4e672af0d2eb74a663c5",
     "Pouw.SecurityProofs.OnsiteFreedWitness.twWork": "cbd1289061856f009326a2c6ca5cc940704b78e1b5ca0fea2b1e8d216ceebc47"
-   }
-  },
-  "Proofs.Pouw.PearlC.FlockTile.Audit": {
-   "digest": "114f9ba7e0d082b73b983e39aa2f594904da3b766fc439c5624addb45786e52d",
-   "definitions": {
-    "Pouw.PearlC.FlockTile.TileReadBinds": "0deaee2e5b057429bc78a5f71bee82ce3817e506749bdfef60857ca17d98c8fb",
-    "Pouw.PearlC.FlockTile.TileReadSession": "b8326724b2bace11f77830cae486996d8a8caf3d077b7927a4f9457fc4171724",
-    "Pouw.PearlC.FlockTile.TileReadSession.Bad": "5f5a5f715d0948735271829cb771960d092a1b967587188069ab7807713d848a",
-    "Pouw.PearlC.FlockTile.TileReadSession.Cls": "82f3dbc009428c57fdfdbc64ebb08d1d32b87e53f66b12c02457ed8c2b1ff05b",
-    "Pouw.PearlC.FlockTile.TileReadSession.Opening": "9f063602942fc6400184de0e0167bb4e98ab28803d95eacff8a3e01e7d737c88",
-    "Pouw.PearlC.FlockTile.TileReadSession.Out": "f6c706a62b67f10819dec6ed800a3cd5dae1b6f0f201e331de48d64cf8df05da",
-    "Pouw.PearlC.FlockTile.TileReadSession.Root": "ad2af8cf0e288fbdb057aa7af4c9079b0a684635c7db307f0ef1936d087d4bb9",
-    "Pouw.PearlC.FlockTile.TileReadSession.audit": "46c7662dddb9cc2a61fa356e393e0dfd3433b44c500618399121428b39be1f0f",
-    "Pouw.PearlC.FlockTile.TileReadSession.cls": "9b2dea0e11c7120be18407d8f48d6d4879e5331214a27088ee58f0ab5053ce87",
-    "Pouw.PearlC.FlockTile.TileReadSession.game": "181486bf3ef4f8988f585a5b7c828d7a0dfad01d83f1ea805c98867d6a67ad30",
-    "Pouw.PearlC.FlockTile.TileReadSession.proofGame": "4e1a13aa3d26c94437e074f0c159b930b089f977dcf88dbb062e5fac27895c2e",
-    "Pouw.PearlC.FlockTile.TileReadSession.root": "70a7514fe1bafa582fb699efd60b91d0da6ad6554d302f4475abb6b8a0f2d628",
-    "Pouw.PearlC.FlockTile.TileReadSession.stratOf": "c1237b4d36caf38282b5cf0db4e81f022c1eb9520d04b73596a2e822f0475df9",
-    "Pouw.PearlC.FlockTile.TileReadSession.verdict": "df77b12a1559204c0313d434a44435376545abdc9ed4b4842ba05fe62c4e022c",
-    "Pouw.PearlC.FlockTile.TileReadSound": "14415c7d065b4ef9f59bad5fa4baeeb20f227279a0ba2c484a28ec5e779da21c"
-   }
-  },
-  "Proofs.Pouw.PearlC.FlockTile.Bridge": {
-   "digest": "d930f03e563e23050dd4df95c322da5f8a0651875f1c4d525f1e0713f8f45c93",
-   "definitions": {
-    "Pouw.PearlC.FlockTile.stratOfVerity": "42f5b39a76c69553b9de2e137cff7ebefa752446b1fbbf1ed5b1cb0a46c0e904",
-    "Pouw.PearlC.FlockTile.toVerity": "67f63ddfe35a7494159adaa56a0da3db73bc7a0f14303e26ccfc55af7862c42e"
-   }
-  },
-  "Proofs.Pouw.PearlC.FlockTile.Statement": {
-   "digest": "465f5655deb1bcd97a1eeb02d07f26aa53a6a8db3b9f91d54e2dbbd0ee083284",
-   "definitions": {
-    "Pouw.Guarantees.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192": "e6e7094d949ae08c4d2d27d03cc844cdb92cab1a89752f6479547017446e67fb"
    }
   },
   "Proofs.Properties.NetworkCertifier.Bytes": {
