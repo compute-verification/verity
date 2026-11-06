@@ -10,7 +10,7 @@
 
 Two graph schemas.  `tasks/v1` (`verity tasks list --json`, `tools/verity/check/tasks.py`), which `executor = "shadow"`
 compares with the after-landing run, and graph/v2 (`verity graph`, `tools/verity/graph`), which `executor = "on"` verifies a tip
-by.
+by, beside a train.sh run of the steps drive still takes from one (`drive.SLIM_STEPS`).
 
 A graph's keys hash the lister's environment and its suite splits come from the lister's caches, so only a graph listed where
 the tasks run has the keys their verdicts come under: the executor lists a check enqueued with no graph on a worker, puts it
@@ -33,13 +33,14 @@ disagrees), changing nothing else (a shadow that fails, the store's or the trans
 `SHADOW_WAIT_S`, is recorded incomplete, and landing goes on); `research queue shadow-report`
 prints the newest of them and whether `SWITCH_STREAK` tips in a row agreed fully, the gate for `on`.
 
-`on` launches no run: it enqueues the tip's check with `--schema verity-graph/v2` and no graph, the executor lists graph/v2 on
-a worker, puts it in the store (`verity-graph/v2`) and labels `commit:<sha> verity_graph art:<id>` (`vocab.VERITY_GRAPH`), and
-each task's result/v1 document is a `result` label on `task:<key>` (`vocab.TASK_RESULT`; an error is never a result, so only
-pass and fail appear).  A graph/v2 task that reads none has its key in the graph; one that reads others has none there, and
-`settle` computes it by the contract's key rule (`task_key`, held to `tools/verity/graph/tests/key_vectors.json`) once each
-task it reads passed, from their results' `outputs`; it is blocked, never run, once one of them failed or is blocked.  Drive
-judges the results (`drive.Driver._follow_tasks`)."""
+`on` launches no run of every step: it enqueues the tip's check with `--schema verity-graph/v2` and no graph, the executor lists
+graph/v2 on a worker, puts it in the store (`verity-graph/v2`) and labels `commit:<sha> verity_graph art:<id>`
+(`vocab.VERITY_GRAPH`), and each task's result/v1 document is a `result` label on `task:<key>` (`vocab.TASK_RESULT`; an error is
+never a result, so only pass and fail appear).  A graph/v2 task that reads none has its key in the graph; one that reads others
+has none there, and `settle` computes it by the contract's key rule (`task_key`, held to
+`tools/verity/graph/tests/key_vectors.json`) once each task it reads passed, from their results' `outputs`; it is blocked, never
+run, once one of them failed or is blocked.  Drive judges the results (`drive.Driver._follow_tasks`) beside a train.sh run of
+`drive.SLIM_STEPS` alone (lean-agreement and ratchet-gate), whose verdicts on those steps are the only ones it counts."""
 from __future__ import annotations
 
 import hashlib

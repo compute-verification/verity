@@ -15,7 +15,7 @@ One connection serves one registration and then `--sessions` sessions over it, e
 3. each session: `Params` with the allowance A = `timing.deadline` at a high percentile of the calibration's passes
    and gaps and of the measured round trip (`--quantile`), `--jitter-ms`, and the lifetime cap L on an appended block
    (`--lifetime`, windows, by default those of `--window-ms` in 30 s, `audit.lifetime_windows`, sent with the
-   session so the prover re-keys in time); σ_0, then a boundary message every window, each coin sent as its value and
+   session so the prover re-keys in time); chal_0, then a boundary message every window, each coin sent as its value and
    the root it was opened after (`coins.Released`), each append answered with its coin (`Verifier.append`), each root
    fed to `AuditRun.receive` stamped with the time its last byte was read (with the releases its message carries first, and
    the withdrawn blocks among them, its plan as a change when it carries one, and the step its pass covers:
@@ -718,7 +718,7 @@ class Pair:
     they agree on; where they differ, the session is refused at the event's window as `disagreement` (in both
     verifiers), returned as that rejection, or raised as `audit.SessionError` where `audit.AuditRun` returns no verdict.
     Everything else is read from `s`. The Lean's session takes its coins live (`"coins": null`): each the challenger
-    releases goes with the event that released it, σ_t with its start or boundary, window t's openings coin with its
+    releases goes with the event that released it, chal_t with its start or boundary, window t's openings coin with its
     close and an append's coin with the append.
 
     The driver never waits on the Lean for an event the books take: it acts on the books' result and the Lean's

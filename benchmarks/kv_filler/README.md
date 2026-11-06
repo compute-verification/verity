@@ -8,10 +8,9 @@ under a bursty trace with it, `step_profile.py` profiles one decode step, and `f
 `plan.py` is the filler a pass of the bandwidth audit (PoUB, `verity/core/protocols/remote_bandwidth`) reads in the vLLM
 integration's store, `green.py` the SM partition, and `lag.py`, `analyze.py` and `eta.py` price the conversion lag and η.
 
-**Status: active.** `benchmarks/serve_bandwidth` imports it (its suite's inputs and `sys.path`), so do
-`benchmarks/stacked_share/share.py` and `benchmarks/vllm_encoded/bench_arm.py` (`green.py`, the top-up), and
-`benchmarks/harness` builds `topup.cu`. Decided by `rg kv_filler` over `verity/`, `benchmarks/`, `examples/`, `tests/`
-and `integrations/`.
+**Status: active.** `benchmarks/stacked_share/share.py` and `benchmarks/vllm_encoded/bench_arm.py` import it (`green.py`,
+the top-up), and `benchmarks/harness` builds `topup.cu`. Decided by `rg kv_filler` over `verity/`, `benchmarks/`,
+`examples/`, `tests/` and `integrations/`.
 
 **Run:** `uv run tools/verity/check/suites.py benchmarks/kv_filler` runs what needs no GPU: the fill's reference, the
 lag's replay, the filler plan, the analysis, and the serving and profiling scripts' pure parts. `run.sh` builds `topup.cu` and

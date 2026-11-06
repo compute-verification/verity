@@ -1,4 +1,4 @@
-//! The statement forms the soundness proof covers (verifier PROTOCOL.md §16.15): the Lean verifier's `Flock.ProvedScope.check`,
+//! The statement forms the soundness proof covers (`Flock.ProvedScope`): the Lean verifier's `Flock.ProvedScope.check`,
 //! its rules in its order and its refusals word for word. The Lean verifier refuses every session of a statement outside
 //! them, so a form no theorem covers is never accepted; the live server does the same ([`crate::StatementVerifier::refusal`]),
 //! so its verdicts are the Lean verifier's. The Lean verifier also refuses, last, a session at a statement other than

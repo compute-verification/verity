@@ -419,7 +419,7 @@ class Words:
         self._patterns: dict[tuple[tuple[int, ...], tuple[int, ...]], tuple[re.Pattern, list[str]]] = {}
 
     def excluded(self, path: str) -> bool:
-        return any(_match(path, g) for g in self.exclude)
+        return path == MOVES or any(_match(path, g) for g in self.exclude)
 
     def rules(self, path: str, text: str) -> tuple[re.Pattern, list[str]]:
         """The words for file `path`: those of each [[words_in]] whose files match it (whole words, first), then [words],
