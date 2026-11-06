@@ -38,7 +38,8 @@ Commit's instrumented run (`Lockstep`: each pass's engine step is the run's next
 the steps the Commit commits), its store's encode on the GPU by kv.cu (`KvDevice`).
 
 `benchmarks/remote_session` is not a package: `session_module` loads its ``prover.py`` from the source tree
-(`config.REMOTE_SESSION`). The verifier's side, the wire among it, is `verity.core.protocols.remote_bandwidth.session`.
+(`config.REMOTE_SESSION`), and `prove` takes the wire from it. The verifier's side, the wire among it, is
+`verity.core.protocols.remote_bandwidth.session`.
 """
 from __future__ import annotations
 
@@ -60,7 +61,6 @@ from typing import Any
 import numpy as np
 
 from verity.core.protocols.remote_bandwidth import audit, codec as rcodec, receipts as rb
-from verity.core.protocols.remote_bandwidth.session import wire
 from verity_vllm import config
 from verity_vllm.protocols.remote_bandwidth import memory_map as store_map
 from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory
@@ -515,6 +515,7 @@ def prove(backend: StoreBackend, verifier: str, plan: str = "serve", *, node: by
     the session end there."""
     host, port = address(verifier)
     prover = session_module("prover")
+    wire = prover.wire
     conn = wire.connect(host, port)
     try:
         p = prover.ProverSide(conn, backend, node, prover.parse_plan(plan), log=log, **kw)
