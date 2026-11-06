@@ -87,10 +87,10 @@ beyond = "supported"
 credible_bits = { value = inf, unit = "bit", source = "Nci.Cover.Cube.Wide: the accumulation entries' width, a property of the recipe's shapes", status = "derived" }
 
 [premise.baseline-registered]
-lean = "Nci.Assumptions.BaselineRegistered"
+lean = "Nci.Assumptions.ThetaRegistered"
 standing = "supported"
 beyond = "supported"
-credible_bits = { value = inf, unit = "bit", source = "Nci.Assumptions.BaselineRegistered: what registration enforces (no dark value in the declaration's baseline)", status = "derived" }
+credible_bits = { value = inf, unit = "bit", source = "Nci.Assumptions.ThetaRegistered: what registration enforces (no dark value in the declaration's θ)", status = "derived" }
 
 [premise.reference-layered]
 lean = "Nci.Assumptions.ReferenceLayered"

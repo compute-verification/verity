@@ -70,11 +70,12 @@ def test_the_example_port_agrees(server, fn, reference):
 
 def test_echo_holds_the_wire_format_to_python_s_canonical_json(server):
     """`echo` returns what `Json.parse` read, as `Flock.canon` writes it: strings with control characters and non-ASCII,
-    integers past 64 bits, nested objects with keys out of order."""
+    integers past 64 bits, nested objects with keys out of order. The canon is ASCII: every character past `~` (DEL,
+    é, U+2028) is written as a `u` escape, like a control character."""
     stats = D.run(port("echo", lambda v: v, JSON, need_rejects=False), examples=300, server=server)
     assert stats.outputs == 300
     assert D.replay(port("echo", lambda v: v), {"z": "é\n\x01\x7f\u2028", "a": [-(2**100), True, None]}, server) == (
-        "output", '{"a":[-1267650600228229401496703205376,true,null],"z":"é\\n\\u0001\x7f\u2028"}')
+        "output", '{"a":[-1267650600228229401496703205376,true,null],"z":"\\u00e9\\n\\u0001\\u007f\\u2028"}')
 
 
 def test_a_wrong_reference_is_caught_and_shrunk(server):

@@ -13,7 +13,7 @@ up).
 
 `QkSoftmaxRow` is `SoftmaxRow{N=T}` of the T scores ``x_j = GemmCoordinate_v3{K=D, DOT}(q, k_j)`` (`gemm.Gemm_v3` over the key
 rows; `gemm.GEMM_HOPPER` binds the H200's step). Its q row is 16·D bits and each key row as long, so at D = 64 every row it
-reads is over C-Flock's 111-byte floor, which a proof block of short rows alone (a softmax row at T <= 55) doesn't reach. A score
+reads is over Flock's 111-byte floor, which a proof block of short rows alone (a softmax row at T <= 55) doesn't reach. A score
 scale is folded into q's producer, as a power of two.
 
 `SoftmaxRow` is `SoftmaxRef_v1{N, bf16}`'s dataflow (`verity.ml.definitions.registry.ref_prims`) on the GPU's operations, so a kernel

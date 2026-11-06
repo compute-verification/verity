@@ -1,6 +1,8 @@
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Tactic.Linarith
-import Proofs.Nci.Cover.Paths
+module
+
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Tactic.Linarith
+public import Proofs.Nci.Cover.Paths
 
 /-!
 # The cover theorem: what a block pays for the products it finishes
@@ -17,6 +19,8 @@ gate `x ∉ computed I`, which reaches the output inside the product (`reachesIn
 `I` among the product's gates (`entry`): a non-input gate, so not in `θ`, and distinct across products since they are
 disjoint.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.SecurityProofs
 

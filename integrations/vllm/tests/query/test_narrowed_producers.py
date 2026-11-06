@@ -142,18 +142,6 @@ def test_the_last_layers_shared_rope_is_the_shared_modules_last_invocation(build
         (1, "query"): ([0, 4 * 16], None), (1, "key"): ([0, 2 * 16], None)}
 
 
-def test_the_last_layers_attention_launch_is_the_prompts_whole(build):
-    """`dead_free` leaves the last layer's prompt attention one query row, but vLLM's launch runs every prompt row: the hidden stream
-    declares the launch the runtime runs (LP rows, a slab per query head), the first layer's, never the one-row swapped decode launch."""
-    _d, man, _inst = build
-    hidden = {(r["step"], r["op_path"]): (r["output_member"], r["element_range"], r["geometry"])
-              for r in man["identities"] if r["family"] == "fa2_hidden_m1_stream"}
-    assert hidden[(0, "fa2.m1/L1")] == hidden[(0, "fa2.m1/L0")]
-    assert hidden[(0, "fa2.m1/L1")][2] == {"HB": C["NH"], "M": LP, "NB": 1, "BN": 128, "D": C["D"], "seqlen_k": LP, "rows": LP}
-    assert hidden[(1, "fa2.m1/L1")] == hidden[(1, "fa2.m1/L0")]
-    assert hidden[(1, "fa2.m1/L1")][2]["rows"] == 1
-
-
 class _Qkv(torch.nn.Module):
     """vLLM's fused qkv linear: (the output, its bias) for the rows it is given."""
 

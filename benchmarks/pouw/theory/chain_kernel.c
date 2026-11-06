@@ -1,4 +1,4 @@
-/* Runs of two across adjacent committed words when the words are absorbed different numbers of times (FOLD §9's
+/* Runs of two across adjacent committed words when the words are absorbed different numbers of times (the
    fractional round: word j once, word j+1 twice), at width n <= 6, by meeting in the middle over every word pair.
 
    Round(w) is receipt_folds_r9.xorin_step at width n with keys (a0, a1) and rotations (r1, r2). The chain is

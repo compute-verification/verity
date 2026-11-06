@@ -1,5 +1,7 @@
-import Definitions.Nci.Info
-import Mathlib.Analysis.SpecialFunctions.Pow.Real
+module
+
+public import Definitions.Nci.Info
+public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
 /-!
 # NCI over threads, reads counted by information: the named assumption
@@ -8,6 +10,8 @@ import Mathlib.Analysis.SpecialFunctions.Pow.Real
 number of distinct values they take, as `ActivationsSupport` does the chain's: wiring cannot make a read carry more than
 its values.
 -/
+
+@[expose] public section
 
 namespace Nci.Assumptions
 

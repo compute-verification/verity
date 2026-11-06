@@ -9,17 +9,17 @@
     "Gemm_v2{K=8192,N=4}": "scaled: 4 × Gemm_v2{K=8192,N=1}'s, r20261025-072834-bd85",
     "Gemm_v2{K=2048,N=1}": "r20261025-072834-bd85",
     "SiluMul_v2{I=8192}": "8,192 × SiluMulBf16_v4's 1,380 (circuits-bool-silu)",
+    "TokenSelectGroups_v1{C=2672,G=16}": "C-Flock's lowering (ir_lower) in r20261027-194654-01bb; k_log an estimate, not composed: its 169 rows' (rows_k), x cut 167",
+    "TokenSelectCombine_v2{V=128256,C=16}": "C-Flock's lowering (ir_lower) in r20261027-194654-01bb; k_log an estimate, not composed: its 98 rows' (rows_k), best and idx cut 48",
     "AttnHeadEnd_v1{D=64}": "#4263, r20261025-123346-091b",
     "AttnBlock_v5{D=64,NVIS=128,FIRST=false,BN=128,CHECK=false}": "#4263, r20261025-123346-091b",
     "AttnBlock_v5{D=64,NVIS=128,FIRST=false,BN=128,CHECK=true}": "CHECK=false's (#4263, r20261025-123346-091b), which circuits found it equal to",
-    "ScanSlots_v1{NS=9353,NP=1024,IDB=17,K0=12,K=45}": "wires (circuit-check --no-cache r20261027-045850-de6d); k_log an estimate, not composed: its 9 rows' (rows_k), the state row 149,648 bits",
+    "ScanSlots_v2{NS=9353,NP=1024,IDB=17,K0=12,K=45}": "30 ANDs a lane (bits.compile) at 4 lanes; k_log an estimate, not composed: its 17 rows' (rows_k), the state row 149,648 bits",
     "SlotEntry_v1{KO=64,IDB=17,NP=1024}": "C-Flock's lowering (ir_lower) in r20261027-045850-de6d, whose circuit-check --no-cache passed it (3,064 IR gates, past whole lowering's 256); k_log an estimate, not composed: its 3 rows' (rows_k)"
   },
   "families": {
     "AttnBlockFirst_v1": "#4263 (r20261025-123346-091b)",
-    "TokenFeed_v1": "circuit-check r20261025-174007-faec",
-    "SlotRow_v1": "circuit-check r20261026-172423-b1a4",
-    "SlotMask_v1": "circuit-check r20261026-172423-b1a4"
+    "TokenFeed_v1": "circuit-check r20261025-174007-faec"
   },
   "levers": {
     "P": "outputs in shared 1 KiB rows (CIR-113)"

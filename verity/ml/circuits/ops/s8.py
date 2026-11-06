@@ -4,7 +4,7 @@ is the same chain of exact s8 IMMA steps (`prims.BlackwellS8ImmaDot32_v1`, `prim
     S8Dot_v1{K, L, T0, C, DOT, A, B, TAIL, TDOT, NOISE, LIMBS, COMMIT}
         ([acc: Value<32>,] a, b: Array<K, Value<8>>[, ta, tb: Array<32 m, Value<8>>])
         -> Value<32>                                                   COMMIT "final" and no tail
-         | Record(T: Array<n, Value<32>>[, D: Array<g, Value<32>>])     otherwise
+         | RecordType(T: Array<n, Value<32>>[, D: Array<g, Value<32>>])     otherwise
     S8Matmul_v1{N, K, L, T0, C, DOT, A, B, TAIL, TDOT, NOISE, LIMBS, COMMIT}
         ([acc: Array<N, Value<32>>,] a: Array<K, Value<8>>, b: Array<N, Array<K, Value<8>>>
          [, ta: Array<32 m, Value<8>>, tb: Array<N, Array<32 m, Value<8>>>])
@@ -55,7 +55,7 @@ from verity.ml.circuits.census import FAMILY_COUNTS
 from verity.ml.circuits.defs import CompositeDefinition, bind, composite, primitive
 from verity.ml.circuits.refs import Coll, concat
 from verity.ml.circuits.silicon.integer import S32_MAX, S32_MIN, s32_value, s32_word
-from verity.ml.circuits.types import Array, Record, Type, Value
+from verity.ml.circuits.types import Array, RecordType, Type, Value
 
 from . import prims as P
 
@@ -183,7 +183,7 @@ def _signature(S: Any, acc_t: Type, op_t: Type) -> tuple[tuple[tuple[str, Type],
     if S.COMMIT == "final" and not n_d:
         return tuple(params), acc_t
     fields: list[tuple[str, Type]] = [("T", Array(n_t, acc_t))] + ([("D", Array(n_d, acc_t))] if n_d else [])
-    return tuple(params), Record(*fields)
+    return tuple(params), RecordType(*fields)
 
 
 def _dot_body(B: Any, S: Any, args: tuple, zero: Callable[[Any], Coll], acc_t: Type, op_t: Type) -> Coll:
@@ -205,7 +205,7 @@ def _dot_body(B: Any, S: Any, args: tuple, zero: Callable[[Any], Coll], acc_t: T
             d = B.call(S.TDOT, d, ta[32 * j:32 * j + 32], tb[32 * j:32 * j + 32])
             j += 1
         D.append(d)
-    if not isinstance(ret, Record):
+    if not isinstance(ret, RecordType):
         return T[0]
     return Coll(ret, concat([w.refs for w in T + D]))
 

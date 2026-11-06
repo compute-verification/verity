@@ -1,4 +1,4 @@
-"""HC-PROVED's arm-side runner (cmp-13, approach pouw/filler-proved) for an arm with a fused decode step at some points
+"""The proved-floor arms' runner for an arm with a fused decode step at some points
 (`fused(phase, B, L)`, fused_score.py) and a phase filler at others (`phase(phase, B, L)`, psched_score.py): `fscore
 fscore` where it runs a fused step, `pscore pscore` where it places a phase filler, the locked `dscore dscore`
 elsewhere. It changes nothing in the scorer or either runner. The build, the gates before anything is timed and the ncu

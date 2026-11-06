@@ -1,9 +1,11 @@
-import Definitions.Pouw.PearlC.Device
-import Definitions.Pouw.PearlC.DeviceKernelWref
-import Definitions.Pouw.PearlC.DevicePricesLoop
-import Definitions.Pouw.PearlC.Instance
-import Definitions.Pouw.Assumptions.PearlC.TTOutW1
-import Proofs.Pouw.PearlC.FlockTile.Audit
+module
+
+public import Definitions.Pouw.PearlC.Device
+public import Definitions.Pouw.PearlC.DeviceKernelWref
+public import Definitions.Pouw.PearlC.DevicePricesLoop
+public import Definitions.Pouw.PearlC.Instance
+public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
+public import Proofs.Pouw.PearlC.FlockTile.Audit
 
 /-!
 # Pearl-C's γ under C-Flock's hidden audit (trusted)
@@ -17,6 +19,8 @@ C-Flock's definitions, and the session's (`FlockTile.Audit`), are still in the p
 `Proofs.Pouw.PearlC.FlockTile.Audit`, as `Flock.Guarantees.EndToEndHidden`'s statement does C-Flock's; `Models.lean`,
 which the `security` package builds without `security_proofs`, does not import it.
 -/
+
+@[expose] public section
 
 namespace Pouw.Guarantees.PearlC
 

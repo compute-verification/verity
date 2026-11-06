@@ -1,9 +1,9 @@
-"""Lane L8: the registered f32 -> bf16 conversions of the library and the production configuration's binding.
+"""The registered f32 -> bf16 conversions of the library and the production configuration's binding.
 
 `F2fpBf16_v1` (NaN -> 0x7FFF, the measured `cvt.rn.bf16.f32` word) is the conversion B0/B1 bind; it is the same
 function as `veritor.core.tc.f32_to_bf16_hw_word` (`veritor.tc-ampere-bf16@2`).  `F32ToBf16Rn_v1` (NaN -> 0x7FC0)
 stays registered, byte for byte, as the software canonicalisation (`veritor.tc-ampere-bf16@1`); the production
-program never binds it, so the B0/B1 program digests are unchanged by L8.
+program never binds it, so it is in neither B0/B1 program digest.
 """
 
 from __future__ import annotations
@@ -26,10 +26,9 @@ from verity.ml.circuits.silicon.cast import f32_is_nan as is_nan_f32_word, f32_t
 REPO = Path(__file__).resolve().parents[2]
 MEASURED = sorted((REPO / "docs/data/tc-total-2026-09-07").glob("*/cvt_special.json"))
 
-#: `Serve_v1{C=B0,LP=32,STEPS=7}` (typed-b1.md §2): the digest before and after L8 (no bound definition changed). L8's
-#: record was written at `e47be70` (v0 codec, pre-DC builder); DC's builder fix B.1 + v1 codec (the defaults since the DC
-#: merge) give the same program the digest `2d483c89d14d215f…`, certified equivalent by `fixtures/verity-ir/descriptor-profile/
-#: correspondence-B0-LP32-STEPS7-v0-v1.json` (descriptor-codec.md §2/§4). The L8 record keeps the digest it was written under.
+#: `Serve_v1{C=B0,LP=32,STEPS=7}`: its digest under the v0 codec and the earlier builder, which the NaN record was written under (no
+#: bound definition changes it); the builder fix B.1 and the v1 codec (the defaults) give the same program the digest
+#: `2d483c89d14d215f…`, certified equivalent by the v0/v1 correspondence record. The NaN record keeps the digest it was written under.
 B0_DIGEST = "03405bbdc7ec2825abd79aad723a2c75a417e8b3084567f89cf3341e31a5ab2d"
 B0_DIGEST_V1 = "2d483c89d14d215f49305ab3db7b1dd6370bdecc4449f56ca36bd8c6ac4aae30"
 #: the same program after the re-baseline re-key: only the k16 step's id moved (AmpereBF16TcDot16_v1 -> core's _v2), so the descriptor is
@@ -99,8 +98,8 @@ def test_conformance_record_names_the_evidence():
 
 
 def test_scan_records_match_the_conformance_record():
-    """The two store scans (`docs/data/l8-nan-scan-2026-09-07/`) are what the record states."""
-    root = Path(__file__).resolve().parents[2] / "data" / "l8-nan-scan-2026-09-07"  # was docs/data/ in veritor
+    """The two store scans (`data/l8-nan-scan-2026-09-07/`) are what the record states."""
+    root = Path(__file__).resolve().parents[2] / "data" / "l8-nan-scan-2026-09-07"
     stated = CF.NAN_CANONICALISATION["recorded_traces_finite"]
     for config in ("B0", "B1"):
         scan = json.loads((root / f"{config}.json").read_text())

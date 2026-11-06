@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Files
-import Proofs.Flock.Claims.Complete.ZkTables.Table
-import Proofs.Flock.Claims.Complete.Zk.Exact
-import Proofs.Flock.Claims.Complete.Zk.Stops
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.Files
+public import Proofs.Flock.Claims.Complete.ZkTables.Table
+public import Proofs.Flock.Claims.Complete.Zk.Exact
+public import Proofs.Flock.Claims.Complete.Zk.Stops
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 
 /-!
 # A masked session that returns passed every refusal at its slot
@@ -23,6 +25,8 @@ session stops within `repStartZk q + n` (an earlier rep that stops ends by rep `
 `sessionPZk_rho_stop`, `sessionPZk_beta_stop` and `sessionPZk_rank_stop` give `n` at each refusal: right after the
 send whose reply it refused (`repPZk_rho_stop`, `repPZk_beta_stop`, `repPZk_rank_stop`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 

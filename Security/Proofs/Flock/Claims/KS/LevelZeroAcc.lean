@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.KS.LevelZero
-import Proofs.Flock.Claims.DeployCode
-import Proofs.Flock.Soundness.Discharge.Exec.Verdict
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+module
+
+public import Proofs.Flock.Claims.KS.LevelZero
+public import Proofs.Flock.Claims.DeployCode
+public import Proofs.Flock.Soundness.Discharge.Exec.Verdict
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 
 /-!
 # Level 0's request first, at flock-verify's acceptance
@@ -13,6 +15,8 @@ at the positions of the coins of the stream's round `plainQueryRound` (`rep_refi
 a run has one result, `plays_det`), where the proof opens one level-0 row per position (`merkleCheck_rows`), and every
 request has its level's lanes and path length in the model's schedule `schedOf sch` (`ReqOK`, `lvOf_schedOf`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 
@@ -31,7 +35,7 @@ played with its proof file's messages and its stream's coins, has level 0's requ
 coins of the stream's round `plainQueryRound` at the table's `m`, `kLog`, `k0` and claims, where the proof opens one
 level-0 row per position, and every request has its level's lanes and path length in the model's schedule. -/
 theorem accepts_req0 {I : Inputs} {t : Transcript} (h : Accepts I t) :
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupOf I t.record = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupOf I t.record = .ok (spec, sts) ∧
       Record.decode spec t.record = .ok sess ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
         ∀ (hwf : StmtWF sts[j]) (hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m) (r : ℕ), r < 2 →

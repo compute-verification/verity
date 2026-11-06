@@ -1,10 +1,12 @@
-import Proofs.Pouw.PearlC.DeviceRev1Gamma
-import Definitions.Pouw.PearlC.DevicePrices
-import Definitions.Pouw.Guarantees.PearlC
-import Proofs.Pouw.PearlC.TTOutW1
+module
+
+public import Proofs.Pouw.PearlC.DeviceRev1Gamma
+public import Definitions.Pouw.PearlC.DevicePrices
+public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.PearlC.TTOutW1
 
 /-!
-# The unpromoted record, the cap, and γ at sm_120's prices (the TT_OUT restatements lane's file)
+# The unpromoted record, the cap, and γ at sm_120's prices
 
 Staged; nothing pinned.
 * **The unpromoted domain is not empty:** `pearlCDomainDev_unpromoted` puts a `1 × 64 × 128` layout in `pearlCDomainDev d`
@@ -21,6 +23,8 @@ Staged; nothing pinned.
 
 `devSm120v1` and `devSm120v2` meet the hypotheses by `rfl` once the flags twin defines them.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

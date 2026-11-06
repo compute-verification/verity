@@ -1,18 +1,20 @@
-import Proofs.Flock.Claims.Recursion.VerdictAssembly
-import Proofs.Flock.Claims.Recursion.VerdictLoop
-import Proofs.Flock.Claims.Recursion.VerdictPieces
-import Proofs.Flock.Claims.Recursion.VerdictRun
-import Proofs.Flock.Claims.Recursion.RecRecord
-import Proofs.Flock.Claims.Recursion.FinOpen
-import Proofs.Flock.Claims.Recursion.LayoutBTops
-import Proofs.Flock.Claims.Recursion.DeployOuter
-import Proofs.Flock.Claims.Recursion.BindsDeployed
-import Proofs.Flock.Claims.KS.PlainR
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictAssembly
+public import Proofs.Flock.Claims.Recursion.VerdictLoop
+public import Proofs.Flock.Claims.Recursion.VerdictPieces
+public import Proofs.Flock.Claims.Recursion.VerdictRun
+public import Proofs.Flock.Claims.Recursion.RecRecord
+public import Proofs.Flock.Claims.Recursion.FinOpen
+public import Proofs.Flock.Claims.Recursion.LayoutBTops
+public import Proofs.Flock.Claims.Recursion.DeployOuter
+public import Proofs.Flock.Claims.Recursion.BindsDeployed
+public import Proofs.Flock.Claims.KS.PlainR
 
 /-!
 # `RecursiveKS`'s premise at `nextR`, from the verdict's rows
 
-The recursion sprint's top statement. `RecursiveKS` (#3638) takes one premise, that V\*'s parts decompose the inner
+The recursion's top statement. `RecursiveKS` takes one premise, that V\*'s parts decompose the inner
 verifier (`DecompB` at `PartAccepts`). At the deployed reader `nextR` that premise is `RecKSDecompR` below, and
 `recKSDecompR_of_targets` proves it from named targets, one per open obligation. Each target is a `def … : Prop` with a
 fixed statement: a row's owner proves `theorem … : Target…` against it, and the integration replaces the argument with
@@ -45,6 +47,8 @@ Its owner's lowering fact (`hlowP`) holds at every dense compiled statement, and
 at a dense inner statement.
 -/
 
+@[expose] public section
+
 namespace RecDeploy
 
 open Flock
@@ -67,7 +71,7 @@ namespace Top
 
 /-- **A dense inner statement**: the inner statement of a compiled statement read at the dense form. -/
 def DenseInner (x : Msg) : Prop :=
-  ∃ (xo : Msg) (sto : Claims.Recursion.Stmt), parse xo = some sto ∧ Claims.Recursion.Form.Dense sto.form ∧
+  ∃ (xo : Msg) (sto : Claims.Recursion.CompiledStatement), parse xo = some sto ∧ Claims.Recursion.Form.Dense sto.form ∧
     x = xIOf xo
 
 /-- **Where the rows are asked**: at a dense inner statement, where the last step reads, the four base checks hold and
@@ -325,7 +329,7 @@ abbrev acceptsR (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ →
   PartAccepts FlockDeploy.sha512 (recR rd b aux nOf hd rest fin wE final w) (deployZkRec _root_.Flock.Readable.relation)
     (layR fin) Claims.Recursion.Form.Dense (showsPart recRead { b with tr := recTr aux nOf hd rest }) (cmtTr recRead)
 
-/-- **`RecursiveKS`'s premise at the deployed reader**: `Flock.Assumptions.RecKSDecomp` (#3638) with `IVStar`'s last
+/-- **`RecursiveKS`'s premise at the deployed reader**: `Flock.Assumptions.RecKSDecomp` with `IVStar`'s last
 step `nextR rd` and its rows joined by `joinR`. At the brings whose transcript is the coin server's record, V\*'s bound
 layout and the deployed outer `--zk` record, wherever every part's circuit accepts at a dense compiled statement,
 `IVStar` accepts or two of the parts' recorded calls collide. -/
@@ -358,11 +362,11 @@ circuit accepting implies its share of the other checks (`hlowR`) and of the pie
 `RecKSDecompR` holds. -/
 theorem recKSDecompR_of_targets (h : Top.Targets rd rows holds acc) (ownB : Msg → VerdictR → Option ℕ)
     (ownQ : Msg → Top.Piece Q → Option ℕ)
-    (hR : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recR rd b aux nOf hd rest fin wE final w).parse x = some st →
+    (hR : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recR rd b aux nOf hd rest fin wE final w).parse x = some st →
       Claims.Recursion.Form.Dense st.form →
       ∀ r ∈ (splitR rd rows holds acc h).checks (Claims.Recursion.xI (recR rd b aux nOf hd rest fin wE final w) x),
         ∀ s, ownP ownB ownQ x r = some s → s < (recR rd b aux nOf hd rest fin wE final w).nS x)
-    (hrest : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recR rd b aux nOf hd rest fin wE final w).parse x = some st →
+    (hrest : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recR rd b aux nOf hd rest fin wE final w).parse x = some st →
       Claims.Recursion.Form.Dense st.form →
       ∀ q ∈ ivChecks (bdR rd wE final w)
           (deploySplit FlockDeploy.sha512 _root_.Flock.Readable.relation (nextR rd)

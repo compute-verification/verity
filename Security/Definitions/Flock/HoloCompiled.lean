@@ -1,16 +1,20 @@
-import Definitions.Flock.Holo
-import Definitions.Flock.Compiled
+module
+
+public import Definitions.Flock.Holo
+public import Definitions.Flock.Compiled
 
 /-!
 # The holographic table, compiled: caps, and the openings after the last coin
 
-`holoTable` as run (§13–§14), on the pattern of `tableCL`, in the order the live session records it: the level-0 cap,
+`holoTable` as run (`Flock.Ligerito`, `Flock.Merkle`), on the pattern of `tableCL`, in the order the live session records it: the level-0 cap,
 the link points, both reps with hidden units in any interleaving (`holoRepC`: `holoRep`'s PIOP, then compiled Ligerito),
 both reps' sparse phases and the registered opening (`regPhase`, with compiled Ligerito on R as rep `2`), and then one
 message of the openings with their salts. Every path verifies from its row's leaf under its salt (`OpensOKL`): the reps'
 level-0 paths against the session's cap, R's level-0 paths against the registered cap `capReg` (R's level 0, committed at
 registration, `HoloReg` in `Recursive/HoloExec.lean`), and each later level's against the cap its stream sends.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Model
 

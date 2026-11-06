@@ -1,14 +1,15 @@
-import Mathlib
+module
+
+public import Mathlib
 
 /-!
 # The compute dampener: the vocabulary
 
-The training-efficiency bound of `benchmarks/nci/tiers.py` ("Terms and symbols for the training-efficiency bound",
-Notion). A developer spends `C` FLOP on monitored hardware and `U` on unmonitored hardware, and must still compute the
-counted multiplications `M` of training (an updated weight times an activation or an activation gradient). Each stands
-for `2/κ` FLOP of an unconstrained run, `κ` being the share of training FLOP that are counted multiplications at 2 FLOP
-each, so the compute efficiency is `η = (2/κ) M / (C + U)` (`efficiency`). The dampener bounds it by
-`s + min(r, μ) + ν + χ` (`Nci.Guarantees.Dampener`), with:
+The training-efficiency bound of `benchmarks/nci/tiers.py`. A developer spends `C` FLOP on monitored hardware and `U` on
+unmonitored hardware, and must still compute the counted multiplications `M` of training (an updated weight times an
+activation or an activation gradient). Each stands for `2/κ` FLOP of an unconstrained run, `κ` being the share of
+training FLOP that are counted multiplications at 2 FLOP each, so the compute efficiency is `η = (2/κ) M / (C + U)`
+(`efficiency`). The dampener bounds it by `s + min(r, μ) + ν + χ` (`Nci.Guarantees.Dampener`), with:
 
 * `s = U/(C + U)`, the unmonitored compute share (`unmonitoredShare`);
 * `r = 1 − W_cert/C`, the monitored compute residual (`residualShare`);
@@ -18,6 +19,8 @@ each, so the compute efficiency is `η = (2/κ) M / (C + U)` (`efficiency`). The
 * `μ = 2 reuse · R α/(κ d b_w b_a)`, the memory cap at wipe state `R` (`memoryCap`);
 * `χ`, the cheating share.
 -/
+
+@[expose] public section
 
 namespace Nci.Dampener
 

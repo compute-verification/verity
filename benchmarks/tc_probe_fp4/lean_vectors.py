@@ -25,7 +25,7 @@ twin; for a NaN accumulator, which the pinned model refuses, the record-only wor
 refuses it (it reads a scale byte's low 7 bits, as sm_120 does, and refuses NaN accumulators).
 
 A fill chunk captures (``--out``: probe_results.json and dumps.npz, every tile's operands and both kernels' words); ``--collect
-DIR`` then derives every gate and word again from DIR's dumps on the CPU under a research run, checks them against the chunk's
+DIR`` then derives every gate and word again from DIR's dumps on the CPU in a recorded run, checks them against the chunk's
 record, the library (``--prebuilt``, its SASS with ``--sass-check``) and the vectors file, and publishes them.
 """
 from __future__ import annotations
@@ -238,7 +238,7 @@ def records(lists: dict, selected: list, words: dict, model) -> list[dict]:
 class FakeLow7:
     """CPU stand-in (``--fake-silicon low7``): the pinned model on every scale byte's low 7 bits (the decode measured on the device),
     NaN where it refuses; ``--fake-silicon verity`` is the pinned model as-is, which reads the same
-    low 7 bits.  With the launch switched off it returns the poison, as the library does.  Refused under a research run."""
+    low 7 bits.  With the launch switched off it returns the poison, as the library does.  Refused with ``RESEARCH_RUN_ID`` set."""
 
     def __init__(self, name: str):
         if name not in ("low7", "verity"):
@@ -321,7 +321,7 @@ def main(args) -> int:
     arch = args.arch or "sm_120a"
     collect_dir = Path(os.path.expandvars(args.collect)) if getattr(args, "collect", None) else None
     if args.fake_silicon and SHARED.RESEARCH_RUN_ID:
-        raise SystemExit("--fake-silicon is a dry run and never publishes: not under a research run")
+        raise SystemExit("--fake-silicon is a dry run and never publishes: unset RESEARCH_RUN_ID")
     if collect_dir is not None and args.fake_silicon:
         raise SystemExit("--collect reads a capture; it takes no --fake-silicon")
     if not args.vectors:

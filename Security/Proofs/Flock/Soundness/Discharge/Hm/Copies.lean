@@ -3,7 +3,11 @@
 each `cv`, `pad` and chain bit of a row there is exactly one: the rows' wires (`rowWires_eq`) go into distinct inputs,
 since port `p`'s compressions sit at the distinct places `at_p + k` (`rowSlots_eq`).
 -/
-import Proofs.Flock.Soundness.Discharge.Hm.Delta
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hm.Delta
+
+@[expose] public section
 
 open Flock FlockLevel3
 

@@ -1,7 +1,7 @@
-"""Negative and adversarial tests for the automatic importer (lane XFER, GUIDANCE §43.1; the derive
-mandate's "Test generality and failure behavior").
+"""Negative and adversarial tests for the automatic importer (the derive mandate's "Test generality and failure
+behavior").
 
-Contract under test (frontend design §4.3 / GUIDANCE §43.3): `derive(...)` returns a complete `Program` or
+Contract under test (frontend design §4.3): `derive(...)` returns a complete `Program` or
 `Unsupported(reason, node, module_path, hint)` (returned or raised) / a `FrontendError` code — never a partial
 program, never an opaque gate, never a specialisation on observed values. Every negative here asserts BOTH that
 no `Program` is returned AND that the refusal names the right class of reason. A refusal for the *wrong* reason

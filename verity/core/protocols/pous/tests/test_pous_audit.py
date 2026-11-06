@@ -8,6 +8,7 @@ import random
 
 import pytest
 
+from pous_fakes import Clock
 from verity.ml.commitments.rowleaf import sha512_row_v2_digest, sha512_row_v2_prefix
 from verity.core.protocols.pous import setup
 from verity.core.protocols.pous.audit import (DEADLINE_NS, HonestResponder, UnsignedRounds, challenge_key, deadline_rounds, run_timed,
@@ -111,14 +112,6 @@ def test_simulated_audit(world):
     assert not simulate(vk, Wrong(), PRIMS, key, k=3).accepted
 
 
-class FakeClock:
-    def __init__(self):
-        self.now = 0
-
-    def __call__(self):
-        return self.now
-
-
 def test_memory_challenger(world):
     _, _, enc, vk = world
     key = challenge_key(b"audit", vk)
@@ -127,7 +120,7 @@ def test_memory_challenger(world):
     assert run_timed(UnsignedRounds(vk, key, k=30, root_only=True, clock=itertools.count(0, 1000).__next__), responder.block, responder.path).accepted
 
     assert DEADLINE_NS == 500_000
-    clock = FakeClock()
+    clock = Clock()
     v = UnsignedRounds(vk, key, k=3, rtt_allowance_ns=40_000, clock=clock)
     assert v.limit_ns == 540_000
     i = v.challenge()

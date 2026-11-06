@@ -47,7 +47,7 @@ def test_two_bindings_of_one_required_identity_are_ambiguous_and_coverage_is_not
 
 
 def test_committed_store_no_longer_reads_the_first_binding_silently():
-    """rev's attack: honest bytes first, arbitrary bytes second under the same identity -- neither copy is read; the VU fails by name."""
+    """The attack: honest bytes first, arbitrary bytes second under the same identity -- neither copy is read; the VU fails by name."""
     honest = bytes(range(16))
     forged = bytes(16)
     stream = {0: honest, 64: forged}
@@ -60,7 +60,7 @@ def test_committed_store_no_longer_reads_the_first_binding_silently():
     st = CommittedStore(bm, committed)
     w, why = st.words("r0", 0, "model.norm", "out", 0, 8)
     assert w is None and why.startswith("ambiguous binding: 2 entries for (r0, step 0, model.norm/out) [invocation 0] cover [0, 8)")
-    assert "model.norm/out@0" in why and "model.norm/out#2@64" in why and "F-r16-08" in why
+    assert "model.norm/out@0" in why and "model.norm/out#2@64" in why and "one unambiguous binding per required identity" in why
     # the order of the entries does not matter (forged first): still refused, never 'first wins'
     bm2 = _bmap([_leaf("model.norm/out#2", lo=0, hi=8, stream_offset=64), _leaf("model.norm/out", lo=0, hi=8, stream_offset=0)])
     w, why = CommittedStore(bm2, committed).words("r0", 0, "model.norm", "out", 2, 6)
@@ -71,14 +71,14 @@ def test_committed_store_no_longer_reads_the_first_binding_silently():
 
 
 def test_fixed_coverage_refuses_an_ambiguous_binding():
-    """rev's strict xfail, flipped."""
+    """The former strict xfail, flipped."""
     bm = _bmap([_leaf("model.norm/out", lo=0, hi=8, stream_offset=0), _leaf("model.norm/out#2", lo=0, hi=8, stream_offset=64)])
     cov = coverage_check(_population(), bm)
     assert cov["ok"] is False and cov.get("unambiguous") is False
 
 
 def test_fixed_committed_store_names_the_ambiguity():
-    """rev's strict xfail, flipped."""
+    """The former strict xfail, flipped."""
     bm = _bmap([_leaf("model.norm/out", lo=0, hi=8, stream_offset=0), _leaf("model.norm/out#2", lo=0, hi=8, stream_offset=64)])
     st = CommittedStore(bm, lambda *_: bytes(16))
     w, why = st.words("r0", 0, "model.norm", "out", 0, 8)

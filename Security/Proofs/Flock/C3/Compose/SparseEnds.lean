@@ -1,6 +1,8 @@
-import Proofs.Flock.C3.Compose.PartRead
-import Proofs.Flock.C3.Reps.Tie
-import Proofs.Flock.C3.Sparse.SrcTie
+module
+
+public import Proofs.Flock.C3.Compose.PartRead
+public import Proofs.Flock.C3.Reps.Tie
+public import Proofs.Flock.C3.Sparse.SrcTie
 
 /-!
 # n10: the sparse phases' part ends in a coin, at a count the class fixes; R's ring switches are read at their rounds
@@ -16,6 +18,8 @@ the statement, the extra claims' number (two per region) and the reps' schedule 
 wires of their rounds' commit strings (`RsSk`, `RsIo`). The layers are good at an accepted outer proof, so each bit of
 w's element at a ring switch's slot is the layer's at one wire in both runs.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 

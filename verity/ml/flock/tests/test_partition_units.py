@@ -1,4 +1,4 @@
-"""C-Flock over an arbitrary partition (`verity_flock.partition_units`): every lowered unit class agrees with the reference
+"""Flock over an arbitrary partition (`verity_flock.partition_units`): every lowered unit class agrees with the reference
 evaluator on synthetic inputs lifted through its flat Definition, under `Q_word` on circuit-check's tiny Serve_v1 and under two
 deliberately odd owner functions on a RoPE Call; a class circuit run on another class's lanes disagrees."""
 from __future__ import annotations

@@ -1,14 +1,16 @@
-import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
-import Proofs.Flock.Claims.Recursion.CapOpens
-import Proofs.Flock.Claims.Recursion.SlotsCommit
-import Proofs.Flock.Claims.Recursion.DeployedR
-import Proofs.Flock.Soundness.Binding.Leaf
+module
+
+public import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
+public import Proofs.Flock.Claims.Recursion.CapOpens
+public import Proofs.Flock.Claims.Recursion.SlotsCommit
+public import Proofs.Flock.Claims.Recursion.DeployedR
+public import Proofs.Flock.Soundness.Binding.Leaf
 
 /-!
 # The cap's lowering at the deployed layout (U14b)
 
-A `rec-open` piece's registration tie (`OpenTie`) has two halves: the position bits the copy reads (LOWOPEN's
-`CopyBitsR`), and its climb's top, the first 64 bytes of its `out` row, which must be the side's cap entry at the
+A `rec-open` piece's registration tie (`OpenTie`) has two halves: the position bits the copy reads
+(`CopyBitsR`), and its climb's top, the first 64 bytes of its `out` row, which must be the side's cap entry at the
 opened position (`CopyTopR`). This file reduces the second half to two facts.
 
 * **The binding** (`OutBindR`): a level part's `out` slot at an opening and a RecCap part's `top` slot at the matching
@@ -22,8 +24,10 @@ opened position (`CopyTopR`). This file reduces the second half to two facts.
   a climb's top and `FitsRep.sizes`' cap entries are 64 bytes (`DecodeZL.ProofSizes.capEach`, `rcapsEach`). So the
   reader takes each cap row's node (`FlockDeploy.nodeOf`), as `topGroups` and `capR` do.
 
-`capTop_of` gives LOWOPEN's `CopyTopR` at `sideAtR rd` from the two, and `openTieR_deployed` its `OpenTieR`.
+`capTop_of` gives `CopyTopR` at `sideAtR rd` from the two, and `openTieR_deployed` its `OpenTieR`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.CapLower
 
@@ -318,7 +322,7 @@ theorem capTop_of (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin �
   exact (hO x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht r' ss' hr' hss' s' N' c' w'
     hs' hc' hw' hlt).trans hcap.symm
 
-/-- **The registration ties at the deployed layout at `sideAtR rd`**: LOWOPEN's `OpenTieR`, its cap half
+/-- **The registration ties at the deployed layout at `sideAtR rd`**: `OpenTieR`, its cap half
 (`CopyTopR`) from the binding and the reader (`capTop_of`). -/
 theorem openTieR_deployed (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
     (hP : ∀ x, D.parse x = parse x) (hD : ∀ f, shape f → Claims.Recursion.Form.Dense f)

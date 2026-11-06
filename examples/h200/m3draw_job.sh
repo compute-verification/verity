@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# m3draw.py on the H200 (PRF-172): PHASE=commit writes the salt secret (~/.local/state/m3draw-1de3, 0600, never under
+# m3draw.py on the H200: PHASE=commit writes the salt secret (~/.local/state/m3draw-1de3, 0600, never under
 # $OUT) and the roots; PHASE=open re-runs, checks the roots against inputs/roots.json, opens inputs/draw.json's units (their
 # values and salts, drawn.bin, beside the secret, never under $OUT) and checks them on CPU (m3check.py against
 # inputs/registration.json, the coin's session in inputs/coin.tgz, inputs/challenger-key.json and inputs/main.txt).
-#   research run --on vy-dc-h200-3 --project verity --source . --cwd source --timeout 5400 --env PHASE=commit \
+#   research run --on H200_NODE --project verity --source . --cwd source --timeout 5400 --env PHASE=commit \
 #     -- gpu-lease 1 --wait --mem-gb 0 -- bash examples/h200/m3draw_job.sh
 set -euo pipefail
 PHASE=${PHASE:?}
@@ -13,8 +13,8 @@ nvidia-smi --query-gpu=name,uuid,memory.total,memory.used --format=csv
 echo "nproc $(nproc)"; free -g | head -2
 for c in /usr/local/cuda /usr/local/cuda-13.0 /usr/local/cuda-12.8 /usr/local/cuda-12.9; do [ -x "$c/bin/nvcc" ] && export CUDA=$c && break; done
 echo "CUDA=${CUDA:-none}"; export PATH="${CUDA:-/usr/local/cuda}/bin:$PATH"
-CUBIN_ONLY=1 bash benchmarks/torch_gpu/attn_ref/build.sh "$OUT/attn_ship" 2>&1 | tail -3
-export ATTN_REF_CUBIN="$OUT/attn_ship/attn_ref.sm_90a.cubin"
+CUBIN_ONLY=1 bash benchmarks/torch_gpu/attn_bf16/build.sh "$OUT/attn_ship" 2>&1 | tail -3
+export ATTN_BF16_CUBIN="$OUT/attn_ship/attn_bf16.sm_90a.cubin"
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 git rev-parse HEAD
 FLAGS=(--shape h200 --seed demo --device cuda --batch 512 --steps 32 --prompt-bytes 8 --micro-batch 512 --workers "$(nproc)"

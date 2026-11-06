@@ -1,6 +1,9 @@
-import Flock.Hm96
-import PouwCommit.Frame
-import PouwCommit.Py
+module
+
+public import Flock.Hm96
+public import PouwCommit.Frame
+public import PouwCommit.Py
+public import Identity.Domains
 
 /-!
 # The epoch coins' check (`verity.core.protocols.pouw.coins`)
@@ -18,6 +21,8 @@ opening against the root, in Python's order and words; `none` when it is. It thr
 as `CoinCommitment.from_json` and `CoinOpening.from_json` read them, refusing what they refuse. Lean also refuses, where
 Python would compare it, an opening whose epoch is not a JSON integer or whose label is not a string.
 -/
+
+@[expose] public section
 
 namespace PouwCommit
 
@@ -93,5 +98,10 @@ def coinReason (c : CoinCommitment) (o : CoinOpening) (label : String) (after : 
     return some "coin does not open against the epoch's coin commitment"
   if o.after != after then return some "coin was not opened after what the verifier recorded"
   return none
+
+/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
+written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : SCHEME = Domains.POUW_EPOCH_COINS := rfl
+example : COIN_TAG = Domains.POUW_EPOCH_COIN.toUTF8.push 0 := rfl
 
 end PouwCommit

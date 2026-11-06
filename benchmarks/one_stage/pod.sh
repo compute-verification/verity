@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# One-stage audit, run A0, on a CPU pod (research run --on POD --source . --cwd clone --send m0.tar --send lean.tar
-# --send set.tar -- bash benchmarks/one_stage/pod.sh). The inputs are `git archive`s of M0's tree and the Lean
+# One-stage audit, run A0, on a CPU pod (a job run from a clone of the tree, with m0.tar, lean.tar and set.tar sent:
+# bash benchmarks/one_stage/pod.sh). The inputs are `git archive`s of M0's tree and the Lean
 # verifier's tree at pinned commits, and one captured input set. Builds M0's `flock-circuit` (CPU, M0's own
 # 60-circuit.sh MODE=build) and Lean's `flock-verify` (lake build, no dependencies) once per pod, then runs a0.py.
 # env: K=16 DELTA=0.01 BIND=1 (run A1's M0 half: the statement binds the partition, program and unit indices)

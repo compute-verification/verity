@@ -27,13 +27,18 @@ def _eval(sub: TM.Subcircuit, draws: list[TM.Draw]) -> dict[str, list[np.ndarray
     return sub.evaluate({p.name: [d.inputs[p.name] for d in draws] for p in sub.inputs}, [d.instance_statics for d in draws])
 
 
-def test_every_bound_subcircuit_id_is_the_spines():
-    from verity_numerical.bench import headline as H
+def _bound(mix: dict) -> str | None:
+    """The census subcircuit a workload mix entry binds: its template at exactly its parameters."""
+    return next((s.id for s in census.SUBCIRCUITS.values()
+                 if s.template == mix["subcircuit_template"] and vars(s.parameters) == (mix["subcircuit_parameters"] or {})), None)
 
+
+def test_every_bound_subcircuit_id_is_the_spines():
     for w in census.raw("workloads"):
-        for g in H.groups(w):
-            sub = TM.parse_subcircuit_id(g["subcircuit"])
-            assert (sub.id, sub.display) == (g["subcircuit"], census.SUBCIRCUITS[g["subcircuit"]].display)
+        for m in w["template_mix"]:
+            sid = _bound(m)
+            sub = TM.parse_subcircuit_id(sid)
+            assert (sub.id, sub.display) == (sid, census.SUBCIRCUITS[sid].display)
 
 
 def test_fa3_head_equals_its_definition():
@@ -183,10 +188,8 @@ def test_scale_words_are_pinned():
 def test_workloads_suite(tmp_path):
     suite = G.workload_suite((39, 57, 60, 67, 73, 74))
     sids = {TM.subcircuit(t, **p).id for t, p, _n in suite}
-    from verity_numerical.bench import headline as H
-
-    want = {g["subcircuit"] for w in census.raw("workloads") if (w.get("source") or {}).get("row") in (39, 57, 60, 67, 73, 74)
-            for g in H.groups(w)}
+    want = {_bound(m) for w in census.raw("workloads") if (w.get("source") or {}).get("row") in (39, 57, 60, 67, 73, 74)
+            for m in w["template_mix"]}
     assert sids == want and len(suite) == len(sids) == 45
     fa3 = next(p for t, p, _n in suite if p.get("semantics") == "sm90.fa3.bf16")
     rng = census.SUBCIRCUITS["attention-head/d128-bn128/sm90-fa3-bf16"].variable_ranges.T

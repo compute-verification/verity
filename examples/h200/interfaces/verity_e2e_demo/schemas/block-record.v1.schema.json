@@ -65,11 +65,14 @@
   },
   "composed": {
    "type": "object", "required": ["verdict", "legs", "missing", "elsewhere", "joint_horizon", "onsite"], "additionalProperties": false,
+   "dependentRequired": {"product": ["dropped"], "dropped": ["product"]},
    "properties": {
     "verdict": {"enum": ["accept", "reject", "pending"]},
     "legs": {"type": "object", "additionalProperties": {"$ref": "#/$defs/verdict"}},
     "missing": {"type": "array", "items": {"type": "string"}},
     "elsewhere": {"type": "array", "items": {"type": "string"}},
+    "product": {"enum": ["remote"]},
+    "dropped": {"type": "array", "items": {"type": "string"}},
     "onsite": {"oneOf": [{"type": "null"}, {"type": "object", "required": ["protocol", "verdict", "reason"]}]},
     "joint_horizon": {
      "type": "object", "required": ["statement", "terms", "error_sum", "outside_statement", "at"], "additionalProperties": false,

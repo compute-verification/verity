@@ -4,7 +4,7 @@ observation log must keep resolving to exactly its recorded pattern attribution 
     uv run verity-vllm golden --check [--out golden.json]          # CPU only, no GPU, every candidate commit
     uv run verity-vllm golden --record NAME --log LOG --profile MOD  # integrator only (protected path)
 
-Why: a lane that adds a Gemma pattern which accidentally also matches a Qwen operation, or loosens a matcher, changes how an
+Why: a change that adds a Gemma pattern which accidentally also matches a Qwen operation, or loosens a matcher, changes how an
 *old* capture resolves.  Re-folding the corpus catches that without a GPU: `attribution_sha` is the sha256 of the node-ordered
 sequence `(step, event, pattern, specialization)` of every instance plus the fold summary histogram, `digest` is the Program's
 canonical digest.  Additive specializations leave both unchanged; anything else is a regression that needs an explicit,

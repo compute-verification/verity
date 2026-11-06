@@ -1,11 +1,12 @@
-import Proofs.Pouw.Eps1.Basics
+module
+
+public import Proofs.Pouw.Eps1.Basics
 
 /-!
 # Theorem B in M3: a word-local program's instructions
 
-QSTAR's Theorem B (gap list E6, E7):
-a word-local program costs at least 4 instructions a word at the zero instance and at least 8 at a general (int8)
-instance.
+Theorem B: a word-local program costs at least 4 instructions a word at the zero instance and at least 8 at a general
+(int8) instance.
 
 Block `τ`'s live part `L` is its writer and the writer's ancestors inside the block. The writer's value is a function
 of `L`'s input slots and the previous segment's output (`out_determined`). On the fiber of `τ = (ℓ, i, j)`, where only
@@ -14,6 +15,8 @@ word is a function of the row's segment and a column-side one of the column. The
 general instance, the row's segment too), so at least 7 column-side slots and 1 row-side slot (8 and 8) feed `L`, and
 `block_outside_slots` caps `L`'s outside slots at `2|L| + 1`.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Eps1.WordLocal
 

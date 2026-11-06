@@ -1,4 +1,6 @@
-import Definitions.Pouw.Game.Defs
+module
+
+public import Definitions.Pouw.Game.Defs
 
 /-!
 # NCP's named assumption (trusted)
@@ -6,13 +8,15 @@ import Definitions.Pouw.Game.Defs
 A `Prop` taken as a hypothesis by the statements that use it, never an `axiom`.
 -/
 
+@[expose] public section
+
 namespace Pouw.NCP.Assumptions
 
 open Finset
 
 variable {Q R S : Type}
 
-/-- **Assumption TT_NCP(γ₀), tight stacked transcript** (red-team N2), for a cost model `CM`, a protocol `P` (the
+/-- **Assumption TT_NCP(γ₀), tight stacked transcript**, for a cost model `CM`, a protocol `P` (the
 named assumption is its instance at `CM = M_4090` and `P` an NCP instance with `IsLead`), a segment length `d` (the
 instance's `P.d`), a domain `D`, a target `γ₀` and an error `ε(q, N)`: TT (`Pouw.Assumptions.TT`) with every
 checked-correct unit credited `3·m·k·n`, the work of the stacked product.

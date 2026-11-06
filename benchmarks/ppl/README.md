@@ -42,7 +42,7 @@ Fixed in `methodology.py`; `run.py eval` refuses any other window list, context 
   The engine's bf16 layers are HF's `LlamaDecoderLayer` / `Qwen2DecoderLayer` with SDPA op for op, with HF's RoPE
   tables (computed on the CPU), and the `hf_reference` gate checks both bit for bit on every layer. TF32 is off.
 - **Batching.** The bf16 reference and calibration streams run 4 consecutive windows per forward. Arms run one window
-  per forward, since their coins are drawn per window.
+  per forward, since their coins are flipped per window.
 - **The report** (`report.py`), per (model, set, context): each arm's perplexity as the mean over its seeds with the
   seeds' range, its Δ% against bf16 and against its scope's plain int8 arm, and the significance rule's verdict.
 - **Plain int8**, for each scope: `int8-linears` (rotated, one scale per token and per output row, rounded to ±127),
@@ -115,7 +115,7 @@ what it is.
 `specs/` holds the three plain int8 arms, the adopted design (`adopted`) with its halves (`adopted-linears`,
 `adopted-attention`) and `adopted-no-smooth`, and the variants measured against them. A design in the design registry
 (`benchmarks/pouw/machine_model/data/designs/`) names its arm as `ppl`. `attention.int8`'s `softmax = "lut"` is the
-integer softmax of `benchmarks/pouw/edited_gemm/fattn.cu`, which `steps.lut_softmax` states. `dither_plot.py` draws
+integer softmax of `benchmarks/pouw/edited_gemm/fattn.cu`, which `steps.lut_softmax` states. `dither_plot.py` samples
 perplexity against the dither's size per side choice, and `frontier_plot.py` perplexity against core ε
 (`machine-model eps --checking full`) under each reading of the table route, each with its table. A SPEC is an arm's
 name in `specs/` or, with its suffix, any TOML file's path.
@@ -236,7 +236,7 @@ and each point's runs. The floor covers what moves a deterministic arm between h
   and with GPU-built tables it is the earlier harnesses' 9.15903.
 - Kernel shapes. A bf16 GEMM's rounding depends on its rows: the same model at 1 window per forward is 9.16174
   (+0.04%). The bench's arms run 1 window per forward; the earlier linears harness ran 4.
-- The coins. The earlier linears harness drew a linear's coins per batch of 4 windows, the bench per window, so seeded
+- The coins. The earlier linears harness sampled a linear's coins per batch of 4 windows, the bench per window, so seeded
   arms agree in distribution, not bit for bit.
 - The reference attention under a linears-only arm: the earlier attention harness's was eager (Llama) or FP32
   (Qwen2.5), marked.

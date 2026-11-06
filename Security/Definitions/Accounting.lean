@@ -1,62 +1,66 @@
-import Definitions.Accounting.Actual
-import Definitions.Accounting.Actual.WipeDraw
-import Definitions.Accounting.Actual.WipeHeld
-import Definitions.Accounting.Actual.WipePrf
-import Definitions.Accounting.Bandwidth
-import Definitions.Accounting.BandwidthAudit
-import Definitions.Accounting.BoundReceipt
-import Definitions.Accounting.BoundSketch
-import Definitions.Accounting.Bridge
-import Definitions.Accounting.Capacity
-import Definitions.Accounting.CoinFlow
-import Definitions.Accounting.Carrier
-import Definitions.Accounting.Compose
-import Definitions.Accounting.ComposePeriod
-import Definitions.Accounting.Confidence
-import Definitions.Accounting.CostModel
-import Definitions.Accounting.Device
-import Definitions.Accounting.Filler
-import Definitions.Accounting.HMu
-import Definitions.Accounting.Gates
-import Definitions.Accounting.Headline
-import Definitions.Accounting.HeadlineDc
-import Definitions.Accounting.Joint
-import Definitions.Accounting.JointBlocks
-import Definitions.Accounting.JointPeriod
-import Definitions.Accounting.JointBridge.CreditedWords
-import Definitions.Accounting.JointBridge.H200
-import Definitions.Accounting.JointBridge.SpaceOfPeriodHeld
-import Definitions.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod
-import Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted
-import Definitions.Accounting.JointLive
-import Definitions.Accounting.Memory
-import Definitions.Accounting.PerRun
-import Definitions.Accounting.Physical
-import Definitions.Accounting.Overhead
-import Definitions.Accounting.Pouw
-import Definitions.Accounting.PouwWork
-import Definitions.Accounting.RateAudit
-import Definitions.Accounting.RateAuditDeployed
-import Definitions.Accounting.RateAuditHorizon
-import Definitions.Accounting.RateAuditInteractive
-import Definitions.Accounting.RateAuditJoint
-import Definitions.Accounting.RateAuditPartial
-import Definitions.Accounting.RateAuditRemote
-import Definitions.Accounting.RateAuditSketch
-import Definitions.Accounting.RateAuditSketchDeployed
-import Definitions.Accounting.RateAuditSketchInteractive
-import Definitions.Accounting.RateAuditSketchLayout
-import Definitions.Accounting.Remote
-import Definitions.Accounting.Remote.Deployed
-import Definitions.Accounting.Requirement
-import Definitions.Accounting.Requirement.Placed
-import Definitions.Accounting.Responder
-import Definitions.Accounting.Schedule
-import Definitions.Accounting.Served
-import Definitions.Accounting.Tag
-import Definitions.Accounting.TS
-import Definitions.Accounting.TS.Fixed
-import Definitions.Accounting.Window
+module
+
+public import Definitions.Accounting.Actual
+public import Definitions.Accounting.Additive
+public import Definitions.Accounting.Actual.Sampler
+public import Definitions.Accounting.Bandwidth
+public import Definitions.Accounting.BandwidthAudit
+public import Definitions.Accounting.BoundReceipt
+public import Definitions.Accounting.BoundSketch
+public import Definitions.Accounting.Bridge
+public import Definitions.Accounting.Capacity
+public import Definitions.Accounting.CoinFlow
+public import Definitions.Accounting.Carrier
+public import Definitions.Accounting.Compose
+public import Definitions.Accounting.ComposePeriod
+public import Definitions.Accounting.Confidence
+public import Definitions.Accounting.CostModel
+public import Definitions.Accounting.Device
+public import Definitions.Accounting.Filler
+public import Definitions.Accounting.HMu
+public import Definitions.Accounting.Gates
+public import Definitions.Accounting.Headline
+public import Definitions.Accounting.HeadlineDc
+public import Definitions.Accounting.Joint
+public import Definitions.Accounting.JointBlocks
+public import Definitions.Accounting.JointPeriod
+public import Definitions.Accounting.JointBridge.CreditedWords
+public import Definitions.Accounting.JointBridge.H200
+public import Definitions.Accounting.JointBridge.SpaceOfPeriodHeld
+public import Definitions.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod
+public import Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted
+public import Definitions.Accounting.JointLive
+public import Definitions.Accounting.Memory
+public import Definitions.Accounting.PerRun
+public import Definitions.Accounting.Physical
+public import Definitions.Accounting.Slowdown
+public import Definitions.Accounting.Pouw
+public import Definitions.Accounting.PouwWork
+public import Definitions.Accounting.RateAudit
+public import Definitions.Accounting.RateAuditDeployed
+public import Definitions.Accounting.RateAuditHorizon
+public import Definitions.Accounting.RateAuditInteractive
+public import Definitions.Accounting.RateAuditJoint
+public import Definitions.Accounting.RateAuditPartial
+public import Definitions.Accounting.RateAuditRemote
+public import Definitions.Accounting.RateAuditSketch
+public import Definitions.Accounting.RateAuditSketchDeployed
+public import Definitions.Accounting.RateAuditSketchInteractive
+public import Definitions.Accounting.RateAuditSketchLayout
+public import Definitions.Accounting.Remote
+public import Definitions.Accounting.Remote.Deployed
+public import Definitions.Accounting.Requirement
+public import Definitions.Accounting.Requirement.Placed
+public import Definitions.Accounting.Responder
+public import Definitions.Accounting.Schedule
+public import Definitions.Accounting.Served
+public import Definitions.Accounting.ServingBlocks
+public import Definitions.Accounting.ServingBlocks.Instances
+public import Definitions.Accounting.Tag
+public import Definitions.Accounting.TS
+public import Definitions.Accounting.TS.Fixed
+public import Definitions.Accounting.Window
+public import Definitions.Accounting.Wipe
 
 /-! Resource accounting's vocabulary: the device model every resource audit is about, a joint audit's run on it, and
 how PoUW's game, the bandwidth audit's game and a state-bounded capacity game realize its compute, bandwidth and
@@ -76,5 +80,8 @@ run's guarantee per run is, PoUW's verdict, credits and help on one node of the 
 device memory whose post-seed contents are a circuit's values, seen through its inputs and encodes, a declared
 circuit's requirement: the values its schedule keeps live and reads, by block, and when the audit's store and plans are
 its, a pass's layout as the verifier's plan of a schedule of counted bits (`ScheduleDeterministic`), the run tree of
-a prover's wipes that the memory cap's lifetime pool is over, and the gate model the lower bounds on a declared
+a prover's wipes that the memory cap's lifetime pool is over, a device's period as runs of the machine model 𝓜
+that compute additivity is stated over, and the gate model the lower bounds on a declared
 circuit are proved over (`Gates`). -/
+
+@[expose] public section

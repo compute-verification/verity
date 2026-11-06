@@ -2,13 +2,11 @@
 
     verity-vllm conformance [--out record.json]
 
-One entry per registered definition (`Name_vN`): its status (`exact-model-tested` | `model-untested` |
-`not-yet-established` | `superseded`), the free-text qualification attached to the status, and — for the
-definitions with recorded production divergences or derived Inputs — a structured `qualifications` list. The
-Input-gate qualifications (the `cos_sin_cache` table, typed-b1.md §5.2) are recorded here too, so that no
-summary of the B1/B0 programs can be produced from this record without them.
-
-The record is what typed-b1.md §3 states in prose; the two must agree (`tests/program/test_conformance_record.py`).
+One entry per registered definition (`Name_vN`): its status, the label its conformance text starts with (one of
+`verity.ml.circuits.defs.CONFORMANCE`), the text itself, and — for the definitions with recorded production divergences
+or derived Inputs — a structured `qualifications` list. The Input-gate qualifications (the `cos_sin_cache` table) are
+recorded here too, so that no summary of the B1/B0 programs can be produced from this record without them
+(`tests/program/test_conformance_record.py`).
 """
 
 from __future__ import annotations
@@ -16,14 +14,9 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
+from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, conformance_label
 from verity_vllm.config import option
 from verity.ml.definitions.registry import b1, prims  # noqa: F401  (registration)
-
-STATUSES = ("exact-model-tested", "model-untested", "not-yet-established", "superseded",
-            # lane NUMERIC (additive): kinds of `ref_prims.py` whose semantics IS the evaluator's arithmetic (GUIDANCE §43.2 (B));
-            # "exact" against torch CPU only over the tested domain recorded in `docs/data/ref-prims/`.
-            "reference-defined")
 
 # Structured qualifications on Input gates: which committed leaves are *not* checkpoint tensors and what their
 # registered source is. Counts are the correspondence records' (`corr-*.json`, `input_gate_records.weights`).
@@ -35,7 +28,7 @@ INPUT_QUALIFICATIONS = [
      "statement": "the Input gates of this table are 'rebuilt from the registered source' only if that source is the CUDA computation"},
 ]
 
-# Recorded production divergences (typed-b1.md §5), keyed by definition id.
+# Recorded production divergences, keyed by definition id.
 DIVERGENCES = {
     "RMSNormFusedCuda_v1": [
         {"where": "B1 t=1/layers.27/post_attention_layernorm.rmsnorm/port=0, word 629 of 1536", "ir": "0x3f04", "captured": "0x3f03",
@@ -51,7 +44,7 @@ DIVERGENCES = {
     ],
 }
 
-# The f32 -> bf16 conversion the production programs bind and its NaN rule (lane L8). `F32ToBf16Rn_v1` (NaN -> 0x7FC0,
+# The f32 -> bf16 conversion the production programs bind and its NaN rule. `F32ToBf16Rn_v1` (NaN -> 0x7FC0,
 # the software canonicalisation and `veritor.tc-ampere-bf16@1`'s gate) stays registered and unchanged; B0/B1 bind `F2fpBf16_v1` (NaN -> 0x7FFF, the
 # measured `cvt.rn.bf16.f32` word; `veritor.tc-ampere-bf16@2`'s gate). The two are equal on every non-NaN word, so a
 # recorded trace without NaN words at conversion outputs is evidence about either binding.
@@ -59,7 +52,7 @@ NAN_CANONICALISATION = {
     "production_conversion": "F2fpBf16_v1",
     "nan_word": "0x7FFF",
     "nan_rule": "every FP32 NaN (either sign, quiet or signalling, any payload) -> 0x7FFF; sign and payload dropped",
-    "source": "measured: L6 docs/data/tc-total-2026-09-07/{a100,4090}/cvt_special.json -- 84 NaN inputs per device "
+    "source": "measured: docs/data/tc-total-2026-09-07/{a100,4090}/cvt_special.json -- 84 NaN inputs per device "
               "(12 +qNaN, 12 -qNaN, 34 +sNaN, 26 -sNaN), all 0x7FFF on both devices; not an assumption",
     "not_bound": {"F32ToBf16Rn_v1": "NaN -> 0x7FC0 (software canonical); registered, unchanged, not bound by B0/B1"},
     "interface_family": {"F2fpBf16_v1": "veritor.tc-ampere-bf16@2 f32_to_bf16", "F32ToBf16Rn_v1": "veritor.tc-ampere-bf16@1 f32_to_bf16"},
@@ -75,21 +68,13 @@ NAN_CANONICALISATION = {
 }
 
 
-def status_of(conformance: str) -> str:
-    head = conformance.split(";")[0].split(":")[0].strip()
-    for s in STATUSES:
-        if head.startswith(s):
-            return s
-    return "not-yet-established"
-
-
 def record() -> dict:
     defs = {}
     for fid, d in sorted(REGISTRY.defs.items()):
         if getattr(d, "family", None) == "Const":
             continue
         entry = {"kind": "primitive" if isinstance(d, PrimitiveDefinition) else "composite",
-                 "status": status_of(d.conformance), "conformance": d.conformance}
+                 "status": conformance_label(d.conformance, fid), "conformance": d.conformance}
         if isinstance(d, CompositeDefinition):
             entry["statics"] = list(d.statics)
         if fid in DIVERGENCES:

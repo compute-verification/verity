@@ -1,4 +1,4 @@
-"""Provenance records of an export (frontend rulings, §8.1 and §8.4).
+"""Provenance records of an export.
 
     Gate -> exactly one Value<w>.
     Composite interfaces -> ordered collections of value references.

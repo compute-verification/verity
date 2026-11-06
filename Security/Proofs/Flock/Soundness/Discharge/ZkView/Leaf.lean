@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkView.Statements
-import Proofs.Flock.Soundness.Discharge.Hm.Commit
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkView.Statements
+public import Proofs.Flock.Soundness.Discharge.Hm.Commit
 
 /-!
 # The executable's hm96-sha512 leaf splits, and the honest prover's leaves are the executable's
@@ -8,6 +10,8 @@ import Proofs.Flock.Soundness.Discharge.Hm.Commit
 `Hm.bitL_mask` gives as `⊕_{j < 1536} key_{t+j} · y_j`, the Hankel product `My y` at `t` over `ZMod 2`. The other half is
 `c(y)` itself.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkView
 

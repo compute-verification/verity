@@ -135,7 +135,7 @@ def boundary_linkage(bmap: dict[str, Any], committed: Callable[[int, str, int, i
                     unlinked.append({"request_id": rid, "engine_step": eos_step, "kind": "eos", "why": f"{over} but the EOS step {eos_step}'s sampled id is not committed: {ewhy}"})
                 elif eos_set is None:
                     unlinked.append({"request_id": rid, "engine_step": eos_step, "kind": "eos",
-                                     "why": f"{over} and the Program declares no stop rule (eos_token_ids): the early stop cannot be verified, fail closed (F-pm-24)"})
+                                     "why": f"{over} and the Program declares no stop rule (eos_token_ids): the early stop cannot be verified, fail closed"})
                 elif e["eos_id"] not in eos_set:
                     unlinked.append({"request_id": rid, "engine_step": eos_step, "kind": "eos",
                                      "why": f"{over} but its committed sampled id {e['eos_id']} at the EOS step {eos_step} (= last step {last} - lag {lag}) is not a declared EOS id {sorted(eos_set)[:8]}"})
@@ -183,7 +183,7 @@ def linkage_horizon(arrive: int, declared_cap: int, program_steps: int | None, e
     return list(range(int(arrive), int(arrive) + max(n, 0)))
 
 
-SEED_RULE = "committed runner.sampler/seed word == the DECLARED workload seed of the request (i64 exact) at every step with a committed sampled id (constant per request; stoch M-0446)"
+SEED_RULE = "committed runner.sampler/seed word == the DECLARED workload seed of the request (i64 exact) at every step with a committed sampled id (constant per request)"
 SPLITS_RULE = "committed runner.sampler/splits word at step s == SplitsFor_v1(#requests with a committed sampled id at s, num_SMs of record) (REQ-03 derived S)"
 
 
@@ -241,7 +241,7 @@ def prescribed_input_linkage(store: Any, workload_requests: list[dict[str, Any]]
                 seed_linked += 1
             else:
                 unlinked.append({"request_id": rid, "engine_step": s, "kind": "seed",
-                                 "why": f"committed runner.sampler/seed {got} != declared workload seed {declared} of {rid} at step {s} (prescribed input, ruling 36)"})
+                                 "why": f"committed runner.sampler/seed {got} != declared workload seed {declared} of {rid} at step {s} (prescribed input)"})
     seed_rec: dict[str, Any] = {"rule": SEED_RULE, "requests_declared": seeded, "checked": seed_checked, "linked": seed_linked}
     if seeded == 0:
         # 'not applicable' only when the record carries NO committed seed word: a stochastic run with no declared
@@ -297,6 +297,6 @@ def prescribed_input_linkage(store: Any, workload_requests: list[dict[str, Any]]
                     splits_rec["linked"] += 1
                 else:
                     unlinked.append({"request_id": rid, "engine_step": s, "kind": "splits",
-                                     "why": f"committed runner.sampler/splits {got} != SplitsFor_v1(live {len(rids)}, num_SMs {nsm}) = {want} for {rid} at step {s} (prescribed input, ruling 36)"})
+                                     "why": f"committed runner.sampler/splits {got} != SplitsFor_v1(live {len(rids)}, num_SMs {nsm}) = {want} for {rid} at step {s} (prescribed input)"})
         splits_rec["schedule"] = {str(s): v for s, v in list(sched.items())[:64]}
     return {"seed": seed_rec, "splits": splits_rec, "unlinked": unlinked}

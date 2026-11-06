@@ -1,5 +1,5 @@
 """`verity-vllm advice` commits the advice and publishes only its binding, never the advice, on run A's
-advice (`fixtures/advice_run_a`: r20261024-050219-71ab's step trace and Commit record, Qwen3-8B on one GPU): the root is the one
+advice (`fixtures/advice_run_a`: a recorded step trace and Commit record, Qwen3-8B on one GPU): the root is the one
 `advice_windows.commit_advice` and `verity.ml.commitments.advice` give for I1's encoding, the registration carries the root and the
 bit count and no byte of the advice, and one changed advice byte changes the root."""
 from __future__ import annotations
@@ -42,7 +42,7 @@ def test_the_root_is_the_advice_commitments_reference_on_run_a(run_a):
     assert I1.encode(I1.decode(data)) == data and I1.total_bits(I1.decode(data)) == RUN_A_BITS
     assert run_a["opening"]["advice"] == data.hex() and len(salts) == run_a["registration"]["rows"] == len(AW.advice_rows(data))
     assert root == AW.commit_advice(C, data, salts).root.hex()
-    ref = AC.register(AW.advice_rows(data), AW.ROW_BITS, AW.commitment_binding(C), salts)
+    ref = AC.commit(AW.advice_rows(data), AW.ROW_BITS, AW.commitment_binding(C), salts)
     assert root == ref.root.hex()
     for i in (0, len(salts) - 1):
         assert AC.verify(bytes.fromhex(root), len(salts), AW.ROW_BITS, AW.commitment_binding(C), ref.open(i))

@@ -8,7 +8,7 @@ sequences -- nothing is asserted by rule name, and no model or family name appea
 through `Ctx.call` is covered by the explicit fx node it passes; a rule that emits through the Builder directly is covered by the
 node the translation loop was at when the Builder grew (`Ctx.note_emitted`).
 
-What the frontend can NOT populate here (and where it would come from) is stated in the lane report, not guessed at: kernel
+What the frontend can NOT populate here (and where it would come from) is not guessed at: kernel
 launch identity / grid (the runtime observation), physical addresses (the acquisition), the peer rank's own Call ids (the peer
 Program's correspondence).
 """
@@ -22,7 +22,7 @@ from typing import Any
 import torch
 
 from verity.ml.circuits.refs import Affine, Coll, Concat, Strided, prefix_runs
-from verity.ml.circuits.types import Record
+from verity.ml.circuits.types import RecordType
 from verity_vllm.program.frontend.value_types import flat_types
 from verity_vllm.correspondence.runtime import NAMESPACE, SCHEMA
 
@@ -295,7 +295,7 @@ def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> di
     weights_index = len(params) - 1 if ctx.weights_coll is not None else None
     field_names: list[str] = []
     field_starts: list[int] = []
-    if weights_index is not None and isinstance(params[weights_index][1], Record):
+    if weights_index is not None and isinstance(params[weights_index][1], RecordType):
         off = 0
         for fname, ft in params[weights_index][1].fields:
             field_names.append(fname)

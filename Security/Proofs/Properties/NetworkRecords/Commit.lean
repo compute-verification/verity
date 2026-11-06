@@ -1,4 +1,6 @@
-import Proofs.Properties.NetworkRecords.Program
+module
+
+public import Proofs.Properties.NetworkRecords.Program
 
 /-!
 # A committed record's digest binds its frames
@@ -8,6 +10,8 @@ import Proofs.Properties.NetworkRecords.Program
 where SHA-256 has no collision on the strings the two digests hash, have the same frames row by row (`frames_eq`), and a
 committed record whose digest is the Program's grid's commits to it (`commitsTo`).
 -/
+
+@[expose] public section
 
 open NetworkCheck hiding Params
 open NetworkCheck.Check (Params Grid)
@@ -51,7 +55,7 @@ theorem taggedInput_inj {tag : String} {a b : ByteArray} (h : taggedInput tag a 
   obtain ⟨-, e''⟩ := split_bytes e (by rw [be64_size, be64_size])
   exact bs_inj e''
 
-theorem header_def (l : String) (w : Nat) (g : Grid) : header l w g = Flock.canon (Lean.Json.mkObj [
+theorem header_def (l : String) (w : Nat) (g : Grid) : header l w g = Flock.canonUtf8 (Lean.Json.mkObj [
     ("link", .str l), ("window", Lean.toJson w), ("buckets", Lean.toJson g.buckets),
     ("allocation", Lean.toJson g.allocation), ("frame_bytes", Lean.toJson g.frameBytes),
     ("bucket_ms", Lean.toJson g.bucketMs), ("status", .str "complete")]) := rfl

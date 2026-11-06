@@ -115,6 +115,30 @@ class WindowCarry:
     rank: int = 0
 
 
+@dataclass(frozen=True)
+class Window:
+    """What one sampling block of the network certifier is charged: advice v1's residual for the block, each field's
+    values in the order its reader asks for them, as `code_v1` codes them. `arrived`, the replay's decisions; `hits`,
+    each sent hit in hit units; `resumes`, the resumed rows' positions; `order`, each entry a step's position and its
+    new requests' certified ingress indices; `lag`, async mode's bits. `reference_window` charges the residual v1
+    sends, which has no resumes and no lag bits and one index an order entry, in slots: `arrived` in (en, bits),
+    `hits` in (hen, short) and each entry (p, (r,)) in (oen, p, r). That residual is the spec's `Window` (`ds`,
+    `hits`, `order`)."""
+
+    arrived: tuple[bool, ...] = ()
+    hits: tuple[int, ...] = ()
+    resumes: tuple[int, ...] = ()
+    order: tuple[tuple[int, tuple[int, ...]], ...] = ()
+    lag: tuple[bool, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "arrived", tuple(bool(b) for b in self.arrived))
+        object.__setattr__(self, "hits", tuple(int(h) for h in self.hits))
+        object.__setattr__(self, "resumes", tuple(int(p) for p in self.resumes))
+        object.__setattr__(self, "order", tuple((int(s), tuple(int(i) for i in idx)) for s, idx in self.order))
+        object.__setattr__(self, "lag", tuple(bool(b) for b in self.lag))
+
+
 def _bins(N: int, H: int, O: int) -> list[tuple[str, int]]:
     """Each of `SYMBOLS` and the bins a window of N decisions, H hits and O order entries reaches."""
     return [("n_arrived", N.bit_length() + 1), ("n_hits", H.bit_length() + 1), ("hit", HW + 1), ("n_resumes", 1),
@@ -585,8 +609,8 @@ def size(kind: str = "charge", N: int = 1, H: int = 0, O: int = 0) -> dict[str, 
     return out
 
 
-__all__ = ["ChargeCount", "ChargeLink", "GAP_CAP", "HIT_CAP", "INDEX_CAP", "ROW_BITS", "SYMBOLS", "VALUE", "WindowBook",
-           "WindowCarry", "ZIG_CAP", "binned_symbols", "book_fields", "book_values", "build_link", "carry_of",
-           "charge_unit", "check_chain", "commit_window", "encode", "evaluate_links", "evaluate_windows",
+__all__ = ["ChargeCount", "ChargeLink", "GAP_CAP", "HIT_CAP", "INDEX_CAP", "ROW_BITS", "SYMBOLS", "VALUE", "Window",
+           "WindowBook", "WindowCarry", "ZIG_CAP", "binned_symbols", "book_fields", "book_values", "build_link",
+           "carry_of", "charge_unit", "check_chain", "commit_window", "encode", "evaluate_links", "evaluate_windows",
            "first_carry", "link_arguments", "link_unit", "reads", "reference_link", "reference_window", "session",
            "size", "start_opening", "window_arguments", "window_book", "zigzag"]

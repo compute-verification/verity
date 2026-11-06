@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.BatchSteps
+module
+
+public import Proofs.Flock.Claims.KS.BatchSteps
 
 /-!
 # A batch's schedule read position by position
@@ -18,6 +20,8 @@ read off the batch's by `projR` and `projL`, which leaves nothing to choose alon
   `Dead` reads one table, every position holds;
 * `paused_sess_spent`: once the slot is behind and rep 0 has ended, every strategy holds.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game.Lock
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Skeleton
-import Proofs.Flock.Soundness.Refine.Seam
+module
+
+public import Proofs.Flock.Claims.Complete.Skeleton
+public import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
 # The skeleton's goals discharged
@@ -11,6 +13,8 @@ The goals of `Goals` proved at every honest run, from the scope alone:
 * `tables_goal` (`Tables`, §3): one statement per table.
 * `schedules_goal` (`Schedules`): `fast100` has a schedule at the table's `m` (`fast100_isSome`).
 -/
+
+@[expose] public section
 
 open Flock FlockDeploy
 

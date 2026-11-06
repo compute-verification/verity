@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Binding.Rows
+module
+
+public import Proofs.Flock.Soundness.Binding.Rows
 
 /-!
 # `registered_weights`: the extracted rows are the registered weights, or a SHA-512 collision
@@ -11,6 +13,8 @@ collision. It is the value binding's `collide_spec`, applied through the registr
 for `hm96-sha512/row/v1` rows, from `HmRowComputes`, and `registered_weights_extracted` for the message the audit's
 extractor settles on.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Binding
 

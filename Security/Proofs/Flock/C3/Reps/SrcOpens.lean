@@ -1,7 +1,9 @@
-import Proofs.Flock.C3.Reps.Maps
-import Proofs.Flock.C3.Reps.OpensRead
-import Proofs.Flock.VBridge.Family.Opened
-import Proofs.Flock.VBridge.Renumber
+module
+
+public import Proofs.Flock.C3.Reps.Maps
+public import Proofs.Flock.C3.Reps.OpensRead
+public import Proofs.Flock.VBridge.Family.Opened
+public import Proofs.Flock.VBridge.Renumber
 
 /-!
 # The reps' openings at G's values, read from the layers' read wires
@@ -17,6 +19,8 @@ input columns its rows read, so at `W` every position the masked layer has them,
 * `RepMaps.OpenCols` (the hypothesis, `OpenKeys`' form): every `row` and `aux` column of each level's unit is an input
   column a row reads. `srcOpensOfLayers` and `opensReadAt` follow at any `b` whose openings are `ligOfRead`'s.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

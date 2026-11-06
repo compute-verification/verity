@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.PlainStep
-import Proofs.Flock.Claims.Recursion.LastSharedR
-import Proofs.Flock.Claims.Recursion.NextRFits
+module
+
+public import Proofs.Flock.Claims.KS.PlainStep
+public import Proofs.Flock.Claims.Recursion.LastSharedR
+public import Proofs.Flock.Claims.Recursion.NextRFits
 
 /-!
 # The plain simulator's round counts and rep schedules at a parsed record
@@ -11,6 +13,8 @@ coins. And every rep of an accepted record is set up (`SchedOf (repCtx …)`, `s
 verdict and the link points the checks pin to the first coin.
 -/
 
+@[expose] public section
+
 namespace FlockDeploy.KS
 
 open Flock Transcript
@@ -19,7 +23,7 @@ open Lean (Json)
 
 /-- **The verifier's decoder reads only rounds of `1` to `65536` coins** (S12) at a parsed record, at any `keep`. -/
 theorem decodeJWithK_n (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json}
-    {sess : Session} (h : Record.decodeJWithK keep hs spec j = .ok sess) :
+    {sess : RunRecord} (h : Record.decodeJWithK keep hs spec j = .ok sess) :
     ∀ x ∈ sess.streams.toList, ∀ rd ∈ x.rounds.toList, 1 ≤ rd.n ∧ rd.n ≤ 65536 := by
   unfold Record.decodeJWithK at h
   dsimp only at h

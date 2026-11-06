@@ -1,4 +1,4 @@
-"""period_cost: INT-PERIOD's windows and node-days come back, the served window's units are 32×32, n_min is the least
+"""period_cost: the windows and node-days come back, the served window's units are 32×32, n_min is the least
 n under 1%, the period only shortens with load, draws and nodes, and every lever names what it changes."""
 
 from __future__ import annotations
@@ -18,6 +18,17 @@ sys.modules["pouw_period_cost"] = PC
 spec.loader.exec_module(PC)
 
 LINE = PC.configurations()[0]
+#: the ε_♭ INT-PERIOD's figures (and ComposePeriod's, which quote them) are stated at
+INT_PERIOD_EPS_FLAT = 0.00571
+
+
+def test_eps_flat_is_the_machine_models_sheet_row():
+    """ε_♭ + ε_μ is the machine model's sm_120 sheet row less its luck, which rounds to INT-PERIOD's 0.571%."""
+    from verity_machine_model.headline import row
+    r = row("sm_120", "sheet")
+    assert (r.design, r.vector) == ("dither-c-peel-fx1", "DS-120")
+    assert PC.EPS_FLAT == r.skip + r.machine + r.mand and r.core == pytest.approx(PC.EPS_FLAT + r.luck, abs=1e-15)
+    assert round(PC.EPS_FLAT, 5) == INT_PERIOD_EPS_FLAT
 
 
 @pytest.mark.parametrize("change, n", [
@@ -25,7 +36,7 @@ LINE = PC.configurations()[0]
     (dict(u=1.0, draws=64), 842), (dict(u=1.0, draws=13), 3039), (dict(u=1.0, r=1.0), 1813),
 ])
 def test_int_periods_windows_come_back(change, n):
-    assert PC.windows(replace(PC.TODAY, **change)) == n
+    assert PC.windows(replace(PC.TODAY, eps_flat=INT_PERIOD_EPS_FLAT, **change)) == n
 
 
 @pytest.mark.parametrize("change", [dict(), dict(u=1.0), dict(r=1.0, draws=64), dict(rounds=72, u=PC.U_FULL)])
@@ -36,7 +47,7 @@ def test_n_min_is_the_least_n_under_one_percent(change):
 
 
 def test_int_periods_line_costs_its_node_days():
-    p = PC.period(LINE)
+    p = PC.period(replace(LINE, eps_flat=INT_PERIOD_EPS_FLAT))
     assert p["windows"] == 46604 and p["draws"] == 372832
     assert p["prove_process_days"] == pytest.approx(284.8, abs=0.05)
     assert p["lean_process_days"] == pytest.approx(1924.6, abs=0.05)
@@ -127,7 +138,7 @@ def test_one_long_window_is_the_least_rounds_under_one_percent_and_certifies_aft
 
 
 def test_a_prefix_is_credited_at_its_own_epsilon():
-    # RT4-INT-8: ε at the prefix is at least 1 up to j = 201 at today's gate credit
+    # ε at the prefix is at least 1 up to j = 201 at today's gate credit
     assert PC.first_credit(PC.TODAY) == 202
     assert PC.credit(201, PC.TODAY) == 0.0 < PC.credit(202, PC.TODAY)
     n = PC.windows(PC.TODAY)
@@ -157,6 +168,6 @@ def test_main_writes_the_report(tmp_path, capsys):
     assert {"rates", "configurations", "near_term", "levers", "draws_scan", "rounds_scan", "long_windows",
             "sensitivity"} <= set(rep)
     assert all(p["windows"] == 1 for p in rep["long_windows"])
-    assert rep["configurations"][0]["windows"] == 46604
-    assert rep["sensitivity"]["delta_s_log2"]["40"] == 4815
+    assert rep["configurations"][0]["windows"] == 46637
+    assert rep["sensitivity"]["delta_s_log2"]["40"] == 4818
     assert "| lever |" in md.read_text() == capsys.readouterr().out

@@ -1,10 +1,10 @@
-"""`records.declared_stop`: the workload Program's declared stop rule and LAG as GP-01 and GM-01's mock Program write them, refused
-by name when a field they all write is missing, and read by GM-01's chronology check (`check.match.chronology`, G6) to the same
-document as the parsed JSON.
+"""`records.declared_stop`: the workload Program's declared stop rule and LAG as `pipeline.global_program` and the global match's
+mock Program write them, refused by name when a field they all write is missing, and read by the global match's chronology check
+(`check.match.chronology`, G6) to the same document as the parsed JSON.
 
-`data/global_program.json` is a real record: GM-01's global Program of the regression row
+`data/global_program.json` is a real record: the global match's global Program of the regression workload
 `llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager` (`global_match_global_program.json`,
-`tests/regression/files.toml`, sha256 ec2f476bb5cf...), byte for byte.  The G6 runs are GM-01's toy
+`tests/regression/files.toml`, sha256 ec2f476bb5cf...), byte for byte.  The G6 runs are the global match's toy
 (`tests.check.test_global_match`), with the Program's two blocks rewritten to each writer's shape and to each way G6 reads them.
 """
 from __future__ import annotations
@@ -24,11 +24,11 @@ from verity_vllm.records.fields import MissingField, RecordError
 
 DATA = Path(__file__).parent / "data"
 REAL = DATA / "global_program.json"
-#: sha256 of GM-01's outcomes over `_corpus` (`json.dumps(..., sort_keys=True, default=str)`, the run directory replaced), computed
+#: sha256 of the global match's outcomes over `_corpus` (`json.dumps(..., sort_keys=True, default=str)`, the run directory replaced), computed
 #: with G6 on the parsed JSON before it read the record
-OUTCOMES_SHA256 = "726dacb66b10b350136c32c364a9523b7c4747526c8c7c40edeaca7b42910bf3"
+OUTCOMES_SHA256 = "1a920268eff23cacdd3b4b51bec598d9070633c029861bca65ebdbf202cfe75a"
 REQUIRED = ("stop_rule.eos_token_ids", "lag.value")
-#: GP-01's two blocks as `pipeline.global_program` writes them (the real record's, with the toy's EOS id and the LAG to declare)
+#: The global Program's two blocks as `pipeline.global_program` writes them (the real record's, with the toy's EOS id and the LAG to declare)
 GP01_SOURCE = {"generation_config.json": [T.EOS], "config.json": [T.EOS]}
 
 
@@ -119,7 +119,7 @@ def _outcome(gp: dict, oracle: str) -> dict:
 
 
 def _corpus(tmp_path: Path) -> dict[str, dict]:
-    """GM-01 over the Program's two blocks as each writer writes them and as each G6 leg reads them: served to the cap, an EOS stop
+    """The global match over the Program's two blocks as each writer writes them and as each G6 path reads them: served to the cap, an EOS stop
     under a synchronous Program, an EOS stop under a LAG-1 Program; declared, undeclared, disagreeing with the record."""
     out: dict[str, dict] = {}
 
@@ -168,7 +168,7 @@ _POP = object()
 
 
 def test_g6_reads_the_record_to_the_same_document(memory, tmp_path):
-    """Every outcome of GM-01 over `_corpus` (verdict, G6's check, the per-request account, the lag finding) is what it was when G6
+    """Every outcome of the global match over `_corpus` (verdict, G6's check, the per-request account, the lag finding) is what it was when G6
     read the parsed JSON."""
     got = _corpus(tmp_path)
     assert got["cap, as the mock writes it"]["verdict"] == "PASS" and got["cap, as GP-01 writes it"]["verdict"] == "PASS"

@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.CROnly.Truncate
+module
+
+public import Proofs.Flock.Soundness.CROnly.Truncate
 
 /-!
 # The link finders under `cr/sha-512`
@@ -15,6 +17,8 @@ that takes `LinkCR` holds with `t'` replaced by `strictRunCost t' q`.
 linear in `T` costs a factor `(2(1 + k))^{1/3}` against the best budget for the finder's own `T ≤ 2(1 + k)t'`, which
 would give `(3/2)·(2(1 + k)t')^{2/3}/2^{512/3}`; that form would need the link layer restated over a concave bound.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.CROnly
 

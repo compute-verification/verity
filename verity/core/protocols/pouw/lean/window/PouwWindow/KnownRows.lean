@@ -1,4 +1,6 @@
-import PouwWindow.Lanes
+module
+
+public import PouwWindow.Lanes
 
 /-!
 # A drawn H1 leaf's known rows
@@ -23,6 +25,8 @@ halves, then `roots[1]`'s).
 `Accounting.TS.Lanes.knownOf` (`Security/Proofs/Accounting/TS/Session/Lanes/KnownOf.lean`), the known content
 `Accounting.Guarantees.TS.LeafLanesSound` hands each session.
 -/
+
+@[expose] public section
 
 namespace PouwWindow.Lanes
 

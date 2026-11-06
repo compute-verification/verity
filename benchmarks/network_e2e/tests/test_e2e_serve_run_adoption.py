@@ -20,7 +20,7 @@ advice and only the disclosure (`stubs`, `_registered`) changed.
 The fix, which these cases now hold as regressions: every adopted arm's advice is held by
 content (`chain.held_to`): its root is the registered root, and the registration's opening opens it to the report's
 advice of the window (`chain.opens`), which the report's `ok` requires; the bit count never passes. `at_serve_time` is
-read off the registration's own time, before the arm's draw (its `advice_before_draw` receipt) and no later than the next
+read off the registration's own time, before the arm's sample (its `advice_before_draw` receipt) and no later than the next
 window's close in the endpoint's trace (`chain.closes`), never the job's flag.
 """
 from __future__ import annotations
@@ -119,7 +119,7 @@ def test_the_content_tie_is_opens_and_every_adopted_arm_takes_it(tmp_path):
 def test_at_serve_time_is_read_off_the_registration_never_the_job(tmp_path):
     """`--prove-path-registered`'s `at_serve_time` is no say: the same registration reads the same whatever the job
     claims, after serving when its time is after the next window's close in the endpoint's trace and at serve time when
-    it is before its draw (the arm's own receipt) and not after that close."""
+    it is before its sample (the arm's own receipt) and not after that close."""
     ep = tmp_path / "ep"
     shutil.copytree(EP, ep)
     info, b = _served(ep)

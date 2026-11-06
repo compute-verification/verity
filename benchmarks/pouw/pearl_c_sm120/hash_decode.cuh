@@ -1,5 +1,5 @@
 // Pearl-C -h3's per-call hashing at decode in fewer, shorter launches, writing the bytes Pearl-C's launches write
-// (hash_h3.cuh, hash_fast.cuh; every format is theirs, and every constant byte comes from their tables):
+// (hash_h3.cuh, hash_fast.cuh; every format is theirs and row_commit.cuh's, and every constant byte comes from their tables):
 //
 // * pd_commit, one launch for A's commitment: a CTA a row.  Its first warps hash the row's 1 KiB segments (a thread a
 //   segment, from hash_fast.cuh's header table) while two helper warps do what no data reaches: one the row's hm96 salt
@@ -36,8 +36,8 @@
 // templates, with PD_SM90_FORMS (below) warp 2 computes the fold's round inputs a chunk ahead of warp 0's rounds instead
 // (`pd_fold_sched`; with PD_ROUNDS, at most 32 blocks), so the fold's rounds start without waiting for every block's schedule.
 //
-// The builder (WMsg) writes `merkle._message`'s bytes as big-endian words, the data's 64-byte parts left zero and filled
-// later (wm_put64, at any byte offset).  hash_decode_host.cpp builds this file for the host tests.  pearl_c_sm120.cu
+// The builder (WMsg, a sink of verity/ml/kernels/row_commit.cuh's) writes `merkle._message`'s bytes as big-endian words, the
+// data's 64-byte parts left zero and filled later (wm_put64, at any byte offset).  hash_decode_host.cpp builds this file for the host tests.  pearl_c_sm120.cu
 // builds the served variants (its PD_VARIANT_LIST); run.py's Pipeline launches them at decode (`PD_SERVED`).  A build that
 // defines PD_PDL (pearl_c_sm90.cu) has pd_commit wait at its entry for the launch before it (so it may be launched
 // programmatically behind it), then let a programmatic next launch on its stream start, which waits at its entry for
@@ -74,7 +74,7 @@ constexpr int PD_ROUNDS = 1, PD_ROLLED = 2, PD_CALL = 4, PD_PREFETCH = 8, PD_PAI
 #define PD_VARIANT_LIST(X) X(19) X(211) X(307) X(339) X(467) X(819) X(851) X(979)
 #endif
 // A build that defines PD_SM90 (pearl_c_sm90.cu; the host tests build both) takes the forms cut for the H200's pd_commit,
-// which on sm_120 made pd_commit about 2.5% slower (kernels-pcsrv, r20261025-131827-fe67): rs_round's sums off e's chain;
+// which on sm_120 made pd_commit about 2.5% slower (kernels-pcsrv): rs_round's sums off e's chain;
 // in mode 1 with PD_LATE and PD_ROUNDS, the fold's round inputs on warp 2 (pd_fold_sched); and the row's seed chain from
 // shared copies of the labels and the unit block, with PD_LOOP its line hash at pd_seed's paired site, and on a whole warp
 // its line codes a lane a byte (pd_line_codes_warp).  The bytes are the same either way
@@ -89,46 +89,25 @@ enum { PD_SEED_A = 0, PD_NOISE_LINE = 1, PD_LINE = 2 };
 __device__ uint64_t PD_LABELS[3][8];   // the states after the seed-A, noise-line and line label blocks
 
 // ---------------------------------------------------------------- the message builder
+// The row commitment's sink (rc::put_*) over big-endian words, zeroed before: a byte is ORed into its word
 struct WMsg {
-  uint64_t* w;   // zeroed before
+  uint64_t* w;
   int n;
+  RC_HD void put(uint32_t v) {
+    w[n >> 3] |= (uint64_t)(v & 0xFF) << (56 - 8 * (n & 7));
+    n++;
+  }
+  RC_HD uint64_t word(int i) const { return w[i]; }
 };
-DEV void wm_byte(WMsg& m, uint32_t v) {
-  m.w[m.n >> 3] |= (uint64_t)(v & 0xFF) << (56 - 8 * (m.n & 7));
-  m.n++;
-}
-DEV void wm_be(WMsg& m, uint64_t v, int bytes) {
-  for (int i = bytes - 1; i >= 0; i--) wm_byte(m, (uint32_t)(v >> (8 * i)));
-}
-DEV void wm_uint(WMsg& m, uint64_t v) {   // `merkle._uint`, as sm_uint
-  const int bytes = v ? (71 - __clzll((long long)v)) / 8 : 1;
-  wm_be(m, (uint64_t)bytes, 8);
-  wm_be(m, v, bytes);
-}
 DEV int wm_slot64(WMsg& m) {   // a 64-byte part left zero: its offset
-  wm_be(m, 64, 8);
+  rc::put_be(m, 64, 8);
   const int at = m.n;
   m.n += 64;
   return at;
 }
-DEV void wm_frame(WMsg& m, const char* tag, int len, uint64_t dom) {   // as sm_frame
-  for (int i = 0; i < 33; i++) wm_byte(m, FRAME_V3[i]);
-  wm_be(m, (uint64_t)len, 4);
-  for (int i = 0; i < len; i++) wm_byte(m, (uint32_t)(uint8_t)tag[i]);
-  wm_be(m, 64, 8);
-  const uint32_t* q = reinterpret_cast<const uint32_t*>(dom);
-  for (int i = 0; i < 16; i++) {
-    const uint32_t x = q[i];
-    for (int j = 0; j < 4; j++) wm_byte(m, x >> (8 * j));
-  }
-}
-DEV int wm_finish(WMsg& m) {   // SHA-512's padding, as sm_hash: the message's blocks
-  const int total = m.n;
-  wm_byte(m, 0x80);
-  while ((m.n & 127) != 112) wm_byte(m, 0);
-  wm_be(m, 0, 8);
-  wm_be(m, 8ull * total, 8);
-  return m.n / 128;
+DEV void wm_frame(WMsg& m, const char* tag, uint64_t dom) {   // as sm_frame
+  rc::put_tag(m, tag);
+  rc::put_words(m, reinterpret_cast<const uint32_t*>(dom), 16);
 }
 // a 64-byte value (8 big-endian words: a SHA-512 state, or a digest's bytes) into zeroed bytes at byte offset AT, a
 // constant so the words stay in registers (the builders trap on any other offset)
@@ -477,54 +456,39 @@ DEV void pd_fold_sched(const uint64_t* dig, int s, int lane, uint64_t* kw) {
 // lane alone waits on 192 of them in turn), XORed across the warp (`pd_hm_mask`), then lane 0 c's state.  Out on lane 0:
 // the mask M·y (8 little-endian limbs) and c's state
 DEV void pd_hm_mask(uint64_t salt_key, uint64_t nonce, uint64_t i, uint64_t hm, uint32_t* ys, int lane, uint64_t* mk) {
-  const uint64_t* tables = reinterpret_cast<const uint64_t*>(hm + 128);
+  const rc::PosTab<false> tables{reinterpret_cast<const uint8_t*>(hm + 128)};
   if (lane < 3) {
     uint32_t key[8];
     load_key(salt_key, key);
     chacha20_block(key, 3 * i + lane, nonce, ys + 16 * lane);
   }
   __syncwarp();
-  uint64_t m[8];
+  uint32_t m[16];
 #pragma unroll
-  for (int k = 0; k < 8; k++) m[k] = 0;
+  for (int k = 0; k < 16; k++) m[k] = 0;
 #pragma unroll
   for (int u = 0; u < 6; u++) {
     const int j = lane + 32 * u;
-    const uint4* e = reinterpret_cast<const uint4*>(tables + ((size_t)j * 256 + ((ys[j >> 2] >> (8 * (j & 3))) & 0xFF)) * 8);
-#pragma unroll
-    for (int k = 0; k < 4; k++) {
-      const uint4 v = e[k];
-      m[2 * k] ^= (uint64_t)v.y << 32 | v.x;
-      m[2 * k + 1] ^= (uint64_t)v.w << 32 | v.z;
-    }
+    tables.xor64(m, j, (ys[j >> 2] >> (8 * (j & 3))) & 0xFF);
   }
 #pragma unroll
   for (int o = 16; o; o >>= 1)
 #pragma unroll
-    for (int k = 0; k < 8; k++) m[k] ^= __shfl_xor_sync(0xffffffffu, m[k], o);
+    for (int k = 0; k < 16; k++) m[k] ^= __shfl_xor_sync(0xffffffffu, m[k], o);
   if (lane) return;
 #pragma unroll
-  for (int k = 0; k < 8; k++) mk[k] = m[k];
+  for (int k = 0; k < 8; k++) mk[k] = (uint64_t)m[2 * k + 1] << 32 | m[2 * k];
 }
+// pd_cmp<V> as the row commitment's policy
+template <int V> struct PdSha {
+  static DEV void compress(uint64_t* st, uint64_t* w) { pd_cmp<V>(st, w); }
+};
 template <int V>
 DEV void pd_hm_salt(uint64_t salt_key, uint64_t nonce, uint64_t i, uint64_t hm, uint32_t* ys, int lane, uint64_t* mk,
                     uint64_t* c) {
-  const uint64_t* mid = reinterpret_cast<const uint64_t*>(hm);
   pd_hm_mask(salt_key, nonce, i, hm, ys, lane, mk);
   if (lane) return;
-  uint64_t st[8], w[16];
-#pragma unroll
-  for (int j = 0; j < 8; j++) st[j] = mid[j];
-#pragma unroll
-  for (int j = 0; j < 16; j++) w[j] = rs_be64(ys[2 * j], ys[2 * j + 1]);
-  pd_cmp<V>(st, w);
-#pragma unroll
-  for (int j = 0; j < 16; j++) w[j] = j < 8 ? rs_be64(ys[32 + 2 * j], ys[33 + 2 * j]) : 0;
-  w[8] = 0x8000000000000000ull;
-  w[15] = 8 * (128 + 192);
-  pd_cmp<V>(st, w);
-#pragma unroll
-  for (int j = 0; j < 8; j++) c[j] = st[j];
+  rc::salt_digest<PdSha<V>>(reinterpret_cast<const uint64_t*>(hm), rc::SaltU32{ys, 1}, c);
 }
 // line `line`'s block under line key `key`: H_line's message after its label (key ‖ 0 ‖ 0 ‖ line u32 LE), padded
 DEV void pd_line_block(const uint32_t* key, uint32_t line, uint64_t* w) {
@@ -712,11 +676,11 @@ template <int V> DEV void pd_stamp(uint64_t buf, int row, int slot) {
 DEV void pd_node_msg(uint64_t dom, int level, int i, uint64_t* buf) {
   for (int t = 0; t < 48; t++) buf[t] = 0;
   WMsg m{buf, 0};
-  wm_frame(m, "node", 4, dom);
-  wm_uint(m, (uint64_t)level);
-  wm_uint(m, (uint64_t)i);
+  wm_frame(m, "node", dom);
+  rc::put_uint(m, (uint64_t)level);
+  rc::put_uint(m, (uint64_t)i);
   const int left = wm_slot64(m), right = wm_slot64(m);
-  if (wm_finish(m) != 3 || left - 128 != PD_LEFT_AT || right - 128 != PD_RIGHT_AT) __trap();
+  if (rc::put_padding(m) != 3 || left - 128 != PD_LEFT_AT || right - 128 != PD_RIGHT_AT) __trap();
 }
 // level l's node template (PD_TM words): the state after its first block (8 words), then blocks 1 and 2 at index 0 (32
 // words).  Below 256 a node's first block holds the frame, dom_a, the level and its index's length prefix alone, and its
@@ -736,9 +700,9 @@ template <int V> DEV void pd_level_template(uint64_t dom, int level, uint64_t* t
 template <int V> DEV void pd_pad(uint64_t dom, uint64_t rank, uint64_t tree, uint64_t* buf /*48 words*/) {   // as s512_pads
   for (int t = 0; t < 48; t++) buf[t] = 0;
   WMsg m{buf, 0};
-  wm_frame(m, "pad", 3, dom);
-  wm_uint(m, rank);
-  const int blocks = wm_finish(m);
+  wm_frame(m, "pad", dom);
+  rc::put_uint(m, rank);
+  const int blocks = rc::put_padding(m);
   uint64_t st[8];
   rs_iv(st);
   for (int b = 0; b < blocks; b++) pd_cmp<V>(st, buf + 16 * b);
@@ -1012,13 +976,12 @@ template <int V, bool Z = false> DEV void pd_commit_t(const Args a, const int r)
   auto frame = [&] {                                // the frame leaf's first block and this CTA's pads, by one thread
     for (int t = 0; t < 32; t++) ftw[t] = 0;
     WMsg m{ftw, 0};
-    wm_frame(m, "leaf", 4, dom);
-    wm_uint(m, (uint64_t)r);
-    wm_uint(m, (uint64_t)r);
-    wm_be(m, 22, 8);
-    for (int j = 0; j < 22; j++) wm_byte(m, HM96_SCHEMA[j]);
+    wm_frame(m, "leaf", dom);
+    rc::put_uint(m, (uint64_t)r);
+    rc::put_uint(m, (uint64_t)r);
+    rc::put_part(m, HM96_SCHEMA, 22);
     const int at = wm_slot64(m);
-    if (wm_finish(m) != 2 || at - 128 != PD_LEAF_AT) __trap();
+    if (rc::put_padding(m) != 2 || at - 128 != PD_LEAF_AT) __trap();
     uint64_t st[8], w[16];
 #pragma unroll
     for (int q = 0; q < 16; q++) w[q] = ftw[q];

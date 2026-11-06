@@ -1,5 +1,8 @@
-import PouwWindow.Side
-import PouwWindow.Record
+module
+
+public import PouwWindow.Side
+public import PouwWindow.Record
+public import Identity.Domains
 
 /-!
 # The tile instances' public inputs (`window.py`, "The tile instances' public inputs")
@@ -11,22 +14,24 @@ root, its domain, side A's and side B's domains, the pass's -h3 domain), little-
 one-stage's record as JSON, read as Python reads it.
 -/
 
+@[expose] public section
+
 namespace PouwWindow
 
 open Lean (Json)
 
-def PUBLIC_INPUTS_FORMAT : String := "verity/flock-public-inputs/v1"
+def PUBLIC_INPUTS_FORMAT : String := Domains.FLOCK_PUBLIC_INPUTS
 /-- `M_MAX`: C-Flock's largest session, m = k_log + nbl ≤ 35. -/
 def mMax : Nat := 35
 
 /-- `PUBLIC_PORTS`: (port, words, seed, derivation). -/
 def publicPorts : List (String × Nat × String × String) := [
-  ("t", 8, "drawn", "verity/pouw/window/t/v1"),
-  ("root", 32, "registration", "verity/pouw/window/root/v1"),
-  ("domain", 32, "registration", "verity/pouw/window/domain/v1"),
-  ("domain_a", 32, "registration", "verity/pouw/window/side-domain-a/v1"),
-  ("domain_b", 32, "registration", "verity/pouw/window/side-domain-b/v1"),
-  ("domain_h3", 32, "pass", "verity/pouw/window/domain-h3/v1")]
+  ("t", 8, "drawn", Domains.POUW_PERIOD_T),
+  ("root", 32, "registration", Domains.POUW_PERIOD_ROOT),
+  ("domain", 32, "registration", Domains.POUW_PERIOD_DOMAIN),
+  ("domain_a", 32, "registration", Domains.POUW_PERIOD_SIDE_DOMAIN_A),
+  ("domain_b", 32, "registration", Domains.POUW_PERIOD_SIDE_DOMAIN_B),
+  ("domain_h3", 32, "pass", Domains.POUW_PERIOD_DOMAIN_H3)]
 
 /-- `session_cap`: the most instances one session holds when each block of 2^`kLog` bits holds `perBlock` of them. -/
 def sessionCap? (kLog perBlock : Int) : Except String Nat :=

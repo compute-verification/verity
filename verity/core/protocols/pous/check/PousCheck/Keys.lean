@@ -1,9 +1,14 @@
-import Identity.Sha512
-import Randomness
-import PousCheck.P2
+module
+
+public import Identity.Sha512
+public import Randomness
+public import PousCheck.P2
+meta import Identity.Sha512
+meta import Randomness
+meta import PousCheck.P2
 
 /-!
-P2 v4's per-block keys (`p2/PROTOCOL.md` §4, `schemes/p2.py`'s `expand_prefix`, `stream`, `below`, `sha512_keys`):
+P2 v4's per-block keys (`schemes/p2.py`'s `expand_prefix`, `stream`, `below`, `sha512_keys`):
 
 ~~~text
 prefix   Z(body), Z zero-pads to whole 128-byte blocks
@@ -17,12 +22,14 @@ Two prefix bodies, the same streams after them:
 
 - the package's (`expand_prefix`, what `p2-16448/v4` runs): `"verity/pous/p2/keys/v4\0" ‖ frame("p2/v4") ‖
   frame(prime id) ‖ frame(salt)`, its 24-byte salt from the generic `setup.draw_salt`;
-- the spec's (§4, and the vectors of §7): the same with `frame(model commitment) ‖ frame(setup salt)`, 64 and 32 bytes.
+- the spec's (`reference.py`, and `vectors.json`): the same with `frame(model commitment) ‖ frame(setup salt)`, 64 and 32 bytes.
 
 The prefix is absorbed once (`Identity.Sha512`'s midstate) and each chunk is one compression after it. The counter is a
 `u32be`, so a stream has at most `2^32` chunks: `t` reads candidates while they fit, and a stream with none below `p` among
 them is an error here, an `OverflowError` in Python (probability `(c0/2^w)^⌊2^38/n⌋`).
 -/
+
+@[expose] public section
 
 namespace PousCheck.Keys
 
@@ -42,7 +49,7 @@ def packagePrefix (q : P2.Params) (salt : ByteArray) : Except String ByteArray :
     throw s!"the salt is {SALT_BYTES} bytes, drawn by the verifier after W is committed"
   return pad128 (KEYS_TAG ++ frame (.str PROTOCOL_ID) ++ frame (.str q.primeId) ++ frame (.bytes salt))
 
-/-- The spec's prefix (§4): the model commitment and the 32-byte setup salt. -/
+/-- The spec's prefix (`reference.expand_prefix`): the model commitment and the 32-byte setup salt. -/
 def specPrefix (q : P2.Params) (model setupSalt : ByteArray) : ByteArray :=
   pad128 (KEYS_TAG ++ frame (.str PROTOCOL_ID) ++ frame (.str q.primeId) ++ frame (.bytes model)
     ++ frame (.bytes setupSalt))

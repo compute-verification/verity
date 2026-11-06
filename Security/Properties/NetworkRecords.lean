@@ -1,5 +1,7 @@
-import NetworkCheck.RecordsGrid
-import Properties.NetworkCertifier
+module
+
+public import NetworkCheck.RecordsGrid
+public import Properties.NetworkCertifier
 
 /-!
 # The records check: what acceptance by its Lean code (`NetworkCheck.Records.protocol`) means
@@ -27,6 +29,8 @@ hash have one SHA-256 digest. A certified record's certificate verifies under th
 their certifier session (LMS's verifier accepts it; that only the key's holder could sign is not claimed), and its head
 is the record head of the Program's grid, or two distinct strings the two heads' digests hash have one SHA-512 digest.
 -/
+
+@[expose] public section
 
 open NetworkCheck hiding Params
 open NetworkCheck.Check (Params Certified Link Evidence Grid Profile LinkWindow)
@@ -73,9 +77,10 @@ def rowInput (row : Array (Option ByteArray)) : ByteArray :=
   taggedInput "verity-network-warden/row/v1"
     ((row.filterMap id).foldl (· ++ ·) (Flock.be32 (row.filterMap id).size.toUInt32))
 
-/-- The canonical JSON header `record_digest` hashes for link-window `(l, w)` of a complete record under `g`. -/
+/-- The header `record_digest` hashes for link-window `(l, w)` of a complete record under `g`, in the identity form
+(`Flock.canonUtf8`). -/
 def header (l : String) (w : Nat) (g : Grid) : Flock.V String :=
-  Flock.canon (Lean.Json.mkObj [
+  Flock.canonUtf8 (Lean.Json.mkObj [
     ("link", .str l), ("window", Lean.toJson w), ("buckets", Lean.toJson g.buckets),
     ("allocation", Lean.toJson g.allocation), ("frame_bytes", Lean.toJson g.frameBytes),
     ("bucket_ms", Lean.toJson g.bucketMs), ("status", .str "complete")])

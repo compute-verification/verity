@@ -51,7 +51,7 @@ def add(sub) -> None:
                    help="the cheater's operand delivery on the tensor route (default %(default)s)")
     e.add_argument("--credit", choices=E.CREDITS, default="H",
                    help="what ε is a fraction of: honest's kernel (H, default), its model bound B(H) (model) or the "
-                        "floor program ♭ (floor, SPEC §0.7a)")
+                        "floor program ♭ (floor, Corollary D3)")
     e.add_argument("--fold-cost", type=float, help="scale the design's fold to R lane instructions a word")
     e.add_argument("--vector", help="the vector whose rows are Π (default: model.toml's current)")
     e.add_argument("--json", action="store_true")
@@ -66,7 +66,7 @@ def add(sub) -> None:
     e.add_argument("--l2", type=float, help="with --lookups: L2 read bytes a second (default: the file's)")
     e.add_argument("--uni-issue", type=float, metavar="C",
                    help="put the uniform classes on the issue rows (issue, the joint JI…_0) at C times an ALU's "
-                        "cost there (PREDICT's u16s_l7qs measured 0.92, r20261017-045133-67bf)")
+                        "cost there (u16s_l7qs measures 0.92)")
     e.add_argument("--checking", choices=("full", "sampled"), default="full",
                    help="full: every word and operand verified, the core ε alone, ε_luck in it (default); sampled: "
                         "also ε_sample = ε_adapt, on its own line and columns")
@@ -186,7 +186,7 @@ def _eps_table(args, pi: E.Machine) -> int:
     qs = (2, 4, 8, 16)
     qe = sorted({2.0, 8.0, args.q})
     cred = {"H": "honest's kernel (H)", "model": "honest's model bound B(H)",
-            "floor": "the floor program ♭ (SPEC §0.7a)"}[args.credit]
+            "floor": "the floor program ♭ (Corollary D3)"}[args.credit]
     tb = _lookups(args)
     sampled = args.checking == "sampled"
     look = "" if tb is None else (f", the table route open at {tb.q:g} lane instructions and {tb.bytes:g} B of L2 a "
@@ -260,7 +260,7 @@ def run(args) -> int:
     h, per_mma = e.honest, e.honest.words * e.honest.depth / d.L
     filler = ", ".join(f"{pw:.4g} a word on {f.route}" for f, pw in e.fillers) or "none"
     floor = ", ".join(f"{k} {v:g}" for k, v in d.floor.items())
-    ops = {"free": "free (SPEC's conservative default)", "honest": "at honest's",
+    ops = {"free": "free (the conservative default)", "honest": "at honest's",
            "floor": f"at the noise's floor φ_del, {floor} a MMA ({d.floor_source})"}
     built = {"H": "honest as built", "model": "honest as built",
              "floor": f"the floor program ♭ (the tensor route at φ_del = {floor} a MMA)"}

@@ -1,11 +1,13 @@
-import Proofs.Flock.EndToEnd.Period.Statement
-import Proofs.Flock.EndToEnd.Period.Union
-import Proofs.Flock.EndToEndHidden
-import Proofs.Flock.Soundness.Audit.Horizon
-import Proofs.Flock.Soundness.Game.Union
+module
+
+public import Proofs.Flock.EndToEnd.Period.Statement
+public import Proofs.Flock.EndToEnd.Period.Union
+public import Proofs.Flock.EndToEndHidden
+public import Proofs.Flock.Soundness.Audit.Pooled
+public import Proofs.Flock.Soundness.Game.Union
 
 /-!
-# Proof of the integrity audit over a period, and over a horizon
+# Proof of the integrity audit over a period, per sampling block and pooled
 
 * `Flock.SecurityProofs.IntegrityPeriod`: `period_union` over the sampling blocks, each sampling block's bound
   `Flock.SecurityProofs.EndToEndHidden` at the strategy that plays it (`SamplingBlock.accepted_wrong_le`), with its
@@ -18,6 +20,8 @@ import Proofs.Flock.Soundness.Game.Union
   `C(n − |W|, kd)/C(n, kd) ≤ (1 − kd/n)^{|W|}` under A3 (`SamplingBlock.drawMiss_le`; `Law.execOS_subset_escape_le`,
   `Law.choose_div_le_one_sub_pow`). At `M = ⌈ln(1/δ)/q⌉`, `(1 − q)^M ≤ e^{−qM} ≤ δ`.
 -/
+
+@[expose] public section
 
 namespace Flock.SecurityProofs
 
@@ -154,7 +158,7 @@ theorem IntegrityPeriodLog : Flock.Guarantees.IntegrityPeriodLog := by
   gcongr
   exact (W t).miss_le hq hδ (hqt t ht') (hK t ht')
 
-/-- **The integrity audit over a horizon.** -/
+/-- **The integrity audit over a period, pooled.** -/
 theorem IntegrityHorizon : Flock.Guarantees.IntegrityHorizon := by
   intro W T q δ hq hδ hqt hA3 s hT hL
   classical

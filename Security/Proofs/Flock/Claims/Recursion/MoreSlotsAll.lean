@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.PastIn
-import Proofs.Flock.Claims.Recursion.AccFits
+module
+
+public import Proofs.Flock.Claims.Recursion.PastIn
+public import Proofs.Flock.Claims.Recursion.AccFits
 
 /-!
 # `MoreSlotsTrue` at the outer relation, unconditionally
@@ -8,6 +10,8 @@ import Proofs.Flock.Claims.Recursion.AccFits
 `accFits` (a statement reads `acc` only below its instances). The statement is KSLin2LayR's `MoreSlotsTrue` at
 `deployZkRec`, unfolded, so this file doesn't import KSLin2LayR.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.MoreSlots
 

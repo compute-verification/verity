@@ -1,13 +1,15 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Data.Fintype.Sigma
-import Definitions.Pouw.Assumptions.Dimension.H100W
-import Definitions.Pouw.Assumptions.Fp8Atom.H1TAssumptions
+module
+
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Mathlib.Data.Fintype.Sigma
+public import Definitions.Pouw.Assumptions.Dimension.H100W
+public import Definitions.Pouw.Assumptions.Fp8Atom.H1TAssumptions
 
 /-!
 # H-1T's γ corollary: several units in `MH100w` (trusted statements)
 
 A matmul's output is split into units (`Unit`) of at most 88,412 columns. Each unit's salt context binds its id, so
-each unit's salt is its own coordinate of the joint salt (`MSalt`, X-H1T-8 change 4 and X-H1T-S7). The free values
+each unit's salt is its own coordinate of the joint salt (`MSalt`). The free values
 (`mfree`) are W1's: the constants, which include every salt-independent function of the committed inputs, and every
 unit's raw XOF words. The grid is every joint salt.
 
@@ -17,6 +19,8 @@ unit's raw XOF words. The grid is every joint salt.
   whose registers include every credited word of every unit costs at least 32 per credited word: `32·Σ m·n·(4T − 3)`
   (`H1TPosCard`). This is `DistinctLiveMH100` at `ε = 0`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Fp8Atom.H1T
 

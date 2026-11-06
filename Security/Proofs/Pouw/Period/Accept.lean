@@ -1,11 +1,17 @@
-import Proofs.Pouw.Period.Sort
-import Proofs.Properties.Pouw.Check
-import Proofs.Properties.Pouw.Draw
+module
+
+public import Proofs.Pouw.Period.Sort
+public import Proofs.Properties.Pouw.Check
+public import Proofs.Properties.Pouw.Draw
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
+import all Init.Data.Array.Basic
+import all Init.Data.Array.DecidableEq
 
 /-!
 # PoUW's deployed check accepts H1's honest window at the leg's parameters
 
-The all-protocols PoUW leg (#4351, `benchmarks/all_protocols/legs/pouw.py`) checks its H1 window at `h1_params`: the
+The all-protocols PoUW leg (`benchmarks/all_protocols/legs/pouw.py`) checks its H1 window at `h1_params`: the
 pinned H1 tile's check item with the entries bound 1024 and no coin mode, ε = 1/2, δ = 10⁻⁶, the 3-bit grid, the range
 `[1, 2^16]` and the loop's fixed length, 4 requests of 2 decode steps (`h1Params`). A window registering the loop's
 128 real tiles is at level 39, which pads to `N = 144`, and its draw is `K′ = 24` (`kPrime_h1`:
@@ -17,6 +23,8 @@ the profile the rule fixes (`h1Evidence`), and publishes level 39's work, `K′ 
 window the check accepts at those parameters, registered at level 39, publishes `N = 144` and `K′ = 24`, the population
 and draw size `DrawIsCoin` reads at H1's instance.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Period.SecurityProofs.Accept
 

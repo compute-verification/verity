@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.VerdictRowETarget
-import Proofs.Flock.Claims.Recursion.VerdictRowDCoin
-import Proofs.Flock.Claims.Recursion.VerdictRowDCover
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRowETarget
+public import Proofs.Flock.Claims.Recursion.VerdictRowDCoin
+public import Proofs.Flock.Claims.Recursion.VerdictRowDCover
 
 /-!
 # Row E's coin tie, and its target at row D's pieces
@@ -18,6 +20,8 @@ reader and its tie, and states the target at those.
 * `Top.targetE_rowD`: `TargetE` at `accR`, row D's pieces and side reader, and `coefRead`. What it still takes:
   the pieces' running sums (`hholds`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Rows
 
@@ -115,7 +119,7 @@ theorem coefRead_eq (hnd : (D.spec.repStreams.toList.map (·.2.2)).Nodup) (hi : 
 /-- **`hcoef`, the coin tie, in `targetE`'s form**: at a decision of an inner statement read at the dense form and a
 table `i` of the statement, every piece of rep `r` of table `i` reads the verifier's `coef` for its query through
 `coefRead`. -/
-theorem hcoef {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+theorem hcoef {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) (hi : i < D.sts.size)
     (hti : i < D.spec.tables.size) (pieces : List OpenPiece) :
     ∀ r : Fin 2, ∀ q ∈ pieces, q.table = i → q.rep = r.val →

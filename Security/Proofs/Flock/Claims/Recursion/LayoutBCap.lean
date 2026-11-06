@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.LayoutBDeployed
-import Proofs.Flock.Claims.Recursion.KSLin2PlainClosed
-import Proofs.Flock.Claims.Recursion.DeployScope
-import Proofs.Flock.C3.Reps.AtList
+module
+
+public import Proofs.Flock.Claims.Recursion.LayoutBDeployed
+public import Proofs.Flock.Claims.Recursion.KSLin2PlainClosed
+public import Proofs.Flock.Claims.Recursion.DeployScope
+public import Proofs.Flock.C3.Reps.AtList
 
 /-!
 # V*'s bound layout with round 0 at RecCap (`layoutBCap`), and `HeldB` there
@@ -41,6 +43,8 @@ circuit has its port `top` (`CapPorts`), proved at every shape (`capPorts`, `Cap
 `TopsHeld` asks for a part that holds a tops round whole, which none does; `ksLin2_deployed_tops` (`LayoutBTops.lean`)
 takes the same facts but that one.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -96,7 +100,7 @@ theorem readX_statements {x : Msg} {r : XR} (h : readX x = some r) :
 theorem capAt_readX {x : Msg} {r : XR} (h : readX x = some r) :
     ∃ N, capAt r = some (nS x - 1, N) ∧ 0 < nS x := by
   obtain ⟨vs, hvs, hlen⟩ := readX_statements h
-  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, _, _, K, N, -, -, rfl⟩ := FlockC3.Reps.list_ok hvs
+  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, _, _, K, L, N, -, -, -, rfl⟩ := FlockC3.Reps.list_ok hvs
   have hn : nS x = r.w.parts.length := by simp [nS, h]
   refine ⟨N, ?_, ?_⟩
   · rw [hn, hlen]
@@ -268,7 +272,7 @@ last (it is a stream round), so it has no pieces. Each rep's level-0 round commi
 theorem not_heldB_layoutBCap_none {W : Type} (IV : Claims.Verifier Coin) (ivScope : Msg → Bool) (b : Brings)
     (I : Claims.Recursion.Inner Coin W) (hk : ∀ x, I.V.k x = (FlockDeploy.V false).k x)
     (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (shape : Claims.Recursion.Form → Prop)
-    (hM : SchedMatches shape) {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st) (hf : shape st.form)
+    (hM : SchedMatches shape) {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st) (hf : shape st.form)
     {j : ℕ} {sr : RecVStar.SchedRound} (hs : streamRound x j = some sr) (ht : sr.2.1.isEmpty = false) :
     ¬ Claims.Recursion.VStarB.HeldB (deployRec IV ivScope b) I (layoutBCap (fun _ _ _ => none) fin) shape := by
   intro hH

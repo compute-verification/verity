@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Replay.LigeritoProver
-import Proofs.Flock.Claims.Complete.Replay.LigeritoGoal
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoProver
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoGoal
 
 /-!
 # A returning rep carries the model's Ligerito
@@ -14,6 +16,8 @@ returns the decoded proof, the model's transcript at the rep (`Run.lgOut`) is wh
 walk's Ligerito facts (`LgAt`, `LgCount`) follow from the recorded stream carrying the rep's rounds and holding as many
 (`Run.lgAt_of`, `Run.lgCount_of`), and lincheck's circuit fold from the run alone (`Run.lcFold_of`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

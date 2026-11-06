@@ -8,7 +8,12 @@ outputs and plain SHA-512 leaves is refused at any count, and the verifier's own
 subset law alone (`ProvedScope.lawWhy` at `plainTables`), where without the flag a plain session at public outputs draws
 by the stratified law alone.
 -/
-import Flock.ProvedScope
+module
+
+public import Flock.ProvedScope
+meta import Flock.ProvedScope
+
+@[expose] public section
 
 namespace Flock.Test.TableCap
 

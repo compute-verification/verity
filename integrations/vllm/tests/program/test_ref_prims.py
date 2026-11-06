@@ -1,6 +1,6 @@
-"""Lane NUMERIC: the reference-mode kinds of `verity/ml/definitions/registry/ref_prims.py`.
+"""The reference-mode kinds of `verity/ml/definitions/registry/ref_prims.py`.
 
-Three layers, kept separate (brief boundary 5 — semantics vs evidence):
+Three layers, kept separate (semantics vs evidence):
   1. **definition consistency** — the numpy twins equal the gate-by-gate circuit evaluation of the registered bodies on
      small shapes (the body is the definition; the twin is a testing aid);
   2. **conformance vs torch CPU over a stated, seeded random domain** — agreement statistics (exact-word fraction, max
@@ -11,7 +11,7 @@ Three layers, kept separate (brief boundary 5 — semantics vs evidence):
      rotate_half RoPE) bit equality is asserted;
   3. **vocabulary pin** — manifest/digest stability and the codec round trip of a reference program.
 
-Run on the pod (GUIDANCE §37):  `REF_PRIMS_RECORD_DIR=docs/data/ref-prims PYTHONPATH=. python -m pytest tests/program/test_ref_prims.py -q`
+Run on a pod:  `REF_PRIMS_RECORD_DIR=docs/data/ref-prims PYTHONPATH=. python -m pytest tests/program/test_ref_prims.py -q`
 Records are written to `$REF_PRIMS_RECORD_DIR`, and without it to a temporary directory: a plain run leaves the tree alone.
 """
 
@@ -687,6 +687,29 @@ def test_i64_to_i32_vs_torch():
 # ---------------------------------------------------------------------------------------------------------
 
 
+def test_log_vs_torch():
+    """`F32LogRn_v1` against torch.log on its vectorised and strided paths, over positive words: random finite ones, dense
+    around 1, subnormals and edges. torch's log is not correctly rounded, so the two differ by at most 1 ulp."""
+    rng = np.random.default_rng(SEED)
+    x = np.concatenate([rng.integers(1, 0x7F800000, 1 << 14), rng.integers(0x3F700000, 0x3F900000, 1 << 12),
+                        rng.integers(1, 0x00800000, 1 << 10),
+                        [1, 0x007FFFFF, 0x00800000, 0x3F7FFFFF, 0x3F800000, 0x3F800001, 0x40000000, 0x7F7FFFFF]]).astype(np.uint32)
+    ref = np.array([R.F32LogRn.evaluate(int(v)) for v in x], dtype=np.uint32)
+    xt = words_t(x, "f32")
+    res_vec = compare(ref, t_words(torch.log(xt)), "f32")
+    res_sca = compare(ref, t_words(torch.log(torch.stack([xt, xt], 1)[:, 0])), "f32")
+    assert res_vec["max_ulp"] <= 1 and res_sca["max_ulp"] <= 1, (res_vec, res_sca)
+    write_record("F32LogRn_v1", "f32", statics={}, oracle_op="torch.log (contiguous and strided)",
+                 domain={"x": "16,384 uniform positive finite words + 4,096 in [0x3F700000, 0x3F900000) + 1,024 subnormals "
+                              "+ 8 edge words"},
+                 result={"torch_vectorised_path_contiguous": res_vec, "torch_scalar_path_strided": res_sca,
+                         "words": res_vec["words"], "exact_fraction": res_vec["exact_fraction"],
+                         "max_ulp": max(res_vec["max_ulp"], res_sca["max_ulp"])},
+                 gate_check={"evaluated": "primitive evaluator"},
+                 notes="The reference is correctly rounded on every binary32 word (benchmarks/f32_exhaustive); torch's log "
+                       "is within 1 ulp of it.")
+
+
 
 
 def test_transcendental_specials():
@@ -694,6 +717,11 @@ def test_transcendental_specials():
     # last finite input / first overflow; torch.exp gives the same two words (measured on the pod, torch 2.4.1 CPU)
     assert R.f32_exp_rn_bits(0x42B17217) == 0x7F7FFF84 and R.f32_exp_rn_bits(0x42B17218) == 0x7F800000
     assert R.f32_exp_rn_bits(0) == 0x3F800000 and R.f32_exp_rn_bits(0x80000000) == 0x3F800000
+    lg = R.f32_log_rn_bits
+    assert lg(0x7FC00000) == lg(0xFF800000) == lg(0xBF800000) == lg(0x80000001) == P.F32_NAN and lg(0x7F800000) == 0x7F800000
+    assert lg(0) == lg(0x80000000) == 0xFF800000 and lg(0x3F800000) == 0 and lg(0x40000000) == 0x3F317218  # ln 2
+    # the smallest subnormal, the largest finite word, and the two neighbours of 1 (|ln x| ~ 2^-24 and 2^-23: normal results)
+    assert lg(1) == 0xC2CE8ED0 and lg(0x7F7FFFFF) == 0x42B17218 and lg(0x3F7FFFFF) == 0xB3800000 and lg(0x3F800001) == 0x33FFFFFF
     for f in (R.f32_erf_rn_bits, R.f32_tanh_rn_bits):
         assert f(0) == 0 and f(0x80000000) == 0x80000000 and f(0x7F800000) == 0x3F800000 and f(0xFF800000) == 0xBF800000
         assert f(0x7FC00000) == P.F32_NAN and f(0x41200000) == 0x3F800000 and f(0xC1200000) == 0xBF800000  # ±10 -> ±1

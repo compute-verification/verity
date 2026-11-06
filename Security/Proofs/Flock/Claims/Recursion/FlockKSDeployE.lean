@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Recursion.BoundDeployE
-import Proofs.Flock.Claims.Recursion.FlockKSRecord
-import Proofs.Flock.Claims.KS.Range
-import Proofs.Flock.Claims.KS.Width
-import Proofs.Flock.Claims.KS.ZkAbortR
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundDeployE
+public import Proofs.Flock.Claims.Recursion.FlockKSRecord
+public import Proofs.Flock.Claims.KS.Range
+public import Proofs.Flock.Claims.KS.Width
+public import Proofs.Flock.Claims.KS.ZkAbortR
 
 /-!
 # (P1) at the element-level inner verifier (`FlockDeploy.VE`)
@@ -24,6 +26,8 @@ So (P1) at `VE` (`plainE_KSAbortR`) rests on two premises at `deployPlainE rel`:
 at `VE` in `ConflictTiedE` (`plainE_conflictTied`, which also states (P1) at the bound record), and the table bound
 counted per round on accepted first runs, proved at `deployPlain rel` (`plain_tableBoundθOnAccR`'s) and not yet at `VE`.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

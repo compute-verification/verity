@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.Compiled
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Compiled
 
 /-!
 # The compiled `--zk` audit's analysis, with the expected-time extractor
@@ -17,6 +19,8 @@ session's acceptance probability and `r = N₀/(ek) < 1`:
 `JointZC` at a closed-form `a` from the caps (the compiled `ε_ks`) is open: it is the `--zk` counterpart of
 `joint_le_accBL`. The link term does not depend on `a`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 

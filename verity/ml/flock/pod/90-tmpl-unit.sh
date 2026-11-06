@@ -1,23 +1,36 @@
 #!/usr/bin/env bash
-# A templated statement end to end (PRF-133): RoPE d64 staged as verity/flock-circuit/tmpl (tests/tmpl_statement.py), its
+# A templated statement end to end: RoPE d64 staged as verity/flock-circuit/tmpl (tests/tmpl_statement.py), its
 # unit read at layout LAYOUT by Lean's `flock-tmpl-unit` (tests/lean/TmplUnit.lean: the rows at Tmpl.posMap, an ORDER
 # line), proved by the CPU flock-circuit (--tmpl-unit) in one loopback session per mode, then Lean's `flock-verify verify` on each. The verifier
-# refuses the statement once every check has passed, so each verdict's reason must be exactly that refusal. Run from the
+# covers a templated statement only under --zk (`ProvedScope.scopeOkT`): the zk session, drawn (--draw subset:N, every
+# unit) and verified with the statement's partition and program (tmpl_statement.py's partition.json and program.json),
+# must be accepted, and the m0 one refused as a templated statement without --zk, by Lean and by the live server (its
+# LIVE line) alike. Each session's coin tree is sampled and opened by its own challenger (challenger.sh: serve --tree-from,
+# the m0 session's under FC_COINS=tree), and its record held to that challenger's release log. Run from the
 # verity tree (research run --cwd source); CPU only. Outputs under out/: host.txt, template.json, tmpl.txt, stage.json,
-# statement-<mode>.txt, serve-<mode>.log, prove-<mode>.txt and .err, lean-<mode>.log (its VERDICT line), verdicts.json.
-# env: CPUS=16  LAYOUT=iv  MODES="m0 zk"  FLOCK_WORK=/workspace, or /workspace/jobs/pc-read-gadget where /workspace isn't
-#      writable (the prover build and its venv, shared as 76-read-gadget.sh's)
+# statement-<mode>.txt, serve-<mode>.log, prove-<mode>.txt and .err, challenger-<mode>/ (its record, releases.jsonl and
+# audit.json), lean-<mode>.log (its VERDICT line), verdicts.json.
+# Pins its own slices where it can take slice locks (node 1); on a vy-cpu pod, run it in a check slot (--pool), which pins it.
+# env: CPUS=16  LAYOUT=iv  MODES="m0 zk"  FLOCK_WORK=/workspace, or where /workspace isn't writable
+#      /workspace/jobs/pc-read-gadget (node 1, shared as 76-read-gadget.sh's) else /workspace/cache/tmpl-unit (the prover
+#      build and its venv)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 if [ -z "${TU_PINNED:-}" ]; then
-  . verity/ml/flock/pod/cpu-slices.sh
-  hold_slices "" "${CPUS:-16}" || exit 1
-  export TU_PINNED=$SLICE_CPUS RAYON_NUM_THREADS=$(echo $SLICE_CPUS | tr ',' '\n' | wc -l)
-  exec taskset -c $SLICE_CPUS bash "$0" "$@"
+  if mkdir -p "${SLICE_LOCKS:-/workspace/jobs/slices}" 2>/dev/null; then
+    . verity/ml/flock/pod/cpu-slices.sh
+    hold_slices "" "${CPUS:-16}" || exit 1
+    export TU_PINNED=$SLICE_CPUS RAYON_NUM_THREADS=$(echo $SLICE_CPUS | tr ',' '\n' | wc -l)
+    exec taskset -c $SLICE_CPUS bash "$0" "$@"
+  fi
+  # no slice locks here (a vy-cpu pod): the check slot (research run --pool) has pinned the job to its own cores
+  export TU_PINNED=slot RAYON_NUM_THREADS=$(nproc)
 fi
-export FC_COINS=${FC_COINS:-os}
+export FC_COINS=tree
 REPO=$(pwd); O=${RESEARCH_RUN_DIR:-/tmp/tmpl-unit}/out; mkdir -p $O
-[ -z "${FLOCK_WORK:-}" ] && [ ! -w /workspace ] && export FLOCK_WORK=/workspace/jobs/pc-read-gadget
+if [ -z "${FLOCK_WORK:-}" ] && [ ! -w /workspace ]; then
+  if [ -d /workspace/jobs ]; then export FLOCK_WORK=/workspace/jobs/pc-read-gadget; else export FLOCK_WORK=/workspace/cache/tmpl-unit; fi
+fi
 FW=${FLOCK_WORK:-/workspace}; W=$FW/flock-circuit; mkdir -p $W || exit 1
 [ -w "$HOME" ] || { export HOME=$FW/home; mkdir -p $HOME; }
 S=$FW/scratch/${RESEARCH_RUN_ID:-local-$$}; rm -rf $S; mkdir -p $S || exit 1
@@ -29,7 +42,7 @@ trap 'rm -rf $S' EXIT
 # Lean's flock-verify, and beside it the prover's flock-tmpl-unit (tests/lean/TmplUnit.lean, which unrolls the unit and so
 # is no part of the verifier of record), built once per source, while the prover builds
 LSHA=$( (cd verity/core/service/flock && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum;
-  cat verity/ml/flock/tests/lean/TmplUnit.lean) | sha256sum | cut -c1-16)
+  cat $REPO/verity/ml/flock/tests/lean/TmplUnit.lean) | sha256sum | cut -c1-16)
 LEAN_BIN=$L/lean-$LSHA/flock-verify; UNIT_BIN=$L/lean-$LSHA/flock-tmpl-unit
 (
   export PATH=$HOME/.elan/bin:$PATH
@@ -44,6 +57,9 @@ LEAN_BIN=$L/lean-$LSHA/flock-verify; UNIT_BIN=$L/lean-$LSHA/flock-tmpl-unit
   fi
 ) > $O/build-lean.log 2>&1 &
 LP=$!
+CHALLENGER_REPO=$REPO CHALLENGER_WORK=$S/challenger-work
+. verity/ml/flock/pod/challenger.sh
+challenger_build
 
 # the CPU prover, cached per pod under its sources' key (76-read-gadget.sh's)
 SM=${SM:-$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d .)}; SM=${SM:-89}
@@ -64,6 +80,8 @@ UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1; UV=$HOME/.local/bin/uv; }
 [ -x $W/py/bin/python ] || { $UV venv -q --python 3.12 $W/py && $UV pip install -q --python $W/py/bin/python numpy blake3; } || exit 1
 export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm
+CHALLENGER_PY=python3
+challenger_built || exit 1
 
 D=$S/stage; N=8; LAYOUT=${LAYOUT:-iv}
 python3 verity/ml/flock/tests/tmpl_statement.py template --out $D > $O/template.json 2> $O/template.err || { tail -20 $O/template.err; exit 1; }
@@ -74,34 +92,45 @@ python3 verity/ml/flock/tests/tmpl_statement.py stage --out $D --tmpl $D/tmpl.js
   || { tail -20 $O/stage.err; exit 1; }
 mkdir -p $D/tables
 PIN=$(sha512sum $D/circuit.txt | cut -d' ' -f1)
-WANT="refused: verity/flock-circuit/tmpl, a templated statement: a statement form the soundness proof does not cover"
 echo '{}' > $O/verdicts.json
 for mode in ${MODES:-m0 zk}; do
   Z=; [ $mode = zk ] && Z=--zk
-  C=(--coins os); [ $mode = zk ] && C=()
+  C=(--coins tree); [ $mode = zk ] && C=()
+  DRAW=(); [ $mode = zk ] && DRAW=(--draw subset:$N)
   U=(--circuit $D/circuit.txt --tmpl-unit $D/unit.placed --tables $D/tables)
   $B statement $Z "${U[@]}" --instances $D/pub-$N.bin > $O/statement-$mode.txt 2>&1
+  challenger_start $O/challenger-$mode || exit 1
   PORT=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
   $B serve $Z --listen 127.0.0.1:$PORT --out $S/sessions-$mode --instances $D/pub-$N.bin "${U[@]}" --pin $PIN --operator tmpl-unit \
-    --sessions 1 > $O/serve-$mode.log 2>&1 &
+    "${DRAW[@]}" --sessions 1 "${TREE_FROM[@]}" > $O/serve-$mode.log 2>&1 &
   SP=$!
   for i in $(seq 1800); do grep -q SERVING $O/serve-$mode.log && break; kill -0 $SP 2>/dev/null || break; sleep 1; done
   $B prove $Z --verifier 127.0.0.1:$PORT --instances $D/inst-$N.bin "${U[@]}" --runs 1 --warm 0 > $O/prove-$mode.txt 2> $O/prove-$mode.err
   for i in $(seq 600); do kill -0 $SP 2>/dev/null || break; sleep 1; done
   kill $SP 2>/dev/null; wait $SP
+  challenger_end $O/challenger-$mode; echo "$mode challenger exit $?"
   SESS=$(dirname $(ls -1 $S/sessions-$mode/*/session.json | LC_ALL=C sort | tail -1)) || { tail -20 $O/prove-$mode.err; continue; }
+  challenger_audit $O/challenger-$mode $SESS
   $LEAN_BIN verify $Z "${C[@]}" --statement verity/flock-circuit/tmpl --circuit $D/circuit.txt --public $D/pub-$N.bin --tables $D/tables \
-    --session $SESS > $O/lean-$mode.log 2>&1
+    --partition $D/partition.json --program $D/program.json --session $SESS > $O/lean-$mode.log 2>&1
   echo "$mode rc $?"
   grep -h '^VERDICT' $O/lean-$mode.log | head -1 | cut -c1-600
-  python3 - $O/verdicts.json $mode "$WANT" $O/lean-$mode.log $O/prove-$mode.txt <<'EOF'
+  python3 - $O/verdicts.json $mode $O/lean-$mode.log $O/prove-$mode.txt $O/challenger-$mode/audit.json <<'EOF'
 import json, sys
-out, mode, want, log, prove = sys.argv[1:]
+from pathlib import Path
+out, mode, log, prove, audit = sys.argv[1:]
+want = None if mode == "zk" else \
+    "refused: a templated statement without --zk: a statement form the soundness proof does not cover"
 v = [json.loads(l[8:]) for l in open(log) if l.startswith("VERDICT ")]
 live = [json.loads(l.split("\t", 1)[1]) for l in open(prove) if l.startswith("LIVE")]
+audit = json.loads(Path(audit).read_text()) if Path(audit).exists() else None
+lean_ok = bool(v) and (v[0]["accepted"] is True if want is None else not v[0]["accepted"] and v[0]["why"] == want)
+live_ok = bool(live) and (live[0].get("accepted") is True if want is None else live[0].get("why") == want)
+# the accepted session's coins are its challenger's; the refused one's audit is kept, not judged
+audit_ok = want is not None or bool(audit and audit["ok"])
 doc = json.load(open(out))
-doc[mode] = {"verdict": v[0] if v else None, "pass": bool(v) and not v[0]["accepted"] and v[0]["why"] == want,
-             "live_why": live[0].get("why") if live else None}
+doc[mode] = {"verdict": v[0] if v else None, "pass": lean_ok and live_ok and audit_ok, "lean_pass": lean_ok,
+             "live_pass": live_ok, "audit_pass": audit_ok, "audit": audit, "live_why": live[0].get("why") if live else None}
 json.dump(doc, open(out, "w"), indent=1, sort_keys=True)
 EOF
 done

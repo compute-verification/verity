@@ -213,7 +213,7 @@ class SparseDevice:
 
 
 class FakeSparse:
-    """CPU stand-in (``--fake-silicon MODEL``): MODEL's words for the device; refused under a research run."""
+    """CPU stand-in (``--fake-silicon MODEL``): MODEL's words for the device; refused with ``RESEARCH_RUN_ID`` set."""
 
     tcgen05 = False
 
@@ -380,7 +380,7 @@ def main(args) -> int:
     if args.chain != 1:
         raise SystemExit("--chain is not defined for the sparse rows")
     if args.fake_silicon and SHARED.RESEARCH_RUN_ID:
-        raise SystemExit("--fake-silicon is a dry run and never publishes: not under a research run")
+        raise SystemExit("--fake-silicon is a dry run and never publishes: unset RESEARCH_RUN_ID")
     models = candidates(instr)
     if args.expect_model and args.expect_model not in models:
         raise SystemExit(f"--expect-model {args.expect_model!r} is not a candidate of {instr} ({sorted(models)})")

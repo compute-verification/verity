@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Zk.Level0HonestRun
-import Proofs.Flock.Claims.Complete.Zk.Level0Opens
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Level0HonestRun
+public import Proofs.Flock.Claims.Complete.Zk.Level0Opens
 
 /-!
 # Level 0's masked Ligerito: the verifier's premise, proved
@@ -14,6 +16,8 @@ and ends where the prover did. It is `ligeritoWithZ_of` at the replies' coins, i
   pair (`laneRun_ch`, `laneRun_rho`) and its first out-of-domain coin, which the model's state keeps (`outZ_oods0`);
 * the prover's cap is the commitment's and its pair's coins independent, since it returned (`ligeritoPZk_capRho`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.L0
 

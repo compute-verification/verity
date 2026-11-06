@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.ZkCols
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
-import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
-import Flock.With.ZkEq
+module
+
+public import Proofs.Flock.Claims.ZkCols
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
+public import Flock.With.ZkEq
 
 /-!
 # Level 0's query round in the masked verifier over the hash oracle
@@ -28,6 +30,8 @@ when every table's Merkle scheme is the registry's, `Zk.verify_eq_verifyWith`):
 Each table is checked on its own: its reps' streams, its schedule's level 0 and its own `root_B[i]`. A multi-table
 session commits one level-0 codeword per table, so `zkRunCols` reads one table's.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZkQuery
 
@@ -356,7 +360,7 @@ theorem ligeritoWith_query (hs : Hashes V) (ms : MerkleScheme) (sch : Flock.Sche
 table, a rep that `Zk.verifyRepWith hs` accepts (in `V`, any oracle) has a stream with that round, and level 0's
 Merkle check passed against the committed `root_B` on the proof's opened rows at the positions of that round's coins. -/
 theorem zkQueryRound_verifyRepWith (hs : Hashes V) (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule)
-    (tPad : ℕ) (sess : Session) (i r : ℕ) (bytes cap : ByteArray) (hsch : Flock.Zk.schedule st.m = .ok (sch, tPad))
+    (tPad : ℕ) (sess : RunRecord) (i r : ℕ) (bytes cap : ByteArray) (hsch : Flock.Zk.schedule st.m = .ok (sch, tPad))
     (h : Zk.verifyRepWith hs spec st sch tPad sess i r bytes = .ok cap) :
     ∃ (stream : StreamRec) (extras : Array Flock.Claim) (zp : Flock.Zk.ZkProof),
       sess.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some stream ∧
@@ -425,7 +429,7 @@ proof file is the witness lanes (the first `2^k0` symbols) of the proof's level-
 `zkQueryRound`'s coins, the positions and rows on which level 0's Merkle check passed against the committed `root_B`
 (`zkQueryRound_verifyRepWith`). -/
 theorem zkRepColsOf_verifyRepWith (hs : Hashes V) (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule)
-    (tPad : ℕ) (sess : Session) (i r : ℕ) (bytes cap : ByteArray) (hsch : Flock.Zk.schedule st.m = .ok (sch, tPad))
+    (tPad : ℕ) (sess : RunRecord) (i r : ℕ) (bytes cap : ByteArray) (hsch : Flock.Zk.schedule st.m = .ok (sch, tPad))
     (h : Zk.verifyRepWith hs spec st sch tPad sess i r bytes = .ok cap) :
     ∃ (stream : StreamRec) (extras : Array Flock.Claim) (zp : Flock.Zk.ZkProof),
       sess.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some stream ∧
@@ -455,7 +459,7 @@ session decodes, has one statement per table, and each table `i`'s rep `r` (`r <
 by `Zk.verifyRepWith` at the table's `--zk` schedule. -/
 theorem verifyWithM_reps (hs : Hashes V) (spec : SessionSpec) (tabs : Array Setup) (record : String)
     (proofs : Array ByteArray) (h : Zk.verifyWithM hs spec tabs record proofs = .ok ()) :
-    ∃ sess : Session, Record.decodeWith hs spec record = .ok sess ∧ tabs.size = spec.tables.size ∧
+    ∃ sess : RunRecord, Record.decodeWith hs spec record = .ok sess ∧ tabs.size = spec.tables.size ∧
       ∀ (i : ℕ) (hi : i < tabs.size), ∃ (sch : Flock.Schedule) (tPad : ℕ) (c : ByteArray),
         Flock.Zk.schedule tabs[i].m = .ok (sch, tPad) ∧ ∀ r < 2,
           Zk.verifyRepWith hs spec tabs[i] sch tPad sess i r proofs[2 * i + r]! = .ok c := by
@@ -515,7 +519,7 @@ level-0 rows at the positions of that round's coins, and level 0's Merkle check 
 those positions against the table's committed `root_B`. -/
 theorem zkQueryRound_verifyWithM (hs : Hashes V) (spec : SessionSpec) (tabs : Array Setup) (record : String)
     (proofs : Array ByteArray) (h : Zk.verifyWithM hs spec tabs record proofs = .ok ()) :
-    ∃ sess : Session, Record.decodeWith hs spec record = .ok sess ∧ tabs.size = spec.tables.size ∧
+    ∃ sess : RunRecord, Record.decodeWith hs spec record = .ok sess ∧ tabs.size = spec.tables.size ∧
       ∀ (i : ℕ) (hi : i < tabs.size), ∃ (sch : Flock.Schedule) (tPad : ℕ),
         Flock.Zk.schedule tabs[i].m = .ok (sch, tPad) ∧ ∀ r < 2,
         ∃ (stream : StreamRec) (extras : Array Flock.Claim) (zp : Flock.Zk.ZkProof),
@@ -547,7 +551,7 @@ theorem zkQueryRound_verifyWithM (hs : Hashes V) (spec : SessionSpec) (tabs : Ar
 (`Zk.verify_eq_verifyWith`; every table `Stmt.setupTables` sets up, `setupTables_named`). -/
 theorem zkQueryRound_verify (spec : SessionSpec) (tabs : Array Setup) (record : String) (proofs : Array ByteArray)
     (hN : ∀ st ∈ tabs, st.merkle.Named) (h : Flock.Zk.verify spec tabs record proofs = .ok ()) :
-    ∃ sess : Session, Record.decodeWith (Hashes.ofSha512 Sha512.hash : Hashes V) spec record = .ok sess ∧
+    ∃ sess : RunRecord, Record.decodeWith (Hashes.ofSha512 Sha512.hash : Hashes V) spec record = .ok sess ∧
       tabs.size = spec.tables.size ∧
       ∀ (i : ℕ) (hi : i < tabs.size), ∃ (sch : Flock.Schedule) (tPad : ℕ),
         Flock.Zk.schedule tabs[i].m = .ok (sch, tPad) ∧ ∀ r < 2,

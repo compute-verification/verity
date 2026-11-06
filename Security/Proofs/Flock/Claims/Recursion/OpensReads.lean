@@ -1,12 +1,16 @@
-import Proofs.Flock.Claims.Recursion.RecRecord
-import Proofs.Flock.Claims.Recursion.DeployHonest
-import Proofs.Flock.C3.VStarList.Accepts
-import Proofs.Flock.C3.PubRows.Check
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Shared
-import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
-import Proofs.Flock.Soundness.Discharge.Layout.QSort
-import Proofs.Flock.Claims.Recursion.SlotsCheck
-import Proofs.Flock.Claims.Recursion.LayoutBTops
+module
+
+public import Proofs.Flock.Claims.Recursion.RecRecord
+public import Proofs.Flock.Claims.Recursion.DeployHonest
+public import Proofs.Flock.C3.VStarList.Accepts
+public import Proofs.Flock.C3.PubRows.Check
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Shared
+public import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
+public import Proofs.Flock.Soundness.Discharge.Layout.QSort
+public import Proofs.Flock.Claims.Recursion.SlotsCheck
+public import Proofs.Flock.Claims.Recursion.LayoutBTops
+import all Init.Data.String.Defs
+import all Init.Data.Repr
 
 /-!
 # What a staged part's transcript shows is the record the verifier read in its own format
@@ -29,6 +33,8 @@ digest (`slotPub_table`). On the record's side, rep `x`'s `kc`-th `c_k` in the J
 schedule lists `kc`-th, and at a round with no salted tops it is the record's message `x · R + k + 1`
 (`cmt_of_rep`): the rounds open with the two reps' schedules (`scheduleOf_reps`), whose streams are apart (`rep_ne`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -68,7 +74,7 @@ theorem RecRaw.ins_commits {w : RecRaw} {s : RecIns} (h : w.ins = .ok s) :
 
 theorem commits_parse_error {sh : RecVStar.Inner} {tt : String} {e : String} {r : Except String (Option String)}
     {bound : Flock.V (Option String × Option RecVStar.StackedShape)} {record : String} {cs : RecVStar.InnerCommits}
-    (hp : Json.parse tt = .error e) : RecSetup.commits (some sh) (.ok tt) r bound record ≠ .ok cs := by
+    (hp : Flock.JsonParse.parse tt = .error e) : RecSetup.commits (some sh) (.ok tt) r bound record ≠ .ok cs := by
   intro h
   unfold RecSetup.commits at h
   simp only [bind, Except.bind, pure, Except.pure, hp] at h
@@ -90,7 +96,7 @@ theorem commitsOf_reads {w : RecRaw} {src : Option RecCoins.Source}
     {bound : Flock.V (Option String × Option RecVStar.StackedShape)} {sh : RecVStar.Inner}
     {c : Option RecVStar.InnerCommits} {t : ByteArray} (ht : w.transcript = some t)
     (h : commitsOf w src bound (some sh) = .ok c) :
-    ∃ cs tt tr record, c = some cs ∧ String.fromUTF8? t = some tt ∧ Json.parse tt = .ok tr ∧
+    ∃ cs tt tr record, c = some cs ∧ String.fromUTF8? t = some tt ∧ Flock.JsonParse.parse tt = .ok tr ∧
       src.map (·.record) = some record ∧ RecSetup.checkReads sh tt tr record cs = .ok () := by
   unfold commitsOf at h
   rw [ht] at h
@@ -113,7 +119,7 @@ theorem commitsOf_reads {w : RecRaw} {src : Option RecCoins.Source}
         exact absurd hX commits_text_error
       | some tt =>
         rw [textOf, htx] at hX
-        cases hp : Json.parse tt with
+        cases hp : Flock.JsonParse.parse tt with
         | error e => exact absurd hX (commits_parse_error hp)
         | ok tr => exact ⟨cs, tt, tr, record, rfl, rfl, hp, rfl, FlockC3.VStarList.reads_of_commits hp hX⟩
 
@@ -502,9 +508,7 @@ theorem vu_lt_pow2_setupOne {tags : Tags} {cf pf : ByteArray} {coins : Coins} {t
     g < 2 ^ st.c.g.log2 := by
   unfold HiddenExec.setupOne at h
   split at h
-  · have P := FlockSoundness.parse_facts (HiddenExec.parse_untyped ht (HiddenExec.setupHidden_parseC h)).1
-    obtain ⟨ls, hls⟩ := P.check
-    exact Layout.vu_lt_pow2_of (FlockSoundness.check_facts P.typed hls) hg
+  · exact Layout.vu_lt_pow2_of (Hidden.parseCommit_checkFacts ht (Hidden.setupHidden_parseCommit h)) hg
   · exact Layout.vu_lt_pow2_of (Aliased.setupH_unitFacts ht h).check hg
 
 open FlockSoundness.Refine in
@@ -627,7 +631,12 @@ theorem RecIns.setup_coins {s : RecIns} {spec : SessionSpec} {sts : Array Stmt} 
   unfold RecIns.setup at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
-  all_goals first | (cases h; done) | (cases h; assumption)
+  all_goals first | (cases h; done) | skip
+  all_goals
+    obtain ⟨-, h2⟩ := Prod.mk.inj (Except.ok.inj h)
+    subst h2
+    -- reducibly: at default transparency each later check's `forM` is unfolded against this one's first
+    with_reducible assumption
 
 /-- `RecCoins.check` refuses a rec-residuals, rec-sparse or rec-opening unit without the verifier's own reads. -/
 theorem registered_of_coins {st : Stmt} {own : Option (Array Registered.Port)} {f : Option RecCoins.Source}
@@ -645,7 +654,8 @@ theorem registered_of_coins {st : Stmt} {own : Option (Array Registered.Port)} {
       simp [hv] at h
 
 /-- A statement with an own port under its V\* statement's name is a rec-residuals, rec-sparse or rec-opening unit. -/
-theorem params_of_own {tags : Tags} {c : Circuit} (P : FlockSoundness.ParseFacts tags c) {sv : VStar.Stmt}
+theorem params_of_own {tags : Tags} {pre : Array (String × Net)} {c : Circuit} (P : FlockSoundness.ParseFactsU tags pre c)
+    {sv : VStar.Stmt}
     (hn : c.unit.name = sv.name) (hp : RecVStar.checkPart sv c = .ok ()) {q : String × String × Array (Option ℕ)}
     (hq : q ∈ RecVStar.ownPorts sv) :
     (RecResiduals.params c.unit.name).isSome ∨ (RecSparse.params c.unit.name).isSome ∨
@@ -659,6 +669,7 @@ theorem params_of_own {tags : Tags} {c : Circuit} (P : FlockSoundness.ParseFacts
   | recOpen _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | recOpenStacked _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | cap _ _ => simp [RecVStar.ownPorts] at hq
+  | link _ _ _ => simp [RecVStar.ownPorts] at hq
 
 /-- With an inner shape and own reads, `RecVStar.checkStmt` runs `checkCircuit` and `checkOwn` at them. -/
 theorem checkStmt_own {i : RecVStar.Inner} {tags : Tags} {tables : List (String × ByteArray)} {st : Stmt}
@@ -839,6 +850,7 @@ theorem ownPorts_row {sv : VStar.Stmt} {q : String × String × Array (Option �
   | recOpen _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | recOpenStacked _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | cap _ _ => simp [RecVStar.ownPorts] at hq
+  | link _ _ _ => simp [RecVStar.ownPorts] at hq
 
 /-- What `heldRows` holds, with its round: a row of a statement's own port under `rec-c<k>`, at the port's index,
 held at that rep's `k`-th message round. -/
@@ -946,7 +958,7 @@ theorem heldRow_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit}
   have hpr := Flock.Readable.array_forM_ok (RecIns.setup_pubRows hset) 0 h0'
   have hreg := RecIns.setup_registered hset sts[0] (Array.getElem_mem h0')
   rw [← e0] at hcoin hpr hreg
-  obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi h0
+  obtain ⟨_, _, P⟩ := Flock.Readable.parseFactsU_of_parse hx ht hpi h0
   obtain ⟨hn, hpt, -⟩ := htab 0 h0
   obtain ⟨own, hown⟩ := Option.isSome_iff_exists.1 (registered_of_coins hcoin (params_of_own P hn hpt hq))
   obtain ⟨xr, hxr, hinner, -⟩ := insO_staged hins

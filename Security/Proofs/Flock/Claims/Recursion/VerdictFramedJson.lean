@@ -1,6 +1,9 @@
-import Proofs.Flock.Claims.Recursion.NextRFits
-import Proofs.Flock.Claims.Recursion.NextShaDec
-import Proofs.Flock.Claims.KS.PlainDrawJRun
+module
+
+public import Proofs.Flock.Claims.Recursion.NextRFits
+public import Proofs.Flock.Claims.Recursion.NextShaDec
+public import Proofs.Flock.Claims.KS.PlainDrawJRun
+import all Lean.Data.Json.Basic
 
 /-!
 # The decided record's rep streams: the reader's frames, through the substitutions
@@ -17,6 +20,8 @@ and the reader's rep streams carry, round by round, the round messages `readPs` 
 * **A round reads back** (`roundFields_roundObj`): where the decoder read a round of the reader's record, its count is
   the round's and its bytes are the round's message.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

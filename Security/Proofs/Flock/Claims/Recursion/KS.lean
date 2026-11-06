@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.Finders
-import Proofs.Flock.Claims.Recursion.Hybrid
+module
+
+public import Proofs.Flock.Claims.Recursion.Finders
+public import Proofs.Flock.Claims.Recursion.Hybrid
 
 /-!
 # The recursion: KS
@@ -39,6 +41,8 @@ the instance with Flock as the inner protocol. The draft's `γ` is `γ_A` with a
 * Code facts, which bind `D`'s readers to the compiled verifier: `Refuses` (the compiled verifier accepts only a
   statement that parses with no circuit commitment) and `InnerRounds` (its first rounds are the inner session's).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 
@@ -276,7 +280,7 @@ def InnerKS [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (D
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
 /-- On an accepted run of a statement the compiled verifier parses with no circuit commitment, the inherited relation
 is the inner one at the inner statement. -/
-theorem R_of_innerR (D : Deploy Coin) (I : Inner Coin W) {x : Msg} {s : Stmt} (hs : D.parse x = some s)
+theorem R_of_innerR (D : Deploy Coin) (I : Inner Coin W) {x : Msg} {s : CompiledStatement} (hs : D.parse x = some s)
     (hc : s.circ = none) (o : Option W) (h : (innerR D I).ext x o) : (R D I).ext x o := by
   rcases o with _ | w
   · exact h

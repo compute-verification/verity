@@ -1,4 +1,6 @@
-import Definitions.Nci.Threads
+module
+
+public import Definitions.Nci.Threads
 
 /-!
 # Links: the counted multiplications an activation is computed from
@@ -16,6 +18,8 @@ counted multiplication (an embedding, an attention output). It generalizes a `Ch
 * `ChainIn ch T L`: where a chain and a threading overlap: the chain's products are counted multiplications, its
   entries are distinct weight and activation gates, and its links are among `L`'s.
 -/
+
+@[expose] public section
 
 namespace Nci
 

@@ -1,20 +1,21 @@
 """load_relay's streamed, multi-process commit of the weights' load against its references: the manifest and generator
-are CMP-95 interface 1's (its fixture's TINY manifest, tensor digests and entries, and at H200 its stream's length, head
-and every tensor's first and last rows); the relayed roots are interface 1's fixture roots under its salts, for its
-reader named by digest, whose domains are the verifier's (``tok`` (H, V) in row/v2, every tensor 16-bit leaves, an f32
-scale two, at H200 a linear's row the 8,192 codes of a FAMILIES ``wrow`` part), over one process and several, whatever
-the reads' sizes, and `Registered.commit`'s under the certifier's own salts (the witness it writes) and the verifier's
-domain, pads, many chunks a value and both row formats included; a P2 link (interface 2's layout over a small field,
-so that the test encodes its own store) decodes to the same roots, and a block that isn't a codeword, a nonzero byte
-past a store tensor's end and a short link are refused; at H200 the store's layout is interface 2's; and
-the command signs one load head a value, each registration read by the verifier for the load it expects.
+are the seeded weights' (`e2e_h200.served_weights`, interface 1: its fixture's TINY manifest, tensor digests and
+entries, and at H200 its stream's length, head and every tensor's first and last rows); the relayed roots are interface
+1's fixture roots under its salts, for its reader named by digest, whose domains are the verifier's (``tok`` (H, V) in
+row/v2, every tensor 16-bit leaves, an f32 scale two, at H200 a linear's row the 8,192 codes of a FAMILIES ``wrow``
+part), over one process and several, whatever the reads' sizes, and `Registered.commit`'s under the certifier's own
+salts (the witness it writes) and the verifier's domain, pads, many chunks a value and both row formats included; a P2
+link (interface 2's layout over a small field, so that the test encodes its own store) decodes to the same roots, and a
+block that isn't a codeword, a nonzero byte past a store tensor's end and a short link are refused; at H200 the store's
+layout is interface 2's; and the command signs one load head a value, each registration read by the verifier for the
+load it expects.
 
-The gate's load: the store's pins are interface 1's H200 manifest digests (vendored) and its generator's TINY ones under
-the demo seed; the store is written once, read back to its pin, kept when present and refused (unrecorded) when it isn't
-interface 1's; the load crosses four streams to a loopback sink (a tunnel's probe ignored) with its witness, which the
-sink alone keeps and which reproduces every root; a store whose bytes aren't their digests, a sink that doesn't answer
-and a malformed heads document are refused; and the load's registrations read back under the signer's key and session
-only."""
+The gate's load: the store's pins are interface 1's H200 manifest digests (a fetched fixture) and its generator's TINY
+ones under the demo seed; the store is written once, read back to its pin, kept when present and refused (unrecorded)
+when it isn't interface 1's; the load crosses four streams to a loopback sink (a tunnel's probe ignored) with its
+witness, which the sink alone keeps and which reproduces every root; a store whose bytes aren't their digests, a sink
+that doesn't answer and a malformed heads document are refused; and the load's registrations read back under the
+signer's key and session only."""
 
 from __future__ import annotations
 

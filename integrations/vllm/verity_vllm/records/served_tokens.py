@@ -1,4 +1,4 @@
-"""The driver's served tokens of one run (`capture/tokens.json`), as GM-01's chronology check (G6) and the padded conversion
+"""The driver's served tokens of one run (`capture/tokens.json`), as the global match's chronology check (G6) and the padded conversion
 (`commit.padding_steps`) read them.
 
 Three writers write it: the one-process capture (`pipeline.m1_capture`), the TP capture (`pipeline.tp.capture`) and the TP

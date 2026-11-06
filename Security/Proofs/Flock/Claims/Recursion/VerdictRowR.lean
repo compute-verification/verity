@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.VerdictRows
-import Proofs.Flock.VBridge.AlgResZero
-import Proofs.Flock.VBridge.Family.Join
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRows
+public import Proofs.Flock.VBridge.AlgResZero
+public import Proofs.Flock.VBridge.Family.Join
 
 /-!
 # Row R: the residuals at a rep of the decision
@@ -8,14 +10,16 @@ import Proofs.Flock.VBridge.Family.Join
 `RowR` asks `AlgebraHolds` at rep `r` of table `i` (`DecAt.rep`). `rowR_of_parts` proves it from what the verdict's
 `rec-residuals` pieces give, one fact per part of the verifier's algebra at the rep's shape (`PartsZero`): the part's
 residuals vanish (VerdictPieces' `ResZero`) at elements `E` that are the rep's `w` at the part's row ports and verifier
-values `vv` that are `verifierRows`' `v` at the part's `V`. The last is check 5's tie at the verifier's values (vcalls,
-`note:20261024T2340Z-draft-vcalls-ask`), which stays a hypothesis, as in `ResTie`.
+values `vv` that are `verifierRows`' `v` at the part's `V`. The last is check 5's tie at the verifier's values, which
+stays a hypothesis, as in `ResTie`.
 
 The rest of `AlgebraHolds` is the shape's: S and its groups (`structureOf`, `groups`), the rep's coins in the rounds
 `verifierRows` draws (`roundSizes`, with none empty, row B's `noEmpty`) and `w`'s size S's `nw`. The extra claims number
 the shape's by definition (`shapeOf`), the comb has 64 elements (`combOf_size`), so `v` has S's `nv`
 (`verifierRows_v_size`) and the wire bits are in range (`structureOf_bitsOk`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Rows
 

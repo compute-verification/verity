@@ -1,7 +1,10 @@
-import Proofs.Flock.C3.PubRows.Prefix
-import Proofs.Flock.C3.Compose.Honest
-import Proofs.Flock.VBridge.Family.Pub
-import Proofs.Flock.C3.Compose.RowsReg
+module
+
+public import Proofs.Flock.C3.PubRows.Prefix
+public import Proofs.Flock.C3.Compose.Honest
+public import Proofs.Flock.VBridge.Family.Pub
+public import Proofs.Flock.C3.Compose.RowsReg
+import all Init.Data.Array.Basic
 
 /-!
 # n1: what the verifier's check of the public rows gives
@@ -21,6 +24,8 @@ units, the first port of a name, and a rec-sparse unit's own shape. What closes 
 * `PortsNamed`: each circuit names each port once (G's `PortNamesUnique`);
 * `SparseAtShape`: a rec-sparse unit's shape is the verifier's own.
 -/
+
+@[expose] public section
 
 namespace FlockC3.PubRows
 
@@ -236,7 +241,7 @@ theorem pubRow_of_checked {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {h
   have hjs : (partOf zo.I d u.val).val < sts.size := by rw [hsz]; exact (partOf zo.I d u.val).isLt
   have s := Hidden.setupHidden_spec' (hstJ _ hjs)
   have hcst : sts[(partOf zo.I d u.val).val].c = c := by
-    have h1 := s.parse
+    have h1 := s.parseF ((FlockSoundness.Discharge.Exec.tagsAt_isTmpl _ _ _).trans (HmOut.parse_isTmpl zo.hcH))
     rw [ZkHidden.parseH_tagsAt ((zkTags_typed zo.I).trans zo.ht), zo.hcH] at h1
     exact (Except.ok.inj h1).symm
   obtain ⟨pop', hpop', -, hdr⟩ := s.pub
@@ -340,7 +345,7 @@ theorem label_of_checked {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU
   have hjs : (partOf zo.I d u.val).val < sts.size := by rw [hsz]; exact (partOf zo.I d u.val).isLt
   have s := Hidden.setupHidden_spec' (hstJ _ hjs)
   have hcst : sts[(partOf zo.I d u.val).val].c = c := by
-    have h1 := s.parse
+    have h1 := s.parseF ((FlockSoundness.Discharge.Exec.tagsAt_isTmpl _ _ _).trans (HmOut.parse_isTmpl zo.hcH))
     rw [ZkHidden.parseH_tagsAt ((zkTags_typed zo.I).trans zo.ht), zo.hcH] at h1
     exact (Except.ok.inj h1).symm
   obtain ⟨pop', hpop', -, hdr⟩ := s.pub

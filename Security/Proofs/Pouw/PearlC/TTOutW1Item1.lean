@@ -1,12 +1,14 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOutW1
-import Proofs.Pouw.PearlC.HonestWords
-import Proofs.Pouw.Copy
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
+public import Proofs.Pouw.PearlC.HonestWords
+public import Proofs.Pouw.Copy
 
 /-!
-# The TT_OUT red team's item 1 at W1: guessing a `1 × 1 × k` unit's two output words
+# Guessing a `1 × 1 × k` unit's two output words at W1
 
-Lean's red team of the TT_OUT forms argued that on the earlier domain (`pearlCDomainDevOld`, which admits
-a single `1 × 1 × k` unit) a W1 program that guesses the unit's ticket word and useful word costs `2·fetch` and wins with
+On the earlier domain (`pearlCDomainDevOld`, which admits
+a single `1 × 1 × k` unit), a W1 program that guesses the unit's ticket word and useful word costs `2·fetch` and wins with
 probability at least `Pr[E]/2^64`, above `εPearlC 0 1 = 2^−128`. This file proves it, and what the narrowed domain
 (`64 ≤ n ∧ 64 ∣ n`, `pearlCDomainDev`) does to that program. It is analysis: it states and lists no assumption.
 
@@ -24,7 +26,7 @@ useful word `(0, 0, 0)`. The adversary `guessAdv` has no preprocessing and suppl
   2^64·ε(0, 1)`.
 
 **(a) The refutation** on the old domain, `¬ TTOutW1 dv salt P (pearlCDomainDevOld d) (1/400) εPearlC`, which is
-`TTOutPearlCDevW1` (rev1: `TTOutPearlCDevRev1W1`) as #3759 states it before #3675's domain:
+`TTOutPearlCDevW1` (rev1: `TTOutPearlCDevRev1W1`) as stated before the floor on `n`:
 - `not_ttOutPearlCDevW1_old`, `not_ttOutPearlCDevRev1W1_old`: at any record, once `Pr[GuessEvent] > 2^−64`;
 - `not_ttOutW1_devAt_old`, `not_ttOutW1Rev1_devAt_old`: at `devAt ⟨[32], wd, z⟩ G pp` with `wd ≥ 24` (sm_120's step
   has 26), the representability conjuncts hold always (`HonestWords`), so the hypotheses are deterministic rules on `a`
@@ -40,6 +42,8 @@ At the H100 (`devH100`, a 14-bit adder) the general forms apply, with the repres
   126 words the program never wrote. How rare such draws are is a property of the noise, which this file does not bound.
 `ttOutPearlCDevW1_of_old`: the refuted form implies the narrowed one, so the narrowing only weakens the assumption.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.TTOutW1Item1
 
@@ -63,7 +67,7 @@ noncomputable def guessAdv (dv : W1.W1Device) (salt : S → List ℕ) (a : Codes
     Adversary (W1.w1Priced dv salt : CostModel Q R S) :=
   ⟨.done [], guessProg t y, fun _ => a⟩
 
-/-- `pearlCDomainDev` as #3759 states it, before #3675's floor on `n`: `n` only positive. -/
+/-- `pearlCDomainDev` as stated before the floor on `n`: `n` only positive. -/
 def pearlCDomainDevOld (d : PearlCDevice) (L : Layout) : Prop :=
   ∀ u < L.N, 0 < (L.shape u).m ∧ 0 < (L.shape u).n ∧ 0 < (L.shape u).k ∧ 128 ∣ (L.shape u).k ∧
     (d.G = 0 ∨ 32 * d.G ∣ (L.shape u).k) ∧ (L.shape u).k ≤ 2 ^ 16

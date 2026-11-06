@@ -1,6 +1,8 @@
-import Proofs.Flock.SessionLoop.Statement
-import Proofs.Flock.Claims.ZK.FinExe
-import Proofs.Flock.Claims.ZK.PrefixLive
+module
+
+public import Proofs.Flock.SessionLoop.Statement
+public import Proofs.Flock.Claims.ZK.FinExe
+public import Proofs.Flock.Claims.ZK.PrefixLive
 
 /-!
 # `FinishIs` at the loop's own `Finish`, in parts
@@ -26,6 +28,8 @@ guarantee, each at a `Finish` `FinishIs` reads (`Loop.FinCtx`):
 Each rep's run reads the streams before it as the auditor saw them (`FlockComplete.priorOf` of `Loop.streamOf`), which
 (d) makes the session's. **`Loop.finishIs_of_parts`**: (a) to (d) give `FinishIs` at `ofLoopLink`.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

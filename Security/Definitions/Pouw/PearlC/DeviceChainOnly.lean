@@ -1,7 +1,9 @@
-import Definitions.Pouw.PearlC.DeviceKernelWref
+module
+
+public import Definitions.Pouw.PearlC.DeviceKernelWref
 
 /-!
-# The chain-only reading at a device record (the price-twins lane's file; definitions only, staged)
+# The chain-only reading at a device record (definitions only, staged)
 
 The forming-credit reading credits the salt-dependent forming (`fs` per activation element). The chain-only reading
 credits the unit without it, as `creditChainOnly` does at the H100 (`Game`): `creditDev` less `fs·m·k`, less the
@@ -9,6 +11,8 @@ unit's debit. The cap stays on the full credit, so a unit within it keeps at lea
 Per tile the fixed credit is that times the credited rows' share. `W_ref` is the kernel's (`DeviceKernelWref`), and
 every other field is the record's. TT_OUT at these protocols is stated in `TTOutChainOnly`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

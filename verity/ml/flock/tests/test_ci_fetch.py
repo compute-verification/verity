@@ -1,6 +1,6 @@
 """`ci.fetch` reaches the evidence store inside a recorded check. `check`'s steps carry no store credentials, only the run's
 custody dir (`$CHECK_STORE_CUSTODY`), so the store CLI is handed that key, as integrations/vllm's `store_io` is. Without it the
-Lean tests that fetch their stages through `ci.fetch` skipped in every recorded check (#757's red team)."""
+Lean tests that fetch their stages through `ci.fetch` skipped in every recorded check."""
 from __future__ import annotations
 
 import json

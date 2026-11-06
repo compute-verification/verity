@@ -1,6 +1,8 @@
-import Definitions.Pouw.PearlC.PeelExact
-import Proofs.Pouw.PearlC.Peel
-import Proofs.Pouw.PearlC.AtomErr
+module
+
+public import Definitions.Pouw.PearlC.PeelExact
+public import Proofs.Pouw.PearlC.Peel
+public import Proofs.Pouw.PearlC.AtomErr
 
 /-!
 # P2 on the served U (staging, nothing pinned)
@@ -11,7 +13,7 @@ than on exact peel factors.
 **(a) The noise cancels exactly.** Each pinned step has an exact counterpart, with every truncation and rounding
 replaced by the exact value: the chains `C̃_ij`, `A′·F_B`, `B̃·F_A` and `G = F_Bᵀ·F_A` (`chainQ`: `cQ`, `afQ`, `bfQ`,
 `gQ`), the rows `P_A,i = [be_A,i ‖ A′·F_B]` (`paQ`) and `P_B,j = [Σ_p be_B,jp·G_pq − B̃·F_A ‖ −be_B,j]` (`accQ`, `pbQ`),
-and U's four K16 steps from `C̃_ij` (`k16Q`, `uQ`). When `32 ∣ k`, `uQ` is #311's U with unit `β` on the served noise
+and U's four K16 steps from `C̃_ij` (`k16Q`, `uQ`). When `32 ∣ k`, `uQ` is Pearl's U with unit `β` on the served noise
 (`uQ_eq_peelUQ`, on rational factors since the rows are BF16 words, not codes: `peelUQ`): `E_A`, `E_B` are the values
 of the peel's rows `beA`, `beB` and `F_A`, `F_B` the bases' values. So it is `(A′ − N_A)·(B̃ − N_B)ᵀ` with
 `N_A = be_A·F_Aᵀ`, `N_B = be_B·F_Bᵀ` (`uQ_cancel`, by `peelUQ_cancel`). Which noise the rows hold: under v1 they are
@@ -42,6 +44,8 @@ other row's exact entry (`rowErr`, from `paEntry_err` and `pbEntry_err`).
 `(A′ − N_A)·(B̃ − N_B)ᵀ`, a function of the salt through `N_A` and `N_B`.
 -/
 
+@[expose] public section
+
 namespace Pouw.PearlC.PeelExactProofs
 
 open Pouw.Fp8Atom Pouw.PearlC Pouw.PearlC.PeelExact Matrix
@@ -53,7 +57,7 @@ variable {m n k : Nat}
 /-- A BF16 word's value: the FP32 word `h <<< 16`'s, `0` where that is not finite. -/
 def bfVal (h : Nat) : ℚ := (wordQ (h <<< 16)).getD 0
 
-/-- #311's U at unit `β` on rational factors: `C̃ + [E_A ‖ A′·F_B]·[(E_B·F_Bᵀ − B̃)·F_A ‖ −E_B]ᵀ`, `peelU`'s form for
+/-- Pearl's U at unit `β` on rational factors: `C̃ + [E_A ‖ A′·F_B]·[(E_B·F_Bᵀ − B̃)·F_A ‖ −E_B]ᵀ`, `peelU`'s form for
 noise rows that are BF16 values rather than E4M3 codes, as the served rows are. -/
 def peelUQ (Ct : Matrix (Fin m) (Fin n) ℚ) (A' : Matrix (Fin m) (Fin k) ℚ) (B' : Matrix (Fin n) (Fin k) ℚ)
     (EA : Matrix (Fin m) (Fin 32) ℚ) (FA : Matrix (Fin k) (Fin 32) ℚ) (EB : Matrix (Fin n) (Fin 32) ℚ)
@@ -157,7 +161,7 @@ section Exact
 variable (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fin n) (Fin k) Code) (FA FB : Matrix (Fin k) (Fin 32) Code)
   (beA : Matrix (Fin m) (Fin 32) Nat) (beB : Matrix (Fin n) (Fin 32) Nat)
 
-/-- **The exact counterpart is #311's U on the served noise**: with unit `β`, `E_A`, `E_B` the values of `beA`, `beB`
+/-- **The exact counterpart is Pearl's U on the served noise**: with unit `β`, `E_A`, `E_B` the values of `beA`, `beB`
 and `F_A`, `F_B` the bases' values (`peelUQ`). -/
 theorem uQ_eq_peelUQ (hk : 32 ∣ k) (i : Fin m) (j : Fin n) :
     uQ Aq Bq FA FB beA beB i j =

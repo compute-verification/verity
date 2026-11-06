@@ -1,14 +1,18 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOut
-import Definitions.Pouw.PearlC.DeviceChainOnly
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOut
+public import Definitions.Pouw.PearlC.DeviceChainOnly
 
 /-!
-# TT_OUT under the chain-only reading at a device record (the price-twins lane's file; staged, nothing pinned)
+# TT_OUT under the chain-only reading at a device record (staged, nothing pinned)
 
 The four chain-only forms of the record's TT_OUT: `TTOut` and `TTOutTile` at the chain-only protocol and tiles
 (`DeviceChainOnly`), unit and per audit tile, unrev'd and rev1. Each is implied by the record's own TT_OUT
 (`ChainOnlyGamma`'s `…ChainOnly_of_ttOut`), so none is a new assumption; they sit in an assumptions module as the
 bundle's named `Prop`s do.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Assumptions
 
