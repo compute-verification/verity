@@ -1,5 +1,5 @@
 """The test-file family: on this tree its tasks are the test files `suites.py` runs; on a toy checkout its listing is the same
-bytes from any checkout of the same files, and a test file's inputs are its conftests, the `__init__.py` files their import runs,
+bytes from any checkout of the same files, a suite check runs after its Lean steps makes none, and a test file's inputs are its conftests, the `__init__.py` files their import runs,
 their import closure, what they start, the suite's declared data and reads, the pyprojects above it and the read guard; and its runner's
 status is pytest's verdict on the file under the read guard: a pass, a fail when a test or its collection failed, an error when
 the file read outside its inputs or pytest was killed."""
@@ -16,6 +16,7 @@ import pytest
 from conftest import toy_tree
 
 from verity_graph import ROOT, graph, runners
+from verity_graph.families import build
 from verity_graph.families import test_file as family
 from verity_graph.runners import test_file as runner
 
@@ -140,6 +141,26 @@ def test_a_test_file_s_inputs(tmp_path):
     tree = family.Tree(root, graph.tracked(root))
     assert family.Imports(tree, family.Layout(tree)).info("s/tests/test_a.py").unfollowed == 1, \
         "import_module(name) is followed only for a constant name"
+
+
+def test_a_suite_check_runs_after_its_lean_steps_makes_no_test_file_task(tmp_path):
+    """A suite `suites.AFTER_LEAN` names, by its name or its path, runs once: as the build family's lean-suites task, after
+    lean-build has built what it runs, never as test-file tasks besides; in a tree without the verifier, which lists no
+    lean-suites task, its files are test-file tasks, as check runs it with the rest there."""
+    pytest_ = '\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n'
+    files = {**SUITE, build.SUITES: 'AFTER_LEAN = ("toy-suite", "t")\n',
+             "t/pyproject.toml": f'[project]\nname = "toy-t"\n{pytest_}', "t/tests/test_t.py": "def test_t():\n    pass\n",
+             "u/pyproject.toml": f'[project]\nname = "toy-u"\n{pytest_}', "u/tests/test_u.py": "def test_u():\n    pass\n"}
+    plain = toy_tree(tmp_path / "plain", SPEC, files)
+    assert [t["id"] for t in family.tasks(plain, graph.tracked(plain))] == [
+        "test-file:s/tests/sub/test_b.py", "test-file:s/tests/test_a.py", "test-file:s/tests/test_c.py",
+        "test-file:s/tests/test_d.py", "test-file:t/tests/test_t.py", "test-file:u/tests/test_u.py"]
+    assert build.tasks(plain, graph.tracked(plain)) == []
+    lean = {f"{build.LEAN}/lakefile.toml": 'defaultTargets = ["v"]\n[[lean_exe]]\nname = "v"\n', f"{build.LEAN}/V.lean": ""}
+    root = toy_tree(tmp_path / "tree", SPEC, {**files, **lean})
+    assert [t["id"] for t in family.tasks(root, graph.tracked(root))] == ["test-file:u/tests/test_u.py"]
+    assert [t["id"] for t in build.tasks(root, graph.tracked(root)) if t["kind"] == "lean-suites"] == [
+        "lean-suites:toy-suite", "lean-suites:t"]
 
 
 WALKS = {
