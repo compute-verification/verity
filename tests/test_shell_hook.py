@@ -308,6 +308,11 @@ def test_one_agent_per_checkout_switching_another_agents_worktree_or_pushing_its
     subprocess.run([sys.executable, str(ROOT / "tools/agent-guard/worktree_guard.py"), "hand", "coord", "bc-worker"], check=True,
                    capture_output=True, env={**os.environ, **env})
     assert ask("git push origin coord", "bc-worker")["permission"] == "allow"
+    hand = "python3 tools/agent-guard/worktree_guard.py hand coord bc-third"
+    out = ask(hand, "bc-coord")
+    assert out["permission"] == "deny" and "belongs to agent bc-worker" in out["agent_message"], "only the owner hands a branch on"
+    assert ask(hand, "bc-worker")["permission"] == "allow"
+    assert ask("python3 tools/agent-guard/worktree_guard.py hand unregistered bc-third", "bc-coord")["permission"] == "allow"
     assert ask("git checkout lane", "")["permission"] == "allow", "no conversation id: nothing to judge"
 
 

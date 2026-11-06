@@ -448,7 +448,8 @@ def main() -> int:
     except Exception:                                   # a bug in the local-work gate must not stop every command
         low = None
     try:
-        low = low or (None if deny or "git" not in command else checkout_reason(command, conversation, cwd))
+        low = low or (None if deny or ("git" not in command and "worktree_guard" not in command)
+                      else checkout_reason(command, conversation, cwd))
     except Exception:                                   # nor one in the checkout guard
         pass
     if deny or low:
