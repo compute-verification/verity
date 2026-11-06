@@ -668,6 +668,9 @@ LOWRISK_EXCLUDE_RE = re.compile(r"(?:[\w.-]+/)+|[\w.*?\[\]-]+")
 EXECUTOR_MODES = ("off", "shadow", "on")
 #: the keys a flag of drive's command line can set (`DriveFlags.override`), each as `--KEY` with `_` as `-`
 COMMAND_LINE = ("on", "marked_after", "regenerate_locks", "first", "after_landing_no_cache")
+#: drive.toml keys whose code was deleted: a drive deployed ahead of `main` (`drive.sh deploy SHA`) still reads them in
+#: `main`'s drive.toml, so even a strict parse ignores them, with a note, rather than refuse every tick
+DELETED_KEYS = ("max_lean_checks", "nonlean_first", "reviewed_first")
 #: what `DriveFlags.signed_verdicts` keeps off the low-risk lane: who holds each handle, and the code that judges a label
 SIGNED_GUARDS = (str(REGISTRY), "tools/research/src/research/labelauth.py", "tools/research/src/research/queue.py",
                  "tools/research/src/research/drive.py")
@@ -741,10 +744,11 @@ class DriveFlags:
         for k in list(doc):
             if k not in keys:
                 near = difflib.get_close_matches(k, keys, n=1)
-                if strict:
+                if strict and k not in DELETED_KEYS:
                     raise QueueError(f"{source}: unknown key {k!r}{f' (did you mean {near[0]!r}?)' if near else ''}: drive "
                                      f"reads only {', '.join(keys)}; rename or remove it, or update this research")
-                print(f"{source}: ignoring key {k!r}, which this research doesn't read (a newer one may)", file=sys.stderr)
+                print(f"{source}: ignoring key {k!r}, which this research doesn't read "
+                      + ("(its code was deleted: remove it)" if k in DELETED_KEYS else "(a newer one may)"), file=sys.stderr)
                 del doc[k]
 
         def bad(k: str, want: str) -> QueueError:
