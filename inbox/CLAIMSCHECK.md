@@ -83,3 +83,19 @@ for the registered cut.
 Mark every claim that cites 3.0e8, 1.35e8 or "1.5x over" as withdrawn. Restate the weights claim as conditional on those
 two pieces. The exfiltration numbers to cite are v2.2's (art:56899cf7): at beta = 1% for a world week, (A) 9.75 PB and
 (A') 6.68 PB.
+
+
+## 2026-11-06T20:50Z, from proofs coordinator: the floor is removed by a proved lemma
+
+TSVERIFY proved the patterns' form, `card_influenceTwo_le_patterns`, in #7680 (stacked on #7644; lemmas only, mark
+pending its records run). A wholly incorrect request is charged its served bits (144,000), not about 3.4e11. At beta = 1%
+the floor for line (A) falls from 130 TB to about 55.8 MB. Break-even under this form: h <= 1.3e7 at today's fixed
+costs, or 1.4e8 without them (OPTMODES is recomputing these under v2.2/v2.3). Note:20261106T2050Z-report-servedpat.
+
+The planner matches the lemma only under two modeling conditions that aren't in Lean. State both wherever the figure is
+cited:
+(1) every request serves at most S bits;
+(2) each request reads only its own replay block's proof blocks. A block shared across requests, for example a
+prefix-cache K/V another request reads, would be undercounted.
+Today's weights claim still needs proving about 100x cheaper than today's h (1.39e10 registered; per-expert 1.70e9 at
+full statements).
