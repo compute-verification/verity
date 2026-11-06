@@ -24,6 +24,11 @@ def _module(name: str, path: Path):
 CHECK = _module("repo_check_for_deferred", ROOT / "tools" / "verity" / "check" / "check.py")
 
 
+@pytest.fixture(autouse=True)
+def _provers(provers):
+    return provers(CHECK)
+
+
 def _main(monkeypatch, tmp_path, argv):
     got = []
     monkeypatch.setenv("RESEARCH_RUN_ID", "r20261018-000000-abcd")

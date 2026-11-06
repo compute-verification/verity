@@ -1239,8 +1239,9 @@ def layout_check(probe: Probe, ins: Instruction) -> dict:
 
 
 def special_all_finite_records(path: Path) -> list[dict]:
-    """The all-finite records (finite acc, finite a and b words) of a ``tc-total-2026-09-07/<device>/mma_special.reduced.json.gz``
-    file, in the golden-record shape: the ``cases`` list and the ``pos`` list (one measured word each)."""
+    """The all-finite records (finite acc, finite a and b words) of a device's ``mma_special.reduced.json.gz`` from the
+    A100 and RTX 4090 special-value campaign, in the golden-record shape: the ``cases`` list and the ``pos`` list (one
+    measured word each)."""
 
     import gzip
 
@@ -1263,8 +1264,8 @@ def special_all_finite_records(path: Path) -> list[dict]:
 
 
 def hopper_capture_records(path: Path) -> list[dict]:
-    """Every record of veritor's H100 BF16 wgmma capture (``tc-hopper-2026-09-07/special.reduced.json.gz``: 14 families, the
-    non-finite ones included), in the golden-record shape with ``family`` set."""
+    """Every record of veritor's H100 BF16 wgmma capture (its ``special.reduced.json.gz``: 14 families, the non-finite
+    ones included), in the golden-record shape with ``family`` set."""
 
     import gzip
 
