@@ -279,7 +279,7 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   property resting on it, which stays under `frozen` only as `falsified`. Every package is checked: without a `shape`
   section each guarantee is frozen or fails. An entry added to `frozen`, and a conjecture added or with a new status,
   is a claims change: the landing DM shows it with its reason (`research/spec_alert.py`), and nothing waits on it.
-- **The spec**, the trusted text a guarantee is stated over, is the `layers` prefixes: the modules whose imports the
+- **The spec**, what a guarantee is stated over, is the `layers` prefixes: the modules whose imports the
   policy rules. Every definition a guarantee's statement reads (theorems are not read: a statement means the same
   whatever proves the propositions in it), followed through `meaning` and where the walk leaves it, must lie in the spec
   of its package or of a package it requires by path (by that package's own `layers`), or in a pinned dependency (the
