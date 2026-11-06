@@ -303,6 +303,24 @@ def test_a_sharded_run_that_passes_moves_main_and_the_verified_record_together_a
     assert not any("passed without passing" in p for p in h.posts), h.posts
 
 
+def test_main_follows_a_baseline_of_every_step_on_the_gate(world, monkeypatch):
+    """ci's `--steps` baseline counts once it names every step on the merge gate: circuit-check, off it, needn't be among them."""
+    from research import queue as Q
+
+    h = _gated(world, monkeypatch)
+    main = _main(world)
+    tip = _landed(h, {"a.txt": "1\n"})
+    state = h.q.load_state()
+    state["drive"]["postland"]["run"] = None
+    h.q.save_state(state)
+    with pytest.raises(QueueError, match=f"--steps leaves out {GATED[-1]}, on the merge gate"):
+        Q.baseline(h.q, tip, "ci", ",".join(GATED[:-1]))
+    assert _main(world) == main
+    assert Q.baseline(h.q, tip, "ci", ",".join(GATED)) == 0 and _main(world) == tip
+    h.tick()
+    assert h.postland()["verified"] == tip, world.logs
+
+
 def test_a_tick_takes_a_main_moved_beside_it_as_verified_and_follows_what_it_brought_once(world, monkeypatch):
     """A `main` moved beside drive (`research queue baseline` or `promote`) is `verified` from the next tick on, as drive's own
     promotion leaves it: the red records at or below it of steps on the merge gate end (a `suite` one too, the gate holding

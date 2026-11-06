@@ -1797,34 +1797,18 @@ class Driver:
             cache[commit] = gating(self.repo, commit)
         return cache[commit]
 
-    def _passes_gate(self, run: dict) -> bool:
-        """Whether an after-landing run, ended or still running, passed every step `main` waits for at its tip (`_gating`), or
-        failed it only on failures an allowance covers (`_allowed_steps`), whatever a step off the gate does or did
-        (circuit-check, pending or red)."""
-        dirs = self._evidence(Verdict("failed", " ".join(run["ids"])))
-        passed = {st.get("step") for d in dirs for st in step_records(d) if st.get("status") == "passed"}
-        return set(self._gating(run["tip"])) <= passed | self._allowed_steps(run["tip"], dirs)
-
     def _gate_passed(self, pl: dict, run: dict) -> None:
-        """A run that `_passes_gate`: its tip is `gated` (with "gated_run", its ids), a commit `_promote` may move `main` to."""
-        tip = run["tip"]
+        """An after-landing run, ended or still running, that passed every step `main` waits for at its tip (`_gating`), or
+        failed it only on failures an allowance covers (`_allowed_steps`), whatever a step off the gate does or did
+        (circuit-check, pending or red): its tip is `gated` (with "gated_run", its ids), a commit `_promote` may move `main` to."""
+        tip, ids = run["tip"], " ".join(run["ids"])
         if (g := pl.get("gated")) and (g == tip or not self._ancestor(g, tip)):
             return
-        if self._passes_gate(run):
-            pl["gated"], pl["gated_run"] = tip, " ".join(run["ids"])
+        dirs = self._evidence(Verdict("failed", ids))
+        passed = {st.get("step") for d in dirs for st in step_records(d) if st.get("status") == "passed"}
+        if set(self._gating(tip)) <= passed | self._allowed_steps(tip, dirs):
+            pl["gated"], pl["gated_run"] = tip, ids
             pl.pop("gated_by", None)
-
-    def not_promotable(self, run: dict) -> str | None:
-        """Why ``run``, the after-landing run in drive's state, moves no `main` beside drive (`queue.promote`), or None once each
-        of its runs (every shard's twins) has ended and it passed every step on the merge gate at its tip (`_passes_gate`), as
-        `follow_postland` judges it.  The executor's check (`executor = "on"`) moves `main` only through drive's own pass."""
-        if "tasks" in run:
-            return "it is the executor's check, which only drive's pass follows"
-        if run.get("shards") or "launch" in run or not run.get("ids"):
-            return "it is still launching"
-        if running := [r for r, (st, *_) in self._states(run["ids"]).items() if st in ACTIVE]:
-            return f"{' '.join(running)} still {'runs' if len(running) == 1 else 'run'}"
-        return None if self._passes_gate(run) else "it didn't pass every step on the merge gate"
 
     def _shards_launched(self, drive: dict, pl: dict, run: dict) -> bool:
         """Whether every shard of a sharded after-landing run (`start_postland`) has its run ids, which then become the run's own
@@ -3040,6 +3024,20 @@ class Driver:
         if g := pl.get("gated"):
             out.append((g, pl.get("gated_run") or ""))
         return out
+
+    def not_promotable(self, run: dict) -> str | None:
+        """Why ``run``, the after-landing run in drive's state, moves no `main` beside drive (`queue.promote`), or None once each
+        of its runs (every shard's twins) has ended and its tip is one the tick takes as `gated` (`_gate_passed`).  The
+        executor's check (`executor = "on"`) moves `main` only through drive's own tick."""
+        if "tasks" in run:
+            return "it is the executor's check, which only drive's tick follows"
+        if run.get("shards") or "launch" in run or not run.get("ids"):
+            return "it is still launching"
+        if running := [r for r, (st, *_) in self._states(run["ids"]).items() if st in ACTIVE]:
+            return f"{' '.join(running)} still {'runs' if len(running) == 1 else 'run'}"
+        judged: dict = {}
+        self._gate_passed(judged, run)
+        return None if "gated" in judged else "it didn't pass every step on the merge gate"
 
     def _promote(self, drive: dict) -> None:
         """When drive lands on `checked` (drive.toml's `land_into`), fast-forward `main` to the newest commit of `checked` whose
