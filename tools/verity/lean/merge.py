@@ -5,24 +5,26 @@
     python tools/verity/lean/merge.py --lakefile BASE OURS THEIRS [PATH]   the same for a `lakefile.toml` (`lakefile-lists`)
     python tools/verity/lean/merge.py --caps BASE OURS THEIRS [PATH]   the same for `tests/test_lean_packages.py` (`lean-caps`)
     python tools/verity/lean/merge.py --install [REPO]         register the drivers in the repository's git config, once per clone
-    python tools/verity/lean/merge.py --normalize FILE...      recompute each `reads` digest from its definitions
+    python tools/verity/lean/merge.py --normalize FILE...      recompute each `reads` digest from its definitions, and drop
+                                                               the readers an older record lists
 
 `.gitattributes` names this driver for every `lean-audit.json`, and git runs it when both sides changed the file. A record is
 a map of entries by name: the guarantees, the modules under `reads`, the assumptions, the dependencies, and the policy's own
 sections. Each side's change to an entry (added, changed or removed) applies. Under `reads`, which two branches adding
-guarantees that read one module both change, the module's definitions merge the same way, its readers (`guarantees`) as
-sets, and its digest is recomputed from the merged definitions (`audit.module_digest`). A side written before guarantees
-were called that (`pins`) is read under today's names (`audit.as_guarantees`).
+guarantees that read one module both change, the module's definitions merge the same way, and its digest is recomputed
+from the merged definitions (`audit.module_digest`). A side written before guarantees were called that (`pins`) is read
+under today's names (`audit.as_guarantees`), and a side whose `reads` groups still list their readers (`audit.READER_KEYS`)
+is read without them, so a branch from before the lock dropped them merges with one from after.
 
-What the build determines never refuses: the records `check.py --update` writes from it and a train's Lean check
+What the build determines never refuses: the records `check.py --update` writes from it and the Lean check of `next`
 (`--regenerate`) rewrites on the merged tree whenever they differ (`audit.RECORD_DIFFERENCE`, `audit.regenerated`). Those are
 a guarantee's record (signature, named assumptions, type hash: restated on both sides, the merged tree's statement decides
-it), each `reads` group (which guarantees read which definition, and each definition's hash) and an assumption's `digest`.
-Where the sides disagree the merge takes the union (a definition or a module one side stopped reading, unless that side
-moved the definition to another module, where alone it stays (`moved`), or renamed or deleted it, which its record says by
-reading it nowhere while it states every reader of the module as the base did (`gone`); readers as sets less those the
-merged record no longer lists, a group left without readers or definitions dropped) or ours' value (a hash or a record
-both sides changed differently), and names each in one line on stderr. Whether a guarantee is listed is
+it), each `reads` group (which definitions the guarantees read, and each one's hash) and an assumption's `digest`.
+Where the sides disagree the merge takes the union (a definition the other side changed while one side stopped reading
+it) or ours' value (a hash or a record both sides changed differently), and names each in one line on stderr. A definition
+one side reads nowhere while the other kept it as the base had it is dropped (`gone`): none of that side's guarantees
+reads it, so in the merged tree only the other side's new or restated guarantees can, and one moved to another module
+leaves the old one (`moved`); a group left without definitions is dropped. Whether a guarantee is listed is
 not the build's: one side's removal applies over the other's change to its record. What only a person writes still
 refuses when both sides changed it differently: an `owner`, a `shape` or `frozen` entry (a `shape.inline` entry is one
 premise of a guarantee, so two sides that each add or drop premises of one guarantee merge: `DEEPER`; a premise both
@@ -37,9 +39,9 @@ a PR, stands as a candidate, which the Lean check of the merged commit judges.
 
 Exit 0: merged. Exit 1: refused, the entries named on stderr and OURS left as it was, which git reports as a conflict; then
 regenerate the record on the merged tree (`check.py --update`), as without the driver. A merged record is a candidate, never
-a verdict: `check`'s Lean audit rebuilds every record of the merged tree and fails on any difference, as for any record; a
-train's (`--regenerate`) commits the regenerated records on landing, and the landing DM shows each one that changed
-against `main`.
+a verdict: `check`'s Lean audit rebuilds every record of the merged tree and fails on any difference, as for any record; the
+Lean check of `next` (`--regenerate`) regenerates them, drive commits them when it lands, and the landing DM shows each
+one that changed against `main`.
 
 Git runs a driver from the worktree of the side merged into, so a branch whose checkout took older merge rules would merge
 `main`, or another branch, by those (`deferred`): when `origin/main` has changed this file or `check.py` since the checkout took
@@ -187,7 +189,7 @@ def derived(path: str, o, a, b, candidate: list[str]):
     """The three-way merge of a value the build determines (a definition's hash, an assumption's digest, a guarantee's
     signature, named assumptions and type hash): as `one`, but no clash refuses.  A value both sides changed differently is
     ours' (named ``path (ours)`` in ``candidate``), and one removed on one side and changed on the other is kept (the union,
-    named ``path``): the train's Lean check regenerates it from the merged tree."""
+    named ``path``): the Lean check of `next` regenerates it from the merged tree."""
     if a == b or a == o:
         return b
     if b == o:
@@ -206,7 +208,7 @@ def owned(rec, k: str = "owner"):
 def guarantees(o: dict, a: dict, b: dict, why: list[str], candidate: list[str]) -> dict:
     """The guarantees entry by entry, each one's `owner` apart from the rest of its record: a branch that restates a guarantee
     and one that gives it an owner merge.  The rest of a record (signature, named assumptions, type hash) is the build's, so
-    two sides that restated it differently merge as ours' record (`derived`), which the train's Lean check rebuilds from the
+    two sides that restated it differently merge as ours' record (`derived`), which the Lean check of `next` rebuilds from the
     merged statement.  Whether a guarantee is listed is not the build's: one side's removal applies over the other's
     change to its record, and refuses only when that side changed its owner."""
     out = {}
@@ -237,7 +239,7 @@ def guarantees(o: dict, a: dict, b: dict, why: list[str], candidate: list[str]) 
 def assumptions(o: dict, a: dict, b: dict, why: list[str], candidate: list[str]) -> dict:
     """The named assumptions entry by entry, each one's `owner` (hand-written) apart from its `digest` (the build's: the hash
     its `reads` record holds), which merges as `derived`.  An entry one side removed and the other changed is kept: the
-    train's Lean check drops it when no guarantee of the merged tree reads it (`assumptions.unread`)."""
+    Lean check of `next` drops it when no guarantee of the merged tree reads it (`assumptions.unread`)."""
     out = {}
     for k in keys("assumptions", a, b):
         x, y, z = o.get(k, MISSING), a.get(k, MISSING), b.get(k, MISSING)
@@ -256,24 +258,22 @@ def assumptions(o: dict, a: dict, b: dict, why: list[str], candidate: list[str])
 
 def core(group):
     """What a `reads` entry says, its digest (which it determines) aside."""
-    return None if group is None else (A.definitions(group), sorted(group.get("guarantees", [])))
+    return None if group is None else A.definitions(group)
 
 
 def group(m: str, x: dict, y: dict, z: dict, why: list[str], candidate: list[str], dropped: dict | None = None) -> dict:
-    """One module's `reads` entry, both sides having changed it: definitions entry by entry, readers as sets.  A definition one
-    side no longer reads while the other still reads it stays, with the other side's hash: the record does not say which
-    guarantees read it, so the union is the candidate (``candidate``), and the train's Lean check regenerates the group.  But
-    when the dropping side's `gone` (``dropped``, by "ours" and "theirs") says it renamed or deleted it, and the other side kept
-    its hash, the removal applies: the union would bring back a read of a definition the merged tree no longer has (a
-    `J10R.Layout` renamed `NoiseLayout` would stay beside the new name).  A hash both sides changed differently is ours'
-    (`derived`)."""
+    """One module's `reads` entry, both sides having changed it: definitions entry by entry.  A definition one side no
+    longer reads while the other still reads it stays, with the other side's hash, unless the dropping side's `gone`
+    (``dropped``, by "ours" and "theirs") says the merged tree reads it nowhere: the union is the candidate
+    (``candidate``), and the Lean check of `next` regenerates the group.  A hash both sides changed differently is
+    ours' (`derived`)."""
     xd, yd, zd = A.definitions(x), A.definitions(y), A.definitions(z)
     defs = {}
     for d in sorted(set(xd) | set(yd) | set(zd)):
         p, q, r = xd.get(d, MISSING), yd.get(d, MISSING), zd.get(d, MISSING)
         if p is not MISSING and (q is MISSING) != (r is MISSING):
             h = q if r is MISSING else r
-            if h == p and dropped and dropped["ours" if q is MISSING else "theirs"](d):
+            if dropped and dropped["ours" if q is MISSING else "theirs"](d, h != p):
                 continue
             defs[d] = h
             candidate.append(f"reads[{m}].definitions[{d}]")
@@ -281,27 +281,23 @@ def group(m: str, x: dict, y: dict, z: dict, why: list[str], candidate: list[str
             defs[d] = v
     if len({len(h) for h in defs.values() if isinstance(h, str)}) > 1:
         candidate.append(f"reads[{m}] (32-bit and SHA-256 hashes mixed)")
-    xp, yp, zp = set(x.get("guarantees", [])), set(y.get("guarantees", [])), set(z.get("guarantees", []))
-    return {"definitions": defs, "guarantees": sorted((yp & zp) | (yp - xp) | (zp - xp))}
+    return {"definitions": defs}
 
 
-def gone(m: str, o: dict, side: dict, other: dict, records: tuple[dict, dict, dict], candidate: list[str]):
-    """Whether a definition of module ``m`` that ``side`` (its `reads`) no longer lists anywhere was renamed or deleted there,
-    as `group` asks: every guarantee that read ``m`` at the base is, on that side, removed or stated as at the base, so the same
-    statements no longer reach it.  One the side restated may only have stopped reading it, which leaves the union.  A removal
-    the other side's new or restated readers of ``m`` may still need is named in ``candidate``."""
-    base, mine, others = records
+def gone(m: str, side: dict, other_new: bool, candidate: list[str]):
+    """Whether a definition of module ``m`` that ``side`` (its `reads`) lists nowhere, while the other side lists it, leaves
+    the merged record, as `group` asks (with whether the other side changed its hash).  None of that side's guarantees
+    reads it, and a guarantee the other side left as the base had it is in the merged tree as that side states it, or
+    removed, so only the other side's new or restated guarantees (``other_new``) may read it there.  Without any, the
+    removal applies.  With some, it applies while the other side kept the definition's hash, named in ``candidate``: the
+    union would bring back a read of a definition the merged tree may no longer have (a `J10R.Layout` renamed
+    `NoiseLayout` would stay beside the new name); where the other side changed the hash, the union stays."""
     listed = {d for g in side.values() for d in A.definitions(g)}
 
-    def same(rec: dict, g: str) -> bool:
-        return g not in rec or (g in base and A.unowned(rec[g]) == A.unowned(base[g]))
-    kept = all(same(mine, g) for g in (o.get(m) or {}).get("guarantees", []))
-    new = any(not same(others, g) for g in (other.get(m) or {}).get("guarantees", []))
-
-    def ask(d: str) -> bool:
-        if d in listed or not kept:
+    def ask(d: str, rehashed: bool) -> bool:
+        if d in listed or (other_new and rehashed):
             return False
-        if new:
+        if other_new:
             candidate.append(f"reads[{m}].definitions[{d}] (removed)")
         return True
     return ask
@@ -309,7 +305,12 @@ def gone(m: str, o: dict, side: dict, other: dict, records: tuple[dict, dict, di
 
 def reads(o: dict, a: dict, b: dict, why: list[str], candidate: list[str],
           records: tuple[dict, dict, dict] = ({}, {}, {})) -> dict:
-    """The `reads` sections merged module by module (`group`), ``records`` being the base's, ours' and theirs' guarantees."""
+    """The `reads` sections merged module by module (`group`), ``records`` being the base's, ours' and theirs' guarantees,
+    of which each side's new or restated ones (`audit.restated`) may read what the other side reads nowhere.  A module left
+    without definitions is dropped."""
+    base = {"guarantees": records[0], "reads": o}
+    new = {"ours": bool(A.restated(base, {"guarantees": records[1], "reads": a})),
+           "theirs": bool(A.restated(base, {"guarantees": records[2], "reads": b}))}
     out = {}
     for m in sorted(set(a) | set(b)):
         x, y, z = o.get(m), a.get(m), b.get(m)
@@ -320,24 +321,27 @@ def reads(o: dict, a: dict, b: dict, why: list[str], candidate: list[str],
         elif core(z) == core(x):
             g = y
         else:
-            drop = {"ours": gone(m, o, a, b, records, candidate),
-                    "theirs": gone(m, o, b, a, (records[0], records[2], records[1]), candidate)}
+            drop = {"ours": gone(m, a, new["theirs"], candidate), "theirs": gone(m, b, new["ours"], candidate)}
             if y is None or z is None:
                 g = group(m, x or {}, y or {}, z or {}, why, [], drop)
                 candidate.append(f"reads[{m}]")
             else:
                 g = group(m, x or {}, y, z, why, candidate, drop)
         if g is not None:
-            out[m] = {"definitions": dict(sorted(A.definitions(g).items())), "guarantees": sorted(g.get("guarantees", []))}
-    moved(o, a, b, out, candidate)
+            out[m] = {"definitions": dict(sorted(A.definitions(g).items()))}
+    moved(o, a, b, out, candidate, new)
+    for m in [m for m, g in out.items() if not g["definitions"]]:
+        del out[m]
+        if f"reads[{m}]" not in candidate:
+            candidate.append(f"reads[{m}]")
     return {m: {"digest": A.module_digest(g["definitions"]), **g} for m, g in out.items()}
 
 
-def moved(o: dict, a: dict, b: dict, out: dict, candidate: list[str]) -> None:
+def moved(o: dict, a: dict, b: dict, out: dict, candidate: list[str], new: dict[str, bool]) -> None:
     """A Lean declaration lives in one module: a definition one side moved (it added it under another module of the merged
     table and no longer lists it under this one) leaves the module the other side's group kept it in, and is no longer the
-    candidate `group` named.  Its hash is the mover's; when the other side changed it in the old module, or added
-    guarantees there that may read it in the new one, the new module's group is the candidate."""
+    candidate `group` named.  Its hash is the mover's; when the other side changed it in the old module, or added or
+    restated guarantees (``new``, by side), which may read it in the new one, the new module's group is the candidate."""
     def defs(s: dict, m: str) -> dict:
         return A.definitions(s.get(m) or {})
     where: dict[str, list[str]] = {}
@@ -353,9 +357,8 @@ def moved(o: dict, a: dict, b: dict, out: dict, candidate: list[str]) -> None:
             del out[m]["definitions"][d]
             if f"reads[{m}].definitions[{d}]" in candidate:
                 candidate.remove(f"reads[{m}].definitions[{d}]")
-            kept = a if d in defs(a, m) else b
-            new = set((kept.get(m) or {}).get("guarantees", [])) - set((o.get(m) or {}).get("guarantees", []))
-            if defs(kept, m).get(d) != defs(o, m).get(d) or new & set(out[m]["guarantees"]):
+            kept = "ours" if d in defs(a, m) else "theirs"
+            if defs(a if kept == "ours" else b, m).get(d) != defs(o, m).get(d) or new[kept]:
                 candidate.append(f"reads[{to}] (definitions moved from {m})")
 
 
@@ -397,7 +400,7 @@ def layers(o: dict, a: dict, b: dict, why: list[str]) -> dict:
 def merge(base: dict, ours: dict, theirs: dict, candidate: list[str] | None = None) -> tuple[dict, list[str]]:
     """(the merged record, why it is refused: empty when it merged).  A pure function of the three records.  ``candidate``
     collects the records the build determines (`RECORD_DIFFERENCE`'s kinds: guarantees' records, `reads`, assumptions'
-    digests) merged although the sides disagree on them: the union or ours' value, which the train's Lean check
+    digests) merged although the sides disagree on them: the union or ours' value, which the Lean check of `next`
     regenerates; and the `shape.inline` premises `held` keeps."""
     why: list[str] = []
     candidate = [] if candidate is None else candidate
@@ -425,14 +428,6 @@ def merge(base: dict, ours: dict, theirs: dict, candidate: list[str] | None = No
         if v is not MISSING:
             out[k] = v
     held(base, ours, theirs, out, candidate)
-    kept = set(out.get("guarantees", {}))
-    for m, g in list(out.get("reads", {}).items()):
-        if extra := sorted(set(g["guarantees"]) - kept):
-            g["guarantees"] = [r for r in g["guarantees"] if r in kept]
-            candidate.append(f"reads[{m}].guarantees[{', '.join(extra)}]")
-        if not g["guarantees"] or not g["definitions"]:
-            del out["reads"][m]
-            candidate.append(f"reads[{m}]")
     return out, why
 
 
@@ -885,8 +880,12 @@ def caps(base: Path, ours: Path, theirs: Path) -> tuple[str, int]:
 
 
 def load(path: Path) -> dict:
+    """The record at ``path`` under today's names, its `reads` groups without the readers an older record lists."""
     text = path.read_text()
-    return A.as_guarantees(json.loads(text)) if text.strip() else {}
+    doc = A.as_guarantees(json.loads(text)) if text.strip() else {}
+    for m in A.with_readers(doc):
+        doc["reads"][m] = {k: v for k, v in doc["reads"][m].items() if k not in A.READER_KEYS}
+    return doc
 
 
 def deferred(argv: list[str]) -> int | None:
@@ -938,21 +937,22 @@ def install(repo: Path) -> None:
 
 
 def normalize(path: Path) -> int:
-    """Recompute each `reads` digest of the record at ``path`` from its definitions; the number that changed."""
+    """Recompute each `reads` digest of the record at ``path`` from its definitions, and drop the readers an older record
+    lists (`load`); the number of groups that changed."""
+    before = A.as_guarantees(json.loads(path.read_text())).get("reads", {})
     doc = load(path)
-    n = 0
     for g in doc.get("reads", {}).values():
-        if g.get("digest") != (d := A.module_digest(A.definitions(g))):
-            g["digest"], n = d, n + 1
+        g["digest"] = A.module_digest(A.definitions(g))
     path.write_text(A.text(doc))
-    return n
+    return sum(before.get(m) != g for m, g in doc.get("reads", {}).items())
 
 
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="merge.py", description=__doc__.split("\n\n")[0])
     ap.add_argument("files", nargs="*", type=Path, help="BASE OURS THEIRS [PATH], as git passes them; with --normalize, records")
     ap.add_argument("--install", nargs="?", const=Path.cwd(), type=Path, metavar="REPO", help="register the driver in REPO")
-    ap.add_argument("--normalize", action="store_true", help="recompute the `reads` digests of each record named")
+    ap.add_argument("--normalize", action="store_true", help="recompute the `reads` digests of each record named, and drop "
+                    "the readers an older one lists")
     ap.add_argument("--lean", action="store_true", help="BASE OURS THEIRS [PATH] are a `.lean` file's: merge its import lists")
     ap.add_argument("--lakefile", action="store_true", help="BASE OURS THEIRS [PATH] are a `lakefile.toml`'s: merge its "
                     "`[[require]]` blocks and string arrays")
@@ -964,7 +964,7 @@ def main(argv: list[str]) -> int:
         return 0
     if a.normalize:
         for p in a.files:
-            print(f"merge.py: {p}: {normalize(p)} digests recomputed")
+            print(f"merge.py: {p}: {normalize(p)} `reads` groups rewritten")
         return 0
     if len(a.files) not in (3, 4):
         ap.error("name BASE OURS THEIRS [PATH], or --install, or --normalize FILE...")
@@ -991,7 +991,7 @@ def main(argv: list[str]) -> int:
     named = list(dict.fromkeys(candidate))
     if rest := [c for c in named if not c.endswith(" (kept)")]:
         print(f"merge.py: {path}: merged derived records as a candidate (the union, or ours' value where marked), which the "
-              f"train's Lean check regenerates: {'; '.join(rest)}", file=sys.stderr)
+              f"Lean check of `next` regenerates: {'; '.join(rest)}", file=sys.stderr)
     if inline := [c for c in named if c.endswith(" (kept)")]:
         print(f"merge.py: {path}: kept shape.inline premises one side dropped and the other has as the base had them, which "
               f"`check.py --update` drops where the merged tree's premise no longer offends: {'; '.join(inline)}",
