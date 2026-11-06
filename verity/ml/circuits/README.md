@@ -16,7 +16,7 @@ The terms are the [Glossary](../../../ARCHITECTURE.md#glossary)'s; [`GLOSSARY.md
 - A **circuit** is gates and the wires between them. A **gate** outputs one bit: the AND or XOR of two or more bits, a NOT,
   an input gate, or the constant 0 or 1 as one of an operation's own bits. A wire carries its source gate's value and none
   of its own.
-- A **value** is the bit a gate takes in one run, and the trace is all of them (`evaluate.ExecutionTranscript`). Gates and
+- A **value** is the bit a gate takes in one run, and the trace is all of them (`evaluation.reference.Trace`). Gates and
   wires are structure; values are data, and everything a program or a request brings is a value, never a gate. A
   *registered input* (`RegisteredInput<w>_v1`: weights, a norm's epsilon, a table) is bound when the Program is
   registered, and a *run input* (`Input<w>_v1`: a request's tokens and parameters) per run, so a Program holds no input's
