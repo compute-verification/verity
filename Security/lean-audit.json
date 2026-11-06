@@ -74873,7 +74873,7 @@
    "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "SampledProofs.ChallengerTrees": {
-   "digest": "323f0e6d3aefa26041285b300137e79bfc15970f399bbc1d2d05640d0bb4c52c",
+   "digest": "7e88c49b13ca69102ede49e92c71d9c08f4612de692dd6b65963ff6c9a8078b3",
    "definitions": {
     "SampledProofs.Challenger.LINK_ROOT_LEN": "1f8fe31e355f018a53a514f119ab08ada8488ed6acb6643ec9c8df82a7dc045a",
     "SampledProofs.Challenger.LINK_TABLES": "8af716a484dd7ab4f4e315c2eeb20f7828c8781f86bb7275cf827566b638e88d",
@@ -74913,8 +74913,6 @@
     "_private.SampledProofs.ChallengerTrees.0.SampledProofs.Challenger.isHexN": "e24fdbe1fd04f2fc70bb3951f9785216d01f275f14546a088bf15cd3ddb8451f",
     "_private.SampledProofs.ChallengerTrees.0.SampledProofs.Challenger.isHexN._sparseCasesOn_1": "9e591fab54932b0c102c0b1e0cf9b09dc6a2177e28c3de3afc214557e19e1dfa",
     "_private.SampledProofs.ChallengerTrees.0.SampledProofs.Challenger.isStream": "15df1311b604d9cadeaf4d2d41f6d1a1047f75c26a03a33fea7284a1628a3d9b",
-    "_private.SampledProofs.ChallengerTrees.0.SampledProofs.Challenger.recordCoins?": "80df91b2f8689a5640931e6190c75075f98d0a3f43a13eb9af1398f1c96bb126",
-    "_private.SampledProofs.ChallengerTrees.0.SampledProofs.Challenger.recordCoins?._sparseCasesOn_1": "64160630b533d4011c876adaff3107b7fb372bd184ad126f42d542dee5b09a9c",
     "_private.SampledProofs.ChallengerTrees.0.SampledProofs.Challenger.strOf": "3ea208f6c5b8fa118cede43ad8b64ffd5ed9bcd2fcb529e7fbf2ef8f36d68808"
    },
    "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
@@ -75072,7 +75070,7 @@
    "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "SampledProofs.OneStageZk": {
-   "digest": "c25e6a7b4a7507486afebd41305c7cbbd3bafd0b341ac5d1b6c66c4d2ee70a46",
+   "digest": "52abaa2f8550b27db9b9f571c465cc403df01baae30bfebab7d29a4acf7688d4",
    "definitions": {
     "SampledProofs.OneStageZk.Evidence": "c6225844065026f039f99bb073a172ebd1caf057aa99df9629dc83c3b72b4444",
     "SampledProofs.OneStageZk.Evidence.base": "f88a295c9c15075955eadf77c4082a0174b7338e8a580fe01d770c8929000895",
@@ -75124,7 +75122,6 @@
     "SampledProofs.OneStageZk.programDigest": "e04320cb701bb40bb4c05d2ddd3f223a3ba88ebe299fbf5bcec21b7abe95fbbf",
     "SampledProofs.OneStageZk.proofsOf": "59a5c3779097231ff024285be1cf24972e29b9fad6a74589623b5b7b43e4ef91",
     "SampledProofs.OneStageZk.proofsOf._sparseCasesOn_1": "9c33abc52f31224a4e89f170a2485174ac70e9ef3f1b43f6ec11ddcb69e09bfc",
-    "SampledProofs.OneStageZk.proofsOf._sparseCasesOn_4": "fbc75a5ad47a1d9c0fb5cea5b59fd0b4306057cd018c133ce224ca7823458937",
     "SampledProofs.OneStageZk.provedHeld": "b6c33bfe26865815971bbb2e841f4c57278e528f57e4385d9256470b60ddbd72",
     "SampledProofs.OneStageZk.provedUnits": "7fc793770f4562364e834c2511a7be733cd26f63124160a19d6f7aa3d100cc83",
     "SampledProofs.OneStageZk.publicHeld": "247fc0b3a6716af1c4d25068c44ca70046e0665d97fe15905a83aabee16dcacd",
