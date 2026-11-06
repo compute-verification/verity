@@ -56,12 +56,14 @@ public import SampledProofs.ChallengerTrees
 public import SampledProofs.Slots
 public import SampledProofs.FilePart
 public import Flock
+public import Flock.JsonParse
 meta import CoreProtocol.Blobs
 meta import SampledProofs.OneStage
 meta import SampledProofs.ChallengerTrees
 meta import SampledProofs.Slots
 meta import SampledProofs.FilePart
 meta import Flock
+meta import Flock.JsonParse
 
 @[expose] public section
 set_option backward.privateInPublic true
