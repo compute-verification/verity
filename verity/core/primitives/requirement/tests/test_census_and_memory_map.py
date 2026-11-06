@@ -4,9 +4,9 @@ through the difftest's instance format (`test_requirement_difftest.encode`), Pyt
 The census path: a census and a schedule as an instance (`census_execution`): the census's values, then a value of 0 bits
 for each root Call a step runs, whose operands are the values the Call reads or selects. Lean's live values and bits are
 `from_census`'s at every step, its reads `from_census`'s where those are known and, the selected values used too,
-`reads_upper`'s; and `pack`'s layout and store of `from_census`'s requirement, with the blocks each step reads as its plan,
-are W's at every step, crediting every live value. On the toy decoder, `b1.Serve` at TINY and `b1.RMSNormFusedCudaV1`,
-whose live and read bits are the gate path's.
+`reads_upper`'s; and `pack`'s store placement and store of `from_census`'s requirement, with the blocks each step reads
+as its plan, are W's at every step, crediting every live value. On the toy decoder, `b1.Serve` at TINY and
+`b1.RMSNormFusedCudaV1`, whose live and read bits are the gate path's.
 
 The memory map: a session's KV as an instance (`map_case`). Its values are the rows `MM.rows` finds, each born at its
 request's arrival step plus its own and read at the steps the requirement over the census reads it, in the block the
@@ -97,8 +97,8 @@ def census_execution(c: dict, schedule: R.Schedule, upper: bool) -> R.Execution:
 
 
 def census_case(c: dict, schedule: R.Schedule, block_bits: int, upper: bool) -> dict:
-    """`census_execution`'s instance under `pack`'s layout and store of `from_census`'s requirement, each step's plan the
-    blocks of the reads the instance states (all in complete blocks under `pack`)."""
+    """`census_execution`'s instance under `pack`'s store placement and store of `from_census`'s requirement, each step's
+    plan the blocks of the reads the instance states (all in complete blocks under `pack`)."""
     ex = census_execution(c, schedule, upper)
     layout, store = R.pack(R.from_census(c, schedule), block_bits)
     stated = R.Requirement.of(ex)
@@ -144,9 +144,9 @@ def test_the_toy_decoders_census_path(B, server):
 
 
 def test_the_tiny_serve_rows_census_path(server):
-    """Each weight is one census value, up to 66,048 bits, and the layout keeps a value in one block, so the census path
-    takes blocks of 2^17 bits. Every step's reads are known (its selections' candidates are read anyway), and its live
-    and read bits are the gate path's: `test_the_tiny_serve_row`'s weights less the RoPE rows no step reaches."""
+    """Each weight is one census value, up to 66,048 bits, and the store placement keeps a value in one block, so the
+    census path takes blocks of 2^17 bits. Every step's reads are known (its selections' candidates are read anyway), and
+    its live and read bits are the gate path's: `test_the_tiny_serve_row`'s weights less the RoPE rows no step reaches."""
     program, schedule, inputs = serve()
     req = held_census(program, schedule, 1 << 17, server)
     assert all(req.resolved(t) for t in range(req.steps))
@@ -305,7 +305,7 @@ def map_case(requests: dict[str, Program], arrive: dict[str, int], censuses: dic
         ex_ops[g], ex_uses[g] = tuple(sorted(vs)), frozenset(uses.get((r, s), set()))
     ex = R.Execution(width, frozenset(), step, ex_ops, ex_uses, value)
     store = R.Store(0, written, freed, payload)
-    instance = encode(ex, R.Layout(block, offset), store, held, codec.BLOCK_BYTES * 8, end)
+    instance = encode(ex, R.Store.Placement(block, offset), store, held, codec.BLOCK_BYTES * 8, end)
     return instance, {"rows": of_value, "page": page_of, "width": width, "block": block, "held": held, "arrive": arrive}
 
 
