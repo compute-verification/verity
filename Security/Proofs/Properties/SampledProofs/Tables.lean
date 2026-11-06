@@ -67,35 +67,75 @@ theorem checkBlobsAt_run {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ :
 theorem tablesRegistered : TablesRegistered :=
   ⟨fun _ _ => tablesHeld_ok, fun _ _ _ _ _ _ _ h => (checkBlobsAt_run h).elim fun _ hr => run_tables hr⟩
 
+private theorem ok_of_toOption {ε α : Type} {x : Except ε α} {a : α} (h : x.toOption = some a) : x = .ok a := by
+  cases x with
+  | error e => cases h
+  | ok b => cases h; rfl
+
+private theorem ok_bind {ε α β : Type} {a : α} {f : α → Except ε β} : (Except.ok a >>= f) = f a := rfl
+
+/-- `tablesHeld` accepts where the circuit file is among the blobs and its lookups are the blobs' tables. -/
+private theorem tablesHeld_of {p : OneStageZk.Own} {bs : Core.Blobs} {c : ByteArray}
+    (hc : bs.get p.circuit "circuit" = .ok c)
+    (hl : OneStageZk.lookupsOf c = .ok ((OneStageZk.tablesOf bs).map (·.1))) : OneStageZk.tablesHeld p bs = .ok () := by
+  unfold OneStageZk.tablesHeld
+  rw [hc, ok_bind, hl, ok_bind]
+  simp
+  rfl
+
+/-- `Flock.HmOut.metaOf` at a circuit file whose second line is `line`, with no trailing whitespace: the kernel does
+not evaluate `String.trimAsciiEnd`, whose recursion is well-founded, so the witnesses' lines take it by `h3`. -/
+private theorem metaOf_of {bytes : ByteArray} {n1 : Nat} {line : String} (h1 : Flock.findByte bytes 10 = some n1)
+    (h2 : String.fromUTF8? (bytes.extract (n1 + 1) ((Flock.findByte bytes 10 (n1 + 1)).getD bytes.size)) = some line)
+    (h3 : line.trimAsciiEnd.toString = line) (h4 : line.startsWith "META " = true) :
+    Flock.HmOut.metaOf bytes = match Flock.JsonParse.parse (line.drop 5).toString with
+      | .ok j => .ok j
+      | .error e => .error s!"META: {e}" := by
+  unfold Flock.HmOut.metaOf
+  simp only [h1, h2, h3, h4]
+  rfl
+
+private theorem honest_trim :
+    ("META {\"lookups\":{\"rcp\":{}}}".trimAsciiEnd).toString = "META {\"lookups\":{\"rcp\":{}}}" := by
+  unfold String.trimAsciiEnd String.Slice.trimAsciiEnd String.Slice.dropEndWhile String.Slice.skipSuffixWhile
+  rw [String.Slice.Pos.revSkipWhile]
+  decide +kernel
+
+private theorem table_trim : ("META {}".trimAsciiEnd).toString = "META {}" := by
+  unfold String.trimAsciiEnd String.Slice.trimAsciiEnd String.Slice.dropEndWhile String.Slice.skipSuffixWhile
+  rw [String.Slice.Pos.revSkipWhile]
+  decide +kernel
+
+private theorem honest_lookups : OneStageZk.lookupsOf honestCircuit = .ok ["rcp"] := by
+  apply ok_of_toOption
+  unfold OneStageZk.lookupsOf
+  rw [metaOf_of (n1 := 7) (by decide +kernel) (by decide +kernel) honest_trim (by decide +kernel)]
+  decide +kernel
+
+private theorem table_lookups : OneStageZk.lookupsOf tableCircuit = .ok [] := by
+  apply ok_of_toOption
+  unfold OneStageZk.lookupsOf
+  rw [metaOf_of (n1 := 7) (by decide +kernel) (by decide +kernel) table_trim (by decide +kernel)]
+  decide +kernel
+
 /-- **`TablesRegistered`'s honest lemma**: blobs holding a circuit file that looks up `rcp` and `rcp`'s table pass v2's
 refusal. -/
 theorem tablesRegistered_honest : OneStageZk.tablesHeld witnessOwn honestBlobs = .ok () := by
-  have h : (OneStageZk.tablesHeld witnessOwn honestBlobs).toBool = true := by decide +kernel
-  generalize OneStageZk.tablesHeld witnessOwn honestBlobs = x at h ⊢
-  cases x with
-  | error e => cases h
-  | ok u => rfl
-
-/-- `HoldsRegisteredTables` as a computation. -/
-private def holdsB (p : OneStageZk.Own) (bs : Core.Blobs) : Bool :=
-  match bs.get p.circuit "circuit" with
-  | .ok c => match OneStageZk.lookupsOf c with
-    | .ok w => w == (OneStageZk.tablesOf bs).map (·.1)
-    | .error _ => false
-  | .error _ => false
-
-private theorem holdsB_of {p : OneStageZk.Own} {bs : Core.Blobs} (h : HoldsRegisteredTables p bs) : holdsB p bs = true := by
-  obtain ⟨c, hc, hl⟩ := h
-  unfold holdsB
-  simp only [hc, hl, beq_self_eq_true]
+  refine tablesHeld_of (c := honestCircuit) (ok_of_toOption (by decide +kernel)) ?_
+  rw [honest_lookups]
+  have h : (OneStageZk.tablesOf honestBlobs).map (·.1) = ["rcp"] := by decide +kernel
+  rw [h]
 
 /-- **`TablesRegistered`'s nontrivial lemma**: blobs holding a circuit file that looks up no table and `rcp`'s table
 hold a table the circuit doesn't look up, so a check that accepts them, as one that accepts every input does, does not
 have `TablesRegistered`'s conclusion. -/
 theorem tablesRegistered_nontrivial : ¬ HoldsRegisteredTables witnessOwn tableBlobs := by
-  intro h
-  have hf : holdsB witnessOwn tableBlobs = false := by decide +kernel
-  rw [holdsB_of h] at hf
-  cases hf
+  rintro ⟨c, hc, hl⟩
+  have hg : tableBlobs.get witnessOwn.circuit "circuit" = .ok tableCircuit := ok_of_toOption (by decide +kernel)
+  rw [hg] at hc
+  cases hc
+  have h : (OneStageZk.tablesOf tableBlobs).map (·.1) = ["rcp"] := by decide +kernel
+  rw [table_lookups, h] at hl
+  cases hl
 
 end Properties.SampledProofs.SecurityProofs
