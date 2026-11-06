@@ -1,9 +1,9 @@
 module
 
-public import Properties.RemoteAudit.Component
+public import Properties.RemoteAudit.Subprotocol
 
 /-!
-# The bandwidth component accepts only what `Shared.run g` accepts, proved (`Properties.RemoteAudit.Component`)
+# The bandwidth component accepts only what `Shared.run g` accepts, proved (`Properties.RemoteAudit.Subprotocol`)
 
 `check` matches on `replay`, which binds `sessionOf` and then `Shared.run g` (`replay_ok`), and accepts only at a state
 that ended accepted with a record, publishing `certify` of it at g (`acceptIsVerified`). `plays_verified` reads `Plays`
@@ -13,7 +13,7 @@ windows a draw.
 
 @[expose] public section
 
-namespace Properties.RemoteAudit.Component
+namespace Properties.RemoteAudit.Subprotocol
 
 open Properties.RemoteAudit.Line
 
@@ -68,4 +68,4 @@ theorem plays_verified {node : Node} {rec : Record} {a b e : ByteArray} (h : Pla
   obtain ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩ := hs'
   exact ⟨rs, s, hrun, hout⟩
 
-end Properties.RemoteAudit.Component
+end Properties.RemoteAudit.Subprotocol

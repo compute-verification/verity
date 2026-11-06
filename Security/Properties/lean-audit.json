@@ -58,7 +58,7 @@
   "Properties.RemoteAudit.Line",
   "Properties.RemoteAudit.Schedule",
   "Properties.RemoteAudit.Live",
-  "Properties.RemoteAudit.Component",
+  "Properties.RemoteAudit.Subprotocol",
   "Properties.Composition",
   "Properties.Nci.Protocol",
   "Properties.Verity.Soundness",
@@ -698,8 +698,6 @@
   "Properties.Pouw.Window.padRefuses": "2c2d22f4c1189a576da9882358b50af1699c2d28f7dee2443267d52fe37f67ca",
   "Properties.Pouw.Window.pointRefuses": "6b3249983259aa1e4b30cdf04a812d8542728e4123f82ff71ade2e0143d81c75",
   "Properties.Pouw.Window.workAtRefuses": "106f9eeb8a719c5b3bdc75b1580cd548d065c3f5d3b7d429eb3709f3b281ee09",
-  "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent": "6fb8373a02a810bf600b6c591918363ed77972bd908601d917d4ff66bd582156",
-  "Properties.RemoteAudit.Component.acceptIsVerified": "5e3069f2c0bb12102f9cf9ec32b6cb573d48b81d26b2f1ce0143b0c683f65959",
   "Properties.RemoteAudit.Line.SecurityProofs.lineHeld": "869ce854c6e28bbfab9afec70664c0ff52cb2e286516fc98f0886488f20e2951",
   "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity": "32103c4822a99f98eae5a5aec862a2c834114c156876ace2daa1b364bb187a9f",
   "Properties.RemoteAudit.Line.lineChecked": "92521b24e4953445a0d2e7c4dec1648b2bb5b0afc4b6894f08334057afa8cf9a",
@@ -767,7 +765,9 @@
    "type_hash": "cb787233027c149c9cf3d23cbc2485781bdead41db68164723913059c512cde4",
    "missing": "honest",
    "why": "its honest case, remote's check accepting one run, needs the composite's check past parsing: each subprotocol's decoder reads its bytes through `Lean.Json.parse`, which is `partial`, so no proof evaluates it on a literal. PRF-299 brings the check factored past parsing and the reachability lemma by Tue 3 Nov; meanwhile `Properties.Remote.SecurityProofs.acceptInferenceOnly_honest` proves the tie on an honest run's one record"
-  }
+  },
+  "Properties.RemoteAudit.Subprotocol.SecurityProofs.lineHeldAtSubprotocol": "fbb79296c2d8d010361458fbbc8255129c234ad59ad8deaca1e560a9a4eca738",
+  "Properties.RemoteAudit.Subprotocol.acceptIsVerified": "e5be3f448a3a0cd511b5b692cd03aa865fa570e659e621fe25464cc53f957dd9"
  },
  "layers": {
   "Properties.Pouw": {
@@ -898,7 +898,7 @@
     "Properties.RemoteAudit.Line.Premises",
     "Properties.RemoteAudit.Line.Record",
     "Properties.RemoteAudit.Schedule",
-    "Properties.RemoteAudit.Component"
+    "Properties.RemoteAudit.Subprotocol"
    ],
    "why": "the properties are stated against the verifier's own functions, on Lean core: nothing of Mathlib or of `security`",
    "sealed": true
@@ -1006,11 +1006,6 @@
    "except": [],
    "why": "the properties are stated against the composition's own functions and the core interface's, on Lean core: nothing of Mathlib or of `security`"
   },
-  "Properties.RemoteAudit.Component": {
-   "imports": ["RemoteAudit", "Properties.RemoteAudit.Line"],
-   "except": [],
-   "why": "the bandwidth component's refinement is stated against its own check (`RemoteAudit.Protocol`) and the memory line of record (`Properties.RemoteAudit.Line`), whose model vocabulary it reads through that module; never a proof"
-  },
   "Properties.Pouw.ServedValues": {
    "imports": ["Definitions.Core.Formalism", "Properties.Pouw.PeriodJ10R"],
    "except": [],
@@ -1115,6 +1110,11 @@
    "imports": ["Definitions.Claims.Sampling", "SampledProofs.Bits"],
    "except": [],
    "why": "Bits' layout read as the claims' program (`bitsGate`, `bitsProg`) is stated against Bits' own gates and lowering (`SampledProofs.Bits`) and the claims' gates and program (`Definitions.Claims.Sampling`), never a proof"
+  },
+  "Properties.RemoteAudit.Subprotocol": {
+   "imports": ["RemoteAudit", "Properties.RemoteAudit.Line"],
+   "except": [],
+   "why": "the bandwidth component's refinement is stated against its own check (`RemoteAudit.Protocol`) and the memory line of record (`Properties.RemoteAudit.Line`), whose model vocabulary it reads through that module; never a proof"
   }
  },
  "reads_exempt": {
@@ -3286,21 +3286,6 @@
    "assumptions": [],
    "type_hash": "0f5109466e05f075d67d02887e9bd8af525c461822f0b9cd76df9c9f427222aa"
   },
-  "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent": {
-   "owner": "@memory-accounting",
-   "signature": [
-    "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent :",
-    "  Properties.RemoteAudit.Component.LineHeldAtComponent"
-   ],
-   "assumptions": [],
-   "type_hash": "6fb8373a02a810bf600b6c591918363ed77972bd908601d917d4ff66bd582156"
-  },
-  "Properties.RemoteAudit.Component.acceptIsVerified": {
-   "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.Component.acceptIsVerified : Properties.RemoteAudit.Component.AcceptIsVerified"],
-   "assumptions": [],
-   "type_hash": "5e3069f2c0bb12102f9cf9ec32b6cb573d48b81d26b2f1ce0143b0c683f65959"
-  },
   "Properties.RemoteAudit.Line.SecurityProofs.lineHeld": {
    "owner": "@memory-accounting",
    "signature": ["Properties.RemoteAudit.Line.SecurityProofs.lineHeld : Properties.RemoteAudit.Line.LineHeld"],
@@ -3372,6 +3357,23 @@
    "signature": ["Properties.RemoteAudit.Shared.sessionDrawsRecords : Properties.RemoteAudit.Shared.SessionDrawsRecords"],
    "assumptions": [],
    "type_hash": "065919af943ec94c405062fd23a3454f46e6dbfaaa8ab906f3ec0b37ec0f9773"
+  },
+  "Properties.RemoteAudit.Subprotocol.SecurityProofs.lineHeldAtSubprotocol": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.Subprotocol.SecurityProofs.lineHeldAtSubprotocol :",
+    "  Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocol"
+   ],
+   "assumptions": [],
+   "type_hash": "fbb79296c2d8d010361458fbbc8255129c234ad59ad8deaca1e560a9a4eca738"
+  },
+  "Properties.RemoteAudit.Subprotocol.acceptIsVerified": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.Subprotocol.acceptIsVerified : Properties.RemoteAudit.Subprotocol.AcceptIsVerified"
+   ],
+   "assumptions": [],
+   "type_hash": "e5be3f448a3a0cd511b5b692cd03aa865fa570e659e621fe25464cc53f957dd9"
   },
   "Properties.RemoteAudit.acceptChecksOpenings": {
    "owner": "@memory-accounting",
@@ -5130,14 +5132,6 @@
     "function": "RemoteAudit.Line.lineOfRegistered",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.Component.acceptIsVerified": {
-    "function": "RemoteAudit.Protocol.check",
-    "outcome": "accept"
-   },
-   "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent": {
-    "function": "RemoteAudit.Protocol.check",
-    "outcome": "accept"
-   },
    "MemoryChallenger.Properties.SecurityProofs.wipeSigned": {
     "function": "MemoryChallenger.WipeProtocol.protocol.check",
     "outcome": "accept"
@@ -5264,6 +5258,14 @@
    },
    "Properties.Firewall.afterOnTime": {
     "function": "Core.Firewall.Decision.after",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.Subprotocol.acceptIsVerified": {
+    "function": "RemoteAudit.Protocol.check",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.Subprotocol.SecurityProofs.lineHeldAtSubprotocol": {
+    "function": "RemoteAudit.Protocol.check",
     "outcome": "accept"
    }
   },
@@ -7383,6 +7385,14 @@
    "definitions": {
     "PousCheck.Properties.TimedAuditAnswers": "4cf5e7412eb23b6aeb12ef156ff727afc6d4a80ebb0e70a5cf937ae2fb75b469",
     "PousCheck.Properties.challengesOf": "a0b3be6bbabe3ee6c8f42e7ae6fc701acc6216ba57bc45e10e5430fc2a0651f2"
+   }
+  },
+  "Properties.RemoteAudit.Subprotocol": {
+   "digest": "73ba4521cf2e90209df9366a22e695ac00b29e18fbd38a825cc9cd97def1fd49",
+   "definitions": {
+    "Properties.RemoteAudit.Subprotocol.AcceptIsVerified": "64e4dee8e599a70e00ddccee1ea81a4465e964dd0d925ded5de67c76760dc93e",
+    "Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocol": "949764810c4aae20aff950e0dcf2846d18b1bffbffa22f8d26a3b1ef6bb6ab9c",
+    "Properties.RemoteAudit.Subprotocol.Plays": "cd90e454b261689d2136d86ff2e3c47523d396d72d2934a29d8724bf45587a80"
    }
   },
   "Properties.SampledProofs": {
