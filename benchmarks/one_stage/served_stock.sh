@@ -13,8 +13,7 @@
 # the client's record of load j, and load-<j>.timings.json, its per-request send, first-token and done times. The trace and
 # the load's records hold request values, so they stay there: once the endpoint stops, `served_overhead.py metrics` reads
 # them on the node and $OUT/<lifetime>/overhead.json gets its aggregate alone, which `served_overhead.py table --stock`
-# reads beside the composed run's full aggregate (its serve dir's private/out/serve/overhead.json, on the node: its published
-# $OUT/serve/overhead.json holds no load's counts, tokens or span). WARM lifetimes (default 1) run first as warm-<i>,
+# reads beside the composed run's $OUT/serve/overhead.json. WARM lifetimes (default 1) run first as warm-<i>,
 # so the reps find the Triton and vLLM caches as warm as the composed run's node keeps them; a cold first lifetime's first step
 # took 0.40 s against 0.018 s warm (r20261027-175833-6214). With NOT_AFTER (a UTC time, `date -d` syntax) no lifetime starts
 # after it, so a control queued behind other leases never runs into a later window (V2's run of record, say).
@@ -70,6 +69,8 @@ serve() {  # under the lease: lifetime $1's (rep-<i> or warm-<i>) endpoint, its 
   trap - TERM INT
   kill -TERM "$srv" 2>/dev/null; wait "$srv"
   echo "$1: stopped (exit $?)" | tee -a "$OUT/stock.txt"
+  # this lifetime's aggregate, whole; `table` reads it beside the composed run's whole one, its serve dir's
+  # private/out/serve/overhead.json on its node (its published $OUT/serve/overhead.json holds no load's counts, tokens or span)
   "$PY" "$TREE/benchmarks/one_stage/served_overhead.py" metrics "$D" > "$OUT/$1/overhead.json" 2> "$D/overhead.err" \
     || { echo "$1: no aggregate: $(cut -c1-300 "$D/overhead.err")" | tee -a "$OUT/stock.txt"; rm -f "$OUT/$1/overhead.json"; rc=12; }
   return "$rc"
