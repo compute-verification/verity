@@ -1,6 +1,11 @@
 module
 
-public import Proofs.Flock.Soundness.ExecParse
+public import Flock.HmRow
+public import Properties.Flock.Circuit.Rows
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Soundness.ExecParse
 
 /-!
 # What `HmRow.parse` accepted

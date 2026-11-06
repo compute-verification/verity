@@ -1,7 +1,9 @@
 module
 
 public import Definitions.Accounting.Bridge
-public import Proofs.Accounting.Actual.Physical
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Proofs.Accounting.Actual.Split
 
 /-!
 # The actual circuit's schedule fits the device

@@ -1,11 +1,13 @@
 module
 
-public import Proofs.Pouw.PearlC.ChainOnlyGamma
-public import Definitions.Pouw.PearlC.DevicePricesLoop
-public import Definitions.Pouw.PearlC.DevicePrices
+public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnly
 public import Definitions.Pouw.Guarantees.PearlC
-public import Proofs.Pouw.PearlC.TTOutW1
-public import Proofs.Pouw.PearlC.TTOutW1Variants
+public import Proofs.Pouw.PearlC.ChainOnlyGamma
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.KernelWrefGamma
+import Proofs.Pouw.PearlC.TTOutW1
+import Proofs.Pouw.PearlC.TTOutW1Variants
 
 /-!
 # γ at the RTX PRO 6000 (sm_120) records against the kernel as it runs (staged)

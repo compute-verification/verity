@@ -43,11 +43,21 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
 open Classical in
-/-- **The circuit's constants**: `keyProg`'s constant wire `oneG` is `1` and its zero `zeroG` is `0`, public circuit
-structure, so `progOf` lowers them to constants (`.const`), which a proof unit reads with no opening. -/
-noncomputable def _root_.Flock.Bridge.constsOf (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ)
+/-- **The circuit's constant wires**: `keyProg`'s constant wire `oneG` is `1` and its zero `zeroG` is `0`. -/
+noncomputable def _root_.Flock.Bridge.constWiresOf (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ)
     (g : Fin (Discharge.Layout.keyN c hU n)) : Option Bool :=
   if g = Discharge.Layout.oneG then some true else if g = Discharge.Layout.zeroG then some false else none
+
+open Classical in
+/-- **The circuit's constants**: `keyProg`'s constant wire `oneG` is `1`, and its zero `zeroG` and every program input
+no unit reads (`Bridge.owner`) are `0`, public circuit structure, so `progOf` lowers them to constants (`.const`), which
+a proof unit reads with no opening. They are Bits' (`SampledProofs.Bits.consts`). -/
+noncomputable def _root_.Flock.Bridge.constsOf (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ)
+    (g : Fin (Discharge.Layout.keyN c hU n)) : Option Bool :=
+  if g = Discharge.Layout.oneG then some true
+  else if g = Discharge.Layout.zeroG ∨ (g.val < 2 + n * Discharge.Layout.keyB c hU ∧
+      Bridge.owner ((keyProg c hU n).partition (Discharge.Layout.outsOf c hU n)) g = none) then some false
+  else none
 
 open Classical in
 /-- **The sampled audit's knowledge soundness, live.** `EndToEndHidden`'s setting: for every live prover `τ`, strata

@@ -1,6 +1,8 @@
 module
 
 public import Definitions.Flock.Statement
+import Mathlib.Tactic.NormNum.Inv
+import Mathlib.Tactic.NormNum.Pow
 
 /-!
 # Pinned outputs (META `pinned_outputs`): the rows a pinned bit has, and what they force

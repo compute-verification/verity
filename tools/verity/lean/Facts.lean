@@ -44,7 +44,11 @@ judgement; `check.py` holds the policy.
 - each pin's `inline`: the `Prop` binders of its statement, with a definition under `meaning` it applies unfolded once
   (`liftOf`), in each conjunct, instance binders aside, each split past its leading `∀` over data and at `∧`
   (`inlineParts`): as printed with those `∀`s, its head as written and past reducible unfolding (`premiseHead`), whether
-  it is a plain range (`plainRange`), whether it is closed, and whether the statement as written binds it (`outer`).
+  it is a plain range (`plainRange`), whether it is closed, whether the statement as written binds it (`outer`), and the
+  constants it uses whose names its text shows (`consts`).
+- `constants`: each name under `names` (what `check.py` asks after: the names in the lock's `shape.inline` texts) and
+  each of the inline parts' `consts` that is a constant here, with its kind; a definition's and a theorem's `readCanon` is
+  a `const:` line, so `check.py` can tell a renamed declaration from another one.
 - `instances`: each constant with a declaration range whose name (a private one's as written) ends in a component
   starting with `inst`, with that component as an identifier (`id`) and where its declaration's name is (`at`: line,
   codepoint column). An anonymous `instance` has its name there as the keyword `instance` itself.
@@ -53,7 +57,9 @@ judgement; `check.py` holds the policy.
 
 The hashes in the document are Lean's `Expr.hash`, which has 32 bits; `check.py` keeps them only to check records written
 before SHA-256. When `CONFIG` names a `canon` path, the pins' statements and the definitions they read are also written
-there, one JSON line each, as `canon` texts (and those `assumption_reads` holds), and `check.py` hashes those with SHA-256. A pinned statement that is a
+there, one JSON line each, as `canon` texts (and those `assumption_reads` holds), and `check.py` hashes those with SHA-256.
+A definition's text holds the matchers and abstracted proofs Lean shares between the declarations of a module in place,
+not by name (`readCanon`), and they are not reads of their own, so a file split changes no definition's hash. A pinned statement that is a
 definition under `meaning` applied under binders (`∀ xs, G as`) is also written with that definition unfolded once
 (`liftOf`), with the definition and its module, so that `check.py` can certify a statement lifted into a `Guarantees`
 definition as the statement its record holds.
@@ -175,12 +181,38 @@ def canonText (e : Expr) (rn : Name → Name := id) : String := Id.run do
           lines := lines.push key
   return "\n".intercalate lines.toList ++ s!"\nR{seen.getD e 0}"
 
-/-- What a read definition contributes to what a statement means: its type, and a definition's value. -/
-def readCanon (ci : ConstantInfo) (rn : Name → Name := id) : String :=
+/-- Whether `n` is a constant the elaborator numbers within a module and reuses for the next declaration of that module
+that needs the same one: a matcher (`match_<n>`), a sparse case split (`_sparseCasesOn_<n>`) or a proof abstracted out of
+a definition (`_proof_<n>`). A declaration moved to another file gets new ones under its own name, so the name a
+definition reads one by says what else its file declares, not what the definition means. -/
+def sharedHelper : Name → Bool
+  | .str _ s => ["match_", "_sparseCasesOn_", "_proof_"].any fun pre =>
+      match s.splitOn pre with
+      | ["", k] => k.toNat?.isSome
+      | _ => false
+  | _ => false
+
+/-- `e` with each `sharedHelper` in place, by what it is rather than its name: a definition by its value at its levels, a
+theorem (a proof, whose content no statement depends on) as `_proof` applied to its type; each with its own in place. -/
+partial def inlineHelpers (env : Environment) (e : Expr) : Expr :=
+  e.replace fun
+    | .const n us =>
+      if !sharedHelper n then none else
+      match env.find? n with
+      | some (.defnInfo v) => some (inlineHelpers env (v.value.instantiateLevelParams v.levelParams us))
+      | some (.thmInfo v) =>
+        some (.app (.const (Name.mkSimple "_proof") []) (inlineHelpers env (v.type.instantiateLevelParams v.levelParams us)))
+      | _ => none
+    | _ => none
+
+/-- What a read definition contributes to what a statement means: its type, and a definition's value, each with the
+helpers it uses in place (`inlineHelpers`), so that a file split, which renames them, changes no read's text. -/
+def readCanon (env : Environment) (ci : ConstantInfo) (rn : Name → Name := id) : String :=
+  let text (e : Expr) := canonText (inlineHelpers env e) rn
   match ci with
-  | .defnInfo v => canonText v.type rn ++ "\n=\n" ++ canonText v.value rn
-  | .opaqueInfo v => canonText v.type rn ++ "\n=\n" ++ canonText v.value rn
-  | ci => canonText ci.type rn
+  | .defnInfo v => text v.type ++ "\n=\n" ++ text v.value
+  | .opaqueInfo v => text v.type ++ "\n=\n" ++ text v.value
+  | ci => text ci.type
 
 /-- The value of a constant that is a theorem the elaborator made from a proof nested in a definition
 (`<decl>._proof_<n>`, `abstractNestedProofs`), a proof a theorem's statement keeps in place. -/
@@ -298,10 +330,13 @@ unsafe def entriesOf (α : Type) (data : ModuleData) (ext : Name) : Array (Name 
   | none => #[]
 
 /-- The definitions of the modules `inScope` admits that the constants `roots` read, transitively, and the constants other
-than theorems outside them that the walk reaches and does not follow (with their modules). Each definition's `meaningDeps`
-is read from `table` (`usesTable`): a read definition's value is walked once per run, not once per guarantee. -/
+than theorems outside them that the walk reaches and does not follow (with their modules). A `sharedHelper` the walk
+reaches through a definition is followed but not listed: the definition's `readCanon` holds it in place. Each definition's
+`meaningDeps` is read from `table` (`usesTable`): a read definition's value is walked once per run, not once per
+guarantee. -/
 def readsWhere (env : Environment) (table : Std.HashMap Name (Array Name)) (inScope : Name → Bool) (roots : Array Name) :
     Array (Name × Name × ConstantInfo) × Array (Name × Name) := Id.run do
+  let named : NameSet := roots.foldl (·.insert ·) {}
   let mut seen : NameSet := {}
   let mut stack := roots
   let mut out := #[]
@@ -320,7 +355,8 @@ def readsWhere (env : Environment) (table : Std.HashMap Name (Array Name)) (inSc
       if !inScope m then
         outside := outside.push (c, m)
         continue
-      out := out.push (c, m, ci)
+      unless sharedHelper c && !named.contains c do
+        out := out.push (c, m, ci)
       stack := stack ++ meaningDeps env table ci
   return (out, outside)
 
@@ -892,7 +928,8 @@ def plainRange (t : Expr) : Bool :=
 
 /-- The parts of a premise `t` for the inline rule, under the binders `ys` stripped so far: past its leading `∀` over data
 (`∀ ω`), split at `∧`. Each is printed with those binders, with its head as written and past reducible unfolding
-(`premiseHead`, which also passes its antecedents: `A → X` asks less than `X`), and whether it is a plain range. -/
+(`premiseHead`, which also passes its antecedents: `A → X` asks less than `X`), whether it is a plain range, and the
+constants it uses whose names its text shows. -/
 partial def inlineParts (moduleOf : Name → Option Name) (ys : Array Expr) (t : Expr) : MetaM (Array Json) := do
   let t := t.consumeMData
   if let .forallE n d b bi := t then
@@ -902,8 +939,11 @@ partial def inlineParts (moduleOf : Name → Option Name) (ys : Array Expr) (t :
     return (← inlineParts moduleOf ys t.appFn!.appArg!) ++ (← inlineParts moduleOf ys t.appArg!)
   let head := t.getAppFn.constName?
   let unfolded ← premiseHead moduleOf 4 t
-  return #[Json.mkObj [("type", toJson (toString (← ppExpr (← mkForallFVars ys t)))), ("head", toJson (head.map toString)),
-    ("unfolded", toJson (unfolded.map toString)), ("range", toJson (plainRange t))]]
+  let e ← mkForallFVars ys t
+  let text := toString (← ppExpr e)
+  let consts := (e.getUsedConstants.map toString).filter fun c => (text.splitOn c).length > 1
+  return #[Json.mkObj [("type", toJson text), ("head", toJson (head.map toString)),
+    ("unfolded", toJson (unfolded.map toString)), ("range", toJson (plainRange t)), ("consts", toJson (consts.qsort (· < ·)))]]
 
 /-- Each pin's `inline`: the `Prop` binders of the statement `t`, a definition under `meaning` it applies unfolded once
 (`liftOf`), in each of its conjuncts, instance binders aside, split by `inlineParts`, each with its binder's name, whether
@@ -1171,6 +1211,11 @@ unsafe def main (args : List String) : IO UInt32 := do
   let pinned ← tasks.mapM fun t => IO.ofExcept t.get
   lap "pins" pinned.size
   let field (j : Json) (k : String) : Array Json := (j.getObjValD k).getArr?.toOption.getD #[]
+  let asked := names cfg "names" ++ pinned.foldl (init := #[]) fun acc (_, j) =>
+    (field j "inline").foldl (init := acc) fun acc p => acc ++ names p "consts"
+  let constants := (asked.foldl (init := (({} : NameSet), #[])) fun (s, out) n =>
+    if s.contains n then (s, out) else (s.insert n, match env.find? n with | some ci => out.push (n, ci) | none => out)).2
+  lap "constants" constants.size
   let nameAt (j : Json) (k : String) : Option Name := (j.getObjValD k).getStr?.toOption.map String.toName
   let candidates := names cfg "assumptions" ++ pinned.foldl (init := #[]) fun acc (_, j) =>
     acc ++ (field j "premises").filterMap (nameAt · "head") ++ (field j "hypotheses").filterMap (nameAt · "named")
@@ -1215,18 +1260,22 @@ unsafe def main (args : List String) : IO UInt32 := do
         if done.contains c then continue
         done := done.insert c
         lines := lines.push <| Task.spawn fun _ =>
-          (Json.mkObj [("id", toJson s!"read:{c}"), ("canon", toJson (readCanon rci))]).compress
+          (Json.mkObj [("id", toJson s!"read:{c}"), ("canon", toJson (readCanon env rci))]).compress
         if !back.isEmpty then
           named := (uses rci).foldl (·.insert ·) (named.insert c)
           lines := lines.push <| Task.spawn fun _ =>
             (Json.mkObj [("id", toJson s!"moved-read:{c}"), ("as", toJson (rn c).toString),
-              ("canon", toJson (readCanon rci rn))]).compress
+              ("canon", toJson (readCanon env rci rn))]).compress
     for (_, rs) in walks do
       for (c, _, rci) in rs do
         if done.contains c then continue
         done := done.insert c
         lines := lines.push <| Task.spawn fun _ =>
-          (Json.mkObj [("id", toJson s!"read:{c}"), ("canon", toJson (readCanon rci))]).compress
+          (Json.mkObj [("id", toJson s!"read:{c}"), ("canon", toJson (readCanon env rci))]).compress
+    for (c, ci) in constants do
+      if ci matches .defnInfo _ | .thmInfo _ then
+        lines := lines.push <| Task.spawn fun _ =>
+          (Json.mkObj [("id", toJson s!"const:{c}"), ("canon", toJson (readCanon env ci))]).compress
     let h ← IO.FS.Handle.mk path .write
     for l in lines do
       h.putStrLn l.get
@@ -1250,6 +1299,7 @@ unsafe def main (args : List String) : IO UInt32 := do
     ("axioms", toJson (used.toArray.qsort Name.lt |>.map toString)), ("offenders", toJson offenders),
     ("unreported_errors", toJson unreportedErrors), ("declared_axioms", toJson declared), ("escapes", toJson escapes), ("spec_definitions", toJson specDefs),
     ("instances", toJson instances), ("pins", Json.mkObj pinned.toList),
+    ("constants", Json.mkObj (constants.toList.map fun (c, ci) => (c.toString, Json.mkObj [("kind", toJson (kind ci))]))),
     ("assumption_reads", Json.mkObj (walks.toList.map fun (a, rs) => (a.toString, toJson (rs.map fun (c, m, ci) =>
       Json.mkObj [("name", toJson c.toString), ("module", toJson m.toString), ("kind", toJson (kind ci))])))),
     ("moved_conflicts", toJson conflicts)]

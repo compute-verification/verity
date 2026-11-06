@@ -8,13 +8,14 @@ record the tree's data files name. Stdlib only; it reads the tree at one commit 
 - `packages`: every lock git tracks at REV (default HEAD) outside a `tests/` directory, by the package's path.
 - A guarantee's `assumptions` are those its lock record takes as hypotheses and, with `--facts`, the premises its statement
   takes through its definitions, by the Lean audit's own rule (`premised`). DIR is a Lean audit's output directory
-  (`lean-audit/` of a `check` or records run): `audit-<package path, each run of other characters as _>/facts.json`, and
-  `proved-in-*/facts.json` beside it for the packages its `proved_in` names. A guarantee has `premises_read` when one of
-  those holds it as a theorem whose signature is its lock record's.
+  (`lean-audit/` of a `check` or records run): `audit-<package path, each run of other characters as _>/facts.json.gz`, and
+  `proved-in-*/facts.json.gz` beside it for the packages its `proved_in` names (an older audit's `facts.json` where it
+  holds no `.gz`). A guarantee has `premises_read` when one of those holds it as a theorem whose signature is its lock
+  record's.
 - `status`: `assumes` with an assumption, `proved` with none and its premises read, `unknown` with none and its premises
   not read.
-- `results`: each `art:` id a table's runs of record name (`RENDERERS`, read as literals, never imported) and each example's
-  `[evidence]` (`examples/*/example.toml`); run ids are counted, not exported.
+- `results`: each `art:` id a table's runs of record name (`RENDERERS`, read as literals, never imported) and each demo's
+  `[evidence]` (`examples/*/demo.toml`); run ids are counted, not exported.
 
 The document is written as `canonical` bytes. Prints one JSON line: the counts, the bytes written and their SHA-256.
 """
@@ -23,6 +24,7 @@ from __future__ import annotations
 import argparse
 import ast
 import fnmatch
+import gzip
 import hashlib
 import json
 import os
@@ -36,7 +38,7 @@ SCHEMA = "verity/status/v0"
 LOCK = "lean-audit.json"
 ART = re.compile(r"art:[0-9a-f]{64}")
 RUN = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
-EXAMPLES = "examples/*/example.toml"
+DEMOS = "examples/*/demo.toml"
 #: a table renderer's path -> {the call naming a row's runs of record: how its `what` reads, from the call's first argument}
 RENDERERS = {"benchmarks/harness/verity_bench/served_table.py": {"Protocol": "{}", "Breakdown": "{}, where its time goes by span"}}
 
@@ -67,10 +69,12 @@ def package_of(lock: str) -> str:
 
 
 def facts_sources(facts: Path, package: str) -> list[dict]:
-    """The facts documents a Lean audit wrote for ``package`` under ``facts``: its own, then each `proved_in` package's."""
+    """The facts documents a Lean audit wrote for ``package`` under ``facts``: its own, then each `proved_in` package's,
+    each its `facts.json.gz`, else an older audit's `facts.json`."""
     work = facts / f"audit-{re.sub(r'[^A-Za-z0-9]+', '_', package)}"
-    paths = [work / "facts.json", *sorted(work.glob("proved-in-*/facts.json"))]
-    return [json.loads(p.read_text()) for p in paths if p.is_file()]
+    found = [next((p for p in (d / "facts.json.gz", d / "facts.json") if p.is_file()), None)
+             for d in [work, *sorted(work.glob("proved-in-*"))]]
+    return [json.loads(gzip.decompress(p.read_bytes()) if p.suffix == ".gz" else p.read_bytes()) for p in found if p]
 
 
 def own_modules(f: dict) -> set[str]:
@@ -182,12 +186,12 @@ def renderer_records(text: str, calls: dict[str, str]) -> list[tuple[str, str, s
     return out
 
 
-def example_records(text: str, name: str) -> list[tuple[str, str, str | None]]:
-    """(id, what, None) for each run of record an example's `[evidence]` names: its `runs` and each premise's run."""
+def demo_records(text: str, name: str) -> list[tuple[str, str, str | None]]:
+    """(id, what, None) for each run of record a demo's `[evidence]` names: its `runs` and each premise's run."""
     ev = tomllib.loads(text).get("evidence") or {}
-    out = [(r, f"the {name} example's run of record", None) for r in names(ev.get("runs"))]
+    out = [(r, f"the {name} demo's run of record", None) for r in names(ev.get("runs"))]
     for premise, v in sorted((ev.get("premises") or {}).items()):
-        out += [(r, f"{premise}, measured for the {name} example", None) for r in names(v)]
+        out += [(r, f"{premise}, measured for the {name} demo", None) for r in names(v)]
     return out
 
 
@@ -197,8 +201,8 @@ def results(root: Path, rev: str, files: list[str]) -> tuple[list[dict], int]:
     for path, calls in sorted(RENDERERS.items()):
         if path in files:
             found += renderer_records(show(root, rev, path), calls)
-    for path in sorted(p for p in files if fnmatch.fnmatch(p, EXAMPLES)):
-        found += example_records(show(root, rev, path), path.split("/")[1])
+    for path in sorted(p for p in files if fnmatch.fnmatch(p, DEMOS)):
+        found += demo_records(show(root, rev, path), path.split("/")[1])
     arts = {(i, what, table) for i, what, table in found if ART.fullmatch(i)}
     out = [{"art": i, "kind": None, "what": what, "table": table} for i, what, table in sorted(arts, key=lambda t: (t[0], t[1], t[2] or ""))]
     return out, len({i for i, _, _ in found if RUN.fullmatch(i)})
@@ -219,7 +223,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--root", type=Path, required=True, help="the repository")
     ap.add_argument("--rev", default="HEAD", help="the commit whose tree is read (default HEAD)")
-    ap.add_argument("--facts", type=Path, help="a Lean audit's output directory, its audit-*/facts.json")
+    ap.add_argument("--facts", type=Path, help="a Lean audit's output directory, its audit-*/facts.json.gz")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args(argv)
     if a.facts and not a.facts.is_dir():

@@ -1,13 +1,13 @@
 module
 
-public import Mathlib.Data.Nat.Bitwise
-public import Mathlib.Tactic.Linarith
-public import Mathlib.Tactic.Positivity
-public import Mathlib.Tactic.NormNum
-public import Mathlib.Tactic.Ring
 public import Definitions.Pouw.Fp8Atom.H1TLemmas
-public import Proofs.Pouw.Fp8Atom.Proofs
+public import Mathlib.Data.Nat.Bitwise
 public import Proofs.Pouw.Fp8Atom.H1TProofs
+public import Proofs.Pouw.Fp8Atom.Proofs
+import Mathlib.Algebra.BigOperators.Fin
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Fp8Atom.Fp32Proofs
 
 /-!
 # The atom as two truncations (`H1TAtomValue`)

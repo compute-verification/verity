@@ -11,27 +11,31 @@ total (everything is committed at serve time): every
 scale's serve-time commitments under the PoUW scheme (`--scheme`: `floor`, the measured s8 A-operand floor alone;
 `h1`, `h1-bf16`, `pearl-c`, each scheme's rows a token a layer) and the store-block receipts of
 PoUB, which every plan pays; then proving and the verifier's CPU (at its price ratio) for the drawn units,
-the commitment of every unit's outputs, replay of the layer-steps the draw meets (to build their witnesses), and the
-zero-work subcircuits at their floor.
+the commitment of every unit's outputs, replay of the requests the draw meets (serving keeps only the requests' tokens and
+the weights, so each is re-run whole from its prompt to build its drawn units' witnesses), and the zero-work subcircuits at
+their floor.
 
 - `inputs.py`: the models (Llama-3.1-8B, Qwen3-8B); each scheme's serve-time rows a token a layer, with their leaf
-  chains; the row's inputs (price ratio, rounds, throughput, replay and commitment speeds, PoUB's receipts
+  chains; the row's inputs (price ratio, rounds, throughput, a request's context, commitment speeds, PoUB's receipts
   and passes, decode's step and its compression latency), each with a low and a
-  high; the pieces' AND counts (#2391's pins, hm96's rows); and the observations the cost model is fitted from, Flock's
-  zero-knowledge sessions on sm_120 (`benchmarks/one_stage/zk_cost.py`'s of s8 coordinates, and A8's of PoUB's
+  high; the pieces' AND counts (circuit-check's pins, hm96's rows); and the observations the cost model is fitted from,
+  Flock's zero-knowledge sessions on sm_120 (`benchmarks/one_stage/zk_cost.py`'s of s8 coordinates, and A8's of PoUB's
   opening unit, `BlockOpeningCheck_v1`, at twice their ANDs, its proving only), with the builds and
-  hardware they key.
+  hardware they key; and the `h200` card (`CARDS`): the deployed prover's sessions on GLM-5.3's proof blocks on one
+  H200 (`zk_cost.py`'s served types, arm dev), in H200 GPU-seconds at that card's price ratio.
 - `int8_llama.py`: the int8 Llama-3.1-8B row (vLLM's `cursor/vllm-int8-build-8350`). Its units: every s8 dot checks its
   seed, derives its own noise and opens its rows in circuit. `--model qwen3-8b`
   runs the Qwen3-8B row the same way. A linear's coordinate may be cut into K-chunks that commit their running sums, and
-  r × c tiles are offered, each a unit when its outputs fit a size class. It writes the fitted model (`cost-model.json`, a
+  r × c tiles are offered, each a unit when its outputs fit a size class. Its replay grain is the window's requests, each
+  one prompt of `context` tokens re-run through every layer at `tokens_per_s` (the engine is batch-invariant, so no
+  co-scheduled request is re-run with it). It writes the fitted model (`cost-model.json`, a
   cost-model/v1 record), the serve-time commitments, the frontier, the plan at each budget, the tensors committed at
   more than one scale and what committing each once saves (`overlaps`), the weight classes' weights at each ε
   (`--weights`), the break-even table (the linears forced to each grain, per window, ε and commitment regime), the
   sensitivity (each cost group scaled, each input at its low and high) and the hints (`plan.json`), and prints the
   tables.
 
-- `transformer.py`: the end-to-end demo's transformer (PRF-166), CMP-92's decoder block over one server block of
+- `transformer.py`: the end-to-end demo's transformer, its decoder block over one server block of
   serving, small (width 128, 2 heads, MLP 512, 2 layers, a byte vocabulary, context 32) or large (`--model large`:
   the Phase 2 model's 70 layers at width 8,192, 128 heads of 64 and an MLP of 32,768, 52.5 GiB of INT8 linears and
   35.0 GiB of KV for 1,023 sequences on one 96 GiB card, its requests a block from an estimated 195 ms step; each
@@ -54,7 +58,7 @@ zero-work subcircuits at their floor.
   units, the replay and, beside them, the commitment of every unit's outputs; compares the static matmuls as 128-channel
   tiles (`--tiles`) and softmax and PV padded to the context (`--pad`); and gives the frontier over the share, the
   sampling block length in blocks that proves within its own GPU time, and the incorrect ANDs (`Stratified.harm_bound`, not a Lean
-  guarantee).
+  guarantee). `--card h200` prices it with the `h200` card's fit instead of the RTX PRO 6000's.
 - `demo_a.py`: Demo A's frontier on one H200: plain INT8 weights, no P2 decode, a block of 16,384 requests at a
   6.35 s step, 32 steps a request, on the Definition map (`examples/h200/e2e_h200/plan.py`: every subcircuit a
   Definition Flock stages, at its measured ANDs and staged k_log) with PoUW's tiles as one more subcircuit at each K
@@ -67,11 +71,37 @@ zero-work subcircuits at their floor.
   and the commits beside it; then M3's uniform 8-unit draw against the block's GPU time, and each Definition's share
   of the ANDs against the step's GPU time.
 
+- `served_window.py`: the served window (Llama-3.2-1B int8, T 8,192 on the H200, one step a window) cut at each rung of
+  a ladder (K-chunks of the int8 linears, output coordinates, tiles, and fused attention/MLP, layer and 4-layer proof
+  blocks that commit only the residual and K, V), for the free-compute target (a window, and pooled over a week, a month
+  and a year) and the exfiltration target, in the planner's two modes (proving only, and proving plus w times the serve-time
+  commitment) at two readings of a hashed byte's cost, through `grain_costs` and `for_target`, and the second mode again
+  under a code-based commitment at each rate ρ (codeword columns hashed, 1/ρ the bytes, and no row hashed in circuit),
+  each total with the replay of the requests the draw meets, each re-run from its prompt at the stock step's share;
+  then each rung under a two-stage design (`optimize.two_stage`: serving commits only the replay blocks' boundaries, q of
+  them sampled, their interiors committed after that, and k proof blocks sampled in each), at the `request` replay
+  grain for exfiltration and a layer of a token for both targets, beside today's one-stage design at the same scope, also
+  pooled over the census's datacenter and the world's fleet; then the chunk family's optimum against √(wβhC/(oΛ)). A rung fits when C-Flock's block holds each of its proof blocks (`inputs.cap`). Its
+  inputs, each with its status and source, are `served_window_inputs.json`; it writes `served_window.json` and
+  `served_window.md`.
+
 ```text
 uv run python benchmarks/sampling_plan/int8_llama.py --out DIR [--model qwen3-8b] [--scheme pearl-c] [--weights]
+uv run python benchmarks/sampling_plan/served_window.py --out DIR [--weight W] [--rates R ...] [--no-planner]
 uv run python benchmarks/sampling_plan/transformer.py --out DIR [--model large] [--share S] [--delta D]
-uv run python benchmarks/sampling_plan/h200.py --out DIR [--share S] [--batch B] [--step-s T] [--tiles] [--pad]
+uv run python benchmarks/sampling_plan/h200.py --out DIR [--share S] [--batch B] [--step-s T] [--tiles] [--pad] [--card h200]
 uv run python benchmarks/sampling_plan/demo_a.py --out DIR [--spans NAME ...] [--no-frontier]
+```
+
+- `glm53.py`: GLM-5.3 as served (vLLM, H200, TP8, FP8) as the planner's candidates, from its proof-block census
+  (`glm53_blocks.json`, `benchmarks/one_stage/block_census.py`'s card over the Commit Build it names, the census in the
+  store): each proof-block Definition one candidate, its units one request's count over every rank, its work its
+  estimated ANDs, its outputs committed and its opened rows' bytes; the gaps, rows no cut fits, are listed by row family
+  and are no candidate. It prints the proof blocks, output bits, ANDs, served MACs and opened bytes per prefill token,
+  per decode token and per request, and the gaps.
+
+```text
+uv run python benchmarks/sampling_plan/glm53.py [--requests N]
 ```
 
 - `cpu_budget.py`: the block's draw sized to a CPU proving budget. It reads `h200.py`'s `plan.json` (its

@@ -410,7 +410,7 @@ def root4(shape, side: str) -> SpecializedDefinition:
 ROLES = {"weight": ("row_b_head", "row_b_first", "row_b_form", "row_b_tail"),
          "call": ("row_a_head", "row_a_first", "row_a_form", "row_a_tail", "tile")}
 ROLES["check"] = ROLES["weight"] + ROLES["call"]
-#: the roles whose units are one segment of a row, `pc4.Unit.where` (row, segment)
+#: the roles whose units are one segment of a row, `pc4.ProofBlock.where` (row, segment)
 FORMS = ("row_a_first", "row_a_form", "row_b_first", "row_b_form")
 ROLE_OF = {id(d): f"row_{side.lower()}_{piece}"
            for scheme in (
@@ -429,7 +429,7 @@ def _flat(pieces: tuple) -> list:
 def unit_templates8(shape, side: str) -> list[SpecializedDefinition]:
     """The side's unit templates under the cut, in the order its root body first uses them (`pc8.query`)."""
     b, a = (_flat(pieces8(shape.k, shape.row_k, shape.dev, s)) for s in ("b", "a"))
-    tile = pc8.templates(shape.k, shape.tile, shape.dev, shape.hidden)["tile"]
+    tile = pc8.templates(shape.k, shape.tile, shape.dev, shape.hidden, "h0")["tile"]
     return {"weight": b, "call": a + [tile], "check": b + a + [tile]}[side]
 
 

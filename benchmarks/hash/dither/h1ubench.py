@@ -231,8 +231,8 @@ _NOISE_GATES: dict = {}
 
 
 def floor_gate(arm: str, nlib: NoiseLib, nb: int, j: int) -> dict:
-    """h1bench.py's gate (kn_ca against hashlib, kn_mid's writes and its sink fold at J against kn_ca, a no-write control)
-    for one noise build at nb blocks a unit and J, once a run."""
+    """h1bench.py's gate (kn_ca against seeds.noise_block, kn_mid's writes and its sink fold at J against kn_ca, a
+    no-write control) for one noise build at nb blocks a unit and J, once a run."""
     key = (arm, nb, j)
     if key not in _NOISE_GATES:
         gen = torch.Generator(device="cuda")

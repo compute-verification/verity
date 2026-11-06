@@ -1,6 +1,10 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Integrate.Sites
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.ExecLookup
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # The accepted statement `Placed.Accepted` reads is the one the refinement plays

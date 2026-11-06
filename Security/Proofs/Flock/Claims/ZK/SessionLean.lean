@@ -1,10 +1,42 @@
 module
 
 public import Proofs.Flock.Claims.ZK.Refine
-public import Flock.Firewall.SessionPlan
 public import Flock.Firewall.Frames
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Data.String.Basic
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The release at the session loop (`flock-firewall session`)
@@ -645,7 +677,8 @@ theorem Flock.zk_server_lean_loop
     (hS : (CoinLayer.session Loop.loopNr T).Tables)
     (hV : (CoinLayer.session Loop.loopNr T).Complete (Flock.R (FlockDeploy.deployZk rel).parse))
     (hD : (CoinLayer.session Loop.loopNr T).DummyReg) (hc : (CoinLayer.session Loop.loopNr T).Causal)
-    (hsc : (CoinLayer.session Loop.loopNr T).SwCausal vs) (hT : (CoinLayer.session Loop.loopNr T).TapeOK)
+    (Ok : (x : Msg) → (Fin (refK x) → (CoinLayer.session Loop.loopNr T).Coin) → Prop)
+    (hsc : (CoinLayer.session Loop.loopNr T).SwCausalOn Ok vs) (hT : (CoinLayer.session Loop.loopNr T).TapeOK)
     (L₀ L : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand))
     (hL : L = LeanRelease.loop Loop.loopNr T L₀)
@@ -653,6 +686,8 @@ theorem Flock.zk_server_lean_loop
     (pc : Msg → List (CoinLayer.session Loop.loopNr T).Coin → Masker)
     (fc : Msg → List (CoinLayer.session Loop.loopNr T).Coin → Except String Masker)
     (hPr : LeanRelease.ProgReads (CoinLayer.session Loop.loopNr T) L pc fc x)
+    (hOk : (CoinLayer.session Loop.loopNr T).StopsOk
+      (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc fc Loop.readCoins) Ok)
     (hLk : LeanRelease.LinkRoundEq (CoinLayer.session Loop.loopNr T) vs L x w)
     (hF : LeanRelease.FinalRoundEq (CoinLayer.session Loop.loopNr T) vs L CoinOpen.shaH wk x w)
     (hE : LeanRelease.LiveRoundEq (CoinLayer.session Loop.loopNr T) vs L CoinOpen.shaH wk x w)
@@ -682,8 +717,8 @@ theorem Flock.zk_server_lean_loop
                 (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc fc Loop.readCoins) L.stop).swP vs).prover w) Vs θ x).Pr
               CoinOpen.shaH) := by
   subst hL
-  exact Flock.zk_server_lean_coinLayer rel Loop.loopNr T vs t ht hT1 hδ₁ hS hV hD hc hsc hT _ wk x w hR
-    (LeanRelease.loop_last Loop.loopNr T L₀ x) pc fc Loop.readCoins ⟨hPr, LeanRelease.loop_coinsRead Loop.loopNr T L₀ x⟩
+  exact Flock.zk_server_lean_coinLayer rel Loop.loopNr T vs t ht hT1 hδ₁ hS hV hD hc Ok hsc hT _ wk x w hR
+    (LeanRelease.loop_last Loop.loopNr T L₀ x) pc fc Loop.readCoins hOk ⟨hPr, LeanRelease.loop_coinsRead Loop.loopNr T L₀ x⟩
     (LeanRelease.loop_helloIs Loop.loopNr T L₀ x)
     (LeanRelease.loop_helloParses Loop.loopNr T L₀ x) (LeanRelease.loop_reqsFollow T L₀ x) hLk hF hE hEf Vs θ hk Ev
 
