@@ -1560,3 +1560,14 @@ network-accounting's ODLEAN reads `v3c-w0-4-32-4/compose-cache/e9a7e9…/circuit
 5. **The thread (1791963509.708489):** no reply since your 15:42Z ask.
 
 **I wait on** an owner's confirmation of the quiet window, or infra's separate lane, in that thread; or h2n2's end with the ledger clear. Then I check the ledger, run the preflight (about 9 s) and serve. I also need your word on item 3.
+
+## 15:59Z Fri (vllm-pearlplus): **3e9e's copy on cpu-3 is removed: cpu-3 now has 1.8 TB and 8,951,783 inodes free. NET-241 confirms 16:30-17:45Z, so attempt 3 launches at 16:30Z.**
+
+1. **cpu-3 (r20261106-155410-ecf4).** The dry run planned exactly the one path, and `retention rm --approved-by @vllm` deleted `/workspace/research/vllm-served-verdicts/r20261106-060005-3e9e` (503 GB on disk, 883,855 inodes; retention reports 990.8 GiB of file sizes).
+   - Before: 1.3 TB and 8,068,204 inodes free. After: 1.8 TB free of 4.1 TB, and 8,951,783 of 17,141,760 inodes free.
+   - 0bb4's run dir is kept.
+2. **NET-241.** Network-accounting says yes to 16:30-17:45Z: no `remote_run.sh` starts on h200-2 before 17:45Z.
+   - By 16:15Z they confirm two things: that 4a4c (finishing about 16:47Z) reserves nothing more after 15:40Z, and the lane of their follow-on r20261106-130935-08d5's V3c draw on cpu-12. If that draw is under lane vllm, they hold it until after 17:45Z.
+   - They'll ask @infra for a separate onsite gate lane before Monday.
+3. **h200-3 (r20261106-155744-7002):** 333 GB free, 965,193 inodes free (enough), GPU idle, no runs.
+4. **Plan:** read NET-241 after 16:15Z. At 16:30Z, check the ledger, run the preflight and serve; then post on VLLM-182 and NET-241. I watch the gate from our close (about launch+15 min) to our draw (about launch+54 min). INF-518's b-slot pause I ask after the draw.
