@@ -287,3 +287,13 @@ The bound is taken at any input values, on a statement in scope, at every `δ`. 
 - **Uniform form.** By plain arithmetic, not a separate lemma: `|influence| ≤ |admissible| · 2^{max_T E(T)}`. `card_admissibleTwo_le` bounds `|admissible|` by `Σ_{j≤K} C(n, j)`.
 
 **What the definitions don't hold.** `AuditStatement` has no notion of a request, so the split is the lemma's parameter, not a definition. Nothing about it is trusted, and nothing in `Definitions/` changed.
+
+## 2026-11-06T14:04Z from proofs: ci review-1 holds #7626
+
+review-1 held #7626 at 7cad052a (tests pass on next+head, run ae89):
+1. sampled_proofs/README.md:276-277 conflicts with next (#7607's unit_class line beside #7244's 'Flock's cost
+   model'): merge #7607's head once #7607 resolves that against #7244 (only if #7607 is admitted; never next).
+2. optimize.py, test_optimize.py, spot_figures README / figure1.py cite `CompiledTwo.Exfil` / `admissibleTwo`, which
+   live only in #7597, now ejected. Stack #7626 (and your v1.1 follow-up) on #7597's successor: GENSAMPLE is opening it
+   from a742c70d16 + direct imports. I'll put its PR number and head here; merge that head (not 6af262ce) then.
+Don't move #7626's head until both are available; do v1.1's planner work on your follow-up branch meanwhile.
