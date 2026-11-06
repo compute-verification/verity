@@ -134,6 +134,12 @@ PENDING: dict[str, str] = {
     "Security/Proofs/NetworkCertifier/README.md": "#4690 adds lines",
     "benchmarks/census/README.md": "#4731 rewrites its lines",
     "examples/h200/interfaces/README.md": "#4719 rewrites its lines",
+    "README.md": "main rewrote its demos' rows, naming verity example, after the demos' words were generated; they follow",
+    "tools/verity/cli/README.md": "main added it, naming verity example, after the demos' words were generated; they follow",
+    "benchmarks/remote_session/README.md": "main rewrote its opening, naming verity example, after the demos' words were "
+                                           "generated; they follow",
+    "verity/core/protocols/pouw/README.md": "main rewrote its remote paragraph, naming verity example, after the demos' "
+                                            "words were generated; they follow",
     "examples/h200/interfaces/verity_e2e_demo/report.py": "#4691 adds a line",
     "examples/h200/README.md": "#4680 rewrites its lines",
     "benchmarks/stacked_share/README.md": "#4514 rewrites its lines",
