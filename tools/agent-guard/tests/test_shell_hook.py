@@ -194,10 +194,40 @@ def test_builds_and_tests_are_refused_on_an_agent_vm_and_light_ones_only_while_i
         assert "1.9 GiB of 15.3 GiB available" in out["agent_message"] and "research run --on auto" in out["agent_message"]
     for command in passes:
         assert verdict(command, **gate) == "allow", command
-    meminfo.write_text("MemTotal:       16000000 kB\nMemFree:          100000 kB\nMemAvailable:    6000000 kB\n")
-    (cgroup / "memory.max").write_text(f"{8 * 2**30}\n")         # a cgroup limit tighter than the VM: its headroom counts
+
+
+def cgroup_gate(tmp_path: Path, stat: str | None) -> dict[str, str]:
+    """The memory gate's overrides for a VM with most of its 15.3 GiB available, under a cgroup limit of 8 GiB with 7 GiB in use
+    whose memory.stat is `stat` (None: there is none)."""
+    meminfo, cgroup = tmp_path / "meminfo", tmp_path / "cg"
+    cgroup.mkdir()
+    meminfo.write_text("MemTotal:       16000000 kB\nMemFree:          100000 kB\nMemAvailable:   14000000 kB\n")
+    (cgroup / "memory.max").write_text(f"{8 * 2**30}\n")
     (cgroup / "memory.current").write_text(f"{7 * 2**30}\n")
-    assert verdict("uv run pytest -q tests/test_x.py", **gate) == "deny"
+    if stat is not None:
+        (cgroup / "memory.stat").write_text(stat)
+    return {"AGENT_GUARD_MEMINFO": str(meminfo), "AGENT_GUARD_MIN_AVAIL": "0.25", "AGENT_GUARD_CGROUP": str(cgroup)}
+
+
+def test_under_a_cgroup_limit_its_inactive_file_cache_counts_as_available(tmp_path):
+    """Under a cgroup limit tighter than the VM, the headroom is taken over the cgroup's working set: memory.current less
+    memory.stat's inactive_file, the file cache the kernel reclaims on demand (as container runtimes count it), so a cache that
+    fills the cgroup doesn't refuse a one-file test run while most of its memory is free; active_file still counts as used."""
+    gate = cgroup_gate(tmp_path, f"anon {2 * 2**30}\nfile {5 * 2**30}\ninactive_file {4 * 2**30}\nactive_file {2**30}\n")
+    assert verdict("uv run pytest -q tests/test_x.py", **gate) == "allow"
+    (tmp_path / "cg" / "memory.stat").write_text(f"anon {2 * 2**30}\nfile {5 * 2**30}\ninactive_file {2**29}\nactive_file {9 * 2**29}\n")
+    out = answer("uv run pytest -q tests/test_x.py", **gate)
+    assert out["permission"] == "deny" and "1.5 GiB of 8.0 GiB available" in out["agent_message"]
+
+
+def test_under_a_cgroup_limit_without_memory_stat_all_of_memory_current_counts(tmp_path):
+    """Where memory.stat can't be read, or names no inactive_file, the headroom is the limit less all of memory.current."""
+    gate = cgroup_gate(tmp_path, None)
+    out = answer("uv run pytest -q tests/test_x.py", **gate)
+    assert out["permission"] == "deny" and "1.0 GiB of 8.0 GiB available" in out["agent_message"]
+    (tmp_path / "cg" / "memory.stat").write_text(f"anon {7 * 2**30}\nfile 0\n")
+    out = answer("uv run pytest -q tests/test_x.py", **gate)
+    assert out["permission"] == "deny" and "1.0 GiB of 8.0 GiB available" in out["agent_message"]
 
 
 @pytest.mark.parametrize("command", [
