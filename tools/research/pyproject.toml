@@ -42,7 +42,6 @@ untraced = [
     "tests/test_drive_config.py",
     "tests/test_drive_executor.py",
     "tests/test_drive_hold_lift.py",
-    "tests/test_drive_lean_failed.py",
     "tests/test_drive_lowrisk.py",
     "tests/test_drive_moves.py",
     "tests/test_drive_policy.py",
@@ -199,7 +198,7 @@ tests = ["tests/test_cli.py", "tests/test_usage_cli.py"]
 paths = ["infra/cluster/src/cluster"]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_drive_lean_failed.py", "tests/test_drive_policy.py", "tests/test_queue_ported.py"]
+tests = ["tests/test_drive_policy.py", "tests/test_queue_ported.py"]
 paths = ["tools/verity/check/gates/markdown_caps.py"]
 
 [[tool.verity.tests.reads]]
