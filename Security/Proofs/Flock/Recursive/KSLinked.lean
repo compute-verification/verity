@@ -86,7 +86,9 @@ theorem recursiveKSLink_nontrivial {Tb : Type} (Q : Msg → Claims.Flock.Wit →
   have hO' : ∀ j < RecDeploy.nS x, ∃ i spec' sts', RecDeploy.PartIn
       (RecDeploy.staged ({ RecDeploy.deployedB b with tr := RecDeploy.recTr aux nOf hd recRest } : RecDeploy.Brings).st
         x (RecDeploy.pick ({ RecDeploy.deployedB b with tr := RecDeploy.recTr aux nOf hd recRest } :
-          RecDeploy.Brings).st x j) j) i spec' sts' := hO
+          RecDeploy.Brings).st x j) j) i spec' sts' := fun j hj => by
+    obtain ⟨i, spec', sts', hp, -⟩ := hO j hj
+    exact ⟨i, spec', sts', hp⟩
   refine RecDeploy.not_ksLin2On_acceptAll _root_.Flock.Readable.relation _root_.Flock.Readable.relation
     { RecDeploy.deployedB b with tr := RecDeploy.recTr aux nOf hd recRest }
     (RecDeploy.DeployedR.layR RecDeploy.OpenRows.elemR) (FlockDeploy.nextR RecDeploy.DeployedR.rdR)
@@ -99,7 +101,8 @@ theorem recursiveKSLink_nontrivial {Tb : Type} (Q : Msg → Claims.Flock.Wit →
         (RecDeploy.DeployedR.layR RecDeploy.OpenRows.elemR) (FlockDeploy.nextR RecDeploy.DeployedR.rdR)
         (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation RecDeploy.DeployedR.rdR).cols
         RecDeploy.DeployedR.wER FlockDeploy.joinR RecDeploy.rowInDeployed RecDeploy.DeployedR.finalR
-        RecDeploy.DeployedR.wR Claims.GS.plainDecodeRD hin hO' hn hS (n := 0) (by norm_num) (v := 0) (by norm_num)))
+        RecDeploy.DeployedR.wR Claims.GS.plainDecodeRD hin hO' (hn.trans (by norm_num)) (hS.trans (by norm_num))
+        (n := 0) (by norm_num) (v := 0) (by norm_num)))
     (Claims.Recursion.ksLin2On_of_linkOn hL (fun y (hy : y = x) => hy ▸ denseAt_of_parses hP) ?_)
   intro decI _ decO _ y hy Ω _ _ P
   change y = x at hy

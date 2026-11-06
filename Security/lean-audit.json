@@ -2072,7 +2072,7 @@
   },
   "RecDeploy.HonestFixture": {
    "owner": "@proofs",
-   "digest": "9470d8f7aedbcb66e62d584ab68823bad75b1ef4590d4a6a028ccedd5ede7a74"
+   "digest": "0dab73037659ff68edcd9c7dc2d80d0551ab74093a4e469f6523a986d337e41a"
   },
   "RecDeploy.KSFixture": {
    "owner": "@proofs",
@@ -3010,6 +3010,10 @@
    "honest": ["Verity.SecurityProofs.CKSize_honest"],
    "nontrivial": "Verity.SecurityProofs.CKSize_nontrivial",
    "kind": "exclusion"
+  },
+  "Flock.SecurityProofs.RecursiveBitsKDeployed": {
+   "honest": ["RecDeploy.HonestHalfFixture.recursiveBitsKDeployed_honest"],
+   "nontrivial": "Flock.Guarantees.recursiveBitsKDeployed_nontrivial"
   }
  },
  "unwitnessed": {
@@ -6789,6 +6793,40 @@
    "assumptions": [],
    "type_hash": "ec759108c22f67c1a8ecba19030feb1071d8497d8f6d680a11425990461c58cf"
   },
+  "Flock.Guarantees.recursiveBitsKDeployed_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Flock.Guarantees.recursiveBitsKDeployed_nontrivial (h : RecDeploy.KSFixture) :",
+    "  Exists fun aux =>",
+    "    Exists fun nOf =>",
+    "      Exists fun hd =>",
+    "        Exists fun recRest =>",
+    "          ∀ (b : RecDeploy.Brings),",
+    "            Not",
+    "              (Claims.Recursion.BitsKAtC FlockDeploy.sha512",
+    "                (RecDeploy.recBoundAt Flock.Readable.relation",
+    "                    (have __src := RecDeploy.deployedB b;",
+    "                    { tr := RecDeploy.recTr aux nOf hd recRest, hs := __src.hs, nC := __src.nC, rd := __src.rd,",
+    "                      zl := __src.zl, ref := __src.ref, setup := __src.setup })",
+    "                    (RecDeploy.DeployedR.layR RecDeploy.OpenRows.elemR)).acceptAll",
+    "                (RecDeploy.bdDeployed Flock.Readable.relation (FlockDeploy.nextR RecDeploy.DeployedR.rdR)",
+    "                  (FlockDeploy.deployPlainTrimR Flock.Readable.relation RecDeploy.DeployedR.rdR).cols",
+    "                  RecDeploy.DeployedR.wER FlockDeploy.joinR RecDeploy.rowInDeployed RecDeploy.DeployedR.finalR",
+    "                  RecDeploy.DeployedR.wR)",
+    "                (RecDeploy.deployZkRec Flock.Readable.relation) FlockDeploy.KS.CpDep",
+    "                (fun x =>",
+    "                  And (RecDeploy.DenseAt x)",
+    "                    (RecDeploy.SizesAt",
+    "                      (have __src := RecDeploy.deployedB b;",
+    "                      { tr := RecDeploy.recTr aux nOf hd recRest, hs := __src.hs, nC := __src.nC, rd := __src.rd,",
+    "                        zl := __src.zl, ref := __src.ref, setup := __src.setup })",
+    "                      x))",
+    "                (instHPow.hPow 2 32) (instHPow.hPow 2 32) (instHPow.hPow 2 (Real.instNeg.neg 167.7))",
+    "                (instHPow.hPow 2 (Real.instNeg.neg 174.95)) 0)"
+   ],
+   "assumptions": ["RecDeploy.KSFixture"],
+   "type_hash": "6f523fee2c7e80579872766d19ddde9497bf3c99465c26efa57f51569626bc5e"
+  },
   "Flock.Guarantees.recursiveKSCompiledEvery_nontrivial": {
    "owner": "@proofs",
    "signature": [
@@ -7092,6 +7130,12 @@
    "signature": ["Flock.SecurityProofs.RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3"],
    "assumptions": [],
    "type_hash": "9b73b88919bb15a1bcfcc8e00e9f5afd9440726ebdcdaa80b26e5136b59e456b"
+  },
+  "Flock.SecurityProofs.RecursiveBitsKDeployed": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.RecursiveBitsKDeployed : Flock.Guarantees.RecursiveBitsKDeployed"],
+   "assumptions": [],
+   "type_hash": "b057bb188c7a6e87c2d77f5fb9a095b2fc0bb0c3e50bc36307f7265d52df4ffb"
   },
   "Flock.SecurityProofs.RecursiveCircuitIndist": {
    "owner": "@proofs",
@@ -11124,6 +11168,47 @@
    "signature": [
     "RecDeploy.HonestHalfFixture.honest_half_fixture (h : RecDeploy.HonestFixture) :",
     "  Exists fun mask =>",
+    "    Exists fun b0 =>",
+    "      Exists fun x =>",
+    "        Exists fun aux =>",
+    "          Exists fun nOf =>",
+    "            Exists fun hd =>",
+    "              Exists fun recRest =>",
+    "                Exists fun decI =>",
+    "                  Exists fun w =>",
+    "                    Exists fun ω =>",
+    "                      Exists fun r =>",
+    "                        ∀ (s : Nat),",
+    "                          instLTNat.lt s (RecDeploy.nS x) →",
+    "                            Claims.Recursion.VStarB.PartAccepts FlockDeploy.sha512",
+    "                              (RecDeploy.HonestHalf.DAt mask (RecDeploy.VStarBuild.IrDep x) b0 x aux nOf hd recRest)",
+    "                              (RecDeploy.deployZkRec Flock.Readable.relation)",
+    "                              (RecDeploy.DeployedR.layR RecDeploy.OpenRows.elemR) Claims.Recursion.Form.Dense",
+    "                              (RecDeploy.showsPart RecDeploy.recRead",
+    "                                (have __src :=",
+    "                                  RecDeploy.VStarHonest.bringsAt mask (RecDeploy.VStarBuild.IrDep x)",
+    "                                    (RecDeploy.deployedB b0) x;",
+    "                                { tr := RecDeploy.recTr aux nOf hd recRest, hs := __src.hs, nC := __src.nC,",
+    "                                  rd := __src.rd, zl := __src.zl, ref := __src.ref, setup := __src.setup }))",
+    "                              (RecDeploy.cmtTr RecDeploy.recRead) s x (Claims.coinSeq r)",
+    "                              (List.map Prod.fst",
+    "                                (Claims.run FlockDeploy.sha512",
+    "                                    (RecDeploy.refP (RecDeploy.HonestHalf.IAt decI).V",
+    "                                      (RecDeploy.HonestHalf.bLAt mask (RecDeploy.VStarBuild.IrDep x) b0 x aux nOf hd",
+    "                                        recRest)",
+    "                                      w)",
+    "                                    (RecDeploy.HonestHalf.DAt mask (RecDeploy.VStarBuild.IrDep x) b0 x aux nOf hd",
+    "                                        recRest).V",
+    "                                    x ω r).msgs)"
+   ],
+   "assumptions": ["RecDeploy.HonestFixture"],
+   "type_hash": "3edc2cda6a0995890c3514cc686ad8f40d0e82e94c83753eaed688aabfb602ec"
+  },
+  "RecDeploy.HonestHalfFixture.recursiveBitsKDeployed_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "RecDeploy.HonestHalfFixture.recursiveBitsKDeployed_honest (h : RecDeploy.HonestFixture) :",
+    "  Exists fun mask =>",
     "    Exists fun Ir =>",
     "      Exists fun b0 =>",
     "        Exists fun x =>",
@@ -11135,25 +11220,61 @@
     "                    Exists fun w =>",
     "                      Exists fun ω =>",
     "                        Exists fun r =>",
-    "                          ∀ (s : Nat),",
-    "                            instLTNat.lt s (RecDeploy.nS x) →",
-    "                              Claims.Recursion.VStarB.PartAccepts FlockDeploy.sha512",
-    "                                (RecDeploy.HonestHalf.DAt mask Ir b0 x aux nOf hd recRest)",
-    "                                (RecDeploy.deployZkRec Flock.Readable.relation)",
-    "                                (RecDeploy.DeployedR.layR RecDeploy.OpenRows.elemR) Claims.Recursion.Form.Dense",
-    "                                (RecDeploy.showsPart RecDeploy.recRead",
+    "                          And",
+    "                            (∀ (s : Nat),",
+    "                              instLTNat.lt s (RecDeploy.nS x) →",
+    "                                Claims.Recursion.VStarB.PartAccepts FlockDeploy.sha512",
+    "                                  (RecDeploy.HonestHalf.DAt mask Ir b0 x aux nOf hd recRest)",
+    "                                  (RecDeploy.deployZkRec Flock.Readable.relation)",
+    "                                  (RecDeploy.DeployedR.layR RecDeploy.OpenRows.elemR) Claims.Recursion.Form.Dense",
+    "                                  (RecDeploy.showsPart RecDeploy.recRead",
+    "                                    (have __src := RecDeploy.VStarHonest.bringsAt mask Ir (RecDeploy.deployedB b0) x;",
+    "                                    { tr := RecDeploy.recTr aux nOf hd recRest, hs := __src.hs, nC := __src.nC,",
+    "                                      rd := __src.rd, zl := __src.zl, ref := __src.ref, setup := __src.setup }))",
+    "                                  (RecDeploy.cmtTr RecDeploy.recRead) s x (Claims.coinSeq r)",
+    "                                  (List.map Prod.fst",
+    "                                    (Claims.run FlockDeploy.sha512",
+    "                                        (RecDeploy.refP (RecDeploy.HonestHalf.IAt decI).V",
+    "                                          (RecDeploy.HonestHalf.bLAt mask Ir b0 x aux nOf hd recRest) w)",
+    "                                        (RecDeploy.HonestHalf.DAt mask Ir b0 x aux nOf hd recRest).V x ω r).msgs))",
+    "                            (And",
+    "                              (And (RecDeploy.DenseAt x)",
+    "                                (RecDeploy.SizesAt",
     "                                  (have __src := RecDeploy.VStarHonest.bringsAt mask Ir (RecDeploy.deployedB b0) x;",
     "                                  { tr := RecDeploy.recTr aux nOf hd recRest, hs := __src.hs, nC := __src.nC,",
-    "                                    rd := __src.rd, zl := __src.zl, ref := __src.ref, setup := __src.setup }))",
-    "                                (RecDeploy.cmtTr RecDeploy.recRead) s x (Claims.coinSeq r)",
-    "                                (List.map Prod.fst",
-    "                                  (Claims.run FlockDeploy.sha512",
-    "                                      (RecDeploy.refP (RecDeploy.HonestHalf.IAt decI).V",
-    "                                        (RecDeploy.HonestHalf.bLAt mask Ir b0 x aux nOf hd recRest) w)",
-    "                                      (RecDeploy.HonestHalf.DAt mask Ir b0 x aux nOf hd recRest).V x ω r).msgs)"
+    "                                    rd := __src.rd, zl := __src.zl, ref := __src.ref, setup := __src.setup })",
+    "                                  x))",
+    "                              (And",
+    "                                (∀ (T : Type)",
+    "                                  (C :",
+    "                                    Claims.Bridge.CoinTree FlockDeploy.Coin T",
+    "                                      ((RecDeploy.HonestHalf.DAt mask Ir b0 x aux nOf hd recRest).V.k x))",
+    "                                  (τ : T),",
+    "                                  Eq",
+    "                                    (Claims.Bridge.runCM FlockDeploy.sha512",
+    "                                        (Claims.Bridge.CProver.ofProver",
+    "                                          (RecDeploy.refP (RecDeploy.HonestHalf.IAt decI).V",
+    "                                            (RecDeploy.HonestHalf.bLAt mask Ir b0 x aux nOf hd recRest) w))",
+    "                                        (RecDeploy.HonestHalf.DAt mask Ir b0 x aux nOf hd recRest).V x C ω r τ).out",
+    "                                    Claims.Out.acc)",
+    "                                (And (Claims.Recursion.decOK RecDeploy.DeployedR.bdR.deploy Claims.GS.plainDecodeRD)",
+    "                                  (And",
+    "                                    (Claims.Recursion.decOK (RecDeploy.deployZkRec Flock.Readable.relation)",
+    "                                      Claims.GS.zkDecodeRD)",
+    "                                    (And",
+    "                                      (Claims.Hm96Hiding FlockSoundness.Discharge.ZkView.My",
+    "                                        FlockSoundness.Discharge.ZkView.saltHash",
+    "                                        (ENNReal.ofReal",
+    "                                          (FlockSoundness.CROnly.hidingGap FlockSoundness.Discharge.ZkView.My",
+    "                                            FlockSoundness.Discharge.ZkView.saltHash)))",
+    "                                      (Ne",
+    "                                        (ENNReal.ofReal",
+    "                                          (FlockSoundness.CROnly.hidingGap FlockSoundness.Discharge.ZkView.My",
+    "                                            FlockSoundness.Discharge.ZkView.saltHash))",
+    "                                        ENNReal.instTop.top))))))"
    ],
    "assumptions": ["RecDeploy.HonestFixture"],
-   "type_hash": "d736c29795c974b827fad7b682212e3c813ddfe4c7236e6cf401ead269af34b4"
+   "type_hash": "b52312b925978ac894f8268508d7718f641e54cfba81d58f3f403032a968aa48"
   },
   "RecDeploy.HonestHalfFixture.recursiveKSDeployed_honest": {
    "owner": "@proofs",
@@ -12680,7 +12801,7 @@
    "Pous.SecurityProofs.StreamedWipeMeetsReads": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at every number of reads k with (1 - 1/r)^k <= 2^-129, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Pous.SecurityProofs.StreamedWipeMeets141GB5": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at k = 5231 reads, an H200's 141 GB fill with its 2.3 GB driver reserve, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Flock.SecurityProofs.RecursiveKS": "restatable: a probability statement (KSLin2On, through RecursiveKSAtRec at the deployed record) whose event is the recursive verifier's acceptance and then the extractor recovering no witness; KSLin2On's probability is not under shape.events, so the shape rule finds no acceptance. It fits once that probability is listed under shape.events or the statement is restated over FlockSoundness.Game.prob.",
-   "RecDeploy.HonestHalfFixture.honest_half_fixture": "completeness: RecursiveKS's honest lemma (LEAN-66, its witnesses entry): at the deployed instance, under the named assumption HonestFixture (the honest run accepted, its witness satisfying, shaped and collision-free), the premises RecursiveKSAt reads hold, so RecursiveKS is not vacuous there.",
+   "RecDeploy.HonestHalfFixture.honest_half_fixture": "completeness: RecursiveKS's honest lemma (LEAN-66, its witnesses entry): at the deployed instance, under the named assumption HonestFixture (at the deployed inner prover IrDep x, the honest run accepted, its witness satisfying, its reps' tops differing and its calls collision-free), the premises RecursiveKSAt reads hold, so RecursiveKS is not vacuous there.",
    "Flock.Guarantees.recursiveKS_nontrivial": "completeness: RecursiveKS's nontrivial lemma (LEAN-66, its witnesses entry): under the named assumption KSFixture, the statement is false at the accept-all verifier (not RecursiveKSAtRec at the record that accepts every message), a counterexample for another verifier, not a property of the deployed one.",
    "Flock.SecurityProofs.SampledKSLivePub": "frozen (no-function): SampledKSLiveV2 at a public error, proved from it; it reads SampledKSLivePub (Security/Proofs/Flock/Bridge/Public.lean), SampledKSLiveV2's statement with its error deltaPub read off public parameters, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
    "Accounting.SecurityProofs.JointPeriodLiveECR": "frozen (no-function): Like JointPeriodLive, with ecr/sha-512 asked of each subprotocol's finder: its per-period guarantees are hypotheses over an abstract live period of the device model whose verdicts, openings, extractor, finders, computed gates and world are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
@@ -12866,7 +12987,8 @@
    "Verity.SecurityProofs.CKSize_nontrivial": "lemma: CKSize's nontrivial lemma: at Counter (Verity.Formalism.Counter, Security/Definitions/Core/Formalism/Instances.lean), the same chain's three operation gates in one proof block, its premise fails at (c, k) = (2, 1), and so does the bound, |C| = 3 > 2 * 1. A counterexample at an instance, not a property of a Lean function.",
    "Flock.SecurityProofs.JointSampledV5": "frozen (no-function): A window's sample over several members (JointAuditV5): every member registered at one registration, one live draw (Bridge.execSel on the verifier's bytes under the registration's law on its strata, LawOn) over all their proof blocks, then one SampledKSLiveV5 session per member in order (MemberV5: flock-verify --zk --public-inputs at keyProgP, under RecordCustodyZKJPLaw at subset |S| for its part S, at one link-point count per member, hcls), with A3 for the draw's bytes and TableCRZAt and LinkCRZCAt at each member's session played alone; it bounds the event that every session accepts with a set W of proof blocks incorrect by the law's miss of W plus each member's eps_ks and eps_bind at its part's design, a Verity.Game.prob event of the joint game rather than a run of a Lean function; it reads JointSampledV5 (Security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean), so the lock records its text, and it takes the shape when SampledKSLiveV5's statement moves into a Guarantees module of the spec. It sits in `unwitnessed` beside SampledKSLiveV5: its acceptance is fixed to flock-verify's AcceptsZKP, so no acceptance-kind witness (the statement false at a verifier that accepts everything) can be stated; restated over a verifier record, as RecursiveKSAtRec is, it takes its witnesses, and its entry leaves `unwitnessed`.",
    "Flock.SecurityProofs.JointShareV5": "frozen (no-function): A window's sample over several members (JointAuditV5): every member registered at one registration, one live draw (Bridge.execSel on the verifier's bytes under the registration's law on its strata, LawOn) over all their proof blocks, then one SampledKSLiveV5 session per member in order (MemberV5: flock-verify --zk --public-inputs at keyProgP, under RecordCustodyZKJPLaw at subset |S| for its part S, at one link-point count per member, hcls), with A3 for the draw's bytes and TableCRZAt and LinkCRZCAt at each member's session played alone; it bounds the event that every session accepts with more than an eps share of the window's proof blocks incorrect by the law's largest miss of such a set plus the members' eps_ks and eps_bind, a Verity.Game.prob event of the joint game rather than a run of a Lean function; it reads JointShareV5 (Security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean), so the lock records its text, and it takes the shape when SampledKSLiveV5's statement moves into a Guarantees module of the spec. It sits in `unwitnessed` beside SampledKSLiveV5: its acceptance is fixed to flock-verify's AcceptsZKP, so no acceptance-kind witness (the statement false at a verifier that accepts everything) can be stated; restated over a verifier record, as RecursiveKSAtRec is, it takes its witnesses, and its entry leaves `unwitnessed`.",
-   "Flock.SecurityProofs.JointHorizonV5": "frozen (no-function): JointSampledV5's window audit (JointAuditV5) over a monitoring period of T windows played as one causal game against one adaptive prover (periodG): the probability that every window accepts and the windows' incorrect proof blocks lie outside the period's confidence set at delta (the windows' laws miss them together with probability at least delta, and their ANDs and output bits in all are at most the most any choice in that set holds) is at most delta plus the sum of the windows' eps, under A3 at every window and TableCRZAt and LinkCRZCAt at each member's session played alone at every strategy the period plays its window with (JointPeriodV5.Plays); a Verity.Game.value event over the period's run rather than a run of a Lean function; it reads JointHorizonV5 (Security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean), so the lock records its text, and it takes the shape when SampledKSLiveV5's statement moves into a Guarantees module of the spec. It sits in `unwitnessed` beside SampledKSLiveV5: its acceptance is fixed to flock-verify's AcceptsZKP, so no acceptance-kind witness (the statement false at a verifier that accepts everything) can be stated; restated over a verifier record, as RecursiveKSAtRec is, it takes its witnesses, and its entry leaves `unwitnessed`."
+   "Flock.SecurityProofs.JointHorizonV5": "frozen (no-function): JointSampledV5's window audit (JointAuditV5) over a monitoring period of T windows played as one causal game against one adaptive prover (periodG): the probability that every window accepts and the windows' incorrect proof blocks lie outside the period's confidence set at delta (the windows' laws miss them together with probability at least delta, and their ANDs and output bits in all are at most the most any choice in that set holds) is at most delta plus the sum of the windows' eps, under A3 at every window and TableCRZAt and LinkCRZCAt at each member's session played alone at every strategy the period plays its window with (JointPeriodV5.Plays); a Verity.Game.value event over the period's run rather than a run of a Lean function; it reads JointHorizonV5 (Security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean), so the lock records its text, and it takes the shape when SampledKSLiveV5's statement moves into a Guarantees module of the spec. It sits in `unwitnessed` beside SampledKSLiveV5: its acceptance is fixed to flock-verify's AcceptsZKP, so no acceptance-kind witness (the statement false at a verifier that accepts everything) can be stated; restated over a verifier record, as RecursiveKSAtRec is, it takes its witnesses, and its entry leaves `unwitnessed`.",
+   "Flock.SecurityProofs.RecursiveBitsKDeployed": "restatable: a probability statement (BitsKAtC, through RecursiveBitsKDeployedAt at the deployed record) bounding the recursive verifier's acceptance at Hello-committed coins by the extractor's success at the simulating prover plus recursiveBitsK_deployed's a + t·e and 2·k(x)·δ₁; BitsKAtC's probability is not under shape.events, so the shape rule finds no acceptance. It fits once that probability is listed under shape.events or the statement is restated over FlockSoundness.Game.prob."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -22621,12 +22743,18 @@
     "Claims.Flock.Numbers.innerUp": "8e2feb107494dd001ab2b3f72158295a5fcd7ff112b4035abd45c1fafd7a4f7e"
    }
   },
-  "Proofs.Flock.Claims.Recursion.Assumptions.KSFixture": {
-   "digest": "80275a61097b11ab8f39a8c51c990826c7187db1837a1fda8035f27bfe8cddb6",
+  "Proofs.Flock.Claims.Recursion.Assumptions.HonestFixture": {
+   "digest": "6e3180e34565615c5ba3308b81bb73997d6f2486c86a8e2128bbe11df66a488d",
    "definitions": {
-    "RecDeploy.DeployedParses": "b128001ff7657bc024d3dbab5ad9ad61d51fa646889ae19857912caac6c59c5f",
+    "RecDeploy.HonestFixture": "0dab73037659ff68edcd9c7dc2d80d0551ab74093a4e469f6523a986d337e41a"
+   }
+  },
+  "Proofs.Flock.Claims.Recursion.Assumptions.KSFixture": {
+   "digest": "be41d8b5e2048500fb1878576f4761b1f71e167125d48a6c84c8b3acbf24b0b6",
+   "definitions": {
+    "RecDeploy.DeployedParses": "803b4911326ce85b0b66256c01b092ede0f5768b8d19620ce71d7ebf4c5ca48b",
     "RecDeploy.KSFixture": "d3c4dd5ab3b8fd1bfd39f8689777757ebacc6464cca8a9ca1cde7c603e4f224d",
-    "RecDeploy.PartsInScope": "1d8a2afb7ae4556836391548b6d4a1d14c190c7d43b45de14abb1ffb39492c2b",
+    "RecDeploy.PartsInScope": "f1e83e3551a9514c2b2c66dc986a03f329df967cacefb6fe1712fab1dfb40609",
     "RecDeploy.setupView": "f80c0404ac0803bc94390e66f6c7a179a7442b11f640184c789c0da005c90c45"
    }
   },
@@ -22634,6 +22762,12 @@
    "digest": "605d11bf26ef3e0bbd2c388cb966af62ba9e4d98d7199f5e92fabc28510e2d77",
    "definitions": {
     "RecDeploy.rowInDeployed": "1ba7fef6205cf1f65f90db7bffcddc05f406e88229ed953b988ad7826f2cd5d5"
+   }
+  },
+  "Proofs.Flock.Claims.Recursion.BitsKCommitted": {
+   "digest": "9b6d27ecb31ee782a12f333d480a495fbbf8e269f69d4894a835502f4b879e25",
+   "definitions": {
+    "Claims.Recursion.BitsKAtC": "6ee7cdc6cf60c5a82d623cbc5d6d05f9fa18a4b3557ec1c62180cb84f1dac491"
    }
   },
   "Proofs.Flock.Claims.Recursion.BoundDeploy": {
@@ -22926,11 +23060,38 @@
     "RecDeploy.rowOpen": "b9348aad14246b7004007a26f34857353276b3fb03716eb50310cd7ec52c4d4c"
    }
   },
+  "Proofs.Flock.Claims.Recursion.IrDep": {
+   "digest": "b4080c2ef5c2a594c4be8eef1a077e9df1cced46cbe43ac7253eb7b7e9267ac7",
+   "definitions": {
+    "RecDeploy.VStarBuild.DepTape": "a0edabf84b8e040a49beb97f9dab0aa376410da135b84027eeca41f270ca3e4c",
+    "RecDeploy.VStarBuild.DepTape.accSalts": "ff066ae6541a150722b299dd122e31e164a2257febe3ffbbb5807d6fbfe375b3",
+    "RecDeploy.VStarBuild.DepTape.fresh": "bbc867332d97b8575d8fa9c99d8dfc212d428cd43575c2007b01bf47c4e91910",
+    "RecDeploy.VStarBuild.DepTape.prove": "49d5c334dcc9e98e43c2d5ada53f49713afac2e9cb358e8f8cb27d92029c40cf",
+    "RecDeploy.VStarBuild.IrDep": "b63a57d2e1562de21e4463f7fe8cda4f2958db7727a5829a1ca3dddca10f6c5f",
+    "RecDeploy.VStarBuild.coinAt": "d39c55fb0f5fbb55df4c0f8b525a19392fd7f8ece0eed2ea860103da76d3e3a1",
+    "RecDeploy.VStarBuild.combAt": "f7a8776a5b8f1f9c458f3d76e7bdefde72751e8653e3560f359da6108cdb7ea7",
+    "RecDeploy.VStarBuild.combAt._sparseCasesOn_1": "83c41bc3fd954f6db9629a347850575bfd2f0d9fc33e79e5af28a4cfea92d5a8",
+    "RecDeploy.VStarBuild.depCaps": "f80d48d8b44667626d584747012a9ee3ba1f6373ecf9d3d91d6704e6eec14f17",
+    "RecDeploy.VStarBuild.depOpen": "b4457ecf7269e2015f0c9dd98e0184386ca364b3f027f0aa13bc4cfcb4da3828",
+    "RecDeploy.VStarBuild.depOpenings": "7b3559f26ae87d402021ceda863cbd307a7557ae38b3dd17032a3ae65de7e366",
+    "RecDeploy.VStarBuild.depRest": "2ca35124cc40eddd3571e73276bb53a17d7cebb934876937d46650594ac76961",
+    "RecDeploy.VStarBuild.depRows": "6c0ea3843e23af1531aaab44028e6dbce41da3180c82dfff4f8192b5414cd535",
+    "RecDeploy.VStarBuild.fitArr": "c9104c999a6ee652d93eb12295030cebe757d1709430b0c7bdb036ab68c09346",
+    "RecDeploy.VStarBuild.innerCoins": "ba88591a033d33c248c004306a6943a40e81d9027afb89aa084fc5cc4597c955",
+    "RecDeploy.VStarBuild.verRowsAt": "dc32bb98229011cf66c4fd471f29009520afc55617c646bed1af775a3bc7c880"
+   }
+  },
   "Proofs.Flock.Claims.Recursion.KSLin2Committed": {
    "digest": "980a5e4cf66d9a3b51f202735436908487152fdd1a62e7e357dcfe045918526c",
    "definitions": {
     "Claims.Recursion.KSLin2OnC": "8fdd72cf5102faeddfd19560bc50ffad9811e6a88c40a4fd8865f9b5d4d874cf",
     "Claims.Recursion.lin2Rhs": "9f860a27b1ff7f9983289abefaafacf6ab484063d9a2ae75674a671f8308713c"
+   }
+  },
+  "Proofs.Flock.Claims.Recursion.KappaEpsDeployed": {
+   "digest": "78dceb6bb51ebb4e6f0639bdef8da6bf6f943e0825b830637762d0441d7f6f82",
+   "definitions": {
+    "RecDeploy.SizesAt": "313adb168866732aa37630dd8514bd622220975cb9c5a8f307c7e8f286821679"
    }
   },
   "Proofs.Flock.Claims.Recursion.LamDeployed": {
@@ -23040,7 +23201,7 @@
    }
   },
   "Proofs.Flock.Claims.Recursion.NextR": {
-   "digest": "485539c62aaeec0cc7f02e098754047a9acdbdccb9f945677887770cc84935fa",
+   "digest": "6ce8bdab8f546a54b72dc8d3284fa83914ec3a557476536abc3cda93f9c3b1a7",
    "definitions": {
     "FlockDeploy.DecR": "52dd9d10dcd02e562d40a0d06ebf5236c6634fa68f8c8300304a5ec2bb53daf8",
     "FlockDeploy.DecR.c₁": "14dce341eb9c1ad4efedf9717074d24c6d0f7af165c9dcb68c1170ea11a79693",
@@ -23073,6 +23234,8 @@
     "FlockDeploy.linkR": "39a760d57c02de53d65f922ec2b25ab2e18c9b8ae2c101b006e3cb3b1fad5cce",
     "FlockDeploy.nextR": "695b6b9ec176b0a2c5e2a6f83b0afedb2d3d96afd68e40182230176b9735460f",
     "FlockDeploy.nodeOf": "dd62e28ea205c85f645bdc1c92314361461ebe4fa452b95f5527cd38ed078e79",
+    "FlockDeploy.nodeRow": "e5a10314f7d622131bcbc59f1528f7f75b98c2ba49396f992512d03ea587c1e9",
+    "FlockDeploy.padRow": "715711068ecbbbd28b2765b808df2fd86d6b67658ba0d777ad08d90b6e2bd3e1",
     "FlockDeploy.readPs": "1f774468253e05df5c981126e05bfbe5fca73b0dabcde968d4f98950b8a7d1e7",
     "FlockDeploy.readRep": "0756b94d1e820cbccf312f5193c423653e805b171d0d8a8a2d46c87a950d41a5",
     "FlockDeploy.recJ": "88bf04586d0fd7d1e1b5d4a0b6835dabc86df9b072f17d717799b0f985349ac0",
@@ -23082,6 +23245,15 @@
     "FlockDeploy.rowsOf": "83b78c28a6409812cf4745e4aeb160a945b9fcb20dba93548b2ad7eb6cadff9a",
     "FlockDeploy.topGroups": "28e5a83575b8a3fb3f6c00b397f4d32fb7c41d9c32b4880f79f699122e580e31",
     "FlockDeploy.vals": "008af029683288e60659513c8ff374234534b20f3ca7331eb3f9c5c2e4657ac4"
+   }
+  },
+  "Proofs.Flock.Claims.Recursion.NextRHonest": {
+   "digest": "eb329f381133bf0ea8b79e057c3af4c92e9b27b321407fa201e56706675f0dd4",
+   "definitions": {
+    "FlockDeploy.capRows": "a2bf1e818d05f53104aa9d65395cb04cb9e220538c60d75009b3640f7c3855e6",
+    "FlockDeploy.honestRows": "ed89ea4851e7ee1b74d418aa0dda32fdf8a724726a67f7d29d0041742b4af211",
+    "FlockDeploy.honestRows._sparseCasesOn_1": "da04e433e741ccb45ad21007f0eb24043b53780df95d3f86ace35554130c78ce",
+    "FlockDeploy.repRows": "c297a0c447e7987eb48bca4d3be6c172b4233f22ea2f6ff81cfb0ce0d55da3d7"
    }
   },
   "Proofs.Flock.Claims.Recursion.NextS": {
@@ -23108,6 +23280,16 @@
    "digest": "a28707a6e80709d3db8228bd6ecf927280cfb79996be233029699d2dc2be043c",
    "definitions": {
     "RecDeploy.OpenLower.schAt": "4c3803a77bf2bc7ad5a830031bfebdd1f25a01528a2e51918739a987925cef17"
+   }
+  },
+  "Proofs.Flock.Claims.Recursion.OpenPieces": {
+   "digest": "e74d4847b34dad0bafa83d0c06099a999a70c6321c3958133a7e5b286f33de9f",
+   "definitions": {
+    "RecDeploy.OpenPiece": "b98a7b6a8df7a866930fc72ba130a7d6804c77aca1a6b78e8c92b53e73a636c2",
+    "RecDeploy.OpenPiece.level": "981575219c5491e10197a8130739842e4ef29180fe9a12e70b3c99c6e5bf2ff2",
+    "RecDeploy.OpenPiece.query": "7a08a80221f3f1eb87959f015a480b3fc49555d493cfd10f4945bf31f4d0ef82",
+    "RecDeploy.OpenPiece.rep": "f02c1308328eb65f183bc9563a783b26e204e8b3f6971b4c843653f440c43a0c",
+    "RecDeploy.OpenPiece.table": "736c5b5d6864017718298a1342f4aaabe43627a2269d533079c6ec90cb73132c"
    }
   },
   "Proofs.Flock.Claims.Recursion.OpenRowsDeployed": {
@@ -23242,6 +23424,13 @@
     "FlockDeploy.rdVB": "f0a32192c20d326cf2dd9ce295adaa2504e6ee8c53ad0de103fce41430527c61",
     "FlockDeploy.rdVL": "d7d33cfec55946af49f606b7001075a47e74acfee26f4a1285cf4b8e75ad30d4",
     "FlockDeploy.rdVLs": "d3894b5c0227a0a5a376800f94643d90252e4f6a169b3f0764196baacc085af9"
+   }
+  },
+  "Proofs.Flock.Claims.Recursion.VerdictRowDCoin": {
+   "digest": "55ba7cd5853e399204cd819263309ac8c620a9297899f7616cd5b7f0059cffd5",
+   "definitions": {
+    "RecDeploy.Rows.canonRounds": "e0420ac45cbab4a5f3c722f22ef87cf7cc73c97bec416cf82cfa2316273b7f2c",
+    "RecDeploy.Rows.posAt": "7e66c42798e9b5dbfb06a4d1cae4459d03f836f91d59b2b4bdb25b4c8affbee1"
    }
   },
   "Proofs.Flock.Claims.RootFindAlg": {
@@ -23832,6 +24021,13 @@
    "digest": "f677fb236863ece14afdf0f62465b74c3a8411547398dec92d7725de66458a09",
    "definitions": {
     "Claims.RecGeneric.Comp.err": "16466f292171540029dfacba2f08d619d5e655a9010d5a841558e23e19bdef85"
+   }
+  },
+  "Proofs.Flock.Recursive.BitsKCoinTreeStatement": {
+   "digest": "4d788c4e2a77397a881126280695f33eb16ce3694cfc3221e4c1253f5b957a11",
+   "definitions": {
+    "Flock.Guarantees.RecursiveBitsKDeployed": "4a75605380e89d2c82c603a264d4c9e4aacf3c4ca1a0ce79a044b79209d1ccf4",
+    "Flock.Guarantees.RecursiveBitsKDeployedAt": "f1654a0f61963e0ff223e02afbce1a3716aec386c30564c4ea3f94a2aba9581d"
    }
   },
   "Proofs.Flock.Recursive.KSNontrivial": {
