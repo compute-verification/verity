@@ -9,3 +9,6 @@ next-env.d.ts
 *.tsbuildinfo
 /.swc
 smoke/live-turn/api/
+cutover/
+LEADS.json
+.env.platform
