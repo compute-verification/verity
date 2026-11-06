@@ -44,33 +44,33 @@ def ActivationsReads : Prop :=
     ∀ R, Small r c k R → b_a * (T.mults R).card ≤ novelReads r R * T.bound k b_w dd e
 
 /-- **The activations bound over all of training, with dark gates** ([ACTIVATIONS-BOUND]): a declaration `d` that
-complies at `(c, k)` and contains the reference circuit `r` partly, computing the gates `S` of `r` and leaving the rest
-dark (`PartialContainment`), computes at most `(k / c) Λ size(d) / b_a` of `r`'s counted multiplications, with
-`Λ = max(e, c_r · K / (4 dd b_w))` at read cap `K ≥ k`, under `ActivationsIncompressibleAll` on `r` at `K` and
+complies at `(Γ, α)` (`CompliesRate`) and contains the reference circuit `r` partly, computing the gates `S` of `r` and
+leaving the rest dark (`PartialContainment`), computes at most `α Λ size(d) / b_a` of `r`'s counted multiplications,
+with `Λ = max(e, c_r · K / (4 dd b_w))` at read cap `K ≥ α Γ`, under `ActivationsIncompressibleAll` on `r` at `K` and
 `ThetaRegistered`. There is no term for the dark gates, so it holds however much of `r`, the partial sums included,
 is computed off the books. -/
 def ActivationsBoundOn : Prop :=
-  ∀ (c k : ℕ) (K b_w b_a : ℝ) (r d : RegisteredCircuit) (T : Threading r) (L : T.Links) (dd e : ℕ)
+  ∀ (Γ : ℕ) (α K b_w b_a : ℝ) (r d : RegisteredCircuit) (T : Threading r) (L : T.Links) (dd e : ℕ)
     (M : PartialContainment r d),
-    0 < c → (k : ℝ) ≤ K → 0 < b_w → 0 < b_a → 0 < dd → Complies c k d → Assumptions.ThetaRegistered r d M →
+    0 ≤ α → α * Γ ≤ K → 0 < b_w → 0 < b_a → 0 < dd → CompliesRate Γ α d → Assumptions.ThetaRegistered r d M →
     Assumptions.EntersAtMost T e → Assumptions.DrawsAtLeast L dd →
-    Assumptions.ActivationsIncompressibleAll r T L c K b_w b_a →
-      b_a * (T.M ∩ M.S).card ≤ (k / c : ℝ) * T.bound K b_w dd e * d.D.size d.D.computed
+    Assumptions.ActivationsIncompressibleAll r T L Γ K b_w b_a →
+      b_a * (T.M ∩ M.S).card ≤ α * T.bound K b_w dd e * d.D.size d.D.computed
 
 /-- **Training is slowed, by the activations bound, with dark gates**: when counted multiplications are a fraction `κ`
-of the reference circuit's flops (2 flops each), a declaration that complies at `(c, k)` and contains it partly, with
+of the reference circuit's flops (2 flops each), a declaration that complies at `(Γ, α)` and contains it partly, with
 its registered information free of the reference circuit's fresh input (`ThetaRegistered`), is larger by a factor of
-at least `κ c b_a / (2 k Λ)`, less what its dark gates absorb:
-`κ b_a size(r) ≤ 2 b_a #dark + 2 (k / c) Λ size(d)`. -/
+at least `κ b_a / (2 α Λ)`, less what its dark gates absorb:
+`κ b_a size(r) ≤ 2 b_a #dark + 2 α Λ size(d)`. -/
 def ActivationsTrainingOn : Prop :=
-  ∀ (c k : ℕ) (K b_w b_a κ : ℝ) (r d : RegisteredCircuit) (T : Threading r) (L : T.Links) (dd e : ℕ)
+  ∀ (Γ : ℕ) (α K b_w b_a κ : ℝ) (r d : RegisteredCircuit) (T : Threading r) (L : T.Links) (dd e : ℕ)
     (M : PartialContainment r d),
-    0 < c → (k : ℝ) ≤ K → 0 < b_w → 0 < b_a → 0 < dd → Complies c k d → Assumptions.ThetaRegistered r d M →
+    0 ≤ α → α * Γ ≤ K → 0 < b_w → 0 < b_a → 0 < dd → CompliesRate Γ α d → Assumptions.ThetaRegistered r d M →
     Assumptions.EntersAtMost T e → Assumptions.DrawsAtLeast L dd →
-    Assumptions.ActivationsIncompressibleAll r T L c K b_w b_a →
+    Assumptions.ActivationsIncompressibleAll r T L Γ K b_w b_a →
     Assumptions.Coverage κ r (2 * T.M.card) →
       κ * b_a * r.D.size r.D.computed ≤
-        2 * b_a * M.dark.card + 2 * (k / c : ℝ) * T.bound K b_w dd e * d.D.size d.D.computed
+        2 * b_a * M.dark.card + 2 * α * T.bound K b_w dd e * d.D.size d.D.computed
 
 /-- **The premise over all counted multiplications gives the chain's**: where a chain `ch` is part of the threading
 (`ChainIn`), `ActivationsIncompressibleAll` gives `ActivationsIncompressible` for `ch` at the same caps, for nonnegative
