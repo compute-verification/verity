@@ -400,7 +400,8 @@ class TimedAudit:
     def challenge(self) -> int:
         return self.timed.challenge()
 
-    def respond(self, block: bytes, path: tuple[bytes, ...] | None = None, report: object = None) -> audit.Answer:
+    def respond(self, block: bytes, path: tuple[bytes, ...] | None = None,
+                report: object = None) -> audit.ChallengeReply:
         return self.timed.respond(block, path, report)
 
     def result(self) -> audit.AuditResult:
