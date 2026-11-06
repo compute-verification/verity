@@ -288,7 +288,8 @@ TOP = "@top"
 #: a step of a check of drive's still running this many times its median rings the step's owner (`Driver._slow_steps`); the
 #: median is of its newest `STEP_PASSES` uncached passes in drive's own runs of that kind, and needs `STEP_MIN_PASSES` of them
 SLOW_STEP_FACTOR, STEP_PASSES, STEP_MIN_PASSES = 1.5, 10, 3
-#: how long a member of `next` marked ready may go unlanded before drive rings the owner of what holds it (`Driver._stuck`)
+#: how long a member of `next` marked ready may go unlanded before drive rings the owner of what holds it, and `TOP` beside `CI`
+#: when that is a missing land verdict, so top can record one (`Driver._stuck`)
 STUCK_S = 2 * 3600
 #: how often an alarm rings again while its subject stays past its bound (`Driver._due`)
 ALARM_EVERY_S = 3600
@@ -3016,12 +3017,13 @@ class Driver:
         return at is None or self.now() - at >= ALARM_EVERY_S
 
     def _ring_alarm(self, drive: dict, keys: list[str], text: str, handle: str | None) -> None:
-        """Ring ``handle`` (`CI` when None) with ``text`` for alarms ``keys`` (`_due`); with --shadow or --dry-run, only log it."""
-        to = f"@{handle}" if handle else CI
+        """Ring ``handle`` (`CI` when None; several, separated by spaces, each) with ``text`` for alarms ``keys`` (`_due`); with
+        --shadow or --dry-run, only log it."""
+        to = " ".join(h if h.startswith("@") else f"@{h}" for h in handle.split()) if handle else CI
         if self.q.shadow or self.dry_run:
             self.q.log(f"research queue drive: would ring {to}: {text} [{'shadow' if self.q.shadow else 'dry run'}]")
             return
-        if self.post(f"{to} queue: {text}", (to,)):
+        if self.post(f"{to} queue: {text}", tuple(to.split())):
             drive.setdefault("alarms", {}).update(dict.fromkeys(keys, self.now()))
             self.q.log(f"research queue drive: rang {to}: {text}")
         else:
@@ -3108,8 +3110,8 @@ class Driver:
                                                        f"drive's uncached passes of it in {med[1]}", self._step_owner(step, commit))
 
     def _stuck(self, drive: dict, why: str) -> None:
-        """Ring the owner of what holds each member of `next` marked ready `STUCK_S` ago or more (`Queue.marked_at`) that hasn't
-        landed, one post per owner: the member at or below it where the reviewed prefix stops (`_reviewed`), whose missing
+        """Ring the owner of what holds each member of `next` marked ready `STUCK_S` ago or more (`Queue.marked_at`) unlanded, one post
+        per owner, `TOP` too for a land verdict, to record it as backup: the member at or below it where `_reviewed` stops, whose missing
         land verdict is the reviewer's (`CI`), whose hold or withdrawn mark is its owner's, and whose wait on a red
         circuit-check is that red's culprit's lane (`_red_owners`); with every member up to it reviewed, a Lean check of drive's still running
         at or above it, its step's owner (ci.toml's), else `CI` with what the tick's landing said (``why``)."""
@@ -3128,7 +3130,7 @@ class Driver:
                 if i >= k:
                     h = chain[k]
                     red = ((drive.get("postland") or {}).get("red") or {}).get(CIRCUIT_RED)
-                    who = (None if (stop or "").startswith("no land verdict") else
+                    who = (f"{CI} {TOP}" if (stop or "").startswith("no land verdict") else
                            self._red_owners(CIRCUIT_RED, red)[0] if red and self._circuit_held(h) else self._owner(h))
                     held = f"#{h.pr} at {h.head[:8]}: {stop}"
                 elif c := next((c for c, rec in lean.items() if rec.get("state") is None and pos.get(c, -1) >= i), None):

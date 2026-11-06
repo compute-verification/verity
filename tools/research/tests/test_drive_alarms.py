@@ -149,8 +149,12 @@ def test_lean_audits_median_falls_back_to_every_machines_with_fewer_than_three_o
 
 
 def test_a_ready_pr_unlanded_two_hours_for_its_land_verdict_rings_the_reviewer_once_an_interval(world, monkeypatch):
+    """A review request with no verdict two hours after the mark rings top beside ci, in one post: top can record the verdict
+    as backup when no reviewer does."""
     marks: dict[int, str] = {}
     h = Review(world, monkeypatch, land_into="checked", marked_at=lambda n, head: marks.get(n))
+    to: dict[str, tuple] = {}
+    h.d.post = lambda text, handles=(): to.update({text: handles}) or h.posts.append(text) or True
     world.gh.put(1, head := world.change({"a.txt": "1\n"}))
     marks[1] = _utc(h.clock - STUCK_S + 60)
     h.tick()
@@ -158,8 +162,9 @@ def test_a_ready_pr_unlanded_two_hours_for_its_land_verdict_rings_the_reviewer_o
     h.clock += 60
     h.tick()
     (ring,) = _rings(h, "not landed")
-    assert ring.startswith("@ci queue: marked ready 2 h ago or more and not landed on `checked`: #1 (2.0 h), held by #1 at "
-                           f"{head[:8]}: no land verdict"), ring
+    assert ring.startswith("@ci @top queue: marked ready 2 h ago or more and not landed on `checked`: #1 (2.0 h), held by #1 "
+                           f"at {head[:8]}: no land verdict"), ring
+    assert to[ring] == ("@ci", "@top"), to
     h.clock += 60
     h.tick()
     assert len(_rings(h, "not landed")) == 1
