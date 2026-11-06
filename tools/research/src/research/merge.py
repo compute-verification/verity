@@ -1460,7 +1460,8 @@ def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool 
     open pull request uses.  Then the head branch of each pull request GitHub has as merged (its head on ``into``) or closed
     unmerged goes too, while it is still at that PR's head: never a fork's, one of `KEEP_BRANCHES`, one an open pull request
     uses as its head or base, a closed one's that is a lead's run branch (`RUN_BRANCH_RE`), or ``keep`` (the heads of PRs
-    drive closed as stale, which stay to be reopened: `research.stale`); GitHub keeps each one's commits under
+    drive closed as stale or unlandable, which stay to be reopened: `research.stale`, `drive.Driver._unlandable`); GitHub
+    keeps each one's commits under
     `refs/pull/N/head`.  Idempotent: what it closed is no longer open, and what it retargeted is based on ``into``.  Returns
     (closed, retargeted) PR numbers, ascending."""
     gh = gh or (lambda *a: _gh_cli(repo, *a))
@@ -1559,7 +1560,8 @@ def sweep_branches(repo: Path, remote: str = "origin", into: str = "main", now: 
     is on ``into`` and is a day idle (its content is there), and move each branch with unmerged work three days idle to
     `refs/archive/heads/NAME` (still fetchable: `git fetch origin refs/archive/heads/NAME`). It keeps `KEEP_BRANCHES`, leads'
     run branches (`RUN_BRANCH_RE`), every branch an open PR uses as its head or base, and ``keep`` (the heads of PRs drive
-    closed as stale, which stay to be reopened: `research.stale`).  At most ``limit`` of each, the longest idle first, each
+    closed as stale or unlandable, which stay to be reopened: `research.stale`, `drive.Driver._unlandable`).  At most
+    ``limit`` of each, the longest idle first, each
     logged by name.  Each push leases the tip it saw, so a branch pushed to meanwhile is kept.  Returns (deleted, archived)."""
     gh = gh or (lambda *a: _gh_cli(repo, *a))
     now = time.time() if now is None else now
