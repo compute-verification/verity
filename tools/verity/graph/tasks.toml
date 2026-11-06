@@ -16,7 +16,8 @@ spec = ["**/lean-toolchain", "**/lake-manifest.json"]
 spec = ["verity/ml/flock/check_build.sh"]
 
 [family.test-file]
-# one task per test file of every suite; a suite's [tool.verity.tests] worker_gb and timeout_s stand in for mem_gb and timeout_s
+# one task per test file of every suite but those the build family's lean-suites tasks run (suites.py's AFTER_LEAN); a suite's
+# [tool.verity.tests] worker_gb and timeout_s stand in for mem_gb and timeout_s
 files = ["**/tests/**/test_*.py", "**/tests/test_*.py"]
 kinds = ["test-file"]
 env = "py"
