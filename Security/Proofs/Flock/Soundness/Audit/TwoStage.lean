@@ -17,7 +17,7 @@ coarse unit contains a wrong fine unit, so the fine count curve bounds coarse co
 draws coarse units by `L₁`. The prover commits the interiors of the drawn units (`Int`). Then the
 verifier draws, independently inside each drawn coarse unit `u`, fine units by `L₂ u`, and the
 session proves them. The profile is over the coarse partition, the only one committed everywhere,
-with the effective escape (`effEscape`)
+with the effective escape (`effAcceptProb`)
 $$e_{\text{eff}}(B) = \mathbb E_{S_1}\Big[\prod_{u \in B \cap S_1} \max_{v \subseteq u}
   \big(1 - \pi_{L_2 u}(v)\big)\Big].$$
 Why: a drawn wrong coarse unit has a wrong fine unit under every interior the prover commits
@@ -27,8 +27,8 @@ interior and independent across coarse units.
 * `twoStage_profile`: $\Pr[\text{accept} \wedge \text{wrong}_c(X) \in \mathcal B] \le \sup_{B \in
   \mathcal B} e_{\text{eff}}(B) + \varepsilon_{ks} + \delta_{link}$, with the two per-unit terms
   named at the fine level, as in one-stage;
-* `effEscape_full`: **(b1) is one-stage over the coarse partition**: when the second stage proves
-  every fine unit of each drawn coarse unit, `effEscape = L₁.escape`, with no dilution.
+* `effAcceptProb_full`: **(b1) is one-stage over the coarse partition**: when the second stage proves
+  every fine unit of each drawn coarse unit, `effAcceptProb = L₁.escape`, with no dilution.
 -/
 
 @[expose] public section
@@ -143,7 +143,7 @@ end Analysis₂
 
 /-- **The effective escape** of a coarse set `B` under nested sampling: each drawn unit of `B`
 escapes the second stage with the largest miss probability of a fine unit inside it. -/
-noncomputable def effEscape (L₁ : Law nc) (L₂ : Fin nc → Law nf) (parent : Fin nf → Fin nc)
+noncomputable def effAcceptProb (L₁ : Law nc) (L₂ : Fin nc → Law nf) (parent : Fin nf → Fin nc)
     (B : Finset (Fin nc)) : ℝ≥0∞ :=
   avg fun ω₁ => ∏ u ∈ B ∩ L₁.draw ω₁, ⨆ (v : Fin nf) (_ : parent v = u), (1 - (L₂ u).incl v)
 
@@ -152,7 +152,7 @@ theorem twoStage_profile (A : Analysis₂ L₁ L₂ Reg Int session) {εks δlin
     (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (𝓑 : Finset (Fin nc) → Prop)
     (σ : Strategy (twoStage L₁ L₂ Reg Int session)) :
     prob (fun o => o.1 = true ∧ 𝓑 (A.wrongC (A.committedCOf σ))) (twoStage L₁ L₂ Reg Int session) σ ≤
-      (⨆ (B : Finset (Fin nc)) (_ : 𝓑 B), effEscape L₁ L₂ A.parent B) + εks + δlink := by
+      (⨆ (B : Finset (Fin nc)) (_ : 𝓑 B), effAcceptProb L₁ L₂ A.parent B) + εks + δlink := by
   classical
   obtain ⟨R, c'⟩ := σ
   set c : Cont₁ L₁ L₂ Reg Int session R := cont₁ ⟨R, c'⟩
@@ -240,7 +240,7 @@ theorem twoStage_profile (A : Analysis₂ L₁ L₂ Reg Int session) {εks δlin
         refine (avg_mono hmiss).trans ?_
         by_cases hB : 𝓑 (A.wrongC X)
         · simp only [hB, ite_true]
-          exact le_iSup₂_of_le (f := fun B (_ : 𝓑 B) => effEscape L₁ L₂ A.parent B) _ hB le_rfl
+          exact le_iSup₂_of_le (f := fun B (_ : 𝓑 B) => effAcceptProb L₁ L₂ A.parent B) _ hB le_rfl
         · simp only [hB, ite_false]
           exact (avg_const 0).le.trans (zero_le)
 
@@ -249,15 +249,15 @@ theorem twoStage_count (A : Analysis₂ L₁ L₂ Reg Int session) {εks δlink 
     (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (K : ℕ)
     (σ : Strategy (twoStage L₁ L₂ Reg Int session)) :
     prob (fun o => o.1 = true ∧ K ≤ (A.wrongC (A.committedCOf σ)).card) (twoStage L₁ L₂ Reg Int session) σ ≤
-      (⨆ (B : Finset (Fin nc)) (_ : K ≤ B.card), effEscape L₁ L₂ A.parent B) + εks + δlink :=
+      (⨆ (B : Finset (Fin nc)) (_ : K ≤ B.card), effAcceptProb L₁ L₂ A.parent B) + εks + δlink :=
   twoStage_profile A hks hlink (fun B => K ≤ B.card) σ
 
 /-- **(b1) is one-stage over the coarse partition.** When the second stage draws every fine unit of
 each coarse unit, the effective escape is the first stage's escape. -/
-theorem effEscape_full (parent : Fin nf → Fin nc) (hfull : ∀ u ω v, parent v = u → v ∈ (L₂ u).draw ω)
-    (B : Finset (Fin nc)) : effEscape L₁ L₂ parent B = L₁.escape B := by
+theorem effAcceptProb_full (parent : Fin nf → Fin nc) (hfull : ∀ u ω v, parent v = u → v ∈ (L₂ u).draw ω)
+    (B : Finset (Fin nc)) : effAcceptProb L₁ L₂ parent B = L₁.escape B := by
   classical
-  unfold effEscape Verity.Law.escape
+  unfold effAcceptProb Verity.Law.escape
   rw [← avg_ite_eq_prCoin]
   refine congrArg avg (funext fun ω₁ => ?_)
   have hzero : ∀ u, (⨆ (v : Fin nf) (_ : parent v = u), (1 - (L₂ u).incl v)) = 0 := fun u =>
@@ -279,15 +279,15 @@ theorem twoStage_full_profile (A : Analysis₂ L₁ L₂ Reg Int session) {εks 
     prob (fun o => o.1 = true ∧ 𝓑 (A.wrongC (A.committedCOf σ))) (twoStage L₁ L₂ Reg Int session) σ ≤
       (⨆ (B : Finset (Fin nc)) (_ : 𝓑 B), L₁.escape B) + εks + δlink := by
   have := twoStage_profile A hks hlink 𝓑 σ
-  simp only [effEscape_full A.parent hfull] at this
+  simp only [effAcceptProb_full A.parent hfull] at this
   exact this
 
 /-- **(b2) with a Bernoulli first stage, in general**: each coarse unit of `B` contributes its
 Bernoulli factor at its largest second-stage miss probability, so the nested law is a one-stage
 Bernoulli law thinned unit by unit. -/
-theorem effEscape_bernoulli_prod {num den : ℕ} [NeZero den] (hnum : num ≤ den)
+theorem effAcceptProb_bernoulli_prod {num den : ℕ} [NeZero den] (hnum : num ≤ den)
     (L₂ : Fin nc → Law nf) (parent : Fin nf → Fin nc) (B : Finset (Fin nc)) :
-    effEscape (Law.bernoulli nc num den) L₂ parent B =
+    effAcceptProb (Law.bernoulli nc num den) L₂ parent B =
       ∏ u ∈ B, Law.bernFactor num den (⨆ (v : Fin nf) (_ : parent v = u), (1 - (L₂ u).incl v)) :=
   Law.bernoulli_avg_prod hnum _ B
 
@@ -421,7 +421,7 @@ theorem Refines.oracle₂_profile (r : Refines Pf Pc) {L₁ : Law nc} {L₂ : Fi
     {ε : ℝ≥0∞} (hs : SessionSound₂ Pf Pc ext session ε) (𝓑 : Finset (Fin nc) → Prop)
     (σ : Strategy (twoStage L₁ L₂ (Fin C.N → Bool) Int session)) :
     prob (fun o => o.1 = true ∧ 𝓑 (Pc.wrong (reg₂ σ))) (twoStage L₁ L₂ _ Int session) σ ≤
-      (⨆ (B : Finset (Fin nc)) (_ : 𝓑 B), effEscape L₁ L₂ r.parent B) + ε := by
+      (⨆ (B : Finset (Fin nc)) (_ : 𝓑 B), effAcceptProb L₁ L₂ r.parent B) + ε := by
   have := twoStage_profile (r.oracle₂ ext session) (r.oracle₂_knowledgeSound hs) r.oracle₂_linkSound
     𝓑 σ
   rwa [add_zero] at this
@@ -437,7 +437,7 @@ theorem Refines.oracle₂_full_profile (r : Refines Pf Pc) {L₁ : Law nc} {L₂
     prob (fun o => o.1 = true ∧ 𝓑 (Pc.wrong (reg₂ σ))) (twoStage L₁ L₂ _ Int session) σ ≤
       (⨆ (B : Finset (Fin nc)) (_ : 𝓑 B), L₁.escape B) + ε := by
   have := r.oracle₂_profile hs 𝓑 σ
-  simp only [effEscape_full r.parent hfull] at this
+  simp only [effAcceptProb_full r.parent hfull] at this
   exact this
 
 end Partition
