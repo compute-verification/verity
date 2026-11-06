@@ -2941,6 +2941,27 @@ def test_without_a_notes_token_the_service_asks_the_broker_for_one_by_its_oidc_i
         slack.notes_api("GET", "people.d/x.json")
 
 
+def test_a_cursor_agent_without_research_notes_token_reads_the_notes_with_the_agents_broker_token(monkeypatch):
+    """A Cursor agent has no Vercel identity: its notes reads (routes, machines.d) take `notes_sync.notes_token`'s, which the
+    agents' GitHub broker mints, so they keep working once RESEARCH_NOTES_TOKEN is gone."""
+    from research import notes_sync
+
+    def minted():
+        os.environ.update({notes_sync.TOKEN_ENV: "agent-minted", notes_sync.SOURCE_ENV: "broker"})
+        return "agent-minted"
+
+    for k in (notes_sync.TOKEN_ENV, notes_sync.SOURCE_ENV, "VERCEL_OIDC_TOKEN"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setattr(slack, "_notes_token", {})
+    monkeypatch.setattr(notes_sync, "notes_token", minted)
+    assert slack.notes_token() == "agent-minted"
+    assert slack.notes_token_source() == "agent-broker" and slack.notes_token_why() == "no OIDC identity"
+    monkeypatch.setenv(notes_sync.TOKEN_ENV, "t0k")
+    monkeypatch.delenv(notes_sync.SOURCE_ENV)
+    monkeypatch.setattr(notes_sync, "notes_token", lambda: os.environ[notes_sync.TOKEN_ENV])
+    assert slack.notes_token() == "t0k" and slack.notes_token_source() == "env"
+
+
 def notes_clone(tmp_path) -> Path:
     import subprocess
     bare, clone = tmp_path / "notes.git", tmp_path / "notes"
