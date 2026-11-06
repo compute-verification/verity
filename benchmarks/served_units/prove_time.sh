@@ -11,6 +11,9 @@
 # env: PT_UNITS="fp8-coord:K=6144 fp8-coord:K=6144+public-weights"  PT_NS="16 64"  PT_DEVICE=gpu (or cpu)  PT_JOBS=4  WARM=1
 #      RUNS=3  VCPUS=4  LEASE_MIN=30  SM=120  PT_CARD (gpu: the leased card's, from nvidia-smi)  FLOCK_WORK (default a
 #      directory under /workspace/tmp, kept)  STEPS="build stage prove"
+#      PT_PERF=1: each prover process under `perf record -F PT_PERF_HZ` (default 499), its flat profile by symbol in perf.txt
+#      beside prove.tsv (the samples themselves are not kept); upstream's phase traces pass through as arguments
+#      (LIGERITO_TRACE=1 PCS_TRACE=1 LINCHECK_TRACE=1, into prove.err)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
 REPO=$(pwd); O=${RESEARCH_RUN_DIR:-/tmp/served-units-time}/out; mkdir -p $O
@@ -97,10 +100,15 @@ session() {
   local SP=$!
   wait_serving $o/serve.log $SP || { tail -20 $o/serve.log; return 1; }
   [ $DEV = gpu ] && { gpu_sample $o & GS=$!; }
-  RAYON_NUM_THREADS=$((NC - VC)) FC_VERIFY_AHEAD=$NSESS taskset -c $PCPU /usr/bin/time -v -o $o/time-prove.txt $B prove --zk $G \
+  local PERF=; [ "${PT_PERF:-0}" = 1 ] && PERF="perf record -q -F ${PT_PERF_HZ:-499} -o $o/perf.data --"
+  RAYON_NUM_THREADS=$((NC - VC)) FC_VERIFY_AHEAD=$NSESS taskset -c $PCPU /usr/bin/time -v -o $o/time-prove.txt $PERF $B prove --zk $G \
     --verifier 127.0.0.1:$PORT --instances $d/inst.bin --circuit $d/circuit.txt --warm $WARM --runs $RUNS \
     2> $o/prove.err | stamp > $o/prove.tsv
   echo "prove $nm exit ${PIPESTATUS[0]}: $(grep -o '"accepted":[a-z]*' $o/prove.tsv | sort | uniq -c | tr '\n' ' ')$(grep -o '"why":"[^"]*"' $o/prove.tsv | sort -u | head -2 | tr '\n' ' ')"
+  if [ -n "$PERF" ]; then
+    perf report -q -i $o/perf.data --stdio --no-children --sort symbol --percent-limit 0.2 > $o/perf.txt 2> $o/perf-report.err
+    rm -f $o/perf.data
+  fi
   [ -n "$GS" ] && { touch $o/stop; wait $GS; }
   kill $SP; wait $SP 2>/dev/null
   grep -h panicked $o/prove.err | head -3
