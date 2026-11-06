@@ -109,8 +109,8 @@ locked() {
   checkout "$1" || exit 1
   cd "$REPO" && RESEARCH_DRIVE=1 PYTHONPATH=$REPO/tools/research/src exec python3.12 -m research "$@"
 }
-# Each preflight merges a PR onto `next` in a worktree under --preflight-root and `uv sync`s it there: on the container disk,
-# beside uv's cache, which it hardlinks from, that takes ~13 s; under TMPDIR on the volume it outran the 120 s budget.
+# Drive's merged trees (the sync's codemod worktrees) go under --preflight-root, on the container disk: under TMPDIR, on the
+# network volume, each worktree add and remove takes minutes.
 tick() { locked queue drive --config tools/verity/check/drive.toml --preflight-root "$FAST/preflight" $(grep -v '^#' $DIR/args 2>/dev/null) "$@"; }
 case ${1:-} in
   start) (exec 8> "$TICK"; flock 8; fast_clones) \
