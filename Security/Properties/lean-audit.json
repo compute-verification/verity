@@ -676,9 +676,9 @@
    "honest": ["Verity.soundness_at_of_componentBounds_honest"],
    "nontrivial": "Verity.soundness_at_of_componentBounds_nontrivial"
   },
-  "Properties.SampledProofs.SecurityProofs.tablesRefused": {
-   "honest": ["Properties.SampledProofs.SecurityProofs.tablesRefused_honest"],
-   "nontrivial": "Properties.SampledProofs.SecurityProofs.tablesRefused_nontrivial"
+  "Properties.SampledProofs.SecurityProofs.tablesRegistered": {
+   "honest": ["Properties.SampledProofs.SecurityProofs.tablesRegistered_honest"],
+   "nontrivial": "Properties.SampledProofs.SecurityProofs.tablesRegistered_nontrivial"
   }
  },
  "unwitnessed": {
@@ -4458,13 +4458,13 @@
    "assumptions": [],
    "type_hash": "303f59f6e5d086c022bcd5f65d8494f0da4a42aa9cb9b2d7b80aaba186bfc119"
   },
-  "Properties.SampledProofs.SecurityProofs.tablesRefused": {
+  "Properties.SampledProofs.SecurityProofs.tablesRegistered": {
    "owner": "@soundness"
   },
-  "Properties.SampledProofs.SecurityProofs.tablesRefused_honest": {
+  "Properties.SampledProofs.SecurityProofs.tablesRegistered_honest": {
    "owner": "@soundness"
   },
-  "Properties.SampledProofs.SecurityProofs.tablesRefused_nontrivial": {
+  "Properties.SampledProofs.SecurityProofs.tablesRegistered_nontrivial": {
    "owner": "@soundness"
   },
   "Properties.SampledProofs.acceptMeans": {
@@ -6152,7 +6152,7 @@
      }
     ]
    },
-   "Properties.SampledProofs.SecurityProofs.tablesRefused": {
+   "Properties.SampledProofs.SecurityProofs.tablesRegistered": {
     "conjuncts": [
      {
       "function": "SampledProofs.OneStageZk.tablesHeld",
