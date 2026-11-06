@@ -265,7 +265,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                         "allocation runs at a GPU job's weight (node 1: not CPUWeight=idle)")
     q.add_argument("--quiet", action="store_true", help="a timed job: the node is kept quiet while it runs (the node's owner only)")
     q.add_argument("--gpu-ids", default=None, metavar="LIST", help="the GPU indices it must get, comma-separated")
-    ap.add_argument("--id", default=None, help="use this run id instead of allocating one")
+    ap.add_argument("--id", default=None, help="use this run id (rYYYYMMDD-HHMMSS-xxxx) instead of allocating one")
     ap.add_argument("--claimed", action="store_true", help=argparse.SUPPRESS)          # machine side: the dir was created by launch-request
     ap.add_argument("--cost-json", default=None, help=argparse.SUPPRESS)
     ap.add_argument("--remote-json", default=None, help=argparse.SUPPRESS)
@@ -303,6 +303,14 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--source-identity", default=None, help=argparse.SUPPRESS)   # machine side: JSON {commit, tree, dirty} of the shipped source
     ns, harness_opts = ap.parse_known_args(opts)
     ns.started = started
+    if ns.id is not None and not ns.claimed:
+        from .store import ids as store_ids
+
+        if not store_ids.is_run_id(ns.id):
+            print(f"research run: --id {ns.id!r} is not a run id (rYYYYMMDD-HHMMSS-xxxx, x hex): the store refuses its "
+                  "attempt, so nothing the run writes, its coins included, would be preserved; omit --id to get one",
+                  file=sys.stderr)
+            return 2
     if ns.wait_max is not None:
         try:
             if not ns.wait:
@@ -1780,6 +1788,11 @@ def hand_to_ops(cmd: str, rest: list[str]) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # A test's `python -m research` runs its tree's code, and doesn't read at_main.py, which suites don't declare.
+    if argv is None and not os.environ.get("PYTEST_CURRENT_TEST"):
+        from .at_main import reexec
+
+        reexec(sys.argv[1:])
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv or argv[0] in ("-h", "--help"):
         print(__doc__.strip())
