@@ -2,6 +2,7 @@
 installed (the fixture package passes clean and fails each check once a violation is added)."""
 from __future__ import annotations
 
+import gzip
 import hashlib
 import importlib.util
 import json
@@ -671,6 +672,35 @@ def test_the_sha256_hash_is_expr_hash_s_equivalence(tmp_path):
     assert got["a"] == got["b"] == got["c"] != got["d"] and len(got["a"]) == 64 and not (tmp_path / "canon.jsonl").exists()
 
 
+def test_the_facts_are_kept_only_gzipped_as_the_program_wrote_them(tmp_path, monkeypatch):
+    """A recorded run publishes the work directory, where `Facts.lean`'s document is hundreds of MB for `Security`: it is
+    kept there only as `facts.json.gz`, its bytes gzipped with no timestamp (equal facts are equal bytes, which the store
+    keeps once), and the facts the audit judges are that document's. A `.gz` an earlier run left is gone before it runs."""
+    doc = {"pins": {"C.g": {"kind": "theorem", "reads": [{"name": "C.d"}]}}, "modules": ["C"], "note": "é"}
+    written = json.dumps(doc, ensure_ascii=False).encode()
+
+    def program(argv, cwd, log):
+        assert argv[:3] == ["lake", "env", "facts"] and not (tmp_path / A.FACTS).exists()
+        config = json.loads(Path(argv[3]).read_text())
+        Path(config["out"]).write_bytes(written)
+        Path(config["canon"]).write_text("".join(json.dumps(r) + "\n" for r in ({"id": "pin:C.g", "canon": "g"},
+                                                                             {"id": "read:C.d", "canon": "d"})))
+        return 0, ""
+
+    monkeypatch.setattr(A, "facts_program", lambda pkg: "facts")
+    monkeypatch.setattr(A, "run", program)
+    (tmp_path / A.FACTS).write_bytes(b"stale")
+    facts = A.facts_of(tmp_path, {"roots": ["C"]}, tmp_path)
+    kept = tmp_path / A.FACTS
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["facts-config.json", "facts.json.gz"]
+    assert gzip.decompress(kept.read_bytes()) == written and kept.read_bytes()[4:8] == bytes(4), "no timestamp"
+    assert A.stored_facts(kept) == doc and facts["note"] == "é"
+    assert facts["pins"]["C.g"]["type_sha256"] == hashlib.sha256(b"g").hexdigest()
+    assert facts["pins"]["C.g"]["reads"][0]["sha256"] == hashlib.sha256(b"d").hexdigest()
+    (tmp_path / "facts.json").write_bytes(written)
+    assert A.stored_facts(tmp_path / "facts.json") == doc, "an older run's plain facts.json still reads"
+
+
 SHAPE_SPEC = """namespace Control
 def verify (x : Nat) : Bool := x % 2 == 0
 structure Sess where
@@ -992,7 +1022,9 @@ def test_naming_the_anonymous_instances_keeps_their_names_and_the_record(tmp_pat
                         (10, "instInhabitedFinOfNatNat_control"))]
     record = (pkg / A.POLICY).read_text()
     def facts():
-        return sorted(i["name"] for i in json.loads((tmp_path / "out" / "audit-control" / "facts.json").read_text())["instances"])
+        work = tmp_path / "out" / "audit-control"
+        assert not (work / "facts.json").exists(), "the facts are kept only gzipped"
+        return sorted(i["name"] for i in A.stored_facts(work / A.FACTS)["instances"])
     names = facts()
     named = audit(name=True)
     assert len(named["named_instances"]) == 4
