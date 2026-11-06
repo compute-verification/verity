@@ -153,9 +153,8 @@ theorem frameAnswer_congr (T : CoinLayer.TableData)
     LeanRelease.loop_coinsRead loopNr T (LeanRelease.withFrames T L₀ real) x m0 r0 h1
   have hc' : coinsAt x ((m0', r0') :: h1') = readCoins x (h1'.map fun p => CoinLayer.rd p.2) :=
     LeanRelease.loop_coinsRead loopNr T (LeanRelease.withFrames T L₀ real) x m0' r0' h1'
-  rw [LeanRelease.ofLoop_frameAnswer, LeanRelease.ofLoop_frameAnswer, hc, hc', hd, LeanRelease.cfg_eq_cfgAt,
-    LeanRelease.cfg_eq_cfgAt]
-  simp only [List.length_cons, hl]
+  rw [LeanRelease.ofLoop_frameAnswer, LeanRelease.ofLoop_frameAnswer, hc, hc', hd]
+  simp only [LeanRelease.cfg, List.length_cons, hl]
 
 /-- **At a rep's round past its first the frame takes the coins at the state the last round left**: the loop's
 state at the answers so far (`Loop.progOf`), its place unmoved by the answer (`Free.answer_pos`). -/

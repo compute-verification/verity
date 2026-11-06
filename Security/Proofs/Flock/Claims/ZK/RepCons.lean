@@ -101,7 +101,8 @@ theorem lincheckFw_ot (coins : Got) (c : _root_.Flock.CircuitFold) (lay : _root_
         apply ot_bind (ot_liftTM _); intro _ _
         apply ot_bind (ot_sampleP coins); intro _ _
         exact ot_pure trivial
-    · exact ot_throw_bind _ _
+    · exact ot_eq (ot_bind (Q := fun _ => False) (ms := []) (fun _ _ _ _ => trivial) fun _ h => h.elim)
+        (List.append_nil _)
   · simp [lcCounts]
 
 /-- **A rep's PIOP's asks**: the zerocheck's, then the lincheck's, leaving the extras and two claims more. -/
