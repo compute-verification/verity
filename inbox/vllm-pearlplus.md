@@ -1512,3 +1512,30 @@ network-accounting's ODLEAN reads `v3c-w0-4-32-4/compose-cache/e9a7e9…/circuit
    - It runs copies of 3e9e's scripts that name the new serve dir, from `4f816e9da6`, with 0bb4's flags (`--mem-gb 320 --mem-wait 14400 --no-custody-r2 --timeout 284400`, `V3C_AUDIT_TIMEOUT=72h`) and no FOLLOW_ANY_TREE.
 
 **I wait on:** the seal, about 15:40Z. You resume me for the post-seal steps.
+
+## 15:42Z Fri (vllm-pearlplus): **c564 sealed. Its PoUW was rejected because the verifier's draw was refused: another run under lane vllm reserved gate sessions between our Pearl-C period's close and our draw. V3c's root is unspent. Nothing was relaunched or deleted, and h200-3's window and serve dir are kept.**
+
+1. **First error, at the PoUW stage, 14:08:14Z:** "REJECT verity/pouw/pearl-plus/v1: the verifier's draw: CoinError: refused before reserving the run's draw session: lane vllm reserved session s20261106T135709Z-1383 after its Pearl-C period pearlplus-r20261106-131358-c564 closed, so no draw now is the lane's first reserve after it".
+   - Then Lean refused (no coin), POUW-DEV credits nothing, and RECORD composed `reject`. The script's last line wants `pending` or `accept`, so the run exited 1 at 14:53:01Z.
+   - BLOCK-COUNTS "undecided" and the refused window-circuit measurement match 3e9e's lines.
+2. **The seal happened:** SEALED, SERVED-SEAL VERDICT and B-OF-RECORD all PASS by 13:29Z, and the serve stopped with exit 0.
+   - **At the gate:** Pearl+'s salt session s20261106T132751Z-076d (seq 1778-1780, peer h200-3) released `pouw/salt` 1, and the period closed complete at 13:29:06Z (seq 1781). No draw session was reserved, so no draw coin was released.
+   - **V3c:** the window's run root has no open anywhere in the ledger; its one session is unspent.
+   - **Verdicts that stand:** the seal; INFERENCE-ONLY accept on the registered session (nci-check agrees); SERVED-COMPARE EQUAL (PHI, BUILD and CUT PASS); WINDOW-CIRCUIT-HELD PASS; the tie (W then R chained; retain PASS 4 of 4); and the sampled-proofs development check (exit 0). The deferral is written.
+   - **PoUW can't be recovered:** its one draw has to be the lane's first reserve after the close, and that reserve is gone.
+3. **Cause:** the run r20261106-134237-h2n2 on vy-dc-h200-2 (tree `60efaa2649`, on `origin/cursor/onsite-push1b-cand-061a`, `remote_run.sh`, still running). It opened a Pearl-C period under lane vllm (seq 1782, model `LLAMA32_1B_INT8_K2048`) and reserved two sessions at 13:57:10Z and 13:57:14Z.
+   - That was between our close (13:29Z) and our draw (14:08Z), while window-commit ran (13:41 to 14:07Z), and W then R must precede the coin.
+   - It's not a node problem, and not this worker's run: another run shares lane vllm's identity at the gate.
+4. **Fix and rerun.** The tree is unchanged (`4f816e9da6`), and neither option touches the one-session rule:
+   - **(a) c564's follow-on on cpu-3 now:** V3c's audit of record on its unspent root, with PoUW recorded as a visible failure. About 48 h (72 h cap).
+   - **(b) a new serve on h200-3** with lane vllm quiet at the gate from about 10 to 70 min after launch. Seal about 2.5 h after launch, then the follow-on.
+     - The quiet hour needs the h2n2 run's owner, and any other users of lane vllm, to hold off; or that run gets its own lane at the gate.
+     - h200-3 has 579,197 inodes free against 772,388 needed, so one window commit has to go first: 3e9e's or c564's.
+   - A code fix that reserves the draw at the close is possible but untested (reserve expiry), so I don't recommend it now.
+5. **Window numbers in the store:**
+   - The runner's stall dumps (`logs/stall-*`) carry the stalled step's command line, which includes the `--window` argument. Both runs of record's records hold them: 3e9e has 4 dumps and c564 has 2.
+   - My diagnostic probes repeat them: r20261106-153303-c9a3's stdout (three `--window` lines and one file name), and r20261106-153749-9f48's stdout, which states the run's window count.
+   - Withdrawals go to infra on INF-559 on your word, and the dumps need a fix.
+6. **INF-518:** told infra at 15:40Z that no follow-on starts now, and asked them to lift the b-slot hold until I post a new time.
+
+**I wait on:** your choice of (a) or (b), and your word on item 5.
