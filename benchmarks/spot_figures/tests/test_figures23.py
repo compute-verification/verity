@@ -74,6 +74,34 @@ def test_figure3_prices_the_cuts_as_figure1_does():
                                                      "GLM-5.3 on 8x H200, the layer boundary"}
 
 
+def test_macs_in_no_proof_block_are_served_and_shown(card_dir):
+    """A workload card whose proof blocks hold half the served MACs, one stratum modeled: Figure 1 serves half the
+    requests and its captions say what no curve bounds and what is modeled, Figure 2's shares are of the served MACs,
+    and Figure 3 prices a token's serving at them."""
+    base, base3 = figure1.run("GLM-5.3", 2, ("world year",)), figure3.run("GLM-5.3")
+    work = cards.load("workload", "GLM-5.3")
+    strata = work["value"]["strata"]
+    macs = sum(s["per_token"] * s["macs"] for s in strata)
+    first = next(s for s in strata if s["macs"])
+    first["modeled"] = True
+    work["value"]["served_macs_per_token"] = 2 * macs
+    cards.write(work, force=True)
+    out = figure1.run("GLM-5.3", 2, ("world year",))
+    modeled = first["per_token"] * first["macs"] / (2 * macs)
+    assert out["partition"]["uncovered_mac_share"] == pytest.approx(.5)
+    assert out["partition"]["modeled_mac_share"] == pytest.approx(modeled)
+    assert out["scopes"]["world year"]["requests"] == pytest.approx(base["scopes"]["world year"]["requests"] / 2)
+    for panel in ("exfiltration", "skipped_work"):
+        caption = out["scopes"]["world year"]["captions"][panel]
+        assert "50% of the served MACs are in no proof block" in caption and "no cut yet" in caption
+        assert "no proof block" not in base["scopes"]["world year"]["captions"][panel]
+    f2 = figure2.run("GLM-5.3")
+    assert f2["uncovered_mac_share"] == pytest.approx(.5)
+    assert sum(t["mac_share"] for t in f2["types"]) == pytest.approx(.5)
+    assert [t["block"] for t in f2["types"] if t["modeled"]] == [first["block"]]
+    assert figure3.run("GLM-5.3")["token_seconds"] == pytest.approx(2 * base3["token_seconds"])
+
+
 def test_figure3_without_the_hillclimb_card_is_pending(card_dir, tmp_path):
     (card_dir / "commit_hillclimb.all.json").unlink()
     out = figure3.run("GLM-5.3")

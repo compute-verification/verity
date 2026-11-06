@@ -68,8 +68,8 @@ def run(model: str) -> dict:
     hc = spot_cards.load("commit_hillclimb", None, required=False)
     sc = figure1.slot_cards(model)
     c = figure1.cards(model)
-    part = figure1.TokenBlocks.of(c["partition"].value["strata"])
-    token_s = 2 * part.macs / (c["mfu_serve"].value * c["peak_flops"].value)
+    part = figure1.TokenBlocks.of(c["partition"].value["strata"], c["partition"].value["served_macs_per_token"])
+    token_s = 2 * part.served_macs / (c["mfu_serve"].value * c["peak_flops"].value)
     rate = c["hash_rate"].value
     cuts = {"tokens": c["token_bytes"].value} | sc["workload"]["value"].get("boundaries", {})
     modeled = [{"cut": k, "label": CUT_NAMES[k], "bytes_per_token": b, "share": b / rate / token_s}

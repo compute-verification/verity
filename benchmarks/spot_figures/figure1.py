@@ -9,7 +9,8 @@ console reads.
 **Workload.**  A scope's compute is its GPUs (the world: rho's `world-h200` fleet, the census's `world-inference-2027`;
 a datacenter: the census's `dc-12500-machines-600s`) over a monitoring period (`wipe_monitoring.PERIODS`), serving at
 the fleet's MFU on the H200's dense FP8 peak.  It serves the model's requests of the census's tokens each, at the
-circuit's MACs a token, cut into proof blocks as the model's `workload` card has them.
+circuit's MACs a token (the `workload` card's `served_macs_per_token` where its proof blocks leave some out), cut into
+proof blocks as the card has them; the captions give the share of MACs in no proof block and in `modeled` strata.
 
 **Costs**, in the scope's GPU-seconds: a replay costs the `replay` card's factor times its request served at serving's
 MFU; proving a proof block takes the proof overhead times its FLOP at the dense peak; hashing a byte takes the
@@ -109,7 +110,8 @@ def cards(model: str = "GLM-5.3") -> dict[str, InputCard]:
             "hash_rate": _card(sc["commitment"], sc["commitment"]["value"]["hash_rate"], "B/s", "hash_rate"),
             "replay_factor": _card(sc["replay"], sc["replay"]["value"]["factor"], "x", "factor"),
             "weights_bytes": _card(work, work["value"]["weights_bytes"], "B", "weights_bytes"),
-            "partition": _card(work, {k: work["value"][k] for k in ("ranks", "tokens", "strata")}, "", "strata")}
+            "partition": _card(work, {k: work["value"].get(k) for k in
+                                      ("ranks", "tokens", "strata", "served_macs_per_token")}, "", "strata")}
     census, dc = _entry(ADVERSARY, CENSUS_WORLD), _entry(DEPLOYMENTS, DATACENTER)
     peak = _entry(HARDWARE, PEAK)
     rho = _toml(RHO)
@@ -148,7 +150,8 @@ def cards(model: str = "GLM-5.3") -> dict[str, InputCard]:
 @dataclass(frozen=True)
 class TokenBlocks:
     """The model's proof blocks a token: their count, MACs and the bytes one-stage commits, and the mean MACs a proof
-    block weighted by count, by MACs (the work target's samples) and by output bits (the leak target's)."""
+    block weighted by count, by MACs (the work target's samples) and by output bits (the leak target's); beside them
+    the whole circuit's MACs a token and those in `modeled` strata."""
 
     blocks: float
     macs: float
@@ -157,15 +160,24 @@ class TokenBlocks:
     macs_by_work: float
     macs_by_bits: float
     bits: float
+    served_macs: float
+    modeled_macs: float
 
     @classmethod
-    def of(cls, strata: list[dict]) -> TokenBlocks:
+    def of(cls, strata: list[dict], served_macs: float | None = None) -> TokenBlocks:
         n = sum(s["per_token"] for s in strata)
         macs = sum(s["per_token"] * s["macs"] for s in strata)
         bits = sum(s["per_token"] * s["out_bits"] for s in strata)
         committed = sum(s["per_token"] * s.get("commit_bytes", s["out_bits"] / 8) for s in strata)
+        modeled = sum(s["per_token"] * s["macs"] for s in strata if s.get("modeled"))
         return cls(n, macs, committed, macs / n, sum(s["per_token"] * s["macs"] ** 2 for s in strata) / macs,
-                   sum(s["per_token"] * s["out_bits"] * s["macs"] for s in strata) / bits, bits / n)
+                   sum(s["per_token"] * s["out_bits"] * s["macs"] for s in strata) / bits, bits / n,
+                   served_macs or macs, modeled)
+
+    def coverage(self) -> dict:
+        """The shares of the served MACs in no proof block and in `modeled` strata."""
+        return {"uncovered_mac_share": 1 - self.macs / self.served_macs,
+                "modeled_mac_share": self.modeled_macs / self.served_macs}
 
 
 @dataclass(frozen=True)
@@ -184,7 +196,7 @@ class Scope:
 
 
 def scopes(c: dict[str, InputCard], part: TokenBlocks) -> list[Scope]:
-    flop_request = c["tokens_per_request"].value * 2 * part.macs
+    flop_request = c["tokens_per_request"].value * 2 * part.served_macs
     out = []
     for who in ("world", "datacenter"):
         for period, seconds in PERIODS:
@@ -303,19 +315,26 @@ def references(c: dict[str, InputCard], model: str, card: dict | None = None) ->
     return out
 
 
-def captions(serve_hash_share: float, infiltration: dict | None = None) -> dict[str, str]:
+def captions(serve_hash_share: float, infiltration: dict | None = None, coverage: dict | None = None) -> dict[str, str]:
     serve = (f"hashes every proof block's outputs at serve time, {serve_hash_share:.2g}× the scope's compute, outside "
              "the budget")
+    gaps = ""
+    if coverage and coverage["uncovered_mac_share"] > 0:
+        gaps += (f" {coverage['uncovered_mac_share']:.0%} of the served MACs are in no proof block, and no curve "
+                 "bounds what is done in them.")
+    if coverage and coverage["modeled_mac_share"] > 0:
+        gaps += (f" {coverage['modeled_mac_share']:.0%} are in proof blocks whose Definitions have no cut yet, "
+                 "modeled at the grain they would take.")
     return {
         "exfiltration": ("Two-stage (solid): serving commits only the requests' token ids, and the sampled requests' "
                          "interiors are committed after the first stage, inside the budget. One-stage (dashed) "
                          f"{serve}. Request-level (dotted) proves each sampled request whole. A bound counts the "
-                         "incorrect proof blocks' output bits and which ones they are."),
+                         f"incorrect proof blocks' output bits and which ones they are.{gaps}"),
         "infiltration": (infiltration["value"]["caption"] if infiltration else
                          "Pending: the design that certifies infiltration, and its consumer."),
         "skipped_work": (f"One-stage (solid) {serve}. Request-level (dotted) proves each sampled request whole. "
                          "Two-stage is left out: its interiors are committed after the first stage, so they don't "
-                         "show the work was done at serve time."),
+                         f"show the work was done at serve time.{gaps}"),
     }
 
 
@@ -333,7 +352,7 @@ def infiltration_panel(card: dict | None, scope_names: list[str]) -> dict:
 def run(model_name: str = "GLM-5.3", points: int = 57, scope_names: tuple[str, ...] | None = None) -> dict:
     sc = slot_cards(model_name)
     c = cards(model_name)
-    part = TokenBlocks.of(c["partition"].value["strata"])
+    part = TokenBlocks.of(c["partition"].value["strata"], c["partition"].value["served_macs_per_token"])
     xs = overheads(c, points)
     budgets = c["budgets"].value
     and_per_flop = c["ands_per_mac"].value / 2
@@ -350,7 +369,8 @@ def run(model_name: str = "GLM-5.3", points: int = 57, scope_names: tuple[str, .
                               "serve_hash_share": serve_hash / s.gpu_seconds,
                               "boundary_hash_share": base.replay.replay_blocks * base.replay.boundary_bytes
                               * base.byte_s / s.gpu_seconds,
-                              "captions": captions(serve_hash / s.gpu_seconds, sc.get("infiltration"))}
+                              "captions": captions(serve_hash / s.gpu_seconds, sc.get("infiltration"),
+                                                   part.coverage())}
         models = [model(c, part, s, x) for x in xs]
         for panel, target in (("exfiltration", "leak"), ("skipped_work", "work")):
             for design in DESIGNS[panel]:
@@ -368,7 +388,7 @@ def run(model_name: str = "GLM-5.3", points: int = 57, scope_names: tuple[str, .
         "schema": SCHEMA, "model": model_name,
         "inputs": {k: v.__dict__ for k, v in c.items()},
         "cards": sc,
-        "partition": part.__dict__,
+        "partition": part.__dict__ | part.coverage(),
         "scopes": out_scopes,
         "budgets": budgets,
         "vertical": {"x": c["proof_overhead"].value, "provisional": c["proof_overhead"].provisional,

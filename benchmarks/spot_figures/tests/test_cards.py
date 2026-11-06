@@ -50,6 +50,17 @@ def test_a_reference_line_has_one_value_or_one_per_scope():
     cards.check(c | {"value": {"lines": [line | {"by_scope": {"world year": 1.0}}]}})
 
 
+def test_a_workload_serves_at_least_its_proof_blocks_macs():
+    stratum = {"block": "Dot_v1{K=8}", "per_token": 2.0, "macs": 8, "out_bits": 16, "modeled": True}
+    value = {"ranks": 1, "device": "H200", "request": {"prefill": 1, "decode": 1}, "tokens": 2, "weights_bytes": 1.0,
+             "strata": [stratum]}
+    c = good() | {"slot": "workload"}
+    for served in ({}, {"served_macs_per_token": None}, {"served_macs_per_token": 32.0}):
+        cards.check(c | {"value": value | served})
+    with pytest.raises(ValueError, match="below the strata's 16 MACs a token"):
+        cards.check(c | {"value": value | {"served_macs_per_token": 8.0}})
+
+
 def test_load_falls_back_to_every_model_and_names_a_missing_card(tmp_path, monkeypatch):
     monkeypatch.setattr(cards, "CARDS", tmp_path)
     cards.write(good() | {"slot": "design", "model": None, "value": {"delta": .01, "budgets": [.01],

@@ -23,7 +23,10 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   uv run python benchmarks/spot_figures/cards.py list
   ~~~
 
-  A model without a `workload` card is refused; no census is guessed from a model's config.
+  A model without a `workload` card is refused; no census is guessed from a model's config. A `workload` card marks a
+  stratum whose Definition has no cut on main `modeled` and gives the whole circuit's MACs a token
+  (`served_macs_per_token`) where its proof blocks leave some out: requests are sized from the served MACs, and the
+  figures show the share in no proof block and the share modeled.
 - **Figure 1** (`figure1.py`, `render.py`): what an adversary serving the model on all of a scope's compute over a
   monitoring period can exfiltrate, infiltrate or skip while evading detection with probability above δ, against
   proof overhead, a curve per share of compute spent on replays, interior commitments and proofs.

@@ -9,7 +9,10 @@ A card is one JSON object:
 
 `SLOTS` gives each slot's `value` fields, every number in the unit its field names; `model` is null only in the slots
 that hold for every model (`MODEL_FREE`).  A proof block's Definition is named as circuit-check names the
-specialization, the key `workload` and `proof_overhead` join on.  A card reaches the figures by art id:
+specialization, the key `workload` and `proof_overhead` join on.  A `workload` card's strata are its proof blocks a
+token over its ranks; a stratum whose Definition has no cut on main, sized at the grain it would take, is `modeled`, and
+`served_macs_per_token` is the whole circuit's MACs a token where the strata leave some out.  A card reaches the
+figures by art id:
 
     uv run python benchmarks/spot_figures/cards.py check CARD.json ...       # refuses unknown and missing fields
     research data put --kind spot-card/v1 --file CARD.json --preserve --json
@@ -57,7 +60,8 @@ ENVELOPE = {"schema": F(str, choices=(SCHEMA,)), "slot": F(str), "model": F(str,
             "status": F(str, choices=("measured", "modeled")), "provisional": F(bool), "source": F(str),
             "runs": F(list), "owner": F(str), "value": F(dict), "art": _opt(str)}
 STRATUM = {"block": F(str), "kind": _opt(str), "per_token": F(NUM), "macs": F(NUM), "out_bits": F(NUM),
-           "in_bits": _opt(NUM), "ands": _opt(NUM), "k_log": _opt(int), "commit_bytes": _opt(NUM)}
+           "in_bits": _opt(NUM), "ands": _opt(NUM), "k_log": _opt(int), "commit_bytes": _opt(NUM),
+           "modeled": _opt(bool)}
 OVERHEAD_BLOCK = {"block": F(str), "stands_in": _opt(bool), "macs": F(NUM), "out_bits": _opt(NUM), "k_log": _opt(int),
                   "seconds_per_block": F(NUM), "fixed_seconds": F(NUM), "statement_blocks": F(int),
                   "overhead": F(NUM, nullable=True), "runs": _opt(list)}
@@ -70,7 +74,8 @@ POINT = {"x": F(NUM), "y": F(NUM), "runs": _opt(list), "note": _opt(str)}
 CURVE = {"label": F(str), "model": _opt(str, nullable=True, choices=MODELS), "points": F(list, each=POINT)}
 SLOTS = {
     "workload": {"ranks": F(int), "device": F(str), "request": F(dict), "tokens": F(int), "weights_bytes": F(NUM),
-                 "strata": F(list, each=STRATUM), "boundaries": _opt(dict)},
+                 "strata": F(list, each=STRATUM), "served_macs_per_token": _opt(NUM, nullable=True),
+                 "boundaries": _opt(dict)},
     "proof_overhead": {"definition": F(str), "device": F(str), "format": F(str, choices=("fp8", "s8", "bf16", "nvfp4")),
                        "peak_mac_s": F(NUM), "arm": _opt(str), "blocks": F(list, each=OVERHEAD_BLOCK),
                        "model_overhead": F(NUM, nullable=True), "label": F(str)},
@@ -135,6 +140,11 @@ def check(card: dict) -> dict:
         errors += [f"references.value.lines[{i}]: give exactly one of value and by_scope"
                    for i, line in enumerate(value.get("lines") or [])
                    if isinstance(line, dict) and ("value" in line) == ("by_scope" in line)]
+    if slot == "workload" and not errors and value.get("served_macs_per_token") is not None:
+        in_blocks = sum(s["per_token"] * s["macs"] for s in value["strata"])
+        if value["served_macs_per_token"] < in_blocks * (1 - 1e-9):
+            errors.append(f"workload.value.served_macs_per_token: {value['served_macs_per_token']:.4g}, below the "
+                          f"strata's {in_blocks:.4g} MACs a token; it is the whole circuit's")
     if errors:
         raise ValueError("not a spot-card/v1 card:\n  " + "\n  ".join(errors))
     return card

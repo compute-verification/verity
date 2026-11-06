@@ -35,12 +35,14 @@ def run(model: str) -> dict:
     strata = work["value"]["strata"]
     blocks = sum(s["per_token"] for s in strata)
     macs = sum(s["per_token"] * s["macs"] for s in strata)
+    served = work["value"].get("served_macs_per_token") or macs
     types = []
     for s in sorted(strata, key=lambda s: (-s["per_token"] * s["macs"], -s["per_token"])):
         b = measured.get(s["block"])
         types.append({"block": s["block"], "label": short(s["block"]), "kind": s.get("kind"),
                       "per_token": s["per_token"], "macs": s["macs"], "out_bits": s["out_bits"],
-                      "block_share": s["per_token"] / blocks, "mac_share": s["per_token"] * s["macs"] / macs,
+                      "modeled": bool(s.get("modeled")),
+                      "block_share": s["per_token"] / blocks, "mac_share": s["per_token"] * s["macs"] / served,
                       "measured": b is not None, "overhead": None if b is None else b["overhead"],
                       "seconds_per_token": None if b is None else s["per_token"] * seconds(b)})
     shared = {t["label"] for t in types if sum(u["label"] == t["label"] for u in types) > 1}
@@ -55,6 +57,7 @@ def run(model: str) -> dict:
         "stand_ins": [b | {"label": short(b["block"])} for b in po["value"]["blocks"] if b.get("stands_in")],
         "pending_mac_share": sum(t["mac_share"] for t in types if not t["measured"]),
         "pending_block_share": sum(t["block_share"] for t in types if not t["measured"]),
+        "uncovered_mac_share": 1 - macs / served,
         "model_overhead": po["value"]["model_overhead"], "label": po["value"]["label"],
         "derived_model_overhead": sum(t["seconds_per_token"] for t in types) * peak / macs if done else None,
     }
@@ -68,7 +71,8 @@ def render(out: dict, outdir):
     import matplotlib.pyplot as plt
 
     rows = out["types"] + [s | {"stand_in": True, "measured": True} for s in out["stand_ins"]]
-    labels = [r["label"] + ("  (stand-in)" if r.get("stand_in") else "") for r in rows]
+    labels = [r["label"] + ("  (stand-in)" if r.get("stand_in") else "  (modeled)" if r.get("modeled") else "")
+              for r in rows]
     n = len(rows)
     plt.rcParams.update({"font.family": "serif", "font.serif": ["STIXGeneral", "DejaVu Serif"],
                          "mathtext.fontset": "stix", "font.size": 13, "savefig.facecolor": "white"})
@@ -103,8 +107,9 @@ def render(out: dict, outdir):
         for side in ("top", "right"):
             ax.spines[side].set_visible(False)
         ax.grid(axis="x", color="#E2E2E2", lw=.45)
+    gap = f", {out['uncovered_mac_share']:.1%} in no proof block" if out["uncovered_mac_share"] > 0 else ""
     fig.suptitle(f"Proof overhead per proof-block type, {out['model']}: {sum(r['measured'] for r in out['types'])} of "
-                 f"{len(out['types'])} types measured, {out['pending_mac_share']:.1%} of a token's MACs pending",
+                 f"{len(out['types'])} types measured, {out['pending_mac_share']:.1%} of a token's MACs pending{gap}",
                  x=.27, ha="left", fontsize=15)
     outdir.mkdir(parents=True, exist_ok=True)
     paths = [outdir / f"figure2.{ext}" for ext in ("png", "svg")]
