@@ -68,6 +68,15 @@ def test_token_diff_counts_a_shorter_replay_from_where_it_stops():
         {"request": "a", "tokens": 3, "tokens_replayed": 2, "first_position": 2, "positions": 1}]
 
 
+def test_logprob_diff_finds_each_requests_first_differing_step():
+    steps = [{"step": 0, "emitted": {"a": 1}}, {"step": 1, "emitted": {"a": 1, "b": 1}}, {"step": 2, "emitted": {"a": 1, "b": 1}}]
+    d = R.logprob_diff({"a": [-0.5, -1.0, -2.0], "b": [-0.1, -0.2]}, {"a": [-0.5, -1.0, -2.5], "b": [-0.1, -0.3]}, steps)
+    assert (d["requests_logprobs_differing"], d["first_step"]) == (2, 2)
+    assert [(r["request"], r["first_position"], r["step"], r["want"], r["got"]) for r in d["requests_differing"]] == [
+        ("a", 2, 2, -2.0, -2.5), ("b", 1, 2, -0.2, -0.3)]
+    assert R.logprob_diff({"a": [-0.5]}, {"a": [-0.5]}, steps)["requests_logprobs_differing"] == 0
+
+
 def test_replay_tokens_round_trip(tmp_path: Path):
     tokens = {rid("sat1", 1): [7, 9], rid("sat1", 0): [7, 0]}
     R.write_tokens(tmp_path, tokens)
