@@ -1974,9 +1974,11 @@ class Driver:
     def _shards_launched(self, drive: dict, pl: dict, run: dict) -> bool:
         """Whether every shard of a sharded after-landing run (`start_postland`) has its run ids, which then become the run's own
         (``ids``, ``groups``: each shard's twins).  One whose train.sh registered no run stops the others and is told, as an
-        unsharded one is, and the next `start_postland` launches the run again."""
+        unsharded one is, and the next `start_postland` launches the run again.  A shard still printing nothing `LAUNCH_LOST_S`
+        after the run's launch registered none."""
         shards, n = run["shards"], len(run["shards"])
         for k, rec in enumerate(shards, 1):
+            rec.setdefault("at", run["at"])
             if (tail := self._resolve(rec, f"shard {k}/{n} of the post-landing run of `{self.q.into}` {run['tip'][:12]}")) is None:
                 continue
             if (got := [r for x in shards for r in x.get("ids") or ()]) and not (self.dry_run or self.q.shadow):
