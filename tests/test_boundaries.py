@@ -67,10 +67,9 @@ ALLOWED = {
     # An auditor party's signed period roots and liveness records,
     # stdlib only (its frame-v3-sha512 tree held to `ml.commitments.merkle` by its test), the signer injected.
     "core.attest": set(),
-    # 2026-10-27 (memory accounting, the deployment API v3, note:memory-accounting/20261026T2305Z-draft-deployment-api-v3):
-    # the wire is what both sides parse with, stdlib only; the deployment layer is protocol-agnostic and reads frames with
-    # it, signs and verifies only through keys its caller hands it, and checks a configuration against what a protocol and
-    # a workload declare to it, so neither gains an ml edge.
+    # The deployment API: the wire is what both sides parse with, stdlib only; the deployment layer is protocol-agnostic and
+    # reads frames with it, signs and verifies only through keys its caller hands it, and checks a configuration against what
+    # a protocol and a workload declare to it, so neither gains an ml edge.
     "core.wire": set(),
     # The Site, the registered hardware: its locations, links and registration log, the check each entry passes and the
     # views a protocol reads. Its digests are canonical JSON's, the wire's.
@@ -86,12 +85,12 @@ ALLOWED = {
     # parties of the deployment layer (`parties`), their messages the wire's.
     "core.protocols.sampled_proofs": {"core.claims", "core.wire", "core.deploy", "ml.circuits", "ml.commitments",
                                       "ml.randomness", "core.protocols.profile", "core.protocols.record"},
-    # 2026-10-27 (memory accounting, the deployment API v3): the wipe's memory challenger and prover are parties of the
+    # The wipe's memory challenger and prover are parties of the
     # deployment layer (`wipe_parties`), their messages the wire's. The
     # memory challenger reports its sessions under its party's per-period root (`core.attest`).
     "core.protocols.pous": {"core.claims", "core.attest", "core.wire", "core.deploy", "ml.circuits", "ml.commitments",
                             "ml.crypto", "ml.randomness"},
-    # 2026-10-11 (Daniel, decision 7 of the resource-accounting agenda): the bandwidth audit's store is PoUS's `C*`,
+    # The bandwidth audit's store is PoUS's `C*`,
     # under its setup and `vk`, reused as they are.
     "core.protocols.bandwidth": {"ml.crypto", "ml.randomness", "core.protocols.pous"},
     # The verifier's side runs where `period.json` puts it, a side of the deployment layer (`verity.core.deploy.stream`).
