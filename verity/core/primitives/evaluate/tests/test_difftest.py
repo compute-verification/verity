@@ -48,7 +48,7 @@ import verity_difftest as DT
 from hypothesis import strategies as st
 from verity_difftest import settings
 
-from verity.core.protocols.pouw.circuit import words as W
+from verity.ml.protocols.pouw.circuit import words as W
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import codec
 from verity.ml.circuits.boolean.trace import word_of

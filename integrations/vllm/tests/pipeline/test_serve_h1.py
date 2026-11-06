@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 import torch
 
-from verity.core.protocols.pouw.circuit import h1window as HW
+from verity.ml.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.sampled_proofs.challenger import CoinError
 from verity_vllm.engine import handle
 from verity_vllm.pipeline import cli

@@ -1,7 +1,7 @@
 # accel_v31: Dither's no-fold call on the GPU
 
 The GPU prover of one Dither call, the binding that runs it a call at a time, and the CPU reference and verifier checks
-that judge its output bit for bit. The call is `verity/core/protocols/pouw/circuit/dither.py`'s:
+that judge its output bit for bit. The call is `verity/ml/protocols/pouw/circuit/dither.py`'s:
 
 - m rows of A against n rows of B, at contraction K;
 - HYB noise in noise tiles of L′ inner indices;

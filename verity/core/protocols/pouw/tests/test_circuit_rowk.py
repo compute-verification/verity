@@ -1,4 +1,4 @@
-"""Row units cut along k (`verity.core.protocols.pouw.circuit.rowk`, ``Shape.row_k``): on every row, admitted or refused, a row's head, forms
+"""Row units cut along k (`verity.ml.protocols.pouw.circuit.rowk`, ``Shape.row_k``): on every row, admitted or refused, a row's head, forms
 and tail in sequence give the whole row unit's outputs, for Pearl-C on the H100, sm_120 and sm_120 unpromoted and for
 Pearl-C4, rows of A and of B; the cut roots give today's roots' outputs with the same computing gates, and their partition
 computes every value in exactly one unit; each piece's ports are committed rows of `leaves`' schemas and public input
@@ -25,14 +25,14 @@ from verity.ml.circuits.defs import CompositeDefinition
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Value
 from verity.ml.circuits.ops.scalar import BitAnd, SelectBf16
-from verity.core.protocols.pouw.circuit import leaves as L
-from verity.core.protocols.pouw.circuit import pc4, pc8, plan, rowk
-from verity.core.protocols.pouw.circuit.anchors import ANCHORED, Derivation, TileAnchors, public_ports
+from verity.ml.protocols.pouw.circuit import leaves as L
+from verity.ml.protocols.pouw.circuit import pc4, pc8, plan, rowk
+from verity.ml.protocols.pouw.circuit.anchors import ANCHORED, Derivation, TileAnchors, public_ports
 from verity.core.protocols.pouw.protocol import DomainError, Tile
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c4 as F
-from verity.core.protocols.pouw.schemes import pearl_kw as P
-from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_c4 as F
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes.pearl_c_device import DEVICES
 
 SEED = bytes(range(32))
 #: (device, k, row_k): three segments each, so a form carries a carry it was given

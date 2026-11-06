@@ -1,7 +1,7 @@
 """hgemm.cu's gate judged by the repository's own functions: every level of both trees of every call, by
 ``verity.ml.commitments`` (commit_gpu's reference.py: ``permute``, ``prf_salt``, ``params``), and sampled tiles' windowed
 receipts by ``segment.PouwSegCheck_v2{16, FOLD}``'s own fold (``fold_keys``, ``fold_absorb``, ``fold_final`` of
-`verity.core.protocols.pouw.circuit.segment`, which `PouwSegCheck_v3` checks the same receipts with).
+`verity.ml.protocols.pouw.circuit.segment`, which `PouwSegCheck_v3` checks the same receipts with).
 
 Call c's trees, each a ``CommitmentDomain(identity_digest_sha512(TAG, {"tree": T, "m", "n", "k", "leaves"}), -1,
 RangeIndexedDomain(0, leaves), hash="sha512")`` of hm96-sha512/row/v2 rows of 16,384 bits:
@@ -33,7 +33,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "commit_gpu"))
 import reference as cref  # noqa: E402
 
-from verity.core.protocols.pouw.circuit import segment as SG  # noqa: E402
+from verity.ml.protocols.pouw.circuit import segment as SG  # noqa: E402
 from verity.ml.commitments.identity import identity_digest_sha512  # noqa: E402
 from verity.ml.commitments.indexed import RangeIndexedDomain  # noqa: E402
 from verity.ml.commitments.limits import VerificationLimits  # noqa: E402
