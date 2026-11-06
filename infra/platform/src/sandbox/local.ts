@@ -28,7 +28,7 @@ export function localSandboxSession(root: string): Experimental_SandboxSession {
   const spawn = (async (opts: { command: string; workingDirectory?: string; env?: Record<string, string>; stdin?: boolean; abortSignal?: AbortSignal }) => {
     const child: ChildProcess = spawnChild("bash", ["-lc", opts.command], {
       cwd: opts.workingDirectory ? abs(opts.workingDirectory) : root,
-      env: { PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: root, LANG: "C.UTF-8", ...opts.env } as NodeJS.ProcessEnv,
+      env: { PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: root, LANG: "C.UTF-8", ...opts.env } as unknown as NodeJS.ProcessEnv,
       stdio: [opts.stdin ? "pipe" : "ignore", "pipe", "pipe"],
       signal: opts.abortSignal,
     });
