@@ -3,7 +3,7 @@ module
 public import Mathlib.Algebra.BigOperators.Fin
 public import Mathlib.Data.ZMod.Defs
 public import Mathlib.Probability.Distributions.Uniform
-public import Definitions.Accounting.Tag.Prob
+public import Definitions.Core.Prob
 
 /-!
 # The keyed polynomial hash over `GF(2^31 − 1)` (trusted)

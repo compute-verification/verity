@@ -35,8 +35,8 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] {mPts n : ℕ} {R
   (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
   (capOf : ∀ (_ : Finset (Fin n)) (_ : Reg), ByteArray → Fin 1 → Cap D) (N : ℕ) {L : Law n}
 
-/-- **R11 at `--zk` at one table, with an event of the draw**: flock-verify `--zk` accepts the live audit at a draw in
-`E` no likelier than the compiled batched audit, played by `simZ … τ`, accepts at a draw in `E`. -/
+/-- **The refinement at `--zk` at one table, with an event of the draw**: flock-verify `--zk` accepts the live audit at
+a draw in `E` no likelier than the compiled batched audit, played by `simZ … τ`, accepts at a draw in `E`. -/
 theorem execRefinesZK_on_drawn (hdec : DecodesOnZK A Hs T I wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOf dg mPts N wr))) (E : Finset (Fin n) → Prop) :
     prob (fun o => LiveAcceptsZK I o ∧ E o.2.1) (auditLive L Reg (liveOf dg mPts N wr)) τ ≤

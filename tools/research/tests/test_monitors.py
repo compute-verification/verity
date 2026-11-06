@@ -1260,6 +1260,21 @@ def test_disk_forecast_pages_when_the_fitted_line_reaches_the_watermark_within_6
     assert f.key == "inode" and "inode use is past 80%" in f.text
 
 
+def test_disk_forecast_pages_on_its_own_key_once_free_inodes_near_the_check_slots_floor(tmp_path, monkeypatch):
+    """A node can stand past 80% inodes for days, so that finding's one page says nothing when the slots stop."""
+    root = machine_root(tmp_path, {})
+    use = {"pct": 50.0, "ipct": 92.0, "size_b": 2 * 2**40, "ifree": 900_000.0}
+    monkeypatch.setattr(M, "disk_use", lambda path: dict(use))
+    memo: dict = {}
+    assert [f.key for f in M.disk_forecast(mctx(root, Run(), memo, now=T0))] == ["inode"]
+    use.update(ipct=99.5, ifree=22_194.0)
+    found = {f.key: f for f in M.disk_forecast(mctx(root, Run(), memo, now=T0 + 600))}
+    assert set(found) == {"inode", "inode-full"}
+    assert "has 22,194 inodes free*, under 800,000; check slots start nothing under 400,000" in found["inode-full"].text
+    use["ifree"] = None                                  # a filesystem without inode counts never pages on them
+    assert [f.key for f in M.disk_forecast(mctx(root, Run(), memo, now=T0 + 1200))] == ["inode"]
+
+
 MANIFEST = """
 [[file]]
 path = "/etc/systemd/system/vy-a.service"

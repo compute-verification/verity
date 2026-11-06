@@ -42,6 +42,7 @@ public import Proofs.Flock.Claims.Recursion.SeqDeploy
 public import Proofs.Flock.Claims.Recursion.DeployStop
 public import Proofs.Flock.Claims.Recursion.SeqStop
 public import Proofs.Flock.Claims.Recursion.SeqDeployStop
+public import Proofs.Flock.Claims.Recursion.RecSystem
 public import Proofs.Flock.Claims.Recursion.VStar
 public import Proofs.Flock.Claims.Recursion.VStarBound
 public import Proofs.Flock.Claims.Recursion.BoundDeploy
@@ -275,6 +276,7 @@ public import Proofs.Flock.Claims.Recursion.VStarDense
 public import Proofs.Flock.Claims.Recursion.VStarTopsOk
 public import Proofs.Flock.Claims.Recursion.VStarRowsFit
 public import Proofs.Flock.Claims.Recursion.HonestHalf
+public import Proofs.Flock.Claims.Recursion.IrDep
 public import Proofs.Flock.Claims.Recursion.HonestHalfTops
 public import Proofs.Flock.Claims.Recursion.Assumptions.HonestFixture
 public import Proofs.Flock.Claims.Recursion.HonestHalfFixture

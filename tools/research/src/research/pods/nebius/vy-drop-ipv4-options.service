@@ -1,0 +1,13 @@
+[Unit]
+Description=Drop inbound IPv4 TCP packets that carry IP options
+DefaultDependencies=no
+Before=network-pre.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f /etc/vy/drop-ipv4-options.nft
+
+[Install]
+WantedBy=multi-user.target

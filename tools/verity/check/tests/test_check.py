@@ -44,7 +44,7 @@ def test_the_rust_tests_run_the_live_crates_unit_tests_and_every_test_of_the_cra
     patched = set()
     for p in sorted((ROOT / "verity" / "ml" / "flock").glob("flock-*-b684b12.patch")):
         patched |= {m.group(1) for line in p.read_text().splitlines() if (m := re.match(r"\+\+\+ b/crates/([a-z-]+)/", line))}
-    upstream = re.search(r"cargo test --release -q((?: -p [a-z-]+)+)$", mode, re.M).group(1).split(" -p ")[1:]
+    upstream = re.search(r"cargo test --release -q((?: -p [a-z-]+)+)(?: \\)?$", mode, re.M).group(1).split(" -p ")[1:]
     assert sorted(upstream) == sorted(patched - {"flock-live"}), "every crate a patch changes, and only those"
 
 
@@ -785,7 +785,7 @@ def test_a_checkouts_files_are_gits_and_the_key_environment_drops_the_tree_path(
         (tmp_path / built).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / built).write_bytes(b"x")
     assert CHECK.tracked_files(tmp_path) == [".gitignore", "a.txt"]
-    assert CHECK._env_key({"VIRTUAL_ENV": f"{ROOT}/.venv", "SSH_CLIENT": "1 2 3"}) == {"VIRTUAL_ENV": "<tree>/.venv"}   # per-commit path
+    assert CHECK._env_key({"PYTHONPATH": f"{ROOT}/x", "VIRTUAL_ENV": f"{ROOT}/.venv", "SSH_CLIENT": "1 2 3"}) == {"PYTHONPATH": "<tree>/x"}
 
 
 def test_the_agreement_is_not_required_for_docs_alone():
@@ -796,7 +796,7 @@ def test_the_agreement_is_not_required_for_docs_alone():
     tool = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(tool)
     rule = tool.CHECK.merge_requires["lean-agreement"]
-    docs = ["verity/ml/flock/verifier/PROTOCOL.md", "verity/ml/flock/verifier/README.md", "verity/ml/flock/README.md", "AGENTS.md"]
+    docs = ["verity/ml/flock/live/PROTOCOL.md", "verity/ml/flock/verifier/README.md", "verity/ml/flock/README.md", "AGENTS.md"]
     assert rule_touches(rule, docs) == []
     assert rule_touches(rule, [*docs, "verity/ml/flock/verifier/ci.py"]) == ["verity/ml/flock/"]
     assert rule_touches(rule, ["verity/ml/flock/verifier/DESIGN.md"]) == ["verity/ml/flock/"]      # only the two names are left out
@@ -1668,6 +1668,7 @@ def _train_repo(tmp_path):
         env.pop(k, None)
 
     def train(*a, **extra):
+        done.unlink(missing_ok=True)      # else `sleep` returns at once on an earlier call's launch, before this one's
         return subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), *a], capture_output=True, text=True,
                               cwd=tmp_path / "repo", env={**env, **extra})
 
@@ -1933,7 +1934,8 @@ def test_the_lints_are_keyed_by_the_committed_tree_and_unkeyed_on_any_change(tmp
     monkeypatch.setattr(CHECK, "ROOT", tmp_path)
     e = {"PATH": "/usr/bin"}
     one = CHECK.lints_key(e)
-    assert one and CHECK.lints_key(e) == one and CHECK.lints_key({"PATH": "/bin"}) != one
+    assert one and CHECK.lints_key(e) == one and CHECK.lints_key({"PATH": "/bin"}) == one
+    assert CHECK.lints_key({**e, "VERITY_SLOW": "1"}) != one
     (tmp_path / "b.md").write_text("b\n")
     assert CHECK.lints_key(e) is None
     git("add", "-A")

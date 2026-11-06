@@ -8,8 +8,9 @@
 `verity tasks ...` runs these.  The schema and what each field means is the "Tasks" section of this directory's README.md.
 
 `list` prints the task graph of this checkout, uncommitted files included: one task per part of the shard planner's
-(`check.auto_parts`), so each test suite (`pytest:SUITE`, `lean-suites:SUITE`; one measured past `--split-s` seconds, default
-`shards.SPLIT_S`, in M parts by test file, `pytest:SUITE:K/M`), each Lake package's audit (`lean-audit:PKG`), circuit-check's
+(`check.auto_parts`), so each test suite (`pytest:SUITE`, `lean-suites:SUITE`; one that declares `[tool.verity.tests] parts =
+P` in its P parts by test id, `lean-suites:SUITE:K/P`; one measured past `--split-s` seconds, default `shards.SPLIT_S`, in M
+parts by test file, `pytest:SUITE:K/M`), each Lake package's audit (`lean-audit:PKG`), circuit-check's
 `circuit-check:K/M`, the builds (`lean-build`, `flock-circuit-build`) and the other jobs whole.  `--kind
 after-landing` (the default) is every job, `--kind preflight` those on the merge gate.  Each task's argv is the one `check.py`
 builds for that part alone (`check.groups`), with this tree's path, the check's cache and the run's output directory written
@@ -220,13 +221,14 @@ class Facts:
         return c
 
     def part_key(self, name: str, spec: str, step: str) -> str:
-        """`suites.part_key` of suite ``name``'s parts ``spec`` (K/M) under ``step``'s environment, as check's run of it keys it."""
+        """`suites.part_key` of suite ``name``'s parts ``spec`` (K/M) under ``step``'s environment, as check's run of it keys it: by
+        file of the partition ``splits`` names, or by test id where it declares `parts`."""
         s, paths = self.suites[name], self.inputs[name]
         cut = S.dropped(s, paths)
         ids = S.input_ids(self.tree, sorted(set(paths) | set(S.RUNNER)), S.markdown(s), cut)
         ids.update({f"fixture:{p}": art for p, art in self.fixtures.items() if S.covered(p, paths, cut)})
         k, m = (int(x) for x in spec.split("/"))
-        part = S.part_of(s, (k,), m, self.tree, cut, self.splits[name]["timings"])
+        part = S.part_of(s, (k,), m, self.tree, cut, {} if s.parts else self.splits[name]["timings"])
         mods, own, keep = S.part_context(s, part, self.tree, cut)
         return S.part_key(s, part, keep, mods, ids, own, self.env[step], [], S.resolved(S.roots(s, self.pkgs), self.lock, s.path))
 

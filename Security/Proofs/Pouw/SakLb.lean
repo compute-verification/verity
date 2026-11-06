@@ -33,6 +33,8 @@ headline's slack, and the rate condition is a theorem about the check. Nothing h
 
 @[expose] public section
 
+open Claims renaming Ex → avg
+
 namespace Pouw.SakLb
 
 open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Finset

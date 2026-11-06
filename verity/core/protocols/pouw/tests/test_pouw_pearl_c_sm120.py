@@ -61,7 +61,7 @@ def test_registry_names_the_device_and_its_standins():
     assert dict(get("pearl-c-h100-v1").certificate.parameters)["device"] == "h100"
     assert not any(h.startswith("stand-in") for h in get("pearl-c-h100-v1").certificate.hypotheses)
     with pytest.raises(ValueError):
-        C.PearlC(forming="v0", device=SM120)
+        C.PearlC(forming="v0", device=SM120, hashing="h0")
 
 
 def test_u_restates_the_sm120_steps():
@@ -95,7 +95,7 @@ def test_chain_runs_on_the_devices_atom():
 
 
 def sm120_instance(case: str, shape=(16, 128, 16), device=SM120):
-    s = C.PearlC(k_min=32, tile=(16, 16), forming="v1", device=device)
+    s = C.PearlC(k_min=32, tile=(16, 16), forming="v1", device=device, hashing="h0")
     ctx = CV.ctx_of(case, shape, 3, 9)
     a, b = CV.rows_f32(case, "A", shape[0], shape[1]), CV.rows_f32(case, "B", shape[2], shape[1])
     noise = s.noise(ctx)
@@ -132,7 +132,7 @@ def test_sm120_lifecycle_and_work_audit():
     from verity.core.protocols.pouw.audit import Epoch, Workload
     from clear_audit import Prover, Sampled, Verifier
 
-    s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1", device=SM120), 128
+    s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1", device=SM120, hashing="h0"), 128
     rows_a, rows_b = CV.rows_f32("life", "A", 32, k), CV.rows_f32("life", "B", 16, k)
     work = Workload((Matmul(3, Shape(32, k, 16), 9),))
     prover = Prover(s, {9: rows_b})
@@ -156,7 +156,7 @@ def test_the_cap_is_the_records(monkeypatch):
 
     s, h = get("pearl-c-sm120-v1"), get("pearl-c-h100-v1")
     assert (s.cap, h.cap, D.CAP, SM120_UNPROMOTED.cap) == (Fraction(1, 1000), Fraction(1, 400), Fraction(1, 400), Fraction(1, 1000))
-    assert C.PearlC(forming="v1", prices=C.SM120_PRICES).cap == Fraction(1, 400) == pearl_c4.PearlC4().cap
+    assert C.PearlC(forming="v1", prices=C.SM120_PRICES, hashing="h0").cap == Fraction(1, 400) == pearl_c4.PearlC4(hashing="h0").cap
     assert dict(s.certificate.parameters)["cap"] == "1/1000" and dict(h.certificate.parameters)["cap"] == "1/400"
     assert s.certificate.hypotheses[0].startswith("TT_OUT(1/1000)") and "less than 99.9% of" in s.certificate.hypotheses[0]
     assert h.certificate.hypotheses[0].startswith("TT_OUT(1/400)") and "less than 99.75% of" in h.certificate.hypotheses[0]
@@ -164,8 +164,8 @@ def test_the_cap_is_the_records(monkeypatch):
         dataclasses.replace(SM120, cap=Fraction(1))
 
     k = 128
-    sm = C.PearlC(k_min=32, tile=(16, 16), forming="v1", device=SM120)
-    at400 = C.PearlC(k_min=32, tile=(16, 16), forming="v1", device=dataclasses.replace(SM120, cap=Fraction(1, 400)))
+    sm = C.PearlC(k_min=32, tile=(16, 16), forming="v1", device=SM120, hashing="h0")
+    at400 = C.PearlC(k_min=32, tile=(16, 16), forming="v1", device=dataclasses.replace(SM120, cap=Fraction(1, 400)), hashing="h0")
     rows_a, rows_b = CV.rows_f32("cap", "A", 32, k), CV.rows_f32("cap", "B", 16, k)
     work = Workload((Matmul(3, Shape(32, k, 16), 9),))
     prover = Prover(sm, {9: rows_b})
@@ -223,12 +223,12 @@ def test_accounting_reads_the_record(m, k, n):
     """sm120's W_ref, credit and weight side are the H100's atom's at SM120_PRICES (the same G = 4 window), below the
     H100's own; another record's G and prices move each term by its own price."""
     sh = Shape(m, k, n)
-    h, s, hs = get("pearl-c-h100-v1"), get("pearl-c-sm120-v1"), C.PearlC(forming="v1", prices=C.SM120_PRICES)
+    h, s, hs = get("pearl-c-h100-v1"), get("pearl-c-sm120-v1"), C.PearlC(forming="v1", prices=C.SM120_PRICES, hashing="h0")
     assert s.prices == C.SM120_PRICES and hs.name == "pearl-c-h100-v1@sm_120"
     assert (s.wref(sh), s.credit_of(sh), s.job_cost(n, k)) == (hs.wref(sh), hs.credit_of(sh), hs.job_cost(n, k))
     assert s.credit_of(sh) < h.credit_of(sh)
     pr = Prices("test", fadd=16, bf16_mac=3, forming_credited=60, forming_a_only=5)
-    o = C.PearlC(forming="v1", device=dataclasses.replace(SM120, g=2, prices=pr, standins=()))
+    o = C.PearlC(forming="v1", device=dataclasses.replace(SM120, g=2, prices=pr, standins=()), hashing="h0")
     chain = m * n * (k + 16 * (k // 64 - 1))
     assert o.wref(sh) == chain + m * k * 32 + 3 * 64 * m * n + 65 * m * k
     assert o.credit_of(sh) == o.wref(sh) - 5 * m * k
@@ -264,7 +264,7 @@ def test_unpromoted_instance_and_accounting():
     assert s.admissible(ctx, ops) and s.name == "pearl-c-sm120-unpromoted-v1"
     assert "no promotion" in s.certificate.hypotheses[0]
     sh = Shape(128, 4096, 256)
-    promoted = C.PearlC(forming="v1", device=SM120)
+    promoted = C.PearlC(forming="v1", device=SM120, hashing="h0")
     assert promoted.wref(sh) - s.wref(sh) == 128 * 256 * C.SM120_PRICES.fadd * (4096 // 128 - 1)
     assert s.first_adds(sh) == 0 and promoted.first_adds(sh) == 128 * 256 * C.SM120_PRICES.fadd
     with pytest.raises(KeyError):

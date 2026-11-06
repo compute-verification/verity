@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.Soundness.Discharge.Exec.Live
 
 /-!
-# R11 for one-table sessions, with the decoder right at the law's draws only
+# The refinement for one-table sessions, with the decoder right at the law's draws only
 
 `DecodesAll` asks `Decodes` at every draw `S` and registration. The audit plays only the law's draws `L.draw ω`, so
 `DecodesOn L` asks it there and nowhere else, and `execRefines_on` and `Prog.flock_headline_live_on` take it in place
@@ -55,10 +55,10 @@ noncomputable def simAuditOn (hdec : DecodesOn H E Lf T I wr opn dec one fin cap
       (Strategy.ofMap (wr (L.draw ω) τ.1) _
         (Strategy.ofMap (fun t => (τ.1, L.draw ω, t)) _ (τ.2 ω)))))⟩
 
-/-- **R11 for one-table sessions.** Against any live prover `τ` of the live audit whose session is `liveTable` written
-out by `wr`, flock-verify's acceptance is no likelier than the salted audit's acceptance against the simulated prover
-`simAuditOn … τ`, with no live event added (`bad = ⊥`), whenever the decoder is right on accepted sessions
-at the law's draws (`DecodesOn`). -/
+/-- **The refinement for one-table sessions.** Against any live prover `τ` of the live audit whose session is
+`liveTable` written out by `wr`, flock-verify's acceptance is no likelier than the salted audit's acceptance against the
+simulated prover `simAuditOn … τ`, with no live event added (`bad = ⊥`), whenever the decoder is right on accepted
+sessions at the law's draws (`DecodesOn`). -/
 theorem execRefines_on (hdec : DecodesOn H E Lf T I wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOf dg mPts N wr))) :
     ExecRefines (auditLive L Reg (liveOf dg mPts N wr)) τ (LiveAccepts I) (fun _ => False)
