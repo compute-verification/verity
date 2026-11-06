@@ -5788,7 +5788,22 @@
    "Proofs.Flock.Bytes": "the byte conversion `bs`, which the deployed sampling commitment's SHA-512 (`Claims.Sampling.Path.sha512Msg`) and registration roots read in SampledKSLive; C-Flock is excepted until proofs extracts its spec"
   }
  },
- "four_names": ["Nci", "NetTiming", "Accounting", "Hash"],
+ "four_names": [
+  "Nci",
+  "NetTiming",
+  "Pous",
+  "Pouw",
+  "RecDeploy",
+  "Verity",
+  "WeightSecurity",
+  "Accounting",
+  "Bandwidth",
+  "Claims",
+  "Flock",
+  "FlockSoundness",
+  "FlockVBridge",
+  "Hash"
+ ],
  "guarantees": {
   "Accounting.SecurityProofs.AccelAdditive": {
    "owner": "@compute-research",
@@ -53963,5 +53978,10 @@
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
   "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
+ },
+ "four_names_except": {
+  "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties": "not yet lifted into a `FlockSoundness.Guarantees` definition; @proofs lifts it with `check.py --lift`",
+  "Pouw.Salt.keyed_leaf_binds": "proves `Pouw.Guarantees.KeyedLeaf.Binds` under another name; @compute-research renames it `Pouw.SecurityProofs.KeyedLeaf.Binds` with `--moved`",
+  "Pouw.Salt.keyed_leaf_hides": "proves `Pouw.Guarantees.KeyedLeaf.Hides` under another name; @compute-research renames it `Pouw.SecurityProofs.KeyedLeaf.Hides` with `--moved`"
  }
 }

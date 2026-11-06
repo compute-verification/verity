@@ -69,9 +69,9 @@ package or add a root to `Security/Properties` merge. Any other conflict, and a 
 sides: two branches that each add a file a suite reads merge, and anything else stays git's. In
 both, an import, a require or a root that one side removed stays removed, judged on the whole files (`kept`), so a line the
 other side moved can't bring it back. For `tests/test_lean_packages.py` (`--caps`, `lean-caps`), each of its ratchet caps
-(`UNWITNESSED = {...}`, `INLINE = {...}`) merges over the whole files as counters, each key theirs' count plus ours' change
-from the base, so two branches that each witness or grandfather guarantees merge, and a conflict whose sides differ only in
-comment lines takes theirs'; any other conflict stays git's.
+(`CAP_NAMES`: `UNWITNESSED = {...}`, `INLINE = {...}`...) merges over the whole files as counters, each key theirs' count
+plus ours' change from the base, so two branches that each witness or grandfather guarantees merge, a cap one side brings
+is that side's, and a conflict whose sides differ only in comment lines takes theirs'; any other conflict stays git's.
 """
 from __future__ import annotations
 
@@ -107,8 +107,11 @@ TEST_LISTS = {"inputs", "untraced", "paths", "tests"}
 #: a lakefile's `[[require]]` block line, and a line of a string array's items (`roots = ["A", "B",`, `"C"]`)
 REQUIRE_LINE = re.compile(r'\s*(\[\[require\]\]|(name|path|git|rev|scope|version|subDir)\s*=\s*\S.*)\s*$')
 ITEM_LINE = re.compile(r'\s*(\w+\s*=\s*\[)?\s*("[^"]*"\s*,?\s*)+\]?\s*$')
+#: the ratchet caps of `tests/test_lean_packages.py`, each on one line there
+CAP_NAMES = ("UNWITNESSED", "INLINE", "ROOM", "TREES_EXCEPT", "FOUR_NAMES_EXCEPT", "UNDOCUMENTED", "SPEC_THEOREMS", "OVERLONG",
+             "RETIRED_NAMES", "IMPORT_ALL_USES")
 #: a ratchet cap's line (`UNWITNESSED = {"Security": 355, "verity/core/service/flock": 7}`), and one of its entries
-CAP_LINE = re.compile(r'(\s*(?:UNWITNESSED|INLINE) = )\{([^{}]*)\}\s*$')
+CAP_LINE = re.compile(rf'(\s*(?:{"|".join(CAP_NAMES)}) = )\{{([^{{}}]*)\}}\s*$')
 CAP_ENTRY = re.compile(r'\s*"([^"\\]*)"\s*:\s*(\d+)\s*')
 #: where a merged string array wraps
 WIDTH = 120
@@ -929,18 +932,23 @@ def caps(base: Path, ours: Path, theirs: Path) -> tuple[str, int]:
     the placeholders.  So two branches that each move a cap and reword its comment merge, whatever the bases git's
     recursive merge combines (it runs this driver on them too).  A cap both sides hold and the base lacks (both brought the
     file's caps, from a base before them) merges key by key as the larger count, since counters would add the same entries
-    twice.  Where a side's caps can't be read whole (a cap's line twice, the sides holding different caps) or a count would
-    go below 0, the conflicts merge one by one instead: one whose sides are only cap lines as counters (`_caps`), one that
-    differs only in comments as theirs'.  Any other conflict is left as git writes it."""
+    twice, and one only a side holds (a new cap, which the base lacks too) is that side's line.  Where a side's caps can't be
+    read whole (a cap's line twice, a side without a cap the base holds) or a count would go below 0, the conflicts merge
+    one by one instead: one whose sides are only cap lines as counters (`_caps`), one that differs only in comments as
+    theirs'.  Any other conflict is left as git writes it."""
     def one_by_one():
         return lean(base, ours, theirs, (_caps, _comments))
 
     texts = [p.read_text() for p in (base, ours, theirs)]
     found = [_file_caps(t) for t in texts]
-    if None in found or not found[1] or not set(found[1]) == set(found[2]) or not set(found[0]) <= set(found[1]):
+    if None in found or not found[1] or not set(found[0]) <= set(found[1]) & set(found[2]):
         return one_by_one()
     merged: dict[str, str] = {}
-    for head, (line, counts) in found[1].items():
+    for head in [*found[1], *(h for h in found[2] if h not in found[1])]:
+        if head not in found[1] or head not in found[2]:
+            merged[head] = (found[1].get(head) or found[2][head])[0].rstrip("\n")
+            continue
+        line, counts = found[1][head]
         if found[2][head][0] == line:
             merged[head] = line.rstrip("\n")
         elif head not in found[0]:

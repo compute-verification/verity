@@ -1123,6 +1123,20 @@ def test_a_cap_whose_comment_both_sides_reword_merges_as_counters_under_theirs_c
     assert _caps(tmp_path, base, alike, alike) == (alike, 0), "a line both sides changed alike is that line, not twice"
 
 
+def test_a_cap_one_side_brings_is_that_side_s_beside_the_caps_that_merge_as_counters(tmp_path):
+    """A branch that brings a new cap (a new check's count) and a branch that moves an old cap and rewords its comment
+    merge as when both hold the same caps: the new cap is its side's line, whichever side brings it, and the old one
+    merges as counters under theirs' comment."""
+    inline = {SEC: 1422}
+    base = packages({SEC: 354, PROPS: 184}, inline)
+    new = '\n\n#: the spec\'s theorems\nSPEC_THEOREMS = {"Security": 154}\n'
+    ours, theirs = packages({SEC: 355, PROPS: 184}, inline, above="ours"), packages({SEC: 380, PROPS: 185}, inline, above="theirs")
+    assert _caps(tmp_path, base, ours, theirs + new) == (packages({SEC: 381, PROPS: 185}, inline, above="theirs") + new, 0)
+    assert _caps(tmp_path, base, ours + new, theirs) == (packages({SEC: 381, PROPS: 185}, inline, above="theirs") + new, 0)
+    text, left = _caps(tmp_path, base + new, ours, theirs + new)
+    assert left == 1 and "<<<<<<< ours\n" in text, "a cap the base holds and a side dropped stays git's"
+
+
 def test_caps_both_sides_brought_over_a_base_without_them_merge_as_the_larger_count(tmp_path):
     """A merge base from before the caps came (`main` while the PR bringing them is still on `next`) holds no cap line,
     so both sides added each one: each key merges as the larger count, not the sum, under theirs' comment."""

@@ -81,7 +81,7 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   [Loogle](https://loogle.lean-lang.org). A lemma another package proves is imported or moved, not proved again.
 - **A slow declaration**: measure (`set_option profiler true in`; `#count_heartbeats in` in a Mathlib package), then fix
   the proof: `simp only [...]` outside terminal calls, a split-out lemma, a smaller `decide`. An override that stays has
-  its reason in a `--` comment on or above it. Keep files to a few hundred declarations.
+  its reason in a `--` comment on or above it.
 - **`X.congr_simp is declared by a replayed module and by one it imports`**: `simp` realized a structure constructor's
   congruence lemma Mathlib had already. Don't unfold a `→+` or `→*` in `simp`; prove its `_apply` lemma by `rfl` and simp
   with that.
@@ -113,6 +113,11 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   runs, and once falsified takes every property resting on it off the list. Every `def G : Prop` of a `Guarantees`
   module is listed or frozen; adding a frozen entry is a claims change, so rather restate the guarantee or move what
   isn't a property to `Proofs/`.
+
+## Standards
+
+The checks in `tests/test_lean_packages.py` and `tests/test_retired_terms.py` print their fixes. Two they don't
+hold: Mathlib's names, and no binder `X` where ArkLib is imported (its `notation3 "X"` makes `X` a token).
 
 ## Before the PR
 
