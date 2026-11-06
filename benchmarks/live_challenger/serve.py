@@ -26,8 +26,10 @@ log signed when the session ends.
   `--peer`: it then opens `ssh -R PORT` to that machine of `--peers` (`/etc/vy/peers`, as
   `benchmarks/remote_session/run.sh` does for its verifier), whose own 127.0.0.1:PORT the client connects to.  It
   serves the first client whose hello it accepts (`remote.greet`, then `remote.serve`): a refused hello releases nothing, so it is logged in `hellos.jsonl` (`{"n",
-  "reason"}`, fsynced) and the next connection is taken, each hello read within 10 s; once one is accepted it stops
-  listening, so every later connection is refused.  However the session ends, a tunnel that ends first included, it
+  "reason"}`, fsynced; `remote.log_hello`) and the next connection is taken, each hello read within 10 s, up to
+  `challenger.MAX_HELLOS` refused hellos, the most a session's evidence holds: the next refused past them ends the
+  session (`remote`, "The device's caps"). Once a hello is accepted it stops listening, so every later connection is
+  refused.  However the session ends, a tunnel that ends first included, it
   signs its release log and how it ended and writes `challenger.json` (`remote.close_session`).  On the auditor host
   (`auditor.py`) the session has a secret, `--secret-file` (64 hex digits, given to the window's opener by the gate),
   which the client's hello must carry, and `--root`, the window's Commit root: a salt family's coin (label `salt` or
@@ -69,7 +71,6 @@ from verity.core.protocols.sampled_proofs.one_stage import verifier as V  # noqa
 from verity.ml.crypto import lms  # noqa: E402
 
 KEY = Path.home() / ".local" / "state" / "live-challenger" / "key"
-HELLOS = "hellos.jsonl"
 HELLO_SECONDS = 10.0
 SSH = ["ssh", "-tt", "-o", "ObscureKeystrokeTiming=no", "-o", "BatchMode=yes", "-o", "ExitOnForwardFailure=yes",
        "-o", "ServerAliveInterval=15"]
@@ -157,13 +158,6 @@ class WindowChallenger:
         return self._challenger.open(label, index, after)
 
 
-def log_hello(out: Path, n: int, why: str) -> None:
-    with open(out / HELLOS, "a", encoding="utf-8") as f:
-        f.write(json.dumps({"n": n, "reason": why}, sort_keys=True) + "\n")
-        f.flush()
-        os.fsync(f.fileno())
-
-
 def read_secret(path: Path | None) -> bytes | None:
     if path is None:
         return None
@@ -219,7 +213,7 @@ def main(argv: list[str] | None = None) -> int:
             st.start(args.session.encode())
         session = remote.open_session(served, ChallengerKey(params.W, params.H, lms.public_key(key)), args.host, sign,
                                       out, args.session, withhold=args.withhold)
-        with open(out / HELLOS, "x", encoding="utf-8") as f:
+        with open(out / remote.HELLOS, "x", encoding="utf-8") as f:
             os.fsync(f.fileno())
     except (CoinError, ValueError, OSError, lms.StateError) as e:
         print(f"the challenger refused to start: {e}", file=sys.stderr)
@@ -258,7 +252,11 @@ def run(args: argparse.Namespace, out: Path, ssh: list[str] | None, session: rem
             why = remote.greet(conn, secret)
             if why is not None:
                 conn.close()
-                log_hello(out, refused, why)
+                try:
+                    remote.log_hello(out, refused, why)
+                except CoinError as e:
+                    ended = str(e)
+                    break
                 refused += 1
                 continue
             conn.settimeout(None)
