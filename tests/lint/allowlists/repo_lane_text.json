@@ -300,7 +300,6 @@
     {"file": "verity/core/protocols/pouw/circuit/h1tile.py", "count": 2},
     {"file": "verity/core/protocols/pouw/dither/PROTOCOL.md", "count": 2},
     {"file": "verity/core/protocols/remote_bandwidth/README.md", "count": 3},
-    {"file": "verity/core/protocols/sampled_proofs/challenger.py", "count": 1},
     {"file": "verity/core/protocols/tests/test_profile.py", "count": 2},
     {"file": "verity/core/service/flock/Flock/RecCoins.lean", "count": 1},
     {"file": "verity/core/service/vstar/lakefile.toml", "count": 1},
@@ -378,6 +377,7 @@
     {"file": "verity/core/protocols/remote/README.md", "count": 1},
     {"file": "tools/verity/check/tests/test_slot_cache_disk.py", "count": 1},
     {"file": "verity/core/protocols/onsite/CoreOnsite.lean", "count": 3},
-    {"file": "verity/core/protocols/remote/CoreRemote.lean", "count": 3}
+    {"file": "verity/core/protocols/remote/CoreRemote.lean", "count": 3},
+    {"file": "verity/ml/flock/tests/test_lean_record_checks.py", "count": 1}
   ]
 }

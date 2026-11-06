@@ -161,6 +161,7 @@
       "owns": [
         "integrations/",
         "benchmarks/served_units/",
+        "benchmarks/unit_block/",
         "benchmarks/served_commit/",
         "benchmarks/g2/",
         "tools/verity/circuit_check/",
