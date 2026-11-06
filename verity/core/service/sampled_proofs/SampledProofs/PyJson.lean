@@ -1,13 +1,20 @@
 /-
 JSON as Python's `canonical_json` writes it (`json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True)`),
 the form the audit record is compared and digested in: keys sorted, strings escaped to ASCII, integers as written, and a
-number with a fraction or a negative exponent (`Json.parse` gives it a positive decimal exponent) as Python's `repr` of
-the double nearest it: the shortest digits that read back to it, closest to it, an even last digit on a tie, in fixed
-notation unless the decimal point is more than 16 places right or 4 left of the first digit. What a Python float can't be
-read back as (`-0.0`, a float of 10¹⁶ or more, which `Json.parse` reads as an integer) is written as the integer or `0.0`.
+number with a fraction or a negative exponent (`Flock.JsonParse.parse` gives it a positive decimal exponent) as Python's
+`repr` of the double nearest it: the shortest digits that read back to it, closest to it, an even last digit on a tie, in
+fixed notation unless the decimal point is more than 16 places right or 4 left of the first digit. What a Python float
+can't be read back as (`-0.0`, a float of 10¹⁶ or more, which `Flock.JsonParse.parse` reads as an integer) is written as
+the integer or `0.0`.
 -/
-import Lean.Data.Json
-import CoreProtocol.Ratio
+module
+
+public import Lean.Data.Json
+public import CoreProtocol.Ratio
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.PyJson
 

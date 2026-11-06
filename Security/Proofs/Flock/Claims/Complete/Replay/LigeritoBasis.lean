@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Replay.LigeritoFinal
-import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoFinal
+public import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
 
 /-!
 # The verifier's basis is the batched basis's extension
@@ -13,6 +15,8 @@ import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
 * **The rep's claims** (`claims_xsize`): every claim a rep opens has `m − 6` coordinates, so its switched claim's
   suffix point has `m − 7`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 
@@ -50,7 +54,7 @@ theorem fOf_basisTerm (sw : Switched) (l : ℕ) (hrpp : sw.rpp.size = 7) (hz : s
   rw [unpack_fOf, ← eqTable_vecOf sw.rpp 7 hrpp u.val (by simp)]
   split_ifs <;> simp [fOf_zero]
 
-/-- **The batched basis on the cube** (§12.4) is the model's: `basisVals sws` at `w < 2^ℓ` is
+/-- **The batched basis on the cube** (`Flock.Opening`) is the model's: `basisVals sws` at `w < 2^ℓ` is
 `Σ_k γ_k·Φ_k(eq(z_k, w))`. -/
 theorem fOf_basisVals (sws : Array Switched) (l : ℕ) (hrpp : ∀ k < sws.size, (sws[k]!).rpp.size = 7)
     (hz : ∀ k < sws.size, (sws[k]!).z.size = l) (w : ℕ) (hw : w < 2 ^ l) :

@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.KS.ForkAlign
-import Proofs.Flock.Claims.KS.RepDistZ
-import Proofs.Flock.Claims.KS.SlotPost
-import Proofs.Flock.Claims.KS.ZkFork
+module
+
+public import Proofs.Flock.Claims.KS.ForkAlign
+public import Proofs.Flock.Claims.KS.RepDistZ
+public import Proofs.Flock.Claims.KS.SlotPost
+public import Proofs.Flock.Claims.KS.ZkFork
 
 /-!
 # The masked simulated fork's alignment at the caps, from the slot's coin count
@@ -35,6 +37,8 @@ session's leaves record the cap of the entry they hold:
   fork bound and the pads' premises, hold where the primed simulated strategy reaches each cap's slot after
   `zkRd j i` coins.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 

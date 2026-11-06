@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Audit.Extraction
+module
+
+public import Proofs.Flock.Soundness.Audit.Extraction
 
 /-!
 # The stratified draw law
@@ -18,6 +20,8 @@ stratified law draws an independent uniform `k s`-subset inside each stratum (`L
   `extraction_audit_whole_stratum` (compiled layer): an audit accepts while a whole floored stratum is wrong with
   probability at most the per-unit terms.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

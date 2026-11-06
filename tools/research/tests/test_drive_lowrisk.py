@@ -303,6 +303,69 @@ def test_the_lanes_merge_rebuilds_conflicted_pins_as_the_sync_does(world, monkey
     assert h.d._clean_merge(d, e) == (None, "conflict in q.txt")
 
 
+def test_the_lanes_merge_ports_the_lean_a_member_adds_as_the_sync_does(world, monkeypatch, tmp_path):
+    """Above a Lean check it moves, the lane merges each member again: once the tree has Lean's module system, the merged
+    tree's `.lean` files that aren't modules are ported, as the sync's merge ported them, so the moved check holds the tree it
+    checked."""
+    from test_queue_ported import _port, _tooling
+
+    h = _lane(world, monkeypatch)
+    a = world.change(_tooling(tmp_path / "argv"))
+    b = world.change({"Lib/New.lean": "import Lib.Old\n"}, base=a)
+    _git(h.d.repo, "fetch", "-q", "origin", f"refs/dev/{a}", f"refs/dev/{b}")
+    merged, why = h.d._clean_merge(a, b)
+    assert merged and why == "", why
+    assert _git(h.d.repo, "show", f"{merged}:Lib/New.lean") + "\n" == _port("import Lib.Old\n")
+
+
+def test_the_lanes_merge_takes_a_members_deletion_of_lean_the_tip_only_ported_as_the_sync_does(world, monkeypatch, tmp_path):
+    """A member made before the port that deletes a `.lean` file the tip changed only by porting it merges again with the
+    file deleted, as the sync merged it (`queue.port_deletions`); one the tip changed beyond porting still conflicts."""
+    from test_queue_ported import _port, _tooling
+
+    h = _lane(world, monkeypatch)
+    old = "-- made before the port\nimport Init\n"
+    base = world.change({"Lib/Gone.lean": old, "Lib/Edited.lean": old})
+    gone, edited = (world.change({f: None}, base=base) for f in ("Lib/Gone.lean", "Lib/Edited.lean"))
+    tip = world.change({**_tooling(tmp_path / "argv"), "Lib/Gone.lean": _port(old),
+                        "Lib/Edited.lean": _port(old) + "\ndef y := 2\n"}, base=base)
+    _git(h.d.repo, "fetch", "-q", "origin", *(f"refs/dev/{c}" for c in (gone, edited, tip)))
+    merged, why = h.d._clean_merge(tip, gone)
+    assert merged and why == "", why
+    assert _git(h.d.repo, "ls-tree", "--name-only", merged, "--", "Lib/Gone.lean") == ""
+    assert _git(h.d.repo, "show", f"{merged}:Lib/Edited.lean") + "\n" == _port(old) + "\ndef y := 2\n"
+    assert h.d._clean_merge(tip, edited) == (None, "conflict in Lib/Edited.lean")
+
+
+def test_the_lanes_merge_is_the_syncs_record_and_a_tick_keeps_its_own_for_the_next(world, monkeypatch):
+    """The lane merges onto `checked`'s tip through the sync's merge records (`Queue._recorded`): `next`'s lowest member, which
+    the sync merged onto that tip, lands with no merge of its own, and `next` rebuilt the next tick on the landing, a commit
+    with the tree of that merge, merges nothing again.  A merge the lane makes and leaves out (it doesn't compile) is kept in
+    the queue's state by drive's tick, and the next tick's lane, in a new process, takes it."""
+    from test_queue import _merge_trees
+
+    h = _lane(world, monkeypatch, per_tick=1)
+    world.gh.put(1, h1 := world.change({"x.txt": "1\n"}))
+    world.gh.put(2, h2 := world.change({"y.txt": "2\n"}))
+    calls = _merge_trees(monkeypatch)
+    assert h.tick().endswith("landed #1 on the low-risk lane"), world.logs
+    assert calls == [h1, h2]
+    calls.clear()
+    h.q._merge_records = {}
+    assert h.tick().endswith("landed #2 on the low-risk lane"), world.logs
+    assert calls == [] and _subject(world, "checked") == "Queue: #2 change 2"
+
+    world.gh.put(3, h3 := world.change({"verity/core/v.py": "3\n"}))     # a verifier: waits for its review
+    world.gh.put(4, h4 := world.change({"bad.py": "def (\n"}))
+    h.tick()
+    assert calls == [h3, h4, h4], calls                         # the sync's two, and #4 onto `checked`'s tip, under #3
+    assert _skipped(world)[-1].startswith("research queue drive: low-risk lane skipped #4 (compile: bad.py"), world.logs
+    calls.clear()
+    h.q._merge_records = {}
+    h.tick()
+    assert h4 not in calls and _skipped(world)[-1].startswith("research queue drive: low-risk lane skipped #4 (compile"), calls
+
+
 def test_the_lane_waits_while_a_lean_check_drive_didnt_launch_runs(world, monkeypatch):
     """A hand check's run is of the commit it runs on, which a landing off `next` takes off it: (a) can't be shown for it."""
     h = _lane(world, monkeypatch)
@@ -318,6 +381,83 @@ def test_the_lane_waits_while_a_lean_check_drive_didnt_launch_runs(world, monkey
     assert _checked(world) == checked and not _landed(world), world.logs
     assert f"research queue drive: low-risk lane waits: a landing off `next` rebuilds it, and the Lean check of {tip[:12]}, " \
            "which drive didn't launch, runs, and its run is of that commit" in world.logs
+
+
+#: drive.toml's `lowrisk_excludes` in full: the guards and the landing rules too
+FULL = (*EXCLUDES, "tools/verity/lean/", "tests/", "tools/verity/check/", ".gitattributes", "drive.py", "queue.py")
+REVIEWED_TAG = ("(low-risk lane: reviewed, no Lean change and nothing a Lean check reads, above the prefix a Lean check of "
+                "`next` holds)")
+
+
+def _running_lean(world: World, monkeypatch) -> tuple[Review, str]:
+    """A Lean check of #1, a reviewed Lean change, running; (the harness, its commit)."""
+    h = _lane(world, monkeypatch)
+    h.d.lowrisk_excludes = FULL
+    world.gh.put(1, world.change({"pkg/T.lean": "theorem T : True := trivial\n"}))
+    h.review(1)
+    h.tick()
+    assert [c for c, *_ in h.launched] == [one := _tip(world)], world.logs
+    return h, one
+
+
+def test_a_reviewed_non_lean_fix_above_a_running_lean_check_lands_below_it_and_the_check_moves(world, monkeypatch):
+    """#2, reviewed, changes no Lean and nothing a Lean check reads, but a file `lowrisk_excludes` names (a test): it lands on
+    `checked` in the tick it comes, below the running check of #1, which moves to #1's commit on it without a relaunch, and
+    lands there on its pass."""
+    h, one = _running_lean(world, monkeypatch)
+    world.gh.put(2, world.change({"tests/test_x.py": "x = 2\n"}))
+    h.review(2)
+    assert h.tick().endswith("landed #2 on the low-risk lane"), world.logs
+    assert _subject(world, "checked") == "Queue: #2 change 2" and world.on_next(h.q) == [1]
+    assert any(x.endswith(REVIEWED_TAG) and x.startswith("research queue drive: landed #2 on `checked`") for x in world.logs)
+    new = _tip(world)
+    (rid,) = h.lean_ids()
+    assert list(_lean(h)) == [new] and _lean(h)[new]["rekeyed_from"] == one and _lean(h)[new]["state"] is None
+    assert any(f"the Lean check {rid} of {one[:12]} (running) holds {new[:12]}" in x and "but a reviewed landing's" in x
+               for x in world.logs), world.logs
+    h.tick()
+    assert h.cancelled == [] and len(h.launched) == 1 and list(_lean(h)) == [new], world.logs
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+    assert h.tick().startswith("landed #1"), world.logs
+    assert _checked(world) == new and len(h.launched) == 1
+
+
+@pytest.mark.parametrize("files, reviewed", [({"tools/verity/lean/check.py": "x = 2\n"}, True),
+                                             ({"tests/test_x.py": "x = 2\n"}, False)],
+                         ids=["reviewed, touching what a Lean check reads", "unreviewed"])
+def test_a_member_above_a_running_lean_check_that_touches_a_lean_input_or_has_no_verdict_waits(world, monkeypatch, files,
+                                                                                                reviewed):
+    h, one = _running_lean(world, monkeypatch)
+    checked = _checked(world)
+    world.gh.put(2, world.change(files))
+    if reviewed:
+        h.review(2)
+    h.tick()
+    h.tick()
+    assert _checked(world) == checked and not any("landed #2" in x for x in world.logs), world.logs
+    assert world.on_next(h.q) == [1, 2] and list(_lean(h)) == [one] and len(h.launched) == 1 and h.cancelled == []
+
+
+def test_a_reviewed_members_files_dont_let_a_check_move_across_another_change_to_an_excluded_file(world, monkeypatch):
+    """(b) takes the reviewed landing's own files only: `checked` moved within the tick by a verifier's file, so the lane waits,
+    and lands nothing that tick."""
+    h, one = _running_lean(world, monkeypatch)
+    world.gh.put(2, world.change({"tests/test_x.py": "x = 2\n"}))
+    h.review(2)
+    real = h.d._stack_lean
+
+    def move(drive, dry_run):
+        _git(world.dev, "push", "-q", "origin",
+             f"{world.change({'verity/core/v.py': 'v = 1\n'}, base='origin/checked')}:refs/heads/checked")
+        h.q.fetch()
+        return real(drive, dry_run)
+
+    monkeypatch.setattr(h.d, "_stack_lean", move)
+    h.tick()
+    assert not any("landed #2" in x for x in world.logs) and list(_lean(h)) == [one], world.logs
+    (line,) = [x for x in world.logs if "low-risk lane waits" in x]
+    assert line.endswith("differ in verity/core/v.py, which `lowrisk_excludes` names"), line
 
 
 def test_the_lane_never_lands_on_main(world, monkeypatch):

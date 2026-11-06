@@ -9,7 +9,12 @@ included), at `m27-k24-c8` 80, whose part 1 the honest prover names through `m79
 (`holo`) the rep has one round more, h's (`holoRepRounds`), as V*'s holo spec has one port more: `m46` passes at
 `m22-k6-c4`, `m47` does not.
 -/
-import Flock.RecVStar
+module
+
+public import Flock.RecVStar
+meta import Flock.RecVStar
+
+@[expose] public section
 
 namespace Flock.Test.MsgNames
 

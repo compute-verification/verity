@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.DeployPremises
-import Proofs.Flock.Claims.Recursion.VStarKS
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployPremises
+public import Proofs.Flock.Claims.Recursion.VStarKS
 
 /-!
 # The recursion's premises at `deployRec`, with registered ties
@@ -24,6 +26,8 @@ registered ties:
   `ksFlock_deployed` at `VStar.KS_of_flockKS_played`, whose bound charges the forks' registered ties to `Br`.
   `ksA_deployed_parts` is the same from V*'s parts at a layout the readers are (`VStar.codeFacts_of_parts`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -237,12 +241,11 @@ theorem ksA_deployed_reg (rel relO : Flock.Readable.Parsed → Flock.Readable.Re
     (FlockDeploy.coinsShown_V FlockDeploy.sha512 false) (callsNil I.V ivScope b FlockDeploy.sha512)
 
 /-- **`KSFlock` at `deployRec`, with registered ties**: `ksA_deployed_reg` at every inner decoder that meets the spec, as
-`KSA` is `KS`. Its level (`Claims.Recursion.lam`) is about 65 bits per SHA-512 call at the deployed shape (one inner
-table at `m = 35`, `γ`'s weight at `IVStar` at `coverW`), below the 100-bit floor and the `2^-128` target under every
-weight. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
-(`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment's dense statements (`KSLin2On` at
-`RecDeploy.DenseAt`) only follows from premises still open (`RecDeploy.ksLin2_deployed_open`), Holo statements being
-candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). -/
+`KSA` is `KS`. No theorem evaluates its level (`Claims.Recursion.lam`) at the deployment. Route 2C's bound λ₂
+(`lamLin2`) evaluates to at least 135.7 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep_tight`), and
+`KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) is proved
+(`Flock.SecurityProofs.RecursiveKS`), Holo statements being candidate 3's own model, and `BitsLin2` at those statements
+follows from it (`bitsLin2On_of_ksLin2On`). -/
 theorem ksFlock_deployed_reg (rel relO : Flock.Readable.Parsed → Flock.Readable.Relation) (ivScope : Msg → Bool)
     (b : Brings) (opening : Claims.Recursion.Opening)
     (hF : Claims.Flock.KS FlockDeploy.sha512 (deployZkRec relO))

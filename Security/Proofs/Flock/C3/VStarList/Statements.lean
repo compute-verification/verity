@@ -1,6 +1,8 @@
-import Proofs.Flock.Recursive.AuditC3
-import Proofs.Flock.C3.VStarList.Default
-import Proofs.Flock.C3.VStarList.Parse
+module
+
+public import Proofs.Flock.Recursive.AuditC3
+public import Proofs.Flock.C3.VStarList.Default
+public import Proofs.Flock.C3.VStarList.Parse
 
 /-!
 # Piece (h): V*'s statements over the verifier's list (gap 4(c)), and R's shape
@@ -19,6 +21,8 @@ R's shape is derived, not a hypothesis: each `rec-opening/m<m>-c<c>-p<j>` unit t
 `table_m` is transitive, through the outer program's `rec-opening` units, whose names the verifier compiles; the list's
 own `rec-opening` statements are at `mReg` (`mReg_of_list`, `Shape.lean`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.VStarList
 
@@ -42,14 +46,12 @@ theorem vstarParsesScoped_of_list (ish : Flock.RecVStar.Inner) (bind : Fin (vsta
       FlockSoundness.Discharge.Layout.scopeOk q.1 = true ∧
       ∀ ss s cf c, Flock.RecVStar.statements ish = .ok ss → ss[(j : ℕ)]? = some s →
         Flock.RecVStar.circuitFile s (bind j) ish.holo = .ok cf →
-        Flock.HmRow.parse (Flock.Zk.tags (Flock.Tags.circuit.withCoins
-          (.tree (Flock.Zk.coinSpec #[Flock.Tags.circuit.table]))) (Flock.Zk.maskLogOf cf) 1) cf [] = .ok c →
+        Flock.HmRow.parse (Flock.Zk.tags Flock.Tags.circuit (Flock.Zk.maskLogOf cf) 1) cf [] = .ok c →
         FlockSoundness.Discharge.Layout.scopeOk c = true → c = q.1 ∧ q.2 = s.instances := by
     intro j
     by_cases hw : ∃ ss s cf c, Flock.RecVStar.statements ish = .ok ss ∧ ss[(j : ℕ)]? = some s ∧
         Flock.RecVStar.circuitFile s (bind j) ish.holo = .ok cf ∧
-        Flock.HmRow.parse (Flock.Zk.tags (Flock.Tags.circuit.withCoins
-          (.tree (Flock.Zk.coinSpec #[Flock.Tags.circuit.table]))) (Flock.Zk.maskLogOf cf) 1) cf [] = .ok c ∧
+        Flock.HmRow.parse (Flock.Zk.tags Flock.Tags.circuit (Flock.Zk.maskLogOf cf) 1) cf [] = .ok c ∧
         FlockSoundness.Discharge.Layout.scopeOk c = true
     · obtain ⟨ss, s, cf, c, hss, hs, hcf, hc, hsc⟩ := hw
       refine ⟨(c, s.instances), FlockC3.VStarList.built_of_parse hc, hsc,

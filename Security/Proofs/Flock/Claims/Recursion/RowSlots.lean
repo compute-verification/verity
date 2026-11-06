@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.VStarBound
-import Proofs.Flock.Claims.Recursion.VStarLinks
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarBound
+public import Proofs.Flock.Claims.Recursion.VStarLinks
 
 /-!
 # The bound layout's shared rows: held off a copy's columns, and agreeing through their commits
@@ -30,6 +32,8 @@ and position (`Registered.opens`). The climb's evaluations are the verifier's ow
 doesn't search: the escape here is option A, which charges a collision with them, and until it
 lands no route reaches a layout whose messages carry a shared row.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion.VStarB
 

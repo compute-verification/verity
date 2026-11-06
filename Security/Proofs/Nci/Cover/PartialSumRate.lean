@@ -1,7 +1,9 @@
-import Mathlib.Analysis.Real.Sqrt
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.Positivity
-import Definitions.Nci.Guarantees.CoverPartialSum
+module
+
+public import Mathlib.Analysis.Real.Sqrt
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.Positivity
+public import Definitions.Nci.Guarantees.CoverPartialSum
 
 /-!
 # The partial-sum bounds: the rate, one block at a time
@@ -17,6 +19,8 @@ Each face of `r` is its own inequality. With `A = Ah + Al` and `K = 2k ≥ X + A
 budget's `X + μ A`, `c₂` for the low ones out of the rest and the crossings (AM–GM on the two, `rate_min`), and the
 fan-out face for both out of `μ (X + A)`, at `aOut` per activation and `K / (4 b a)` per high read (`rate_fan`).
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.SecurityProofs
 

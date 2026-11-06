@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLig
-import Proofs.Flock.Soundness.Refine.Final
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLig
+public import Proofs.Flock.Soundness.Refine.Final
 
 /-!
 # `--zk` Ligerito's final check is the model's
@@ -8,6 +10,8 @@ import Proofs.Flock.Soundness.Refine.Final
 succeeds establishes `finalProg_ok`'s facts (`finalProgZ_facts`), so the model's final check holds on its state
 (`final_refinesZ`, as the non-ZK session's `final_refines`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 
@@ -82,7 +86,7 @@ theorem finalProgZ_facts {p : LigeritoProof} {basisAt : Array F256 → ℕ → A
   rw [← c3, hres₂, hres₁]
   rfl
 
-/-- **The `--zk` final check is the model's** (§13.6): `final_refines` for `finalProgZ`. -/
+/-- **The `--zk` final check is the model's** (`Flock.Ligerito`): `final_refines` for `finalProgZ`. -/
 theorem final_refinesZ {p : LigeritoProof} {basisAt : Array F256 → ℕ → Array F256} {n : ℕ} {T : F128}
     {initCh : Array F256} {rho : F256 × F256} {levels : Array (Array F256)} {ext : ℕ} {st st' : LState}
     {tr tr' : Flock.Transcript} {rec : Zk.L0Rec} (b : ℕ → FlockLevel3.GF128)

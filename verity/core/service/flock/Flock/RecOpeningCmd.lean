@@ -1,5 +1,7 @@
-import Flock.HmRow
-import Flock.RecOpening
+module
+
+public import Flock.HmRow
+public import Flock.RecOpening
 
 /-!
 `flock-rec-opening`'s command: the verifier's registered-opening units (`Flock.RecOpening`), which
@@ -13,6 +15,8 @@ import Flock.RecOpening
 part holds each running sum (`acc_held`, `RecOpening.accHeld`, which `RecCoins.opening` refuses without). `check`
 parses each file as `verity/flock-circuit` and prints `{"circuit", "ok"}`, with `"error"` when refused.
 -/
+
+@[expose] public section
 
 namespace Flock.RecOpeningCmd
 

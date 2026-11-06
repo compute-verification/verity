@@ -1,6 +1,8 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeedK
-import Proofs.Pouw.PearlC.RowSeedCode
-import Proofs.Pouw.PearlC.DeviceGamma
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeedK
+public import Proofs.Pouw.PearlC.RowSeedCode
+public import Proofs.Pouw.PearlC.DeviceGamma
 
 /-!
 # Per-row seeds at a census k: the tile cap `ρ` and a wider row cap `ρr` (compute accounting's file)
@@ -20,6 +22,8 @@ TT_OUT per tile at `ρr`, through (C2) at `ρr`:
   (`-h3`) with C1-h3 and C5 (`pearlCSampledH100v1RowSeedCodeRowCap100_6144x256`): `ω = 25210/25137` and
   `γ = 32437/2521000` (1.28667%), with the error at the `m·N` rows. C0 is `devAt_rowLocal`, by `rfl`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

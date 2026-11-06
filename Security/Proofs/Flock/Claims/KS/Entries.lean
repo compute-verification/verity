@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.OffSC
-import Proofs.Flock.Claims.KS.LevelZeroAcc
+module
+
+public import Proofs.Flock.Claims.KS.OffSC
+public import Proofs.Flock.Claims.KS.LevelZeroAcc
 
 /-!
 # The deployed reader's level-0 entries at flock-verify's acceptance
@@ -20,6 +22,8 @@ with their rows, the deployed reader's entries. This file proves all three at fl
   (`accepts_req0`, `verified_opens₀L`); `accepts_verdict_hm96` gives such runs, accepted at `capOfRoot` of the table's
   `root_B`.
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 
@@ -110,7 +114,7 @@ has its level-0 openings verifying against that cap at level 0's lanes and path 
 openings' positions and rows are the reps' `plainRepColsOf` entries, rep 0's then rep 1's, at the table's shape, the
 reps' stream rounds and the proof files. -/
 theorem accepts_opens₀L {I : Inputs} {t : Transcript} (h : Accepts I t) :
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupOf I t.record = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupOf I t.record = .ok (spec, sts) ∧
       Record.decode spec t.record = .ok sess ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
         ∀ (hwf : StmtWF sts[j]) (hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m) (p₀ p₁ : Proof) (s₀ s₁ : StreamRec)
