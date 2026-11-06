@@ -17,8 +17,8 @@ This file holds the coupling off those events. Its coin map's premise is `sample
 (`sampleMap_couples_at`), its stops' term is `couplesErr_sampleMap_le_at`, and the coupling, assembled
 (`couplingTarget_assembled_at`), takes no bound on the stops' term. What moves to the moves' reach is the count match:
 `MovesReach` off the count-aware events follows from `MovesReach` off the empty classes wherever every accepted play
-reached off the first is reached off the second (`CountsReach`, `movesReach_at`). At the deployment
-(`couplingTargetAt_counts`), that is the one premise beside `couplingTargetAt`'s others.
+reached off the first is reached off the second (`CountsReach`, `movesReach_at`), which holds at the session's layout
+(`Proofs.Properties.Verity.Sampled.CountsLayout`).
 -/
 
 @[expose] public section
@@ -149,40 +149,5 @@ theorem movesReach_at {P : Exchange → Prop} {A : Live} {rd : Reading A.rounds}
     MovesReach V θ F c k P A rd σ D M (linkEmptyAt e (finish (V.signer θ) θ F c σ.1))
       (roundEmptyAt e (finish (V.signer θ) θ F c σ.1)) :=
   fun o ho hacc => hM o (hC o ho hacc) hacc
-
-/-- **The coupling at the deployment, off the empty classes at their counts**: `couplingTargetAt` with its bound on
-the stops' term replaced by the count match on the moves' reach (`hC`, `CountsReach`): `couplingTarget_assembled_at`
-at the deployed device's history and `movesReachAt`'s readings, decoders, family, digest and coins, with its `hM` by
-`movesReachAt` and `hC` (`movesReach_at`). -/
-theorem couplingTargetAt_counts {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V)
-    (P : Device.Deployment) {θ : ByteArray} {F : Array ByteArray} {A : Live}
-    (reg : (A : Live) → Option Claims.Msg → A.Reg)
-    (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
-    (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
-    (hD : V.signer θ = P.signer V.families θ)
-    (hA : SetsUp V θ F A) (hDg : DigestsAt V θ) (hL : A.Lb 0 = _root_.SampledProofs.Challenger.MAX_COINS * 64)
-    (hord : ∀ c (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ),
-      V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) → OrderHeld (CoinTape.run (V.game θ F c) σ x).sent)
-    (hO : ∀ c (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ),
-      V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) →
-      Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ x) →
-      ∀ text Jr, sentRecord (CoinTape.run (V.game θ F c) σ x).sent = some text →
-        Flock.JsonParse.parse text = .ok Jr → OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ x).log)
-    (hC : ∀ c σ, CountsReach fieldEnc V θ F c k
-      (fun o => Binding.Logged Binding.readsV2 o ∧ SampledDigest k o.sent (afterAt V k θ F c σ)) A
-      (readingAt A.tables A.layout (record A θ F c) (recordDigest A θ F c)) σ (decodersAt (reg A) A.layout)
-      (sampleMap fieldEnc V θ F c A (readingAt A.tables A.layout (record A θ F c) (recordDigest A θ F c)) σ
-        (labelAt θ) (afterAt V k θ F c σ) (srcCoinsAt _root_.SampledProofs.Challenger.MAX_COINS A))) :
-    CouplingTarget V k (K.assembled fieldEnc (Device.dev (P.setupOf V.families)) k
-      (fun A θ F c => readingAt A.tables A.layout (record A θ F c) (recordDigest A θ F c))
-      (fun A _ _ _ _ => decodersAt (reg A) A.layout) (fun θ _ _ _ => labelAt θ) (afterAt V k)
-      (srcCoinsAt _root_.SampledProofs.Challenger.MAX_COINS)) A θ F :=
-  couplingTarget_assembled_at fieldEnc V k K (Device.dev (P.setupOf V.families))
-    (fun A θ F c => readingAt A.tables A.layout (record A θ F c) (recordDigest A θ F c))
-    (fun A _ _ _ _ => decodersAt (reg A) A.layout) (fun θ _ _ _ => labelAt θ)
-    (srcCoinsAt _root_.SampledProofs.Challenger.MAX_COINS) A θ F (fun o _ => Device.printsLog_dev _ o)
-    (fun c => Device.signsPlay_dev V P θ F c hD) (avg_srcCoinsAt hL) hA hDg (writesView_wrZP A rfl)
-    (fun c σ => movesReach_at (movesReachAt (reg A) (record A θ F) (recordDigest A θ F) hA hDg hL hord hO c σ)
-      (hC c σ))
 
 end Verity.Sampled
