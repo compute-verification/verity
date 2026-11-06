@@ -4,7 +4,7 @@ import json
 import pytest
 import torch
 
-from training_slowdown import run as te_run
+from training_slowdown import run
 from training_slowdown.counterexample import check
 
 MODEL = '''
@@ -95,7 +95,7 @@ def launch(tmp_path, theta_file, source: str, name: str, *extra):
     prog = tmp_path / f"{name}.py"
     prog.write_text(source)
     out = tmp_path / f"out-{name}"
-    rc = te_run.main(["--program", str(prog), "--theta", str(theta_file), "--out", str(out), "--device", "cpu",
+    rc = run.main(["--program", str(prog), "--theta", str(theta_file), "--out", str(out), "--device", "cpu",
                       "--meta", json.dumps({"agent": "t"}), *extra])
     return rc, out, json.loads((out / "run.json").read_text()) if (out / "run.json").exists() else None
 
@@ -125,7 +125,7 @@ def test_mezo_run_is_rebuilt_from_its_seed_log(tmp_path, theta_file):
     assert fam["failed"] == {}, fam["failed"]
     assert fam["covers"] == [0, 1, 2, 3, 4, 5]
     assert fam["beta"]["0"] < fam["beta"]["5"]  # the log grows with the step
-    theta = te_run.load_theta(theta_file)[0]
+    theta = run.load_theta(theta_file)[0]
     assert check(out / "families" / "mezo", rec, theta, c=10, coin=b"x").failed  # a rebuild over c is refused
     bad = out / "families" / "mezo" / "3.enc"
     bad.write_bytes(bad.read_bytes()[:-1] + bytes([bad.read_bytes()[-1] ^ 1]))

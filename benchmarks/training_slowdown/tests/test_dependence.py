@@ -1,4 +1,4 @@
-"""training_slowdown 4.0's definitions (after Daniel's smell check), on toy steps: T2 reads update dependence,
+"""training_slowdown 4.0's definitions, on toy steps: T2 reads update dependence,
 however the circuit is written, and T1's β is the narrowest cut the step's own circuit has (structure.py's docstring)."""
 from __future__ import annotations
 

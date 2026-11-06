@@ -1,14 +1,12 @@
-import sys
-from pathlib import Path
-
 import pytest
 import torch
 import torch.nn.functional as F
 from torch import nn
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-
 VOCAB, D, HEADS = 32, 16, 2
+#: the 45M start's shape, as a start's record states it
+SHAPE = {"d_model": 512, "n_layer": 6, "vocab": 50304, "ctx": 1024, "parameters": 45_029_888, "tokens": 154_206_208,
+         "forward_macs_per_token": 51_342_080}
 
 
 class Tiny(nn.Module):

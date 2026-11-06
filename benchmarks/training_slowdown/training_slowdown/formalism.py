@@ -116,7 +116,7 @@ ones (None, and so ρ where Fit fails, where none is). Beside the kinds, never i
   (assumption (D) with A1), a target.
 (R) and (U) hold only for partitions split by tokens, not by layers or tensors (a block holding only frozen layers'
 work passes no partial), and the token and decoding forms are targets, so none is a lower bound on its own; `kinds`
-refuses them. Each result is labelled "training_slowdown VERSION". `published` is the console's ρ: Fit's c/(c − d)
+refuses them. Each result is labelled "training's slowdown code VERSION" (`THE_CODE`). `published` is the console's ρ: Fit's c/(c − d)
 where it holds; else the max of the measured terms where it exceeds 1, partial where a kind is unmeasured; else None
 where a kind is unmeasured; else 1, binding none. Each comes with the kind it binds on and what that rests on, short
 (`RESTS_ON_CELL`; the products term's with its β and b_y, `he_rests_on`, which `products_rests_on` carries wherever
@@ -141,7 +141,7 @@ refused) where the row has none of these.
 
 **Refusals** (`refusal`, `measure` raising `Refused`): a traced row's measured quantities are refused, never scored,
 with the reason, when
-- its trace lists no read-backs: it was traced before training_slowdown 4.2, whose capture lists them (unchecked);
+- its trace lists no read-backs: it was traced before 4.2, whose capture lists them (unchecked);
 - its capture lists a read-back that decides what the graph can't carry (`trace.data_dependent`: a Python clip or
   branch on a read-back loss): the update the trace shows is the stand-in's, not the run's;
 - a Python number is folded over steps (`trace.carried_scalars`, an EMA of read-back estimates kept as a float): the
@@ -716,7 +716,7 @@ def he_of_rows(rows: list[dict], k: float, steps: float | None = None, tokens: f
     scores), is at most `beta_eff`(w, r_step, k): the update reaches it only through the adapters, and its rate
     stops showing that once r_step passes K*. The adapters' own operands (A, B, Ax and the rank-wide gradients) keep
     their widths. Each output is at its Definition's output width b_y. Token-indexed products keep 1 −
-    `SHARED_PREFIX`/n of their MACs, as `products_of_trace`'s do, and every output. An operand no token indexes is a
+    `SHARED_PREFIX`/n of their MACs, and every output. An operand no token indexes is a
     weight (`weight`), which `he_figure` caps at the record's code bits a trained weight, the others activations,
     which it caps at β(k); a backward product contracting over tokens is a weight gradient (`dw`); the head's are the
     backward products over its vocabulary width V, the widest output of a forward product indexed by tokens on m that
@@ -1432,7 +1432,7 @@ def refusal(row: dict) -> str | None:
         return None
     missing = [k for k in READ_BACKS if k not in tr]
     if missing:
-        return (f"read-backs unchecked: traced before training_slowdown 4.2 (no {' or '.join(missing)}), whose capture lists the "
+        return (f"read-backs unchecked: traced before {THE_CODE} 4.2 (no {' or '.join(missing)}), whose capture lists the "
                 f"read-backs that decide what the graph can't carry; trace the run again")
     if tr["data_dependent"]:
         return f"data-dependent: not measured ({_events(tr['data_dependent'])})"
@@ -1518,7 +1518,7 @@ def of_record(record: dict, through: int | None = None) -> dict:
                                   "stub: forward MACs with an update-dependent operand (no backward), bf16 GEMM")
             dg = st.get("delta_grad_bits", st.get("cut_bits"))
             if "delta_grad_bits" not in st and dg is not None:
-                labels.setdefault("delta_grad_bits", "measured: training_slowdown 4.0's cut (gradient side to the new values)")
+                labels.setdefault("delta_grad_bits", f"measured: {THE_CODE} 4.0's cut (gradient side to the new values)")
         parts.append({"gates": gates, "tokens": tokens, "token_gates": token_gates, "affected_gates": affected,
                       "steps": n, "delta_grad_bits": dg, "partial_bits": partial, "grad_bits": grad})
     labels.setdefault("gates", "counted MACs in gates (training_slowdown.gates)")

@@ -6,7 +6,7 @@ import pytest
 
 from training_slowdown import gates
 
-BOOLEAN = Path(__file__).resolve().parents[4] / "verity" / "ml" / "circuits" / "ops" / "boolean"
+BOOLEAN = Path(__file__).resolve().parents[3] / "verity" / "ml" / "circuits" / "ops" / "boolean"
 
 
 def test_each_and_count_is_circuit_checks_pin():

@@ -442,9 +442,9 @@ def load_program(path: Path):
     path = Path(path).resolve()
     bad = screen(path.read_text())
     if bad:
-        raise SystemExit(f"{path}: refused, it names {bad} (training_slowdown/README.md, the program contract)")
+        raise SystemExit(f"{path}: refused, it names {bad} (benchmarks/training_slowdown/README.md, the program contract)")
     sys.path.insert(0, str(path.parent))
-    spec = importlib.util.spec_from_file_location("te_program", path)
+    spec = importlib.util.spec_from_file_location("training_program", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     if not hasattr(mod, "train"):

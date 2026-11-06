@@ -80,7 +80,7 @@ def test_frozen_weights_stay_theta(tiny):
 
 
 def test_an_update_of_the_tied_table_alone_is_read_at_its_lookup(tiny):
-    """The 12:50Z ruling: the lookup reads the updated table at position 0, an updated node priced as the circuit's gather,
+    """The lookup reads the updated table at position 0, an updated node priced as the circuit's gather,
     so the tied head has it upstream; w1 and w2 are θ's and add nothing."""
     m, theta = tiny
     rec = train(m, theta, params=[m.emb])
@@ -280,8 +280,8 @@ def test_token_data_read_out_of_torch_is_counted_in_its_step():
 
 
 def test_a_program_made_token_source_is_one_source_by_tensor_not_by_address():
-    """ref-data's 14:06Z LOOPHOLE: tokens were keyed by an index tensor's address, so a fresh index tensor per chunk at a
-    freed one's address counted once, and one score per chunk read out was a value per token. Each new tensor over the
+    """Tokens keyed by an index tensor's address would count a fresh index tensor per chunk at a freed one's address
+    once, so one score per chunk read out would be a value per token. Each new tensor over the
     same memory counts (here a numpy buffer refilled per chunk, every chunk at one address), as does a buffer an op
     rewrites; the same source read again, or through a view, doesn't."""
     guard_exits()
