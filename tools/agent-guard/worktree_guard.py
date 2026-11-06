@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One agent per checkout (INF-59; the rule is AGENTS.md's, #2416): the shell hook's judgment of `git checkout`, `git switch` and
+"""One agent per checkout (the rule is AGENTS.md's): the shell hook's judgment of `git checkout`, `git switch` and
 `git push`, and the branch registry it keeps.
 
     python3 tools/agent-guard/worktree_guard.py hand BRANCH AGENT_ID   give a branch you created to another agent (its new owner)
@@ -13,7 +13,7 @@ branch it had then is registered to it. The hook then refuses, from any other ag
   - pushing a branch registered to another agent: one it created (`checkout -b`, `switch -c`, `worktree add -b`) or the one its
     worktree had when it claimed it, until that agent hands it over (`hand`). An unregistered branch passes.
 For every agent, whatever it owns, it also refuses a push that would update `main`, `checked` or `next` (only drive and the lander move
-them; INF-110), and a `git config` that prints values, since the checkout's http.*.extraheader carries a GitHub token (INF-105).
+them), and a `git config` that prints values, since the checkout's http.*.extraheader carries a GitHub token.
 A lander's hand repair of `next` under the queue lock names its reason on the push itself (`AGENT_GUARD_PUSH_NEXT_OK='REASON'
 git push ...`), and is logged to `$AGENT_GUARD_STATE/push-next-ok.jsonl`. Nothing lets a push to `main` through.
 It refuses, too, a push, branch switch or worktree add with `$` or a backquote in its words, whose branch the shell names only
@@ -141,18 +141,19 @@ def push_targets(directory: str, args: list[str]) -> list[str]:
     return out
 
 
-#: Branches only drive and the lander push, from their own processes rather than an agent's shell (INF-110)
+#: Branches only drive and the lander push, from their own processes rather than an agent's shell
 PROTECTED = {"main", "checked", "next"}
 
 #: `git config` forms that list keys: an installation token sits in http.*.extraheader's value and in url.*.insteadof's name,
-#: so even `--name-only` prints it (INF-105, INF-297)
+#: so even `--name-only` prints it
 CONFIG_DUMPS = {"--list", "-l", "--get-regexp", "--show-origin", "--get-all", "--get-urlmatch"}
 CREDENTIAL_KEYS = ("extraheader", "insteadof", "token", "password", "credential")
 
 
 def main_or_config_reason(invocations_: list[tuple[int, str, list[str]]], next_ok: list[str], agent: str) -> str | None:
-    """Whatever agent runs it: a push that would update `main` or `next` (INF-110: a worker whose VM came back from a snapshot
-    reset to `main` pushed onto it, and drive rebuilt every queued PR), or a `git config` that prints credential-bearing values."""
+    """Whatever agent runs it: a push that would update `main` or `next` (a worker whose VM comes back from a snapshot reset
+    to `main` would push onto it, and drive would rebuild every queued PR), or a `git config` that prints credential-bearing
+    values."""
     for i, d, args in invocations_:
         sub, ok = args[0], next_ok[i] if i < len(next_ok) else ""
         if sub == "push":
