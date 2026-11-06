@@ -378,11 +378,11 @@ def _root_.Flock.Guarantees.LoopInnerRound0 (T : CoinLayer.TableData)
       (labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8 ++ header 3 1 1 ++ w' ++ header 4 1 1).data.toList
 
 /-- **C-Flock's zero knowledge at the session loop's own frames, at the tables `T`.** At the deployed relation, where
-`T`'s session meets the tables' side (`Tables`, `Complete` at the relation, `DummyReg`, `Causal`, `TapeOK`, and the
-switched round encoding at `vs` causal on the coins the loop computes at, `SwCausalOn` at `Loop.SwOk T`: no zerocheck
-outer coin `1` at a `Live` statement it serves, as its frames refuse one, or coins every table admits), at every
-repetition count `0 < t`, every `L₀` (the release's inner rounds), every level-0 source `src` (the rep's tables `real`
-are the loop's own, `Loop.realOf src`) and worker `wk`, at every statement `x` the loop serves
+`T`'s session meets the tables' side (`Tables`, `Complete` at the relation, `DummyReg`, `Causal`, `SwCausal` at `vs`,
+asked only on the coins the loop computes at, `SwCausalOn` at `Loop.SwOk T`: no zerocheck outer coin `1` at a `Live`
+statement it serves, as its frames refuse one, or coins every table admits; and `TapeOK`), at every repetition count
+`0 < t`, every `L₀` (the release's inner rounds), every level-0 source `src` (the rep's tables `real` are the loop's
+own, `Loop.realOf src`) and worker `wk`, at every statement `x` the loop serves
 (`Loop.Serves`) with a witness `w` under the relation, where the loop's obligation (`LoopInnerRound0`) and the
 transport's round trusts hold: the deployed frame's state
 is the loop's but for `stopped` (`ProgChecks`), and against every `V*` of one more round than the verifier, the
