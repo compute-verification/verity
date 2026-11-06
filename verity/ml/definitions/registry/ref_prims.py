@@ -30,10 +30,9 @@ where the torch op materialises a `DT` tensor.  With `DT="f32"` the widen/narrow
 
 **Composites** (statics in capitals; see each docstring for the exact order):
   `DotRef{K}`, `LinearRef{K,N,DT,BIAS}`, `RMSNormRef{N,EPS,DT}`, `LayerNormRef{N,EPS,DT}`, `GeluRefElem{APPROX}` /
-  `GeluRef{N,DT,APPROX}`, `SiluRefElem` / `SiluRef{N,DT}`, `SoftmaxRef{N,DT}`, `LogSoftmaxRef{N,DT}`, `RoPERef{D,DT}` /
-  `RoPEHeadsRef{NHEADS,D,DT}`, `RoPEInterleavedRef{D,DT}` (GPT-J pairing), `EagerAttentionHeadRef{T,D,DT,SCALE_OP}` /
-  `EagerAttentionRef{T,NH,KVH,D,DT,SCALE_OP}`,
-  `EmbeddingRef{V,H,DT}`, `AddRef{N,DT}`, `MulRef{N,DT}`, `ReluRef{N,DT}`, `ArgmaxStepF32` / `ArgmaxRef{V,DT}`.
+  `GeluRef{N,DT,APPROX}`, `SiluRefElem` / `SiluRef{N,DT}`, `SoftmaxRef{N,DT}`, `RoPERef{D,DT}` / `RoPEHeadsRef{NHEADS,D,DT}`,
+  `RoPEInterleavedRef{D,DT}` (GPT-J pairing), `EagerAttentionHeadRef{T,D,DT,SCALE_OP}` / `EagerAttentionRef{T,NH,KVH,D,DT,SCALE_OP}`,
+  `EmbeddingRef{V,H,DT}`, `AddRef{N,DT}`, `MulRef{N,DT}`, `ReluRef{N,DT}`, `ArgmaxStepF32` / `ArgmaxRef{V,DT}`, `LogSoftmaxRef{N,DT}`.
   Profile-mode additions, NOT in the reference digest: `RoPEHeadGptJ{D}` / `RoPEGptJ{NHEADS,D}` (vLLM
   `rotary_embedding(is_neox=False)`, proof-supported through the `RopeOut`/`RopeOutAdd` twins; superseded by `boolean_rope`'s v2).
 
@@ -526,8 +525,7 @@ def SoftmaxRef(B, S, x):
     return _narrow(B, B.batch(P.F32Mul, e, r, axes=(0, None)), DT)
 
 
-@composite("LogSoftmaxRef", 1, ["N", "DT"], lambda S: ((("x", Array(S.N, _dt(S.DT))),), Array(S.N, _dt(S.DT))),
-           conformance=_REF_CONF)
+@composite("LogSoftmaxRef", 1, ["N", "DT"], lambda S: ((("x", Array(S.N, _dt(S.DT))),), Array(S.N, _dt(S.DT))), conformance=_REF_CONF)
 def LogSoftmaxRef(B, S, x):
     """`F.log_softmax(x, dim=-1)` on one row, reference arithmetic: `m = max_i x_i` (`F32MaxRef_v1` fold, ascending);
       `d_i = RN(x_i - m)`;  `s = Σ_i exp(d_i)` (`F32ExpRn_v1`) sequential ascending from +0;  `out_i = DT(RN(d_i - log(s)))`

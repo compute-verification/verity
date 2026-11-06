@@ -1,6 +1,7 @@
 """What the training rules (`rules.training`) emit with: constants, element-wise operands, batches and the rule base.
 
-    _const(ctx, node, bits, w)          one constant gate per distinct word in the derivation
+    _const(ctx, node, bits, w)          one constant gate per distinct word in the derivation (`training_views`', with the static
+                                        tensors' words)
     _operand(ctx, node, a, S)           an element-wise operand broadcast to the output shape, as f32 words
     _word_operand(ctx, node, a, S, dt)  an element-wise operand broadcast to the output shape, as words of its own dtype
     _ew(ctx, node, fn, ops, S, w)       `fn` element by element over the output shape
@@ -16,7 +17,6 @@ import numpy as np
 import torch
 
 from verity.ml.circuits.ops import scalar as SC
-from verity.ml.circuits.ops.prims import const
 from verity.ml.circuits.refs import Affine, Coll, Strided, broadcast, concat
 from verity.ml.circuits.types import Array, Value
 from verity.ml.definitions.registry import prims as P
@@ -25,7 +25,7 @@ from verity.ml.definitions.registry import torch_words as W
 from verity_vllm.program.frontend.derive import StaticIndex, refuse
 from verity_vllm.program.frontend.errors import FrontendError
 from verity_vllm.program.frontend.rules.base import OpRule
-from verity_vllm.program.frontend.rules.training_views import _PARTS, StaticFloat, _view_expand
+from verity_vllm.program.frontend.rules.training_views import StaticFloat, _const, _static_words, _view_expand, _words
 from verity_vllm.program.frontend.strided_views import _tensor_type
 from verity_vllm.program.frontend.value_types import WIDTH_OF_DTYPE, shape_of
 
@@ -33,7 +33,6 @@ aten = torch.ops.aten
 F32, BF16, BIT, I64 = Value(32), Value(16), Value(1), Value(64)
 _DT = {torch.float32: "f32", torch.bfloat16: "bf16"}
 _NAMES = {**_DT, torch.bool: "bool", torch.int64: "int64"}
-_INT_VIEW = {8: torch.uint8, 16: torch.int16, 32: torch.int32, 64: torch.int64}
 
 
 def _bits(x: float) -> int:
@@ -59,40 +58,6 @@ def _batch(ctx, node, fn, *args, axes, n=None) -> Coll:
 
 def _call(ctx, node, fn, *args) -> Coll:
     return ctx.call(fn, *args, node=node)
-
-
-def _const(ctx, node, bits: int, w: int = 32) -> Coll:
-    """One constant gate per distinct word in the derivation (a node a refused rule removed is made again)."""
-    cache = ctx.state.setdefault("train_consts", {})
-    bits &= (1 << w) - 1
-    fn = const(w, bits)
-    k = cache.get((w, bits))
-    if k is None or k >= len(ctx.B.nodes) or ctx.B.nodes[k].fn is not fn:
-        _call(ctx, node, fn)
-        k = cache[(w, bits)] = len(ctx.B.nodes) - 1
-    return Coll(Value(w), Affine("n", k, 0, 1))
-
-
-def _words(t: torch.Tensor, w: int) -> np.ndarray:
-    """A static tensor's words, `w` bits wide, as unsigned integers (a bool tensor's 1 or 0)."""
-    t = t.detach().contiguous().reshape(-1)
-    t = t.to(torch.uint8) if w == 1 else t.view(_INT_VIEW[w])
-    return t.numpy().astype(np.uint64) & np.uint64((1 << w) - 1)
-
-
-def _static_words(ctx, node, bits: np.ndarray, w: int = 32) -> Coll:
-    """Static words of `w` bits (unsigned) as references to one constant gate per distinct word, run by run."""
-    bits = np.asarray(bits).reshape(-1)
-    n = bits.size
-    starts = np.concatenate([[0], np.flatnonzero(np.diff(bits)) + 1])
-    if starts.size > _PARTS:
-        refuse("shape", node, ctx.module_path(node), f"a constant tensor of {starts.size} runs (limit {_PARTS})")
-    ends = np.concatenate([starts[1:], [n]])
-    parts = []
-    for a, b in zip(starts.tolist(), ends.tolist()):
-        c = _const(ctx, node, int(bits[a]), w)
-        parts.append(broadcast(c.refs.space, c.refs.idx, c.refs.base, b - a))
-    return Coll(Array(n, Value(w)), concat(parts))
 
 
 def _static_coll(ctx, node, t: torch.Tensor) -> Coll:

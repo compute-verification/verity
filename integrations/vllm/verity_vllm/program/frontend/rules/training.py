@@ -23,10 +23,10 @@ A random op's values are an input of the step, committed with its generator's se
 
     training_rules(min_view_leaves, cc, tf32) -> RuleSet     the training rule set
 
-Views and static float tensors are `rules.training_views`'s, matrix products `rules.training_matmul`'s, comparisons, masks,
-integer sums, conversions, functionalized copies, table lookups, `amax` and `kthvalue` `rules.training_masks`'s, draws
-`rules.training_draws`'s and the helpers the rules emit with `rules.training_emit`'s; a survey of what the rules refuse is
-`rules.training_survey`'s.
+Views and static float tensors are `rules.training_views`'s, matrix products `rules.training_matmul`'s, softmax and log-softmax
+`rules.training_softmax`'s, comparisons, masks, integer sums, conversions, functionalized copies, table lookups, `amax` and
+`kthvalue` `rules.training_masks`'s, draws `rules.training_draws`'s and the helpers the rules emit with `rules.training_emit`'s; a
+survey of what the rules refuse is `rules.training_survey`'s.
 """
 
 from __future__ import annotations
@@ -46,13 +46,14 @@ from verity.ml.definitions.registry import ref_prims as R
 from verity.ml.definitions.registry import torch_embedding_f32 as TEF
 from verity_vllm.program.frontend.rules.base import RuleSet
 from verity_vllm.program.frontend.rules.training_emit import (_DT, BIT, F32, _batch, _bits, _call, _const, _ew, _flat, _iota,
-                                                              _operand, _operand_ok, _ones, _per_row, _ref, _rounded, _rows, _shape,
-                                                              _tokens, _TrainRule, _widened, aten)
+                                                              _operand, _operand_ok, _ones, _per_row, _ref, _rounded, _shape, _tokens,
+                                                              _TrainRule, _widened, aten)
 from verity_vllm.program.frontend.rules.training_draws import Random
 from verity_vllm.program.frontend.rules.training_masks import (AMax, Cast, Clamp, Compare, Copy, Index, IntSum, KthValue, Logic,
                                                                Where)
 from verity_vllm.program.frontend.rules.training_matmul import Matmul
 from verity_vllm.program.frontend.rules.training_reduce import FullReduce
+from verity_vllm.program.frontend.rules.training_softmax import LogSoftmax, LogSoftmaxBackward, SafeSoftmax, SoftmaxBackward
 from verity_vllm.program.frontend.rules.training_views import BoxPermute, StaticFloat, StaticFloats, _info, _view_permute
 from verity_vllm.program.frontend.strided_views import _tensor_type
 from verity_vllm.program.frontend.value_types import shape_of
@@ -458,7 +459,7 @@ class FusedAdamW(_TrainRule):
 
 
 # ---------------------------------------------------------------------------------------------------------
-# reductions, softmax and the loss
+# reductions and the loss
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -497,123 +498,6 @@ class Reduce(_TrainRule):
             s = _batch(ctx, node, P.F32Div, s, _const(ctx, node, _bits(float(N))), axes=(0, None))
         ctx.define(node, s.reshape(_tensor_type(ctx.shape_of_node(node), 32)))
         ctx.record(self, node, {"dims": dims, "rows": Rn, "N": N}, emitted=f"DotRef_v1{{K={N}}} x{Rn}")
-
-
-def _last_dim(ctx, node, a, dim) -> str | None:
-    S = _shape(ctx, a)
-    if not S or dim % len(S) != len(S) - 1:
-        return f"over dim {dim} of {list(S)}, not the last"
-    return None
-
-
-class SafeSoftmax(_TrainRule):
-    """`_safe_softmax(x, -1)` (SDPA's math path) = `where(all(x == -inf), 0, softmax(x))` per row: `SoftmaxRef_v1{N,f32}` rows,
-    `F32Eq_v1` against -inf, a `BitAnd_v1` fold, `SelectF32_v1`."""
-    info = _info("SafeSoftmax", "aten._safe_softmax over the last axis of f32", "the operand is an f32 value", "no dtype argument")
-
-    def targets(self):
-        return {aten._safe_softmax.default}
-
-    def applies(self, node, ctx):
-        why = _operand_ok(ctx, node.args[0])
-        if why or not isinstance(ctx.val(node.args[0]), Coll):
-            return why or "the operand is not a value"
-        if len(node.args) > 2 and node.args[2] is not None or node.kwargs.get("dtype") is not None:
-            return "numerics_unregistered: a dtype argument"
-        return _last_dim(ctx, node, node.args[0], node.args[1]) or True
-
-    def emit(self, node, ctx):
-        x = ctx.coll(node.args[0])
-        S = shape_of(x.type)[0]
-        x2, Rn, N = _rows(x, S)
-        sm = _batch(ctx, node, ctx.kind("softmax", node, N=N, DT="f32"), x2, axes=(0,))
-        eq = _batch(ctx, node, SC.F32Eq, x.reshape(Array(Rn * N, F32)), _const(ctx, node, 0xFF800000), axes=(0, None))
-        r = eq.refs
-        acc = Coll(Array(Rn, BIT), Strided(r.space, r.idx, r.base, 1, N, 0, Rn))
-        for i in range(1, N):
-            acc = _batch(ctx, node, SC.BitAnd, acc, Coll(Array(Rn, BIT), Strided(r.space, r.idx, r.base + i, 1, N, 0, Rn)), axes=(0, 0))
-        out = _batch(ctx, node, SC.SelectF32, _per_row(acc, Rn, N), _const(ctx, node, 0), sm.reshape(Array(Rn * N, F32)),
-                     axes=(0, None, 0))
-        ctx.define(node, out.reshape(_tensor_type(S, 32)))
-        ctx.record(self, node, {"rows": Rn, "N": N}, emitted=f"SoftmaxRef_v1{{N={N},DT=f32}} x{Rn} + mask")
-
-
-class SoftmaxBackward(_TrainRule):
-    """`_softmax_backward_data(g, y, -1, f32)` = `y * (g - sum(g * y))` per row, torch CPU's form: `DotRef_v1{N}(g, y)`, `F32Sub_v1`,
-    `F32Mul_v1`."""
-    info = _info("SoftmaxBackward", "aten._softmax_backward_data over the last axis, f32", "g and y are f32 values",
-                 "input_dtype is float32")
-
-    def targets(self):
-        return {aten._softmax_backward_data.default}
-
-    def applies(self, node, ctx):
-        for a in node.args[:2]:
-            why = _operand_ok(ctx, a)
-            if why or not isinstance(ctx.val(a), Coll):
-                return why or "an operand is not a value"
-        if node.args[3] != torch.float32:
-            return f"numerics_unregistered: input_dtype {node.args[3]}"
-        return _last_dim(ctx, node, node.args[0], node.args[2]) or True
-
-    def emit(self, node, ctx):
-        g, y = ctx.coll(node.args[0]), ctx.coll(node.args[1])
-        S = shape_of(g.type)[0]
-        g2, Rn, N = _rows(g, S)
-        y2 = _rows(y, S)[0]
-        dot = _batch(ctx, node, bind(R.DotRef, K=N), g2, y2, axes=(0, 0))
-        diff = _batch(ctx, node, R.F32Sub, g.reshape(Array(Rn * N, F32)), _per_row(dot, Rn, N), axes=(0, 0))
-        out = _batch(ctx, node, P.F32Mul, y.reshape(Array(Rn * N, F32)), diff, axes=(0, 0))
-        ctx.define(node, out.reshape(_tensor_type(S, 32)))
-        ctx.record(self, node, {"rows": Rn, "N": N}, emitted=f"DotRef_v1{{K={N}}} x{Rn} + F32Sub/F32Mul")
-
-
-class LogSoftmax(_TrainRule):
-    """`_log_softmax(x, -1, False)` of f32 = `(x - max) - log(sum(exp(x - max)))` per row: `LogSoftmaxRef_v1{N,f32}` rows."""
-    info = _info("LogSoftmax", "aten._log_softmax over the last axis of f32", "the operand is an f32 value", "half_to_float is false")
-
-    def targets(self):
-        return {aten._log_softmax.default}
-
-    def applies(self, node, ctx):
-        why = _operand_ok(ctx, node.args[0])
-        if why or not isinstance(ctx.val(node.args[0]), Coll):
-            return why or "the operand is not a value"
-        if node.args[2]:
-            return "numerics_unregistered: half_to_float"
-        return _last_dim(ctx, node, node.args[0], node.args[1]) or True
-
-    def emit(self, node, ctx):
-        x = ctx.coll(node.args[0])
-        S = shape_of(x.type)[0]
-        x2, Rn, N = _rows(x, S)
-        out = _batch(ctx, node, bind(R.LogSoftmaxRef, N=N, DT="f32"), x2, axes=(0,))
-        ctx.define(node, out.reshape(_tensor_type(S, 32)))
-        ctx.record(self, node, {"rows": Rn, "N": N}, emitted=f"LogSoftmaxRef_v1{{N={N},DT=f32}} x{Rn}")
-
-
-class LogSoftmaxBackward(_TrainRule):
-    """`_log_softmax_backward_data(g, y, -1, f32)` = `g - exp(y) * sum(g)` per row, torch CPU's form: `DotRef_v1{N}(g, ones)`,
-    `F32ExpRn_v1`, `F32Mul_v1`, `F32Sub_v1`."""
-    info = _info("LogSoftmaxBackward", "aten._log_softmax_backward_data over the last axis, f32", "g and y are f32 values",
-                 "input_dtype is float32")
-
-    def targets(self):
-        return {aten._log_softmax_backward_data.default}
-
-    def applies(self, node, ctx):
-        return SoftmaxBackward.applies(self, node, ctx)
-
-    def emit(self, node, ctx):
-        g, y = ctx.coll(node.args[0]), ctx.coll(node.args[1])
-        S = shape_of(g.type)[0]
-        g2, Rn, N = _rows(g, S)
-        s = _batch(ctx, node, bind(R.DotRef, K=N), g2, _ones(ctx, node, N), axes=(0, None))
-        e = _batch(ctx, node, R.F32ExpRn, y.reshape(Array(Rn * N, F32)), axes=(0,))
-        p = _batch(ctx, node, P.F32Mul, e, _per_row(s, Rn, N), axes=(0, 0))
-        out = _batch(ctx, node, R.F32Sub, g.reshape(Array(Rn * N, F32)), p, axes=(0, 0))
-        ctx.define(node, out.reshape(_tensor_type(S, 32)))
-        ctx.record(self, node, {"rows": Rn, "N": N}, emitted=f"DotRef_v1{{K={N}}} x{Rn} + F32ExpRn/F32Mul/F32Sub")
 
 
 def _nll_ok(ctx, node, logp, target, weight, reduction) -> str | None:

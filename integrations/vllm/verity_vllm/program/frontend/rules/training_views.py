@@ -14,9 +14,12 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+import numpy as np
 import torch
 
-from verity.ml.circuits.refs import Affine, Coll, Concat, Strided, concat
+from verity.ml.circuits.ops.prims import const
+from verity.ml.circuits.refs import Affine, Coll, Concat, Strided, broadcast, concat
+from verity.ml.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import StaticIndex, _LiftedConstant, refuse
 from verity_vllm.program.frontend.errors import FrontendError
 from verity_vllm.program.frontend.rules.base import RuleInfo, ViewRule
@@ -27,6 +30,7 @@ from verity_vllm.program.frontend.value_types import WIDTH_OF_DTYPE, shape_of
 
 aten = torch.ops.aten
 _PARTS = 1 << 18  # reference parts a view or a constant tensor may take
+_INT_VIEW = {8: torch.uint8, 16: torch.int16, 32: torch.int32, 64: torch.int64}
 _REF = "reference arithmetic: the registered Definitions' (ref_prims); element-wise ops are torch CPU's f32 operations"
 
 
@@ -227,6 +231,39 @@ def _permute_dims(node, rank: int) -> tuple[int, ...]:
     return tuple(dims)
 
 
+def _const(ctx, node, bits: int, w: int = 32) -> Coll:
+    """One constant gate per distinct word in the derivation (a node a refused rule removed is made again)."""
+    cache = ctx.state.setdefault("train_consts", {})
+    bits &= (1 << w) - 1
+    fn = const(w, bits)
+    k = cache.get((w, bits))
+    if k is None or k >= len(ctx.B.nodes) or ctx.B.nodes[k].fn is not fn:
+        ctx.call(fn, node=node)
+        k = cache[(w, bits)] = len(ctx.B.nodes) - 1
+    return Coll(Value(w), Affine("n", k, 0, 1))
+
+
+def _words(t: torch.Tensor, w: int) -> np.ndarray:
+    """A static tensor's words, `w` bits wide, as unsigned integers (a bool tensor's 1 or 0)."""
+    t = t.detach().contiguous().reshape(-1)
+    t = t.to(torch.uint8) if w == 1 else t.view(_INT_VIEW[w])
+    return t.numpy().astype(np.uint64) & np.uint64((1 << w) - 1)
+
+
+def _static_words(ctx, node, bits: np.ndarray, w: int = 32) -> Coll:
+    """Static words of `w` bits (unsigned) as references to one constant gate per distinct word, run by run."""
+    bits = np.asarray(bits).reshape(-1)
+    n = bits.size
+    starts = np.concatenate([[0], np.flatnonzero(np.diff(bits)) + 1])
+    if starts.size > _PARTS:
+        refuse("shape", node, ctx.module_path(node), f"a constant tensor of {starts.size} runs (limit {_PARTS})")
+    ends = np.concatenate([starts[1:], [n]])
+    parts = []
+    for a, b in zip(starts.tolist(), ends.tolist()):
+        c = _const(ctx, node, int(bits[a]), w)
+        parts.append(broadcast(c.refs.space, c.refs.idx, c.refs.base, b - a))
+    return Coll(Array(n, Value(w)), concat(parts))
+
 
 @dataclass(eq=False)
 class StaticFloat:
@@ -241,8 +278,6 @@ class StaticFloat:
     def returned(self, ctx, node) -> Coll:
         """The tensor as a value the step returns (a fill of a mutated input, say): its words in `node`'s dtype, a constant gate a
         distinct word. A NaN is refused, as where an op reads one: torch CPU's NaN word is not the GPU's."""
-        from verity_vllm.program.frontend.rules.training_emit import _static_words, _words
-
         if bool(torch.isnan(self.tensor).any()):
             refuse("numerics_unregistered", node, ctx.module_path(node), "a returned static NaN (torch CPU's NaN word is not the GPU's)")
         dt = ctx.dtype_of(node)
