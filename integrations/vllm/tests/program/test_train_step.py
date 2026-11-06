@@ -593,10 +593,15 @@ def test_gpu_silu_backward_is_its_stated_arithmetic(dt: torch.dtype) -> None:
 FUSED_ADAMW = dict(lr=1e-3, beta1=0.9, beta2=0.95, weight_decay=0.1, eps=1e-8, amsgrad=False, maximize=False)
 
 
-def _fused_adamw_step(p0, p1, g0, g1, m0, m1, v0, v1, s0, s1, **kw):
-    """`_fused_adamw` over two tensors: the new parameters, first moments and second moments."""
-    out = aten._fused_adamw([p0, p1], [g0, g1], [m0, m1], [v0, v1], [], [s0, s1], **(FUSED_ADAMW | kw))
-    return [*out[0], *out[2], *out[3]]
+def _fused_adamw_step(**kw):
+    """`_fused_adamw` over two tensors: the new parameters, first moments and second moments. The step takes positional
+    arguments only, since tracing a function with `**kwargs` behind functionalize's wrapper miscounts its inputs."""
+
+    def step(p0, p1, g0, g1, m0, m1, v0, v1, s0, s1):
+        out = aten._fused_adamw([p0, p1], [g0, g1], [m0, m1], [v0, v1], [], [s0, s1], **(FUSED_ADAMW | kw))
+        return [*out[0], *out[2], *out[3]]
+
+    return step
 
 
 def _fused_adamw_arithmetic(ps, gs, ms, vs, steps, lr, beta1, beta2, weight_decay, eps, **_):
@@ -634,16 +639,15 @@ def test_gpu_fused_adamw_is_its_kernels_arithmetic() -> None:
     vs = [_data(67, positive=True, seed=46) * 1e-3, _data(4, 16, positive=True, seed=47) * 1e-3]
     steps = [torch.tensor(3.0), torch.tensor(1.0)]
     xs = (*ps, *gs, *ms, *vs, *steps)
-    prog = _program(_fused_adamw_step, *xs, rules=training_rules(cc=CC))
+    prog = _program(_fused_adamw_step(), *xs, rules=training_rules(cc=CC))
     ids = {nd.fn.id.split("{")[0] for nd in prog.root.body.nodes}
     assert {"F32Fma_v2", "F32Mul_v2", "F32Div_v2", "F32Add_v2", "F32Sub_v2", "F32Sqrt_v1", "F32ExpRn_v1"} <= ids, ids
     got = _outputs(prog, *xs)
     want = _fused_adamw_arithmetic(ps, gs, ms, vs, steps, **FUSED_ADAMW)
     _same_bits(got, torch.from_numpy(np.array(want, dtype=np.uint32).view(np.float32).copy()))
-    torch.testing.assert_close(got, torch.cat([t.reshape(-1) for t in _fused_adamw_step(*xs)]), rtol=1e-5, atol=1e-6)
+    torch.testing.assert_close(got, torch.cat([t.reshape(-1) for t in _fused_adamw_step()(*xs)]), rtol=1e-5, atol=1e-6)
     for rules, kw, why in ((training_rules(), {}, "computes in double"), (training_rules(cc=CC), {"maximize": True}, "maximize")):
-        f = functools.partial(_fused_adamw_step, **kw)
-        gm = make_fx(torch.func.functionalize(f, remove="mutations"), tracing_mode="fake")(*xs)
+        gm = make_fx(torch.func.functionalize(_fused_adamw_step(**kw), remove="mutations"), tracing_mode="fake")(*xs)
         u = derive_graph(gm, xs, mode="reference", rules=rules, name="T").unsupported
         assert isinstance(u, Unsupported) and u.reason == "numerics_unregistered" and why in u.hint, u
 
