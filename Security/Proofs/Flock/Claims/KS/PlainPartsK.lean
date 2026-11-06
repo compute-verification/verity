@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.PlainParts
+module
+
+public import Proofs.Flock.Claims.KS.PlainParts
 
 /-!
 # The plain chain from the concrete simulator's parts, at `VK keep`
@@ -13,6 +15,8 @@ originals stay beside these rather than becoming their wrappers.
 * `plainSimWrPAtD_of_partsK`, `plainSimWD_of_partsK`: so `PlainSimWDK keep` holds from `PlainSimClashAtK keep` and
   `PlainSimForkLeK keep` alone.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

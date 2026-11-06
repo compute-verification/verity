@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Reps
-import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
+module
+
+public import Proofs.Flock.Claims.Complete.Reps
+public import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
 
 /-!
 # The replay goals from the session walk alone
@@ -13,6 +15,8 @@ establishes for each rep: `ZcAt`, `LcWalk` and `RsAt`.
 * `LcWalk`: `LcAt` without the fold, which `Run.lcAt` adds back.
 * `replay_goals`: the three goals at `Readable.relation` from `ZcAt`, `LcWalk` and `RsAt`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

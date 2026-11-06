@@ -1,5 +1,7 @@
-import Lms.Verify
-import Lean.Data.Json
+module
+
+public import Lms.Verify
+public import Lean.Data.Json
 
 /-!
 # The difftest: LMS verification against `lms.py`, on generated keys and signatures
@@ -14,6 +16,8 @@ same results with `Lms.Verify`'s definitions, gives every one of them. The Lean 
 * `root`: `root_of` under the key's I, `null` where it refuses;
 * `verify`: `verify`'s verdict, `null` where it refuses (a public key of another length) or there is no signature.
 -/
+
+@[expose] public section
 
 namespace Lms.Difftest
 

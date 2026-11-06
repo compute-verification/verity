@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.LigeritoDecode
+module
+
+public import Proofs.Flock.Soundness.LigeritoDecode
 
 /-!
 # The novel basis: `X̂_c` has degree at most `c`
@@ -18,6 +20,8 @@ the polynomials of degree below `2^cols + t`, spanned by the first `2^cols + t` 
 
 Then the first `k ≤ 2^L` monomials span the polynomials of degree below `k` (`xP_span_lt`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

@@ -1,4 +1,6 @@
-import Lean.Data.Json
+module
+
+public import Lean.Data.Json
 
 /-!
 # How the Python reads its JSON
@@ -8,6 +10,10 @@ between bytes), and a label shown in a reason as `repr` shows it. `pyRepr` is CP
 ASCII it escapes C1 controls, U+00A0 and U+00AD and keeps every other code point, where CPython also escapes the rest of
 Unicode's non-printable ones.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace PouwCommit
 

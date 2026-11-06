@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Finder
+module
+
+public import Proofs.Flock.Claims.Finder
 
 /-!
 # Bits from KS, and soundness from KS
@@ -11,6 +13,8 @@ bound gives `Pr[B] ≤ (2t)²/2^513`, and KS gives
 `Flock.Bits_ge`): the deployed parameters' numbers enter only there. Soundness is a corollary of KS under
 `R(x, ⊥) := False` (`sound_of_KS`).
 -/
+
+@[expose] public section
 
 namespace Claims
 

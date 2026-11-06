@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Refine.Live
-import Proofs.Flock.Soundness.Refine.Plays
-import Proofs.Flock.Soundness.Model.Compiled
+module
+
+public import Proofs.Flock.Soundness.Refine.Live
+public import Proofs.Flock.Soundness.Refine.Plays
+public import Proofs.Flock.Soundness.Model.Compiled
 
 /-!
 # The table's simulation (the transfer, R11c)
@@ -18,6 +20,8 @@ any strategy.
 * `live_le`: against any live prover, the live verdict's probability is at most the model's against the simulated
   prover.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 

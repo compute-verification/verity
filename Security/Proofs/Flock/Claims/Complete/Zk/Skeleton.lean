@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Complete.Skeleton
-import Proofs.Flock.Claims.Complete.Zk.Coins
-import Proofs.Flock.Claims.Complete.Zk.Sim
-import Proofs.Flock.Claims.Complete.Zk.Verdict
+module
+
+public import Proofs.Flock.Claims.Complete.Skeleton
+public import Proofs.Flock.Claims.Complete.Zk.Coins
+public import Proofs.Flock.Claims.Complete.Zk.Sim
+public import Proofs.Flock.Claims.Complete.Zk.Verdict
 
 /-!
 # The masked completeness proof's skeleton
@@ -29,6 +31,8 @@ pass and the rank bound (`MaskRank.MaskRankBound`, which `pr_badZk_le` reads).
 * **The composition**: `RunZk.rep_ok` (`zk_verifyRepWith_ok`), `RunZk.verdict_ok` (`zk_verifyWith_ok`),
   `RunZk.checks_ok'` (`checks_ok`), then `RunZk.acc` (`run_acc_of_zk`), and `complete_zk_of_goals` (`complete_zk_of`).
 -/
+
+@[expose] public section
 
 open Flock FlockDeploy Transcript
 
@@ -98,7 +102,7 @@ def live (o : RunZk H rel) : Live :=
   | .error _ => ⟨#[], #[], #[], #[]⟩
 
 /-- The record, decoded. -/
-def sess (o : RunZk H rel) : Session := val (Record.decodeWith o.hs o.spec o.record)
+def sess (o : RunZk H rel) : RunRecord := val (Record.decodeWith o.hs o.spec o.record)
 
 /-- Table `i`'s `--zk` schedule. -/
 def sch (o : RunZk H rel) (i : ℕ) : Schedule := (zkSchedsOf o.tabs)[i]!.1

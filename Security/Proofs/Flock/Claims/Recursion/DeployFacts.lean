@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Recursion.Deploy
-import Proofs.Flock.Claims.Recursion.DeployScope
-import Proofs.Flock.Claims.Recursion
-import Proofs.Flock.Claims.DeployK
-import Proofs.Flock.Soundness.Refine.Paths
+module
+
+public import Proofs.Flock.Claims.Recursion.Deploy
+public import Proofs.Flock.Claims.Recursion.DeployScope
+public import Proofs.Flock.Claims.Recursion
+public import Proofs.Flock.Claims.DeployK
+public import Proofs.Flock.Soundness.Refine.Paths
 
 /-!
 # The compiled verifier's structural code facts
@@ -29,6 +31,8 @@ has it for Flock's. `coinOf_bytes`: a coin's bytes determine it, so `coinOf`
 reads an inner round's answer back as its coin. `zeroCommit_sha512`: the record's commit string to the zero digest
 (`Deploy.zeroCommit` at its salt prefix and mask) is the deployed one at SHA-512.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

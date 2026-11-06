@@ -1,10 +1,12 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.LiveStatements
-import Proofs.Flock.Soundness.Discharge.ZkExec.Verdict
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRun
-import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
-import Proofs.Flock.Soundness.Discharge.Exec.Merkle
-import Proofs.Flock.Soundness.Discharge.Exec.Retained
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.LiveStatements
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Verdict
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRun
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+public import Proofs.Flock.Soundness.Discharge.Exec.Merkle
+public import Proofs.Flock.Soundness.Discharge.Exec.Retained
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
 
 /-!
 # `RunsZC` at the live `--zk` tables, from `TablesAtZKLive`
@@ -15,6 +17,8 @@ table at `tablesAtZK` (`DrawSetupZK.table`, at the executable's dimensions, pads
 each rep's run (`zk_verifyRep_ok`), `zk_rep_run_plays` makes each run a `RepRun` for `decAtZ` at the result it plays on
 the proof's messages, and `zk_table_verdict` makes the table's verdict accept at the two results.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

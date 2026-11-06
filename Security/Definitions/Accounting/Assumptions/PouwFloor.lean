@@ -1,4 +1,6 @@
-import Definitions.Accounting.PouwWork
+module
+
+public import Definitions.Accounting.PouwWork
 
 /-!
 # PoUW's work floor on one node, an open conjecture (trusted)
@@ -8,6 +10,8 @@ strategy `S` and the verifier `P`, taken as a hypothesis by `Accounting.Guarante
 is an open conjecture, so it is not under `shape.premises`: it becomes a premise under `shape.conjectures` once it has a
 falsification test that runs. The other three premises are in `Definitions.Accounting.Assumptions.PouwWork`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Assumptions
 

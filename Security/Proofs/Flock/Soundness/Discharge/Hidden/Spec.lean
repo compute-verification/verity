@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Defs
-import Proofs.Flock.Soundness.Discharge.Exec.Setup
-import Proofs.Flock.Soundness.Discharge.Exec.Merkle
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Defs
+public import Proofs.Flock.Soundness.Discharge.Exec.Setup
+public import Proofs.Flock.Soundness.Discharge.Exec.Merkle
 
 /-!
 # What `Stmt.setupHidden` checked and produced (`Spec`)
@@ -8,6 +10,8 @@ import Proofs.Flock.Soundness.Discharge.Exec.Merkle
 `setupHidden_spec` walks `Stmt.setupHidden` as `setupH_spec` walks `Stmt.setupH`: every return is the statement its
 checks built. `Facts.lean` reads off it what `Discharge/HiddenExec` reads.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 open Lean (Json)

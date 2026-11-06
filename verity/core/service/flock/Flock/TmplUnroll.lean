@@ -8,7 +8,11 @@ self rows or empty (`rows_inputRows`), the constant row is the last write, the o
 row reads is at most the constant's, inside the slot (`Sparse.ofRows` passes, `sparse_ofRows_ok`). So a reader that checks
 the description knows the flat net exists without building it.
 -/
-import Flock.TmplApart
+module
+
+public import Flock.TmplApart
+
+@[expose] public section
 
 namespace Flock.Tmpl
 

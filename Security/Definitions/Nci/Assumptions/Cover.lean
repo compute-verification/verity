@@ -1,6 +1,8 @@
-import Definitions.Nci.Cover
-import Mathlib.Basic.Real.Basic
-import Mathlib.Data.Finset.Union
+module
+
+public import Definitions.Nci.Cover
+public import Mathlib.Basic.Real.Basic
+public import Mathlib.Data.Finset.Union
 
 /-!
 # The cover theorem: the named assumptions
@@ -11,6 +13,8 @@ parameter-hardness at cost `b` (`Nci.Assumptions.ParameterHardAt`; `Proofs.Nci.C
 `ConditionalUpdateHardness`, a stronger premise that the structural fan-out tier rests on, pays those bits outside a given set of regions. Both are statements
 about the training circuit `C` and its products, at block size `s`.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.Assumptions
 

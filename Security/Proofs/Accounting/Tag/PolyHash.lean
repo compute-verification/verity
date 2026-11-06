@@ -1,5 +1,7 @@
-import Proofs.Accounting.Tag.Basic
-import Definitions.Accounting.Guarantees.Tag
+module
+
+public import Proofs.Accounting.Tag.Basic
+public import Definitions.Accounting.Guarantees.Tag
 
 /-!
 # The polynomial hash's properties
@@ -8,6 +10,8 @@ Proofs of `Accounting.Guarantees.Tag`'s statements about the keyed polynomial ha
 for fixed blocks and for fixed lists of hashes (root counting), unpredictability under partial reads (a residue class mod
 `p` holds at most three 32-bit words), the digest (the two together) and the Horner loop.
 -/
+
+@[expose] public section
 
 namespace Accounting.TagProofs
 

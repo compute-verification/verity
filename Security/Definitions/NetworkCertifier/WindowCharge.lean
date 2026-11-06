@@ -1,4 +1,6 @@
-import Definitions.NetworkCertifier.AdviceV1
+module
+
+public import Definitions.NetworkCertifier.AdviceV1
 
 /-!
 # Advice v1's whole window charged (`ChargeCount_v2`): decisions, hits and order entries, as `code_v1` codes them
@@ -34,6 +36,8 @@ circuit to the Python reference, and these definitions are held to that referenc
 **Refusals.** The reference refuses (ok 0) where the Python does, and then specifies nothing else, so each function here
 returns `none` there.
 -/
+
+@[expose] public section
 
 namespace NetTiming.WindowCharge
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.C3.Compose.Decoder
+module
+
+public import Proofs.Flock.C3.Compose.Decoder
 
 /-!
 # The reps' tie: each rep's steps are a rep unit V*'s layers check
@@ -20,6 +22,8 @@ source's runs are tied so at every accepted outer proof.
   part (`ProofOfVals`), the setup's and schedule's (`SetupOfVals`), the record's frames (`FramesOfVals`) and the
   source's rep steps (`StepsOfVals`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.BadLin
-import Proofs.Flock.Claims.Recursion.KSStated
+module
+
+public import Proofs.Flock.Claims.Recursion.BadLin
+public import Proofs.Flock.Claims.Recursion.KSStated
 
 /-!
 # The recursion's KS, linearly
@@ -19,6 +21,8 @@ at a bad rerun, or where the judged draw's inner view rejects (`PrBadGood_le_abo
 The outer sessions are `KS_of`'s (`κ` and `√(γ·Pr[B])`). `KSLin_of_flockKS_binds` is the result, and
 `KSLin_of_flockKS` the same where the played rounds' openings are recorded (`forksBind_of_opening`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

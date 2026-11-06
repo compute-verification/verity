@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.DeployLayout
-import Proofs.Flock.Claims.Recursion.InnerAccepts
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployLayout
+public import Proofs.Flock.Claims.Recursion.InnerAccepts
 
 /-!
 # `SchedMatches` fails at the holo form
@@ -11,6 +13,8 @@ import Proofs.Flock.Claims.Recursion.InnerAccepts
 it is `2 + 2R` at the plain schedule, as at a dense shape, it is two short of the holo schedule's, so `SchedMatches`
 fails at every such holo statement (`not_schedMatches_holo`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

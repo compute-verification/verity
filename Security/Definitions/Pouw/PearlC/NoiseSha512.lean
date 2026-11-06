@@ -1,5 +1,7 @@
-import Definitions.Pouw.PearlC.Instance
-import Definitions.Pouw.PearlC.Sha512
+module
+
+public import Definitions.Pouw.PearlC.Instance
+public import Definitions.Pouw.PearlC.Sha512
 
 /-!
 # Pearl-C's noise as SHA-512 gives it (trusted; definitions only)
@@ -37,6 +39,8 @@ The Python's refusals (a unit or row index of `2^32` or more, a non-finite BF16 
 taken mod `2^64` as `u64le` bytes, and no line reaches a non-finite value (every `|x| ≥ 1`, so the scale and the codes are
 finite and normal).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

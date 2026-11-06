@@ -3,8 +3,8 @@ whose top nodes the prover registers under the ZK server's salts (the verifier's
 running sums the prover registers as one chain. Staged here at the smallest shape (8 lanes, one sibling: a synthetic tree of
 four plain leaves, its top two nodes) with three honest openings and one whose sibling is another node's. Composing the
 unit's circuit takes about a minute, so that test is slow; it catches what `test_rec_open` can't: the statement's ports,
-program, partition and registered rows (the verifier's ``coef`` and ``dirs``, the tops, the running sums and, with
-`link_rows`, the opened rows), with no public input, as the Lean verifier's `statement` reads them (when it is built), and an
+program, partition and registered rows (the verifier's ``coef`` and ``dirs``, the tops, the running sums, the opened rows
+and their siblings), with no public input, as the Lean verifier's `statement` reads them (when it is built), and an
 opening that does not climb to its top node found before anything is proved."""
 from __future__ import annotations
 
@@ -105,7 +105,7 @@ def staged(once):
     tops = O.TopValue.build(PROGRAM, 1, {0: _top(layers[1], 2), 1: _top(layers[1], 3)})
 
     def make(d):
-        s = O.stage(level, d / "level", O.Chain.build(PROGRAM, qs, coefs), coefs, tops, link_rows=True)
+        s = O.stage(level, d / "level", O.Chain.build(PROGRAM, qs, coefs), coefs, tops)
         (d / "stage.pickle").write_bytes(pickle.dumps(s))
 
     d = once("rec-outer-staged", make, lambda: keyed.key(code=[__name__]))
@@ -126,12 +126,13 @@ def test_a_level_is_one_template_over_both_reps(staged):
     assert own["out"]["reads"] == [0, 1, 3, 2] and own["out"]["root"] == s["registered_root"] == tops.own["root"]
     assert own["out"]["value"] == s["value"] == "rec-top-L1" and own["out"]["leaves"] == s["top_rows"] == 4
     assert own["row"]["reads"] == [0, 1, 2, 3] and own["row"]["root"] == s["rows_root"] != s["registered_root"]
+    assert own["aux"]["reads"] == [0, 1, 2, 3] and own["aux"]["root"] == s["aux_root"] != s["rows_root"]
     assert own["acc"]["reads"] == [0, 1, 2, 3] and own["acc_out"]["reads"] == [1, 2, 3, 4]
     assert own["acc"]["root"] == own["acc_out"]["root"] == s["acc_root"] and own["acc"]["leaves"] == 5
     head = json.loads((d / "pub.bin").read_bytes().split(b"\n", 1)[0])
     assert {k: v["value"] for k, v in head["registered"].items()} == {
-        "row": "rec-rows-L1", "out": "rec-top-L1", "acc": O.ACC_VALUE, "acc_out": O.ACC_VALUE, "coef": O.COEF_VALUE,
-        "dirs": O.DIRS_VALUE}
+        "row": "rec-rows-L1", "aux": "rec-aux-L1", "out": "rec-top-L1", "acc": O.ACC_VALUE, "acc_out": O.ACC_VALUE,
+        "coef": O.COEF_VALUE, "dirs": O.DIRS_VALUE}
     assert head["registered"]["out"]["positions"] == [0, 1, 3, 2]
     assert head["registered"]["coef"]["positions"] == head["registered"]["dirs"]["positions"] == [0, 1, 2, 3]
     meta = json.loads((d / "circuit.txt").read_text().split("\n", 2)[1][5:])

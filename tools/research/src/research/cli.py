@@ -47,6 +47,8 @@
   research merge --train A B C [--on MACHINE --project P]                # several refs as one candidate, one check, a fast-forward
   research queue status|sync|land|eject|ready|judge|review [--shadow] [--dry-run]  # the merge queue: ready PRs on `next`, `checked`
                                                  # fast-forwarded to its reviewed prefix, `main` to what passed the gated steps (research/queue.py)
+  research goals show|set|confirm|done|remove|replace|priority ...   # the Goals page, written with this agent's Cursor identity
+                                                 # (research/goals.py)
   research jobs add|list|show|cancel|events ...  # the Job queue: batch work on pods, on the control app (research/jobs/cli.py)
   research worker --dispatch --pods A,B [--name rc]   # stage 1's dispatcher: claims jobs, runs each with `run --on` on a free pod
   research git old2new|remap|check|build ...     # after a history rewrite: an old commit's image, a clone's local work moved onto the
@@ -1867,6 +1869,10 @@ def main(argv: list[str] | None = None) -> int:
         from .queue import main as queue_main
 
         return queue_main(rest)
+    if cmd == "goals":
+        from .goals import main as goals_main
+
+        return goals_main(rest)
     if cmd == "jobs":
         from .jobs.cli import main as jobs_main
 

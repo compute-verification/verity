@@ -1,4 +1,6 @@
-import Mathlib
+module
+
+public import Mathlib
 
 /-!
 # FP8-g1 and W4A8-g1: the operand encodings (trusted)
@@ -26,6 +28,8 @@ integer level `R` that the honest prover picks on a format's integer grid, plus 
   on H1 they are conservative; g1's values fit both. No Program checks `Grids.On`: it describes what an honest g1 prover
   commits.
 -/
+
+@[expose] public section
 
 namespace Pouw.FpG1
 

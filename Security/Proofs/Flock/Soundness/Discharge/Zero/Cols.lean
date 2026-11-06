@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.E2E
-import Proofs.Flock.Soundness.Types.ProgramPlaces
+module
+
+public import Proofs.Flock.Soundness.E2E
+public import Proofs.Flock.Soundness.Types.ProgramPlaces
 
 /-!
 # The zero's columns are input columns (`hZero`, e2e)
@@ -14,6 +16,8 @@ computed column is a gate of the unit itself (`IsRowsUnit.mem`).
 - `TableClass.block_eq_zero`: at a table class's slot, an input whose copy position is one of the class's forced-zero rows
   carries 0, in every block of a satisfying witness.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Zero
 

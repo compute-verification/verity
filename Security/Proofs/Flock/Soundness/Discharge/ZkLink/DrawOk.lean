@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt
-import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt
+public import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
 
 /-!
 # The challenger's draw at every draw of the live law, at `--zk`
@@ -18,6 +20,8 @@ custody; the second is flock-verify's own arithmetic. This file splits them.
   setupH accepts passes `UnitDraw.ofJson`'s per-stratum count, so every stratum draws all its units and
   `∑ s, ks s = n`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 

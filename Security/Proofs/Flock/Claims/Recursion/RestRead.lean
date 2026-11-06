@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Recursion.VerdictPieces
-import Proofs.Flock.Claims.Recursion.LayoutBTops
-import Proofs.Flock.Claims.Recursion.FinOpen
-import Proofs.Flock.Claims.Recursion.SchedDense
-import Proofs.Flock.Claims.Recursion.BindsDeployed
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictPieces
+public import Proofs.Flock.Claims.Recursion.LayoutBTops
+public import Proofs.Flock.Claims.Recursion.FinOpen
+public import Proofs.Flock.Claims.Recursion.SchedDense
+public import Proofs.Flock.Claims.Recursion.BindsDeployed
 
 /-!
 # The statement's share of `hrest` at `nextR`: the last message's reading, the rounds' lengths, and the reading
@@ -25,6 +27,8 @@ about the last message and the rounds:
 
 `hrest_shape`, `hrest_len` and `hrest_read` give one check each; `hrest_part` gives the three at `hrest`'s binders.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.RestRead
 

@@ -1,5 +1,7 @@
-import Definitions.NetworkCertifier.Guarantees.Period
-import Definitions.NetworkCertifier.PooledLeak
+module
+
+public import Definitions.NetworkCertifier.Guarantees.Period
+public import Definitions.NetworkCertifier.PooledLeak
 
 /-!
 # The leak through the network certifier over a monitoring period of sampled audits
@@ -28,14 +30,16 @@ bits, so `b = 16`.
 
 The network certifier is one device on the server's uplink, as in `PeriodLeakAccepted`
 (`Definitions.NetworkCertifier.Tap`): one run of its code gives the cells the client receives (it functions as an
-active warden) and its record of them, the observations the audits read, so on every schedule its record format holds
-the client's cells read back from the record. Its one named assumption is `trusted-host`.
+active network certifier) and its record of them, the observations the audits read, so on every schedule its record
+format holds the client's cells read back from the record. Its one named assumption is `trusted-host`.
 
 The statement is conditional: it holds for any audits that satisfy the two inputs. Over a monitoring period of live
 audits they are `Flock.Guarantees.SampledKSLive` at each window's history (at `K₀ = |W_i|`) and the live
 `SampledLeakAccepted` (P2), neither discharged yet, so nothing here bounds the deployed system over a monitoring period
 until that discharge lands.
 -/
+
+@[expose] public section
 
 namespace NetTiming.Guarantees
 

@@ -1,4 +1,6 @@
-import Proofs.Pous.P2.Rows
+module
+
+public import Proofs.Pous.P2.Rows
 
 /-!
 # The abstract model `m1p` on `[0, p)`: `Meets` for `Pous.m1p`, at any payload width `b`
@@ -35,6 +37,8 @@ The generic count (`PousGen`) is `Security/Proofs/Pous/P2/Count.lean`, the certi
 plumbing (`PousP2`, up to `meets_m1_of_row`) is `Security/Proofs/Pous/P2/Rows.lean`, and
 A3′ is `PousTrackA.a3_prime_lam`. This module's own part is `PousP2p`.
 -/
+
+@[expose] public section
 
 /-! ## M1 on P2's exact domain `[0, p)`: `Pous.m1p` -/
 

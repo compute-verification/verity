@@ -3,9 +3,16 @@ The salt digest `c = SHA-512(salt_prefix ‖ y)` of `hm96-sha512/v1` as the hm96
 prefix's midstate (`saltMid`), over the salt's 24 big-endian words and the fixed padding of a 320-byte message
 (`saltTail`).
 -/
-import Mathlib.Data.List.GetD
-import Proofs.Flock.Soundness.Discharge.Hm.Hash
-import Proofs.Flock.Soundness.Discharge.Hm.Hm96
+module
+
+public import Mathlib.Data.List.GetD
+public import Proofs.Flock.Soundness.Discharge.Hm.Hash
+public import Proofs.Flock.Soundness.Discharge.Hm.Hm96
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import all Init.Data.String.Defs
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Hm
 

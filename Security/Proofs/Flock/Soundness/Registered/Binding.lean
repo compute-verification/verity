@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Registered.Defs
-import Proofs.Flock.Soundness.Binding.Weights
-import Proofs.Flock.Soundness.StrictCR
+module
+
+public import Proofs.Flock.Soundness.Registered.Defs
+public import Proofs.Flock.Soundness.Binding.Weights
+public import Proofs.Flock.Soundness.StrictCR
 
 /-!
 # Registered reads bind the registrant's rows, under `cr/sha-512`
@@ -17,6 +19,8 @@ import Proofs.Flock.Soundness.StrictCR
   while some registered read's leaf is not the registrant's is at most `qR²/2^513`, under `SHA512CRStrict` for the finder
   that plays the game once and outputs the extractor's pair (`Reads.pick`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Registered
 

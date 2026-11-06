@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.VStar
-import Flock.HmNets
+module
+
+public import Proofs.Flock.Claims.Recursion.VStar
+public import Flock.HmNets
 
 /-!
 # V*'s parts at the representation V* binds (option (d)): the layout and part facts, restated
@@ -54,6 +56,8 @@ at positions is one at forms (`segsAt`, `readSegs_segsAt`).
 
 Statements only. The proofs that V*'s parts meet them, and the route from them to `KSBound`, are to come.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion.VStarB
 

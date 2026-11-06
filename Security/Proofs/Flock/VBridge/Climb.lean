@@ -1,6 +1,8 @@
-import Proofs.Flock.VBridge.Sha
-import Proofs.Flock.Verifier.Hash
-import Flock.Merkle
+module
+
+public import Proofs.Flock.VBridge.Sha
+public import Proofs.Flock.Verifier.Hash
+public import Flock.Merkle
 
 /-!
 # V*'s climb through the tree's nodes
@@ -14,6 +16,8 @@ direction bit `d[h]` swaps the current digest and the sibling (`_Forms.swap`: `t
 `Flock.climb ms` of the digest at the position through the siblings, for any scheme `ms` whose node is `SHA-512(l ‖ r)`
 (`MerkleScheme.hm96Sha512`, and `MerkleScheme.sha512`'s unsalted leaves).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge
 

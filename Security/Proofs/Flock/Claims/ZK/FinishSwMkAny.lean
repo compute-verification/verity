@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FinishSwMk
+module
+
+public import Proofs.Flock.Claims.ZK.FinishSwMk
 
 /-!
 # The switched source's masked values, with or without the rows
@@ -14,17 +16,19 @@ values plus the drawn pads, so the readings `FinishSwMk` takes where the rows ho
   array's entry (`padsOf`), with no hypothesis on the rows.
 -/
 
+@[expose] public section
+
 /-- **The switched pre-final view's masked values are the worker's view's**, whether or not its rows hold: where they
 fail, the honest values on the moved pads add up to the worker's on the drawn ones. -/
 theorem FlockSoundness.ZK.Table.swPre_masked_any {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (w : W) (v : T.Vals) (ω : T.Rand) :
     (T.swPre w v ω).masked = (T.onVals.view (w, v) ω).masked := by
-  by_cases hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1.2.1
+  by_cases hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1
   · exact T.swPre_masked w v ω hr
   · rw [FlockSoundness.ZK.Table.swPre, if_neg hr]
     funext r i
-    show T.vals r w ω.1 ω.2.1.2.1 i + ((ω.2.2.1 r).1 i + (v r w ω.1 ω.2.1.2.1 i - T.vals r w ω.1 ω.2.1.2.1 i)) =
-      v r w ω.1 ω.2.1.2.1 i + (ω.2.2.1 r).1 i
+    show T.vals r w ω.1 ω.2.1 i + ((ω.2.2.1 r).1 i + (v r w ω.1 ω.2.1 i - T.vals r w ω.1 ω.2.1 i)) =
+      v r w ω.1 ω.2.1 i + (ω.2.2.1 r).1 i
     ring
 
 namespace Claims.ZKMal
@@ -51,7 +55,7 @@ theorem swSrcE_masked_any (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w :
     ((swSrcE x c w v τ j.val).rep r.val).masked k =
       FlockLevel3.GF128.val (v j r (wtOf PE x w j)
           (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-          (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1 ⟨k, hk⟩) +
+          (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1 ⟨k, hk⟩) +
         (UE.tapeZk τ).h j.val r.val k := by
   obtain ⟨t, rfl⟩ : ∃ t' : Fin Claims.Flock.zkTableCap → ExeCell, t' = τ := ⟨τ, rfl⟩
   have hc : j.val < Claims.Flock.zkTableCap := lt_of_lt_of_le j.isLt (jOf_le_cap x)
@@ -72,7 +76,7 @@ theorem swSrcE_masked_any (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w :
   rw [dite_eq_left (show k < ((tabC PE x j).T (czExe PE x c j)).tab.nE from hk), swCutE_masked_any x c w v t j]
   show FlockLevel3.GF128.val (v j r (wtOf PE x w j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x t).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x t).1 j) 0).2.1.2.1 ⟨k, hk⟩ +
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x t).1 j) 0).2.1 ⟨k, hk⟩ +
     (t ⟨j.val, hc⟩).1.2.2.1 r (hEmb hz (.inl ⟨k, hk⟩))) = _
   rw [FlockLevel3.val_add]
   congr 1
@@ -86,7 +90,7 @@ theorem swSrcE_masked_pad_any (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) 
     ((swSrcE x c w v τ j.val).rep r.val).masked k =
       FlockLevel3.GF128.val (v j r (wtOf PE x w j)
           (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-          (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1 ⟨k, hkE⟩) +
+          (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1 ⟨k, hkE⟩) +
         (FlockComplete.padsOf (UE.tapeZk τ) j.val r.val (layE x j)).h[k]! := by
   have hk : k < (layE x j).hab := by rw [← nE_eq_hab x j]; exact hkE
   have hlen : (layE x j).len = (layE x j).tw + 1 := rfl

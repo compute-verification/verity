@@ -1,5 +1,7 @@
-import Proofs.Accounting.TS.Session.Checked.Guarantees
-import Proofs.Accounting.TS.SessionSound
+module
+
+public import Proofs.Accounting.TS.Session.Checked.Guarantees
+public import Proofs.Accounting.TS.SessionSound
 
 /-!
 # A checked unit's proof layer is sound through its C-Flock sessions (the proof)
@@ -15,6 +17,8 @@ value layer the committed row (`RowsSession.servedEv_false`). `SoundAt δ` is th
 This module imports `Proofs.Flock.SoundAtBridge` (through `Proofs.Accounting.TS.SessionSound`), whose imports make `X`
 a token, so `Proofs/Accounting.lean` imports it.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit.Law
 

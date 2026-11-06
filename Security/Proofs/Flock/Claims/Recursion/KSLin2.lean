@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.VCalls
+module
+
+public import Proofs.Flock.Claims.Recursion.VCalls
 
 /-!
 # Route 2C: `KSLin2` from `KSFlockLin` at `DE`
@@ -26,6 +28,8 @@ V*'s parts are `InnerAcceptsCollAtV` and `ForksBindAtV`, and `B_I` and `Fdev` se
 (`BinnerV`, `FdevV`).
 `Bound.ksLin2_of_flockLin_binds` is the recursion's bound from it, as `KSLin_of` (`PrBad_le_of_inner`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

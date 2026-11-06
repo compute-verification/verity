@@ -1,4 +1,6 @@
-import Proofs.Flock.VBridge.Algebra.RunSkel
+module
+
+public import Proofs.Flock.VBridge.Algebra.RunSkel
 
 /-!
 # L4′: the lincheck with hidden units, at the residuals
@@ -13,6 +15,8 @@ comb `comb + h` (`addH`). `lincheck_of_residuals_holo`: so when they are zero th
 `lincheck_of_residuals_hw` reads its residuals at w itself, ending the rounds at `dot (comb + h) z_partial` for the `h`
 w holds (`hOfW`).
 -/
+
+@[expose] public section
 
 namespace Flock.RecAlgebra
 

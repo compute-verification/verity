@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.ZkDecJ
-import Proofs.Flock.Claims.KS.ZkOffSC
+module
+
+public import Proofs.Flock.Claims.KS.ZkDecJ
+public import Proofs.Flock.Claims.KS.ZkOffSC
 
 /-!
 # The deployed `--zk` decoders, with no witness-lane opening off the table
@@ -28,6 +30,8 @@ it self-clashes:
   `decodesTable_deploy` are at `accepted`.
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.Discharge.Composed
 
 open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec
@@ -43,7 +47,7 @@ schedule is `Zk.schedule`'s, and the record decodes to a session with table `j`'
 reader looks up no column off `C` in the reps' `zkRepColsOf` entries at `2·|regions|` extra claims on the streams'
 rounds and table `j`'s proof files, below level 0's `2^d`. -/
 def ZkTxNoOff (I : Inputs) (d : Lean.Json) (j : ℕ) {N : ℕ} (C : Fin N → List 𝔽) (t : Exec.Transcript) : Prop :=
-  ∀ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session) (sch : Flock.Schedule) (tPad : ℕ)
+  ∀ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord) (sch : Flock.Schedule) (tPad : ℕ)
     (s₀ s₁ : StreamRec) (h : j < sts.size),
     FlockDeploy.KS.setupAt (zkInputs I) (some d) = .ok (spec, sts) → Record.decode spec t.record = .ok sess →
     Zk.schedule sts[j].m = .ok (sch, tPad) →

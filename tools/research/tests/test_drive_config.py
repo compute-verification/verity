@@ -17,7 +17,6 @@ from test_queue import World, _git
 FLAGS = """on = ["m1", "m2"]
 marked_after = "2026-10-12T06:00:00Z"
 regenerate_locks = true
-first = [1858]
 land = "review"
 after_landing_no_cache = true
 landing_gates = ["gates/g.py"]
@@ -46,13 +45,13 @@ def machines(monkeypatch) -> tuple[set[str], dict[str, str]]:
 
 @pytest.fixture
 def driven(monkeypatch) -> list[dict]:
-    """Each Driver the command builds, as its queue's `first` and the flags it was given; its tick does nothing."""
+    """Each Driver the command builds, as the flags its queue and it were given; its tick does nothing."""
     built: list[dict] = []
 
     class Driver:
         def __init__(self, q, **kw):
             assert callable(kw.pop("reviews")) and callable(kw.pop("ready_by"))
-            built.append({"first": q.first, "nonlean_first": q.nonlean_first, "reviewed_first": q.reviewed_first,
+            built.append({"nonlean_first": q.nonlean_first, "reviewed_first": q.reviewed_first,
                           "verdict_first": q.verdict_first, **kw})
 
         def tick(self, dry_run=False):
@@ -75,17 +74,17 @@ def on_main(world: World, text: str) -> str:
 
 def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defaults():
     f = DriveFlags.parse(FLAGS)
-    assert f == DriveFlags(on="m1,m2", marked_after="2026-10-12T06:00:00Z", regenerate_locks=True, first=(1858,),
+    assert f == DriveFlags(on="m1,m2", marked_after="2026-10-12T06:00:00Z", regenerate_locks=True,
                            land="review", after_landing_no_cache=True,
                            landing_gates=("gates/g.py",), max_lean_checks=3, nonlean_first=False, reviewed_first=False,
                            verdict_first=False, stale_days=3, stale_close_days=7)
-    assert DriveFlags.parse("") == DriveFlags() == DriveFlags(None, None, False, (), "review", None, False)
+    assert DriveFlags.parse("") == DriveFlags() == DriveFlags(None, None, False, "review", None, False)
     assert DriveFlags.parse("after_landing_shards = 3\n").after_landing_shards == 3
     assert [DriveFlags.parse(f'after_landing_shards = "{v}"\n').after_landing_shards for v in ("auto", "auto:4")] == ["auto", "auto:4"]
-    assert f.line() == ("on=m1,m2 marked_after=2026-10-12T06:00:00Z regenerate_locks=True first=1858 land=review "
+    assert f.line() == ("on=m1,m2 marked_after=2026-10-12T06:00:00Z regenerate_locks=True land=review "
                         "land_into=None after_landing_no_cache=True landing_gates=gates/g.py max_lean_checks=3 nonlean_first=False reviewed_first=False verdict_first=False stale_days=3 "
-                        "stale_close_days=7 stale_keep= after_landing_shards=1 command_line=on,first lowrisk_lane=True lowrisk_per_tick=20 lowrisk_excludes= "
-                        "executor=off")
+                        "stale_close_days=7 stale_keep= after_landing_shards=1 command_line=on lowrisk_lane=True lowrisk_per_tick=20 lowrisk_excludes= "
+                        "executor=off executor_enqueue= signed_verdicts=False")
     assert [DriveFlags.parse(f'executor = "{v}"\n').executor for v in ("off", "shadow", "on")] == ["off", "shadow", "on"]
     for text, why in (('on = "m1,m2"', 'on = \'m1,m2\': a list of names, as ["a", "b"]'),
                       ('executor = "yes"', "executor = 'yes': one of off, shadow, on"),
@@ -105,7 +104,6 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
                       ('lowrisk_excludes = ["/verity/core/"]', "lowrisk_excludes = ['/verity/core/']: a non-empty list"),
                       ('lowrisk_excludes = ["../x/"]', "lowrisk_excludes = ['../x/']: a non-empty list"),
                       ('lowrisk_excludes = ["verity/*/x.py"]', "lowrisk_excludes = ['verity/*/x.py']: a non-empty list"),
-                      ('first = ["1858"]', "first = ['1858']: a list of PR numbers"),
                       ('land = "fast"', "land = 'fast': one of review"),
                       ('land = "check"', "land = 'check': train landing was deleted with its code (#5070): drive lands on "
                                          "review only"),
@@ -122,6 +120,9 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
                       ("stale_days = 7\nstale_close_days = 3", "stale_close_days = 3: 0, or at least stale_days"),
                       ('command_line = ["max_lean_checks"]', "command_line = ['max_lean_checks']: a list of the keys a "
                                                              "command-line flag sets, of on, marked_after"),
+                      ('command_line = ["on", "first"]', "command_line = ['on', 'first']: a list of the keys a command-line "
+                                                         "flag sets, of on, marked_after, regenerate_locks, "
+                                                         "after_landing_no_cache"),
                       ("on = [", "not TOML")):
         with pytest.raises(QueueError, match="^drive.toml: ") as e:
             DriveFlags.parse(text)
@@ -132,9 +133,9 @@ def test_drive_refuses_an_unknown_key_naming_the_keys_it_reads_and_the_one_it_li
     with pytest.raises(QueueError) as e:
         DriveFlags.parse("max_lean_check = 4\n", "d.toml", strict=True)
     assert str(e.value) == ("d.toml: unknown key 'max_lean_check' (did you mean 'max_lean_checks'?): drive reads only on, "
-                            "marked_after, regenerate_locks, first, land, land_into, after_landing_no_cache, landing_gates, max_lean_checks, "
+                            "marked_after, regenerate_locks, land, land_into, after_landing_no_cache, landing_gates, max_lean_checks, "
                             "nonlean_first, reviewed_first, verdict_first, stale_days, stale_close_days, stale_keep, after_landing_shards, command_line, lowrisk_lane, "
-                            "lowrisk_per_tick, lowrisk_excludes, executor; "
+                            "lowrisk_per_tick, lowrisk_excludes, executor, executor_enqueue, signed_verdicts; "
                             "rename or remove it, or update this research")
 
 
@@ -145,9 +146,9 @@ def test_a_client_ignores_every_key_it_doesnt_read_a_near_miss_too_so_it_parses_
 
 
 #: what `driven` records of a Driver built from `FLAGS`
-FROM_FLAGS = {"first": (1858,), "nonlean_first": False, "reviewed_first": False, "verdict_first": False, "on": "m1,m2", "regenerate_locks": True,
+FROM_FLAGS = {"nonlean_first": False, "reviewed_first": False, "verdict_first": False, "on": "m1,m2", "regenerate_locks": True,
               "after_landing_no_cache": True, "max_lean_checks": 3, "stale_days": 3, "stale_close_days": 7, "stale_keep": (),
-              "after_landing_shards": 1, "lowrisk_lane": True, "lowrisk_per_tick": 20, "lowrisk_excludes": (), "executor": "off"}
+              "after_landing_shards": 1, "lowrisk_lane": True, "lowrisk_per_tick": 20, "lowrisk_excludes": (), "executor": "off", "executor_enqueue": ()}
 
 
 def test_drive_reads_the_flags_at_main_in_its_clone_never_the_callers_tree_and_takes_a_new_main_without_a_restart(world, driven, monkeypatch, capsys):
@@ -160,9 +161,10 @@ def test_drive_reads_the_flags_at_main_in_its_clone_never_the_callers_tree_and_t
     assert driven[-1] == FROM_FLAGS
     lines = [x for x in capsys.readouterr().out.splitlines() if "flags from" in x]
     assert lines == [f"research queue drive: flags from {DRIVE_FLAGS} at main {sha[:12]}: on=m1,m2 "
-                     "marked_after=2026-10-12T06:00:00Z regenerate_locks=True first=1858 land=review "
+                     "marked_after=2026-10-12T06:00:00Z regenerate_locks=True land=review "
                      "land_into=None after_landing_no_cache=True landing_gates=gates/g.py max_lean_checks=3 nonlean_first=False reviewed_first=False verdict_first=False stale_days=3 "
-                     "stale_close_days=7 stale_keep= after_landing_shards=1 command_line=on,first lowrisk_lane=True lowrisk_per_tick=20 lowrisk_excludes= executor=off"]
+                     "stale_close_days=7 stale_keep= after_landing_shards=1 command_line=on lowrisk_lane=True lowrisk_per_tick=20 lowrisk_excludes= executor=off executor_enqueue= "
+                     "signed_verdicts=False"]
     assert drive(world, "--config", DRIVE_FLAGS) == 0 and driven[-1] == FROM_FLAGS
 
     on_main(world, FLAGS.replace("max_lean_checks = 3", "max_lean_checks = 6"))
@@ -203,32 +205,32 @@ def test_a_pod_config_key_that_differs_from_mains_refuses_the_tick_naming_each_k
 
 
 def test_the_command_line_overrides_only_the_keys_drive_toml_lets_it(world, driven, monkeypatch, capsys):
-    """The control pod's args pass `--on` and `--first` (drive.toml's `command_line`); any other flag refuses the tick."""
+    """The control pod's args pass `--on` (drive.toml's `command_line`); any other flag that sets a key refuses the tick."""
     sha = on_main(world, FLAGS)
     monkeypatch.chdir(world.dev)
-    assert drive(world, "--on", "m9", "--first", "7,8") == 0
-    assert driven[-1] == {**FROM_FLAGS, "first": (7, 8), "on": "m9"}
+    assert drive(world, "--on", "m9") == 0
+    assert driven[-1] == {**FROM_FLAGS, "on": "m9"}
     assert drive(world, "--on", "m9", "--no-regenerate-locks", "--marked-after", "2026-10-13T06:00:00Z") == 1
     assert capsys.readouterr().err == (
         f"research queue: --marked-after and --regenerate-locks: {DRIVE_FLAGS} at main {sha[:12]} lets drive's command line set "
-        f"only on, first (its `command_line`): commit the change to {DRIVE_FLAGS}, or drop the flag from drive's args\n")
+        f"only on (its `command_line`): commit the change to {DRIVE_FLAGS}, or drop the flag from drive's args\n")
     assert len(driven) == 1
-    on_main(world, FLAGS + 'command_line = ["on", "first", "regenerate_locks", "after_landing_no_cache"]\n')
+    on_main(world, FLAGS + 'command_line = ["on", "regenerate_locks", "after_landing_no_cache"]\n')
     assert drive(world, "--no-regenerate-locks", "--no-after-landing-no-cache") == 0
     assert driven[-1] == {**FROM_FLAGS, "regenerate_locks": False, "after_landing_no_cache": False}
     on_main(world, FLAGS + "command_line = []\n")
     assert drive(world, "--on", "m9") == 1 and "set only nothing (its `command_line`)" in capsys.readouterr().err
 
 
-def test_without_drive_toml_at_main_drive_takes_the_defaults_and_its_on_and_first(world, driven, monkeypatch, capsys):
+def test_without_drive_toml_at_main_drive_takes_the_defaults_and_its_on(world, driven, monkeypatch, capsys):
     rules = world.tmp / "rules.toml"
     rules.write_text('hold_label = "hold"\nmarked_after = "2026-10-12T06:00:00Z"\n')
     monkeypatch.chdir(world.dev)
-    assert drive(world, "--on", "m1", "--rules", str(rules), "--first", "5") == 0
-    assert driven[-1] == {"first": (5,), "nonlean_first": True, "reviewed_first": True, "verdict_first": True, "on": "m1", "regenerate_locks": False,
+    assert drive(world, "--on", "m1", "--rules", str(rules)) == 0
+    assert driven[-1] == {"nonlean_first": True, "reviewed_first": True, "verdict_first": True, "on": "m1", "regenerate_locks": False,
                           "after_landing_no_cache": False, "max_lean_checks": 2, "stale_days": 0, "stale_close_days": 0,
                           "stale_keep": (), "after_landing_shards": 1, "lowrisk_lane": True, "lowrisk_per_tick": 20,
-                          "lowrisk_excludes": (), "executor": "off"}
+                          "lowrisk_excludes": (), "executor": "off", "executor_enqueue": ()}
     assert f"flags from the defaults ({DRIVE_FLAGS} isn't at main " in capsys.readouterr().out
     assert drive(world, "--on", "m1", "--rules", str(rules), "--regenerate-locks") == 1
     assert "--regenerate-locks: the defaults" in capsys.readouterr().err
@@ -309,6 +311,49 @@ def test_the_deleted_train_flags_parse_and_are_ignored_with_a_note(world, driven
     assert driven[-1] == plain and "drive: --max-running ignored: " in capsys.readouterr().out
 
 
+def test_the_priority_file_reaches_the_ticks_queue_and_is_for_sync_and_drive_only(world, monkeypatch, capsys):
+    """`--priority-file PATH` is drive's priority list, which its queue reads at each sync (`Queue.priority_file`).  The tick's
+    queue makes no `Preflight`: a ready mark admits the PR."""
+    rules = world.tmp / "rules.toml"
+    rules.write_text('hold_label = "hold"\nmarked_after = "2026-10-12T06:00:00Z"\n')
+    monkeypatch.chdir(world.dev)
+    files: list[Path | None] = []
+
+    def preflight(*args, **kwargs):
+        raise AssertionError("drive's queue made a preflight")
+
+    monkeypatch.setattr(Q.Preflight, "__init__", preflight)
+
+    class Driver:
+        def __init__(self, q, **kw):
+            files.append(q.priority_file)
+
+        def tick(self, dry_run=False):
+            return ""
+
+    monkeypatch.setattr(D, "Driver", Driver)
+    assert drive(world, "--on", "m1", "--rules", str(rules), "--priority-file", str(world.tmp / "priority")) == 0
+    assert drive(world, "--on", "m1", "--rules", str(rules)) == 0
+    assert files == [world.tmp / "priority", None]
+    with pytest.raises(SystemExit) as e:
+        Q.main(["status", "--priority-file", str(world.tmp / "priority")])
+    assert e.value.code == 2 and "--priority-file is for sync and drive only" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("command", ["drive", "sync"])
+def test_first_is_refused_naming_the_priority_file_which_holds_the_landing_order(world, driven, monkeypatch, capsys, command):
+    """The landing order has one source, drive's priority file: a `--first` left in drive's args refuses the tick before it
+    reads anything, with the fix."""
+    on_main(world, FLAGS)
+    monkeypatch.chdir(world.dev)
+    with pytest.raises(SystemExit) as e:
+        Q.main([command, "--workdir", str(world.tmp / "q" / "verity"), "--remote", str(world.origin), "--repo", "o/r",
+                "--store", str(world.tmp / "store"), "--on", "m1", "--first", "7,8"])
+    assert e.value.code == 2 and driven == [] and not (world.tmp / "q").exists()
+    assert ("--first is retired: drive's priority file (--priority-file) holds the landing order; list the PRs there, first "
+            "to land first") in capsys.readouterr().err
+
+
 def test_config_refusals_name_the_fix(world, driven, monkeypatch, capsys):
     monkeypatch.chdir(world.dev)
     assert drive(world, "--config", DRIVE_FLAGS) == 1
@@ -345,3 +390,14 @@ def test_the_gates_are_read_whatever_other_keys_drive_toml_holds(tmp_path):
     _git(tmp_path, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "y")
     with pytest.raises(QueueError, match="landing_gates"):
         gates_at(tmp_path, "main")
+
+
+def test_the_low_risk_lane_excludes_what_runs_with_the_control_pods_or_every_agents_credentials():
+    """A change to infra, the research tool, the agent guard and its hooks, or the environment runs on the control pod or on
+    every agent once it is on main, so it lands only on a review, never on a ready mark alone."""
+    import tomllib
+
+    root = Path(__file__).resolve().parents[3]
+    excludes = tomllib.loads((root / "tools/verity/check/drive.toml").read_text())["lowrisk_excludes"]
+    for path in ("infra/", "tools/research/", "tools/agent-guard/", ".cursor/", "pyproject.toml", "uv.lock"):
+        assert path in excludes, f"drive.toml's lowrisk_excludes lacks {path}"

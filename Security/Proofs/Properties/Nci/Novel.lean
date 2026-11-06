@@ -1,5 +1,7 @@
-import Proofs.Properties.Nci.Resolve
-import Proofs.Properties.Nci.Width
+module
+
+public import Proofs.Properties.Nci.Resolve
+public import Proofs.Properties.Nci.Width
 
 /-!
 # The novel reads, from what `Desc.analyze` and `Desc.novelWidth` compute
@@ -16,6 +18,8 @@ segment's first piece. `readsExact` (`Proofs.Properties.Nci.Agrees`) proves it.
 `descAgrees_of_open` gives `DescAgrees` from it, `Walk.OperandsResolve` and `Resolve.BodiesOk`, and
 `descAgrees_of_readsExact` (`Proofs.Properties.Nci.Agrees`) from it alone, the other two proved.
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.Novel
 

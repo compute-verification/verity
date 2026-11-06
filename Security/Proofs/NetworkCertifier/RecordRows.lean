@@ -1,4 +1,7 @@
-import Definitions.NetworkCertifier.RecordRows
+module
+
+public import Definitions.NetworkCertifier.RecordRows
+meta import Definitions.NetworkCertifier.RecordRows
 
 /-!
 # The network certifier's rows read back its lanes
@@ -17,6 +20,8 @@ traffic of `test_network_certifier_warden_rows.py`); a byte late at its cell (`f
 `egress_cells` (`fxLimit`). Each frame is its ordinal, kind and payload in hex; a lane's arrivals are its DATA cells'
 and its END's payloads (`true` for the END), every cell in time except a failed lane's next one.
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

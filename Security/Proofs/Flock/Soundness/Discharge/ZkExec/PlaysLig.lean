@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysStatements
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLig
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysStatements
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLig
 
 /-!
 # The hiding Ligerito's runs
@@ -11,6 +13,8 @@ coins of the right sizes (`foldRoundsC_any`, `foldRoundsZK_any`, `drawKs_any`, `
 recursive round records a query. What the executable gives is the coins: every round it consumes issued the number of
 coins the model draws there (`fold_coins`, `lane_coins`, `queryLevel0_bind`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

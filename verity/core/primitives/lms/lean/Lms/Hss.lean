@@ -1,4 +1,6 @@
-import Lms.Verify
+module
+
+public import Lms.Verify
 
 /-!
 # HSS at two levels: a device's identity and its parties' keys (RFC 8554 §6 over SHA-512)
@@ -10,6 +12,8 @@ format (`HssSignature.decode`: `lower ‖ certificate ‖ signature`, the lower 
 `SHA-512([tag] ‖ I ‖ [context] ‖ [record])`, each `[·]` a u64 big-endian length then the bytes. A Python `ValueError` is
 an `Except.error` here. `MemoryChallenger.Difftest` holds these to the Python.
 -/
+
+@[expose] public section
 
 namespace Lms
 

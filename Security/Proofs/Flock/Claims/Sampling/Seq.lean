@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.Layout
-import Proofs.Flock.Claims.Sampling.Deployed
+module
+
+public import Proofs.Flock.Claims.ZK.Layout
+public import Proofs.Flock.Claims.Sampling.Deployed
 
 /-!
 # Sampling's zero knowledge by sequential composition
@@ -31,6 +33,8 @@ messages from `(x, hist)` (`zkmalAt_public`), and `M` sessions cost `Σ_{j < M} 
 The simulator is given the published leaf layer and doesn't read it: what the prover sends outside the sessions is a
 function of `(x, hist)`.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 

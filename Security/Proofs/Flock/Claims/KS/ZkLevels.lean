@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.KS.PlainLevels
-import Proofs.Flock.Claims.KS.ZkEvent
-import Proofs.Flock.Claims.KS.ZkTables
-import Proofs.Flock.Claims.DeployRoundsZk
-import Proofs.Flock.Claims.KS.ConflictRun
+module
+
+public import Proofs.Flock.Claims.KS.PlainLevels
+public import Proofs.Flock.Claims.KS.ZkEvent
+public import Proofs.Flock.Claims.KS.ZkTables
+public import Proofs.Flock.Claims.DeployRoundsZk
+public import Proofs.Flock.Claims.KS.ConflictRun
 
 /-!
 # Every level's queries in the masked verifier over the hash oracle
@@ -23,6 +25,8 @@ that position against one root in the run's own log, a collision there (`zk_leve
 * `zkRawLevelRowsJ`, `zk_levelRowJ_raw`, `zk_levelClash_tiedJ`: the level-`ℓ` rows table `j`'s rep `k` opens in a masked
   record, each an `Opening` in an accepted run's log, and two of them at one position that differ collide there.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -231,7 +235,7 @@ schedule of its table, a rep that `Zk.verifyRepWith hs` accepts (in `V`, any ora
 for every level `1 ≤ ℓ`, against the proof's `ℓ − 1`-th recursive cap on its level-`ℓ` rows at the positions of round
 `zkLevelRound`'s coins, and the reader's level-`ℓ` rows (`zkLevelRowsOf`) are those positions with those rows. -/
 theorem zkLevels_verifyRepWith (hs : Hashes Flock.V) (spec : SessionSpec) (st : Setup) (sch : Schedule) (tPad : ℕ)
-    (sess : Session) (i r : ℕ) (bytes cap : ByteArray) (hsch : Zk.schedule st.m = .ok (sch, tPad))
+    (sess : RunRecord) (i r : ℕ) (bytes cap : ByteArray) (hsch : Zk.schedule st.m = .ok (sch, tPad))
     (h : Zk.verifyRepWith hs spec st sch tPad sess i r bytes = .ok cap) :
     ∃ (stream : StreamRec) (extras : Array Claim) (zp : Zk.ZkProof),
       sess.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some stream ∧
@@ -290,7 +294,7 @@ open FlockSoundness.Discharge.ZkExec (shapeZK) in
 `zkLevels_verifyRepWith` at every table `i` and rep `r < 2` (`verifyWithM_reps`). -/
 theorem zkLevels_verifyWithM (hs : Hashes Flock.V) (spec : SessionSpec) (tabs : Array Setup) (record : String)
     (proofs : Array ByteArray) (h : Zk.verifyWithM hs spec tabs record proofs = .ok ()) :
-    ∃ sess : Session, Record.decodeWith hs spec record = .ok sess ∧ tabs.size = spec.tables.size ∧
+    ∃ sess : RunRecord, Record.decodeWith hs spec record = .ok sess ∧ tabs.size = spec.tables.size ∧
       ∀ (i : ℕ) (hi : i < tabs.size), ∃ (sch : Schedule) (tPad : ℕ), Zk.schedule tabs[i].m = .ok (sch, tPad) ∧
         ∀ r < 2, ∃ (stream : StreamRec) (extras : Array Claim) (zp : Zk.ZkProof),
           sess.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some stream ∧

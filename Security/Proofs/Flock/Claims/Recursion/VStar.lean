@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.InnerAccepts
-import Proofs.Flock.Claims.Recursion.Registered
+module
+
+public import Proofs.Flock.Claims.Recursion.InnerAccepts
+public import Proofs.Flock.Claims.Recursion.Registered
 
 /-!
 # `VStarAccepts` at the deployed readers, reduced to V*'s parts
@@ -81,6 +83,8 @@ the inner verifier.
   message's digest under the salt's mask, as hm96 rows open (`Deploy.zeroCommit`'s form). It binds wherever the salt's
   and the message's encodings are injective.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion.VStar
 
@@ -716,7 +720,7 @@ theorem vstarAccepts_dense {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W
   vstarAccepts_of_parts hR hVL hC hO hS hD
 
 omit [Fintype Coin] [Nonempty Coin] in
-/-- **`VStarAcceptsR` at the holo shape**, from V*'s parts there (`RecursiveAuditC3`'s inner protocol, private inner
+/-- **`VStarAcceptsR` at the holo shape**, from V*'s parts there (`RecursiveAuditHolo`'s inner protocol, private inner
 circuits). -/
 theorem vstarAccepts_holo {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {IV : Verifier Coin} {L : Layout} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}

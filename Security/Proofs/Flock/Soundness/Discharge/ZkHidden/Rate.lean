@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkBind.Rate
-import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkBind.Rate
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
 
 /-!
 # The planned rate of the hidden-output `--zk` plan of `J` tables, at every draw
@@ -12,6 +14,8 @@ schedule `Zk.schedule` returned (`DrawSetupZHJ.hz`), so a cap `L` (`ZkBind.ZkLog
 * `hr_planZHJ`: `2^L ≤ ρ·(e·k)` gives `rateZ (planZHJ dj y₀ S R) i k ≤ ρ` at every `dj`, `y₀`, `S`, `R`, `i`.
 * `hr_planZHJ_23`: the same at `ZkBind.zkLogLenCap_23`, the cap `Zk.schedule`'s m range puts on level 0's `logLen`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkHidden
 

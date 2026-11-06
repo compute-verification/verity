@@ -1,8 +1,10 @@
-import Properties.RemoteAudit.Pooled
-import Mathlib.Algebra.Order.BigOperators.Group.List
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.Positivity
+module
+
+public import Properties.RemoteAudit.Pooled
+public import Mathlib.Algebra.Order.BigOperators.Group.List
+public import Mathlib.Tactic.FieldSimp
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.Positivity
 
 /-!
 # The verifier's pooled bound covers the draw's (`PooledCovers`)
@@ -17,6 +19,8 @@ greedy wins with `b` (`G_ge`): the head's share is at most the greedy's, and the
 the head buys, on the rest, no more than the head's ratio. `order` permutes the windows (`List.mergeSort_perm`) and
 sorts them (`List.pairwise_mergeSort`), so every share vector `Draw.pooled` ranges over is one `G_ge` bounds.
 -/
+
+@[expose] public section
 
 open RemoteAudit Pooled
 

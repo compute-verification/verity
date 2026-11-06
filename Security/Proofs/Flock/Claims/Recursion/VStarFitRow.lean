@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.VStarFitHeld
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarFitHeld
 
 /-!
 # The absorbed row's piece at a round that commits tops (`fit_rowPiece`)
@@ -9,6 +11,8 @@ then the row's (`rowSlot`), so at the fitted records the absorbed row is the rou
 which is the row the stager's message rounds read (`msgsOf`, `getLast?`). The holder's port `m<k>` reads it at the
 fitted port inputs, its words being the port's (`hW`), as at a held round (`fit_stream`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarBuild
 
@@ -143,6 +147,7 @@ theorem fit_rowPiece {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.fi
     | recOpen _ _ _ _ => simp [RecVStar.ownPorts] at hq
     | recOpenStacked _ _ _ _ => simp [RecVStar.ownPorts] at hq
     | cap _ _ => simp [RecVStar.ownPorts] at hq
+    | link _ _ _ => simp [RecVStar.ownPorts] at hq
     | sparse _ _ =>
       first | cases hpin | simp [_root_.VStar.In.partIn, throw, throwThe, MonadExceptOf.throw] at hpin
     | opening _ _ _ _ _ _ =>

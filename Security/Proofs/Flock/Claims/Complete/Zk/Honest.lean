@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Zk.Session
-import Proofs.Flock.Claims.Complete.Honest
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Session
+public import Proofs.Flock.Claims.Complete.Honest
 
 /-!
 # Flock's honest prover at the deployed masked verifier (`honestPZk`)
@@ -15,6 +17,8 @@ runs `ZkTables.honestP` (each table on its share, `honestPZk` at one table) at t
   `Final.encode ⟨x, record, proofs⟩`.
 * **The prover** (`honestPZk`): at the history `hist`, the program fed the verifier's replies so far.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

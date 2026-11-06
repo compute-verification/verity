@@ -1,4 +1,6 @@
-import PouwCheck.Verified
+module
+
+public import PouwCheck.Verified
 
 /-!
 # A period's committed circuit files (`credit.committed_files`)
@@ -7,6 +9,8 @@ The circuit files a period's open committed, which `credit.period_credit` verifi
 statements on (`credit._lean_committed_files`, through `pouw-check-difftest`'s `credit-committed-files`), with
 `credit.committed_files` the Python reference the difftest (`tests/test_live_verified_difftest.py`) holds to it.
 -/
+
+@[expose] public section
 
 namespace PouwCheck.CommittedFiles
 
@@ -26,16 +30,18 @@ def noFiles (name : String) : String :=
   "window's statements can be verified: commit them in the period-open, beside its circuit and K"
 
 /-- `credit.committed_files`: the circuit files period `name`'s open committed (`CIRCUIT_FILES`, `{k<K>: SHA-512,
-live: SHA-512}`: each template's circuit file, as the auditor's lowering built it) in the auditor's ledger `ledger`,
-one `period` has trusted; else the refusal (`circuit`). -/
+live: SHA-512}`: each template's circuit file, as the auditor's lowering built it, a lanes-form K's `lane<K>` and
+`combine<K>` with their leaf Programs' digests in `Lanes.LEAF_PROGRAMS`) in the auditor's ledger `ledger`, one `period`
+has trusted, in the lanes form (`Lanes.lanesFiles`); else the refusal (`circuit`). -/
 def committedFiles (ledger : Json) (name : String) : R Json := do
   let .arr lines := ledger | throw ("period", "the period is not named")
   let body := ((lines.filterMap SampledProofs.Challenger.ledgerEntry?).find? fun e =>
     e.kind == "period-open" && get e.body "period" == Json.str name).map (·.body)
   let files := (body.map (get · CIRCUIT_FILES)).getD .null
-  unless isObj files && !(fields files).isEmpty
-      && (fields files).all (fun (x, v) => template? x && (digest? v).isSome) do
+  unless isObj files && !(fields files).isEmpty && (fields files).all (fun (x, v) =>
+      x == Lanes.LEAF_PROGRAMS || ((template? x || (Lanes.leafFile? x).isSome) && (digest? v).isSome)) do
     throw ("circuit", noFiles name)
+  if let some why := Lanes.lanesFiles files then throw ("circuit", s!"period {name}'s open: {why}")
   pure files
 
 /-- `credit-committed-files`: on `{ledger, name}`, `{"files": …}` (`committedFiles`) or `{"refused": [code, why]}`. -/

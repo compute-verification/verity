@@ -1,4 +1,4 @@
-//! Zero-knowledge readiness for `verity/flock-circuit` (lane flock-circuit, M0): the masking hooks the prover API
+//! Zero-knowledge readiness for `verity/flock-circuit` (M0): the masking hooks the prover API
 //! carries now, as no-ops, and the prover's own randomness.
 //!
 //! Every random value the prover uses is the operating system's own bytes (`getrandom`), read where it is drawn and kept where it

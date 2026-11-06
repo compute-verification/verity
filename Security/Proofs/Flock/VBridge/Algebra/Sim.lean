@@ -1,5 +1,7 @@
-import Flock.RecAlgebra
-import Proofs.Flock.Soundness.Refine.Arith
+module
+
+public import Flock.RecAlgebra
+public import Proofs.Flock.Soundness.Refine.Arith
 
 /-!
 # V*'s algebra over symbolic values, evaluated
@@ -13,6 +15,8 @@ points are the same.
 * `Sim f x y`: whenever the coin computation `x` succeeds, `y` succeeds with `f` of its result, the same coins drawn;
   `SimL` is the same through Ligerito's state. Each function `run` calls has its lemma, in the order `run` calls them.
 -/
+
+@[expose] public section
 
 namespace Flock.RecAlgebra
 
