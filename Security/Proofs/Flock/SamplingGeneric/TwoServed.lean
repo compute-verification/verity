@@ -242,7 +242,7 @@ theorem served_eq_on (H : Msg → Msg) (Cm : CommitmentScheme Bool) {s : AuditSt
 theorem blocksTo_union {R : Type} (C : Prog) (Pt : Partition) (req : Fin C.outs.length → R) (T T' : Finset ℕ)
     (r : R) : blocksTo C Pt req (T ∪ T') r = blocksTo C Pt req T r ∪ blocksTo C Pt req T' r := by
   unfold blocksTo
-  exact filter_union _ _
+  exact filter_union T T'
 
 /-- Two boundary traces whose incorrect sets are in `𝒯`, each with `T_r = U`, the same inputs and the same bits at
 `U`'s committed values serve request `r` the same outputs: both are correct outside the union of their sets. -/
@@ -502,7 +502,6 @@ theorem card_influenceTwo_le_touched (H : Msg → Msg) (Cm : CommitmentScheme Bo
             (fun U => U.Nonempty), 2 ^ bitsOf s Pt U) (2 ^ servedBits req r) := by
   classical
   refine (card_influenceTwo_le_classes H Cm hs δ a req fun _ U => decide U.Nonempty).trans ?_
-  beta_reduce
   have himg : ((admissibleTwo Pt d δ).image fun T r => decide (blocksTo s.prog Pt req T r).Nonempty) =
       ((admissibleTwo Pt d δ).image fun T => univ.filter fun r => (blocksTo s.prog Pt req T r).Nonempty).image
         fun Q r => decide (r ∈ Q) := by
@@ -544,7 +543,8 @@ def lightBits (s : AuditStatement) (Pt : Partition) (n : ℕ) : Option (Option (
 theorem lightOf_eq_none {s : AuditStatement} {Pt : Partition} {n : ℕ} {U : Finset ℕ} (h : lightOf s Pt n U = none) :
     U = ∅ := by
   unfold lightOf at h
-  split_ifs at h with h₁ h₂ <;> first | exact h₁ | cases h
+  split_ifs at h with h₁
+  exact h₁
 
 theorem lightOf_eq_some_some {s : AuditStatement} {Pt : Partition} {n : ℕ} {U U₀ : Finset ℕ}
     (h : lightOf s Pt n U = some (some U₀)) : U = U₀ := by
@@ -574,7 +574,6 @@ theorem card_influenceTwo_le_patterns (H : Msg → Msg) (Cm : CommitmentScheme B
         2 ^ ∑ r, lightBits s Pt (servedBits req r) (p r) := by
   classical
   refine (card_influenceTwo_le_classes H Cm hs δ a req fun r U => lightOf s Pt (servedBits req r) U).trans ?_
-  beta_reduce
   refine sum_le_sum fun p _ => ?_
   rw [← prod_pow_eq_pow_sum]
   refine prod_le_prod fun r _ => ?_
