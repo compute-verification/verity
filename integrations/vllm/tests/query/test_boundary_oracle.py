@@ -280,7 +280,7 @@ def test_moe_router_scans_and_step_interiors():
         # inside the step body of the first, a middle and the last iteration (parent walk through the carry edges)
         for m in (0, n // 2, n - 1):
             si = sc.child(js, m)
-            run_family("  RouterArgmaxStep body nodes (iteration interiors)", oracle, body_parts(si) + [merged(si, {(0, 0), (1, 0)})])
+            run_family("  ArgmaxStepF32 body nodes (iteration interiors)", oracle, body_parts(si) + [merged(si, {(0, 0), (1, 0)})])
     check_widths(P_, oracle)
     check_used_against_liveness(nodes[scans[0]].fn)
 
