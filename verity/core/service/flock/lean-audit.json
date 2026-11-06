@@ -97,14 +97,19 @@
   "FlockRecLinks": "the flock-rec-links executable's entry point, one line; its command is Flock.RecLinksCmd.cmd, audited under Flock",
   "FlockFrameTape": "the flock-frame-tape executable's entry point, a test's: Flock.Firewall.Frame.cmdWith (audited under Flock) with the rep's draws read from a file, so verity/ml/flock/tests/test_firewall_frame.py knows the pads the frame masks with"
  },
- "assumptions": {
+ "assumptions": {},
+ "open": {
   "Flock.Firewall.Contract.FirewallComputes": {
    "owner": "@firewall-contract",
-   "digest": "10ce3362fd413ab328b12f38b4771422e218144267f0fc7504c5a67821372912"
+   "digest": "10ce3362fd413ab328b12f38b4771422e218144267f0fc7504c5a67821372912",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
   },
   "Flock.Firewall.Contract.Holds": {
    "owner": "@firewall-contract",
-   "digest": "5eef9362b6eac7cb9ba9a919a4274a63f7ab369f6059ab598fefcd0e51df6ee3"
+   "digest": "5eef9362b6eac7cb9ba9a919a4274a63f7ab369f6059ab598fefcd0e51df6ee3",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
   }
  },
  "meaning": ["Flock"],
@@ -353,6 +358,12 @@
     "    (Flock.Hm96.Default512.treeLeaf (Flock.Firewall.Contract.commitBC msg salt))"
    ],
    "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
    "type_hash": "a7d43f86e900aef1dd9ec4d39216186ccbdccd394d69bdaac40f3f3c7e908a67"
   },
   "Flock.Firewall.Contract.holds_coins": {
@@ -371,6 +382,12 @@
     "      (And (Eq pub.coins List.nil.toArray) (Eq opening.size 0)))"
    ],
    "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Flock.Firewall.Contract.Holds"],
+    "reads": []
+   },
    "type_hash": "f611d55ea12c11473bcbfe0f723437d933d8bdfed81b134e1c2427a6961b37df"
   },
   "Flock.Firewall.Contract.holds_coins_binding": {
@@ -399,6 +416,12 @@
     "            (Flock.Firewall.Contract.coinMsg stream k cs') y y').snd))"
    ],
    "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Flock.Firewall.Contract.Holds"],
+    "reads": []
+   },
    "type_hash": "440fe1557c52cfc039fe7de0f3d2a61a3def418b42dbbc8f710547689f334711"
   },
   "Flock.Firewall.Contract.holds_commit": {
@@ -418,6 +441,12 @@
     "                  (Array.instGetElem?NatLtSize.getElem! t.salts i).data))))"
    ],
    "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Flock.Firewall.Contract.Holds"],
+    "reads": []
+   },
    "type_hash": "15196dcbfdd621070fec595078f25d91bea5231c788c2420525d8efcbcd5728d"
   },
   "Flock.Firewall.Contract.holds_computed": {
@@ -434,6 +463,12 @@
     "  Eq (spec what) (Option.some sent)"
    ],
    "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Flock.Firewall.Contract.FirewallComputes", "Flock.Firewall.Contract.Holds"],
+    "reads": []
+   },
    "type_hash": "356e6e3e7042c1194d6dbca4fd6b9077d0042bb4dd61b956135b9228641f0e59"
   },
   "Flock.Firewall.Contract.holds_finish": {
@@ -444,6 +479,12 @@
     "  Eq t.items.toList.getLast? (Option.some Flock.Firewall.Contract.Item.finish)"
    ],
    "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Flock.Firewall.Contract.Holds"],
+    "reads": []
+   },
    "type_hash": "517bb4d3fba64c5643d16167bcaff8990f7a66a6902f8f85d1309536ffb66027"
   },
   "Flock.Firewall.Contract.holds_fixed": {
@@ -470,6 +511,12 @@
     "          And (Eq sent.data want.data) (Eq (pub.computes.contains what) Bool.true)))"
    ],
    "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Flock.Firewall.Contract.Holds"],
+    "reads": []
+   },
    "type_hash": "f63a6c36d77ac4ab1cf2b4e5a1d17e2179d85048e48d1b674d5f325483d94dc4"
   },
   "Flock.Firewall.Contract.holds_masked": {
@@ -487,6 +534,12 @@
     "              Ne (Array.instGetElem?NatLtSize.getElem! t.pads q) (Array.instGetElem?NatLtSize.getElem! t.pads p))))"
    ],
    "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Flock.Firewall.Contract.Holds"],
+    "reads": []
+   },
    "type_hash": "457708597f2841098fb5904b6f15316d8f12d995a46c791b11e033668cb118ce"
   },
   "Flock.RecLinks.check_sound": {
@@ -508,6 +561,12 @@
     "              (List.map (fun l => { fst := l.reader, snd := l.port }) ls).Nodup))))"
    ],
    "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
    "type_hash": "218aec79e075e338ef0fd887a1c7e9a60d6a9064f315409e1cc5c38a5569e883"
   },
   "Flock.RecLinks.check_sound_honest": {
@@ -520,6 +579,12 @@
     "    (Except.ok 1)"
    ],
    "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
    "type_hash": "adf73139c22dcdb9c1611459387c467f24535e9c60a21e821284528a9dfd10fb"
   },
   "Flock.RecLinks.check_sound_nontrivial": {
@@ -542,6 +607,12 @@
     "              (List.map (fun l => { fst := l.reader, snd := l.port }) ls).Nodup)))))"
    ],
    "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
    "type_hash": "6dad6f59128ad47ab24414e32de877bb654a05d7db3bf255eff8495197ee8bca"
   }
  },

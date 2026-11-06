@@ -46,7 +46,7 @@ def problems(lock: Path | None = None, root: Path = HERE) -> list[str]:
     lean = None
     if lock is not None:
         pol = json.loads(lock.read_text())
-        lean = set(pol["guarantees"]) | set(pol["assumptions"])
+        lean = set(pol["guarantees"]) | set(pol["assumptions"]) | set(pol.get("open") or {}) | set(pol.get("domain") or {})
     claims = {c["id"]: c for c in a["claims"]}
     premises = {p["id"]: p for p in a["premises"]}
     attacks = {x["id"]: x for x in a["attacks"]}
