@@ -1,7 +1,9 @@
-import Proofs.Flock.Bridge.Draw
-import Proofs.Flock.Bridge.PopMatches
-import Proofs.Flock.Claims.Sampling.Select.Design
-import SampledProofs.OneStage
+module
+
+public import Proofs.Flock.Bridge.Draw
+public import Proofs.Flock.Bridge.PopMatches
+public import Proofs.Flock.Claims.Sampling.Select.Design
+public import SampledProofs.OneStage
 
 /-!
 # The law the audit draws under (`Bridge.drawnLaw`)
@@ -18,11 +20,14 @@ work table `tb`, at the population `n`:
 * `drawnLaw_cases`: `drawnLaw` is a subset law within the population, a Bernoulli law, or the stratified or work law
   `Flock.Draw.derive` or `deriveWork` expands over the registration's strata;
 * `strata_pos`, `strata_nodup`: those strata each hold a unit, and their slots hold each unit once;
+* `popMatches_strata`: at `PopMatches`, `nsOf` is those strata's sizes and their slots are the units `0, …, n − 1`;
 * `lawSized_drawnLaw`, `lawSized_drawsUnder`: a `drawnLaw` that is no Bernoulli law (`NotBernoulli`) is sized
   (`LawSized`) at `lawK`, at any population;
 * `lawOn_drawnLaw`, `lawOn_drawsUnder`: at `PopMatches`, it is on the registration's strata (`LawOn` at `nsOf`), drawing
   `lawK` units.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 
@@ -99,12 +104,21 @@ theorem drawnLaw_cases {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.
     · exact Or.inl hder
     · exact Or.inr ⟨tab, hwork⟩
 
+/-- The registration's strata are the evaluated query's ranges, by template (`Partition.strata`). -/
+theorem strata_evaluate {p : SampledProofs.Program} {q : Lean.Json} {S : Array (String × Array (ℕ × ℕ))}
+    (hS : SampledProofs.Partition.strata p q = .ok S) :
+    ∃ rs, SampledProofs.Partition.evaluate p q = .ok rs ∧
+      S = Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)) := by
+  unfold SampledProofs.Partition.strata at hS
+  obtain ⟨rs, he, h⟩ := SecurityProofs.bind_eq_ok.1 hS
+  exact ⟨rs, he, (Except.ok.inj h).symm⟩
+
 /-- **The registration's strata each hold a unit**: `TemplateQuery.evaluate` refuses a template with no instance
 (`strataOf_pos`, `partition_covered`). -/
 theorem strata_pos {p : SampledProofs.Program} {q : Lean.Json} {S : Array (String × Array (ℕ × ℕ))}
     (hS : SampledProofs.Partition.strata p q = .ok S) :
     ∀ s ∈ S.toList, 1 ≤ (SecurityProofs.expand s.2.toList).length := by
-  obtain ⟨rs, he, rfl⟩ := SecurityProofs.strata_ok p q S hS
+  obtain ⟨rs, he, rfl⟩ := strata_evaluate hS
   exact SecurityProofs.strataOf_pos _ (SecurityProofs.partition_covered p q rs he)
 
 /-- **The registration's strata's slots hold each unit once**: they are the evaluated ranges, which tile the population
@@ -112,7 +126,7 @@ theorem strata_pos {p : SampledProofs.Program} {q : Lean.Json} {S : Array (Strin
 theorem strata_nodup {p : SampledProofs.Program} {q : Lean.Json} {S : Array (String × Array (ℕ × ℕ))}
     (hS : SampledProofs.Partition.strata p q = .ok S) :
     (S.toList.flatMap fun s => SecurityProofs.expand s.2.toList).Nodup := by
-  obtain ⟨rs, he, rfl⟩ := SecurityProofs.strata_ok p q S hS
+  obtain ⟨rs, he, rfl⟩ := strata_evaluate hS
   exact (SecurityProofs.strataOf_perm _ _ (SecurityProofs.partition_evaluate_tiles p q rs he)).nodup_iff.2
     List.nodup_range'
 
@@ -122,6 +136,28 @@ theorem flatMap_expand_eq {α : Type} {f : α → Array (ℕ × ℕ)} {l : List 
     l.flatMap (fun a => SecurityProofs.expand (f a).toList) = S.flatMap fun s => SecurityProofs.expand s.2.toList := by
   have h1 := congrArg (fun m => m.flatMap fun u : Array (ℕ × ℕ) => SecurityProofs.expand u.toList) h
   simpa only [List.flatMap_map] using h1
+
+/-- **At `PopMatches`, the registration's strata are its population**: where `desc` parses to `p`, whose strata under
+the query `q` are `S` (`Partition.strata`), `nsOf` is their sizes and their slots, stratum by stratum, are the units
+`0, …, n − 1`, since the layout `PopMatches` reads lays each stratum's units in order (`layout_ok`, `laysOut_units`). -/
+theorem popMatches_strata {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : SampledProofs.Program}
+    {S : Array (String × Array (ℕ × ℕ))} (hpop : PopMatches desc q n)
+    (hp : SampledProofs.Program.parse ⟨desc.toArray⟩ = .ok p) (hS : SampledProofs.Partition.strata p q = .ok S) :
+    nsOf desc q = (S.toList.map fun s => (SecurityProofs.expand s.2.toList).length) ∧
+      (S.toList.flatMap fun s => SecurityProofs.expand s.2.toList) = List.range n := by
+  obtain ⟨p', l, hp', hl, hu⟩ := popMatches_iff.1 hpop
+  have epp : p' = p := by rw [hp] at hp'; exact (Except.ok.inj hp').symm
+  rw [epp] at hl
+  obtain ⟨rs, he, pop, rfl, hlays⟩ := SecurityProofs.layout_ok p q l hl
+  obtain ⟨rs', he', rfl⟩ := strata_evaluate hS
+  obtain rfl : rs' = rs := by rw [he] at he'; exact (Except.ok.inj he').symm
+  obtain ⟨h1, h2⟩ := SecurityProofs.laysOut_units _ _ hlays
+  have hpo : popOf { classes := #[pop, SecurityProofs.inputClass p] } = pop.toList.flatMap (·.toList) := by
+    simp [popOf, List.flatMap_def]
+  refine ⟨?_, List.map_injective_iff.2 (Option.some_injective _) ?_⟩
+  · rw [nsOf_eq hp hl]
+    simpa [SecurityProofs.rsSize] using h2
+  · rw [← h1, ← hu, hpo]
 
 /-- **The law the audit draws under is on the registration's strata**: at `PopMatches`, a `drawnLaw` that is not a
 Bernoulli law is `LawOn` the strata's sizes `nsOf`, drawing `lawK` units: a subset law within the `n` units they sum to,
@@ -134,16 +170,10 @@ theorem lawOn_drawnLaw {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.
   rcases drawnLaw_cases h with ⟨k, rfl, hk⟩ | ⟨a, b, rfl⟩ | ⟨p, S, k, hp, hS, hlaw⟩
   · exact ⟨rfl, by rw [hsum]; exact hk⟩
   · exact (hb a b rfl).elim
-  obtain ⟨p', us, hp', hus, hn⟩ := popMatches_iff.1 hpop
-  have epp : p' = p := by rw [hp] at hp'; exact (Except.ok.inj hp').symm
-  rw [epp] at hus
-  obtain ⟨S', hS', hu⟩ := popUnits_ok hus
-  have eSS : S' = S := by rw [hS] at hS'; exact (Except.ok.inj hS').symm
-  rw [eSS] at hu
-  have hns : nsOf desc q = S.toList.map fun s => (SecurityProofs.expand s.2.toList).length := nsOf_eq hp hS
+  obtain ⟨hns, hn⟩ := popMatches_strata hpop hp hS
   have hns' : (nsOf desc q).sum = SecurityProofs.strataSize S := by rw [hns]; rfl
   have hslots : (S.toList.flatMap fun s => SecurityProofs.expand s.2.toList) = List.range (nsOf desc q).sum := by
-    rw [hsum, ← hn, hu]
+    rw [hsum, hn]
   rcases hlaw with hder | ⟨tab, hwork⟩
   · obtain ⟨-, hkn⟩ := SecurityProofs.derive_bounds k S law hder
     obtain rfl := SecurityProofs.derive_ok k S law hder
