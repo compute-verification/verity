@@ -193,7 +193,19 @@ def _refusal(e: BaseException) -> CaptureRefused:
         return CaptureRefused("custom_kernel", op or _named_op(text), f"no fake (meta) kernel: {msg}", where)
     if "autograd formula" in low or "autograd kernel" in low:
         return CaptureRefused("custom_kernel", op or _named_op(text), f"no backward to trace: {msg}", where)
+    hops = [n for fs in traceback.extract_tb(e.__traceback__) if (n := _control_flow_file(fs.filename))]
+    if hops:
+        return CaptureRefused("dynamic_control_flow", f"torch.ops.higher_order.{hops[0]}",
+                              f"higher-order op {hops[0]} failed to trace ({type(e).__name__}: {msg}): a branch or loop "
+                              f"taken on data has no fixed product count", where)
     return CaptureRefused("trace", op, f"{type(e).__name__}: {msg}", where)
+
+
+def _control_flow_file(filename: str) -> str | None:
+    """The control-flow higher-order op whose torch module `filename` is (`torch/_higher_order_ops/cond.py`: cond)."""
+    d, name = os.path.split(os.path.abspath(filename))
+    op = name.removesuffix(".py")
+    return op if d == os.path.join(_TORCH_DIR, "_higher_order_ops") and op in _CONTROL_FLOW else None
 
 
 def _named_op(text: str) -> str | None:
