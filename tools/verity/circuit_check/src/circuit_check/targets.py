@@ -675,7 +675,7 @@ def boolean_call_candidates(word_calls: set[str]) -> set[str]:
 
 def on_demand_boolean_families(word_calls: set[str]) -> set[str]:
     """The Boolean version's family of each word Call family made on demand, by its id (`verity.ml.definitions.boolean.
-    made_on_demand`: `Const<w>[0x..]`, `GatherBf16x{V}`, `GatherI32x{V}`).  No module registers such a family's members ahead,
+    made_on_demand`: `Const<w>[0x..]`, `GatherBf16x{V}`, `GatherI32x{V}`, `GatherF32x{V}`).  No module registers such a family's members ahead,
     so these come from the families' own patterns, not from the catalog.  Made in sorted order: making one registers it, and
     the registry's order is then the same in every process, whatever its hash seed or what it did before."""
     from verity.ml.definitions.boolean import made_on_demand

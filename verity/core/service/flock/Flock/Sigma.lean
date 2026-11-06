@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §16.7, the partition of record of a Boolean Program: the word Program's partition lifted by σ, the map from each
+`Flock.Partition`, the partition of record of a Boolean Program: the word Program's partition lifted by σ, the map from each
 word Definition to its Boolean version. This module checks the lift's structure on the two descriptors (`Program.decode` of
 each), as `verity_vllm.program.boolean.sigma_check` checks it on Python objects, which stays the mirror (the
 `verity/core/service/sigma` difftest holds the two together).
