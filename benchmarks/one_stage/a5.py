@@ -991,8 +991,9 @@ def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public:
     public file's, taken when it was staged before the draw, and the verifier's registered file), the evidence with its
     ``verdicts`` replaced by the proofs' files (`proofs.evidence_v2`, under the evidence's ``sessions``), and ``blobs``,
     the paths of the files those name and of the pinned lookup tables, which onsite reads after the evidence
-    (`compose.onsite_check`). v2 holds the public file's header to the registration (`registration.matches_public`), so
-    it refuses a windowed registration, whose ports are its members' (``<member>/<port>``)."""
+    (`compose.onsite_check`). v2 holds the public file's header to the registration (`registration.matches_public`, and
+    its ``units.indices`` the population's units in order), so it refuses a windowed registration, whose ports are its
+    members' (``<member>/<port>``)."""
     import replay as RP
     from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 

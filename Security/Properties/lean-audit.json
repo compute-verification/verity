@@ -17747,11 +17747,12 @@
    }
   },
   "SampledProofs.OneStageZk": {
-   "digest": "27ef7df00b773a722a5df0d513facf4a3fc286cb76d32e656c5278deb4faee25",
+   "digest": "54dcf25306186853e3f929aa9764a381d3159e312c33bfbc29b1ec0d0e115ff0",
    "definitions": {
     "SampledProofs.OneStageZk.Evidence": "c6225844065026f039f99bb073a172ebd1caf057aa99df9629dc83c3b72b4444",
     "SampledProofs.OneStageZk.Evidence.base": "f88a295c9c15075955eadf77c4082a0174b7338e8a580fe01d770c8929000895",
     "SampledProofs.OneStageZk.Evidence.sessions": "c3269990d1ced0410fb26306d5a79409de791ffa46ad3a258452beea840a0911",
+    "SampledProofs.OneStageZk.INDICES_WHY": "312a163469c0c494655a3fa7a7d2ce2925fda421dd88be5dadb4ea639c998261",
     "SampledProofs.OneStageZk.KEY_PARAMS": "59e3d3ecb3410114a369b3c8088a25ee55b159596baf10c3caa13166f9d50911",
     "SampledProofs.OneStageZk.NO_CHALLENGER": "a8511755d79385dfe31d999e282696b68fc0d7fc6babf62f45963f5c3e23395f",
     "SampledProofs.OneStageZk.Own": "b72f939e1c1558b5424361ceec991bf2f47e79b4f47d99a8750ad0cadbb7393f",
@@ -17790,6 +17791,7 @@
     "SampledProofs.OneStageZk.deployedKey": "a77890a2e3e66deb48f6547b42b0d87e92ff0b17a5e2c00e600252c66d48ca3e",
     "SampledProofs.OneStageZk.evidenceOf": "f360fdba0052654f74f83942fc9e03c30bdd65c7e94cd7211ad9665423736d1e",
     "SampledProofs.OneStageZk.filesOf": "4703a5c941a4ff5baab9c56044ab5cc9d3e73cf1d5682df921b6ce40662b8468",
+    "SampledProofs.OneStageZk.indicesHeld": "71508045fe1bfc463509560a1972f331dc112616d7c29e6603c8f562f8a39028",
     "SampledProofs.OneStageZk.inputsOf": "22eb8d33feabded8c4c565d308dba7999f462aef3a3eab5a6fc81f3b03fac46f",
     "SampledProofs.OneStageZk.oneSession": "67a2157b27c555e6e20cd120bc386e9a8c9c16d834c6f4b527fe348736da4ca4",
     "SampledProofs.OneStageZk.paramsOfJson": "c411d68511e20f7031fa3a2bbce32a705a388195421642d81b4866c6ad39266f",
@@ -17798,7 +17800,7 @@
     "SampledProofs.OneStageZk.proofsOf": "c0dfc365ea612c5fd0d3c5b2536b3f7070b565b755399fba2e9c94f3135442b9",
     "SampledProofs.OneStageZk.provedHeld": "b6c33bfe26865815971bbb2e841f4c57278e528f57e4385d9256470b60ddbd72",
     "SampledProofs.OneStageZk.provedUnits": "ae64f151087ff234e389a149cda4feed0dbf1fb3d67610a2ef94711b627c9fee",
-    "SampledProofs.OneStageZk.publicHeld": "247fc0b3a6716af1c4d25068c44ca70046e0665d97fe15905a83aabee16dcacd",
+    "SampledProofs.OneStageZk.publicHeld": "408792f063dceb902ab4a89b6a4efccfc7b7d3e36cb5535fcfc283b283b0f1cc",
     "SampledProofs.OneStageZk.push": "d21e46b449ade253db65e2ac3a004b8ade87f31209dc14a2e4047efe980e2217",
     "SampledProofs.OneStageZk.readsOf": "b98e69f3ece10e22b375c78035f3e9dd026d348b2bf5c38fc3e0f4fd88c27978",
     "SampledProofs.OneStageZk.readsRegistered": "7d29bcf63f84785d9995da39ab5e6e1ab9327046f386146b77ae53df050d2bb0",
