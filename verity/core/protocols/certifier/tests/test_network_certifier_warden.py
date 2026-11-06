@@ -16,9 +16,9 @@ import pytest
 
 from verity.core.protocols.certifier.active import DATA, HEADER, PAD, VirtualClock, encode_frame
 from verity.core.protocols.certifier.grid import Reason
-from verity.core.protocols.certifier.release import release_of, with_release
-from verity.core.protocols.certifier.warden import (END, FAIL, KIND_NAMES, REASONS, REFUSED, Shim, Warden,
-                                                    WardenParams, audit, cell, cells, read_cell, read_reason,
+from verity.core.protocols.certifier.release import read_watermark, release_of, watermark_head, with_release
+from verity.core.protocols.certifier.warden import (END, FAIL, KIND_NAMES, REASONS, REFUSED, WRITE_BACKLOG, Shim,
+                                                    Warden, WardenParams, audit, cell, cells, read_cell, read_reason,
                                                     reason_frame)
 
 PARAMS = WardenParams(cell_bytes=64, slots=2, bucket_ms=100, delay=3, lanes=2, queue=2, window=24, ingress_cells=8,
@@ -524,28 +524,38 @@ def http(body: bytes, extra: bytes = b"") -> bytes:
     return b"POST /v1/completions HTTP/1.1\r\nhost: s\r\n%scontent-length: %d\r\n\r\n%s" % (extra, len(body), body)
 
 
+def signed_ends(warden: Warden) -> list[tuple[int, int]]:
+    """(bucket, ordinal) of every `END` cell of the signed ingress records, in record order."""
+    return [(r.window * PARAMS.window + b, read_cell(f, B)[1]) for r in records(warden)[0]
+            for b, row in enumerate(r.grid) for f in row if f is not None and read_cell(f, B)[0] == END]
+
+
 def test_the_server_gets_each_request_whole_with_its_place_among_the_signed_ends():
     """Two requests admitted in one bucket, the first two buckets long and the second one, so their `END`s are
     released in the other order: each reaches the server once, whole, at its `END`'s release, with
-    `x-verity-release: N`, N its `END`'s index among the `END` cells of the signed ingress records, and the network
-    certifier's run id; a client's own release header is dropped there, while the cells, the records and the audit hold
-    the client's bytes as sent, which the audit accepts."""
-    reqs = [http(b'{"prompt":"%s"}' % (b"a" * 140)), http(b"{}", b"X-Verity-Release: 0\r\n")]
+    `x-verity-release: N`, N its `END`'s index among the `END` cells of the signed ingress records, the network
+    certifier's run id and `x-verity-release-bucket: a`, the bucket of that `END`; a client's own release headers are
+    dropped there, while the cells, the records and the audit hold the client's bytes as sent, which the audit
+    accepts."""
+    reqs = [http(b'{"prompt":"%s"}' % (b"a" * 112), b"x-verity-release-bucket: 0\r\n"),
+            http(b"{}", b"X-Verity-Release: 0\r\n")]
     assert [-(-len(r) // P) for r in reqs] == [2 * R, R]
     run_id = bytes(range(100, 132))
     warden, clients, server = run([[(0, b"r0"), (0, EOF)], [(0, b"r1"), (0, EOF)]],
                                   {1: [cells(reqs[0], B), cells(reqs[1], B)]},
                                   run_nonce=lambda n: run_id[:n])
-    ingress, _, _ = records(warden)
-    ends = [read_cell(f, B)[1] for r in ingress for row in r.grid for f in row
-            if f is not None and read_cell(f, B)[0] == END]
-    assert ends == [2, 1] and warden.run_id == run_id and warden.requests_released == 2
+    ends = signed_ends(warden)
+    assert [o for _, o in ends] == [2, 1] and warden.run_id == run_id and warden.requests_released == 2
     log = {e["ordinal"]: e for e in warden.log}
     assert log[1]["admitted"] == log[2]["admitted"] == 1 and log[2]["ingress_end"] < log[1]["ingress_end"]
     for k, req in enumerate(reqs):
-        assert server.conns[k].received == with_release(req, ends.index(k + 1), run_id) == \
-            with_release(req, log[k + 1]["release"], run_id)
-    assert release_of(server.conns[1].received) == (0, run_id) and b"X-Verity" not in server.conns[1].received
+        n = [o for _, o in ends].index(k + 1)
+        assert server.conns[k].received == with_release(req, n, run_id, ends[n][0]) == \
+            with_release(req, log[k + 1]["release"], run_id, log[k + 1]["ingress_end"])
+    assert release_of(server.conns[1].received) == (0, run_id, log[2]["ingress_end"]) == (0, run_id, ends[0][0])
+    assert b"X-Verity" not in server.conns[1].received
+    assert release_of(server.conns[0].received) == (1, run_id, log[1]["ingress_end"]) == (1, run_id, ends[1][0])
+    assert server.conns[0].received.count(b"x-verity-release-bucket") == 1
     verdict = audit(PARAMS, *records(warden))
     assert verdict["accepted"], verdict["windows"]
     assert [c["ingress_sha256"] for c in verdict["connections"]] == [hashlib.sha256(r).hexdigest() for r in reqs]
@@ -559,9 +569,188 @@ def test_a_connection_that_fails_before_its_end_is_never_numbered_and_its_server
     warden, _, server = run([[], [(0, b"r"), (0, EOF)]], {0: [slow], 4: [cells(http(b"{}"), B)]})
     log = {e["ordinal"]: e for e in warden.log}
     assert (log[1]["failed"], log[1]["release"], log[2]["failed"], log[2]["release"]) == ("late", None, None, 0)
-    assert server.conns[0].received == b"" and release_of(server.conns[1].received) == (0, warden.run_id)
+    assert server.conns[0].received == b"" and \
+        release_of(server.conns[1].received) == (0, warden.run_id, log[2]["ingress_end"])
     other, _, _ = run([[(0, b"r"), (0, EOF)]], {0: [cells(http(b"{}"), B)]})
     assert len(warden.run_id) == len(other.run_id) == 32 and warden.run_id != other.run_id
+
+
+# --- the watermark ---------------------------------------------------------------------------------------------------
+
+
+class Ordered(Server):
+    """`Server` whose connections' writes and the watermark stream's go in one list, `events`, in the order the network
+    certifier made them: ("request", connection, bytes) and ("watermark", bytes). Its `watermark` connect opens once
+    bucket `opens` is due (at once without it), or is refused, and its transport reports `buffered` bytes unwritten."""
+
+    def __init__(self, answers, *, opens: int | None = None, refuse_watermark: bool = False, buffered: int = 0,
+                 **kw) -> None:
+        super().__init__(answers, **kw)
+        self.events: list[tuple] = []
+        self.opens, self.refuse_watermark, self.buffered = opens, refuse_watermark, buffered
+        self.opened: asyncio.Event | None = None
+        self.transport, self.closed = self, False
+
+    async def connect(self):
+        k = len(self.conns)
+        reader, conn = await super().connect()
+        write = conn.write
+
+        def logged(data: bytes) -> None:
+            self.events.append(("request", k, bytes(data)))
+            write(data)
+
+        conn.write = logged
+        return reader, conn
+
+    async def watermark(self):
+        self.opened = asyncio.Event()
+        if self.opens is not None:
+            await self.opened.wait()
+        if self.refuse_watermark:
+            raise ConnectionRefusedError("refused")
+        return asyncio.StreamReader(), self
+
+    def release(self, t: int) -> None:
+        if self.opened is not None and self.opens is not None and t >= self.opens:
+            self.opened.set()
+        super().release(t)
+
+    def write(self, data: bytes) -> None:
+        assert not self.closed
+        self.events.append(("watermark", bytes(data)))
+
+    def is_closing(self) -> bool:
+        return self.closed
+
+    def close(self) -> None:
+        self.closed = True
+
+    def get_write_buffer_size(self) -> int:
+        return self.buffered
+
+
+def watermark_lines(data: bytes, run_id: bytes) -> tuple[list[bytes], bool]:
+    """The lines of one write to the watermark stream (whole chunks, after the head when it opens the stream), and
+    whether it ends the stream."""
+    if data.startswith(b"POST "):
+        assert data.startswith(watermark_head(run_id))
+        data = data[len(watermark_head(run_id)):]
+    lines = []
+    while data:
+        size, _, data = data.partition(b"\r\n")
+        k = int(size, 16)
+        if k == 0:
+            assert data == b"\r\n"
+            return lines, True
+        assert data[k:k + 2] == b"\r\n"
+        lines.append(data[:k])
+        data = data[k + 2:]
+    return lines, False
+
+
+def tick_engine(events: list[tuple], run_id: bytes) -> tuple[dict[int, list[int]], dict[int, int], list, bool]:
+    """An engine that admits at logical time T exactly the releases the watermark closes by bucket T, reading the
+    events in order: line T once it has been read and every release N < n_T has arrived, the releases n_{T−1} … n_T − 1
+    in order, each admitted at a T no earlier than its bucket. Returns what it admitted at each T, each release's bucket,
+    the lines and whether the stream ended."""
+    buckets: dict[int, int] = {}
+    lines: list[tuple[int, int]] = []
+    admitted: dict[int, list[int]] = {}
+    ended = False
+    for event in events:
+        if event[0] == "request":
+            n, run, a = release_of(event[2])
+            assert run == run_id and n not in buckets and a is not None
+            buckets[n] = a
+        else:
+            assert not ended
+            got, ended = watermark_lines(event[1], run_id)
+            for line in got:
+                lines.append(read_watermark(line, lines[-1] if lines else None))
+        while len(admitted) < len(lines) and all(n in buckets for n in range(lines[len(admitted)][1])):
+            T, n = lines[len(admitted)]
+            admitted[T] = list(range(lines[T - 1][1] if T else 0, n))
+            assert all(buckets[k] <= T for k in admitted[T]), (T, admitted[T], buckets)
+    return admitted, buckets, lines, ended
+
+
+def tick_traffic() -> tuple[list, dict[int, list[bytes]], dict[int, int]]:
+    """Five requests: two admitted at bucket 1, their `END`s at 2 and 3; one admitted at 8, its `END` at 9, whose
+    server connection opens only before bucket 10, after bucket 9's watermark line; and two admitted at 14 whose
+    `END`s share bucket 15. The answers, the arrivals and the server's held connects."""
+    one = cells(http(b"{}"), B)
+    assert len(one) == R * B and len(cells(http(b'{"p":"%s"}' % (b"a" * 120)), B)) == 2 * R * B
+    arrivals = {1: [cells(http(b'{"p":"%s"}' % (b"a" * 120)), B), one], 8: [one], 14: [one, one]}
+    return [[(0, b"r%d" % k), (0, EOF)] for k in range(5)], arrivals, {2: 10}
+
+
+def test_the_watermark_closes_each_bucket_after_its_releases_and_only_advances():
+    """On one stream the network certifier sends its head, then one line `t n` a tick, t = 0 … the run's last bucket,
+    then the terminating chunk: bucket t closed with n `END`s released through it, so the releases of buckets ≤ t are
+    exactly N < n, as the signed ingress records' `END` cells say, and t steps by 1 and n never decreases. Each request
+    reaches the server at its bucket's tick or later, never before, and every one but a request whose server connection
+    opened late precedes its bucket's line. So an engine that admits at T exactly what the watermark closes by bucket T,
+    waiting for every N < n_T, admits each request at its bucket, two in one bucket in their order, nothing in an
+    empty bucket, and the late one only once it has arrived."""
+    answers, arrivals, hold = tick_traffic()
+    run_id = bytes(range(32))
+    server = Ordered(answers, hold=hold)
+    warden, clients, _ = run(server, arrivals, watermark=server.watermark, run_nonce=lambda n: run_id[:n])
+    ends = signed_ends(warden)
+    assert [t for t, _ in ends] == [2, 3, 9, 15, 15] and [o for _, o in ends] == [2, 1, 3, 4, 5]
+    admitted, buckets, lines, ended = tick_engine(server.events, run_id)
+    assert ended and server.closed and warden.watermark_error is None
+    assert buckets == dict(enumerate(t for t, _ in ends))
+    assert lines == [(t, sum(a <= t for a, _ in ends)) for t in range(PARAMS.window)]
+    assert warden.watermarked == lines[-1] == (PARAMS.window - 1, 5)
+    assert {T: ns for T, ns in admitted.items() if ns} == {2: [0], 3: [1], 9: [2], 15: [3, 4]}
+    assert sorted(admitted) == list(range(PARAMS.window))
+    position, seen = {}, 0
+    for i, event in enumerate(server.events):
+        if event[0] == "watermark":
+            for _ in watermark_lines(event[1], run_id)[0]:
+                position[("line", seen)] = i
+                seen += 1
+        else:
+            position[("request", release_of(event[2])[0])] = i
+    assert seen == PARAMS.window
+    for n, a in buckets.items():
+        assert a == 0 or position[("request", n)] > position[("line", a - 1)]
+    assert [n for n, a in buckets.items() if position[("request", n)] > position[("line", a)]] == [2]
+    assert [bytes(c.shim().data) for c in clients] == [b"r0", b"r1", b"r2", b"r3", b"r4"]
+    verdict = audit(PARAMS, *records(warden))
+    assert verdict["accepted"], verdict["windows"]
+
+
+def test_the_watermark_moves_nothing_certified_and_never_waits_on_the_server():
+    """The same traffic without the watermark, with it, with its connect refused, with it never open by the run's end,
+    and with a server that has stopped reading it: every tick runs on time and every record, every client's cells and
+    every request the server gets are the same. A refused or unopened stream sends nothing, and one whose transport
+    holds more than `WRITE_BACKLOG` unwritten is closed, each saying why; the open one ends with the run."""
+    answers, arrivals, hold = tick_traffic()
+
+    def served(watermark: bool = True, **kw):
+        server = Ordered(answers, hold=hold, **kw)
+        hooks = {"watermark": server.watermark} if watermark else {}
+        warden, clients, _ = run(server, arrivals, run_nonce=bytes, **hooks)
+        wire = ([(r.link, r.window, r.grid, r.status) for r in warden.records], [c.writes for c in clients],
+                [c.received for c in server.conns])
+        assert max(warden.lateness) == 0 and audit(PARAMS, *records(warden))["accepted"]
+        return warden, server, wire
+
+    plain = served(watermark=False)
+    assert plain[0].watermarked is None and not [e for e in plain[1].events if e[0] == "watermark"]
+    cases = {"open": {}, "refused": {"refuse_watermark": True}, "unopened": {"opens": 10 ** 6},
+             "backlog": {"buffered": WRITE_BACKLOG + 1}}
+    for name, kw in cases.items():
+        warden, server, wire = served(**kw)
+        assert wire == plain[2], name
+        assert warden.watermarked == (PARAMS.window - 1, 5), name
+        sent = [e for e in server.events if e[0] == "watermark"]
+        assert warden.watermark_error == {"open": None, "refused": "ConnectionRefusedError: refused",
+                                          "unopened": "unopened", "backlog": "backlog"}[name]
+        assert bool(sent) == (name == "open") and server.closed == (name in ("open", "backlog")), name
 
 
 def test_the_parameters_digest_binds_every_parameter():
