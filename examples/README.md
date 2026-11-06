@@ -17,8 +17,8 @@ establishes with no hardware of its own at the prover's site. It composes three 
 - work, by PoUW's period check (`verity/pouw/period/v1`, onsite's work subprotocol too): the GPU's time is credited
   to useful matmuls through receipts the live coins open, the period's windows all or nothing, each window's Commit
   record the one record the policy and the one-stage audit committed to;
-- the inference-only policy (`verity/inference-only/v0`): the declared circuit divides into inference blocks within
-  their gate and fresh-input budgets, checked from the declared circuit and the registered information alone.
+- the inference-only policy (`verity/inference-only/v0`): the registered circuit divides into inference blocks within
+  their gate and fresh-input budgets, checked from the registered circuit and the registered information alone.
 
 Remote accepts only when all three accept over one commitment that binds them, each having committed to the same record
 (`Core.Composition.same`); any one's rejection rejects it, whatever the others answer. It rests on live coins (flipped after
@@ -95,7 +95,7 @@ checks are `tools/verity/cli/verity_cli/examples.py`'s; a new role goes in its `
   here as a skeleton on fixture coins, not as runs, and nothing claims them.
 - `onsite_served/` (`run` `moved`, `proof` `none`): onsite's run configuration for the served window. One
   `verity run` configuration (`config.toml`) of onsite's seven subprotocols on the served int8 window: its
-  parties, channels and each component's piece, PoUS's at 320 challenges, which `verity run --on MACHINE --bindings FILE`
+  parties, channels and each subprotocol's piece, PoUS's at 320 challenges, which `verity run --on MACHINE --bindings FILE`
   executes on each machine, the hosts and addresses only in the deploy bindings. `verity run CONFIG --dry-run` resolves
   it without a GPU. It has no run of record yet.
 - `dither_full_util/` (`run` `moved`, `proof` `none`): the remote protocol's PoUW half, as PoUW's work unit. The H200 at
