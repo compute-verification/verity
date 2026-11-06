@@ -1093,7 +1093,8 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
     texts = [t for es in inline.values() if isinstance(es, dict) for t in es] if isinstance(inline, dict) else []
     asked = sorted({".".join(p[:i]) for t in texts for n in NAMES.findall(t) for p in [n.split(".")] for i in range(1, len(p) + 1)})
     config.write_text(json.dumps({"roots": policy["roots"], "meaning": policy.get("meaning", policy["roots"]),
-                                  "recorded": record_scope(policy), "allowed": policy.get("axioms", STANDARD), "pins": sorted(policy.get("guarantees", {})),
+                                  "recorded": record_scope(policy), "bounds": list(BOUND_HEADS),
+                                  "allowed": policy.get("axioms", STANDARD), "pins": sorted(policy.get("guarantees", {})),
                                   "spec": spec_of(policy),
                                   "premises": [p for p in premises if isinstance(p, str)] if isinstance(premises, list) else [],
                                   "assumptions": sorted(a for a in policy.get("assumptions", {}) if isinstance(a, str)),
@@ -1785,7 +1786,8 @@ def vacuous_meets(body: dict, claim: str) -> str | None:
 #: starts with one of `VERIFIER_PREFIXES`, in any case (a verifier's acceptance: `PeriodRun.accepts`, `Audits.Accepts`,
 #: `Flock.Zk.verify`), the
 #: `acceptance` kind; with none, a read of a module whose last component is one of `EXCLUSION_MODULES` and a conclusion
-#: headed by one of `BOUND_HEADS` (a partition's or a covering's bound, which no verifier accepts), the `exclusion` kind
+#: headed by one of `BOUND_HEADS` (a partition's or a covering's bound, which no verifier accepts), as written or at the end
+#: of the definitions it unfolds through (`Facts.lean`'s `chain`, which `facts_of` hands `BOUND_HEADS`), the `exclusion` kind
 SCOPE_COMPONENT = "Claims"
 SCOPE_MODULES = ("Properties.Verity",)
 VERIFIER_PREFIXES = ("accept", "verify")
@@ -1810,8 +1812,9 @@ def witness_scope(name: str, policy: dict, pin: dict) -> tuple[str, str] | None:
     `acceptance` when it states what an acceptance means (a property of a function's acceptance, `accepted`, or a
     statement reading a claim, a `SCOPE_COMPONENT` module, the one theorem's vocabulary, `SCOPE_MODULES`, or a verifier's
     acceptance, `VERIFIER_PREFIXES`); `exclusion` when it reads none of those but a partition or a covering
-    (`EXCLUSION_MODULES`) and concludes a bound (`BOUND_HEADS`). A guarantee with no such read is about something else
-    (a bound on a hash, a count, a device), where neither form means anything."""
+    (`EXCLUSION_MODULES`) and concludes a bound (`BOUND_HEADS`, or a definition that unfolds to one, `concluded`). A
+    guarantee with no such read is about something else (a bound on a hash, a count, a device), where neither form means
+    anything."""
     if fns := accepted(policy, name):
         return "acceptance", f"a property of {' or '.join(fns)} accepting"
     reads = sorted(pin.get("reads") or [], key=lambda r: r.get("name", ""))
@@ -1841,8 +1844,8 @@ def statement_read(pin: dict) -> dict:
 
 def concluded(pin: dict) -> tuple[list[str], int]:
     """The constants a guarantee's conclusion is headed by (`Facts.lean`'s `body` as written and `lifted`: the head past
-    its binders, its own definition among them, each conjunct's, and each definition the head unfolds through, `chain`),
-    and how many `∃` stand before its conclusion (`binders`, as `statement_read` reads it)."""
+    its binders, its own definition among them, each conjunct's, and each definition the head unfolds through with the
+    bound it ends at, `chain`), and how many `∃` stand before its conclusion (`binders`, as `statement_read` reads it)."""
     body, heads = pin.get("body") or {}, []
     for b in (body, body.get("lifted") or {}):
         for h in [b.get("head"), *(k.get("head") for k in b.get("conclusion") or []), *(b.get("chain") or [])]:

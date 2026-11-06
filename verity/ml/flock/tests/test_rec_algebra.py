@@ -179,7 +179,7 @@ def test_the_honest_reps_pass_every_check_at_the_lean_verifiers_values(session):
 
 
 def test_a_nonzero_nonce_is_refused(session, monkeypatch):
-    """R4 (verifier PROTOCOL.md D21): the decoder refuses each Ligerito nonce list's first nonce set to 1, as the Lean
+    """R4 (`Flock.Proof`, D21 in `verity/ml/flock/verifier/README.md`): the decoder refuses each Ligerito nonce list's first nonce set to 1, as the Lean
     verifier's `Reader.nonce0` does, with its reason."""
     rep = session[1][0]
     at, vec = {}, A._Reader.vec

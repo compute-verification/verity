@@ -175,6 +175,7 @@ public import Proofs.Pouw.QTree
 public import Proofs.Pouw.Receipt
 public import Proofs.Pouw.Reduction
 public import Proofs.Pouw.RelativeSecurity
+public import Proofs.Pouw.RelativeSecurityFork
 public import Proofs.Pouw.RelativeSecurityGuarantees
 public import Proofs.Pouw.RelativeSecurityJ10R
 public import Proofs.Pouw.Sampling

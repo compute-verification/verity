@@ -1918,6 +1918,71 @@ def test_a_premise_witnesses_assumed_lists_is_taken_and_another_listed_one_is_st
                                 "takes as a premise; remove the entry"]
 
 
+PARTITION = ("namespace Control\ndef Bound (x y : Nat) : Prop := x ≤ y\ndef Fits (n : Nat) : Prop := n ≤ 5\n"
+             "namespace Guarantees\ndef Bounded : Prop := ∀ n : Nat, Fits n → Bound n 5\nend Guarantees\nend Control\n")
+BOUNDED = "theorem bounded : Guarantees.Bounded := by\n  unfold Guarantees.Bounded Bound Fits\n  intro n h\n  exact h\n"
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_bound_a_definition_hides_holds_its_guarantee_to_exclusion_witnesses(tmp_path):
+    """On a real build: `Control.bounded : Guarantees.Bounded`, `∀ n, Fits n → Bound n 5` with `Bound x y := x ≤ y` in
+    `Control.Partition`, concludes a bound of a partition module two definitions deep (as `Nci.Products.Guarantees.Bound`
+    concludes `PartitionBound`, whose `≤` is under its `∀`): `lifted` unfolds `Guarantees.Bounded` to `Bound`, and the
+    `≤` is `Bound`'s. `--update` fails it with `witnesses.missing` of the `exclusion` kind until its honest and
+    nontrivial witnesses are listed. A `chain` that recorded only the definitions it unfolds saw no bound head, and held
+    it to nothing."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    (pkg / "Control" / "Partition.lean").write_text(PARTITION)
+    thms = pkg / "Control" / "Thms.lean"
+    thms.write_text("import Control.Partition\n" + thms.read_text().replace("end Control", (
+        f"{BOUNDED}theorem bounded_honest : Fits 3 ∧ double 1 = 2 := ⟨by unfold Fits; omega, rfl⟩\n"
+        "theorem bounded_nontrivial : ¬ Fits 6 ∧ ¬ Bound 6 5 := ⟨by unfold Fits; omega, by unfold Bound; omega⟩\n"
+        "\nend Control")))
+    pol = A.load(pkg)
+    A.dump(pkg, pol | {"trees": pol["trees"] | {"definitions": [*pol["trees"]["definitions"], "Control.Partition"]},
+                       "layers": pol["layers"] | {"Control.Partition": {"imports": [], "why": "the bound imports nothing"}},
+                       "guarantees": pol["guarantees"] | {"Control.bounded": {"owner": "@lean"}}})
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+
+    def witnessing(update):
+        return [f for f in A.audit(pkg, tmp_path / "out", update=update, replay=False, runs=False, log=lambda *_: None)[
+            "failures"] if f.code.startswith("witnesses")]
+    fails = witnessing(True)
+    assert [f.code for f in fails] == ["witnesses.missing"], fails
+    assert "it concludes a bound and reads Control.Bound of Control.Partition, a partition or covering" in fails[0] and \
+        '"kind": "exclusion"' in fails[0], fails[0]
+    rec = json.loads((pkg / A.POLICY).read_text())
+    names = ("Control.bounded_honest", "Control.bounded_nontrivial")
+    A.dump(pkg, rec | {"guarantees": rec["guarantees"] | {n: {"owner": "@lean"} for n in names},
+                       "witnesses": {"Control.bounded": {"honest": [names[0]], "nontrivial": names[1], "kind": "exclusion"}}})
+    assert witnessing(False) == [] and witnessing(True) == []
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_bound_hidden_in_an_excepted_module_holds_its_guarantee_to_exclusion_witnesses(tmp_path):
+    """On a real build: the same statement in a proofs-tree module under `trees`' `except`, outside `meaning` (as C-Flock's
+    statements are in `Proofs.Flock`): `chain` unfolds through the modules the record follows (`record_scope`), so
+    `--update` fails it with `witnesses.missing` of the `exclusion` kind and lists it under no `unwitnessed`. An entry
+    there at its record's type hash exempts it, and `--update` keeps that entry. A `chain` that stopped outside `meaning`
+    recorded nothing past the statement's own name."""
+    pkg, build, audit, lock = excepted_toy(tmp_path, "Control.Partition", PARTITION, BOUNDED, "Control.bounded")
+    build()
+
+    def witnessing(update):
+        return [f for f in audit(update)["failures"] if f.code.startswith("witnesses")]
+    fails = witnessing(True)
+    assert [f.code for f in fails] == ["witnesses.missing"], fails
+    assert '"kind": "exclusion"' in fails[0] and "reads Control.Bound of Control.Partition" in fails[0], fails[0]
+    rec = lock()
+    assert "Control.bounded" not in rec.get("unwitnessed", {})
+    entry = {"Control.bounded": rec["guarantees"]["Control.bounded"]["type_hash"]}
+    A.dump(pkg, rec | {"unwitnessed": entry})
+    assert witnessing(False) == [] and witnessing(True) == [] and lock()["unwitnessed"] == entry
+
+
 def test_a_statement_whose_premises_could_not_be_read_fails():
     """`Facts.lean` writes `premises: null` when `premisesOf` throws on a statement; read as no premises, every premise of it
     would go unlisted, so it fails instead. Facts without the field (older documents) are not held to it."""
@@ -3721,6 +3786,186 @@ def test_an_equation_lemma_two_modules_realize_counts_as_declared_by_the_importe
         r = subprocess.run(["lake", "env", "lean", "--run", str(A.TOOL / "Replay.lean"), str(tmp_path / "replay.json"),
                             "R.D", "--closure", *closure], cwd=pkg, capture_output=True, text=True, env=A.lake_env())
         assert r.returncode == 0, (closure, r.stderr + r.stdout)
+
+
+#: a package under the module system. `k.eq_1` is realized in `T`'s proof, which leaves it a theorem in `T`'s public
+#: part, and in the bodies of `E`'s and `F`'s exposed definitions, which leave it an axiom in theirs (as
+#: `Circuit.computed.eq_1` in `Definitions.Nci.Dark` and `Proofs.Core.Circuit`). `W1` and `W2` each declare `w`, on a
+#: `sorry` and on an axiom hidden in their private parts. `P` and `Q` declare `t` with different statements, `G1` and
+#: `G2` the definition `g : Nat` with different bodies, `O1` and `O2` the opaque `o : Nat`, `X` the axiom `u` and `Y`
+#: the theorem `u`.
+REALIZED = {
+    "A": "@[expose] public def k (n : Nat) : Nat := n + 1\n",
+    "T": "public import R.A\npublic theorem t : k 0 = 1 := by simp [k]\n",
+    "E": "public import R.A\n@[expose] public def e : {n : Nat // k n = n + 1} := ⟨0, by simp [k]⟩\n",
+    "F": "public import R.A\n@[expose] public def f : {n : Nat // k n = n + 1} := ⟨0, by simp [k]⟩\n",
+    "D": "public import R.T\npublic import R.E\npublic import R.F\npublic theorem d : k 0 = 1 := by simp [k]\n",
+    "D2": "public import R.E\npublic import R.F\npublic theorem d2 : k 0 = 1 := by simp [k]\n",
+    "W1": "public import R.A\npublic theorem w : k 0 = 1 := by sorry\n",
+    "W2": "public import R.A\naxiom hid : k 0 = 1\npublic theorem w : k 0 = 1 := hid\n",
+    "V": "public import R.W1\npublic import R.W2\npublic theorem v : k 0 = 1 := w\n",
+    "P": "public theorem t : 1 = 1 := rfl\n",
+    "Q": "public theorem t : 2 = 2 := rfl\n",
+    "G1": "public def g : Nat := 1\n",
+    "G2": "public def g : Nat := 2\n",
+    "O1": "public opaque o : Nat\n",
+    "O2": "public opaque o : Nat\n",
+    "X": "public axiom u : 1 = 1\n",
+    "Y": "public theorem u : 1 = 1 := rfl\n",
+    "H": "public theorem hk : 3 = 3 := rfl\n",
+    "I": "public import R.A\nimport R.H\ntheorem i_priv : 3 = 3 := hk\npublic theorem i : k 0 = 1 := by simp [k]\n",
+    "J": "public import R.I\npublic theorem j : k 0 = 1 := i\n",
+    "K": "@[expose] public def kb : Nat := 3\n",
+    "L": "public import R.K\n@[expose] public def la : Nat := kb\n",
+    "M": "public import R.L\npublic theorem m : la = 3 := rfl\n",
+}
+
+
+@pytest.fixture(scope="module")
+def realized(tmp_path_factory) -> Path:
+    """`REALIZED` built; no module imports both of a pair that clashes."""
+    pkg = tmp_path_factory.mktemp("realized") / "pkg"
+    (pkg / "R").mkdir(parents=True)
+    shutil.copy(HERE / "fixtures" / "control" / "lean-toolchain", pkg)
+    (pkg / "lakefile.toml").write_text('name = "realized"\n\n[[lean_lib]]\nname = "R"\n')
+    for m, text in REALIZED.items():
+        (pkg / "R" / f"{m}.lean").write_text("module\n" + text)
+    tops = ("D", "D2", "V", "P", "Q", "G1", "G2", "O1", "O2", "X", "Y", "J", "M")
+    subprocess.run(["lake", "build", *(f"R.{m}" for m in tops)], cwd=pkg, check=True, capture_output=True,
+                   env=A.lake_env())
+    return pkg
+
+
+def records_replay(built: Path, tmp_path: Path, *args: str, public: tuple[str, ...] = ()) -> tuple[int, str, dict]:
+    """`Replay.lean --records` on `built`, copied once to ``tmp_path``, with the ``public`` modules cut to their public
+    parts, as the graph's lean-module runner has its imports: its exit code, its output and what it wrote."""
+    pkg = tmp_path / "pkg"
+    if not pkg.exists():
+        shutil.copytree(built, pkg, symlinks=True)
+    for m in public:
+        for part in ("olean.private", "olean.server"):
+            (pkg / ".lake" / "build" / "lib" / "lean" / "R" / f"{m}.{part}").unlink(missing_ok=True)
+    out = tmp_path / "replay.json"
+    out.unlink(missing_ok=True)
+    (tmp_path / "records").mkdir(exist_ok=True)
+    r = subprocess.run(["lake", "env", "lean", "--run", str(A.TOOL / "Replay.lean"), str(out), "--records",
+                        str(tmp_path / "records"), *args], cwd=pkg, capture_output=True, text=True, env=A.lake_env())
+    return r.returncode, r.stderr + r.stdout, json.loads(out.read_text()) if out.is_file() else {}
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_axioms_reused_public_parts_make_of_one_proposition_are_one_constant(realized, tmp_path):
+    """The lean-module runner reads its imports (`--closure-reused`, each passed its own task) at their public parts,
+    where `E`'s and `F`'s `k.eq_1` are axioms and `T`'s a theorem: `D`'s and `D2`'s replays pass, as `lean` imported
+    them (they refused `Circuit.computed.eq_1`, `Claims.OC.eval.eq_def` and `finalCheck.congr_simp` on the module
+    system)."""
+    rc, log, _ = records_replay(realized, tmp_path, "R.D2", "--closure-reused", "R.E", "R.F", public=("E", "F"))
+    assert rc == 0, log
+    rc, log, _ = records_replay(realized, tmp_path, "R.D", "--closure-reused", "R.T", "R.E", "R.F",
+                                public=("T", "E", "F"))
+    assert rc == 0, log
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_copy_from_a_module_checked_here_must_be_a_theorem_it_replays(realized, tmp_path):
+    """`T`, checked here at its private part, holds `k.eq_1` as a theorem, which the kernel checks beside the reused
+    axioms; `X`, checked here, holds `u` as an axiom it wrote, which no reused theorem `Y` stands for."""
+    rc, log, got = records_replay(realized, tmp_path, "R.D", "--closure", "R.T", "--closure-reused", "R.E", "R.F",
+                                  public=("E", "F"))
+    assert rc == 0 and got["replayed"] == 3, log  # `T`'s `t` and `k.eq_1`, and `d`
+    rc, log, _ = records_replay(realized, tmp_path, "R.X", "--closure-reused", "R.Y", public=("Y",))
+    refusal = "u is declared by R.Y and by R.X as an axiom in R.X, which `--closure-reused` doesn't name"
+    assert rc != 0 and refusal in log, log
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_axioms_of_a_type_that_is_not_a_proposition_are_refused(realized, tmp_path):
+    """The axioms `g : Nat` two reused public parts hold hide definitions with different bodies, so they aren't one
+    constant whatever `lean` proved from each."""
+    rc, log, _ = records_replay(realized, tmp_path, "R.A", "--closure-reused", "R.G1", "R.G2", public=("G1", "G2"))
+    assert rc != 0 and "g is declared by R.G1, R.G2, axioms each, of a type that isn't a proposition" in log, log
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_name_declared_with_two_statements_is_refused(realized, tmp_path):
+    """`P`'s theorem `t : 1 = 1` and the axiom `Q`'s public part makes of its `t : 2 = 2` are two constants."""
+    rc, log, _ = records_replay(realized, tmp_path, "R.P", "--closure-reused", "R.Q", public=("Q",))
+    assert rc != 0 and "t is declared by R.Q and by R.P with different statements" in log, log
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_definitions_or_opaques_two_modules_declare_are_refused(realized, tmp_path):
+    """Read at their private parts, reused or checked here, `G1`'s and `G2`'s `g` are definitions and `O1`'s and `O2`'s
+    `o` opaques: neither a theorem nor the axiom a public part makes of one."""
+    rc, log, _ = records_replay(realized, tmp_path, "R.A", "--closure-reused", "R.G1", "R.G2")
+    assert rc != 0 and "g is declared by R.G1 and by R.G2 and not as theorems or axioms" in log, log
+    rc, log, _ = records_replay(realized, tmp_path, "R.A", "--closure", "R.O1", "R.O2")
+    assert rc != 0 and "o is declared by R.O1 and by R.O2 and not as theorems or axioms" in log, log
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_sorry_or_axiom_hidden_behind_either_copy_of_a_name_reaches_its_importer(realized, tmp_path):
+    """`W1` and `W2` each pass their own replay, which records `w`'s axioms; read at their public parts, where each `w`
+    is an axiom, they leave `V`'s `v` with the axioms of whichever copy stands for `w`, the `sorry` or the hidden axiom,
+    never none."""
+    hidden = {}
+    for m in ("W1", "W2"):
+        rc, log, got = records_replay(realized, tmp_path, f"R.{m}")
+        assert rc == 0, log
+        hidden[m] = got["declarations"]["w"]
+        (tmp_path / "records" / "R").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "records" / "R" / f"{m}.json").write_text(json.dumps({"module": f"R.{m}",
+                                                                          "axioms": got["declarations"]}))
+    assert hidden["W1"] == ["sorryAx"] and hidden["W2"][0].endswith(".hid"), hidden
+    for order in (["R.W1", "R.W2"], ["R.W2", "R.W1"]):
+        rc, log, got = records_replay(realized, tmp_path, "R.V", "--closure-reused", *order, public=("W1", "W2"))
+        assert rc == 0 and got["declarations"]["v"] in (hidden["W1"], hidden["W2"]), (order, log, got)
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_public_part_brings_in_none_of_its_modules_private_imports(realized, tmp_path):
+    """`I` imports `H` privately, so `lean` compiles `J` (`public import R.I`) on `I`'s public part without `H`, and the
+    lean-module runner reads no part of `H`: `J`'s replay passes without it, as `CallsDecision`'s didn't on `CallsTop`'s
+    private import of `CallsFast100`. With `I`'s private part, as an `import all` of it has it, `H` is still needed."""
+    pkg = tmp_path / "pkg"
+    shutil.copytree(realized, pkg, symlinks=True)
+    for f in (pkg / ".lake" / "build" / "lib" / "lean" / "R").glob("H.*"):
+        f.unlink()
+    rc, log, _ = records_replay(realized, tmp_path, "R.J", "--closure-reused", "R.I", "R.A", public=("A",))
+    assert rc != 0 and "R.H does not exist" in log, log
+    rc, log, got = records_replay(realized, tmp_path, "R.J", "--closure-reused", "R.I", "R.A", public=("I", "A"))
+    assert rc == 0 and got["replayed"] == 1, log
+
+
+#: `Forge FILE MODULE` rewrites the `.olean` FILE with its imports made private
+FORGE = """import Lean
+open Lean
+
+unsafe def main : List String → IO UInt32
+  | [file, mod] => do
+    let (data, _) ← readModuleData file
+    saveModuleData (file ++ ".forged") mod.toName { data with imports := data.imports.map ({ · with isExported := false }) }
+    IO.FS.rename (file ++ ".forged") file
+    return 0
+  | _ => return 2
+"""
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_constant_only_a_private_import_declares_is_unknown_to_the_kernel(realized, tmp_path):
+    """The replay fails closed on a public part that mentions what a private import declares, which no `lean` build
+    writes: `L`'s import of `K` made private, its `la` still unfolds to `K`'s `kb`, which `M`'s `m : la = 3 := rfl`
+    needs. The replay leaves `K` out, and the kernel rejects `m`."""
+    pkg = tmp_path / "pkg"
+    shutil.copytree(realized, pkg, symlinks=True)
+    lib = pkg / ".lake" / "build" / "lib" / "lean" / "R"
+    for f in lib.glob("K.*"):
+        f.unlink()
+    (tmp_path / "Forge.lean").write_text(FORGE)
+    subprocess.run(["lake", "env", "lean", "--run", str(tmp_path / "Forge.lean"), str(lib / "L.olean"), "R.L"], cwd=pkg,
+                   check=True, capture_output=True, env=A.lake_env())
+    rc, log, got = records_replay(realized, tmp_path, "R.M", "--closure-reused", "R.L", public=("L",))
+    assert rc == 1 and got["rejected"] == ["R.M"] and "unknown constant 'kb'" in log, log
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

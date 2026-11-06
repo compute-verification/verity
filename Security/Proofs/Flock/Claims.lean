@@ -42,6 +42,7 @@ public import Proofs.Flock.Claims.Recursion.SeqDeploy
 public import Proofs.Flock.Claims.Recursion.DeployStop
 public import Proofs.Flock.Claims.Recursion.SeqStop
 public import Proofs.Flock.Claims.Recursion.SeqDeployStop
+public import Proofs.Flock.Claims.Recursion.RecSystem
 public import Proofs.Flock.Claims.Recursion.VStar
 public import Proofs.Flock.Claims.Recursion.VStarBound
 public import Proofs.Flock.Claims.Recursion.BoundDeploy
