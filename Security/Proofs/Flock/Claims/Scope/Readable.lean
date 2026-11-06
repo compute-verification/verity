@@ -31,7 +31,7 @@ namespace Flock.Readable
 open FlockSoundness.Discharge
 
 /-- What `flock-verify verify` reads of a statement besides the session directory: its flags' values (`I`, as
-`Exec.Inputs` holds them: `--statement`'s tags after `withCoins` and `--coins`, which `verify --zk` replaces by
+`Exec.Inputs` holds them: `--statement`'s tags and `--coins`, which `verify --zk` replaces by
 `zkTags I` and `zkCoins I`), whether it is the masked verifier (`--zk`), the record's draw (`Main.recordDraw`, none
 without one), its own public input words (`--public-inputs`) and whether it holds its own registered reads
 (`--registered`). -/

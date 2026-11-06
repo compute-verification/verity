@@ -89,7 +89,7 @@ def executable(exe: str = EXE) -> Path:
 
 def _dumps(value: Any) -> str:
     """`value` as one JSON line the Lean reads back as Python wrote it: a float of 10^16 or more, which Python writes in
-    exponent form and `Json.parse` would read as an integer, is written with its digits and `.0`."""
+    exponent form and `Flock.JsonParse.parse` would read as an integer, is written with its digits and `.0`."""
     nonce, big = secrets.token_hex(8), {}
 
     def walk(x: Any) -> Any:

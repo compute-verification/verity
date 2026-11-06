@@ -23,6 +23,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   the challenger's coins, with the number of bytes it read (`Select.selectSecond`);
 * `slots`: the claims' partition over the program and query, and the slots of that draw's checked proof blocks
   (`Slots.select`);
+* `file_population`: why the registration's population over a program and query is not a public file's units in order
+  (`FilePart.why`);
 * `bound`: the exact bounds on wrong units at δ;
 * `harm_bound`: the harm they hold at δ in closed form (`Bound.densityBound`);
 * `max_harm`: a certificate's bracket around `Flock.Guarantees.JointStratified`'s exact supremum of that harm
@@ -56,6 +58,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `challenger_coin_trees`, `challenger_session_trees`: a `--zk` session's coins (`ChallengerTrees`): the coin trees a
   release log shows the challenger sampled and opened (`coin_trees_of`), and an audit's session records held to them,
   one tree a session (`sessions_tree_reason`).
+* `challenger_inner_trees`: a recursive session's inner coins (`ChallengerInnerTrees`): `rec_live`'s coin server
+  records held to the trees a release log shows, one tree a session, every opening read (`rec_live.tree_held_reason`).
 * `wires`, `wires_unrolled`: a window circuit's wires checked at the size of their description (`Wires.check`) and by
   the unrolled reference (`Wires.checkRef`), each with its summary: wired rows and bits, spans, and drawn rows' writers.
 * `wires_drawn`, `wires_drawn_unrolled`: the wire check on the drawn units alone (`Wires.Summary.drawnOk`, each drawn
@@ -70,6 +74,7 @@ module
 
 public import SampledProofs.OneStage
 public import SampledProofs.Slots
+public import SampledProofs.FilePart
 public import SampledProofs.Service
 public import SampledProofs.Run
 public import SampledProofs.Stream
@@ -79,6 +84,7 @@ public import SampledProofs.ChallengerRecord
 public import SampledProofs.ChallengerSession
 public import SampledProofs.ChallengerCoins
 public import SampledProofs.ChallengerTrees
+public import SampledProofs.ChallengerInnerTrees
 public import SampledProofs.Produced
 public import SampledProofs.HiddenDraw
 public import SampledProofs.PartitionRef
@@ -606,6 +612,7 @@ def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("registration", registration),
    ("registered", registered),
    ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
+   ("file_population", FilePart.piece),
    ("check_proved", checkProved),
    ("select_second", selectSecond),
    ("bound", bound), ("harm_bound", harmBound), ("max_harm", maxHarm), ("bernoulli_bound", bernoulliBound),
@@ -623,6 +630,7 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_pinned", Challenger.pinnedPiece), ("challenger_read", Challenger.readPiece),
    ("challenger_draw_coins", Challenger.drawCoinsPiece),
    ("challenger_coin_trees", Challenger.coinTreesPiece), ("challenger_session_trees", Challenger.sessionTreesPiece),
+   ("challenger_inner_trees", Challenger.innerTreesPiece),
    ("wires", Wires.piece), ("wires_unrolled", Wires.pieceRef),
    ("wires_drawn", Wires.pieceDrawn), ("wires_drawn_unrolled", Wires.pieceDrawnRef)]
 

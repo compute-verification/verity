@@ -73,6 +73,7 @@
   "Proofs.Properties.Core.Site",
   "Proofs.Properties.Nci.Protocol",
   "Proofs.Properties.Verity.Soundness",
+  "Proofs.Properties.Verity.Sampled",
   "Proofs.Properties.Remote",
   "Proofs.Properties.Remote.Honest",
   "Proofs.Properties.Verity.Recursive",
@@ -82,7 +83,7 @@
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
-  "Proofs.Flock.Claims.ZkColsSession": "the masked reader on recorded `--zk` sessions (art:5542740a), run by hand (`lake env lean --run`): a probe, not a proof"
+  "Proofs.Flock.Claims.ZkColsSession": "the masked reader on recorded `--zk` sessions (the `zk-sessions` fixture), run by hand (`lake env lean --run`): a probe, not a proof"
  },
  "runs": {
   "Proofs.Pouw.Bulk": {

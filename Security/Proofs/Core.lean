@@ -19,6 +19,7 @@ public import Proofs.Core.Game.Batch
 public import Proofs.Core.Game.BatchInduced
 public import Proofs.Core.Game.Rewinding
 public import Proofs.Core.Game.Unambiguous
+public import Proofs.Core.Game.TwoRun
 public import Proofs.Core.Challenger
 public import Proofs.Core.ValueSalts
 public import Proofs.Core.UnionBound

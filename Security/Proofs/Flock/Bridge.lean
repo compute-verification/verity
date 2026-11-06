@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.Bridge.PortRoots
 public import Proofs.Flock.Bridge.PopMatches
 public import Proofs.Flock.Bridge.Targets
+public import Proofs.Flock.Bridge.FilePartTarget
 public import Proofs.Flock.Bridge.Lowers
 public import Proofs.Flock.Bridge.Count
 public import Proofs.Flock.Bridge.CircuitOf
