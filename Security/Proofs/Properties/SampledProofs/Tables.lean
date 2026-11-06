@@ -2,16 +2,17 @@ module
 
 public import Properties.SampledProofs.Tables
 
-/-! # Proofs of v2's refusal of blobs holding a lookup table (`Properties.SampledProofs.Tables`)
+/-! # Proofs of v2's holding the blobs' lookup tables to the registered circuit's (`Properties.SampledProofs.Tables`)
 
-`tablesHeld` matches on the blobs' tables and throws on any, so its acceptance is their emptiness (`tablesHeld_ok`).
-`run` binds it first (`run_tables`), and `checkBlobsAt` accepts only where its chain of refusals ends in `run`'s
-acceptance (`checkBlobsAt_run`).
+`tablesHeld` reads the circuit file, its lookups and the blobs' tables, and throws where the two lists of names differ,
+so its acceptance is their equality (`tablesHeld_ok`). `run` binds it first (`run_tables`), and `checkBlobsAt` accepts
+only where its chain of refusals ends in `run`'s acceptance (`checkBlobsAt_run`).
 
-`tablesRefused_honest` is its honest lemma: blobs holding a circuit file and a public file under digests that are no
-pinned table's, as the deployment hands v2 (`honestBlobs`), pass the refusal. `tablesRefused_nontrivial` is its
-nontrivial lemma: blobs holding a file under the pinned SHA-512 of `rcp` (`tableBlobs`) hold a table, so a check that
-accepts every input, as one without the refusal does there, does not have `TablesRefused`'s conclusion.
+`tablesRegistered_honest` is its honest lemma: blobs holding a circuit file that looks up `rcp` and `rcp`'s table, as
+the served path hands v2 (`honestBlobs`), pass the refusal. `tablesRegistered_nontrivial` is its nontrivial lemma: blobs
+holding a circuit file that looks up no table and `rcp`'s table (`tableBlobs`) hold a table the circuit doesn't look
+up, so a check that accepts every input, as one without the refusal does there, does not have `TablesRegistered`'s
+conclusion.
 -/
 
 @[expose] public section
@@ -26,15 +27,22 @@ private theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except 
   | error e => cases h
   | ok a => exact ⟨a, rfl, h⟩
 
-theorem tablesHeld_ok {bs : Core.Blobs} (h : OneStageZk.tablesHeld bs = .ok ()) : HoldsNoTable bs := by
+theorem tablesHeld_ok {p : OneStageZk.Own} {bs : Core.Blobs} (h : OneStageZk.tablesHeld p bs = .ok ()) :
+    HoldsRegisteredTables p bs := by
   unfold OneStageZk.tablesHeld at h
-  unfold HoldsNoTable
-  split at h
-  · assumption
-  · cases h
+  obtain ⟨c, hc, h1⟩ := bind_ok h
+  obtain ⟨w, hw, h2⟩ := bind_ok h1
+  refine ⟨c, hc, ?_⟩
+  rw [hw]
+  dsimp only at h2
+  split at h2
+  · cases h2
+  · rename_i hne
+    simp only [bne_iff_ne, ne_eq, Decidable.not_not] at hne
+    rw [hne]
 
 theorem run_tables {p : OneStageZk.Own} {ss : Array OneStageZk.RunFiles} {pu : Option (Array Nat)} {bs : Core.Blobs}
-    {r : OneStageZk.Run} (h : OneStageZk.run p ss pu bs = .ok r) : HoldsNoTable bs := by
+    {r : OneStageZk.Run} (h : OneStageZk.run p ss pu bs = .ok r) : HoldsRegisteredTables p bs := by
   unfold OneStageZk.run at h
   obtain ⟨u, hu, -⟩ := bind_ok h
   exact tablesHeld_ok hu
@@ -56,23 +64,38 @@ theorem checkBlobsAt_run {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ :
     obtain ⟨-, -, h6⟩ := bind_ok h5
     exact ⟨r, h6⟩
 
-theorem tablesRefused : TablesRefused :=
-  ⟨fun _ => tablesHeld_ok, fun _ _ _ _ _ _ _ h => (checkBlobsAt_run h).elim fun _ hr => run_tables hr⟩
+theorem tablesRegistered : TablesRegistered :=
+  ⟨fun _ _ => tablesHeld_ok, fun _ _ _ _ _ _ _ h => (checkBlobsAt_run h).elim fun _ hr => run_tables hr⟩
 
-/-- **`TablesRefused`'s honest lemma**: blobs holding a circuit file and a public file pass v2's refusal. -/
-theorem tablesRefused_honest : OneStageZk.tablesHeld honestBlobs = .ok () := by
-  have h : (OneStageZk.tablesOf honestBlobs).isEmpty = true := by decide +kernel
-  unfold OneStageZk.tablesHeld
-  rw [List.isEmpty_iff.1 h]
-  rfl
+/-- **`TablesRegistered`'s honest lemma**: blobs holding a circuit file that looks up `rcp` and `rcp`'s table pass v2's
+refusal. -/
+theorem tablesRegistered_honest : OneStageZk.tablesHeld witnessOwn honestBlobs = .ok () := by
+  have h : (OneStageZk.tablesHeld witnessOwn honestBlobs).toBool = true := by decide +kernel
+  generalize OneStageZk.tablesHeld witnessOwn honestBlobs = x at h ⊢
+  cases x with
+  | error e => cases h
+  | ok u => rfl
 
-/-- **`TablesRefused`'s nontrivial lemma**: blobs holding a file under a pinned table's SHA-512 hold a table, so a check
-that accepts them, as one that accepts every input does, does not have `TablesRefused`'s conclusion. -/
-theorem tablesRefused_nontrivial : ¬ HoldsNoTable tableBlobs := by
-  have h : (OneStageZk.tablesOf tableBlobs).isEmpty = false := by decide +kernel
-  intro hn
-  unfold HoldsNoTable at hn
-  rw [hn] at h
-  cases h
+/-- `HoldsRegisteredTables` as a computation. -/
+private def holdsB (p : OneStageZk.Own) (bs : Core.Blobs) : Bool :=
+  match bs.get p.circuit "circuit" with
+  | .ok c => match OneStageZk.lookupsOf c with
+    | .ok w => w == (OneStageZk.tablesOf bs).map (·.1)
+    | .error _ => false
+  | .error _ => false
+
+private theorem holdsB_of {p : OneStageZk.Own} {bs : Core.Blobs} (h : HoldsRegisteredTables p bs) : holdsB p bs = true := by
+  obtain ⟨c, hc, hl⟩ := h
+  unfold holdsB
+  simp only [hc, hl, beq_self_eq_true]
+
+/-- **`TablesRegistered`'s nontrivial lemma**: blobs holding a circuit file that looks up no table and `rcp`'s table
+hold a table the circuit doesn't look up, so a check that accepts them, as one that accepts every input does, does not
+have `TablesRegistered`'s conclusion. -/
+theorem tablesRegistered_nontrivial : ¬ HoldsRegisteredTables witnessOwn tableBlobs := by
+  intro h
+  have hf : holdsB witnessOwn tableBlobs = false := by decide +kernel
+  rw [holdsB_of h] at hf
+  cases hf
 
 end Properties.SampledProofs.SecurityProofs

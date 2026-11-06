@@ -23,7 +23,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   (`Slots.select`);
 * `file_population`: why the registration's population over a program and query is not a public file's units in order
   (`FilePart.why`);
-* `tables_held`: v2's refusal of blobs holding a pinned MUFU table, on their digests (`OneStageZk.tablesHeld`);
+* `tables_held`: v2's refusal of blobs whose pinned MUFU tables are not a circuit's lookups, on a META's `lookups` and
+  the blobs' digests (`OneStageZk.tablesHeld`);
 * `bound`: the exact bounds on wrong units at δ;
 * `harm_bound`: the harm they hold at δ in closed form (`Bound.densityBound`);
 * `max_harm`: a certificate's bracket around `Flock.Guarantees.JointStratified`'s exact supremum of that harm
