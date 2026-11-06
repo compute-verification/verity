@@ -4249,6 +4249,10 @@
    "honest": ["Nci.Cut.SecurityProofs.Cut_honest"],
    "nontrivial": "Nci.Cut.SecurityProofs.HEShared_nontrivial",
    "kind": "exclusion"
+  },
+  "Pouw.SecurityProofs.PeriodBindingPerProver": {
+   "honest": ["Pouw.SecurityProofs.PeriodBindingPerProver_honest"],
+   "nontrivial": "Pouw.SecurityProofs.PeriodBindingPerProver_nontrivial"
   }
  },
  "unwitnessed": {
@@ -5408,6 +5412,9 @@
    "unfolded_hash": "9ee55757053ac9b90349a34cc82f764000f922db7c3e90e1e4fc443c5c65475f"
   },
   "Accounting.SecurityProofs.ComposePeriod.CircuitWorkMonitoringPeriod": "4281b075f13efe6fcb4bdf1a55358689c65c2f65cafa4845f9b06d9d5b1c9fa8"
+ },
+ "witnesses_assumed": {
+  "Claims.ExpectedCR": "ecr/sha-512 at one collision finder is a computational assumption about SHA-512 that no theorem concludes, so a witness takes it as it stands."
  },
  "layers": {
   "Definitions.Core": {
@@ -22154,6 +22161,26 @@
    "type_hash": "6db2b5f14eaa50ef363440f397e8532266bf9830364718fb5fd44faa6e14a9c2",
    "unfolded_hash": "0e6b5f1a98d281062a1fb396fc59dad90e9789e47644db91ee256ee9d89f0c6c"
   },
+  "Pouw.SecurityProofs.PeriodBindingPerProver": {
+   "owner": "@compute-accounting",
+   "signature": ["Pouw.SecurityProofs.PeriodBindingPerProver : Pouw.Guarantees.PeriodBindingPerProver"],
+   "assumptions": [],
+   "type_hash": "4062925d0714123d7a8745d9bb9c51d7acae31138478c1fb747cbd22485bad77"
+  },
+  "Pouw.SecurityProofs.PeriodBindingPerProver_honest": {
+   "owner": "@compute-accounting",
+   "signature": ["Pouw.SecurityProofs.PeriodBindingPerProver_honest : Pouw.Guarantees.PeriodBindingPerProver_honest"],
+   "assumptions": [],
+   "type_hash": "32765e57ad52586014e2fe569e17e47568eb6370bb5f4aa9a16cef60b2af920a"
+  },
+  "Pouw.SecurityProofs.PeriodBindingPerProver_nontrivial": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.PeriodBindingPerProver_nontrivial : Pouw.Guarantees.PeriodBindingPerProver_nontrivial"
+   ],
+   "assumptions": [],
+   "type_hash": "508756b10337712a83d0cb90b5ff4a59c9d0d5c2255f6d78121c63be15be9c4c"
+  },
   "Pouw.SecurityProofs.Receipt.DuoCheckpointNoKernel": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.Receipt.DuoCheckpointNoKernel : Pouw.Guarantees.Receipt.DuoCheckpointNoKernel"],
@@ -25161,7 +25188,10 @@
    "Nci.Cut.SecurityProofs.Slowdown_nontrivial": "completeness: Slowdown's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy Nci.Cut.Toy (Security/Definitions/Nci/Cut/Toy.lean), Slowdown without the block cap: one block holding both MACs reads three inputs, more than k = 1, and at c = 1 the bound (c / |C|) (N / (k + α) - √(Π(1) O N) / (k + α)^{3/2}) = 1 exceeds m c / |C| = 1/2, all proved, so Slowdown's conclusion is not a tautology and needs the premise it drops.",
    "Nci.Cut.SecurityProofs.HE_nontrivial": "completeness: HE's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy Nci.Cut.Toy (Security/Definitions/Nci/Cut/Toy.lean), HE without the block cap: Cut_honest's values and (E) at b = 1, with (H) at k = 0; one block holding both MACs reads three inputs, more than k = 0, and N = 2 exceeds the bound, 0, all proved, so HE's conclusion is not a tautology and needs the premise it drops.",
    "Nci.Cut.SecurityProofs.HEShared_nontrivial": "completeness: HEShared's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy Nci.Cut.Toy (Security/Definitions/Nci/Cut/Toy.lean), HEShared without the block cap: Cut_honest's arrays, values, costs and (E) at b = 1, with (H) at k = 0; one block holding both MACs reads three inputs, more than k = 0, and N = 2 exceeds the bound, 0, all proved, so HEShared's conclusion is not a tautology and needs the premise it drops.",
-   "Accounting.SecurityProofs.ComposePeriod.CircuitWorkMonitoringPeriod": "frozen (no-function,world-unlisted): INT-PERIOD's restatement of CircuitWork over an accounting period of at most n windows of one declared circuit (Accounting.Compose.WindowPlay, each window with its own live coins and draw), credited up to its first window with a refused proof (Accounting.Compose.Outcomes.Credited, RT3-INT-7) and its words counted on each credited window's live tiles only (RT-INT's fix (c) with RT2-INT-1's), which Daniel took (ASK-64 = A, 19 Oct): an accepted period has its accepted prefix's live words fixed right but for a share at cost Lambda ln(1/delta_s) + j min(a, b) D0 at the realized prefix j (LiveWorkAt at rOfPrefix), except with probability delta_s + n (delta_bind + delta_ks); not a Lean function, an Accounting.TS.prob event that shape.events does not list, and its claims (OperandHMu, ReceiptLuckAt and GuessLuckAt per live tile under PerLiveTile, UnitFixed at the period's modes) are not on the premises list. Proved from CircuitWork's lemmas at n rounds: ServiceBudget per window at the live weights, PeriodBudget, PeriodTailMax once at the accepted prefix, DrawnRightOff at n rounds with PrefixOf, the period layer's covers (Accounting.SecurityProofs.ComposePeriod.periodCovers: Declared.periodLayer's writers are in their own window by its definition) and UnitFixed's sums. Its Scope holds LayerCommitted (each value the prover writes committed by its IR cut, or a computed value only its own unit reads by the draw, on which a late edge's cone lying in the IR's rests), which today's code doesn't meet, so a live window it serves is out of scope; and the period's record (cap and circuit committed before window 0's first coin, each window's first coin after the previous window's draw, closed at the first refused window) is protocol structure today's code doesn't meet either: the served Credits registers a window when it is received. Its live tiles are the ones live in-circuit: under #2731's tile (#2639's PouwH1Tile_v2) the served gate's admit bits admit a scale_only row block whose tile is dead (RT4-LOGIC-4), and under #2902's PouwH1Tile_v4 a tile's live bit is its admit bits' OR (RT4-LOGIC-20). Its quoted numbers take D0 = 0, which nothing computes for the served circuit, and at D0 > 0 DeadConeDead can fail, so that the statement says nothing (RT4-LOGIC-18). Its numbers are for live windows, which no served path runs yet, and the declared circuit is the served Program's only through Properties.Compose.UnitsOfLayout and an extractor that doesn't exist yet."
+   "Accounting.SecurityProofs.ComposePeriod.CircuitWorkMonitoringPeriod": "frozen (no-function,world-unlisted): INT-PERIOD's restatement of CircuitWork over an accounting period of at most n windows of one declared circuit (Accounting.Compose.WindowPlay, each window with its own live coins and draw), credited up to its first window with a refused proof (Accounting.Compose.Outcomes.Credited, RT3-INT-7) and its words counted on each credited window's live tiles only (RT-INT's fix (c) with RT2-INT-1's), which Daniel took (ASK-64 = A, 19 Oct): an accepted period has its accepted prefix's live words fixed right but for a share at cost Lambda ln(1/delta_s) + j min(a, b) D0 at the realized prefix j (LiveWorkAt at rOfPrefix), except with probability delta_s + n (delta_bind + delta_ks); not a Lean function, an Accounting.TS.prob event that shape.events does not list, and its claims (OperandHMu, ReceiptLuckAt and GuessLuckAt per live tile under PerLiveTile, UnitFixed at the period's modes) are not on the premises list. Proved from CircuitWork's lemmas at n rounds: ServiceBudget per window at the live weights, PeriodBudget, PeriodTailMax once at the accepted prefix, DrawnRightOff at n rounds with PrefixOf, the period layer's covers (Accounting.SecurityProofs.ComposePeriod.periodCovers: Declared.periodLayer's writers are in their own window by its definition) and UnitFixed's sums. Its Scope holds LayerCommitted (each value the prover writes committed by its IR cut, or a computed value only its own unit reads by the draw, on which a late edge's cone lying in the IR's rests), which today's code doesn't meet, so a live window it serves is out of scope; and the period's record (cap and circuit committed before window 0's first coin, each window's first coin after the previous window's draw, closed at the first refused window) is protocol structure today's code doesn't meet either: the served Credits registers a window when it is received. Its live tiles are the ones live in-circuit: under #2731's tile (#2639's PouwH1Tile_v2) the served gate's admit bits admit a scale_only row block whose tile is dead (RT4-LOGIC-4), and under #2902's PouwH1Tile_v4 a tile's live bit is its admit bits' OR (RT4-LOGIC-20). Its quoted numbers take D0 = 0, which nothing computes for the served circuit, and at D0 > 0 DeadConeDead can fail, so that the statement says nothing (RT4-LOGIC-18). Its numbers are for live windows, which no served path runs yet, and the declared circuit is the served Program's only through Properties.Compose.UnitsOfLayout and an extractor that doesn't exist yet.",
+   "Pouw.SecurityProofs.PeriodBindingPerProver": "frozen (no-function): a bound on a period's binding (DrawnLayer.BindingAt at Declared.periodLayer, which J10-R's tileLayer is) for every circuit, outcomes and openings, not a property of a Lean function's acceptance; it takes ecr/sha-512 at the prover's own fork finder (Claims.ExpectedCR, applied to that finder alone) and states kappa, the unverified-opening and split terms, in full, since no premise bounds them yet (CMP-33).",
+   "Pouw.SecurityProofs.PeriodBindingPerProver_honest": "completeness: PeriodBindingPerProver's honest witness (LEAN-66): at onePeriod with every proof accepted and every slot opened to false by a verified path, the proofs are accepted on every coin, kappa is 0 and binding never fails (CMP-33).",
+   "Pouw.SecurityProofs.PeriodBindingPerProver_nontrivial": "lemma: PeriodBindingPerProver's nontrivial witness (LEAN-66): at onePeriod with every proof accepted, opening every slot to the coin bit by a verified path, kappa is 0 and the bound at q = 0, which is 0, fails, since the opened bit moves with every fresh sample; a counterexample about no protocol function (CMP-33)."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -28603,6 +28633,14 @@
     "Accounting.Guarantees.PouwEndToEndPerRun": "61879b9f414acf6b7bee5c10f414272c7217fc0b2e0882f8953db21b99da0a31"
    }
   },
+  "Definitions.Accounting.Guarantees.PeriodBinding": {
+   "digest": "4b916a4446c205abc07b321e0c3b59d3f54148dde38ec3fb1b12410242675894",
+   "definitions": {
+    "Pouw.Guarantees.PeriodBindingPerProver": "ff9fee42483186e3b576d3e46d953e188d974b890b7834aa05b1aea734136a3d",
+    "Pouw.Guarantees.PeriodBindingPerProver_honest": "8c1abb66e54ad1962e6254a4fc5cb282b5f7e84977a32aae3b27fd8bade41e5a",
+    "Pouw.Guarantees.PeriodBindingPerProver_nontrivial": "48bd3adcef300547b8fb6092a98a2e5249d0caba4df1cca4d9a18b685d59d28d"
+   }
+  },
   "Definitions.Accounting.Guarantees.Pouw": {
    "digest": "86d00bba1e7e691a7bf4896f659bf7b8fabdfe7505fb786f91dd2f3432d966e0",
    "definitions": {
@@ -29204,6 +29242,22 @@
     "Accounting.Run.totalRead": "d5cb38a07c596464a4159b7954e162501406f0ff052fccf0840daf306664202c",
     "Accounting.onlineCost": "4309a53969d6636363b5a42e4a2619bc8b3cef23e901332f1170975c3334f456",
     "Accounting.onlineCostPearlC": "5416d23a3147119804ae9e28f5a4b5ac7a8c926467c0207ca15445b96c9d5e7d"
+   }
+  },
+  "Definitions.Accounting.PeriodBinding": {
+   "digest": "752e60ec76bb82c5c7c02af048b9cf7f30a5ae608b42c8943f98a2078f4b80f1",
+   "definitions": {
+    "Accounting.Compose.Declared.periodPositions": "a90eb9601c154ff81ba6d4cf41f92b28531dfd6d3d4c3083a91577da96197b9d",
+    "Accounting.Compose.PeriodBinding.OneCoins": "41f5bd5bc1d37e657fda9b2e2d418a80f0d01a52ebf48f92a26323fa3d79d31b",
+    "Accounting.Compose.PeriodBinding.acceptAllLayer": "d97e8877ac303f83ac9397b5406d2f74410130ee444a0ccfa8f18480dd1070cd",
+    "Accounting.Compose.PeriodBinding.acceptAllOutcomes": "c8f9e02a07e91b1f2dd04af881381bd9ffc02e07c2af2fa66c563d625e3f8ed3",
+    "Accounting.Compose.PeriodBinding.coinBit": "dc335022554302a4bb32764a161458ac00c24469d29f9d861c522fd6dfe67b62",
+    "Accounting.Compose.PeriodBinding.honestLayer": "6d0e276bfff49f2f8e8b841e949019b0020a8ef6b94240b0e07b8fba26cd3bbc",
+    "Accounting.Compose.PeriodBinding.honestOutcomes": "a290b254ffc63a6f98a9a1d29d6bd1c388bc72727df94e728e44f3adc8058202",
+    "Accounting.Compose.PeriodBinding.oneOpenings": "d5844a50dec42635df7435ada7a3a3b80765ff95a440f5069107f4f17a83cb8f",
+    "Accounting.Compose.PeriodBinding.onePeriod": "41edd8f7fea432b3929a52d9a11e72034afced2b65fe52f944146bc11739fbff",
+    "Accounting.Compose.PeriodBinding.oneVerifier": "8778403b4431ebfccd70ca6980402c459fc7096061997ff3995af760b4955f80",
+    "Accounting.Compose.PeriodBinding.zeroHash": "020ffca91e2aad4ce38040476ea01d5fb89bc9576e7f862e24ac5d3e8a709a55"
    }
   },
   "Definitions.Accounting.Physical": {
@@ -29959,6 +30013,23 @@
    "definitions": {
     "Accounting.TS.BindingStep": "c22e666b1e4035abf15886dbdf99fd2528959877bc5022d77ed9b57cb5c62c1c",
     "Accounting.TS.foldRun": "f3251505eafd31ec02c542ba34556238befd8a20f0add7a0c12e73f148c511d0"
+   }
+  },
+  "Definitions.Accounting.TS.Hashed": {
+   "digest": "6116c9ce2b5f99a178aba5958a372344690450b460a83d57aba40623950038be",
+   "definitions": {
+    "Accounting.TS.HashedOpenings": "0f322e41f08e94d424f1e99b05e747bd8bb938bd1937f6779c9651860c994ac6",
+    "Accounting.TS.HashedOpenings.Finds": "6b9c2dee798b4973bbda17cfcfc3a638444cb13471aecc6c9afb9461e5a7a5e7",
+    "Accounting.TS.HashedOpenings.Split": "6360f06b3ac75c0203f3229eff09f0f709c205e09aee2f69e22bcedb77c6d54e",
+    "Accounting.TS.HashedOpenings.Unverified": "396a3cf0c22d9faf5a164d8df62c3d6b5d02279c7b8068e4ffcee8c0dfabe7ef",
+    "Accounting.TS.HashedOpenings.Verified": "1c1a9440cf6466313274633969165af9e40c6d6deaef43a780d8491bf75835fc",
+    "Accounting.TS.HashedOpenings.checked": "9bf15ae9d949d5d2abb178d36fc16af4469ef59049906208e407ab68e126f786",
+    "Accounting.TS.HashedOpenings.decode": "a329fd9687b54e723f360cc3bede5150d878be0c2bdbf6011ee9a7fdda04718a",
+    "Accounting.TS.HashedOpenings.finder": "0bbe47021aad0fc521a2366ef88a6bbeb28bf904ea00cdd5ad54059780ca433b",
+    "Accounting.TS.HashedOpenings.leaf": "fbb5c1c7dfdd15eaad17ef0d3addbfabf734bff3e14e09096a5d63ba4d3dad56",
+    "Accounting.TS.HashedOpenings.opening": "9e5684a79c0b80ad0956bcc451d408e19e800a94d61eb264ca9331a738b67d53",
+    "Accounting.TS.HashedOpenings.rank": "c127120adbacb659c9395cfa57292d35710e8f24ec44c1e5245dad1c48dea486",
+    "Accounting.TS.HashedOpenings.root": "2dedb97f440a9c681a9b7d12a20f80191b1c182e5b2bdb3784fe4b17a02c9b59"
    }
   },
   "Definitions.Accounting.TS.Machine": {

@@ -32,6 +32,7 @@ public import Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted
 public import Definitions.Accounting.JointLive
 public import Definitions.Accounting.Memory
 public import Definitions.Accounting.PerRun
+public import Definitions.Accounting.PeriodBinding
 public import Definitions.Accounting.Physical
 public import Definitions.Accounting.Slowdown
 public import Definitions.Accounting.Pouw
