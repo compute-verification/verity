@@ -19,7 +19,7 @@ DIR`` stages from them without the fold, which is most of a run's time on a shar
   `check.weights_of_record.compose` and the Build's load-time ue8m0 rewrite (`check.fp8_ue8m0`, roles from ``--roles``), the
   composition whose per-field digests the Commit's weights pin held equal to the served parameters; the rotary table is the
   capture's ``cos_sin_cache.npy``. A Call reading another rank's values (``peers``) has none here and is not staged.
-* **Units.** The Call is evaluated gate by gate (`circuits.evaluate`) on those operands and held to the capture's output
+* **Units.** The Call is evaluated gate by gate (`circuits.evaluation.reference`) on those operands and held to the capture's output
   snapshot (the twin; for a kernel whose write lands after its own event's snapshot, the first later one before another
   writer that holds it, `call_twin`); its first ``--per-kind`` unit calls (the kind's unit, `a11_kinds.chain`) give each
   unit's arguments and returns. Each is packed into the unit's rows (`a11_kinds.rows_of`, an output row per output port,
@@ -62,7 +62,7 @@ import a11_kinds as K  # noqa: E402
 import r2_population as R2  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.ml.circuits.defs import PrimitiveDefinition  # noqa: E402
-from verity.ml.circuits.evaluate import evaluate_region  # noqa: E402
+from verity.ml.circuits.evaluation.reference import evaluate_region  # noqa: E402
 from verity.ml.circuits.program import Program  # noqa: E402
 from verity.ml.circuits.refs import runs  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402

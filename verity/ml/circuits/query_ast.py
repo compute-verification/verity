@@ -11,7 +11,11 @@ top-level plan costs O(root nodes) once; gates are never expanded.
 Values
     GateSet(parts)      union of `parts.Part`s (each Part = items of one activation); algebra `union/minus/inter`
                         refines Parts along the hierarchy so results stay Parts; equality is by root gate intervals.
+                        It is the one gate-set type: `layout`'s `Region` and `FunctionCall` are addressing, not sets.
     Family              ordered lazy sequence: count(), by_index(i), index_of(S), iteration, tiling().
+    oracle_gateset(C, gates), oracle_in(C, S), oracle_out(C, S)
+                        test-only: an explicit set of root gates and its boundary by expansion, the answers the compact
+                        modules are checked against.
 
 Query AST (frozen dataclasses; `evaluate(program, q)` is the only entry point; string syntax in `verity.ml.circuits.query`,
 JSON codec in `verity.ml.circuits.query_codec`):
@@ -59,12 +63,12 @@ import re
 import weakref
 from dataclasses import dataclass
 from functools import cached_property
-from typing import TYPE_CHECKING, Iterator, Mapping, Protocol, Sequence
+from typing import TYPE_CHECKING, Iterable, Iterator, Mapping, Protocol, Sequence
 
 from .codec import _split_record, descriptor_id
 from .defs import PrimitiveDefinition, SpecializedDefinition, _fmt_static
 from .intervals import complement, norm, total
-from .layout import Scope
+from .layout import Circuit, Scope
 from .parts import Item, Part, n_members
 from .intervals import Intervals, full, ref_intervals, restrict
 from .liveness import Liveness, _members
@@ -233,6 +237,55 @@ class GateSet:
 def gateset_of_scope(scope: Scope) -> GateSet:
     """The whole activation `scope` as one GateSet (every item of its body)."""
     return GateSet((Part(scope, _all_items(scope.spec)),))
+
+
+# ---------------------------------------------------------------------------------------------------------
+# The explicit oracle: test-only.  A query never builds an explicit set; tests check the compact answers against these.
+# ---------------------------------------------------------------------------------------------------------
+
+
+def _leaf_part(circuit: Circuit, g: int) -> Part:
+    scope = circuit.root_scope
+    while True:
+        body = scope.spec.body
+        k = body.node_at(g - scope.offset)
+        node = body.nodes[k]
+        m = 0 if node.form in ("primitive", "call") else (g - scope.offset - body.offsets[k]) // node.fn.gates
+        if isinstance(node.fn, PrimitiveDefinition):
+            return Part(scope, frozenset({(k, m)}))
+        scope = scope.child(k, m)
+
+
+def oracle_gateset(circuit: Circuit, gates: Iterable[int]) -> GateSet:
+    """The GateSet of the root gates `gates`, one primitive item per gate.  Test-only: O(|gates| x depth)."""
+    gs = sorted({int(g) for g in gates})
+    for g in gs[:1] + gs[-1:]:
+        if not (0 <= g < circuit.size):
+            raise IndexError(g)
+    return GateSet(_merge_parts([_leaf_part(circuit, g) for g in gs]))
+
+
+def oracle_in(circuit: Circuit, s: GateSet) -> tuple[int, ...]:
+    """in(S) by expansion: the distinct gates outside `s` with a wire into it, ascending.  Test-only; the compact
+    answer is `boundary.in_gates`."""
+    circuit._check_explicit(s.size())
+    found: set[int] = set()
+    for lo, hi in s.intervals():
+        for g in range(lo, hi):
+            found.update(o for o in circuit.gate(g).operands if o not in s)
+    return tuple(sorted(found))
+
+
+def oracle_out(circuit: Circuit, s: GateSet) -> tuple[int, ...]:
+    """out(S) by expansion: the distinct gates of `s` read by a gate outside it, or designated root outputs, ascending.
+    Test-only: it scans every gate of the circuit; the compact answer is `boundary.out_gates`."""
+    circuit._check_explicit(circuit.size)
+    used: set[int] = set()
+    for g in range(circuit.size):
+        if g not in s:
+            used.update(o for o in circuit.gate(g).operands if o in s)
+    used.update(o for o in circuit.root_outputs() if o in s)
+    return tuple(sorted(used))
 
 
 # ---------------------------------------------------------------------------------------------------------

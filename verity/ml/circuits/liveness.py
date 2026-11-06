@@ -2,7 +2,7 @@
 
 A gate is *dead* when no other gate consumes its value and it is not protected (not a root output). Dead
 gates are legal in every mode; they are counted toward the described computation, they are **not** boundary
-values of any gate selection by existence (`S.out` is the graph boundary — a value nobody reads is not on it), and
+values of any gate set by existence (`S.out` is the graph boundary — a value nobody reads is not on it), and
 frontends report them (count + ids).
 
 The analysis never expands the circuit. It runs once per (specialised definition, set of live return leaves):

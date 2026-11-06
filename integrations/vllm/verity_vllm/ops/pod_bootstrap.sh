@@ -210,7 +210,7 @@ check("vllm_commit_d9105ea80", lambda: ("d9105ea80" in __import__("vllm").__vers
 check("verity_from_tree", lambda: under("verity.ml.circuits", core))
 check("verity_vllm_from_tree", lambda: under("verity_vllm.program", root))
 check("research_telemetry_from_tree", lambda: under("research.telemetry", research))
-check("sampled_proofs_from_tree", lambda: under("verity.core.protocols.sampled_proofs.plan", verifiers))   # the program tests import it
+check("sampled_proofs_from_tree", lambda: under("verity.core.protocols.sampled_proofs.one_stage.partition", verifiers))   # the program tests import it
 def distributions_from_tree():
     # the catalog and the kernels, distributions of their own before the platform layout, and the verifiers, now in verity
     mods = {"catalog": "verity.ml.circuits.ops", "kernels": "verity.ml.kernels", "core": "verity.core"}
