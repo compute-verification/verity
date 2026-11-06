@@ -9,7 +9,7 @@ the bytes of the rows it opens and its block's log2 as C-Flock stages it; and, b
 Each Definition is one candidate (`optimize.Candidate`), its own op type with the one cut the census took: its units the
 request's count times ``requests``, its work its own ANDs (the planner credits Boolean work; MACs are informational), its
 outputs committed, a statement at most `cap` of them (Flock's m = k_log + nbl <= 35, and at most 2^20), and its replay
-block the request.
+grain the request, which holds one request's count of it (``n_rho``).
 
     uv run python benchmarks/sampling_plan/glm53.py [--card PATH] [--requests N]
 """
@@ -41,7 +41,7 @@ def candidates(card: dict, requests: int = 1) -> list[Candidate]:
         per = d["prefill"] + d["decode"]
         out.append(Candidate(t, t, per * requests, d["ands"], d["out_bits"], out_gates=-(-d["out_bits"] // 16),
                              ands=d["ands"], rows=tuple(d["rows"]), commit_bits=d["out_bits"], cap=cap(d["k_log"]),
-                             replay="request", per_replay=per))
+                             grain="request", n_rho=per))
     return out
 
 

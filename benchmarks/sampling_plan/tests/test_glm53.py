@@ -30,7 +30,7 @@ def test_every_definition_is_a_candidate_over_the_requests(requests):
     for c in cs:
         d = CARD["definitions"][c.template]
         per = d["prefill"] + d["decode"]
-        assert (c.units, c.per_replay, c.replay) == (requests * per, per, "request")
+        assert (c.units, c.n_rho, c.grain) == (requests * per, per, "request")
         assert c.work == c.ands == d["ands"] and c.out_bits == c.commit_bits == d["out_bits"]
         assert c.cap == min(2 ** (35 - d["k_log"]), 2 ** 20) and c.rows == tuple(d["rows"])
 
