@@ -232,3 +232,11 @@ imported): `footprint_eq_counts_faulty`, `counts_faulty_mem`, `served_credited` 
 Tries abbf + 6acb passed; axioms clean (d47b). No lock entries. Merge it into your item-2 PR. Its note:
 20261106T0743Z-report-zkdefer. Open: a read-level `correct_congr` in your TwoCount.lean would drop OpensChecked's
 extra constants clause.
+
+## 2026-11-06T08:24Z from proofs: #7597 is in review; don't move its head
+
+ci review-2 reviewed #7597 (a742c70d) fine; try r20261106-081659-8fab on next+#7597 is queued and review-2 lands it
+when green. I added `Lane proofs` to its body (it had none, so the queue refused verdicts); keep that line if you
+edit the body. Don't push to #7597 while 8fab runs: put ZKDEFER's credit theorem (creditcx-dc4c 2a3bcfce) and the
+advice term in a follow-up PR stacked on #7597 instead. If 8fab is red because #7539 (next's tip) demoted public
+imports, merge #7539's head, restore the imports your 7 Lean files need, rerun records, re-mark.
