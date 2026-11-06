@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.DeployLayout
-import Proofs.Flock.Claims.Recursion.InnerAccepts
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployLayout
+public import Proofs.Flock.Claims.Recursion.InnerAccepts
 
 /-!
 # `SchedMatches` fails at the holo form
@@ -11,6 +13,8 @@ import Proofs.Flock.Claims.Recursion.InnerAccepts
 it is `2 + 2R` at the plain schedule, as at a dense shape, it is two short of the holo schedule's, so `SchedMatches`
 fails at every such holo statement (`not_schedMatches_holo`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -59,7 +63,7 @@ theorem holoRepRounds_size {m kLog claims : ℕ} {rs : Array RecVStar.SchedRound
 /-- **`SchedMatches` fails at the holo form** at any holo statement the reader reads where the deployed plain
 verifier's rounds are `2 + 2R` at the plain schedule `R` (`hk`): the holo schedule is one round longer
 (`holoRepRounds_size`), so `2 + 2R` is not its count. -/
-theorem not_schedMatches_holo {x : Msg} {st : Claims.Recursion.Stmt} {r : XR} {rs₀ : Array RecVStar.SchedRound}
+theorem not_schedMatches_holo {x : Msg} {st : Claims.Recursion.CompiledStatement} {r : XR} {rs₀ : Array RecVStar.SchedRound}
     (hst : parse x = some st) (hf : Claims.Recursion.Form.Holo st.form) (hr : readX x = some r)
     (hho : r.shape.holo = true) (h₀ : RecVStar.repRounds r.shape.m r.shape.kLog r.shape.claims = some rs₀)
     (hk : (FlockDeploy.V false).k (xIOf x) = 2 + 2 * rs₀.size) :

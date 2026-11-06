@@ -45,6 +45,10 @@ import sys
 import time
 from pathlib import Path
 
+sys.path.append(str(Path(__file__).resolve().parents[2]))
+
+from benchmarks.word_codec import cuda_lib
+
 BLOCK = 4096
 GIB = 1 << 30
 RUNNERS = ("vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")
@@ -88,11 +92,8 @@ class Decoder:
     """kv.so's decode at the registration's key, on this process's one GPU."""
 
     def __init__(self, path: str) -> None:
-        self.so = ctypes.CDLL(path)
         v, q, i = ctypes.c_void_p, ctypes.c_uint64, ctypes.c_int
-        self.so.kv_set_key.argtypes = [v, i, v]
-        self.so.kv_set_mask.argtypes = [v]
-        self.so.kv_decode.argtypes = [v, v, q, q, i, i, v, v]
+        self.so = cuda_lib.load(path, {"kv_set_key": [v, i, v], "kv_set_mask": [v], "kv_decode": [v, v, q, q, i, i, v, v]})
         self.masked = bool(self.so.kv_mask())
 
     def set_key(self, key: dict) -> None:

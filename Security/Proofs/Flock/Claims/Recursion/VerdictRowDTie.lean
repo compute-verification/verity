@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Recursion.VerdictRowDCoin
-import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
-import Proofs.Flock.VBridge.Algebra.RunSkel
-import Proofs.Flock.VBridge.Algebra.Zerocheck
-import Proofs.Flock.VBridge.PartS
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRowDCoin
+public import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
+public import Proofs.Flock.VBridge.Algebra.RunSkel
+public import Proofs.Flock.VBridge.Algebra.Zerocheck
+public import Proofs.Flock.VBridge.PartS
 
 /-!
 # Row D's ties at the deployed layout: the side's schedule and check 5's positions
@@ -21,6 +23,8 @@ is handed. This file gives two of them at row D's readers `RecDeploy.Rows.sideAt
   reads the same positions at check 5's shape (`RecResiduals.shape?`) as at the reader's (`shapeOf`), which differ only
   in the Merkle widths it doesn't read (`verifierRows_congr`), and at any comb (`verifierRows_comb`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.OpenLower
 
@@ -144,7 +148,7 @@ theorem build_congr (h : algFields sh = algFields sh') (lins : Array RecAlgebra.
   unfold RecAlgebra.build
   simp only [hc, hs, buildAll_congr h, RecAlgebra.wNames, rounds_congr h]
 
-theorem residualLins_congr (h : algFields sh = algFields sh') (coins : RecAlgebra.Coins) (extras : Array Claim) :
+theorem residualLins_congr (h : algFields sh = algFields sh') (coins : RecAlgebra.CoinSource) (extras : Array Claim) :
     RecAlgebra.residualLins sh coins extras = RecAlgebra.residualLins sh' coins extras := by
   obtain ⟨hm, hk, hc, hs, -⟩ := algFields_eq h
   unfold RecAlgebra.residualLins RecAlgebra.run
@@ -168,13 +172,13 @@ end Congr
 
 /-! ## The verifier rows read only the rounds that hold coins -/
 
-/-- **`verifierRows` skips rounds of no coins** (`Coins.ofRounds`): at recorded rounds equal but for them, it computes
+/-- **`verifierRows` skips rounds of no coins** (`CoinSource.ofRounds`): at recorded rounds equal but for them, it computes
 the same rows. -/
 theorem verifierRows_filter {sh : Shape} {a b : Array (Array F128)} {extras : Array Claim} {comb : Array F128}
     (h : a.filter (·.size ≠ 0) = b.filter (·.size ≠ 0)) :
     RecAlgebra.verifierRows sh a extras comb = RecAlgebra.verifierRows sh b extras comb := by
-  have e : RecAlgebra.Coins.ofRounds a = RecAlgebra.Coins.ofRounds b := by
-    unfold RecAlgebra.Coins.ofRounds
+  have e : RecAlgebra.CoinSource.ofRounds a = RecAlgebra.CoinSource.ofRounds b := by
+    unfold RecAlgebra.CoinSource.ofRounds
     rw [h]
   unfold RecAlgebra.verifierRows
   rw [e]
@@ -195,7 +199,7 @@ theorem verifierRows_pos {sh : Shape} {rounds : Array (Array F128)} {extras : Ar
     rcases RecAlgebra.coinVec_ok hv with ⟨h6, -⟩ | ⟨-, hr6, -⟩
     · exact absurd h6 (by decide)
     · rw [Array.eq_empty_of_size_eq_zero h0] at hr6
-      simp [RecAlgebra.Coins.ofRounds] at hr6
+      simp [RecAlgebra.CoinSource.ofRounds] at hr6
   · exact h0
 
 /-! ## Check 5's `dirs` rows -/
@@ -323,7 +327,7 @@ def PosTieR (untr : TrReader) (b : Brings) (pieces : Msg → List OpenPiece)
 /-- **`PosTieR` at row D's position reader**, from `InnerCoinsR`, at a statement the reader reads at the dense form
 and pieces in range. -/
 theorem posTieR_of {untr : TrReader} {b : Brings} {pieces : Msg → List OpenPiece} {Bk : Msg → ℕ} {s : ℕ}
-    {x : Msg} {c : ℕ → Coin} {st : Claims.Recursion.Stmt} (hst : parse x = some st)
+    {x : Msg} {c : ℕ → Coin} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st)
     (hd : Claims.Recursion.Form.Dense st.form) (hR : PiecesInRangeR pieces)
     (hI : InnerCoinsR untr b Bk s x c) : PosTieR untr b pieces posAt Bk s x c := by
   intro xO hsh i spec sts hsu ht f inn hf hload r ss lv LANES HH n hr hss hsv cr dr hop q hq ho

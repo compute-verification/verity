@@ -1,4 +1,6 @@
-import Definitions.Nci.Threads
+module
+
+public import Definitions.Nci.Threads
 
 /-!
 # NCI over windows: the fit bound's vocabulary
@@ -20,6 +22,8 @@ carrying a parameter across steps is counted once for it:
 * `Slots.slotsUsed R`: the slots of the weights `R` uses.
 * `Slots.threadSlots R t`: the slots of the weights thread `t` uses inside `R`.
 -/
+
+@[expose] public section
 
 namespace Nci.Threading
 

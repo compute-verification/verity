@@ -6,12 +6,12 @@
 // panel chains it through the panel's column tiles.
 //
 // Variants (spec, NAMES): where the schedule W (32 registers) and the chaining value (16) live, and one chain or two a thread:
-//   r, r0, r2   sx::compress<0, 1 | 0 | 2>: both in registers (r is sha512x.cuh's default)
+//   r, r0, r2   sx::compress<0, 1 | 0 | 2>: both in registers (r is sha512.cuh's default)
 //   rs          W in registers, the chaining value in shared memory (lowreg.cuh's rounds)
 //   s, ss       W in shared memory ([word][thread]); the chaining value in registers, or in shared memory too
 //   d, ds, dr   two rows a thread interleaved (rounds2): W in registers or shared memory, the chaining values in shared
 //               memory (d, ds) or registers (dr)
-//   rs<SSss>    rs with sha512x.cuh's V: the pipe of S0, S1, s0 and s1's shifts (README "Compression variants"), some on
+//   rs<SSss>    rs with sha512.cuh's V: the pipe of S0, S1, s0 and s1's shifts (README "Compression variants"), some on
 //               IMAD, which issues to the FMA pipe beside the ALU: with one warp a scheduler the ALU's throughput bounds
 //               rs, and the FMA pipe is idle
 // The rest use V 0.

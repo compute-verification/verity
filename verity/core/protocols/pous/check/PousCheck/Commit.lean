@@ -1,9 +1,11 @@
-import Flock.Canon
-import PousCheck.P2
-import Identity.Tagged
+module
+
+public import Flock.Canon
+public import PousCheck.P2
+public import Identity.Tagged
 
 /-!
-The commitment to `W` (`setup.commit`, `p2/PROTOCOL.md` §4 "Setup commitment, salt and verification root"):
+The commitment to `W` (`setup.commit`):
 
 ~~~text
 manifest      canonical_json_bytes(params.manifest())
@@ -18,6 +20,8 @@ tagged_sha512(tag, x) = SHA512("verity/tagged-sha512/v1\0" ‖ u32be(len tag) �
 through Flock's canonical JSON (sorted keys, compact; its integers and ASCII strings are what Python's
 `canonical_json_bytes` writes).
 -/
+
+@[expose] public section
 
 namespace PousCheck.Commit
 

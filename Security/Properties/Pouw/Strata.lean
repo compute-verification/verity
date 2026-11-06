@@ -1,4 +1,6 @@
-import PouwCheck.Credit
+module
+
+public import PouwCheck.Credit
 
 /-!
 # A served window's work strata tile its units (`PouwCheck.Credit.strata`)
@@ -10,6 +12,8 @@ other unit. `callWork` (`credit.call_work`) lists each call's units and the work
 units in the strata the draw runs over (`unitWork`), and the window's work it passes as `W` is the strata's
 (`Flock.Draw.totalWork`). Each is a `Prop`, and `Proofs.Properties.Pouw.Strata` proves every one, on Lean core.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Strata
 

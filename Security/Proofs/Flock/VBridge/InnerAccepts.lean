@@ -1,6 +1,8 @@
-import Proofs.Flock.Recursive.Target
-import Proofs.Flock.Soundness.Discharge.Exec.Tables
-import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
+module
+
+public import Proofs.Flock.Recursive.Target
+public import Proofs.Flock.Soundness.Discharge.Exec.Tables
+public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
 
 /-!
 # VBridge G: the compiled inner verifier accepts from both reps' accepting runs
@@ -19,6 +21,8 @@ openings with their salts (`tableTape`).
 * `flockInnerCL_rejects_short`: `flockInnerCL` accepts no transcript of at most `r` rounds, the rounds `Inner.game`
   plays: each of them ends with a coin, and the table ends with the openings' message.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.InnerAccepts
 
@@ -161,7 +165,7 @@ theorem inner_accepts_of_reps (cls : HClass) (regs : List (Region cls.kLog (cls.
     (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hS : M.toStatement regs = S)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
     (hms : st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted") (pts : Fin 2 → Fin cls.mPts → 𝔽)
-    (sess : Session)
+    (sess : RunRecord)
     (hext : ExtraRealizes st S sess.points (extraClaims S cls.ptLocal cls.mPts pts))
     (hwf : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds)
     (sch : Flock.Schedule) (hf : Flock.fast100 st.m = some sch) (i : ℕ) (b₀ b₁ c : ByteArray)

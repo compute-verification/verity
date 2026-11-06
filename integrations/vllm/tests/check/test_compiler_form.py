@@ -11,7 +11,7 @@ import pytest
 
 from verity.ml.circuits.codec import encode_program
 from verity_vllm.check.match import compiler_form as CF
-from verity_vllm.check.match.instance_sequence import Prog
+from verity_vllm.check.match.instance_sequence import RootView
 from verity_vllm.check.match.program_compare import compare_steps
 from verity_vllm.program.predict import build as PB
 from verity_vllm.program.predict.phi import Phi
@@ -45,8 +45,8 @@ def test_the_unpruned_request_in_the_compilers_form_is_the_builds_request_progra
     sequences differ.  After: the same Program set as the compiler's (spec, operands and output of every instance), the dead units
     dropped by family, every RMSNormTriton, Attention and TokenSelect swapped, and the 7 qkv linears narrowed to their K/V columns."""
     built, ran = descriptors
-    A = Prog("built", built, {}, tok_node=0, compact=compact)
-    B = Prog("ran", ran, {}, tok_node=0, compact=compact)
+    A = RootView("built", built, {}, tok_node=0, compact=compact)
+    B = RootView("ran", ran, {}, tok_node=0, compact=compact)
     assert not compare_steps(A, B)["canonical_sha256"]["equal"]
     ran_spec = {r["k"]: r["spec"] for r in B.inst}
     facts = B.to_compiler_form()
@@ -67,7 +67,7 @@ def test_the_unpruned_request_in_the_compilers_form_is_the_builds_request_progra
 @pytest.mark.parametrize("compact", [False, True])
 def test_the_builds_request_program_is_its_own_compilers_form(descriptors, compact):
     """The compiler's form is a fixed point: nothing dead, nothing left to swap, no linear read in part, every instance unchanged."""
-    A = Prog("built", descriptors[0], {}, tok_node=0, compact=compact)
+    A = RootView("built", descriptors[0], {}, tok_node=0, compact=compact)
     inst = list(A.inst)
     assert A.to_compiler_form() == {"sampling_events": 4, "dead": {}, "swapped": {}, "narrowed": {}}
     assert all(x is y for x, y in zip(A.inst, inst, strict=True))
@@ -94,7 +94,7 @@ def test_a_fold_is_put_in_the_form_only_when_every_component_counts_no_dead_gate
     assert CF.components_in_form([good, dead, approx, bare]) == {
         "in_form": False, "components": 4, "not_in_form": ["build_step", "build_request_approx", "build_request_bare"]}
     assert not CF.components_in_form([])["in_form"]
-    B = Prog("ran", descriptors[1], {}, tok_node=0)
+    B = RootView("ran", descriptors[1], {}, tok_node=0)
     n = len(B.inst)
     kept = CF.fold_in_form(B, [good, dead])
     assert kept["in_form"] is False and "dead" not in kept and B.fold_form is kept and len(B.inst) == n

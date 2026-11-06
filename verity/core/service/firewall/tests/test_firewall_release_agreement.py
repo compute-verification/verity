@@ -1,4 +1,4 @@
-"""The firewall's release side in Lean (`core_firewall`: `Firewall.Record` and `Firewall.Release`, served by
+"""The ZK server's release side in Lean (`core_firewall`: `Firewall.Record` and `Firewall.Release`, served by
 `core-firewall-difftest`) against Python's (`verity_flock.firewall`) and against Rust's (`flock_live::release`) as it was
 frozen in `fixtures/` before the Lean replaced it: the shared record vectors, every op of the record on drawn records against
 Python (results and the record each leaves, byte for byte), Rust's index cases op by op, Rust's outer sessions, with each
@@ -8,8 +8,8 @@ held to, are `_release`'s.
 
 The fixtures were frozen from `flock_live::release` at e64d2e1238: `release-index.jsonl.gz` from its index tests'
 streams (`release::tests::drive`, with each line its damage rewrites as a `wait` numbered as the event it replaces, and
-each event its `appended` op writes as the firewall writes it, which changes nothing Rust reads: an `open` without a
-null `budget`, a `stop` with a `why`, a `finish` of part `inner`; so the record stays the firewall's own),
+each event its `appended` op writes as the ZK server writes it, which changes nothing Rust reads: an `open` without a
+null `budget`, a `stop` with a `why`, a `finish` of part `inner`; so the record stays the ZK server's own),
 `release-outer.jsonl.gz` from `outer_session` on `_release.outer_input`'s first 1000 draws at seed 0, and
 `release-e2e.jsonl` from `flock-circuit prove --firewall-state` on rope_head(64) (run r20261021-042230-834a)."""
 
@@ -121,7 +121,7 @@ def _apply(text: str, edit: list) -> str:
     return (b[:at] + put.encode() + b[at + cut:]).decode()
 
 
-#: why the Lean refuses a record holding a line the firewall doesn't write (`Record.read`), with the line's number, and the
+#: why the Lean refuses a record holding a line the ZK server doesn't write (`Record.read`), with the line's number, and the
 #: one such line Rust's `foreign` damage writes
 FOREIGN = re.compile(r"the record's line (\d+) is not (an event of firewall/v0|the firewall's own)")
 FOREIGN_LINE = '{"event": "note", "seq": 7}\n'
@@ -132,7 +132,7 @@ def test_the_lean_runs_rusts_index_cases(lean):
     limit), 1500 draws each, an op or damage to the record (torn, cut, halved, edited, rewritten, a line foreign to it), a
     repair or an append, which leave 3979 ops. Of those, Rust rejected 762, and the Lean rejects each; Rust answered 3217,
     and at 2830 of them the Lean's result and the record it leaves are Rust's byte for byte. The other 387 are outside the
-    domain: their record holds a line the firewall doesn't write (`foreign`), which Rust read past and the Lean refuses the
+    domain: their record holds a line the ZK server doesn't write (`foreign`), which Rust read past and the Lean refuses the
     record for (`test_the_lean_reads_only_the_firewalls_lines`). A step's `edit` is the record before it as an edit `[AT, CUT, PUT]` of the one the step before left (CUT bytes
     at byte AT replaced by PUT), its `out` the record it leaves as an edit of the one before it, and `after` that record's
     SHA-256."""
@@ -207,8 +207,8 @@ def test_the_loops_stages_write_the_end_to_end_record(lean):
 
 
 def test_the_lean_reads_only_the_firewalls_lines(lean):
-    """A line of the record that is JSON but not the line the firewall writes for its event (not `json.dumps(ev,
-    sort_keys=True)`, or its `seq` not its place) is refused by the Lean; Python reads it as the event. Only the firewall
+    """A line of the record that is JSON but not the line the ZK server writes for its event (not `json.dumps(ev,
+    sort_keys=True)`, or its `seq` not its place) is refused by the Lean; Python reads it as the event. Only the ZK server
     writes its record, so this is outside the domain the two are compared on."""
     first, second = R.record_of([["open", "s", ["L0"], None, None], ["finish", "r0000"]]).splitlines()
     ev = json.loads(second)

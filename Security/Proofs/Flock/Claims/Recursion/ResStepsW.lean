@@ -1,10 +1,12 @@
-import Proofs.Flock.Claims.Recursion.ResChainW
-import Proofs.Flock.Claims.Recursion.VerdictRowEAccR
-import Proofs.Flock.Claims.Recursion.VerdictRowEBytes
-import Proofs.Flock.Claims.Recursion.ResLowerDeployed
-import Proofs.Flock.Claims.Recursion.CapLowerPin
-import Proofs.Flock.Claims.Recursion.ResPiecesD
-import Proofs.Flock.Soundness.Discharge.Hidden.Delta
+module
+
+public import Proofs.Flock.Claims.Recursion.ResChainW
+public import Proofs.Flock.Claims.Recursion.VerdictRowEAccR
+public import Proofs.Flock.Claims.Recursion.VerdictRowEBytes
+public import Proofs.Flock.Claims.Recursion.ResLowerDeployed
+public import Proofs.Flock.Claims.Recursion.CapLowerPin
+public import Proofs.Flock.Claims.Recursion.ResPiecesD
+public import Proofs.Flock.Soundness.Discharge.Hidden.Delta
 
 /-!
 # The steps half of P3 (`StepsW`): the outer witnesses' chain carries row D's running sums
@@ -21,6 +23,8 @@ the copy's part to `acc` at row `pin` (`RecVStar.accReads`) and registers `acc_o
 * `accHolds_chainW`: a piece holds its running sum at `chainW`, from its copy's facts (`accHolds_of_copy`'s) and one
   commit string between each of the copy's two rows and its row's owner's holding.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.ResLower
 
@@ -253,7 +257,7 @@ def StepsWG (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → 
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg)
     (Φ : Msg → (ℕ → Coin) → List Claims.Flock.Wit → Prop) : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), (DRL rd wE final w b elem).parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (DRL rd wE final w b elem).parse x = some st → shape st.form →
     ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
     RecDeploy.OpenLower.JointP FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
       (AccP rd wE final w b elem shape untr cmt) x c ws → Φ x c ws →
@@ -372,7 +376,7 @@ and the next row has an owner (`NextHeldW`). -/
 
 /-- **The inner schedule is V\*'s**: at a dense statement with a level part, table 0's schedule at the inner statement
 is `fast100` at the read shape's `m` (`levelMatch`'s). -/
-theorem schAt_fast100 {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st)
+theorem schAt_fast100 {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st)
     (hd : Claims.Recursion.Form.Dense st.form) {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt}
     (hss : _root_.Flock.RecVStar.statements r.shape = .ok ss) {s lv LANES HH n : ℕ}
     (hsv : ss[s]? = some (.recOpen lv LANES HH n)) :
@@ -504,7 +508,7 @@ parts, `accCommit_eq`; a level part and an algebra part's `acc0`/`acc1`, `innerA
 def AccCommitW (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), (DRL rd wE final w b elem).parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (DRL rd wE final w b elem).parse x = some st → shape st.form →
     ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
     RecDeploy.OpenLower.JointP FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
       (AccP rd wE final w b elem shape untr cmt) x c ws →
@@ -522,7 +526,7 @@ def AccCommitWG (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg →
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg)
     (Φ : Msg → (ℕ → Coin) → List Claims.Flock.Wit → Prop) : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), (DRL rd wE final w b elem).parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (DRL rd wE final w b elem).parse x = some st → shape st.form →
     ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
     RecDeploy.OpenLower.JointP FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
       (AccP rd wE final w b elem shape untr cmt) x c ws → Φ x c ws →
@@ -540,7 +544,7 @@ end). -/
 def NextHeldW (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), (DRL rd wE final w b elem).parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (DRL rd wE final w b elem).parse x = some st → shape st.form →
     ∀ (r : XR), readX x = some r → ∀ (ss : Array VStar.Stmt), _root_.Flock.RecVStar.statements r.shape = .ok ss →
     ∀ (s lv LANES HH n : ℕ), ss[s]? = some (.recOpen lv LANES HH n) →
     ∀ (u p : ℕ), ("acc", u) ∈ accHoldings r s p → (accCanon r (p + 1)).isSome

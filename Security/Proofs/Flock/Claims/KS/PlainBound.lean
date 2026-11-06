@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.Mixture
-import Proofs.Flock.Claims.KS.SessionSC
+module
+
+public import Proofs.Flock.Claims.KS.Mixture
+public import Proofs.Flock.Claims.KS.SessionSC
 
 /-!
 # The plain table bound from salted sessions after `Commit`
@@ -25,6 +27,8 @@ With the mixture the simulated strategies after `Commit` of live strategies whos
 is the live verdict bounding the deployed runs that accept on `C`, and the decoder right for the verdict accepting
 with no opening off `C` unless it self-clashes (`plain_tableBoundθAt_of_live`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

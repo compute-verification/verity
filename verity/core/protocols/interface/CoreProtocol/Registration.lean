@@ -1,6 +1,10 @@
-import CoreProtocol.Protocol
-import CoreProtocol.Site
-import Flock.Hash
+module
+
+public import CoreProtocol.Protocol
+public import CoreProtocol.Site
+public import Flock.Hash
+meta import CoreProtocol.Protocol
+meta import Flock.Hash
 
 /-!
 # The registration log
@@ -32,6 +36,10 @@ core protocol (`protocol`, `verity/registration/log/v1`) the log is the commitme
 parameters the auditor's own: the composite and the Site's auditor (`Core.Site.Registration.Auditor`: its data sheets,
 the tolerance it allows a sheet's figures around their estimates, and its devices' keys).
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Core.Registration
 

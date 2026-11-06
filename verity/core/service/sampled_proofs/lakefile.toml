@@ -10,6 +10,7 @@ defaultTargets = ["SampledProofs", "sampled-proofs-one-stage", "sampled-proofs-o
 [leanOptions]
 autoImplicit = false
 relaxedAutoImplicit = false
+backward.proofsInPublic = true
 
 [[require]]
 name = "core_protocol"
@@ -19,7 +20,7 @@ path = "../../protocols/interface"
 name = "flock_verifier"
 path = "../flock"
 
-# The proof service's challenger signs its record with LMS (`SampledProofs.ChallengerRecord`).
+# The proof system's challenger signs its record with LMS (`SampledProofs.ChallengerRecord`).
 [[require]]
 name = "lms"
 path = "../../primitives/lms/lean"

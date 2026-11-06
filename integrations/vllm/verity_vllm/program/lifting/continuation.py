@@ -44,7 +44,7 @@ PROFILE_FIELD = lifted_records.LAG_FIELD  # RunHeader.profile.engine_kwargs.asyn
 FAMILIES = ("is_eos", "emit", "run", "out", "in")  # b_t, e_t, r_t, o_t, u_t: Q(P) identities with named families
 #: the Definition's statement about randomness.  The sampler of slot `t` EXECUTES iff `r_t = 1` (it is the
 #: slot's sampling event; `u_t = bot` makes the whole step bot by strictness, sampler included), so a stochastic Program draws exactly once
-#: per executed slot: the lag slot (e, r) = (0, 1) consumes ONE draw after the served EOS, an inactive slot none.  With the counter RNG of
+#: per executed slot: the lag slot (e, r) = (0, 1) consumes ONE sample after the served EOS, an inactive slot none.  With the counter RNG of
 #: record (Philox keyed by (seed, pos), no sequential state; `pos` = the QUERY position whose logits are sampled, the
 #: record's own `pos` fact: slot t draws at pos = prompt_len - 1 + (t - 1), the ledger's "draw k at prompt_len - 1 + k") "advances" means "the
 #: draw at pos exists": the served draws at pos < prompt_len - 1 + n are unchanged whether or not the lag slot ran.  stoch_recompute carries the
@@ -317,11 +317,11 @@ def slot_map(executed_engine_steps: Sequence[int], *, arrive_step: int, prefill_
 
 
 def expected_draw_positions(served: Sequence[int], *, cap: int, A: int, eos: Iterable[int], prompt_len: int) -> dict[str, Any]:
-    """The draw positions the RULE prescribes, `{L - 1 + (t - 1) : r_t = 1}` with `L = prompt_len` (the record's
-    `pos` fact = the query position whose logits are sampled: the draw ledger's 'draw k at pos = prompt_len - 1 + k', slot t = k + 1;
+    """The sample positions the RULE prescribes, `{L - 1 + (t - 1) : r_t = 1}` with `L = prompt_len` (the record's
+    `pos` fact = the query position whose logits are sampled: the sample ledger's 'draw k at pos = prompt_len - 1 + k', slot t = k + 1;
     the counter RNG is keyed by `(seed, pos)`), read from the recurrence over the SERVED list (the one mechanism).
     An ORDERED list: the served slots' draws, then the one lag draw (A = 1, EOS before the cap), nothing after -- so an over-cap draw without
-    an EOS, a second post-EOS draw, or a draw at an inactive slot is an EXTRA position by name, a missing served draw a MISSING one
+    an EOS, a second post-EOS draw, or a sample at an inactive slot is an EXTRA position by name, a missing served draw a MISSING one
     (`compare_draw_positions`).  `A in {0, 1}` (check_profile) -- a lag >= 2 has no admitted profile."""
     check_profile(A)
     if prompt_len < 1:
@@ -334,7 +334,7 @@ def expected_draw_positions(served: Sequence[int], *, cap: int, A: int, eos: Ite
     return {"rule": "expected draw positions = {L - 1 + (t - 1) : r_t = 1}, L = prompt_len, pos = the query position of record (Continuation_v1 "
                     "recurrence over the served list; A = LAG; the draw ledger's convention)",
             "prompt_len": int(prompt_len), "A": A, "cap": cap, "n_served": len(served),
-            # the recurrence runs on served[:cap]; a served list OVER the cap is named here (and its draws past the cap
+            # the recurrence runs on served[:cap]; a served list OVER the cap is named here (and its samples past the cap
             # are EXTRA positions in the compare), never truncated silently
             "n_served_over_cap": max(0, len(served) - cap),
             "positions": [pos(t) for t in run], "slots": run, "n": len(run),
@@ -344,7 +344,7 @@ def expected_draw_positions(served: Sequence[int], *, cap: int, A: int, eos: Ite
 
 
 def compare_draw_positions(expected: Sequence[int], drawn: Sequence[int]) -> dict[str, Any]:
-    """`drawn` = the positions the record's ledger shows a draw at (stoch_recompute's `draw_accounting`), in ledger order.  Every extra / missing / repeated /
+    """`drawn` = the positions the record's ledger shows a sample at (stoch_recompute's `draw_accounting`), in ledger order.  Every extra / missing / repeated /
     out-of-order position is a problem BY NAME; `ok` is their absence -- 'RNG advances iff r_t' measured literally."""
     exp = [int(p) for p in expected]
     got = [int(p) for p in drawn]

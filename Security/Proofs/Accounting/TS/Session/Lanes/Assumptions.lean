@@ -1,4 +1,6 @@
-import Proofs.Accounting.TS.Session.Lanes.Holds
+module
+
+public import Proofs.Accounting.TS.Session.Lanes.Holds
 
 /-!
 # The named premise a leaf's 33 linked sessions take
@@ -30,6 +32,8 @@ its root at its position, so two of them at one tree and position are one row's 
 Like `Accounting.Assumptions.TS`'s other session premises it reads `RowsSession`, in the proofs package, so it sits
 here until C-Flock's spec is extracted.
 -/
+
+@[expose] public section
 
 namespace Accounting.Assumptions.TS
 

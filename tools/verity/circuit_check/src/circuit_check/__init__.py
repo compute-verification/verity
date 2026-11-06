@@ -10,8 +10,7 @@ a served workload's Program, their Boolean lowerings).
     ambient   each lowering one text in a plain and a perturbed interpreter, reading no environment, clock or draw (``--ambient``)
     cache     the result cache: a target's report reused while everything its check read is unchanged
     units     the catalog bindings' records, each reused while what its build read is unchanged (``--catalog-units``)
-    known     the failures `main` already has, each with its cause (``known/``)
-    entries   the shared lists' layout, one file per entry (``known/``, ``pins/``)
+    entries   the shared lists' layout, one file per entry (``pins/``)
     cli       ``circuit-check TARGET... | --all | --structural UNIT.tmpl TARGET | --ambient TARGET... | --batch [--out report.json]``
 
 The suite (`tools/verity/circuit_check/tests`) runs it over every registered Definition and template; a failure is a correctness or

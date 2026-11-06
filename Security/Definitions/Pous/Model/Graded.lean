@@ -1,4 +1,6 @@
-import Definitions.Pous.Model.Audit
+module
+
+public import Definitions.Pous.Model.Audit
 
 /-!
 # The graded sequential audit: up to `t` late rounds, each within a hard bound
@@ -60,6 +62,8 @@ round (a late round can recompute anything within `(D_late, Q_late)`, but keeps 
 `(D_late, Q_late)` is what the adversary completes within `Δ_late`; and that the memory challenger's count of late
 rounds is what the implementation's deadline check counts.
 -/
+
+@[expose] public section
 
 namespace Pous
 

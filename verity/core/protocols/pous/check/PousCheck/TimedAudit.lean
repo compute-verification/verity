@@ -1,8 +1,10 @@
-import Flock.Canon
-import PousCheck.Merkle
-import PousCheck.Challenge
-import PousCheck.Certificate
-import PousCheck.Prim.PyJson
+module
+
+public import Flock.Canon
+public import PousCheck.Merkle
+public import PousCheck.Challenge
+public import PousCheck.Certificate
+public import PousCheck.Prim.PyJson
 
 /-!
 # The timed audit's verdict on its record
@@ -33,6 +35,8 @@ the record when it has an audit and every audit is; and the audit of record (the
 StorageProfile (`Certificate.profileJson`). Without `k` (a refusal recorded before refusals recorded it), `k` is the
 certificate's, else `audit.CHALLENGES`.
 -/
+
+@[expose] public section
 
 namespace PousCheck.TimedAudit
 
@@ -96,7 +100,7 @@ def audit (s : Certificate.Store) (salt root : ByteArray) (leaves : Array ByteAr
   let answers ← match (← field rec "answers" p).getArr? with
     | .ok a => pure a
     | .error _ => throw p
-  let key := Randomness.derive source CHALLENGE_DOMAIN [("root", .bytes root), ("salt", .bytes salt)]
+  let key := FlockSoundness.Randomness.derive source CHALLENGE_DOMAIN [("root", .bytes root), ("salt", .bytes salt)]
   let mut out : Array (Bool × Bool) := #[]
   for j in List.range k do
     need (j < answers.size) "short"

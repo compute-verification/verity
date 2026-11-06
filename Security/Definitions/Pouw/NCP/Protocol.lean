@@ -1,5 +1,7 @@
-import Definitions.Pouw.D1
-import Definitions.Pouw.NCP.Defs
+module
+
+public import Definitions.Pouw.D1
+public import Definitions.Pouw.NCP.Defs
 
 /-!
 # NCP as a protocol (trusted)
@@ -23,6 +25,8 @@ most `2^40` rows per weight.
 `GameProofs.shiftBy c k` is the cyclic shift by `c`; at `c = 24` it passes the rule for every `k ≥ 1024` with `16 ∣ k`
 (`Pouw.Guarantees.NCP.ShiftBy24Admissible`).
 -/
+
+@[expose] public section
 
 namespace Pouw.NCP
 

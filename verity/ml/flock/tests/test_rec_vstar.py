@@ -1,4 +1,4 @@
-"""The reference for V*'s hashing (`verity_flock.rec_vstar`): query positions from coins (PROTOCOL.md §13.5), openings with
+"""The reference for V*'s hashing (`verity_flock.rec_vstar`): query positions from coins (`Flock.Ligerito`), openings with
 plain SHA-512 leaves (and rec-step2's salted ``hm96-sha512/v1`` ones) climbing to a top's node, each top opening the salted
 commitment the coin server received or refused by name, and how the coin server's record yields each level's query round. The
 pod job (``pod/85-rec-reprice.sh``) runs `check` over a real inner session."""
@@ -76,7 +76,7 @@ def _committed(cap: bytes, at: int):
 
 
 def _session():
-    """A rep stream as the firewall records it: level 0's top at Commit, its copies counted, a level-1 top salted."""
+    """A rep stream as the ZK server records it: level 0's top at Commit, its copies counted, a level-1 top salted."""
     a, b = bytes([1]) * 64 + bytes([3]) * 64, bytes([2]) * 64
     (oa, ca), (ob, cb) = _committed(a, 100), _committed(b, 200)
     s = "circuit/rep0"

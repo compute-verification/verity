@@ -114,6 +114,7 @@
 """
 from __future__ import annotations
 
+import concurrent.futures
 import errno
 import fcntl
 import hashlib
@@ -977,7 +978,7 @@ def _git_ship_script(root: str, repo: str, partial: str, sha: str) -> str:
             f"cd {q} && find . -path ./.git -prune -o -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum")
 
 
-def _push_main(ssh: list[str], repo: str, git_dir: Path, man: dict[str, Any]) -> None:
+def _push_main(ssh: list[str], repo: str, git_dir: Path, size: int) -> None:
     """The launcher's `origin/main` onto the bare repository's `main`, fast-forward only and best effort, so a shipped checkout's
     `origin/main` (its clone's view of that `main`) is no older than its newest launcher's, and `suites.py --changed origin/main` in a
     run diffs against a current `main`, not the one the repository was created with.  A launcher whose `origin/main` is older is
@@ -988,9 +989,29 @@ def _push_main(ssh: list[str], repo: str, git_dir: Path, man: dict[str, Any]) ->
         return
     try:
         subprocess.run(["git", "-c", "protocol.ext.allow=always", "push", "-q", git_push_url(ssh, repo), f"{main}:refs/heads/main"],
-                       cwd=git_dir, capture_output=True, text=True, timeout=ship_timeout(man["size"]))
+                       cwd=git_dir, capture_output=True, text=True, timeout=ship_timeout(size))
     except subprocess.TimeoutExpired:
         pass
+
+
+def _push_commit(ssh: list[str], repo: str, git_dir: Path, sha: str, size: int) -> str | None:
+    """`git push` of commit `sha` (and the launcher's `origin/main`, `_push_main`) into the machine's bare repository `repo`, created
+    if absent.  None once pushed, else why not."""
+    r = ssh_run(ssh, ["sh", "-c", f"command -v git >/dev/null 2>&1 || exit {_RC_NO_GIT}; mkdir -p {shlex.quote(str(Path(repo).parent))} && "
+                                  f"{{ [ -d {shlex.quote(repo)} ] || git init -q --bare {shlex.quote(repo)}; }}"], timeout=120)
+    if r.returncode == _RC_NO_GIT:
+        return "the machine has no git"
+    if r.returncode != 0:
+        return f"could not create {repo}: {r.stderr.decode(errors='replace')[-200:].strip()}"
+    try:
+        push = subprocess.run(["git", "-c", "protocol.ext.allow=always", "push", "-q", git_push_url(ssh, repo), f"{sha}:refs/research/src/{sha}"],
+                              cwd=git_dir, capture_output=True, text=True, timeout=ship_timeout(2 * size))
+    except subprocess.TimeoutExpired:
+        return "git push timed out"
+    if push.returncode != 0:
+        return f"git push failed: {push.stderr.strip()[-200:]}"
+    _push_main(ssh, repo, git_dir, size)
+    return None
 
 
 def _ship_git(ssh: list[str], root: str, git_dir: Path, sha: str, tree: str | None, man: dict[str, Any], dest: str) -> tuple[str | None, str | None]:
@@ -1001,20 +1022,8 @@ def _ship_git(ssh: list[str], root: str, git_dir: Path, sha: str, tree: str | No
     repo = f"{root}/{POD_GIT_REPO}"
     if not tree:
         return None, "no tree hash for HEAD"
-    r = ssh_run(ssh, ["sh", "-c", f"command -v git >/dev/null 2>&1 || exit {_RC_NO_GIT}; mkdir -p {shlex.quote(str(Path(repo).parent))} && "
-                                  f"{{ [ -d {shlex.quote(repo)} ] || git init -q --bare {shlex.quote(repo)}; }}"], timeout=120)
-    if r.returncode == _RC_NO_GIT:
-        return None, "the machine has no git"
-    if r.returncode != 0:
-        return None, f"could not create {repo}: {r.stderr.decode(errors='replace')[-200:].strip()}"
-    try:
-        push = subprocess.run(["git", "-c", "protocol.ext.allow=always", "push", "-q", git_push_url(ssh, repo), f"{sha}:refs/research/src/{sha}"],
-                              cwd=git_dir, capture_output=True, text=True, timeout=ship_timeout(2 * man["size"]))
-    except subprocess.TimeoutExpired:
-        return None, "git push timed out"
-    if push.returncode != 0:
-        return None, f"git push failed: {push.stderr.strip()[-200:]}"
-    _push_main(ssh, repo, git_dir, man)
+    if why := _push_commit(ssh, repo, git_dir, sha, man["size"]):
+        return None, why
     partial = f"{dest}.partial-{secrets.token_hex(4)}"
     try:
         r = ssh_run(ssh, ["sh", "-c", _git_ship_script(root, repo, partial, sha), "sh", tree], timeout=ship_timeout(man["size"]))
@@ -1035,6 +1044,46 @@ def _ship_git(ssh: list[str], root: str, git_dir: Path, sha: str, tree: str | No
         return None, f"extracted tree does not match the archive manifest ({len(bad)}: {'; '.join(bad[:3])})"
     man["pod_archive_sha256"] = lines[0].strip() if lines else None
     return partial, None
+
+
+_RC_DIRT = 77                                  # _add_git: the tree's tracked files are not the commit's (its .git stays, so the probe sees dirt)
+
+
+def _add_git(ssh: list[str], root: str, git_dir: Path, sha: str, tree: str | None, dest: str, doc: dict[str, Any]) -> str | None:
+    """Make the READY tree `dest`, shipped by the archive stream, a checkout of `sha` in place, for a `--cwd clone` run (which clones
+    it): the commit is pushed as `_ship_git` pushes it, and a `--no-checkout` shared clone's .git, detached at `sha` with its index,
+    is renamed into the tree, so runs of the commit sharing it are never moved.  Its tracked files must then be the commit's
+    (`git status`), and READY.json is replaced, renamed into place, with `checkout: true` and `transport: stream+git`.  A tree whose
+    files differ keeps the .git, so `_probe_source` reads it as dirty and `ship_source` ships the commit afresh.  None once done,
+    else why not."""
+    repo = f"{root}/{POD_GIT_REPO}"
+    if not tree:
+        return "no tree hash for HEAD"
+    if why := _push_commit(ssh, repo, git_dir, sha, int(doc.get("bytes") or 0)):
+        return why
+    nonce = secrets.token_hex(4)
+    g, d, p = shlex.quote(repo), shlex.quote(dest), shlex.quote(f"{dest}.git-{nonce}")
+    new = shlex.quote(f"{dest}/.git/{READY_FILE}.{nonce}")
+    script = (f"trap 'rm -rf {p}' EXIT; set -e; "
+              f"t=$(git --git-dir={g} rev-parse --verify -q {sha}^{{tree}}) || exit {_RC_TREE}; [ \"$t\" = \"$1\" ] || exit {_RC_TREE}; "
+              f"if [ ! -e {d}/.git ]; then git clone -q --shared --no-checkout {g} {p}; git -C {p} update-ref --no-deref HEAD {sha}; "
+              f"git -C {p} read-tree {sha}; mkdir -p {p}/.git/info; echo /{READY_FILE} >> {p}/.git/info/exclude; "
+              f"mv -T {p}/.git {d}/.git || [ -d {d}/.git ]; fi; "
+              f"[ \"$(git -C {d} rev-parse HEAD)\" = {sha} ] || exit {_RC_DIRT}; "
+              f"[ -z \"$(git -C {d} status --porcelain --untracked-files=no)\" ] || exit {_RC_DIRT}; "
+              f"cat > {new}; mv {new} {d}/{READY_FILE}")
+    ready = {**doc, "checkout": True, "transport": f"{doc.get('transport') or 'unrecorded'}+git", "git_added_utc": utc_now_ms()}
+    try:
+        r = ssh_run(ssh, ["sh", "-c", script, "sh", tree], stdin=(json.dumps(ready, indent=1, sort_keys=True) + "\n").encode(),
+                    timeout=ship_timeout(int(doc.get("bytes") or 0)))
+    except subprocess.TimeoutExpired:
+        return "adding git on the machine timed out"
+    if r.returncode == _RC_DIRT:
+        return None
+    if r.returncode != 0:
+        why = "the pushed commit's tree is not the launcher's" if r.returncode == _RC_TREE else r.stderr.decode(errors="replace")[-200:].strip()
+        return f"adding git failed (rc {r.returncode}): {why}"
+    return None
 
 
 def _mark_ready(ssh: list[str], partial: str, dest: str, sha: str, doc: dict[str, Any]) -> dict[str, Any]:
@@ -1063,7 +1112,7 @@ def _quarantine(ssh: list[str], root: str, dest: str, sha: str, why: str) -> Non
     print(f"research: {dest} is {why}; moved to {quarantine}, shipping afresh", file=sys.stderr)
 
 
-def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dict[str, Any]]:
+def ship_source(ssh: list[str], root: str, git_dir: Path, *, checkout: bool = False) -> tuple[str, str, dict[str, Any]]:
     """`git archive HEAD` of a clean checkout -> a VERIFIED <root>/src/<identity>/.  Returns (identity, remote dir, READY.json doc).
 
     Identity: the commit sha (a dirty tree is refused; there is no patch digest to name).  Protocol:
@@ -1078,7 +1127,8 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
          there asks git what it asks in the launcher's checkout, and every file's sha256 must equal the launcher's archive manifest
          (`verified: git-push+tree+file-sha256`, `transport: git`, `checkout: true`).  A machine without git, or any failure of that
          path, prints one line and falls through to the archive stream below, a tree without .git; `RESEARCH_SHIP=stream` goes
-         straight there.  A READY tree shipped before checkouts is reused as it is;
+         straight there.  A READY tree shipped before checkouts is reused as it is, except that `checkout` (a `--cwd clone` run,
+         which clones the tree) makes one the archive stream shipped a checkout in place first (`_add_git`);
       2'. the archive stream into <root>/src/<identity>.partial-<nonce>/: the tar is staged as a file, sha256'd on the machine, extracted, and the
          extracted regular-file set listed back; the machine's archive sha256 must equal the launcher's and the file set must equal the
          archive's manifest.  The launcher streams it (`archive_manifest_git`, then `_archive_feed` through `ssh_stream`): its memory
@@ -1096,6 +1146,12 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
     tree = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=git_dir, capture_output=True, text=True).stdout.strip() or None
     dest = f"{root}/src/{sha}"
     state, doc = _probe_source(ssh, dest)
+    stream_only = os.environ.get(SHIP_ENV, "").strip().lower() == "stream"
+    if state == "ready" and checkout and not doc.get("checkout") and doc.get("identity") == sha and not stream_only:
+        if why := _add_git(ssh, root, git_dir, sha, tree, dest, doc):
+            print(f"research: could not make {dest} a checkout ({why})", file=sys.stderr)
+        else:
+            state, doc = _probe_source(ssh, dest)
     if state == "ready":
         if doc.get("identity") != sha or doc.get("schema") != READY_SCHEMA:
             raise SourceNotReady(f"{dest}/{READY_FILE} names identity {doc.get('identity')!r}, not {sha}; inspect the machine before shipping over it")
@@ -1112,7 +1168,7 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
             _write_ready(ssh, dest, doc)
             return sha, dest, doc
         _quarantine(ssh, root, dest, sha, f"an unverified tree that did not match the archive ({len(bad)} file(s): {'; '.join(bad[:3])})")
-    if os.environ.get(SHIP_ENV, "").strip().lower() != "stream":
+    if not stream_only:
         gpartial, why = _ship_git(ssh, root, git_dir, sha, tree, man, dest)
         if gpartial is not None:
             doc = {**_ready_doc(sha, tree, man, "git-push+tree+file-sha256"), "transport": "git", "checkout": True,
@@ -1983,7 +2039,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         ready: dict[str, Any] = {}
         remote_cwd = cwd
         if source is not None:
-            tree_sha, src_dir, ready = ship_source(ssh, m["root"], source)
+            tree_sha, src_dir, ready = ship_source(ssh, m["root"], source, checkout=cwd_clone)
             if cwd_clone and not ready.get("checkout"):
                 raise Refused(f"--cwd clone: {src_dir} was shipped without git (transport {ready.get('transport') or 'unrecorded'}), so it "
                               f"has no .git to clone.  Pass --cwd source to run in it as it is, shared with other runs of the commit")
@@ -2066,6 +2122,11 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         raise
 
 
+#: `adopt` asks the ssh machines at once, ADOPT_JOBS at a time, each with this connect timeout and this bound: one at a time with
+#: 15 s and 60 s, `research status` on a run another VM launched sat silent 80 to 90 s behind 28 machines, stopped ones among them
+ADOPT_CONNECT_S, ADOPT_PROBE_S, ADOPT_JOBS = 5, 20, 16
+
+
 def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict[str, dict[str, Any]] | None = None,
           unique: bool = False) -> Path:
     """The local run dir of a run another VM launched: find <root>/runs/<run_id> on machine `on`, else on each ssh machine, write
@@ -2081,7 +2142,8 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
         raise Refused(f"{local} exists already")
     ms = load_machines() if machines is None else machines
     names = [on] if on else sorted(n for n, m in ms.items() if m.get("provider") == "ssh")
-    answers, held = [], []
+    answers: dict[str, str] = {}
+    targets = []
     for name in names:
         m = ms.get(name)
         if m is None:
@@ -2089,22 +2151,39 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
         try:
             tgt = pod_target(m)
         except Refused as e:
-            answers.append(f"{name}: {e}")
+            answers[name] = f"{name}: {e}"
             continue
         m = {**m, "root": m.get("root") or DEFAULT_ROOT}
-        rd = f"{m['root']}/runs/{run_id}"
-        ssh = ssh_argv(tgt["host"], tgt["port"], user=tgt.get("user", "root"))
+        targets.append((name, m, tgt, f"{m['root']}/runs/{run_id}"))
+    if len(targets) > 1:
+        print(f"research: looking for {run_id} on {len(targets)} machines (--on NAME skips this)", file=sys.stderr, flush=True)
+
+    def probe(t: tuple) -> str | None:
+        name, _, tgt, rd = t
+        ssh = ssh_argv(tgt["host"], tgt["port"], user=tgt.get("user", "root"), connect_timeout=ADOPT_CONNECT_S)
         try:
-            r = ssh_run(ssh, ["test", "-d", rd], timeout=60)
+            r = ssh_run(ssh, ["test", "-d", rd], timeout=ADOPT_PROBE_S)
         except subprocess.TimeoutExpired:
-            answers.append(f"{name}: no answer in 60 s")
-            continue
+            return f"{name}: no answer in {ADOPT_PROBE_S} s"
         if r.returncode != 0:
-            answers.append(f"{name}: " + (f"no {rd}" if r.returncode == 1 else f"ssh rc {r.returncode}: {r.stderr.decode(errors='replace').strip()[-160:]}"))
-            continue
-        held.append((name, m, tgt, rd))
-        if not unique:
-            break
+            return f"{name}: " + (f"no {rd}" if r.returncode == 1 else f"ssh rc {r.returncode}: {r.stderr.decode(errors='replace').strip()[-160:]}")
+        return None
+
+    held = []
+    ex = concurrent.futures.ThreadPoolExecutor(max_workers=max(1, min(ADOPT_JOBS, len(targets))))
+    try:
+        futures = {ex.submit(probe, t): t for t in targets}
+        for f in concurrent.futures.as_completed(futures):
+            t = futures[f]
+            if (why := f.result()) is not None:
+                answers[t[0]] = why
+                continue
+            held.append(t)
+            if not unique:
+                break
+    finally:
+        ex.shutdown(wait=False, cancel_futures=True)
+    held.sort(key=lambda h: h[0])
     if len(held) > 1:
         raise Refused(f"{' and '.join(h[0] for h in held)} each hold a run {run_id}: name one with --on")
     if held:
@@ -2117,7 +2196,8 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
             "remote_run_dir": rd})
         fetch(local)
         return local
-    raise Refused(f"no machine holds run {run_id}" + (f" ({'; '.join(answers)})" if answers else " (no ssh machine is registered)"))
+    raise Refused(f"no machine holds run {run_id}" + (f" ({'; '.join(answers[n] for n in sorted(answers))})" if answers
+                                                       else " (no ssh machine is registered)"))
 
 
 def _runner_gone(ssh: list[str], local_dir: Path, pid: int, *, timeout: float = 120) -> str | None:

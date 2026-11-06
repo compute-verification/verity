@@ -1,4 +1,6 @@
-import Definitions.Flock.Accounting.Bound
+module
+
+public import Definitions.Flock.Accounting.Bound
 
 /-!
 # The bound with a padded level 0 (C-Flock ZK)
@@ -17,6 +19,8 @@ level 0's soundness terms:
 Everything else in the rep is unchanged, with the padded list bound for level 0 (`padRepError`).
 The bound is a function of `t` and `e`, so a change to either is a parameter, not a proof.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Accounting
 

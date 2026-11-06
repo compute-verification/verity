@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.Compiled
-import Proofs.Flock.Soundness.Discharge.ZkExec.Shape
-import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Compiled
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Shape
+public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
 
 /-!
 # The coin half of `DecodesZK` at the compiled `--zk` table
@@ -18,6 +20,8 @@ such result (`accZ_lig`).
   challenger's draws are (`DrawOkZK` at `L.draw ω`).
 * `zk_headline_exec_zc_runs`: `zk_headline_exec_zc_execOS` with `RunsZC` in place of `hdec`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

@@ -6,12 +6,21 @@ freed after it. A library must report `p2v1_keys_version() == 4`: v1's SHAKE256 
 from __future__ import annotations
 
 import ctypes
+import importlib.util
+import sys
 from pathlib import Path
 from typing import Any
 
 from . import reference
 
 LIB = "libp2v1.so"
+CUDA_LIB = Path(__file__).resolve().parents[2] / "word_codec" / "cuda_lib.py"
+_v, _u, _q = ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint64
+ABI = {"p2v1_decode": [_v, _v, _v, _v, _u, _u, _v, _v], "p2v1_encode": [_v, _v, _v, _v, _u, _u, _u, _u, _u, _v, _v]}
+BUILT = {   # each where the build has it: P2_FUSED's, and P2_KEYS's or P2_KEYS4's
+    "p2v1_decode_fused": [_v, _v, ctypes.c_char_p, ctypes.c_int, _q, _u, _q, _u, _v, _v],
+    "p2v1_keys": [ctypes.c_char_p, ctypes.c_int, _q, _u, _q, _v, _v, _v],
+}
 
 
 def exponent_split(params: reference.Params) -> tuple[int, int, int]:
@@ -24,6 +33,15 @@ def exponent_split(params: reference.Params) -> tuple[int, int, int]:
     return a, n, r
 
 
+def _cuda_lib() -> Any:
+    """`benchmarks/word_codec/cuda_lib.py` by its path: the vLLM integration loads this package with `sys.path` as it is."""
+    if "wc_cuda_lib" not in sys.modules:
+        spec = importlib.util.spec_from_file_location("wc_cuda_lib", CUDA_LIB)
+        mod = sys.modules["wc_cuda_lib"] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+    return sys.modules["wc_cuda_lib"]
+
+
 class Kernels:
     """The library on the current CUDA device, for one parameter set and one setup's key prefix (`build_dir`, where v1's
     SHAKE256 extension was built, is no longer read)."""
@@ -32,20 +50,11 @@ class Kernels:
         import torch
 
         self.torch = torch
-        self.lib = ctypes.CDLL(str(Path(lib_dir) / LIB))
+        self.lib = _cuda_lib().load(Path(lib_dir) / LIB, ABI, BUILT)
         if self.lib.p2v1_width_bits() != params.w:
             raise RuntimeError(f"{LIB} is built for {self.lib.p2v1_width_bits()} bits, not {params.w}")
-        v = ctypes.c_void_p
-        u = ctypes.c_uint32
-        self.lib.p2v1_decode.argtypes = [v, v, v, v, u, u, v, v]
-        self.lib.p2v1_encode.argtypes = [v, v, v, v, u, u, u, u, u, v, v]
         self.fused = hasattr(self.lib, "p2v1_decode_fused")
-        if self.fused:
-            self.lib.p2v1_decode_fused.argtypes = [v, v, ctypes.c_char_p, ctypes.c_int, ctypes.c_uint64, u, ctypes.c_uint64, u, v, v]
         self.fast_keys = hasattr(self.lib, "p2v1_keys")
-        if self.fast_keys:
-            q = ctypes.c_uint64
-            self.lib.p2v1_keys.argtypes = [ctypes.c_char_p, ctypes.c_int, q, u, q, v, v, v]
         self.keys_version = self.lib.p2v1_keys_version() if hasattr(self.lib, "p2v1_keys_version") else 1
         if self.keys_version != 4 or not self.fast_keys:
             raise RuntimeError(f"{LIB} expands keys v{self.keys_version}, not v4: build it with FAST='-DP2_FAST -DP2_KEYS4 -DP2SQ_KARA'")

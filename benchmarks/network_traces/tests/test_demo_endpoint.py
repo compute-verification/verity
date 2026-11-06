@@ -140,5 +140,5 @@ def test_the_endpoint_serves_the_rehearsals_calls_and_writes_serve_openais_recor
         data = [struct.pack(">IIII", *r) for r in opened["rows"]] or [bytes(de.ROW_BITS // 8)]
         binding = hashlib.sha512(de.BINDING + b"\0" + w["run_id"].encode()).digest()
         salts = [bytes.fromhex(s) for s in opened["salts"]]
-        assert de.AC.register(data, de.ROW_BITS, binding, salts).root.hex() == w["run_root"]
+        assert de.AC.commit(data, de.ROW_BITS, binding, salts).root.hex() == w["run_root"]
         assert w["rows"] == len(opened["rows"]) and {r[1] for r in opened["rows"]} <= set(range(len(bodies)))

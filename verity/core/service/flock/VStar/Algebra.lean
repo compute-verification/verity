@@ -1,6 +1,8 @@
-import Std.Data.HashMap
-import Flock.Schedule
-import VStar.InnerRepCheck
+module
+
+public import Std.Data.HashMap
+public import Flock.Schedule
+public import VStar.InnerRepCheck
 
 /-!
 # V*'s algebra: `GfResiduals`' S of a rep and `InnerRepCheck`'s (`verity_flock.rec_algebra.structure`, `rec_residuals.spec`)
@@ -18,6 +20,8 @@ the comb (64). The consistency sums (`cons`) are kept apart, as `_build` reads t
 dimension checks. Below `k_log = 6` Python's `run` reads past the first claim's point (an `IndexError` in
 `basis_for_claim`); that is refused too.
 -/
+
+@[expose] public section
 
 namespace VStar.Algebra
 

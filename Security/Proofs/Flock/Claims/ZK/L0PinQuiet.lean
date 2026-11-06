@@ -1,5 +1,9 @@
-import Proofs.Flock.Claims.ZK.FrameRanked
-import Proofs.Flock.Claims.ZK.FrameCount
+module
+
+public import Proofs.Flock.Claims.ZK.FrameRanked
+public import Proofs.Flock.Claims.ZK.FrameCount
+import all Init.Data.String.Defs
+import all Init.Data.Array.Basic
 
 /-!
 # The algebraic phase's rounds pass over the frame's phase
@@ -17,6 +21,8 @@ them, so past its first round each of its scheduled rounds is plain frames and a
 * **`rounds_quiet`**: every scheduled round of the algebraic phase but its first (the zerocheck's head, which
   `Ranked.run_head` reads) is a `QRound`.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer.Quiet
 

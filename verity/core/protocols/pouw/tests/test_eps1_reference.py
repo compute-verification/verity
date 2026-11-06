@@ -1,4 +1,4 @@
-"""The EPS1 sm_120 H1 + fx1 design on words (`circuit.eps1_reference`, decision 102): a non-registered reference, so the
+"""The EPS1 sm_120 H1 + fx1 design on words (`circuit.eps1_reference`): a non-registered reference, so the
 served scheme (`circuit.h1tile`) can be tested against it (`test_h1tile_matches_eps1`).  These pin the reference's own
 surface: it is not in `circuit.SCHEMES`, its arm is the s8 family, its work table is the served MACs a dot and its closure
 is empty.  Pure Python, fast (no Boolean lowering): the arm's and the spot check's lowerings are circuit-check's."""
@@ -22,8 +22,8 @@ def test_the_reference_is_not_registered():
 
 
 def test_the_reference_traces_its_arm_and_spot_check():
-    """`eps1_reference.traced_as` builds the design the verifier would: the served arm, the spot check that is the drawn
-    unit, the work table and the empty closure, each from the shape alone."""
+    """`eps1_reference.traced_as` builds the design the verifier would: the served arm, the spot check that is the sampled
+    proof block, the work table and the empty closure, each from the shape alone."""
     t = EPS.traced_as(SHAPE.m, SHAPE.k, SHAPE.n)
     assert isinstance(t, EPS.Eps1Traced) and t.scheme == EPS.SCHEME and t.kind == EPS.KIND and t.shape == SHAPE
     assert t.check == EPS.check(SHAPE.ks) and t.arm == EPS.arm(SHAPE.k)

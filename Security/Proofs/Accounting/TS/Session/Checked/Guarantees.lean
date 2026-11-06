@@ -1,4 +1,6 @@
-import Proofs.Accounting.TS.Session.Checked.Layer
+module
+
+public import Proofs.Accounting.TS.Session.Checked.Layer
 
 /-!
 # A checked unit's proof layer is sound through its C-Flock sessions (the statement)
@@ -23,6 +25,8 @@ Definition with `ok = 1` (each cell `z = Σ_k a_k b_k` and `y = dq [z, s_a, s_b]
 `Accounting.Guarantees.TS.TileSessionSound`'s, under its premise `Accounting.TS.Tile.TileComputes`; the declared
 circuit's checks are `Accounting.Guarantees.TS.HeldSessionSound`'s.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.TS
 

@@ -1,6 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.ZkBind.At
-import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
-import Proofs.Flock.Soundness.Discharge.ZkLink.Compiled
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkBind.At
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Compiled
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The planned rate of the `--zk` plan, at every draw
@@ -16,6 +20,8 @@ returns (`ZkLogLenCap L`) bounds the rate at every draw, and the count curve's `
 * `zkLogLenCap_23`: `Zk.schedule` accepts `m` from 25 to 35 only (`schedule_spec`), and fast100's level 0 there has rate
   1 and `m − 7 − k0` columns, so `logLen₀ = m − 6 − k0 ≤ 23` (checked by `decide +kernel` at each `m`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkBind
 

@@ -27,7 +27,7 @@ input token ids, layer 0's input. Core's credit holds each to the Commit's value
   tree, one commitment; rows off them make a tree of the Commit's own under the same domain and salts, at another root.
 * **The record** (`CommitTap.record`, the commitment's ``commit``, `CommitTap.hex`): a ``verity/registration/v2`` record
   (one-stage's `registration`) of those values, with what the tap refused, its canonical JSON in hex as
-  `credit.commit_of` reads it. `pouw_h1.calls_root` binds its digest (`credit.calls_root`), so the draw coin follows it.
+  `credit.commit_of` reads it. `pouw_h1.calls_root` binds its digest (`credit.calls_root`), so the sampling coin follows it.
 * **The serving process's own check** (`roots1`, at the window's close): each step's A table of each K and each round's
   input-ids table is the Commit's value of the same rows (`credit._arow`'s rule), the tap refused nothing, and each
   prefill row's input id is its request's prompt token (`ids_reason`, until Served.lean's layer-0 tie holds it in core).

@@ -1,5 +1,5 @@
 /-
-A templated unit's logical unroll succeeds, checked on its description (PRF-133): `Tmpl.unroll` (its rows, then the checks
+A templated unit's logical unroll succeeds, checked on its description: `Tmpl.unroll` (its rows, then the checks
 `Net.ofRows` runs on a flat unit) refuses nothing that passes `Tmpl.wellFormed`, `Tmpl.apart`, `Tmpl.ordered`,
 `Tmpl.inputsT` and `Tmpl.groupsOk` (`unroll_ok`). `groupsOk` is what `Net.ofRows` checks of the port groups and the size,
 none of it a row; each row check `Net.ofRows` runs follows from the others: the rows exist (`rows_ok`), the input rows are
@@ -8,7 +8,11 @@ self rows or empty (`rows_inputRows`), the constant row is the last write, the o
 row reads is at most the constant's, inside the slot (`Sparse.ofRows` passes, `sparse_ofRows_ok`). So a reader that checks
 the description knows the flat net exists without building it.
 -/
-import Flock.TmplApart
+module
+
+public import Flock.TmplApart
+
+@[expose] public section
 
 namespace Flock.Tmpl
 

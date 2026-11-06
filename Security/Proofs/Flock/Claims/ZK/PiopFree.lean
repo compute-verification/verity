@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.ZK.L0PinCoins
-import Proofs.Flock.Claims.ZK.L0PinSwitch
-import Proofs.Flock.Claims.ZK.FinishZc
-import Proofs.Flock.Claims.ZK.FinishTau
-import Proofs.Flock.Claims.ZK.FinishSwRows
+module
+
+public import Proofs.Flock.Claims.ZK.L0PinCoins
+public import Proofs.Flock.Claims.ZK.L0PinSwitch
+public import Proofs.Flock.Claims.ZK.FinishZc
+public import Proofs.Flock.Claims.ZK.FinishTau
+public import Proofs.Flock.Claims.ZK.FinishSwRows
 
 /-!
 # The cut PIOP returns on its coins alone
@@ -21,8 +23,10 @@ the masked values, the switched vectors, the layout, the cap or the root.
   size; at the same extra claims, with the same switched claims (`piopCut_sws_eq`).
 * **`Masked.piopCut_of_repFwC`**: at a live statement whose opened coins are admitted, where the firewall's rep `r` of
   table `j` returned from rep `2j + r`'s base, the cut PIOP from any source returns there, its rank check at the earlier
-  reps' points and the mask slot's words: the `hpiop` that `swSrcE_hmk_cut` takes, with no premise on the masked values.
+  reps' points and the mask slot's words, with no premise on the masked values.
 -/
+
+@[expose] public section
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000

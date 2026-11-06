@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.CapOpens
-import Proofs.Flock.C3.RegLevels.AccReads
+module
+
+public import Proofs.Flock.Claims.Recursion.CapOpens
+public import Proofs.Flock.C3.RegLevels.AccReads
 
 /-!
 # A rec-open part's `acc` and `acc_out` slots are registered `rec-acc` rows at their chain positions
@@ -20,6 +22,8 @@ label is taken as `n` (`hidx`, as `check5_bytes` takes it). Two parts staged at 
 their setups parse the one set of V*'s shared rows the staging round carries (`Stage.rows`, `partRaw`'s `recRows`)
 (`insO_staged_rows`), so their ports' sites agree (`accRow_site_eq`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -104,6 +108,7 @@ theorem registered_recOpen {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart 
   have h0 : 0 < sts.size := by subst hp; exact h0p
   have e0 : p.sts[0] = sts[0] := by subst hp; rfl
   obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi h0p
+    (FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0p).2.2)
   have hpar := FlockVBridge.params_of_check P.recNet ((htab 0 h0p).1.trans (FlockVBridge.name_recOpen l LANES HH m))
   rw [e0] at hpar
   have hcoin := Flock.Readable.array_forM_ok (RecIns.setup_coins hset) 0 h0

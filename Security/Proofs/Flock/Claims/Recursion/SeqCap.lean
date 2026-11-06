@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.SeqSim
-import Proofs.Flock.Claims.ZK.Capacity
-import Proofs.Flock.Claims.ZK.Prefix
+module
+
+public import Proofs.Flock.Claims.Recursion.SeqSim
+public import Proofs.Flock.Claims.ZK.Capacity
+public import Proofs.Flock.Claims.ZK.Prefix
 
 /-!
 # The masked recursion on one capped tape
@@ -24,6 +26,8 @@ prover (`Deploy.P`), and `ZkDeploy.tapeOf`, which reads no statement, is the ide
 tape `T₀` too, so where it commits under fresh salts (`PreCommits`), `T₀` splits evenly into each statement's inner and
 staging salts: their numbers are bounded as well.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

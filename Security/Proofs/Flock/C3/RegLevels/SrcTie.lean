@@ -1,5 +1,7 @@
-import Proofs.Flock.C3.Compose.Decoder
-import Proofs.Flock.C3.Opening.SrcOpening
+module
+
+public import Proofs.Flock.C3.Compose.Decoder
+public import Proofs.Flock.C3.Opening.SrcOpening
 
 /-!
 # n7's levels: `RegTape` at the source, from R's Ligerito tied to an accepting run
@@ -10,6 +12,8 @@ source's run `u` at every accepted outer proof. Past R's opening a run's own ste
 `LevelTie` (`regTape_of_levelTie`). R's Ligerito verifies against the registered cap, so the source's tie is at
 `xR.cap` (`SrcLevelTie`), and with `SrcOK` it gives `RegLevelsRead` at the fixed decoder (`regLevelsRead_of_tie`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.BoundRouteKSLin2
-import Proofs.Flock.Claims.Recursion.BoundDeployOuter
-import Proofs.Flock.Claims.Recursion.LastColsDeployed
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundRouteKSLin2
+public import Proofs.Flock.Claims.Recursion.BoundDeployOuter
+public import Proofs.Flock.Claims.Recursion.LastColsDeployed
 
 /-!
 # `KSLin2` at the intended choice
@@ -13,6 +15,8 @@ the decoder's canonicity (`CanonicalProofFiles`), the calls half of the plain ve
 (`PlainCallsBindOrSlack`), and the code facts of the staging, V*'s parts at the dense form and the readers, and the
 bound holds at the dense statements (`DenseAt`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

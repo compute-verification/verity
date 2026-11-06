@@ -1,9 +1,16 @@
 /-
 `canon` escapes every character outside printable ASCII, so its text has no byte at or above `0x7f`: these are the bytes
 Python's `codec.canonical_json` writes for the same values (`json.dumps(..., ensure_ascii=True)` with DEL escaped), and
-each reads back to its value.
+each reads back to its value through the verifier's parser.
 -/
-import Flock.Canon
+module
+
+public import Flock.Canon
+public import Flock.JsonParse
+meta import Flock.Canon
+meta import Flock.JsonParse
+
+@[expose] public section
 
 namespace Flock.Test.Canon
 
@@ -24,7 +31,7 @@ def VECTORS : List (Json × String) := [
 
 #guard VECTORS.all fun (j, t) => (canon j).toOption == some t
 #guard VECTORS.all fun (_, t) => t.toUTF8.data.all (· < 0x7f)
-#guard VECTORS.all fun (j, t) => match Json.parse t with
+#guard VECTORS.all fun (j, t) => match JsonParse.parse t with
   | .ok j' => (canon j').toOption == (canon j).toOption
   | .error _ => false
 

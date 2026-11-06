@@ -9,7 +9,7 @@ challenger's key record fetched from the store, then
   this tree): the session trusted on the stand-in root (`remote.trusted_session`, every head of the ledger), the round
   coins (`core_check.rounds` over the recomputed round roots, its session run from a commit the host's pins log
   ``--pins`` records on the auditor's first-parent list of main ``--main``), the salt coin after the stand-in root and
-  the draw coin
+  the sampling coin
   after the recomputed manifest root (`challenger.live_reason`, each the root the challenger's signed log shows), the
   commitment the manifest's, a live epoch's;
 * ``check-end.json``: the GPU run's own `dither_so.check_end` of the window (its stop record's ``end``), which needs the

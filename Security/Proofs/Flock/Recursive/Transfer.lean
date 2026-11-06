@@ -1,5 +1,7 @@
-import Proofs.Flock.Recursive.ZkReg.Vals
-import Proofs.Flock.Recursive.Fork
+module
+
+public import Proofs.Flock.Recursive.ZkReg.Vals
+public import Proofs.Flock.Recursive.Fork
 
 /-!
 # Recursion: a stage's committed values against a candidate, for the compiled `--zk` session
@@ -26,6 +28,8 @@ reference, which no finder at a budget computes, so `stage_bind` bounds that pro
   hidden-output tables, at the committed values their simulation decodes (`XplurZC` at `simZHJ … τ`, the value binding
   `vbHJ`), as `zk_session_regValsR` is `zk_flock_regValsC_cr` there; `candTermZC_le` puts its bound in `htr`'s shape.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

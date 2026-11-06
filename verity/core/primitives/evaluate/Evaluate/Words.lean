@@ -1,5 +1,7 @@
-import Evaluate.Casts
-import Evaluate.TC.Dots
+module
+
+public import Evaluate.Casts
+public import Evaluate.TC.Dots
 
 /-!
 # PoUW's and NCP's word primitives
@@ -14,6 +16,8 @@ copied here, and the two it states over rationals (`eTildeWord`, `sqrtWord`) are
 definition each must equal. `Pouw.NCP.accWFrom` is route U's int32 accumulator, of which `PouwDot16U8S8_v1` is 16 steps.
 Security defines none of the others: the Python function is the definition.
 -/
+
+@[expose] public section
 
 namespace Evaluate.Words
 

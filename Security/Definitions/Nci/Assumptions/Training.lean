@@ -1,4 +1,6 @@
-import Definitions.Nci.Threads
+module
+
+public import Definitions.Nci.Threads
 
 /-!
 # NCI's one assumption about training
@@ -25,6 +27,8 @@ its weights' half. With a partial containment, the restated chain guarantee
 (`Nci.Guarantees.IncompressibleContainedMatMulOn`) bounds what the dark gates absorb by their novel reads, where the
 support form bounds it by their width.
 -/
+
+@[expose] public section
 
 namespace Nci.Assumptions
 

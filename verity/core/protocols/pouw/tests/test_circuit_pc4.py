@@ -320,7 +320,7 @@ def test_the_verifier_derives_the_anchored_inputs():
 
 def test_the_tile_layout_proves_each_drawn_tile_with_its_rows():
     """`plan.tile_layout`: a tile's closure is itself and its TM `RowA` units, and its ``b_rows`` its TN `RowB` units in the
-    weight's Program; a draw proves both, the row units each once (`Plan.proved_b`), opens nothing, and the tile stratum
+    weight's Program; a sample proves both, the row units each once (`Plan.proved_b`), opens nothing, and the tile stratum
     has the W_ref given."""
     tm, tn = HIDDEN.tile
     lay = plan.tile_layout(HIDDEN, 1000)

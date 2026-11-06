@@ -1,6 +1,8 @@
-import Proofs.Properties.Nci
-import Proofs.Properties.Nci.Agrees
-import Properties.NciDesc.Verdict
+module
+
+public import Proofs.Properties.Nci
+public import Proofs.Properties.Nci.Agrees
+public import Properties.NciDesc.Verdict
 
 /-!
 # What a verdict of the description-sized check carries, from `DescAgrees`
@@ -10,6 +12,8 @@ Each statement of `Properties.NciDesc.Verdict` is its `Properties.Nci` counterpa
 thread bounds from `Throttles` and its forms, which `Proofs.Nci.DescVerdict` (package `security_proofs`) supplies.
 `DescReports` and `DescWitnesses` are the guarantees, from `SecurityProofs.DescAgrees` (`Proofs.Properties.Nci.Agrees`).
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs
 

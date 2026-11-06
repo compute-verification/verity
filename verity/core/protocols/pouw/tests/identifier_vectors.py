@@ -1,6 +1,6 @@
 """Pinned vectors for the proof's identifier v1 (`verity.core.protocols.pouw.identifier`): ``uv run python
 verity/core/protocols/pouw/tests/identifier_vectors.py`` rewrites ``tests/vectors/identifier_v1.json``.  A change to that file is a change
-to the identifier, which C-Flock's verifier compares byte for byte, and needs a reason in the PR.
+to the identifier, which Flock's verifier compares byte for byte, and needs a reason in the PR.
 
 Inputs are derived, then pinned with each case: weight w's root in case c is SHA-256("verity/pouw/identifier-vectors/v1", c,
 "weight", w), and the salt is `Epoch.unverified`'s from the beacon seed SHA-256(…, c, "beacon").  Every case's matmuls are in

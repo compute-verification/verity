@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FrameRank
+module
+
+public import Proofs.Flock.Claims.ZK.FrameRank
 
 /-!
 # The frame's claim points are the session's (`FrameAdmits`)
@@ -13,6 +15,8 @@ lincheck and `r'`, so:
 * **`claimPoints_frame`**: where the array holds round `1`'s coins from `K_SKIP`, `ρ`'s from `m − 6` and the lincheck's
   from `2 m − 10`, the frame's claim points are `MaskRank.claimPoints` at the rounds, as lists.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer.Rank
 

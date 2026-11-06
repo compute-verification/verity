@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.KS.ZkBound
-import Proofs.Flock.Claims.KS.PlainKS
-import Proofs.Flock.Soundness.Discharge.ZkLink.M1
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements
+module
+
+public import Proofs.Flock.Claims.KS.ZkBound
+public import Proofs.Flock.Claims.KS.PlainKS
+public import Proofs.Flock.Soundness.Discharge.ZkLink.M1
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements
 
 /-!
 # The deployed masked verifier's KS from the live sessions' bound at one table
@@ -24,6 +26,8 @@ fields, without a draw), that `zkTab` is at C-Flock ZK's parameters (`zkTab_m1`)
 is not committed to it (`zk_not_committed`, `zkTab_committed`). `zk_tableBoundθ_live` is the bound at full-width
 columns, the form the trimmed record reads (`zk_KS_trim`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

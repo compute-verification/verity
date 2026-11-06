@@ -1,6 +1,8 @@
-import Definitions.Nci.Ldl
-import Mathlib.Basic.ENNReal.Real
-import Mathlib.Basic.Real.ENatENNReal
+module
+
+public import Definitions.Nci.Ldl
+public import Mathlib.Basic.ENNReal.Real
+public import Mathlib.Basic.Real.ENatENNReal
 
 /-!
 # Local description length: the named premises
@@ -9,6 +11,8 @@ Two premises, each its own named `Prop` so that what each costs is visible. `Eva
 the fixed decoder that Lemma 1 uses; `ActivationRate` is Corollary 4b's lower bound on the description length of each
 block's activations.
 -/
+
+@[expose] public section
 
 namespace Nci.Ldl.Assumptions
 
@@ -27,14 +31,14 @@ program-encoding overhead", and its proof's program: the block index in `⌈log�
 block and applies `ext`. Its time is the evaluator's: the premise is that `t` covers it.
 
 It is stated as a capability, not as a bound on `LDL`: the program depends on the run only through the block's
-unregistered input bits, and the decoder must output the extraction for every run consistent with `R`. So `ext` must
-read only `I ∪ in(I)` and the registered description of `I`, as the draft's extraction rule does; for an `ext` that
-reads anything else no decoder meets it. -/
-def EvaluatesBlocks {d : Declaration} {n : ℕ} (D : Decoder) (t : ℕ) (R : Registration d n)
-    (ext : Fin n → d.D.Transcript → List Bool) (aBlk : ℕ) : Prop :=
-  ∃ enc : Fin n → d.D.Transcript → List Bool, ∀ u X, R.Consistent X →
-    (∀ X', R.Consistent X' → (∀ g ∈ d.D.into (R.P.gates u) \ d.θ, X' g = X g) → enc u X' = enc u X) ∧
-    (enc u X).length ≤ Nat.clog 2 n + novelReads d (R.P.gates u) + aBlk ∧
+unregistered input bits, and the decoder must output the extraction for every run that takes `R`'s registered values
+(`R.Honest`). So `ext` must read only `I ∪ in(I)` and the registered description of `I`, as the draft's extraction rule
+does; for an `ext` that reads anything else no decoder meets it. -/
+def EvaluatesBlocks (D : Decoder) (t : ℕ) (R : Committed) (ext : Fin R.B → R.d.D.Transcript → List Bool)
+    (aBlk : ℕ) : Prop :=
+  ∃ enc : Fin R.B → R.d.D.Transcript → List Bool, ∀ u X, R.Honest X →
+    (∀ X', R.Honest X' → (∀ g ∈ R.d.D.into (R.P.gates u) \ R.d.θ, X' g = X g) → enc u X' = enc u X) ∧
+    (enc u X).length ≤ Nat.clog 2 R.B + novelReads R.d (R.P.gates u) + aBlk ∧
     D (enc u X) t = some (ext u (R.P.localEval X u))
 
 /-- NEW PREMISE. **Activation rate** ([LDL-ACTIVATION-RATE]) `β` with deficit `Λ` (the draft's `β_x` and `λ_x`; Lean
@@ -48,9 +52,8 @@ it receives, which its `k` unregistered input bits limit (Lemma 1).
 It is a premise on the fixed decoder `D` and the run, not on the data alone: for some decoder (one that prints `a_I` on
 the empty program) it is false. It is a joint bound over the collections a block can select, internally generated
 activations and mixtures of layers and steps included; a measured code rate for one tensor is not such a bound. -/
-def ActivationRate {d : Declaration} {n : ℕ} {ι A : Type} [DecidableEq A] (β Λ : ℝ) (t : ℕ) (D : Decoder)
-    (R : Registration d n) (M : Products d.D ι A) (a : Fin n → d.D.Transcript → List Bool) (X : d.D.Transcript) :
-    Prop :=
+def ActivationRate {ι A : Type} [DecidableEq A] (β Λ : ℝ) (t : ℕ) (D : Decoder) (R : Committed)
+    (M : Products R.d.D ι A) (a : Fin R.B → R.d.D.Transcript → List Bool) (X : R.d.D.Transcript) : Prop :=
   ∀ u, ENNReal.ofReal (β * (M.acts R.P u).card - Λ) ≤ (LDL D t (a u X) : ℝ≥0∞)
 
 end Nci.Ldl.Assumptions

@@ -1,5 +1,7 @@
-import Mathlib.Data.Nat.Choose.Basic
-import Definitions.Pous.Game.Prob
+module
+
+public import Mathlib.Data.Nat.Choose.Basic
+public import Definitions.Pous.Game.Prob
 
 /-!
 # The streamed-label wipe (experimental)
@@ -25,6 +27,8 @@ the prover won.
 
 Provers are deterministic: a randomized prover is an average of deterministic ones (`Pous.pr`).
 -/
+
+@[expose] public section
 
 namespace Pous.StreamedWipe
 

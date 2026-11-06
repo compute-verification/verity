@@ -1,4 +1,6 @@
-import Definitions.Pouw.Dimension.Defs
+module
+
+public import Definitions.Pouw.Dimension.Defs
 
 /-!
 # `Lift_MinRank`: a named placeholder, and MinRank ≥ ρ (trusted statements)
@@ -16,6 +18,8 @@ checkpoint matrices has a `ρ × ρ` triangular minor with nonzero diagonal.
 The named `Prop`s `LiftMinRank` and `LiftMinRankL5e` are in the assumptions module `Pouw.Dimension.PipeAssumptions`,
 and `LiftMinRankWitness` is in `Pouw.Dimension.Pipe`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension
 

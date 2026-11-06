@@ -1,7 +1,9 @@
-import Proofs.Flock.Recursive.Sessions
-import Proofs.Flock.Recursive.Premises
-import Proofs.Flock.Soundness.Discharge.ZkView.OsSalts
-import Flock.Firewall
+module
+
+public import Proofs.Flock.Recursive.Sessions
+public import Proofs.Flock.Recursive.Premises
+public import Proofs.Flock.Soundness.Discharge.ZkView.OsSalts
+public import Flock.Firewall
 
 /-!
 # (ii) at the firewall and V*'s code
@@ -26,6 +28,8 @@ firewall sends, message `i` reading the strings before it (`commitBytes`, `firew
 two halves, and the commitments V*'s sessions read).
 Its proof is `Flock.SecurityProofs.RecursiveFirewallPrivate` (`Proofs.Flock.Recursive.FirewallZK`).
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

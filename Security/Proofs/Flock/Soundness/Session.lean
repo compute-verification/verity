@@ -1,10 +1,12 @@
-import Proofs.Flock.Soundness.Knowledge
-import Proofs.Flock.Soundness.Game.Batch
+module
+
+public import Proofs.Flock.Soundness.Knowledge
+public import Proofs.Flock.Soundness.Game.Batch
 
 /-!
 # A table inside a batched session (README.md §1.3)
 
-**The session** follows PROTOCOL.md §5. `Commit` carries every table's level-0 cap before any coin
+**The session** follows `Flock.Record`. `Commit` carries every table's level-0 cap before any coin
 (S3, S13, S16). The link points are one draw for all tables. Then every table's reps and openings
 run concurrently, in the order the prover chooses. So after `Commit`, a table sits in a batch with
 the rest of the session, whatever that is (`sessAfter`): the games `pre` and `post` may be other
@@ -22,6 +24,8 @@ everything after `Commit` `K` times, and fills the table from the table's openin
 (`extractTableS`). The session accepts while that extraction fails with probability at most
 `ε_c⁻ + K·adv₀ + N₀/(eK)`, the table theorem's form, with `adv₀` the level-0 finder in the session.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 
@@ -61,7 +65,7 @@ theorem tableOrc_eq (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 �
 def dfltOut [Inhabited D] : OutC F D :=
   ⟨false, fun _ => default, (PendL.reject, PendL.reject), fun _ _ _ => ([], [])⟩
 
-/-- **A batched session after `Commit`** (PROTOCOL.md §5): one link-point draw, then the games
+/-- **A batched session after `Commit`** (`Flock.Record`): one link-point draw, then the games
 `pre`, the table with level-0 cap `cap₀`, and the games `post`, concurrently. -/
 noncomputable def sessAfter (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)

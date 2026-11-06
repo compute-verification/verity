@@ -1,8 +1,8 @@
-"""The warden's cells as registered rows (`warden_rows`): a link-window is a row a bucket whatever the load, each row is
-its bucket's cells in slot order, the wiring places each connection's cells where its client got them, each row opens
-the signed root at its position and only there, the registration reads back under the warden's key and session and the
-schedule, and refuses any field, key, session or certificate but its own, and the port reads only what the warden's
-wiring places."""
+"""The network certifier's cells as registered rows (`warden_rows`): an execution phase is a row a bucket whatever the
+load, each row is its bucket's cells in slot order, the wiring places each connection's cells where its client got them,
+each row opens the signed root at its position and only there, the registration reads back under the network certifier's
+key and session and the schedule, and refuses any field, key, session or certificate but its own, and the port reads
+only what the network certifier's wiring places."""
 
 from __future__ import annotations
 
@@ -59,10 +59,10 @@ def test_a_link_window_is_a_row_a_bucket_whatever_the_load(traffic):
 
 
 def test_the_wiring_places_each_connections_cells_where_its_client_got_them(traffic):
-    """Connection q's cell k of the link-window is at its row's slot `place` gives: the cells its client got that
-    window, in order. Ordinals count connections from 1 in the order they reached the warden (the wire's ingress
-    ordinal: the active certifier's `Requests` and the I/O tie's map number them so). A bucket's cells are sorted by
-    stream."""
+    """Connection q's cell k of the execution phase is at its row's slot `place` gives: the cells its client got that
+    window, in order. Ordinals count connections from 1 in the order they reached the network certifier (the wire's
+    ingress ordinal: the active certifier's `Requests` and the I/O tie's map number them so). A bucket's cells are
+    sorted by stream."""
     warden, clients = traffic
     seen, ordinals, shared = 0, set(), 0
     for record in records(warden)[1]:
@@ -148,9 +148,9 @@ def test_salts_are_fresh_and_never_shared_and_the_witness_reads_back():
 
 
 def test_the_registration_reads_back_and_refuses_anything_but_its_own(traffic, tmp_path):
-    """The verifier's read takes the link-window it expects and the schedule's parameters; any other field, an extra
-    key, a root or wiring the certificate doesn't sign, another key, session or link-window, or the wire record's
-    certificate of the same link-window, is refused."""
+    """The verifier's read takes the execution phase it expects and the schedule's parameters; any other field, an extra
+    key, a root or wiring the certificate doesn't sign, another key, session or execution phase, or the wire record's
+    certificate of the same execution phase, is refused."""
     warden, _ = traffic
     record = records(warden)[1][1]
     issuer, cells_, cert = _attest(tmp_path / "a", record)
@@ -229,10 +229,10 @@ def test_the_port_reads_the_rows_the_wardens_wiring_places_and_nothing_else(traf
 
 
 def test_the_bucket_port_reads_every_row_whole(traffic, tmp_path):
-    """`bucket_port` (one unit a bucket) is `port`'s entry with unit `reads_from + t` reading row t, an idle
-    window's rows too, whose slots `port` can't name, under the head's value. The statement for those rows is accepted
-    by the host's read of Lean's registered reads (`refusal`), and one naming a units' wiring or with two rows swapped
-    is refused. A head of another schedule is refused."""
+    """`bucket_port` (one proof block a bucket) is `port`'s entry with proof block `reads_from + t` reading row t, an
+    idle window's rows too, whose slots `port` can't name, under the head's value. The statement for those rows is
+    accepted by the host's read of Lean's registered reads (`refusal`), and one naming a proof blocks' wiring or with
+    two rows swapped is refused. A head of another schedule is refused."""
     warden, _ = traffic
     idle, _, _ = run([], {}, windows=1)
     for record in (records(warden)[1][0], records(idle)[1][0]):
@@ -261,9 +261,10 @@ def test_the_bucket_port_reads_every_row_whole(traffic, tmp_path):
 def test_the_programs_units_name_their_wiring_and_a_statement_for_any_other_is_refused(traffic, tmp_path):
     """The Program's `Units` read the rows a bare sequence of the same reads does, and the port's value names their
     digest (`<link>/<direction>/<window>/units/<digest>`), as the statement made for them does, which the host's read
-    of Lean's registered reads (`refusal`) accepts. A statement made for any other units' wiring is refused by its
-    value, even where its rows are the same (two cells of a row swapped), and so is one that names no units' wiring;
-    rows not the units' are refused by position. `Units` refuses no read, ordinal 0, and anything but (int, int)."""
+    of Lean's registered reads (`refusal`) accepts. A statement made for any other proof blocks' wiring is refused by
+    its value, even where its rows are the same (two cells of a row swapped), and so is one that names no proof blocks'
+    wiring; rows not the proof blocks' are refused by position. `Units` refuses no read, ordinal 0, and anything but
+    (int, int)."""
     warden, _ = traffic
     _, cells_, _ = _attest(tmp_path, records(warden)[1][0])
     head, wiring = cells_.head, cells_.wiring

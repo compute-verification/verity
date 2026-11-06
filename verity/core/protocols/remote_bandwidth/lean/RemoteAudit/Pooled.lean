@@ -1,3 +1,5 @@
+module
+
 /-!
 # The openings' pooled bound
 
@@ -15,6 +17,8 @@ budget left allow, the fractional knapsack's optimum. `Properties.RemoteAudit.Po
 `Accounting.Remote.Draw.pooled`, the bound `PooledDraw` reads. `pooled.py` is held to this by the difftest
 (`tests/test_pooled.py`). Code: Lean core only.
 -/
+
+@[expose] public section
 
 namespace RemoteAudit.Pooled
 

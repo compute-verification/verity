@@ -1,5 +1,7 @@
-import Mathlib
-import Properties.CertifierDevice
+module
+
+public import Mathlib
+public import Properties.CertifierDevice
 
 /-!
 # The certifier device, proved: loops, the certifier's operations, packed rows
@@ -9,6 +11,8 @@ certifier's fault (`Certifier.doFault`) keeps the first reason, so a certifier a
 faulting (`CertRel`). A row the certifier releases is `Packed`, and what a packed row puts on the link (`wire`) is
 `r · B` bytes, the frames the code writes.
 -/
+
+@[expose] public section
 
 namespace Properties.CertifierDevice.Proofs
 

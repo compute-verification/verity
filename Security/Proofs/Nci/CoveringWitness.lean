@@ -1,7 +1,9 @@
-import Definitions.Nci.Guarantees.Covering
-import Mathlib.Data.Fin.VecNotation
-import Mathlib.Data.Fintype.Prod
-import Mathlib.Tactic.NormNum
+module
+
+public import Definitions.Nci.Guarantees.Covering
+public import Mathlib.Data.Fin.VecNotation
+public import Mathlib.Data.Fintype.Prod
+public import Mathlib.Tactic.NormNum
 
 /-!
 # The covering bound is not vacuous
@@ -13,6 +15,8 @@ input `x` (gate 4) are unregistered inputs (`θ = ∅`). The products `pᵢ = w�
 that completes a product holds its weight as an input, so the circuit is parameter-hard at every `s`, and six blocks of
 three gates, each with two inputs, cover it.
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs.Covering
 

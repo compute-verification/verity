@@ -1,11 +1,11 @@
 """Opening drawn slots by replaying their requests, for the ``slots`` commit backend (`commit`), under which a run keeps no
 step's tables.
 
-After the run, a FIXTURE coin draws slots of the batch (`draw_slots`; the sampling plan draws from live coins). Each drawn slot
+After the run, a FIXTURE coin selects slots of the batch (`draw_slots`; the sampling plan draws from live coins). Each drawn slot
 is replayed alone (`replay_slot`): one row through positions 0 .. the drawn step, on the run's resident weights, each step
 under that step's salt key with the slot's own nonce, so its subtree is rebuilt and compared with the slot root the step
 committed. A mismatch means the committed outputs are not the ones the slot's request computes. The replayed tables then give
-the drawn units (`units.Replayer`), and `Openings.open` opens each unit's outputs against the step's root: the one commit unit
+the sampled proof blocks (`units.Replayer`), and `Openings.open` opens each unit's outputs against the step's root: the one commit unit
 holding them (`commit.Committer.unit_of`, `slots.open_unit`'s construction from the replayed slot's rows) is checked by
 `slots.verify_unit` with its rows and salts, its rows must be the unit's committed outputs, and the reference's slot root
 (`slots.commit_slot`, in Python) must equal the replay's.
@@ -107,7 +107,7 @@ def commit_slot_parallel(S: Any, context: bytes, layout: Any, salt_key: bytes, s
 
 
 class Openings:
-    """Drawn units' openings against their steps' roots, from replayed slots."""
+    """Sampled proof blocks' openings against their steps' roots, from replayed slots."""
 
     def __init__(self, committer: Committer, results: list[StepResult], workers: int = 1) -> None:
         self.c, self.results, self.workers = committer, results, workers

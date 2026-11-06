@@ -1,8 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Flat
-import Proofs.Flock.Soundness.Discharge.Hidden.Public
-import Proofs.Flock.Soundness.Discharge.Hm.Bc
-import Proofs.Flock.Soundness.Discharge.Hm.Site
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Flat
+public import Proofs.Flock.Soundness.Discharge.Hidden.Public
+public import Proofs.Flock.Soundness.Discharge.Hm.Bc
+public import Proofs.Flock.Soundness.Discharge.Hm.Site
+public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 
 /-!
 # An output row's registered `b ‖ c` (`OutputsCommitted`)
@@ -17,6 +19,8 @@ In a satisfying witness of an untyped hidden-output statement, at block `o`, tem
   of `outSrc` (`msg_copy`), the output word's bit below the port's words and the forced-zero row past them
   (`Hm.zero_bit`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -198,15 +202,16 @@ theorem msg_bytes {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z :
 end Msg
 
 theorem outputs_committed' : OutputsCommitted := by
-  intro tags cf pf coins tables d partition program st ht h pop hpop hpt D hD hlt ho hv1 L regs hregs z hz o g j hg hg2
+  intro tags cf pf coins tables d partition program st ht hi h pop hpop hpt D hD hlt ho hv1 L regs hregs z hz o g j hg hg2
     hj hr
   have s := setupHidden_spec' h
-  obtain ⟨hp, hcr⟩ := parse_untyped ht s.parse
+  obtain ⟨hp, hcr⟩ := parse_untyped ht (s.parseF hi)
   have P := parse_facts hp
   have L0 : FlockSoundness.Layout (flatTwin st) := layout_of (st := flatTwin st) P s.pin rfl rfl s.m s.kLog
   have F0 : Aliased.UnitFacts tags (flatTwin st) := unitFacts_of_parse (st := flatTwin st) hp rfl
   have R : RowRanges st.c := RowRanges.ofL (st := flatTwin st) L0 F0.parse F0.check
-  have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (outPairs st.c).toArray := by rw [s.da, hidden_delta']
+  have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (outPairs st.c).toArray := by
+    rw [s.da, hidden_delta_unpinned (unpinned_of_v1 hcr fun p hp => (hv1 p hp).1)]
   have hrows : OutRows st.c := out_rows_v1 hp hcr fun p hp => (hv1 p hp).1
   have hz0 := sat_flat L L0 F0 hv1 hda hrows hz
   have hupv := upv_pos F0.check ho

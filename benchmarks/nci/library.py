@@ -1,4 +1,4 @@
-"""A library of training algorithms and what the NCI policy costs each, with where every block's reads go.
+"""A library of training algorithms and what the inference-only policy costs each, with where every block's reads go.
 
 An algorithm (``algorithms.json``) carries its measured scaling (``scaling``: compute-equivalent multipliers over a
 dense AdamW Chinchilla-optimal reference, each citing findings, and ``multiplier``, the one at the largest compute) and

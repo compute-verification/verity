@@ -1,5 +1,7 @@
-import Proofs.Flock.SoundAtBridge.Served
-import Proofs.Flock.C3.Compose.RowsReg
+module
+
+public import Proofs.Flock.SoundAtBridge.Served
+public import Proofs.Flock.C3.Compose.RowsReg
 
 /-!
 # `ServedRowsLinked`'s proof
@@ -11,6 +13,8 @@ drawn statement (`drawn_of_acceptsZKR`) whose draw proves the unit (`drawOkZKHJ_
 `own` port's position at the unit's label (`reads_of_acceptsZKR`). With it, `RowsAt` is the rows link at those reads
 (`RowsSession.xv_eq_of_rowsAt`).
 -/
+
+@[expose] public section
 
 namespace Flock.SoundAtBridge
 

@@ -1,6 +1,8 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Basic.ENNReal.BigOperators
-import Mathlib.Basic.ENNReal.Inv
+module
+
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Mathlib.Basic.ENNReal.BigOperators
+public import Mathlib.Basic.ENNReal.Inv
 
 /-!
 # hm96's hiding: the claims' hiding assumption
@@ -14,6 +16,8 @@ property of SHA-512.
 of Mathlib they do, so they need not import all of it. The probability is in `[0, ∞]` (`PrENNReal`), as the proofs
 compute theirs.
 -/
+
+@[expose] public section
 
 namespace Claims
 

@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.ZK.SplitInner
-import Proofs.Flock.Claims.ZK.SimSession
-import Proofs.Flock.Claims.Complete.ZkTables.RunsGo
-import Proofs.Flock.Claims.Complete.ZkTables.MaskFree
-import Proofs.Flock.Claims.Complete.Zk.Level0Premises
+module
+
+public import Proofs.Flock.Claims.ZK.SplitInner
+public import Proofs.Flock.Claims.ZK.SimSession
+public import Proofs.Flock.Claims.Complete.ZkTables.RunsGo
+public import Proofs.Flock.Claims.Complete.ZkTables.MaskFree
+public import Proofs.Flock.Claims.Complete.Zk.Level0Premises
 
 /-!
 # `InnerBatched`: the batched constraint at the honest pads
@@ -22,6 +24,8 @@ the triple's vanishes there at every coin (`innerP_batched`).
 * `tableM_mask`: each table and its trace at the mask witness have `TableM` (`maskFree_relation`, `relS_only`).
 * `outer_ne_one`: no refusal seen up to a stop past the rep's `ε` slot means its outer coins are not `1`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 

@@ -1,13 +1,13 @@
-# The deployment configuration of sampled-proofs and certifier on the toy workload (`verity config new`), every party
+# The deployment configuration of sampled-proofs and pouw and inference-only on the toy workload (`verity config new`), every party
 # on local: `verity run` this file. Parameters it doesn't state are their declarations' defaults.
 format = "verity/config/v0"
-protocols = ["sampled-proofs", "certifier"]
+protocols = ["sampled-proofs", "pouw", "inference-only"]
 
 [workload]
 name = "toy"
 
 [service]
-law = "work:64"
+law = "subset:8"
 
 [program]
 commit = "ed7f3bdcea6d1966c489c0b8e1cbccabe7cd89bc"
@@ -29,11 +29,6 @@ principal = "developer"
 
 [[party]]
 name = "verifier"
-machine = "local"
-principal = "auditor"
-
-[[party]]
-name = "network-certifier"
 machine = "local"
 principal = "auditor"
 
@@ -71,13 +66,3 @@ from = "firewall"
 to = "verifier"
 messages = ["proof"]
 after = ["draw"]
-
-[[channel]]
-from = "network-certifier"
-to = "workers"
-messages = ["out-opening"]
-
-[[channel]]
-from = "network-certifier"
-to = "verifier"
-messages = ["out-record"]

@@ -1,5 +1,5 @@
-// The edited GEMM with its noise expanded from sigma by SHA-512 in counter mode (RS-D1b,
-// note:20261015T1815Z-draft-rs-d1b-independent; the generator is sha_noise.cuh), at the minimum bits an entry for two
+// The edited GEMM with its noise expanded from sigma by SHA-512 in counter mode (the
+// generator is sha_noise.cuh), at the minimum bits an entry for two
 // alphabets: pm1, S = {+1, -1} (1 bit an entry), and u17, uniform {-8..8} (base-17 digits, about 4.6 bits an entry),
 // with u17w the same alphabet from 32-bit words (7 digits a word, no 64-bit division), and u17p and u17wp the noise of
 // u17 and u17w with a patch's blocks hashed at once on five lanes (sha_patch5); u17w, u17p and u17wp separate passes only.

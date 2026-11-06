@@ -1,4 +1,6 @@
-import Definitions.Accounting.Confidence
+module
+
+public import Definitions.Accounting.Confidence
 
 /-!
 # Physical assumptions (trusted)
@@ -39,6 +41,8 @@ what the protocol says each of their gates does (`Spec`), and the buckets of tic
 counted. `Hardware` bundles the parameters that don't depend on `A`, and `Usage A` those of the constraints on one
 run that name its gates; `TrustedUnits` takes each run's `Spec`.
 -/
+
+@[expose] public section
 
 namespace Accounting
 

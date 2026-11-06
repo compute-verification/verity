@@ -1,3 +1,5 @@
+module
+
 /-!
 # The outside world, as a core device or challenger reaches it
 
@@ -12,6 +14,8 @@ drift against real time, and `trusted-host` for a signer's state (an LMS key's n
 has started), which is state the device keeps on its host. Everything else a `World` returns (link bytes, a refused
 connection, an unpublished record) is adversarial, and a device fails closed on it.
 -/
+
+@[expose] public section
 
 namespace Core
 

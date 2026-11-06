@@ -7,8 +7,8 @@
 #   at most 128 tiles, else 64 work-weighted draws;
 # - N = 384 trials an input; m counts every bound the table states: Llama-3.1-8B and Qwen3-8B, 16 inputs each, a census or draw
 #   bound and a fresh one each, so m = 64, δ = 0.05/64, and at k = 0 the fresh limit is 1 − δ^(1/384) = 1.846%;
-# - SOURCE: 32 bytes of OS randomness (os.urandom) drawn by the launcher after the pass has ended with rc 0, so after its
-#   activations are fixed, and written into the command, so the run's Attempt records it; every trial's draw and salt derive
+# - SOURCE: 32 bytes of OS randomness (os.urandom) sampled by the launcher after the pass has ended with rc 0, so after its
+#   activations are fixed, and written into the command, so the run's Attempt records it; every trial's sample and salt derive
 #   from it (served_debit.FRESH).  One run per pass, and the cited limit uses every trial it ran.
 set -euo pipefail
 WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=$WORK/venv312/bin/python

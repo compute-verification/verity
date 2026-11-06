@@ -1,5 +1,7 @@
-import Definitions.Accounting.Guarantees.PerRun
-import Proofs.Accounting.Joint
+module
+
+public import Definitions.Accounting.Guarantees.PerRun
+public import Proofs.Accounting.Joint
 
 /-!
 # Proof of the per-run joint guarantee and its covert residual
@@ -14,6 +16,8 @@ A per-run guarantee implies its sure-bound form (`Run.computeSound_of_perRun` an
 hypotheses are at least as strong as `Joint`'s, and an ideal audit has its per-run guarantee with error 0
 (`Run.computeSoundPerRun_ideal` and the two beside it): the hypotheses hold together on any run.
 -/
+
+@[expose] public section
 
 namespace Accounting
 

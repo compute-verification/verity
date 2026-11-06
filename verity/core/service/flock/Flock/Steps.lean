@@ -3,7 +3,11 @@ A walk of the program's call hierarchy as total functions: one step at a time, i
 verifier refuses. The bound is more steps than any run takes, so a walk the verifier finishes is the one it would finish
 without the bound (`Steps.run_mono`).
 -/
-import Flock.Bytes
+module
+
+public import Flock.Bytes
+
+@[expose] public section
 
 namespace Flock.Steps
 

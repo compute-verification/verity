@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Sampling.Draws
-import Proofs.Flock.Claims.Sampling.ExecBernoulli
+module
+
+public import Proofs.Flock.Claims.Sampling.Draws
+public import Proofs.Flock.Claims.Sampling.ExecBernoulli
 
 /-!
 # The live draw's miss bounds, as the claims read probabilities
@@ -17,6 +19,8 @@ identity source is uniform by definition (`uniformBytes_id`), so these statement
   every number of bytes `L` read.
 * `live_stratified_miss_le_count`: the stratified live draw, at most its model's count curve at `t`.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 

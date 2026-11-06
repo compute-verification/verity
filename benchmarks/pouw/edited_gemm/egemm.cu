@@ -1,4 +1,4 @@
-// The adopted design's edited GEMM (decision 29) on sm_120a (RTX PRO 6000), as close to plain int8 as we can get it.
+// The adopted design's edited GEMM on sm_120a (RTX PRO 6000), as close to plain int8 as we can get it.
 //
 // A linear Y = X W^T (X m x k activations, W n x k weights capped at ±63) served as the adopted design's noised product:
 // the served operand is the dithered X = clamp(floor(x / s), -127, 126) + b, b a fresh coin bit an entry, and the weights
@@ -19,7 +19,7 @@
 //   e_*, d64_*, x_*, x64_*, x13_*, t*_*  the GEMM: lpgemm.cu's 16-warp 128 x 128 TMA mainloop (fgemm.cu's ML) with the receipts'
 //                    absorbs interleaved with the MMAs, and the peel as a 2-atom tail (acc -= 256 S_1 U^T + S_0 U^T; with
 //                    S_2's atom a 3-atom tail at k > 4096; the rows t_duo32's 4-atom tail reads). Receipts (EL's RK): duo
-//                    every 32 steps (e_*: t_duo32's), duo every 64 (d64_*), P2-FF's XOR-in fold every 32 (x_*) and every
+//                    every 32 steps (e_*: t_duo32's), duo every 64 (d64_*), the r9 XOR-in fold every 32 (x_*) and every
 //                    64 (x64_*), r9's XOR-in with rotations (13, 19) (x13_*), and the tensor-byte
 //                    receipts TB4, TB4C, TB2W, TB1W (t4_*, t4c_*, t2w_*, t1w_*: fgemm.cu's), and the fold-cost sweep's
 //                    timing variants at r = 1, 1.5, 2, 2.5, 4 ops a word (f10_*, ..., f40_*; FR10's). Interleaving: the absorb of
@@ -49,29 +49,29 @@
 constexpr uint32_t DITHER_TAG = 7;
 using MLW = ML<128, 128, 32, 3>;
 
-// FOLD's scalar-only dial (note:20261017T0320Z-draft-eps1-fold): the served GEMM's tensor pipe is already busy with the
-// useful IMMA, so the mandatory per-word work must ride the idle scalar issue, not filler MMAs. EG_ROUNDS absorbs each
-// committed word's four s32 limbs R times through the XOR-in(13,19) fold (RK == XIN/XIN64/XIN13), no extra MMAs, so R is
-// the one cost parameter and the tensor time is untouched. EG_ROUNDS == 1 (the default) is byte-identical to the fold of
-// record. The loop runs #pragma unroll 1 so the SASS op-count is constant across R (one dial); the honest kernel pins a
-// fixed R and lets ptxas unroll it. PROFILE sweeps the knee; FOLD measures correctness and cost a round once.
+// The fold's scalar-only dial: the served GEMM's tensor pipe is already busy with the useful IMMA, so the mandatory
+// per-word work must ride the idle scalar issue, not filler MMAs. EG_ROUNDS absorbs each committed word's four s32
+// limbs R times through the XOR-in(13,19) fold (RK == XIN/XIN64/XIN13), no extra MMAs, so R is the one cost parameter
+// and the tensor time is untouched. EG_ROUNDS == 1 (the default) is byte-identical to the fold of record. The loop runs
+// #pragma unroll 1 so the SASS op-count is constant across R (one dial); the honest kernel pins a fixed R and lets
+// ptxas unroll it. PROFILE sweeps the knee; FOLD measures correctness and cost a round once.
 #ifndef EG_ROUNDS
 #define EG_ROUNDS 1
 #endif
 static_assert(EG_ROUNDS >= 1 && EG_ROUNDS <= 64, "EG_ROUNDS in 1..64");
 
 // The receipt kinds beyond fgemm.cu's DUO, TB4, TB4C, TB2W and TB1W (NONE: no receipts). DUO64: duo on every second
-// running sum only (the odd steps', so derive.py's tile_receipts on Ts[1::2]). XIN: P2-FF's XOR-in fold (pfill.cuh's NC 4
-// under -DPFILL_XIN), three ops a pair: y = (rotl(y, 7) ^ d0) a0 + d1, then y = (rotl(y, 19) ^ d2) a1 + d3 on an
+// running sum only (the odd steps', so derive.py's tile_receipts on Ts[1::2]). XIN: the r9 XOR-in fold (pfill.cuh's NC
+// 4 under -DPFILL_XIN), three ops a pair: y = (rotl(y, 7) ^ d0) a0 + d1, then y = (rotl(y, 19) ^ d2) a1 + d3 on an
 // accumulator's four words, tile t into chain t % 4. XIN64: XIN on the odd steps' running sums only (as DUO64). XIN and
-// XIN64 are timing references, not receipts: rotl 7 puts a bad merge ratio at ±128, an int8 ratio, at the step boundary
-// (note:20261016T1117Z-draft-fullfloor-s-r9). XIN13, the served candidate: P2-FF r9's XOR-in, y = (rotl(y, 13) ^ d0) a0
-// + d1, then y = (rotl(y, 19) ^ d2) a1 + d3 (receipt_folds_r9.xorin_step), keys under key_ok_r9, chain c of thread ctid
-// of tile t starting at pfill's y = pos = (32 w + lane) 4 + c with the output's warps numbered in order (w = 16 t +
-// warp, so pos = (t NCT + ctid) 4 + c). Negative, so fgemm.cu's is_tb is false for them
+// XIN64 are timing references, not receipts: rotl 7 puts a bad merge ratio at ±128, an int8 ratio, at the step
+// boundary. XIN13, the served candidate: the r9 XOR-in, y = (rotl(y, 13) ^ d0) a0 + d1, then y = (rotl(y, 19) ^ d2) a1
+// + d3 (receipt_folds_r9.xorin_step), keys under key_ok_r9, chain c of thread ctid of tile t starting at pfill's y =
+// pos = (32 w + lane) 4 + c with the output's warps numbered in order (w = 16 t + warp, so pos = (t NCT + ctid) 4 + c).
+// Negative, so fgemm.cu's is_tb is false for them
 constexpr int DUO64 = -1, XIN = -2, XIN64 = -3, XIN13 = -4;
-// XIN's multipliers: pfill.cuh's key rule (odd, more than 2^8 from 0 mod 2^24, not ±1 mod 32) on the words
-// mix32(seed ^ (0x5A5A0000 + i)), i = 0, 1, ..., the first two that pass (P2-FF draws them per tile from a SHA block;
+// XIN's multipliers: pfill.cuh's key rule (odd, more than 2^8 from 0 mod 2^24, not ±1 mod 32) on the words mix32(seed ^
+// (0x5A5A0000 + i)), i = 0, 1, ..., the first two that pass (the r9 reference draws them per tile from a SHA block;
 // either way two registers); XIN13's the first two that pass key_ok_r9
 __host__ __device__ inline bool xin_ok(uint32_t a) {
   const uint32_t m = a & 0xFFFFFFu, r = a & 31u;
@@ -114,7 +114,7 @@ __host__ __device__ inline uint2 xin_keys(uint32_t seed) {
 // out of line: inlined, the vote costs the GEMM's mainloop spill loads
 __host__ __device__ __noinline__ uint2 xin_keys_r9(uint32_t seed) { return xin_keys<true>(seed); }
 
-// The fold-cost sweep's kinds (note:20261017T0320Z-draft-eps1-profile): duo's chains (tile t's word e into chain
+// The fold-cost sweep's kinds: duo's chains (tile t's word e into chain
 // 4 (t % 2) + e), keys and finish with r scalar ops a word, timing variants and not receipts. A is y ^ p ^ kx (LOP3), M
 // y a + p (IMAD), AM (y ^ p ^ kx) a + z (LOP3, IMAD; duo without its rotate-add), D duo (LOP3, IMAD, LEA.HI). FR10 (r = 1):
 // M and A alternating along each chain, so no two XORs meet and fuse into one LOP3; FR15: AM on words 0 and 2, FR10's op

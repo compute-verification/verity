@@ -1,9 +1,11 @@
-import Proofs.Flock.Claims.Recursion.OpensReads
-import Proofs.Flock.C3.PubRows.Shape
-import Proofs.Flock.C3.Compose.RsFacts
-import Proofs.Flock.C3.Reps.RoundLinks
-import Proofs.Flock.VBridge.Pinned
-import Proofs.Flock.VBridge.Sparse.Unit
+module
+
+public import Proofs.Flock.Claims.Recursion.OpensReads
+public import Proofs.Flock.C3.PubRows.Shape
+public import Proofs.Flock.C3.Compose.RsFacts
+public import Proofs.Flock.C3.Reps.RoundLinks
+public import Proofs.Flock.VBridge.Pinned
+public import Proofs.Flock.VBridge.Sparse.Unit
 
 /-!
 # RecCap's part holds round 0 as the coin server recorded it
@@ -22,6 +24,8 @@ At `layoutBTops`, RecCap's part holds round 0 whole: port `top`'s hm96 slot at e
 * So instance `n`'s slot at `top` reads `topRow lk l n` (`capRow_bytes`), node `n` of `root_B` at level 0, and the `N`
   slots in order are `root_B`'s nodes, the record's round 0 (`staged_reads_link`, `FlockC3.VStarList.checkReads_ok`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -434,7 +438,7 @@ theorem capRow_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} 
 
 theorem link_of_input {wr : RecRaw} {src : Option RecCoins.Source} {t : ByteArray} {tt record : String} {tr : Json}
     {lk : RecVStar.InnerLink} {o : Option RecVStar.InnerLink} (ht : wr.transcript = some t)
-    (hrec : src.map (·.record) = some record) (htx : String.fromUTF8? t = some tt) (hp : Json.parse tt = .ok tr)
+    (hrec : src.map (·.record) = some record) (htx : String.fromUTF8? t = some tt) (hp : Flock.JsonParse.parse tt = .ok tr)
     (hlk : RecVStar.innerLink tr record = .ok lk) (h : linkInputOf wr src = .ok o) : o = some lk := by
   have htt : textOf "rec inner transcript" t = .ok tt := by rw [textOf, htx]
   have e : linkInputOf wr src = .ok (some lk) := by
