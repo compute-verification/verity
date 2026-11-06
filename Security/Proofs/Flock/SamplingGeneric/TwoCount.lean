@@ -201,7 +201,8 @@ theorem gateBlock_of_mem {Pρ : Partition} (hn : Pρ.gates.Nodup) {ρ : ℕ} {r 
   | none =>
     have hρ : ρ < Pρ.blocks.length := (List.getElem?_eq_some_iff.1 hr).1
     have := (List.find?_range_eq_none.1 h) ρ hρ
-    simp [getD_of_getElem? hr, hg] at this
+    simp only [getD_of_getElem? hr] at this
+    simp [hg] at this
   | some ρ' =>
     obtain ⟨hr', hg'⟩ := gateBlock_some h
     exact congrArg some (eq_of_mem_of_nodup hn hr' hr hg' hg)
@@ -552,7 +553,8 @@ theorem rInflTwo_of_rTwo {H : Msg → Msg} {Cm : Claims.Sampling.CommitmentSchem
 /-- **`Exfil` from `KS`**: `RTwo` implies `RInflTwo`, and the count is `card_influenceTwo_le`. -/
 theorem exfil_of_ks {H : Msg → Msg} {L : CompiledTwo Coin A} (h : L.KS H) : L.Exfil H := by
   intro δ hδ
-  refine ⟨fun x hx Ω _ _ P => ?_, fun x s Pt d a _ _ _ hin => card_influenceTwo_le H L.commit hin δ a⟩
+  refine ⟨?_, fun x s Pt d a _ _ _ hin => card_influenceTwo_le H L.commit hin δ a⟩
+  intro x hx Ω _ _ P
   have hk := h δ hδ x hx Ω P
   unfold PrBad at hk ⊢
   refine le_trans (Pr_mono fun s hs => ⟨hs.1, fun hR => hs.2 ?_⟩) hk
