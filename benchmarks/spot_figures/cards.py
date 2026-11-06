@@ -42,6 +42,8 @@ MODEL_FREE = ("design", "commitment", "references", "commit_hillclimb")
 MANY = ("references",)
 PANELS = ("exfiltration", "infiltration", "skipped_work")
 CUTS = ("tokens", "kv", "layer_of_token", "every_block")
+#: the server configurations Figure 1 draws a line for (`total_cost.CONFIGURATIONS`)
+CONFIGURATIONS = ("tokens", "layer_of_token", "every_block")
 RUN = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
 NUM = (int, float)
 
@@ -78,6 +80,9 @@ SERIES = {"scope": F(str), "budget": F(NUM), "x": F(list), "y": F(list)}
 AXIS = {"label": F(str), "unit": F(str)}
 POINT = {"x": F(NUM), "y": F(NUM), "runs": _opt(list), "note": _opt(str)}
 CURVE = {"label": F(str), "model": _opt(str, nullable=True, choices=MODELS), "points": F(list, each=POINT)}
+TAX_PART = {"part": F(str), "share": F(NUM), "low": F(NUM), "high": F(NUM), "source": F(str)}
+TAX = {"config": F(str, choices=CONFIGURATIONS), "status": F(str, choices=("priced", "measured")), "tax": F(NUM),
+       "low": F(NUM), "high": F(NUM), "lower_bound": F(bool), "parts": F(list, each=TAX_PART), "runs": _opt(list)}
 SLOTS = {
     "workload": {"ranks": F(int), "device": F(str), "request": F(dict), "tokens": F(int), "weights_bytes": F(NUM),
                  "strata": F(list, each=STRATUM), "served_macs_per_token": _opt(NUM, nullable=True),
@@ -98,6 +103,7 @@ SLOTS = {
                      "vector_bits": _opt(NUM), "series": _opt(list, each=SERIES)},
     "commit_hillclimb": {"x": F(dict, each=AXIS), "y": F(dict, each=AXIS), "workload": F(str),
                          "series": F(list, each=CURVE)},
+    "serve_tax": {"baseline": F(str), "configurations": F(list, each=TAX)},
 }
 
 
@@ -147,6 +153,12 @@ def check(card: dict) -> dict:
         errors += [f"references.value.lines[{i}]: give exactly one of value and by_scope"
                    for i, line in enumerate(value.get("lines") or [])
                    if isinstance(line, dict) and ("value" in line) == ("by_scope" in line)]
+    if slot == "serve_tax" and not errors:
+        names = [t["config"] for t in value["configurations"]]
+        errors += [f"serve_tax.value.configurations: {n!r} given {names.count(n)} times" for n in sorted(set(names))
+                   if names.count(n) > 1]
+        errors += [f"serve_tax.value.configurations[{i}]: low <= tax <= high, but {t['low']}, {t['tax']}, {t['high']}"
+                   for i, t in enumerate(value["configurations"]) if not 0 <= t["low"] <= t["tax"] <= t["high"]]
     if slot == "workload" and not errors and value.get("served_macs_per_token") is not None:
         in_blocks = sum(s["per_token"] * s["macs"] for s in value["strata"])
         if value["served_macs_per_token"] < in_blocks * (1 - 1e-9):
