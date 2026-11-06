@@ -132,24 +132,21 @@ def packages(pkg: Path, work: Path) -> Path | None:
 
 def _stamp(warm: Path) -> list[int] | None:
     """The inode and mtime of the warm copy at ``warm``, which each give-back (a build's tree moved there, its mtime set)
-    and restore (a bundle unpacked there) changes; None when the worker keeps none or a check holds it."""
-    try:
-        st = warm.stat()
-    except OSError:
+    and restore (a bundle unpacked there) changes; None when the worker keeps none or a check holds it. Under the warm
+    copy's lock nothing moves it between the two calls; outside it, a copy taken between them raises."""
+    if not warm.is_dir():
         return None
+    st = warm.stat()
     return [st.st_ino, st.st_mtime_ns]
 
 
 def _ready(home: Path) -> dict | None:
-    """``home``'s `READY` record: {} for one that holds the deps key alone, as this runner wrote it before it topped up, and
-    None when ``home`` isn't made."""
-    try:
-        doc = json.loads((home / READY).read_text())
-    except FileNotFoundError:
+    """``home``'s `READY` record: None when ``home`` isn't made, and {} for one that holds the deps key alone, as this runner
+    wrote it before it topped up (`_mark` replaces it whole, and nothing here removes one)."""
+    if not (f := home / READY).is_file():
         return None
-    except (OSError, ValueError):
-        return {}
-    return doc if isinstance(doc, dict) else {}
+    text = f.read_text()
+    return json.loads(text) if text.startswith("{") else {}
 
 
 def _mark(home: Path, k: str, stamp: list[int] | None) -> None:
