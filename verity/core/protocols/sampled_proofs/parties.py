@@ -1,5 +1,6 @@
 """Sampled proofs' parties on the deployment layer (`verity.core.deploy`): the challenger, the firewall, the workers and the
-verifier, the roles `verity run CONFIG --party ROLE` runs, and their table (`PROTOCOL`; `PROTOCOLS` by id).
+verifier, as roles and channels a deployment configuration declares (`MANIFEST`), and their table (`PROTOCOL`;
+`PROTOCOLS` by id), which the deployment layer's runtime runs (`verity.core.deploy.runtime.run`).
 
 ~~~text
 challenger -> verifier    Challenger {address, pin}: where its host answers the verifier's open and finish of a session
