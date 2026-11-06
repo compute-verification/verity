@@ -1,7 +1,7 @@
 module
 
-public import Definitions.Pouw.Guarantees.Barrier
 public import Proofs.Pouw.Barrier.Proofs
+public import Proofs.Pouw.Lemmas.Barrier
 
 /-!
 # Proofs of the degenerate-input barrier's guarantee

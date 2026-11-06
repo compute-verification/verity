@@ -5,7 +5,7 @@ public import Definitions.Nci.Info
 /-!
 # NCI over threads, each thread charged by the work done on it: the vocabulary
 
-`WeightsSupport` charges a subcircuit `b_a` for each novel value of a thread it reads, and `(d, e)`-threading bounds the
+`WeightsIncompressible` charges a subcircuit `b_a` for each novel value of a thread it reads, and `(d, e)`-threading bounds the
 counted multiplications of a thread it does by `e` per value read, below `d` values. Charging reads fails where reads
 are redundant: gates reading the products `W[i,j] · x[t,j]` of a tile `A × I × J` read `|A||I||J|` thread values that
 carry at most `|J|(|A| + |I|)` entries' worth of information. Theorem 1's proof reads a thread's count only through those
