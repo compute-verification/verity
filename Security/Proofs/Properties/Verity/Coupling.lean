@@ -1,9 +1,11 @@
-import Properties.Verity.Coupling
-import Properties.Verity.Idle
-import Proofs.Properties.Verity.Subprotocols
-import Proofs.Core.Game.BatchInduced
-import Proofs.Core.Blocks
-import Proofs.Core.UnionBound
+module
+
+public import Properties.Verity.Coupling
+public import Properties.Verity.Idle
+public import Proofs.Properties.Verity.Subprotocols
+public import Proofs.Core.Game.BatchInduced
+public import Proofs.Core.Blocks
+public import Proofs.Pouw.Prob
 
 /-!
 # The causal game's coins, drawn up front: the coupling and the bounds it carries
@@ -18,15 +20,19 @@ reach (`Coupling.Shape`), for every continuation:
   one resolution serves them all, glued by the release that extends the log (`Coupling.AgreeFrom`);
 * at a coin tree's `Hello` or an opening, the device draws the tree's sample or the opened leaf's draw, and the
   resolution takes the one at which the continuation's probability is largest (`avg_le_of_max`), so the play's
-  probability is at most that resolution's over the coins drawn up front.
+  probability is at most that resolution's over the coins drawn up front;
+* where a tree-line guard fails, the releases end in the play and at the coins drawn up front alike
+  (`Coupling.prob_ifPos`, `Coupling.prob_ifNeg`).
 
-The lower half is the upper half of the complement (`Coupling.prob_add_not`). From it: `coins_couple`
+The device's draw at the close is the last coordinate of the coins drawn up front (`Coupling.avg_prod`). The lower half is the upper half of the complement (`Coupling.prob_add_not`). From it: `coins_couple`
 (`Verity.CoinsCouple`); `target_of_periods` (`Verity.TargetOfPeriods`: `PeriodRun.Sound` at the coupled run's own
 coordinate, its verdict and claim carried by the coupling, and the rest of the event by `BreakBound` and the forger's
 `Unforgeable`); `wipe_target` (`Verity.WipeTarget`, through `Wipe.OfRun.prob_kept_le`); and `soundness_of_upFront`
 (`Verity.SoundnessOfUpFront`, through `soundness_at_of_targets`). Each guarantee's witnesses are at the idle deployment
 (`Properties.Verity.Idle`).
 -/
+
+@[expose] public section
 
 namespace Verity
 
@@ -220,6 +226,9 @@ def AgreeFrom (pre : List Release) (ρ ρ' : TreeCoins) : Prop :=
 theorem AgreeFrom.mono {pre pre' : List Release} {ρ ρ' : TreeCoins} (h : AgreeFrom pre ρ ρ') (hp : pre <+: pre') :
     AgreeFrom pre' ρ ρ' := fun w hw => h w (hp.trans hw)
 
+theorem exists_le_of_eq {X : Type} {a b : ℝ≥0∞} {g : X → ℝ≥0∞} (e : a = b) (h : ∃ x, b ≤ g x) :
+    ∃ x, a ≤ g x := e ▸ h
+
 theorem outK_congr (fs₀ : List (String × ℕ)) {β : Type} : ∀ (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree)
     (pre : List Release) (f : List Release → Game β) (σ : Game.Strategy ((releases k fs ts).bind f))
     (t t' : UpFront fs₀) (ρ ρ' : TreeCoins), Shape fs₀ fs → Agree fs₀ fs t t' → AgreeFrom pre ρ ρ' →
@@ -243,10 +252,20 @@ theorem outK_congr (fs₀ : List (String × ℕ)) {β : Type} : ∀ (k : ℕ) (f
         rw [outK_congr fs₀ k fs' ts _ _ _ t t' ρ ρ' (shape_take l hs hc) (agree_take l hs hc ha)
           (hρ.mono (List.prefix_append _ _))]
     · dsimp only
-      rw [show ρ.hello pre spec b = ρ'.hello pre spec b from congrFun (congrFun (hρ pre List.prefix_rfl).1 spec) b]
-      rw [outK_congr fs₀ k fs _ _ _ _ t t' ρ ρ' hs ha (hρ.mono (List.prefix_append _ _))]
+      by_cases hc : treeLines ts < maxTreeLines ∧ TreeSpecOk spec
+      · simp only [dite_eq_left hc]
+        generalize Game.Strategy.ifPos hc σ = σ'
+        rw [show ρ.hello pre spec b = ρ'.hello pre spec b from congrFun (congrFun (hρ pre List.prefix_rfl).1 spec) b]
+        rw [outK_congr fs₀ k fs _ _ _ _ t t' ρ ρ' hs ha (hρ.mono (List.prefix_append _ _))]
+      · simp only [dite_eq_right hc]
     · dsimp only at σ ⊢
-      revert σ
+      by_cases hc : treeLines ts < maxTreeLines
+      swap
+      · simp only [dite_eq_right hc]
+      simp only [dite_eq_left hc]
+      generalize Game.Strategy.ifPos hc σ = σ'
+      clear σ
+      revert σ'
       generalize ts[i]? = oT
       cases oT with
       | none => intro σ; rfl
@@ -283,6 +302,26 @@ theorem prCoin_or_le {C : Type} [Fintype C] (p q : C → Prop) :
     exact le_self_add
   · by_cases hq : q c <;> simp [hp, hq]
 
+/-- **A bound at one coordinate.** If, at every value of the other coins, the probability over coordinate `i` of `E`
+is at most `δ`, so is the probability over all the coins. -/
+theorem pr_le_of_update {I : Type} [Fintype I] [DecidableEq I] {Ω : I → Type} [∀ i, Fintype (Ω i)]
+    [∀ i, Nonempty (Ω i)] (i : I) (E : ((j : I) → Ω j) → Prop) {δ : ℝ}
+    (h : ∀ ξ, Pouw.pr (fun x : Ω i => E (Function.update ξ i x)) ≤ δ) : Pouw.pr E ≤ δ := by
+  let e : ((j : I) → Ω j) ≃ ((j : { j // j ≠ i }) → Ω j) × Ω i :=
+    (Equiv.piSplitAt i Ω).trans (Equiv.prodComm _ _)
+  obtain ⟨x₀⟩ : Nonempty (Ω i) := inferInstance
+  rw [← Pouw.pr_equiv e.symm E]
+  refine Pouw.pr_prod_le _ δ ((Pouw.pr_nonneg _).trans (h (Classical.arbitrary _))) fun g => ?_
+  have key : (fun x => E (e.symm (g, x))) = fun x => E (Function.update (e.symm (g, x₀)) i x) := by
+    funext x
+    congr 1
+    funext j
+    by_cases hj : j = i
+    · subst hj
+      simp [e, Equiv.piSplitAt_symm_apply]
+    · simp [e, Equiv.piSplitAt_symm_apply, hj]
+  exact (congrArg Pouw.pr key).trans_le (h _)
+
 theorem prCoin_eq_ofReal_pr {C : Type} [Fintype C] (p : C → Prop) :
     prCoin p = ENNReal.ofReal (Pouw.pr p) := by
   classical
@@ -315,6 +354,27 @@ theorem prob_assocMap {α β γ : Type} (p : γ → Prop) (h : α → β) (f : �
   | @Game.coin _ C _ _ k, s => by
       show avg (fun c => prob p (((k c).map h).bind f) (s c)) = avg fun c => prob p _ _
       exact congrArg avg (funext fun c => prob_assocMap p h f (k c) (s c))
+
+theorem prob_ifPos {β γ : Type} (p : γ → Prop) (f : β → Game γ) {c : Prop} [h : Decidable c] {A B : Game β}
+    (hc : c) (s : Strategy ((if c then A else B).bind f)) :
+    prob p ((if c then A else B).bind f) s = prob p (A.bind f) (Strategy.ifPos hc s) := by
+  cases h with
+  | isTrue _ => rfl
+  | isFalse hn => exact absurd hc hn
+
+theorem prob_ifNeg {β γ : Type} (p : γ → Prop) (f : β → Game γ) {c : Prop} [h : Decidable c] {A B : Game β}
+    (hc : ¬ c) (s : Strategy ((if c then A else B).bind f)) :
+    prob p ((if c then A else B).bind f) s = prob p (B.bind f) (Strategy.ifNeg hc s) := by
+  cases h with
+  | isTrue hp => exact absurd hp hc
+  | isFalse _ => rfl
+
+open Classical in
+theorem prCoin_add_not {C : Type} [Fintype C] [Nonempty C] (p : C → Prop) :
+    prCoin p + prCoin (fun c => ¬ p c) = 1 := by
+  unfold prCoin
+  rw [← avg_add]
+  exact avg_eq_const fun c => by by_cases h : p c <;> simp [h]
 
 theorem prob_add_not {α : Type} (p : α → Prop) :
     ∀ (g : Game α) (s : Strategy g), prob p g s + prob (fun a => ¬ p a) g s = 1
@@ -418,16 +478,24 @@ theorem upper (fs₀ : List (String × ℕ)) {β : Type} (q : β → Prop) : ∀
           _ = avg fun t => Ψ ρ (t.read l (coinsLeft fs' l)) t := hlazy.symm
     · change ∃ ρ, prob q _ σ ≤ _
       dsimp only at σ ⊢
+      by_cases hc : treeLines ts < maxTreeLines ∧ TreeSpecOk spec
+      swap
+      · conv => enter [1, ρ, 2, 1, t]; rw [dite_eq_right hc]
+        exact exists_le_of_eq (prob_ifNeg q f hc σ) ⟨TreeCoins.any, (avg_eq_const fun _ => rfl).ge⟩
+      conv => enter [1, ρ, 2, 1, t]; rw [dite_eq_left hc]
+      refine exists_le_of_eq (prob_ifPos q f hc σ) ?_
+      generalize Game.Strategy.ifPos hc σ = σ'
+      clear σ
       let R : TreeSample spec → Release := fun x =>
         ⟨.hello spec, b, bitsOfBytes (treeRoot b spec x ++ treeKey x.1)⟩
       let T : TreeSample spec → OpenTree := fun x => ⟨b, spec, x, fun _ => 0⟩
       let Ψ : TreeCoins → TreeSample spec → UpFront fs₀ → ℝ≥0∞ := fun ρ x t =>
         prob q (f (R x :: (outK fs₀ t ρ k fs (ts ++ [T x]) (pre ++ [R x]) (fun w => f (R x :: w))
-          (Strategy.assocMap (R x :: ·) f _ (σ x))).1))
+          (Strategy.assocMap (R x :: ·) f _ (σ' x))).1))
           (outK fs₀ t ρ k fs (ts ++ [T x]) (pre ++ [R x]) (fun w => f (R x :: w))
-            (Strategy.assocMap (R x :: ·) f _ (σ x))).2
+            (Strategy.assocMap (R x :: ·) f _ (σ' x))).2
       choose ρs hρs using fun x => upper fs₀ q k fs (ts ++ [T x]) (pre ++ [R x]) (fun w => f (R x :: w))
-        (Strategy.assocMap (R x :: ·) f _ (σ x)) hs
+        (Strategy.assocMap (R x :: ·) f _ (σ' x)) hs
       obtain ⟨x, hx⟩ := avg_le_of_max fun x => avg fun t => Ψ (ρs x) x t
       let ρ : TreeCoins :=
         { hello := fun w sp ν => if w = pre ∧ ν = b then Function.update (fun sp => (ρs x).hello w sp ν) spec x sp
@@ -440,10 +508,10 @@ theorem upper (fs₀ : List (String × ℕ)) {β : Type} (q : β → Prop) : ∀
         simp [ρ, ne_of_prefix hw]
       refine ⟨ρ, ?_⟩
       rw [hρx]
-      calc prob q _ σ
+      calc prob q _ σ'
           = avg fun x => prob q ((releases k fs (ts ++ [T x])).bind fun w => f (R x :: w))
-              (Strategy.assocMap (R x :: ·) f _ (σ x)) :=
-            congrArg avg (funext fun x => prob_assocMap q (R x :: ·) f _ (σ x))
+              (Strategy.assocMap (R x :: ·) f _ (σ' x)) :=
+            congrArg avg (funext fun x => prob_assocMap q (R x :: ·) f _ (σ' x))
         _ ≤ avg fun x => avg fun t => Ψ (ρs x) x t := avg_mono fun x => hρs x
         _ ≤ avg fun t => Ψ (ρs x) x t := hx
         _ = avg fun t => Ψ ρ x t := by
@@ -452,7 +520,15 @@ theorem upper (fs₀ : List (String × ℕ)) {β : Type} (q : β → Prop) : ∀
             rw [outK_congr fs₀ k fs _ _ _ _ t t (ρs x) ρ hs (agree_refl _ _ _) hagree]
     · change ∃ ρ, prob q _ σ ≤ _
       dsimp only at σ ⊢
-      revert σ
+      by_cases hc : treeLines ts < maxTreeLines
+      swap
+      · conv => enter [1, ρ, 2, 1, t]; rw [dite_eq_right hc]
+        exact exists_le_of_eq (prob_ifNeg q f hc σ) ⟨TreeCoins.any, (avg_eq_const fun _ => rfl).ge⟩
+      conv => enter [1, ρ, 2, 1, t]; rw [dite_eq_left hc]
+      refine exists_le_of_eq (prob_ifPos q f hc σ) ?_
+      generalize Game.Strategy.ifPos hc σ = σ'
+      clear σ
+      revert σ'
       generalize ts[i]? = oT
       cases oT with
       | none => intro σ; exact ⟨TreeCoins.any, (avg_eq_const fun _ => rfl).ge⟩
@@ -505,35 +581,38 @@ theorem upper (fs₀ : List (String × ℕ)) {β : Type} (q : β → Prop) : ∀
 
 end Coupling
 
-/-- **The coupling of the play to the coins drawn up front.** For every families `fs`, parameters, committed files,
-commitment, strategy `σ` and event `q`, the probability of `q` in the play of `σ` is at least its probability over the
-coins drawn up front at some resolution of the coin trees' coins, and at most its probability at another. -/
+/-- **The coupling of the play to the coins drawn up front.** For every families `fs`, device signer `D`, parameters,
+committed files, commitment, strategy `σ` and event `q`, the probability of `q` in the play of `σ` is at least its
+probability over the coins drawn up front (the families' coins and the device's draw at the close) at some resolution
+of the coin trees' coins, and at most its probability at another. -/
 def PlayCouples : Prop :=
-  ∀ (fs : List (String × ℕ)) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
-    (σ : Game.Strategy (play fs θ F c)) (q : Exchange → Prop),
-    (∃ ρ : TreeCoins, Game.prCoin (fun t => q (outUp fs θ F c ρ σ t)) ≤ Game.prob q (play fs θ F c) σ) ∧
-      ∃ ρ : TreeCoins, Game.prob q (play fs θ F c) σ ≤ Game.prCoin fun t => q (outUp fs θ F c ρ σ t)
+  ∀ (fs : List (String × ℕ)) (D : Signer) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Game.Strategy (play fs D θ F c)) (q : Exchange → Prop),
+    (∃ ρ : TreeCoins, Game.prCoin (fun t => q (outUp fs D θ F c ρ σ t)) ≤ Game.prob q (play fs D θ F c) σ) ∧
+      ∃ ρ : TreeCoins, Game.prob q (play fs D θ F c) σ ≤ Game.prCoin fun t => q (outUp fs D θ F c ρ σ t)
 
 open Game in
-/-- **`PlayCouples`**: the upper half from the device's initial state (`Coupling.upper`), and the lower half from the
-upper half of the complement, whose probabilities with the event's sum to one in the play and at every coins drawn up
-front. -/
+/-- **`PlayCouples`**: the upper half from the device's state after the request (`Coupling.upper`), the close's draw
+being the last coordinate of the coins drawn up front (`Coupling.avg_prod`); the lower half from the upper half of the
+complement, whose probabilities with the event's sum to one in the play and over the coins drawn up front. -/
 theorem play_couples : PlayCouples := by
-  intro fs θ F c σ q
-  let g : List Release → Game Exchange := fun log =>
-    .send (ByteArray × Array ByteArray) fun e => .ret ⟨θ, F, c, log, e.1, e.2⟩
-  refine ⟨?_, Coupling.upper fs q (frames fs) fs [] [] g σ (Coupling.shape_refl fs)⟩
-  obtain ⟨ρ, h⟩ := Coupling.upper fs (fun o => ¬ q o) (frames fs) fs [] [] g σ (Coupling.shape_refl fs)
+  have up : ∀ (fs : List (String × ℕ)) (D : Signer) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+      (σ : Game.Strategy (play fs D θ F c)) (q : Exchange → Prop),
+      ∃ ρ : TreeCoins, Game.prob q (play fs D θ F c) σ ≤ Game.prCoin fun t => q (outUp fs D θ F c ρ σ t) := by
+    intro fs D θ F c σ q
+    obtain ⟨ρ, h⟩ := Coupling.upper fs q (frames fs) fs [] [] (finish D θ F c σ.1) σ.2 (Coupling.shape_refl fs)
+    refine ⟨ρ, h.trans (le_of_eq ?_)⟩
+    unfold Game.prCoin
+    rw [Coupling.avg_prod]
+    rfl
+  intro fs D θ F c σ q
+  refine ⟨?_, up fs D θ F c σ q⟩
+  obtain ⟨ρ, h⟩ := up fs D θ F c σ fun o => ¬ q o
   refine ⟨ρ, ?_⟩
-  let A := avg fun t : UpFront fs => prob (fun o => ¬ q o) (g (outK fs t ρ (frames fs) fs [] [] g σ).1)
-    (outK fs t ρ (frames fs) fs [] [] g σ).2
-  have e1 := Coupling.prob_add_not q (play fs θ F c) σ
-  have e2 : Game.prCoin (fun t => q (outUp fs θ F c ρ σ t)) + A = 1 := by
-    rw [show Game.prCoin (fun t => q (outUp fs θ F c ρ σ t)) = avg fun t : UpFront fs =>
-      prob q (g (outK fs t ρ (frames fs) fs [] [] g σ).1) (outK fs t ρ (frames fs) fs [] [] g σ).2 from rfl,
-      ← avg_add]
-    exact Coupling.avg_eq_const fun t => Coupling.prob_add_not q _ _
-  have hA : A ≠ ⊤ := ne_top_of_le_ne_top ENNReal.one_ne_top (e2 ▸ le_add_self)
+  have e1 := Coupling.prob_add_not q (play fs D θ F c) σ
+  have e2 := Coupling.prCoin_add_not fun t => q (outUp fs D θ F c ρ σ t)
+  have hA : Game.prCoin (fun t => ¬ q (outUp fs D θ F c ρ σ t)) ≠ ⊤ :=
+    ne_top_of_le_ne_top ENNReal.one_ne_top (e2 ▸ le_add_self)
   refine ENNReal.le_of_add_le_add_right hA ?_
   rw [e2, ← e1]
   exact add_le_add le_rfl h
@@ -544,7 +623,7 @@ theorem play_couples : PlayCouples := by
 some resolution of the coin trees' coins (`play_couples`), which the bound takes at every resolution. -/
 theorem coins_couple : CoinsCouple := by
   intro ι α _ d V acc k a h θ F c σ
-  obtain ⟨ρ, hρ⟩ := (play_couples (V.families θ) θ F c σ fun o => acc o ∧ ¬ V.Holds k θ F c σ a o).2
+  obtain ⟨ρ, hρ⟩ := (play_couples (V.families θ) (V.signer θ) θ F c σ fun o => acc o ∧ ¬ V.Holds k θ F c σ a o).2
   exact hρ.trans (h θ F c σ ρ)
 
 /-- **`TargetOfPeriods`**: at the resolution `play_couples` gives, the coupled run's coins carry the play's event into
@@ -555,8 +634,8 @@ theorem target_of_periods : TargetOfPeriods := by
   unfold Vocab.error Accounting.condError
   split_ifs with hcr
   · classical
-    obtain ⟨-, hcr, hun⟩ := hcr
-    obtain ⟨ρ, hρ⟩ := (play_couples (V.families θ) θ F c σ
+    obtain ⟨-, -, hcr, hun⟩ := hcr
+    obtain ⟨ρ, hρ⟩ := (play_couples (V.families θ) (V.signer θ) θ F c σ
       fun o => acc o ∧ ¬ V.Holds k θ F c σ (.ofAudit b) o).2
     obtain ⟨q, δ, hs, hδ, hb⟩ := h θ F c σ ρ
     have hf : ENNReal.ofReal ((V.forger (.ofAudit b) θ F c σ).Pr lmsVerify) ≤
@@ -570,17 +649,17 @@ theorem target_of_periods : TargetOfPeriods := by
     rw [add_assoc]
     refine hρ.trans ((Coupling.prCoin_equiv q.coins _).symm.trans_le ?_)
     refine (Game.prCoin_mono (q := fun ξ => (q.run.accepts b ξ ∧ ¬ q.run.Holds (V.certOf θ) q.price b ξ) ∨
-      (acc (outUp (V.families θ) θ F c ρ σ (q.coins ξ)) ∧
-        (¬ V.Logged (.ofAudit b) (outUp (V.families θ) θ F c ρ σ (q.coins ξ)) ∨ q.brk ξ))) ?_).trans
+      (acc (outUp (V.families θ) (V.signer θ) θ F c ρ σ (q.coins ξ)) ∧
+        (¬ V.Logged (.ofAudit b) (outUp (V.families θ) (V.signer θ) θ F c ρ σ (q.coins ξ)) ∨ q.brk ξ))) ?_).trans
       ((Coupling.prCoin_or_le _ _).trans (add_le_add ?_ (le_trans (hb hcr) (add_le_add hf le_rfl))))
     · intro ξ ⟨ha, hh⟩
-      by_cases hl : V.Logged (.ofAudit b) (outUp (V.families θ) θ F c ρ σ (q.coins ξ))
+      by_cases hl : V.Logged (.ofAudit b) (outUp (V.families θ) (V.signer θ) θ F c ρ σ (q.coins ξ))
       · by_cases hk : q.brk ξ
         · exact Or.inr ⟨ha, Or.inr hk⟩
         · exact Or.inl ⟨q.verdict ξ ha hl hk, fun hw => hh (q.world ξ hw)⟩
       · exact Or.inr ⟨ha, Or.inl hl⟩
     · rw [Coupling.prCoin_eq_ofReal_pr]
-      exact (ENNReal.ofReal_le_ofReal (Pouw.pr_le_of_update (q.run.own b)
+      exact (ENNReal.ofReal_le_ofReal (Coupling.pr_le_of_update (q.run.own b)
         (fun ξ => q.run.accepts b ξ ∧ ¬ q.run.Holds (V.certOf θ) q.price b ξ) hs)).trans hδ
   · exact le_top
 
@@ -607,9 +686,13 @@ theorem soundness_of_upFront : SoundnessOfUpFront := by
 namespace Idle
 
 /-- At `exact`, PoUW's target fails at remote for a verifier that accepts everything. -/
-theorem pouw_nontrivial : ¬ exact.TargetFor (fun _ => True) .remote .pouw :=
-  exact.sound_of_nontrivial .remote .pouw .empty #[.empty] .empty (exact.honest .empty #[.empty] .empty)
-    (pouw_fails .remote _ _ _ _) (lt_of_eq_of_lt (error_exact _ _ _ _ _) zero_lt_one)
+theorem pouw_nontrivial : ¬ exact.TargetFor (fun _ => True) .remote .pouw := by
+  intro h
+  have h1 := prob_play_eq_one (exact.families .empty) (exact.signer .empty) .empty #[.empty] .empty
+    (fun o => True ∧ ¬ exact.Holds .remote .empty #[.empty] .empty (exact.honest .empty #[.empty] .empty) .pouw o)
+    (fun o _ _ hc => ⟨trivial, pouw_fails .remote _ _ _ o hc⟩) (exact.honest .empty #[.empty] .empty)
+  exact lt_irrefl (1 : ℝ≥0∞) ((h1.symm.trans_le (h _ _ _ _)).trans_lt
+    (lt_of_eq_of_lt (error_exact _ _ _ _ _) zero_lt_one))
 
 end Idle
 
