@@ -6107,9 +6107,10 @@
    }
   },
   "Flock.Desc": {
-   "digest": "8d4c3a95d3cb7d01f7497e8266a5a9f46904cf51d657e6131b7454fbd5518971",
+   "digest": "8f0c5a63b2da5d695b99fb5773f21942cd16d97c26475d92050d9988a0826846",
    "definitions": {
     "Flock.Desc.parse": "4739f22d86537c37d145b809be2940eff900d71bb637f8a10a84b199e5e738e6",
+    "Flock.Desc.tmpl": "10fecaada8a4ed07056e78b927ad55aa65af5e97af80f78f5b3ee235abc5c53c",
     "Flock.Desc.unroll": "683c0b77d2863b5dfbc1408fee2adbe18d53ef6bb8af898a889d6f4be9549338"
    }
   },
@@ -6165,7 +6166,7 @@
    }
   },
   "Flock.HmRow": {
-   "digest": "e79191ac8294bf1955058714c06b723273e6d8ddecafd6b342b3d570502100dd",
+   "digest": "45af0fb3b90a5ed6bb57b74a7b78370fdc1c500611f6bc3187881a7673c8069d",
    "definitions": {
     "Flock.HmIn.blocks": "ed026e5f1145955f7367cec965ce6c9522e94ce3ee5864ae2905d3a9fe2a4f8a",
     "Flock.HmIn.checkOwn": "810e264f3400fe59cc4b1fa44ebd90f0ce59d4c14b9b8c98840f0c15b9058761",
@@ -6193,6 +6194,7 @@
     "Flock.HmOut.parseTmpl": "f3f9dee772cd6996dbf94d005bdb0ad2c51b693f66575b00b01059f1a63be0b0",
     "Flock.HmOut.pinnedNames": "4bdaa2bd859bf7aecef6ad36d054c601891a0dcf3d3d36f5a4905c74db528ca0",
     "Flock.HmOut.regions": "902c1b4c948e677b19bd356e7d83bbbc53abc012e62495535b17728ad2a1d12c",
+    "Flock.HmOut.unrolled": "ddc00e7d1d7970d8084e855b155d92dcd4398ede5496957a2da04ed086ad1efa",
     "Flock.HmRow.byteAt": "24092944a7957a3b3ff1a77677bd4832a84e5b902d61ecb896954ad9cd7097aa",
     "Flock.HmRow.chainStart": "240e8cadbd1dad5e835ef55d79da68e5a6fb3b9dea02a910994a505d60edf769",
     "Flock.HmRow.check": "7f68d8f8648bcafa897d0c2cbda4219f70ddc2df581164429e20c15c231405f3",
@@ -6856,11 +6858,12 @@
    }
   },
   "Flock.Tmpl": {
-   "digest": "8520e3f845c705395893c4f90d27cf4e7e2422750a4f94ab6cf3e809e093ed0b",
+   "digest": "906358db40e7c8d56a4b1911ec2a290f40242e3363747e3dd331a0f4561551e0",
    "definitions": {
     "Flock.Tmpl.dropPairs": "be561052f1f03f3b0ebf89be1dcced2d9c6f6e9cc870b8fe925c82a9c3c7183b",
     "Flock.Tmpl.parse": "e2181ee539e4884be995c3200c83cc2018356f7bf9a44f0f263828819adc1445",
     "Flock.Tmpl.place": "6335e2e0bab07a8355acc9a1acb8dca475a252c81d86d9a2a63eb582279ee8e9",
+    "Flock.Tmpl.unroll": "b5e60733061ccc0a0a99ba4b28fec528e52516d67a7b5a37c6fd6f61570d0982",
     "_private.Flock.Tmpl.0.Flock.Tmpl.num": "a18dd0bb63621300e1bd74f3a3550517d1b6898976d2673dce2274385862f95f"
    }
   },

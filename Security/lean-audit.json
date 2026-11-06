@@ -984,7 +984,7 @@
   },
   "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw": {
    "owner": "@proofs",
-   "digest": "46425ee234457f87cd36951a341fdee5012bfb11e60adc39a249fdd3fc40afa0"
+   "digest": "e0c4225c7072bce463c5f927386486c40ea7e1094ca5797cb47533bf7f6a7cc9"
   },
   "FlockSoundness.Assumptions.Zk.RecordCustodyZKJS": {
    "owner": "@lean",
@@ -3342,7 +3342,10 @@
   "Nci.SecurityProofs.ThreadedReadsSlots": "43deeb35d80d7cf5ccf1ac1d3146368ec5775d06dbb0f5769b2bef1c092e7112",
   "Verity.SecurityProofs.CreditSizeLe": "1d82216e931154c5b736226230471bd9983409d8bd95d9d21ef3b787124dcb6c",
   "Nci.SecurityProofs.Inference": "9577814bc7cda3860fee9d3428ecde7e11d7299009a1d3bfb405e11c92e5c600",
-  "Nci.SecurityProofs.UpdatedMatMulReads": "3d44d307610a81a4747f64dcc7d3945c2dcfe9ea92f7a0339d49a79417e45c83"
+  "Nci.SecurityProofs.UpdatedMatMulReads": "3d44d307610a81a4747f64dcc7d3945c2dcfe9ea92f7a0339d49a79417e45c83",
+  "Flock.SecurityProofs.JointHorizonV5": "6bf001db90d1e2f2293065e87750097905100b4b3bfaefd4f26474959f331d72",
+  "Flock.SecurityProofs.JointSampledV5": "2ab8f9edfaf8c3dbbcf8b9fa37933dd79f84b94347d45e1a3fe266d199210b76",
+  "Flock.SecurityProofs.JointShareV5": "021a8367cbb384241ac411da6a2b8a523ce3aba4efe29fc8d6ba1e1a0add071f"
  },
  "layers": {
   "Definitions.Core": {
@@ -7000,6 +7003,24 @@
    "signature": ["Flock.SecurityProofs.IntegrityPeriodLog : Flock.Guarantees.IntegrityPeriodLog"],
    "assumptions": [],
    "type_hash": "20a8497e59180c39414fe50e1e41293894b8d2c6b974786bb7b8d58803dd58cc"
+  },
+  "Flock.SecurityProofs.JointHorizonV5": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.JointHorizonV5 : Flock.Guarantees.JointHorizonV5"],
+   "assumptions": [],
+   "type_hash": "6bf001db90d1e2f2293065e87750097905100b4b3bfaefd4f26474959f331d72"
+  },
+  "Flock.SecurityProofs.JointSampledV5": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.JointSampledV5 : Flock.Guarantees.JointSampledV5"],
+   "assumptions": [],
+   "type_hash": "2ab8f9edfaf8c3dbbcf8b9fa37933dd79f84b94347d45e1a3fe266d199210b76"
+  },
+  "Flock.SecurityProofs.JointShareV5": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.JointShareV5 : Flock.Guarantees.JointShareV5"],
+   "assumptions": [],
+   "type_hash": "021a8367cbb384241ac411da6a2b8a523ce3aba4efe29fc8d6ba1e1a0add071f"
   },
   "Flock.SecurityProofs.JointStratified": {
    "owner": "@lean",
@@ -12837,7 +12858,10 @@
    "Nci.Formalism.SecurityProofs.FitTraining_honest": "completeness: Fit's honest lemma for training: at Honest (Nci.Formalism.Honest, Security/Definitions/Nci/Formalism/Instances.lean), a token served from a new weight (a Boolean declaration with a registered weight, a data bit, the new weight computed from both and the token computed from it and the data), its two blocks of one gate are compute blocks that fit at k = 2, with Δ = Δ_t = Δ_grad = s = τ = 1 and no decoder. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's partition into training blocks, which no check reads yet, would supply the deployed premises.",
    "Nci.Formalism.SecurityProofs.FitTraining_nontrivial": "lemma: Fit's nontrivial lemma for training: at Honest (Nci.Formalism.Honest, Security/Definitions/Nci/Formalism/Instances.lean), a token served from a new weight (a Boolean declaration with a registered weight, a data bit, the new weight computed from both and the token computed from it and the data), at k = 1 its blocks don't fit, no partition into inference blocks exists, and ρ = ⊤, above c / (c - d) = 1. A counterexample at an instance, not a property of a Lean function.",
    "Verity.SecurityProofs.CKSize_honest": "completeness: CKSize's honest lemma: at Honest (Verity.Formalism.Honest, Security/Definitions/Core/Formalism/Instances.lean), the proof blocks {1, 2} and {3} of a chain of three gates after a registered input, its premise holds at (c, k) = (2, 1), the second proof block having one gate, under c. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound and rests on no run and no art:.",
-   "Verity.SecurityProofs.CKSize_nontrivial": "lemma: CKSize's nontrivial lemma: at Counter (Verity.Formalism.Counter, Security/Definitions/Core/Formalism/Instances.lean), the same chain's three operation gates in one proof block, its premise fails at (c, k) = (2, 1), and so does the bound, |C| = 3 > 2 * 1. A counterexample at an instance, not a property of a Lean function."
+   "Verity.SecurityProofs.CKSize_nontrivial": "lemma: CKSize's nontrivial lemma: at Counter (Verity.Formalism.Counter, Security/Definitions/Core/Formalism/Instances.lean), the same chain's three operation gates in one proof block, its premise fails at (c, k) = (2, 1), and so does the bound, |C| = 3 > 2 * 1. A counterexample at an instance, not a property of a Lean function.",
+   "Flock.SecurityProofs.JointSampledV5": "frozen (no-function): A window's sample over several members (JointAuditV5): every member registered at one registration, one live draw (Bridge.execSel on the verifier's bytes under the registration's law on its strata, LawOn) over all their proof blocks, then one SampledKSLiveV5 session per member in order (MemberV5: flock-verify --zk --public-inputs at keyProgP, under RecordCustodyZKJPLaw at subset |S| for its part S, at one link-point count per member, hcls), with A3 for the draw's bytes and TableCRZAt and LinkCRZCAt at each member's session played alone; it bounds the event that every session accepts with a set W of proof blocks incorrect by the law's miss of W plus each member's eps_ks and eps_bind at its part's design, a Verity.Game.prob event of the joint game rather than a run of a Lean function; it reads JointSampledV5 (Security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean), so the lock records its text, and it takes the shape when SampledKSLiveV5's statement moves into a Guarantees module of the spec. It sits in `unwitnessed` beside SampledKSLiveV5: its acceptance is fixed to flock-verify's AcceptsZKP, so no acceptance-kind witness (the statement false at a verifier that accepts everything) can be stated; restated over a verifier record, as RecursiveKSAtRec is, it takes its witnesses, and its entry leaves `unwitnessed`.",
+   "Flock.SecurityProofs.JointShareV5": "frozen (no-function): A window's sample over several members (JointAuditV5): every member registered at one registration, one live draw (Bridge.execSel on the verifier's bytes under the registration's law on its strata, LawOn) over all their proof blocks, then one SampledKSLiveV5 session per member in order (MemberV5: flock-verify --zk --public-inputs at keyProgP, under RecordCustodyZKJPLaw at subset |S| for its part S, at one link-point count per member, hcls), with A3 for the draw's bytes and TableCRZAt and LinkCRZCAt at each member's session played alone; it bounds the event that every session accepts with more than an eps share of the window's proof blocks incorrect by the law's largest miss of such a set plus the members' eps_ks and eps_bind, a Verity.Game.prob event of the joint game rather than a run of a Lean function; it reads JointShareV5 (Security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean), so the lock records its text, and it takes the shape when SampledKSLiveV5's statement moves into a Guarantees module of the spec. It sits in `unwitnessed` beside SampledKSLiveV5: its acceptance is fixed to flock-verify's AcceptsZKP, so no acceptance-kind witness (the statement false at a verifier that accepts everything) can be stated; restated over a verifier record, as RecursiveKSAtRec is, it takes its witnesses, and its entry leaves `unwitnessed`.",
+   "Flock.SecurityProofs.JointHorizonV5": "frozen (no-function): JointSampledV5's window audit (JointAuditV5) over a monitoring period of T windows played as one causal game against one adaptive prover (periodG): the probability that every window accepts and the windows' incorrect proof blocks lie outside the period's confidence set at delta (the windows' laws miss them together with probability at least delta, and their ANDs and output bits in all are at most the most any choice in that set holds) is at most delta plus the sum of the windows' eps, under A3 at every window and TableCRZAt and LinkCRZCAt at each member's session played alone at every strategy the period plays its window with (JointPeriodV5.Plays); a Verity.Game.value event over the period's run rather than a run of a Lean function; it reads JointHorizonV5 (Security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean), so the lock records its text, and it takes the shape when SampledKSLiveV5's statement moves into a Guarantees module of the spec. It sits in `unwitnessed` beside SampledKSLiveV5: its acceptance is fixed to flock-verify's AcceptsZKP, so no acceptance-kind witness (the statement false at a verifier that accepts everything) can be stated; restated over a verifier record, as RecursiveKSAtRec is, it takes its witnesses, and its entry leaves `unwitnessed`."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -13826,7 +13850,6 @@
    },
    "Flock.SecurityProofs.SampledKSLiveV5": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.HmIn.parse D.unroll) (Except.ok pi)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.HmIn.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll pi I.publicFile) (Except.ok pub)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -13834,7 +13857,9 @@
     "Eq (Flock.Registered.dupName D.unroll) Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.Desc.parseStmt (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, the grandfathered premise `Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D` restated as `Flock.Desc.parseStmt … = .ok D` so V5 reads templated statements, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.ZeroKnowledgeHidden": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -16381,6 +16406,18 @@
     "FlockSoundness.wit": "63c5ebda55f859c118e57170708ff50a8560217a34e1e68f2e4a80bafc169cb2"
    }
   },
+  "Definitions.Flock.Game.Tape": {
+   "digest": "46c113b841fac0fc6fb540384620d07df244b012177e1e2d002bba445e12a07f",
+   "definitions": {
+    "FlockSoundness.Game.Tape": "74d466dffd467c820fffadd50132fc6048186749f2d7394ccbe4c169a7450b2f",
+    "FlockSoundness.Game.Tape.fintype": "dd2d75b87e9b3f73dc4b764614b29b19f41185766b3346f12cdb00b17654d8e5",
+    "FlockSoundness.Game.Tape.land": "3cca504150c05abdbc106863e97dfdb89aa2202c011526673e9bf19e668551a4",
+    "FlockSoundness.Game.seqG": "2e3a8b9c6ff6c772f12202048264c94b62d6ec3871620de4852f712a3840378c",
+    "FlockSoundness.Game.seqStrat": "9837cf9495e44d333a678eda902295ac7cf2294bd1b4414fa34ffe9522f575ba",
+    "FlockSoundness.Game.seqTape": "0228893b11b8893a938d2ca8a77d7bbeb4f14e8835bedceb5ecb970bcf7b8814",
+    "FlockSoundness.Game.seqTape.fintype": "edabc0179fcacb904df0b99d58567aa3741a8c0e2f6cdacc3b12551e9e9918b8"
+   }
+  },
   "Definitions.Flock.Statement": {
    "digest": "67cc7f85b6dd2ab847ac1e0effb6b254b62b694c4537d76ff130434fd7cd56c8",
    "definitions": {
@@ -17769,6 +17806,16 @@
     "Flock.DeriveAll.rowWithin": "62d465b8a0cfdbb6f022ae3703e19d1835bea91bdfa6d025a199c89c4e6fe334",
     "Flock.DeriveAll.shiftRow": "36c581cbd24310cb8d8bc612ca1b667040c1548ca41b9f1355892942d3fc3b93",
     "Flock.DeriveAll.walk": "703fa590f1c7609a691e1447186277f3caae1aba660c8b00519d66c91b02130a"
+   }
+  },
+  "Flock.Desc": {
+   "digest": "33aee14395a35920105b497bfd6548cd86157fd726f74e720bde793fe6cc682a",
+   "definitions": {
+    "Flock.Desc.casesOn": "cad2839f4b4fe46a8124a9c254a1a9e2f1593e36b3437c902273ab4cff3ffec8",
+    "Flock.Desc.parseStmt": "9731e4072e1590d029d1b4d51311960c54921ed4e57d2e4f0606be77eb4cb504",
+    "Flock.Desc.rec": "f443ca064670c7792163bb8a8f301fae72affc1bdad7641f47bcde1acde38bba",
+    "Flock.Desc.tmpl": "10fecaada8a4ed07056e78b927ad55aa65af5e97af80f78f5b3ee235abc5c53c",
+    "Flock.Desc.unroll": "92e3c6d8c6f66134b1d55f4ca9aebe53ba181cba0b343e1af9788550e4fcd39e"
    }
   },
   "Flock.Draw": {
@@ -21697,8 +21744,11 @@
    }
   },
   "Proofs.Flock.Bridge.Canon": {
-   "digest": "5a96d7b45e3b7e141dd91bf9fc7d8c638b480495f2f715b7668de68687dd215b",
+   "digest": "660e25131d58448de663d3f2a83e080f88a909e03abba3007d89d13c81d7dcc1",
    "definitions": {
+    "Flock.Bridge.canonAt": "2f24a0e7cdcebfc8a1f177bf338e3cbd4ca3b49bc1aaa46ec85621e028537b72",
+    "Flock.Bridge.canonOpen": "7de1d430add1b6a818761e7e150b820bd65a582012b2473e569c0a99c78f0f95",
+    "Flock.Bridge.canonRow": "13f9bfb5338f6f08ebcccddc134c00c950b8ac558e8bf0b4bb9b2b08be23b550",
     "Flock.Guarantees.SampledKSLiveV2": "9a40a901aa1bab750beee0c7a49b6247467cc8e34510dae9e4e634e7979205ce"
    }
   },
@@ -21727,10 +21777,23 @@
     "Flock.Guarantees.SampledKSLiveV3": "508db7ff476cf4f57de551b3430e2e94e399f8fc3efa397799391c2c71aa57d2"
    }
   },
+  "Proofs.Flock.Bridge.RightRegZc": {
+   "digest": "43f2b01cc97bdbdcf8e665f0599f9caad15f4c60f984f618c4b515c32892227b",
+   "definitions": {
+    "FlockSoundness.Discharge.ZkLink.RightRegZc": "79c5624417d002617cd89e78dc1ca9987e489e4b0f4e19a773336d3f981753d1",
+    "FlockSoundness.Discharge.ZkLink.wrongRegZc": "f8e0d67b6fbd0e862780a5313cb825b00629f6b45da6e8011ebf79e7b58f753b"
+   }
+  },
   "Proofs.Flock.Bridge.Statement": {
    "digest": "0f38a9075722bec7bfc74654a8492db44142303f05e9a4c16ee15b1b546a2605",
    "definitions": {
     "Flock.Guarantees.SampledKSLive": "537ccb5f6d6a1f3cfa4e9589619cfd739e16f4e63964396ba2b79c3ade06ffb1"
+   }
+  },
+  "Proofs.Flock.Bridge.V5.Honest": {
+   "digest": "8feacca842be80d3948a384419a226e71740c8822412acfa01fc0db8f8711098",
+   "definitions": {
+    "Flock.Guarantees.SampledKSLiveV5Honest": "86fe43a5138c166dfc5339168ac55c9f00f7f2a9b20e7036d926c37d35c278c2"
    }
   },
   "Proofs.Flock.Bridge.V5.Statement": {
@@ -23364,6 +23427,84 @@
     "Claims.Flock.zkWidth": "ea0b53acb8a1826b8939f5a31214cb4ce79179b536500335738a7aec878b3f41"
    }
   },
+  "Proofs.Flock.EndToEnd.Joint.V5.Statement": {
+   "digest": "d32b2576aebbc0ed5c298c5c17114c36b0a3ba9871e69a4cf9cab6b28ff530d9",
+   "definitions": {
+    "Flock.Guarantees.AuditRecV5": "7bfffa4abcfe2f46f48de4503a7c716d5421f99567846516fcfaf08c87e1dbd3",
+    "Flock.Guarantees.AuditRecV5.accepted": "d4d0f2e7acc26284547fd0abe41debdc97c244097ca14a9cc2505174ec08d5f7",
+    "Flock.Guarantees.AuditRecV5.harm": "8f7ff34938778d75d7cc1bf869ac9bbdd031fb086dc4fbfbb82cd61b8c02c00a",
+    "Flock.Guarantees.AuditRecV5.idx": "9439e3cbcf27c3b8744f7fe92fd32b901af69f094afee4773abb5337c1b724bf",
+    "Flock.Guarantees.AuditRecV5.pa": "c9acd1b7ee4ad60ddfde6b3adeb7ca777b2bbaeb5486108aa73fb63ec8322aba",
+    "Flock.Guarantees.AuditRecV5.wrong": "e60d82efbc5b1cfe51dbb0e614f5b4d24608e5fa445175260b806e09ca657e95",
+    "Flock.Guarantees.JointAuditV5": "0a5ed4e97fe6ef962ed19f1b41c6a10590992e502ccb6c5fc1d6bd5d5bff16c6",
+    "Flock.Guarantees.JointAuditV5.Accepts": "17a0f78bfb052eb31201cf918a8c99aa44bc90a4bb558c9c4342582281a90a68",
+    "Flock.Guarantees.JointAuditV5.L": "0aa2cb220fa4bc0f3810c8226f05c6e11815a805efcfd9dcd470943ade45ff87",
+    "Flock.Guarantees.JointAuditV5.Lb": "b18e346e64350411c678b8b9eab62011f6d2ad4a22d848a897030b8654efbe4d",
+    "Flock.Guarantees.JointAuditV5.Reg": "7af5c2b4d4b12033ed6476f7b4f1501973d5cc1b85884a6d7675294b3e28aa76",
+    "Flock.Guarantees.JointAuditV5.before": "a073a0a178916a66c65505a45ed199b808b7be9d50af7471a5b97994c61d9e55",
+    "Flock.Guarantees.JointAuditV5.design": "59f8a56bbc6f4f91685a9989168bf0883d3806012caf7ef7c84cb43da31792eb",
+    "Flock.Guarantees.JointAuditV5.eps": "62ba5b6f46381a623a8b58e44509ac3a6b9508f0c33c49fb0cfd6bbc603d2439",
+    "Flock.Guarantees.JointAuditV5.fintypeΩ": "570da0b06365f003bf95ad4c72663ece90b921184fa0d238d120422849388d34",
+    "Flock.Guarantees.JointAuditV5.game": "1a726730f510f4f9b6ee622080431fbb6a561a11300eecddc4fd8535800c7e73",
+    "Flock.Guarantees.JointAuditV5.instFintypeBefore": "e1d4ea4a8ef52ee5d73b98dabfd134723973d7c0c5b1c338e9e9aeef3c56c911",
+    "Flock.Guarantees.JointAuditV5.law": "e95be4d1b352bfa29877f8b1417958f1e40eadcf589f92ff78805feccb26018c",
+    "Flock.Guarantees.JointAuditV5.memberLaw": "b052f3e661d88977fb5b0ee01ac77444b8ebfb18bf7d46895394b0b4cd009fa7",
+    "Flock.Guarantees.JointAuditV5.memberSim": "a27a87a049d1e35dd78c323aed51b23152fc8b33dcd365530b446c03f6172df4",
+    "Flock.Guarantees.JointAuditV5.memberStrat": "7a25ff8fb1cc349a631ac52cd49a34ee217342b2aa2c0361151c45d96b83e1cf",
+    "Flock.Guarantees.JointAuditV5.memberWrong": "35b74d2504bd86f0530f52d195f5720cbffe6b5ef86a611305c3c2ea8ff6f7d8",
+    "Flock.Guarantees.JointAuditV5.ms": "294f08d7c930825307673d7b6673b237ac6b63df36733d42e3325469df235216",
+    "Flock.Guarantees.JointAuditV5.nJ": "d9849d7ad68c2b0d3fb577e6fb5241f1060355768bd6cf1398f664594b212839",
+    "Flock.Guarantees.JointAuditV5.ns": "3f210377a58c62afa06b90265879f66ba30d18afa5a29358ecc52b75df501ee8",
+    "Flock.Guarantees.JointAuditV5.pa": "e463d5bf72a3a57c69a2b447f809723daeb609c2d5220ea88a713891e2445475",
+    "Flock.Guarantees.JointAuditV5.record": "4c7ae138ee351c9d9895718067b4d161218fabce9e26ae197241bc0dfc9de542",
+    "Flock.Guarantees.JointAuditV5.sessions": "3f878f316c6801419d56c06808fc131309912f360711b29f737b49180bb04f9d",
+    "Flock.Guarantees.JointAuditV5.src": "81d104b0982b4e22418c9398382c8787bc7f43c01db3ca5251e7390e90854ee1",
+    "Flock.Guarantees.JointAuditV5.wrongSet": "357d8f0aee24dd59b93b44bb087679ccb4a52c3f4003badfc674bad95a7b4e73",
+    "Flock.Guarantees.JointAuditV5.Ω": "18f131feebf3e4ce76f7e6b668bc0defa57970490de98aa18cb15bc03855e3c6",
+    "Flock.Guarantees.JointHorizonV5": "61f308baf155b17374f00894e1aaa52632f50b44eaa2af9cbfddb9106e7bd435",
+    "Flock.Guarantees.JointPeriodV5.Plays": "4fdd036a56ed8c46f3c3e60cd6ba6bc74d728507cfda52c11d5730512f087793",
+    "Flock.Guarantees.JointPeriodV5.Within": "cfe743d21c5922450b62dd2cf52e312fb5485284a8cbb7cab20b4eb8de29cc1c",
+    "Flock.Guarantees.JointPeriodV5.game": "e92513d898c302e93af221b8a8bed74ca69e0de44e52dfb8c96654e112af4520",
+    "Flock.Guarantees.JointPeriodV5.maxHarm": "c97ce4355e356855707c583a3a73c0778456767cc098f5fd61e7d71322b097fe",
+    "Flock.Guarantees.JointPeriodV5.run": "23e7d50cf8b564d564ae7971551e0f68ad7c97f093a23d1b998affb091abb874",
+    "Flock.Guarantees.JointSampledV5": "e99f346a7302b5006f2fd2df94795f0c2266c71ac17be001a0566b72cd17e070",
+    "Flock.Guarantees.JointShareV5": "ba6fb80443106fe0e35c4307b19a31bf7eb7f4343951d3540f35ec86c2409ff5",
+    "Flock.Guarantees.MemberV5": "ed7539d1ee73c3f9523c7cae05d5dee451b0d6ff7405a85c6f52093b15183a53",
+    "Flock.Guarantees.MemberV5.D": "e08a395034bb089f2db4100b3a9c1fb11b8c2f14cc6c0af420b925c34adeeaec",
+    "Flock.Guarantees.MemberV5.I": "1dc5cb402bbaaaa03d98a628eec70a8c0e3d2b5cfb59e1eb3a27796de8bc7e4d",
+    "Flock.Guarantees.MemberV5.M": "51b20f663e31d31c342ce703714634a8ad23bf0d2da02139f081b2fc24dde967",
+    "Flock.Guarantees.MemberV5.N": "8968baa0ad5c05269765e405a39a8895bba9da55f645dd452cb001a231ce3cc2",
+    "Flock.Guarantees.MemberV5.OneClass": "a5660f5ad364b5aab6c298dbba916144567ba7a109c45dbcd65d4a9531bbc614",
+    "Flock.Guarantees.MemberV5.P": "949cc3889cdbcaf04916c1ff30f3498c66e8feeaf70be0d1c92f3f903f99c872",
+    "Flock.Guarantees.MemberV5.Rw": "ce0c1f4b6c3f2bb8d164ef50f02eab987492466718aaf2c77770868dadf57514",
+    "Flock.Guarantees.MemberV5.S₀": "d090fd13677a14ca8fec03898b5889bc27cdd7d05adae1129d75d6e1fad2b4e7",
+    "Flock.Guarantees.MemberV5.canon": "079bc6559af00b0d0e197c53f334791ae5f69c6d2fdf16279788f9229718e63d",
+    "Flock.Guarantees.MemberV5.dg": "a86eeec804b7d7e1de46e30f34f1b355c4e82de537ebff685469a7b65d600af1",
+    "Flock.Guarantees.MemberV5.dj": "deb05513115c4b85952843c59a56932ccabc7c3f936b2f7c776b6d661111feac",
+    "Flock.Guarantees.MemberV5.d₀": "3fc24f48a91765e62adb423cc3bdc084495c2c47ac075f2608279168dc964550",
+    "Flock.Guarantees.MemberV5.emb": "94fbb464435306159898ede5bc7b3385e9b3f0ba5892b3c913b17a7032dc41db",
+    "Flock.Guarantees.MemberV5.epsKs": "3ceb884ff798d3c88308dd15447332c303f9fe963e7937b29100cbd552997d86",
+    "Flock.Guarantees.MemberV5.game": "96dcc07d5715b56452803e4fdb64d0b6a283e64ba5c660b69b913854b988d7d6",
+    "Flock.Guarantees.MemberV5.k": "159fcc9ef3dcc9f26deade87767fa7746918973f967e7f9daaf0eb1470de5277",
+    "Flock.Guarantees.MemberV5.kd": "55a76a769824551931173d47318478823fc67746c16beccd8347d2b9ccaeef6e",
+    "Flock.Guarantees.MemberV5.link": "7a2b8ea9f5d3698c6b9ce371a92f14584aa539e9fb3a474a568e1d7a5160f70f",
+    "Flock.Guarantees.MemberV5.live": "3318f98684d93b6cbd145f21efe45542fb09251b062a7341027c352bad6e2f74",
+    "Flock.Guarantees.MemberV5.n": "14ee541d09309ab8243c3e6fe6522e4b16b699093e7c4d98f630a2731248fead",
+    "Flock.Guarantees.MemberV5.own": "d1d20573aa79f8ba0bae528c1ee9c265bfbb0cf671fa604bdb1f02d86a11cb0f",
+    "Flock.Guarantees.MemberV5.part": "d438773fbaadcfd48164fa52bd66f254a904dc900c2e386dd4f91a8dd4484e38",
+    "Flock.Guarantees.MemberV5.pi": "f9f05523118ae481407f0bae0f04e6b6b849f07f968540555b2e4df727970413",
+    "Flock.Guarantees.MemberV5.pub": "48931b26c4426d14aca4fc0f474ae9a4b4cc6813a5de7e261731894e4d709a7e",
+    "Flock.Guarantees.MemberV5.qF": "9c35f3d4db0de72736d38a09a5f88d9812de8eed93fe9bc71bb2987563c18ae7",
+    "Flock.Guarantees.MemberV5.qS": "a1b9b1821ee9128155f1c1fdfc8cdb3894171465a6b75ce57e1b9e4e6cc00173",
+    "Flock.Guarantees.MemberV5.sim": "a4cbdfecd80549991c44877a0bdc89cbd369234fa14defba13e640a463c8339d",
+    "Flock.Guarantees.MemberV5.t'": "cd6f198d97aded12c590cff32fb826bec9d014e3832c2872a60694bcf9f5196a",
+    "Flock.Guarantees.MemberV5.vb": "7e2fb9fbdda20b70faa912e381af0749f584edb29f60cb09b7ac35de6e8501aa",
+    "Flock.Guarantees.MemberV5.wr": "36cb7e7721e36a5688bc549dadb5927e00a67fb324105e890fa3947bce6762f3",
+    "Flock.Guarantees.MemberV5.wrongSet": "4890b7c65d0ae29b51dd46c1af44081d28411053c018cc64b53f5ff596438f82",
+    "Flock.Guarantees.MemberV5.y₀": "39068d5ff260cd8ea2986f608679a6acc1985fbd2b5e6512e5a3e9195467da7d",
+    "Flock.Guarantees.MemberV5.ρ": "d7e97ec339bd5e9be346fbb990150469d28ec5f9cee6e0737aef0b8295715711"
+   }
+  },
   "Proofs.Flock.Level3.ArithFacts": {
    "digest": "c5d39259a865879648ed50fb4d97145a017c65a2101788cf22f905a171e38598",
    "definitions": {
@@ -23705,6 +23846,12 @@
     "FlockSoundness.Accounting.m1Schedule": "0a67ffb48365b18d5f3c8d1992e7c537f5559c70abe124bef97904435bc20df1"
    }
   },
+  "Proofs.Flock.Soundness.Assumptions.ZkP": {
+   "digest": "6569b20c0ec9eb966a1ad6de0fd37e81d0382249f09c456236f480254430d65f",
+   "definitions": {
+    "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw": "e0c4225c7072bce463c5f927386486c40ea7e1094ca5797cb47533bf7f6a7cc9"
+   }
+  },
   "Proofs.Flock.Soundness.CompiledSound": {
    "digest": "48b7eb9234250816934c89fac9b385a394607a7829b9378846a5ad4b532d1715",
    "definitions": {
@@ -23844,6 +23991,30 @@
     "FlockSoundness.Discharge.FailClosed.SoundZHJRU": "26181611085ff804ea9ad9fa4fe4953775712c4f7e687245af3d9a4aa5f0dbef"
    }
   },
+  "Proofs.Flock.Soundness.Discharge.HiddenExec.KeyHP": {
+   "digest": "41a1d6c4797ca7f70643dca63597c492deaf88a27da2b6d6cbcc1280697ece6d",
+   "definitions": {
+    "FlockSoundness.Discharge.HiddenExec.keyLayoutHP": "d6ffeaa7a9ce46a32eced87cf575b6fae7549f9fee6502283f335e09e9fc63ef",
+    "FlockSoundness.Discharge.HiddenExec.keyPlaceHP": "5bcf3abdba181cd77c3ecd01beb87a838c107ba238a2b57e185b0c240c8203da",
+    "FlockSoundness.Discharge.HiddenExec.keyReadersHP": "70a2534869f9b88c6fe0f93c8f2bebd5d9d10a0e19af9dd51a46276553e06438",
+    "FlockSoundness.Discharge.HiddenExec.keyRowsHP": "30998be0cfca8c27b6c50e4f8aa0559c3fb5cddc2a60c42db1c8b5d883a2a133"
+   }
+  },
+  "Proofs.Flock.Soundness.Discharge.HiddenExec.PlacedP": {
+   "digest": "bcbec9bfb90ae0e7fb2b91598cdec1156634c3d173c394168d67b5a2964f692c",
+   "definitions": {
+    "FlockSoundness.Discharge.HiddenExec.AcceptedHP": "47c76c8cb342f7c4f6a6815f67823c317cc832c1db689cfbff1810e1b1cc602c",
+    "FlockSoundness.Discharge.HiddenExec.AcceptedHP.pi": "083c037f4af6c3118335dc896e8f07370faa089cc64c35afd70acb260cd70c81",
+    "FlockSoundness.Discharge.HiddenExec.AcceptedHP.regs": "963eef5936cc23dab956fe02a77fff3d2eff7d7dea0ee85d14420db4ba56e9eb",
+    "FlockSoundness.Discharge.HiddenExec.SitesHP.progPlaces_keyProgP": "e6111ff484a47087fac6c5957c929c4bd6ef07a33053ebab114452c3cbb5f961"
+   }
+  },
+  "Proofs.Flock.Soundness.Discharge.HiddenExec.SitesP": {
+   "digest": "792593d6c01fc3d5b79756d208307fc5f95902f77cb430c567bfe12a07e2e5cf",
+   "definitions": {
+    "FlockSoundness.Discharge.HiddenExec.TableHP.acc": "e010e735b3265d2391e56d3a9c703f0fd2beb64d45e9b2f362dbef496989b4a2"
+   }
+  },
   "Proofs.Flock.Soundness.Discharge.ZkExec.Event": {
    "digest": "b8f744a5edf4855e3dcd5fdd908d23bb2a31478cc11b969ed2dd2e4d46e8bfa7",
    "definitions": {
@@ -23852,6 +24023,18 @@
     "FlockSoundness.Discharge.ZkExec.zkCoins": "687f70fefcb9986cd9438ca4952f57d2eff5e7043d05ef2efa5aa485acd4429a",
     "FlockSoundness.Discharge.ZkExec.zkInputs": "958394f2402e7f83dd0dba7412f86d297aa3c708bdd88b30838dabf1dbcc69f8",
     "FlockSoundness.Discharge.ZkExec.zkTags": "08ac45510101ab1fb96f6c37f2011c6c9d46c9506296e7d7dcc455fba1e82914"
+   }
+  },
+  "Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJP": {
+   "digest": "352e5545e8f82fde1248c87d4c11003fa241abd5fe57261e139e195e7b3d2fdf",
+   "definitions": {
+    "FlockSoundness.Discharge.ZkHidden.layShHJP": "499400c8c0848bb9e78dd7a5504959bf8928dd139fb67c48866d313fc9497799",
+    "FlockSoundness.Discharge.ZkHidden.layZHJP": "8d7182d3da3203b2d3a0cbf9645160059fa3753ead5861ac9d3dbc757e1b1179",
+    "FlockSoundness.Discharge.ZkHidden.placeZHJP": "7d4c68527b8c89aa3299c8ec69cbd7b33e3c2b276d8a0693e3b3b9ba82f86380",
+    "FlockSoundness.Discharge.ZkHidden.recastAccHP": "d7a6c8cbb73eeb89492614fc3eb058302101f7a1c362d70356739ffba537a606",
+    "FlockSoundness.Discharge.ZkHidden.rsShHJP": "42459e97151e4a0156aed4080f77d47a62bcef2090b0bafcd02270117320975b",
+    "FlockSoundness.Discharge.ZkHidden.rsZHJP": "fb3288f89f4d7740f627299289ddf87247653fa2eb59fbced01e318706eb4a12",
+    "FlockSoundness.Discharge.ZkHidden.sitesShHJP": "91ee789b2dc2a30e11c6af773e0274143ccab0e5de51b697b8b63238e29eced3"
    }
   },
   "Proofs.Flock.Soundness.Discharge.ZkView.Wire": {
