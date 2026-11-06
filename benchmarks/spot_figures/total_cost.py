@@ -384,17 +384,18 @@ def _panel(fig, ax, out: dict, scope: str, panel: str, wrap: int) -> None:
     ax.set_ylabel(YLABELS[panel], labelpad=8)
     for side in ("top", "right"):
         ax.spines[side].set_visible(False)
-    ax.text(0, -CAPTION_DROP, textwrap.fill(out["scopes"][scope]["captions"][panel], wrap), transform=ax.transAxes,
-            ha="left", va="top", fontsize=14, color="#444444")
     refs = _lines(p["references"], scope, scale)
     if panel == "exfiltration":
         refs = sorted(refs + [(out["scopes"][scope]["served_bits"] * scale, "Everything the scope serves", "dotted")])
-    head = [y * scale for s in series if s["config"] != "every_block" for y in s["y"]] or \
-        [y * scale for s in series for y in s["y"]]
-    far = [r for r in refs if r[0] > max(head) * OFF_SCALE]
+    ys = [y * scale for s in series for y in s["y"]]
+    far = [r for r in refs if r[0] > max(ys) * OFF_SCALE]
     refs = [r for r in refs if r not in far]
-    ys = [y * scale for s in series for y in s["y"] if y * scale <= max(head + [r[0] for r in refs])]
-    lo, hi = 10.0 ** floor(log10(min(ys + [r[0] for r in refs]))), 10.0 ** (floor(log10(max(head + [r[0] for r in refs]))) + 1)
+    lo, hi = 10.0 ** floor(log10(min(ys + [r[0] for r in refs]))), 10.0 ** (floor(log10(max(ys + [r[0] for r in refs]))) + 1)
+    caption = out["scopes"][scope]["captions"][panel]
+    if far:
+        caption += " Above the axis: " + "; ".join(f"{label} ({fmt(a)})" for a, label, _ in far) + "."
+    ax.text(0, -CAPTION_DROP, textwrap.fill(caption, wrap), transform=ax.transAxes, ha="left", va="top", fontsize=14,
+            color="#444444")
     ax.set_yscale("log")
     ax.set_ylim(lo, hi)
     ax.yaxis.set_major_locator(FixedLocator(_decades(lo, hi, 3 if hi / lo > 1e12 else 2)))
@@ -406,11 +407,6 @@ def _panel(fig, ax, out: dict, scope: str, panel: str, wrap: int) -> None:
         ax.axhline(amount, color="#909090", ls=styles[style], lw=1.3, zorder=1)
         ax.text(hi_x / 1.3, amount * 1.08, label, ha="right", va="bottom", fontsize=14, color="#555555", zorder=5,
                 bbox={"facecolor": "white", "alpha": .75, "edgecolor": "none", "pad": .5})
-    above = [f"{out['configurations'][s['config']]['label']}, {fmt(min(s['y']) * scale)} at its most β"
-             for s in series if min(s["y"]) * scale > hi] + [f"{label} ({fmt(a)})" for a, label, _ in far]
-    if above:
-        ax.text(lo_x * 1.15, hi, "Above the axis: " + "; ".join(above), ha="left", va="top", fontsize=14,
-                color="#555555")
     for s in series:
         color, ls, lw = STYLE[s["config"]]
         t = tax[s["config"]]
