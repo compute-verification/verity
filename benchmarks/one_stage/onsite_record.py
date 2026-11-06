@@ -676,7 +676,10 @@ NOT_CHECKED = "no run's inputs were checked"
 #: counts that names it. A Property's statement may take a deployment's premise inline, where the lock records no
 #: assumption (`ScanScopeAcc` takes `StmtFlattens` and `ScopeMatches` of the deployment it quantifies), so a discharge
 #: counts only at the statement pinned here
-DISCHARGES: dict[str, dict[str, Any]] = {}
+DISCHARGES: dict[str, dict[str, Any]] = {
+    "Verity.circuit_files_by_path_agree": {
+        "statement": "e7d654ec8b6cf1e758b80e19f8cfa3dedf52c33409910a1680b792635c229dfc", "takes": {}},
+}
 #: the named assumptions that may stand under the figure of record, each on an auditor-trusted device or the auditor's
 #: placement of one, named beside the bound
 STANDING = {"Verity.Assumptions.TrustedHost": "trusted-host: the network certifier and its host are the auditor's, "

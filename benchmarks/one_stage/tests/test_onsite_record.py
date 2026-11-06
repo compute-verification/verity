@@ -907,6 +907,20 @@ def test_at_the_trees_lock_certifier_key_closes_where_the_runs_check_of_the_audi
         assert OR.CERTIFIER_KEY in got["open"] and got["premises"][OR.CERTIFIER_KEY]["unchecked"] == why
 
 
+def test_at_the_trees_lock_composite_congruence_closes_where_the_composite_read_files_by_path(monkeypatch):
+    """The tree's Properties lock holds CircuitFilesByPathAgree at the statement `DISCHARGES` pins, with no named
+    assumption, and it takes nothing of the deployment (any executable's accept on any blobs, a collision its own
+    disjunct): where the composite of record read the period's circuit files by path, composite-congruence closes;
+    where it read none, the premise doesn't apply."""
+    monkeypatch.undo()
+    assert OR.DISCHARGES[AGREE]["takes"] == {}
+    got = OR.premises(OR.LOCKS, by_path=True)
+    assert got["unread"] == [] and OR.CONGRUENCE not in got["open"]
+    p = got["premises"][OR.CONGRUENCE]
+    assert (p["missing"], p["unpinned"], p["assumes"], p["takes"]) == ([], {}, [], [])
+    assert OR.CONGRUENCE not in OR.premises(OR.LOCKS)["premises"]
+
+
 def test_a_scans_tied_audits_are_the_ones_it_charges_and_else_every_audit_is(tmp_path):
     """Two audits, each charged the run's cap: with the public naming none, each phase charges both; with
     scans[j].tied, each phase only those it names."""
