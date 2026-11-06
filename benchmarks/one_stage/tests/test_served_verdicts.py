@@ -4118,6 +4118,62 @@ def test_handoff_host_writes_a_deferrals_hand_off_again_at_its_settings_naming_w
     assert S.witness(listed) == [] and json.loads((dc / "inference-only.json").read_text()) == verdict
 
 
+#: a compose gate that answers that it composed the record, accepted, at its pin on remote, keeping in $GATE_SEEN its
+#: argv and each file of the tar it was sent
+STUB_GATE = '''import json, os, sys, tarfile
+with tarfile.open(fileobj=sys.stdin.buffer, mode="r|") as t:
+    sent = {m.name: t.extractfile(m).read().decode(errors="replace") for m in t if m.isreg()}
+open(os.environ["GATE_SEEN"], "w").write(json.dumps({"argv": sys.argv[1:], "sent": sent}))
+print(json.dumps({"pinned": "c0" * 20, "pin": {"on": "remote"},
+                  "compose": {"rc": 0, "files": {"verdicts.txt": 'RECORD {"composed": "accept"}\\n'}}}))
+'''
+
+
+def test_gate_compose_sends_a_deferrals_hand_off_at_its_settings_naming_where_v3cs_audit_ran(tmp_path):
+    """`served_verdicts.sh gate-compose PIECES VERDICT HOST` on a deferral's serve dir (its follow-on's copy, V3c's audit
+    there) writes the hand-off at the settings the deferral recorded, not the environment's, HOST where V3c's audit ran,
+    and sends it to the compose gate. Without HOST where the serve dir holds V3c's audit, or with a setting other than
+    the deferral's, it is refused and sends nothing."""
+    verdict = {"format": "verity-bench/inference-only-verdict/v3", "verdict": "accept"}
+    (tmp_path / "served-out" / "record").mkdir(parents=True)
+    (tmp_path / "served-out" / "record" / "inference-only.json").write_text(json.dumps(verdict))
+    assert _deferred(tmp_path).returncode == 0
+    d, dd, dc = tmp_path / "serve", tmp_path / "serve" / "private" / "deferred", tmp_path / "serve" / "private" / "compose"
+    (d / f"v3c-w7-{VTAG}" / "audit" / "window").mkdir(parents=True)
+    (d / f"v3c-w7-{VTAG}" / "audit" / "window" / "case.json").write_text(json.dumps({"evidence": "cafe"}))
+    gate, seen = tmp_path / "stub-gate.py", tmp_path / "gate-seen.json"
+    gate.write_text(STUB_GATE)
+
+    def gate_compose(out: str, *host: str, **extra: str) -> tuple[int, list[str]]:
+        env = {"PATH": f"{_hosts(tmp_path)}:{os.defpath}", "HOME": str(tmp_path), "D": str(d), "OUT": str(tmp_path / out),
+               "SERVE_ROOT": str(tmp_path / "root"), "HOST": "cpu-6", "RESEARCH_SOURCE_SHA": SHA,
+               "GIT_CEILING_DIRECTORIES": str(tmp_path), "COMPOSE_GATE": f"{sys.executable} {gate}",
+               "GATE_SEEN": str(seen), **extra}
+        rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "gate-compose", str(dd / "pieces"),
+                             str(dd / "inference-only.json"), *host], cwd=tmp_path / "served-tree", env=env, check=False,
+                            capture_output=True).returncode
+        said = tmp_path / out / "verdicts.txt"
+        return rc, said.read_text().splitlines() if said.exists() else []
+
+    assert gate_compose("no-host") == (3, ["GATE-COMPOSE refused: the serve dir holds V3c's audit, so the hand-off names "
+                                           "the host it ran on: served_verdicts.sh gate-compose PIECES VERDICT HOST"])
+    assert gate_compose("clash", "cpu-6", K="8") == (3, [
+        "GATE-COMPOSE refused: the hand-off is written at the deferral's settings (the serve dir's "
+        "private/deferred/deferred.env), and the environment sets another K: unset it"])
+    assert not seen.exists() and not dc.exists()
+    assert gate_compose("out", "cpu-6") == (0, [
+        HANDOFF_LINE.replace("{d}", str(d)), f"GATE-COMPOSE at the compose gate's tree {'c0' * 6} (on remote): exit 0, "
+        f"the record accept, 1 files of its $OUT in {tmp_path / 'out' / 'compose'}"])
+    assert _env_of(dc / "compose.env", COMPOSES) == {
+        "K": "7", "PRODUCT": "remote", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
+        "SERVED_DIR": str(d), "COMPOSE_NODE": "vy-auditor-2", "COMPOSE_TREE": SHA, "AUDITED_ON": "cpu-6",
+        "SAMPLED_AUDIT": STEP3, "STEPS": "0,3"}
+    sent, listed = json.loads(seen.read_text()), (dc / "inputs.txt").read_text().splitlines()
+    assert sent["argv"] == ["compose"] and sorted(sent["sent"]) == sorted(listed)
+    assert sent["sent"]["private/compose/compose.env"] == (dc / "compose.env").read_text()
+    assert f"v3c-w7-{VTAG}/audit/window/case.json" in listed and S.witness(listed) == []
+
+
 #: the compose gate as `vy-compose-gate` serves it over ssh, its words its argv: `host.gate` on a compose host under
 #: $GATE_ROOT with lane vllm's key, its compose `host.compose_handoff` in-process with $GATE_ENV added (no runuser); the
 #: hand-off in transit with $TAMPER's member rewritten or a $CARRY member added

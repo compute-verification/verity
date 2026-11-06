@@ -166,8 +166,9 @@
 # the hand-off's only once `served_verdicts.py witness` passes its list again. `HOST:DIR` (DIR may be empty) sends them
 # under DIR/<the serve dir's name>/ in the directory HOST's rsync writes to, a write-only rsync's (`rrsync -wo`, its key
 # in RSYNC_RSH), which makes no directory the path needs; HOST's node then moves that directory to the serve dir's path.
-# `served_verdicts.sh gate-compose PIECES [VERDICT]`, with D and OUT, on the node that holds the serve dir, writes the
-# hand-off from PIECES (and the inference-only VERDICT) and sends it to the compose gate on COMPOSE_NODE
+# `served_verdicts.sh gate-compose PIECES [VERDICT [HOST]]`, with D and OUT, on the node that holds the serve dir, writes
+# the hand-off from PIECES and the inference-only VERDICT (on a deferral's serve dir, at its settings, HOST as
+# `handoff`'s) and sends it to the compose gate on COMPOSE_NODE
 # (`benchmarks/live_verifier/host.py`'s `compose`: COMPOSE_GATE, default lane vllm's gate key as research@ on
 # vy-auditor-2's public address, where the gate admits senders (set it for any other COMPOSE_NODE), the one word `compose`), a tar of the files its inputs.txt lists on the gate's stdin; the gate composes there at its
 # pinned tree (COMPOSE_BUILT: built at its pin; SAMPLED_EXE its prebuilt sampled proofs Lean; COMPOSE_TREE_ON the branch
@@ -366,8 +367,8 @@ follow_env() {  # $1's settings, those named in $2, read over the environment's,
   for v in $2; do [ -z "${given[$v]+x}" ] || [ "${given[$v]}" = "${!v-}" ] || CLASH+=" $v"; done
   VENV=${VENV:-$TREE/.venv}
 }
-if { [ "${1:-}" = v3c ] || [ "${1:-}" = handoff ]; } && [ -f "$DEFER_DIR/deferred.env" ]; then  # the follow-on of a
-  # deferral, or its compose hand-off written again, at the settings it recorded
+if [[ ${1:-} =~ ^(v3c|handoff|gate-compose)$ ]] && [ -f "$DEFER_DIR/deferred.env" ]; then  # the follow-on of a deferral,
+  # or its compose hand-off written again (and sent to the compose gate), at the settings it recorded
   FOLLOW=1
   follow_env "$DEFER_DIR/deferred.env" "$FOLLOWS"
   COMPOSE_OFF_NODE=${COMPOSE_OFF_NODE-0}  # a deferral that names no COMPOSE_OFF_NODE predates it: it composes as it did
@@ -1340,8 +1341,9 @@ copy() {  # `served_verdicts.sh copy deferred|compose HOST[:DIR]`: each file the
       "$where: $([ "$rc" = 0 ] && echo PASS || echo "FAIL (exit $rc, the serve dir's private/copy-$kind.log)")"
   return "$rc"
 }
-gate_compose() {  # `served_verdicts.sh gate-compose PIECES [VERDICT]`: the hand-off from PIECES (and the inference-only
-  # VERDICT), sent to the compose gate as a tar of the files its inputs.txt lists and nothing else; its answer in $OUT/compose
+gate_compose() {  # `served_verdicts.sh gate-compose PIECES [VERDICT [HOST]]`: the hand-off from PIECES (and the
+  # inference-only VERDICT), sent to the compose gate as a tar of the files its inputs.txt lists and nothing else; its
+  # answer in $OUT/compose
   local rc why answer=$OUT/compose/answer.json
   handoff "$1" "${2:-}" || return 1
   why=$("$SAY_PY" "$SV" witness < "$COMPOSE_DIR/inputs.txt") \
@@ -1354,6 +1356,12 @@ gate_compose() {  # `served_verdicts.sh gate-compose PIECES [VERDICT]`: the hand
   "$SAY_PY" "$SV" composed "$answer" "$OUT/compose" --gate-exit "$rc" --err "$D/private/gate-compose.err" \
     | publish_lines
   return "${PIPESTATUS[0]}"
+}
+follow_handoff() {  # whether $1 (handoff, gate-compose) may write a deferral's hand-off again: at its settings alone,
+  # naming the host V3c's audit ran on (V3C_AUDITED) where the serve dir holds that audit, as $2, its usage, says
+  [ -z "$CLASH" ] || { say "${1^^} refused: the hand-off is written at the deferral's settings (the serve dir's private/deferred/deferred.env), and the environment sets another$CLASH: unset it"; return 3; }
+  [ -n "$V3C_AUDITED" ] || [ ! -d "$D/v3c-w$K-$vtag/audit" ] \
+    || { say "${1^^} refused: the serve dir holds V3c's audit, so the hand-off names the host it ran on: $2"; return 3; }
 }
 
 if [ "${1:-}" = serve ]; then serve; exit $?; fi
@@ -1372,9 +1380,7 @@ if [ "${1:-}" = handoff ]; then  # `served_verdicts.sh handoff [HOST]`: the comp
   # audit ran (a deferral's follow-on), which a serve dir holding that audit must name
   V3C_AUDITED=${2:-${V3C_AUDITED:-}}
   if [ -n "$FOLLOW" ]; then
-    [ -z "$CLASH" ] || { say "HANDOFF refused: the hand-off is written at the deferral's settings (the serve dir's private/deferred/deferred.env), and the environment sets another$CLASH: unset it"; exit 3; }
-    [ -n "$V3C_AUDITED" ] || [ ! -d "$D/v3c-w$K-$vtag/audit" ] \
-      || { say "HANDOFF refused: the serve dir holds V3c's audit, so the hand-off names the host it ran on: served_verdicts.sh handoff HOST"; exit 3; }
+    follow_handoff handoff "served_verdicts.sh handoff HOST" || exit 3
     handoff "$DEFER_DIR/pieces" "$DEFER_DIR/inference-only.json"
   else
     handoff "$OUT/pieces" "$OUT/record/inference-only.json"
@@ -1382,7 +1388,12 @@ if [ "${1:-}" = handoff ]; then  # `served_verdicts.sh handoff [HOST]`: the comp
   exit $?
 fi
 if [ "${1:-}" = copy ]; then copy "${2:?served_verdicts.sh copy deferred|compose HOST[:DIR]}" "${3:?served_verdicts.sh copy deferred|compose HOST[:DIR]}"; exit $?; fi
-if [ "${1:-}" = gate-compose ]; then gate_compose "${2:?served_verdicts.sh gate-compose PIECES [VERDICT]}" "${3:-}"; exit $?; fi
+if [ "${1:-}" = gate-compose ]; then  # `served_verdicts.sh gate-compose PIECES [VERDICT [HOST]]`: on a deferral's
+  # serve dir at its settings, HOST where V3c's audit ran, as `handoff`'s
+  V3C_AUDITED=${4:-${V3C_AUDITED:-}}
+  [ -z "$FOLLOW" ] || follow_handoff gate-compose "served_verdicts.sh gate-compose PIECES VERDICT HOST" || exit 3
+  gate_compose "${2:?served_verdicts.sh gate-compose PIECES [VERDICT [HOST]]}" "${3:-}"; exit $?
+fi
 
 # $OUT leaves the node: once the run is done, however it ends, each of its files that names a window or counts its own is
 # held in full in the serve dir's private/out, its public form in its place (`served_verdicts.py publish`)
