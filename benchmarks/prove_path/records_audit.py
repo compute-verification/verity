@@ -50,8 +50,9 @@ the window's run root (`committed_activations`), and reports their roots. Those 
 the free inputs. Those it reads as ties (a wired loop's activations: an output port writes every row an input port
 takes, `tied_values`) are pinned from the registration beside ``--registered``'s (`window_pins`), so Lean's registered
 reads tie each reader's row to its writer's. One it reads only through input ports is opened against its committed root
-too, but the prover chose its rows: its reads count free, and the count names it (``leak.untied``). PoUW's H1 tiles
-have theirs pinned through ``--registered``, from the window's entries.
+too, but the prover chose its rows: its reads count free, and the count names it (``leak.untied``). The summary states
+each such pin as the registered reads opened it (``registered.own``: its entry, the value, root and domain each read
+port takes). PoUW's H1 tiles have theirs pinned through ``--registered``, from the window's entries.
 
 A circuit whose program takes values ahead of its templates' parameters (`interface.Registered.values`: a served window's
 H1 tables, or each Pearl+ call's A rows and y, which its proof blocks make where the model makes them) has them registered
@@ -893,7 +894,8 @@ def audit(a: argparse.Namespace) -> int:
     row["leak"] = (declared_count(doc, bits, resolve, counted, roots, untied)
                    if {*IF.DECLARED, IF.WINDOW_INGRESS} & set(doc) else leak_count(mine.members, doc.get("external") or (), bits))
     if reads:
-        row["registered"] = {"pins": counted, "roots": roots, "members": len(reads)}
+        row["registered"] = {"pins": counted, "roots": roots, "members": len(reads),
+                             "own": {v: pins[v] for v in sorted(ties | untied)}}
     if tied:
         row["tie"] = tie_row(tied)
     acts = committed_activations(w)

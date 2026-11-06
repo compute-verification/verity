@@ -9,8 +9,8 @@
 * an audit that left nothing behind is an error, not a verdict, and so is one that opened the advice (``--opening``, a
   development check), accepted or not;
 * an audit record decided at δ = 0.01 (a float in the record) is the exact ratio 1/100 in the profile;
-* the public copy of an audit (`public_copy`, what a verifier on another machine receives) is what `answer` reads of it
-  alone, of the public kinds (`kind_scan.V3C_DOCS`), and answers as the audit does.
+* the public copy of an audit (`public_copy`, what a verifier on another machine receives) is what `answer` and the
+  onsite record read of it alone, of the public kinds (`kind_scan.V3C_DOCS`), and answers as the audit does.
 """
 from __future__ import annotations
 
@@ -61,6 +61,12 @@ UNCOMPLETED = {"wiring": {"ok": True, "codes": [], "detail": {}},
                                        "detail": {MEMBER: "port o0 has no committed tree"}}}
 #: the member's Lean verdict of record's reads beside its completed file's (`tables.reported_reads`)
 READS = {"ok": True, "chunks": {MEMBER: {"ok": True, "reads": {"o0": "ab" * 64}, "reported": {"o0": "ab" * 64}}}}
+#: the audit's registered reads (`records_audit.audit`): the pins' roots, the window's and the members with a file,
+#: beside the entry they opened the window's own scan state at (``own``)
+STATE = "verity/certifier/scan-state/v1"
+OWN = {STATE: {"value": STATE, "root": "ab" * 64, "domain": "cd" * 64, "leaves": 64, "words": 8}}
+REGISTERED = {"pins": {STATE: "ab" * 64, "weights/w@8": "ef" * 64}, "roots": {STATE: "ab" * 64}, "members": 1,
+              "own": OWN}
 AFTER_DRAW = {"checks_before_draw": {"registration": True}, "checks": {"registration": {"ok": True}, **UNCOMPLETED}}
 
 
@@ -194,7 +200,8 @@ def _kind_scan():
     ({"checks_before_draw": {"registration": True},
       "audit": {"why": {f"lean-verify/m{k}": "session files: no such file" for k in range(5)}}}, "unproved"),
     (AFTER_DRAW, None),
-    ({"checks_before_draw": {"registration": True}, "fixed_before_draw": {"ok": True}}, "completed"),
+    ({"checks_before_draw": {"registration": True}, "fixed_before_draw": {"ok": True}, "registered": REGISTERED},
+     "completed"),
 ])
 def test_the_public_copy_is_what_answer_reads_and_answers_as_the_audit_does(tmp_path, summary, rec):
     """`public_copy` of an audit that also wrote what `answer` doesn't read (the window's number, its requests and
@@ -203,7 +210,9 @@ def test_the_public_copy_is_what_answer_reads_and_answers_as_the_audit_does(tmp_
     units not proved), and every field of it is one of the public kinds as `kind_scan.py --received` declares V3c's
     audit (`V3C_DOCS`). Of the checks after the draw and the registered reads it keeps what the onsite record credits
     members by: each check's outcome with the drawn members completed, by name, and each member's reads' outcome, not
-    the ports, roots and values they compared."""
+    the ports, roots and values they compared. Of the summary's registered reads it keeps the entries they opened the
+    window's own values at (``registered.own``), which the onsite record holds the scan's state to, not the other
+    pins' roots or the members' count."""
     if rec == "unproved":
         rec = {**record(False, proved=False), "draw": {**DRAW, "strata": [{"template": "T", "units": [[0, 8]]}]}}
         rec["checks"]["proved"]["detail"] = {"units": {"drawn": [5, 700], "statement": [700]}}
@@ -218,6 +227,7 @@ def test_the_public_copy_is_what_answer_reads_and_answers_as_the_audit_does(tmp_
         assert '"window"' not in text and '"requests"' not in text and '"population": 37' not in text, (f, text)
     assert (tmp_path / "copy" / "window").exists() == (rec is not None)
     copied = json.loads((tmp_path / "copy" / "summary.json").read_text())
+    assert copied.get("registered") == ({"own": OWN} if "registered" in summary else None)
     if "checks" in summary:
         assert copied["checks"]["registered_complete"] == {"ok": False, "codes": [MEMBER], "members": []}
     if isinstance(rec, dict) and "checks_after_draw" in rec:

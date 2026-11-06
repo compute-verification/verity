@@ -11,8 +11,9 @@ that doesn't accept, with its failed checks and the first of Lean's refusals by 
 open its root names its port). An audit that ended with no summary is an error (RuntimeError), not a verdict, and so is
 one that opened the advice (`opened`), whatever its verdict.
 
-`public_copy` writes what `answer` reads of an audit and what the onsite record credits its members by, and nothing
-else (`SUMMARY`, `RECORD`): the copy a verifier on another machine reads, from which `answer` makes the same answer.
+`public_copy` writes what `answer` reads of an audit, what the onsite record credits its members by and the entries its
+registered reads opened the window's own values at, and nothing else (`SUMMARY`, `RECORD`): the copy a verifier on
+another machine reads, from which `answer` makes the same answer.
 
     python benchmarks/one_stage/served_integrity.py public-copy AUDIT DST
 """
@@ -30,9 +31,10 @@ from verity.core.protocols.sampled_proofs.one_stage import audit as A, registrat
 PROTOCOL = R.PROTOCOL
 #: what `answer` reads of the audit's ``summary.json``, by key (its value whole, or of those keys alone): whether it
 #: opened the advice, its refusal, its checks before and after the draw (each one's outcome, ``checks`` where one
-#: after the draw refused), and the audit's verdict, outcome and Lean's refusals
+#: after the draw refused), and the audit's verdict, outcome and Lean's refusals; and what the onsite record holds the
+#: scan's state to: the entries its registered reads opened the window's own values at (``registered.own``)
 SUMMARY = {"compile": None, "refused": None, "checks_before_draw": None, "fixed_before_draw": ("ok", "codes"),
-           "checks": None, "audit": ("accepted", "outcome", "why")}
+           "checks": None, "audit": ("accepted", "outcome", "why"), "registered": ("own",)}
 #: what `answer` reads of the audit record ``window/audit.json``: its verdict, each check's outcome and the proved units
 #: its statement covers, the draw, the registration, the bound on wrong units and the units proved; and what the onsite
 #: record credits members by: each check after the draw's outcome, with the drawn members whose ``--registered`` files

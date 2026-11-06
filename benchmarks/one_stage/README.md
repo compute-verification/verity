@@ -235,7 +235,7 @@ negatives.
   row's answer beside it, and credits no member. The inference-only verdict says where its case's α and Γ came from, never
   a registered policy: off the run's own division, so the verdict confirms the division against itself, where the
   case's private `policy.json` says so (its `read`, the one field the record reads), else the run's `ALPHA` and `GAMMA`.
-  It checks two obligations on the auditor's configuration on each run (``checked``), reading only the auditor's inputs: `auditor-record`, that the period's key, LMS parameters and
+  It checks three obligations on each run (``checked``), reading only the auditor's inputs and outputs: `auditor-record`, that the period's key, LMS parameters and
   session, in parameters whose SHA-512 is the one the composite of record states for the network certifier's case, are
   the auditor's record of its network certifier (`CERTIFIER_KEY`, `certifier-key/v1`) and that the
   auditor's registration of the deployment (`SITE_REGISTRATION`: the registration log's params and the log, which
@@ -248,11 +248,16 @@ negatives.
   by SHA-512 the one its params θ name (`proofs.circuit`, `proofs.public`), θ held to the params each composite that
   reads the case states, the files hashed and never read off the evidence, and the public file the one a5 pinned at
   staging, before the draw (`--public-pin`), whose bodies' leaf layer is the one the registration the coins committed
-  to holds. `certifier-key` closes only where the
+  to holds; and `scan-state-pinned`, that where an audit's window commits the scan's state in its activations (the
+  entry `NetworkCheck.Period` holds to the scan's), V3c's audit opened its registered reads of it at that entry's
+  value, root and domain (its published summary's `registered.own`), accepted, and reported each sampled member's
+  registered reads: one-stage's registration checks read nothing of the window, so the audit's driver pins it there,
+  and this checks that it did. `certifier-key` closes only where the
   lock holds PeriodLeakRegistered at its pinned statement taking hA, hr and hkey as `auditor-record` and that check
   holds; while it is open, an accepted network verdict is not established, its Lean answer's accept beside it, and its
   bound conditional on `certifier-key` by name. Where `auditor-listing` doesn't hold, the verdict is not established
-  and there is no bound; where its registered-files condition doesn't, neither is a composite's that reads the case,
+  and there is no bound; where `scan-state-pinned` doesn't, its evidence missing included, neither is it nor the
+  composite of record's, and there is no bound; where its registered-files condition doesn't, neither is a composite's that reads the case,
   nor sampled proofs', its leg there; and where θ names no public file, the public file isn't bound and sampled proofs'
   verdict is not established.
   Sampled proofs credits only the drawn members whose `--registered` file its audit completed at the window's
@@ -296,7 +301,11 @@ negatives.
   leak by ℓ_a + 1 is in the lock and a check verifying that cut has run on the period's case (the record written again
   from the same OUT, with no re-serving), and to K alone once `padding-out-of-free` (the period check refusing a tied
   audit's padding reads, and the lemma that a column no unit reads adds no free input) is in the lock and nothing else
-  is open. While the coins are a local
+  is open. The figure says which charge K applied each tied audit (`state_charge`): its free inputs with its reads of
+  the scan's state held (`stateFree`) only where the lock holds RowsStateHeld at its pinned statement reading
+  `stateHeldIn` and `auditStateEntries` at their pinned digests, so that its proof stands over the entry a window's
+  activations commit, else `free`; where it is `free` and a tied audit's parameters state its circuit record, whose
+  `stateFree` may be less than its `free`, there is no figure. While the coins are a local
   development session's, or no line names them, or the network certifier's period draw or its scan's draw takes K of
   what it draws from (or the run published no chain report), the condition live-coins is named, with each such draw,
   on every figure that rests on the draw (the sampled-proofs verdict where its draw is the one open, the figure of

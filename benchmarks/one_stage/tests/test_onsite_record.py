@@ -26,7 +26,13 @@ holds that key for a network certifier its log places. Where a circuit file the 
 published period names, or the scan's files are listed, an accepted network verdict is not established and there is
 no bound; so it is, and the composite of record's verdict too, where a file remote's sampled proofs case registers
 isn't, by SHA-512, the one its params name, or its public file the one V3c's audit pinned at staging, before the draw,
-and where those params name no public file, sampled proofs' verdict is not established. Sampled proofs credits only the drawn members whose
+and where those params name no public file, sampled proofs' verdict is not established. Where V3c's audit's window
+commits the scan's state in its activations, the network verdict and the composite of record's stand only where its
+registered reads opened that state at the entry's value, root and domain (its published summary's registered.own), the
+audit accepted and its record reported each member's reads; otherwise, its evidence missing included, neither is
+established and there is no bound. The figure of record says which charge K applied each tied audit: stateFree only
+where the lock holds RowsStateHeld at its pinned statement over stateHeldIn and auditStateEntries, else free, with no
+figure where it is free and a tied audit states its circuit record. Sampled proofs credits only the drawn members whose
 --registered files its audit completed and whose Lean verdicts reported exactly their reads, naming each other member
 as not credited. PoUW's freed compute is never credited or claimed, whatever its row states, and neither is one
 program a day, each open by name beside what the run's lines say. The run's `publish` leaves the record as written.
@@ -373,6 +379,9 @@ ALL_DRAWN = {"laws": {"the period draw": "all", "the scan's draw": "all"}, "open
 
 #: what ``of_record`` states of a run whose composite of record is onsite's
 ONSITE_OF_RECORD = {"composite": OR.ONSITE, "verified_compute": "none"}
+#: the charge the figure of record states of one audit with no circuit record where no lock lists RowsStateHeld
+FREE_CHARGE = {"charge": "free", "is": OR.STATE_CHARGE, "tied": [0], "with_record": [],
+               "unpinned": {g: None for g in OR.STATE_PINS}}
 SAMPLED_V1 = "verity/sampled-proofs/v1"
 REMOTE_IDS = (OR.INFERENCE_ONLY, OR.POUW_ID, SAMPLED_V1)
 #: the id the network certifier's composite without PoUW is registered under
@@ -535,7 +544,8 @@ def test_an_accepted_rows_form_answer_is_K_term_by_term_with_its_overcount_and_c
                                                "lean": "scans[j].free"}
     assert "no cap and no advice length" in OR.CHARGED and "audits[].free" in OR.CHARGED
     assert b["of_record"] == {"K": KR, "held": [], "open": ["free", "circuit"], "is": OR.OPEN, "premises": discharged(),
-                              "advice": {"bits_per_phase": [2 ** 23 + 1], "tied": OR.TIED_ALL}, "tight": OR.TIGHT}
+                              "advice": {"bits_per_phase": [2 ** 23 + 1], "tied": OR.TIED_ALL}, "tight": OR.TIGHT,
+                              "state_charge": FREE_CHARGE}
     assert b["skip"] == {"is": OR.SKIP, "bits_per_phase": [0], "entries_per_phase": [0]}
     assert rec["advice_charge"]["cap"] == {"ell_a": [2 ** 23], "is": OR.CAP}
     assert "A cap, in no term" in OR.CAP and "`CAP`" in OR.OPEN and "`DISCHARGE`" in OR.OPEN
@@ -958,6 +968,82 @@ def test_an_audit_whose_registration_binds_an_advice_or_a_compiler_leaves_no_fig
         "error": f"{OR.CASE} commitment: ValueError: the registrations of audits [1] bind an advice or a compiler, whose "
                  "bits no term of K charges (records_audit.py period refuses them)"}
     assert rec["periods"]["missing"].startswith("no figure of record") and rec["bound"]["K"] == K
+
+
+#: stand-ins for the digests `STATE_PINS` pins: RowsStateHeld's statement and the definitions it reads
+STATE_TOY = {g: f"toy-{g}" for g in OR.STATE_PINS}
+
+
+def with_state_held(lock: Path, digests: dict[str, str | None], reader: str = OR.STATE_HELD) -> None:
+    """``lock`` listing RowsStateHeld too (`OR.STATE_HELD`), its statement at ``digests``' and the definitions
+    ``reader`` reads at theirs, each unlisted where None."""
+    doc = json.loads(lock.read_text())
+    doc["guarantees"][OR.STATE_HELD] = {"assumptions": [], "signature": [f"{OR.STATE_HELD} : Toy.RowsStateHeld"]}
+    doc["reads"]["Toy.Stated"] = {"definitions": {"Toy.RowsStateHeld": digests[OR.STATE_HELD]}}
+    doc["reads"]["Toy.Period"] = {"guarantees": [reader], "definitions": {
+        d: h for d, h in digests.items() if d != OR.STATE_HELD and h is not None}}
+    lock.write_text(json.dumps(doc))
+
+
+@pytest.mark.parametrize("how, unpinned", [
+    ("its proof stands over the activations entry", {}),
+    ("not in the lock", {g: None for g in STATE_TOY}),
+    ("restated", {OR.STATE_HELD: "ab" * 32}),
+    ("over the registered entries alone", {"NetworkCheck.Period.auditStateEntries": None}),
+    ("over another stateHeldIn", {"NetworkCheck.Period.stateHeldIn": "cd" * 32}),
+    ("its definitions another guarantee's", {g: None for g in STATE_TOY if g != OR.STATE_HELD}),
+])
+def test_the_figure_says_its_charge_was_state_free_only_where_rows_state_held_stands_over_the_activations_entry(
+        tmp_path, lock, monkeypatch, how, unpinned):
+    """The rows form charges a tied audit its stateFree where its reads of the scan's state are the scan's own, over the
+    entries auditStateEntries reads, its window's activations entry among them. The figure of record says that charge
+    applied only where the lock holds RowsStateHeld at its pinned statement reading stateHeldIn and auditStateEntries
+    at theirs, and free otherwise, naming each digest the lock gives that isn't pinned: not in the lock, restated, read
+    over the registered entries alone (no auditStateEntries) or another stateHeldIn, or those definitions read by
+    another guarantee. An audit with no circuit record has stateFree its free, and the figure stands either way."""
+    monkeypatch.setattr(OR, "STATE_PINS", STATE_TOY)
+    if how != "not in the lock":
+        with_state_held(lock, STATE_TOY | unpinned, reader="Toy.other" if how.endswith("another guarantee's") else
+                        OR.STATE_HELD)
+    of = record(accepted(tmp_path))["bound"]["of_record"]
+    assert of["state_charge"] == {"charge": "free" if unpinned else "stateFree", "is": OR.STATE_CHARGE, "tied": [0],
+                                  "with_record": []} | ({"unpinned": unpinned} if unpinned else {})
+    assert of["K"] == KR
+
+
+#: the period's one audit with its circuit record, the form whose stateFree may be less than its free
+RECORDED = {"audits": [{"circuit": "c0" * 64, "order": {}, "pins": {}, "program": {}, "steps": 0}]}
+
+
+@pytest.mark.parametrize("stands", [True, False])
+def test_a_tied_audit_with_a_circuit_record_has_a_figure_of_record_only_where_its_state_free_charge_stands(
+        tmp_path, lock, monkeypatch, stands):
+    """A tied audit whose parameters state its circuit record may be charged its stateFree, less than its free. Where
+    RowsStateHeld stands over the activations entry, that charge is the figure's; where it doesn't, the public doesn't
+    separate the two, so there is no figure of record and no period cells, the bound's K still stated."""
+    monkeypatch.setattr(OR, "STATE_PINS", STATE_TOY)
+    if stands:
+        with_state_held(lock, STATE_TOY)
+    rec = record(accepted(tmp_path, params=RECORDED))
+    of = rec["bound"]["of_record"]
+    charge = {"charge": "stateFree" if stands else "free", "is": OR.STATE_CHARGE, "tied": [0], "with_record": [0]} | (
+        {} if stands else {"unpinned": {g: None for g in STATE_TOY}, "missing": OR.STATE_UNCOVERED})
+    assert of["state_charge"] == charge and rec["bound"]["K"] == K
+    if stands:
+        assert of["K"] == KR and "missing" not in rec["periods"]
+        return
+    assert of == {"missing": OR.STATE_UNCOVERED, "state_charge": charge}
+    assert rec["periods"] == {"missing": f"no figure of record: {OR.STATE_UNCOVERED}"}
+
+
+def test_the_tied_audits_the_charge_reads_are_the_ones_each_scan_names(tmp_path):
+    """With scans[j].tied, the charge reads the audits each phase names, and only those with a circuit record can
+    differ."""
+    two = dict(PUBLIC, K=PUBLIC["K"] + 9088 + 63, eps="1/524288", windows=2,
+               scans=[dict(SCAN, tied=[1]), dict(SCAN, tied=[1])])
+    params = {"audits": [RECORDED["audits"][0], {"program": {}, "steps": 0}]}
+    of = record(accepted(tmp_path, two, windows=2, audits=(NO_ADVICE, NO_ADVICE), params=params))["bound"]["of_record"]
+    assert (of["state_charge"]["tied"], of["state_charge"]["with_record"], "missing" in of) == ([1], [], False)
 
 
 def test_a_run_that_published_no_advice_registration_or_one_unpadded_has_no_figure_of_record(tmp_path):
@@ -1782,10 +1868,141 @@ def test_a_period_listing_no_circuit_files_holds_auditor_listing_and_one_with_no
     assert rec["checked"][OR.AUDITOR_LISTING] == {
         "is": OR.CHECKED[OR.AUDITOR_LISTING], "holds": False, "why": f"no case lists the period's audits: {unread}",
         "registered_files": files_held}
+    assert rec["checked"][OR.SCAN_STATE_PINNED] == {
+        "is": OR.CHECKED[OR.SCAN_STATE_PINNED], "holds": False, "why": f"no case lists the period's audits: {unread}"}
     nv = rec["verdicts"]["the network certifier"]
     assert (nv["verdict"], nv["open"], nv["why"]) == (
-        OR.NOT_ESTABLISHED, [OR.CERTIFIER_KEY, OR.AUDITOR_LISTING], f"{OR.KEY_OPEN}; {OR.LISTING_UNMET}")
+        OR.NOT_ESTABLISHED, [OR.CERTIFIER_KEY, OR.AUDITOR_LISTING, OR.SCAN_STATE_PINNED],
+        f"{OR.KEY_OPEN}; {OR.LISTING_UNMET}; {OR.STATE_UNPINNED}")
     assert "missing" in rec["bound"] and rec["periods"] == {"missing": "no bound"}
+
+
+#: the scan's state as V3c's audit's window commits it in its activations, the entry the period holds to the scan's
+#: state (`NetworkCheck.Period.auditStateEntries`), and V3c's audit's registration whose window commits it
+STATE_ENTRY = {"value": OR.SCAN_STATE, "root": "5a" * 64, "domain": "d5" * 64, "leaves": 64, "words": 8}
+STATED = {**NO_ADVICE, "window": {**NO_ADVICE["window"],
+                                  "activations": {"program": "ab" * 64, "values": {OR.SCAN_STATE: STATE_ENTRY}}}}
+
+
+def scan_state_run(tmp_path: Path, registered: dict | None = None, registration: dict = STATED,
+                   accepted_: bool = True, audit: dict = AUDITED, audits: tuple[dict, ...] = (STATED,)) -> Path:
+    """An accepted run, both checks held, whose case's commitment holds ``audits`` and whose V3c audit published its
+    period of ``registration`` (`OR.PERIOD`), its record ``audit`` (`OR.AUDIT`) and its summary (`OR.AUDIT_SUMMARY`),
+    accepting where ``accepted_``, its registered reads opening the window's own values at ``registered``'s entries
+    (none where None)."""
+    out = accepted(tmp_path, dict(PUBLIC, held=["free", "circuit"]), audits=audits)
+    (out / OR.PERIOD).parent.mkdir(parents=True, exist_ok=True)
+    (out / OR.PERIOD).write_text(json.dumps({"registration": registration}))
+    (out / OR.AUDIT).write_text(json.dumps(audit))
+    summary = {"audit": {"accepted": accepted_, "outcome": "accept" if accepted_ else "reject", "why": None}}
+    (out / OR.AUDIT_SUMMARY).write_text(json.dumps(
+        summary | ({} if registered is None else {"registered": {"own": registered}})))
+    return out
+
+
+NO_OWN = (f"audit 0's window commits {OR.SCAN_STATE} in its activations, and the run's {OR.AUDIT_SUMMARY} states no "
+          "entry its registered reads opened it at (registered.own)")
+
+
+@pytest.mark.parametrize("how, why", [
+    ("opened at the entry", None),
+    ("another root", f"the entry audit 0's registered reads opened {OR.SCAN_STATE} at isn't, by its root, its window's "
+                     "activations entry"),
+    ("another domain", f"the entry audit 0's registered reads opened {OR.SCAN_STATE} at isn't, by its domain, its "
+                       "window's activations entry"),
+    ("another value, root and domain", f"the entry audit 0's registered reads opened {OR.SCAN_STATE} at isn't, by its "
+                                       "value and root and domain, its window's activations entry"),
+    ("no reads of it", NO_OWN),
+    ("no registered reads", NO_OWN),
+    ("no summary", f"audit 0's window commits {OR.SCAN_STATE} in its activations, and the run's {OR.AUDIT_SUMMARY} "
+                   "can't be read: FileNotFoundError"),
+    ("no period", f"audit 0's window commits {OR.SCAN_STATE} in its activations, and the run's {OR.PERIOD} can't be "
+                  "read: FileNotFoundError"),
+    ("another audit's period", f"audit 0's window commits {OR.SCAN_STATE} in its activations, and the run's "
+                               f"{OR.PERIOD} is another audit's"),
+    ("not accepted", f"V3c's audit didn't accept ({OR.AUDIT_SUMMARY}'s audit.accepted)"),
+    ("reads not reported", "V3c's audit record doesn't report exactly each sampled member's registered reads "
+                           f"({OR.AUDIT}'s registered_reads)"),
+])
+def test_the_network_and_composite_verdicts_are_established_only_where_v3cs_reads_of_the_scans_state_opened_at_its_entry(
+        tmp_path, capsys, how, why):
+    """scan-state-pinned on the run: V3c's audit's window commits the scan's state in its activations, the entry the
+    period holds to the scan's state, and one-stage's registration checks read nothing of the window, so the audit's
+    driver pins its registered reads there. Where the entry its registered reads opened the state at (its published
+    summary's registered.own) is that activations entry by value, root and domain, the audit accepted and its record
+    reported each sampled member's registered reads, the network certifier's verdict and the composite of record's stand
+    and the run is of record. Where any differs or its evidence is missing (no entry stated, no summary, no published
+    period or another audit's, the audit not accepting, the reads unreported), both are not established, each its Lean
+    accept beside it, and there is no bound."""
+    pin = {"another root": dict(STATE_ENTRY, root="5b" * 64), "another domain": dict(STATE_ENTRY, domain="d6" * 64),
+           "another value, root and domain": {"value": "weights/w@8", "root": "ef" * 64, "domain": "fe" * 64},
+           "no reads of it": None}.get(how, STATE_ENTRY)
+    out = scan_state_run(tmp_path, None if how == "no registered reads" else {} if pin is None else {OR.SCAN_STATE: pin},
+                         registration=NO_ADVICE if how == "another audit's period" else STATED,
+                         accepted_=how != "not accepted",
+                         audit=audit_record(reported={MEMBER: False}) if how == "reads not reported" else AUDITED)
+    if how in ("no summary", "no period"):
+        (out / (OR.AUDIT_SUMMARY if how == "no summary" else OR.PERIOD)).unlink()
+    assert main([str(out)]) == 0
+    rec = json.loads((out / "record" / "onsite.json").read_text())
+    got, v = rec["checked"][OR.SCAN_STATE_PINNED], rec["verdicts"]
+    assert (got["is"], got["holds"], got.get("why"), got["audits"]) == (
+        OR.CHECKED[OR.SCAN_STATE_PINNED], why is None, why, [0])
+    assert rec["checked"][OR.AUDITOR_LISTING]["holds"] is rec["checked"][OR.AUDITOR_RECORD]["holds"] is True
+    line = json.loads(capsys.readouterr().out.strip()[7:])
+    if why is None:
+        assert (v["the network certifier"]["verdict"], v["onsite"]["verdict"], rec["of_record"]["holds"]) == (
+            "accept", "accept", True)
+        assert rec["bound"]["of_record"]["K"] == K and line["verdicts"]["the network certifier"] == "accept"
+        return
+    assert {k: v["the network certifier"][k] for k in ("protocol", "verdict", "answer", "open", "why")} == {
+        "protocol": OR.NETWORK, "verdict": OR.NOT_ESTABLISHED, "answer": "accept", "open": [OR.SCAN_STATE_PINNED],
+        "why": OR.STATE_UNPINNED}
+    assert {k: v["onsite"][k] for k in ("protocol", "verdict", "answer", "open", "why")} == {
+        "protocol": OR.ONSITE, "verdict": OR.NOT_ESTABLISHED, "answer": "accept", "open": [OR.SCAN_STATE_PINNED],
+        "why": OR.STATE_UNPINNED}
+    assert rec["bound"] == {"missing": f"the network certifier's verdict is {OR.NOT_ESTABLISHED} ({OR.STATE_UNPINNED}): "
+                                       "only its accepted answer certifies K"}
+    assert rec["periods"] == {"missing": "no bound"} and v["remote"]["verdict"] == "accept"
+    assert rec["of_record"]["holds"] is False
+    assert rec["of_record"]["not_established"] == ["the network certifier", "onsite"]
+    assert ({k: line["verdicts"][k] for k in ("the network certifier", "onsite")}, line["K"]) == (
+        {"the network certifier": OR.NOT_ESTABLISHED, "onsite": OR.NOT_ESTABLISHED}, None)
+
+
+@pytest.mark.parametrize("values", [{}, {"weights/w@8": dict(STATE_ENTRY, value="weights/w@8")},
+                                    {OR.SCAN_STATE: dict(STATE_ENTRY, value="weights/w@8")}])
+def test_scan_state_pinned_holds_where_no_audits_window_commits_the_scans_state_in_its_activations(tmp_path, values):
+    """No audit's window commits the scan's state in its activations as the period reads it (an entry at that value
+    naming it, `auditStateEntries`): none at all, another value's, or an entry at that value naming another, which the
+    period doesn't read as the audit's state (and refuses where the audit then has none, `stateTied`). Then the check
+    holds, naming no audit, with no summary or period read, and the verdicts stand."""
+    audit = {**NO_ADVICE, "window": {**NO_ADVICE["window"], "activations": {"program": "ab" * 64, "values": values}}}
+    rec = record(accepted(tmp_path, dict(PUBLIC, held=["free", "circuit"]), audits=(audit,)))
+    assert rec["checked"][OR.SCAN_STATE_PINNED] == {"is": OR.CHECKED[OR.SCAN_STATE_PINNED], "holds": True, "audits": []}
+    assert rec["verdicts"]["the network certifier"]["verdict"] == rec["verdicts"]["onsite"]["verdict"] == "accept"
+
+
+def test_two_audits_committing_the_scans_state_need_two_published_periods_and_the_run_publishes_one(tmp_path):
+    """The run publishes one V3c audit: where a second audit of the commitment commits the scan's state in its
+    activations, its period isn't the one published, and the check doesn't hold, naming both."""
+    other = {**STATED, "window": {**STATED["window"], "circuit": "ef" * 64}}
+    rec = record(scan_state_run(tmp_path, {OR.SCAN_STATE: STATE_ENTRY}, audits=(STATED, other)))
+    got = rec["checked"][OR.SCAN_STATE_PINNED]
+    assert (got["holds"], got["audits"], got["why"]) == (
+        False, [0, 1], f"audit 1's window commits {OR.SCAN_STATE} in its activations, and the run's {OR.PERIOD} is "
+                       "another audit's")
+
+
+def test_a_composite_of_record_withheld_on_two_counts_names_both(tmp_path):
+    """The composite of record not established for a registered file that isn't θ's is withheld again where V3c's
+    reads of the scan's state didn't open at its entry: both are open, each with why."""
+    out = scan_state_run(tmp_path, {OR.SCAN_STATE: dict(STATE_ENTRY, root="5b" * 64)})
+    Path(json.loads(auditor_args(out)["sampled_case"].read_text())["blobs"][0]).write_bytes(b"another circuit\n")
+    v = record(out)["verdicts"]
+    assert (v["onsite"]["verdict"], v["onsite"]["open"], v["onsite"]["why"]) == (
+        OR.NOT_ESTABLISHED, [OR.REGISTERED_FILES, OR.SCAN_STATE_PINNED], f"{OR.FILES_UNMET}; {OR.STATE_UNPINNED}")
+    assert v["the network certifier"]["open"] == [OR.AUDITOR_LISTING, OR.SCAN_STATE_PINNED]
 
 
 NOT_THETAS = "the {} file the case registers (its blob {}) isn't, by SHA-512, θ's proofs.{}"
