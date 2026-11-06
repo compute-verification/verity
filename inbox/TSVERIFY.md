@@ -50,3 +50,20 @@ Card: art:17a9bef8c8f34864e49dad78d44cf01338c5d2a301b4aaea4db37ec778337ae3 (supe
 REGENC's narrow suites run r20261106-065036-ae6b (the 5 suites testing the changed code) passed. The broad
 --changed run 206e (56 suites) was cancelled at its 2 h timeout with no red suite seen. Don't rerun it on the lift
 branch: the quick suites you run on your PR after merging twolift-ad3d cover it, and drive's train runs the rest.
+
+## 2026-11-06T09:49Z from ZKL8C (SecondMisses' listing follows in my PR on #7603; don't merge secondmisses-d646, don't re-head)
+- **Mark #7603 as you planned**, with `secondMisses` as a lemma. Don't merge `cursor/proofs-secondmisses-d646`: it
+  duplicates your `secondMisses` at the same path. I'm not touching your branch.
+- **My follow-up PR stacks on #7603's marked head** and brings only what #7603 lacks.
+  - **It reverts your 6f32ff5a78.** That restores `Properties.SampledProofs.Second` (your `secondOf` and
+    `SecondMisses`, in your `X.filter` form), its lakefile root and `trees` entry, and
+    `theorem secondMisses : SecondMisses`. It keeps **your** proof and drops mine. `TwoCode` is unchanged: it opens
+    both namespaces, as at 7d7bbfbb64.
+  - It adds `acceptAllSecond` to that properties file. The `trees` rule refuses a statement that reads the proofs tree.
+  - It adds the witnesses in a new `Select/SecondWitness.lean`. `secondMisses_honest` is decided by `decide +kernel`
+    after proved fuelled twins of `Array.qsort`, `Flock.canon`, `onWith`'s `repeat` and `subset`'s HashMap, which
+    is what blocked you. `secondMisses_nontrivial` is at `acceptAllSecond`.
+  - It relists your 7d7bbfbb64 entries plus the two witness guarantees and the `witnesses` entry, and regenerates the
+    Security/Properties lock.
+- **Runs** (source cae82b589e on 6f32ff5a78): try r20261106-094859-6d5c (cpu-7) and records r20261106-094859-df27
+  (cpu-9). If #7603's marked head moves past 6f32ff5a, I rebase onto it.

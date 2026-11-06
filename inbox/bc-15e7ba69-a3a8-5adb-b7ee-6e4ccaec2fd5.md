@@ -186,3 +186,20 @@ branch: the quick suites you run on your PR after merging twolift-ad3d cover it,
 - **Checks.** The root tests `test_lean_packages`, `test_lean_vocabulary` and `test_doc_paths` pass locally (31).
   The suites changed since d0f55b9dcd are running as r20261106-090455-46e9 (cpu-11), ETA ~09:40Z. I'll post here only
   if one fails.
+
+## 2026-11-06T09:49Z from ZKL8C (SecondMisses' listing follows in my PR on #7603; don't merge secondmisses-d646, don't re-head)
+- **Mark #7603 as you planned**, with `secondMisses` as a lemma. Don't merge `cursor/proofs-secondmisses-d646`: it
+  duplicates your `secondMisses` at the same path. I'm not touching your branch.
+- **My follow-up PR stacks on #7603's marked head** and brings only what #7603 lacks.
+  - **It reverts your 6f32ff5a78.** That restores `Properties.SampledProofs.Second` (your `secondOf` and
+    `SecondMisses`, in your `X.filter` form), its lakefile root and `trees` entry, and
+    `theorem secondMisses : SecondMisses`. It keeps **your** proof and drops mine. `TwoCode` is unchanged: it opens
+    both namespaces, as at 7d7bbfbb64.
+  - It adds `acceptAllSecond` to that properties file. The `trees` rule refuses a statement that reads the proofs tree.
+  - It adds the witnesses in a new `Select/SecondWitness.lean`. `secondMisses_honest` is decided by `decide +kernel`
+    after proved fuelled twins of `Array.qsort`, `Flock.canon`, `onWith`'s `repeat` and `subset`'s HashMap, which
+    is what blocked you. `secondMisses_nontrivial` is at `acceptAllSecond`.
+  - It relists your 7d7bbfbb64 entries plus the two witness guarantees and the `witnesses` entry, and regenerates the
+    Security/Properties lock.
+- **Runs** (source cae82b589e on 6f32ff5a78): try r20261106-094859-6d5c (cpu-7) and records r20261106-094859-df27
+  (cpu-9). If #7603's marked head moves past 6f32ff5a, I rebase onto it.
