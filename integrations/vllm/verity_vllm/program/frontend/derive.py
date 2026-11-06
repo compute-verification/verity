@@ -495,16 +495,16 @@ def derive(source, example_inputs: Sequence[Any], *, mode: str, profile: str | N
 
 def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: str | None = None, config: dict | None = None,
                   rules: RuleSet | None = None, allowed_dims: dict | None = None, name: str | None = None,
-                  check_registry: bool = True, rank: tuple[int, int] | None = None, exported=None,
+                  check_registry: bool = True, rank: tuple[int, int] | None = None, exported=None, theta: Sequence[str] = (),
                   registered_values: bool = False, session: list | None = None, dead_free: bool = False) -> DeriveReport:
     """`registered_values`: the program's values (the norms' eps, the attention scale) are fields of a registered `values` parameter
     (before `weights`), read by the Definitions that take them as inputs (`TargetProfile.registered_values`); the provenance's
     `supplied` states every field's bits.  `rank=(world, rank)`: the rank coordinate of a tensor-parallel rank Program.  It is written into the runtime correspondence
     (`annotations["correspondence"].rank`, explicit integers) and NOWHERE else: not a static, not a config -- the Program's identity
-    (`program_digest`) does not depend on it.  `exported`: the caller's export of `source` (same inputs and shims), derived from.
-    `session`: a list that receives the derivation's `DerivationTail` when it succeeds (`relabel.rank_report` reads it).
-    `dead_free`: the flat body in the registered compiler's form (`program.prune.dead_free`: without the units no output reads, each
-    Definition with dead gates swapped for its version without them), and the correspondence's Calls with it."""
+    (`program_digest`) does not depend on it.  `exported`: the caller's export of `source` (same inputs and shims), derived from.  `theta`:
+    the inputs that are weights (`Program.theta`).  `session`: a list that receives the derivation's `DerivationTail` when it succeeds
+    (`relabel.rank_report` reads it).  `dead_free`: the flat body in the registered compiler's form (`program.prune.dead_free`: without the
+    units no output reads, each Definition with dead gates swapped for its version without them), and the correspondence's Calls with it."""
     if mode not in ("profile", "reference"):
         raise ValueError("mode must be 'profile' or 'reference'")
     if rank is not None and not (len(rank) == 2 and 0 <= int(rank[1]) < int(rank[0])):
@@ -512,8 +512,7 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
     from verity_vllm.program.frontend.rules import DEFAULT_RULES, vocabulary_for
     ruleset = rules if rules is not None else DEFAULT_RULES
     vocab = vocabulary_for(mode, profile)
-    allowed_dims = dict(allowed_dims or {})
-    config = dict(config or {})
+    allowed_dims, config, theta = dict(allowed_dims or {}), dict(config or {}), tuple(theta)
     name = name or (type(source).__name__ if isinstance(source, torch.nn.Module) else getattr(source, "__name__", "Derived"))
     source_desc = _describe_source(source, example_inputs, mode, profile, config, allowed_dims)
     prov: dict[str, Any] = {"schema": "verity_ir/derive-provenance/v1", "frontend": FRONTEND_VERSION, "derive": DERIVE_VERSION,
@@ -526,9 +525,9 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
                                     name=name, ruleset=ruleset, vocab=vocab, _ctx_holder=holder, exported=exported,
                                     registered_values=registered_values)
         head = (dict(prov), dict(ctx.unresolved_module_paths)) if session is not None else None
-        rep = _finish_report(flat_sd, ctx, prov, mode=mode, ruleset=ruleset, rank=rank, check_registry=check_registry, dead_free=dead_free)
+        rep = _finish_report(flat_sd, ctx, prov, mode=mode, ruleset=ruleset, rank=rank, check_registry=check_registry, dead_free=dead_free, theta=theta)
         if session is not None:
-            session.append(DerivationTail(flat_sd, ctx, *head, name, mode, ruleset, check_registry, rank, rep.family, dead_free))
+            session.append(DerivationTail(flat_sd, ctx, *head, name, mode, ruleset, check_registry, rank, rep.family, dead_free, theta))
         return rep
     except Refuse as e:
         prov["unsupported"] = e.u.to_json()
@@ -542,7 +541,7 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
 
 
 def _finish_report(flat_sd: SpecializedDefinition, ctx: Ctx, prov: dict, *, mode: str, ruleset: RuleSet, rank: tuple[int, int] | None,
-                   check_registry: bool, dead_free: bool = False) -> DeriveReport:
+                   check_registry: bool, dead_free: bool = False, theta: tuple[str, ...] = ()) -> DeriveReport:
     """The derivation's tail over the finished flat body: provenance, runtime correspondence, the flat Program and its digest, the
     family claims, `prov["result"]`.  Raises `Refuse` / `FrontendError` (the caller reports them)."""
     prov["weights"] = [w.to_json() for w in ctx.weights]
@@ -566,9 +565,10 @@ def _finish_report(flat_sd: SpecializedDefinition, ctx: Ctx, prov: dict, *, mode
     body, corr_doc["calls"], hints = kept_records(flat_sd.body, corr_doc["calls"], ctx.node_hints, registered=dead_free)
     flat_sd = flat_sd if body is flat_sd.body else _flat_definition(flat_sd.defn.name[len("Derived["):-1], body, flat_sd.bindings["SRC"], mode)
     corr_digest = correspondence_digest(corr_doc)
-    flat_program = Program(flat_sd, annotations={"derive": prov, "node_hints": {str(k): v for k, v in hints.items()}, _CORR: corr_doc},
+    holes = {"survey_holes": ctx.state["survey_holes"]} if ctx.state.get("survey_holes") else {}
+    flat_program = Program(flat_sd, annotations={"derive": prov, "node_hints": {str(k): v for k, v in hints.items()}, _CORR: corr_doc, **holes},
                            registered=ctx.registered_inputs.names if ctx.registered_values else (),
-                           theta=() if ctx.weights_param is None else (flat_sd.signature()[0][ctx.weights_param][0],))
+                           theta=(() if ctx.weights_param is None else (flat_sd.signature()[0][ctx.weights_param][0],)) + theta)
     check_identity(flat_program, check_registry=check_registry)
     flat_digest = program_digest(flat_desc := encode_program(flat_program))
     program, family_report = flat_program, None
