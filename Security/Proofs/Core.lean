@@ -42,7 +42,6 @@ public import Proofs.Core.HongKung
 public import Proofs.Core.Blocks
 public import Proofs.Core.Structure
 public import Proofs.Core.DeviceFigures
-public import Proofs.Core.CapacityWithinEstimate
 public import Proofs.Core.Site
 
 /-!

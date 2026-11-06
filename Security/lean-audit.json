@@ -3163,12 +3163,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Verity.Assumptions.DeviceWithinRegisteredFigures": {
-   "owner": "@soundness",
-   "digest": "e083b5535a6d2136d0c688b1d62f6a038456b92fc48609c1a1e6ed2157d4301c",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Verity.Assumptions.FlipsAfterRecorded": {
    "owner": "@soundness",
    "digest": "3261cd32e88a813bed5cba80d2463e28d2202169df59653ce77d0692830f48f7",
@@ -3214,12 +3208,6 @@
   "Verity.Committed.Honest": {
    "owner": "@lean",
    "digest": "f5f7d51a49315432e4df695ff99101c66c65bda69dd9141e5a99b190dd92af58",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Verity.DeviceFigures.Accepted": {
-   "owner": "@soundness",
-   "digest": "e79ecdc887349564c389cf682a4b8a6e7a7467e8f9de6e664ee9c4853fc07516",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -5196,10 +5184,6 @@
   "Verity.SecurityProofs.BlockDescription": {
    "type_hash": "80baa463fd43086b3ca137b50dc78ace3b4400bfbabdb344ddc3c090d1f6dbeb",
    "unfolded_hash": "f830f8537468fd7a080331216d0dd8f6117bbc1f6c810269da4d543d472a3b34"
-  },
-  "Verity.SecurityProofs.CapacityWithinEstimate": {
-   "type_hash": "33f7bf73bd890217a96e1f811c4fa5862df92ccec1ba47b063fff95e97ba8370",
-   "unfolded_hash": "5911c876bdb85e99e59ec1e249e555a99c547e3b69fc489d1f0ef3062cfe7b8d"
   },
   "Verity.SecurityProofs.Counting": {
    "type_hash": "34e0729bbd40c2fd7311fc30725f7d8bb1f2fb2daed521891c0dada5afd70f77",
@@ -22329,19 +22313,6 @@
    "type_hash": "2272ed38498bee7b4cf314d5e00e5f27ae4f5d62b35ad6bc7dfb1b8e0c808c94",
    "unfolded_hash": "7fd2032046e78e500b3f9f33d7517b12c3b4dab439308df071fffb69ef57a8db"
   },
-  "Verity.SecurityProofs.CapacityWithinEstimate": {
-   "owner": "@soundness",
-   "signature": ["Verity.SecurityProofs.CapacityWithinEstimate : Verity.Guarantees.CapacityWithinEstimate"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["Verity.Assumptions.DeviceWithinRegisteredFigures", "Verity.DeviceFigures.Accepted"],
-    "reads": []
-   },
-   "type_hash": "33f7bf73bd890217a96e1f811c4fa5862df92ccec1ba47b063fff95e97ba8370",
-   "unfolded_hash": "5911c876bdb85e99e59ec1e249e555a99c547e3b69fc489d1f0ef3062cfe7b8d"
-  },
   "Verity.SecurityProofs.CommittedMeets": {
    "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.CommittedMeets : Verity.Guarantees.CommittedMeets"],
@@ -23203,7 +23174,6 @@
    "Definitions.Accounting.Assumptions.PouwWork",
    "Proofs.Flock.Recursive.Premises",
    "Definitions.Nci.Assumptions.Fit",
-   "Definitions.Core.Assumptions.DeviceFigures",
    "Proofs.Accounting.TS.Session.Group.Premises",
    "Definitions.Pouw.Assumptions.LeadCommit"
   ],
@@ -23487,10 +23457,6 @@
    "Pouw.Salt.keyed_leaf_binds": {
     "function": "Hash.Keyed.accepts",
     "outcome": "none"
-   },
-   "Verity.SecurityProofs.CapacityWithinEstimate": {
-    "function": "Verity.DeviceFigures.Accepted",
-    "outcome": "accept"
    }
   },
   "frozen": {
@@ -30140,12 +30106,6 @@
     "Verity.Assumptions.VerifierReadsLog": "0ed1c5456b740c38fa2d2638b81cae376aacb18ab9315ed23702dfe936d329e4"
    }
   },
-  "Definitions.Core.Assumptions.DeviceFigures": {
-   "digest": "95e5ba7cf9502a59823597ea469397355e0be722060604c818461808639a3e8e",
-   "definitions": {
-    "Verity.Assumptions.DeviceWithinRegisteredFigures": "e083b5535a6d2136d0c688b1d62f6a038456b92fc48609c1a1e6ed2157d4301c"
-   }
-  },
   "Definitions.Core.Assumptions.ZkServer": {
    "digest": "ad020b2215f9a23c89d8d6f748e4b0e58c52906a727e51e62355b3ff44ddd5bd",
    "definitions": {
@@ -30563,12 +30523,6 @@
     "Verity.Guarantees.ContainsImplements": "c9597de16132453b15c34ccb6d10011aa2b799e41e2c6ebc78449f109c242b31",
     "Verity.Guarantees.CorrectOfOpening": "10386484b8cce510b55f28b3072a425e8555580988de08bb25db00b3b0b7b699",
     "Verity.Guarantees.RefineWrong": "f6dc61dd64bff7f68d19f350d308a0ab2ed7577db10138d290703268254a469c"
-   }
-  },
-  "Definitions.Core.Guarantees.DeviceFigures": {
-   "digest": "ff21d9752621598edd23682de7eb2f187c86c749b5216b790d339328ef798143",
-   "definitions": {
-    "Verity.Guarantees.CapacityWithinEstimate": "a15b51a66aa2902094984e4c0f87215b72a03fb31f88cf2daa1e707c180aa987"
    }
   },
   "Definitions.Core.Guarantees.Expand": {
