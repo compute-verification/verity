@@ -12,3 +12,13 @@ inputs = [
     # reference (verity/core/protocols/composition/tests/reference.py), which the example runs
     "verity",
 ]
+
+# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
+# what a program it starts reads): the graph's test-file tasks are keyed on it.
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_lifecycle.py"]
+paths = [
+    "verity/core/protocols/network/nci/lean/scripts/baseline_difftest_vectors.py",
+    "verity/core/protocols/network/nci/lean/scripts/difftest_vectors.py",
+]
