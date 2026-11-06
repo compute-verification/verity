@@ -6,7 +6,7 @@ from __future__ import annotations
 import pytest
 
 from research import merge
-from research.drive import Driver
+from research.drive import AFTER_LANDING, Driver
 from test_queue import World, _git
 
 
@@ -44,6 +44,17 @@ class Harness:
 
     def tick(self, **kw) -> str:
         return self.d.tick(**kw)
+
+    def baseline(self) -> None:
+        """Drive's state with `main` verified on every after-landing step, as a passed after-landing run of it leaves it, so a
+        tick lands without first running one."""
+        self.q._clone()
+        self.q.fetch()
+        state = self.q.load_state()
+        state.setdefault("drive", {})["postland"] = {
+            "verified": _git(self.world.origin, "rev-parse", "main"), "pending": [], "run": None,
+            "verified_as": {"steps": list(AFTER_LANDING), "no_cache": None}}
+        self.q.save_state(state)
 
 
 def _tip(world: World) -> str:

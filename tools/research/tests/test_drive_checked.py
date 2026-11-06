@@ -103,25 +103,46 @@ def test_a_pr_containing_a_head_landed_on_checked_never_waits_for_it_and_one_on_
     assert st[8].state == "waiting" and st[8].why == "contains #6, which isn't admitted" and st[8].held == {6: six}
 
 
-def test_main_follows_no_baseline_that_passed_fewer_steps(world, monkeypatch):
-    """ci's baseline of only some steps lets landing go on, as a red baseline run does, but isn't a full check: `main` stays."""
-    from research import queue as Q
+def _cli(h: Review, *args: str) -> list[str]:
+    """`research queue ARGS` against ``h``'s drive: its clone, origin and store."""
+    w = h.world
+    return [*args, "--workdir", str(h.q.workdir), "--remote", str(w.origin), "--repo", "o/r", "--store", str(w.tmp / "store"),
+            "--rules", str(w.dev / "ci" / "queue.toml")]
 
+
+def test_ci_baseline_moves_main_at_once_beside_a_tick_holding_its_lock_and_writes_nothing_of_drives(world, monkeypatch, capsys):
+    """ci's `research queue baseline` fast-forwards `main` itself, at once: a tick holds the clone's lock for its whole run (an
+    hour and more), and a baseline that waited for it, then left `main` to the tick after, kept `main` that far behind a green
+    `checked`.  It reads drive's clone as the tick left it and writes no ref of it and nothing of drive's state, takes only a
+    commit on `checked`'s first-parent chain whose steps cover every step on the merge gate, and is refused but by ci and off
+    drive."""
+    from research import queue as Q
+    from research.merge import DRIVE_ENV
+
+    _move_main(world, {**GATED_TREE, "tools/verity/check/drive.toml": 'land_into = "checked"\n'})
     h = Review(world, monkeypatch, land_into="checked")
     main = _main(world)
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    h.review(1)
-    assert h.tick().startswith("landed #1")
-    tip = _checked(world)
-    state = h.q.load_state()
-    state["drive"]["postland"]["run"] = None                    # its run lost; ci records `checked` by hand instead
-    h.q.save_state(state)
-    assert Q.baseline(h.q, tip, "ci", "lean-audit") == 0
-    h.tick()
-    assert _main(world) == main
-    assert Q.baseline(h.q, tip, "ci") == 0
-    h.tick()
-    assert _main(world) == tip
+    tip = _landed(h, {"a.txt": "1\n"})
+    argv = _cli(h, "baseline", tip, "--by", "ci")
+    state, refs = h.q.state_path.read_bytes(), _git(h.q.workdir, "for-each-ref")
+    lock = Q._lock(h.q.workdir)                                 # a tick runs
+    try:
+        assert Q.main(_cli(h, "status")) == 1 and "another `research queue` holds" in capsys.readouterr().err
+        monkeypatch.delenv(DRIVE_ENV)
+        assert Q.main(argv) == 1 and "this isn't drive" in capsys.readouterr().err
+        monkeypatch.setenv(DRIVE_ENV, "1")
+        assert Q.main(_cli(h, "baseline", tip, "--by", "lane-3")) == 1 and "only ci" in capsys.readouterr().err
+        assert Q.main([*argv, "--steps", ",".join(GATED[:-1])]) == 1
+        assert f"--steps leaves out {GATED[-1]}, on the merge gate" in capsys.readouterr().err
+        assert Q.main(_cli(h, "baseline", f"{tip}^2", "--by", "ci")) == 1      # #1's head, merged into `checked`
+        assert "is not on `checked`'s first-parent chain" in capsys.readouterr().err
+        assert _main(world) == main
+        assert Q.main([*argv, "--steps", ",".join(GATED)]) == 0                # circuit-check, off the gate, needn't be among them
+        assert _main(world) == tip and f"`main` fast-forwarded from {main[:12]} to {tip[:12]}" in capsys.readouterr().out
+        assert Q.main(argv) == 0 and "already: nothing to move" in capsys.readouterr().out
+    finally:
+        lock.close()
+    assert h.q.state_path.read_bytes() == state and _git(h.q.workdir, "for-each-ref") == refs
 
 
 def _gated(world: World, monkeypatch) -> Review:
@@ -282,22 +303,101 @@ def test_a_sharded_run_that_passes_moves_main_and_the_verified_record_together_a
     assert not any("passed without passing" in p for p in h.posts), h.posts
 
 
-def test_main_follows_a_baseline_of_every_step_on_the_gate(world, monkeypatch):
-    """ci's `--steps` baseline counts once it names every step on the merge gate: circuit-check, off it, needn't be among them."""
+def test_a_tick_takes_a_main_moved_beside_it_as_verified_and_follows_what_it_brought_once(world, monkeypatch):
+    """A `main` moved beside drive (`research queue baseline` or `promote`) is `verified` from the next tick on, as drive's own
+    promotion leaves it: the red records at or below it of steps on the merge gate end (a `suite` one too, the gate holding
+    pytest and lean-suites), one off the gate stays, keeping as its newest green the old `verified` that passed it, and what
+    `main` brought follows as a landing on `main` does, once."""
     from research import queue as Q
 
     h = _gated(world, monkeypatch)
     main = _main(world)
     tip = _landed(h, {"a.txt": "1\n"})
     state = h.q.load_state()
-    state["drive"]["postland"]["run"] = None
+    red = lambda key: {"tip": tip, "base": main, "step": key.split(" ")[1], "culprit": None, "first": "x"}  # noqa: E731
+    state["drive"]["postland"]["red"] = {k: red(k) for k in ("step lean-audit", "suite pkg::test_y", "step circuit-check")}
     h.q.save_state(state)
-    assert Q.baseline(h.q, tip, "ci", ",".join(GATED[:-1])) == 0
+    assert Q.baseline(h.q, tip, "ci") == 0 and h.after == []
     h.tick()
+    pl = h.postland()
+    assert pl["verified"] == tip and pl["verified_as"]["steps"] == GATED and pl["pending"] == [] and pl["main"] == tip
+    assert list(pl["red"]) == ["step circuit-check"] and pl["green"]["step circuit-check"] == main
+    assert pl["green"]["step lean-audit"] == pl["green"]["suite pkg::test_y"] == tip
+    assert h.after == [(main, {tip: ""})] and pl["run"]["ids"] == ["r-post-0"]
+    h.tick()
+    assert h.after == [(main, {tip: ""})] and h.postland()["verified"] == tip
+
+
+def test_a_tick_whose_promotion_finds_main_moved_past_it_meanwhile_leaves_main_there(world, monkeypatch):
+    """ci's baseline moves `main` while a tick runs, past the commit that tick moves it to: the tick's push is refused, which is
+    no failure of the tick and moves `main` nowhere back; the next tick takes `main` and follows what it brought once."""
+    from research import queue as Q
+
+    h = Review(world, monkeypatch, land_into="checked")
+    main = _main(world)
+    one = _landed(h, {"a.txt": "1\n"})
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.review(2)
+    assert h.tick().startswith("landed #2"), world.logs
+    two = _checked(world)
+    _pass(h)                                                    # the run of `one`: this tick moves `main` to it
+    revert_reds = h.d._revert_reds
+
+    def baseline_meanwhile(drive: dict) -> None:
+        revert_reds(drive)
+        assert Q.baseline(h.q, two, "ci") == 0
+
+    monkeypatch.setattr(h.d, "_revert_reds", baseline_meanwhile)
+    h.tick()
+    assert _main(world) == two and h.postland()["verified"] == one and h.after == []
+    assert any(f"`main` is at {two[:12]} already, which holds {one[:12]}" in x for x in world.logs), world.logs
+    assert not any("was refused" in x for x in world.logs), world.logs
+    monkeypatch.setattr(h.d, "_revert_reds", revert_reds)
+    h.evidence = []                                             # the run of `two` has passed nothing yet
+    for _ in range(2):
+        h.tick()
+        assert h.postland()["verified"] == two and h.after == [(main, {one: "", two: ""})]
+
+
+def test_promote_moves_main_once_every_shard_ended_passing_the_gate_and_never_before(world, monkeypatch, capsys):
+    """`research queue promote` moves `main` to the after-landing run's tip as soon as the run ends, not at drive's next tick
+    (up to its 2 min sleep and an hour's tick later): nothing while a shard runs or once a step on the gate failed, `main` there
+    once every shard passed them.  It reads drive's state and writes none; drive's next tick follows what `main` brought."""
+    from research import queue as Q
+
+    h = _gated(world, monkeypatch)
+    h.d.after_landing_shards = 3
+    h.d.records_artifact = lambda rid: f"art:{'a' * 64}@{'b' * 64}" if rid == "r-post-0" else None
+    main = _main(world)
+    tip = _landed(h, {"a.txt": "1\n"})
+    h.run_state["r-post-0"] = ("done", 0, None)                 # circuit-check's records step
+    h.tick()
+    h.tick()
+    shards = ["r-post-1", "r-post-2", "r-post-3"]
+    assert h.postland()["run"]["ids"] == shards and _main(world) == main
+
+    def promote(out: str) -> None:
+        assert Q.promote(h.q, states=h.d.states, evidence=h.d.evidence) == 0
+        assert out in capsys.readouterr().out
+
+    def ended(k: int, passed: list[str], failed: str | None = None):
+        h.run_state[shards[k]] = ("done", 1 if failed else 0, None)
+        return _steps_run(world.tmp / f"{k}-{failed}", shards[k], {**dict.fromkeys(passed, "passed"),
+                                                                    **({failed: "failed"} if failed else {})})
+
+    state = h.q.state_path.read_bytes()
+    rest = [s for s in h.posted[-1][1].split(",") if s not in GATED[:7]]          # the last shard's: ratchet-gate, circuit-check
+    h.evidence = [ended(0, GATED[:4]), ended(1, GATED[4:7])]
+    promote("r-post-3 still runs")
+    h.evidence.append(ended(2, [s for s in rest if s != GATED[-1]], GATED[-1]))
+    promote("it didn't pass every step on the merge gate")
     assert _main(world) == main
-    assert Q.baseline(h.q, tip, "ci", ",".join(GATED)) == 0
+    h.evidence[2] = ended(2, rest)
+    promote(f"`main` fast-forwarded from {main[:12]} to {tip[:12]}, whose after-landing run r-post-1 r-post-2 r-post-3 passed")
+    assert _main(world) == tip and h.q.state_path.read_bytes() == state
+    promote("already: nothing to move")
     h.tick()
-    assert _main(world) == tip and any("(ci baseline)" in x for x in world.logs), world.logs
+    assert h.postland()["verified"] == tip and h.after == [(main, {tip: "r-post-1 r-post-2 r-post-3"})]
 
 
 def test_a_main_pushed_outside_drive_is_merged_into_checked_and_main_follows_once_that_is_checked(world, monkeypatch):
