@@ -921,7 +921,6 @@ theorem finders_of_break (V : Vocab d α) (dev : Exchange → History) (θ : Byt
 theorem tableCollision_valid {s : Sent} {u v : Claims.Msg} (h : tableCollision s = some (u, v)) :
     Claims.Collision Verity.sha512Msg u v := by
   obtain ⟨t, -, ht⟩ := List.exists_of_findSome?_eq_some h
-  dsimp only at ht
   split at ht
   · split at ht
     · rename_i hab
