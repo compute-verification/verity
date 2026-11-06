@@ -7,7 +7,6 @@ public import Definitions.Nci.Guarantees
 public import Definitions.Nci.Guarantees.Reads
 public import Definitions.Nci.Guarantees.Threads
 public import Definitions.Nci.Guarantees.Layered
-public import Definitions.Nci.Guarantees.Contained
 public import Definitions.Nci.Guarantees.Fit
 public import Definitions.Nci.Guarantees.FitRate
 public import Definitions.Nci.Guarantees.Dampener
@@ -36,6 +35,8 @@ public import Definitions.Nci.Guarantees.PartitionCovers
 public import Definitions.Nci.Guarantees.CompliesCK
 public import Definitions.Nci.Guarantees.Ldl
 public import Definitions.Nci.Guarantees.Witnesses
+public import Definitions.Nci.Guarantees.Formalism
+public import Definitions.Nci.Guarantees.Formalism.Witnesses
 public import Definitions.Pous.Assumptions
 public import Definitions.Pous.Guarantees
 public import Definitions.Pouw.Assumptions

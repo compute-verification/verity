@@ -6,7 +6,7 @@ public import Mathlib.Analysis.Real.Sqrt
 /-!
 # The inference-only policy
 
-The developer registers `(D, θ)` (`Verity.RegisteredCircuit`). The input gates in `θ` hold the registered information,
+The developer declares `(D, θ)` (`Verity.RegisteredCircuit`). The input gates in `θ` hold the registered information,
 committed beforehand; every other value is fresh input. A division of `D` into inference blocks is a `Verity.Partition`
 of its computed gates. Input gates are in no inference block, so an inference block that uses an input reads it. The
 gates `R` of an inference block read `width(in(R) \ θ)` fresh input bits (`novelReads`): registered information is free,
@@ -17,18 +17,18 @@ block exactly `c` gates, padding included, reading at most `k` fresh input bits.
 input an inference block reads per gate. `CompliesRate c α` is the policy as the verifier's check (`NciCheck`) reads it,
 on a circuit of any widths: inference blocks of at most `c` gates, each reading at most `α` fresh input bits per gate. A
 `(c, k)`-partition complies at rate `k / c`, and an inference block of at most `c` gates at rate `α` reads at most
-`k = α c` fresh input bits. `CompliesAtMost c k n` is its count form on a Boolean registered circuit: `D` divides into
-at most `n` proof blocks of a `(c, k)`-partition. A policy is a condition on the registered circuit that the verifier
-checks from `D` and `θ` alone (`Policy`), a protocol with no rounds of its own. `slowdown policy t` is the least ratio by
-which a circuit that complies with `policy` and implements `t` is larger than `t`. `Reads c C` is the least total fresh
-input that the inference blocks of a division of `C` into blocks of at most `c` gates read.
+`k = α c` fresh input bits. `CompliesAtMost c k n` is its count form on a Boolean declaration: `D` divides into at most
+`n` proof blocks of a `(c, k)`-partition. A policy is a condition on declarations that the verifier checks from `D` and
+`θ` alone (`Policy`), a protocol with no rounds of its own. `slowdown policy t` is the factor by which every declaration
+that complies with `policy` and implements `t` is larger than `t`. `Reads c C` is the least total fresh input that the
+inference blocks of a division of `C` into blocks of at most `c` gates read.
 
 The draft's necessary subcomputation of frontier training is an updated matrix multiplication chain (`Chain`): the
 gates where a circuit computes the products, the complete output entries, and the links between consecutive
 multiplications. For a set `R` of gates it gives the draft's vocabulary: the weight entries `R` uses, the input entries
 it uses, the entries whole in `R`, `R`'s full positions, and in a division into inference blocks the entries that are
-split and the number of inference blocks that hold products of each. `F` is the draft's lower bound on that size ratio
-for such chains.
+split and the number of inference blocks that hold products of each. `F` is the slowdown factor the draft proves for
+such chains.
 -/
 
 @[expose] public section
@@ -41,11 +41,11 @@ open scoped ENNReal
 /-- The fresh input that the gates `R` of `d`'s circuit read, in bits: the width of `in(R) \ θ`. -/
 def novelReads (d : RegisteredCircuit) (R : Finset (Fin d.D.N)) : ℕ := d.D.width (d.D.into R \ d.θ)
 
-/-- A policy: a condition on registered circuits. -/
+/-- A policy: a condition on declarations. -/
 abbrev Policy : Type := RegisteredCircuit → Prop
 
 /-- **The inference-only policy** at `(c, k)`: `d` has a `(c, k)`-partition, its circuit Boolean and divided into
-inference blocks of exactly `c` gates, padding included, each with at most `k` fresh input bits. -/
+inference blocks of at most `c` gates, each with at most `k` fresh input bits. -/
 def Complies (c k : ℕ) : Policy := fun d =>
   ∃ (B : ℕ) (P : Partition d.D B), P.IsCK d c k
 
@@ -66,8 +66,8 @@ gates read. -/
 noncomputable def Reads (c : ℕ) (C : RegisteredCircuit) : ℕ :=
   sInf {r | ∃ (n : ℕ) (P : Partition C.D n), (∀ u, C.D.size (P.gates u) ≤ c) ∧ r = ∑ u, novelReads C (P.gates u)}
 
-/-- **The size ratio** `slowdown policy t`: the least ratio of `size(d)` to `size(t)` over the registered circuits `d`
-that implement `t` and comply with `policy`, and `⊤` when none does. -/
+/-- **The slowdown factor** `ρ_policy(t)`: the least ratio of `size(d)` to `size(t)` over the declarations `d` that
+implement `t` and comply with `policy`, and `⊤` when none does. -/
 noncomputable def slowdown (policy : Policy) (t : RegisteredCircuit) : ℝ≥0∞ :=
   ⨅ (d : RegisteredCircuit) (_ : t.Implements d ∧ policy d), (d.D.size d.D.computed : ℝ≥0∞) / t.D.size t.D.computed
 
@@ -152,8 +152,8 @@ noncomputable def spread {n : ℕ} (P : Partition D n) (ℓ : Fin c.L) (t : Fin 
 
 end Chain
 
-/-- **The size-ratio bound for updated matrix multiplications** `F` (the draft's theorem, "Throttling updated matrix
-multiplications"), at rate `α` (under the policy `k / c`), read cap `k`, widths `b_w` of a weight entry and `b_a` of an
+/-- **The slowdown factor for updated matrix multiplications** `F` (the draft's theorem, "Throttling updated matrix
+multiplications"), at rate `α`, read cap `k` (the policy's `α Γ`), widths `b_w` of a weight entry and `b_a` of an
 activation entry, and smallest inner dimension `d`:
 `F = 1/(2α) · max_{0<μ<1} min{(1 + √μ)² b_w b_a d / k, √2 (1 + √μ) √(1 − μ) b_a √(b_w / k)}`,
 the maximum written as a supremum. The first term covers inference blocks that complete entries themselves, the second
