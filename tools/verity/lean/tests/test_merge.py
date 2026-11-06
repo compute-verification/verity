@@ -260,7 +260,7 @@ def claims(**sections: dict) -> dict:
 
 
 def test_proofs_zkoutleak_main_moved_to_claims_generic_leaves_claims_not_where_the_branch_still_has_it():
-    """Merging `main` into #7254's line: `main` moved `Claims.ZKOutLeak` from `claims.not` to `claims.generic`, and the
+    """Merging `main` into a branch: `main` moved `Claims.ZKOutLeak` from `claims.not` to `claims.generic`, and the
     branch still had it under `claims.not`, with the base's reason or an older one. The merged record lists it under
     `claims.generic` alone; the driver had kept both, which the Lean check refuses (`claims.generic-both`)."""
     leak, excuse = "Claims.ZKOutLeak", {"Claims.Bits": "a helper"}
