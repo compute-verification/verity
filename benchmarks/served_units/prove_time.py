@@ -52,7 +52,8 @@ def main(out: Path, card: str | None) -> dict:
         for d in sorted((out / dev).glob("*-n*")):
             st = json.loads((out / "stage" / d.name / "stage.json").read_text())
             s = session_set(d, gpu=dev == "gpu")
-            rec = {"device": dev, "tag": st["tag"], "n": st["n"], "k_log": st["k_log"], "vus_per_block": st["vus_per_block"],
+            rec = {"device": dev, "tag": st["tag"], "n": st["n"], "k_log": st["k_log"], "unit_log": st.get("unit_log"),
+                   "vus_per_block": st["vus_per_block"],
                    "ands": st["ands"], "macs": st["statics"]["K"], "public_inputs": st.get("public_inputs", []),
                    "accepted": s.get("accepted"), "prove_total_s": s.get("prove_total_s"),
                    "prove_total_all_s": s.get("prove_total_all_s"), "session_s": s.get("session_s"), "buckets": s.get("buckets"),
@@ -65,7 +66,7 @@ def main(out: Path, card: str | None) -> dict:
         recs.sort(key=lambda r: r["n"])
         macs, r0 = recs[0]["macs"], recs[0]
         f = fit([(r["n"], r["prove_total_s"]) for r in recs])
-        t = {"macs": macs, "k_log": r0["k_log"], "vus_per_block": r0["vus_per_block"], "ands": r0["ands"],
+        t = {"macs": macs, "k_log": r0["k_log"], "unit_log": r0["unit_log"], "vus_per_block": r0["vus_per_block"], "ands": r0["ands"],
              "cells_per_block": (1 << r0["k_log"]) / r0["vus_per_block"],
              "amortized": {r["n"]: {"s_per_block": r["prove_total_s"] / r["n"]} for r in recs}}
         if peak:
@@ -76,7 +77,7 @@ def main(out: Path, card: str | None) -> dict:
             if peak:
                 t["overhead"] = f[1] * peak / macs
         res["types"][key] = t
-        line = f"{key}: k_log {t['k_log']} G {t['vus_per_block']} ANDs {t['ands']:,}"
+        line = f"{key}: k_log {t['k_log']} unit_log {t['unit_log']} G {t['vus_per_block']} ANDs {t['ands']:,}"
         if f:
             line += f"; fixed {f[0]:.3f} s, {f[1] * 1e3:.3f} ms a block" + (f", overhead {t['overhead']:.3g}" if peak else "")
         line += "; amortized " + ", ".join(f"N={n} {a['s_per_block'] * 1e3:.3f} ms" + (f" ({a['overhead']:.3g})" if peak else "")

@@ -20,14 +20,15 @@ Two kinds of type (`stage.py`'s docstring has both):
 
 Files:
 
-- `stage.py UNIT N OUT [--public-weights]`: the proof-block types at GLM-5.3's statics (per TP8 rank), the W8A8 coordinate at
-  Llama-3.2-1B's, and their synthetic values; `--public-weights` stages a `UNITS` type's weight row as public input ports on
-  the same values, the block without its weight row's in-circuit opening (a statement the verifier refuses as outside the
-  proved scope, after every check).
+- `stage.py UNIT N OUT [--public-weights [--packed]]`: the proof-block types at GLM-5.3's statics (per TP8 rank), the W8A8
+  coordinate at Llama-3.2-1B's, and their synthetic values; `--public-weights` stages a `UNITS` type's weight row as public
+  input ports on the same values, the block without its weight row's in-circuit opening (a statement the verifier refuses as
+  outside the proved scope, after every check), each leaf in its own u16 words, or with `--packed` as the row lays them.
 - `job.sh`: builds, stages, proves and verifies every proof block of `SU_UNITS` (its header lists the checks and the environment);
   the builds, the run and the controls are `benchmarks/pouw/hidden_zk/job.sh`'s.
 - `summarize.py`: `out/<tag>/summary.json` and one table row per proof block.
-- `prove_time.sh`: the prover's time on statements of each `PT_UNITS` type (`TYPE[:S=V,...]`, `+public-weights` for that arm)
+- `prove_time.sh`: the prover's time on statements of each `PT_UNITS` type (`TYPE[:S=V,...]`, `+public-weights` or
+  `+packed-weights` for those arms)
   at each size of `PT_NS`, on one leased GPU (`PT_DEVICE=gpu`) or the CPU prover (`cpu`); `prove_time.py` fits each type's
   fixed seconds a statement and seconds a block, and on a GPU gives its proof overhead (seconds a block × the card's peak MACs
   a second ÷ the block's MACs), marginal and amortized at each size.
