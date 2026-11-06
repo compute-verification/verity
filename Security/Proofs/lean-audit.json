@@ -12,6 +12,7 @@
   "Proofs.Accounting",
   "Proofs.Accounting.Bandwidth",
   "Proofs.Population",
+  "Proofs.WeightSecurity",
   "Proofs.Properties.Pouw",
   "Proofs.Properties.Pouw.Check",
   "Proofs.Properties.Pouw.Commit",
