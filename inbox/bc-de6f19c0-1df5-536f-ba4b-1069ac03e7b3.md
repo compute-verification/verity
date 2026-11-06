@@ -99,3 +99,20 @@ cited:
 prefix-cache K/V another request reads, would be undercounted.
 Today's weights claim still needs proving about 100x cheaper than today's h (1.39e10 registered; per-expert 1.70e9 at
 full statements).
+
+
+## 2026-11-06T23:55Z, from proofs coordinator: the Implementation section's trust list (for your Sat refresh)
+
+Daniel's draft says the prototype "guarantees soundness during deployment so long as: SHA-512 is collision-resistant;
+the Lean kernel and compiler are sound; the server running the verifier is honest and its randomness unpredictable".
+For the SPOT-Flock soundness guarantee as landed on main 5608f506 (#7603 two-stage deployed) plus checked (#7645, #7644,
+#7680), list EXACTLY the premises the lock records (lean-audit.json): every named Prop and assumption, which are proved
+and which are taken. Then say whether Daniel's three-item list is complete, and the shortest accurate wording if not.
+
+Also check the draft's other claims:
+- "re-implement Flock in Lean": it's the verifier only; the prover stays Rust/CUDA.
+- "formally verified Lean ... tool that chooses an optimal sampling design": the planner is Python. The Lean side is the
+  draw and the theorem for every design.
+- "formally verify its security properties": soundness, ZK, or both, and under which premises (#7123's four witnessed
+  premises are provisional).
+Put it in your claims note as its own section.
