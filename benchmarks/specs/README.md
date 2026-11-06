@@ -7,8 +7,8 @@ every key a spec may hold, how a point is timed, and what a result says. This fi
   checkpoint with its digest, its precision, the GPU, the vLLM pin and the engine settings), the arms timed against each
   other, the sweep it runs over, its reps, and its admission. Every ratio is over its baseline: `stock-fp8` when it runs,
   else `stock`, else its first arm.
-- A **sweep** (`verity-bench/vllm-sweep/v0`) is the points a spec runs: the product of its batches, prompt lengths,
-  traffic shapes and samplings. A spec names one by its id.
+- A **sweep** (`verity-bench/vllm-sweep/v0`) is the points a spec runs: the product of its batches, prompt lengths
+  and traffic shapes, every request sampled greedily. A spec names one by its id.
 
 ~~~text
 verity-bench plan SPEC     # each point's identity, and its passing run if it has one

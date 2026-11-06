@@ -127,6 +127,7 @@ def test_sweep_expansion_and_staggered_mixed_requests():
     assert {p.prompt_tokens for p in full} == {512, 8192}
     assert {p.traffic for p in full} == {"decode-heavy", "prefill-heavy", "mixed"}
     assert [r.arrive_step for r in quick[0].requests()] == [0, 0, 1, 1, 2, 2, 3, 3]
+    assert [(p.id, p.to_json()["sampling"]) for p in quick] == [("b8-p512-mixed", "greedy"), ("b32-p512-mixed", "greedy")]
 
 
 def test_cli_and_presets_use_the_benchmark_package_and_stable_gpu_ids(tmp_path):
@@ -1356,40 +1357,14 @@ def test_pearl_cs_whole_step_arm_on_an_h200_runs_pearl_c_sm90s_kernels_under_the
                                  "lag_ends": True, "whole_tree_sm": True, "aside_ends": True} and whole.schedule == "serial"
 
 
-SAMPLED_SWEEP = '''schema = "verity-bench/vllm-sweep/v0"
-id = "sampled"
-batches = [1, 8, 32, 64]
-prompt_tokens = [512]
-traffic = ["mixed"]
-sampling = ["greedy", "stochastic"]
-
-[output_tokens]
-mixed = 64
-'''
-
-
-def test_a_sweep_crosses_samplings_and_greedy_points_keep_their_ids(tmp_path, monkeypatch):
+def test_a_sweep_that_samples_other_than_greedily_refuses(tmp_path, monkeypatch):
     from verity_bench.vllm import presets
 
-    assert {p.sampling for p in expand_sweep("quick")} == {"greedy"}
-    (tmp_path / "sampled.toml").write_text(SAMPLED_SWEEP)
+    quick = (presets.SPEC_ROOT / "quick.toml").read_text().replace('id = "quick"', 'id = "odd"')
+    sampled = quick.replace("[output_tokens]", 'sampling = ["greedy", "stochastic"]\n\n[output_tokens]')
+    (tmp_path / "odd.toml").write_text(sampled)
     monkeypatch.setattr(presets, "SPEC_ROOT", tmp_path)
-    sampled = presets.expand_sweep("sampled")
-    assert [(p.batch, p.sampling) for p in sampled] == [
-        (b, s) for b in (1, 8, 32, 64) for s in ("greedy", "stochastic")
-    ]
-    assert [p.id for p in sampled[4:6]] == ["b32-p512-mixed", "b32-p512-mixed-stochastic"]
-    assert [p.headline for p in sampled[4:6]] == [True, False]
-    assert sampled[5].to_json()["sampling"] == "stochastic"
-
-
-def test_an_unknown_sampling_refuses(tmp_path, monkeypatch):
-    from verity_bench.vllm import presets
-
-    (tmp_path / "odd.toml").write_text(
-        SAMPLED_SWEEP.replace('id = "sampled"', 'id = "odd"').replace('"stochastic"', '"beam"'))
-    monkeypatch.setattr(presets, "SPEC_ROOT", tmp_path)
-    with pytest.raises(presets.ConfigError, match="unknown sampling"):
+    with pytest.raises(presets.ConfigError, match="every point samples greedily"):
         presets.load_sweep("odd")
 
 
