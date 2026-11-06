@@ -1,10 +1,11 @@
-"""Figure 1 of the SPOT post, derived from the sampled-proofs planner: what an adversary serving a model on all of a
-scope's compute over a monitoring period can exfiltrate, infiltrate or skip while evading detection with probability
-above δ, against proof overhead, at each share of compute spent on verification.
+"""Figure 1's model and its bounds against proof overhead, derived from the sampled-proofs planner: what an adversary
+serving a model on all of a scope's compute over a monitoring period can exfiltrate, infiltrate or skip while evading
+detection with probability above δ, against proof overhead, at each share of compute spent on verification.  Figure 1
+itself plots the same model against total cost (`total_cost.py`).
 
 Every input is a card marked measured or modeled with its source: the model's `spot-card/v1` cards (`cards.py`), the
-census and rho's reference.  The output carries them all beside every plotted series (`figure1.json`), which the
-console reads.
+census and rho's reference.  The output carries them all beside every plotted series (`figure1_overhead.json`), which
+the console reads.
 
 **Workload.**  A scope's compute is its GPUs (the world: rho's `world-h200` fleet, the census's `world-inference-2027`;
 a datacenter: the census's `dc-12500-machines-600s`) over a monitoring period (`wipe_monitoring.PERIODS`), serving at
@@ -52,7 +53,8 @@ two-stage design's interior commitments come after its first stage, so they don'
 time.  Infiltration is a panel of its own, plotted from the model's `infiltration` card and pending without one.  Each
 panel names the deployment it assumes (`DEPLOYMENT`).  The horizontal lines are rho's reference objects
 (`REFERENCES`, its reference model's; SparseLoCo's syncs scaled to the served model's parameters where its `workload`
-card gives them), the model's checkpoint and every `references` card's.  `figures.py` writes it with Figures 2 and 3.
+card gives them), the model's checkpoint and every `references` card's.  `figures.py` writes it with Figure 1 and
+Figures 2 and 3.
 """
 from __future__ import annotations
 

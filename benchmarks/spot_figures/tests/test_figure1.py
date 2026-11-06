@@ -402,7 +402,8 @@ def test_the_json_is_plain_and_renders(out, tmp_path):
     for panel in ("exfiltration", "infiltration", "skipped_work"):
         assert back["panels"][panel]["deployment"]
     paths = render(back, "datacenter week", tmp_path) + render_appendix(back, "datacenter week", tmp_path)
-    assert [p.name for p in paths] == ["figure1_datacenter_week.png", "figure1_datacenter_week.svg",
-                                       "figure1_appendix_datacenter_week.png", "figure1_appendix_datacenter_week.svg"]
+    assert [p.name for p in paths] == ["figure1_overhead_datacenter_week.png", "figure1_overhead_datacenter_week.svg",
+                                       "figure1_overhead_appendix_datacenter_week.png",
+                                       "figure1_overhead_appendix_datacenter_week.svg"]
     assert all(p.stat().st_size > 0 for p in paths)
-    assert (stem("world year"), appendix_stem("world year")) == ("figure1", "figure1_appendix")
+    assert (stem("world year"), appendix_stem("world year")) == ("figure1_overhead", "figure1_overhead_appendix")

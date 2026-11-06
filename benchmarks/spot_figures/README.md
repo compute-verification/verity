@@ -6,15 +6,16 @@ card marked measured or modeled with its source, and each figure's JSON carries 
 plotted series.
 
 ~~~sh
-uv run python benchmarks/spot_figures/figures.py --model GLM-5.3 --out DIR   # figure{1,2,3}.json, PNGs and SVGs
+uv run python benchmarks/spot_figures/figures.py --model GLM-5.3 --out DIR   # figure{1,1_overhead,2,3}.json, PNGs, SVGs
                                                        # [--request workload] [--workers N] [--points N]
-uv run python benchmarks/spot_figures/render.py DIR/figure1.json            # Figure 1 and its appendix, from the JSON
+uv run python benchmarks/spot_figures/total_cost.py render DIR/figure1.json  # Figure 1, from the JSON
+uv run python benchmarks/spot_figures/render.py DIR/figure1_overhead.json   # the bounds against proof overhead
 research data put --kind spot-figure/v1 --tree DIR --preserve                # for the console
 ~~~
 
 - **Cards** (`cards.py`, schema `spot-card/v1`): every number the figures read arrives as one JSON card in a slot
   (`workload`, `proof_overhead`, `commitment`, `replay`, `design`, `references`, `infiltration`,
-  `commit_hillclimb`), for a model or for every model. `cards.py` holds each slot's fields and checks a card against
+  `commit_hillclimb`, `serve_tax`), for a model or for every model. `cards.py` holds each slot's fields and checks a card against
   them. A card is published to the evidence store and kept in `cards/SLOT.MODEL.json` with its art id; a model's
   `references` cards add up, each kept as `cards/references.MODEL.ART.json`:
 
@@ -35,9 +36,28 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   (`served_macs_per_token`) where its proof blocks leave some out: requests are sized from the served MACs, and the
   figures show the share in no proof block and the share modeled. Its `params`, the model's total parameters, scale
   the references that go as the model's size.
-- **Figure 1** (`figure1.py`, `render.py`): what an adversary serving the model on all of a scope's compute over a
-  monitoring period can exfiltrate, infiltrate or skip while evading detection with probability above δ, against
-  proof overhead, a curve per share of compute spent on replays, interior commitments and proofs.
+
+  A `serve_tax` card gives each server configuration's serve tax, what its change to the production server costs on
+  every token against its `baseline`, as one number with its range, `priced` or `measured`, a lower bound or not, and
+  its parts. `total_cost.py priced-card` prices one from the model's cards; a measured value replaces a priced one
+  configuration by configuration, and the figure draws a priced tax hollow.
+- **Figure 1** (`total_cost.py`): what an adversary serving the model on all of a scope's compute over a monitoring
+  period can exfiltrate or infiltrate while evading detection with probability above δ, against total cost as a share
+  of serving compute, the serve tax plus β (the share spent on replays, interior commitments and proofs of the drawn
+  units), at the `proof_overhead` card's marginal overhead; skipped work is a figure of its own.
+  - One line per server configuration (`CONFIGURATIONS`), each starting at its own tax, hollow while the tax is
+    priced, with its range as a bar: (A) tokens only (the token ids, the schedule record and the KV cache at window
+    edges committed; a replay block is a request), (B) each layer's state (a replay block is one layer of one token),
+    and (C) every proof-block boundary (one-stage, dashed, its tax a lower bound from hashing alone, the only line
+    with skipped work). A new configuration, such as another circuit partition, is a new entry with its own line.
+  - Exfiltration: (A) and (B) in the capped sets' form (`card_influenceTwo_le_served_min`) and never above the
+    scope's served bits (`card_influenceTwo_le_min`), the JSON saying which term binds at each β; (C) in
+    `consumers.exfiltration_bound`'s form, at most the served bits by the same count.
+  - Infiltration: the write form, the bits the incorrect proof blocks write, at the design each exfiltration line
+    plans (`write_form`): each replay block charged at most its footprint, a request's served bits under (A) and a
+    layer's boundary bits under (B); (C)'s is the K incorrect blocks its plan detects, each the widest block's bits.
+- **The bounds against proof overhead** (`figure1.py`, `render.py`): the same model against marginal proof overhead,
+  a curve per share of compute spent on replays, interior commitments and proofs.
   - Scopes are the world (rho's `world-h200` fleet, which computes the census's `world-inference-2027`) and a
     datacenter (the census's `dc-12500-machines-600s`), each over a week, a month and a year
     (`wipe_monitoring.PERIODS`).
@@ -96,3 +116,5 @@ Limits of the model:
   `card_influenceTwo_le_served_min` and the patterns' form on none yet.
 - The served bits count every token of a request as served, as the token select's output word alone: a circuit that
   returns more (logits, state) serves more, and the cap is then too low.
+- The two-stage write forms need a harm bound at the footprint, which no lemma states yet, and (B) replays a layer of
+  one token at its share of its request's replay, from state it retains.

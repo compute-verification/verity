@@ -1,5 +1,6 @@
-"""Figure 1's PNG and SVG for one scope, drawn from `figure1.json` alone, so anything holding the JSON draws the same
-figure: three panels (exfiltration, infiltration, skipped work) against proof overhead, a colour per share of compute
+"""The bounds against proof overhead as PNG and SVG for one scope, drawn from `figure1_overhead.json` alone, so anything
+holding the JSON draws the same figure: three panels (exfiltration, infiltration, skipped work) against proof overhead,
+a colour per share of compute
 spent on verification, the panel's headline design solid and thick, the uniform two-stage design solid and thin, the
 capped two-stage designs dash-dotted (`CAPPED`, `PATTERNS`; uniform thin), and the other comparisons dashed or dotted,
 the measured overhead as a vertical line, the references as grey horizontal ones in the style the JSON gives each, and
@@ -9,7 +10,7 @@ leaves out.  A panel's y-axis spans its headline curves and the references up to
 comparison curve may leave it at the top; a reference further up is named at the axis's top, and one at 0 only in the
 caption.
 
-    uv run python benchmarks/spot_figures/render.py DIR/figure1.json [--scope "world year"] [--out DIR]
+    uv run python benchmarks/spot_figures/render.py DIR/figure1_overhead.json [--scope "world year"] [--out DIR]
 """
 from __future__ import annotations
 
@@ -58,11 +59,11 @@ PANELS = (("exfiltration", "Exfiltration capacity"), ("infiltration", "Infiltrat
 
 
 def stem(scope: str) -> str:
-    return "figure1" if scope == PRIMARY else "figure1_" + scope.replace(" ", "_")
+    return "figure1_overhead" if scope == PRIMARY else "figure1_overhead_" + scope.replace(" ", "_")
 
 
 def appendix_stem(scope: str) -> str:
-    return "figure1_appendix" if scope == PRIMARY else "figure1_appendix_" + scope.replace(" ", "_")
+    return "figure1_overhead_appendix" if scope == PRIMARY else "figure1_overhead_appendix_" + scope.replace(" ", "_")
 
 
 def _bytes(v: float, _pos=None) -> str:
@@ -229,7 +230,8 @@ def render_appendix(out: dict, scope: str, outdir: Path) -> list[Path]:
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("json", type=Path)
-    ap.add_argument("--scope", action="append", help="a scope's name, as figure1.json's `scopes` has it; default all")
+    ap.add_argument("--scope", action="append",
+                    help="a scope's name, as figure1_overhead.json's `scopes` has it; default all")
     ap.add_argument("--out", type=Path, help="default: the JSON's directory")
     args = ap.parse_args(argv)
     out = json.loads(args.json.read_text())

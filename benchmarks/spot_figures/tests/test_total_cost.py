@@ -1,0 +1,129 @@
+"""Figure 1 in its total-cost form: the configurations and their serve-tax card, the write form against every admissible
+set of a small design, and one scope end to end with a measured tax dropped in."""
+from itertools import product
+from math import comb
+
+import cards
+import pytest
+import total_cost as t
+from verity.core.protocols.sampled_proofs.optimize import Cell
+
+
+def test_the_configurations_are_the_cards():
+    assert tuple(t.CONFIGURATIONS) == cards.CONFIGURATIONS
+    assert [n for n, c in t.CONFIGURATIONS.items() if "skipped_work" in c.panels] == ["every_block"]
+
+
+def test_the_kept_priced_taxes_are_the_generators():
+    """While a configuration's tax is priced, the kept card's is what `priced_card` prices from the kept cards."""
+    kept = t.taxes(cards.load("serve_tax", "GLM-5.3"))
+    fresh = t.taxes(t.priced_card("GLM-5.3"))
+    priced = [n for n, e in kept.items() if e["status"] == "priced"]
+    for name in priced:
+        assert [p["part"] for p in kept[name]["parts"]] == [p["part"] for p in fresh[name]["parts"]], name
+        for k in ("tax", "low", "high"):
+            assert kept[name][k] == pytest.approx(fresh[name][k], rel=1e-12), (name, k)
+    assert kept["every_block"]["lower_bound"] and not kept["tokens"]["lower_bound"]
+    assert kept["tokens"]["tax"] < kept["layer_of_token"]["tax"] < kept["every_block"]["tax"]
+
+
+def test_a_card_without_every_configuration_is_refused():
+    card = t.priced_card("GLM-5.3")
+    card["value"]["configurations"] = card["value"]["configurations"][:2]
+    with pytest.raises(ValueError, match="no tax for \\['every_block'\\]"):
+        t.taxes(card)
+    with pytest.raises(ValueError, match="low <= tax <= high"):
+        cards.check(t.priced_card("GLM-5.3") | {"value": {"baseline": "x", "configurations": [
+            {"config": "tokens", "status": "priced", "tax": .1, "low": .2, "high": .3, "lower_bound": False,
+             "parts": []}]}})
+
+
+def most_written(cells, k, q, replay_blocks, delta, footprint):
+    """The most bits any set of incorrect proof blocks escaping with probability at least δ writes, every replay
+    block's incorrect blocks counted by stratum, each replay block charged at most `footprint`."""
+    options = list(product(*(range(int(c.n) + 1) for c in cells)))
+
+    def escape(js):
+        miss = 1.0
+        for c, j in zip(cells, js):
+            miss *= comb(int(c.n) - j, k[c.stratum]) / comb(int(c.n), k[c.stratum])
+        return 1 - q * (1 - miss)
+
+    def charge(js):
+        return min(sum(j * c.bits for c, j in zip(cells, js)), footprint)
+
+    best = 0.0
+    for blocks in product(options, repeat=replay_blocks):
+        p = 1.0
+        for js in blocks:
+            p *= escape(js)
+        if p >= delta:
+            best = max(best, sum(charge(js) for js in blocks))
+    return best
+
+
+@pytest.mark.parametrize("q,delta,footprint", [(.5, .1, 40), (.5, .1, 1000), (.9, .3, 40), (.2, .05, 1000)])
+def test_the_write_form_bounds_every_admissible_set(q, delta, footprint):
+    """Three 16-bit blocks in one stratum and one 64-bit block in its own, one sampled of each: the write form is at
+    least the most any admissible set writes, and within a few times of it."""
+    cells = [Cell(3, 16, stratum=0), Cell(1, 64, stratum=64)]
+    row = {"merged": 16, "k": {0: 1, 64: 1}, "q": q}
+    want = most_written(cells, row["k"], q, 4, delta, footprint)
+    got = t.write_form(cells, row, 4, delta, footprint)
+    assert want <= got <= 4 * max(want, 16)
+
+
+def test_the_write_form_is_at_most_every_replay_block_at_its_footprint():
+    cells = [Cell(1e6, 16)]
+    assert t.write_form(cells, {"merged": 16, "k": {0: 1}, "q": 1e-12}, 1000, .01, 500) == 1000 * 500
+
+
+@pytest.fixture(scope="module")
+def measured(tmp_path_factory) -> dict:
+    """One scope at four shares, with (A)'s tax measured."""
+    mp = pytest.MonkeyPatch()
+    load = cards.load
+
+    def with_measured(slot, model, required=True):
+        card = load(slot, model, required)
+        if slot == "serve_tax":
+            card["value"]["configurations"][0] |= {"status": "measured", "tax": .03, "low": .025, "high": .035}
+        return card
+
+    mp.setattr(t.spot_cards, "load", with_measured)
+    mp.setattr(t, "BETAS", (1e-3, 1e-1, 1.0))
+    out = t.run("GLM-5.3", ("datacenter week",))
+    mp.undo()
+    return out
+
+
+@pytest.mark.slow
+def test_each_line_starts_at_its_own_tax(measured, tmp_path):
+    """The planned scope: each line's x is its tax plus β, a measured tax as it comes; the exfiltration lines never
+    above the served bits, saying which term binds; both infiltration lines drawn; skipped work only for (C); the
+    captions name what each rests on; and it renders.  It plans every configuration at four shares, about 20 s, the
+    only test of the series end to end."""
+    out, scope = measured, "datacenter week"
+    served = out["scopes"][scope]["served_bits"]
+    assert out["taxes"]["tokens"] == out["taxes"]["tokens"] | {"status": "measured", "tax": .03}
+    for panel, p in out["panels"].items():
+        lines = {s["config"]: s for s in p["series"]}
+        assert set(lines) == {n for n, c in t.CONFIGURATIONS.items() if panel in c.panels}
+        for name, s in lines.items():
+            assert s["x"] == [out["taxes"][name]["tax"] + b for b in out["betas"]]
+            assert all(b <= a * (1 + 1e-9) for a, b in zip(s["y"], s["y"][1:])), (panel, name)
+            if panel == "exfiltration":
+                assert all(y <= served for y in s["y"])
+                assert [b == "served" for b in s["binds"]] == [c >= served for c in s["count"]]
+    caps = out["scopes"][scope]["captions"]
+    assert "card_influenceTwo_le_served_min" in caps["exfiltration"] and "card_influenceTwo_le_min" in caps["exfiltration"]
+    assert "serve tax 3%" in caps["exfiltration"] and "measured" in caps["exfiltration"]
+    assert "a lower bound, the hashing alone" in caps["skipped_work"]
+    rows = t.at_budgets(out)
+    assert {(r["panel"], r["config"]) for r in rows} == {(p, n) for n, c in t.CONFIGURATIONS.items() for p in c.panels}
+    paths = t.render(out, scope, tmp_path)
+    assert [p.name for p in paths] == ["figure1_datacenter_week.png", "figure1_datacenter_week.svg",
+                                       "figure1_skipped_work_datacenter_week.png",
+                                       "figure1_skipped_work_datacenter_week.svg"]
+    assert all(p.stat().st_size > 0 for p in paths)
+    assert (t.stem("world year"), t.stem("world year", "skipped_work")) == ("figure1", "figure1_skipped_work")
