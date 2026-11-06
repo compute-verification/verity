@@ -31,7 +31,7 @@ AGENT_ID = re.compile(r"(bc-)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0
 def send(agent: str, text: str, inbox: Path = INBOX) -> Path:
     if not AGENT_ID.fullmatch(agent or ""):
         raise SystemExit(f"inbox: {agent!r} is no full agent id; the hook delivers only to the whole conversation id, "
-                         "e.g. bc-1228808b-7b57-5204-a99d-e0b46dbae2e6 (the id the Task call returned), never a prefix")
+                         "e.g. bc-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (the id the Task call returned), never a prefix")
     if not text.strip():
         raise SystemExit("inbox: the message is empty")
     inbox.mkdir(parents=True, exist_ok=True)
