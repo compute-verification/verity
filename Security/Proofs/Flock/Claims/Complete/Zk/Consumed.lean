@@ -86,12 +86,12 @@ theorem RunZk.inner_k (hRp : Replay H rel) (hRS : RingSwitchZk H rel) (hLg : Lig
     exact hend
 
 /-- **Every recorded round of a masked rep is consumed** wherever its steps return: the goal `ConsumedZk`. -/
-theorem consumedZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hS : JsonRT.StmtOkZk H rel)
+theorem consumedZk_goal (h64 : Claims.Out64 H) (hS : JsonRT.StmtOkZk H rel)
     (hP : JsonRT.ProverOkZk H rel) (hRp : Replay H rel) (hRS : RingSwitchZk H rel) (hLg : LigeritoZk H rel)
     (hIn : Inner H rel) : ConsumedZk H rel := by
   intro o i hi r hr
   obtain ⟨st, rb, streams, hz, ct, hst, ht, htabs, hss, -, -, -, ⟨bs, hbs, hrec⟩, -, -, hsess, -, -⟩ :=
-    JsonRT.RunZk.json S h64 hS hP o
+    JsonRT.RunZk.json h64 hS hP o
   rw [htabs] at hi
   obtain rfl : i = 0 := by simpa using hi
   obtain ⟨v, hv⟩ := schedulesZk_goal H rel o (Setup.ofCircuit st) (by simp [htabs])
@@ -117,7 +117,7 @@ theorem consumedZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.O
   obtain ⟨k0, le0⟩ := RunZk.inner_k hRp hRS hLg hIn o htabs hv hsch (r := 0) (by omega)
   obtain ⟨k1, le1⟩ := RunZk.inner_k hRp hRS hLg hIn o htabs hv hsch (r := 1) (by omega)
   have hx : (o.extras 0).size = o.spec.points * st.regions.size := by
-    have he := JsonRT.repExtrasZk_goal S h64 hS hP o 0 (by simp [htabs])
+    have he := JsonRT.repExtrasZk_goal h64 hS hP o 0 (by simp [htabs])
     simp only [htabs, List.getElem!_toArray, List.getElem!_cons_zero] at he
     rw [FlockDeploy.extraClaims_size (st := st) he, hsess]
     simp [JsonRT.sessOf, pointsOf, Nat.mul_comm]

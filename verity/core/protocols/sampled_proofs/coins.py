@@ -1,7 +1,7 @@
-"""The verifier's coins: its own randomness and the one-stage draws it makes from it.
+"""A draw's coins: the auditor's challenger's, and the one-stage draws the verifier makes from them.
 
-The verifier samples every coin from its own randomness (`OwnRandomness`), with no derivation and no beacon, after the
-prover's commitments are registered.  `draw_first` draws a one-stage sampling design's proof blocks as the Lean verifier's
+The verifier samples no coins of its own. Every coin of a sample is the challenger's (`ChallengerCoins`), read from its log
+after the prover's commitments are registered, with no derivation and no beacon, by exact samplers (`OwnRandomness`).  `draw_first` draws a one-stage sampling design's proof blocks as the Lean verifier's
 `Flock.Draw.drawWith` does from the same bytes, and `closure_of` widens a work sample by the verifier's closure map.  A
 sampled proof block's outcome is final: nothing resamples.
 
@@ -101,9 +101,8 @@ def _on(src: bytes) -> Callable[[int], bytes]:
 
 
 class OwnRandomness:
-    """The verifier's randomness, read directly: exact samplers over raw bytes from `source`, the caller's coins (the
-    proof system's are the Lean verifier's, `verifier.coins`; there is no default, so nothing here reads the operating
-    system), consumed in order, with no hash and no derivation.  They are the Lean verifier's `Flock.Draw` and
+    """Exact samplers over raw bytes from `source`, the caller's coins (the proof system's are the challenger's,
+    `ChallengerCoins`; there is no default, so nothing here reads the operating system), consumed in order, with no hash and no derivation.  They are the Lean verifier's `Flock.Draw` and
     `flock-circuit`'s `unit_draw` samplers: `uniform(n)` reads w = ceil((bitlen(n) + 64) / 8)-byte big-endian words and returns the
     first below the largest multiple of n, mod n; `bernoulli(a/b)`, a/b in lowest terms, is `uniform(b) < a` (p = 0 and
     p = 1 read nothing); `subset` is a sparse partial Fisher-Yates."""

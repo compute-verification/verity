@@ -36,7 +36,7 @@ def repConsZk (rp : Zk.Replayed) (p : Proof) : Array (String × Zk.Lin) :=
 
 /-- **A masked rep accepts** when each of its checks passes, each from the transcript the previous one left. -/
 theorem zk_verifyRepWith_ok (hs : Flock.Hashes V) (spec : SessionSpec) (st : Setup) (sch : Schedule) (tPad : ℕ)
-    (sess : Session) (i r : ℕ) (bytes : ByteArray) {stream : StreamRec} {extras : Array Claim} {zp : Zk.ZkProof}
+    (sess : RunRecord) (i r : ℕ) (bytes : ByteArray) {stream : StreamRec} {extras : Array Claim} {zp : Zk.ZkProof}
     {rp : Zk.Replayed} {T : F128} {sws : Array Switched} {rec : Zk.L0Rec} {lg : Array (String × Zk.Lin)}
     {t₁ t₂ t₃ t₄ : Transcript}
     (hS : sess.streams.find? (·.name == s!"{spec.tables[i]!}/rep{r}") = some stream)
@@ -81,7 +81,7 @@ def zkSchedsOf (tabs : Array Setup) : Array (Schedule × ℕ) := tabs.map fun st
 
 /-- **The masked verdict accepts** when each of its checks passes. -/
 theorem zk_verifyWith_ok (h : ByteArray → ByteArray) (spec : SessionSpec) (tabs : Array Setup) (record : String)
-    (proofs : Array ByteArray) {sess : Session}
+    (proofs : Array ByteArray) {sess : RunRecord}
     (hT : (tabs.size != spec.tables.size || tabs.size == 0) = false)
     (hCT : spec.coinTree.isNone = false)
     (hD : Record.decodeWith (Flock.Hashes.ofSha512 h : Flock.Hashes V) spec record = Except.ok sess)

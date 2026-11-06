@@ -1045,10 +1045,10 @@ class UnitStager:
     row ``(schema, output ports)``, a run of consecutive output ports of exactly their words (`circuit.compose`'s
     ``seg_out_rows`` / ``v2_out_rows``). ``public_inputs`` (``{param: {"seed", "derivation"}}``): parameters that are public
     input ports, not rows (`circuit.compose`; PoUW's anchors, which the verifier recomputes from public seeds), laid out as
-    `unit_lowering`'s ``public``. ``circuit``: where circuit.txt is written, once; else `stage` writes it beside each round's
-    files. ``pin`` and ``class_sha512`` (`circuit.digest`, `circuit.class_digest`) are computed on first read: `stage` reads
-    them after writing circuit.txt, so a streamed circuit (``benchmarks/pouw/hidden_zk/fast_stage.py``) is hashed in the pass
-    that writes it. ``bind`` (``{"partition", "program"}``, `circuit.compose`'s): the statement bound to a partition of another
+    `unit_lowering`'s ``public``. ``circuit``: where circuit.txt is written, once, as it is composed (`circuit.compose_to`: the
+    stager never holds it, and ``text`` reads it back); else `stage` writes it beside each round's files, and ``pin`` and
+    ``class_sha512`` (`circuit.digest`, `circuit.class_digest`) are computed on first read: `stage` reads them after writing
+    circuit.txt, so a streamed circuit (``benchmarks/pouw/hidden_zk/fast_stage.py``) is hashed in the pass that writes it. ``bind`` (``{"partition", "program"}``, `circuit.compose`'s): the statement bound to a partition of another
     Program, a template query's that lists ``definition``, which META ``program_digests`` then names as the circuit's template
     (as `_shims`' does with a ``definition``); `stage` then takes each instance's global unit index (``indices``). The class
     (`circuit.class_digest`) is the unbound stager's. ``layout`` (a layout mode, ``iv/hybrid/4``): the templated statement
@@ -1094,18 +1094,26 @@ class UnitStager:
                                    outputs=[port(f"o{j}") for j in range(len(self.out_words))],
                                    program_digests=lambda statics: programs, **({"definition": lambda **_: definition} if bind else {}))
         self.iset = SimpleNamespace(subcircuit=self.sub, name=name.replace("/", "-"), content_digest=hashlib.sha256(content).hexdigest())
-        self.text = FC.compose(self.low, self.sub, port_bits=[None] * len(public_inputs) + [b for _r, _s, b, _ps in in_rows],
-                               seg_ports=frozenset(r for r, s, _b, _ps in in_rows if s == SCHEMA_HM96_SHA512_ROW_SEG),
-                               seg_out_rows=seg_out, v2_out_rows=v2_out, public_inputs=public_inputs or None,
-                               partition=bind and bind["partition"], program=bind and bind["program"], layout=layout,
-                               tail=getattr(self.low, "tail", None), leaf_scheme=LEAF_SCHEME)
+        kw = dict(port_bits=[None] * len(public_inputs) + [b for _r, _s, b, _ps in in_rows],
+                  seg_ports=frozenset(r for r, s, _b, _ps in in_rows if s == SCHEMA_HM96_SHA512_ROW_SEG),
+                  seg_out_rows=seg_out, v2_out_rows=v2_out, public_inputs=public_inputs or None,
+                  partition=bind and bind["partition"], program=bind and bind["program"], layout=layout,
+                  tail=getattr(self.low, "tail", None), leaf_scheme=LEAF_SCHEME)
         self.bound = bind is not None
-        self.meta = FC.meta_of(self.text)
-        self.ports = FC._meta_ports(self.meta)
         self.circuit = circuit
-        if circuit is not None:
+        if circuit is None:
+            self._text = self._head = FC.compose(self.low, self.sub, **kw)
+        else:
             circuit.parent.mkdir(parents=True, exist_ok=True)
-            circuit.write_text(self.text)
+            got = FC.compose_to(circuit, self.low, self.sub, **kw)
+            self._text, self._head, self.pin, self.class_sha512 = None, got["head"], got["sha512"], got["class"]
+        self.meta = FC.meta_of(self._head)
+        self.ports = FC._meta_ports(self.meta)
+
+    @property
+    def text(self) -> str:
+        """The circuit's text: the stager's own, or with ``circuit`` read from the file, a fresh copy each read."""
+        return self._text if self.circuit is None else self.circuit.read_bytes().decode()
 
     @functools.cached_property
     def pin(self) -> str:
@@ -1177,13 +1185,13 @@ class UnitStager:
         out_dir.mkdir(parents=True, exist_ok=True)
         if self.circuit is None:
             (out_dir / "circuit.txt").write_text(self.text)
-        FC.write(self.text, iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin", salt_key,
+        FC.write(self._text, iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin", salt_key,
                  rows={r: np.asarray(rows[r], dtype=np.uint16) for r, *_ in self.in_rows}, outs=outs, salts=salts,
                  public_words={p: np.asarray(rows[p], dtype=np.uint16) for p in self.public_inputs},
                  digests=(self.pin, self.class_sha512), indices=None if indices is None else [int(u) for u in indices],
                  share_rows=tables is not None, tables=tables, refs=refs, registered=registered, meta=self.meta)
         counts = getattr(self.low, "counts", None) or self.low.layout.counts
-        return {"meta": FC.meta_of(self.text), "outs": outs, "salts": salts, "ands": counts["ands"],
+        return {"meta": FC.meta_of(self._head), "outs": outs, "salts": salts, "ands": counts["ands"],
                 "unit_nnz": counts["nnz_a"] + counts["nnz_b"], "circuit_sha512": self.pin}
 
 

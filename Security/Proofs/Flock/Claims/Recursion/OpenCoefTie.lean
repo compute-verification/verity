@@ -394,7 +394,7 @@ theorem coefTie_staged {b : Brings} {IV : Claims.Verifier Coin}
   obtain ⟨cr, dr, hrows, ⟨what, hcv⟩, -⟩ := FlockSoundness.Discharge.Recursion.open_of_check hco
   refine ⟨inn, cr, dr, hinn, hrows, fun hnr => ?_⟩
   obtain ⟨hqc, ptc, hptc, hwords, hL8, hcols⟩ := coefCols_staged (w := w) hS hr hss hsv hpc hx ht hdin i
-  obtain ⟨prog, hprog, hpv⟩ := OpenDirs.check5_bytes_lt hS hck hr hpc hsu h0 hidx hown hcv hqc hnN hnr hnp
+  obtain ⟨prog, hprog, hpv⟩ := ResLower.check5_bytes_lt hS hck hr hpc hsu h0 hidx hown hcv hqc hnN hnr hnp
   have hst : openSetupSt (RecCoins.Source.atC3 i0.src i0.inner i0.commits) sts[0] =
       commitIns cr (RecCoins.verifierSalt prog RecCoins.COEF_VALUE) ++
         commitIns dr (RecCoins.verifierSalt prog RecCoins.DIRS_VALUE) := by

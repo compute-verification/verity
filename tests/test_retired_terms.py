@@ -10,11 +10,12 @@ them are incorrect, never faulty or wrong, while a faulty node, link or device k
 a key that mirrors a Lean name such as `faulty_bits`) are code; the retired-terms table
 (`GLOSSARY.md`) names them. What may stay: the table's own rows (``RETIRED_ROWS``), a spelling baked into a
 record or a digest (``ALLOWED``, one reason each; an entry that matches nothing fails too), and a file whose lines a PR
-already queued on `next` rewrites (``PENDING``), until that PR lands and the rename follows it.
+already queued on `next` rewrites (``PENDING``), until that PR lands and the rename follows it, or that moves to another
+repository.
 
 The maintained docs (every tracked Markdown file but a CHANGELOG) retire more (``DOC_TERMS``:
 "block" is reserved for parts of circuits, a proof block is incorrect or correct, never faulty, the subprotocols go by
-their names, and "leg", the dampener and NCI are retired). Their code
+their names, and "leg", the dampener, NCI, C-Flock, the netlist, M0, IR and the verifier of record are retired). Their code
 keeps the old words until its owners rename it, so this scan skips code spans and fences, where a path (`legs/`) or a
 record key stays, and a term written as a quoted mention ("leg"); the table's rows name them too. A retired command
 (`verity example`) keeps no path or key, so it is found in code spans and fences as well.
@@ -63,6 +64,11 @@ DOC_TERMS = {
     "declared work, declared workload, declares its advice": "registered work; the developer reports its advice, which the "
                                                              "registered compiler turns into the execution block",
     "sampled unit, unit class": "sampled proof block; a size class, or Flock's proof-block class",
+    "C-Flock": "Flock (Succinct's is upstream Flock)",
+    "netlist": "a private circuit, or the circuit's description",
+    "M0": "Flock's circuit prover",
+    "IR, Verity IR": "circuit or Program (`verity.ml.circuits`)",
+    "verifier of record": "the verifier (other checking code is named for what it is: the Rust cross-check, a Python mirror)",
     "audit coin": "the challenger's coins (the step that reads them is the verification phase)",
     "declaration block, declaration period": "execution block, execution phase",
     "sampling period, sampling block, PoUW's commit period": "execution phase (work plus its audit: an execution phase and its "
@@ -89,6 +95,7 @@ _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}u
                        rf"|declaration{_SPACE}(?:blocks?|periods?)|sampling{_SPACE}(?:periods?|blocks?)|hm96{_SPACE}rows?"
                        rf"|period's{_SPACE}(?:audit{_SPACE})?coins|reject(?:ion)?{_SPACE}domina\w*|dampeners?"
                        rf"|novel{_SPACE}communication{_SPACE}intensity)\b)|\bIUs?\b|\bNCI\b"
+                       rf"|(?i:\bC-Flock\b|\bnetlists?\b|\bverifiers?{_SPACE}of{_SPACE}record\b)|\bM0\b|\bIRs?\b"
                        rf"|\bcommit{_SPACE}periods?\b")
 _DOC_COMMAND = re.compile(r"\bverity[ \t]+(?:bench\|)?example\b")
 #: The commitments' own docs, where hm96 rows keep their name.
@@ -96,7 +103,6 @@ HM96_HOME = "verity/ml/commitments/"
 _CODE = re.compile(r"^[ \t]*(`{3,}|~{3,}).*?^[ \t]*\1[^\n]*$|(`+)[\s\S]*?(?<!`)\2(?!`)", re.M | re.S)
 
 ALLOWED: dict[str, str] = {
-    "the PoUW window's keyed draw takes A4 and A5": "Flock's ASSUMPTIONS.md: a queued PR rewrites the next line; renamed after it lands",
     "N, the window's proof units": "a public item's reason in A5's Spec (`benchmarks/one_stage/a5.py`): `Spec.digest` hashes it",
     "N, the round's proof units": "a public item's reason in scan_zk's Spec (`benchmarks/network_traces/scan_zk.py`): "
                                   "`Spec.digest` hashes it",
@@ -104,6 +110,8 @@ ALLOWED: dict[str, str] = {
                                                         "(`certifier.service`): `Spec.digest` hashes it",
     "T proof units per registration, unit t the link-window's bucket row t": "a public item's reason in the ingress tie's "
                                                                              "Spec (`certifier.tie_service`): `Spec.digest` hashes it",
+    "the verifier of record runs it": "Flock's Soundness README: a queued PR on next rewrites the line beside it; renamed after "
+                                      "it lands",
     '"proof-unit"': "the kind circuit-check's Boolean export records for a unit circuit (`boolean_export.Registry.type_of`)",
     "verity/proof-service/": "the stream's and outcome's record formats (`sampled_proofs.service.STREAM`, `OUTCOME`), "
                              "which their digests hash",
@@ -128,7 +136,6 @@ PENDING: dict[str, str] = {
     "verity/ml/commitments/domains.py": "queued PRs add the term here; the proof-service rename follows them",
     "benchmarks/pouw/served_h1/coins.py": "queued PRs rewrite its lines; the proof-service rename follows them",
     "verity/core/claims/tests/test_claims_registry.py": "queued PRs rewrite its lines; the proof-service rename follows them",
-    "verity/core/protocols/pouw/PROTOCOL.md": "queued PRs rewrite its lines; the proof-service rename follows them",
     "verity/core/protocols/pouw/dither/PROTOCOL.md": "queued PRs rewrite its lines; the proof-service rename follows them",
     "verity/core/protocols/remote_bandwidth/README.md": "queued PRs rewrite its lines; the proof-service rename follows them",
     "Security/Proofs/NetworkCertifier/README.md": "#4690 adds lines",
@@ -186,6 +193,7 @@ PENDING: dict[str, str] = {
     "benchmarks/recursion_e2e/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "benchmarks/torch_gpu/sha512_rows/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "examples/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
+    "Security/Proofs/Flock/Soundness/ASSUMPTIONS.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "examples/lifecycle/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "examples/vllm/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/core/difftest/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
@@ -206,6 +214,12 @@ PENDING: dict[str, str] = {
     "verity/ml/flock/verifier/PROTOCOL.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/ml/flock/verifier/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/ml/flock/README.md": "a PR on next rewrites the lines beside its unit classes; the rename follows it",
+    "tools/verity/check/README.md": "moves to the infra repository with the check's tooling; renamed there",
+    "benchmarks/README.md": "queued PRs on next add rows that name C-Flock, beside lines the rename touches; it follows them",
+    "benchmarks/unit_block/README.md": "a queued PR on next adds it, naming C-Flock; the rename follows it",
+    "benchmarks/flock_s8_block/README.md": "a queued PR on next adds lines naming C-Flock and the verifier of record; the rename follows it",
+    "verity/core/devices/memory_challenger/lean/README.md": "a queued PR on next adds it, naming C-Flock; the rename follows it",
+    "verity/ml/private_circuits/README.md": "a queued PR on next adds it, naming the netlist; the rename follows it",
 }
 
 
@@ -418,3 +432,18 @@ def test_the_doc_scan_reads_the_incorrect_terms():
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
         ("a.md", 1, "faulty proof blocks"), ("a.md", 1, "faulty proof block"), ("a.md", 2, "faulty-block"),
         ("a.md", 2, "faulty set")]
+
+
+def test_the_doc_scan_reads_the_flock_terms():
+    """C-Flock, the netlist, M0, IR and the verifier of record, on toy files: the stored label `C-Flock`, a
+    `flock-netlist` tag, an `ir` key, Flock, upstream Flock, M1, M2, an M00 and the verifier stay."""
+    docs = {
+        "a.md": "C-Flock's prover proves a netlist; two\nNetlists, and C-FLOCK.\n"
+                "M0's session, the Verity IR and two IRs; the verifier of\nrecord and two verifiers-of-record.\n"
+                "The stored label `C-Flock`, the `verity/flock-netlist/v1` tag, Flock and upstream Flock stay.\n"
+                "The `ir` key, `M0` in a span, M1, M2, an M00, a mirror and the verifier stay.\n",
+    }
+    assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
+        ("a.md", 1, "C-Flock"), ("a.md", 1, "netlist"), ("a.md", 2, "Netlists"), ("a.md", 2, "C-FLOCK"),
+        ("a.md", 3, "M0"), ("a.md", 3, "IR"), ("a.md", 3, "IRs"), ("a.md", 3, "verifier of record"),
+        ("a.md", 4, "verifiers-of-record")]

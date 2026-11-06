@@ -13,8 +13,11 @@
 #             subset:8 over the step's 3,124,276,224 proof blocks (m3stepreg.py). ROOTS: commit's roots.json, WEIGHTS_REG:
 #             weights' registration.json, PROGRAM, COMMIT_RUN: commit's run id; then REG_OUT/step-registration.json
 #             goes to the evidence store (kind m3-step-registration/v1)
-#   coin      one live coin from the challenger host's gate, its session opened at the registration's digest, no resample; the
-#             receipt and draw.json out (m3coin.py). REG: step-registration.json
+#   coin      one live coin from the challenger host's gate, its session reserved and opened withheld at the
+#             registration's digest (the challenger's root released only at its close), no resample; the receipt and
+#             draw.json out (m3coin.py). REG: step-registration.json
+#   withheld  the coin's withheld session on CPU against a loopback gate, on the step registration: the honest session
+#             accepted, a plain one and a prover that registers after seeing the root refused (m3withheld.py). REG
 #   open      every registered weight row a sampled proof block reads, opened from weights' witness (m3bundle.py weights). REG, DRAW:
 #             coin's draw.json, WEIGHTS_STATE: weights' state directory on WEIGHTS_NODE
 #   replay    the step again on the H200 under the salt secret, every root held to roots.json, the drawn slots' rows kept
@@ -30,7 +33,7 @@
 # nothing. The memory audits (PoUS and the bandwidth audit) are not a phase here.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
-PHASES="commit weights register coin open replay bundle prove"
+PHASES="commit weights register coin withheld open replay bundle prove"
 PHASE=${1:-}
 [[ " $PHASES " == *" $PHASE "* ]] || { echo "examples/h200/phases.sh PHASE [--dry-run] [FLAG...]: PHASE is one of $PHASES" >&2; exit 2; }
 shift
@@ -68,9 +71,16 @@ uv run --no-sync research keep "$ST" --owner @compute-accounting --expires 30d -
   coin)
     have examples/h200/m3coin.py $BR
     need REG; named "$REG" step-registration.json
-    CMD=("${RR[@]}" --on "$CPU" --send "$REG" --send "$(main_txt)" "$@" -- bash -c 'uv sync -q && uv run --no-sync python \
+    CMD=("${RR[@]}" --on "$CPU" --cwd source --send "$REG" --send "$(main_txt)" "$@" -- bash -c 'uv sync -q && uv run --no-sync python \
 examples/h200/m3coin.py --registration "$RESEARCH_RUN_DIR/inputs/step-registration.json" --gate-key \
 "$HOME/.ssh/vy-gate-compute-accounting" --peer '"$CPU"' --minutes 20 --main "$RESEARCH_RUN_DIR/inputs/main.txt" --out "$OUT/coin"') ;;
+  withheld)
+    have examples/h200/m3withheld.py $BR
+    need REG; named "$REG" step-registration.json
+    CMD=("${RR[@]}" --on "$CPU" --cwd source --mem-gb 4 --send "$REG" --send "$(main_txt)" --env PIN="$(git rev-parse origin/main)" "$@" \
+         -- bash -c 'uv sync -q --all-packages --extra torch-cpu && uv run --no-sync python examples/h200/m3withheld.py --registration \
+"$RESEARCH_RUN_DIR/inputs/step-registration.json" --main "$RESEARCH_RUN_DIR/inputs/main.txt" --pin "$PIN" \
+--utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --peer '"$CPU"' --out "$OUT/withheld"') ;;
   open)
     have examples/h200/m3bundle.py $BR
     need REG DRAW WEIGHTS_STATE; named "$REG" step-registration.json; named "$DRAW" draw.json

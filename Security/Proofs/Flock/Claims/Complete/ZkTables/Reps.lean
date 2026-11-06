@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.Complete.ZkTables.Files
+import Proofs.Flock.Claims.Complete.Json.Canon
 
 /-!
 # The reps' checks at several tables
@@ -50,7 +51,7 @@ variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Rel
 every round retained; the sends are the link of the tables' caps, then the streams' rounds; and at each table, with
 `--zk` schedule `schs[i]!`, rep `r`'s recorded rounds are the `2 i + r`th stream's as the decoder reads them back, and
 its decoded masked proof is the proof it returned, ending at that stream. -/
-theorem Run.walkJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) (hR : RepShapedAt o.toCase) :
+theorem Run.walkJ (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) (hR : RepShapedAt o.toCase) :
     ∃ (schs : Array (Schedule × ℕ)) (cms : Array Commit) (streams : Array (Array Round)),
       streams.size = 2 * o.sts.size ∧ (∀ rs ∈ streams, ∀ x ∈ rs, ∃ c, x.bytes = some c) ∧
       (∃ bs, o.bodies.toList = linkBody (cms.map fun c => flat c.cap).toList
@@ -63,7 +64,7 @@ theorem Run.walkJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.
             (o.extras i) o.ω i r streams[2 * i + r]!
             (1 + ((streams.toList.take (2 * i + r)).flatMap Array.toList).length) fun p => o.zp i r = p := by
   obtain ⟨hsig, hdraw, -, m, kvs, hown, hm, hkv, hco, hg⟩ := id hS
-  obtain ⟨hz, hcz, -⟩ := S.canon_ok _ hg
+  obtain ⟨hz, hcz, -⟩ := FlockComplete.JsonRT.canon_ok _ hg
   have hH : HelloOk o.spec hz := ⟨m, kvs, hown, hm, hkv, hco, hg, hcz⟩
   obtain ⟨ct, hct⟩ : ∃ ct, o.spec.coinTree = some ct := Option.isSome_iff_exists.1 o.ready_parts.2.2.2.2
   have hn := o.toCase.tables_nodup
@@ -115,7 +116,7 @@ theorem Run.walkJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.
   have hdec : Record.decodeWith o.hs o.spec o.record = .ok (sessOf o.spec (Claims.hOf H)
       (cms.map fun c => flat c.cap) (pointsOf o.spec (Claims.coinSeq o.r 0)) ss o.proofs) := by
     rw [hrec]
-    exact decode_recordObjZkJ S (hOf_size h64) hn hct hH hdraw hsig hrbs hrb hpts hpm hss hrs o.proofs
+    exact decode_recordObjZkJ (hOf_size h64) hn hct hH hdraw hsig hrbs hrb hpts hpm hss hrs o.proofs
   have hsess : o.sess = sessOf o.spec (Claims.hOf H) (cms.map fun c => flat c.cap)
       (pointsOf o.spec (Claims.coinSeq o.r 0)) ss o.proofs := by
     unfold Run.sess
@@ -188,12 +189,12 @@ theorem Run.lt_sts {o : Run H rel} {i : ℕ} (hi : i < o.tabs.size) : i < o.sts.
   simpa [Run.tabs, tabsOf_size] using hi
 
 /-- **The masked replay passes** at every rep of a run, from its recorded rounds (`replay_goal`). -/
-theorem replayJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) (hR : RepShapedAt o.toCase) :
+theorem replayJ (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) (hR : RepShapedAt o.toCase) :
     ∀ i < o.tabs.size, ∀ r < 2,
       (Zk.replayWith o.hs o.tabs[i]! (o.lay i) (o.zp i r).proof (o.zp i r).inner.root).run (o.t₀ i r) =
         .ok (o.rp i r) := by
   intro i hi r hr
-  obtain ⟨schs, cms, streams, hss, hbytes, -, -, hrep⟩ := Run.walkJ S h64 o hS hR
+  obtain ⟨schs, cms, streams, hss, hbytes, -, -, hrep⟩ := Run.walkJ h64 o hS hR
   obtain ⟨htabi, -, hsch, hreps⟩ := hrep i (Run.lt_sts hi)
   obtain ⟨hstream, p, ic, l, t', l', prior, ws, -, hzp, hst', -, -, hrun⟩ := hreps r hr
   have hroot := (Ret.go (repPZk_fields _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) hrun).2.2
@@ -298,7 +299,7 @@ theorem eq_of_sum_le {α : Type} (a b : α → ℕ) :
 /-- **Every recorded round of a masked rep is consumed** at a run, wherever its steps return (`consumedZk_goal`): each
 rep's inner proof ends at its table's `repRounds` within its stream (`Run.inner_kJ`), and the streams together are the
 sends after the link, at most `2 · repRounds` per table (`sends_goal`, `rounds_eq`). -/
-theorem consumedJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) (hR : RepShapedAt o.toCase)
+theorem consumedJ (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) (hR : RepShapedAt o.toCase)
     (hRS : ∀ i < o.tabs.size, ∀ r < 2,
       (ringSwitchWith o.hs o.tabs[i]!.m (ringClaimsZk (o.rp i r).1 (o.zp i r).proof ++ o.extras i)
         (o.zp i r).proof.ringSwitches).run (o.rp i r).2 = .ok (o.sw i r))
@@ -309,9 +310,9 @@ theorem consumedJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.
       (Zk.verifyInnerWith o.hs (o.lay i) (o.zp i r).inner (o.zp i r).proof.zerocheck.finalC
         (repConsZk (o.rp i r).1 (o.zp i r).proof ++ o.lanes i r)).run (o.lg i r).2 = .ok (o.inner i r)) :
     ∀ i < o.tabs.size, ∀ r < 2, ((o.inner i r).2.k != (o.stream i r).rounds.size) = false := by
-  have hRp := replayJ S h64 o hS hR
-  have hJ := recordJsonJ S h64 o hS
-  obtain ⟨schs, cms, streams, hss, -, ⟨bs, hbs, hrecs⟩, hpts, hrep⟩ := Run.walkJ S h64 o hS hR
+  have hRp := replayJ h64 o hS hR
+  have hJ := recordJsonJ h64 o hS
+  obtain ⟨schs, cms, streams, hss, -, ⟨bs, hbs, hrecs⟩, hpts, hrep⟩ := Run.walkJ h64 o hS hR
   have htsz : o.tabs.size = o.sts.size := tabsOf_size _
   let K : ℕ → ℕ := fun i => repRounds true o.spec o.sts[i]!
   have hk : ∀ i (hi : i < o.sts.size), ∀ r < 2, (o.inner i r).2.k = K i ∧
@@ -387,20 +388,20 @@ end Several
 
 /-- **The rep's checks at a run**, from the ring switch, the masked Ligerito and the inner proof there: the replay
 (`replayJ`), level 0's lanes (`lanesJ`) and every round consumed (`consumedJ`). -/
-theorem openAt_of (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) (hR : RepShapedAt o.toCase)
+theorem openAt_of (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) (hR : RepShapedAt o.toCase)
     (hC : RepChecksAt H rel o) : OpenAt H rel o :=
-  { replay := replayJ S h64 o hS hR
+  { replay := replayJ h64 o hS hR
     ringSwitch := hC.ringSwitch
     ligerito := hC.ligerito
-    lanes := fun i hi r hr => lanesJ (hC.ligerito i hi r hr) ((Run.repJ S h64 o hS hR).2.2 i hi r hr).1
+    lanes := fun i hi r hr => lanesJ (hC.ligerito i hi r hr) ((Run.repJ h64 o hS hR).2.2 i hi r hr).1
     inner := hC.inner
-    consumed := consumedJ S h64 o hS hR hC.ringSwitch hC.ligerito hC.inner }
+    consumed := consumedJ h64 o hS hR hC.ringSwitch hC.ligerito hC.inner }
 
 /-- **The rep's checks at every run of several tables**, from the ring switch, the masked Ligerito and the inner proof
 there. -/
-theorem openJ_of (S : JsonSpec) (h64 : Out64 H) (hS : StmtOkJ H rel) (hR : RepShapedJ H rel)
+theorem openJ_of (h64 : Out64 H) (hS : StmtOkJ H rel) (hR : RepShapedJ H rel)
     (hC : RepChecksJ H rel) : OpenJ H rel := fun o hc =>
-  openAt_of S h64 o (hS o.toCase hc) (hR o.toCase hc) (hC o hc)
+  openAt_of h64 o (hS o.toCase hc) (hR o.toCase hc) (hC o hc)
 
 /-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
 any number of tables: from `complete_zk`'s premises, and at
@@ -408,24 +409,24 @@ several tables the statement's and the prover's pieces' (`StmtOkJ`, `ProverRunsJ
 and per rep the ring switch, the masked Ligerito and the inner proof (`RepChecksJ`), the premises `complete_zk` takes
 at one table. -/
 theorem completeJO (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
-    (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
+    (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
     (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel) (hLg : FlockComplete.LigeritoZk H rel)
     (hIn : FlockComplete.Inner H rel) (hSJ : StmtOkJ H rel) (hPRJ : ProverRunsJ H rel) (hRJ : RepShapedJ H rel)
     (hCJ : RepChecksJ H rel) (hMR : MaskRank.MaskRankBound) (hMF : MaskFree rel) :
     Claims.Flock.Complete H (deployZk rel) :=
-  completeJR H rel S h64 hS hR hPR hRS hLg hIn hSJ hPRJ hRJ (openJ_of S h64 hSJ hRJ hCJ) hMR hMF
+  completeJR H rel h64 hS hR hPR hRS hLg hIn hSJ hPRJ hRJ (openJ_of h64 hSJ hRJ hCJ) hMR hMF
 
 /-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
 any number of tables, from premises stated per table at every good case, one table's as several's: the statement's
 `hello` (`StmtAt`), the prover's pieces (`ProverRunsAt`), the rep proofs' shapes (`RepShapedAt`), and per rep the
 ring switch, the masked Ligerito and the inner proof (`RepChecksAt`). -/
 theorem completeAll (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
-    (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : ∀ c : Case H rel, StmtAt c)
+    (h64 : JsonRT.Out64 H) (hS : ∀ c : Case H rel, StmtAt c)
     (hPR : ∀ c : Case H rel, ProverRunsAt c) (hR : ∀ c : Case H rel, RepShapedAt c)
     (hC : ∀ o : Run H rel, RepChecksAt H rel o) (hMR : MaskRank.MaskRankBound) (hMF : MaskFree rel) :
     Claims.Flock.Complete H (deployZk rel) :=
-  complete_of_at H rel h64 (fun c => c.sessionRuns S (hS c) (hPR c))
-    (fun o => recordAt_of S h64 o (hS o.toCase) (filesAt S h64 o (hS o.toCase) (hR o.toCase)))
-    (fun o => openAt_of S h64 o (hS o.toCase) (hR o.toCase) (hC o)) hMR hMF
+  complete_of_at H rel h64 (fun c => c.sessionRuns (hS c) (hPR c))
+    (fun o => recordAt_of h64 o (hS o.toCase) (filesAt h64 o (hS o.toCase) (hR o.toCase)))
+    (fun o => openAt_of h64 o (hS o.toCase) (hR o.toCase) (hC o)) hMR hMF
 
 end FlockComplete.ZkTables

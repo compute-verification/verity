@@ -4,6 +4,7 @@ and `RECORD_VERDICT` switches the record back to Python in one line."""
 
 from __future__ import annotations
 
+import itertools
 import json
 import re
 from pathlib import Path
@@ -13,7 +14,7 @@ import pytest
 import verity_difftest
 from test_service import DELTA, PAIR, QUERY, SESSION, _lean, _ports, _record, _spec, _stream
 from verity.ml.circuits.codec import canonical_json
-from verity.core.protocols.sampled_proofs import service as S
+from verity.core.protocols.sampled_proofs import challenger as C, coins as T, service as S
 from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as D, hello as H, partition as P, registration as R,
                                                             verifier as V)
 from verity.core.protocols.sampled_proofs.one_stage.verdict import Verdict
@@ -153,7 +154,7 @@ def test_the_draw_of_record_is_the_leans_on_the_bytes_the_python_read(monkeypatc
     assert draw.draw == got["draw"] and got["read"] == len(bytes.fromhex(asked["source"])) > 0
     for rule, law in ((S.All(), {"law": "subset", "k": 6}), (S.Law("subset:3"), {"law": "subset", "k": 3})):
         seen.clear()
-        s = _stream(_spec(rule), coins=b"\x5a")
+        s = _stream(_spec(rule))
         d = s.select(s.register(_record(law=law), _ports(6)))
         (asked,) = seen
         got = real("select", asked)
@@ -212,26 +213,32 @@ def test_the_runs_hello_is_checked_by_both(monkeypatch):
     assert V.hello(*run, [key], ["selection"], 2, ["session"]).codes == (V.DISAGREE,)
 
 
-def test_a_streams_coins_are_the_leans(monkeypatch):
-    """A stream's default coins are the Lean verifier's `IO.getRandomBytes` (A3): every byte its salt and its
-    draw read is a `coins` answer, and the draw of record is the Lean's on exactly those bytes."""
+def test_the_leans_coins_are_a_challengers_entropy_and_never_a_streams(monkeypatch):
+    """The Lean verifier's `IO.getRandomBytes` (A3, `verifier.coins`) is a challenger's entropy, never a stream's own
+    coins: a stream given it, or no coins, refuses (`NO_OWN_COINS`). A challenger on it commits to its coins, and a
+    stream drawing from that challenger has the Lean's draw of record on coins it released after the registration."""
     a, b = V.coins(64), V.coins(64)
     assert len(a) == len(b) == 64 and a != b and V.coins(0) == b""
-    answered, selected = [], []
+    for coins in (None, V.coins):
+        with pytest.raises(ValueError) as e:
+            S.Stream(_spec(), PAIR, budget=1, delta=DELTA, challenger="c", coins=coins)
+        assert str(e.value) == S.NO_OWN_COINS
+    selected = []
     real = V._server.call
 
     def spy(fn, value):
-        kind, body = real(fn, value)
-        if fn == "coins":
-            answered.append(bytes.fromhex(body))
         if fn == "select":
             selected.append(bytes.fromhex(value["source"]))
-        return kind, body
+        return real(fn, value)
     monkeypatch.setattr(V._server, "call", spy)
-    stream = S.Stream(_spec(), PAIR, budget=1, delta=DELTA, challenger="c")
-    assert stream.salt() == answered[0] and len(answered[0]) == 64
-    draw = stream.select(stream.register(_record(), _ports(6)))
-    assert len(draw.units) == 2 and selected == [b"".join(answered[1:])] and len(selected[0]) > 0
+    challenger = C.LiveChallenger("verity/test/coins/v1", 0, [("positions", 8)], V.coins)
+    coins = T.ChallengerCoins(C.LiveRecord(challenger, "positions", itertools.count().__next__))
+    stream = S.Stream(_spec(), PAIR, budget=1, delta=DELTA, challenger="c", coins=coins)
+    reg = stream.register(_record(), _ports(6))
+    segment = coins.commit(bytes.fromhex(reg.digest))
+    draw = stream.select(reg)
+    released = b"".join(o.coin for o in segment.openings)
+    assert len(draw.units) == 2 and len(selected) == 1 and 0 < len(selected[0]) and released.startswith(selected[0])
 
 
 def test_coins_the_lean_cannot_give_are_no_coins(monkeypatch):

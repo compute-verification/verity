@@ -6,8 +6,8 @@ units on live coins, proves them with Flock `--zk` behind the Lean ZK server, an
 `prove_path.py` is that path on a committed run, a TP Commit (`--tp-commit`), a single-GPU one (`--bundle`, TP1) or a closed
 Commit window of a `verity-vllm serve-openai` run (`--serve-run`, TP1): the prover commits the advice under hiding rows (a
 served window's the server committed) and each rank's window over the compiler's Programs for it, and the verifier audits each
-rank through the one-stage audit's per-rank `service.Stream` on its own coins or a challenger's (`--challenger local`,
-`benchmarks/one_stage/a5.py`). `run.sh` builds the prover and the Lean verifier and runs it on the CPU TP stand-in, on a
+rank through the one-stage audit's per-rank `service.Stream` on a challenger's coins (`--challenger local` by default in
+`run.sh`, `benchmarks/one_stage/a5.py`); the verifier has no coins of its own. `run.sh` builds the prover and the Lean verifier and runs it on the CPU TP stand-in, on a
 deferred TP Commit (`PP_TP`), on a single-GPU Commit's row dir on the node (`PP_LLAMA`) or on a served window
 (`PP_SERVE_RUN`), with one forged run that must be refused. Row dirs and serve runs are the node's own, never fetched from the
 store, since their bundles and requests hold request values. The docstrings say how.
@@ -84,7 +84,7 @@ reads and its named assumptions.
 files (their ports `sha512/row/v1`, `row/v2` or `row-seg/v1` rows of distinct names, no root registered under two domains)
 and the sampled-proofs run passes the registration's population, the committed transcript, read as the sampling witness, is
 outside the sampling relation `RelS` at δ with probability at most δ + ε_ks + δ_link. It takes no hypothesis on the files.
-It follows from `SampledKSLiveV2`, the same bound at the circuit files the verifier of record reads. Its named assumptions
+It follows from `SampledKSLiveV2`, the same bound at the circuit files the verifier reads. Its named assumptions
 are the coins (A3, `FlockSoundness.Assumptions.UniformRandomBytes`), the live verifier, and SHA-512's collision resistance.
 
 **The property.** `NetTiming.SecurityProofs.SampledAuditAccepted : NetTiming.Guarantees.SampledAuditAccepted`, at any

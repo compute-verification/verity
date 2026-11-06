@@ -18,7 +18,7 @@ The objects `Flock.Guarantees.AuditC3` reads, beside `ExecClass.lean`'s for `Pub
   padded to `PAD_TO` as the verifier opens R (the default, whose empty levels reject R, where `ℓ` is out of
   `[6, k_log]`, which the verifier refuses: `SparseRangeOk`).
 * `HoloReg`: a word `w` and a level-0 cap `cap`, the inner statement; `Opens` is a registrant's openings of every
-  position of `cap` to `w`'s columns (`RecursiveAudit`'s `_hreg` for an encoded table), which `RecursiveAuditC3` does
+  position of `cap` to `w`'s columns (`RecursiveAudit`'s `_hreg` for an encoded table), which `RecursiveAuditHolo` does
   not take: its word is the one the prover's own runs open (`Recursive/RegExtract.lean`).
 * `StackedTopAt lv st reg cap salt bcs'`: `cap` is R's registered top at the explicit commit strings `bcs'` under the
   held salts `salt` (`registrant-holds-openings`), the `stacked`

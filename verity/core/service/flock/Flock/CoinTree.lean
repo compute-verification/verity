@@ -9,6 +9,7 @@ nonce, the record's `coin_tree`, and, across the sessions it verifies together, 
 compared across sessions: a repeated prover nonce is not a soundness matter.
 -/
 import Flock.Canon
+import Flock.JsonParse
 
 namespace Flock.CoinTree
 
@@ -33,7 +34,7 @@ def Spec.coins (s : Spec) (nonce : String) : Json := s.toJson.setObjVal! "nonce"
 
 /-- The tree's spec, when a `Hello` names this scheme in `coins`. -/
 def ofHello (hello : String) : Option Spec := do
-  let c ← ((Json.parse hello).toOption.bind (·.getObjVal? "coins" |>.toOption))
+  let c ← ((JsonParse.parse hello).toOption.bind (·.getObjVal? "coins" |>.toOption))
   if (c.getObjValAs? String "scheme").toOption != some SCHEME then none
   let streams ← (c.getObjValAs? (Array String) "streams").toOption
   return ⟨streams, ← (c.getObjValAs? Nat "rounds_log").toOption, ← (c.getObjValAs? Nat "block").toOption⟩
@@ -44,7 +45,7 @@ def isHex (n : Nat) (s : String) : Bool := s.length == n && s.all fun c => c.isD
 /-- **R7 with the prover's nonce** (§3): the received `Hello` must be the verifier's own `Hello` object with the received
 `coins.nonce` put in, serialized canonically, byte for byte; the nonce must be 64 lowercase hex digits. The nonce. -/
 def checkHello (own : Json) (received : String) : V String := do
-  let some j := (Json.parse received).toOption | throw "S2/R7: the prover's Hello is not JSON"
+  let some j := (JsonParse.parse received).toOption | throw "S2/R7: the prover's Hello is not JSON"
   let nonce := ((j.getObjVal? "coins").toOption.bind (·.getObjValAs? String "nonce" |>.toOption)).getD ""
   if !isHex 64 nonce then throw "S2/R7: Hello's coins.nonce is not 64 lowercase hex digits"
   let coins := (own.getObjVal? "coins").toOption.getD Json.null

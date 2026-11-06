@@ -1,8 +1,9 @@
 /-
 `RecVStar.checkTemplate`: the verifier's bindings' `program_digests` names V*'s template of the statement, the descriptor id
 core's codec names its Definition by (`RecVStar.templateId`, each pinned below as `codec.descriptor_id` writes it). A part
-relabelled under another template (another part's S, a level's, or the same S with a port renamed) is refused, and so is
-a level under its neighbour's `H`, however consistently the bindings carry the label.
+relabelled under another template (another part's S, a level's, or the same S with a port renamed) is refused, and so are
+a level under its neighbour's `H` and the link table's part under another table's `UB` or `PB`, however consistently the
+bindings carry the label.
 -/
 import Flock.RecVStar
 
@@ -45,6 +46,7 @@ def why (s : VStar.Stmt) (f : VStar.Bindings) : String := match checkTemplate s 
 #guard idOf (.recOpenStacked 0 16 1 2) == "RecOpen_v4{LANES=16,H=1}"
 #guard idOf (.sparse { nu := 4, ell := 6, sLog := 2, tLog := 1 } 0) == "RecSparse_v1{NU=4,ELL=6,S_LOG=2,T_LOG=1}"
 #guard idOf (.cap 0 128) == "RecCap_v1"
+#guard idOf (.link 2 2 9) == "RecLink_v1{UB=2,PB=2}"
 #guard idOf (part S) == S_ID
 #guard idOf opening == S_ID
 
@@ -52,6 +54,7 @@ def why (s : VStar.Stmt) (f : VStar.Bindings) : String := match checkTemplate s 
 #guard ok opening (bind S_ID)
 #guard ok level (bind "RecOpen_v4{LANES=16,H=1}")
 #guard ok (.cap 3 8) (bind "RecCap_v1")
+#guard ok (.link 2 2 9) (bind "RecLink_v1{UB=2,PB=2}")
 -- one part's template relabelled: another S (its port renamed), a level's, or the honest S under a later version
 #guard !ok (part S) (bind (S_ID.replace "m0" "m1"))
 #guard !ok (part { S with ports := [("m1", 1)] }) (bind S_ID)
@@ -59,6 +62,10 @@ def why (s : VStar.Stmt) (f : VStar.Bindings) : String := match checkTemplate s 
 #guard !ok (part S) (bind (S_ID.replace "InnerRepCheck_v2" "InnerRepCheck_v3"))
 #guard !ok level (bind "RecOpen_v4{LANES=16,H=2}")
 #guard !ok (.cap 0 128) (bind "RecOpen_v4{LANES=16,H=1}")
+-- the link table's part under another table's widths, or under a cap's template
+#guard !ok (.link 2 2 9) (bind "RecLink_v1{UB=2,PB=1}")
+#guard !ok (.link 2 2 9) (bind "RecLink_v1{UB=1,PB=2}")
+#guard !ok (.link 2 2 9) (bind "RecCap_v1")
 #guard !ok level { bind "RecOpen_v4{LANES=16,H=1}" with
   programDigests := Json.mkObj [("RecOpen_v4{LANES=16,H=1}", "e"), ("RecCap_v1", "e")] }
 #guard !ok level { bind "RecOpen_v4{LANES=16,H=1}" with programDigests := Json.arr #[] }

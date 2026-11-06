@@ -19,8 +19,10 @@ what V*'s link unit is held to, and `verity_flock.rec_links` mirrors it for the 
 Its witnesses: `check_sound_honest`, `check` accepting the prover's table of one link that holds, and
 `check_sound_nontrivial`, its conclusion failing at a table a check that accepts everything accepts.
 
-A recursive statement carries the table's root and row count as `--rec-links`, which `verify` and `statement` refuse
-(`refuseLinks`) until a guarantee covers it.
+A recursive statement carries the table's root and row count as `--rec-links ROOT:N` (`RecLinkTree.linksArg`), which
+`verify`, `statement` and `rec-compose` read: V*'s link part (`RecLinkPart`) holds every row of the table to the inner
+statement's rows, and the recursion's knowledge soundness at the linked relation (`Flock.Guarantees.RecursiveKSLinkAt`,
+through the links' binding `Flock.Guarantees.LinksBindDeployed`) covers a statement carrying it.
 -/
 
 namespace Flock
@@ -262,15 +264,6 @@ theorem check_sound {sh : Shape} {inRow outRow : Nat → Nat → Array Nat} {row
             · cases hxs : xs.filterMap id with
               | nil => simp [hxs] at he
               | cons _ _ => simp
-
-def NO_LINKS : String :=
-  "--rec-links is refused: no guarantee yet covers a recursive statement's link table (its root and row count)"
-
-/-- **`--rec-links` is refused**, given a value or not, before any file is read: a statement carrying the link table's
-root and row count claims that every link holds in the inner population, and no verdict may claim that before V*'s link
-statement and its binding are proved. -/
-def refuseLinks (args : List String) : Except String Unit :=
-  if args.contains "--rec-links" then .error NO_LINKS else .ok ()
 
 /-! ## `check_sound`'s witnesses -/
 

@@ -25,7 +25,7 @@ set_option smartUnfolding false in
 theorem FlockSoundness.ZK.Table.swPre_y1 {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (w : W) (v : T.Vals) (ω : T.Rand) :
     (T.swPre w v ω).y1 = (T.preView w ω).y1 := by
-  by_cases hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1.2.1
+  by_cases hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1
   · rw [FlockSoundness.ZK.Table.swPre, ite_eq_left hr]
     rfl
   · rw [FlockSoundness.ZK.Table.swPre, ite_eq_right hr]
@@ -36,7 +36,7 @@ set_option smartUnfolding false in
 theorem FlockSoundness.ZK.Table.swPre_ybar {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (w : W) (v : T.Vals) (ω : T.Rand) :
     (T.swPre w v ω).ybar = (T.preView w ω).ybar := by
-  by_cases hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1.2.1
+  by_cases hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1
   · rw [FlockSoundness.ZK.Table.swPre, ite_eq_left hr]
     rfl
   · rw [FlockSoundness.ZK.Table.swPre, ite_eq_right hr]
@@ -47,7 +47,7 @@ set_option smartUnfolding false in
 theorem FlockSoundness.ZK.Table.swPre_lig {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (w : W) (v : T.Vals) (ω : T.Rand) :
     (T.swPre w v ω).lig = (T.preView w ω).lig := by
-  by_cases hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1.2.1
+  by_cases hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1
   · rw [FlockSoundness.ZK.Table.swPre, ite_eq_left hr]
     rfl
   · rw [FlockSoundness.ZK.Table.swPre, ite_eq_right hr]
@@ -166,7 +166,7 @@ theorem swSrcE_ligHyp_E {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (ρ :
       (Claims.ZKServer.tapeOfDraws t₀ (L.lay x) (L.draws ρ) rep).h j.val r.val k)
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, valsFw x c A B j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1) :
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1) :
     FlockComplete.LigLock.LigHyp (ligCoin c) n (ligP0 x j r) (ligSt x j).merkle (zkTab x j).sch (ligTab x w τ j)
       (ligBasis x c w τ j r extras) (layE x j) (_root_.Flock.Firewall.Finish.padsOf q.draws).h r.val (zkTab x j).tPad
       ((UE.tapeZk τ).extra j.val) ((UE.tapeZk τ).lanePad j.val) ((UE.tapeZk τ).salt j.val r.val)

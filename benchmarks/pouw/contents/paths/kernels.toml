@@ -1,4 +1,0 @@
-order = 220
-path = "`kernels/`"
-runs_on = "RTX 4090"
-what = "NCP's native u8xs8 route-U GEMM and Pearl's e4m3 GEMM on the `ada` device (`pouw_gemm.cu`), JIT-built as a torch extension"

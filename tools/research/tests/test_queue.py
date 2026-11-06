@@ -4,6 +4,7 @@ PRs and writes their `refs/pull/{n}/head`."""
 from __future__ import annotations
 
 import base64
+import dataclasses
 import hashlib
 import json
 import os
@@ -47,6 +48,8 @@ def _git(repo: Path, *args: str) -> str:
 
 
 class FakeGitHub:
+    repo = Q.REPO
+
     def __init__(self, origin: Path):
         self.origin, self.prs, self.ready = origin, {}, set()
 
@@ -564,8 +567,10 @@ def test_prs_whose_only_conflicts_are_in_pins_merge_with_each_pin_rebuilt_from_t
     merged = {k: v for k, v in {**one, **two, f"{POUS}/lakefile.toml": "l1\n", "Security/Proofs/lakefile.toml": "s1\n"}.items()
               if v is not None}
     assert all(_git(world.origin, "show", f"refs/heads/next:{p}") + "\n" == t for p, t in merged.items())
-    show = lambda p: subprocess.run(["git", "show", f"refs/heads/next:{p}"], cwd=world.origin, check=True, capture_output=True,
-                                    text=True).stdout
+    def show(p: str) -> str:
+        return subprocess.run(["git", "show", f"refs/heads/next:{p}"], cwd=world.origin, check=True, capture_output=True,
+                              text=True).stdout
+
     assert show(TRUSTED) == _trusted(["lean-toolchain", "lakefile.toml", UP, "New1.lean", "New2.lean"], merged)
     assert show(EXFIL) == _exfil(["Security/Proofs/lakefile.toml", "x.lean", "y.lean", "z.lean"], merged)
     tip = _git(world.origin, "rev-parse", "refs/heads/next")
@@ -583,9 +588,23 @@ def _sync_preflight(refuse: dict[int, str]) -> tuple[Callable, list[tuple[int, s
     return run, calls
 
 
+def _slow_preflight() -> tuple[Callable, list[float], list[int]]:
+    """A stand-in for drive's `Preflight.onto` that passes each PR and moves the returned clock (a sync's `clock` reads
+    ``now[0]``) on by the whole `PREFLIGHT_BUDGET_S`: (it, the clock, the PRs it ran, in order)."""
+    now: list[float] = [0.0]
+    calls: list[int] = []
+
+    def run(pr, base, commit, members):
+        calls.append(pr.number)
+        now[0] += PREFLIGHT_BUDGET_S
+        return None
+    return run, now, calls
+
+
 def test_a_pr_whose_preflight_onto_next_refuses_it_stays_out_and_the_members_above_it_merge(world):
     """Each merge a sync makes is preflighted onto the member below it, so a refusal leaves out that PR alone, told as a
-    conflict is (the state's `conflicts`, which drive posts to its owner)."""
+    conflict is (the state's `conflicts`, which drive posts to its owner).  #3's preflight ran beside #2's, onto #2's merge as
+    if #2 passed; #2's refusal took the sync back below #2, and #3 entered on its preflight onto #1's merge."""
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     world.gh.put(2, world.change({"b.txt": "2\n"}))
     world.gh.put(3, world.change({"c.txt": "3\n"}))
@@ -594,7 +613,9 @@ def test_a_pr_whose_preflight_onto_next_refuses_it_stays_out_and_the_members_abo
     members, entries = q.sync()
     assert [m.pr for m in members] == [1, 3], world.logs
     one = members[0].commit
-    assert calls == [(1, _git(world.origin, "rev-parse", "main")), (2, one), (3, one)]
+    (two,) = {b for n, b in calls if n == 3} - {one}
+    assert sorted(calls) == sorted([(1, _git(world.origin, "rev-parse", "main")), (2, one), (3, two), (3, one)])
+    assert _git(q.workdir, "rev-parse", f"{two}^1", f"{two}^2").split() == [one, world.gh.prs[2].head]
     assert entries[2].state == "refused" and entries[2].why.endswith("a.py: SyntaxError")
     assert q.load_state()["conflicts"]["2"]["why"] == entries[2].why and world.on_next(q) == [1, 3]
 
@@ -602,18 +623,18 @@ def test_a_pr_whose_preflight_onto_next_refuses_it_stays_out_and_the_members_abo
 def test_an_unchanged_head_and_base_tree_is_not_preflighted_again_and_a_new_base_is(world):
     """A PR's preflight is recorded per (head, base): a sync that tries a refused PR again onto the same tree reads its refusal
     back, and so does one onto another commit of that tree (a rebuilt `next`'s merges carry the time they're made).  A new
-    base runs it again."""
+    base runs a refusal again; a pass stands there when the new base changed nothing it touches (the tests below)."""
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     world.gh.put(2, world.change({"b.txt": "2\n"}))
     refuse, calls = _sync_preflight({2: "refused: x"})
     q = world.queue()
     q.preflight = refuse
     q.sync()
-    assert [n for n, _ in calls] == [1, 2]
+    assert sorted(n for n, _ in calls) == [1, 2]
     again = world.queue()                                                   # a later tick's queue reads the records back
     again.preflight = refuse
     members, entries = again.sync()
-    assert [m.pr for m in members] == [1] and entries[2].why == "refused: x" and [n for n, _ in calls] == [1, 2], world.logs
+    assert [m.pr for m in members] == [1] and entries[2].why == "refused: x" and sorted(n for n, _ in calls) == [1, 2], world.logs
     first = members[0].commit
     remade = subprocess.run(["git", "commit-tree", f"{first}^{{tree}}", "-p", f"{first}^1", "-p", f"{first}^2", "-m",
                              _git(world.origin, "log", "-1", "--format=%B", first)], cwd=world.origin, check=True, text=True,
@@ -625,17 +646,128 @@ def test_an_unchanged_head_and_base_tree_is_not_preflighted_again_and_a_new_base
     rebuilt.preflight = refuse
     members, entries = rebuilt.sync()
     assert [m.commit for m in members] == [remade] and remade != first and entries[2].state == "refused"
-    assert [n for n, _ in calls] == [1, 2], world.logs
+    assert sorted(n for n, _ in calls) == [1, 2], world.logs
     _move_main(world, {"c.txt": "moved\n"})
     moved = world.queue()
     moved.preflight = refuse
     moved.sync()
-    assert [n for n, _ in calls] == [1, 2, 1, 2], world.logs
+    assert sorted(n for n, _ in calls) == [1, 2, 2], world.logs
+
+
+#: a lock record as a landing's lock commit on `main` rewrites it: the only path the commit changes
+RELOCKED = {"pkg/lean-audit.json": json.dumps({"guarantees": {"T": "2"}, "reads": {}, "dependencies": {"M": "1"}})}
+
+
+def test_a_rebuild_below_a_member_that_changes_nothing_its_change_touches_keeps_its_pass_and_runs_no_preflight(world):
+    """Every rebuild of `next` (an ejection below a member, a landing's lock commit on `main`) gives each member above the change
+    a new base tree, and each preflight takes a place in the sync's pool and wall time of its budget.  Where the member's change
+    onto the new base is the one it made onto the old, nothing the checks run changed and no path went, its pass stands
+    (`Queue._standing`)."""
+    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    q = world.queue()
+    q.preflight, calls = _sync_preflight({})
+    assert [m.pr for m in q.sync()[0]] == [1, 2, 3] and sorted(n for n, _ in calls) == [1, 2, 3]
+    world.gh.ready.discard((1, world.gh.prs[1].head))                      # #1 ejected: #2 and #3 merge onto `main` again
+    assert [m.pr for m in q.sync()[0]] == [2, 3] and sorted(n for n, _ in calls) == [1, 2, 3], world.logs
+    assert world.logs[-1].endswith("kept 0, merged 2, preflights' verdicts reused for 2"), world.logs[-1]
+    _move_main(world, RELOCKED)
+    assert [m.pr for m in q.sync()[0]] == [2, 3] and sorted(n for n, _ in calls) == [1, 2, 3], world.logs
+    assert world.logs[-1].endswith("kept 0, merged 2, preflights' verdicts reused for 2"), world.logs[-1]
+
+
+def test_a_rebuild_that_changes_a_file_a_members_change_touches_preflights_that_member_again(world):
+    """A pass stands only while the member's change is the same: an ejection below it that rewrites another part of a file its
+    change touches (so the merge stays clean) runs its preflight again, and the member above, which touches neither, keeps its
+    pass."""
+    _move_main(world, {"m.txt": "1\n2\n3\n4\n5\n6\n7\n"})
+    world.gh.put(1, world.change({"m.txt": "one\n2\n3\n4\n5\n6\n7\n"}))
+    world.gh.put(2, world.change({"m.txt": "1\n2\n3\n4\n5\n6\nseven\n"}))
+    world.gh.put(3, world.change({"c.txt": "3\n"}))
+    q = world.queue()
+    q.preflight, calls = _sync_preflight({})
+    assert [m.pr for m in q.sync()[0]] == [1, 2, 3] and sorted(n for n, _ in calls) == [1, 2, 3]
+    world.gh.ready.discard((1, world.gh.prs[1].head))
+    assert [m.pr for m in q.sync()[0]] == [2, 3], world.logs
+    assert calls[3:] == [(2, _git(world.origin, "rev-parse", "main"))], world.logs
+    assert world.logs[-1].endswith("preflights' verdicts reused for 1"), world.logs[-1]
+
+
+def test_a_pass_stands_across_no_base_that_changes_what_the_checks_run_or_deletes_a_path_nor_for_a_change_that_deletes_one(world):
+    """What `Preflight.onto` can't judge from the change's own files: a base that changed what its checks run (a test of
+    `PREFLIGHT_RULES`), one that deleted a path the change may name, and a change that deletes a path the base may name.  Each
+    preflights again."""
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": None}))
+    q = world.queue()
+    q.preflight, calls = _sync_preflight({})
+    assert [m.pr for m in q.sync()[0]] == [1, 2] and sorted(n for n, _ in calls) == [1, 2]
+    _move_main(world, RELOCKED)
+    assert [m.pr for m in q.sync()[0]] == [1, 2] and [n for n, _ in calls[2:]] == [2], world.logs
+    _move_main(world, {"tests/test_pins.py": "def test_no_pin_is_stale():\n    pass\n"})
+    assert [m.pr for m in q.sync()[0]] == [1, 2] and sorted(n for n, _ in calls[3:]) == [1, 2], world.logs
+    _move_main(world, {"c.txt": None})
+    assert [m.pr for m in q.sync()[0]] == [1, 2] and sorted(n for n, _ in calls[5:]) == [1, 2], world.logs
+
+
+def test_a_pass_stands_from_the_base_the_member_had_on_next_though_the_saved_state_sorts_its_records_by_hash(world):
+    """The state is saved with its keys sorted, so a head's preflight records come back in the order of their bases' hashes, not
+    of time.  Here the newest by position is of the first base, below a change to what the checks run.  The pass onto the base
+    the member had on `next` is read first (`Queue._next_base`), and a later move of `main` that changes nothing the checks
+    run keeps it."""
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    q = world.queue()
+    q.preflight, calls = _sync_preflight({})
+    assert [m.pr for m in q.sync()[0]] == [1] and len(calls) == 1
+    first = _git(world.origin, "rev-parse", "main^{tree}")
+    for i in range(64):                                     # a base whose tree sorts below the first one's
+        moved = _move_main(world, {"tests/test_pins.py": f"# {i}\n"})
+        if _git(world.origin, "rev-parse", f"{moved}^{{tree}}") < first:
+            break
+    assert _git(world.origin, "rev-parse", "main^{tree}") < first
+    assert [m.pr for m in q.sync()[0]] == [1] and len(calls) == 2, world.logs
+    _move_main(world, {"c.txt": "moved\n"})
+    assert [m.pr for m in q.sync()[0]] == [1] and len(calls) == 2, world.logs
+    assert world.logs[-1].endswith("preflights' verdicts reused for 1"), world.logs[-1]
+
+
+def test_a_new_head_is_preflighted_though_its_change_onto_next_is_the_old_heads_file_for_file(world):
+    """A verdict is its head's: a head pushed again, here rebased onto a `main` that moved so that its change onto `next` is the
+    old head's file for file, is preflighted, while the member below it keeps its pass."""
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, old := world.change({"b.txt": "2\n"}))
+    q = world.queue()
+    q.preflight, calls = _sync_preflight({})
+    assert [m.pr for m in q.sync()[0]] == [1, 2] and sorted(n for n, _ in calls) == [1, 2]
+    _move_main(world, {"c.txt": "moved\n"})
+    world.gh.put(2, new := world.change({"b.txt": "2\n"}))
+    members, _ = q.sync()
+    assert new != old and [(m.pr, m.head) for m in members] == [(1, world.gh.prs[1].head), (2, new)], world.logs
+    assert calls[2:] == [(2, members[0].commit)], world.logs
+
+
+def test_a_pass_read_back_takes_no_place_in_the_pool_and_none_of_the_budget(world):
+    """A verdict read back starts no preflight, so it spends none of `PREFLIGHT_BUDGET_S`: a `--first` PR whose preflight takes
+    the whole budget goes below two members, whose passes stand on the new base, and they enter, where a preflight would wait
+    for a later sync.  One preflight at a time here."""
+    for n in (2, 3):
+        world.gh.put(n, world.change({f"{n}.txt": f"{n}\n"}))
+    q = world.queue()
+    q.preflight, _ = _sync_preflight({})
+    assert [m.pr for m in q.sync()[0]] == [2, 3]
+    world.gh.put(1, world.change({"1.txt": "1\n"}))
+    q = world.queue(first=(1,))
+    q.preflight, now, calls = _slow_preflight()
+    q.clock, q.preflight_parallel = lambda: now[0], 1
+    members, _ = q.sync()
+    assert [m.pr for m in members] == [1, 2, 3] and calls == [1], world.logs
+    assert world.logs[-1].endswith("kept 0, merged 3, preflights' verdicts reused for 2"), world.logs[-1]
 
 
 def test_a_syncs_preflights_start_only_within_their_budget_and_a_pr_not_yet_preflighted_waits_off_next_untold(world):
     """A sync's preflights start only while they've taken under `PREFLIGHT_BUDGET_S` together: past it a PR waits off `next`,
-    with the PRs that contain it, told nothing, and a later sync preflights it."""
+    with the PRs that contain it, told nothing, and a later sync preflights it within its budget.  One at a time here
+    (`preflight_parallel`), so each starts once the one before it has ended."""
     now = [0.0]
     calls: list[int] = []
 
@@ -648,15 +780,248 @@ def test_a_syncs_preflights_start_only_within_their_budget_and_a_pr_not_yet_pref
     world.gh.put(2, two := world.change({"b.txt": "2\n"}))
     world.gh.put(3, world.change({"c.txt": "3\n"}, base=two))
     q = world.queue()
-    q.preflight, q.clock = slow, lambda: now[0]
+    q.preflight, q.clock, q.preflight_parallel = slow, lambda: now[0], 1
     members, entries = q.sync()
     assert [m.pr for m in members] == [1] and calls == [1], world.logs
     assert entries[2].state == entries[3].state == "waiting" and "hasn't run" in entries[2].why
     assert entries[3].why.endswith("which waits for its preflight"), entries[3].why
     state = q.load_state()
     assert state["conflicts"] == {} and state["waiting"] == {} and "waiting off it for their preflight (#2 #3)" in world.logs[-1]
+    assert state["preflight_waited"] == [2, 3]
     assert [m.pr for m in q.sync()[0]] == [1, 2] and calls == [1, 2]
     assert [m.pr for m in q.sync()[0]] == [1, 2, 3] and calls == [1, 2, 3]
+
+
+def test_a_pr_the_preflight_budget_skipped_is_preflighted_first_next_sync_within_the_budget_and_every_pr_is_reached(world):
+    """New PRs that come before one the budget skipped, by number, would spend each sync's budget ahead of it.  Instead the PRs
+    the last sync left waiting take the budget first: while one is still to come, the others wait too, recorded for the next
+    sync, and no sync's preflights start past the budget.  So each PR is reached in turn.  One preflight at a time here, as
+    above."""
+    now = [0.0]
+    calls: list[int] = []
+    spent: list[float] = []
+
+    def half(pr, base, commit, members):
+        calls.append(pr.number)
+        now[0] += PREFLIGHT_BUDGET_S / 2
+        return None
+
+    def sync() -> tuple[list[int], dict]:
+        start = now[0]
+        members, entries = q.sync()
+        spent.append(now[0] - start)
+        return [m.pr for m in members], entries
+
+    for n in (3, 4, 5):
+        world.gh.put(n, world.change({f"{n}.txt": f"{n}\n"}))
+    q = world.queue()
+    q.preflight, q.clock, q.preflight_parallel = half, lambda: now[0], 1
+    assert sync()[0] == [3, 4] and calls == [3, 4]
+    assert q.load_state()["preflight_waited"] == [5]
+    for n in (1, 2):
+        world.gh.put(n, world.change({f"{n}.txt": f"{n}\n"}))
+    members, entries = sync()
+    assert members == [3, 4, 5] and calls == [3, 4, 5], world.logs
+    assert entries[1].state == entries[2].state == "waiting" and "the PRs the last sync left waiting" in entries[1].why
+    assert q.load_state()["preflight_waited"] == [1, 2]
+    assert sync()[0] == [3, 4, 5, 1, 2] and calls == [3, 4, 5, 1, 2]
+    assert q.load_state()["preflight_waited"] == []
+    assert spent == [PREFLIGHT_BUDGET_S, PREFLIGHT_BUDGET_S / 2, PREFLIGHT_BUDGET_S], "no sync's preflights pass the budget"
+
+
+def test_a_sync_runs_four_preflights_at_once_in_its_order_each_onto_the_merge_below_its_place(world):
+    """A sync keeps `PREFLIGHT_PARALLEL` preflights running: above one still running it merges on as if that one passes.  The
+    stand-in gets past its barrier only once four are in it, so the first four PRs in the queue's order run together and the
+    next four as those end (fewer at once hangs here rather than passing).  Each ran onto the merge of the PR below it, and
+    each PR entered on its own."""
+    together, lock = threading.Barrier(Q.PREFLIGHT_PARALLEL), threading.Lock()
+    calls: list[tuple[int, str]] = []
+    running, peak = [0], [0]
+
+    def meet(pr, base, commit, members):
+        with lock:
+            calls.append((pr.number, base))
+            running[0] += 1
+            peak[0] = max(peak[0], running[0])
+        together.wait()
+        with lock:
+            running[0] -= 1
+        return None
+
+    for n in range(1, 9):
+        world.gh.put(n, world.change({f"{n}.txt": f"{n}\n"}))
+    q = world.queue()
+    q.preflight = meet
+    members, _ = q.sync()
+    assert [m.pr for m in members] == list(range(1, 9)) == world.on_next(q), world.logs
+    assert peak[0] == Q.PREFLIGHT_PARALLEL == 4
+    assert sorted(n for n, _ in calls[:4]) == [1, 2, 3, 4] and sorted(n for n, _ in calls[4:]) == [5, 6, 7, 8]
+    below = [_git(world.origin, "rev-parse", "main")] + [m.commit for m in members[:-1]]
+    assert sorted(calls) == sorted(zip(range(1, 9), below))
+
+
+def test_four_preflights_at_once_spend_the_budget_as_wall_time_and_the_prs_left_waiting_go_first_next_sync(world):
+    """`PREFLIGHT_BUDGET_S` is wall time: four preflights that run together for half of it spend half of it, so eight start
+    and the ninth, which would start at the budget, waits off `next` untold.  The next sync runs it before the newer PRs that
+    come before it by number, which wait in their turn for the sync after."""
+    now = [0.0]
+    together = threading.Barrier(Q.PREFLIGHT_PARALLEL, action=lambda: now.__setitem__(0, now[0] + PREFLIGHT_BUDGET_S / 2))
+    lock, calls = threading.Lock(), []
+
+    def meet(pr, base, commit, members):
+        with lock:
+            calls.append(pr.number)
+            meets = len(calls) <= 2 * Q.PREFLIGHT_PARALLEL
+        if meets:
+            together.wait()
+        return None
+
+    for n in range(3, 12):
+        world.gh.put(n, world.change({f"{n}.txt": f"{n}\n"}))
+    q = world.queue()
+    q.preflight, q.clock = meet, lambda: now[0]
+    members, entries = q.sync()
+    assert [m.pr for m in members] == list(range(3, 11)) and sorted(calls) == list(range(3, 11)), world.logs
+    assert now[0] == PREFLIGHT_BUDGET_S
+    assert entries[11].state == "waiting" and entries[11].why == (
+        f"its preflight onto `next` hasn't run: this sync's preflights took their {PREFLIGHT_BUDGET_S:g} s, so a later sync runs it")
+    state = q.load_state()
+    assert state["conflicts"] == {} and state["waiting"] == {} and state["preflight_waited"] == [11]
+    q.preflight, recorded = _sync_preflight({})
+    for n in (1, 2):
+        world.gh.put(n, world.change({f"{n}.txt": f"{n}\n"}))
+    members, entries = q.sync()
+    assert [m.pr for m in members] == list(range(3, 12)) and [n for n, _ in recorded] == [11], world.logs
+    assert entries[1].state == entries[2].state == "waiting" and "the PRs the last sync left waiting" in entries[1].why
+    assert q.load_state()["preflight_waited"] == [1, 2]
+    members, _ = q.sync()
+    assert [m.pr for m in members] == [*range(3, 12), 1, 2] and sorted(n for n, _ in recorded) == [1, 2, 11]
+    assert q.load_state()["preflight_waited"] == []
+
+
+def test_preflights_run_together_keep_each_prs_own_verdict_and_one_that_fails_to_run_admits_only_its_pr(world):
+    """Two refusals and a preflight that raises among six run four at once: each refused PR stays out with its own text,
+    recorded at its own base, the one that raised enters unpreflighted, logged once, with nothing recorded, and the others
+    enter on their own passing preflights onto the merge below their place."""
+    refusals = {2: "refused: two", 5: "refused: five"}
+    calls: list[tuple[int, str]] = []
+
+    def judge(pr, base, commit, members):
+        calls.append((pr.number, base))
+        if pr.number == 4:
+            raise RuntimeError("boom")
+        return refusals.get(pr.number)
+
+    for n in range(1, 7):
+        world.gh.put(n, world.change({f"{n}.txt": f"{n}\n"}))
+    q = world.queue()
+    q.preflight = judge
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [1, 3, 4, 6] == world.on_next(q), world.logs
+    state = q.load_state()
+    for n, why in refusals.items():
+        assert entries[n].state == "refused" and entries[n].why == why == state["conflicts"][str(n)]["why"]
+    assert sorted(state["conflicts"]) == ["2", "5"] and state["waiting"] == {}
+    below = dict(zip([1, 3, 4, 6], [_git(world.origin, "rev-parse", "main")] + [m.commit for m in members[:-1]]))
+    below |= {2: below[3], 5: below[6]}
+    trees = dict(zip(below, _git(q.workdir, "rev-parse", *(f"{c}^{{tree}}" for c in below.values())).split()))
+    recorded = {n: state["preflights"].get(f"{world.gh.prs[n].head}:{trees[n]}", {"why": "unrecorded"})["why"]
+                for n in below}
+    assert recorded == {1: None, 2: "refused: two", 3: None, 4: "unrecorded", 5: "refused: five", 6: None}
+    assert set(below.items()) <= set(calls)
+    assert [line for line in world.logs if "failed to run" in line] == [
+        "research queue: #4's preflight onto `next` failed to run (RuntimeError: boom); it enters unpreflighted"]
+
+
+def test_what_a_sync_decided_above_a_preflight_that_then_refuses_is_taken_back(world):
+    """Above #2's running preflight the sync merged on as if #2 passed: #3, which edits #2's file, conflicted, and #4, which
+    contains #3, waited.  #2's refusal takes all of that back: #3 and #4 enter, nobody is told of a conflict or a wait, and
+    the log holds no line of the walk it dropped."""
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    world.gh.put(3, three := world.change({"b.txt": "3\n"}))
+    world.gh.put(4, world.change({"c.txt": "4\n"}, base=three))
+    q = world.queue()
+    q.preflight, calls = _sync_preflight({2: "refused: two"})
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [1, 3, 4] == world.on_next(q), world.logs
+    assert entries[3].why == entries[4].why == "" and entries[2].why == "refused: two"
+    state = q.load_state()
+    assert sorted(state["conflicts"]) == ["2"] and state["waiting"] == {} and state["preflight_waited"] == []
+    assert not [line for line in world.logs if "#3" in line or "#4" in line], world.logs
+    assert sorted(n for n, _ in calls) == [1, 2, 3, 4]
+
+
+def test_a_pr_of_drives_priority_list_and_those_it_contains_go_first_and_start_their_preflights_past_the_budget(world):
+    """Drive's priority list (`Queue.priority`): a listed PR and the PRs it contains go first of what a sync merges anew, a Lean
+    change among them too, and their preflights start whatever `PREFLIGHT_BUDGET_S`; a PR not in it waits off `next` once the
+    budget is spent, for a later sync.  A listed number that is no open PR changes nothing.  One preflight at a time here,
+    each taking the whole budget."""
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, two := world.change({"pkg/A.lean": "-- 2\n"}))
+    world.gh.put(3, world.change({"c.txt": "3\n"}, base=two))
+    q = world.queue()
+    q.preflight, now, calls = _slow_preflight()
+    q.clock, q.preflight_parallel, q.priority = lambda: now[0], 1, frozenset({3, 99})
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [2, 3] and calls == [2, 3] and now[0] == 2 * PREFLIGHT_BUDGET_S, world.logs
+    assert entries[1].state == "waiting" and entries[1].why == (
+        f"its preflight onto `next` hasn't run: this sync's preflights took their {PREFLIGHT_BUDGET_S:g} s, so a later sync runs it")
+    assert q.load_state()["preflight_waited"] == [1]
+    assert [m.pr for m in q.sync()[0]] == [2, 3, 1] and calls == [2, 3, 1], world.logs
+
+
+def test_a_pr_of_drives_priority_list_starts_its_preflight_ahead_of_the_prs_the_last_sync_left_waiting(world):
+    """While a PR the last sync left waiting (#3) is still to come, any other PR waits for a later sync (#1); one of drive's
+    priority list (#4) doesn't: its preflight starts first, and spends the budget #3 would have taken."""
+    for n in (2, 3):
+        world.gh.put(n, world.change({f"{n}.txt": f"{n}\n"}))
+    q = world.queue()
+    q.preflight, now, calls = _slow_preflight()
+    q.clock, q.preflight_parallel = lambda: now[0], 1
+    assert [m.pr for m in q.sync()[0]] == [2] and q.load_state()["preflight_waited"] == [3]
+    for n in (1, 4):
+        world.gh.put(n, world.change({f"{n}.txt": f"{n}\n"}))
+    q.priority = frozenset({4})
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [2, 4] and calls == [2, 4], world.logs
+    assert entries[1].why == ("its preflight onto `next` hasn't run: the PRs the last sync left waiting for theirs go first "
+                              "(#3), so a later sync runs it")
+    assert entries[3].why.startswith("its preflight onto `next` hasn't run: this sync's preflights took their"), entries[3].why
+    assert q.load_state()["preflight_waited"] == [1, 3]
+
+
+def test_drives_priority_list_is_read_again_at_each_sync_and_one_it_cant_read_is_empty_its_error_logged_once(world):
+    """`--priority-file` (`Queue.priority_file`): each sync reads the file again and logs the list when it changes; no file is an
+    empty list, and so is one it can't read, its error logged once while it stays the same, whichever tick's queue meets it."""
+    path = world.tmp / "priority"
+
+    def sync() -> frozenset[int]:
+        q = world.queue()
+        q.priority_file = path
+        q.sync()
+        return q.priority
+
+    def said() -> list[str]:
+        return [line for line in world.logs if "priority" in line]
+
+    assert sync() == frozenset() and said() == []
+    path.write_text("12, 7\n3,")
+    assert sync() == sync() == {3, 7, 12} and said() == [f"research queue: drive's priority list ({path}): #3 #7 #12"]
+    path.write_text("12 #7")
+    assert sync() == sync() == frozenset()
+    assert said()[1:] == [f"research queue: --priority-file {path} holds '#7', which is not a PR number: write PR numbers "
+                          "separated by spaces or commas; drive's priority list is empty until the file is fixed"]
+    path.unlink()
+    path.mkdir()
+    assert sync() == sync() == frozenset() and len(said()) == 3
+    assert said()[2].startswith(f"research queue: --priority-file {path} can't be read (Is a directory): "), said()
+    path.rmdir()
+    assert sync() == frozenset() and len(said()) == 3
+    path.write_text("5")
+    assert sync() == {5} and said()[3:] == [f"research queue: drive's priority list ({path}): #5"]
+    path.unlink()
+    assert sync() == frozenset() and said()[4:] == [f"research queue: drive's priority list ({path}): empty"]
 
 
 def test_a_conflict_in_any_file_besides_the_pins_still_refuses_the_merge(world):
@@ -1544,6 +1909,39 @@ def test_status_on_any_vm_applies_the_rules_cutoff_as_drive_does(world, monkeypa
     assert {e["pr"]: e["state"] for e in json.loads(capsys.readouterr().out)} == {1: "ready", 2: "ready"}
 
 
+def test_status_lists_every_open_pr_whose_body_names_no_linear_issue(world, monkeypatch, capsys):
+    """A key after a Linear magic word names an issue whatever its team, a bare key only for a team main's registry gives a
+    handle (so `SHA-512` names none), and an `Issue: none:` line names none on purpose; an unmarked PR on another branch,
+    which has no entry, is listed too."""
+    import research.queue as Qm
+
+    cfg = world.tmp / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{world.tmp / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    _git(world.dev, "checkout", "-q", "--detach", "origin/main")
+    reg = world.dev / Qm.REGISTRY
+    reg.parent.mkdir(parents=True)
+    reg.write_text(json.dumps({"handles": [{"handle": "ci", "linear": "CI"}, {"handle": "infra"}]}))
+    _git(world.dev, "add", "-A")
+    _git(world.dev, "commit", "-qm", "the registry")
+    _git(world.dev, "push", "-q", "origin", "HEAD:refs/heads/main")
+    bodies = {1: "Lane a\n\nRefs ENG-5\n", 2: "Lane b\n\nCI-12 (the thing)\n", 3: "Lane c\n\nSHA-512 everywhere, as INF-3\n",
+              4: "Lane d\n\nIssue: none: docs only\n", 5: "Lane e\n\npart of nothing\n"}
+    for n, body in bodies.items():
+        world.gh.put(n, world.change({f"{n}.txt": "x\n"}), body=body, ready=False)
+    world.gh.prs[5] = dataclasses.replace(world.gh.prs[5], base="feature")
+    monkeypatch.setattr(Qm, "GitHub", lambda repo: world.gh)
+    argv = ["queue", "status", "--workdir", str(world.tmp / "q" / "verity"), "--remote", str(world.origin), "--repo", "o/verity",
+            "--store", str(world.tmp / "queue-store"), "--marked-after", "2026-10-01T00:00:00Z"]
+    assert research_main(argv) == 0
+    section = capsys.readouterr().out.split("\n\nno Linear issue named ")[1].splitlines()
+    assert section[0].startswith("(2 of 5 open PRs; add a `Refs KEY` or `Issue: none: REASON` line")
+    assert [r.split()[0] for r in section[1:]] == ["#3", "#5"] and section[1].split()[1:] == ["c", "change", "3"]
+    assert research_main([*argv, "--json"]) == 0
+    assert {e["pr"]: e["issue"] for e in json.loads(capsys.readouterr().out)} == {1: "ENG-5", 2: "CI-12", 3: None,
+                                                                                  4: "none: docs only"}
+
+
 def test_status_and_the_review_listing_free_the_queue_lock_before_they_read_labels(world, monkeypatch, capsys):
     """The lock refuses a second queue command at once, and a fresh VM's listing read labels for minutes under it, so every
     verdict meanwhile was refused.  A command that only reads holds it while it clones and fetches, not after."""
@@ -1644,7 +2042,9 @@ def test_off_drive_the_queue_verbs_never_push_next_or_main(world, monkeypatch, c
     for verb in ("sync",):
         assert research_main(["queue", verb, *base]) == 1
         assert f"/data/infra/drive.sh queue {verb}" in capsys.readouterr().err
-    refs = lambda: _git(world.origin, "for-each-ref", "--format=%(refname) %(objectname)", "refs/heads/")
+    def refs() -> str:
+        return _git(world.origin, "for-each-ref", "--format=%(refname) %(objectname)", "refs/heads/")
+
     before = refs()
     research_main(["queue", "eject", "1", "--reason", "x", "--by", "ci", *base])
     assert refs() == before and "drive's next tick rebuilds `next` without it" in capsys.readouterr().out
@@ -1731,6 +2131,70 @@ def test_ready_mark_writes_the_mark_with_no_quick_tier(world, capsys):
     assert ready(world.gh, world.store, 3, "lane-3", MarkOnly()) == 0
     assert "marked on lane-3's word, with no quick tier" in capsys.readouterr().out
     assert StoreLabels(world.store, log=world.logs.append).ready(3, h) is True
+
+
+def test_pr_from_api_reads_the_head_repository_and_the_author():
+    d = {"number": 7, "head": {"sha": "a" * 40, "ref": "lane/x", "repo": {"full_name": "someone/verity"}}, "base": {"ref": "main"},
+         "user": {"login": "someone"}, "author_association": "CONTRIBUTOR"}
+    pr = PR.from_api(d)
+    assert (pr.head_repo, pr.author, pr.association) == ("someone/verity", "someone", "CONTRIBUTOR")
+    assert PR.from_api({**d, "head": {**d["head"], "repo": None}}).head_repo is None
+    assert PR.from_api({**d, "user": None, "author_association": None}).association == ""
+
+
+def _outside_prs(world: World) -> dict[int, str]:
+    """PRs 1-4 refused (a fork's head, a deleted head repository, an outside author, a collaborator), 5 and 6 not (a member's, the
+    App's), each marked ready at its head; their heads."""
+    import dataclasses
+
+    who = {1: dict(head_repo="someone/verity"), 2: dict(head_repo=None), 3: dict(author="stranger", association="CONTRIBUTOR"),
+           4: dict(author="helper", association="COLLABORATOR"), 5: dict(author="alice", association="MEMBER"),
+           6: dict(author="verity-agents[bot]", association="NONE")}
+    heads = {}
+    for n, fields in who.items():
+        world.gh.put(n, heads.setdefault(n, world.change({f"o{n}.txt": f"{n}\n"})))
+        world.gh.prs[n] = dataclasses.replace(world.gh.prs[n], **fields)
+    return heads
+
+
+def test_a_fork_or_an_outside_author_is_refused_at_mark_before_any_gate_runs_and_a_members_or_the_apps_pr_is_marked(world, capsys):
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    world.with_store_remote()
+    heads = _outside_prs(world)
+    ran: list[str] = []
+    gate = lambda name: lambda *a: ran.append(name)            # noqa: E731  (each gate records that it ran, and passes)
+    tier = lambda pr: ran.append("tier")                        # noqa: E731
+    for n in (1, 2, 3, 4):
+        assert ready(world.gh, world.store, n, f"lane-{n}", tier, records=gate("records"), preflight=gate("preflight")) == 1
+        err = capsys.readouterr().err
+        assert f"#{n} is not marked ready: " in err and "a maintainer opens it from a branch of this repository" in err, err
+        assert StoreLabels(world.store, log=world.logs.append).ready(n, heads[n]) is False
+    assert ran == []
+    ready(world.gh, world.store, 1, "lane-1", MarkOnly())
+    assert f"its head is on someone/verity, not {Q.REPO}" in capsys.readouterr().err
+    ready(world.gh, world.store, 2, "lane-2", MarkOnly())
+    assert "its head is on a deleted repository" in capsys.readouterr().err
+    ready(world.gh, world.store, 4, "lane-4", MarkOnly())
+    assert "its author helper is no owner or member of the organization (COLLABORATOR)" in capsys.readouterr().err
+    for n in (5, 6):
+        assert ready(world.gh, world.store, n, f"lane-{n}", MarkOnly(), records=gate("records"), preflight=gate("preflight")) == 0
+        assert StoreLabels(world.store, log=world.logs.append).ready(n, heads[n]) is True
+    assert ran == ["records", "preflight"] * 2
+
+
+def test_a_fork_or_an_outside_author_is_refused_at_admission_though_marked_and_a_members_or_the_apps_pr_is_admitted(world):
+    _outside_prs(world)
+    q = world.queue()
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [5, 6] == world.on_next(q)
+    assert entries[1].state == "refused" and entries[1].why == (f"its head is on someone/verity, not {Q.REPO}: a maintainer opens "
+                                                                "it from a branch of this repository")
+    assert entries[2].why.startswith("its head is on a deleted repository")
+    assert entries[3].why.startswith("its author stranger is no owner or member of the organization (CONTRIBUTOR)")
+    assert all(entries[n].state == "refused" for n in (1, 2, 3, 4))
+    status = q.status()
+    assert [n for n, e in sorted(status.items()) if e.state == "queued"] == [5, 6] and status[4].state == "refused"
 
 
 def test_ready_without_sha_marks_the_branchs_tip_not_the_head_github_still_shows(world, monkeypatch):
@@ -1877,10 +2341,10 @@ FAKE_SYNC = (sys.executable, "-c", "import sys; from pathlib import Path; s = Pa
              "'error: The lockfile at `uv.lock` needs to be updated, but `--locked` was provided.', file=sys.stderr); sys.exit(2 * s)")
 
 
-def _preflight(world: World, free=lambda: 1.0, fetch=None, store=None, **kw):
+def _preflight(world: World, free=lambda: 1.0, fetch=None, store=None, repo: Path | None = None, sync=FAKE_SYNC, **kw):
     from research.queue import Preflight
 
-    return Preflight(world.dev, str(world.origin), store or world.store, sync=FAKE_SYNC, python=sys.executable,
+    return Preflight(repo or world.dev, str(world.origin), store or world.store, sync=sync, python=sys.executable,
                      root=world.tmp / "pre", log=world.logs.append, free=free, fetch=fetch, **kw)
 
 
@@ -2478,6 +2942,42 @@ def test_the_lean_step_skips_past_its_bounds_and_refuses_what_it_cannot_build(wo
         assert said.index("checks skipped: ") < said.index(says), said
 
 
+def test_the_syncs_preflight_runs_no_environment_sync_and_no_lean_build_says_so_and_still_runs_the_invariant_tests(
+        world, monkeypatch):
+    """A sync's preflight that synced the merged tree's environment and built its Lean took about 300 s a PR against a sync's
+    120 s budget, so each sync admitted one PR.  The mark's preflight still runs both at the head; the sync's runs the cheap
+    merge-level checks alone, says what it skipped as skipped, never as nothing refused, and still refuses a merge that
+    breaks an invariant test."""
+    from research.queue import LeanBuilt, MarkOnly, ready
+
+    _lean_world(world, monkeypatch)
+    syncs = world.tmp / "syncs.txt"
+    sync = (sys.executable, "-c", f"open({str(syncs)!r}, 'a').write('synced\\n')")
+    built: list[list[str]] = []
+
+    def lean(wt, targets, left):
+        built.append(list(targets))
+        return LeanBuilt()
+
+    world.gh.put(2, h2 := world.change({"lean/a/A/Base.lean": "def foo := 1\ndef bar := 2\n"}), ready=False)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world, sync=sync, lean=lean)) == 0
+    assert syncs.read_text() == "synced\n" and len(built) == 1, "the mark's preflight syncs and builds"
+
+    world.gh.put(2, h2, ready=True)
+    world.gh.put(3, world.change({"BROKEN_MODULE_STRING": "", "n3.txt": "x\n"}))
+    q = world.queue()
+    q.preflight = _preflight(world, repo=q.workdir, sync=sync, lean=lean).onto
+    world.logs.clear()
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [1, 2], world.logs
+    assert syncs.read_text() == "synced\n" and len(built) == 1, "the sync's preflight neither syncs nor builds"
+    said = next(s for s in world.logs if "preflight: #2 at" in s)
+    assert "checks skipped: the merged tree's environment and Lean build (`uv sync --locked`" in said, said
+    assert "the checks that ran passed" in said and "nothing refused" not in said, said
+    assert entries[3].state == "refused" and "the invariant tests in . fail on the merged tree" in entries[3].why, entries[3].why
+    assert not any((world.tmp / "pre").iterdir()) and len(_git(q.workdir, "worktree", "list").splitlines()) == 1
+
+
 def test_ready_mark_from_an_agent_vm_builds_the_lean_it_reaches_on_a_node_refuses_what_none_can_and_skips_a_timeout(
         world, monkeypatch, capsys):
     """`ready --mark` from a VM without a warm Lean tree used to skip the Lean step, so a head whose merge onto `next` broke 5
@@ -2739,6 +3239,13 @@ def test_a_head_that_changes_a_lock_is_marked_only_on_a_records_run_of_it_that_p
     assert _mark(world, 2, plain, store=LocalStore(world.tmp / "bare", config_path=world.tmp / "none.toml")) == 0
 
 
+def test_a_lock_of_the_auditors_fixtures_needs_no_records_run(world):
+    """No records run reads a lock under `LEAN_FIXTURES` (`lean_changed.py --records` matches no package there, and the
+    controls write its records), so a head that changes only such locks is marked with nothing read, not even the store."""
+    fixture = world.change({"tools/verity/lean/tests/fixtures/f/lean-audit.json": _lock(A="2")})
+    assert _mark(world, 1, fixture, store=LocalStore(world.tmp / "bare", config_path=world.tmp / "none.toml")) == 0
+
+
 def test_under_land_into_checked_a_head_is_judged_against_checked_not_main(world, capsys):
     """Under `land_into = "checked"` a lock change lands on `checked` well before `main` follows it, and a PR that merges
     `checked` (to resolve a conflict with one landed there) carries it: against `main` the gate blamed that PR for every lock
@@ -2884,7 +3391,7 @@ def test_a_records_run_vouches_for_exactly_the_packages_it_passed(world, capsys)
     world.with_store_remote()
     h = world.change({**BOTH, "lib/lean-audit.json": _lock(C="2")})
     rid = _published(world, h, files={"lean-audit/audit.json": _audit(),
-                                      "lean-audit/audit-Proofs/report.json": json.dumps(
+                                      "lean-audit/audit-pkg_Proofs/report.json": json.dumps(
                                           {"package": "/w/lean-records/build-0/pkg/Proofs", "failures": []})})
     capsys.readouterr()
     assert _mark(world, 1, h) == 1
@@ -2895,10 +3402,23 @@ def test_a_records_run_vouches_for_exactly_the_packages_it_passed(world, capsys)
         assert any(f"records gate: {pkg}: records run {rid} of {h[:12]} passed it" in line for line in world.logs)
 
 
+def test_a_records_run_built_outside_the_checkout_names_the_report_by_the_package_s_directory(world, capsys):
+    """lean/check.py tags a package's report by its directory's name alone when the build is outside the checkout, as a records
+    run's is (`audit-Proofs`, not `audit-pkg_Proofs`): that report vouches for the package too."""
+    world.with_store_remote()
+    h = world.change({LOCK: _lock(A="2"), "pkg/Proofs/lean-audit.json": _lock(B="2")})
+    rid = _published(world, h, files={"lean-audit/audit.json": _audit(),
+                                      "lean-audit/audit-Proofs/report.json": json.dumps(
+                                          {"package": "/w/lean-records/build-0/pkg/Proofs", "failures": []})})
+    capsys.readouterr()
+    assert _mark(world, 1, h) == 0, capsys.readouterr().err
+    assert any(f"records gate: pkg/Proofs: records run {rid} of {h[:12]} passed it" in line for line in world.logs)
+
+
 def test_a_package_audited_beside_pkg_is_read_from_its_own_report(world, capsys):
     """A records run of `Security` audits `Security/Proofs` too (its `proved_in`), with that package's verdict in
-    `audit-Proofs/report.json`: a head changing both locks is vouched for by one run when the report passed, and refused with its
-    first failure line when it didn't."""
+    `audit-pkg_Proofs/report.json` (lean/check.py tags it by its path, not `audit-Proofs`): a head changing both locks is
+    vouched for by one run when the report passed, and refused with its first failure line when it didn't."""
     world.with_store_remote()
     both = {LOCK: _lock(A="2"), "pkg/Proofs/lean-audit.json": _lock(B="2")}
     def report(failure=None):
@@ -2906,7 +3426,7 @@ def test_a_package_audited_beside_pkg_is_read_from_its_own_report(world, capsys)
 
     h = world.change(both)
     _published(world, h, passed=False, files={"lean-audit/audit.json": _audit(),
-                                              "lean-audit/audit-Proofs/report.json": report("replay: P.t: stale\n  more")})
+                                              "lean-audit/audit-pkg_Proofs/report.json": report("replay: P.t: stale\n  more")})
     capsys.readouterr()
     assert _mark(world, 1, h) == 1
     err = capsys.readouterr().err
@@ -2914,7 +3434,7 @@ def test_a_package_audited_beside_pkg_is_read_from_its_own_report(world, capsys)
     assert "--records pkg/Proofs --update" in err and "more" not in err
 
     h2 = world.change({"pkg/Proofs/P.lean": "theorem p : True := trivial\n"}, base=h)
-    rid = _published(world, h2, files={"lean-audit/audit.json": _audit(), "lean-audit/audit-Proofs/report.json": report()})
+    rid = _published(world, h2, files={"lean-audit/audit.json": _audit(), "lean-audit/audit-pkg_Proofs/report.json": report()})
     assert _mark(world, 2, h2) == 0
     assert any(f"records gate: pkg/Proofs: records run {rid} of {h2[:12]} passed it" in line for line in world.logs)
 
@@ -2922,7 +3442,9 @@ def test_a_package_audited_beside_pkg_is_read_from_its_own_report(world, capsys)
 def test_a_records_run_whose_update_wrote_a_record_vouches_only_for_the_commit_of_that_record(world, capsys):
     """`--update` passes by writing the record, kept as `record/lean-audit.json` when it differs from the commit's lock: the head
     it ran on still has the old lock, which a train's Lean check fails.  The commit of exactly that record over it is vouched for
-    by the run below it, so a lane needs no second run; any other lock there is refused."""
+    by the run below it, so a lane needs no second run; any other lock there is refused.  A merge of another PR that resolves to
+    that commit's tree byte for byte is vouched for through it too, and so is a commit above it that changes only non-Lean tests
+    or docs; one that changes a file the records read, a `.lean` file under `tests/` included, isn't."""
     world.with_store_remote()
     h1 = world.change({LOCK: _lock(A="2"), "pkg/A.lean": "theorem a : True := trivial\n"})
     rec = _lock(A="2", B="2")
@@ -2936,6 +3458,79 @@ def test_a_records_run_whose_update_wrote_a_record_vouches_only_for_the_commit_o
     h2 = world.change({LOCK: rec}, base=h1)
     assert _mark(world, 1, h2) == 0
     assert f"{h2[:12]} commits the record records run {rid} of {h1[:12]} regenerated, where pkg passed" in world.logs[-1]
+
+    other = world.change({"c.txt": "another PR's\n"})
+    _git(world.dev, "checkout", "-q", "--detach", h2)
+    _git(world.dev, "merge", "-q", "--no-ff", "-s", "ours", "-m", "merge another PR, keeping our lock", other)
+    h3 = _git(world.dev, "rev-parse", "HEAD")
+    _git(world.dev, "push", "-q", "origin", f"{h3}:refs/dev/{h3}")
+    assert _mark(world, 1, h3) == 0
+    assert (f"{h3[:12]} has {h2[:12]}'s tree byte for byte, where {h2[:12]} commits the record records run {rid}"
+            in world.logs[-1])
+
+    h4 = world.change({"pkg/tests/test_t.py": "def test_t(): pass\n", "pkg/README.md": "pkg\n"}, base=h2)
+    assert _mark(world, 1, h4) == 0
+    assert (f"{h4[:12]} changes none of pkg's records inputs over {h2[:12]}, where {h2[:12]} commits the record records run "
+            f"{rid}" in world.logs[-1])
+    assert _mark(world, 1, world.change({"pkg/A.lean": "theorem a : 1 = 1 := rfl\n"}, base=h2)) == 1
+    assert _mark(world, 1, world.change({"pkg/tests/T.lean": "def t := 1\n"}, base=h2)) == 1   # the audit walks it
+
+
+def test_a_requirer_whose_record_the_run_regenerated_is_vouched_for_only_at_the_commit_of_that_record(world, capsys):
+    """`--records PKG --update` also updates a requirer that failed only on record differences, and its pass is
+    then on the record it wrote (`record/<path>/`), not the head's lock: the head is refused for it, and the commit of both
+    records is vouched for by that one run."""
+    world.with_store_remote()
+    req = "req/lean-audit.json"
+    h1 = world.change({LOCK: _lock(A="2"), req: _lock(A="2"), "pkg/A.lean": "theorem a : True := trivial\n"})
+    rec, rreq = _lock(A="2", B="2"), _lock(A="2", C="2")
+    rid = _published(world, h1, files={"lean-audit/audit.json": _audit(), "lean-audit/requirer-req/audit.json": _audit("req"),
+                                       "lean-audit/record/lean-audit.json": rec, f"lean-audit/record/{LOCK}": rec,
+                                       f"lean-audit/record/{req}": rreq})
+    capsys.readouterr()
+    assert _mark(world, 1, h1) == 1
+    err = capsys.readouterr().err
+    assert f"records run {rid} of {h1[:12]} passed req only with the record its `--update` wrote" in err
+    assert f"commit its `record/{req}`" in err and "commit its `record/lean-audit.json`" in err
+    assert _mark(world, 1, world.change({LOCK: rec, req: _lock(A="2", C="3")}, base=h1)) == 1
+    h2 = world.change({LOCK: rec, req: rreq}, base=h1)
+    assert _mark(world, 1, h2) == 0
+    for pkg in ("pkg", "req"):
+        assert any(f"records gate: {pkg}: {h2[:12]} commits the record records run {rid} of {h1[:12]} regenerated, where "
+                   f"{pkg} passed" in line for line in world.logs)
+
+
+def test_a_chain_of_commits_of_records_vouches_for_its_top_when_every_lock_it_changes_is_a_record_a_run_below_kept(world, capsys):
+    """Records runs of `pkg` and `pkg/Proofs` at one commit each keep a record; a lane commits Proofs' and then pkg's on top, and
+    the top commit's parent holds no run of pkg, which made the gate rerun pkg's records for an hour.  The run below the chain
+    vouches for it when each lock each commit of the chain changes is a record a passing run below that commit kept; a chain
+    with a change besides locks, or a lock no run kept, is no such chain."""
+    world.with_store_remote()
+    proofs = "pkg/Proofs/lean-audit.json"
+    a = world.change({LOCK: _lock(A="2"), proofs: _lock(B="2"), "pkg/A.lean": "theorem a : True := trivial\n"})
+    rec, prec = _lock(A="2", C="2"), _lock(B="2", C="2")
+    rid = _published(world, a, files={"lean-audit/audit.json": _audit(), "lean-audit/record/lean-audit.json": rec})
+    pid = _published(world, a, pkg="pkg/Proofs", files={"lean-audit/audit.json": _audit("pkg/Proofs"),
+                                                         "lean-audit/record/lean-audit.json": prec})
+    h1 = world.change({proofs: prec}, base=a)
+    h2 = world.change({LOCK: rec}, base=h1)
+    assert _mark(world, 1, h2) == 0
+    assert any(f"records gate: pkg: {h2[:12]} commits the record records run {rid} of {a[:12]}, over 1 commit(s) of records "
+               f"runs' records, regenerated, where pkg passed" in line for line in world.logs)
+    assert any(f"{h1[:12]} commits the record records run {pid} of {a[:12]} regenerated, where pkg/Proofs passed" in line
+               for line in world.logs)
+
+    one = world.change({LOCK: rec, proofs: prec}, base=a)                           # one commit of the records: as before
+    assert _mark(world, 2, one) == 0
+    assert f"{one[:12]} commits the record records run {rid} of {a[:12]} regenerated, where pkg passed" in world.logs[-1]
+
+    for n, below, top in ((3, {proofs: prec, "pkg/B.lean": "theorem b : True := trivial\n"}, rec),   # a change besides locks
+                          (4, {proofs: _lock(B="2", C="9")}, rec),                                  # a lock no run kept
+                          (5, {proofs: prec}, _lock(A="2", C="9"))):                                # nor at the top
+        capsys.readouterr()
+        assert _mark(world, n, world.change({LOCK: top}, base=world.change(below, base=a))) == 1
+        err = capsys.readouterr().err
+        assert "it changes the Lean lock of pkg" in err and "--records pkg --update" in err
 
 
 def test_a_pass_at_a_commit_whose_inputs_for_the_package_are_the_heads_vouches_for_it_and_one_that_differs_or_cant_be_read_doesnt(
@@ -2966,13 +3561,15 @@ def test_a_pass_at_a_commit_whose_inputs_for_the_package_are_the_heads_vouches_f
     assert _mark(world, 1, h) == 0
     assert f"research queue: records gate: pkg: a records run of {c[:12]} ({rid}) with identical inputs" in world.logs[-1]
 
-    for n, files in ((6, {"lib/tests/T.lean": "def t := 2\n"}), (7, {"lib/README.md": "lib, said again\n", "lib/READMEs.txt": "x\n"}),
-                     (8, {"pkg/test/x.txt": "y\n", "pkg/NOTES.md": "notes\n"})):        # tests and docs: no records run reads them
+    for n, files in ((6, {"lib/tests/t.py": "x = 2\n"}), (7, {"lib/README.md": "lib, said again\n", "lib/READMEs.txt": "x\n"}),
+                     (8, {"pkg/test/x.txt": "y\n", "pkg/NOTES.md": "notes\n"}),
+                     (11, {"tools/verity/lean/README.md": "the checker's outline\n"})):  # tests and docs: no records run reads them
         assert _mark(world, n, world.change({LOCK: _lock(A="2"), **files})) == 0
         assert f"a records run of {c[:12]} ({rid}) with identical inputs" in world.logs[-1]
 
     for n, files in ((2, {"lib/L.lean": "def l := 2\n"}), (3, {"lean-toolchain": "v2\n"}),
                      (9, {"lib/lakefile.toml": 'name = "lib"\ndefaultTargets = ["L"]\n'}), (10, {"lib/tests.lean": "def t := 1\n"}),
+                     (11, {"lib/tests/T.lean": "def t := 2\n"}),                        # the audit walks every .lean file
                      (4, {"tools/verity/lean/check.py": "# the checker, changed\n"}),
                      (5, {"tools/verity/check/common.py": "# its helpers, changed\n"})):
         capsys.readouterr()
@@ -3513,7 +4110,9 @@ def test_a_remote_quick_tier_that_cannot_launch_or_is_never_seen_to_end_fails_af
     monkeypatch.setattr(Q, "REMOTE_GRACE_S", 30)
     world.gh.put(1, h1 := world.change({"a.txt": "a1\n"}), ready=False)
     pr = world.gh.prs[1]
-    refused = lambda argv, cwd: subprocess.CompletedProcess(argv, 3, "", "research run: refused: vy-test isn't in machines.toml\n")
+    def refused(argv, cwd):
+        return subprocess.CompletedProcess(argv, 3, "", "research run: refused: vy-test isn't in machines.toml\n")
+
     tier, sleeps = _remote_tier(world, monkeypatch, Machine(world.tmp), launch=refused)
     assert tier(pr) == "`research run --on vy-test` failed (exit 3): research run: refused: vy-test isn't in machines.toml" and sleeps == []
     tier, sleeps = _remote_tier(world, monkeypatch, Machine(world.tmp, outcome=_reports({"state": "running"})), timeout_s=60, wait_s=30)
@@ -3550,10 +4149,13 @@ def test_a_remote_quick_tier_on_auto_runs_on_the_machine_placed_and_without_one_
 
     machine = Machine(world.tmp, outcome=_reports())
     asked = []
-    placed = lambda spec, repo: asked.append(spec) or ("vy-test", "a check slot and a Lean check slot are free (check slots: d free)")
+    def placed(spec, repo):
+        asked.append(spec)
+        return "vy-test", "a check slot and a Lean check slot are free (check slots: d free)"
+
     tier, _ = _remote_tier(world, monkeypatch, machine, place=placed)
     tier.on = "auto"
-    world.gh.put(1, h1 := world.change({"a.txt": "a1\n"}), ready=False)
+    world.gh.put(1, world.change({"a.txt": "a1\n"}), ready=False)
     assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 0 and asked == ["auto"]
     flags = machine.launched[-1][:machine.launched[-1].index("--")]
     assert flags[flags.index("--on") + 1] == "vy-test"
@@ -3937,6 +4539,20 @@ def test_a_lock_merge_onto_next_names_each_premise_and_frozen_key_it_drops_that_
     head = world.change({"a.txt": "a2\n"} if edit is None else {"pkg/lean-audit.json": _lock_text(edit)})
     _git(world.dev, "fetch", "-q", "origin")
     assert lock_drops(world.dev, _git(world.dev, "rev-parse", "origin/next"), head) == drops
+
+
+def test_dropped_entries_reads_a_frozen_reason_reworded_at_its_key_as_kept_and_a_removed_key_as_dropped():
+    """`check.py` reads a frozen entry's key and its reason's category, not its wording: a head that rewords the reason under
+    the same key drops nothing, and one that removes the key still drops it."""
+    from research.queue import dropped_entries
+
+    def lock(edit: Callable[[dict], object]) -> dict:
+        return json.loads(_lock_text(edit))
+
+    base = lock(lambda d: None)
+    (f, why), = base["shape"]["frozen"].items()
+    assert dropped_entries(base, lock(lambda d: d["shape"]["frozen"].update({f: why + " (reworded)"}))) == []
+    assert dropped_entries(base, lock(lambda d: d["shape"]["frozen"].pop(f))) == [f"shape.frozen[{f}]"]
 
 
 def test_dropped_entries_keeps_a_premise_moved_under_a_new_key_and_one_of_a_guarantee_recorded_otherwise():

@@ -185,6 +185,7 @@ import Proofs.Flock.Claims.ZK.RepFree
 import Proofs.Flock.Claims.ZK.RepReplay
 import Proofs.Flock.Claims.ZK.RepInner
 import Proofs.Flock.Claims.ZK.RepCutFw
+import Proofs.Flock.Claims.ZK.RepRet
 
 /-!
 # Flock's zero knowledge against a malicious verifier
@@ -247,7 +248,8 @@ import Proofs.Flock.Claims.ZK.RepCutFw
   at its masked record `zkOf`, under `Proto.Honest`).
 * `Prefinal`: Lemma C from world `W₀` alone, for any family of tables of their own types (`famCard_cut_eq`), and its
   bounds on the runs before the last coin and where the prover refuses (`Proto.runs_close_of_ideal`,
-  `Proto.refused_close_of_ideal`).
+  `Proto.refused_close_of_ideal`), and the same at the switched prover with level 0's real leaves under salts its
+  values read (`Proto.runs_close_sw_of_ideal`, `Proto.refused_close_sw_of_ideal`).
 * `Deployed`: the same at the tables `verify --zk` sets up, each with its own types (`Proto.TPreModel`,
   `Proto.TabModel`, `Proto.TOffModel`), where `NonDegenerate` and `InnerHolds` are `CoinedOK`'s (`SetupTable.ok`,
   `ZkHidden.zkViewAtJ_of_ok`), Lemma C's tables, leaves and world `W₀` are the session's by definition
@@ -467,8 +469,14 @@ import Proofs.Flock.Claims.ZK.RepCutFw
   drawn pads is its value at the clear values and the zero pads (`rows_padFree`), so the drawn pads' check passes iff
   `RowsAt` holds (`rowsAt_iff_pass`), and the Finish's stop bit is `1[¬RowsAt (w, v)]`, a function of the witness and
   the values alone.
-* `Switched`: the switched prover at the session's `J` tables: Lemma B at the workers' values there (`zkViewAtJ_sw`),
-  and `SHVZK` against the honest prover's simulator where the prover goes on (`Proto.TabModel.shvzk_sw`).
+* `WorkerSeen`: Lemma B at values read from what the workers see of every table (`Table.Seen`: the mask slots, level
+  0's hiding and level 0's salts), in the reordered chain: the pads trees' hidden leaves ideal, a bijection of each
+  table's randomness that keeps what the workers see moving the switched view at constant values to the honest one
+  (`fixE`, `swView_fix`), then level 0's hidden leaves ideal (`mix_shvzk_hm96`; at `J` tables `fam_sw_shvzk_hm96`).
+* `Switched`: the switched prover at the session's `J` tables: Lemma B at the workers' values there, read from every
+  table's seen randomness (`zkViewAtJ_sw`), Lemma A at the switched prover before the last coin
+  (`card_swCutAt_real0`), and `SHVZK` against the honest prover's simulator where the prover goes on
+  (`Proto.TabModel.shvzk_sw`).
 * `Server`: the ZK server (`ZkServer`) that releases untrusted workers' values in four kinds (`fixed`, `own`,
   `recomputed`, `masked`), masks added after its checks, on a public schedule. For every worker it releases the
   reference prover's run cut at some round, but with probability the masked checks' errors (`ZkServer.split`), from
@@ -480,8 +488,8 @@ import Proofs.Flock.Claims.ZK.RepCutFw
   server's draws nor its messages (`ZkServer.lift`, `ZkServer.Blind`). The server that defers every stop to the last
   round (`ZkServer.nextD`) releases the reference run or it with its last message the stop (`ZkServer.split_deferred`),
   within a factor 2 of the simulator that guesses which (`ZkServer.zk_deferred`, `leaky1`).
-* `Blind`: the switched prover at the reference session (`RefSession.swP`, at values `RefSession.SwVals` indexed by what
-  a pad-blind worker sees), with `refP`'s simulator, which never reads the prover's messages (`Proto.simulatorE_msg`):
+* `Blind`: the switched prover at the reference session (`RefSession.swP`, at values `RefSession.SwVals` read from what
+  a pad-blind worker sees of every table, `RefSession.seenOf`), with `refP`'s simulator, which never reads the prover's messages (`Proto.simulatorE_msg`):
   **`Flock.zk_deployZk_sw`**, `Claims.Flock.ZKAt` at the same `ε_zk`, `γ` and simulator as `Flock.zkAt_deployZk_ref`
   for any values whose round encoding is causal (`RefSession.SwCausal`), `Flock.zkAt_deployZk_ref` its case at the
   tables' own values (`Flock.zkAt_deployZk_ref_of_sw`); and **`Flock.zk_server_blind`**, the server that defers every
@@ -643,8 +651,8 @@ import Proofs.Flock.Claims.ZK.RepCutFw
   **`LeanRelease.tablesAdmitUnrefused_dataE`**) and the frames' side `LeanRelease.FrameUnrefused` (at a `Live`
   statement, a live history the frame takes shows no fault), so `FinalRoundEq` at `ofLoop` is theirs and `FinishIs`'
   (**`LeanRelease.finalRoundEq_ofLoop`**).
-* `FrameBeta`: `FrameUnrefused`' `β` fault. At a `Live` statement the loop serves, on a live history of `refK x` openings
-  whose last coins the frame takes, each rep's opening at `betaSlot` is its inner proof's round 2 (the rep's round
+* `FrameBeta`: `FrameUnrefused`' `β` fault. At a `Live` statement the loop serves, on a live history of at most `refK x`
+  openings whose last coins the frame takes, each rep's opening at `betaSlot` among them is its inner proof's round 2 (the rep's round
   position, `Loop.locate_take_sum` with `Loop.repStartZk_eq`, and its schedule so far complete,
   `Count.schedSoFar_size`), whose frame takes only one nonzero `β` (`Loop.answer_beta`), so the opened `β` is nonzero
   (**`LeanRelease.beta_unrefused`**).
@@ -662,8 +670,8 @@ import Proofs.Flock.Claims.ZK.RepCutFw
   the rounds' answers up to the label, each the round's count (`Ranked.run_head`), so where the requests up to an inner
   proof's round run on, the rank check held at the rounds' coins after the earlier rep's claim points
   (**`Ranked.ownReqs_rank`**).
-* `FrameRankFault`: `FrameUnrefused`' rank fault. At a `Live` statement the loop serves, on a live history of `refK x`
-  openings whose last coins the frame takes, each rep's opening at `betaSlot` finds the frame at its inner proof's round
+* `FrameRankFault`: `FrameUnrefused`' rank fault. At a `Live` statement the loop serves, on a live history of at most
+  `refK x` openings whose last coins the frame takes, each rep's opening at `betaSlot` among them finds the frame at its inner proof's round
   2, where the rank check held on the rounds' coins after the earlier rep's claim points (`Ranked.repState_rank`).
   Those coins are the opened ones (`Loop.wordsAt_slot`), at the algebraic phase's counts (`Ranked.alg_cnt`,
   `Loop.loopNr_rep`), and the frame's claim points on them are the session's (`Ranked.frame_points`), so no rep's rank
@@ -683,7 +691,7 @@ import Proofs.Flock.Claims.ZK.RepCutFw
   reps the worker's rows hold at every pad (**`Composed.rowsAt_of_rows`**, `Table.RowsAt`).
 * `FinishStopAt`: that stop at a `--zk` table's own draw. Where, at each rep, the firewall's constraints are the first
   seven rows on the view's masked values and none fails on the drawn pads, the worker's rows hold at the draw's mask slot
-  and extra lanes (**`Composed.rowsAt_of_cons`**), so the switched view is the worker's own.
+  and level 0's hiding (**`Composed.rowsAt_of_cons`**), so the switched view is the worker's own.
 * `FinishSwSrc`: the switched prover's rep source, `tabSrcCut` of the switched cut at the workers' values
   (`Masked.swSrcE`, `Masked.swCutE`, `RefSession.swCutOf`), the source `FinishSrc`'s premises are to be met at for
   `FinishIs`. Where a table's rows hold at its base, its masked values are the worker's view's
@@ -740,6 +748,10 @@ import Proofs.Flock.Claims.ZK.RepCutFw
 * `RepCutFw`: the cut rep returns on its coins alone. Where the firewall's rep returned and the cut's rank check passes,
   the cut rep from any hash, commitments and source returns, with a log of the firewall's size
   (**`CutFree.repCut_of_repFwC`**).
+* `RepRet`: a rep returns on its coins alone. Each phase returns from any source wherever the coins it draws pass its
+  checks (`CutFree.piopCut_ret`, `CutFree.ligeritoCut_ret`, `CutFree.innerCut_ret`, `CutFree.repCut_ret`), so at a
+  `Live` statement, table `k / 2`'s rep `k % 2` returns from `repBase x k` to `repBase x (k + 1)` wherever the coins
+  below round `n`, past its `β` round, show no refusal (**`Masked.repCut_ret`**).
 * `L0PinFrame`: the firewall's scheduled opening, fed the stream's coins, is the cut run. Fed coins one round at a
   time (`Fed.feedR`), a run over `Drive.OpenM` is the cut run over `PS` at those coins (`Fed.feedSim`), so the opening
   is (`Fed.asksRel_feed`, `Fed.repOpening_feed`), and past its ring switch it sends level 0's bodies
@@ -943,7 +955,8 @@ import Proofs.Flock.Claims.ZK.RepCutFw
   reads (`real_bounds`, with `sched_bounds` by `decide +kernel`).
 * `FrameRep`: the session loop places a rep's rounds as `Drive.reqs` does: at a rep whose kept algebraic phase and
   opening are the schedule so far on its coins (`RepInv`), `Frames.placeOf` places its next round at that schedule's
-  round there, the inner proof's own past it (`placeOf_sched`), and the rep after the round's coins keeps `RepInv`.
+  round there, the inner proof's own past it (`placeOf_sched`; `Frames.roundPlace` places that at `.sched` of the frame's
+  own round, `Frame.innerSched`), and the rep after the round's coins keeps `RepInv`.
 * `FrameInner`: at the inner proof's rounds the frame takes only the firewall's own round (`innerOwn_inv`,
   `roundFree_own_frames`), and where the deployed frame's check releases one, the placeholder's own round at zero pads
   (`ZeroCfg`) from the same state but for `stopped` leaves the same state but for `stopped`: past the inner proof's

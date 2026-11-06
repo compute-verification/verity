@@ -247,7 +247,7 @@ def stream (n r : ℕ) : StreamRec :=
 
 /-- The session record at the link points `P`, for `n` extra claims: the level-0 cap's bytes as the table's `root_B`, and
 both reps' streams. -/
-def sessAt (P : Array (Array F128)) (n : ℕ) : Session where
+def sessAt (P : Array (Array F128)) (n : ℕ) : RunRecord where
   rootF := ByteArray.empty
   rootB := #[s.cap.foldl (· ++ ·) ByteArray.empty]
   publics := #[]

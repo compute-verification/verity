@@ -2,12 +2,13 @@ import Proofs.Flock.Claims.Complete.ZkTables.RingSwitch
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.FailClosed.PublicTies
+import Proofs.Flock.Claims.Complete.Json.Parse
 
 /-!
 # What the masked record needs of the statement, at one table
 
-`stmt_of_one`: a masked statement in scope whose drawn setup has one table gives `StmtAt`'s facts under the JSON
-library's specification (`JsonSpec`), from the setup alone. So `StmtAt` holds at every good case of one table
+`stmt_of_one`: a masked statement in scope whose drawn setup has one table gives `StmtAt`'s facts from the setup
+alone. So `StmtAt` holds at every good case of one table
 (`Case.stmtOne`), and with `Case.stmtAt` at every good case (`stmtAt_all`); `StmtOkZk` holds (`stmtOkZk`); and
 `completeRel`, `completeJRel` and `complete_zk_relation` hold without it (`completeRelS`, `completeJRelS`,
 `complete_zk_relationS`). `complete_json` and `complete_jsonJ` are `completeRelS` and `completeJRelS` in
@@ -152,7 +153,7 @@ private theorem setupOne_stmt {tags : Tags} {cf pf : ByteArray} {coins : Coins} 
 /-! ## The public header's draw -/
 
 set_option maxHeartbeats 4000000 in
-/-- The public file's header is a rebuilt object (`Flock.norm` of what `Json.parse` read). -/
+/-- The public file's header is a rebuilt object (`Flock.norm` of what `JsonParse.parse` read). -/
 private theorem loadPublic_header {tags : Tags} {c : Circuit} {f : ByteArray} {pop : Public}
     (h : HmRow.loadPublic tags c f = .ok pop) : (∃ j, pop.header = Flock.norm j) ∧ ∃ m, pop.header = .obj m := by
   unfold HmRow.loadPublic at h
@@ -318,11 +319,11 @@ theorem setupOne_of {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array
 /-- **What the masked record needs of the statement, at one table**, under the JSON library's specification: a masked
 statement in scope whose drawn setup has one table has a non-empty `Σ`, a printable draw that decodes to its instances
 and is the statement's, and a `Hello` that reads back with `coins` an object, printable with the prover's nonce. -/
-theorem stmt_of_one (S : JsonSpec) {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
+theorem stmt_of_one {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hsc : Claims.Flock.Scope (deployZk rel) x) (hs : setupOf true x = some (s, spec, sts))
     (hdr : s.read.draw.isSome = true) (h1 : sts.size = 1) :
     0 < spec.sigma.size ∧ DrawOk spec ∧ spec.unitDraw = s.read.draw ∧
-      ∃ m kvs : Std.TreeMap.Raw String Json compare, Json.parse spec.hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
+      ∃ m kvs : Std.TreeMap.Raw String Json compare, Flock.JsonParse.parse spec.hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
         m.get? "coins" = some (.obj kvs) ∧ Good (helloJ (.obj m)) := by
   obtain ⟨st, -, hspec, hst⟩ := setupOne_of hsc hs h1
   obtain ⟨⟨c, pop, hl, hd⟩, hinst, hsig, hhello⟩ := setupOne_stmt hst
@@ -338,7 +339,7 @@ theorem stmt_of_one (S : JsonSpec) {x : Claims.Msg} {s : Ins} {spec : SessionSpe
   have hU : spec.unitDraw = some d := by
     rw [hspec]
     simp [Flock.Stmt.spec, hu, Except.toOption]
-  obtain ⟨m, kvs, hp, hm, hkv, hmg, hg⟩ := hello_ok S hhello
+  obtain ⟨m, kvs, hp, hm, hkv, hmg, hg⟩ := hello_ok hhello
   refine ⟨by rw [hspec]; exact hsig, ?_, by rw [hU, hdd], m, kvs, by rw [hspec]; exact hp, hm, hkv, hmg, hg⟩
   unfold DrawOk
   rw [hU]
@@ -358,68 +359,68 @@ theorem stmt_of_one (S : JsonSpec) {x : Claims.Msg} {s : Ins} {spec : SessionSpe
   · exact (good_subset hw hD hk).1
 
 /-- **`StmtAt` at every good case of one table**, under the JSON library's specification. -/
-theorem Case.stmtOne (S : JsonSpec) (c : Case H rel) (h1 : c.sts.size = 1) : StmtAt c :=
-  stmt_of_one S c.scope c.setup c.ready_parts.1 h1
+theorem Case.stmtOne (c : Case H rel) (h1 : c.sts.size = 1) : StmtAt c :=
+  stmt_of_one c.scope c.setup c.ready_parts.1 h1
 
 /-- **`StmtAt` at every good case**, under the JSON library's specification: `Case.stmtOne` at one table,
 `Case.stmtAt` at several. -/
-theorem stmtAt_all (S : JsonSpec) (c : Case H rel) : StmtAt c :=
-  c.one_or_several.elim (c.stmtOne S) (c.stmtAt S)
+theorem stmtAt_all (c : Case H rel) : StmtAt c :=
+  c.one_or_several.elim (c.stmtOne) (c.stmtAt)
 
 /-- **`StmtOkZk` holds**, under the JSON library's specification: a good masked case has one table. -/
-theorem stmtOkZk (S : JsonSpec) : StmtOkZk H rel :=
-  fun c => stmt_of_one S c.scope c.setup c.ready_parts.2.1 c.ready_parts.1
+theorem stmtOkZk : StmtOkZk H rel :=
+  fun c => stmt_of_one c.scope c.setup c.ready_parts.2.1 c.ready_parts.1
 
 /-! ## Completeness without the statement's premise -/
 
 /-- **Flock's masked verifier is complete at the deployed relation** for the honest masked prover on each table's
 share, with error `δc H`, at any number of tables: `completeRel` with the statement's premise proved
 (`stmtAt_all`). -/
-theorem completeRelS (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H)
+theorem completeRelS (H : Claims.Msg → Claims.Msg) (h64 : JsonRT.Out64 H)
     (hPR : ∀ c : Case H Readable.relation, ProverRunsAt c) (hR : ∀ c : Case H Readable.relation, RepShapedAt c)
     (hC : ∀ o : Run H Readable.relation, LgInnerAt H Readable.relation o) (hMR : MaskRank.MaskRankBound) :
     Claims.Flock.Complete H (deployZk Readable.relation) :=
-  completeR H Readable.relation S h64 (stmtAt_all S) hPR hR Run.rsExtras hC hMR maskFree_relation
+  completeR H Readable.relation h64 (stmtAt_all) hPR hR Run.rsExtras hC hMR maskFree_relation
 
 /-- **Flock's completeness at the deployed masked verifier**, at the deployed relation, of the record's reference
 prover (`(deployZk Readable.relation).P`, `honestPR`) at the record's error (`(deployZk Readable.relation).δc`, `δc H`),
 at any number of tables: `completeRelS`, the oracle's 64-byte outputs (`Out64`) being `Claims.Complete`'s own
 antecedent. -/
-theorem complete_json (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon)
+theorem complete_json (H : Claims.Msg → Claims.Msg) 
     (hPR : ∀ c : Case H Readable.relation, ProverRunsAt c) (hR : ∀ c : Case H Readable.relation, RepShapedAt c)
     (hC : ∀ o : Run H Readable.relation, LgInnerAt H Readable.relation o) (hMR : MaskRank.MaskRankBound) :
     Claims.Flock.Complete H (deployZk Readable.relation) := fun h64 =>
-  completeRelS H S h64 hPR hR hC hMR h64
+  completeRelS H h64 hPR hR hC hMR h64
 
 /-- **Flock's masked verifier is complete at the deployed relation** for the honest masked prover on each table's
 share, with error `δc H`, at any number of tables: `completeJRel` with `StmtOkZk` proved (`stmtOkZk`). -/
-theorem completeJRelS (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H)
+theorem completeJRelS (H : Claims.Msg → Claims.Msg) (h64 : JsonRT.Out64 H)
     (hR : JsonRT.RepShapedZk H Readable.relation) (hPR : JsonRT.ProverRunsZk H Readable.relation)
     (hLg : FlockComplete.LigeritoZk H Readable.relation) (hIn : FlockComplete.Inner H Readable.relation)
     (hPRJ : ProverRunsJ H Readable.relation) (hRJ : RepShapedJ H Readable.relation)
     (hCJ : LgInnerJ H Readable.relation) (hMR : MaskRank.MaskRankBound) :
     Claims.Flock.Complete H (deployZk Readable.relation) :=
-  completeJRel H S h64 (stmtOkZk S) hR hPR hLg hIn hPRJ hRJ hCJ hMR
+  completeJRel H h64 (stmtOkZk) hR hPR hLg hIn hPRJ hRJ hCJ hMR
 
 /-- **Flock's completeness at the deployed masked verifier**, at the deployed relation, of the record's reference
 prover at the record's error, at any number of tables: `completeJRelS`, from the one-table premises and the same
 three at several tables (`ProverRunsJ`, `RepShapedJ`, `LgInnerJ`), with `Out64` `Claims.Complete`'s own
 antecedent. -/
-theorem complete_jsonJ (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon)
+theorem complete_jsonJ (H : Claims.Msg → Claims.Msg) 
     (hR : JsonRT.RepShapedZk H Readable.relation) (hPR : JsonRT.ProverRunsZk H Readable.relation)
     (hLg : FlockComplete.LigeritoZk H Readable.relation) (hIn : FlockComplete.Inner H Readable.relation)
     (hPRJ : ProverRunsJ H Readable.relation) (hRJ : RepShapedJ H Readable.relation)
     (hCJ : LgInnerJ H Readable.relation) (hMR : MaskRank.MaskRankBound) :
     Claims.Flock.Complete H (deployZk Readable.relation) :=
-  fun h64 => completeJRelS H S h64 hR hPR hLg hIn hPRJ hRJ hCJ hMR h64
+  fun h64 => completeJRelS H h64 hR hPR hLg hIn hPRJ hRJ hCJ hMR h64
 
 /-- **Flock's masked verifier is complete at the deployed relation** for `honestPZk` with error `δcZk H`:
 `complete_zk_relation`, which proves `StmtOkZk` from `S` itself. -/
-theorem complete_zk_relationS (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec)
+theorem complete_zk_relationS (H : Claims.Msg → Claims.Msg) 
     (hR : JsonRT.RepShapedZk H Readable.relation)
     (hPR : JsonRT.ProverRunsZk H Readable.relation) (hLg : FlockComplete.LigeritoZk H Readable.relation)
     (hIn : FlockComplete.Inner H Readable.relation) (hMR : MaskRank.MaskRankBound) :
     CompleteWith H (deployZk Readable.relation) honestPZk (δcZk H) :=
-  FlockComplete.complete_zk_relation H S hR hPR hLg hIn hMR
+  FlockComplete.complete_zk_relation H hR hPR hLg hIn hMR
 
 end FlockComplete.ZkTables

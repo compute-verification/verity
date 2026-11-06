@@ -231,7 +231,7 @@ schedule of its table, a rep that `Zk.verifyRepWith hs` accepts (in `V`, any ora
 for every level `1 ≤ ℓ`, against the proof's `ℓ − 1`-th recursive cap on its level-`ℓ` rows at the positions of round
 `zkLevelRound`'s coins, and the reader's level-`ℓ` rows (`zkLevelRowsOf`) are those positions with those rows. -/
 theorem zkLevels_verifyRepWith (hs : Hashes Flock.V) (spec : SessionSpec) (st : Setup) (sch : Schedule) (tPad : ℕ)
-    (sess : Session) (i r : ℕ) (bytes cap : ByteArray) (hsch : Zk.schedule st.m = .ok (sch, tPad))
+    (sess : RunRecord) (i r : ℕ) (bytes cap : ByteArray) (hsch : Zk.schedule st.m = .ok (sch, tPad))
     (h : Zk.verifyRepWith hs spec st sch tPad sess i r bytes = .ok cap) :
     ∃ (stream : StreamRec) (extras : Array Claim) (zp : Zk.ZkProof),
       sess.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some stream ∧
@@ -290,7 +290,7 @@ open FlockSoundness.Discharge.ZkExec (shapeZK) in
 `zkLevels_verifyRepWith` at every table `i` and rep `r < 2` (`verifyWithM_reps`). -/
 theorem zkLevels_verifyWithM (hs : Hashes Flock.V) (spec : SessionSpec) (tabs : Array Setup) (record : String)
     (proofs : Array ByteArray) (h : Zk.verifyWithM hs spec tabs record proofs = .ok ()) :
-    ∃ sess : Session, Record.decodeWith hs spec record = .ok sess ∧ tabs.size = spec.tables.size ∧
+    ∃ sess : RunRecord, Record.decodeWith hs spec record = .ok sess ∧ tabs.size = spec.tables.size ∧
       ∀ (i : ℕ) (hi : i < tabs.size), ∃ (sch : Schedule) (tPad : ℕ), Zk.schedule tabs[i].m = .ok (sch, tPad) ∧
         ∀ r < 2, ∃ (stream : StreamRec) (extras : Array Claim) (zp : Zk.ZkProof),
           sess.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some stream ∧

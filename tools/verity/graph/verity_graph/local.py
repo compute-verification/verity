@@ -1,9 +1,10 @@
-"""`verity graph check --local`: the serial reference executor.  No cache and no parallelism: every task of the graph in `order`,
-each in a fresh work directory holding the artifacts it reads at their producers' output paths, run as its argv with `--work
-DIR`, its result/v1 checked (the schema, its key against the one computed here from the reads' digests as they appear, its
-outputs' bytes against their digests).  An error (no result, a key that isn't the executor's, an undeclared read) is never a
-result and is retried; a fail is a result and is never retried; a task whose read didn't pass is cancelled.  It writes an
-events/v1 line for each event, purpose `adhoc` (`verity graph check --local`: to its work directory's `events.jsonl`)."""
+"""`verity graph check --local`: the serial reference executor.  No cache and no parallelism: the graph listed once, and every
+task of it in `order`, each in a fresh work directory holding the artifacts it reads at their producers' output paths, run as
+its argv with `--work DIR --graph PART` (its part of that listing, so that no task's run lists again), its result/v1 checked
+(the schema, its key against the one computed here from the reads' digests as they appear, its outputs' bytes against their
+digests).  An error (no result, a key that isn't the executor's, an undeclared read) is never a result and is retried; a fail
+is a result and is never retried; a task whose read didn't pass is cancelled.  It writes an events/v1 line for each event,
+purpose `adhoc` (`verity graph check --local`: to its work directory's `events.jsonl`)."""
 from __future__ import annotations
 
 import datetime
@@ -31,12 +32,19 @@ def verity() -> str:
     return str(exe)
 
 
-def launcher(root: Path) -> Callable[[dict, Path], dict]:
-    """Run a task as its graph argv with `--work DIR` from ``root``, and parse the result/v1 it prints."""
+def launcher(root: Path, doc: dict, spawn: Callable[..., subprocess.CompletedProcess] = subprocess.run
+             ) -> Callable[[dict, Path], dict]:
+    """Run a task of the listing ``doc`` as its graph argv with `--work DIR --graph PART` from ``root``, PART its `graph.part`
+    written beside DIR, so that its run lists nothing, and parse the result/v1 it prints."""
+    by = {t["id"]: t for t in doc["tasks"]}
+
     def launch(task: dict, work: Path) -> dict:
-        argv = [verity() if task["argv"][0] == "verity" else task["argv"][0], *task["argv"][1:], "--work", str(work)]
+        part = work.with_name(f"{work.name}.graph.json")
+        part.write_bytes(contract.canonical(graph.part(doc, task["id"], by)))
+        argv = [verity() if task["argv"][0] == "verity" else task["argv"][0], *task["argv"][1:], "--work", str(work),
+                "--graph", str(part)]
         try:
-            p = subprocess.run(argv, cwd=root, capture_output=True, text=True, timeout=task["timeout_s"] + GRACE_S)
+            p = spawn(argv, cwd=root, capture_output=True, text=True, timeout=task["timeout_s"] + GRACE_S)
         except subprocess.TimeoutExpired:
             return {"error": f"`verity graph run` outlived timeout_s + {GRACE_S} s"}
         lines = p.stdout.strip().splitlines()
@@ -100,7 +108,7 @@ def check(root: Path, only: set[str] | None, work_root: Path, launch: Callable[[
     tasks = graph.order(doc["tasks"])
     store = work_root / "artifacts"
     store.mkdir(parents=True, exist_ok=True)
-    launch = launch or launcher(root)
+    launch = launch or launcher(root, doc)
     ev = Events(events, doc["commit"])
     for t in tasks:
         ev("queued", t, t["key"])

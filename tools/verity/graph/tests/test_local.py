@@ -2,10 +2,13 @@
 producers' paths, keys from the reads' digests, and invariant 6: an error is retried and never a result, a fail never is."""
 from __future__ import annotations
 
+import contextlib
 import io
 import json
+import subprocess
 from pathlib import Path
 
+import pytest
 from conftest import LISTERS
 
 from verity_graph import cli, contract, families, graph, local, runners
@@ -96,7 +99,7 @@ def test_check_local_writes_its_events_beside_its_work_unless_told_where(tree, t
     doc = graph.listing(tree, listers=LISTERS)
     monkeypatch.setattr(cli, "ROOT", tree)
     monkeypatch.setattr(families, "listers", lambda: LISTERS)
-    monkeypatch.setattr(local, "launcher", lambda root: launcher(doc, {}, []))
+    monkeypatch.setattr(local, "launcher", lambda root, listed: launcher(doc, {}, []))
     for argv, where in (([], tmp_path / "w" / "events.jsonl"), (["--events", str(tmp_path / "e.jsonl")], tmp_path / "e.jsonl")):
         assert cli.main(["check", "--local", "--work", str(tmp_path / "w"), *argv]) == 0
         assert json.loads(capsys.readouterr().out)["events"] == str(where)
@@ -106,28 +109,76 @@ def test_check_local_writes_its_events_beside_its_work_unless_told_where(tree, t
     assert sorted(results) == ["other:x", "toy-b:b", "toy:a"] and {r["status"] for r in results.values()} == {"pass"}
 
 
-def test_a_run_given_its_commit_s_graph_runs_no_lister(tree, tmp_path, monkeypatch, capsys):
+def write_outputs(task: dict, work: Path) -> dict:
+    for o in task["outputs"]:
+        (work / o["path"]).parent.mkdir(parents=True, exist_ok=True)
+        (work / o["path"]).write_text(f"{task['id']} {o['name']}\n")
+    return {"status": "pass"}
+
+
+def test_a_run_given_its_part_runs_no_lister(tree, tmp_path, monkeypatch, capsys):
     doc = graph.listing(tree, listers=LISTERS)
     f = tmp_path / "graph.json"
-    f.write_bytes(contract.canonical(doc))
 
     def lister():
-        raise AssertionError("a run given its commit's graph lists nothing")
-
-    def write(task: dict, work: Path) -> dict:
-        (work / "out").mkdir()
-        (work / "out/a").write_text("a\n")
-        return {"status": "pass"}
+        raise AssertionError("a run given its part of the listing lists nothing")
     monkeypatch.setattr(cli, "ROOT", tree)
     monkeypatch.setattr(families, "listers", lister)
-    monkeypatch.setattr(runners, "run", write)
-    assert cli.main(["run", "toy:a", "--work", str(tmp_path / "w"), "--graph", str(f)]) == 0
-    res = json.loads(capsys.readouterr().out)
-    assert res["status"] == "pass" and res["key"] == next(t["key"] for t in doc["tasks"] if t["id"] == "toy:a")
-    (tree / "new.txt").write_text("untracked\n")
-    assert cli.main(["run", "toy:a", "--work", str(tmp_path / "w2"), "--graph", str(f)]) == 2, \
+    monkeypatch.setattr(runners, "run", write_outputs)
+    for n, (tid, given) in enumerate((("toy:a", doc), ("toy:a", graph.part(doc, "toy:a")),
+                                      ("toy-b:b", graph.part(doc, "toy-b:b")))):
+        f.write_bytes(contract.canonical(given))
+        work = tmp_path / "w" / str(n)
+        (work / "out").mkdir(parents=True)
+        (work / "out/a").write_text("toy:a o\n")
+        assert cli.main(["run", tid, "--work", str(work), "--graph", str(f)]) == 0
+        res = json.loads(capsys.readouterr().out)
+        task = next(t for t in doc["tasks"] if t["id"] == tid)
+        assert res["status"] == "pass" and res["key"] == contract.key(task, doc["files"], {"toy:a": {
+            "o": contract.digest(b"toy:a o\n")}}, doc["envs"]["py"]["digest"]), "the key of the listing's task"
+    (tree / "src/b.txt").write_text("changed\n")
+    assert cli.main(["run", "toy-b:b", "--work", str(tmp_path / "w2"), "--graph", str(f)]) == 2, \
         "a refusal is neither a fail nor a run"
-    assert "the tree is dirty" in capsys.readouterr().err
+    assert "src/b.txt differs here" in capsys.readouterr().err
+
+
+def in_process(argv: list[str], cwd: Path, **_) -> subprocess.CompletedProcess:
+    """A spawn for `local.launcher` that runs `verity graph ...` in this process: what the run does is what the test sees."""
+    assert argv[1] == "graph" and Path(cwd) == cli.ROOT, argv
+    out = io.TextIOWrapper(io.BytesIO(), encoding="utf-8")
+    with contextlib.redirect_stdout(out):
+        rc = cli.main(argv[2:])
+    out.flush()
+    return subprocess.CompletedProcess(argv, rc, out.buffer.getvalue().decode(), "")
+
+
+@pytest.mark.parametrize("change", [{}, {"src/a.txt": "changed\n"}, {"new.txt": "untracked\n"}],
+                         ids=["clean", "an-input-changed", "an-untracked-file"])
+def test_the_reference_executor_lists_once_and_no_task_s_run_lists_again(tree, tmp_path, monkeypatch, capsys, change):
+    for p, text in change.items():
+        (tree / p).write_text(text)
+    calls: list[str] = []
+
+    def counted(name, lister):
+        def tasks(root, files):
+            calls.append(name)
+            return lister(root, files)
+        return tasks
+    spawned: list[list[str]] = []
+    real = local.launcher
+    monkeypatch.setattr(cli, "ROOT", tree)
+    monkeypatch.setattr(families, "listers", lambda: {n: counted(n, f) for n, f in LISTERS.items()})
+    monkeypatch.setattr(local, "launcher", lambda root, doc: real(root, doc, lambda argv, **kw: (
+        spawned.append(argv), in_process(argv, **kw))[1]))
+    monkeypatch.setattr(runners, "run", write_outputs)
+    assert cli.main(["check", "--local", "--work", str(tmp_path / "w")]) == 0
+    assert json.loads(capsys.readouterr().out)["ok"]
+    assert calls == ["other", "toy"], "the executor lists each family once, and no task's run lists again"
+    assert len(spawned) == 3 and all(a[-2] == "--graph" and Path(a[-1]).is_file() for a in spawned)
+    results = json.loads((tmp_path / "w" / "results.json").read_text())
+    doc = graph.listing(tree, listers=LISTERS)
+    assert results["toy:a"]["key"] == next(t["key"] for t in doc["tasks"] if t["id"] == "toy:a")
+    assert doc["files"]["src/a.txt"] == contract.digest(change.get("src/a.txt", "a\n").encode())
 
 
 def test_what_the_executor_takes_from_a_launch(tree, tmp_path):

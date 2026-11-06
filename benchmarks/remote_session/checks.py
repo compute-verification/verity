@@ -1,6 +1,6 @@
 """The verifier's worker processes, and the window verdict the books take from the Lean's check: each window's exact
-bound on wrong receipts computed in the workers side by side, and a window's settled result set on `audit.Session` as
-`Session.verify` would set it.
+bound on wrong receipts computed in the workers side by side, and a window's settled result set on `audit.AuditRun` as
+`AuditRun.verify` would set it.
 
     checks = Checks(workers)              a pool of spawned processes
     Checks.settle(session, t, results, count)        the window's verdict, set on the session as `verify` sets it
@@ -28,8 +28,8 @@ class Checks:
             f.result()
 
     @staticmethod
-    def settle(session: audit.Session, t: int, results: list[dict], count: int) -> audit.Verdict:
-        """Window t's verdict from its batches' results in draw order, as `Session.verify` would give it (`malformed`
+    def settle(session: audit.AuditRun, t: int, results: list[dict], count: int) -> audit.Verdict:
+        """Window t's verdict from its batches' results in draw order, as `AuditRun.verify` would give it (`malformed`
         on a window with no draws)."""
         session._live()
         w = session.windows[t]

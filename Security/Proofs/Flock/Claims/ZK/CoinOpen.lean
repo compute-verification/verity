@@ -8,7 +8,7 @@ import Flock.Firewall.Contract
 
 `flock-firewall coins` (`Flock.Firewall.Coins.cmd`) is the check every coin a firewalled masked prover hands on has passed:
 `coin_tree::Checked` asks it at `Hello`, at `Hello`'s answer and at each opening, and its verdict is the transport's. Its
-verdict over a session is `Session.start` at the answer, then `Session.openAll` over the openings in order. At SHA-512
+verdict over a session is `Release.start` at the answer, then `Release.openAll` over the openings in order. At SHA-512
 (`shaH`, the hash `Coins.hk` takes under the nonce prefix) that verdict is the model's: the keyed coin-tree walk of
 `CoinLayer` (`treeChk` at `treeD`, `parseD`), checked by `allOk` up to the first opening that fails.
 
@@ -16,7 +16,7 @@ verdict over a session is `Session.start` at the answer, then `Session.openAll` 
   tree's (`answerOK`), the model's check is `Coins.parses` and `Coins.reach` reaching the answer's root, which are
   `Coins.check`'s two tests (`check_isOk`).
 * `openAll_isOk`, `verdict_isOk`: a session. When each request names the model's place (`Follows`: its stream's index in
-  the tree, its round as `Session.open` counts it, its count with the session stream's `Hello`'s), `openAll` passes
+  the tree, its round as `Release.open` counts it, its count with the session stream's `Hello`'s), `openAll` passes
   exactly where `allOk` does, and so does the whole verdict for a session of at least one opening. A malformed answer
   ends the session before any opening, as it fails every opening's `parseD`.
 * `coinLayer_verdict`, `coinLayer_refuses`: the same at `CoinLayer.session nr T`'s check (`refP.chk`), at the nonce whose
@@ -188,10 +188,10 @@ theorem answer_ok {a : List UInt8} (h : answerOK a = true) : Coins.answer a = .o
 
 /-! ## A session -/
 
-theorem open_isOk (S : Coins.Session) (st : String) (n : ℕ) (m : List UInt8) :
+theorem open_isOk (S : Coins.Release) (st : String) (n : ℕ) (m : List UInt8) :
     (S.open st n m).isOk = (Coins.check S.hello.spec S.hello.nonce S.key S.root (S.hello.spec.streams.toList.idxOf st)
       (S.opened.count (S.hello.spec.streams.toList.idxOf st)) (if st == Coins.SESSION then S.hello.links else n) m).isOk := by
-  unfold Coins.Session.open
+  unfold Coins.Release.open
   dsimp only
   by_cases hs : S.hello.spec.streams.toList.idxOf st < S.hello.spec.streams.size
   · simp only [hs, ↓reduceIte]
@@ -199,10 +199,10 @@ theorem open_isOk (S : Coins.Session) (st : String) (n : ℕ) (m : List UInt8) :
   · simp only [hs, ↓reduceIte, check_isOk, Coins.parses, and_false, decide_false, Bool.false_and]
     rfl
 
-theorem open_ok {S : Coins.Session} {st : String} {n : ℕ} {m : List UInt8} {S' : Coins.Session} {c : List UInt8}
+theorem open_ok {S : Coins.Release} {st : String} {n : ℕ} {m : List UInt8} {S' : Coins.Release} {c : List UInt8}
     (h : S.open st n m = .ok (S', c)) :
     S' = { S with opened := S.opened ++ [S.hello.spec.streams.toList.idxOf st] } := by
-  unfold Coins.Session.open at h
+  unfold Coins.Release.open at h
   dsimp only at h
   by_cases hs : S.hello.spec.streams.toList.idxOf st < S.hello.spec.streams.size
   · simp only [hs, ↓reduceIte] at h
@@ -219,7 +219,7 @@ theorem open_ok {S : Coins.Session} {st : String} {n : ℕ} {m : List UInt8} {S'
     cases h
 
 /-- **The requests follow the places `pl`**: from position `j` on, with the streams `opened` already opened, request `i`
-of `os` names the place `pl (j + i)` by its stream's index in the tree `ct`, its round (as `Session.open` counts it) and
+of `os` names the place `pl (j + i)` by its stream's index in the tree `ct`, its round (as `Release.open` counts it) and
 its count (the session stream's `links`, `Hello`'s). -/
 def Follows (pl : ℕ → Place) (ct : _root_.Flock.CoinTree.Spec) (links : ℕ) :
     ℕ → List ℕ → List (String × ℕ × Msg) → Prop
@@ -235,7 +235,7 @@ def chkAt (pl : ℕ → Place) (ν : List UInt8) (ρ : Msg) (j : ℕ) (m : Msg) 
 
 /-- **The openings after the answer**: `openAll` passes exactly where `allOk` of the model's check does. -/
 theorem openAll_isOk (pl : ℕ → Place) (ρ : Msg) (hρ : answerOK ρ = true) :
-    ∀ (S : Coins.Session) (j : ℕ) (os : List (String × ℕ × Msg)), S.key = keyD ρ → S.root = (rootD ρ).val →
+    ∀ (S : Coins.Release) (j : ℕ) (os : List (String × ℕ × Msg)), S.key = keyD ρ → S.root = (rootD ρ).val →
       Follows pl S.hello.spec S.hello.links j S.opened os →
       (S.openAll os).isOk = ((allOk (chkAt pl S.hello.nonce ρ) j (os.map fun o => o.2.2)).eval shaH).1
   | _, _, [], _, _, _ => rfl
@@ -244,7 +244,7 @@ theorem openAll_isOk (pl : ℕ → Place) (ρ : Msg) (hρ : answerOK ρ = true) 
     rw [check_isOk, hk, hr] at ho
     simp only [List.map_cons, allOk, ocBind_eval]
     rw [chkAt, hp, treeChk_sha _ _ _ _ _ _ _ hρ, ← ho]
-    unfold Coins.Session.openAll
+    unfold Coins.Release.openAll
     cases h : S.open st n m with
     | error e => rfl
     | ok p =>
@@ -256,19 +256,19 @@ theorem openAll_isOk (pl : ℕ → Place) (ρ : Msg) (hρ : answerOK ρ = true) 
 one, exactly where the model's check passes every one of them in order, at SHA-512. -/
 theorem verdict_isOk (h : Coins.Hello) (ρ : Msg) (os : List (String × ℕ × Msg)) (pl : ℕ → Place)
     (hf : Follows pl h.spec h.links 0 [] os) (hne : os ≠ []) :
-    ((Coins.Session.start h ρ).bind fun S => S.openAll os).isOk =
+    ((Coins.Release.start h ρ).bind fun S => S.openAll os).isOk =
       ((allOk (chkAt pl h.nonce ρ) 0 (os.map fun o => o.2.2)).eval shaH).1 := by
   cases hρ : answerOK ρ
   · obtain ⟨o, os, rfl⟩ := List.exists_cons_of_ne_nil hne
-    have hs : (Coins.Session.start h ρ).isOk = false := by
+    have hs : (Coins.Release.start h ρ).isOk = false := by
       have := answer_isOk ρ
       rw [hρ] at this
-      unfold Coins.Session.start
+      unfold Coins.Release.start
       cases ha : Coins.answer ρ with
       | ok p => rw [ha] at this; simp [Except.isOk, Except.toBool] at this
       | error e => rfl
-    have hl : ((Coins.Session.start h ρ).bind fun S => S.openAll (o :: os)).isOk = false := by
-      cases hS : Coins.Session.start h ρ with
+    have hl : ((Coins.Release.start h ρ).bind fun S => S.openAll (o :: os)).isOk = false := by
+      cases hS : Coins.Release.start h ρ with
       | ok S => rw [hS] at hs; simp [Except.isOk, Except.toBool] at hs
       | error e => rfl
     have hp : parseD (pl 0) ρ o.2.2 = none := by
@@ -278,7 +278,7 @@ theorem verdict_isOk (h : Coins.Hello) (ρ : Msg) (os : List (String × ℕ × M
     rw [hl]
     simp only [List.map_cons, allOk, ocBind_eval, chkAt, hp, treeChk, OC.eval]
     rfl
-  · unfold Coins.Session.start
+  · unfold Coins.Release.start
     rw [answer_ok hρ]
     exact openAll_isOk pl ρ hρ _ 0 os rfl rfl hf
 
@@ -294,7 +294,7 @@ opening is `allOk` of the deployed check (`refP.chk`) at SHA-512. -/
 theorem coinLayer_verdict (nr : Msg → ℕ → ℕ) (T : TableData) (x : Msg) (ν : Nonce) (h : Coins.Hello) (ρ : Msg)
     (os : List (String × ℕ × Msg)) (hν : h.nonce = nb ν) (hf : Follows (place nr x) h.spec h.links 0 [] os)
     (hne : os ≠ []) :
-    ((Coins.Session.start h ρ).bind fun S => S.openAll os).isOk =
+    ((Coins.Release.start h ρ).bind fun S => S.openAll os).isOk =
       ((allOk ((session nr T).refP.chk x ν ρ) 0 (os.map fun o => o.2.2)).eval shaH).1 := by
   rw [refP_chk_eq, ← hν]
   exact verdict_isOk h ρ os (place nr x) hf hne
@@ -304,7 +304,7 @@ deployed check fails on the openings, the Lean check's verdict over them is a re
 theorem coinLayer_refuses (nr : Msg → ℕ → ℕ) (T : TableData) (x : Msg) (ν : Nonce) (h : Coins.Hello) (ρ : Msg)
     (os : List (String × ℕ × Msg)) (hν : h.nonce = nb ν) (hf : Follows (place nr x) h.spec h.links 0 [] os)
     (hm : ((allOk ((session nr T).refP.chk x ν ρ) 0 (os.map fun o => o.2.2)).eval shaH).1 = false) :
-    ((Coins.Session.start h ρ).bind fun S => S.openAll os).isOk = false := by
+    ((Coins.Release.start h ρ).bind fun S => S.openAll os).isOk = false := by
   cases os with
   | nil => simp [allOk, OC.eval] at hm
   | cons o os => rw [coinLayer_verdict nr T x ν h ρ (o :: os) hν hf (List.cons_ne_nil _ _)]; exact hm

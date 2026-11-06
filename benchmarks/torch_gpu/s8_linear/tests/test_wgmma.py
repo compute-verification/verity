@@ -135,11 +135,6 @@ def test_the_sass_gate_refuses_the_report(report, why):
     assert any(why in p for p in problems), problems
 
 
-def test_sass_functions_takes_each_functions_lines_and_a_repeated_header_starts_over():
-    listing = "code for sm_90a\n  Function : a\n  /*0000*/ X ;\n  Function : b\n  /*0000*/ Y ;\n  Function : a\n  /*0000*/ Z ;\n"
-    assert SG.sass_functions(listing) == {"a": ["  /*0000*/ Z ;"], "b": ["  /*0000*/ Y ;"]}
-
-
 def test_the_kernel_order_is_a_permutation_within_each_32_bytes():
     assert sorted(W.KERNEL_ORDER) == list(range(32))
     assert W.KERNEL_ORDER[:8] == (0, 1, 2, 3, 8, 9, 10, 11) and W.KERNEL_ORDER[16:20] == (4, 5, 6, 7)

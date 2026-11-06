@@ -1,6 +1,7 @@
 name = "flock_verifier"
 version = "0.1.0"
-defaultTargets = ["flock-verify", "flock-rows", "flock-firewall", "flock-witness", "flock-rec-opening", "flock-rec-sparse", "flock-rec-links"]
+defaultTargets = ["flock-verify", "flock-rows", "flock-firewall", "flock-witness", "flock-rec-opening",
+  "flock-rec-sparse", "flock-frame-tape", "flock-rec-links"]
 
 [leanOptions]
 autoImplicit = false
@@ -22,6 +23,10 @@ root = "FlockRows"
 [[lean_exe]]
 name = "flock-firewall"
 root = "FlockFirewall"
+
+[[lean_exe]]
+name = "flock-frame-tape"
+root = "FlockFrameTape"
 
 [[lean_exe]]
 name = "flock-rec-sparse"

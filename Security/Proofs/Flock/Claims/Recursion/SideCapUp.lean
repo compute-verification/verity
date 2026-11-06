@@ -375,7 +375,7 @@ theorem topSize_cap {x : Msg} {r : XR} (hr : readX x = some r) {rs : Array RecVS
     (hrs : repSched r.shape = some rs) {g n : ℕ} (hn : (RecVStar.topSizes rs)[g]? = some n) :
     ∃ s : _root_.Flock.Schedule, _root_.Flock.fast100 r.shape.m = some s ∧ n = 2 ^ (s.levels[g + 1]!).cap := by
   obtain ⟨vs, hvs, -⟩ := readX_statements hr
-  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, _, _, K, N, hK, hT, rfl⟩ := FlockC3.Reps.list_ok hvs
+  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, _, _, K, Lk, N, hK, hT, -, rfl⟩ := FlockC3.Reps.list_ok hvs
   have hsz := topsListed_size hT hrs
   obtain ⟨hg', -⟩ := List.getElem?_eq_some_iff.1 hn
   have hg : g < K.size := by rw [hsz]; exact hg'
