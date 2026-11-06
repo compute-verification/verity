@@ -1396,6 +1396,16 @@ def test_a_worker_whose_message_never_became_a_run_is_recorded_dropped_for_its_l
         ("dropped", W1_, "run-w", "2026-10-18T19:45:00Z", "2026-10-18T19:32:53Z", "circuits")]
 
 
+def test_the_workers_heard_most_recently_are_read_first_when_more_are_new_than_a_sweep_reads(tmp_path, monkeypatch):
+    """A backlog of workers heard days ago, sorted ahead by id, kept a reviewer heard today from being read for hours."""
+    monkeypatch.setattr(W, "WORKERS_NEW", 1)
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("IDLE", "2026-10-18T19:00:00Z"),
+                                                           W2_: worker("IDLE", "2026-10-18T19:00:00Z")})
+    w.workers = {W1_: {"heard": T0 - 5 * 86400 + 60, "lane": "x"}, W2_: {"heard": T0 - 60, "lane": "x"}}
+    w.sweep(lambda r: None)
+    assert f"/v1/agents/{W2_}" in api.gets and f"/v1/agents/{W1_}" not in api.gets
+
+
 def test_a_worker_that_goes_idle_is_recorded_once_per_transition(tmp_path):
     """20:06-20:47Z, 18 Oct: all 20 of proofs' workers stopped mid-step and nobody noticed until 23:08Z. A worker's updatedAt
     moves on a status change, so the IDLE read gives when it stopped."""

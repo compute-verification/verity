@@ -1341,7 +1341,8 @@ class Watch:
             w.update(parent=p, lane=w.get("lane") or handle or "", handle=w.get("handle") or handle,
                      heard=max(w["heard"], c["t"]), name=w.get("name") or c.get("name") or "")
         self.worker_status, new = {}, 0
-        for agent, w in sorted(self.workers.items()):
+        # the most recently heard first: `WORKERS_NEW` a sweep reaches a worker heard today before a backlog heard last week
+        for agent, w in sorted(self.workers.items(), key=lambda kv: (-kv[1].get("heard", 0.0), kv[0])):
             if agent in listed or agent in coords:              # an agent the sweep reads already, or a coordinator now
                 self.workers.pop(agent)
                 continue
