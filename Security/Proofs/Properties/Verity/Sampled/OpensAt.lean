@@ -25,7 +25,10 @@ it is from the code's side (`Flock.Bridge.Spec`), at:
 * `Instance.opensAt_of`: **`OpensAt`**, wherever each session v2 sets up is `OpensReady` and the base places each
   non-constant gate at the session's `placeAt` of its claims position. The committed files' circuit is Boolean
   (`Circuit.ofAudit`), so the opened bit is the gate's whole value. `Instance.opensAt_of_ready`: the same, for a base
-  whose place is `placeOfRead` at its reading of the files, at sessions `OpensReady` alone.
+  whose place is `placeOfRead` at its reading of the files, at sessions `OpensReady` alone; `Instance.opensAt_of_sessions`
+  at every instance, whose base's place is `placeOfRead` by construction (`Instance.place`).
+* `remote_soundness_deployedReady`: **`remote_soundness_deployedAt` with `OpensAt` discharged** at sessions
+  `OpensReady`.
 -/
 
 @[expose] public section
@@ -212,6 +215,36 @@ theorem opensAt_of_ready (I : Instance d α)
   I.opensAt_of fun θ F A hs hsu => ⟨h θ F A hs hsu, fun c hN g _ =>
     (hplace θ F c g).trans (A.placeOfRead_eq hsu.read hN g)⟩
 
+/-- **`OpensAt` at sessions `OpensReady`**: an instance's base places each gate at the committed files' place by its
+construction (`Instance.place`), so `OpensAt` needs only that each session v2 sets up is `OpensReady`. -/
+theorem opensAt_of_sessions (I : Instance d α)
+    (h : ∀ θ F A, I.session θ = some A → SetsUp I.base θ F A → A.OpensReady) : I.OpensAt :=
+  I.opensAt_of_ready I.place h
+
 end Instance
+
+/-- **`remote_soundness_deployedAt` at sessions `OpensReady`**: its openings premise `OpensAt` discharged by
+`opensAt_of_sessions`. -/
+theorem remote_soundness_deployedReady (I : Instance d α) (K₀ : Constructions I.base)
+    (reg : (A : Live) → Option Claims.Msg → A.Reg)
+    (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
+    (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
+    (hready : ∀ θ F A, I.session θ = some A → SetsUp I.base θ F A → A.OpensReady)
+    (hRg : I.RegisteredFiles) (hSa : I.SessionAt .remote) (hε : I.StopsWithin .remote reg record recordDigest)
+    (hL : ∀ θ F A, I.sessions θ F = some A → A.Lb 0 = _root_.SampledProofs.Challenger.MAX_COINS * 64)
+    (hord : ∀ θ F c (σ : Verity.Game.Strategy (I.base.game θ F c)) (x : Verity.Game.CoinTape (I.base.game θ F c) σ),
+      I.base.Verdict .remote .sampled (Verity.Game.CoinTape.run (I.base.game θ F c) σ x) →
+      OrderHeld (Verity.Game.CoinTape.run (I.base.game θ F c) σ x).sent)
+    (hOR : ∀ θ F c (σ : Verity.Game.Strategy (I.base.game θ F c)) (x : Verity.Game.CoinTape (I.base.game θ F c) σ),
+      I.base.Verdict .remote .sampled (Verity.Game.CoinTape.run (I.base.game θ F c) σ x) →
+      Binding.Logged Binding.readsV2 (Verity.Game.CoinTape.run (I.base.game θ F c) σ x) →
+      ∀ text Jr, sentRecord (Verity.Game.CoinTape.run (I.base.game θ F c) σ x).sent = some text →
+        Flock.JsonParse.parse text = .ok Jr →
+        OpenedRecorded Jr (Verity.Game.CoinTape.run (I.base.game θ F c) σ x).log)
+    (hB : UnboundFaulty) (hR : RecursiveForm (I.vocab (I.constructionsAt K₀ .remote reg record recordDigest)) .remote)
+    (hW : I.base.PouwSound .remote) (hI : I.base.InferenceOnlySound .remote) :
+    (I.vocab (I.constructionsAt K₀ .remote reg record recordDigest)).SoundnessAt .remote :=
+  remote_soundness_deployedAt I K₀ reg record recordDigest (I.opensAt_of_sessions hready) hRg hSa hε hL hord hOR hB
+    hR hW hI
 
 end Verity.Sampled

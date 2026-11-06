@@ -3,6 +3,7 @@ module
 public import Proofs.Properties.Verity.Assembled
 public import Proofs.Properties.Verity.Sampled.Binding
 public import Proofs.Properties.Verity.Sampled.MovesReachAt
+public import Proofs.Properties.Verity.Sampled.Place
 public import Proofs.Flock.Recursive.TopFinder
 
 /-!
@@ -224,11 +225,12 @@ def CostsRead (V : Vocab d α) (dev : Exchange → Properties.Challenger.History
 
 /-- **The deployment, before sampled proofs' names**: the other subprotocols' vocabulary over the deployed device
 (`base`), whose signer is the deployed device's (`deployment`, `signer`), whose reading of the committed files and
-digests are v2's (`read`, `programDigest`, `publicDigest`) and whose declared calls cover the deployed device's reading
-at its history (`costs`, `Device.dev`); and the session the deployment runs at each parameters (`session`), whose
-bound's parameters `θ` fixes. A deployed instance fills `signer` at its construction, by `rfl` or a lemma, as the honest
-instance does; no theorem takes the signer's equation as a hypothesis of its own, and `couplingTarget_at` reads it
-from this field. -/
+digests are v2's (`read`, `programDigest`, `publicDigest`), whose place for each gate is the committed files' (`place`,
+`placeOfRead`) and whose declared calls cover the deployed device's reading at its history (`costs`, `Device.dev`); and
+the session the deployment runs at each parameters (`session`), whose bound's parameters `θ` fixes. A deployed
+instance fills `signer` and `place` at its construction, by `rfl` or a lemma, as the honest instance does; no theorem
+takes either equation as a hypothesis of its own: `couplingTarget_at` reads the signer's from this field, and
+`opensAt_of_sessions` the place's. -/
 structure Instance (d : Accounting.Device ι) (α : Type) [Fintype α] where
   base : Vocab d α
   deployment : Device.Deployment
@@ -236,6 +238,7 @@ structure Instance (d : Accounting.Device ι) (α : Type) [Fintype α] where
   read : ∀ θ F, base.read θ F = readOf θ F
   programDigest : ∀ θ, base.programDigest θ = programDigestOf θ
   publicDigest : ∀ θ, base.publicDigest θ = publicDigestOf θ
+  place : ∀ θ F c g, base.place θ F c g = placeOfRead (base.read θ F) g
   costs : CostsRead base (Device.dev (deployment.setupOf base.families))
   session : ByteArray → Option Live
 
@@ -842,7 +845,7 @@ noncomputable def base : Vocab Verity.Idle.device Unit :=
     programDigest := programDigestOf
     publicDigest := publicDigestOf
     registered := registeredOf
-    place := fun _ _ _ _ => none
+    place := fun θ F _ g => placeOfRead (readOf θ F) g
     extract := fun _ _ _ _ _ => 0
     finder := fun _ _ _ _ _ => Verity.Idle.finder
     cost := cost
@@ -881,6 +884,7 @@ noncomputable def inst (session : ByteArray → Option Live) : Instance Verity.I
   read _ _ := rfl
   programDigest _ := rfl
   publicDigest _ := rfl
+  place _ _ _ _ := rfl
   costs := costs
   session := session
 
