@@ -1,7 +1,8 @@
 """`one_stage`'s Python held to sampled proofs' one-stage audit in Lean (`core_sampled_proofs`), its definition and verifier
 of record (`one_stage.verifier.RECORD_VERDICT`): the whole protocol through its own `serve` (`sampled-proofs-one-stage`, a
-`ProtocolPort`), and its pieces through `sampled-proofs-difftest` (`Port`s), on drawn programs, laws, records, draws and
-verdicts, valid ones and one or two changes to each. A disagreement is the Python's to fix, unless it finds the Lean wrong.
+`ProtocolPort`), and its pieces through `sampled-proofs-difftest` (`Port`s), those a two-stage rule reaches through
+`sampled-proofs-verifier` too, on drawn programs, laws, records, draws and verdicts, valid ones and one or two changes to
+each. A disagreement is the Python's to fix, unless it finds the Lean wrong.
 
 The Python held to it is `one_stage` itself (`registration.check`, `draw.derive`, `check_draw`, `audit.audit_record`, `profile`,
 `wrong_units`, `registered.registered_entries` and `domain`) behind the protocol's decoders, which this file writes as the
@@ -36,6 +37,7 @@ populations in a sample.
 from __future__ import annotations
 
 import copy
+import dataclasses
 import functools
 import hashlib
 import json
@@ -3524,6 +3526,21 @@ PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (REGISTRAT
 @pytest.mark.parametrize("port, examples", PIECE_RUNS, ids=[p.fn for p, _ in PIECE_RUNS])
 def test_a_piece_agrees(pieces, port, examples):
     stats = D.run(port, examples=examples, server=pieces)
+    assert stats.outputs > examples // 4 and stats.rejects > 0, stats
+
+
+VERIFIER = "sampled-proofs-verifier"
+#: The verifier of record's pieces (`Pieces.verifier`) that a two-stage rule reaches, on its own executable.
+RECORD_RUNS = [(dataclasses.replace(port, exe=VERIFIER), examples)
+               for port, examples in ((SELECT, 150), (SELECT_SECOND, 100), (RUN, 100), (STREAM, 200))]
+of_record = D.server_fixture(RECORD_RUNS[0][0])
+
+
+@pytest.mark.parametrize("port, examples", RECORD_RUNS, ids=[p.fn for p, _ in RECORD_RUNS])
+def test_the_verifier_of_record_agrees_under_a_two_stage_rule(of_record, port, examples):
+    """The deployed executable, not the difftest's, on the same inputs, two-stage rules among them: its first stage, its
+    second, its run and its stream agree with the Python."""
+    stats = D.run(port, examples=examples, server=of_record)
     assert stats.outputs > examples // 4 and stats.rejects > 0, stats
 
 
