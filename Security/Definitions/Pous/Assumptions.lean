@@ -1,12 +1,16 @@
-import Definitions.Pous.Accounting.LemmaA
-import Definitions.Pous.Model.Inc
-import Definitions.Pous.Assumptions.P2
+module
+
+public import Definitions.Pous.Accounting.LemmaA
+public import Definitions.Pous.Model.Inc
+public import Definitions.Pous.Assumptions.P2
 
 /-!
 # Named assumptions
 
 Each is a `Prop` taken as a hypothesis by the statements that use it, never an `axiom`.
 -/
+
+@[expose] public section
 
 namespace Pous.Assumptions
 
@@ -24,8 +28,9 @@ def B1Prime {M : IdealModel} (sch : Scheme M) (Mdom S D Q k : ℕ) : Prop :=
     (histCount sch.B k : ℝ≥0∞) * gammaM1 sch.B S Q g Mdom ≤ 2⁻¹ ^ lam →
     AuditSecure sch .sequential S D Q k ((((g - 1 : ℕ) : ℝ≥0∞) / sch.B) ^ k) (2⁻¹ ^ lam)
 
-/-- **Lemma A as a hypothesis** (verbatim from the prover's `track-a/A3Prime.lean`) (sms5 `tradeoff.md` Lemma A in its per-run form, review F4). On the good setups
-`G W` (the review's `Dist` for M2/M3; `True` for M1), every `S`-bit state and every per-block responder that
+/-- **Lemma A as a hypothesis** (the hypothesis of `A3Prime` and `A3PrimeLam`,
+`Security/Proofs/Pous/TrackA/A3Prime.lean`) (sms5 `tradeoff.md` Lemma A in its per-run form, review F4). On the
+good setups `G W` (the review's `Dist` for M2/M3; `True` for M1), every `S`-bit state and every per-block responder that
 spends at most `(D, Q)` per run answers at least `g` blocks correctly with probability at most `Γ`. -/
 def LemmaA {M : IdealModel} (sch : Scheme M) (S D Q g : ℕ) (Γ : ℝ≥0∞)
     (G : Bits sch.n → M.Ω × sch.Coins → Prop) : Prop :=

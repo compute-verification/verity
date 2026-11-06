@@ -1,4 +1,4 @@
-"""Kernel census (lane L5, DESIGN §8): every device kernel the bare run launches must be accounted for by a pattern.
+"""Kernel census (DESIGN §8): every device kernel the bare run launches must be accounted for by a pattern.
 
 Two halves, one CLI:
 

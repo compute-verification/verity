@@ -11,8 +11,8 @@ process per rank of a node Program: `predict.node_registration`), and `write` co
   that holds a θ node, named as the parameter, its rows committed under hiding leaves (`commit.registered_rows`, R7's
   format). One log is one deployment and θ is what its first record registers, so this record opens the log and is the
   run's own: the deployment's first run. Its keys are the ones nci-check reads (`program`, `registered`, `previous`) with
-  `protocol`, `window` and `roots`, as NCI's difftest vectors write them. It carries none of the one-stage draw's fields
-  (query, partition, population, law, scheme, leaf layer, anchors): it registers θ, and no draw follows it.
+  `protocol`, `window` and `roots`, as NCI's difftest vectors write them. It carries none of the one-stage sample's fields
+  (query, partition, population, law, scheme, leaf layer, anchors): it registers θ, and no sampling follows it.
 * **`provenance`**: the instance's, one `{"kind": "registered", "registration", "value", "root"}` per θ node, in θ's order.
 * **`trusted`**: `{"log": [record], "run": digest, "params": [[name, type], ...]}`, the types as the descriptor writes them.
 * **`salts`**: per value its rows' salts, the prover's, which nothing public carries.
@@ -29,7 +29,7 @@ from typing import Any, Callable, Mapping, Sequence
 import numpy as np
 
 from verity.core.protocols.sampled_proofs.one_stage import registration as REG
-from verity.ml.circuits.types import Array, Record, Tuple, Type
+from verity.ml.circuits.types import Array, RecordType, Tuple, Type
 from verity_vllm.commit import registered_rows as RR
 
 
@@ -43,7 +43,7 @@ def lower(t: Type) -> list[tuple[int, int]]:
         return lower(t.elem) * t.n
     if isinstance(t, Tuple):
         return [x for f in t.fields for x in lower(f)]
-    if isinstance(t, Record):
+    if isinstance(t, RecordType):
         return [x for _, f in t.fields for x in lower(f)]
     raise ValueError(f"a parameter of type {t!r} lowers to no input nodes")
 

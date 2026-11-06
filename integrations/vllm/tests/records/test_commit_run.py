@@ -1,5 +1,5 @@
 """`records.commit_run`: a line of `commit/runs.jsonl` as each writer writes it (`pipeline.commit`, `pipeline.tp.commit`,
-`pipeline.serve_seal`, and R19's runs before them) loads as the typed Commit run and dumps back to the same JSON; a missing or unknown
+`pipeline.serve_seal`, and the older runs before them) loads as the typed Commit run and dumps back to the same JSON; a missing or unknown
 field is refused by name.  A sealed window's own line is held to the same in `tests/pipeline/test_serve_seal.py`."""
 from __future__ import annotations
 

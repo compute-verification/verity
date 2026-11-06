@@ -1,7 +1,9 @@
-import Proofs.Flock.SessionLoop.FinPrevFw
-import Proofs.Flock.SessionLoop.FinHmkRet
-import Proofs.Flock.SessionLoop.FinRepPads
-import Proofs.Flock.Claims.ZK.FinishSwMkAny
+module
+
+public import Proofs.Flock.SessionLoop.FinPrevFw
+public import Proofs.Flock.SessionLoop.FinHmkRet
+public import Proofs.Flock.SessionLoop.FinRepPads
+public import Proofs.Flock.Claims.ZK.FinishSwMkAny
 
 /-!
 # `FinRepMsgs` with no rows
@@ -18,6 +20,8 @@ request's. Here it holds outright, reading no table's rows:
 
 **`Loop.finRepMsgs_ret`** states it.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
@@ -161,14 +165,14 @@ theorem finRepMsgs_ret (vs : finS.SwVals)
     exact lt_trans hiz (Masked.zp64_lt_hab x j)
   have e1 := hmk i (by rw [hlay]; exact hiz)
   rw [hP] at e1
-  have e2 := Masked.swSrcE_masked_pad_any x (finCoins x ops) w (vs x w ν (finCoins x ops)) t j r hkE
-  have e4 : FlockLevel3.GF128.val (vs x w ν (finCoins x ops) j r (Masked.wtOf Masked.PE x w j)
-      (randAtT x ops t j).1 (randAtT x ops t j).2.1.2.1 ⟨i, hkE⟩) +
+  have e2 := Masked.swSrcE_masked_pad_any x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t j r hkE
+  have e4 : FlockLevel3.GF128.val (vs x w ν (finCoins x ops) (finS.seenOf x t) j r (Masked.wtOf Masked.PE x w j)
+      (randAtT x ops t j).1 (randAtT x ops t j).2.1 ⟨i, hkE⟩) +
         (FlockComplete.padsOf (Masked.UE.tapeZk t) j.val r.val (Masked.layE x j)).h[i]! =
       q.vals[i]! + (FlockComplete.padsOf (Masked.UE.tapeZk t) j.val r.val (Masked.layE x j)).h[i]! :=
     e2.symm.trans e1
-  have e3 : FlockLevel3.GF128.val (vs x w ν (finCoins x ops) j r (Masked.wtOf Masked.PE x w j)
-      (randAtT x ops t j).1 (randAtT x ops t j).2.1.2.1 ⟨i, hkE⟩) = q.vals[i]! := by
+  have e3 : FlockLevel3.GF128.val (vs x w ν (finCoins x ops) (finS.seenOf x t) j r (Masked.wtOf Masked.PE x w j)
+      (randAtT x ops t j).1 (randAtT x ops t j).2.1 ⟨i, hkE⟩) = q.vals[i]! := by
     rw [← Composed.ZerocheckMasked.add_add_self (FlockLevel3.GF128.val _)
       (FlockComplete.padsOf (Masked.UE.tapeZk t) j.val r.val (Masked.layE x j)).h[i]!, e4,
       Composed.ZerocheckMasked.add_add_self]

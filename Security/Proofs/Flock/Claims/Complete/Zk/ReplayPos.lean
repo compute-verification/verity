@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.Zk.Transfer
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Transfer
 
 /-!
 # Where the masked replay stops, and the coins its claims read
@@ -10,6 +12,8 @@ import Proofs.Flock.Claims.Complete.Zk.Transfer
 * **Runs that return** (`RetV x t P`): every run of `x` from `t` that returns ends in `P`; composed by `RetV.bind`,
   through loops by `RetV.forIn_range`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

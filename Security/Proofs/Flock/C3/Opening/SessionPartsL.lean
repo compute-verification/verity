@@ -1,5 +1,7 @@
-import Proofs.Flock.C3.Opening.SessionParts
-import Proofs.Flock.VBridge.ResLayer
+module
+
+public import Proofs.Flock.C3.Opening.SessionParts
+public import Proofs.Flock.VBridge.ResLayer
 
 /-!
 # n4's session (a) at the columns the rows read: `OpeningZeroAtL`
@@ -14,6 +16,8 @@ computed row of the part's unit reads (at `m = 22`, `m24`'s first four elements)
 * `OpeningZeroAtL`, `partCols_of_openingZeroAtL`: `OpeningZeroAt` with the row ports registered at the read columns,
   and the part's residuals, zero, from it as from `OpeningZeroAt`; `openingZeroAtL_of` weakens `OpeningZeroAt` to it.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.OfVStar
 

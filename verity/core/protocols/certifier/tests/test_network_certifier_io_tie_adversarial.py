@@ -2,14 +2,14 @@
 arbitrary serving: what it can carry"), as the tie that opens every cell answers them:
 
 - No field of a cell but the id is the server's: another frame kind, payload length, a finish reason or a second id
-  in the padding is refused by the reference and by `IoTieCell`. The stream parses, because the warden writes it from
-  the connection it terminated; a cell on another request's stream is refused by the map, which names every slot's
-  stream.
+  in the padding is refused by the reference and by `IoTieCell`. The stream parses, because the network certifier writes
+  it from the connection it terminated; a cell on another request's stream is refused by the map, which names every
+  slot's stream.
 - A variable-length response has its map: the verifier computes each slot's record from the advice's outputs and
   release buckets, so interleaved responses of any lengths are accepted, and a count one off either way is refused.
-- The order within a bucket: the warden's slots are its connections' by ordinal, r each in cell order, and the map
-  holds every slot to its record, so of every order of a bucket's cells the tie accepts the warden's alone, and the
-  order says nothing the admissions and release buckets don't.
+- The order within a bucket: the network certifier's slots are its connections' by ordinal, r each in cell order, and
+  the map holds every slot to its record, so of every order of a bucket's cells the tie accepts the network certifier's
+  alone, and the order says nothing the admissions and release buckets don't.
 - Attack 8, a covert payload in m cells: every cell is opened, so a payload of m = 1, 3 or 17 cells is refused. The
   K-draw tie this replaced passed it with probability (1 − m/N)^K, its price kept as the comparison.
 """
@@ -96,9 +96,9 @@ def test_a_variable_length_response_has_its_map():
 
 
 def test_a_buckets_order_carries_nothing():
-    """Of every order of a bucket's cells, the tie accepts the warden's bytes alone: with r = 1 each slot is its own
-    connection's, so a bucket whose slots are all held has distinct cells and exactly one order accepted, and the only
-    other orders accepted swap byte-identical cells (the zero cells of unheld slots)."""
+    """Of every order of a bucket's cells, the tie accepts the network certifier's bytes alone: with r = 1 each slot is
+    its own connection's, so a bucket whose slots are all held has distinct cells and exactly one order accepted, and
+    the only other orders accepted swap byte-identical cells (the zero cells of unheld slots)."""
     one = IT.Shape(B, 2, 4, P=4, S=4, DS=4)
     link = serve(one, wardens(one, 1, 1), [0, 0, 0, 0], [[10, 11], [12], [], [13, 14, 15]], 3 * one.T)
     full = 0
@@ -118,8 +118,8 @@ def test_a_buckets_order_carries_nothing():
 
 def test_a_payload_in_m_cells_is_refused_and_the_draws_price_is_the_comparison():
     """Every cell is opened, so a payload in any m cells is refused. The K-draw tie measured the changed share: what
-    passed K draws at δ was m < N·ln(1/δ)/K cells, each free to carry log2 V bits; at the served shape's busiest window
-    (N = 35,386) and K = 20 a window, δ = 2^−40 let about 49,000 cells over a link (Σ_w ε_w·N_w), 844 kbit at
+    passed K samples at δ was m < N·ln(1/δ)/K cells, each free to carry log2 V bits; at the served shape's busiest
+    window (N = 35,386) and K = 20 a window, δ = 2^−40 let about 49,000 cells over a link (Σ_w ε_w·N_w), 844 kbit at
     V = 151,329."""
     link = busy(13)
     inst = commit(BIG, link, busiest(link))

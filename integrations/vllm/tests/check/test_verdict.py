@@ -7,8 +7,8 @@ record and one-fault mutations of it, `run_outcome(run_checks(...)) == PASS` iff
 INSUFFICIENT_EVIDENCE, not FAIL: the Match account leg(s) absent beside the Commit (`account_missing`) grade
 `execution_extent` INSUFFICIENT_EVIDENCE while the overall verdict is still not PASS (v1 fails the same record by name); (5) X-03's
 per-layer uniformity finding is carried as the named difference `fa2_layers_bad` under `program_source_identity/identity_layout`;
-(6) `from_record` over a row dir reads the execution configuration from the Commit's own evidence (`execution_of_record`; a pre-P5
-row's `commit_summary.json` still supplies `rc` / execution when present -- the writer is retired, P5); (7) the by-name tables today's checks
+(6) `from_record` over a row dir reads the execution configuration from the Commit's own evidence (`execution_of_record`; an older
+row's `commit_summary.json` still supplies `rc` / execution when present -- the writer is retired); (7) the by-name tables today's checks
 lean on are marked `structural_leak: <table>` on the verdict, never silently; (8) a TP1 row whose Program binds a Definition only the cuBLAS
 route pin binds is refused by name unless its replay's `engine_of_record.cublas` is the pin's scan's conditions (the TP ranks' gate,
 `check.cublas_route_pin`, stamped at rank 0), a deferred replay decided on the Commit engine's facts."""
@@ -127,7 +127,7 @@ def test_schema_round_trip_and_closed_vocabularies(tmp_path):
                 summary={"rc": 0, "pass": True}, manifest_verify={"ok": True}, row="unit")
     assert v.schema == "vllm-verdict/v1" and v.outcome == V.PASS and v.program_digest == "ab" * 32 and v.manifest_digest == "cd" * 32 and v.query_id == "Q_module_v1"
     p = v.write(tmp_path / "verdict.json")
-    back = V.Verdict.load(p)
+    back = V.CommitChecks.load(p)
     assert back.to_dict() == v.to_dict()
     assert json.loads(p.read_text())["schema"] == "vllm-verdict/v1"
     assert set(V.GROUPS) == {"runtime_match", "local_replay", "boundary_linkage", "checkpoint_binding", "execution_extent", "required_value_coverage", "program_source_identity"}
@@ -138,9 +138,9 @@ def test_schema_round_trip_and_closed_vocabularies(tmp_path):
     with pytest.raises(ValueError):
         CheckResult.from_dict({"name": "runtime_match/x", "claim": "c", "outcome": "MAYBE"})
     with pytest.raises(ValueError):
-        V.Verdict(checks=[CheckResult(name="weights_pin/x", code=VC.ACCEPTED)], outcome=V.PASS)          # the OLD name is not a group
+        V.CommitChecks(checks=[CheckResult(name="weights_pin/x", code=VC.ACCEPTED)], outcome=V.PASS)          # the OLD name is not a group
     with pytest.raises(ValueError):
-        V.Verdict.from_dict({"schema": "something-else/v9", "checks": [], "outcome": V.PASS})
+        V.CommitChecks.from_dict({"schema": "something-else/v9", "checks": [], "outcome": V.PASS})
 
 
 def test_worst_orders_fail_over_insufficient_over_not_run():
@@ -176,7 +176,7 @@ def test_mapping_old_to_new_is_complete_with_no_loss():
     # every compat field a check names is a documented old fact ...
     missing_doc = sorted(f for f in emitted_compat if not documented(f))
     assert not missing_doc, f"compat fields not in OLD_TO_NEW: {missing_doc}"
-    # ... and every documented old fact lands on a check / group / Verdict field that exists
+    # ... and every documented old fact lands on a check / group / CommitChecks field that exists
     targets = {m["new"].split(" ")[0].strip("`").rstrip(";,") for m in OLD_TO_NEW}
     unknown = []
     for t in targets:
@@ -188,7 +188,7 @@ def test_mapping_old_to_new_is_complete_with_no_loss():
             continue
         elif t.startswith(("verdict.", "compat.")):
             fld = t.split(".")[1] if t.startswith("verdict.") else "compat"
-            if fld not in V.Verdict.__dataclass_fields__:
+            if fld not in V.CommitChecks.__dataclass_fields__:
                 unknown.append(t)
         else:
             unknown.append(t)
@@ -262,7 +262,7 @@ def test_pass_record_passes_in_both_and_names_its_scope():
 def test_a_tp1_eager_row_that_binds_a_route_pinned_gemm_is_refused_by_name_without_its_cublas_facts():
     (ok, why), out, checks = _both(_routed(None))
     assert ok is False and why.startswith("cuBLAS route pin (rank 0): CublasSplitKGemmF32Out_v1 x6, CublasSplitKGemm_v1 x4 bound at the "
-                                          f"routes of {BC.CUBLAS_ROUTES['run']}, served otherwise: no cuBLAS facts recorded"), why
+                                          f"routes of {BC.CUBLAS_ROUTES['run_record']}, served otherwise: no cuBLAS facts recorded"), why
     rule = {c.name: c for c in checks}["local_replay/cublas_route_pin"]
     assert out != V.PASS and rule.outcome == V.FAIL and rule.reason == why and rule.code == VC.EXPECTATION_MISMATCH
     assert rule.differences == [{"name": "served_off_route_pin", "departures": [why.split("served otherwise: ")[1]]}]
@@ -272,7 +272,7 @@ def test_the_same_row_passes_with_the_pins_facts_of_record():
     (ok, why), out, checks = _both(_routed({"cublas": PIN_FACTS}))
     rule = {c.name: c for c in checks}["local_replay/cublas_route_pin"]
     assert ok is True and out == V.PASS, why
-    assert rule.outcome == V.PASS and rule.scope == {"families": ROUTED, "pin": BC.CUBLAS_ROUTES["run"]}
+    assert rule.outcome == V.PASS and rule.scope == {"families": ROUTED, "pin": BC.CUBLAS_ROUTES["run_record"]}
 
 
 def test_the_same_row_served_under_the_split_k_off_switch_is_refused_naming_each_departure():
@@ -388,7 +388,7 @@ def test_a_full_row_that_committed_no_sampled_ids_rests_on_its_match_link_alone(
     link = next(x for x in checks if x.name == "execution_extent/match_account_link")
     assert link.outcome == V.PASS and "account" not in link.scope and "commit_tokens_sha256" not in link.inputs
     bad = copy.deepcopy(c)
-    why_m = "r0: the Commit served 5 tokens (last 2) but the Match record's tokens.json served 6 (last 7): not one serving transcript (R17-27 (a))"
+    why_m = "r0: the Commit served 5 tokens (last 2) but the Match record's tokens.json served 6 (last 7): not one serving transcript (executed-prefix condition (a))"
     bad["binding"]["coverage"] |= {"match_account_link": _link(ok=False, required=True, problems=[why_m]) | {"match_dir": "/x/match", "tokens_json": cov["match_account_link"]["tokens_json"]},
                                    "ok": False, "error": "executed prefix not linked to the Match account: " + why_m}
     bad["sampled_replay"]["executed_prefix_of_record"]["facts_of_record"]["r0"]["linked"] = False
@@ -453,7 +453,7 @@ def _row_dir(tmp_path, commit: dict, *, commit_pass: bool, rc: int, manifest_ver
 def test_from_record_pass_row_reads_its_own_execution_configuration(tmp_path):
     d, ex = _row_dir(tmp_path, _base(), commit_pass=True, rc=0)
     assert ex["committer"] == "native_collect_v2b" and ex["engine_settings"]["openings"] == 64 and ex["engine_settings"]["required_manifest"] is True
-    assert not (d / "commit_summary.json").exists()                     # P5: nothing writes the pre-P5 summary
+    assert not (d / "commit_summary.json").exists()                     # nothing writes the old summary
     v = V.from_record(d, rc=0, stage_ok="PASS")
     assert v.outcome == V.PASS and v.compat["commit_pass"] is True and v.compat["stage_ok"] == "PASS" and not v.notes
     assert v.inputs["commit/verdict.json"] and v.inputs["commit/runs.jsonl"] and "global_match.json" in v.inputs
@@ -462,7 +462,7 @@ def test_from_record_pass_row_reads_its_own_execution_configuration(tmp_path):
     assert v.runs == {"instrumented": 1, "failed": 0, "control": 1, "not_pass_by_reconstruction": 0, "pairs": [0]}
     assert v.execution["engine_settings"]["openings"] == 64 and v.execution["committer"] == "native_collect_v2b"
     out = cli.main(["verdict", "from-record", str(d), "--rc", "0", "--stage-ok", "PASS", "--quiet"])
-    assert out == 0 and V.Verdict.load(d / "verdict.json").outcome == V.PASS
+    assert out == 0 and V.CommitChecks.load(d / "verdict.json").outcome == V.PASS
 
 
 def test_from_record_pre_p5_row_takes_rc_and_execution_from_its_commit_summary(tmp_path):
@@ -516,7 +516,7 @@ def test_correspondence_digest_is_the_builds_own_or_absent(tmp_path):
     assert v.correspondence_digest == step and v.correspondence_digest_source == "build_summary.json:step"
     assert v.correspondence_digests == {"build_request_LP9_T1": shape, "request": req, "step": step}
     assert v.inputs["build_summary.json"] and v.correspondence_digest != v.inputs["global_match.json"]
-    assert V.Verdict.from_dict(json.loads(v.dumps())).correspondence_digest == step
+    assert V.CommitChecks.from_dict(json.loads(v.dumps())).correspondence_digest == step
     # a build_summary.json of a v1-frontend Build (no correspondence_digest per wrapper): absent, null
     (d / "build_summary.json").write_text(json.dumps({"step": {"ok": True, "program_digest": "p1" * 32, "correspondence_digest": None}, "request": {"ok": True, "program_digest": "p2" * 32}}))
     v = V.from_record(d, rc=0, stage_ok="PASS")
@@ -541,7 +541,7 @@ def test_correspondence_digest_is_the_builds_own_or_absent(tmp_path):
 # ---------------------------------------------------------------------------------------------------------------- (9) property citations
 
 def test_from_record_cites_property_records_by_digest(tmp_path):
-    """P5's registry test: every property the verdict cites is in REGISTRY, by a digest that recomputes from the cited file.  A record
+    """The registry test: every property the verdict cites is in REGISTRY, by a digest that recomputes from the cited file.  A record
     that does not hold, was edited, or does not parse is a note, never a changed decision; a row without records has no `properties` key."""
     d, _ = _row_dir(tmp_path, _base(), commit_pass=True, rc=0)
     bare = V.from_record(d, rc=0, stage_ok="PASS")
@@ -558,7 +558,7 @@ def test_from_record_cites_property_records_by_digest(tmp_path):
         assert c["name"] in REGISTRY and c["schema"] == REGISTRY[c["name"]].schema
         assert digest_of(json.loads((d / c["source"]).read_text())) == c["digest"]
     assert v.notes == ["property census (properties/census.json): does not hold"]
-    assert V.Verdict.from_dict(json.loads(v.dumps())).properties == v.properties
+    assert V.CommitChecks.from_dict(json.loads(v.dumps())).properties == v.properties
     doc = json.loads((d / "properties" / "noninterference.json").read_text())
     (d / "properties" / "noninterference.json").write_text(json.dumps({**doc, "world": 2}))
     (d / "properties" / "junk.json").write_text("{not json")

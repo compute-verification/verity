@@ -1,9 +1,11 @@
-import Proofs.Pouw.PearlC.RowSeedGamma
+module
+
+public import Proofs.Pouw.PearlC.RowSeedGamma
 
 /-!
 # The code-form seed (`-h3`): a relabelling of the one-row-unit form (staging, nothing pinned)
 
-`internal/pouw/rtx-pro/theory-pearl-c-sm120.md` §14. The code seeds row `i` of unit `u` at the index `u·2³² + i`, with
+The code seeds row `i` of unit `u` at the index `u·2³² + i`, with
 `leaf_i` framed inside unit `u`; C1 (`RowSeedNoise`) seeds it as the one-row unit `rowIdx L u i` of the split workload.
 A fixed permutation of the oracle's inputs, one per layout, carries one to the other (C1-h3, `CodeSeedNoise`).
 
@@ -17,6 +19,8 @@ A fixed permutation of the oracle's inputs, one per layout, carries one to the o
 * **From rev1's TT_OUT:** `ttOutRowSeedCode_of_ttOut` and `ttOutTileRowSeedCode_of_ttOutTile` (C1, C1-h3, C3, C5). The
   γ theorems `pearlCGammaDevRev1RowSeedAt` and `pearlCSampledDevRev1RowSeedAt` apply at `semC` unchanged.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

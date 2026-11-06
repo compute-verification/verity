@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.AccZ
-import Proofs.Flock.Soundness.Discharge.ZkLink.Analysis
-import Proofs.Flock.Soundness.SessionBatchAcc
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.AccZ
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Analysis
+public import Proofs.Flock.Soundness.SessionBatchAcc
 
 /-!
 # Knowledge soundness of a compiled `--zk` table in the session, from accepted reruns
@@ -20,6 +22,8 @@ the table's rounds, so `advRSZ` reads the collision at the slot those runs reach
   ε_c⁻ + N₀·ε/(ek) + √(k·adv₀)`;
 * `jointZC_ksBound`: `JointZC` at `ksBoundAccZ`, table `j`'s `ε_c⁻ + √(k·adv₀)` in the session, for `k ≥ 1`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 

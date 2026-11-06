@@ -1,11 +1,12 @@
-import Proofs.Pouw.PearlC.DeviceChainCapGamma
-import Definitions.Pouw.Assumptions.PearlC.DeviceChainCapKernel
-import Proofs.Pouw.PearlC.KernelWrefGamma
-import Definitions.Pouw.PearlC.DevicePricesLoop
+module
+
+public import Proofs.Pouw.PearlC.DeviceChainCapGamma
+public import Definitions.Pouw.Assumptions.PearlC.DeviceChainCapKernel
+public import Proofs.Pouw.PearlC.KernelWrefGamma
+public import Definitions.Pouw.PearlC.DevicePricesLoop
 
 /-!
-# v2 at the chain cap 1/1,000 against the honest kernel's `W_ref`: the exact in-loop values (the price-twins lane's
-file; staged)
+# v2 at the chain cap 1/1,000 against the honest kernel's `W_ref`: the exact in-loop values (staged)
 
 * **γ at any record against the kernel's `W_ref`, with the chain cap** (`pearlCGammaDevChainCapKAt`,
   `pearlCSampledDevChainCapKAt`), from the record's own chain-cap TT_OUT, which doesn't read `W_ref` (`ttOut_wref`). Per
@@ -18,6 +19,8 @@ file; staged)
   above (`qa` rounded up to 2). At FADD 8.00 the kernel's `W_ref` at the statement's cast is the statement's own, so
   `DeviceSm120Gamma`'s chain-cap instances are the issue-bound values (0.35925%, 0.35456%).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

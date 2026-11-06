@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.ZkDecJ
-import Proofs.Flock.Claims.Recursion.DeployPremises
-import Proofs.Flock.Claims.Scope.Tables
+module
+
+public import Proofs.Flock.Claims.KS.ZkDecJ
+public import Proofs.Flock.Claims.Recursion.DeployPremises
+public import Proofs.Flock.Claims.Scope.Tables
 
 /-!
 # Recursion completeness at `deployRec`: the honest outer witnesses are in the V\* relation
@@ -29,18 +31,20 @@ named `Prop`:
 (`RecVStar.checkLinkRounds`, `RecVStar.checkTopRows`, `RecCoins.checkLink` at `RecVStar.innerLink`), passed in as
 `linkOk`: they pass at the coin server's transcript of the honest inner rounds and the record the honest prover staged.
 A staged statement holds exactly that transcript (`transcript_honest`), so the checks pass at the statement's own
-inputs. The deployed checks are in `RecIns.setup` (#2405), so at them (`linkOkSetup`) `LinksHonest` holds with no
+inputs. The deployed checks are in `RecIns.setup`, so at them (`linkOkSetup`) `LinksHonest` holds with no
 premise (`linksHonest_setup`): `vstar_complete_setup` and `vstar_complete_run_setup` are the theorems without it, and
 the link input they pass at is the one `RecVStar.innerLink` reads off the staged transcript (`insO_staged_link`).
 
 The inner verifier is arbitrary here. At the deployed plain inner verifier, at SHA-512, `InnerAccepts` holds only at an
 inner statement that verifier admits (`InnerAdmitted`, `innerAdmitted_of_accepts`): its scope check passes and it
 carries a unit draw. A recursive session's inner statement has plain SHA-512 leaves, which the scope check admits
-without `--zk` and with hidden outputs (`ProvedScope.leafOk`, #2411); where the scope check or the draw fails,
+without `--zk` and with hidden outputs (`ProvedScope.leafOk`); where the scope check or the draw fails,
 `InnerAccepts` never holds and the theorem says nothing about the statement.
 `InnerAccepts` is a hypothesis about the coins, not a consequence of the relation: at coins in the inner completeness
 error the honest inner proof is refused, and the V\* statements staged there need not have a witness.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -115,7 +119,7 @@ def LinksHonest (linkOk : RecIns → ByteArray → ByteArray → Array Stmt → 
 
 /-! ## The deployed link checks -/
 
-/-- **The link checks the recursive setup runs** (#2405's, in `RecIns.setup`), as a `linkOk`:
+/-- **The link checks the recursive setup runs** (in `RecIns.setup`), as a `linkOk`:
 `RecVStar.checkLinkRounds` at the inner shape and the link input, then `RecVStar.checkTopRows` and `RecCoins.checkLink`
 on each table. They read the link input `RecRaw.ins` reads (`linkInputOf`: `RecVStar.innerLink` on the statement's own
 inner transcript and record, `insO_staged_link`), not the transcript and record passed in. -/
@@ -440,7 +444,7 @@ theorem honestPre_run (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings)
     simp only [List.getElem_map, List.getElem_take, histOf, Option.some.inj ha, Claims.Recursion.outMsg, hc]
 
 /-- A statement that parses reads. -/
-theorem readX_some_of_parse {x : Msg} {s : Claims.Recursion.Stmt} (h : parse x = some s) : ∃ xr, readX x = some xr := by
+theorem readX_some_of_parse {x : Msg} {s : Claims.Recursion.CompiledStatement} (h : parse x = some s) : ∃ xr, readX x = some xr := by
   cases hx : readX x with
   | some xr => exact ⟨xr, rfl⟩
   | none =>

@@ -1,4 +1,6 @@
-import NetworkCertifier.Schedule
+module
+
+public import NetworkCertifier.Schedule
 
 /-!
 # A served link's admission rule
@@ -9,6 +11,8 @@ its ingress counts under a sync (`derive`), and whether a window still ends idle
 (`admits`). `handing_buckets` is `NetworkCertifier.handingBuckets` with one window of advice; `grid.released` is
 `releasedCounts`.
 -/
+
+@[expose] public section
 
 namespace CertifierDevice
 

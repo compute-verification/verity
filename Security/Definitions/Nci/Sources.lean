@@ -1,5 +1,7 @@
-import Definitions.Nci.Work
-import Mathlib.Analysis.SpecialFunctions.Log.Base
+module
+
+public import Definitions.Nci.Work
+public import Mathlib.Analysis.SpecialFunctions.Log.Base
 
 /-!
 # NCI over threads, each value charged once over its copies: the vocabulary
@@ -20,6 +22,8 @@ optimizer steps each source is from the baseline.
   the `log₂ n` bits a value of the activations' format carries: `b_a · fanOut s ≤ e · log₂ n`.
 * `Sources.OffFresh k₀`: every counted multiplication reads a weight at least `k₀` optimizer steps from `θ`.
 -/
+
+@[expose] public section
 
 namespace Nci.Threading
 

@@ -59,19 +59,19 @@ def test_sheet_prices_the_headline(name):
 @pytest.mark.parametrize("name", SHEETS)
 def test_tensor_lines_have_slack(name):
     """The headline's sheet ε doesn't move until every tensor line is 2% slower than the sheet's, so an A3 error under
-    2% leaves it as it is: the H200's tensor lines are measured at 0.01% of the sheet's (RT-H200-EMP,
-    r20261019-053910-d2c9), and the B200's per-clock peaks are its measured rates. On DS-90 that slack is the fold's
-    margin (FOLD-OPT; RT-HOPPER-2)."""
+    2% leaves it as it is: the H200's tensor lines are measured at 0.01% of the sheet's, and the B200's
+    per-clock peaks are its measured rates. On DS-90 that slack is the fold's
+    margin (FOLD-OPT)."""
     s = sheet(DEVICES / name)
     m = moves(s, DEVICES / name, steps=10)
     assert m is None or m >= 1.02, (f"{name}: ε moves with every tensor line {m:.3f}× the sheet's, inside A3's "
-                                    "measured error and its margin, so A3's error now moves the headline (RT-HOPPER-2)")
+                                    "measured error and its margin, so A3's error now moves the headline")
 
 
 @pytest.mark.parametrize("name", SHEETS)
 def test_uni_issue_leaves_a_ds_vector(name):
     """A DS vector charges a uniform instruction its issue slot already (`UNI,DS_issue`, A2u), so `eps --uni-issue`
-    leaves it as it is, its name too: a renamed vector loses its ε_skip `at` entry (RT-HOPPER-4)."""
+    leaves it as it is, its name too: a renamed vector loses its ε_skip `at` entry."""
     d = DEVICES / name
     pi = E.machine(sheet(d).vector, d)
     assert E.uniform_issue_charged(pi) and E.uniform_on_issue(pi, 0.5) is pi
@@ -82,7 +82,7 @@ def test_uni_prices_a2u_on_the_sheet(name):
     """`sheet --eps --uni` changes the uniform instruction's line, where `eps --uni-issue` leaves a DS vector as it is:
     at the sheet's own cost it is the headline, and with the issue slot free the cheater takes the uniform route as far
     as DS_uniform, the measured UP line, lets it: about 1.15 points over the sheet's ε on each (2.007% on the H200,
-    1.844% on the B200; RT-MACHINE-4: without that row, 94% on the H200, 100% on the B200)."""
+    1.844% on the B200; without that row, 94% on the H200, 100% on the B200)."""
     s, d = sheet(DEVICES / name), DEVICES / name
     r = reading(s, d)
     assert uni(s, d, 1.0) == r.sheet

@@ -1,4 +1,6 @@
-import Definitions.Pous.Model.StreamedWipe
+module
+
+public import Definitions.Pous.Model.StreamedWipe
 
 /-!
 # The streamed-label wipe: secure erasure from streamed PRF labels (experimental)
@@ -26,6 +28,8 @@ constraints are these premises' forms there.
 **What it covers.** The sequential reveal: round `j`'s answer reads the indices before it, not those after. A batched
 reveal, where an answer can read its whole batch, is not covered.
 -/
+
+@[expose] public section
 
 namespace Pous.Guarantees
 

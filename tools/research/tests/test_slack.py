@@ -734,8 +734,10 @@ def app_config(tmp_path, monkeypatch, registry):
     fake = FakeAppConfig(live)
     monkeypatch.setattr(slack, "post", fake)
     monkeypatch.setattr(slack, "_epoch", lambda: fake.now)
-    monkeypatch.setenv(slack.APP_STATE_ENV, str(tmp_path / "app" / "slack-app-token.json"))
-    monkeypatch.setenv(slack.APP_SEED_ENV, "dummy-seed")
+    state = tmp_path / "app" / "slack-app-token.json"
+    monkeypatch.setenv(slack.APP_STATE_ENV, str(state))
+    state.parent.mkdir()
+    slack._write_private(state, {"refresh_token": "dummy-seed"})                # as a person writes a new pair on the pod
     return fake
 
 
@@ -745,14 +747,13 @@ def app(capsys, *argv) -> tuple[int, str, str]:
     return rc, out, err
 
 
-def test_the_configuration_token_is_seeded_from_the_env_and_rotated_near_its_exp(app_config, capsys, monkeypatch):
+def test_the_configuration_token_is_read_from_the_pods_state_file_and_rotated_near_its_exp(app_config, capsys, monkeypatch):
     state = slack.app_state_path()
     assert app(capsys, "export")[0] == 0
     assert app_config.methods() == ["tooling.tokens.rotate", "apps.manifest.export"]
     assert app_config.calls[0][1] == {"refresh_token": "dummy-seed"}
     assert oct(state.stat().st_mode & 0o777) == "0o600"
     assert json.loads(state.read_text()) == {"token": "dummy-config-1", "refresh_token": "dummy-refresh-1", "exp": T0 + 43200, "rotated": T0}
-    monkeypatch.setenv(slack.APP_SEED_ENV, "dummy-seed-spent")                   # the file exists: the seed is never read again
     app_config.now = T0 + 43200 - slack.ROTATE_BEFORE_S - 1
     assert app(capsys, "export")[0] == 0 and app_config.methods()[2:] == ["apps.manifest.export"]
     app_config.now += 2                                                          # within 10 min of exp: rotate first
@@ -764,20 +765,26 @@ def test_the_configuration_token_is_seeded_from_the_env_and_rotated_near_its_exp
 
 def test_a_spent_refresh_token_says_how_to_get_a_new_pair(app_config, capsys, monkeypatch):
     state = slack.app_state_path()
-    state.parent.mkdir()
     slack._write_private(state, {"token": "dummy-config-old", "refresh_token": "dummy-refresh-old", "exp": T0 - 1})
     before = state.read_text()
     rc, _, err = app(capsys, "export")
     assert rc == 2 and "tooling.tokens.rotate: invalid_refresh_token" in err and "works once" in err
-    assert slack.APP_SEED_ENV in err and str(state) in err and slack.APP_TOKENS_PAGE in err
+    assert "on the control pod" in err and str(state) in err and slack.APP_TOKENS_PAGE in err
     assert "dummy-refresh-old" not in err and state.read_text() == before and app_config.methods() == ["tooling.tokens.rotate"]
     state.chmod(0o644)
     rc, _, err = app(capsys, "export")
     assert rc == 2 and f"chmod 600 {state}" in err
     state.unlink()
-    monkeypatch.delenv(slack.APP_SEED_ENV)
+    monkeypatch.setenv("SLACK_APP_CONFIG_REFRESH_TOKEN", "dummy-seed-env")      # an agent's old secret seeds nothing
     rc, _, err = app(capsys, "export")
-    assert rc == 2 and f"{slack.APP_SEED_ENV} is unset" in err
+    assert rc == 2 and f"{state} is absent" in err and "no environment variable seeds it" in err and not state.exists()
+    assert app_config.methods() == ["tooling.tokens.rotate"]
+
+
+def test_slack_app_runs_only_where_the_state_file_is_named(app_config, capsys, monkeypatch):
+    monkeypatch.delenv(slack.APP_STATE_ENV)
+    rc, _, err = app(capsys, "export")
+    assert rc == 2 and f"${slack.APP_STATE_ENV} is unset" in err and "control pod" in err and app_config.methods() == []
 
 
 def test_slack_app_needs_an_app_id(app_config, registry, capsys):
@@ -890,6 +897,12 @@ def test_oidc_token_asks_the_cursor_socket_for_the_brokers_audience(identity_soc
         identity_socket["answer"] = answer
         with pytest.raises(slack.SlackError, match=re.escape(says)):
             slack.oidc_token(slack.BROKER)
+
+
+def test_oidc_token_asks_for_the_nonce_it_is_given(identity_socket):
+    """A label's authentication binds the token to the label through its `nonce` claim (`research.labelauth`)."""
+    assert slack.oidc_token("urn:verity:label-auth", nonce="ab" * 64) == OIDC
+    assert identity_socket["seen"] == [("/v1/tokens/oidc", {"aud": "urn:verity:label-auth", "nonce": "ab" * 64})]
 
 
 def test_oidc_token_asks_again_when_the_socket_drops_the_connection(identity_socket, monkeypatch, tmp_path):
@@ -1273,7 +1286,7 @@ def test_chat_open_by_slack_id_makes_a_private_channel_pins_two_lines_and_publis
     reg = slack.load_registry(registry)
     assert reg["collaborators"] == [{"name": "Luke Example", "slack_user": LUKE, "note": "a visiting researcher (COMM-52)",
                                      "email": "luke@example.org"}]
-    assert slack.chat_channels(reg)["chat-luke"]["id"] == c["id"] and slack.subscribers(reg, "chat-luke") == ["top"]
+    assert slack.chat_channels(reg)["chat-luke"]["id"] == c["id"] and slack.subscribers(reg, "chat-luke") == []
 
     rc, out, _ = run(capsys, "chat", "open", "luke", "--user", LUKE)
     assert rc == 0 and f"#chat-luke {c['id']}: reused" in out and out.count(": already in") == 2
@@ -1516,9 +1529,9 @@ def test_a_chat_post_rings_its_leading_names_else_its_thread_s_lanes_else_top_an
     assert rc == 0 and "how do I read a PoUW receipt?" in out and "@proofs: it proves the sum" in out and "and the Lean side?" in out
     late = fake.add("CCHAT1", text="is anyone there?", user=LUKE)
     rc, _, err = run(capsys, "match", "--as", "top", "--event", json.dumps({"channel": "CCHAT1", **late}), "--why")
-    assert rc == 0 and "top-level post in #chat-luke, which @top subscribes to" in err
+    assert rc == 1                                    # no channel subscription: the post reaches top as a doorbell in its inbox
     out = run(capsys, "subscriptions", "--as", "top")[1]
-    assert 'subscribe_slack_channel(channelId="CCHAT1", topLevelOnly=true' in out and "# #chat-luke" in out
+    assert "CCHAT1" not in out and "#chat-luke" not in out                    # a private chat the subscription tool can't join
 
     published = tmp_path / slack.PEOPLE_DIR                                             # the routes' sibling
     assert slack.ChatPeople().base == f"file://{published}/"
@@ -2563,6 +2576,29 @@ def test_a_61_word_reply_posts_with_a_note_naming_the_count_the_limit_and_the_fi
     assert len(posts(fake)) == 2 and slack.plain(posts(fake)[-1]["text"]) == words(61)
 
 
+def test_a_reply_with_a_retired_term_posts_with_a_note_naming_what_to_write(fake, registry, capsys):
+    root = fake.add(COORD, text="@infra is node 2 free?", username="circuits", bot_id=BOT)
+    rc, _, err = run(capsys, "reply", "--as", "infra", "--thread", root["ts"], "--text", "the draw's coins and a faulty block")
+    assert rc == 0 and len(posts(fake)) == 1
+    assert "retired term(s), posted anyway: 'draw': write the sample" in err and "'faulty block': write incorrect proof block" in err
+    rc, _, err = run(capsys, "reply", "--as", "infra", "--thread", root["ts"], "--text", 'the sample, `firewall/` and "leg"')
+    assert rc == 0 and "retired" not in err and len(posts(fake)) == 2
+
+
+def test_the_retired_terms_name_what_to_write_and_skip_code_and_quoted_mentions():
+    """`research msg` reads the table from tests/test_retired_terms.py, its one home."""
+    from research import vocabulary
+    doc = vocabulary.table()["DOC_TERMS"]
+    service = "proof " + "service"                                   # the tree's own scan refuses the term written whole
+    assert vocabulary.retired(f"two legs, the NCI, a commit period and the {service}") == [
+        (service, "proof system"), ("legs", doc["leg"]), ("NCI", doc["NCI, novel communication intensity"]),
+        ("commit period", doc["sampling period, sampling block, PoUW's commit period"])]
+    assert vocabulary.retired('a proof block, `drawn.py` and "draw"') == []
+    assert vocabulary.instead("nothing like it") == "see GLOSSARY.md's older names"
+    assert "no/such/table.py" in vocabulary.table(Path("no/such/table.py"))["error"] and vocabulary.retired("a draw", {}) == []
+    assert "skipped" not in vocabulary.table()
+
+
 def test_a_121_word_reply_is_refused_with_the_fix_and_nothing_is_posted(fake, registry, capsys):
     root = fake.add(COORD, text="@infra is node 2 free?", username="circuits", bot_id=BOT)
     for dry in ((), ("--dry-run",)):
@@ -2576,7 +2612,7 @@ def test_a_machine_report_is_held_to_no_length(fake, registry, capsys):
     """Drive and the merge train post their reports (a red suite's failing lines, a revert) through `send` and `reply`."""
     root = fake.add(COORD, text="@infra is node 2 free?", username="circuits", bot_id=BOT)
     for verb in ("send", "reply"):
-        rc, _, err = run(capsys, verb, "--as", "infra", "--thread", root["ts"], "--quiet", "--machine", "--text", words(400))
+        rc, _, err = run(capsys, verb, "--as", "infra", "--thread", root["ts"], "--quiet", "--report", "--text", words(400))
         assert rc == 0 and "words" not in err
     assert len(posts(fake)) == 2
 
@@ -2773,6 +2809,7 @@ def test_http_get_reads_the_private_notes_raw_files_with_the_notes_token(monkeyp
         return Reply(b'{"name": "x"}')
 
     monkeypatch.setattr(slack.urllib.request, "urlopen", urlopen)
+    monkeypatch.delenv("VERCEL_OIDC_TOKEN", raising=False)
     monkeypatch.setenv("RESEARCH_NOTES_TOKEN", "t0k")
     assert slack.http_get(f"{slack.ROUTES_RAW}x.json") == b'{"name": "x"}'
     assert slack.http_get("https://example.invalid/routes.d/x.json") == b'{"name": "x"}'
@@ -2780,6 +2817,64 @@ def test_http_get_reads_the_private_notes_raw_files_with_the_notes_token(monkeyp
     assert slack.http_get(f"{slack.ROUTES_RAW}x.json") == b'{"name": "x"}'
     assert seen == [(f"{slack.ROUTES_RAW}x.json", "Bearer t0k"), ("https://example.invalid/routes.d/x.json", None),
                     (f"{slack.ROUTES_RAW}x.json", None)]
+
+
+def test_without_a_notes_token_the_service_asks_the_broker_for_one_by_its_oidc_identity(monkeypatch, capsys):
+    """The Slack events service holds no notes token of its own: the broker mints one for its Vercel OIDC identity, kept until
+    shortly before it expires, ahead of $RESEARCH_NOTES_TOKEN, which serves only while the broker refuses (asked again a
+    minute later); with neither, the notes are read unauthenticated."""
+    seen, answers = [], []
+
+    class Reply(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return None
+
+    def http_json(method, url, data, headers):
+        seen.append((url, method, headers.get("Authorization"), data))
+        assert url == slack.NOTES_TOKEN_URL
+        a = answers.pop(0)
+        if isinstance(a, Exception):
+            raise a
+        return a
+
+    def urlopen(req, timeout):
+        seen.append((req.full_url, req.get_method(), req.get_header("Authorization"), req.data))
+        return Reply(b'{"name": "x"}')
+
+    monkeypatch.setattr(slack, "http_json", http_json)
+    monkeypatch.setattr(slack.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(slack, "_notes_token", {})
+    monkeypatch.delenv("RESEARCH_NOTES_TOKEN", raising=False)
+    monkeypatch.setenv("VERCEL_OIDC_TOKEN", "oidc-1")
+    answers.append({"token": "minted", "expires_at": "2026-11-02T06:00:00Z"})
+    now = slack._iso_epoch("2026-11-02T05:00:00Z")
+    assert slack.notes_token(now) == "minted" and slack.notes_token(now + 600) == "minted"      # kept
+    assert seen == [(slack.NOTES_TOKEN_URL, "POST", "Bearer oidc-1", b'{"scope": "notes"}')]
+    answers.append({"token": "minted-2"})                                                         # no stated expiry
+    assert slack.notes_token(now + 3600) == "minted-2" and len(seen) == 2                       # renewed before 06:00Z
+    monkeypatch.setattr(slack.time, "time", lambda: now + 3600)                                 # http_get reads the clock
+    assert slack.http_get(f"{slack.ROUTES_RAW}x.json") == b'{"name": "x"}' and seen[-1][2] == "Bearer minted-2"
+    monkeypatch.setenv("RESEARCH_NOTES_TOKEN", "t0k")
+    assert slack.notes_token(now + 3600) == "minted-2" and slack._notes_token["source"] == "broker"   # the broker wins
+    monkeypatch.setattr(slack, "_notes_token", {})
+    answers.append(slack.urllib.error.HTTPError(slack.NOTES_TOKEN_URL, 403, "Forbidden", {},
+                                                io.BytesIO(b'{"error": "identity_refused", "claim": "project_id"}')))
+    assert slack.notes_token(now) == "t0k" and "the broker gave no notes token (403)" in capsys.readouterr().err
+    assert slack._notes_token["source"] == "env"                                                # refused: the old token
+    assert slack.notes_token_why() == "the broker refused (403: identity_refused project_id)"     # its stated reason
+    assert slack.notes_token(now + 30) == "t0k" and len(seen) == 4                              # not asked again so soon
+    answers.append({})
+    assert slack.notes_token(now + 61) == "t0k" and "has no `token`" in capsys.readouterr().err
+    monkeypatch.delenv("RESEARCH_NOTES_TOKEN")
+    answers.append(slack.urllib.error.URLError("down"))
+    assert slack.notes_token(now + 122) is None and slack._notes_token["source"] is None
+    monkeypatch.delenv("VERCEL_OIDC_TOKEN")
+    assert slack.notes_token(now) is None
+    with pytest.raises(slack.SlackError, match="no notes token: set RESEARCH_NOTES_TOKEN, or run where the broker mints one"):
+        slack.notes_api("GET", "people.d/x.json")
 
 
 def notes_clone(tmp_path) -> Path:

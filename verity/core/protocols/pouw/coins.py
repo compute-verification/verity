@@ -1,7 +1,7 @@
 """PoUW's epoch coins: the challenger's live coins for one epoch, committed before the epoch and each opened once, live,
 against that commitment (``PROTOCOL.md``, "Epoch coins").
 
-The challenger is the auditor's service that issues coins.  Before epoch e it draws one 32-byte coin per label of `LABELS`
+The challenger is the auditor's service that issues coins.  Before epoch e it samples one 32-byte coin per label of `LABELS`
 from its entropy (a served one's: the Lean verifier of record's, `verifier.coins`) and publishes a coin commitment:
 
     x_l     = SHA-512("verity/pouw/epoch-coin/v1\\0" || coin_l)                      the coin's unsalted digest
@@ -11,8 +11,8 @@ from its entropy (a served one's: the Lean verifier of record's, `verifier.coins
 
 The hm96 leaves keep every unopened coin statistically hidden (``hm96/PROTOCOL.md``); binding rests on SHA-512's collision
 resistance.  The challenger opens a coin only once the verifier has recorded what the coin must follow (`CoinOpening.after`:
-the weights' root for the salt coin, the transcript's commitment for the draw coin), and never twice, so a retry never
-redraws.  These are a seeded epoch's coins; a live window's salt coin follows its own open root instead
+the weights' root for the salt coin, the transcript's commitment for the sampling coin), and never twice, so a retry never
+resamples.  These are a seeded epoch's coins; a live window's salt coin follows its own open root instead
 (`salt.window_open_root`, `core_check.salt`), since the weights' root is the same in every window of a model.
 `coin_reason` is the verifier's check of an opening: the epoch, the label, the record it followed, and the opening against
 the published root.  A coin that doesn't open against the epoch's commitment is refused.
@@ -29,13 +29,14 @@ from dataclasses import dataclass
 
 from verity.ml.commitments import (Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain,
                                            VerificationLimits, verify_opening)
-from verity.ml.commitments import hm96
+from verity.ml.commitments import domains, hm96
+from verity.ml.commitments.scheme import DIGEST_BYTES
 from verity.core.protocols.sampled_proofs.challenger import coin_claim
 
 from .protocol import DomainError, tagged
 
-SCHEME = "verity/pouw/epoch-coins/v1"
-COIN_TAG = b"verity/pouw/epoch-coin/v1\0"
+SCHEME = domains.POUW_EPOCH_COINS
+COIN_TAG = domains.POUW_EPOCH_COIN.encode() + b"\0"
 LABELS = ("salt", "draw")
 COIN_BYTES = 32
 HM96 = hm96.SHA512
@@ -61,7 +62,7 @@ class CoinCommitment:
     def __post_init__(self) -> None:
         if type(self.epoch) is not int or self.epoch < 0:
             raise DomainError("an epoch is a nonnegative integer")
-        if type(self.root) is not bytes or len(self.root) != 64:
+        if type(self.root) is not bytes or len(self.root) != DIGEST_BYTES["sha512"]:
             raise DomainError("a coin commitment's root is 64 bytes")
 
     def to_json(self) -> dict:
@@ -120,11 +121,11 @@ def coin_reason(commitment: CoinCommitment, opening: CoinOpening, label: str, af
 
 
 class Challenger:
-    """The challenger's side of one epoch.  It draws every coin and hm96 salt of the epoch from `entropy` and commits to
+    """The challenger's side of one epoch.  It samples every coin and hm96 salt of the epoch from `entropy` and commits to
     them at construction, before the epoch starts; `open` releases one coin, once, after the verifier has recorded
     `after`.  `entropy` has no default, so nothing here reads the operating system: a served challenger's is the Lean
     verifier of record's read of it (`verifier.coins`, `IO.getRandomBytes`, A3).  `claim` is the claim instance naming
-    `entropy` (the proof service's `challenger.coin_claim`), None for an unnamed source, which a served challenger
+    `entropy` (the proof system's `challenger.coin_claim`), None for an unnamed source, which a served challenger
     refuses (`challenger.served_claim`)."""
 
     def __init__(self, epoch: int, entropy: Callable[[int], bytes]):

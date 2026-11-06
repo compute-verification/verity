@@ -1,4 +1,4 @@
-// The census's unpriced sm_100a classes, timed beside the classes that price them (note:20261019T0520Z-draft-rt-isa G3):
+// The census's unpriced sm_100a classes, timed beside the classes that price them:
 // FFMA2 and FMUL2 (fma.rn.f32x2, mul.rn.f32x2: two FP32 results a lane, which loads.class_of folds into FFMA) beside
 // FFMA and FMUL, and DMMA (mma.sync m8n8k4 f64, which no DS_tensor row lists) beside IMMA (mma.sync m16n8k32 s8) and
 // beside a saturated tcgen05.mma kind::i8 (dmmaU_tc, tcU_dmma).

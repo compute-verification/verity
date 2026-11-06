@@ -1,8 +1,9 @@
-"""N2's egress side of the scan (`egress`) on the warden's own egress: links of variable-length responses served
-through the warden's schedule (`egress_traffic`, `warden.Warden._egress`), and the slot state each bucket's egress
-reads. The reference renders every bucket row the warden registered from that state; the Boolean Definition computes
-its reference's outputs, bit for bit, on honest and adversarial states (the row of a state that renders none too); it
-reads only the state; and the verifier's registered read of its row output holds the computed rows to the warden's."""
+"""N2's egress side of the scan (`egress`) on the network certifier's own egress: links of variable-length responses
+served through the network certifier's schedule (`egress_traffic`, `warden.Warden._egress`), and the slot state each
+bucket's egress reads. The reference renders every bucket row the network certifier registered from that state; the
+Boolean Definition computes its reference's outputs, bit for bit, on honest and adversarial states (the row of a state
+that renders none too); it reads only the state; and the verifier's registered read of its row output holds the computed
+rows to the network certifier's."""
 
 import random
 
@@ -16,7 +17,7 @@ from verity.core.protocols.certifier import egress as EG, head_check as HC, io_t
 from verity.core.protocols.certifier.active import DATA, PAD
 from verity.core.protocols.certifier.certificate import Direction
 
-#: the warden's schedule the tests serve: T = 6 buckets of 4 lanes of r = 2 slots, D = 2
+#: the network certifier's schedule the tests serve: T = 6 buckets of 4 lanes of r = 2 slots, D = 2
 PARAMS = W.WardenParams(cell_bytes=256, slots=2, delay=2, lanes=4, window=6)
 SESSION = bytes(range(32))
 #: the request slots and outputs a slot the served links' states hold
@@ -93,7 +94,7 @@ def test_the_map_is_the_wardens_slots():
     E, P = IT.END_ENTRY, IT.EMPTY
     slots = [EG.Request(1, 0, 3), EG.Request(2, 0, 0), EG.Request(3, 2, 1), None]
     maps = [EG.bucket_map(b, slots, 4, 2, 1) for b in range(5)]
-    R = EG.Record
+    R = EG.Occupancy
     assert maps[0] == ((R(1, 0, P), R(1, 0, P), R(2, 1, P), R(2, 1, P)), False)
     assert maps[1] == ((R(1, 0, 0), R(1, 0, 1), R(2, 1, E), R(2, 1, P)), False)
     assert maps[2] == ((R(1, 0, 2), R(1, 0, E), R(3, 2, P), R(3, 2, P)), False)
@@ -108,9 +109,9 @@ def test_the_map_is_the_wardens_slots():
 
 @pytest.mark.parametrize("seed", [1, 2, 3])
 def test_the_state_renders_the_wardens_registered_rows(seed):
-    """Every bucket row of a busy link, idle ones too, is the warden's registered row (`warden_rows.window_rows` of
-    the record its grid closed), rendered from the state the scan's ingress step wrote at that bucket (each request
-    in the lowest free slot from its admission to its last egress bucket)."""
+    """Every bucket row of a busy link, idle ones too, is the network certifier's registered row
+    (`warden_rows.window_rows` of the record its grid closed), rendered from the state the scan's ingress step wrote at
+    that bucket (each request in the lowest free slot from its admission to its last egress bucket)."""
     served = busy(seed, PARAMS, 14, 15, 6)
     assert not served.fails
     sh, kinds = shape(PARAMS, NR, K), set()
@@ -168,9 +169,10 @@ def test_the_bucket_circuit_is_its_reference(B, R, r, NR, K, IB_, D):
 
 
 def test_the_bucket_circuit_computes_the_wardens_rows():
-    """On every bucket of a busy link, the circuit computes the warden's registered row from the state the ingress
-    step wrote, with o0 `ACCEPT`; under a state one of whose rendered output ids is another (what links the state's
-    layout to the circuit) it computes another row, which no registered read of the warden's opens."""
+    """On every bucket of a busy link, the circuit computes the network certifier's registered row from the state the
+    ingress step wrote, with o0 `ACCEPT`; under a state one of whose rendered output ids is another (what links the
+    state's layout to the circuit) it computes another row, which no registered read of the network certifier's
+    opens."""
     served = busy(4, PARAMS, 14, 15, 6)
     sh = shape(PARAMS, NR, K)
     sts, rs = states(served, NR, K), rows(served)
@@ -194,8 +196,8 @@ def test_the_bucket_circuit_computes_the_wardens_rows():
 
 
 def test_the_unit_reads_the_state_and_computes_the_row():
-    """The unit's one input is the state's row (every switch computed, none witness); its outputs are o0, a u16, and
-    o1, the row of R B-byte cells, gates of the circuit and never an input."""
+    """The proof block's one input is the state's row (every switch computed, none witness); its outputs are o0, a u16,
+    and o1, the row of R B-byte cells, gates of the circuit and never an input."""
     for sh in (shape(PARAMS, NR, K), EG.Shape(256, 16, 4, 4, 64, 17, 22)):
         params, out = _fn(sh).signature()
         assert [(name, t.leaves) for name, t in params] == [("state", sh.state_words * 16)]
@@ -208,9 +210,10 @@ def _committed(served, w):
 
 
 def test_the_registered_read_holds_the_row_output_to_the_wardens_rows():
-    """The verifier's registered read of the unit's row output o1 (`warden_rows.refusal` on `bucket_port`: unit 3 + t
-    reads row t) accepts the rows a window's units compute from its states, committed under the warden's salts, and
-    refuses a row with one bit flipped and a row moved to another bucket, at its own position and at the other's."""
+    """The verifier's registered read of the proof block's row output o1 (`warden_rows.refusal` on `bucket_port`: proof
+    block 3 + t reads row t) accepts the rows a window's proof blocks compute from its states, committed under the
+    network certifier's salts, and refuses a row with one bit flipped and a row moved to another bucket, at its own
+    position and at the other's."""
     served = busy(6, PARAMS, 14, 15, 6)
     T, sh = PARAMS.window, shape(PARAMS, NR, K)
     w = max(range(len(served.records)), key=lambda w: len(set(WR.window_rows(served.records[w], PARAMS))))
@@ -239,8 +242,8 @@ def test_the_registered_read_holds_the_row_output_to_the_wardens_rows():
 
 def test_a_request_not_yet_in_the_state_computes_another_row():
     """The row of a request's admission bucket holds its lane (a `PAD` on its q), so a state that omits a request the
-    warden admitted, or admits it a bucket late, renders another row than the warden's, which its registered read
-    refuses."""
+    network certifier admitted, or admits it a bucket late, renders another row than the network certifier's, which its
+    registered read refuses."""
     served = serve(PARAMS, [0, 0], [[5, 6, 7], [8]], 2)
     sh = shape(PARAMS, 2, 4)
     sts, rs = states(served, 2, 4), rows(served)
@@ -252,14 +255,14 @@ def test_a_request_not_yet_in_the_state_computes_another_row():
 
 
 def test_the_units_ands():
-    """The unit's ANDs at the ZK driver's shape and at the scan note's class (16 cells of 256 bytes in 4 lanes, 4
+    """The proof block's ANDs at the ZK driver's shape and at the scan note's class (16 cells of 256 bytes in 4 lanes, 4
     request slots of 64 outputs, 17-bit ids, D = 22): what circuit-check pins and the status extrapolates."""
     memo = {}
     assert HC.ands(_fn(shape(PARAMS, NR, K)), memo) == ANDS_ZK
     assert HC.ands(_fn(EG.Shape(256, 16, 4, 4, 64, 17, 22)), memo) == ANDS_CLASS
 
 
-#: `EgressBucket_v1{B=256,R=8,r=2,NR=4,K=16,IB=18,D=2}`'s, egress_zk.py's unit
+#: `EgressBucket_v1{B=256,R=8,r=2,NR=4,K=16,IB=18,D=2}`'s, egress_zk.py's proof block
 ANDS_ZK = 5_795
 #: `EgressBucket_v1{B=256,R=16,r=4,NR=4,K=64,IB=17,D=22}`'s
 ANDS_CLASS = 11_555

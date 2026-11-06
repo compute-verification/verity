@@ -1,5 +1,5 @@
 """PoUW's verifier of record (`verifier`): one assignment that names the side of record, in a module that imports only the
-standard library, so undoing the switch is one line and what decides a window, or draws its coins, never reaches
+standard library, so undoing the switch is one line and what decides a window, or flips its coins, never reaches
 `verity.ml`."""
 from __future__ import annotations
 

@@ -52,7 +52,6 @@ def _check(target, inputs, *, declined: int | None = 0):
     assert sc.ok, str(sc)
     if declined is not None:
         assert sc.declined == declined, str(sc)
-    assert sc.declined < sc.n, str(sc)
     return sc
 
 

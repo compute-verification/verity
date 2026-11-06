@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.ResLowerDeployed
-import Proofs.Flock.Claims.Recursion.FinalPiece
+module
+
+public import Proofs.Flock.Claims.Recursion.ResLowerDeployed
+public import Proofs.Flock.Claims.Recursion.FinalPiece
 
 /-!
 # A residual copy's row ports read its committed rows
@@ -17,6 +19,8 @@ row at instance `n` (`rowHidden`'s forms, read off the witness), which is the ro
 * `copy_rowElems`: the copy's row port elements are the committed row's, and row port `i` is named for the verifier's
   port `P[i]` (`checkPart_ok`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.ResLower
 
@@ -203,6 +207,7 @@ theorem copy_rowElems {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit}
   have hsz : p.sts.size = 1 := by rw [hp]; exact (oneFull_staged hS hsu).1
   have hc0 := partCircuit_staged hS hx ht' hpi hr hpc h0
   obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx ht' hpi h0
+    (FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0).2.2)
   obtain ⟨-, hpk, hpa⟩ := htab 0 h0
   obtain ⟨u, hu, hupv, -, hl, hrows⟩ := FlockSoundness.Discharge.Recursion.checkParsed_ok hpa
   subst hc0

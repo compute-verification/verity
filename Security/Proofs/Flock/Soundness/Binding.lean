@@ -1,7 +1,11 @@
-import Proofs.Flock.Soundness.Binding.Leaf
-import Proofs.Flock.Soundness.Binding.Layout
-import Proofs.Flock.Soundness.Binding.Rows
-import Proofs.Flock.Soundness.Binding.RowSeg
-import Proofs.Flock.Soundness.Binding.RowsX
-import Proofs.Flock.Soundness.Binding.Weights
-import Proofs.Flock.Soundness.Binding.E2E
+module
+
+public import Proofs.Flock.Soundness.Binding.Leaf
+public import Proofs.Flock.Soundness.Binding.Layout
+public import Proofs.Flock.Soundness.Binding.Rows
+public import Proofs.Flock.Soundness.Binding.RowSeg
+public import Proofs.Flock.Soundness.Binding.RowsX
+public import Proofs.Flock.Soundness.Binding.Weights
+public import Proofs.Flock.Soundness.Binding.E2E
+
+@[expose] public section

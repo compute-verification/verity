@@ -1,4 +1,6 @@
-import Mathlib
+module
+
+public import Mathlib
 
 /-!
 # The decoder's polynomial representations
@@ -8,6 +10,8 @@ The counted decoder computes on plain data: a univariate polynomial is its coeff
 `P i j` (the coefficient of `X^i Y^j`) on the box `i ≤ D`, `j ≤ L` (`toBi`). These are the readings into Mathlib's
 `F[X]` and `F[X][X]` that the correctness proofs use.
 -/
+
+@[expose] public section
 
 namespace Claims.GS
 

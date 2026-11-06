@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.VerdictRowG
-import Proofs.Flock.Claims.Recursion.RecordCanon
-import Proofs.Flock.Claims.Recursion.VerdictRun
-import Proofs.Flock.Claims.Complete.Verdict
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRowG
+public import Proofs.Flock.Claims.Recursion.RecordCanon
+public import Proofs.Flock.Claims.Recursion.VerdictRun
+public import Proofs.Flock.Claims.Complete.Verdict
 
 /-!
 # Row A's step 3: the verdict on the decoded proofs, from every table's runs
@@ -20,6 +22,8 @@ around them.
   so both reps' caps agree, and the verdict accepts where the session's public words are empty.
 -/
 
+@[expose] public section
+
 namespace RecDeploy.Rows
 
 open Flock
@@ -31,7 +35,7 @@ open FlockSoundness.Discharge.Recursion (HClass)
 
 /-- **The verdict on the decoded proofs accepts** when each of its checks passes. -/
 theorem verifyJPWith_ok (hs : Flock.Hashes Flock.V) (spec : SessionSpec) (tabs : Array Setup) (j : Lean.Json)
-    (ps : Array Proof) {sess : Session}
+    (ps : Array Proof) {sess : RunRecord}
     (hT : (tabs.size != spec.tables.size || tabs.size == 0) = false)
     (hD : Record.decodeJWith hs spec j = .ok sess)
     (hU : ∀ q ∈ (tabs.zip sess.publics).toList, q.1.publics q.2 = .ok ())
@@ -90,7 +94,7 @@ variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.
   (D : DecAt rd x ms cs)
 
 /-- **A dense inner statement's decision sets up one table**, and the session spec names one. -/
-theorem tables_of_dense {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+theorem tables_of_dense {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) :
     D.sts.size = 1 ∧ D.spec.tables.size = 1 := by
   obtain ⟨s, spec, st, sch, hset, htags, hpi, -⟩ := dense_inner hst hf

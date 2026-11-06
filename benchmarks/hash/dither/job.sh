@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# The dither-hb benches. Libraries are built on a CPU node and shipped to the dc node, so nothing but the bench runs on
-# vy-dc-h200 / vy-dc-b200 (no CPU phase there):
-#   build    (vy-nebius-2) every library for each ARCH in a comma list: $OUT/lib/ARCH/{kb,kb_pg,h1noise,h1u,h1zref,h1c}.so and the
+# The dither-hb benches. Libraries are built on a CPU host and copied to the GPU host, so nothing but the bench runs on
+# the H200 or the B200 (no CPU phase there):
+#   build    (a CPU host) every library for each ARCH in a comma list: $OUT/lib/ARCH/{kb,kb_pg,h1noise,h1u,h1zref,h1c}.so and the
 #            h1u variants in $VARIANTS (NAME=FLAGS, e.g. pd4=-DH1U_PF=1,-DH1U_PD=4 builds h1u_pd4.so), their SASS and
 #            resource usage, and BUILD.txt: the commit and arch, and per library the sha256 of the repository files
 #            nvcc -M names (a bench refuses a library whose sources differ at its own commit)
 #   kbench   kb.so (and kb_pg.so on sm_100a): hb_kbench.py (the honest GEMMs gated, then timed against the plain int8 GEMMs);
-#            verify.py (the numpy twin) runs after a `research fetch`, off the node
+#            verify.py (the numpy twin) runs on the bench's out/ afterwards, off the GPU host
 #   h1       h1noise.so: h1bench.py (H1's per-unit noise gated, then timed against the plain int8 GEMMs)
 #   h1u      h1u.so, h1noise.so and every h1u_* / h1noise_* variant shipped: h1ubench.py (H1 + fx1's fused unit, and
 #            each build's two-launch kh_unit_ws as arm NAME-ws, gated against receipts.py and h1tile.reference, the
@@ -24,9 +24,6 @@
 #            unitsbench.py (the served noise and units launches at the served window, each build gated against
 #            receipts.py and the base's every word, then timed: each call's units and the step's 128)
 #   unitsprof  the same builds under ncu (--set full; kernels h1u and h1k): unitsbench.py --profile, then the text pages
-#   j10r90   h1u_kr.so (the base) and every h1u_kr*.so shipped: unitsbench.py --multi --j10r --j10r-sm, gated only, then
-#            j10r90.py check (J10-R's units at the frozen shape's linears, M = 4,096 and 16,384); j10r90t: j10r90.py time
-#            (the same calls against plain INT8); j10r90.sh builds the sm_90a arms
 #   partials h1u.so and every h1u_*.so shipped: benchmarks/pouw/tests/test_partials.py and test_lane_refs.py with
 #            PARTIALS_LIB each (option A's partials: kh_seeds_at and kh_lanes byte for byte served_h1/partials.py's cpu
 #            backend and SERVE-REG's gated lane rows)
@@ -37,20 +34,18 @@
 #            pages; the full set's replays outlast the default lease, so give it LEASE="--max-min 40" or fewer kernels
 # Benches in a comma list (kbench,h1u) run one after another under one lease.
 #
-#   research run --on vy-nebius-2 --preemptible --project verity --campaign dither-loop --source . --cwd source \
-#     --timeout 20m -- bash benchmarks/hash/dither/job.sh sm_90a,sm_100a build
-#   research run --on vy-dc-h200 --project verity --campaign dither-loop --source . --cwd source --timeout 40m \
-#     --send BUILD_RUN/out/lib/sm_90a/h1u.so --send ... --send BUILD_RUN/out/lib/sm_90a/BUILD.txt \
-#     -- bash benchmarks/hash/dither/job.sh sm_90a h1u
+#   OUT=B bash benchmarks/hash/dither/job.sh sm_90a,sm_100a build          (a CPU host with CUDA 13.0, up to 20 minutes)
+#   OUT=R LIBS=B/lib/sm_90a bash benchmarks/hash/dither/job.sh sm_90a h1u  (an H200 under a GPU lease, up to 40 minutes)
 #
 # Env: VARIANTS (default below), BUILDS (the base libraries a build makes, default "kb h1noise h1u h1zref h1c" and
 # kb_pg on sm_100a; set empty, only the variants), NVCC_EXTRA (nvcc flags every build adds, e.g. --no-compress for the
 # SASS gate), JOBS (builds at once, default 8), BENCH_ARGS (extra flags for the bench, e.g. "--ms 1,32 --linears o"), HB_WHO (the lease owner, default dither/ and the run's id), LEASE (gpu-lease flags, default
 # "--max-min 14"), LIBS (the shipped libraries, default $RESEARCH_RUN_DIR/inputs), VERITY_BENCH_VENV (default
-# /workspace/cp/venv312), NVCC (default CUDA 13.0's), NCU (default the ncu beside NVCC).
+# /workspace/cp/venv312, else benchmarks/harness/env.sh's), NVCC (default CUDA 13.0's), NCU (default the ncu
+# beside NVCC).
 # Exit: the bench's (4 a gate failed), 2 a build failed or the shipped libraries are missing or another commit's.
 set -uo pipefail
-ARCH=${1:?usage: job.sh ARCH[,ARCH] build | job.sh sm_90a|sm_100a|sm_120a kbench|h1|h1u|h1z|j10hb|prof|units|unitsprof|j10r90|j10r90t|partials|z|zprof[,...]}
+ARCH=${1:?usage: job.sh ARCH[,ARCH] build | job.sh sm_90a|sm_100a|sm_120a kbench|h1|h1u|h1z|j10hb|prof|units|unitsprof|partials|z|zprof[,...]}
 BENCH=${2:-kbench}
 HERE=$(cd "$(dirname "$0")" && pwd)
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
@@ -119,6 +114,7 @@ if [ "$BENCH" = build ]; then
   exit 0
 fi
 
+[ -x "$PY" ] || PY=$(. "$ROOT/benchmarks/harness/env.sh" && echo "$VENV/bin/python") || exit 2
 NEED=()
 CMDS=()
 for b in ${BENCH//,/ }; do
@@ -174,21 +170,6 @@ for b in ${BENCH//,/ }; do
         CMDS+=("$NCU --profile-from-start off --clock-control none --set full --nvtx -k regex:h1u|h1k -f -o $OUT/prof $PY $HERE/unitsbench.py$ul --profile --out $OUT ${BENCH_ARGS:-}")
         CMDS+=("$PY $HERE/hb_prof.py --pages $OUT/prof.ncu-rep --ncu $NCU --out $OUT")
       fi ;;
-    j10r90|j10r90t)
-      # h1u_kr.so (the base) and every other h1u_kr*.so shipped: j10r90 is unitsbench.py's J10-R gates at its own shapes
-      # (--profile: gated, not timed), then j10r90.py check at the frozen shape; j10r90t is j10r90.py time
-      jl=""
-      for f in "$LIBS"/h1u_kr.so "$LIBS"/h1u_kr?*.so; do
-        [ -f "$f" ] || continue
-        v=$(basename "$f" .so); NEED+=("$v"); jl+=" --lib ${v#h1u_}=$f"
-      done
-      [ -f "$LIBS/h1u_kr.so" ] || { echo "job.sh: $b needs $LIBS/h1u_kr.so, the base" >&2; exit 2; }
-      if [ "$b" = j10r90 ]; then
-        CMDS+=("$PY $HERE/unitsbench.py$jl --multi --j10r --j10r-sm --profile --out $OUT/units")
-        CMDS+=("$PY $HERE/j10r90.py check$jl --out $OUT ${BENCH_ARGS:-}")
-      else
-        CMDS+=("$PY $HERE/j10r90.py time$jl --out $OUT ${BENCH_ARGS:-}")
-      fi ;;
     partials)
       # every h1u*.so shipped: test_partials.py and test_lane_refs.py with PARTIALS_LIB, their gpu tests (kh_seeds_at and
       # kh_lanes, against the cpu's and SERVE-REG's lane rows) on each
@@ -226,12 +207,12 @@ for b in ${BENCH//,/ }; do
     *) echo "job.sh: no bench $b" >&2; exit 2 ;;
   esac
 done
-[ -f "$LIBS/BUILD.txt" ] || { echo "job.sh: no $LIBS/BUILD.txt: --send the build's lib/$ARCH/BUILD.txt" >&2; exit 2; }
+[ -f "$LIBS/BUILD.txt" ] || { echo "job.sh: no $LIBS/BUILD.txt: point LIBS at the build's lib/$ARCH" >&2; exit 2; }
 cp "$LIBS/BUILD.txt" "$OUT/env/BUILD.txt"
 read -r bsha barch < "$LIBS/BUILD.txt"
 [ "$barch" = "$ARCH" ] || { echo "job.sh: the libraries are $barch's, not $ARCH's" >&2; exit 2; }
 for name in $(printf '%s\n' "${NEED[@]}" | sort -u); do
-  [ -f "$LIBS/$name.so" ] || { echo "job.sh: no $LIBS/$name.so: build on vy-nebius-2 (job.sh $ARCH build) and --send lib/$ARCH/$name.so" >&2; exit 2; }
+  [ -f "$LIBS/$name.so" ] || { echo "job.sh: no $LIBS/$name.so: build it on a CPU host (job.sh $ARCH build) and point LIBS at its lib/$ARCH" >&2; exit 2; }
   read -r _ _ h paths <<< "$(grep "^src $name " "$LIBS/BUILD.txt")"
   [ -n "$h" ] && [ "$(srchash $paths)" = "$h" ] || {
     echo "job.sh: $name.so was built (commit $bsha) from sources that differ at $SHA: rebuild" >&2; exit 2; }

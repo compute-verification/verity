@@ -1,5 +1,5 @@
-"""[MOE-01] Bet A rules for vLLM's fused-MoE block under the batch-invariant profile — the leaf kernels `export_compat.moe_ops_traced`
-makes visible in place of the opaque `vllm.moe_forward` dispatcher (F-moe-02 / B-MOE): generic in the block's shape parameters
+"""Bet A rules for vLLM's fused-MoE block under the batch-invariant profile — the leaf kernels `export_compat.moe_ops_traced`
+makes visible in place of the opaque `vllm.moe_forward` dispatcher: generic in the block's shape parameters
 (E experts, TOPK, hidden H, intermediate I, tokens M), nothing about a model.
 
 The block, in launch order, and what each rule binds (numerics: `verity.ml.definitions.registry.moe`, difftested bit-exact in
@@ -39,7 +39,7 @@ DECLARED construction (`vllm_bindings.active_target_profile().effective_moe_cons
     Any OTHER reader of an intermediate meets a marker and refuses (`Ctx.coll`: "is not a tensor value (Padded...)") -- the block's
     interior is the Definition's, not the Program's (fail closed, never a silent mix).  Under `padded` the MOE-01 rules decline by name
     (and vice versa), so a Program is of ONE construction; two Programs of the same trace differ in digest by construction (G1 by name).
-    N-pad-09: the schedule's shapes (blocks per expert, `num_tokens_post_padded`) are read as the marker and never enter the statics.
+    The schedule's shapes (blocks per expert, `num_tokens_post_padded`) are read as the marker and never enter the statics.
 """
 
 from __future__ import annotations
@@ -115,7 +115,7 @@ def _val_matches(v, node) -> bool:
     return isinstance(v, torch.fx.Node) and v is node
 
 
-# -- [R17-42] the declared construction: which family owns the block ------------------------------------------------------------------
+# -- the declared construction: which family owns the block ------------------------------------------------------------------
 
 INDEXED_READ, INDEXED_READ_ORDERED = "indexed-read", "indexed-read-ordered"   # MOE-01 with the router in selection order
 PADDED = "padded"
@@ -235,7 +235,7 @@ class TopkSoftmaxRule(InPlaceRule):
         M, E = shape(ctx, logits)
         TOPK = shape(ctx, w)[1]
         VPT = TOPK_SOFTMAX_VPT[ctx.dtype_of(logits)]
-        # [MOE-04] renormalize=True (Qwen3-MoE / Mixtral norm_topk_prob) is the same kernel with the lead thread's 1/sum epilogue:
+        # renormalize=True (Qwen3-MoE / Mixtral norm_topk_prob) is the same kernel with the lead thread's 1/sum epilogue:
         # MoeRouterTopKNorm_v1 (registry.moe); the ids are unchanged, the weights are the normalised probabilities.
         renorm = node.args[4]
         fn = ctx.kind("moe_router_topk" + ("_ordered" if active_moe_construction() == INDEXED_READ_ORDERED else "") + ("_norm" if renorm else ""), node, E=E, TOPK=TOPK, VPT=VPT)
@@ -462,7 +462,7 @@ class MoeSumRule(InPlaceRule):
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
-# [R17-42 route A (3)] the PADDED family: the same six launches, ONE `MoeFfnFixedL_v1` per token, the interior as markers (module doc)
+# the PADDED family: the same six launches, ONE `MoeFfnFixedL_v1` per token, the interior as markers (module doc)
 # ---------------------------------------------------------------------------------------------------------------------------------
 
 
@@ -860,7 +860,7 @@ class PaddedMoeSumRule(InPlaceRule):
                    emitted=f"{fn.id} x{M}")
 
 
-#: [R17-42] both families in one list; each rule applies only under its own declared construction (`_not_owned`), so the block is bound by
+#: both families in one list; each rule applies only under its own declared construction (`_not_owned`), so the block is bound by
 #: exactly one family per Program.  The padded family is listed first: under `padded` the MOE-01 rules decline by name, under
 #: `indexed-read` the padded rules do -- the order never decides.
 VLLM_MOE_RULES = [PaddedTopkSoftmaxRule(), PaddedMoeAlignBlockSizeRule(), PaddedFusedMoeKernelRule(), PaddedViewRule(), PaddedSiluAndMulRule(),

@@ -37,7 +37,7 @@ Poisson traffic. Plain vLLM's OpenAI server on one RTX PRO 6000, with the integr
   late cell read came from: `warden_probe.py` (the relay's every tick, publish and collection), `host_sample.py` (the
   host's load every 100 ms) and the client's own event loop record (`corpus.drive_warden`); the summary lays each late
   tick against them (`summary.late_ticks`).
-- `run.sh`: the job on a leased GPU of a node (its header has the `research run` command). `join.sh`: its summaries,
+- `run.sh`: the job on a leased GPU of a node (its header has its command and resources). `join.sh`: its summaries,
   comparison and the scheduler replay's table on a CPU node, for a GPU job run with `JOIN=0`. A summarized corpus is
   published in the evidence store as `vllm-trace-corpus/v1`, which `benchmarks/network_e2e/encodings/trace_corpus.py`
   reads.

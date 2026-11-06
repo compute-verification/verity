@@ -1,5 +1,7 @@
-import Proofs.Properties.Nci.Resolve
-import Proofs.Properties.Nci.Width
+module
+
+public import Proofs.Properties.Nci.Resolve
+public import Proofs.Properties.Nci.Width
 
 /-!
 # The novel reads, from what `Desc.analyze` and `Desc.novelWidth` compute
@@ -17,10 +19,12 @@ segment's first piece. `readsExact` (`Proofs.Properties.Nci.Agrees`) proves it.
 `descAgrees_of_readsExact` (`Proofs.Properties.Nci.Agrees`) from it alone, the other two proved.
 -/
 
+@[expose] public section
+
 namespace NciCheck.Properties.SecurityProofs.Novel
 
 open DescAgree
-open Flock.Program (Prog)
+open Flock.Program (Prog GateTable)
 open Width (pieceGates piecesGates segGates segsGates dedup_sum)
 
 /-- **`analyze`'s reads are the unrolled operands outside each root node.** On a Program `Desc.evaluate` reads,
@@ -28,7 +32,7 @@ with `NciCheck.circuitOf`'s circuit `c`: every gate a segment of root node `k`'s
 gate `a` of width `c.w[a]` in the root node `Desc.nodeOf` finds for the segment's first piece; and those gates are
 exactly the gates outside node `k` that its gates read. -/
 def ReadsExact : Prop :=
-  ∀ (bytes : ByteArray) (P : Prog) (reads : Array (Array Desc.Seg)) (c : Circuit),
+  ∀ (bytes : ByteArray) (P : Prog) (reads : Array (Array Desc.Seg)) (c : GateTable),
     Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
     Desc.inputsAtRoot P = true → Desc.walkable P = true → Desc.analyze P = .ok reads → circuitOf P = .ok c →
     ∀ k < nodeCount P,
@@ -202,7 +206,7 @@ theorem hashSet_fold_sum' (S : Std.HashSet ℕ) (p : ℕ → Bool) (f : ℕ → 
   have hnd : S.toList.Nodup := Std.HashSet.distinct_toList.imp fun h => by simpa using h
   rw [← List.sum_toFinset _ hnd]
 
-theorem ius_snd (c : Circuit) (dv : Division) {u : ℕ} (hu : u < dv.n) :
+theorem ius_snd (c : GateTable) (dv : Division) {u : ℕ} (hu : u < dv.n) :
     (ius c dv)[u]!.2 = (tally c dv)[u]!.2.fold (fun x a => if dv.theta.contains a then x else x + c.w[a]!) 0 := by
   have hs := (tally_spec c dv).1
   rw [getElem!_pos (ius c dv) u (by simp [ius, hs, hu]), getElem!_pos (tally c dv) u (by rw [hs]; exact hu)]

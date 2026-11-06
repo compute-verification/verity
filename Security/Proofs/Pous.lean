@@ -1,69 +1,72 @@
-import Proofs.Pous.Thm1.Theorem1iiTimed
-import Proofs.Pous.TrackA.FibreCount
-import Proofs.Pous.TrackA.A1Compression
-import Proofs.Pous.TrackA.A3Prime
-import Proofs.Pous.TrackA.A6Rederive
-import Proofs.Pous.Pebbling.B1IndepSet
-import Proofs.Pous.Pebbling.B3Chain
-import Proofs.Pous.Dense.DenseMeets
-import Proofs.Pous.FreeBlocks.Zero
-import Proofs.Pous.FreeBlocks.P2
-import Proofs.Pous.P3.InvertibleCore
-import Proofs.Pous.P3.Refutation
-import Proofs.Pous.Chain.Flat
-import Proofs.Pous.Chain.Family
-import Proofs.Pous.Chain.FamilyRounds
-import Proofs.Pous.Continuous
-import Proofs.Pous.SecureErasure
-import Proofs.Pous.StreamedWipe
-import Proofs.Pous.Graded.Band
-import Proofs.Pous.P2.Margin
-import Proofs.Pous.P2.Bridge
-import Proofs.Pous.P2.Wide
-import Proofs.Pous.Accounting.Numbers
-import Proofs.Pous.Audit.SampledAudit
-import Proofs.Pous.B5.ExPostFacto
-import Proofs.Pous.B5.StackedOneWay
-import Proofs.Pous.Dense.DenseReCert
-import Proofs.Pous.Dense.SegTagged
-import Proofs.Pous.P2.Count
-import Proofs.Pous.P2.Domain
-import Proofs.Pous.P2.RingBasic
-import Proofs.Pous.P2.RingTight
-import Proofs.Pous.P2.RingTrunc
-import Proofs.Pous.P2.Rounds
-import Proofs.Pous.P2.RoundTests
-import Proofs.Pous.P2.Rows
-import Proofs.Pous.P3.Column.BandComb
-import Proofs.Pous.P3.Column.BandTwoWay
-import Proofs.Pous.P3.Column.BandWeights
-import Proofs.Pous.P3.Column.TwoWay
-import Proofs.Pous.Pebbling.B2Stacking
-import Proofs.Pous.Pebbling.FischClaims1314
-import Proofs.Pous.Sanity
-import Proofs.Pous.Thm1.Theorem1iTimed
-import Proofs.Pous.Thm1.Theorem1ii
-import Proofs.Pous.Thm1.Theorem1iiSeq
-import Proofs.Pous.Thm1.Theorem1iiiTimed
-import Proofs.Pous.Chain.PubFamily
-import Proofs.Pous.Chain.PubRounds
-import Proofs.Pous.Rebuild.Exclusion
-import Proofs.Pous.EndToEnd
-import Proofs.Pous.Period
-import Proofs.Pous.Pooled
-import Proofs.Pous.EndToEndAt
-import Proofs.Pous.PeriodAt
-import Proofs.Pous.PeriodDeployed
-import Proofs.Pous.Obligation
+module
+
+public import Proofs.Pous.Thm1.Theorem1iiTimed
+public import Proofs.Pous.TrackA.FibreCount
+public import Proofs.Pous.TrackA.A1Compression
+public import Proofs.Pous.TrackA.A3Prime
+public import Proofs.Pous.TrackA.A6Rederive
+public import Proofs.Pous.Pebbling.B1IndepSet
+public import Proofs.Pous.Pebbling.B3Chain
+public import Proofs.Pous.Dense.DenseMeets
+public import Proofs.Pous.FreeBlocks.Zero
+public import Proofs.Pous.FreeBlocks.P2
+public import Proofs.Pous.P3.InvertibleCore
+public import Proofs.Pous.P3.Refutation
+public import Proofs.Pous.Chain.Flat
+public import Proofs.Pous.Chain.Family
+public import Proofs.Pous.Chain.FamilyRounds
+public import Proofs.Pous.Continuous
+public import Proofs.Pous.StreamedWipe
+public import Proofs.Pous.Graded.Band
+public import Proofs.Pous.P2.Margin
+public import Proofs.Pous.P2.Bridge
+public import Proofs.Pous.P2.Wide
+public import Proofs.Pous.Accounting.Numbers
+public import Proofs.Pous.Audit.SampledAudit
+public import Proofs.Pous.B5.ExPostFacto
+public import Proofs.Pous.B5.StackedOneWay
+public import Proofs.Pous.Dense.DenseReCert
+public import Proofs.Pous.Dense.SegTagged
+public import Proofs.Pous.P2.Count
+public import Proofs.Pous.P2.Domain
+public import Proofs.Pous.P2.RingBasic
+public import Proofs.Pous.P2.RingTight
+public import Proofs.Pous.P2.RingTrunc
+public import Proofs.Pous.P2.Rounds
+public import Proofs.Pous.P2.RoundTests
+public import Proofs.Pous.P2.Rows
+public import Proofs.Pous.P3.Column.BandComb
+public import Proofs.Pous.P3.Column.BandTwoWay
+public import Proofs.Pous.P3.Column.BandWeights
+public import Proofs.Pous.P3.Column.TwoWay
+public import Proofs.Pous.Pebbling.B2Stacking
+public import Proofs.Pous.Pebbling.FischClaims1314
+public import Proofs.Pous.Sanity
+public import Proofs.Pous.Thm1.Theorem1iTimed
+public import Proofs.Pous.Thm1.Theorem1ii
+public import Proofs.Pous.Thm1.Theorem1iiSeq
+public import Proofs.Pous.Thm1.Theorem1iiiTimed
+public import Proofs.Pous.Chain.PubFamily
+public import Proofs.Pous.Chain.PubRounds
+public import Proofs.Pous.Rebuild.Exclusion
+public import Proofs.Pous.EndToEnd
+public import Proofs.Pous.Period
+public import Proofs.Pous.Pooled
+public import Proofs.Pous.EndToEndAt
+public import Proofs.Pous.PeriodAt
+public import Proofs.Pous.PeriodDeployed
+public import Proofs.Pous.Obligation
 
 /-!
 # The proved guarantees
 
 `Pous.SecurityProofs.X : Pous.Guarantees.X` for every statement of `Security/Definitions/Pous/Guarantees.lean`,
-`Security/Definitions/Pous/Guarantees/P2.lean`, `Security/Definitions/Pous/Guarantees/SecureErasure.lean`,
+`Security/Definitions/Pous/Guarantees/P2.lean`,
 `Security/Definitions/Pous/Guarantees/StreamedWipe.lean`,
 `Security/Definitions/Pous/Guarantees/StreamedWipeFamily.lean`,
-`Security/Definitions/Pous/Guarantees/StreamedWipeReads.lean` (the frozen statements)
+`Security/Definitions/Pous/Guarantees/StreamedWipeReads.lean`,
+`Security/Definitions/Pous/Guarantees/StreamedWipeServer.lean`,
+`Security/Definitions/Pous/Guarantees/StreamedWipeDisk.lean` (the frozen statements)
 and `Security/Proofs/Pous/Statements.lean` (the lemmas) that has a proof. `lean-audit.json` pins these theorems, so a
 change to a guarantee, or to a definition it reads, changes their records. The open statements (`A2LemmaAM1`,
 `A5RabinGcd`, `A7Params`, `M1Meets`) have no entry here.
@@ -72,6 +75,8 @@ Two proofs were written against a prover's copy of a trusted recursive definitio
 equal to the trusted one: `PousPebbling.chain` (`Pous.HashChain.chain`) and `PousThm1.seqState`
 (`Pous.Sampled.seqState`).
 -/
+
+@[expose] public section
 
 namespace Pous.SecurityProofs
 
@@ -180,10 +185,6 @@ theorem ContinuousComplete : Pous.Guarantees.ContinuousComplete := PousContinuou
 theorem ContinuousTimeAverage : Pous.Guarantees.ContinuousTimeAverage := PousContinuous.continuous_time_average
 theorem BandFamilyContinuousTimeAverage : Pous.Guarantees.BandFamilyContinuousTimeAverage :=
   PousContinuous.band_family_continuous_time_average
-theorem DigestAU : Pous.Guarantees.DigestAU := PousDigest.digestAU
-theorem SecureErasureMeets : Pous.Guarantees.SecureErasureMeets := PousErase.secure_erasure_meets
-theorem SecureErasureMeetsFamily : Pous.Guarantees.SecureErasureMeetsFamily := PousErase.secure_erasure_meets_family
-theorem SecureErasureMeets96GiB : Pous.Guarantees.SecureErasureMeets96GiB := PousErase.secure_erasure_meets_96GiB
 theorem StreamedWipe : Pous.Guarantees.StreamedWipe := PousStreamedWipe.streamed_wipe
 theorem StreamedWipeMeets2600GB : Pous.Guarantees.StreamedWipeMeets2600GB :=
   PousStreamedWipe.streamed_wipe_meets_2600GB
@@ -194,6 +195,20 @@ theorem StreamedWipeMeets141GB : Pous.Guarantees.StreamedWipeMeets141GB := PousS
 theorem StreamedWipeMeetsReads : Pous.Guarantees.StreamedWipeMeetsReads := PousStreamedWipe.streamed_wipe_meets_reads
 theorem StreamedWipeMeets141GB5 : Pous.Guarantees.StreamedWipeMeets141GB5 :=
   PousStreamedWipe.streamed_wipe_meets_141GB5
+theorem StreamedWipeMeetsReadsTight : Pous.Guarantees.StreamedWipeMeetsReadsTight :=
+  PousStreamedWipe.streamed_wipe_meets_reads_tight
+theorem StreamedWipeMeetsServer : Pous.Guarantees.StreamedWipeMeetsServer := PousStreamedWipe.streamed_wipe_meets_server
+theorem StreamedWipeMeetsServer5GB : Pous.Guarantees.StreamedWipeMeetsServer5GB :=
+  PousStreamedWipe.streamed_wipe_meets_server_5GB
+theorem StreamedWipeMeetsServerH200 : Pous.Guarantees.StreamedWipeMeetsServerH200 :=
+  PousStreamedWipe.streamed_wipe_meets_server_H200
+theorem StreamedWipeMeetsServer8H200HBM : Pous.Guarantees.StreamedWipeMeetsServer8H200HBM :=
+  PousStreamedWipe.streamed_wipe_meets_server_8H200_HBM
+theorem StreamedWipeMeetsServer8H200HBMRAM : Pous.Guarantees.StreamedWipeMeetsServer8H200HBMRAM :=
+  PousStreamedWipe.streamed_wipe_meets_server_8H200_HBMRAM
+theorem StreamedWipeMeetsServer8H200 : Pous.Guarantees.StreamedWipeMeetsServer8H200 :=
+  PousStreamedWipe.streamed_wipe_meets_server_8H200
+theorem StreamedWipeMeetsDisk : Pous.Guarantees.StreamedWipeMeetsDisk := PousStreamedWipe.streamed_wipe_meets_disk
 
 theorem P2MeetsM1pB19Uncond : Pous.Guarantees.P2MeetsM1pB19Uncond := PousP2p.p2_meets_m1p_b19
 theorem P2MeetsM1pFamilyUncond : Pous.Guarantees.P2MeetsM1pFamilyUncond := PousP2p.family

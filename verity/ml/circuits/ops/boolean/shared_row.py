@@ -24,7 +24,7 @@ tensor's bytes are in memory. FN's return, or PORT's type, is any type of bits w
     d[w] = (row[OFF + W·j + w] XOR y[w]) OR (j >= G)   for w < W (j unsigned),
 
 so d is segment j XOR y when j < G and every bit set when j >= G: d is 0 exactly when j < G and segment j is y.
-`SharedRowWindow_v1`'s proof block has no output row: d is its pinned output (C-Flock's META ``pinned_outputs``, each bit a
+`SharedRowWindow_v1`'s proof block has no output row: d is its pinned output (Flock's META ``pinned_outputs``, each bit a
 copy of a forced-zero row), and the row is the committed one its readers read, so a proof binds FN's output to segment j of
 that row. Each bit of d is one linear form over the circuit's wires, as a pinned bit's row must be. j is one unsigned
 16-bit word of kind position (`ports.In`), as `softmax_row.QkSoftmaxRowPad_v1`'s n is: a public input, the verifier's own

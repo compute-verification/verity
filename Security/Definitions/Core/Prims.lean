@@ -1,4 +1,6 @@
-import Definitions.Core.TC.Spec
+module
+
+public import Definitions.Core.TC.Spec
 
 /-!
 # Casts: the word casts of `verity.ml.prims`
@@ -14,6 +16,8 @@ is carried as its numerator `m` and exponent `e`, and each comparison and roundi
 and rounding of those integers (`dyadicLt`, `roundEvenDyadic`). Subtractions of naturals are written so that they never
 truncate (`p + 127 - 9` for the Python's `p - 9 + 127`).
 -/
+
+@[expose] public section
 
 namespace Verity.Prims
 

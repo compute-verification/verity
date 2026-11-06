@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.InnerAcceptsKS
+module
+
+public import Proofs.Flock.Claims.Recursion.InnerAcceptsKS
 
 /-!
 # The recursion's KS where the inner rounds' forks bind
@@ -7,12 +9,14 @@ import Proofs.Flock.Claims.Recursion.InnerAcceptsKS
 `sum_opensDiffer_le`, and there only through `forkColl_of_opening`: two extractions at a fork at round `j` whose inner
 views differ at message `j` show a collision `Be` finds at that fork. `ForksBind` is that conclusion, stated as the
 premise. At option (d) the inner views' rounds before the last are the run's (`RecDeploy.ReadersRunPlayed`) and the
-last is bound by `IVStar`'s decision (`Bound.LastBinds`), with no `Opening` of a commit string to read, so
+last is bound by `IVStar`'s decision (`Bound.LastBindsEC`), with no `Opening` of a commit string to read, so
 `CallsOpenPlayed` has nothing to say there and `ForksBind` is proved directly.
 
 This file is the chain with `ForksBind` in place of `CallsOpenPlayed` (`Pr_bad_le_fork_binds`, `Pr_bad_le_binds`,
 `bad_rej_le_binds`, `innerKS_of_KSAbort_binds`, `KS_of_flockKS_binds`), at the same bound.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

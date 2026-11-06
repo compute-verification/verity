@@ -1,10 +1,12 @@
-import Mathlib
+module
+
+public import Mathlib
 
 /-!
 # Merkle commitments over an oracle, and their extractor (trusted)
 
 The vocabulary of `Extract`, the commit-and-open premise of the no-fold design (every committed word is a SHA-512 Merkle
-leaf), and of its discharge from SHA-512 as a random oracle (R-ACCEL-3; ABSORB-THM).
+leaf), and of its discharge from SHA-512 as a random oracle.
 
 * `Enc`: the tree's leaf and node encodings into the oracle's domain, injective with disjoint images (frame-v3-sha512's
   domain separation, a protocol-code fact).
@@ -24,6 +26,8 @@ leaf), and of its discharge from SHA-512 as a random oracle (R-ACCEL-3; ABSORB-T
 * `Consistent qry h u`: `u` is the answer stream the oracle `h` gives the querier `qry`, the bridge from a uniform
   oracle `X → D` to the uniform stream.
 -/
+
+@[expose] public section
 
 namespace Pouw.MerkleExtract
 

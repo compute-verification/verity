@@ -233,6 +233,6 @@ AMPERE_BF16_DOT16_TOTAL = AMPERE_BF16_M16N8K16
 TOTAL_FAMILY_VERSION = "3"
 
 #: :data:`verity.ml.circuits.silicon.models.HOPPER_BF16_WGMMA_K16` (the model of ``sm90.wgmma.m64n8k16.bf16``) is re-exported
-#: here, where lane HP's campaign first registered it: all sixteen products and the accumulator in one grouped
+#: here, where veritor's H100 campaign first registered it: all sixteen products and the accumulator in one grouped
 #: sum, 26-bit adder, exponent floor ``-133``, the parameters of :data:`~verity.ml.circuits.silicon.silicon.HOPPER_BF16_M16N8K16`.
 HOPPER_WGMMA_FAMILY_VERSION = "1"

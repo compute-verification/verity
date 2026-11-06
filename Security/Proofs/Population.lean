@@ -1,23 +1,25 @@
-import Proofs.Population.Determinacy
-import Proofs.Population.Necessity
-import Proofs.Population.Egress
-import Proofs.Population.Pointer
-import Proofs.Population.Leakage
-import Proofs.Population.Work
-import Proofs.Population.Instance
-import Proofs.Population.Oblivious
-import Proofs.Population.Transfer
-import Proofs.Population.Converse
-import Proofs.Population.HonestCone
-import Proofs.Population.LongValue
-import Proofs.Population.NecessitySkeleton
-import Proofs.Population.NecessityMatrix
-import Proofs.Population.Exfiltration
-import Proofs.Population.ExfiltrationBound
-import Proofs.Population.ExfiltrationExamples
-import Proofs.Population.DrawPressure
-import Proofs.Population.JointPressure
-import Proofs.Population.ChiPool
+module
+
+public import Proofs.Population.Determinacy
+public import Proofs.Population.Necessity
+public import Proofs.Population.Egress
+public import Proofs.Population.Pointer
+public import Proofs.Population.Leakage
+public import Proofs.Population.Work
+public import Proofs.Population.Instance
+public import Proofs.Population.Oblivious
+public import Proofs.Population.Transfer
+public import Proofs.Population.Converse
+public import Proofs.Population.HonestCone
+public import Proofs.Population.LongValue
+public import Proofs.Population.NecessitySkeleton
+public import Proofs.Population.NecessityMatrix
+public import Proofs.Population.Exfiltration
+public import Proofs.Population.ExfiltrationBound
+public import Proofs.Population.ExfiltrationExamples
+public import Proofs.Population.DrawPressure
+public import Proofs.Population.JointPressure
+public import Proofs.Population.ChiPool
 
 /-!
 # Populations: which object each policy needs of sampled proofs' guarantee
@@ -49,8 +51,9 @@ honest, a run is an assignment of the honest run's frozen dataflow.
 are public when the padded assignments are those holding the public values; that cone holds every honest run's.
 `Converse`: the padding is the least wiring that expresses every program with a given address map, and the pointer
 machine's honest wiring, which never has a secret upstream of the egress, does not bound its egress.
-`HonestCone`: Daniel's leakage form and the skipped work hold for every time-ordered, address-closed program at the
-cones over its honest runs, with no obliviousness; what needs the padding is isolation, a secret's place upstream.
+`HonestCone`: leakage in its uniform form (`card_leak_le_coneOver`) and the skipped work hold for every time-ordered,
+address-closed program at the cones over its honest runs, with no obliviousness; what needs the padding is isolation,
+a secret's place upstream.
 `LongValue`: a committed value of another length than its slot's width buys nothing. The verifier refuses such an
 opening before it reads it, so the slot is ⊥ in its view (or the run holds a collision), and its writer and readers are
 wrong; ⊥ is weakly dominated by a short wrong value, and the determinacy, egress, leakage and skipped-work
@@ -84,3 +87,5 @@ commitment, what leaves through the halt is at most `cum + Δ ℓ`, so under the
 `(1 + Δ) ℓ + (n/k) ln (1/δ)` with probability at least `1 - δ`, and at most `j (ℓ + n/k) + Δ ℓ` on average through the
 halt the `j`-th detection triggers.
 -/
+
+@[expose] public section

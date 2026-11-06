@@ -1,9 +1,11 @@
-import Definitions.Accounting.Carrier
-import Definitions.Accounting.Assumptions.RateAudit
-import Definitions.Accounting.Assumptions.RateAuditDeployed
-import Definitions.Accounting.Assumptions.Stacking
-import Definitions.Accounting.Assumptions.SquaringChain
-import Definitions.Accounting.Guarantees.Requirement
+module
+
+public import Definitions.Accounting.Carrier
+public import Definitions.Accounting.Assumptions.RateAudit
+public import Definitions.Accounting.Assumptions.RateAuditDeployed
+public import Definitions.Accounting.Assumptions.Stacking
+public import Definitions.Accounting.Assumptions.SquaringChain
+public import Definitions.Accounting.Guarantees.Requirement
 
 /-!
 # Stacking: carriers are a source of bounded capacity in every pass (trusted)
@@ -53,6 +55,8 @@ TCC 2017) counts only what crosses the fast-memory boundary. The encode's price 
 bound, assumed per squaring and summed over the chain, as `WorkHardness` assumes the codec's price. The append coin is commit-then-challenge: a
 writer commits to an append's digests before the verifier's live coin keys it, so what it chose can't aim at the key.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 

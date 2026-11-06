@@ -1,9 +1,11 @@
-import Definitions.Pouw.PearlC.Defs
+module
+
+public import Definitions.Pouw.PearlC.Defs
 
 /-!
 # U's pinned order, bit-exact (trusted definitions)
 
-Pearl-C's clean-up as `protocols/pouw/verity_pouw/schemes/pearl_c_u.py` pins it (#449's branch at commit `76134352`,
+Pearl-C's clean-up as `protocols/pouw/verity_pouw/schemes/pearl_c_u.py` pins it (at commit `76134352`,
 SHA-256 `aef10195…2485514a`), transcribed op for op. FP32 words are natural numbers below `2^32`, BF16 words below `2^16`.
 A function returns `none` where the pin raises `NonFinite`, that is, where a step leaves the finite range.
 
@@ -26,6 +28,8 @@ A function returns `none` where the pin raises `NonFinite`, that is, where a ste
 
 The model follows the pin at `76134352`; a change to the pin needs the vectors regenerated and rechecked.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.PeelExact
 

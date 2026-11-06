@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.TableBound
-import Proofs.Flock.Claims.KS.Refit
+module
+
+public import Proofs.Flock.Claims.KS.TableBound
+public import Proofs.Flock.Claims.KS.Refit
 
 /-!
 # Escapes on accepted runs
@@ -12,6 +14,8 @@ each one-run event only where its run accepts. `TableBoundθAccAt` is `TableBoun
 and fitting the same weight (`Escapes.onAccOf_onAcc`, `Escapes.fitsFork_onAccOf`), with a smaller term
 (`Escapes.term_onAccOf_le`).
 -/
+
+@[expose] public section
 
 namespace Claims
 

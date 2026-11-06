@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainDrawAccJK
-import Proofs.Flock.Claims.KS.PlainDrawDecK
+module
+
+public import Proofs.Flock.Claims.KS.PlainDrawAccJK
+public import Proofs.Flock.Claims.KS.PlainDrawDecK
 
 /-!
 # The deployed plain decoders at the draw, at the parsed record
@@ -7,6 +9,8 @@ import Proofs.Flock.Claims.KS.PlainDrawDecK
 `PlainDrawDecK` at `wrPDJK` and `plainVerdictAtJK` (`plain_hdecAtJK`, `plain_hdecHAtJK`), on `PlainDrawAccJK`'s
 acceptance lemmas. `PlaysCoin`'s erasure lemmas are `PlainDrawDecK`'s.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.PlainDraw
 
@@ -473,7 +477,7 @@ theorem plain_hdecHLfAtK_ofJ (keep : Bool → Bool) (F : AtDraw.LeafFormJ)
       fun _ _ => plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay := by
     funext S R
     obtain rfl : S = ∅ := Finset.eq_empty_of_isEmpty S
-    exact tableAtH_plainTab ht (fun _ : Finset (Fin 0) => d) (spec := st.spec) (S := ∅) x₀ x₀ hx₀ L m k0 l₀ l₁
+    exact tableAtH_plainTab ht (HmOut.parse_isTmpl hc) (fun _ : Finset (Fin 0) => d) (spec := st.spec) (S := ∅) x₀ x₀ hx₀ L m k0 l₀ l₁
       rest ext hsch hm hlay
   have hS : HiddenDec.DrawOkH ins.read.I (fun _ : Finset (Fin 0) => d) st.spec.mPts ∅ :=
     ⟨fun _ _ u hu => absurd hu (Finset.notMem_empty u), fun st' hst' => by

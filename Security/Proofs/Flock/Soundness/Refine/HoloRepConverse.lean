@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Refine.HoloRefines
-import Proofs.Flock.Soundness.Refine.RepConverse
+module
+
+public import Proofs.Flock.Soundness.Refine.HoloRefines
+public import Proofs.Flock.Soundness.Refine.RepConverse
 
 /-!
 # One rep with hidden units accepts when its stages' checks hold
@@ -11,6 +13,8 @@ none, and `r'`'s round issued one and answers `h` and `r'`'s squeeze (`HoloLcAns
 converses, as `prog_of_checks` gives `repProg`'s; `holoLincheck_plays_of_checks` feeds the lincheck's run to
 `holoLincheck_refines`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

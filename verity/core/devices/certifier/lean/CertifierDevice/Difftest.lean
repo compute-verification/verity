@@ -1,5 +1,7 @@
-import CertifierDevice.Device
-import Lean.Data.Json
+module
+
+public import CertifierDevice.Device
+public import Lean.Data.Json
 
 /-!
 # The difftest: `step` against `active.Proxy`, on generated traces
@@ -14,6 +16,8 @@ frames, it also fails unless every record is complete and each egress record's g
 under the syncs `step` declared. The Lean audit runs it (`runs` in `lean-audit.json`): compiled evaluation, a test and
 not a proof.
 -/
+
+@[expose] public section
 
 namespace CertifierDevice.Difftest
 

@@ -1,7 +1,9 @@
-import Proofs.Pouw.PearlC.TileGamma
+module
+
+public import Proofs.Pouw.PearlC.TileGamma
 
 /-!
-# TT_OUT and γ at a device record (the cheap-binding lane's file)
+# TT_OUT and γ at a device record
 
 Staged; nothing pinned.
 * **The H100 record is the granted statement on a narrower domain:** `pearlCProtocolDev_h100` and
@@ -12,6 +14,8 @@ Staged; nothing pinned.
   (`pearlCGammaDevAt`) and `GγSampled` from TT_OUT per tile (`pearlCSampledDevAt`), both at `γ = 1 − (399/400)/ω`.
   `pearlCTilesDev_total`: the audit tiles' `W_ref` is the layout's `∑_u wrefDev`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

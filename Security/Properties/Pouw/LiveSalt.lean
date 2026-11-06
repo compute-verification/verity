@@ -1,4 +1,6 @@
-import PouwCheck
+module
+
+public import PouwCheck
 
 /-!
 # PoUW's Pearl-C live salt: what the check of a pass salted by a live challenger session must establish
@@ -78,8 +80,10 @@ every pass of the epoch registers by it, so abandoning buys no time, and an inst
 intervals, each its own epoch. Best-of-`n` gains at most `n·ε`, where `ε` is the chance that one salt lets a dishonest
 pass through, while nothing keyed by the salt is rewarded. A Pearl-C period refuses a complete salt-only session that no
 accepted pass presents, which makes the gain zero within credited periods. That rule is the period checker's, not this
-check's (the note `compute-accounting/20261024T2324Z-draft-livesalt`, "The Pearl-C period rule").
+check's.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.LiveSalt
 
@@ -225,9 +229,9 @@ def fv3Message (tag : String) (parts : List ByteArray) : ByteArray :=
   let t := tag.toUTF8
   parts.foldl (fun acc p => acc ++ Flock.be64 p.size.toUInt64 ++ p) (Flock.FV3.FRAME ++ Flock.be32 t.size.toUInt32 ++ t)
 
-/-- The message `taggedSha512 tag manifest` hashes, when the manifest has a canonical form. -/
+/-- The message `taggedSha512 tag manifest` hashes, when the manifest has identity bytes (`Flock.canonUtf8`). -/
 def taggedMessage (tag : String) (manifest : Json) : List ByteArray :=
-  match Flock.canon manifest with
+  match Flock.canonUtf8 manifest with
   | .ok s =>
     let t := tag.toUTF8
     let b := s.toUTF8

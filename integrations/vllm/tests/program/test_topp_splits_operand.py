@@ -1,4 +1,4 @@
-"""[R16 stoch, coord M-0169 / global M-0189 (1)] The split count S of the top-p pipeline is an OPERAND of the registered Definitions,
+"""The split count S of the top-p pipeline is an OPERAND of the registered Definitions,
 not a static: `TopPMaskWordx{V}(logits, top_p, splits) -> Value<V>`, `TopPMask_v1{V}(logits, top_p, splits)`,
 `GumbelTopPTokenSelect_v1{V}(logits, top_p, seed, pos, temp, splits)`.  S_t = SplitsFor_v1(|live(t)|, num_SMs) is a derived value of the
 WORKLOAD the request Program reads from its request-owned `splits` Input (one entry per sampling event) and the fold carries as the split
@@ -6,11 +6,11 @@ kernels' constexpr (`Const32[S]`).  CPU, torch-free:
 
   1. the operand form evaluates to `topp_split.topp_keep_row(x, p, S)` at every S in {1, 2, 4, 8, 16, 32} (the masked row lane by lane);
   2. the keep word is total: an S the pipeline never launches (0, 3, 64, 2^31, -1) keeps no lane (word 0, a word no launched S gives);
-  3. `GumbelTopPTokenSelect_v1{V}` with the splits operand == the difftest composite with the same S as a static (the R15 body), token
+  3. `GumbelTopPTokenSelect_v1{V}` with the splits operand == the difftest composite with the same S as a static (the static-S body), token
      and masked row, at every S -- the numerics did not move, only where S enters;
-  4. the F-stoch-01 record rows (kernel-consumed bf16 logits at S = 16, V = 128256) through the operand form: masked row bit-exact
+  4. the B8 record rows (kernel-consumed bf16 logits at S = 16, V = 128256) through the operand form: masked row bit-exact
      to the kernel (the fixed model behind the operand);
-  5. the codec materialises `TopPMaskWordx{V}_v1` by name (the R15 `TopPMaskWordx{V}s{S}_v1` name is gone: one form);
+  5. the codec materialises `TopPMaskWordx{V}_v1` by name (the static-S `TopPMaskWordx{V}s{S}_v1` name does not decode: one form);
   6. `splits_for_v1` (the relation the Match checks the operand against) is the registry's `splits_for` on 1..64 x {132, 142} SMs.
 """
 from __future__ import annotations
@@ -81,7 +81,7 @@ def test_topp_mask_operand_form_equals_topp_keep_row_at_every_s(S):
 
 
 def test_the_operand_changes_the_result_where_the_geometry_matters():
-    """S is not decorative: the same row masks differently under two split counts (the F-stoch-01 class -- tie quota per split)."""
+    """S is not decorative: the same row masks differently under two split counts (the tie quota is per split)."""
     V, p = 128256, 0.95
     z = np.load(RECORD)
     meta = json.load(open(RECORD + ".json"))
@@ -147,7 +147,7 @@ def test_select_signature_has_splits_as_the_sixth_operand():
     assert [n for n, _ in params] == ["logits", "top_p", "splits"]
 
 
-# ------------------------------------------------------------------------------------------------ 4. F-stoch-01 through the operand form
+# ------------------------------------------------------------------------------------------- 4. the record rows through the operand form
 
 
 @pytest.mark.slow
@@ -176,7 +176,7 @@ def test_codec_materialises_the_operand_form_by_name():
     assert len(hits) == 1
     prim = hits[0][1](hits[0][0].match("TopPMaskWordx128256_v1"))
     assert prim.id == "TopPMaskWordx128256_v1" and prim is SM.topp_mask_word(128256)
-    assert not any(rx.match("TopPMaskWordx128256s16_v1") for rx, _ in fams), "the R15 static-S name must not decode: one form"
+    assert not any(rx.match("TopPMaskWordx128256s16_v1") for rx, _ in fams), "the static-S name must not decode: one form"
 
 
 # ------------------------------------------------------------------------------------------------ 6. the relation

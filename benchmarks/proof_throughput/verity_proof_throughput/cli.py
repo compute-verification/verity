@@ -9,7 +9,7 @@
     baseline [--workload W] [--lock RESULT ...]          the pinned hill-climb baseline (baseline.json), or pin one sweep
     instances --workload W [--write]                     regenerate the workload's frozen instance manifest
     workloads                                            the VU families and their B caps
-    zk                                                   what configuration 2 measures today (job.sh ZK=1: --zk sessions under the firewall)
+    zk                                                   what configuration 2 measures today (job.sh ZK=1: --zk sessions under the ZK server)
 
 The job scripts call the rest: ``population``, ``check-instances``, ``partition``, ``staged``, ``probe``, ``put-bundle``,
 ``fetch-bundle``, ``lean-verdict``, ``point-result``, ``zk-point`` and ``profile-phases``.

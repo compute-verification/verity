@@ -287,7 +287,7 @@ SHA512 = Instance("hm96-sha512/v1", "sha512", 192, b"verity/hm96-sha512/salt/v1\
                   b"verity/hm96-sha512/key/v1\0", "verity/hm96-sha512/scheme/v1")
 INSTANCES = {i.name: i for i in (SHA256, SHA512)}
 
-# hm96-sha256/v1's names, as PR #88 published them.
+# hm96-sha256/v1's names, as first published.
 NAME = SHA256.name
 DIGEST_BYTES = SHA256.digest_bytes
 ROWS = SHA256.rows

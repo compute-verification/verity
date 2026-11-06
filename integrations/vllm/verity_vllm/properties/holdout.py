@@ -3,10 +3,10 @@
     uv run verity-vllm holdout --generate --case B0 --model HuggingFaceTB/SmolLM2-135M --vocab 49152 --n 3 --seed 20260917 --out out/gen/holdouts/B0
     uv run verity-vllm holdout --assemble RUN_DIR/holdouts --out RUN_DIR/holdouts.json
 
-After a lane says it is done, the ORCHESTRATOR (never the lane) generates fresh workloads — new token values, prompt/decode
+Once an adapter is done, the ORCHESTRATOR (never the adapter's author) generates fresh workloads — new token values, prompt/decode
 lengths that straddle kernel-specialization boundaries (the FA2 kBlockN 64/128 rows, the persistent-matmul tile edges),
-new request ids and, for batching lanes, new batch arrangements — and reruns the full driver on them.  A lane cannot encode its
-development trace (`if rows == 32`, fixture-specific mappings, output-specific hacks) into an adapter that survives this.
+new request ids and, for batched workloads, new batch arrangements — and reruns the full driver on them.  No adapter that encodes a
+development trace (`if rows == 32`, fixture-specific mappings, output-specific hacks) survives this.
 Holdouts carry NO expected tokens: the clean control run of the sealed driver is the only reference.
 
 `--assemble` collects `<dir>/<holdout>/gates.json` files (written by `run_config.py` for each holdout run) into the

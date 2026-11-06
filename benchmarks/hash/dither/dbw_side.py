@@ -1,6 +1,6 @@
-"""The remote bandwidth audit beside sbench's served arms on the GPU they share (`sbench.py --bw-passes GIB`, `dbw.py`).
+"""PoUB beside sbench's served arms on the GPU they share (`sbench.py --bw-passes GIB`, `dbw.py`).
 
-One process stands in for the auditor: the remote audit's own verifier (`benchmarks/remote_session/verifier.py`'s
+One process stands in for the auditor: PoUB's own verifier (`benchmarks/remote_session/verifier.py`'s
 `Verifier`, its coins from an in-process challenger, the Lean verifier of record deciding) on a loopback socket. Its
 prover is `prover.py`, unmodified, on the GPU sbench leased (CUDA_VISIBLE_DEVICES inherited) and on --prover-cpus,
 over a store of GIB GiB of seeded payload under kv.cu's p1024 masked codec (`device.py`, the store `run.sh` registers on
@@ -53,7 +53,7 @@ def emit(event: str, **kw) -> None:
 
 
 def lines(r: dict) -> dict:
-    """A session's verdict, pass timeline and memory lines, without its draws: what sbench's report reads."""
+    """A session's verdict, pass timeline and memory lines, without its samples: what sbench's report reads."""
     seen = r.get("windows_seen", [])
     passes = []
     for w in seen:

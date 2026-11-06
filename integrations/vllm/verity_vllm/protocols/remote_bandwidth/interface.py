@@ -11,15 +11,15 @@ receipt     a keyed hash of one block read in a pass, `keyed(seed)(j, block, z)`
             prior tile's output reads (None for receipts that bind only the block)
 registration  putting a block into the store: its bytes are the codec's encoding of a payload a `Source` names; every
             registration is a record in the log, and `Registration.root` commits the log
-window      the interval of one challenge σ: `begin_window(σ)` ... `end_window()`, which the verifier's boundary
-            message ends (the next window's challenge, or the close after the last)
+window      the interval of one challenge chal_t: `begin_window(chal_t)` ... `end_window()`, which the verifier's
+            boundary message ends (the next window's challenge, or the close after the last)
 pass        one read of the live store: weights, the batch's written KV, and filler to top up, no block twice; its seed
-            is chained, seed_j = H(σ, j, commitment before it) across windows (the verifier's registration digest
+            is chained, seed_j = H(chal_t, j, commitment before it) across windows (the verifier's registration digest
             before the session's first), so pass j's receipts can't start before the pass before it is committed
 segment     some of one region's blocks read in a pass, in read order; one reader (a fused GEMM, attention, the filler
             sweep) receipts it.  The store lays a pass's segments out as subtrees of its tree (whole leaves, a power
             of two of them, from a multiple of their number), but for a tail of the parts' last blocks
-commitment  a pass's root, the remote bandwidth driver's: frame-v3-sha512 over leaves of 16 receipts in plan order, each
+commitment  a pass's root, the PoUB driver's: frame-v3-sha512 over leaves of 16 receipts in plan order, each
             hidden as an hm96-sha512/row/v2 leaf under a salt, bound to the pass's seed and the plan's digest (over
             the plan's runs of store indices)
 opening     for a sampled (pass, position): the block's bytes as read, its receipt, its leaf's receipts and salt, the

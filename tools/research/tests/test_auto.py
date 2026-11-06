@@ -46,6 +46,8 @@ def test_cpu_3s_research_pool_takes_a_job_while_cpu_1s_and_cpu_5s_are_full():
     full = pool(*(slot(f"r{i}", held=True) for i in range(8)), waiters=22)
     target, why = auto.choose({N2: share(waiters=5), CPU1: full, CPU5: full, cpu3: pool(slot("b4", cpus="0-15", mem=48))}, 4, 16)
     assert target == (cpu3, "research") and why.endswith("a slot is free there now")
+    target, _ = auto.choose({N2: share(waiters=5), CPU1: full, CPU5: full, cpu3: pool(slot("r0", cpus="0-15", mem=None))}, 4, 16)
+    assert target == (cpu3, "research"), "27 Oct 23:45Z: cpu-3's slots declare no mem=, which slot.py raises to the run's --mem-gb"
 
 
 def test_with_nothing_free_the_pool_with_the_shortest_line_per_fitting_slot_wins():
@@ -87,6 +89,8 @@ def test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_t
     claims.mkdir()
     monkeypatch.setattr(cores, "CLAIMS", claims)
     monkeypatch.setattr(cores, "CPU_ROOT", tmp_path / "no-topology")          # each CPU its own core
+    monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path / "no-disk"))         # no such directory: the probe skips the disk check
+    monkeypatch.setattr(remote, "RUNS_VIA_SLOT_FILE", str(tmp_path / "no-via-slot"))   # a slot-only host (cpu-1) carries the real one
     held = [cores.locked(claims / "r1.cpus", "48-91\n"), cores.locked(claims / "wait.01.r2", "4\n")]
     (claims / "gone.cpus").write_text("92-95\n")                               # nobody holds it: a run that ended
     src = tmp_path / "src"
@@ -103,8 +107,35 @@ def test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_t
     assert docs[CPU1] == {"research": {"file": "/workspace/research/locks/research/slots", "slots": [], "waiters": []}}
     assert (claims / "gone.cpus").exists(), "the probe only reads: a leftover is the next taker's to remove"
     assert auto.read(src, 8, reach=lambda name: [sys.executable, "-"])[N2]["share"]["fits"] is True, "nothing holds them now"
+    monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path))
+    monkeypatch.setattr(auto, "MIN_FREE_INODES", 2**62)
+    short = auto.read(src, 4, reach=lambda name: [sys.executable, "-"])[CPU1]["research"]
+    assert short["error"].startswith(f"disk: {tmp_path} has ") and "inodes free" in short["error"], "27 Oct: cpu-5 out of inodes"
+    target, why = auto.choose({N2: share(free=8), CPU1: {"research": short}}, 4, 16)
+    assert target is None and "disk:" in why, "a pool on a full disk is skipped like one that can't be read"
     failing = auto.read(src, 4, reach=lambda name: [sys.executable, "-c", "import sys; sys.exit('no python here')"])
     assert failing == {m: "exit 1: no python here" for m in (N2, *(machine for machine, _ in auto.SPILL))}
+
+
+def test_a_node_2_that_takes_runs_only_through_a_check_slot_is_never_chosen(tmp_path, monkeypatch):
+    """A node 2 carrying /etc/vy/runs-via-slot refuses a run placed on its share, so its share reads as unread."""
+    monkeypatch.setattr(cores, "CLAIMS", tmp_path / "claims")
+    monkeypatch.setattr(cores, "CPU_ROOT", tmp_path / "no-topology")
+    monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path / "no-disk"))
+    marker = tmp_path / "runs-via-slot"
+    marker.write_text("slot only\n")
+    monkeypatch.setattr(remote, "RUNS_VIA_SLOT_FILE", str(marker))
+    src = tmp_path / "src"
+    (src / auto.DESCRIPTION).parent.mkdir(parents=True)
+    (src / auto.DESCRIPTION).write_text(f'[[shares]]\nproject = "verity"\nnode = "{N2}"\ncpus = "48-95"\n')
+    (src / auto.SLOT_PY).parent.mkdir(parents=True)
+    (src / auto.SLOT_PY).write_text("def status_doc(now):\n    return {'file': 'f', 'slots': [], 'waiters': []}\n")
+    n2 = auto.read(src, 4, reach=lambda name: [sys.executable, "-"])[N2]
+    assert "runs-via-slot" in n2["share"]["error"]
+    target, why = auto.choose({N2: n2, CPU1: pool(slot("r0", held=True), waiters=9)}, 4, 16)
+    assert target == (CPU1, "research") and f"{N2}'s share wasn't read" in why
+    with pytest.raises(auto.Unplaceable):
+        auto.choose({N2: n2, CPU1: "no answer in 30 s"}, 4, 16)
 
 
 def _auto_repo(tmp_path: Path) -> Path:

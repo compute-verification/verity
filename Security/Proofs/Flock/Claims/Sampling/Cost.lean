@@ -1,5 +1,7 @@
-import Definitions.Claims.Sampling
-import Proofs.Flock.Claims.Sampling.Extract
+module
+
+public import Definitions.Claims.Sampling
+public import Proofs.Flock.Claims.Sampling.Extract
 
 /-!
 # The sampling extractor's rerun programs: reruns, own calls, and what they return
@@ -13,6 +15,8 @@ The claims block's extractor `E` (`Definitions.Claims.Sampling`) is built of `of
   commitment's check under its roots, and that check's calls are among its own.
 * `waitAccC_sum`, `accExp_le`: the weights of a wait's accepted draws, `ε · G(K, a) ≤ (k − a) · 𝔼[1[acc] · g]`.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 
@@ -255,7 +259,7 @@ theorem flatMapRP_mem {R β γ : Type} (H : Msg → Msg) (run : R → Trace) (f 
 
 /-- **What `checkRevealed` returns passes its check**: each pair is one of `rs`, its opening passes the commitment's
 check under its roots, and that check's calls are among `checkRevealed`'s own. -/
-theorem checkRevealed_mem {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : Commitment Bool)
+theorem checkRevealed_mem {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : CommitmentScheme Bool)
     (rs : List (List Msg × Opening Bool)) :
     ∀ p ∈ ((checkRevealed (R := R) Cm rs).eval H run).1, p ∈ rs ∧ Cm.Opens H p.1 p.2 = true ∧
       ∀ q ∈ ((Cm.opens p.1 p.2).eval H).2, q ∈ ownLog H run (checkRevealed (R := R) Cm rs) := by
@@ -269,7 +273,7 @@ theorem checkRevealed_mem {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm :
     exact ⟨hp', hok, fun q h => hq q (List.mem_append_left _ h)⟩
   · simp at hc
 
-theorem checkRevealed_runs {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : Commitment Bool)
+theorem checkRevealed_runs {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : CommitmentScheme Bool)
     (rs : List (List Msg × Opening Bool)) : ((checkRevealed (R := R) Cm rs).eval H run).2.2 = 0 := by
   unfold checkRevealed
   rw [flatMapRP_runs]

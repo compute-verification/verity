@@ -1,4 +1,4 @@
-"""Lane SD: `Accept`/`Advance` semantics against a Python reference, and the TINY `VerifyBranch` / `ServeSpec`
+"""`Accept`/`Advance` semantics against a Python reference, and the TINY `VerifyBranch` / `ServeSpec`
 programs build, evaluate and satisfy the static-schedule obligation (`accepted == A[s]`) when `A` is taken
 from an evaluation of the program itself."""
 

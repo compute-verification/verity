@@ -1,4 +1,4 @@
-"""[R16 sys SYS-05] The device weights registration produces the SAME per-tensor roots as the host path -- byte for byte -- over sizes with
+"""The device weights registration produces the SAME per-tensor roots as the host path -- byte for byte -- over sizes with
 and without a shorter tail leaf, single-leaf tensors, odd leaf counts (lift rule), both chunk sizes the committer uses (256 GPU-tree, 4096),
 and every dtype view the model carries.  CUDA + a compiler required (the extension is JIT-built); skipped elsewhere."""
 from __future__ import annotations

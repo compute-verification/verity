@@ -4,7 +4,7 @@ the auditor's host signed rather than from the verifier's stamps.
 
 **Who computes it** (`line_by`, `LINE_BY`). The Lean verifier (`remote-audit-verifier`'s `line_record` request,
 `RemoteAudit.Line.lineOfRecordOn` at the record's `groups_per_coin` g, with its W from `RemoteAudit.Pooled` over the
-record's draws) computes each session's line off its record from
+record's samples) computes each session's line off its record from
 the inputs `verifier.recorded_inputs` reads, and `remote_bandwidth.line` computes it beside it from the same JSON
 (`line.line_of_record`):
 the two are compared exactly, every rational as text in lowest terms and every integer, and a session where they
@@ -12,19 +12,19 @@ differ refuses the run's line, naming both values (`Disagree`). Floats appear on
 rounded for display. `--line-by python` computes it in `line.py` alone, a reading that is never of record: the
 `memory-line-of-record` label needs `line_by` lean.
 
-Group g's coin σ_g left the challenger at its release log's `released_at` for challenge coin g, and window g's last
+Group g's coin chal_g left the challenger at its release log's `released_at` for challenge coin g, and window g's last
 root reached it at the first `received_at` of a request naming it by place (`auditor_seen`). Openings coin g's request
-names it (`audit.Session.close` asks for the coin after the window's last root), and a paced window is drawn at its
-k-th root (its boundary leaves before it), so that request leaves as the root arrives; for k = 1, σ_(g+2)'s request names the same root too. At
-one window in flight (`audit.Pace.in_flight` 1) σ_(g+1)'s request names it and openings coin g's leaves once σ_(g+1)
-is back, so this reading, which doesn't take f, ends L_g about a round trip to the challenger past s_(g+1). Drawn
-G > 1 windows a coin (`groups_per_coin`), openings coin c's request names only the last root of draw c's last window,
-and another window's A_g is the first request that leaves after its last root, σ_(g+2)'s at the earliest, which above
-k = 1 names a root of window g + 1 and so ends L_g later than the window did. Both
-times are the challenger's monotonic clock in its release log, whose lines its close signs (`challenger.session_of`),
-and whose close, record and refused hellos the auditor's ledger sealed at the session's end (`remote.trusted_session`).
-So L_g = max(A_g, s_(g+1)) − s_g on the challenger's clock holds group g's reads: they come after its coin, whose seed
-they take, and before its last root, which chains them.
+names it (`audit.AuditRun.close` asks for the coin after the window's last root), and a paced window is drawn at its
+k-th root (its boundary leaves before it), so that request leaves as the root arrives; for k = 1, chal_(g+2)'s request
+names the same root too. At one window in flight (`audit.Pace.in_flight` 1) chal_(g+1)'s request names it and openings
+coin g's leaves once chal_(g+1) is back, so this reading, which doesn't take f, ends L_g about a round trip to the
+challenger past s_(g+1). Drawn G > 1 windows a coin (`groups_per_coin`), openings coin c's request names only the last
+root of draw c's last window, and another window's A_g is the first request that leaves after its last root,
+chal_(g+2)'s at the earliest, which above k = 1 names a root of window g + 1 and so ends L_g later than the window did.
+Both times are the challenger's monotonic clock in its release log, whose lines its close signs
+(`challenger.session_of`), and whose close, record and refused hellos the auditor's ledger sealed at the session's end
+(`remote.trusted_session`). So L_g = max(A_g, s_(g+1)) − s_g on the challenger's clock holds group g's reads: they come
+after its coin, whose seed they take, and before its last root, which chains them.
 
 Beside the times the line reads the Lean verifier's record of the session (`verifier.lean_record`, `verifier.json`'s
 `lean_record`): each group's passes, its windows' receipts and draws, whose pooled bound (`remote_bandwidth.pooled`)
@@ -32,15 +32,15 @@ is its wrong receipts, and its registered blocks, the registration's; and the ve
 held bytes by kind (`ledger.memory`), which the record doesn't hold (they need each pass's plan and the store's
 regions). The verifier runs on the audit's machine, not
 the auditor's host, so these rest on its verdict, which the session's transcript (`verifier.py --transcript`) lets the
-auditor replay offline (the remote audit's `lean/tests/replay.py transcript`). The verifier's stamps are read only to
+auditor replay offline (PoUB's `lean/tests/replay.py transcript`). The verifier's stamps are read only to
 cross-check the challenger's: each coin interval on both clocks, their rates, and each group's L on both.
 
 The ledger check: its longest head verified under the pinned key (`ledger_head`, `verify_ledger`, `verify_periods`);
 the period's lane, cap and circuit, and that it closed; each session reserved and opened by the lane for the peer under
-the pin at epoch k, opened at its window root R_k, ended closed with no refused hello, inside the period; σ_0 asked
+the pin at epoch k, opened at its window root R_k, ended closed with no refused hello, inside the period; chal_0 asked
 after R_k, and each coin released after its root's receipt. The peer is the verifier machine's name at the challenger
-host, as the run's own record gives it (`peer_of`): vy-nebius-1 for a verifier there, vy-auditor-1 for a host run.
-`--peer` overrides it, and a gate run whose record names none is refused. A session served by `--challenger serve`
+host, as the run's own record gives it (`peer_of`): the node's own name for a verifier on a node, the verifier host's
+for a host run. `--peer` overrides it, and a gate run whose record names none is refused. A session served by `--challenger serve`
 (the verifier's machine) has no ledger: its log is read under the key its run wrote (`session_of`) and its line is not
 the auditor's.
 
@@ -50,18 +50,18 @@ the auditor's.
 - *credited*: its window reads through `challenger.credited_session` (its pin first, as *pinned* reads it) with the
   descriptor of the verifier that ran it, `verity/remote-bandwidth/v0 verifier tree <tree>`, `<tree>` being
   `git rev-parse COMMIT:verity/core/protocols/remote_bandwidth` of the run's recorded commit (`--commit`), so it counts
-  only toward a period that committed that verifier (PRF-126); and that commit is on the auditor's first-parent list
+  only toward a period that committed that verifier; and that commit is on the auditor's first-parent list
   of main (`--main`), as the challenger host's pin must be, so the verdict is that of a tree main's check ran on. A host
   run's request.json beside OUT records the commit its verifier ran at (`pinned`), and a `--commit` other than it is
   refused;
 - *complete*: its window's end, and its period's close, are complete: the challenger released every coin it committed
-  to, in every window of the period (PRF-132);
+  to, in every window of the period;
 - *accepted*: the Lean's verdict (the record's `verdict` lean or both, no disagreement) accepted it, since a refused
   session can still close complete;
 - *pinned*: its window reads through `challenger.pinned_session` with the challenger host's pins log (`--pins`, its
   lines as the gate served them) and the auditor's own first-parent list of main (`--main FILE`, `git rev-list
   --first-parent origin/main`): its open sealed the log as it stood, one of the sealed lines records the open's
-  `pinned`, and that commit is on main's first-parent line, a tree main's check ran on (RT4-INT-40, CMP-74). With no
+  `pinned`, and that commit is on main's first-parent line, a tree main's check ran on. With no
   log or no copy of main, no session is pinned or credited;
 - *bound*: the registered store is the model's (`bound_check`, the run's, so every session's): the verifier bound it
   (`verifier.py --model`, verifier.json's `binding`), refusing any hello whose payload root isn't that of the store the
@@ -85,7 +85,7 @@ and `sketch_outside` every F the run's sessions were charged at.
 parts beside it: the windows' profile δ, AuditRO's 2^-slack a pass (the slack its ledger was charged at: 67 bits, and
 41 in a record that doesn't say, where it dominates: 2^-29.95 over a 60 s session's 2118 passes), the coin
 commitment's hiding terms n·2^-191, the receipts' binding term at the session's bounds, δs, the sketch's, and the
-draw's rejection Σ_t k_t/2^64, k_t the session's `samples` (the hiding, the binding and the rejection added to the
+sample's rejection Σ_t k_t/2^64, k_t the session's `samples` (the hiding, the binding and the rejection added to the
 total of a record whose ledger didn't charge them), plus the windows' PRF advantages by name (`NAMED_TERMS`, claim
 prf/sha-512), which have no number and are in no total. The line at each T, and the line of record over every T
 (`credit`'s `error`), fail with at most the sum of their credited sessions' totals: the least share is read off
@@ -97,7 +97,7 @@ certifiers cover the gate node's boundary. A relay prover, a thin node forwardin
 the store and computes the receipts, breaks that premise alone. The error's binding term takes the gap `binding-split`
 as closed (split_t = 0), which the deployed protocol doesn't yet ensure, so every line is conditional on that too,
 grounded or not. The `memory-line-of-record` label names what the file names (`line_label`: `lean conditional on
-NoOutsideCompute, binding-split`), and `research data label` refuses one that doesn't.
+NoOutsideCompute, binding-split`), and the evidence store's labeller refuses one that doesn't.
 
 **The lockdown** (`--lockdown FILE`, `read_lockdown`, `lockdown_check`). Infra's record of the provider's lockdown of
 the gate node: the security group's allow list, each interval it was applied, with infra's records, and whether the
@@ -116,7 +116,7 @@ record. The verifier's clock's reading holds the times seen to the record's; the
 
 **The boundary** (`--boundary FILE --boundary-pin SHA512`, off by default; `boundary_check`). With it, a sixth check
 refuses a session's credit when the network certifiers' records of the gate node's boundary links over its credited
-span, from σ_0's release to its last root's arrival on the challenger's clock, show ingress other than the verifier's
+span, from chal_0's release to its last root's arrival on the challenger's clock, show ingress other than the verifier's
 messages. It reads the certifier's `CertifiedRecord` of each boundary link's ingress window covering the span
 (`certifier.certificate`: the head's `counts` and `root`), each held to one record with a complete status, signed under
 the certifier's key in its session (`certifier.audit.Audit.check_ingress_link`), and compares its real frames with the
@@ -192,9 +192,9 @@ CONDITIONAL_ON = {"NoOutsideCompute": (
     "binding-split": (
     "the receipts' binding term (ledger.binding, Accounting.Guarantees.Remote.ReceiptsBindingOfCR) is charged with "
     "split_t, the chance that two runs of the prover from window t's cut on independent openings coins root the window "
-    "differently, taken as 0; the deployed prover holds the coin commitment and may compute a window's roots from it, "
-    "so that holds only once the verifier sends it no commitment to a window's openings coin before its roots "
-    "(PROTOCOL.md §8)")}
+    "differently, taken as 0; the prover is sent no coin commitment before the session's end (coins.Released, "
+    "audit.AuditRun.disclose), so its roots can't depend on an openings coin before it is released, and what remains "
+    "is the statement that the play fixes each window's receipts by its cut (PROTOCOL.md §8)")}
 """What the line's error rests on that no record of the run discharges, each with what it says: the premises of its
 statement and the gaps in its charge (`GAPS`). A line (`auditor_line.json`'s `conditional_on`, `credit.md`) is
 conditional on them, `NoOutsideCompute` unless a lockdown grounds it (`GROUNDED`), and the `memory-line-of-record`
@@ -248,8 +248,8 @@ def requested_pin(out: Path) -> str | None:
 
 def peer_of(out: Path, v: dict) -> str:
     """The challenger peer the verifier ran as (`verifier.py --challenger-peer`), from the run's record: each gate
-    session's in `v` (verifier.json's `challenger.peer`, `challengers.Gate.finish`), and a host run's `request.json`
-    beside `out` (its `argv`; its `peer` is the audited node). Refused unless the record names exactly one."""
+    session's in `v` (verifier.json's `challenger.peer`, `challengers.ChallengerGate.finish`), and a host run's
+    `request.json` beside `out` (its `argv`; its `peer` is the audited node). Refused unless the record names exactly one."""
     named = {(s.get("challenger") or {}).get("peer") for s in v["sessions"]
              if (s.get("challenger") or {}).get("challenger") == "gate"}
     req = out.parent / "request.json"
@@ -282,14 +282,14 @@ def release_log(lines: list[str]) -> dict[str, dict[str, list]]:
 def auditor_seen(lines: list[str], seen: list[dict], per_coin: int = 1) -> tuple[list[dict], dict]:
     """`seen` (a session's `windows_seen`) with each group's coin and last root on the challenger's clock: `released_ns`
     challenge coin g's release, `arrivals_ns` the first receipt of the requests that name the window's last root by
-    their place, openings coin g's and, when it names the same root, σ_(g+2)'s; and which family's came first. Both
+    their place, openings coin g's and, when it names the same root, chal_(g+2)'s; and which family's came first. Both
     leave only once that root has come, so a root the prover repeats can't make A_g early, as an earlier request
-    naming the same value (σ_(g+1)'s, or another window's) would.
+    naming the same value (chal_(g+1)'s, or another window's) would.
 
-    Drawn `per_coin` G > 1 windows a coin (`groups_per_coin`), only a draw's last window closes, so openings coin c's
+    Drawn `per_coin` G > 1 windows a coin (`groups_per_coin`), only a sample's last window closes, so openings coin c's
     request names the last root of draw c's last window and no request names another window's by place. A_g is then
     the first receipt of the requests that leave only once window g's last root has come: openings coin g // G's and
-    σ_(g+2)'s, which at k = 1 names window g's root and above it a root of window g + 1, whose roots come after g's.
+    chal_(g+2)'s, which at k = 1 names window g's root and above it a root of window g + 1, whose roots come after g's.
     That time is at or after A_g, so L_g is at least window g's own and the line credits no more."""
     fam = release_log(lines)
     ch, op = fam.get("challenge"), fam.get("openings")
@@ -414,7 +414,7 @@ def shares(session: dict, registration: dict, host_bytes: int, rates: dict, lean
 
 
 def transcript_of(out: Path, s: dict) -> dict | None:
-    """Session `s`'s transcript (`lean_verifier.Transcript`'s file) where the run's out/ keeps it: its name under
+    """Session `s`'s transcript (`lean_verifier.DifftestCase`'s file) where the run's out/ keeps it: its name under
     `out/transcripts/`, gzipped (`host.gzip_transcripts`) or not, held to the sha256 verifier.json gives it; None where
     there is none (a host run fetched without `--transcripts`)."""
     t = s.get("transcript") or {}
@@ -454,7 +454,7 @@ def session_error(session: dict) -> dict:
     `declared`), read and never recomputed, so it charges whatever the ledger does (the F the node states among it);
     beside it its six parts (`ledger.delta_parts`): `delta_profile`, the windows' profile δ, `delta_slack`, AuditRO's
     2^-slack a pass, `delta_hiding`, the coin commitment's Σ_t hide_t, `delta_binding`, the receipts' binding term,
-    `delta_sketch`, δs, and `delta_rejection`, the draw's Σ_t k_t/2^64. A record that carries the parts (verifier.json's
+    `delta_sketch`, δs, and `delta_rejection`, the sample's Σ_t k_t/2^64. A record that carries the parts (verifier.json's
     `delta`) must sum to the total as the ledger adds them, or there is no line (`Disagree`); one written before them
     gives the profile δ from its windows (`recorded_windows`) and the slack from its passes at the slack its ledger was
     charged at (its `inputs`' `slack_log2`, else `V.UNRECORDED_SLACK_LOG2`), both exact, and δs as the rest. A ledger
@@ -515,10 +515,10 @@ def recorded_append_coins(session: dict) -> int | None:
 
 
 def recorded_binding(session: dict) -> Fraction:
-    """`ledger.binding` from an accepted session's record, at the session's bounds (`ledger.binding_over`): its draws
-    (`V.recorded_windows`, a window each at `groups_per_coin` g = 1), the most receipts a draw of it can have (g times
+    """`ledger.binding` from an accepted session's record, at the session's bounds (`ledger.binding_over`): its samples
+    (`V.recorded_windows`, a window each at `groups_per_coin` g = 1), the most receipts a sample of it can have (g times
     `ledger.window_receipts`, at its pace's k, its registered blocks and, when its append coins aren't recorded
-    (`recorded_append_coins`), the codec's `max_blocks`) and its draw cap `samples`, F·C the queries its sketch term
+    (`recorded_append_coins`), the codec's `max_blocks`) and its sample cap `samples`, F·C the queries its sketch term
     (`sketch_failure`) charged; 0 for a record with no sketch term, which states no C."""
     sf = (session.get("ledger") or {}).get("sketch_failure")
     if not sf:
@@ -622,11 +622,11 @@ def read_boundary(path: Path, pin: str) -> dict:
 
 def boundary_check(b: dict, seen: list[dict]) -> dict:
     """Whether the gate node's boundary links let in nothing but the verifier's messages over a session's credited span,
-    from σ_0's release to its last root's arrival on the challenger's clock (`seen`, `auditor_seen`'s), by the network
-    certifiers' records `b` (`read_boundary`'s): the ingress windows that meet the span cover it, and each boundary
-    link's record of each is one record with a complete status, signed under the certifier's key in its session, on its
-    grid (`Audit.check_ingress_link`), whose real frames are as many as the verifier's messages framed for that
-    link-window, under the same root (`frames_root`)."""
+    from chal_0's release to its last root's arrival on the challenger's clock (`seen`, `auditor_seen`'s), by the
+    network certifiers' records `b` (`read_boundary`'s): the ingress windows that meet the span cover it, and each
+    boundary link's record of each is one record with a complete status, signed under the certifier's key in its
+    session, on its grid (`Audit.check_ingress_link`), whose real frames are as many as the verifier's messages framed
+    for that link-window, under the same root (`frames_root`)."""
     lo = seen[0]["released_ns"]
     hi = max([lo, *(t for w in seen for t in w["arrivals_ns"])])
     meet = sorted(((s, e, w) for w, s, e in b["windows"] if s <= hi and lo < e))
@@ -724,7 +724,7 @@ def conditional_on(rows: list[dict]) -> dict:
 
 def line_label(doc: dict) -> str:
     """The `memory-line-of-record` value naming the doc's line: who computed it and what it is conditional on, as
-    `research data label` holds it to this file (`vocab.check_line_of_record`)."""
+    the evidence store's labeller holds it to this file (`vocab.check_line_of_record`)."""
     return f"{doc['line_by']} conditional on {', '.join(doc['conditional_on'])}"
 
 
@@ -737,10 +737,10 @@ def with_check(credit: dict, name: str, check: dict) -> dict:
 def clock_rate_ppm(Rv: list[int], Ra: list[int]) -> float | None:
     """The auditor's clock's rate over the verifier's, less 1, in ppm, from each coin's release on both (`Rv`, `Ra`):
     the median of the rates between each coin and the one half the session after it. The verifier stamps a coin it
-    fetches alone (σ_0 and σ_1 at k = 1) before asking for it, and one asked ahead (`coins.Coins.ahead`) after it came
-    back (`audit.Session._release`), so those first coins sit a round trip off the rest. A rate taken end to end reads
-    that round trip over the session's span (−441 ppm at 60 s and −8989 ppm at 1 s on gate run 7); here it moves two
-    of the pairs. None for a session of fewer than four coins."""
+    fetches alone (chal_0 and chal_1 at k = 1) before asking for it, and one asked ahead (`coins.SessionCoins.ahead`)
+    after it came back (`audit.AuditRun._release`), so those first coins sit a round trip off the rest. A rate taken end
+    to end reads that round trip over the session's span (−441 ppm at 60 s and −8989 ppm at 1 s on gate run 7); here it
+    moves two of the pairs. None for a session of fewer than four coins."""
     h = len(Rv) // 2
     rates = [((Ra[i + h] - Ra[i]) / (Rv[i + h] - Rv[i]) - 1) * 1e6 for i in range(h) if Rv[i + h] != Rv[i]]
     return statistics.median(rates) if h >= 2 and rates else None
@@ -760,7 +760,7 @@ def cross_check(verifier_seen: list[dict], auditor: list[dict]) -> dict:
 
 def log_checks(lines: list[str], window_root: str) -> dict:
     """What the release log shows about the order of coins and roots: each coin released after its request's receipt,
-    the clock never running back, and σ_0 asked after the session's window root."""
+    the clock never running back, and chal_0 asked after the session's window root."""
     fam = release_log(lines)
     times = [t for i in range(1, len(lines) - 1, 2)
              for t in (json.loads(lines[i])["received_at"], json.loads(lines[i + 1])["released_at"])]
@@ -1131,10 +1131,9 @@ def main(argv: list[str] | None = None) -> int:
                     f"{VERIFIER_TREE} tree names the verifier a gate run's period must have committed")
     ap.add_argument("--repo", type=Path, default=HERE.parents[1], help="a git checkout holding --commit")
     ap.add_argument("--pins", type=Path, help="the challenger host's pins log as the gate served it (`pins`), a line a "
-                    "pin: without it no session is pinned (RT4-INT-40)")
+                    "pin: without it no session is pinned")
     ap.add_argument("--main", type=Path, metavar="FILE", help="the auditor's own first-parent list of main, a commit a "
-                    "line (`git rev-list --first-parent origin/main` in its checkout): without it no session is pinned "
-                    "(CMP-74)")
+                    "line (`git rev-list --first-parent origin/main` in its checkout): without it no session is pinned")
     ap.add_argument("--model-pin", type=Path, metavar="FILE",
                     help="the model the store must be bound to when the audit's period signs none: a pin in the "
                          "auditor's model registry's shape (`remote_bandwidth.store.read_pin`); without either no session is "
@@ -1154,7 +1153,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="compute each line in the Lean verifier, held exactly to line.py's (the line of record), or in "
                          "line.py alone (a reading, not of record)")
     ap.add_argument("--lean-exe", type=Path, metavar="PATH",
-                    help="the remote-audit-verifier executable (default: `lake build` it in the remote audit's package)")
+                    help="the remote-audit-verifier executable (default: `lake build` it in PoUB's package)")
     ap.add_argument("--boundary", type=Path, metavar="FILE",
                     help="the network certifiers' records of the gate node's boundary links (`read_boundary`): refuse "
                          "a session's credit when they show ingress other than the verifier's messages over its span "

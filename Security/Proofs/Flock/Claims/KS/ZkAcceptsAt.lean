@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.ZkDrawJ
-import Proofs.Flock.Claims.KS.ConflictRun
-import Proofs.Flock.Claims.KS.PlainWrP
+module
+
+public import Proofs.Flock.Claims.KS.ZkDrawJ
+public import Proofs.Flock.Claims.KS.ConflictRun
+public import Proofs.Flock.Claims.KS.PlainWrP
 
 /-!
 # An accepted run of the deployed `--zk` verifier, at the statement's draw
@@ -15,6 +17,8 @@ statement's only up to key order (`Custody.checks_draw`). Where the two are equa
 `AcceptsZK` (`acceptsAt_iff_acceptsZK`), so `liveAcceptsZK_of_runAt` gives `LiveAcceptsZK` at every outcome carrying the
 last message's transcript.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

@@ -1,5 +1,7 @@
-import Proofs.Nci.Cover.FanOutWitness
-import Proofs.Nci.Cover.PartialSumKeyed
+module
+
+public import Proofs.Nci.Cover.FanOutWitness
+public import Proofs.Nci.Cover.PartialSumKeyed
 
 /-!
 # The partial-sum bounds: their hypotheses can hold together
@@ -10,6 +12,8 @@ cube of one entry, whose accumulation is the product's gate 14, satisfies the pr
 those of `PartialSumCoverBound` at `f = a = 1` (`ActivationReads`, by `KeyedActivationReads`), with a cover by
 inference blocks one of which computes the product whole.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.SecurityProofs
 

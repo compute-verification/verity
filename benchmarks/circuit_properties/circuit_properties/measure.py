@@ -1,7 +1,7 @@
 """a_out, a_in, |𝒥| and s_× of a circuit's counted operations, exactly, and which of them a partition computes whole.
 
 The circuit is a Program in the `verity-ir/descriptor/v1` format (anything with a lowered ``root``: `Program`, or
-`codec.decode_program`'s result), read through its canonical layout (PROTOCOL.md §6), the format NCI's check reads gate by
+`codec.decode_program`'s result), read through its canonical layout (PROTOCOL.md §6), the format the inference-only check reads gate by
 gate and `Nci.Cover.Circuit` formalizes. A served layer is 10^9 to 10^12 Boolean gates, so nothing is flattened except one
 counted operation's Definition (`ops.OpShape`): every quantity is summarized once per Definition and context and mapped
 through the call hierarchy, which equals the gate-by-gate definitions `flat` computes on small circuits (the tests hold
@@ -36,7 +36,9 @@ from .ops import (
     OpShape,
     Site,
     _bits,
+    ids,
     is_constant,
+    matches,
     member_refs,
     op_shape,
     param_bases,
@@ -118,17 +120,12 @@ class Whole:
         return sum(self.per_block.values())
 
 
-def _ids(fid: str) -> tuple[str, str]:
-    return (fid.split("{", 1)[0], fid)
-
-
 class Measurer:
     """Summaries of one program under one designation, memoized per Definition and context."""
 
     def __init__(self, program, designation: Designation) -> None:
         self.root: SpecializedDefinition = program.root
-        fid = getattr(program, "program_fn_id", None) or getattr(self.root, "program_fn", self.root).id
-        self.root_ids = _ids(fid)
+        self.root_ids = ids(getattr(program, "program_fn_id", None) or self.root)
         self.d = designation
         self.sites: tuple[Site, ...] = designation.sites
         self._sum: dict = {}
@@ -142,10 +139,9 @@ class Measurer:
 
     # -- matching ---------------------------------------------------------------------------------------------------
     def match(self, rx: re.Pattern | None, fn) -> bool:
-        if rx is None:
-            return False
-        names = self.root_ids if fn is self.root else _ids(fn.id) if isinstance(fn, SpecializedDefinition) else (fn.id,)
-        return any(rx.fullmatch(i) for i in names)
+        if fn is not self.root:
+            return matches(rx, fn)
+        return rx is not None and any(rx.fullmatch(i) for i in self.root_ids)
 
     def enter(self, fn, ctx: tuple) -> tuple:
         return tuple(c or self.match(s.within_rx, fn) for s, c in zip(self.sites, ctx))

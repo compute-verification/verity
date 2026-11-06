@@ -1,12 +1,14 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Basic.ENNReal.BigOperators
-import Mathlib.Basic.ENNReal.Inv
-import Mathlib.Order.CompleteLattice.Basic
-import Mathlib.Data.Fintype.Perm
-import Mathlib.Data.Fintype.Pi
-import Mathlib.Data.Fintype.Sigma
-import Definitions.Core.Draw
+module
+
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Basic.ENNReal.BigOperators
+public import Mathlib.Basic.ENNReal.Inv
+public import Mathlib.Order.CompleteLattice.Basic
+public import Mathlib.Data.Fintype.Perm
+public import Mathlib.Data.Fintype.Pi
+public import Mathlib.Data.Fintype.Sigma
+public import Definitions.Core.Draw
 
 /-!
 # A window of calls: one draw that depends on the registration, then the calls' sessions in order (trusted)
@@ -55,6 +57,8 @@ guarantee `audit_window_split_of_record` is stated over), on its own so that a g
   in every session or in none; `UnitStmts.copies`, the tiles' statements read in every session, and `WrongCopyClosed`,
   statements whose wrong sets are copy-closed.
 -/
+
+@[expose] public section
 
 namespace Pouw.Window
 
@@ -341,7 +345,7 @@ noncomputable def coll {Reg : Type} (Lw : Reg → Law (WUnit n))
   avg fun ω => along (fun c => sess c (slice ((Lw R).draw ω) c) R)
     (fun c τc => g c (slice ((Lw R).draw ω) c) R τc) (List.finRange C) (τ ω)
 
-/-- **The window's collision term at the sessions' counted queries** (premise, open; the random-oracle card's, with gap
+/-- **The window's collision term at the sessions' counted queries** (premise, open; the random-oracle claim's, with gap
 (4)'s `ε_id`): for windows indexed by the oracle `H`, uniform on a finite `O` (the window's game, its laws, sessions
 and state terms at each oracle), every prover's plays `σ H` whose sessions make at most `q` oracle calls by the count
 `qs` have collision term at most `f q` on average over the oracle.
@@ -356,7 +360,7 @@ non-uniform adversary that bound doesn't cover, and `qs` is free:
   otherwise some `Q` with `f Q ≥ 1`, meets it for every game.
 `qs` is meant to be the prover model's count of its sessions' calls (gap (4)'s `ProverModel.sessCalls`, which its
 `Prover.Bounded` counts), and that field isn't tied to an oracle program either. No guarantee reads `CollCounted`, and
-before the random-oracle card discharges it, it is restated with gap (4)'s session-query tie, one definition for both:
+before the random-oracle claim discharges it, it is restated with gap (4)'s session-query tie, one definition for both:
 over an oracle strategy of the window's game, one `QTree` per prover move, with `H` only in the verdict, so the plays
 and their count can depend on `H` only through queries (the
 recheck's (c)). -/

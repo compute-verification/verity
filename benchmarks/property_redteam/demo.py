@@ -21,10 +21,8 @@ from __future__ import annotations
 
 import argparse
 import collections
-import importlib
 import json
 import os
-import pkgutil
 import random
 import struct
 import sys
@@ -33,6 +31,7 @@ from verity.ml.circuits.defs import REGISTRY, PrimitiveDefinition
 from verity.ml.circuits.silicon.integer import (BLACKWELL_SM120_S8_M16N8K32 as IMMA_SAT,
                                                  BLACKWELL_SM120_S8_M16N8K32_WRAP as IMMA_WRAP, IntegerMma, S32_MAX,
                                                  S32_MIN, s32_value)
+from verity.ml.definitions.registry import catalog
 from verity.core.protocols.remote_bandwidth import codec as C
 
 M32 = (1 << 32) - 1
@@ -59,24 +58,6 @@ def classify(pid: str) -> str:
         if base in s:
             return name
     return "unknown"
-
-
-# ---- registry -----------------------------------------------------------------------------------------------------------
-
-
-def load_registry() -> dict[str, PrimitiveDefinition]:
-    import verity.ml.circuits.ops as ops
-    import verity.core.protocols.pouw.circuit.words  # noqa: F401  (PoUW word primitives register on import)
-    import verity.ml.definitions.registry as reg
-    for pkg, prefix in ((ops, "verity.ml.circuits.ops."), (reg, "verity.ml.definitions.registry.")):
-        for m in pkgutil.walk_packages(pkg.__path__, prefix):
-            if ".tests" in m.name or "quarantine" in m.name or "circuit-check" in m.name:
-                continue
-            try:
-                importlib.import_module(m.name)
-            except Exception as e:
-                print(f"skip {m.name}: {type(e).__name__}", file=sys.stderr)
-    return {k: v for k, v in REGISTRY.defs.items() if isinstance(v, PrimitiveDefinition)}
 
 
 def f32(x: float) -> int:
@@ -309,7 +290,7 @@ def _jacobi(a: int, n: int) -> int:
 
 # ---- the codec's encode from exact products and unbudgeted primitives ---------------------------------------------------
 
-#: u8 x u8 IMMA: the same instruction at operand formats u8.u8, which run r20261015-084000-06d8 also reproduced bit for bit
+#: u8 x u8 IMMA: the same instruction at operand formats u8.u8, which the validating run also reproduced bit for bit
 #: (`verity.ml.circuits.silicon.integer`'s docstring); its column sums here are at most 128 * 255^2 < 2^23, so every
 #: chain is in range from C = 0 and passes a static operand-range and reduction-length check.
 IMMA_U8 = IntegerMma(name="blackwell_sm120_u8u8_m16n8k32", arch="sm_120", dtype="u8", b_dtype="u8", operand_bits=8,
@@ -517,7 +498,10 @@ def main() -> None:
     ap.add_argument("--words", type=int, default=1, help="codec words to encode in-circuit (each ~6,100 modmuls)")
     args = ap.parse_args()
     rng = random.Random(args.seed)
-    prims = load_registry()
+    import verity.core.protocols.pouw.circuit.words  # noqa: F401  (PoUW word primitives register on import)
+    for e in catalog.load(("ops", "registry"))[1]:
+        print(f"skip {e}", file=sys.stderr)
+    prims = {k: v for k, v in REGISTRY.defs.items() if isinstance(v, PrimitiveDefinition)}
     result = {
         "n_registered_primitives": len(prims),
         "imma": section_imma(rng),

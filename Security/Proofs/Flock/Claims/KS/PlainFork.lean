@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.PlainClashLater
-import Proofs.Flock.Claims.KS.PlainPartsK
-import Proofs.Flock.Claims.KS.ForkSim
+module
+
+public import Proofs.Flock.Claims.KS.PlainClashLater
+public import Proofs.Flock.Claims.KS.PlainPartsK
+public import Proofs.Flock.Claims.KS.ForkSim
 
 /-!
 # The concrete simulator's fork advantage, from its alignment and its clash
@@ -22,6 +24,8 @@ opening nothing, `opRL_nul`), which is the deployed runs' fork at round `j` (`fo
 * `PlainHDecK`, …, `plainSimForkLe_ofK`: the same at `VK keep` (`plainSimK keep`, `plainVerdictAtK keep`), so
   `PlainSimForkLeK keep` holds from `PlainForkAlignK keep` and `PlainForkClashK keep`.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

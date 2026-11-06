@@ -1,7 +1,7 @@
 """M2's committed coin schedule is one schedule on both sides: the prover's `coin_spec_of` (flock-circuit) and the Lean
 verifier of record's `Flock.Zk.coinSpec` pin the same rounds per stream and coins per round, and the verifier's own `Hello`
 refuses any other, so a change on one side alone refuses every honest --zk session. 2^9 rounds: the live PoUW unit
-(`PouwLiveSlots_v2`) needs more than 256 (r20261025-155143-ffb9 refused every honest window at 2^8)."""
+(`PouwLiveSlots_v2`) needs more than 256 (a run at 2^8 refused every honest window)."""
 from __future__ import annotations
 
 import re

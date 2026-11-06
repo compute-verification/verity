@@ -211,10 +211,10 @@ def evaluate(pool, As, META, B, C, procs: int):
             {m: np.concatenate([p[1][m] for p in parts]) for m in parts[0][1]})
 
 
-# --- devices ---------------------------------------------------------------------------------------------------------------------
+# --- the probe's module ----------------------------------------------------------------------------------------------------------
 
 
-class Device:
+class ProbeModule:
     tcgen05 = False
 
     def __init__(self, so: Path):
@@ -273,9 +273,9 @@ class Device:
         return D
 
 
-class FakeDevice:
+class FakeProbeModule:
     """CPU stand-in (``--fake-silicon MODEL``): the sparse words are MODEL's, the dense twins the dense atom's model; a dry run,
-    refused under a research run."""
+    refused with ``RESEARCH_RUN_ID`` set."""
 
     def __init__(self, model_name: str):
         models = candidates()
@@ -485,10 +485,10 @@ def capture(args) -> int:
         print("SPARSE CAPTURE: every seed recorded", flush=True)
         return 0
     if args.fake_silicon:
-        so, dev = None, FakeDevice(args.fake_silicon)
+        so, dev = None, FakeProbeModule(args.fake_silicon)
     else:
         so = Path(os.path.expandvars(args.prebuilt))
-        dev = Device(so)
+        dev = ProbeModule(so)
     identity = dev.identity()
     uuid = identity.get("gpu_uuid")
     expect = os.path.expandvars(args.expect_uuid) if args.expect_uuid else None
@@ -707,7 +707,7 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("--arch", default="sm_120a")
     args = ap.parse_args(argv)
     if getattr(args, "fake_silicon", None) and SHARED.RESEARCH_RUN_ID:
-        ap.error("--fake-silicon is a dry run and never publishes: not under a research run")
+        ap.error("--fake-silicon is a dry run and never publishes: unset RESEARCH_RUN_ID")
     if args.cmd == "build":
         out = Path(os.path.expandvars(args.out))
         out.mkdir(parents=True, exist_ok=True)

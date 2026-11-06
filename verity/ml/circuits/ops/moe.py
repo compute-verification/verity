@@ -21,9 +21,14 @@ launch, MUL_ROUTED_WEIGHT). `DOT` is the k16 step (`gemm.GEMM_HOPPER`'s `HopperB
 mma.sync on sm_90 and sm_120, `gemm.GEMM_AMPERE`'s on sm_80/sm_89). These are the functions of the vLLM registry's
 `MoeExpertCoordinate(W)_v2` and `MoeExpertGemm(W)_v2` (held equal in `verity_vllm`'s tests), defined here so the Boolean
 forms (`ops.boolean.moe`, the next version of each) have a word view inside `verity.ml.circuits`.
+
+The store ids the pair GEMMs' conformance cites are `EVIDENCE_IDS` (`moe_evidence.json`), keyed by Definition id and then
+by role, which the conformance names in backticks.
 """
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -37,8 +42,11 @@ from . import gemm as G
 from . import prims as P
 from .prims import BF16, F32
 
-__all__ = ["FILL", "I32", "MoePairCoordinate", "MoePairCoordinateW", "MoePairGemm", "MoePairGemmW", "SELECT_ID", "columns",
-           "coordinate_major", "select_bf16"]
+__all__ = ["EVIDENCE_IDS", "FILL", "I32", "MoePairCoordinate", "MoePairCoordinateW", "MoePairGemm", "MoePairGemmW", "SELECT_ID",
+           "columns", "coordinate_major", "select_bf16"]
+
+#: Definition id -> role -> the run ids its conformance names by that role.
+EVIDENCE_IDS: dict[str, dict] = json.loads(Path(__file__).with_name("moe_evidence.json").read_text())
 
 I32 = Value(32)
 #: the word an id outside [0, E) selects (the vocabulary gather's extension, `GatherBf16x{V}_v1`)
@@ -116,8 +124,7 @@ def MoePairCoordinateW(B, S, x, e, g, slab):
 
 #: the served capture both pair GEMMs were replayed against (`MoePairGemm(W)_v1{E=128, ..., DOT=HopperBF16WgmmaDot16_v1}`)
 _SERVED = ("vLLM's Triton fused_moe_kernel serving Qwen3-30B-A3B (bf16) on the RTX PRO 6000, layers 0, 24 and 47 at M = 1..256 "
-          "(naive and sorted schedules, BLOCK_SIZE_M 16 and 64; capture r20261018-221222-7a0d, replays r20261018-224659-0b31, "
-          "r20261018-224733-4220, r20261018-224800-5a66)")
+          "(naive and sorted schedules, BLOCK_SIZE_M 16 and 64; capture `capture`, replays `replays`)")
 
 
 @composite("MoePairGemm", 1, ["E", "K", "N", "DOT"], _gemm_sig(False),

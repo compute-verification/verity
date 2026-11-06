@@ -1,6 +1,8 @@
-import Mathlib
-import Definitions.Accounting.Carrier
-import Proofs.Accounting.RateAudit.DeployedSketchSum
+module
+
+public import Mathlib
+public import Definitions.Accounting.Carrier
+public import Proofs.Accounting.RateAudit.DeployedSketchSum
 
 /-!
 # A pass on some of its tiles: what it obtained there
@@ -13,6 +15,8 @@ the link and those rebuilds (`Device.card_obtained_tiles`). A pass whose memory 
 never obtained behind correct digest queries, at most one sector a tile (`Device.unpaid_tiles_split`, `BadK`): each
 tile short of a sector gives one, and each stream sector short gives one.
 -/
+
+@[expose] public section
 
 namespace Accounting.RateSketch
 

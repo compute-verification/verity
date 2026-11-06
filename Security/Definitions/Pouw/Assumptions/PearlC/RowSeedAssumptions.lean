@@ -1,4 +1,6 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
 
 /-!
 # The named assumption `FragDraw`, the fragment corollary's per-row draw (trusted; a `Prop` hypothesis, not an `axiom`)
@@ -11,6 +13,8 @@ The corollary's other conditions stay definitions in `TTOutRowSeed.lean`, taken 
 `CostModel.FragmentPriced` and (C6) `PearlCSem.RowDrawn`. C6's injective key idealizes the row leaf's collision
 resistance.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Assumptions
 

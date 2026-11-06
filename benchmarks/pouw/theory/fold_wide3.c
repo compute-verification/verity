@@ -1,4 +1,4 @@
-/* FOLD-OPT's two-word residual (fold_opt_fx.py, RT-MACHINE-8 and RT-MACHINE-14). For a target pair (t1, t2) at width W,
+/* FOLD-OPT's two-word residual (fold_opt_fx.py). For a target pair (t1, t2) at width W,
    exhaustive over the ISA fold_opt_fx.py models together with every sm_120 lane form that writes two words:
      found  does a straight-line program of at most 3 instructions write the pair, either way round, as its last
             instruction's two words?

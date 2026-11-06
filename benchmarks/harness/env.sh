@@ -1,8 +1,8 @@
 # Sourced by the harness's launchers (run_point.sh, benchmarks/<name>/run.sh) from the source tree: the node's pinned-vLLM
 # Python as $VENV, the checkpoint store, CUDA, and this tree's packages on PYTHONPATH. $VENV is VERITY_BENCH_VENV, which
 # the dispatcher forwards when it is set, else the first of the nodes' pinned-vLLM environments that exists: the one
-# integrations/vllm/verity_vllm/ops/pod_bootstrap.sh makes ($WORK/venv312), vy-nebius-2's jobs environment, the PoUW
-# pod's and the DC VMs' (vy-dc-h200, vy-dc-b200). `benchmarks` is on the path so a spec names an experimental arm module
+# integrations/vllm/verity_vllm/ops/pod_bootstrap.sh makes ($WORK/venv312), a jobs node's environment, the PoUW
+# pod's and the single-GPU VMs'. `benchmarks` is on the path so a spec names an experimental arm module
 # from there (`served_commit.prof_arm:SERVED_COMMIT_ROWS`).
 WORK=${WORK:-/workspace}
 VENVS="$WORK/venv312 $WORK/jobs/venv312 $WORK/pouw/mvp-e2e/venv312 $WORK/cp/venv312"

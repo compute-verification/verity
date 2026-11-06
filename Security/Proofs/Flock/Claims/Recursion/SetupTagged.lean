@@ -1,5 +1,8 @@
-import Proofs.Flock.Claims.Recursion.LayoutBTops
-import Proofs.Flock.Claims.Recursion.VStarCross
+module
+
+public import Proofs.Flock.Claims.Recursion.LayoutBTops
+public import Proofs.Flock.Claims.Recursion.VStarCross
+import all Init.Data.String.Defs
 
 /-!
 # The plain setup makes a call no recorded part makes
@@ -16,6 +19,8 @@ log `p` holds of nowhere, the poisoned run is the `OC` run (`poisonSim`, one mor
 `setupTablesWith_sim`). With `p` the inputs not `HmTagged`, a hidden-output setup refuses at `σ`
 (`setupHiddenWith_poison`), and so does every session of such tables (`setupTablesWith_poison`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -135,9 +140,12 @@ theorem setupTablesWith_poison {p : ByteArray → Bool} {h : ByteArray → ByteA
     | (exact throw_ok hs)
     | (obtain ⟨_, hx, hs⟩ := ebind_ok' hs
        try (cases hx; done)
-       try (simp only [hhid, ↓reduceIte] at hx; refine setupHiddenWith_poison hp ?_ _ _ _ _ _ _ _ _ hx; exact htag)
+       try (simp only [hhid, ↓reduceIte] at hx
+            obtain ⟨_, hx, -⟩ := ebind_ok' hx
+            refine setupHiddenWith_poison hp ?_ _ _ _ _ _ _ _ _ hx; exact htag)
        try (refine mapM_range_ne_ok (by omega) (fun a ha => ?_) hx
             simp only [hhid, ↓reduceIte] at ha
+            obtain ⟨_, ha, -⟩ := ebind_ok' ha
             refine setupHiddenWith_poison hp ?_ _ _ _ _ _ _ _ _ ha
             exact htag))
     | (rw [ite_ok] at hs

@@ -1,4 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.Const.Inst
-import Proofs.Flock.Soundness.Discharge.Const.ConstCols
-import Proofs.Flock.Soundness.Discharge.Const.Typed
-import Proofs.Flock.Soundness.Discharge.Const.Keyed
+module
+
+public import Proofs.Flock.Soundness.Discharge.Const.Inst
+public import Proofs.Flock.Soundness.Discharge.Const.ConstCols
+public import Proofs.Flock.Soundness.Discharge.Const.Typed
+public import Proofs.Flock.Soundness.Discharge.Const.Keyed
+
+@[expose] public section

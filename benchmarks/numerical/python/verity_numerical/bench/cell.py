@@ -22,7 +22,7 @@ records its container's identity (DMI product uuid, kernel boot id, CPU model, p
 ``placement.json``, and ``check`` compares both runs' identities, never their hostnames.
 
 ``check`` reads the prover run's result and says what keeps it from counting: the result contract (``contract.validate``), the
-protocol (``views._protocol``), the interaction record (``views.interaction_problem``), a live verifier on another machine for an
+protocol (``interaction.protocol_problem``), the interaction record (``interaction.interaction_problem``), a live verifier on another machine for an
 interactive backend, the loopback probe, and that its statement and instance set are the cell's.  ``register`` runs the backend's
 registration script, stamps the cell (backend, family, statement, subcircuit, scheme, input set, both machines) into the document, checks it,
 and puts it in the evidence store (``research data put --kind bench-result/v1 --ref run_files=... --preserve``).
@@ -42,7 +42,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from . import census as CN
-from . import contract, drivers, input_sets as IS, lowerings as LW, placement as PL, templates as TM, views
+from . import contract, drivers, input_sets as IS, interaction, lowerings as LW, placement as PL, templates as TM
 
 FAMILIES = {"A": "A-GKR", "B": "B-Ligero", "C": "C-Flock", "D": "D-SP1"}
 BACKENDS = ("A-interactive", "A-fs", "A-route-a", "B-interactive", "B-fs", "C-interactive", "D-fs")
@@ -293,11 +293,11 @@ def check(cell: Cell, doc: Mapping[str, Any], prover_run: Path | None = None, ve
     drv = drivers.driver(cell.backend)
     fp = doc.get("workload_fingerprint") if isinstance(doc.get("workload_fingerprint"), Mapping) else {}
     out = [f"contract: {p}" for p in contract.validate(doc)]
-    why = views._protocol(doc, None)
+    why = interaction.protocol_problem(doc)
     if why:
         out.append(why)
-    ix = views.interaction(doc)
-    why = views.interaction_problem(ix)
+    ix = interaction.interaction(doc)
+    why = interaction.interaction_problem(ix)
     if why:
         out.append(why)
     m = _meas(doc)
@@ -392,7 +392,7 @@ def register(cell: Cell, prover_ref: str, verifier_ref: str | None, work: Path, 
     files = run_files(pd.name, RUN_FILES_WAIT_S) if not dry_run else f"<run_files of {pd.name}>"
     if not files:
         problems.append(f"no run files: the prover run {pd.name}'s attempt names none after {RUN_FILES_WAIT_S:.0f} s (its proofs are "
-                        f"what the views count; `research data show {pd.name}` once its custody lands, then register again)")
+                        f"what the cell counts; `research data show {pd.name}` once its custody lands, then register again)")
     doc.setdefault("validation", {})["cell_problems"] = problems
     meta.write_text(json.dumps(doc, indent=1, default=str) + "\n")
     put = ["research", "data", "put", "--kind", "bench-result/v1", "--meta", f"@{meta}"]

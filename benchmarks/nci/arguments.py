@@ -1,4 +1,4 @@
-"""The argument map (``arguments.json``): what we claim about NCI, on what, against what, and what would settle it.
+"""The argument map (``arguments.json``): what we claim about the inference-only policy, on what, against what, and what would settle it.
 
 * ``claims``: a ladder from most to least trustworthy (``rung`` 1-6), each with its ``status``, the premises it rests
   on (premise or claim ids), the attacks against it, and what comes ``next``.

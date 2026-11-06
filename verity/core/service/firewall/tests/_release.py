@@ -1,12 +1,12 @@
 """What this suite's tests share: the paths, the references the Lean is compared with (Python's `verity_flock.firewall`,
 the cases frozen from Rust's `flock_live::release` before the Lean replaced it, in `fixtures/`, and `flock-firewall
-contract` for the send check's verdict), and the strategies that draw records, ops and outer sessions.
+contract` for the send check's verdict), and the strategies that sample records, ops and outer sessions.
 
-Every record drawn is one the firewall wrote (Python's, from a drawn history of ops), or one torn by a crash (its last line
+Every record drawn is one the ZK server wrote (Python's, from a drawn history of ops), or one torn by a crash (its last line
 cut short), with blank lines in it or without its final newline. Strings are any Unicode but lone surrogates, integers are
 below 2^40, and a schedule is any JSON but floats: outside that domain Python and Rust differed from each other (a budget
-that isn't an integer, statements that aren't strings, integers past u64, lines that are JSON but not the firewall's,
-`\\r\\n`), and the Lean reads only the firewall's own lines (`test_the_lean_reads_only_the_firewalls_lines`).
+that isn't an integer, statements that aren't strings, integers past u64, lines that are JSON but not the ZK server's,
+`\\r\\n`), and the Lean reads only the ZK server's own lines (`test_the_lean_reads_only_the_firewalls_lines`).
 """
 
 from __future__ import annotations
@@ -66,7 +66,7 @@ def python_op(value: dict) -> dict:
 
 
 def record_of(ops: list[list]) -> str:
-    """The record Python's firewall writes running `ops` from an empty state."""
+    """The record Python's ZK server writes running `ops` from an empty state."""
     with tempfile.TemporaryDirectory() as d:
         fw = FW.Firewall(Path(d))
         for op in ops:

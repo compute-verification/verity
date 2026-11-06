@@ -1,8 +1,10 @@
-import Proofs.Pouw.PearlC.TileUOnlyGamma
-import Definitions.Pouw.PearlC.DevicePricesLoop
+module
+
+public import Proofs.Pouw.PearlC.TileUOnlyGamma
+public import Definitions.Pouw.PearlC.DevicePricesLoop
 
 /-!
-# U-only binding at sm_120's in-loop prices (the price-twins lane's file; staged)
+# U-only binding at sm_120's in-loop prices (staged)
 
 The twins of `UOnlyGamma`'s and `TileUOnlyGamma`'s instances at `Prices.sm120Loop` in place of `Prices.sm120`, with the
 same hypotheses otherwise and the same general theorems, at 8192³, per unit and per audit tile: v1 under rev1 (`G = 4`,
@@ -13,6 +15,8 @@ Every γ here is an upper bound on the in-loop γ: `Prices.sm120Loop` rounds the
 exact 1.047 the values are those of `DeviceSm120KernelGamma`'s `…LoopCast8…` pins (0.51105% and 0.36218%), which state
 them under (C̃, U) binding; no pin states them under U-only binding.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

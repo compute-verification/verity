@@ -1,6 +1,6 @@
-"""`rename.py`, the rename move: where a word is renamed and where it stands, what it moves, the locks' records it leaves for
-`audit.py --update --moved`, the pins it rewrites, that a second run changes nothing, and that no tracked path is left to move
-on this tree."""
+"""`rename.py`, the rename move, with a past move's word maps as fixtures (`fixtures/`): where a word is renamed and where it
+stands, what it moves, the locks' records it leaves for the Lean check's `--update --moved`, the pins it rewrites, and that a
+second run changes nothing."""
 from __future__ import annotations
 
 import hashlib
@@ -17,7 +17,8 @@ spec = importlib.util.spec_from_file_location("rename_move_under_test", HERE.par
 M = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(M)
 
-WORDS = M.Words(tomllib.loads((HERE.parent / "rename_map.toml").read_text()))
+MAP = HERE / "fixtures" / "rename_map.toml"
+WORDS = M.Words(tomllib.loads(MAP.read_text()))
 
 
 def test_a_word_is_renamed_as_a_word_or_a_part_of_an_identifier():
@@ -43,17 +44,63 @@ def test_phrases_come_first_and_start_at_a_word():
     assert s("no 2-GPU worker") == "no 2-GPU worker"
 
 
+def test_a_phrase_a_line_break_splits_keeps_the_break():
+    s = WORDS.sub
+    assert s("reads the warden's\n    records whole") == "reads the network\n    certificates whole"
+    assert s("# reads the\n# warden's records") == "# reads the\n# network certificates"
+    assert s("/-- the warden's records\n  -- and the prover\n  -- gateway -/") == \
+        "/-- the network certificates\n  -- and the firewall -/"
+    assert s("the prover\n\ngateway") == "the prover\n\nfirewall"
+    assert s('f"{n}: the warden\'s "\n        f"records {x}"') == 'f"{n}: the network "\n        f"certificates {x}"'
+    assert s('"a prover "\n    f"gateway {x}"') == '"a prover "\n    f"gateway {x}"'
+
+
+def test_a_phrase_that_starts_with_an_apostrophe_follows_a_possessive():
+    words = M.Words({"words": {"'s firewall": "'s ZK server", "firewall": "zk_server"}})
+    assert words.sub("Rust's firewall sends; the audit's\n    firewall; a firewall_state") == \
+        "Rust's ZK server sends; the audit's\n    ZK server; a zk_server_state"
+
+
 def test_what_is_kept_stands():
     s = WORDS.sub
     tags = 'ROW_TAG = b"verity-network-warden/row/v1"; RECORD_TAG = b"verity-network-warden/record/v1"'
     assert s(tags) == tags
-    assert s("see note:20261001T0000Z-warden-x and art:0123abcd, cursor/warden-fix-1234") == \
-        "see note:20261001T0000Z-warden-x and art:0123abcd, cursor/warden-fix-1234"
+    ids = "see note:20261001T0000Z-warden-x and art:0123abcd, cursor/warden-fix-1234"
+    assert s(ids) == ids
     statement = "a recursive session's inner statement: the gateway commits every tree top under a salt, ZK off"
     assert s(f'"use": "{statement}"') == f'"use": "{statement}"'
     assert s("node.gateway.id", "tools/check/guard/x.py") == "node.gateway.id"
     assert s("node.gateway.id", "verity/x.py") == "node.firewall.id"
     assert s("the prover gateway", "tools/check/x.py") == "the firewall"
+
+
+def test_keep_paths_holds_a_path_and_not_the_files_text():
+    words = M.Words({"words": {"firewall": "zk_server"}, "keep_paths": {"pkg/firewall/**": ["firewall"]}})
+    assert words.path("pkg/firewall/tests/test_firewall.py") == "pkg/firewall/tests/test_firewall.py"
+    assert words.path("pkg/other/firewall.py") == "pkg/other/zk_server.py"
+    assert words.sub("the firewall serves", "pkg/firewall/tests/test_firewall.py") == "the zk_server serves"
+
+
+def test_a_held_file_is_named_where_it_stands():
+    words = M.Words({"words": {"firewall": "zk_server", "draw": "sample"},
+                     "keep_paths": {"pkg/firewall/**": ["firewall"]}, "keep_in": {"a/draw.py": ["draw"]}})
+    files = ["pkg/firewall/tests/test_firewall.py", "pkg/firewall/README.md", "a/draw.py", "b/draw.py", "doc.md"]
+    assert words.hold(files) == ["pkg/firewall/tests/test_firewall.py", "pkg/firewall/README.md", "a/draw.py"]
+    assert words.sub("see pkg/firewall/tests/test_firewall.py, test_firewall.py, a/draw.py and b/draw.py", "doc.md") == \
+        "see pkg/firewall/tests/test_firewall.py, test_firewall.py, a/draw.py and b/sample.py"
+
+
+def test_a_name_in_all_follows_what_it_exports_where_a_quoted_key_stands():
+    words = M.Words({"words": {"draw": "sample"}, "keep": {"patterns": ['"draw"']}})
+    module = '__all__ = ["draw",\n           "other"]\n\n\ndef draw():\n    return {"draw": 1}\n'
+    assert words.sub(module, "m.py") == '__all__ = ["sample",\n           "other"]\n\n\ndef sample():\n    return {"draw": 1}\n'
+    assert words.sub(module, "m.md") == module.replace("def draw", "def sample")
+    kept = M.Words({"words": {"draw": "sample"}, "keep": {"patterns": ['"draw"', r"\bdraw_salt\b"]}})
+    module = '__all__ = ["draw_salt", "draw"]\n\n\ndef draw_salt():\n    pass\n\n\ndef draw():\n    pass\n'
+    assert kept.sub(module, "m.py") == '__all__ = ["draw_salt", "sample"]\n\n\ndef draw_salt():\n    pass\n\n\ndef sample():\n    pass\n'
+    tag = M.Words({"words": {"DRAW": "SAMPLE"}, "keep": {"patterns": [r"(?<=[\x22])DRAW(?=[\x22 ])"]}})
+    module = '__all__ = ["DRAW"]\nDRAW = "pouw/draw"\nlines(p, "DRAW")\n'
+    assert tag.sub(module, "m.py") == '__all__ = ["SAMPLE"]\nSAMPLE = "pouw/draw"\nlines(p, "DRAW")\n'
 
 
 def test_paths_and_names_are_renamed_part_by_part():
@@ -79,6 +126,13 @@ def test_words_in_hold_only_in_their_files():
     assert WORDS.sub(harness, "benchmarks/pous/band_gpu/codec.py") == \
         'LIVE = HERE / "memory_challenger.py"\nfrom .memory_challenger import scheme_of\nALIVE = 1\n'
     assert WORDS.sub(harness, "benchmarks/other/harness.py") == harness
+
+
+def test_a_map_of_words_in_alone_leaves_every_other_file():
+    words = M.Words({"words": {}, "words_in": [{"files": ["cli/*.py"], "words": {'"examples"': '"demos"'}}]})
+    assert words.sub('ROOT / "examples"\n', "cli/run.py") == 'ROOT / "demos"\n'
+    assert words.sub('ROOT / "examples"\n', "other/run.py") == 'ROOT / "examples"\n'
+    assert words.path("examples/run.py") == "examples/run.py"
 
 
 def test_the_certifiers_program_is_network_certifier_where_it_stands():
@@ -132,10 +186,57 @@ def test_lock_moves_are_the_shortest_renamed_prefixes(tmp_path):
         "Warden": "NetworkCertifier"}
 
 
+def test_a_prefix_whose_names_move_otherwise_than_under_it_is_left_out(tmp_path):
+    """A private name holds its module twice (`_private.RemoteAudit.Plan.0.RemoteAudit.spans`): its prefix's move would
+    map it back under the wrong old name, which `check.py --moved` refuses, so only the full names move."""
+    words = M.Words({"words": {"RemoteAudit": "PoubCheck"}})
+    names = ("_private.RemoteAudit.Plan.0.RemoteAudit.spans", "_private.RemoteAudit.Line.0.RemoteAudit.Line.sumOver",
+             "RemoteAudit.Plan")
+    (tmp_path / "lean-audit.json").write_text(json.dumps({"reads": {"M": {"definitions": {n: "00" for n in names}}}}))
+    assert M.lock_moves(tmp_path, words, ["lean-audit.json"]) == {
+        "RemoteAudit": "PoubCheck",
+        "_private.RemoteAudit.Line.0.RemoteAudit.Line.sumOver": "_private.PoubCheck.Line.0.PoubCheck.Line.sumOver",
+        "_private.RemoteAudit.Plan.0.RemoteAudit.spans": "_private.PoubCheck.Plan.0.PoubCheck.spans"}
+
+
+def test_a_namespace_whose_names_are_renamed_inside_too_is_listed_in_full(tmp_path):
+    """`Component` renames a namespace and the names under it that end in it: the prefix alone would give
+    `Subprotocol.LineHeldAtComponent`, and the prefix with its override under it is a move `check.py --moved` can't read
+    back, so each name is listed in full."""
+    words = M.Words({"words": {"Component": "Subprotocol"}})
+    lock = {"guarantees": {"R.Component.SecurityProofs.lineHeldAtComponent": {}},
+            "reads": {"M": {"definitions": {"R.Component.LineHeldAtComponent": "00", "R.Component.Held": "00"}}}}
+    (tmp_path / "lean-audit.json").write_text(json.dumps(lock))
+    moves = M.lock_moves(tmp_path, words, ["lean-audit.json"])
+    assert moves == {"R.Component.Held": "R.Subprotocol.Held",
+                     "R.Component.LineHeldAtComponent": "R.Subprotocol.LineHeldAtSubprotocol",
+                     "R.Component.SecurityProofs.lineHeldAtComponent": "R.Subprotocol.SecurityProofs.lineHeldAtSubprotocol"}
+    assert not [(o, o2) for o, n in moves.items() for o2, n2 in moves.items()
+                if n2.startswith(n + ".") and o2 != o + n2[len(n):]]
+    lock["reads"]["M"]["definitions"]["R.Component"] = "00"
+    (tmp_path / "lean-audit.json").write_text(json.dumps(lock))
+    with pytest.raises(SystemExit, match="rename them in two moves"):
+        M.lock_moves(tmp_path, words, ["lean-audit.json"])
+
+
+def test_a_read_definition_is_renamed_as_its_modules_file_renames_it(tmp_path):
+    """A [[words_in]] word holds in its files, so a read definition moves where its module's file is one of them, and stands
+    where it is another's, or in a file the map excludes."""
+    words = M.Words({"words": {}, "words_in": [{"files": ["S/Definitions/Compose.lean", "S/Old/Gates.lean"],
+                                                "words": {"Declared": "RegisteredCircuit"}}],
+                     "rewrite": {"exclude": ["S/Old/**"]}})
+    lock = {"reads": {"Definitions.Compose": {"definitions": {"Compose.Declared": "00"}},
+                      "Definitions.Other": {"definitions": {"Other.Declared": "00"}},
+                      "Old.Gates": {"definitions": {"Gates.Declared": "00"}}}}
+    (tmp_path / "lean-audit.json").write_text(json.dumps(lock))
+    files = ["lean-audit.json", "S/Definitions/Compose.lean", "S/Definitions/Other.lean", "S/Old/Gates.lean"]
+    assert M.lock_moves(tmp_path, words, files) == {"Compose.Declared": "Compose.RegisteredCircuit"}
+
+
 def test_a_module_that_shares_a_namespaces_name_moves_where_it_is_one():
     """`Properties.RemoteAudit.Line` and `.Line.Record` are modules, a namespace and a structure: a whole import line or
     quoted string names the module, and everywhere else the name stands."""
-    areas = M.Words(tomllib.loads((HERE.parent / "areas_map.toml").read_text()))
+    areas = M.Words(tomllib.loads((HERE / "fixtures" / "areas_map.toml").read_text()))
     code = ("import Properties.RemoteAudit.Line.Record\nimport Proofs.Properties.RemoteAudit.Line\n"
             "open RemoteAudit\n  Properties.RemoteAudit.Line\n"
             "theorem t (r : Properties.RemoteAudit.Line.Record) : Properties.RemoteAudit.Line.LineHeld r := x\n"
@@ -150,7 +251,7 @@ def test_a_module_that_shares_a_namespaces_name_moves_where_it_is_one():
 def test_a_namespace_that_shares_a_modules_name_stands(tmp_path):
     """The areas move renames module `Properties.CertifierDevice` and keeps namespace `Properties.CertifierDevice`: the
     rewrite and the declaration renames the locks need agree on what stands."""
-    areas = M.Words(tomllib.loads((HERE.parent / "areas_map.toml").read_text()))
+    areas = M.Words(tomllib.loads((HERE / "fixtures" / "areas_map.toml").read_text()))
     code = ("import Properties.CertifierDevice\nimport Proofs.Properties.CertifierNetwork.Runs\n"
             "namespace Properties.CertifierDevice\nopen Properties.NetworkCertifier Properties.NetworkCertifier.Bytes\n"
             "/-- `Properties.CertifierDevice.failClosed`, stated in `Properties.CertifierNetwork.Runs`. -/\n"
@@ -172,12 +273,16 @@ def test_a_namespace_that_shares_a_modules_name_stands(tmp_path):
     assert out["layers"] == {"Properties.NetworkCertifier.Device": {"imports": ["Properties.Hash.Identity"]}}
 
 
-def test_the_recorded_paths_are_the_moves_up_to_their_first_renamed_span():
+def test_the_recorded_paths_are_the_moves_up_to_the_end_of_each_renamed_span():
     moves = [("v/warden/a.py", "v/certifier/a.py"), ("v/warden/lean/Warden/B.lean", "v/certifier/lean/NetworkCertifier/B.lean"),
-             ("S/Proofs/Warden.lean", "S/Proofs/NetworkCertifier.lean"), ("S/Proofs/Warden/C.lean", "S/Proofs/NetworkCertifier/C.lean")]
+             ("S/Proofs/Warden.lean", "S/Proofs/NetworkCertifier.lean"), ("S/Proofs/Warden/C.lean", "S/Proofs/NetworkCertifier/C.lean"),
+             ("v/warden/tests/test_warden.py", "v/certifier/tests/test_certifier.py")]
     assert M.renamed_paths(moves) == {"S/Proofs/Warden.lean": "S/Proofs/NetworkCertifier.lean",
-                                      "S/Proofs/Warden/": "S/Proofs/NetworkCertifier/", "v/warden/": "v/certifier/"}
-    assert M.renamed_paths(moves[:1]) == M.renamed_paths(moves[:2])       # a branch's new file under a renamed directory
+                                      "S/Proofs/Warden/": "S/Proofs/NetworkCertifier/", "v/warden/": "v/certifier/",
+                                      "v/warden/lean/Warden/": "v/certifier/lean/NetworkCertifier/",
+                                      "v/warden/tests/test_warden.py": "v/certifier/tests/test_certifier.py"}
+    branch = [*moves, ("v/warden/c.py", "v/certifier/c.py"), ("v/warden/lean/Warden/D.lean", "v/certifier/lean/NetworkCertifier/D.lean")]
+    assert M.renamed_paths(moves) == M.renamed_paths(branch)              # a branch's new files under the renamed directories
     swapped = [("S/Properties/Proofs/Nci.lean", "S/Proofs/Properties/Nci.lean"), ("S/Properties/Proofs/Nci/V.lean",
                                                                               "S/Proofs/Properties/Nci/V.lean")]
     assert M.renamed_paths(swapped) == {"S/Properties/Proofs/": "S/Proofs/Properties/"}
@@ -219,7 +324,7 @@ def toy(tmp_path):
 
 
 def test_the_move_on_a_toy_tree(toy, capsys):
-    assert M.main(["--root", str(toy)]) == 0
+    assert M.main(["--map", str(MAP), "--root", str(toy)]) == 0
     tracked = set(git(toy, "ls-files").split())
     assert {"w/certifier/grid.py", "w/certifier/tests/test_network_certifier_grid.py",
             "Sec/Proofs/NetworkCertifier.lean"} <= tracked
@@ -238,15 +343,28 @@ def test_the_move_on_a_toy_tree(toy, capsys):
                                                         f"{'0' * 64}  ../README.md\n")   # a stale pin stays stale
     assert json.loads((toy / M.MOVES).read_text())["moves"] == [
         {"paths": {"old/": "w/"}},
-        {"paths": {"Sec/Proofs/Warden.lean": "Sec/Proofs/NetworkCertifier.lean", "w/warden/": "w/certifier/"}}]
+        {"paths": {"Sec/Proofs/Warden.lean": "Sec/Proofs/NetworkCertifier.lean", "w/warden/": "w/certifier/",
+                   "w/warden/tests/test_network_warden_grid.py": "w/certifier/tests/test_network_certifier_grid.py"}}]
     status = git(toy, "status", "--porcelain", "--untracked-files=all").splitlines()
     assert status and all(line[1] == " " for line in status)                           # everything staged
     git(toy, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "move")
     head = git(toy, "rev-parse", "HEAD:")
     capsys.readouterr()
-    assert M.main(["--root", str(toy)]) == 0
-    assert "files rewritten: 0, files moved: 0, TRUSTED.sha256 files repinned: 0" in capsys.readouterr().out
+    assert M.main(["--map", str(MAP), "--root", str(toy)]) == 0
+    assert "files rewritten: 0, files moved: 0, pins repinned: 0" in capsys.readouterr().out
     assert git(toy, "status", "--porcelain") == "" and git(toy, "rev-parse", "HEAD:") == head
+
+
+def test_the_record_of_the_moves_keeps_their_old_paths_whatever_the_map_excludes(toy, tmp_path_factory):
+    """research's `moves.json` records each move's old paths: renamed in it, they'd be lost, and a second run would rename
+    the entry the first appended."""
+    bare = tmp_path_factory.mktemp("map") / "map.toml"
+    bare.write_text('[words]\n"warden" = "certifier"\n')
+    assert M.main(["--map", str(bare), "--root", str(toy)]) == 0
+    git(toy, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "move")
+    assert json.loads((toy / M.MOVES).read_text())["moves"][-1]["paths"]["w/warden/"] == "w/certifier/"
+    assert M.main(["--map", str(bare), "--root", str(toy)]) == 0
+    assert git(toy, "status", "--porcelain") == ""
 
 
 def test_the_moves_are_those_of_the_tree_re_recorded(toy, capsys):
@@ -256,15 +374,15 @@ def test_the_moves_are_those_of_the_tree_re_recorded(toy, capsys):
     lock = json.loads(path.read_text())
     path.write_text(json.dumps(lock | {"guarantees": {"Flock.Guarantees.gatewayLeaf": {}}}, indent=1) + "\n")
     git(toy, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "a branch's guarantee")
-    assert M.main(["--root", str(toy)]) == 0
+    assert M.main(["--map", str(MAP), "--root", str(toy)]) == 0
     git(toy, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "move")
     capsys.readouterr()
-    assert M.main(["--root", str(toy), "--moves"]) == 0
+    assert M.main(["--map", str(MAP), "--root", str(toy), "--moves"]) == 0
     assert json.loads(capsys.readouterr().out) == {"Flock.Guarantees.gatewayLeaf": "Flock.Guarantees.firewallLeaf",
                                                    "NetTiming.Warden": "NetTiming.Certifier"}
     path.write_text(json.dumps({"guarantees": {"Flock.Guarantees.firewallLeaf": {}},
                                 "reads": {"Definitions.Warden": {"definitions": {"NetTiming.Certifier": "00"}}}}))
-    assert M.main(["--root", str(toy), "--moves"]) == 0
+    assert M.main(["--map", str(MAP), "--root", str(toy), "--moves"]) == 0
     assert json.loads(capsys.readouterr().out) == {}
 
 
@@ -282,10 +400,36 @@ def test_a_file_lands_where_another_leaves(toy):
     assert not (toy / "S/Area.lean").exists()
 
 
+def test_a_json_pin_follows_a_manifest_the_move_rewrites(toy):
+    """A JSON pin `pins.py` lists gets a rewritten manifest's new digest, since a move changes where a path package sits,
+    which no pinned output reads; any other file it pins and the move rewrites (the README) stays stale, for its command."""
+    manifest = '{"packages": [{"type": "path", "dir": "../../w/warden"}]}\n'
+    readme = (toy / "README.md").read_text()
+
+    def sha(t: str) -> str:
+        return hashlib.sha256(t.encode()).hexdigest()
+    pin = {"inputs": {"README.md": sha(readme), "Sec/Proofs/lake-manifest.json": sha(manifest)}, "out": [1]}
+    (toy / "tools/verity/check").mkdir(parents=True)
+    (toy / "tools/verity/check/pins.py").write_text(
+        "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Pin:\n"
+        "    path: str\n    key: str | None\n"
+        '    under: str\n\n\nPINS = (Pin("fix/vec.json", "inputs", ""), Pin("pous/TRUSTED.sha256", None, "pous"))\n')
+    (toy / "Sec/Proofs/lake-manifest.json").write_text(manifest)
+    (toy / "fix").mkdir()
+    (toy / "fix/vec.json").write_text(json.dumps(pin, indent=2) + "\n")
+    git(toy, "add", "-A")
+    git(toy, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "a pin")
+    assert M.main(["--map", str(MAP), "--root", str(toy)]) == 0
+    moved = (toy / "Sec/Proofs/lake-manifest.json").read_text()
+    assert moved == manifest.replace("w/warden", "w/certifier")
+    assert json.loads((toy / "fix/vec.json").read_text()) == {
+        "inputs": {"README.md": sha(readme), "Sec/Proofs/lake-manifest.json": sha(moved)}, "out": [1]}
+
+
 def test_it_refuses_a_dirty_worktree(toy):
     (toy / "README.md").write_text("edited\n")
     with pytest.raises(SystemExit, match="isn't clean"):
-        M.main(["--root", str(toy)])
+        M.main(["--map", str(MAP), "--root", str(toy)])
 
 
 def test_two_files_landing_at_one_path_fail(toy):
@@ -294,4 +438,61 @@ def test_two_files_landing_at_one_path_fail(toy):
     git(toy, "add", "-A")
     git(toy, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "clash")
     with pytest.raises(SystemExit, match="two files would land at one path"):
-        M.main(["--root", str(toy)])
+        M.main(["--map", str(MAP), "--root", str(toy)])
+
+
+PROSE = M.Words({"scope": "prose", "words": {"draw": "sample", "firewall": "ZK server", "firewalled": "zk_served",
+                                             "escape": "acceptance probability", "DrawnUnit": "SampledBlock"}})
+
+
+@pytest.mark.parametrize("path, old, new", [
+    ("a.py",
+     '"""Each draw is fresh; the firewall serves it."""\nDRAW = b"draw"\n\n\ndef draw(n):\n'
+     '    # a draw of n coins, as `draw` gives; unit_draw, .draw, draw.py, --draw, draw(\n    return f"draw {n}" + draw_one(n)\n',
+     '"""Each sample is fresh; the ZK server serves it."""\nDRAW = b"draw"\n\n\ndef draw(n):\n'
+     '    # a sample of n coins, as `draw` gives; unit_draw, .draw, draw.py, --draw, draw(\n    return f"draw {n}" + draw_one(n)\n'),
+    ("L.lean",
+     '/-- A draw of the firewall. -/\ndef draw : Nat := 1 -- the draw\n#eval s!"draw {draw}"\n/- nested /- draw -/ escape -/\n',
+     '/-- A sample of the ZK server. -/\ndef draw : Nat := 1 -- the sample\n#eval s!"draw {draw}"\n'
+     '/- nested /- sample -/ acceptance probability -/\n'),
+    ("n.md",
+     "A draw (`draw()`), [draw](draw.md) and https://x/draw; a firewalled escape; a DrawnUnit.\n\n```\ndraw\n```\n",
+     "A sample (`draw()`), [sample](draw.md) and https://x/draw; a firewalled acceptance probability; a DrawnUnit.\n\n"
+     "```\ndraw\n```\n"),
+    ("s.sh",
+     "#!/bin/bash\n# a draw\necho \"draw\" 'draw'\ndraw() { :; }\ncat <<X\ndraw\nX\n",
+     "#!/bin/bash\n# a sample\necho \"draw\" 'draw'\ndraw() { :; }\ncat <<X\ndraw\nX\n"),
+    ("k.cu",
+     '// a draw\nconst char *s = "draw"; /* the draw */ int draw = 1;\n',
+     '// a sample\nconst char *s = "draw"; /* the sample */ int draw = 1;\n'),
+    ("x.json", '{"draw": "a draw"}\n', '{"draw": "a draw"}\n'),
+])
+def test_a_prose_map_renames_only_words_in_prose(path, old, new):
+    """Under `scope = "prose"` a word is renamed in a comment, a docstring or Markdown's text, and nowhere else: not in code,
+    a string, backticks, a link target, a fence, a heredoc or a data file, nor as part of a name, a path, a flag, a call or a
+    constant; and a word whose new word is a name (`zk_served`) stays."""
+    assert PROSE.sub(old, path) == new
+
+
+def test_a_prose_move_moves_nothing_and_leaves_what_a_json_pin_records(toy, capsys):
+    """A prose move renames no path and no declaration, and leaves a file a JSON pin records for the pin's command."""
+    (toy / "tools/verity/check").mkdir(parents=True)
+    (toy / "tools/verity/check/pins.py").write_text(
+        "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Pin:\n"
+        '    path: str\n    key: str | None\n    under: str\n\n\nPINS = (Pin("fix/vec.json", "inputs", ""),)\n')
+    (toy / ".gitignore").write_text("__pycache__/\n")
+    (toy / "fix").mkdir()
+    (toy / "fix/vec.json").write_text(json.dumps({"inputs": {"pinned.md": "00"}}) + "\n")
+    (toy / "pinned.md").write_text("The prover gateway.\n")
+    (toy / "prose.toml").write_text('scope = "prose"\n\n[words]\n"warden" = "certifier"\n"prover gateway" = "firewall"\n')
+    git(toy, "add", "-A")
+    git(toy, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "a pin")
+    lock = (toy / "Sec/lean-audit.json").read_text()
+    assert M.main(["--map", str(toy / "prose.toml"), "--root", str(toy), "--moves"]) == 0
+    assert json.loads(capsys.readouterr().out) == {}
+    assert M.main(["--map", str(toy / "prose.toml"), "--root", str(toy)]) == 0
+    assert git(toy, "diff", "--cached", "--name-status").split() == ["M", "CHANGELOG.md", "M", "README.md"]
+    assert (toy / "README.md").read_text() == "The firewall; `w/warden/grid.py`.\n"
+    assert (toy / "CHANGELOG.md").read_text() == "- the certifier landed\n"
+    assert (toy / "pinned.md").read_text() == "The prover gateway.\n"
+    assert (toy / "Sec/lean-audit.json").read_text() == lock

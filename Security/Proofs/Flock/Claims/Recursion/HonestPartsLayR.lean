@@ -1,17 +1,19 @@
-import Proofs.Flock.Claims.Recursion.HonestPartsR
-import Proofs.Flock.Claims.Recursion.DeployHonest
-import Proofs.Flock.Claims.Recursion.HonestWitR
-import Proofs.Flock.Claims.Recursion.DeployedR
-import Proofs.Flock.Claims.Recursion.SlotsCheck
-import Proofs.Flock.Claims.Recursion.CapPorts
-import Proofs.Flock.Claims.Recursion.RowsCover
-import Proofs.Flock.Claims.Recursion.SchedDense
+module
+
+public import Proofs.Flock.Claims.Recursion.HonestPartsR
+public import Proofs.Flock.Claims.Recursion.DeployHonest
+public import Proofs.Flock.Claims.Recursion.HonestWitR
+public import Proofs.Flock.Claims.Recursion.DeployedR
+public import Proofs.Flock.Claims.Recursion.SlotsCheck
+public import Proofs.Flock.Claims.Recursion.CapPorts
+public import Proofs.Flock.Claims.Recursion.RowsCover
+public import Proofs.Flock.Claims.Recursion.SchedDense
 
 /-!
 # What each V\* part's circuit accepts on the honest outer run, at the layout of record (`DeployedR.layR`)
 
-`RecursiveKSAt`'s premise is `DecompB` at `PartAccepts`, over V\*'s layout of record `DeployedR.layR elem` (RECINT's
-statement). It is not vacuous only if `PartAccepts` holds where the honest recursive prover runs. Here the honest run is
+`RecursiveKSAt`'s premise is `DecompB` at `PartAccepts`, over V\*'s layout of record `DeployedR.layR elem`.
+ It is not vacuous only if `PartAccepts` holds where the honest recursive prover runs. Here the honest run is
 the compiled record's own reference prover (`refP`, the record's `P`) at the deployed recursive record
 `recBound Readable.relation bR (layR elem) bdR.IVStar` (`bR` the brings whose transcript is the coin server's record,
 `recTr`), on a statement `x` in the recursion's relation at the inner witness `w`, and the part's outer witness is the
@@ -34,6 +36,8 @@ the relation, dense), the run (accepted), the calls `layR` records beyond `layou
 check 5's) being true at the honest witness, no collision among the honest run's calls, and the honest witness holding
 the run's messages where the layout places them (held rounds, pieces, shared rows).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -113,7 +117,7 @@ theorem honest_partAccepts_layR (elem : (r : XR) → List (Fin r.w.parts.length 
     let I := Claims.Recursion.Inner.ofFlock DeployedR.bdR.deploy decI
     let D := recBound _root_.Flock.Readable.relation bR L DeployedR.bdR.IVStar
     NumsFixed bL.st →
-    ∀ {x : Msg} {w : Claims.Flock.Wit} {st : Claims.Recursion.Stmt}, Claims.Recursion.R D I x w →
+    ∀ {x : Msg} {w : Claims.Flock.Wit} {st : Claims.Recursion.CompiledStatement}, Claims.Recursion.R D I x w →
       D.parse x = some st → Claims.Recursion.Form.Dense st.form →
     ∀ (ω : Tape bL) (r : Fin (D.V.k x) → Coin),
       (Claims.run FlockDeploy.sha512 (refP I.V bL w) D.V x ω r).out = .acc →

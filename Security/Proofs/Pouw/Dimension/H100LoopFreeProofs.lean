@@ -1,8 +1,12 @@
-import Definitions.Pouw.Assumptions.Dimension.H100LoopFree
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.H100LoopFree
 
 /-!
 # `MH100`'s loop-free table satisfies `H32`: proof
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.H100
 

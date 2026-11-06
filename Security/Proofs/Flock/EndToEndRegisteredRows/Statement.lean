@@ -1,6 +1,8 @@
-import Flock.Desc
-import Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJ
-import Proofs.Flock.Soundness.Discharge.ZkLink.Rows
+module
+
+public import Flock.Desc
+public import Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJ
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Rows
 
 /-!
 # C-Flock's one-stage audit, end to end, with the rows link (trusted)
@@ -21,6 +23,8 @@ C-Flock's definitions are still in its proofs package, so this module imports
 `Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJ`, and `Models.lean`, which the `security` package builds without
 `security_proofs`, does not import it: `Proofs.Flock.EndToEndRegisteredRows` does.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

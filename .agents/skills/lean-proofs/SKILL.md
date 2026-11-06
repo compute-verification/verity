@@ -1,8 +1,8 @@
 ---
 name: lean-proofs
 description: >
-  How to work on Lean in Verity: where a new Lean file or package goes, the edit loop (verity lean try FILE on a node's
-  warm tree; scratch probes with #print axioms, exact? and trace_state; profiling a slow proof), building and auditing with
+  How to work on Lean in Verity: where a new Lean file or package goes, the edit loop (verity lean try FILE, lake env lean
+  in the file's package; scratch probes with #print axioms, exact? and trace_state; profiling a slow proof), building and auditing with
   tools/verity/lean/check.py and its fast path, stating assumptions as named Props, freezing and listing guarantees in
   lean-audit.json, moving them without a landing DM (--moved), the shape of a property, watching dependencies for
   proofs of what we assume (tools/verity/lean/upstream.py), keeping parallel Lean lanes out of each other's files and
@@ -29,6 +29,20 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   lock lists where they are; keep it short). The Lean check refuses a statement that reads the proofs tree, and a
   definitions or properties module that imports it (`trees` in `Security/lean-audit.json`); a lemma's statement over
   proof-only definitions is not a guarantee.
+- **Every module is on Lean's module system** (`tests/test_lean_packages.py`): a new file starts `module`, imports with
+  `public import M`, and opens `@[expose] public section` after its header; `python3 tools/verity/lean/modules.py FILE`
+  writes that, with `backward.privateInPublic` when the file declares a private definition, and puts
+  `backward.proofsInPublic = true` in each package's `[leanOptions]`, so a proof inside a statement or an exposed body
+  stays in it and the lock's records don't move. A proof's body is private,
+  so an edit to it rebuilds no importer. What the module system refuses is fixed
+  in the file (the codemod's docstring): a tactic's helper is `meta`; a proof that unfolds a core definition the
+  toolchain doesn't expose (`decide`, `rfl`, `unfold`) rewrites by core's lemma for it or has `import all` of its
+  module, never of an in-tree one (a module's build reads only its imports' public parts), and moves to a module of its
+  own when that `import all` slows its file's other proofs; a theorem whose statement names another module's private
+  declaration (core's `Array.qsort.sort`) is private, beside a public one over the public definition; an exported
+  `:= rfl` that unfolds an unexposed definition is `:= (rfl)`; a public definition that reads another private
+  declaration, and a module whose private declarations another opens (`open private … from M`), take
+  `modules.py --option backward.privateInPublic FILE`.
 - **Build in your own checkout**: two agents never share a writable `.lake`, since two Lake builds in one tree break
   each other. A second Lean task on one machine gets its own worktree, its dependencies copied (never symlinked) from a
   checkout with the same manifest and toolchain: `mkdir -p WT/PKG/.lake && cp -a --reflink=auto PKG/.lake/packages
@@ -36,9 +50,10 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 
 ## Build, iterate, check
 
-- **The edit loop is `verity lean try FILE`** (FILE from the root; `--on vy-nebius-cpu-5 --pool proofs` for another
-  node with `build` Lean slots): your checkout, uncommitted edits included, on a warm slot tree (the README). It never
-  writes a record. After editing a file others import, try an importer.
+- **The edit loop is `verity lean try FILE`**: `lake env lean FILE` in the Lake package that holds FILE, against its
+  built imports (`bash tools/verity/lean/setup.sh PKG`, then `lake build` there, once), exiting with lean's status. It
+  never writes a record. After editing a file others import, `lake build` its module, then try an importer. It also runs
+  on a project machine with `--on` (the README).
 - **Build on a CPU machine.** Never `lake update`, and never change a `require`, a revision or `lean-toolchain` in a
   feature PR. The full check, `python tools/verity/lean/check.py PKG`, is the train's; run it by hand only on a machine
   of your own. It refuses a package too big for the machine, naming where to run it; a queued Security audit takes
@@ -53,9 +68,11 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 
   In cpu-1's research pool the runner takes the check slot: don't wrap it in `slot.py`. On vy-nebius-1 a bare run is
   refused: wrap it in n1's Lean-record pool, `env CHECK_SLOTS=/workspace/research/locks/leanrec/slots python3
-  tools/verity/check/slot.py --by LANE -- python3 tools/verity/lean/lean_changed.py --records PKG --update`. Commit the
-  record from `lean-audit/audit-*/` and, when it changed, `lean-audit/record/` (with `review.txt`). It also audits every
-  package whose guarantees read PKG's build (`lean-audit/requirer-<path>/`): run `--records --update` on one that fails.
+  tools/verity/check/slot.py --by LANE -- python3 tools/verity/lean/lean_changed.py --records PKG --update`. It also
+  audits every package whose guarantees read PKG's build (`lean-audit/requirer-<path>/`), and with `--update` updates one
+  that fails only on record differences. Commit each record it kept, `lean-audit/record/<path>/lean-audit.json` over
+  `<path>/lean-audit.json` (its log names each; each package's `audit-*/review.txt` says what changed); a requirer
+  failing otherwise fails the run.
   Its result, `lean-fast/v1`, no merge check accepts. It repairs a slot tree another run left mid-way, so never delete or
   copy one by hand. A spec's `proved_in: P's build did not pass` points at P's own report.
 - **A full record on a pod**: `research run --on POD --project verity --source . --cwd clone -- python3
@@ -78,7 +95,7 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 
 ## Assumptions and guarantees
 
-- **An assumption is a named `Prop`** in its area's `Definitions/<Area>/Assumptions` (C-Flock's in
+- **An assumption is a named `Prop`** in its area's `Definitions/<Area>/Assumptions` (Flock's in
   `Proofs/Flock/Soundness/Assumptions` until its spec is extracted), taken as a hypothesis by each theorem that needs it
   and listed by name in the lock's `assumptions` with its owner. Its docstring opens with its claim id
   (`verity.core.claims`) and gives its rationale; a ledger points to it. `--update` lists every premise a guarantee
@@ -115,8 +132,9 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 - The PR says which guarantees changed and why; the ledger's status rows match `lean-audit.json`.
 - Merge `main` in rather than rebasing, with `python tools/verity/lean/merge.py --install` run once per clone so
   `lean-audit.json` merges without a rebuild; only a conflict it refuses needs `check.py --update` on the merged tree.
+  Fetch `main` first: a checkout whose `merge.py` is older than `origin/main`'s merges by `origin/main`'s.
 - Record your lock at your own head, then mark (`ready` refuses a changed lock no records run of that head passed); a
-  passing Lean check, a clean merge of `main` over a passing head, or a commit of exactly the `record/lean-audit.json` a
+  passing Lean check, a clean merge of `main` over a passing head, or a commit of exactly the records under `record/` a
   passing run kept needs no new run. A train regenerates records that differ only because another PR moved what yours
   reads; re-record only what it can't (a refused conflict, `shape`, a move's map).
 
@@ -142,7 +160,9 @@ repository.
   commitment); the knowledge form (`EndToEndHidden`, `Claims.KS`) is preferred.
 - Every security guarantee has an honest lemma (its hypotheses hold at the honest deployed instance) and a nontrivial
   one (its conclusion fails for a verifier that accepts everything), in the lock as a claim's `meets` and `fails` are;
-  failing either, it says nothing.
+  failing either, it says nothing. `check.py` holds them to it (`witnesses`): both lemmas build their instance, taking
+  only listed assumptions; an exclusion's nontrivial lemma is a circuit where the other premises hold and one named
+  premise and the bound fail.
 - A property's premises are assumptions about the world the function can't see; what the code can see, it checks. A
   condition picking out what the conclusion talks about goes inside the conclusion. Completeness theorems are not claims:
   they live in `Proofs/` with one concrete instance where the honest case holds.
@@ -153,3 +173,7 @@ repository.
 - What a physical region reads is not a premise: it follows from the actual circuit's regions and causality
   (`width_into_region_le`; `Links`, `Covered` in `Security/Definitions/Accounting/Physical.lean`). A bound per
   server-window is stated on `Accounting.Placed` with `WindowsAt`.
+- Verifier code compares `Json` by a match the kernel reduces, never by `BEq Json`'s `==`, a `partial def` no proof can
+  read. A string is compared by `SampledProofs.jsonStrIs`, which `Properties.Pouw.LiveSalt.jsonStrIs_eq` reads back.
+  Replacing such an `==` or a partial reading with a total one that means the same (it refuses on every parse failure
+  and never defaults) changes no claim: the lane makes the change and tells the code's owner.

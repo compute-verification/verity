@@ -114,7 +114,7 @@ def test_the_lean_menu_lists_each_model_s_entries():
         {"workload": "w2", "entries": [{"slots": 1, "bound": 9.0, "inner_m": 26, "k_log": 24, "claims": 16, "positions": 2,
                                         "unit_types": ["d"]}]}]}
     text = M.lean(mn, "SRC")
-    assert text.startswith("import VStar.Menu\n") and "\nSRC\n(verity/f6-menu/v1, K = 50); do not edit. -/" in text
+    assert text.startswith("module\n\npublic import VStar.Menu\n") and "\nSRC\n(verity/f6-menu/v1, K = 50); do not edit. -/" in text
     assert ('def pinned : List (String × List Entry) := [\n  ("w1",\n    [⟨16, 3, 30, 22, 8, 3, 2⟩,\n     ⟨4, 7, 28, 26, 6, 1, 1⟩]),\n'
             '  ("w2",\n    [⟨1, 9, 26, 24, 16, 2, 1⟩])]\n') in text
     mn["models"][1]["entries"][0]["bound"] = 9.5
@@ -181,7 +181,7 @@ def test_a_shape_takes_its_largest_positions_from_the_rows_instances():
 
 
 def test_v_star_stages_the_reps_algebra_at_16_claims_and_refuses_past_the_lone_part_bound():
-    """proofs' blocker (note:proofs/20261010T2112Z-finding-c3-claims-per-shape): at m 35, k_log 27 and 16 claims the
+    """proofs' blocker: at m 35, k_log 27 and 16 claims the
     batched-T residual alone needs more sha512x3 slots than a part holds, so it takes a part of its own (at most
     ``MAX_LONE_SLOTS``) and V* stages the algebra in 3 parts. At m 26, k_log 24 and 28 claims it needs 300 alone, past
     that bound, and V* refuses (the control of `test_vstar_menu.py`)."""

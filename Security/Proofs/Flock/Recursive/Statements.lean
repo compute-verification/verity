@@ -1,8 +1,10 @@
-import Proofs.Flock.Soundness.Assumptions.Recursive
-import Proofs.Flock.Soundness.Assumptions.Zk
-import Proofs.Flock.Soundness.Discharge.ZkView.Defs
-import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Defs
-import Proofs.Flock.Soundness.ZK.HidingAdaptive
+module
+
+public import Proofs.Flock.Soundness.Assumptions.Recursive
+public import Proofs.Flock.Soundness.Assumptions.Zk
+public import Proofs.Flock.Soundness.Discharge.ZkView.Defs
+public import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Defs
+public import Proofs.Flock.Soundness.ZK.HidingAdaptive
 
 /-!
 # The recursive audit's guarantees (trusted)
@@ -11,21 +13,22 @@ The recursive audit (`Proofs.Flock.Recursive.Defs`: `recGame`): the developer re
 commitment among it); the auditor draws `ω`, the hidden circuit's units to prove; in each of the inner protocol's `I.r`
 rounds the developer's firewall sends the auditor a salted SHA-512 commitment to the round's inner message (C-Flock run
 with `--zk` off on the workers), and the auditor answers with a live coin; then the developer registers `R₂`, the
-values V*'s sessions read that the rounds do not fix (V*'s running sums `rec-acc`, and with `link_rows` its opened rows),
+values V*'s sessions read that the rounds do not fix (V*'s running sums `rec-acc`, and its opened rows and their siblings),
 and C-Flock `--zk --registered` sessions of the public verifier circuits V* (`zs R ω t R₂ j`, `ZkOuter`, one per circuit
 `(Vs j).c`, in a row: `outerV`) prove that openings of those commitments exist on which the inner verifier accepts. Each guarantee is a `def G : Prop` in the
 form of `Pouw.Guarantees`; its proof is `Flock.SecurityProofs.G : Flock.Guarantees.G`
 (`Proofs.Flock.Recursive.Guarantees`).
 
-* `RecursiveSound`, for the auditor, in fork form (not a guarantee: the lock retired it, PRF-212, since its event is
+* `RecursiveSound`, for the auditor, in fork form (not a guarantee: the lock retired it, since its event is
   possibilistic and nearly empty; the recursion's guarantee is `Flock.Guarantees.RecursiveKS`): either a run of the prover's own strategy finds a SHA-512 collision
   (between two of V*'s sessions' registrant records, at a round's commitment, or in one of V*'s sessions), or the auditor accepts every one of V*'s sessions on a false
   hidden statement with probability at most V*'s sessions' statistical errors, plus each round's transfer slack, plus
   the inner protocol's soundness error. It assumes no hash. Its one new assumption is `Flock.Assumptions.VBridge`.
 * `RecursiveZK`, for the developer: the auditor's whole view, the firewall's commitments (`firewallLeaf`) to every inner
   message and tree top and then its view of the outer session, has a simulator that reads public inputs only, within
-  the commitments' hiding gap at hm96-sha512's pinned key plus the outer session's zero-knowledge gap. It assumes nothing
-  of the key or of SHA-512.
+  the commitments' hiding gap at hm96-sha512's pinned key plus the outer session's zero-knowledge gap. A view released
+  cut at a stop of a public family `St` is within `|St|` times the simulator's view cut at a uniform stop, plus the same
+  gaps: the stop leaks at most `log₂ |St|` bits. It assumes nothing of the key or of SHA-512.
 * `RecursiveCircuitPrivate`, for the developer of a hidden circuit: the private circuit is a witness value of the class's
   universal unit `UniversalUnit_v1{G, N_IN, N_OUT}`, and the auditor's whole view, the private circuit's registration, the
   firewall's commitments and V*'s sessions, has a simulator that reads only the class and the owed outputs, within the
@@ -50,6 +53,8 @@ form of `Pouw.Guarantees`; its proof is `Flock.SecurityProofs.G : Flock.Guarante
 C-Flock's definitions and the recursion's model are still in the proofs package, so `Models.lean` does not import this
 module: `Proofs.Flock.Recursive` does.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 
@@ -91,21 +96,19 @@ Every `∃` in a fork ranges over `σ`'s own runs and what they output, never ov
 for a prover that never collides on a fork, and says nothing for one that collides on a single pair: no term counts
 SHA-512 evaluations.
 
-**A nearly empty event** (vacuity sweep, 16 Oct, LEAN-19): Its event asks that the inner statement have no witness (`¬
+**A nearly empty event**: Its event asks that the inner statement have no witness (`¬
 holds`, with `holds` = `∃ z, Satisfies z`). The inner statement pins each row only by its hm96 commit string `b ‖ c`,
 with the salt a free witness wire, so a commitment to a wrong row under a fresh salt also opens to the right row except
-with probability at most `4·hidingGap` (`VacuityProbes.Hm96Opens.opens_to_any_row`, `shift_reachable`, on
-cursor/vacuity-sweep-c7a9). For any cheater the event is then nearly empty, and the bound bounds it, not a wrong
+with probability at most `4·hidingGap` (`VacuityProbes.Hm96Opens.opens_to_any_row`, `shift_reachable`, probes
+outside this tree). For any cheater the event is then nearly empty, and the bound bounds it, not a wrong
 computation. The fix is the knowledge form the claims API states recursion in; `EndToEndHidden` avoids this by
-extraction. The knowledge form, `Claims.Recursion.KS`, is at the recursion's level `Claims.Recursion.lam`: about
-65 bits per SHA-512 call at the deployed shape, below the 100-bit floor and the `2^-128` target under every weight
-(ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
-(`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment's dense statements (`KSLin2On` at
-`RecDeploy.DenseAt`) only follows from premises still open (`RecDeploy.ksLin2_deployed_open`), Holo statements being
-candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). This fork form
-states no bits.
+extraction. The knowledge form, `Claims.Recursion.KS`, is at the recursion's level `Claims.Recursion.lam`, which no
+theorem evaluates at the deployment. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 135.7 at the deployed
+records (`RecDeploy.lamLin2_deployed_ge_dep_tight`), and `KSLin2` at the deployment's dense statements (`KSLin2On` at
+`RecDeploy.DenseAt`) is proved (`Flock.SecurityProofs.RecursiveKS`), Holo statements being candidate 3's own model, and
+`BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). This fork form states no bits.
 
-**Retired from the lock** (PRF-212): its break is possibilistic, so the lock lists no theorem of it; the recursion's
+**Retired from the lock**: its break is possibilistic, so the lock lists no theorem of it; the recursion's
 guarantee is the knowledge form at the deployed reader, `Flock.Guarantees.RecursiveKS` (`Proofs.Flock.Recursive.KSStatement`). -/
 def RecursiveSound : Prop :=
   ∀ {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
@@ -231,6 +234,21 @@ def OuterSessionsZK {Out Prog Wit Rr Rv Ωa Ωp Ωo Ωs V : Type} [Fintype Ωo] 
     (sim : Out → Rv → Ωa → (Fin nh → ByteArray) → Ωs → V) (εo : ℝ≥0∞) : Prop :=
   ∀ o P w, honest o P w → ∀ r, OuterViewZK nh (msgs P w r) (view P w r) (sim o (reg P r)) εo
 
+/-- **The auditor's whole view of the recursive audit** at `u = (((a, p), y), r)`: its tape `a`, the firewall's
+commitments to `msgs a p` under the salts `y` (`firewallLeaf`), and the outer session's view at them on the
+developer's randomness `r`. -/
+def recView {Ωa Ωp Ωo V : Type} (nh : ℕ) (msgs : Ωa → Ωp → Fin nh → ByteArray)
+    (view : Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
+    (u : ((Ωa × Ωp) × (Fin nh → ZkView.Salt)) × Ωo) : Ωa × (Fin nh → ByteArray) × V :=
+  (u.1.1.1, (fun i => firewallLeaf (msgs u.1.1.1 u.1.1.2 i) (u.1.2 i)),
+    view u.1.1.1 (fun i => firewallLeaf (msgs u.1.1.1 u.1.1.2 i) (u.1.2 i)) u.1.1.2 u.1.2 u.2)
+
+/-- **The simulated view** at `u = ((a, l), s)`: the tape `a`, `nh` ideal commitments (`idealLeaf`) of `l`, and `sim`
+on them with its coins `s`. -/
+def recIdeal {Ωa Ωs V : Type} (nh : ℕ) (sim : Ωa → (Fin nh → ByteArray) → Ωs → V)
+    (u : (Ωa × (Fin nh → ZkView.Bits × ZkView.Salt)) × Ωs) : Ωa × (Fin nh → ByteArray) × V :=
+  (u.1.1, (fun i => idealLeaf (u.1.2 i)), sim u.1.1 (fun i => idealLeaf (u.1.2 i)) u.2)
+
 /-- **The recursive audit is zero knowledge.** The auditor's tape is `Ωa` and the developer's randomness `Ωp`. The
 firewall sends the `nh` commitments `firewallLeaf (msgs a p i) (y i)`, to the inner messages and tree tops `msgs a p`, each
 under its own fresh uniform salt `y i`; the inner coins the messages answer are the auditor's, fixed by its tape before
@@ -238,10 +256,18 @@ the first commitment (Goldreich–Kahan's committed coins, or a beacon's). Then 
 `h` (the commitments), with the inner proof and the salts as its witness: `view a h p y r` is the auditor's view of it on
 the developer's randomness `r`, against the auditor of tape `a`, which may read `h`. When the outer session has a
 simulator `sim a h` (reading the auditor and the public input only) within `ε_o` of `view` at every tape, witness and
-event (`OuterViewZK`), the auditor's whole view (its tape, the commitments, the outer view) is within
+event (`OuterViewZK`), the auditor's whole view (its tape, the commitments, the outer view: `recView`) is within
 $$\varepsilon_o + n_h \cdot \delta_{K^*}$$
-of the simulator that draws `nh` ideal commitments (`idealLeaf`) and runs `sim` on them: it reads the auditor and public
-inputs only, nothing of the inner proof. One-sided at every event, so both ways (an event's complement).
+of the simulator that draws `nh` ideal commitments (`idealLeaf`) and runs `sim` on them (`recIdeal`): it reads the
+auditor and public inputs only, nothing of the inner proof. One-sided at every event, so both ways (an event's
+complement).
+
+**Where the audit stops.** What the auditor is released is the whole view cut at a stop: `cut s`, for a stop `s` of a
+public family `St`, reads only the stop and the whole view. The audit stops at `stop u`, which may depend on anything:
+the coins, any further coins `Ωk`, and the witness. Every event of the released view
+`cut (stop u) (recView nh msgs view u.1)` is at most `|St|` times as likely as at the simulator's view cut at a uniform
+stop, plus the same `ε_o + n_h·δ_{K*}`, added once: the stop leaks at most `log₂ |St|` bits. At `St = Ωk = Unit` and
+`cut` the identity, this is the whole view's bound above (`Flock.SecurityProofs.recursiveZK_whole`).
 
 `δ_{K*}` is `hidingGap My saltHash`, the commitments' hiding gap at hm96-sha512's pinned key `K*` (`ZkView.My`,
 `ZkView.saltHash`): the statistical distance of `(M(K*)·y, H(sp ‖ y))` from `(U, H(sp ‖ y))` for a uniform salt `y`.
@@ -252,18 +278,18 @@ The salts are drawn uniformly here; the firewall reads them from the operating s
 (`UniformRandomBytesTest`, `uniform/io-getrandombytes`) the same bound plus the source's slack `η` on the event's test
 holds at those bytes (`Flock.SecurityProofs.recursiveZK_os_gap`), so no premise on a stream generator enters. -/
 def RecursiveZK : Prop :=
-  ∀ {Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ωp] [Nonempty Ωp] [Fintype Ωo] [Nonempty Ωo]
-    [Fintype Ωs] [Nonempty Ωs] (nh : ℕ) (msgs : Ωa → Ωp → Fin nh → ByteArray)
+  ∀ {Ωa Ωp Ωo Ωs V St Ωk W : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ωp] [Nonempty Ωp] [Fintype Ωo]
+    [Nonempty Ωo] [Fintype Ωs] [Nonempty Ωs] [Fintype St] [Nonempty St] [Fintype Ωk] [Nonempty Ωk]
+    (nh : ℕ) (msgs : Ωa → Ωp → Fin nh → ByteArray)
     (view : Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
     (sim : Ωa → (Fin nh → ByteArray) → Ωs → V) {εo : ℝ≥0∞},
     OuterViewZK nh msgs view sim εo →
-    ∀ E : Ωa × (Fin nh → ByteArray) × V → Prop,
-      prCoin (fun w : ((Ωa × Ωp) × (Fin nh → ZkView.Salt)) × Ωo =>
-          E (w.1.1.1, (fun i => firewallLeaf (msgs w.1.1.1 w.1.1.2 i) (w.1.2 i)),
-            view w.1.1.1 (fun i => firewallLeaf (msgs w.1.1.1 w.1.1.2 i) (w.1.2 i)) w.1.1.2 w.1.2 w.2))
-        ≤ prCoin (fun w : (Ωa × (Fin nh → ZkView.Bits × ZkView.Salt)) × Ωs =>
-            E (w.1.1, (fun i => idealLeaf (w.1.2 i)), sim w.1.1 (fun i => idealLeaf (w.1.2 i)) w.2))
-          + εo + nh * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash)
+    ∀ (cut : St → Ωa × (Fin nh → ByteArray) × V → W)
+      (stop : (((Ωa × Ωp) × (Fin nh → ZkView.Salt)) × Ωo) × Ωk → St) (E : W → Prop),
+      prCoin (fun u => E (cut (stop u) (recView nh msgs view u.1))) ≤
+        (Fintype.card St : ℝ≥0∞) * prCoin (fun u : St × ((Ωa × (Fin nh → ZkView.Bits × ZkView.Salt)) × Ωs) =>
+            E (cut u.1 (recIdeal nh sim u.2))) +
+          εo + nh * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash)
 
 /-- **The recursive audit's real view of a private circuit**, the probability of the event `E`. The developer registers
 the private circuit `P` under the registration's randomness `r`, and the auditor sees `reg P r`; the firewall sends the `nh`
@@ -447,17 +473,16 @@ whose last round isn't committed (candidate 3 today) doesn't give.
 
 Every `∃` ranges over `σ`'s own runs and what they output; nothing is assumed of SHA-512.
 
-**A nearly empty event** (vacuity sweep, 16 Oct, LEAN-19): its event, as `RecursiveSound`'s, asks that the inner
+**A nearly empty event**: its event, as `RecursiveSound`'s, asks that the inner
 statement have no witness (`¬ holds`, with `holds` = `∃ z, Satisfies z`). The inner statement pins each row only by its
 hm96 commit string `b ‖ c`, with the salt a free witness wire, so a commitment to a wrong row under a fresh salt also
 opens to the right row except with probability at most `4·hidingGap` (`VacuityProbes.Hm96Opens.opens_to_any_row`,
-`shift_reachable`, on cursor/vacuity-sweep-c7a9). For any cheater the event is then nearly empty, and the bound bounds
+`shift_reachable`, probes outside this tree). For any cheater the event is then nearly empty, and the bound bounds
 it, not a wrong computation. The fix is the knowledge form the claims API states recursion in;
 `EndToEndHidden` avoids this by extraction. The knowledge form, `Claims.Recursion.KS`, is at the recursion's level
-`Claims.Recursion.lam`: about 65 bits per SHA-512 call at the deployed shape, below the 100-bit floor and the `2^-128`
-target under every weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
-(`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment's dense statements (`KSLin2On` at
-`RecDeploy.DenseAt`) only follows from premises still open (`RecDeploy.ksLin2_deployed_open`), Holo statements being
+`Claims.Recursion.lam`, which no theorem evaluates at the deployment. Route 2C's bound λ₂ (`lamLin2`) evaluates to at
+least 135.7 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep_tight`), and `KSLin2` at the deployment's dense
+statements (`KSLin2On` at `RecDeploy.DenseAt`) is proved (`Flock.SecurityProofs.RecursiveKS`), Holo statements being
 candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). This fork form
 states no bits. -/
 def RecursiveRanRegistered : Prop :=

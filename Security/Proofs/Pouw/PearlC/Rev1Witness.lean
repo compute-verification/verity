@@ -1,7 +1,9 @@
-import Proofs.Pouw.PearlC.DeviceRev1Gamma
+module
+
+public import Proofs.Pouw.PearlC.DeviceRev1Gamma
 
 /-!
-# rev1's H100 rows are satisfiable (the cheap-binding lane's file)
+# rev1's H100 rows are satisfiable
 
 Staged; nothing pinned. The pins proposed are `ttOutPearlCH100Rev1Witness`, `ttOutTilePearlCH100Rev1Witness` and
 `pearlCTilesDevRev1_total` (rev1's tiles cover each unit's words once, so `GγSampled`'s W is the layout's rev1 `W_ref`).
@@ -11,6 +13,8 @@ fits rev1's `W_ref` (unit by unit, or tile by tile), on an in-domain workload (`
 whose unit, or first tile, is within the cap and has positive rev1 credit. The cost models are `witnessCM` and `witnessTileCM` at rev1's protocol and tiles; they show
 satisfiability only.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

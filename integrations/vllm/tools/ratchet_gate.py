@@ -28,19 +28,25 @@ when:
   at least as much, so a move from one package to another passes.  A repository list
   (``repo_ruff``'s and each counted lint's, ``CATCH_UP``) may also raise a key, in any file, up to what its lint, as the
   change's base has it, finds there in the base's tree: a list that records what its base already holds adds no finding,
-  so a list behind its tree catches up, while growth past the base's own findings is held as before;
+  so a list behind its tree catches up, while growth past the base's own findings is held as before.  A change that edits
+  a counted lint's module may raise that lint's list, as far as it records, at each file it leaves untouched: it adds no
+  text there, so the rise records what the edited lint finds in a tree the change didn't write (the base's, or a file of
+  a change queued on `next`), which the gate can't count without running the change's code, and a list ahead of its tree
+  admits no site, since the source check holds each file a later change touches.  So a lint that comes to count more
+  records its list in the same change;
 * among the other entries, the per-site ones and P10's, whose count is a size in lines, no ratchet its base has holds
   more after it than before, and no entry's recorded ``count`` grows (an entry is its fields less ``count``);
 * a command the ``public`` table of P16's list (``allowlists/p16_cli_callers.json``) gains, one run from outside the
   integration, where P16's suite doesn't look, or one given another caller, names a file that, in the change's tree, runs it
   as the base's P16 lint finds a call (its ``runs``).  Like the environment-read list's registry marks, the table is a
-  declaration and no ratchet counts it, but this one is checked, so a change may add one (the vLLM coordinator, 27 Oct
-  16:12Z: while the table was P16's code, which the gate runs as the base has it, no change could add a command run from
-  ``benchmarks/``); and
-* if it changes a lint's code or allowlist, its base's lint code finds nothing on its tree that its allowlists don't cover.
-  In a temporary worktree of the change's top, each lint directory to run and both ``ruff.toml`` files are replaced by the
-  base's, each allowlist there holding the top's entries for its slug (none for a deleted one), P16's the top's public
-  commands too, and the ``test_no_new*`` tests
+  declaration and no ratchet counts it, but this one is checked, so a change may add one (were the table P16's code, which
+  the gate runs as the base has it, no change could add a command run from ``benchmarks/``); and
+* if it changes a lint's code or allowlist, its base's lint code finds nothing on its tree that its allowlists don't cover,
+  beyond what it finds on the base's own tree, with the base's lists: a violation the tree below already holds isn't the
+  change's, so it passes, naming the change that added each one's line (``git blame --first-parent`` on the base: ``#N``
+  for a queue merge), whose own merge the source checks below refuse.  In a temporary worktree of the change's top, each
+  lint directory to run and both ``ruff.toml`` files are replaced by the base's, each allowlist there holding the top's
+  entries for its slug (none for a deleted one), P16's the top's public commands too, and the ``test_no_new*`` tests
   of each lint whose code or allowlist changed (every lint's in a directory whose shared code did) run without pytest, the ruff
   lints with the base's pin.
   So loosening a lint to drop its entries (raising P10's cap, skipping a kind, ignoring a ruff rule, deleting the lint)
@@ -71,7 +77,10 @@ catch (every outcome is recorded): the fix is to re-raise, record the outcome, o
 A rename must move the file's entry (``python3 tests/lint/test_<slug>.py --move OLD NEW``), as for ruff.
 
 Only the top change is linted: a PR's own commits at the preflight, its merge onto `next` at the sync, where the members below
-were linted at their own merges.
+were linted at their own merges.  Its findings and sites are counted with the lints, configs and pin its own base has when
+that base holds BASE (its merge onto `next`, whose members below may change a lint: the lints it lands with), else with
+BASE's (a preflight's merge base, an older `main`), so a PR that adds a site a lint queued below it counts is refused at
+its own merge, not found later by the whole-tree run of a change that touches a lint.
 
 A counted lint with ``holds`` reads each file its ``holds`` takes, of any kind, rather than each ``*.py`` file, and counts it
 by its path too: the repository's lane text, in the prose of code, Lean and Markdown, whose fix says where the text goes (history
@@ -168,6 +177,8 @@ NOQA = re.compile(r"#\s*(?:(?:ruff|flake8)\s*:\s*)?noqa\b", re.IGNORECASE)
 HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", re.MULTILINE)
 #: entries or violations named in a failure's fix, at most
 CHEAPEST = 12
+#: a violation that names a file, and maybe its line, as `violations` writes it: ``lint: file:line what``, ``lint: file: ...``
+SITE = re.compile(r"^[^:]+: ([^\s:]+):(?:(\d+)\b)?")
 #: the ratchets whose ``count`` measures one site (P10's is a size in lines) rather than counting findings, so never pooled
 MEASURES = {"size"}
 
@@ -399,11 +410,13 @@ def counted_kinds(s: str, entries: list) -> set:
 
 
 def growth(before: dict[str, list], after: dict[str, list], paths: dict[str, str],
-           held: dict[str, Counter] | None = None) -> tuple[list[str], list[str], list[str]]:
+           held: dict[str, Counter] | None = None, widened: dict[str, set[str]] | None = None
+           ) -> tuple[list[str], list[str], list[str]]:
     """(each grown ratchet, count and pooled kind; the entries that grew it, or the keys that moved in a grown kind; each
     kind a key rose in whose total didn't grow, and each list that caught up): what the change adds, against its base.  A
-    key of a list in ``held`` may rise up to what ``held`` says its base holds there, which adds no finding."""
-    held = held or {}
+    key of a list in ``held`` may rise up to what ``held`` says its base holds there, which adds no finding, and a key
+    ``widened`` names for its list as far as the change records."""
+    held, widened = held or {}, widened or {}
     grown, fix, pooled = [], [], []
     for s in sorted(before):
         was_all, now = [e for e in before[s] if not is_mark(e)], [e for e in after.get(s, []) if not is_mark(e)]
@@ -427,7 +440,8 @@ def growth(before: dict[str, list], after: dict[str, list], paths: dict[str, str
                 for e in entries:
                     if in_pool(e) and kind(e) == pool:
                         side[key(e)] += count(e)
-            caught = {k: n for k in hi if (n := min(hi[k], base[k]) - lo[k]) > 0}
+            wide = widened.get(s, set())
+            caught = {k: n for k in hi if (n := min(hi[k], hi[k] if k in wide else base[k]) - lo[k]) > 0}
             moved = sorted((k for k in lo.keys() | hi.keys() if lo[k] + caught.get(k, 0) != hi[k]),
                            key=lambda k: (lo[k] - hi[k], k))
             total = f"{paths[s]}{'' if pool is None else f' {pool}'} {sum(lo.values())} -> {sum(hi.values())} in total"
@@ -435,9 +449,13 @@ def growth(before: dict[str, list], after: dict[str, list], paths: dict[str, str
                 grown.append(total)
                 fix += [f"{paths[s]}: {k} {lo[k]} -> {hi[k]}" for k in moved]
                 continue
-            if caught:
-                pooled.append(f"{total}, {sum(caught.values())} of it in {len(caught)} key(s) catching up to what its lint "
+            up = {k: n for k, n in caught.items() if k not in wide or lo[k] + n <= base[k]}
+            if up:
+                pooled.append(f"{total}, {sum(up.values())} of it in {len(up)} key(s) catching up to what its lint "
                               f"finds in the base's tree (a list that records its base's findings adds none)")
+            if wide := {k: n for k, n in caught.items() if k not in up}:
+                pooled.append(f"{total}, {sum(wide.values())} of it in {len(wide)} key(s) at files the change leaves "
+                              f"untouched, recorded as the lint it edits counts them")
             if any(hi[k] > lo[k] + caught.get(k, 0) for k in moved):
                 pooled.append(f"{total} over {len(moved)} moved key(s)")
     return grown, fix, pooled
@@ -796,10 +814,15 @@ def findings_at(rev: str, s: str, files: set[str]) -> Counter:
     return Counter({key({"file": f}): len(count(b.decode("utf-8", errors="replace"), f)) for f, b in data.items()})
 
 
-def held(c: Change, before: dict[str, list], after: dict[str, list]) -> dict[str, Counter]:
+def held(c: Change, before: dict[str, list], after: dict[str, list]) -> tuple[dict[str, Counter], dict[str, set[str]]]:
     """For each repository list (``CATCH_UP``) whose keys the change raises, what its lint, as the change's base has it, finds
-    in the base's tree at those keys: the most each may rise to, since a list that records its base's findings adds none."""
-    out = {}
+    in the base's tree at those keys: the most each may rise to, since a list that records its base's findings adds none.
+    And, for a counted lint whose module the change edits, the keys it raises at files the change leaves untouched, which may
+    rise as far as the change records: it adds no text there, so the rise records what the change's lint finds in text the
+    change didn't write, which the gate can't count without running the change's code.  A list ahead of its tree admits no
+    site, since the source check holds each file a later change touches to its own count."""
+    out, widened = {}, {}
+    edited: set[str] | None = None
     for s in CATCH_UP:
         lo, hi = Counter(), Counter()
         for side, entries in ((lo, before.get(s, [])), (hi, after.get(s, []))):
@@ -808,7 +831,12 @@ def held(c: Change, before: dict[str, list], after: dict[str, list]) -> dict[str
                     side[key(e)] += count(e)
         if files := {json.loads(k)["file"] for k in hi if hi[k] > lo[k]}:
             out[s] = findings_at(c.lo, s, files)
-    return out
+            if s in (slug for slug, *_ in COUNTED):
+                if edited is None:
+                    edited = set(git("diff", "--no-renames", "--name-only", "-z", c.lo, c.hi).split("\0"))
+                if counted_paths(s)[0] in edited:
+                    widened[s] = {key({"file": f}) for f in files - edited}
+    return out, widened
 
 
 def public_commands(rev: str) -> dict[str, str]:
@@ -940,6 +968,30 @@ def violations(failures: list[dict]) -> list[str]:
     return out
 
 
+def added_by(rev: str, items: list[str]) -> str:
+    """Each violation in ``items`` with the change on ``rev``'s first-parent chain that added the line it names
+    (``lint: file:line ...``), by `git blame --first-parent`: ``#N`` for a queue merge, else the commit.  One that names only
+    a file (``lint: file: 2 found, 1 allowed``) goes with a line of that file, else is listed as it is."""
+    sites = [(item, SITE.match(item)) for item in items[:CHEAPEST]]
+    by_item: dict[str, str] = {}
+    by_file: dict[str, set[str]] = {}
+    for item, m in sites:
+        if m and m[2]:
+            r = subprocess.run(["git", "blame", "--first-parent", "--porcelain", "-L", f"{m[2]},{m[2]}", rev, "--", m[1]],
+                               capture_output=True, text=True)
+            if r.returncode == 0 and r.stdout:
+                sha = r.stdout.split()[0]
+                q = QUEUE_SUBJECT.match(git("log", "-1", "--format=%s", sha).strip())
+                by_item[item] = f"#{q[1]}" if q else sha[:12]
+                by_file.setdefault(m[1], set()).add(by_item[item])
+    out: dict[str, list[str]] = {}
+    for item, m in sorted(sites, key=lambda s: not (s[1] and s[1][2])):
+        who = by_item.get(item) or (", ".join(sorted(by_file[m[1]])) if m and m[1] in by_file else "no line named")
+        out.setdefault(who, []).append(item)
+    more = f"; ... and {len(items) - CHEAPEST} more" if len(items) > CHEAPEST else ""
+    return "; ".join(f"added by {w}: {', '.join(v)}" for w, v in out.items()) + more
+
+
 def judge(c: Change, base: str) -> None:
     diff = git("diff", "--no-renames", "--name-only", "-z", c.lo, c.hi).split("\0")
     c.touched = sorted(f for f in diff if f and (is_ratchet(f) or is_lint_code(f) or f in (RUFF_CONFIG, REPO_RUFF_CONFIG)
@@ -956,19 +1008,25 @@ def judge(c: Change, base: str) -> None:
         after, now_at, bad = ratchets(c.hi)
         c.before = sum(len(v) for v in before.values())
         c.after = sum(len(after.get(s, [])) for s in before)
-        grown, added, c.pooled = growth(before, after, {**was_at, **now_at}, held(c, before, after))
+        grown, added, c.pooled = growth(before, after, {**was_at, **now_at}, *held(c, before, after))
         uncalled, public = public_callers(c)
     noqa_grows = c.noqa_added > c.noqa_removed
+    inherited: list[str] = []
     if c.touched and not (grown or bad or uncalled or noqa_grows):
         selection = {lint: s for lint in LINTS if (s := lint_selection(c.touched, lint)) is None or s}
         if selection:
             c.lints, failures = base_lints(c, selection, after)
             found = violations(failures)
+            if found:
+                had = set(violations(base_lints(Change(c.lo, c.lo, []), selection, before)[1]))
+                inherited, found = [v for v in found if v in had], [v for v in found if v not in had]
     if not (grown or bad or uncalled or noqa_grows or found):
         c.verdict, c.why = "passed", "; ".join(
             ([f"{c.before} -> {c.after} ratchet exceptions"] if c.touched else []) + [f"pooled: {p}" for p in c.pooled] + noqa
             + ([f"public, each run by its caller: {', '.join(public)}"] if public else [])
-            + ([f"the base's lint code finds nothing uncovered ({', '.join(c.lints)})"] if c.lints else []))
+            + ([f"the base's lint code finds nothing uncovered ({', '.join(c.lints)})"] if c.lints and not inherited else [])
+            + ([f"the base's lint code ({', '.join(c.lints)}) finds {len(inherited)} violation(s) its own tree already holds, "
+                f"which aren't this change's: {added_by(c.lo, inherited)}"] if inherited else []))
         return
     if is_revert(c):
         c.verdict, c.why = "exempt", "a revert"
@@ -1005,23 +1063,34 @@ def judge(c: Change, base: str) -> None:
         c.fix = found[:CHEAPEST] + ([f"... and {len(found) - CHEAPEST} more"] if len(found) > CHEAPEST else [])
 
 
+def lints_at(c: Change, base: str) -> str:
+    """Where the source checks read their lints for ``c``: its own base when that holds BASE (its merge onto `next`, whose
+    members below may change a lint, so these are the lints that land with it), else BASE (a branch's preflight, whose merge
+    base is an older `main`).  A member below that makes a lint count more is counted against the PR that adds a site to it,
+    rather than found later by the whole-tree run of a change that touches a lint."""
+    if c.lo != base and subprocess.run(["git", "merge-base", "--is-ancestor", base, c.lo], capture_output=True).returncode == 0:
+        return c.lo
+    return base
+
+
 def find(c: Change, base: str) -> None:
-    """The source checks on ``c``: ruff's findings, and each counted lint's count."""
+    """The source checks on ``c``: ruff's findings, and each counted lint's count, with the lints at ``base``."""
     c.ruff_new, c.ruff_grown, c.ruff_unmoved = source_lint(c, base)
     c.counted = {slug: got for slug, sites, noun in COUNTED if (got := counted_lint(c, base, slug, sites, noun)) is not None}
 
 
 def lint_top(c: Change, base: str) -> None:
-    """The source checks on the top change ``c``, after ``judge``: a ruff finding or a counted lint's site it adds, or a list
-    entry a rename leaves behind, fails a change that passed or touched nothing else, unless it is exempt (a revert; a
-    pure move, from what it adds but not from the entries it leaves behind, which would fail the repository's lints as
-    surely); a change already failed or exempt keeps its verdict.  What the checks find is kept beside the verdict, in an entry
-    of its own, so a change below the top never fails by it."""
+    """The source checks on the top change ``c``, after ``judge``, with the lints `lints_at` reads: a ruff finding or a
+    counted lint's site it adds, or a list entry a rename leaves behind, fails a change that passed or touched nothing else,
+    unless it is exempt (a revert; a pure move, from what it adds but not from the entries it leaves behind, which would
+    fail the repository's lints as surely); a change already failed or exempt keeps its verdict.  What the checks find is
+    kept beside the verdict, in an entry of its own, so a change below the top never fails by it."""
     if c.verdict in ("failed", "exempt"):
         return
+    at = lints_at(c, base)
     p = cache_path(c, base, "found")
     if not recall(c, p, FOUND):
-        find(c, base)
+        find(c, at)
         keep(c, p, FOUND)
     counted = [(slug, sites, noun, c.counted[slug]) for slug, sites, noun in COUNTED if slug in c.counted]
     if not (c.linted or any(v["read"] for *_, v in counted)):
@@ -1039,7 +1108,7 @@ def lint_top(c: Change, base: str) -> None:
         for *_, v in counted:
             v["new"] = []
     def reads(slug: str, sites: str, noun: str) -> str:
-        return "files" if hasattr(counted_lint_at(base, slug, sites, noun), "holds") else "Python"
+        return "files" if hasattr(counted_lint_at(at, slug, sites, noun), "holds") else "Python"
 
     if not (new or unmoved):
         notes = ([f"ruff finds nothing new in the {len(c.linted)} Python file(s) it changes"] if c.linted else []) + [
@@ -1055,7 +1124,7 @@ def lint_top(c: Change, base: str) -> None:
                    f"and F541 among them), or, where a rule is wrong for that line, say why in a `# noqa: CODE` on it")
     for slug, sites, noun, v in counted:
         if v["new"]:
-            lint = counted_lint_at(base, slug, sites, noun)
+            lint = counted_lint_at(at, slug, sites, noun)
             why.append(f"adds {len(v['new'])} {noun}(s) to the {reads(slug, sites, noun)} it changes, as the base's "
                        f"{counted_paths(slug)[0]} "
                        f"counts them ({'; '.join(v['grown'])}): {lint.FIX}"

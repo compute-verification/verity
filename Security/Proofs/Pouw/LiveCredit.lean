@@ -1,5 +1,7 @@
-import Mathlib
-import Proofs.Accounting.TS.Session.Lanes.Layer
+module
+
+public import Mathlib
+public import Proofs.Accounting.TS.Session.Lanes.Layer
 
 /-!
 # Dense credit counts the served rows (`PouwLiveSlots_v1`, rule A)
@@ -50,6 +52,8 @@ statement decoded at another round proves nothing about this one. That the decod
 registered `slots@<s>` and its request table (`requests@0` under round-0-only admission) is the statement's registration
 (flock-verify's complete check and the served path's roots), outside this file.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.LiveCredit
 
@@ -208,7 +212,7 @@ theorem liveOk_decode_round {T : ℕ} {v : LiveView} (h : liveOk T v) (hd : ∀ 
 /-! ## The named premise -/
 
 /-- `LiveSlotsChecks` (a fact of `circuit.live.PouwLiveSlots_v1{T}`'s circuit, backed by circuit-check and
-`test_circuit_live`'s agreement of its gates with `live_ok`, not proved; owner @compute-accounting; no guarantee takes
+`test_circuit_live`'s agreement of its gates with `live_ok`, not proved; no guarantee takes
 it yet, so it has no claim id or lock entry). **The unit's circuit computes its Definition at its port rows**: at round
 `s`'s session `sess`, whose circuit is `PouwLiveSlots_v1{T}`'s lowering, on every wire assignment `vals` the key
 program's evaluation agrees with on every unit's wires, if the `ok` word `dec` reads from `vals`' port rows

@@ -1,5 +1,7 @@
-import Proofs.Flock.C3.Compose.Honest
-import Proofs.Flock.VBridge.Family.Registered
+module
+
+public import Proofs.Flock.C3.Compose.Honest
+public import Proofs.Flock.VBridge.Family.Registered
 
 /-!
 # The rows `own` names are registered reads, at candidate 3's family
@@ -19,6 +21,8 @@ at every unit. At the checked family (`C3Family.checked`) the sessions' records 
 * `rowsCovered_checked`: `RowsCovered` at the checked family from `RegistrantCovers zr`; `keepOwn` and `ZkOuter.refuse`
   only narrow `own` to `freshOwn`, which names no port of the circuit (`fresh_not_named`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 
@@ -138,7 +142,7 @@ theorem reads_of_acceptsZKR (I : Inputs) (ht : I.tags.typed = false) {c : Flock.
   have hjs : (partOf I d u).val < sts.size := by rw [hsz]; exact (partOf I d u).isLt
   have s := Hidden.setupHidden_spec' (hstJ _ hjs)
   have hcst : sts[(partOf I d u).val].c = c := by
-    have h1 := s.parse
+    have h1 := s.parseF ((FlockSoundness.Discharge.Exec.tagsAt_isTmpl _ _ _).trans (HmOut.parse_isTmpl hc))
     rw [parseH_tagsAt ((zkTags_typed I).trans ht), hc] at h1
     exact (Except.ok.inj h1).symm
   obtain ⟨pop', hpop', -, hdr⟩ := s.pub
@@ -176,7 +180,7 @@ theorem drawn_of_acceptsZKR (I : Inputs) (ht : I.tags.typed = false) {c : Flock.
   have hjs : (partOf I d u).val < sts.size := by rw [hsz]; exact (partOf I d u).isLt
   have s := Hidden.setupHidden_spec' (hstJ _ hjs)
   have hcst : sts[(partOf I d u).val].c = c := by
-    have h1 := s.parse
+    have h1 := s.parseF ((FlockSoundness.Discharge.Exec.tagsAt_isTmpl _ _ _).trans (HmOut.parse_isTmpl hc))
     rw [parseH_tagsAt ((zkTags_typed I).trans ht), hc] at h1
     exact (Except.ok.inj h1).symm
   obtain ⟨pop', hpop', -, hdr⟩ := s.pub
@@ -203,7 +207,8 @@ theorem names_of_acceptsZKR (I : Inputs) (ht : I.tags.typed = false) {c : Flock.
   obtain ⟨hsz, hstJ⟩ := setupOf_tableJH hTags.1 hd hs
   have hjs : (partOf I d 0).val < sts.size := by rw [hsz]; exact (partOf I d 0).isLt
   have hcst : sts[(partOf I d 0).val].c = c := by
-    have h1 := (Hidden.setupHidden_spec' (hstJ _ hjs)).parse
+    have h1 := (Hidden.setupHidden_spec' (hstJ _ hjs)).parseF
+      ((FlockSoundness.Discharge.Exec.tagsAt_isTmpl _ _ _).trans (HmOut.parse_isTmpl hc))
     rw [parseH_tagsAt ((zkTags_typed I).trans ht), hc] at h1
     exact (Except.ok.inj h1).symm
   have hdn := dupName_of_checkRegistered (array_forM_ok hreg _ hjs)

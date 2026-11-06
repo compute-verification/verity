@@ -3,8 +3,8 @@
 Two facts of the `TargetProfile` decide a launch's Definition, and the two registries
 split along them:
 
-* the GEMM *launch geometry* (tiling table / default tiling, the k16 step the Triton kernel lowers to) is `verity_vllm.program.frontend.gemm_targets`
-  (lane ampere): `TargetProfile.gemm_target()` -> `GemmTarget{key, vllm_arch_family, tuned_table, dot, kind, evidence}`; `ada` / `ampere` /
+* the GEMM *launch geometry* (tiling table / default tiling, the k16 step the Triton kernel lowers to) is `verity_vllm.program.frontend.gemm_targets`:
+  `TargetProfile.gemm_target()` -> `GemmTarget{key, vllm_arch_family, tuned_table, dot, kind, evidence}`; `ada` / `ampere` /
   `hopper` / `blackwell_consumer` are registered there, anything else is `UnregisteredGemmTarget` (fail closed).  This module holds NO table copy: it resolves the
   record's `dot` NAME to the registered step primitive (`DOTS`) and binds the Definition;
 * the *attention chain* is keyed by the effective FA version (`TargetProfile.effective_flash_attn_version()`: the declared knob, else vLLM's
@@ -22,8 +22,8 @@ their Program digests do not move).  Every other combination binds the statics-l
 `Attention_v2{T,NH,KVH,D,BN,DOT,INV}` (`b1.GemmV2`, `b1.AttentionV2`: the same bodies with the step and the epilogue as declared
 statics).  Three consumers read this module for "which registered function does
 this launch compute on the declared target": the Bet A builder (`verity_vllm.program.frontend.rules.vllm_bindings`), the eager Match resolver
-(`verity_vllm.observe.fold.patterns`) and, through the run header's recorded target, the collector.  The per-target correspondence (the row's Match
-replay on the captured operands; lane ampere's `gemm_target_correspondence` driver) is checked bit for bit, never a tolerance.
+(`verity_vllm.observe.fold.patterns`) and, through the run header's recorded target, the collector.  The per-target correspondence (the workload's Match
+replay on the captured operands; the `gemm_target_correspondence` driver) is checked bit for bit, never a tolerance.
 """
 from __future__ import annotations
 
@@ -32,6 +32,7 @@ from typing import Any
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops.prims import (BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64, HopperBF16WgmmaDot16,
                                           HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32)
+from verity.ml.definitions.numerics import fa3_model as FA3
 from verity.ml.definitions.registry import b1
 from verity.ml.definitions.registry import fa2_check_inf as F2
 from verity.ml.definitions.registry import attention_vocab
@@ -64,10 +65,10 @@ TARGETS: dict[str, dict[str, Any]] = {
                "instruction": "mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 (Triton tl.dot on sm_80/sm_89; FA2 CUTLASS)",
                "pipeline": "veritor.core.silicon_total.AMPERE_BF16_DOT16_TOTAL (groups 8+8, width 25, floor -132; A100 + RTX 4090 conform)",
                "flash_attn_versions": (2,),
-               "evidence": {"attention_fa2": "W11 (D=128, BN=64), E7 D54/D57 (D=64, BN=128); R12 canaries; R13 ampere A100 row Match replay"}},
+               "evidence": {"attention_fa2": "D=128 (BN=64) and D=64 (BN=128) replays; canaries; an A100 workload's Match replay"}},
     "hopper": {"dot_id": "HopperBF16WgmmaDot16_v1",
                "instruction": "wgmma.mma_async.sync.aligned.m64nNk16.f32.bf16.bf16 (Triton tl.dot on sm_90) / mma.sync.m16n8k16 (FA2 CUTLASS JIT to sm_90)",
-               "pipeline": "veritor.core.silicon_total.HOPPER_BF16_WGMMA_K16 (one group of 16, width 26, floor -133; lane HP 2026-09-07) = "
+               "pipeline": "veritor.core.silicon_total.HOPPER_BF16_WGMMA_K16 (one group of 16, width 26, floor -133) = "
                            "silicon.HOPPER_BF16_M16N8K16 (Hawkeye H100)",
                "flash_attn_versions": (2, 3),
                # a biased linear binds GemmBias_v2{K,N,DOT} with this family's step (`gemm_bias_dot`): serving has no source for the
@@ -76,18 +77,18 @@ TARGETS: dict[str, dict[str, Any]] = {
                # the bf16 fused-MoE expert GEMMs bind MoeExpertGemm_v2 / MoeExpertGemmW_v2{DOT} with this family's step (`moe_expert_dot`),
                # at any tuned tile at served defaults (`moe_tuned_tile_refusal`); the runs are Qwen3-30B-A3B's on one H200
                "moe_expert_dot": True,
-               "evidence": {"attention_fa2": "R13 hopper: forced-FA2 row `…__h100__…__bi-eager-fa2` Match replay (D=64, BN=128, DOT=Hopper, INV=Fa2InvSum)",
+               "evidence": {"attention_fa2": "the forced-FA2 workload `…__h100__…__bi-eager-fa2`'s Match replay (D=64, BN=128, DOT=Hopper, INV=Fa2InvSum)",
                             "moe_expert": "Triton lowers the bf16 fused_moe_kernel's tl.dot to wgmma k16 or to MMA v2's mma.sync m16n8k16, whose "
                                           "HMMA.16816 on cc 9.0 is silicon.HOPPER_BF16_M16N8K16, the wgmma step's parameters and not the Ampere "
-                                          "step (silicon.instructions, r20260922-185339-e337); cc 9.0, 132 SMs, vLLM d9105ea80, served defaults: "
-                                          "the compiled Match r20261018-084657-c7f6 equals MoeExpertGemm_v2 / MoeExpertGemmW_v2{DOT=HopperBF16WgmmaDot16_v1} "
-                                          "on 672 of 672 rows each at the tuned tiles of 1 to 303 rows, where the _v1 binding matched 27 of 1,344 "
-                                          "(r20261018-062333-f1a7); eager under batch invariance, whose launches take the same tuned tiles: the "
-                                          "Match r20261018-101214-aa8f folds every expert row of 32 steps to these Definitions, and tier A on its "
-                                          "rerun's capture (r20261018-103507-288c, replayed by r20261018-122240-8e2d) evaluates 1,536 of 1,536 rows "
+                                          "step (silicon.instructions); cc 9.0, 132 SMs, vLLM d9105ea80, served defaults: "
+                                          "the compiled Match equals MoeExpertGemm_v2 / MoeExpertGemmW_v2{DOT=HopperBF16WgmmaDot16_v1} "
+                                          "on 672 of 672 rows each at the tuned tiles of 1 to 303 rows, where the _v1 binding matched 27 of 1,344; "
+                                          "eager under batch invariance, whose launches take the same tuned tiles: the "
+                                          "Match folds every expert row of 32 steps to these Definitions, and tier A on its "
+                                          "rerun's capture evaluates 1,536 of 1,536 rows "
                                           "exactly at the gates, each launch's 384 rows of decode step 1 and 384 of the prefill",
-                            "attention_fa3": "lane HP CONF-b1-hopper (D=128, BN=128, 39 leaves exact, positions 0..526); R13 hopper: D=64 (BN 128 prefill / "
-                                             "192 decode) — the native FA3 row's Match replay"}},
+                            "attention_fa3": "D=128, BN=128, 39 leaves exact, positions 0..526; D=64 (BN 128 prefill / "
+                                             "192 decode) — the native FA3 workload's Match replay"}},
     "blackwell_consumer": {"dot_id": "HopperBF16WgmmaDot16_v1",
                            "instruction": "mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 (cc 12.0 has no wgmma; under VLLM_BATCH_INVARIANT=1 "
                                           "vLLM's linear layers run the Triton matmul_kernel_persistent, then `output + bias` in bf16, at every M; "
@@ -100,19 +101,18 @@ TARGETS: dict[str, dict[str, Any]] = {
                            "moe_expert_dot": True,
                            # a biased linear binds GemmBias_v2{K,N,DOT} with this family's step (`gemm_bias_dot`)
                            "gemm_bias_dot": True,
-                           "evidence": {"attention_fa2": "the port's attention lane, RTX PRO 6000 (cc 12.0, 188 SMs, driver 595.91): property "
-                                                         "fa2_target_capture ef4b2584 (r20260930-033258-f611, art:d342a748): vLLM selects FLASH_ATTN "
+                           "evidence": {"attention_fa2": "RTX PRO 6000 (cc 12.0, 188 SMs, driver 595.91): property "
+                                                         "fa2_target_capture ef4b2584 (art:d342a748): vLLM selects FLASH_ATTN "
                                                          "FA2; _vllm_fa2_C carries cc 8.0 SASS + compute_80 PTX, so the kernel is the driver's JIT; "
                                                          "kBlockM 64, kBlockN fa2_kblock_n(D) at D 64/96/128/256; MUFU ex2/rcp = core's tables on all "
                                                          "2^32 inputs; 19,232 rows (122,228 heads) equal Attention_v2 with this DOT and Fa2InvSum on "
                                                          "every finite head (Attention_v3: 997 differ); fa_tap_exactness 9dee6b6f / 9403e9fe guarded "
-                                                         "(r20260930-030755-9aab, art:592bc0ae)",
+                                                         "(art:592bc0ae)",
                                         "gemm_bias": "RTX PRO 6000 (driver 580.173.02), torch 2.13.0+cu129, vLLM d9105ea80 under "
                                                      "VLLM_BATCH_INVARIANT=1: linear_batch_invariant(x, W, b) on a biased qkv linear of the bf16 "
                                                      "sweep (K 896, N 1152) launches matmul_kernel_persistent, then a bf16 add, at M 1, 2, 7 and 256; all "
                                                      "306,432 words equal BiasAdd_v1(Gemm_v2{DOT=HopperBF16WgmmaDot16_v1}), and 80,572 of them "
-                                                     "differ from the bias added before the rounding (F.linear's cuBLASLt epilogue), run "
-                                                     "r20260930-140739-7974"}},
+                                                     "differ from the bias added before the rounding (F.linear's cuBLASLt epilogue)"}},
 }
 
 
@@ -270,38 +270,20 @@ def check_flash_attn_registered(profile) -> int:
 
 
 def fa3_kblock_n(D: int, seqlen_q: int, qh_per_kvh: int) -> int:
-    """kBlockN of the FA3 forward vLLM launches (vllm-flash-attn 506341a1 `hopper/tile_size.h::tile_size_fwd_sm90`, element_size 2,
-    causal, not local, `paged_kv_non_TMA` = paged KV without TMA, `use_one_mma_wg = (D in {64, 128}) and seqlen_q * qh_per_kvh <= 64`
-    (`hopper/heuristics.h`; `seqlen_q` = the launch's max_seqlen_q under varlen)):  D <= 64: one-MMA-warpgroup 64 x 192 else 192 x 128;
-    D <= 96: 128 (paged non-TMA); D <= 128: 128 (causal); D = 256 (qk and v head 256, GLM-5.3's dense MHA prefill): 80, the 128 x 80
-    tile whatever seqlen_q or paging.  The head dims between are not registered."""
-    D, seqlen_q, qh = int(D), int(seqlen_q), int(qh_per_kvh)
-    one_wg = D in (64, 128) and seqlen_q * qh <= 64
-    if D <= 64:
-        return 192 if one_wg else 128
-    if D <= 96:
-        return 128
-    if D <= 128:
-        return 128
-    if D == 256:
-        return 80
-    raise UnregisteredTarget(f"FA3 head dim {D}: no registered kBlockN rule")
+    """kBlockN of the FA3 forward vLLM launches (`fa3_model.kblock_n_for`; D = 256 is GLM-5.3's dense MHA prefill), refused at a head
+    dim it has no rule for."""
+    try:
+        return FA3.kblock_n_for(D, seqlen_q, qh_per_kvh)
+    except ValueError as e:
+        raise UnregisteredTarget(f"FA3 head dim {D}: no registered kBlockN rule") from e
 
 
 def fa3_tile_m(D: int, seqlen_q: int, qh_per_kvh: int) -> int:
-    """kBlockM of the FA3 forward tile (the same `tile_size_fwd_sm90` / `use_one_mma_wg` rule as `fa3_kblock_n`): D <= 64: 64 (one MMA
-    warpgroup) else 192; D <= 96: 192; D <= 128: 64 (one MMA warpgroup) else 128; D = 256: 128."""
-    D, seqlen_q, qh = int(D), int(seqlen_q), int(qh_per_kvh)
-    one_wg = D in (64, 128) and seqlen_q * qh <= 64
-    if D <= 64:
-        return 64 if one_wg else 192
-    if D <= 96:
-        return 192
-    if D <= 128:
-        return 64 if one_wg else 128
-    if D == 256:
-        return 128
-    raise UnregisteredTarget(f"FA3 head dim {D}: no registered kBlockM rule")
+    """kBlockM of the FA3 forward tile (`fa3_model.kblock_m_for`), refused at a head dim it has no rule for."""
+    try:
+        return FA3.kblock_m_for(D, seqlen_q, qh_per_kvh)
+    except ValueError as e:
+        raise UnregisteredTarget(f"FA3 head dim {D}: no registered kBlockM rule") from e
 
 
 def fa3_check_inf(profile) -> bool:
@@ -334,12 +316,12 @@ def fa2_masked_from(profile, T: int, D: int, seqlen_q: int, row: int, own_rows: 
 
 
 class LaunchContextConflict(ValueError):
-    """[HOP-03] the launch context of a request shape is not one value (requests of the same (LP, T) are co-scheduled with
+    """The launch context of a request shape is not one value (requests of the same (LP, T) are co-scheduled with
     different batches) and the target's tile rule reads it: the component Program cannot be built for that shape as one Program."""
 
 
 def parse_launch_context(spec: str | int | list | dict | None) -> dict[str, Any] | None:
-    """[R15 hopper HOP-03] The LAUNCH CONTEXT a request Program is built under -- a structural input of the construction, like `sampling`.
+    """The LAUNCH CONTEXT a request Program is built under -- a structural input of the construction, like `sampling`.
 
     FA3's tile (`fa3_kblock_n`) reads the varlen launch's `max_seqlen_q` = the most query rows any ONE sequence of the launch has; the
     request wrapper sees only its own rows (its prompt on step 0, one row per decode step), which IS the launch's value for a batch of one
@@ -402,18 +384,18 @@ def _launch_batch(steps) -> dict[str, Any]:
 
 
 class LaunchContextInvalid(ValueError):
-    """[HOP-03b, rev-pm M-0326 T1/T2] a DECLARED launch context that cannot be the context of this request: it does not name a
-    step the request runs (a truncated declaration would silently fall back to own rows = the M-0225 bug through the CLI), or it names a
+    """A DECLARED launch context that cannot be the context of this request: it does not name a
+    step the request runs (a truncated declaration would silently fall back to own rows), or it names a
     max_seqlen_q below the request's own rows at that step (the launch contains the request; a smaller value is another shape's context).
     Refused on every target: it is a wrong structural input, not a tile question."""
 
 
 def launch_seqlen_q(own_rows: int, step: int, launch: dict[str, Any] | None) -> tuple[int, str]:
-    """[HOP-03] The `seqlen_q` the attention tile rule must read for a request's step: the launch's max over all sequences,
+    """The `seqlen_q` the attention tile rule must read for a request's step: the launch's max over all sequences,
     never less than this request's own rows (the launch contains the request).  Returns (seqlen_q, source):
     ("own rows" when no context is declared; "declared launch context" when one is).  A declared context that does not name the step,
-    or names a value below the request's own rows, is refused (`LaunchContextInvalid`) -- never completed or corrected (rev-pm T1/T2:
-    row_pod's `launch_context` always declares every step of the shape, so both are CLI-only misdeclarations)."""
+    or names a value below the request's own rows, is refused (`LaunchContextInvalid`) -- never completed or corrected
+    (row_pod's `launch_context` always declares every step of the shape, so both are CLI-only misdeclarations)."""
     own = int(own_rows)
     if not launch:
         return own, "own rows"

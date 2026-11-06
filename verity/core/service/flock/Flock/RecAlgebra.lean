@@ -1,4 +1,6 @@
-import Flock.Ligerito
+module
+
+public import Flock.Ligerito
 
 /-!
 # V*'s algebra: `GfResiduals`' structure and its verifier rows
@@ -12,7 +14,7 @@ holds. This file restates how Python builds that unit's `S` and `v` (`verity_flo
 * `run` is the inner verifier's algebra written once over values (`Val`): over `F128` it is the reference, over the
   symbolic values `Lin` it yields each residual's coefficients. The coin-only functions it calls (`lagrange`,
   `combWeights`, `eqTable`, `positions`, `basis`, `svTable`, `whats`, `cff`) are the Lean verifier's, which Python's
-  restate; `finalWeights` is the verifier's §13.6 loop (`Flock.ligerito`) as a function.
+  restate; `finalWeights` is the verifier's `Flock.Ligerito` loop (`Flock.ligerito`) as a function.
 * `build` reads `GfResiduals`' `S`, the coefficient slots' values and the final check's coefficients on the consistency
   sums (`kappa`) off the symbolic residuals (`rec_algebra._build`).
 * `structureOf sh` is `S` at coins all zero (`rec_algebra.structure`: the structure depends on the rounds the verifier
@@ -23,21 +25,24 @@ holds. This file restates how Python builds that unit's `S` and `v` (`verity_flo
 The verifier computes the S of each `rec-residuals/…` unit it checks with `structureOf` (`Flock.RecResiduals`).
 -/
 
+@[expose] public section
+
 namespace Flock.RecAlgebra
 
 open Flock
 
 /-! ## Coins -/
 
-/-- Where the verifier's coins come from (`rec_algebra.Coins`, rec_algebra.py:229–249): `round k n` is round `k`'s coins
+/-- Where the verifier's coins come from (`rec_algebra.CoinSource`, rec_algebra.py:229–249): `round k n` is round `k`'s coins
 when the verifier draws `n` of them, `drawnAll k` that every recorded round is drawn once `k` are. -/
-structure Coins where
+structure CoinSource where
   round : Nat → Nat → Except String (Array F128)
   drawnAll : Nat → Bool
 
-/-- A session record's coins by round (`Coins(rounds)`, rec_algebra.py:232–242). A recorded round of no coins is no
-draw (§6.2), so it is skipped (`Coins.__init__`): z_partial's round in a holo session absorbs elements and draws none. -/
-def Coins.ofRounds (recorded : Array (Array F128)) : Coins :=
+/-- A session record's coins by round (`CoinSource(rounds)`, rec_algebra.py:232–242). A recorded round of no coins is no
+draw (`Flock.Transcript`), so it is skipped (`CoinSource.__init__`): z_partial's round in a holo session absorbs elements
+and draws none. -/
+def CoinSource.ofRounds (recorded : Array (Array F128)) : CoinSource :=
   let rounds := recorded.filter (·.size ≠ 0)
   { round := fun k n => match rounds[k]? with
       | some r => if r.size = n then .ok r else .error s!"round {k}: {n} coins drawn, the record has {r.size}"
@@ -46,12 +51,13 @@ def Coins.ofRounds (recorded : Array (Array F128)) : Coins :=
 
 /-- Coins in whatever rounds the verifier draws, all zero (`_dummy_coins`, rec_algebra.py:884–901, whose coins are
 random: the structure depends on the rounds, not on the coins). -/
-def Coins.zeros : Coins := ⟨fun _ n => .ok (Array.replicate n 0), fun _ => true⟩
+def CoinSource.zeros : CoinSource := ⟨fun _ n => .ok (Array.replicate n 0), fun _ => true⟩
 
 /-- The coins drawn so far, read from a source. -/
-abbrev CM := StateT Nat (ReaderT Coins (Except String))
+abbrev CM := StateT Nat (ReaderT CoinSource (Except String))
 
-/-- `Coins.vec` (rec_algebra.py:235–242): a draw of `n` coins is one round of `n`; none is no round (§6.2). -/
+/-- `CoinSource.vec` (rec_algebra.py:235–242): a draw of `n` coins is one round of `n`; none is no round
+(`Flock.Transcript`). -/
 def coinVec (n : Nat) : CM (Array F128) := do
   if n = 0 then return #[]
   let src ← read
@@ -65,10 +71,10 @@ def liftE {A : Type} : Except String A → CM A
   | .ok a => pure a
   | .error e => throw e
 
-/-- `Coins.one` (rec_algebra.py:244–245). -/
+/-- `CoinSource.one` (rec_algebra.py:244–245). -/
 def coinOne : CM F128 := do return (← coinVec 1)[0]!
 
-/-- `Coins.k2` (rec_algebra.py:247–249): two coins as a K element. -/
+/-- `CoinSource.k2` (rec_algebra.py:247–249): two coins as a K element. -/
 def coinK2 : CM F256 := do
   let v ← coinVec 2
   return ⟨v[0]!, v[1]!⟩
@@ -243,7 +249,7 @@ def zcRounds (r : Array F128) : List (α × α) → Nat → α → Array F128 �
     let rr ← coinOne
     zcRounds r rest (i + 1) (add (add (sm (1 + rr) g0) (sm rr g1)) (sm (rr * (1 + rr)) ginf)) (rho.push rr)
 
-/-- §9.2, the zerocheck (rec_algebra.py:587–600): its residual `claim + v_A·v_B`, and its points. -/
+/-- `Flock.Piop`, the zerocheck (rec_algebra.py:587–600): its residual `claim + v_A·v_B`, and its points. -/
 def zerocheck (m : Nat) (M : Messages α) : CM (α × ZcPts α) := do
   let _ ← coinVec 6
   let r := pinned ++ (← coinVec (m - 13))
@@ -284,7 +290,7 @@ def combDot : List (α × α) → α → Except String α
   | [], acc => .ok acc
   | (cl, zl) :: rest, acc => do combDot rest (add acc (← mv cl zl))
 
-/-- §10, the lincheck (rec_algebra.py:601–617): its residual `Σ_l comb[l]·z_partial[l] + claim`, and its points. -/
+/-- `Flock.Piop`, the lincheck (rec_algebra.py:601–617): its residual `Σ_l comb[l]·z_partial[l] + claim`, and its points. -/
 def lincheck (kLog : Nat) (M : Messages α) (zc : ZcPts α) : CM (α × LcPts α) := do
   let alpha ← coinOne
   let beta ← coinOne
@@ -324,7 +330,7 @@ def rsClaims (M : Messages α) : List (AClaim α) → Nat → CM (Array α × Ar
     let (outs, betas, pts) ← rsClaims M rest (k + 1)
     return (#[out] ++ outs, #[beta] ++ betas, #[(rpp, z)] ++ pts)
 
-/-- §11, §12.2–§12.3, ring switching (rec_algebra.py:620–636): one residual per claim, and the batched sum. -/
+/-- `Flock.Piop`, `Flock.Opening`, ring switching (rec_algebra.py:620–636): one residual per claim, and the batched sum. -/
 def ringSwitch (M : Messages α) (claims : Array (AClaim α)) : CM (Array α × RsPts α) := do
   let (outs, betas, pts) ← rsClaims M claims.toList 0
   let gamma ← coinVec claims.size
@@ -332,7 +338,7 @@ def ringSwitch (M : Messages α) (claims : Array (AClaim α)) : CM (Array α × 
     ({ gamma := gamma[k]!, rpp := pts[k]!.1, z := pts[k]!.2 } : Switched)
   return (outs, ⟨dotV gamma betas, gamma, sws⟩)
 
-/-! ### Ligerito (§13) -/
+/-! ### Ligerito (`Flock.Ligerito`) -/
 
 /-- Ligerito's state (`st`, `msgs`, `oods`, `ood_ctx`, `cons_ctx`; rec_algebra.py:639–654): the running sum `s`, the
 round polynomial `q`, the messages and OOD values read, and the OOD and consistency contexts. -/
@@ -453,7 +459,7 @@ def ligeritoRun (sch : Schedule) (M : Messages α) : LM α (Array F256 × Array 
   let (levels, ext) ← levelsLoop sch M (sch.levels.size - 1) (sch.levels.size - 1) 0 split #[] 0
   return (initCh, levels, ext)
 
-/-- §13.6's `res[y]` for `y < 2^ext` (`rec_algebra.final_weights`, rec_algebra.py:395–455): the batched basis at the
+/-- `Flock.Ligerito`'s `res[y]` for `y < 2^ext` (`rec_algebra.final_weights`, rec_algebra.py:395–455): the batched basis at the
 folded point, the OOD terms and the consistency terms, all functions of the coins and the claims' points. This is the
 verifier's final-check loop (`Flock.ligerito`) as a function, which Python's restates; like the verifier it takes the
 levels loop's `ext`, where Python reads `sch.ext` (the same number: each level's columns are the last one's less 3). -/
@@ -509,7 +515,7 @@ structure LgPts where
   oods : Array OodCtx
   conss : Array ConsCtx
 
-/-- §13 Ligerito (rec_algebra.py:637–721): from the running sum `(T, 0)` (`tIn`: the absorbed `T`, or the verifier's
+/-- `Flock.Ligerito` Ligerito (rec_algebra.py:637–721): from the running sum `(T, 0)` (`tIn`: the absorbed `T`, or the verifier's
 own), the final check's two residuals (K's `c0`, `c1`), and its points. -/
 def ligerito (sch : Schedule) (M : Messages α) (tIn : α) (sws : Array Switched) : CM (Array α × LgPts) := do
   let ((initCh, levels, ext), st) ←
@@ -824,7 +830,7 @@ def build (sh : Shape) (lins : Array Lin) : Except String Built := do
   return ⟨⟨(wNames sh).size, vNames.size, st.ops, res⟩, vNames, st.vVals, st.kappa⟩
 
 /-- The symbolic residuals at a coin source (`_residual_lins`, rec_algebra.py:825–827). -/
-def residualLins (sh : Shape) (coins : Coins) (extras : Array Claim) : Except String (Array Lin × Info Lin) :=
+def residualLins (sh : Shape) (coins : CoinSource) (extras : Array Claim) : Except String (Array Lin × Info Lin) :=
   ((run sh (symbolic sh) extras).run' 0).run coins
 
 /-- Extra claims of the statement's number, all zero (`_extras_like`, rec_algebra.py:904–909, whose are random). -/
@@ -833,14 +839,14 @@ def extrasLike (sh : Shape) : Array Claim :=
 
 /-- `GfResiduals_v1{S}`'s S, a function of the shape alone (`rec_algebra.structure`, rec_algebra.py:915–921). -/
 def structureOf (sh : Shape) : Except String GfS := do
-  let (lins, _) ← residualLins sh Coins.zeros (extrasLike sh)
+  let (lins, _) ← residualLins sh CoinSource.zeros (extrasLike sh)
   return (← build sh lins).S
 
 /-- `GfResiduals`' v port at the rep's coins (the comb last), the coin-derived points and `kappa`
 (`rec_algebra.verifier_rows`, rec_algebra.py:931–940); refused when the structure moved with the coins. -/
 def verifierRows (sh : Shape) (rounds : Array (Array F128)) (extras : Array Claim) (comb : Array F128) :
     Except String (Array F128 × Info Lin × Array (Array (Array F128))) := do
-  let (lins, info) ← residualLins sh (Coins.ofRounds rounds) extras
+  let (lins, info) ← residualLins sh (CoinSource.ofRounds rounds) extras
   let b ← build sh lins
   if some b.S ≠ (structureOf sh).toOption then throw "the structure moved with the coins"
   return (b.vVals ++ comb, info, b.kappa)

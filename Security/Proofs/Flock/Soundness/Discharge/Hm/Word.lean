@@ -2,8 +2,12 @@
 Words of the builder (`Flock.HmNets`) and what their gadgets force: a word's value as a `BitVec 64`, rotations, shifts and
 XORs as `BitVec` operations, `Ch` and `Maj` bit by bit, commit, and the ripple-carry adder as addition mod `2^64`.
 -/
-import Proofs.Flock.Soundness.Discharge.Hm.Gadget
-import Proofs.Flock.Soundness.Discharge.Hm.Spec
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hm.Gadget
+public import Proofs.Flock.Soundness.Discharge.Hm.Spec
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Hm
 

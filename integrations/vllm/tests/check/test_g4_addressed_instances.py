@@ -1,5 +1,5 @@
 """G4 (`per_request._compare_component`): the global Program's address map declares each request's component by its root nodes
-(`n_instances`), and the component the Match loads has `Prog._bind_splits` remove a single-request Program's splits constants (one
+(`n_instances`), and the component the Match loads has `RootView._bind_splits` remove a single-request Program's splits constants (one
 `Const32[S]` per top-p select) from its compared sequence.  So G4 compares the address map with the compared sequence plus those bound
 constants (`addressed_instances`).  Workload 101's fifth Match failed G4 by exactly its 32 selects: 46,686 declared, 46,654
 compared."""
@@ -45,7 +45,7 @@ def test_a_component_without_splits_constants_is_counted_as_compared():
 
 @pytest.mark.slow
 def test_101s_fifth_build_is_addressed_as_its_component_is_compared(tmp_path):
-    """#101's stored fifth Build: the address map's `n_instances` for r0 equals its request Program's compared instances plus its 32 bound
+    """Workload 101's stored fifth Build: the address map's `n_instances` for r0 equals its request Program's compared instances plus its 32 bound
     splits constants (46,654 + 32 = 46,686), the count G4 failed on."""
     from tests.regression import store_io
     if os.environ.get("VERITY_SKIP_STORE") == "1" or not store_io.reachable():

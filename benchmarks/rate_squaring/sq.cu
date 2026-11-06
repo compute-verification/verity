@@ -1,6 +1,6 @@
 // Squarings mod p = 2^512 - 569 on the CUDA cores (sm_120), a thread holding ILP words, for the adversary's floor on
-// Sloth's encode (a root is (p+1)/4, about 510 squarings). Every form squares column by column (ra-word-codec's and
-// ra-codec-tensor's `sqr_full`, the red team's form 0: each unordered pair once, doubled, a three-word accumulator) and
+// Sloth's encode (a root is (p+1)/4, about 510 squarings). Every form squares column by column (the word codec's and
+// the tensor-core codec's `sqr_full`, the red team's form 0: each unordered pair once, doubled, a three-word accumulator) and
 // differs in the fold 2^512 = 569:
 //   FOLD 0  the red team's `fold_cols` (C u64 carries), ptxas's MOV / IADD.64 churn included: the baseline.
 //   FOLD 1  `kv.cu`'s PTX carry chains: the low products' chain, then the high ones' a limb up.

@@ -257,7 +257,7 @@ def uuid_text(device: bytes) -> str:
 def challenger_device(tagger: Tagger, gpu: str) -> bytes:
     """The device the windows audit, as the on-node challenger reads it on this node (`audit.read_device`: nvidia-smi's
     `GPU-…` UUID for `gpu`, a MIG slice refused), refused unless the tagger runs on that GPU: the UUID CUDA gives the
-    tagger's device (`Tagger.device`) must be the same 16 bytes.  Both are the prover's word (`PROTOCOL.md` §0)."""
+    tagger's device (`Tagger.device`) must be the same 16 bytes.  Both are the prover's word (`PROTOCOL.md` §2)."""
     device = audit.read_device(gpu)
     ran = tagger.device()
     if ran != device:

@@ -1,5 +1,5 @@
 /-
-A templated unit's rows evaluate as the composition of its Definitions (PRF-133): any assignment of the unrolled rows,
+A templated unit's rows evaluate as the composition of its Definitions: any assignment of the unrolled rows,
 each column the AND of its A and B rows' XORs, satisfies at every placed copy its Definition's own rows on that copy's
 columns and bound inputs, and its calls' copies recursively (`rows_sat`, `SatAt`). So a fact about a Definition's rows on
 any copy (a piece computing its specification) is a fact about the unit's columns at every copy of it, and a session's
@@ -8,7 +8,11 @@ circuit is the composition of its pieces as the template places them. No verifie
 The proof is an induction over the copies `place` writes: each copy's rows are written once (`write` refuses a written
 column) and so are the unit's at the end (`Keeps`), and `canon` keeps a row's XOR (`xorL_canon`).
 -/
-import Flock.TmplOrder
+module
+
+public import Flock.TmplOrder
+
+@[expose] public section
 
 namespace Flock.TmplEval
 

@@ -13,7 +13,7 @@ name the same request, else the Call is AMBIGUOUS. Any other row count is UNATTR
 no Call is dropped, guessed or shared.
 
 Projection: request r's Calls in fold order, segmented at r's own `TokenSelect` Calls into r's steps (prefill,
-then one per decode). Operand sources are canonicalised exactly as `compare.Prog.canon` does, relative to the projection:
+then one per decode). Operand sources are canonicalised exactly as `compare.RootView.canon` does, relative to the projection:
 `(TOK, lo, hi)` for r's OWN prompt parameter, `(W, field, lo, hi)` for weights, `(N, step_r, index_r, lo, hi)` for a node
 produced by one of r's Calls. A read of ANOTHER request's prompt parameter or of a node resolved to another request
 is a cross-request dependency (`XREQ`): it is counted, reported with examples, and fails the sweep row — token-row independence is
@@ -41,7 +41,6 @@ PROTOCOL SUMMARY (Match stage, B>1: the per-request decomposition of the batched
     request's prompt or node is XREQ and fails the sweep row; a request is compared at (LP_r, T_r) = (its prompt length, its served decode
     steps), never at the row envelope; the operand counts are the positional comparison, the verdict follows --within-step (dag of
     record; sequence recorded beside it).  Inside GM-01 (MATCH_PIPELINE=shared) the same decompose() writes this document via --decomp-out.
-  Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 """
 
 from __future__ import annotations
@@ -73,7 +72,7 @@ from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling
 from verity_vllm.check.match.dag_form import dag_multiset  # noqa: F401
 
 
-# the within-step criterion of record from r15-int-2: `dag` accepts a request whose projection
+# the within-step criterion of record: `dag` accepts a request whose projection
 # is the same live-cone DAG multiset as its Program although the fold's emission SEQUENCE differs (a co-scheduled prefill displaced
 # by a running decode, M-ARRIVAL-ORDER); `sequence` is the r14-v1 criterion (dag accepted for a chunked prefill only). Both facts are
 # recorded per request either way (`sequence_equal`, `dag_multiset_equal`); the global checker (GM-01) applies the per-step form and gates.
@@ -86,7 +85,7 @@ def record_ops() -> Ops:   # the checker of record's operations: X-09's default,
 
 
 def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = None, within_step: str = DEFAULT_WITHIN_STEP,
-              oracle: "C.Prog | None" = None, components: "dict[str, C.Prog] | None" = None, ops: Ops | None = None) -> dict:
+              oracle: "C.RootView | None" = None, components: "dict[str, C.RootView] | None" = None, ops: Ops | None = None) -> dict:
     if within_step not in WITHIN_STEP_CRITERIA:
         raise ValueError(f"within_step must be one of {WITHIN_STEP_CRITERIA}, got {within_step!r}")
     ops = ops or record_ops()
@@ -100,7 +99,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
     log_path = log_path or os.path.join(oracle_dir, "capture", "log.jsonl.gz")
     header, steps = read_steps(log_path)
     reqs, param_of, parent_of = request_params(header)
-    # the caller (global_match.check) may pass the fold it has already decoded: the fold Prog is read-only
+    # the caller (global_match.check) may pass the fold it has already decoded: the fold RootView is read-only
     # after load_oracle and at B16 1024/128 it is ~40 GB of Python objects -- decoding it a second time in the same process doubled
     # GM-01's peak RSS (87 GB on cp-dev1) for nothing
     with _Phase(run_prof, "fold_load") if profiling else _NoPhase():
@@ -217,7 +216,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
             bad_derived.append(d)
         else:
             derived.setdefault(sh, d)
-    A_cache: dict[tuple[int, ...], C.Prog] = {}
+    A_cache: dict[tuple[int, ...], C.RootView] = {}
     components = components if components is not None else {}  # decoded component Progs keyed by dir, shared with the caller
 
     res = {"schema": "cb-a/batch-decomp/v1", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "oracle_dir": oracle_dir,
@@ -341,7 +340,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
             if not seq_equal and not diff and chunked:
                 ent["criterion"] = "dag-multiset over the live cone (chunked prefill)"
             elif not seq_equal and not diff and within_step == "dag":
-                ent["criterion"] = "dag-multiset over the live cone (within-step criterion of record, COORD M-0177; sequence differs)"
+                ent["criterion"] = "dag-multiset over the live cone (within-step criterion of record; sequence differs)"
         ent["canonical_equal"] = (seq_equal or (ent.get("dag_multiset_equal") is True and (chunked or within_step == "dag"))) and (cmp.get("splits_values") or {}).get("equal", True)
         ent["totals"] = cmp["totals"]
         ent["a_steps"], ent["b_steps"] = cmp["a"]["steps"], cmp["b"]["steps"]
@@ -433,7 +432,7 @@ class Options:
     log: str | None = option("--log", default=None, help="capture log (default <oracle>/capture/log.jsonl.gz)")
     out: str = option("--out")
     within_step: str = option("--within-step", choices=WITHIN_STEP_CRITERIA, default=DEFAULT_WITHIN_STEP,
-                              help="within-step criterion of record: dag (COORD M-0177; live-cone DAG multiset accepted for every request) | sequence (r14-v1)")
+                              help="within-step criterion of record: dag (live-cone DAG multiset accepted for every request) | sequence (r14-v1)")
 
 
 def main(a: Options) -> int:

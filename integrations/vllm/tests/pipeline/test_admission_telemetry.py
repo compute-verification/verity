@@ -43,7 +43,7 @@ def test_same_name_twice_is_two_allocations():
 def _cfg(**kw):
     base = {"model": "llama32-1b", "requests": 8, "prompt_tokens": 3819, "decode_rows": 494, "steps": 129, "max_context": 1152, "pairs": 3, "host_limit_bytes": 119_209 * MiB}
     base.update(kw)
-    return adm.RowConfig(**base)
+    return adm.RowScale(**base)
 
 
 def test_predict_names_every_term_and_has_no_multiplier():
@@ -132,16 +132,16 @@ def test_r19_retain_windowed_pool_terms():
 def test_largest_tensor_law_matches_the_ledger():
     # 'largest tensor bound': llama B1 392, B8 3140, B32 12560, B64 25120 MiB; r11 (LP 4096, T 512) 6274 MiB
     for b, mib in ((1, 392), (8, 3140), (32, 12560), (64, 25120)):
-        c = adm.RowConfig(model="llama32-1b", requests=b, prompt_tokens=1024 * b, decode_rows=128 * b, max_context=1152, largest_request_rows=128, largest_request_ctx=1152)
+        c = adm.RowScale(model="llama32-1b", requests=b, prompt_tokens=1024 * b, decode_rows=128 * b, max_context=1152, largest_request_rows=128, largest_request_ctx=1152)
         assert abs(c.largest_tensor() / MiB - mib) / mib < 0.05
-    c = adm.RowConfig(model="llama32-1b", requests=1, prompt_tokens=4096, decode_rows=512, max_context=4608)
+    c = adm.RowScale(model="llama32-1b", requests=1, prompt_tokens=4096, decode_rows=512, max_context=4608)
     assert abs(c.largest_tensor() / MiB - 6274) / 6274 < 0.05
 
 
 def test_instances_law():
     assert abs(_cfg().instances() - 698_398) / 698_398 < 0.01
-    assert abs(adm.RowConfig(model="phi3-mini", requests=8, prompt_tokens=3630, decode_rows=460).instances() - 1_315_324) / 1_315_324 < 0.01
-    assert abs(adm.RowConfig(model="olmoe-1b-7b", requests=32, prompt_tokens=8659, decode_rows=1308).instances() - 5_745_046) / 5_745_046 < 0.01
+    assert abs(adm.RowScale(model="phi3-mini", requests=8, prompt_tokens=3630, decode_rows=460).instances() - 1_315_324) / 1_315_324 < 0.01
+    assert abs(adm.RowScale(model="olmoe-1b-7b", requests=32, prompt_tokens=8659, decode_rows=1308).instances() - 5_745_046) / 5_745_046 < 0.01
 
 
 def test_admission_decision_flips_on_the_limit():
@@ -158,7 +158,7 @@ def test_admission_decision_flips_on_the_limit():
 
 def test_under_fitted_capture_models_are_flagged_not_silently_admitted():
     llama = adm.predict(_cfg())["match"]
-    mistral = adm.predict(adm.RowConfig(model="mistral-7b", requests=8, prompt_tokens=3070, decode_rows=688, max_context=1152, host_limit_bytes=359_535 * MiB))["match"]
+    mistral = adm.predict(adm.RowScale(model="mistral-7b", requests=8, prompt_tokens=3070, decode_rows=688, max_context=1152, host_limit_bytes=359_535 * MiB))["match"]
     assert llama["lower_bound_terms"] == []
     assert mistral["lower_bound_terms"] == ["match.capture.hidden_values", "match.capture.instance_records", "match.capture.token_values"]
     assert any("#60" in t["basis"] for t in mistral["terms"] if t["name"].startswith("match.capture."))
