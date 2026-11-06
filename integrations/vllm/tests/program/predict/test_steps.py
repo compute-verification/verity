@@ -653,7 +653,7 @@ def test_a_class_g_request_compiles_to_the_traced_build(tmp_path):
     Program in the traced Build's form is the row's record, and compiled (`partial`: the window's other requests brought no body,
     so are refused, their rows still in its launches) in the registered compiler's form, the batch rules pass. What no cheaper
     test can: that a registration without a workload, at the advice's launch, builds the Program the Build traced, and that
-    `compile_steps` compiles a class-G request. Two GLM-5.3 builds of minutes each, so the window's other seven are
+    `compile_steps` compiles a class-G request. Its two GLM-5.3 builds take about a minute, so the window's other seven are
     `VERITY_VLLM_CLASS_G_WINDOW`'s."""
     reg, (advice, ingress, _) = _class_g(tmp_path), _b8_window()
     u = plan_steps(reg, advice, ingress).requests[0]
@@ -666,7 +666,7 @@ def test_a_class_g_request_compiles_to_the_traced_build(tmp_path):
 @pytest.mark.slow
 @pytest.mark.skipif(os.environ.get("VERITY_VLLM_CLASS_G_WINDOW") != "1",
                     reason="VERITY_VLLM_CLASS_G_WINDOW=1: GLM-5.3's B8 window whole, its eight request Programs built in each form at "
-                           "rank 0 (most of an hour and about 25 GB on one core)")
+                           "rank 0 (about half an hour and 25 GB on one core)")
 def test_a_class_g_window_compiles_to_the_traced_build(tmp_path):
     """GLM-5.3's B8 row as a window's advice under a class-G registration at rank 0, whole: each of its eight request Programs, at
     the launch context the advice gives it, is in the traced Build's form the row's record (`aot.compare` over the window, one
