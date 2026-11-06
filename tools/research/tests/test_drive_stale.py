@@ -223,7 +223,7 @@ def test_after_a_landing_the_owner_of_each_unmarked_pr_stacked_on_it_hears_once_
     h = _driven(world, monkeypatch, stale_days=0)
     h.d.reviews = lambda n, head: world.store.labels(label_target(n, head), key=vocab.REVIEWED)
     h.d.ready_by = lambda n, head: None
-    assert Q.baseline(h.q, _git(world.origin, "rev-parse", "main"), "ci") == 0
+    h.baseline()
     h.tick()
     assert [m.pr for m in h.q.chain()] == [1, 3]
     world.store.add_label(label_target(1, h1), vocab.REVIEWED, "land", "reviewer")

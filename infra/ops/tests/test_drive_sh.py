@@ -87,6 +87,19 @@ def test_locked_calls_checkout_with_its_verb():
     assert 'checkout "$1" || exit 1' in body and "--detach" not in body
 
 
+@pytest.mark.parametrize("args, runs", [(("queue", "promote"), "unlocked"), (("queue", "baseline", "abc", "--by", "ci"), "unlocked"),
+                                        (("queue", "eject", "5"), "locked"), (("merge", "--push"), "locked")])
+def test_queue_baseline_and_promote_run_beside_a_tick(args, runs):
+    """`queue baseline` and `queue promote` only fast-forward main and write nothing of drive's, so they wait for no tick (one
+    holds its lock an hour and more, and main would wait with them) and check nothing out under one; every other verb does."""
+    arms = "".join(re.search(rf"^  {verb}\) .*;;\n", DRIVE.read_text(), re.M).group(0) for verb in ("queue", "merge"))
+    stubs = 'locked() { echo locked "$@"; }; unlocked() { echo unlocked "$@"; }; '
+    out = subprocess.run(["sh", "-c", f"{stubs}case $1 in\n{arms}esac", "sh", *args], capture_output=True, text=True).stdout.strip()
+    assert out == f"{runs} {' '.join(args)}"
+    body = function("unlocked")
+    assert "flock" not in body and "checkout" not in body and "RESEARCH_DRIVE=1" in body
+
+
 def test_merge_checks_out_branch_main_at_origin(repo):
     clone, tip = repo
     checkout(clone, "merge")

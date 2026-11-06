@@ -96,8 +96,8 @@ def _tree(world: World, ref: str) -> str:
 
 
 class Review(Harness):
-    """A drive landing on reviews, whose verdicts are `reviewed` labels in the world's store.  Unless ``baseline`` is off, ci has
-    recorded `main` green (`research queue baseline`), so a tick lands without first running the after-landing run on `main`."""
+    """A drive landing on reviews, whose verdicts are `reviewed` labels in the world's store.  Unless ``baseline`` is off, `main`
+    is verified (`Harness.baseline`), so a tick lands without first running the after-landing run on `main`."""
 
     def __init__(self, world, monkeypatch, baseline: bool = True, **kw):
         super().__init__(world, monkeypatch, **kw)
@@ -105,7 +105,7 @@ class Review(Harness):
         self.d.ready_by = lambda pr, head: next((lab.by for lab in sorted(world.store.labels(label_target(pr, head), key=vocab.READY),
                                                                           key=lambda lab: lab.ts, reverse=True)), None)
         if baseline:
-            assert Q.baseline(self.q, _git(world.origin, "rev-parse", "main"), "ci") == 0
+            self.baseline()
 
     def review(self, pr: int, verdict: str = "land", by: str = "reviewer", ref: str | None = None) -> None:
         self.world.store.add_label(label_target(pr, self.world.gh.prs[pr].head), vocab.REVIEWED, verdict, by, ref=ref)
@@ -819,62 +819,6 @@ def test_nothing_lands_before_the_after_landing_run_of_main_itself_and_a_red_mai
     (post,) = [p for p in h.posts if "Reverted nothing" in p]
     assert "suite pkg is red" in post and "It never passed in an after-landing run since" in post, post
     assert "@lane-2" not in post, post
-
-
-def test_ci_records_a_baseline_only_on_the_control_pod_and_it_clears_an_open_bisection(world, monkeypatch):
-    """Off the control pod `research queue baseline` wrote a state file there that drive never reads, and said nothing."""
-    from research.merge import DRIVE_ENV
-
-    h = Review(world, monkeypatch, baseline=False)
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    h.review(1)
-    main = _main(world)
-    h.q._clone()
-    state = h.q.load_state()
-    state["drive"] = {"launched": {}, "told": [], "postland": {"verified": main, "pending": [], "run": None, "bisect": {
-        "tip": main, "base": main, "steps": ["pytest"], "why": "x", "key": "step pytest", "no_cache": False, "cands": [], "good": -1, "bad": 0,
-        "run": {"ids": ["r-gone"], "i": 0, "at": 0}}}}
-    h.q.save_state(state)
-    argv = ["baseline", main, "--by", "ci", "--workdir", str(h.q.workdir), "--remote", str(world.origin), "--repo", "o/r",
-            "--store", str(world.tmp / "store"), "--rules", str(world.dev / "ci" / "queue.toml")]
-    monkeypatch.delenv(DRIVE_ENV, raising=False)
-    assert Q.main(argv) == 1 and "bisect" in h.postland()
-    with pytest.raises(QueueError, match="only ci"):
-        Q.baseline(h.q, main, "lane-3")
-    monkeypatch.setenv(DRIVE_ENV, "1")
-    with pytest.raises(QueueError, match="not after-landing steps"):
-        Q.baseline(h.q, main, "ci", "nonsense")
-    assert Q.main([*argv, "--steps", "lean-audit"]) == 0 and h.postland()["verified_as"]["steps"] == ["lean-audit"]
-    assert Q.main(argv) == 0 and "bisect" not in h.postland()
-    assert h.tick().startswith("landed #1")
-
-
-def test_a_baseline_ends_the_red_records_at_or_below_it_of_the_steps_it_records(world, monkeypatch, capsys):
-    """A baseline that left the red records of the runs below it kept them in drive's status line, culprits and all, after ci
-    recorded the run that passed them.  It ends each at or below the commit whose step it records green, as a passing run
-    does (`Driver._green`): a `suite` record once it records every suite step, never one it doesn't record."""
-    from research.merge import DRIVE_ENV
-
-    h = Review(world, monkeypatch, baseline=False)
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    h.review(1)
-    main = _main(world)
-    h.q._clone()
-    state = h.q.load_state()
-    red = lambda key: {"tip": main, "base": main, "step": key.split(" ")[1], "culprit": None, "first": "x"}  # noqa: E731
-    state["drive"] = {"launched": {}, "told": [], "postland": {"verified": main, "pending": [], "run": None, "red": {
-        k: red(k) for k in ("step ratchet-gate", "step lean-audit", "suite repository", "suite pkg::test_y")}}}
-    h.q.save_state(state)
-    monkeypatch.setenv(DRIVE_ENV, "1")
-    assert Q.baseline(h.q, main, "ci", "lean-audit,pytest") == 0
-    pl = h.postland()
-    assert sorted(pl["red"]) == ["step ratchet-gate", "suite pkg::test_y", "suite repository"]
-    assert pl["green"] == {"step lean-audit": main}
-    assert "their red records end: step lean-audit" in capsys.readouterr().out
-    assert Q.baseline(h.q, main, "ci") == 0
-    pl = h.postland()
-    assert pl["red"] == {} and set(pl["green"]) == {"step lean-audit", "step ratchet-gate", "suite repository",
-                                                     "suite pkg::test_y"}
 
 
 def _rings(h: Harness) -> list[str]:

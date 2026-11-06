@@ -87,10 +87,15 @@ only once that commit's after-landing run, the full check, passed every step on 
     research queue delegate AGENT --by LANE [--days N]
                                                    as LANE's holder, let the Cursor agent AGENT (a worker) sign ready marks and
                                                    land verdicts as LANE for N days (default 7, at most 14): see Signed verdicts
-    research queue baseline SHA --by ci             record `checked` at SHA as green for the review landing (and `main`'s to
-                                                   follow), which otherwise first runs the after-landing run on `checked` itself,
-                                                   and lands nothing until it ends
+    research queue baseline SHA --by ci [--steps STEP,...]
+                                                   fast-forward `main` now to SHA, a commit of `checked` ci knows is green on
+                                                   every step on the merge gate, beside drive's tick (no lock, no state written);
+                                                   drive's next tick takes it as verified, and the review landing lands on it
                                                    (on the control pod: `/data/infra/drive.sh queue baseline SHA --by ci`)
+    research queue promote                          fast-forward `main` to the tip of drive's after-landing run once every shard
+                                                   of it ended passing every step on the merge gate, beside drive's tick, as
+                                                   `baseline` does; nothing to do before (on the control pod, from a loop:
+                                                   `/data/infra/drive.sh queue promote`)
     research queue accept-checked SHA --by ci       record `checked`'s tip SHA, a commit drive didn't write, as one drive takes,
                                                    so its ticks, held on it (`Driver._unwritten`), go on from it
                                                    (on the control pod: `/data/infra/drive.sh queue accept-checked SHA --by ci`)
@@ -447,6 +452,17 @@ def _git(repo: Path, *args: str, check: bool = True, env: dict | None = None) ->
 
 def _out(repo: Path, *args: str) -> str:
     return _git(repo, *args).stdout.strip()
+
+
+def on_first_parents(repo: Path, c: str, tip: str) -> bool:
+    """Whether the commit ``c`` (full) is on ``tip``'s first-parent chain: one the branch at ``tip`` was at, not one only merged
+    into it."""
+    r = _git(repo, "rev-list", "--first-parent", "--parents", f"{c}..{tip}", check=False)
+    if r.returncode:
+        return False
+    if lines := r.stdout.strip().splitlines():
+        return lines[-1].split()[1:2] == [c]
+    return _git(repo, "rev-parse", "--verify", "-q", f"{tip}^{{commit}}", check=False).stdout.strip() == c
 
 
 def credential_args(repo: Path, remote: str) -> tuple[str, ...]:
@@ -5423,61 +5439,88 @@ def review_owners(q: Queue, labels: StoreLabels, pr: int, head: str, owner: str 
     return {owner, q.handle(p), labels.ready_by(pr, head)}
 
 
-#: the after-landing steps whose tasks run test suites, so a `suite NAME` red record may be either's (`Driver._unit_states`)
-SUITE_STEPS = ("lean-suites", "pytest")
+def _move_main(q: Queue, sha: str, verb: str, passed: str, wait: Callable[[], str | None] = lambda: None) -> int:
+    """Fast-forward `main` to ``sha``, a commit on the landing branch's first-parent chain (`checked`, `Queue.into`), beside
+    drive's tick: in drive's clone as the tick left it, read only (the branches' tips from the remote, nothing fetched, and the
+    push to the remote's URL, so no ref of the clone moves under the tick), with a plain push, never forced, which a `main` moved
+    meanwhile refuses.  Nothing to do when `main` already holds ``sha``, or while ``wait`` says why not yet.  Drive's next tick
+    takes the new `main` (`Driver._main_moved`)."""
+    if q.into == "main":
+        raise QueueError(f"{verb}: drive lands on `main` itself (drive.toml's `land_into`), so no `checked` leads it")
+    if not (q.workdir / ".git").exists():
+        raise QueueError(f"{verb}: drive has no clone at {q.workdir} yet: its first tick makes it")
+    has = lambda c: not _git(q.workdir, "cat-file", "-e", f"{c}^{{commit}}", check=False).returncode  # noqa: E731
+    holds = lambda a, b: not _git(q.workdir, "merge-base", "--is-ancestor", a, b, check=False).returncode  # noqa: E731
+
+    def main_tip() -> str | None:
+        out = q._remote(q.workdir, "ls-remote", q.remote, "refs/heads/main", ok=None).stdout.split()
+        return out[0] if out else None
+
+    tips = {ref: c for c, ref in (line.split() for line in q._remote(
+        q.workdir, "ls-remote", q.remote, "refs/heads/main", f"refs/heads/{q.into}").stdout.splitlines())}
+    main, tip = tips.get("refs/heads/main"), tips.get(f"refs/heads/{q.into}")
+    if missing := [f"`{n}` {c[:12]}" for n, c in (("main", main), (q.into, tip)) if c and not has(c)]:
+        raise QueueError(f"{verb}: {' and '.join(missing)} isn't in drive's clone: pushed outside drive, which takes it next tick")
+    if not main or not tip or not on_first_parents(q.workdir, sha, tip):
+        raise QueueError(f"{verb}: {sha[:12]} is not on `{q.into}`'s first-parent chain" + (f" (at {tip[:12]})" if tip else ""))
+    if holds(sha, main):
+        print(f"research queue: {verb}: `main` {main[:12]} holds {sha[:12]} already: nothing to move")
+        return 0
+    if not holds(main, sha):
+        raise QueueError(f"{verb}: `main` {main[:12]}, pushed outside drive, isn't below {sha[:12]}: drive's next tick merges "
+                         f"it into `{q.into}` (`_absorb`)")
+    if why := wait():
+        print(f"research queue: {verb}: `main` stays at {main[:12]}: {why}")
+        return 0
+    q._drive_only("main", verb, False)
+    if (p := q._remote(q.workdir, "push", "-q", "--no-verify", q.remote, f"{sha}:refs/heads/main", ok=None)).returncode:
+        if (now := main_tip()) and has(now) and holds(sha, now):
+            print(f"research queue: {verb}: `main` moved to {now[:12]} meanwhile, which holds {sha[:12]}: nothing to move")
+            return 0
+        raise QueueError(f"{verb}: pushing `main` {main[:12]} to {sha[:12]} was refused: "
+                         f"{(p.stderr or p.stdout).strip()[-200:]}")
+    print(f"research queue: {verb}: `main` fast-forwarded from {main[:12]} to {sha[:12]}, {passed}; drive's next tick takes it")
+    return 0
 
 
 def baseline(q: Queue, sha: str, by: str, steps: str | None = None) -> int:
-    """`research queue baseline SHA --by ci [--steps STEP,...]`: record the landed branch (`checked`, `Queue.into`) at SHA as verified by the after-landing run
-    (`drive["postland"]`), on the steps ci knows are green there (every after-landing step by default; with --steps, only those,
-    as a red baseline run records: a later failure of another step reverts nothing), so the review landing lands without first running the after-landing run on that branch itself
-    (`Driver._unbaselined`), and a later failure reverts only a landing above SHA.  When those steps cover every step on the merge
-    gate there (not circuit-check: `Driver._gating`), drive moves `main` to SHA (`Driver._promote`).  It drops a bisection still open (it reverted
-    nothing), ends each red record at or below SHA of a step it records (a `suite` record once it records every one of
-    `SUITE_STEPS`), as a run that passes it does (`Driver._green`), and is refused while a post-landing run runs, for a SHA the
-    branch doesn't hold, and off drive (`/data/infra/drive.sh queue baseline SHA --by ci` on the control pod)."""
-    from .drive import AFTER_LANDING
+    """`research queue baseline SHA --by ci [--steps STEP,...]`: fast-forward `main` to SHA, a commit on `checked`'s first-parent
+    chain whose after-landing steps ci knows are green (every one by default; with --steps, those), at once (`_move_main`): it
+    waits for no tick, takes no lock of drive's and writes nothing of drive's state, and drive's next tick takes `main` there as
+    verified (`Driver._main_moved`), so the review landing lands on it.  Refused but by ci, off drive
+    (`/data/infra/drive.sh queue baseline SHA --by ci` on the control pod), for --steps that leave out a step on the merge gate
+    at SHA (`drive.gating`: not circuit-check), and for a SHA off that chain or below `main`; nothing to do when `main` holds it."""
+    from .drive import AFTER_LANDING, gating
 
     if _who(by) != "ci":
         raise QueueError(f"baseline: only ci records a green `main` (--by ci), not {by}")
     green = [x for x in (steps or "").split(",") if x] or list(AFTER_LANDING)
     if unknown := [x for x in green if x not in AFTER_LANDING]:
         raise QueueError(f"baseline: --steps {', '.join(unknown)}: not after-landing steps ({', '.join(AFTER_LANDING)})")
-    q._clone()
-    q.fetch()
-    full = _git(q.workdir, "rev-parse", "--verify", "-q", f"{sha}^{{commit}}", check=False).stdout.strip()
-    if not full or _git(q.workdir, "merge-base", "--is-ancestor", full, q.base, check=False).returncode:
-        raise QueueError(f"baseline: {sha} is not a commit of `{q.into}`")
-    state = q.load_state()
-    pl = state.setdefault("drive", {}).setdefault("postland", {"verified": full, "pending": [], "run": None})
-    if pl.get("run"):
-        raise QueueError(f"baseline: the post-landing run {' '.join(pl['run'].get('ids') or [])} is running; its end verifies "
-                         f"`{q.into}` or acts on it (a lost one, in 3 h): record a baseline once it has ended")
-    if b := pl.pop("bisect", None):
-        print(f"research queue: dropped the bisection of `{q.into}` {b['tip'][:12]}'s failed after-landing run; it reverted nothing")
-    on = lambda a, b: not _git(q.workdir, "merge-base", "--is-ancestor", a, b, check=False).returncode  # noqa: E731
-    pl["verified"] = full
-    pl.pop("verified_run", None)
-    pl["verified_as"] = {"steps": green, "no_cache": None, "by": by,
-                         "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
-    pl["pending"] = [p for p in pl.get("pending", []) if not on(p, full)]
-    if pl.get("failed") and on(pl["failed"], full):
-        del pl["failed"]
-    ended = []
-    for key, r in list((pl.get("red") or {}).items()):
-        kind, _, name = key.partition(" ")
-        if not (all(s in green for s in SUITE_STEPS) if kind == "suite" else name in green) or not on(r["tip"], full):
-            continue
-        kept = pl.setdefault("green", {})
-        if kept.get(key) != full and (key not in kept or on(kept[key], full)):
-            kept[key] = full
-        del pl["red"][key]
-        ended.append(f"{key} (red at {r['tip'][:12]})")
-    q.save_state(state)
-    print(f"research queue: `{q.into}` {full[:12]} recorded as verified by the after-landing run, by {by}: the review landing lands "
-          f"on it; {len(pl['pending'])} landing(s) above it wait for their run"
-          + (f"; their red records end: {', '.join(ended)}" if ended else ""))
-    return 0
+    if not (q.workdir / ".git").exists() or not (
+            full := _git(q.workdir, "rev-parse", "--verify", "-q", f"{sha}^{{commit}}", check=False).stdout.strip()):
+        raise QueueError(f"baseline: {sha} is no commit drive's clone has")
+    if left := [s for s in gating(q.workdir, full) if s not in green]:
+        raise QueueError(f"baseline: --steps leaves out {', '.join(left)}, on the merge gate at {full[:12]}: `main` moves only to "
+                         "a commit that passed every step on it")
+    return _move_main(q, full, "baseline", f"green on every step on the merge gate by {by}")
+
+
+def promote(q: Queue, states: Callable[[Path, list[str]], dict] | None = None,
+            evidence: Callable[[Path, list[str]], list[Path]] | None = None) -> int:
+    """`research queue promote`: fast-forward `main` to the tip of drive's after-landing run (`postland["run"]` in drive's
+    state, read and never written) once each of its runs, every shard's twins, has ended and it passed every step on the merge
+    gate there, as drive's tick judges it (`Driver.not_promotable`), the way `baseline` moves it (`_move_main`): `main` moves
+    within minutes of the run's end, not at drive's next tick.  Nothing to do without such a run, while it runs, once it failed
+    on the gate, or when `main` holds its tip; a loop on drive's host runs it (`/data/infra/drive.sh queue promote`)."""
+    from .drive import Driver, evidence as run_evidence, run_states
+
+    if not (run := ((q.load_state().get("drive") or {}).get("postland") or {}).get("run")):
+        print("research queue: promote: no after-landing run in drive's state: nothing to move")
+        return 0
+    d = Driver(q, on="", states=states or run_states, evidence=evidence or run_evidence)
+    return _move_main(q, run["tip"], "promote", f"whose after-landing run {' '.join(run.get('ids') or ())} passed every step on "
+                      "the merge gate", lambda: d.not_promotable(run))
 
 
 def accept_checked(q: Queue, sha: str, by: str) -> int:
@@ -5870,17 +5913,17 @@ def _checked_heads(a: argparse.Namespace) -> int:
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research queue", description=__doc__.split("\n\n")[0])
     ap.add_argument("command", choices=["status", "sync", "eject", "ready", "judge", "drive", "open", "edit", "link", "stats",
-                                            "checked-heads", "review", "baseline", "accept-checked", "drive-shard-add",
-                                            "delegate",
+                                            "checked-heads", "review", "baseline", "promote", "accept-checked",
+                                            "drive-shard-add", "delegate",
                                             "shadow-report"])
     ap.add_argument("pr", nargs="?", help="eject, ready, review, edit, link: the PR number; judge: the quick tier's run id; baseline: the "
-                    "commit of the landing branch (`checked`, or `main` until `checked` exists) ci knows is green; "
+                    "commit of `checked` ci knows is green, which `main` moves to; "
                     "accept-checked: `checked`'s tip, which drive didn't write; drive-shard-add: the after-landing run's tip; "
                     "delegate: the Cursor agent id to delegate --by's handle to")
     ap.add_argument("shard_run", nargs="*", metavar="K RUN_ID", help="drive-shard-add: the shard and the run to count in it")
     ap.add_argument("--reason", help="eject: why, for the owner's notice")
-    ap.add_argument("--steps", help="baseline: the after-landing steps green at SHA (default every one): a later failure of "
-                    "another step reverts nothing; `main` moves to SHA once they cover every step on the merge gate")
+    ap.add_argument("--steps", help="baseline: the after-landing steps green at SHA (default every one), which must cover every "
+                    "step on the merge gate there")
     ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE"),
                     help="eject, ready, judge: who ejects it, the handle its notice is posted as (default merge-queue, which no "
                          "one holds, so the notice fails) or says it's ready (no default: the owner's lane), "
@@ -6074,7 +6117,9 @@ def main(argv: list[str]) -> int:
     if a.command == "review" and a.pr and (a.land == (a.hold is not None) or not a.by):
         ap.error("review N records one verdict: --land [--ref NOTE] or --hold REASON, with --by <reviewer lane> (or $RESEARCH_LANE)")
     if a.command == "baseline" and not (a.pr and a.by):
-        ap.error("baseline SHA records a green `main` for the review landing: pass the commit and --by ci")
+        ap.error("baseline SHA moves `main` to a green commit of `checked`: pass the commit and --by ci")
+    if a.command == "promote" and a.pr is not None:
+        ap.error("promote takes no argument: it moves `main` to the tip of drive's after-landing run, once it passed")
     if a.command == "accept-checked" and not (a.pr and a.by):
         ap.error("accept-checked SHA records `checked`'s tip as one drive takes: pass the commit and --by ci")
     if a.shard_run and a.command != "drive-shard-add":
@@ -6116,6 +6161,14 @@ def main(argv: list[str]) -> int:
                   auth=credential_args(Path.cwd(), remote),
                   before_cutoff=labels.before_cutoff, marked_by=labels.marked_by, marked_at=labels.marked_at,
                   prefetch=labels.prefetch)
+        if a.command in ("baseline", "promote"):
+            from .merge import DRIVE_ENV, on_drive
+
+            if not on_drive():
+                raise QueueError(f"{a.command}: `main` moves only from drive's clone, and this isn't drive (no {DRIVE_ENV}=1): run "
+                                 f"`/data/infra/drive.sh queue {' '.join([a.command, *([a.pr, '--by', a.by] if a.pr else [])])}` there")
+            # no lock: a tick holds the clone's for its whole run, and these only read the clone and drive's state
+            return baseline(q, a.pr, a.by, a.steps) if a.command == "baseline" else promote(q)
         lock = _lock(workdir)
         q.unlock = lock.close
         if ignored := [f"--{k.replace('_', '-')}" for k in ("max_running", "train_size") if getattr(a, k) is not None]:
@@ -6173,11 +6226,6 @@ def main(argv: list[str]) -> int:
                           "land" if a.land else "hold" if a.pr else None, a.hold or a.ref, a.by, sha=a.sha, as_json=a.json)
         from .merge import DRIVE_ENV, off_drive, on_drive
 
-        if a.command == "baseline":
-            if not on_drive():
-                raise QueueError(f"baseline: drive's state is the control pod's, and this isn't drive (no {DRIVE_ENV}=1): run "
-                                 f"`/data/infra/drive.sh queue baseline {a.pr} --by {a.by}` there")
-            return baseline(q, a.pr, a.by, a.steps)
         if a.command == "accept-checked":
             if not on_drive():
                 raise QueueError(f"accept-checked: drive's state is the control pod's, and this isn't drive (no {DRIVE_ENV}=1): "

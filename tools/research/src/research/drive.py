@@ -26,8 +26,10 @@ Review landing, of every change the low-risk lane (above) doesn't take.  `main` 
 on a review onto the
 landing branch, drive.toml's `land_into` (`checked`: `Queue.into`), drive runs the full check on its tip, and `main` is
 fast-forwarded only to a commit of it whose after-landing run passed every step on the merge gate (`_promote`: not
-circuit-check, off it by drive's policy, policy.toml's `off_gate`, whose red reverts its culprit on `checked`); with `land_into = "main"` they
-land on `main` and are checked after.  A tick
+circuit-check, off it by drive's policy, policy.toml's `off_gate`, whose red reverts its culprit on `checked`); beside the
+tick, without its lock or a write to its state, `research queue promote` moves it there as soon as that run ends (a loop on
+drive's host runs it: `queue.promote`), and ci's `research queue baseline SHA` to a commit ci knows passed them, each tick
+taking a `main` so moved as verified (`_main_moved`); with `land_into = "main"` they land on `main` and are checked after.  A tick
 syncs `next` (`Queue.sync`: admit and drop PRs, rebuild on a moved `checked`), then lands its longest prefix whose every member has a land verdict at its head and no hold
 (`research queue review N --land|--hold`, a `reviewed` label on `pr:N@HEAD`; one by its owner, the owner's handle or its ready
 mark's author doesn't count: `queue.unreviewed`), a fast-forward of `checked` (`_land`); once `main` reaches it, `merge.caught_up`
@@ -91,8 +93,9 @@ cancel the twin after);
 `--no-cache --circuit-cache` while `after_landing_no_cache` (no pass reused but circuit-check's per-target ones), and
 `--no-regenerate` (a lock record difference fails it).  So `main` moves only to a commit whose records are the regenerated
 ones and whose gated steps all passed on it.  Nothing lands before one such run of `checked`
-itself ended (its baseline, verifying the steps it passed; `/data/infra/drive.sh queue baseline SHA --by ci` records a green one
-by hand).  The tick that reads a run's end launches the next before its sync, once its reverts are pushed, and a tick that
+itself ended (its baseline, verifying the steps it passed), or `main` moved to a green commit of it
+(`/data/infra/drive.sh queue baseline SHA --by ci`, which the next tick takes as verified).  The tick that reads a run's end
+launches the next before its sync, once its reverts are pushed, and a tick that
 launched none then launches it after its landings (`start_postland`); what lands in a tick after its run launched waits for
 the run after.  While a red on `checked` has a low-risk fix marked under `FIX_WAIT_S` ago and not landed, the run waits for it
 (`_fix_wait`), as one without it would go red again.  A red run runs on, so every red suite is named, and is cancelled only once its `TAIL` is all it has left (a cancel
@@ -156,7 +159,7 @@ from .executor import (AFTER_LANDING_PRIORITY, FAIL, PASS, PENDING, SHADOW_WAIT_
                        old_verdicts)
 from .gates import git_env
 from .queue import (IDENTITY, LANDED_WINDOW, PR, Entry, Member, Queue, QueueError, StoreLabels, _brought, _git, _out, _who, built_on,
-                    changed, forces_cold, lean_change, move_of, queue_commit, unreviewed)
+                    changed, forces_cold, lean_change, move_of, on_first_parents, queue_commit, unreviewed)
 from .queue_stats import ts
 from .store import vocab
 
@@ -228,6 +231,8 @@ TRAIN_STATE = ("launched", "deferred", "resent", "base", "bisect", "orphans", "p
 AFTER_LANDING = tuple(s for s in CHECK_STEPS if not s.startswith("preflight-"))
 #: the after-landing steps a run may skip by name: lean-agreement when nothing it checks changed, lean-changed under --no-cache
 AFTER_LANDING_OPTIONAL = ("lean-agreement", "lean-changed")
+#: the after-landing steps whose tasks run test suites, so a `suite NAME` red record may be either's (`Driver._unit_states`)
+SUITE_STEPS = ("lean-suites", "pytest")
 #: the after-landing steps train.sh still checks with `executor = "on"`: a run of them alone beside the executor's check of each
 #: tip (`Driver._start_slim`), whose steps on the merge gate `main` waits for as for the executor's tasks on it: lean-agreement
 #: unless that run skips it by name, not ratchet-gate (policy.toml's `off_gate`); the executor's tasks of them count for nothing
@@ -598,6 +603,17 @@ def failing(run_dir: Path) -> str | None:
             tests = s.get("failed_tests") or []
             out.append(f"suite {s.get('name')}" + (f" ({', '.join(tests[:2])}{' ...' if len(tests) > 2 else ''})" if tests else ""))
     return "; ".join(out) or None
+
+
+def gating(repo: Path, commit: str) -> list[str]:
+    """The after-landing steps `main` waits for at ``commit`` (`Driver._promote`, `queue.baseline`): every step but those a run
+    skips by name (`AFTER_LANDING_OPTIONAL`) and the jobs ``commit``'s own drive policy takes off the merge gate (policy.toml's
+    `off_gate`: circuit-check, `merge.declared_jobs`), which still run there and revert their culprit on `checked`; every such
+    step when that ci.toml or policy can't be read."""
+    from .merge import declared_jobs
+
+    jobs = declared_jobs(repo, commit)
+    return [s for s in AFTER_LANDING if s not in AFTER_LANDING_OPTIONAL and (isinstance(jobs, str) or s in jobs)]
 
 
 def run_states(repo: Path, ids: list[str]) -> dict[str, tuple]:
@@ -1423,6 +1439,9 @@ class Driver:
                                                       "steps.jsonl): it verified nothing and reverted nothing. Find why; "
                                                       f"the next landing's run checks `{self.q.into}` again")
                 return
+            if (v := pl.get("verified")) and v != tip and self._ancestor(tip, v):
+                self._red(drive, pl, run, ended=True)       # `main` moved past it beside drive (`_main_moved`): `verified` stays
+                return
             pl["verified"], pl["verified_run"] = tip, " ".join(run["ids"])
             # a step it skipped by name (`start_postland`) still holds from the run that verified `main` before
             kept = set((pl.get("verified_as") or {}).get("steps") or ()) & set(run.get("skip", ()))
@@ -1927,16 +1946,10 @@ class Driver:
                                       "failed. Reverted nothing")
 
     def _gating(self, commit: str) -> list[str]:
-        """The after-landing steps `main` waits for at ``commit`` (`_promote`): every step but those a run skips by name
-        (`AFTER_LANDING_OPTIONAL`) and the jobs ``commit``'s own drive policy takes off the merge gate (policy.toml's
-        `off_gate`: circuit-check, `merge.declared_jobs`), which still run there and revert their culprit on `checked`; every
-        such step when that ci.toml or policy can't be read."""
-        from .merge import declared_jobs
-
+        """`gating` at ``commit``, read once a drive."""
         cache = self.__dict__.setdefault("_gating_of", {})
         if commit not in cache:
-            jobs = declared_jobs(self.repo, commit)
-            cache[commit] = [s for s in AFTER_LANDING if s not in AFTER_LANDING_OPTIONAL and (isinstance(jobs, str) or s in jobs)]
+            cache[commit] = gating(self.repo, commit)
         return cache[commit]
 
     def _gate_passed(self, pl: dict, run: dict) -> None:
@@ -3174,15 +3187,30 @@ class Driver:
               f"research queue drive: kept {p.branch}, #{n}'s head: {(r.stderr or r.stdout).strip()[-200:]}")
 
     def _promotable(self, pl: dict) -> list[tuple[str, str]]:
-        """The commits of `checked` `main` may move to, each with the run that passed it ("" for ci's baseline): `verified` when
-        its steps (`verified_as`: its run's, ci's baseline, `--steps` too, or a red baseline's) cover every step `main` waits
-        for there (`_gating`), and `gated`, whose run passed those though a step off the gate (circuit-check) was red."""
+        """The commits of `checked` `main` may move to, each with the run that passed it ("" when none is known): `verified`
+        when its steps (`verified_as`: its run's, a red baseline's, or the gate's of a `main` taken there, `_main_moved`) cover
+        every step `main` waits for there (`_gating`), and `gated`, whose run passed those though a step off the gate
+        (circuit-check) was red."""
         out = []
         if (v := pl.get("verified")) and set(self._gating(v)) <= set((pl.get("verified_as") or {}).get("steps") or ()):
             out.append((v, pl.get("verified_run") or ""))
         if g := pl.get("gated"):
             out.append((g, pl.get("gated_run") or ""))
         return out
+
+    def not_promotable(self, run: dict) -> str | None:
+        """Why ``run``, the after-landing run in drive's state, moves no `main` beside drive (`queue.promote`), or None once each
+        of its runs (every shard's twins) has ended and its tip is one the tick takes as `gated` (`_gate_passed`).  The
+        executor's check (`executor = "on"`) moves `main` only through drive's own tick."""
+        if "tasks" in run:
+            return "it is the executor's check, which only drive's tick follows"
+        if run.get("shards") or "launch" in run or not run.get("ids"):
+            return "it is still launching"
+        if running := [r for r, (st, *_) in self._states(run["ids"]).items() if st in ACTIVE]:
+            return f"{' '.join(running)} still {'runs' if len(running) == 1 else 'run'}"
+        judged: dict = {}
+        self._gate_passed(judged, run)
+        return None if "gated" in judged else "it didn't pass every step on the merge gate"
 
     def _promote(self, drive: dict) -> None:
         """When drive lands on `checked` (drive.toml's `land_into`), fast-forward `main` to the newest commit of `checked` whose
@@ -3191,7 +3219,9 @@ class Driver:
         on `checked`, and `main` follows the revert.  With `executor = "on"`, a tip is `gated` once the executor's tasks on the
         gate passed and the run of `SLIM_STEPS` beside them passed its preflights and its steps on the gate, by the same
         `off_gate`, and verified once both passed everything (`_follow_tasks`).  `main` never moves to a commit no such run
-        passed, and never back; one that isn't below it (pushed outside drive) waits for `_absorb`."""
+        passed, and never back; one that isn't below it (pushed outside drive) waits for `_absorb`.  A push refused because
+        `main` already holds the commit, moved there beside this tick (`queue.baseline`, `queue.promote`), is no failure:
+        `main` stays, and the next tick takes it (`_main_moved`)."""
         q = self.q
         pl = drive.get("postland") or {}
         if q.into == "main" or self.dry_run or q.shadow:
@@ -3205,16 +3235,63 @@ class Driver:
         q._drive_only("main", "once", False)
         p = q._remote(self.repo, "push", "-q", "--no-verify", "origin", f"{v}:refs/heads/main", ok=None)
         if p.returncode:
+            now = q._remote(self.repo, "ls-remote", "origin", "refs/heads/main", ok=None).stdout.split()[:1]
+            if now and self._ancestor(v, now[0]):
+                q.log(f"research queue drive: `main` is at {now[0][:12]} already, which holds {v[:12]}: moved beside this "
+                      "tick; the next tick takes it")
+                return
             q.log(f"research queue drive: moving `main` to {v[:12]} was refused ({p.stderr.strip()[-200:]}); the next tick "
                   "tries again")
             return
+        pl["main"] = v
         members = self.landed_since(main, v)
         ex = ((pl.get("verified_as") or {}).get("executor") if v == pl.get("verified") else None) or (
             pl.get("gated_by") if v == pl.get("gated") else None)
-        by = run or (f"(the executor's {ex})" if ex else "(ci baseline)")
+        by = run or (f"(the executor's {ex})" if ex else "(no run recorded)")
         q.log(f"research queue drive: `main` fast-forwarded to {v[:12]}, which its after-landing run {by} "
               f"passed on every step on the merge gate: {' '.join(f'#{x.pr}' for x in members) or 'no PR'} since {main[:12]}")
         self._on_main(drive, members, main, v, run)
+
+    def _main_moved(self, drive: dict) -> None:
+        """At the start of each tick, take `main` as drive's own promotion leaves it, once it moved beside drive
+        (`queue.baseline`, `queue.promote`: neither takes the tick's lock or writes drive's state) or to `gated`.  On `checked`'s
+        first-parent chain above `verified`, it becomes `verified`, as passing every step on the merge gate there (`gating`),
+        each step the old `verified` passed beyond those keeping it as its newest green (`_green`); the red records at or below
+        it of the steps on the gate (a `suite` one once they cover `SUITE_STEPS`) end, and the landings and the failed tip at or
+        below it no longer wait.  What a move beside drive brought follows as a landing on `main` does (`_on_main`), once:
+        ``postland["main"]`` is the `main` drive last moved or took.  One pushed outside drive, off that chain, is only
+        recorded; `_absorb` brings it into `checked`."""
+        q = self.q
+        if q.into == "main" or self.dry_run or q.shadow or not (pl := drive.get("postland")):
+            return
+        main = _out(self.repo, "rev-parse", "refs/remotes/origin/main")
+        seen, pl["main"] = pl.get("main") or main, main
+        if not on_first_parents(self.repo, main, q.base):
+            return
+        attempt = next((pl.get(f"{k}_run") or "" for k in ("verified", "gated") if pl.get(k) == main), "")
+        if (old := pl.get("verified")) and old != main and self._ancestor(old, main):
+            steps = self._gating(main)
+            for s in (pl.get("verified_as") or {}).get("steps") or ():
+                if s not in steps:
+                    self._green(pl, f"step {s}", old)
+            for key in [f"step {s}" for s in steps] + [k for k in pl.get("red") or {}
+                                                       if k.startswith("suite ") and set(SUITE_STEPS) <= set(steps)]:
+                self._green(pl, key, main)
+            pl["verified"], pl["verified_as"] = main, {"steps": steps, "no_cache": None, "by": "main"}
+            if attempt:
+                pl["verified_run"] = attempt
+            else:
+                pl.pop("verified_run", None)
+            pl["pending"] = [p for p in pl.get("pending", []) if not self._ancestor(p, main)]
+            pl["landed_at"] = {p: t for p, t in (pl.get("landed_at") or {}).items() if p in pl["pending"]}
+            if pl.get("failed") and self._ancestor(pl["failed"], main):
+                del pl["failed"]
+            q.log(f"research queue drive: `{q.into}` {main[:12]} verified: `main` is there, past every step on the merge gate")
+        if main != seen and self._ancestor(seen, main):
+            members = self.landed_since(seen, main)
+            q.log(f"research queue drive: `main` moved beside drive to {main[:12]}: "
+                  f"{' '.join(f'#{x.pr}' for x in members) or 'no PR'} since {seen[:12]}")
+            self._on_main(drive, members, seen, main, attempt)
 
     def _absorb(self, drive: dict) -> None:
         """When drive lands on `checked`, bring into it a `main` that moved outside drive (`research merge --push` on its own
@@ -3583,22 +3660,25 @@ class Driver:
                                 f"the next sync rebuilds without it{also}", *(self._handle(x.pr) for x in xs))
 
     # -- the review landing (the module's docstring).  `drive["postland"]` also keeps "verified_as" ({"steps", "no_cache"} of
-    #    the run that verified `verified`, or ci's `research queue baseline`), "verified_run" (the ids of the run that verified
-    #    it; none for ci's baseline), "gated" and "gated_run" (the newest tip whose run passed every step on the merge gate, red
-    #    off it or not: `_gate_passed`; with "gated_by", the executor's check, when its tasks did: `_follow_tasks`),
+    #    the run that verified `verified`, or the gate's steps, "by": "main", once `main` was there: `_main_moved`),
+    #    "verified_run" (the ids of the run that verified it, when known), "gated" and "gated_run" (the newest tip whose run
+    #    passed every step on the merge gate, red off it or not: `_gate_passed`; with "gated_by", the executor's check, when
+    #    its tasks did: `_follow_tasks`), "main" (the `main` drive last moved or took: `_promote`, `_main_moved`),
     #    "ratchet_judged" (the newest tip whose run's ratchet-gate ended with a verdict: `_ratchet_judged`), "bisect" (a failed
     #    after-landing run's implicated landings, being bisected: `_bisect_step`), and the lock run's "locks" and "fresh"
 
     def _review(self, state: dict, drive: dict, dry_run: bool) -> str:
-        """One tick of the review landing, its low-risk lane after it (`land_lowrisk`): follow the lock run (`_follow_locks`),
-        move `main` to a fully checked `checked` (`_promote`) and bring a `main` pushed outside drive into `checked` (`_absorb`),
-        sync `next` (its held members moved to its top: `_park`, its reviewed ones to its bottom: `_lift`), land its reviewed
-        prefix (`land_reviewed`) once the landing branch has a baseline (`_unbaselined`), and launch the lock run
-        (`_start_locks`) and the after-landing run, or the next run of a bisection (`_bisect_step`); then ring what is past its
-        bound (`_behind`, `_alarms`).  The lock run and the after-landing run are launched before the sync, once the reverts
-        are pushed, so the sync, most of a tick, doesn't delay them, and else after the landings."""
+        """One tick of the review landing, its low-risk lane after it (`land_lowrisk`): take a `main` moved beside the tick
+        (`_main_moved`), follow the lock run (`_follow_locks`), move `main` to a fully checked `checked` (`_promote`) and bring
+        a `main` pushed outside drive into `checked` (`_absorb`), sync `next` (its held members moved to its top: `_park`, its
+        reviewed ones to its bottom: `_lift`), land its reviewed prefix (`land_reviewed`) once the landing branch has a
+        baseline (`_unbaselined`), and launch the lock run (`_start_locks`) and the after-landing run, or the next run of a
+        bisection (`_bisect_step`); then ring what is past its bound (`_behind`, `_alarms`).  The lock run and the
+        after-landing run are launched before the sync, once the reverts are pushed, so the sync, most of a tick, doesn't
+        delay them, and else after the landings."""
         q = self.q
         what: list[str] = []
+        self._main_moved(drive)
         self._follow_locks(drive)
         self._bisect_step(drive)
         self._revert_reds(drive)
@@ -3679,14 +3759,15 @@ class Driver:
 
     def _baselined(self, pl: dict) -> bool:
         """Whether `verified` ran the after-landing run as the review landing runs it, under `after_landing_no_cache`
-        (`verified_as`: the steps it passed, every step when green, fewer when `main` was red then, `_red_baseline`), or ci
-        recorded it green (`research queue baseline`, either flag)."""
+        (`verified_as`: the steps it passed, every step when green, fewer when `main` was red then, `_red_baseline`), or `main`
+        was there (`_main_moved`, either flag)."""
         vs = pl.get("verified_as")
         return bool(vs) and vs.get("no_cache") in (None, self.after_landing_no_cache)
 
     def _unbaselined(self, drive: dict) -> str | None:
         """Why no review landing happens now, or None: `main` has no baseline (`_baselined`), so a failure after a landing couldn't be told from one `main` had before it.  The
-        first run is then of `main` itself (`start_postland`), once any post-landing run still going has ended; ci records a green `main` by hand with `/data/infra/drive.sh queue baseline SHA --by ci`."""
+        first run is then of `main` itself (`start_postland`), once any post-landing run still going has ended; with `land_into = "checked"`, ci moves `main` to a green commit of
+        it by hand (`/data/infra/drive.sh queue baseline SHA --by ci`), which the next tick takes as verified (`_main_moved`)."""
         into = self.q.into
         main = _out(self.repo, "rev-parse", self.q.base)
         pl = drive.setdefault("postland", {"verified": main, "pending": [], "run": None})
