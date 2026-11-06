@@ -28,7 +28,7 @@ blobs hold (`tablesOf_extends`). -/
 theorem tablesOf_files_nil {V : Vocab d α} {k : Verity.Registration.Composite} {o : Verity.Exchange}
     {p₀ : _root_.SampledProofs.OneStageZk.Params} (hθ : ParamsAt o.params p₀) (hv : V.Verdict k .sampled o) :
     _root_.SampledProofs.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray o.files) = [] := by
-  obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, -, -, pub, prof, hck⟩ := case_drew hv.2.1 hθ (verdict_case hv)
+  obtain ⟨_, _, _, _, _, _, _, _, -, -, -, -, -, -, pub, prof, hck⟩ := case_drew hv.2.1 hθ (verdict_case hv)
   have h0 : _root_.SampledProofs.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray (o.files ++ o.blobs)) = [] :=
     Properties.SampledProofs.SecurityProofs.tablesRefused.2 _ _ _ _ _ _ _ hck
   cases hT : _root_.SampledProofs.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray o.files) with
@@ -49,8 +49,7 @@ theorem read_files {θ : ByteArray} {F F' : Array ByteArray} (hc : I.base.circui
     (ht : _root_.SampledProofs.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray F) =
       _root_.SampledProofs.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray F')) :
     I.base.read θ F = I.base.read θ F' := by
-  rw [Vocab.circuitFile, I.programDigest] at hc
-  rw [Vocab.publicFile, I.publicDigest] at hp
+  simp only [Vocab.circuitFile, Vocab.publicFile, I.programDigest, I.publicDigest] at hc hp
   rw [I.read, I.read, readOf, readOf, hc, hp, ht]
 
 /-- **A session v2 sets up on some files it sets up on files naming the same circuit and public files, read alike.** -/
