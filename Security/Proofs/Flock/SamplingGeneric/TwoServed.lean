@@ -45,19 +45,33 @@ is bounded request by request. Split the served outputs into requests by any map
 members. It is a set of served outputs, so it also has at most `2^{|outs|}`, and the bound to charge is the smaller.
 The split is the lemma's to take: the bound holds at every one, so it trusts none.
 
+Counting by sets charges each set of a request's proof blocks on its own, so a wholly incorrect request costs which of
+its blocks are incorrect as well as its `|r|` bits. Counting by patterns removes that. Sets that give `r` one `T_r`
+serve it alike, whatever else is incorrect, so the traces of the admissible sets of one pattern `r ↦ cls r (T_r)`
+serve at most `∏_r min(Σ_{U of class p r} 2^{b(U)}, 2^{|r|})` outputs, at any classes `cls`. With `lightOf`'s
+classes, a request whose `T_r` commits at least `|r|` bits costs `|r|` and its blocks are forgotten, and the count is
+never above the sets'.
+
 * `Prog.Reads`: gate `g` reads gate `j`, itself or through the wires it reads.
 * `Prog.runIn_congr_reads`, `boundary_eq_reads`, `outs_eq_reads`: **the determinism lemma at one returned gate**: two
   traces that make every proof block outside `T` correct and agree at the inputs and at the committed values of `T`
   that a returned gate reads agree at it.
-* `served_eq_on`, `card_image_servedAt_le`, `card_servedAt_le_served`: **one set `T`**: request `r`'s served outputs are
-  fixed by `T_r`'s committed bits, and number at most `2^{|r|}`; the outputs `T` serves are at most the product over the
-  requests.
+* `served_eq_on`, `blocksTo_union`, `served_eq_on_of_mem`, `card_image_onReq_le`: **request by request**: request
+  `r`'s served outputs are fixed by the committed bits of `S_r`, for any `S` holding both traces' incorrect sets, so
+  the traces of sets that all give `r` one `U` serve it in at most `2^{b(U)}` ways.
+* `card_le_prod_onReq`, `card_image_onReq_le_served`, `card_image_servedAt_le`, `card_servedAt_le_served`: **one set
+  `T`**: it serves `r` in at most `2^{min(b(T_r), |r|)}` ways, and the outputs it serves are at most the product over
+  the requests.
 * `card_influenceTwo_le_served`, `card_influenceTwo_le_served_min`: **the influence set** under the served-output cap,
   and under the smaller of it and `CompiledTwo.Exfil`'s `2^{b(T)}` for each `T` (a proof block read by several requests
   counts in each, so neither bound is always the smaller).
 * `sum_servedBits`, `card_influenceTwo_le_two_pow_outs`, `card_influenceTwo_le_min`: **never above the served
   outputs**: the influence set is a set of served outputs, so it has at most `2^{|outs|}` members, `|outs| = Σ_r |r|`,
   and the bound to charge is the smaller of that and the served-output cap.
+* `card_influenceTwo_le_classes`, `card_influenceTwo_le_touched`: **patterns**: the influence set counted by the
+  admissible sets' patterns under any classes, and by which requests they touch.
+* `lightOf`, `lightBits`, `card_influenceTwo_le_patterns`, `sum_patterns_le_served`: **the patterns' form**: a request
+  whose `T_r` commits at least `|r|` bits costs `|r|`, with its blocks forgotten; never above the sets' count.
 * `CompiledTwo.exfil_served`: **the corollary of `CompiledTwo.Exfil`**: KS at `RInflTwo`, with the influence set under
   the smaller of the served-output cap and `2^{|outs|}`.
 -/
@@ -241,8 +255,9 @@ theorem served_eq_on (H : Msg → Msg) (Cm : CommitmentScheme Bool) {s : AuditSt
 /-- The proof blocks of `T ∪ T'` that request `r` reads are `T_r ∪ T'_r`. -/
 theorem blocksTo_union {R : Type} (C : Prog) (Pt : Partition) (req : Fin C.outs.length → R) (T T' : Finset ℕ)
     (r : R) : blocksTo C Pt req (T ∪ T') r = blocksTo C Pt req T r ∪ blocksTo C Pt req T' r := by
+  ext v
   unfold blocksTo
-  exact filter_union T T'
+  simp only [mem_filter, mem_union, or_and_right]
 
 /-- Two boundary traces whose incorrect sets are in `𝒯`, each with `T_r = U`, the same inputs and the same bits at
 `U`'s committed values serve request `r` the same outputs: both are correct outside the union of their sets. -/
@@ -564,8 +579,8 @@ theorem lightBits_lightOf (s : AuditStatement) (Pt : Partition) (n : ℕ) (U : F
 /-- **The patterns' form**: at any split `req`, the influence set has at most `Σ_p 2^{Σ_r bits(p r)}` members, `p` over
 the admissible sets' patterns `r ↦ lightOf |r| T_r`. A request `T` doesn't touch costs nothing. One whose `T_r` commits
 at least `|r|` bits costs `|r|`, and its pattern forgets which of its blocks are incorrect. Any other costs `b(T_r)`.
-The exponent is the capped sets' `Σ_{r touched by T} min(b(T_r), |r|)` at every `T` of the pattern (`lightBits_lightOf`), so
-the bound is never above `card_influenceTwo_le_served`'s (`sum_patterns_le_served`). -/
+The exponent is the capped sets' `Σ_{r touched by T} min(b(T_r), |r|)` at every `T` of the pattern
+(`lightBits_lightOf`), so the bound is never above `card_influenceTwo_le_served`'s (`sum_patterns_le_served`). -/
 theorem card_influenceTwo_le_patterns (H : Msg → Msg) (Cm : CommitmentScheme Bool) {s : AuditStatement}
     {Pt : Partition} {d : Design.Two} (hs : InScopeTwo Pt d s) (δ : ℝ) (a : ℕ → Option Bool) {R : Type} [Fintype R]
     [DecidableEq R] (req : Fin s.prog.outs.length → R) :
