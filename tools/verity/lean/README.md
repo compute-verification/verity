@@ -347,10 +347,10 @@ statement change. Any other lift prints in full: a `G` whose value differs from 
 theorem's binders into `G`, which the record's `assumptions` would lose. The landing DM reads only the records, so it
 still lists a lifted guarantee as changed.
 
-`four_names` lists the namespace roots (`["Nci", "NetTiming"]`) whose guarantees are all in the four-name form: each is
-`X.SecurityProofs.G : X.Guarantees.G` (universe parameters aside), with `G` a definition of a `Guarantees` module, and the
-audit fails on any other guarantee under a listed root. A package's owner adds its root once every guarantee there is
-lifted, or no longer a guarantee.
+`four_names` lists the root of each of the lock's guarantees (`["Nci", "NetTiming", …]`), and each is `X.SecurityProofs.G
+: X.Guarantees.G` (universe parameters aside), `G` a definition of a `Guarantees` module, but a witness, a frozen guarantee,
+a generic claim's (`claims.generic`: stated as its claim) and one `four_names_except` holds ({G: why not yet}). An entry
+there in the form, frozen, a witness, a generic claim's or gone fails.
 
 `check.py --lift LIFTS.json PKG` writes lifts into the four-name form: `def G : Prop` in the spec module, and
 `theorem X.SecurityProofs.G : X.Guarantees.G := @X.t` beside the proof or in the module `"beside": M` names (`check.py`'s

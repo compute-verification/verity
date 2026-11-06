@@ -29,7 +29,7 @@ def sha(s: str) -> str:
 
 #: the functions whose failures make up a report, and where in what each returns its failures are (None: all of it)
 EMITTERS = {"judge": 0, "unreported": None, "dropped": None, "verifier_failures": None, "claim_failures": None,
-            "witness_failures": None, "inline_failures": 0, "assumption_records": 2, "shape": None, "spec_reads": None, "tree_failures": None, "scans": None, "listings": 0, "dependency_scans": 0,
+            "witness_failures": None, "four_name_failures": None, "inline_failures": 0, "assumption_records": 2, "shape": None, "spec_reads": None, "tree_failures": None, "scans": None, "listings": 0, "dependency_scans": 0,
             "assign": 1, "proved": 0, "replay_step": 0, "tests": 0, "run_paths": None}
 
 
@@ -109,11 +109,66 @@ def test_four_names_holds_the_guarantees_under_the_roots_it_lists_to_the_four_na
             "P.SecurityProofs.V": lifted("P.SecurityProofs.V", "P.Guarantees.V", binders=" (n : Nat)", args=" n"),
             "P.SecurityProofs.X": lifted("P.SecurityProofs.X", "P.Guarantees.Y"),
             "Q.u": fact(signature="Q.u : True", hyps=[], reads=[])}
-    policy = POLICY | {"four_names": ["P"], "guarantees": {n: {"owner": "@lean"} for n in pins}}
+    policy = POLICY | {"four_names": ["P", "Q"], "guarantees": {n: {"owner": "@lean"} for n in pins},
+                       "four_names_except": {"Q.u": "waits for its lift"}}
     fails, _ = A.judge(policy, facts(pins=pins), FILES, update=True)
     assert [f.split(" is a guarantee")[0] for f in fails] == [
         f"four names: P.{n}" for n in ("SecurityProofs.V", "SecurityProofs.W", "SecurityProofs.X", "t")]
     assert A.judge(POLICY | {"guarantees": policy["guarantees"]}, facts(pins=pins), FILES, update=True)[0] == []
+
+
+def four_named_pins(**more) -> dict:
+    """Facts for the four-name rule alone: `P.SecurityProofs.G`, in the form, and ``more`` ({name: signature}), not."""
+    pins = {"P.SecurityProofs.G": fact(signature="P.SecurityProofs.G : P.Guarantees.G", hyps=[], reads=[])
+            | {"lift": {"head": "P.Guarantees.G", "module": "P.Guarantees"}}}
+    return {"pins": pins | {n: fact(signature=s, hyps=[], reads=[]) for n, s in more.items()}}
+
+
+def test_four_names_lists_the_root_of_every_guarantee():
+    """A lock that lists `four_names` lists every namespace root its guarantees are under, so a new area's guarantees are
+    held to the four-name form from its first one; the failure names the fix."""
+    f = four_named_pins(**{"Q.u": "Q.u : True"})
+    policy = {"four_names": ["P"], "guarantees": dict.fromkeys(f["pins"], {"owner": "@lean"})}
+    fails = A.four_name_failures(policy, f)
+    assert [(x.code, x.entry) for x in fails] == [("four-names.root", "Q")]
+    assert "add Q to it, and state each guarantee under it as `X.SecurityProofs.G : X.Guarantees.G`" in fails[0]
+    assert A.four_name_failures(policy | {"four_names": ["P", "Q"], "shape": {"frozen": {"Q.u": "frozen: open"}}}, f) == []
+    assert A.four_name_failures({"guarantees": policy["guarantees"]}, f) == [], "a lock without `four_names` holds none"
+
+
+def test_a_four_names_exception_goes_once_it_holds_nothing():
+    """`four_names_except` holds a guarantee that isn't in the four-name form yet, and only shrinks: an entry for one in the
+    form, one frozen or a witness, and one that is no guarantee, each fails until it goes."""
+    f = four_named_pins(**{"P.t": "P.t : True", "P.w": "P.w : True"})
+    policy = {"four_names": ["P"], "guarantees": dict.fromkeys(f["pins"], {"owner": "@lean"}),
+              "four_names_except": {"P.t": "waits for its lift"}, "shape": {"frozen": {"P.w": "frozen: open"}}}
+    assert A.four_name_failures(policy, f) == []
+    stale = A.four_name_failures(policy | {"four_names_except": {"P.t": "waits", "P.SecurityProofs.G": "waits",
+                                                                 "P.w": "waits", "P.gone": "waits"}}, f)
+    assert [(x.code, x.entry) for x in stale] == [("four-names.stale", n) for n in ("P.SecurityProofs.G", "P.w", "P.gone")]
+    assert [str(x).split(", which is ")[1] for x in stale] == ["in the four-name form: remove the entry",
+                                                              "a witness, frozen or a generic claim: remove the entry",
+                                                              "no guarantee of this lock: remove the entry"]
+    assert [x.entry for x in A.four_name_failures(policy | {"four_names_except": {}}, f)] == ["P.t"]
+
+
+def test_four_names_leaves_a_generic_claims_guarantee_to_the_claims_rule():
+    """A guarantee `claims.generic` lists is stated as its claim (`theorem g : C`, `generic_failures`), which the four-name
+    form can't be, so the four-name rule holds it to nothing, and an exception for it is stale."""
+    f = four_named_pins(**{"P.g": "P.g : P.C"})
+    policy = {"four_names": ["P"], "guarantees": dict.fromkeys(f["pins"], {"owner": "@lean"}),
+              "claims": {"generic": {"P.C": "P.g"}}}
+    assert A.four_name_failures(policy, f) == []
+    assert [x.entry for x in A.four_name_failures(policy | {"claims": {}}, f)] == ["P.g"]
+    stale = A.four_name_failures(policy | {"four_names_except": {"P.g": "waits for its lift"}}, f)
+    assert [(x.code, x.entry) for x in stale] == [("four-names.stale", "P.g")]
+
+
+def test_each_four_names_exception_gives_its_reason():
+    f = four_named_pins(**{"P.t": "P.t : True"})
+    policy = {"four_names": ["P"], "guarantees": dict.fromkeys(f["pins"], {"owner": "@lean"})}
+    for bad in ({"P.t": ""}, {"P.t": None}, ["P.t"]):
+        assert [x.code for x in A.four_name_failures(policy | {"four_names_except": bad}, f)] == ["four-names.except-form"]
 
 
 def test_a_recorded_package_passes_and_its_record_is_the_statement():

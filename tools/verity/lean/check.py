@@ -1325,7 +1325,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
         fails.append(Failure("escape.stale", n, f"escape: {n} is listed under `escapes` but is not one; remove the entry"))
     fails += verifier_failures(policy.get("verifier"), facts.get("verifier"), update)
     fails += claim_failures(policy, facts) + witness_failures(policy, facts, own)
-    witnesses = claim_witnesses(policy)
+    fails += four_name_failures(policy, facts)
     modules = set(facts["modules"])
     exempt = policy.get("exempt", {})
     for m, rel in sorted(files.items()):
@@ -1439,10 +1439,6 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
             named += these
             for n in these:
                 premised.setdefault(n, set()).add(name)
-        if name.split(".")[0] in policy.get("four_names", []) and name not in witnesses and not four_named(name, f):
-            fails.append(Failure("four-names", name, f"four names: {name} is a guarantee of {name.split('.')[0]}, which "
-                                 f"`four_names` lists, so it is stated as `X.SecurityProofs.G : X.Guarantees.G` with `G` a "
-                                 f"definition of a `Guarantees` module (`check.py --lift` writes it), or is not a guarantee"))
         now = {"signature": f["signature"].splitlines(), "assumptions": sorted(set(named)), "type_hash": f["type_sha256"]} | (
             {"unfolded_hash": u} if (u := (f.get("lift") or {}).get("unfolded_sha256")) else {})
         kept[name] = ({"owner": who} if who else {}) | now
@@ -3427,6 +3423,47 @@ MOVED = "the same statement under its old names"
 LIFTED = "the same statement, its definition unfolded once"
 MOVED_READS = "definitions read in another module or under another name: the same under their old names"
 OWNED = "who answers for it, not what it says"
+
+
+def four_name_failures(policy: dict, facts: dict) -> list[Failure]:
+    """The four-name rule, for a lock that lists `four_names`: it lists the namespace root of every guarantee, and each
+    guarantee is `X.SecurityProofs.G : X.Guarantees.G` (`four_named`) but a witness (`claim_witnesses`), a generic claim's
+    (`generic_claims`, which the claims rule holds to `theorem g : C`), one under `shape.frozen`, and one
+    `four_names_except` holds ({guarantee: why it isn't yet}). That map only shrinks: an entry for a guarantee in the
+    form, frozen, a witness or a generic claim's, or for no guarantee of the lock, fails until it goes."""
+    roots = policy.get("four_names") or []
+    if not roots:
+        return []
+    waiting = policy.get("four_names_except") or {}
+    if not isinstance(waiting, dict) or not all(isinstance(w, str) and w.strip() for w in waiting.values()):
+        return [Failure("four-names.except-form", None, "four names: `four_names_except` is {guarantee: why it is not yet "
+                        "in the four-name form}, each reason one sentence")]
+    guarantees = policy.get("guarantees") or {}
+    exempt = (claim_witnesses(policy) | set(generic_claims(policy).values())
+              | set((policy.get("shape") or {}).get("frozen") or {}))
+    fails = []
+    for root in sorted({n.split(".")[0] for n in guarantees} - set(roots)):
+        some = sorted(n for n in guarantees if n.split(".")[0] == root)
+        fails.append(Failure("four-names.root", root, f"four names: {root} holds guarantees ({', '.join(some[:3])}"
+                             f"{', …' if len(some) > 3 else ''}) that `four_names` doesn't list: add {root} to it, and state "
+                             f"each guarantee under it as `X.SecurityProofs.G : X.Guarantees.G` (`check.py --lift` writes "
+                             f"it) or freeze it"))
+    for name in sorted(guarantees):
+        f = facts["pins"].get(name) or {}
+        if f.get("kind") != "theorem" or name.split(".")[0] not in roots:
+            continue
+        form = four_named(name, f)
+        if name in waiting and (form or name in exempt):
+            fails.append(Failure("four-names.stale", name, f"four names: `four_names_except` lists {name}, which is "
+                                 f"{'in the four-name form' if form else 'a witness, frozen or a generic claim'}: "
+                                 "remove the entry"))
+        elif not form and name not in exempt and name not in waiting:
+            fails.append(Failure("four-names", name, f"four names: {name} is a guarantee of {name.split('.')[0]}, which "
+                                 f"`four_names` lists, so it is stated as `X.SecurityProofs.G : X.Guarantees.G` with `G` a "
+                                 f"definition of a `Guarantees` module (`check.py --lift` writes it), or is not a guarantee"))
+    fails += [Failure("four-names.stale", n, f"four names: `four_names_except` lists {n}, which is no guarantee of this "
+                      f"lock: remove the entry") for n in sorted(set(waiting) - set(guarantees))]
+    return fails
 
 
 def four_named(name: str, fact: dict) -> bool:

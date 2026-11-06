@@ -20,11 +20,15 @@ The maintained docs (every tracked Markdown file but a CHANGELOG) retire more (`
 their names, and "leg", the dampener and NCI are retired). Their code
 keeps the old words until its owners rename it, so this scan skips code spans and fences, where a path (`legs/`) or a
 record key stays, and a term written as a quoted mention ("leg"); the table's rows name them too.
+
+The Lean's declaration names get a pass of their own (``LEAN_WORDS``): a name that carries one of the Glossary's older
+names keeps it until it is renamed, and each word's count of names only falls (``RETIRED_NAMES``).
 """
 from __future__ import annotations
 
 import re
 
+from test_lean_packages import RETIRED_NAMES, _held, declarations
 from test_repository import ROOT, _tracked
 
 #: Each retired term and what to write instead.
@@ -420,3 +424,52 @@ def test_the_doc_scan_reads_the_incorrect_terms():
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
         ("a.md", 1, "faulty proof blocks"), ("a.md", 1, "faulty proof block"), ("a.md", 2, "faulty-block"),
         ("a.md", 2, "faulty set")]
+
+
+#: the Glossary's older names (GLOSSARY.md) a Lean declaration's own name may carry, each word's forms and its term;
+#: `session`, `window` and `block` are left out, as each has a sense the Glossary keeps
+LEAN_WORDS = {"draw": (("draw", "draws", "drawn"), "sample"), "law": (("law", "laws"), "sampling design"),
+              "escape": (("escape",), "acceptance probability"), "wrong": (("wrong",), "incorrect"),
+              "dampener": (("dampener",), "slowdown"), "firewall": (("firewall",), "ZK server"),
+              "horizon": (("horizon",), "monitoring period"), "warden": (("warden",), "network certifier"),
+              "tap": (("tap", "taps"), "network certifier"), "leg": (("leg", "legs"), "subprotocol")}
+
+
+def words(name: str) -> list[str]:
+    """``name``'s words, lowercased: split at dots, underscores and primes, then at case (`drawCoins_ok` is draw, coins
+    and ok; `HTTPLaw` is http and law)."""
+    return [w.lower() for part in re.split(r"[._']", name) for w in re.findall(r"[A-Z]+(?![a-z])|[A-Z]?[a-z]+|\d+", part)]
+
+
+def retired_names(files: dict[str, str]) -> dict[str, list[str]]:
+    """{word of LEAN_WORDS: `FILE:LINE NAME` for each declaration of ``files`` ({file: its source}) whose name, as the
+    declaration writes it, carries the word}."""
+    forms = {f: w for w, (fs, _) in LEAN_WORDS.items() for f in fs}
+    out: dict[str, list[str]] = {w: [] for w in LEAN_WORDS}
+    for f, src in sorted(files.items()):
+        for d in declarations(src):
+            for w in sorted({forms[x] for x in words(d.written) if x in forms}):
+                out[w].append(f"{f}:{d.line} {d.written}")
+    return out
+
+
+def test_no_retired_word_in_a_new_lean_name():
+    """A Lean name says the Glossary's term, not an older name: an existing name keeps its word until it is renamed (with
+    `--moved` where a lock lists it), and each word's count only falls (`RETIRED_NAMES`, `test_lean_packages.py`)."""
+    files = {f: text for f in _tracked() if f.endswith(".lean") and (text := _read(f)) is not None}
+    found = retired_names(files)
+    _held("RETIRED_NAMES", RETIRED_NAMES, {w: len(v) for w, v in found.items()}, "the Lean names with a retired word",
+          "name the new one with the Glossary's term instead (" + "; ".join(f"{t} for {w}" for w, (_, t) in LEAN_WORDS.items())
+          + "; GLOSSARY.md, Older names): `git diff -U0 origin/main -- '*.lean'` shows it")
+
+
+def test_the_lean_name_scan_reads_each_form():
+    """The words of a name, on toy files: a form at a case or underscore boundary counts, inside a word it doesn't
+    (`drawer`, `lawful`, `tapir`, `legal`), a comment's name doesn't, and a private name does."""
+    assert words("drawCoins_ok") == ["draw", "coins", "ok"] and words("HTTPLaw.mk'") == ["http", "law", "mk"]
+    src = ("namespace Pouw.Draw\n/-- A drawn sample. -/\ndef drawnUnits : Nat := 1\nprivate theorem wrong_set : True := trivial\n"
+           "-- def lawOf : Nat := 0\ndef drawer : Nat := 0\nstructure Lawful where\ndef tapir : Nat := 0\n"
+           "def legal : Nat := 0\nabbrev TapLegs : Nat := 0\nend Pouw.Draw\n")
+    got = {w: v for w, v in retired_names({"a.lean": src}).items() if v}
+    assert got == {"draw": ["a.lean:3 drawnUnits"], "wrong": ["a.lean:4 wrong_set"], "tap": ["a.lean:10 TapLegs"],
+                   "leg": ["a.lean:10 TapLegs"]}

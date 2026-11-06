@@ -22,12 +22,10 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   tree.
 - **Own a subdirectory and namespace** with one aggregator module, imported once by the area's root, so parallel lanes
   don't edit one root file.
-- **Parallel proof work runs against fixed statements**: the final theorem's statement and each open piece's statement
-  are on the branch before anyone proves a piece. What isn't closed by the deadline is a gap list of exact lemma names, each
-  with a size and an owner, with no `sorry` outside them.
-- **Definitions a guarantee or property reads go in `Definitions/`**, not in a proof file (`reads` in the
-  lock lists where they are; keep it short). The Lean check refuses a statement that reads the proofs tree, and a
-  definitions or properties module that imports it (`trees` in `Security/lean-audit.json`); a lemma's statement over
+- **Parallel proof work runs against fixed statements**, the final theorem's and each open piece's, on the branch before
+  anyone proves a piece. What isn't closed by the deadline is a gap list of exact lemma names, each with a size and an
+  owner, with no `sorry` outside them.
+- **Definitions a guarantee or property reads go in `Definitions/`**, not in a proof file; a lemma's statement over
   proof-only definitions is not a guarantee.
 - **Every module is on Lean's module system** (`tests/test_lean_packages.py`): a new file starts `module`, imports with
   `public import M`, and opens `@[expose] public section` after its header; `python3 tools/verity/lean/modules.py FILE`
@@ -88,7 +86,7 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   [Loogle](https://loogle.lean-lang.org). A lemma another package proves is imported or moved, not proved again.
 - **A slow declaration**: measure (`set_option profiler true in`; `#count_heartbeats in` in a Mathlib package), then fix
   the proof: `simp only [...]` outside terminal calls, a split-out lemma, a smaller `decide`. An override that stays has
-  its reason in a `--` comment on or above it. Keep files to a few hundred declarations.
+  its reason in a `--` comment on or above it.
 - **`X.congr_simp is declared by a replayed module and by one it imports`**: `simp` realized a structure constructor's
   congruence lemma Mathlib had already. Don't unfold a `→+` or `→*` in `simp`; prove its `_apply` lemma by `rfl` and simp
   with that.
@@ -124,6 +122,11 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   open with a falsification test that runs, or falsified, taking every property resting on it off the list. Every `def G
   : Prop` of a `Guarantees` module is a listed guarantee or frozen. Adding a frozen entry is a claims change: rather
   restate the guarantee, or move what isn't a property to `Proofs/`.
+
+## Standards
+
+The checks in `tests/test_lean_packages.py` and `tests/test_retired_terms.py` print their fixes. Two they don't
+hold: Mathlib's names, and no binder `X` where ArkLib is imported (its `notation3 "X"` makes `X` a token).
 
 ## Before the PR
 
