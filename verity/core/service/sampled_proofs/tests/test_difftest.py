@@ -359,6 +359,7 @@ EVIDENCE_KEYS = {"draw", "instances", "proved_units", "receipt", "served", "sess
                  "statement", "verdicts"}
 RATIO = re.compile(r"(0|[1-9][0-9]*)(?:/(0|[1-9][0-9]*))?")
 DIGITS = re.compile(r"[0-9]+")
+HEX_DIGITS = re.compile(r"[0-9a-f]*")
 
 
 def _nat(x) -> bool:
@@ -948,6 +949,20 @@ def file_population(j):
     except (P.QueryRefused, ValueError) as e:
         raise D.Reject(str(e)) from None
     return {"why": PF.population_why(indices, strata)}
+
+
+def tables_held(j):
+    """`OneStageZk.tablesPiece` (`proofs.tables_why`): v2's refusal of blobs under `digests` (even-length lowercase hex)
+    when one is a pinned MUFU table's."""
+    j = _json(j)
+    ds = j.get("digests") if isinstance(j, dict) else None
+    if not isinstance(ds, list):
+        raise D.Reject("digests is not a list")
+    if not all(isinstance(d, str) for d in ds):
+        raise D.Reject("digests is not a list of hex strings")
+    if not all(len(d) % 2 == 0 and HEX_DIGITS.fullmatch(d) for d in ds):
+        raise D.Reject("not lowercase hex")
+    return {"why": PF.tables_why(ds)}
 
 
 def bound(j):
@@ -2665,6 +2680,13 @@ def file_populations(draw) -> dict:
 
 FILE_POPULATION = D.Port(PIECES, "file_population", file_population, st.one_of(file_populations(), file_populations(),
                                                                                   JSON), package=PACKAGE)
+TABLE_DIGEST = st.one_of(st.sampled_from(sorted(PF.MUFU_SHA512.values())), st.binary(max_size=64).map(bytes.hex))
+TABLES_HELD = D.Port(PIECES, "tables_held", tables_held, st.one_of(
+    st.lists(TABLE_DIGEST, max_size=5).map(lambda ds: {"digests": ds}),
+    st.lists(TABLE_DIGEST, max_size=5).map(lambda ds: {"digests": ds}),
+    st.lists(st.one_of(TABLE_DIGEST, st.sampled_from(["0", "AB", "0g", PF.MUFU_SHA512["rcp"].upper()]), st.integers(0, 3)),
+             min_size=1, max_size=4).map(lambda ds: {"digests": ds}),
+    JSON), package=PACKAGE)
 
 STRATA = st.lists(st.builds(lambda name, size, dk: {"k": max(0, size - dk), "name": name, "size": size},
                             st.sampled_from(["a", "b", "c", "unit"]), st.integers(0, 14), st.integers(0, 14)),
@@ -3343,7 +3365,7 @@ pieces = D.server_fixture(DECODE)
 
 PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (PRODUCED, 500), (KNOWN_PORT, 300),
-              (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (FILE_POPULATION, 400),
+              (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (FILE_POPULATION, 400), (TABLES_HELD, 300),
               (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
