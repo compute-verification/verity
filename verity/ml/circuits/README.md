@@ -104,7 +104,7 @@ now, and the diff is reviewed.
 | [`ops`](ops/README.md) | the primitive circuits' Definitions, and their Boolean versions (`ops.boolean`) |
 | [`silicon`](silicon/README.md) | the GPUs' exact semantics: tensor-core steps, the FP32 pipe, casts |
 | [`targets`](targets/README.md) | the subcircuits a proof system is asked to prove |
-| [`boolean`](boolean/README.md) | the Boolean core: the three gates, the word view, the GF(2) builders |
+| [`boolean`](boolean/README.md) | the Boolean core: the three gates, the word view, the GF(2) helpers that write gates |
 | [`verity.ml.definitions`](../definitions/README.md) | the served workloads' Definitions, their Boolean versions and fast evaluators |
 | [`verity.ml.private_circuits`](../private_circuits/README.md) | the universal unit, one public Definition that runs any private circuit of a size class |
 | [`circuit-check`](../../../tools/verity/circuit_check/README.md) | the property checks every circuit passes |
@@ -151,7 +151,7 @@ calls.count(), calls.by_index(2)        # (4, GateSet(2 gates; [12:14]))
   static collections of references to leaves, not structured values. `refs` builds collections of references
   (`tuple_of`, `array_of`, `record_of`).
 - `defs`: `primitive(name, version, params, ret)` registers a primitive with its evaluator; `composite(name, version,
-  statics, signature)` registers a composite whose body a builder function writes with `B.call`, `B.batch` (one call per
+  statics, signature)` registers a composite whose body function writes it with `B.call`, `B.batch` (one call per
   member, along the given axes) and `B.scan` (a carried state over iterations). `bind(F, **statics)` fixes a composite's
   statics.
 - `program`: `Program(fn)` lowers a fully bound composite to its root circuit: one input gate per leaf of each parameter,
@@ -203,7 +203,7 @@ Pure functions of a Program, read by the resource audits:
 
 - `census`: `verity/census/v1`, what a Program computes, counted by class, and the values its root's calls pass.
 - `liveness`: dead gates (`dead_gates(program)`), those no output depends on.
-- `requirement` and `requirement_units`: a declared circuit's memory requirement from its wiring and schedule, and its
+- `requirement` and `requirement_units`: a registered circuit's memory requirement from its wiring and schedule, and its
   two proof blocks (the plan, and the memory map).
 - `stacking`: the stacking property over a Program and its census.
 - `population`: the population Programs a window registers under a template query.
