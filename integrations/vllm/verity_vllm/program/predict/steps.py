@@ -26,9 +26,9 @@
   prefill rows in turn, and a resume's recompute of positions its request had reached is `discarded`, like the row past the last
   kept output. This rests on the target computing a position's row bit for bit alike however its prefill is chunked or
   recomputed; where it doesn't, the committed row isn't the Program's and the proof fails visibly.
-- Off batch invariance the compiler serves class G alone (`CLASS_G`, `launch_class`: GLM-5.3 at TP8, eager, on H200, its steps at
-  most 2,048 tokens and its positions at most 2,048, prefill chunks of at most 256 rows, no prefix cache), whose token-count-dependent
-  kernel choices read the whole launch. There a request's Program is the request wrapper at its launch context too
+- Off batch invariance the compiler serves class G alone (`launch_class`, `engine.profiles.engine_classes.CLASS_G`: GLM-5.3 at
+  TP8, eager, on H200, its steps at most 2,048 tokens and its positions at most 2,048, prefill chunks of at most 256 rows, no prefix
+  cache), whose token-count-dependent kernel choices read the whole launch. There a request's Program is the request wrapper at its launch context too
   (`RequestUnit.launch`, `common._Launch`): per step of its Program, its prefill and then its T decodes, every row that step's forward
   ran as (n, start), in the advice's batch order, a refused request's rows and discarded rows included, since they ran. The launch
   is the advice's schedule, never a batch-mate's value; requests of one (LP, T, C, policy, launch) share one Program. The request
@@ -86,7 +86,7 @@ from typing import Any
 
 from verity.core.protocols.certifier import advice as I1
 from verity.ml.circuits.defs import bind
-from verity_vllm.engine.profiles.devices import CLASS_G_DEVICE
+from verity_vllm.engine.profiles.engine_classes import CLASS_G, CLASS_G_LIMITS
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.program.prune import dead_units
@@ -112,12 +112,6 @@ _FINISH = ("max_tokens", "stop", "stop_token_ids", "ignore_eos")
 _READ = ("temperature", "top_p", "seed")
 #: a body's fields that compute nothing: the prompt (read apart) and how the response travels
 _TRANSPORT = ("prompt", "model", "user", "stream", "stream_options", "return_token_ids")
-#: class G, the one registration without batch invariance the compiler serves: GLM-5.3 at TP8, eager, on H200 (`predict.dsa`'s
-#: domain), and the engine limits (each stated, at most these) that keep every launch where `predict.dsa` writes it: steps of at
-#: most 2,048 tokens (its captured statics), at most 2,048 keys a row (DSA's top-k is the identity there, and deterministic), and
-#: prefill chunks of at most 256 rows (its decode route at 8 heads a rank)
-CLASS_G = {"model_type": "glm_moe_dsa", "world": 8, "execution": "eager", "device_name": CLASS_G_DEVICE}
-CLASS_G_LIMITS = {"max_num_batched_tokens": 2048, "max_model_len": 2048, "long_prefill_token_threshold": 256}
 
 
 @dataclass(frozen=True)
