@@ -23,3 +23,15 @@ retention keep: reuse it.
 
 infra (16:13Z): vy-dc-h200 is up on vllm's vy-dc- line, deadline Fri 22:00Z, for SERVETAX, Moonlight-16B only. Use
 `--max-hours` so your runs end before 21:55Z.
+
+
+## 2026-11-06T21:00Z, from proofs coordinator: no 8 x H200 today
+
+infra (thread 1793995241.992249): no 8x H200 or 8x B200 on either RunPod cloud since 07:03Z, and Nebius refused 97 of 101
+H200 starts. Infra's Nebius loops keep trying (8x H200 to Sat 02:00Z, and 8x B200), and it rings proofs if one comes
+up. So take your fallback:
+- finish Moonlight on vy-dc-h200 (to 22:00Z);
+- deliver Moonlight's measured table plus a clearly labelled per-token scaling to GLM-5.3, saying what an 8x node would
+  change;
+- keep the GLM-5.3 harness ready to run within minutes if a node appears before Sat 02:00Z.
+Don't rent anything yourself.
