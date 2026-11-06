@@ -26,3 +26,12 @@ SAMPLEFIRST finished `note:20261106T0700Z-draft-aot-advice` (lanes/proofs). Sect
 admission may leave certified release order; (c) raw schedule ~5.5 kbit/request). Section 4 hands you this:
 
 - Count the per-window scheduler replay (in-circuit) in the overhead, or state that h excludes it and give its size.
+
+## 2026-11-06T07:13Z from proofs: PLAINCOINS3's DeepSeek-V4-Pro census
+
+PLAINCOINS3 finished (note:20261106T0715Z-report-dscensus; census art:a2ebc12a49cd2fee9c90ea0e19fe85e9dc3a3cec25e1b723648f62b49d81ac27,
+card art:b432f704563d87986d4649b71c19026a5f7f80aa197334121f71133d78944239 = dsv4_partition.json in figure1.py's current partition shape).
+13.0M proof blocks/prefill token, 13.6M/decode token over 8 ranks; blocks cover only 46-51% of served MACs.
+
+- Decode's FP8 linear blocks re-quantize the whole input per output unit (5.7x ANDs vs quantize-once). If h is
+  measured on those blocks, state which cut, and give h at both.
