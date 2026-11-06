@@ -238,7 +238,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "coins not yet released; what it learns of them is what p's outputs carry", "Secret party", "standard"),
     Entry("confined", "assumption",
           "Confined p: the auditor party p's only outputs are the messages of its declared channels (toward the auditor, "
-          "its manifest's public messages, such as one liveness record per sampling block): no other channel, timing "
+          "its manifest's public messages, such as one liveness record per execution phase): no other channel, timing "
           "included, carries its state out", "Confined party", "standard"),
     Entry("witness-path-private", "assumption",
           "Witness path private: the path between an auditor party and the prover carries no observer but its two "
