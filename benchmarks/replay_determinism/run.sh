@@ -8,7 +8,7 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=$(cd "$here/../.." && pwd)
 : "${OUT:?run under research run, which sets OUT}"
 PY=${PY:-/workspace/cp/venv312/bin/python}
-WORK=${WORK:-/workspace/replay-determinism}
+WORK=${WORK:-/workspace/research/scratch/replay-determinism}
 MODEL_DIR=${MODEL_DIR:-$WORK/moonlight}
 N=${N:-48}
 PHASES=${PHASES:-serve replay1 replay2 replay_plain alone}
