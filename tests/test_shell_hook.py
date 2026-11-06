@@ -188,6 +188,11 @@ def test_builds_and_tests_are_refused_on_an_agent_vm_and_light_ones_only_while_i
     for command in passes:
         assert verdict(command, **gate) == "allow", command
     meminfo.write_text("MemTotal:       16000000 kB\nMemFree:          100000 kB\nMemAvailable:    6000000 kB\n")
+    (tmp_path / "vmstat").write_text(f"balloon_inflate {3 * 2**20}\nballoon_deflate {2**20}\n")     # 8 GiB in the balloon
+    meminfo.write_text("MemTotal:       16000000 kB\nMemFree:          100000 kB\nMemAvailable:    2000000 kB\n")
+    assert verdict("uv run pytest -q tests/test_x.py", **gate) == "allow", \
+        "memory the balloon holds is available: the VM gets it back as it asks"
+    meminfo.write_text("MemTotal:       16000000 kB\nMemFree:          100000 kB\nMemAvailable:    6000000 kB\n")
     (cgroup / "memory.max").write_text(f"{8 * 2**30}\n")         # a cgroup limit tighter than the VM: its headroom counts
     (cgroup / "memory.current").write_text(f"{7 * 2**30}\n")
     assert verdict("uv run pytest -q tests/test_x.py", **gate) == "deny"

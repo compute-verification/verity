@@ -41,6 +41,7 @@ import os
 import re
 import shlex
 import sys
+from pathlib import Path
 
 PATTERN = re.compile(r"KEY|TOKEN|SECRET|PASSW|CREDENTIAL|PRIVATE", re.I)
 INBOX = os.environ.get("AGENT_INBOX", "/tmp/agent-inbox")
@@ -293,13 +294,18 @@ def weight(text: str) -> int:
 
 
 def available() -> tuple[float, float] | None:
-    """(available, total) bytes of this VM's memory: /proc/meminfo's MemAvailable and MemTotal, or this process's cgroup's limit and
-    its headroom where that limit is tighter."""
+    """(available, total) bytes of this VM's memory: /proc/meminfo's MemAvailable and MemTotal, plus what a hypervisor balloon holds
+    (/proc/vmstat beside it), or this process's cgroup's limit and its headroom where that limit is tighter."""
+    meminfo = Path(os.environ.get("AGENT_GUARD_MEMINFO", "/proc/meminfo"))
     try:
-        info = dict(re.findall(r"^(\w+):\s+(\d+) kB", open(os.environ.get("AGENT_GUARD_MEMINFO", "/proc/meminfo")).read(), re.M))
+        info = dict(re.findall(r"^(\w+):\s+(\d+) kB", meminfo.read_text(), re.M))
         avail, total = int(info["MemAvailable"]) * 1024, int(info["MemTotal"]) * 1024
     except (OSError, KeyError, ValueError):
         return None
+    # the balloon's pages are counted as used, but the hypervisor hands them back as the VM asks for memory
+    if (vmstat := meminfo.with_name("vmstat")).is_file():
+        v = dict(re.findall(r"^(balloon_inflate|balloon_deflate) (\d+)$", vmstat.read_text(), re.M))
+        avail = min(total, avail + max(0, int(v.get("balloon_inflate", 0)) - int(v.get("balloon_deflate", 0))) * 4096)
     try:
         rel = open("/proc/self/cgroup").read().split("::", 1)[1].strip()
         cg = os.environ.get("AGENT_GUARD_CGROUP") or f"/sys/fs/cgroup{rel}"
