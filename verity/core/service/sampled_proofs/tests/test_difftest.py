@@ -2151,6 +2151,45 @@ def test_v2_refuses_a_population_out_of_order(server, server_v2):
         assert (out["verdict"], out["reason"]) == ("reject", want), (s.templates, out)
 
 
+def test_v2_refuses_a_release_log_out_of_order(server, server_v2):
+    """v2 holds its challenger session's release log to the sample, then the link, then the other rounds
+    (`OneStageZk.orderHeld`, `Challenger.sampleLinkFirst`) before any session's record is read. Of three audits v1
+    accepts on their verdict and their challenger's coins, their coin trees all as the challenger logged them, the
+    honest log goes on to its session's verdict; one releasing a coin of the sample after a tree's link is opened
+    (`sample-late`), and one whose first round opened is of another stream than the link's (`link-late`), are refused
+    (`SAMPLE_LINK_FIRST`). The Python twins (`challenger.sample_link_first`, `one_stage.proofs.order_why`) agree;
+    `test_challenger_difftest.py` holds the first to Lean's piece."""
+    s = SETUPS[3]
+    law = {"k": 2, "law": "subset"}
+    rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+                   WINDOW, leaf_layer=LEAF)
+    circuit, public = b"not a circuit file", _public_of(rec)
+    for order in ORDERS:
+        ch, d, coins = _challenger_draw(random.Random(f"v2-order-{order}"), s, law, rec, 1, order=order)
+        proved = DR.proved(d)
+        evidence = {"coins": coins, "draw": d, "instances": len(proved), "proved_units": proved,
+                    "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
+                    "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": True, "of_record": True}}}
+        params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20",
+                  "law": law, "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query),
+                  "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
+                  "window_root": ch.ledger.window["root"], "work_table": None}
+        v1 = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
+        assert D.replay(ONE_STAGE, v1, server)[0] == "accept", order
+        want = None if order == "honest" else f"coins: {Ch.SAMPLE_LINK_FIRST}"
+        assert order_why(params, rec, evidence) == want, order
+        assert Ch.sample_link_first("draw", bytes.fromhex(R.digest(rec)), ch.s.lines[1:]) == (want is None), order
+        record = D.canonical(ch.trees[0].record).encode()
+        proofs = {"sessions": [{"name": "s", "record": _sha(record), "reps": {}}]}
+        base = {k: v for k, v in evidence.items() if k != "verdicts"}
+        case = {"blobs": [circuit.hex(), public.hex(), record.hex()], "commitment": _hex(rec),
+                "evidence": _hex(base | {"proofs": proofs, "sessions": ["s"]}),
+                "params": params | {"proofs": {"circuit": _sha(circuit), "public": _sha(public), "registered": None}}}
+        out = server_v2.exchange(_json(case))
+        assert (out["verdict"], out["reason"]) == (
+            "reject", "verdict flock-verify/s did not accept" if want is None else f"proofs: {want}"), order
+
+
 def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
     """v2 reads its draw's coins as v1 does (`OneStageZk.coinsOf`, v1's `coinsOf`), and only from the auditor's
     challenger under a key at the deployed parameters: parameters naming none, one without a window (`NO_CHALLENGER`) or
@@ -4214,42 +4253,3 @@ def test_the_run_refuses_a_population_out_of_order(pieces):
         else:
             assert (out.get("step"), out.get("codes")) == ("register", ["population-order"]), out
     assert not P.in_order(SETUPS[3].program, SETUPS[3].query, SETUPS[3].population + 1)
-
-
-def test_v2_refuses_a_release_log_out_of_order(server, server_v2):
-    """v2 holds its challenger session's release log to the sample, then the link, then the other rounds
-    (`OneStageZk.orderHeld`, `Challenger.sampleLinkFirst`) before any session's record is read. Of three audits v1
-    accepts on their verdict and their challenger's coins, their coin trees all as the challenger logged them, the
-    honest log goes on to its session's verdict; one releasing a coin of the sample after a tree's link is opened
-    (`sample-late`), and one whose first round opened is of another stream than the link's (`link-late`), are refused
-    (`SAMPLE_LINK_FIRST`). The Python twins (`challenger.sample_link_first`, `one_stage.proofs.order_why`) agree;
-    `test_challenger_difftest.py` holds the first to Lean's piece."""
-    s = SETUPS[3]
-    law = {"k": 2, "law": "subset"}
-    rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
-                   WINDOW, leaf_layer=LEAF)
-    circuit, public = b"not a circuit file", _public_of(rec)
-    for order in ORDERS:
-        ch, d, coins = _challenger_draw(random.Random(f"v2-order-{order}"), s, law, rec, 1, order=order)
-        proved = DR.proved(d)
-        evidence = {"coins": coins, "draw": d, "instances": len(proved), "proved_units": proved,
-                    "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
-                    "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": True, "of_record": True}}}
-        params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20",
-                  "law": law, "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query),
-                  "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
-                  "window_root": ch.ledger.window["root"], "work_table": None}
-        v1 = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
-        assert D.replay(ONE_STAGE, v1, server)[0] == "accept", order
-        want = None if order == "honest" else f"coins: {Ch.SAMPLE_LINK_FIRST}"
-        assert order_why(params, rec, evidence) == want, order
-        assert Ch.sample_link_first("draw", bytes.fromhex(R.digest(rec)), ch.s.lines[1:]) == (want is None), order
-        record = D.canonical(ch.trees[0].record).encode()
-        proofs = {"sessions": [{"name": "s", "record": _sha(record), "reps": {}}]}
-        base = {k: v for k, v in evidence.items() if k != "verdicts"}
-        case = {"blobs": [circuit.hex(), public.hex(), record.hex()], "commitment": _hex(rec),
-                "evidence": _hex(base | {"proofs": proofs, "sessions": ["s"]}),
-                "params": params | {"proofs": {"circuit": _sha(circuit), "public": _sha(public), "registered": None}}}
-        out = server_v2.exchange(_json(case))
-        assert (out["verdict"], out["reason"]) == (
-            "reject", "verdict flock-verify/s did not accept" if want is None else f"proofs: {want}"), order
