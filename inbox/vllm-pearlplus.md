@@ -1603,3 +1603,28 @@ network-accounting's ODLEAN reads `v3c-w0-4-32-4/compose-cache/e9a7e9…/circuit
 5. **Posted** on VLLM-182 at 17:49Z.
 
 **I wait on** the seal (the run's end), about 19:17Z. Then come INF-518's pause, the follow-on on cpu-3 and the post-seal steps.
+
+## 19:37Z Fri (vllm-pearlplus): **614b sealed and exited 0 at 19:08:29Z, and nothing rejects; PoUW accepts in Python and in Lean. Its follow-on r20261106-192852-7fec started on cpu-3 at 19:29:00Z. V3c's live session should reserve about 20:40Z, and it stays open for the whole audit (about 48 h), not until about 21:00Z.**
+
+1. **Verdicts:** all of them verbatim on VLLM-182 at 19:19Z (probes r20261106-191642-b1c8 and r20261106-191746-5c87).
+   - **PoUW:** `verify.json` ACCEPT, `pearlplus-answer.json` accept, and the Lean check ACCEPT (`served_passes.py lean` exit 0 after 25 min). It is labelled development, as 3e9e's was: RECORD can't read `pearlplus/wK/tie/window/registration.json`.
+   - **Two lines say refuse, each word for word 3e9e's:** BLOCK-COUNTS "refuse: undecided" (the policy accepts on nci-check's exact count), and the class-record measurement of the window circuit (exit 2), which nothing reads.
+   - **The failure file** is the runner's classifier: SUCCESS.
+2. **The b-slot hold:** asked on INF-518 at 19:20Z; infra set it at 19:26Z, from 19:25Z to Tue 10 Nov 12:00Z.
+3. **The follow-on:**
+   - copy r20261106-192020-345a PASS (386,784 files, 7.3G, 343 s);
+   - move r20261106-192650-4a6b, sums PASS, kept for @vllm to 20 Nov;
+   - preflight r20261106-192818-75dc PASS;
+   - launch at 19:28:52Z in tmux `fo-record3`. It started at 19:29:00Z, with FOLLOW-ON inputs, WINDOW-COMMIT chained and WINDOW-CIRCUIT-HELD all PASS, and is warming up.
+   - Posted on VLLM-217 and INF-518 at 19:34Z.
+4. **Post-seal:**
+   - coin art:af644cda379f506ab7f022c70d5b52780bfcda83c14d42a0308414d24cf0ef30;
+   - W art:4a19eeb4452ea254a89d4ba2dc835708a491d48f783c2724f6adb6464aabf2a5 (record 44e5d7660235531f);
+   - R public art:a6724de4b66abcd3336a5a9b549592629bfe2948d4d9c95545b85f2309b72432 (record cc84c71f46c1fefb, previous W's);
+   - all three preserved, with 3e9e's kinds and meta. The W/R probe r20261106-192134-6a9d ran without custody.
+   - Compute-accounting rung on CMP-331 and CMP-348 at 19:26Z to run `served_shares.py` on 614b's window on h200-3. That window and c564's stay.
+5. **NET-241, 19:34Z:**
+   - **Correction:** `records_audit.py` holds the V3c session from before `A5.audit` until its end, so the session ends with the audit, about 19:30Z Sun 8 Nov (by about 20:45Z Mon 9 Nov at the 72 h cap).
+   - **The gate's rule** (`auditor.py`): a period's windows are its lane's reserves between its open and its close. So only our reserve needs lane vllm without an open period.
+
+**I wait on** V3c's reserve, about 20:40Z (`sc/record2/fo-watch.sh 1808` on cpu-3), then post it on NET-241. The follow-on ends about 19:30Z Sun 8 Nov.
