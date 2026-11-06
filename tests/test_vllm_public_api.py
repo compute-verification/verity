@@ -42,6 +42,8 @@ PUBLIC = {
     "verity_vllm.engine.spec": "I1: engine spec documents",
     "verity_vllm.engine.handle": "I2: a built engine's vLLM objects",
     "verity_vllm.engine.served_seed": "I1: the served engine's public default seed, which a served registration fixes",
+    "verity_vllm.engine.step_trace": "I2: the scheduler's step trace of an in-process engine core (StepTrace) and its "
+                                     "reader, which serve-openai records and benchmarks/serve_tax times and replays",
     "verity_vllm.program.predict.naming": "I7: a request Program's Build with the names I2's compile gives it, the verifier's "
                                           "own Build without a trace",
     "verity_vllm.program.predict.window_weights": "I7: the window circuit's weights, the committer's registration and the "
