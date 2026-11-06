@@ -12,8 +12,9 @@ the audit's cold build reaches it.
 `--try` elaborates one file (FILE: its path from the repository's root) on the same warm tree as `--records`, under the same
 `build` slot, tree lock, sync, `repair` and dependencies, for the closure of the package that owns FILE only: there it runs
 `lake build +MODULE:deps` (FILE's imports; Lake rebuilds only what changed since the slot's last build) and then
-`lake env lean` in that package's directory on a copy of FILE with the axiom probe appended (`axiom_probe.py`: its last line
-names each theorem whose axioms go beyond the standard three, `sorryAx` among them, or says none do), and exits with lean's
+`lake env lean` with the package's `[leanOptions]` (`siblings.options`) in that package's directory on a copy of FILE with
+the axiom probe appended (`axiom_probe.py`: its last line names each theorem whose axioms go beyond the standard three,
+`sorryAx` among them, or says none do), and exits with lean's
 status on FILE's own lines (with `--siblings`, that copy's build then goes through the sibling check, `siblings.py`, whose
 status it takes); when that status is an import clash (an
 import declaring what an earlier one did), the two modules it names lose their traces (`clashed`), so the next try rebuilds
@@ -1240,8 +1241,8 @@ def module_of(pkg: str, file: str) -> str:
 def try_file(file: str, deps: Path, tree: Path | None = None, log=print, siblings: bool = False) -> int:
     """`--try`: on the tree of the `build` slot it takes (as `--records` does), with the closure of the package that owns
     ``file`` synced from this checkout and its fetched dependencies taken, `lake build +MODULE:deps` (its imports, of which
-    Lake rebuilds only what changed) then `lake env lean` on FILE's probed copy in that package's directory (`PROBE.probe`,
-    whose line is the last), and with ``siblings`` the sibling check (`siblings.py`) on that copy's build; lean's exit
+    Lake rebuilds only what changed) then `lake env lean` with the package's Lean options (`SIBLINGS.options`) on FILE's
+    probed copy in that package's directory (`PROBE.probe`, whose line is the last), and with ``siblings`` the sibling check (`siblings.py`) on that copy's build; lean's exit
     status on FILE's own lines (the check's when it runs), or 2 when ``file`` is in no package, no `build` slot is granted,
     or the tree's dependencies can't be had. Never check.py."""
     file = file.removeprefix("./")
@@ -1295,9 +1296,10 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
                 log(f"lean-try: {pkg}: its dependencies are fetched cold, once for this tree")
             write_links(tree, links)
             mark(tree, package=pkg, phase="try")
+            opts = SIBLINGS.options(tree / pkg)
             log(f"lean-try: {file} on {tree} ({n} files changed there, {time.monotonic() - t0:.0f} s; "
-                f"{'' if sandbox else 'no sandbox here, '}lake build +{mod}:deps, then lake env lean on "
-                f"{PROBE.COPIES / rel}, {rel} with the axiom probe after its last line"
+                f"{'' if sandbox else 'no sandbox here, '}lake build +{mod}:deps, then lake env lean "
+                f"{''.join(o + ' ' for o in opts)}on {PROBE.COPIES / rel}, {rel} with the axiom probe after its last line"
                 f"{', then the sibling check' if siblings else ''})")
             step, (rc, text) = f"lake build +{mod}:deps", build(pkg, tree, lake, [f"+{mod}:deps"], sandbox)
             plan = SIBLINGS.plan(tree / pkg, rel) if siblings and rc == 0 else None
@@ -1305,7 +1307,7 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
                 log(f"lean-try: {file}: no sibling check: {plan}")
             checked, said = isinstance(plan, SIBLINGS.Plan), ""
             with SIBLINGS.scratch(tree / pkg) if checked else contextlib.nullcontext() as work:
-                args = SIBLINGS.lean_args(tree / pkg, plan, work) if checked else []
+                args = opts + (SIBLINGS.lean_args(tree / pkg, plan, work) if checked else [])
                 at = os.path.relpath(SIBLINGS.source(plan, work), tree / pkg / PROBE.COPIES) if checked else rel
                 if rc == 0:
                     step, (rc, said, text) = "lean", PROBE.probe(
@@ -1597,7 +1599,7 @@ def main(argv: list[str]) -> int:
                     "passed on the same Lean inputs or that a merge of main leaves a candidate of")
     ap.add_argument("--try", dest="try_", metavar="FILE",
                     help=f"elaborate FILE (from the repository's root) on the tree of a Lean slot of pool {FAST_POOL}: "
-                    "lake build of its imports, then lake env lean FILE; never check.py")
+                    "lake build of its imports, then lake env lean FILE with its package's Lean options; never check.py")
     ap.add_argument("--siblings", action="store_true", help="with --try: then import FILE's build beside every built module "
                     "of its package that doesn't import it, which refuses a name two of them declare (siblings.py)")
     ap.add_argument("--build", nargs="+", metavar="FILE",
