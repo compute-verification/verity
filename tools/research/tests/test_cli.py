@@ -413,9 +413,12 @@ def test_on_auto_sizes_a_suites_run_of_named_suites_from_their_declared_worker_g
             (["--max-min", "30"], ["python3", "tools/verity/check/suites.py", "vllm"], (None, 32, 1800)),
             ([], [*suites, "verity-core"], (None, None, 3600)),               # 30 min and the sync: the kind's hour
             # all 3 suites side by side on 4 jobs: (300 + 14400 + 1800) / 4 + the longest, 14400, + the sync (INF-98)
-            ([], [*suites, "--quick"], (None, 32, 19140)),       # in whole minutes
+            ([], [*suites, "--quick"], (None, 72, 19140)),       # in whole minutes; 2 x 4 workers x 9 GB beside serial suites
             # the 2 the change touches, as the checkout's suites.py --list says: (14400 + 1800) / 8 + 14400 + 600
-            (["--cpus", "8"], [*suites, "--changed", "main", "--quick"], (8, 64, 17040)),
+            (["--cpus", "8"], [*suites, "--changed", "main", "--quick"], (8, 144, 17040)),
+            # the lane run `research queue ready` names, suites.py inside a shell string: sized as the same run is
+            (["--cpus", "8"], ["bash", "-lc", "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py "
+                                              "--changed main --quick"], (8, 144, 17040)),
             ([], [*suites, "--changed=nothing"], (None, None, None)),
             ([], [*suites, "--changed", "broken"], (None, None, None)),     # suites.py can't say: the kind's size
             ([], [*suites, "repository"], (None, None, None)),
