@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.MoreSlots
-import Proofs.Flock.C3.VStarList.Shape
-import Proofs.Flock.C3.PubRows.Shape
+module
+
+public import Proofs.Flock.Claims.Recursion.MoreSlots
+public import Proofs.Flock.C3.VStarList.Shape
+public import Proofs.Flock.C3.PubRows.Shape
 
 /-!
 # The chain's `acc` holdings are instances of their statement (`AccFits`)
@@ -12,6 +14,8 @@ import Proofs.Flock.C3.PubRows.Shape
 `recOpenStacked l … q` (`candidate3Statements`, at `fast100` at R's `m`); no other statement reads `acc`. So every
 unit a statement reads `acc` at is below its instances.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.MoreSlots
 

@@ -1,8 +1,10 @@
-import Proofs.Flock.Soundness.Assumptions.Recursive
-import Proofs.Flock.Soundness.Assumptions.Zk
-import Proofs.Flock.Soundness.Discharge.ZkView.Defs
-import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Defs
-import Proofs.Flock.Soundness.ZK.HidingAdaptive
+module
+
+public import Proofs.Flock.Soundness.Assumptions.Recursive
+public import Proofs.Flock.Soundness.Assumptions.Zk
+public import Proofs.Flock.Soundness.Discharge.ZkView.Defs
+public import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Defs
+public import Proofs.Flock.Soundness.ZK.HidingAdaptive
 
 /-!
 # The recursive audit's guarantees (trusted)
@@ -51,6 +53,8 @@ form of `Pouw.Guarantees`; its proof is `Flock.SecurityProofs.G : Flock.Guarante
 C-Flock's definitions and the recursion's model are still in the proofs package, so `Models.lean` does not import this
 module: `Proofs.Flock.Recursive` does.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Shaped
-import Proofs.Flock.VBridge.Family.Files
+module
+
+public import Proofs.Flock.Claims.Complete.Shaped
+public import Proofs.Flock.VBridge.Family.Files
 
 /-!
 # The honest run's proof files
@@ -14,6 +16,8 @@ commitment and its extra claims, and the first send is the link of that commitme
 verifier's decoded proof is that rep's proof, whose cap is the commitment's (the record's `root_B`) and whose PCS
 parameters are the table's (`repP_fields`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

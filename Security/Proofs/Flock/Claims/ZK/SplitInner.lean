@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.SimInner
+module
+
+public import Proofs.Flock.Claims.ZK.SimInner
 
 /-!
 # `InnerSrcE` as five statements
@@ -18,6 +20,8 @@ the cut's source carries what the session absorbs there. Here `InnerSrcE` is fiv
 `innerSrcE_of` assembles them (`InnerSlot` puts the other four at the slot the shared phases end at), and
 `simInner_of_split` gives `SimInner`.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

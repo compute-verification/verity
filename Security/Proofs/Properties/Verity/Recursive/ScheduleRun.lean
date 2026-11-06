@@ -1,4 +1,6 @@
-import Proofs.Properties.Verity.Recursive.ScheduleSession
+module
+
+public import Proofs.Properties.Verity.Recursive.ScheduleSession
 
 /-!
 # The recursive verifier's schedule: the run accepts
@@ -10,6 +12,8 @@ passed every check before it. `run_acc` is the form the split states, every sess
 is it at SHA-512, the oracle `Verity.Recursive.acc_of_accepts` runs at, where `(recordAt …).V` is `RecDeploy.V` at
 `(boundAt wE w).IVStar` and `stageAt …` by definition.
 -/
+
+@[expose] public section
 
 namespace Verity.Recursive.Schedule
 

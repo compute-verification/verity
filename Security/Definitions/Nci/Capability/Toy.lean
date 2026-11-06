@@ -1,6 +1,8 @@
-import Definitions.Nci.Capability
-import Mathlib.Probability.ProbabilityMassFunction.Constructions
-import Mathlib.Probability.Distributions.Uniform
+module
+
+public import Definitions.Nci.Capability
+public import Mathlib.Probability.ProbabilityMassFunction.Constructions
+public import Mathlib.Probability.Distributions.Uniform
 
 /-!
 # Local bounds: the toy instance their witnesses are stated at
@@ -20,6 +22,8 @@ and `3`. The decoder `M` has programs of four lengths, and compresses: it descri
 when the token is set, in one bit, and every other two-bit string in three. The run distribution `μ` draws the token
 uniformly.
 -/
+
+@[expose] public section
 
 namespace Nci.Capability.Toy
 

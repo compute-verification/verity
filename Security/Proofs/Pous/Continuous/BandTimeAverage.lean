@@ -1,5 +1,7 @@
-import Proofs.Pous.Chain.FamilyRounds
-import Proofs.Pous.Continuous.TimeAverage
+module
+
+public import Proofs.Pous.Chain.FamilyRounds
+public import Proofs.Pous.Continuous.TimeAverage
 
 /-!
 # The time-averaged bound on the band store: `Pous.Guarantees.BandFamilyContinuousTimeAverage`
@@ -17,6 +19,8 @@ unconditional `chainExPostFactoG_v6` (`band_seg_timedINC`), for every `D ≤ d` 
 `(0, 89)`, `(1, 93)`, `(2, 97)`, `(5, 111)`, the parameter points of `BandMultiMeetsFamilyD0`, `D1`, `D2` and
 `BandMultiMeetsFamily`.
 -/
+
+@[expose] public section
 
 namespace PousContinuous
 

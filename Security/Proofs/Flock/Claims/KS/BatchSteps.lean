@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.SimLead
-import Proofs.Flock.Claims.KS.BatchProj
+module
+
+public import Proofs.Flock.Claims.KS.SimLead
+public import Proofs.Flock.Claims.KS.BatchProj
 
 /-!
 # Paths of the model's messages, read at the games they move
@@ -16,6 +18,8 @@ reading of a strategy played along a path at its own game is the path played at 
 * `projL_ret`, `projL_left_lift`, `projL_left_coin`: a path in the first game, read at it;
 * `lead_left_lift`, `lead_left_coin`: rep 0's messages and coins keep `Lock.Lead`, read at the table.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

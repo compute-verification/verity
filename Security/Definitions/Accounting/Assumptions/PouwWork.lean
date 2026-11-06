@@ -1,4 +1,6 @@
-import Definitions.Accounting.PouwWork
+module
+
+public import Definitions.Accounting.PouwWork
 
 /-!
 # PoUW's named premises on one node (trusted)
@@ -9,6 +11,8 @@ vocabulary on the actual circuit. Each is a `Prop` about one strategy `S` and th
 (`HelpBound`). They are under `shape.premises`. A3 (`FloorOff`), an open conjecture, is in
 `Definitions.Accounting.Assumptions.PouwFloor`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Assumptions
 

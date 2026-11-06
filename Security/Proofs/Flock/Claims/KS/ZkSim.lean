@@ -1,12 +1,14 @@
-import Proofs.Flock.Claims.KS.ZkClashRaw
-import Proofs.Flock.Claims.KS.ZkAbortJR
-import Proofs.Flock.Claims.KS.ZkSlackFit
-import Proofs.Flock.Claims.KS.ForkCoupling
-import Proofs.Flock.Claims.KS.PlainWire
-import Proofs.Flock.Claims.KS.Rounds
-import Proofs.Flock.Claims.KS.RoundsNZk
-import Proofs.Flock.Claims.KS.ZkBoundJ
-import Proofs.Flock.VBridge.Family.Lig
+module
+
+public import Proofs.Flock.Claims.KS.ZkClashRaw
+public import Proofs.Flock.Claims.KS.ZkAbortJR
+public import Proofs.Flock.Claims.KS.ZkSlackFit
+public import Proofs.Flock.Claims.KS.ForkCoupling
+public import Proofs.Flock.Claims.KS.PlainWire
+public import Proofs.Flock.Claims.KS.Rounds
+public import Proofs.Flock.Claims.KS.RoundsNZk
+public import Proofs.Flock.Claims.KS.ZkBoundJ
+public import Proofs.Flock.VBridge.Family.Lig
 
 /-!
 # The masked simulator
@@ -35,6 +37,8 @@ From those, `ZkSimWJ` (`zkSimWJ_of_parts`), so `Flock.KS` at the trimmed masked 
 table's bound with escapes on accepted runs counted per round (`zk_tableBoundJOnAccR_of_parts`), and the recursion's KS
 over the masked record (`zk_KSFlock_of_parts`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

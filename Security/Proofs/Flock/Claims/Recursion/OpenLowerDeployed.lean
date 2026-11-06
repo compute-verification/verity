@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.OpenPieces
-import Proofs.Flock.Claims.Recursion.SchedDense
-import Proofs.Flock.Claims.Recursion.VerdictRowDCover
-import Proofs.Flock.Claims.Recursion.SlotsCheck
+module
+
+public import Proofs.Flock.Claims.Recursion.OpenPieces
+public import Proofs.Flock.Claims.Recursion.SchedDense
+public import Proofs.Flock.Claims.Recursion.VerdictRowDCover
+public import Proofs.Flock.Claims.Recursion.SlotsCheck
 
 /-!
 # The `rec-open` pieces' lowering at the deployed layout (`OpenCopy`, `OpenTie`)
@@ -39,6 +41,8 @@ So this file states the lowering in the form the deployed layout meets:
   range (`PiecesInRangeR`) and the staged circuit's capacity (`StagedFitsR`) (`copyFitsR_of`). `OpenTieR` is the
   position bits (`CopyBitsR`, from check 5's `dirs` tie `CopyDirsR`: `copyBitsR_of`) and the top (`CopyTopR`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.OpenLower
 

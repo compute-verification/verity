@@ -1,12 +1,16 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Upv
-import Proofs.Flock.Soundness.ExecSetup
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Upv
+public import Proofs.Flock.Soundness.ExecSetup
 
 /-!
 # A template instance per block, from acceptance
 
-`HmRow.check` refuses an untyped circuit of `vus_per_block = 0` (PROTOCOL.md §16.10, D9), the one check that does when a
+`HmRow.check` refuses an untyped circuit of `vus_per_block = 0` (`Flock.HmRow`, D9), the one check that does when a
 tail returns the outputs (`check_g_pos`), and `Stmt.setupH` parses its circuit through it (`setupH_g_pos`).
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

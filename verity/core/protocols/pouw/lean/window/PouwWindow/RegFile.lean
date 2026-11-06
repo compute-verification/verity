@@ -1,8 +1,10 @@
-import PouwWindow.OwnPorts
-import PouwWindow.FullDraw
-import Flock.KnownRead
-import SampledProofs.Produced
-import SampledProofs.Record
+module
+
+public import PouwWindow.OwnPorts
+public import PouwWindow.FullDraw
+public import Flock.KnownRead
+public import SampledProofs.Produced
+public import SampledProofs.Record
 
 /-!
 # A drawn H1 leaf's registered files, from the registration
@@ -28,6 +30,8 @@ accepted produced record alone:
 `tests/test_reg_file.py` holds `fileOf?` to the Python's file at the Python's entries and roots, and holds `leafOwn?` to
 accept it.
 -/
+
+@[expose] public section
 
 namespace PouwWindow.Lanes
 

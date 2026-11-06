@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Composed.Coined
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.Coined
 
 /-!
 # The level-0 padding geometry of `CoinedOK`
@@ -7,6 +9,8 @@ import Proofs.Flock.Soundness.Discharge.Composed.Coined
 conditions (`Accounting.PadOK`) and rate `1/2` (`logLen = logCols + 1`) give C-Flock ZK's geometry: `cols ≤ 40`,
 `t_pad ≤ 2^cols`, and opened positions inside the codeword are inside `2^(cols+1)`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.RecRecord
+module
+
+public import Proofs.Flock.Claims.Recursion.RecRecord
 
 /-!
 # live-verifier at the recursive session: the records hold the live coins
@@ -11,6 +13,8 @@ restated at the check the compiled component can't make: the model verifier hold
 live coins (`FlockDeploy.custody`), and the compiled component, which holds no live coin, reads that record as a
 prover-sent blob.
 -/
+
+@[expose] public section
 
 namespace Verity.Recursive
 

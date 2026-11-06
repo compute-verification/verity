@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.SimPiopGo
-import Proofs.Flock.Claims.ZK.Split
+module
+
+public import Proofs.Flock.Claims.ZK.SimPiopGo
+public import Proofs.Flock.Claims.ZK.Split
 
 /-!
 # `SimPiop` from the deployed source's values
@@ -11,6 +13,8 @@ live statement, witness in the deployed relation, tape, opened coins and stop wi
 least `14` variables and its rep `r` source from the cut (`srcE`) is at the opened coins from the rep's first round on
 (`FlockComplete.PiopSrc`), at the session's pads and trace and the statement's extra claims (`simPiop_of`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

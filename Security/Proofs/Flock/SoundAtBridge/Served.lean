@@ -1,4 +1,6 @@
-import Proofs.Flock.SoundAtBridge.Statement
+module
+
+public import Proofs.Flock.SoundAtBridge.Statement
 
 /-!
 # The rows link at served roots (trusted)
@@ -20,6 +22,8 @@ owned reads (`RowsAt`) has the committed tree's row at each served read.
 C3's `FlockC3.Compose.ownReads_cover` in this setting (`Proofs.Flock.SoundAtBridge.ServedProof`, whose
 `servedRowsLinked` is the proof). `ServedRegistered` is the one premise: the service's registration of its served trees.
 -/
+
+@[expose] public section
 
 namespace Flock.SoundAtBridge
 

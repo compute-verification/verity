@@ -1,7 +1,9 @@
-import Definitions.Pouw.PearlC.TileCheck8
-import Definitions.Pouw.PearlC.TileCheck4
-import Definitions.Pouw.PearlC.Device
-import Definitions.Pouw.PearlC.DeviceFp4
+module
+
+public import Definitions.Pouw.PearlC.TileCheck8
+public import Definitions.Pouw.PearlC.TileCheck4
+public import Definitions.Pouw.PearlC.Device
+public import Definitions.Pouw.PearlC.DeviceFp4
 
 /-!
 # Pearl-C's tile checks compute the words (trusted)
@@ -13,6 +15,8 @@ on its accept outcome first (`TileCheck.Accepts`), then the premises on the inpu
 hypothesis on core's float primitives or on the noise: `pc8`'s check refuses a noise line with a NaN code
 (`tileCheck8`'s `anchorsOK`). Each proof is the theorem `Pouw.SecurityProofs.PearlC.G : Pouw.Guarantees.PearlC.G`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

@@ -1,6 +1,8 @@
-import Definitions.Accounting.TS.Play
-import Definitions.Pouw.Receipt.Fx1
-import Definitions.Pouw.Receipt.Li
+module
+
+public import Definitions.Accounting.TS.Play
+public import Definitions.Pouw.Receipt.Fx1
+public import Definitions.Pouw.Receipt.Li
 
 /-!
 # The ideal game split at the receipt (trusted)
@@ -32,6 +34,8 @@ then carries two more events on its coins:
 * `ReceiptGame.WrongWords`: every round's share lies in `[0, 1]` and is positive only where a deficient word is wrong
   (the keyed rounds' share).
 -/
+
+@[expose] public section
 
 namespace Accounting.TS
 

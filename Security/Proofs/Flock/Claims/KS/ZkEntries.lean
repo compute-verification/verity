@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.Entries
-import Proofs.Flock.Soundness.Discharge.ZkExec.Verdict
+module
+
+public import Proofs.Flock.Claims.KS.Entries
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Verdict
 
 /-!
 # The masked reader's level-0 entries at a rep's run
@@ -24,6 +26,8 @@ acceptance, the masked `Entries`:
   that cap at `width₀`, below `2^d`, and its level-0 openings' positions and witness lanes are the reps' `zkRepColsOf`
   entries, rep 0's then rep 1's (`zk_rep_entries`, `Claims.Flock.verified_opens₀Z`).
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 

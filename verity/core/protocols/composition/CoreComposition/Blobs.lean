@@ -6,8 +6,12 @@ three byte strings). `productB` hands the caller's blobs to every component, and
 `product` of its components without them. So what `product` accepts, a `productB` accepts on blobs, with each component
 answering its own case on the same blobs. `sameB` is `same` over blobs in the same way (`sameB_on`).
 -/
-import CoreComposition.Same
-import CoreProtocol.Blobs
+module
+
+public import CoreComposition.Same
+public import CoreProtocol.Blobs
+
+@[expose] public section
 
 namespace Core
 

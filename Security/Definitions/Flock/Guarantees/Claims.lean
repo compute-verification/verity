@@ -1,4 +1,6 @@
-import Definitions.Claims
+module
+
+public import Definitions.Claims
 
 /-!
 # The claims are stated (trusted)
@@ -10,6 +12,8 @@ is reported when it lands. It says nothing about the verifier. A claim leaves it
 at the deployed verifier, and the guarantee's own record holds the text from then on. `Nontrivial` stays: it is
 established by a test against recorded sessions (`check`'s `lean-agreement` job), not by a Lean proof.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

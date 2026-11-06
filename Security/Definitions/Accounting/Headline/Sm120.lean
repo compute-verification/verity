@@ -1,4 +1,6 @@
-import Definitions.Accounting.Headline.Encoding
+module
+
+public import Definitions.Accounting.Headline.Encoding
 
 /-!
 # sm_120's headline instance: DS-120 and H1 + fx1 (trusted; generated)
@@ -25,6 +27,8 @@ file. `Accounting.Guarantees.TS.Sm120SheetHeadline` reads it.
   the menu's φ*.
 * `checks`: the checks a window, one a round (Theorem S's S).
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Headline.Sm120
 

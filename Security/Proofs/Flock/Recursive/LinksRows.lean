@@ -1,5 +1,7 @@
-import Proofs.Flock.Recursive.LinksOuter
-import Proofs.Flock.Claims.Recursion.CapLowerPin
+module
+
+public import Proofs.Flock.Recursive.LinksOuter
+public import Proofs.Flock.Claims.Recursion.CapLowerPin
 
 /-!
 # The link part's rows at each instance
@@ -15,6 +17,8 @@ against, each instance `n < N` fixes its rows:
   the inner statement's input (output) rows' root (`linkSetup_staged`), so the unit's output row is that row's message,
   or SHA-512 collides.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Links
 

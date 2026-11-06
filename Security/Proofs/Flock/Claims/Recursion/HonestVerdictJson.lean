@@ -1,7 +1,12 @@
-import Proofs.Flock.Claims.Recursion.NextR
-import Proofs.Flock.Claims.Complete.Json.Decode
-import Proofs.Flock.Claims.Complete.ZkTables.Decode
-import Proofs.Flock.Claims.Complete.Json.Canon
+module
+
+public import Proofs.Flock.Claims.Recursion.NextR
+public import Proofs.Flock.Claims.Complete.Json.Decode
+public import Proofs.Flock.Claims.Complete.ZkTables.Decode
+public import Proofs.Flock.Claims.Complete.Json.Canon
+import all Lean.Data.Json.Basic
+import all Init.Data.Array.Basic
+import all Lean.Data.Json.FromToJson.Basic
 
 /-!
 # The honest record survives the reader's substitutions
@@ -17,6 +22,8 @@ value the record already holds. A value alike the honest record decodes as the p
 * **The substitutions** (`same_round_fill`, `same_link_points`, `same_stream_fill`, `same_coinSub_recordObj`): a round
   whose coin opens to its coins, the link at its own points, each rep stream at its coin offset, the whole record.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

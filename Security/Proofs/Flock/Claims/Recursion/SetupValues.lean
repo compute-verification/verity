@@ -1,4 +1,6 @@
-import Flock.With.SimSetup
+module
+
+public import Flock.With.SimSetup
 
 /-!
 # What the setup's parse, load and draw return, in any hash
@@ -14,6 +16,8 @@ and the drawn population (`SetupCount.setupHidden_cost`). Each is a function of 
 So the values at any hash are the ones at SHA-512 (`parse_ports_eq`, `load_counts_eq`, `drawn_pop`), where the
 verifier's own checks bound them.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.SetupValues
 

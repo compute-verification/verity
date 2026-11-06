@@ -1,4 +1,6 @@
-import Proofs.Properties.Nci.BodiesOk.Decode
+module
+
+public import Proofs.Properties.Nci.BodiesOk.Decode
 
 /-!
 # `composite`'s step
@@ -12,6 +14,8 @@ fuel.
 The decoder is a `do` block whose join points Lean inlines once a step applies them to the decoder state, so each step
 names them first (`st_get_bind`, `lift_lets`, `extract_lets`) and splits each `if` and `match` once.
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.BodiesOk
 open Flock.Program

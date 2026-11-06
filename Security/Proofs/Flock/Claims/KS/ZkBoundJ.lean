@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.ZkTables
-import Proofs.Flock.Claims.KS.ZkKS
-import Proofs.Flock.Claims.KS.ZkSessionSC
+module
+
+public import Proofs.Flock.Claims.KS.ZkTables
+public import Proofs.Flock.Claims.KS.ZkKS
+public import Proofs.Flock.Claims.KS.ZkSessionSC
 
 /-!
 # Every masked table's bound from masked sessions after `Commit`
@@ -20,6 +22,8 @@ table of witness-lane columns that does not extract table `j` is not committed t
 (`zk_not_committedJ`), since a satisfying old witness of it reads as a witness of table `j`'s own statement
 (`relS_tableJ`).
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 

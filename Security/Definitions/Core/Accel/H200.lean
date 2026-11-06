@@ -1,4 +1,6 @@
-import Definitions.Core.Accel.Machine
+module
+
+public import Definitions.Core.Accel.Machine
 
 /-!
 # The H200 SXM's numbers (trusted)
@@ -32,6 +34,8 @@ them.
 * HBM3e: 3201 MHz at two transfers a clock on 6144 bits (six stacks), 4.917 TB/s, above the data sheet's 4.8 TB/s;
   1.229184 · 10¹² words a second.
 -/
+
+@[expose] public section
 
 open scoped NNRat
 

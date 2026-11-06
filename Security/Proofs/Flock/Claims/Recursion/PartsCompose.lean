@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.PartAccepts
-import Proofs.Flock.Claims.Recursion.BoundRun
+module
+
+public import Proofs.Flock.Claims.Recursion.PartAccepts
+public import Proofs.Flock.Claims.Recursion.BoundRun
 
 /-!
 # The composition: V\*'s parts' checks together make `IVStar` accept (`ivstar_of_parts`)
@@ -64,6 +66,8 @@ one check given to the reader part of the last round (`RecDeploy.ownJ`). There t
 `verifyRepWith` stays among the verdict's checks, owned by no reader part; at `FlockDeploy.nextS`
 (`RecDeploy.decompB_nextS`) the last message carries the decoded proofs and the decision decodes no proof file.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion.VStarB
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.C3.Fork.OracleFold
-import Proofs.Flock.C3.Fork.OracleGame
-import Proofs.Flock.Soundness.RepSound
+module
+
+public import Proofs.Flock.C3.Fork.OracleFold
+public import Proofs.Flock.C3.Fork.OracleGame
+public import Proofs.Flock.Soundness.RepSound
 
 /-!
 # Piece (a), the oracle count: one rep with its sparse phase
@@ -13,6 +15,8 @@ simulates `lincheck` and `rep_sound`'s phases bound the rep (`holoRep_honest_le`
 followed by its sparse phase hands on a claim true on `R` with probability at most `repError + sparseError`
 (`holoRep_stage_le`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Fork
 

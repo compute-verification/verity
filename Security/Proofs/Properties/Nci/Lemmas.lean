@@ -1,5 +1,7 @@
-import Properties.Nci
-import Mathlib.Tactic
+module
+
+public import Properties.Nci
+public import Mathlib.Tactic
 
 /-!
 # Lemmas about `NciCheck`'s functions
@@ -7,6 +9,8 @@ import Mathlib.Tactic
 Each step of the check, characterized: the folds over a range in `Except`, `gateOf` and `circuitOf`, `thetaStep`,
 `ownerOf` and `divisionOf`, `tally` and `ius`, `failure`, `parse` and `evaluate`.
 -/
+
+@[expose] public section
 
 set_option linter.unusedSimpArgs false
 set_option linter.unnecessarySeqFocus false

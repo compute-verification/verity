@@ -1,5 +1,7 @@
-import Proofs.Accounting.ComposePeriod
-import Proofs.Accounting.Compose.SplitRateClosed
+module
+
+public import Proofs.Accounting.ComposePeriod
+public import Proofs.Accounting.Compose.SplitRateClosed
 
 /-!
 # An honest period meets `CircuitWorkPeriod`'s premises
@@ -20,6 +22,8 @@ window's tile is dead and whose window `w`'s proof is refused when `w`'s round c
 at the same numbers, and its accepted prefix depends on the coins: `0` windows when the first is refused, `1` when
 the second is, and all `n + 1` when none is, with `n` credited live words then, the dead window's counting none.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.ComposePeriod.Honest
 

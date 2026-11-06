@@ -1,10 +1,12 @@
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.Positivity
-import Mathlib.Tactic.NormNum
-import Mathlib.Tactic.Ring
-import Definitions.Pouw.Fp8Atom.H1TPinned
-import Proofs.Pouw.Fp8Atom.H1TChecks
-import Proofs.Pouw.Fp8Atom.Fp32Proofs
+module
+
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.Positivity
+public import Mathlib.Tactic.NormNum
+public import Mathlib.Tactic.Ring
+public import Definitions.Pouw.Fp8Atom.H1TPinned
+public import Proofs.Pouw.Fp8Atom.H1TChecks
+public import Proofs.Pouw.Fp8Atom.Fp32Proofs
 
 /-!
 # Proofs of H-1T's pinned statements
@@ -15,6 +17,8 @@ follow by induction from its local checks. The structural statements unfold the 
 of `r` leaves `r + i` in `r`'s binade or below, so `|i| ≤ ulp (r + i) / 2 ≤ ulp r / 2`; a summand of an ulp or more
 is `RnAddMoves`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Fp8Atom.H1T.Proofs
 

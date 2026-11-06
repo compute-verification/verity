@@ -1,13 +1,17 @@
-import Proofs.Flock.Claims.Recursion.CopySiteDeployed
-import Proofs.Flock.Claims.Recursion.SlotsCheck
-import Proofs.Flock.Claims.Recursion.DeployMargin
-import Proofs.Flock.Claims.Recursion.CoinPos
-import Proofs.Flock.C3.PubRows.Check
-import Proofs.Flock.Soundness.Discharge.Layout.QSort
-import Proofs.Flock.Soundness.Discharge.Hidden.Spec
-import Proofs.Flock.Soundness.Discharge.Hidden.Public
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Proofs.Properties.Nci.ReadsExact
+module
+
+public import Proofs.Flock.Claims.Recursion.CopySiteDeployed
+public import Proofs.Flock.Claims.Recursion.SlotsCheck
+public import Proofs.Flock.Claims.Recursion.DeployMargin
+public import Proofs.Flock.Claims.Recursion.CoinPos
+public import Proofs.Flock.C3.PubRows.Check
+public import Proofs.Flock.Soundness.Discharge.Layout.QSort
+public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+public import Proofs.Flock.Soundness.Discharge.Hidden.Public
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+public import Proofs.Properties.Nci.ReadsExact
+
+@[expose] public section
 
 set_option Elab.async false
 

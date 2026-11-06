@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.LinkFinder
+module
+
+public import Proofs.Flock.Soundness.LinkFinder
 
 /-!
 # Extraction from accepted reruns, linearly: a conflict finder at level 0
@@ -21,6 +23,8 @@ and the bound is linear:
 * `joint_acc_le_ecr`: under expected-time collision resistance at the finder, `ε · Pr[fails]` is at most
   `ε_c + N·ε/(ek) + (k + 1)·E[c]/2^256 + (k + 1)/(eR)`: weight 1, `k + 1` runs.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

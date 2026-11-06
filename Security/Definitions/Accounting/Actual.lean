@@ -1,6 +1,8 @@
-import Definitions.Core.Circuit
-import Definitions.Core.Declaration
-import Mathlib.Order.Interval.Set.Defs
+module
+
+public import Definitions.Core.Circuit
+public import Definitions.Core.Declaration
+public import Mathlib.Order.Interval.Set.Defs
 
 /-!
 # The actual circuit (trusted)
@@ -36,6 +38,8 @@ and the gates of `S` its outputs. `declaration X t θ` is `A[X, [0, t))` so cut,
 committed before the run, as NCI's `Declaration`. The runtime `t_A(P)` reads the strategy, not one run
 (`Accounting.Actual.runtime`).
 -/
+
+@[expose] public section
 
 namespace Accounting
 

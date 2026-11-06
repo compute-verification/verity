@@ -1,13 +1,15 @@
-import Proofs.Flock.Recursive.LinksInner
-import Proofs.Flock.Claims.Recursion.KSLinks
-import Proofs.Flock.Claims.Recursion.InnerAccepts
-import Proofs.Flock.Claims.Recursion.ResLowerDeployed
-import Proofs.Flock.Claims.Recursion.MoreSlots
-import Proofs.Flock.VBridge.RecLink
-import Proofs.Flock.VBridge.Pinned
-import Proofs.Flock.Recursive.VStarCheck
-import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
-import Proofs.Flock.C3.VStarList.Shape
+module
+
+public import Proofs.Flock.Recursive.LinksInner
+public import Proofs.Flock.Claims.Recursion.KSLinks
+public import Proofs.Flock.Claims.Recursion.InnerAccepts
+public import Proofs.Flock.Claims.Recursion.ResLowerDeployed
+public import Proofs.Flock.Claims.Recursion.MoreSlots
+public import Proofs.Flock.VBridge.RecLink
+public import Proofs.Flock.VBridge.Pinned
+public import Proofs.Flock.Recursive.VStarCheck
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+public import Proofs.Flock.C3.VStarList.Shape
 
 /-!
 # The link part on the outer side: what an accepted run's link part fixes
@@ -28,6 +30,8 @@ a collision among what the link finder reads. This file holds the outer side's p
 * `stagedLink`: a staged part whose V\* statement is `.link UB PB N` has one table, its circuit the part's, named
   `linkName UB PB`, its rows and leaves V\*'s, and its population `N`.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

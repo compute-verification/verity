@@ -1,4 +1,6 @@
-import Proofs.Flock.Bridge.LeafMap
+module
+
+public import Proofs.Flock.Bridge.LeafMap
 
 /-!
 # The row-seg leaf binds (hm96-sha512/row-seg/v1), and the deployed commitment with it
@@ -25,6 +27,8 @@ of its answers as hm96 does:
   (`commitRowL_binds`), and it opens at SHA-512 exactly what `commitDepL` opens (`commitRowL_sha512`).
 * `Binding_of_rowLeaf`: **the claims' `Binding`** for a commitment of `rowLeaf` leaves under the registered path check.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

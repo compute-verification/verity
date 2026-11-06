@@ -1,8 +1,10 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.RateAuditHorizon
-import Definitions.Accounting.Guarantees.RateAuditNamed
-import Proofs.Accounting.RateAudit.Horizon
-import Proofs.Accounting.RateAudit.Named
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.RateAuditHorizon
+public import Definitions.Accounting.Guarantees.RateAuditNamed
+public import Proofs.Accounting.RateAudit.Horizon
+public import Proofs.Accounting.RateAudit.Named
 
 /-!
 # The pooled draw: windows and sessions, the proof
@@ -24,6 +26,8 @@ with no union over the windows (`Horizon.pr_floor_le`).
 short of those receipts' words leaves some window short (`Session.pr_unpaid_le`), and that window some pass, which
 `RatePaidNamedRO` bounds at the devices the earlier coins pick (`Session.pr_window_le`, then `Chain.pr_unpaid_le`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.VBridge.Runs.ZcLc
-import Proofs.Flock.Soundness.Refine.HoloRepConverse
+module
+
+public import Proofs.Flock.VBridge.Runs.ZcLc
+public import Proofs.Flock.Soundness.Refine.HoloRepConverse
 
 /-!
 # The holo rep's program from E's zerocheck and lincheck
@@ -11,6 +13,8 @@ taken at the transcript's rounds with their empty ones filtered out (`R'`), whos
 transcript's (`filter_getElem!_of`: every one of them issued coins, `HoloLcAnswered` and the zerocheck's counts), and
 read back at the transcript's.
 -/
+
+@[expose] public section
 
 namespace FlockC3.HoloValues
 

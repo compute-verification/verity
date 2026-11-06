@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.ZkDecJ
-import Proofs.Flock.Claims.KS.ZkOffSC
+module
+
+public import Proofs.Flock.Claims.KS.ZkDecJ
+public import Proofs.Flock.Claims.KS.ZkOffSC
 
 /-!
 # The deployed `--zk` decoders, with no witness-lane opening off the table
@@ -27,6 +29,8 @@ it self-clashes:
   hidden outputs and at a masked statement in scope, as `decodesTable_zkTabs`, `decodesTableH_zkTabs` and
   `decodesTable_deploy` are at `accepted`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 

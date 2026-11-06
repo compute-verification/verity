@@ -1,6 +1,8 @@
-import Proofs.Flock.EndToEnd.Joint.MT.Statement
-import Proofs.Flock.Soundness.Discharge.Composed.DrawnJ
-import Proofs.Flock.Soundness.Audit.HarmBound
+module
+
+public import Proofs.Flock.EndToEnd.Joint.MT.Statement
+public import Proofs.Flock.Soundness.Discharge.Composed.DrawnJ
+public import Proofs.Flock.Soundness.Audit.HarmBound
 
 /-!
 # A sampling block of `J` tables stratified by subcircuit: its drawn units, its draw's miss, and its one budget
@@ -12,6 +14,8 @@ import Proofs.Flock.Soundness.Audit.HarmBound
   `B`, under A3 (`Law.execOS_escape_le`).
 * `StratifiedBlockMT.within_of_le`: a set in the confidence set, `δ ≤` its escape, is within the one budget.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees.StratifiedBlockMT
 

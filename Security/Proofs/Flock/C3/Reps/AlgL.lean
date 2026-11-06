@@ -1,7 +1,9 @@
-import Proofs.Flock.VBridge.AlgHolds
-import Proofs.Flock.VBridge.ResLayer
-import Proofs.Flock.VBridge.AccChain
-import Proofs.Flock.VBridge.Family.Openings
+module
+
+public import Proofs.Flock.VBridge.AlgHolds
+public import Proofs.Flock.VBridge.ResLayer
+public import Proofs.Flock.VBridge.AccChain
+public import Proofs.Flock.VBridge.Family.Openings
 
 /-!
 # G's items 1–4 at the layer-read forms, at the family level
@@ -15,6 +17,8 @@ rep's units its own (`un p r`, `unO ℓ r j`), as `vbridgeRead_of_layers` compos
 * `hStruct_of_checkH`: the structure and groups at the holo form of the shape a passing holo part names, as
   `VStarFamily.hStruct_of_check` at `check_part_holo`.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

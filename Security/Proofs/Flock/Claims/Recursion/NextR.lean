@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.NextS
-import Proofs.Flock.Claims.Complete.Encode
-import Proofs.Flock.Claims.Recursion.RepFramesBind
-import Proofs.Flock.Claims.Recursion.VarLen
+module
+
+public import Proofs.Flock.Claims.Recursion.NextS
+public import Proofs.Flock.Claims.Complete.Encode
+public import Proofs.Flock.Claims.Recursion.RepFramesBind
+public import Proofs.Flock.Claims.Recursion.VarLen
 
 /-!
 # `IVStar`'s last step at the deployed reader (`nextR`)
@@ -52,6 +54,8 @@ openings, and the fields the transcript never absorbs are what V\* takes for the
   with the checks the decision needs (`VerdictR`): the setup at `hOf H`, the proofs' shapes, the rep streams' names, the
   verdict on the decoded proofs and the checks after it.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

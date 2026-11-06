@@ -1,5 +1,7 @@
-import Definitions.Accounting.Remote.Node
-import Definitions.Pouw.Basic.Prob
+module
+
+public import Definitions.Accounting.Remote.Node
+public import Definitions.Pouw.Basic.Prob
 
 /-!
 # A remote audit's run, and the routes its guarantees compose (trusted)
@@ -47,6 +49,8 @@ compose them by a union bound; each route is proved for the runs its game or the
 `Rebuild` and `Fit` are the rebuild's route as a fit at π_r. Sequential speed's rebuild clause, that no word is rebuilt
 within a pass, is the other route; each guarantee names the route it takes.
 -/
+
+@[expose] public section
 
 namespace Accounting.Remote
 

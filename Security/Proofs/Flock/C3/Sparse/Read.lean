@@ -1,9 +1,11 @@
-import Proofs.Flock.C3.Sparse.Session
-import Proofs.Flock.C3.Compose.Honest
-import Proofs.Flock.C3.Compose.Plays
-import Proofs.Flock.VBridge.Sparse.Refine
-import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
-import Proofs.Flock.Recursive.StageKinds
+module
+
+public import Proofs.Flock.C3.Sparse.Session
+public import Proofs.Flock.C3.Compose.Honest
+public import Proofs.Flock.C3.Compose.Plays
+public import Proofs.Flock.VBridge.Sparse.Refine
+public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
+public import Proofs.Flock.Recursive.StageKinds
 
 /-!
 # n3's read fact: each rep's sparse phase from the tape
@@ -19,6 +21,8 @@ phase's run to the registered claim (`sparse_refines`), which is a play on one t
 phase's shape fixes (`sparsePhase_exact`, so the tape is `stepsOf`); and a game plays on at most one prefix of a tape
 (`stageOf_of_playsT`), so the stage the run decodes is that play.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Sparse
 

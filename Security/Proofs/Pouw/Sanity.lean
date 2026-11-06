@@ -1,7 +1,9 @@
-import Proofs.Pouw.Witness
-import Proofs.Pouw.Copy
-import Mathlib.Data.Set.Finite.List
-import Mathlib.Data.Fintype.Pigeonhole
+module
+
+public import Proofs.Pouw.Witness
+public import Proofs.Pouw.Copy
+public import Mathlib.Data.Set.Finite.List
+public import Mathlib.Data.Fintype.Pigeonhole
 
 /-!
 # Sanity: degenerate instances and side conditions
@@ -28,6 +30,8 @@ the pinned statements excludes it or makes it harmless.
 | R_copy with zero noise | `copy_zero_noise`: Nz fails and R_copy's bound fails |
 | (d′)'s hypotheses together | `milestone_hypotheses_consistent` (at `W_ref = m1Wref`, `Ω_max = Ω_M1`) |
 -/
+
+@[expose] public section
 
 namespace Pouw.Sanity
 

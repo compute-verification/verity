@@ -1,6 +1,8 @@
-import Proofs.Accounting.TS.Session.Tile.Assumptions
-import Proofs.Accounting.TS.Session.Lanes.Lane
-import Proofs.Pouw.H1Zy.Tile
+module
+
+public import Proofs.Accounting.TS.Session.Tile.Assumptions
+public import Proofs.Accounting.TS.Session.Lanes.Lane
+public import Proofs.Pouw.H1Zy.Tile
 
 /-!
 # A tile unit's `TileChecks` from its Definition
@@ -22,6 +24,8 @@ from the registered reads. `tileChecks_of_computes` gives `TileChecks` at the vi
 `rd`, the words the unit's registered reads carry, the v3 noise as a function of the public inputs, and `dqW`'s float
 roundings.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Tile
 

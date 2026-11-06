@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDefs
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Theorems
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLive
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDefs
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Theorems
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLive
 
 /-!
 # `RunsZC` at the live hidden-output `--zk` tables, from `TablesAtZKHLive`
@@ -15,6 +17,8 @@ each run a `RepRun` for `decAtZ` and the table's verdict accept at the two resul
 on every circuit `HmOut.parse` accepts (where the unit returns the outputs, for `runsZC_liveH`), and `runsZC_liveHISt` and
 `runsZC_liveHSt` on every statement circuit (`HmOut.parseStmt`, a templated file's template unrolled).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkHidden
 

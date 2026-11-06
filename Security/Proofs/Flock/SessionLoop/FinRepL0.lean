@@ -1,9 +1,11 @@
-import Proofs.Flock.SessionLoop.FinRepFinal
-import Proofs.Flock.SessionLoop.FinRepXs
-import Proofs.Flock.SessionLoop.Tables
-import Proofs.Flock.Claims.ZK.FinishRank
-import Proofs.Flock.Claims.ZK.FinishSwPts
-import Proofs.Flock.Claims.ZK.LinkFft
+module
+
+public import Proofs.Flock.SessionLoop.FinRepFinal
+public import Proofs.Flock.SessionLoop.FinRepXs
+public import Proofs.Flock.SessionLoop.Tables
+public import Proofs.Flock.Claims.ZK.FinishRank
+public import Proofs.Flock.Claims.ZK.FinishSwPts
+public import Proofs.Flock.Claims.ZK.LinkFft
 
 /-!
 # (c.3)'s `FinRepL0`: level 0's opened rows and salts
@@ -25,6 +27,8 @@ names: at `q0At`'s positions. Each of those is opened (`FinRep.q0At_opened`), an
 **`Loop.finRepL0`**: at a statement in the masked scope with a witness, where the loop draws the tape's level 0
 (`Loop.Level0Src`), `FinRepL0` holds. It reads no worker's values.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.RankAt
 

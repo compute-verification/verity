@@ -1,8 +1,10 @@
-import Proofs.Nci.CoveringTwoCosts
-import Proofs.Nci.CoveringWitness
-import Mathlib.Data.Fin.VecNotation
-import Mathlib.Data.Fintype.Prod
-import Mathlib.Tactic.NormNum
+module
+
+public import Proofs.Nci.CoveringTwoCosts
+public import Proofs.Nci.CoveringWitness
+public import Mathlib.Data.Fin.VecNotation
+public import Mathlib.Data.Fintype.Prod
+public import Mathlib.Tactic.NormNum
 
 /-!
 # The two-cost covering bound is not vacuous, at `c_w ≠ c_a`
@@ -19,6 +21,8 @@ of three gates, each with two inputs, cover it.
 `c_a > 0` can't be dropped (`coveringBoundTwoCosts_needs_ca_pos`): at `c_a = -1`, on `CoveringBound`'s witness
 (`Proofs.Nci.CoveringWitness`), the count's bound is negative.
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs.CoveringTwoCosts
 

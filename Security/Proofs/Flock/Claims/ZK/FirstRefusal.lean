@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.Refusals
-import Proofs.Flock.Claims.Complete.ZkTables.Refuse
-import Proofs.Flock.Claims.Complete.ZkTables.Pass
+module
+
+public import Proofs.Flock.Claims.ZK.Refusals
+public import Proofs.Flock.Claims.Complete.ZkTables.Refuse
+public import Proofs.Flock.Claims.Complete.ZkTables.Pass
 
 /-!
 # The masked session's `β`, pair-coin and rank refusals, as its first refusal
@@ -24,6 +26,8 @@ one).
   `Flock.zk_deployZk_masked_exe_refusals_gap`: without `hrank` too, at a plan that also reads the claim points
   (`PointReads`). Left: the plan's `Causal`, its round `0`, the rounds after the first and the last round.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 
@@ -93,10 +97,8 @@ theorem repSlot_eq {x : Msg} {s spec} (hsx : FlockDeploy.setupOf true x = some (
   simp only [hz]
 
 theorem refK_eq {x : Msg} {s spec sts} (hsx : FlockDeploy.setupOf true x = some (s, spec, sts)) :
-    refK x = 1 + FlockDeploy.rounds true spec sts := by
-  unfold refK
-  simp only [FlockDeploy.V, hsx]
-  omega
+    refK x = 1 + FlockDeploy.rounds true spec sts :=
+  refK_of_flock hsx
 
 /-- **An opened coin's element is its opening's**, at a round of the openings. -/
 theorem slotAt_padOps {x : Msg} (ops : List (Msg × Msg)) (hl : ops.length = refK x) {k : ℕ} (hk : k < refK x)

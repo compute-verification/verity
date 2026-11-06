@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Discharge
-import Proofs.Flock.Claims.Complete.ZkTables.Link
-import Proofs.Flock.Claims.Complete.ZkTables.Runs
-import Proofs.Flock.Claims.Complete.Zk.Complete
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.Discharge
+public import Proofs.Flock.Claims.Complete.ZkTables.Link
+public import Proofs.Flock.Claims.Complete.ZkTables.Runs
+public import Proofs.Flock.Claims.Complete.Zk.Complete
 
 /-!
 # Masked completeness at any number of tables, from named premises
@@ -22,6 +24,8 @@ import Proofs.Flock.Claims.Complete.Zk.Complete
   (`Claims.Flock.Complete H (deployZk rel)`), from `complete_zk`'s premises and
   these four.
 -/
+
+@[expose] public section
 
 open Flock FlockDeploy Transcript
 

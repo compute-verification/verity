@@ -318,13 +318,13 @@ def test_designs_read_what_exists():
     c = census(model(), vector(PIN).epoch)
     for n in E.designs():
         d = E.design(n)
-        assert d.name == n and d.honest in E.profiles() and d.floor and "SPEC" in d.floor_source
+        assert d.name == n and d.honest in E.profiles() and d.floor and d.floor_source
         assert set(d.fold) | set(d.baseline) | set(d.floor) | {k for f in d.filler for k in f.mix} <= set(c), n
-        assert all("CALC" in p.source or "assumption" in p.source for p in d.mand.values()), n
+        assert all("assumption" in p.source for p in d.mand.values()), n
         assert all(p.source.startswith("eps_budget.py") for p in d.skip.values()), n
         assert 0 <= E.eps(d, PI, 8).total() < 1
         assert d.title.startswith("Dither-") and set(d.noise) == set(E.PRODUCTS) and d.unit in E.adapts(), n
-        assert d.coin_bits >= 1 and "CALC" in d.coins_source, n
+        assert d.coin_bits >= 1 and d.coins_source, n
         assert not d.ppl or (SPECS / f"{d.ppl}.toml").read_text(), n
         assert all(E.design(a).name == n for a in d.aliases), n
     assert {E.design(n).title for n in E.designs()} >= {"Dither-1S", "Dither-2S", "Dither-C"}

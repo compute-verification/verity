@@ -1,5 +1,7 @@
-import Definitions.Nci.Assumptions.Baseline
-import Proofs.Core.Circuit
+module
+
+public import Definitions.Nci.Assumptions.Baseline
+public import Proofs.Core.Circuit
 
 /-!
 # Pulling a division back through a containment
@@ -15,6 +17,8 @@ an input gate, which lies in no IU, so the IU reads it too, and it is outside `d
 total containment is a partial one with no dark gates (`PartialContainment.ofContainment`), and `ThetaRegistered` for
 it keeps the novel inputs of `c` that a piece reads out of `d`'s θ (`novelReads_pull`).
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

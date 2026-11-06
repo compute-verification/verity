@@ -1,6 +1,8 @@
-import Proofs.Nci.Cover.Additive
-import Mathlib.Data.Fin.VecNotation
-import Mathlib.Tactic.NormNum
+module
+
+public import Proofs.Nci.Cover.Additive
+public import Mathlib.Data.Fin.VecNotation
+public import Mathlib.Tactic.NormNum
 
 /-!
 # The cover theorem: its hypotheses can hold together
@@ -19,6 +21,8 @@ outside `θ` and the region, so `ConditionalUpdateHardness`, and with it `Update
 `b = 1` (`conditionalUpdateHardness_of_feeds`); the certificate holds at depth `D = 4`, so `k = 3 < b D`; and seven
 blocks of `s = 4` gates, each handed at most three bits outside `θ`, cover the circuit.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.SecurityProofs
 

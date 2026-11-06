@@ -1,5 +1,7 @@
-import Proofs.Pous.P2.Margin
-import Proofs.Pous.FreeBlocks.P2
+module
+
+public import Proofs.Pous.P2.Margin
+public import Proofs.Pous.FreeBlocks.P2
 
 /-!
 # P2's `m1p` families up to `2^64` blocks
@@ -11,6 +13,8 @@ family extends with the same `c` and margin `m`: below `2^23` it is the proved f
 `n = 64`. A store of `2^64` blocks of 2,056 bytes is far beyond any device; the cap is the one a 64-bit block index
 gives.
 -/
+
+@[expose] public section
 
 namespace PousP2Wide
 

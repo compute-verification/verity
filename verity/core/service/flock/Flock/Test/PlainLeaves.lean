@@ -3,7 +3,12 @@
 (`Tags.circuitPlainLeaves`, hidden outputs) passes them without `--zk` and is refused under it; a statement with public
 outputs and plain leaves is refused either way.
 -/
-import Flock.ProvedScope
+module
+
+public import Flock.ProvedScope
+meta import Flock.ProvedScope
+
+@[expose] public section
 
 namespace Flock.Test.PlainLeaves
 

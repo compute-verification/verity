@@ -1,9 +1,11 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Basic.ENNReal.BigOperators
-import Mathlib.Basic.ENNReal.Inv
-import Mathlib.Order.CompleteLattice.Basic
-import Definitions.Core.Game
+module
+
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Basic.ENNReal.BigOperators
+public import Mathlib.Basic.ENNReal.Inv
+public import Mathlib.Order.CompleteLattice.Basic
+public import Definitions.Core.Game
 
 /-!
 # Games: the monad laws, values, and bounds over one coin
@@ -11,6 +13,8 @@ import Definitions.Core.Game
 `value` against the optimal prover bounds every strategy's `prob` (`prob_le_value`), is at most one and monotone in the
 event, and is bounded through a bind or a coin from a bound on each continuation.
 -/
+
+@[expose] public section
 
 namespace Verity
 

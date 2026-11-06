@@ -1,4 +1,6 @@
-import Definitions.Nci.Assumptions.Fit
+module
+
+public import Definitions.Nci.Assumptions.Fit
 
 /-!
 # NCI over windows: the fit bound
@@ -10,6 +12,8 @@ multiplications with no `(d, e)`-threading at window scale. At `S ≥ N* b_w` it
 bound with weights counted in parameter slots, so that it applies to windows that span many optimizer steps; `FitBound`
 is its case of one slot per weight gate.
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 

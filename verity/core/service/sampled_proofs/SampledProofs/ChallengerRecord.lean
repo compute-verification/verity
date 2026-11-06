@@ -19,8 +19,14 @@ without the challenger's record is refused.
 The difftest's pieces: `challenger_key` (`ChallengerKey.from_json`), `challenger_record` (`ChallengerRecord.from_json`
 and `record_message`) and `challenger_trusted` (`trusted_reason`), each `{"refused": why}` where Python refuses.
 -/
-import Lms.Verify
-import SampledProofs.Challenger
+module
+
+public import Lms.Verify
+public import SampledProofs.Challenger
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Challenger
 

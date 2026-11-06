@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Replay.Trace
-import Proofs.Flock.Claims.Scope.StmtOf
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.Trace
+public import Proofs.Flock.Claims.Scope.StmtOf
 
 /-!
 # The deployed table as the statement the soundness proof plays
@@ -13,6 +15,8 @@ matrices (`matA`, `matB`) the circuit fold reads (`stmtOf_fold`), and the witnes
 * `Case.model`: at a good case of the deployed relation, `stmtOf st hwf (regionsOf st)` is satisfied by the witness's
   bits (`zOf 1 w 0`), from `RelS` (`relS_relation`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

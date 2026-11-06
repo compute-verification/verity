@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.VStarCross
-import Flock.RecRecord
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarCross
+public import Flock.RecRecord
 
 /-!
 # The coin server's record reads back
@@ -23,6 +25,8 @@ the rounds `Record.msgs` shows are the link's and the recorded rounds', one fewe
 schedule's count of commit strings. The model before it, which listed every inner round, set up no staged statement
 (`Flock.Test.RecSchedule`: `RecSetup.commits` holds the staged record to the schedule's rounds).
 -/
+
+@[expose] public section
 
 namespace Flock.RecRecord
 

@@ -3,8 +3,12 @@ The `…With` functions of `Flock.With.Hashes`, `Flock.With.Transcript` and `Flo
 (`Flock.With.Sim`): run with two oracles that `S` relates hash by hash, each function's two runs are related by `S` (or by
 its lift to the transcript and the Ligerito state).
 -/
-import Flock.With.SimWalk
-import Flock.With.Verify
+module
+
+public import Flock.With.SimWalk
+public import Flock.With.Verify
+
+@[expose] public section
 
 namespace Flock.With
 

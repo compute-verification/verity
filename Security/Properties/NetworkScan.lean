@@ -1,5 +1,7 @@
-import NetworkCheck.Period
-import Definitions.NetworkCertifier.SampledAudit
+module
+
+public import NetworkCheck.Period
+public import Definitions.NetworkCertifier.SampledAudit
 
 /-!
 # The rows form's scan fits its layout: what `NetworkCheck.Period.scanOf`'s acceptance gives the sampled audit's scope
@@ -28,6 +30,8 @@ an input node, reading exactly the gates its operands name, returning the gates 
   a statement the scope check takes, whose descriptor is the accepted scan's canonical bytes, is in the sampled audit's
   scope at `layOf` and `T` (`ScopeAcc`). `Proofs.Properties.NetworkScan` derives it from `ScanFits`.
 -/
+
+@[expose] public section
 
 namespace Properties.NetworkScan
 

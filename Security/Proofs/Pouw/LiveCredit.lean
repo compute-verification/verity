@@ -1,5 +1,7 @@
-import Mathlib
-import Proofs.Accounting.TS.Session.Lanes.Layer
+module
+
+public import Mathlib
+public import Proofs.Accounting.TS.Session.Lanes.Layer
 
 /-!
 # Dense credit counts the served rows (`PouwLiveSlots_v1`, rule A)
@@ -50,6 +52,8 @@ statement decoded at another round proves nothing about this one. That the decod
 registered `slots@<s>` and its request table (`requests@0` under round-0-only admission) is the statement's registration
 (flock-verify's complete check and the served path's roots), outside this file.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.LiveCredit
 
