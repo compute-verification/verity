@@ -1,7 +1,10 @@
 import { timingSafeEqual } from "node:crypto";
+import { start } from "workflow/api";
+import { leadWorkflow } from "../workflows/lead.ts";
 import { tick } from "./cron.ts";
 import { runtime } from "./runtime.ts";
 import { mentionedLanes, parseSlackEvent, verifySlackSignature } from "./slack.ts";
+import type { HarnessName, Lead } from "./store.ts";
 import { wake } from "./wake.ts";
 
 // The HTTP surface as plain (Request) => Response functions: the Next routes
@@ -85,7 +88,56 @@ export async function cronTick(req: Request, env: Env = process.env) {
 
 export async function status(req: Request, env: Env = process.env) {
   if (!bearerOk(req, env.PLATFORM_API_TOKEN)) return json({ error: "unauthorized" }, 401);
-  return json(await statusReport(new URL(req.url).searchParams.get("lane") ?? undefined));
+  const q = new URL(req.url).searchParams;
+  const lane = q.get("lane") ?? undefined;
+  if (lane && q.get("doc") === "1") {
+    const lead = await (await runtime()).store.getLead(lane);
+    return lead ? json({ lane, docRev: lead.docRev, doc: lead.doc }) : json({ error: "no such lead" }, 404);
+  }
+  return json(await statusReport(lane));
+}
+
+type LeadChange = {
+  lane: string;
+  charter?: string;
+  doc?: string;
+  slackChannel?: string;
+  harness?: HarnessName;
+  model?: string;
+  monthlyBudgetUsd?: number;
+  cronEveryMinutes?: number;
+  status?: Lead["status"];
+  kick?: string;
+  roll?: boolean;
+};
+
+// The cutover's one write: register or change a lead, provision its gateway key
+// the first time it has a budget, park its sandbox when it is paused, and
+// optionally ring it (`kick`, an event it handles at once) or move it to a fresh
+// run on this deployment (`roll`).
+export async function changeLead(req: Request, env: Env = process.env) {
+  if (!bearerOk(req, env.PLATFORM_API_TOKEN)) return json({ error: "unauthorized" }, 401);
+  const c = (await req.json()) as LeadChange;
+  if (!c.lane || !/^[a-z][a-z0-9-]{0,39}$/.test(c.lane)) return json({ error: "lane must match [a-z][a-z0-9-]*" }, 400);
+  const rt = await runtime();
+  const before = await rt.store.getLead(c.lane);
+  const model = c.model ?? before?.model ?? env.PLATFORM_DEFAULT_MODEL ?? "anthropic/claude-opus-5.5";
+  let lead = await rt.store.upsertLead({ ...c, model });
+  if (lead.monthlyBudgetUsd && !lead.gatewayKeyId) {
+    await rt.credentials.provisionGatewayKey(lead.lane, lead.monthlyBudgetUsd);
+    lead = (await rt.store.getLead(lead.lane))!;
+  }
+  if (lead.status !== "active") await rt.sandbox.park(`lead-${lead.lane}`);
+  let runId: string | null = null;
+  if (c.roll && lead.status === "active") {
+    runId = (await start(leadWorkflow, [{ lane: lead.lane, epoch: 0 }])).runId;
+    await rt.store.setRunId(lead.lane, runId);
+  }
+  const kicked = c.kick
+    ? await wake(lead.lane, { lane: lead.lane, source: "mcp", kind: "cutover", payload: { text: c.kick, from: "swap" }, replyTo: null })
+    : null;
+  const { doc: _doc, charter: _charter, ...shown } = lead;
+  return json({ lead: { ...shown, docBytes: lead.doc.length }, kicked, runId });
 }
 
 export async function transcripts(req: Request, env: Env = process.env) {
