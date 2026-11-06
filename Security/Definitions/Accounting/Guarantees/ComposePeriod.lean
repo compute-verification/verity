@@ -37,7 +37,7 @@ at it (`PeriodTailMax`).
   that ends at a stopping time the cheater steers pays `ln(1/δ_s)` once, as a fixed one does. Proved
   (`Proofs.Accounting.ComposePeriod`): by induction on the game, conditioning on the first round's coins as
   `expect_weight_le` does, with the bound for every threshold `D` in the induction.
-* `CircuitWorkMonitoringPeriod`: (L), the circuit's work on live tiles, over the period's accepted prefix. Proved
+* `CircuitWorkPeriod`: (L), the circuit's work on live tiles, over the period's accepted prefix. Proved
   (`Proofs.Accounting.ComposePeriod`) from `CircuitWork`'s lemmas, not from its conclusion (a per-window tail at `δ`
   can't be averaged into `ε/n`): `ServiceBudget` per window at the window's detected live weights, `PeriodBudget`,
   `PeriodTailMax` once at `t = ln(1/δ_s)`, `DrawnRightOff` at `n` rounds, the period layer's `Covers` on the credited
