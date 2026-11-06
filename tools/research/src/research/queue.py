@@ -560,6 +560,33 @@ class GitHub:
             raise QueueError(f"gh pr close {number}: {(r.stderr or r.stdout).strip()[-300:]}")
 
 
+def landing_waiter(repo: str | None = None, store_root: str | None = None) -> Callable[[list[int]], bool]:
+    """Whether PRs wait only on landing: each is open, not held (the rules' hold label) and marked ready at its current head
+    (`StoreLabels.ready`), as the Linear audit asks of an issue In Review.  The open PRs are read once, on the first call;
+    `repo` defaults to the checkout's origin, and a PR GitHub or the store can't answer for doesn't wait.  When the open PRs
+    can't be read at all (no checkout, gh failing), nothing waits: the audit then counts the issue as it would without this."""
+    from .store.local import LocalStore
+
+    state: dict = {}
+
+    def waiting(numbers: list[int]) -> bool:
+        if "heads" not in state:
+            try:
+                slug = repo or ((m := SLUG_RE.search(_out(Path.cwd(), "remote", "get-url", "origin"))) and m.group(1))
+                hold = Rules().hold_label
+                state["heads"] = {pr.number: pr.head for pr in GitHub(slug).open_prs() if hold not in pr.labels}
+                state["labels"] = StoreLabels(LocalStore(store_root), log=lambda s: None)
+                state["labels"].prefetch(state["heads"].items())
+            except (QueueError, OSError) as e:
+                print(f"linear audit: can't read the open PRs ({e}), so no issue counts as waiting on landing",
+                      file=sys.stderr)
+                state["heads"], state["labels"] = {}, None
+        heads, labels = state["heads"], state["labels"]
+        return bool(numbers) and all(n in heads and labels.ready(n, heads[n]) for n in numbers)
+
+    return waiting
+
+
 # ---- rules and labels ---------------------------------------------------------------------------------------------------------------
 
 @dataclass(frozen=True)
