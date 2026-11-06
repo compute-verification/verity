@@ -81,7 +81,7 @@
   },
   "Accounting.Assumptions.CircuitCarriers": {
    "owner": "@compute-accounting",
-   "digest": "4de55e550d8e17c2fc24e9bd547f8d97bab9c21ef83f8d7daffbba195dd33704"
+   "digest": "be29d1c5e01223840401d0246dccf22593f62c50643c17c6db968e95929878f4"
   },
   "Accounting.Assumptions.Compose.GuessLuckAt": {
    "owner": "@compute-accounting",
@@ -113,7 +113,7 @@
   },
   "Accounting.Assumptions.SketchHashBudget": {
    "owner": "@compute-accounting",
-   "digest": "f3124bfd590b659120d11eac7d0a3f243c6fae7023c117bf8e6a9033d64f2f77"
+   "digest": "7152c3bee14ef89d534145e9ca82a0933d6aee2891e6a7e1beaa5a973944558b"
   },
   "Accounting.Assumptions.SketchRank": {
    "owner": "@compute-accounting",
@@ -5686,6 +5686,17 @@
    "digest": "fa77d88ac1ea328dc556a5758a354fe5dec8e03b5b4e642a7188c48fdc17217d",
    "definitions": {
     "Accounting.PeriodLive.Holds": "fd1f254e4939543657ec8b5a22423fcf66eef733cb1d60f7c631dcd7e80ab310"
+   }
+  },
+  "Definitions.Accounting.RateAuditSketch": {
+   "digest": "0f1eadbf82c8c9fdddf8c545cb06f94bb885941456f5f6de2eb98f2d84116400",
+   "definitions": {
+    "Accounting.RateSketch.Prover": "35db249ecd07e4addf73c2dc20e5a3750e87f7227f0c64151e52bd6d81753acf",
+    "Accounting.RateSketch.Prover.chip": "a61da209d7c3ee9990996051435d91054ed18bcd2591126096059c88728187b8",
+    "Accounting.RateSketch.Prover.correct": "5ebc065c668d71b1648bd6231a324695c6f91de80298322fecd6ef0741a6baa0",
+    "Accounting.RateSketch.Prover.held": "579f801d51c7c4929b553c94bad7ec994fe15cf68c8830ba6bb1b0805883717d",
+    "Accounting.RateSketch.Prover.prog": "acba349f7104456b17247c2a94246ccbd2510488f0baeb9801f6556140482469",
+    "Accounting.RateSketch.Prover.tags": "6a72c52804c9b8fe71c5bd1d52df79bb2ddedc87aeb0834f12657ddeff294395"
    }
   },
   "Definitions.Core.Boolean": {
