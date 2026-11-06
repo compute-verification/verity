@@ -1,7 +1,12 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2023", "DOM", "DOM.Iterable", "esnext.disposable"],
+    "lib": [
+      "ES2023",
+      "DOM",
+      "DOM.Iterable",
+      "esnext.disposable"
+    ],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "allowImportingTsExtensions": true,
@@ -11,11 +16,31 @@
     "esModuleInterop": true,
     "isolatedModules": true,
     "resolveJsonModule": true,
-    "jsx": "preserve",
+    "jsx": "react-jsx",
     "incremental": true,
-    "types": ["node"],
-    "plugins": [{ "name": "workflow" }, { "name": "next" }]
+    "types": [
+      "node"
+    ],
+    "plugins": [
+      {
+        "name": "workflow"
+      },
+      {
+        "name": "next"
+      }
+    ],
+    "allowJs": true
   },
-  "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["node_modules", ".next", ".workflow-vitest", ".workflow-data"]
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    ".next",
+    ".workflow-vitest",
+    ".workflow-data"
+  ]
 }
