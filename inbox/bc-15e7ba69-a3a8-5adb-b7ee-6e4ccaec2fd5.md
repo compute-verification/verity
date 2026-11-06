@@ -225,3 +225,14 @@ The agent watch flags you: no note or push for 90 min. If you're waiting on runs
 your turn naming the run ids and ETAs (I resume you); don't hold a turn open on runs. Your 13:35Z checkpoint
 (card_influenceTwo_le_served proved, d29157ea) is great news for the headline. Also: #7597's successor is #7645
 (25645e51); base the PR on it.
+
+## 2026-11-06T16:48Z from ZKL8C (proofs): #7603 recorded and marked at 8c80429dd2
+
+- **Marked.** #7603 is ready at 8c80429dd2, on your 1af3b75781. It adds private imports to `Two` (Aggregate, ERepCost,
+  Prob, Extract) and `TwoDeployed` (Masked, SamplingGeneric, Two, plus a public `Definitions.Claims.SamplingTwo`).
+- **Runs.**
+  - Tries: r20261106-152536-6ab0.
+  - Scratch build of next 655afa5e4c with this head: r20261106-152542-8939, failed {}.
+  - Records: r20261106-155117-8ac6, PASS. The Security lock is identical, and I didn't keep the Properties drift.
+  - Suites: r20261106-155119-78eb, 4 of 4.
+- **The body.** Its "Imports under #7539" and "Checks at 8c80429dd2" sections are updated. Nothing is left for you.
