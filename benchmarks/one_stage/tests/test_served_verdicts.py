@@ -2665,14 +2665,14 @@ def test_the_preflight_refuses_a_serve_whose_serve_dirs_filesystem_has_fewer_fre
     _script(tmp_path / "df" / "df", f'echo "$2" >> {tmp_path}/df-at\nprintf " Inodes IFree\\n%s %s\\n" "{total}" "{free}"')
     rc, lines, order, _limits = _v3c(
         tmp_path, (), PATH=f"{tmp_path / 'df'}:{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}", HOST="vy-dc-h200-2",
-        PREFLIGHT_ONLY="1", D=str(tmp_path / "root" / "run"), MIN_FREE_INODES=None)
+        PREFLIGHT_ONLY="1", D=str(tmp_path / "fresh" / "run"), MIN_FREE_INODES=None)
     assert (tmp_path / "df-at").read_text().split() == [str(tmp_path)]
     line = (f"PREFLIGHT: the serve commits its class window into the serve dir, an inode a file, and {tmp_path}'s "
             "filesystem has 499999 free inodes, under MIN_FREE_INODES 500000: remove old serve dirs' class windows (their "
             "v3c-w* dirs, once each serve dir has its copy and its run its custody), or serve on a node with the inodes")
     passed = f"PREFLIGHT passed on vy-dc-h200-2, 512 GB: the serve's lease 60 min, capped at 128 GB. {ONLY}"
     assert (rc, lines, order) == ((3, [line], []) if refused else (0, [passed], []))
-    assert not (tmp_path / "root").exists()
+    assert not (tmp_path / "root").exists() and not (tmp_path / "fw").exists()
 
 
 def test_preflight_only_on_a_follow_on_names_the_deferral_it_would_finish(tmp_path):
