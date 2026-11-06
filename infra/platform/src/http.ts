@@ -37,7 +37,7 @@ export async function slackEvents(req: Request, env: Env = process.env, nowSecon
   const m = parsed.message;
   const rt = await runtime();
   const leads = (await rt.store.listLeads()).filter((l) => l.status === "active");
-  let lanes = mentionedLanes(m.text, leads.map((l) => l.lane));
+  let lanes = mentionedLanes(m.text, leads);
   if (lanes.length === 0 && m.threadTs) {
     const owner = await rt.store.threadLane(m.channel, m.threadTs);
     if (owner) lanes = [owner];
@@ -108,6 +108,7 @@ type LeadChange = {
   charter?: string;
   doc?: string;
   slackChannel?: string;
+  slackUsergroup?: string;
   harness?: HarnessName;
   model?: string;
   monthlyBudgetUsd?: number;

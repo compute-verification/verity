@@ -51,8 +51,10 @@ describe("slack", () => {
     expect(parseSlackEvent({ type: "url_verification", challenge: "abc" })).toEqual({ challenge: "abc" });
   });
   it("finds lanes named by @lane or by a user-group mention", () => {
-    const lanes = ["infra", "proofs", "kernels"];
-    expect(mentionedLanes("@infra and <!subteam^S123|@proofs> please", lanes)).toEqual(["infra", "proofs"]);
+    const lanes = [{ lane: "infra" }, { lane: "proofs", slackUsergroup: "S123" }, { lane: "kernels", slackUsergroup: "S456" }];
+    expect(mentionedLanes("@infra and <!subteam^S999|@proofs> please", lanes)).toEqual(["infra", "proofs"]);
+    expect(mentionedLanes("<!subteam^S456> and <!subteam^S123|@renamed>", lanes)).toEqual(["kernels", "proofs"]);
+    expect(mentionedLanes("<!subteam^S000>", lanes)).toEqual([]);
     expect(mentionedLanes("mail me at a@infra.example", lanes)).toEqual([]);
     expect(mentionedLanes("(@kernels) and @nobody", lanes)).toEqual(["kernels"]);
   });

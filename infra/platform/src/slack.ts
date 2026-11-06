@@ -55,14 +55,16 @@ export function parseSlackEvent(body: Record<string, unknown>): { challenge: str
   };
 }
 
-// A message naming a lead (`@lane` as a word, or a Slack user-group mention whose
-// handle is the lane) goes to that lead; otherwise it goes to the lead whose
-// channel it is posted in.
-export function mentionedLanes(text: string, lanes: string[]): string[] {
+// A message naming a lead (`@lane` as a word, or a mention of the lead's Slack
+// user group, which Slack sends as `<!subteam^ID>` with or without its handle)
+// goes to that lead; otherwise it goes to the lead whose channel it is posted in.
+export function mentionedLanes(text: string, leads: { lane: string; slackUsergroup?: string | null }[]): string[] {
   const found = new Set<string>();
-  for (const m of text.matchAll(/<!subteam\^[A-Z0-9]+\|@([\w-]+)>|(?:^|[\s(])@([\w-]+)/g)) {
-    const name = (m[1] ?? m[2])!.toLowerCase();
-    if (lanes.includes(name)) found.add(name);
+  const lanes = new Set(leads.map((l) => l.lane));
+  for (const m of text.matchAll(/<!subteam\^([A-Z0-9]+)(?:\|@?([\w-]+))?>|(?:^|[\s(])@([\w-]+)/g)) {
+    const byId = m[1] ? leads.find((l) => l.slackUsergroup === m[1])?.lane : undefined;
+    const name = byId ?? (m[2] ?? m[3])?.toLowerCase();
+    if (name && lanes.has(name)) found.add(name);
   }
   return [...found].sort();
 }

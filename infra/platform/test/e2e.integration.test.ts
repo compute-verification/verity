@@ -40,7 +40,7 @@ async function filesUnder(dir: string): Promise<string[]> {
 beforeAll(async () => {
   t = await testRuntime();
   await t.store.upsertLead({ lane: "infra", model: "fake/fake", harness: "fake", slackChannel: "C_INFRA", doc: "# infra workstream\n", monthlyBudgetUsd: 400 });
-  await t.store.upsertLead({ lane: "proofs", model: "fake/fake", harness: "fake", slackChannel: "C_PROOFS", doc: "# proofs workstream\n" });
+  await t.store.upsertLead({ lane: "proofs", model: "fake/fake", harness: "fake", slackChannel: "C_PROOFS", slackUsergroup: "SPROOFS1", doc: "# proofs workstream\n" });
 });
 
 describe("a lead on the platform", () => {
@@ -56,8 +56,8 @@ describe("a lead on the platform", () => {
     expect((await t.store.docRevisions("infra")).map((r) => r.rev)).toEqual([1]);
   });
 
-  it("routes by mention, then by thread", async () => {
-    const m = await say("C_GENERAL", "@proofs is the lock current?");
+  it("routes by mention of the lead's user group, then by thread", async () => {
+    const m = await say("C_GENERAL", "<!subteam^SPROOFS1> is the lock current?");
     expect(m.res.routed).toEqual(["proofs"]);
     await reply(m.thread, "slack/message");
     const followUp = await say("C_GENERAL", "and the audit?", m.thread);
