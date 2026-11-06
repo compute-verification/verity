@@ -1,29 +1,25 @@
-"""A captured step's matrix products as training_slowdown.io_bound reads them (P-width's dataflow side), for a program recorded
-from its start (training_slowdown.capture.script, `Trace.region`) as well as a step captured by capture_step or capture_fn.
+"""A captured step's matrix products as the products term reads them (training_slowdown.formalism), for a step captured
+by capture_step or capture_fn as well as a program recorded from its start (`Trace.region`).
 
 Each GEMM of the measured step is a row (`rows`): its dims and token dims, whether each operand depends on θ′, the
-width each operand is passed at (`io_bound._passed_width`), the bits a block pays an entry of it at policy k (the rates
-`io_bound._Rates` states), the shortest chain that makes an operand entry whole by itself (`io_bound._chain_ks`'s
-rule), whether both operands are one array, its partial sums' width (`io_bound.ACC_BITS`), its price, and what the
-step's whole-making system (`io_bound.chain_classes`) reads of it: the classes whose outputs reach its operands (`fed`)
-and their paid factor (`P`, `_reach`), and whether each operand reads a gather's rows (an embedding's, the same for
-every token that shares an id) before any op makes them token-specific (`gathered`, `_gathered`), which the bound drops
-(training_slowdown.formalism). The block's `p_match` lists the ops that break P-match, and its `elementwise_products` the
-matrix products written with elementwise ops (a broadcast multiplication and a sum, or a gather, a multiplication and
-a sum by index), which no row is and whose classes the whole-making system would miss. Identical rows of the step (a layer's GEMMs
-repeated over the layers) are one row with their count, so `gathered` puts layer 0's products of the embedding's rows in
-rows of their own. A trace keeps the rows at each k of the console's dial too (`rows_on_dial`, `DIAL_K`), since a
-row's rates, kind and feeds move with k.
+width each operand is passed at (`_passed_width`), the bits a block pays an entry of it at policy k (`_rates`), whether
+both operands are one array, its partial sums' width (`ACC_BITS`), its price (`_gemm_price`), and whether each operand
+reads a gather's rows (an embedding's, the same for every token that shares an id) before any op makes them
+token-specific (`gathered`, `_gathered`), which M leaves out. The block's `p_match` lists the ops that break P-match
+(`_p_match`), and its `elementwise_products` the matrix products written with elementwise ops (a broadcast
+multiplication and a sum, or a gather, a multiplication and a sum by index), which no row is, so M leaves them out.
+Identical rows of the step (a layer's GEMMs repeated over the layers) are one row with their count, so `gathered` puts
+layer 0's products of the embedding's rows in rows of their own. A trace keeps the rows at each k of the console's dial
+too (`rows_on_dial`, `DIAL_K`), since a row's rates and kind move with k.
 
 A recorded program reads θ′ through storage versions: a weight's view in the measured step reads the version the
-previous step's optimizer wrote, not the attribute's entry value. So the rates and chains here are keyed by the
-capture's values (`training_slowdown.capture.structure._Flow`), not by nodes as io_bound's are, and every value the measured step
-reads from an earlier step that depends on θ′ (θ′ itself, the optimizer's state) is read at its width with no chain,
-as io_bound takes an updated parameter or state; for a step captured by capture_step or capture_fn they are io_bound's.
+previous step's optimizer wrote, not the attribute's entry value. So the rates here are keyed by the capture's values
+(`training_slowdown.capture.structure._Flow`), and every value the measured step reads from an earlier step that
+depends on θ′ (θ′ itself, the optimizer's state) is read at its width, as an updated parameter or state is in a step
+captured by capture_step or capture_fn.
 
 The summation order of a GEMM's partial sums is its kernel's, which no ATen graph shows (a GEMM is one op), so `order`
-is ``unknown`` here; the order belongs to the circuit model, not the trace, and training_slowdown.formalism sums the rows in the
-reference circuit's chains (`training_slowdown.formalism.ORDER`), as training_slowdown.gates prices a GEMM."""
+is ``unknown`` here."""
 from __future__ import annotations
 
 import math
@@ -31,35 +27,153 @@ import operator
 
 import torch
 
-from training_slowdown import io_bound
 from training_slowdown.capture.structure import _GATHERS, _WALK, _closure, _dtype_name, _Flow, _gemms, _macs, _phases, _pk, _shape
+from training_slowdown.formalism import is_paid
+from training_slowdown.policy import CONSOLE
 
-#: the capture's version of these rows (training_slowdown's VERSION when they were last changed), so a trace that has them is
-#: distinguishable from one traced before them. A recorded program's trace also carries the training_slowdown VERSION whose code
-#: wrote it (`capture_code`, training_slowdown.capture.script's `record`, from 4.12.14 on; a trace without it was written by 4.12.9
-#: to 4.12.13's code, which differ only in that 4.12.12's and 4.12.13's list fewer elementwise products)
+#: the capture's version of these rows (training_slowdown's VERSION when they were last changed), so a trace that has
+#: them is distinguishable from one traced before them
 CAPTURE = "4.12.9"
 #: the torch the frozen capture traces under, the trace job's (``torch==2.15.0+cpu``): a step's graph, and so what the
-#: capture counts on it, moves with torch's version, so training_slowdown.capture.script refuses to trace under another
+#: capture counts on it, moves with torch's version
 TORCH = "2.15.0"
 ORDER = "unknown"
-#: the console's dial's k levels in bits (training_slowdown.panels' `K_LEVELS`, which a test holds this to): each of its block
-#: sizes, the reference's, the served demo's block and the console's default
+#: the console's dial's k levels in bits: each of its block sizes, the reference's, the served demo's block and the
+#: console's default
 DIAL_K = (65_536, 80_000, 145_568, 800_000, 8_000_000, 80_000_000, 800_000_000)
+#: a GEMM's partial sums' width: the GEMM gadget accumulates from a zero 32-bit word
+ACC_BITS = 32
+#: views that repeat their argument's entries
+_REPEATS = {"expand", "expand_as", "repeat", "broadcast_to"}
+#: ops whose result is their tensor arguments laid side by side
+_CONCAT = {"cat", "stack", "concat", "hstack", "vstack"}
+
+
+def _width(n) -> int:
+    from training_slowdown.capture.structure import _dtype_bits
+
+    v = n.meta.get("val") if hasattr(n, "meta") else None
+    if isinstance(v, (list, tuple)):
+        v = next((x for x in v if hasattr(x, "dtype")), None)
+    return _dtype_bits(v.dtype) if hasattr(v, "dtype") else 64
+
+
+def _numel(n) -> int:
+    v = n.meta.get("val") if hasattr(n, "meta") else None
+    vs = v if isinstance(v, (list, tuple)) else [v]
+    return sum(x.numel() for x in vs if hasattr(x, "numel"))
+
+
+def _tensor_args(n) -> list:
+    from training_slowdown.capture.structure import _arg_nodes
+
+    return [a for a in _arg_nodes(n) if hasattr(a.meta.get("val"), "dtype")]
+
+
+def _root(a, scale: bool = False):
+    """The node a value is read from through views and casts (and, with `scale`, scalings by a constant)."""
+    from training_slowdown.capture.structure import _SCALE
+
+    for _ in range(10_000):
+        if not (hasattr(a, "op") and a.op == "call_function"):
+            return a
+        if a.target is operator.getitem:
+            a = a.args[0]
+            continue
+        name = _pk(a.target)
+        one = len(_tensor_args(a)) == 1 and hasattr(a.args[0], "op")
+        if name in _WALK and hasattr(a.args[0], "op") or scale and name in _SCALE and one:
+            a = a.args[0]
+            continue
+        return a
+    return a
+
+
+def _passed_width(vs, n, a) -> int:
+    """The narrowest width a value has on its way into operand `a` of node `n`: back through views, casts, scalings and
+    ops with one same-size affected tensor argument (others broadcast or unaffected), which a block can apply itself."""
+    b = _width(a)
+    for _ in range(10_000):
+        if not (hasattr(a, "op") and a.op == "call_function"):
+            break
+        if a.target is operator.getitem:
+            a = a.args[0]
+            b = min(b, _width(a))
+            continue
+        same = [x for x in _tensor_args(a) if _numel(x) == _numel(a) and vs.reads_affected(a, x)]
+        if len(same) != 1 or _pk(a.target) in _CONCAT:
+            break
+        a = same[0]
+        b = min(b, _width(a))
+    return b
+
+
+def _gemm_price(phase: str, op: str, dtype: str | None, gemm_dtype: str | None) -> tuple[float, float]:
+    """(gates a MAC, gates a gadget) of a GEMM: its operands' dtype's Definition, or `gemm_dtype`'s for a forward or
+    backward GEMM whose operands are wider (CPU autocast runs scaled-dot-product attention's math backend in fp32, a GPU
+    in the autocast dtype)."""
+    from training_slowdown.capture.structure import _dtype_bits
+    from training_slowdown.gates import PRICES, gates, kind_of, per_mac
+
+    if gemm_dtype and phase in ("forward", "backward") and dtype is not None and \
+            _dtype_bits(getattr(torch, dtype)) > _dtype_bits(getattr(torch, gemm_dtype)):
+        dtype = gemm_dtype
+    kind = kind_of(phase, "", op, dtype)[0]
+    (name, _), = PRICES[kind]
+    return per_mac(kind), float(gates(name))
+
+
+def step_gates(graph, gemm_dtype: str | None = None) -> float:
+    """The step's |C| in gates for a step captured by capture_step or capture_fn, each counted op at
+    training_slowdown.gates' price for its dtype as training_slowdown.capture.structure prices it: GEMMs (`_gemm_price`),
+    elementwise multiplications and dense linear algebra (`_other_macs`), and the forward's other ops that combine an
+    activation with an updated parameter (a gather of an updated table by token data at the circuit's gather, any other
+    at its work)."""
+    from training_slowdown.capture.structure import _arg_nodes, _arg_nodes_of, _dtype_bits, _other_macs, _work
+    from training_slowdown.flops import _is_view, gather_macs
+    from training_slowdown.gates import kind_of, per_mac
+
+    vs = _Values(graph)
+    phases = _phases(vs.gm)
+    total = 0.0
+    for n in vs.nodes:
+        if n.op != "call_function" or not isinstance(n.target, torch._ops.OpOverload):
+            continue
+        name, ph = _pk(n.target), phases.get(n, "forward")
+        if name in ("_record_function_enter_new", "_record_function_exit"):
+            continue
+        gs = _gemms(n)
+        if gs:
+            for g in gs:
+                total += _macs(g.dims) * _gemm_price(ph, name, _dtype_name(g.operands[0]), gemm_dtype)[0]
+            continue
+        k, kind = _other_macs(n)
+        if kind:
+            total += k * per_mac(kind_of(ph, "", name, _dtype_name(n))[0])
+        if ph != "forward" or _is_view(n.target):
+            continue
+        ops = _arg_nodes(n)
+        src = set(_arg_nodes_of(n.args[:1])) if name in _GATHERS else set()
+        acts = any(vs.reads_tokens(n, a) and not vs.updated_param(a) for a in ops if a not in src)
+        if src and any(vs.updated_param(a) for a in src) and acts:
+            gm_ = gather_macs(name, n.args[0].meta["val"].shape, n.args[1] if len(n.args) > 1 else None,
+                              n.meta["val"].numel())
+            total += gm_ * per_mac("gather", _dtype_bits(n.args[0].meta["val"].dtype))
+        elif not src and not kind and acts and any(vs.updated_param(a) for a in ops):
+            total += _work(n) * per_mac(kind_of(ph, "", name, _dtype_name(n))[0])
+    return total
 
 
 class _Values:
     """The measured step's dataflow: the capture's values (`_Flow`), which depend on θ′ (`dep`), and the step whose
-    GEMMs are rows (`region`; None: a step captured by capture_step or capture_fn, with io_bound's dependent slots)."""
+    GEMMs are rows (`region`; None: a step captured by capture_step or capture_fn, whose values depend on θ′ from the
+    updated parameters and the state slots the step writes)."""
 
     def __init__(self, graph) -> None:
         base, varied, _ = graph._inputs
         self.region = base.region
         self.token_dims = {(m.node, m.part): m.token_dims for m in graph.matmuls}
-        if self.region is None:
-            st = io_bound._Step(graph)
-            self.gm, self.nodes, self.flow, self.dep = st.gm, st.nodes, st.flow, st.dep
-            return
+        self.attrs, self.updated = base.attrs, graph.updated
         gm = self.gm = base.gm
         self.nodes = list(gm.graph.nodes)
         pos = {n: i for i, n in enumerate(self.nodes)}
@@ -76,8 +190,27 @@ class _Values:
             return s is not None and any(vshape(n, idx, vs) != s for vs in vnodes)
 
         flow = self.flow = _Flow(gm, _phases(gm), tok)
-        past = {v for v, k in flow.source.items() if k[0] == "input" and flow.step[v] < self.region}
-        self.dep = _closure(flow, past.__contains__)
+        if self.region is not None:
+            past = {v for v, k in flow.source.items() if k[0] == "input" and flow.step[v] < self.region}
+            self.dep = _closure(flow, past.__contains__)
+            return
+        params = {t: v for t, v in base.attrs.items() if v[0] == "parameter"}
+        entry = {key: v for v, key in flow.source.items() if key[0] == "attr"}
+        writes: dict = {}
+        for key, v, _ in flow.writes:
+            if key[0] == "attr":
+                writes.setdefault(key, []).append(v)
+        before = {("attr", t) for t in base.written_before if ("attr", t) in entry}
+        seeded = {key for key in entry if key[1] in params and params[key[1]][1] in graph.updated}
+        slots = {key for key in set(writes) | before if key[1] not in params}
+        while True:
+            seeds = {entry[key] for key in slots | seeded if key in entry}
+            dep = _closure(flow, seeds.__contains__)
+            kept = {key for key in slots if key not in writes or any(dep[v] for v in writes[key])}
+            if kept == slots:
+                break
+            slots = kept
+        self.dep = dep
 
     def step_of(self, n) -> int:
         return int(n.meta.get("te_step", 0))
@@ -94,6 +227,16 @@ class _Values:
 
     def reads_affected(self, n, a) -> bool:
         return any(self.dep[x] for x in self.flow.reads.get((n, a), ()))
+
+    def reads_tokens(self, n, a) -> bool:
+        return any(self.flow.tok[x] for x in self.flow.reads.get((n, a), ()))
+
+    def updated_param(self, a) -> bool:
+        s = _root(a, scale=True)
+        if not (hasattr(s, "op") and s.op == "get_attr"):
+            return False
+        hit = self.attrs.get(s.target)
+        return hit is not None and hit[0] == "parameter" and hit[1] in self.updated
 
 
 def _made(vs: _Values) -> dict:
@@ -123,24 +266,30 @@ def _reads(vs: _Values, n, a) -> frozenset:
     return xs
 
 
-def _rates_and_chains(vs: _Values, k: float) -> tuple[dict, dict, dict]:
-    """io_bound's `_Rates` and `_chain_ks` keyed by value: (rate by value, chain by value, the node that made each)."""
+def _rates(vs: _Values, k: float) -> tuple[dict, dict]:
+    """The bits of input a block must pay per entry of each affected value at policy k, keyed by value, and the node
+    that made each:
+
+    - a value the measured step reads as given that depends on θ′ (an updated parameter or state, one an earlier step
+      made) is paid at its width;
+    - a gather by token data is 0: its rows repeat over the tokens that share an index;
+    - a GEMM's output is `_gemm_rate`'s;
+    - a view or cast keeps its argument's rate, a repeating view spreads it, a concatenation sums its parts', and any
+      other op takes the largest rate(input)·numel(input)/numel(output) over its affected inputs (a broadcast gain
+      passes almost none, a reduction restores);
+
+    each capped at the value's width. Unaffected values cost nothing: a block computes them from θ and token data."""
     flow, dep = vs.flow, vs.dep
     made = _made(vs)
     made_by = {v: n for n, xs in made.items() for v in xs}
     rate: dict = {}
-    chain: dict = {}
 
     def R(n, a) -> float:
         return max((rate.get(x, 0.0) for x in _reads(vs, n, a)), default=0.0)
 
-    def C(n, a) -> float:
-        return max((chain.get(x, math.inf) for x in _reads(vs, n, a)), default=0.0)
-
     for v in range(len(flow.preds)):
         if _carried(vs, v, made_by):
             rate[v] = float(flow.width[v]) if dep[v] else 0.0
-            chain[v] = math.inf if dep[v] else 0.0
     for n in vs.nodes:
         if n.op != "call_function" or not vs.measured(n) or n.target is operator.getitem:
             continue
@@ -149,86 +298,65 @@ def _rates_and_chains(vs: _Values, k: float) -> tuple[dict, dict, dict]:
             continue
         if not vs.affected(n) and not any(dep[v] for v in outs):
             for v in outs:
-                rate[v], chain[v] = 0.0, 0.0
+                rate[v] = 0.0
             continue
-        w = io_bound._width(n)
+        w = _width(n)
         name, gs = _pk(n.target), _gemms(n)
         if gs:
             r = min(float(w), max(_gemm_rate(vs, n, g, R, k) for g in gs))
-            both = all(vs.reads_affected(n, g.operands[0]) and vs.reads_affected(n, g.operands[1]) for g in gs)
-            c = float(max(g.dims["k"] for g in gs)) if both else math.inf
         else:
-            ins = [a for a in io_bound._tensor_args(n) if vs.reads_affected(n, a)]
-            out = max(io_bound._numel(n), 1)
+            ins = [a for a in _tensor_args(n) if vs.reads_affected(n, a)]
+            out = max(_numel(n), 1)
             if name in _GATHERS and len(n.args) > 1 and hasattr(n.args[1], "op") and not vs.reads_affected(n, n.args[1]):
                 r = 0.0
             elif not ins:
                 r = float(w)
-            elif name in _WALK and name not in io_bound._REPEATS and ins[0] is n.args[0]:
+            elif name in _WALK and name not in _REPEATS and ins[0] is n.args[0]:
                 r = R(n, ins[0])
-            elif name in io_bound._CONCAT:
-                r = sum(R(n, a) * io_bound._numel(a) for a in ins) / out
+            elif name in _CONCAT:
+                r = sum(R(n, a) * _numel(a) for a in ins) / out
             else:
-                r = max(R(n, a) * io_bound._numel(a) / out for a in ins)
+                r = max(R(n, a) * _numel(a) / out for a in ins)
             r = min(float(w), r)
-            if name in _GATHERS and len(n.args) > 1 and hasattr(n.args[1], "op") and not vs.reads_affected(n, n.args[1]):
-                c = 0.0
-            else:
-                big = [a for a in ins if name in io_bound._CONCAT or io_bound._numel(a) >= io_bound._numel(n)]
-                c = max((C(n, a) for a in big), default=0.0)
         for v in outs:
-            rate[v], chain[v] = (r, c) if dep[v] else (0.0, 0.0)
-    return rate, chain, made_by
+            rate[v] = r if dep[v] else 0.0
+    return rate, made_by
 
 
 #: ops each of whose output entries is one entry of one argument, or a sum of distinct ones (concatenation, padding,
 #: scatter, the embedding's backward): no argument fans out, whatever its size
-_LAYOUT = io_bound._CONCAT | {"constant_pad_nd", "pad", "embedding_dense_backward", "embedding_backward", "index_add",
+_LAYOUT = _CONCAT | {"constant_pad_nd", "pad", "embedding_dense_backward", "embedding_backward", "index_add",
                               "index_add_", "scatter_add", "scatter_add_", "index_put", "index_put_", "_unsafe_index_put",
                               "scatter", "scatter_", "slice_backward", "select_backward", "slice_scatter",
                               "select_scatter"}
 
 
-def _reach(vs: _Values, made: dict, made_by: dict, rate: dict) -> tuple[dict, dict, dict]:
-    """io_bound's whole-making system (`io_bound._whole_making`) keyed by value, and P-match's check.
+def _p_match(vs: _Values, made: dict, made_by: dict, rate: dict) -> dict:
+    """P-match's check: the ops that hand one entry of a value that reaches a product of two affected operands to
+    several on the way into a product's operand.
 
-    A value's reach is {K: A}: the outputs of the class of chain length K (every product with both operands affected,
-    `io_bound.chain_classes`) that its entries are made whole from, A entries of it for each. A product with both
-    operands affected starts {K: 1}, K its longest part's; one with an operand outside the update passes its affected
-    operand's times n/K (m/K for the B side); any other op passes its affected arguments' of at least its size (a
-    concatenation's parts whatever their size), only the lightest where some are paid at their width (each such entry
-    is needed). Its paid factor P is the largest factor a path into it has for paid entries (n/K through such a
-    product). Carried and unaffected values reach nothing.
+    A value reaches such a product where its entries are made from one's outputs: a product with both operands affected
+    reaches it; one with an operand outside the update passes its affected operand's reach; any other op passes its
+    affected arguments' of at least its size (a concatenation's parts whatever their size), only the lightest where
+    some are paid at their width (each such entry is needed). Carried and unaffected values reach nothing.
 
     P-match breaks at an op other than a layout op (`_LAYOUT`) with no affected argument of its size, whose output is
-    made whole from a smaller argument that reaches a class (a repeating view, a broadcast), unless that argument is a
+    made from a smaller argument that reaches a product (a repeating view, a broadcast), unless that argument is a
     statistic: a reduction's output (a norm's or softmax's row statistic), or one computed from statistics alone, which
     a block is charged nothing for and whose broadcast fans out no more than its reduction fanned in; and at a gather by
-    token data of a value that reaches a class, whose rows repeat. Returns (reach, P, {op: (largest fan-out,
-    count)})."""
+    token data of a value that reaches a product, whose rows repeat. Returns {op: (largest fan-out, count)}."""
     flow, dep = vs.flow, vs.dep
     reach: dict = {}
-    paid: dict = {}
     stat: dict = {}
     broken: dict = {}
 
-    def got(n, a) -> dict:
-        out: dict = {}
-        for x in _reads(vs, n, a):
-            for K, w in reach.get(x, {}).items():
-                out[K] = max(out.get(K, 0.0), w)
-        return out
-
-    def got_paid(n, a) -> float:
-        return max((paid.get(x, 1.0) for x in _reads(vs, n, a)), default=1.0)
+    def got(n, a) -> bool:
+        return any(reach.get(x, False) for x in _reads(vs, n, a))
 
     def elems(a) -> int:
         b = flow.base.get(a)
         size = flow.size.get(b) if not isinstance(b, list) else None
-        return min(io_bound._numel(a), size) if size else io_bound._numel(a)
-
-    def mass(x: dict) -> float:
-        return sum(w * w / (K * K) for K, w in x.items())
+        return min(_numel(a), size) if size else _numel(a)
 
     def breaks(name, fan) -> None:
         f, c = broken.get(name, (0.0, 0))
@@ -236,7 +364,7 @@ def _reach(vs: _Values, made: dict, made_by: dict, rate: dict) -> tuple[dict, di
 
     for v in range(len(flow.preds)):
         if _carried(vs, v, made_by):
-            reach[v], paid[v], stat[v] = {}, 1.0, False
+            reach[v], stat[v] = False, False
     for n in vs.nodes:
         if n.op != "call_function" or not vs.measured(n) or n.target is operator.getitem:
             continue
@@ -244,33 +372,21 @@ def _reach(vs: _Values, made: dict, made_by: dict, rate: dict) -> tuple[dict, di
         if not outs:
             continue
         name, gs = _pk(n.target), _gemms(n)
-        r: dict = {}
-        best, s = 1.0, False
+        r, s = False, False
         if not vs.affected(n) and not any(dep[v] for v in outs):
             pass
         elif gs and all(vs.reads_affected(n, g.operands[0]) and vs.reads_affected(n, g.operands[1]) for g in gs):
-            r = {float(max(g.dims["k"] for g in gs)): 1.0}
+            r = True
         elif gs:
-            for g in gs:
-                for a, f in ((g.operands[0], g.dims["n"] / g.dims["k"]), (g.operands[1], g.dims["m"] / g.dims["k"])):
-                    if vs.reads_affected(n, a):
-                        for K, w in got(n, a).items():
-                            r[K] = max(r.get(K, 0.0), w * f)
-                        best = max(best, f * got_paid(n, a), f)
+            r = any(got(n, a) for g in gs for a in g.operands[:2] if vs.reads_affected(n, a))
         else:
-            size = io_bound._numel(n)
-            cat = name in io_bound._CONCAT
-            aff = [a for a in io_bound._tensor_args(n) if vs.reads_affected(n, a)]
-            ins = [a for a in aff if cat or io_bound._numel(a) >= size]
-            for a in ins:
-                best = max(best, got_paid(n, a))
-            whole = [a for a in ins if io_bound.is_paid(max((rate.get(x, 0.0) for x in _reads(vs, n, a)),
-                                                            default=0.0), io_bound._width(a))]
-            if not cat and len(ins) > 1 and whole:
-                ins = [min(whole, key=lambda a: mass(got(n, a)))]
-            for a in ins:
-                for K, w in got(n, a).items():
-                    r[K] = max(r.get(K, 0.0), w)
+            size = _numel(n)
+            cat = name in _CONCAT
+            aff = [a for a in _tensor_args(n) if vs.reads_affected(n, a)]
+            ins = [a for a in aff if cat or _numel(a) >= size]
+            whole = [a for a in ins if is_paid(max((rate.get(x, 0.0) for x in _reads(vs, n, a)), default=0.0),
+                                               _width(a))]
+            r = all(got(n, a) for a in whole) if not cat and len(ins) > 1 and whole else any(got(n, a) for a in ins)
             reached = {a: any(stat.get(x, False) for x in _reads(vs, n, a)) for a in aff if got(n, a)}
             s = bool(reached) and (all(reached.values()) or
                                    name not in _WALK and name not in _GATHERS and any(elems(a) > size for a in aff))
@@ -280,8 +396,8 @@ def _reach(vs: _Values, made: dict, made_by: dict, rate: dict) -> tuple[dict, di
             elif name not in _LAYOUT and not ins and any(not st for st in reached.values()):
                 breaks(name, max(size / max(elems(a), 1) for a, st in reached.items() if not st))
         for v in outs:
-            reach[v], paid[v], stat[v] = (r, best, s) if dep[v] else ({}, 1.0, False)
-    return reach, paid, broken
+            reach[v], stat[v] = (r, s) if dep[v] else (False, False)
+    return broken
 
 
 #: ops that take a token-indexed value's entries from a table that isn't token-indexed (a positional table's rows, as
@@ -323,7 +439,7 @@ def _gathered(vs: _Values, made: dict) -> set:
         if not outs:
             continue
         name = _pk(n.target)
-        args = io_bound._tensor_args(n)
+        args = _tensor_args(n)
         table = name in _TAKE and bool(args) and args[0] is n.args[0] and \
             not any(tok[x] for x in _reads(vs, n, n.args[0]))
         got = {state.get(x, "u") for a in (args[1:] if table else args) for x in _reads(vs, n, a) if tok[x]} - {"u"}
@@ -371,7 +487,7 @@ def _rows_by_data(n):
         return None
     if not (hasattr(a[0], "op") and hasattr(index, "op")):
         return None
-    return a[0] if getattr(io_bound._root(index), "op", None) == "placeholder" else None
+    return a[0] if getattr(_root(index), "op", None) == "placeholder" else None
 
 
 def _lookup(n) -> bool:
@@ -379,7 +495,7 @@ def _lookup(n) -> bool:
     tensor through views and casts). Its rows repeat only where the data does, so its entries are its own; an index
     a program computes is no lookup, and a table it builds is one only where its entries are its own (`_sources`)."""
     table = _rows_by_data(n)
-    return table is not None and getattr(io_bound._root(table), "op", None) == "get_attr"
+    return table is not None and getattr(_root(table), "op", None) == "get_attr"
 
 
 def _sources(vs: _Values) -> list:
@@ -508,7 +624,7 @@ def _flats(vs: _Values, src: list) -> list:
         f = flat[own] if isinstance(own, int) else None
         if name in _EXPAND or name in _SAME or name in _MULTIPLY or torch.Tag.pointwise in getattr(n.target, "tags", ()):
             got = [_broadcast(flat[x] if isinstance(x := flow.val.get(a), int) else None, _shape_of(a), out)
-                   for a in io_bound._tensor_args(n) if vs.reads_affected(n, a)]
+                   for a in _tensor_args(n) if vs.reads_affected(n, a)]
             flat[v] = None if not got or None in got else _meet(got, out)
         elif name in _RESHAPE and f is not None and shape is not None and math.prod(shape) == math.prod(out):
             flat[v] = f
@@ -525,8 +641,8 @@ def _flats(vs: _Values, src: list) -> list:
 
 
 def _elementwise_products(vs: _Values) -> list[dict]:
-    """The measured step's matrix products written with elementwise ops, which no row is and whose outputs the
-    whole-making system would miss: a multiplication of two values that depend on θ′ whose result has more entries
+    """The measured step's matrix products written with elementwise ops, which no row is, so M leaves them out: a
+    multiplication of two values that depend on θ′ whose result has more entries
     than the sources (`_sources`) of either have, each broadcast or repeated along a run of the index the other isn't
     (`_flats`; runs it can't tell never exempt, unless the other is flat along the whole index, a scalar's broadcast,
     which mixes with nothing): an outer product, a GEMM with K = 1, or a matrix product once summed, as
@@ -552,7 +668,7 @@ def _elementwise_products(vs: _Values) -> list[dict]:
 
     def ent(n, a) -> int:
         s = frozenset().union(*(src[x] for x in _reads(vs, n, a) if dep[x]))
-        return min(io_bound._numel(a), sum(size[x] for x in s))
+        return min(_numel(a), sum(size[x] for x in s))
 
     def runs(n, a) -> frozenset | None:
         """Operand `a` of `n` broadcast to `n`'s entries: the runs of their index along which it is flat."""
@@ -583,13 +699,13 @@ def _elementwise_products(vs: _Values) -> list[dict]:
             continue
         name = "getitem" if n.target is operator.getitem else _pk(n.target)
         outs = made.get(n, [])
-        aff = [a for a in io_bound._tensor_args(n) if vs.reads_affected(n, a)]
+        aff = [a for a in _tensor_args(n) if vs.reads_affected(n, a)]
         a, b = (n.args[i] if len(n.args) > i else None for i in _MULTIPLY[name]) if name in _MULTIPLY else (None, None)
         both = a in aff and b in aff
         if name in _GATHERS and n.args and n.args[0] in aff:
             gathered.update(outs)
         elif len(aff) == 1 and not both and not _gemms(n) and (name in _WALK or
-                                                                io_bound._numel(n) >= io_bound._numel(aff[0])):
+                                                                _numel(n) >= _numel(aff[0])):
             got = _reads(vs, n, aff[0])
             if gathered & got:
                 gathered.update(outs)
@@ -598,13 +714,13 @@ def _elementwise_products(vs: _Values) -> list[dict]:
         if not vs.measured(n) or phases.get(n, "forward") not in ("forward", "backward"):
             continue
         if both:
-            out = io_bound._numel(n)
+            out = _numel(n)
             if out > ent(n, a) and out > ent(n, b) and mixes(n, a, b):
                 add(name, out)
             elif gathered & (_reads(vs, n, a) | _reads(vs, n, b)):
                 product.update(dict.fromkeys(outs, out))
         elif _sums_by_index(n):
-            for x in io_bound._tensor_args(n)[1:]:
+            for x in _tensor_args(n)[1:]:
                 if carried := [product[v] for v in _reads(vs, n, x) if v in product]:
                     add(name, max(carried))
                     break
@@ -626,7 +742,12 @@ def gathered_gemms(graph) -> set[tuple[str, str]]:
 
 
 def _gemm_rate(vs: _Values, n, g, R, k: float) -> float:
-    """io_bound's `_Rates._gemm` with each operand's rate as the node read it."""
+    """A GEMM output's rate (`_rates`), each operand's as the node read it: ∞ where no token indexes it (a sum over
+    tokens is paid at its width); attention's (two token-indexed dims) rate(A)·K/n + rate(B)·K/m; with an affected
+    parameter side, 4·K²·b_tok·b_par/k, its sides at their passed widths (by Loomis-Whitney, x rows and y columns of K
+    entries read in k bits make at most x·y entries, so a block making E of them pays 2K·√(b_tok·b_par·E) bits), where
+    the token side is paid at its width or K ≥ 3^1.5·√(k/b_c), within a consumer's chains' share; else, and with a
+    parameter side outside the update, the token side's rate times K over the parameter side's spread."""
     A, B = g.operands[0], g.operands[1]
     d = g.dims
     td = vs.token_dims.get((n.name, g.part), {})
@@ -639,24 +760,22 @@ def _gemm_rate(vs: _Values, n, g, R, k: float) -> float:
     token_a = "m" in td or "n" not in td
     param, r_tok, spread = (B, ra, d["n"]) if token_a else (A, rb, d["m"])
     tok = A if token_a else B
-    b_tok, b_par = io_bound._passed_width(vs, n, tok), io_bound._passed_width(vs, n, param)
-    if vs.reads_affected(n, param) and (io_bound.is_paid(r_tok, b_tok)
-                                        or d["k"] >= 3 ** 1.5 * math.sqrt(k / io_bound.ACC_BITS)):
+    b_tok, b_par = _passed_width(vs, n, tok), _passed_width(vs, n, param)
+    if vs.reads_affected(n, param) and (is_paid(r_tok, b_tok)
+                                        or d["k"] >= 3 ** 1.5 * math.sqrt(k / ACC_BITS)):
         return 4 * d["k"] ** 2 * b_tok * b_par / k
     return r_tok * d["k"] / max(spread, 1)
 
 
-def rows(graph, k: float = io_bound.CONSOLE[1], gemm_dtype: str | None = "bfloat16") -> dict:
+def rows(graph, k: float = CONSOLE[1], gemm_dtype: str | None = "bfloat16") -> dict:
     """The measured step's products (module docstring) at policy k: {"capture", "k", "order", "tokens", "gates",
-    "rows", "p_match"}, each row
-    {"count", "phase", "op", "dims", "token_dims", "macs", "outputs", "affected", "widths", "rates", "paid", "self",
-    "b_c", "k_whole", "gates_per_mac", "cell_gates", "fed", "P", "gathered"} (MACs and outputs over its count;
-    `k_whole` None: no chain makes an operand entry whole by itself; `fed` the [K, A] pairs of the classes reaching its
-    operands; `gathered` whether each operand reads a gather's rows before any op makes them token-specific), `gates`
-    the step's |C| at io_bound's prices (`io_bound.step_gates`) for a step captured by capture_step or capture_fn, else
+    "rows", "p_match", "elementwise_products"}, each row {"count", "phase", "op", "dims", "token_dims", "macs",
+    "outputs", "affected", "widths", "rates", "paid", "self", "b_c", "gates_per_mac", "cell_gates", "gathered"} (MACs
+    and outputs over its count; `gathered` whether each operand reads a gather's rows before any op makes them
+    token-specific), `gates` the step's |C| (`step_gates`) for a step captured by capture_step or capture_fn, else
     None (the circuit's count is the trace's), `p_match` [{"op", "fan_out", "count"}] the ops that break P-match
-    (`_reach`), and `elementwise_products` the matrix products the step writes with elementwise ops
-    (`_elementwise_products`), which training_slowdown.formalism refuses to price."""
+    (`_p_match`), and `elementwise_products` the matrix products the step writes with elementwise ops
+    (`_elementwise_products`)."""
     vs = _Values(graph)
     made = _made(vs)
     return _rows(vs, graph, k, gemm_dtype, made, _gathered(vs, made)) | {"elementwise_products": _elementwise_products(vs)}
@@ -664,26 +783,25 @@ def rows(graph, k: float = io_bound.CONSOLE[1], gemm_dtype: str | None = "bfloat
 
 def rows_on_dial(graph, gemm_dtype: str | None = "bfloat16") -> dict:
     """`rows` at the console's k, and under "at" each other k of the console's dial (`DIAL_K`, by its integer as a
-    string) the rows and P-match check there ({"k", "rows", "p_match"}): a product's rates, kind and feeds move with k
-    (a block of k bits pays an output made whole at 4K²·b²/k, and makes one whole by itself from K ≥ 3^1.5·√(k/b_c)),
-    so the dial's term at a k reads that k's rows, which only the captured step gives. A trace keeps these (training_slowdown.
-    capture.script) so the dial needs no retrace."""
+    string) the rows and P-match check there ({"k", "rows", "p_match"}): a product's rates and kind move with k (a
+    block of k bits pays a GEMM output at 4K²·b²/k), so the dial's term at a k reads that k's rows, which only the
+    captured step gives. A trace keeps these so the dial needs no retrace."""
     vs = _Values(graph)
     made = _made(vs)
     gathered = _gathered(vs, made)
-    out = _rows(vs, graph, io_bound.CONSOLE[1], gemm_dtype, made, gathered)
+    out = _rows(vs, graph, CONSOLE[1], gemm_dtype, made, gathered)
     out["elementwise_products"] = _elementwise_products(vs)
     out["at"] = {}
     for k in DIAL_K:
-        if k != io_bound.CONSOLE[1]:
+        if k != CONSOLE[1]:
             b = _rows(vs, graph, float(k), gemm_dtype, made, gathered, gates=False)
             out["at"][str(k)] = {x: b[x] for x in ("k", "rows", "p_match")}
     return out
 
 
 def _rows(vs: _Values, graph, k: float, gemm_dtype, made: dict, gathered: set, gates: bool = True) -> dict:
-    rate, chain, made_by = _rates_and_chains(vs, k)
-    reach, paid, broken = _reach(vs, made, made_by, rate)
+    rate, made_by = _rates(vs, k)
+    broken = _p_match(vs, made, made_by, rate)
     by_name = {n.name: n for n in vs.nodes}
     merged: dict = {}
     for m in graph.matmuls:
@@ -692,35 +810,25 @@ def _rows(vs: _Values, graph, k: float, gemm_dtype, made: dict, gathered: set, g
         A, B = g.operands[0], g.operands[1]
         aff = (vs.reads_affected(n, A), vs.reads_affected(n, B))
 
-        def got(a, table):
-            return max((table.get(x, 0.0) for x in _reads(vs, n, a)), default=0.0)
+        def got(a):
+            return max((rate.get(x, 0.0) for x in _reads(vs, n, a)), default=0.0)
 
-        rates = (got(A, rate) if aff[0] else 0.0, got(B, rate) if aff[1] else 0.0)
-        widths = (io_bound._passed_width(vs, n, A), io_bound._passed_width(vs, n, B))
-        whole = min((v for v in (got(A, chain), got(B, chain)) if v > 0), default=math.inf)
-        fed: dict = {}
-        P = 1.0
-        for a, on in ((A, aff[0]), (B, aff[1])):
-            for x in _reads(vs, n, a) if on else ():
-                P = max(P, paid.get(x, 1.0))
-                for K, w in reach.get(x, {}).items():
-                    fed[K] = max(fed.get(K, 0.0), w)
-        gpm, cell = io_bound._gemm_price(m.phase, _pk(n.target), _dtype_name(A), gemm_dtype)
+        rates = (got(A) if aff[0] else 0.0, got(B) if aff[1] else 0.0)
+        widths = (_passed_width(vs, n, A), _passed_width(vs, n, B))
+        gpm, cell = _gemm_price(m.phase, _pk(n.target), _dtype_name(A), gemm_dtype)
         d = g.dims
         row = {"phase": m.phase, "op": _pk(n.target), "dims": {x: d[x] for x in ("batch", "m", "k", "n")},
                "token_dims": sorted(m.token_dims), "macs": _macs(d), "outputs": d["batch"] * d["m"] * d["n"],
                "affected": list(aff), "widths": list(widths), "rates": [round(r, 6) for r in rates],
-               "paid": [io_bound.is_paid(r, w) for r, w in zip(rates, widths)],
-               "self": io_bound._root(A, scale=True) is io_bound._root(B, scale=True), "b_c": io_bound.ACC_BITS,
-               "k_whole": whole if math.isfinite(whole) else None, "gates_per_mac": gpm, "cell_gates": cell,
-               "fed": [[K, round(w, 9)] for K, w in sorted(fed.items())], "P": round(P, 9),
-               "gathered": [any(x in gathered for x in _reads(vs, n, a)) for a in (A, B)]}
+               "paid": [is_paid(r, w) for r, w in zip(rates, widths)],
+               "self": _root(A, scale=True) is _root(B, scale=True), "b_c": ACC_BITS, "gates_per_mac": gpm,
+               "cell_gates": cell, "gathered": [any(x in gathered for x in _reads(vs, n, a)) for a in (A, B)]}
         key = repr(sorted(row.items()))
         if key in merged:
             merged[key]["count"] += 1
         else:
             merged[key] = {"count": 1} | row
-    gates = None if not gates else io_bound.step_gates(graph, gemm_dtype) if vs.region is None else \
+    gates = None if not gates else step_gates(graph, gemm_dtype) if vs.region is None else \
         (graph.formalism or {}).get("gates")
     return {"capture": CAPTURE, "k": k, "order": ORDER, "tokens": graph.tokens, "gates": gates,
             "rows": list(merged.values()),
