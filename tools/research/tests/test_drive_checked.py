@@ -8,9 +8,9 @@ import json
 
 import pytest
 
-from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, FIX_WINDOW_S, TAIL
+from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, TAIL
 from research.queue import DriveFlags, QueueError
-from test_drive_review import GATED_TREE, Review, _main, _move_main, _owning, _subject
+from test_drive_review import GATED_TREE, Review, _main, _move_main, _owning, _rings, _subject
 from test_queue import World, _git
 from test_queue_drive import _failed_run, _steps_run
 
@@ -73,11 +73,8 @@ def test_a_red_after_landing_run_moves_nothing_on_main_and_its_culprit_is_revert
     h.run_state["r-post-0"] = ("done", 1, None)
     h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
     h.tick()
-    (ring,) = [p for p in h.posts if "is red on" in p]
+    (ring,) = _rings(h)
     assert "suite pkg is red on `checked`" in ring and "Culprit: #2" in ring, ring
-    assert _main(world) == main
-    h.clock += FIX_WINDOW_S + 1
-    h.tick()
     reverted = _checked(world)
     assert _git(world.origin, "rev-parse", f"{reverted}^") == tip and _main(world) == main
     assert "pkg/tests/test_x.py" not in _git(world.origin, "ls-tree", "-r", "--name-only", reverted)
@@ -164,18 +161,19 @@ def _circuit_red(h: Review, tmp_path) -> None:
 
 
 def test_a_red_circuit_check_reverts_its_culprit_on_checked_at_once_and_holds_no_promotion(world, monkeypatch, tmp_path):
-    """No `FIX_WINDOW_S` for circuit-check, and no marked fix holds its revert: it runs only after landing, so each landing on its
-    red goes unchecked."""
+    """A marked fix holds no revert, a red circuit-check's as every other: it runs only after landing, so each landing on its
+    red goes unchecked, and the ring says no PR touching its inputs lands until it passes."""
     h = _gated(world, monkeypatch)
     tip = _landed(h, {"pkg/x.circuit-check.py": "X = 1\n"})
     world.gh.put(9, world.change({"c.txt": "9\n"}), body="Lane `lane-9`. fixes step circuit-check")
     _circuit_red(h, tmp_path)
     h.tick()
     (ring,) = [p for p in h.posts if "Culprit: #1" in p]
-    assert "step circuit-check is red on `checked`" in ring and "Drive reverts #1 now" in ring, ring
+    assert "step circuit-check is red on `checked`" in ring and ring.endswith(
+        "Drive reverts #1 now, and lands no PR touching circuit-check's inputs until it passes on `checked`."), ring
     reverted = _checked(world)
     assert _git(world.origin, "rev-parse", f"{reverted}^") == tip and h.posted[-1][0] == reverted
-    assert any("a red circuit-check is reverted at once" in p for p in h.posts), h.posts
+    assert any("#1 reverted on `checked`: step circuit-check is red" in p for p in h.posts), h.posts
     assert _main(world) == tip
     assert "pkg/x.circuit-check.py" not in _git(world.origin, "ls-tree", "-r", "--name-only", reverted)
     h.evidence = []

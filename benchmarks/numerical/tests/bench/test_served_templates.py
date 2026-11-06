@@ -1,4 +1,4 @@
-"""The templates of every served workload beyond #101 (``bench.templates``): FA3 attention, greedy token select, embedding row, the
+"""The templates of every served workload beyond row 101 (``bench.templates``): FA3 attention, greedy token select, embedding row, the
 MoE router (with and without renormalisation), expert coordinates (plain and weighted), MoE sum, the FP8 block-scaled GEMM, bias-add,
 the bf16 scalar multiply, the served SiLU·mul (SiluMul_v2) and RMSNorms (the width-8 CUDA kernels), and the registered compiler's
 dead-free RMSNormTriton_v5 and AttentionHead_v18.  Each evaluation path equals its subcircuit's own Definition, and every

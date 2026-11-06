@@ -24,6 +24,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
+    "tests/test_challenger_audit.py",
     "tests/test_circuit.py",
     "tests/test_class_statement.py",
     "tests/test_class_statement_redteam_1178.py",
@@ -35,12 +36,11 @@ untraced = [
     "tests/test_lean_coin_tree.py",
     "tests/test_lean_forged_proofs.py",
     "tests/test_lean_hidden_outputs.py",
-    "tests/test_lean_honest_plain.py",
-    "tests/test_lean_live_os.py",
     "tests/test_lean_out_group_slot.py",
     "tests/test_lean_plain_hidden_tables.py",
     "tests/test_lean_public_inputs.py",
     "tests/test_lean_rec_cap_guards.py",
+    "tests/test_lean_record_checks.py",
     "tests/test_lean_region_words.py",
     "tests/test_lean_registered_bit_rows.py",
     "tests/test_lean_registered_reads.py",
@@ -80,8 +80,9 @@ inputs = [
     "verity/core/protocols/sampled_proofs", "verity/core/primitives/randomness", "verity/ml/randomness/tests",
     # the Lean decoder's width refusals against the codec, on the NCI difftest's mistyped descriptors
     "verity/core/protocols/network/nci/lean/scripts",
-    # test_coin_schedule.py holds the prover's coin schedule to the Lean verifier's
-    "verity/core/service/flock/Flock/Zk.lean",
+    # test_coin_schedule.py holds the prover's coin schedule to the Lean verifier's, and test_rec_live.py the inner coin
+    # tree to RecVStar's
+    "verity/core/service/flock/Flock/Zk.lean", "verity/core/service/flock/Flock/RecVStar.lean",
     # test_lean_rec_cap_guards.py builds Flock.Test.RecCap, which the Lean check no longer does; its imports reach it through
     # the flock-verify artifact
     "verity/core/service/flock/Flock/Test/RecCap.lean",
@@ -112,6 +113,16 @@ artifacts = ["verity/core/service/flock/.lake/build/bin/flock-verify",
 [[tool.verity.tests.reads]]
 tests = ["tests/test_backend.py"]
 paths = ["verity/ml/flock/python/verity_flock"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_challenger_audit.py"]
+# `lake build sampled-proofs-difftest`: its package and those it requires by path
+paths = [
+    "verity/core/primitives/lms/lean",
+    "verity/core/protocols/interface",
+    "verity/core/service/flock",
+    "verity/core/service/sampled_proofs",
+]
 
 [[tool.verity.tests.reads]]
 tests = [
@@ -170,9 +181,8 @@ paths = [
 tests = [
     "tests/test_lean_draw_laws.py",
     "tests/test_lean_ks_form.py",
-    "tests/test_lean_live_os.py",
-    "tests/test_lean_plain_hidden.py",
     "tests/test_lean_plain_hidden_tables.py",
+    "tests/test_lean_record_checks.py",
     "tests/test_lean_region_words.py",
     "tests/test_lean_registered_reads.py",
     "tests/test_lean_served_registered.py",
