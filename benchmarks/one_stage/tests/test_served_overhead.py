@@ -2,7 +2,8 @@
 time per output token, time to first token and tokens per second come from its arrivals and step outputs, a Commit window's
 on-loop close counts only in busy tokens per second, the client's timings file gives the same three from send to done, and
 `table` takes each dir's first load, refuses engines that differ unless allowed, and puts composed over stock with a
-delta-method interval."""
+delta-method interval. The composed run's published aggregate holds no load's tokens or span, and `table` reads the full
+one the serve dir keeps."""
 from __future__ import annotations
 
 import json
@@ -198,6 +199,40 @@ def test_metrics_prints_aggregates_and_the_table_reads_them_as_it_reads_the_dirs
     by_file, by_dir = O.table(files[:1], files[1:]), O.table([c], [s])
     assert by_file["metrics"] == by_dir["metrics"] and by_file["composed"][0]["dir"] == str(files[0])
     assert "step_s" not in json.dumps(by_dir)
+
+
+def test_the_composed_runs_published_aggregate_holds_its_loads_tokens_and_span_and_the_table_reads_the_private_one(
+        tmp_path, capsys):
+    """`served_verdicts.py publish` leaves the composed run's aggregate with no load's tokens or span (its tokens count its
+    blocks), nor its counts and windows; `table` refuses that file, naming the serve dir's private/out copy, and from that
+    copy `table --public` gives the ratios and shares the serve dir gives."""
+    import served_verdicts as SV
+
+    c = _dir(tmp_path / "c", _load(10.0, 1.5, window=0), windows=[{"window": 0, "seconds": {"open": 0.5, "on_loop": 1.0}}])
+    (c / "load.timings.json").write_text(json.dumps(_timings(10.0, 0.0, 4.0, 7.5)))
+    s = _dir(tmp_path / "s", _load(100.0, 0.5) + _load(200.0, 0.25))
+    for j, at in ((1, 100.0), (2, 200.0)):
+        (s / f"load-{j}.timings.json").write_text(json.dumps(_timings(at, 0.0, 0.25, 1.5)))
+    out, private = tmp_path / "out", c / "private" / "out"
+    (out / "serve").mkdir(parents=True)
+    assert O.main(["metrics", str(c)]) == 0
+    (out / "serve" / "overhead.json").write_text(capsys.readouterr().out)
+    assert O.main(["metrics", str(s)]) == 0
+    (stock := tmp_path / "stock.json").write_text(capsys.readouterr().out)
+    assert SV.publish(out, private) == ["serve/overhead.json"]
+    published = json.loads((out / "serve" / "overhead.json").read_text())
+    assert published["loads"] and all(set(ld) == set(O.METRICS + O.CLIENT) for ld in published["loads"])
+    with pytest.raises(ValueError, match="published aggregate, its loads without requests, span_s, windows .* "
+                                         "private/out/serve/overhead.json"):
+        O.run_of(out / "serve" / "overhead.json")
+    assert O.main(["table", "--composed", str(out / "serve" / "overhead.json"), "--stock", str(stock), "--public"]) == 2
+    assert "private/out/serve/overhead.json" in capsys.readouterr().err
+    full = private / "serve" / "overhead.json"
+    assert O.main(["table", "--composed", str(full), "--stock", str(stock), "--public", "--out", str(tmp_path / "f")]) == 0
+    assert O.main(["table", "--composed", str(c), "--stock", str(s), "--public", "--out", str(tmp_path / "d")]) == 0
+    by_file, by_dir = (json.loads((tmp_path / x / "ratios.json").read_text()) for x in "fd")
+    assert by_file["ratios"] == by_dir["ratios"] and by_file["composed_shares"] == by_dir["composed_shares"]
+    assert by_file["ratios"]["time_per_output_token_s"]["ratio"]["mean"] == pytest.approx(2.0)
 
 
 def test_the_table_refuses_a_file_that_is_no_aggregate_and_metrics_a_dir_with_no_trace(tmp_path, capsys):
