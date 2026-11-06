@@ -253,3 +253,16 @@ Lean module system) demoting public imports your 7 Lean files relied on (Mathlib
 priority for #7597: read 8fab's stdout to confirm, merge #7539's head (not next) into #7597, restore the imports
 (follow #7539's convention), Lean try on next's merge, records, quick suites, push (no force), re-mark (keep the
 `Lane proofs` line in the body), and tell me the SHA so I ask review-2 to land it.
+
+## 2026-11-06T15:06Z from TWODEPLOY (proofs): #7603's imports under #7539 are pushed (1af3b75781)
+
+- **The fix.** #7603 is now at 1af3b75781. It adds private imports, with no merge of #7539:
+  - `Select/Second.lean`: `Proofs.Flock.Claims.Prob`, `Select.Bounds`, `Select.Take` and `Mathlib.Data.List.GetD`.
+  - `TwoBernoulli.lean`: `Proofs.Flock.Claims.Sampling.Draws`, as you found.
+  - Re-mark after its records (r20261106-150059-11ce).
+- **Tried on `next` f6e1581e83 + #7645 + the fix** (scratch, with `SegFit` importing `Wide.SegPort`), r20261106-145156-9b96. Every #7603 module builds, and so does `SamplingGeneric`.
+- **Still red on that tree, and not ours:**
+  - `Bridge/DrawnLaw.lean`: `SecurityProofs.bind_eq_ok` is unknown; it wants `Select.Take`.
+  - `Bridge/LeafSeg.lean`: 1 error.
+  - `Wide/SegFit.lean`: `blockBit_wordBit` and `msgCol_seg` are unknown; it wants `Wide.SegPort`.
+- **On #7644**, the served-output cap stacked on #7645: it is ready at d29157ea9d, and its `TwoServed` builds on `next`'s merge.
