@@ -81,7 +81,7 @@ INSTANCES: dict[str, Instance] = {i.id: i for i in (
     Instance("ajtai-n64", "Ajtai n = 64", algebraic=True),
     Instance("ajtai-n128", "Ajtai n = 128", algebraic=True),
     Instance("io-getrandombytes", "IO.getRandomBytes"),
-    # A5: the PoUW window's secret, secrets.token_bytes(32), fresh per window (#423)
+    # A5: the PoUW window's secret, secrets.token_bytes(32), fresh per window
     Instance("python-secrets", "Python's secrets"),
     # A6: each round's coins from Flock's Rust coin server (/dev/urandom outside seed mode), sampled after the prover's message
     Instance("flock-coin-server", "Flock's coin server"),
@@ -266,7 +266,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "trusted-host, pending network-accounting's widening) and the memory challenger's coins drawn online, "
           "after its state is fixed", "PoUS ring device"),
     # its falsification test is the measurement behind ROOT_CALL_NS (verity/core/protocols/pous/PROTOCOL.md, P2's SeqRoot):
-    # the timing red team's modelled floor, note:20261004T2102Z-report-relay-p2-redteam-timing
+    # the timing red team's modelled floor
     # (art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57), and the 8-core cooperation run
     # r20260929-060834-0ec4 (art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed); a faster squaring on the
     # stated device falsifies it
@@ -336,8 +336,8 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("accounting-ts-nosum", "assumption",
           "NOSUM: on the stated device no unit outside the route menu heads a fresh committed word", "NOSUM",
           "measured"),
-    # What the declared capacity Π rests on, per node and per window (ASK-74 = A; note:20261019T0455Z-draft-rt-scope,
-    # "Device identity and clock"): ε is relative to Π (decision 100), and ASK-65 = A made the floor the node's. Its
+    # What the declared capacity Π rests on, per node and per window: ε is relative to Π, and the
+    # floor is the node's. Its
     # trust is the auditor's inventory of the node, as certifier-coverage's is the auditor's placement; nothing checks
     # it at run time but the prover's own driver, and NVIDIA's attestation states no clock and can't rule out an
     # undeclared GPU
@@ -346,7 +346,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "declared board and vBIOS, and no SM clock exceeds f_max, the top of that vBIOS's clock table (MIG and MPS "
           "need no clause: they can't raise the node's capacity). Trust: the auditor's inventory of the node, onsite "
           "or the host provider's instance record", "Declared device", "standard"),
-    # The data-sheet axioms A1–A7 (Security/Definitions/Accounting/Assumptions/Sheet.lean, note:20261017T1818Z-draft-axioms):
+    # The data-sheet axioms A1–A7 (Security/Definitions/Accounting/Assumptions/Sheet.lean):
     # vendor statements that build the data-sheet machine and give (I1)–(I5) at the ½ floor
     Entry("accounting-sheet-clock", "assumption",
           "A1 CLOCK: the SM clock never exceeds the device's f_max, from the device's own source. Assumed: sm_120's "
