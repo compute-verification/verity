@@ -819,7 +819,7 @@ theorem zk_run_mono (hB : BlobSup B1 B2) (p : SampledProofs.OneStageZk.Own)
   repeat' (first
     | with_reducible exact ExtP.refl _ _ | with_reducible exact ExtP.of_ext (get_ext hB _ _)
     | ((with_reducible apply zk_fold_bind hB) <;> exact fun a b hab hb => by
-        (repeat' split at hab) <;> (cases hab <;> exact hb))
+        (repeat' split at hab) <;> (first | assumption | (cases hab <;> exact hb)))
     | split | apply ExtP.arrayMapM | apply ExtP.listMapM | apply ExtP.optionMapM | apply ExtP.arrayForIn
     | apply ExtP.mapError | apply ExtP.map | apply ExtP.bind | intro _)
 
