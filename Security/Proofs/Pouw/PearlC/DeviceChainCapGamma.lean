@@ -4,7 +4,7 @@ import Definitions.Pouw.Guarantees.PearlC
 import Proofs.Pouw.PearlC.TTOutW1Variants
 
 /-!
-# The cap on the chain's share: what it admits, that it asserts less, and γ (the TT_OUT restatements lane's file)
+# The cap on the chain's share: what it admits, that it asserts less, and γ
 
 Staged; nothing pinned.
 * **What it admits:** `chainCap_flagged_le`. A debit within `ρ·chainCreditDev` has at most `ρ·m·k·n/32` flagged

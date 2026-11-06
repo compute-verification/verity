@@ -12,7 +12,7 @@ are the chunks' in sequence, so the chain's state and each cell's z after chunk 
 `(c + 1) K_c / 32` segments. An induction over `c` (`chunkCarry_eq`) pins each carry in, through the chunk before's
 carry-out check, to that state, and each chunk's scales, through its scale check, to chunk 0's. So the last chunk's
 checks are the lane's on the joined rows, at `z = gemmAccS8` over the whole `K` (`zRun_zero`), which `laneOk_spec`
-(with #3392's `gemmAccS8_eq`, at `32 ∣ K` and `K < 2^17`) makes the exact dot.
+(with `gemmAccS8_eq`, at `32 ∣ K` and `K < 2^17`) makes the exact dot.
 -/
 
 namespace Pouw.H1Zy

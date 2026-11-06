@@ -35,7 +35,7 @@ is padded up), its claims 2 + 2 regions, both in ``menu.json``. With ``--outer``
 check of the inner session's two reps' algebra at those claims (:func:`inner_algebra`), which the input's rows leave out,
 and carries V*'s refusal where ``rec_residuals.parts`` refuses the shape.
 
-**Positions per shape** (lean's #1734, ``FlockSampled.Shape``): an entry's unit positions per slot are its bucket's
+**Positions per shape** (``FlockSampled.Shape``): an entry's unit positions per slot are its bucket's
 ``instances_max`` in the ``--rows`` output (``--positions``), and a shape's are the largest among its entries, as its
 claims are.
 """
@@ -120,7 +120,7 @@ def pick(options: Mapping[int, Mapping[str, Any]], gib: float = U.NODE_GIB) -> i
 
 
 def regions(row: Mapping[str, Any]) -> int:
-    """A unit type's regions in its sampled inner statement (proofs, note:proofs/20261010T2112Z-finding-c3-claims-per-shape):
+    """A unit type's regions in its sampled inner statement:
     one digest region per row, a row per input port and per output port, so its subcircuit's ports."""
     sub = TM.subcircuit(row["template"], **row["subcircuit_parameters"])
     return len(sub.inputs) + len(sub.outputs)

@@ -8,8 +8,8 @@ wholly inside one block. Each is defined for an arbitrary Boolean circuit and a 
 
 A circuit is a Program in `verity-ir/descriptor/v1` (`verity/ml/circuits/PROTOCOL.md`) in the Boolean profile (§9),
 read through its canonical layout (§6): a `verity.ml.circuits.program.Program`, or `codec.decode_program`'s result. It is
-the format NCI's check reads gate by gate (`verity/core/protocols/network/nci/lean/NciCheck/Check.lean`) and
-`Nci.Cover.Circuit` formalizes (`Security/Definitions/Nci/Cover.lean`, `BitView.lean`), and the one the served workloads lower
+the format the inference-only policy's check reads gate by gate
+(`verity/core/protocols/network/nci/lean/NciCheck/Check.lean`) and `Nci.Cover.Circuit` formalizes (`Security/Definitions/Nci/Cover.lean`, `BitView.lean`), and the one the served workloads lower
 to on bits. A word circuit has no per-product gates (one tensor-core step gate computes 16 products), so s_× and
 whole-in-block are defined only on the Boolean lowering; `ops.NotSeparable` refuses a word op.
 
@@ -32,7 +32,7 @@ fan-in is read at. `references.GEMM_PRODUCTS` is the GEMMs' products: each lane 
   `Blocks(runs)` is a partition as runs of gate indices (`Blocks.from_owner` from each gate's block, `Blocks.by_root`
   one block per root activation).
 
-`measure` computes all of them hierarchically, once per Definition, so a served layer of 10^10 to 10^12 gates measures
+`measure` computes all of them hierarchically, once per Definition, so a served layer of 10^9 to 10^12 gates measures
 in seconds. `flat` computes them gate by gate from the definitions; the tests hold the two equal on synthetic circuits
 covering every node form, the Boolean GEMM, and b1's layer at tiny shapes. `measure.Ambiguous` refuses the one case the
 summaries can't count exactly (one value bound to two activation leaves above the op); `flat` measures it.

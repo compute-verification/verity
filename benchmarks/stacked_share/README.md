@@ -58,7 +58,7 @@ At f ≥ 1 no KV is credited.
   `decoder-e2e-h200-mqa.json` (the e2e demo's frozen MQA H200 shape, units estimated from its shapes).
   `--m-dyn-node BYTES` spreads the input term over the node's pool, since the cut scales with the requests and R_in L
   doesn't.
-- `beta_job.sh` runs `beta.py` for `research run` on a CPU node, on the Program the census read (the Build its `ART`
+- `beta_job.sh` runs `beta.py` as a job on a CPU node, on the Program the census read (the Build its `ART`
   names), whose descriptor decodes only with its own commit's `verity` and `verity_vllm` (`inputs/tree.tar.gz`).
 
 What is measured and what is modeled:

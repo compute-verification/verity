@@ -1,6 +1,8 @@
 """Identifier syntax (README §1): `art:<sha256 hex>`, `drv:<sha256 hex>`, attempt id == run id (`r20260922-105905-2021`), a
-pull request at one head, `pr:<number>@<40-hex commit>` (the merge queue's grants), and a checkpoint at one revision,
-`ckpt:<HF repo id>@<40-hex revision>` (its weights' staging), which only labels target.
+pull request at one head, `pr:<number>@<40-hex commit>` (the merge queue's grants), a checkpoint at one revision,
+`ckpt:<HF repo id>@<40-hex revision>` (its weights' staging), a check's task by its key, `task:<sha512 hex>` (the executor's
+verdicts and results; a graph/v2 key without its `sha512:`), and a commit, `commit:<40-hex>` (the executor's graphs of it and
+drive's shadow record of a check of it), which only labels target.
 
 The store checks syntax, never existence: a ref may name an artifact that lives only remotely.
 """
@@ -20,6 +22,8 @@ RUN_RE = re.compile(r"^r\d{8}-\d{6}-[0-9a-f]{4}$")
 PR_RE = re.compile(r"^pr:[1-9]\d*@[0-9a-f]{40}$")
 CKPT_RE = re.compile(r"^ckpt:[A-Za-z0-9][\w.-]*/[\w.-]+@[0-9a-f]{40}$")
 SHA_RE = re.compile(rf"^{HEX64}$")
+TASK_RE = re.compile(r"^task:[0-9a-f]{128}$")
+COMMIT_RE = re.compile(r"^commit:[0-9a-f]{40}$")
 
 
 def art_id(manifest: Any) -> str:
@@ -58,6 +62,14 @@ def is_ckpt(s: Any) -> bool:
     return isinstance(s, str) and bool(CKPT_RE.match(s)) and "--" not in s
 
 
+def is_task(s: Any) -> bool:
+    return isinstance(s, str) and bool(TASK_RE.match(s))
+
+
+def is_commit(s: Any) -> bool:
+    return isinstance(s, str) and bool(COMMIT_RE.match(s))
+
+
 def is_sha256(s: Any) -> bool:
     return isinstance(s, str) and bool(SHA_RE.match(s))
 
@@ -74,7 +86,7 @@ def target_dirname(target: str) -> str:
 
 
 def kind_of_id(s: str) -> str:
-    """'art' | 'drv' | 'run' | 'pr' | 'ckpt' | 'unknown'."""
+    """'art' | 'drv' | 'run' | 'pr' | 'ckpt' | 'task' | 'commit' | 'unknown'."""
     if is_art(s):
         return "art"
     if is_drv(s):
@@ -85,4 +97,8 @@ def kind_of_id(s: str) -> str:
         return "pr"
     if is_ckpt(s):
         return "ckpt"
+    if is_task(s):
+        return "task"
+    if is_commit(s):
+        return "commit"
     return "unknown"

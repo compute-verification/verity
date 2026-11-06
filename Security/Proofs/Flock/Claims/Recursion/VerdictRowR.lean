@@ -8,8 +8,8 @@ import Proofs.Flock.VBridge.Family.Join
 `RowR` asks `AlgebraHolds` at rep `r` of table `i` (`DecAt.rep`). `rowR_of_parts` proves it from what the verdict's
 `rec-residuals` pieces give, one fact per part of the verifier's algebra at the rep's shape (`PartsZero`): the part's
 residuals vanish (VerdictPieces' `ResZero`) at elements `E` that are the rep's `w` at the part's row ports and verifier
-values `vv` that are `verifierRows`' `v` at the part's `V`. The last is check 5's tie at the verifier's values (vcalls,
-`note:20261024T2340Z-draft-vcalls-ask`), which stays a hypothesis, as in `ResTie`.
+values `vv` that are `verifierRows`' `v` at the part's `V`. The last is check 5's tie at the verifier's values, which
+stays a hypothesis, as in `ResTie`.
 
 The rest of `AlgebraHolds` is the shape's: S and its groups (`structureOf`, `groups`), the rep's coins in the rounds
 `verifierRows` draws (`roundSizes`, with none empty, row B's `noEmpty`) and `w`'s size S's `nw`. The extra claims number

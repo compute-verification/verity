@@ -50,7 +50,7 @@ theorem swSrcE_hmk_ret (vs : finS.SwVals)
     (hcms : ∀ l, ((Array.range (FlockDeploy.tabsOf (Masked.stsOf x)).size).mapM fun i =>
       FlockComplete.commit0Cut Masked.hsE (FlockDeploy.tabsOf (Masked.stsOf x))[i]!.merkle
         (schs[i]!.1.levels.getD 0 default)
-        (Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t i)).go l = (.ok cms, l))
+        (Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t i)).go l = (.ok cms, l))
     (j : Fin (Masked.jOf x)) (r : Fin 2)
     (hexts : ∀ k < 2 * j.val + r.val, ∃ extras,
       (FlockDeploy.tabsOf (Masked.stsOf x))[k / 2]!.extra (viewPoints x ops spec) = .ok extras)
@@ -60,13 +60,13 @@ theorem swSrcE_hmk_ret (vs : finS.SwVals)
         (((_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (Masked.stsOf x))[k / 2]!.m
           (FlockDeploy.tabsOf (Masked.stsOf x))[k / 2]!.kLog schs[k / 2]!.1.k0).len +
           _root_.Flock.Zk.K_PAD).nextPowerOfTwo * 2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE)
-        ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t (k / 2)).rep (k % 2))).go l =
+        ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t (k / 2)).rep (k % 2))).go l =
           (.ok ic, l)) →
       ∀ l : Array Msg, l.size = Masked.repBase x k →
       ∃ p tr l', ((FlockComplete.repCut (FlockComplete.asksCut (Masked.ligCoin (finCoins x ops)) (refK x)) Masked.hsE
           (FlockDeploy.tabsOf (Masked.stsOf x))[k / 2]! schs[k / 2]!.1 (k % 2)
           (spec.domain spec.tables[k / 2]! (k % 2)).toUTF8 cms[k / 2]! extras ic
-          ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t (k / 2)).rep (k % 2))
+          ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t (k / 2)).rep (k % 2))
           (Masked.priorE (finCoins x ops) (k / 2) (k % 2)) (FlockComplete.MaskRank.masksOf (Masked.stsOf x))[k / 2]!).run
           (_root_.Flock.Transcript.init #[] (spec.domain spec.tables[k / 2]! (k % 2)).toUTF8)).go l =
           (.ok (p, tr), l') ∧ l'.size = Masked.repBase x (k + 1))
@@ -79,7 +79,7 @@ theorem swSrcE_hmk_ret (vs : finS.SwVals)
       (((_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.m
         (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.kLog (Masked.zkTab x j).sch.k0).len +
         _root_.Flock.Zk.K_PAD).nextPowerOfTwo * 2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE)
-      ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t j.val).rep r.val)).go l = (.ok ic, l))
+      ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t j.val).rep r.val)).go l = (.ok ic, l))
     {l : Array Msg} (hl : l.size = Masked.repBase x (2 * j.val + r.val))
     (hcap : (FlockComplete.flat cms[j.val]!.cap).size < 2 ^ 64) (hroot : ic.root.size < 2 ^ 64)
     (hcur : ∀ extras,
@@ -90,7 +90,7 @@ theorem swSrcE_hmk_ret (vs : finS.SwVals)
           (FlockDeploy.tabsOf (Masked.stsOf x))[(2 * j.val + r.val) / 2]!.kLog
             schs[(2 * j.val + r.val) / 2]!.1.k0).len +
           _root_.Flock.Zk.K_PAD).nextPowerOfTwo * 2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE)
-        ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t ((2 * j.val + r.val) / 2)).rep
+        ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t ((2 * j.val + r.val) / 2)).rep
           ((2 * j.val + r.val) % 2))).go l = (.ok ic, l)) →
       ∀ l : Array Msg, l.size = Masked.repBase x (2 * j.val + r.val) →
       ∃ p tr l', ((FlockComplete.repCut (FlockComplete.asksCut (Masked.ligCoin (finCoins x ops)) (refK x)) Masked.hsE
@@ -98,7 +98,7 @@ theorem swSrcE_hmk_ret (vs : finS.SwVals)
           ((2 * j.val + r.val) % 2)
           (spec.domain spec.tables[(2 * j.val + r.val) / 2]! ((2 * j.val + r.val) % 2)).toUTF8
           cms[(2 * j.val + r.val) / 2]! extras ic
-          ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t ((2 * j.val + r.val) / 2)).rep
+          ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t ((2 * j.val + r.val) / 2)).rep
             ((2 * j.val + r.val) % 2))
           (Masked.priorE (finCoins x ops) ((2 * j.val + r.val) / 2) ((2 * j.val + r.val) % 2))
           (FlockComplete.MaskRank.masksOf (Masked.stsOf x))[(2 * j.val + r.val) / 2]!).run
@@ -106,7 +106,7 @@ theorem swSrcE_hmk_ret (vs : finS.SwVals)
             (spec.domain spec.tables[(2 * j.val + r.val) / 2]! ((2 * j.val + r.val) % 2)).toUTF8)).go l =
           (.ok (p, tr), l') ∧ l'.size = Masked.repBase x (2 * j.val + r.val + 1)) :
     ∀ i < (_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0).zp 64,
-      ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t j.val).rep r.val).masked i =
+      ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t j.val).rep r.val).masked i =
         q.vals[i]! + (_root_.Flock.Firewall.Finish.padsOf q.draws).toC.h[i]! := by
   have hx : Masked.Live x := Masked.live_of hsc hR
   have hk2 : (2 * j.val + r.val) / 2 = j.val := by

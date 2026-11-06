@@ -5,7 +5,7 @@ finalize has fixed every rank's root and taken off its hooks, and before any che
 
 1. every rank says what still needs its device after its root (``rank_kept``); a reason on any rank keeps the lease to the exit;
 2. every rank leaves its device (``rank_off``): its committer's worker stopped, the model's parameters and buffers copied to host
-   memory (the sampled replay, its weights self-check and the cross-rank embedding leg read them there) but for those its weights view
+   memory (the sampled replay, its weights self-check and the cross-rank embedding check read them there) but for those its weights view
    already holds on the host (`acquire.as_loaded`), which are emptied, its NCCL groups destroyed;
 3. every rank resets its CUDA context (``rank_reset``); from then on it sees no device, ends at once if a context reappears, and
    exits without vLLM's worker teardown, which would open one;

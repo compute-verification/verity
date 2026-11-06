@@ -264,12 +264,4 @@ theorem ReferenceThreaded : Guarantees.ReferenceThreaded := by
   obtain ⟨L⟩ := hL
   exact threaded_of_layered L Γ S 7 (hS.trans_lt (by norm_num))
 
-/-- **Training is slowed, at Kimi K2's shapes.** -/
-theorem ReferenceTraining : Guarantees.ReferenceTraining := by
-  intro Γ α b_w b_a κ c dcl T M hL hα hbw hba hd hB hS hW hκ
-  unfold Assumptions.ReferenceLayered at hL
-  obtain ⟨L⟩ := hL
-  exact LayeredTraining Γ α b_w b_a κ c dcl T _ _ _ _ 7 M L hα hbw hba (by norm_num) hd hB
-    (hS.trans_lt (by norm_num)) hW hκ
-
 end Nci.SecurityProofs

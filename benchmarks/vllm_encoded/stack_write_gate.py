@@ -1,7 +1,8 @@
-"""The stack's write gate (codec_tensor/write_gate.py's rule on the stack's own launches): under Nsight Compute, one
-launch of each kernel a decode step of the encoded stack runs, from the stack's own code (`stack.py`, `paged.py`) on
-synthetic data at Llama-3.1-8B's shapes, and per kernel the SMs' L2 write sectors (plus reductions) against what it must
-write. A launch passes with no local stores and its writes within 1% (and a 4 KiB floor a kernel) of its outputs:
+"""The stack's write gate (codec_tensor/write_gate.py's profile and rule on the stack's own launches): under Nsight
+Compute, one launch of each kernel a decode step of the encoded stack runs, from the stack's own code (`stack.py`,
+`paged.py`) on synthetic data at Llama-3.1-8B's shapes, and per kernel the SMs' L2 write sectors (plus reductions)
+against what it must write. A launch passes with no local stores and its writes within 1% (and a 4 KiB floor a kernel)
+of its outputs (`write_gate.passes`):
 
 - each linear shape at m = 1 and 32, at the config the serve arm picked (`--stack-json`, its `selection`): the fused
   kernel's chunk partial sums (stored, nchunks · m · n · 4 bytes) and receipts (64 bytes a vector), then pg_reduce's
@@ -37,8 +38,6 @@ import write_gate as WG
 KERNELS = "regex:fused_kernel|leaves_kernel|level_kernel|pads_kernel|pg_|decode_kernel"
 SHAPES = {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096), "down": (4096, 14336)}
 MS = (1, 32)
-LOCAL = "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum"
-RED = "lts__t_sectors_op_red.sum"
 
 
 def launches(a) -> list[dict]:
@@ -134,31 +133,20 @@ def launches(a) -> list[dict]:
 
 
 def summarize(stdout: str, rc: int) -> dict:
-    want = next((json.loads(line[len("WRITE-GATE "):]) for line in stdout.splitlines()
-                 if line.startswith("WRITE-GATE ")), None)
-    import csv
-    import io
-    rows = list(csv.DictReader(io.StringIO("\n".join(line for line in stdout.splitlines() if line.startswith('"')))))
-    per: dict[str, dict] = {}
-    for r in rows:
-        v = r["Metric Value"].replace(",", "")
-        per.setdefault(r["ID"], {"name": r["Kernel Name"][:90]})[r["Metric Name"]] = None if v == "n/a" else float(v)
-    kernels = list(per.values())
+    """Each launch, in order, against the kernels it ran: its L2 writes (and reductions) against what it must write."""
+    want, kernels = WG.profiled(stdout, 90)
     res = {"rc": rc, "metrics": WG.METRICS, "launches": want, "kernels": kernels, "rows": []}
     if want is None:
         res["ok"] = False
         return res
 
-    def b_(kv, metric):
-        return 32 * (kv.get(metric) or 0)
-
     def check(w, ks, must, extra=None):
-        wb = sum(b_(kv, WG.WRITE) + b_(kv, RED) for kv in ks)
-        lb = sum(b_(kv, LOCAL) for kv in ks)
+        wb = sum(WG.sector_bytes(kv, WG.WRITE) + WG.sector_bytes(kv, WG.RED) for kv in ks)
+        lb = sum(WG.sector_bytes(kv, WG.LOCAL) for kv in ks)
         row = {**w, "kernels": [kv["name"][:48] for kv in ks], "l2_write_bytes": wb,
-               "l2_write_all_bytes": sum(b_(kv, WG.ALL) for kv in ks), "local_store_bytes": lb, "must_bytes": must,
-               "over_must": wb / must if must else None, **(extra or {}),
-               "ok": bool(ks) and lb == 0 and wb <= 1.01 * must + 4096 * len(ks)}
+               "l2_write_all_bytes": sum(WG.sector_bytes(kv, WG.ALL) for kv in ks), "local_store_bytes": lb,
+               "must_bytes": must, "over_must": wb / must if must else None, **(extra or {}),
+               "ok": bool(ks) and WG.passes(wb, lb, must, len(ks))}
         res["rows"].append(row)
 
     queue = list(kernels)
@@ -224,15 +212,12 @@ def main() -> int:
     ap.add_argument("--child", action="store_true")
     a = ap.parse_args()
     if a.child:
-        print("WRITE-GATE " + json.dumps(launches(a)), flush=True)
+        print(WG.MARK + json.dumps(launches(a)), flush=True)
         return 0
     out = Path(a.out)
-    ncu = shutil.which("ncu") or "/usr/local/cuda-13.0/bin/ncu"
-    cmd = [ncu, "--csv", "--print-units", "base", "--target-processes", "all", "--kernel-name", KERNELS, "--metrics",
-           ",".join(WG.METRICS), sys.executable, __file__, "--child", "--wt-lib", a.wt_lib, "--reader-lib",
-           a.reader_lib, "--paged-lib", a.paged_lib, "--k", str(a.k)] + (
-               ["--stack-json", a.stack_json] if a.stack_json else [])
-    p = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    p = WG.profile(KERNELS, [sys.executable, __file__, "--child", "--wt-lib", a.wt_lib, "--reader-lib", a.reader_lib,
+                             "--paged-lib", a.paged_lib, "--k", str(a.k)] + (
+                                 ["--stack-json", a.stack_json] if a.stack_json else []))
     (out / "stack-write-gate.ncu.txt").write_text(p.stdout + "\n--- stderr ---\n" + p.stderr)
     res = summarize(p.stdout, p.returncode)
     if a.ptxas:

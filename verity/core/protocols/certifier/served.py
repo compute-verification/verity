@@ -1,9 +1,10 @@
 """N2's served profile: on a served link, whose egress end has no public occupancy profile, the egress counts derived
 from the ingress counts under the declared clock sync, zero-knowledge. A Boolean Definition, a gated part of N2's
-served proof block (`service`'s `NetworkServedLinkWindow` v4), which runs on every link-window; its one output is the ok
-bit. That unit's Program holds it as one gate that names its circuit digest (`gate`), pinned in this module's sidecar
-and held to the Definition by circuit-check; N2's verifier of record reads its output from the unit's proof, and the
-in-the-clear check (`LinkWindows.clear`) runs its `reference`, which the tests hold to the circuit.
+served proof block (`service`'s `NetworkServedLinkWindow` v4), which runs on every execution phase; its one output is
+the ok bit. That proof block's Program holds it as one gate that names its circuit digest (`gate`), pinned in this
+module's sidecar and held to the Definition by circuit-check; N2's verifier of record reads its output from the proof
+block's proof, and the in-the-clear check (`LinkWindows.clear`) runs its `reference`, which the tests hold to the
+circuit.
 
     NetworkServedCounts_v1{T, FOUT, FIN, R, RIN, OWN}
         (ingress: Array<T, Array<4, Byte>>, egress: Array<T, Array<4, Byte>>, sync: Array<3, Array<16>>) -> Value<1>
@@ -80,7 +81,7 @@ from verity.core.protocols.certifier.head_check import (BIT, BYTE, _coll, _Const
 from verity.core.protocols.certifier.grid import released
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, handing_buckets
 
-#: δ, p and q are each u16 in the unit's `sync` input
+#: δ, p and q are each u16 in the proof block's `sync` input
 SYNC_BITS = 16
 SYNC_MAX = (1 << SYNC_BITS) - 1
 
@@ -172,7 +173,7 @@ def admits(released_counts: Sequence[int], queued: int, sync: ClockSync, profile
 
 
 def sync_words(sync: ClockSync) -> tuple[int, int, int]:
-    """The sync as the unit's `sync` input: δ, and ρ = p/q in lowest terms, each u16."""
+    """The sync as the proof block's `sync` input: δ, and ρ = p/q in lowest terms, each u16."""
     words = (sync.delta, sync.rho.numerator, sync.rho.denominator)
     if not all(0 <= x <= SYNC_MAX for x in words):
         raise ValueError(f"a served unit's sync has δ, p and q below 2^{SYNC_BITS}, not {sync!r}")
@@ -475,20 +476,20 @@ def _count_bits(counts: Sequence[int]) -> list[int]:
 
 
 def arguments(ingress: Sequence[int], egress: Sequence[int], sync: tuple[int, int, int]) -> list[list[int]]:
-    """The unit's arguments in its signature's order, each its leaves' bits, 0 or 1."""
+    """The proof block's arguments in its signature's order, each its leaves' bits, 0 or 1."""
     return [_count_bits(ingress), _count_bits(egress), [(x >> j) & 1 for x in sync for j in range(SYNC_BITS)]]
 
 
 def evaluate(key: tuple[int, int, int, int, int, int], cases: Sequence[tuple[Sequence[int], Sequence[int],
                                                                           tuple[int, int, int]]]) -> list[int]:
-    """The unit's output on each case, (ingress, egress, sync) of one size class `key` = (T, F, FIN, R, RIN, OWN), in
-    one evaluation."""
+    """The proof block's output on each case, (ingress, egress, sync) of one size class `key` = (T, F, FIN, R, RIN,
+    OWN), in one evaluation."""
     args = [list(rows) for rows in zip(*(arguments(*c) for c in cases))]
     return [int(b) for b in evaluate_bits(unit(*key), *args).reshape(-1).tolist()]
 
 
 def size(T: int, F: int, FIN: int, R: int, RIN: int, OWN: int) -> int:
-    """The unit's ANDs."""
+    """The proof block's ANDs."""
     return ands(unit(T, F, FIN, R, RIN, OWN))
 
 

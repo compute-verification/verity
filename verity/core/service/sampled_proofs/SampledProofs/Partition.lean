@@ -3,7 +3,7 @@ The partition as a named query over the verifier's own program (`one_stage/parti
 object and its digest (C-Flock's `HmRow.checkPartitionObject` and `HmRow.partitionDigest`), and the queries one-stage
 applies to the program: the template queries (C-Flock's `TemplateQuery`), `Q_word` v1 at `X = 16` (`Flock.Extract`) and
 `Q_call` v1 at `X ≤ 16` (`Flock.Qcall`), each on a topological program only, as core's `evaluate` refuses any other.
-Every unit's committed bits fit a public size class (`UNIT_CLASSES`, powers of two from 16 to `UNIT_CLASS_MAX` bits; ASK-61,
+Every unit's committed bits fit a public size class (`UNIT_CLASSES`, powers of two from 16 to `UNIT_CLASS_MAX` bits,
 provisional), its class the least that holds them (`unitClass`), a public property of its Definition: a program with a unit
 wider than the widest class is refused (a template instance's bits are its distinct returned gates', `templateBits`; a
 `Q_call` unit's count the constants its activation holds, `committedBits`, which `Q_call`'s width rule leaves out; a
@@ -58,8 +58,8 @@ def digest (obj : Json) : Option String :=
 /-- `Q_word` v1's `X`, and the most `Q_call` v1's `X` may be: the width rule of the queries applied here. -/
 def QUERY_X : Nat := 16
 
-/-- The widest public size class of a unit's committed bits (the claims' `Claims.Sampling.unitClassMax`; ASK-61, Daniel,
-19 Oct 2:59 PM PDT, provisional). 16 sets the classes back to the former literal limit alone. -/
+/-- The widest public size class of a unit's committed bits (the claims' `Claims.Sampling.unitClassMax`,
+provisional). 16 sets the classes back to the former literal limit alone. -/
 def UNIT_CLASS_MAX : Nat := 262144
 
 /-- The public size classes, ascending: the powers of two from 16 to `UNIT_CLASS_MAX` (the claims' `unitClasses`). -/

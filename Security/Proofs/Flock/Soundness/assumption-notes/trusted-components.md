@@ -1,4 +1,4 @@
-# Trusted components
+# Trusted code
 
 These are not assumptions of the theorem, but the verdict still depends on them.
 

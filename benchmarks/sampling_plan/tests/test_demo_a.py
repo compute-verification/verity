@@ -1,7 +1,7 @@
-"""Demo A's frontier (`demo_a.py`): FAMILIES' subcircuits at their per-token counts and staged k_log, each unit's work
+"""Demo A's frontier (`demo_a.py`): the Definition map's subcircuits at their per-token counts and staged k_log, each unit's work
 its own ANDs and every unit its output bits, statements shared, core's risk wherever core computes it, the certificate
-`certify`'s where core's exact count is cheap and its location term never below it, at each budget the plan under top's
-rate no worse than either half's best alone, within the budget, the least sampling block the first whose share of its
+`certify`'s where core's exact count is cheap and its location term never below it, at each budget the plan under the
+exchange rate no worse than either half's best alone, within the budget, the least execution phase the first whose share of its
 GPU time affords a plan, PoUW's lanes their traced chunks and combine sharing statements, and M3's uniform draw and the
 tile strata's epsilon as core and PoUW state them."""
 
@@ -21,7 +21,7 @@ from verity.core.protocols.sampled_proofs.optimize import Objective, certify
 
 TINY = replace(D.SHAPE, batch=4, step_s=0.01)
 
-#: FAMILIES' table (PRF-166 db928eb0): units a token and a generated token, by Definition
+#: the Definition map's table: units a token and a generated token, by Definition
 FAMILIES = {"ScaledMmS8CoordinateRows_v1{K=16384": (5_118_464, 256), "ScaledMmS8CoordinateRows_v1{K=65536": (851_968, 0),
             "AllGather_v1{WORLD=64,": (13_416, 0), "AllGather_v1{WORLD=128,": (40_064, 2),
             "AllGather_v1{WORLD=2,": (6_656, 0), "RowAbsMax_v1{N=16384,RELU=True": (156, 0),
@@ -78,8 +78,8 @@ def test_the_partition_is_families_table_within_the_cap():
             a0 = t.groups * (cm.statement_fixed + cm.statement_per_and * proved) + cm.statement_fixed \
                 + cm.statement_per_and * combine
             assert cm.statement(c) == (pytest.approx(a0), 0.0) and cm.unit(c) == rates.unit(c)
-    assert D.costs(blocks=7).replay["request"].units == 7 * m.batch
-    assert all(D.costs(blocks=7).replay[t.id].units == 7 * t.units for t in tiles)
+    assert D.costs(blocks=7).replay["request"].replay_blocks == 7 * m.batch
+    assert all(D.costs(blocks=7).replay[t.id].replay_blocks == 7 * t.units for t in tiles)
     assert m.block_s == pytest.approx(32 * 6.35)
     g = D.ands_against_gpu()
     assert sum(d["ands_share"] for d in g["definitions"].values()) == pytest.approx(1)
@@ -108,7 +108,7 @@ def test_location_is_location_bits_at_the_exact_count():
 
 
 def test_the_certificate_is_certifys_on_small_strata():
-    cands = [replace(c, units=60 + 7 * i, replay="", per_replay=0) for i, c in enumerate(D.candidates()[:6])]
+    cands = [replace(c, units=60 + 7 * i, grain="", n_rho=0) for i, c in enumerate(D.candidates()[:6])]
     sizes = {c.template: 40 for c in cands}
     objective = Objective(0.01, work=1e-9, bits=1e-3)
     ours, core = D.certificate(sizes, cands, objective), certify(sizes, cands, objective)

@@ -29,7 +29,7 @@ open Flock Refine
 
 /-- **Rep `r` of table `i`, round by round**: its stream and proof decode, the stream has one round per chunk of the
 rep's frames, and round `k` retained the bytes of chunk `k`. -/
-def RepRounds (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (sess : Session) (i r : ℕ)
+def RepRounds (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (sess : RunRecord) (i r : ℕ)
     (bytes : ByteArray) : Prop :=
   ∃ (stream : StreamRec) (p : Proof) (extras : Array Flock.Claim) (T : F128),
     sess.streams.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString r) = some stream ∧
@@ -39,7 +39,7 @@ def RepRounds (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (sess : S
     ∀ k < stream.rounds.size, Retains (stream.rounds[k]!)
       (encs ((chunks (repFrames st sch (spec.domain spec.tables[i]! r).toUTF8 (2 + extras.size) p T)).1.getD k []))
 
-theorem rep_rounds_retained {spec : SessionSpec} {st : Setup} {sch : Flock.Schedule} {sess : Session} {i r : ℕ}
+theorem rep_rounds_retained {spec : SessionSpec} {st : Setup} {sch : Flock.Schedule} {sess : RunRecord} {i r : ℕ}
     {bytes cap : ByteArray} (hm : 14 ≤ st.m) (hdim : DimSeam sch)
     (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
     (hret : ∀ s ∈ sess.streams.toList, AllRetained s.rounds) (h : verifyRep spec st sch sess i r bytes = .ok cap) :
@@ -53,7 +53,7 @@ against the session's spec, and for every table `j`, at its `fast100` schedule, 
 proof files. -/
 theorem accepts_rep_rounds {I : Inputs} {t : Transcript} (hh : I.tags.hiddenOutputs = false)
     (hr : I.tags.retainRounds = true) (h : Accepts I t) :
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupOf I t.record = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupOf I t.record = .ok (spec, sts) ∧
       Record.decode spec t.record = .ok sess ∧ sts.size = spec.tables.size ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
         RepRounds spec (Setup.ofCircuit sts[j]) sch sess j 0 t.proofs[2 * j]! ∧

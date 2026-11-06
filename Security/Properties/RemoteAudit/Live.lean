@@ -13,7 +13,7 @@ verdict `checkWindowChunked`'s), and applies that verdict to the session as it s
 settled window as a `verify` of its frames, read by the same `Wire.openingsOf`.
 
 `Live` is that request loop on one session drawn `g` windows a coin, as a pure function: `step` is the process's
-`event`, `verify` and `settle` on a running session, each giving its answer and the event the transcript records for it
+`event`, `verify` and `settle` on a running session, each giving its reply and the event the transcript records for it
 (none for a `verify`), and `run` takes a list of requests through it.
 
 * `LiveIsRun`: a session the process ran on its live coins, with every window it checked settled or not, is
@@ -56,19 +56,20 @@ structure Proc where
   session : Session.State
   checks : List Check := []
 
-/-- An answer: an event's or a settle's result, a check spawned, or a `verify` refused. -/
-inductive Answer
+/-- A reply to one request (the process's `answer` line): an event's or a settle's result, a check spawned, or a `verify`
+refused. -/
+inductive Reply
   | result (r : Session.Result)
   | spawned
   | refused
 
-def Answer.result? : Answer → Option Session.Result
+def Reply.result? : Reply → Option Session.Result
   | .result r => some r
   | _ => none
 
 /-- One request through the process (`Verifier.handle`'s `event`, `verify` and `settle` on a running session): its
-answer, the event the transcript records for it, and the process after it. -/
-def step (chunk g : Nat) (p : Proc) : Req → Except String (Answer × Option Session.Event × Proc)
+reply, the event the transcript records for it, and the process after it. -/
+def step (chunk g : Nat) (p : Proc) : Req → Except String (Reply × Option Session.Event × Proc)
   | .event e coin => do
     let (r, s) ← Verifier.eventOn 2 g p.session e coin
     pure (.result r, some e, { p with session := s })
@@ -86,10 +87,10 @@ def step (chunk g : Nat) (p : Proc) : Req → Except String (Answer × Option Se
     pure (.result r, some (.verify c.t (Wire.openingsOf c.frames)),
       { session := s, checks := p.checks.filter (·.id != id) })
 
-/-- Every request's answer, in order, the events the transcript records, and the process after them. -/
+/-- Every request's reply, in order, the events the transcript records, and the process after them. -/
 def run (chunk g : Nat) (p : Proc) (qs : List Req) :
-    Except String (List Answer × List Session.Event × Proc) :=
-  qs.foldlM (fun (acc : List Answer × List Session.Event × Proc) q => do
+    Except String (List Reply × List Session.Event × Proc) :=
+  qs.foldlM (fun (acc : List Reply × List Session.Event × Proc) q => do
     let (a, e?, p') ← step chunk g acc.2.2 q
     pure (acc.1 ++ [a], acc.2.1 ++ e?.toList, p')) ([], [], p)
 
@@ -102,13 +103,13 @@ namespace Properties.RemoteAudit
 with them: the same results (each event's and settle's) and the same session, with `c` and `a`. -/
 def LiveIsRun : Prop :=
   ∀ (chunk g : Nat) (params : Session.Params) (reg : Registration) (coins appendCoins : Array ByteArray)
-    (notBeforeNs : Nat) (qs : List Live.Req) (answers : List Live.Answer) (es : List Session.Event) (p : Live.Proc),
+    (notBeforeNs : Nat) (qs : List Live.Req) (answers : List Live.Reply) (es : List Session.Event) (p : Live.Proc),
     Live.run chunk g { session := Session.State.init params reg coins appendCoins notBeforeNs } qs =
       .ok (answers, es, p) →
     ∀ (c a : Array ByteArray), 1 ≤ g → 1 ≤ params.minPasses →
       (∀ (i : Nat) (x : ByteArray), p.session.coins[i]? = some x → x.size = Codec.COIN_BYTES → c[i]? = some x) →
       (∀ (k : Nat) (x : ByteArray), p.session.appendCoins[k]? = some x → a[k]? = some x) →
       Shared.run g (Session.State.init params reg c a notBeforeNs) es.toArray =
-        .ok ((answers.filterMap Live.Answer.result?).toArray, { p.session with coins := c, appendCoins := a })
+        .ok ((answers.filterMap Live.Reply.result?).toArray, { p.session with coins := c, appendCoins := a })
 
 end Properties.RemoteAudit

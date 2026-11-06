@@ -22,7 +22,8 @@ This file states the bound there with `ProgChecks` as a conclusion, its premises
   with no `ProgReads`, and `ProgChecks` at `ofLoop`, at every `x` the loop serves. Beyond `zk_server_lean_loop`'s other premises it reads the
   tables `real` answers being the session loop's own (`Count.RealTabs`: `Finish`'s `level0` request, `tabOfLevel0` at a
   level 0 `Level0.ofDraws` drew) and `L₀`'s round at the inner proof's round 0 being the firewall's own at some
-  `final_c'` (`hL0`: Rust's firewall sends that round, `check_self`, at the inner proof's label).
+  `final_c'` (`hL0`: the loop's frame releases that round itself, `Frame.innerSched` on its finish's round 0, at the inner
+  proof's label).
 -/
 
 namespace Claims.ZKServer
@@ -160,7 +161,8 @@ here, at every `x` the loop
 serves (`Loop.Serves`: its `Hello` leaves, so the setup's sizes pass `Session.sizesOk`). In `ProgReads`' place it reads
 the tables `real` answers being the session loop's own
 (`hRt`, `Count.RealTabs`: `Finish`'s `level0` request) and `L₀`'s round at the inner proof's round 0 being the
-firewall's own at some `final_c'` (`hL0`: what Rust's firewall sends there, `check_self`). The transport's other trusts
+firewall's own at some `final_c'` (`hL0`: the loop's frame releases that round itself, `Frame.innerSched`). The
+transport's other trusts
 (`LinkRoundEq`, `FinalRoundEq`, `LiveRoundEq`, `FillRoundEq`) and the tables' side are `zk_server_lean_loop`'s. -/
 theorem Flock.zk_server_lean_ofLoop
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (T : CoinLayer.TableData)

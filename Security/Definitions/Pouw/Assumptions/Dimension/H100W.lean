@@ -3,7 +3,7 @@ import Definitions.Pouw.Assumptions.Dimension.H100
 /-!
 # `MH100w`: W1's free operations only, and the distinct-writes bound (trusted statements; draft semantics)
 
-**Draft semantics, pending review** (`internal/pouw-fp8/genuine-fp8-interface.md` §1.1).
+**Draft semantics, pending review**.
 
 `MH100` has no free arithmetic instruction: its only free instructions are `move` (an oblivious whole-word move or
 copy) and `operand` (a free value). But its free values are a subspace `V`, so `operand` hands out every rational
@@ -18,21 +18,21 @@ instructions at `pr.tc` or more per register, FFMA, FADD and FMUL at `pr.ffma`, 
 `pr.other`. Every register value is therefore free or written by an instruction that pays for it.
 
 * **Work, not time.** `MH100w`'s cost is additive W1: the sum of the prices of the instructions written. The hardware
-  co-issues writers on separate pipes. In Round 8 (`internal/pouw/gpu-constants.md` §13), 1:1 DADD + FADD wrote a
+  co-issues writers on separate pipes. In Round 8, 1:1 DADD + FADD wrote a
   register every 26.75 units with two register sources, and as often as every 21.45 loop-free with immediates, and
   21.33 at full dispatch, below `H32`'s 32 per register. So every bound here is on work. A bound on time needs a
-  maximum over resources (`docs/pouw/w1-time-model.md`).
+  maximum over resources.
 
-* **Every salt-independent function of the committed input is free** (the corrected §0 rule, 16:52Z, and red team
-  F18b-4). The committed input is X_q (the model's own FP8 quantization of the activations: E4M3 codes and a per-row
-  scale), s, and the offline weight codes and scales, all fixed before the salt. Under the §0 game, `F` holds every
-  salt-independent function of it, not just X_q: the decoded X_q, the row RMS or partner maximum, the cell widths,
-  the registered weight tables, and Y16 if it is committed. The program may start from any of them (`L ⊆ F`) at no
-  cost. The honest's cost of computing them is in W_ref, which Lean does not state. The casts of the noised copies
-  are in the program and are priced. No statement changes: `F` is a parameter, and every statement here requires
-  only that it hold the constants. A salt-tied target equals no salt-independent function on an `S` that spans the
-  salts, so the credit is unchanged, and so is `DenseCert`'s `r`.
-* **Targets are 32-bit words** (red team F18-1). A target is one register's function, and the credit is per
+* **Every salt-independent function of the committed input is free** (the corrected §0 rule). The committed input is X_q
+  (the model's own FP8 quantization of the activations: E4M3 codes and a per-row scale), s, and the offline weight codes
+  and scales, all fixed before the salt. Under the §0 game, `F` holds every salt-independent function of it, not just
+  X_q: the decoded X_q, the row RMS or partner maximum, the cell widths, the registered weight tables, and Y16 if it is
+  committed. The program may start from any of them (`L ⊆ F`) at no cost. The honest's cost of computing them is in
+  W_ref, which Lean does not state. The casts of the noised copies are in the program and are priced. No statement
+  changes: `F` is a parameter, and every statement here requires only that it hold the constants. A salt-tied target
+  equals no salt-independent function on an `S` that spans the salts, so the credit is unchanged, and so is
+  `DenseCert`'s `r`.
+* **Targets are 32-bit words**. A target is one register's function, and the credit is per
   register. A trace word narrower than 32 bits counts only through the 32-bit slot holding it, so with `κ` codes per
   slot a code earns `32/κ`: 16 with each two-code word in its own slot, and 8 packed four codes to a slot
   (`DistinctWritesPacked`, `Pouw.Dimension.H100Cite`). A plain whole-word store is a free `move`, so storing a register
@@ -85,8 +85,7 @@ def DistinctLiveAt (ε : ℚ) (S : Set G) (F : Set (G → ℚ)) (ts : List (G �
   ∃ D : Finset (G → ℚ), (∀ t ∈ D, t ∈ ts) ∧ DistinctOn S F D ∧ (1 - ε) * ts.length ≤ D.card
 
 /-- The nominal table with the other tensor-core instructions at 31 per register, below `H32`. It is a hypothetical part:
-X-H32-1's H800 PCIe figure for legacy k8 `mma.sync` (31.2–31.8), rounded down. The H100 SXM measured 34.0 (Round 7;
-red team F18-5). -/
+the H800 PCIe's figure for legacy k8 `mma.sync` (31.2–31.8), rounded down. The H100 SXM measured 34.0. -/
 def h100Legacy : Prices100 := { h100Nominal with tc := 31 }
 
 /-! ## Pinned statements (draft semantics, pending review) -/
@@ -96,7 +95,7 @@ values `F` containing the constants, and FP32 semantics, a well-formed `MH100w` 
 registers include every target of a finite set `T`, none of them free, costs at least `32·|T|`.
 
 The targets are 32-bit register functions, so the credit is 32 per register. For code words packed `κ` to a register it
-is `32/κ` per code (red team F18-1; `DistinctWritesPacked`). -/
+is `32/κ` per code (`DistinctWritesPacked`). -/
 def DistinctWritesMH100 : Prop :=
   ∀ pr : Prices100, H32 pr →
     ∀ (G : Type) (F : Set (G → ℚ)), (∀ q : ℚ, (fun _ : G => q) ∈ F) →
@@ -144,7 +143,7 @@ def FloorTcSat : Prop := FloorTc 32 31 h100Legacy ∧ ¬ H32 h100Legacy
 /-- **The distinct-writes bound is attained** at the nominal prices: for every finite set `T` of functions and every
 list `Fr` of free values, one FP8 `wgmma` register per target of `T` and one operand word per free value is a
 well-formed `MH100w` program whose registers include them all, at exactly `32·|T|`. This is a nominal-model
-statement. On hardware it holds only for `wgmma` at `N ≥ 64` (red team F18-4; `Shape100`). -/
+statement. On hardware it holds only for `wgmma` at `N ≥ 64` (`Shape100`). -/
 def DistinctWritesAttained : Prop :=
   ∀ (G : Type) (F : Set (G → ℚ)) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (T : Finset (G → ℚ)) (Fr L : List (G → ℚ)),
     (∀ f ∈ Fr, f ∈ F) →
@@ -175,7 +174,7 @@ ts`, every well-formed `MH100w` program on free inputs that matches every target
 `32·(1 − ε)·|ts|`.
 
 This is the applicable pin for the truncated k32 `HOPPER_E4M3_K32` words of C-2, A-1 and D-2, which are not linear, so
-`PerWordMH100Words` does not cover them (red team F18-3). `DistinctLiveAt ε` is what each scheme must certify. -/
+`PerWordMH100Words` does not cover them. `DistinctLiveAt ε` is what each scheme must certify. -/
 def DistinctLiveMH100 : Prop :=
   ∀ pr : Prices100, H32 pr →
     ∀ (G : Type) (F : Set (G → ℚ)), (∀ q : ℚ, (fun _ : G => q) ∈ F) →

@@ -1,10 +1,10 @@
-"""`AllReduceSumBf16{N, R}` — the body of one NCCL sum all-reduce over R ranks' bf16 vectors of length N (lane tp2, quarantine).
+"""`AllReduceSumBf16{N, R}` — the body of one NCCL sum all-reduce over R ranks' bf16 vectors of length N (quarantine).
 
 Production op (vLLM d9105ea80, `tensor_parallel_size=2`, batch-invariant profile, `disable_custom_all_reduce=True`):
 `torch.ops.vllm.all_reduce(tensor, group_name="tp:0")` → `GroupCoordinator.all_reduce` → `PyNcclCommunicator.all_reduce(in, out=None,
 op=ReduceOp.SUM, stream=None)` → `ncclAllReduce(send, recv, count, ncclBfloat16, ncclSum, comm, current_stream)`; the device kernel the
 census sees is `ncclDevKernel_AllReduce_Sum_bf16_TREE_LL(ncclDevKernelArgsStorage<4096ul>)` (grid 1, block 640), NCCL 2.29.7
-(`out/gen/lanes/ov-tp2/evidence/census_reconcile.rank0.md`, `stream_facts.json`).
+(the capture's `stream_facts.json`).
 
 What is KNOWN about the arithmetic (evidence + NCCL source reading):
   * reduction op `ncclSum`, datatype `ncclBfloat16`: NCCL reduces IN THE DATATYPE — the partial sum that travels between ranks is a
@@ -13,10 +13,10 @@ What is KNOWN about the arithmetic (evidence + NCCL source reading):
     which is the same function of two bf16 words — see `_exact_bf16_sum` in the tests: RN32 of the sum of two bf16 values is exact or
     far from every bf16 midpoint, so RN_bf16(RN32(a+b)) = RN_bf16(a+b)).  Each binary addition therefore costs one bf16 rounding, and
     a reduction over R ranks has R-1 roundings, one per hop.  (Source reading from memory of NCCL 2.1x–2.2x; not re-read against the
-    captured 2.29.7 in this window — the R = 2 statement does not depend on it, the per-hop statement for R > 2 does.)
+    captured 2.29.7 — the R = 2 statement does not depend on it, the per-hop statement for R > 2 does.)
   * for R = 2 there is one addition per element; addition is commutative, so the per-element body is the order-free
-    `bf16_rne(f32(x_0) + f32(x_1))`.  Measured (lane ov-tp2, `tp2_body.summary.json`): 114/114 snapshotted all-reduces of the TP=2
-    capture satisfy it, both ranks' outputs bit-equal (`out_sha_equal_across_ranks`); lane tp2 (TA1 commit 917b9faa): 99/99 leaves.
+    `bf16_rne(f32(x_0) + f32(x_1))`.  Measured (`tp2_body.summary.json`): 114/114 snapshotted all-reduces of the TP=2
+    capture satisfy it, both ranks' outputs bit-equal (`out_sha_equal_across_ranks`); a second TP=2 capture: 99/99 leaves.
   * every rank receives the same output word (tree: the root reduces and broadcasts; ring: the reduce-scatter result is all-gathered).
 
 What is NOT known (and why this stays in quarantine):

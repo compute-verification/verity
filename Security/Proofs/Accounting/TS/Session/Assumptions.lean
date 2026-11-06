@@ -4,7 +4,7 @@ import Proofs.Flock.SoundAtBridge
 # The named premises a window of C-Flock sessions takes
 
 The premises `Accounting.Guarantees.TS.SessionSoundAt` takes on the served proof layer `pf`
-(`Accounting.TS.ProofLayer`), besides `Flock.SoundAtBridge`'s own: the proof service's acceptance rule (`AcceptedLive`,
+(`Accounting.TS.ProofLayer`), besides `Flock.SoundAtBridge`'s own: the proof system's acceptance rule (`AcceptedLive`,
 the bridge's premise of that name, as a named `Prop`), the window's law (`WindowLaw`), and in place of the bridge's
 `Flock.SoundAtBridge.RelOfRows` and `Flock.SoundAtBridge.OpenedPlurAt`, the same two facts on the accepted sessions
 whose drawn units are right: there `pf`'s relation, the served Definition's check, holds at the session's value layer
@@ -22,7 +22,7 @@ open Pouw.RelativeSecurity (Paths)
 
 variable {Ω : Type} {S nπ : ℕ} {V : Type}
 
-/-- `accounting-ts-accepted-live` (the proof service's acceptance rule). **A proof is credited only after
+/-- `accounting-ts-accepted-live` (the proof system's acceptance rule). **A proof is credited only after
 flock-verify `--zk --registered` accepts its session**: on every path, `pf` accepts proof `i` of round `w` only where
 flock-verify accepts its session's outcome (`LiveAcceptsZKR`). `Flock.SoundAtBridge.AcceptedLive` is the same `Prop`.
 
@@ -34,11 +34,11 @@ def AcceptedLive (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin S → F
     (out : ∀ x w i, (sess x w i).Out) : Prop :=
   ∀ x w i, pf.accepted x w i → LiveAcceptsZKR (sess x w i).I (sess x w i).own (out x w i)
 
-/-- `accounting-ts-window-law` (live coins at the window: the proof service's draws and audit coins are the window's).
+/-- `accounting-ts-window-law` (live coins at the window: the proof system's draws and audit coins are the window's).
 **At each round and proof, the window's coins read through the session have the session game's law**: for every event
 `E` of a session's outcome, its probability over the window's paths at `(w, i)` is at most the average over the paths
 of its probability in the session's own game (`Flock.SoundAtBridge.SessionLaw`). Read with every `E` it is equality of
-the two laws; `Flock.SoundAtBridge.WindowLaw` is the same `Prop`. The equality rests on five facts of the proof service
+the two laws; `Flock.SoundAtBridge.WindowLaw` is the same `Prop`. The equality rests on five facts of the proof system
 and of how `sess` is built:
 1. **No retry or redraw.** `out x w i` is the outcome of the session's one run on its draw: a refused session is a
    visible failure and is never rerun on a fresh draw. Otherwise the kept outcome leans toward acceptance, and `δ`

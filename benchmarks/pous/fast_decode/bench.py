@@ -36,10 +36,18 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE))
+sys.path.append(str(HERE.parents[2]))
 
 import algo  # noqa: E402
+from benchmarks.word_codec import cuda_lib  # noqa: E402
+from p2_v1 import gpu as G  # noqa: E402
 from p2_v1 import reference as R  # noqa: E402
 
+_v, _u = ctypes.c_void_p, ctypes.c_uint32
+FD = {   # the prototypes' functions (fd_keys is p2v1_keys' signature)
+    "fd_decode": [_v, _v, _v, _v, _u, _u, _v, ctypes.c_int, _v],
+    "fd_decode_grid": [_v, _v, _v, _v, _u, _u, _v, ctypes.c_int, _v, ctypes.c_int],
+}
 SALT = hashlib.sha256(b"verity-pous/bench/fast-decode/salt").digest()
 MODEL = hashlib.sha512(b"verity-pous/bench/fast-decode/model").digest()
 LATENCY_BLOCKS = 256
@@ -63,28 +71,22 @@ class Lib:
     """One library through ctypes: `kind` is "fd" (the prototypes' API) or "cgbn" (`p2v1_*`)."""
 
     def __init__(self, name: str, path: str, kind: str) -> None:
-        v, u, q = ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint64
         self.name, self.path, self.kind = name, path, kind
-        self.so = ctypes.CDLL(path)
         if kind == "fd":
+            self.so = cuda_lib.load(path, FD, {"fd_keys": G.BUILT["p2v1_keys"]})
             cfg = (ctypes.c_int * 12)()
             rc = self.so.fd_config(cfg)
             if rc:
                 raise RuntimeError(f"{name}: fd_config error {rc}")
             self.config = dict(zip(CONFIG_FIELDS, list(cfg)))
             self.per = self.config["per"]
-            self.so.fd_decode.argtypes = [v, v, v, v, u, u, v, ctypes.c_int, v]
-            self.so.fd_decode_grid.argtypes = [v, v, v, v, u, u, v, ctypes.c_int, v, ctypes.c_int]
             self.has_keys = hasattr(self.so, "fd_keys")
-            if self.has_keys:
-                self.so.fd_keys.argtypes = [ctypes.c_char_p, ctypes.c_int, q, u, q, v, v, v]
-                if self.so.fd_keys_version() != 4:
-                    raise RuntimeError(f"{name}: keys are not v4's")
+            if self.has_keys and self.so.fd_keys_version() != 4:
+                raise RuntimeError(f"{name}: keys are not v4's")
         else:
+            self.so = cuda_lib.load(path, G.ABI, G.BUILT)
             self.per = per_of_bits(self.so.p2v1_width_bits())
             self.config = {"per": self.per, "width_bits": self.so.p2v1_width_bits()}
-            self.so.p2v1_decode.argtypes = [v, v, v, v, u, u, v, v]
-            self.so.p2v1_keys.argtypes = [ctypes.c_char_p, ctypes.c_int, q, u, q, v, v, v]
             self.has_keys = self.so.p2v1_keys_version() == 4
         self.mode1 = kind == "fd"
 

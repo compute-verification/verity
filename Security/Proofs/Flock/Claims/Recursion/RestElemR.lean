@@ -82,7 +82,11 @@ def readTail : Rd RecX := do
   let recInner ← rdBytes
   let registration ← rdOpt rdBytes
   let parts ← rdList PartX.read
-  pure ⟨inner, recInner, registration, parts⟩
+  let links ← rdOpt (do
+    let t ← rdBytes
+    let n ← rdNat
+    pure (t, n))
+  pure ⟨inner, recInner, registration, parts, links⟩
 
 theorem read_eq : RecX.read = (do
     if (← rdStr) ≠ XFORMAT then failure
@@ -95,6 +99,7 @@ theorem tail_inner_lt {s s' : Msg} {w : RecX} (h : readTail.run s = some (w, s')
   obtain ⟨_, s₃, -, h⟩ := rd_bind h
   obtain ⟨_, s₄, -, h⟩ := rd_bind h
   obtain ⟨_, s₅, -, h⟩ := rd_bind h
+  obtain ⟨_, s₆, -, h⟩ := rd_bind h
   rw [StateT.run_pure] at h
   obtain ⟨rfl, -⟩ := Prod.mk.inj (Option.some.inj h)
   show inner.length < 2 ^ 64

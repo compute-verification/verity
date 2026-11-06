@@ -1,8 +1,8 @@
 """The wipe's egress count (`wipe_egress.py`) over a gate warden run built here at the gate's scan schedule and signed
-under a small LMS key: the link-windows meeting [t0 − pad, t1 + pad) and none other, each at the schedule's capacity; a
-window reaching before the session's origin or past its last window, a certificate missing or failing to verify, a run
-the gate's check refused, and an `out/` file other than the one `end.json` hashed each leave the record uncovered, by
-name; the CLI reads the gate's `fetch` bundle as it reads the unpacked directory."""
+under a small LMS key: the execution phases meeting [t0 − pad, t1 + pad) and none other, each at the schedule's
+capacity; a window reaching before the session's origin or past its last window, a certificate missing or failing to
+verify, a run the gate's check refused, and an `out/` file other than the one `end.json` hashed each leave the record
+uncovered, by name; the CLI reads the gate's `fetch` bundle as it reads the unpacked directory."""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ import warden_serve as ws  # noqa: E402
 import wipe_egress as E  # noqa: E402
 
 SCAN = WardenParams(**{flag[2:].replace("-", "_"): value for flag, value in G.SCAN.items()})
-#: c20261026T172351Z-7f47's origin, the rehearsal the record was first read off
+#: the origin of the rehearsal the record was first read off
 ORIGIN = 1793035442.0242794
 WINDOWS = 6
 SESSION = bytes(range(32))

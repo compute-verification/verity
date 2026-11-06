@@ -7,7 +7,7 @@ import Definitions.Pouw.Fp8Atom.H1TVec
 /-!
 # H-1T's M3 statements (trusted)
 
-M3 of `internal/pouw-fp8/lean-atom-m2-plan.md` (§0.6): the lemmas the one-flip clauses of `DistinctLiveH1T` rest on.
+The lemmas the one-flip clauses of `DistinctLiveH1T` rest on.
 
 * **`H1TAtomValue`**: on finite codes, the `HOPPER_E4M3_K32` step from `+0` writes the exact sum after two truncations
   toward zero: each product to the grid `2^(E − 13)` of the slice's alignment exponent `E` (`gridExp`, the largest
@@ -21,7 +21,7 @@ M3 of `internal/pouw-fp8/lean-atom-m2-plan.md` (§0.6): the lemmas the one-flip 
 * **`H1TRange`** (L4): on a legal unit every fresh-step word is finite, block 1's are at most 6,142,976 and block 2's at
   most 738,304 in magnitude, and every running word is below `2^33`, so its ulp is at most 512. This holds at
   `x = ±448`: the legal inputs are all finite codes.
-* **`H1TFormCover`** (X-M2-4 (a)): a slice of finite codes has one of the five `F` of `H1TFormTable`'s keys, so the
+* **`H1TFormCover`**: a slice of finite codes has one of the five `F` of `H1TFormTable`'s keys, so the
   table covers every slice.
 
 # M4a's statement, narrowed in M4b and M4c (trusted)
@@ -110,7 +110,7 @@ def H1TRange : Prop :=
     |runVal U.T (U.row i) (U.col j) j.val (U.rowSalt g i) p| < 2 ^ 33
 
 
-/-- **The forming table covers every slice** (X-M2-4 (a)): a slice of finite codes has `F = fOf fi` for one of the
+/-- **The forming table covers every slice**: a slice of finite codes has `F = fOf fi` for one of the
 indices `fi ≤ 4` of `H1TFormTable`'s keys, and each of its codes is below `2^(fi + 5)`. -/
 def H1TFormCover : Prop :=
   ∀ xs : Fin 29 → Code, (∀ l, (xs l).isNaN = false) →

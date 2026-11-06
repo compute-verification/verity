@@ -165,14 +165,25 @@ theorem setupH_leaf {tags : Tags} {circuitFile publicFile : ByteArray} {coins : 
 
 section Model
 
-variable {st : Stmt} {tags : Tags} (P : ParseFacts tags st.c) (L : Layout st) (hleaf : st.leaf = default)
-include P L hleaf
+/-- Every net stores `A` and `B` at its slot's width and reads at most 32 lookup bits (`net_width`). -/
+abbrev NetWidths (c : Circuit) : Prop :=
+  ∀ n < c.nets.size, (c.nets.getD n default).2.a.width = 2 ^ (c.nets.getD n default).2.unitLog ∧
+    (c.nets.getD n default).2.b.width = 2 ^ (c.nets.getD n default).2.unitLog ∧
+    ∀ lk, (c.nets.getD n default).2.lookup = some lk → lk.bits ≤ 32
 
-theorem slotA_eq {rg : Range} (hrg : rg ∈ st.c.ranges.toList) (i : ℕ) {c : ℕ} (hc : c < 2 ^ rg.slotLog) :
+/-- Every net range names a net. -/
+abbrev NetKinds (c : Circuit) : Prop := ∀ r ∈ c.ranges.toList, ∀ i, r.kind = .net i → i < c.nets.size
+
+theorem netWidths_of {tags : Tags} {c : Circuit} (P : ParseFacts tags c) : NetWidths c := fun _ hn => net_width P hn
+
+variable {st : Stmt} (hW : NetWidths st.c) (hK : NetKinds st.c) (L : Layout st) (hleaf : st.leaf = default)
+include hW hK L hleaf
+
+theorem slotA_eqW {rg : Range} (hrg : rg ∈ st.c.ranges.toList) (i : ℕ) {c : ℕ} (hc : c < 2 ^ rg.slotLog) :
     slotEntryA st rg.kind i c = (slotA st rg.kind i c : ZMod 2) := by
   cases hk : rg.kind with
   | net n =>
-      have hw := net_width P (P.kinds rg hrg n hk)
+      have hw := hW n (hK rg hrg n hk)
       rw [L.slotLog rg hrg n hk] at hc
       exact sparse_eq _ _ _ (Or.inl (by rw [hw.1]; exact hc))
   | mask =>
@@ -183,11 +194,11 @@ theorem slotA_eq {rg : Range} (hrg : rg ∈ st.c.ranges.toList) (i : ℕ) {c : �
       rw [hleaf]
       exact sparse_eq _ _ _ (Or.inr (Nat.zero_le _))
 
-theorem slotB_eq {rg : Range} (hrg : rg ∈ st.c.ranges.toList) (i : ℕ) {c : ℕ} (hc : c < 2 ^ rg.slotLog) :
+theorem slotB_eqW {rg : Range} (hrg : rg ∈ st.c.ranges.toList) (i : ℕ) {c : ℕ} (hc : c < 2 ^ rg.slotLog) :
     slotEntryB st rg.kind i c = (slotB st rg.kind i c : ZMod 2) := by
   cases hk : rg.kind with
   | net n =>
-      have hw := net_width P (P.kinds rg hrg n hk)
+      have hw := hW n (hK rg hrg n hk)
       rw [L.slotLog rg hrg n hk] at hc
       show sparseEntry _ i c + lookupEntry _ i c = ((spCnt _ i c + lkSide _ _ i c : ℕ) : ZMod 2)
       rw [Nat.cast_add, sparse_eq _ _ _ (Or.inl (by rw [hw.2.1]; exact hc))]
@@ -205,7 +216,7 @@ theorem slotB_eq {rg : Range} (hrg : rg ∈ st.c.ranges.toList) (i : ℕ) {c : �
       rw [hleaf]
       exact sparse_eq _ _ _ (Or.inr (Nat.zero_le _))
 
-omit P L hleaf in
+omit hW hK L hleaf in
 theorem rangesEntry_eq (entry : Kind → ℕ → ℕ → ZMod 2) (side : Kind → ℕ → ℕ → ℕ)
     (hside : ∀ rg ∈ st.c.ranges.toList, ∀ i c, c < 2 ^ rg.slotLog → entry rg.kind i c = (side rg.kind i c : ZMod 2))
     (r j : ℕ) : rangesEntry st entry r j = (rangeCnt side st.c.ranges.toList r j : ZMod 2) := by
@@ -219,22 +230,47 @@ theorem rangesEntry_eq (entry : Kind → ℕ → ℕ → ZMod 2) (side : Kind �
       · exact hside rg (lastCover_spec _ _ _ h).1 _ _ (Nat.mod_lt _ (Nat.two_pow_pos _))
       · simp
 
-theorem placedA_eq (r j : Fin (2 ^ st.c.kLog)) : placedA st r j = matA st r.val j.val := by
+theorem placedA_eqW (r j : Fin (2 ^ st.c.kLog)) : placedA st r j = matA st r.val j.val := by
   unfold placedA matA
-  rw [Nat.cast_add, rangesEntry_eq _ _ (fun rg hrg i c hc => slotA_eq P L hleaf hrg i hc), deltaEntry_eq]
+  rw [Nat.cast_add, rangesEntry_eq _ _ (fun rg hrg i c hc => slotA_eqW hW hK L hleaf hrg i hc), deltaEntry_eq]
 
-theorem placedB_eq (r j : Fin (2 ^ st.c.kLog)) : placedB st r j = matB st r.val j.val := by
+theorem placedB_eqW (r j : Fin (2 ^ st.c.kLog)) : placedB st r j = matB st r.val j.val := by
   unfold placedB matB
-  rw [Nat.cast_add, rangesEntry_eq _ _ (fun rg hrg i c hc => slotB_eq P L hleaf hrg i hc), deltaEntry_eq]
+  rw [Nat.cast_add, rangesEntry_eq _ _ (fun rg hrg i c hc => slotB_eqW hW hK L hleaf hrg i hc), deltaEntry_eq]
 
-theorem model_eq (hwf : StmtWF st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) :
+theorem model_eqW (hwf : StmtWF st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) :
     L.model regs = stmtOf st hwf regs := by
   unfold Layout.model stmtOf
   congr 1 <;> funext r j
-  · exact placedA_eq P L hleaf r j
-  · exact placedB_eq P L hleaf r j
+  · exact placedA_eqW hW hK L hleaf r j
+  · exact placedB_eqW hW hK L hleaf r j
 
 end Model
+
+section ModelFlat
+
+variable {st : Stmt} {tags : Tags} (P : ParseFacts tags st.c) (L : Layout st) (hleaf : st.leaf = default)
+include P L hleaf
+
+theorem slotA_eq {rg : Range} (hrg : rg ∈ st.c.ranges.toList) (i : ℕ) {c : ℕ} (hc : c < 2 ^ rg.slotLog) :
+    slotEntryA st rg.kind i c = (slotA st rg.kind i c : ZMod 2) :=
+  slotA_eqW (netWidths_of P) P.kinds L hleaf hrg i hc
+
+theorem slotB_eq {rg : Range} (hrg : rg ∈ st.c.ranges.toList) (i : ℕ) {c : ℕ} (hc : c < 2 ^ rg.slotLog) :
+    slotEntryB st rg.kind i c = (slotB st rg.kind i c : ZMod 2) :=
+  slotB_eqW (netWidths_of P) P.kinds L hleaf hrg i hc
+
+theorem placedA_eq (r j : Fin (2 ^ st.c.kLog)) : placedA st r j = matA st r.val j.val :=
+  placedA_eqW (netWidths_of P) P.kinds L hleaf r j
+
+theorem placedB_eq (r j : Fin (2 ^ st.c.kLog)) : placedB st r j = matB st r.val j.val :=
+  placedB_eqW (netWidths_of P) P.kinds L hleaf r j
+
+theorem model_eq (hwf : StmtWF st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) :
+    L.model regs = stmtOf st hwf regs :=
+  model_eqW (netWidths_of P) P.kinds L hleaf hwf regs
+
+end ModelFlat
 
 /-- **The accepted statement is `stmtOf`'s.** For a statement `Stmt.setupH` accepted on the untyped path, the
 statement `Placed.Accepted` reads (`Layout.model`: `placedA`, `placedB`) is the one the executable's refinement plays

@@ -4,7 +4,7 @@ import Definitions.Pouw.Guarantees.PearlC
 import Proofs.Pouw.PearlC.TTOutW1
 
 /-!
-# The unpromoted record, the cap, and γ at sm_120's prices (the TT_OUT restatements lane's file)
+# The unpromoted record, the cap, and γ at sm_120's prices
 
 Staged; nothing pinned.
 * **The unpromoted domain is not empty:** `pearlCDomainDev_unpromoted` puts a `1 × 64 × 128` layout in `pearlCDomainDev d`

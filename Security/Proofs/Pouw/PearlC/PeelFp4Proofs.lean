@@ -20,10 +20,10 @@ so the noise the peel cancels is the noise atom's, `E′ = E·a_E·2⁻⁴` agai
 on the named range `PeelRange4`: each FP4 chain word of the entry within its `δ` of its exact dot (`ChainsNear4`), and
 U's four K16 steps on the K16 range (`URange4`, `PeelExactProofs.URange`). The FP32 FMAs and add, `RN_bf16` and the K16
 steps (width 26, `eps16`) are bounded by `PeelExactProofs`' lemmas as they stand. Where the chains are exact runs
-(`ExactRuns4`: `Fp4Freeze.ExactRun` on each chain from `+0`), bc-5a715b19's exactness lemma `Fp4Freeze.cTilde_dot` puts
+(`ExactRuns4`: `Fp4Freeze.ExactRun` on each chain from `+0`), the exactness lemma `Fp4Freeze.cTilde_dot` puts
 every chain word on its exact dot (`chainNear_exact`, through `atomDot_sum`), so the bound is U's own rounding
 (`peelFp4_err_exact`, `peelBound4Exact`). `Fp4Freeze` shows D₄ gives no exact run (`noLoss_gap`), so `ExactRuns4` is a
-per-run hypothesis, not a consequence of the domain. This is option (b) of the theory's 10:50Z ruling: a claim that
+per-run hypothesis, not a consequence of the domain. This is option (b) of the exactness ruling: a claim that
 equates `C̃` with the exact product carries a per-word exact-run condition, here `ExactRuns4 i j` on entry `(i, j)`
 alone, and it loses the inexact words. `peelFp4_err` itself needs no exactness.
 
@@ -103,7 +103,7 @@ theorem uQ4_eq_sum (i : Fin m) (j : Fin n) :
     uQ4 A' B' FA FB EA EB i j = cQ4 A' B' i j + ∑ t, paQ4 A' FB EA i t * pbQ4 B' FA FB EB j t := by
   unfold uQ4; exact foldl_k16Q _ _ _
 
-/-- The exact counterpart is #311's U with unit `β`, `C̃ = A′·B̃ᵀ` and the noise `E_A, F_A, E_B, F_B` (`peelUQ`). -/
+/-- The exact counterpart is Pearl's U with unit `β`, `C̃ = A′·B̃ᵀ` and the noise `E_A, F_A, E_B, F_B` (`peelUQ`). -/
 theorem uQ4_eq_peelUQ (i : Fin m) (j : Fin n) :
     uQ4 A' B' FA FB EA EB i j = peelUQ (A' * B'ᵀ) A' B' EA FA EB FB i j := by
   rw [uQ4_eq_sum]
@@ -332,7 +332,7 @@ theorem atomDot_sum (p : Fp4Atom) (hp : Fp4Freeze.BlockShape p) {x y : List Nib}
     scaleAt_slice _ _ _ _ _ hjS, scaleAt_slice _ _ _ _ _ hjS, hdiv]
   ring
 
-/-- **bc-5a715b19's exactness lemma on one chain** (`Fp4Freeze.cTilde_dot`): on an exact run from `+0`, the peel's chain
+/-- **The exactness lemma on one chain** (`Fp4Freeze.cTilde_dot`): on an exact run from `+0`, the peel's chain
 word is `flatDot`. -/
 theorem chainNear_exact {p : Fp4Atom} (hp : Fp4Freeze.BlockShape p) {x y : List Nib} {sx sy : List (Fin 256)}
     (hs : Fp4Freeze.Shaped p x y sx sy) (hr : Fp4Freeze.ExactRun p [] 0 x y sx sy (x.length / p.k)) :
@@ -406,7 +406,7 @@ def ExactRuns4 (i : Fin m) (j : Fin n) : Prop :=
     (∀ q, Fp4Freeze.ExactRun p [] 0 b.1 (colF FA q) b.2 (onesScales p k) (k / p.k)) ∧
     ∀ q q', Fp4Freeze.ExactRun p [] 0 (colF FB q) (colF FA q') (onesScales p k) (onesScales p k) (k / p.k)
 
-/-- **Exact runs make the chains exact**, by bc-5a715b19's exactness lemma (`Fp4Freeze.cTilde_dot`) on each chain. -/
+/-- **Exact runs make the chains exact**, by the exactness lemma (`Fp4Freeze.cTilde_dot`) on each chain. -/
 theorem chainsExact4_of_runs (hp : Fp4Freeze.BlockShape p) (hk : p.k ∣ k) (i : Fin m) (j : Fin n)
     (h : ExactRuns4 p A B FA FB i j) : ChainsExact4 p A B FA FB i j := by
   intro a b hA hB
@@ -576,9 +576,9 @@ theorem peelFp4_err (i : Fin m) (j : Fin n) {v : ℚ} (hv : (peelFp4 p A B FA FB
         unfold peelBound4
         exact add_le_add (add_le_add (mul_le_mul_of_nonneg_left (by linarith) hK) le_rfl) le_rfl
 
-/-- **(b) on exact runs**: where the entry's FP4 chains are exact runs (`ExactRuns4`, through bc-5a715b19's
-`Fp4Freeze.cTilde_dot`) and U's steps are on the K16 range, the served entry is within `peelBound4Exact`, U's own
-rounding, of `uQ4`. At `sm120Nvf4`, `hp` is `Fp4Freeze.sm120Nvf4_blockShape` and `hk` is `64 ∣ k`. -/
+/-- **(b) on exact runs**: where the entry's FP4 chains are exact runs (`ExactRuns4`, through `Fp4Freeze.cTilde_dot`)
+and U's steps are on the K16 range, the served entry is within `peelBound4Exact`, U's own rounding, of `uQ4`. At
+`sm120Nvf4`, `hp` is `Fp4Freeze.sm120Nvf4_blockShape` and `hk` is `64 ∣ k`. -/
 theorem peelFp4_err_exact (hp : Fp4Freeze.BlockShape p) (hk : p.k ∣ k) (i : Fin m) (j : Fin n) {v : ℚ}
     (hv : (peelFp4 p A B FA FB beA beB i j).bind wordQ = some v) (hX : ExactRuns4 p A B FA FB i j)
     (hU : URange4 p A B FA FB beA beB i j) :

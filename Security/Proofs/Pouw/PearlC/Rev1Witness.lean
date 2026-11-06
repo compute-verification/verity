@@ -1,7 +1,7 @@
 import Proofs.Pouw.PearlC.DeviceRev1Gamma
 
 /-!
-# rev1's H100 rows are satisfiable (the cheap-binding lane's file)
+# rev1's H100 rows are satisfiable
 
 Staged; nothing pinned. The pins proposed are `ttOutPearlCH100Rev1Witness`, `ttOutTilePearlCH100Rev1Witness` and
 `pearlCTilesDevRev1_total` (rev1's tiles cover each unit's words once, so `GγSampled`'s W is the layout's rev1 `W_ref`).

@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
-# The recursion bench's job (README.md): verity/ml/flock/pod/85-rec-reprice.sh's steps in order, as one research run, each
+# The recursion bench's job (README.md): verity/ml/flock/pod/85-rec-reprice.sh's steps in order, as one recorded run, each
 # invocation under its own RESEARCH_RUN_DIR ($OUT/steps/<step>/r<i>, so every record 85 writes is kept) and /usr/bin/time -v,
 # every CPU step REPEAT times and every GPU step once with its runs; then the result (run.py result) in
 # $OUT/recursion_e2e.json and $OUT/table.md. Run from the verity tree; `verity bench recursion_e2e run` prints and launches
 # it, a firewalled run (85's CPU prover, GPU=0) as a plain run on a CPU node:
-#   research run --on vy-nebius-cpu-2 --project verity --source . --cwd source --mem-gb 128 --timeout 327m -- \
+#   research run --on CPU_NODE --project verity --source . --cwd source --mem-gb 128 --timeout 327m -- \
 #     taskset -c 0-31 bash benchmarks/recursion_e2e/job.sh K=4096 N=2 GPU=0 FLOCK_WORK=/workspace/cache/rec-bench
-# and a GPU one as a GPU host job on vy-nebius-1's queue (85 leases a GPU around each prove itself).
+# and a GPU one as a GPU host job on a GPU node's queue (85 leases a GPU around each prove itself).
 # env: K=4096 N=2 (85's inner statement: N instances of GemmCoordinate_v2{K})
 #      STEPS=build,inner,icheck,vstage,vcap,oprove,oreplay,lean,forge-after,negative  REPEAT=3 (each CPU step; REPEAT_<STEP>=n one step's)
 #      WARM=1 RUNS=3 (the inner's runs)  OPROVE_WARM=0 OPROVE_RUNS=1 (each V* statement's releases)
 #      OPROVE_JOBS=1 (V* statements proved at once; 85's own default is 4)
-#      MODES=firewall (oprove's prover sides; the last one's releases are what oreplay and lean read)
+#      MODES=ZK server (oprove's prover sides; the last one's releases are what oreplay and lean read)
 #      GPU_MAX_MIN=75 (each prove's lease, minutes)  LEAN_JOBS=4 (Lean verifies this many V* releases at once)
-#      OPROVE_GPU=0 under MODES=firewall, else GPU (V*'s prover: 85's CPU prover, or the GPU one under a lease)
+#      OPROVE_GPU=0 under MODES=ZK server, else GPU (V*'s prover: 85's CPU prover, or the GPU one under a lease)
 #      NEG=challenge,query (negative: the inner coins of rep 0 flipped, each verified under every V* statement; empty: none)
 #      FORGE= (85's forgeries, staged by vstage and proved by oprove, comma separated: message,sum,comb,top,top-salt,coef,dirs;
 #      empty: none)  forge-after: coef, dirs and message made on the honest L0 and alg-p0 releases after proving
@@ -35,10 +35,10 @@ export K=${K:-4096} N=${N:-2}; export TAG=${TAG:-rb-${RESEARCH_RUN_ID:-$$}} WARM
 export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/rec-bench}; mkdir -p "$FLOCK_WORK" || { echo "cannot make $FLOCK_WORK" >&2; exit 1; }
 STEPS=${STEPS:-build,inner,icheck,vstage,vcap,oprove,oreplay,lean,negative}; REPEAT=${REPEAT:-3}; FORGE=${FORGE:-}
 MODES=${MODES:-firewall}; NEG=${NEG-challenge,query}; NEG=${NEG//,/ }
-# OPROVE_GPU=0 (the default under the firewall): V*'s statements proved by 85's CPU prover, no lease. A lease pool stops a
+# OPROVE_GPU=0 (the default under the ZK server): V*'s statements proved by 85's CPU prover, no lease. A lease pool stops a
 # lease whose GPU computes nothing for about 10 min, and a firewalled release's GPU waits on the Lean session loop for minutes
 [[ ,$MODES, == *,firewall,* ]] && OPROVE_GPU=${OPROVE_GPU:-0} || OPROVE_GPU=${OPROVE_GPU:-${GPU:-1}}
-# V*'s statements one at a time, as the firewall proves outer proofs: 85 proves 4 at once by default
+# V*'s statements one at a time, as the ZK server proves outer proofs: 85 proves 4 at once by default
 export OPROVE_JOBS=${OPROVE_JOBS:-1}
 PYTHONPATH=$REPO/tools/research/src python3 -m research keep "$FLOCK_WORK" --owner @benchmarks --expires 7d --priority low \
   --regenerate "bash benchmarks/recursion_e2e/job.sh K=$K N=$N" \
@@ -110,7 +110,7 @@ for s in ${STEPS//,/ }; do
     lean) for i in $(reps lean); do step lean $i INNER_LEAN=1 JOBS=${LEAN_JOBS:-4} NEG_INNER= || rc=1; done ;;
     # the lean step once more with rep 0's coins flipped (85's NEG_INNER): Lean must refuse each flipped coin
     negative) [ -z "$NEG" ] || step negative 1 STEP=lean INNER_LEAN=0 JOBS=${LEAN_JOBS:-4} "NEG_INNER=$NEG" || rc=1 ;;
-    # the forgeries the firewall stops before release, made on the honest releases after proving and put to Lean with the
+    # the forgeries the ZK server stops before release, made on the honest releases after proving and put to Lean with the
     # lean step's own flags (forge_after.py; out/forge-after.json)
     forge-after)
       lo=$O/steps/lean/r1/out; fv=$L/lean-$LSHA/flock-verify

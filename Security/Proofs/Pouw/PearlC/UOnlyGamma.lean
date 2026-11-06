@@ -4,7 +4,7 @@ import Definitions.Pouw.Guarantees.PearlC
 import Proofs.Pouw.PearlC.TTOutW1Variants
 
 /-!
-# TT_OUT over U alone: it asserts more than the (C̃, U) row, and γ from it (the TT_OUT restatements lane's file)
+# TT_OUT over U alone: it asserts more than the (C̃, U) row, and γ from it
 
 Staged; nothing pinned.
 * `correctSet_subset_correctSetU`: a unit correct under (C̃, U) binding is correct under U alone.

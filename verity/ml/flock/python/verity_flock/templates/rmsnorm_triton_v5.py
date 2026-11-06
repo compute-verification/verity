@@ -1,4 +1,4 @@
-"""C-Flock lowering of ``rmsnorm-triton-v5`` (RMSNormTriton_v5, ``registry.dead_free``: the registered compiler's
+"""Flock lowering of ``rmsnorm-triton-v5`` (RMSNormTriton_v5, ``registry.dead_free``: the registered compiler's
 ``RMSNormTriton_v1`` without its dead adds): ``rmsnorm-triton``'s lowering, byte for byte. v5 keeps lane 0's 31 adds of each warp's
 xor butterfly where v1 states all 160, but a lowering reads only the live gates (``ir_lower.live_gates``), so v1's lowering never
 held the other 129: the two graphs give the same warp units (a warp's 8-column square chains, lane 0's adds, whose sum is a cut

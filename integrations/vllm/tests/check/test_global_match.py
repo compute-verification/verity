@@ -428,7 +428,7 @@ def test_b2_unequal_requests_pass_globally(memory, tmp_path):
 
 @pytest.mark.slow
 def test_fast_path_releases_its_caches_when_the_outermost_check_returns(memory, tmp_path, monkeypatch):
-    """MATCH_IMPL=fast memoises per Prog / Projection for the duration of ONE check() -- including its
+    """MATCH_IMPL=fast memoises per RootView / Projection for the duration of ONE check() -- including its
     nested alternate-criterion run -- and holds nothing afterwards, so a process that checks several records does not grow by one
     record's caches per record.  The document is the checker of record's, field for field."""
     from verity_vllm.check.match import global_match_fast as GMF
@@ -477,24 +477,24 @@ def test_fast_path_passes_its_operations_and_rebinds_nothing(memory, tmp_path, m
     from verity_vllm.check.match import batch_decomp as BD
     from verity_vllm.check.match import program_compare as C
     from verity_vllm.check.match import global_match_fast as GMF
-    names = [(codec, "_spec_id"), (refs, "runs"), (C, "compare_steps"), (C, "_canonical_hash"), (C, "_canon_step_relative"),
+    names = [(codec, "descriptor_id"), (refs, "runs"), (C, "compare_steps"), (C, "_canonical_hash"), (C, "_canon_step_relative"),
              (C, "load_oracle"), (C, "load_derived"), (BD, "dag_hashes"), (BD, "live_cone"), (BD, "Projection")]
     before = [getattr(m, n) for m, n in names]
-    canon = C.Prog.__dict__["canon"]
+    canon = C.RootView.__dict__["canon"]
     gp, oracle = assemble([R0, R1_LATE], tmp_path)
     ref = gm.check(gp, oracle)
     monkeypatch.setenv(GMF.FLAG, "fast")
     monkeypatch.delenv(GMF.COMPACT_ENV, raising=False)
     loaded_fast: dict = {}
     fast = gm.check(gp, oracle, _loaded=loaded_fast)
-    assert all(getattr(m, n) is b for (m, n), b in zip(names, before)) and C.Prog.__dict__["canon"] is canon
+    assert all(getattr(m, n) is b for (m, n), b in zip(names, before)) and C.RootView.__dict__["canon"] is canon
     assert type(loaded_fast["oracle"]) is GMF.MemoProg and loaded_fast["oracle"].compact
     assert all(type(A) is GMF.MemoProg for A in loaded_fast["components"].values())
     monkeypatch.delenv(GMF.FLAG)
     loaded_rec: dict = {}
     again = gm.check(gp, oracle, _loaded=loaded_rec)
-    assert type(loaded_rec["oracle"]) is C.Prog and not loaded_rec["oracle"].compact
-    assert all(type(A) is C.Prog for A in loaded_rec["components"].values())
+    assert type(loaded_rec["oracle"]) is C.RootView and not loaded_rec["oracle"].compact
+    assert all(type(A) is C.RootView for A in loaded_rec["components"].values())
 
     def strip(o):
         if isinstance(o, dict):
@@ -557,7 +557,7 @@ def test_early_stop_without_an_eos_token_fails_g6_whatever_the_driver_says(memor
         res = gm.check(gp, oracle)
         assert res["verdict"] == "FAIL" and "G6" in res["failed_checks"], (finish, res["reasons"])
         g6 = _check(res, "G6")
-        assert any("on token 11, not a declared EOS id [99]" in p and "F-pm-24" in p for p in g6["problems"]), g6["problems"]
+        assert any("on token 11, not a declared EOS id [99]" in p and "an early stop without EOS is not modelled" in p for p in g6["problems"]), g6["problems"]
         r1 = next(e for e in res["requests"] if e["request_id"] == "r1")
         assert r1["eos_verified"] is False
         # the concurrency waiver is gone with it: observed max 2 (both requests live at step 0..1) vs programmed 2 here, so no
@@ -750,7 +750,7 @@ def test_tgrouped_emission_without_displacement_passes_both_criteria(memory, tmp
 
 def test_coscheduled_prefill_tgrouped_emission_fails_the_sequence_criterion_as_on_the_pod(memory, tmp_path):
     gp, oracle = assemble([R0, RX_LATE], tmp_path, tgrouped=True)
-    res = gm.check(gp, oracle, within_step="sequence")   # the r14-v1 criterion as the verdict of record (default is dag since M-0177)
+    res = gm.check(gp, oracle, within_step="sequence")   # the r14-v1 criterion as the verdict of record (the default is dag)
     assert res["verdict"] == "FAIL" and res["failed_checks"] == ["G3", "G7", "G8"], (res["failed_checks"], res["reasons"])
     assert res["within_step_criterion"] == "sequence"
     r1 = next(e for e in res["requests"] if e["request_id"] == "r1")
@@ -767,7 +767,7 @@ def test_coscheduled_prefill_tgrouped_emission_passes_the_dag_criterion_with_the
     gp, oracle = assemble([R0, RX_LATE], tmp_path, tgrouped=True)
     res = gm.check(gp, oracle, within_step="dag")
     assert res["verdict"] == "PASS", res["reasons"]
-    assert res["within_step_criterion"] == "dag" and "M-0177" in res["within_step_note"]
+    assert res["within_step_criterion"] == "dag" and "dag: criterion of record" in res["within_step_note"]
     r1 = next(e for e in res["requests"] if e["request_id"] == "r1")
     assert r1["executed_steps_equal"] and r1["criterion"].startswith("dag")
     assert r1["within_step"]["permuted_instances"] > 0 and r1["within_step"]["sequence_also_equal"] is False
@@ -1269,7 +1269,7 @@ def test_default_criterion_is_dag_and_the_sequence_verdict_is_kept_beside_it(mem
     x = res["x09"]
     assert x["verdict"] == "PASS" and x["within_step_criterion"] == "dag"
     xr1 = next(e for e in x["requests"] if e["request_id"] == "r1")
-    assert xr1["canonical_equal"] is True and xr1["sequence_equal"] is False and xr1["dag_multiset_equal"] is True and "M-0177" in xr1["criterion"]
+    assert xr1["canonical_equal"] is True and xr1["sequence_equal"] is False and xr1["dag_multiset_equal"] is True and "within-step criterion of record" in xr1["criterion"]
     # explicit sequence as the verdict of record keeps the dag verdict beside it; X-09 then fails the displaced request as in r14-v1
     res2 = gm.check(gp, oracle, within_step="sequence")
     assert res2["verdict"] == "FAIL" and res2["alternate_verdict"]["criterion"] == "dag" and res2["alternate_verdict"]["verdict"] == "PASS"
@@ -1609,7 +1609,7 @@ def test_g6_consumes_the_programs_declared_lag_and_the_record_must_attest_the_sa
     assert _check(res, "G6")["lag"]["agree"] is False and res["lag"]["record_attests"] == 0 and res["lag"]["declared"] == 1
     # the EOS-stopped request itself is not established under the disagreement: named per request, its EOS evidence not accepted
     assert any("r1: EOS stop at engine step 1 on a record whose attested scheduler (async_scheduling=False (RunHeader.profile.engine_kwargs)) is not the "
-               "Program's declared LAG 1: the 1 post-EOS row(s) are not accepted as the declared lag (R17-1)" in p for p in pr), pr
+               "Program's declared LAG 1: the 1 post-EOS row(s) are not accepted as the declared lag" in p for p in pr), pr
     assert _r(res, "r1")["eos_verified"] is False and "eos_lag_rows_accepted" not in _r(res, "r1")
     # ... and the reverse: a LAG-0 Program on a record attesting True (a lag-1 trace) fails by name too, with the lag row named as execution past EOS
     gpr, oracler = assemble([R0, R1_LAG], tmp_path / "lag0_program_on_lag1_record", lag=0)
@@ -1627,7 +1627,7 @@ def test_g6_consumes_the_programs_declared_lag_and_the_record_must_attest_the_sa
     assert res["verdict"] == "FAIL" and {"G1", "G6"} <= set(res["failed_checks"])
     pr = _check(res, "G6")["problems"]
     assert any("the Program is specialized for LAG 1" in p and "but the record does not attest async_scheduling (not attested; RunHeader.profile.engine_kwargs / "
-               "RunHeader.engine_kwargs / capture/versions.json)" in p and "refuse by name (R17-1)" in p for p in pr), pr
+               "RunHeader.engine_kwargs / capture/versions.json)" in p and "refuse by name" in p for p in pr), pr
     assert _check(res, "G6")["lag"]["record_attests"] is None and _check(res, "G6")["lag"]["declared"] == 1
     gp0, oracle0 = assemble([R0, R1_EOS], tmp_path / "lag0_unattested", lag=0)
     _set_async_scheduling(oracle0, None)
@@ -1697,9 +1697,9 @@ def test_g6_consumes_the_programs_declared_lag_and_the_record_must_attest_the_sa
     assert res8["verdict"] == "FAIL" and "G6" in res8["failed_checks"], res8["reasons"]
     pr8 = _check(res8, "G6")["problems"]
     assert any("r1: stopped on the declared EOS id 11 at engine step 1 with 1 more row(s) executed after it, but the Program declares no LAG "
-               "(Program declares no lag (pre-R17-1 Build); record attests async_scheduling=True (RunHeader.profile.engine_kwargs) (NOT used as the rule))"
+               "(Program declares no lag; record attests async_scheduling=True (RunHeader.profile.engine_kwargs) (NOT used as the rule))"
                in p and "nothing is inferred from the trace or read from the header as the rule" in p for p in pr8), pr8
-    assert _check(res8, "G6")["lag"]["declared"] is None and _check(res8, "G6")["lag"]["exercised"] is True and "pre-R17-1" in _check(res8, "G6")["lag"]["note"]
+    assert _check(res8, "G6")["lag"]["declared"] is None and _check(res8, "G6")["lag"]["exercised"] is True and "Program declares no lag" in _check(res8, "G6")["lag"]["note"]
     gp8b, oracle8b = assemble([R0, R1], tmp_path / "undeclared_caps", lag=None)      # every request to its cap
     res8b = gm.check(gp8b, oracle8b)
     assert res8b["verdict"] == "PASS", res8b["reasons"]
@@ -1724,11 +1724,11 @@ def test_g6_consumes_the_programs_declared_lag_and_the_record_must_attest_the_sa
     assert resv["verdict"] == "FAIL" and "G6" in resv["failed_checks"], resv["reasons"]
     prv = _check(resv, "G6")["problems"]
     assert any(p.startswith("VARIABLE LAG: the EOS-stopped requests of this record show different post-EOS row counts {'r1': 1, 'r2': 0} under one "
-                            "declared scheduler (Program LAG 1") and "never fold into a constant-lag model (R17-1)" in p for p in prv), prv
+                            "declared scheduler (Program LAG 1") and "never fold into a constant-lag model" in p for p in prv), prv
     assert any("r2: the Program's declared scheduler" in p and "a deleted step" in p for p in prv), prv
     assert resv["lag"]["variable_lag"] is True and resv["lag"]["lag_rows_observed"] == {"r1": 1, "r2": 0} and resv["lag"]["eos_stop_requests"] == ["r1", "r2"]
     assert resv["alerts"] == [{"kind": "variable_lag", "check": "G6", "lag_rows_observed": {"r1": 1, "r2": 0}, "declared": 1, "record_attests": 1,
-                               "action": "ALERT + DECISIONS-PENDING entry (R17-1)"}]
+                               "action": "ALERT"}]
     assert _r(resv, "r1")["executed_prefix_len"] == 3 and _r(resv, "r2")["executed_prefix_len"] == 2 and _r(resv, "r2")["served_output_len"] == 2
 
     # A LENGTH stop runs no post-cap row under any LAG -- REQUIRED from the trace: r1 = [8, 5, 77] executed against cap 2
@@ -1879,8 +1879,8 @@ def test_sampler_geometry_check_holds_every_launch_to_the_registered_s_whatever_
 
 class _OperandFold:
     """Every select is `GumbelTopPTokenSelect_v1{V}` (no S static) and the fold carries ONE `Const32[S]` instance
-    right before it, read as the 6th operand by exactly one run ("n", kc, 0, 1) -- the shape compare.Prog._bind_splits binds; here UNBOUND
-    (no splits_values), the way a Prog-shaped reader without compare's binding sees it."""
+    right before it, read as the 6th operand by exactly one run ("n", kc, 0, 1) -- the shape compare.RootView._bind_splits binds; here UNBOUND
+    (no splits_values), the way a RootView-shaped reader without compare's binding sees it."""
 
     def __init__(self, selects):   # selects: list of (S value | None for a non-Const operand, 6th-operand override or None)
         self.inst, self.k2i, self.splits_values = [], {}, {}
@@ -2119,7 +2119,7 @@ def test_a_record_without_tokens_json_fails_g6_by_name_unless_tokens_optional_is
     res = gm.check(gp, oracle)
     assert res["verdict"] == "FAIL" and res["failed_checks"] == ["G6"], res["reasons"]
     pr = _check(res, "G6")["problems"]
-    assert any("the record has no capture/tokens.json: the output-association legs" in p and "--tokens-optional" in p and "(F-r17-01)" in p for p in pr), pr
+    assert any("the record has no capture/tokens.json: the output-association legs" in p and "--tokens-optional" in p for p in pr), pr
     assert _check(res, "G6")["tokens_json"] is False
     # the same record accepted when asked for, and the label stays on the check
     acc = gm.check(gp, oracle, tokens_optional=True)
@@ -2254,7 +2254,7 @@ def test_fast_dag_hash_interning_induces_exactly_the_records_merkle_partition(me
 
     def spy(P, only=None):
         mine = intern(P, only)
-        rec = BD.dag_hashes(P, only)                # the checker of record's function on the same Prog / cone
+        rec = BD.dag_hashes(P, only)                # the checker of record's function on the same RootView / cone
         assert set(mine) == set(rec)
         for i, hid in mine.items():
             assert rec_of_id.setdefault(hid, rec[i]) == rec[i], ("two digests share an id", i, P.label)
@@ -2291,11 +2291,11 @@ def test_fast_dag_hash_progression_memo_does_not_carry_a_forward_ref_marker_to_a
     from verity_vllm.check.match import batch_decomp as BD
     from verity_vllm.check.match import global_match_fast as GMF
     if "compact" not in inspect.getsource(BD.dag_hashes):
-        pytest.skip("the compact (progression-form) operand is mfast's tree; here no Prog is compact and the memo branch is not reached")
+        pytest.skip("the compact (progression-form) operand is mfast's tree; here no RootView is compact and the memo branch is not reached")
 
     class FakeProg:
         compact = True
-        label = "F-r17-10"
+        label = "fake-compact"
 
         def __init__(self):
             self.steps = [[0, 1, 2, 3, 4]]           # node order: [A consumer (forward refs), P1, P2, B consumer, C consumer]

@@ -1,10 +1,10 @@
-"""The sampling plan for the end-to-end demo's transformer under C-Flock (PRF-166): CMP-92's decoder block, small (the
-CPU reference) or scaled onto one RTX PRO 6000 (compute-accounting's Phase 2 model), every operation a proof block.
+"""The sampling plan for the end-to-end demo's transformer under Flock: the demo's decoder block, small (the CPU
+reference) or scaled onto one RTX PRO 6000 (the Phase 2 model), every operation a proof block.
 
 The Definition DAG is one server-time block of serving: `requests` requests of `context` positions each (`prompt` given,
 the rest generated greedily, the last one never fed back, so `positions` = context - 1 run), through `layers` pre-norm
 blocks of width `width` (`heads` heads of 64, an MLP of `mlp` with ReLU), learned absolute positions, a byte vocabulary
-and a W8A8 output head. Every op is a unit of one request's (`cuts` puts every subcircuit in the `request` replay domain),
+and a W8A8 output head. Every op is a unit of one request's (`cuts` puts every subcircuit in the `request` replay grain),
 and its units, from the finest up:
 
 - the static matmuls (QKV, the output projection, MLP up and down, the head): `ScaledMmS8Coordinate_v1{K}` on sm_120's
@@ -16,22 +16,22 @@ and its units, from the finest up:
   request's head (`stub:QkHead`, `stub:PvHead`); every row padded to `context` keys (masked keys read as zero), so
   every position has one shape, as the GPU loop runs it;
 - the residual and position adds: `Bf16Add_v1`, a coordinate or a row (`stub:Bf16AddRow`);
-- RMSNorm, the per-row s8 quantizer, softmax, ReLU, the embedding's select and argmax: CIR-100's Definitions, not on
-  main yet, so stubs here (every id `stub:`), each one's ANDs composed from pinned pieces. A row op is a unit whole
+- RMSNorm, the per-row s8 quantizer, softmax, ReLU, the embedding's select and argmax: Definitions not on main
+  yet, so stubs here (every id `stub:`), each one's ANDs composed from pinned pieces. A row op is a unit whole
   when its outputs fit a size class, or commits its row statistic as a unit of its own (`shared`: RMSNorm's 1/rms, the
   quantizer's scale, softmax's max and sum) read by coordinate units or chunks (`chunked`: the quantizer at N > 16,384,
   whose whole row of N/2 code pairs and its scale is over `UNIT_CLASS_MAX`), or recomputes it in each reader
   (`recomputed`); ReLU is a coordinate or a chunk of at most 16,384. The planner chooses (`candidates.cuts`).
 
-The harm is faulty ANDs: each unit is credited its ANDs (a recomputed statistic once, in the op it belongs to), so a
-plan's certificate means the same whatever the cut, where a count of faulty proof blocks falls as the cut coarsens; the
-faulty proof blocks (`IntegrityPeriod`'s W) are reported beside it. The cost is C-Flock's, fitted from its zero-knowledge
+The harm is incorrect ANDs: each unit is credited its ANDs (a recomputed statistic once, in the op it belongs to), so a
+plan's certificate means the same whatever the cut, where a count of incorrect proof blocks falls as the cut coarsens; the
+incorrect proof blocks (`IntegrityPeriod`'s W) are reported beside it. The cost is Flock's, fitted from its zero-knowledge
 sessions on sm_120 (`inputs.observations`, `costfit`), in GPU-seconds of an RTX PRO 6000, with every serve-time
 commitment of the block: every unit's outputs, the requests' bytes, the carried KV cache at the block's close, PoUW's
 CP-W receipts (h1, assumed) and the bandwidth audit's receipts (`serve`), and the replay of each drawn request
 (`Serving.replay`). A plan is a stratified law, k units of each subcircuit; the chosen one is the cheapest certifying at
-most `TARGET_SHARE` of the block's ANDs wrong. `recertify` recomputes its certificate from the sizes alone through
-core's `Stratified.harm_bound` and `count_bound`, and `pooled` bounds the faulty proof blocks over a monitoring period of many
+most `TARGET_SHARE` of the block's ANDs incorrect. `recertify` recomputes its certificate from the sizes alone through
+core's `Stratified.harm_bound` and `count_bound`, and `pooled` bounds the incorrect proof blocks over a monitoring period of many
 blocks. `handoff` is the plan as the GPU loop registers it: one `IntegrityPeriod` window a subcircuit, or the block as one
 window under the `work:1` law.
 
@@ -43,6 +43,7 @@ import argparse
 import json
 import sys
 from dataclasses import asdict, dataclass, replace
+from fractions import Fraction
 from math import ceil, log, log2
 from pathlib import Path
 
@@ -50,32 +51,34 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from inputs import I, KEY, observations  # noqa: E402
 
+from verity.core.protocols.pous import wipe_monitoring
 from verity.core.protocols.profile import Stratified, Stratum  # noqa: E402
 from verity.core.protocols.sampled_proofs.candidates import Shape, cuts, shape_of  # noqa: E402
 from verity.core.protocols.sampled_proofs.costfit import Fitted, fit  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage.draw import work_k, work_table  # noqa: E402
 from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
-                                                           Plan, ReplayDomain, certify, density_bound, for_target,
-                                                           frontier, row_ands)
+                                                           Plan, ReplayGrain, certify, density_bound, for_target,
+                                                           frontier, ln_upper, row_ands)
 from verity.ml.circuits.codec import descriptor_id  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.ml.circuits.ops import fp32 as F, gemm as G, prims as P  # noqa: E402
 
-DELTAS = (1e-2, 1e-6)
-#: the server-time block, assumed: compute-accounting's Phase 2 default, 20 minutes, which a `gpu-lease`'s 30-minute
-#: ceiling sets (note:compute-accounting/20261025T2215Z-draft-allp-gpu §4); no wipe has been timed, and the census has
-#: no block length
+#: core's reporting deltas (`wipe_monitoring`), as floats
+DELTAS = tuple(map(float, wipe_monitoring.DELTAS))
+#: the server-time block, assumed: the Phase 2 default, 20 minutes, which a `gpu-lease`'s 30-minute ceiling sets; no
+#: wipe has been timed, and the census has no block length
 BLOCK_S = 1200
-#: the datacenter, assumed (#4358's table took the same): the census has no datacenter size
+#: the datacenter, assumed: the census has no datacenter size
 SERVERS = 10_000
-PERIODS = {"week": 7 * 86400, "month": 30 * 86400, "year": 365 * 86400}
-#: the target, a share of the block's ANDs certified at most wrong: a share of the work scales with the model where a
+#: core's monitoring periods (`wipe_monitoring`), seconds by name
+PERIODS = dict(wipe_monitoring.PERIODS)
+#: the target, a share of the block's ANDs certified at most incorrect: a share of the work scales with the model where a
 #: count of units does not (a coarser cut has fewer units); 1e-3 is the small model's knee (halving it costs about 8%
 #: more, each halving past it over 10%), held fixed for every size
 TARGET_SHARE = 1e-3
-#: F32Rint_v1's ANDs from #2487 (not on main), the quantizer's round half to even
+#: F32Rint_v1's ANDs (a Definition not on main), the quantizer's round half to even
 F32_RINT = 275
-#: the widest ReLU chunk and quantizer code chunk circuits plans (note:compute-accounting/20261025T2215Z-draft-allp-gpu §4)
+#: the widest ReLU chunk and quantizer code chunk the Phase 2 model plans
 CHUNK = 16_384
 #: output channels a static-matmul tile spans
 TILE_COLS = 32
@@ -91,7 +94,7 @@ def pieces() -> dict[str, int]:
 
 @dataclass(frozen=True)
 class Model:
-    """CMP-92's block at a size, and one server-time block's serving: `requests` requests of `context` positions, the
+    """The demo's block at a size, and one server-time block's serving: `requests` requests of `context` positions, the
     first `prompt` given, `sequences` of them live at once (staggered, so the KV cache's occupancy is constant);
     `inflight` carry their KV cache across the block's close."""
 
@@ -148,7 +151,7 @@ class Model:
     @property
     def kv_resident(self) -> int:
         """The KV cache held while serving: `sequences` staggered over the positions, so on average each holds half
-        (compute-accounting's 16,368 entries a layer at 1,023 sequences)."""
+        (the Phase 2 model's 16,368 entries a layer at 1,023 sequences)."""
         return self.sequences * ((self.positions + 1) // 2) * self.kv_bytes
 
 
@@ -367,22 +370,22 @@ def serve(m: Model, s: Serving) -> tuple[Commitment, ...]:
 
 
 def costs(m: Model, s: Serving) -> CostModel:
-    """C-Flock's fitted model (int8_llama's fit) with the commitment rate, the block's serve-time commitments and the
-    `request` replay domain."""
+    """Flock's fitted model (int8_llama's fit) with the commitment rate, the block's serve-time commitments and the
+    `request` replay grain."""
     obs = observations()
     fitted = Fitted(fit(obs, "prove", ["one", "ands", "ands*staged", "ands*drawn"]),
                     fit(obs, "verify", ["one", "ands", "ands*staged", "ands*drawn"]),
                     fit(obs, "stage", ["one", "ands", "ands*staged"]), I["cpu"].value, KEY)
     return replace(fitted.model(), commit_per_bit=I["commit_per_byte"].value / 8, serve=serve(m, s),
-                   replay={"request": ReplayDomain(m.requests, s.replay)})
+                   replay={"request": ReplayGrain(m.requests, s.replay)})
 
 
 def candidates(dag: Dag, cm: CostModel, objective: Objective, grid: int = 21) -> tuple[list[Candidate], dict]:
-    """`candidates.cuts` on each op, every subcircuit in the `request` replay domain: its alternatives, each its units
+    """`candidates.cuts` on each op, every subcircuit in the `request` replay grain: its alternatives, each its units
     by Definition."""
     out, alts = [], {}
     for op, (root, n) in dag.ops.items():
-        cs, a, _ = cuts(op, root, n, cm, objective, grid=grid, replay=("request", dag.m.requests))
+        cs, a, _ = cuts(op, root, n, cm, objective, grid=grid, grain=("request", dag.m.requests))
         out += cs
         alts[op] = {label: [list(u) for u in units] for label, units in a.items()}
     return out, alts
@@ -400,7 +403,7 @@ def plans(m: Model, s: Serving, delta: float = DELTAS[0], *, grid: int = 61, cut
 
 def chosen(cands: list[Candidate], cm: CostModel, objective: Objective, front: list[Plan],
            target: float) -> Plan | None:
-    """The cheapest plan certifying at most `target` faulty ANDs (`for_target` on the frontier)."""
+    """The cheapest plan certifying at most `target` incorrect ANDs (`for_target` on the frontier)."""
     return for_target(cands, cm, objective, target, plans=front, exact=False)
 
 
@@ -411,7 +414,7 @@ def law(plan: Plan, cands: list[Candidate]) -> Stratified:
 
 
 def recertify(plan: Plan, cands: list[Candidate], delta: float, *, exact_count: bool = True) -> dict:
-    """The plan's certificate from its sizes alone: faulty ANDs (each unit's credited work) and faulty proof blocks by core's
+    """The plan's certificate from its sizes alone: incorrect ANDs (each unit's credited work) and incorrect proof blocks by core's
     `Stratified.harm_bound` (and units by `count_bound`, exact, when `exact_count`), and the optimizer's own `certify`
     and `density_bound` of the ANDs."""
     chosen_ = [c for c in cands if c.template in plan.sizes]
@@ -426,24 +429,25 @@ def recertify(plan: Plan, cands: list[Candidate], delta: float, *, exact_count: 
 
 
 def pooled(plan: Plan, cands: list[Candidate], delta: float, blocks: float, *, ands: bool = False) -> float:
-    """Faulty proof blocks (or their ANDs) over `blocks` blocks, each drawn by the plan's law on its own live coins and all
-    accepted, except with probability `delta`: a set of x_{b,s} faulty proof blocks escapes with at most
+    """Incorrect proof blocks (or their ANDs) over `blocks` blocks, each sampled by the plan's law on its own live coins and all
+    accepted, except with probability `delta`: a set of x_{b,s} incorrect proof blocks escapes with at most
     prod exp(-k_s x_{b,s} / n_s), never once x_{b,s} > n_s - k_s, so the total is the knapsack `density_bound` over
     `blocks` copies of each stratum, which the period's length doesn't move (each stratum's rate k_s / n_s is a
-    block's).  This relaxation is the optimizer's, not a Lean guarantee; `IntegrityHorizon` (#4358) proves the
+    block's).  This relaxation is the optimizer's, not a Lean guarantee; `IntegrityHorizon` proves the
     uniform case, ln(1/delta) / q (`horizon`)."""
     return density_bound(((c.units * blocks, plan.sizes[c.template] * blocks, float(c.work) if ands else 1.0)
                           for c in cands if c.template in plan.sizes), delta)
 
 
 def horizon(plan: Plan, cands: list[Candidate], delta: float) -> float:
-    """`IntegrityHorizon`'s bound on the faulty proof blocks over any number of windows, each a subcircuit's window of a block
-    (`windows`): ln(1/delta) / q at q the least share k_s / n_s any window draws."""
-    return log(1 / delta) / min(plan.sizes[c.template] / c.units for c in cands if c.template in plan.sizes)
+    """`IntegrityHorizon`'s bound on the incorrect proof blocks over any number of windows, each a subcircuit's window of a block
+    (`windows`): ln(1/delta) / q at q the least share k_s / n_s any window draws, ln(1/delta) the planner's `ln_upper`."""
+    return float(ln_upper(delta) / min(Fraction(plan.sizes[c.template], c.units) for c in cands
+                                       if c.template in plan.sizes))
 
 
 def monitoring(plan: Plan, cands: list[Candidate], s: Serving, *, servers: int = SERVERS) -> list[dict]:
-    """Per monitoring period (one server, and `servers` of them), at each delta: the pooled bound on faulty proof blocks and
+    """Per monitoring period (one server, and `servers` of them), at each delta: the pooled bound on incorrect proof blocks and
     their ANDs, and beside it each block's own at delta / blocks, so the period's total error is delta."""
     rows = []
     for fleet, count in (("1 server", 1), (f"{servers:,} servers", servers)):
@@ -458,19 +462,19 @@ def monitoring(plan: Plan, cands: list[Candidate], s: Serving, *, servers: int =
 
 def handoff(plan: Plan, cands: list[Candidate], dag: Dag) -> dict:
     """The plan as a GPU loop registers it (a `circuit_record(..., law, cap)`), each subcircuit
-    a Definition's descriptor id (a stub's id until CIR-100 lands) with its units:
+    a Definition's descriptor id (a stub's id until its Definition lands) with its units:
 
-    * `windows`, the form `IntegrityPeriod` (#4358) reads: one window a subcircuit, its units under `subset:k_s` in
+    * `windows`, the form `IntegrityPeriod` reads: one window a subcircuit, its units under `subset:k_s` in
       members of its statement size (the loop's `--law` and `--cap`), and at each delta its `K0`, `IntegrityPeriodLog`'s
-      ln(1/delta_w)/q at delta_w = delta over the block's windows and q = k/n (or n - k + 1, which no draw misses), so
-      outside delta every window has fewer than its K0 units wrong;
+      ln(1/delta_w)/q at delta_w = delta over the block's windows and q = k/n (or n - k + 1, which no sample misses), so
+      outside delta every window has fewer than its K0 units incorrect;
     * `record`, the block as one window: every subcircuit under the `work:1` law whose work table's floors are the plan's
       k, which `draw.derive` expands to exactly those k (`work_k`). It needs one `cap` for every subcircuit, so it carries
       the least statement size; `IntegrityPeriod` covers only a uniform subset, not this law.
 
     The planner's strata are its ops' subcircuits, so two ops cut to one Definition (attention's QK and PV matmuls both to
     `F2fpBf16_v1`, say) are two of its strata and one of the record's: merged, at the higher of their rates, which only
-    raises each one's draw. A merged subcircuit's units are credited one work, as the work law needs."""
+    raises each one's sample. A merged subcircuit's units are credited one work, as the work law needs."""
     groups: dict[str, list[Candidate]] = {}
     for c in cands:
         if c.template in plan.sizes:
@@ -500,7 +504,7 @@ def summary(plan: Plan, cands: list[Candidate], dag: Dag) -> dict:
     rows = [{"template": dag.template_id(c), "op": c.op, "units": c.units, "k": plan.sizes[c.template],
              "statement": plan.statement_size[c.template], "work": c.work,
              "ands": c.ands + sum(row_ands(r) for r in c.rows)} for c in cands if c.template in plan.sizes]
-    return {"cost": dict(plan.cost), "faulty": plan.certificate.harm if plan.certificate else None,
+    return {"cost": dict(plan.cost), "incorrect": plan.certificate.harm if plan.certificate else None,
             "units": sum(v["units"] for v in rows), "drawn": sum(v["k"] for v in rows),
             "templates": rows, "choice": dict(plan.choice), "floor_only": sorted(plan.floor_only),
             "full": sorted(plan.full)}
@@ -512,7 +516,7 @@ def budget(front: list[Plan], gpu_s: float) -> Plan | None:
 
 
 SMALL = Model()
-#: compute-accounting's Phase 2 model (note:compute-accounting/20261025T2215Z-draft-allp-gpu §1): CMP-92's block at
+#: the Phase 2 model: the demo's block at
 #: width 8,192, 70 layers, 1,023 sequences staggered; 52.5 GiB of INT8 linears and 35.0 GiB of KV, 91% of 96 GiB
 LARGE_SEQUENCES = 1023
 #: its decode step, estimated by their sizing script, not measured: the INT8 GEMMs at 85% of peak (86% of the step)
@@ -536,7 +540,7 @@ def main(argv=None) -> None:
     ap.add_argument("--replay", type=float, help="GPU-s to replay one drawn request (large: LARGE_REPLAY_S)")
     ap.add_argument("--delta", type=float, default=DELTAS[0])
     ap.add_argument("--share", type=float, default=TARGET_SHARE,
-                    help="the share of the block's ANDs the chosen plan certifies at most wrong")
+                    help="the share of the block's ANDs the chosen plan certifies at most incorrect")
     ap.add_argument("--grid", type=int, default=61)
     args = ap.parse_args(argv)
     large = args.model == "large"
@@ -552,12 +556,12 @@ def main(argv=None) -> None:
     b = budget(front, s.block_s)
     out = {"model": asdict(m), "serving": asdict(s), "delta": args.delta, "target": target, "share": args.share,
            "work": dag.work, "units_dense": dag.units_dense, "parameters": parameters(m, s, args.share),
-           "budget": None if b is None else {"cost": b.cost["total"], "faulty": b.certificate.harm},
+           "budget": None if b is None else {"cost": b.cost["total"], "incorrect": b.certificate.harm},
            "serve": [asdict(c) for c in cm.serve], "serve_cost": cm.serve_cost(),
            "rates": {"statement_fixed": cm.statement_fixed, "statement_per_and": cm.statement_per_and,
                      "staged_per_and": cm.staged_per_and, "per_and": cm.per_and, "commit_per_bit": cm.commit_per_bit},
            "alternatives": alts,
-           "frontier": [{"cost": p.cost["total"], "faulty": p.certificate.harm, "drawn": sum(p.sizes.values()),
+           "frontier": [{"cost": p.cost["total"], "incorrect": p.certificate.harm, "drawn": sum(p.sizes.values()),
                          "choice": dict(p.choice), "floor_only": sorted(p.floor_only)} for p in front]}
     if plan is not None:
         out["chosen"] = summary(plan, cands, dag)
@@ -575,46 +579,46 @@ def parameters(m: Model, s: Serving, share: float) -> list[list[str]]:
     tok = None if s.step_s is None else m.sequences / s.step_s
     return [
         ["shape", f"L {m.layers}, d {m.width}, {m.heads} heads of {m.head_dim}, MLP {m.mlp}, V {m.vocab}, "
-                  f"C {m.context} ({m.positions} run, {m.prompt} prompt)", "CMP-92; large: compute-accounting's"],
+                  f"C {m.context} ({m.positions} run, {m.prompt} prompt)", "the demo's block; large: the Phase 2 model's"],
         ["memory", f"{m.weight_bytes / 2**30:.4g} GiB weights + {m.kv_resident / 2**30:.4g} GiB KV",
          "derived from the shape and `sequences`"],
-        ["sequences live", f"{m.sequences:,}", "large: compute-accounting's"],
+        ["sequences live", f"{m.sequences:,}", "large: the Phase 2 model's"],
         ["step", "-" if s.step_s is None else f"{s.step_s * 1e3:.0f} ms, {tok:,.0f} tokens/s",
-         "large: compute-accounting's estimate (a sizing script, not measured)"],
+         "large: the Phase 2 model's estimate (a sizing script, not measured)"],
         ["block", f"{s.block_s:.0f} s, {m.requests:,} requests",
-         "assumed (`BLOCK_S`)" + ("; requests from the step" if s.step_s is not None else "; requests CMP-92's")],
+         "assumed (`BLOCK_S`)" + ("; requests from the step" if s.step_s is not None else "; requests the demo's")],
         ["datacenter", f"{SERVERS:,} servers", "assumed (`SERVERS`); not in benchmarks/census"],
-        ["replay", f"{s.replay:g} GPU-s a drawn request", "large: compute-accounting's estimate"],
+        ["replay", f"{s.replay:g} GPU-s a drawn request", "large: the Phase 2 model's estimate"],
         ["serve-time commitments", "units' outputs, request bytes, KV carry, PoUW h1 receipts, bandwidth receipts",
          "h1 assumed; commitment rate `inputs.commit_per_byte`"],
         ["cost model", "C-Flock zk sessions of ScaledMmS8Coordinate at K = 4096, 14336 on sm_120",
          "`inputs.observations`; extrapolated past them"],
-        ["target", f"{share:g} of the block's ANDs wrong at most",
+        ["target", f"{share:g} of the block's ANDs incorrect at most",
          "`TARGET_SHARE`: the small model's knee, held fixed" if share == TARGET_SHARE else "given (`--share`)"],
     ]
 
 
 def render(out: dict) -> str:
     m = out["model"]
-    lines = [f"# CMP-92 block, {m['layers']} layers x {m['width']} ({m['heads']} heads, MLP {m['mlp']}), "
+    lines = [f"# Demo block, {m['layers']} layers x {m['width']} ({m['heads']} heads, MLP {m['mlp']}), "
              f"{m['requests']:,} requests a block: the sampling plan at delta {out['delta']:g}", "",
              "| parameter | value | source |", "|---|---|---|"]
     lines += [f"| {a} | {b} | {c} |" for a, b, c in out["parameters"]]
     lines += ["", f"a block: {out['work']:.4g} ANDs, {out['units_dense']:,} units in the finest form; serve-time "
-              f"commitments {out['serve_cost']:.3g} GPU-s", "", "| expected cost (GPU-s) | certified faulty ANDs | "
+              f"commitments {out['serve_cost']:.3g} GPU-s", "", "| expected cost (GPU-s) | certified incorrect ANDs | "
               "share of the block's | drawn | floor-only templates |", "|---|---|---|---|---|"]
     for f in out["frontier"]:
-        lines.append(f"| {f['cost']:.4g} | {f['faulty']:.4g} | {f['faulty'] / out['work']:.3g} | {f['drawn']:,} | "
+        lines.append(f"| {f['cost']:.4g} | {f['incorrect']:.4g} | {f['incorrect'] / out['work']:.3g} | {f['drawn']:,} | "
                      f"{len(f['floor_only'])} |")
     b = out["budget"]
     lines += ["", f"the block's own GPU time, {out['serving']['block_s']:g} GPU-s, buys "
-              + ("no plan" if b is None else f"at most {b['faulty'] / out['work']:.3g} of its ANDs wrong ({b['cost']:.4g} "
+              + ("no plan" if b is None else f"at most {b['incorrect'] / out['work']:.3g} of its ANDs incorrect ({b['cost']:.4g} "
                  f"GPU-s)")]
     c = out.get("chosen")
     if c is None:
-        lines += ["", f"no plan certifies {out['target']:.4g} faulty ANDs"]
+        lines += ["", f"no plan certifies {out['target']:.4g} incorrect ANDs"]
         return "\n".join(lines)
-    lines += ["", f"chosen (at most {out['share']:g} of the block's ANDs wrong, {out['target']:.4g}): cost "
+    lines += ["", f"chosen (at most {out['share']:g} of the block's ANDs incorrect, {out['target']:.4g}): cost "
               f"{c['cost']['total']:.4g} GPU-s a block "
               f"({', '.join(f'{k} {v:.3g}' for k, v in c['cost'].items() if k != 'total')}), {c['drawn']:,} drawn of "
               f"{c['units']:,} units", "", "| template | op | units | k | statement | ANDs a unit | proved, rows opened |",
@@ -623,7 +627,7 @@ def render(out: dict) -> str:
         lines.append(f"| {v['template']} | {v['op'].split('{')[0]} | {v['units']:,} | {v['k']:,} | {v['statement']:,} | "
                      f"{v['work']:,} | {v['ands']:,} |")
     lines += ["", "a block, recertified from the sizes (`Stratified.harm_bound`; `count_bound` exact, small model only):", "",
-              "| delta | faulty ANDs | share | faulty proof blocks | count_bound | certify (ANDs) |", "|---|---|---|---|---|---|"]
+              "| delta | incorrect ANDs | share | incorrect proof blocks | count_bound | certify (ANDs) |", "|---|---|---|---|---|---|"]
     for r in out["recertified"]:
         lines.append(f"| {r['delta']:g} | {r['ands']:.4g} | {r['ands'] / out['work']:.3g} | {r['units']:.4g} | "
                      f"{r.get('count_bound', '-')} | {r['certify']:.4g} |")

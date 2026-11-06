@@ -14,8 +14,7 @@ steps, one word each, read the coins the verifier holds of a round word by word,
 `holoForms_sparse_none`: `holoSelWords`' last conjunct at a sparse phase's round, where the model's rep forms are the
 verifier's (`repFormsAt`, `repForms`): past both reps' rounds (`heldBefore_rep_forms`) the round's history rounds are
 inside the phase's `sparseForms`, every one `none`. `repFormsAt_holoAt` is `hA` where the inner statement's class
-checks pass and the inner shape is the statement's (`checkInnerStmt`), at its claims `2 · regions + 2` (`hcl`), which V*'s
-list gives (`shape_of_statements`).
+checks pass and the inner shape is the statement's (`checkInnerStmt`), at its claims `2 · regions + 2` (`hcl`).
 -/
 
 namespace FlockC3.Reps

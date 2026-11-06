@@ -12,7 +12,7 @@ sets up at `count > 1` (`accepts_tables`), with dec-zl's one-table decoder run o
 * `partJson d count j`: part `j` of the draw `d`'s units, the subset draw `partDraw` that `Stmt.setupTables` sets table
   `j` up at.
 * `SetupJ I mPts j d`: under table `j`'s tags (`tagsAt`), setupH accepts the draw `d`, at a `fast100` schedule of at
-  least two levels and `mPts` link points. `SetupJ.spec` is its table, built as #828's `DrawSetup.specAt` builds one.
+  least two levels and `mPts` link points. `SetupJ.spec` is its table, built as `DrawSetup.specAt` builds one.
 * `tableJ`, `planJ`: table `j` at the draw's JSON is `SetupJ.spec` at part `j` where flock-verify sets that part up, and
   the fallback `T₀` elsewhere; the plan has `I.count` tables.
 * `decJ`, `opnJ`: table `j`'s decoder (`wZL ++ (wOP ++ wLIG)` at its dimensions, claims and schedule) and openings
@@ -62,7 +62,7 @@ structure SetupJ (j : ℕ) (d : Json) where
 variable {I mPts} (ht : I.tags.typed = false)
 
 /-- **A set-up table's table**: setupH's level-0 matrices and pin at the statement's regions (`Layout.model`), its
-schedule, and the link layout at `PT_LOCAL`, as #828's `DrawSetup.specAt` at `regionsOf`. -/
+schedule, and the link layout at `PT_LOCAL`, as `DrawSetup.specAt` at `regionsOf`. -/
 noncomputable def SetupJ.spec {j : ℕ} {d : Json} (x : SetupJ I mPts j d) : TabSpec mPts where
   S := (setupH_layout ((tagsAt_typed I.tags I.count j).trans ht) x.h).model (regionsOf x.st)
   m := x.m

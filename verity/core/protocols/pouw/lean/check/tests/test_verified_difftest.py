@@ -1,8 +1,9 @@
 """The Lean verifier of record of a served window's statements (`PouwCheck.Verified`, `pouw-check-difftest`'s
 ``credit-verified``) held to its Python reference, `credit._asks` and `credit._verified`, on `pouw_verified_cases`:
 with `runs` null, the verifier runs the Lean names (or the verdict, when it names none); with the answers, the verdict,
-each drawn unit's outcome or the refusal, string for string. `credit.window` and `credit.period_credit` take their
-outcomes from the Lean (`credit._lean_verified`), so here the Lean is of record."""
+each sampled proof block's outcome or the refusal, string for string, the lanes form's (`PouwCheck.Lanes`) among them.
+`credit.window` and `credit.period_credit` take their outcomes from the Lean (`credit._lean_verified`), so here the Lean
+is of record."""
 from __future__ import annotations
 
 import random
@@ -38,13 +39,14 @@ def verified(case: dict) -> dict:
         args = (case["statements"], case["files"], raw, lay, case["entries"], case["window"], case["units"],
                 case["steps"])
         if case["runs"] is None:
-            asks, refused = Cr._asks(*args, case["salt"])
+            asks, refused = Cr._asks(*args, case["salt"], case["draw"])
             if asks:
                 VERIFIED["run"] += 1
                 return {"run": asks}
         else:
-            got, refused = Cr._verified(*args, cases.replay(case["runs"]), case["salt"])
-    VERIFIED[f"{refused[0]}: {_template(refused[1])}" if refused else "accept"] += 1
+            got, refused = Cr._verified(*args, cases.replay(case["runs"]), case["salt"], case["draw"])
+    lanes = isinstance(case["statements"], dict)
+    VERIFIED[f"{refused[0]}: {_template(refused[1])}" if refused else "lanes: accept" if lanes else "accept"] += 1
     return {"refused": list(refused)} if refused is not None else {"outcomes": got}
 
 
@@ -56,22 +58,36 @@ server = D.server_fixture(VERIFIED_PORT)
 
 
 def test_verified(server):
-    """Generated windows' statements, null and answered, then each mutation over a few seeds (`replay`), so every
-    refusal before the verifier runs and of its answers is reached whatever the draw."""
+    """Generated windows' statements, null and answered, then each mutation over a few seeds (`replay`; ten for a
+    lanes mutation, which picks among more variants), so every refusal before the verifier runs and of its answers is
+    reached whatever the sample."""
     VERIFIED.clear()
     stats = D.run(VERIFIED_PORT, examples=300, server=server)
     swept = Counter(D.replay(VERIFIED_PORT, cases.verified_instance(random.Random(f"{name}/{seed}"), name), server)[0]
-                    for name in ["honest", *cases.NAMES] for seed in range(4))
+                    for name in ["honest", *cases.NAMES] for seed in range(10 if name in cases.LANES_NAMES else 4))
     print(f"pouw-check-difftest credit-verified: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
           f"{dict(sorted(VERIFIED.items()))}")
-    assert {"run", "accept"} <= set(VERIFIED)
+    assert {"run", "accept", "lanes: accept"} <= set(VERIFIED)
     for part in ("circuit: the committed circuit files are not", "proof: the window's statements are not a list",
                  "outcome: call # has two statements", "outcome: call # has a statement and no drawn unit",
                  "circuit: the period's open commits no circuit file for K = #",
                  "registration: the window registers ", "which the window registers not", "layout: ",
                  "proof: call #'s statement could not be verified", "'s statement: the statement's public file",
                  "failed: call #'s session ", "opened a public table at another port",
-                 "opened the ok rows at another port", "which is no unit of call #"):
+                 "opened the ok rows at another port", "which is no unit of call #",
+                 "lanes-shape: drawn leaf #: the window's # × # tile", "lanes-shape: drawn leaf #: K = # is below LEAST_K",
+                 "lanes-shape: drawn leaf #: K = # fails PouwWindow.Lanes.Tile.check",
+                 "lanes-shape: drawn leaf #: K = #'s lanes are # chunk lanes",
+                 "is at a lanes-form K and the window carries no lanes evidence", "missing: drawn leaf # has no statement",
+                 "leaf Program is not the one the period-open committed", "leaf Program is not h#window.leaf_program's",
+                 "is proved twice", "has a leaf statement and is no drawn lanes-form leaf",
+                 "is none of leaf_lanes.statements", "the window's produced record (verity/registration/produced/v#) "
+                 "fails P-", "combine reads its call's receipts", "the window's draw root, the produced record's",
+                 "the window's draw coin, the produced record's draw, is not a live opening",
+                 "proof: the window's lanes evidence is not", "of its lanes form's two files", "commits both k#",
+                 "leaf_programs is not", "(P-shared)", "(P-opened)", "opened its ports at other values or roots",
+                 "failed: drawn leaf #'s ", "(checkFull)", "# statement could not be verified",
+                 "# statement: the statement's public file"):
         assert any(part in k for k in VERIFIED), part
 
 
@@ -99,8 +115,8 @@ def test_served_answers():
                 return go
             args = (case["statements"], case["files"], raw)
             got = Cr._lean_verified(*args, case["entries"], case["window"], case["units"], case["steps"],
-                                    logged("lean"), case["salt"])
+                                    logged("lean"), case["salt"], case["draw"])
             want = Cr._verified(*args, lay, case["entries"], case["window"], case["units"], case["steps"],
-                                logged("python"), case["salt"])
+                                logged("python"), case["salt"], case["draw"])
             assert got == want, (name, seed, got, want)
             assert calls["lean"][:len(calls["python"])] == calls["python"], (name, seed)

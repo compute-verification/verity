@@ -1,5 +1,5 @@
-"""The sm_120 unit's floor under CP-W, against #2482's headline (RT2-120): the Lean bound's break line, and what the
-per-set checkpoint adds to the floor of every program `PouwWarpCheck_v2` accepts at FOLD fx1.
+"""The sm_120 unit's floor under CP-W, against the sm_120 headline: the Lean bound's break line, and what the
+per-set checkpoint adds to the floor of every program `PouwWarpCheck_v2` accepts at fold fx1.
 
 The bound (`lean_headline.branches` on `Definitions/Accounting/Headline/Sm120.lean` at a495f9c5dd) reads a cheater's
 floor a unit as N_w (w* + φ*) = 17: an IMMA.16832 writes 128 words a slot, and fx1's fold is 8 ALU + 8 IMAD lane
@@ -7,7 +7,7 @@ instructions a unit. ♭'s bound B adds the operand floor (LDSM_X4 a 39th of a u
 its unfolded branch 1 − Y (1 − 41/S), Y = 17 / B, rounded up to 656/100,000, so it fails for a floor below
 B (1 − ε) / (1 − 41/S), a hair under 17.
 
-CP-W (decision 104) commits, after every set (32 words a lane, 8 units a warp), the XOR over the warp's 32 lanes and 8
+CP-W commits, after every set (32 words a lane, 8 units a warp), the XOR over the warp's 32 lanes and 8
 chains of y and of z (`segment.warp_checkpoint`), and `PouwWarpCheck_v2` reads both words of every set. Neither ♭ nor
 the Lean floor has this work. Its cost a set-warp on DS-120 (every class 1 on DS_issue), by route:
 
@@ -18,10 +18,10 @@ the Lean floor has this work. Its cost a set-warp on DS-120 (every class 1 on DS
   UTMA*/TMAred512, which a batch of sets can share): no class takes more than 8 words a lane out of the registers
   (STG.E.ENL2.256), so at least 2 slots.
 
-On sm_120a (`cpw_sass.cu`, r20261019-115006-35c0) fx1 is 2 IMAD, 1 LOP3 and 1 LEA.HI a word, REDG.E.XOR.64 and
+On sm_120a (`cpw_sass.cu`) fx1 is 2 IMAD, 1 LOP3 and 1 LEA.HI a word, REDG.E.XOR.64 and
 STSM.16.M88.4 are one instruction each, and a 64-bit XOR into shared memory is a CAS loop (ATOMS.CAST.SPIN.64), so the
-shared-atomic route is no cheaper. cpw_sass's pair2 (mode 6, r20261019-121345-6849) is the issue-merged route, 6 LOP3
-and 2 REDG.E.XOR.64 a set-warp, bit-exact. st256 (mode 7, r20261019-123310-288b) takes a lane's 16 words out in two
+shared-atomic route is no cheaper. cpw_sass's pair2 (mode 6) is the issue-merged route, 6 LOP3
+and 2 REDG.E.XOR.64 a set-warp, bit-exact. st256 (mode 7) takes a lane's 16 words out in two
 STG.E.ENL2.256, and pair64 (mode 8) shows ptxas has no 64-bit logic op: its 64-bit XORs are LOP3s.
 
 `priced` is the unfolded branch with the checkpoint in both the floor and ♭: it moves the bound only when ♭'s route
@@ -47,7 +47,7 @@ FLAT_WORDS = {"IMMA16832": Fraction(1), "LDSM_X4": Fraction(25641, 1000000)}
 FLAT_FOLD = {"ALU": Fraction(8), "IMAD": Fraction(8)}
 FLAT_SKIP = {"NOROW": Fraction(14325412520309335111003, 199158597757329117000000)}
 CHECKS = 48000
-#: the statement's ε and the brief's break line (1 − 0.599%) B
+#: the statement's ε and the stated break line (1 − 0.599%) B
 EPS = Fraction(656, 100000)
 BRIEF_BREAK = Fraction(16995, 1000)
 #: lean_headline's w* (an IMMA.16832's slot over its 128 words) and φ* (fx1's 4 lane instructions a word over 32 lanes)

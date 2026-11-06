@@ -44,8 +44,9 @@ theorem check_upv_pos {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed
 instance. -/
 theorem setupHidden_upv_pos {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt} (ht : tags.typed = false)
-    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) : 0 < st.c.upv := by
-  obtain ⟨hp, -⟩ := parse_untyped ht (setupHidden_spec' h).parse
+    (hi : tags.isTmpl = false) (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
+    0 < st.c.upv := by
+  obtain ⟨hp, -⟩ := parse_untyped ht ((setupHidden_spec' h).parseF hi)
   obtain ⟨ls, hls⟩ := (parse_facts hp).check
   exact check_upv_pos (parse_facts hp).typed hls
 

@@ -43,7 +43,7 @@ from verity.core.protocols.pous import wipe_period as WP
 ID = WP.PROTOCOL
 TEST_ID = mc.TEST_PREFIX + ID
 ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
-SERVER = b"vy-nebius-cpu-4"
+SERVER = b"server-4"
 REMOTE_READS = 5231
 """The reads of `StreamedWipeMeets141GB5`, the H200's wipe at 5 GB (`r = 59`)."""
 
@@ -191,7 +191,7 @@ def _build(m: str, seed: int) -> dict:
 
 
 def build(m: str, seed: int = 0) -> dict:
-    """A wipe's case with the change `m` (`EXPECT`), every choice drawn from `seed`."""
+    """A wipe's case with the change `m` (`EXPECT`), every choice sampled from `seed`."""
     return copy.deepcopy(_build(m, seed))
 
 
@@ -211,7 +211,7 @@ def verdict_of(kind: str) -> str:
 
 
 def case(kind: str, seed: int = 0) -> dict:
-    """A wipe aimed at `kind`, its change and every choice drawn from `seed`."""
+    """A wipe aimed at `kind`, its change and every choice sampled from `seed`."""
     ms = AIMS[kind]
     return build(ms[random.Random(f"wipe-protocol {kind} {seed}").randrange(len(ms))], seed)
 

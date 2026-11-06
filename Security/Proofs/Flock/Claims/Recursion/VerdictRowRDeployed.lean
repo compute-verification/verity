@@ -194,7 +194,7 @@ variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.
 
 /-- **Table `i`'s decode shape is V\*'s inner shape** in every field V\*'s algebra reads, at a decision of an inner
 statement the reader reads at the dense form, where the session's points are the link's. -/
-theorem sh_alg {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+theorem sh_alg {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size)
     (hpts : D.sess.points = pointsOf D.spec D.d.c₁) :
     ∃ (inn : RecVStar.Inner) (ss : Array VStar.Stmt) (sh0 : Shape), RecVStar.statements inn = .ok ss ∧
@@ -259,7 +259,7 @@ theorem sh_alg {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo =
 
 /-- **S and its groups at table `i`** (row R's `hS` and `hg`): V\*'s list, which the reader's scope check builds,
 computes them at the inner shape, which is table `i`'s decode shape in the fields they read. -/
-theorem structure_ok {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+theorem structure_ok {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size)
     (hpts : D.sess.points = pointsOf D.spec D.d.c₁) :
     ∃ (S : RecAlgebra.GfS) (gs : Array (Array ℕ × Array ℕ × Array ℕ)),
@@ -347,7 +347,7 @@ theorem partsZero_of_pieces {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (
 /-- **Table `i`'s reps run at the decision**, as `runs_assembled`, with row R's S, groups and `w`'s size discharged,
 its parts' residuals given by the `rec-residuals` pieces and their two ties (the layout's `hE`, check 5's `hvv`), and
 its coin rounds' sizes (`hsz`) and the accumulators' number (`hacc`) as hypotheses. -/
-theorem runs_assembled_R {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+theorem runs_assembled_R {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) (hi : i < D.sts.size)
     (hti : i < D.spec.tables.size)
     (hframed : ∀ r : Fin 2, FramedAt ((D.files cls i).stream r).rounds 0 (repFrames (D.files cls i).st

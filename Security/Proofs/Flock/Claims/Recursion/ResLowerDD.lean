@@ -58,7 +58,7 @@ def ResLoweredPD (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg �
     (pieces : Msg → List ResPiece) (ownQ : Msg → ResPiece → Option ℕ)
     (elemAt : Msg → List Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
     (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128) : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), (DRL rd wE final w b elem).parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (DRL rd wE final w b elem).parse x = some st → shape st.form →
     ∀ (c : ℕ → Coin) (xs : List Msg) (ws : List Claims.Flock.Wit),
     RecDeploy.OpenLower.JointV FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
       (AccV rd wE final w b elem shape untr cmt) x c xs ws → XsStaged b.st x xs ws.length →
@@ -222,7 +222,7 @@ abbrev acceptsLVD :=
 /-- **`ResLowJP` with each part's decision, at the parts' V\* statements**: at `JointV` over `showsDec`, which an
 accepted run gives at its staged statements (`staged_deployRec_part`, `partDec_run`). -/
 def ResLowJPD : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), parse x = some st → Claims.Recursion.Form.Dense st.form →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), parse x = some st → Claims.Recursion.Form.Dense st.form →
     ∀ (c : ℕ → Coin) (xs : List Msg) (ws : List Claims.Flock.Wit),
       OpenLower.JointV FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L) L
         (acceptsLVD rd b aux nOf hd rest wE final w L) x c xs ws →

@@ -610,7 +610,7 @@ TP_DENSE = "llama32-1b__bf16__l40s__tp2__b1__i256__o32__mixed__greedy__bi-eager"
 
 def _tap_manifest(path: Path, *families: str) -> str:
     """A manifest built under every tap policy whose identities name `families` (a policy with no site writes its header only)."""
-    query = {"engine": "v2-query", **{k: {} for k in ("norm_scales", "router_softmax", "vocab_range", "guarded_max")}}
+    query = {"engine": "v2-query", **{k: {} for k in ("norm_scales", "router_softmax", "vocab_range")}}
     path.write_text(json.dumps({"query": query, "identities": [{"family": "instance_outputs"}] + [{"family": f} for f in families]}))
     return str(path)
 
@@ -620,13 +620,13 @@ def test_the_taps_are_on_by_default_and_0_turns_one_off_for_ab_only(tmp_path):
     assert (ck.norm_tap, ck.guarded_max_tap, ck.router_tap, ck.vocab_tap) == ("1", "1", "1", "1")
     off = _opts(tmp_path, "--router-tap", "0", environ={"NORM_TAP": "0", "GUARDED_MAX_TAP": "0"}).commit
     assert (off.norm_tap, off.guarded_max_tap, off.router_tap, off.vocab_tap) == ("0", "0", "0", "1")
-    assert R.tap_policy_flags(ck) == ["--norm-scales", "--router-softmax", "--vocab-range", "--guarded-max"]
-    assert R.tap_policy_flags(off) == ["--no-norm-scales", "--no-router-softmax", "--vocab-range", "--no-guarded-max"]
+    assert R.tap_policy_flags(ck) == ["--norm-scales", "--router-softmax", "--vocab-range"]
+    assert R.tap_policy_flags(off) == ["--no-norm-scales", "--no-router-softmax", "--vocab-range"]
     for argv in (["manifest", "build", "--program", "p"], ["manifest", "build-global", "--fixture", "f", "--programs-root", "r"],
                  ["manifest-verify", "--manifest", "m"]):
         on, ab = cli.parse(argv[0], [*argv[1:], "--out", "o"], {}), cli.parse(argv[0], [*argv[1:], "--out", "o", *R.tap_policy_flags(off)], {})
-        assert (on.norm_scales, on.router_softmax, on.vocab_range, on.guarded_max) == (True, True, True, True)
-        assert (ab.norm_scales, ab.router_softmax, ab.vocab_range, ab.guarded_max) == (False, False, True, False)
+        assert (on.norm_scales, on.router_softmax, on.vocab_range) == (True, True, True) and not hasattr(on, "guarded_max")
+        assert (ab.norm_scales, ab.router_softmax, ab.vocab_range) == (False, False, True)
 
 
 def test_a_manifest_of_other_policies_is_rebuilt_either_way(tmp_path):
@@ -634,8 +634,7 @@ def test_a_manifest_of_other_policies_is_rebuilt_either_way(tmp_path):
     assert R.manifest_policy_mismatch(man, _opts(tmp_path).commit) == []
     assert R.manifest_policy_mismatch(man, _opts(tmp_path, environ={"NORM_TAP": "0"}).commit) == ["norm_scales"]
     (tmp_path / "old.json").write_text(json.dumps({"query": {"engine": "v2-query"}, "identities": []}))
-    assert R.manifest_policy_mismatch(str(tmp_path / "old.json"), _opts(tmp_path).commit) == ["norm_scales", "router_softmax", "vocab_range",
-                                                                                                "guarded_max"]
+    assert R.manifest_policy_mismatch(str(tmp_path / "old.json"), _opts(tmp_path).commit) == ["norm_scales", "router_softmax", "vocab_range"]
 
 
 def test_a_passing_commit_verifies_the_manifest_it_ran_over(tmp_path, monkeypatch):
@@ -660,7 +659,7 @@ PD = "p" * 64
 
 
 def _record_manifest(path: Path, query_id: str, *, program_digest: str = PD, partition: bool = True, word_check: bool = True) -> None:
-    query = {"query_id": query_id, **{k: {} for k in ("norm_scales", "router_softmax", "vocab_range", "guarded_max")}}
+    query = {"query_id": query_id, **{k: {} for k in ("norm_scales", "router_softmax", "vocab_range")}}
     if partition:
         query["partition"] = {"object": {"format": "verity/partition/v1"}, "digest": "d" * 128}
     if word_check:
@@ -682,11 +681,11 @@ def _row_with_build(tmp_path: Path, monkeypatch) -> tuple[SingleRow, list[str]]:
 
 def test_the_rows_query_of_record_is_the_one_its_manifest_build_writes():
     from verity_vllm.query import required
-    assert R.QUERY_OF_RECORD == required.QUERY_OF_RECORD == required.query_header("ampere", "fa2_hidden_m1_stream", return_slots=True)["query_id"]
+    assert R.QUERY_OF_RECORD == required.QUERY_OF_RECORD == required.query_header("ampere", return_slots=True)["query_id"]
 
 
 def test_the_builds_q_word_manifest_with_a_partition_of_its_program_is_the_manifest_of_record(tmp_path, monkeypatch):
-    """#4's Commit (15:31Z) moved the Build's Q_word manifest aside as "not the query path's" and rebuilt it: a third full build per row."""
+    """The Commit keeps the Build's Q_word manifest: moving it aside as "not the query path's" and rebuilding it is a third full build per row."""
     r, built = _row_with_build(tmp_path, monkeypatch)
     assert r.program_digest() == PD
     _record_manifest(Path(r.d) / "manifest.json", R.QUERY_OF_RECORD)
@@ -757,7 +756,7 @@ def test_a_tp_row_runs_the_guarded_build_and_every_tap_its_manifest_names(tmp_pa
     monkeypatch.setattr(t, "run_tl", lambda stage, to, log, cmd: seen.append(cmd) or 0)
     os.makedirs(t.d)
     t.manifest_global("commit.required_manifest")
-    assert {"--norm-scales", "--router-softmax", "--vocab-range", "--guarded-max"} <= set(seen[0])
+    assert {"--norm-scales", "--router-softmax", "--vocab-range"} <= set(seen[0]) and "--guarded-max" not in seen[0]
     taps = R.applicable_taps(_tap_manifest(tmp_path / "moe.json", "norm_scales", "router_softmax", "vocab_range"), t.ck_)
     cmd = t.commit_cmd(taps)
     assert cmd[cmd.index("--hidden-so") + 1] == t.env.hidden_so_fa2_guarded and "--vocab-range" in cmd
@@ -847,7 +846,7 @@ def _engines_custom_all_reduce_off(t, monkeypatch) -> tuple[object, object]:
 
 
 def test_a_tp_match_splits_into_its_gpu_legs_before_the_build_and_the_cpu_rest_after(tmp_path, monkeypatch):
-    """`--match-phase gpu` runs the capture and control with no Build and stops the row; `cpu` runs the check over the legs they recorded."""
+    """`--match-phase gpu` runs the capture and control with no Build and stops the row; `cpu` runs the check over the stages they recorded."""
     gpu, cpu = _tp_row(tmp_path, GLM53, "--match-phase", "gpu"), _tp_row(tmp_path, GLM53, "--match-phase", "cpu")
     os.makedirs(gpu.M)
     monkeypatch.setattr(R, "derived_ok", lambda p: True)
@@ -867,7 +866,7 @@ def test_a_tp_match_splits_into_its_gpu_legs_before_the_build_and_the_cpu_rest_a
     monkeypatch.setattr(R, "derived_ok", lambda p: True)
     monkeypatch.setattr(R, "tp_passed", lambda p: True)
 
-    monkeypatch.setattr(cpu, "run_gpu", lambda *a, **kw: pytest.fail("a GPU leg in the cpu phase"))
+    monkeypatch.setattr(cpu, "run_gpu", lambda *a, **kw: pytest.fail("a GPU stage in the cpu phase"))
     monkeypatch.setattr(cpu, "run_tl", lambda stage, *a: ran.append(stage) or 0)
     cpu.match()
     last = open(f"{cpu.d}/stages.txt").read().splitlines()[-1].split()
@@ -899,7 +898,7 @@ def test_a_tp_fold_match_bounds_each_leg_and_gives_the_whole_four_legs(tmp_path,
 def test_a_cpu_half_rerun_keeps_its_captures_folds_with_bounded_ranks(tmp_path, monkeypatch, argv, workers, folds, reuse, shared):
     """A GLM-5.3 B8 CPU half whose eight X-09 compares (200+ GB each) ran out of host memory reruns over the folds it persisted
     (`--match-reuse fold`, and with `legs` the compares and GM-01s it wrote), `--fold-rank-workers` ranks at a time, the far lighter
-    folds `--fold-workers` at a time; a capture removes the folds and legs of any earlier one, so none is ever kept.  Under the row's
+    folds `--fold-workers` at a time; a capture removes the folds and stages of any earlier one, so none is ever kept.  Under the row's
     `--match-pipeline shared` (the default) each rank's X-09 is its GM-01's (`--shared-x09`), as a single-GPU row's is."""
     t = _tp_row(tmp_path, GLM53, "--match-phase", "cpu", *argv)
     t.fold_profile = "derived_GLM53_tp8"
@@ -926,8 +925,8 @@ GLM53_B8 = "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager"
 
 
 def _b8_cpu_half(tmp_path: Path, monkeypatch, *argv: str, mem_gb: str) -> tuple[Any, dict[str, tuple[int, list[str]]]]:
-    """GLM-5.3 TP8 B8's Match CPU half over legs on disk, its checkpoint's 78 layers, under research run --mem-gb `mem_gb`: the row
-    and each leg's (limit, command)."""
+    """GLM-5.3 TP8 B8's Match CPU half over stages on disk, its checkpoint's 78 layers, under research run --mem-gb `mem_gb`: the row
+    and each stage's (limit, command)."""
     t = _tp_row(tmp_path, GLM53_B8, "--match-phase", "cpu", *argv, environ={"RESEARCH_RUN_MEM_GB": mem_gb})
     ck = tmp_path / "glm-ck"
     ck.mkdir(parents=True)
@@ -963,14 +962,14 @@ def test_a_tp_fold_match_is_sized_to_the_runs_memory(tmp_path, monkeypatch, mem_
 
 
 def test_a_tp_fold_match_too_big_for_its_memory_runs_one_rank_at_a_time_and_the_flags_override_the_sizing(tmp_path, monkeypatch):
-    """At --mem-gb 300 no planned B8 GM-01 leg fits beside a fold: the CPU half runs one rank and one fold at a time and row.log warns
+    """At --mem-gb 300 no planned B8 GM-01 stage fits beside a fold: the CPU half runs one rank and one fold at a time and row.log warns
     (the plan's ratios are fitted on this row alone, so a smaller row's estimate may be high).  The flags override the sizing:
-    --fold-rank-workers 2 runs two ranks (folds as tp-fold-match defaults them), and --fold-timeout bounds each leg."""
+    --fold-rank-workers 2 runs two ranks (folds as tp-fold-match defaults them), and --fold-timeout bounds each stage."""
     t, seen = _b8_cpu_half(tmp_path / "short", monkeypatch, mem_gb="300")
     t.match()
     cmd = seen["match.fold_match"][1]
     assert (cmd[cmd.index("--rank-workers") + 1], cmd[cmd.index("--fold-workers") + 1]) == ("1", "1")
-    assert "WARNING: 300 GB holds no planned GM-01 leg beside one fold" in open(f"{t.d}/row.log").read()
+    assert "WARNING: 300 GB holds no planned GM-01 stage beside one fold" in open(f"{t.d}/row.log").read()
     t, seen = _b8_cpu_half(tmp_path / "explicit", monkeypatch, "--fold-rank-workers", "2", "--fold-timeout", "100", mem_gb="300")
     t.match()
     to, cmd = seen["match.fold_match"]
@@ -980,7 +979,7 @@ def test_a_tp_fold_match_too_big_for_its_memory_runs_one_rank_at_a_time_and_the_
 
 def test_reused_legs_keep_a_b8_ranks_x09_compare_and_rerun_one_cut_short(tmp_path):
     """Under --reuse-legs a B>1 rank's written X-09 document (`match_decomp.json`) is its compare, as cb_a.compare's is at B1; one a
-    killed batch-decomp left unparseable runs again (here `/bin/false`, so a leg that runs fails)."""
+    killed batch-decomp left unparseable runs again (here `/bin/false`, so a stage that runs fails)."""
     from verity_vllm.pipeline.tp import fold_match as FM
     doc = tmp_path / "match_decomp.json"
     for text, reuse, verdict in (('{"verdict": "PASS", "requests": []}', True, "PASS"), ('{"verdict": "PASS", "requests": []}', False, "FAIL"),
@@ -1057,9 +1056,9 @@ def test_a_tensor_parallel_row_declaring_prefix_caching_is_refused_before_any_st
 
 
 @pytest.mark.parametrize("argv, reads", [
-    (("--stages", "build,match", "--match-phase", "cpu"), False),   # a declared-target Build and the CPU half: vy-glm53-cpu-2 runs them
+    (("--stages", "build,match", "--match-phase", "cpu"), False),   # a declared-target Build and the CPU half: a CPU node runs them
     (("--stages", "match", "--match-phase", "gpu"), True),
-    (("--stages", "match"), True),                                  # the GPU legs and the CPU half in one run
+    (("--stages", "match"), True),                                  # the GPU stages and the CPU half in one run
     (("--stages", "commit"), True),
 ])
 def test_a_tp_rows_target_precheck_reads_the_device_only_when_a_stage_runs_on_it(tmp_path, monkeypatch, argv, reads):

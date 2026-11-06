@@ -9,7 +9,7 @@ import Proofs.Flock.Recursive.ValueFinder
 (`rec-open-stacked`, `RecCoins.checkStackedLevel`: `coef`, `dirs`) and a part of R's opening (`rec-opening`,
 `RecCoins.checkOpening`: `v`, and `out`'s one zero row, which `checkZero` holds under `zeroSalt`, `valueSrcAll`'s salt
 there), and none elsewhere. The finder's budget counts each row's words once and each salt's
-SHAKE256 once. The definitions are in `Recursive/ValueSrc.lean`, below `RecursiveAuditC3At`, which reads them; here
+three SHA-512 (`RecCoins.saltOf`) once. The definitions are in `Recursive/ValueSrc.lean`, below `RecursiveAuditC3At`, which reads them; here
 are their ties:
 
 * `stacked_of_check`, `opening_of_check`: an accepted unit's `checkValue`s are at `valueRows`' rows
@@ -75,21 +75,21 @@ theorem opening_of_check {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : Flo
       · cases h
     · cases h
 
-theorem valueRows_coef {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {LANES H l : ℕ} {o : Flock.RecCoins.Opening}
+theorem valueRows_coef {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {LANES H l : ℕ} {o : Flock.RecCoins.RegisteredOpening}
     (hso : Flock.RecCoins.stackedParams c.unit.name = some (LANES, H)) (hop : Flock.RecCoins.opening c3 c.unit.name = .ok o)
     (hls : stackedLevels o LANES H = [l]) :
     valueRows (some c3) c "coef" = some (stackedCoefRows o l LANES, Flock.RecCoins.COEF_VALUE) := by
   simp only [valueRows, hop, hso, hls]
   rfl
 
-theorem valueRows_dirs {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {LANES H l : ℕ} {o : Flock.RecCoins.Opening}
+theorem valueRows_dirs {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {LANES H l : ℕ} {o : Flock.RecCoins.RegisteredOpening}
     (hso : Flock.RecCoins.stackedParams c.unit.name = some (LANES, H)) (hop : Flock.RecCoins.opening c3 c.unit.name = .ok o)
     (hls : stackedLevels o LANES H = [l]) :
     valueRows (some c3) c "dirs" = some (stackedDirsRows o l H, Flock.RecCoins.DIRS_VALUE) := by
   simp only [valueRows, hop, hso, hls]
   rfl
 
-theorem valueRows_v {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {m cl j : ℕ} {o : Flock.RecCoins.Opening}
+theorem valueRows_v {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {m cl j : ℕ} {o : Flock.RecCoins.RegisteredOpening}
     {rows : Array (Array ℕ)} (hso : Flock.RecCoins.stackedParams c.unit.name = none)
     (hp : Flock.RecOpening.params c.unit.name = some (m, cl, j)) (hop : Flock.RecCoins.opening c3 c.unit.name = .ok o)
     (hr : openingVRows o j = some rows) :
@@ -97,7 +97,7 @@ theorem valueRows_v {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {m cl j : ℕ} 
   simp only [valueRows, hop, hso, hp, hr]
   rfl
 
-theorem valueRows_out {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {m cl j : ℕ} {o : Flock.RecCoins.Opening}
+theorem valueRows_out {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {m cl j : ℕ} {o : Flock.RecCoins.RegisteredOpening}
     (hso : Flock.RecCoins.stackedParams c.unit.name = none)
     (hp : Flock.RecOpening.params c.unit.name = some (m, cl, j)) (hop : Flock.RecCoins.opening c3 c.unit.name = .ok o) :
     valueRows (some c3) c "out" = some (Flock.RecCoins.zeroRows 1 Flock.RecCoins.OUT_WORDS, Flock.RecCoins.ZERO_VALUE) := by

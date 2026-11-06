@@ -123,10 +123,11 @@ def test_a_typed_statement_with_other_row_nets_is_refused(rope, name, what):
 
 
 #: a typed RoPE (`rope-head/d64/neox-bf16`, a flat class, 4 instances) staged by `typed_statement.stage`, and every CPU
-#: selftest case of its flock-circuit (seed-injection build, #273 at 8505c540), recorded
+#: selftest case of its flock-circuit (seed-injection build at 8505c540), recorded
 RUST_SESSIONS = "art:48f286b4"
 
 
+@pytest.mark.slow
 def test_it_refuses_the_rust_provers_sessions(tmp_path):
     """A typed statement is a form the soundness proof does not cover (§16.15): on `flock-circuit`'s own recorded sessions
     for a flat class, the statement sets up and the verifier refuses every case, the 3 honest ones for that reason, once

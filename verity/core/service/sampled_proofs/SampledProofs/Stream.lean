@@ -1,5 +1,5 @@
 /-
-# The proof service's stream: its own rules (`service._Control`)
+# The proof system's stream: its own rules (`service._Control`)
 
 What `service.Stream` decides of each op on its own, around the checks whose verifiers of record are their own pieces
 (`Service.checkPublic`, `Registration.check`, `Select.select`, `Draw.checkDraw`, `Service.checkVerdicts`, `Record.record`,

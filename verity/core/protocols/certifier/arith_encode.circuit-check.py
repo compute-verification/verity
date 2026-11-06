@@ -12,7 +12,7 @@ def _network_arith_encode_roots() -> list[Any]:
     overflowing count; its finish at CW = 20; the book's model at the decisions' three contexts and at one (async's lag bits); and a window's charge at N = 2
     slots (its smallest with n_arrived's offset symbol) and at the compile slice's P·A = 14, each within the
     whole-Definition lowering budget (N = 64, the corpus difftest's, is 178,978 ANDs and isn't lowered whole). The
-    bit-checking variant: the step at K = 18 for both kinds and at K = 3, and the finish. ENC-REPLAY's model at plain
+    bit-checking variant: the step at K = 18 for both kinds and at K = 3, and the finish. The KT model at plain
     contexts (C = 3, NW = 24) and at its smallest (C = 1, NW = 15)."""
     from verity.core.protocols.certifier.arith_encode import (book_kt_unit, charge_unit, count_finish_unit, count_unit,
                                                               finish_unit, kt_unit, step_unit)

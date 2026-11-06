@@ -15,11 +15,13 @@ verdict accepts. The statements here:
 * `ProofSizes`, `DecodeSizes`: the lengths `decodeProof` checks, which make the message-carrying frames well formed.
 * `OPCarries`, `LIGCarries`: the same chunk lemma for the opening's ring switches and for Ligerito, at a decoded
   proof of a `fast100` statement (owners: dec-open, dec-lig).
-* `TagsOk`, `RecordsLive`, `DrawOk`: what `DecodesOn` needs past #828's hypotheses. `wr` is a free parameter of the
-  headline, and at a `wr` constant at an accepted transcript `DecodesOn` is false (an outcome with no rounds can't play
-  `repC`, which starts with a coin); `RecordsLive` says `wr` is the challenger's record of the outcome.
+* `TagsOk`, `RecordsLive`, `DrawOk`: what `DecodesOn` needs past the plain headline's hypotheses. `wr` is a free
+  parameter of the headline, and at a `wr` constant at an accepted transcript `DecodesOn` is false (an outcome with no
+  rounds can't play `repC`, which starts with a coin); `RecordsLive` says `wr` is the challenger's record of the
+  outcome.
 * `decAt`, `opnAt`: the decoder and the openings at draw `S`, read off the table `T S R` and setupH's statement there.
-* `DecodesOnExec`: `DecodesOn` at #828's tables, the decoder `decAt`, `one := true`, no final messages, `capOfRoot`.
+* `DecodesOnExec`: `DecodesOn` at the plain headline's tables, the decoder `decAt`, `one := true`, no final messages,
+  `capOfRoot`.
 -/
 
 namespace FlockSoundness.Discharge.DecodeZL
@@ -130,7 +132,8 @@ noncomputable def opnAt (T : Finset (Fin n) → Reg → TabSpec mPts) (I : Input
 
 /-- **The decoder is right at the headline's draws** (R11b): given the opening's and Ligerito's chunk lemmas, the
 tags, `wr` the challenger's record and the challenger's draws proving their units at `mPts` link points, `DecodesOn`
-holds at #828's tables with the decoder `decAt`, single coins as field elements, no final messages and `capOfRoot`. -/
+holds at the plain headline's tables with the decoder `decAt`, single coins as field elements, no final messages and
+`capOfRoot`. -/
 def DecodesOnExec : Prop :=
   ∀ {c : Flock.Circuit} {n : ℕ} {I : Inputs} (ht : I.tags.typed = false)
     (_hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (_ho : c.outNet = c.unitNet) {mPts : ℕ}

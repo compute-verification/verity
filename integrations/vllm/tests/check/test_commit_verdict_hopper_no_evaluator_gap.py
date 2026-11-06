@@ -83,7 +83,7 @@ def test_the_mechanism_is_in_the_registry_and_the_evaluator_table():
 
 def test_hopper_commit_only_without_form_b_fails_by_name():
     ok, why = commit_verdict({**BASE, "binding": _bnd(1), "sampled_replay": SR_HOPPER}, True, min_openings=64)
-    assert not ok and why.startswith("C2 of record not established (COORD M-0721 (1)): 3616 VUs not evaluable by name (no-evaluator)"), why
+    assert not ok and why.startswith("C2 of record not established: 3616 VUs not evaluable by name (no-evaluator)"), why
     assert "form (B) absent" in why and "3616 x no registered evaluator for Gemm_v2" in why
     assert "RoPE" not in why and "Attention" not in why                           # the domain is not the gap named
 
@@ -98,13 +98,13 @@ def test_hopper_full_row_with_a_complete_oracle_passes_carrying_the_gap():
 def test_hopper_1024_128_with_the_m0217_value_partial_oracle_fails_by_name():
     """The module outputs at the not-snapshotted steps are checked by neither form: named, not a PASS."""
     ok, why = commit_verdict({**BASE, "binding": _bnd(1), "sampled_replay": SR_HOPPER, "oracle_compare": OC_M0217}, True, min_openings=64)
-    assert not ok and why.startswith("C2 of record not established (COORD M-0721 (1)): 3616 VUs not evaluable by name (no-evaluator)"), why
+    assert not ok and why.startswith("C2 of record not established: 3616 VUs not evaluable by name (no-evaluator)"), why
     assert "form (B) result None" in why or "form (B) not complete" in why or "instance outputs compared" in why, why
 
 
 @pytest.mark.parametrize("b", [1, 8])
 def test_ampere_rows_are_byte_identical(b):
-    """L40S / A100 under FA2: Gemm_v1 / Attention_v3 -- the population carries only the NOT_YET domain (phi3 B8 int-2 record shape)."""
+    """L40S / A100 under FA2: Gemm_v1 / Attention_v3 -- the population carries only the NOT_YET domain (phi3 B8 record shape)."""
     sr = {**SR_HOPPER, "population": {"vus": 242048, "not_evaluable": {K_ROPE: 68480, K_ATT3: 34240},
                                       "not_evaluable_by_family": {"RoPE_v1": 68480, "Attention_v3": 34240}}}
     assert _complete_replay_population_gap(sr, None) == (None, None)
@@ -114,7 +114,7 @@ def test_ampere_rows_are_byte_identical(b):
 
 
 def test_composed_and_direct_gemm_v2_gaps_get_the_same_rule():
-    """rev's K_06G fixture (BiasAdd over Gemm_v2, Hopper Qwen) beside the direct Gemm_v2 outputs: one FAIL naming both, one PASS covering both."""
+    """The K_06G fixture (BiasAdd over Gemm_v2, Hopper Qwen) beside the direct Gemm_v2 outputs: one FAIL naming both, one PASS covering both."""
     k_06g = "fed by interior producer(s) without an evaluator (Gemm_v2 (model.layers.*.self_attn.qkv_proj)): composition not possible in this replay (MAN-06g, v2)"
     sr = {**SR_HOPPER, "population": {**SR_HOPPER["population"], "not_evaluable": {K_ROPE: 9184, k_06g: 140, K_GEMM2: 3476}}}
     ok, why = commit_verdict({**BASE, "binding": _bnd(1), "sampled_replay": sr}, True, min_openings=64)
@@ -127,5 +127,5 @@ def test_the_plane_fed_fail_still_leads():
     k_06f = "fed by moe_block_stream planes (SiluMul_v1@experts): row -> plane mapping not in this replay (MAN-06f, v2)"
     sr = {**SR_HOPPER, "population": {**SR_HOPPER["population"], "not_evaluable": {K_ROPE: 9184, k_06f: 64, K_GEMM2: 3616}}}
     ok, why = commit_verdict({**BASE, "binding": _bnd(1), "sampled_replay": sr, "oracle_compare": OC_COMPLETE}, True, min_openings=64)
-    assert not ok and why.startswith("C2 of record not established: 64 plane-fed VUs (MAN-06f)"), why
+    assert not ok and why.startswith("C2 of record not established: 64 plane-fed VUs"), why
     assert "the other 3616 VUs not evaluable by name (no-evaluator) are covered by the complete form (B)" in why, why

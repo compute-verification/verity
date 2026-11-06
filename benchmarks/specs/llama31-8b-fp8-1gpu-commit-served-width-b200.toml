@@ -1,11 +1,12 @@
 schema = "verity-bench/vllm-spec/v0"
 backend = "vllm"
 id = "llama31-8b-fp8-1gpu-commit-served-width-b200"
-# `llama31-8b-fp8-1gpu-commit-served-width` on one B200 (vy-dc-b200, sm_100a): the served Commit (rows-sha512 hiding
+# `llama31-8b-fp8-1gpu-commit-served-width` on one B200 (sm_100a): the served Commit (rows-sha512 hiding
 # leaves in a frame-v3-sha512 tree), commit@compiled / stock-fp8@compiled, at b1, b8 and b32, with that spec's arms,
 # sweep, reps and engine settings, and both arms on FlashAttention 2, as the B200 Build's row declares: on cc 10.0 vLLM
 # would serve FlashInfer attention, which has no Definitions. The pinned 60 GiB pool (458,752 tokens) is the RTX's, and
-# every point runs in `blocks`. Launch with `verity-bench run SPEC --direct vy-dc-b200`.
+# every point runs in `blocks`. Launch with `verity-bench run SPEC --direct NODE`, NODE the B200 VM in
+# `verity_bench.jobs.DIRECT_NODES`.
 arms = ["stock-fp8@compiled", "commit@compiled"]
 arm_modules = ["verity_bench.vllm.commit_arm:COMMIT_COMPILED"]
 sweep = "width"

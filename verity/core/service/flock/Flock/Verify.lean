@@ -21,7 +21,7 @@ structure Setup where
   publics : ByteArray → V Unit
   /-- the proof's Merkle trees (§14) -/
   merkle : MerkleScheme
-  /-- every opening carries `opened_salts`, empty for an unsalted scheme, as PR #83's prover writes it from `2908d078` on
+  /-- every opening carries `opened_salts`, empty for an unsalted scheme, as the circuit prover writes it from `2908d078` on
   (§16.16); its earlier unsalted openings carry none -/
   openedSalts : Bool := false
   deriving Inhabited
@@ -34,7 +34,7 @@ def Setup.ofCircuit (st : Stmt) : Setup :=
 def pcsParams (ms : MerkleScheme) (sch : Schedule) : PcsParams := ⟨sch.m.toUInt64, 1, sch.k0.toUInt64, 1, none, ms.pcsIndex⟩
 
 /-- §9–§14 for table `i`'s rep `r`; returns the proof's flattened cap. -/
-def verifyRep (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session) (i r : Nat) (bytes : ByteArray) : V ByteArray := do
+def verifyRep (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : RunRecord) (i r : Nat) (bytes : ByteArray) : V ByteArray := do
   let t := spec.tables[i]!
   let name := s!"{t}/rep{r}"
   let some stream := sess.streams.find? (·.name == name) | throw s!"S11: no stream {name}"

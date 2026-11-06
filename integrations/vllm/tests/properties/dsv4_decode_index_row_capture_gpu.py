@@ -161,7 +161,7 @@ def edge_table(case: str, rng) -> np.ndarray:
 def edge_row(kind: str, case: str, rng) -> np.ndarray:
     """One edge top-k row of ``kind``: `empty` (every index -1), `negative` (the negative kinds), `short` (a prefix of 1, 63, 64,
     65 or 1023 indices, then -1), `full`, `edges` (the block edges, the row's last slot NB * BS - 1 and the negatives around
-    them), or `mix` (the twin's draws, a valid one past the row folded into it)."""
+    them), or `mix` (the twin's samples, a valid one past the row folded into it)."""
     st = statics(case)
     K, BS, span = st["TOPK"], st["BS"], st["NB"] * st["BS"]
     if kind == "empty":

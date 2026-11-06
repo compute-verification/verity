@@ -1,9 +1,16 @@
 {
- "roots": ["RemoteAudit", "RemoteAudit.Difftest", "RemoteAudit.Verifier", "RemoteAudit.Protocol"],
+ "roots": [
+  "RemoteAudit",
+  "RemoteAudit.Difftest",
+  "RemoteAudit.Verifier",
+  "RemoteAudit.Protocol",
+  "RemoteAudit.P2Protocol"
+ ],
  "exempt": {
   "RemoteAudit.DifftestMain": "the remote-audit-difftest executable's entry point, one line; it serves RemoteAudit.Difftest.table, audited under RemoteAudit.Difftest, through the difftest server's line protocol: a test and not a proof",
   "RemoteAudit.VerifierMain": "the remote-audit-verifier executable's entry point, one line; it runs RemoteAudit.Verifier.serve, audited under RemoteAudit.Verifier",
-  "RemoteAudit.ProtocolMain": "the remote-audit-protocol executable's entry point, one line; its command is Core.Protocol.main of RemoteAudit.Protocol.protocol, audited under RemoteAudit.Protocol and CoreProtocol"
+  "RemoteAudit.ProtocolMain": "the remote-audit-protocol executable's entry point, one line; its command is Core.Protocol.main of RemoteAudit.Protocol.protocol, audited under RemoteAudit.Protocol and CoreProtocol",
+  "RemoteAudit.P2ProtocolMain": "the remote-audit-p2-protocol executable's entry point, one line; its command is Core.Protocol.main of RemoteAudit.P2Protocol.protocol, audited under RemoteAudit.P2Protocol and CoreProtocol"
  },
  "layers": {
   "RemoteAudit": {

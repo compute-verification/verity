@@ -66,7 +66,6 @@ def test_the_evaluator_cites_the_h200_capture_at_every_shape_and_m_the_capture_r
 
     p = rows.EVALUATOR_PROVENANCE["BatchedGemm_v1"]
     assert p is batched_gemm_rows.PROVENANCE
-    assert re.fullmatch(r"r\d{8}-\d{6}-[0-9a-f]{4}", p["run"])
     assert all(re.fullmatch(r"[0-9a-f]{64}", p[k]) for k in ("record", "record_served_default"))
     assert all(re.fullmatch(r"art:[0-9a-f]{64}", a) for a in p["art"].values())
     assert p["variants"] == {"split_k_off": "GO", "served_default": "GO"}
@@ -75,7 +74,7 @@ def test_the_evaluator_cites_the_h200_capture_at_every_shape_and_m_the_capture_r
     assert {1, 256} <= set(X.LINEAR_M)
     for d in (CB.BatchedGemmWord, CB.BatchedGemm):
         assert status_of(d.conformance) == "exact-model-tested"
-        assert p["run"] in d.conformance and p["record"][:16] in d.conformance and p["art"]["record"] in d.conformance
+        assert p["record"][:16] in d.conformance and p["art"]["record"] in d.conformance
 
 
 def test_an_unregistered_dot_a_non_finite_lane_and_another_shape_decline_by_name():

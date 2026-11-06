@@ -1,5 +1,6 @@
-"""Advice v1's arithmetic encoder as Boolean Definitions, run forward inside the compile unit alongside the replay scan:
-counting the bits it would write, which is what the composition charges, or checking them against a segment.
+"""Advice v1's arithmetic encoder as Boolean Definitions, run forward inside the compile slice's proof block alongside
+the replay scan: counting the bits it would write, which is what the composition charges, or checking them against a
+segment.
 
     ArithCountStep_v1{K, BIN, CW}  (tally, en, symbol) -> tally'
     ArithCountFinish_v1{CW}        (tally, c) -> (ok, bits)
@@ -13,11 +14,12 @@ counting the bits it would write, which is what the composition charges, or chec
     coder = (low[32], high[32], open, x, used, ok)
     KTContext_v1{C, NW}            (counts[C], en, ctx, bit) -> (ok, f0, f1, counts')
 
-Under advice v1 (the certifier PROTOCOL's "Advice v1") each certifier window is one terminated segment of ENC-CODE's
+Under advice v1 (the certifier PROTOCOL's "Advice v1") each certifier window is one terminated segment of the
 32-bit Witten–Neal–Cleary arithmetic coder (`benchmarks/network_e2e/encodings/code.py`, `ArithEncoder`), as `code_v1`
 codes it: the window's counts, then its values (the replay's decisions, each a bit at the registered book's KT estimate
-for its context, and the arrival order's deviations and the hits sent past the pool bound, integers). The compile unit
-runs the encoder forward, since which value is read next, and so its window, is the replay's position.
+for its context, and the arrival order's deviations and the hits sent past the pool bound, integers). The compile
+slice's proof block runs the encoder forward, since which value is read next, and so its window, is the replay's
+position.
 
 **The counting variant** is what the PROTOCOL composes. The committed advice is the values themselves, which the
 replay scan reads, and the charge is their coded length: the encoder runs over the same symbols and counts the
@@ -79,15 +81,15 @@ consumes n = 2 bits, or none when nothing was used. Its window's segment must en
 **The book's model** (`BookKT_v1`) is `code_v1.KT`, the estimate advice v1 codes its bits at. C contexts each count
 their 0s and 1s, in KW = 15 bits, from the registered book's priors (`Book.priors`, public). Context ctx gives
 f = 2n + 1 for each count, and the bit then raises its count; once 2·(n0 + n1) + 2 would pass 2^16, that is once
-n0 + n1 reaches 2^15, both are halved, rounding up. The book keeps n0 + n1 < 2^15, and the unit refuses counts past it
-and a context ≥ C. With `en` = 0 it passes the counts through. v1's decisions take context min(run, 2), with run the
-decisions since the last arrival, carried across windows (`code_v1._State.run`): a function of the bits alone, which the
-composition keeps as a 2-bit counter (C = 3). Async's lag bits take one context (C = 1).
+n0 + n1 reaches 2^15, both are halved, rounding up. The book keeps n0 + n1 < 2^15, and the proof block refuses counts
+past it and a context ≥ C. With `en` = 0 it passes the counts through. v1's decisions take context min(run, 2), with run
+the decisions since the last arrival, carried across windows (`code_v1._State.run`): a function of the bits alone, which
+the composition keeps as a 2-bit counter (C = 3). Async's lag bits take one context (C = 1).
 
-**A window's charge** (`ChargeCount_v1{N}`) is the one call the compile unit makes a window, for a window that sends
-only decisions (no hits, resumes, order entries or lag bits: the compile slice's class). Its N slots are the window's
-decisions in order, `en` (the slot holds one) and `bit` (the decision), and a slot with `en` 0 changes nothing. In the
-replay's units they are the ones the window's load loads (`protocol/charge-chain.md`). It counts
+**A window's charge** (`ChargeCount_v1{N}`) is the one call the compile slice's proof block makes a window, for a window
+that sends only decisions (no hits, resumes, order entries or lag bits: the compile slice's class). Its N slots are the
+window's decisions in order, `en` (the slot holds one) and `bit` (the decision), and a slot with `en` 0 changes nothing.
+In the replay's proof blocks they are the ones the window's load loads (`protocol/charge-chain.md`). It counts
 `code_v1._window`'s segment for them:
 - n_arrived, the enabled slots' count, as the book's Exp-Golomb bin, one general step at the bin's (cum, freq, total)
   read from the public table by a one-hot of the count's bit length, then, once n ≥ 2, its offset in the bin, one more
@@ -105,16 +107,16 @@ makes the call inline. After each decision the carried words (the count's state,
 `sha512.commit`'s copies: a row each in a lowering and no gate in the traced circuit, so no word's linear form carries
 the decisions before it and the build is linear in N.
 
-**ENC-REPLAY's model** (`KTContext_v1`) is the estimate advice v1 used before `code_v1`, kept for the bit-checking
+**The KT model** (`KTContext_v1`) is the estimate advice v1 used before `code_v1`, kept for the bit-checking
 variant. C contexts each count their 0s and 1s (`replay._KT`, from the registered priors). Context ctx gives f = 2n + 1
 for each count, halved with rounding up while f0 + f1 > 2^16 (`scaled`), and the decision then adds to its count.
 After h ≥ 1 halvings f is ⌊n / 2^(h−1)⌋ + 1, so the circuit takes the first h whose two candidates fit. With `en` = 0 it
-passes the counts through. It refuses a context ≥ C and a count that would overflow NW bits. In the compile unit
-the counts start public, at the registered priors, and pass from model to model, and the context index is the
-replay's (plain: min(passes, 2), C = 3): neither is witness.
+passes the counts through. It refuses a context ≥ C and a count that would overflow NW bits. In the compile slice's
+proof block the counts start public, at the registered priors, and pass from model to model, and the context index is
+the replay's (plain: min(passes, 2), C = 3): neither is witness.
 
 **Statics** (public): K, the scalings a symbol may take (18 covers every symbol); BIN, binary (1) or general (0)
-symbols; CW, the count's width; C, the contexts; NW, a count's width in ENC-REPLAY's model; and N, a window's slots (1 ≤ N < 2^16; `charge_book` also refuses an N whose top bin the book's
+symbols; CW, the count's width; C, the contexts; NW, a count's width in the KT model; and N, a window's slots (1 ≤ N < 2^16; `charge_book` also refuses an N whose top bin the book's
 cap cuts short). Fields are little-endian. Both steps are specified on the states a window reaches (low ≤ high),
 where code.py's loop is the one above.
 
@@ -242,7 +244,7 @@ def reference_finish(st: Coder, seg: Sequence[int]) -> tuple[int, int]:
 
 
 def scaled(f0: int, f1: int) -> tuple[int, int]:
-    """ENC-REPLAY's estimate (`replay._KT`) halved, rounding up, into the coder's total."""
+    """The replay's KT estimate (`replay._KT`) halved, rounding up, into the coder's total."""
     while f0 + f1 > MAX_TOTAL:
         f0, f1 = (f0 + 1) >> 1, (f1 + 1) >> 1
     return f0, f1
@@ -250,7 +252,7 @@ def scaled(f0: int, f1: int) -> tuple[int, int]:
 
 def reference_kt(C: int, NW: int, counts: Sequence[tuple[int, int]], en: int, ctx: int,
                  bit: int) -> tuple[int, int, int, tuple[tuple[int, int], ...]]:
-    """(ok, f0, f1, counts') of one decision under ENC-REPLAY's KT counts per context, scaled as advice v1 does. A
+    """(ok, f0, f1, counts') of one decision under the replay's KT counts per context, scaled as advice v1 does. A
     refusal returns ok 0, and then only ok is specified."""
     counts = tuple(tuple(c) for c in counts)
     if not en:
@@ -897,28 +899,28 @@ def _sig_charge(S):
 
 ArithEncodeStep = _part(
     "ArithEncodeStep", ("K", "BIN"), _sig_step, _build_step,
-    "one symbol through ENC-CODE's 32-bit WNC arithmetic encoder, its output bits checked in the decoder's order against "
+    "one symbol through the 32-bit WNC arithmetic encoder, its output bits checked in the decoder's order against "
     "the window's next K segment bits; the next coder state and the bits consumed, the symbol's charge "
     "(`arith_encode.reference_step`)")
 
 ArithEncodeFinish = _part(
     "ArithEncodeFinish", (), _sig_finish, _build_finish,
-    "ENC-CODE's arithmetic encoder's termination checked against the window's last two segment bits "
+    "the arithmetic encoder's termination checked against the window's last two segment bits "
     "(`arith_encode.reference_finish`)")
 
 KTContext = _part(
     "KTContext", ("C", "NW"), _sig_kt, _build_kt,
-    "ENC-REPLAY's adaptive KT estimate for one decision's context, scaled into the coder's total as advice v1 did "
+    "the replay's adaptive KT estimate for one decision's context, scaled into the coder's total as advice v1 did "
     "before code_v1, and its counts updated (`arith_encode.reference_kt`)")
 
 ArithCountStep = _part(
     "ArithCountStep", ("K", "BIN", "CW"), _sig_count, _build_count_step,
-    "one symbol through ENC-CODE's 32-bit WNC arithmetic encoder, the bits it puts in the window's segment added to the "
+    "one symbol through the 32-bit WNC arithmetic encoder, the bits it puts in the window's segment added to the "
     "window's count (`arith_encode.reference_count_step`)")
 
 ArithCountFinish = _part(
     "ArithCountFinish", ("CW",), _sig_count_finish, _build_count_finish,
-    "ENC-CODE's arithmetic encoder's termination added to the window's count, held to the declared charge c "
+    "the arithmetic encoder's termination added to the window's count, held to the declared charge c "
     "(`arith_encode.reference_count_finish`)")
 
 BookKT = _part(

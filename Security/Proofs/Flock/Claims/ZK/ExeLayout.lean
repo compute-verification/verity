@@ -355,6 +355,27 @@ noncomputable def exeTape (t : Fin Claims.Flock.zkTableCap → ExeCell) : FlockC
   lanePad i l k := fAt 0 (fun l => fAt 0 ((cellAt t i).1.2.1.1 l) k) l
   mask _ _ := 0
 
+/-! ## What the workers see -/
+
+/-- **What the workers see of a cell**: the mask slot's words, the lanes' paddings with the extra lanes (whose
+paddings are among them), and level 0's salts by tree position, which the device's level-0 commitment reads; never the
+pads, `pad_h`, `pad_μ`, `μ`, the pads trees', `τ`'s or levels ≥ 1's salts, or the ideal seeds. -/
+abbrev ExeSeen : Type :=
+  (Fin (2 ^ 35) → Fin 128 → ZMod 2) × ((Fin (schMax + 4) → Fin schMax → 𝔽) × (Fin 2 → Fin 2 → Fin schMax → 𝔽)) ×
+    (Fin (schMax + schMax) → ZkView.Salt)
+
+/-- A cell's part the workers see. -/
+def exeSeen (c : ExeCell) : ExeSeen := (c.1.1, c.1.2.1, c.2.1.1)
+
+/-- **What the workers see of the nonce and the tape**: the nonce and each cell's `exeSeen`. -/
+def seenOf {N : Type} (ρ : N × (Fin Claims.Flock.zkTableCap → ExeCell)) :
+    N × (Fin Claims.Flock.zkTableCap → ExeSeen) :=
+  (ρ.1, fun i => exeSeen (ρ.2 i))
+
+theorem seenOf_surjective {N : Type} : Function.Surjective (seenOf (N := N)) := fun s =>
+  ⟨(s.1, fun i => (((s.2 i).1, (s.2 i).2.1, Classical.arbitrary _), ((s.2 i).2.2, Classical.arbitrary _),
+    Classical.arbitrary _)), rfl⟩
+
 /-! ## Round `0` at the executable's layout -/
 
 theorem saltBytes_size (y : ZkView.Salt) : (ZkView.saltBytes y).size = 192 := by

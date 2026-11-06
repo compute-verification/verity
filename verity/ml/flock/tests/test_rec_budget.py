@@ -4,9 +4,10 @@ caps sit far above every deployed V* session at every `fast100` schedule: a tabl
 later level's RecCap over both reps' `2 · 2^cap` tops, RecCap's `2^cap`), a part's ports (its row ports, at most
 `MAX_REGIONS`, with `v` and `out`) and the deepest registered tree (`rec-acc`'s chain of every opening, both reps' and R's);
 and V*'s list, the recursion's parts (each level's RecOpen, the algebra's parts, RecCap at each later level and over level
-0's cap), at every `fast100` m of the deployed class's claims."""
+0's cap), at every deployed inner shape, while the cap is the 16 parts the recursion's soundness bound covers."""
 from __future__ import annotations
 
+import pytest
 from verity_flock import rec_algebra as A
 from verity_flock import rec_budget as RB
 from verity_flock import rec_residuals as RR
@@ -29,9 +30,14 @@ def test_the_mirror_refuses_what_the_lean_guards_refuse():
     assert RB.table("", 510) is None and RB.table("", RB.MAX_INSTANCES) is None
     assert RB.table("", RB.MAX_INSTANCES + 1) == (
         f": refused: a V* session's table of 65537 instances, more than 65536: {TAIL}")
-    assert RB.count(10) is None and RB.count(RB.MAX_STATEMENTS) is None
-    assert RB.count(RB.MAX_STATEMENTS + 1) == (
-        f"refused: V*'s list at the verifier's inner shape holds 4097 statements, more than 4096: {TAIL}")
+    assert RB.MAX_STATEMENTS == 16
+    assert RB.count(10) is None and RB.count(16) is None
+    assert RB.count(17) == (
+        "refused: V*'s list at the verifier's inner shape holds 17 statements, more than 16: the recursion's soundness "
+        "bound covers at most 16 V* parts")
+    assert RB.count(4096) == (
+        "refused: V*'s list at the verifier's inner shape holds 4096 statements, more than 16: the recursion's soundness "
+        "bound covers at most 16 V* parts")
 
 
 def test_log2ceil_is_the_verifiers():
@@ -51,13 +57,24 @@ def test_the_caps_sit_far_above_every_deployed_v_star_session():
     assert 60 * (RR.MAX_REGIONS + 2) <= RB.MAX_PORTS
 
 
-def test_the_statement_cap_sits_far_above_every_deployed_v_star_list():
-    counts = {}
-    for shape in [(m, 22, 8) for m in range(22, 36)] + [(22, 6, 16)]:
-        try:
-            sh = A.Shape(*shape)
-            counts[shape] = 2 * len(sh.sched.levels) + len(RR.parts(RR.spec(sh)))
-        except ValueError:
-            continue
-    assert len(counts) >= 10 and counts.get((27, 22, 8)) == 10, counts
-    assert 64 * max(counts.values()) <= RB.MAX_STATEMENTS, counts
+def _listed(m: int, k: int, c: int, holo: bool = False) -> int:
+    """V*'s list at a plain or holo inner shape (`RecVStar.statements`): each level's RecOpen and RecCap, and the parts."""
+    sh = A.Shape(m, k, c, holo=holo)
+    return 2 * len(sh.sched.levels) + len(RR.parts(RR.spec(sh)))
+
+
+def _candidate_3(m: int, k: int, c: int, r_m: int) -> int:
+    """Candidate 3's list: the holo list, RecSparse, R's levels at its `m` and R's opening parts (`candidate3Statements`)."""
+    r = A.Shape(r_m, 6, 2, salt_len=0, opening_only=True)
+    return _listed(m, k, c, holo=True) + 1 + len(r.sched.levels) + len(RR.parts(RR.spec(r)))
+
+
+@pytest.mark.slow
+def test_the_statement_cap_holds_every_deployed_v_star_list():
+    """85-rec-reprice's K = 4096 statement (m 35, three regions) lists 16, the recursion bench's at N = 2 (m 27) 10, the
+    served silu-mul statement (29, 26, 6) 12 and 88-rec-c3-inner's candidate 3 (25, 22, 8) at R's m 23 15: each within
+    the cap. At most three regions every m ≤ 35 lists at most 16, and four regions at m 35 (17) or candidate 3 at m 28
+    (17) is refused."""
+    assert [_listed(35, 24, 8), _listed(27, 24, 8), _listed(29, 26, 6), _candidate_3(25, 22, 8, 23)] == [16, 10, 12, 15]
+    assert max(_listed(m, 22, c) for m in range(22, 36) for c in (4, 6, 8)) == RB.MAX_STATEMENTS
+    assert RB.count(_listed(35, 24, 10)) is not None and RB.count(_candidate_3(28, 22, 8, 23)) is not None

@@ -275,7 +275,7 @@ class Device:
 
 class FakeDevice:
     """CPU stand-in (``--fake-silicon MODEL``): the sparse words are MODEL's, the dense twins the dense atom's model; a dry run,
-    refused under a research run."""
+    refused with ``RESEARCH_RUN_ID`` set."""
 
     def __init__(self, model_name: str):
         models = candidates()
@@ -707,7 +707,7 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("--arch", default="sm_120a")
     args = ap.parse_args(argv)
     if getattr(args, "fake_silicon", None) and SHARED.RESEARCH_RUN_ID:
-        ap.error("--fake-silicon is a dry run and never publishes: not under a research run")
+        ap.error("--fake-silicon is a dry run and never publishes: unset RESEARCH_RUN_ID")
     if args.cmd == "build":
         out = Path(os.path.expandvars(args.out))
         out.mkdir(parents=True, exist_ok=True)

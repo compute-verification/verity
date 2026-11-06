@@ -28,7 +28,6 @@ namespace Pouw.Dimension.Forest
 
 open Finset Pouw.NCP Pouw.NCP.Relation Pouw.NCP.RelationProofs Pouw.Dimension Pouw.Dimension.Assumptions
 
-
 open scoped Classical
 
 noncomputable section
@@ -546,7 +545,7 @@ theorem a1CostQuadNear : A1CostQuadNear := by
   obtain ⟨h2, hli⟩ := gridNear k m n N R A B U w hind hmr hU hw
   exact theorem1Family N m n k w U h2 hli
 
-/-- **Theorem 1 on the grid** (`a1-cost.md` §3.2 with P8-2): `A1_cost_quad 2 0` holds for every `k` and `R`, the
+/-- **Theorem 1 on the grid**: `A1_cost_quad 2 0` holds for every `k` and `R`, the
 instance `w = word` of `a1CostQuadNear`. -/
 theorem a1CostQuadHolds : A1CostQuadHolds := by
   intro k R hind hmr m n N A B U hU Rs hRs S hS hSw
@@ -562,29 +561,6 @@ theorem algBoundQuad8 : AlgBoundQuad8 := by
   have h := algBoundQuad k m n N R A B U L P 8 2 0 hind hMR hU hL hP hout (a1CostQuadHolds k R) (by norm_num)
   rw [sub_zero, mul_one] at h
   exact_mod_cast h
-
-theorem ttNCPQuadOfA2 : TTNCPQuadOfA2 := by
-  intro k m n N R A B U M q γ₀ γ₂ h16 hk hind hMR hU hA2 hout hγ₂ hγ₀ hγ
-  exact ttNCPOfQuadA2 k m n N R A B U M q γ₀ 0 γ₂ h16 hk hind hMR hU hA2 (a1CostQuadHolds k R) hout hγ₂ hγ₀
-    (by rw [sub_zero, mul_one]; exact hγ)
-
-theorem quadChainConsistent : QuadChainConsistent := by
-  intro k hk h16 m n N A B U hU
-  obtain ⟨R, hind, hMR, -, hA2q, -, -, -, hq, -⟩ := pipeChainConsistent k hk h16 m n N A B U hU
-  refine ⟨R, hind, hMR, hA2q, hq, ?_⟩
-  have hk' : (1024 : ℝ) ≤ k := by exact_mod_cast hk
-  have h1 : 16 / (3 * (k : ℝ)) ≤ 1 / 2 := by
-    rw [div_le_iff₀ (by positivity)]
-    linarith
-  linarith
-
-theorem quadChainConsistentTight : QuadChainConsistentTight := by
-  intro k hk h16 m n N A B U hU
-  obtain ⟨R, hind, hMR, hA2q, hq, -⟩ := quadChainConsistent k hk h16 m n N A B U hU
-  refine ⟨R, hind, hMR, hA2q, hq, one_pos, ?_, by ring⟩
-  have hk' : (1024 : ℝ) ≤ k := by exact_mod_cast hk
-  rw [div_lt_one (by positivity)]
-  linarith
 
 end Grid
 

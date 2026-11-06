@@ -4,7 +4,7 @@ import Proofs.Flock.Claims.Complete.Json.Decode
 /-!
 # The honest record's checks at a value alike it
 
-`decode_recordObj` reads the printed honest record back through `JsonSpec`'s `parse_print`, which hands it a parsed
+`decode_recordObj` reads the printed honest record back through `FlockComplete.JsonRT.parse_print`, which hands it a parsed
 value alike the record (`Same`), and every check after that reads the parsed value only through `Same`. So the same
 checks pass at any value alike the honest record (`decodeJ_same`): S1–S14 at `Record.decodeJWith`, no parse. It takes
 no JSON premise: S3 reads `require_link` by a match, and U1's `canon` is total (`canon_ok`,
@@ -147,7 +147,7 @@ theorem decodeJ_same {h : ByteArray → ByteArray}
       rintro ⟨hn, hg, D, hD, hDs⟩ hdvs
       simp only [Option.getD_some] at hdvs
       have hn' : dv ≠ Json.null := fun e => hn (same_null (e ▸ hdvs.symm))
-      obtain ⟨c, hc⟩ := FlockComplete.JsonRT.canon_ok d hg
+      obtain ⟨c, hc, -⟩ := FlockComplete.JsonRT.canon_ok d hg
       have hc' : canon dv = .ok c := by rw [← FlockComplete.JsonRT.canon_same _ _ hdvs, hc]
       rw [ho₂ hn']
       simp only [Draw.check, hc, hc', ok_bind, bne_self_eq_false, Bool.false_eq_true, ite_false, hD, hDs]

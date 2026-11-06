@@ -22,10 +22,9 @@ can open (`L_t`) gives its share. Neither statement has a premise beyond `L_t` h
 the code charges at the session's bounds on a window's receipts and draws, not at one record's `U_t` and `s'_t`. Where
 every window's roots, ranks and verifiers are fixed by its cut, `split_t = 0` and the bound is
 `Σ_t √(|L_t|·s_t)·q_t/2^256.5` (`Accounting.SecurityProofs.Remote.Binding.binding_le_of_fixed`), `ledger.binding`'s
-charge. The deployed prover holds the challenger's commitment to every coin (`Committed`), and a root it computes from
-that commitment reads window `t`'s coin, so in the deployed play (`Committed.play com`) the roots can split and
-`split_t` is not bounded here: the gap `binding-split`. The design that would close it sends the prover no
-commitment to window `t`'s coin before window `t`'s roots are in (note:20261025T0115Z-report-bind-close).
+charge. The deployed challenger sends the prover no commitment to window `t`'s coin before window `t`'s roots are in
+(the coin commitment comes only with the outcome), the design note:20261025T0115Z-report-bind-close asks for; that
+the roots then read only the cut is not stated here, so `split_t` is not bounded: the gap `binding-split`.
 -/
 
 namespace Accounting.Guarantees.Remote

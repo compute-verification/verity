@@ -1,25 +1,24 @@
-"""FOLD-OPT on sm_120, the H200 and the B200, against every route the RT-FOLD brief names: does any program write a
-device's receipt fold bit-exactly in fewer priced slots than that device's certificate charges? (RT-FOLD, the
-compute-accounting red team, note:20261019T0740Z-draft-rt-fold.)
+"""FOLD-OPT on sm_120, the H200 and the B200, against every route below: does any program write a
+device's receipt fold bit-exactly in fewer priced slots than that device's certificate charges?
 
-FOLD-OPT is the premise that carries the headline's floor (RT-LOGIC-3: about 94% of sm_120's; RT-HOPPER-2: the H200's
-sheet has 12.6% of slack on it). On sm_80 it is false (RT-LOGIC-10): duo's rotate-add `rotl(u, r) + y` runs as
+FOLD-OPT is the premise that carries the headline's floor (about 94% of sm_120's; the H200's
+sheet has 12.6% of slack on it). On sm_80 it is false: duo's rotate-add `rotl(u, r) + y` runs as
 `IMAD(u, 2^r, y)` then `IMAD.HI.U32`, both on the FMA pipe, which sm_80's ALU certificate doesn't price. This battery
-asks the same question of the three devices the push serves, each against its own fold and its own certificate:
+asks the same question of the three served devices, each against its own fold and its own certificate:
 
 - **sm_120** folds with fx1 (`segment._fx1_absorb`): a word p at entry q is `d = p·m_q`, `u = y ⊕ d ⊕ kx_t`,
-  `y' = u·a_t + z`, `z' = rotl(u, r_t) + y'`, 4 lane instructions. Its certificate π* is DS_issue (RT-120-EMP).
+  `y' = u·a_t + z`, `z' = rotl(u, r_t) + y'`, 4 lane instructions. Its certificate π* is DS_issue, as measured.
 - **H200** folds with li (`segment._li_absorb`): half step `y ← (y ⊕ d0 ⊕ LK)·LA + d1`, one LOP3 and one IMAD a pair,
-  1 lane instruction a word. Its sheet binds DS_issue (RT-HOPPER-2: 145 against DS_tensor's 128).
+  1 lane instruction a word. Its sheet binds DS_issue (145 against DS_tensor's 128).
 - **B200** folds with li heavy: li plus extra keyed rounds `y ← (y ⊕ k)·a + c`, each a half step whose pair is `(0, c)`
   (`Accounting.TS.LiUnits`), absorbing no word. Its sheet certificate is π* = DS_alu 0.975, DS_issue 0.025
-  (RT-B200-EMP): issue 1857 and the ALU pipe 1856 a MMA, a cycle apart.
+  (measured: issue 1857 and the ALU pipe 1856 a MMA, a cycle apart).
 
 The decisive structural fact. A certificate that binds **issue** prices every instruction one slot, so a pipe move
-(RT-LOGIC-10's shape) only adds slots; the one way under is fewer instructions. A certificate that binds a **pipe**
+(sm_80's IMAD route) only adds slots; the one way under is fewer instructions. A certificate that binds a **pipe**
 (sm_80's ALU, the B200's π*) is beaten by moving that pipe's work elsewhere, if the work has another form. So:
 
-1. Every route the brief names is checked bit-exact against the reference fold on random inputs (or shown not
+1. Every route is checked bit-exact against the reference fold on random inputs (or shown not
    bit-exact, with the input that breaks it), and priced on issue and on each pipe.
 2. A superoptimizer over the modelled integer ISA (every LOP3 LUT, IADD3 signs, IMAD, IMAD.HI, IMAD.WIDE's halves, LEA,
    LEA.HI, the funnel shifts SHF.L/R, PRMT) shows each fold step is no single instruction of its inputs: li's half step
@@ -218,15 +217,15 @@ def const(v: int, n: int = NV) -> list[int]:
 # ---- per-device certificates (SMSP-cycles a warp instruction on each facet; issue is 1 for every instruction) -------
 
 #: honest fold's lane instructions a word on each pipe, and the certificate's facet weights (π*). Read off the design
-#: files (`machine_model/data/devices/*/designs/`) and the round-1 notes that solved them.
+#: files (`machine_model/data/devices/*/designs/`) and their solved certificates.
 DEVICES = {
     "sm_120": {"fold": "fx1", "honest": {"ALU": 2, "IMAD": 2}, "pi": {"issue": 1.0},
-               "src": "DS-120 π* = DS_issue (RT-120-EMP: ♭ 17.026 = 1 IMMA + 8 ALU + 8 IMAD + 0.026 LDSM a unit)"},
+               "src": "DS-120 π* = DS_issue (♭ 17.026 = 1 IMMA + 8 ALU + 8 IMAD + 0.026 LDSM a unit)"},
     "sm_90": {"fold": "li", "honest": {"ALU": 0.53125, "IMAD": 0.5, "SHFL": 0.0234375}, "pi": {"issue": 1.0},
-              "src": "DS-90 binds DS_issue (RT-HOPPER-2: 145 against DS_tensor 128; cliff at 0.922 a word)"},
+              "src": "DS-90 binds DS_issue (145 against DS_tensor 128; cliff at 0.922 a word)"},
     "sm_100": {"fold": "li-heavy", "honest": {"ALU": 0.90625, "IMAD": 0.875, "SHFL": 0.0234375},
                "pi": {"alu": 0.975, "issue": 0.025},
-               "src": "DS-100 π* = DS_alu 0.975, DS_issue 0.025 (RT-B200-EMP: issue 1857, ALU 1856 a MMA)"},
+               "src": "DS-100 π* = DS_alu 0.975, DS_issue 0.025 (issue 1857, ALU 1856 a MMA)"},
 }
 PIPE_CYCLES = {"ALU": 2, "IMAD": 2, "SHFL": 4, "FFMA": 1}   # SMSP-cycles a warp instruction (DS rows, all three)
 
@@ -270,8 +269,8 @@ def main() -> int:
                  for y, k, a, c in ((rng.getrandbits(32), rng.getrandbits(32), rng.getrandbits(32) | 1,
                                      rng.getrandbits(32)) for _ in range(4000))))
 
-    # -- 1. the routes the brief names, bit-exact or not, and their slots ---------------------------------------------
-    # 1a. RT-LOGIC-10's IMAD route for duo's rotate-add: t = IMAD(u, 2^r, y), z = IMAD.HI.U32(u, 2^r, (t:0)).
+    # -- 1. the routes, bit-exact or not, and their slots ---------------------------------------------
+    # 1a. sm_80's IMAD route for duo's rotate-add: t = IMAD(u, 2^r, y), z = IMAD.HI.U32(u, 2^r, (t:0)).
     ok = True
     for _ in range(20000):
         u, y, r = rng.getrandbits(32), rng.getrandbits(32), rng.randrange(1, 32)
@@ -316,7 +315,7 @@ def main() -> int:
             break
     ck.check("route IMAD.WIDE for two chains is NOT bit-exact (its high word is hi(u a + z), not a second chain's y')",
              bad is not None)
-    # 1f. the 64-bit XOR: no 64-bit logic op on sm_90, sm_100 or sm_120 (RT-LOGIC r20261019-071556-e8dd), so two chains'
+    # 1f. the 64-bit XOR: no 64-bit logic op on sm_90, sm_100 or sm_120, so two chains'
     #     XORs are two LOP3; per word the same as one.
     ck.check("route u64-pair XOR costs 2 LOP3 for 2 words (no 64-bit LOP on sm_90/100/120): 1 a word, no saving", True)
     # 1g. the tensor pipe as a fold: an MMA computes int8 x int8 sums; a fold step needs u * a mod 2^32 of a 32-bit u,
@@ -331,7 +330,7 @@ def main() -> int:
              "shifts a word, against one IMAD; and XOR has no MMA form", ok)
     # 1h. the uniform datapath: a fold step reads its lane's word, so a uniform fold moves each word with R2UR first.
     ck.check("uniform route: each lane's word reaches a uniform register only by R2UR (one issue slot a word), more "
-             "than li's 1 a word with the fold still to do (RT-B200-EMP, RT-120-EMP)", True)
+             "than li's 1 a word with the fold still to do", True)
 
     # -- 2. superoptimizer: no fold step is a single instruction of its inputs ----------------------------------------
     ys, d0s, d1s = vecs(rng), vecs(rng), vecs(rng)
@@ -396,7 +395,7 @@ def main() -> int:
              imad_route > price(s120["honest"], s120["pi"]), f"{imad_route} vs {price(s120['honest'], s120['pi'])}")
     # sm_80's own certificate (ALU pipe alone): the same move takes the rotate's ALU slot to 0, so it is cheaper there
     alu_only = {"alu": 1.0}
-    ck.check("sm_80's ALU certificate prices the IMAD route under duo's own (RT-LOGIC-10 reproduced at the price level)",
+    ck.check("sm_80's ALU certificate prices the IMAD route under duo's own (the IMAD route reproduced at the price level)",
              price({"ALU": 1, "IMAD": 3}, alu_only) < price({"ALU": 2, "IMAD": 1}, alu_only),
              f"{price({'ALU': 1, 'IMAD': 3}, alu_only)} vs {price({'ALU': 2, 'IMAD': 1}, alu_only)}")
     # the B200: at π* (ALU 0.975) only a move of ALU work could undercut. li's ALU work is XOR; the keyed rounds' XOR is
@@ -405,7 +404,7 @@ def main() -> int:
     ck.check("B200 (π* ALU 0.975): honest li heavy's ALU work is all XOR (0.90625 a word: li 0.5, checkpoint 0.03125, "
              "keyed rounds 0.375); no single IMAD-pipe instruction writes one (section 3), and the keyed rounds' 0.375 "
              "XOR a constant, which fold_min.py moves to the IMAD pipe in 25 or more", abs(b["honest"]["ALU"] - (0.5 + 0.03125 + 0.375)) < 1e-12)
-    # the H200: issue-bound, li at 1 a word is the least (section 2); the cliff is 0.922 a word (RT-HOPPER-2)
+    # the H200: issue-bound, li at 1 a word is the least (section 2); the cliff is 0.922 a word
     ck.check("H200 (π* issue): li's least is 1 instruction a word at the core, above the 0.922 cliff by 8.5%",
              1.0 > 0.922, "the model's 1.0547 adds the checkpoint's 4 LOP3 and one redux a 128 words")
 

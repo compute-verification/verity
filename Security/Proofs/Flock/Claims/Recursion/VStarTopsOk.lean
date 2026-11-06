@@ -88,7 +88,7 @@ theorem capLevel_of_partAt {x : Msg} {r : XR} (hr : readX x = some r) {rs : Arra
   have hn : nS x = r.w.parts.length := by simp [nS, hr]
   rw [hvs] at hst
   simp only [Except.toOption, Option.bind_some] at hst
-  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, hA, hC, K, n0, hK, hT, rfl⟩ := FlockC3.Reps.list_ok hvs
+  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, hA, hC, K, Lk, n0, hK, hT, hLk, rfl⟩ := FlockC3.Reps.list_ok hvs
   obtain ⟨s', _, ps, hsch, -, -, rfl⟩ := FlockVBridge.Family.statementsOf_eq hA
   have hm := Array.mem_of_getElem? hst
   rcases Array.mem_append.1 hm with hm | hm
@@ -102,16 +102,19 @@ theorem capLevel_of_partAt {x : Msg} {r : XR} (hr : readX x = some r) {rs : Arra
     · rcases FlockC3.Reps.candidate3_kinds hC _ hm with ⟨_, _, he⟩ | ⟨_, _, _, _, he⟩ |
         ⟨_, _, _, _, _, _, he⟩ <;> cases he
   · rcases Array.mem_append.1 hm with hm | hm
-    · right
-      obtain ⟨g, hg, he⟩ := Array.mem_iff_getElem.1 hm
-      have hts := topsListed_size hT hrs
-      have hgt : g < (RecVStar.topSizes rs).length := by omega
-      have hi := topsListed_at hT hrs (List.getElem?_eq_getElem hgt) hg
-      obtain ⟨N', hN'⟩ := levelCap_at hK hg
-      rw [hN'] at he hi
-      simp only [_root_.VStar.Stmt.cap.injEq] at he
-      simp only [_root_.VStar.Stmt.instances] at hi
-      exact ⟨g, _, List.getElem?_eq_getElem hgt, he.1.symm, by rw [← he.2]; exact hi⟩
+    · rcases Array.mem_append.1 hm with hm | hm
+      · right
+        obtain ⟨g, hg, he⟩ := Array.mem_iff_getElem.1 hm
+        have hts := topsListed_size hT hrs
+        have hgt : g < (RecVStar.topSizes rs).length := by omega
+        have hi := topsListed_at hT hrs (List.getElem?_eq_getElem hgt) hg
+        obtain ⟨N', hN'⟩ := levelCap_at hK hg
+        rw [hN'] at he hi
+        simp only [_root_.VStar.Stmt.cap.injEq] at he
+        simp only [_root_.VStar.Stmt.instances] at hi
+        exact ⟨g, _, List.getElem?_eq_getElem hgt, he.1.symm, by rw [← he.2]; exact hi⟩
+      · exfalso
+        rcases FlockC3.VStarList.linkStatements_ok hLk with ⟨-, rfl⟩ | ⟨_, -, rfl⟩ <;> simp at hm
     · left
       simp at hm
       obtain ⟨rfl, rfl⟩ := hm
@@ -129,7 +132,7 @@ theorem recOpenLevel_of_partAt {x : Msg} {r : XR} (hr : readX x = some r) {rs : 
   obtain ⟨vs, hvs, -⟩ := readX_statements hr
   rw [hvs] at hst
   simp only [Except.toOption, Option.bind_some] at hst
-  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, hA, hC, K, n0, hK, hT, rfl⟩ := FlockC3.Reps.list_ok hvs
+  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, hA, hC, K, Lk, n0, hK, hT, hLk, rfl⟩ := FlockC3.Reps.list_ok hvs
   obtain ⟨s', _, ps, hsch, -, -, rfl⟩ := FlockVBridge.Family.statementsOf_eq hA
   have hm := Array.mem_of_getElem? hst
   have hlt : l < s'.levels.size := by
@@ -145,10 +148,12 @@ theorem recOpenLevel_of_partAt {x : Msg} {r : XR} (hr : readX x = some r) {rs : 
       · rcases FlockC3.Reps.candidate3_kinds hC _ hm with ⟨_, _, he⟩ | ⟨_, _, _, _, he⟩ |
           ⟨_, _, _, _, _, _, he⟩ <;> cases he
     · rcases Array.mem_append.1 hm with hm | hm
-      · obtain ⟨g, hg, he⟩ := Array.mem_iff_getElem.1 hm
-        obtain ⟨N', hN'⟩ := levelCap_at hK hg
-        rw [hN'] at he
-        cases he
+      · rcases Array.mem_append.1 hm with hm | hm
+        · obtain ⟨g, hg, he⟩ := Array.mem_iff_getElem.1 hm
+          obtain ⟨N', hN'⟩ := levelCap_at hK hg
+          rw [hN'] at he
+          cases he
+        · rcases FlockC3.VStarList.linkStatements_ok hLk with ⟨-, rfl⟩ | ⟨_, -, rfl⟩ <;> simp at hm
       · simp at hm
   have hsz := levelCaps_size hK hsch
   have hts := topsListed_size hT hrs
@@ -260,7 +265,7 @@ theorem hT_honest {Ir : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (Ir.fit
 /-- **The stager accepts every part of a dense statement at the honest run**: `hok_shaped` with its `hT` and `hC`
 discharged (`hT_honest`, `hC_honest`). -/
 theorem hok_honest {Ir : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (Ir.fit x).Tape} {hist : List (Msg × Msg)}
-    {st : Claims.Recursion.Stmt} {s : ℕ} (hx : parse x = some st) (hf : Claims.Recursion.Form.Dense st.form)
+    {st : Claims.Recursion.CompiledStatement} {s : ℕ} (hx : parse x = some st) (hf : Claims.Recursion.Form.Dense st.form)
     (hI : IrShaped Ir x w ρ hist)
     (hN : ∀ (j : ℕ) (nm : String) (p : _root_.VStar.Part) c, partAt x s = some (.inner j nm p, c) → ∀ xr rs,
       readX x = some xr → repSched xr.shape = some rs → ∀ pn ∈ p.S.ports.map Prod.fst,

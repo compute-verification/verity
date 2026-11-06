@@ -1,7 +1,7 @@
 #!/bin/bash
 # First boot of the Nebius server, as root, from cloud-init's runcmd (launch.sh embeds it); safe to run again.
 #
-#   - sshd: keys only, no root, only $VY_USER;
+#   - sshd: keys only, no root, only $VY_USER, and room for many concurrent connections (MaxStartups, MaxSessions);
 #   - the data disk (/dev/disk/by-id/virtio-data) is formatted ONLY when it holds no filesystem, and mounted at /workspace, where
 #     the tooling already looks: /workspace/hf (HF_HOME, the weight cache), /workspace/research (the research root),
 #     /workspace/ramlock (--mem-gb reservations), /workspace/cp (the vLLM integration's build root, as on a RunPod pod: its
@@ -24,13 +24,18 @@ PermitRootLogin no
 AllowUsers $U
 X11Forwarding no
 EOF
-systemctl reload ssh || systemctl reload sshd || true
+# sshd keeps the first value it reads; on the nodes a MaxStartups in a drop-in didn't take effect (the main file's own line won),
+# and at the default 10:30:100 ssh from runs and agents was refused at random. So both go first in the main file.
+sed -i -E '/^[[:space:]]*#?[[:space:]]*(MaxStartups|MaxSessions)[[:space:]]/d' /etc/ssh/sshd_config
+sed -i '1i MaxStartups 200:30:400\nMaxSessions 64' /etc/ssh/sshd_config
+sshd -t && { systemctl reload ssh || systemctl reload sshd || true; }
 
 for _ in $(seq 60); do [ -e "$DEV" ] && break; sleep 2; done
 [ -e "$DEV" ] || { log "no data disk at $DEV"; exit 1; }
 if [ -z "$(blkid -o value -s TYPE "$DEV" || true)" ]; then
   log "formatting $DEV (it holds no filesystem)"
-  mkfs.ext4 -q -L vy-data -m 0 -i 262144 -E lazy_itable_init=1,lazy_journal_init=1 "$DEV"
+  # one inode per 64 KiB: at 256 KiB a 2 TB disk ran out of inodes with 46% of its bytes used, a Lean build tree being 0.5-1M inodes
+  mkfs.ext4 -q -L vy-data -m 0 -i 65536 -E lazy_itable_init=1,lazy_journal_init=1 "$DEV"
 fi
 mkdir -p /workspace
 grep -q ' /workspace ' /etc/fstab || echo "LABEL=vy-data /workspace ext4 defaults,noatime,nofail,x-systemd.device-timeout=120 0 2" >> /etc/fstab
@@ -40,15 +45,26 @@ install -d -o "$U" -g "$U" /workspace/hf /workspace/hf/hub /workspace/hf/prefetc
 
 # TMPDIR: the root disk is 247 GB, and one Lean audit's scratch tree is ~22 GB; four at once filled it on vy-nebius-1 (6 Oct)
 install -d -m 1777 -o root -g root /workspace/tmp
+# the check cache (~/.cache/verity-check, a busy node's Lean build trees: 150 GB and more) lives on /workspace as well; on the
+# root disk a Security build filled it mid-run. A real directory there is the node's live cache: it is moved with its slots
+# drained, never here.
+CC=$(getent passwd "$U" | cut -d: -f6)/.cache/verity-check
+install -d -o "$U" -g "$U" /workspace/research/cache /workspace/research/cache/verity-check "$(dirname "$CC")"
+if [ ! -e "$CC" ] && [ ! -L "$CC" ]; then
+  ln -sT /workspace/research/cache/verity-check "$CC" && chown -h "$U:$U" "$CC"
+elif [ ! -L "$CC" ]; then
+  log "$CC is a directory on the root disk: move it onto /workspace/research/cache with the node's check slots drained"
+fi
 if [ -n "${VY_FS_TAG:-}" ]; then   # a shared filesystem launch.sh attached (NEBIUS_FILESYSTEM_ID), shared by every VM it is attached to
   mkdir -p /workspace/fs
   grep -q ' /workspace/fs ' /etc/fstab || echo "$VY_FS_TAG /workspace/fs virtiofs defaults,nofail 0 0" >> /etc/fstab
   mountpoint -q /workspace/fs || mount /workspace/fs
   chown "$U:$U" /workspace/fs
 fi
-echo 'd /workspace/tmp 1777 root root 10d' > /etc/tmpfiles.d/workspace-tmp.conf
+# 12 h, not 10 d: every job's TMPDIR, so a suite's dead pytest temp trees cost inodes until they age out
+echo 'd /workspace/tmp 1777 root root 12h' > /etc/tmpfiles.d/workspace-tmp.conf
 touch /etc/environment
-# UV_SYSTEM_CERTS (the pinned uv's name for what was --native-tls): uv reads the system trust store, not the roots it ships (INF-314)
+# UV_SYSTEM_CERTS (the pinned uv's name for what was --native-tls): uv reads the system trust store, not the roots it ships
 for kv in HF_HOME=/workspace/hf UV_CACHE_DIR=/workspace/cache/uv LEASE_DIR=$LEASE_DIR CUDA_DEVICE_ORDER=PCI_BUS_ID TMPDIR=/workspace/tmp \
     UV_SYSTEM_CERTS=1; do
   grep -q "^${kv%%=*}=" /etc/environment || echo "$kv" >> /etc/environment
@@ -85,7 +101,7 @@ apt-get update -q
 # python3 (node 2 and cpu-1 lacked it, 11 Oct). python3.12-dev and build-essential: Triton compiles cuda_utils.c against
 # Python.h at a vLLM engine's first start (vy-glm53-eu 16 Oct and vy-glm53-eu2 17 Oct lacked it; circuits)
 apt-get install -y -q git rsync fio jq python3-venv python3-numpy python3.12-dev build-essential util-linux ripgrep
-# The trust store (INF-314): the Nebius images ship with apt's daily timers off, so ca-certificates stayed at the image's and
+# The trust store: the Nebius images ship with apt's daily timers off, so ca-certificates stayed at the image's and
 # kept roots Ubuntu had removed. Upgrade it now, and let unattended-upgrades keep it, and only it, current: no driver or kernel
 # package moves under a run. Strict: a whitelist that isn't only raises its packages' priority and upgrades everything else
 # too. `research deploy drift` lists a node that still trusts a distrusted root.

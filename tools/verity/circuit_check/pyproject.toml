@@ -28,6 +28,17 @@ markers = [
 ]
 
 [tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = [
+    "tests/test_ambient.py",
+    "tests/test_cache.py",
+    "tests/test_cache_redteam.py",
+    "tests/test_cache_redteam_1176.py",
+    "tests/test_circuit_check.py",
+    "tests/test_metadata_listings.py",
+    "tests/test_shard.py",
+    "tests/test_units.py",
+]
 # a pass can take up to an hour, past suites.py's SUITE_TIMEOUT_S
 timeout_s = 7200
 # its tests are independent; serially the suite is the check's critical path
@@ -44,18 +55,23 @@ worker_gb = 8
 # packages that define Definitions and templates, with their sidecars (`sidecars.discover` searches every package root, so a
 # sidecar anywhere else is read outside these and fails the guard), and the modules they import. Test-only:
 # test_sampled_replay.py (test_circuit_check.py's request Program), with verity_vllm/records, which its replay modules import.
+# verity_vllm/engine/spec.py: what the package's lazy `EngineSpec` (in its `__all__`) imports when a session fixture resolves
+# the package's names.
 # Read only to check the catalog's records (conftest.py):
 # pouw/window.py and sampled_proofs/service.py, which the records digest as import sites of the PoUW modules they hold
 # (`units._unchanged`), and which a whole build never imports. pouw/weights.py and sampled_proofs/__init__.py: h1zy reads an
 # H1 lane's chunks along K from weights (`chunks`), and weights imports one_stage. sampled_proofs/challenger.py and
 # claims/__init__.py: pouw/coins.py names its entropy's claim instance through the challenger's `coin_claim`.
 inputs_only = true
-inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/ml/__init__.py",
+inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/ml/__init__.py",
           "verity/core/protocols/sampled_proofs/__init__.py",
+          "verity/core/protocols/record.py",
           "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/kernels", "verity/ml/private_circuits",
           "verity/ml/randomness", "verity/ml/definitions", "verity/ml/flock/python/verity_flock", "verity/ml/windows",
           "verity/core/protocols/pouw/__init__.py", "verity/core/protocols/pouw/audit.py", "verity/core/protocols/pouw/salt.py",
           "verity/core/protocols/pouw/protocol.py",
+          # circuit/h1window.py imports both, so building the H1 units reads them.
+          "verity/core/protocols/pouw/core_check.py", "verity/core/protocols/pouw/leaf_lanes.py",
           "verity/core/protocols/pouw/serving.py", "verity/core/protocols/pouw/registration.py", "verity/core/protocols/pouw/coins.py",
           "verity/core/protocols/sampled_proofs/challenger.py", "verity/core/claims/__init__.py",
           "verity/core/protocols/pouw/grind.py", "verity/core/protocols/pouw/circuit", "verity/core/protocols/pouw/schemes",
@@ -110,14 +126,12 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/certifier/served_statics.circuit-check.py",
           "verity/core/protocols/certifier/served_statics.circuit-check.json",
           "verity/core/protocols/sampled_proofs/one_stage",
-          "verity/core/protocols/certifier/advised.py", "verity/core/protocols/certifier/advised.circuit-check.py",
-          "verity/core/protocols/certifier/advised.circuit-check.json",
           "verity/core/protocols/pouw/window.py", "verity/core/protocols/sampled_proofs/service.py",
           "verity/core/protocols/sampled_proofs/__init__.py", "verity/core/protocols/pouw/weights.py",
           "integrations/vllm/verity_vllm/settings.py", "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/config.py", "integrations/vllm/verity_vllm/program",
           "integrations/vllm/verity_vllm/check", "integrations/vllm/verity_vllm/commit", "integrations/vllm/verity_vllm/correspondence",
           "integrations/vllm/verity_vllm/observe", "integrations/vllm/verity_vllm/query", "integrations/vllm/verity_vllm/records",
-          "integrations/vllm/verity_vllm/engine/hooks.py",
+          "integrations/vllm/verity_vllm/engine/hooks.py", "integrations/vllm/verity_vllm/engine/spec.py",
           "integrations/vllm/verity_vllm/llm.py", "integrations/vllm/verity_vllm/pipeline/program_graph.py",
           "integrations/vllm/tests/check/test_sampled_replay.py", "benchmarks/numerical/python/verity_numerical",
           "verity/core/protocols/sampled_proofs/__init__.py",
@@ -132,6 +146,80 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/certifier/compile_slice_v3.circuit-check.py",
           "verity/core/protocols/certifier/compile_slice_v3.circuit-check.json",
           "verity/core/protocols/certifier/served_rows.py", "verity/core/protocols/certifier/warden.py",
-          "verity/core/protocols/certifier/release.py",
-          "verity/core/protocols/certifier/advised.py", "verity/core/protocols/certifier/advised.circuit-check.py",
-          "verity/core/protocols/certifier/advised.circuit-check.json"]
+          "verity/core/protocols/certifier/release.py"]
+
+# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
+# what a program it starts reads): the graph's test-file tasks are keyed on it.
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_ambient.py", "tests/test_cache.py", "tests/test_structural.py"]
+paths = [
+    "benchmarks/numerical/python/verity_numerical/bench",
+    "verity/core/protocols/certifier",
+    "verity/core/protocols/pous",
+    "verity/ml",
+]
+
+[[tool.verity.tests.reads]]
+tests = [
+    "tests/test_block.py",
+    "tests/test_bodies.py",
+    "tests/test_declared_tables.py",
+    "tests/test_named_targets.py",
+    "tests/test_pinned_targets.py",
+    "tests/test_targets.py",
+    "tests/test_wide_outputs.py",
+]
+paths = [
+    "benchmarks/numerical/python/verity_numerical/bench/templates.circuit-check.py",
+    "verity/core/protocols/certifier",
+    "verity/core/protocols/pous",
+    "verity/ml",
+]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_cache_redteam.py", "tests/test_cache_redteam_1176.py"]
+paths = ["tools/verity/circuit_check/src/circuit_check"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_attention_split.py", "tests/test_metadata_files.py"]
+paths = [
+    "benchmarks/numerical/python/verity_numerical/bench",
+    "tools/verity/circuit_check/src/circuit_check",
+    "verity/core/protocols/certifier",
+    "verity/core/protocols/pous",
+    "verity/ml",
+]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_moe_fp8_split.py"]
+paths = [
+    "benchmarks/numerical/python/verity_numerical/bench",
+    "integrations/vllm/verity_vllm/program",
+    "tools/verity/circuit_check/src/circuit_check",
+    "verity/core/protocols/certifier",
+    "verity/core/protocols/pous",
+    "verity/ml",
+]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_sampling_split_tasks.py", "tests/test_shard.py", "tests/test_split_prims_serve.py"]
+paths = [
+    "benchmarks/numerical/python/verity_numerical/bench/templates.circuit-check.py",
+    "tools/verity/circuit_check/src/circuit_check",
+    "verity/core/protocols/certifier",
+    "verity/core/protocols/pous",
+    "verity/ml",
+]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_units.py"]
+paths = [
+    "tools/verity/circuit_check/src/circuit_check",
+    "verity/core/protocols/certifier",
+    "verity/core/protocols/pous",
+    "verity/ml/circuits",
+    "verity/ml/commitments/gates",
+    "verity/ml/flock/python/verity_flock",
+    "verity/ml/private_circuits",
+]

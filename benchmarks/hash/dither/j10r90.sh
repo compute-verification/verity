@@ -13,18 +13,16 @@
 #          pinned builds at sm_90a, sass_gate.py --pin) and given the numeric run that pinned it on the H200,
 #          j10r90.json's sm90_pin (ieee_pin.cu, ieee_pin.py, pin_target.sh and the gate as they are now), an entry that
 #          never landed: what the gate would flag once it does
-#   check  (vy-dc-h200, under gpu-lease) job.sh's j10r90: unitsbench.py's J10-R gates at its own shapes, then j10r90.py
+#   check  (an H200, under a GPU lease) job.sh's j10r90: unitsbench.py's J10-R gates at its own shapes, then j10r90.py
 #          check at the frozen shape
-#   time   (vy-dc-h200, under gpu-lease) job.sh's j10r90t: j10r90.py time; with an s8-ship.tar sent
+#   time   (an H200, under a GPU lease) job.sh's j10r90t: j10r90.py time; with an s8-ship.tar sent
 #          (s8_linear/build.sh's ship plus its wgmma.py and configs.py), wgmma.linear as a second plain arm
 #
-#   research run --on auto --cwd source --timeout 30m -- bash benchmarks/hash/dither/j10r90.sh build
+#   OUT=B bash benchmarks/hash/dither/j10r90.sh build                     (a CPU host, up to 30 minutes)
 #   (or on the H200's host, outside any lease; where the host has no /workspace/cp/venv312, VERITY_BENCH_VENV names a
 #   torch venv for check and time)
-#   research run --on vy-dc-h200 --project verity --campaign e2e-demo --source . --cwd source --timeout 30m \
-#     --env GPU_LEASE_WHO=WHO --send BUILD_RUN/out/lib/sm_90a/h1u_kr.so --send .../h1u_kraqwxsc.so \
-#     [--send .../h1u_kra.so ...] --send .../BUILD.txt -- bash benchmarks/hash/dither/j10r90.sh check
-# then on a CPU node with check's out/j10r90-check.json and .npz sent: j10r90.py verify and j10r_units.py anchor.
+#   OUT=R LIBS=B/lib/sm_90a GPU_LEASE_WHO=WHO bash benchmarks/hash/dither/j10r90.sh check   (the H200, up to 30 minutes)
+# then on a CPU host with check's j10r90-check.json and .npz: j10r90.py verify and j10r_units.py anchor.
 # Env: NVCC (default CUDA 13.0's), LEASE (default "--max-min 20"), HB_WHO (default $GPU_LEASE_WHO, else dither/ and the run's id), BENCH_ARGS.
 set -uo pipefail
 WHAT=${1:?usage: j10r90.sh build|check|time}

@@ -1,7 +1,7 @@
 import Definitions.Pouw.PearlC.DeviceKernelWref
 
 /-!
-# The chain-only reading at a device record (the price-twins lane's file; definitions only, staged)
+# The chain-only reading at a device record (definitions only, staged)
 
 The forming-credit reading credits the salt-dependent forming (`fs` per activation element). The chain-only reading
 credits the unit without it, as `creditChainOnly` does at the H100 (`Game`): `creditDev` less `fs·m·k`, less the

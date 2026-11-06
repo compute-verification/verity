@@ -14,7 +14,7 @@ hypotheses).
 namespace FlockC3.RegLevels
 
 open Flock FlockSoundness.Refine
-open Flock.RecAlgebra (Messages LSt Coins)
+open Flock.RecAlgebra (Messages LSt CoinSource)
 
 variable {c : Array (Array F128)}
 
@@ -23,7 +23,7 @@ theorem levelsLoop_starts [Fact (RecAlgebra.NoEmpty c)] {M : Messages F128} {sch
     (hq : ∀ i ≤ R, LevelSeam (sch.levels.getD i default)) :
     ∀ (fuel i split : ℕ) (levels : Array (Array F256)) (e : ℕ) (st : LSt F128) (k : ℕ)
       (out : Array (Array F256) × ℕ) (st' : LSt F128) (k' : ℕ), i + fuel ≤ R →
-      RecAlgebra.levelsLoop sch M R fuel i split levels e st k (Coins.ofRounds c) = .ok ((out, st'), k') →
+      RecAlgebra.levelsLoop sch M R fuel i split levels e st k (CoinSource.ofRounds c) = .ok ((out, st'), k') →
       st'.conss.toList.map (fun x => (x.start, x.pos.size)) =
         st.conss.toList.map (fun x => (x.start, x.pos.size)) ++
           (List.range' (i + 1) fuel).map fun l => (l, (sch.levels.getD l default).q)
@@ -78,7 +78,7 @@ theorem ligeritoRun_starts [Fact (RecAlgebra.NoEmpty c)] {sch : Flock.Schedule} 
     (hrun : (RecAlgebra.ligeritoRun sch M).run
         { s := RecAlgebra.kofF T, q := ((RecAlgebra.Val.zero, RecAlgebra.Val.zero),
           (RecAlgebra.Val.zero, RecAlgebra.Val.zero), (RecAlgebra.Val.zero, RecAlgebra.Val.zero)) } k₀
-        (Coins.ofRounds c) = .ok (((initCh, levels, ext), stV), k')) :
+        (CoinSource.ofRounds c) = .ok (((initCh, levels, ext), stV), k')) :
     stV.conss.toList.map (fun x => (x.start, x.pos.size)) =
       (List.range sch.levels.size).map fun l => (l, (sch.levels[l]!).q) := by
   obtain ⟨hn7, h2, hl0, hc0, hl4, hcols, hext⟩ := hdim
@@ -122,7 +122,7 @@ at a `fast100` schedule on rounds with no empty round, it records level `ℓ`'s 
 positions. -/
 theorem conssAt_of_lig {m : ℕ} {sch : Flock.Schedule} {M : Messages F128} {tIn : F128} {sws : Array Switched}
     {k₂ k₃ : ℕ} {lgr : Array F128} {lg : RecAlgebra.LgPts} (hf : Flock.fast100 m = some sch)
-    (hlg : RecAlgebra.ligerito sch M tIn sws k₂ (Coins.ofRounds c) = .ok ((lgr, lg), k₃)) (hz : ∀ x ∈ lgr, x = 0)
+    (hlg : RecAlgebra.ligerito sch M tIn sws k₂ (CoinSource.ofRounds c) = .ok ((lgr, lg), k₃)) (hz : ∀ x ∈ lgr, x = 0)
     (hne : RecAlgebra.NoEmpty c) : ConssAt sch lg := by
   obtain ⟨ext, stV, hrun, -, -, -, -, hlc, -, -⟩ := RecAlgebra.ligerito_checks hlg hz
   have : Fact (RecAlgebra.NoEmpty c) := ⟨hne⟩

@@ -17,7 +17,7 @@ open Flock
 rep's stream and the statement's extra claims at the session's link points. -/
 theorem verifyRepWith_filesAt {M : Type → Type} [Monad M] [LawfulMonad M] [MonadExceptOf String M]
     [MonadLiftT Flock.V M] (hlift : ∀ {α : Type} (a : α), (monadLift (Except.ok a : Flock.V α) : M α) = pure a)
-    (hs : Flock.Hashes M) (spec : SessionSpec) (sess : Session) {tabs : Array Flock.Setup}
+    (hs : Flock.Hashes M) (spec : SessionSpec) (sess : RunRecord) {tabs : Array Flock.Setup}
     {pts : Array (Array F128)} {ps : Array Flock.Proof} {i r : ℕ} (hr : r < 2) (hk : 2 * i + r < ps.size)
     {sch : Flock.Schedule} (hsc : fast100 tabs[i]!.m = some sch) (hpts : sess.points = pts)
     {extras : Array Flock.Claim} (he : tabs[i]!.extra pts = .ok extras) {stream : StreamRec}
@@ -33,7 +33,7 @@ theorem verifyRepWith_filesAt {M : Type → Type} [Monad M] [LawfulMonad M] [Mon
 theorem liftV_ok_ocv {α : Type} (a : α) : (monadLift (Except.ok a : Flock.V α) : Claims.OCV α) = pure a := rfl
 
 /-- **`verifyRepWith_filesAt` in the oracle monad.** -/
-theorem verifyRepWith_filesAt_oc (hs : Flock.Hashes Claims.OCV) (spec : SessionSpec) (sess : Session)
+theorem verifyRepWith_filesAt_oc (hs : Flock.Hashes Claims.OCV) (spec : SessionSpec) (sess : RunRecord)
     {tabs : Array Flock.Setup} {pts : Array (Array F128)} {ps : Array Flock.Proof} {i r : ℕ} (hr : r < 2)
     (hk : 2 * i + r < ps.size) {sch : Flock.Schedule} (hsc : fast100 tabs[i]!.m = some sch)
     (hpts : sess.points = pts) {extras : Array Flock.Claim} (he : tabs[i]!.extra pts = .ok extras)

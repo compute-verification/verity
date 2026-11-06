@@ -131,24 +131,24 @@ theorem finRepLanes_ret (vs : finS.SwVals)
           tb.g (Masked.ligBasis x (finCoins x ops) w t j r extras) (Masked.layE x j) tb.extra r.val k +
         (_root_.Flock.Firewall.Finish.padsOf q.draws).h[k]!) =
       Composed.msgAt (fun i => (tabAt x ops j).tab.onVals.vals r
-          (Masked.wtOf Masked.PE x w j, vs x w ν (finCoins x ops) j) (randAtT x ops t j).1
-          (randAtT x ops t j).2.1.2.1 i + fOf (_root_.Flock.Firewall.Finish.padsOf q.draws).h[i.val]!) k := by
+          (Masked.wtOf Masked.PE x w j, vs x w ν (finCoins x ops) (finS.seenOf x t) j) (randAtT x ops t j).1
+          (randAtT x ops t j).2.1 i + fOf (_root_.Flock.Firewall.Finish.padsOf q.draws).h[i.val]!) k := by
     intro k hlo hhi
     have hkE : k < (Masked.tabC Masked.PE x j).z.nE := by
       rw [Masked.nE_eq_hab x j]
       exact hhi
     have e1 := hl0 k hlo hhi
     rw [hPh] at e1
-    have e2 := Masked.swSrcE_masked_pad_any x (finCoins x ops) w (vs x w ν (finCoins x ops)) t j r hkE
-    have e4 : FlockLevel3.GF128.val (vs x w ν (finCoins x ops) j r (Masked.wtOf Masked.PE x w j)
-        (randAtT x ops t j).1 (randAtT x ops t j).2.1.2.1 ⟨k, hkE⟩) +
+    have e2 := Masked.swSrcE_masked_pad_any x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t j r hkE
+    have e4 : FlockLevel3.GF128.val (vs x w ν (finCoins x ops) (finS.seenOf x t) j r (Masked.wtOf Masked.PE x w j)
+        (randAtT x ops t j).1 (randAtT x ops t j).2.1 ⟨k, hkE⟩) +
           (FlockComplete.padsOf (Masked.UE.tapeZk t) j.val r.val (Masked.layE x j)).h[k]! =
         FlockComplete.LigLock.l0Clear (Masked.ligCoin (finCoins x ops)) (Masked.ligP0 x j r) (Masked.zkTab x j).sch
           tb.g (Masked.ligBasis x (finCoins x ops) w t j r extras) (Masked.layE x j) tb.extra r.val k +
           (FlockComplete.padsOf (Masked.UE.tapeZk t) j.val r.val (Masked.layE x j)).h[k]! :=
       e2.symm.trans e1
-    have e3 : FlockLevel3.GF128.val (vs x w ν (finCoins x ops) j r (Masked.wtOf Masked.PE x w j)
-        (randAtT x ops t j).1 (randAtT x ops t j).2.1.2.1 ⟨k, hkE⟩) =
+    have e3 : FlockLevel3.GF128.val (vs x w ν (finCoins x ops) (finS.seenOf x t) j r (Masked.wtOf Masked.PE x w j)
+        (randAtT x ops t j).1 (randAtT x ops t j).2.1 ⟨k, hkE⟩) =
         FlockComplete.LigLock.l0Clear (Masked.ligCoin (finCoins x ops)) (Masked.ligP0 x j r) (Masked.zkTab x j).sch
           tb.g (Masked.ligBasis x (finCoins x ops) w t j r extras) (Masked.layE x j) tb.extra r.val k := by
       rw [← Composed.ZerocheckMasked.add_add_self (FlockLevel3.GF128.val _)

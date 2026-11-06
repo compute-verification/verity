@@ -43,7 +43,7 @@ schedule is `Zk.schedule`'s, and the record decodes to a session with table `j`'
 reader looks up no column off `C` in the reps' `zkRepColsOf` entries at `2·|regions|` extra claims on the streams'
 rounds and table `j`'s proof files, below level 0's `2^d`. -/
 def ZkTxNoOff (I : Inputs) (d : Lean.Json) (j : ℕ) {N : ℕ} (C : Fin N → List 𝔽) (t : Exec.Transcript) : Prop :=
-  ∀ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session) (sch : Flock.Schedule) (tPad : ℕ)
+  ∀ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord) (sch : Flock.Schedule) (tPad : ℕ)
     (s₀ s₁ : StreamRec) (h : j < sts.size),
     FlockDeploy.KS.setupAt (zkInputs I) (some d) = .ok (spec, sts) → Record.decode spec t.record = .ok sess →
     Zk.schedule sts[j].m = .ok (sch, tPad) →
@@ -135,8 +135,7 @@ variable {n mPts : ℕ} {Reg : Type}
 
 /-- **`runsAtZCJH_live` with no witness-lane opening off `C` at table `j₀` unless it self-clashes**, under hidden
 outputs: `runsAtZCJ_live_offW` from `runsAtZCJH_live_entries`. -/
-theorem runsAtZCJH_live_offW (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
-    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
+theorem runsAtZCJH_live_offW (I : Inputs) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
@@ -150,7 +149,7 @@ theorem runsAtZCJH_live_offW (I : Inputs) (ht : I.tags.typed = false) {c : Flock
           ¬ SelfClashZ hs512 ((planZHJ dj y₀ S R).get j) out))) := by
   intro ω R o ho j
   obtain ⟨hacc, hno⟩ := ho
-  obtain ⟨pend, h₀, h₁, hok, he⟩ := runsAtZCJH_live_entries I ht hc dj y₀ wr L hT hRec hDraw ω R o hacc j
+  obtain ⟨pend, h₀, h₁, hok, he⟩ := runsAtZCJH_live_entries I ht dj y₀ wr L hT hRec hDraw ω R o hacc j
   refine ⟨pend, h₀, h₁, hok, fun hj hN => ?_⟩
   subst hj
   exact not_offW_of_entries hN C rfl he hno
@@ -264,8 +263,7 @@ theorem decodesTableW_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT :
 
 /-- **The deployed hidden-output `--zk` decoders are right at `zkTabs` at the witness-lane verdict at table `j₀`**
 (`decodesTableH_zkTabs` with `runsAtZCJH_live_offW`). -/
-theorem decodesTableHW_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT : TagsOkZHJ I)
-    {c : Flock.Circuit} (hc : HmOut.parse (ZkExec.zkTags I) I.circuitFile I.tables = .ok c) {n : ℕ}
+theorem decodesTableHW_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT : TagsOkZHJ I) {n : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupAt (ZkExec.zkInputs I) (some (dj ∅)) = .ok (spec, sts)) (hshape : sts.forM Flock.Zk.shapeOk = .ok ())
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -281,13 +279,13 @@ theorem decodesTableHW_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT 
       (repJ execArith ZkExec.hs512 (tabsJ sts.size (zkTabs h0 L hz hk hlay))) i := by
   have hok := drawOkZKHJ_empty hT.1 dj hs
   obtain ⟨y₀, -, -, -⟩ :=
-    setupZHJ_of_setupAt hT.1 ht hc dj hs hshape hok ⟨0, Composed.nTab_pos I⟩ h0 (hz 0 h0)
+    setupZHJ_of_setupAt hT.1 ht dj hs hshape hok ⟨0, Composed.nTab_pos I⟩ h0 (hz 0 h0)
   have h := Composed.decodes_of_runsOnZCJW
-    (ZkHidden.runsAtZCJH_live_offW (Reg := Unit) I ht hc dj y₀ (fun S _ o => Claims.Bridge.Custody.wrS I (dj S) o)
+    (ZkHidden.runsAtZCJH_live_offW (Reg := Unit) I ht dj y₀ (fun S _ o => Claims.Bridge.Custody.wrS I (dj S) o)
       { Ω := Unit, draw := fun _ => ∅ } hT (fun S _ o => Claims.Bridge.Custody.recordsLiveAtS_wrS I (dj S) o)
       (fun _ => hok) j₀ C) () () (OkOffWJ (planZHJ dj y₀ ∅ ()) j₀ rootB₀ C) (AccTxJ I (dj ∅) j₀ rootB₀ C)
     (fun o ho => ⟨⟨ho.1, ho.2.1⟩, fun j out hw => okOffW_of_entries ho j out hw⟩)
-  have hp := planZHJ_eq_tabsJ hT.1 ht hc dj y₀ hs hshape hok h0 L hz hk hlay ()
+  have hp := planZHJ_eq_tabsJ hT.1 ht dj y₀ hs hshape hok h0 L hz hk hlay ()
   revert i
   rw [← hp, ← opnAtZHJ_eq_opnD (planZHJ dj y₀) dj hT.1 hs (by rw [hp, tabsJ_length])]
   exact h
@@ -327,11 +325,7 @@ theorem decodesTableW_deploy {x : Claims.Msg} {s : Claims.Flock.Stmt}
   cases hh : ins.read.I.tags.hiddenOutputs
   · exact decodesTableW_zkTabs ht ⟨hh, hrr, hl⟩ (fun _ : Finset (Fin 0) => d) hsA h0 L hz hk hlay j₀ rootB₀ C
   · have hshape := Claims.Bridge.Custody.setup_shapeOk (setupOf_some hset).2 hzk
-    obtain ⟨-, hstJ⟩ := setupAt_tableJH hh hsA
-    have hp := (Hidden.setupHidden_spec' (hstJ 0 h0)).parse
-    have hc : HmOut.parse (ZkExec.zkTags ins.read.I) ins.read.I.circuitFile ins.read.I.tables = .ok sts[0].c :=
-      (ZkHidden.parseH_tagsAt ((ZkExec.zkTags_typed _).trans ht) _ _ _ _).symm.trans hp
-    exact decodesTableHW_zkTabs ht ⟨hh, hrr, hl⟩ hc (fun _ : Finset (Fin 0) => d) hsA hshape h0 L hz hk hlay j₀
+    exact decodesTableHW_zkTabs ht ⟨hh, hrr, hl⟩ (fun _ : Finset (Fin 0) => d) hsA hshape h0 L hz hk hlay j₀
       rootB₀ C
 
 end Gen

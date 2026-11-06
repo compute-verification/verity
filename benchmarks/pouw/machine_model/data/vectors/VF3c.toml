@@ -1,8 +1,7 @@
-# VF3c: VF3 with one head credit for every 32-bit word an instruction writes (§15).
+# VF3c: VF3 with one head credit for every 32-bit word an instruction writes.
 name = "VF3c"
 epoch = "VF3c"
-summary = "VF3 with one head credit for every 32-bit word an instruction writes (§15)."
-note = "note:20261015T1814Z-draft-rs-machine-model"
+summary = "VF3 with one head credit for every 32-bit word an instruction writes."
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
     "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "UP",
@@ -19,9 +18,8 @@ credits = [
     ["ALU64", 2048], ["MOV64", 1024], ["MOV64", 2048],
 ]
 
-[published]  # as the legacy scripts printed them: τ, τ at 600 W and U/F_low to 4 places, the margin to 3
+[published]  # as the legacy scripts printed them: τ and U/F_low to 4 places, the margin to 3
 tau = 0.1208
-tau_600w = 0.0944
 uf_low = 1.1875
 margin = 2.0
 

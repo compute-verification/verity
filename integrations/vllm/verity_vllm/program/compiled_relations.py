@@ -1,6 +1,5 @@
-"""P_compiled relations (R15 compiled, DECISIONS-2 §7 S1): the numerics of every Inductor-generated kernel of the production compiled
-Llama execution, read from the kernel sources (verity_vllm/ops/compiled_s2_checkpoints.py records the S2 evidence: each relation
-reproduces the implementation's materialized outputs bit-for-bit on every launch of the B1 row, r15_2249_s2_checkpoints/S1-S2.md).
+"""P_compiled relations: the numerics of every Inductor-generated kernel of the production compiled Llama execution, read from the
+kernel sources (each relation reproduces the implementation's materialized outputs bit-for-bit on every launch of the B1 row).
 
 Kernel -> relation (`relation()`): matmul_kernel_persistent = GEMM (existing Definition, vLLM's batch-invariant Triton GEMM);
 triton_red_fused__to_copy_embedding_rms_norm_t_0 = EmbedRMSNormTriton; triton_red_fused_fused_add_rms_norm_t_0 = AddRMSNormTriton (the
@@ -10,7 +9,7 @@ RoPETriton (q and k in one kernel, bf16 cos|sin table, f32 math, one rounding). 
 (`_triton_sum_models`): the one exact on every S2 launch is "8 contiguous positions per thread, xor-butterfly over 32 lanes, then over 8
 warps" (labels `r0=2048 warps=8 chunk=8 sep|fma`; sep/fma coincide on bf16-derived data).
 
-[R16 compiled] The norm relation OF RECORD is the literal Triton transcription of the generated source launched with the executed config
+The norm relation OF RECORD is the literal Triton transcription of the generated source launched with the executed config
 (compiled_norm_literal.py, labels `triton-literal XBLOCK=.. R0_BLOCK=.. warps=.. (executed)`); the torch model set stays as witnesses.
 
 Argument roles per kernel (`ROLES`: hook arg index -> role; `WEIGHT_ARGS`: registered inputs, committed by reference only) are read off
@@ -23,9 +22,9 @@ import importlib.util
 from verity_vllm.program.compiled_norm_literal import literal_variants
 
 # hook/wrapper argument index -> committed member name (roles), per kernel-name prefix; registered weights are not committed.
-# [R16 compiled, Qwen row] a kernel NAME does not fix its argument list: Inductor names pointwise kernels `triton_poi_fused_<n>` in both the
+# a kernel NAME does not fix its argument list: Inductor names pointwise kernels `triton_poi_fused_<n>` in both the
 # Llama RoPE (in_ptr0..2, out_ptr0..1: qkv, positions, cos|sin -> k, q) and the Qwen2.5 RoPE-with-QKV-bias (in_ptr0..3, out_ptr0..1: qkv,
-# bias, positions, cos|sin -> k (rotated from the UNROUNDED f32 qkv+bias), qkv+bias (bf16)), and the R15 name-keyed table applied the Llama
+# bias, positions, cos|sin -> k (rotated from the UNROUNDED f32 qkv+bias), qkv+bias (bf16)), and a name-keyed table applies the Llama
 # roles to the Qwen kernel (the cos|sin table taken for the k output; 84 undefined dataflow edges).  The role table is therefore keyed by
 # (name prefix, POINTER ARITY of the kernel's signature = the number of in_ptr*/out_ptr*/in_out_ptr* parameters, read from the generated
 # source in the wrapper); a name whose arity has no entry is UNMODELLED (refused by the manifest as incomplete), never mis-roled.
@@ -76,7 +75,7 @@ def pointer_arity(signature: list[str] | None) -> int | None:
 
 def roles_of(kernel: str, signature: list[str] | None = None, *, arity: int | None = None) -> tuple[dict[int, str], set[int]]:
     """(arg index -> role, weight arg indices) of a launch of `kernel`.  With the kernel's signature (or its pointer arity) the entry of that
-    arity is returned -- none for that arity = UNMODELLED ({}, set()).  Without a signature the name's single entry is returned (the R15
+    arity is returned -- none for that arity = UNMODELLED ({}, set()).  Without a signature the name's single entry is returned (the Llama
     callers: every Llama kernel name has exactly one arity); a name with several arities and no signature is unmodelled too (never a guess)."""
     k = kernel_key(kernel)
     if k is None:
@@ -131,7 +130,7 @@ def _triton_sum_models(r, labels=None):
     if labels is None or "torch.sum" in labels:
         yield "torch.sum", (r * r).sum(-1)
     N = int(r.shape[1])
-    # [R16 Qwen, run 5] the reduction tile r0 is R0_BLOCK: a power of two (Inductor's reduction heuristic: size hint 2048 -> R0_BLOCK 2048,
+    # the reduction tile r0 is R0_BLOCK: a power of two (Inductor's reduction heuristic: size hint 2048 -> R0_BLOCK 2048,
     # `r0_mask = r0_index < r0_numel` zero-masks the tail) -- for Qwen2.5-1.5B (row 1536) the EXECUTED config is XBLOCK=2 R0_BLOCK=2048
     # num_warps=16 (loaded_code_objects executed_configs), i.e. the same [2, 2048] tile as Llama's with positions 1536..2047 held as zeros;
     # divisors of the row are kept as candidates for a looped (R0_BLOCK < row) config.

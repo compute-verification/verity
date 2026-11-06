@@ -1,5 +1,5 @@
 /-
-The lincheck fold of a templated unit under layout (iv), lenient (PRF-133), from its description. No verifier path reads
+The lincheck fold of a templated unit under layout (iv), lenient, from its description. No verifier path reads
 it yet.
 
 For a unit slot of `2^sl` bits, `Stmt.partialRanges` needs `p = project (baseOf α e_lo A B none sl) (eqTable r)`, with

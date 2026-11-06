@@ -6,7 +6,7 @@
 # SCRIPT=gemm_dtypes.py runs that instead, with ARGS; REDO=<a run's out/ on this node> exports and analyzes its kept
 # reports again.
 #
-#   research run --queue --gpus 1 --on vy-nebius-2 --project verity --source . --cwd source --mem-gb 64 --max-min 30 \
+#   research run --queue --gpus 1 --project verity --source . --cwd source --mem-gb 64 --max-min 30 \
 #     -- bash benchmarks/serve_bandwidth/run.sh
 set -uxo pipefail
 O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"

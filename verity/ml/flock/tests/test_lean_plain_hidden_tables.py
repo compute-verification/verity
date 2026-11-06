@@ -1,6 +1,6 @@
 """Plain sessions of several tables at hidden outputs (PROTOCOL.md §16.15, `--plain-tables` with `SoundExecHJ`):
 `plain_hidden.py`'s statement (RoPE d64 instances with hidden outputs, hm96-sha512 leaves), proved without `--zk` on OS
-coins in loopback sessions of two tables under a subset draw (`verity/ml/flock/pod/91-plain-hidden-tables.sh`). Under
+coins in loopback sessions of two tables under a subset sample (`verity/ml/flock/pod/91-plain-hidden-tables.sh`). Under
 `--plain-tables` with the verifier's own program and partition, both sessions are accepted and a tampered one keeps its
 check's reason; verified against another program it is refused; without the flag, several tables without `--zk` are
 refused, once every check has passed."""

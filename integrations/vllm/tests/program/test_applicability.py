@@ -1,4 +1,4 @@
-"""cb-fix (R10 §5) — driver-level applicability tests of Bet A, GPU-free, on CB-C2's B0 `request 8/4` driver
+"""Driver-level applicability tests of Bet A, GPU-free, on the B0 `request 8/4` driver
 (`validation/sens/run.sh`): every case is a real construction (`derive_step`) in a subprocess with `CUDA_VISIBLE_DEVICES=""`.
 
 Needs the pinned vLLM (d9105ea80) and the SmolLM2-135M snapshot under `$HF_HOME` (default /workspace/hf); skipped otherwise.
@@ -6,10 +6,10 @@ Eight constructions run in parallel (~20 s on a 128-vCPU pod, ~1.9 GB RSS each);
 
 (i)   the reported inconsistent-capability case: a target whose circuit is genuinely unchanged (sm_80 / 108 SMs; re-pinned 132 SMs)
       builds the SAME Program digest with a DIFFERENT artifact identity, and the manifest reports the capability that was APPLIED;
-(i-b) the R9 a1 shape itself — a second capability applied only around the export — is refused (declared != applied at export);
+(i-b) a second capability applied only around the export is refused (declared != applied at export);
 (ii)  a consistently changed target (9.0 -> FA3; TRITON_ATTN) is refused fail-closed with the reason verbatim, no artifact written;
 (iii) two construction hosts, same profile -> same identity (host block not in any component); the Program digest is byte-identical
-      to A's cp-cba build and CB-C2's cp-cbc build (`59b35d80…d496`);
+      to the recorded builds (`59b35d80…d496`);
 (iv)  reuse of an artifact under a mismatched profile / applicability is rejected with every differing field named;
 plus: the Program digest of B0 8/4 is unchanged by the patch; the dead env `VLLM_ATTENTION_BACKEND` is not a declared fact."""
 
@@ -27,7 +27,7 @@ pytest.importorskip("vllm")
 
 from verity_vllm.program.frontend.target_profile import ApplicabilityError, ArtifactIdentity, TargetProfile, load_artifact, reuse_mismatches
 
-B0_DIGEST = "59b35d80faf29438d21a0ea1c96c877ec69e2f21174f11b835ac1ef04c1ed496"  # A's cp-cba request_8_4 == CB-C2's cp-cbc sens/base
+B0_DIGEST = "59b35d80faf29438d21a0ea1c96c877ec69e2f21174f11b835ac1ef04c1ed496"  # the recorded request_8_4 and sens/base builds
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CORE_SRC = os.path.join(os.path.dirname(os.path.dirname(REPO)), "packages", "verity", "src")
 HF_HOME = os.environ.get("HF_HOME", "/workspace/hf")
@@ -46,8 +46,8 @@ CASES = {  # name -> --target JSON (None = default profile)
 }
 
 _HOSTILE_EXPORT = textwrap.dedent("""
-    # the R9 a1 shape: the EXPORT applies a capability other than the declared one (export_compat.py:71 used to hard-code 8.9 for the
-    # export while the manifest's literal said 8.9 too; here the export is handed a 9.0 profile while the declared target stays 8.9)
+    # the EXPORT applies a capability other than the declared one: the export is handed a 9.0 profile while the declared
+    # target stays 8.9
     import sys
     import verity_vllm.program.frontend.vllm_meta as vm
     from verity_vllm.program.frontend.target_profile import TargetProfile
@@ -111,10 +111,10 @@ def _digest(b):
 def test_program_digest_of_b0_8_4_unchanged_and_cross_host(builds):
     b = builds["base"]
     assert b["rc"] == 0 and b["result"]["ok"] is True
-    assert _digest(b) == B0_DIGEST, "the Program digest of B0 request 8/4 must be byte-identical to A's and CB-C2's builds"
+    assert _digest(b) == B0_DIGEST, "the Program digest of B0 request 8/4 must be byte-identical to the recorded builds"
     assert b["result"]["program"]["gates"] == 234235513
     assert b["artifact"]["program_digest"] == B0_DIGEST and b["manifest"]["artifact"]["identity"] == b["artifact"]["identity"]
-    assert b["manifest"]["target"]["host"]["cuda_available"] is False  # GPU-free, as CB-C2 ran it
+    assert b["manifest"]["target"]["host"]["cuda_available"] is False  # GPU-free
 
 
 # -- (i) the reported case: different target, same circuit -> same digest, different identity, manifest says what was applied ----
@@ -123,7 +123,7 @@ def test_program_digest_of_b0_8_4_unchanged_and_cross_host(builds):
 def test_case_i_same_digest_different_identity_manifest_reports_applied(builds, name, cap, sms):
     base, b = builds["base"], builds[name]
     assert b["rc"] == 0 and b["result"]["ok"] is True
-    assert _digest(b) == _digest(base) == B0_DIGEST  # the circuit is genuinely unchanged for these targets (CB-C2 §8.2)
+    assert _digest(b) == _digest(base) == B0_DIGEST  # the circuit is genuinely unchanged for these targets
     assert b["artifact"]["identity"] != base["artifact"]["identity"]
     t = b["manifest"]["target"]
     assert t["declared"]["compute_capability"] == cap and t["declared"]["num_sms"] == sms
@@ -132,9 +132,9 @@ def test_case_i_same_digest_different_identity_manifest_reports_applied(builds, 
     decl = {d["field"]: d for d in b["manifest"]["declared"]}
     assert decl["compute capability"]["value"] == f"{cap[0]}.{cap[1]}" and decl["compute capability"]["applied"] == cap
     assert decl["NUM_SMS"]["value"] == sms and decl["NUM_SMS"]["applied"] == sms
-    assert "8.9 (sm_89, Ada)" not in json.dumps(b["manifest"]["declared"])  # the R9 literal is gone
+    assert "8.9 (sm_89, Ada)" not in json.dumps(b["manifest"]["declared"])  # no hard-coded capability literal
     assert b["artifact"]["target_profile"] == t["declared"]
-    # [R13 ampere] the applicability names the registered GEMM specialization the construction pinned (registry keyed by the target)
+    # the applicability names the registered GEMM specialization the construction pinned (registry keyed by the target)
     app = b["artifact"]["applicability"]
     assert (app["gemm_target"], app["tuned_gemm_arch_family"]) == (("ampere", None) if cap == [8, 0] else ("ada", "ada")), app
     assert app["gemm_target_dot"] == "AmpereBF16TcDot16" and app["gemm_target_refusal"] is None
@@ -142,7 +142,7 @@ def test_case_i_same_digest_different_identity_manifest_reports_applied(builds, 
 
 
 def test_case_i_b_capability_applied_only_around_the_export_is_refused(builds):
-    """The exact R9 a1 shape (a second capability around the export) can no longer produce an artifact labelled 8.9."""
+    """A second capability applied around the export cannot produce an artifact labelled 8.9."""
     b = builds["export_divergence"]
     assert b["rc"] == 1 and b["result"]["ok"] is False and b["artifact"] is None
     u = b["result"]["unsupported"]
@@ -156,8 +156,8 @@ def test_case_i_b_capability_applied_only_around_the_export_is_refused(builds):
 # -- (ii) a consistently changed target: refused fail-closed, verbatim ----------------------------------------------------------
 
 @pytest.mark.parametrize("name,needle,applied", [
-    # [R13 ampere/hopper] a capability with NO registered GEMM specialization (Blackwell): the FIRST refusal is the GEMM target registry's
-    # (the qkv GEMM precedes attention in the graph).  cc 9.0 is registered since R13 hopper (case iv below).
+    # a capability with NO registered GEMM specialization (Blackwell): the FIRST refusal is the GEMM target registry's
+    # (the qkv GEMM precedes attention in the graph).  cc 9.0 is registered (case iv below).
     ("cap100", "numerics_unregistered: no registered GEMM specialization for target cc 10.0 (tuned_gemm_arch_family='blackwell')", {"compute_capability": [10, 0], "tuned_gemm_arch_family": "blackwell"}),
     ("triton_attn", "numerics_unregistered: attention impl='vllm.v1.attention.backends.triton_attn.TritonAttentionImpl' (observed on layer 'model.layers.0.self_attn.attn') differs from the target's 'vllm.v1.attention.backends.flash_attn.FlashAttentionImpl'", {"attention_backend": "TRITON_ATTN"}),
 ])
@@ -172,7 +172,7 @@ def test_case_ii_consistently_changed_target_is_refused_verbatim(builds, name, n
     assert not (b["out"] / "descriptor.json.gz").exists()
 
 
-# -- (iv) [R13 hopper] a consistently changed target WITH a registered binding: another Program (digest moves), declared in the manifest ----
+# -- (iv) a consistently changed target WITH a registered binding: another Program (digest moves), declared in the manifest ----
 
 @pytest.mark.parametrize("name,fa,attn_kind,label", [
     ("cap90", 3, "Attention_v2{T,NH,KVH,D,BN=fa3_kblock_n(D,seqlen_q,NH/KVH),DOT=HopperBF16WgmmaDot16_v1,INV=Fa3InvSum_v1}", "bi-eager"),
@@ -208,17 +208,17 @@ def test_case_iii_identity_is_host_independent(builds):
                  builds["base"]["manifest"]["target"]["host"]):
         assert ArtifactIdentity.compute(art.construction_version, art.target_profile, art.applicability, art.program_digest) == art.identity, host
     assert "host" not in a and "hostname" not in json.dumps(a)
-    # the real cross-host point: this pod's Program digest equals the ones recorded on cp-cba (A) and cp-cbc (CB-C2)
+    # the real cross-host point: this pod's Program digest equals the recorded builds'
     assert art.program_digest == B0_DIGEST
     # a second construction in another process on this host with the same profile (dead_env) -> same identity
     assert builds["dead_env"]["artifact"]["identity"] == a["identity"]
-    # a second construction HOST configuration: the pod's GPU left visible (on cp-cb8: an L40S, 142 SMs).  [X-01] With no declared
+    # a second construction HOST configuration: the pod's GPU left visible (e.g. an L40S, 142 SMs).  [X-01] With no declared
     # target the target IS the host device, queried once (`TargetProfile.from_device`): the applied profile shows the device's SM
     # count / capability, the Program digest is the same (NUM_SMS is a scheduling fact), and the identity differs from the GPU-free
     # build exactly when the device differs from the default profile.  Without a visible GPU the build is the default one.
     g = builds["gpu_host"]
     gh, ga = g["manifest"]["target"]["host"], g["manifest"]["target"]["applied"]
-    # [R13 hopper] a Hopper host IS a hopper target: the registered hopper bindings make it case iv's Program (cap90), not B0's
+    # a Hopper host IS a hopper target: the registered hopper bindings make it case iv's Program (cap90), not B0's
     hopper_host = bool(gh["cuda_available"]) and ga["compute_capability"][0] == 9
     assert g["rc"] == 0 and _digest(g) == (_digest(builds["cap90"]) if hopper_host else B0_DIGEST)
     if gh["cuda_available"]:
@@ -247,11 +247,11 @@ def test_case_iv_reuse_under_mismatched_profile_is_rejected(builds):
     # same target, but the requester's environment (here: cap80's applicability, which differs in the tuned-GEMM family) does not satisfy the conditions
     bad = reuse_mismatches(ArtifactIdentity.from_json(base["artifact"]), TargetProfile.default(), cap80["artifact"]["applicability"])
     # [X-01] the SM count read back through the shim is an applicability condition too (the one TargetProfile fact of the persistent GEMM)
-    # [R13 ampere] and so are the registered GEMM target (ada vs ampere) and the tuned table it consults (the sm_89 table vs none)
+    # and so are the registered GEMM target (ada vs ampere) and the tuned table it consults (the sm_89 table vs none)
     cap80_applic = cap80["artifact"]["applicability"]
     assert bad == ["applicability.gemm_target: artifact requires 'ada', requester has 'ampere'",
                    "applicability.num_sms: artifact requires 128, requester has 108",
-                   # [R13 hopper] the target-keyed bindings (GEMM/attention kinds, dot, tensor-core + tuned family, effective FA version) as one condition
+                   # the target-keyed bindings (GEMM/attention kinds, dot, tensor-core + tuned family, effective FA version) as one condition
                    f"applicability.target_bindings: artifact requires {applic['target_bindings']!r}, requester has {cap80_applic['target_bindings']!r}",
                    "applicability.tuned_gemm_arch_family: artifact requires 'ada', requester has None",
                    f"applicability.tuned_gemm_table_sha256: artifact requires {applic['tuned_gemm_table_sha256']!r}, requester has None"]

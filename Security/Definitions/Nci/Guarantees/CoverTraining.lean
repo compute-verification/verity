@@ -9,7 +9,7 @@ import Definitions.Nci.Assumptions.Cover
 The cover theorem (`Nci.Cover.Guarantees`) bounds what a block of a circuit of bits finishes. This guarantee joins it to
 the NCI policy, `Nci.Complies Γ α`, through a reference training circuit `c` that the declared circuit `d` contains, as
 `Nci.Guarantees.ContainedTraining` does: `d`'s wiring is the prover's, so the premises are on `c`, and `d` reaches `c`
-through containment with its baseline registered (`BaselineRegistered`). The premises of the cover theorem
+through containment with its θ registered (`ThetaRegistered`). The premises of the cover theorem
 (`UpdateHardness`, the upstream certificate) are on `c`'s circuit bit by bit (`Circuit.ofDecl c`), where a block is a set
 of bits.
 
@@ -34,7 +34,7 @@ the blocks are whole words too, so each use of their whole products costs them `
 namespace Nci.Cover.Guarantees
 
 /-- **Training through a compliant declaration pays the cover theorem's factor**: a declaration `d` that contains a
-reference training circuit `c` and complies at `(Γ, α)`, with its baseline registered (`BaselineRegistered`), has
+reference training circuit `c` and complies at `(Γ, α)`, with its θ registered (`ThetaRegistered`), has
 `α₀ b size(c) ≤ (α² Γ + b α) size(d)` when the counted products of `c`'s bit view are a fraction `α₀` of `c`'s gates,
 under `UpdateHardness` at the block size `s ≥ w₀ Γ + α Γ + width(θ)` (no gate of `c` wider than `w₀`) and the upstream
 certificate at depth `D` with `α Γ < b D`. -/
@@ -43,7 +43,7 @@ def CoverTraining : Prop :=
     {J L : Type} [DecidableEq J] [DecidableEq L] (Mb : MulBlocks (Circuit.ofDecl c) J L)
     (A : J → Finset (Fin (Circuit.ofDecl c).N)) (s D w₀ : ℕ),
     0 < b → 0 ≤ α → Nci.Complies Γ α d →
-    Nci.Assumptions.BaselineRegistered c d (Nci.PartialContainment.ofContainment M) →
+    Nci.Assumptions.ThetaRegistered c d (Nci.PartialContainment.ofContainment M) →
     Assumptions.UpdateHardness Mb s b → Mb.Upstream A D → α * Γ < b * D →
     (∀ g, c.D.w g ≤ w₀) → w₀ * Γ + α * Γ + c.D.width c.θ ≤ s →
     α₀ * c.D.size c.D.computed ≤ Mb.P.card →
@@ -58,7 +58,7 @@ def CoverTrainingAligned : Prop :=
     {J L : Type} [DecidableEq J] [DecidableEq L] (Mb : MulBlocks (Circuit.ofDecl c) J L)
     (Aw : J → Finset (Fin c.D.N)) (s D w₀ f : ℕ),
     0 < b → 0 ≤ α → Nci.Complies Γ α d →
-    Nci.Assumptions.BaselineRegistered c d (Nci.PartialContainment.ofContainment M) →
+    Nci.Assumptions.ThetaRegistered c d (Nci.PartialContainment.ofContainment M) →
     Assumptions.UpdateHardness Mb s b → Mb.Upstream (fun j => wordBits c (Aw j)) D → α * Γ < b * D →
     (∀ j ∈ Mb.uses, ∀ a ∈ Aw j, f ≤ c.D.w a) →
     (∀ g, c.D.w g ≤ w₀) → w₀ * Γ + α * Γ + c.D.width c.θ ≤ s →

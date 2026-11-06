@@ -11,10 +11,10 @@ its support has `Forming.FlatPairs`, and that ρ_D = 1/64 bounds it are proved i
 
 * **The support** (`flatLine`, `flatLineF`, `support`): the pairs `(E row, F row)` of flat lines of codes, the `E` row
   flat at Pearl's norm 256 (all 32 entries `±44`) and the `F` row flat at Π's norm 16 (all 32 entries `±11/4`).
-  Pearl's line rule gives a flat line whenever the 32 raw magnitudes are equal (checked on #449's `sample_line`: all
-  128 flat raw inputs give `±44` at norm 256 and `±2.75` at norm 16), so these pairs lie in the image of Π's lines; an
-  element salt-dead over that image is salt-dead here, and the debit can only over-count. They are the pairs
-  `FlatPairs` is about and the ones ρ_D is proved on.
+  Pearl's line rule gives a flat line whenever the 32 raw magnitudes are equal (checked on the reference's
+  `sample_line`: all 128 flat raw inputs give `±44` at norm 256 and `±2.75` at norm 16), so these pairs lie in the image
+  of Π's lines; an element salt-dead over that image is salt-dead here, and the debit can only over-count. They are the
+  pairs `FlatPairs` is about and the ones ρ_D is proved on.
 * **The predicate** (`saltDead alpha beta`): on the code's value, so a salt that only flips the sign of a zero (`0x00`
   against `0x80`) counts as dead; it changes the code but not the product. `alpha` and `beta` are the row's scales as the
   forming computes them (`PearlCSem.alpha` and `PearlCSem.beta`: α from the model's quantizer, β from `σ = δ·ρ` with ρ

@@ -6,14 +6,14 @@ import Definitions.Pouw.Fp8Atom.Vectors.Add
 /-!
 # `Pouw.Fp8Atom`'s pinned statements (trusted)
 
-M1 of `internal/pouw-fp8/lean-atom-plan.md`: the bit-exact `HOPPER_E4M3_K32` step and its basic facts.
+The bit-exact `HOPPER_E4M3_K32` step and its basic facts.
 
 * **`Conformance`**: on each of 631 vectors, `hopperStep` writes the word
   `verity.ml.tc.total_fp8.tc_dot_total_e4m3(HOPPER_E4M3_K32, …)` computes. They are the 49 chained steps of the
   repository's `fp8-hopper-wgmma-k32`/`-k1536` model replays, and the union of two greedy branch covers of the
   10,549 steps of `verity/protocols/accounting/work/pouw/lean/scripts/fp8atom_vectors.py` (`fp8atom_cover.json` beside it), 582 vectors with 15 in common:
-  * red-team R1's 450, which hit each of its 24 branch outcomes at least 50 times;
-  * the Lean worker's 147, which reach every branch feature the 10,549 reach (739).
+  * 450 adversarial vectors, which hit each of its 24 branch outcomes at least 50 times;
+  * 147 more, which reach every branch feature the 10,549 reach (739).
   The 10,549 and R1's 166,000 differential steps run in the Lean audit as a compiled test (`Proofs.Pouw.Bulk`, under `runs`), which is
   not a proof. `verity.ml.tc`'s `HOPPER_E4M3_K32` agrees with H100 silicon on two campaigns, with 0 mismatches, but
   their raw words are in neither the repository nor the store, so no H100 capture is included (R1 F2).

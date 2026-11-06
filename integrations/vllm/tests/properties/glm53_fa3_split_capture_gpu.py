@@ -69,7 +69,7 @@ SCALE = (NOPE + DR) ** -0.5
 #: the KV rows every token selects from, and the scales of q (alternating by token) and of the rows
 POOL, Q_SCALES, KV_SCALE = 16384, (1.0, 3.0), 0.5
 SEED = 20261013
-#: the operand sets: each token's valid count; its q and selected rows are drawn from SEED and the set's name
+#: the operand sets: each token's valid count; its q and selected rows are sampled from SEED and the set's name
 SOLO = (1, 64, 65, 192, 320, 448, 640, 1000, 1500, 1793, 1856, 2047, 2048)
 SETS: dict[str, tuple[int, ...]] = {
     "dsa14": (1, 2, 5, 64, 65, 66, 128, 129, 130, 1001, 2047, 2048, 2048, 2048),

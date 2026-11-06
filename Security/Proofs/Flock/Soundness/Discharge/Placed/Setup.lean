@@ -1,5 +1,6 @@
 import Proofs.Flock.Soundness.ExecSetup
 import Proofs.Flock.Soundness.E2E
+import Properties.Flock.Circuit.Keyed
 
 /-!
 # `ProgPlaces` from `Stmt.setupH`'s accept
@@ -29,14 +30,15 @@ open Model Audit
 
 /-! ## The circuit's template instance rows -/
 
-/-- **A template instance's rows for a circuit**: `units_per_vu` copies of the unit net's rows, one shared constant
-(`Rows.stack`). -/
-noncomputable def circuitRows (c : Flock.Circuit) (hU : Built c.unit) : Rows := (Rows.ofNet hU).stack c.upv
-
-/-- The unit net's rows depend only on the circuit. -/
-theorem ofNet_eq {c c' : Flock.Circuit} (e : c = c') (h : Built c.unit) (h' : Built c'.unit) :
+/-- A net's rows depend only on the net. -/
+theorem ofNet_eq {n n' : Flock.Net} (e : n = n') (h : Built n) (h' : Built n') :
     Rows.ofNet h = Rows.ofNet h' := by
   subst e; rfl
+
+/-- A circuit `HmRow.parse` read is its own logical circuit: its unit is `lunit`. -/
+theorem lunit_of_parse {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c c' : Flock.Circuit}
+    (hp : HmRow.parse tags bytes tables = .ok c) (e : c' = c) : lunit c' = c.unit := by
+  subst e; exact lunit_flat (parse_facts hp).tmpl
 
 /-! ## An accepted statement -/
 
@@ -74,12 +76,10 @@ theorem kLog_eq : 2 ^ ((setupH_layout a.ht a.h).model a.regs).kLog = 2 ^ T.kLog 
 theorem nbl_eq : 2 ^ ((setupH_layout a.ht a.h).model a.regs).nbl = 2 ^ T.nbl :=
   congrArg (fun S : Model.Statement => 2 ^ S.nbl) a.hT
 
-/-- **Template instance `g`'s columns in the block**: `stackPlace` at the unit slots `ur.slot (g·upv + i)`, the shared
+/-- **Template instance `g`'s columns in the block** (`Layout.col`): the unit slots `ur.slot (g·upv + i)`, the shared
 constant at the pin. -/
 noncomputable def col {g : ℕ} (hg : g < a.st.c.g) (c : Fin a.rows.w) : Fin (2 ^ T.kLog) :=
-  Fin.cast a.kLog_eq
-    (stackPlace ((setupH_layout a.ht a.h).model a.regs) (unitRows a.st a.layout.unit_built) a.st.c.upv
-      (fun u => a.st.c.unitRange.slot (g * a.st.c.upv + u)) ((setupH_layout a.ht a.h).hb hg) c)
+  Fin.cast a.kLog_eq ((setupH_layout a.ht a.h).col a.regs hg c)
 
 /-- A placement moves along an equal statement. -/
 theorem placement_cast {S S' : Model.Statement} (hS : S = S') {R : Rows} {col : Fin R.w → Fin (2 ^ S.kLog)}
@@ -101,7 +101,7 @@ theorem rows_eq {c : Flock.Circuit} (hp : HmRow.parse a.tags a.cf a.tables = .ok
     rw [hp] at this
     exact (Except.ok.inj this).symm
   unfold rows circuitRows unitRows
-  rw [ofNet_eq hc a.layout.unit_built hU, hc]
+  rw [ofNet_eq (lunit_of_parse hp hc) a.layout.unit_built hU, hc]
 
 /-- **`Layout.Aliased` in `ProgPlaces`' form**: the accepted layout's aliasing at template instance `g` and block `o`, for an instance of
 rows `R` equal to the template instance rows, read at `col`. -/
@@ -171,7 +171,7 @@ noncomputable def progPlaces (outs : Finset (Fin N)) (inst : ∀ u, (p.partition
   inst := inst
   o := si.o
   col := si.col hrows
-  placed := si.placed hrows
+  placed S R u h := (si.placed hrows S R u h).sat
   aliased := hal
 
 /-- **`ProgPlaces` from setupH's accept, its aliasing from `Layout.Aliased`** at each drawn unit's template instance and
@@ -187,23 +187,6 @@ noncomputable def progPlaces_of_layout (outs : Finset (Fin N))
 end Sites
 
 /-! ## The program of a circuit's units -/
-
-/-- The gates of `n` units with rows `R` after `k` input gates. -/
-def gates (k : ℕ) (R : Rows) : ℕ → ℕ
-  | 0 => k
-  | n + 1 => gates k R n + R.nComp
-
-theorem le_gates (k : ℕ) (R : Rows) : ∀ n, k ≤ gates k R n
-  | 0 => le_rfl
-  | n + 1 => (le_gates k R n).trans (Nat.le_add_right _ _)
-
-/-- **`n` units of rows `R` on `k` input gates**: unit `u`'s input columns read the input gates `ins u`, its constant the
-input gate `one`, which none of them reads. No unit reads another's gates. -/
-def uniform (k : ℕ) (R : Rows) (ins : ℕ → Fin R.nIn → Fin k) (one : Fin k) (hone : ∀ u c, ins u c ≠ one) :
-    (n : ℕ) → Prog (gates k R n) n
-  | 0 => .inputs k
-  | n + 1 => .snoc (uniform k R ins one hone n) R (fun c => Fin.castLE (le_gates k R n) (ins n c))
-      (Fin.castLE (le_gates k R n) one) (fun c h => hone n c (Fin.castLE_injective _ h))
 
 /-- Every unit of `uniform` has rows `R`. -/
 theorem rows_uniform (k : ℕ) (R : Rows) (ins : ℕ → Fin R.nIn → Fin k) (one : Fin k) (hone : ∀ u c, ins u c ≠ one) :

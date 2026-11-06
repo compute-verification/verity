@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# The native baseline on one dc node: native.py's arms, each in its own process under its own gpu-lease (an engine build
+# The native baseline on one H200 or B200: native.py's arms, each in its own process under its own gpu-lease (an engine build
 # plus its measures fit well inside one).
 #
-#   research run --on vy-dc-b200 --project verity --campaign dither-loop --source . --cwd source --timeout 90m \
-#     -- bash benchmarks/hash/dither/native.sh [ARM ...]
+#   bash benchmarks/hash/dither/native.sh [ARM ...]      (on a B200 or an H200, up to 90 minutes)
 #
 # Default arms: vllm-int8, and vllm-int8-triton on a B200 (served-row only when named: served_h1's eager engine, whose
 # receipts are a side computation, not a served number). Every arm samples without FlashInfer's JIT sampler, as
@@ -14,6 +13,7 @@ set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
 PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
+[ -x "$PY" ] || PY=$(. benchmarks/harness/env.sh && echo "$VENV/bin/python") || exit 2
 mkdir -p "$OUT"
 # the venv's bin holds ninja, which any JIT build vLLM or FlashInfer starts needs
 export PATH=$(dirname "$PY"):$PATH VLLM_USE_FLASHINFER_SAMPLER=0

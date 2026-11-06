@@ -19,7 +19,7 @@ Grid = tuple[Row, ...]
 
 
 class Reason(enum.Enum):
-    """Why a link-window's coverage was not established (W5)."""
+    """Why an execution phase's coverage was not established (W5)."""
 
     MONITOR_UNAVAILABLE = "monitor-unavailable"
     OVERFLOW = "overflow"
@@ -31,8 +31,8 @@ class Reason(enum.Enum):
 
 @dataclass(frozen=True, slots=True)
 class Status:
-    """One untimed coverage status per link-window: complete when `reason` is None, otherwise not established. It carries
-    no bucket index, time or count, so it never shows when within the window something happened."""
+    """One untimed coverage status per execution phase: complete when `reason` is None, otherwise not established. It
+    carries no bucket index, time or count, so it never shows when within the window something happened."""
 
     reason: Reason | None = None
 

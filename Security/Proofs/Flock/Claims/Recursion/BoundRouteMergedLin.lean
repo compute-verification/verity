@@ -4,8 +4,8 @@ import Proofs.Flock.Claims.Recursion.BoundMergedLin
 /-!
 # `KSBoundLin` at the deployment with no bridge and no `WeightCovers` (route 2B, linearly)
 
-`RecDeploy.KSBoundRouteLin` reaches `KSBoundLin` through the bridge, so it reads (P3, `Bound.WeightCovers`):
-`γ`'s weight at `IVStar` must cover `DE`'s plus the bridge's second plurality. `Bound.KSLin_of_plainKSAbort_binds`
+A route through the bridge reads (P3, `Bound.WeightCovers`): `γ`'s weight at `IVStar` must cover `DE`'s plus the
+bridge's second plurality. `Bound.KSLin_of_plainKSAbort_binds`
 reaches `KSLin` from (P1) at `DE` through one plurality, with `P_O`'s bad draws linear in `Fdev`, so the route needs
 neither: `γ`'s weight at `IVStar` need only be at least `DE`'s.
 

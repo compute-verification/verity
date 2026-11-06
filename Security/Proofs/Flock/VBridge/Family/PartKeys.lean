@@ -16,7 +16,7 @@ so the Δ key (`Aliased.srcKey`, copy 0) of each of the unit's input bits is the
   `rowCol q` is a bit of the row port it lies in (`rowCol_at`), named as V* names it;
 * `part_counts`, `part_link`: V*'s part `pt.S` has the verifier's part's row ports and v (`nsOf F.sh p`, `nvOf F.sh p`;
   `VStarFamily.hpart`, `RecVStar.checkPart`), so the keys hold at the verifier's part (`partRep`, which `rowCol` and
-  `vBase` read only through those counts): `partVCols` (`PartVCols`'s statement) and `partRowCols` (`PartRowCols`);
+  `vBase` read only through those counts): `partVCols` and `partRowCols` (`PartRowCols`);
 * its row ports are named the whole S's at the part's ports (`RecVStar.portNames`, `partPorts`), so a row column of
   element `a` is keyed by that element's bit of its port in w, named as that port (`wIdx_get`, `rowBit`), and two
   parts' keys of one element's bit are one bit of rows of one name (`starts_inj`, `partRowBits_holds`).
@@ -458,7 +458,7 @@ theorem part_link (hne : Nonempty (Reg × L.Ω × Reg₂)) {p : ℕ} {j : Fin F.
   exact ⟨by rw [nsOf, hgp, ← hns, h1], by rw [nvOf, hgp, ← hnv, h2],
     by rw [hgp]; exact h3 _ (OfVStar.partPorts_eq hS hg hp)⟩
 
-/-- **`PartVCols` at part `p`'s statement**: `srcKey_v` at V*'s part (`repKeys_part`), which is the verifier's
+/-- **The `v` columns' keys at part `p`'s statement**: `srcKey_v` at V*'s part (`repKeys_part`), which is the verifier's
 (`part_link`). -/
 theorem partVCols (hne : Nonempty (Reg × L.Ω × Reg₂)) {p : ℕ} {j : Fin F.stmts.size} {nm : String}
     {pt : VStar.Part} (hj : F.stmts[j] = .inner p nm pt) :

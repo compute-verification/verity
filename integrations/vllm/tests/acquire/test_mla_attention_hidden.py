@@ -55,8 +55,11 @@ def test_a_hopper_flash_attention_manifest_names_fa3_and_the_manifest_decides_th
     assert attention_hidden({"identities": FA3_ROWS}, model(FlashAttentionImpl(2)))["family"] == "fa3_hidden_m1_stream"
 
 
-def test_a_manifest_without_hidden_rows_on_a_flash_attention_model_keeps_the_models_class():
-    assert attention_hidden({"identities": GLM_ROWS}, model(FlashAttentionImpl(3)))["family"] == "fa3_hidden_m1_stream"
+def test_a_manifest_without_hidden_rows_on_a_flash_attention_model_binds_no_hidden_class():
+    # query.required puts no M1 row in a manifest: the stream is no Value of the Program, so the Commit binds none
+    for fa in (2, 3):
+        assert attention_hidden({"identities": GLM_ROWS}, model(FlashAttentionImpl(fa))) == {
+            "family": None, "why": "the required manifest names no attention hidden stream"}
 
 
 def test_a_manifest_with_two_hidden_families_is_refused():

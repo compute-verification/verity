@@ -102,7 +102,7 @@ def NoiseRange : Prop :=
   (∀ (sh : Shape) (ans : List R), ∀ l < sh.k, ∀ j < sh.n,
       InNoise (mm P.r (P.expWt sh ans).1 (P.expWt sh ans).2 l j))
 
-/-- Group sharing (tt-attacks V4, red-team B8, replacing per-epoch sharing of `E_R`, which tt-attacks' V3 breaks): the
+/-- Group sharing (tt-attacks V4, replacing per-epoch sharing of `E_R`, which tt-attacks' V3 breaks): the
 weight noise `(F_L, F_R)` depends only on the salt and the weight, and the activations' right factor `E_R` only on
 the salt, the weight and the group `⌊u/G⌋`, for every oracle. Part of `IsMilestone`; no generic theorem assumes it. -/
 def GroupShared (G : ℕ) : Prop :=
@@ -116,7 +116,7 @@ def QueryBound (c : ℕ) : Prop :=
   ∀ (s : S) (u : ℕ) (A : Mat) (w : ℕ), (P.qAct s u A w).length + (P.qWt s u w).length ≤ c
 
 /-- The milestone's parameters: rank 16, checked depth `d = r = 16`, the weight noise shared per (epoch, weight) and
-`E_R` per (epoch, weight, group of 16 consecutive indices) (W4 as replaced at 21:18Z). `W_ref` is not fixed here. -/
+`E_R` per (epoch, weight, group of 16 consecutive indices) (W4). `W_ref` is not fixed here. -/
 def IsMilestone : Prop := P.r = 16 ∧ P.d = 16 ∧ P.GroupShared 16
 
 end Params

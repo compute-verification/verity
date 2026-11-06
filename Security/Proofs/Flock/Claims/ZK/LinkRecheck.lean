@@ -14,8 +14,8 @@ commits nothing of level 0 that leaves). Here that function is held to the sessi
 * `Flock.Firewall.Link.root_eq`, `cap_eq`, `leaves_getElem!`, `layer_eq`: the recheck's root is
   `FlockComplete.flat` of `FlockComplete.layerOf`'s cap over `hm96-sha512/v1`'s leaves of `encodeRowsZk`'s rows under the
   salts (`rows_eq`, `LinkFft`: the FFT's rows are those rows); its tasks (`parRange`) split one map (`Link.parRange_eq`).
-* `Coined.swContent_inl`, `swExeOf_inl`, `Masked.leafAt_swCutAt`: the switched prover's level-0 leaves are the honest
-  prover's, whatever values the workers supply: level 0 reads neither the values nor the moved pads.
+* `swExeOf_inl`, `Masked.leafAt_swCutAt`: the switched prover's level-0 leaves are the honest prover's, whatever values
+  the workers supply (`Coined.swContent_inl`): level 0 reads neither the values nor the moved pads.
 * `Masked.linkIn`, `Masked.linkMsg`: what the firewall hands `Flock.Firewall.Link` for table `j` at the tape (the packed
   table of the witness's traces at the tape's mask words, and the tape's extra lanes, lane paddings and level-0 salts),
   and the link message of the roots it answers. That message is round `0`'s encoding of the switched cut, at every
@@ -72,16 +72,6 @@ namespace Claims.ZKMal
 open Claims
 open FlockSoundness.Discharge
 open CoinLayer
-
-/-- **At a level-0 position the switched prover's leaf commits the honest prover's column**: level 0 reads the mask
-slot's lanes and the lanes' paddings, which the values and the moved pads leave as they are. -/
-theorem _root_.FlockSoundness.Discharge.ZkView.Coined.swContent_inl {K W Hi VL : Type} [Field K]
-    {z : ZkView.Sizes} (T : ZkView.Coined K W Hi VL z) (w : W) (v : T.tab.Vals) (b : ZkView.Base z Hi)
-    (p : Fin (z.nS + z.nU)) : T.swContent w v b (.inl p) = T.content w b (.inl p) := by
-  unfold ZkView.Coined.swContent
-  by_cases h : T.tab.onVals.RowsAt (w, v) b.1 b.2.1.2.1
-  · rw [if_pos h] <;> rfl
-  · rw [if_neg h] <;> rfl
 
 /-- **The executable's level-0 leaves at the switched prover are the honest prover's.** -/
 theorem swExeOf_inl {J : ℕ} (C : Fin J → Composed.CoinedSetup) (cz : ∀ j, Composed.CoinsZK (C j).Rest)
@@ -211,7 +201,7 @@ theorem linkRoundEq_of_linkIs (nr : Msg → ℕ → ℕ) (vs : (session nr dataE
     (w : Claims.Flock.Wit) (hL : LinkIs nr L x w) : LinkRoundEq (session nr dataE) vs L x w := by
   intro ν t m₀ ρ₀ hk hr
   have e := enc0_swCutAt x w t (czExe PE x ((session nr dataE).pad [] : Fin (refK x) → FlockDeploy.Coin))
-    (vs x w ν ((session nr dataE).pad []))
+    (vs x w ν ((session nr dataE).pad [] : Fin (refK x) → FlockDeploy.Coin) ((session nr dataE).seenOf x t))
   rw [hL ν t m₀ ρ₀ hk hr, ← e]
   unfold RefSession.swMsgAt
   rw [List.length_nil, if_pos hk]

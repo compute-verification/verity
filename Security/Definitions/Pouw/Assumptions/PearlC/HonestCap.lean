@@ -11,7 +11,7 @@ and nothing proves it; `HonestTileCapRate` assumes it at the rate a measurement 
 
 It is **empirical**, not a hardness assumption: `ε` is an upper confidence limit on a measured rate of honest tiles that
 fail the per-tile cap. It is a parameter, so the theorem that reads it (`completeSampledDevRev1K`) holds unchanged
-whatever the table's number. How the rate is measured and cited (lean's rulings on #923):
+whatever the table's number. How the rate is measured and cited:
 
 - **Per input.** An input is one `(U, act)`: one linear's GEMM in one pass. Its rate is `p = E[X]`, `X` its
   work-weighted failing fraction under the tiles' noise, which is the probability the assumption bounds. Each measured
@@ -43,7 +43,7 @@ whatever the table's number. How the rate is measured and cited (lean's rulings 
   step, not a confidence statement. A population can meet it and say nothing: on activations whose every row fails Π's
   rules (all NaN, say) no row is credited, every tile's debit and cap are both 0, and the completeness that follows is
   of an audit that credits nothing.
-- **The counted event** is `pearlCTilesDevRev1K`'s `capOK`, through the Python check that #865's L5 test ties to it.
+- **The counted event** is `pearlCTilesDevRev1K`'s `capOK`, through the Python check that the L5 test ties to it.
 - **The measurement** is `benchmarks/pouw/pearl_c_vllm/served_debit.py --per-input` (at `f96f5b780`; the fresh trials
   are its `--fresh-draws N --fresh-source HEX`). Its `inputs.json`
   holds each input's failures, `W`, `w_max` and upper limit, and their maximum `cited_upper`; `ε` is `cited_upper`
@@ -72,7 +72,7 @@ tile's noise is the oracle at points of its own). `Served` carries the meaning: 
 `ε`, not only the measured ones (a further empirical step, not a confidence statement), with activations fixed
 independently of the oracle and the salt. It is the population the measured requests were drawn from (their prompt
 source and how it was sampled) on the model's pinned weights. The counted event is `pearlCTilesDevRev1K`'s `capOK`,
-through the Python check that #865's L5 test ties to it. The measurement is `served_debit.py --per-input`
+through the Python check that the L5 test ties to it. The measurement is `served_debit.py --per-input`
 (`inputs.json`'s `cited_upper`), `art:<pending: FP8 served table>`; the module docstring gives the bounds for an input
 with failures and for fresh trials. -/
 def HonestTileCapRate [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S) (TR : TileRules Q R S)
