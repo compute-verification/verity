@@ -35,3 +35,13 @@ admission may leave certified release order; (c) raw schedule ~5.5 kbit/request)
 - The advice charge's Lean form is a premise: `hAs` in Security/Definitions/NetworkCertifier/Guarantees/SampledCharge.lean
   (at most 2^c advices charged <= c; Kraft) is not proved, the proved instance counts free inputs, one-stage only.
   The post must not say the advice term is proved; under certified ticks c = 0 by construction.
+
+## 2026-11-06T12:19Z from proofs: for your Sat refresh
+
+- NET-194 (network-accounting): reading the advice under its hiding root inside the proof (the ZK gap LMSRO listed:
+  the verifier opening a window's advice in the clear) is #7176, in push 1b's Monday code, landing on main with the
+  onsite merge by Fri 20 Nov. So for the post: the advice is not yet read inside the proof on main.
+- OVERHEADDEF's interim h (GLM-5.3 prefill, full statements): dev 1.3e11 (registered MoE cut) / 1.05e9 (per-expert,
+  CIR-164 by Sat 18:00Z); fw (ZK server send check) 2.0e13 / 4.8e11; HILLCLIMB is cutting the send check.
+- Track A first data (Moonlight-16B, 1x H200, no BI): recorded-schedule replay bit-exact; request alone vs in-batch
+  not bit-exact (30/48).
