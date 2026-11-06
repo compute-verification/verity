@@ -213,8 +213,7 @@ over the monitoring period (`IntegrityHorizon`, `CircuitCreditPeriod`), not per 
 
 ## The demo
 
-**No demo runs the remote verifier yet:** `remote check` has no run of record; its first is due Wed 28 Oct, 11 AM
-PDT (D3). Lifecycle is the only demo that steps through the whole remote composite, with a stand-in prover; h200
+**No run of record of the remote verifier yet:** `remote check` (to be `verity verify remote`) has none. Lifecycle is the only example that steps through the whole remote composite; h200
 runs remote's sampled-proofs half for real, and the vLLM demo runs both halves on one served run, PoUW's as a
 development run:
 
@@ -229,8 +228,8 @@ development run:
   refused. At an 8-block sample, that allows at most 43.77% incorrect proof blocks at δ = 1%. It runs, at proof level
   none, and isn't placed: its Lean verifier ran beside the prover. On a CPU at a small shape, run
   `uv run python examples/h200/run.py --out /tmp/e2e` (`--tamper l1.wup` must exit 3).
-- `verity demo vllm` (`examples/vllm/README.md`), the vLLM demo: Llama-3.2-1B INT8 served by vLLM on one H200, its
-  values committed while serving, a sampling block's proof blocks sampled by live coins, proved by C-Flock `--zk` and
+- `verity example vllm` (`examples/vllm/README.md`), the vLLM demo: Llama-3.2-1B INT8 served by vLLM on one H200, its
+  values committed while serving, a verification phase's proof blocks sampled by live coins, proved by Flock `--zk` and
   checked by the Lean verifier, and PoUW's H1 on the served model. PoUW's verdict there is a development run under the
   challenger's development key and credits nothing, and an H1 commitment's served execution blocks aren't yet a
   `verity/pouw/v1` case, so no run of record of the remote verdict has passed: its run is moved, at proof level none,

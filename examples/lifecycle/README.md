@@ -18,8 +18,10 @@ uv run --directory examples/lifecycle pytest tests/test_lifecycle.py     # hones
 
 **The proofs are a stand-in.** `prove(statement, witness) -> proof` returns the sampled proof block's openings, and
 `verify(statement, proof) -> verdict` checks them against the commitments and re-evaluates the unit's circuit in the clear.
-It is sound for the demo and not zero-knowledge; Flock behind the ZK server replaces it (`verity/ml/flock/`,
-`verity/core/service/flock/`). Everything else is the repository's own code, as (b) says.
+It is sound for the example and not zero-knowledge, though its answer carries the id both composites run for integrity,
+sampled proofs (`VStar.Recursive.Sampled`, `verity/sampled-proofs/v1`); Flock's zero-knowledge proofs behind the ZK
+server replace it (`verity/ml/flock/`, `verity/core/service/flock/`). Everything else is the repository's own code, as
+(b) says.
 
 ## Terms
 
@@ -145,11 +147,12 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
 | `draw(coins, block)`, `draw_size` | verifier | live coins | the sampled proof blocks | `verity/core/protocols/sampled_proofs/coins.py` (`draw_first`), `verity/core/protocols/pouw/window.py` (`bucket`, `k_prime`) |
 | `prove(statement, witness)` | ZK server | a `Statement`, the openings | a proof | STAND-IN for Flock |
 | `verify(statement, proof)` | verifier | a `Statement`, a proof | each check's reason, or none | STAND-IN for Flock's verifier |
-| `sampled_proofs`, `pouw_window`, `OnsiteVerifier.answers` | verifier | one declaration's checks, view, report | `Core.Protocol` outcomes | missing as per-declaration functions: written in the demo |
+| `sampled_proofs`, `pouw_window`, `inference_only`, `OnsiteVerifier.answers` | verifier | one declaration's checks, view, report | `Core.Protocol` outcomes | missing as per-declaration functions: written in the example |
 | `compose(protocol, answers)` | verifier | the subprotocols' outcomes | the composite verdict and binding | `verity/core/protocols/composition/tests/reference.py` (`verdict`, `bind`, `ONSITE`, `REMOTE`) |
-| `account(baseline, declarations, lines, layout)` | verifier | the period's records and verdicts | period verdict, credit, bound, projections, scaling | missing: written in the demo |
+| `inference_only` | verifier | one declaration's checks, view, report | `Core.Protocol` outcomes | missing as a per-declaration function: written in the example |
+| `account(baseline, declarations, lines, layout)` | verifier | the period's records and verdicts | period verdict, credit, bound, projections, scaling | missing: written in the example |
 | `Certifier`, `certified(I, view, direction)` | network certifier | frames seen | a signed view | `verity/ml/crypto/lms.py` (`certificate_message`, `sign_at`, `verify`) |
-| `Challenger`, `theta_reach(layout, store)` | memory challenger, verifier | an open round; the layout | PoUS and bandwidth report; rate and latency | missing: written in the demo |
+| `Challenger`, `theta_reach(layout, store)`, `label` | memory challenger, verifier | an open round; the layout | PoUS, bandwidth and wipe report; rate and latency | missing: written in the example (the wipe a STAND-IN for `verity/wipe/v0`) |
 | `Developer`, `Verifier`, manifests | runtime | params, capabilities, messages | actions | `verity/core/deploy/` (`party`, `manifest`, `runtime.run`) |
 
 ## (c) What this exposes
@@ -194,8 +197,8 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
   independent samples, a wrong share ε of the credited work escapes with probability at most q_max^⌈εN⌉ (q = 1 − K′/n, N
   credited units): 1.0 % over the three declarations, 10^-6017 over a week of declarations like these. The theorem from
   a declaration's audit to the period's is the layer the modular math still needs.
-- **Per-declaration subprotocol checks don't exist yet.** PoUW's `core_check` and PoUS's and the bandwidth audit's verifiers take
-  whole-run cases; the demo writes one answer each a declaration. Only sampled proofs samples from the execution
+- **Per-declaration subprotocol checks don't exist yet.** PoUW's `core_check` and `period_check`, and PoUS's, the bandwidth
+  audit's and the wipe's verifiers take whole-run cases; the example writes one answer each a declaration. Only sampled proofs samples from the execution
   block; the memory challenger samples theta rows.
 - **The advice is charged but the toy's circuit doesn't depend on it beyond the count.** Batching enters B only as
   validation; a batched matmul would make B's output depend on it.

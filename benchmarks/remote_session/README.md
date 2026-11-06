@@ -1,7 +1,7 @@
 # benchmarks/remote_session
 
-The session harness of PoUB (proof of useful bandwidth, `verity/core/protocols/remote_bandwidth`), not the remote
-protocol's demo, which is `verity demo vllm`. It runs PoUB end to end: a verifier's process and a prover's, over TCP,
+The session harness of PoUB (`verity/core/protocols/remote_bandwidth`), not the remote
+protocol's demo, which is `verity example vllm`. It runs PoUB end to end: a verifier's process and a prover's, over TCP,
 and the memory line a gate run publishes.
 
 **Status: active.** The vLLM integration imports it (`integrations/vllm/verity_vllm/protocols/remote_bandwidth/remote.py`

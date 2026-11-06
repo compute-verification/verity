@@ -52,6 +52,7 @@ DOC_TERMS = {
     "isolation unit, IU": "isolation block",
     "replay unit": "replay block",
     "draw, drawn, redraw": "the sample, sampled proof block (verb: sample; coins are flipped)",
+    "verity example": "verity demo",
     "components, the composite's product": "subprotocols, composition",
     "firewall": "ZK server",
     "flock-verify, remote check, naming the verifier": "verity verify proof, verity verify remote (a command someone runs today "
@@ -75,8 +76,8 @@ DOC_TERMS = {
     "dampener, compute dampener": "the slowdown, slowdown(𝒢, 𝒜, η) (`Nci.Dampener` and `Dampener*` stay in backticks until renamed)",
     "NCI, novel communication intensity": "the inference-only policy (`Nci*`, `NciCheck` and the `nci` directories stay in backticks until "
                                           "renamed)",
-    "leg": "the subprotocol's name (sampled proofs, PoUW, PoUS, the bandwidth audit, the network certifier, the wipe), or run",
-    "verity example": "verity demo",
+    "leg": "the subprotocol's name (sampled proofs, PoUW, PoUS, PoUB, network certification), the bandwidth audit's or the "
+           "memory wipe's, or run",
 }
 _SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
 _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?|(?:physical|thread|KV){_SPACE}blocks?"
@@ -356,8 +357,8 @@ def test_the_doc_scan_reads_each_form():
                 "```sh\nverity example vllm\n```\n",
         "c.py": '"""A wrong unit and a leg stay in code until PR 2."""',
         "benchmarks/pouw/CHANGELOG.md": "a leg",
-        "verity/README.md": "a leg",
-        GLOSSARY: '| "leg"; a physical block; `verity example` | subprotocol |\nA leg outside the table.\n',
+        next(f for f in PENDING if f.endswith(".md")): "a leg",
+        GLOSSARY: '| "leg"; a physical block | subprotocol |\nA leg outside the table.\n',
     }
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [(GLOSSARY, 2, "leg"),
         ("a.md", 1, "wrong unit"), ("a.md", 1, "Isolation-Units"), ("a.md", 1, "replay unit"), ("a.md", 2, "IU"),

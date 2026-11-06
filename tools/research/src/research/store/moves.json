@@ -1516,15 +1516,6 @@
         "benchmarks/e2e_h200/": "examples/h200/",
         "benchmarks/e2e_demo/": "examples/h200/interfaces/"
       }
-    },
-    {
-      "paths": {
-        "examples/dither_full_util/example.toml": "examples/dither_full_util/demo.toml",
-        "examples/h200/example.toml": "examples/h200/demo.toml",
-        "examples/lifecycle/example.toml": "examples/lifecycle/demo.toml",
-        "examples/onsite_served/example.toml": "examples/onsite_served/demo.toml",
-        "examples/vllm/example.toml": "examples/vllm/demo.toml"
-      }
     }
   ]
 }
