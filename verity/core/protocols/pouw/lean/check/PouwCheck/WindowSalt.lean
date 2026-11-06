@@ -1,4 +1,7 @@
-import PouwCheck.Pass
+module
+
+public import PouwCheck.Pass
+public import Identity.Domains
 
 /-!
 # A live window's salt (`core_check.window_salt`)
@@ -13,6 +16,8 @@ opened after R, its salt that coin's round-0 unit salt after R (`h1tile.live_sal
 `SALT_BYTES`), and its session the gate's answer for the session without its secret (`carries`). A seeded window's
 answer carries no salt. Every refusal is `core_check.py`'s.
 -/
+
+@[expose] public section
 
 namespace PouwCheck
 
@@ -135,5 +140,10 @@ def windowSaltReason (p : Params) (c : Registration) (salt : Option Json) : Opti
     | some s => match windowSaltCheck (p.live.getD .null) c s with
       | .ok () => none
       | .error (_, why) => some why
+
+/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
+written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : ANCHORED_EPOCH_TAG = Domains.POUW_ANCHORED_EPOCH_OPEN.toUTF8 := rfl
+example : VALUES_TAG = Domains.POUW_PERIOD_VALUES.toUTF8 := rfl
 
 end PouwCheck

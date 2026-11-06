@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.PlainDrawDec
-import Proofs.Flock.Claims.KS.PlainDrawDecK
-import Proofs.Flock.Claims.KS.PlainSimW
+module
+
+public import Proofs.Flock.Claims.KS.PlainDrawDec
+public import Proofs.Flock.Claims.KS.PlainDrawDecK
+public import Proofs.Flock.Claims.KS.PlainSimW
 
 /-!
 # The plain chain from a simulator, at the statement's draw
@@ -17,6 +19,8 @@ draw, which needs nothing of the record's draw: an accepting run gives `plainVer
 * `plain_first_of_simDK`, `PlainSimWrPAtDK`, `PlainSimWDK`: the same at `VK keep`, reading `plainVerdictAtK keep`
   (`plainVerdictAtK_of_run`, `plain_hdecAtK`, `plain_hdecHAtK`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

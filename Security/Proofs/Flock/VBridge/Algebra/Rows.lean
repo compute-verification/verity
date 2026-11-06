@@ -1,4 +1,6 @@
-import Proofs.Flock.VBridge.Algebra.Build
+module
+
+public import Proofs.Flock.VBridge.Algebra.Build
 
 /-!
 # When `verifierRows` returns
@@ -10,6 +12,8 @@ and the constant's value go into v and `kappa`, never into S. So S is the same a
 skeleton (`Lin.Skel`, `build_skel`), and `verifierRows` returns, with v the coefficient slots then the comb, whenever
 `run` at the rep's coins gives residuals of the zero coins' skeleton (`verifierRows_ok_of_skel`).
 -/
+
+@[expose] public section
 
 namespace Flock.RecAlgebra
 
@@ -355,8 +359,8 @@ have (the ones `structureOf` builds S from): then its S is `structureOf`'s, and 
 comb. -/
 theorem verifierRows_ok_of_skel {sh : Shape} {rounds : Array (Array F128)} {extras : Array Claim} {comb : Array F128}
     {lins₀ lins : Array Lin} {info₀ info : Info Lin} {S : GfS} (hS : structureOf sh = .ok S)
-    (hz : residualLins sh Coins.zeros (extrasLike sh) = .ok (lins₀, info₀))
-    (hl : residualLins sh (Coins.ofRounds rounds) extras = .ok (lins, info))
+    (hz : residualLins sh CoinSource.zeros (extrasLike sh) = .ok (lins₀, info₀))
+    (hl : residualLins sh (CoinSource.ofRounds rounds) extras = .ok (lins, info))
     (hs : List.Forall₂ Lin.Skel lins₀.toList lins.toList) :
     ∃ b : Built, build sh lins = .ok b ∧ b.S = S ∧
       verifierRows sh rounds extras comb = .ok (b.vVals ++ comb, info, b.kappa) := by

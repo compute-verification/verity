@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.FlockKSAbort
-import Proofs.Flock.Claims.Recursion.Hybrid
-import Proofs.Flock.Claims.Bridge.Coins
+module
+
+public import Proofs.Flock.Claims.Recursion.FlockKSAbort
+public import Proofs.Flock.Claims.Recursion.Hybrid
+public import Proofs.Flock.Claims.Bridge.Coins
 
 /-!
 # The abort-law table bound from the table bound with escapes on accepted runs
@@ -24,6 +26,8 @@ message (`Refusable`). So Flock meets `Inner.KSAbort` at `Inner.ofFlock` from th
 * **The bound** (`tableBoundθAbort_of_onAcc`): the refuser's bound, averaged over `g`, with its escapes on accepted runs
   read at the runs as they abort (each fork event's root by Jensen).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

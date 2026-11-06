@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Deploy
+module
+
+public import Proofs.Flock.Claims.Deploy
 
 /-!
 # Runs of the verifier over `OC`, peeled
@@ -9,6 +11,8 @@ bind is a run of each part (`Runs.bind`, and through the transcript's and Ligeri
 verdict is the step's with the hashes `hOf H` (`shadow`, a `Flock.With.Sim`), which at `sha512` is the compiled
 verifier's own (`Runs.std`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

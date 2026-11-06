@@ -1,9 +1,11 @@
-import Proofs.Flock.Soundness.Discharge.Zero.Cols
-import Proofs.Flock.Soundness.Discharge.Zero.Stack
-import Proofs.Flock.Soundness.Discharge.Aliased.Keys
-import Proofs.Flock.Soundness.Discharge.Placed.Wiring
-import Proofs.Flock.Soundness.Discharge.Placed.Keyed
-import Proofs.Flock.Soundness.Discharge.Const.Inst
+module
+
+public import Proofs.Flock.Soundness.Discharge.Zero.Cols
+public import Proofs.Flock.Soundness.Discharge.Zero.Stack
+public import Proofs.Flock.Soundness.Discharge.Aliased.Keys
+public import Proofs.Flock.Soundness.Discharge.Placed.Wiring
+public import Proofs.Flock.Soundness.Discharge.Placed.Keyed
+public import Proofs.Flock.Soundness.Discharge.Const.Inst
 
 /-!
 # `hZero` at the circuit's program (e2e, untyped statements)
@@ -22,6 +24,8 @@ The untyped statement `Stmt.setupH` accepted places a template instance (`upv` s
   `zeroCols_progPlaces` is the same at `Placed.progPlaces`, and `zeroCols_keyProg` at `Placed.Sites.progPlaces_keyProg`,
   which takes only the sites and the parse.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 
@@ -50,13 +54,12 @@ theorem copyPos_zero {g : ℕ} (hg : g < st.c.g) {x : ℕ} (hx : x < st.c.upv * 
   · exact ⟨_, hs, rfl⟩
 
 include F in
-/-- **A stacked input that reads the zero carries 0**: at template instance `g`'s place (`stackPlace`), in every block
+/-- **A stacked input that reads the zero carries 0**: at template instance `g`'s place (`Layout.col`), in every block
 of a satisfying witness. -/
 theorem stack_zero_block {g : ℕ} (hg : g < st.c.g) (x : Fin ((unitRows st L.unit_built).stackW st.c.upv))
     (hx : x.val < ((unitRows st L.unit_built).stack st.c.upv).nIn) (hz : ZeroIn st.c x.val)
     {z : Model.Witness (L.model regs).m} (hsat : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
-    (L.model regs).block z o (stackPlace (L.model regs) (unitRows st L.unit_built) st.c.upv
-        (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg) x) = 0 := by
+    (L.model regs).block z o (L.col regs hg x) = 0 := by
   have hx' : x.val < st.c.upv * (st.c.unit.inWords * WORD) := by
     have : x.val < st.c.upv * (unitRows st L.unit_built).nIn := hx
     rwa [L.unitRows_nIn] at this

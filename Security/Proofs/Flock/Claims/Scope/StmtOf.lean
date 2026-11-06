@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Scope.Setup
-import Proofs.Flock.Claims.Scope.Fit
-import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
+module
+
+public import Proofs.Flock.Claims.Scope.Setup
+public import Proofs.Flock.Claims.Scope.Fit
+public import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
 
 /-!
 # Each table the verifier parses is `stmtOf`'s
@@ -9,6 +11,8 @@ import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
 `RegionsWF`), and its table's matrices (`placedA`, `placedB`, what `Tab.toModel` reads) are `stmtOf`'s (`matA`, `matB`;
 `placedA_eq`, on the public-output path and the hidden one).
 -/
+
+@[expose] public section
 
 namespace Flock.Readable
 
@@ -39,8 +43,10 @@ theorem tableAt_model {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts)
     simp only [↓reduceIte] at hd
     obtain ⟨hwf, hrw⟩ := Hidden.setupHidden_wf hd
     have s := Hidden.setupHidden_spec' hd
-    have P := parse_facts (Hidden.parse_untyped ht' s.parse).1
-    exact ⟨hwf, hrw, fun a b => ⟨Integrate.placedA_eq P (Hidden.hidden_layout' ht' hd) s.leaf a b,
-      Integrate.placedB_eq P (Hidden.hidden_layout' ht' hd) s.leaf a b⟩⟩
+    have hC := Hidden.committed_of_commit s.parse
+    have hW := hC.netWidths ht'
+    have hK := hC.netKinds ht'
+    have L := Hidden.hidden_layout' ht' hd (HiddenExec.setupTables_pinnedH hh hset j hj)
+    exact ⟨hwf, hrw, fun a b => ⟨Integrate.placedA_eqW hW hK L s.leaf a b, Integrate.placedB_eqW hW hK L s.leaf a b⟩⟩
 
 end Flock.Readable

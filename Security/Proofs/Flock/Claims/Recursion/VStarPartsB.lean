@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.VStarParts
-import Proofs.Flock.Claims.Recursion.VStarBound
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarParts
+public import Proofs.Flock.Claims.Recursion.VStarBound
 
 /-!
 # V*'s algebra and rec-open parts at the bound layout (option (d))
@@ -19,6 +21,8 @@ pieces, the commit strings its statement shows (`LayoutB.CmtAgrees`) and its sha
 (`RecDeploy.partOpensB_recRead`, through `partOpensB_layoutBTops`), and every route at `layoutBTops` drops it. The
 climbs' argument also escapes to a setup collision (`SetupColl`), which `PartOpensB`'s escape doesn't admit.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion.VStarB
 
@@ -52,7 +56,7 @@ compiled statement `x` of the shape shows the coins `c` for part `s`,
 def ResLinksB (D : Deploy Coin) (decode : Msg → Option Flock.Readable.Read) (L : LayoutB) (shape : Form → Prop)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg)
     (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin), shows s x xO c →
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin), shows s x xO c →
     ∃ p, Flock.Readable.parseBytes decode xO = some p ∧ p.tags.typed = false ∧ p.publicInputs = none ∧
       ∃ t, ∃ ht : t < p.sts.size, ∃ (m k cl j : ℕ) (sh : _root_.Flock.Shape) (S : _root_.Flock.RecOpen.GfS)
         (ns : List ℕ) (nv : ℕ),
@@ -94,7 +98,7 @@ those elements are the agreeing messages' and the coins' coefficients. -/
 def ResReadsB (D : Deploy Coin) (decode : Msg → Option Flock.Readable.Read) (L : LayoutB) (shape : Form → Prop)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg)
     (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin), shows s x xO c →
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin), shows s x xO c →
     ∃ p, Flock.Readable.parseBytes decode xO = some p ∧ p.tags.typed = false ∧ p.publicInputs = none ∧
       ∃ t, ∃ ht : t < p.sts.size, ∃ (m k cl j : ℕ) (sh : _root_.Flock.Shape) (S : _root_.Flock.RecOpen.GfS)
         (ns : List ℕ) (nv : ℕ),
@@ -145,7 +149,7 @@ compiled statement `x` of the shape shows the coins `c` for part `s`,
 def OpenLinksB (D : Deploy Coin) (decode : Msg → Option Flock.Readable.Read) (L : LayoutB) (shape : Form → Prop)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg)
     (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin), shows s x xO c →
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin), shows s x xO c →
     ∃ p, Flock.Readable.parseBytes decode xO = some p ∧ p.tags.typed = false ∧ p.publicInputs = none ∧
       ∃ t, ∃ ht : t < p.sts.size, ∃ LANES Ht : ℕ,
         _root_.Flock.RecOpen.check p.sts[t].c = .ok () ∧

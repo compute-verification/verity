@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Defs
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Defs
 
 /-!
 # `OutputsCommitted` and `OutputsBinding`, widened: the frozen statements
@@ -15,6 +17,8 @@ unit, or a tail's last stage):
   is partial and so in its `hm96` slot, is not covered);
 * `…Wide`: a population file with shared rows too (header `shared_rows`, `pop.tables ≠ none`).
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 
@@ -33,7 +37,8 @@ population, and `sha512/row/v1` rows (`hv1`).
 def OutputsCommittedTail : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)} {d : Lean.Json}
     {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt},
-    tags.typed = false → Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
+    tags.typed = false → tags.isTmpl = false →
+    Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop → pop.tables = none →
     ∀ {D : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
     0 < st.c.upv →
@@ -57,7 +62,8 @@ and salts is a SHA-512 collision. -/
 def OutputsBindingTail : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins coins' : Coins} {tables : List (String × ByteArray)} {d d' : Lean.Json}
     {partition partition' : Option Lean.Json} {program program' : Option ByteArray} {st st' : Stmt},
-    tags.typed = false → Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
+    tags.typed = false → tags.isTmpl = false →
+    Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
     Stmt.setupHidden tags cf pf coins' tables (some d') partition' program' = .ok st' →
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop → pop.tables = none →
     ∀ {D D' : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
@@ -92,7 +98,8 @@ file without shared rows and a draw whose proved units are in the population. -/
 def OutputsCommittedV2 : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)} {d : Lean.Json}
     {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt},
-    tags.typed = false → Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
+    tags.typed = false → tags.isTmpl = false →
+    Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop → pop.tables = none →
     ∀ {D : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
     0 < st.c.upv →
@@ -115,7 +122,8 @@ row's prefix its own (`HmRow.prefixOf`). -/
 def OutputsBindingV2 : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins coins' : Coins} {tables : List (String × ByteArray)} {d d' : Lean.Json}
     {partition partition' : Option Lean.Json} {program program' : Option ByteArray} {st st' : Stmt},
-    tags.typed = false → Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
+    tags.typed = false → tags.isTmpl = false →
+    Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
     Stmt.setupHidden tags cf pf coins' tables (some d') partition' program' = .ok st' →
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop → pop.tables = none →
     ∀ {D D' : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
@@ -151,7 +159,8 @@ the population. -/
 def OutputsCommittedWide : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)} {d : Lean.Json}
     {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt},
-    tags.typed = false → Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
+    tags.typed = false → tags.isTmpl = false →
+    Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop →
     ∀ {D : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
     0 < st.c.upv →
@@ -173,7 +182,8 @@ def OutputsCommittedWide : Prop :=
 def OutputsBindingWide : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins coins' : Coins} {tables : List (String × ByteArray)} {d d' : Lean.Json}
     {partition partition' : Option Lean.Json} {program program' : Option ByteArray} {st st' : Stmt},
-    tags.typed = false → Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
+    tags.typed = false → tags.isTmpl = false →
+    Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
     Stmt.setupHidden tags cf pf coins' tables (some d') partition' program' = .ok st' →
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop →
     ∀ {D D' : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →

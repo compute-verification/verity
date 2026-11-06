@@ -2,7 +2,7 @@
 `$OUT` (period.json, wipe.json, wipe.case.json, summary.json) with its exit: one 32 MiB segment kept in host memory
 (`wipe_store.HostMemory`, period.json's `wipe.store` `host`) in place of the card, against `wipe_side.py`, the challenger's
 stand-in on a host of its own, in place of the side `--challenger-command` starts on `--challenger`. The challenger
-period.json names is `wipe_party.Party.of`'s, written to `$OUT/party.json` before the stand-in replaces it; the arguments
+period.json names is `wipe_party.side_of`'s, written to `$OUT/party.json` before the stand-in replaces it; the arguments
 and the lease it ran under go to `$OUT/demo-argv.json`. The Python judges alone: a `--wipe-protocol` is only recorded.
 `python served_wipe_demo.py OUT LEASE [DEMO_OPTIONS]`: the test's shim passes `$OUT` and `$GPU_LEASE_UUID`."""
 
@@ -16,6 +16,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+from verity.core.deploy.stream import Side
 from verity.core.protocols.pous import wipe_party as WP
 from verity.core.protocols.pous import wipe_period as W
 
@@ -34,15 +35,15 @@ def main(argv: list[str]) -> int:
     doc = {"tools": {}, "challenger_host": a.challenger,
            "challenger": {"wipe": {"command": shlex.split(a.challenger_command), "address": a.challenger_address}},
            "wipe": {"store": "host", "reads": int(a.reads)}}
-    of = WP.Party.of
+    of = WP.side_of
 
-    def stand_in(cls, period, node, device, extra=()):
+    def stand_in(period, node, device, extra=()):
         named = of(period, node, device, extra)
         (out / "party.json").write_text(json.dumps({"host": named.host, "command": named.command,
                                                     "address": named.address}))
-        return WP.Party(named.host, (sys.executable, str(SIDE), str(device)))
+        return Side(named.host, (sys.executable, str(SIDE), str(device)))
 
-    WP.Party.of = classmethod(stand_in)  # type: ignore[method-assign]
+    WP.side_of = stand_in
     with tempfile.TemporaryDirectory() as t:
         period = Path(t) / "periods" / "p0"
         period.mkdir(parents=True)

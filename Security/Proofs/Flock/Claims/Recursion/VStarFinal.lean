@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.VStarHonest
-import Proofs.Flock.Claims.Recursion.VStarFitHeld
-import Proofs.Flock.Claims.Recursion.VStarFitPin
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarHonest
+public import Proofs.Flock.Claims.Recursion.VStarFitHeld
+public import Proofs.Flock.Claims.Recursion.VStarFitPin
 
 /-!
 # What each V\* part's circuit accepts on the honest run, with hh's fitting discharged (`honest_partAccepts_final`)
@@ -22,6 +24,8 @@ each one piece:
 * the parts holding one round's row agree on its port's words (`hW`).
 -/
 
+@[expose] public section
+
 namespace RecDeploy.VStarHonest
 
 open _root_.Flock
@@ -41,7 +45,7 @@ theorem honest_partAccepts_final (mask : ℕ → ℕ → Bool) (Ir : InnerRec) (
     let I := Claims.Recursion.Inner.ofFlock DeployedR.bdR.deploy decI
     let D := recBound _root_.Flock.Readable.relation bR L DeployedR.bdR.IVStar
     NumsFixed bL.st →
-    ∀ {w : Claims.Flock.Wit} {st : Claims.Recursion.Stmt}, Claims.Recursion.R D I x w →
+    ∀ {w : Claims.Flock.Wit} {st : Claims.Recursion.CompiledStatement}, Claims.Recursion.R D I x w →
       D.parse x = some st → Claims.Recursion.Form.Dense st.form →
     ∀ (ω : Tape bL) (r : Fin (D.V.k x) → Coin),
       (Claims.run FlockDeploy.sha512 (refP I.V bL w) D.V x ω r).out = .acc →

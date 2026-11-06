@@ -1,8 +1,11 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Binding
-import Proofs.Flock.Soundness.Discharge.Hidden.Public
-import Proofs.Flock.Soundness.Discharge.Hidden.Delta
-import Proofs.Flock.Soundness.Discharge.Hidden.Layout
-import Proofs.Flock.Soundness.Discharge.Hidden.Committed
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Commit
+public import Proofs.Flock.Soundness.Discharge.Hidden.Binding
+public import Proofs.Flock.Soundness.Discharge.Hidden.Public
+public import Proofs.Flock.Soundness.Discharge.Hidden.Delta
+public import Proofs.Flock.Soundness.Discharge.Hidden.Layout
+public import Proofs.Flock.Soundness.Discharge.Hidden.Committed
 
 /-!
 # The soundness of a hidden-output statement (`Stmt.setupHidden`)
@@ -18,6 +21,8 @@ The frozen statements of `Defs.lean`, one theorem each:
 * `outputs_binding`: two accepted statements that put one registered unit at two template instances, whose output words
   differ, give a SHA-512 collision (`cr/sha-512`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Hidden
 

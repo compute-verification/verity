@@ -1,4 +1,6 @@
-import Definitions.Accounting.Guarantees.Stacking
+module
+
+public import Definitions.Accounting.Guarantees.Stacking
 
 /-!
 # A declared circuit's space and bandwidth from an accepted audit (trusted)
@@ -19,6 +21,8 @@ weights and the filler are the registration audit's to count. Its theorem is
 `Accounting.SecurityProofs.DeclaredCircuitRequirement`, in `Security/Proofs/Accounting/DeclaredCircuit/Requirement.lean`
 with its pieces beside it.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 
@@ -183,7 +187,7 @@ credited blocks (one-sided), each pass and window on the devices' clocks, in the
 models, under the per-pass hash budget, `SquaringFloor`, `ChainSum`, `KeyBinding`, `CircuitCarriers` and
 `SteeredLayout`. -/
 def DeclaredCircuitRequirement : Prop :=
-  ∀ (n P N ρ S q G Xr Lr qr τ k a L E es B εnum εden T M : ℕ) (ε δ : ℝ≥0∞) {ιW : Type} (Wc : Gates.Dag ιW)
+  ∀ (n P N ρ S q G Xr Lr qr τ k a L E es B εnum εden T M : ℕ) (ε δ : ℝ≥0∞) {ιW : Type} (Wc : Gates.IntDag ιW)
     (caps : Gates.Caps) (Aud : Gates.Audit) {Ω Ca Ch : Type} [Fintype Ω] [Fintype Ca]
     (enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → (Fin 128 → RateSketch.Sector))
     (choose : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω → (a : Fin T) → ({b : Fin T // b < a} → Ca) → Ch)

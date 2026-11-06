@@ -35,7 +35,7 @@ replayed rows, which recomputes every start and n by vLLM's rules and checks the
 under the cumulative pool bound to the longest cached prefix, and gives `kind`, the canonical `sources`, and the request
 records (the tie: prompt and output lengths against the certified ids, `finish` by the stop rule).
 
-**Sent**, as `code_v1.Window`s (`residual`), and nothing else:
+**Sent**, as `window_charge.Window`s (`residual`), and nothing else:
 - `arrived`: the replay's decisions, one per open step: whether the next request had arrived.
 - `order`: the order's deviations from release order, as above.
 - `hits`: past the pool bound, every prefix-cache lookup the replay's scheduler reads (`_KV.hit`: each candidate its
@@ -44,7 +44,7 @@ records (the tie: prompt and output lengths against the certified ids, `finish` 
   (`derived.Prefixes.cached` over the rows scheduled before the lookup) less the replay's hit, in whole blocks. Where
   the bound holds (`derived._walk`'s: sync scheduling, and the blocks of the requests admitted through the step at most
   the pool less its null block) the shortfall is 0 by the bound and is derived at 0 bits. Past it, the hit is the
-  prover's choice of eviction, so it is sent and charged, and no choice goes uncharged (LEAK-LEAN's `BitsCount`).
+  prover's choice of eviction, so it is sent and charged, and no choice goes uncharged (the sampled leak bound's `hAs`).
 The resumes and the order of new requests that `derived._walk` would otherwise read are the replay's, so v1 sends none.
 The KV pool's size is registered before the run, never sent: a prover that chose it could declare a bigger pool and buy
 derived hits with it.
@@ -63,7 +63,7 @@ record's windows (`windows`: its last bucket's, plus one). `code_v1` codes each 
 terminates each window's segment, so the code finds every window's end itself, with no length prefix. A window's charge
 is its segment's bits (`code_v1.Encoded.lens`; `bits_by_window`), a function of the string alone, never of the record.
 The strings are prefix-free for every W, so a string
-charged c bits in all is one of at most 2^c (LEAK-LEAN's `bitsCount_of_prefixFree`). The codebook (`Registered.book`,
+charged c bits in all is one of at most 2^c (Kraft; the sampled leak bound's `hAs`). The codebook (`Registered.book`,
 `code_v1.Book`) is fit on other runs, never this one, and its digest is registered before the first window. `decode`
 takes only the canonical string (`code_v1.decode`: each segment the coder's own codeword for the symbols it decodes to),
 zero padding of fewer than 8 bits and no byte past it, and then holds the windows to the replay's: the decisions the
@@ -472,9 +472,9 @@ def _charged(record: Record, reg: Registered, order: Sequence[int], rp: Any, W: 
 
 def _residual(record: Record, reg: Registered, engine: Any, order: Sequence[int], rp: Any,
               decisions: Sequence[Decision], looks: Sequence[Sequence[Lookup]], W: int) -> list[Any]:
-    """The windows v1 sends (`code_v1.Window`). A decision goes to the earlier of its arrival's ingress window and the
-    earliest window that shows its step's rows; an order entry to the earlier of its arrival's ingress window and the
-    earliest window that shows the rows of the first step that reads that arrival (a lookup, a decision or its
+    """The windows v1 sends (`window_charge.Window`). A decision goes to the earlier of its arrival's ingress window
+    and the earliest window that shows its step's rows; an order entry to the earlier of its arrival's ingress window
+    and the earliest window that shows the rows of the first step that reads that arrival (a lookup, a decision or its
     admission); and a sent hit's shortfall to the earliest window that shows its step's. Each is nondecreasing in the
     replay's order, so each field's values, window after window, are the replay's."""
     earliest, win = _charged(record, reg, order, rp, W)
@@ -638,8 +638,8 @@ def _residual_of(advice: I1.Advice, record: Record, reg: Registered) -> tuple[li
 
 
 def residual(advice: I1.Advice, record: Record, reg: Registered) -> list[Any]:
-    """The windows `encode` codes (`code_v1.Window`s: the decisions, the order's deviations and the sent hits): what a
-    codebook is fit on."""
+    """The windows `encode` codes (`window_charge.Window`s: the decisions, the order's deviations and the sent hits):
+    what a codebook is fit on."""
     return _total(lambda: _residual_of(advice, record, reg)[0])
 
 

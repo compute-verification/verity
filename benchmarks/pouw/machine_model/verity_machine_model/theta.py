@@ -26,14 +26,14 @@ value, and the sheet's where no run has one, which the result lists as filled).
   against the fold's own, r_min, and the slack r_H − r_min in tensor MAC-times a MAC over the cheapest adding route's
   exchange rate: the ε that slack would buy if ε were slack over exchange. A measured profile also gives γ, its
   SMSP-cycles a MMA over the lone INT8 MMA's at the measured rate.
-- `units`: every arithmetic or reduction unit RT-UNITS lists (`UNITS`), each with its verdict: a priced rate, an adding
+- `units`: every arithmetic or reduction unit a card has (`UNITS`), each with its verdict: a priced rate, an adding
   route d reads, bounded outside the model (its most work a SM-clock over the rate it stands in for, summed by `free`),
   open (with the run that would settle it), none, a clock or bandwidth scale, or absent.
 - `sha`: SHA-512, our measured compressions a SM-clock against each public implementation's figure (`[[public]]`) read
   at its card's highest clock, the lowest per-clock reading it can have; ours over it, at most 1, is c_sha's reading.
   `sha_ceiling`: the most a compression of `[sha512_mix]` (the built kernel's SASS) gets from the card's pipes, an LP
   over ALU, IMAD and issue with RT-UNITS' three exact moves to IMAD (a rotation as IMAD.HI + IMAD + IMAD.WIDE, or as
-  SHF + IMAD + IMAD.WIDE; a 2-input 64-bit add as IMAD.WIDE + IMAD), with and without IMAD.HI: the rate a `ShaSpeed`
+  SHF + IMAD + IMAD.WIDE; a 2-input 64-bit add as IMAD.WIDE + IMAD), with and without IMAD.HI: the rate a `SAKSha`
   premise is stated at, since no schedule built from those moves beats it.
 
 `figures` holds each rate's `figure`, the per-second number its document prints at `clock`, to 2 · sheet · SMs · clock.
@@ -70,7 +70,7 @@ REDUCTIONS = {"smem.atom": ADDING[5], "l2.red": ADDING[6], "dsmem.red": ADDING[7
               "nvls.red": ADDING[9]}
 # A 2-input 64-bit add as the kernel was built: its ALU instructions, IMAD instructions and instructions.
 ADD_FORMS = {"IADD3 + IADD3.X": (2, 0, 2), "IADD3 + IMAD.X": (1, 1, 2), "IADD.64": (1, 0, 1)}
-# Every arithmetic or reduction unit RT-UNITS (CMP-139) lists; each θ has a `[[unit]]` for each, with its verdict.
+# Every arithmetic or reduction unit a card has; each θ has a `[[unit]]` for each, with its verdict.
 UNITS = ("tensor", "dp4a", "imad", "alu", "fp32", "fp64", "sfu", "uniform", "texture", "smem.atomics", "l2.atomics",
          "tma.reduce", "dsmem", "nvlink.reduce", "copy", "video", "rt", "clocks", "compression", "host.link", "host.cpu")
 VERDICTS = {
@@ -255,7 +255,7 @@ def check(t: Theta) -> list[str]:
     if not t.honest:
         out.append("`honest` lists no profile; r_H and Strassen's L read one")
     if missing := [k for k in UNITS if k not in t.units]:
-        out.append(f"no [[unit]] for {', '.join(missing)}: every unit RT-UNITS lists has one, `absent` if the card "
+        out.append(f"no [[unit]] for {', '.join(missing)}: every unit in UNITS has one, `absent` if the card "
                    f"lacks it")
     for u in t.units.values():
         if u.verdict not in VERDICTS:

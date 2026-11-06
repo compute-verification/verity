@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.ForkSim
-import Proofs.Flock.Claims.KS.OffAlign
+module
+
+public import Proofs.Flock.Claims.KS.ForkSim
+public import Proofs.Flock.Claims.KS.OffAlign
 
 /-!
 # The plurality off mass after a number of coins, through a simulation and on the round coins
@@ -21,6 +23,8 @@ from the simulated session to the deployed runs as one run's mass, never as a fo
 * `offX_fresh`, `Live.offC_liveStrat_le`: on a game whose every coin answers its own send, `j` rounds are `j` coins, so
   at the live session the off mass after `j` coins is at most that probability at the run's coins.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

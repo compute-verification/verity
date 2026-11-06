@@ -1,10 +1,12 @@
-import Proofs.Flock.Claims.Recursion.ResChainW
-import Proofs.Flock.Claims.Recursion.ResStepsW
-import Proofs.Flock.Claims.Recursion.AccTies
-import Proofs.Flock.Claims.Recursion.ResCopyRows
-import Proofs.Flock.Claims.Recursion.TopsOpens
-import Proofs.Flock.VBridge.AlgHolds
-import Proofs.Flock.VBridge.Family.PartKeys
+module
+
+public import Proofs.Flock.Claims.Recursion.ResChainW
+public import Proofs.Flock.Claims.Recursion.ResStepsW
+public import Proofs.Flock.Claims.Recursion.AccTies
+public import Proofs.Flock.Claims.Recursion.ResCopyRows
+public import Proofs.Flock.Claims.Recursion.TopsOpens
+public import Proofs.Flock.VBridge.AlgHolds
+public import Proofs.Flock.VBridge.Family.PartKeys
 
 /-!
 # P3's ends half: the copy's accumulator ports read the outer witnesses' chain at the rep's ends
@@ -22,6 +24,8 @@ import Proofs.Flock.VBridge.Family.PartKeys
   registered reads (`innerAccTieV`), so they hold one row (`held_rows_eq`).
 * `repOpens_eq`: the rep's run length `R` is `D.accE`'s `nOpen` at table 0's schedule.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.ResLower
 
@@ -444,7 +448,7 @@ theorem stepsWX_of_G (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ →
     StepsWX rd key wE final w b elem shape untr cmt :=
   fun x st hx hf c ws hJ xs hxs hcol hms => h x st hx hf c ws hJ ⟨xs, hxs, hcol, hms⟩
 
-/-- **P3 from `StepsWG` at `XsW`** (STEPSW's form), wherever the brings list the registered reads. -/
+/-- **P3 from `StepsWG` at `XsW`**, wherever the brings list the registered reads. -/
 theorem accPorts_of_G (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))

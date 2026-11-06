@@ -1,11 +1,14 @@
-import NciCheck.Check
-import NciCheck.Difftest
-import NciCheck.Desc
-import NciCheck.DescDifftest
-import NciCheck.DescLiveness
-import NciCheck.DescFuzz
-import NciCheck.Baseline
-import NciCheck.BaselineDifftest
+module
+
+public import NciCheck.Check
+public import NciCheck.Difftest
+public import NciCheck.Desc
+public import NciCheck.DescDifftest
+public import NciCheck.DescLiveness
+public import NciCheck.DescFuzz
+public import NciCheck.Baseline
+public import NciCheck.BaselineDifftest
+public import NciCheck.Protocol
 
 /-!
 # The NCI policy's check
@@ -24,7 +27,12 @@ statements their agreement rests on, and the agreement itself. Code: it reads th
 decoder (`Flock.Program`) and imports nothing else but Lean core. It stays experimental until its agreement with the
 definition is proved.
 
+`NciCheck.Protocol` is the policy's check as a core protocol, `verity/inference-only/v0` (the `inference-only` exe):
+the inference-only policy's subprotocol of onsite and remote, on the core interface (`CoreProtocol`).
+
 C-Flock's decoder doesn't check that a reference reads a leaf at the width it was committed with, which the
 Python codec refuses as it decodes (`E_REINTERPRET`), so every Program the check reads goes through
 `NciCheck.decodeProgram`, which refuses one that doesn't, with a message.
 -/
+
+@[expose] public section

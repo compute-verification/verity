@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.DeployRounds
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
-import Flock.With.Zk
+module
+
+public import Proofs.Flock.Claims.DeployRounds
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
+public import Flock.With.Zk
 
 /-!
 # The rounds the shipped masked verifier reads
@@ -10,6 +12,8 @@ import Flock.With.Zk
 on the hash. The masked replay reads `m + (kLog − 6)` rounds, Ligerito `k0 + 7 + 11 R` (the plain count and the lane
 phase's `ρ` pair), and the inner proof four; a masked rep reads all of its stream's rounds (`zkVerifyRepWith_rounds`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 
@@ -356,7 +360,7 @@ at the table's `--zk` schedule, its stream has `(m + (kLog − 6)) + (claims + 1
 replay, the ring switch over `claims = 2 + |extras|`, Ligerito over `R + 1` levels, the inner proof), whatever the hashes
 `hs` are. -/
 theorem zkVerifyRepWith_rounds (hs : Hashes V) {spec : SessionSpec} {st : Setup} {sch : Schedule} {tPad : ℕ}
-    {sess : Session} {i r : ℕ} {bytes c : ByteArray} (hsch : Zk.schedule st.m = .ok (sch, tPad))
+    {sess : RunRecord} {i r : ℕ} {bytes c : ByteArray} (hsch : Zk.schedule st.m = .ok (sch, tPad))
     (h : Zk.verifyRepWith hs spec st sch tPad sess i r bytes = .ok c) :
     ∃ (stream : StreamRec) (extras : Array Claim),
       sess.streams.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString r) = some stream ∧
