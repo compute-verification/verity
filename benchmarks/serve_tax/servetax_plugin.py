@@ -250,17 +250,30 @@ def launch_rows(edge: int, rows: Any) -> Any:
     return RTD.step_roots(bytes(64), edge, {"kv": (ids, rows, scales)}, bytes(32), timing=True)
 
 
-def _kv_runner(execute: Callable[..., Any], cfg: Mapping[str, Any]) -> Callable[..., Any]:
+def _kv_runner(execute: Callable[..., Any], cfg: Mapping[str, Any], capturing: Callable[[], bool] | None = None,
+               edge_of: Callable[[], KvEdge] | None = None) -> Callable[..., Any]:
+    """The model runner's ``execute_model``, then `KvEdge.tick` on its KV cache. The edge, and its window, start at the
+    first step with a KV cache: the engine's startup runs the model before it has one (the memory profile) and while
+    it captures CUDA graphs, when nothing may launch on another stream."""
     state: dict[str, Any] = {}
+    if capturing is None:
+        import torch
+
+        capturing = torch.cuda.is_current_stream_capturing
+
+    def make() -> KvEdge:
+        edge = KvEdge(float(cfg.get("kv_window_s", cfg.get("window_s", 600))),
+                      _lines(Path(cfg["out"]) / f"kv_edges.{os.getpid()}.jsonl"))
+        atexit.register(edge.reap, True)
+        return edge
 
     def execute_model(self: Any, *args: Any, **kwargs: Any) -> Any:
-        edge = state.get("edge")
-        if edge is None:
-            edge = state["edge"] = KvEdge(float(cfg.get("kv_window_s", cfg.get("window_s", 600))),
-                                          _lines(Path(cfg["out"]) / f"kv_edges.{os.getpid()}.jsonl"))
-            atexit.register(edge.reap, True)
         out = execute(self, *args, **kwargs)
-        edge.tick(self.kv_caches)
+        kv = getattr(self, "kv_caches", None)
+        if kv and not capturing():
+            if "edge" not in state:
+                state["edge"] = (edge_of or make)()
+            state["edge"].tick(kv)
         return out
     return execute_model
 

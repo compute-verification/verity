@@ -141,3 +141,25 @@ def test_token_commit_commits_each_window_prompt_and_sampled_ids_in_order():
     tc.stop()
     assert [g["tokens"] for g in got] == [4, 1] and [g["window"] for g in got] == [0, 1]
     assert seen[0] == bytes([5, 0, 0, 0, 6, 0, 0, 0, 7, 0, 0, 0, 8, 0, 0, 0])
+
+
+def test_kv_edge_starts_at_the_first_step_with_a_kv_cache_outside_a_capture():
+    ticks, capturing = [], [False]
+
+    class Edge:
+        def tick(self, kv):
+            ticks.append(kv)
+
+    made = []
+    run = P._kv_runner(lambda self: "out", {"out": "."}, capturing=lambda: capturing[0],
+                       edge_of=lambda: made.append(1) or Edge())
+    runner = NS()
+    assert run(runner) == "out" and not made
+    runner.kv_caches = []
+    run(runner)
+    runner.kv_caches, capturing[0] = ["kv"], True
+    run(runner)
+    assert not made
+    capturing[0] = False
+    run(runner), run(runner)
+    assert made == [1] and ticks == [["kv"], ["kv"]]
