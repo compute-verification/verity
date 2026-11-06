@@ -3,9 +3,13 @@ The fuel-bounded recursions of the sampled verifier's reading: past its fuel eac
 some fuel it gives, unchanged, at any more (`defOfJsonIn_mono`, `cutIn_mono`, `evalDefIn_mono`; the walks' is
 `Steps.run_mono`). So the verifier's answer at `Steps.FUEL` is the unbounded recursion's wherever it accepts.
 -/
-import Flock.Qword
-import Flock.Qcall
-import Flock.Extract
+module
+
+public import Flock.Qword
+public import Flock.Qcall
+public import Flock.Extract
+
+@[expose] public section
 
 namespace Flock.Fuel
 

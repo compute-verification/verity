@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# flock-circuit stacked, candidate 3's opening-only prover (lane rec-v0): tests/test_rec_c3_open.py against this tree's prover
+# flock-circuit stacked, candidate 3's opening-only prover: tests/test_rec_c3_open.py against this tree's prover
 # build (rec-env.sh's $B: 60-circuit.sh MODE=build GPU=0 on C-Flock's patched checkout). Its openings at m_R 22 and 23 are
 # accepted by the opening-only model, and a forged cell and a forged claim value are refused. Run from the verity tree
 # (research run --cwd source), pinned by its caller (slot.py). Outputs under out/: host.txt, build.log, binary.sha256,

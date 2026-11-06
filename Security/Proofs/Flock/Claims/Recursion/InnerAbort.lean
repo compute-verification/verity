@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.Inner
-import Proofs.Flock.Claims.Recursion.Abort
+module
+
+public import Proofs.Flock.Claims.Recursion.Inner
+public import Proofs.Flock.Claims.Recursion.Abort
 
 /-!
 # The inner stage's KS from the inner protocol's KS against provers that may abort
@@ -17,6 +19,8 @@ rerun disagrees. That is at most `N_I` times one draw's disagreement (`Pr_exists
 `Σ_j √(Pr[two extractions open inner round j differently])` (`Pr_plur_fork`), so `√(k_I·k(x)·Pr[Be])`
 (`sum_opensDiffer_le`). `B` at `P_I`'s aborting runs finds collisions `B_I` finds (`PrBAbort_le_PrBI`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

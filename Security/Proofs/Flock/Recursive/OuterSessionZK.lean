@@ -1,4 +1,6 @@
-import Proofs.Flock.Recursive.FirewallZK
+module
+
+public import Proofs.Flock.Recursive.FirewallZK
 
 /-!
 # Recursion: the committed-coin statements' `_hOuter` at V*'s sessions
@@ -18,10 +20,13 @@ firewall sends when every message is fixed by the auditor's tape before the firs
   `hz`, `hR`, `hS`. `outerViewZK_of_sessionZK` is `RecursiveZK`'s `OuterViewZK` at one honest witness and registration.
 
 What this does not cover: that the deployed outer sessions send `Sessions.view`, the honest prover's view at coins the
-auditor's tape fixes before each session (`Sessions.coin`). C-Flock's session-loop bound (`SessionLoopZKAt`) is about
-the deployed loop against every `V*`, but it bounds the real view by twice the simulated one plus its error, so it
-doesn't give `OuterViewZK`'s additive form.
+auditor's tape fixes before each session (`Sessions.coin`). `Loop` gives `OuterSessionsZK` at V*'s statements run by the
+session loop's switched prover (`outerSessionsZK_loop`). C-Flock's session-loop bound (`SessionLoopZKAt`) is about the
+deployed loop against every `V*`, but it bounds the real view by twice the simulated one plus its error, so it doesn't
+give `OuterViewZK`'s additive form.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion.OuterZK
 

@@ -1,20 +1,22 @@
-import Proofs.Flock.Claims.Bridge.Coins
-import Proofs.Flock.Claims.Bridge.OfGame
-import Proofs.Flock.Claims.Bridge.Transport
-import Proofs.Flock.Claims.Bridge.Live
-import Proofs.Flock.Claims.Bridge.LiveZk
-import Proofs.Flock.Claims.Bridge.LivePlain
-import Proofs.Flock.Claims.Bridge.Committed
-import Proofs.Flock.Claims.Bridge.Custody
-import Proofs.Flock.Claims.Bridge.CustodyPlain
-import Proofs.Flock.Claims.Bridge.DecodePlain
-import Proofs.Flock.Claims.Bridge.Dead
-import Proofs.Flock.Claims.Bridge.Returns
-import Proofs.Flock.Claims.Bridge.Hm96Tree
-import Proofs.Flock.Claims.Bridge.ErrorTerms
-import Proofs.Flock.Claims.Bridge.WrongSet
-import Proofs.Flock.Claims.Bridge.BindsColl
-import Proofs.Flock.Claims.Bridge.Transports
+module
+
+public import Proofs.Flock.Claims.Bridge.Coins
+public import Proofs.Flock.Claims.Bridge.OfGame
+public import Proofs.Flock.Claims.Bridge.Transport
+public import Proofs.Flock.Claims.Bridge.Live
+public import Proofs.Flock.Claims.Bridge.LiveZk
+public import Proofs.Flock.Claims.Bridge.LivePlain
+public import Proofs.Flock.Claims.Bridge.Committed
+public import Proofs.Flock.Claims.Bridge.Custody
+public import Proofs.Flock.Claims.Bridge.CustodyPlain
+public import Proofs.Flock.Claims.Bridge.DecodePlain
+public import Proofs.Flock.Claims.Bridge.Dead
+public import Proofs.Flock.Claims.Bridge.Returns
+public import Proofs.Flock.Claims.Bridge.Hm96Tree
+public import Proofs.Flock.Claims.Bridge.ErrorTerms
+public import Proofs.Flock.Claims.Bridge.WrongSet
+public import Proofs.Flock.Claims.Bridge.BindsColl
+public import Proofs.Flock.Claims.Bridge.Transports
 
 /-! The run-to-live-game bridge: the coin law (`Coins`), the public-coin verifier of a game and its run path by path
 (`OfGame`), the transport of `Claims.run`'s probabilities to the live game's (`Transport`), and Flock's live session
@@ -32,3 +34,5 @@ checks collide, given that the registered openings read as claims openings and t
 a SHA-512 collision (`leaf_misshaped`). `ErrorTerms`: `EndToEnd`'s error `miss + ε_ks + δ_link` under `KS`'s
 `κ D δ x + √(γ·Pr[B]) + Pr[B_ext]` at a deployment whose `δ` covers the miss and whose `4·ε_table` the rest
 (`e2e_error_le_ks`). -/
+
+@[expose] public section

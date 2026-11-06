@@ -1,4 +1,6 @@
-import Proofs.Core.Game.Interleave
+module
+
+public import Proofs.Core.Game.Interleave
 
 /-!
 # Union bounds and loops
@@ -13,6 +15,8 @@ The tools every phase lemma uses to add up per-coin errors:
   step's output is bad is at most the sum of the per-step bounds;
 * `value_mapM_fst`: such a loop returns one output per element, in order.
 -/
+
+@[expose] public section
 
 namespace Verity.Game
 

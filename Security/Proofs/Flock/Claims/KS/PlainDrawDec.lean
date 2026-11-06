@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainDrawAcc
-import Proofs.Flock.Claims.KS.PlainDrawDecK
+module
+
+public import Proofs.Flock.Claims.KS.PlainDrawAcc
+public import Proofs.Flock.Claims.KS.PlainDrawDecK
 
 /-!
 # The deployed plain decoders at the statement's draw
@@ -17,6 +19,8 @@ draw in the record: `PlainDrawDecK`'s decoders at `keep := id` and the writer `w
 * `plain_hdecAt`, `plain_hdecHAt`: `plain_hdecAtK_of` and `plain_hdecHAtK_of` at `wrPD`, `plain_hdec` and
   `plain_hdecH` with `plainVerdictAt`.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.PlainDraw
 

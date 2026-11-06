@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.ExecDraw
+module
+
+public import Proofs.Flock.Soundness.ExecDraw
 
 /-!
 # A sequential draw from one byte source misses no more often than its stages' bounds multiplied
@@ -15,6 +17,8 @@ uniform and unread, so the strata's draws are independent.
 * `seqMiss_le`: the stages' draws all meet their conditions with probability at most the product of each one's bound on
   a stream of any length, for samplers that keep a draw on a longer stream.
 -/
+
+@[expose] public section
 
 namespace Properties.SampledProofs.SecurityProofs
 

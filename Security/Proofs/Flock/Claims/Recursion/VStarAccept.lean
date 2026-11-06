@@ -1,54 +1,33 @@
-import Proofs.Flock.Claims.Recursion.VStarBuild
-import Proofs.Flock.C3.RegLevels.TopHold
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarBuild
+public import Proofs.Flock.C3.RegLevels.TopHold
 
 /-!
 # When the stager accepts a part (`VStar.In.partIn`)
 
-`partIn` builds a level's port inputs (`levelIn`), an algebra part's (`algebraIn`) or a cap's (`capIn`), and refuses
-every other statement. `StmtFits src st` is what each builder checks of the stager's inputs `src`, written out, and
-`partIn_ok` is that `partIn` accepts wherever it holds:
+`partIn` builds a level's port inputs (`levelIn`), an algebra part's (`algebraIn`), a cap's (`capIn`) or the link
+table's (`linkIn`), and refuses every other statement. `StmtFits src st` is what each builder checks of the stager's
+inputs `src`, written out, and `partIn_ok` is that `partIn` accepts wherever it holds:
 
 * **a level** (`LevelInFits`): its openings number `n`, each of `LANES` lanes and `H` siblings, the level's tops are
   read (`topsAt`), and each opening's top node is among them. That every opening is in the chain (`at?`) is proved:
-  `Array.qsort` keeps its elements (`qsort_mem`, through `TopHold.sort_spec`);
+  `Array.qsort` keeps its elements (`TopHold.qsort_mem`);
 * **an algebra part** (`AlgInFits`): each rep has an opening (`repEnds`), and each port is `acc0`, `acc1` or an `m<i>`
   whose message round holds two rows;
-* **a cap**: `capIn` accepts (`VStarPorts.capIn_ok`).
+* **a cap**: `capIn` accepts (`VStarPorts.capIn_ok`);
+* **the link table's part**: always, as `linkIn` refuses nothing.
 
 At the honest source (`srcOf`) the message rounds are `msgsOf`'s, each of two rows, so an algebra part's `m<i>` fits
 wherever `i` is one of the schedule's message rounds (`algFits_srcOf`). The openings are the inner prover's `rest`.
 -/
 
+@[expose] public section
+
 namespace RecDeploy.VStarBuild
 
 open _root_.Flock
 open Claims (Msg)
-
-theorem mem_of_sameOn {α : Type} {as : Array α} {r : Vector α as.size} {lo hi : ℕ}
-    (hS : FlockC3.RegLevels.TopHold.SameOn lo hi as.toVector r) (hlo : lo = 0) (hhi : as.size ≤ hi + 1) (x : α) :
-    x ∈ r.toArray ↔ x ∈ as := by
-  subst hlo
-  rw [Vector.mem_toArray_iff, Vector.mem_iff_getElem, Array.mem_iff_getElem]
-  constructor
-  · rintro ⟨j, hj, rfl⟩
-    obtain ⟨j', hj', -, -, e⟩ := (hS.2 r[j]).2 ⟨j, hj, Nat.zero_le _, by omega, rfl⟩
-    exact ⟨j', hj', e⟩
-  · rintro ⟨j, hj, rfl⟩
-    obtain ⟨j', hj', -, -, e⟩ := (hS.2 as[j]).1 ⟨j, hj, Nat.zero_le _, by omega, rfl⟩
-    exact ⟨j', hj', e⟩
-
-/-- **`Array.qsort` keeps its elements**, under an order whose negation is transitive. -/
-theorem qsort_mem {α : Type} (as : Array α) (lt : α → α → Bool) (hasym : ∀ a b, lt a b = true → lt b a = false)
-    (htr : ∀ a b c, lt a b = false → lt b c = false → lt a c = false) (x : α) : x ∈ as.qsort lt ↔ x ∈ as := by
-  unfold Array.qsort
-  split
-  · exact Iff.rfl
-  · rename_i h0
-    try simp only
-    obtain ⟨hS, -⟩ := FlockC3.RegLevels.TopHold.sort_spec lt hasym htr _ as.toVector (min 0 (as.size - 1))
-      (max (min 0 (as.size - 1)) (min (as.size - 1) (as.size - 1))) (by omega) (by omega) (by omega)
-      (Nat.lt_succ_self _)
-    exact mem_of_sameOn hS (Nat.zero_min _) (by omega) x
 
 theorem before_asym (a b : _root_.VStar.In.Query) (h : _root_.VStar.In.before a b = true) :
     _root_.VStar.In.before b a = false := by
@@ -61,7 +40,7 @@ theorem before_trans (a b c : _root_.VStar.In.Query) (h1 : _root_.VStar.In.befor
 /-- An opening is in the chain's order exactly where it is one of the stager's. -/
 theorem mem_order {src : _root_.VStar.In.Src} {o : _root_.VStar.In.Query} :
     o ∈ _root_.VStar.In.order src ↔ o ∈ src.openings :=
-  qsort_mem _ _ before_asym before_trans o
+  FlockC3.RegLevels.TopHold.qsort_mem _ _ before_asym before_trans o
 
 theorem at?_some {src : _root_.VStar.In.Src} {o : _root_.VStar.In.Query} (h : o ∈ src.openings) :
     ∃ p, _root_.VStar.In.at? src o = some p := by
@@ -128,12 +107,13 @@ def AlgInFits (src : _root_.VStar.In.Src) (ports : List (String × ℕ)) : Prop 
     ∀ nm ∈ ports.map Prod.fst, nm = "acc0" ∨ nm = "acc1" ∨
       ∃ i rs, RecVStar.mIndex nm = some i ∧ src.msgs[i]? = some rs ∧ rs.size = 2
 
-/-- **What the stager checks of its inputs at statement `st`**: a level's, an algebra part's or a cap's; it has no
-builder for any other statement. -/
+/-- **What the stager checks of its inputs at statement `st`**: a level's, an algebra part's or a cap's, and nothing at
+the link table's part; it has no builder for any other statement. -/
 def StmtFits (src : _root_.VStar.In.Src) : _root_.VStar.Stmt → Prop
   | .recOpen level LANES H n => LevelInFits src level LANES H n
   | .inner _ _ p => AlgInFits src p.S.ports
   | .cap level N => ∃ pin, _root_.VStar.In.capIn src level N = .ok pin
+  | .link .. => True
   | _ => False
 
 /-- **A level's builder accepts** where its checks hold. -/
@@ -143,7 +123,7 @@ theorem levelIn_ok {src : _root_.VStar.In.Src} {prog : String} {level LANES H n 
   have hq : ∀ q, q ∈ (src.openings.filter (·.level == level)).qsort _root_.VStar.In.before ↔
       q ∈ src.openings ∧ q.level = level := by
     intro q
-    simp only [qsort_mem _ _ before_asym before_trans, Array.mem_filter, beq_iff_eq]
+    simp only [FlockC3.RegLevels.TopHold.qsort_mem _ _ before_asym before_trans, Array.mem_filter, beq_iff_eq]
   have h1 : (((src.openings.filter (·.level == level)).qsort _root_.VStar.In.before).size == n) = true := by
     rw [FlockC3.RegLevels.TopHold.qsort_size, hn]
     exact beq_self_eq_true n
@@ -225,6 +205,7 @@ theorem partIn_ok {src : _root_.VStar.In.Src} {prog : String} {st : _root_.VStar
   | recOpenStacked _ _ _ _ => exact False.elim h
   | sparse _ _ => exact False.elim h
   | opening _ _ _ _ _ _ => exact False.elim h
+  | link _ _ _ => exact ⟨_, rfl⟩
 
 /-- **The honest source's message rounds** (`msgsOf`): each of the schedule's message rounds holds two rows. -/
 theorem msgsOf_getElem? (rs : Array RecVStar.SchedRound) (rr : ℕ → List _root_.VStar.In.Row) {i : ℕ}

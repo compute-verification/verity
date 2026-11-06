@@ -8,10 +8,14 @@ The program (`program`) is `N` RoPE d64 template instances, instance `i` reading
   the MUFU tables if the lowering cuts any (`tables/`);
 * the tree, committed as a registered value (`Registered.commit`): each instance's `cs` row of a generated RoPE set at its
   position, the other rows random, so every instance's output is the set's own;
-* the prover's `inst-N.bin` and the verifier's `pub-N.bin`, a shared-row file whose `cs` table rows carry the registered
-  salts and paths (header `registered`);
-* `served.json`, the tree as the service holds it (`ServedTree`: value, root, leaves, words, word_bits, domain,
-  row_schema), and `registered.json`, the verifier's own `--registered` file from it (`register_served`).
+* `x`, each instance's input row, committed as a registered value too (row i instance i's), and the instances' outputs
+  as the registered value `rope_out` (row i instance i's output), so every port of the circuit is registered
+  (`Flock.Registered.checkComplete`, which `--registered` runs);
+* the prover's `inst-N.bin` and the verifier's `pub-N.bin`, a shared-row file whose `x` and `cs` table rows and output
+  rows carry the registered salts and paths (header `registered`);
+* `served.json` and `served-x.json`, the trees as the service holds them (`ServedTree`: value, root, leaves, words,
+  word_bits, domain, row_schema), `out-port.json`, the output rows' port, and `registered.json`, the verifier's own
+  `--registered` file from them (`registered_file`: `register_served`'s ports and the output port).
 
 `--schema` is the tree's row format (`FORMATS`): `v1` (`hm96-sha512/row/v1`), or `v2` or `seg`, for which the circuit's
 input rows are bit rows of their words (`compose`'s `port_bits`), `cs` a `row/v2` or a segmented `row-seg/v1` row, and
@@ -28,7 +32,6 @@ from pathlib import Path
 
 import numpy as np
 
-from verity.ml.commitments import hm96
 from verity.ml.circuits.codec import canonical_json, encode_program
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.program import Program
@@ -42,6 +45,8 @@ ROWS = 40
 #: the row of `cs_table` instance i reads: distinct, since 7 is prime to ROWS
 POS = tuple((7 * i + 3) % ROWS for i in range(N))
 VALUE = "cs_table"
+#: the registered value whose rows are the instances' outputs, row i instance i's
+OUT_VALUE = "rope_out"
 WORDS = 64
 SEED = 20261020
 #: `--schema`'s names for the row formats a served tree may be
@@ -97,16 +102,44 @@ def stage(out: Path, seed: int = SEED, schema: str = G.SCHEMA) -> dict:
     reg = G.Registered.commit(P.program_digest(prog), VALUE, table.tolist(), schema=schema)
     positions, refs = G.table(POS)
     rows, salts, entry = reg.statement(positions)
+    bit_rows = G.SCHEMA if schema == G.SCHEMA else G.SCHEMA_V2
+    reg_x = G.Registered.commit(P.program_digest(prog), "x", x.tolist(), schema=bit_rows)
+    x_rows, x_salts, x_entry = reg_x.statement(range(N))
+    outs = np.asarray(s.port("out", 0, N), np.uint16).reshape(N, -1)
+    reg_out = G.Registered.commit(P.program_digest(prog), OUT_VALUE, outs.tolist(), schema=bit_rows)
+    out_rows, out_salts, out_entry = reg_out.statement(range(N))
     FC.write(text, s, 0, N, out / f"inst-{N}.bin", out / f"pub-{N}.bin", None, list(range(N)), share_rows=True,
-             tables={"x": x, "cs": np.asarray(rows)}, refs={"x": list(range(N)), "cs": refs},
-             salts={"x": [hm96.SHA512.fresh_salt() for _ in range(N)], "cs": salts,
-                    "out": [hm96.SHA512.fresh_salt() for _ in range(N)]},
-             registered={"cs": entry})
-    tree = ServedTree.of(reg)
+             outs={"out": np.asarray(out_rows, np.uint16)},
+             tables={"x": np.asarray(x_rows), "cs": np.asarray(rows)}, refs={"x": list(range(N)), "cs": refs},
+             salts={"x": x_salts, "cs": salts, "out": out_salts},
+             registered={"cs": entry, "x": x_entry, "out": out_entry})
+    tree, x_tree = ServedTree.of(reg), ServedTree.of(reg_x)
+    out_port = {**reg_out.entry(), **G.width_entry(G.WORD_BITS), **G.schema_entry(bit_rows), "reads": list(range(N))}
     (out / "served.json").write_text(json.dumps(dataclasses.asdict(tree), sort_keys=True))
-    register_served(prog, query, [tree]).write(out / "registered.json")
-    return {"n": N, "rows": ROWS, "value": VALUE, "root": tree.root, "row_schema": schema, "program": P.program_digest(prog),
-            "partition": P.digest(part), "pin": FC.digest(text)}
+    (out / "served-x.json").write_text(json.dumps(dataclasses.asdict(x_tree), sort_keys=True))
+    (out / "out-port.json").write_text(json.dumps(out_port, sort_keys=True))
+    write_registered(registered_file(prog, query, tree, x_tree, out_port), out / "registered.json")
+    return {"n": N, "rows": ROWS, "value": VALUE, "root": tree.root, "x_root": x_tree.root, "out_root": out_port["root"],
+            "row_schema": schema, "program": P.program_digest(prog), "partition": P.digest(part), "pin": FC.digest(text)}
+
+
+def load(stage_dir: Path) -> tuple[ServedTree, ServedTree, dict]:
+    """A stage's served trees `cs_table` and `x`, and its output rows' port, as `stage` wrote them."""
+    return (ServedTree(**json.loads((stage_dir / "served.json").read_text())),
+            ServedTree(**json.loads((stage_dir / "served-x.json").read_text())),
+            json.loads((stage_dir / "out-port.json").read_text()))
+
+
+def registered_file(prog: Program, query: dict, tree: ServedTree, x_tree: ServedTree, out_port: dict) -> dict:
+    """The verifier's own `--registered` file: `register_served`'s ports for the served trees `cs_table` and `x`, and the
+    output rows' port, so every port of the circuit is registered (`Flock.Registered.checkComplete`)."""
+    sr = register_served(prog, query, [tree, x_tree])
+    return {**sr.file, "ports": {**sr.ports, "out": out_port}}
+
+
+def write_registered(doc: dict, path: Path) -> Path:
+    path.write_bytes(canonical_json(doc))
+    return path
 
 
 def main(argv=None) -> int:

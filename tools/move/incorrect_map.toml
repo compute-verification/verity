@@ -31,7 +31,7 @@ files = ["Security/Definitions/Population.lean", "Security/Definitions/Populatio
 "wrong_freeze_of_off_padDown" = "incorrect_freeze_of_off_padDown"
 
 [rewrite]
-# host_map.toml's: records of what was (the earlier moves and their maps, changelogs, the rulings), the frozen backends,
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the frozen backends,
 # files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line itself) and lock files.
 exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**",
            "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock"]

@@ -1,10 +1,12 @@
-import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
-import Proofs.Flock.Claims.Complete.Replay.RingSwitch
-import Proofs.Flock.Soundness.LinkSound
-import Proofs.Flock.Soundness.Discharge.Layout.Region
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.RingSwitch
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.LincheckReplay
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckGlue
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
+public import Proofs.Flock.Claims.Complete.Replay.RingSwitch
+public import Proofs.Flock.Soundness.LinkSound
+public import Proofs.Flock.Soundness.Discharge.Layout.Region
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.RingSwitch
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.LincheckReplay
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckGlue
 
 /-!
 # The ring switch's algebra at the deployed relation
@@ -24,6 +26,8 @@ evaluation, `claim_eval_eq` and `fOf_claimCheck`, with `s[v]` the honest `ŝ[v]`
   (`regionClaim_rel'`) at link points of `m_pts` coordinates, which `Record.decodeWith` checks (S9,
   `decodeWith_points`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay.Region
 
@@ -421,7 +425,7 @@ theorem claims_switch (st : Stmt) (hwf : StmtWF st) (hrw : RegionsWF st) (hm : 2
 /-! ## The record's link points -/
 
 /-- The record's link points have `m_pts` coordinates: `Record.decodeWith` checks it (S9). -/
-theorem decodeWith_points (hs : Hashes Flock.V) {spec : SessionSpec} {text : String} {sess : Session}
+theorem decodeWith_points (hs : Hashes Flock.V) {spec : SessionSpec} {text : String} {sess : RunRecord}
     (h : Record.decodeWith hs spec text = .ok sess) : ∀ p ∈ sess.points.toList, p.size = spec.mPts := by
   unfold Record.decodeWith Record.decodeJWith at h
   dsimp only at h
@@ -444,7 +448,7 @@ theorem _root_.FlockComplete.Run.sess_points (o : Run H rel) {st : Stmt} (hspec 
   cases h : Record.decodeWith o.hs o.spec o.record with
   | error e =>
     intro p hp
-    rw [show (val (Except.error e : Except String Session)).points = #[] from rfl] at hp
+    rw [show (val (Except.error e : Except String RunRecord)).points = #[] from rfl] at hp
     simp at hp
   | ok s =>
     have hp := decodeWith_points o.hs h

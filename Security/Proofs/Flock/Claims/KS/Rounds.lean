@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.Refit
-import Proofs.Flock.Claims.DeployK
+module
+
+public import Proofs.Flock.Claims.KS.Refit
+public import Proofs.Flock.Claims.DeployK
 
 /-!
 # The deployed plain verifier's fork rounds
@@ -17,6 +19,8 @@ index, `n = L`, whose weight `2^{d}·Q` is `0`, lands in the last level's seven 
 * `plainJ`, `plainJ_inj`: the map, no two of whose rounds are one; `oldEsc_fitsFork_plainJ`, the old escapes at these
   rounds fit the plain weight.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

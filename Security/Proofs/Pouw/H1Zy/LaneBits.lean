@@ -1,9 +1,11 @@
-import Definitions.Pouw.H1Zy.LaneBits
-import Proofs.Pouw.H1Zy.CombineBits
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Tactic.LinearCombination
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.Ring
+module
+
+public import Definitions.Pouw.H1Zy.LaneBits
+public import Proofs.Pouw.H1Zy.CombineBits
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Tactic.LinearCombination
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.Ring
 
 /-!
 # The lane's pieces on bits compute their word views, and so does their composition
@@ -18,6 +20,8 @@ import Mathlib.Tactic.Ring
 * **The lane** (`laneBits_bv`): on any lane's inputs' bits, at the dequant's and the chain's word views on bits,
   `laneBits` is `laneOk`.
 -/
+
+@[expose] public section
 
 namespace Pouw.H1Zy
 

@@ -1,5 +1,7 @@
-import Proofs.Pouw.PearlC.RowCircuit
-import Proofs.Pouw.PearlC.Tile4Circuit
+module
+
+public import Proofs.Pouw.PearlC.RowCircuit
+public import Proofs.Pouw.PearlC.Tile4Circuit
 
 /-!
 # Pearl-C4's row units compute their codes, scale bytes, `P_A` and `P_B` (proofs)
@@ -23,6 +25,8 @@ These are word formulas on `ops` and on the units' own inputs. They are not yet 
 forming is on values: that needs core's primitives to agree with the protocol's word functions where both are defined,
 as `pc8`'s `Pc8OpsAgree` does.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.RowCircuit
 

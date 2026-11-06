@@ -1,5 +1,7 @@
-import Definitions.Core
-import Mathlib.Analysis.Real.Sqrt
+module
+
+public import Definitions.Core
+public import Mathlib.Analysis.Real.Sqrt
 
 /-!
 # Novel communication intensity: the policy
@@ -22,6 +24,8 @@ multiplications. For a set `R` of gates it gives the draft's vocabulary: the wei
 it uses, the entries whole in `R`, `R`'s full positions, and in a division into IUs the entries that are split and the
 number of IUs that hold products of each. `F` is the slowdown factor the draft proves for such chains.
 -/
+
+@[expose] public section
 
 namespace Nci
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJ
-import Proofs.Flock.Soundness.Discharge.Composed.DrawnJ
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJ
+public import Proofs.Flock.Soundness.Discharge.Composed.DrawnJ
 
 /-!
 # `zk_session_soundHJ_custody`, "wrong" measured against the public file
@@ -20,6 +22,8 @@ transcript.
   `zk_session_soundHJ_custody_drawn_at` is the same at the value layer of any values, with the binding errors against
   them for `δ_link`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkHidden
 

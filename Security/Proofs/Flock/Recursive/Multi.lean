@@ -1,5 +1,7 @@
-import Proofs.Flock.Recursive.Compose
-import Proofs.Flock.Soundness.Game.Seq
+module
+
+public import Proofs.Flock.Recursive.Compose
+public import Proofs.Flock.Soundness.Game.Seq
 
 /-!
 # Recursion: several outer sessions in a row
@@ -22,6 +24,8 @@ included), so the composition records each session's strategy with its outcome:
 Names other than the strategies themselves let the output's type be one fixed type while the games, and so their
 strategies' types, vary with the history the sessions follow.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

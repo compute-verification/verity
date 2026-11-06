@@ -1,6 +1,8 @@
-import Definitions.Nci.Assumptions
-import Definitions.Nci.Assumptions.Training
-import Definitions.Nci.Dark
+module
+
+public import Definitions.Nci.Assumptions
+public import Definitions.Nci.Assumptions.Training
+public import Definitions.Nci.Dark
 
 /-!
 # NCI's guarantees on a reference training circuit, under one assumption
@@ -16,6 +18,8 @@ gates' reads. At `μ = 1` that term goes, and with it the partial sums: `Contain
 declaration computes under the activations' half of the assumption alone, `ActivationsIncompressible` on the reference
 circuit.
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 

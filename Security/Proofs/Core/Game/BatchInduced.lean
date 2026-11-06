@@ -1,4 +1,6 @@
-import Proofs.Core.Game.Prob
+module
+
+public import Proofs.Core.Game.Prob
 
 /-!
 # One game of a batch, for a strategy whose induced strategies are in a class
@@ -13,6 +15,8 @@ on that position's game (`InducedAt`), the one that fixes each coin of the other
 * `prob_batch_getD_le_induced`, `prob_batch_getD_le_of_induced`: one position of a batch, by induction on the games
   before it.
 -/
+
+@[expose] public section
 
 namespace Verity.Game
 

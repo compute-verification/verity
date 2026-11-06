@@ -1,4 +1,6 @@
-import Proofs.Flock.VBridge.Decode
+module
+
+public import Proofs.Flock.VBridge.Decode
 
 /-!
 # The verifier's `rec-residuals/…` unit
@@ -20,6 +22,8 @@ net, at the bridge's `residualForms` (`gfsOf S`), which needs no range hypothesi
 * The size. `part_small`: the verifier's part has at most 16 residuals, as `laid_part` asks: `groups` adds a residual to
   a part only where `8 (size + 1) ≤ 128` (`groups_small`), and `partS` keeps its group's residuals.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.OfVStar
 

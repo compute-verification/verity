@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Exec.FramesRep
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.FramesRep
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 
 /-!
 # Two reps accepted on one stream have one rep's frames
@@ -21,6 +23,8 @@ What the frames don't carry is open: the openings (rows, siblings and salts at e
 tie to the caps the frames carry, and the fields the transcript never absorbs (`params`, which `verifyRep` pins,
 `finalC` and `initialCap`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 
@@ -229,7 +233,7 @@ theorem repFrames_hds {st : Setup} {sch : Flock.Schedule} {nExtra : ℕ} {p p' :
 /-- **Two reps accepted on one stream have one rep's frames**: two proof files that `verifyRep` accepts as rep `r` of
 table `i` of one session, where the rep's stream retained every round's bytes, decode at one shape to proofs whose
 frames are the same. -/
-theorem rep_frames_bind (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (sess : Session) (i r : ℕ)
+theorem rep_frames_bind (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (sess : RunRecord) (i r : ℕ)
     (bytes bytes' cap cap' : ByteArray) (hm : 14 ≤ st.m) (hdim : DimSeam sch)
     (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
     (h : verifyRep spec st sch sess i r bytes = .ok cap) (h' : verifyRep spec st sch sess i r bytes' = .ok cap')

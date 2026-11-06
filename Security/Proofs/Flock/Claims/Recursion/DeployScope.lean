@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.Deploy
+module
+
+public import Proofs.Flock.Claims.Recursion.Deploy
 
 /-!
 # The compiled verifier's scope refusals
@@ -28,6 +30,8 @@ of an accepted run: the last session's decision (`next_acc`), so `parse` reads t
   statement it accepts parses at a dense form (`acc_dense`: `DenseAt`, the class `RecursiveKS` is stated at).
 -/
 
+@[expose] public section
+
 namespace RecDeploy
 
 open Flock
@@ -41,7 +45,7 @@ theorem jsonOf_toOption (a b : String) (q : ByteArray) : (jsonOf a q).toOption =
   | none => rfl
   | some t =>
     simp only
-    cases Lean.Json.parse t <;> rfl
+    cases Flock.JsonParse.parse t <;> rfl
 
 theorem toOption_eq_some {ε α : Type} {e : Except ε α} {a : α} (h : e.toOption = some a) : e = .ok a := by
   cases e <;> simp_all [Except.toOption]

@@ -1,4 +1,6 @@
-import Definitions.Pouw.RelativeSecurity
+module
+
+public import Definitions.Pouw.RelativeSecurity
 
 /-!
 # (H-μ⁺): the receipt-luck premise, and the rounds whose coins give it (trusted)
@@ -33,6 +35,8 @@ give it.
   `w` with the skipped value `X` added at every position of `P`, as one skipped product shifts every later prefix word
   of its entry (Lemma B′'s persistent pattern).
 -/
+
+@[expose] public section
 
 namespace Accounting.HMu
 

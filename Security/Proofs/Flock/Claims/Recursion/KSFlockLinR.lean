@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.KSLin2E
-import Proofs.Flock.Claims.KS.PlainRConflict
-import Proofs.Flock.Claims.KS.PlainRCapPrefix
+module
+
+public import Proofs.Flock.Claims.Recursion.KSLin2E
+public import Proofs.Flock.Claims.KS.PlainRConflict
+public import Proofs.Flock.Claims.KS.PlainRCapPrefix
 
 /-!
 # `KSFlockLin` at the deployed reader's bound record (U3)
@@ -13,6 +15,8 @@ read (`RecDeploy.deE_R_trim`). So `KSFlockLin` there is `plainR_KSFlockLin`, fro
 run accepts (`PlainRdInR`) alone, the level caps' prefix being proved (`capPrefixR`), so `ksFlockLin_R` takes exactly
 that one.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

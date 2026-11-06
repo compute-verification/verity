@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.BoundDeploy
-import Proofs.Flock.Claims.KS.PlainCapsDep
-import Proofs.Flock.Soundness.Refine.Seam
-import Definitions.Claims.RecursionLin
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundDeploy
+public import Proofs.Flock.Claims.KS.PlainCapsDep
+public import Proofs.Flock.Soundness.Refine.Seam
+public import Definitions.Claims.RecursionLin
 
 /-!
 # Route 2C's bound at the deployed shape: `λ₂ ≥ 100`
@@ -40,6 +42,8 @@ It bounds a number and establishes no security level by itself: `KSLin2` at the 
 statements, that `Pr[acc ∧ ¬R] ≤ t·2^{−λ₂}`, follows from `KSLin2On` (`bitsLin2On_of_ksLin2On`). The proved level at
 the deployment is still `Claims.Recursion.lam`'s, about 65 bits, below the 100-bit floor.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

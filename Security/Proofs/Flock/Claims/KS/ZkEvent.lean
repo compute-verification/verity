@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.ZkDecodeW
-import Proofs.Flock.Claims.KS.ConflictTied
+module
+
+public import Proofs.Flock.Claims.KS.ZkDecodeW
+public import Proofs.Flock.Claims.KS.ConflictTied
 
 /-!
 # The deployed masked event at `wrS`'s verdict
@@ -17,6 +19,8 @@ live session's:
   (`acceptsAt_wrS`), and that transcript records the run's streams and proof files (`RecordsLiveAtS`), whose columns
   are the reader's (`cols_zk`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

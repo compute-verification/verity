@@ -1,4 +1,6 @@
-import Proofs.Accounting.HeadlineDc.Sm90
+module
+
+public import Proofs.Accounting.HeadlineDc.Sm90
 
 /-!
 # The H200's headline on its measured vector
@@ -19,6 +21,8 @@ rows (issue, JI90_0, JI90_1; `sm90m_isCert`), `p = 7/8`, `p₀ = ½` and `Λ = m
 * the unfolded branch (`unfolded_of_lower`): below `1412/100000` by `decide` (`sm90m_unfolded_q`);
 * (I7) at `7/8` is the receipt split's (`luck_of_receipt_half`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS.HeadlineDc
 

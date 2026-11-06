@@ -1,4 +1,7 @@
-import Proofs.Flock.Claims.Complete.Json
+module
+
+public import Proofs.Flock.Claims.Complete.Json
+import all Init.Data.Array.Basic
 
 /-!
 # The honest session runs
@@ -12,6 +15,8 @@ through `Hashes.ofSha512` every leaf and node hash is a `pure`), and so do the e
 `Runs y l P`: `y` returns from the sends `l`, with `P` of its value and the sends after; `Runs.bind`, `Runs.forIn_array`
 and `Runs.mapM_singleton` walk the session.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

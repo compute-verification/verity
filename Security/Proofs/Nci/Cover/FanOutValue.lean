@@ -1,6 +1,8 @@
-import Proofs.Nci.Cover.FanOut
-import Proofs.Nci.Cover.FanOutChain
-import Definitions.Nci.Guarantees.CoverFanOutValue
+module
+
+public import Proofs.Nci.Cover.FanOut
+public import Proofs.Nci.Cover.FanOutChain
+public import Definitions.Nci.Guarantees.CoverFanOutValue
 
 /-!
 # The fan-out read tier from wiring
@@ -18,6 +20,8 @@ no other spent value's meets (`pathGates_disjoint`, from `spent_eq_of_follows`).
 
 `Keyed.keyDisjoint` proves `KeyDisjoint` from `Keyed`'s (I) and (F).
 -/
+
+@[expose] public section
 
 namespace Nci.Cover
 

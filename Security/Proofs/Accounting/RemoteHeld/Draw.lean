@@ -1,9 +1,11 @@
-import Definitions.Accounting.Guarantees.RemoteDraw
-import Proofs.Accounting.RemoteHeld.OverTime
-import Proofs.Accounting.RateAudit.Horizon
-import Proofs.Accounting.Prob
-import Proofs.Accounting.Actual.Sampler
-import Proofs.Hash.RowBinding
+module
+
+public import Definitions.Accounting.Guarantees.RemoteDraw
+public import Proofs.Accounting.RemoteHeld.OverTime
+public import Proofs.Accounting.RateAudit.Horizon
+public import Proofs.Accounting.Prob
+public import Proofs.Accounting.Actual.Sampler
+public import Proofs.Hash.RowBinding
 
 /-!
 # The openings' pooled bound: the proof
@@ -62,6 +64,8 @@ test lands in on `prf` always and on uniform blocks with probability at most `2^
 distinguisher only in a session whose correct receipts are those `2^256` openings, which a prover can't compute; it
 passes, and C3 bounds no such distinguisher.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Remote
 

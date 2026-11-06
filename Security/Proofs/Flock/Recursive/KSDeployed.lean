@@ -1,8 +1,10 @@
-import Proofs.Flock.Recursive.KS
-import Proofs.Flock.Claims.Recursion.DeployedBrings
-import Proofs.Flock.Claims.Recursion.DeployedBringsLam
-import Proofs.Flock.Claims.Recursion.RestFinal
-import Proofs.Flock.Claims.Recursion.RestOpenedSized
+module
+
+public import Proofs.Flock.Recursive.KS
+public import Proofs.Flock.Claims.Recursion.DeployedBrings
+public import Proofs.Flock.Claims.Recursion.DeployedBringsLam
+public import Proofs.Flock.Claims.Recursion.RestFinal
+public import Proofs.Flock.Claims.Recursion.RestOpenedSized
 
 /-!
 # `RecursiveKSAt` from chain B's leaves at the deployed brings
@@ -12,6 +14,8 @@ compiled verifier's own evaluations (`deployedSetup`: check 5's and the register
 `resSetup_deployedB`, the last message's reading by `finalReads` (`hF`) and `readsAt_elemR_closed` (`hRd`,
 which also closes the cap tie's `sideCapR_leaf`). The other fields of the brings stay `b`'s.
 -/
+
+@[expose] public section
 
 namespace Flock.SecurityProofs
 

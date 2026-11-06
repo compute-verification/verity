@@ -1,11 +1,15 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOut
-import Definitions.Pouw.PearlC.DeviceFp4
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOut
+public import Definitions.Pouw.PearlC.DeviceFp4
 
 /-!
 # TT_OUT for Pearl-C4 on sm_120 (trusted; staged, nothing pinned)
 
 `Prop`s taken as hypotheses by the statements that use them, never `axiom`s.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Assumptions
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Refine.LiveSim
-import Proofs.Flock.Soundness.Discharge.Exec.Tables
+module
+
+public import Proofs.Flock.Soundness.Refine.LiveSim
+public import Proofs.Flock.Soundness.Discharge.Exec.Tables
 
 /-!
 # Pieces of `DecodesAll`: the aligned tape and the cap
@@ -19,6 +21,8 @@ import Proofs.Flock.Soundness.Discharge.Exec.Tables
   `capOfRoot root_B`. So `capOf` can be `capOfRoot`: the cap the salted verdict of `verify_refines_hm96` reads,
   `capDig p₀.cap`, is a function of `root_B` alone.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 
@@ -109,11 +113,11 @@ accepts a one-table session on the hypotheses of `verify_refines_hm96`, rep 0's 
 `capDig`, is `capOfRoot` of the table's committed `root_B`. -/
 theorem verify_cap_hm96 (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
-    (hms : st.merkle = MerkleScheme.hm96Sha512) (extra : Session → List (Model.Claim FlockLevel3.GF128 S.m))
+    (hms : st.merkle = MerkleScheme.hm96Sha512) (extra : RunRecord → List (Model.Claim FlockLevel3.GF128 S.m))
     (record : String) (proofs : Array ByteArray)
     (hext : ∀ sess, Record.decode spec record = .ok sess → ExtraRealizes st S sess.points (extra sess))
     (h : Flock.verify spec #[st] record proofs = .ok ()) :
-    ∃ (sess : Session) (sch : Flock.Schedule) (p₀ : Proof),
+    ∃ (sess : RunRecord) (sch : Flock.Schedule) (p₀ : Proof),
       Record.decode spec record = .ok sess ∧ Flock.fast100 st.m = some sch ∧
       decodeProof (shapeOf st sch (extra sess).length) proofs[0]! = .ok p₀ ∧
       capDig p₀.cap = capOfRoot sess.rootB[0]! := by
@@ -135,7 +139,7 @@ theorem verify_cap_hm96 (spec : SessionSpec) (st : Setup) (S : Model.Statement) 
 theorem verify_cap_ofCircuit_hm96 (st : Flock.Stmt) (hwf : StmtWF st) (hr : RegionsWF st) (hm : 13 ≤ st.m)
     (hms : st.merkle = MerkleScheme.hm96Sha512) (record : String) (proofs : Array ByteArray)
     (h : Flock.verify st.spec #[Setup.ofCircuit st] record proofs = .ok ()) :
-    ∃ (sess : Session) (sch : Flock.Schedule) (p₀ : Proof),
+    ∃ (sess : RunRecord) (sch : Flock.Schedule) (p₀ : Proof),
       Record.decode st.spec record = .ok sess ∧ Flock.fast100 st.m = some sch ∧
       decodeProof (shapeOf (Setup.ofCircuit st) sch (Model.extraClaims (stmtOf st hwf (regionsOf st)) PT_LOCAL st.mPts
         (ptsOf st.mPts sess.points)).length) proofs[0]! = .ok p₀ ∧

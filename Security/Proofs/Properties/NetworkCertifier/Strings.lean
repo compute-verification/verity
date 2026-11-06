@@ -1,4 +1,6 @@
-import Properties.NetworkCertifier
+module
+
+public import Properties.NetworkCertifier
 
 /-!
 # The strings the run hashes, as predicates
@@ -7,6 +9,8 @@ What a record head, a signed digest, a frame tree and the run hash, as the predi
 is a string of the list the claims search (`headStrings`, `saltedStrings`, `framesStrings`, `treeStrings`,
 `checkStrings`; `Extract` shows it).
 -/
+
+@[expose] public section
 
 open NetworkCheck hiding Params
 open NetworkCheck.Check

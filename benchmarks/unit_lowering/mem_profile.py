@@ -34,8 +34,8 @@ H1_PROVE = ROOT / "benchmarks" / "pouw" / "h1_prove"
 PHASES = (("unit_lowering", "CS.unit_lowering"), ("ir_lower.lower", "IL.lower"), ("ir_lower.standalone", "IL.standalone"),
           ("ir_lower.lower_gates", "IL.lower_gates"), ("ir_lower.layout", "IL.layout"),
           ("fast_stage.ands_layout", "fast_stage.ands_layout"), ("Program", "CS.Program"), ("program_digest", "CS.program_digest"),
-          ("circuit.compose", "FC.compose"), ("compose.netlist", "fast_stage._unit"), ("compose.dummy", "FC._dummy"),
-          ("circuit.meta_of", "FC.meta_of"))
+          ("circuit.compose_to", "FC.compose_to"), ("circuit.compose", "FC.compose"), ("compose.netlist", "FC._write_netlist"),
+          ("compose.dummy", "FC._dummy"), ("circuit.digests", "FC._file_digests"), ("circuit.meta_of", "FC.meta_of"))
 CENSUS = ("ir_lower.lower_gates", "fast_stage.ands_layout")
 GIB = 1 << 30
 
@@ -181,7 +181,7 @@ def main(argv: list[str] | None = None) -> int:
     rss.close()
     counts = getattr(st.low.layout, "counts", {})
     out.update(ands=counts.get("ands"), rows=counts.get("rows"), nnz_a=counts.get("nnz_a"), nnz_b=counts.get("nnz_b"),
-               bytes=fast_stage.size(fast_stage.composed()), peak=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss << 10,
+               bytes=path.stat().st_size, peak=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss << 10,
                hwm_resets=phases.resets, phases=sorted(phases.rows, key=lambda f: f["order"]))
     path.unlink(missing_ok=True)
     (a.out / "profile.json").write_text(json.dumps(out, indent=1) + "\n")

@@ -3,7 +3,12 @@
 inner session, and no other statement ever does: a plain session's part with META `holo`, a holo session's part
 without it, any level with it and a `holo` that is not a boolean are refused.
 -/
-import Flock.RecVStar
+module
+
+public import Flock.RecVStar
+meta import Flock.RecVStar
+
+@[expose] public section
 
 namespace Flock.Test.Holo
 

@@ -1,5 +1,7 @@
-import Definitions.Nci.Work
-import Mathlib.Analysis.SpecialFunctions.Pow.Real
+module
+
+public import Definitions.Nci.Work
+public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
 /-!
 # NCI over threads, each thread charged by the work done on it at a format's rate: the named assumption
@@ -8,6 +10,8 @@ import Mathlib.Analysis.SpecialFunctions.Pow.Real
 redundant. `WeightsSupportFmt` charges each thread by the work done on it, in thread values (`Threading.work`), at the
 rate of the activations' format less a margin.
 -/
+
+@[expose] public section
 
 namespace Nci.Assumptions
 

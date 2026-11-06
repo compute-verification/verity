@@ -1,6 +1,8 @@
-import Definitions.Pouw.Witness
-import Proofs.Pouw.Dither
-import Proofs.Pouw.ShaRealize
+module
+
+public import Definitions.Pouw.Witness
+public import Proofs.Pouw.Dither
+public import Proofs.Pouw.ShaRealize
 
 /-!
 # `WorkSound`'s premises hold together
@@ -43,6 +45,8 @@ at `δ = 1/2`.
   single point, so at `D = Unit` the realization's walk clause is vacuous and `WorkSoundNoFold`'s `κ`, with its
   `(q² + …)/|D|`, is at least 1; that guarantee has no witness here.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.DitherWitness
 

@@ -1,4 +1,6 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
 
 /-!
 # Per-row seeds (P2) as the per-unit game on the split layout (trusted definitions; nothing assumed)
@@ -44,6 +46,8 @@ Three additions, also definitions only:
   named assumption, `Assumptions.FragDraw`, is in `RowSeedAssumptions.lean`. P2 rests on `ttOutRowSeed_of_ttOut` (and
   its tile twin) alone, with no named assumption; the corollary is a supporting line, and it takes no TT_OUT.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

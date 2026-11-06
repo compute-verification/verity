@@ -1,5 +1,7 @@
-import Definitions.Nci.Assumptions.Packed
-import Definitions.Nci.Threads
+module
+
+public import Definitions.Nci.Assumptions.Packed
+public import Definitions.Nci.Threads
 
 /-!
 # Training's incompressibility on a chain with several products to a gate
@@ -7,6 +9,8 @@ import Definitions.Nci.Threads
 `TrainingIncompressible`, restated for a `PackedChain`, so that it applies to a reference circuit that computes in `Dot16`
 steps. At `k = 1` it is `TrainingIncompressible` on the chain itself (`Chain.toPacked`).
 -/
+
+@[expose] public section
 
 namespace Nci.Assumptions
 

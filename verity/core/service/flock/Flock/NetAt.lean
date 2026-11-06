@@ -10,7 +10,11 @@ width, and the constant last. The inverse map is built without a check of its ow
 so `ofRowsAt_ok` and the lemmas after it read every property off `List.all`s. `Tmpl.unrollAt` takes `pos` from
 `Tmpl.posMap` under a layout.
 -/
-import Flock.TmplLayout
+module
+
+public import Flock.TmplLayout
+
+@[expose] public section
 
 namespace Flock
 

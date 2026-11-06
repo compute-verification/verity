@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.CompiledSound
+module
+
+public import Proofs.Flock.Soundness.CompiledSound
 
 /-!
-# Compiled soundness of one table under a leaf scheme (README.md §1.2, PROTOCOL.md §14)
+# Compiled soundness of one table under a leaf scheme (README.md §1.2, `Flock.Merkle`)
 
 `table_sound_compiled` (`CompiledSound.lean`) bounds `tableC`, whose openings verify from the unsalted leaf
 `H(encode row)`. This file proves the same bound for `Model.tableCL A H E Lf`, whose openings carry salts and verify
@@ -18,6 +20,8 @@ message; the reps' locksteps (`lockRep`) are unchanged.
   + Pr[self-clash]`, with each `Adv` and the self-clash a collision of `H` (`op₀L_conflict_collision`,
   `opRL_conflict_collision`, `SelfClashL.collision`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 

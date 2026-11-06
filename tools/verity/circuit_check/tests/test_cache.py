@@ -371,6 +371,63 @@ def test_a_target_holds_its_own_reads_and_resolutions(tmp_path):
     assert set(top["enums"]) == {"syn"} and {"top", "other", "idle"} <= set(top["enums"]["syn"])   # `load_registries` listed it
 
 
+def test_a_target_s_reads_declare_the_paths_their_lookup_takes(tmp_path, monkeypatch):
+    """`cache.declared` of SynTop's entry: the files of the modules it holds and of their import sites, its binding file and
+    its pin's file; the listing of the package `load_registries` enumerated, not the modules that lists (`lookup` holds an
+    unheld one by its name, through a move); each path the search for its modules asked about, so a module put where the
+    search would find it first is a change of what it declares; whether it read the registries (every reached Definition's
+    registrar).  SynOther's leaves out what only SynTop's build imported, and a code object's pseudo-file is no path."""
+    from circuit_check import cache as CC
+
+    root = _tree(tmp_path)
+    _run(root)
+    monkeypatch.syspath_prepend(str(root))
+    assert CC.declared(root, {"files": ["<frozen abc>", "<string>"]}) == {"files": [], "listed": [], "probes": [],
+                                                                          "registry": False}
+    top, other = (CC.declared(root, _entry(root, t)["reads"]) for t in ("SynTop_v1", "SynOther_v1"))
+    assert {"syn/__init__.py", "syn/top.py", "syn/sub.py", "syn/shape.py", "syn/prims.py", "syn/check.py", "syn/h.py",
+            "targets.py", _pin("SynTop_v1")} <= set(top["files"]), top["files"]
+    assert "syn" in top["listed"] and "syn/idle.py" not in top["files"] and top["registry"], top
+    assert {"syn/top/__init__.py", "syn/sub/__init__.py"} <= set(top["probes"]), top["probes"]
+    assert not {"syn/top.py", "syn/sub.py", "syn/shape.py", _pin("SynTop_v1")} & set(other["files"]), other["files"]
+    assert {"syn/other.py", _pin("SynOther_v1")} <= set(other["files"]), other["files"]
+
+
+def test_a_sidecar_whose_source_inspect_looked_for_is_declared_by_where_it_is(tmp_path, monkeypatch):
+    """The first check a process runs looks for the source of every module loaded (`syn.check`'s `inspect` lookup, as torch's
+    import does), each binding file among them (``present``).  `lookup` holds such a sidecar by whether it is where its module
+    is, so an edit of one no target is bound by reuses every target; `cache.declared` declares its path as a probe, not its
+    bytes, so a task keyed on the declaration isn't rerun by that edit either."""
+    from circuit_check import cache as CC
+
+    root = _tree(tmp_path)
+    side = "syn/extra.circuit-check.py"
+    (root / side).write_text("def _model_roots():\n    return []\n")
+    _run(root)
+    reads = [_entry(root, t)["reads"] for t in ("SynOther_v1", "SynTop_v1")]
+    assert any("syn.extra.circuit-check" in r["present"] for r in reads), reads
+    monkeypatch.syspath_prepend(str(root))
+    for r in reads:
+        d = CC.declared(root, r)
+        assert side not in d["files"] and (side in d["probes"]) == ("syn.extra.circuit-check" in r["present"]), d
+    _edit(root, side, "return []", "return []  # no roots")
+    assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
+
+
+def test_what_a_read_set_holds_beyond_its_declaration_is_undeclared():
+    from circuit_check import cache as CC
+
+    now = {"files": ["a.py", "b.py"], "listed": ["d"], "probes": ["p/__init__.py"], "registry": True}
+    assert CC.undeclared(now, now) == {} and CC.undeclared(now, {**now, "files": ["a.py", "b.py", "c.py"]}) == {}
+    assert CC.undeclared(now, {"files": ["a.py"], "listed": ["d"], "probes": [], "registry": False}) == {
+        "files": ["b.py"], "probes": ["p/__init__.py"], "registry": True}
+    assert CC.undeclared({**now, "registry": False}, None) == {"files": ["a.py", "b.py"], "listed": ["d"],
+                                                               "probes": ["p/__init__.py"]}
+    assert CC.undeclared({**now, "untracked": ["build/x.so"]}, now) == {"untracked": ["build/x.so"]}   # no task declares one
+    # a path declared by its bytes or its listing is declared by its kind too
+    assert CC.undeclared({**now, "probes": ["a.py", "d", "e"]}, now) == {"probes": ["e"]}
+
+
 #: the harness with `syn` served as hatch's `dev-mode-exact` serves core's `verity`: by `editables`' finder, after the path-based
 #: one, with the tree's root on no `sys.path` entry
 EXACT = HARNESS.replace("sys.path.insert(0, str(root))",
@@ -1214,10 +1271,67 @@ def test_a_run_of_imports_is_held_by_the_names_it_binds_not_their_order():
     assert norm("from a import *\nfrom b import y\n") != norm("from b import y\nfrom a import *\n")
 
 
+def _builds_a_name(v) -> bool:
+    """`v` only builds a string from names: an f-string, `+`, a literal's `join`/`format`, or a conditional of those."""
+    import ast
+
+    if isinstance(v, (ast.Constant, ast.Name)):
+        return True
+    if isinstance(v, ast.Attribute):
+        return isinstance(v.value, ast.Name)
+    if isinstance(v, ast.JoinedStr):
+        return all(isinstance(x, ast.Constant) or (isinstance(x, ast.FormattedValue) and _builds_a_name(x.value))
+                   for x in v.values)
+    if isinstance(v, ast.BinOp) and isinstance(v.op, ast.Add):
+        return _builds_a_name(v.left) and _builds_a_name(v.right)
+    if isinstance(v, ast.IfExp):
+        return isinstance(v.test, ast.Compare) and _builds_a_name(v.body) and _builds_a_name(v.orelse)
+    if isinstance(v, ast.Call) and isinstance(v.func, ast.Attribute) and v.func.attr in ("join", "format"):
+        return isinstance(v.func.value, ast.Constant) and not v.keywords and all(_builds_a_name(a) for a in v.args)
+    return False
+
+
+def _enumerator_misuses(tree) -> list[str]:
+    """Each `pkgutil` listing loop in `tree` whose names (or names only built from them) are used other than compared,
+    imported (``importlib.import_module``), written into an error, or queued on a work list (``todo``) whose entries are
+    popped and only imported; and the listing loops' count, so a body with none is caught."""
+    import ast
+
+    loops = [n for n in ast.walk(tree) if isinstance(n, ast.For) and "iter_modules" in ast.unparse(n.iter)]
+    bad = [] if loops else ["no pkgutil listing loop"]
+    for loop in loops:
+        allowed: set[int] = set()
+        tracked = {loop.target.id}
+        for n in ast.walk(loop):
+            if (isinstance(n, ast.Assign) and len(n.targets) == 1 and isinstance(n.targets[0], ast.Name)
+                    and any(isinstance(x, ast.Name) and x.id in tracked for x in ast.walk(n.value))
+                    and _builds_a_name(n.value)):
+                tracked.add(n.targets[0].id)
+                allowed |= {id(x) for x in ast.walk(n.value)}
+        for n in ast.walk(loop):
+            if isinstance(n, ast.Call) and ast.unparse(n.func) in ("importlib.import_module", "errors.append", "todo.append"):
+                allowed |= {id(x) for a in n.args for x in ast.walk(a)}
+            elif isinstance(n, ast.Compare):
+                allowed |= {id(x) for x in ast.walk(n)}
+        uses = [n for s in loop.body for n in ast.walk(s)
+                if isinstance(n, ast.Name) and n.id in tracked and isinstance(n.ctx, ast.Load)]
+        if not uses or not all(id(n) in allowed for n in uses):
+            bad.append(ast.unparse(loop))
+    if "todo.append" in ast.unparse(tree):
+        pops = [n for n in ast.walk(tree) if isinstance(n, ast.Assign) and ast.unparse(n.value) == "todo.pop()"]
+        popped = {ast.unparse(t.elts[0] if isinstance(t, ast.Tuple) else t) for p in pops for t in p.targets}
+        imported = {ast.unparse(c.args[0]) for c in ast.walk(tree)
+                    if isinstance(c, ast.Call) and ast.unparse(c.func) == "importlib.import_module"}
+        if not pops or not popped <= imported:
+            bad.append(f"work list: popped {sorted(popped)}, imported {sorted(imported)}")
+    return bad
+
+
 def test_each_enumerator_only_imports_what_it_lists():
     """`cache._ENUMERATORS` (and `targets.load_registries`) are held by the modules a package lists rather than by its
-    listing, on a claim about their bodies: each name a ``pkgutil`` listing yields is only compared, imported
-    (``importlib.import_module``) or written into an error."""
+    listing, on a claim about their bodies: each name a ``pkgutil`` listing yields, and each name only built from one, is
+    only compared, imported (``importlib.import_module``), written into an error, or queued on a work list (``todo``)
+    whose entries are popped and only imported."""
     import ast
     import importlib
     import inspect
@@ -1229,18 +1343,45 @@ def test_each_enumerator_only_imports_what_it_lists():
         fn = importlib.import_module(mod)
         for part in qual.split("."):
             fn = getattr(fn, part)
-        tree = ast.parse(textwrap.dedent(inspect.getsource(fn)))
-        loops = [n for n in ast.walk(tree) if isinstance(n, ast.For) and "iter_modules" in ast.unparse(n.iter)]
-        assert loops, (mod, qual)
-        for loop in loops:
-            allowed: set[int] = set()
-            for n in ast.walk(loop):
-                if isinstance(n, ast.Call) and ast.unparse(n.func) in ("importlib.import_module", "errors.append"):
-                    allowed |= {id(x) for a in n.args for x in ast.walk(a)}
-                elif isinstance(n, ast.Compare):
-                    allowed |= {id(x) for x in ast.walk(n)}
-            uses = [n for s in loop.body for n in ast.walk(s) if isinstance(n, ast.Name) and n.id == loop.target.id]
-            assert uses and all(id(n) in allowed for n in uses), (mod, qual, ast.unparse(loop))
+        assert not _enumerator_misuses(ast.parse(textwrap.dedent(inspect.getsource(fn)))), (mod, qual)
+
+
+def test_the_enumerator_rule_refuses_a_listed_name_used_for_anything_else():
+    """The rule `test_each_enumerator_only_imports_what_it_lists` holds bodies to: a work list of names built from the
+    listing passes, and a read keyed by a listed name, directly or through a name derived from it, fails."""
+    import ast
+
+    ok = """
+def load(pkg):
+    todo = [(pkg, True)]
+    while todo:
+        name, is_package = todo.pop()
+        importlib.import_module(name)
+        for m in pkgutil.iter_modules([]):
+            child = f"{name}.{m.name}" if name == "x" else name + "." + m.name
+            if m.name != "tests" and child != __name__:
+                todo.append((child, m.ispkg))
+"""
+    assert not _enumerator_misuses(ast.parse(ok))
+    for body in ("data = open(path_for(m.name)).read()",
+                 "path = f'{m.name}.json'\n        data = open(path).read()",
+                 "path = path_for(m.name)\n        importlib.import_module(path)"):
+        src = f"""
+def load(pkg):
+    for m in pkgutil.iter_modules([]):
+        {body}
+        importlib.import_module(m.name)
+"""
+        assert _enumerator_misuses(ast.parse(src)), body
+    stray = """
+def load(pkg):
+    todo = []
+    for m in pkgutil.iter_modules([]):
+        todo.append(m.name)
+    for name in todo:
+        open(name).read()
+"""
+    assert _enumerator_misuses(ast.parse(stray))
 
 
 def test_the_task_list_is_reused_only_while_nothing_its_build_could_depend_on_changed(tmp_path):
@@ -1428,9 +1569,8 @@ CHECKER = (HARNESS.replace("sys.path.insert(0, str(root))", "sys.path.insert(0, 
 def test_the_scheduler_s_peaks_are_in_no_key(tmp_path):
     """`heavy.json` (`cli.HEAVY`) says only which targets may run beside which (`cli.run`'s scheduler), never what a check
     computes: an edit to it reuses every target and the task list (so adding a peak never makes
-    `circuit-check --all` run cold), and so does an edit to the known failures (`cache.KNOWN`,
-    which decide only the summary) or to the checker's docstrings and comments (`cache.version`), while an edit to the
-    checker's code still reruns them all."""
+    `circuit-check --all` run cold), and so does an edit to the checker's docstrings and comments (`cache.version`), while an
+    edit to the checker's code still reruns them all."""
     import shutil
 
     root = _tree(tmp_path)
@@ -1440,10 +1580,6 @@ def test_the_scheduler_s_peaks_are_in_no_key(tmp_path):
     (checker / "heavy.json").write_text(json.dumps({"SynOther_v1": 20.0}))
     assert _run(root, CHECKER)["checker"] == str(checker / "cli.py")
     (checker / "heavy.json").write_text(json.dumps({"SynOther_v1": 20.0, "SynTop_v1": 161.8}))
-    out = _run(root, CHECKER)
-    assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["task_list"]
-    for p in (checker / "known.py", *sorted((checker / "known").rglob("*.toml"))):
-        p.write_text(p.read_text() + "\n# another known failure\n")
     out = _run(root, CHECKER)
     assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["task_list"]
     checks = checker / "checks.py"

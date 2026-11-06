@@ -15,7 +15,7 @@ from research.store.remote import FsRemote
 
 DOC = "kb/doc.md"
 SECTION = "\n".join(f"filler {i}" for i in range(12))
-NOW = dt.datetime(2026, 9, 28, 6, 42, tzinfo=dt.timezone.utc)
+NOW = dt.datetime(2026, 9, 28, 6, 42, tzinfo=dt.UTC)
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -160,7 +160,7 @@ def test_a_rebase_whose_abort_lost_its_state_goes_back_to_the_branch(machines, m
 
 def test_the_watcher_reports_a_failed_sync_as_sync_failed_with_its_lag_every_pass(machines):
     origin, a, b = machines
-    now = dt.datetime(2026, 9, 26, 4, 50, tzinfo=dt.timezone.utc)
+    now = dt.datetime(2026, 9, 26, 4, 50, tzinfo=dt.UTC)
     for i in range(3):
         _insert_after(a / DOC, "<!-- a -->", f"a says yes {i}")
         assert NS.sync(a, secrets=[])["pushed"]
@@ -326,7 +326,7 @@ def test_sync_and_checkpoint_exit_5_naming_the_note_and_the_stamp_to_use(machine
 
 
 def test_created_is_read_from_the_front_matter_with_or_without_seconds():
-    utc = dt.timezone.utc
+    utc = dt.UTC
     for value, when in (("2026-09-28T07:00Z", dt.datetime(2026, 9, 28, 7, 0, tzinfo=utc)),
                         ("2026-09-28T07:00:30Z", dt.datetime(2026, 9, 28, 7, 0, 30, tzinfo=utc)),
                         ('"2026-09-28 07:00"', dt.datetime(2026, 9, 28, 7, 0, tzinfo=utc)),
@@ -560,6 +560,66 @@ def test_token_url_names_the_github_repo_with_an_explicit_user_and_never_the_tok
         assert where == EXPLICIT and not where.startswith("https://github.com/"), url
         assert opts == ["-c", "credential.helper=", "-c", f"credential.helper={NS.CREDENTIAL_HELPER}"] and TOKEN not in " ".join(opts)
     assert NS.token_url("/srv/notes.git") is None and NS.token_url("https://gitlab.com/a/b.git") is None
+
+
+BROKER_NOW = dt.datetime(2026, 11, 3, 4, 0, tzinfo=dt.UTC).timestamp()
+BROKER_EXPIRES = "2026-11-03T05:00:00Z"
+
+
+@pytest.fixture
+def broker(monkeypatch):
+    """The agents' GitHub broker on localhost: each POST's (identity, body) is recorded and answered with a fresh token that
+    expires at BROKER_EXPIRES; `status` other than 200 refuses. This agent's identity is a fixed OIDC token."""
+    import http.server
+    import json as _json
+
+    from research import slack
+    state = {"seen": [], "status": 200, "n": 0}
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            body = _json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            state["seen"].append((self.headers["Authorization"], body))
+            state["n"] += 1
+            out = _json.dumps({"token": f"broker-token-{state['n']}", "expires_at": BROKER_EXPIRES}).encode()
+            self.send_response(state["status"])
+            self.send_header("Content-Length", str(len(out)))
+            self.end_headers()
+            self.wfile.write(out)
+
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    monkeypatch.setattr(NS, "GITHUB_BROKER", f"http://127.0.0.1:{srv.server_address[1]}/api/agent-github/token")
+    monkeypatch.setattr(NS, "_BROKER_REFUSED", [])
+    monkeypatch.setattr(slack, "oidc_token", lambda aud: f"oidc-for-{aud.rsplit('/', 1)[-1]}")
+    for k in (NS.TOKEN_ENV, NS.SOURCE_ENV, NS.EXPIRES_ENV):         # notes_token sets them in os.environ: undone after
+        monkeypatch.setenv(k, "")
+        monkeypatch.delenv(k)
+    yield state
+    srv.shutdown()
+
+
+def test_a_cursor_agent_gets_the_notes_token_from_the_broker_without_the_secret(broker, monkeypatch):
+    """A cloud VM reaches the notes with the agents' GitHub App, without a personal token in its secrets."""
+    assert NS.notes_token(now=BROKER_NOW) == "broker-token-1"
+    assert broker["seen"] == [("Bearer oidc-for-token", {"scope": "notes"})]
+    assert NS.os.environ[NS.TOKEN_ENV] == "broker-token-1", "in the environment, where git's helper reads it"
+    assert NS.notes_token(now=BROKER_NOW + 60) == "broker-token-1" and len(broker["seen"]) == 1, "an hour's token is reused"
+    assert NS.notes_token(now=BROKER_NOW + 3600 - NS.REFRESH_S + 1) == "broker-token-2", "minted again before it expires"
+    monkeypatch.setenv(NS.TOKEN_ENV, TOKEN)
+    monkeypatch.delenv(NS.SOURCE_ENV)
+    assert NS.notes_token(now=BROKER_NOW + 7200) == TOKEN and len(broker["seen"]) == 2, "a token set by hand wins, never replaced"
+
+
+def test_a_broker_that_refuses_leaves_no_token_and_is_not_asked_again_at_once(broker):
+    broker["status"] = 403
+    assert NS.notes_token(now=BROKER_NOW) is None and NS.notes_token(now=BROKER_NOW + NS.BROKER_RETRY_S - 1) is None
+    assert len(broker["seen"]) == 1 and NS.TOKEN_ENV not in NS.os.environ
+    NS.notes_token(now=BROKER_NOW + NS.BROKER_RETRY_S)
+    assert len(broker["seen"]) == 2, "asked again once the wait is over"
 
 
 def test_the_credential_helper_answers_the_token_from_the_environment(cloud_vm, tmp_path, monkeypatch):

@@ -1,6 +1,8 @@
-import Properties.SampledProofs.Halt
+module
 
-/-! # Proofs of the proof service's halt (`Properties.SampledProofs.Halt`)
+public import Properties.SampledProofs.Halt
+
+/-! # Proofs of the proof system's halt (`Properties.SampledProofs.Halt`)
 
 Each op's step is evaluated once, as a lemma over its state monad (`Halt.step_halt`, `Halt.attached_run`,
 `Halt.failures_run`, `Halt.attach_run`, `Halt.register_run`): its guards are matched or tested one at a time, and the
@@ -8,6 +10,8 @@ op's decision and state are read off the lemma. `Fleet.run` keeps the state on a
 `runs` takes one op at a time (`Halt.runs_cons`), so a halted stream's later decisions are its refusals by induction
 (`Halt.runs_halted`).
 -/
+
+@[expose] public section
 
 open Lean (Json)
 open SampledProofs

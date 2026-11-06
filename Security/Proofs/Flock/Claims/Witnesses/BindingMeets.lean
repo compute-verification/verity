@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Sampling.Deployed
+module
+
+public import Proofs.Flock.Claims.Sampling.Deployed
 
 /-!
 # Binding's antecedent at the deployed sampling record
@@ -18,6 +20,8 @@ code that addresses nothing opens nothing (`Binding_dead`). So the antecedent is
 * `Binding_dead`: the probe that the record alone meets nothing: at a code whose `at_` addresses no position, no opening
   passes at any `H`.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 

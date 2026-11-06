@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.HonestHalfTops
-import Proofs.Flock.Claims.Recursion.Assumptions.HonestFixture
+module
+
+public import Proofs.Flock.Claims.Recursion.HonestHalfTops
+public import Proofs.Flock.Claims.Recursion.Assumptions.HonestFixture
 
 /-!
 # The honest half at the honest run (`honest_half_fixture`)
@@ -8,6 +10,8 @@ import Proofs.Flock.Claims.Recursion.Assumptions.HonestFixture
 part `s < nS x` accepting (`PartAccepts` at `RecursiveKSAt`'s record and layout), the honest witness of `RecursiveKS`'s
 non-vacuity, with every premise in the one closed assumption.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.HonestHalfFixture
 

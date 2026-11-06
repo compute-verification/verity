@@ -1,5 +1,7 @@
-import Proofs.Pous.P2.Rounds
-import Proofs.Pous.P2.RingTrunc
+module
+
+public import Proofs.Pous.P2.Rounds
+public import Proofs.Pous.P2.RingTrunc
 
 /-!
 # Falsification tests of `P2RingRoundSecure`, at every block count from `2^19` to `2^25`
@@ -15,6 +17,8 @@ import Proofs.Pous.P2.RingTrunc
 Both hold at every `N`, as `tight_p16448` does; `not_meetsOn_b19_k88`'s numbers are `2^19`'s, and here `m` and `t` are
 hypotheses, with `m·(16448 − t) ≤ S₀` at the `N` in question.
 -/
+
+@[expose] public section
 
 namespace PousP2Rounds
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.VBridge.Runs.Rep
-import Proofs.Flock.VBridge.Family
-import Proofs.Flock.Soundness.Discharge.DecodeZL.ZL
+module
+
+public import Proofs.Flock.VBridge.Runs.Rep
+public import Proofs.Flock.VBridge.Family
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.ZL
 
 /-!
 # `TableFiles.Runs` from both reps' algebra
@@ -18,6 +20,8 @@ each round retaining its chunk's bytes and issuing the coins its chunk's closing
 * `valid_fast`, `valid_extras_wf`, `valid_roundsWF`, `valid_decode`: the fields of `RunsFrom` that `TableFiles.Valid`
   already gives.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 

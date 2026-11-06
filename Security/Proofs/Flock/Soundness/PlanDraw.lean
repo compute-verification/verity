@@ -1,4 +1,6 @@
-import Randomness
+module
+
+public import Randomness
 
 /-!
 # The PoUW window draw, as a Lean spec
@@ -13,6 +15,8 @@ the window's one key, and the window around it:
 * `window key calls L`: every call admitted, no call index framed twice (X-SPC-107's admission inside the draw), then each
   call's `drawn` under the one key, its units in the window's numbering.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.PlanDraw
 

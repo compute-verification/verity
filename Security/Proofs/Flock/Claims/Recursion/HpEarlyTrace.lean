@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.SlotsOk
+module
+
+public import Proofs.Flock.Claims.Recursion.SlotsOk
 
 /-!
 # `TraceAt` from its two discharges, and hp before the last round on the honest run (`hpEarly_deployed`)
@@ -13,6 +15,8 @@ facts of the part's circuit alone, so `TraceAt` is the conjunction of:
 
 `traceAt_of` assembles `TraceAt` from them, and `hpEarly_deployed` is `hpEarly_run` with `TraceAt` so replaced.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.HpEarly
 

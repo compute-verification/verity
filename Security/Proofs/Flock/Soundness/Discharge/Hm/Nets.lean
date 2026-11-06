@@ -5,8 +5,12 @@ layouts (`shaNet_ofRows`, `hmNet_ofRows`), so their input ports sit at `cv_k = 1
 (`shaOut_eq`, `hmOut_eq`). `port_commit_rows` is `port_commit` with the slots holding the nets' rows (`LaidRows`) in
 place of the builder's rows, and the nets' places from `HmNets.check`.
 -/
-import Proofs.Flock.Soundness.Discharge.Hm.Laid
-import Proofs.Flock.Soundness.Discharge.Hm.Port
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hm.Laid
+public import Proofs.Flock.Soundness.Discharge.Hm.Port
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Hm
 

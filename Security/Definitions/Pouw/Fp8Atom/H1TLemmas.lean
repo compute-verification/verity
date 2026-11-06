@@ -1,8 +1,10 @@
-import Mathlib.Algebra.BigOperators.Fin
-import Mathlib.Algebra.Order.Floor.Ring
-import Mathlib.Data.Fintype.Pi
-import Definitions.Pouw.Fp8Atom.H1T
-import Definitions.Pouw.Fp8Atom.H1TVec
+module
+
+public import Mathlib.Algebra.BigOperators.Fin
+public import Mathlib.Algebra.Order.Floor.Ring
+public import Mathlib.Data.Fintype.Pi
+public import Definitions.Pouw.Fp8Atom.H1T
+public import Definitions.Pouw.Fp8Atom.H1TVec
 
 /-!
 # H-1T's M3 statements (trusted)
@@ -41,6 +43,8 @@ The lemmas the one-flip clauses of `DistinctLiveH1T` rest on.
   word `R_p` has a tag lane of magnitude at least `32·(p − T + 2) + 4`, so a flip of that lane of slice `T − 1` moves
   it through all `p − T + 2` roundings between.
 -/
+
+@[expose] public section
 
 namespace Pouw.Fp8Atom.H1T
 

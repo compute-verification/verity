@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.Inst.Order
-import Proofs.Flock.Soundness.Discharge.Inst.Keys
-import Proofs.Flock.Soundness.Discharge.Layout.KeysRow
+module
+
+public import Proofs.Flock.Soundness.Discharge.Inst.Order
+public import Proofs.Flock.Soundness.Discharge.Inst.Keys
+public import Proofs.Flock.Soundness.Discharge.Layout.KeysRow
 
 /-!
 # `InstKeysRow` from the parse
@@ -18,6 +20,8 @@ unit (`instKeysRow_of_parse`, `keysRow_of_cuts` without `CutsFromRows`):
 * a port bit no wire fills has the zero or a row bit as its key (`rowKey_of_port`): a leaf port's, or a cut port's, whose
   one source (`check_facts`' `wired`) is then a leaf cut.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

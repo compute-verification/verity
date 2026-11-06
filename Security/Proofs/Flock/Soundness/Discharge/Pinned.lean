@@ -1,4 +1,6 @@
-import Definitions.Flock.Statement
+module
+
+public import Definitions.Flock.Statement
 
 /-!
 # Pinned outputs (META `pinned_outputs`): the rows a pinned bit has, and what they force
@@ -15,6 +17,8 @@ is that window of `S` (`window_eq`). Neither reads a row size, a `G`, a window w
 The Lean verifier refuses the form until its reader of `pinned_outputs` lands (`HmRow.parse` requires `out_row_ports`
 to cover every output port).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Pinned
 

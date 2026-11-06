@@ -1,16 +1,23 @@
-import Proofs.Flock.Claims.Complete.Json.Session
-import Proofs.Flock.Soundness.Discharge.Exec.Event
-import Proofs.Flock.Claims.JsonNorm
+module
+
+public import Proofs.Flock.Claims.Complete.Json.Session
+public import Proofs.Flock.Soundness.Discharge.Exec.Event
+public import Proofs.Flock.Claims.JsonNorm
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
+import all Init.Data.Array.Basic
 
 /-!
 # The honest record's live session and draw
 
-Under the JSON library's specification (`JsonSpec`), at one table:
+With no premise on the JSON library, at one table:
 
 * `live_recordObj`: `liveOf` reads the printed honest record back as its `root_B`, no public words, its points and each
   rep stream's rounds with no digest (`liveRound`).
 * `recordDraw_recordObj`: the record's draw is the statement's, up to key order (`none` when the statement has none).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 
@@ -51,13 +58,13 @@ theorem live_stream {spec : SessionSpec} {h : ByteArray → ByteArray} {rootB : 
 
 /-- **`liveOf` reads the printed honest record** at one table: its `root_B`, no public words, its points and each rep
 stream's rounds without digests. -/
-theorem live_recordObj (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArray → ByteArray} {spec : SessionSpec}
+theorem live_recordObj {h : ByteArray → ByteArray} {spec : SessionSpec}
     {t : String} (ht : spec.tables = #[t]) (hd : Good (spec.unitDraw.getD Json.null)) {rb : ByteArray}
     {points : Array (Array F128)} {streams : Array (Array Round)} (hss : streams.size = spec.repStreams.size)
     (proofs : Array ByteArray) :
     liveOf spec (printJ (recordObj spec h #[rb] points streams proofs)) =
       .ok ⟨#[rb], spec.tables.map fun _ => ByteArray.empty, points, streams.map (·.map liveRound)⟩ := by
-  obtain ⟨j, hp, hs⟩ := S.parse_print _ (good_recordObj ht h rb points streams proofs hd)
+  obtain ⟨j, hp, hs⟩ := FlockComplete.JsonRT.parse_print _ (good_recordObj ht h rb points streams proofs hd)
   have gR : ∀ {k v}, (k, v) ∈ recordList spec h #[rb] points streams proofs →
       (recordObj spec h #[rb] points streams proofs).getObjVal? k = .ok v :=
     fun hm => getObjVal?_mkObj (recordList_distinct ..) hm
@@ -136,7 +143,7 @@ theorem live_recordObj (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArray �
   rfl
 
 /-- **The record's draw is the statement's**, up to key order (`JsonEquiv`). -/
-theorem recordDraw_recordObj (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArray → ByteArray} {spec : SessionSpec}
+theorem recordDraw_recordObj {h : ByteArray → ByteArray} {spec : SessionSpec}
     {t : String} (ht : spec.tables = #[t]) (hdraw : DrawOk spec) (rb : ByteArray) (points : Array (Array F128))
     (streams : Array (Array Round)) (proofs : Array ByteArray) :
     match spec.unitDraw with
@@ -149,7 +156,7 @@ theorem recordDraw_recordObj (S : Claims.JsonSpec printJ Flock.canon) {h : ByteA
     cases spec.unitDraw with
     | none => exact fun _ => .null
     | some d => exact fun hd => hd.2.1
-  obtain ⟨j, hp, hs⟩ := S.parse_print _ (good_recordObj ht h rb points streams proofs hgood)
+  obtain ⟨j, hp, hs⟩ := FlockComplete.JsonRT.parse_print _ (good_recordObj ht h rb points streams proofs hgood)
   obtain ⟨dv, hdv, hdvs⟩ := hs.getObjVal (getObjVal?_mkObj (recordList_distinct ..)
     (k := "unit_draw") (v := spec.unitDraw.getD Json.null) (by simp [recordList]))
   unfold FlockSoundness.Discharge.Exec.recordDraw

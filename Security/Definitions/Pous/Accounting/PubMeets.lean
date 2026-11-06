@@ -1,5 +1,7 @@
-import Definitions.Pous.Model.PubEncoder
-import Definitions.Pous.Accounting.Params
+module
+
+public import Definitions.Pous.Model.PubEncoder
+public import Definitions.Pous.Accounting.Params
 
 /-!
 # The requirement with a public encoder
@@ -8,6 +10,8 @@ import Definitions.Pous.Accounting.Params
 `Security/Proofs/Pous/Chain/Flat.lean`: `Meets`'s clauses, the check's completeness, and the public-encoder audit
 bound at the problem statement's parameters.
 -/
+
+@[expose] public section
 
 namespace Pous
 

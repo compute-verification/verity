@@ -118,7 +118,7 @@ def test_a_malformed_opening_or_table_is_refused():
     with pytest.raises(ProtocolError, match="128 bytes"):
         RT.RowOpening(o.ranks, (o.strings[0], o.strings[1][:-1]), o.proof)
     with pytest.raises(ProtocolError, match="frame-v3-sha512"):
-        RT.RowTable(CommitmentDomain(b"\x07" * 64, -1, RangeIndexedDomain(0, 3)), t.strings)
+        RT.RowTable(CommitmentDomain(b"\x07" * 64, -1, RangeIndexedDomain(0, 3), hash="sha256"), t.strings)
     with pytest.raises(ProtocolError, match="3 rows, 2 salts"):
         RT.commit(domain(3), [RT.s8_row([0], 0)] * 3, [bytes(192)] * 2)
     with pytest.raises(ProtocolError, match="outside"):

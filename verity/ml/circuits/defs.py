@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import bisect
 import math
+import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Sequence
 
@@ -64,6 +65,37 @@ class FunctionDefinition:
 #: ``registered`` input of the program, which the primitive still holds while it declares it
 TABLE_KINDS = ("library", "registered")
 
+#: a Definition's conformance label, the word its ``conformance`` text starts with (`conformance_label`), and what it says: how
+#: far the Definition is known to compute what the model computes (completeness, checked empirically and never proved). The
+#: rest of the text qualifies it (the capture, the tested domain, the replacement) and starts with a character that isn't a
+#: lower-case letter or a hyphen, as in ``"exact-model-tested: ..."``.
+CONFORMANCE = {
+    "exact-model-tested": "gives the model's outputs exactly on every input its tests compare (captures of the served kernel, "
+                          "or the model run), which the text names",
+    "model-untested": "read from the model's sources (its kernels, their PTX, a spec) and not yet held to a capture; the text "
+                      "names the check that would",
+    "not-yet-established": "nothing established either way (the default)",
+    "reference-defined": "its evaluator is its definition (a reference operation, an index into its operand), held to another "
+                         "implementation only on the domain the text names",
+    "protocol-defined": "a protocol's own function, with no model to match: the Definition is the specification",
+    "quarantine": "held only to op-level evidence (a difftest against one operation), not to a capture of the served kernel",
+    "superseded": "a later version replaces it, which the text names, with why",
+    "derived": "built from other Definitions by a tool (a difftest, the derive frontend, a prediction, a capture fold): what is "
+               "established is its callees' labels",
+}
+_LABEL = re.compile(r"[a-z][a-z-]*")
+
+
+def conformance_label(text: str, of: str = "a Definition") -> str:
+    """The label of `CONFORMANCE` that the conformance ``text`` starts with; a ValueError, naming ``of`` and the fix, for any
+    other text."""
+    m = _LABEL.match(text) if isinstance(text, str) else None
+    if m is None or m.group(0) not in CONFORMANCE:
+        raise ValueError(f"{of}: conformance {str(text)[:80]!r} doesn't start with a label of "
+                         f"verity.ml.circuits.defs.CONFORMANCE ({', '.join(CONFORMANCE)}): start it with the label that "
+                         "holds, then ': ' and the qualification, or add a new label to CONFORMANCE with what it says")
+    return m.group(0)
+
 
 @dataclass(eq=False)
 class PrimitiveDefinition(FunctionDefinition):
@@ -77,7 +109,7 @@ class PrimitiveDefinition(FunctionDefinition):
     ret: Value
     evaluate: Callable[..., int] = field(repr=False)
     doc: str = ""
-    conformance: str = "not-yet-established"  # exact-model-tested | model-untested | not-yet-established
+    conformance: str = "not-yet-established"  # starts with a label of `CONFORMANCE`
     register: bool = True
     tables: tuple[tuple[str, str], ...] = ()
     ports: Any = None
@@ -85,6 +117,7 @@ class PrimitiveDefinition(FunctionDefinition):
     def __post_init__(self) -> None:
         if not isinstance(self.ret, Value):
             raise TypeError(f"a primitive returns exactly one Value<w>; {self.id} declares {self.ret!r}")
+        conformance_label(self.conformance, self.id)
         self.params = tuple((n, t) for n, t in self.params)
         self.tables = tuple((n, k) for n, k in self.tables)
         bad = [k for _n, k in self.tables if k not in TABLE_KINDS]
@@ -130,12 +163,13 @@ class CompositeDefinition(FunctionDefinition):
     signature: Callable[[Any], tuple[Sequence[tuple[str, Type]], Type]] = field(repr=False)
     body: Callable[..., Coll] = field(repr=False)
     doc: str = ""
-    conformance: str = "not-yet-established"
+    conformance: str = "not-yet-established"  # starts with a label of `CONFORMANCE`
     register: bool = True
     refuse: Callable[[dict], str | None] | None = field(default=None, repr=False)
     ports: Any = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
+        conformance_label(self.conformance, self.id)
         self.statics = tuple(self.statics)
         self._cache: dict[tuple, "SpecializedDefinition"] = {}
         if self.register:
@@ -822,4 +856,4 @@ def composite(name: str, version: int, statics: Sequence[str], signature, doc: s
 
 
 __all__ = ["Registry", "REGISTRY", "FunctionDefinition", "PrimitiveDefinition", "CompositeDefinition", "SpecializedDefinition", "bind", "Node",
-           "Body", "Builder", "TABLE_KINDS", "primitive", "composite", "Explicit", "concat"]
+           "Body", "Builder", "TABLE_KINDS", "CONFORMANCE", "conformance_label", "primitive", "composite", "Explicit", "concat"]

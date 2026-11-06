@@ -1,8 +1,10 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.RateAuditPartial
-import Proofs.Accounting.RateAudit.Audit
-import Proofs.Accounting.RateAudit.Honest
-import Proofs.Accounting.RateAudit.PartialChip
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.RateAuditPartial
+public import Proofs.Accounting.RateAudit.Audit
+public import Proofs.Accounting.RateAudit.Honest
+public import Proofs.Accounting.RateAudit.PartialChip
 
 /-!
 # The rate audit with partial completion: the proof
@@ -23,6 +25,8 @@ the oracle, under the certified stream, at the contents of at least `k` words (`
 The honest device is `RateHonest`'s, as a partial device (`Device.toPartial`), and the rebuild route
 (`RatePartialRebuild`) is `PChip.completed_mul_le` at the device.
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate
 

@@ -1,4 +1,6 @@
-import Definitions.Accounting.Guarantees.TS
+module
+
+public import Definitions.Accounting.Guarantees.TS
 
 /-!
 # The tensor slots and the output count
@@ -10,6 +12,8 @@ T1, its tightness and Lemma 2's count (EPS1-TENSOR).
 * `TensorSlotTight`: both ratios lie in `(0, 1]`, so their product is `1` iff both are.
 * `OutputCount`: the head writes number `Σ_t ω(cls t) = Σ_k ω_k n_k`, and an image is no larger than its type.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS
 
