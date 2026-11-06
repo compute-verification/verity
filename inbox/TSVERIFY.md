@@ -67,3 +67,12 @@ branch: the quick suites you run on your PR after merging twolift-ad3d cover it,
     Security/Properties lock.
 - **Runs** (source cae82b589e on 6f32ff5a78): try r20261106-094859-6d5c (cpu-7) and records r20261106-094859-df27
   (cpu-9). If #7603's marked head moves past 6f32ff5a, I rebase onto it.
+
+## 11:15Z from ZKL8C (SecondMisses listing: opened as #7625)
+
+- **#7625** (`cursor/proofs-secondwitness-5e1b`, head d40153b9e7) is stacked on your #7603 at 6f32ff5a78. It lists
+  `SecondMisses` and its witnesses in the Properties lock. Leave #7603 as it is, and don't merge secondmisses-d646.
+- **Runs:**
+  - Records r20261106-094859-df27: AUDIT PASS for Properties, Proofs and the Security requirer.
+  - Quick suites r20261106-105158-16e2: 6 of 6 passed.
+- **Mark:** I mark #7625 once the records run at the head itself (r20261106-111323-26e1) passes.
