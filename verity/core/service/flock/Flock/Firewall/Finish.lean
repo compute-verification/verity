@@ -80,6 +80,23 @@ def treeOf (leaves : Array ByteArray) (k : Nat) : Array (Array ByteArray) × Arr
     layers := layers.push cur
   return (layers, cur)
 
+/-- `treeOf` with each level's nodes `step cur`. -/
+def treeOfWith (step : Array ByteArray → Array ByteArray) (leaves : Array ByteArray) (k : Nat) :
+    Array (Array ByteArray) × Array ByteArray := Id.run do
+  let mut layers := #[leaves]
+  let mut cur := leaves
+  for _ in [0:k] do
+    cur := step cur
+    layers := layers.push cur
+  return (layers, cur)
+
+/-- `treeOf` with each level's nodes in tasks (`Link.nodesPar`). -/
+def treeOfPar : Array ByteArray → Nat → Array (Array ByteArray) × Array ByteArray := treeOfWith Link.nodesPar
+
+/-- Compiled code runs `treeOfPar`; the kernel and every proof see `treeOf`. It stays above `commitRows`. -/
+@[csimp] theorem treeOf_eq_treeOfPar : @treeOf = @treeOfPar :=
+  (congrArg treeOfWith (funext Link.nodesPar_eq)).symm
+
 /-- **A commitment of given rows** under the `hm96-sha512/v1` leaves, salt `q` fitted to 192 bytes, `2^CHUNK` rows to a
 task. -/
 def commitRows (lv : Level) (rows : Array (Array F128)) (salt : Nat → ByteArray) : Commit :=

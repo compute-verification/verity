@@ -215,6 +215,276 @@ def algOf (st : Stmt) (root dom : ByteArray) : V (Array (ByteArray × Nat)) := d
   let (sch, _) ← Zk.schedule st.m
   Skeleton.rounds (Setup.ofCircuit st) sch.k0 root dom
 
+/-! ## The lincheck fold's refusal alone
+
+`Finish.lincheckFw` takes of its circuit fold only whether it refuses, and why: it discards the fold's value. The skeleton
+(`algOf`) and the opening (`placeOf`) run it on the statement's setup with the fold `foldChk`, which computes that refusal
+alone (`foldWhy`), in place of `Stmt.fold`'s `2^k_log` products; each is proved equal to its definition, so every round
+and coin is the same. -/
+
+/-- The refusal `why`, or none. -/
+def orOk : Option String → V Unit
+  | some e => .error e
+  | none => .ok ()
+
+theorem orOk_error {α : Type} {e : String} {w : Option String}
+    (h : (fun _ => ()) <$> (Except.error e : V α) = orOk w) : w = some e := by
+  cases w with
+  | none =>
+    have h' : (Except.error e : V Unit) = .ok () := h
+    cases h'
+  | some e' =>
+    have h' : (Except.error e : V Unit) = .error e' := h
+    cases h'
+    rfl
+
+theorem orOk_ok {α : Type} {b : α} {w : Option String} (h : (fun _ => ()) <$> (Except.ok b : V α) = orOk w) :
+    w = none := by
+  cases w with
+  | none => rfl
+  | some e' =>
+    have h' : (Except.ok () : V Unit) = .error e' := h
+    cases h'
+
+/-- Why `Stmt.slotBase` refuses the slot type `key`, or none. -/
+def slotWhy (st : Stmt) (key : Kind × Nat) : Option String :=
+  match key.1 with
+  | .comp => if key.2 != st.leaf.comp.spec.kLog then some "lincheck fold: a compression slot of the wrong size" else none
+  | .net i =>
+    if (st.c.nets.getD i default).2.unitLog != key.2 then some "lincheck fold: a unit slot of the wrong size" else none
+  | .mask => none
+
+/-- Why `Stmt.foldRanges` refuses the ranges `rs`: the first range's slot type `slotWhy` refuses. -/
+def rangesWhy (st : Stmt) : List Range → Option String
+  | [] => none
+  | r :: rs => match slotWhy st (r.kind, r.slotLog) with
+    | some e => some e
+    | none => rangesWhy st rs
+
+/-- Why `Stmt.fold` refuses the point `lw`, `rho`, or none. -/
+def foldWhy (st : Stmt) (lw rho : Array F128) : Option String :=
+  if rho.size + 6 != st.c.kLog || lw.size != 64 then some "lincheck fold: the point is not the block's"
+  else rangesWhy st st.c.ranges.toList
+
+theorem slotBase_map (st : Stmt) (a : F128) (lw rho : Array F128) (key : Kind × Nat) :
+    (fun _ => ()) <$> st.slotBase a lw rho key = orOk (slotWhy st key) := by
+  obtain ⟨k, sl⟩ := key
+  cases k with
+  | comp =>
+    simp only [Stmt.slotBase, slotWhy]
+    cases (sl != st.leaf.comp.spec.kLog) <;> rfl
+  | net i =>
+    simp only [Stmt.slotBase, slotWhy]
+    cases ((st.c.nets.getD i default).2.unitLog != sl) <;> rfl
+  | mask => rfl
+
+theorem foldRanges_map (st : Stmt) (a : F128) (lw rho : Array F128) :
+    ∀ (rs : List Range) (bases : Array ((Kind × Nat) × Array F128)) (out : Array F128),
+      (∀ kb ∈ bases, slotWhy st kb.1 = none) →
+        (fun _ => ()) <$> st.foldRanges a lw rho rs bases out = orOk (rangesWhy st rs)
+  | [], _, _, _ => rfl
+  | r :: rs, bases, out, hb => by
+    simp only [Stmt.foldRanges]
+    cases hc : bases.find? (fun kb => decide (kb.1 = (r.kind, r.slotLog))) with
+    | some kb =>
+      obtain ⟨key, b⟩ := kb
+      have h1 := Array.find?_some hc
+      have hk : key = (r.kind, r.slotLog) := of_decide_eq_true h1
+      have hw : slotWhy st (r.kind, r.slotLog) = none := by
+        rw [← hk]
+        exact hb _ (Array.mem_of_find?_eq_some hc)
+      rw [rangesWhy, hw]
+      exact foldRanges_map st a lw rho rs bases _ hb
+    | none =>
+      have hs := slotBase_map st a lw rho (r.kind, r.slotLog)
+      cases hb' : st.slotBase a lw rho (r.kind, r.slotLog) with
+      | error e =>
+        rw [hb'] at hs
+        rw [rangesWhy, orOk_error hs]
+        rfl
+      | ok b =>
+        rw [hb'] at hs
+        rw [rangesWhy, orOk_ok hs]
+        refine foldRanges_map st a lw rho rs (bases.push ((r.kind, r.slotLog), b)) _ fun kb hkb => ?_
+        rcases Array.mem_push.mp hkb with h | h
+        · exact hb kb h
+        · subst h
+          exact orOk_ok hs
+
+theorem fold_map (st : Stmt) (a : F128) (lw rho : Array F128) :
+    (fun _ => ()) <$> st.fold a lw rho = orOk (foldWhy st lw rho) := by
+  have hr := foldRanges_map st a lw rho st.c.ranges.toList #[] (Array.replicate (2 ^ st.c.kLog) 0)
+    fun kb h => absurd h (Array.not_mem_empty kb)
+  simp only [Stmt.fold, foldWhy]
+  generalize st.foldRanges a lw rho st.c.ranges.toList #[] (Array.replicate (2 ^ st.c.kLog) 0) = x at hr ⊢
+  cases (rho.size + 6 != st.c.kLog || lw.size != 64)
+  · show _ = orOk (rangesWhy st st.c.ranges.toList)
+    rw [← hr]
+    cases x <;> rfl
+  · rfl
+
+/-- **`Stmt.fold`'s refusal alone** (`foldWhy`), its value `#[]`. -/
+def foldChk (st : Stmt) (_alpha : F128) (lw rho : Array F128) : V (Array F128) :=
+  (fun _ => #[]) <$> orOk (foldWhy st lw rho)
+
+theorem foldChk_map (st : Stmt) (a : F128) (lw rho : Array F128) :
+    (fun _ => ()) <$> foldChk st a lw rho = (fun _ => ()) <$> st.fold a lw rho := by
+  rw [fold_map]
+  unfold foldChk
+  cases foldWhy st lw rho <;> rfl
+
+/-- The statement's setup (`Setup.ofCircuit`) with the fold `foldChk`. -/
+def ofCircuitChk (st : Stmt) : Setup := { Setup.ofCircuit st with fold := { st.circuitFold with fold := foldChk st } }
+
+/-- `lincheckFw` reads of its fold only the refusal. -/
+theorem lincheckFw_fold {M : Type → Type} [Monad M] [LawfulMonad M] [MonadExceptOf String M] [MonadLiftT V M]
+    (io : Asks M) (c c' : CircuitFold) (hk : c.kLog = c'.kLog)
+    (hf : ∀ a w r, (fun _ => ()) <$> c.fold a w r = (fun _ => ()) <$> c'.fold a w r)
+    (lay : Zk.PadLayout) (mk : Nat → F128) (zc : ZcOut) :
+    lincheckFw io c lay mk zc = lincheckFw io c' lay mk zc := by
+  obtain ⟨k, p, f, fd⟩ := c
+  obtain ⟨k', p', f', fd'⟩ := c'
+  change k = k' at hk
+  subst hk
+  unfold lincheckFw
+  dsimp only
+  refine bind_congr fun _ => bind_congr fun alpha => bind_congr fun _ => ?_
+  have h := hf alpha (skipWeights zc.z) (zc.rho.extract 0 (k - 6))
+  dsimp only at h
+  revert h
+  cases f alpha (skipWeights zc.z) (zc.rho.extract 0 (k - 6)) <;>
+    cases f' alpha (skipWeights zc.z) (zc.rho.extract 0 (k - 6)) <;> intro h
+  · have h' : (Except.error _ : V Unit) = .error _ := h
+    cases h'
+    rfl
+  · have h' : (Except.error _ : V Unit) = .ok () := h
+    cases h'
+  · have h' : (Except.ok () : V Unit) = .error _ := h
+    cases h'
+  · simp only [pure_bind]
+
+theorem repPiop_fold {M : Type → Type} [Monad M] [LawfulMonad M] [MonadExceptOf String M] [MonadLiftT V M]
+    (io : Asks M) (S : Setup) (c : CircuitFold) (hk : c.kLog = S.fold.kLog)
+    (hf : ∀ a w r, (fun _ => ()) <$> c.fold a w r = (fun _ => ()) <$> S.fold.fold a w r)
+    (lay : Zk.PadLayout) (cap root : ByteArray) (extras : Array Claim) (mk : Nat → F128) :
+    repPiop io { S with fold := c } lay cap root extras mk = repPiop io S lay cap root extras mk := by
+  simp only [repPiop, lincheckFw_fold io c S.fold hk hf]
+
+theorem repOpening_fold {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (io : Asks M)
+    (commit : Level → Array F128 → (Nat → ByteArray) → M Commit) (S : Setup) (c : CircuitFold) (sch : Flock.Schedule)
+    (lay : Zk.PadLayout) (tPad rep : Nat) (g : Array F128) (cm0 : Commit) (claims : Array Claim) (h : Array F128)
+    (extra lanePad : Nat → Nat → F128) (salt : Nat → Nat → ByteArray) :
+    repOpening io commit { S with fold := c } sch lay tPad rep g cm0 claims h extra lanePad salt =
+      repOpening io commit S sch lay tPad rep g cm0 claims h extra lanePad salt := rfl
+
+theorem rounds_fold (S : Setup) (c : CircuitFold) (hk : c.kLog = S.fold.kLog)
+    (hf : ∀ a w r, (fun _ => ()) <$> c.fold a w r = (fun _ => ()) <$> S.fold.fold a w r) (k0 : Nat) (cap dom : ByteArray) :
+    Skeleton.rounds { S with fold := c } k0 cap dom = Skeleton.rounds S k0 cap dom := by
+  simp only [Skeleton.rounds, Skeleton.head, repPiop_fold Skeleton.recAsks S c hk hf]
+  all_goals rfl
+
+instance instLawfulStep : LawfulMonad Drive.Step := LawfulMonad.mk' Drive.Step
+  (id_map := fun x => by
+    induction x with
+    | done _ => rfl
+    | fail _ => rfl
+    | ask c n k ih => exact congrArg (Drive.Step.ask c n) (funext ih))
+  (pure_bind := fun _ _ => rfl)
+  (bind_assoc := fun x f g => by
+    induction x with
+    | done _ => rfl
+    | fail _ => rfl
+    | ask c n k ih => exact congrArg (Drive.Step.ask c n) (funext ih))
+
+theorem openStep_fold (t : Tab) (S : Setup) (c : CircuitFold) (hk : c.kLog = S.fold.kLog)
+    (hf : ∀ a w r, (fun _ => ()) <$> c.fold a w r = (fun _ => ()) <$> S.fold.fold a w r) (rep : Nat) (dom : ByteArray)
+    (xs : Array (Array F128)) (hi : Array ByteArray) (coins : Array (Array F128)) :
+    Drive.openStep { t with st := { S with fold := c } } rep dom xs hi coins =
+      Drive.openStep { t with st := S } rep dom xs hi coins := by
+  simp only [Drive.openStep, repPiop_fold (Drive.stepAsks coins false) S c hk hf, repOpening_fold]
+
+theorem ok_bind {α β : Type} (a : α) (f : α → V β) : ((Except.ok a : V α) >>= f) = f a := rfl
+
+/-- `tabOfLevel0` reads of its setup only the Merkle scheme and `m`. -/
+theorem tabOfLevel0_with (S S' : Setup) (hm : S'.merkle = S.merkle) (hn : S'.m = S.m) (l : Level0.Level0) :
+    tabOfLevel0 S' l = (fun t => { t with st := S' }) <$> tabOfLevel0 S l := by
+  unfold tabOfLevel0
+  rw [hm, hn]
+  cases (S.merkle.id != MerkleScheme.hm96Sha512.id)
+  · cases (l.m != S.m)
+    · cases Zk.schedule S.m with
+      | error e => rfl
+      | ok p =>
+        obtain ⟨sch, tPad⟩ := p
+        cases h : (l.tPad != tPad) <;> simp only [ok_bind, h] <;> rfl
+    · rfl
+  · rfl
+
+/-- A rep's opening (`Drive.openStep`) on the table's level 0 `l0` at the statement's setup `setup st`. -/
+def openingOf (setup : Stmt → Setup) (st : Stmt) (l0 : Level0.Level0) (rep : Nat) (dom : ByteArray)
+    (xs : Array (Array F128)) (hi : Array ByteArray) (coins : Array (Array F128)) : V (Drive.Step Unit) :=
+  (fun t => Drive.openStep t rep dom xs hi coins) <$> tabOfLevel0 (setup st) l0
+
+theorem openingOf_chk : openingOf Setup.ofCircuit = openingOf ofCircuitChk := by
+  funext st l0 rep dom xs hi coins
+  unfold openingOf
+  rw [tabOfLevel0_with (Setup.ofCircuit st) (ofCircuitChk st) rfl rfl l0,
+    tabOfLevel0_with (Setup.ofCircuit st) (Setup.ofCircuit st) rfl rfl l0]
+  simp only [Functor.map_map]
+  refine congrArg (fun f => Functor.map f (tabOfLevel0 (Setup.ofCircuit st) l0)) (funext fun t => ?_)
+  exact (openStep_fold t (Setup.ofCircuit st) { st.circuitFold with fold := foldChk st } rfl (foldChk_map st) rep dom xs
+    hi coins).symm
+
+/-- `placeOf` with the rep's opening `op st l0 rep dom xs hi coins` (`openingOf`). -/
+def placeOfWith (op : Stmt → Level0.Level0 → Nat → ByteArray → Array (Array F128) → Array ByteArray →
+    Array (Array F128) → V (Drive.Step Unit)) (salts : Array (ByteArray × Nat × Array ByteArray))
+    (l0 : Level0.Level0) (s : Release) (p : Rep) (dom : ByteArray) : Except String (Frame.Place × Nat × Rep) := do
+  let k := p.coins.size
+  if h : k < p.alg.size then return (.sched p.alg[k].1, p.alg[k].2, p)
+  if p.opened then return (.own, 0, p)
+  let mut p := p
+  if p.opening.isNone then
+    let some st := s.sts[p.table]? | throw s!"table {p.table} of the session's {s.sts.size}"
+    let some c := s.link | throw "the opening before the session's Commit coins"
+    let some (_, _, hi) := salts.find? fun (r, q, _) => r == l0.root && q == p.rep
+      | throw s!"table {p.table} rep {p.rep}'s opening before its salts for levels ≥ 1"
+    let o ← op st l0 p.rep dom (Drive.extras st (Drive.linkPoints st c)) hi (p.coins.extract 0 p.alg.size)
+    p := { p with opening := some o }
+  match p.opening with
+  | some (.ask c n _) => return (.sched c, n, { p with toOpening := true })
+  | some (.done _) => return (.own, 0, { p with opened := true, opening := none })
+  | some (.fail e) => throw e
+  | none => throw "no opening"
+
+theorem placeOf_eq_with : placeOf = placeOfWith (openingOf Setup.ofCircuit) := by
+  funext salts l0 s p dom
+  simp only [placeOf, placeOfWith, openingOf, bind_map_left] <;> rfl
+
+def placeOfChk : Array (ByteArray × Nat × Array ByteArray) → Level0.Level0 → Release → Rep → ByteArray →
+    Except String (Frame.Place × Nat × Rep) := placeOfWith (openingOf ofCircuitChk)
+
+/-- `algOf` on the statement's setup `setup st`. -/
+def algOfWith (setup : Stmt → Setup) (st : Stmt) (root dom : ByteArray) : V (Array (ByteArray × Nat)) := do
+  let (sch, _) ← Zk.schedule st.m
+  Skeleton.rounds (setup st) sch.k0 root dom
+
+def algOfChk : Stmt → ByteArray → ByteArray → V (Array (ByteArray × Nat)) := algOfWith ofCircuitChk
+
+theorem rounds_chk (st : Stmt) (k0 : Nat) (cap dom : ByteArray) :
+    Skeleton.rounds (ofCircuitChk st) k0 cap dom = Skeleton.rounds (Setup.ofCircuit st) k0 cap dom :=
+  rounds_fold (Setup.ofCircuit st) { st.circuitFold with fold := foldChk st } rfl (foldChk_map st) k0 cap dom
+
+/-- Compiled code runs `placeOfChk` and `algOfChk`, the lincheck fold's refusal alone (`foldChk`); the kernel and every
+proof see `placeOf` and `algOf`. `@[csimp]` rewrites only code compiled after it, so it stays above `withAlg` and
+`roundPlace`. -/
+@[csimp] theorem placeOf_eq_chk : @placeOf = @placeOfChk :=
+  placeOf_eq_with.trans (congrArg placeOfWith openingOf_chk)
+
+@[csimp] theorem algOf_eq_chk : @algOf = @algOfChk := by
+  show algOfWith Setup.ofCircuit = algOfWith ofCircuitChk
+  funext st root dom
+  simp only [algOfWith, rounds_chk]
+
 /-- `p` with its algebraic phase's scheduled rounds (`algOf`) on the session's level 0 `l0`, the table being `name`,
 computed once. -/
 def withAlg (s : Release) (l0 : Level0.Level0) (name : String) (p : Rep) : V Rep := do
