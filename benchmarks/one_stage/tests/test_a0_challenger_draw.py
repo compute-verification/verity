@@ -1,8 +1,8 @@
 """a0's Lean draw on a development challenger's coins (`a0.challenger_draw`): the verifier has no randomness of its
 own, so `flock-verify draw` of fewer than every unit reads `--stream-file F`, F holding a challenger's coins opened
 after the registration's digest. F holds exactly the bytes the law reads in Lean's `Draw.drawOn` layout (no
-extension), and the record beside it replays them from the challenger's commitment. `flock-verify` is a stand-in that
-echoes its argv and F; the challenger's entropy is seeded."""
+extension), and the record beside it replays them from the challenger's commitment, under no other registration digest
+or challenger. `flock-verify` is a stand-in that echoes its argv and F; the challenger's entropy is seeded."""
 from __future__ import annotations
 
 import hashlib
@@ -91,3 +91,23 @@ def test_the_registration_digest_may_come_as_bytes(lean, tmp_path):
     p = a0.challenger_draw(lean, ["--population", str(n), "--k", "5"], law, n, after, tmp_path / "draw.log")
     assert p.returncode == 0, p.stderr
     assert json.loads((tmp_path / "draw.coins.json").read_text())["segment"]["after"] == after.hex()
+
+
+@pytest.mark.parametrize("other, why", [
+    ("registration", "the draw's coins were not opened after the prover's commitment the verifier holds"),
+    ("challenger", "coin does not open against the epoch's coin commitment"),
+])
+def test_the_record_replays_under_no_other_registration_or_challenger(lean, tmp_path, other, why):
+    law, n = LAWS["stratified"]
+    after = hashlib.sha512(b"registration").digest()
+    p = a0.challenger_draw(lean, ["--population", str(n)], law, n, after, tmp_path / "draw.log")
+    assert p.returncode == 0, p.stderr
+    record = json.loads((tmp_path / "draw.coins.json").read_text())
+    commitment = Ch.LiveCommitment.from_json(record["commitment"])
+    if other == "registration":
+        after = hashlib.sha512(b"another registration").digest()
+    else:
+        commitment = Ch.LiveChallenger(a0.DEV_SCHEME, 0, commitment.families,
+                                       random.Random("another challenger").randbytes).commitment
+    with pytest.raises(Ch.CoinError, match=why):
+        CC.challenger_stream(commitment, record["segment"], after)
