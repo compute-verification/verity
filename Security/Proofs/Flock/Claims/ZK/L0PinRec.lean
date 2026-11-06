@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.ZK.FinishSwPts
 public import Proofs.Flock.Claims.ZK.L0PinFrame
 public import Proofs.Flock.Claims.ZK.SimPiopGo
 import Mathlib.Algebra.Order.Floor.Extended
@@ -35,7 +36,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Zk.RingSwitch
 import Proofs.Flock.Claims.ZK.FinishLive
-import Proofs.Flock.Claims.ZK.FinishSwPts
 
 /-!
 # A rep's PIOP on its recorded coins

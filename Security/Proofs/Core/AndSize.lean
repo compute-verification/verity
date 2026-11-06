@@ -2,9 +2,9 @@ module
 
 public import Definitions.Core.Guarantees.Expand
 public import Definitions.Core.Guarantees.Formalism
+public import Mathlib.Data.ZMod.Basic
+public import Mathlib.Tactic.LinearCombination
 public import Proofs.Core.Expand
-import Mathlib.Data.ZMod.Basic
-import Mathlib.Tactic.LinearCombination
 import Mathlib.Tactic.Ring.RingNF
 
 /-!

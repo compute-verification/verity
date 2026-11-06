@@ -6,6 +6,7 @@ public import Flock.With.Sim
 public import Mathlib.NumberTheory.LucasLehmer
 public import Proofs.Flock.Claims.ZK.FrameCount
 public import Proofs.Flock.Claims.ZK.FrameParse
+public import Proofs.Flock.Claims.ZK.FrameRanked
 import Flock.With.SimWalk
 import all Init.Data.Array.Basic
 import all Init.Data.String.Defs

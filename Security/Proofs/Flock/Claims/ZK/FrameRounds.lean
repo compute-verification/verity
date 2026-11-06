@@ -1,11 +1,12 @@
 module
 
-public import Proofs.Flock.Claims.ZK.FrameMask
-public import Proofs.Flock.Claims.ZK.Refine
-import all Init.Data.String.Defs
-import all Init.Data.Array.Basic
 public import Proofs.Flock.Claims.Complete.Replay.Steps
 public import Proofs.Flock.Claims.ZK.CutSession
+public import Proofs.Flock.Claims.ZK.FrameMask
+public import Proofs.Flock.Claims.ZK.Refine
+public import Proofs.Flock.Claims.ZK.SimZerocheck
+import all Init.Data.Array.Basic
+import all Init.Data.String.Defs
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -37,7 +38,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.ZK.SimZerocheck
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!

@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Complete.ZkTables.View
 public import Proofs.Flock.Claims.ZK.FinishSrc
+public import Proofs.Flock.Claims.ZK.FinishSwFw
 public import Proofs.Flock.Claims.ZK.SimPiopGo
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
