@@ -3810,9 +3810,9 @@ def cmd_pages(ns: argparse.Namespace, reg: dict) -> int:
 
 
 class RouteError(SlackError):
-    def __init__(self, message: str, status: int):
+    def __init__(self, message: str, status: int, error: str = ""):
         super().__init__(message)
-        self.status = status
+        self.status, self.error = status, error
 
 
 def http_json(method: str, url: str, data: bytes | None, headers: dict[str, str]) -> dict:
@@ -3821,8 +3821,8 @@ def http_json(method: str, url: str, data: bytes | None, headers: dict[str, str]
         return json.load(r)
 
 
-def route_error(what: str, e: urllib.error.HTTPError) -> str:
-    why = f"HTTP {e.code}{_code(e)}"
+def route_error(what: str, e: urllib.error.HTTPError, code: str) -> str:
+    why = f"HTTP {e.code}{code}"
     if e.code == 401:
         return f"{what}: the route rejected this agent's Cursor identity ({why}): it takes managed agents on compute-verification/verity only"
     if e.code == 403:
@@ -3851,7 +3851,8 @@ class AskDaniel:
         try:
             out = self._oidc.send(lambda t: http_json(method, self.base + path, data, {"Authorization": f"Bearer {t}", **ctype}))
         except urllib.error.HTTPError as e:
-            raise RouteError(route_error(what, e), e.code) from None
+            code = _code(e)
+            raise RouteError(route_error(what, e, code), e.code, code.strip()) from None
         except (urllib.error.URLError, OSError, ValueError) as e:
             raise SlackError(f"{what}: the route is unreachable: {getattr(e, 'reason', e)}") from None
         if not isinstance(out, dict):
@@ -4002,6 +4003,9 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
             try:
                 out = AskDaniel().call("POST", f"{path}/{ns.verb}", body)
             except RouteError as e:
+                if e.status == 404 and not e.error:
+                    raise SlackError(f"ask-daniel {ns.verb} {ns.id}: HTTP 404 with no error code: the route has no {ns.verb} "
+                                     "endpoint yet (the website hasn't deployed it), so nothing changed on the card") from None
                 if e.status == 404:
                     raise SlackError(no_such_card(ns.verb, ns.id)) from None
                 raise

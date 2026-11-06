@@ -1698,7 +1698,7 @@ def route(identity_socket, monkeypatch):
             n = int(self.headers.get("Content-Length") or 0)
             body = json.loads(self.rfile.read(n)) if n else None
             status, out = state.handle(self.command, self.path, body, self.headers.get("Authorization", ""))
-            raw = json.dumps(out).encode()
+            raw = out.encode() if isinstance(out, str) else json.dumps(out).encode()      # a str: a page that is no JSON
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(raw)))
@@ -1948,6 +1948,9 @@ def test_extend_moves_a_cards_deadline_and_withdraw_takes_it_back(route, registr
     route.answer = (404, {"error": "not_found"})
     rc, _, err = run(capsys, "ask-daniel", "extend", "42", "--deadline", "2026-09-30T23:00:00Z")
     assert rc == 2 and "ask-daniel extend 42: HTTP 404: no card has that ID" in err
+    route.answer = (404, "<!DOCTYPE html><title>404: This page could not be found.</title>")         # the route isn't deployed
+    rc, _, err = run(capsys, "ask-daniel", "withdraw", "42", "--note", "events overtook it")
+    assert rc == 2 and "HTTP 404 with no error code: the route has no withdraw endpoint yet" in err and "no card" not in err
 
 
 def test_ask_daniels_dry_run_prints_the_card_and_sends_nothing(route, registry, capsys):
