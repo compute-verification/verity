@@ -33,6 +33,7 @@
   "Properties.NetworkScan",
   "Properties.SampledProofs",
   "Properties.SampledProofs.Draw",
+  "Properties.SampledProofs.Bits",
   "Properties.SampledProofs.Halt",
   "Properties.Pous.TimedAudit",
   "Properties.Pous.MemoryChallenger",
@@ -875,7 +876,7 @@
   },
   "Properties.SampledProofs": {
    "imports": ["SampledProofs"],
-   "except": ["Properties.SampledProofs.Draw"],
+   "except": ["Properties.SampledProofs.Draw", "Properties.SampledProofs.Bits"],
    "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.CertifierNetwork": {
@@ -1109,6 +1110,11 @@
    "imports": ["Firewall"],
    "except": [],
    "why": "the record's rules are stated against the release side's own functions (`Firewall.Record`, `Firewall.Release`), on Lean core: nothing of Mathlib or of `security`, never a proof"
+  },
+  "Properties.SampledProofs.Bits": {
+   "imports": ["Definitions.Claims.Sampling", "SampledProofs.Bits"],
+   "except": [],
+   "why": "Bits' layout read as the claims' program (`bitsGate`, `bitsProg`) is stated against Bits' own gates and lowering (`SampledProofs.Bits`) and the claims' gates and program (`Definitions.Claims.Sampling`), never a proof"
   }
  },
  "reads_exempt": {
