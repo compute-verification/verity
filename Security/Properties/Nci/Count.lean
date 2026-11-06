@@ -9,9 +9,10 @@ public import Properties.Nci
 
 `NciCheck.Count.evaluate` (`verity/core/protocols/network/nci/lean/NciCheck/Count.lean`, package `nci_check`) counts the
 blocks of a declaration's word-level Program: each activation of a block Definition that no other block holds, with its
-Boolean gates from the gate table and its fresh bits from `NciCheck.Desc`'s summaries. `DescCountsCK` states what an
-accepted count means for the Boolean declaration the Program lowers to: it complies with `Nci.CompliesAtMost c k n`,
-at most `n` proof blocks of a `(c, k)`-partition (`Verity.Partition.IsCK`).
+Boolean gates from the gate table and its fresh bits from `NciCheck.Desc`'s summaries. What the count publishes is
+`NciCheck.Count.check`, the judgment against `n` alone, `{complies}` (or a refusal); the counts stay in the private
+record. `DescCountsCK` states what a published `complies` means for the Boolean declaration the Program lowers to: it
+complies with `Nci.CompliesAtMost c k n`, at most `n` proof blocks of a `(c, k)`-partition (`Verity.Partition.IsCK`).
 
 The Boolean declaration is related to the Program by `Lowering`: each word gate `g` of the canonical layout is a set
 `L g` of the Boolean circuit's gates, the sets covering it once each; an input word gate's are input gates, at most its
@@ -69,17 +70,16 @@ structure Lowering (P : Prog) (gatesOf : String → Option ℕ) (D : Verity.Circ
      else (∀ b ∈ L g, D.isInput b = false) ∧ gatesOf (P.defs[p]!).key = some (L g).card) ∧
     ∀ b ∈ L g, ∀ a ∈ D.reads b, a ∈ L g ∨ ∃ o ∈ ops, a ∈ out o
 
-/-- When the count `out` on `j` has `complies` `true`, every Boolean declaration that lowers the Program by the instance's
-gate table, with θ the bits of θ's root nodes, has at most `n` `(c, k)`-inference blocks. -/
-def CountWitnessed (j out : Json) : Prop :=
+/-- Every Boolean declaration that lowers `j`'s Program by the instance's gate table, with θ the bits of θ's root nodes,
+has at most `n` `(c, k)`-inference blocks. -/
+def CountWitnessed (j : Json) : Prop :=
   ∀ (i : Count.Instance) (P : Prog) (d : Verity.RegisteredCircuit) (lw : Lowering P i.gatesOf d.D),
     CountParses j i → Flock.Program.decode i.program.toUTF8 = .ok P → d.D.Boolean →
-    (∀ b, b ∈ d.θ ↔ ∃ g, b ∈ lw.L g ∧ InTheta P i.theta g) →
-    out.getObjVal? "complies" = .ok (.bool true) → Nci.CompliesAtMost i.c i.k i.n d
+    (∀ b, b ∈ d.θ ↔ ∃ g, b ∈ lw.L g ∧ InTheta P i.theta g) → Nci.CompliesAtMost i.c i.k i.n d
 
-/-- **An accepted count witnesses at most `n` `(c, k)`-inference blocks.** On every instance the count gives a verdict
-on, the verdict is `CountWitnessed`. -/
+/-- **A published `complies` witnesses at most `n` `(c, k)`-inference blocks.** On every instance on which what the
+count publishes (`Count.check`) has `complies` `true`, the instance is `CountWitnessed`. -/
 def DescCountsCK : Prop :=
-  ∀ (j out : Json), Count.evaluate j = .ok out → CountWitnessed j out
+  ∀ j : Json, (Count.check j).getObjVal? "complies" = .ok (.bool true) → CountWitnessed j
 
 end NciCheck.Properties
