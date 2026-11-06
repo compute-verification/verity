@@ -514,7 +514,7 @@ def fetch_run(rid: str, names: list[str], cwd: Path | None = None, refresh: bool
 
 
 def live_records(rid: str, fetch=fetch_run) -> dict[str, tuple[str, Path | None]] | None:
-    """`regenerated_records` of a check whose files aren't in the store (a Lean check still running, which drive's landing lands on),
+    """`regenerated_records` of a check whose files aren't in the store yet (a lock run drive commits the records of: `Driver._locks`),
     read from its run dir on its node with ``fetch`` (`fetch_run`), each record's sha256 taken of the bytes fetched; None when
     its run can't be read or holds no report of its Lean check.  `Unreadable` when the report can't be parsed, or names a
     record the run dir doesn't hold."""
@@ -549,49 +549,21 @@ def _ran_on(store, rid: str, commit: str, fetch) -> bool:
     return got is not None and got[1].get("tree_sha") == commit
 
 
-#: what a Lean check reads whatever drive.toml's `lowrisk_excludes` say: its sources, Lake files, toolchain, locks and its own code
-LEAN_READS, LEAN_TOOLING = (".lean", "lakefile.toml", "lean-toolchain", "lake-manifest.json", LOCK), "tools/verity/lean/"
-
-
-def rekey_refusal(repo: Path, ran: str, onto: str, excludes: Iterable[str]) -> str | None:
-    """Why the records a Lean check of ``ran`` regenerated don't hold on ``onto``, or None when they do: the two trees differ
-    only in files the low-risk rule allows (`queue.lowrisk` with drive.toml's ``excludes``), none of them a file a Lean check
-    reads (`LEAN_READS`, `LEAN_TOOLING`) whatever ``excludes`` say, so what the check read is identical in both.  Trees that
-    can't be compared refuse."""
-    from .queue import lowrisk
-
-    r = _git(repo, "diff", "--name-only", "--no-renames", ran, onto, check=False)
-    if r.returncode:
-        return f"the trees of {ran[:12]} and {onto[:12]} can't be compared"
-    excludes = tuple(excludes)
-    bad = sorted(f for f in set(r.stdout.split())
-                 if f.endswith(LEAN_READS) or f.startswith(LEAN_TOOLING) or not lowrisk([f], excludes))
-    if bad:
-        return (f"the trees of {ran[:12]} and {onto[:12]} differ in {', '.join(bad[:3])}, which a Lean check reads or "
-                "`lowrisk_excludes` names")
-    return None
-
-
 def regenerated_parent(repo: Path, commit: str, store, *, tool: str, kinds: frozenset[str], command: tuple[str, ...],
-                       maps=None, deferred: str | None = None, fetch=None, ran: str | None = None,
-                       rekeyed_from: str | None = None, excludes: Iterable[str] = ()) -> str | None:
+                       maps=None, deferred: str | None = None, fetch=None) -> str | None:
     """The passing ``tool`` attempt of ``commit``'s one parent that vouches for ``commit``, or None: ``commit`` changes only Lake
     packages' locks, names exactly those in its `Regenerated:` trailer, and they are byte for byte the locks that attempt
     regenerated, one for each package it regenerated, so the tree that lands is the one that check audited.
 
-    ``deferred`` is the Lean check drive lands the parent on (`Driver._unvouched`), which may have no passing attempt yet: it
-    vouches when ``commit``'s `Checked:` trailer names it, it ran on the parent, and its records match, read from the store, else from its run dir on its node (``fetch``: `live_records`), hashed here, never
-    digests a caller hands in.  Only drive passes it, having read that verdict itself; `gate` and the push guard never do.
-    With it, ``ran`` is the commit that check ran on when it isn't the parent (`Driver._carry` rebuilt the parent above a lock
-    commit drive landed): ``commit``'s files are then taken against ``ran``, so what lands is still the tree it checked with its
-    records, whatever the parent holds.  And ``rekeyed_from`` is the commit that check ran on when drive moved it to the parent
-    (`Driver._rekey_lean`, the low-risk lane's `Driver._move_lean`): it vouches only when the check ran on ``rekeyed_from``
-    and that commit's tree and the parent's differ in no file but those the low-risk rule allows (`rekey_refusal`, with
-    drive.toml's ``excludes``), so what lands is the parent's tree with the records of a check that read the same Lean."""
+    ``deferred`` is the lock run drive commits ``commit`` for on the parent (`Driver._unvouched`), a check of lean-audit
+    alone, so no passing attempt of the whole check: it vouches when ``commit``'s `Checked:` trailer names it, it ran on the
+    parent, and its records match, read from the store, else from its run dir on its node (``fetch``: `live_records`), hashed
+    here, never digests a caller hands in.  Only drive passes it, having read that verdict itself; `gate` and the push guard
+    never do."""
     parents = _git(repo, "rev-list", "--parents", "-n", "1", commit).stdout.split()[1:]
     if len(parents) != 1:
         return None
-    parent = ran if deferred is not None and ran else parents[0]
+    parent = parents[0]
     files = _git(repo, "diff", "--name-only", "--no-renames", parent, commit).stdout.split()
     said = {f.strip() for f in _git(repo, "log", "-1", "--format=%(trailers:key=Regenerated,valueonly,separator=%x2C)",
                                      commit).stdout.replace("\n", ",").split(",") if f.strip()}
@@ -599,9 +571,7 @@ def regenerated_parent(repo: Path, commit: str, store, *, tool: str, kinds: froz
         return None
     if deferred is not None:
         checked = re.findall(r"^Checked: (\S+)", _git(repo, "log", "-1", "--format=%B", commit).stdout, re.M)
-        on = rekeyed_from or parent
-        moved_ok = not rekeyed_from or rekey_refusal(repo, rekeyed_from, parent, excludes) is None
-        ids = [deferred] if checked == [deferred] and moved_ok and _ran_on(store, deferred, on, fetch) else []
+        ids = [deferred] if checked == [deferred] and _ran_on(store, deferred, parent, fetch) else []
     else:
         tree = _git(repo, "rev-parse", f"{parent}^{{tree}}").stdout.strip()
         ids = passing(store, parent, tool, kinds=kinds, command=command, tree=tree, maps=maps, repo=repo)
@@ -1723,8 +1693,7 @@ def after_land(repo: Path, tool: str, commit: str, log=print, spawn=subprocess.P
     `required_steps` reads `merge_requires`) on ``commit``, in a session of its own, so it outlives this process and nothing it
     does changes the merge's result, and in a worktree of ``commit`` of its own (`_own_tree`) that goes when it ends.  With
     ``attempt``, the check the landing was admitted on, it gets `--attempt RID` after the commit: drive's landings carry no
-    `Check:` trailer, and the Lean check one lands on may have no passed attempt in the store yet.  Returns the argv started,
-    None when the declaration names none."""
+    `Check:` trailer.  Returns the argv started, None when the declaration names none."""
     from .store import tools_registry
 
     try:

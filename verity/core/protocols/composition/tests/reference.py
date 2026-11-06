@@ -247,7 +247,7 @@ def _one_stage_check(p: dict, c: tuple[dict, bytes], e: dict, blobs: list[bytes]
         return REJECT, f"proofs: session {s['name']}'s record is not UTF-8"
     if trees:
         raise ValueError("outside the mirror: a session on the challenger's coin trees")
-    return REJECT, f"proofs: {CH.sessions_tree_reason(trees, [(s['name'], None)])}"
+    return REJECT, f"proofs: {CH.sessions_tree_reason(trees, [(s['name'], {'circuit': None}, None)])}"
 
 
 def _form_params(j: Any) -> dict:
