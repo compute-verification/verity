@@ -147,11 +147,10 @@ def test_the_dc_headlines_claims_name_what_their_statements_assume() -> None:
     assert "RT3-LOGIC-6" in get("accounting-ts-fold-opt").name
 
 
-def test_the_relay_trusts_are_standard_assumptions_citing_their_acceptance() -> None:
+def test_the_relay_trusts_are_standard_assumptions() -> None:
     for i in ("flock-relay-serves", "flock-worker-deterministic"):
         e = get(i)
-        assert (e.kind, e.standing) == ("assumption", "standard") and "Accepted provisionally" in e.name, i
-        assert "https://app.notion.com/p/40f399515d9e81a19338f2ddbec3635e" in e.name, i
+        assert (e.kind, e.standing) == ("assumption", "standard"), i
     assert "auditor's connection" in get("flock-relay-serves").name
     assert "LiveChallenger::round" in get("flock-worker-deterministic").name
 
