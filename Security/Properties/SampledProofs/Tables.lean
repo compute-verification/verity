@@ -45,7 +45,7 @@ def circuitDigest : ByteArray := ⟨Array.replicate 64 0x11⟩
 
 /-- The verifier's own files naming the circuit file under `circuitDigest` and no public file. -/
 def witnessOwn : OneStageZk.Own :=
-  { programJ := Lean.Json.null, program := .empty, partition := Lean.Json.null, circuit := String.mk (List.replicate 128 '1'),
+  { programJ := Lean.Json.null, program := .empty, partition := Lean.Json.null, circuit := String.ofList (List.replicate 128 '1'),
     pub := "", registered := none }
 
 /-- `rcp`'s pinned SHA-512 (`Flock.MUFU_TABLES`), as bytes. -/
@@ -55,12 +55,16 @@ def rcpDigest : ByteArray :=
      0x43, 0x96, 0xa4, 0xc3, 0xa0, 0x56, 0x8d, 0x23, 0x87, 0xc2, 0xff, 0x2f, 0x33, 0xeb, 0x76, 0x45,
      0x3b, 0x33, 0xa7, 0xb8, 0x89, 0x0d, 0x97, 0x75, 0x2d, 0x86, 0xcc, 0x1d, 0x97, 0x1a, 0xea, 0xcc]⟩
 
+/-- A circuit file whose META looks up `rcp`. -/
+def honestCircuit : ByteArray := "circuit\nMETA {\"lookups\":{\"rcp\":{}}}\n".toUTF8
+
+/-- A circuit file whose META looks up no table. -/
+def tableCircuit : ByteArray := "circuit\nMETA {}\n".toUTF8
+
 /-- Blobs as the served path hands v2: a circuit file looking up `rcp` and `rcp`'s table, under its pinned SHA-512. -/
-def honestBlobs : Core.Blobs :=
-  ⟨#[(circuitDigest, "circuit\nMETA {\"lookups\":{\"rcp\":{}}}\n".toUTF8), (rcpDigest, ByteArray.empty)]⟩
+def honestBlobs : Core.Blobs := ⟨#[(circuitDigest, honestCircuit), (rcpDigest, ByteArray.empty)]⟩
 
 /-- Blobs holding a circuit file that looks up no table, and `rcp`'s table under its pinned SHA-512. -/
-def tableBlobs : Core.Blobs :=
-  ⟨#[(circuitDigest, "circuit\nMETA {}\n".toUTF8), (rcpDigest, ByteArray.empty)]⟩
+def tableBlobs : Core.Blobs := ⟨#[(circuitDigest, tableCircuit), (rcpDigest, ByteArray.empty)]⟩
 
 end Properties.SampledProofs
