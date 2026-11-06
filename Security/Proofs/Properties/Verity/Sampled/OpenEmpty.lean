@@ -27,9 +27,9 @@ hash that releases them, and `openEmpty` is the probability that it is empty.
   no round with the drawn round's leaf is released as `bits` (`OpeningAt.classOf_nonempty`). At a node that every draw
   `d₀` of one leaf (its nonce, key, stream, round and count) describes, `openEmpty` averaged over the draw is at most
   `2·δ₁`.
-* **The round's law** (`avg_take`, `avg_opened_roundBits`, `openEmpty_avg_le_round`): a draw's first `m` coins of a
-  block of at least `m` have the law of a round's `m` live challenges as bits (`roundBits`), so the bound holds at the
-  coin map's release.
+* **The round's law** (`avg_take`, `opened_eq_roundBits`, `avg_opened_roundBits`): a draw's first `m` coins of a
+  block of at least `m` are released as the bits (`roundBits`) of the `m` challenges they encode, so they have the law
+  of a round's `m` live challenges as bits.
 -/
 
 @[expose] public section
@@ -273,31 +273,27 @@ theorem openEmpty_avg_le {β : Type} {lg : β → List Release} {E : List Releas
 
 variable (e : 𝔽 ≃ (Fin 128 → Bool))
 
+/-- **A draw's first `m` coins are a round's release**: in a block of at least `m` coins, the device releases them as
+the bits of the `m` challenges they encode. -/
+theorem opened_eq_roundBits {block m : ℕ} (hm : m ≤ block) (d : TreeDraw block) :
+    TreeDraw.opened d m = roundBits e fun i => e.symm (Fin.take m hm d.1 i) := by
+  have hr : roundBits e (fun i => e.symm (Fin.take m hm d.1 i)) =
+      (List.ofFn fun i => List.ofFn (Fin.take m hm d.1 i)).flatten :=
+    congrArg List.flatten (congrArg List.ofFn (funext fun i => congrArg List.ofFn (e.apply_symm_apply _)))
+  rw [hr, TreeDraw.opened, ← Fin.ofFn_take_eq_take_ofFn hm]
+  rfl
+
 /-- **A draw's first `m` coins have a round's law**: in a block of at least `m` coins, a uniform draw's first `m` coins
-are released as the bits of `m` uniform live challenges (`roundBits`). -/
+are released as the bits of `m` uniform live challenges (`opened_eq_roundBits`). -/
 theorem avg_opened_roundBits {block m : ℕ} (hm : m ≤ block) (G : List Bool → ℝ≥0∞) :
     avg (fun ω : Fin block → Fin 128 → Bool => G (TreeDraw.opened (ω, fun _ => false) m)) =
-      avg fun c : Fin m → 𝔽 => G (roundBits e c) := by
-  have h1 : ∀ ω : Fin block → Fin 128 → Bool, TreeDraw.opened (ω, fun _ => false) m =
-      (List.ofFn fun i => List.ofFn (Fin.take m hm ω i)).flatten := fun ω => by
-    rw [TreeDraw.opened, ← Fin.ofFn_take_eq_take_ofFn hm]
-    rfl
+      avg fun c : Fin m → 𝔽 => G (roundBits e c) :=
   calc avg (fun ω : Fin block → Fin 128 → Bool => G (TreeDraw.opened (ω, fun _ => false) m))
-      = avg (fun ω : Fin block → Fin 128 → Bool => G (List.ofFn fun i => List.ofFn (Fin.take m hm ω i)).flatten) :=
-        congrArg avg (funext fun ω => congrArg G (h1 ω))
-    _ = avg (fun a : Fin m → Fin 128 → Bool => G (List.ofFn fun i => List.ofFn (a i)).flatten) :=
-        avg_take hm fun a => G (List.ofFn fun i => List.ofFn (a i)).flatten
+      = avg (fun ω : Fin block → Fin 128 → Bool => G (roundBits e fun i => e.symm (Fin.take m hm ω i))) :=
+        congrArg avg (funext fun ω => congrArg G (opened_eq_roundBits e hm (ω, fun _ => false)))
+    _ = avg (fun a : Fin m → Fin 128 → Bool => G (roundBits e fun i => e.symm (a i))) :=
+        avg_take hm fun a => G (roundBits e fun i => e.symm (a i))
     _ = avg fun c : Fin m → 𝔽 => G (roundBits e c) :=
-        (avg_equiv (Equiv.piCongrRight fun _ => e) fun a => G (List.ofFn fun i => List.ofFn (a i)).flatten).symm
-
-/-- **An opening's empty class at a round's release has probability at most `2·δ₁`, averaged over the device's draw**
-(`openEmpty_avg_le` at `avg_opened_roundBits`): the release is a round's `m` live challenges as bits, and the opening's
-count `m` fits in the block. -/
-theorem openEmpty_avg_le_round {β : Type} {lg : β → List Release} {E : List Release → Game β}
-    (hE : RecordsLog lg E) (ν key : ByteArray) (s r : ℕ) {block m : ℕ} (hm : m ≤ block)
-    (g' : TreeDraw block → Game β) (ho : ∀ d₀, ∃ o : OpeningAt E (g' d₀), o.AtLeaf ν key s r m d₀)
-    {δ₁ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding (treeMy key) (treeC ν) δ₁) :
-    avg (fun d₀ : TreeDraw block => openEmpty E (g' d₀) (roundBits e : (Fin m → 𝔽) → List Bool)) ≤ 2 * δ₁ :=
-  openEmpty_avg_le hE ν key s r m g' ho (roundBits e) hT1 (avg_opened_roundBits e hm)
+        avg_equiv (Equiv.piCongrRight fun _ => e.symm) fun c => G (roundBits e c)
 
 end Verity.Sampled
