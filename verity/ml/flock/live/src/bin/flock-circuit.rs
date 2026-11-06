@@ -15,6 +15,9 @@
 //!
 //! `--session-tables J` (both sides, CPU prover): the session's units in J equal tables (`session_tables`), each with its own
 //! randomness, all J roots in one `Commit`, and every proof after the session's last coin (the barrier).
+//!
+//! `serve --tree-from HOST:PORT [--tree-secret-file F]` (`--zk`, with `--sessions N`): each session's coin tree sampled and
+//! opened by the challenger (`flock_live::tree_from`), not drawn here.
 
 use std::{
     collections::BTreeMap,
@@ -765,6 +768,47 @@ struct Serving {
     given: Option<Value>,
     law: Option<flock_live::unit_draw::Law>,
     tabs: Tables,
+    /// `serve --tree-from`: the challenger every session's coin tree is sampled by
+    tree_from: Option<TreeFrom>,
+}
+
+/// The challenger's session (`serve --tree-from`), one connection the server's sessions share. It closes when the server is
+/// done with it: once its last session's record is written, `serve_loop` returns and drops the [`Serving`] its sessions were
+/// made from. A close the challenger doesn't confirm is the server's refusal.
+struct TreeFrom(flock_live::tree_from::Shared);
+
+impl Drop for TreeFrom {
+    fn drop(&mut self) {
+        if let Err(e) = self.0.lock().unwrap_or_else(PoisonError::into_inner).close() {
+            refuse(format!("--tree-from: {e}"));
+        }
+    }
+}
+
+/// `serve --tree-from HOST:PORT [--tree-secret-file F]`: the challenger that samples and opens every session's coin tree
+/// ([`flock_live::tree_from`]). Only a `--zk` statement's sessions commit their coins to a tree, and the challenger's
+/// session closes after the server's last, so a bounded `--sessions N`.
+fn tree_from_arg(tabs: &Tables) -> Option<TreeFrom> {
+    let (address, secret_file) = (arg("--tree-from", ""), arg("--tree-secret-file", ""));
+    if address.is_empty() {
+        if !secret_file.is_empty() {
+            refuse("--tree-secret-file is --tree-from's".into());
+        }
+        return None;
+    }
+    if std::env::args().nth(1).as_deref() != Some("serve") || config_of(tabs).coin_tree.is_none() {
+        refuse("--tree-from is serve's, for a --zk statement: only its sessions commit their coins to a tree".into());
+    }
+    if arg("--sessions", "").parse::<usize>().is_err() {
+        refuse("--tree-from: the challenger's session closes after the server's last, so --sessions N".into());
+    }
+    let secret = (!secret_file.is_empty()).then(|| {
+        let s = std::fs::read_to_string(&secret_file).unwrap_or_else(|e| refuse(format!("--tree-secret-file: {e}")));
+        flock_live::tree_from::unhex(&s.trim().to_ascii_lowercase())
+            .unwrap_or_else(|| refuse("--tree-secret-file: the challenger session's secret, in hex".into()))
+    });
+    let c = flock_live::tree_from::Challenger::connect(&address, secret.as_deref()).unwrap_or_else(|e| refuse(format!("--tree-from: {e}")));
+    Some(TreeFrom(Arc::new(Mutex::new(c))))
 }
 
 fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
@@ -815,12 +859,17 @@ fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
     } else {
         Tables::one(st, inst)
     };
-    Serving { given, law, tabs }
+    let tree_from = tree_from_arg(&tabs);
+    Serving { given, law, tabs, tree_from }
 }
 
 /// One session's server.
 fn server_of(sv: &Serving, st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Server {
     let s = Server::new(config_of(&sv.tabs), Box::new(CircuitVerifier::new(sv.tabs.clone())));
+    let s = match &sv.tree_from {
+        Some(TreeFrom(c)) => s.with_tree_from(c.clone()),
+        None => s,
+    };
     if let Some(draw) = &sv.given {
         let mut s = with_draw(s, st, inst, flock_live::unit_draw::Law::Subset { k: 0 }, count);
         s.cfg.draw_law = None;
