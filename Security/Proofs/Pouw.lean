@@ -155,6 +155,7 @@ public import Proofs.Pouw.PearlC.TileCircuit
 public import Proofs.Pouw.PearlC.TileValues
 public import Proofs.Pouw.PearlC.TileGamma
 public import Proofs.Pouw.PearlC.TileGammaTol
+public import Proofs.Pouw.PearlC.TileDrawGamma
 public import Proofs.Pouw.PearlC.TileUOnlyGamma
 public import Proofs.Pouw.PearlC.UOnlyGamma
 public import Proofs.Pouw.PearlC.UOnlyLoopGamma
