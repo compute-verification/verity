@@ -600,7 +600,7 @@ patterns = ['(?i:\bcertifier windows?\b)', '(?i:\b(?:promotion|partial|device|ro
             '(?<=← )draw(?= )|@draw\b|\bdraw(?= [A-Z] >>=)|(?<=\()draw(?= [A-Z]\)| \(Fin\b)|\bdraw(?:Fin|Ks?|Strat)\b', '\bCoinsDraw\b',
             '\bdef draw(?=\(self, n: int\) -> bytes:)|\bself\.draw(?=\(msg\.message\.fields\[)|\b(?:seeded|SeededCoins)\([^()\n]*\)\.draw\b',
             '(?<=\.update\()(?:draw|draws|drawn|firewall)(?==)', '\b(draw|draws|drawn)(?==\w+\[\x22\1\x22\])',
-            '(?<=\]\}, )draw(?==union_draw\[)', '\bdrawn(?==draws, exclusion_tiles)', '(?<=subcircuit=sub\.id, )draws(?==)',
+            '(?<=\]\}, )draw(?==union_draw\[)', '\bdrawn(?==len\(drawn\), exclusion_tiles)', '(?<=subcircuit=sub\.id, )draws(?==)',
             '(?<=rounds=len\(got\), )draws(?==)',
             '(?<=[\w.:/`-])[Ll]aws?\b|\b[Ll]aws?(?=[\w/(`-]|\.\w)',
             '\bpower[._ -]draws?\b', '(?i:\bpower draws?\b)', '(?i:power[- ]laws?|laws? of large numbers)',
