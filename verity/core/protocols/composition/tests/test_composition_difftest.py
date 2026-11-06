@@ -641,7 +641,7 @@ def test_remote_on_one_record_that_reuses_the_windows_registration(remote_server
     assert [x.hex() for x in R.window_records(period["root"], period["evidence"])] == [record]
     got = R.SAMPLED_PROOFS.answer({**reused, "blobs": BLOBS})
     assert (got["verdict"], got["reason"]) == (R.REJECT, NO_SESSION), got
-    case = remote_case([policy, period, audit])
+    case = product_case(R.REMOTE, [policy, period, audit])
     assert R.REMOTE.verdicts(case) == [R.ACCEPT, R.ACCEPT, R.REJECT], R.REMOTE.verdicts(case)
     python, lean = R.REMOTE.answer(case), remote_server.exchange(case)
     assert {k: v for k, v in lean.items() if k != "reason"} == {k: v for k, v in python.items() if k != "reason"}
