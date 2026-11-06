@@ -8,7 +8,6 @@
     {"file": "verity_vllm/acquire/fa3_tap_src/build_fa3_ext.py", "kind": "machine-path", "symbol": "main", "detail": "/usr/local"},
     {"file": "verity_vllm/acquire/sources/moe_source.py", "kind": "broad-except", "symbol": "MoeBlockSource._sites", "detail": "except Exception"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "broad-except", "symbol": "NativeHostCommitter._load_cudart", "detail": "except Exception", "count": 2},
-    {"file": "verity_vllm/commit/committer/native_host.py", "kind": "broad-except", "symbol": "NativeHostCommitter.verify", "detail": "except Exception"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "optional-import", "symbol": "<module>", "detail": "except ImportError"},
     {"file": "verity_vllm/commit/committer/pinned_pool.py", "kind": "broad-except", "symbol": "PinnedPool.__del__", "detail": "except Exception"},
     {"file": "verity_vllm/commit/committer/pinned_pool.py", "kind": "environ", "symbol": "<module>", "detail": "VERITY_PINNED_EXACT"},
