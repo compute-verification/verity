@@ -6,6 +6,19 @@ public import Proofs.Flock.Recursive.FirewallFixed
 public import Proofs.Flock.Claims.Recursion.BaseParses
 public import Proofs.Flock.SessionLoop.TablesSide
 public import Proofs.Flock.Soundness.Audit.TwoStage
+import all Init.Control.Except
+import all Init.Data.Array.Basic
+import all Init.Data.Int.Repr
+import all Init.Data.List.Basic
+import all Init.Data.List.Control
+import all Init.Data.Ord.String
+import all Init.Data.Range.Basic
+import all Init.Data.Repr
+import all Init.Data.String.Basic
+import all Init.Data.String.Defs
+import all Init.Data.String.Legacy
+import all Init.Data.ToString.Basic
+import all Lean.Data.Json.Basic
 
 /-!
 # `RecursiveZKLoop` and `RecursiveZKLoopAnySum` say something
@@ -57,7 +70,7 @@ def sched : Schedule where
   streams := []
   rounds := #[]
 
-theorem roundSpec_null : Flock.Firewall.roundSpec Json.null = none := rfl
+theorem roundSpec_null : Flock.Firewall.roundSpec Json.null = none := (rfl)
 
 /-- One 64-byte node of zeros. -/
 def top64 : ByteArray := ⟨Array.replicate 64 0⟩
