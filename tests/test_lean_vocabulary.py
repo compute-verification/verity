@@ -400,7 +400,7 @@ def slots(s: Scan) -> set[str]:
 
 
 #: The most lines ``KNOWN`` may hold. Raising it, for a new line, needs lean's review; `--prune` lowers it to the count.
-KNOWN_MAX = 414
+KNOWN_MAX = 418
 
 #: Every hit that is not a canonical, a mirror, a reading of the canonical or a protocol's slot, with its reason and owner.
 #: For new code, read the canonical or rename; `--prune` deletes the lines whose declarations went.
@@ -741,7 +741,6 @@ KNOWN: dict[str, str] = {
     "benchmarks/sampling_plan/transformer.py::Dag": "homonym, a block's Definition DAG for the plan: rename (proofs)",
     "benchmarks/stacked_share/units.py::Window": "homonym, an attention window of S keys: rename (memory-accounting)",
     "benchmarks/tc_probe_fp4/f1_rates.py::Op": "homonym, one CUDA-core multiplier a probe times: rename (circuits)",
-    "benchmarks/tc_probe_fp4/sp_e4m3.py::Device": "homonym, a probe's loaded CUDA module: rename (circuits)",
     "benchmarks/torch_gpu/commit_slots/slots.py::Layout":
         "homonym, a step's public commitment structure: rename (kernels)",
     "benchmarks/torch_gpu/p2_stage/stage.py::Store":
@@ -794,21 +793,7 @@ KNOWN: dict[str, str] = {
     # integrations/
     "integrations/vllm/verity_vllm/acquire/committer_api.py::Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a client of it (circuits)",
-    "integrations/vllm/verity_vllm/acquire/plan.py::Site": "homonym, a quantisation site: rename (circuits)",
-    "integrations/vllm/verity_vllm/acquire/served_device.py::Device":
-        "homonym, a served build's device: rename (circuits)",
-    "integrations/vllm/verity_vllm/check/batch.py::Verdict": "homonym, a template's check results: rename (vllm)",
-    "integrations/vllm/verity_vllm/check/match/instance_sequence.py::Prog":
-        "homonym, a decoded root body as an instance sequence: rename (vllm)",
-    "integrations/vllm/verity_vllm/check/match/resolve.py::Program":
-        "homonym, the Program side of a match's resolution: rename (vllm)",
-    "integrations/vllm/verity_vllm/check/verdict.py::Verdict":
-        "homonym, a check run's results and outcome: rename (vllm)",
     "integrations/vllm/verity_vllm/commit/memory_map.py::Layout": "homonym, the engine's KV pool map: rename (circuits)",
-    "integrations/vllm/verity_vllm/commit/row_tables_device.py::Device":
-        "homonym, one CUDA device's build of a kernel library: rename (circuits)",
-    "integrations/vllm/verity_vllm/commit/served_record.py::Record":
-        "duplicate of the execution block (no canonical yet: LEAN-93): becomes an execution block's committed values (circuits)",
     "integrations/vllm/verity_vllm/program/frontend/registration.py::Registration":
         "homonym, the builder's allocation of registered inputs: rename (circuits)",
     "integrations/vllm/verity_vllm/protocols/pouw/h1/challenger.py::Ledger":
@@ -890,6 +875,8 @@ KNOWN: dict[str, str] = {
         "homonym, a link-window's witness: rename (network-accounting)",
     "verity/core/protocols/interface/CoreProtocol/Profile.lean::Core.Draw":
         "homonym, how a profile level is drawn: rename (proofs)",
+    "verity/core/protocols/interface/CoreProtocol/Record.lean::Core.Record":
+        "duplicate of the auditor's record chain (`SampledProofs.Challenger.LedgerEntry`): becomes a reading of it (proofs)",
     "verity/core/protocols/interface/CoreProtocol/Registration.lean::Core.Registration.Card":
         "duplicate of `Verity.Accel.Card`: becomes a reading of it (soundness)",
     "verity/core/protocols/interface/CoreProtocol/Registration.lean::Core.Registration.Link":
@@ -987,7 +974,7 @@ KNOWN: dict[str, str] = {
     "verity/core/protocols/remote_bandwidth/lean/RemoteAudit/P2Protocol.lean::RemoteAudit.P2Protocol.Op":
         "homonym, one request of the verifier's process as its log records it: rename (memory-accounting)",
     "verity/core/protocols/remote_bandwidth/lean/RemoteAudit/Registry.lean::RemoteAudit.Registry":
-        "duplicate of the registration log (`Verity.Registration`, not yet in Core: LEAN-93): becomes the log's fold (deleted) (memory-accounting)",
+        "duplicate of the verification loop's record (no canonical yet; proofs holds it): becomes a reading of the verifier's record, its draws `Verity.Draw` on `Verity.Coins` (memory-accounting)",
     "verity/core/protocols/remote_bandwidth/lean/RemoteAudit/Schedule.lean::RemoteAudit.Schedule.Block":
         "homonym, a chunk of the store: rename (memory-accounting)",
     "verity/core/protocols/remote_bandwidth/lean/RemoteAudit/Window.lean::RemoteAudit.Opening":
@@ -1044,6 +1031,8 @@ KNOWN: dict[str, str] = {
         "homonym, the recursion's coin sources: rename (proofs)",
     "verity/core/service/flock/Flock/RecCoins.lean::Flock.RecCoins.Opening":
         "homonym, a polynomial-commitment opening: rename (proofs)",
+    "verity/core/service/flock/Flock/RecLinks.lean::Flock.RecLinks.Link":
+        "homonym, a recursion link from a reader to a port: rename (proofs)",
     "verity/core/service/flock/Flock/RecRecord.lean::Flock.RecRecord.Record":
         "duplicate of the auditor's record chain (`SampledProofs.Challenger.LedgerEntry`): becomes the challenger's live-coin entries (proofs)",
     "verity/core/service/flock/VStar/In.lean::VStar.In.Opening": "homonym, a Ligerito opening: rename (proofs)",
@@ -1094,6 +1083,8 @@ KNOWN: dict[str, str] = {
         "homonym, the recursion's coin sources in draw order: rename (proofs)",
     "verity/ml/flock/python/verity_flock/rec_algebra.py::Layout":
         "homonym, a GF residual gadget's ports: rename (proofs)",
+    "verity/ml/flock/python/verity_flock/rec_links.py::Link":
+        "homonym, a recursion link from a reader to a port, `Flock.RecLinks.Link`'s pair: rename (proofs)",
     "verity/ml/flock/python/verity_flock/rec_sparse.py::Coins":
         "homonym, a rep's public values the sparse phase reads: rename (proofs)",
     "verity/ml/windows/interface.py::Circuit":

@@ -276,8 +276,8 @@ def write_links(tree: Path, links: dict[str, str]) -> None:
 
 def in_sandbox(pkg: str, tree: Path, argv: list[str]) -> list[str]:
     """``argv`` in the sandbox, writable in the `.lake` of ``tree/pkg`` and the packages it requires by path but not in their
-    fetched dependencies."""
-    rw = [str(tree / p / ".lake") for p in closure(pkg)]
+    fetched dependencies. The paths are resolved, as mountinfo names them: a slot tree is a link into the node's cache root."""
+    rw = [str((tree / p / ".lake").resolve()) for p in closure(pkg)]
     ro = [str(Path(d) / "packages") for d in rw if (Path(d) / "packages").is_dir()]
     return [*UNSHARE, "--", "bash", str(SANDBOX), *rw, "--", "bash", "-c", READ_ONLY, "ro", *ro, "--", *argv]
 

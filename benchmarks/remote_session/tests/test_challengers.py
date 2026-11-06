@@ -794,7 +794,7 @@ def test_a_session_inside_the_providers_lockdown_rests_on_it_and_any_other_on_no
 
 
 def test_the_boundary_check_needs_the_certifiers_windows_that_meet_the_span_to_cover_it():
-    """A credited span from σ_0's release at 100 ns to the last root's arrival at 250 ns is covered by windows
+    """A credited span from chal_0's release at 100 ns to the last root's arrival at 250 ns is covered by windows
     [0, 120) and [120, 251), whatever lies beyond it, and not with a gap at 120 or a last window ending at 250."""
     seen = [{"released_ns": 100, "arrivals_ns": [150]}, {"released_ns": 160, "arrivals_ns": [250]}]
 
@@ -808,7 +808,7 @@ def test_the_boundary_check_needs_the_certifiers_windows_that_meet_the_span_to_c
 
 
 def test_the_clock_rate_beside_the_line_doesnt_read_the_first_coins_round_trip():
-    """Coins 110 ms apart on a challenger clock 30 ppm fast, σ_0 and σ_1 stamped a 100 ms round trip before the
+    """Coins 110 ms apart on a challenger clock 30 ppm fast, chal_0 and chal_1 stamped a 100 ms round trip before the
     challenger released them and every later coin 50 ms after: the cross-check's rate reads 30 ppm, where the ratio end
     to end reads the round trip over the session's span."""
     ms = 1_000_000
