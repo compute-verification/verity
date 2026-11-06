@@ -1,7 +1,12 @@
 module
 
 public import Definitions.Nci.Witness
-public import Definitions.Nci.Guarantees
+public import Definitions.Nci.Assumptions
+public import Definitions.Nci.Threads
+public import Definitions.Core.Circuit
+public import Definitions.Core.RegisteredCircuit
+public import Definitions.Core.Partition
+public import Definitions.Nci
 public import Definitions.Nci.Dampener
 public import Definitions.Nci.Reads
 public import Definitions.Nci.Assumptions.Threads

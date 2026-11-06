@@ -4,6 +4,7 @@ public import Definitions.Nci.Guarantees.Training
 public import Proofs.Nci.Threads
 public import Proofs.Nci.Contained
 public import Proofs.Nci.Packed
+public import Proofs.Nci.Lemmas
 
 /-!
 # Proofs of NCI's guarantees under training's incompressibility
@@ -144,16 +145,6 @@ theorem trainingIncompressible_iff (hba : 0 ≤ b_a) :
   ⟨fun h => ⟨weightsIncompressible_of_training h, activationsIncompressible_of_training hba h,
       partialSumsIncompressible_of_training hba h⟩,
     fun ⟨hW, hA, hPS⟩ => trainingIncompressible_of_reads hba hW hA hPS⟩
-
-/-- **The support forms give training's incompressibility**: `ActivationsSupport` at cap `K + b_w + b_a` and
-`PartialSumsSupport`, with `WeightsIncompressible`, for any committed values of the baseline. -/
-theorem trainingIncompressible_of_support {θv : c.D.Transcript} (hw : 0 ≤ b_w) (hba : 0 ≤ b_a)
-    (hW : Assumptions.WeightsIncompressible c T Γ K b_w b_a)
-    (hA : Assumptions.ActivationsSupport c θv ch (K + b_w + b_a) b_w b_a)
-    (hPS : Assumptions.PartialSumsSupport c θv ch Γ K b_w b_a) :
-    Assumptions.TrainingIncompressible c ch T Γ K b_w b_a :=
-  trainingIncompressible_of_reads hba hW (activationsIncompressible_of_support hw hba hA)
-    (partialSumsIncompressible_of_support hPS)
 
 end Training
 

@@ -5,7 +5,9 @@ public import Definitions.Core.Partition
 public import Definitions.Nci.Reads
 
 /-!
-# The inference-only policy's guarantee in reads form
+# The inference-only policy's bound in reads form: a lemma
+
+These are steps of proofs, not guarantees: they sit with the proofs, and no record of the lock pins them.
 
 B5 of the actual-circuit model: the bound for
 updated matrix multiplications before its division by `α`. It is about any division into inference blocks that are small

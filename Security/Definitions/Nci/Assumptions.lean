@@ -16,8 +16,7 @@ receives. Each is a `Prop` about one declaration and one chain it runs, taken as
 need it.
 
 Which declaration matters. On a declared circuit, whose wiring the prover controls, both are false, an analysis
-simplification, and the guarantees that apply them there (`UpdatedMatMul`,
-`UpdatedMatMulReads`, `Training`) are falsified. That covers declared circuits only:
+simplification, and no guarantee applies them there. That covers declared circuits only:
 on a reference training circuit, the one a declared circuit contains, both stand, and with `WeightsIncompressible` they
 are `TrainingIncompressible`, the inference-only policy's one adopted premise.
 
@@ -52,7 +51,7 @@ reads at least `b_w` bits for each weight entry it uses and `b_a` bits for each 
 entry linked to an entry whole in `R`, which `R` can compute from its own products alone:
 `b_w · #(weight entries R uses) + b_a · #(input entries R uses, not linked to an entry whole in R) ≤ width(in(R) \ θ)`.
 "Uses" means that `R` holds a product of the entry. `b_w` is the width of a weight entry and `b_a` that of an activation
-entry; at FP4 both widths are 4 bits. These are widths, not support: in the support form below an E2M1 product takes
+entry; at FP4 both widths are 4 bits. These are widths, not support: in support form an E2M1 product takes
 only 37 values, so there `b_w + b_a ≤ log₂ 37 ≈ 5.2` at FP4. An entry's share of its block scale is not counted, since
 an inference block can use an entry without reading its scale and leave the scaling to another.
 
@@ -62,35 +61,13 @@ least `b_a` wide. No inference block of at most `c` gates can reconstruct entrie
 input and output vectors, from fewer fresh input bits than their width.
 
 False when `D` is a declared circuit; it stands when `D` is a reference training circuit,
-as the activations' half of `TrainingIncompressible`. `ActivationsSupport`'s counterexample does not
+as the activations' half of `TrainingIncompressible`. The counterexample to its support form does not
 apply to it: an E2M1 product takes at most 37 values, but an inference block that holds the product gate reads its
 weight and input wires whole, at least `b_w + b_a` bits. -/
 def ActivationsIncompressible (D : RegisteredCircuit) (ch : Chain D.D) (c : ℕ) (k b_w b_a : ℝ) : Prop :=
   ∀ R ⊆ D.D.computed, D.D.size R ≤ c → (novelReads D R : ℝ) ≤ k →
     b_w * (ch.weightsUsed R).card +
         b_a * ((ch.inputsUsed R).filter fun x => ¬ ch.LinkedWhole R x.1 x.2.1 x.2.2).card ≤ novelReads D R
-
-/-- **Incompressibility of weights and activations, in support form**: `ActivationsIncompressible` restated over what
-values determine rather than over wiring. For every inference block `R` and every set `T` of its gates whose charge
-(`Chain.charge`, `b_w` per weight entry and `b_a` per input entry of which `T` holds a product, other than one linked to
-an entry whole in `R`) is at most `k`, the gates of `T` take at least `2^charge` distinct values over the runs of `D`
-with the registered information at its committed values `θv`.
-
-Wiring cannot falsify it: a weight held in a constant gate, or rebuilt from a narrower wire, has the support it has.
-It fails when the chain's values are determined by less than they are charged for, as when the chain is not updated.
-`b_w` and `b_a` are rates, in bits of support per entry, and are below an entry's width when products repeat values (at
-FP4, a product's sign and scale symmetries), so they are measured, not read from the format.
-
-Every value of `R` is a function of the values on `in(R)`, so `support(T) ≤ 2^novelReads(R)`; at cap `k + b_w + b_a`
-this assumption gives `ActivationsIncompressible` at cap `k` (`activationsIncompressible_of_support`). It needs no
-bound on `R`'s size: the support form says what the values are, not what an inference block can compute.
-
-**Falsified** at FP4, for every updated chain too: when a product
-gate of the first multiplication holds an E2M1 × E2M1 product, `T` that one gate is charged `b_w + b_a` and takes at
-most 37 values, so the assumption fails at every cap of at least `b_w + b_a` once `b_w + b_a > log₂ 37 ≈ 5.21` (the
-calculator's 2.5 + 4 = 6.5). At FP8 (E4M3, 2011 products) this counterexample does not apply. -/
-def ActivationsSupport (D : RegisteredCircuit) (θv : D.D.Transcript) (ch : Chain D.D) (k b_w b_a : ℝ) : Prop :=
-  ∀ R ⊆ D.D.computed, ∀ T ⊆ R, ch.charge R b_w b_a T ≤ k → (2 : ℝ) ^ ch.charge R b_w b_a T ≤ support D θv T
 
 /-- **Incompressibility of partial sums** (the draft's partial-sum incompressibility, applied jointly with weight
 incompressibility, and the count of partial sums in the proof of its theorem). A partial sum is a sum of some of the
@@ -109,7 +86,7 @@ This is the draft's statement with `s u` the number of partial sums inference bl
 not gates the chain names, since `D` may add up each entry in any order.
 
 False when `D` is a declared circuit; it stands when `D` is a reference training circuit,
-as the partial sums' half of `TrainingIncompressible`. `PartialSumsSupport`'s counterexample does not
+as the partial sums' half of `TrainingIncompressible`. The counterexample to its support form does not
 apply to it: an adder inference block over a `k × k × k` block holds values determined by `2k²` entries, but it reads
 its `k³` products' wires to form them. -/
 def PartialSumsIncompressible (D : RegisteredCircuit) (ch : Chain D.D) (c : ℕ) (k b_w b_a : ℝ) : Prop :=
@@ -117,33 +94,6 @@ def PartialSumsIncompressible (D : RegisteredCircuit) (ch : Chain D.D) (c : ℕ)
     ∃ s : Fin n → ℕ,
       ∑ x : (ℓ : Fin ch.L) × Fin ch.N × Fin (ch.e ℓ), (ch.spread P x.1 x.2.1 x.2.2 - 1) ≤ ∑ u, s u ∧
       ∀ u, b_w * (ch.weightsUsed (P.gates u)).card + b_a * s u ≤ novelReads D (P.gates u)
-
-/-- **Incompressibility of partial sums, in support form**: `PartialSumsIncompressible` restated over what values
-determine rather than over wiring. For every division `P` of `D` into inference blocks of at most `c` gates, each
-reading at most `k` fresh input bits, the partial sums passed between inference blocks can be charged to the inference
-blocks that receive them, `s u` to inference block `u`, so that an entry whose products lie in `m` inference blocks is
-charged at least `m − 1` in total, and the gates of each inference block take at least
-`2^(b_w · #(weight entries it uses) + b_a · s u)` distinct values over the runs of `D` with the registered information
-at its committed values `θv`.
-
-Like `ActivationsSupport`, wiring cannot falsify it, and `b_w` and `b_a` are rates in bits of support per entry, below an
-entry's width by whatever the updated weights and the partial sums compress to. It is meant for a reference training
-circuit, the one a declared circuit contains (`Nci.Guarantees.ContainedMatMul`), where it is a claim about how
-compressible training is. An inference block's values are functions of the values on its fresh input reads, so it gives
-`PartialSumsIncompressible` at the same caps (`partialSumsIncompressible_of_support`).
-
-**Falsified** for one honest matrix multiplication, with binary
-additions and inside the caps: divide it into product inference blocks that fix a column over a block of rows and
-positions, and inference blocks that hold the adder tree over `k × k × k` blocks. Each entry's products then lie in `d`
-inference blocks, while each inference block's values are functions of the few weight and input entries it depends on.
-In the exact 1-bit toy (`d = e = N = 8`, `b_w = b_a = 1`) the inference blocks can be charged at most 183 (192 bits of
-entries) against the 448 required, for every `c ≥ 448` and `k ≥ 512`. At `d = 7168` and the deployed `k = 2·10⁷` such a
-division absorbs at most 8.4% of the charge at FP4 and 17.8% at FP8 (2.5 and 4 bits). -/
-def PartialSumsSupport (D : RegisteredCircuit) (θv : D.D.Transcript) (ch : Chain D.D) (c : ℕ) (k b_w b_a : ℝ) : Prop :=
-  ∀ (n : ℕ) (P : Partition D.D n), (∀ u, D.D.size (P.gates u) ≤ c ∧ (novelReads D (P.gates u) : ℝ) ≤ k) →
-    ∃ s : Fin n → ℕ,
-      ∑ x : (ℓ : Fin ch.L) × Fin ch.N × Fin (ch.e ℓ), (ch.spread P x.1 x.2.1 x.2.2 - 1) ≤ ∑ u, s u ∧
-      ∀ u, (2 : ℝ) ^ (b_w * (ch.weightsUsed (P.gates u)).card + b_a * s u) ≤ support D θv (P.gates u)
 
 /-! The parameters the guarantees are taken at, named: what a chain's shape, a run's coverage and a division's caps must
 be for a guarantee's factor to apply. Each is checkable on the circuit it reads, and none is about the world. -/

@@ -3,8 +3,6 @@ module
 public import Definitions.Core.Assumptions
 public import Definitions.Core.Guarantees
 public import Definitions.Nci.Assumptions
-public import Definitions.Nci.Guarantees
-public import Definitions.Nci.Guarantees.Reads
 public import Definitions.Nci.Guarantees.Threads
 public import Definitions.Nci.Guarantees.Layered
 public import Definitions.Nci.Guarantees.Fit
@@ -16,7 +14,6 @@ public import Definitions.Nci.Guarantees.Info
 public import Definitions.Nci.Assumptions.Capability
 public import Definitions.Nci.Guarantees.Capability
 public import Definitions.Accounting.Guarantees.Coverage
-public import Definitions.Nci.Guarantees.Fmt
 public import Definitions.Nci.Guarantees.Fmt2
 public import Definitions.Nci.Guarantees.Training
 public import Definitions.Nci.Guarantees.Packed
@@ -50,6 +47,7 @@ public import Definitions.Accounting.Assumptions.RemoteOutside
 public import Definitions.Accounting.Assumptions.CreditedWords
 public import Definitions.Accounting.Assumptions.RemoteP2
 public import Definitions.Accounting.Assumptions.Parties
+public import Definitions.Accounting.Assumptions.TS.Fixed
 public import Definitions.Accounting.Guarantees
 public import Definitions.Hash.Assumptions
 public import Definitions.Hash.Guarantees

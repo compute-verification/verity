@@ -118,12 +118,8 @@
    "id": "p-inference-theorem",
    "kind": "theorem",
    "status": "proved",
-   "statement": "A declaration divided into sessions reading only theta and their prompts complies.",
-   "refs": {
-    "lean": [
-     "Nci.SecurityProofs.Inference"
-    ]
-   }
+   "statement": "A declaration divided into sessions reading only theta and their prompts complies (a lemma, with NCI's proofs in Security/Proofs/Nci/Lemmas.lean).",
+   "refs": {}
   },
   {
    "id": "p-thread-theorem",

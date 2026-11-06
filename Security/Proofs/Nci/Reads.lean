@@ -1,7 +1,8 @@
 module
 
 public import Proofs.Nci.Throttling
-public import Definitions.Nci.Guarantees.Reads
+public import Proofs.Nci.Lemmas.Reads
+public import Proofs.Nci.Lemmas
 
 /-!
 # Updated matrix multiplications are throttled, in reads form
