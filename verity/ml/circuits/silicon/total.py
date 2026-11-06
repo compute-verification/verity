@@ -1,6 +1,6 @@
 """Total semantics of one BF16 tensor-core step: ``veritor.tensor-core.ampere_bf16_m16n8k16@3``.
 
-:mod:`verity.ml.circuits.silicon.silicon` models the *finite* domain of an Ampere
+:mod:`verity.ml.circuits.silicon.models` models the *finite* domain of an Ampere
 ``mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32`` step (Hawkeye's
 parameters: two groups of eight exact products, a 25-bit truncating adder,
 exponent floor ``-132``) and raises on any NaN or infinity.  This module
@@ -8,17 +8,17 @@ extends that model to a **total function on every encoding** of the gate's
 signature -- every 16-bit word as a BF16 operand, every 32-bit word as the
 accumulator -- as a mathematical definition, not a lookup of measurements:
 
-* a *value* is a NaN, a signed infinity, or a finite :class:`~verity.ml.circuits.silicon.silicon.Term`;
+* a *value* is a NaN, a signed infinity, or a finite :class:`~verity.ml.circuits.silicon.term.Term`;
 * the **product** of two BF16 words is NaN if either is a NaN (quiet or
   signalling, any payload, either sign); otherwise, if either is an infinity,
   NaN if the other is a zero (``±0``; a subnormal is *not* a zero) and else an
   infinity with the XOR of the signs; otherwise the exact finite product of
-  :func:`~verity.ml.circuits.silicon.silicon.bf16_product`;
-* the **accumulator** word decodes likewise (NaN, ``±inf``, or :func:`~verity.ml.circuits.silicon.silicon.fp32_term`);
+  :func:`~verity.ml.circuits.silicon.term.bf16_product`;
+* the **accumulator** word decodes likewise (NaN, ``±inf``, or :func:`~verity.ml.circuits.silicon.term.fp32_term`);
 * one **group step** takes the incoming value and the group's products: NaN if
   any of them is NaN; NaN if infinities of both signs are present; that
   infinity if infinities of one sign are present (whatever the finite terms);
-  otherwise the finite :func:`~verity.ml.circuits.silicon.silicon.group_sum` of the finite
+  otherwise the finite :func:`~verity.ml.circuits.silicon.models.group_sum` of the finite
   terms, which *saturates* to an infinity of its sign when it leaves the FP32
   range (exponent above ``127``).  A saturated infinity is an ordinary
   infinity for the following group (``+inf`` from an overflowing group 1 and
@@ -26,10 +26,10 @@ accumulator -- as a mathematical definition, not a lookup of measurements:
 * the **result word** is ``0x7FFFFFFF`` for NaN (one canonical word: positive
   sign, every mantissa bit set, whatever the payloads and signs of the input
   NaNs), ``0x7F800000`` / ``0xFF800000`` for the infinities, and
-  :func:`~verity.ml.circuits.silicon.silicon.pack_fp32` for a finite value -- whose zero is
+  :func:`~verity.ml.circuits.silicon.term.pack_fp32` for a finite value -- whose zero is
   always ``+0`` (``-0`` accumulators and ``-0`` products never produce ``-0``).
 
-On finite operands this is exactly :func:`verity.ml.circuits.silicon.silicon.tc_dot`.
+On finite operands this is exactly :func:`verity.ml.circuits.silicon.models.tc_dot`.
 On the special encodings it is a *specification*; the evidence that the A100
 (sm_80) and the RTX 4090 (sm_89) implement it is a hardware campaign: 147,258 structured tiles x 128 outputs x 3
 repetitions per device, every output reproduced, no nondeterminism, no
@@ -39,7 +39,7 @@ Also here: :func:`cvt_rn_bf16_f32`, the FP32 -> BF16 conversion
 (``cvt.rn.bf16.f32``, SASS ``F2FP.BF16.PACK_AB``) as measured on both devices:
 round to nearest even on finite words, ``±inf`` for ``±inf`` and for finite
 words that round beyond BF16's range, and the canonical ``0x7FFF`` for every
-NaN.  Note that :func:`verity.ml.circuits.silicon.silicon.f32_to_bf16` maps NaN to ``0x7FC0``
+NaN.  Note that :func:`verity.ml.circuits.silicon.cast.f32_to_bf16_word` maps NaN to ``0x7FC0``
 instead; the difference is only on NaN inputs, which the pinned gate set's
 ``check`` rejects.
 
@@ -55,8 +55,8 @@ over groups x width x floor) and the special-value rules R1-R8 were re-tested
 with L6's case families.
 The instruction's ``scale-d = 0`` form (accumulator ignored, CUTLASS
 ``ScaleOut::Zero``) was measured equal to ``acc = +0``.  On finite operands
-the function is :func:`verity.ml.circuits.silicon.silicon.tc_dot` on
-:data:`~verity.ml.circuits.silicon.silicon.HOPPER_BF16_M16N8K16` (identical parameters,
+the function is :func:`verity.ml.circuits.silicon.models.tc_dot` on
+:data:`~verity.ml.circuits.silicon.models.HOPPER_BF16_M16N8K16` (identical parameters,
 Hawkeye's H100 numbers, now re-measured).
 """
 
@@ -66,15 +66,12 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from .errors import InvalidArtifact
-from .models import HOPPER_BF16_WGMMA_K16
-from .silicon import (
-    AMPERE_BF16_M16N8K16,
+from .models import AMPERE_BF16_M16N8K16, HOPPER_BF16_WGMMA_K16, GroupSum, group_sum
+from .term import (
     FP32_MAX_EXPONENT,
-    Pipeline,
     Term,
     bf16_product,
     fp32_term,
-    group_sum,
     pack_fp32,
 )
 
@@ -194,7 +191,7 @@ def pack_value(value: Value) -> int:
 
 
 def tc_dot_total(
-    pipeline: Pipeline, acc_bits: int, a: Sequence[int], b: Sequence[int]
+    pipeline: GroupSum, acc_bits: int, a: Sequence[int], b: Sequence[int]
 ) -> int:
     """``D = acc + sum_k a[k] * b[k]`` on every encoding, as ``pipeline``'s silicon computes it."""
 
@@ -234,5 +231,5 @@ TOTAL_FAMILY_VERSION = "3"
 
 #: :data:`verity.ml.circuits.silicon.models.HOPPER_BF16_WGMMA_K16` (the model of ``sm90.wgmma.m64n8k16.bf16``) is re-exported
 #: here, where veritor's H100 campaign first registered it: all sixteen products and the accumulator in one grouped
-#: sum, 26-bit adder, exponent floor ``-133``, the parameters of :data:`~verity.ml.circuits.silicon.silicon.HOPPER_BF16_M16N8K16`.
+#: sum, 26-bit adder, exponent floor ``-133``, the parameters of :data:`~verity.ml.circuits.silicon.models.HOPPER_BF16_M16N8K16`.
 HOPPER_WGMMA_FAMILY_VERSION = "1"
