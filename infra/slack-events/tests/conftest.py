@@ -23,7 +23,7 @@ SIGNING = "dummy-signing-secret"
 BOT, BOT_USER, COORD, TEAM, ACCT = "B0VERITY", "U0AGENTS", "CCOORD", "C0CA1JZSYNR", "C0CABUKBT2S"
 LUKE, DANIEL = "U0LUKE", "UDANIEL"
 CHAT = "CCHATLUKE"
-T0 = 1_800_000_000.0                                           # 2027-01-15 08:00 UTC
+T0 = 1_800_000_000.0                                           # a fixed instant, 08:00 UTC
 
 
 class Clock:
@@ -183,8 +183,8 @@ def registry() -> dict:
 
 @pytest.fixture
 def world(tmp_path, monkeypatch, registry):
-    """The deps the service runs on, with Luke's chat (people.d published beside routes.d) and inboxes for @top and
-    @circuits."""
+    """The deps the service runs on, with Luke's chat (people.d published beside routes.d) and inboxes for the admin
+    (`top`) and `circuits`."""
     notes, published = tmp_path / "notes", tmp_path / "published"
     (notes / rs.ROUTES_DIR).mkdir(parents=True)
     published.mkdir()
