@@ -7,11 +7,14 @@ directory is private as `composite.py` reads it; and ``--exe`` is the answer of 
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import random
 import stat
 import sys
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/core/protocols/pouw/lean/check/tests"))
@@ -20,9 +23,29 @@ import pouw_check_cases
 import pouw_period_cases
 import pouw_piece as P
 from verity.core.protocols.pouw import core_check as CC
+from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import period_check as PC
+from verity.core.protocols.pouw import verifier as V
+from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
 SERVED = Path(__file__).resolve().parent / "fixtures" / "served-h1-window"
+STATEMENTS = Path(__file__).resolve().parents[3] / "verity/core/protocols/pouw/tests/test_pouw_credit_statements.py"
+
+
+@pytest.fixture
+def statements(tmp_path, monkeypatch):
+    """credit's statements kit (`test_pouw_credit_statements`): its periods of proof files and its stand-in
+    flock-verify, which accepts a session only when it proves the files credit hands it; credit's Python asks, which
+    the difftests hold to the Lean's."""
+    spec = importlib.util.spec_from_file_location("pouw_credit_statements", STATEMENTS)
+    kit = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(kit)
+    exe = tmp_path / "flock-verify"
+    exe.write_text(kit.FAKE)
+    exe.chmod(0o755)
+    monkeypatch.setattr(PF, "executable", lambda: exe)
+    monkeypatch.setattr(V, "RECORD_VERDICT", "python")
+    return kit
 
 
 def _json(p: Path, x) -> Path:
@@ -66,6 +89,54 @@ def test_an_honest_period_is_a_period_piece_that_accepts(tmp_path):
     assert got["verdict"] == "accept" and got["protocol"] == P.PERIOD
     assert got["commitment"] == PC.digest(PC.commitment(bytes.fromhex(case["commitment"]))).hex()
     assert json.loads((out / "case.json").read_text())["evidence"] == case["evidence"]
+
+
+def _period_args(tmp_path: Path, d: dict, windows: list[dict]) -> list[str]:
+    return ["--key", str(_json(tmp_path / "k.json", d["key"])), "--main", str(_lines(tmp_path / "main.txt", d["main"])),
+            "--name", d["name"], "--ledger", str(_lines(tmp_path / "ledger.jsonl", d["ledger"])),
+            "--pins", str(_lines(tmp_path / "pins.jsonl", d["pins"])),
+            "--windows", str(_json(tmp_path / "w.json", windows))]
+
+
+def test_a_period_of_statements_is_put_in_the_lean_form_by_the_verifier_of_record(tmp_path, statements, capsys):
+    """The kit's windows are over PouwH1Tile_v1, whose per-unit noise the period's guarantee doesn't cover, so the
+    case credit accepts is refused at its form, as a served window over h1zy's default tile is."""
+    d, windows = statements._period(0, tmp_path / "proofs")
+    out, (credit, why) = P.proved(d["key"], d["ledger"], d["pins"], d["main"], d["name"], windows)
+    assert why is None and credit["windows"] == [statements._credited(w) for w in windows]
+    assert [sorted(w) for w in out] == [list(Cr.PROVED_KEYS)] * len(windows)
+    assert all(p["verdict"] == "accept" for w in out for p in w["proofs"] + w["live"]["proofs"])
+    assert Cr._period_outcomes(d["key"], d["ledger"], d["pins"], d["main"], d["name"], out, CC.lms_verify) == (
+        credit, None)
+    piece = tmp_path / "period"
+    assert PC.form(d["name"], out).startswith("window 0 of period") and "PouwH1Tile_v1" in PC.form(d["name"], out)
+    assert P.main(["period", "--out", str(piece), *_period_args(tmp_path, d, windows)]) == 1
+    said = capsys.readouterr().out.splitlines()
+    assert said == [f"REFERENCE {P.PERIOD} accept", f"PIECE {P.PERIOD} reject form by=python"]
+    assert json.loads(bytes.fromhex(json.loads((piece / "case.json").read_text())["evidence"]))["windows"] == out
+
+
+def test_a_rejected_live_session_is_an_outcome_the_lean_form_rejects(tmp_path, statements, capsys):
+    d, windows = statements._period(1, tmp_path / "proofs")
+    p = Path(windows[0]["live"]["statements"][0]["sessions"][0]) / "session.json"
+    rec = json.loads(p.read_text())
+    rec["proof"] = ("0" if rec["proof"][0] != "0" else "1") + rec["proof"][1:]
+    p.write_text(json.dumps(rec))
+    out, (credit, why) = P.proved(d["key"], d["ledger"], d["pins"], d["main"], d["name"], windows)
+    assert credit is None and why[0] == "window"
+    assert [x["verdict"] for x in out[0]["live"]["proofs"]][:1] == ["reject"]
+    assert Cr._period_outcomes(d["key"], d["ledger"], d["pins"], d["main"], d["name"], out, CC.lms_verify)[1][0] == (
+        "window")
+    assert P.main(["period", "--out", str(tmp_path / "period"), *_period_args(tmp_path, d, windows)]) == 1
+    assert capsys.readouterr().out.splitlines() == [f"REFERENCE {P.PERIOD} reject window",
+                                                    f"PIECE {P.PERIOD} reject form by=python"]
+
+
+def test_statements_naming_the_same_proof_files_twice_are_refused(tmp_path, statements):
+    d, windows = statements._period(0, tmp_path / "proofs")
+    w = {**windows[0], "statements": windows[0]["statements"] + windows[0]["statements"][:1]}
+    with pytest.raises(ValueError, match="name the same proof files"):
+        P.proved(d["key"], d["ledger"], d["pins"], d["main"], d["name"], [w, *windows[1:]])
 
 
 def test_a_deployment_key_file_is_the_key_the_period_pins():
