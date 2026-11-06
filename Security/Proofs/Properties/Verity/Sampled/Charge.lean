@@ -436,7 +436,7 @@ theorem openGap_add_openEmptyAt_le {P : Type} [Fintype P] [Nonempty P] {g' : Gam
     openGap E g' bits + openEmptyAt E g' n bits ≤ openErr e E g' := by
   by_cases hn : ∀ o, openingOf E g' = some o → o.n = n
   · exact (add_le_add le_rfl (openEmptyAt_le_openEmpty n bits)).trans (h hn)
-  · push_neg at hn
+  · push Not at hn
     obtain ⟨o, ho, hon⟩ := hn
     have h0 : openEmptyAt E g' n bits = 0 := by
       unfold openEmptyAt
