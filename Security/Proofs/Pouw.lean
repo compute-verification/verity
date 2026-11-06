@@ -12,7 +12,7 @@ public import Proofs.Pouw.Eps1
 public import Proofs.Pouw.Dither
 public import Proofs.Pouw.DitherWitness
 public import Proofs.Pouw.DitherInstance
-public import Proofs.Pouw.DitherSelected
+public import Proofs.Pouw.SakLb
 public import Proofs.Pouw.Dimension.CausalProofs
 public import Proofs.Pouw.Dimension.EmbedProofs
 public import Proofs.Pouw.Dimension.ForestProofs
@@ -181,7 +181,6 @@ public import Proofs.Pouw.Reduction
 public import Proofs.Pouw.RelativeSecurity
 public import Proofs.Pouw.RelativeSecurityGuarantees
 public import Proofs.Pouw.RelativeSecurityJ10R
-public import Proofs.Pouw.SakLb
 public import Proofs.Pouw.Sampling
 public import Proofs.Pouw.Sanity
 public import Proofs.Pouw.ServedFreed
@@ -190,9 +189,14 @@ public import Proofs.Pouw.ServedWork
 public import Proofs.Pouw.ServedWork.Honest
 public import Proofs.Pouw.SteinerRigidity
 public import Proofs.Pouw.Theorem1
-public import Proofs.Pouw.TileBound.AlignedExact
+public import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+public import Mathlib.Tactic
+public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Data.Rat.Cast.Order
 public import Proofs.Pouw.TileBound.Fp8
-public import Proofs.Pouw.TileBound.Fp8Depth
+public import Definitions.Pouw.TileBound.Defs
+public import Mathlib.Tactic.IntervalCases
+public import Definitions.Pouw.TileBound.Fp8Defs
 public import Proofs.Pouw.TileBound.Proofs
 public import Proofs.Pouw.TileBound.WinogradStrassen
 public import Proofs.Pouw.TileBound.Witness

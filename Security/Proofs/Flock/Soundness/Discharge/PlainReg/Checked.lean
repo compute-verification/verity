@@ -2,9 +2,12 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.PlainReg.Defs
 public import Proofs.Flock.Soundness.Discharge.PlainReg.BindH
-public import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedH
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineInst
+public import Proofs.Flock.Soundness.Discharge.ZkReg.BindH
+public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+public import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
 import all Init.Data.Array.Basic
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineInst
 
 /-!
 # The registered check at an accepted hidden-output `verify --registered F` outcome, without `--zk`
