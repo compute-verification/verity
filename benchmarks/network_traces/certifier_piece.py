@@ -20,9 +20,10 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   and its cells are execution phase 0's alone (``--tokens`` at most 4 keeps the group in one execution phase), so the
   engine admits the group together and closes it into one Commit window, the run's earliest: the window the run audits (with
   ``REQUESTS=1`` the requests after it make a smaller window, which `served_verdicts.py window` passes over). The
-  defaults are the window circuit's class 4,32,4 (4 slots, prompts of at most 32 ids, 4 outputs), and the gate runs
-  the network certifier at its scan class's schedule (``--scan-class``, `V3C_SCAN_CLASS`: w63k4, at 5 egress cells),
-  the one the chain's scan at that class takes. The scan's schedule
+  defaults fill the scan's 4 lanes with prompts of at most 32 ids and 4 outputs each, and the gate runs the network
+  certifier at its scan class's schedule (``--scan-class``, `V3C_SCAN_CLASS`: w63k4, at 5 egress cells; `gate_params`),
+  the one the chain's scan at that class takes, whose link-window of 32 buckets is a window of the window circuit's
+  class 8,32,4,4,16 (8 slots, 4 lanes at each of its 2 boundaries; `prove_path.py window-class`). The scan's schedule
   gives a request D·τ from its admission to its first egress cell, by which a short answer must be whole, and an
   endpoint slower than that fails each request late: 2.7 s at the scan's tick τ of 100 ms. ``--bucket-ms MS`` runs
   the scan at the tick MS instead (the gate's `auditor.SCAN_BUCKET_MS`, 100 to 4000: D·τ = 108 s at 4000), each
@@ -196,7 +197,8 @@ PUBLIC = {"report/report.json": ("schema", "verdict", "path", "scope", "stubbed"
 REFUSED = "refused.txt"
 #: the piece's case, as `composite.py` reads it
 CASE = "case.json"
-#: the scan class of V3c's default window class (`served_verdicts.sh`'s V3C_CLASS)
+#: the scan class of V3c's window class behind the front (`served_verdicts.sh`'s V3C_CLASS, 8,32,4,4,16, whose window
+#: is the scan's link-window)
 V3C_SCAN_CLASS = "w63k4"
 #: what `bind`'s rejects say: a served request the network certifier didn't carry, a certified one the endpoint didn't
 #: serve, and one certified request served twice
@@ -224,7 +226,7 @@ CASE_ONLY = ("case only: the period lists circuit files, which the composite's n
 PIECE_FILES = ("answer.json", *LOGS, CHAINED, "period/commitment.bin", "period/evidence.json", "period/params.json",
                f"{CIRCUITS}/*.txt", SCAN_CIRCUITS, *(f"chain/{rel}" for rel in PUBLIC))
 LEAN_DIR = TREE / "verity" / "core" / "protocols" / "network" / "lean"
-#: the window circuit's class (4 slots, prompts of at most 32 ids, 4 outputs) and the scan's lanes
+#: the front's group: the scan's 4 lanes, each a prompt of 24 ids (V3c's window class takes at most 32) and 4 outputs
 PROMPTS, PROMPT_IDS, TOKENS = 4, 24, 4
 HEIGHT = 10
 #: how long a warm-up request may take, and how long the front waits for serve-openai to record the warm-ups'
@@ -298,6 +300,16 @@ def front(a: argparse.Namespace) -> int:
     finally:
         if attack is not None:
             end_group(attack)
+
+
+def gate_params(scan_class: str = V3C_SCAN_CLASS, bucket_ms: int | None = None):
+    """The schedule the gate's network certifier runs a front's scan rehearsal at, at the scan class ``scan_class`` and
+    the tick ``bucket_ms`` (the scan's own when None): `auditor.warden_command`'s flags as warden_serve.py parses them,
+    its `WardenParams`."""
+    import warden_serve as WSV
+    argv = SS.A.warden_command({"requests": 1, "scan": True, "scan_class": scan_class, "bucket_ms": bucket_ms},
+                               Path("out"), "http://127.0.0.1:1")
+    return WSV._params(WSV.parser().parse_args(argv[2:]))
 
 
 def attack_relay(a: argparse.Namespace, keep: Path) -> tuple[subprocess.Popen, int]:

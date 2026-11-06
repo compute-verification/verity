@@ -19,7 +19,8 @@ which hold none of the window's counts or advice bits; the leak guard reads the 
 and moves out any file DIR doesn't declare, and the case is written only from the period files it left. The front's
 warm-ups go straight to the endpoint, one at a time, each recorded in a closed window of its own before the gate is
 asked, and the pick passes over those windows for the group's. At a tick of 4000 ms the front's rehearsal reaches this
-tree's gate with the tick in its request and the minutes counted at it, and the warden runs the scan's schedule there;
+tree's gate with the tick in its request and the minutes counted at it, and the warden runs the scan's schedule there
+(`certifier_piece.gate_params`: link-windows of 32 buckets, each a window of the window circuit's class 8,32,4,4,16);
 a tick the gate refuses (past its range, or on a request that isn't the scan rehearsal) refuses the front before the
 gate is asked. An attack's front puts the prover's relay between the gate and the endpoint, and ends it with the
 front."""
@@ -60,7 +61,7 @@ import served_verdicts as S  # noqa: E402
 import warden_serve as WS  # noqa: E402
 from test_scan_zk import published, sz  # noqa: E402
 from test_served_session import RUN, STUB  # noqa: E402
-from test_warden_chain import WC, gate_run  # noqa: E402
+from test_warden_chain import WC, gate_run, warden_network  # noqa: E402
 from verity.core.protocols.certifier import warden as W  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registration as RG  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
@@ -694,7 +695,7 @@ def _private_chain_out(out: Path) -> Path:
                        "rows": [{"window": 0, "certified": True}],
                        "warden_check": {"accepted": True, "summary": {"requests": REQUESTS, "outputs": OUTPUTS}}},
         "n2/summary.json": {"warden_run": RUN, "ok": True, "link": {"unit": "n2"}, "members": {"honest": {
-            "network": {"accepted": True}, "windows": [{"window": 0, "accepted": True, "as_expected": True}]}}},
+            "network": warden_network(), "windows": [{"window": 0, "accepted": True, "as_expected": True}]}}},
         "scan/summary.json": {"warden_run": RUN, "T": 30, "ok": True, "responses": {"0": OUTPUTS}, "rounds": {
             "honest": {"ok": True, "audit": {"accepted": True, "window_accepted": True}},
             "chain": {"ok": True, "audit": {"accepted": False, "window_accepted": False}}}},
@@ -1052,8 +1053,9 @@ def test_a_fronts_rehearsal_at_4000_ms_reaches_the_gate_with_its_tick_and_the_sc
                                                                                                    monkeypatch):
     """``--gate local``, this tree's gate in this process: the run's request records the tick, the minutes counted at
     it and greedy sampling (temperature 0, top_p 1, which the network certifier's client puts on every request, as
-    ``--stop-prompt``'s warm-ups are sent), and `warden_command` is the scan's schedule at it. The tunnel and the
-    rehearsal are stand-ins, the rehearsal's check accepting."""
+    ``--stop-prompt``'s warm-ups are sent), and `warden_command` is the scan's schedule at it, the network certifier's
+    parameters `gate_params` gives (link-windows of 32 buckets, a window of the window circuit's class 8,32,4,4,16). The
+    tunnel and the rehearsal are stand-ins, the rehearsal's check accepting."""
     real, ran, check = CP.SS.A.certifier_run, [], json.dumps({"accepted": True, "problems": []})
 
     def command(req, work, url):
@@ -1084,6 +1086,9 @@ def test_a_fronts_rehearsal_at_4000_ms_reaches_the_gate_with_its_tick_and_the_sc
     at = warden.index("--ids")
     assert warden[at:at + 1 + len(CP.SS.A.SCAN_SCHEDULE)] == ["--ids", *CP.SS.A.scan_schedule(4000, CP.V3C_SCAN_CLASS)]
     assert CP.SS.A.scan_schedule(4000) != CP.SS.A.SCAN_SCHEDULE
+    params = WS._params(WS.parser().parse_args(warden[2:]))
+    assert params == CP.gate_params(CP.V3C_SCAN_CLASS, 4000)
+    assert (params.bucket_ms, params.window, params.lanes, params.every, params.egress_cells) == (4000, 32, 4, 16, 5)
     doc = json.loads((out / "session.json").read_text())
     assert doc["request"] == (f"warden-rehearse --peer vy-dc-h200 --port 18190 --minutes {minutes} --requests 4 "
                               "--height 10 --scan --bucket-ms 4000 --prompts --tokens 4 --scan-class w63k4 "

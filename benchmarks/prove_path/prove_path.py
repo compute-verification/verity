@@ -56,6 +56,7 @@ Two kinds of committed run:
     prove_path.py window-commit --serve-run DIR --window K --row-dir DIR --advice FILE --key FILE --registration FILE \\
         --checkpoint-dir DIR --out DIR [--checkpoints F] [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--law L] [--cap N] \\
         [--workers N] [--window-registration W --h1-key FILE] [--hf-config F] [--target F] [--cap-bits L]
+    prove_path.py window-class --class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY] [--scan-class w63|w63k4]
 
 * **advice**: a declared run's I1 advice from its workload file (`advice_windows.advice_of_workload`), its canonical encoding
   padded to ℓ (``--cap-bits``, `advice_windows.pad`), as the registered compiler reads it.
@@ -139,6 +140,11 @@ Two kinds of committed run:
   registration of the window) and ``--h1-key``, the circuit reads H1's tables where the model makes them (its rounds
   H1's steps, the class's outputs), and the window's registration ``--out``/registration.json is chained right after W
   and registers them as W's tables (`pouw_h1_commit.reuse`), refused unless the model made each as H1 committed it.
+* **window-class**: ``--class`` held to the one class whose window the chain's scan reads behind the certifier front
+  (`window_class_of_scan`): one link-window of the network certifier the gate runs at the scan class ``--scan-class``
+  (the front's w63k4 by default: 8,32,4,4,16; w63's is the class of record), at the scan class's own lanes, timestep,
+  prompt ids and outputs. ``served_verdicts.sh``'s preflight runs it on V3C_CLASS before a serve behind the front, since
+  window-commit's scan and the chain's refuse any other class only after it.
 
 `Capped` adds the public cap ℓ on the advice's length to the compiler's registered digest and reads the advice at ℓ bits
 (`advice_windows.pad`: the encoding, a 0x80 byte, zero bytes), so its commitment's rows and its registration's length are ℓ's
@@ -1254,13 +1260,63 @@ def network_traces() -> Iterator[None]:
             sys.modules["replay"] = replay
 
 
+def class_arg(cls: Any) -> str:
+    """The window class ``cls`` as ``--class`` takes it: SLOTS,PROMPT,OUTPUTS,LANES,EVERY."""
+    return f"{cls.slots},{cls.prompt},{cls.outputs},{cls.lanes},{cls.every}"
+
+
+def link_window(cls: Any, params: Any) -> None:
+    """A window of class ``cls`` is one link-window of the network certifier's run at ``params`` (`WardenParams`), the
+    window its scan reads: the class's scan serves the run (`ingress_scan.Class.serves`) and the class's buckets are the
+    run's T. A ValueError naming why, and the class at ``cls``'s lanes and timestep whose window it is."""
+    cls.scan.serves(params)
+    T = params.window
+    if T != cls.buckets:
+        fit = (f", or take the class {class_arg(replace(cls, slots=cls.lanes * T // cls.every))}, whose window it is"
+               if T % cls.every == 0 else "")
+        raise ValueError(f"the network certifier's link-windows are {T} buckets, not a window of class {cls}'s "
+                         f"{cls.buckets}: serve at the class's scan schedule{fit}")
+
+
+def window_class_of_scan(a: argparse.Namespace) -> dict[str, Any]:
+    """``window-class``: ``--class`` held to the one window class whose window the chain's scan reads behind the certifier
+    front at the scan class ``--scan-class`` (the front's, `certifier_piece.V3C_SCAN_CLASS`, by default): the scan
+    class's own lanes, timestep, prompt ids and outputs (`scan_zk.SETUPS`), and slots lanes · T / every, so that its
+    window is one link-window of the network certifier the gate runs there (`certifier_piece.gate_params`,
+    `link_window`). A ValueError naming that class where ``--class`` isn't it; window-commit's scan (`kept_scan`) and the
+    chain's (`scan_zk.py --v3c`) refuse any other, after the serve. -> the class, the scan class and T."""
+    from verity_vllm.program.predict.window_circuit import WindowClass
+
+    with network_traces():
+        import certifier_piece as CP
+        import scan_zk as SZ
+
+        scan = a.scan_class or CP.V3C_SCAN_CLASS
+        if scan not in CP.SS.A.SCAN_CLASSES:
+            raise ValueError(f"--scan-class {scan}: the gate's scan classes are {', '.join(sorted(CP.SS.A.SCAN_CLASSES))}")
+        params = CP.gate_params(scan)
+    try:
+        cls = window_class_of(a.window_class)
+    except TypeError as e:
+        raise ValueError(f"--class {a.window_class}: SLOTS,PROMPT,OUTPUTS[,LANES,EVERY] ({e})") from None
+    s = SZ.SETUPS[scan].cls
+    fit = WindowClass(s.lanes * params.window // s.EVERY, s.KI, s.KO, lanes=s.lanes, every=s.EVERY)
+    link_window(fit, params)
+    if cls != fit:
+        raise ValueError(f"the gate runs the network certifier at the scan class {scan} with link-windows of "
+                         f"{params.window} buckets, each a window of the class {class_arg(fit)} alone, the one the "
+                         f"chain's scan at {scan} reads, not of {class_arg(cls)}: set the class {class_arg(fit)}")
+    return {"class": class_arg(cls), "scan_class": scan, "window": params.window}
+
+
 def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> tuple[list[list[int]], list[str | None]] | None:
     """The network certifier's scan of its run the certifier front kept under ``serve_dir``
     (`certifier_piece.PRIVATE`), as a window of class ``cls`` holding the requests of I1 ids ``users`` reads it: the scan's
     state rows and slot k's request, the I1 id (its id request's ``user``) of the one whose Program starts there,
     None for a slot no request starts (`scan_state.scan_state`). The window is the link-window, of the class's
-    buckets, whose Programs start its requests (their anchors, `scan_state.scan_anchors`); the scan reads the network
-    certifier's certified ingress rows from link-window 0 and the outputs its egress cells carry (`warden_chain.io`).
+    buckets (`link_window`), whose Programs start its requests (their anchors, `scan_state.scan_anchors`); the scan
+    reads the network certifier's certified ingress rows from link-window 0 and the outputs its egress cells carry
+    (`warden_chain.io`).
     None where the front kept no run; ValueError, naming why, where the kept run doesn't give the window's scan."""
     from verity.core.protocols.certifier import warden_rows as WRW
     from verity_vllm.program.predict import scan_state as SS
@@ -1285,10 +1341,7 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> tuple[list[lis
         if unpacked is not None:
             CP.rm(unpacked)
     T = params.window
-    cls.scan.serves(params)
-    if T != cls.buckets:
-        raise ValueError(f"the kept run's link-windows are {T} buckets, not a window of class {cls}'s "
-                         f"{cls.buckets}: serve at the class's scan schedule")
+    link_window(cls, params)
     if not io["accepted"]:
         raise ValueError(f"the kept run's certified I/O doesn't read whole off its cells: {io['violations'][:3]}")
     by = {r["user"]: r for r in io["records"]}
@@ -1716,6 +1769,11 @@ def main(argv: list[str] | None = None) -> int:
                    "after W (`pouw_h1_commit.reuse`)")
     p.add_argument("--h1-key", help="with --window-registration: H1's prover key file (its prover dir's key), whose salts "
                    "W's tables take")
+    p = sub.add_parser("window-class", help="a window class held to the one whose window the chain's scan reads behind the "
+                       "certifier front (served_verdicts.sh's preflight of V3C_CLASS)")
+    p.add_argument("--class", dest="window_class", required=True, help="the window class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]")
+    p.add_argument("--scan-class", help="the gate's scan class the front runs the network certifier at (default the "
+                   "front's, certifier_piece.V3C_SCAN_CLASS)")
     for name in ("window-circuit", "class-size", "window-commit"):
         sub.choices[name].add_argument("--class", dest="window_class", help="the window class SLOTS,PROMPT,OUTPUTS[,LANES,"
                                        "EVERY] (`window_circuit.WindowClass`; by default `CLASS_OF_RECORD`, 8,1024,64,4,16)")
@@ -1735,9 +1793,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if a.cmd == "window-commit":
         a.bundle = str(Path(a.row_dir) / "commit" / "replay_bundle_p0")
-    if a.cmd in ("circuit", "window-circuit", "class-size", "window-commit", "weights-registration"):
+    if a.cmd in ("circuit", "window-circuit", "class-size", "window-commit", "weights-registration", "window-class"):
         commands = {"circuit": circuit_of_advice, "window-circuit": window_circuit_of_class, "class-size": class_size_of_advice,
-                    "window-commit": window_commit_of_advice, "weights-registration": weights_registration_of_serve}
+                    "window-commit": window_commit_of_advice, "weights-registration": weights_registration_of_serve,
+                    "window-class": window_class_of_scan}
         try:
             print(json.dumps(commands[a.cmd](a), sort_keys=True))
         except ValueError as e:

@@ -3348,6 +3348,59 @@ def test_the_preflight_refuses_a_front_flag_the_trees_front_does_not_take_and_a_
     assert (rc, said) == ((3, [line]) if line else (0, []))
 
 
+#: the toy tree's prove_path.py with `window-class`: its argv to ORDER.class, refused unless the class is the one whose
+#: window the chain's scan reads at the scan class (the front's w63k4 unless given)
+WINDOW_CLASS = f'''import os, sys
+a = sys.argv[1:]
+if a[0] == "window-class":
+    open(os.environ["ORDER"] + ".class", "w").write(" ".join(a[1:]))
+    fit = {{"w63k4": "{W63K4}", "w63": "8,1024,64,4,16"}}[a[a.index("--scan-class") + 1] if "--scan-class" in a else "w63k4"]
+    if a[a.index("--class") + 1] != fit:
+        sys.exit(f"prove_path.py window-class: not the class of the scan's link-window: set the class {{fit}}")
+    print("{{}}")
+    sys.exit(0)
+''' + FAKE_V3C_PROVE_PATH
+PREFLIGHT_PASSED = f"PREFLIGHT passed on vy-dc-h200-2, 512 GB: the serve's lease 60 min, capped at 128 GB. {ONLY}"
+UNLINKED = ("PREFLIGHT: V3C_CLASS {} behind the certifier front: prove_path.py window-class: not the class of the scan's "
+            "link-window: set the class {}")
+
+
+@pytest.mark.parametrize("extra, argv, line", [
+    ({"CERTIFIER_FRONT": FRONT}, f"--class {W63K4}", PREFLIGHT_PASSED),
+    ({"CERTIFIER_FRONT": FRONT, "V3C_CLASS": "4,32,4", "CLASSES": "4,32,4"}, "--class 4,32,4",
+     UNLINKED.format("4,32,4", W63K4)),
+    ({"CERTIFIER_FRONT": f"{FRONT} --scan-class w63", "V3C_CLASS": "8,1024,64,4,16", "CLASSES": "8,1024,64,4,16"},
+     "--class 8,1024,64,4,16 --scan-class w63", PREFLIGHT_PASSED),
+    ({"CERTIFIER_FRONT": f"{FRONT} --scan-class=w63"}, f"--class {W63K4} --scan-class w63",
+     UNLINKED.format(W63K4, "8,1024,64,4,16")),
+    ({"CERTIFIER_FRONT": f'{FRONT} --scan-class "$SCAN"'}, None,
+     "PREFLIGHT: CERTIFIER_FRONT passes --scan-class with no class this preflight reads: name it"),
+    ({"CERTIFIER_FRONT": "front", "V3C_CLASS": "4,32,4", "CLASSES": "4,32,4"}, None, PREFLIGHT_PASSED),
+    ({"CLASSES": "4,32,4"}, None, "PREFLIGHT: untied, V3c's window commit is held to the window-circuit record step 3 "
+     f"writes at each class of CLASSES, and CLASSES '4,32,4' doesn't hold V3C_CLASS {W63K4}: set CLASSES to hold it"),
+    ({"CLASSES": f"record 4,32,4 {W63K4}"}, None, PREFLIGHT_PASSED),
+    ({**TIES, "CLASSES": "4,32,4"}, None,
+     f"PREFLIGHT passed on vy-dc-h200-2, 512 GB: the serve's lease 150 min, capped at 160 GB. {ONLY}"),
+])
+def test_the_preflight_holds_v3c_class_to_the_fronts_link_window_and_an_untied_runs_classes_to_hold_it(
+        tmp_path, extra, argv, line):
+    """Behind this tree's certifier front (CERTIFIER_FRONT naming `certifier_piece.py front`), V3C_CLASS is held to the
+    one class whose window the chain's scan reads at the front's scan class, its `--scan-class` or w63k4
+    (`prove_path.py window-class`), before the lease: window-commit's scan refuses any other only after the serve. A
+    front that isn't this tree's is not held to it, and one whose --scan-class names no class this preflight reads is
+    refused. An untied run's CLASSES must hold V3C_CLASS, since step 6 holds V3c's commit to the record step 3 writes at
+    each of them; a tied run writes its own (`v3c_circuit`)."""
+    (tmp_path / "tree" / "benchmarks" / "network_traces").mkdir(parents=True)
+    (tmp_path / "tree" / "benchmarks" / "network_traces" / "certifier_piece.py").write_text(
+        "print('usage: certifier_piece.py front PORT [--gate --warmup --bucket-ms --scan-class]')\n")
+    rc, lines, order, _limits = _v3c(tmp_path, (), prove_path=WINDOW_CLASS,
+                                     PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}", HOST="vy-dc-h200-2",
+                                     PREFLIGHT_ONLY="1", SERVE_ARGS=IDS, **extra)
+    assert (rc, lines, order) == (0 if ONLY in line else 3, [line], [])
+    noted = tmp_path / "order.class"
+    assert (noted.read_text() if noted.exists() else None) == argv
+
+
 def test_settings_are_read_before_the_defaults_and_an_unreadable_file_is_refused(tmp_path):
     """SETTINGS names the file a load's counts are launched from, so the job record's command holds only its path."""
     tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"

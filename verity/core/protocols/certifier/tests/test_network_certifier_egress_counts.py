@@ -1,7 +1,7 @@
 """Each connection's egress cell count held to its request Program's output count, for any prompt length and any
 ending, on the network certifier's path: the scan's egress unit (`egress.EgressBucket`) renders each bucket's row from
 the slot state, whose n is the request Program's (`SlotEntry_v1`'s entry, the scan's Programs' row), and its proof opens
-only on the network certifier's own row. At the scan class w63k4 (the window circuit's 4,32,4), five
+only on the network certifier's own row. At the scan class w63k4 (the window circuit's 8,32,4,4,16), five
 network-certifier-form id requests of mixed prompt lengths (1 to KI = 32 ids) and `max_tokens`, on four lanes (the fifth
 queued until a lane frees), are answered with what `SlotEntry_v1` at its circuit-check row `SlotEntry_v1:4` keeps of the
 model's samples: the outputs up to `max_tokens` and the first stop id (128001), that one included. Three end on the stop

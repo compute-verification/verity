@@ -10,7 +10,10 @@ records through active.Proxy) is refused by name (`warden_chain.PROXY`) by every
 deployment.json in an active network certifier's run. The report on the network certifier path requires the
 certificates, N2 and the scan, names its stubs, leaves d1's K open with no advice term (it opens no endpoint records or
 advice, and refuses an endpoint report), and refuses a step whose input is a certifier rehearsal's or another network
-certifier run's."""
+certifier run's. N2's network verdicts, as its driver writes them there (no egress tie, so each member refused by name
+for its egress), count a member accepted when that is its only refusal and no window is refused: an honest chain is
+accepted and a negative refused or escaped the draw, never an honest member with a refused window or another refusal
+by name."""
 
 from __future__ import annotations
 
@@ -181,6 +184,14 @@ def test_n2_on_a_sampled_warden_period_tampers_every_window_and_proves_another_s
         n2.main(["prove", "--warden-run", str(run), "--draw", "3", "--dry", "--out", str(tmp_path / "n2x")])
 
 
+def warden_network(*refused: int, **why: str) -> dict:
+    """A member's network verdict as `n2_zk` writes it on a network certifier link, `LinkWindows.network_verdict` given
+    no egress tie: it accepts none, refuses the link by name for its egress (`service.EGRESS_TIED`) and by ``why``'s
+    names, and refuses the windows ``refused``."""
+    return {"accepted": False, "refused": list(refused), "egress": None,
+            "why": {n2.SVC.EGRESS_TIED: "no egress tie was given"} | why}
+
+
 def _steps(tmp_path, run: Path) -> SimpleNamespace:
     """The network certifier path's step outputs on `run`: its real certificates, and N2 and the scan as their drivers
     write them."""
@@ -195,8 +206,8 @@ def _steps(tmp_path, run: Path) -> SimpleNamespace:
         certs=put("certs.json", WC.certificates(run)),
         endpoint=None,
         n2=put("n2.json", {"ok": True, "warden_run": rid, "members": {
-            "honest": {"windows": [window, window], "network": {"accepted": True}, "ok": True},
-            "tampered": {"windows": [window | {"accepted": False}, window], "network": {"accepted": False},
+            "honest": {"windows": [window, window], "network": warden_network(), "ok": True},
+            "tampered": {"windows": [window | {"accepted": False}, window], "network": warden_network(0),
                          "ok": True}}}),
         scan=put("scan.json", {"ok": True, "T": 32, "warden_run": rid, "rounds": {
             "honest": {"audit": {"window_accepted": True}}, "forged": {"audit": {"window_accepted": False}}}}),
@@ -237,3 +248,31 @@ def test_the_warden_path_requires_every_step_on_one_warden_run_and_refuses_a_cer
     refused("scan", lambda d: d | {"warden_run": None}, "the scan's summary names no warden run")
     certifier_certs = cr.certs(certifier_run, certifier_run)
     refused("certs", lambda d: certifier_certs, f"the certificates step's input names no warden run: {proxy}")
+
+
+def test_n2_counts_a_network_verdict_refused_by_name_only_for_its_egress():
+    """N2's step on the network certifier path accepts the honest member's verdict that refuses only by name for the
+    egress, and refuses a negative on its refused window; an honest member with a refused window or another refusal by
+    name fails the step, and a sampled negative whose verdict refuses only for the egress escapes the draw when none of
+    its incorrect windows was drawn and fails the step when one was."""
+    window = {"accepted": True, "proof": {"proved": True}, "as_expected": True}
+
+    def step(ok=True, **members):
+        return cr.n2_step({"ok": ok, "members": {k: {"windows": [window]} | v for k, v in members.items()}}, {},
+                          {"path": cr.WARDEN, "rc": {"n2": "0"}})
+
+    got = step(honest={"network": warden_network()}, tampered={"network": warden_network(0)})
+    assert (got["verdict"], got["why"], got["negatives"]) == ("accepted", None, {"tampered": True}), got
+    for honest in (warden_network(0), warden_network(**{n2.SVC.PERIOD_DRAWN: "not the draw of record"})):
+        got = step(honest={"network": honest}, tampered={"network": warden_network(0)})
+        assert (got["verdict"], got["why"]) == ("failed", "honest: network refused"), got
+    reference = [{"window": w, "expect": int(w != 0)} for w in range(4)]
+
+    def moved(units):
+        return step(False, honest={"network": warden_network()},
+                    moved={"network": warden_network(), "reference": reference, "period": {"units": units}})
+
+    got = moved([1, 2])
+    assert (got["verdict"], got["negatives"]) == ("accepted", {"moved": "escaped the draw"}), got
+    got = moved([0, 1])
+    assert (got["verdict"], got["why"]) == ("failed", "moved: network accepted"), got

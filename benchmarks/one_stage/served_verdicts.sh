@@ -31,8 +31,10 @@
 #     window closed stops the endpoint at once, with no window to seal; one that failed after (its leak guard holding a
 #     file, say) leaves its exit to the certifier's verdict, and the run goes on with the window it sealed.
 #     CERTIFIER_FRONT runs within CERTIFIER_FRONT_TIMEOUT (default 20m), and a flag it passes to `certifier_piece.py front`
-#     that this tree's front doesn't take, or a front whose endpoint isn't on the id form the network certifier sends
-#     (SERVE_ARGS without `--protocol ids`), is refused before the lease. The
+#     that this tree's front doesn't take, a front whose endpoint isn't on the id form the network certifier sends
+#     (SERVE_ARGS without `--protocol ids`), or a V3C_CLASS whose window isn't one link-window of the network certifier
+#     the gate runs behind this tree's front (`prove_path.py window-class`: 8,32,4,4,16 at the front's scan class w63k4,
+#     the class of record at w63) is refused before the lease. The
 #     lease ends once every closed window is sealed. What names a window's requests (the serve dir's windows.jsonl,
 #     seals.jsonl, requests.jsonl and serve.json, each window's PoUW calls record, the load's records, timings file and
 #     log, and the certifier front's session, bundle and log, in the serve dir's private/, of which the CERTIFIER-FRONT
@@ -141,8 +143,10 @@
 #     no count, n judged on the exact count) and its INFERENCE-ONLY line, in full with the exact counts in the serve dir's
 #     private/inference-only.json. It gates nothing.
 #  6. V3c, sampled proofs' audit of record, run before step 4 (V3C_CLASS set empty is refused): it proves the window
-#     circuit's own units at V3C_CLASS (default 4,32,4,
-#     which CLASSES must hold). `prove_path.py window-commit`, within V3C_TIMEOUT (default 15m), commits the window as that
+#     circuit's own units at V3C_CLASS (default 4,32,4; behind this tree's certifier front the one whose window is the
+#     network certifier's link-window, 8,32,4,4,16 at the front's w63k4, which the preflight holds it to). Untied,
+#     CLASSES must hold it, since step 3 writes the record its commit is held to only at those, and the preflight refuses
+#     CLASSES that don't. `prove_path.py window-commit`, within V3C_TIMEOUT (default 15m), commits the window as that
 #     class circuit's units, the weights it serves under the committer's key, so each served as registered has the
 #     registration's root; its circuit.json less its run fields is held to the verifier's own window-circuit record at the
 #     class; then `records_audit.py audit --circuit --registered`, within V3C_AUDIT_TIMEOUT (default 30m), samples the
@@ -166,7 +170,7 @@
 #     record composes pending. `served_verdicts.sh v3c` runs only that step on an
 #     existing serve dir (D and its window K set), the build first, its limits 120m and 180m.
 #     With the network certifier's piece split in two, CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD (both set, CERTIFIER_CMD
-#     unset, and V3C_CLASS the certifier's scan class, which CLASSES holds), the certifier's answer reads V3c's
+#     unset, and V3C_CLASS the window class of the certifier's scan class, 8,32,4,4,16 at w63k4), the certifier's answer reads V3c's
 #     period.json: the chain after the window commit, beside V3c's audit and period.json on a node that holds both
 #     (NODE_MEM_GB at least V3C_AUDIT_MEM_GB plus CERTIFIER_CHAIN_MEM_GB, default 96), else after them, which a
 #     CERTIFIER-CHAIN line says, and always after them in a deferral's follow-on, whose node is held to the audit's
@@ -939,6 +943,18 @@ front_ok() {  # preflight: LOAD=front has a front, and each flag CERTIFIER_FRONT
       || { say "PREFLIGHT: CERTIFIER_FRONT passes $f, which this tree's certifier front doesn't take"; return 3; }
   done
 }
+v3c_link() {  # preflight: behind this tree's certifier front, V3C_CLASS is the one class whose window the chain's scan
+  # reads at the front's scan class (`prove_path.py window-class`), the only one window-commit's scan takes after the serve
+  case ${CERTIFIER_FRONT:-} in *"certifier_piece.py front"*) ;; *) return 0 ;; esac
+  local scan why
+  scan=$(grep -oE -- "--scan-class[= ]+['\"]?[a-z0-9]+" <<< "$CERTIFIER_FRONT" | grep -oE '[a-z0-9]+$')
+  [[ $CERTIFIER_FRONT != *--scan-class* ]] || [ -n "$scan" ] \
+    || { say "PREFLIGHT: CERTIFIER_FRONT passes --scan-class with no class this preflight reads: name it"; return 3; }
+  why=$(cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py window-class --class "$V3C" ${scan:+--scan-class "$scan"} \
+    2>&1 >/dev/null) \
+    || { say "PREFLIGHT: V3C_CLASS $V3C behind the certifier front: $({ grep -m1 'prove_path.py window-class' <<< "$why" \
+      || tail -1 <<< "$why"; } | cut -c1-600)"; return 3; }
+}
 # the certifier's chain files list and count the window's requests (its certs, its N2 warden's counts, its report and the
 # piece's log, or the split's two logs); once the record has read them, and however the run ends, they move to the serve
 # dir's private/
@@ -1201,6 +1217,11 @@ front_ok || exit 3
 advice_cap || exit 3
 [ -n "$V3C" ] \
   || { say "PREFLIGHT: sampled proofs' audit of record is V3c's (and the split certifier reads its period.json), and V3C_CLASS is empty"; exit 3; }
+[ "${1:-}" = advice-charge ] || v3c_link || exit 3
+case ${1:-} in v3c | advice-charge) ;; *)  # a run that serves: untied, step 6 holds V3c's commit to step 3's record
+  [ -n "${H1_TIE:-}" ] || [[ " $CLASSES " == *" $V3C "* ]] \
+    || { say "PREFLIGHT: untied, V3c's window commit is held to the window-circuit record step 3 writes at each class of CLASSES, and CLASSES '$CLASSES' doesn't hold V3C_CLASS $V3C: set CLASSES to hold it"; exit 3; } ;;
+esac
 SPLIT= DEFER=
 if [ -n "${CERTIFIER_CHAIN_CMD:-}${CERTIFIER_PERIOD_CMD:-}" ]; then  # the split certifier: its period check writes its answer
   [ -z "${CERTIFIER_CMD:-}" ] || { say "PREFLIGHT: CERTIFIER_CMD or the split's CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD, not both"; exit 3; }

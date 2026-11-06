@@ -51,7 +51,9 @@
   whose input is refused by name (`warden_chain.PROXY`). ``certs --warden-run`` reruns the network certifier's own
   offline check on its witness and holds the public ``certificates.jsonl`` to the certified lines
   (`warden_chain.certificates`; no clock certificate: the network certifier signs none). N2 is `n2_zk.py prove
-  --warden-run`'s, on the network certifier link; the scan is `scan_zk.py prove --warden-run`'s, whose ingress units
+  --warden-run`'s, on the network certifier link, whose network verdict refuses every member by name for its egress
+  (N2 gives it no egress tie: the scan's holds the egress), so each member is read for its counts (`n2_counts`);
+  the scan is `scan_zk.py prove --warden-run`'s, whose ingress units
   read each request's prompt off the network certifier's ingress cells. Each is held to the network certifier run the
   certificates step read (`on_warden`), every one is required, and the report names what the path stands on
   (`WARDEN_STUBBED`). No step opens the endpoint's records or its advice, and the window's compute audit is V3c's class
@@ -330,28 +332,33 @@ def on_warden(step: dict, doc: dict | None, run_id: str | None, what: str) -> di
     return step | {"verdict": "refused", "why": why} if why else step
 
 
+def n2_counts(net: dict) -> bool | None:
+    """Whether an N2 member's network verdict ``net`` accepts the link's counts, what N2 holds: its accept or, when it
+    refuses by name ``egress`` (`service.EGRESS_TIED`: a network certifier link's, to which N2 gives no egress tie),
+    no refused window and no other refusal by name."""
+    why = set(net.get("why") or ())
+    return net.get("accepted") if "egress" not in why else not net.get("refused") and why == {"egress"}
+
+
 def escaped(name: str, m: dict, s: dict) -> dict | None:
-    """A negative member the sampled draw accepted because none of its incorrect windows (those its reference expects
-    refused) was among the windows drawn: the draw's sampling error, which its ``wrong_units`` at δ bounds, not a
-    failure of the run. None for honest, a member refused, or a period not sampled."""
-    net = m.get("network") or {}
+    """A negative member the sampled draw accepted (`n2_counts`) because none of its incorrect windows (those its
+    reference expects refused) was among the windows drawn: the draw's sampling error, which its ``wrong_units`` at δ
+    bounds, not a failure of the run. None for honest, a member refused, or a period not sampled."""
     units = (((s.get("sampled") or {}).get(name) or {}).get("draw") or {}).get("units") or (m.get("period") or {}).get(
         "units")
     bad = [r["window"] for r in m.get("reference") or [] if not r.get("expect")]
-    if name == "honest" or not net.get("accepted") or units is None or set(bad) & set(units):
+    if name == "honest" or not n2_counts(m.get("network") or {}) or units is None or set(bad) & set(units):
         return None
     return {"incorrect_windows": bad, "drawn": sorted(units)}
 
 
 def unexpected(name: str, m: dict, escape: dict | None = None) -> list[str]:
     """What keeps an N2 driver's member from its ``ok``: the conditions `n2_zk` holds it to, but
-    a negative's acceptance when it escaped the draw (`escaped`). The network verdict is read for N2's counts alone:
-    its refused windows and its refusals by name but ``egress`` (`service.EGRESS_TIED`, a network certifier link's
-    egress tie, which N2's driver gives none). A witness piece counts when the scan reads it
+    a negative's acceptance when it escaped the draw (`escaped`). The network verdict is read for N2's counts alone
+    (`n2_counts`). A witness piece counts when the scan reads it
     ``leaked`` (`leak_scan.classify`); a ``structured`` find is listed, not counted, as the drivers decide."""
-    wins, net, rec = m.get("windows") or [], m.get("network") or {}, m.get("received") or {}
-    why = set(net.get("why") or ())
-    counts = net.get("accepted") if "egress" not in why else not net.get("refused") and why == {"egress"}
+    wins, rec = m.get("windows") or [], m.get("received") or {}
+    counts = n2_counts(m.get("network") or {})
     return ([f"windows {[w.get('window') for w in wins if not w.get('as_expected')]} not as expected"]
             * any(not w.get("as_expected") for w in wins)
             + [f"network {'accepted' if counts else 'refused'}"]
@@ -374,6 +381,7 @@ def n2_step(s: dict | None, certs_doc: dict, job: dict | None = None) -> dict:
     for name, m in (s.get("members") or {}).items():
         wins, escape = m.get("windows") or [], escaped(name, m, s)
         members[name] = {"network_accepted": (m.get("network") or {}).get("accepted"),
+                         "counts_accepted": n2_counts(m.get("network") or {}),
                          "unexpected": unexpected(name, m, escape) if wins else None, "escaped_the_draw": escape,
                          "drawn": sorted(((s.get("sampled") or {}).get(name) or {}).get("draw", {}).get("units") or [])
                          or None, "refused_by_name": ((s.get("sampled") or {}).get(name) or {}).get("why") or None,
@@ -399,10 +407,10 @@ def n2_step(s: dict | None, certs_doc: dict, job: dict | None = None) -> dict:
         gone = [k for k, v in members.items() if v["escaped_the_draw"]]
         why = (f"the driver's ok is false only for {', '.join(gone)}: accepted with none of its incorrect windows "
                "drawn, within the draw's bound" if gone else None)
-    return {"verdict": ("accepted" if honest.get("network_accepted") else "refused") if proved else
+    return {"verdict": ("accepted" if honest.get("counts_accepted") else "refused") if proved else
             ("dry" if "members" in s and not honest.get("windows") else "failed"), "why": why, "stand_in": stand_in,
             "ok": s.get("ok"), "unit": (s.get("link") or {}).get("unit"), "members": members,
-            "negatives": {k: "escaped the draw" if v["escaped_the_draw"] else v["network_accepted"] is False
+            "negatives": {k: "escaped the draw" if v["escaped_the_draw"] else v["counts_accepted"] is False
                           for k, v in members.items() if k != "honest"},
             "challenger": s.get("challenger"),
             "clocks": s.get("clocks") or {"source": "declared", "by": "plan.json's syncs (n2_zk); the certificates step "
@@ -546,7 +554,7 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
     import leak_bounds as LB
     rows = cert.get("rows") or []
     honest = (n2.get("members") or {}).get("honest") or {}
-    acc = [bool(r.get("certified")) and bool(honest.get("network_accepted")) for r in rows]
+    acc = [bool(r.get("certified")) and bool(honest.get("counts_accepted")) for r in rows]
     network = network_terms(cert, endpoint)
     steps = len(rows) * (cert.get("window_buckets") or 0)
     if endpoint is None:
