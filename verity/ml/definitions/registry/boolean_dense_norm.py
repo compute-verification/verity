@@ -23,7 +23,7 @@ or a NaN; 0 + x and x + 0 are one function of x), and +0 + +0, which is +0, is f
 divisor's magnitude is in [2^-126, 2^126], as f32(N) always is, and DivFullRcp_v1(f32(N)) is a constant, so the division is
 `MeanDivTriton_v1{N}`, acc * rcp(N), and the mean reads no MUFU.
 
-MUFU: ``RSQRT`` is a Definition computing `RsqrtApprox_v1`: proofs' Boolean `RsqrtApprox_v2` (`verity.ml.circuits.ops.boolean.mufu`, which
+MUFU: ``RSQRT`` is a Definition computing `RsqrtApprox_v1`: the Boolean `RsqrtApprox_v2` (`verity.ml.circuits.ops.boolean.mufu`, which
 the switch binds through ``word_statics``), or the word id itself, on which each element is packed (`PackF32_v1`) and its result
 unpacked (`UnpackF32_v1`) once.
 """
