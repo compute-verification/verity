@@ -82,22 +82,28 @@ export function webSlack(token: string): SlackClient {
   };
 }
 
-// Records posts; `until(n)` resolves once n posts exist, so a test waits on the
-// post itself rather than on a clock.
+type Posted = SlackPost & { ts: string };
+
+// Records posts; `waitFor(match)` resolves with the first post that matches, so
+// a test waits on the post itself rather than on a clock.
 export function memorySlack() {
-  const posts: (SlackPost & { ts: string })[] = [];
-  const waiters: { n: number; resolve: () => void }[] = [];
+  const posts: Posted[] = [];
+  const waiters: { match: (p: Posted) => boolean; resolve: (p: Posted) => void }[] = [];
   return {
     posts,
     async post(m: SlackPost) {
-      const ts = `${1_800_000_000 + posts.length}.000100`;
-      posts.push({ ...m, ts });
-      for (const w of waiters.filter((w) => posts.length >= w.n)) w.resolve();
-      return { ts };
+      const p = { ...m, ts: `${1_800_000_000 + posts.length}.000100` };
+      posts.push(p);
+      for (const w of waiters.splice(0)) {
+        if (w.match(p)) w.resolve(p);
+        else waiters.push(w);
+      }
+      return { ts: p.ts };
     },
-    until(n: number): Promise<(SlackPost & { ts: string })[]> {
-      if (posts.length >= n) return Promise.resolve(posts.slice());
-      return new Promise((resolve) => waiters.push({ n, resolve: () => resolve(posts.slice()) }));
+    waitFor(match: (p: Posted) => boolean): Promise<Posted> {
+      const hit = posts.find(match);
+      if (hit) return Promise.resolve(hit);
+      return new Promise((resolve) => waiters.push({ match, resolve }));
     },
   };
 }

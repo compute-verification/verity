@@ -10,7 +10,7 @@ type Env = Record<string, string | undefined>;
 
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "cache-control": "no-store" } });
 
-function bearerOk(req: Request, secret: string | undefined): boolean {
+export function bearerOk(req: Request, secret: string | undefined): boolean {
   if (!secret) return false;
   const got = /^Bearer\s+(\S+)$/i.exec(req.headers.get("authorization") ?? "")?.[1] ?? "";
   const a = Buffer.from(got);

@@ -15,8 +15,14 @@ export function leadInstructions(lead: Lead): string {
 }
 
 export function renderEvent(e: InboxEvent): string {
-  const where =
-    e.replyTo && "channel" in e.replyTo ? ` (slack ${e.replyTo.channel}${e.replyTo.threadTs ? ` thread ${e.replyTo.threadTs}` : ""})` : e.replyTo && "lane" in e.replyTo ? ` (from lead ${e.replyTo.lane})` : "";
+  const r = e.replyTo;
+  const where = !r
+    ? ""
+    : "channel" in r
+      ? ` (slack ${r.channel}${r.threadTs ? ` thread ${r.threadTs}` : ""})`
+      : "lane" in r
+        ? ` (from lead ${r.lane})`
+        : ` (from ${r.caller})`;
   const body =
     typeof e.payload.text === "string"
       ? e.payload.text
@@ -34,7 +40,7 @@ export function workerInstructions(task: { lane: string; branch: string | null }
   return [
     `You are a worker for the ${task.lane} lead on Verity's research platform. Do the task below and finish with a short report of what you did and what you found; the report is sent to your lead.`,
     task.branch ? `Commit to branch ${task.branch} only, and push only to it.` : "",
-    `Heavy compute goes through submit_job and never runs in this sandbox.`,
+    `Heavy compute (GPU, Lean, circuit builds, test suites) never runs in this sandbox: if the task needs it, stop and say in your report exactly what to run, and your lead submits it.`,
   ]
     .filter(Boolean)
     .join("\n\n");

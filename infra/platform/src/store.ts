@@ -19,7 +19,9 @@ export type Lead = {
   runId: string | null;
 };
 
-export type ReplyTo = { channel: string; threadTs?: string } | { lane: string };
+// Where a turn's reply goes: a Slack thread, another lead's inbox (an answer to
+// ask_lead), or nowhere but the record (an MCP caller reads it with get_answer).
+export type ReplyTo = { channel: string; threadTs?: string } | { lane: string } | { caller: string };
 
 export type InboxEvent = {
   id: number;
@@ -327,6 +329,23 @@ export function createStore(db: Db) {
     async eventsForTurn(turnId: string): Promise<InboxEvent[]> {
       const { rows } = await db.query(`select * from events where turn_id = $1 order by id`, [turnId]);
       return rows.map(toEvent);
+    },
+
+    // What became of one event: pending, or the turn that took it and its reply.
+    async eventOutcome(eventId: number) {
+      const { rows } = await db.query(
+        `select e.lane, e.turn_id, t.status, t.final_text from events e left join turns t on t.id = e.turn_id
+         where e.id = $1`,
+        [eventId],
+      );
+      const r = rows[0];
+      if (!r) return null;
+      return {
+        lane: r.lane as string,
+        turnId: (r.turn_id as string) ?? null,
+        status: ((r.status as string) ?? "pending") as "pending" | Turn["status"],
+        reply: (r.final_text as string) ?? null,
+      };
     },
 
     async startTurn(t: {

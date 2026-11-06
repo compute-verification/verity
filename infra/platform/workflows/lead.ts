@@ -47,14 +47,17 @@ export async function leadWorkflow(state: LeadState): Promise<LeadResult> {
     }
   };
 
+  const settle = async () => {
+    do await drain();
+    while (turns < TURNS_PER_RUN && (await parkLead(state.lane, workflowRunId)));
+  };
+
   try {
-    await drain();
+    await settle();
     if (turns < TURNS_PER_RUN) {
-      await parkLead(state.lane);
       for await (const _wake of hook) {
-        await drain();
+        await settle();
         if (turns >= TURNS_PER_RUN) break;
-        await parkLead(state.lane);
       }
     }
   } catch (e) {

@@ -34,17 +34,23 @@ export async function testRuntime() {
 
 let seq = 0;
 
-export function slackRequest(o: { channel: string; text: string; threadTs?: string; user?: string }) {
+// A Slack Events API body for one message, with a fresh event id and ts.
+export function slackBody(o: { channel: string; text: string; threadTs?: string; user?: string }) {
   seq++;
+  const ts = `${NOW}.${String(seq).padStart(6, "0")}`;
   const body = JSON.stringify({
     type: "event_callback",
     event_id: `Ev${seq}`,
-    event: { type: "message", channel: o.channel, user: o.user ?? "U_DANIEL", text: o.text, ts: `${NOW}.${String(seq).padStart(6, "0")}`, thread_ts: o.threadTs },
+    event: { type: "message", channel: o.channel, user: o.user ?? "U_DANIEL", text: o.text, ts, thread_ts: o.threadTs },
   });
+  return { ts, body };
+}
+
+export function signedSlackRequest(body: string, secret = SIGNING_SECRET) {
   const ts = String(NOW);
   return new Request("http://platform.test/api/slack/events", {
     method: "POST",
-    headers: { "x-slack-request-timestamp": ts, "x-slack-signature": signSlackBody(SIGNING_SECRET, ts, body), "content-type": "application/json" },
+    headers: { "x-slack-request-timestamp": ts, "x-slack-signature": signSlackBody(secret, ts, body), "content-type": "application/json" },
     body,
   });
 }

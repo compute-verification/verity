@@ -180,27 +180,32 @@ async function postOnce(rt: Runtime, ctx: TurnCtx, channel: string, threadTs: st
   await rt.store.appendParts(ctx.turnId, [{ type: "post", content: { channel, threadTs, ts }, text: body }]);
 }
 
+// The reply goes to every Slack thread the turn's events came from, and back to
+// every lead that asked (into the thread it asked from). A turn on events with
+// no return address (ticks, say) posts in the lead's channel; an MCP caller's
+// event gets no post and is read back with get_answer.
 async function deliver(rt: Runtime, ctx: TurnCtx, events: InboxEvent[], text: string) {
   const lead = (await rt.store.getLead(ctx.lane))!;
   const threads = new Map<string, { channel: string; threadTs?: string }>();
-  const lanes = new Map<string, InboxEvent>();
+  const asks: { lane: string; e: InboxEvent }[] = [];
   for (const e of events) {
-    if (e.replyTo && "channel" in e.replyTo) threads.set(`${e.replyTo.channel}/${e.replyTo.threadTs}`, e.replyTo);
-    if (e.replyTo && "lane" in e.replyTo) lanes.set(e.replyTo.lane, e);
+    const r = e.replyTo;
+    if (r && "channel" in r) threads.set(`${r.channel}/${r.threadTs}`, r);
+    if (r && "lane" in r) asks.push({ lane: r.lane, e });
   }
   const quiet = text === "" || text === NO_REPLY;
   if (!quiet) {
     for (const t of threads.values()) await postOnce(rt, ctx, t.channel, t.threadTs, text);
-    if (threads.size === 0 && lanes.size === 0 && lead.slackChannel) await postOnce(rt, ctx, lead.slackChannel, undefined, text);
+    if (events.every((e) => !e.replyTo) && lead.slackChannel) await postOnce(rt, ctx, lead.slackChannel, undefined, text);
   }
-  for (const [lane, e] of lanes) {
+  for (const { lane, e } of asks) {
     await wake(lane, {
       lane,
       source: "lead",
       kind: "answer",
       payload: { from: ctx.lane, question: e.payload.text ?? null, text: quiet ? "(no answer)" : text },
-      replyTo: null,
-      dedupeKey: `answer:${ctx.turnId}:${lane}`,
+      replyTo: (e.payload.askerReplyTo as ReplyTo | undefined) ?? null,
+      dedupeKey: `answer:${ctx.turnId}:${e.id}`,
     });
   }
 }
@@ -253,8 +258,18 @@ export async function reportToLead(w: WorkerInput, outcome: { failed: boolean; t
   await rt.sandbox.park(`worker-${w.id}`);
 }
 
-export async function parkLead(lane: string) {
+// Stops an idle lead's sandbox. Parking holds the lead's lease, so it never
+// stops the sandbox under a turn that a newer run has begun; it returns true
+// when events arrived meanwhile, so the caller drains again.
+export async function parkLead(lane: string, runId: string): Promise<boolean> {
   "use step";
   const rt = await runtime();
-  await rt.sandbox.park(`lead-${lane}`);
+  const key = `park-${runId}`;
+  if (!(await rt.store.acquireLease(lane, key, 120))) return false;
+  try {
+    await rt.sandbox.park(`lead-${lane}`);
+  } finally {
+    await rt.store.releaseLease(lane, key);
+  }
+  return (await rt.store.pendingCount(lane)) > 0;
 }

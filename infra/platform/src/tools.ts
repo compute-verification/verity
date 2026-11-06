@@ -68,30 +68,18 @@ export async function askLead(ctx: ToolCtx, input: { lane: string; question: str
     lane: input.lane,
     source: "lead",
     kind: "ask",
-    payload: { text: input.question, from: ctx.lane },
+    payload: { text: input.question, from: ctx.lane, askerReplyTo: ctx.replyTo },
     replyTo: { lane: ctx.lane },
     dedupeKey: `ask:${ctx.turnId}:${toolCallId}`,
   });
   return { queued: !r.duplicate, eventId: r.eventId };
 }
 
+// A worker is one harness turn, so nothing could wake it with a job's outcome
+// or an answer: it gets no host tools, and its report says what its lead should
+// submit or ask.
 export function hostTools(ctx: ToolCtx): ToolSet {
-  const jobTool = tool({
-    description:
-      "Submit heavy compute (GPU work, Lean or circuit builds, test suites, anything over a few CPU-minutes) to the team's job queue. Returns at once; you are woken with the job's outcome.",
-    inputSchema: z.object({
-      command: z.string().describe("The command, as `research run` would take it."),
-      requirements: z.record(z.string(), z.unknown()).optional().describe("Job requirements, e.g. {min_mem_gb: 64}."),
-      leaseSeconds: z.number().int().optional(),
-    }),
-    execute: (input, { toolCallId }) => submitJob(ctx, input, toolCallId),
-  });
-  const askTool = tool({
-    description: "Ask another lead a question. Returns at once; their answer arrives as an event in a later turn.",
-    inputSchema: z.object({ lane: z.string(), question: z.string() }),
-    execute: (input, { toolCallId }) => askLead(ctx, input, toolCallId),
-  });
-  if (ctx.kind === "worker") return { submit_job: jobTool, ask_lead: askTool };
+  if (ctx.kind === "worker") return {};
   return {
     dispatch_worker: tool({
       description:
@@ -104,7 +92,20 @@ export function hostTools(ctx: ToolCtx): ToolSet {
       }),
       execute: (input, { toolCallId }) => dispatchWorker(ctx, input, toolCallId),
     }),
-    submit_job: jobTool,
-    ask_lead: askTool,
+    submit_job: tool({
+      description:
+        "Submit heavy compute (GPU work, Lean or circuit builds, test suites, anything over a few CPU-minutes) to the team's job queue. Returns at once; you are woken with the job's outcome.",
+      inputSchema: z.object({
+        command: z.string().describe("The command, as `research run` would take it."),
+        requirements: z.record(z.string(), z.unknown()).optional().describe("Job requirements, e.g. {min_mem_gb: 64}."),
+        leaseSeconds: z.number().int().optional(),
+      }),
+      execute: (input, { toolCallId }) => submitJob(ctx, input, toolCallId),
+    }),
+    ask_lead: tool({
+      description: "Ask another lead a question. Returns at once; their answer arrives as an event in a later turn.",
+      inputSchema: z.object({ lane: z.string(), question: z.string() }),
+      execute: (input, { toolCallId }) => askLead(ctx, input, toolCallId),
+    }),
   };
 }

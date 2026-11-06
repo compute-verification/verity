@@ -47,9 +47,12 @@ export function runtime(): Promise<Runtime> {
   return g[SLOT];
 }
 
+// A directory per sandbox. It mints the same per-open GitHub grant the Vercel
+// provider does, and like it never writes the token inside.
 export function localSandboxes(root: string): SandboxProvider {
   return {
-    async open(name) {
+    async open(name, { subject, credentials }) {
+      await credentials.github(subject);
       const dir = join(root, name);
       await mkdir(dir, { recursive: true });
       return localSandboxSession(dir);
