@@ -1,0 +1,3 @@
+[2026-11-06T22:28Z] f1a9918c3366
+CHECKS: #7671 re-marked (checked 2f471f40 queue code) at 09c8daeb4c414dd4a9c871036d8b119c27ce61ce. Caps recounted on next f8c8eed6 and checked 2f471f40 + head, each the larger count: RETIRED_NAMES law 133 (#7682 prCoin_law) ROOM 9; escape ROOM 9; UNWITNESSED Security/Properties 192 ROOM 3 (next counted 189 under 193 with ROOM 1, which also failed on next). test_lean_packages + test_retired_terms on next+head (attr-source origin/next): 45 pass, 1 fail; on head alone: 41 pass. The one failure, test_no_retired_term_in_the_maintained_docs, is benchmarks/serve_tax/README.md:40 and fails on checked alone too, so it is not this PR. Preflight onto next refused nothing. Body now has Goal lean/lock-regeneration-queued.
+
