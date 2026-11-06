@@ -806,7 +806,8 @@ STATE_HELD = "Properties.NetworkPeriod.rowsStateHeld"
 #: window's activations commit it, each by its digest in `LOCKS`: None is no pin, under which the charge is free
 STATE_PINS: dict[str, str | None] = {
     STATE_HELD: "201c7e14cff40c3f649f09173ee7e1824cd0e00f9d5c18a1cef22d6ee09aa309",
-    "NetworkCheck.Period.stateHeldIn": None, "NetworkCheck.Period.auditStateEntries": None}
+    "NetworkCheck.Period.stateHeldIn": "f034cfeb8082ba6a91f8d2d851c0f4aeda7145051f564a8312d76276b964925d",
+    "NetworkCheck.Period.auditStateEntries": "e3e53a0ba614ba12360f3cf8e073412a146c1ba7eb144be53810be7027644996"}
 STATE_CHARGE = ("which charge the rows form's K applied to each audit tied to an execution phase's scan "
                 "(`NetworkCheck.Period.chargeOf`): its free inputs with its reads of the scan's state held (stateFree) "
                 "where its SCAN_STATE is the scan's state in every phase tied to it (stateHeldIn, over the entries "
