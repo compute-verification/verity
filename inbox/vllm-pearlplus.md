@@ -1362,3 +1362,31 @@ network-accounting's ODLEAN reads `v3c-w0-4-32-4/compose-cache/e9a7e9…/circuit
 8. **h200-3 untouched.** The window and the serve dir stay for `served_shares.py`.
 
 **I wait on:** infra holding cpu-3's pool for the follow-on, and the suite r20261106-091311-fed1.
+
+## 10:02Z Fri (vllm-pearlplus): **Both of your 09:45Z pushes are done. The fix branch is at `9574010e6b`, with `gate-compose` given the treatment `handoff` got. The record's hand-off tree is `cursor/vllm-pprecord-handoff-4734` at `997af1d259`. The suite at the previous head `09de1beae0` PASSED (667 tests). The follow-on is still not admitted, and infra's hold is still not in.**
+
+1. **gate-compose:** `cursor/vllm-handoff-pp-3a37` at `9574010e6b83791312a3515ccb791666fdfab40c`, one commit on `09de1beae0`.
+   - On a deferral's serve dir, `served_verdicts.sh gate-compose PIECES VERDICT HOST` writes the hand-off at `deferred.env`'s settings, not the environment's, with HOST as AUDITED_ON. Then it sends it to the compose gate.
+   - It refuses an environment that sets another value, and a serve dir that holds V3c's audit but names no HOST. Both refusals send nothing. They share one helper with `handoff`.
+   - **The new test** drives a stub compose gate. It checks the two refusals, the settings in compose.env, and that the tar sent holds exactly the files `inputs.txt` lists. It fails against the old script, which writes the hand-off at the environment's settings and exits 1.
+   - Locally, `test_served_verdicts.py` gives 313 passed and the five failures that also fail at the base.
+2. **The record's hand-off tree:** `cursor/vllm-pprecord-handoff-4734` at `997af1d259422ee53ddb93d77f71a052cc83ae8d`.
+   - It is `44b0c741c930`, then the resolved pair, then the gate-compose commit.
+   - The gate-compose commit conflicted in two hunks, next to pprecord's `copy HOST[:DIR]` header paragraph and dispatch line. I kept both sides in each. The new test on this tree also expects SAMPLED_AUDIT.
+   - A range-diff against the fix branch shows only the record tree's own context lines differ.
+   - Locally, `test_served_verdicts.py` gives 359 passed and the same five failures. The new test also fails here against the script before the cherry-pick.
+   - `cursor/vllm-pprecord-496a` is untouched at `44b0c741c930`.
+3. **The suites:**
+   - **At `09de1beae0`:** r20261106-091311-fed1 PASSED, `benchmarks/one_stage` 667 passed and 0 failed, in 918 s on cpu-3's pool slot b11.
+   - **At the two new heads:** both launched at 09:58Z, and both spilled to cpu-5's pool, not cpu-3's. r20261106-095845-039d tests the fix branch, and r20261106-095845-2444 tests the record's hand-off tree. Each is about 25 min from taking its slot (the flock `lake build`, then about 15 min of tests). At 10:00Z both were waiting for a slot.
+4. **The follow-on r20261106-084839-0bb4 is still not admitted.**
+   - **The reading at 09:54:34Z:** −30.0 GB available = 497.1 GB limit − 147.7 GB in use − 379.5 GB reserved by the 14 live b-slot reservations.
+   - research.mem's line is the follow-on (320 GB, since 08:48:47Z), then two 32 GB waiters since 09:25Z.
+   - There is no hold in `/workspace/ramlock` and no `windows=` on any slot.
+   - If it gives up at about 12:48Z, I relaunch it the same way only once the hold is in `/workspace/ramlock` or the b slots are paused. I check at each step and post its start on VLLM-217 when it is admitted.
+5. **Part 3, still planned and not run.** With this change, step 2 (`handoff HOST`) folds into step 3. After the follow-on ends, as a research run on cpu-3 from the record's hand-off tree plus the lift, with its answer in the run's `out/compose`:
+   `D=<the serve dir> bash benchmarks/one_stage/served_verdicts.sh gate-compose <the serve dir>/private/deferred/pieces <the serve dir>/private/deferred/inference-only.json computeinstance-e05hfxe8cv9nhcdb3x`.
+   Nothing in FOLLOWS is set otherwise. It is the composite of record only with the lift in; before that, it is development.
+6. **h200-3 is untouched.** The window and the serve dir stay for `served_shares.py`.
+
+**I wait on:** r20261106-095845-039d and r20261106-095845-2444 (about 10:25–10:40Z, if they take slots soon), and infra's hold for the follow-on, which gives up at about 12:48Z.
