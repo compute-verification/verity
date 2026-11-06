@@ -992,16 +992,18 @@ def with_state_held(lock: Path, digests: dict[str, str | None], reader: str = OR
     ("restated", {OR.STATE_HELD: "ab" * 32}),
     ("over the registered entries alone", {"NetworkCheck.Period.auditStateEntries": None}),
     ("over another stateHeldIn", {"NetworkCheck.Period.stateHeldIn": "cd" * 32}),
+    ("over another stateEntries", {"NetworkCheck.Period.stateEntries": "ef" * 32}),
     ("its definitions another guarantee's", {g: None for g in STATE_TOY if g != OR.STATE_HELD}),
 ])
 def test_the_figure_says_its_charge_was_state_free_only_where_rows_state_held_stands_over_the_activations_entry(
         tmp_path, lock, monkeypatch, how, unpinned):
     """The rows form charges a tied audit its stateFree where its reads of the scan's state are the scan's own, over the
     entries auditStateEntries reads, its window's activations entry among them. The figure of record says that charge
-    applied only where the lock holds RowsStateHeld at its pinned statement reading stateHeldIn and auditStateEntries
-    at theirs, and free otherwise, naming each digest the lock gives that isn't pinned: not in the lock, restated, read
-    over the registered entries alone (no auditStateEntries) or another stateHeldIn, or those definitions read by
-    another guarantee. An audit with no circuit record has stateFree its free, and the figure stands either way."""
+    applied only where the lock holds RowsStateHeld at its pinned statement reading stateHeldIn, auditStateEntries and
+    the stateEntries both call at theirs, and free otherwise, naming each digest the lock gives that isn't pinned: not
+    in the lock, restated, read over the registered entries alone (no auditStateEntries), another stateHeldIn or another
+    stateEntries, or those definitions read by another guarantee. An audit with no circuit record has stateFree its
+    free, and the figure stands either way."""
     monkeypatch.setattr(OR, "STATE_PINS", STATE_TOY)
     if how != "not in the lock":
         with_state_held(lock, STATE_TOY | unpinned, reader="Toy.other" if how.endswith("another guarantee's") else
@@ -1038,9 +1040,9 @@ def test_a_tied_audit_with_a_circuit_record_has_a_figure_of_record_only_where_it
 
 
 def test_at_the_trees_locks_the_charge_is_state_free(monkeypatch):
-    """`STATE_PINS` are the digests the tree's Properties lock records for RowsStateHeld's statement and the stateHeldIn
-    and auditStateEntries it reads: a change to any of them fails here, rather than every figure's charge turning free
-    unremarked."""
+    """`STATE_PINS` are the digests the tree's Properties lock records for RowsStateHeld's statement and the stateHeldIn,
+    auditStateEntries and stateEntries it reads: a change to any of them fails here, rather than every figure's charge
+    turning free unremarked."""
     monkeypatch.undo()
     got = OR.state_charge({"params": {}}, {"scans": []}, 0, OR.LOCKS)
     assert got["charge"] == "stateFree", f"the tree's locks give {got.get('unpinned')}, {got.get('unread')}"

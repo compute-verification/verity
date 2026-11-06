@@ -807,13 +807,15 @@ STATE_HELD = "Properties.NetworkPeriod.rowsStateHeld"
 STATE_PINS: dict[str, str | None] = {
     STATE_HELD: "201c7e14cff40c3f649f09173ee7e1824cd0e00f9d5c18a1cef22d6ee09aa309",
     "NetworkCheck.Period.stateHeldIn": "f034cfeb8082ba6a91f8d2d851c0f4aeda7145051f564a8312d76276b964925d",
-    "NetworkCheck.Period.auditStateEntries": "e3e53a0ba614ba12360f3cf8e073412a146c1ba7eb144be53810be7027644996"}
+    "NetworkCheck.Period.auditStateEntries": "e3e53a0ba614ba12360f3cf8e073412a146c1ba7eb144be53810be7027644996",
+    "NetworkCheck.Period.stateEntries": "a7c8123beed3f6e036818652a4c5bca16f9b8a994fb5b074d052d5a8f55469e4"}
 STATE_CHARGE = ("which charge the rows form's K applied to each audit tied to an execution phase's scan "
                 "(`NetworkCheck.Period.chargeOf`): its free inputs with its reads of the scan's state held (stateFree) "
                 "where its SCAN_STATE is the scan's state in every phase tied to it (stateHeldIn, over the entries "
                 "auditStateEntries reads: its registered ones and its window's activations entry), else its free inputs "
                 "(free). The record states stateFree only where RowsStateHeld is in the lock at the statement, and "
-                "reading stateHeldIn and auditStateEntries at the digests, that `STATE_PINS` pins, so that its proof "
+                "reading stateHeldIn, auditStateEntries and the stateEntries both call at the digests that "
+                "`STATE_PINS` pins, so that its proof "
                 "stands over the activations entry, and free otherwise, naming each digest the lock doesn't give as "
                 "pinned (``unpinned``). A tied audit's stateFree is its free unless the period's parameters state its "
                 "circuit record (``with_record``)")
