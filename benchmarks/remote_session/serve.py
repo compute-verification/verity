@@ -37,7 +37,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path[:0] = [str(HERE), str(ROOT), str(ROOT / "integrations" / "vllm")]
 
-from benchmarks.remote_session import wire  # noqa: E402
+from verity.core.protocols.remote_bandwidth.session import wire  # noqa: E402
 
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128,
         "num_attention_heads": 4, "num_key_value_heads": 2, "head_dim": 64, "num_hidden_layers": 2, "vocab_size": 256,
@@ -158,7 +158,7 @@ def backend_class(remote):
 
 
 def verify_locally(lsock, clock: PassClock, a: argparse.Namespace, out: dict) -> None:
-    from benchmarks.remote_session import verifier
+    from verity.core.protocols.remote_bandwidth.session import verifier
 
     sock, _ = lsock.accept()
     lsock.close()
