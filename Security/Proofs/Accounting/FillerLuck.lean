@@ -2,6 +2,7 @@ module
 
 public import Definitions.Accounting.Guarantees.FillerLuck
 public import Proofs.Accounting.TS.Rounds
+public import Proofs.Accounting.Lemmas.FillerLuck
 
 /-!
 # The filler's per-check luck

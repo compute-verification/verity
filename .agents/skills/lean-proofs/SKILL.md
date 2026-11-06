@@ -130,6 +130,8 @@ Their history is in the decisions log.
 
 - A guarantee is a proved `Prop` under named assumptions, with no third status; proving an assumption removes it from
   every guarantee that took it. Lean is the one source of truth for what we assume.
+- Named assumptions are the few real ones (a hash's collision resistance, the auditor's devices), in the lock's
+  `assumptions_module`; any other premise is `domain` or `open` (the README).
 - A guarantee never assumes a hash or a signature. It ends in a break tied to the run: for SHA-512,
   `P ∨ ∃ x ∈ run.hashInputs, ∃ y ∈ run.hashInputs, x ≠ y ∧ sha512 x = sha512 y`; for LMS, a verifying signature on a
   message missing from the device's log; for Merkle binding, a collision along the two openings' paths. Every `∃` is
@@ -153,7 +155,7 @@ Their history is in the decisions log.
   one (its conclusion fails for a verifier that accepts everything), in the lock as a claim's `meets` and `fails`;
   failing either, it says nothing. Both build their instance (`witnesses` in `check.py`), taking
   only listed assumptions; an exclusion's nontrivial lemma is a circuit where the other premises hold and one named
-  premise and the bound fail.
+  premise and the bound fail, or, for an exclusion that takes no premise, a circuit where a tighter bound fails.
 - A property's premises are assumptions about the world the function can't see; what the code can see, it checks. A
   condition picking out what the conclusion talks about goes inside the conclusion. Completeness theorems are not
   claims: they live in `Proofs/` with one concrete instance where the honest case holds.

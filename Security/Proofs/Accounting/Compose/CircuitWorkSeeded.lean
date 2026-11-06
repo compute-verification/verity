@@ -3,6 +3,8 @@ module
 public import Proofs.Accounting.Compose.ServiceBudget
 public import Proofs.Accounting.Compose.ServiceCovers
 public import Proofs.Accounting.Compose.CircuitWork
+public import Proofs.Accounting.Lemmas.Compose
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # `CircuitWorkSeeded`: the circuit's work under seeded coins

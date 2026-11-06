@@ -239,10 +239,9 @@ The time credit adds the data sheet's rates.
 
 **Establishes.** The registered circuit divides into inference blocks of at most Γ gates, each reading at most α_f
 fresh bits per gate, anything outside the registered information θ (`Nci.CompliesRate Γ α_f`); and θ is registered
-information. A partition meeting that is, once padded, a (c, k)-partition with c = Γ and k = ⌊α_f·Γ⌋, or
-k = ⌊α_f·Γ·W⌋ for the bit-level expansion at Γ·W gates,
+information. On a Boolean circuit such a partition is a (c, k)-partition with c = Γ and k = ⌊α_f·Γ⌋
 (`Verity.Partition.IsCK`), the hypothesis part 6's local bounds take. With gates up to W bits wide, the bit-level
-expansion meets it at Γ·W gates. `DampenerRemote` instead takes `Nci.Complies c k` of d.
+expansion meets it at Γ·W gates and k = ⌊α_f·Γ·W⌋. `DampenerRemote` takes `Nci.CompliesRate Γ α_f` of d.
 
 **How it is checked.**
 
@@ -265,7 +264,7 @@ is the deployment's; that the registered roots bind their data (`Nci.Assumptions
 for its tie to one registration. Nothing about learning: the policy restricts the shape of the registered circuit, and
 part 6's premises say why that shape trains little.
 
-**Lean, and how it discharges `Complies`, link by link.**
+**Lean, and how it discharges `CompliesRate`, link by link.**
 
 1. *Remote's verdict means the policy accepted the same registration.* **Open**: remote doesn't run the policy, and no
    composite rule ties the policy's registration to the one sampled proofs and PoUW bind. The composition's proved
@@ -279,14 +278,14 @@ part 6's premises say why that shape trains little.
    expansion:*
    `NciCheck.Properties.SecurityProofs.DescWitnesses` (its `Witnessed`), **proved**, with `DescReports` (the verdict
    is the definition's), **proved**; `refines` bounds the unrolled check's blocks by (Γ, α_f·Γ). `DampenerRemote`
-   takes `Complies c k d`, which a verdict gives only padded (link 4): links 1, 2 and that step are open.
-4. *`CompliesRate` ⇒ the padded (c, k)-partition the local bounds read:* `Nci.Guarantees.CompliesCK`, and through the
+   takes `CompliesRate Γ α_f d`, what this verdict gives: links 1 and 2 are open.
+4. *`CompliesRate` ⇒ the (c, k)-partition the local bounds read:* `Nci.Guarantees.CompliesCK`, and through the
    bit-level expansion `Nci.Guarantees.ExpandComplies`, **proved**. Joining them to link 3 for the run's registered circuit
    is open with links 1 and 2.
 5. *A block's effective fresh input:* k plus k_F, the bits faulty proof blocks inject into it, plus k_a, the advice bits
    its structure depends on. Sampled proofs bound the faulty proof blocks and the advice's length is public, but no
    statement bounds either per inference block yet: **open**.
-6. *The displayed bound reading the result instead of assuming `Complies`:* **open** (part 6).
+6. *The displayed bound reading the result instead of assuming `CompliesRate`:* **open** (part 6).
 
 ### 5. The monitoring period
 
@@ -510,8 +509,9 @@ The slowdown, `DampenerRemote`:
 - `Nci.Assumptions.WeightsIncompressible` (`Security/Definitions/Nci/Assumptions/Threads.lean`): no small subcircuit
   rebuilds the weights it uses from fewer bits than their width. It is the older form, which the local bounds below
   replace (`Security/README.md`, part 2).
-- `Nci.Complies c k` (`Security/Definitions/Nci.lean`): the registration has a (c, k)-partition.
-  `DampenerRemote` takes it as a hypothesis; part 4 is what discharges it once its open links close.
+- `Nci.CompliesRate Γ α` (`Security/Definitions/Nci.lean`), the policy: inference blocks of at most Γ gates, each
+  reading at most α fresh bits per gate. `DampenerRemote` takes it as a hypothesis; part 4 is what discharges it once
+  its open links close.
 
 The local bounds (part 6):
 
