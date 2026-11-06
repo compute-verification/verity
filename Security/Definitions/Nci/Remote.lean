@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Nci.Dampener
+public import Definitions.Core.Prob
 
 /-!
 # The compute dampener, remote protocol: the vocabulary
@@ -12,7 +13,7 @@ can do outside it:
 
 * the certificate slack `ε'`: PoUW certifies each window, and a window's certificate may be wrong, so the work certified
   correctly falls short of `W_cert` by at most the capacity of the windows whose certificates are wrong
-  (`wrongCapacity`), which is at most `ε' C` outside an event of probability (`prob`) at most `p/ε'`;
+  (`wrongCapacity`), which is at most `ε' C` outside an event of probability (core's `Game.prPMFReal`) at most `p/ε'`;
 * the verdict lag `JΔ/H` (`lagShare`): from an identity's first detected faulty proof block until the halt `Δ` later,
   its developer skips declared work, once for each of its `J` identities, over the horizon `H`;
 * the escape slack `θ`: under sampled proofs (tier T5) a faulty block that isn't drawn is accepted, so the faulty blocks
@@ -31,11 +32,6 @@ computes it at `s = 0`; `hardwareMultiple` is the one a developer needs.
 @[expose] public section
 
 namespace Nci.Dampener
-
-/-- **The probability of an event** `E` under a distribution `μ` on a finite outcome space, as a real number:
-`∑_{ω ∈ E} μ(ω)`. -/
-noncomputable def prob {Ω : Type} [Fintype Ω] (μ : PMF Ω) (E : Ω → Prop) : ℝ :=
-  open scoped Classical in ∑ ω, if E ω then (μ ω).toReal else 0
 
 /-- **The capacity of the windows whose certificates are wrong**: `∑_{i : wrong i} c_i`, window `i` of `N` having
 capacity `c_i`. -/

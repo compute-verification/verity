@@ -97,10 +97,8 @@ theorem repSlot_eq {x : Msg} {s spec} (hsx : FlockDeploy.setupOf true x = some (
   simp only [hz]
 
 theorem refK_eq {x : Msg} {s spec sts} (hsx : FlockDeploy.setupOf true x = some (s, spec, sts)) :
-    refK x = 1 + FlockDeploy.rounds true spec sts := by
-  unfold refK
-  simp only [FlockDeploy.V, hsx]
-  omega
+    refK x = 1 + FlockDeploy.rounds true spec sts :=
+  refK_of_flock hsx
 
 /-- **An opened coin's element is its opening's**, at a round of the openings. -/
 theorem slotAt_padOps {x : Msg} (ops : List (Msg × Msg)) (hl : ops.length = refK x) {k : ℕ} (hk : k < refK x)

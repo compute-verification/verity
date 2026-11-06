@@ -35,7 +35,7 @@ def coins (input : Json) : IO String := do
 
 /-- The response line to one request line: `coins`, or the verifier's (`Difftest.respond`). -/
 def respond (request : String) : IO String :=
-  match Json.parse request with
+  match Flock.JsonParse.parse request with
   | .ok req =>
     match req.getObjValAs? String "fn", req.getObjVal? "input" with
     | .ok "coins", .ok input => coins input

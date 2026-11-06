@@ -122,7 +122,7 @@ theorem zcTail_sim {io : Asks M} {L : Lift io} (m : ℕ) (lay : _root_.Flock.Zk.
     exact sim_pure rfl
 
 /-- A squeeze of `n ≠ 0` coins on the recording: its framed bytes recorded with their count. -/
-theorem sampleVecP_rec {n : ℕ} (h0 : n ≠ 0) (hn : n < 2 ^ 64) (t : Transcript) (rs : Array (ByteArray × ℕ)) (k : ℕ) :
+theorem sampleVecP_rec {n : ℕ} (h0 : n ≠ 0) (hn : n < 2 ^ 64) (t : Flock.Transcript) (rs : Array (ByteArray × ℕ)) (k : ℕ) :
     sampleVecP recAsks n t (rs, k) =
       .ok (((Array.range n).map fun i => _root_.Flock.Firewall.Skeleton.coin (k + i + 1),
           { t with pending := ByteArray.empty, k := t.k + 1,
@@ -156,9 +156,9 @@ theorem skel_two (st : _root_.Flock.Setup) (lay : _root_.Flock.Zk.PadLayout) (ca
     RelV (fun a b => RecPre [(zcPend st.digest cap root dom ++ header 4 2 6, 6),
         (framed (skelT8 (zcPend st.digest cap root dom ++ header 4 2 6)) 2 (st.m - 13), st.m - 13)] a.2 b.2)
       (((repPiop recAsks st lay cap root #[] fun _ => 0) >>= fun _ => pure () : TMW RecM Unit).run'
-        (Transcript.init #[] dom) |>.run (#[], 0))
+        (Flock.Transcript.init #[] dom) |>.run (#[], 0))
       (((repPiop recAsks st lay cap root #[] fun _ => 0) >>= fun _ => pure () : TMW RecM Unit).run'
-        (Transcript.init #[] dom) |>.run (#[], 0)) := by
+        (Flock.Transcript.init #[] dom) |>.run (#[], 0)) := by
   have hcnt : (_root_.Flock.u64OfLE (zcPend st.digest cap root dom ++ header 4 2 6)
       ((zcPend st.digest cap root dom ++ header 4 2 6).size - 8)).toNat = 6 :=
     count_header _ 2 6 (by decide)

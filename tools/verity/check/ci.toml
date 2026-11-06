@@ -20,6 +20,15 @@ part = "circuits"
 group = 2
 halts_on = "error: could not compile"
 
+# Before circuit-check: a group stops at its first failed job, and circuit-check is off the merge gate, so its red must not keep
+# this job, which is on it, from running.
+[[job]]
+name = "flock-rust-tests"
+owner = "proofs"
+part = "circuits"
+group = 2
+needs = ["flock-circuit-build"]
+
 [[job]]
 name = "circuit-check"
 owner = "circuits"
@@ -31,13 +40,6 @@ group = 2
 shards = 4
 # Off the merge gate by drive's policy (policy.toml's `off_gate`): the plans keep it, so putting it back is one line there. Its red
 # in drive's after-landing run reverts its culprit at once and lands no PR touching its inputs until it passes.
-
-[[job]]
-name = "flock-rust-tests"
-owner = "proofs"
-part = "circuits"
-group = 2
-needs = ["flock-circuit-build"]
 
 # Group 3: the Lean verifier, its partition check, then the agreement with upstream's Rust verifier.
 [[job]]
@@ -104,37 +106,45 @@ group = 7
 # The shard plans: `check.py --record --shard K/N --on POD` runs shard K of the plan with N shards, on a pod of the lander's
 # choosing, and `check.py --record --combine RUN...` records their union as the commit's check (`research merge` re-reads the
 # shards). These are written by hand and stay as fallbacks: `--shard auto[:MAX]` plans the shards from measured costs instead
-# (`shards.py`, `check.py --shard-plan` prints the plan), N the fewest that reach the critical path. Balanced on a cold check's costs on one pod (lean-audit 46 min, soundness alone 45-70 of it; pytest 27, lean-suites
-# 22, circuit-check about 48 on half the cores), so the wall time is about the soundness audit's.
+# (`shards.py`, `check.py --shard-plan` prints the plan), N the fewest that reach the critical path. Balanced on a cold check's
+# costs, whose longest part is the security analysis's audit.
 # lean-audit runs on a scratch tree, so a shard audits without lean-build; the jobs that read lean-build's binaries `needs`
-# it, or run `after` it, and a shard holds both.
-# Security and its proofs (Security/Proofs, which its `proved_in` names) are audited together, from one build
-# of the proofs, so they share a shard.
+# it, or run `after` it, and a shard that holds one of them whole holds it too. lean-suites is split by suite: a shard that
+# holds some of its parts and not lean-build builds the verifier again beside them, a short build.
+# Security and Security/Properties are audited beside their proofs (Security/Proofs, which their `proved_in` names), from one
+# build of the proofs, so the three share a shard; a spec package a plan doesn't name goes with its provers (`declaration.resolve`).
+# The composition suite (verity-core-composition) declares three parts by test id (`[tool.verity.tests] parts`), so that no
+# shard runs it whole: each plan puts one beside the security analysis's audit, one with the rest of lean-suites, and one with
+# the Rust build.
 
 # 3 pods: the security analysis's audit beside the suites; the rest of the Lean; the Rust build and the circuits.
 [[plan]]
 shards = [
-    ["lean-audit:Security", "lean-audit:Security/Proofs", "pytest"],
-    ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites", "lean-agreement", "lean-changed"],
-    ["flock-circuit-build", "circuit-check", "flock-rust-tests"],
+    ["lean-audit:Security", "lean-audit:Security/Proofs", "lean-audit:Security/Properties", "pytest",
+     "lean-suites:verity-core-composition:3/3"],
+    ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites:verity-core-composition:1/3", "lean-suites:*", "lean-agreement",
+     "lean-changed"],
+    ["flock-circuit-build", "circuit-check", "flock-rust-tests", "lean-suites:verity-core-composition:2/3"],
 ]
 
 # 4 pods: the 3-pod plan with pytest on a pod of its own, and circuit-check's four shards one to each pod, so a cold
-# circuit-check (about 4 h whole on one pod, drive.toml) is no single pod's long pole.
+# circuit-check is no single pod's long pole.
 [[plan]]
 shards = [
-    ["lean-audit:Security", "lean-audit:Security/Proofs", "circuit-check:1/4"],
-    ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites", "lean-agreement", "lean-changed", "circuit-check:2/4"],
+    ["lean-audit:Security", "lean-audit:Security/Proofs", "lean-audit:Security/Properties", "circuit-check:1/4",
+     "lean-suites:verity-core-composition:3/3"],
+    ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites:verity-core-composition:1/3", "lean-suites:*", "lean-agreement",
+     "lean-changed", "circuit-check:2/4"],
     ["pytest", "circuit-check:3/4"],
-    ["flock-circuit-build", "flock-rust-tests", "circuit-check:*"],
+    ["flock-circuit-build", "flock-rust-tests", "circuit-check:*", "lean-suites:verity-core-composition:2/3"],
 ]
 
 # 5 pods: each of those apart.
 [[plan]]
 shards = [
-    ["lean-audit:Security", "lean-audit:Security/Proofs"],
+    ["lean-audit:Security", "lean-audit:Security/Proofs", "lean-audit:Security/Properties", "lean-suites:verity-core-composition:3/3"],
     ["lean-audit:*", "lean-changed"],
-    ["lean-build", "lean-unit-cut", "lean-suites", "lean-agreement"],
+    ["lean-build", "lean-unit-cut", "lean-suites:verity-core-composition:1/3", "lean-suites:*", "lean-agreement"],
     ["pytest"],
-    ["flock-circuit-build", "circuit-check", "flock-rust-tests"],
+    ["flock-circuit-build", "circuit-check", "flock-rust-tests", "lean-suites:verity-core-composition:2/3"],
 ]

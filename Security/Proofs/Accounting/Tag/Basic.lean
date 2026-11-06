@@ -15,6 +15,8 @@ uniform draw are counts; and a nonzero sparse polynomial of degree at most `d` v
 
 @[expose] public section
 
+open Verity.Game renaming prPMF → prob
+
 namespace Accounting.TagProofs
 
 open Accounting.Tag Polynomial

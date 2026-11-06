@@ -20,8 +20,8 @@ def test_the_steps_are_the_suites_then_circuit_check_then_the_lean_hook(tmp_path
     names = [(n, argv if isinstance(argv, str) else argv[1:4]) for n, argv, _cwd in CHECK.steps(tmp_path)]
     assert names[0] == ("pytest", [str(ROOT / "tools/verity/check/suites.py"), "--json", str(tmp_path / "suites.json")])
     assert names[1] == ("flock-circuit-build", [str(ROOT / "verity" / "ml" / "flock" / "check_build.sh")])
-    assert names[2] == ("circuit-check", ["-m", "circuit_check", "--all"])
-    assert names[3] == ("flock-rust-tests", ["CARGO_BUILD_JOBS=1", "RUST_TEST_THREADS=1", "bash"])
+    assert names[2] == ("flock-rust-tests", ["CARGO_BUILD_JOBS=1", "RUST_TEST_THREADS=1", "bash"])
+    assert names[3] == ("circuit-check", ["-m", "circuit_check", "--all"])
     assert names[4] == ("lean", "skipped: verity/core/service/flock is not on this tree")
 
 
@@ -44,7 +44,7 @@ def test_the_rust_tests_run_the_live_crates_unit_tests_and_every_test_of_the_cra
     patched = set()
     for p in sorted((ROOT / "verity" / "ml" / "flock").glob("flock-*-b684b12.patch")):
         patched |= {m.group(1) for line in p.read_text().splitlines() if (m := re.match(r"\+\+\+ b/crates/([a-z-]+)/", line))}
-    upstream = re.search(r"cargo test --release -q((?: -p [a-z-]+)+)$", mode, re.M).group(1).split(" -p ")[1:]
+    upstream = re.search(r"cargo test --release -q((?: -p [a-z-]+)+)(?: \\)?$", mode, re.M).group(1).split(" -p ")[1:]
     assert sorted(upstream) == sorted(patched - {"flock-live"}), "every crate a patch changes, and only those"
 
 
@@ -711,9 +711,9 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
     monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)
     monkeypatch.delenv(CHECK.SLOT.SLOT_MEM_ENV, raising=False)
-    assert "--mem-gb" not in CHECK.groups(tmp_path, 16)[1][1][1]
+    assert "--mem-gb" not in CHECK.groups(tmp_path, 16)[1][2][1]
     monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "560")
-    (pt,), (build, cc, rust), (lean,), (gate,) = CHECK.groups(tmp_path, 16)
+    (pt,), (build, rust, cc), (lean,), (gate,) = CHECK.groups(tmp_path, 16)
     assert cc[1][cc[1].index("--mem-gb") + 1] == "210", "a slot's mem=, less what pytest and Lean hold beside it, caps circuit-check"
     assert build[0] == "flock-circuit-build" and build[1][-1].endswith("verity/ml/flock/check_build.sh")
     assert rust[0] == "flock-rust-tests" and rust[1][-2:] == [build[1][-1], "test"] and "CARGO_BUILD_JOBS=8" in rust[1]
@@ -785,7 +785,7 @@ def test_a_checkouts_files_are_gits_and_the_key_environment_drops_the_tree_path(
         (tmp_path / built).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / built).write_bytes(b"x")
     assert CHECK.tracked_files(tmp_path) == [".gitignore", "a.txt"]
-    assert CHECK._env_key({"VIRTUAL_ENV": f"{ROOT}/.venv", "SSH_CLIENT": "1 2 3"}) == {"VIRTUAL_ENV": "<tree>/.venv"}   # per-commit path
+    assert CHECK._env_key({"PYTHONPATH": f"{ROOT}/x", "VIRTUAL_ENV": f"{ROOT}/.venv", "SSH_CLIENT": "1 2 3"}) == {"PYTHONPATH": "<tree>/x"}
 
 
 def test_the_agreement_is_not_required_for_docs_alone():
@@ -796,7 +796,7 @@ def test_the_agreement_is_not_required_for_docs_alone():
     tool = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(tool)
     rule = tool.CHECK.merge_requires["lean-agreement"]
-    docs = ["verity/ml/flock/verifier/PROTOCOL.md", "verity/ml/flock/verifier/README.md", "verity/ml/flock/README.md", "AGENTS.md"]
+    docs = ["verity/ml/flock/live/PROTOCOL.md", "verity/ml/flock/verifier/README.md", "verity/ml/flock/README.md", "AGENTS.md"]
     assert rule_touches(rule, docs) == []
     assert rule_touches(rule, [*docs, "verity/ml/flock/verifier/ci.py"]) == ["verity/ml/flock/"]
     assert rule_touches(rule, ["verity/ml/flock/verifier/DESIGN.md"]) == ["verity/ml/flock/"]      # only the two names are left out
@@ -1668,6 +1668,7 @@ def _train_repo(tmp_path):
         env.pop(k, None)
 
     def train(*a, **extra):
+        done.unlink(missing_ok=True)      # else `sleep` returns at once on an earlier call's launch, before this one's
         return subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), *a], capture_output=True, text=True,
                               cwd=tmp_path / "repo", env={**env, **extra})
 
@@ -1933,7 +1934,8 @@ def test_the_lints_are_keyed_by_the_committed_tree_and_unkeyed_on_any_change(tmp
     monkeypatch.setattr(CHECK, "ROOT", tmp_path)
     e = {"PATH": "/usr/bin"}
     one = CHECK.lints_key(e)
-    assert one and CHECK.lints_key(e) == one and CHECK.lints_key({"PATH": "/bin"}) != one
+    assert one and CHECK.lints_key(e) == one and CHECK.lints_key({"PATH": "/bin"}) == one
+    assert CHECK.lints_key({**e, "VERITY_SLOW": "1"}) != one
     (tmp_path / "b.md").write_text("b\n")
     assert CHECK.lints_key(e) is None
     git("add", "-A")
