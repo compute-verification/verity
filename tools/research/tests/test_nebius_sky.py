@@ -863,8 +863,13 @@ def test_researchs_store_eviction_also_deletes_unused_source_trees_and_says_what
     assert "Environment=VY_EVICT_SRC=/workspace/research/src VY_EVICT_ORIGIN=/workspace/research/git/verity.git\n" in conf and "AmbientCapabilities=CAP_SYS_PTRACE CAP_DAC_READ_SEARCH\n" in conf
     dest = "/etc/systemd/system/vy-store-evict-research.service.d/src.conf"
     assert f'"$SRC/store_evict_src.conf" {dest}' in (SKY / "cluster_up.sh").read_text()
+    import tomllib
     deploy = (SKY.parent / "deploy.toml").read_text()
-    assert f'path = "{dest}"\nsrc = "tools/research/src/research/pods/nebius/sky/store_evict_src.conf"\nnodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]' in deploy
+    files = tomllib.loads(deploy)["file"]
+    src_conf = [f for f in files if f["path"] == dest]
+    assert [f["src"] for f in src_conf] == ["tools/research/src/research/pods/nebius/sky/store_evict_src.conf"]
+    unit_nodes = {n for f in files if f["path"] == "/etc/systemd/system/vy-store-evict-research.service" for n in f["nodes"]}
+    assert set(src_conf[0]["nodes"]) == unit_nodes and "vy-nebius-cpu-12" in unit_nodes
     for u in ("store_evict.service", "store_evict.timer", "store_evict_research.service", "store_evict_research.timer"):
         assert f'"$SRC/$u"' in (SKY / "cluster_up.sh").read_text() and f'src = "tools/research/src/research/pods/nebius/sky/{u}"' in deploy
     assert 'ExecCondition=/bin/grep -qs "timed False" /workspace/pouw/fill/status.txt' in (SKY / "store_evict_timed.conf").read_text()
