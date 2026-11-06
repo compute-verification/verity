@@ -23,8 +23,6 @@ The ACCEL program's headline, on the accelerator model of `Definitions.Pouw.Dith
 * `FleetSound`: a fleet of replicas, each its own period, whose moments are pooled by convexity on every set of
   accepted replicas at once, at `ln(N / (s δ_coin))` of luck rather than the union bound's `ln(N / δ_coin)` a replica,
   under `OwnDither` and `CoinsConfidential` (tier A).
-* `FreedOfFloor`: the rounds' floor at the period's dual price bounds freed compute by `ε C` (weak duality); the step
-  from the floor to `WorkSound`'s conclusion.
 -/
 
 @[expose] public section
@@ -116,8 +114,8 @@ Open (stated so the red team can aim at them):
   detection rate's `p`, and which committed values are words, differ, and `WorkSoundNoFold` is not v3.2's statement.
   Until it is restated at v3.2's words, ACCEL's PROTOCOL.md prices `η` at the measured `p ≤ 2.8e-5` and the fleet
   pool's `ζ` at `2^-16`;
-* `G` is any accelerator here. The card instance reads it as the card model's machine at a card's θ with its
-  floors, prices an exchanged bit at `β = n_max H_mac` with the certifier streaming the dither bits and counting
+* `G` is any accelerator here. The card instance reads it as the card model's machine at a card's θ (its table,
+  `Accel.Card`), prices an exchanged bit at `β = n_max H_mac` with the certifier streaming the dither bits and counting
   `K = E_in + E_out` (which holds only while the dither bits stay streamed), and makes the hosts and DPUs resources
   of `G` (that they are all the processors the cards reach is `PeriodInventory`, held until it is decided whether
   they are devices of the period). -/
@@ -282,19 +280,5 @@ def FleetSound : Prop :=
         (Pd u).Fits ((A u oω.2).timedUse oω.1 (coin oω.2 u)) (z u)) ∧
       ¬ ∃ d : Fin N → ℝ, (∀ u ∈ S, 0 ≤ d u ∧ (Pd u).FreedWithin 1 (z u) (ε u (A u oω.2) + d u / C u) (C u)) ∧
         ∑ u ∈ S, d u ≤ fleetLuck η S δcoin) ≤ δcoin + ∑ u, κmax u
-
-/-- **Freed compute is at most `ε C` at the period's dual price**. On a period's devices (`Period`), let
-`μ ≥ 0` be a dual price for the other work (every job worth at most its use at `μ`) at which an honest strategy
-credited `W` with other work `z'` is optimal (its other work worth exactly the capacity it leaves, at `μ`:
-complementary slackness). Any strategy credited the same `W`, whose credited part uses `X` and whose other work `z`
-fits beside it, and whose credited part meets the work floor at `μ` (`μ · X ≥ (1 − ε) μ · W hon`), frees at most
-`ε C` with `C = μ · W hon`, the credited rounds' honest cost at the dual price. The floor on the whole
-run would not be enough here: it would count the other work `z` toward the credited part's floor. -/
-def FreedOfFloor : Prop :=
-  ∀ (G : Accel) (Pd : Period G) (W ε : ℝ) (X μ : G.Res → ℝ) (z z' : Pd.J → ℝ),
-    (∀ r, 0 ≤ μ r) → (∀ j r, 0 ≤ Pd.needs j r) → (∀ j, Pd.val j ≤ ∑ r, μ r * Pd.needs j r) → 0 ≤ W → 0 ≤ ε →
-    Pd.Fits (fun r => W * Pd.hon r) z' → ∑ j, Pd.val j * z' j = ∑ r, μ r * (Pd.cap r - W * Pd.hon r) →
-    Pd.Fits X z → (1 - ε) * ∑ r, μ r * (W * Pd.hon r) ≤ ∑ r, μ r * X r →
-    Pd.FreedWithin W z ε (∑ r, μ r * (W * Pd.hon r))
 
 end Pouw.Guarantees.Dither

@@ -609,8 +609,8 @@ theorem zk_εzk (D : Recursion.Deploy Coin) (hk : D.kS [] = 0) (hn : D.nS [] = 0
   simp [zeroI, hk]
 
 theorem interact_one (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) (hist : List (Msg × Msg)) :
-    ZKMal.interact ask pm 1 hist = [(pm hist, ask (hist.map Prod.fst ++ [pm hist]))] := by
-  simp only [ZKMal.interact]
+    Claims.interact ask pm 1 hist = [(pm hist, ask (hist.map Prod.fst ++ [pm hist]))] := by
+  simp only [Claims.interact]
   split <;> simp_all
 
 /-- The transcript of one zero commit string under the salt `y`, against `V*`'s answers `ask`. -/

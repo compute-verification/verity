@@ -149,7 +149,7 @@ __device__ __forceinline__ void tcgen05_tile_body(const uint8_t* __restrict__ A,
     __syncthreads();
     asm volatile("tcgen05.fence::after_thread_sync;" ::: "memory");
     const uint32_t tmem_base = tmem_base_slot;
-    const uint32_t lane_base = (uint32_t)(32 * (warp & 3)) << 16;  // a warp addresses its own 32-lane sub-partition
+    const uint32_t lane_base = (uint32_t)(32 * (warp & 3)) << 16;  // a warp addresses its own sub-partition of 32 lanes
 
     // 3. TMEM preload: accumulator lane m = tid (C[m % 16][0..7], or zero bits when the accumulator is disabled) and the
     //    scale factors per step.

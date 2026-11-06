@@ -75,7 +75,10 @@ name = "Agent watch"
 started_by = "/data/infra/agent_watch.sh"
 file = "/data/agent-watch/status.json"
 json = "t"                           # each sweep (60 s) rewrites it
-period_s = 300
+period_s = 480                       # twice this must exceed a sweep whose reads take agent_watch.SWEEP_READS_S (12 min)
+also_mention = ["S0C977GL9R7"]       # the top coordinator's group: with the watch down, nobody's held or crashed run is freed
+page_user = "U0BEN96ES8Y"            # the person who runs the project, once it has stayed down this much longer than the alert
+page_after_s = 3600
 
 [[loop]]
 name = "Control disk relay"
