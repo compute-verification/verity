@@ -35,7 +35,6 @@ theorem retainRounds_circuit : Tags.circuit.retainRounds = true := rfl
 theorem retainRounds_circuit967b8d06 : Tags.circuit967b8d06.retainRounds = true := rfl
 theorem retainRounds_circuitTypes : Tags.circuitTypes.retainRounds = true := rfl
 
--- `walk_step` down `Stmt.setupH`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- `setupH`'s statement carries the tags it was set up under. -/
 theorem setupH_tags {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
@@ -54,7 +53,6 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ} {tables
   {draw partition : Option Json} {program : Option ByteArray} {work : Option (ℕ × Array (String × ℕ × ℕ))}
   {stratified : Option ℕ} {closure : Option (Std.HashMap ℕ (Array ℕ))} {spec : SessionSpec} {sts : Array Stmt}
 
--- `walk_step` down `Stmt.setupTables`' unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- The session's spec retains rounds exactly when its tags do, for one table or several. -/
 theorem setupTables_retain (hh : tags.hiddenOutputs = false)
@@ -89,7 +87,6 @@ theorem setupTables_retain (hh : tags.hiddenOutputs = false)
   · exact congrArg Tags.retainRounds (setupH_tags (ok_of_refuse (by assumption)))
   all_goals rfl
 
--- `split` at every branch of `Record.decode`'s unfolded body, an `obtain` per value it reads
 set_option maxHeartbeats 1000000 in
 /-- **An accepted record has every round's bytes** when its spec retains rounds: `Record.decode` refuses a round
 without them (S12). -/

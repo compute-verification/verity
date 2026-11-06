@@ -110,7 +110,6 @@ theorem forIn_sum_each {α : Type} (f : α → ℕ → V (ForInStep ℕ)) (w : �
         have := forIn_sum_each f w P hf L (s + w a) v h j (by simpa using hj)
         simpa [Nat.add_assoc] using this
 
--- `walk_step` down `HmRow.checkPublic`'s and `HmOut.checkPublic`'s unfolded do-blocks, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- **The check of the public file establishes the ties**: `HmRow.checkPublic` with public outputs, `HmOut.checkPublic`
 with hidden ones. Both walk the same input loop; only `HmRow`'s has the output loop. -/

@@ -77,7 +77,6 @@ theorem parse_tail {α : Type} {x y : Except String Sparse} {mk : Sparse → Spa
   cases h
   exact ⟨a, b, ha, hb, rfl⟩
 
--- `Net.parse`'s unfolded body taken a bind at a time (`except_bind_ok`)
 set_option maxHeartbeats 1000000 in
 /-- **`Net.parse` builds its net with `Net.ofRows`**, after reading its rows and trailing lines. -/
 theorem parse_built {lines : Array String} {net : Net} (h : Net.parse lines = .ok net) : Built net := by

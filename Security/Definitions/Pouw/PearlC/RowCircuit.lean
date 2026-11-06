@@ -27,7 +27,7 @@ A row unit's table (`Rows`) is its input gates, the template's parameter leaves 
 (`Run`), each a section of the template's body. The sections both families share are the statistics (`statsRuns`): the
 running max of `|x|`, the FMA partials of `x²` over every 8th position, their butterfly and `ρ`. Which gate reads which,
 in which order and through which wiring, the constants, the widths and the outputs are checked against the templates'
-own gates and their `CallGraph`, with descriptor digests pinned, by `verity/core/protocols/pouw/tests/test_circuit_row_lean.py`; each primitive's
+own gates and their `CallGraph`, with descriptor digests pinned, by `tests/test_circuit_row_lean.py`; each primitive's
 semantics is the trusted part.
 -/
 

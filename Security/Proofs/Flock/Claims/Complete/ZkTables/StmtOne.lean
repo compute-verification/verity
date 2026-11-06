@@ -115,7 +115,6 @@ private theorem hmOut_loadPublic {tags : Tags} {c : Circuit} {f : ByteArray} {po
     subst h
     assumption
 
--- `walk_step` down `Stmt.setupH`'s unfolded do-block with a sample and without, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- What `Stmt.setupH` set up: its public file loaded (at a draw, `HmRow.drawn` of it) and passed `HmRow.checkPublic`,
 its instances, `Σ` and its `Hello`. -/
@@ -161,7 +160,6 @@ private theorem setupOne_stmt {tags : Tags} {cf pf : ByteArray} {coins : Coins} 
 
 /-! ## The public header's draw -/
 
--- `walk_step` down `HmRow.loadPublic`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- The public file's header is a rebuilt object (`Flock.norm` of what `JsonParse.parse` read). -/
 private theorem loadPublic_header {tags : Tags} {c : Circuit} {f : ByteArray} {pop : Public}
@@ -178,7 +176,6 @@ private theorem loadPublic_header {tags : Tags} {c : Circuit} {f : ByteArray} {p
     subst hpj
     exact ⟨⟨_, rfl⟩, obj_of_getObjVal (str_ok (k := "format") (by assumption))⟩
 
--- `walk_step` down the unfolded do-block that puts the sample in the population's header, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- `HmRow.drawn` puts the draw in the population's header. -/
 private theorem drawn_header {c : Circuit} {pub pub' : Public} {d : Json} {m : Std.TreeMap.Raw String Json compare}
@@ -223,7 +220,6 @@ private theorem good_range {p : Array Json} (hs : p.size = 2) {c₀ c₁ : Strin
   · rw [← getElem!_pos p 0 hi]; exact asNat_good h₀
   · rw [← getElem!_pos p 1 hi]; exact asNat_good h₁
 
--- `walk_step` down `stratumOfJson`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- **A stratum that decodes is printable**: an object of exactly `template`, `units` and `k`, a string, ranges of two
 natural numbers, and a natural number. -/
@@ -266,7 +262,6 @@ private theorem good_stratum {j : Json} (hw : Wf j) {s : Draw.Stratum} (h : stra
       simp only [hv, Except.toOption, Option.getD_some] at hn
       exact asNat_good hn
 
--- `walk_step` down the unfolded do-block of `ofJson`, the sample's decoder, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- **A stratified draw that decodes is printable**: an object of exactly `law`, `population`, `units`, `k` and
 `strata`, a string, natural numbers, an array of them, and strata that decode. -/

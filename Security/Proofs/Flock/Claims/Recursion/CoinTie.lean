@@ -266,7 +266,6 @@ def StreamOk (x : Json) (st : StreamRec) : Prop :=
   Record.str x "stream" = .ok st.name ∧ ∃ rj, Record.arr x "rounds" = .ok rj ∧
     Pairs (fun r rd => ∃ cj, Record.arr r "coins" = .ok cj ∧ Record.f128s cj = .ok rd.coins) rj.toList st.rounds.toList
 
--- `split` and `cases` at every branch of `Record.decode`'s unfolded body
 set_option maxHeartbeats 1000000 in
 theorem decode_streams {spec : SessionSpec} {text : String} {sess : RunRecord}
     (h : Record.decode spec text = .ok sess) :

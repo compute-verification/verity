@@ -73,8 +73,6 @@ theorem padE_eq (lv : Flock.Level) (hl : LevelSeam lv) (hrate : lv.rate = 1) (k0
   exact consPad_eq rows (fun j => (o r ℓ j).1) (Flock.positions lv cw) cα fold k0 r lv.cols tPad rho ρ ybar hk hrows
     (fun j hj => hR j (hsz ▸ hj)) (pos_le_alpha lv hl cw cα hcα) hrep hρ0 hρ1 hy ht
 
--- one proof of several hundred lines down `Zk.ligerito`'s unfolded levels, a `*_bind` step per bind and `rw` and
--- `omega` on the round indices
 set_option maxHeartbeats 8000000 in
 /-- **The hiding Ligerito accepts** (live PROTOCOL.md §7 with `Flock.Ligerito`). When `Zk.ligerito` accepts from `t` to
 `t'` on well-formed rounds, at a schedule whose dimensions and levels are the model's, whose levels' consistency coins

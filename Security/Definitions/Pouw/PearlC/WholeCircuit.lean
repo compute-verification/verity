@@ -23,7 +23,7 @@ The partition (`Whole.part`) puts each instance's gates in a unit of its own, nu
   regions: in the deployed Program they are verifier-derived public inputs, so no unit computes `G`.
 
 The inputs' widths, the ports, the unit numbering and the outputs are checked against `pc8.unit_cut` of `Pc8Check`, with
-its descriptor digests pinned, by `verity/core/protocols/pouw/tests/test_circuit_whole_lean.py`; each unit's own table is tied to its template by
+its descriptor digests pinned, by `tests/test_circuit_whole_lean.py`; each unit's own table is tied to its template by
 `test_circuit_row_lean.py` and `test_circuit_tile_lean.py`.
 -/
 

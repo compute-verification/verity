@@ -27,8 +27,6 @@ theorem qbOut_reqs_cons {D : Type} (r : ℕ) (lv : Accounting.Level) (ch : List 
   ⟨rest ++ [⟨stM.level, Model.positions execArith lv.queries lv.logLen (vecOf lv.queries cw), ch.length,
     pathLen lv⟩], by simp only [qbOut, h, List.cons_append]⟩
 
--- one proof of several hundred lines down `Flock.ligerito`'s unfolded levels, a `*_bind` step per bind and `rw` and
--- `omega` on the round indices
 set_option maxHeartbeats 4000000 in
 /-- **Ligerito's rounds refine the model's, level 0's request first** (`Flock.Ligerito`): `ligerito_refines`, and the result's
 first request is level 0's, at the positions of the coins of round `k + k0 + 6` of the transcript, where `k` is the

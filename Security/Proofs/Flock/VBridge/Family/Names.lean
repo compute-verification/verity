@@ -313,8 +313,6 @@ def FirstNet (lines : Array String) (nets : Array (String × Net)) : Prop :=
   ∃ n net, 3 + n ≤ lines.size ∧ Net.parse (lines.extract 3 (3 + n)) = .ok net ∧
     nets.toList.head? = some ((tokens (lines.getD 2 "")).getD 1 "", net)
 
--- one proof of a few hundred lines down `HmRow.parse`'s unfolded body: `split` and `cases` at each branch, a bind step
--- per value it reads
 set_option maxHeartbeats 4000000 in
 /-- **`HmRow.parse`'s unit is the first section's net** when line 2 (`CIRCUIT unit <n>`) names it `unit`: the
 `Net.parse` of the `n` lines after it (`HmRow.lean:580-590`, `615`). -/

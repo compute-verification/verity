@@ -73,8 +73,6 @@ theorem find?_later {sch : Flock.Schedule} {rounds : Array Flock.Round} {k : ℕ
   simp [(hlat j (by omega)).1]
   omega
 
--- one proof of several hundred lines down `Flock.ligerito`'s unfolded levels, a `*_bind` step per bind and `rw` and
--- `omega` on the round indices
 set_option maxHeartbeats 4000000 in
 /-- **Ligerito's rounds refine the model's, every level's request fixed** (`Flock.Ligerito`): `ligerito_refines_req0`, and the
 requests after level 0's are levels `1, …, R` in order, each at the positions of the coins of its query round,

@@ -238,7 +238,6 @@ theorem good_obj_of {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) {L : L
   cases hv''
   exact hg
 
--- `walk_step` down the unfolded do-block of `ofJson`, the sample's decoder, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- **A subset draw that decodes is printable**, an object of exactly `law`, `population`, `units` and `k`, so it has no
 closure. -/
@@ -286,7 +285,6 @@ theorem good_subset {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : Draw.UnitDra
           (by rw [← Std.TreeMap.Raw.size_toArray hm]; simpa using hc) hcl
         simp at this
 
--- `walk_step` down the unfolded do-block of `ofJson`, the sample's decoder, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- **A stratified draw that decodes has no closure**: an object of exactly `law`, `population`, `units`, `k` and
 `strata`, so it holds no `closure` key. -/
@@ -343,7 +341,6 @@ private theorem mapM_some_ok {d : Json} {u? : Option Draw.UnitDraw}
   | error e => rw [hd] at h; cases h
   | ok u => rw [hd] at h; cases h; exact ⟨u, rfl, rfl⟩
 
--- `walk_step` down `Stmt.setupTables`' unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- **The session spec of several tables**: its draw the statement's, a subset or a stratified draw whose units are its
 instances, its

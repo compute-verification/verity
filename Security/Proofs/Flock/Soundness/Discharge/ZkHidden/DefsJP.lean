@@ -63,7 +63,6 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ} {tables
   {draw partition : Option Json} {program own : Option ByteArray} {work : Option (ℕ × Array (String × ℕ × ℕ))}
   {stratified : Option ℕ} {closure : Option (Std.HashMap ℕ (Array ℕ))} {spec : SessionSpec} {sts : Array Flock.Stmt}
 
--- `walk_step` down `Stmt.setupTables`' unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- **`setupTables`'s tables at `count > 1` under hidden outputs at `own`** (`setupTables_partsH`). -/
 theorem setupTables_partsHP (hh : tags.hiddenOutputs = true) (hc1 : 1 < count)

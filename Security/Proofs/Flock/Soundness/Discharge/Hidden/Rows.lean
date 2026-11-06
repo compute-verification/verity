@@ -18,7 +18,6 @@ open Flock FlockLevel3
 
 namespace FlockSoundness.Discharge.Hidden
 
--- `split` and `cases` at every branch of `HmRow.rowPorts`' unfolded body
 set_option maxHeartbeats 1000000 in
 /-- `HmRow.rowPorts`' bit rows: a row of `bits` bits is `(bits + 15) / 16` u16 leaves; a `sha512/row/v2` row's compressions
 its message's blocks after the prefix but the last, a `sha512/row-seg/v1` row's its segments' (`HmRow.segShape`) and its
@@ -110,7 +109,6 @@ theorem foldl_snd_eq {α : Type} {xs : List (α × ℕ)} :
   | nil => intro a; rfl
   | cons x xs ih => intro a; rw [List.foldl_cons, ih, List.map_cons, List.sum_cons]; omega
 
--- one proof down `HmRow.parse`'s unfolded body: `split` at each branch, a bind step per value it reads
 set_option maxHeartbeats 4000000 in
 /-- **`HmRow.parse`'s rows are `HmRow.rowPorts`'** of some META, and its output rows' runs cover its output ports but the
 pinned ones (META `pinned_outputs`, `HmRow.pinnedCount`). -/

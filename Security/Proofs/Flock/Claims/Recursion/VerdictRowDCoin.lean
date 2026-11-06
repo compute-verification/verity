@@ -191,7 +191,6 @@ theorem round_coins {mids : List (Claims.Msg × Coin)} {off : String → ℕ} {w
 
 /-! ## What the decoder reads of the streams -/
 
--- `split` at every branch of `Record.decodeJWithK`'s unfolded body, an `obtain` per value it reads
 set_option maxHeartbeats 1000000 in
 /-- **The decoder's streams at a parsed value**: one per stream record, each with its name and its rounds' coin
 counts and coins (`StreamR`). -/

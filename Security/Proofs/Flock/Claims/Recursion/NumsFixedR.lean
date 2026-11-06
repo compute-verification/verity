@@ -38,7 +38,6 @@ open Lean (Json)
 
 /-! ## Flock's parsers with the public file swapped -/
 
--- `split` at every branch of both runs of `FlockDeploy.Raw.ins`, matched pairwise by `cases` and `simp_all`
 set_option maxHeartbeats 4000000 in
 /-- **A raw statement with its public file swapped reads the same**, but for the public file. -/
 theorem rawIns_pf {w : FlockDeploy.Raw} {pf : ByteArray} {b b' : FlockDeploy.Ins} (h : w.ins = .ok b)
@@ -56,7 +55,6 @@ theorem rawIns_pf {w : FlockDeploy.Raw} {pf : ByteArray} {b b' : FlockDeploy.Ins
 
 /-! ## `Stmt.setupTables` at one table, with the verifier's own public input words -/
 
--- `walk_step` down `Stmt.setupTables`' unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- `HiddenExec.setupTables_okH` at any `--public-inputs`. -/
 theorem setupTables_okH' {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ}
@@ -117,7 +115,6 @@ theorem inRegions_size {c : Circuit} {pi : HmIn.Ports} {pub : Public} {r : Array
     subst h
     rfl
 
--- `walk_step` down `HmIn.loadPublic`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- `HmIn.loadPublic` is `HmRow.loadPublic`'s file, with checks. -/
 theorem inLoad_row {tags : Tags} {c : Circuit} {pi : HmIn.Ports} {f : ByteArray} {pop : Public}
@@ -131,8 +128,6 @@ theorem inLoad_row {tags : Tags} {c : Circuit} {pi : HmIn.Ports} {f : ByteArray}
     subst h
     exact ⟨_, by assumption⟩
 
--- `walk_step` down `Stmt.setupHidden`'s unfolded do-block with a sample and without, then the hidden key's reads
--- followed through each branch
 set_option maxHeartbeats 4000000 in
 /-- **What `Stmt.setupHidden` set up**, at any `--public-inputs`: its circuit is `HmOut.parseCommit`'s, its public file the
 loaded one or its draw, and its `n`, `m`, `mPts` and region count are the circuit's and the public file's. -/

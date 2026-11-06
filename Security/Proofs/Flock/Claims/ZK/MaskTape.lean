@@ -31,7 +31,7 @@ open FlockSoundness.Discharge
 open CoinLayer
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
+set_option synthInstance.maxHeartbeats 1000000
 
 namespace Masked
 

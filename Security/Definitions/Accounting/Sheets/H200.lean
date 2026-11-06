@@ -6,11 +6,11 @@ public import Definitions.Accounting.TS.Sheet
 # The H200's data sheet (generated)
 
 The data-sheet machine (`Accounting.TS.Sheet.machine`) at the H200 SXM (sm_90a)'s vendor values: each constant with the
-axiom that reads it, its value, its grade and its source, and the census of the machine model's `DS-90` vector
-(`benchmarks/pouw/machine_model/data/devices/sm_90/census/DS-90.csv`), which `machine_eq_census` proves the machine is,
-line for line. Each tensor peak has a lemma that the per-clock peak reproduces the document's per-second figure at the
-clock that figure is quoted at. A3 reads `Run.n` as device totals over the SMSPs, so a warpgroup's `wgmma` or a
-single-thread `tcgen05.mma` counts its MACs once, spread over the SM's four SMSPs.
+axiom that reads it, its value, its grade and its source, and the census of the machine model's `DS-90` vector, which
+`machine_eq_census` proves the machine is, line for line. Each tensor peak has a lemma that the per-clock peak
+reproduces the document's per-second figure at the clock that figure is quoted at. A3 reads `Run.n` as device totals
+over the SMSPs, so a warpgroup's `wgmma` or a single-thread `tcgen05.mma` counts its MACs once, spread over the SM's
+four SMSPs.
 
 Scope: the machine is one GPU's own SMs. Work a peer GPU on the node does over NVLink or NVSwitch and sends back (whole
 tiles as 64-byte digests) is outside it: the sheet bounds what the credited GPU's SMs compute, not which GPU computed a
@@ -397,7 +397,7 @@ def sheet : Sheet Kind Pipe where
   width := Pipe.width
   smem _ := 0
 
-/-- `DS-90.csv`'s `DS_tensor` lines, SMSP-cycles a warp instruction; 0 for a class with none. -/
+/-- `census/DS-90.csv`'s `DS_tensor` lines, SMSP-cycles a warp instruction; 0 for a class with none. -/
 def tensorLine : Kind → ℝ
   | .ALU => 0
   | .ATOME32 => 0
@@ -450,7 +450,7 @@ def tensorLine : Kind → ℝ
   | .UNI => 0
   | .UNLISTED => 0
 
-/-- `DS-90.csv`'s `DS_alu` lines, SMSP-cycles a warp instruction; 0 for a class with none. -/
+/-- `census/DS-90.csv`'s `DS_alu` lines, SMSP-cycles a warp instruction; 0 for a class with none. -/
 def aluLine : Kind → ℝ
   | .ALU => 2
   | .ATOME32 => 0
@@ -503,7 +503,7 @@ def aluLine : Kind → ℝ
   | .UNI => 0
   | .UNLISTED => 0
 
-/-- `DS-90.csv`'s `DS_imad` lines, SMSP-cycles a warp instruction; 0 for a class with none. -/
+/-- `census/DS-90.csv`'s `DS_imad` lines, SMSP-cycles a warp instruction; 0 for a class with none. -/
 def imadLine : Kind → ℝ
   | .ALU => 0
   | .ATOME32 => 0
@@ -556,7 +556,7 @@ def imadLine : Kind → ℝ
   | .UNI => 0
   | .UNLISTED => 0
 
-/-- `DS-90.csv`'s `DS_shfl` lines, SMSP-cycles a warp instruction; 0 for a class with none. -/
+/-- `census/DS-90.csv`'s `DS_shfl` lines, SMSP-cycles a warp instruction; 0 for a class with none. -/
 def shflLine : Kind → ℝ
   | .ALU => 0
   | .ATOME32 => 0
@@ -609,7 +609,7 @@ def shflLine : Kind → ℝ
   | .UNI => 0
   | .UNLISTED => 0
 
-/-- `DS-90.csv`'s `DS_uniform` lines, SMSP-cycles a warp instruction; 0 for a class with none. -/
+/-- `census/DS-90.csv`'s `DS_uniform` lines, SMSP-cycles a warp instruction; 0 for a class with none. -/
 def uniformLine : Kind → ℝ
   | .ALU => 0
   | .ATOME32 => 0
@@ -662,8 +662,8 @@ def uniformLine : Kind → ℝ
   | .UNI => 49027679 / 25000000
   | .UNLISTED => 0
 
-/-- **`DS-90`'s census** (`DS-90.csv`): SMSP-cycles a warp instruction of each class holds each row; every class holds
-issue for 1, and a class with no line on a row holds it not at all. -/
+/-- **`DS-90`'s census** (`census/DS-90.csv`): SMSP-cycles a warp instruction of each class holds each row; every class
+holds issue for 1, and a class with no line on a row holds it not at all. -/
 def census : SheetRow Pipe → Kind → ℝ
   | .issue, _ => 1
   | .tensor, k => tensorLine k

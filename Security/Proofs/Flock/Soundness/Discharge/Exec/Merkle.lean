@@ -26,7 +26,6 @@ open Flock FlockLevel3
 
 namespace FlockSoundness.Discharge.Exec
 
--- one proof down `HmRow.parse`'s unfolded body: `split` at each branch, a bind step per value it reads
 set_option maxHeartbeats 4000000 in
 /-- **`HmRow.parse` keeps the tags' leaf scheme** (no template, nets `pre` first): it refuses a `leaf_scheme` id other
 than `tags.merkleLeaf`. -/
@@ -165,7 +164,6 @@ theorem parse_leafScheme_pre {tags : Tags} {bytes : ByteArray} {tables : List (S
   subst hc
   simpa [bne_iff_ne] using hleaf
 
--- one proof down `HmRow.parse`'s unfolded body: `split` at each branch, a bind step per value it reads
 set_option maxHeartbeats 4000000 in
 /-- **`HmRow.parse` keeps the tags' leaf scheme**, for a typed template. -/
 theorem parse_leafScheme_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}

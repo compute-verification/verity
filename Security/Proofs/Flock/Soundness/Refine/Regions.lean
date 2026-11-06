@@ -550,7 +550,6 @@ theorem check_pts {pts : Array (Array F128)} {n k : ℕ} {why : String} {u : Uni
   obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hp
   simpa using this.2 i (by simpa using hi)
 
--- `split` at every branch of `Record.decode`'s unfolded body
 set_option maxHeartbeats 1000000 in
 /-- The record's link points have the configured shape: `Record.decode` checks it (S9). -/
 theorem decode_points {spec : SessionSpec} {text : String} {sess : RunRecord}

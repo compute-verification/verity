@@ -71,7 +71,6 @@ theorem metaLeaf_of {bytes : ByteArray} {text : String} {mj ls : Json} {ctx₁ c
     (hl : J.get mj "leaf_scheme" ctx₁ = .ok ls) (hs : J.str ls "id" ctx₂ = .ok s) : metaLeaf bytes = some s := by
   simp only [metaLeaf, ht, hj, get_ok hl, str_ok hs, Option.bind_eq_bind, Option.bind_some, Except.toOption]
 
--- one proof down `HmRow.parse`'s unfolded body: `split` at each branch, a bind step per value it reads
 set_option maxHeartbeats 4000000 in
 /-- **`HmRow.parse` reads the tags' leaf scheme off the META line** (no template, nets `pre` first): it refuses a file whose
 META `leaf_scheme` id (`metaLeaf`) is not `tags.merkleLeaf`. -/

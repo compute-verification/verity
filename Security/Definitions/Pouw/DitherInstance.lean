@@ -185,7 +185,7 @@ def shaUnits (a m i : ℚ≥0) : Verity.Accel.Res → ℚ≥0
 
 /-- **The public-best menu's named matmul programs on the H200**
 (`art:4eb6719838c94485978f03fe075cb004e7693a318c6c5b980590f4b3d2f01263`, computed by
-`34866fd9f8:benchmarks/pouw/theory/d5_v2.py`): protocol v3's round at A = B = 0, the frozen qkv shape
+`benchmarks/pouw/theory/d5_v2.py` at `34866fd9f8`): protocol v3's round at A = B = 0, the frozen qkv shape
 (K 16384, n 16512) at the served caps (t 2, L' 512), the hull of every route in the menu (the tile route, the
 O-route, the zero-high-digit peel, Strassen's orbit, the integral catalogue, every route beside the MMA) priced at
 the honest period's duals μ° without the hashing. Served (μ° on `alu` and `joint0`): the dense product with O by the

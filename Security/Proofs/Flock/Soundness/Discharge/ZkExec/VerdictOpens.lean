@@ -248,8 +248,6 @@ theorem queryLevel0_mc {ms : MerkleScheme} {p : LigeritoProof} {lv : Flock.Level
 
 /-! ## Ligerito under `--zk`, with its requests -/
 
--- one proof of several hundred lines down `Zk.ligerito`'s unfolded levels, a `*_bind` step per bind and `rw` and
--- `omega` on the round indices
 set_option maxHeartbeats 4000000 in
 /-- **The hiding Ligerito's run records requests that passed** (`zk_ligerito_plays` with its requests): at the
 proof's caps, every request the run records is one whose Merkle check the executable passed (`ReqOKZ`), and the first

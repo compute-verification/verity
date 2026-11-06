@@ -49,8 +49,8 @@ issue and the LOP pipe. At `π*` it is a conjecture (`shape.conjectures`), check
 * the bit-exact lane folds `FOLDS`: the IMAD, funnel and shift rotates and the IMAD.WIDE forms;
 * the bulk-reduction floors, the exporter's `BULK_FLOORS` (sheet only): fx1's step `u = y ⊕ d′ ⊕ k` as two bulk
   reductions a word, `d′` moved by STS.128 or STG.256 and the reductions into global or shared memory;
-* the twelve whole-block folds on the bulk engine (their loops from the SASS in
-  `benchmarks/pouw/tests/fixtures/fold_bulk_loops.json`, sheet only), fbw4096_K4_BT256 among them.
+* the twelve whole-block folds on the bulk engine (`fold_bulk.cu`, `fixtures/fold_bulk_loops.json`, sheet
+  only), fbw4096_K4_BT256 among them.
 
 A fold outside that menu isn't checked: FOLD-OPT says nothing is cheaper, and the menu is what has been tried.
 

@@ -159,7 +159,6 @@ theorem hold_words {types : Array (String × CircuitType)} {tables : List (Strin
       · simp [Functor.map, Except.map, throw, throwThe, MonadExceptOf.throw] at hs
     · simp [Functor.map, Except.map, throw, throwThe, MonadExceptOf.throw] at hs
 
--- `split` and `cases` at every branch of `Typed.classOf`'s unfolded body
 set_option maxHeartbeats 1000000 in
 /-- **What `classOf` returns**: its class holds the tables `hold` read, and its type is the unit layout's. -/
 theorem classOf_facts {mj : Lean.Json} {tables : List (String × ByteArray)} {kt : Typed.Class × CircuitType}

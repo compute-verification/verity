@@ -22,7 +22,7 @@ public import Definitions.Pouw.PearlC.DeviceFp4
 * **One proof unit** (`Spec.part`) holds every computed gate.
 
 Which gate reads which, the widths and the outputs are checked against the template's `CallGraph`, with the checked
-templates' descriptor digests pinned, by `verity/core/protocols/pouw/tests/test_circuit_tile_lean.py`. The trusted part is as in `TileCircuit`: the
+templates' descriptor digests pinned, by `tests/test_circuit_tile_lean.py`. The trusted part is as in `TileCircuit`: the
 order of a gate's reads and each primitive's semantics, here `nvf4Word` for the FP4 step (the primitive's three rules,
 with `Fp4Atom.step sm120Nvf4` on a finite accumulator and valid scale bytes).
 -/
