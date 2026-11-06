@@ -1407,10 +1407,6 @@ def StepBody(B, S, tok, kc, vc, weights):
     return tuple_of(y, k_new, v_new)
 
 
-def _lifted_weights_type(C: dict) -> Type:
-    return lift_type(b1.weights_type(C))
-
-
 GUARD_IN = "in"  # the input guard: the activity guard sits on the step's INPUT token — the implemented candidate
 GUARDS_IMPLEMENTED = (GUARD_IN,)
 LAGS_IMPLEMENTED = (0, 1)  # the engine's post-EOS placeholder rows (vLLM async scheduling: 1); a DECLARED static, no default
