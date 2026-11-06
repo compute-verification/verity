@@ -177,6 +177,19 @@ def test_fp8_block_coordinate_reads_its_scales():
     assert all(np.array_equal(draws[i].inputs["xq"], draws[0].inputs["xq"]) for i in range(8))
 
 
+def test_fp8_block_identifies_the_exporters_relation():
+    """Each FP8 block family the vLLM exporter decomposes writes a relation `identify` takes back to the coordinate template."""
+    from verity_vllm.pipeline import vu_export
+
+    fams = sorted(f for f, d in vu_export.DECOMPOSE.items() if d is vu_export._decompose_fp8_block)
+    assert fams
+    want = TM.subcircuit("scaled-mm-fp8-block-coordinate", K=256, G=128).id
+    for fam in fams:
+        rel = {"subcircuit": "ScaledMmFp8BlockCoordinate<256,128>", "definition": fam, "dot": "HopperE4m3QgmmaDot32_v1",
+               "statics": {"K": 256, "G": 128}}
+        assert TM.identify(rel).id == want, fam
+
+
 def test_scale_words_are_pinned():
     r = np.array([0, 0x7FFFFF, 0x00800000, 0xFFFFFFFF], dtype=np.uint32)
     got = TM.scale_words(r)

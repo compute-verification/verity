@@ -1142,8 +1142,13 @@ def scaled_mm_fp8_block_coordinate(K: int, G: int = 128, semantics: str = "sm90.
                               "sx, sw": f"positive normal f32, exponent field in {list(SCALE_EXP)}, mantissa uniform"})
 
 
+#: the Definitions whose coordinate relation is `scaled_mm_fp8_block_coordinate`'s: the vLLM exporter's (`vu_export.DECOMPOSE`) and
+#: the one it replaced, whose input sets are still read
+FP8_BLOCK_DEFINITIONS = frozenset({"ScaledMmFp8BlockSharedScale_v1", "ScaledMmFp8Block_v1"})
+
+
 def _fp8_block_identify(rel: Mapping[str, Any]) -> Subcircuit | None:
-    if rel.get("definition") != "ScaledMmFp8Block_v1":
+    if rel.get("definition") not in FP8_BLOCK_DEFINITIONS:
         return None
     return scaled_mm_fp8_block_coordinate(rel["statics"]["K"], rel["statics"]["G"])
 
