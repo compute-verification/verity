@@ -31,8 +31,10 @@
 #     window closed stops the endpoint at once, with no window to seal; one that failed after (its leak guard holding a
 #     file, say) leaves its exit to the certifier's verdict, and the run goes on with the window it sealed.
 #     CERTIFIER_FRONT runs within CERTIFIER_FRONT_TIMEOUT (default 20m), and a flag it passes to `certifier_piece.py front`
-#     that this tree's front doesn't take, or a front whose endpoint isn't on the id form the network certifier sends
-#     (SERVE_ARGS without `--protocol ids`), is refused before the lease. The
+#     that this tree's front doesn't take, a front whose endpoint isn't on the id form the network certifier sends
+#     (SERVE_ARGS without `--protocol ids`), or a V3C_CLASS whose window isn't one link-window of the network certifier
+#     the gate runs behind this tree's front (`prove_path.py window-class`: 8,32,4,4,16 at the front's scan class w63k4,
+#     the class of record at w63) is refused before the lease. The
 #     lease ends once every closed window is sealed. What names a window's requests (the serve dir's windows.jsonl,
 #     seals.jsonl, requests.jsonl and serve.json, each window's PoUW calls record, the load's records, timings file and
 #     log, and the certifier front's session, bundle and log, in the serve dir's private/, of which the CERTIFIER-FRONT
@@ -68,7 +70,8 @@
 #     certifier: `served_verdicts.py pieces` runs each one's piece
 #     where POUW_CMD, POUS_CMD, BANDWIDTH_CMD or CERTIFIER_CMD names it, one at a time (the certifier's alone, the longest,
 #     from the moment the window is picked, beside step 3, its lines said after the others'; split in two, the answer step
-#     6's period check wrote, V3c having run before this step), each within <COMPONENT>_TIMEOUT
+#     6's period check wrote, V3c having run before this step, and none where step 6 defers V3c's audit, which that
+#     period check reads: the piece refused, naming the deferral, `pieces --deferred`), each within <COMPONENT>_TIMEOUT
 #     (else PIECE_TIMEOUT, default 60m), else names it MISSING with the command it lacks and its owner. No verdict is made
 #     for a piece that didn't run or refused to; one that ran and wrote no answer errs. A piece that needs a GPU takes its
 #     own `gpu-lease`, the serve's being over. POUS_CMD defaults to 'bash benchmarks/pous/served_piece.sh "$@"' where the
@@ -111,7 +114,11 @@
 #     REPROOF_COPY's copy of the serve dir's, NODE:/PATH, checked against REPROOF_LISTING, its listing kept off $OUT;
 #     and its checks of the auditor's inputs, CERTIFIER_KEY's record of the network certifier and SITE_REGISTRATION's
 #     registration of the deployment, both the auditor's and never the prover's node's, without which the network
-#     certifier's verdict is not established; and, where the composite wrote the inference-only case, where its α and Γ
+#     certifier's verdict is not established; its check that the files remote's sampled proofs case registers are the
+#     ones its params name by SHA-512 (the serve dir's private/sampled-proofs/case.json, where the composite wrote it),
+#     its public file the one V3c's audit pinned at staging, before the draw (its window/public-pin.json),
+#     without which neither that verdict nor a composite's that reads the case is; and, where the composite wrote the
+#     inference-only case, where its α and Γ
 #     came from, its private policy.json's read: off the run's own division, or ALPHA and GAMMA, never a registered
 #     policy); its ONSITE line gates nothing.
 #     PRODUCT (default onsite) is the product the run composes: onsite every subprotocol; remote sampled proofs and PoUW
@@ -136,8 +143,10 @@
 #     no count, n judged on the exact count) and its INFERENCE-ONLY line, in full with the exact counts in the serve dir's
 #     private/inference-only.json. It gates nothing.
 #  6. V3c, sampled proofs' audit of record, run before step 4 (V3C_CLASS set empty is refused): it proves the window
-#     circuit's own units at V3C_CLASS (default 4,32,4,
-#     which CLASSES must hold). `prove_path.py window-commit`, within V3C_TIMEOUT (default 15m), commits the window as that
+#     circuit's own units at V3C_CLASS (default 4,32,4; behind this tree's certifier front the one whose window is the
+#     network certifier's link-window, 8,32,4,4,16 at the front's w63k4, which the preflight holds it to). Untied,
+#     CLASSES must hold it, since step 3 writes the record its commit is held to only at those, and the preflight refuses
+#     CLASSES that don't. `prove_path.py window-commit`, within V3C_TIMEOUT (default 15m), commits the window as that
 #     class circuit's units, the weights it serves under the committer's key, so each served as registered has the
 #     registration's root; its circuit.json less its run fields is held to the verifier's own window-circuit record at the
 #     class; then `records_audit.py audit --circuit --registered`, within V3C_AUDIT_TIMEOUT (default 30m), samples the
@@ -157,10 +166,11 @@
 #     3 writes it after the classes, `window-circuit --window-registration W`), none is made here, and the audit is tied
 #     to H1's W. On a node with less memory than the audit needs, tied or not, the window commit is made (or the tie's
 #     held) here and the audit and the composite are deferred to a follow-on (below), and the record here has sampled
-#     proofs missing. `served_verdicts.sh v3c` runs only that step on an
+#     proofs missing, and the split certifier missing too, its chain and period check going with the audit, so the
+#     record composes pending. `served_verdicts.sh v3c` runs only that step on an
 #     existing serve dir (D and its window K set), the build first, its limits 120m and 180m.
 #     With the network certifier's piece split in two, CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD (both set, CERTIFIER_CMD
-#     unset, and V3C_CLASS the certifier's scan class, which CLASSES holds), the certifier's answer reads V3c's
+#     unset, and V3C_CLASS the window class of the certifier's scan class, 8,32,4,4,16 at w63k4), the certifier's answer reads V3c's
 #     period.json: the chain after the window commit, beside V3c's audit and period.json on a node that holds both
 #     (NODE_MEM_GB at least V3C_AUDIT_MEM_GB plus CERTIFIER_CHAIN_MEM_GB, default 96), else after them, which a
 #     CERTIFIER-CHAIN line says, and always after them in a deferral's follow-on, whose node is held to the audit's
@@ -171,8 +181,7 @@
 #     and V3C V3c's $D/v3c-w<K>-<class>. V3c then takes the window commit, the longer of the chain and V3c's audit
 #     (their sum on a node that holds only one), and the period check, which the run's --timeout holds beside the other
 #     steps. The period check writes the
-#     certifier's answer.json in DIR, which step 4's certifier piece reads (on the served node of a deferral, which runs
-#     neither, that piece leaves the certifier missing, naming the deferral); the steps' logs (CERTIFIER_PRIVATE) move to the
+#     certifier's answer.json in DIR, which step 4's certifier piece reads; the steps' logs (CERTIFIER_PRIVATE) move to the
 #     serve dir's private/pieces/certifier before the run exits, `served_verdicts.sh v3c`, which writes no record, included.
 #     The chain's scan proves at CR_SCAN_DELTA (chain_record.sh's), 2^-64 by default, written as the double that is
 #     2^-64 exactly, which scan_zk.py keeps exact: every scan block is drawn, so no δ costs proving or leaves a wrong unit.
@@ -248,18 +257,20 @@
 # memory, outside any run dir. There `served_verdicts.sh v3c` with D alone (deferred.env names the window, and an
 # environment that sets one of its settings to another value is refused) holds the copy to its sums, runs at the served
 # node's tree (another only with FOLLOW_ANY_TREE=1, which its WINDOW-CIRCUIT line names, since it reads that tree's
-# window-circuit record), needs no row dir, vLLM venv, card or gpu-lease, makes no window commit (it holds the served
+# window-circuit record), needs no row dir, vLLM venv, card or gpu-lease, syncs the tree's venv before its preflight's
+# checks run its python (`uv sync --all-packages --extra torch-cpu`, its log sync.log), makes no window commit (it holds the served
 # node's, the tie's or untied step 6's, in the copy, as there), runs the split certifier's chain and period
 # check after V3c's audit (their answer and case in its own $OUT/pieces/certifier), then removes the window's circuit
-# files, which nothing after reads but the composite those its cases name (a v2 case's, the network certifier's period's;
-# `drop_circuits`, its V3C-CIRCUITS line), then runs
+# files, which nothing after reads but the composite those its cases name (a v2 case's, which the onsite record reads
+# too, and the network certifier's period's; `drop_circuits`, its V3C-CIRCUITS line; those after the onsite record),
+# then runs
 # REPROOF_CMD where it is set (`bash -c CMD _ D K VW` in TREE, its log the serve dir's private/reproof.log and its last
 # line the REPROOF line: a command that copies the serve dir's re-proof inputs off the node and writes REPROOF_LISTING, and fails the
 # follow-on where it fails; it runs whatever V3c's audit gave, a failed audit's inputs kept as well), composes the
 # final record (`record --node` the served node, so its composed_on names the
 # host it composed on, served_node false, and that it read a prover-side copy; its pieces the served node's, but for the
-# network certifier's where the deferral has the split certifier: what its chain and period check left here, beside the
-# served node's piece.json, so its answer is about the served node, which remote-network's record reads) and the
+# split certifier's, whose piece runs here as step 4 runs it, about the served node (`pieces --served`), so its answer
+# here, which remote-network's record reads, is composed, and its failure here rejects) and the
 # composite (`served_composite.sh`, SERVED_NODE the served node; under CASE_ONLY before the record, as in step 5), and
 # under ONSITE the onsite record, as the served
 # node's run would (with REPROOF_COPY and REPROOF_LISTING); its $OUT is published as every run's is.
@@ -299,7 +310,7 @@
 # command names only its path.
 # PREFLIGHT_ONLY=1 runs the preflight alone (the settings, the row dir and taps, gpu-lease, the front's flags, H1_TIE's and
 # a follow-on's checks), says what the run would do (PREFLIGHT passed: its lease, or its deferral) and exits 0 before the
-# serve dir is made, kept or anything built.
+# serve dir is made, kept or anything built but a follow-on's venv, which its checks run.
 # `served_verdicts.sh circuits K`, in TREE with D and OUT, counts serve dir D's window K's circuits alone (its advice written).
 # `served_verdicts.sh advice-charge`, with PRODUCT=remote, measures honest serving's advice charge on a test run whose
 # inputs and counts are public, never on a served run: steps 0 to 2 at the run of record's serving (T, WINDOW_STEPS, the
@@ -932,6 +943,18 @@ front_ok() {  # preflight: LOAD=front has a front, and each flag CERTIFIER_FRONT
       || { say "PREFLIGHT: CERTIFIER_FRONT passes $f, which this tree's certifier front doesn't take"; return 3; }
   done
 }
+v3c_link() {  # preflight: behind this tree's certifier front, V3C_CLASS is the one class whose window the chain's scan
+  # reads at the front's scan class (`prove_path.py window-class`), the only one window-commit's scan takes after the serve
+  case ${CERTIFIER_FRONT:-} in *"certifier_piece.py front"*) ;; *) return 0 ;; esac
+  local scan why
+  scan=$(grep -oE -- "--scan-class[= ]+['\"]?[a-z0-9]+" <<< "$CERTIFIER_FRONT" | grep -oE '[a-z0-9]+$')
+  [[ $CERTIFIER_FRONT != *--scan-class* ]] || [ -n "$scan" ] \
+    || { say "PREFLIGHT: CERTIFIER_FRONT passes --scan-class with no class this preflight reads: name it"; return 3; }
+  why=$(cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py window-class --class "$V3C" ${scan:+--scan-class "$scan"} \
+    2>&1 >/dev/null) \
+    || { say "PREFLIGHT: V3C_CLASS $V3C behind the certifier front: $({ grep -m1 'prove_path.py window-class' <<< "$why" \
+      || tail -1 <<< "$why"; } | cut -c1-600)"; return 3; }
+}
 # the certifier's chain files list and count the window's requests (its certs, its N2 warden's counts, its report and the
 # piece's log, or the split's two logs); once the record has read them, and however the run ends, they move to the serve
 # dir's private/
@@ -1023,12 +1046,12 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
     mkdir -p "$OUT/record" && cp "$DEFER_DIR/inference-only.json" "$OUT/record/inference-only.json" \
       && say "INFERENCE-ONLY: the served node's verdict, carried into this record as it wrote it (the serve dir's private/deferred/inference-only.json)"
   fi
-  if [ -n "${CERTIFIER_CHAIN_CMD:-}" ]; then  # the split certifier ran here: the record reads what it left, about the
-    # served node, whose step 4 ran its piece (piece.json)
-    mkdir -p "$OUT/pieces/certifier" || return 1
+  if [ -n "$SPLIT" ]; then  # the split certifier ran here: the record reads its piece, run as step 4 runs it, about the
+    # served node (its served.json), beside the served node's other pieces
+    mkdir -p "$OUT/pieces" || return 1
     for p in "$DEFER_DIR/pieces"/*; do [ "${p##*/}" = certifier ] || cp -a "$p" "$OUT/pieces/" || return 1; done
-    [ ! -f "$DEFER_DIR/pieces/certifier/piece.json" ] || cp "$DEFER_DIR/pieces/certifier/piece.json" "$OUT/pieces/certifier/" \
-      || return 1
+    CERTIFIER_CMD=true "$TPY" benchmarks/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$K" \
+      --out "$OUT/pieces" --only certifier --served "$SERVED_NODE" --product "$PRODUCT" 2>&1 | publish_lines
     pieces=$OUT/pieces
   fi
   local net=
@@ -1043,8 +1066,8 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
   rec=${PIPESTATUS[0]}
   [ -n "$CASE_ONLY" ] || [ -z "${COMPOSITE-1}" ] \
     || TPY=$TPY SERVED_NODE=$SERVED_NODE bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
-  drop_circuits all || dc=1
   [ -z "${ONSITE:-}" ] || onsite_record
+  drop_circuits all || dc=1
   echo "---- verdicts"; cat "$OUT/verdicts.txt"
   [ "$vrc" = 0 ] && [ "$rec" = 0 ] && [ "$comp" = 0 ] && [ "$rp" = 0 ] && [ "$dc" = 0 ]
 }
@@ -1053,8 +1076,9 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
 # copies under circuits/), recomposable from the public registration and the templates, the audit's window/summary.json
 # naming each by the SHA-512 its sessions were held to: removed once the period check has read them, before the re-proof
 # copy (whose inputs name the circuit by that pin alone) and the node's next window; with $1 all, also a file the audit's
-# v2 case names (window/case-v2.json's blobs) or the network certifier's case does (its period's circuits/ copies, which
-# $OUT/pieces/certifier/case.json's circuits name), each of which the composite reads first.
+# v2 case names (window/case-v2.json's blobs), which the composite and the onsite record read first, or the network
+# certifier's case does (its period's circuits/ copies, which $OUT/pieces/certifier/case.json's circuits name), which the
+# composite reads first.
 drop_circuits() {
   local said
   said=$("$SAY_PY" - "$VW" "${1:-}" "$OUT/pieces/certifier/case.json" <<'EOF'
@@ -1087,13 +1111,16 @@ EOF
   [ -z "$said" ] || say "V3C-CIRCUITS removed, the window's circuit files, recomposable and named by their pins: $said"
 }
 onsite_record() {  # the onsite record ($OUT/record/onsite.json, the header's), which gates nothing
-  local io=() c=$D/private/inference-only
+  local io=() sp=() c=$D/private/inference-only s=$D/private/sampled-proofs/case.json
+  local pin=${VW:+$VW/audit/window/public-pin.json}
   [ ! -f "$c/case.json" ] || io=(--inference-only-case-policy "$c/policy.json")
+  [ ! -f "$s" ] || sp=(--sampled-proofs-case "$s")
+  [ -z "$pin" ] || [ ! -f "$pin" ] || sp+=(--public-pin "$pin")
   "$TPY" benchmarks/one_stage/onsite_record.py "$OUT" --window-steps "$WINDOW_STEPS" --max-tokens "$MAX_TOKENS" \
     ${ADVICE_CHARGE:+--advice-charge "$ADVICE_CHARGE"} \
     ${REPROOF_COPY:+--reproof-copy "$REPROOF_COPY"} ${REPROOF_LISTING:+--reproof-listing "$REPROOF_LISTING"} \
     ${CERTIFIER_KEY:+--certifier-key "$CERTIFIER_KEY"} ${SITE_REGISTRATION:+--site-registration "$SITE_REGISTRATION"} \
-    "${io[@]}" ${H1_TIE:+--h1-tie} 2>&1 | publish_lines
+    "${io[@]}" "${sp[@]}" ${H1_TIE:+--h1-tie} 2>&1 | publish_lines
 }
 
 advice_charge() {  # the test run's every closed window's advice and advice_charge.py's record of it (the header's)
@@ -1178,6 +1205,10 @@ if [ -n "$FOLLOW" ]; then  # a deferral's follow-on: no serve, its venv the tree
   sha=$(tree_sha)
   [ -n "$DEFERRED_TREE" ] && { [ "$sha" = "$DEFERRED_TREE" ] || [ -n "${FOLLOW_ANY_TREE:-}" ]; } \
     || { say "PREFLIGHT: the follow-on reads the served node's window-circuit record, which its tree ${DEFERRED_TREE:-(unknown)} wrote, and this tree is ${sha:-(unknown)}: run it at that commit, or set FOLLOW_ANY_TREE=1"; exit 3; }
+  # the checks below run the venv's python, which a fresh clone of the tree doesn't have until it syncs
+  ( unset PYTHONPATH; command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
+    uv sync --all-packages --extra torch-cpu ) > "$OUT/sync.log" 2>&1 \
+    || { tail -20 "$OUT/sync.log"; say "PREFLIGHT: the follow-on's venv, whose python its checks run, didn't sync (uv sync --all-packages --extra torch-cpu): its log is sync.log"; exit 3; }
 else
   for f in "$ROW/manifest.json" "$ROW/build_summary.json" "$HIDDEN_SO" "$NORM_TAP_SO" "$PY"; do [ -e "$f" ] || { say "PREFLIGHT: no $f"; exit 3; }; done
   command -v gpu-lease >/dev/null || { say "PREFLIGHT: no gpu-lease on this node"; exit 3; }
@@ -1186,6 +1217,11 @@ front_ok || exit 3
 advice_cap || exit 3
 [ -n "$V3C" ] \
   || { say "PREFLIGHT: sampled proofs' audit of record is V3c's (and the split certifier reads its period.json), and V3C_CLASS is empty"; exit 3; }
+[ "${1:-}" = advice-charge ] || v3c_link || exit 3
+case ${1:-} in v3c | advice-charge) ;; *)  # a run that serves: untied, step 6 holds V3c's commit to step 3's record
+  [ -n "${H1_TIE:-}" ] || [[ " $CLASSES " == *" $V3C "* ]] \
+    || { say "PREFLIGHT: untied, V3c's window commit is held to the window-circuit record step 3 writes at each class of CLASSES, and CLASSES '$CLASSES' doesn't hold V3C_CLASS $V3C: set CLASSES to hold it"; exit 3; } ;;
+esac
 SPLIT= DEFER=
 if [ -n "${CERTIFIER_CHAIN_CMD:-}${CERTIFIER_PERIOD_CMD:-}" ]; then  # the split certifier: its period check writes its answer
   [ -z "${CERTIFIER_CMD:-}" ] || { say "PREFLIGHT: CERTIFIER_CMD or the split's CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD, not both"; exit 3; }
@@ -1257,7 +1293,7 @@ if [ -n "${OF_RECORD:-}" ] && [ "${1:-}" != advice-charge ] && { [ "${1:-}" != v
   OF=1
 fi
 if [ -n "${PREFLIGHT_ONLY:-}" ]; then  # the checks above alone: nothing kept, built or served
-  if [ -n "$FOLLOW" ]; then plan="the follow-on of $SERVED_NODE's deferral"
+  if [ -n "$FOLLOW" ]; then plan="the follow-on of $SERVED_NODE's deferral, its venv synced for the checks"
   else
     plan="the serve's lease ${LEASE_MIN:-60} min, capped at ${LEASE_MEM_GB:-128} GB"
     [ -z "$DEFER" ] || plan+="; $DEFER, so step 6 defers $DEFERRED_WHAT to a follow-on"
@@ -1487,14 +1523,13 @@ IOV=$!
 # (under H1_TIE, the tie's held) here, and the audit and the composite are deferred to a follow-on (after the record)
 if [ -n "$DEFER" ]; then v3c_commit
 else v3c_commit && v3c_proved; fi
-if [ -n "$SPLIT" ] && [ -n "$DEFER" ]; then  # its period check reads the period.json of V3c's audit, which the follow-on runs
-  export CERTIFIER_DEFERRED="deferred with V3c's audit to the follow-on, whose period.json its period check reads"
-  export CERTIFIER_CMD='echo "$CERTIFIER_DEFERRED" > "$3/refused.txt"'
-elif [ -n "$SPLIT" ]; then export CERTIFIER_CMD=true; fi
+[ -z "$SPLIT" ] || export CERTIFIER_CMD=true
 
-# 4. the other subprotocols, each its piece's verdict or MISSING with the command it lacks
+# 4. the other subprotocols, each its piece's verdict or MISSING with the command it lacks; the split certifier's, where
+# step 6 defers V3c's audit, missing, its chain and period check the follow-on's
 TPY=$TREE/.venv/bin/python
 "$TPY" benchmarks/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$K" --out "$OUT/pieces" ${CERT:+--skip certifier} \
+  ${SPLIT:+${DEFER:+--deferred "its chain and period check, which read V3c's period.json, go with V3c's audit to a follow-on on a node with the memory, which composes the final record: $DEFER"}} \
   --product "$PRODUCT" 2>&1 | publish_lines
 [ -z "$CERT" ] || { wait "$CERT"; publish_lines < "$OUT/pieces-certifier.txt"; }
 

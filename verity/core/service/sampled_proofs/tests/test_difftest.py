@@ -60,8 +60,7 @@ from verity.core.protocols.sampled_proofs import service
 from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as DR, hello as H, hidden_draw as HD,
                                                             partition as P, produced as PD, registered as G,
                                                             registration as R)
-from verity.core.protocols.sampled_proofs.challenger import (COIN_BYTES, NO_TREE, SHARED_TREE, UNUSED_TREE,
-                                                             ChallengerKey, CoinError)
+from verity.core.protocols.sampled_proofs.challenger import COIN_BYTES, NO_CLOSE, NO_TREE, ChallengerKey, CoinError
 from verity.core.protocols.sampled_proofs.coins import OwnRandomness, coins_reason, draw_coins, draw_first
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
@@ -1962,9 +1961,22 @@ def _sha(b: bytes) -> str:
     return hashlib.sha512(b).hexdigest()
 
 
+def _public_of(rec: dict, roots: dict | None = None) -> bytes:
+    """A public file whose header is `rec`'s as `registration.matches_public` reads one (`OneStageZk.publicHeld`): its
+    scheme, its ``frame_v3`` roots (`roots` in their place) and their ``domain_ids``, and its population as ``instances``.
+    No statement follows it, so a session set up on it is rejected."""
+    reg = {r["port"]: r for r in rec["roots"]}
+    fv = {"domain_ids": {p: r["domain"] for p, r in reg.items()}, "roots": roots or {p: r["root"] for p, r in reg.items()}}
+    header = {"frame_v3": fv, "instances": rec["population"], "scheme": rec["scheme"]}
+    return json.dumps(header, sort_keys=True).encode() + b"\nnot a public file"
+
+
 #: `OneStageZk.NO_CHALLENGER`
 NO_CHALLENGER = ("the parameters name no challenger: the draw's coins are the auditor's challenger's signed release "
                  "(challenger, with window_root), never the prover's record")
+#: `OneStageZk.POPULATION_ORDER`
+POPULATION_ORDER = ("population-order: the program's proof blocks under the query are not the registration's "
+                    "population units in order")
 
 
 def decode_params_v2(j) -> dict:
@@ -2006,18 +2018,20 @@ def _challenger_draw(rng: random.Random, s: Setup, law: dict, rec: dict, trees: 
 def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     """v2 (`SampledProofs.OneStageZk`, `one_stage.proofs.check_v2`) is v1 with the verdicts its own run of the verifier
     on the proofs. An audit v1 accepts on the verdict its evidence hands in and its challenger's coins is, in v2: refused
-    for naming verdicts; rejected with them replaced by proofs naming no session (no session proved the units the
-    evidence claims, or, when the challenger sampled a coin tree, no session used it), and by the session's own verdict
-    when its files are not a statement's; refused before any session is verified when a session's coins are not a tree
-    the challenger logged, or two sessions share one; refused when a file it names is in no blob, or its sessions are
-    not the evidence's. `test_proofs.py` holds the verdicts to `verify`'s on a real session, and
+    for naming verdicts; refused, before any tree is read, with them replaced by proofs naming no session or two (the
+    drawn units are proved in one session, `oneSession`); rejected by the session's own verdict when its files are not
+    a statement's; refused before the session is verified when its coins are not a tree the challenger logged, or the
+    public file is not the registration's (`publicHeld`, its codes Python's `matches_public`'s); refused when a file it
+    names is in no blob, as the public file the parameters name is when the blobs hold another, or its sessions are not
+    the evidence's. The public file is the parameters', committed before any coin: evidence naming one of its own, or
+    parameters naming none, are refused. `test_proofs.py` holds the verdicts to `verify`'s on a real session, and
     `test_challenger_difftest.py` the trees' check to its Python."""
     s = SETUPS[3]
     law = {"k": 2, "law": "subset"}
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF)
     rng = random.Random("v2-verdicts")
-    circuit, public = b"not a circuit file", b"not a public file"
+    circuit, public = b"not a circuit file", _public_of(rec)
 
     def audit(trees: int) -> tuple[Drawn, dict, dict, dict]:
         ch, d, coins = _challenger_draw(rng, s, law, rec, trees)
@@ -2032,7 +2046,8 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
         v1 = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
         assert D.replay(ONE_STAGE, v1, server)[0] == "accept"
         base = {k: v for k, v in evidence.items() if k != "verdicts"}
-        return ch, evidence, base, params | {"proofs": {"circuit": _sha(circuit), "registered": None}}
+        return ch, evidence, base, params | {"proofs": {"circuit": _sha(circuit), "public": _sha(public),
+                                                        "registered": None}}
 
     ch, evidence, base, p2 = audit(1)
     record, stand_in = D.canonical(ch.trees[0].record).encode(), b"{}"
@@ -2044,21 +2059,18 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
         return out["verdict"], out["reason"]
 
     def proofs(sessions, record_=record):
-        return {"public": _sha(public), "sessions": [{"name": n, "record": _sha(record_), "reps": {}} for n in sessions]}
+        return {"sessions": [{"name": n, "record": _sha(record_), "reps": {}} for n in sessions]}
 
     assert run(evidence | {"proofs": proofs([])}) == (
         "reject", "evidence: the evidence names verdicts: this audit's verdicts are its own run of the verifier on the "
                   "proofs")
-    _, _, base0, p0 = audit(0)
-    assert run(base0 | {"proofs": proofs([])}, p=p0) == (
-        "reject", "proofs: the units the sessions proved are not the evidence's proved_units")
     assert run(base | {"proofs": proofs([])}) == (
-        "reject", f"proofs: the challenger's release log shows 1 coin trees and the sessions use 0: {UNUSED_TREE}")
+        "reject", "proofs: the evidence names 0 sessions: the drawn units are proved in one session")
     assert run(base | {"proofs": proofs(["s"]), "sessions": ["s"]}) == ("reject", "verdict flock-verify/s did not accept")
     assert run(base | {"proofs": proofs(["s"], stand_in), "sessions": ["s"]}) == (
         "reject", f"proofs: session s's coins are not the challenger's: {NO_TREE}")
     assert run(base | {"proofs": proofs(["s", "t"]), "sessions": ["s", "t"]}) == (
-        "reject", f"proofs: session t's coins are not the challenger's: {SHARED_TREE}")
+        "reject", "proofs: the evidence names 2 sessions: the drawn units are proved in one session")
     got = run(base | {"proofs": proofs(["s"]), "sessions": ["s"]}, blobs_=blobs[1:])
     assert got[0] == "reject" and got[1].startswith("proofs: circuit: no blob has the SHA-512"), got
     got = run(base | {"proofs": proofs(["s"]), "sessions": ["s"]}, blobs_=blobs[:2])
@@ -2067,6 +2079,55 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
         "reject", "evidence: proofs: the sessions are not the evidence's sessions, in order")
     got = run(base | {"proofs": proofs([])}, p={k: v for k, v in p2.items() if k != "proofs"})
     assert got[0] == "reject" and got[1].startswith("params: the parameters name no proofs"), got
+    one = base | {"proofs": proofs(["s"]), "sessions": ["s"]}
+    other = _public_of(rec) + b", another"
+    got = run(one, p=p2 | {"proofs": {**p2["proofs"], "public": _sha(other)}})
+    assert got[0] == "reject" and got[1].startswith("proofs: public file: no blob has the SHA-512"), got
+    first = rec["roots"][0]["port"]
+    roots = {r["port"]: r["root"] for r in rec["roots"]} | {first: "00" * 64}
+    codes = R.matches_public(rec, SCHEME, roots, {p: s.ports[p]["domain"] for p in s.ports}, s.population).codes
+    assert codes == ("roots",)
+    wrong = _public_of(rec, roots)
+    assert run(one, blobs_=[circuit.hex(), wrong.hex(), *blobs[2:]],
+               p=p2 | {"proofs": {**p2["proofs"], "public": _sha(wrong)}}) == (
+        "reject", f"proofs: public file: not the registration's: {', '.join(codes)}")
+    assert run(base | {"proofs": {"public": _sha(public), **proofs(["s"])}, "sessions": ["s"]}) == (
+        "reject", "evidence: the keys of the evidence's proofs are not sessions")
+    got = run(one, p=p2 | {"proofs": {k: v for k, v in p2["proofs"].items() if k != "public"}})
+    assert got == ("reject", "params: the keys of proofs are not circuit, public, registered"), got
+
+
+def test_v2_refuses_a_population_out_of_order(server, server_v2):
+    """v2 refuses a registration whose program's proof blocks, read stratum by stratum, are not its population's units
+    in order (`OneStageZk.popHeld`, `Slots.popOk`), before any session is verified, as the service's run refuses it at
+    registration (`population-order`): the session's knowledge soundness reads slot `u` as proof block `u`. v1, whose
+    R2 holds only the population's count, accepts the same audit on its verdicts. `SETUPS[4]` and `SETUPS[5]` are out
+    of order (`test_the_run_refuses_a_population_out_of_order`); `SETUPS[3]`'s audit goes on to its session's
+    verdict."""
+    law = {"k": 2, "law": "subset"}
+    circuit = b"not a circuit file"
+    for s, ok in ((SETUPS[4], False), (SETUPS[5], False), (SETUPS[3], True)):
+        assert P.in_order(s.program, s.query, s.population) is ok, s.templates
+        rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+                       WINDOW, leaf_layer=LEAF)
+        ch, d, coins = _challenger_draw(random.Random(f"v2-order-{s.templates}"), s, law, rec)
+        proved, public, record = DR.proved(d), _public_of(rec), D.canonical(ch.trees[0].record).encode()
+        base = {"coins": coins, "draw": d, "instances": len(proved), "proved_units": proved,
+                "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
+                "statement": {}}
+        params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20",
+                  "law": law, "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query),
+                  "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
+                  "window_root": ch.ledger.window["root"], "work_table": None}
+        v1 = base | {"sessions": [], "verdicts": {"lean": {"accepted": True, "of_record": True}}}
+        assert D.replay(ONE_STAGE, _json({"commitment": _hex(rec), "evidence": _hex(v1), "params": params}),
+                        server)[0] == "accept", s.templates
+        v2 = base | {"proofs": {"sessions": [{"name": "s", "record": _sha(record), "reps": {}}]}, "sessions": ["s"]}
+        case = {"blobs": [circuit.hex(), public.hex(), record.hex()], "commitment": _hex(rec), "evidence": _hex(v2),
+                "params": params | {"proofs": {"circuit": _sha(circuit), "public": _sha(public), "registered": None}}}
+        out = server_v2.exchange(_json(case))
+        want = "verdict flock-verify/s did not accept" if ok else f"proofs: {POPULATION_ORDER}"
+        assert (out["verdict"], out["reason"]) == ("reject", want), (s.templates, out)
 
 
 def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
@@ -2074,21 +2135,24 @@ def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
     challenger: parameters naming none, or one without a window, are refused (`NO_CHALLENGER`), and evidence whose coins
     are not the challenger's signed release is rejected: none, the record carrying its own key, coins under another key,
     on another window, of another family or released after another digest, a session record or close whose signature
-    was forged, each mutation of the segment, or a session the ledger doesn't open withheld. On the challenger's coins
-    it goes on to its own verdicts, and a draw other than theirs is rejected after them (`checkBlobsAt`, v1's
-    `checkAt`). Each step Lean rejects at is the Python reference's: `decode_params_v2`, `_coins_of`, then v1's `check`
-    with the session's verdict the reject its blobs give, its record on the coin tree the challenger sampled."""
+    was forged, each mutation of the segment, or a session the ledger doesn't open withheld. So is a session whose
+    release log, which its coin trees are read from too, is not the whole log the challenger's signed close covers: no
+    close, a log a line short of the count the close signs, or the log's lines in another order than its chain, each
+    refused in Python's words. On the challenger's coins it goes on to its own verdicts, and a draw other than theirs is
+    rejected after them (`checkBlobsAt`, v1's `checkAt`). Each step Lean rejects at is the Python reference's:
+    `decode_params_v2`, `_coins_of`, then v1's `check` with the session's verdict the reject its blobs give, its record
+    on the coin tree the challenger sampled."""
     s, law = SETUPS[3], {"k": 3, "law": "stratified"}
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF)
     after = bytes.fromhex(R.digest(rec))
-    circuit, public = b"not a circuit file", b"not a public file"
+    circuit, public = b"not a circuit file", _public_of(rec)
     failed = {"flock-verify/s": {"accepted": False, "of_record": True}}
 
     def audit_of(d: Drawn, draw: dict, coins, **params) -> dict:
         proved = DR.proved(draw)
         record = D.canonical(d.trees[0].record).encode() if d.trees else b"{}"
-        proofs = {"public": _sha(public), "sessions": [{"name": "s", "record": _sha(record), "reps": {}}]}
+        proofs = {"sessions": [{"name": "s", "record": _sha(record), "reps": {}}]}
         evidence = {"draw": draw, "instances": len(proved), "proved_units": proved, "proofs": proofs,
                     "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
                     "sessions": ["s"], "statement": {}}
@@ -2096,8 +2160,9 @@ def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
             evidence["coins"] = coins
         p = {"anchors": [], "challenger": {"key": d.s.key.to_json(), "label": "draw"}, "delta": "1/20", "law": law,
              "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query), "ports": s.ports,
-             "program": s.desc, "proofs": {"circuit": _sha(circuit), "registered": None}, "query": s.query,
-             "registered": None, "scheme": SCHEME, "window_root": d.ledger.window["root"], "work_table": None}
+             "program": s.desc, "proofs": {"circuit": _sha(circuit), "public": _sha(public), "registered": None},
+             "query": s.query, "registered": None, "scheme": SCHEME, "window_root": d.ledger.window["root"],
+             "work_table": None}
         return {"evidence": evidence, "params": {k: v for k, v in (p | params).items() if k not in params or v is not None},
                 "record": record}
 
@@ -2114,10 +2179,13 @@ def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
         step = check(p, (rec, after), e)[1]
         return "draw" if step == "coins" else step
 
-    def lean(a: dict) -> str:
+    def outcome(a: dict) -> dict:
         case = {"blobs": [circuit.hex(), public.hex(), a["record"].hex()], "commitment": _hex(rec),
                 "evidence": _hex(a["evidence"]), "params": a["params"]}
-        out = server_v2.exchange(_json(case))
+        return server_v2.exchange(_json(case))
+
+    def lean(a: dict) -> str:
+        out = outcome(a)
         assert out["verdict"] == "reject", out
         step = next(step for prefix, step in (("params: ", "params"), ("coins: ", "coins"), ("draw: coins: ", "draw"),
                                               ("verdict flock-verify/s ", "verdict"), ("", out["reason"]))
@@ -2129,6 +2197,21 @@ def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
     def signed(coins: dict, part: str) -> dict:
         f = coins["session"][part]
         return {**coins, "session": {**coins["session"], part: {**f, "signature": _flip(f["signature"], 9)}}}
+
+    def files(coins: dict, **f) -> dict:
+        return {**coins, "session": {**coins["session"], **f}}
+
+    def unclosed(coins: dict) -> dict[str, tuple[dict, str]]:
+        """Session files whose release log isn't the one the challenger's signed close covers, each with Python's
+        refusal."""
+        log = coins["session"]["log"]
+        assert len(log) >= 3 and log[1] != log[2]
+        return {"no close": (files(coins, close=None), NO_CLOSE),
+                "a log a line short of its close": (
+                    files(coins, log=log[:-1]),
+                    f"the challenger's release log has {len(log) - 1} lines, not the {len(log)} its close record signs"),
+                "a log out of its close's chain": (files(coins, log=[log[0], log[2], log[1], *log[3:]]),
+                                                   "the challenger's release log is not the one its close record signs")}
 
     for seed in range(3):
         rng = random.Random(f"one-stage-v2-coins/{seed}")
@@ -2161,6 +2244,13 @@ def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
              for name in DRAW_MUTATIONS if name not in ("unread", "read-tampered", "other-after")}
         for name, (want, a) in cases.items():
             assert (python(a), lean(a)) == (want, want), (seed, name)
+        for name, (c, why) in unclosed(coins).items():
+            a = audit_of(d, draw, c)
+            e = {k: v for k, v in a["evidence"].items() if k != "proofs"} | {"verdicts": failed}
+            with pytest.raises(CoinError) as py:
+                _coins_of(decode_params_v2(a["params"]), (rec, after), e)
+            out = outcome(a)
+            assert (str(py.value), out["verdict"], out["reason"]) == (why, "reject", f"coins: {why}"), (seed, name)
 
 
 def committed_bits(j):
@@ -4099,9 +4189,9 @@ def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
         base = {k: v for k, v in evidence.items() if k != "verdicts"}
         d = Drawn(random.Random(kind))
         v2 = {"blobs": [circuit.hex(), public.hex(), record.hex()], "commitment": _hex(rec),
-              "evidence": _hex(base | {"proofs": {"public": _sha(public), "sessions": []}}),
+              "evidence": _hex(base | {"proofs": {"sessions": []}}),
               "params": params | {"challenger": {"key": d.s.key.to_json(), "label": "draw"},
-                                  "proofs": {"circuit": _sha(circuit), "registered": None},
+                                  "proofs": {"circuit": _sha(circuit), "public": _sha(public), "registered": None},
                                   "window_root": d.ledger.window["root"]}}
         out = server_v2.exchange(_json(v2))
         assert out["verdict"] == "reject" and out["reason"].startswith(stage), (kind, out)

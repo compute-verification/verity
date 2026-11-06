@@ -244,10 +244,11 @@ def _shipped(case: dict) -> dict:
 
 
 def _out(tmp_path: Path, period) -> Path:
-    """A served run's OUT as the verifier receives it (`RECEIVED`): the certifier's piece with the scan's circuit file,
-    its record (`certifier_piece.scan_record`) and its case naming the period's circuit files, V3c's audit as the run
-    copies it (its summary and audit record as `served_integrity.public_copy` writes them, the registration it audited,
-    its period audit and its circuit file), the registered compiler, the window's advice registration in its public form
+    """A served run's OUT as the verifier receives it (`RECEIVED`): the certifier's piece (with the served.json a
+    deferral's follow-on leaves, naming the served node it audited) with the scan's circuit file, its record
+    (`certifier_piece.scan_record`) and its case naming the period's circuit files, V3c's audit as the run copies it
+    (its summary and audit record as `served_integrity.public_copy` writes them, the registration it audited, its
+    period audit and its circuit file), the registered compiler, the window's advice registration in its public form
     (`served_verdicts.public_registration`), the weights registration and a class's count."""
     out = tmp_path / "out"
     case, answer = _case(period)
@@ -261,6 +262,7 @@ def _out(tmp_path: Path, period) -> Path:
     (piece / CP.SCAN_CIRCUITS).write_text(json.dumps({"format": CP.SCAN_CIRCUITS_FORMAT, "registration": reg,
                                                       "circuits": SCAN_CIRCUITS}))
     (piece / "piece.json").write_text(json.dumps({"server": "node", "rc": 0, "limit": "CERTIFIER_TIMEOUT"}))
+    (piece / "served.json").write_text(json.dumps({"server": "served-node"}))
     com, ev = (json.loads(bytes.fromhex(case[k])) for k in ("commitment", "evidence"))
     reg, units = com["audits"][0], [0, 1]
     v3c = out / "v3c-audit"

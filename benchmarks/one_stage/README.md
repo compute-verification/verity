@@ -133,8 +133,12 @@ negatives.
 - `v2_case.py`: sampled proofs v2's `--cases` directory from a served window's kept files (`case_v2` of its v1 case,
   partition, public file, sessions and circuit file, and the challenger's release of the draw's coins, `release.json`),
   naming the challenger v2 requires by the auditor's own key record (`--challenger-key`), never by the key the release
-  names: a release naming another key is refused. With its own Lean answer with `--exe`. A circuit file the run didn't
-  keep is rebuilt by the command its `m0/compose.log` records and used only at the log's pin.
+  names: a release naming another key is refused. Its params name the public file by the SHA-512 a5 pinned at staging,
+  before the draw (`public-pin.json`), never one read after it: a window with no pin, or whose kept public file isn't
+  the pinned one, is refused. It reads the drawn member's files, the one member whose sessions the window kept (none
+  or several refused), its `compose.log` its own or its template's first member's. With its own Lean answer with
+  `--exe`. A circuit file the run didn't keep is rebuilt by the command its `compose.log` records and used only at the
+  log's pin.
 - `kept_composite.sh SRC [K]`: remote's and onsite's Lean verdicts on a served run's kept records (`served_verdicts.sh`'s
   `out/`, or a tarball of it) on a CPU node: it builds the products and the pieces' checks, writes PoUW's pieces
   (`pouw_piece.py`; the period from the kept `pieces/pouw/`, `main.txt`, `H1_KEY_SHA512` and the drawn and live legs'
@@ -225,7 +229,10 @@ negatives.
   `served_verdicts.sh` writes after its composite step when the network certifier is in the run: its piece
   (`CERTIFIER_CMD`, or the split's `CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`) or its front (`CERTIFIER_FRONT`). It holds every verdict
   the run of record needs (sampled proofs, PoUW, inference-only, remote, the network certifier, onsite), each missing
-  with its why where the run has no answer. The inference-only verdict says where its case's α and Γ came from, never
+  with its why where the run has no answer. Sampled proofs' verdict is its leg in the composite of record, the outcome
+  of remote's sampled proofs case there (one-stage v2), never the window report's integrity row, the records audit's
+  one-stage v1 answer, which is no verdict: where the composite of record has no such case, it is not established, the
+  row's answer beside it, and credits no member. The inference-only verdict says where its case's α and Γ came from, never
   a registered policy: off the run's own division, so the verdict confirms the division against itself, where the
   case's private `policy.json` says so (its `read`, the one field the record reads), else the run's `ALPHA` and `GAMMA`.
   It checks two obligations on the auditor's configuration on each run (``checked``), reading only the auditor's inputs: `auditor-record`, that the period's key, LMS parameters and
@@ -236,13 +243,19 @@ negatives.
   stated parameters, not measured; that the node has no egress but the uplink the network certifier splits, which the
   registration asserts, is the auditor's placement under trusted-host, which no file establishes); and
   `auditor-listing`, that each circuit file the period lists is, by SHA-512, the one its sessions were verified
-  against: an audit's as V3c's `period.json` states it, the scan's as the certifier piece's `scan-circuits.json` does.
-  `certifier-key` closes only where the
+  against: an audit's as V3c's `period.json` states it, the scan's as the certifier piece's `scan-circuits.json` does;
+  and the remote theorem's registered-files condition: each file remote's sampled proofs case registers, the circuit
+  file and the public file, is by SHA-512 the one its params θ name (`proofs.circuit`, `proofs.public`), θ held to the
+  params each composite that reads the case states, the files hashed and never read off the evidence, and the public
+  file the one a5 pinned at staging, before the draw (`--public-pin`), whose bodies' leaf layer is the one the
+  registration the coins committed to holds. `certifier-key` closes only where the
   lock holds PeriodLeakRegistered at its pinned statement taking hA, hr and hkey as `auditor-record` and that check
   holds; while it is open, an accepted network verdict is not established, its Lean answer's accept beside it, and its
   bound conditional on `certifier-key` by name. Where `auditor-listing` doesn't hold, the verdict is not established
-  and there is no bound. Where the composite of record read the period's circuit files by path (its composite.json's
-  `circuit_files`), the verdict is the composed executable's: until the lock holds
+  and there is no bound; where its registered-files condition doesn't, neither is a composite's that reads the case,
+  nor sampled proofs', its leg there; and where θ names no public file, the public file isn't bound and sampled proofs'
+  verdict is not established. Where the composite of record read the period's circuit files by path (its
+  composite.json's `circuit_files`), the verdict is the composed executable's: until the lock holds
   `Verity.circuit_files_by_path_agree`, `composite-congruence` is open and its accept and bound are conditional on it
   by name.
   Sampled proofs credits only the drawn members whose `--registered` file its audit completed at the window's

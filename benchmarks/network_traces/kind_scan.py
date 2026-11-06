@@ -195,6 +195,7 @@ DOCS: dict[str, dict[str, Any]] = {
     "period/evidence.json": EVIDENCE,
     "period/params.json": PARAMS,
     "piece.json": {"server": S, "rc": O, "limit": S},
+    "served.json": {"server": S},
 }
 HEX = {"case.json": ("commitment", "evidence")}
 #: text files, each declared whole, its text not read: a piece's refusal (`certifier_piece.REFUSED`), the protocol's

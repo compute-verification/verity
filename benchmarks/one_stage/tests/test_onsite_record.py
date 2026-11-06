@@ -24,7 +24,9 @@ at its pinned statement taking hA, hr and hkey as auditor-record and the run's c
 its certifier-key record's key, LMS parameters and session are the period's, and its registration, which checks,
 holds that key for a network certifier its log places. Where a circuit file the period lists isn't the one V3c's
 published period names, or the scan's files are listed, an accepted network verdict is not established and there is
-no bound. Sampled proofs credits only the drawn members whose
+no bound; so it is, and the composite of record's verdict too, where a file remote's sampled proofs case registers
+isn't, by SHA-512, the one its params name, or its public file the one V3c's audit pinned at staging, before the draw,
+and where those params name no public file, sampled proofs' verdict is not established. Sampled proofs credits only the drawn members whose
 --registered files its audit completed and whose Lean verdicts reported exactly their reads, naming each other member
 as not credited. PoUW's freed compute is never credited or claimed, whatever its row states, and neither is one
 program a day, each open by name beside what the run's lines say. The run's `publish` leaves the record as written.
@@ -65,6 +67,7 @@ import warden_chain as WC  # noqa: E402
 from verity.core import site as S  # noqa: E402
 from verity.core.protocols import registration as REG  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import audit as A  # noqa: E402
+from verity.ml.circuits.codec import canonical_json  # noqa: E402
 
 NODE = "computeinstance-toy"
 SCAN = {"delta": "1/1048576", "drawn": 126, "units": 126, "wrong_units": 0, "free": 9088, "faulty_sets": 0,
@@ -126,17 +129,64 @@ def site_registration(held: str = CERT_KEY["public"], placed: str | None = None,
 
 
 def auditor_args(out: Path) -> dict[str, Path]:
-    """The auditor's inputs `served_out` writes beside ``out``, as `OR.record` takes them."""
+    """The auditor's inputs `served_out` writes beside ``out``, and remote's sampled proofs case under the serve dir
+    beside it with V3c's audit's pin of its public files, as `OR.record` takes them."""
     return {"certifier_key": out.parent / "auditor" / "certifier-key.json",
-            "site_registration": out.parent / "auditor" / "site-registration.json"}
+            "site_registration": out.parent / "auditor" / "site-registration.json",
+            "sampled_case": out.parent / "serve" / "private" / "sampled-proofs" / "case.json",
+            "public_pin": out.parent / "serve" / "v3c" / "audit" / "window" / "public-pin.json"}
+
+
+#: the circuit and public files remote's sampled proofs case registers, its first two blobs (`proofs.evidence_v2`), the
+#: public file a header line and its body
+FILES_REGISTERED = (b"toy circuit\n", b"toy public header\ntoy public body")
+
+
+def sha512_hex(b: bytes) -> str:
+    return hashlib.sha512(b).hexdigest()
+
+
+def pin_of(public: bytes) -> dict:
+    """a5's pin at staging (`a5.public_pin`) of a window whose one member's public file is ``public``."""
+    body = sha512_hex(public.partition(b"\n")[2])
+    return {"format": "verity/public-pin/v1", "leaf_layer": sha512_hex(canonical_json({"m0": body})),
+            "members": {"m0": {"k": 0, "file": sha512_hex(public), "body": body}}}
+
+
+def registration_of(pin: dict) -> str:
+    """The case's commitment: a registration record, as canonical JSON in hex, holding ``pin``'s leaf layer."""
+    return canonical_json({"format": "verity/registration/v1", "leaf_layer": pin["leaf_layer"]}).hex()
+
+
+def sampled_case(out: Path, proofs: dict | None = None, evidence: dict | None = None) -> Path:
+    """Remote's sampled proofs case beside ``out`` (`auditor_args`), as `served_cases.sampled_case` writes one: its blobs
+    `FILES_REGISTERED` and a session's file, its params θ naming ``proofs`` (both files' SHA-512s unless given), its
+    commitment the registration holding the leaf layer of a5's pin of the public file at staging, written beside it
+    (`pin_of`), and its ``evidence``."""
+    f, pin = auditor_args(out)["sampled_case"], auditor_args(out)["public_pin"]
+    f.parent.mkdir(parents=True, exist_ok=True)
+    pin.parent.mkdir(parents=True, exist_ok=True)
+    blobs = [f.parent.parent.parent / n for n in ("circuit.txt", "pub-1.bin", "session.json")]
+    for b, data in zip(blobs, (*FILES_REGISTERED, b"{}")):
+        b.write_bytes(data)
+    pin.write_text(json.dumps(pin_of(FILES_REGISTERED[1])))
+    proofs = {"circuit": sha512_hex(FILES_REGISTERED[0]), "public": sha512_hex(FILES_REGISTERED[1]),
+              "registered": None} if proofs is None else proofs
+    f.write_text(json.dumps({"params": {"form": "one-stage", "proofs": proofs},
+                             "commitment": registration_of(pin_of(FILES_REGISTERED[1])),
+                             "evidence": json.dumps((evidence or {}) | {"form": "one-stage"}).encode().hex(),
+                             "blobs": [str(b) for b in blobs]}))
+    return f
 
 
 def auditor_files(out: Path, key: dict | None = None, site: dict | None = None) -> dict[str, Path]:
-    """`auditor_args`' files: ``key`` (`key_record` unless given) and ``site`` (`site_registration` unless given)."""
+    """`auditor_args`' files: ``key`` (`key_record` unless given), ``site`` (`site_registration` unless given) and
+    `sampled_case`'s."""
     args = auditor_args(out)
     args["certifier_key"].parent.mkdir(parents=True, exist_ok=True)
     args["certifier_key"].write_text(json.dumps(key or key_record()))
     args["site_registration"].write_text(json.dumps(site or site_registration()))
+    sampled_case(out)
     return args
 
 
@@ -149,7 +199,8 @@ def main(argv: list[str]) -> int:
     """`OR.main` on ``argv``, with OUT's auditor's inputs beside it (`auditor_args`) where it names an OUT."""
     if argv and not argv[0].startswith("--"):
         a = auditor_args(Path(argv[0]))
-        argv = [*argv, "--certifier-key", str(a["certifier_key"]), "--site-registration", str(a["site_registration"])]
+        argv = [*argv, "--certifier-key", str(a["certifier_key"]), "--site-registration", str(a["site_registration"]),
+                "--sampled-proofs-case", str(a["sampled_case"]), "--public-pin", str(a["public_pin"])]
     return OR.main(argv)
 
 
@@ -279,6 +330,8 @@ def audit_record(completed: tuple[str, ...] = (MEMBER,), reported: dict[str, boo
 
 AUDITED = audit_record()
 CREDITED = {"credited": [MEMBER], "not_credited": {}, "from": str(OR.AUDIT), "is": OR.CREDIT}
+#: the credit of sampled proofs where its verdict is not established: none
+UNESTABLISHED = {"credited": [], "missing": OR.UNESTABLISHED_CREDIT, "is": OR.CREDIT}
 
 
 def served_out(tmp_path: Path, *, network: dict | None = None, work: dict | None = None, case: dict | None = None,
@@ -338,20 +391,29 @@ def sha512_of(params) -> str:
     return hashlib.sha512(CO.canonical(params)).hexdigest()
 
 
-def composed(out: Path) -> str:
-    """`sha512_of` the params of OUT's network certifier case, "00" where OUT has none."""
-    f = out / OR.CASE
+def composed(out: Path, f: Path | None = None) -> str:
+    """`sha512_of` the params of OUT's network certifier case (or the case at ``f``), "00" where there is none."""
+    f = out / OR.CASE if f is None else f
     return sha512_of(json.loads(f.read_text())["params"]) if f.is_file() else "00"
+
+
+def sampled_stated(out: Path) -> dict[str, str]:
+    """What a composite states of remote's sampled proofs case beside OUT (`sampled_case`): its params' SHA-512 and its
+    commitment, "00" where there is none."""
+    f = auditor_args(out)["sampled_case"]
+    return {"params_sha512": composed(out, f),
+            "commitment": json.loads(f.read_text())["commitment"] if f.is_file() else "00"}
 
 
 def with_composite(out: Path, name: str, product: str, ids: tuple[str, ...], verdict: str = "accept",
                    missing: tuple[str, ...] = (), inference_only: str = "accept") -> Path:
     """``out`` with ``product``'s composite.json in composite/NAME: a case of each of ``ids`` but those ``missing``,
     which it names, inference-only's answering ``inference_only`` and each other accepting, the network certifier's
-    with the params of OUT's case (`composed`), and Lean's ``verdict``."""
-    cases = [{"id": i, "verdict": inference_only if i == OR.INFERENCE_ONLY else "accept",
-              "params_sha512": composed(out) if i == OR.NETWORK else "00", "commitment": "00"}
-             for i in ids if i not in missing]
+    with the params of OUT's case and remote's sampled proofs' with the params and commitment of its case beside OUT
+    (`composed`, `sampled_case`), and Lean's ``verdict``."""
+    stated = {OR.NETWORK: {"params_sha512": composed(out), "commitment": "00"}, SAMPLED_V1: sampled_stated(out)}
+    cases = [{"id": i, "verdict": inference_only if i == OR.INFERENCE_ONLY else "accept"}
+             | stated.get(i, {"params_sha512": "00", "commitment": "00"}) for i in ids if i not in missing]
     (out / "composite" / name).mkdir(parents=True, exist_ok=True)
     (out / "composite" / name / "composite.json").write_text(json.dumps(
         {"product": product, "commitment": "00", "missing": list(missing), "exceptions": [], "cases": cases,
@@ -366,10 +428,13 @@ def remote_composite(verdict: str = "accept") -> dict:
             "verdict": {"id": OR.REMOTE, "verdict": verdict}}
 
 
-def with_onsite(out: Path) -> Path:
-    """``out`` with onsite's composite, accepting, its network certifier's case the params of OUT's (`composed`)."""
-    cases = remote_composite()["cases"] + [{"id": OR.NETWORK, "verdict": "accept", "params_sha512": composed(out),
-                                            "commitment": "00"}]
+def with_onsite(out: Path, sampled: str = "accept") -> Path:
+    """``out`` with onsite's composite, accepting, its network certifier's case the params of OUT's (`composed`) and
+    remote's sampled proofs case, answering ``sampled``, the params and commitment of the case beside OUT
+    (`sampled_stated`)."""
+    cases = [c for c in remote_composite()["cases"] if c["id"] != "verity/sampled-proofs/one-stage/v1"] + [
+        {"id": SAMPLED_V1, "verdict": sampled} | sampled_stated(out),
+        {"id": OR.NETWORK, "verdict": "accept", "params_sha512": composed(out), "commitment": "00"}]
     doc = remote_composite() | {"product": OR.ONSITE, "cases": cases, "verdict": {"id": OR.ONSITE, "verdict": "accept"}}
     (out / "composite" / "remote-network").mkdir(parents=True, exist_ok=True)
     (out / "composite" / "remote-network" / "composite.json").write_text(json.dumps(doc))
@@ -424,16 +489,20 @@ def test_a_rehearsal_records_each_missing_part_with_its_why_and_no_figure(tmp_pa
     assert main([str(out)]) == 0
     rec = json.loads((out / "record" / "onsite.json").read_text())
     v = rec["verdicts"]
-    assert list(v) == sorted(OR.VERDICTS) and v["sampled proofs"]["verdict"] == "accept"
+    assert list(v) == sorted(OR.VERDICTS) and v["sampled proofs"] == {
+        "protocol": SAMPLED_V1, "verdict": OR.NOT_ESTABLISHED, "answer": "accept",
+        "from": "record/verdicts.json protocols.integrity",
+        "why": f"{OR.V1_UNREAD}, and its case is read from {OR.ONSITE}'s composite, and the run has none",
+        "credit": UNESTABLISHED}
     assert v["PoUW"] == {"verdict": "missing", "why": "POUW_CMD unset: toy", "from": "record/verdicts.json protocols.work",
                          "not_claimed": OR.POUW_OPEN}
-    assert v["sampled proofs"]["credit"] == CREDITED
     assert v["the network certifier"]["why"].startswith("CERTIFIER_CMD unset")
     assert v["remote"]["why"] == "remote's composite didn't run: the run has no composite/remote/composite.json"
     assert v["inference-only"]["verdict"] == v["onsite"]["verdict"] == "missing"
     assert rec["of_record"] == {"holds": False, "missing": ["PoUW", "inference-only", "remote", "the network certifier",
-                                                            "onsite"], "not_accepting": [], "not_established": [],
-                                "not_credited": [], "not_claimed": ["PoUW"], **ONSITE_OF_RECORD}
+                                                            "onsite"], "not_accepting": [],
+                                "not_established": ["sampled proofs"], "not_credited": [], "not_claimed": ["PoUW"],
+                                "uncredited": OR.UNESTABLISHED_CREDIT, **ONSITE_OF_RECORD}
     assert rec["coins"]["open_draws"] == [] and "missing" in rec["coins"]["draws"]
     assert rec["bound"] == {"missing": "the network certifier's verdict is missing (CERTIFIER_CMD unset: the network "
                                        "certifier in front of the serving endpoint): only its accepted answer certifies K"}
@@ -1387,19 +1456,21 @@ def test_a_test_runs_measured_advice_charge_is_beside_the_bound_as_that_runs(tmp
 
 def test_the_run_is_of_record_only_with_the_onsite_composite_accepting(tmp_path):
     """With no composite of record, nothing states the parameters the period's check read, so auditor-record doesn't
-    hold and the network certifier's accepted verdict is not established; onsite's composite, accepting, makes the run
-    of record, and its rejection leaves it not."""
+    hold and the network certifier's accepted verdict is not established, nor is sampled proofs', its leg there, which
+    credits no member; onsite's composite, accepting, makes the run of record, and its rejection leaves it not."""
     out = accepted(tmp_path, onsite=False)
     rec = record(out)
     assert {k: v["verdict"] for k, v in rec["verdicts"].items()} == {
-        "sampled proofs": "accept", "PoUW": "accept", "inference-only": "accept", "remote": "accept",
+        "sampled proofs": OR.NOT_ESTABLISHED, "PoUW": "accept", "inference-only": "accept", "remote": "accept",
         "the network certifier": OR.NOT_ESTABLISHED, "onsite": "missing"}
     assert rec["verdicts"]["onsite"]["why"] == "the run has no composite of verity/remote-network/v0"
+    assert rec["verdicts"]["sampled proofs"]["credit"] == UNESTABLISHED
     assert rec["checked"][OR.AUDITOR_RECORD]["why"] == (
         f"the composite of record has no {OR.NETWORK} case stating the SHA-512 of the parameters the period's check read")
     assert rec["of_record"] == {"holds": False, "missing": ["onsite"], "not_accepting": [],
-                                "not_established": ["the network certifier"], "not_credited": [],
-                                "not_claimed": ["PoUW"], "conditional_on": [OR.CERTIFIER_KEY], **ONSITE_OF_RECORD}
+                                "not_established": ["sampled proofs", "the network certifier"], "not_credited": [],
+                                "not_claimed": ["PoUW"], "conditional_on": [OR.CERTIFIER_KEY],
+                                "uncredited": OR.UNESTABLISHED_CREDIT, **ONSITE_OF_RECORD}
     doc = json.loads((with_onsite(out) / "composite" / "remote-network" / "composite.json").read_text())
     assert record(out)["of_record"] == {"holds": True, "missing": [], "not_accepting": [], "not_established": [],
                                            "not_credited": [], "not_claimed": ["PoUW"], **ONSITE_OF_RECORD}
@@ -1411,6 +1482,48 @@ def test_the_run_is_of_record_only_with_the_onsite_composite_accepting(tmp_path)
                                          "not_established": [OR.NETWORK]}
     assert rec["of_record"] == {"holds": False, "missing": [], "not_accepting": ["onsite"], "not_established": [],
                                 "not_credited": [], "not_claimed": ["PoUW"], **ONSITE_OF_RECORD}
+
+
+@pytest.mark.parametrize("leg, row, verdict", [
+    ("accept", "reject", "accept"),
+    ("reject", "accept", "reject"),
+    ("no case", "accept", OR.NOT_ESTABLISHED),
+    (None, "accept", OR.NOT_ESTABLISHED),
+    (None, None, "missing"),
+])
+def test_sampled_proofs_verdict_is_its_leg_in_the_composite_of_record_never_the_records_audits_v1_row(
+        tmp_path, leg, row, verdict):
+    """Sampled proofs' verdict is the outcome of remote's sampled proofs case in the composite of record
+    (VStar.Recursive.Sampled on OneStageZk's case), whatever the window report's integrity row, the records audit's
+    one-stage v1 answer, says: a v1 verdict is no verdict. Where the composite of record has no such case, or the run
+    no composite of record, it is not established, the row's answer beside it, crediting no member and stating no
+    bound; missing where the row is missing too."""
+    out = accepted(tmp_path, onsite=False)
+    f = out / "record" / "verdicts.json"
+    report = json.loads(f.read_text())
+    report["protocols"]["integrity"] = ({"owner": "compute-accounting", "verdict": "missing", "why": "toy"}
+                                        if row is None else report["protocols"]["integrity"] | {"verdict": row})
+    f.write_text(json.dumps(report))
+    if leg == "no case":
+        with_composite(out, "remote-network", OR.ONSITE, (OR.NETWORK, OR.INFERENCE_ONLY, OR.POUW_ID))
+    elif leg is not None:
+        with_onsite(out, sampled=leg)
+    rec = record(out)
+    v = rec["verdicts"]["sampled proofs"]
+    src = "composite/remote-network/composite.json"
+    unread = {"no case": f"{OR.ONSITE}'s composite has no {SAMPLED_V1} case",
+              None: f"its case is read from {OR.ONSITE}'s composite, and the run has none"}
+    expect = {
+        "accept": {"protocol": SAMPLED_V1, "verdict": "accept", "from": f"{src} cases", "credit": CREDITED},
+        "reject": {"protocol": SAMPLED_V1, "verdict": "reject", "from": f"{src} cases", "credit": CREDITED},
+        OR.NOT_ESTABLISHED: {"protocol": SAMPLED_V1, "verdict": OR.NOT_ESTABLISHED, "answer": "accept",
+                             "from": "record/verdicts.json protocols.integrity",
+                             "why": f"{OR.V1_UNREAD}, and {unread.get(leg)}", "credit": UNESTABLISHED},
+        "missing": {"verdict": "missing", "why": unread[None], "credit": CREDITED}}[verdict]
+    assert v == expect
+    assert ("per_window" in rec["sampled_proofs"]) is (verdict == "accept")
+    assert ("sampled proofs" in rec["of_record"]["not_established"]) is (verdict == OR.NOT_ESTABLISHED)
+    assert OR.summary(rec)["verdicts"]["sampled proofs"] == verdict
 
 
 def test_under_the_network_certifiers_composite_without_pouw_the_run_is_of_record_over_its_subprotocols_alone(
@@ -1718,19 +1831,120 @@ def test_a_period_listing_no_circuit_files_holds_auditor_listing_and_one_with_no
     it doesn't hold, saying why, the certifier's verdict is not established, both auditor-record and auditor-listing
     open, and there is no bound."""
     out = accepted(tmp_path)
+    files_held = {"holds": True, "read_by": [OR.ONSITE], "compared": ["circuit", "public"]}
     assert record(out)["checked"][OR.AUDITOR_LISTING] == {"is": OR.CHECKED[OR.AUDITOR_LISTING], "holds": True,
-                                                          "listed": 0}
+                                                          "listed": 0, "registered_files": files_held}
     if text is None:
         (out / OR.CASE).unlink()
     else:
         (out / OR.CASE).write_text(text)
     rec = record(out)
     assert rec["checked"][OR.AUDITOR_LISTING] == {
-        "is": OR.CHECKED[OR.AUDITOR_LISTING], "holds": False, "why": f"no case lists the period's audits: {unread}"}
+        "is": OR.CHECKED[OR.AUDITOR_LISTING], "holds": False, "why": f"no case lists the period's audits: {unread}",
+        "registered_files": files_held}
     nv = rec["verdicts"]["the network certifier"]
     assert (nv["verdict"], nv["open"], nv["why"]) == (
         OR.NOT_ESTABLISHED, [OR.CERTIFIER_KEY, OR.AUDITOR_LISTING], f"{OR.KEY_OPEN}; {OR.LISTING_UNMET}")
     assert "missing" in rec["bound"] and rec["periods"] == {"missing": "no bound"}
+
+
+NOT_THETAS = "the {} file the case registers (its blob {}) isn't, by SHA-512, θ's proofs.{}"
+#: the public file changed after the draw, its header kept
+CHANGED = b"toy public header\nanother public body"
+
+
+@pytest.mark.parametrize("how, why", [
+    ("both bound", None),
+    ("public unbound", None),
+    ("another circuit file", NOT_THETAS.format("circuit", 0, "circuit")),
+    ("another public file", NOT_THETAS.format("public", 1, "public")),
+    ("public unbound, another circuit file", NOT_THETAS.format("circuit", 0, "circuit")),
+    ("another θ", f"--sampled-proofs-case's params aren't, by SHA-512, those each composite that reads {SAMPLED_V1}'s "
+                  "case states (its params_sha512)"),
+    ("no case", f"the run's composites read {SAMPLED_V1}'s case, and the run gave no --sampled-proofs-case"),
+    ("a file gone", "the case's circuit file (its blob 0) can't be read: FileNotFoundError"),
+    ("a public file changed after the draw",
+     "the public file the case registers isn't, by SHA-512, one --public-pin pinned at staging before the draw"),
+    ("a public file changed after the draw, the pin with it",
+     "--public-pin's bodies aren't, by their leaf layer, those the registration the case commits to holds (R4)"),
+    ("no pin", "the run gave no --public-pin, the public file's SHA-512 pinned at staging before the draw"),
+    ("another commitment", "the case's commitment isn't the one each composite that reads the case states"),
+])
+def test_the_registered_files_condition_establishes_the_verdicts_it_bears_on_only_where_each_file_is_the_one_theta_names(
+        tmp_path, how, why):
+    """auditor-listing's registered-files condition, the remote theorem's on its sampled leg: each file remote's sampled
+    proofs case registers is, by SHA-512, the one its params θ name, θ the one the composite reading the case states.
+    Where θ names both files and both are its, every verdict stands and the run is of record. Where θ names no public
+    file, the public file isn't bound: sampled proofs' verdict is not established, its accept beside it, crediting no
+    member, so the run isn't of record, the circuit file still compared, and the evidence's digest of the public file
+    never stands in for θ's. Where θ names the public file, it is also the one V3c's audit pinned at staging, before the draw
+    (``--public-pin``): a public file changed after the draw, θ naming the changed one, isn't the pin's, and a pin
+    rewritten to it isn't, by its bodies' leaf layer, the registration's the case commits to, which the coins committed
+    to. Where a file isn't θ's (the circuit file or the public file), θ isn't the one the composite states, the run
+    gave no case or a file it registers is gone, the public file isn't the pinned one, or the run gave no pin or its
+    case commits to a registration the composite doesn't state, auditor-listing doesn't hold: the network certifier's
+    verdict, the composite of record's and sampled proofs', its leg there, are not established, each its Lean accept
+    beside it, with no bound and no member credited, and the run isn't of record."""
+    out = accepted(tmp_path)
+    circuit, public = (sha512_hex(b) for b in FILES_REGISTERED)
+    unbound = how.startswith("public unbound")
+    changed = how.startswith("a public file changed after the draw")
+    if unbound:
+        sampled_case(out, {"circuit": circuit, "registered": None}, evidence={"proofs": {"public": public}})
+    elif changed:
+        sampled_case(out, {"circuit": circuit, "public": sha512_hex(CHANGED), "registered": None})
+    with_composite(out, "remote-network-no-pouw", WITHOUT, WITHOUT_IDS)
+    with_onsite(out)
+    case = auditor_args(out)["sampled_case"]
+    blobs = json.loads(case.read_text())["blobs"]
+    if how.endswith("another circuit file"):
+        Path(blobs[0]).write_bytes(b"another circuit\n")
+    elif how == "another public file":
+        Path(blobs[1]).write_bytes(b"another public file")
+    elif how == "another θ":
+        sampled_case(out, {"circuit": circuit, "public": public, "registered": {"reads": []}})
+    elif how == "a file gone":
+        Path(blobs[0]).unlink()
+    elif changed:
+        Path(blobs[1]).write_bytes(CHANGED)
+        if how.endswith("the pin with it"):
+            auditor_args(out)["public_pin"].write_text(json.dumps(pin_of(CHANGED)))
+    elif how == "another commitment":
+        case.write_text(json.dumps(json.loads(case.read_text()) | {"commitment": registration_of(pin_of(CHANGED))}))
+    rec = record(out, **({"sampled_case": None} if how == "no case" else {"public_pin": None} if how == "no pin"
+                         else {}))
+    v, listing = rec["verdicts"], rec["checked"][OR.AUDITOR_LISTING]
+    files, line = listing["registered_files"], OR.summary(rec)
+    assert (files["holds"], files["read_by"], files.get("why"), files.get("unbound")) == (
+        why is None, [WITHOUT, OR.ONSITE], why, OR.PUBLIC_UNBOUND if unbound else None)
+    assert (listing["holds"], listing.get("why"), listing["listed"]) == (why is None, why, 0)
+    if why is None or how in ("another public file", "a file gone", "no pin", "another commitment") or changed:
+        assert files["compared"] == (["circuit"] if unbound else ["circuit", "public"])
+    withheld = (["sampled proofs"] if unbound or why else []) + ([] if why is None else ["the network certifier",
+                                                                                        "onsite"])
+    assert rec["of_record"]["not_established"] == withheld and rec["of_record"]["holds"] is (not withheld)
+    bears = ("sampled proofs", "the network certifier", "onsite")
+    assert {k: line["verdicts"][k] for k in bears} == {k: OR.NOT_ESTABLISHED if k in withheld else "accept" for k in bears}
+    assert line["of_record"] is (not withheld) and v["remote"]["verdict"] == "accept"
+    assert v["sampled proofs"]["credit"] == (UNESTABLISHED if withheld else CREDITED)
+    if withheld:
+        assert v["sampled proofs"] == {
+            "protocol": SAMPLED_V1, "verdict": OR.NOT_ESTABLISHED, "answer": "accept",
+            "from": "composite/remote-network-no-pouw/composite.json cases", "open": [OR.REGISTERED_FILES],
+            "why": OR.PUBLIC_UNBOUND if unbound else OR.FILES_UNMET, "credit": UNESTABLISHED}
+        assert rec["sampled_proofs"]["missing"] == (
+            f"sampled proofs' verdict is {OR.NOT_ESTABLISHED}: only its accepted answer states a bound")
+    if why is None:
+        assert "K" in rec["bound"] and line["K"] is not None
+        return
+    assert {k: v["the network certifier"][k] for k in ("verdict", "answer", "open", "why")} == {
+        "verdict": OR.NOT_ESTABLISHED, "answer": "accept", "open": [OR.AUDITOR_LISTING], "why": OR.FILES_UNMET}
+    assert v["onsite"] == {"protocol": WITHOUT, "verdict": OR.NOT_ESTABLISHED, "answer": "accept",
+                           "from": "composite/remote-network-no-pouw/composite.json", "open": [OR.REGISTERED_FILES],
+                           "why": OR.FILES_UNMET}
+    assert rec["bound"] == {"missing": f"the network certifier's verdict is {OR.NOT_ESTABLISHED} ({OR.FILES_UNMET}): "
+                                       "only its accepted answer certifies K"}
+    assert rec["periods"] == {"missing": "no bound"} and line["K"] is None
 
 
 @pytest.mark.parametrize("audit, credited, not_credited, missing", [
@@ -1818,9 +2032,7 @@ def test_whether_the_run_is_of_record_reads_no_pouw_verdict_which_stays_listed_a
                                 "not_established": [], "not_credited": [], "not_claimed": ["PoUW"], **ONSITE_OF_RECORD}
     line = json.loads(capsys.readouterr().out.strip()[7:])
     assert (line["of_record"], line["verdicts"]["PoUW"]) == (True, verdict["verdict"])
-    report["protocols"]["integrity"]["verdict"] = "reject"
-    (out / "record" / "verdicts.json").write_text(json.dumps(report))
-    assert record(out)["of_record"]["holds"] is False
+    assert record(with_onsite(out, sampled="reject"))["of_record"]["holds"] is False
 
 
 def test_sampled_proofs_guarantee_is_its_windows_epsilon_at_delta_beside_its_pooled_count_over_each_period(
@@ -1879,7 +2091,7 @@ def test_the_pooled_count_is_the_floor_of_ln_links_over_delta_over_q_past_a_floa
 
 
 def test_a_run_with_no_certifier_case_states_the_pooled_count_and_no_period_cells(tmp_path):
-    g = record(served_out(tmp_path))["sampled_proofs"]
+    g = record(with_onsite(served_out(tmp_path)))["sampled_proofs"]
     assert (g["per_window"]["epsilon"], g["pooled"]["incorrect_at_most"]) == ("15/16", 443)
     assert g["pooled"]["periods"] == {"missing": f"no {OR.CASE}: a window's length is an execution phase's, its params' "
                                                  "schedule (`WINDOW_S`)"}
@@ -1891,7 +2103,7 @@ def test_a_draw_of_a_member_of_each_stratum_has_no_pooled_figure_and_is_named_re
     """stratified:1, H1_TIE's default, draws one member of each template's stratum: its window's bound is stated, but
     IntegrityHorizon pools only a uniform k-subset, so it has no pooled figure, and the record names such a draw as one
     a run of record doesn't make, which writes no sampled-proofs case and which Lean's per-member form refuses."""
-    g = record(served_out(tmp_path, draw=STRATIFIED1, bound=14))["sampled_proofs"]
+    g = record(with_onsite(served_out(tmp_path, draw=STRATIFIED1, bound=14)))["sampled_proofs"]
     assert g["per_window"]["law"] == {"law": "stratified", "strata": [{"name": "A", "size": 8, "k": 1},
                                                                   {"name": "B", "size": 8, "k": 1}]}
     assert (g["per_window"]["epsilon"], g["pooled"]) == ("7/8", {"missing": OR.NOT_POOLED})
@@ -1901,7 +2113,9 @@ def test_a_draw_of_a_member_of_each_stratum_has_no_pooled_figure_and_is_named_re
 
 @pytest.mark.parametrize("coins", [None, "a local development challenger session"])
 def test_sampled_proofs_guarantee_rests_on_its_coins_and_is_missing_but_for_an_accepted_answer(tmp_path, coins):
-    out = served_out(tmp_path, coins=coins)
+    """The guarantee reads the records audit's answer's profile and bound only once sampled proofs' verdict, its leg in
+    the composite of record, accepted: rejected there, or not established, it states no bound."""
+    out = with_onsite(served_out(tmp_path, coins=coins))
     g = record(out)["sampled_proofs"]
     assert (g["conditional_on"], g["per_window"]["epsilon"]) == ([OR.COINS_OPEN], "15/16")
     f = out / "record" / "verdicts.json"
@@ -1910,11 +2124,12 @@ def test_sampled_proofs_guarantee_rests_on_its_coins_and_is_missing_but_for_an_a
     f.write_text(json.dumps(report))
     assert record(out)["sampled_proofs"]["error"] == ("its answer's profile or public lacks a field: KeyError: "
                                                          "'profile'")
-    report["protocols"]["integrity"]["verdict"] = "reject"
-    f.write_text(json.dumps(report))
-    g = record(out)["sampled_proofs"]
+    g = record(with_onsite(out, sampled="reject"))["sampled_proofs"]
     assert g["missing"] == "sampled proofs' verdict is reject: only its accepted answer states a bound"
     assert "per_window" not in g and OR.guarantee(g) == {"missing": g["missing"]}
+    (out / "composite" / "remote-network" / "composite.json").unlink()
+    assert record(out)["sampled_proofs"]["missing"] == (
+        f"sampled proofs' verdict is {OR.NOT_ESTABLISHED}: only its accepted answer states a bound")
 
 
 @pytest.mark.parametrize("n2, scan, named", [("subset:8", "all", ["the period draw"]),

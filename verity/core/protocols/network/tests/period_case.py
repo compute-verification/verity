@@ -24,9 +24,9 @@ each link-window's ingress and egress rows committed and registered under a smal
 (`WardenParams.caps`; `bad_caps` are refused), its three records certified (`past-slots`:
 none of them and neither registration, as the warden leaves a window in which it refused a connection), and the scan's
 registration holding both rows at their ports (`rows_name`, of T leaves) in `roots` or at their values in
-`registered` (`_holds`; `port`: the egress rows' root at `scan/view` and their port at another, or the like,
-`UNPORTS`), and each lane j's `scan/prog<j>` (`prog_name`) at the root and domain
-of chunk j's entries port of that link-window's slot entries' template (`slot_entry`, `io_shell.SlotEntry_v1` at its
+`registered`, their domains each naming one tree (`_holds`; `port`: the egress rows' root at `scan/view` and their
+port at another, a second tree under one end's domain, or the like, `UNPORTS`), and each lane j's `scan/prog<j>`
+(`prog_name`) at the root and domain of chunk j's entries port of that link-window's slot entries' template (`slot_entry`, `io_shell.SlotEntry_v1` at its
 smallest circuit-check row, or `select_entry`, `SelectEntry_v1` at its smallest binding beside a stand-in scan slots'
 `ScanSlots_v2`, each a pinned Definition with one member a slot) in its own audit's registration and Program
 (`_prog_tied`, `_wired`), and its
@@ -1134,14 +1134,17 @@ def rows_name(d: Direction, w: int) -> str:
 
 def _holds(reg: dict, d: Direction, w: int, doc: dict) -> bool:
     """`holds`: the scan's registration has an entry of its `roots` at port `rows_name(d, w)` or of its `registered` at
-    the rows' value, and every such entry names their root and domain, a `roots` one with their leaves."""
+    the rows' value, and every such entry names their root and domain, a `roots` one with their leaves; and every entry
+    of either under their domain is at their root, so their domain names one tree."""
     ports = [e for e in _entries(reg, "roots") if e.get("port") == rows_name(d, w)]
     values = [e for e in _entries(reg, "registered") if e.get("value") == doc["value"]]
+    under = [e for k in ("roots", "registered") for e in _entries(reg, k) if e.get("domain") == doc["domain"]]
 
     def at(e: dict) -> bool:
         return e.get("root") == doc["root"] and e.get("domain") == doc["domain"]
 
-    return bool(ports + values) and all(at(e) and _leaves(e) == doc["rows"] for e in ports) and all(map(at, values))
+    return (bool(ports + values) and all(at(e) and _leaves(e) == doc["rows"] for e in ports) and all(map(at, values))
+            and all(e.get("root") == doc["root"] for e in under))
 
 
 #: the scan's Programs' rows in its registration, one tree a lane, `PROG<j>` lane j's (`progName`): its `roots` entry's
@@ -2569,9 +2572,10 @@ UNSTATES = ("root", "domain", "missing", "renamed", "other", "untyped", "extra",
 UNHOLDS = ("audit", "params")
 #: How `rows-port` breaks the scan's registration's hold of the aimed link-window's rows while every other check
 #: holds: the egress rows' root and domain at `scan/view` and their port at another root (`view`), the two ends' names
-#: swapped (`swapped`), one end's at another window's (`window`), of other than T leaves (`leaves`, in `roots`), or
-#: beside a second entry of one end's name at another root (`second`)
-UNPORTS = ("view", "swapped", "window", "leaves", "second")
+#: swapped (`swapped`), one end's at another window's (`window`), of other than T leaves (`leaves`, in `roots`), beside
+#: a second entry of one end's name at another root (`second`), or beside a second tree under one end's domain, at
+#: `scan/view` (`shadow`)
+UNPORTS = ("view", "swapped", "window", "leaves", "second", "shadow")
 #: How `rows-state-misindexed` puts its link-window's scan's state reads off the chain while its state stays tied by
 #: root and domain: unit t's `sin` at leaf t + 1 (a leaf no unit registered) or its `o1` at leaf t (over the state
 #: before it), a run over other units, the two ports' runs swapped, the reads or a port's run missing or under
@@ -2682,8 +2686,12 @@ def _rows_entries(rp: random.Random, named: list[dict], where: str, unport: str 
         out[j] = out[j] | name(x, x["direction"], x["window"] + rp.choice([1, -1] if x["window"] else [1]))
     elif unport == "leaves":
         out[j] = out[j] | {"leaves": rp.choice([x["rows"] + 1, x["rows"] - 1, None, str(x["rows"]), True])}
-    else:
+    elif unport == "second":
         out.insert(rp.randrange(len(out) + 1), out[j] | {"root": rp.randbytes(64).hex()})
+    else:
+        view = {"port": "scan/view", "leaves": x["rows"]} if where == "roots" else \
+            {"value": "verity/certifier/scan-view/v1"}
+        out.insert(rp.randrange(len(out) + 1), {"domain": x["domain"], "root": rp.randbytes(64).hex(), **view})
     return [_present(e) for e in out]
 
 

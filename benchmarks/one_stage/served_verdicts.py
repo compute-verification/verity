@@ -8,7 +8,7 @@ sampled proofs, and the one record of every verdict (the block record).
     served_verdicts.py period close SERVE_DIR [--gate CMD]
     served_verdicts.py program OUT [--model M] [--rows T] [--steps S] [--like SERVE_DIR]
     served_verdicts.py pieces --serve-run DIR --window K --out DIR [--node NAME] [--only COMPONENT]... [--skip COMPONENT]...
-                              [--product P]
+                              [--product P] [--deferred WHY] [--served NODE]
     served_verdicts.py pouw SERVE_DIR WINDOW DIR [--gate CMD] [--key-sha512 HEX] [--main FILE] [--python PY]
                                 [--statements FILE] [--live-evidence FILE] [--lean-answers DIR]
     served_verdicts.py pearlplus DIR --served FILE --verify FILE [--unretained FILE] [--gate CMD] [--key-sha512 HEX]
@@ -57,7 +57,11 @@ the node it ran on. ``--only`` and ``--skip`` (a component each, repeatable) run
 ``--product`` (default onsite; served_verdicts.sh passes its PRODUCT) is the product the run composes (`block_record.PRODUCTS`): onsite's
 every subprotocol, remote's sampled proofs and PoUW alone, remote-network's those and the network certifier. A piece
 the product drops isn't run, whatever its command,
-and prints a ``DROPPED`` line naming it.
+and prints a ``DROPPED`` line naming it. ``--deferred WHY`` (`served_verdicts.sh`'s step 4 on a node that defers V3c's
+audit) runs no split certifier's piece: its period check, which writes the certifier's answer, reads V3c's period.json
+and goes with the audit to the deferral's follow-on, so the piece leaves `REFUSED` naming WHY, and the certifier is
+missing here, as sampled proofs is. ``--served NODE`` (that follow-on, which runs the piece) is the server the pieces it
+runs audit where it isn't this node: each one's `SERVED` names it, unless the piece wrote its own.
 
 ``gate``: before serving with H1's coins from infra's gate (``--gate``, default ``H1_GATE``): refused while the key's lane
 (``--lane``) has a period open, which a reserve would join; prints one ``GATE`` line with the gate's latest pin and,
@@ -618,11 +622,14 @@ def dropped_row(key: str, product: str) -> dict[str, Any]:
 
 def pieces(serve_dir: Path, window: int, out: Path, env: Mapping[str, str] | None = None,
            node: str | None = None, only: Sequence[str] | None = None, skip: Sequence[str] = (),
-           product: str = "onsite") -> dict[str, dict[str, Any]]:
+           product: str = "onsite", deferred: str | None = None,
+           served: str | None = None) -> dict[str, dict[str, Any]]:
     """Each piece of `PIECES` run where ``<COMPONENT>_CMD`` names it, under `timeout` at its limit, else named missing;
     one line each on stdout, its verdict the one `piece` gives the record. ``only`` and ``skip`` name components: those
     alone, or all but those, so one piece can run beside the others (`served_verdicts.sh` starts the certifier's early).
-    A piece ``product`` drops isn't run, whatever its command (`dropped_row`)."""
+    A piece ``product`` drops isn't run, whatever its command (`dropped_row`). ``deferred``: why the split certifier's
+    period check is a deferral's follow-on's, so its piece isn't run and leaves `REFUSED` naming that; ``served``: the
+    server each piece run here audits, which its `SERVED` names unless the piece wrote its own."""
     from verity_e2e_demo import block_record as BR
 
     env = dict(os.environ if env is None else env)
@@ -634,6 +641,12 @@ def pieces(serve_dir: Path, window: int, out: Path, env: Mapping[str, str] | Non
         if comp not in BR.PRODUCTS[product]:
             got[comp] = {k: v for k, v in dropped_row(key, product).items() if k != "owner"}
             print(f"DROPPED {name} ({owner}): {got[comp]['why']}", flush=True)
+            continue
+        if deferred and comp == "certifier":
+            (out / comp).mkdir(parents=True, exist_ok=True)
+            (out / comp / REFUSED).write_text(f"deferred: {deferred}\n")
+            got[comp] = {k: v for k, v in piece_row(key, out).items() if k in ("verdict", "why")}
+            print(f"{name.upper()} {json.dumps(got[comp], sort_keys=True)}", flush=True)
             continue
         cmd = env.get(f"{comp.upper()}_CMD")
         if not cmd:
@@ -647,6 +660,8 @@ def pieces(serve_dir: Path, window: int, out: Path, env: Mapping[str, str] | Non
             rc = subprocess.run(["timeout", "-k", "1m", limit, "bash", "-c", cmd, "_", str(serve_dir), str(window),
                                  str(d)], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, env=env, check=False).returncode
         (d / RAN).write_text(json.dumps({"server": node, "rc": rc, "limit": limit}, sort_keys=True) + "\n")
+        if served and not (d / SERVED).exists():
+            (d / SERVED).write_text(json.dumps({"server": served}) + "\n")
         label, (row, _) = name.upper(), piece(key, out)
         if "development" in row:
             got[comp], label = {**development_line(row["development"]), "rc": rc}, f"{label} (development run, credits nothing)"
@@ -1539,6 +1554,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--only", action="append", choices=[v[1] for v in PIECES.values()])
     p.add_argument("--skip", action="append", default=[], choices=[v[1] for v in PIECES.values()])
+    p.add_argument("--deferred", help="why the split certifier's period check is a deferral's follow-on's: its piece "
+                                      "isn't run here")
+    p.add_argument("--served", help="the server the pieces run here audit, where it isn't this node")
     r.add_argument("--sampled-proofs", type=Path, required=True)
     r.add_argument("--registration", type=Path, required=True)
     r.add_argument("--pieces", type=Path, required=True)
@@ -1667,7 +1685,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if a.cmd == "pieces":
         a.out.mkdir(parents=True, exist_ok=True)
-        got = pieces(a.serve_run, a.window, a.out, node=a.node, only=a.only, skip=a.skip, product=a.product)
+        got = pieces(a.serve_run, a.window, a.out, node=a.node, only=a.only, skip=a.skip, product=a.product,
+                     deferred=a.deferred, served=a.served)
         return 0 if all(g["verdict"] in ("accept", "missing", "dropped", UNCLAIMED) for g in got.values()) else 1
     steps = pick(a.serve_run, 1 << 30, a.window)["steps"]
     run = os.environ.get("RESEARCH_RUN_ID")

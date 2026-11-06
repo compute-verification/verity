@@ -137,12 +137,13 @@ def audit_dir(root: Path, v1: dict, *, v2: bool | str = True) -> Path:
         for b in blobs:
             b.write_bytes(b.name.encode())
         evidence = {k: x for k, x in json.loads(bytes.fromhex(v1["evidence"])).items() if k != "verdicts"}
-        evidence["proofs"] = {"public": "aa" * 64, "sessions": [{"name": "5e" * 64, "record": "bb" * 64, "reps": {}}]}
+        evidence["proofs"] = {"sessions": [{"name": "5e" * 64, "record": "bb" * 64, "reps": {}}]}
         (w / "case-v2.json").write_text(json.dumps({
             "blobs": [str(b) for b in blobs], "commitment": v1["commitment"],
             "evidence": codec.canonical_json(evidence).hex(),
             "params": {**v1["params"], "challenger": {"key": {"H": 5, "W": 4, "public": "00" * 80}, "label": "draw"},
-                       "proofs": {"circuit": "cc" * 64, "registered": None}, "window_root": "0f" * 64}},
+                       "proofs": {"circuit": "cc" * 64, "public": "aa" * 64, "registered": None},
+                       "window_root": "0f" * 64}},
             sort_keys=True))
     return root / "audit"
 

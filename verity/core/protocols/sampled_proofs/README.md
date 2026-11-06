@@ -43,9 +43,9 @@ Onsite's component is still one-stage v1, which takes the sessions' verdicts as 
 `flock-verify --zk` produces them, and the link from onsite's acceptance to that run comes when onsite reads v2.
 
 The draw happens after the registration, so the prover fixes everything a drawn proof block's statement depends on
-before any coin. In the remote protocol the coins come from the auditor's challenger (or, until proofs retires it, the
-verifier's own draw), under three Lean premises, `ChallengerLogsCoins`, `FlipsAfterRecorded` and `VerifierReadsLog`;
-onsite adds two prose premises, `CoinsConfidential` and `OneClock` ("Where things are").
+before any coin. In the remote protocol the coins come from the auditor's challenger, under three Lean premises,
+`ChallengerLogsCoins`, `FlipsAfterRecorded` and `VerifierReadsLog`; onsite adds two prose premises, `CoinsConfidential`
+and `OneClock` ("Where things are").
 
 ## Outline
 
@@ -55,8 +55,8 @@ onsite adds two prose premises, `CoinsConfidential` and `OneClock` ("Where thing
 2. The developer registers a record that fixes everything a drawn proof block's statement can depend on: the program, the query
    that partitions it, the sampling design, the commitment scheme and the roots. The verifier checks the record against
    its own copies and logs a receipt before it draws.
-3. The verifier draws proof blocks from its operating system's randomness under the agreed sampling design and sends the draw
-   in the clear, before the session's coin commitment. Nothing is derived from a commitment, and there is no beacon.
+3. The verifier draws proof blocks on the challenger's coins under the agreed sampling design and sends the draw in the
+   clear, before the session's coin commitment. Nothing is derived from a commitment, and there is no beacon.
 4. The drawn proof blocks are proved in one session, whose statement is the drawn proof blocks'.
 5. The Lean verifier checks the proofs, and its verdict is the one that counts; the Python beside it is its mirror.
 6. The audit record keeps the registration, the receipt, the draw, the proved proof blocks, the statement's digests and every
@@ -137,16 +137,16 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   their slots in class, stratum and block order.
 - **The audit on the proofs** (`verity/sampled-proofs/one-stage/v2`, `SampledProofs/OneStageZk.lean`, the executable
   `sampled-proofs-one-stage-zk`): v1 with the verdicts computed rather than read. Its parameters add the auditor's
-  circuit digest and the verifier's registered file, its evidence names the public file and each session's record and
-  rep files by SHA-512 in place of `verdicts`, and the files come in as `Core.Blobs`. Its draw's coins are the
-  challenger's (parameters naming none are refused), read as v1 reads them (`OneStage.coinsOf`; `oneStageZkReads` in
-  `Security/Properties/Challenger.lean`). The check runs
-  `flock-verify verify --zk`'s one-stage path (the C-Flock library calls `verifyCmd` makes) on those blobs, binds the
-  evidence's `proved_units` to what the accepted sessions proved, and hands the verdicts to v1's `checkAt` at those coins.
-  So are each session's: before any verdict, the check holds every session's record to the coin trees the signed
-  release log shows the challenger sampled and opened (`SampledProofs/ChallengerTrees.lean`,
-  `challenger.sessions_tree_reason`): its `coin_tree` a logged tree, its link points and round coins that tree's
-  openings after its link's roots and each round's message, one tree per session and every tree a session's.
+  circuit and public files' digests and the verifier's registered file; its evidence names step 4's one session's
+  record and rep files by SHA-512 in place of `verdicts`, the files coming in as `Core.Blobs`. It refuses none or
+  several sessions, a public file whose header isn't the registration's (`Record.matchesPublic`) or whose population
+  isn't the program's proof blocks in order (`Slots.popOk`), and parameters naming no challenger coins. It reads the
+  draw's coins as v1 does (`OneStage.coinsOf`; `oneStageZkReads` in `Security/Properties/Challenger.lean`) and holds
+  the session's record to the coin trees the signed release log shows the challenger sampled and opened
+  (`SampledProofs/ChallengerTrees.lean`, `challenger.sessions_tree_reason`): its `coin_tree` the one tree logged, its
+  link points and round coins that tree's openings after its link's roots and each round's message. Then it runs
+  `flock-verify verify --zk`'s one-stage path (the C-Flock library calls `verifyCmd` makes) on those blobs, binds
+  `proved_units` to what the session proved, and hands its verdict to v1's `checkAt` at those coins.
   `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
   to `verify`'s. Remote reads v2 as `VStar.Recursive.Sampled`'s one-stage form, and refuses v1; onsite's integrity
   component (`Core.Onsite`) is still v1 until it reads v2.
