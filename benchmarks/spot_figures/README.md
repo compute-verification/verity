@@ -7,7 +7,7 @@ plotted series.
 
 ~~~sh
 uv run python benchmarks/spot_figures/figures.py --model GLM-5.3 --out DIR   # figure{1,2,3}.json, PNGs and SVGs
-uv run python benchmarks/spot_figures/render.py DIR/figure1.json            # Figure 1 again, from the JSON alone
+uv run python benchmarks/spot_figures/render.py DIR/figure1.json            # Figure 1 and its appendix, from the JSON
 research data put --kind spot-figure/v1 --tree DIR --preserve                # for the console
 ~~~
 
@@ -24,7 +24,10 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   uv run python benchmarks/spot_figures/cards.py list
   ~~~
 
-  A `references` card's optional `caption` is appended to the caption of each panel it has lines on.
+  A `references` card's optional `caption` is appended to the caption of each panel it has lines on. The `design`
+  card's `main_lines` names, per panel and by label prefix (`{model}` for the model's name), the reference lines the
+  main figure plots and each one's style (`solid` or `dashed`); a panel it names plots only those, and the appendix
+  the rest. Its `notes` are sentences each caption ends with, by panel (`exfiltration_appendix` for the appendix's).
 
   A model without a `workload` card is refused; no census is guessed from a model's config. A `workload` card marks a
   stratum whose Definition has no cut on main `modeled` and gives the whole circuit's MACs a token
@@ -42,15 +45,20 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
     plus its share of its statement's fixed cost, and hashing takes the `commitment` card's rate. A statement holds
     one replay block's sampled proof blocks of one Definition, up to the `proof_overhead` card's `statement_blocks`,
     so each design pays at its own fill: one block under one-stage, the k it samples in a request under two-stage, a
-    request's blocks under request-level sampling. A curve's point is the least target the planner's cheapest plan
-    certifies within the budget.
+    request's blocks under request-level sampling. A one-stage or request-level curve's point is the least target the
+    planner's cheapest plan certifies within the budget, and a two-stage one is the planner's design with the least
+    bound at the budget (`optimize.two_stage_design`).
   - Each design's serve-time hashing is in its caption and in the table at the vertical line: every proof block's
     outputs under one-stage, outside the budget; the token ids under two-stage and request-level, inside it.
-  - Each panel shows its headline design solid and its comparisons dashed or dotted:
-    - exfiltration: two-stage sampling (serving commits only token ids), one-stage sampling of dot-product proof
-      blocks, and request-level sampling, in `consumers.exfiltration_bound`'s form (the incorrect proof blocks'
-      output bits and which ones they are). Proof blocks are sampled uniformly, so the adversary makes the widest
-      ones incorrect first: each is charged the widest block's output bits;
+  - Each panel names the deployment it assumes (`DEPLOYMENT`: what serving commits, and the replay block) and shows
+    its headline design solid and its comparisons thin, dashed or dotted:
+    - exfiltration: two-stage sampling (serving commits only token ids), width-stratified (the headline: the public
+      size classes up to a threshold sampled together and each wider one apart) and uniform, and request-level
+      sampling. A two-stage bound is `CompiledTwo.Exfil`'s count (`optimize.two_stage_exfil`): every admissible set
+      of incorrect proof blocks, each charged its own blocks' committed bits, so a wholly incorrect request is
+      charged every bit it commits. The appendix figure adds one-stage sampling of dot-product proof blocks, in
+      `consumers.exfiltration_bound`'s form (the incorrect proof blocks' output bits and which ones they are), where
+      the adversary makes the widest ones incorrect first and each is charged the widest block's output bits;
     - infiltration: the `infiltration` card's design and series, pending without one;
     - skipped work: one-stage and request-level sampling. One-stage needs every proof block's outputs hashed at
       serve time, outside the budget, and the JSON gives that hashing's share of the scope's compute
@@ -75,4 +83,6 @@ Limits of the model:
 - A replay is priced at the `replay` card's factor; one that must reproduce the served batch's layout costs that
   batch.
 - The one-stage curves leave serve-time hashing out of the budget.
-- The two-stage certificate counts location bits over every proof block of the scope.
+- The one-stage certificate counts location bits over every proof block of the scope.
+- The two-stage bound charges a wholly incorrect request every bit it commits, its interior included, not only what
+  it serves.

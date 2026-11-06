@@ -2,11 +2,12 @@
 infiltration panel from its card, and the JSON and renders the console and the post read."""
 import json
 import shutil
+from math import log, log1p
 
 import cards
 import figure1 as f
 import pytest
-from render import _lines, render, stem
+from render import _lines, appendix_stem, render, render_appendix, stem
 
 SCOPES = ("world year", "datacenter week")
 
@@ -92,7 +93,8 @@ def test_every_references_card_adds_its_lines(out):
 def test_a_line_at_zero_is_captioned_and_coincident_lines_plotted_once():
     refs = [{"label": "a", "value": 100.0}, {"label": "b", "value": 101.0}, {"label": "zero", "value": 0.0},
             {"label": "c", "by_scope": {"world year": 1e4}}, {"label": "elsewhere", "by_scope": {"world week": 1.0}}]
-    assert _lines(refs, "world year", 1.0) == [(100.0, "a"), (1e4, "c")]
+    assert _lines(refs, "world year", 1.0) == [(100.0, "a", "dashed"), (1e4, "c", "dashed")]
+    assert _lines([refs[0] | {"style": "solid"}], "world year", 1.0) == [(100.0, "a", "solid")]
     assert f.zero_lines({"exfiltration": refs}, "world year") == {"exfiltration": ["zero"]}
     assert f.captions(1.0, zeros={"exfiltration": ["zero"]})["exfiltration"].endswith(" At 0, so not plotted: zero.")
 
@@ -105,6 +107,27 @@ def test_a_references_cards_caption_joins_its_panels_captions():
     assert notes == {"exfiltration": ["Caps."]}
     caps = f.captions(1.0, notes=notes)
     assert caps["exfiltration"].endswith(" Caps.") and "Caps." not in caps["skipped_work"]
+    off = {"exfiltration": [{"label": "x", "main": False}], "skipped_work": [{"label": "x", "main": True}]}
+    assert f.reference_notes([{"value": {"lines": [line | {"panel": "exfiltration"}], "caption": "Caps."}}],
+                             off) == {"exfiltration_appendix": ["Caps."]}
+
+
+def test_the_design_card_picks_the_main_panels_lines(out):
+    """The main exfiltration panel plots the lines the `design` card's `main_lines` names, in its styles, and the
+    appendix the rest; the other panels plot every line, and the card's notes end the captions."""
+    chosen = out["inputs"]["main_lines"]["value"]["exfiltration"]
+    refs = out["panels"]["exfiltration"]["references"]
+    main = [r for r in refs if r["main"]]
+    assert {r["label"] for r in main} == {"GLM-5.3's weights", "GLM-5.3's weights at FP4 (376.7 GB)",
+                                         "Advice cap 6 bits/req (KV pool in circuit)"}
+    assert 0 < len(main) <= 6 - len(f.MAIN["exfiltration"]) and len(refs) > len(main)
+    for r in main:
+        assert r["style"] == next(v for k, v in chosen.items() if r["label"].startswith(k.format(model="GLM-5.3")))
+    assert all(r["main"] for p in ("infiltration", "skipped_work") for r in out["panels"][p]["references"])
+    caps = out["scopes"]["world year"]["captions"]
+    for panel, sentences in out["inputs"]["notes"]["value"].items():
+        assert all(s in caps[panel] for s in sentences)
+    assert all(s["main"] == (s["design"] in f.MAIN["exfiltration"]) for s in out["panels"]["exfiltration"]["series"])
 
 
 def test_the_infiltration_panel_draws_its_card(card_dir, tmp_path):
@@ -122,13 +145,22 @@ def test_the_infiltration_panel_draws_its_card(card_dir, tmp_path):
     out = f.run("GLM-5.3", 3, SCOPES)
     inf = out["panels"]["infiltration"]
     assert inf["status"] == "card" and inf["headline"] == "layer_of_token" and len(inf["series"]) == 6
-    assert out["scopes"]["world year"]["captions"]["infiltration"] == "Deferred interiors at a layer."
-    assert out["scopes"]["world year"]["captions"]["exfiltration"].endswith(" At 0, so not plotted: no advice.")
-    assert {"label": "a steering vector", "input": "references", "value": 98304.0} in inf["references"]
+    caption = out["scopes"]["world year"]["captions"]["infiltration"]
+    head = next(s for s in out["panels"]["exfiltration"]["series"]
+                if (s["scope"], s["budget"], s["design"]) == ("world year", f.RATIO_BUDGET, "two-stage"))
+    ratio = 1e9 / head["y"][head["x"].index(1.5e8)]
+    assert caption.startswith("Deferred interiors at a layer. At the measured overhead and 1% of compute, this curve "
+                              f"is 1e9 bits, {ratio:.2g}× the exfiltration panel's tokens-only two-stage bound")
+    assert out["scopes"]["world year"]["captions"]["exfiltration_appendix"].endswith(
+        " At 0, so not plotted: no advice.")
+    assert "no advice" not in out["scopes"]["world year"]["captions"]["exfiltration"]
+    assert {"label": "a steering vector", "input": "references", "value": 98304.0, "main": True,
+            "style": "dashed"} in inf["references"]
     line = out["panels"]["skipped_work"]["references"][-1]
     assert line["by_scope"]["world year"] == pytest.approx(1e30 * 2 / out["inputs"]["ands_per_mac"]["value"])
     assert all(p.stat().st_size > 0 for p in render(out, "world year", tmp_path))
     assert all(p.stat().st_size > 0 for p in render(out, "datacenter week", tmp_path))
+    assert all(p.stat().st_size > 0 for p in render_appendix(out, "world year", tmp_path))
 
 
 def test_the_world_fleet_computes_the_census_world(world):
@@ -145,7 +177,7 @@ def test_a_point_is_the_least_target_its_budget_buys(world, panel, target):
     c, part, fill, s = world
     m = f.model(c, part, s, c["proof_overhead"].value, fill)
     budget = 0.01 * s.gpu_seconds
-    for design in f.DESIGNS[panel]:
+    for design in (d for d in f.DESIGNS[panel] if d not in f.TWO_STAGE):
         p = f.point(m, design, target, budget)
         assert not p["capped"], design
         assert f.cost(m, design, target, p["bound"])["total"] <= budget, design
@@ -159,13 +191,37 @@ def test_an_incorrect_block_leaks_the_widest_blocks_output(world):
     m = f.model(c, part, s, 1.0, fill)
     assert m.dot.out_bits == max(x["out_bits"] for x in c["partition"].value["strata"]) > part.bits
     assert m.dot.prove == pytest.approx(2 * part.macs / part.blocks / c["peak_flops"].value)
-    assert f.certified(m, "two-stage", "leak", 1e12) >= m.dot.out_bits * f.leak_count(m.dot, 1e12)
+    assert f.certified(m, "one-stage", "leak", 1e12) >= m.dot.out_bits * f.leak_count(m.dot, 1e12)
 
 
 def test_two_stage_certifies_no_work(world):
     c, part, fill, s = world
+    m = f.model(c, part, s, 1.0, fill)
     with pytest.raises(ValueError, match="no work target"):
-        f.cost(f.model(c, part, s, 1.0, fill), "two-stage", "work", 1e20)
+        f.point(m, "two-stage", "work", 1e20)
+    with pytest.raises(ValueError, match="the planner's at a budget"):
+        f.cost(m, "two-stage-uniform", "leak", 1e20)
+
+
+def test_a_two_stage_point_is_the_planners_design_at_its_budget(world):
+    """A two-stage point is `two_stage_design`'s on the model's cells, a request a replay block and the token ids its
+    boundary, paid from the budget; width-stratified is never above uniform, and each charges every committed bit of a
+    request it lets through, so it is at least ln(1/δ)/q − 1 requests' bits."""
+    c, part, fill, s = world
+    m = f.model(c, part, s, c["proof_overhead"].value, fill)
+    budget = 0.01 * s.gpu_seconds
+    bits = sum(x.n * x.bits for x in m.cells)
+    assert bits == pytest.approx(c["tokens_per_request"].value * part.bits * part.blocks)
+    rows = {}
+    for design in f.TWO_STAGE:
+        p = f.point(m, design, "leak", budget)
+        row = rows[design] = p["row"]
+        assert row == f.two_stage(m, design, budget) and p["bound"] == row["bound"] and not p["capped"]
+        assert row["total"] <= budget * (1 + 1e-9) and row["boundary"] == pytest.approx(
+            m.replay.replay_blocks * m.replay.boundary_bytes * m.byte_s)
+        assert p["bound"] >= (log(1 / m.delta) / -log1p(-row["q"]) - 1) * bits
+    assert rows["two-stage"]["bound"] <= rows["two-stage-uniform"]["bound"]
+    assert set(rows["two-stage-uniform"]["k"]) == {0} and len(rows["two-stage"]["k"]) > 1
 
 
 def test_a_statement_pays_its_fixed_cost_over_its_fill():
@@ -192,9 +248,9 @@ def test_each_design_is_priced_at_its_fill(world):
     assert f.cost(m, "one-stage", "leak", 1e12)["fill"] == pytest.approx(1 + po["fixed_seconds"]
                                                                           / po["seconds_per_block"])
     assert f.cost(m, "request", "leak", 1e18)["fill"] == pytest.approx(fill.factor(f.inf), rel=1e-6)
-    row = f.point(m, "two-stage", "leak", budget)["row"]
-    assert row["fill"] == pytest.approx(fill.factor(row["k"]), rel=1e-6)
-    assert fill.factor(f.inf) <= row["fill"] < fill.factor(1)
+    for design in f.TWO_STAGE:
+        row = f.point(m, design, "leak", budget)["row"]
+        assert 1 + min(r / cap for _, _, r, cap in fill.types) <= row["fill"] <= 1 + max(r for _, _, r, _ in fill.types)
 
 
 def test_each_design_states_its_serve_time_hashing(out):
@@ -228,12 +284,13 @@ def test_curves_rise_with_overhead_and_fall_with_budget(out):
 
 def test_the_headline_designs_win_at_the_measured_overhead(out):
     """The figure's claim at today's inputs: at the vertical line, two-stage bounds exfiltration below both comparisons,
-    and one-stage bounds skipped work below request-level sampling."""
+    width-stratified at most uniform, and one-stage bounds skipped work below request-level sampling."""
     rows = f.at_overhead(out)
     for scope in SCOPES:
         for beta in out["budgets"]:
             at = {(r["panel"], r["design"]): r["bound"] for r in rows if (r["scope"], r["budget"]) == (scope, beta)}
             assert at["exfiltration", "two-stage"] < min(at["exfiltration", "one-stage"], at["exfiltration", "request"])
+            assert at["exfiltration", "two-stage"] <= at["exfiltration", "two-stage-uniform"]
             assert at["skipped_work", "one-stage"] < at["skipped_work", "request"]
 
 
@@ -251,8 +308,12 @@ def test_the_json_is_plain_and_renders(out, tmp_path):
     assert back["schema"] == f.SCHEMA and back["panels"]["infiltration"]["status"] == "card"
     assert set(back["scopes"]) == set(SCOPES)
     for scope in SCOPES:
-        assert set(back["scopes"][scope]["captions"]) == {"exfiltration", "infiltration", "skipped_work"}
-    paths = render(back, "datacenter week", tmp_path)
-    assert [p.name for p in paths] == ["figure1_datacenter_week.png", "figure1_datacenter_week.svg"]
+        assert set(back["scopes"][scope]["captions"]) == {"exfiltration", "exfiltration_appendix", "infiltration",
+                                                          "skipped_work"}
+    for panel in ("exfiltration", "infiltration", "skipped_work"):
+        assert back["panels"][panel]["deployment"]
+    paths = render(back, "datacenter week", tmp_path) + render_appendix(back, "datacenter week", tmp_path)
+    assert [p.name for p in paths] == ["figure1_datacenter_week.png", "figure1_datacenter_week.svg",
+                                       "figure1_appendix_datacenter_week.png", "figure1_appendix_datacenter_week.svg"]
     assert all(p.stat().st_size > 0 for p in paths)
-    assert stem("world year") == "figure1"
+    assert (stem("world year"), appendix_stem("world year")) == ("figure1", "figure1_appendix")

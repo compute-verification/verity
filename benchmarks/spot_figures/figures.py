@@ -1,6 +1,6 @@
 """The SPOT post's Figures 1-3 for one model, from its cards: each figure's JSON (every plotted series beside every
-card it read) and its PNG and SVG, into one directory, which `research data put --kind spot-figure/v1 --tree DIR`
-publishes for the console.
+card it read) and its PNG and SVG, Figure 1's appendix figure too, into one directory, which `research data put --kind
+spot-figure/v1 --tree DIR` publishes for the console.
 
     uv run python benchmarks/spot_figures/figures.py --model GLM-5.3 --out DIR [--points N]
 """
@@ -27,13 +27,14 @@ def main(argv=None) -> None:
     ap.add_argument("--points", type=int, default=57, help="Figure 1's proof overheads, the vertical line's besides")
     args = ap.parse_args(argv)
     args.out.mkdir(parents=True, exist_ok=True)
-    from render import render
+    from render import render, render_appendix
 
     one = figure1.run(args.model, args.points)
     one["at_overhead"] = figure1.at_overhead(one)
     write(one, args.out / "figure1.json")
     for name in one["scopes"]:
         render(one, name, args.out)
+        render_appendix(one, name, args.out)
     two = figure2.run(args.model)
     write(two, args.out / "figure2.json")
     figure2.render(two, args.out)
