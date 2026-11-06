@@ -612,6 +612,13 @@ def records_tree() -> Path:
     return LA.COMMON.cache_dir() / RECORDS / (os.environ.get(LEAN_SLOT.HELD) or "local").replace("/", "-")
 
 
+def made(tree: Path) -> Path:
+    """``tree``, made. A node may link a slot's tree onto a larger volume; when the link's target is gone, the target is made
+    again, where `mkdir` on the link raises FileExistsError and fails every run handed that slot."""
+    tree.resolve().mkdir(parents=True, exist_ok=True)
+    return tree
+
+
 #: `--records`' kept passes, beside its trees: `<inputs_key>.json` for each package whose records passed on those inputs, the
 #: newest `PASSES_KEPT` of them
 PASSES, PASSES_KEPT = "passes", 4000
@@ -1098,7 +1105,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
     try:
         tree = tree or records_tree()
         log(f"lean-records: taking the slot path: check.py on {tree}, which keeps its build between runs")
-        tree.mkdir(parents=True, exist_ok=True)
+        made(tree)
         with open(tree / ".lock", "w") as held:
             if not hold_tree(held, tree, log):
                 return refused(None, pkg)
@@ -1274,7 +1281,7 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
         return 2
     try:
         tree = tree or records_tree()
-        tree.mkdir(parents=True, exist_ok=True)
+        made(tree)
         with open(tree / ".lock", "w") as held:
             if not hold_tree(held, tree, log):
                 return 2
@@ -1398,7 +1405,7 @@ def build_files(files: list[str], deps: Path, tree: Path | None = None, log=prin
         return done(2)
     try:
         tree = tree or records_tree()
-        tree.mkdir(parents=True, exist_ok=True)
+        made(tree)
         with open(tree / ".lock", "w") as held:
             if not hold_tree(held, tree, log):
                 doc["skipped"]["*"] = f"another run held {tree}"
@@ -1521,7 +1528,7 @@ def run(cache: Path, deps: Path, tree: Path, log=print) -> int:
     if not sandboxed():
         log("lean-changed: skipped: no build sandbox here (`unshare`), which keeps the audit's dependencies read-only")
         return 0
-    tree.mkdir(parents=True, exist_ok=True)
+    made(tree)
     with open(tree / ".lock", "w") as held:
         try:
             fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
