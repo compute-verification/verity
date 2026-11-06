@@ -1,0 +1,237 @@
+module
+
+public import Definitions.Claims.SamplingGeneric
+
+/-!
+# Claims: two-stage sampling at the footprint
+
+The sampled audit's two-stage design (registered `{"rule": "two-stage", "grain": Q, "replay": LAW, "k": K}`), on
+`Claims.Sampling`'s statement, witness and commitment and `Claims.SamplingGeneric`'s compiled verifier, read as they
+stand, so neither changes. Replay blocks are the blocks of a replay partition that the proof-block partition refines.
+Serving commits every value read across a replay-block boundary (the registration, the statement's roots). The first
+stage's coins sample replay blocks under a one-stage rule over them (the replay sample); the prover then commits each
+sampled replay block's interior (the interior registration, `iroots`); the second stage's coins, fresh, sample `k_t`
+proof blocks of each stratum `t` inside each sampled replay block. One-stage designs are the case whose replay blocks
+are the proof blocks, with `k = 1` and no interior registration.
+
+1. **The design** (`Design.Two`): the replay partition (`part`, the statement's replay query evaluated on its
+   program), the first stage's rules, one per class of it (`replay`), and the second stage's `k` per stratum of the
+   proof-block partition (`k`). A cell (`cell`) is a replay block's proof blocks in one stratum; `n_{ρ,t}` is its size.
+2. **The footprint** (`footprint`): replay block `ρ`'s fewest incorrect proof blocks in stratum `t` at any interior
+   consistent with its boundary, which the statement's roots commit. It is fixed before any coin. `ρ` is an incorrect
+   replay block when its footprint is positive in some stratum.
+3. **The acceptance probability at the footprint** (`Design.Two.Pa`):
+   `P̄_a(w) = E_S ∏_{ρ∈S} e_ρ(w)`, `e_ρ(w) = ∏_t C(n_{ρ,t} − w(ρ, t), k_t)/C(n_{ρ,t}, k_t)` (`Design.Two.esc`, the
+   hypergeometric miss, `escCell`), written through the first stage's `P_a`; the confidence set
+   `M̄_δ = {w : P̄_a(w) > δ}` (`Design.Two.M`); and the relation `RTwo`: the extracted boundary trace's footprint is in
+   `M̄_δ`.
+4. **The compiled verifier** (`CompiledTwo`): a `Compiled` with the statement's two-stage design (`two`) and the
+   replay sample (`replaySample`). Its second stage is `Compiled.stage2`, and `iroots x v ρ` is the roots a run shows for
+   replay block `ρ`'s interior. Its extractor, errors and numbers are `Compiled`'s.
+5. **The contract** (`CompiledTwo.Sessions`): `Compiled.Sessions` with its draw law split by stage and its openings
+   read at a replay block. The first stage misses a set `T` of replay blocks with probability at most `P_a(T)`
+   (`replayDraws`); at the first stage's coins, the second stage misses a set `X` of proof blocks with probability at
+   most `∏_{ρ∈S} ∏_t C(n_{ρ,t} − |X ∩ cell|, k_t)/C(n_{ρ,t}, k_t)` (`secondDraws`); the interior roots precede the
+   second stage (`interior`); and a witness in `A`'s relation reveals openings under which its proof block is correct
+   on its replay block's boundary values and interior values (`opens`). `slots`, `refuses`, `fixed` and `runs` are
+   `Sessions`'.
+6. **The claims**: `CompiledTwo.KS`, at `Compiled`'s `κ_δ`, `γ` and `ε_bind`, and the compiler's statement
+   `CompilerKSTwo`.
+
+Statements only: definitions, no proofs.
+-/
+
+@[expose] public section
+
+namespace Claims.Sampling
+
+/-! ## 1. The design -/
+
+/-- A slot's stratum among strata of sizes `ns`, in order; `ns.length` past them. -/
+def stratumIdx : List ℕ → ℕ → ℕ
+  | [], _ => 0
+  | n :: ns, v => if v < n then 0 else stratumIdx ns (v - n) + 1
+
+/-- **The strata** of `P`: its classes' strata in population order, each its proof blocks. -/
+def Partition.strata (P : Partition) : List (List (List ℕ)) := P.classes.flatten
+
+/-- **Slot `v`'s stratum** in `P`: its index in `P.strata`. -/
+def Partition.stratumOf (P : Partition) (v : ℕ) : ℕ := stratumIdx (P.strata.map List.length) v
+
+/-- **The replay block of proof block `v`** of `Pt`: the first block of the replay partition `Pρ` that holds each of its
+gates; `none` when none does. -/
+def replayOf (Pt Pρ : Partition) (v : ℕ) : Option ℕ :=
+  (List.range Pρ.blocks.length).find? fun ρ =>
+    match Pt.blocks[v]?, Pρ.blocks[ρ]? with
+    | some u, some r => u.all r.contains
+    | _, _ => false
+
+/-- **A cell**: the proof blocks of `Pt` in replay block `ρ` of `Pρ` and in stratum `t` of `Pt`. Its size is
+`n_{ρ,t}`. -/
+def cell (Pt Pρ : Partition) (ρ t : ℕ) : Finset ℕ :=
+  (Finset.range Pt.blocks.length).filter fun v => replayOf Pt Pρ v = some ρ ∧ Pt.stratumOf v = t
+
+/-- **A two-stage sampling design**, as the verifier evaluates it on a statement: the replay partition (`part`, the
+statement's replay query on its program, which the proof-block partition refines), the first stage's rules, one per
+class of the replay partition (`replay`, a one-stage design over replay blocks), and the second stage's `k` per stratum
+of the proof-block partition (`k`), each stratum's past the list `0`. -/
+structure Design.Two where
+  part : Partition
+  replay : Design
+  k : List ℕ
+
+/-- **The two-stage design is well formed** on the proof-block partition `Pt`: its first stage's rules are well formed
+on the replay partition, and it has one `k ≥ 1` per stratum of `Pt`. -/
+def Design.Two.WellFormed (d : Design.Two) (Pt : Partition) : Prop :=
+  d.replay.WellFormed d.part ∧ d.k.length = Pt.strata.length ∧ ∀ k ∈ d.k, 1 ≤ k
+
+/-! ## 2. The footprint -/
+
+open Classical in
+/-- **The incorrect proof blocks of cell `(ρ, t)` at the interior values `ι`**: each is incorrect on replay block `ρ`'s
+values, its boundary's the committed ones `w` opens and its interior's `ι` (`Prog.refIn` at the replay block). -/
+noncomputable def wrongIn (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt Pρ : Partition) (w : Wit)
+    (ρ t : ℕ) (ι : ℕ → Bool) : Finset ℕ :=
+  (cell Pt Pρ ρ t).filter fun v => ¬ ∃ u r, Pt.blocks[v]? = some u ∧ Pρ.blocks[ρ]? = some r ∧
+    s.prog.Correct (s.prog.refIn r (w.val H Cm s) ι) u
+
+/-- **The footprint** `w(ρ, t)`: the fewest incorrect proof blocks in stratum `t` of replay block `ρ` at any interior
+consistent with its boundary, the values the statement's roots commit at serve time. It is fixed before any coin; `ρ`
+is an incorrect replay block when it is positive in some stratum. -/
+noncomputable def footprint (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt Pρ : Partition) (w : Wit)
+    (ρ t : ℕ) : ℕ :=
+  ⨅ ι : ℕ → Bool, (wrongIn H Cm s Pt Pρ w ρ t ι).card
+
+/-! ## 3. The acceptance probability at the footprint -/
+
+/-- **A cell's escape** (the hypergeometric miss): a uniform `min(k, n)`-subset of `n` proof blocks misses `m` of them
+with probability `C(n − m, k')/C(n, k')`, `k' = min(k, n)`. -/
+noncomputable def escCell (n k m : ℕ) : ℝ := ((n - m).choose (min k n) : ℝ) / (n.choose (min k n) : ℝ)
+
+/-- **Replay block `ρ`'s escape** at a footprint `fp`: `e_ρ = ∏_t C(n_{ρ,t} − fp(ρ, t), k_t)/C(n_{ρ,t}, k_t)`, the
+probability that the second stage samples no incorrect proof block of a sampled `ρ`. -/
+noncomputable def Design.Two.esc (d : Design.Two) (Pt : Partition) (fp : ℕ → ℕ → ℕ) (ρ : ℕ) : ℝ :=
+  ∏ t ∈ Finset.range Pt.strata.length, escCell (cell Pt d.part ρ t).card (d.k.getD t 0) (fp ρ t)
+
+/-- **The acceptance probability at a footprint**, `P̄_a(fp) = E_S ∏_{ρ∈S} e_ρ` over the first stage's sample `S`.
+Catching each replay block independently with probability `1 − e_ρ`, it is the probability that `S` misses the caught
+ones, `Σ_T P_a(T)·∏_{ρ∈T}(1 − e_ρ)·∏_{ρ∉T} e_ρ` at the first stage's `P_a`. One-stage's `P_a(B)` is its case at
+`B`'s indicator, replay blocks the proof blocks and `k = 1`. -/
+noncomputable def Design.Two.Pa (d : Design.Two) (Pt : Partition) (fp : ℕ → ℕ → ℕ) : ℝ :=
+  ∑ T ∈ (Finset.range d.part.blocks.length).powerset,
+    d.replay.Pa d.part T *
+      ((∏ ρ ∈ T, (1 - d.esc Pt fp ρ)) * ∏ ρ ∈ Finset.range d.part.blocks.length \ T, d.esc Pt fp ρ)
+
+/-- **The confidence set** `M̄_δ`: every footprint `fp` with `P̄_a(fp) > δ`. -/
+def Design.Two.M (d : Design.Two) (Pt : Partition) (δ : ℝ) : Set (ℕ → ℕ → ℕ) := {fp | δ < d.Pa Pt fp}
+
+/-- **The two-stage relation** at `δ`, on the statement's bytes: it parses, its proof-block partition and two-stage
+design evaluate (`partition`, `two`, the verifier's own), and the footprint of the boundary trace `w` opens is in
+`M̄_δ`. -/
+def RTwo (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse : Msg → Option AuditStatement)
+    (partition : AuditStatement → Option Partition) (two : AuditStatement → Option Design.Two) (δ : ℝ) : Rel Wit :=
+  fun x w => ∃ s Pt d, parse x = some s ∧ partition s = some Pt ∧ two s = some d ∧
+    footprint H Cm s Pt d.part w ∈ d.M Pt δ
+
+/-- **The two-stage scope, readable**: a topologically ordered program, partitioned into proof blocks (`Partitions`),
+each within a block of the replay partition, whose blocks are disjoint, and a well-formed two-stage design. -/
+def InScopeTwo (Pt : Partition) (d : Design.Two) (s : AuditStatement) : Prop :=
+  s.prog.Topological ∧ Pt.Partitions s.prog ∧ d.part.gates.Nodup ∧
+    (∀ v < Pt.blocks.length, (replayOf Pt d.part v).isSome) ∧ d.WellFormed Pt
+
+end Claims.Sampling
+
+namespace Claims.SamplingGeneric
+
+open Claims
+open Claims.Sampling (AuditStatement Partition InScopeTwo RTwo cell escCell replayOf forkOn KSLinOn Bext)
+
+/-! ## 4. The compiled verifier -/
+
+/-- **A compiled two-stage sampled verifier over `A`**: a compiled sampled verifier (`Compiled`) with the two-stage
+design it evaluates on a statement (`two`) and the replay blocks the first stage samples at a run's coins
+(`replaySample`). Its second stage is `stage2`, the rounds after the interior registration, whose sample is the
+proof blocks `checked`; `iroots x v ρ` is the roots the run `v` shows for replay block `ρ`'s interior values. -/
+structure CompiledTwo (Coin : Type) (A : Arg Coin) extends Compiled Coin A where
+  two : AuditStatement → Option Claims.Sampling.Design.Two
+  replaySample : (x : Msg) → (Fin (V.k x) → Coin) → List ℕ
+
+namespace CompiledTwo
+
+variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
+
+/-- **The two-stage scope, on the statement's bytes**: it parses, its proof-block partition and two-stage design
+evaluate, and they are in scope (`InScopeTwo`). -/
+def Scope (L : CompiledTwo Coin A) (x : Msg) : Prop :=
+  ∃ s Pt d, L.parse x = some s ∧ L.partition s = some Pt ∧ L.two s = some d ∧ InScopeTwo Pt d s
+
+/-! ## 5. The contract -/
+
+/-- **The two-stage compiler's contract** at `H`: `Compiled.Sessions` with its draw law split by stage and its openings
+read at a replay block.
+
+* `replayDraws`: on a statement in scope, the first stage's sample misses a set `T` of replay blocks with probability
+  at most the first stage's `P_a(T)`.
+* `secondDraws`: on a statement in scope, at a run's coins `r`, fresh second-stage coins sample no proof block of a set
+  `X` with probability at most `∏_{ρ∈S} ∏_t C(n_{ρ,t} − |X ∩ cell(ρ, t)|, k_t)/C(n_{ρ,t}, k_t)`, `S` the replay
+  blocks `r` samples: the second stage's sample is, in each sampled replay block, a uniform `k_t`-subset of each cell,
+  independently.
+* `slots`, `refuses` (at `CompiledTwo.Scope`), `fixed` and `runs`: `Sessions`'.
+* `interior`: the roots a run shows for a replay block's interior values are the same at fresh second-stage coins.
+* `opens`: on a statement in scope, at an accepted run that samples `u` and shows its session, a witness in `A`'s
+  relation at the session's statement reveals openings such that any values and interior values agreeing with those
+  that pass (under the statement's roots, and under the interior roots the run showed for `u`'s replay block `ρ`)
+  make proof block `u` correct on `ρ`'s values (`Prog.refIn` at `ρ`). -/
+structure Sessions (H : Msg → Msg) (L : CompiledTwo Coin A) : Prop where
+  replayDraws : ∀ x s Pt d, L.parse x = some s → L.partition s = some Pt → L.two s = some d → InScopeTwo Pt d s →
+    ∀ T ⊆ Finset.range d.part.blocks.length,
+      Pr (fun r : Fin (L.V.k x) → Coin => ∀ ρ ∈ L.replaySample x r, ρ ∉ T) ≤ d.replay.Pa d.part T
+  secondDraws : ∀ x s Pt d, L.parse x = some s → L.partition s = some Pt → L.two s = some d → InScopeTwo Pt d s →
+    ∀ (r : Fin (L.V.k x) → Coin) (X : Finset ℕ),
+      Pr (fun e : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x (forkOn (L.stage2 x) r e), u ∉ X) ≤
+        ∏ ρ ∈ (Finset.range d.part.blocks.length).filter (· ∈ L.replaySample x r),
+          ∏ t ∈ Finset.range Pt.strata.length,
+            escCell (cell Pt d.part ρ t).card (d.k.getD t 0) (X ∩ cell Pt d.part ρ t).card
+  slots : ∀ x r, (L.checked x r).length ≤ L.nPU x
+  refuses : ∀ x (Ω : Type) (P : Prover Ω) ω r, (run H P L.V x ω r).out = .acc → L.Scope x
+  interior : ∀ x (Ω : Type) (P : Prover Ω) ω r e ρ,
+    L.iroots x (run H P L.V x ω (forkOn (L.stage2 x) r e)).seen ρ = L.iroots x (run H P L.V x ω r).seen ρ
+  fixed : ∀ x r u, u ∈ L.checked x r →
+    L.rounds x u ⊆ L.stage2 x ∧ ∀ e, L.checked x (forkOn (L.rounds x u) r e) = L.checked x r
+  runs : ∀ x (Ω : Type) (P : Prover Ω) (ω : Ω) r u, u ∈ L.checked x r →
+    ∃ (xS : Msg) (P' : Prover Unit), A.shape xS = L.sh x u ∧ A.κ xS ≤ L.κb x u ∧ A.γ xS ≤ L.γb x u ∧
+      A.V.k xS = (L.rounds x u).card ∧
+      (∀ r' : Fin (L.V.k x) → Coin, (∀ t ∉ L.rounds x u, r' t = r t) →
+        (run H P L.V x ω r').out = .acc → (run H P' A.V xS () (L.coinsOf x u xS r')).out = .acc) ∧
+      ∀ r' : Fin (L.V.k x) → Coin, (∀ t ∉ L.rounds x u, (∀ t' ∈ L.rounds x u, t < t') → r' t = r t) →
+        L.session x u (run H P L.V x ω r').seen = some (xS, (run H P' A.V xS () (L.coinsOf x u xS r')).seen) ∧
+          ∀ q ∈ (run H P' A.V xS () (L.coinsOf x u xS r')).vLog, q ∈ (run H P L.V x ω r').vLog
+  opens : ∀ x s Pt d (Ω : Type) (Pv : Prover Ω) ω r u xS vS w,
+    L.parse x = some s → L.partition s = some Pt → L.two s = some d → InScopeTwo Pt d s →
+    (run H Pv L.V x ω r).out = .acc → u ∈ L.checked x r → L.session x u (run H Pv L.V x ω r).seen = some (xS, vS) →
+    A.R xS w →
+    ∃ b ρ rb, Pt.blocks[u]? = some b ∧ replayOf Pt d.part u = some ρ ∧ d.part.blocks[ρ]? = some rb ∧
+      ∀ (val : ℕ → Option Bool) (ι : ℕ → Bool),
+        (∀ q ∈ L.reveal s u (run H Pv L.V x ω r).seen w, L.commit.Opens H q.1 q.2 = true →
+          (q.1 = s.roots → val q.2.pos = some q.2.val) ∧
+          (q.1 = L.iroots x (run H Pv L.V x ω r).seen ρ → ι q.2.pos = q.2.val)) →
+        s.prog.Correct (s.prog.refIn rb val ι) b
+
+/-! ## 6. The claims -/
+
+/-- **KS at the footprint**, on the statements in scope, at every `δ ≥ 0`: `Pr[acc ∧ footprint ∉ M̄_δ] ≤ δ + ε_ks +
+ε_bind`, at `Compiled`'s extractor, `κ_δ`, `γ` and `ε_bind = Pr[B_ext]` (`Compiled.KS` at `RTwo`). -/
+def KS (H : Msg → Msg) (L : CompiledTwo Coin A) : Prop :=
+  ∀ δ : ℝ, 0 ≤ δ →
+    KSLinOn H L.V L.Scope (RTwo H L.commit L.parse L.partition L.two δ) L.E (L.κ δ) L.γ (fun _ => 1) (Bext H L.V L.E)
+
+end CompiledTwo
+
+/-- **The two-stage compiler is knowledge sound at the footprint**: over every proof system for proof blocks that is
+knowledge sound, every compiled two-stage verifier whose commitment binds and that meets the contract is, at the
+one-stage compiler's errors. -/
+def CompilerKSTwo : Prop :=
+  ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (L : CompiledTwo Coin A)
+    (H : Msg → Msg), A.KS H → L.commit.Binds H → L.Sessions H → L.KS H
+
+end Claims.SamplingGeneric
