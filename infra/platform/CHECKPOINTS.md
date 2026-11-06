@@ -26,3 +26,13 @@ The notes clone refused the push (no lane binding), so the hourly lines live her
   a lead on the platform couldn't hear agents still on Cursor or alerts (now only the platform's own); a bare
   user-group mention routed nowhere; leads couldn't reach Slack, Linear or Notion beyond their reply (now brokered like
   GitHub, per lead). Rot check passes against latest; 23 unit and 18 end-to-end tests pass. Next: the report.
+- 08:50Z: leads now wake as on Cursor. A lead's one wake is a doorbell in its inbox thread in the coordination
+  channel, rung by `research msg` (which decides who a post is for) or by the people-post service; its reply is posted
+  with `research msg reply --as LANE` from its sandbox, under its stable agent id, in the doorbell's thread. The
+  platform's own Slack routing (mentions, thread ownership, a channel fallback) would have misrouted in the shared
+  channel and dropped posts between leads, and is gone. Linear issue creations and state changes wake the lead of the
+  issue's team through a signed webhook. A local smoke against the built server passes (doorbell, inbox-only, Linear,
+  pause). Found by it: a relative sandbox directory broke `git config --global` (fixed, with a test), and taking
+  another lead's inbox or team was an empty 500 (now a 409 naming the holder). The local server had inherited the VM's
+  Slack token and tried two replies to a made-up channel, which Slack refused; local runs now unset it. 26 unit and 20
+  end-to-end tests pass. top's inbox for this lane is still absent. Next: the report's remaining sections, SWAP.md.
