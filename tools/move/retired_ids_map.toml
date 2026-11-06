@@ -1,0 +1,118 @@
+# The Glossary's retired identifiers, renamed to the words it gives instead: what `tools/move/rename.py --map
+# tools/move/retired_ids_map.toml` renames. Lean declarations keep their place in the locks' records: `rename.py --moves`
+# prints the renames that `check.py --update --moved` takes. GLOSSARY.md is not rewritten, since its table names the old
+# identifiers; a sentence there that names one as current is edited by hand in the same change.
+#
+# - The binding error: the premise `LinkSound`, with `LinkSoundIn` and `zk_rowsLinkSoundC`, is ε_bind's, `BindSound`,
+#   and its module moves with it.
+# - The acceptance probability: `effEscape` is P̄_a, `effAcceptProb`, and its lemmas follow.
+# - The trace: `ExecutionTranscript`, one run's value for every gate, is `ExecutionTrace`.
+# - The monitoring period: `ComposePeriod`, its namespace and its modules, and `CircuitWorkPeriod`.
+# - Unregistered hardware: `Nci.Dampener.unmonitoredShare` is ε_unreg's, `unregisteredShare`, and `benchmarks/rho`'s
+#   `eps_dark` is `eps_unreg`.
+# - Chunks of a counter-mode stream: `noiseBlock` is `noiseChunk`.
+# - Size classes: `Claims.Sampling.unitClasses` is `sizeClasses`.
+# - The proof block: `LinkWindows.proof_unit` and `IngressTie.proof_unit` are `proof_block`.
+# - The sampling design: `parse_law`, `same_law` and `law_object`, and the Lean's `parseLaw`, which the Python mirrors,
+#   are `parse_design`, `same_design`, `design_object` and `parseDesign`.
+# - The certifier's row groups: the Definition `CompileSliceBlocks_v1` is `CompileSliceRowGroups_v1`.
+# - The fingerprint's input set: `instances_ref` is `input_set_ref`.
+# - Segments of a GEMM's inner dimension: `ThreeBlock` is `ThreeSegment`, and `D1.nBlocks` with its two lemmas is
+#   `nSegments`, only in the files that read D1's (`Claims.Flock.Stmt.nBlocks` counts a statement's blocks and stays).
+# - Server blocks: `benchmarks/rho`'s `ServingBlock` is `ServerBlock`, only there (the Lean's `ServingBlockBound` and
+#   `ServingBlocks` are other names).
+# - `block_of`, one name in six senses, each renamed only in the files that use it: a zone of the device graph
+#   (`zone_of`), a kernel's KV tile (`tile_of`), a SASS basic block (`basic_block_of`), a 128-byte SHA-512 message chunk
+#   (`chunk_of`), Marlin's MoE block size (`moe_block_size_of`), a sampled index's slot and layout unit (`position_of`)
+#   and a model's layer (`layer_of`). A file under `examples/` is listed under `demos/` too, and the `CertifierNetwork`
+#   module under `NetworkCertifier/DeviceOutput`, their names after the moves that rename them.
+[words]
+"LinkSound" = "BindSound"
+"effEscape" = "effAcceptProb"
+"ExecutionTranscript" = "ExecutionTrace"
+"ComposePeriod" = "ComposeMonitoringPeriod"
+"CircuitWorkPeriod" = "CircuitWorkMonitoringPeriod"
+"circuitWorkPeriod" = "circuitWorkMonitoringPeriod"
+"unmonitoredShare" = "unregisteredShare"
+"eps_dark" = "eps_unreg"
+"noiseBlock" = "noiseChunk"
+"unitClasses" = "sizeClasses"
+"proof_unit" = "proof_block"
+"parse_law" = "parse_design"
+"same_law" = "same_design"
+"law_object" = "design_object"
+"parseLaw" = "parseDesign"
+"CompileSliceBlocks" = "CompileSliceRowGroups"
+"instances_ref" = "input_set_ref"
+"ThreeBlock" = "ThreeSegment"
+"threeBlock" = "threeSegment"
+
+# Segments of a GEMM's inner dimension.
+[[words_in]]
+files = [
+    "Security/Definitions/Pouw/D1.lean",
+    "Security/Definitions/Pouw/Assumptions/NCP/GamePinned.lean",
+    "Security/Definitions/Pouw/NCP/Protocol.lean",
+    "Security/Proofs/Pouw/NCP/GameProofs.lean",
+    "Security/Proofs/Pouw/Sanity.lean",
+]
+words = { "nBlocks" = "nSegments", "nBlocks_mul" = "nSegments_mul", "nBlocks_pos" = "nSegments_pos" }
+
+# Server blocks.
+[[words_in]]
+files = ["benchmarks/rho/**"]
+words = { "ServingBlock" = "ServerBlock" }
+
+# `block_of`, by sense.
+[[words_in]]
+files = ["benchmarks/datacenter/**", "benchmarks/network_sim/**"]
+words = { "block_of" = "zone_of" }
+
+[[words_in]]
+files = ["verity/ml/definitions/registry/**"]
+words = { "block_of" = "tile_of" }
+
+[[words_in]]
+files = ["benchmarks/pouw/harness/sass_gate.py"]
+words = { "block_of" = "basic_block_of" }
+
+[[words_in]]
+files = [
+    "benchmarks/pouw/np_kernel/l1.h",
+    "Security/Proofs/Properties/CertifierNetwork/Encode.lean",
+    "Security/Proofs/Properties/NetworkCertifier/DeviceOutput/Encode.lean",
+]
+words = { "block_of" = "chunk_of" }
+
+[[words_in]]
+files = ["integrations/vllm/tests/properties/*marlin_capture*.py"]
+words = { "block_of" = "moe_block_size_of" }
+
+[[words_in]]
+files = [
+    "examples/h200/m3bundle.py",
+    "examples/h200/interfaces/verity_e2e_demo/replay_bundle.py",
+    "demos/h200/m3bundle.py",
+    "demos/h200/interfaces/verity_e2e_demo/replay_bundle.py",
+]
+words = { "block_of" = "position_of" }
+
+[[words_in]]
+files = ["benchmarks/pouw/highutil/**"]
+words = { "block_of" = "layer_of" }
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the Glossary's table
+# of older names, the retired-terms lint's own examples, the frozen backends, files whose bytes a digest pins
+# (`rename.py` repins a `TRUSTED.sha256` line itself), lock files, move_check's own tests, and the Lean tools' fixtures,
+# locks as they were on a past tree, which their tests read as such.
+exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "GLOSSARY.md",
+           "tests/test_retired_terms.py", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock",
+           "tools/verity/check/tests/test_move_check.py", "tools/verity/lean/tests/fixtures/**"]
+
+[keep]
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+',
+            'lanes/[\w.-]+']
+strings = []
+
+[keep_in]
