@@ -15,7 +15,7 @@ binary-field proof with upstream Flock (`succinctlabs/flock` at `b684b12`, patch
   - `templates/`: one lowering per subcircuit template; `ir_frame.py` (`verity/flock-ir-frame/v3`) and `ir_sampling.py`
     (`verity/flock-ir-sampling/v1`): their frame-v3 statements, archived like the pure-block backends (BLAKE3 row
     digests, not in the Lean verifier).
-  - `partition_units.py`: every proof-block class of an arbitrary partition (`verity.ml.circuits.units`) lowered and checked against the
+  - `partition_units.py`: every unit class of an arbitrary partition (`verity.ml.circuits.units`) lowered and checked against the
     reference evaluator; `boolean_export.py`: a served workload's leaf templates, or one census subcircuit (`subcircuit`, the catalog's blob), as Boolean
     circuits (a derived format, not a statement); `circuit_types.py` (`verity/circuit-type/v1`): each distinct sub-circuit once, the object the Boolean
     export, the docs site and the prover's layouts share.
@@ -23,7 +23,7 @@ binary-field proof with upstream Flock (`succinctlabs/flock` at `b684b12`, patch
     the rows' SHA-512 and the template's tail in the circuit too (`sha512_circuit.py`, `tail.py`), or with `layout=MODE`
     the templated statement (`verity/flock-circuit/tmpl`: the unit as `tmpl.py`'s template, its slot from `tmpl.layout`,
     Lean's `Tmpl.layoutM`), which the verifier covers only in the form `ProvedScope.scopeOkT` states; `tables.py`
-    (`verity/flock-tables`), several tables in one commitment with private glue; `class_statement.py`, a proof-block class of
+    (`verity/flock-tables`), several tables in one commitment with private glue; `class_statement.py`, a unit class of
     any partition as an M0 statement (`UnitStager(..., layout=MODE, structural=True)`: the unit as `struct_lower.py`'s
     template, the flat unit never built, its outputs from the template, `tmpl.evaluate`), and `class_sweep.py`, the
     backend sweep's work lists; `circuit_bench.py`,

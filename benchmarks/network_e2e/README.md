@@ -19,7 +19,7 @@ reuses the rehearsal and `n2_zk.py`'s driver and re-implements neither. `encodin
 ## The one command
 
 `verity bench network_e2e ARGS` runs `run.sh`, ARGS being `e2e.py`'s. Proving runs as a job on a CPU node, whose command
-and resources are in `run.sh`'s header: it builds C-Flock's `flock-circuit`, the Lean `flock-verify`, the Lean ZK server
+and resources are in `run.sh`'s header: it builds C-Flock's `flock-circuit`, the Lean `flock-verify`, the Lean firewall
 and network-records (`benchmarks/pouw/hidden_zk/job.sh`'s `setup`, cached on the node), then runs `e2e.py` with the
 report in `$OUT`. `E2E_MEM_GB` is the proving runs' memory cap. Exit 0 means the report says OK. The job publishes the
 report with the run's outputs in the evidence store, where results are read.
@@ -66,7 +66,7 @@ verity bench network_e2e (--upstream URL | --endpoint-peer NAME:PORT) --traffic 
   (`chain.tie`) runs instead and is required (`chain.tie_gate`).
 
 The report's `stubbed` list says what each run still stands on that isn't the chain's own: the advice of another run, a
-given serving config, a prove path of a registered workload, pending negatives, the certifier off the gate.
+given serving config, a prove path of a declared workload, pending negatives, the certifier off the gate.
 
 ## Inputs: rehearsals and gate runs
 

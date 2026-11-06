@@ -9,7 +9,7 @@ each shape `K:N:n` (n instances, one x row each):
 
 For each shape, `stage.py` stages `c` and `b` from synthetic values (checked against the served kernel's numpy twin and, when
 small enough, the Definition's IR reference); `prove.py` runs one loopback session of each without `--zk` and one with it,
-sampling every instance, with the prover's and verifier's peak memory; the Lean verifier of record checks each `--zk` session;
+drawing every instance, with the prover's and verifier's peak memory; the Lean verifier of record checks each `--zk` session;
 flock-live's test binary runs `a`; and selected shapes run `c`'s selftest negatives. After each shape the job runs `summarize.py`, which gathers every shape
 into one table (`summary.json`): each slot type's nonzeros, k_log, the committed m, prover and verifier seconds and peak memory,
 proof bytes and the verdict.
