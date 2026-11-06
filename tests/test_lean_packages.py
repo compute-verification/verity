@@ -69,15 +69,12 @@ def test_one_mathlib():
 
 #: the size of each lock's `unwitnessed`: the guarantees stating what an acceptance means, or an exclusion's bound, that
 #: had no `honest` and `nontrivial` witnesses when the witness rule came (`check.py`'s `witness_failures`), with those the
-#: PRs on `next` then brought, NCI's `ReferenceThreaded` and `ThreadedOfLayered`, bounds a
-#: definition hides that read a partition once stated over a registered circuit, the exclusion bounds that read
-#: a partition once a derived circuit's registration built
+#: PRs on `next` then brought, the exclusion bounds that read a partition once a derived circuit's registration built
 #: its one-block partition (`RegisteredCircuit.ofCircuit`), the six C-Flock statements whose claim or verifier read
 #: lies in a module of `trees`' `except`, once the rule read through those, and C-Flock's `LoopInnerRound0Own`, which
-#: reads a claim, from a PR on `next`; the two exclusion bounds a definition hides, once `Facts.lean`'s `chain`
-#: recorded the bound it ends at; and C-Flock's three joint-sample statements (`JointSampledV5`, `JointShareV5`,
-#: `JointHorizonV5`), whose acceptance is flock-verify's as `SampledKSLiveV5`'s is, until they read a verifier record
-UNWITNESSED = {"Security": 565, "Security/Properties": 234, "verity/core/service/flock": 8}
+#: reads a claim, from a PR on `next`; and the two exclusion bounds a definition hides, once `Facts.lean`'s `chain`
+#: recorded the bound it ends at
+UNWITNESSED = {"Security": 624, "Security/Properties": 237, "verity/core/service/flock": 8}
 
 
 def test_the_unwitnessed_list_only_shrinks():
@@ -231,11 +228,9 @@ def test_every_open_conjecture_names_a_test_that_exists():
 
 #: the size of each lock's `shape.inline`, in premises: the inline hypotheses lock-listed guarantees took that are neither
 #: a named assumption, another listed guarantee's statement nor a plain range when the inline rule came (`check.py`'s
-#: `inline_failures`), with those the PRs on `next` then brought and those `main` landed before the rule reached them, less
-#: the 392 premises of the lemmas and completeness theorems the lock stopped listing and the guarantees deleted with the
-#: falsified conjectures they rest on; a renamed or restated premise counts twice, under both texts, until `--update`
-#: drops the one no tree prints
-INLINE = {"Security": 1567, "Security/Properties": 528, "verity/core/service/flock": 6}
+#: `inline_failures`), with those the PRs on `next` then brought and those `main` landed before the rule reached them; a
+#: renamed or restated premise counts twice, under both texts, until `--update` drops the one no tree prints
+INLINE = {"Security": 1960, "Security/Properties": 530, "verity/core/service/flock": 6}
 
 
 def test_the_inline_list_only_shrinks():
