@@ -801,7 +801,7 @@ def render(out: dict, scope: str, outdir: Path) -> list[Path]:
     info = out["scopes"][scope]
     where = "the world's compute" if info["who"] == "world" else "a datacenter's compute"
     paths = []
-    for panels, width, height, bottom in ((("exfiltration", "infiltration"), 24, 13.5, .47),
+    for panels, width, height, bottom in ((("exfiltration", "infiltration"), 24, 14.5, .5),
                                           (("skipped_work",), 13, 12, .42)):
         fig, axes = plt.subplots(1, len(panels), figsize=(width, height), squeeze=False)
         left = .06 if len(panels) > 1 else .11
