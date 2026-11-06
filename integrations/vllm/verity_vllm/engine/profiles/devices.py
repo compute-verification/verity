@@ -14,6 +14,10 @@ from verity_vllm.target_family import device_token_of_row
 
 DEVICE_NAME: dict[str, str] = {"h200": "NVIDIA H200"}
 
+#: the device of class G (`predict.steps.CLASS_G`), GLM-5.3 at TP8 without batch invariance: the device whose statics `predict.dsa`
+#: writes (its captured launches and `FUSED_MOE_CONFIGS`' tiles)
+CLASS_G_DEVICE = DEVICE_NAME["h200"]
+
 #: the card file (`verity.hardware.load`) each served target is registered on, by the name its device reports, which
 #: `acquire.served_device` holds the device to (`served_device.card_of`: a name in neither this nor `NO_CARD` is refused)
 CARD: dict[str, str] = {"NVIDIA H200": "h200-sxm-141gb", "NVIDIA RTX PRO 6000 Blackwell Server Edition": "rtx-pro-6000-server"}
