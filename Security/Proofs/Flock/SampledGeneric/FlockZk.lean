@@ -244,7 +244,9 @@ abbrev LiveRel (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (vs : (Sess
 /-- **`zk_server_lean_loop` in `Exp`'s terms**: at a statement in the relation with its live path's premises
 (`LiveRel`), the honest view is `2`-below the simulator's at the server's error, against every verifier of the server's
 rounds. The tables' side (`hS`, `hV`, `hD`, `hc`, `hsc`, `hT`), hm96's hiding (`hT1`, `hδ₁`) and the release at the
-session loop (`hL`) are the theorem's premises as it takes them. -/
+session loop (`hL`) are the theorem's premises as it takes them, or give them: `SwCausal` gives `SwCausalOn` at every
+coin vector (`swCausalOn_of_swCausal`), which every stop rule's `StopsOk` takes in (`stopsOk_true`), and `LiveRoundEq`
+gives `LiveRoundEqOwn` (`LiveRoundEq.own`). -/
 theorem server_below (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (vs : (Sess T).SwVals) (t : ℕ)
     (ht : 0 < t) {δ₁ : ℝ≥0∞}
     (hT1 : Claims.Hm96Hiding FlockSoundness.Discharge.ZkView.My FlockSoundness.Discharge.ZkView.saltHash δ₁)
@@ -257,8 +259,9 @@ theorem server_below (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (vs :
       (err rel T vs L pc fc t δ₁ x w v) := by
   obtain ⟨hR, hPr, hLk, hF, hE, hEf⟩ := hR
   intro E
-  have h := Claims.ZKServer.Flock.zk_server_lean_loop rel T vs t ht hT1 hδ₁ hS hV hD hc hsc hT L₀ L hL wk x w hR
-    pc fc hPr hLk hF hE hEf v.Vs v.θ (v.hk x) E
+  have h := Claims.ZKServer.Flock.zk_server_lean_loop rel T vs t ht hT1 hδ₁ hS hV hD hc (fun _ _ => True)
+    ((Sess T).swCausalOn_of_swCausal vs _ hsc) hT L₀ L hL wk x w hR pc fc hPr ((Sess T).stopsOk_true _) hLk hF hE.own
+    hEf v.Vs v.θ (v.hk x) E
   rw [server_real_pr, server_sim_pr, err]
   refine (ENNReal.ofReal_le_ofReal (h.trans_eq (congrArg (fun z => 2 * z) (add_assoc _ _ _)))).trans ?_
   rw [ENNReal.ofReal_mul (by norm_num), ENNReal.ofReal_ofNat, ← mul_add]
