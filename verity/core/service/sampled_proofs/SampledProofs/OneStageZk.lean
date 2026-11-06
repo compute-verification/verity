@@ -636,7 +636,9 @@ private def pinnedBlobs (names : List String) : Core.Blobs :=
   ⟨#[(Flock.Sha512.hash "not a table".toUTF8, "not a table".toUTF8)] ++ (Flock.MUFU_TABLES.filter fun t =>
     names.contains t.name).toArray.map fun t => ((Flock.unhex t.sha512).toOption.getD .empty, .empty)⟩
 
-private def noOwn : Own := ⟨Json.mkObj [("definitions", Json.mkObj [])], .empty, Json.null, "", "", none⟩
+private def noOwn : Own :=
+  { programJ := Json.mkObj [("definitions", Json.mkObj [])], program := .empty, partition := Json.null, circuit := "",
+    pub := "", registered := none }
 
 #guard refusal (tablesHeld (pinnedBlobs [])) == ""
 #guard refusal (tablesHeld (pinnedBlobs ["ex2"])) == s!"{NO_TABLES} ex2"
