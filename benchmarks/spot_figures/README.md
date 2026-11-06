@@ -52,8 +52,10 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
     and its statement's fixed ones, with its statement's cap, the type being the card's block of the same name, else
     of the same Definition and K; a type the card doesn't measure is computed from its staged witness bits (the
     measured types' median seconds a witness bit, a fixed cost on their least-squares line in k_log, a statement's
-    2^35 bits), and the caption gives each line's computed share. A line's marginal overhead is what its blocks come
-    to over its MACs at the card's peak.
+    2^35 bits). A line's marginal overhead is what its blocks come to over its MACs at the card's peak. The caption
+    gives each line's computed share twice: of its marginal overhead, and at β = 1% of its sampled replay block's
+    proving (`computed_proving`), where a design that samples a few blocks of a type pays its statement's whole
+    fixed cost, so a type small in the marginal can be much of the proving.
   - One line per server configuration (`CONFIGURATIONS`), each starting at its own tax, hollow while the tax is
     priced, with its range as a bar: (A) tokens only (the token ids, the schedule record and the KV cache at window
     edges committed; a replay block is a request), (B) each layer's state (a replay block is one layer of one token),
@@ -133,5 +135,5 @@ Limits of the model:
   returns more (logits, state) serves more, and the cap is then too low.
 - The two-stage write forms need a harm bound at the footprint, which no lemma states yet, and (B) replays a layer of
   one token at its share of its request's replay, from state it retains.
-- A type the `proof_overhead` card doesn't measure is priced from its staged witness bits, not measured; the caption
-  gives each line's share of it.
+- A type the `proof_overhead` card doesn't measure is priced from its staged witness bits, not measured, its
+  statement's fixed cost included; the caption gives each line's share of it.

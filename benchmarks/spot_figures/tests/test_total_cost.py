@@ -132,6 +132,17 @@ def test_the_write_form_is_at_most_every_replay_block_at_its_footprint():
     assert t.write_form(cells, {"merged": 16, "k": {0: 1}, "q": 1e-12}, 1000, .01, 500) == 1000 * 500
 
 
+def test_a_computed_types_fixed_cost_counts_in_its_share_of_proving():
+    """Two of a hundred narrow blocks sampled pay their statement's whole fixed cost, so a computed type at 2 of a
+    sampled replay block's 3 marginal seconds is 52 of its 53."""
+    cells = [Cell(100, 16, prove=1.0, fixed=50.0, cap=1000), Cell(1, 64, stratum=64, prove=1.0, cap=10)]
+    row = {"merged": 16, "k": {0: 2, 64: 1}}
+    assert t.computed_proving(cells, row, (True, False)) == pytest.approx(52 / 53, rel=1e-12)
+    assert (t.computed_proving(cells, row, (False, False)), t.computed_proving(cells, row, (True, True))) == (0, 1)
+    with pytest.raises(ValueError):
+        t.computed_proving(cells, row, (True,))
+
+
 @pytest.fixture(scope="module")
 def measured(tmp_path_factory) -> dict:
     """One scope at four shares, with (A)'s tax measured."""
@@ -177,6 +188,11 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
     assert "card_influenceTwo_le_served_min" in caps["exfiltration"] and "card_influenceTwo_le_min" in caps["exfiltration"]
     assert "serve tax 3%" in caps["exfiltration"] and "measured" in caps["exfiltration"]
     assert "At β = 1% every line is bounded here only by everything the scope serves" in caps["exfiltration"]
+    at = out["betas"].index(f1.RATIO_BUDGET)
+    for name in ("tokens", "per_expert", "layer_of_token"):
+        s = next(x for x in out["panels"]["exfiltration"]["series"] if x["config"] == name)
+        assert all(0 < v < 1 for v in s["computed_proving"])
+        assert f"{t._share(s['computed_proving'][at])} of its sampled replay block's proving" in caps["exfiltration"]
     assert "everything the scope serves (" not in caps["infiltration"]
     assert "a lower bound, the hashing alone" in caps["skipped_work"]
     rows = t.at_budgets(out)

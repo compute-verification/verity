@@ -50,7 +50,7 @@ from textwrap import fill
 
 import cards as spot_cards
 import figure1 as f1
-from verity.core.protocols.sampled_proofs.optimize import Cell, leak_count, two_stage_design
+from verity.core.protocols.sampled_proofs.optimize import Cell, leak_count, two_stage_design, two_stage_price
 from verity.ml.circuits.partition_v2 import unit_class
 
 SCHEMA = "spot-figure1/v2"
@@ -243,6 +243,18 @@ def write_form(cells: list[Cell], row: dict, replay_blocks: float, delta: float,
     return min(replay_blocks * top, log(1 / delta) * best)
 
 
+def computed_proving(cells: list[Cell], row: dict, computed: tuple[bool, ...]) -> float:
+    """The share of a sampled replay block's proving under `row`'s two-stage design, its statements' fixed costs
+    included, that is in the cells `computed` marks: the types `priced` computes rather than measures.  A design that
+    samples a few blocks of a type pays its statement's fixed cost on them, so this can be far above the type's share
+    of the marginal."""
+    split = [replace(c, stratum=0 if _size_class(c.bits) <= row["merged"] else _size_class(c.bits)) for c in cells]
+    whole = two_stage_price(split, row["k"])[2]
+    measured = two_stage_price([replace(c, prove=0.0, fixed=0.0) if x else c
+                                for c, x in zip(split, computed, strict=True)], row["k"])[2]
+    return 1 - measured / whole
+
+
 @dataclass(frozen=True)
 class Grain:
     """A two-stage configuration's replay blocks on one scope: their count, cells, replay cost and footprint."""
@@ -267,8 +279,8 @@ def _plan(row: dict | None) -> dict | None:
 
 def _point(job: tuple) -> dict:
     """One configuration's bounds at one budget, in GPU-seconds: each panel's, with the plan and, for the capped
-    exfiltration, which of the count and the served bits binds."""
-    name, m, g, budget = job
+    exfiltration, which of the count and the served bits binds and the computed share of its design's proving."""
+    name, m, g, budget, computed = job
     served = f1.served_total(m)
     if name == "every_block":
         total_bits = m.scope.requests * sum(c.n * c.bits for c in m.cells)
@@ -284,7 +296,8 @@ def _point(job: tuple) -> dict:
     row = two_stage_design(g.cells, g.replay_blocks, m.delta, budget=budget, replay=g.replay, h=m.byte_s,
                            served=m.served)
     return {"exfiltration": {"y": min(row["bound"], served), "count": row["bound"],
-                             "binds": "served" if served <= row["bound"] else "count", "plan": _plan(row)},
+                             "binds": "served" if served <= row["bound"] else "count", "plan": _plan(row),
+                             "computed_proving": computed_proving(list(g.cells), row, computed)},
             "infiltration": {"y": write_form(list(g.cells), row, g.replay_blocks, m.delta, g.footprint),
                              "plan": _plan(row)}}
 
@@ -324,6 +337,15 @@ def captions(out: dict, scope: str) -> dict[str, str]:
         return f"serve tax {_share(t['tax'])} ({_share(t['low'])} to {_share(t['high'])}; {kind}: {parts})"
 
     conf = out["configurations"]
+    at = out["betas"].index(f1.RATIO_BUDGET) if f1.RATIO_BUDGET in out["betas"] else None
+
+    def proving(name: str) -> str:
+        if at is None:
+            return ""
+        share = lines["exfiltration"][name]["computed_proving"][at]
+        return (f" At β = {_share(f1.RATIO_BUDGET)}, {_share(share)} of its sampled replay block's proving, the "
+                "statements' fixed costs included, is computed.")
+
     head = ("x is the serve tax, what each configuration's change to the production server costs on every token, plus "
             "β, the share of compute spent on replays and proofs of the sampled proof blocks; each line starts at its "
             "tax, hollow where the tax is priced. Every line proves a proof block at its type's measured seconds, a "
@@ -337,7 +359,7 @@ def captions(out: dict, scope: str) -> dict[str, str]:
     exfil_cuts = "".join(
         f" {e.label} (dash-dot; {k['label']}): {short}'s serving and serve tax on the partition card {k['name']}'s "
         f"cut, its marginal proof overhead {conf[n]['overhead']:.3g}×, {_share(conf[n]['computed_share'])} of it "
-        f"computed; the same form: {_binds(out['betas'], lines['exfiltration'][n]['binds'])}."
+        f"computed; the same form: {_binds(out['betas'], lines['exfiltration'][n]['binds'])}.{proving(n)}"
         for n, (e, k) in cuts.items())
     infil_cuts = "".join(f" {e.label} (dash-dot): {short}'s footprint at its own design." for e, _ in cuts.values())
     trivial = [CONFIGURATIONS[n].label.split(" ")[0] for n, s in lines["exfiltration"].items()
@@ -352,9 +374,10 @@ def captions(out: dict, scope: str) -> dict[str, str]:
     exfil += (f" {a.label}: serving commits {a.commits}, a replay block is {a.replay_block}, {priced('tokens')}; the "
              f"capped sets' form (card_influenceTwo_le_served_min) at most the {sc['served_bits']:.2g} bits the scope "
              f"serves (card_influenceTwo_le_min): {_binds(out['betas'], lines['exfiltration']['tokens']['binds'])}."
-             f"{exfil_cuts} {b.label}: serving commits {b.commits}, a replay block is {b.replay_block}, "
-             f"{priced('layer_of_token')}; each replay block charged at most its request's served bits, at least the "
-             f"lemma's charge: {_binds(out['betas'], lines['exfiltration']['layer_of_token']['binds'])}."
+             f"{proving('tokens')}{exfil_cuts} {b.label}: serving commits {b.commits}, a replay block is "
+             f"{b.replay_block}, {priced('layer_of_token')}; each replay block charged at most its request's served "
+             f"bits, at least the lemma's charge: {_binds(out['betas'], lines['exfiltration']['layer_of_token']['binds'])}."
+             f"{proving('layer_of_token')}"
              f" {c.label} (dashed): serving commits {c.commits}, sampled one-stage, {priced('every_block')}; "
              "consumers.exfiltration_bound's form, which bits are incorrect and where, at most the served bits by the "
              "same count (an influence set is a set of served outputs; Lean states it for two-stage only): "
@@ -393,6 +416,8 @@ def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, eac
                 f1.Fill.of(strata, i["proof_blocks"].value), i["proof_overhead"].value)
 
     lines = {n: line(i) for n, i in inputs.items()}
+    computed = {n: tuple(x["priced"] == "computed" for x in i["partition"].value["strata"] if x["per_token"] > 0)
+                for n, i in inputs.items()}
     part, fill, h = lines["tokens"]
     betas = sorted(set(BETAS) | set(c["budgets"].value))
     inf_card = sc["infiltration"]["value"]
@@ -409,13 +434,15 @@ def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, eac
             tb, fl, oh = lines[name]
             m = f1.model(inputs[name], tb, s, oh, fl) if conf.partition else base
             g = None if name == "every_block" else grain(m, name, layers, boundary, tokens)
-            pts = list(each(_point, [(name, m, g, beta * s.gpu_seconds) for beta in betas]))
+            pts = list(each(_point, [(name, m, g, beta * s.gpu_seconds, computed[name]) for beta in betas]))
             for panel in conf.panels:
                 rows = [p[panel] for p in pts]
                 series[panel].append({"scope": s.name, "config": name, "beta": betas,
                                       "x": [tax[name]["tax"] + b for b in betas], "y": [r["y"] for r in rows],
                                       **({"binds": [r["binds"] for r in rows]} if "binds" in rows[0] else {}),
                                       **({"count": [r["count"] for r in rows]} if "count" in rows[0] else {}),
+                                      **({"computed_proving": [r["computed_proving"] for r in rows]}
+                                         if "computed_proving" in rows[0] else {}),
                                       "plan": [r["plan"] for r in rows]})
         out_scopes[s.name] = {"who": s.who, "period": s.period, "gpus": c[f"{s.who}_gpus"].value,
                               "gpu_seconds": s.gpu_seconds, "requests": s.requests,
