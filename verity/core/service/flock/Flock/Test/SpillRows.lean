@@ -5,7 +5,12 @@ one fewer it is not. That includes a row whose bytes mod 128 are at least 112, w
 bytes' end and the padding's start, the `hm96` block only padding: H1's tile receipt at K = 384 (8 (KS + m) = 8 · 14 =
 112 bytes) and its lanes' partials row there. `proved_scope.rs`'s `v2_rows_are_the_parsers` runs the same rows.
 -/
-import Flock.ProvedScope
+module
+
+public import Flock.ProvedScope
+meta import Flock.ProvedScope
+
+@[expose] public section
 
 namespace Flock.Test.SpillRows
 

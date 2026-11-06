@@ -76,6 +76,16 @@ def moved(tmp_path) -> Path:
     return r
 
 
+def test_a_second_run_on_the_moved_tree_changes_nothing(moved):
+    """`restack.py` carries a branch across a move by rerunning it, and `stage.py` refuses a move whose rerun changes
+    anything: with nothing of the map left to move, no second (empty) entry goes to `moves.json`."""
+    git(moved, "commit", "-q", "-m", "moved")
+    subprocess.run(["python3", str(LAYOUT), "--root", str(moved), "--map", str(moved.parent / "map.toml"), "--no-lock"],
+                   check=True, capture_output=True)
+    assert git(moved, "status", "--porcelain") == ""
+    assert len(json.loads((moved / "tools/research/src/research/store/moves.json").read_text())["moves"]) == 1
+
+
 def test_a_string_literal_in_rust_or_lean_keeps_its_text_and_only_a_path_in_one_moves(moved):
     rs = (moved / "prover.rs").read_text()
     assert 'const TAG: &str = "sha256 (verity.randomness)";' in rs, "a domain tag is protocol text"
@@ -126,7 +136,7 @@ def _split_tree(tmp_path: Path, split: str, *args: str) -> subprocess.CompletedP
 
 def test_a_reference_to_a_directory_the_map_splits_fails_unless_split_acknowledges_it(tmp_path):
     """The rewrite of a split directory follows its larger part, so a gate naming `backends/flock/` would stop covering the
-    Lean verifier that left for core/ (the C-Flock gates that failed open): each such reference is an error until [split]
+    Lean verifier that left for core/ (the Flock gates that failed open): each such reference is an error until [split]
     names it with its reason, and an acknowledgement nothing needs is an error too. A reference to the part that left is
     exact, and needs none. On a branch's tree (restack.py's `--report-splits`) they're noted instead: the owner's to check."""
     p = _split_tree(tmp_path / "bare", "")

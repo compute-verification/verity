@@ -14,8 +14,8 @@
 //
 // ROLL = 1 runs rounds 16..79 as a loop of 16-round bodies (a quarter of the code: a lone warp otherwise waits on
 // instruction fetch), 0 straight-line, 2 all 80 rounds as five passes of one 16-round body with the schedule in place, the
-// form the codec's and the bandwidth tagger's kernels hold, statement for statement: two thirds of ROLL 1's SASS, faster
-// than it in dither's h1c and h1r, slower in its h1u.
+// form the codecs', the bandwidth tagger's and the streamed wipe's kernels run: two thirds of ROLL 1's SASS, faster than it
+// in dither's h1c and h1r, slower in its h1u.
 //
 // `sha::` holds the committer's forms over the same constants: `compress_from<R0>` from a midstate, `compress_kw` over a
 // precomputed schedule, and the issue knobs SHA_ADD, SHA_ROT and SHA_ROLL (below), with the helpers that build their inputs.

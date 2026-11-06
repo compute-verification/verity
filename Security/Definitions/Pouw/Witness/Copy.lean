@@ -1,6 +1,8 @@
-import Definitions.Pouw.Basic.Prob
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Analysis.SpecialFunctions.Pow.Real
+module
+
+public import Definitions.Pouw.Basic.Prob
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
 /-!
 # R_copy: a restricted model with a provable, noise-dependent bound (trusted; tt-attacks §6)
@@ -14,6 +16,8 @@ R_copy captures tt-attacks §2's floor and its route 1 (copies) and nothing else
 fixed before the salt), not the FP32 route (8 units per word), not shared tables. It is a witness that a TT-shaped
 bound can hold because of the noise, not evidence for TT.
 -/
+
+@[expose] public section
 
 namespace Pouw.Copy
 

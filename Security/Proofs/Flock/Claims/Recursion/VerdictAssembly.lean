@@ -1,9 +1,11 @@
-import Proofs.Flock.Claims.Recursion.VerdictRowG
-import Proofs.Flock.Claims.Recursion.RecordCanon
-import Proofs.Flock.Claims.Recursion.DecodeTies
-import Proofs.Flock.Claims.Recursion.VerdictRowDPieces
-import Proofs.Flock.Claims.Recursion.VerdictRowR
-import Proofs.Flock.Claims.Recursion.VerdictRowE
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRowG
+public import Proofs.Flock.Claims.Recursion.RecordCanon
+public import Proofs.Flock.Claims.Recursion.DecodeTies
+public import Proofs.Flock.Claims.Recursion.VerdictRowDPieces
+public import Proofs.Flock.Claims.Recursion.VerdictRowR
+public import Proofs.Flock.Claims.Recursion.VerdictRowE
 
 /-!
 # The verdict's rows, assembled at a table
@@ -23,6 +25,8 @@ the reader reads at the dense form, from the rows as their owners proved them:
   (`rowE_of_units`), where `verifierRows` returns by R's sizes (`verifierRows_rep`).
 -/
 
+@[expose] public section
+
 namespace RecDeploy.Rows
 
 open Flock
@@ -41,7 +45,7 @@ variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.
 
 /-- **Table `i`'s reps run at the decision**, from rows G, B, C, D, R and E as proved, at the hypotheses they still
 take: B's frames, row L, D's pieces and their ties, R's structure, sizes and residuals, and E's unit sums and ends. -/
-theorem runs_assembled {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+theorem runs_assembled {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size)
     (hti : i < D.spec.tables.size)
     (hframed : ∀ r : Fin 2, FramedAt ((D.files cls i).stream r).rounds 0 (repFrames (D.files cls i).st

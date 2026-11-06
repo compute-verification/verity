@@ -1,7 +1,9 @@
-import Flock.Hm96
-import Flock.HmRow
-import Randomness
-import MemoryChallenger.FrameV3
+module
+
+public import Flock.Hm96
+public import Flock.HmRow
+public import Randomness
+public import Attest.FrameV3Sha512
 
 /-!
 # The memory challenger's records and coins
@@ -12,6 +14,10 @@ and its header, the round record (`Round.value`), the records root, the signed m
 exception is an `Except.error` here, and where the Python's caller reads an exception as "no" (`verify_coin`), so does the
 Lean. Integers are big-endian.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace MemoryChallenger
 

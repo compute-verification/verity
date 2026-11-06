@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.ZK.CutSession
-import Proofs.Flock.Claims.ZK.FirstRefusal
-import Proofs.Flock.Claims.ZK.Round0
-import Proofs.Flock.Claims.ZK.SaltProver
+module
+
+public import Proofs.Flock.Claims.ZK.CutSession
+public import Proofs.Flock.Claims.ZK.FirstRefusal
+public import Proofs.Flock.Claims.ZK.Round0
+public import Proofs.Flock.Claims.ZK.SaltProver
 
 /-!
 # The deployed masked session's round plan
@@ -22,6 +24,8 @@ The coin plan, the round encodings and the last message of `flock-circuit --zk` 
   where it stops before. `finExe`: `Final.encode` of `sessionCut`'s record and proof files on the view, `[]` where it
   stops.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.KS.Flock
-import Proofs.Flock.Claims.DeployTables
-import Proofs.Flock.Claims.GS.RadiusDeploy
-import Proofs.Flock.Soundness.CompiledSound
+module
+
+public import Proofs.Flock.Claims.KS.Flock
+public import Proofs.Flock.Claims.DeployTables
+public import Proofs.Flock.Claims.GS.RadiusDeploy
+public import Proofs.Flock.Soundness.CompiledSound
 
 /-!
 # Flock's KS at the deployed instances, from one wait's bound
@@ -12,6 +14,8 @@ columns' zero the empty column (`instZeroListCol`): `K = 2^256 > 0` (`cap_pos`) 
 by table wherever the verifier accepts some run. At an in-scope statement the relation splits (`splits_of_inScope`, from
 `relS_split`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

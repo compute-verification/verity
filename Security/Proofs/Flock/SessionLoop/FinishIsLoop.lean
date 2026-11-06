@@ -1,7 +1,9 @@
-import Proofs.Flock.SessionLoop.FinishIsRet
-import Proofs.Flock.SessionLoop.FinRepTarget
-import Proofs.Flock.SessionLoop.FinRepRestart
-import Proofs.Flock.SessionLoop.FinRepL0
+module
+
+public import Proofs.Flock.SessionLoop.FinishIsRet
+public import Proofs.Flock.SessionLoop.FinRepTarget
+public import Proofs.Flock.SessionLoop.FinRepRestart
+public import Proofs.Flock.SessionLoop.FinRepL0
 
 /-!
 # `FinishIs` at `SessionLoopZKDeployed`'s premises
@@ -12,6 +14,8 @@ masked scope with a witness where the loop draws level 0 from the tape (`Loop.Sr
 
 **`Loop.finishIs`**: `FinishIs` at `SessionLoopZKDeployed`'s premises, with no other hypothesis.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

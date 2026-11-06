@@ -1,5 +1,7 @@
-import Definitions.Nci.Guarantees.CompliesCK
-import Proofs.Core.Padding
+module
+
+public import Definitions.Nci.Guarantees.CompliesCK
+public import Proofs.Core.Padding
 
 /-!
 # Proofs of NCI's policy as a `(c, k)`-partition
@@ -8,6 +10,8 @@ A Boolean declaration's novel reads are its unregistered input gates, so a compl
 most `α |I| ≤ α Γ` of them, and `Padding` makes the division a `(Γ, ⌊αΓ⌋)`-partition. Through the bit-level expansion,
 an IU's size becomes its width, at least `|I|` and at most `W |I|`, and its novel reads do not grow (`ExpandSize`).
 -/
+
+@[expose] public section
 
 namespace Verity
 

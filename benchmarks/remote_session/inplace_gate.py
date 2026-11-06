@@ -1,7 +1,7 @@
 """The in-place pass's gate and timing on one GPU (`inplace.py`; `inplace.sh` builds session.cu and runs it).
 
 The gate, before anything is timed, is over a store registered as vLLM's binder registers one (`verity_vllm.protocols.remote_bandwidth`'s
-`Store`, `TorchBacking`, `PagedBacking` and `page_layout`): weight tensors (bf16 with an unregistered tail, int8 held
+`NodeMemory`, `TorchBacking`, `PagedBacking` and `page_layout`): weight tensors (bf16 with an unregistered tail, int8 held
 transposed, a view 48 bytes into a fused tensor, a plain bf16 matrix) and a KV pool of three layers, two in
 FlashAttention's layout (2, pages, slots, heads, dim) sharing one storage and one page-major (pages, 2, ...). Each
 check is against the driver's reference over each chunk as the binder reads it (`backing.read`):
@@ -47,14 +47,14 @@ from device import BLOCK, PER_LEAF, Lib, digests, rb, store_salt  # noqa: E402
 from inplace import FUSED_H0, InPlace, Region, level_at  # noqa: E402
 from verity_vllm.protocols.remote_bandwidth.binder import PagedBacking, TorchBacking, page_layout, storage_bytes  # noqa: E402
 from verity_vllm.protocols.remote_bandwidth.interface import IDENTITY, PageLayout  # noqa: E402
-from verity_vllm.protocols.remote_bandwidth.registry import RemoteBandwidthReceipt, Store  # noqa: E402
+from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory, RemoteBandwidthReceipt  # noqa: E402
 
 ROWS = rb.SKETCH_ROWS
 
 
 def register(torch, weights: list, kv: list, pages: int, slots: int):
     """A binder's store over `weights` ((name, tensor)) and the KV layers `kv`: the store and each region's backing."""
-    store, backs, receipt = Store(), [], RemoteBandwidthReceipt()
+    store, backs, receipt = NodeMemory(), [], RemoteBandwidthReceipt()
     for name, t in weights:
         b = TorchBacking.of_tensor(t, BLOCK)
         store.register(name, "hbm", "weights", b, block_bytes=BLOCK, codec=IDENTITY, receipt=receipt,

@@ -1,4 +1,4 @@
-"""The monitoring period's pooled step (`monitoring`): the count is the least within δ of #4413's C(T, M)·p^M, the
+"""The monitoring period's pooled step (`monitoring`): the count is the least within δ of the count bound's C(T, M)·p^M, the
 reference year at 10⁻⁶ leaves one session uncovered where the union T·eps doesn't reach δ, the per-window figure is the
 session's openings bound at δ/T, and a rejected session pools nothing."""
 
@@ -16,7 +16,7 @@ EPS = Fraction(2 ** 24 + 34, 2 ** 64)
 ALL_DRAWN = {"verdict": "accept", "reason": None, "public": {"eps": str(EPS), "q_bytes": 34 * codec.BLOCK_BYTES},
              "profile": {"delta": str(Fraction(1, 2 ** 40)), "gaps": [], "receipts": 34, "windows": [[17, 17], [17, 17]],
                          "wrong": "0"}}
-"""An accepted run of the subprotocol at 64 KiB (r20261025-235311-4b2b): two windows of 17 receipts, every one drawn."""
+"""An accepted run of the subprotocol at 64 KiB: two windows of 17 receipts, every one drawn."""
 
 
 def partly_drawn() -> dict:
@@ -97,3 +97,12 @@ def test_the_cli_reads_a_legs_bandwidth_json(tmp_path, capsys):
     got = json.loads((tmp_path / "m.json").read_text())
     assert got == json.loads(capsys.readouterr().out)
     assert got["periods"]["month"]["sessions"] == 30 * 144
+
+
+def test_each_period_is_labelled_as_one_session_scaled_up():
+    """No period is measured: each row says it is the one session scaled to the period's sessions, and the statement
+    is named by its Lean declaration and file alone."""
+    r = monitoring.table(ALL_DRAWN, 12_500, 600)
+    for name, row in r["periods"].items():
+        assert row["basis"] == f"one session scaled up to {row['sessions']} sessions, not a measured {name}"
+    assert set(r["statement"]) == {"name", "file"}

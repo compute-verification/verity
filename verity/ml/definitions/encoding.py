@@ -1,6 +1,6 @@
 """A specialization's Definitions in the codec's v0 form (`encode_specialization`), a Definition's digest (`definition_digest`), and the
 values of a varying static a row's graph is partitioned at (`word_values`): what a row's Program graph
-(`verity_vllm.pipeline.program_graph`) and C-Flock's statements (`verity_flock.boolean_export`, `class_statement`) share.
+(`verity_vllm.pipeline.program_graph`) and Flock's statements (`verity_flock.boolean_export`, `class_statement`) share.
 """
 from __future__ import annotations
 

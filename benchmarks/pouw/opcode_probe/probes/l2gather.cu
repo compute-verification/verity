@@ -1,7 +1,6 @@
-// EPS1 DATASHEET r5 (note:20261017T0332Z-draft-eps1-datasheet): the sustained L2 random-row gather rate, which
-// machine_model/data/table.toml records beside `l2` (r20261017-071007-85c9: 3.85 TB/s). It is no census row and doesn't
-// price the table route: a rate at random rows rests on the cheater's access pattern, which the cheater controls
-// (coordinator, 17 Oct), so no probe here writes a census line.
+// The sustained L2 random-row gather rate, which machine_model/data/table.toml records beside `l2` (3.85 TB/s). It is
+// no census row and doesn't price the table route: a rate at random rows rests on the cheater's access pattern, which
+// the cheater controls, so no probe here writes a census line.
 // Each lane gathers one row of W bytes from an L2-resident table at a fresh pseudo-random index (independent each op, so
 // no coalescing and no reuse), via one load of 64/128/256 bits. The table bytes are
 // set at runtime from a.mode (its log2), swept 1 MB..512 MB, so the rate-vs-size curve shows the L1/L2 cliff and the DRAM

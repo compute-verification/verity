@@ -1,9 +1,11 @@
-import Definitions.Core.TC.Spec
-import Definitions.Core.TC.Relation
-import Definitions.Core.Assumptions
-import Proofs.Core.TC.Proofs.Step
-import Proofs.Core.TC.Proofs.Words
-import Proofs.Core.TC.Proofs.Complete
+module
+
+public import Definitions.Core.TC.Spec
+public import Definitions.Core.TC.Relation
+public import Definitions.Core.Assumptions
+public import Proofs.Core.TC.Proofs.Step
+public import Proofs.Core.TC.Proofs.Words
+public import Proofs.Core.TC.Proofs.Complete
 
 /-!
 # The step relation is the step semantics
@@ -20,6 +22,8 @@ mode, over the integers:
 A verification unit starts from `zero_state = decode_state(+0)` and feeds each step's output state to the next, so the
 step theorem applies to every step of a unit in turn.
 -/
+
+@[expose] public section
 
 open Verity.TC.Relation Verity.TC.Spec Verity.Assumptions Verity.TC.Proofs
 

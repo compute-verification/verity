@@ -1,4 +1,6 @@
-import Definitions.NetworkCertifier.Run
+module
+
+public import Definitions.NetworkCertifier.Run
 
 /-!
 # Ingress: the interaction read inward, content, and acceptance
@@ -23,6 +25,8 @@ and X's egress with them: it reacts to feedback, as the operator does in the egr
 inference-only policy charges as reads. What is left is when they arrive: the occupancy of the ingress grid.
 `linkFrames` erases the timing from a record and keeps each link's frames in the order they were released.
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

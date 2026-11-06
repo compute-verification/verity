@@ -1,7 +1,9 @@
-import Definitions.Pouw.PearlC.RowPrims
-import Definitions.Core.Fp32
-import Definitions.Core.Prims
-import Definitions.Core.Scalar
+module
+
+public import Definitions.Pouw.PearlC.RowPrims
+public import Definitions.Core.Fp32
+public import Definitions.Core.Prims
+public import Definitions.Core.Scalar
 
 /-!
 # The row units as core circuits (definitions only)
@@ -28,6 +30,8 @@ in which order and through which wiring, the constants, the widths and the outpu
 own gates and their `CallGraph`, with descriptor digests pinned, by `tests/test_circuit_row_lean.py`; each primitive's
 semantics is the trusted part.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.RowCircuit
 

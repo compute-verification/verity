@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.SessionSC
-import Proofs.Flock.Soundness.Game.LockOff
+module
+
+public import Proofs.Flock.Claims.KS.SessionSC
+public import Proofs.Flock.Soundness.Game.LockOff
 
 /-!
 # Off the table without a self-clash, with each slot's term raw
@@ -10,6 +12,8 @@ that open a position off the table chosen there (`session_sound_of_table_accL_ra
 the per-position off mass at the slot's node (`Lock.nodeOff`), which is at most the mass off any other table there
 (`Lock.nodeOff_le_of_plurality`): `session_sound_of_table_accL_nodeOff`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 

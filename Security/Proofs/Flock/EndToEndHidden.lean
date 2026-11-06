@@ -1,4 +1,6 @@
-import Proofs.Flock.EndToEndHidden.Statement
+module
+
+public import Proofs.Flock.EndToEndHidden.Statement
 
 /-!
 # Proof of C-Flock's end-to-end guarantee under hidden outputs
@@ -13,6 +15,8 @@ unrolls to, which `HmOut.parse` reads from the file (`Flock.Desc.parse_flat`). `
 `EndToEndHidden_refSetup` shows the hidden-output statements' reference setup `y₀` (theirs and `EndToEndRegistered`'s)
 is no extra condition: every draw flock-verify accepts gives one, at any number of tables.
 -/
+
+@[expose] public section
 
 namespace Flock.SecurityProofs
 

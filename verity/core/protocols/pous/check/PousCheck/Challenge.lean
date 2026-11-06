@@ -1,4 +1,6 @@
-import PousCheck.Randomness
+module
+
+public import Randomness
 
 /-!
 # The audit's challenges
@@ -9,9 +11,11 @@ beacon value keys round `j` and is also its nonce. Every key is bound to the epo
 challenge exists before setup has committed to both.
 -/
 
+@[expose] public section
+
 namespace PousCheck.Challenge
 
-open Randomness
+open FlockSoundness.Randomness
 
 def AUDIT_ID_DOMAIN := "verity/pous/p2-audit-id/v4"
 def CHALLENGE_DOMAIN := "verity/pous/p2-audit-challenge/v4"
@@ -32,7 +36,7 @@ def roundKey (beacon aid epoch root : ByteArray) (j : Nat) : ByteArray :=
   derive beacon ROUND_DOMAIN [("audit", .bytes aid), ("epoch", .bytes epoch), ("root", .bytes root), ("round", .int j)]
 
 /-- Round `j`'s block index under `key`: `key.uniform(blocks, j)`; `none` only for `blocks = 0`. -/
-def index (key : ByteArray) (blocks j : Nat) : Option Nat := uniform key blocks [.int j]
+def index (key : ByteArray) (blocks j : Nat) : Option Nat := uniformExact key blocks [.int j]
 
 /-- Round `j`'s mode-0 nonce: `key.stream(("nonce", j), 32)`. -/
 def nonce (key : ByteArray) (j : Nat) : ByteArray := stream key [.str "nonce", .int j] NONCE

@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.NumbersDeploy
-import Proofs.Flock.Claims.Sampling.Assembled
-import Proofs.Flock.Level3.RowV2
-import Proofs.Flock.Claims.Sampling.Reference.Prover
+module
+
+public import Proofs.Flock.Claims.NumbersDeploy
+public import Proofs.Flock.Claims.Sampling.Assembled
+public import Proofs.Flock.Level3.RowV2
+public import Proofs.Flock.Claims.Sampling.Reference.Prover
 
 /-!
 # The deployed sampling record
@@ -46,6 +48,8 @@ those discharged, reading of `F` its KS and its decoder's `ListWithin` and step 
   each session in Flock's plain scope), the decoder's facts `sampling_assembled_plain`'s.
 -/
 
+@[expose] public section
+
 namespace SamplingDeploy
 
 open Claims Claims.Sampling
@@ -63,14 +67,14 @@ positions a session opens (`reads`) and the Flock witness that encodes what it r
 statement. -/
 structure Code where
   V : Verifier FlockDeploy.Coin
-  parse : Msg → Option Stmt
+  parse : Msg → Option AuditStatement
   scopeCheck : Msg → Bool
-  partition : Stmt → Option Partition
+  partition : AuditStatement → Option Partition
   stage2 : (x : Msg) → Finset (Fin (V.k x))
-  checked : (x : Msg) → (Fin (V.k x) → FlockDeploy.Coin) → List (ℕ × ℕ)
-  rounds : (x : Msg) → ℕ × ℕ → Finset (Fin (V.k x))
-  session : Msg → ℕ × ℕ → Seen → Option (Msg × Seen)
-  reveal : Stmt → ℕ × ℕ → Seen → Claims.Flock.Wit → List (List Msg × Opening Bool)
+  checked : (x : Msg) → (Fin (V.k x) → FlockDeploy.Coin) → List ℕ
+  rounds : (x : Msg) → ℕ → Finset (Fin (V.k x))
+  session : Msg → ℕ → Seen → Option (Msg × Seen)
+  reveal : AuditStatement → ℕ → Seen → Claims.Flock.Wit → List (List Msg × Opening Bool)
   own : Array _root_.Flock.Registered.Port
   at_ : List Msg → ℕ → Option (Msg × ℕ)
   layer : (Msg → Msg) → List Msg → List (Opening Bool) → List Msg
@@ -83,8 +87,8 @@ structure Code where
   reveals : Msg → ℕ
   sessions : Msg → ℕ
   step : Msg → List (Msg × Msg) → Reference.Step
-  reads : Stmt → Msg → List ℕ
-  wit : Stmt → Msg → List (Opening Bool) → Claims.Flock.Wit
+  reads : AuditStatement → Msg → List ℕ
+  wit : AuditStatement → Msg → List (Opening Bool) → Claims.Flock.Wit
 
 /-! ## The trace commitment -/
 
@@ -113,7 +117,7 @@ theorem row_places (place : ℕ → (w : ℕ) × Fin w) (bits : Msg → ℕ → 
   simpa using congrFun (List.ofFn_inj.1 hb) (place p).2
 
 /-- **The deployed trace commitment**: hm96 leaves of the rows under the verifier's own registered path check. -/
-def commit (c : Code) : Commitment Bool :=
+def commit (c : Code) : CommitmentScheme Bool :=
   pathCommit c.at_ (hm96Leaf (row c.place c.bits) c.salt) c.π (regPath c.own) c.layer
 
 /-- The deepest registered port's levels. -/
@@ -174,7 +178,7 @@ theorem opens_calls_le (H : Msg → Msg) (c : Code) (roots : List Msg) (o : Open
 /-- The proof units at `x` under the code's parser and partition evaluation, `0` on a statement that doesn't parse. -/
 def units (c : Code) (x : Msg) : ℕ :=
   match c.parse x with
-  | some s => ((c.partition s).getD ⟨[]⟩).sizes.sum
+  | some s => ((c.partition s).getD ⟨[]⟩).blocks.length
   | none => 0
 
 /-- **The deployed sampling record** at a Flock record `F`, the sessions', and the verifier's code `c`: the sessions'

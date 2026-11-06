@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Prob
-import Proofs.Flock.Soundness.Game.Expect
+module
+
+public import Proofs.Flock.Claims.Prob
+public import Proofs.Flock.Soundness.Game.Expect
 
 /-!
 # The coin law: a game played on `Claims`' coin sequence
@@ -21,6 +23,8 @@ coins and proves that the result has the game's law.
 * `forkX`, `ex_fork`: the same for two plays sharing their first `j` round coins (`Claims.forkCoins j`), the law of
   `B`'s two runs: one play to round `j`, then two independent continuations.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge
 

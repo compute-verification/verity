@@ -1,7 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.ZkReg.BindH
-import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
-import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
-import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkReg.BindH
+public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+public import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
+import all Init.Data.Array.Basic
 
 /-!
 # The registered check at an accepted hidden-output `--zk --registered` outcome
@@ -13,6 +16,8 @@ record's draw `d` (`HiddenExec.setupTables_okH`), over `HmOut.drawn c pub d` (`H
 the drawn instance at `u`'s rank holds the population's row of `u` (`Hidden.drawn_digestW`, from
 `Hidden.loadPublic_nil`), whose leaf is the hidden layout's registered leaf at `(u, q)`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkReg
 
@@ -46,7 +51,7 @@ theorem checked_of_acceptsH (I : Inputs) (ht : I.tags.typed = false) (own : Arra
   rw [hd] at hst
   have s := Hidden.setupHidden_spec' hst
   have hcst : st.c = c := by
-    have h1 := s.parse
+    have h1 := s.parseF (HmOut.parse_isTmpl hc)
     rw [hc] at h1
     exact (Except.ok.inj h1).symm
   obtain ⟨pop', hpop', -, hdr⟩ := s.pub

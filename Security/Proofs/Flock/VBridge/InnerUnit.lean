@@ -1,5 +1,7 @@
-import Proofs.Flock.VBridge.OfVStar
-import VStar.InnerRepCheck
+module
+
+public import Proofs.Flock.VBridge.OfVStar
+public import VStar.InnerRepCheck
 
 /-!
 # V*'s `InnerRepCheck{S}` unit
@@ -16,6 +18,8 @@ ports (port `i` of `nᵢ` elements is `portWordsOf nᵢ` words) and then `v`'s; 
   value at `w`, `vv` (`resVal`), 128 bits each, then zeros (`ResCols`). `unit_innerUnit`: the same of a copy of the unit in
   a unit of any partition.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.OfVStar
 

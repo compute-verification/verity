@@ -10,7 +10,7 @@
 `~/.research/machines.toml` is one hand-edited file on the laptop; every lane that creates a pod had to merge an entry into it.
 The registry is a directory with one TOML file per machine, `<dir>/<name>.toml`, holding that machine's table (`provider`,
 `pod_id`, `project` or `projects`, and optionally `root`, `python`, `guard`, `ramlock`; a Nebius VM's `nebius_instance_id`, and the
-`deadline` fleet.py's sampler copies from its /etc/research/deadline; `lane`, the lane whose budget line pays for it, infra when
+`deadline` fleet.py's sampler copies from its /etc/research/deadline, and its `unreachable_since` while no sample reads it; `lane`, the lane whose budget line pays for it, infra when
 unset) plus who registered it and when.  Two
 agents registering two pods write two files, so nothing is ever hand-merged; in the notes repo, `research notes sync` carries
 them to every machine.  `<dir>/_families.toml` carries the `[families.<fam>]` VRAM references `pods check-part` reads.
@@ -52,7 +52,7 @@ FAMILIES_FILE = "_families.toml"
 NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 POD_ID_RE = re.compile(r"[a-z0-9]{8,32}")
 KNOWN_KEYS = ("provider", "pod_id", "host", "port", "user", "rate_usd_per_hour", "project", "projects", "root", "python", "guard", "ramlock",
-              "nebius_instance_id", "lane", "deadline")
+              "nebius_instance_id", "lane", "deadline", "unreachable_since")
 KEPT_KEYS = ("lane", "deadline")   # a re-registration of the same binding that doesn't set them keeps the old file's
 OWNER_DEFAULT = "infra"            # a machine that names no lane is infra's (fleet.py's idle report rings its lane)
 HOST_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9.:-]{0,252}")

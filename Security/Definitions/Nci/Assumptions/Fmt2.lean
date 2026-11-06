@@ -1,5 +1,7 @@
-import Definitions.Nci.Sources
-import Mathlib.Analysis.SpecialFunctions.Pow.Real
+module
+
+public import Definitions.Nci.Sources
+public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
 /-!
 # NCI over threads, each value charged once over its copies: the named assumption
@@ -9,6 +11,8 @@ AdamW steps past the checkpoint, on a weight's fprop and dgrad copies, and at ll
 `WeightsSupportFmt2` restates it with weights charged per source, a fan-out bound in place of the margin, `e` per model,
 and the counted multiplications off weights fewer than `k₀` steps from the baseline. It is not signed off.
 -/
+
+@[expose] public section
 
 namespace Nci.Assumptions
 

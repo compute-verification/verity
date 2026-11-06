@@ -1,4 +1,4 @@
-"""`WeightField` and `Witness` operands on the toy profile of `test_fold_synthetic`: the embedding table read as its weights field whole
+"""`WeightField` and `WitnessParam` operands on the toy profile of `test_fold_synthetic`: the embedding table read as its weights field whole
 is the same Program as its root read through memory; a witness read takes the next leaves of its request's parameter, which is sized
 to the reads and recorded as `witness_layout`; a read the profile declares no parameter for, and a declared parameter no read takes,
 are refused."""
@@ -10,7 +10,7 @@ import pytest
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.types import Array, Value
 from verity_vllm.observe.fold.fold import FoldError, fold
-from verity_vllm.observe.fold.resolver import Compute, PerRow, Profile, Shared, WeightField, Witness
+from verity_vllm.observe.fold.resolver import Compute, PerRow, Profile, Shared, WeightField, WitnessParam
 from verity.ml.definitions.registry import b1
 from tests.observe import test_fold_synthetic as T
 from tests.observe.test_fold_synthetic import memory  # noqa: F401  (the real memory model, or the stub while it is a skeleton)
@@ -32,7 +32,7 @@ def _profile(embedding, witnesses=()):
 
 
 def _schedule(idx, ctx):
-    return Witness("schedule", tuple(req for req, _ in ctx.start.rows))
+    return WitnessParam("schedule", tuple(req for req, _ in ctx.start.rows))
 
 
 def test_a_weight_field_read_whole_is_the_program_of_its_root_read(memory):

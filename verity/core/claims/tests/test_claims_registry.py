@@ -90,9 +90,8 @@ def test_the_sm120_headlines_claims_name_what_their_statements_assume() -> None:
     assert clock.label == "A1 clock (assumed)"
 
 
-def test_the_sm120_headlines_claims_match_their_lean_after_round_3() -> None:
-    """RT3's claim-text findings: (I1)'s vector, the writers' ω, the ½-floor reading of 0.591%, and pinning graded on
-    its own."""
+def test_the_sm120_headlines_claims_match_their_lean() -> None:
+    """(I1)'s vector, the writers' ω, the ½-floor reading of 0.591%, and pinning graded on its own."""
     facet = get("accounting-ts-facet-ceilings").name
     assert "VF3s-16" in facet and "VF3p-16" not in facet and "(0, f_max]" in facet
     words = get("accounting-ts-words-written").name
@@ -120,8 +119,8 @@ def test_the_honest_clock_says_which_form_is_proved() -> None:
     assert "Accounting.SecurityProofs.Actual.honestClock" in clock.name and "the Pearl-C form is not proved" in clock.name
 
 
-def test_the_session_premises_state_their_scope_after_rt4_logic_25_and_27() -> None:
-    """RT4-LOGIC-25: no served path verifies with --registered; -27: the window's law also needs the audit coins."""
+def test_the_session_premises_state_their_scope() -> None:
+    """No served path verifies with --registered, and the window's law also needs the audit coins."""
     live = get("accounting-ts-accepted-live")
     assert live.standing == "standard"
     assert all(s in live.name for s in ("plain flock-verify --zk", "only one_stage/a0.py passes --registered",
@@ -136,14 +135,13 @@ def test_pouw_gamma_per_coin_is_a_conjecture_at_w1_priced() -> None:
     assert (e.kind, e.standing) == ("assumption", "conjectured") and "budget per coin" in e.name and "W1 priced" in e.name
 
 
-def test_option_a_counts_fixed_is_a_conjecture_and_modes_run_standard() -> None:
+def test_counts_fixed_is_a_conjecture_and_modes_run_standard() -> None:
     assert (get("accounting-ts-counts-fixed").kind, get("accounting-ts-counts-fixed").standing) == ("assumption", "conjectured")
     assert (get("accounting-ts-modes-run").kind, get("accounting-ts-modes-run").standing) == ("assumption", "standard")
 
 
 def test_the_dc_headlines_claims_name_what_their_statements_assume() -> None:
-    """RT3-LOGIC-6's restatement of the H200's and B200's headlines: FOLD-OPT at π* and the proof service's named
-    premises, as sm_120's."""
+    """The H200's and B200's headlines assume FOLD-OPT at π* and the proof service's named premises, as sm_120's."""
     for e in ("accounting-ts-fold-opt", "accounting-ts-proofs-sound"):
         assert "the H200's and the B200's" in get(e).name, e
     assert "RT3-LOGIC-6" in get("accounting-ts-fold-opt").name
@@ -178,7 +176,7 @@ def test_the_latency_ceiling_is_a_measured_device_claim() -> None:
 
 
 def test_the_declared_capacity_rests_on_the_nodes_inventory() -> None:
-    """ASK-74 = A: Π's three clauses, per node, trusting the auditor's inventory, with no partition clause."""
+    """Π's three clauses, per node, trusting the auditor's inventory, with no partition clause."""
     e = get("accounting-declared-device")
     assert (e.kind, e.standing, e.label) == ("assumption", "standard", "Declared device")
     assert all(s in e.name for s in ("every GPU on the node is declared", "the declared board and vBIOS",

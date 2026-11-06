@@ -1,5 +1,7 @@
-import Definitions.Nci.Guarantees.CoveringTwoCosts
-import Proofs.Nci.Covering
+module
+
+public import Definitions.Nci.Guarantees.CoveringTwoCosts
+public import Proofs.Nci.Covering
 
 /-!
 # The covering bound at two costs
@@ -14,6 +16,8 @@ the NCI policy uses at each block's own `k` (`Proofs.Nci.Cover.Chained`).
 At `c_w = c_a = r · b` the assumptions are `ParameterHard` and `ActivationChained` by definition, and the bound is
 `CoveringBound`'s (`coveringBound_of_twoCosts`). `CoveringBound` keeps its own proof.
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs.CoveringTwoCosts
 

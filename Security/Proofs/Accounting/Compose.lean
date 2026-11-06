@@ -1,13 +1,15 @@
-import Proofs.Accounting.Compose.ServiceCovers
-import Definitions.Accounting.Guarantees.Compose
-import Proofs.Accounting.TS
-import Proofs.Accounting.Compose.ServiceBudget
-import Proofs.Accounting.Compose.SplitRateMerged
-import Proofs.Accounting.Compose.BindingOfECR
-import Proofs.Accounting.Compose.CircuitWork
-import Proofs.Accounting.Compose.WholeLuckOfEntropy
-import Proofs.Accounting.Compose.CircuitWorkSeeded
-import Proofs.Pouw.RelativeSecurity
+module
+
+public import Proofs.Accounting.Compose.ServiceCovers
+public import Definitions.Accounting.Guarantees.Compose
+public import Proofs.Accounting.TS
+public import Proofs.Accounting.Compose.ServiceBudget
+public import Proofs.Accounting.Compose.SplitRateMerged
+public import Proofs.Accounting.Compose.BindingOfECR
+public import Proofs.Accounting.Compose.CircuitWork
+public import Proofs.Accounting.Compose.WholeLuckOfEntropy
+public import Proofs.Accounting.Compose.CircuitWorkSeeded
+public import Proofs.Pouw.RelativeSecurity
 
 /-!
 # PoUW's credit on an arbitrary declared circuit: proofs
@@ -118,6 +120,8 @@ Every guarantee here is proved: the three rates, `ServiceBudget`, `ServiceCovers
    entropy conjunct bounds each `Σ_b [S ⊆ Lk]` by `|B|·e^{−Σ_S h}`, and the sum folds back to
    `|B|·Π_v (e^{−h_v}·e^{x_v} + (1 − e^{−h_v})·e^{−κ₀x_v})`, each factor in `[0, 1]`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Compose
 
@@ -303,7 +307,7 @@ theorem CircuitCredit : Accounting.Guarantees.Compose.CircuitCredit := by
     ρ p p0 wmax Λ δs δbind δks win hS hρ hρN hw hlk hΛ hSR hgame hOf hMoved hJS hPins hMu hRB hG hUF hFits hMS
     hSplit hClock hDisp hTen hPipe hSmem hWords hSem hFold hFill
   obtain ⟨ha, hb⟩ := costs_nonneg Sc Cd Z lam hMS
-  unfold Certificate.Holds
+  unfold CreditCertificate.Holds
   refine le_trans (Pouw.RelativeSecurity.prob_mono ?_)
     (CircuitWork Sc Cd hN hr hK W Pl pr folded ρ p p0 _ _ wmax Λ δs δbind δks hS hρ hρN hw hlk ha hb hΛ hSR
       hgame hOf hMoved hJS hPins hMu hRB hG hUF)
@@ -319,7 +323,7 @@ theorem CircuitCreditSeeded : Accounting.Guarantees.Compose.CircuitCreditSeeded 
     T J ρ κ0 δs δg δb δbind δks win hS hδg hKd hρ hρN ha hκ hgame hOf hMoved hJS hPins hSE hSLF hSLW hUF hFits hMS
     hSplit hClock hDisp hTen hPipe hSmem hWords hSem hFold hFill
   have hb := (costs_nonneg Sc Cd Z lam hMS).2
-  unfold Certificate.Holds
+  unfold CreditCertificate.Holds
   refine le_trans (Pouw.RelativeSecurity.prob_mono ?_)
     (CircuitWorkSeeded Sc Cd hN hr hK R Pl pr folded sq εid T J ρ _ _ κ0 δs δg δb δbind δks hS hδg hKd hρ hρN ha hb
       hκ hgame hOf hMoved hJS hPins hSE hSLF hSLW hUF)

@@ -99,9 +99,14 @@ from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
 try:
-    from . import waitcap
+    from . import vocabulary, waitcap
     from .timefmt import both, slack_dates
 except ImportError:                                                 # run as a single file: `python3 slack.py ...`
+    class vocabulary:  # research/vocabulary.py's table isn't beside a single file: nothing is flagged
+        @staticmethod
+        def retired(text: str) -> list[tuple[str, str]]:
+            return []
+
     def both(t: Any) -> str:
         return f"{datetime.fromtimestamp(float(t), UTC):%H:%MZ}" if re.fullmatch(r"\d+(?:\.\d+)?", str(t)) else str(t)
 
@@ -212,7 +217,7 @@ COLLABORATOR_MAY = "ask a lane for something and request work within its budgets
 COLLABORATOR_NEVER = "spend, access or keys, destructive changes or node changes"
 CHAT_PREFIX = "chat-"                                            # a collaborator's private channel, `chat open NAME`
 CHAT_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,74}$")          # Slack's channel names: 80 characters, lower case, no spaces
-CHAT_WATCHER = "top"                                             # subscribes to every chat channel; rings for a post routed to no one
+CHAT_WATCHER = "top"                                             # rung for a chat post routed to no one
 PEOPLE_DIR = "people.d"                                          # in the notes, beside routes.d: one `<NAME>.json` per chat's person
 PERSON_SCHEMA = "verity/slack-person/v1"
 EXPECTED = "expected"                                            # a people.d record's status before its person joins Slack
@@ -457,9 +462,9 @@ def entry(reg: dict, handle: str) -> dict:
 
 
 def chat_channels(reg: dict) -> dict[str, dict]:
-    """Each open chat (`chat open`, people.d) as a registry channel: its id and its `person`.  CHAT_WATCHER subscribes to its
-    top level and hands each post to `deliver`, until `research msg router` reads them."""
-    return {r["channel"]["key"]: {"id": r["channel"]["id"], "person": r, "subscribers": [CHAT_WATCHER],
+    """Each open chat (`chat open`, people.d) as a registry channel: its id and its `person`.  No handle subscribes: the Slack
+    events service hands each post to `deliver`, which rings the lanes it names, else CHAT_WATCHER."""
+    return {r["channel"]["key"]: {"id": r["channel"]["id"], "person": r, "subscribers": [],
                                   "purpose": f"{r['name']}'s questions to the lanes (private)"}
             for r in reg.get("chat_people", [])}
 
@@ -1254,15 +1259,105 @@ def _route_ok(r: Any, name: str) -> bool:
 RAW_HOST = "raw.githubusercontent.com"                           # the notes are private: `http_get` sends it the notes token
 
 
+NOTES_TOKEN_URL = BROKER.rsplit("/api/", 1)[0] + "/api/agent-github/token"   # the broker's notes token, by OIDC identity
+NOTES_TOKEN_TTL_S, NOTES_TOKEN_MARGIN_S = 50 * 60, 120          # a token with no stated expiry lasts this long; renewed early
+NOTES_TOKEN_RETRY_S = 60                                        # after a refusal, the broker isn't asked again for this long
+_notes_token: dict = {}
+#: where this deployment's Vercel OIDC token comes from when $VERCEL_OIDC_TOKEN doesn't hold it: a host whose identity arrives
+#: with each request (the Slack events service, through the vercel SDK) sets it
+OIDC_TOKEN: Callable[[], str | None] | None = None
+
+
+def vercel_oidc_token() -> str | None:
+    """This deployment's Vercel OIDC token: `OIDC_TOKEN`'s when a host set it, else $VERCEL_OIDC_TOKEN; None when there is
+    no identity here (every agent and pod)."""
+    if OIDC_TOKEN is None:
+        return os.environ.get("VERCEL_OIDC_TOKEN") or None
+    try:
+        return OIDC_TOKEN() or None
+    except Exception as e:  # noqa: BLE001 - the host's lookup has no identity for this call: the notes token falls back
+        _notes_token["why"] = f"no OIDC identity ({type(e).__name__})"
+        print(f"research msg: no Vercel OIDC identity ({type(e).__name__}): using RESEARCH_NOTES_TOKEN if set", file=sys.stderr)
+        return None
+
+
+def notes_token(now: float | None = None) -> str | None:
+    """A token for the private notes repository.  Where there is a Vercel OIDC identity (`vercel_oidc_token`, as the Slack events
+    service has it), the one the broker mints for it (`NOTES_TOKEN_URL`, scope `notes`), kept until shortly before it
+    expires; else, or when the broker refuses (said on stderr), $RESEARCH_NOTES_TOKEN.  None when there is neither, so a
+    read goes unauthenticated and a private file answers 404.  `notes_token_source` says which one it was, and why."""
+    _notes_token.pop("why", None)
+    oidc = vercel_oidc_token()
+    if oidc and (token := _broker_notes_token(oidc, time.time() if now is None else now)):
+        _notes_token["source"] = "broker"
+        return token
+    if not oidc:
+        _notes_token.setdefault("why", "no OIDC identity")
+    token = os.environ.get("RESEARCH_NOTES_TOKEN") or None
+    _notes_token["source"] = "env" if token else None
+    return token
+
+
+def notes_token_source() -> str | None:
+    """Where `notes_token` got the token it gives now: "broker", "env" (RESEARCH_NOTES_TOKEN), or None."""
+    notes_token()
+    return _notes_token.get("source")
+
+
+def notes_token_why() -> str | None:
+    """Why the last `notes_token` didn't come from the broker: "no OIDC identity", the broker's refusal, or None."""
+    return None if _notes_token.get("source") == "broker" else _notes_token.get("why")
+
+
+def _broker_notes_token(oidc: str, now: float) -> str | None:
+    if now < _notes_token.get("until", 0):
+        if not _notes_token.get("token"):
+            _notes_token["why"] = _notes_token.get("refused", "the broker refused")
+        return _notes_token.get("token")
+    _notes_token.update(oidc=oidc, token=None, until=now + NOTES_TOKEN_RETRY_S)
+    try:
+        out = http_json("POST", NOTES_TOKEN_URL, json.dumps({"scope": "notes"}).encode(),
+                        {"Authorization": f"Bearer {oidc}", "Content-Type": "application/json"}) or {}
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        said = _refusal(e)
+        why = f"the broker refused ({getattr(e, 'code', '') or getattr(e, 'reason', e)}{': ' + said if said else ''})"
+        _notes_token.update(why=why, refused=why)
+        print(f"research msg: the broker gave no notes token ({getattr(e, 'code', '') or getattr(e, 'reason', e)}): using "
+              "RESEARCH_NOTES_TOKEN if set, else reading the notes unauthenticated", file=sys.stderr)
+        return None
+    token, expires = out.get("token"), out.get("expires_at")
+    if not token:
+        _notes_token.update(why="the broker's answer had no token", refused="the broker's answer had no token")
+        print("research msg: the broker's notes-token answer has no `token`: using RESEARCH_NOTES_TOKEN if set, else reading "
+              "the notes unauthenticated", file=sys.stderr)
+        return None
+    until = (_iso_epoch(expires) if expires else now + NOTES_TOKEN_TTL_S) - NOTES_TOKEN_MARGIN_S
+    _notes_token.update(oidc=oidc, token=token, until=until)
+    return token
+
+
+def _refusal(e: Exception) -> str:
+    """What an HTTP refusal's JSON body says it refused (the broker's `error` and the claim it names), or ""."""
+    if not isinstance(e, urllib.error.HTTPError):
+        return ""
+    try:
+        body = json.loads(e.read(4096) or b"{}")
+    except (OSError, ValueError):
+        return ""
+    if not isinstance(body, dict):
+        return ""
+    return " ".join(str(body[k]) for k in ("error", "reason", "claim", "message") if body.get(k))[:160]
+
+
 def http_get(url: str, timeout: float = 10) -> bytes | None:
     """The body at `url` (http(s), or a `file://` directory for tests and offline use), or None when there is none.  A
-    github.com raw file is read with RESEARCH_NOTES_TOKEN when it is set: the notes repository is private, and without
-    the token its raw files answer 404 as if they weren't there."""
+    github.com raw file is read with the notes token (`notes_token`) when there is one: the notes repository is private,
+    and without a token its raw files answer 404 as if they weren't there."""
     if url.startswith("file://"):
         p = Path(urllib.parse.unquote(url[7:]))
         return p.read_bytes() if p.is_file() else None
     headers = {}
-    if urllib.parse.urlsplit(url).hostname == RAW_HOST and (token := os.environ.get("RESEARCH_NOTES_TOKEN")):
+    if urllib.parse.urlsplit(url).hostname == RAW_HOST and (token := notes_token()):
         headers["Authorization"] = f"Bearer {token}"
     try:
         with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=timeout) as r:
@@ -1776,15 +1871,25 @@ def linear_ask(ns: argparse.Namespace, owner: dict, sender: str, body: str) -> s
     """The ask filed as an issue in its owner's Linear team (`linear` in the registry), which holds the whole brief; what
     Slack carries is then its first line and the issue's link (with `--dry-run`, nothing filed, a stand-in link).  The body
     as it was when the owner has no team or Linear fails, so the ask still goes out on Slack in full."""
-    if not ASKS_ON_LINEAR or not owner.get("linear"):
-        return body
     from . import linear
 
+    if asker := getattr(ns, "asker", None):
+        try:
+            linear.asker_label(asker)
+        except linear.LinearError as e:
+            raise SlackError(f"--asker: {e}") from None
+    if not ASKS_ON_LINEAR or not owner.get("linear"):
+        if asker:
+            raise SlackError(f"--asker: @{owner['handle']} has no Linear team to file the ask in, so nothing would track it")
+        return body
     if ns.dry_run:
-        print(f"dry-run: would file the ask in Linear team {owner['linear']}", file=sys.stderr)
+        print(f"dry-run: would file the ask in Linear team {owner['linear']}" + (f" as asked by {asker}" if asker else ""),
+              file=sys.stderr)
         return f"{linear.first_line(body)}\nLinear: <https://linear.app|{owner['linear']}-?>"
     parent = getattr(ns, "parent", None)
-    issue, why = linear.ask_issue(owner["linear"], sender, body, parent=parent, title=getattr(ns, "title", None))
+    issue, why = linear.ask_issue(owner["linear"], sender, body, parent=parent, title=getattr(ns, "title", None), asker=asker)
+    if not issue and asker:
+        raise SlackError(f"not filed on Linear ({why}), and {asker}'s ask must be tracked: nothing was posted; run it again")
     if not issue:
         print(f"research msg: not filed on Linear ({why}); asking on Slack only", file=sys.stderr)
         return body
@@ -1827,11 +1932,36 @@ def render_audit(found: list[dict], counts: dict[str, dict[str, int]]) -> str:
     return "\n".join(lines)
 
 
+def render_asks(rows: list[dict], now: float) -> str:
+    """People's asks (`Linear.asks`) by lane: each one not delivered, with its state, due date, slips and restatements, then
+    the counts.  Delivered means Done; an ask canceled with its asker's yes (`asker-ok`) or as a duplicate is closed."""
+    from .linear import ASK_SLIPS, ASKER_OK, OPEN_TYPES
+
+    def live(a: dict) -> bool:
+        return a["type"] in (*OPEN_TYPES, "backlog") or a["type"] == "canceled" and not a["ok"]
+    lines = []
+    for lane in sorted({a["lane"] for a in rows}):
+        mine = [a for a in rows if a["lane"] == lane]
+        todo = [a for a in mine if live(a)]
+        lines.append(f"@{lane}: {len(todo)} not delivered, {sum(a['type'] == 'completed' for a in mine)} delivered")
+        lines += [f"  {a['issue']:<9} {a['state']:<12} due {a['due'] or '-':<10} {a['slips']} slip(s), asked again {a['again']}, "
+                  f"{(now - a['created']) / 3600:.0f} h old: {a['title']}" for a in todo]
+    askers = ", ".join(sorted({a["asker"] for a in rows})) or "anyone"
+    todo = [a for a in rows if live(a)]
+    lines.append(f"{len(rows)} ask(s) of {askers} open or closed recently: {sum(a['type'] == 'completed' for a in rows)} delivered, "
+                 f"{len(todo)} not ({sum(a['type'] in ('backlog', 'canceled') and not a['ok'] for a in todo)} parked without `{ASKER_OK}`, "
+                 f"{sum(a['type'] in ('triage', 'unstarted') for a in todo)} with no worker, "
+                 f"{sum(a['slips'] >= ASK_SLIPS for a in todo)} slipped), "
+                 f"{len(rows) - len(todo) - sum(a['type'] == 'completed' for a in rows)} closed with the asker's yes or as duplicates")
+    return "\n".join(lines)
+
+
 def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
     """`check` (what the credentials reach), `state ISSUE STATE`, `comment ISSUE TEXT --as HANDLE` (or `--worker NAME`, a
     lane's worker, which holds no handle: as LANE/NAME, ringing no one), `list TEAM [--state S]`, `audit [TEAM ...]
     [--lane HANDLE]` (exit 1 on any finding; a team the app can't read is named and skipped), `place ISSUE PROJECT
-    [--milestone M]`, `edit ISSUE [--title T] [--due D|none] [--file BRIEF.md] [--parent ID]`, `relate ISSUE
+    [--milestone M]` (`--asks [--asker NAME]`: the ledger of people's asks), `edit ISSUE [--title T] [--due D|none]
+    [--file BRIEF.md] [--parent ID] [--label L [--remove]]`, `relate ISSUE
     blocks|blocked-by|related|duplicate OTHER`, `unrelate ISSUE OTHER`, `update PROJECT --health H --body-file F`,
     `project create NAME --team KEY... [--lead USER] [--target D] [--description-file F]` and `milestone create|edit
     PROJECT NAME [--date D] [--description-file F] [--rename NEW]`. Each prints one line; a refusal exits 2."""
@@ -1847,7 +1977,7 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
                          "--worker NAME for a lane's worker, which holds no handle")
     if ns.worker and not WORKER_RE.fullmatch(ns.worker):
         raise SlackError(f"--worker {ns.worker!r}: a name of letters, digits, `.`, `_` and `-`, at most 40 (e.g. LINTOOLS)")
-    if ns.dry_run and ns.verb not in ("check", "list", "audit", "edit", "state", "place", "comment"):
+    if ns.dry_run and ns.verb not in ("check", "list", "audit", "edit", "state", "place", "comment", "create"):
         raise SlackError(f"linear {ns.verb} has no --dry-run (it would write): leave it off, or try `edit`, `state`, "
                          "`place` or `comment`, which have one")
     try:
@@ -1873,8 +2003,14 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
             if unread:
                 print(f"linear audit: the app can't read team(s) {', '.join(unread)}, so their issues aren't audited",
                       file=sys.stderr)
-            found = [] if teams and not readable else lin.audit(linear.owners(reg), readable or None,
-                                                                None if ns.now is None else float(ns.now))
+            now = time.time() if ns.now is None else float(ns.now)
+            if ns.asks:
+                rows = [] if teams and not readable else lin.asks(linear.owners(reg), readable or None, now)
+                rows = [a for a in rows if (not ns.lane or a["lane"] == ns.lane.lstrip("@"))
+                        and (not ns.asker or a["asker"] == ns.asker.strip().lower())]
+                print(json.dumps(rows, indent=2) if ns.json else render_asks(rows, now))
+                return 0
+            found = [] if teams and not readable else lin.audit(linear.owners(reg), readable or None, now)
             if ns.lane:
                 found = [f for f in found if f["lane"] == ns.lane.lstrip("@")]
             counts = linear.tally(found)
@@ -1895,6 +2031,20 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
                 raise SlackError(f"linear milestone {ns.target}: give PROJECT (a prefix of its name, one word or quoted) and NAME")
             else:
                 print(lin.milestone(ns.value[0], " ".join(ns.value[1:]), ns.date, brief, ns.rename, create=ns.target == "create"))
+            return 0
+        if ns.verb == "create":
+            h = acting_as(ns, reg, need(ns.handle, "--as HANDLE, the issue's filer"))
+            team = ns.team[0] if ns.team else need(h.get("linear"), f"--team KEY (@{h['handle']} has no Linear team)")
+            title, body = need(ns.title, "--title, the deliverable"), need(brief, "--file BRIEF.md, the issue's brief")
+            if ns.dry_run:
+                print(f"dry-run: would file {title!r} in {team} as {h['handle']}" + (f" under {ns.parent}" if ns.parent else "")
+                      + (f", due {ns.due}" if ns.due else ""))
+                return 0
+            made = lin.file(team, h["handle"], body, parent=ns.parent, title=title)
+            if ns.due:
+                lin.edit(made["identifier"], due=ns.due)
+            board = " / ".join(x["name"] for x in (made.get("project"), made.get("projectMilestone")) if x)
+            print(f"{made['identifier']} {made['url']}" + (f" on {board}" if board else ""))
             return 0
         issue = need(ns.target, "the ISSUE (e.g. INF-12)")
         if ns.verb == "relate":
@@ -1917,11 +2067,17 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
             p = lin.place(issue, need(value, "the PROJECT (a prefix of its name)"), ns.milestone)
             print(f"{issue} placed in {p['project']}" + (f" / {p['milestone']}" if p["milestone"] else ""))
             return 0
+        if ns.verb == "edit" and ns.label:
+            name = linear.asker_label(ns.label[len(linear.ASKER_LABEL):]) if ns.label.startswith(linear.ASKER_LABEL) else ns.label
+            print(f"dry-run: would {'remove' if ns.remove else 'add'} {name} on {issue}" if ns.dry_run
+                  else f"{issue} labels: {lin.tag(issue, name, remove=ns.remove) or 'none'}")
+            if not (ns.title or ns.due or brief or ns.parent):
+                return 0
         if ns.verb == "edit":
             i = lin.edit(issue, ns.title, ns.due, brief, ns.parent, send=not ns.dry_run)
             print(("dry-run: would set " if ns.dry_run else f"{issue} set ") + linear.said(i))
             return 0
-        text = need(value, "the TEXT")
+        text = need(value or brief, "the TEXT (or --file BODY.md)")
         if not ns.worker:
             author = acting_as(ns, reg, need(ns.handle, "--as HANDLE, the comment's sender (a lane's worker: --worker NAME)"))["handle"]
             warn_unrouted(text, reg, author)
@@ -2018,8 +2174,9 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
     kind = (ns.kind or ("ask" if to and not ns.thread else "")).strip().lower()
     if kind and not NAME_RE.match(kind) or kind in FLAGS:
         raise SlackError(f"--kind {ns.kind!r}: one lower-case word")
-    if (getattr(ns, "parent", None) or getattr(ns, "title", None)) and not (kind == "ask" and not ns.thread and len(to) == 1):
-        raise SlackError("--parent and --title go with an ask, which files an issue: a top-level send --to one handle")
+    if (getattr(ns, "parent", None) or getattr(ns, "title", None) or getattr(ns, "asker", None)) and not (
+            kind == "ask" and not ns.thread and len(to) == 1):
+        raise SlackError("--parent, --title and --asker go with an ask, which files an issue: a top-level send --to one handle")
     def own() -> bool:
         return rings_own_inbox(routes_of(ns), h["handle"], self_agent_id())
     if any(t["handle"] == h["handle"] for t in to) and not own():
@@ -2289,7 +2446,7 @@ def publish_route(root: Path, r: dict, message: str, where: str = ROUTES_DIR, na
         except ImportError:
             pass
     if not (root / ".git").exists():
-        if os.environ.get("RESEARCH_NOTES_TOKEN"):                  # no git here (the Slack events service): GitHub's API
+        if notes_token():                                           # no git here (the Slack events service): GitHub's API
             rel = f"{where}/{name}.json"
             cur = notes_api("GET", rel)
             notes_api("PUT", rel, {"message": message, "branch": "main",
@@ -2318,10 +2475,11 @@ def publish_route(root: Path, r: dict, message: str, where: str = ROUTES_DIR, na
 
 
 def notes_api(method: str, rel: str, body: dict | None = None) -> Any:
-    """GitHub's contents API on the notes repository, with RESEARCH_NOTES_TOKEN, for a caller with no clone (the Slack events
-    service): the JSON answer, or None for a GET of a path that isn't there."""
-    if not (token := os.environ.get("RESEARCH_NOTES_TOKEN")):
-        raise SlackError("RESEARCH_NOTES_TOKEN is not set: without a notes clone, the notes are read and written with it")
+    """GitHub's contents API on the notes repository, with the notes token (`notes_token`), for a caller with no clone (the
+    Slack events service): the JSON answer, or None for a GET of a path that isn't there."""
+    if not (token := notes_token()):
+        raise SlackError("no notes token: set RESEARCH_NOTES_TOKEN, or run where the broker mints one (VERCEL_OIDC_TOKEN); "
+                         "without a notes clone, the notes are read and written with it")
     req = urllib.request.Request(NOTES_API + urllib.parse.quote(rel) + ("?ref=main" if method == "GET" else ""), method=method,
                                  data=None if body is None else json.dumps(body).encode(),
                                  headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json",
@@ -2763,8 +2921,14 @@ LENGTH_FIX = ("put the body in its Linear issue (`research msg linear comment IS
 
 def check_length(reg: dict, ch: str, text: str, limit: int) -> None:
     """A post `send`, `reply`, `announce` or `ask` makes in the front door, in words as `traffic --volume` counts them: past
-    `limit` it goes out with a note on stderr, and past twice `limit` it is refused before anything is posted."""
-    if ch != channel_id_for(reg, FRONT_DOOR) or (n := len(plain(text).split())) <= limit:
+    `limit` it goes out with a note on stderr, and past twice `limit` it is refused before anything is posted.  A retired term
+    (`vocabulary.retired`) in its prose goes out with a note naming what to write instead."""
+    if ch != channel_id_for(reg, FRONT_DOOR):
+        return
+    if found := vocabulary.retired(plain(text)):
+        print("research msg: retired term(s), posted anyway: " + "; ".join(f"{t!r}: write {w}" for t, w in found)
+              + " (GLOSSARY.md's older names; a name quoted in backticks is kept)", file=sys.stderr)
+    if (n := len(plain(text).split())) <= limit:
         return
     if n > 2 * limit:
         raise SlackError(f"{n} words, past twice the {limit} a post in #{FRONT_DOOR} may have, so nothing was posted: {LENGTH_FIX}")
@@ -3210,11 +3374,13 @@ def cmd_chat(ns: argparse.Namespace, reg: dict) -> int:
 # --- the app's configuration ------------------------------------------------------------------------------------------------
 
 MANIFEST_REL = REGISTRY_REL.with_name("slack-app.json")
-APP_STATE_ENV, APP_SEED_ENV = "RESEARCH_SLACK_APP_STATE", "SLACK_APP_CONFIG_REFRESH_TOKEN"
+APP_STATE_ENV = "RESEARCH_SLACK_APP_STATE"                      # set on the control pod only (infra/control/msg.sh)
 #: the app configuration API: these take the configuration token (rotating it, the refresh token), never the bot's scopes
 APP_METHODS = ("apps.manifest.export", "apps.manifest.update", "apps.manifest.validate", "tooling.tokens.rotate")
 ROTATE_BEFORE_S = 600                                            # a configuration token lives 12 h; rotate this long before its exp
 APP_TOKENS_PAGE = "https://api.slack.com/apps"                   # "Your App Configuration Tokens": where a person generates a pair
+NEW_PAIR = (f"A person generates a new pair at {APP_TOKENS_PAGE} (Your App Configuration Tokens) and, on the control pod, "
+            'writes its refresh token to {path} as {{"refresh_token": "..."}}, mode 600; no environment variable seeds it')
 MANIFEST_IGNORED = ("_metadata",)                                # the manifest format's version, which export adds
 
 
@@ -3223,7 +3389,11 @@ def _epoch() -> float:
 
 
 def app_state_path() -> Path:
-    return Path(os.environ.get(APP_STATE_ENV) or Path.home() / ".research" / "slack-app-token.json")
+    """The configuration token's state file, which only the control pod has: `slack-app` runs there, never on an agent."""
+    if not (p := os.environ.get(APP_STATE_ENV, "").strip()):
+        raise SlackError(f"${APP_STATE_ENV} is unset: `research msg slack-app` runs on the control pod, where infra/control/msg.sh "
+                         "sets it to the app configuration token's state file; ask @comms or @infra to run it there")
+    return Path(p)
 
 
 def _write_private(path: Path, data: dict) -> None:
@@ -3249,11 +3419,7 @@ def _write_private(path: Path, data: dict) -> None:
 
 def _app_state(path: Path) -> dict:
     if not path.exists():
-        if seed := os.environ.get(APP_SEED_ENV, "").strip():
-            return {"refresh_token": seed}
-        raise SlackError(f"no app configuration token: {path} is absent and {APP_SEED_ENV} is unset. A person generates a pair at "
-                         f"{APP_TOKENS_PAGE} (Your App Configuration Tokens); set {APP_SEED_ENV} to its refresh token, which "
-                         f"seeds the file once, or {APP_STATE_ENV} to the state file")
+        raise SlackError(f"no app configuration token: {path} is absent. " + NEW_PAIR.format(path=path))
     if path.stat().st_mode & 0o077:
         raise SlackError(f"{path} is readable by others: `chmod 600 {path}` (it holds the app's configuration tokens)")
     try:
@@ -3261,14 +3427,14 @@ def _app_state(path: Path) -> dict:
     except (OSError, ValueError) as e:
         raise SlackError(f"{path}: {type(e).__name__}; it should be {{token, refresh_token, exp}} as rotation writes it") from None
     if not isinstance(state, dict) or not isinstance(state.get("refresh_token"), str) or not state["refresh_token"]:
-        raise SlackError(f"{path} has no refresh_token; move it aside and set {APP_SEED_ENV} to a new one")
+        raise SlackError(f"{path} has no refresh_token. " + NEW_PAIR.format(path=path))
     return state
 
 
 def app_token(path: Path | None = None, *, transport=None) -> str:
     """The app configuration token from its state file (`app_state_path`), rotated through tooling.tokens.rotate first when it
     is within ROTATE_BEFORE_S of its exp. A refresh token works once, so the new pair is written before the new token is used,
-    under a lock so that two processes never spend the same one; an absent file is seeded once from $SLACK_APP_CONFIG_REFRESH_TOKEN."""
+    under a lock so that two processes never spend the same one."""
     path = path or app_state_path()
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     with open(path.with_name(path.name + ".lock"), "a") as lock:
@@ -3281,10 +3447,8 @@ def app_token(path: Path | None = None, *, transport=None) -> str:
         except SlackError as e:
             if e.code is None:                                     # no answer: whether Slack spent the token is unknown
                 raise SlackError(f"{e}; if Slack refuses the refresh token on the next try, it was spent: see the using-slack skill") from None
-            raise SlackError(f"tooling.tokens.rotate: {e.code}: Slack refused the refresh token in "
-                             f"{path if path.exists() else '$' + APP_SEED_ENV}. A refresh token works once, so an earlier "
-                             f"rotation or another copy of it spent it. A person generates a new pair at {APP_TOKENS_PAGE} "
-                             f"(Your App Configuration Tokens); then move {path} aside and set {APP_SEED_ENV} to the new refresh token") from None
+            raise SlackError(f"tooling.tokens.rotate: {e.code}: Slack refused the refresh token in {path}. A refresh token works "
+                             "once, so an earlier rotation or another copy of it spent it. " + NEW_PAIR.format(path=path)) from None
         token, refresh, exp = out.get("token"), out.get("refresh_token"), out.get("exp")
         if not (isinstance(token, str) and token and isinstance(refresh, str) and refresh and isinstance(exp, (int, float))):
             raise SlackError(f"tooling.tokens.rotate: the answer lacks a token, refresh_token or exp, so {path} is unchanged "
@@ -3925,6 +4089,9 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                        help="the ask's issue is a sub-issue of ISSUE (CMP-92), on its project and milestone")
         p.add_argument("--title", default=None, metavar="TEXT",
                        help="the issue's title (default: the body's first line, without its ring tags and signature)")
+        p.add_argument("--asker", default=None, metavar="NAME",
+                       help="the person who asked for its outcome (daniel): its issue carries `asker:NAME`, done only when "
+                            "the outcome exists, and only NAME parks or cancels it (`research msg linear audit`)")
     issue_flags(p)
     p = cmd("close", "close a thread you were asked in: a status line (done, or --declined WHY), and the root's reaction",
             as_=True, thread=True)
@@ -3957,15 +4124,18 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                       "which acts as Daniel): `check` (what "
                       "the credentials reach; exit 0 when fit for asks), `state ISSUE STATE` (by name; " + LINEAR_STATES + "), "
                       "`comment ISSUE TEXT --as HANDLE` (a lane's worker: `--worker NAME`), `list TEAM [--state S]` (open by "
-                      "default), `audit [TEAM ...] [--lane HANDLE]` (each open issue off its board or stale, with its fix; exit "
-                      "1 on any), `place ISSUE PROJECT [--milestone M]` (by name prefixes), `edit ISSUE [--title T] "
-                      "[--due YYYY-MM-DD|none] [--file BRIEF.md] [--parent ID]`, `relate ISSUE blocks|blocked-by|related|"
+                      "default), `audit [TEAM ...] [--lane HANDLE]` (each open issue off its board or stale, and each person's "
+                      "ask parked, unstaffed, slipped or asked again, with its fix; exit 1 on any; `--asks [--asker NAME]`: "
+                      "the ledger of people's asks, delivered or not), `place ISSUE PROJECT [--milestone M]` (by name "
+                      "prefixes), `edit ISSUE [--title T] [--due YYYY-MM-DD|none] [--file BRIEF.md] [--parent ID] [--label L "
+                      "[--remove]]`, `relate ISSUE blocks|blocked-by|related|"
                       "duplicate OTHER` (Linear moves a duplicate to its Duplicate status), `unrelate ISSUE OTHER`, `update "
                       "PROJECT --health onTrack|atRisk|offTrack --body-file F` (a project update), `project create NAME --team "
                       "KEY... [--lead USER] [--target YYYY-MM-DD] [--description-file F]`, `milestone create|edit PROJECT NAME "
-                      "[--date YYYY-MM-DD] [--description-file F] [--rename NEW]`; none sends a state")
+                      "[--date YYYY-MM-DD] [--description-file F] [--rename NEW]`, `create --as HANDLE --title T --file BRIEF.md [--team KEY] "
+                      "[--due YYYY-MM-DD] [--parent ID]` (an issue in your own team, or KEY's); none sends a state")
     p.add_argument("verb", choices=("check", "state", "comment", "list", "audit", "place", "edit", "relate", "unrelate", "update",
-                                    "project", "milestone"))
+                                    "project", "milestone", "create"))
     p.add_argument("target", nargs="?", help="state, comment, place, edit, relate, unrelate: the issue (INF-12); list, audit: the "
                                              "team (a handle or its key); update: the project; project, milestone: create or edit")
     p.add_argument("value", nargs="*", help="state: the state's name; comment: the text; place: the project; audit: more teams; "
@@ -3981,8 +4151,8 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--title", default=None, metavar="T", help="edit: the issue's new title")
     p.add_argument("--due", default=None, metavar="YYYY-MM-DD", help="edit: its due date (`none` clears it)")
     p.add_argument("--file", "--body-file", "--description-file", dest="file", default=None, metavar="F.md",
-                   help="markdown: edit: the issue's new description; update: the update's body; project create, milestone: "
-                        "the description")
+                   help="markdown: edit: the issue's new description; comment: its body (in place of TEXT); update: the "
+                        "update's body; project create, milestone: the description")
     p.add_argument("--parent", default=None, metavar="ID", help="edit: make it a sub-issue of this issue (CMP-92)")
     p.add_argument("--health", default=None, metavar="H", help="update: onTrack, atRisk or offTrack")
     p.add_argument("--team", action="append", default=[], metavar="KEY", help="project create: a team it is in (repeat for more)")
@@ -3992,8 +4162,13 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                    help="milestone: its target date; project create (--target): the project's (`none` clears it)")
     p.add_argument("--rename", default=None, metavar="NEW", help="milestone edit: the milestone's new name")
     p.add_argument("--lane", default=None, metavar="HANDLE", help="audit: only this lane's findings (`-`: those with no lane)")
+    p.add_argument("--asks", action="store_true", help="audit: the ledger of people's asks (an `asker:` label) instead: "
+                                                       "each not delivered, and the counts")
+    p.add_argument("--asker", default=None, metavar="NAME", help="audit --asks: only this person's asks (daniel)")
+    p.add_argument("--label", default=None, metavar="L", help="edit: add this label (`asker:NAME`, `asker-ok`)")
+    p.add_argument("--remove", action="store_true", help="edit --label: remove it instead")
     p.add_argument("--milestone", default=None, metavar="M", help="place: the project's milestone, a prefix of its name (M3)")
-    p.add_argument("--json", action="store_true", help="audit: the findings and counts as JSON")
+    p.add_argument("--json", action="store_true", help="audit: the findings and counts (--asks: the asks) as JSON")
     p.add_argument("--now", default=None, metavar="EPOCH", help="audit: the time it audits at, in seconds since the epoch (default: now)")
     p = cmd("announce", "1:some or 1:all in #agent-coordination", as_=True, body=True)
     p.add_argument("--to", nargs="+", action="extend", default=[], metavar="@HANDLE", help="the handles or names it's for (default: every handle)")

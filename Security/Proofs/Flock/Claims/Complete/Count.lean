@@ -1,6 +1,10 @@
-import Proofs.Flock.Claims.Complete.Link
-import Proofs.Flock.Claims.Complete.CostWalk
-import Proofs.Flock.Claims.DeployK
+module
+
+public import Proofs.Flock.Claims.Complete.Link
+public import Proofs.Flock.Claims.Complete.CostWalk
+public import Proofs.Flock.Claims.DeployK
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The honest session's sends fit the verifier's rounds
@@ -15,6 +19,8 @@ import Proofs.Flock.Claims.DeployK
   and link point), after the link message; with fast100's at least two levels that is `repRounds`, and
   `sendCount_goal` is the goal `SendCount`.
 -/
+
+@[expose] public section
 
 open Flock FlockDeploy
 

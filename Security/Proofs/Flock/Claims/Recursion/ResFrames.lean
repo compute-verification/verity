@@ -1,9 +1,11 @@
-import Proofs.Flock.Claims.Recursion.ElemRead
-import Proofs.Flock.Claims.Recursion.RestReadsAt
-import Proofs.Flock.Claims.Recursion.DecodeTiesVals
-import Proofs.Flock.Claims.Recursion.DecodeTiesW
-import Proofs.Flock.Claims.Recursion.FinalPiece
-import Proofs.Flock.VBridge.RecOpen
+module
+
+public import Proofs.Flock.Claims.Recursion.ElemRead
+public import Proofs.Flock.Claims.Recursion.RestReadsAt
+public import Proofs.Flock.Claims.Recursion.DecodeTiesVals
+public import Proofs.Flock.Claims.Recursion.DecodeTiesW
+public import Proofs.Flock.Claims.Recursion.FinalPiece
+public import Proofs.Flock.VBridge.RecOpen
 
 /-!
 # The frame values `framesRead` reads off the opened rounds
@@ -13,8 +15,10 @@ reads rep `k`'s frame values off the opened messages (`Rows.framesRead`): a proo
 rounds at no coin, its values at table 0's rounds. This file reads those values back as the opened rows' elements.
 
 * `framesRead_fits`: at the messages `Bound.opened` gives at the deployed join, wherever some proof fits rep `k`'s
-  opened rounds at some coins (RESTREAD's `OpenedFit`), `framesRead` is the values of a proof that fits them there.
+  opened rounds at some coins (`OpenedFit`), `framesRead` is the values of a proof that fits them there.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.ResFrames
 

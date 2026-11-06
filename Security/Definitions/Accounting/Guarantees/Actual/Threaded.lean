@@ -1,6 +1,8 @@
-import Definitions.Accounting.Guarantees.Actual
-import Definitions.Nci.Assumptions.Threads
-import Definitions.Nci.Dark
+module
+
+public import Definitions.Accounting.Guarantees.Actual
+public import Definitions.Nci.Assumptions.Threads
+public import Definitions.Nci.Dark
 
 /-!
 # The memory cap over threads (trusted)
@@ -30,6 +32,8 @@ All count reads by width: `Placed.state` and `novelReads` are widths of the gate
 the state can determine, not the width of the gates a window reads from before its start, so composing these with a wipe
 needs the read bound in its determination form.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.Actual
 

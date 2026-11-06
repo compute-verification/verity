@@ -1,4 +1,4 @@
-# s8_linear: the exact W8A8 linear at the large model's shapes, on the H200 (sm_90a) and sm_120
+# s8_linear: the exact W8A8 linear at the H200 example's shapes, on the H200 (sm_90a) and sm_120
 
 The linear `ScaledMmS8Coordinate_v1{K, DOT}` defines, DOT the card's s8 step (`GEMM_SM90_S8` on the H100 and H200,
 `GEMM_SM120_S8` on the RTX PRO 6000): the s32 sum of s8 x s8 over K (exact below 2^17), then
@@ -41,7 +41,9 @@ gates the kernel on the demo's seeded weights at the H200 shape (`e2e_h200.serve
 | `configs.py` | the configs per kernel, arch and (N, K), `tune.py`'s gated winners |
 | `tune.py` | the config sweep (kbench's interleaved timing, each config gated before it is timed) |
 | `bench.py`, `lt.py`, `roofline.py` | time against M for the exact kernels, cuBLASLt int8 autotuned and vLLM's CUTLASS, against the s8 peak (measured and data-sheet readings) and the measured DRAM bandwidth |
+| `reduce.py` | the price of an s8 tensor-core reduction of a linear's s32 output O (its four bytes, its byte planes, its low byte, against a public r-column matrix), alone and beside the linear on a second stream, against one read of O and the linear itself; the SHA-512 compressions per T MAC of hashing only the reduction |
 | `commit.py` | a layer's op outputs as hm96-sha512 row tables, timed against the layer's linears |
+| `fuse.py` | the reduction of a linear's s32 sums O by a public int8 R in the GEMM's epilogue (`wgmma.reduce_mm`, the `s8mr` kernels: z = O's bytes times R^T), gated against the separate pass word for word and timed against the GEMM alone, with each arm's clock64 SM clock |
 | `run.sh` | steps of these scripts on one leased GPU of an H200, a lease each, from build.sh's ship |
 
 `tests/` holds the twin to the Definition's evaluator for both steps, `int_mm.linear` on the CPU and its PTX audit to the

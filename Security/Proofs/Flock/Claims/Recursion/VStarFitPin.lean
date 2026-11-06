@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.VStarNets
-import Proofs.Flock.Claims.Recursion.VStarFitHeld
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarNets
+public import Proofs.Flock.Claims.Recursion.VStarFitHeld
 
 /-!
 # `TraceOk` at the fitted port inputs (`traceOk_fitPin`)
@@ -15,6 +17,8 @@ and every 192-byte salt (`sameTop`); salts that differ anywhere keep them apart 
 are the inner prover's tape's independent uniform draws, so two reps' tops coincide with probability at most
 `2^-1536` a pair: the honest theorem's tape exception.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarTraceOk
 
@@ -72,6 +76,7 @@ theorem traceOk_fitPin {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s
   cases hsv'
   have hpc := partCircuit_staged hS hx ht hpi hr hc h0
   obtain ⟨tags, P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi h0
+    (FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0).2.2)
   have hsc := (staged_scope hS hx h0).1
   have hcp := (htab 0 h0).2.2
   have hk : p.sts[0].c.kLog ≤ 27 := by

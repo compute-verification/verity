@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.Deployed
-import Proofs.Flock.Claims.ZK.CoinBind
+module
+
+public import Proofs.Flock.Claims.ZK.Deployed
+public import Proofs.Flock.Claims.ZK.CoinBind
 
 /-!
 # The reference prover of `flock-circuit --zk`'s outer layer
@@ -29,6 +31,8 @@ encoding reads the coins before `i` only; `TapeOK`: the tape read with fibers of
 messages are `ZkTables.honestPR`'s (`RefSession.HonestMsgs`, a named Prop until it is proved). `Flock.zk_deployZk_ref` is its case
 at the deployed coin layer (`ZK.CoinLayer`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

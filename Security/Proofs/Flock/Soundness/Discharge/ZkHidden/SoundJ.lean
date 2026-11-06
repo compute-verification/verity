@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
 
 /-!
 # The soundness half of one hidden-output `--zk` sampled session of `J` tables
@@ -17,6 +19,8 @@ circuit and public file are `HmOut`'s, each table is `setupHidden`'s (`setupTabl
 rows are HiddenExec's `keyPlaceH` and `keyRowsH` (`rsZHJ`), the tags are `TagsOkZHJ`, and the coin server's draws are
 `DrawOkZKHJ`. The record is `RecordsLiveZKJ`, unchanged.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkHidden
 

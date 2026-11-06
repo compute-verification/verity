@@ -1,6 +1,8 @@
-import Definitions.Accounting.Guarantees.Actual.Threaded
-import Proofs.Accounting.Actual.Windows
-import Proofs.Nci.Threads
+module
+
+public import Definitions.Accounting.Guarantees.Actual.Threaded
+public import Proofs.Accounting.Actual.Windows
+public import Proofs.Nci.Threads
 
 /-!
 # The memory cap over threads
@@ -21,6 +23,8 @@ The runtime follows from `⌈t/ω⌉ ω ≤ t + ω` (`runtime_of_count`); the ra
 proved per parameter slot, through Theorem 1 per slot (`Nci.SecurityProofs.ThreadedReadsSlots`), and the form over weight
 gates is its instance at one slot per weight gate (`Nci.SecurityProofs.Fit.idSlots`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Actual
 

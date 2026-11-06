@@ -1,7 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.PlainReg.Defs
-import Proofs.Flock.Soundness.Discharge.PlainReg.BindH
-import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedH
-import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineInst
+module
+
+public import Proofs.Flock.Soundness.Discharge.PlainReg.Defs
+public import Proofs.Flock.Soundness.Discharge.PlainReg.BindH
+public import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedH
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineInst
+import all Init.Data.Array.Basic
 
 /-!
 # The registered check at an accepted hidden-output `verify --registered F` outcome, without `--zk`
@@ -19,6 +22,8 @@ the template instance's (`layAtHI`), each the population's public file's (`regLe
 * `checked_of_acceptsRH`: the registered reads of `layAtH`, at `rsAtHS`, are checked;
 * `checked_of_acceptsRHI`: the registered reads of `layAtHI`, at `HiddenExec.rsAtHI`, are checked.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.PlainReg
 
@@ -63,7 +68,7 @@ theorem opens_of_acceptsR (I : Inputs) (own : Array Registered.Port) {c : Flock.
   rw [hd] at hst
   have s := Hidden.setupHidden_spec' hst
   have hcst : st.c = c := by
-    have h1 := s.parse
+    have h1 := s.parseF (HmOut.parse_isTmpl hc)
     rw [hc] at h1
     exact (Except.ok.inj h1).symm
   obtain ⟨pop', hpop', -, hdr⟩ := s.pub

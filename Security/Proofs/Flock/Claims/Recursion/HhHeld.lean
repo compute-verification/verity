@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.HpEarly
-import Proofs.Flock.Claims.Recursion.VStarPin
+module
+
+public import Proofs.Flock.Claims.Recursion.HpEarly
+public import Proofs.Flock.Claims.Recursion.VStarPin
 
 /-!
 # hh at the deployed builder (`hh_of_fit`)
@@ -19,6 +21,8 @@ witness `witFin`, is the run's message there. The rounds part `s` holds whole ar
 The assigner is the trace's at port inputs `g c pin`: `g := fun _ pin => pin` is `VStarTrace.A mask`, and
 `g := fitPin` is the deployed `A0 mask` (`hh_A0`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.HhHeld
 

@@ -754,7 +754,9 @@ def test_each_captured_route_is_the_dispatchs_at_its_setting() -> None:
     binds at its first and last M with what they read (GLM-5.3's tree on every owner, IEEE adds, FMA in both shots); `covered`
     names it there and nowhere past it."""
     assert X.tree_str(T.GLM53_H200_TREE) == "((((((0,(1,2)),3),5),6),4),7)"
-    assert T.CAPTURE_RUNS == ("r20261013-085842-2147", "r20261013-091723-e383", "r20261013-115512-5ff3")
+    assert T.CAPTURE_RUNS == ("art:4a6503ce29cbd49b808dffe32566e4f74e3933199fdd347dec4a2238e73058f7",
+                              "art:aef3c209534e1cf90640cd9bda04a931d041f8553437e917346d6e24283507ea",
+                              "art:6562ff46905ed10fe4372ee070a97ecc6d36725f313e4834a44e78fb3acb3f7a")
     runs = {"custom-off": T.CAPTURE_RUNS[:2], "defaults": T.CAPTURE_RUNS[2:], "switch": T.CAPTURE_RUNS}
     assert [c.definition for c in T.CAPTURED if c.setting not in T.SETTINGS] == ["AllReduceNcclTree_v1"]
     for c in (c for c in T.CAPTURED if c.setting in T.SETTINGS):
@@ -796,7 +798,7 @@ def test_the_capture_map_claims_no_all_reduce_capture_has_not_covered() -> None:
     (`workload_setting`) up to the 2048 tokens a step batches: the fused path to FlashInfer's budget and each all-reduce on the route
     `expected_comm` names, NCCL's never.  Every H200 `CAPTURED` Definition is one its Program lists, and both notes cite `CAPTURED`."""
     from verity.ml.circuits.defs import REGISTRY as DEFS
-    from verity_vllm.program.frontend.conformance import status_of
+    from verity.ml.circuits.defs import conformance_label
 
     cmap = json.loads(CMAP.read_text())
     setting = X.workload_setting()["setting"]
@@ -809,9 +811,9 @@ def test_the_capture_map_claims_no_all_reduce_capture_has_not_covered() -> None:
         assert "tp_allreduce.CAPTURED" in p["note"], pid
         if uncovered:
             assert p["status"] != "exists", (pid, setting, uncovered[:3])
-            assert all(status_of(DEFS.defs[d].conformance) == "not-yet-established" for d in p["definitions"]), pid
+            assert all(conformance_label(DEFS.defs[d].conformance) == "not-yet-established" for d in p["definitions"]), pid
         else:
-            assert all(status_of(DEFS.defs[d].conformance) == "exact-model-tested" for d in p["definitions"]), pid
+            assert all(conformance_label(DEFS.defs[d].conformance) == "exact-model-tested" for d in p["definitions"]), pid
     for c in (c for c in T.CAPTURED if c.setting in T.SETTINGS):
         assert c.definition in cmap["programs"]["fused-allreduce-rmsnorm" if c.route == "fused" else "tp-allreduce"]["definitions"]
 

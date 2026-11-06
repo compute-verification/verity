@@ -1,5 +1,5 @@
 /-
-The proof service's challenger: its live coins, the one live-coin source of every protocol, as the verifier checks them
+The proof system's challenger: its live coins, the one live-coin source of every protocol, as the verifier checks them
 (`verity/core/protocols/sampled_proofs/challenger.py`, which `tests/test_challenger_difftest.py` holds to this, the
 verifier of record).
 
@@ -26,11 +26,17 @@ with its messages; `layoutOf` is `layout_problem` over a layout as JSON gives it
 The difftest's pieces (`Pieces.table`): `challenger_commitment`, `challenger_opening`, `challenger_reason` and
 `challenger_order`, each `{"refused": why}` where the challenger refuses, so the reasons are compared too.
 -/
-import Flock.Hm96
-import Flock.Net
-import Flock.Public
-import Flock.Registered
-import SampledProofs.Json
+module
+
+public import Flock.Hm96
+public import Flock.Net
+public import Flock.Public
+public import Flock.Registered
+public import SampledProofs.Json
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Challenger
 
@@ -77,10 +83,10 @@ def layoutOf (scheme epoch families : Json) : V (String × Nat × Families) := d
   if total fs > MAX_COINS then throw s!"a live coin layout holds at most {MAX_COINS} coins"
   pure (s, e, fs)
 
-/-- `tagged_sha512(tag, canonical_json(manifest))`. -/
+/-- `identity_digest_sha512(tag, manifest)`: `tagged_sha512` over the manifest's identity bytes (`Flock.canonUtf8`). -/
 def taggedSha512 (tag : String) (manifest : Json) : V ByteArray := do
   let t := tag.toUTF8
-  let m := (← Flock.canon manifest).toUTF8
+  let m := (← Flock.canonUtf8 manifest).toUTF8
   return Flock.Sha512.hash
     ("verity/tagged-sha512/v1".toUTF8.push 0 ++ Flock.be32 t.size.toUInt32 ++ t ++ Flock.be64 m.size.toUInt64 ++ m)
 

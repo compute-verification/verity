@@ -4,7 +4,6 @@
  "provenance": {
   "instruction": "lg2.approx.ftz.f32",
   "device": "NVIDIA RTX PRO 6000 Blackwell (sm_120)",
-  "run": "r20261004-060203-ba52",
   "evidence": "art:27ed13d53fac0cf67e3e93693d9ad2b6dd75824401ca5b9f9d48acda27602066",
   "measured": {
    "mantissas": "every m at x in [1, 2) (0x3F800000 | m), sha256 of the outputs 7fd9be9a924e40a0ee18ba20e7f5158135112947597c8dd86131d3d4d8f9dbfa",

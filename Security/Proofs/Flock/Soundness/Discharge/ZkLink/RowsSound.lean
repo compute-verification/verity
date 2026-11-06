@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.Rows
-import Proofs.Flock.Soundness.Discharge.ZkLink.Public
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Rows
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
 
 /-!
 # The rows link at the compiled `--zk` audit
@@ -20,6 +22,8 @@ commitments are the registered ones:
   `δ_rows` at most `δ_link`'s closed form;
 * `zk_flock_drawnC_rows`: `Audit.extraction_audit_drawn` at it.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 

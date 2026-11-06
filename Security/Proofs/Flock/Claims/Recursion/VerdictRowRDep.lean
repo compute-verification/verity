@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.DecompBDeployed
-import Proofs.Flock.Claims.Recursion.VerdictRowECoin
-import Proofs.Flock.Claims.Recursion.VerdictLoop
+module
+
+public import Proofs.Flock.Claims.Recursion.DecompBDeployed
+public import Proofs.Flock.Claims.Recursion.VerdictRowECoin
+public import Proofs.Flock.Claims.Recursion.VerdictLoop
 
 /-!
 # Row R's leaf at the assembly's pieces
@@ -25,6 +27,8 @@ so where both cover rep `r` the groups' row ports would read the same `w` elemen
   (`ElemCover`): a piece of the group at a copy of the rep, whose elements are the rep's `w` at the group's row ports.
 -/
 
+@[expose] public section
+
 namespace RecDeploy.Rows
 
 open Flock
@@ -39,7 +43,7 @@ noncomputable section
 /-- The comb a table's fold gives at a shape's residual coins, as `combOf` computes it from a table's files. -/
 def combRead (st : Setup) (sh : Shape) (rounds : Array (Array F128)) (extras : Array Claim) : Array F128 :=
   let c : Array F128 :=
-    match Flock.RecAlgebra.residualLins sh (Flock.RecAlgebra.Coins.ofRounds rounds) extras with
+    match Flock.RecAlgebra.residualLins sh (Flock.RecAlgebra.CoinSource.ofRounds rounds) extras with
     | .ok (_, info) =>
       match st.fold.folded info.lc.fold.alpha info.lc.fold.beta info.lc.fold.lw info.lc.fold.rhoIn
           info.lc.fold.ts with
@@ -99,7 +103,7 @@ variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.
 /-- **A piece reads the decision's verifier values**: at a decision of an inner statement read at the dense form, a
 piece keyed by group `p` at a copy `(o, g)` with `o + g = r` reads, through `resVRead`, group `p`'s `V` elements of
 the `v` the verifier rows give at rep `r`'s values. -/
-theorem resVRead_eq {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+theorem resVRead_eq {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size) (r : Fin 2)
     {S : RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hS : structureOf (D.sh cls i) = .ok S)
     (hg : groups S (portSizes (D.sh cls i)) = .ok gs) {p : ℕ} (hp : p < gs.size) {o g u : ℕ} (hog : o + g = r.val)

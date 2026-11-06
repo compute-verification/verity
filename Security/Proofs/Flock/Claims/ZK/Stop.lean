@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.Layout
-import Proofs.Flock.Claims.ZK.Cut
+module
+
+public import Proofs.Flock.Claims.ZK.Layout
+public import Proofs.Flock.Claims.ZK.Cut
 
 /-!
 # A run in parts with a public stop
@@ -22,6 +24,8 @@ transcript there (`censorSim`).
   fired and their relation holds at the honest first parts the stop leaves live. The collision term is `Fork`'s of the
   prover with the stop.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

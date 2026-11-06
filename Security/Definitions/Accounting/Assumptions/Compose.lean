@@ -1,5 +1,7 @@
-import Definitions.Accounting.Compose
-import Definitions.Accounting.Assumptions.TS
+module
+
+public import Definitions.Accounting.Compose
+public import Definitions.Accounting.Assumptions.TS
 
 /-!
 # The compiled circuit's named assumptions (trusted)
@@ -53,6 +55,8 @@ The physical layer's (`CreditOfWork`):
   bit-exact fold falsifies, and `FoldOpt` is it at `N_w` words, which a sampled cheater that skips whole units
   falsifies.
 -/
+
+@[expose] public section
 
 namespace Accounting.Assumptions.Compose
 

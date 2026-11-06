@@ -4,8 +4,14 @@ its committed net (`FlockSoundness.TmplFold.unrollAt_ok`). Layouts it refuses, e
 copies placed over the root's own columns (`layApart`), a lane count below the copies (`placeOk`), and a layout of the pair
 marked `ident` (`identOk`) placed at the input rows.
 -/
-import Flock.TmplAt
-import Flock.Test.Tmpl
+module
+
+public import Flock.TmplAt
+public import Flock.Test.Tmpl
+meta import Flock.TmplAt
+meta import Flock.Test.Tmpl
+
+@[expose] public section
 
 namespace Flock.Test.TmplAt
 

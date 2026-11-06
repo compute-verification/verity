@@ -1,6 +1,8 @@
-import Flock.Canon
-import PousCheck.P2
-import Identity.Tagged
+module
+
+public import Flock.Canon
+public import PousCheck.P2
+public import Identity.Tagged
 
 /-!
 The commitment to `W` (`setup.commit`):
@@ -19,6 +21,8 @@ through Flock's canonical JSON (sorted keys, compact; its integers and ASCII str
 `canonical_json_bytes` writes).
 -/
 
+@[expose] public section
+
 namespace PousCheck.Commit
 
 open Lean (Json)
@@ -31,7 +35,7 @@ def manifestJson (q : P2.Params) : Json :=
     ("blocks_per_segment", .num q.blocksPerSegment), ("segments", .num q.segments), ("expander", .str P2.EXPANDER)]
 
 def manifest (q : P2.Params) : Except String ByteArray := do
-  return (← Flock.canon (manifestJson q)).toUTF8
+  return (← Flock.canonUtf8 (manifestJson q)).toUTF8
 
 /-- The commitment's running hash before `W`: header, `u64be(len manifest)`, manifest. -/
 def commitState (q : P2.Params) : Except String Sha512.State := do

@@ -1,6 +1,8 @@
-import Mathlib.Data.Fintype.Pi
-import Mathlib.Data.Fintype.BigOperators
-import Mathlib.Algebra.BigOperators.Fin
+module
+
+public import Mathlib.Data.Fintype.Pi
+public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Algebra.BigOperators.Fin
 
 /-!
 # Grids, occupancy, left-packing, fill, and the FIFO certifier
@@ -12,6 +14,8 @@ constant-rate release (the doc's W4), `S` is the allocation `r` and `none` is ce
 emits `S` frames, and occupancy counts the real ones.
 A frame is a `List Bool`; padding (W3) is a hypothesis in `NetTiming.Assumptions`, not a type.
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

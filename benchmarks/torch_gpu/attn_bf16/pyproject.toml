@@ -6,6 +6,7 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# tests/ evaluate the Definition (verity.ml.circuits, which imports no other unit) through its twin (verity.ml.kernels.tc).
+# tests/ evaluate the Definition (verity.ml.circuits, which imports no other unit) through its twin (verity.ml.kernels.tc);
+# the SASS gate is the harness's build gate (benchmarks/pouw/harness/sass_gate.py's mma_gate).
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "verity/ml/circuits",
-          "verity/ml/kernels/__init__.py", "verity/ml/kernels/tc.py"]
+          "verity/ml/kernels/__init__.py", "verity/ml/kernels/tc.py", "benchmarks/pouw/harness/sass_gate.py"]

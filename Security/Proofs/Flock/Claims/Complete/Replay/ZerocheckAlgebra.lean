@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.Replay.Zerocheck
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.Zerocheck
-import Proofs.Flock.Soundness.Refine.Regions
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.Zerocheck
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.Zerocheck
+public import Proofs.Flock.Soundness.Refine.Regions
 
 /-!
 # The honest prover's zerocheck passes its final check
@@ -14,6 +16,8 @@ analysis's honest messages (`Zerocheck.honest`, in the field's sums, `eqR`, `ski
 (`bitF`), the zerocheck vector and the residual coins; the fold is that analysis's replayed claim (`zcFold_fst`), and
 `Zerocheck.final_ab` closes it.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay.Zc
 

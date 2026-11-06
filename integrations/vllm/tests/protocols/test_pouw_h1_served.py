@@ -36,7 +36,7 @@ from verity.core.protocols.sampled_proofs.one_stage import partition as P, regis
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind  # noqa: E402
 from verity.ml.circuits.ports import In, Out, Ports  # noqa: E402
 from verity.ml.circuits.refs import Coll, coll_concat  # noqa: E402
-from verity.ml.circuits.types import Array, Record, Value  # noqa: E402
+from verity.ml.circuits.types import Array, RecordType, Value  # noqa: E402
 from verity.ml.commitments import hm96  # noqa: E402
 from verity.ml.commitments.merkle import tree_levels  # noqa: E402
 from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest  # noqa: E402
@@ -63,7 +63,7 @@ FOLD1 = PrimitiveDefinition("H1ServedTestFold1", 1, (("key", V1), ("x", V1)), V1
                             register=False, ports=Ports(params={"key": In(kind="coin")}, ret=Out(sink=True)))
 #: the stand-in's receipt: 16 bits, one u16 word a proof block (a receipt is bits, as the tile's u32 words are)
 RECEIPT = Array(16, V1)
-OUT = Record(("receipt", RECEIPT), ("ok", V1))
+OUT = RecordType(("receipt", RECEIPT), ("ok", V1))
 
 
 def _sig(S):
@@ -126,18 +126,21 @@ def _period(ws, shapes=SHAPES, modules=MODULES, blocks=BLOCKS, defn=StandIn):
 
 def _window(key: bytes, seed: int = 0, served_key: bytes | None = None, shapes=SHAPES, blocks=BLOCKS, steps=STEPS,
             served=1, changed=None, modules=MODULES, tile=TILE, rows=T, no_z=False, ws=None, weights=None, receipts=None,
-            order=None, defn=StandIn):
+            order=None, defn=StandIn, device=None):
     """A window: its first ``served`` steps serve 5 rows each, q and k on one input x, o on another, every step with the
     same weights ``ws`` (`_weights` of ``seed`` by default; step 1's q on ``changed`` when given), each call's z/y records
     `scaled_mm_zy`'s over its T slots, its linears called in ``order`` (module order by default); the later steps are
     empty. With ``weights`` (`_period`) its ``b/<K>`` are the period's. Its proof blocks are ``defn``'s (`StandInJ10R` for a
-    J10-R window). Returns the run, each linear's weight and scales, and each served call's (a, s_a, z, y) by its index,
-    z its exact product and y its served y."""
+    J10-R window). With ``device`` the arm's tensors are there (each weight moved once), so its records are too. Returns
+    the run, each linear's weight and scales, and each served call's (a, s_a, z, y) by its index on the host, z its exact
+    product and y its served y."""
     rng = np.random.default_rng(seed)
     run = PH.H1Run("t", SALT, modules, shapes, rows, steps, key=bytes([seed + 1]) * 32,
                    served=SV.Served(tile, _unit(tile, defn), blocks, window=served_key or key, weights=weights,
                                     receipts=receipts))
     ws = _weights(seed, shapes) if ws is None else ws
+    on = (lambda t: t) if device is None else (lambda t: t.to(device))
+    held, moved = [(on(c), on(s)) for c, s in ws], None if changed is None else on(changed)
     got = {}
     for s in range(served):
         xs = {}
@@ -145,13 +148,15 @@ def _window(key: bytes, seed: int = 0, served_key: bytes | None = None, shapes=S
             xs[b] = xs[b] if b in xs else _codes(rng, SERVED, k)
         inputs = [xs[b] for b in blocks]
         for w in range(len(inputs)) if order is None else order:
-            a, (wt, sw) = inputs[w], ws[w]
-            wt = changed if (s, w) == (1, 0) and changed is not None else wt
+            a, (wt, _sw), (dw, ds) = inputs[w], ws[w], held[w]
+            if (s, w) == (1, 0) and changed is not None:
+                wt, dw = changed, moved
             n = wt.shape[0]
             s_a = torch.rand(SERVED) + 0.5
-            y, zy = OPS.scaled_mm_zy(a, s_a, wt, sw, rows) if n % PH.TILE[1] == 0 else (None, None)
-            call = run.record(w, a, s_a, wt, sw, z=None if no_z else zy)
-            got[call.index] = (a, s_a, a.to(torch.int32) @ wt.to(torch.int32).T, y)
+            da, dsa = on(a), on(s_a)
+            y, zy = OPS.scaled_mm_zy(da, dsa, dw, ds, rows) if n % PH.TILE[1] == 0 else (None, None)
+            call = run.record(w, da, dsa, dw, ds, z=None if no_z else zy)
+            got[call.index] = (a, s_a, a.to(torch.int32) @ wt.to(torch.int32).T, None if y is None else y.cpu())
     run.close()
     return run, ws, got
 
@@ -225,6 +230,47 @@ def test_each_call_registers_its_tables_as_it_is_recorded():
         assert {rz.value: rz.root.hex()}.items() <= run.tables[c.index]["registered"].items()
     for r, log in enumerate(run.round_log):
         assert RQ.step_digest(run.salt, r, run._rows([c for c in run.calls if c.step == r])).hex() == log["calls"]
+
+
+class _Hashing:
+    """A z table's hash still running, as `pouw_h1_registered_device.Hashing` is: never ready, so only a wait reads it."""
+
+    def __init__(self, value: str, events: list[tuple[str, str]]) -> None:
+        self.value, self.events = value, events
+
+    def ready(self) -> bool:
+        return False
+
+    def result(self) -> tuple:
+        self.events.append(("read", self.value))
+        return ()
+
+
+def test_a_z_table_hashing_on_the_gpu_is_read_at_its_rounds_close_and_registers_what_a_waited_one_does(monkeypatch):
+    """A z table whose hash is left running (`pouw_h1_registered.commit`'s ``later``, the GPU path) keeps its place in the
+    registration order and is read only when its round closes, after its step's later calls were recorded: the window's
+    trees, entries, digest, manifest roots and round roots are the ones it registers when each hash is waited for."""
+    torch.manual_seed(0)
+    waited, *_ = _window(W1)
+    events, commit = [], NR.commit
+
+    def later(*args, later=False, **kw):
+        reg = commit(*args, **kw)
+        if not later:
+            return reg
+        events.append(("hashing", reg.value))
+        return NR.Later(_Hashing(reg.value, events), lambda: reg)
+
+    monkeypatch.setattr(NR, "commit", later)
+    torch.manual_seed(0)
+    run, *_ = _window(W1)
+    zy = [SV.PREFIX + f"zy@{c}" for c in range(len(run.calls))]
+    assert events == [(e, zy[c]) for s in range(STEPS) for e in ("hashing", "read") for c in range(3 * s, 3 * s + 3)]
+    assert all(isinstance(r, G.Registered) for r in run.served.registered.values())
+    assert list(run.served.registered) == list(waited.served.registered)
+    assert run.served.roots() == waited.served.roots() and run.served.entries() == waited.served.entries()
+    assert (run.tables, run.round_log) == (waited.tables, waited.round_log)
+    assert (run.served.digest(), run.calls_root()) == (waited.served.digest(), waited.calls_root())
 
 
 @pytest.mark.parametrize("steps", [2, 3])
@@ -609,7 +655,7 @@ def test_round_r_lists_step_rs_a_tables_whole_under_its_root():
 
 
 class _Receipts(dict):
-    """A stand-in receipt producer: each proof block of the call one receipt of the stand-in's width (one u16 word), drawn from
+    """A stand-in receipt producer: each proof block of the call one receipt of the stand-in's width (one u16 word), sampled from
     the call's served codes and weight, kept by call (with the codes it was given, and the order it was asked in) so a
     test recomputes each table from them."""
 
@@ -915,11 +961,11 @@ def test_k_up_to_4096_roots_are_unchanged():
         period = _period(ws)
         run, _ws, _got = _window(W1, weights=period)
     got = {v: r.root.hex()[:32] for v, r in run.served.registered.items() if "/a/" in v or "/b/" in v}
-    assert period.root().hex()[:32] == "0b889e954429d1cdac365f8e23e8153c"
+    assert period.root().hex()[:32] == "1ece0ea710f8c4eb2928eab685ffb566"
     assert got == {SV.PREFIX + v: h for v, h in {
-        "a/16@0": "04b9eb08e826e1494240fc36ab0bc5e4", "a/16@1": "e899d34fbfa90038cbdf2585410f56b5",
-        "a/32@0": "3087ac7de2b46030df6a89c0dde76fca", "a/32@1": "9d7cca0084a5daad92b6536fba6fd31c",
-        "b/16": "9af66bcd442455a00f1bbc66995815c7", "b/32": "da3a215e48a1fa5f72401e28e5791cc6"}.items()}
+        "a/16@0": "c8b921b78bada773a56c50d86e4b18e5", "a/16@1": "8b4037635004312a565d50e90ad1d1f1",
+        "a/32@0": "717c4bda4f5b9a14963d83c2f4684b97", "a/32@1": "6aefc8db5b8a0da8ceea92ba37934975",
+        "b/16": "a226c1160a24925da82ea5fcdf038552", "b/32": "434e13142ae61afb78f47ce2b04661c7"}.items()}
 
 
 #: kernels' SPLITK vectors (``tests/vectors/splitk_rows.json``, `splitk_rows_vectors`): their
@@ -928,11 +974,11 @@ def test_k_up_to_4096_roots_are_unchanged():
 VECTORS_LABEL = b"verity/pouw/splitk-rows-vectors/v1"
 VECTORS = [
     ("a-14336-s0", "a/14336@0", 14336, 64, (1 << 61) + (1 << 42), True, 256, 1794,
-     "8acce5e4bf00be8d31e84814e2b349dd5e0906103d55748662898e15e1501c93a50a993b29b5add3c21e89a8e984942ec4a943b0ee4df17e5ea4e239bee20e56",
-     "b2e05799b4fad2b3795b165d5e262d2b35e8776ef3d41eabc132aa160a0fbed537e53927727063f844054ddcce12cb1a5e0e941e4442a4ba50231f7ab72cc369"),
+     "6b893709e728b3f92b578c12d0ef87fc8f452525fc8742e26264a9a32d4d0ca72f0d34fdb8e228219ce52bb896177aa7cac27431f19b823fc069478905b6d88a",
+     "45186fd0067bd7687af889999cedf0c93c5e95816b72aebdd0a51ff2946a59c11cfbc7560c9206ea05c359def2f4aeb39c819ec390c6a004a31b469efa62855b"),
     ("b-6144", "b/6144", 6144, 64, Wt.B_NONCE, False, 128, 1538,
-     "ee06cb8014a9ea97fa6e3c319a61ac9094dfa6727b6a8bca92c9c6daf8098080499f505edeb236c03264fb695e79f2f2c9985ae9250712ae33de36591fbf5358",
-     "f93f07478d0900b061ffc2a6d6b24aa342a7b0247380bd95b2aa3f80fffc8567bed58d4be497b41321d288a33bdd910062e394dbf70444582a7e8f014b49e7ad"),
+     "b8a8b4de9a55053ef37e5d61c493fd54247c43ea3078bcee2be05bb8bfd56f2efe269ec5a09273cb5281c4ce529d62d83b0b5114e5f5ff8240ef8ee89df45195",
+     "2ffd8e4b05f031a1ae596a63248734f1a7f57188cfeaeba0fe24cde018e25e1df52d6258cfa2f54aaa3744e5bf5e5ccc0191681c5f3341ab5bb0c8fc68c6e983"),
 ]
 
 
@@ -1010,6 +1056,29 @@ def test_a_chunked_llama_window_registers_chunk_leaves_and_core_credit_ties_it()
              for e in served.entries()]
     assert CR._weights(window, layout, whole, requests.hex(), session, served.program_digest, pre)[1] == (
         "weights", CR.other_weights_entry(pre + "b/14336", 14336, 32))
+
+
+#: one Llama-3.2-1B decoder layer's int8 linears (n, K): qkv, o and gate_up at the hidden size, down_proj at the
+#: intermediate size
+LLAMA_1B = {"qkv_proj": (3072, 2048), "o_proj": (2048, 2048), "gate_up_proj": (16384, 2048), "down_proj": (2048, 8192)}
+
+
+@pytest.mark.slow
+def test_the_pouw_setting_j10r_over_one_k_declares_the_form_a_periods_guarantee_covers():
+    """serve-openai's ``{"pouw": {"unit": "j10r", "ks": [2048]}}`` (`unit_of`, the linears at K = 2048): the Program it
+    declares over a Llama-3.2-1B layer at T 64, S 1 has its units at one K, each J10-R's, as credit reads the descriptor
+    (`credit.shape_of`): the form a PoUW period's guarantee covers. Unset (v1) its unit takes per-unit noise, and J10-R
+    with down_proj's K = 8192 beside it has units at two K's. Its three declarations are real (up to a minute together):
+    the stand-in tests hold the setting's plumbing, and only a real one gives the descriptor credit reads."""
+    def tiles(names, unit):
+        shapes = [LLAMA_1B[n] for n in names]
+        raw = SV.descriptor(SV.declared(shapes, dict(enumerate(names)), 64, 1, unit=SV.unit_of(unit)))
+        return {k: t["j10r"] for k, t in CR.shape_of(raw)["tiles"].items()}
+
+    one_k = [n for n, (_n, k) in LLAMA_1B.items() if k == 2048]
+    assert tiles(one_k, "j10r") == {2048: True}
+    assert tiles(one_k, None) == {2048: False}
+    assert tiles(list(LLAMA_1B), "j10r") == {2048: True, 8192: True}
 
 
 def _last_chunk_code(w):

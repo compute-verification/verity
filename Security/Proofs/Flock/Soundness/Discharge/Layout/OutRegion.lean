@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Layout.HmRegion
+module
+
+public import Proofs.Flock.Soundness.Discharge.Layout.HmRegion
 
 /-!
 # The returned outputs that the statement pins at the unit slots' output columns
@@ -11,6 +13,8 @@ above the unit range's slot bits, at the output group's first column (`inBlock_o
     10|model's statement at the executable's regions, the bit at slot `k`'s output column `16 j + t` is bit `t` of output `j`
 of the slot's leaf at the slot's instance (the pinned dummy past the population; `out_pinned`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

@@ -104,7 +104,7 @@ def duo_zp(y: int, z: int, d: int, k: int, a: int, r: int) -> int:
 
 # ---- the sm_120 integer ISA (exact), as instruction templates ------------------------------------------------------------
 #
-# An instruction template maps an ordered tuple of operand values to one 32-bit word. Operands are drawn from a pool that
+# An instruction template maps an ordered tuple of operand values to one 32-bit word. Operands are sampled from a pool that
 # holds the inputs {y, z, d}, the public constants and a rich set of immediates. Enumerating the templates over the pool is
 # a complete single-instruction search for the modelled opcodes. LOP3 is handled specially (every 3-input LUT) by a
 # per-bit-locality test, which is faster than and equivalent to enumerating all 256 LUTs.

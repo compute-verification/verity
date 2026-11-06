@@ -5,7 +5,7 @@ which only shrinks. The forms, each read from where the verifier or the agreemen
 - each statement version (`Flock.Tags.all` and `Tags.templated`), covered by a replayable or live set whose
   `lean_statement` it is;
 - each record check (the `S<n>` reasons the verifier writes), covered by an expectation whose `why` names it;
-- each coin mode of a plain session (`--coins`: `seed`, the default, and `os`), covered by a set staged with it;
+- each coin mode of a plain session (`seed`, without `--coins`, and `--coins tree`), covered by a set staged with it;
 - each outcome `agree.py` compares: an accepted and a rejected expectation, an intended divergence (upstream accepts what
   the Lean verifier refuses), each of its `--lean-refuses…` markers on a set, and a set without `--program`
   (`agree.NO_PROGRAM`).
@@ -30,11 +30,9 @@ UNCOVERED = frozenset({
     "statement verity/flock-circuit@f5df3bbc",
     "statement verity/flock-circuit/types@f5df3bbc",
     "statement verity/flock-circuit@b3727bd9",
-    "statement verity/flock-circuit@b3727bd9+seed-injection",
     "statement verity/flock-circuit/types@b3727bd9",
     "statement verity/flock-circuit/types@b3727bd9+seed-injection",
     "statement verity/flock-circuit@cec3e347",
-    "statement verity/flock-circuit@cec3e347+seed-injection",
     "statement verity/flock-circuit/types@cec3e347",
     "statement verity/flock-circuit/types@cec3e347+seed-injection",
     "statement verity/flock-circuit+seed-injection",
@@ -59,14 +57,17 @@ def statements() -> list[str]:
     """The names of `Flock.Tags.all` and `Tags.templated`, each list's definitions read from `Flock/Tags.lean`."""
     src = (LEAN / "Flock" / "Tags.lean").read_text()
     bodies = dict(re.findall(r"^def (\w+) : Tags :=(.*?)(?=^(?:def |/--|end ))", src, re.S | re.M))
+    strings = dict(re.findall(r'^def (\w+) : String := "([^"]+)"', src, re.M))
     names = []
     for listed in ("all", "templated"):
         m = re.search(rf"^def {listed} : List Tags := \[(.*?)\]", src, re.S | re.M)
         assert m, f"Flock/Tags.lean has no `def {listed} : List Tags := [...]`: update statements() to read the versions"
         for d in re.findall(r"\w+", m.group(1)):
-            name = re.search(r'name := "([^"]+)"', bodies.get(d, ""))
-            assert name, f"Tags.{d}: no `name := \"…\"` in its definition: update statements() to read its name"
-            names.append(name.group(1))
+            name = re.search(r'name := (?:"([^"]+)"|(\w+)\b)', bodies.get(d, ""))
+            value = name and (name.group(1) or strings.get(name.group(2)))
+            assert value, (f"Tags.{d}: no `name := \"…\"`, or `name := X` with `def X : String := \"…\"`, in its "
+                           "definition: update statements() to read its name")
+            names.append(value)
     return names
 
 
@@ -102,7 +103,7 @@ def accepted(e) -> bool | None:
 
 def forms() -> set[str]:
     return ({f"statement {s}" for s in statements()} | {f"check {c}" for c in checks()}
-            | {"coins seed", "coins os"}
+            | {"coins seed", "coins tree"}
             | {"outcome accepted", "outcome rejected", "outcome upstream_accepted", "outcome no_program"}
             | {f"outcome {k}" for k in refusal_markers()})
 

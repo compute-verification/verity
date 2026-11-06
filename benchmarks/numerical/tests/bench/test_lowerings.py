@@ -21,7 +21,7 @@ def test_one_module_per_template(family):
         assert f"{L.module_name(tid)}.py" in reg.supports(sub, "frame-v3/blake3-keyed")
 
 
-#: Templates a family proves under frame-v3/blake3-keyed besides the GEMM (C-Flock: verity/flock-ir-frame/v3; sampling under
+#: Templates a family proves under frame-v3/blake3-keyed besides the GEMM (Flock: verity/flock-ir-frame/v3; sampling under
 #: verity/flock-ir-sampling/v1).
 LOWERED = {"C-Flock": {"rope-head", "silu-mul", "silu-mul-v2", "rmsnorm-fused-cuda", "rmsnorm-triton", "attention-head",
                        "gumbel-top-p-token-select", "ingress-prompt", "token-select-chunk", "token-select-combine"}}
@@ -35,7 +35,7 @@ def test_unlowered_templates_say_why(family):
         if sub.template.id in LOWERED.get(family, ()):
             assert why is None and isinstance(reg.supports(sub, "vllm-v1"), str)
         elif sub.template.id != "gemm-coordinate":
-            assert isinstance(why, str) and family in why
+            assert isinstance(why, str) and family.removeprefix("C-") in why
 
 
 CELLS = [("C-Flock", "gemm-coordinate/k1536/sm90-mma-bf16", "frame-v3/blake3-keyed", "bf16-hopper"),

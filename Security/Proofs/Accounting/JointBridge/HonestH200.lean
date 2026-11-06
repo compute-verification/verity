@@ -1,6 +1,8 @@
-import Proofs.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod
-import Proofs.Pouw.Period.Honest
-import Proofs.Pouw.Prob
+module
+
+public import Proofs.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod
+public import Proofs.Pouw.Period.Honest
+public import Proofs.Pouw.Prob
 
 /-!
 # `WorkOfH1CheckedCreditPeriodH200`'s witnesses: an honest period on the H200, and the verifier that accepts everything
@@ -30,6 +32,8 @@ The verifier that accepts everything (`acceptAll`) is the same period with every
 At no windows its device runs nothing, so a work certificate `W = 1` fails on every coin and PoUW's guarantee fails
 there at any error below one (`WorkOfH1CheckedCreditPeriodH200_nontrivial`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Bridge.HonestH200
 
@@ -98,7 +102,7 @@ theorem step_fits (n : ℕ) : (step n).Fits (device n) := by
   refine ⟨fun o => ?_, ?_, fun _ => ?_, ?_, ?_⟩ <;> simp [step, device]
 
 /-- **The deployed check accepts the period**: the compiled PoUW check (`PouwCheck.protocol.check`) accepts every
-window of H1's honest period on the coins `x`, each at its registration and the proof service's answer. -/
+window of H1's honest period on the coins `x`, each at its registration and the proof system's answer. -/
 def checkedAccepts (n : ℕ) (x : Paths HonestH1.Ω1 n) : Prop :=
   ∀ w, Accepts HonestH1.prm ((HonestH1.windows n).reg x w) ((HonestH1.windows n).ev x w)
 
@@ -143,7 +147,7 @@ theorem work_step (n : ℕ) (p : Accounting.Price) (r : Accounting.PeriodRun (de
     (fun _ : Unit => Paths HonestH1.Ω1 n)) (hs : ∀ ξ, r.schedule ξ = fun _ => step n) (hw : r.win = ⟨0, 1⟩)
     (ξ : (i : Unit) → Paths HonestH1.Ω1 n) : r.work p ξ = p .tc * (65536 * n) := by
   unfold Accounting.PeriodRun.work Accounting.Schedule.work Accounting.Schedule.ops
-  rw [hs, hw, Fintype.sum_eq_single Accounting.Op.tc]
+  rw [hs, hw, Fintype.sum_eq_single Accounting.OpClass.tc]
   · simp [step, device, Accounting.Window.ticks]
   · intro o ho
     simp [step, device, ho]

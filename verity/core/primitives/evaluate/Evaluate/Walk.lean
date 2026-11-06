@@ -1,4 +1,6 @@
-import Evaluate.Prims
+module
+
+public import Evaluate.Prims
 
 /-!
 # The gate walk: a Program evaluated gate by gate in canonical order
@@ -22,6 +24,10 @@ root's `ret`. It is `verity.ml.circuits.evaluate.evaluate_region` over the root'
   only in the root's body (§5.2, `decode`), and every gate of theirs is bound before the walk.
 - Before the walk, every primitive the program defines must be one `Evaluate.Prims` implements (`ofDefn`).
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Evaluate
 

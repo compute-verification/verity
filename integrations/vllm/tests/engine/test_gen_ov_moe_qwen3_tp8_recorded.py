@@ -12,7 +12,7 @@ checkpoint's config.json at the recorded revision (its sha256 is the header's `c
   * `fold` over the cut (the hidden state the cut does not compute read as stand-ins, everything else the fold's own) gives every
     collective one `peers` field per peer rank, in rank order at adjacent offsets; a one-row collective (the decode all-reduce, both
     logits all-gathers) reads its 7 peers as ONE run across those fields, the prefill all-reduce one run per field and row;
-  * `Prog` canonicalises each recorded read as one ("PEER", ordinal, ..) per peer in rank order around the rank's own partial, which is
+  * `RootView` canonicalises each recorded read as one ("PEER", ordinal, ..) per peer in rank order around the rank's own partial, which is
     how a rank Program reading one `peers_<k>` Input per peer reads it, and the two compare equal; without the split at field boundaries
     the one-row reads do not.
 Not covered: the Build's TP8 rank Program itself (here a Program of that form over the same fields), the collective ordinals of a whole
@@ -144,7 +144,7 @@ def test_recorded_tp8_scope_resolves_the_gate_gemm_ahead_of_the_router_and_the_r
     assert own.kind == "all_gather" and own.site == "logits_processor" and own.own == lm.outputs[0].view
 
 
-# --- the fold's peer reads of the recorded collectives, and how `Prog` canonicalises them ------------------------------------------------
+# --- the fold's peer reads of the recorded collectives, and how `RootView` canonicalises them ------------------------------------------------
 
 class _CutFold(FD._Fold):
     """`fold` over a cut: a read the cut cannot answer (state computed by the layers outside it) gets a stand-in run; every other read,
@@ -227,9 +227,9 @@ def test_a_one_row_collective_reads_its_peers_as_one_run_across_the_fields(rank)
 OWN, PEERS0 = 0, 1
 
 
-def _prog(label: str, spec: str, own_spec: str, N: int, inputs: dict, peer_fields: dict, operand: list[tuple], compact: bool) -> PC.Prog:
-    """One collective row as `Prog` holds it: the peers Input node(s), the own partial's producer, the collective reading them."""
-    P = PC.Prog.__new__(PC.Prog)
+def _prog(label: str, spec: str, own_spec: str, N: int, inputs: dict, peer_fields: dict, operand: list[tuple], compact: bool) -> PC.RootView:
+    """One collective row as `RootView` holds it: the peers Input node(s), the own partial's producer, the collective reading them."""
+    P = PC.RootView.__new__(PC.RootView)
     P.label, P.digest = label, f"digest-{label}"
     P.inputs = inputs
     P.tok_node, P.seed_nodes, P.seed_index = -1, set(), {}
@@ -248,7 +248,7 @@ def _prog(label: str, spec: str, own_spec: str, N: int, inputs: dict, peer_field
     return P
 
 
-def _sides(rank: int, m: dict, rs: list[tuple], layout: dict, compact: bool) -> tuple[PC.Prog, PC.Prog, list[tuple]]:
+def _sides(rank: int, m: dict, rs: list[tuple], layout: dict, compact: bool) -> tuple[PC.RootView, PC.RootView, list[tuple]]:
     """The fold's row (ONE peers Input with the fields `peers_layout` states, `load_oracle`'s form) and a rank Program's (one Input per
     `peers_<k>` field, read in rank order around its own partial), with the canonical operand both must have."""
     c = m["collective"]
@@ -267,7 +267,7 @@ def _sides(rank: int, m: dict, rs: list[tuple], layout: dict, compact: bool) -> 
     return A, F, want
 
 
-def _canon(P: PC.Prog) -> list[tuple]:
+def _canon(P: PC.RootView) -> list[tuple]:
     got = P.canon(1)[0]
     return K.expand_mixed(got) if P.compact else got
 
@@ -290,7 +290,7 @@ def test_without_the_field_boundary_split_the_one_row_reads_differ(monkeypatch, 
     all-reduce (one run per field) compares equal either way."""
     _f, res = _folded(rank)
     (layout,) = res.peers_layout
-    monkeypatch.setattr(PC.Prog, "_split_peer", lambda self, run: [run])
+    monkeypatch.setattr(PC.RootView, "_split_peer", lambda self, run: [run])
     for m, rs in _rows(rank):
         A, F, want = _sides(rank, m, rs, layout, False)
         r = PC.compare_steps(A, F)

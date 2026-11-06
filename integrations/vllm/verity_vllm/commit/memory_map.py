@@ -23,7 +23,7 @@ page      `block_size` slots in each layer as the engine lays them out (`page_of
           `tables[request][q // block_size] * block_size + q % block_size`, its pages the ones the engine wrote its KV to
           (`tables`, from the slots the Commit committed) or, for its cached positions, its producers', vLLM's null block
           being page 0
-block     4,096 bytes of a plane (`store.registry._page_blocks`), at slot `firsts[layer] + ids[page, c]` (the `Store`'s
+block     4,096 bytes of a plane (`store.registry._page_blocks`), at slot `firsts[layer] + ids[page, c]` (the `NodeMemory`'s
           numbering: a KV pool of one region per layer)
 appended  a block whose rows are all born, at the step of the last (its completion), if a later step reads it: a step's
           record, its frees then its writes, takes effect after the step's reads (remote_bandwidth's convention),
@@ -39,7 +39,7 @@ freed     a written block in the record of its rows' last structural reader (mem
           block, no write, no free and no credit, which this builder doesn't emit yet, so it writes the block and frees it
           a line later, past that reader).  And a slot's registered block (a KV page's filler, registered before
           the seed) at the step a write first reaches it, even the one completing it: its bytes are no longer that block's,
-          and a block not yet written is uncredited (the `Store`'s dirty).  A page's untouched blocks stay held, counting
+          and a block not yet written is uncredited (the `NodeMemory`'s dirty).  A page's untouched blocks stay held, counting
           against capacity, until then: a request's end frees only the blocks it wrote.  A line frees no slot it writes
           (the write releases its block)
 re-key    a live written block as old as the session's lifetime cap, appended again with its d_j at a fresh j: its old j

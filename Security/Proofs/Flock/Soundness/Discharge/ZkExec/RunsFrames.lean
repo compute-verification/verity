@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLig
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLig
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
 
 /-!
 # `repProg` emits a `--zk` rep's frames
@@ -11,6 +13,8 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
 constraints: the replay's three, the ring switch's two, the lane phase's two (`ligeritoConstraints_size`) and the
 triple's three.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

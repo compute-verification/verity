@@ -4,7 +4,7 @@ from the committed bytes alone.
 VU = one Inductor kernel launch of P_compiled (compiled_relations.relation); its input boundaries are committed under
 `c<piece>.<kernel>/<role>` (compiled_kernel_source.py), its registered weights come from the model.  For every launch of the sampled
 steps the relation is evaluated from the committed inputs and compared BIT-FOR-BIT with the committed outputs.  Strata: the prefill
-step, the first decode step, a middle and the last step, plus `n_random` steps drawn from a seed derived from the run root (fixed
+step, the first decode step, a middle and the last step, plus `n_random` steps sampled from a seed derived from the run root (fixed
 before sampling) -- every kernel kind x every piece of those steps.  LINKAGE (ordered boundary): the embedding ids committed at step s
 must equal the token the engine emitted at step s-1 (input prescribed by the previous step's designated output); greedy argmax of the
 eager lm_head over the committed final hidden state at step s must equal the token emitted at step s.  A one-step-late drain keeps

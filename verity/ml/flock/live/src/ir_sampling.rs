@@ -1,6 +1,6 @@
-//! `verity/flock-ir-sampling/v1` (lane flock-ir-sampling; `verity_flock.ir_sampling` stages the `flock-ir-sampling/v1` file):
+//! `verity/flock-ir-sampling/v1` (`verity_flock.ir_sampling` stages the `flock-ir-sampling/v1` file):
 //! `GumbelTopPTokenSelect_v1{V}`'s lanes bound to their frame-v3 rows. This module is `ir_frame.rs` at c53d9148
-//! (`verity/flock-ir-frame/v2`, red-team-flock-2 granted) with the sampling statement's changes, kept apart so that the two
+//! (`verity/flock-ir-frame/v2`, as red team reviewed it) with the sampling statement's changes, kept apart so that the two
 //! statements evolve and are reviewed separately: `diff` it against that file for the delta. The binary is
 //! `flock-ir-sampling`; it refuses any other file.
 //!
@@ -12,7 +12,7 @@
 //! - every leaf input bit of every unit a copy of the message bit it hashes (the plan's wiring);
 //! - every sub-circuit's constant a copy of the pinned column (compression slot 0's).
 //!
-//! Public regions, each opened at two verifier points drawn after the commitment (both reps), all values the verifier's:
+//! Public regions, each opened at two verifier points sampled after the commitment (both reps), all values the verifier's:
 //! - every compression's counter, block_len and flags (bits 1024..1152: the chunk's index in its row, 64, KEYED_HASH |
 //!   CHUNK_START at the chunk's first block | CHUNK_END at its last, the chunk's own block count: a row's last chunk may be
 //!   shorter, `chunk_blocks`);
@@ -60,7 +60,7 @@ use crate::{
 
 pub const TAG: &[u8] = b"verity/flock-ir-frame/v2";
 pub const TAG_SAMPLING: &[u8] = b"verity/flock-ir-sampling/v1";
-/// `verity.ml.commitments.rowleaf.blake3_row_key(ROLE_X)`: the only row key a sampling file may name (red-team-flock-2 IR6).
+/// `verity.ml.commitments.rowleaf.blake3_row_key(ROLE_X)`: the only row key a sampling file may name.
 pub const ROW_KEY_X: &[u8; 32] = b"verity/blake3-leaf/v1/x\0\0\0\0\0\0\0\0\0";
 /// A sampling file's public ports: `GumbelTopPTokenSelect_v1`'s top_p, seed, pos, temp, splits as 32-bit words.
 pub const SAMPLING_PUBLIC: [(&str, usize); 5] = [("in1", 1), ("in2", 2), ("in3", 2), ("in4", 1), ("in5", 1)];

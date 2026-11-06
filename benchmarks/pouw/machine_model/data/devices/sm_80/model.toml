@@ -1,6 +1,5 @@
-# The A100 (sm_80) as `eps` prices it (README "Devices"): one epoch, the census of EPS1 AMPERE (note:20261017T0700Z-
-# draft-eps1-ampere, with M1c's search on sm_80 as its latest extension, note:20261017T0925Z-draft-eps1-ampere-r2), and
-# no vector solved for prices, so the constants only `solve` reads are left out.
+# The A100 (sm_80) as `eps` prices it (README "Devices"): one epoch, its measured census, and no vector
+# solved for prices, so the constants only `solve` reads are left out.
 current = "AMPERE-80"
 epochs = ["AMPERE-80"]
 

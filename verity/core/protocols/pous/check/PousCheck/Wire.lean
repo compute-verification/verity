@@ -1,10 +1,12 @@
-import Flock.Canon
-import Identity.Tagged
-import PousCheck.Commit
-import PousCheck.Merkle
-import PousCheck.Challenge
-import PousCheck.Wire.Codec
-import PousCheck.Prim.PyJson
+module
+
+public import Flock.Canon
+public import Identity.Tagged
+public import PousCheck.Commit
+public import PousCheck.Merkle
+public import PousCheck.Challenge
+public import PousCheck.Wire.Codec
+public import PousCheck.Prim.PyJson
 
 /-!
 # `p2-audit-wire/v4`: a setup and one timed audit, verified to its `FINAL` frame
@@ -32,6 +34,8 @@ Every check is the Python's, in the Python's order, because the first failing ch
 
 Latencies are data (the verifier's measurements, `elapsed`), never read here.
 -/
+
+@[expose] public section
 
 namespace PousCheck.Wire
 
@@ -145,8 +149,8 @@ def payloadBits (profile : String) (width : Nat) : W Nat := do
 
 def FIELDS : Array String := #["blocks_per_segment", "c0", "profile", "scheme", "segments", "w"]
 
-/-- The store a SETUP_COMMIT's manifest names (`_canonical_json`, `_params`): UTF-8 JSON that is its own canonical form
-(sorted keys, no whitespace, integers only; a float is read as Python reads it, `Prim.PyJson.scan`), an object of exactly `FIELDS` with `scheme = "p2"`, the four numbers
+/-- The store a SETUP_COMMIT's manifest names (`_canonical_json`, `_params`): UTF-8 JSON that is its own identity form
+(`Flock.canonUtf8`: sorted keys, no whitespace, integers only; a float is read as Python reads it, `Prim.PyJson.scan`), an object of exactly `FIELDS` with `scheme = "p2"`, the four numbers
 integers in range, a known payload profile, `p = 2^w − c0 ≡ 3 mod 4` with `w` a multiple of 32, and every payload below
 `p` (`reference.Params`). Every refusal is malformed. -/
 def manifestParams (data : ByteArray) : W Params := do
@@ -156,7 +160,7 @@ def manifestParams (data : ByteArray) : W Params := do
   let .ok j := Json.parse text | bad "manifest is not canonical UTF-8 JSON"
   let .ok kvs := j.getObj? | bad "manifest is not an object"
   if unwritable then bad "manifest holds a value canonical JSON cannot"
-  match Flock.canon j with
+  match Flock.canonUtf8 j with
   | .ok c => if c.toUTF8 != data then bad "manifest is not canonical JSON"
   | .error _ => bad "manifest is not canonical JSON"
   let keys := (kvs.toArray.map (·.1)).qsort (· < ·)

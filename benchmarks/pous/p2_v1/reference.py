@@ -34,6 +34,7 @@ from pathlib import Path
 from verity.core.protocols.pous.schemes import p2 as P2
 from verity.ml.commitments.identity import canonical_json_bytes
 from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
+from verity.ml.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
 from verity.ml.randomness import Key, derive, frame
 
 HERE = Path(__file__).resolve().parent
@@ -61,7 +62,7 @@ KEYS_TAG = P2.KEYS_TAG
 EPOCH_TAG = b"verity/pous/p2/epoch/v4\0"
 TAGGED_SHA512 = b"verity/tagged-sha512/v1\0"
 W_COMMITMENT_LABEL = b"verity-pous/w-commitment/v2"
-DIGEST_BYTES = 64
+DIGEST_BYTES = _DIGEST_BYTES["sha512"]
 SALT_BYTES = 32
 K_AUDIT = P2.CERT_K
 """The deployment audit's challenges."""
@@ -133,7 +134,7 @@ def vector_params(w: int, c0: int) -> Params:
 
 
 def setup_salt(source: bytes, params: Params, model: bytes) -> bytes:
-    """The 256-bit setup salt, drawn after the commitment to `W` (`model`) from the verifier's or a beacon's `source`."""
+    """The 256-bit setup salt, sampled after the commitment to `W` (`model`) from the verifier's or a beacon's `source`."""
     return derive(source, SETUP_DOMAIN, {"model": model, "prime": params.prime_id, "protocol": PROTOCOL}).value
 
 

@@ -1,4 +1,4 @@
-"""A live H1 window's salt from the auditor's challenger (CMP-90): the salt-only session `core_check.window_salt` reads.
+"""A live H1 window's salt from the auditor's challenger: the salt-only session `core_check.window_salt` reads.
 
 `issue(gate, rec, k, main, dest)` reserves a session for the salt coin alone (`window.SALT_FAMILIES`, scheme
 `window.LIVE_SCHEME`) on `gate`, opens it on the epoch's root R = `salt.anchored_epoch_root(W, X, k)` (W and X the

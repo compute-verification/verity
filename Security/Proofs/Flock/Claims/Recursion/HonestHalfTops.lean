@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.HonestHalf
-import Proofs.Flock.Claims.Recursion.VStarRowsFit
+module
+
+public import Proofs.Flock.Claims.Recursion.HonestHalf
+public import Proofs.Flock.Claims.Recursion.VStarRowsFit
 
 /-!
 # The honest half with the fitted rows proved (`honest_half_tops`)
@@ -14,6 +16,8 @@ holds both reps' stream rounds (`hH`), every part is staged on the run (`stagedP
 `honest_half_tops` is `honest_half`'s statement without the `RowsFit` hypothesis, and `honest_half`'s proof with `hpE`
 from `hpEarly_tops` and `rowsFit_tops`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.HonestHalfTops
 
@@ -30,8 +34,8 @@ the reference prover `refP`'s run is accepted and satisfies V\*, no recorded cal
 fit V\*'s levels and the reps' tops differ (`TopsAt`), `PartAccepts` holds at every part `s < nS x`.
 
 The premises are about Lean's `refP`; the run witnessing them (`HonestFixture`) used Python's builder and C-Flock's CPU
-prover. `HonestFixture`'s docstring says which difftest ties the two: `test_vstar_trace_difftest` (r20261026-232210-2d0b
-passed; `vstar-trace --sat` r20261027-014612-19c5). -/
+prover. `HonestFixture`'s docstring says which difftest ties the two: `test_vstar_trace_difftest`, with
+`vstar-trace --sat`. -/
 theorem honest_half_tops (mask : ℕ → ℕ → Bool) (Ir : InnerRec) (b0 : Brings) (x : Msg)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record)
     (recRest : Msg → List (Msg × Out) → List UInt8)
@@ -41,7 +45,7 @@ theorem honest_half_tops (mask : ℕ → ℕ → Bool) (Ir : InnerRec) (b0 : Bri
     let bL := bLAt mask Ir b0 x aux nOf hd recRest
     let I := IAt decI
     let D := DAt mask Ir b0 x aux nOf hd recRest
-    ∀ {w : Claims.Flock.Wit} {st : Claims.Recursion.Stmt} (ω : Tape bL) (r : Fin (D.V.k x) → Coin),
+    ∀ {w : Claims.Flock.Wit} {st : Claims.Recursion.CompiledStatement} (ω : Tape bL) (r : Fin (D.V.k x) → Coin),
     HonestRunAccepted mask Ir b0 x aux nOf hd recRest decI w st ω r →
     HonestWitSatisfies FlockDeploy.sha512 I.V bL x w ω r →
     NoCollAt mask Ir b0 x aux nOf hd recRest decI w ω r →

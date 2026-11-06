@@ -114,6 +114,32 @@ def test_a_machine_without_git_gets_the_archive_stream_with_one_line(repo, tmp_p
     assert not (Path(dest) / ".git").exists() and "checkout" not in doc
 
 
+def test_a_clone_launch_makes_a_stream_shipped_tree_a_checkout_and_a_source_launch_leaves_it(repo, tmp_path, monkeypatch, capsys):
+    """`checkout` (a `--cwd clone` launch) gives a READY tree the archive stream shipped a .git in place; a `--cwd source`
+    launch reuses it as it is.  A tree a run edited is not made a checkout of the commit: it is set aside and shipped afresh."""
+    root = tmp_path / "root"
+    monkeypatch.setenv(remote.SHIP_ENV, "stream")
+    sha, dest, doc = remote.ship_source(LOCAL, str(root), repo)
+    assert remote.ship_source(LOCAL, str(root), repo, checkout=True) == (sha, dest, doc), "RESEARCH_SHIP=stream: no git added"
+    monkeypatch.delenv(remote.SHIP_ENV)
+    assert remote.ship_source(LOCAL, str(root), repo) == (sha, dest, doc) and not (Path(dest) / ".git").exists()
+    _, _, doc2 = remote.ship_source(LOCAL, str(root), repo, checkout=True)
+    assert doc2 == {**doc, "checkout": True, "transport": "stream+git", "git_added_utc": doc2["git_added_utc"]}
+    assert _git(Path(dest), "rev-parse", "HEAD") == sha and _git(Path(dest), "status", "--porcelain") == ""
+    assert remote.require_ready_source(dest, sha) == doc2 and remote.ship_source(LOCAL, str(root), repo, checkout=True)[2] == doc2
+    assert sorted(p.name for p in (root / "src").iterdir()) == [sha]
+
+    other = tmp_path / "other"
+    monkeypatch.setenv(remote.SHIP_ENV, "stream")
+    _, dest3, _ = remote.ship_source(LOCAL, str(other), repo)
+    monkeypatch.delenv(remote.SHIP_ENV)
+    (Path(dest3) / "pkg" / "b.py").write_text("B = 99\n")
+    _, _, doc3 = remote.ship_source(LOCAL, str(other), repo, checkout=True)
+    assert doc3["transport"] == "git" and (Path(dest3) / "pkg" / "b.py").read_text() == "B = 2\n"
+    (moved,) = (other / "src" / ".quarantine").iterdir()
+    assert (moved / "pkg" / "b.py").read_text() == "B = 99\n" and "an earlier run edited (pkg/b.py)" in capsys.readouterr().err
+
+
 def test_a_tampered_extraction_is_never_marked_ready_and_the_stream_ships_instead(repo, tmp_path, monkeypatch, capsys):
     root = tmp_path / "root"
     real = remote._git_ship_script

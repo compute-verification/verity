@@ -1,4 +1,6 @@
-import Definitions.Pouw.PearlC.Device
+module
+
+public import Definitions.Pouw.PearlC.Device
 
 /-!
 # rev1: Pearl-C's credit without the promotions into a +0 total (trusted; definitions only)
@@ -25,6 +27,8 @@ included. That over-debits by at most `firstAddDev` per unit, so it only lowers 
 * `pearlCProtocolDevRev1`, `pearlCTilesDevRev1`: `pearlCProtocolDev` and `pearlCTilesDev` with rev1's credit, debit and
   `W_ref`, in the credit, the cap and `W_ref` alike.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

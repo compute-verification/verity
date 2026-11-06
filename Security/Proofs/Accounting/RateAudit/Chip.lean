@@ -1,5 +1,7 @@
-import Mathlib
-import Definitions.Accounting.RateAudit
+module
+
+public import Mathlib
+public import Definitions.Accounting.RateAudit
 
 /-!
 # The rate audit's chip programs: congruence, replay from a footprint trace, and counting
@@ -10,6 +12,8 @@ memory (once per address, at its first read), the side link and rebuilding answe
 footprint plus the link's bits plus `b` per rebuilt word (`trace_length`). `card_addrs_le`: the footprint is at most the
 ingress.
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate
 

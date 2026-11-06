@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.SlotLead
+module
+
+public import Proofs.Flock.Claims.KS.SlotLead
 
 /-!
 # A slot's coin count past a game the strategy plays to its end first
@@ -15,6 +17,8 @@ outcome is `Dead` (`First`), a slot of the lockstep met after `j` coins once tha
   order, after `n` coins in all, put a slot of that position's lockstep met after `j` coins once they have ended at
   `n + j` coins.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game.Lock
 

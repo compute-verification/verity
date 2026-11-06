@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.LigeritoMCA
+module
+
+public import Proofs.Flock.Soundness.LigeritoMCA
 
 /-!
-# Ligerito's levels meet the Johnson-range MCA bound (PROTOCOL.md §13, §15)
+# Ligerito's levels meet the Johnson-range MCA bound (`Flock.Ligerito`, `Flock.Schedule`)
 
 Each level's folds happen over `K`, in the level's Reed–Solomon code embedded from `F`
 (`codeK`: `2^logCols` coefficients on the `2^logLen` points `ω_q`). For every level of a
@@ -12,6 +14,8 @@ bound is the accounting's `Level.mcaA / qK` (`prCoin_level_mca_le`):
 * the radius is in the Johnson range `< 1 − √((k − 1)/n)`, since `(k − 1)/n < ρ`;
 * the bound's numerator, at `n = 2^logLen`, `k = 2^logCols` and `δ` the radius, is `mcaA`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 
