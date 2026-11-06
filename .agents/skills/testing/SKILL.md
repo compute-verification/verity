@@ -111,6 +111,11 @@ untraced`, which keys it on the suite's whole tree. A test that builds or runs a
   --fresh` a few times, and its tests then spread over pytest-xdist workers: they must run in any order and process, and
   session and module fixtures are built once per worker, so keep them cheap. A suite whose workers are big declares
   `worker_gb`, one worker's peak.
+- **A suite that alone makes a check's shard long declares `parts = P`** under `[tool.verity.tests]`: it runs as P parts
+  by test id (`suites.py SUITE:K/P`, each collecting every file and running the tests whose node id hashes to K), the
+  shard planner spreads them over shards (a lean suite's, `lean-suites:SUITE:K/P`, are named in `ci.toml`'s plans), and
+  check reports the suite as one, passed only when every part did. Each part builds its own fixtures, so a suite whose
+  cost is in shared fixtures gains little.
 - In `check` a suite still running after `SUITE_TIMEOUT_S` (an hour) fails as timed out; one that honestly needs longer
   declares `timeout_s` under `[tool.verity.tests]`, with a comment giving its longest pass.
 
