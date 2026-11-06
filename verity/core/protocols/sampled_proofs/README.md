@@ -445,8 +445,11 @@ delta, through its weighted bound `harm_bound`; each application counts delta on
 - `exfiltration_bound(profile, output_bits)` is `harm_bound(output_bits) + location_bits(profile)`, in bits.
   `location_bits` is the location term: with `K = ⌊bound()⌋` of `n` proof blocks, 0 when `K ≤ 0` or `n = 0`, `n` when
   `2K ≥ n`, and otherwise `n H₂(K/n) (1 + MARGIN)` rounded up to the next float, at most `n`. The Lean states the bound
-  (`audit_exfiltration`, `card_admissible_le`), and the tests hold the Python to be at least it.
-- `compute_bound(profile, work)` is `harm_bound(work)`. Policies and PoUW pass their own utility to `worst_case`.
+  (`audit_exfiltration`, `card_admissible_le`; for a two-stage design's profile, counted at the footprint,
+  `card_influenceTwo_le_uniform`), and the tests hold the Python to be at least it.
+- `compute_bound(profile, work)` is `harm_bound(work)`. Policies and PoUW pass their own utility to `worst_case`. It
+  refuses a two-stage design's profile (`UNCERTIFIED_COMPUTE`): its interiors are committed after the draw, so its
+  relation reads none (`rTwo_congr`) and takes a trace whose interiors were never computed (`deferred_not_credited`).
 - A proof block's output bits or work is one number for every proof block, or per stratum a number or `(bits, units)` pairs.
 
 Pinned by `tests/test_consumers.py` and `tests/fixtures/exfiltration_lean.json`, regenerated when its Lean files change (a test compares their sha256).

@@ -3,7 +3,7 @@
 The profile bounds incorrect proof blocks and weights nothing.  An application weights an incorrect proof block by what it costs the
 application and gets its own bound, at the profile's delta, from the profile's generic weighted bound
 (`IntegrityProfile.harm_bound`).  Each reader here is only its weighting, and takes any `IntegrityProfile`, whichever
-protocol produced it.
+protocol produced it, except that compute refuses a two-stage design's.
 """
 from __future__ import annotations
 
@@ -13,9 +13,9 @@ from math import floor, inf, log2, nextafter
 from verity.core.protocols.profile import MARGIN, IntegrityProfile
 from verity.core.protocols.sampled_proofs.service import REPLAY
 
-UNPROVED_EXFILTRATION = ("a two-stage design's profile is credited for compute and integrity only: no Lean proof yet "
-                         "bounds what its accepted traces deliver")
-"""`exfiltration_bound`'s refusal of a profile with a level of replay blocks (`service.REPLAY`)."""
+UNCERTIFIED_COMPUTE = ("a two-stage design's profile is credited for integrity and exfiltration only: its interiors are "
+                       "committed after the draw, so work skipped at serve time and done late passes as work done")
+"""`compute_bound`'s refusal of a profile with a level of replay blocks (`service.REPLAY`) above its checked level."""
 
 
 def location_bits(profile: IntegrityProfile) -> float:
@@ -40,19 +40,21 @@ def exfiltration_bound(profile: IntegrityProfile,
     most 2^b values, so a receiver recovers a uniform l-bit secret with probability at most 2^(b - l), plus delta and
     the proof system's terms.  b is the output bits held by incorrect proof blocks, which the prover chose (`harm_bound` weighted by
     `output_bits`), plus which proof blocks are incorrect (`location_bits`).  The soundness package's Lean states this bound as
-    `audit_exfiltration`.  `output_bits` is a proof block's output bits: one number for every proof block, or per stratum a number or
-    (bits, proof blocks) pairs.  A two-stage design's profile, which has a level of replay blocks, is refused: no Lean
-    proof yet bounds what its accepted traces deliver (the counting bound over footprints), so it is credited for
-    compute and integrity only."""
-    if any(level.name == REPLAY for level in profile.levels):
-        raise ValueError(UNPROVED_EXFILTRATION)
+    `audit_exfiltration`, and for a two-stage design's profile, counted at the footprint, as
+    `Claims.Sampling.card_influenceTwo_le_uniform`.  `output_bits` is a proof block's output bits: one number for every proof
+    block, or per stratum a number or (bits, proof blocks) pairs."""
     return profile.harm_bound(output_bits) + location_bits(profile)
 
 
 def compute_bound(profile: IntegrityProfile, work: float | Mapping[str, float | Sequence[tuple[float, int]]]) -> float:
     """Compute security: except with probability delta, at most this much work lies in incorrect proof blocks, the work the prover
-    could have skipped.  `work` is a proof block's work, given as `exfiltration_bound`'s `output_bits` is."""
+    could have skipped.  `work` is a proof block's work, given as `exfiltration_bound`'s `output_bits` is.  A two-stage design's
+    profile is refused (`UNCERTIFIED_COMPUTE`): its relation reads no interior (`Claims.Sampling.rTwo_congr`), so a trace
+    whose interiors were never computed passes with the one that computed them
+    (`Claims.Witness.SamplingGeneric.deferred_not_credited`)."""
+    if any(level.name == REPLAY for level in profile.levels[:-1]):
+        raise ValueError(UNCERTIFIED_COMPUTE)
     return profile.harm_bound(work)
 
 
-__all__ = ["UNPROVED_EXFILTRATION", "compute_bound", "exfiltration_bound", "location_bits"]
+__all__ = ["UNCERTIFIED_COMPUTE", "compute_bound", "exfiltration_bound", "location_bits"]

@@ -15,7 +15,7 @@ import pytest
 
 from verity.ml.circuits.partition import Level
 from verity.core.protocols.profile import Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
-from verity.core.protocols.sampled_proofs.consumers import (UNPROVED_EXFILTRATION, compute_bound, exfiltration_bound,
+from verity.core.protocols.sampled_proofs.consumers import (UNCERTIFIED_COMPUTE, compute_bound, exfiltration_bound,
                                                             location_bits)
 from verity.core.protocols.sampled_proofs.service import REPLAY
 
@@ -126,14 +126,18 @@ def test_stratified_miss_is_the_lean_certified_greedy_fill():
 def test_the_lean_vectors_were_generated_from_this_tree():
     """The vectors record the sha256 of the exporter and of the soundness package's files they read (`lean/generate.sh`):
     `audit_exfiltration` (`Audit/Influence.lean`), the uniform sampling design and `subset_miss` (`Audit/Law.lean`), the stratified
-    sampling design and `stratified_miss_eq_greedy` (`Audit/Stratified.lean`, `Audit/StratifiedMiss.lean`), and the toolchain and
-    Mathlib pins.  A change to any of them fails here until the vectors are regenerated."""
+    sampling design and `stratified_miss_eq_greedy` (`Audit/Stratified.lean`, `Audit/StratifiedMiss.lean`), the two-stage design,
+    its count and its table (`Claims/SamplingTwo.lean`, `SamplingGeneric/TwoCount.lean`, `SamplingGeneric/TwoTable.lean`), and
+    the toolchain and Mathlib pins.  A change to any of them fails here until the vectors are regenerated."""
     recorded = json.loads(LEAN_VECTORS.read_text())["inputs"]
     soundness = "Security/Proofs/"
     assert set(recorded) == {"verity/core/protocols/sampled_proofs/tests/lean/ExfiltrationVectors.lean",
+                             "Security/Definitions/Claims/SamplingTwo.lean",
                              *(soundness + f for f in ("Flock/Soundness/Audit/Influence.lean", "Flock/Soundness/Audit/Law.lean",
                                                        "Flock/Soundness/Audit/Stratified.lean",
                                                        "Flock/Soundness/Audit/StratifiedMiss.lean",
+                                                       "Flock/SamplingGeneric/TwoCount.lean",
+                                                       "Flock/SamplingGeneric/TwoTable.lean",
                                                        "lake-manifest.json", "lean-toolchain"))}
     stale = [p for p, h in recorded.items() if hashlib.sha256((ROOT / p).read_bytes()).hexdigest() != h]
     assert not stale, f"changed since the vectors were generated, rerun verity/core/protocols/sampled_proofs/tests/lean/generate.sh: {stale}"
@@ -142,21 +146,52 @@ def test_the_lean_vectors_were_generated_from_this_tree():
 def test_compute_is_the_work_weighted_bound():
     """A TOY profile over coarse proof blocks of 4 fine ones each: 64 fine proof blocks of skipped work, exactly `worst_case` with utility 4m; over two
     levels, `worst_case` too; under a stratified sampling design, the work-weighted `harm_bound`."""
-    toy = IntegrityProfile(("replay",), (512,), {"replay": Bernoulli(Fraction(1, 4))}, 0.01)
+    toy = IntegrityProfile(("coarse",), (512,), {"coarse": Bernoulli(Fraction(1, 4))}, 0.01)
     assert compute_bound(toy, 4) == toy.worst_case(lambda m: 4 * m) and round(compute_bound(toy, 4), 1) == 64.0
-    two = IntegrityProfile(("replay", "check"), (512, 4), {"replay": Bernoulli(Fraction(1, 2)), "check": Subset(2)}, 0.01)
+    two = IntegrityProfile(("group", "check"), (512, 4), {"group": Bernoulli(Fraction(1, 2)), "check": Subset(2)}, 0.01)
     assert compute_bound(two, 1) == two.worst_case(lambda m: m)
     work = {"gemm2048": 2048, "gemm8192": 8192, "rope": 128}
     assert compute_bound(one_level(a4_law(FLOOR)), work) == a4_law(FLOOR).harm_bound(work, DELTA)
 
 
-def test_a_two_stage_profile_is_read_for_compute_and_refused_for_exfiltration():
-    """A two-stage design's profile, a level of replay blocks (`service.REPLAY`) above the proof blocks: compute reads
-    it at the footprint, and exfiltration refuses it, since no Lean proof yet bounds what its accepted traces deliver."""
+def test_a_two_stage_profile_is_read_for_exfiltration_and_refused_for_compute():
+    """A two-stage design's profile, a level of replay blocks (`service.REPLAY`) above the proof blocks: exfiltration reads
+    it at the footprint (`card_influenceTwo_le_uniform`), and compute refuses it, since its relation reads no interior and
+    takes a trace whose interiors were never computed (`deferred_not_credited`).  A replay level that is the checked level
+    is a one-stage design's, and compute reads it."""
     two = IntegrityProfile((REPLAY, "unit"), (512, 4), {REPLAY: Bernoulli(Fraction(1, 2)), "unit": Subset(2)}, 0.01)
-    assert compute_bound(two, 1) == two.worst_case(lambda m: m)
-    with pytest.raises(ValueError, match=re.escape(UNPROVED_EXFILTRATION)):
-        exfiltration_bound(two, 1)
+    assert exfiltration_bound(two, 1) == two.worst_case(lambda m: m) + location_bits(two)
+    with pytest.raises(ValueError, match=re.escape(UNCERTIFIED_COMPUTE)):
+        compute_bound(two, 1)
+    one = IntegrityProfile((REPLAY,), (512,), {REPLAY: Bernoulli(Fraction(1, 4))}, 0.01)
+    assert compute_bound(one, 1) == one.worst_case(lambda m: m)
+
+
+def test_the_two_stage_bound_is_at_least_the_footprint_count_evaluated_in_lean():
+    """The two-stage vectors (`gridTwo_influence`): R replay blocks of N proof blocks each, the first stage at rate num/den,
+    k of each sampled replay block's proof blocks drawn, at delta = 2^-e with b bits per proof block.  Lean takes the largest
+    product of the replay blocks' acceptance factors at each total count, in exact integers, and the kernel checks that
+    every count past K escapes with probability at most delta, so the served outputs at any inputs number at most
+    2^H admissible, H = b K and admissible = sum_{j <= K} C(R N, j).  Core's acceptance factor is Lean's; its count bound,
+    the linear relaxation, is at least K and below K + N, and K itself when every replay block is replayed and the replay
+    blocks are strata; so `exfiltration_bound` is at least log2 of the numerator."""
+    data = json.loads(LEAN_VECTORS.read_text())
+    assert data["two_stage_statement"] == "Claims.Sampling.card_influenceTwo_le_uniform" and len(data["two_stage"]) == 22
+    for v in data["two_stage"]:
+        R, N, k, (num, den) = v["replay_blocks"], v["n_rho"], v["k"], v["rate"]
+        K, H, b, admissible, delta = v["K"], v["H"], v["bits"], v["admissible"], 2.0 ** v["delta_log2"]
+        p = IntegrityProfile((REPLAY, "unit"), (R, N), {REPLAY: Bernoulli(Fraction(num, den)), "unit": Subset(k)}, delta)
+        assert [p.accept(m) for m in range(N + 1)] == [Fraction(a, v["accept_den"]) for a in v["accept"]]
+        assert p.count("unit") == R * N and H == b * K
+        assert K <= p.bound() < K + N and H <= p.harm_bound(b) < H + b * N
+        if num == den:
+            assert Stratified(tuple(Stratum(f"r{i}", N, k) for i in range(R))).count_bound(delta) == K
+        loc = location_bits(p)
+        if 2 * K >= R * N:
+            assert loc == R * N and admissible <= 2 ** (R * N)
+        else:
+            assert log2(admissible) <= loc
+        assert exfiltration_bound(p, b) >= H + log2(admissible)
 
 
 def test_an_application_reads_nothing_the_profile_does_not_bound():

@@ -330,6 +330,9 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   registration*); the *second stage* samples k of its n_ρ proof blocks (or k per template stratum) on fresh coins, and
   misses every incorrect one with probability at most C(n_ρ − w(ρ), k)/C(n_ρ, k) (stratified, the product over strata).
   Harm is read at ρ's *footprint* w(ρ), the fewest incorrect proof blocks of any interior its boundary commitment allows.
+  It certifies values, so integrity and exfiltration, and no compute: work skipped at serve time and done late, for the
+  sampled replay blocks only, passes (`consumers.compute_bound` refuses its profile); certifying it takes committing every
+  proof block's values at serve time, which is the one-stage case.
 - **Cell**: one benchmark result: a proof system (or an archived one's backend id) × statement × input set × prover
   hardware.
 - **Input block** (`INPUT_UNIT` in `verity.ml.circuits.partition`): the part of a partition that holds every input gate.
