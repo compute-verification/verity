@@ -1,5 +1,7 @@
-import Definitions.Core.Guarantees.Expand.Witnesses
-import Proofs.Core.AndSize
+module
+
+public import Definitions.Core.Guarantees.Expand.Witnesses
+public import Proofs.Core.AndSize
 
 /-!
 # The bit-level expansion's size bounds: honest and nontrivial lemmas
@@ -13,6 +15,8 @@ nontrivial ones show that both bounds hold with equality there:
 * `Expand.AndPair.isAnd`: each bit of `AndPair`'s gate 2 is the AND of a bit of gate 0 and one of gate 1, so it is not
   affine (`Circuit.not_affine_of_and`), and the expansion's AND count is its number of computed bits.
 -/
+
+@[expose] public section
 
 namespace Verity
 

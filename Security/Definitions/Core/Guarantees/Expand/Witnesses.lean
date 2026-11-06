@@ -1,5 +1,7 @@
-import Definitions.Core.Guarantees.Expand
-import Definitions.Core.Expand.Instances
+module
+
+public import Definitions.Core.Guarantees.Expand
+public import Definitions.Core.Expand.Instances
 
 /-!
 # The bit-level expansion's size bounds: honest and nontrivial lemmas
@@ -11,6 +13,8 @@ the bound is tight at an explicit circuit.
 
 The proofs are in `Security/Proofs/Core/ExpandWitnesses.lean`.
 -/
+
+@[expose] public section
 
 namespace Verity.Guarantees
 

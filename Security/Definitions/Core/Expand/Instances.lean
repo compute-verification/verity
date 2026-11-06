@@ -1,5 +1,7 @@
-import Definitions.Core.Expand
-import Mathlib.Data.Fin.VecNotation
+module
+
+public import Definitions.Core.Expand
+public import Mathlib.Data.Fin.VecNotation
 
 /-!
 # The bit-level expansion: an AND of two two-bit gates (trusted)
@@ -12,6 +14,8 @@ are stated at (`Security/Definitions/Core/Guarantees/Expand/Witnesses.lean`).
 so the expansion has two AND gates where the declaration has two bits of computed gates, and its unit reads gate 1's
 two unregistered bits where the declaration's unit reads gate 1, of width 2: both bounds hold with equality.
 -/
+
+@[expose] public section
 
 namespace Verity.Expand.AndPair
 
