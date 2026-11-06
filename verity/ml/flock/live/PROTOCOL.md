@@ -911,9 +911,9 @@ proof files (`FinishIs`, `Loop.finishIs`). The frames refusing every coin fault 
 (`frameUnrefused_ofLoop`), and from it, `FinishIs` and the tables admitting unrefused coins, proved at the deployed
 tables, `FinalRoundEq` follows (`finalRoundEq_ofLoop`). The other bytes it releases the theorem still reads only through
 named hypotheses: the worker's passed rounds and the stand-in rounds are the session's (`LiveRoundEq`, `FillRoundEq`) and
-the inner proof's round 0 is the firewall's own (`LoopInnerRound0`), and the tables' side (`Tables`, `Complete`,
-`DummyReg`, `Causal`, `SwCausal`, `TapeOK`) is a premise. Until those are proved, the ZK server is not yet proved
-zero-knowledge.
+the inner proof's round 0 is the firewall's own (`LoopInnerRound0`), and of the tables' side `SwCausal` is a premise;
+the rest of it (`Tables`, `Complete`, `DummyReg`, `Causal`, `TapeOK`) is proved at the deployed tables
+(`Loop.tables_dataE` and its siblings). Until those are proved, the ZK server is not yet proved zero-knowledge.
 
 The frame's protocol, which the loop steps on its own requests (`Frame.Req`) and `flock-firewall frame` serves on its
 standard input (`tests/test_firewall_frame.py`):
