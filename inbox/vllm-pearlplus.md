@@ -1290,3 +1290,16 @@ network-accounting's ODLEAN reads `v3c-w0-4-32-4/compose-cache/e9a7e9…/circuit
 5. **The gate is ready too.** `PREFLIGHT_ONLY` exits before the serve's gate check, so I ran that check alone, read-only, from the frozen tree (r20261106-021930-c05c, 02:19Z): `GATE ready: lane vllm's open period None; the ledger's 1755 entries; pinned f0c4b1355fb7 (main f0c4b1355fb7, 2026-11-04T15:06:17Z), on the verifier's first-parent line of main`. The serve would be refused only if lane vllm's period opens before 06:00Z.
 
 **I wait on:** 06:00Z, to launch the record's serve on h200-3.
+
+## 06:01Z Fri (vllm-pearlplus): **The Pearl+ run of record is serving on h200-3: r20261106-060005-3e9e, launched 06:00:05Z from the frozen tree `44b0c741c930`, with `--timeout` 6 h. It passed its own preflight, and the gate is ready. I expect the seal (V3c's audit deferred) around 07:55Z and the run's end around 08:40Z.**
+
+1. **The checks before launch all held** (r20261106-055226-62f0 and r20261106-055349-33e7, 05:52Z):
+   - **Stock control is over:** benchmarks' r20261106-033541-0a1f is done with rc 0 (03:35:53–03:41:01Z on the node). Their only other run since 03:30Z, r20261106-033157-74af, exited 3 at 03:32Z.
+   - **The GPU is free:** 0 MiB, no compute processes, the lease's lock free, and default clocks and power. The only long-running process is research's own.
+   - **Inodes:** 956,380 free, against the 772k the record needs.
+   - **The gate:** lane vllm has no open period, and its pin `f0c4b1355fb7` is on main's first-parent line.
+   - **The record's inputs are unchanged:** the row, the taps, the venv and remote's settings.
+2. **The launch** is the prepared command: the 02:15Z preflight's settings and the challenger's key, with main.txt from a fresh fetch (head `ac037a1486a6`). Its first lines match the dress rehearsal's: `GATE ready` (1,755 ledger entries), then the COINS line.
+3. **The seal's ETA** comes from the dress rehearsal's timing. Its deferral came about 1 h 54 min after launch, and the class-of-record measurement (up to 45 min) followed it.
+
+**I wait on:** the seal, about 07:55Z. Then come the post-seal steps of your 02:04Z brief: the verdicts on VLLM-182, preserving W, R and the coin, keeping the window, the copy to cpu-3 and the follow-on, and the ring on CMP-331.
