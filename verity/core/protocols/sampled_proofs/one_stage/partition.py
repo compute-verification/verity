@@ -25,7 +25,7 @@ and `Q_call` v1 at `X <= 16`, and the programs this protocol builds for the temp
 * **Programs**: `population_program` (instances of one template, `TemplateInstances_v1{template, N}`) and
   `mixed_population_program` (of several, `TemplatePopulations_v1{templates, counts}`), whose binding records name the
   templates by descriptor id, are `verity.ml.circuits.population`'s, named here too: a serving stack builds its window's
-  program with the same builders. v0 of each, which names only the counts, is kept for the records made with it
+  program with the same functions. v0 of each, which names only the counts, is kept for the records made with it
   (`POPULATION_VERSIONS`).
 
 The verifier holds its own copy of the program and applies the query itself (`units`); it never takes a population or a

@@ -193,7 +193,7 @@ def population_why(indices: Sequence[int], strata: Sequence[tuple[str, Sequence[
 
 def proved_units(public: Path, session: Path) -> tuple[int, ...]:
     """The global proof blocks a session proved: the public file's proof block indices (``units.indices``) of the instances its record
-    drew (``unit_draw.units``), ascending. Read only off a session the verifier accepted."""
+    sampled (``unit_draw.units``), ascending. Read only off a session the verifier accepted."""
     indices = _header(public)["units"]["indices"]
     drawn = json.loads((session / "session.json").read_text())["unit_draw"]["units"]
     return tuple(sorted(indices[i] for i in drawn))

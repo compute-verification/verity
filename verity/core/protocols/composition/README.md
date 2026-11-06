@@ -65,10 +65,10 @@ subprotocol accepts its own case, and the commitment is `bind` of the subprotoco
 
 | subprotocol | onsite | remote | `Core.Protocol` | id |
 | --- | --- | --- | --- | --- |
-| network certification (over the period: its sampling blocks of transfer blocks certified and proved, and the bound `K` on what left the site) | yes | | `NetworkCheck.Period.protocol` (`network_check`, `../network/lean`) | `verity/certifier/v0` |
+| network certification (over the period: its execution phases of transfer blocks certified and proved, and the bound `K` on what left the site) | yes | | `NetworkCheck.Period.protocol` (`network_check`, `../network/lean`) | `verity/certifier/v0` |
 | PoUW (its period credit: the period's windows credited all or nothing) | yes | yes | `PouwCheck.Period.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/period/v1` |
 | sampled proofs (the audit on the proofs themselves, one-stage v2's or the recursive audit's, which it reads as blobs, as the params' `form` names it; one-stage v1 refused) | yes | yes | `VStar.Recursive.Sampled.protocol` (`core_vstar_recursive`, `../../service/vstar/recursive`) | `verity/sampled-proofs/v1` |
-| the inference-only policy (its check: the declared circuit's division into inference blocks within their gate and fresh-input budgets, and the provenance of the registered information) | yes | yes | `NciCheck.Protocol.protocol` (`nci_check`, `../network/nci/lean`) | `verity/inference-only/v0` |
+| the inference-only policy (its check: the registered circuit's division into inference blocks within their gate and fresh-input budgets, and the provenance of the registered information) | yes | yes | `NciCheck.Protocol.protocol` (`nci_check`, `../network/nci/lean`) | `verity/inference-only/v0` |
 | PoUS (its check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../pous/check`) | `verity/pous/p2/v4/run` |
 | PoUB-P2 (its session over PoUS's store) | yes | | `RemoteAudit.P2Protocol.protocol` (`remote_audit`, `../remote_bandwidth/lean`) | `verity/remote-bandwidth/p2/v0` |
 | the wipe (the memory challenger's streamed-label wipe of the period) | yes | | `MemoryChallenger.WipeProtocol.protocol` (`core_memory_challenger`, `../../devices/memory_challenger/lean`) | `verity/wipe/v0` |
@@ -82,10 +82,10 @@ checks), and deletes the stub. The difftest's reference (`tests/reference.py`) r
 own Python (`Ported`), or its Python's answers on cases made once (`Recorded`), and its cases come from the port's own
 difftest or its period hook.
 
-The inference-only policy has no rounds and reads no coins. Its case is the declared circuit, the policy's budgets and
+The inference-only policy has no rounds and reads no coins. Its case is the registered circuit, the policy's budgets and
 the registration log before the run (params), the run's own registration record (commitment: its digest is the one
 sampled proofs' audit commits to) and the division with θ and θ's provenance (evidence). It accepts exactly
-when the record names the declared circuit (its `program` is the circuit's SHA-512, as sampled proofs' audit asks of its
+when the record names the registered circuit (its `program` is the circuit's SHA-512, as sampled proofs' audit asks of its
 own record) and the policy's check (`NciCheck.Baseline.evaluate`) finds that the division complies. Each product ties
 the policy's record to sampled proofs' (one record, below), so the circuit the policy checked is the one sampled proofs
 audited.
@@ -94,7 +94,7 @@ A stated exception: the policy's v0 publishes the division and each inference bl
 fresh-input bits) in the clear. Both products compose it for one run of record only, as an exception to
 everything-zero-knowledge, and v1's private form (the division committed under hiding leaves, compliance proved, a
 padded profile) replaces it. `tests/test_inference_only_not_composed.py` refuses any protocol that publishes
-private data among the products' components unless its `KNOWN` lists it with its reason, and `KNOWN` only shrinks;
+private data among the products' subprotocols unless its `KNOWN` lists it with its reason, and `KNOWN` only shrinks;
 `benchmarks/one_stage/composite.py` writes the exception's line into the record it renders.
 
 A subprotocol that reads blobs (`Core.BlobProtocol`, the content-addressed files beside its three byte strings) makes the product one too: `productB` (`CoreComposition/Blobs.lean`) hands the caller's blobs to
@@ -143,14 +143,14 @@ Lean to:
 - PoUW's period: `period_check.case`, with `credit.commit_of` reading each window's Commit record for remote's tie;
 - sampled proofs: its form's split (`sampled_proofs`) over one-stage v2's decoders and checks before the proof check
   (the challenger's coins and coin trees, the registered file, the proofs' blobs) and then the one-stage difftest's
-  `check`, on v2's audits that drew nothing at the challenger's coins, those with one break each (`V2_BREAKS`, among
+  `check`, on v2's audits whose sample at the challenger's coins is empty, those with one break each (`V2_BREAKS`, among
   them v1's params or evidence, refused by name) and v1's audits with one or two changes under the form `one-stage`
   (refused as v1's), and the recursive form refused where the case names none of its files;
 - network certification: its period difftest's `reference`, the Python mirror over the certifier's certificates and
   one-stage's answers, on small signed periods from its `build`;
 - the inference-only policy: its protocol difftest's `reference`, the policy's Python check (`check_baseline`) behind
   the protocol's decoders, on θ's provenance difftest's declarations with at most one change, from its `drawn`, or on
-  the one-stage audit's own declared circuit and record (`policy_on`);
+  the one-stage audit's own registered circuit and record (`policy_on`);
 - the wipe: its mirror, `wipe_protocol_case.answer`, on signed wipes from its `case`;
 - PoUS and PoUB-P2: their Python verifiers' answers on one committed `C*` (`tests/periods.py`: `pous.period.audit`
   signed at its deployed parameters, honest and cheating, and an honest run on another store; PoUB-P2's sessions over

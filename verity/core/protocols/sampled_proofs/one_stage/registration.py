@@ -26,8 +26,8 @@
 * **Receipt**: `{"format": "verity/registration-receipt/v1", "registration": <digest>, "verifier", "received": "<UTC,
   %Y-%m-%dT%H:%M:%SZ>"}`, and the sample names it.
 * **The public file** (`matches_public`): the verifier holds its own (scheme, roots, their domains, its instance count)
-  to the record. That they are the proved rows' is flock-verify's check of the public file (`checkPublic`), stated by
-  the Lean guarantee `FailClosed.flock_verify_public_ties`; flock-verify reads no `scheme` from the header, only META's.
+  to the record. That they are the proved rows' is `flock-verify`'s check of the public file (`checkPublic`), stated by
+  the Lean guarantee `FailClosed.flock_verify_public_ties`; `flock-verify` reads no `scheme` from the header, only META's.
 * **`window`** is provenance, apart from the binding it names (Binding). `kind` says whether the roots are what the integration
   committed as it ran (`served`) or a fresh commitment to values captured from its run (`stand-in`, whose link to the run's
   root is provenance, not proof).

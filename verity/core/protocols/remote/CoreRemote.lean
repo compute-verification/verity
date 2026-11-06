@@ -1,7 +1,7 @@
 /-
 Remote Verity (`verity/remote/v0`): what the verifier establishes with no hardware of its own at the site. Its
 subprotocols are the inference-only policy (`NciCheck.Protocol.protocol`, `verity/inference-only/v0`: the declared
-circuit divides into inference blocks within their gate and fresh-input budgets, which reads only the declared circuit
+circuit divides into inference blocks within their gate and fresh-input budgets, which reads only the registered circuit
 and the registered information and so needs no hardware at the site), work by proof of useful work over the period
 (`PouwCheck.Period.protocol`, `verity/pouw/period/v1`: the period's windows credited all or nothing), onsite's work
 subprotocol, and integrity by sampled proofs (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`, in the

@@ -423,7 +423,7 @@ _O = TypeVar("_O", Outcome, tuple[Outcome, ...])
 class WindowCommitmentRecord:
     """A window's commitment record the challenger admitted: one-stage's `record`, its `receipt` and `digest`, and
     `order`, its audit's index in the stream. It is Verification's, not an entry of the registration log, which registers
-    only the site, θ and the builder. The receipt's `received` is the record's position in
+    only the site, θ and the registered compiler. The receipt's `received` is the record's position in
     the stream's log; the challenger's clock stays its own. Under `Check.registration_deadline`, `salted_at` and
     `received_at` are its readings of the salt's release and of this registration's receipt (None otherwise)."""
 

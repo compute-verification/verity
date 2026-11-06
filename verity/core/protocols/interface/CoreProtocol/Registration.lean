@@ -20,7 +20,7 @@ names the whole log. An entry is one of two formats, each under its own versione
   registered figures: `DeviceFigures`' SKU, tensor clock and peak rate of tensor-core multiply-adds for each operand
   class (int8 operands uniform over one of four ranges, or all zero), and its memory figures.
 * **information** (`verity/registration/information/v1`): the items it registers, each once in the log (`Item.key`):
-  θ, each registered value (weights, initial state, tables) by its committed root, and the builder `B` that compiles
+  θ, each registered value (weights, initial state, tables) by its committed root, and the registered compiler `B` that compiles
   advice into the circuit (its digest, its advice's format and its public cap `ℓ` on one declaration's advice, in
   bits). Registration registers the site, θ and `B`, not the circuit `B` builds; a subprotocol's Program and
   parameters, and the proof system, are that protocol's public verifier parameters, not registration.
@@ -50,7 +50,7 @@ fails, in this order:
 The hardware checks are an information entry's too, and hold of it whenever they held of the log before it, which adds
 no hardware; so an information entry is held to `previous` and `duplicate-information` alone.
 
-A component reads its view of the log by projection (`View`): the site, θ's values and the builder, at the head. As a
+A subprotocol reads its view of the log by projection (`View`): the site, θ's values and the registered compiler, at the head. As a
 core protocol (`protocol`, `verity/registration/log/v1`) the log is the commitment, its head the
 digest, and the parameters the auditor's own: the composite and, for the hardware checks, its data sheets, the tolerance
 it allows a card's clock and peak rates around its sheet's, and its devices' keys. `figures` is registration's check of
@@ -235,7 +235,7 @@ structure Theta where
   checkpoint : Option String := none
   deriving DecidableEq, Repr
 
-/-- The builder `B`: its digest, the format of the advice it compiles, and its public cap `ℓ` on one declaration's
+/-- The registered compiler `B`: its digest, the format of the advice it compiles, and its public cap `ℓ` on one declaration's
 advice, in bits. -/
 structure Builder where
   digest : String
@@ -248,7 +248,7 @@ inductive Item
   | builder (b : Builder)
   deriving DecidableEq, Repr
 
-/-- What an item registers, which the log registers once: each θ value by its name, and one builder. -/
+/-- What an item registers, which the log registers once: each θ value by its name, and one registered compiler. -/
 def Item.key : Item → String
   | .theta t => "theta " ++ t.value
   | .builder _ => "builder"
@@ -632,9 +632,9 @@ def check (A : Auditor) (c : Composite) (log : Log) : Except (Nat × Refusal) St
     | some r => .error (s.entries, r)
     | none => .ok (s.add e)) (State.empty c)
 
-/-! ## Views: what a component reads of the log -/
+/-! ## Views: what a subprotocol reads of the log -/
 
-/-- What a component reads of an accepted log, at its head: the site, θ's registered values in order, and the builder. -/
+/-- What a subprotocol reads of an accepted log, at its head: the site, θ's registered values in order, and the registered compiler. -/
 structure View where
   site : Site
   theta : List Theta
@@ -800,7 +800,7 @@ private def over : Loc := { id := "hbm0", kind := .memory, parent := some "gpu0"
   some (0, .unknownRef)
 #guard refusal .remote [.hardware [] (locs.take 2 ++ [{ id := "node1", kind := .host, parent := some "node0" }]) []] ==
   some (0, .kind)
--- θ's weights registered twice, and a second builder; another θ value is a new item
+-- θ's weights registered twice, and a second registered compiler; another θ value is a new item
 #guard refusal .onsite (bodies ++ [.information (items.take 1)]) == some (2, .duplicateInformation)
 #guard refusal .onsite (bodies ++ [.information (items.drop 2)]) == some (2, .duplicateInformation)
 #guard refusal .onsite (bodies ++ [.information [.theta { weights with value := "tables" }]]) == none
