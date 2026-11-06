@@ -18,13 +18,13 @@ public import Proofs.Flock.Bridge.Refused
 public import Proofs.Flock.Bridge.KSLive
 public import Proofs.Flock.Bridge.PublicDeployed
 public import Proofs.Flock.Bridge.Honest
-public import Proofs.Flock.Bridge.V5
-public import Proofs.Flock.Bridge.LeafSeg
 public import Proofs.Flock.Bridge.BitsRows
 public import Proofs.Flock.Bridge.BitsLower
 public import Proofs.Flock.Bridge.BitsKeys
 public import Proofs.Flock.Bridge.BitsKeyProg
 public import Proofs.Flock.Bridge.BitsRowMap
+public import Proofs.Flock.Bridge.V5
+public import Proofs.Flock.Bridge.LeafSeg
 public import Proofs.Flock.Bridge.Public
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
