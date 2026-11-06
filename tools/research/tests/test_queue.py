@@ -2226,6 +2226,76 @@ def test_a_fork_or_an_outside_author_is_refused_at_admission_though_marked_and_a
     assert [n for n, e in sorted(status.items()) if e.state == "queued"] == [5, 6] and status[4].state == "refused"
 
 
+def _old_next(world: World) -> tuple[str, str, str]:
+    """#1 merged onto `next`, a head built on that `next` (as a demo branch that merged it is), then #1 closed unlanded and
+    `next` rebuilt without it: (#1's head, its merge onto the old `next`, the head built on it)."""
+    q = world.queue()
+    world.gh.put(1, h1 := world.change({"a.txt": "1\n"}))
+    q.sync()
+    merge = _git(world.origin, "rev-parse", "refs/heads/next")
+    head = world.change({"o.txt": "on the old next\n"}, base=merge)
+    del world.gh.prs[1]
+    q.sync()
+    assert world.on_next(q) == []
+    return h1, merge, head
+
+
+OLD_NEXT_FIX = ("which would land with it: retarget the PR to the demo branch it builds on, or restack its own commits onto `main` "
+                "(a branch from `origin/main` with each cherry-picked, and the branch of each open PR it needs merged, never `next`) "
+                "and mark that head")
+
+
+def test_the_sync_refuses_a_head_carrying_merges_of_an_old_next_of_prs_closed_unlanded_naming_the_fix(world):
+    """A branch that merged `next` (a demo's) carries the merge of every PR on it then; once `next` is rebuilt without one that
+    closed unlanded, a PR from that branch would land that PR's change with its own."""
+    h1, merge, head = _old_next(world)
+    world.gh.put(2, head)
+    q = world.queue()
+    members, entries = q.sync()
+    assert entries[2].state == "refused" and entries[2].why == (
+        f"its head carries 1 merge of an old `next` that `main` doesn't hold, of PRs closed unlanded ({merge[:12]} (#1)), "
+        + OLD_NEXT_FIX)
+    assert members == [] and q.status()[2].state == "refused"
+    _git(world.dev, "push", "-q", "origin", f"{h1}:refs/heads/main")      # #1's change landed after all, at its head
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [2], "a merge of a PR that landed carries nothing `main` lacks"
+
+
+def test_a_head_stacked_on_an_open_pr_or_built_on_todays_next_is_not_refused(world):
+    """`next` holds merges of open PRs only: a head built on it, or on another open PR's head, carries no change that is neither
+    open nor landed, and goes after those PRs."""
+    q = world.queue()
+    world.gh.put(1, h1 := world.change({"a.txt": "1\n"}))
+    q.sync()
+    world.gh.put(2, world.change({"b.txt": "2\n"}, base=h1), ready=False)
+    world.gh.put(3, world.change({"c.txt": "3\n"}, base=_git(world.origin, "rev-parse", "refs/heads/next")))
+    members, entries = q.sync()
+    assert not [n for n, e in entries.items() if e.state == "refused"], {n: e.why for n, e in entries.items()}
+    assert [m.pr for m in members] == [1, 3] and entries[3].after == (1,) and entries[2].state == "waiting"
+
+
+def test_the_preflight_refuses_a_head_on_main_carrying_an_old_next_before_any_check_and_one_based_elsewhere_by_its_carry(world, capsys):
+    """At the mark as at admission, in the sync's words, and first, since the fix makes another head.  A PR based on another
+    branch (a demo's) isn't judged for it, as drive never admits it; the carried-head check (`stale_carried`) refuses its mark."""
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    world.with_store_remote()
+    _, merge, head = _old_next(world)
+    world.gh.put(2, head, ready=False)
+    world.gh.put(3, demo := world.change({"p.txt": "3\n"}, base=merge), ready=False)
+    world.gh.prs[3] = dataclasses.replace(world.gh.prs[3], base="demo", branch="cursor/w-3")
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 1
+    assert capsys.readouterr().err == (
+        f"research queue ready: #2 is not marked ready at {head[:12]}: its head carries 1 merge of an old `next` that `main` "
+        f"doesn't hold, of PRs closed unlanded ({merge[:12]} (#1)), {OLD_NEXT_FIX}\n")
+    assert not [s for s in world.logs if "merged onto" in s], "no other check ran"
+    assert ready(world.gh, world.store, 3, "lane-3", MarkOnly(), preflight=_preflight(world)) == 1
+    err = capsys.readouterr().err
+    assert "old `next`" not in err and f"through `next`'s merge {merge[:12]}, and #1 is closed" in err, err
+    labels = StoreLabels(world.store, log=world.logs.append)
+    assert [labels.ready(2, head), labels.ready(3, demo)] == [False, False]
+
+
 def test_ready_without_sha_marks_the_branchs_tip_not_the_head_github_still_shows(world, monkeypatch):
     """`research queue ready N --mark` seconds after a push mustn't preflight GitHub's old head, which may conflict with `next`
     where the pushed one doesn't. Without --sha, the branch's tip (git's refs, which a push moves at once)
@@ -2836,8 +2906,9 @@ def test_the_preflight_refuses_a_head_containing_an_open_pr_that_isnt_admitted_a
 def test_the_preflight_refuses_a_head_that_merged_next_carrying_a_pr_head_its_pr_no_longer_lands(world, capsys):
     """Branches that merged an older `next` carried the heads of PRs rebuilt or withdrawn since, which would land under their
     marks.  A head carried through `next`'s merge (`Queue: #N`) refuses the mark, with the fix, when #N's current head doesn't
-    hold it, #N is closed, or #N isn't admitted, even when #N's owner withdrew it, which carries it for a rebuild; one #N still
-    lands as it stands refuses nothing, nor does one the landing branch holds (an older merge of a PR landed since)."""
+    hold it, #N is closed (unlanded, the merge of an old `next`: `old_next`'s refusal, alone), or #N isn't admitted, even when
+    #N's owner withdrew it, which carries it for a rebuild; one #N still lands as it stands refuses nothing, nor does one the
+    landing branch holds (an older merge of a PR landed since)."""
     from research.queue import MarkOnly, carried_heads, ready
     from research.store.cli import _label_write_through
 
@@ -2859,8 +2930,10 @@ def test_the_preflight_refuses_a_head_that_merged_next_carrying_a_pr_head_its_pr
     assert "#6's" not in err                                                     # #6 lands at the head #4 carries
     del world.gh.prs[5]
     assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 1
-    assert (f"it carries #5's head {five[:12]} through `next`'s merge {by[5][:12]}, and #5 is closed: drop #5's commits "
-            "(rebuild the branch on origin/main, without `next`)") in capsys.readouterr().err
+    assert capsys.readouterr().err == (
+        f"research queue ready: #4 is not marked ready at {four[:12]}: its head carries 1 merge of an old `next` that `main` "
+        f"doesn't hold, of PRs closed unlanded ({by[5][:12]} (#5)), {OLD_NEXT_FIX}\n")
+    world.gh.put(5, new, ready=False)
     world.store.add_label(label_target(6, six), vocab.READY, False, "lane-6")
     _label_write_through(world.store, label_target(6, six))
     assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 1

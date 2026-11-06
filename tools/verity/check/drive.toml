@@ -110,3 +110,9 @@ stale_days = 3
 stale_close_days = 7
 # PRs the stale rule never judges, kept open by their owners with a reason
 stale_keep = [2692, 2693, 2705, 2948, 3205, 3401, 3573]
+# the unlandable rule, hourly: close each open PR based on `main` that nothing will land as it is, its head contained by a PR
+# of the same owner that landed on `checked`, or its change on `checked` already (each file it changes there as its head has
+# it), with a comment naming which and how to keep it open, its branch kept; never one marked ready at its head, on `next`,
+# with a hold label, a draft that says "keep open", one of `stale_keep`, or one reopened at the head drive closed it at.
+# "on"; "log", only log each it would close (`would close #N: why`); "off"
+close_unlandable = "log"
