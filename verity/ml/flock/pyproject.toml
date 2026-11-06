@@ -24,6 +24,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
+    "tests/test_challenger_audit.py",
     "tests/test_circuit.py",
     "tests/test_class_statement.py",
     "tests/test_class_statement_redteam_1178.py",
@@ -112,6 +113,16 @@ artifacts = ["verity/core/service/flock/.lake/build/bin/flock-verify",
 [[tool.verity.tests.reads]]
 tests = ["tests/test_backend.py"]
 paths = ["verity/ml/flock/python/verity_flock"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_challenger_audit.py"]
+# `lake build sampled-proofs-difftest`: its package and those it requires by path
+paths = [
+    "verity/core/primitives/lms/lean",
+    "verity/core/protocols/interface",
+    "verity/core/service/flock",
+    "verity/core/service/sampled_proofs",
+]
 
 [[tool.verity.tests.reads]]
 tests = [

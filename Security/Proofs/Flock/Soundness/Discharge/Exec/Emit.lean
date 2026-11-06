@@ -11,8 +11,8 @@ round: the round retained the pending bytes and the squeeze's header, when the s
 `Emitted t t' fs` says a run from `t` to `t'` absorbed and squeezed the frames `fs`, in order.
 
 * `chunks fs`: the rounds `fs` closes, each the frames up to and including its squeeze, and the frames after the last.
-* `Emitted`: the run consumed one round per chunk, each retaining its chunk's bytes (the first also `t`'s pending bytes),
-  and left the rest pending.
+* `Emitted`: the run consumed one round per chunk, each retaining its chunk's bytes (the first also `t`'s pending bytes)
+  and issuing the coins of the squeeze that closes its chunk, and left the rest pending.
 * `Emitted.trans`: runs compose by appending their frames (`chunks_append`).
 * The transcript's steps (`label_emitted`, `absorbF_emitted`, …, `squeeze_emitted`, `sample_emitted`) and loops
   (`forIn_emitted`).
@@ -63,35 +63,40 @@ theorem chunks_append : ∀ (fs₁ fs₂ : List Frame), chunks (fs₁ ++ fs₂) 
 theorem encs_append (a b : List Frame) : encs (a ++ b) = encs a ++ encs b := by simp [encs]
 
 /-- **A run emitted `fs`**: from `t` to `t'`, it consumed one round per chunk of `fs`, each retaining its chunk's bytes
-(the first also `t`'s pending bytes), and left the frames after the last chunk pending. -/
+(the first also `t`'s pending bytes) and issuing as many coins as the squeeze that closes its chunk asks for, and left
+the frames after the last chunk pending. -/
 structure Emitted (t t' : Transcript) (fs : List Frame) : Prop where
   rounds : t'.rounds = t.rounds
   k : t'.k = t.k + (chunks fs).1.length
   ret : ∀ i < (chunks fs).1.length, Retains (t.rounds[t.k + i]!)
     ((if i = 0 then t.pending.data.toList else []) ++ encs ((chunks fs).1.getD i []))
   pending : t'.pending.data.toList = (if (chunks fs).1 = [] then t.pending.data.toList else []) ++ encs (chunks fs).2
+  count : ∀ i < (chunks fs).1.length, ∃ c kind, (chunks fs).1.getD i [] = c ++ [.sq kind (t.rounds[t.k + i]!).n]
 
 theorem Emitted.refl (t : Transcript) : Emitted t t [] :=
-  ⟨rfl, by simp [chunks], fun i hi => by simp [chunks] at hi, by simp [chunks, encs]⟩
+  ⟨rfl, by simp [chunks], fun i hi => by simp [chunks] at hi, by simp [chunks, encs],
+    fun i hi => by simp [chunks] at hi⟩
 
 theorem Emitted.trans {t t₁ t₂ : Transcript} {fs₁ fs₂ : List Frame} (h₁ : Emitted t t₁ fs₁) (h₂ : Emitted t₁ t₂ fs₂) :
     Emitted t t₂ (fs₁ ++ fs₂) := by
-  obtain ⟨r₁, k₁, R₁, p₁⟩ := h₁
-  obtain ⟨r₂, k₂, R₂, p₂⟩ := h₂
+  obtain ⟨r₁, k₁, R₁, p₁, C₁⟩ := h₁
+  obtain ⟨r₂, k₂, R₂, p₂, C₂⟩ := h₂
   have hg := chunks_append fs₁ fs₂
   unfold glue at hg
   rcases hc : (chunks fs₂).1 with _ | ⟨c, cs⟩
   · rw [hc] at hg k₂ R₂ p₂
     simp only at hg
-    refine ⟨r₂.trans r₁, by rw [hg, k₂, k₁]; simp, fun i hi => ?_, ?_⟩
+    refine ⟨r₂.trans r₁, by rw [hg, k₂, k₁]; simp, fun i hi => ?_, ?_, fun i hi => ?_⟩
     · rw [hg] at hi ⊢
       exact R₁ i hi
     · rw [hg]
       simp only [ite_true] at p₂
       rw [p₂, p₁, encs_append, List.append_assoc]
-  · rw [hc] at hg k₂ R₂ p₂
+    · rw [hg] at hi ⊢
+      exact C₁ i hi
+  · rw [hc] at hg k₂ R₂ p₂ C₂
     simp only at hg
-    refine ⟨r₂.trans r₁, by rw [hg, k₂, k₁]; simp; omega, fun i hi => ?_, ?_⟩
+    refine ⟨r₂.trans r₁, by rw [hg, k₂, k₁]; simp; omega, fun i hi => ?_, ?_, fun i hi => ?_⟩
     · rw [hg] at hi ⊢
       simp only [List.length_append, List.length_cons] at hi
       rcases Nat.lt_or_ge i (chunks fs₁).1.length with hlt | hge
@@ -121,13 +126,34 @@ theorem Emitted.trans {t t₁ t₂ : Transcript} {fs₁ fs₂ : List Frame} (h�
     · rw [hg]
       simp only [reduceCtorEq, ite_false, List.nil_append] at p₂
       simp [p₂]
+    · rw [hg] at hi ⊢
+      simp only [List.length_append, List.length_cons] at hi
+      rcases Nat.lt_or_ge i (chunks fs₁).1.length with hlt | hge
+      · rw [List.getD_append _ _ _ _ hlt]
+        exact C₁ i hlt
+      · rw [List.getD_append_right _ _ _ _ hge]
+        rcases Nat.eq_or_lt_of_le hge with heq | hgt
+        · subst heq
+          obtain ⟨c', kd, hc'⟩ := C₂ 0 (by simp)
+          rw [r₁, k₁] at hc'
+          simp only [List.getD_cons_zero, Nat.add_zero] at hc'
+          subst hc'
+          exact ⟨(chunks fs₁).2 ++ c', kd, by simp⟩
+        · obtain ⟨j, rfl⟩ : ∃ j, i = (chunks fs₁).1.length + 1 + j := ⟨i - (chunks fs₁).1.length - 1, by omega⟩
+          obtain ⟨c', kd, hc'⟩ := C₂ (1 + j) (by simp; omega)
+          rw [r₁, k₁] at hc'
+          rw [show (chunks fs₁).1.length + 1 + j - (chunks fs₁).1.length = 1 + j by omega,
+            show t.k + ((chunks fs₁).1.length + 1 + j) = t.k + (chunks fs₁).1.length + (1 + j) by omega]
+          refine ⟨c', kd, ?_⟩
+          simpa [Nat.add_comm 1 j] using hc'
 
 /-! ## The transcript's steps -/
 
 theorem emitted_absorb {f : Frame} (hf : closes f = false) {t t₁ : Transcript} (hr : t₁.rounds = t.rounds)
     (hk : t₁.k = t.k) (hp : t₁.pending.data.toList = t.pending.data.toList ++ f.enc) : Emitted t t₁ [f] := by
   have hc : chunks [f] = ([], [f]) := by simp [chunks, hf]
-  exact ⟨hr, by rw [hc, hk]; rfl, fun i hi => by rw [hc] at hi; simp at hi, by rw [hc, hp]; simp [encs]⟩
+  exact ⟨hr, by rw [hc, hk]; rfl, fun i hi => by rw [hc] at hi; simp at hi, by rw [hc, hp]; simp [encs],
+    fun i hi => by rw [hc] at hi; simp at hi⟩
 
 theorem label_emitted {l : String} {t t₁ : Transcript} {u : Unit} (h : label l t = .ok (u, t₁)) :
     Emitted t t₁ [.label l.toUTF8] := by
@@ -157,26 +183,34 @@ theorem squeeze_emitted {kind : UInt8} {n : ℕ} (hn : n ≠ 0) {t t₁ : Transc
     (h : squeeze kind n t = .ok (cs, t₁)) (hret : AllRetained t.rounds) :
     Emitted t t₁ [.sq kind n] ∧ cs = (t.rounds[t.k]!).coins := by
   have h' : (squeeze kind n >>= pure) t = .ok (cs, t₁) := by rw [bind_pure]; exact h
-  obtain ⟨-, -, hR, h₂⟩ := squeeze_bindA hn h' hret
+  obtain ⟨-, hN, hR, h₂⟩ := squeeze_bindA hn h' hret
   obtain ⟨rfl, rfl⟩ := pure_ok h₂
   have hc : chunks [.sq kind n] = ([[.sq kind n]], []) := by simp [chunks, closes, hn]
-  refine ⟨⟨rfl, by rw [hc]; rfl, fun i hi => ?_, by rw [hc]; simp [encs]⟩, rfl⟩
-  rw [hc] at hi ⊢
-  have hi0 : i = 0 := by simpa using hi
-  subst hi0
-  simpa [encs] using hR
+  refine ⟨⟨rfl, by rw [hc]; rfl, fun i hi => ?_, by rw [hc]; simp [encs], fun i hi => ?_⟩, rfl⟩
+  · rw [hc] at hi ⊢
+    have hi0 : i = 0 := by simpa using hi
+    subst hi0
+    simpa [encs] using hR
+  · rw [hc] at hi ⊢
+    have hi0 : i = 0 := by simpa using hi
+    subst hi0
+    exact ⟨[], kind, by simp [hN]⟩
 
 theorem sample_emitted {t t₁ : Transcript} {v : F128} (h : sample t = .ok (v, t₁)) (hret : AllRetained t.rounds) :
     Emitted t t₁ [.sq 1 1] ∧ v = (t.rounds[t.k]!).coins.getD 0 0 := by
   have h' : (sample >>= pure) t = .ok (v, t₁) := by rw [bind_pure]; exact h
-  obtain ⟨-, -, hR, h₂⟩ := sample_bindA h' hret
+  obtain ⟨-, hN, hR, h₂⟩ := sample_bindA h' hret
   obtain ⟨rfl, rfl⟩ := pure_ok h₂
   have hc : chunks [.sq 1 1] = ([[.sq 1 1]], []) := by simp [chunks, closes]
-  refine ⟨⟨rfl, by rw [hc]; rfl, fun i hi => ?_, by rw [hc]; simp [encs]⟩, rfl⟩
-  rw [hc] at hi ⊢
-  have hi0 : i = 0 := by simpa using hi
-  subst hi0
-  simpa [encs] using hR
+  refine ⟨⟨rfl, by rw [hc]; rfl, fun i hi => ?_, by rw [hc]; simp [encs], fun i hi => ?_⟩, rfl⟩
+  · rw [hc] at hi ⊢
+    have hi0 : i = 0 := by simpa using hi
+    subst hi0
+    simpa [encs] using hR
+  · rw [hc] at hi ⊢
+    have hi0 : i = 0 := by simpa using hi
+    subst hi0
+    exact ⟨[], 1, by simp [hN]⟩
 
 theorem sampleVec_emitted {n : ℕ} (hn : n ≠ 0) {t t₁ : Transcript} {cs : Array F128} (h : sampleVec n t = .ok (cs, t₁))
     (hret : AllRetained t.rounds) : Emitted t t₁ [.sq 2 n] ∧ cs = (t.rounds[t.k]!).coins :=
@@ -185,14 +219,18 @@ theorem sampleVec_emitted {n : ℕ} (hn : n ≠ 0) {t t₁ : Transcript} {cs : A
 theorem sampleK_emitted {t t₁ : Transcript} {v : F256} (h : sampleK t = .ok (v, t₁)) (hret : AllRetained t.rounds) :
     Emitted t t₁ [.sq 2 2] ∧ v = ⟨(t.rounds[t.k]!).coins.getD 0 0, (t.rounds[t.k]!).coins.getD 1 0⟩ := by
   have h' : (sampleK >>= pure) t = .ok (v, t₁) := by rw [bind_pure]; exact h
-  obtain ⟨-, -, hR, h₂⟩ := sampleK_bindA h' hret
+  obtain ⟨-, hN, hR, h₂⟩ := sampleK_bindA h' hret
   obtain ⟨rfl, rfl⟩ := pure_ok h₂
   have hc : chunks [.sq 2 2] = ([[.sq 2 2]], []) := by simp [chunks, closes]
-  refine ⟨⟨rfl, by rw [hc]; rfl, fun i hi => ?_, by rw [hc]; simp [encs]⟩, rfl⟩
-  rw [hc] at hi ⊢
-  have hi0 : i = 0 := by simpa using hi
-  subst hi0
-  simpa [encs] using hR
+  refine ⟨⟨rfl, by rw [hc]; rfl, fun i hi => ?_, by rw [hc]; simp [encs], fun i hi => ?_⟩, rfl⟩
+  · rw [hc] at hi ⊢
+    have hi0 : i = 0 := by simpa using hi
+    subst hi0
+    simpa [encs] using hR
+  · rw [hc] at hi ⊢
+    have hi0 : i = 0 := by simpa using hi
+    subst hi0
+    exact ⟨[], 2, by simp [hN]⟩
 
 /-- **A loop emits its iterations' frames**, in order, when each iteration emits its own. -/
 theorem forIn_emitted {σ : Type} (body : ℕ → σ → TM (ForInStep σ)) (F : ℕ → List Frame)
