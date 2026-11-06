@@ -1,7 +1,10 @@
 module
 
+public import Definitions.Flock.Game.Expect
+import Mathlib.Algebra.CharP.Defs
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Game.Expect
 public import Proofs.Core.Game.Runs
-public import Proofs.Flock.Soundness.Game.Expect
 
 /-!
 # C-Flock's game library is Core's: `Runs`

@@ -1,6 +1,5 @@
 module
 
-public import VStar.PyJson
 public import VStar.RecOpen
 
 /-!

@@ -1,13 +1,36 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.PlainReg.Defs
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineInst
 public import Proofs.Flock.Soundness.Discharge.PlainReg.BindH
+public import Proofs.Flock.Soundness.Discharge.PlainReg.Defs
 public import Proofs.Flock.Soundness.Discharge.ZkReg.BindH
 public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
+public import Proofs.Flock.Soundness.Registered.ReadsX
 public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 public import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
 import all Init.Data.Array.Basic
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineInst
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.Hidden.Public
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.QSort
+import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
+import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 
 /-!
 # The registered check at an accepted hidden-output `verify --registered F` outcome, without `--zk`

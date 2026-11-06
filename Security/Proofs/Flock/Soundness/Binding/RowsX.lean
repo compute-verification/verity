@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Binding.Rows
 public import Proofs.Flock.Soundness.Binding.RowSeg
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # Rows whose bytes need not be injective: `hm96-sha512/row/v1`, `/row/v2` and `/row-seg/v1` rows together

@@ -1,7 +1,8 @@
 module
 
-public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 public import Definitions.Pous.Model.BandChain
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The background-rebuild budget

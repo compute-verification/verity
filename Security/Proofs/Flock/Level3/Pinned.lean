@@ -7,10 +7,10 @@ left inverse, and `M c = 0` forces `c = 0`.
 module
 
 public import Proofs.Flock.Level3.ArithFacts
-public import Proofs.Flock.Level3.Assembly
-public import Mathlib.Data.Matrix.Mul
-public import Mathlib.LinearAlgebra.Matrix.NonsingularInverse
 import all Init.Data.Array.Basic
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Level3.Assembly
 
 @[expose] public section
 

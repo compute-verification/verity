@@ -1,6 +1,11 @@
 module
 
 public import Definitions.Core.Game
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+public import Mathlib.Basic.ENNReal.Basic
+public import Mathlib.Data.Fintype.Card
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # C-Flock's game vocabulary is Core's: `Game`

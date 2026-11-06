@@ -14,17 +14,12 @@ public import Proofs.Flock.C3.Compose.HoloStageCoins
 public import Proofs.Flock.C3.Compose.LaterHeld
 public import Proofs.Flock.C3.Compose.LaterHeldW
 public import Proofs.Flock.C3.Compose.LaterHolo
-public import Batteries.Recycling.MonadSatisfying.Array
-public import Proofs.Flock.Recursive.HoloSchedCheck
-public import Proofs.Flock.Recursive.ValueChecked
 public import Proofs.Flock.C3.Compose.HoloCoinTys
 public import Proofs.Flock.C3.Compose.HoloEncoded
 public import Proofs.Flock.C3.Compose.RowsReg
 public import Proofs.Flock.C3.Compose.HoloStreamSizes
 public import Proofs.Flock.C3.Compose.HoloSparseRounds
 public import Proofs.Flock.C3.Compose.HoloSparseWords
-public import Proofs.Flock.VBridge.Family.PartKeys
-public import Proofs.Flock.Soundness.Refine.HoloRepConverse
 public import Proofs.Flock.C3.Sparse.Read
 public import Proofs.Flock.C3.Sparse.Src
 public import Proofs.Flock.C3.Sparse.SrcTie
@@ -110,6 +105,19 @@ public import Proofs.Flock.C3.RegLevels.LgCoins
 public import Proofs.Flock.C3.RegLevels.RRounds
 public import Proofs.Flock.C3.RegLevels.LgHeld
 public import Proofs.Flock.C3.Reps.HAlgRows
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # Candidate 3's recursive guarantee: its open pieces

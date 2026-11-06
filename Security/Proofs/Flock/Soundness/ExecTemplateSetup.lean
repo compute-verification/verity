@@ -1,6 +1,12 @@
 module
 
 public import Proofs.Flock.Soundness.ExecTemplatePlace
+public import Proofs.Flock.Soundness.ExecSetup
+public import Proofs.Flock.Soundness.ExecTemplate
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Soundness.Types.Parts
 
 /-!
 # A typed template's layout, from `Stmt.setupH` (1e for templates, T3)

@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Flock.Statement
+import Mathlib.Tactic.Ring.RingNF
 
 /-!
 # A pinned statement satisfies its statement without Δ's pinned copies

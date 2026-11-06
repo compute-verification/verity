@@ -1,7 +1,8 @@
 module
 
-public import Definitions.Nci.Assumptions
 public import Definitions.Nci.Packed
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Data.NNRat.Floor
 
 /-!
 # The inference-only policy's activations assumption on a chain with several products to a gate

@@ -1,7 +1,10 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Tables.Sim
-public import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
+public import Proofs.Flock.Soundness.Discharge.Exec.Live
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Refine.LiveCompiled
 
 /-!
 # R11 for sessions of `J` tables: the live audit simulated in the salted audit

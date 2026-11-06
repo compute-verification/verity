@@ -1,7 +1,14 @@
 module
 
+public import Definitions.Core.Game
+public import Mathlib.Algebra.MvPolynomial.Degrees
+public import Mathlib.Algebra.Polynomial.Degree.Defs
+public import Mathlib.Algebra.Polynomial.Eval.Defs
+import Mathlib.Algebra.MvPolynomial.SchwartzZippel
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Inv
+import Proofs.Flock.Soundness.Game.Basic
 public import Proofs.Core.Game.Poly
-public import Proofs.Flock.Soundness.Game.Basic
 
 /-!
 # C-Flock's game library is Core's: `Poly`

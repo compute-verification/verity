@@ -1,6 +1,7 @@
 module
 
-public import Proofs.Core.NaiveStrassen.Size
+public import Proofs.Core.NaiveStrassen.Check
+import Proofs.Core.NaiveStrassen.Size
 
 /-!
 # The kernel evaluation (NaiveStrassen)

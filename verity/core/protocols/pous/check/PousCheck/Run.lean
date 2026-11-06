@@ -2,7 +2,6 @@ module
 
 public import MemoryChallenger.Judge
 public import PousCheck.SetupProtocol
-public import PousCheck.Merkle
 
 /-!
 # A PoUS run, composed

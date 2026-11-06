@@ -1,9 +1,7 @@
 module
 
 public import Definitions.Pouw.PearlC.Tile
-public import Definitions.Pouw.PearlC.Fp4Chain
 public import Definitions.Pouw.PearlC.Fp4Skip
-public import Definitions.Pouw.PearlC.PeelExact
 
 /-!
 # Pearl-C4's device record: NVFP4 on sm_120 (trusted; definitions only; staged, nothing pinned)

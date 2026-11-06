@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Pouw.PearlC.Cap.IntForm
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # `_cap_constants` at pinned shapes

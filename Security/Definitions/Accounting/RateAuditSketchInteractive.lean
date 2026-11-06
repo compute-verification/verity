@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Accounting.RateAuditSketch
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The sketch rate audit with interactive side sources, verbatim (trusted)

@@ -1,8 +1,9 @@
 module
 
 public import Definitions.Nci.Ldl
-public import Mathlib.Basic.ENNReal.Real
 public import Mathlib.Basic.Real.ENatENNReal
+public import Definitions.Core.Formalism
+import Mathlib.Data.NNRat.Floor
 
 /-!
 # Local description length: the named premises

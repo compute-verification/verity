@@ -2,7 +2,7 @@ module
 
 public import Definitions.Nci.Assumptions.Activations
 public import Definitions.Nci.Assumptions
-public import Definitions.Nci.Dark
+import Mathlib.Data.NNRat.Floor
 
 /-!
 # The inference-only policy's activations bound over all of training ([ACTIVATIONS-BOUND])
