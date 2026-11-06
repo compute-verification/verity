@@ -523,14 +523,6 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "least the words of the units that are fixed under option A, computed, and with every unit steering them "
           "computed, over the rounds, and the folded words at least the words of the units whose receipts commit their "
           "folds", "TS counts fixed", "conjectured"),
-    # `Claims.ZKServer.Loop.Src` (Security/Proofs/Flock/SessionLoop/Statement.lean) is its Lean form, a premise of
-    # Flock.Guarantees.SessionLoopZKDeployed; its two halves are `Loop.Level0Src` and `Loop.RepSrc`
-    Entry("flock-firewall-os-src", "assumption",
-          "Every input the firewall's session loop takes from its host and its operating system is the session tape's: "
-          "for each table's level 0, the witness's packed table at the tape's mask words and the tape's extra lanes, lane "
-          "paddings and level-0 salts; for each rep, its pads, its pads tree's salts and its salts for levels 1 and up. "
-          "The loop runs on the auditor-trusted host (trusted-host), whose operating system's random bytes are the "
-          "uniform draws the tape models", "Firewall OS source", "standard"),
     # `Claims.ZKServer.Relay.RelayServes` and `Claims.ZKServer.Relay.WorkerDeterministic`
     # (Security/Proofs/Flock/ZkAny/RelayServes.lean) are their Lean forms, premises of the relay's `envPre_run`
     Entry("flock-relay-serves", "assumption",
@@ -545,6 +537,14 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "the content LiveChallenger::round sends in its Req::Round is the value the model's worker gives at the "
           "coins the worker has received, from the statement, the witness and its tapes. Accepted provisionally as a "
           "named trust: https://app.notion.com/p/40f399515d9e81a19338f2ddbec3635e", "Worker deterministic", "standard"),
+    # `Claims.ZKServer.Loop.Src` (Security/Proofs/Flock/SessionLoop/Statement.lean) is its Lean form, a premise of
+    # Flock.Guarantees.SessionLoopZKDeployed; its two halves are `Loop.Level0Src` and `Loop.RepSrc`
+    Entry("flock-firewall-os-src", "assumption",
+          "Every input the firewall's session loop takes from its host and its operating system is the session tape's: "
+          "for each table's level 0, the witness's packed table at the tape's mask words and the tape's extra lanes, lane "
+          "paddings and level-0 salts; for each rep, its pads, its pads tree's salts and its salts for levels 1 and up. "
+          "The loop runs on the auditor-trusted host (trusted-host), whose operating system's random bytes are the "
+          "uniform draws the tape models", "Firewall OS source", "standard"),
 )}
 
 
