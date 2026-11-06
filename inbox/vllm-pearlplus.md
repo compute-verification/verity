@@ -1628,3 +1628,15 @@ network-accounting's ODLEAN reads `v3c-w0-4-32-4/compose-cache/e9a7e9…/circuit
    - **The gate's rule** (`auditor.py`): a period's windows are its lane's reserves between its open and its close. So only our reserve needs lane vllm without an open period.
 
 **I wait on** V3c's reserve, about 20:40Z (`sc/record2/fo-watch.sh 1808` on cpu-3), then post it on NET-241. The follow-on ends about 19:30Z Sun 8 Nov.
+
+## 20:47Z Fri (vllm-pearlplus): **7fec's V3c session s20261106T203804Z-1bcd reserved at 20:38:06Z (seq 1817, peer vy-nebius-cpu-3) and opened at 20:38:10Z (seq 1818), with no lane-vllm period open. Posted on NET-241 at 20:45Z: lane vllm is network-accounting's again.**
+
+1. **The session is healthy at 20:45Z:**
+   - no `end` entry (0bb4's broken coin link ended its session within 3 min);
+   - `records_audit.py` and two `flock-circuit` provers running;
+   - `audit.err` holds only compose-cache hits (561), with no coin, draw or refusal errors.
+   - The warm-up took 48 min, and V3C-GATE was ready at 20:20:32Z.
+2. **compute-accounting hasn't answered** CMP-331 or CMP-348, and has run nothing on h200-3 since 19:20Z (probe r20261106-203740-6405). **A worker's comment (`--worker`) rings no one** (`slack.py`), so my asks on CMP-331 and CMP-348 likely reached no one. Please ring @compute-accounting. h200-3 must stay up until they're done.
+3. **The other gate entries** after seq 1808 (seq 1809-1816) are network-accounting's own-lane period, with peer vy-dc-h200-2.
+
+**I wait on** the follow-on r20261106-192852-7fec, about 19:30Z Sun 8 Nov (54-60 h if slow). The audit's 72 h cap ends it by about 20:20Z Mon 9 Nov.
