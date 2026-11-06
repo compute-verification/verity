@@ -2888,7 +2888,7 @@ def test_a_cursor_agent_without_research_notes_token_reads_the_notes_with_the_ag
     assert slack.notes_token_source() == "agent-broker" and slack.notes_token_why() == "no OIDC identity"
     monkeypatch.setenv(notes_sync.TOKEN_ENV, "t0k")
     monkeypatch.delenv(notes_sync.SOURCE_ENV)
-    monkeypatch.setattr(notes_sync, "notes_token", lambda: os.environ[notes_sync.TOKEN_ENV])
+    monkeypatch.setattr(notes_sync, "notes_token", lambda: "t0k")
     assert slack.notes_token() == "t0k" and slack.notes_token_source() == "env"
 
 
