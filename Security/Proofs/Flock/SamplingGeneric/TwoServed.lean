@@ -105,13 +105,13 @@ theorem Prog.runIn_congr_reads (C : Prog) {ref₁ ref₂ : ℕ → Option Bool} 
   | some x =>
     refine BGate.val_congr (fun i hi => ?_) fun h => hin g hg (.refl g) (hx.trans (congrArg some h))
     by_cases hiu : i ∈ u
-    · rw [if_pos hiu, if_pos hiu]
+    · rw [ite_eq_left hiu, ite_eq_left hiu]
       by_cases hig : i < g
-      · rw [dif_pos hig, dif_pos hig]
+      · rw [dite_eq_left hig, dite_eq_left hig]
         exact ih i hig hiu (fun g' hg' h' => hin g' hg' ((Prog.Reads.read hx hi).trans h'))
           fun g' hg' h' => hrd g' hg' ((Prog.Reads.read hx hi).trans h')
-      · rw [dif_neg hig, dif_neg hig]
-    · rw [if_neg hiu, if_neg hiu]
+      · rw [dite_eq_right hig, dite_eq_right hig]
+    · rw [ite_eq_right hiu, ite_eq_right hiu]
       exact hrd g hg (.refl g) x hx i hi hiu
 
 /-- **The determinism lemma at the gates `o` reads**: two traces that make every proof block outside `T` correct, with
@@ -219,7 +219,7 @@ theorem served_eq_on (H : Msg → Msg) (Cm : CommitmentScheme Bool) {s : AuditSt
     intro g hg
     have h1 := congrFun ha g
     unfold inputsOf at h1
-    rw [if_pos hg, if_pos hg] at h1
+    rw [ite_eq_left hg, ite_eq_left hg] at h1
     rw [glue_of_boundary fun r => Prog.boundary_of_input r hg, glue_of_boundary fun r => Prog.boundary_of_input r hg]
     exact h1
   intro i hi
@@ -299,7 +299,7 @@ theorem card_servedAt_le_served (H : Msg → Msg) (Cm : CommitmentScheme Bool) {
         exact congrFun (congrFun h (req i)) ⟨i, rfl⟩
     _ = ∏ r, ((servedAt H Cm s Pt Pρ a T).image (onReq req r)).card := Fintype.card_piFinset _
     _ ≤ ∏ r, 2 ^ min (bitsOf s Pt (blocksTo s.prog Pt req T r)) (servedBits req r) :=
-        prod_le_prod (fun _ _ => Nat.zero_le _) fun r _ => card_image_servedAt_le H Cm hC hP a T req r
+        prod_le_prod fun r _ => card_image_servedAt_le H Cm hC hP a T req r
     _ = 2 ^ ∑ r, min (bitsOf s Pt (blocksTo s.prog Pt req T r)) (servedBits req r) := prod_pow_eq_pow_sum _ _ _
 
 /-- A request `T` doesn't touch adds nothing: `T_r` is empty. -/
