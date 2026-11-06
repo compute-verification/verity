@@ -185,10 +185,10 @@ def test_tc_dot16_matches_prim():
 
 
 def _veritor_silicon():
-    """`(verity.ml.circuits.silicon.silicon, verity.ml.circuits.silicon.total)` -- veritor's `core.silicon` / `core.silicon_total` promoted verbatim into Verity's
+    """`(verity.ml.circuits.silicon.models, verity.ml.circuits.silicon.total)` -- veritor's `core.silicon` / `core.silicon_total` promoted verbatim into Verity's
     core; the registered tensor-core primitives are held to them word for word on every encoding."""
-    from verity.ml.circuits.silicon import silicon, total
-    return silicon, total
+    from verity.ml.circuits.silicon import models, total
+    return models, total
 
 
 def _bf16_words_every_encoding(rng, shape):
