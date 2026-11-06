@@ -1,7 +1,9 @@
-import Definitions.Flock.Game.Tape
-import Proofs.Flock.Bridge.V5.Statement
-import Proofs.Flock.EndToEnd.Period.Run
-import Proofs.Flock.Soundness.Assumptions.Finders
+module
+
+public import Definitions.Flock.Game.Tape
+public import Proofs.Flock.Bridge.V5.Statement
+public import Proofs.Flock.EndToEnd.Period.Run
+public import Proofs.Flock.Soundness.Assumptions.Finders
 
 /-!
 # One window's sample over several members, each verified in its own session (trusted)
@@ -43,6 +45,8 @@ are A3 (`uniform/io-getrandombytes`) for the sample's bytes, `live-verifier` at 
 (`Assumptions.LinkCRZCAt`) at the strategy each member's session is played with alone (in a period, at every window's
 strategy on some run, `JointPeriodV5.Plays`), stated flat. Their proofs are in `Joint/V5/Bound.lean`.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

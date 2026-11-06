@@ -1,7 +1,9 @@
-import Proofs.Flock.EndToEnd.Joint.V5.Statement
-import Proofs.Flock.Bridge.V5.EndToEndHidden
-import Proofs.Flock.Bridge.V5.OpeningsCanon
-import Proofs.Flock.Soundness.Discharge.Composed.DrawnJ
+module
+
+public import Proofs.Flock.EndToEnd.Joint.V5.Statement
+public import Proofs.Flock.Bridge.V5.EndToEndHidden
+public import Proofs.Flock.Bridge.V5.OpeningsCanon
+public import Proofs.Flock.Soundness.Discharge.Composed.DrawnJ
 
 /-!
 # A member's session alone: its drawn proof blocks at flock-verify `--zk --public-inputs`, at any sampling design
@@ -17,6 +19,8 @@ import Proofs.Flock.Soundness.Discharge.Composed.DrawnJ
   (`decodesZCJH_custodyAt`) holds at any sampling design whose draws have the session's link points, so the bound does
   too, and it needs no A3.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 
