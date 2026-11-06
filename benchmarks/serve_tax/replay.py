@@ -31,7 +31,8 @@ def window(arm_dir: Path, load: str, rep: int) -> dict[str, Any]:
     step indices from the window's first."""
     meta = json.loads((arm_dir / load / f"rep-{rep}" / "meta.json").read_text())
     tag = meta["tag"]
-    plan = {r["i"]: r for r in (json.loads(x) for x in (arm_dir / "plan.jsonl").read_text().splitlines() if x.strip())}
+    plan_file = Path(json.loads((arm_dir / "meta.json").read_text()).get("plan") or arm_dir / "plan.jsonl")
+    plan = {r["i"]: r for r in (json.loads(x) for x in plan_file.read_text().splitlines() if x.strip())}
     client = {r["id"]: r for r in (json.loads(x) for x in (arm_dir / load / f"rep-{rep}" / "client.jsonl").read_text().splitlines()
                                    if x.strip())}
     (trace,) = sorted((arm_dir / "server").glob("step_trace.*.jsonl"))

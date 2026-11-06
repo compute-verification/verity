@@ -29,6 +29,8 @@ from typing import Any
 ENV = "VERITY_SERVETAX"
 #: how long the engine core waits on its input queue at a time while the release gate holds requests and nothing runs
 POLL_S = 0.01
+#: the model runners whose ``execute_model`` the KV edge follows: V1's and Model Runner V2's, whichever the engine builds
+RUNNERS = ("vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")
 
 _PLUGIN: list[Any] = []
 
@@ -112,8 +114,9 @@ class TokenCommit:
     ``rows-sha512`` rows under a fresh salt key (`step_rows.keyed_tensor_root`) on a thread of its own when the window
     closes (`tick`, at the first schedule ``window_s`` after it opened, and at exit). ``sink`` gets each window's record."""
 
-    def __init__(self, window_s: float, sink: Callable[[dict], None], clock: Callable[[], float] = time.monotonic) -> None:
-        self.window_s, self.sink, self.clock = float(window_s), sink, clock
+    def __init__(self, window_s: float, sink: Callable[[dict], None], clock: Callable[[], float] = time.monotonic,
+                 commit: Callable[[int, bytes], bytes] | None = None) -> None:
+        self.window_s, self.sink, self.clock, self.commit = float(window_s), sink, clock, commit or rows_root
         self.window = 0
         self.opened = clock()
         self.tokens: list[int] = []
@@ -143,22 +146,27 @@ class TokenCommit:
     def _work(self) -> None:
         import array
 
-        from verity_vllm.commit import step_rows
-
         while (job := self.jobs.get()) is not None:
             window, opened, closed, tokens = job
             t = time.perf_counter()
             data = array.array("I", tokens).tobytes()
-            entry = ["tokens", "u32", [len(tokens)], len(data)]
-            root = step_rows.keyed_tensor_root(bytes(step_rows.ID_BYTES), window, entry, data, os.urandom(step_rows.KEY_BYTES))
-            self.sink({"window": window, "tokens": len(tokens), "bytes": len(data), "rows": -(-len(data) // step_rows.ROW_BYTES),
-                       "root": root.hex(), "open_s": opened, "close_s": closed, "hash_s": round(time.perf_counter() - t, 6)})
+            root = self.commit(window, data)
+            self.sink({"window": window, "tokens": len(tokens), "bytes": len(data), "root": root.hex(), "open_s": opened,
+                       "close_s": closed, "hash_s": round(time.perf_counter() - t, 6)})
 
     def stop(self) -> None:
         if self.tokens:
             self.close()
         self.jobs.put(None)
         self.thread.join()
+
+
+def rows_root(window: int, data: bytes) -> bytes:
+    """``data``'s root as ``rows-sha512`` rows (`step_rows.keyed_tensor_root`) under a fresh salt key."""
+    from verity_vllm.commit import step_rows
+
+    entry = ["tokens", "u32", [len(data) // 4], len(data)]
+    return step_rows.keyed_tensor_root(bytes(step_rows.ID_BYTES), window, entry, data, os.urandom(step_rows.KEY_BYTES))
 
 
 class KvEdge:
@@ -366,7 +374,10 @@ def register() -> None:
     if cfg.get("release_order"):
         hooks.wrap(EngineCoreProc, "_process_input_queue", _input)
     if cfg.get("kv"):
-        from vllm.v1.worker.gpu_model_runner import GPUModelRunner
+        import importlib
 
-        hooks.wrap(GPUModelRunner, "execute_model", lambda execute: _kv_runner(execute, cfg))
+        for name in RUNNERS:
+            runner = getattr(importlib.import_module(name), "GPUModelRunner", None)
+            if runner is not None:
+                hooks.wrap(runner, "execute_model", lambda execute: _kv_runner(execute, cfg))
     _PLUGIN.append(hooks)

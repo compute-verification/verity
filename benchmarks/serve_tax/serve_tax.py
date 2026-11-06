@@ -220,15 +220,22 @@ def load_docs(c4: Path, checkpoint: Path, n: int) -> list[list[int]]:
     return out
 
 
-def plan_of(out: Path, c4: Path, checkpoint: Path, n: int, docs: int, seed: int) -> list[dict]:
-    f = out / "plan.jsonl"
+def plan_of(f: Path, c4: Path, checkpoint: Path, n: int, docs: int, seed: int) -> list[dict]:
+    """The plan's first n requests from f, made there first (`traffic.plan` over the shard's first ``docs`` documents)
+    unless f holds at least n."""
     if f.exists():
         plan = [json.loads(x) for x in f.read_text().splitlines() if x.strip()]
         if len(plan) >= n:
             return plan[:n]
     plan = corpus().traffic.plan(load_docs(c4, checkpoint, docs), n, seed)
+    f.parent.mkdir(parents=True, exist_ok=True)
     f.write_text("".join(json.dumps(r, separators=(",", ":")) + "\n" for r in plan))
     return plan
+
+
+def plan_need(rates: dict[str, float], span_s: float, requests: int | None) -> int:
+    """Requests a run of these loads may send: a load's arrivals over its span, with room for Poisson's spread."""
+    return requests or max(math.ceil(r * span_s * 1.5) + 64 for r in rates.values())
 
 
 def parse_rates(text: str) -> dict[str, float]:
@@ -279,9 +286,9 @@ def run(a: argparse.Namespace) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     rates = parse_rates(a.rates)
-    need = a.requests or max(math.ceil(r * a.span_s * 1.5) + 64 for r in rates.values())
     t = time.monotonic()
-    plan = plan_of(out, Path(a.c4), checkpoint, need, a.docs, a.seed)
+    plan = plan_of(Path(a.plan) if a.plan else out / "plan.jsonl", Path(a.c4), checkpoint,
+                   plan_need(rates, a.span_s, a.requests), a.docs, a.seed)
     print(f"[serve-tax] plan: {len(plan)} requests in {time.monotonic() - t:.1f} s", flush=True)
     tick = tick_args(a.tick_from, a.tick_ms) if arm.tick else None
     srv = out / "server"
@@ -291,7 +298,7 @@ def run(a: argparse.Namespace) -> int:
     argv = server_argv(arm, model, checkpoint, port)
     meta = {"schema": SCHEMA, "arm": a.arm, "what": arm.what, "parent": arm.parent, "model_id": a.model_id,
             "model": f"{model.repo}@{model.revision}", "checkpoint": str(checkpoint), "server_argv": argv[1:],
-            "plugin": list(arm.plugin), "tick": tick, "window_s": a.window_s, "kv_window_s": a.kv_window_s, "rates": rates, "reps": a.reps,
+            "plugin": list(arm.plugin), "tick": tick, "window_s": a.window_s, "kv_window_s": a.kv_window_s, "rates": rates, "reps": a.reps, "plan": a.plan,
             "span_s": a.span_s, "c4": a.c4, "seed": a.seed, "versions": versions(), "host": os.uname().nodename,
             "run_id": os.environ.get("RESEARCH_RUN_ID"), "gpus": os.environ.get("CUDA_VISIBLE_DEVICES"), "loads": []}
     (out / "meta.json").write_text(json.dumps(meta, indent=1))
@@ -383,7 +390,10 @@ def tick_args(source: str | None, given_ms: str | None, load: str = "saturated")
 
 def window_trace(trace: Path, t0: float, t1: float) -> list[dict]:
     """The step trace's records with times in [t0, t1] (one load's), its header first."""
-    recs = [json.loads(x) for x in trace.read_text().splitlines() if x.strip()]
+    return in_window([json.loads(x) for x in trace.read_text().splitlines() if x.strip()], t0, t1)
+
+
+def in_window(recs: list[dict], t0: float, t1: float) -> list[dict]:
     return recs[:1] + [r for r in recs[1:] if "t" in r and t0 <= float(r["t"]) <= t1]
 
 
@@ -541,11 +551,19 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--startup-s", type=float, default=1800.0)
     r.add_argument("--window-s", type=float, default=600.0, help="the Commit window the tokens arm closes at")
     r.add_argument("--kv-window-s", type=float, default=600.0, help="the window edge the kv arm hashes the KV cache at")
-    r.add_argument("--docs", type=int, default=20000)
+    r.add_argument("--plan", help="the plan's file, shared by a job's arms (default: OUT/plan.jsonl)")
+    r.add_argument("--docs", type=int, default=20000, help="the shard's documents a plan draws from")
     r.add_argument("--seed", type=int, default=0)
     r.add_argument("--tick-from", metavar="STEP_TRACE")
     r.add_argument("--tick-ms", metavar="SAT,FREE")
     r.add_argument("--out", required=True)
+    pl = sub.add_parser("plan", help="make the plan a job's arms share, before any GPU is held")
+    for flag in ("--model-id", "--checkpoint", "--c4", "--rates", "--out"):
+        pl.add_argument(flag, required=flag != "--checkpoint")
+    pl.add_argument("--span-s", type=float, default=90.0)
+    pl.add_argument("--requests", type=int)
+    pl.add_argument("--docs", type=int, default=20000)
+    pl.add_argument("--seed", type=int, default=0)
     for name in ("metrics", "table"):
         p = sub.add_parser(name)
         p.add_argument("dirs", nargs="+", type=Path)
@@ -559,6 +577,11 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     if a.cmd == "run":
         return run(a)
+    if a.cmd == "plan":
+        ck = Path(a.checkpoint) if a.checkpoint else MODELS[a.model_id].checkpoint()
+        n = plan_need(parse_rates(a.rates), a.span_s, a.requests)
+        print(f"[serve-tax] plan: {len(plan_of(Path(a.out), Path(a.c4), ck, n, a.docs, a.seed))} requests in {a.out}")
+        return 0
     if a.cmd == "tick":
         print(json.dumps(tick_args(a.source, None, a.load)))
         return 0
