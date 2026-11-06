@@ -37858,10 +37858,10 @@
    }
   },
   "Proofs.Flock.Claims.ZK.LinkRecheck": {
-   "digest": "70ede71e5bc1e4a28d7544bd60ed18758bd5f5f213414376a72f359b8ba79209",
+   "digest": "b8cb4cbd543bfcc61def08b79363372f4e5ca7ad6ac2229d76ec495a144747da",
    "definitions": {
     "Claims.ZKMal.Masked.dataE": "482c5f1580496f35ebe6d1892c271a6e2243cf900aee578adfffe18ddbe968ab",
-    "Claims.ZKMal.Masked.linkIn": "8549f74352b6ccce09914afe2a39a7e565c6b79b4558db726af6c30407fce511"
+    "Claims.ZKMal.Masked.linkIn": "aad36d20478ae14a727a243c4d335e5a8d479669d651a0b61a62e10ad79c8bf4"
    }
   },
   "Proofs.Flock.Claims.ZK.MaskTape": {
