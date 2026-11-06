@@ -42,7 +42,8 @@ is bounded request by request. Split the served outputs into requests by any map
 (`servedBits`), and `T_r` is the proof blocks of `T` with a committed value one of `r`'s served outputs reads
 (`blocksTo`), so that `T` touches `r` when `T_r` is nonempty. On fixed inputs, `T` serves `r` in at most
 `2^{min(b(T_r), |r|)}` ways, and the influence set has at most `Σ_{T admissible} 2^{Σ_{r touched by T} min(b(T_r), |r|)}`
-members. The split is the lemma's to take: the bound holds at every one, so it trusts none.
+members. It is a set of served outputs, so it also has at most `2^{|outs|}`, and the bound to charge is the smaller.
+The split is the lemma's to take: the bound holds at every one, so it trusts none.
 
 * `Prog.Reads`: gate `g` reads gate `j`, itself or through the wires it reads.
 * `Prog.runIn_congr_reads`, `boundary_eq_reads`, `outs_eq_reads`: **the determinism lemma at one returned gate**: two
@@ -54,8 +55,11 @@ members. The split is the lemma's to take: the bound holds at every one, so it t
 * `card_influenceTwo_le_served`, `card_influenceTwo_le_served_min`: **the influence set** under the served-output cap,
   and under the smaller of it and `CompiledTwo.Exfil`'s `2^{b(T)}` for each `T` (a proof block read by several requests
   counts in each, so neither bound is always the smaller).
+* `sum_servedBits`, `card_influenceTwo_le_two_pow_outs`, `card_influenceTwo_le_min`: **never above the served
+  outputs**: the influence set is a set of served outputs, so it has at most `2^{|outs|}` members, `|outs| = Σ_r |r|`,
+  and the bound to charge is the smaller of that and the served-output cap.
 * `CompiledTwo.exfil_served`: **the corollary of `CompiledTwo.Exfil`**: KS at `RInflTwo`, with the influence set under
-  the served-output cap.
+  the smaller of the served-output cap and `2^{|outs|}`.
 -/
 
 @[expose] public section
@@ -369,13 +373,41 @@ theorem card_influenceTwo_le_served_min (H : Msg → Msg) (Cm : CommitmentScheme
         · rw [min_eq_right h]
           exact card_servedAt_le_served H Cm hs.1 hs.2.1 a T req
 
+/-- **The requests' served bits add up to the served outputs**: each served output is in exactly one request. -/
+theorem sum_servedBits {R : Type} [Fintype R] [DecidableEq R] {n : ℕ} (req : Fin n → R) :
+    ∑ r, servedBits req r = n := by
+  have h := card_eq_sum_card_fiberwise (f := req) (s := (univ : Finset (Fin n))) (t := (univ : Finset R))
+    fun _ _ => mem_coe.2 (mem_univ _)
+  rw [card_univ, Fintype.card_fin] at h
+  exact h.symm
+
+/-- **The influence set is a set of served outputs**, so it has at most `2^{|outs|}` members, on any statement, at any
+`δ` and any input values. -/
+theorem card_influenceTwo_le_two_pow_outs (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement)
+    (Pt : Partition) (d : Design.Two) (δ : ℝ) (a : ℕ → Option Bool) :
+    (influenceTwo H Cm s Pt d δ a).card ≤ 2 ^ s.prog.outs.length :=
+  (card_le_univ _).trans (le_of_eq (by rw [Fintype.card_fun, Fintype.card_bool, Fintype.card_fin]))
+
+/-- **The served-output cap, never above the served outputs**: at any split `req`, the influence set has at most the
+smaller of `Σ_{T admissible} 2^{min(b(T), Σ_{r touched by T} min(b(T_r), |r|))}` and `2^{Σ_r |r|} = 2^{|outs|}`. -/
+theorem card_influenceTwo_le_min (H : Msg → Msg) (Cm : CommitmentScheme Bool) {s : AuditStatement} {Pt : Partition}
+    {d : Design.Two} (hs : InScopeTwo Pt d s) (δ : ℝ) (a : ℕ → Option Bool) {R : Type} [Fintype R] [DecidableEq R]
+    (req : Fin s.prog.outs.length → R) :
+    (influenceTwo H Cm s Pt d δ a).card ≤
+      min (∑ T ∈ admissibleTwo Pt d δ, 2 ^ min (bitsOf s Pt T)
+          (∑ r ∈ univ.filter (fun r => (blocksTo s.prog Pt req T r).Nonempty),
+            min (bitsOf s Pt (blocksTo s.prog Pt req T r)) (servedBits req r)))
+        (2 ^ ∑ r, servedBits req r) := by
+  rw [sum_servedBits]
+  exact le_min (card_influenceTwo_le_served_min H Cm hs δ a req) (card_influenceTwo_le_two_pow_outs H Cm s Pt d δ a)
+
 end Claims.Sampling
 
 namespace Claims.SamplingGeneric
 
 open Claims Finset
 open Claims.Sampling (InScopeTwo RInflTwo influenceTwo admissibleTwo bitsOf blocksTo servedBits KSLinOn Bext
-  card_influenceTwo_le_served)
+  card_influenceTwo_le_min)
 
 namespace CompiledTwo
 
@@ -383,7 +415,8 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg 
 
 /-- **The served-output cap, a corollary of `Exfil`**: at every `δ ≥ 0`, KS at `RInflTwo` at `Exfil`'s extractor and
 errors, and on a statement in scope, at any input values and any split `req` of its served outputs into requests, the
-influence set has at most `Σ_{T admissible} 2^{Σ_{r touched by T} min(b(T_r), |r|)}` members. -/
+influence set has at most the smaller of `Σ_{T admissible} 2^{min(b(T), Σ_{r touched by T} min(b(T_r), |r|))}` and
+`2^{Σ_r |r|} = 2^{|outs|}` members (`card_influenceTwo_le_min`). -/
 theorem exfil_served {H : Msg → Msg} {L : CompiledTwo Coin A} (hL : L.Exfil H) (δ : ℝ) (hδ : 0 ≤ δ) :
     KSLinOn H L.V L.Scope (RInflTwo H L.commit L.parse L.partition L.two δ) L.E (L.κ δ) L.γ (fun _ => 1)
         (Bext H L.V L.E) ∧
@@ -392,11 +425,13 @@ theorem exfil_served {H : Msg → Msg} {L : CompiledTwo Coin A} (hL : L.Exfil H)
         (req : Fin s.prog.outs.length → R),
         L.parse x = some s → L.partition s = some Pt → L.two s = some d → InScopeTwo Pt d s →
         (influenceTwo H L.commit s Pt d δ a).card ≤
-          ∑ T ∈ admissibleTwo Pt d δ, 2 ^ ∑ r ∈ univ.filter (fun r => (blocksTo s.prog Pt req T r).Nonempty),
-            min (bitsOf s Pt (blocksTo s.prog Pt req T r)) (servedBits req r) := by
+          min (∑ T ∈ admissibleTwo Pt d δ, 2 ^ min (bitsOf s Pt T)
+              (∑ r ∈ univ.filter (fun r => (blocksTo s.prog Pt req T r).Nonempty),
+                min (bitsOf s Pt (blocksTo s.prog Pt req T r)) (servedBits req r)))
+            (2 ^ ∑ r, servedBits req r) := by
   refine ⟨(hL δ hδ).1, ?_⟩
   intro x s Pt d a R _ _ req _ _ _ hin
-  exact card_influenceTwo_le_served H L.commit hin δ a req
+  exact card_influenceTwo_le_min H L.commit hin δ a req
 
 end CompiledTwo
 
