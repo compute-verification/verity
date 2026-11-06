@@ -100,7 +100,8 @@ _TOKEN = re.compile(r"`([^`\s]+)`|\]\(([^)\s]+)\)")
 _SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+-]*:")
 _SKIP = re.compile(r"[*<>{}$|@\\]")
 _LINE = re.compile(r":\d+(-\d+)?$")
-_NAME = re.compile(r"^[\w.+-]+\.(py|sh|c|h|cc|cpp|cu|cuh|rs|lean)$")
+#: ASCII, as every tracked file's name is, so a Lean field of a Greek binder (`σ.c`) doesn't read as a C file.
+_NAME = re.compile(r"^[\w.+-]+\.(py|sh|c|h|cc|cpp|cu|cuh|rs|lean)$", re.ASCII)
 _LEAN_NAME = re.compile(r"^(?=(?:\w+\.){2,}\w+$)(?:\w+\.)*[A-Z]\w*\.")
 
 
@@ -214,7 +215,7 @@ def test_the_scan_reads_each_form_and_catches_a_dead_path():
                               "`tools/x/tests/fixtures/big/a.bin` `test_a.py:3` `b.py::f` `gone.sh`, `out.json` `x`"),
         "tools/x/CHANGELOG.md": "`tools/gone.py`",
         "Security/A.lean": ('def s := "`tools/gone.py`"\n/-- `tools/x/` and\n`tools/lean_gone.py` -/\n'
-                            "def t := 1 -- `x.lean`, `Loop.RepSrc.h`, `coin_tree.Rules.h`, `Gone.lean`, `a.b.h`\n"),
+                            "def t := 1 -- `x.lean`, `Loop.RepSrc.h`, `coin_tree.Rules.h`, `Gone.lean`, `a.b.h`, `σ.c`\n"),
     }
     assert documents(files) == ["README.md", "Security/A.lean", "tools/x/README.md"]
     assert dead_paths(tree, read=docs.__getitem__) == [
