@@ -41,5 +41,6 @@ python benchmarks/replay_ladder/coverage_table.py render COVERAGE.json --ladder 
 ~~~
 
 `run.sh` takes `REPLAYS` (3), `FRESH` (1), `ALONE` (64), and `SPAN_S`, `OVER` and `BURST` for the window. A TP2 or TP4
-model needs a node with that many GPUs. FP8 models run DeepGEMM, compiled through NVRTC (`DG_JIT_USE_NVRTC=1`), unless
-`DEEP_GEMM=0`; `engine_env.txt` records the choice.
+model needs a node with that many GPUs. FP8 models run DeepGEMM, which JIT-compiles with the newest CUDA toolkit under
+`/usr/local` (12.8 or newer; a RunPod image's 12.4 can't, so install `cuda-nvcc-12-9 cuda-cudart-dev-12-9 cuda-cccl-12-9`
+first), unless `DEEP_GEMM=0`; `engine_env.txt` records the choice.
