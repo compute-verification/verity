@@ -391,6 +391,7 @@ theorem commit_words {st : State} {a : ByteArray} {C : Coins.Release} (hst : st.
 
 /-! ## The history's link coins -/
 
+open Claims.ZKMal in
 /-- **The history's link coins are the auditor's answer to the run's second message**, at the loop's count: where
 `V*` answered that message with `m`, the first coins past the history's `Hello` at the loop's count for opening `0`
 are `m`'s first words there (`Frames.feedOf`). -/
@@ -409,15 +410,16 @@ theorem wordsAt_hist_two {W Rr : Type} (M : LoopModel W Rr) {c : Nat} {m : Claim
   · simp at hj
   · simp at h1
     subst h1
-    simp [Claims.ZKMal.histOf, Loop.wordsAt, Claims.ZKMal.msgOf]
+    simp [histOf, Loop.wordsAt, msgOf]
 
+open Claims.ZKMal in
 theorem wordsAt_hist_two_le {W Rr : Type} (M : LoopModel W Rr) {k : Nat} (hk : 2 ≤ k) :
     Loop.wordsAt M.x ((M.hist k).tail.map fun e => ZKMal.CoinLayer.rd e.2) 0 =
       Loop.wordsAt M.x ((M.hist 2).tail.map fun e => ZKMal.CoinLayer.rd e.2) 0 := by
   obtain ⟨k0, rfl⟩ : ∃ k0, k = k0 + 2 := ⟨k - 2, by omega⟩
   unfold LoopModel.hist
   generalize M.τ = τ
-  rcases τ with _ | ⟨p0, _ | ⟨p1, t⟩⟩ <;> simp [Claims.ZKMal.histOf, Loop.wordsAt]
+  rcases τ with _ | ⟨p0, _ | ⟨p1, t⟩⟩ <;> simp [histOf, Loop.wordsAt]
 
 /-- **The history's link coins are the same at every history past the link.** -/
 theorem wordsAt_hist_zero {W Rr : Type} (M : LoopModel W Rr) {c c' : Nat} (hc : 2 ≤ c) (hc' : 2 ≤ c') :

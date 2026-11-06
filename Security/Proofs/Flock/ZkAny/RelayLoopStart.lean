@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.ZkAny.RelayLoopPre
+import Proofs.Flock.Claims.ZK.Reference
 public import Proofs.Flock.ZkAny.RelayAuditor
 public import Proofs.Flock.ZkAny.RelayWorker
 
@@ -85,13 +86,14 @@ theorem pick_setup {spec : SessionSpec} {sts : Array Stmt} {ins : List (ByteArra
   obtain ⟨p, hp, rfl⟩ := List.mem_map.mp (hsub.subset he)
   exact hs p hp
 
+open Claims.ZKMal in
 /-- **A run of the deferred server against `V*` is its own**: where the model's run is the transcript of the deferred
 server with the model's worker, statement, witness, tape and check coins against `V*` (`ZkServer.proverD`), each of its
 messages is the deferred release's at the history before it (`interact_getElem_fst`). -/
 theorem LoopModel.own_of_runStar {W Rr Θ : Type} {M : LoopModel W Rr} {H : Msg → Msg} {Vs : VStar Θ} {θ : Θ}
     (hτ : M.τ = (runStar H (M.L.toSrv.proverD M.L.fillOf M.nN M.wk M.w) Vs M.x (M.ρ, M.κ) θ).msgs) : M.Own := by
   intro j hj
-  have e : M.τ = ZKMal.interact (fun as => ((Vs.next M.x as θ).eval H).1)
+  have e : M.τ = interact (fun as => ((Vs.next M.x as θ).eval H).1)
       (fun h => (((M.L.toSrv.proverD M.L.fillOf M.nN M.wk M.w).next M.x h (M.ρ, M.κ)).eval H).1) (Vs.k M.x) [] :=
     hτ.trans (ZKMal.runStar_msgs _ _ _ _ _ _)
   have h := interact_getElem_fst _ _ _ [] j (by rw [← e]; exact hj)
@@ -127,7 +129,7 @@ theorem LoopModel.Deployed.head_hello {T : ZKMal.CoinLayer.TableData}
   rw [hm, h0, show (LeanRelease.ofLoop T L₀ real).hello M.x M.ρ = ZKMal.CoinLayer.helloMsg M.x M.ρ.1 from
     LeanRelease.loop_helloIs _ T _ M.x M.ρ.1 M.ρ.2]
   unfold ZKMal.CoinLayer.helloMsg
-  rw [hD.setup]
+  rw [Claims.ZKMal.sessOf_flock hD.setup]
 
 /-- **`EnvPre` at the relay's requests from its start, at the model's run**: at the release
 `withFiles (withLink (withInner Masked.dataE L₁.withoutCross (Loop.realOf src) fin) src) src` on the loop's own tables

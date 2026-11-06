@@ -53,16 +53,17 @@ theorem rep_lt_two {spec : SessionSpec} {i r : Nat} {s : String} (h : (i, r, s) 
   obtain ⟨-, hr, -⟩ := hme
   omega
 
+open Claims.ZKMal in
 /-- **The history one message on ends with the coins' bytes** where the auditor answered coins to it as `V*` did. -/
 theorem LoopModel.hist_ans {W Rr : Type} (M : LoopModel W Rr) {j : Nat} {e : Env} (h : M.Ans j e) {a : ByteArray}
     (ha : e.ans = some a) (hb : byte? a 0 = some 2) :
     ∃ m', M.hist (j + 1) = M.hist j ++ [(m', a.data.toList)] := by
   obtain ⟨hj, hA⟩ := h
   refine ⟨(M.τ[j]'hj).1, ?_⟩
-  unfold LoopModel.hist ZKMal.histOf
+  unfold LoopModel.hist histOf
   rw [List.take_add_one, List.getElem?_eq_getElem hj, Option.toList_some, List.map_append, List.map_cons,
     List.map_nil]
-  simp only [hA a ha hb, ZKMal.msgOf]
+  simp only [hA a ha hb, msgOf]
 
 open Loop in
 /-- **Where `placeOf` places the rep's next round, its schedule so far is one**: at a frame keeping its schedule so far

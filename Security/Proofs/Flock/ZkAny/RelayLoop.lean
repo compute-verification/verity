@@ -94,8 +94,9 @@ variable {W Rr : Type} (M : LoopModel W Rr)
 /-- The run's messages. -/
 def msgs : List Claims.Msg := M.τ.map (·.1)
 
+open Claims.ZKMal in
 /-- The run's history before its `j`-th message. -/
-def hist (j : Nat) : List (Claims.Msg × Claims.Msg) := Claims.ZKMal.histOf (M.τ.take j)
+def hist (j : Nat) : List (Claims.Msg × Claims.Msg) := histOf (M.τ.take j)
 
 /-- **Each of the run's messages is the deferred release's** at the history before it. -/
 def Own : Prop :=
