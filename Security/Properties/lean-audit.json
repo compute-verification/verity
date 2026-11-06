@@ -27413,15 +27413,29 @@
    "guarantees": [
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
+    "Verity.coins_couple",
+    "Verity.coins_couple_honest",
+    "Verity.coins_couple_nontrivial",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
+    "Verity.soundness_at_of_componentBounds",
+    "Verity.soundness_at_of_componentBounds_honest",
+    "Verity.soundness_at_of_componentBounds_nontrivial",
     "Verity.soundness_at_of_targets",
     "Verity.soundness_at_of_targets_honest",
     "Verity.soundness_at_of_targets_nontrivial",
     "Verity.soundness_of_subprotocols",
     "Verity.soundness_of_subprotocols_honest",
-    "Verity.soundness_of_subprotocols_nontrivial"
+    "Verity.soundness_of_subprotocols_nontrivial",
+    "Verity.soundness_of_upFront",
+    "Verity.soundness_of_upFront_honest",
+    "Verity.soundness_of_upFront_nontrivial",
+    "Verity.target_of_periods",
+    "Verity.target_of_periods_honest",
+    "Verity.target_of_periods_nontrivial",
+    "Verity.wipe_target",
+    "Verity.wipe_target_nontrivial"
    ]
   },
   "SampledProofs.ChallengerRecord": {
