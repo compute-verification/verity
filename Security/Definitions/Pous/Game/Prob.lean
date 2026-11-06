@@ -1,6 +1,8 @@
-import Mathlib.Basic.ENNReal.Inv
-import Mathlib.Data.Fintype.Pi
-import Mathlib.Data.Fintype.Prod
+module
+
+public import Mathlib.Basic.ENNReal.Inv
+public import Mathlib.Data.Fintype.Pi
+public import Mathlib.Data.Fintype.Prod
 
 /-!
 # Bit strings and uniform probability
@@ -10,6 +12,8 @@ coins and the challenge indices. `pr P` is the probability that a uniform `x` sa
 type on which `P` holds. Adversaries are deterministic functions. A randomized adversary is an average of
 deterministic ones, so every bound that holds for all deterministic adversaries holds for it too.
 -/
+
+@[expose] public section
 
 namespace Pous
 

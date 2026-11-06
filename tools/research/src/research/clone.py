@@ -143,6 +143,20 @@ def _why(r: subprocess.CompletedProcess) -> str:
     return (r.stderr.strip().splitlines() or [f"exit {r.returncode}"])[-1]
 
 
+def set_drivers(repo: Path) -> list[str]:
+    """Set each `RECORD_DRIVER` key that ``repo``'s own config lacks or holds another value for, and return those keys: one
+    `git config` read when none is.  Refused on a failed read or write."""
+    r = _git(["config", "--local", "--get-regexp", r"^merge\."], repo)
+    if r.returncode not in (0, 1):
+        raise Refused(f"git could not read {repo}'s config: {_why(r)}")
+    have = dict(line.partition(" ")[::2] for line in r.stdout.splitlines())
+    changed = [k for k, v in RECORD_DRIVER.items() if have.get(k) != v]
+    for k in changed:
+        if (r := _git(["config", "--local", k, RECORD_DRIVER[k]], repo)).returncode:
+            raise Refused(f"git could not set {k} in {repo}'s config: {_why(r)}")
+    return changed
+
+
 def make(source_root: Path, dest: Path, *, commit: str | None = None, clean: bool = False) -> str:
     """Clone `source_root` into `dest` (absent), detached at its HEAD, and return that commit.  `commit`: the commit the run is for
     (on a machine, the shipped one), which HEAD must be.  `clean`: refuse a source root with uncommitted or untracked files, which a
@@ -168,10 +182,9 @@ def make(source_root: Path, dest: Path, *, commit: str | None = None, clean: boo
         r = _git(["clone", "-q", "--shared", "--no-checkout", str(src), str(dest)])
         if r.returncode == 0:
             r = _git(["-c", "advice.detachedHead=false", "checkout", "-q", "--detach", head], dest)
-        for k, v in RECORD_DRIVER.items():
-            r = r if r.returncode else _git(["config", k, v], dest)
         if r.returncode:
             raise Refused(f"git could not clone {src} into {dest}: {_why(r)}")
+        set_drivers(dest)
         got = _git(["rev-parse", "HEAD"], dest).stdout.strip()
         st = _git(["status", "--porcelain", "--untracked-files=all"], dest)
         if got != head or st.returncode or st.stdout.strip():

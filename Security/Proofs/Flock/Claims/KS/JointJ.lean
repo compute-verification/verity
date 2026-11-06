@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.Joint
+module
+
+public import Proofs.Flock.Claims.KS.Joint
 
 /-!
 # One wait's bound from every table's bound
@@ -19,6 +21,8 @@ first table that does not: its table is not `GoodTableAt` there. The rate is the
 and the statement parses wherever some run accepts. At tables with unopened positions (`orZeroJ`), the bound follows
 from the bound at tables of `Ok` columns and `ExtendJ` (`tableBoundJ_of_extend`), as in `Joint`.
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 

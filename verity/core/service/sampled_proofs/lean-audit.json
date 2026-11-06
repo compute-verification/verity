@@ -4,7 +4,8 @@
   "SampledProofs.Main": "the sampled-proofs-one-stage executable's entry point, one line; its command is Core.Protocol.main over SampledProofs.OneStage.protocol, audited under SampledProofs",
   "SampledProofs.DifftestMain": "the sampled-proofs-difftest executable's entry point, one line; it serves SampledProofs.Pieces.table, audited under SampledProofs",
   "SampledProofs.ZkMain": "the sampled-proofs-one-stage-zk executable's entry point, one line; its command is SampledProofs.OneStageZk.main, audited under SampledProofs",
-  "SampledProofs.VerifierMain": "the sampled-proofs-verifier executable's entry point, one line; it serves SampledProofs.Pieces.verifier, audited under SampledProofs"
+  "SampledProofs.VerifierMain": "the sampled-proofs-verifier executable's entry point, one line; it serves SampledProofs.Pieces.verifier, audited under SampledProofs",
+  "SampledProofs.SiteDifftestMain": "the site-difftest executable's entry point, one line; it serves SampledProofs.SiteDifftest.table, audited under SampledProofs"
  },
  "layers": {
   "SampledProofs": {

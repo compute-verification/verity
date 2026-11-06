@@ -17,7 +17,8 @@ refused. One line per part, then the count; the exit is 0 only when there is a p
 forgery is refused.
 
 With ``--compose BIN`` (85's V* parts), the recursive statement's verdict is Lean's, not this script's:
-``BIN rec-compose`` (`RecCompose.check`) over DIR's ``rec-inner.json``, its one shared rows file ``rows.json``, the
+``BIN rec-compose`` (`RecCompose.check`) over DIR's ``rec-inner.json``, its one shared rows file ``rows.json``, the link
+table's ``--rec-links ROOT:N`` in ``rec-links.txt`` when the inner population is wired (85's REC_LINKS=1), the
 challenger's interactive-run record ``rec-run.json`` and the V* parts' logs (the honest parts 85 gave V*'s inputs,
 ``own-PART.txt``) accepts only when there is one part per V* statement, each one ``--zk`` session accepted at the SHA-512
 of that one rows file and of that inner shape, every part having read one set of the other inputs V*'s parts share and
@@ -185,15 +186,17 @@ def run_record(d: Path, names: list[str]) -> Path:
 
 
 def compose(binary: str, d: Path, logs: list[Path]) -> tuple[bool | None, str]:
-    """``binary rec-compose`` over ``logs`` at DIR's ``rec-inner.json``, ``rows.json`` and the run's record for those logs'
-    parts (`run_record`). (accepted, its line); accepted is None when there is no record to compose over, which is
-    neither Lean's acceptance nor its refusal."""
+    """``binary rec-compose`` over ``logs`` at DIR's ``rec-inner.json``, ``rows.json``, the link table's ``--rec-links``
+    when DIR has ``rec-links.txt`` (85's REC_LINKS=1), and the run's record for those logs' parts (`run_record`).
+    (accepted, its line); accepted is None when there is no record to compose over, which is neither Lean's acceptance
+    nor its refusal."""
     try:
         run = run_record(d, [f.stem for f in logs])
     except (OSError, ValueError) as e:
         return None, f"no interactive-run record from rec-run.jsonl ({e})"
+    links = ["--rec-links", (d / "rec-links.txt").read_text().strip()] if (d / "rec-links.txt").is_file() else []
     r = subprocess.run([binary, "rec-compose", "--rec-inner", str(d / "rec-inner.json"), "--rec-rows", str(d / "rows.json"),
-                        "--rec-run", str(run), *map(str, logs)], capture_output=True, text=True, check=False)
+                        *links, "--rec-run", str(run), *map(str, logs)], capture_output=True, text=True, check=False)
     line = next((ln for ln in r.stdout.splitlines() if ln.startswith("REC-COMPOSE ")), None)
     if line is None:
         return None, f"exit {r.returncode}: {r.stderr.strip()[-300:]!r}"

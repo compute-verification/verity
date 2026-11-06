@@ -1,8 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.ZkSession.Table
-import Proofs.Flock.Soundness.SessionBatch
-import Proofs.Flock.Soundness.Audit.Extraction
-import Proofs.Flock.Soundness.Lowering
-import Proofs.Flock.Soundness.ExecDrawOS
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkSession.Table
+public import Proofs.Flock.Soundness.SessionBatch
+public import Proofs.Flock.Soundness.Audit.Extraction
+public import Proofs.Flock.Soundness.Lowering
+public import Proofs.Flock.Soundness.ExecDrawOS
 
 /-!
 # A batched `--zk` session and its audit (live/PROTOCOL.md §1–§7, PROTOCOL.md §5)
@@ -52,6 +54,8 @@ averaged over the draw (`ksAvgZK`). The lowering comes from each drawn unit's pl
 * *The non-ZK session's structural guarantees*, unchanged: the drawn units' places (`UnitPlace`: W6, `Layout.Aliased`),
   the constant and zero columns, and the rows' commit (`HmRowComputes`), as the headline takes them.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkSession
 

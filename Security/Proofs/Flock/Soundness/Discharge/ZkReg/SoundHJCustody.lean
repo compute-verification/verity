@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJ
-import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJ
+public import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
 
 /-!
 # One hidden-output `--zk --registered` sampled session of `J` tables, under the record's custody
@@ -15,6 +17,8 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
 * `zk_session_soundHJR_custody`: the custody assumption reads only the record and its draws, which neither the shared
   rows nor the registered check change.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkReg
 

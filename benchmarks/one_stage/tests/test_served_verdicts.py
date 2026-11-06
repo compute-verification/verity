@@ -4,23 +4,32 @@ with the command it lacks and given no verdict, one that refused to run is missi
 wrote no answer errs; and sampled proofs' accepted answer composes, with the others missing, to a pending block record that
 `block_record.check` holds and its schema admits, while a refusal or an audit that wrote nothing composes to reject with no
 block record. The record accepts only when every subprotocol accepted on its node, and names each one missing, rejecting,
-malformed or about another server. The wipe composes only when its answer accepts on the record's server. PoUW's
+malformed or about another server. The wipe composes only when its answer accepts on the record's server. Remote's
+product runs no onsite piece and composes sampled proofs and PoUW alone, the others dropped. PoUW's
 development piece checks the window's gate session and credits nothing, and the gate is refused while the lane has a period
 open. The period the served windows join opens, through infra's own gate, on the Program serve-openai declared and
 the circuit files built for it, as core's credit reads them, and is refused on files of anything else.
 `served_verdicts.sh`'s window circuits gate on every class of CLASSES, and the class of record's count after them
-gates nothing; its endpoint gets one token budget, T, with or without H1. Its load, `serve_load.py --varied`, writes
-each request's send, first-token and done times beside its
-record, on an injected clock and a stand-in endpoint."""
+gates nothing; its endpoint gets one token budget, T, with or without H1. Its preflight refuses a flag the tree's certifier
+front doesn't take, a front whose endpoint isn't on the warden's id form, and a front load with no front; its composite
+step publishes each case's and each product's verdict lines and nothing else. Its V3c step runs the split network
+certifier's chain after the window commit and its period check on V3c's period.json, and fails where no period.json is
+written; its preflight refuses the split beside the certifier's whole piece, or without V3c. Its load, `serve_load.py
+--varied`, writes each request's send, first-token and done times beside its record, on an injected clock and a stand-in
+endpoint."""
 from __future__ import annotations
 
 import argparse
+import contextlib
+import gzip
 import importlib.util
 import io
 import itertools
 import json
 import os
+import re
 import shlex
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -63,6 +72,240 @@ def test_the_window_is_the_fullest_one_with_no_request_carried(tmp_path):
     assert set(got["refused"]) == {"2", "3"} and "carried" in got["refused"]["3"]
 
 
+def test_the_window_subcommand_prints_the_whole_pick_which_stays_on_the_node(tmp_path):
+    """`served_verdicts.py window` prints `pick`'s window whole, for the serve dir's private/window.json: the harness's
+    WINDOW line says none of it."""
+    got = S.pick(_serve_dir(tmp_path), slots=4)
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        assert S.main(["window", str(tmp_path), "--slots", "4"]) == 0
+    assert json.loads(out.getvalue()) == got
+
+
+REGISTRATION = {"schema": "verity-vllm/advice-registration/v1", "row_bits": 256, "rows": 2, "T": 600, "window": 7,
+                "binding": {"compiler": {"name": "c", "digest": "d"}, "advice": {"root": "ab" * 64, "bits": 392}},
+                "commit": {"run_id": "r1/w7", "run_root": "ef" * 64},
+                "compiler": {"name": "c", "digest": "d", "cap_bits": 8388608}, "bits_by_window": {"7": 392, "8": 7},
+                "registered_roots": {"weights/w@16": "cd" * 64}, "requests": 3, "refused": {"q0": "2 of its 3 tokens"}}
+
+
+def test_the_published_registration_pads_the_advices_length_to_the_cap(tmp_path, capsys):
+    """The advice registration's public form states no length of the advice but its compiler's cap, counts and refuses
+    none of its requests, names no window, and keeps its roots, compiler and binding's root."""
+    got = S.public_registration(REGISTRATION)
+    assert got["binding"]["advice"] == {"root": "ab" * 64, "bits": 8388608} and got["rows"] == 32768
+    assert got["padded"] == list(S.PADDED) and got["commit"] == {"run_id": "r1/wK", "run_root": "ef" * 64}
+    assert not {"requests", "compiled", "refused", "window", "bits_by_window"} & set(got) and "392" not in json.dumps(got)
+    assert {k: got[k] for k in ("registered_roots", "compiler", "T", "schema")} == {
+        k: REGISTRATION[k] for k in ("registered_roots", "compiler", "T", "schema")}
+    (tmp_path / "r.json").write_text(json.dumps(REGISTRATION))
+    assert S.main(["public-registration", str(tmp_path / "r.json")]) == 0
+    assert json.loads(capsys.readouterr().out) == got
+
+
+#: a window's number (``w7``, ``window 7``), a step range, a count of windows or requests, or a field of a window's own
+#: holding a number, a list or a map of numbers, in text
+_OWN = "windows|users|engine_steps|every_slot|population|bits_by_window|advice_bits"
+_NUMBERED = "window|steps|requests|refused"
+
+
+def _window_data(out: Path, k: int) -> list[str]:
+    """Each place under ``out``, by path or in a file's text, that names window ``k`` or counts a window's own."""
+    pat = re.compile(rf"(?<![A-Za-z0-9])w{k}(?![A-Za-z0-9])|(?i:\bwindows?)[ :=]+{k}\b|(?i:\bsteps?) \[\d|"
+                     rf"\b\d+ (?:sealed|closed)\b|\d+ window\(s\)|\d+/\d+ ok|\"(?:{_OWN})\":|"
+                     rf"\"(?:{_NUMBERED})\": ?(?:\d|\[\s*\d|\{{\s*\"\d|\[\s*\])")
+    hits = []
+    for p in sorted(out.rglob("*")):
+        if p.is_file():
+            rel = p.relative_to(out).as_posix()
+            data = p.read_bytes()
+            with contextlib.suppress(OSError):
+                data = gzip.decompress(data)
+            hits += [f"{rel}: {m.group()}" for m in pat.finditer(rel + "\n" + data.decode(errors="replace"))]
+    return hits
+
+
+#: a served run's verdict lines on window 7 of three closed, two sealed, steps [13, 19), windows 5 and 6 refused, and
+#: their published form
+LINES = [
+    ("SERVE stopped (exit 0): 3 window(s) closed, 2 sealed", "SERVE stopped (exit 0): window(s) closed, sealed"),
+    ('WINDOW {"engine_steps": 6, "every_slot": true, "refused": [5, 6], "slots": 4, "steps": [13, 19], "window": 7}',
+     'WINDOW {"slots": 4}'),
+    ('PERIOD closed p: {"body": {"complete": true, "windows": [{"complete": true, "root": "ab", "session": "s1"}]}, "seq": 9}',
+     'PERIOD closed p: {"body": {"complete": true}, "seq": 9}'),
+    ('THE NETWORK CERTIFIER {"rc": 1, "reason": "window 7: the scan\'s prog is no audit\'s", "verdict": "reject"}',
+     'THE NETWORK CERTIFIER {"rc": 1, "reason": "window K: the scan\'s prog is no audit\'s", "verdict": "reject"}'),
+    ("SAMPLED-PROOFS (run.sh exit 0): over SiluMul_v2{I=8192} at model.layers.0.mlp. steps [13, 19] (law subset:2), "
+     'drawn members [5, 42]: RECORDS {"accepted": true}',
+     "SAMPLED-PROOFS (run.sh exit 0): over SiluMul_v2{I=8192} at model.layers.0.mlp. steps (law subset:2), "
+     'drawn members [5, 42]: RECORDS {"accepted": true}'),
+    ('RECORD {"by": ["PoUS"], "composed": "reject", "node": "n", "steps": [13, 19], "window": 7}',
+     'RECORD {"by": ["PoUS"], "composed": "reject", "node": "n"}'),
+    ('V3C-AUDIT class 8,32,4,4,16 (records_audit.py exit 0): RECORDS {"ok": true, "circuit": "cd", "population": 37, "dra',
+     f"V3C-AUDIT class 8,32,4,4,16 (records_audit.py exit 0): RECORDS {S.CUT}"),
+    ("POUW-DEV calls at /srv/h1/w7/pouw-h1-calls.json: drawn unit 52294",
+     "POUW-DEV calls at /srv/h1/wK/pouw-h1-calls.json: drawn unit 52294"),
+    ("REQUESTS (exit 0): [serve-load] varied: 3/3 ok", "REQUESTS (exit 0): [serve-load] varied: ok"),
+    ("CLASSES: the window circuit's 4,32,4; the certifier's scan W63 (w63k4), the one class the gate serves",) * 2,
+    ('POUS {"rc": 1, "reason": "the session ended late after 9 of 320 rounds", "verdict": "reject"}',) * 2,
+]
+
+
+def test_a_published_line_names_no_window_and_counts_none_of_a_windows_own(tmp_path, monkeypatch, capsys):
+    """Each verdict line's published form (`public_line`) names no window and counts no window closed, sealed or refused, and
+    none of a window's steps or requests, in its text or its JSON, and replaces a JSON object cut short that names one; the
+    class, the scan class, the draw, a refusal's reason and the protocol's rounds stay. `public-lines` prints that form and
+    keeps each line whole in the serve dir's private/verdicts.txt, 0700, where that serve dir exists."""
+    for line, public in LINES:
+        assert S.public_line(line) == public and S.public_line(public) == public
+    d = tmp_path / "serve"
+    d.mkdir()
+    text = "".join(line + "\n" for line, _ in LINES)
+    monkeypatch.setattr(sys, "stdin", io.StringIO(text))
+    assert S.main(["public-lines", "--private", str(d / "private" / "verdicts.txt")]) == 0
+    (tmp_path / "out").mkdir()
+    (tmp_path / "out" / "verdicts.txt").write_text(capsys.readouterr().out)
+    assert (tmp_path / "out" / "verdicts.txt").read_text().splitlines() == [p for _, p in LINES]
+    assert not _window_data(tmp_path / "out", 7)
+    assert (d / "private" / "verdicts.txt").read_text() == text and (d / "private").stat().st_mode & 0o777 == 0o700
+    monkeypatch.setattr(sys, "stdin", io.StringIO(text))
+    assert S.main(["public-lines", "--private", str(tmp_path / "absent" / "private" / "verdicts.txt")]) == 0
+    assert capsys.readouterr().out.splitlines() == [p for _, p in LINES] and not (tmp_path / "absent").exists()
+
+
+def test_publish_holds_each_file_that_names_or_counts_a_window_and_leaves_its_public_form(tmp_path):
+    """`publish`, once the run is done: a file whose path names a window is held whole in the serve dir's private/out, one
+    whose text or JSON names or counts a window is held there in full with its public form left in out/, and the rest,
+    the bench Build's requests by name, a window named ``all`` and the gzipped declared Program, stay byte for byte. Then out/
+    names no window and counts none of a window's own, and a second pass holds nothing."""
+    out, private = tmp_path / "out", tmp_path / "serve" / "private" / "out"
+    files = {
+        "verdicts.txt": "SERVE stopped (exit 0): 3 window(s) closed, 2 sealed\nCOMPOSITE CASE verity/pous/p2/v4/run accept\n",
+        "record/verdicts.json": json.dumps({"window": 7, "node": "n", "composed": {"verdict": "pending", "reason": "window 7: no"}}),
+        "record/block-record.json": json.dumps({"server_time": [{"server": "n", "steps": [13, 19]}], "composed": {"verdict": "pending"}}),
+        "registration.json": json.dumps(REGISTRATION),
+        "pieces/certifier/answer.json": json.dumps({"reason": "window 7: the scan's prog", "verdict": "reject"}),
+        "pieces/bandwidth/answer.json": json.dumps({"profile": {"windows": 6}, "verdict": "accept"}),
+        "serve/period.json": json.dumps({"close": {"body": {"windows": [{"root": "ab"}]}}, "rows": 512, "steps": 16}),
+        "pieces/pouw/check/check.log": "calls /srv/h1/w7/pouw-h1-calls.json\nPOUW {\"window\": 7, \"verdict\": \"accept\"}\n",
+        "sampled-proofs/w7/summary.json": json.dumps({"verdict": "accept"}),
+        "predicted.json": json.dumps({"requests": {"build_request_LP11_T8": "ab"}, "row": "r"}),
+        "pieces/wipe/served.json": json.dumps({"window": "all", "server": "n"}),
+    }
+    for rel, body in files.items():
+        (out / rel).parent.mkdir(parents=True, exist_ok=True)
+        (out / rel).write_text(body)
+    (out / "serve" / "h1").mkdir()
+    (out / "serve" / "h1" / "window-program.json.gz").write_bytes(gzip.compress(json.dumps({"rows": 512}).encode()))
+    assert S.main(["publish", str(out), "--private", str(private)]) == 0
+    assert not _window_data(out, 7), _window_data(out, 7)
+    kept = {"predicted.json", "pieces/wipe/served.json"}
+    for rel, body in files.items():
+        assert (out / rel).exists() == (rel != "sampled-proofs/w7/summary.json"), rel
+        if rel in kept:
+            assert (out / rel).read_text() == body and not (private / rel).exists(), rel
+        else:
+            assert (private / rel).read_text() == body, rel
+    assert json.loads((out / "record" / "verdicts.json").read_text()) == {
+        "node": "n", "composed": {"verdict": "pending", "reason": "window K: no"}}
+    assert json.loads((out / "serve" / "period.json").read_text()) == {"close": {"body": {}}, "rows": 512}
+    assert (out / "verdicts.txt").read_text() == ("SERVE stopped (exit 0): window(s) closed, sealed\n"
+                                                  "COMPOSITE CASE verity/pous/p2/v4/run accept\n")
+    assert gzip.decompress((out / "serve" / "h1" / "window-program.json.gz").read_bytes()) == b'{"rows": 512}'
+    assert S.publish(out, private) == []
+
+
+def test_publish_holds_whole_each_file_that_isnt_text_but_the_declared_program(tmp_path, monkeypatch):
+    """`publish` fails closed on a file it can't read as text: bytes that aren't UTF-8, a gzip stream that doesn't
+    decompress, and gzipped JSON, whether or not it names a window, are each held whole in private/out. Only the declared
+    Program (`PUBLIC_FILES`) stays in out/, byte for byte and unread, even past `PUBLISH_MAX`."""
+    monkeypatch.setattr(S, "PUBLISH_MAX", 64)
+    out, private = tmp_path / "out", tmp_path / "serve" / "private" / "out"
+    program = gzip.compress(json.dumps({"rows": list(range(256))}).encode())
+    public = gzip.compress(json.dumps({"rows": 512}).encode())
+    files = {"serve/h1/window-program.json.gz": program,
+             "blob.bin": b"\xff\x00window 7",
+             "broken.json.gz": public[:-6],
+             "public.json.gz": public,
+             "named.json.gz": gzip.compress(json.dumps({"window": 7}).encode())}
+    assert len(program) > S.PUBLISH_MAX
+    for rel, body in files.items():
+        (out / rel).parent.mkdir(parents=True, exist_ok=True)
+        (out / rel).write_bytes(body)
+    assert S.publish(out, private) == ["blob.bin", "broken.json.gz", "named.json.gz", "public.json.gz"]
+    assert (out / "serve" / "h1" / "window-program.json.gz").read_bytes() == program
+    assert not (private / "serve" / "h1" / "window-program.json.gz").exists()
+    for rel in ("blob.bin", "broken.json.gz", "named.json.gz", "public.json.gz"):
+        assert not (out / rel).exists() and (private / rel).read_bytes() == files[rel], rel
+    assert S.publish(out, private) == []
+
+
+def test_the_sampled_proofs_line_names_the_partition_and_its_draw_and_no_advice_length_population_or_steps(tmp_path, capsys):
+    row = {"ok": True, "accepted": True, "draw": [0, 2], "population": 37,
+           "leak": {"advice_bits": 832, "bound": "vacuous", "other_inputs": 786432, "registered": 0}}
+    part = {"templates": ["SiluMul_v2{I=8192}"], "law": "subset:2",
+            "scope": {"op_path_prefix": "model.layers.0.mlp.", "steps": [5, 11]}}
+    line = S.sampled_line(row, part)
+    head, _, rec = line.partition(": RECORDS ")
+    assert head == "over SiluMul_v2{I=8192} at model.layers.0.mlp. (law subset:2), drawn members [0, 2]"
+    assert "steps" not in line and "11" not in line
+    assert json.loads(rec)["leak"] == {"bound": "vacuous", "other_inputs": 786432, "registered": 0} and "832" not in line
+    assert "population" not in line and "37" not in line and row["population"] == 37
+    (tmp_path / "log").write_text("+ set -x\nRECORDS " + json.dumps(row) + "\n")
+    (tmp_path / "p.json").write_text(json.dumps(part))
+    assert S.main(["sampled-line", str(tmp_path / "log"), "--partition", str(tmp_path / "p.json")]) == 0
+    assert capsys.readouterr().out == line + "\n"
+    (tmp_path / "log").write_text("refused\n")
+    assert S.main(["sampled-line", str(tmp_path / "log")]) == 1
+
+
+def test_the_front_line_says_the_sessions_public_fields_alone(tmp_path, capsys):
+    """The CERTIFIER-FRONT line carries `FRONT_PUBLIC` of the front's session and none of its prompts, request, kept
+    fetch, gate or verdict's cells; a refused front's line names no reason, and a missing session says so."""
+    session = {"rc": 0, "run": "c1", "prompts": {"count": 4, "ids": 64}, "request": "warden-rehearse --requests 4",
+               "keep": "/serve/private/fetch.tar.gz", "gate": {"run": "g"}, "ended": "the rehearsal ended",
+               "ended_utc": "t", "session_s": 128.0, "pinned": "ab" * 20, "leaked_removed": [], "origin_unix": 1,
+               "verdict": {"cells": [7] * 3, "requests": 4, "wire_bits": 9}}
+    (tmp_path / "session.json").write_text(json.dumps(session))
+    assert S.main(["front-line", str(tmp_path / "session.json")]) == 0
+    said = json.loads(capsys.readouterr().out)
+    assert list(said) == list(S.FRONT_PUBLIC) and said == {k: session[k] for k in S.FRONT_PUBLIC}
+    (tmp_path / "session.json").write_text(json.dumps({"refused": "4 prompts of 64 ids: past one link-window"}))
+    assert S.main(["front-line", str(tmp_path / "session.json")]) == 0
+    assert "64" not in capsys.readouterr().out
+    assert S.main(["front-line", str(tmp_path / "absent.json")]) == 1
+    assert capsys.readouterr().out == "no session (FileNotFoundError)\n"
+
+
+def test_the_certifiers_chain_files_that_count_requests_move_to_the_serve_dirs_private_after_the_record(tmp_path):
+    """`served_verdicts.sh private-pieces` moves CERTIFIER_PRIVATE out of $OUT/pieces/certifier into the serve dir's
+    private/, 0700, and leaves the piece's answer, case and verdict where the record and its reader find them."""
+    piece, d = tmp_path / "out" / "pieces" / "certifier", tmp_path / "serve"
+    moved = ["chain/certs.json", "chain/report/report.json", "chain/tie/summary.json", "chain/n2/summary.json", "piece.log",
+             "chain.log", "period.log"]
+    kept = ["answer.json", "case.json", "chain/scan/answers.json"]
+    for f in moved + kept:
+        (piece / f).parent.mkdir(parents=True, exist_ok=True)
+        (piece / f).write_text(f)
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "D": str(d), "OUT": str(tmp_path / "out")}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "private-pieces"], cwd=tmp_path, env=env,
+                        check=False).returncode
+    assert rc == 0
+    assert sorted(str(p.relative_to(piece)) for p in piece.rglob("*") if p.is_file()) == sorted(kept)
+    private = d / "private" / "pieces" / "certifier"
+    assert sorted(str(p.relative_to(private)) for p in private.rglob("*") if p.is_file()) == sorted(moved)
+    assert (private / "chain/tie/summary.json").read_text() == "chain/tie/summary.json"
+    assert all((d / p).stat().st_mode & 0o777 == 0o700 for p in ("private", "private/pieces", "private/pieces/certifier"))
+
+
+def test_one_piece_runs_alone_or_all_but_it(tmp_path, capsys):
+    """``only`` runs the named pieces alone and ``skip`` all but them, so the certifier's can run beside the others."""
+    assert list(S.pieces(tmp_path, 1, tmp_path / "pieces", env={}, only=["certifier"])) == ["certifier"]
+    assert "the network certifier" in capsys.readouterr().out
+    assert list(S.pieces(tmp_path, 1, tmp_path / "pieces", env={}, skip=["certifier"])) == ["pouw", "pous", "bandwidth"]
+    assert "the network certifier" not in capsys.readouterr().out
+
+
 def test_a_window_past_the_slots_or_named_and_refused_is_refused(tmp_path):
     d = _serve_dir(tmp_path)
     assert S.pick(d, slots=2)["window"] == 0
@@ -86,10 +329,10 @@ def test_a_subprotocol_with_no_piece_is_named_missing_with_the_command_it_lacks(
     got = S.pieces(tmp_path, 1, tmp_path / "pieces", env={})
     lines = capsys.readouterr().out.splitlines()
     assert [g["verdict"] for g in got.values()] == ["missing"] * 4
-    assert [line.split(" (")[0] for line in lines] == ["MISSING PoUW", "MISSING the bandwidth audit", "MISSING PoUS",
+    assert [line.split(" (")[0] for line in lines] == ["MISSING PoUW", "MISSING PoUS", "MISSING the bandwidth audit",
                                                        "MISSING the network certifier"]
-    for line, (cmd, owner) in zip(lines, (("POUW_CMD", "compute-accounting"), ("BANDWIDTH_CMD", "memory-accounting"),
-                                          ("POUS_CMD", "memory-accounting"), ("CERTIFIER_CMD", "network-accounting"))):
+    for line, (cmd, owner) in zip(lines, (("POUW_CMD", "compute-accounting"), ("POUS_CMD", "memory-accounting"),
+                                          ("BANDWIDTH_CMD", "memory-accounting"), ("CERTIFIER_CMD", "network-accounting"))):
         assert f"({cmd} unset; {owner}): " in line
     assert not (tmp_path / "pieces").exists()
 
@@ -123,7 +366,7 @@ def test_a_piece_runs_within_its_limit_and_one_out_of_time_or_refused_says_so(tm
     env = {"PATH": f"{bin_}:{os.defpath}", "PIECE_TIMEOUT": "7m", "BANDWIDTH_TIMEOUT": "0", "BANDWIDTH_CMD": "true",
            "POUS_CMD": 'echo "PoUS REFUSED: the card has a compute process" > "$3/refused.txt"; exit 3'}
     got = S.pieces(tmp_path, 1, tmp_path / "pieces", env=env, node="n")
-    assert (tmp_path / "limits").read_text().split() == ["0", "7m"]
+    assert (tmp_path / "limits").read_text().split() == ["7m", "0"]
     assert got["bandwidth"] == {"verdict": "error", "rc": 124,
                                 "reason": "its piece ran (exit 124, out of time at 0) and wrote no answer; "
                                           "its log is bandwidth/piece.log"}
@@ -195,6 +438,23 @@ def test_an_accepted_pous_answer_says_when_its_weights_were_held_their_share_and
                              "it except with 1/100 + 2^-128)")
     assert line["reason"] == report["composed"]["reason"] == rec["composed"]["onsite"]["reason"]
     assert line["reason"].startswith("sampled proofs: accept; ")
+
+
+def test_an_accepted_certifier_answer_says_what_its_trusted_host_premise_rests_on(tmp_path):
+    """The network certifier's answer as its piece writes it when the warden ran on the gate's host and its checks, draws
+    and coins on the served node: its accept's clause says the premise is assumed and why, so the ``RECORD`` line's
+    accept isn't read as the auditor's devices having placed it."""
+    premise = ("assumed, the auditor's devices not placed: the network certifier ran on 204.12.178.84, not the prover's "
+               "vy-dc-h200, but the chain's checks and draws, the period check and their proofs' coins ran on vy-dc-h200")
+    (d := tmp_path / "certifier").mkdir()
+    (d / "answer.json").write_text(json.dumps({
+        "protocol": "verity/certifier/v0", "verdict": "accept", "reason": None, "commitment": "cd" * 64,
+        "public": {"K": 15764, "eps": "1/100", "windows": 1},
+        "profile": {"placement": {"kind": "not-placed", "trusted-host": premise}}}))
+    (d / S.RAN).write_text(json.dumps({"server": "vy-dc-h200", "rc": 0, "limit": "60m"}))
+    _report, _rec, line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
+                                   servers={k: S.piece_server(k, tmp_path) for k in [*S.PIECES, "wipe"]})
+    assert line["reason"].split("; the network certifier: ", 1)[1].startswith(f"accept (trusted-host {premise}; ")
 
 
 def test_an_audit_that_wrote_nothing_composes_to_reject_with_no_block_record(tmp_path):
@@ -331,6 +591,49 @@ def test_the_record_accepts_only_when_every_subprotocol_accepts_on_its_node_and_
     else:
         assert line["missing"] == {} and line["elsewhere"] == {name: "vy-dc-h200-2"}
         assert rec["legs"][leg]["server"] == "vy-dc-h200-2" and rec["composed"]["elsewhere"] == [leg]
+
+
+def test_remote_runs_no_onsite_piece_and_composes_sampled_proofs_and_pouw_alone(tmp_path, monkeypatch, capsys):
+    """PRODUCT=remote: `pieces` runs PoUW's piece and no onsite one, whatever its command, printing a DROPPED line for
+    each; the record names PoUS, the bandwidth audit, the network certifier and the wipe dropped, neither missing nor
+    composed, whatever their pieces left, and composes accept from sampled proofs' and PoUW's accepts on its node. The
+    same pieces composed for onsite reject on the wipe's answer."""
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
+    pieces, ran = tmp_path / "pieces", tmp_path / "ran"
+    pouw = {"verdict": "accept", "reason": None, "commitment": "ef" * 64, **ACCEPTS["pouw"]}
+    env = {"POUW_CMD": f"echo '{json.dumps(pouw)}' > \"$3/answer.json\"",
+           **{f"{c}_CMD": f"touch {ran}" for c in ("POUS", "BANDWIDTH", "CERTIFIER")}}
+    got = S.pieces(tmp_path, 1, pieces, env=env, node="vy-dc-h200", product="remote")
+    why = "not run: the remote product composes sampled proofs and PoUW alone"
+    assert not ran.exists()
+    assert got == {"pouw": {"verdict": "accept", "rc": 0},
+                   **{c: {"verdict": "dropped", "why": why} for c in ("pous", "bandwidth", "certifier")}}
+    dropped = [x.split(" (")[0] for x in capsys.readouterr().out.splitlines() if x.startswith("DROPPED ")]
+    assert dropped == ["DROPPED PoUS", "DROPPED the bandwidth audit", "DROPPED the network certifier"]
+    (pieces / "wipe").mkdir()
+    (pieces / "wipe" / "answer.json").write_text(json.dumps(WIPE_REJECT))
+    (pieces / "wipe" / S.SERVED).write_text(json.dumps({"server": "vy-dc-h200"}))
+    (tmp_path / "serve").mkdir()
+    argv = ["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1", "--sampled-proofs",
+            str(tmp_path / "audit"), "--pieces", str(pieces), "--out", str(tmp_path / "record"), "--node", "vy-dc-h200",
+            "--product", "remote"]
+    rc = S.main(argv)
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    rec = json.loads((tmp_path / "record" / "block-record.json").read_text())
+    jsonschema.Draft202012Validator(SCHEMA).validate(rec)
+    assert rc == 0 and line["check"] == {} == BR.check(rec)
+    assert (line["product"], line["composed"], line["record_missing"], line["missing"]) == ("remote", "accept", [], {})
+    names = ("PoUS", "the bandwidth audit", "the network certifier", "the wipe")
+    assert line["dropped"] == {n: why for n in names} and all(line["verdicts"][n] == "dropped" for n in names)
+    assert line["reason"] == "sampled proofs: accept; PoUW: accept; " + "; ".join(f"{n}: dropped, {why}" for n in names)
+    assert (rec["composed"]["product"], rec["composed"]["dropped"]) == ("remote", ["bandwidth", "certifier", "pous", "wipe"])
+    assert rec["composed"]["legs"] == {"integrity": "accept", "pouw": "accept"} and rec["legs"]["wipe"] is None
+    report = json.loads((tmp_path / "record" / "verdicts.json").read_text())
+    assert report["protocols"]["wipe"] == {"verdict": "dropped", "owner": "memory-accounting", "why": why}
+    assert S.main([*argv, "--product", "onsite"]) == 1
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    assert (line["product"], line["composed"], line["by"]) == ("onsite", "reject", ["the wipe"])
 
 
 SID = "s20261026T221500Z-ab12"
@@ -525,10 +828,13 @@ def _circuits(tmp_path: Path, classes: str, answers: dict) -> tuple[int, list[st
 
 def test_the_class_of_record_is_measured_after_the_gating_classes_and_its_timeout_fails_nothing(tmp_path):
     rc, lines, limits = _circuits(tmp_path, "4,32,4", {"4,32,4": "count", "record": "expire"})
-    assert rc == 0 and limits == ["30m", "20m"], (rc, lines)
+    assert rc == 0 and limits == ["30m", "45m"], (rc, lines)
     assert lines[0].startswith("WINDOW-CIRCUIT class 4,32,4: registered 7 bits, free 3 bits of 10 input bits at the "
                                "weights registration's pins; ")
-    assert lines[1:] == ["WINDOW-CIRCUIT class record (measurement) timed out after WC_RECORD_TIMEOUT=20m (exit 124): no count"]
+    assert lines[1:] == ["WINDOW-CIRCUIT class record (measurement) timed out after WC_RECORD_TIMEOUT=45m (exit 124): no count"]
+    published = json.loads((tmp_path / "out" / "window-circuit-4-32-4.json").read_text())
+    kept = json.loads((tmp_path / "serve" / "window-circuit-4-32-4.count.json").read_text())
+    assert "bits" not in published and '"bits"' not in lines[0] and kept["bits"] == 772 and published["count"] == kept["count"]
 
 
 @pytest.mark.parametrize("classes, answers, refused", [
@@ -543,7 +849,309 @@ def test_any_class_of_classes_that_does_not_count_fails_the_run(tmp_path, classe
     assert rc != 0 and sum(line.startswith(refused) for line in lines) == 1, lines
     assert any("prove_path.py window-circuit: refused at" in line for line in lines) == (answers.get("8,64,4") == "refuse")
     measured = [line for line in lines if line.startswith("WINDOW-CIRCUIT class record (measurement)")]
-    assert len(measured) == (classes != "record") and limits[-1] == ("30m" if classes == "record" else "20m")
+    assert len(measured) == (classes != "record") and limits[-1] == ("30m" if classes == "record" else "45m")
+
+
+W63K4 = "8,32,4,4,16"
+FAKE_V3C_PROVE_PATH = f'''import json, os, sys
+from pathlib import Path
+a = sys.argv[1:]
+open(os.environ["ORDER"], "a").write(a[0] + "\\n")
+out = Path(a[a.index("--out") + 1])
+assert a[a.index("--class") + 1] == "{W63K4}"
+if a[0] == "window-circuit":
+    out.write_text("{{}}")
+    print(json.dumps({{"bits": 772, "count": {{"free": 3, "inputs": 10, "registered": 7, "units": 1}}}}))
+else:
+    assert a[0] == "window-commit"
+    out.mkdir(parents=True)
+    (out / "circuit.json").write_text(json.dumps({{"run": "ab"}}))
+    print(json.dumps({{"run": "ab", "circuit": "cd", "population": 37, "sources": {{"pad": 3}}, "window": 7}}))
+'''
+FAKE_RECORDS_AUDIT = '''import json, os, sys
+from pathlib import Path
+a = sys.argv[1:]
+open(os.environ["ORDER"], "a").write(a[0] + "\\n")
+out = Path(a[a.index("--out") + 1])
+if a[0] == "audit":
+    out.mkdir(parents=True)
+    (out / "summary.json").write_text("{}")
+    print("RECORDS " + json.dumps({"verdict": "accept", "population": 37, "window": 7}))
+    sys.exit(0)
+assert a[0] == "period" and a[a.index("--audit") + 1] == str(out.parent / "audit")
+if os.environ.get("FAIL_PERIOD"):
+    print("records_audit.py period: the audit under it wrote no Program", file=sys.stderr)
+    sys.exit(1)
+out.write_text(json.dumps({"free": 0}))
+print("PERIOD " + json.dumps({"verdict": "accept"}))
+'''
+CHAIN = 'echo chain >> "$ORDER"; printf "%s\\n" "$@" > "$ORDER.args"; echo "chain on window $2"'
+PERIOD = 'echo period-check >> "$ORDER"; cp "$4/period.json" "$3/"; echo \'{"verdict": "accept"}\' > "$3/answer.json"; echo checked'
+
+
+def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), **extra: str | None) -> tuple[int, list[str], list[str], list[str]]:
+    """`served_verdicts.sh v3c` (or ``args``) on window 7 of a toy serve dir at the certifier's class, in a toy tree whose
+    prove_path.py and records_audit.py note each step they run, its builds stubbed and the split certifier's two commands
+    set (``extra`` adds to the environment, None unsetting): the exit status, the verdict lines, the steps in order and the
+    limits."""
+    tree, bin_, venv, d = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin", tmp_path / "serve"
+    for p in (tree / "benchmarks" / "prove_path", tree / ".venv" / "bin", tree / "verity" / "core" / "service" / "flock",
+              tree / "verity" / "core" / "service" / "sampled_proofs", tree / "verity" / "ml" / "flock" / "pod", bin_, venv,
+              d / "advice" / "w7" / "private", tmp_path / "row"):
+        p.mkdir(parents=True)
+    (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(FAKE_V3C_PROVE_PATH)
+    (tree / "benchmarks" / "prove_path" / "records_audit.py").write_text(FAKE_RECORDS_AUDIT)
+    (tree / "verity" / "ml" / "flock" / "pod" / "60-circuit.sh").write_text("exit 0\n")
+    for f in (d / "advice" / "w7" / "private" / "advice.bin", tmp_path / "row" / "manifest.json",
+              tmp_path / "row" / "build_summary.json", tmp_path / "h.so", tmp_path / "n.so"):
+        f.write_text("")
+    (d / "weights_registration.json").write_text("{}")
+    _write(d, "windows.jsonl", [{"window": 7, "run_root": "ab" * 64}])
+    # the toy tree's verity/ directories, on the PYTHONPATH the script sets and as `python -`'s working directory, would
+    # shadow the installed verity
+    py = f'unset PYTHONPATH\nexport PYTHONSAFEPATH=1\n[ "$1 $2" = "-m research" ] && exit 0\nexec {sys.executable} "$@"'
+    for path, body in ((venv / "python", py), (tree / ".venv" / "bin" / "python", py),
+                       (bin_ / "timeout", f'[ "$1" = -k ] && shift 2\necho "$1" >> {tmp_path}/limits; shift; exec "$@"'),
+                       (bin_ / "gpu-lease", "exit 99"), (bin_ / "uv", "exit 0"), (bin_ / "lake", "exit 0")):
+        _script(path, body)
+    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "K": "7",
+           "OUT": str(tmp_path / "out"), "SERVE_ROOT": str(tmp_path / "root"), "FLOCK_WORK": str(tmp_path / "fw"),
+           "ROW": str(tmp_path / "row"), "HIDDEN_SO": str(tmp_path / "h.so"), "NORM_TAP_SO": str(tmp_path / "n.so"),
+           "ORDER": str(tmp_path / "order"), "H1_GATE": "", "V3C_CLASS": W63K4, "CLASSES": W63K4,
+           "CERTIFIER_CHAIN_CMD": CHAIN, "CERTIFIER_PERIOD_CMD": PERIOD}
+    env = {k: v for k, v in {**env, **extra}.items() if v is not None}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), *args], cwd=tree, env=env, check=False,
+                        capture_output=True).returncode
+    read = lambda f: (tmp_path / f).read_text().split() if (tmp_path / f).exists() else []  # noqa: E731
+    return rc, (tmp_path / "out" / "verdicts.txt").read_text().splitlines(), read("order"), read("limits")
+
+
+def test_v3c_runs_the_certifiers_chain_beside_its_audit_and_its_period_check_on_the_period_json_after(tmp_path):
+    """The window commit, then the split certifier's chain (it reads the commit's scan state) beside V3c's audit and its
+    period.json, and the certifier's period check on it once both are done, each within its own limit; the check gets
+    the serve dir, the window, the certifier's piece dir and V3c's dir, and writes the answer `pieces` reads there. The
+    two steps' logs, which count the window's requests, end in the serve dir's private/pieces/certifier, not in $OUT,
+    which leaves the node. $OUT then names no window and counts none of its own (the window commit's population, the
+    audit's, the chain's window): each line is whole in the serve dir's private/verdicts.txt, each file in its private/out."""
+    rc, lines, order, limits = _v3c(tmp_path)
+    assert rc == 0, lines
+    assert order[:2] == ["window-circuit", "window-commit"] and order[-1] == "period-check"
+    assert sorted(order[2:-1]) == ["audit", "chain", "period"] and order.index("audit") < order.index("period")
+    assert limits[:2] == ["30m", "120m"] and sorted(limits[2:-1]) == ["180m", "4h"] and limits[-1] == "60m"
+    vw, pieces = tmp_path / "serve" / f"v3c-w7-{W63K4.replace(',', '-')}", tmp_path / "out" / "pieces" / "certifier"
+    assert (tmp_path / "order.args").read_text().split() == [str(tmp_path / "serve"), "7", str(pieces), str(vw)]
+    assert not _window_data(tmp_path / "out", 7), _window_data(tmp_path / "out", 7)
+    held = (tmp_path / "serve" / "private" / "verdicts.txt").read_text()
+    assert "chain on window 7" in held and '"population": 37' in held and "chain on window K" in "\n".join(lines)
+    assert '"population": 37' in (tmp_path / "serve" / "private" / "out" / "v3c-audit" / "audit.log").read_text()
+    assert json.loads((pieces / "answer.json").read_text()) == {"verdict": "accept"}
+    assert json.loads((tmp_path / "out" / "v3c-audit" / "period.json").read_text()) == {"free": 0}
+    heads = [line.split(" (")[0].split(":")[0] for line in lines]
+    assert heads[:3] == [f"WINDOW-CIRCUIT class {W63K4}", f"WINDOW-COMMIT class {W63K4}",
+                         f"WINDOW-CIRCUIT-HELD class {W63K4}"] and heads[-1] == "CERTIFIER-PERIOD"
+    assert sorted(heads[3:-1]) == ["CERTIFIER-CHAIN", f"V3C-AUDIT class {W63K4}", "V3C-PERIOD"]
+    assert lines[2].endswith("PASS") and lines[heads.index("V3C-PERIOD")].endswith('PERIOD {"verdict": "accept"}')
+    private = tmp_path / "serve" / "private" / "pieces" / "certifier"
+    assert (private / "chain.log").read_text().strip() == "chain on window 7"
+    assert (private / "period.log").read_text().strip() == "checked"
+    assert not (pieces / "chain.log").exists() and not (pieces / "period.log").exists()
+
+
+def test_v3c_with_no_period_json_runs_no_period_check_and_fails(tmp_path):
+    """V3c's audit wrote no period.json: no period check, and `served_verdicts.sh v3c` exits 1 once it has moved the
+    chain's log to the serve dir's private/pieces/certifier."""
+    rc, lines, order, _limits = _v3c(tmp_path, FAIL_PERIOD="1")
+    assert rc == 1 and order[:2] == ["window-circuit", "window-commit"]
+    assert sorted(order[2:]) == ["audit", "chain", "period"] and order.index("audit") < order.index("period")
+    assert any("the audit under it wrote no Program" in x for x in lines[-3:-1])
+    assert lines[-1] == "CERTIFIER-PERIOD: not run: V3c wrote no period.json"
+    pieces = tmp_path / "out" / "pieces" / "certifier"
+    assert not (pieces / "answer.json").exists() and not (pieces / "chain.log").exists()
+    assert (tmp_path / "serve" / "private" / "pieces" / "certifier" / "chain.log").exists()
+
+
+@pytest.mark.parametrize("args, extra, line", [
+    (("v3c",), {"CERTIFIER_CMD": "true", "CERTIFIER_PERIOD_CMD": None},
+     "PREFLIGHT: CERTIFIER_CMD or the split's CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD, not both"),
+    ((), {"V3C_CLASS": "", "CERTIFIER_CHAIN_CMD": None},
+     "PREFLIGHT: the split certifier's period check reads V3c's period.json, and V3C_CLASS is empty"),
+])
+def test_the_split_certifier_needs_v3c_and_no_whole_piece_beside_it(tmp_path, args, extra, line):
+    """The split's period check writes the certifier's answer from V3c's period.json, so the preflight refuses it beside
+    CERTIFIER_CMD, the whole piece's command, and in a run that leaves V3c out, before anything runs."""
+    rc, lines, order, _limits = _v3c(tmp_path, args, **extra)
+    assert (rc, lines, order) == (3, [line], [])
+
+
+def _script(path: Path, body: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f"#!/bin/sh\n{body}\n")
+    path.chmod(0o755)
+
+
+FRONT = '"$PY" benchmarks/network_traces/certifier_piece.py front "$1" "$2" "$3" --bucket-ms 4000 --warmup 0'
+
+
+IDS = "--protocol ids --id-payload 503"
+
+
+@pytest.mark.parametrize("load, front, takes, serve_args, line", [
+    ("varied", FRONT, "--gate --warmup --bucket-ms", IDS, None),
+    ("front", FRONT, "--gate --warmup --bucket-ms", IDS, None),
+    ("varied", "", "", "", None),
+    ("varied", FRONT, "--gate --warmup --bucket-ms-x", IDS, "PREFLIGHT: CERTIFIER_FRONT passes --bucket-ms, which this "
+                                                             "tree's certifier front doesn't take"),
+    ("front", "", "", "", "PREFLIGHT: LOAD=front sends the front's group alone, and CERTIFIER_FRONT is unset"),
+    ("front", FRONT, "--gate --warmup --bucket-ms", "--seal-hold-gb 8", "PREFLIGHT: the certifier front's warden sends "
+     "id-form requests, which serve-openai answers only under SERVE_ARGS='--protocol ids --id-payload 503'"),
+])
+def test_the_preflight_refuses_a_front_flag_the_trees_front_does_not_take_and_a_front_load_with_no_front(
+        tmp_path, load, front, takes, serve_args, line):
+    tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
+    (tree / "benchmarks" / "network_traces").mkdir(parents=True)
+    (tree / "benchmarks" / "network_traces" / "certifier_piece.py").write_text(
+        f"import sys\nassert sys.argv[1:] == ['front', '--help']\nprint('usage: certifier_piece.py front PORT [{takes}]')\n")
+    _script(venv / "python", f'exec {sys.executable} "$@"')
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
+           "LOAD": load, "CERTIFIER_FRONT": front, "SERVE_ARGS": serve_args}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
+                        check=False).returncode
+    said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines() if (tmp_path / "out" / "verdicts.txt").exists() else []
+    assert (rc, said) == ((3, [line]) if line else (0, []))
+
+
+@pytest.mark.parametrize("product, extra, line", [
+    ("remote", {}, None),
+    ("remote", {"POUS_CMD": "true"}, "PREFLIGHT: PRODUCT=remote runs no onsite piece, and POUS_CMD is set: unset it"),
+    ("remote", {"CERTIFIER_CHAIN_CMD": "true"},
+     "PREFLIGHT: PRODUCT=remote runs no onsite piece, and CERTIFIER_CHAIN_CMD is set: unset it"),
+    ("remote", {"CERTIFIER_FRONT": FRONT},
+     "PREFLIGHT: PRODUCT=remote runs no onsite piece, and CERTIFIER_FRONT is set: unset it"),
+    ("onsite", {}, None),
+    ("offsite", {}, "PREFLIGHT: PRODUCT is onsite or remote, not offsite"),
+])
+def test_remote_sets_no_onsite_default_and_its_preflight_refuses_an_onsite_command(tmp_path, product, extra, line):
+    """PRODUCT=remote drops the onsite pieces: in a tree that has the wipe's piece its default WIPE_CMD isn't set, and
+    the preflight refuses any onsite piece's command set, before anything runs."""
+    tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
+    _script(tree / "benchmarks" / "pous" / "streamed_wipe" / "served_wipe.sh", "exit 0")
+    _script(venv / "python", f'exec {sys.executable} "$@"')
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
+           "PRODUCT": product, **extra}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
+                        check=False).returncode
+    said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines() if (tmp_path / "out" / "verdicts.txt").exists() else []
+    assert (rc, said) == ((3, [line]) if line else (0, []))
+
+
+def test_settings_are_read_before_the_defaults_and_an_unreadable_file_is_refused(tmp_path):
+    """SETTINGS names the file a load's counts are launched from, so the job record's command holds only its path."""
+    tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
+    tree.mkdir()
+    _script(venv / "python", f'exec {sys.executable} "$@"')
+    settings = tmp_path / "private" / "settings.env"
+    settings.parent.mkdir()
+    settings.write_text("LOAD=front\nCERTIFIER_FRONT=\n")
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
+           "SETTINGS": str(settings)}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
+                        check=False).returncode
+    said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines()
+    assert (rc, said) == (3, ["PREFLIGHT: LOAD=front sends the front's group alone, and CERTIFIER_FRONT is unset"])
+    got = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree,
+                         env={**env, "SETTINGS": str(tmp_path / "missing.env")}, check=False, capture_output=True, text=True)
+    assert (got.returncode, got.stderr.strip()) == (3, f"PREFLIGHT: SETTINGS={tmp_path / 'missing.env'} is not a readable file")
+
+FAKE_COMPOSITE = '''import json, sys
+from pathlib import Path
+COMPONENTS = {"onsite": ("verity/pous/p2/v4/run", "verity/wipe/v0"),
+              "remote": ("verity/pouw/v1", "verity/sampled-proofs/one-stage/v2")}
+if __name__ == "__main__":
+    a = sys.argv[1:]
+    Path(a[a.index("--private-out") + 1]).mkdir(parents=True)
+    Path(a[a.index("--public-out") + 1]).mkdir(parents=True)
+    Path(a[a.index("--public-out") + 1], "composite.json").write_text(json.dumps({"product": a[0]}))
+    cases = [a[i + 1] for i, x in enumerate(a) if x == "--cases"]
+    Path(a[a.index("--private-out") + 1], "argv.json").write_text(json.dumps(cases))
+    print("PIECE verity/pous/p2/v4/run accept 0123456789abcdef0123")
+    print("NOT_ESTABLISHED missing verity/wipe/v0")
+    print(f"VERDICT verity/{a[0]}/v0 reject components")
+    sys.exit(1)
+'''
+
+
+def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_lean_verdict(tmp_path):
+    """served_composite.sh with a stand-in lake, served_case.sh, served_cases.py and composite.py: PoUS's case is written
+    under the serve dir's private dir with both Lean answers built and passed, and served_cases.py's under it, given no α
+    or Γ while ALPHA and GAMMA are unset; each product gets the cases of its own subprotocols; OUT/verdicts.txt gets each
+    CASE line's protocol and verdict, each case not written by its protocol, and each product's NOT_ESTABLISHED and
+    VERDICT lines, never a PIECE line, a reason, a log or a path; each product's public output is OUT/composite/PRODUCT;
+    and without composite.py in the tree it says so and fails, since no Lean answered. PRODUCT=remote needs no
+    served_case.sh, writes neither PoUS's case nor the wipe's, and runs remote's Lean alone."""
+    tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
+    out.mkdir()
+    _script(bin_ / "lake", 'mkdir -p .lake/build/bin && touch ".lake/build/bin/$2"')
+    _script(bin_ / "systemd-run", "exit 1")
+    _script(tree / "benchmarks" / "pous" / "served_case.sh", f'''set -e
+[ -x "$POUS_EXE" ] && [ -x "$WIPE_EXE" ] && [ "$1" = {out}/pieces ] && [ "$MEM_GB" = 170 ]
+for w in pous/w0 other; do mkdir -p {d}/private/$w; echo '{{"evidence": "beef"}}' > {d}/private/$w/case.json; done
+echo '{{"protocol": "verity/pous/p2/v4/run", "verdict": "accept"}}' > {d}/private/pous/w0/answer.json
+echo '{{"protocol": "verity/certifier/v9", "verdict": "accept"}}' > {d}/private/other/answer.json
+echo "CASE: evidence beef"
+echo 'CASE {{"piece": "{d}/private/pous/w0", "protocol": "verity/pous/p2/v4/run", "verdict": "accept"}}' ''')
+    for pkg in ("protocols/pous/check", "devices/memory_challenger/lean", "protocols/remote", "protocols/onsite"):
+        (tree / "verity" / "core" / pkg).mkdir(parents=True)
+    (tree / "benchmarks" / "one_stage").mkdir(parents=True)
+    (tree / "benchmarks" / "one_stage" / "composite.py").write_text(FAKE_COMPOSITE)
+    v2 = d / "private" / "sampled-proofs-v2"
+    (tree / "benchmarks" / "one_stage" / "served_cases.py").write_text(f'''import json, sys
+from pathlib import Path
+assert sys.argv[1:] == ["--serve-dir", "{d}", "--private", "{d}/private", "--from-division"], sys.argv
+Path("{v2}").mkdir(parents=True)
+Path("{v2}", "case.json").write_text(json.dumps({{"evidence": "beef"}}))
+Path("{v2}", "answer.json").write_text(json.dumps({{"protocol": "verity/sampled-proofs/one-stage/v2", "verdict": "accept"}}))
+print("CASE " + json.dumps({{"protocol": "verity/sampled-proofs/one-stage/v2", "verdict": "accept", "dir": "{v2}"}}))
+print("CASE " + json.dumps({{"protocol": "verity/registration/v0", "verdict": "accept", "dir": "{d}/private/reg", "alpha_gamma": "235330880/1544757928"}}))
+print("NOT_WRITTEN " + json.dumps({{"protocol": "verity/inference-only/v0", "reason": "no alpha 0123456789abcdef"}}))
+sys.exit(1)
+''')
+    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable}
+    run = lambda: subprocess.run(["bash", str(HERE.parent / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,  # noqa: E731
+                                 check=False, capture_output=True, text=True)
+    r = run()
+    assert r.returncode == 0, r.stderr
+    assert (out / "verdicts.txt").read_text().splitlines() == [
+        "COMPOSITE CASE verity/pous/p2/v4/run accept", "COMPOSITE CASES: served_case.sh exit 0",
+        "COMPOSITE CASE verity/sampled-proofs/one-stage/v2 accept",
+        "COMPOSITE CASE verity/registration/v0 accept",
+        "COMPOSITE NOT_WRITTEN verity/inference-only/v0",
+        "COMPOSITE CASES: served_cases.py exit 1, its log on the node",
+        "COMPOSITE remote: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE remote: VERDICT verity/remote/v0 reject components",
+        "COMPOSITE onsite: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE onsite: VERDICT verity/onsite/v0 reject components"]
+    p = d / "private" / "composite"
+    assert json.loads((p / "remote" / "private" / "argv.json").read_text()) == [str(v2)]
+    assert json.loads((p / "onsite" / "private" / "argv.json").read_text()) == [str(d / "private" / "pous" / "w0")]
+    assert oct((d / "private").stat().st_mode & 0o777) == "0o700"
+    assert sorted(out.iterdir()) == [out / "composite", out / "verdicts.txt"]
+    assert sorted(f.relative_to(out).as_posix() for f in (out / "composite").rglob("*") if f.is_file()) == [
+        "composite/onsite/composite.json", "composite/remote/composite.json"]
+    (tree / "benchmarks" / "one_stage" / "composite.py").unlink()
+    (out / "verdicts.txt").unlink()
+    shutil.rmtree(out / "composite")
+    assert run().returncode == 1
+    assert (out / "verdicts.txt").read_text() == "COMPOSITE: not run, this tree has no benchmarks/one_stage/composite.py\n"
+    (tree / "benchmarks" / "one_stage" / "composite.py").write_text(FAKE_COMPOSITE)
+    (tree / "benchmarks" / "pous" / "served_case.sh").unlink()
+    (out / "verdicts.txt").unlink()
+    shutil.rmtree(d / "private")
+    env["PRODUCT"] = "remote"
+    r = run()
+    assert r.returncode == 0, r.stderr
+    assert (out / "verdicts.txt").read_text().splitlines() == [
+        "COMPOSITE CASE verity/sampled-proofs/one-stage/v2 accept", "COMPOSITE CASE verity/registration/v0 accept",
+        "COMPOSITE NOT_WRITTEN verity/inference-only/v0", "COMPOSITE CASES: served_cases.py exit 1, its log on the node",
+        "COMPOSITE remote: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE remote: VERDICT verity/remote/v0 reject components"]
+    assert sorted(x.name for x in (out / "composite").iterdir()) == ["remote"] and not (p / "onsite").exists()
 
 
 DIGEST = "5e" * 64

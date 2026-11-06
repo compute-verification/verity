@@ -5,6 +5,7 @@ defaultTargets = ["Grader", "pous-grader"]
 [leanOptions]
 autoImplicit = false
 relaxedAutoImplicit = false
+backward.proofsInPublic = true
 
 [[lean_lib]]
 name = "Grader"

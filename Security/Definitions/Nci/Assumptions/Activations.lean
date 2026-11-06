@@ -1,4 +1,6 @@
-import Definitions.Nci.Links
+module
+
+public import Definitions.Nci.Links
 
 /-!
 # NCI's activations premise over all of training's counted multiplications
@@ -9,6 +11,8 @@ gradients) span many chains that share their activations, so a bound per chain c
 `ActivationsIncompressibleAll` states the same charge once, over every counted multiplication of the reference circuit,
 with the chain's links generalized to `Threading.Links`.
 -/
+
+@[expose] public section
 
 namespace Nci.Assumptions
 

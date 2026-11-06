@@ -1,4 +1,6 @@
-import Definitions.Pouw.PearlC.Sha512
+module
+
+public import Definitions.Pouw.PearlC.Sha512
 
 /-!
 # J10-R: H1's noise from one seed a call, at call scale (trusted; definitions only)
@@ -28,6 +30,8 @@ scheme replaces.
   `callCompressionsNum M N k R C` is J10-R's over the call's `units M N R C` units when each block is derived once a
   call: the call's blocks and seed_c's two, and each unit's σ_R (two) and its lanes' key blocks.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.J10R
 

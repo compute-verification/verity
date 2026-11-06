@@ -1,5 +1,7 @@
-import Properties.NetworkScan
-import Proofs.Properties.Nci.BodiesOk
+module
+
+public import Properties.NetworkScan
+public import Proofs.Properties.Nci.BodiesOk
 
 /-!
 # What `NetworkCheck.Period.scanOf`'s acceptance gives of the scan's Program
@@ -10,6 +12,8 @@ egress template's node (a batch of `T`, returning a u16 and the row, every leaf 
 returned by the root in one run), each step's ingress bucket (`Ingress`: a batch member, its first parameter the row,
 its first argument one input node's leaves), and the Program topological (`Prog.orderViolation`), which part (3) reads.
 -/
+
+@[expose] public section
 
 namespace Properties.NetworkScan.Fits
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.SideCapRead
+module
+
+public import Proofs.Flock.Claims.Recursion.SideCapRead
 
 /-!
 # The reader's caps above level 0 (`SideCapUp`), at the deployed `finalR` and `DeployedR.layR`
@@ -21,6 +23,8 @@ deployed last message those rows are the rounds' openings (`openPieces`), so the
 `sideCapUp_of` gives `SideCapUp` at SHA-512, `layR elem` and the bound record at `finalR` from `ReadsAt` and
 the opened position's range (`PosCapUp`), and `sideCapR_deployed` puts it with level 0 (`sideCapR_of`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.CapLower
 
@@ -375,7 +379,7 @@ theorem topSize_cap {x : Msg} {r : XR} (hr : readX x = some r) {rs : Array RecVS
     (hrs : repSched r.shape = some rs) {g n : ℕ} (hn : (RecVStar.topSizes rs)[g]? = some n) :
     ∃ s : _root_.Flock.Schedule, _root_.Flock.fast100 r.shape.m = some s ∧ n = 2 ^ (s.levels[g + 1]!).cap := by
   obtain ⟨vs, hvs, -⟩ := readX_statements hr
-  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, _, _, K, N, hK, hT, rfl⟩ := FlockC3.Reps.list_ok hvs
+  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, _, _, K, Lk, N, hK, hT, -, rfl⟩ := FlockC3.Reps.list_ok hvs
   have hsz := topsListed_size hT hrs
   obtain ⟨hg', -⟩ := List.getElem?_eq_some_iff.1 hn
   have hg : g < K.size := by rw [hsz]; exact hg'

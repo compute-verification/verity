@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.Mixture
-import Proofs.Flock.Claims.Bridge.Returns
+module
+
+public import Proofs.Flock.Claims.KS.Mixture
+public import Proofs.Flock.Claims.Bridge.Returns
 
 /-!
 # The self-clash after `Commit` arises only on accepted live runs
@@ -15,6 +17,8 @@ output, at the reps' pendings on their runs of their whole decoded tapes, the ca
 the proof files decode to, self-clashes (`LiveSelfClash`, `selfClash_le_live`). Averaged over a mixture of live
 strategies, so is the mean (`mean_selfClash_le_live`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

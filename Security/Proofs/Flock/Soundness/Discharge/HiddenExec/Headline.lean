@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
 
 /-!
 # The headline over hidden-output sessions, with every open guarantee named
@@ -17,6 +19,8 @@ binding (`lay`, `rs`, `hHm`) at those tables. What it leaves open is named in it
   interface;
 * the assumptions of record: A3 (`hA3`), `cr/sha-512` (`hKS`), `ecr/sha-512` (`hCR`); A6 is the live session.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.HiddenExec
 

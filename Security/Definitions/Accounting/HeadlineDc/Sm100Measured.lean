@@ -1,4 +1,6 @@
-import Definitions.Accounting.HeadlineDc.Sm100
+module
+
+public import Definitions.Accounting.HeadlineDc.Sm100
 
 /-!
 # B200 (sm_100)'s measured headline instance: DC-100-ri and `dither-2s-licpw-redux-ldtm0-l32` (trusted; generated)
@@ -22,6 +24,8 @@ this file. `Accounting.Guarantees.TS.Sm100MeasuredHeadline` reads it.
   DC-100-ri), at FFMA's price.
 * `lamStar`: π*, the certificate minimising the bound over this menu (issue 1.000000).
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Headline.Sm100Measured
 

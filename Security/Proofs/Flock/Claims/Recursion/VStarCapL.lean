@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.VStarCap0
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarCap0
 
 /-!
 # A later level's rows at its cap's port `top` (`portRow_capl`)
@@ -13,6 +15,8 @@ round `rep · R + k + 1`. Where the two reps' tops differ (`sameTop` refuses the
 `n` nodes, then rep 1's (`topsAt_two`), so the cap's instance `rep · n + t` reads rep `rep`'s `t`-th row back whole
 (`topRows_fit`, `capIn_ok`, `portRow_ownRows`), unchanged at the fitted port inputs (`fitPin`, `fitPortRow_top`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarBuild
 

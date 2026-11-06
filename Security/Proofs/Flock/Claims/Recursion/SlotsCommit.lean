@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.RecOpen
-import Proofs.Flock.Soundness.Discharge.Hm.Commit
+module
+
+public import Proofs.Flock.Claims.Recursion.RecOpen
+public import Proofs.Flock.Soundness.Discharge.Hm.Commit
 
 /-!
 # `ReadersTrue` at `layoutBTops`, from the hm96 slots' commit strings
@@ -25,6 +27,8 @@ a staged part sets up one table holding its whole population, which the verifier
 commits (`slotCommits_of_hm96`): `SlotCommits` holds wherever the slot's columns carry a satisfying hm96 assignment on
 the row and salt it reads (`Hm.hm96_commit`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

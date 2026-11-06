@@ -1,4 +1,6 @@
-import Proofs.Properties.Nci.BodiesOk.Basic
+module
+
+public import Proofs.Properties.Nci.BodiesOk.Basic
 
 /-!
 # What `Prog.orderViolation` checks
@@ -7,6 +9,8 @@ import Proofs.Properties.Nci.BodiesOk.Basic
 a composite among them, and each such composite's nodes name only parameters and earlier nodes (`Checked`). Its loops
 stop at the first violation, so each level is a `for` loop whose state carries an optional verdict (`forIn_all`).
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.BodiesOk
 open Flock.Program

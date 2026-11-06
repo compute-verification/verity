@@ -78,6 +78,10 @@ class LinearError(RuntimeError):
     pass
 
 
+class NoIssue(LinearError):
+    """Linear has no issue of that identifier that these credentials can read."""
+
+
 def _http(url: str, data: bytes, headers: dict, timeout: float = 30) -> dict:
     req = urllib.request.Request(url, data=data, method="POST", headers=headers)
     with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -641,9 +645,42 @@ class Linear:
                  {"id": issue["id"], "s": to["id"]})
         return to["name"]
 
+    def _issue(self, issue: str, fields: str) -> dict:
+        """The issue a team key and number identify, with `fields`; `NoIssue` when Linear has none."""
+        try:
+            return self.gql(f"query($id: String!) {{ issue(id: $id) {{ {fields} }} }}", {"id": issue})["issue"]
+        except LinearError as e:
+            if "Entity not found" in str(e):
+                raise NoIssue(f"Linear has no issue {issue} that {self.mode} can read") from None
+            raise
+
     def issue_id(self, issue: str) -> str:
-        """The id of the issue an identifier such as `INF-12` names."""
-        return self.gql("query($id: String!) { issue(id: $id) { id } }", {"id": issue})["issue"]["id"]
+        """The id of the issue an identifier such as `INF-12` names; `NoIssue` when Linear has none."""
+        return self._issue(issue, "id")["id"]
+
+    def issue_labels(self, issue: str) -> list[str]:
+        """The names of the labels of the issue a team key and number identify, sorted; `NoIssue` when Linear has none."""
+        return sorted(x["name"] for x in self._issue(issue, "labels { nodes { name } }")["labels"]["nodes"])
+
+    def link_pr(self, issue_id: str, url: str) -> bool:
+        """Attach the GitHub pull request at `url` to the issue (its id) as Linear's GitHub integration would, which is off
+        for this repository, so a PR body's magic words link nothing: True, or False when the issue has it attached already.
+        Attached to other issues only, it is refused, naming them."""
+        q = ("mutation($i: String!, $u: String!) { attachmentLinkGitHubPR(issueId: $i, url: $u) "
+             "{ success attachment { id url } } }")
+        try:
+            r = self.gql(q, {"i": issue_id, "u": url})["attachmentLinkGitHubPR"]
+        except LinearError as e:
+            if "Duplicate attachment" not in str(e):
+                raise
+            q = "query($u: String!) { attachmentsForURL(url: $u) { nodes { issue { id identifier } } } }"
+            on = [n["issue"] for n in self.gql(q, {"u": url})["attachmentsForURL"]["nodes"]]
+            if any(i["id"] == issue_id for i in on):
+                return False
+            raise LinearError(f"{url} is attached to {', '.join(i['identifier'] for i in on) or 'another issue'} already") from None
+        if not r["success"]:
+            raise LinearError(f"Linear didn't link {url}: attachmentLinkGitHubPR returned success false")
+        return True
 
     def issues(self, team: str, state: str | None = None) -> list[dict]:
         """The team's open issues, or those in the state named `state`, oldest first: {identifier, title, state: {name}}."""

@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.ZkSessionW
-import Proofs.Flock.Claims.KS.OffSC
-import Proofs.Flock.Claims.KS.ZkEntries
+module
+
+public import Proofs.Flock.Claims.KS.ZkSessionW
+public import Proofs.Flock.Claims.KS.OffSC
+public import Proofs.Flock.Claims.KS.ZkEntries
 
 /-!
 # Off the masked table on a witness lane without a self-clash, at the deployed reader
@@ -14,6 +16,8 @@ verifying openings of one position with different rows are a self-clash, so the 
 there have one row. `exists_ne_of_zk_entries` is it with the entries given as one list equation, which `ZkEntries`
 gives at `Zk.verifyRep`'s acceptance (`zk_table_opens₀Z`).
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 

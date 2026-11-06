@@ -1,6 +1,6 @@
 """The dependency rules (AGENTS.md "Map and commands") as import-boundary checks over ``verity/``, and the one over ``infra/``.
 
-    ml.circuits <- ml.commitments -> ml.crypto;  ml.randomness, ml.crypto and core.claims import no unit;  the
+    ml.circuits <- ml.commitments -> ml.crypto;  ml.randomness, ml.crypto, core.claims and hardware import no unit;  the
     catalog (ml.circuits.ops, .silicon, .targets) and the kernels (ml.kernels) build on ml.circuits, and the served
     workloads' Definitions (ml.definitions) on the catalog and the kernels;
     ml.circuits <- core.protocols.profile;  each protocol imports ml, the profile and the protocols it names in
@@ -16,7 +16,9 @@ An import is an import statement (a relative one resolved against its package), 
 ``importlib.import_module``, ``__import__`` or ``importorskip``, or a ``"module:attr"`` string naming what to load at run
 time: a module named as data is still a dependency.  Tests (``tests/``) are suites of their own and declare what they read;
 a ``lean/`` directory holds a Lean package and the scripts that write its vectors, run by path.  The trees in ``SEPARATE``
-have import roots of their own, and only the rule that ml never imports core reads them; it reads ml's tests too.
+have import roots of their own, and only the rule that ml never imports core reads them; it reads ml's tests too.  No other
+file under ``verity/``, tests included, reads another distribution at run time: its package data or a module named in a
+string (`RUN_TIME_READ`, matched in the text, f-strings too).
 
 numpy is a core dependency (architecture decision: `verity.ml.circuits.evaluation` batches over numpy arrays).  The
 plain-integer references stay numpy-free on purpose, because they are the specification the Rust guest, the Lean vectors and
@@ -46,6 +48,8 @@ ALLOWED = {
     "ml.circuits": set(),
     "ml.randomness": set(),
     "ml.crypto": set(),
+    # the card files, one TOML a SKU, and their loader: the one source of each card's numbers
+    "hardware": set(),
     "ml.commitments": {"ml.circuits", "ml.crypto"},
     # the catalog and the kernels, distributions of their own before the platform layout
     "ml.circuits.silicon": {"ml.circuits"},
@@ -68,6 +72,9 @@ ALLOWED = {
     # it, signs and verifies only through keys its caller hands it, and checks a configuration against what a protocol and
     # a workload declare to it, so neither gains an ml edge.
     "core.wire": set(),
+    # The Site, the registered hardware: its locations, links and registration log, the check each entry passes and the
+    # views a protocol reads. Its digests are canonical JSON's, the wire's.
+    "core.site": {"core.wire"},
     "core.deploy": {"core.wire"},
     # The registration log every subprotocol and both composites read, the Python of `Core.Registration`: canonical JSON
     # and SHA-512 only, so it reaches no ml.
@@ -121,7 +128,7 @@ DEPENDENCIES = {"numpy"}
 #: which holds it to the wire's Python reference through ``verity_difftest``.
 SEPARATE = ("ml/flock", "core/difftest", "core/protocols/pous/check")
 #: Source subtrees that must stay stdlib-only, the scalar references, and within them what may use numpy.
-NUMPY_FREE = ("ml/circuits", "ml/randomness", "core/claims")
+NUMPY_FREE = ("ml/circuits", "ml/randomness", "core/claims", "hardware")
 NUMPY_USERS = ("ml/circuits/evaluation", "ml/circuits/boolean/forms.py", "ml/circuits/ops")
 #: ml builds on no verifier: core's frozen edges into ml (``CORE_ML_EDGES``) never run the other way.  The files of
 #: ``verity/ml/`` that import core anyway
@@ -135,7 +142,10 @@ ML_IMPORTS_CORE = {
                                              "over sampled proofs' `one_stage.partition` and `one_stage.registered`, which "
                                              "use only verity.ml; the follow-up to T2 moves them into ml "
                                              "(`verity/ml/circuits/population.py`, `verity/ml/commitments/registered.py`), "
-                                             "core imports them from there, and this entry goes",
+                                             "core imports them from there, and this entry then covers only rec_live's coin "
+                                             "server, which takes the inner session's coin tree from the challenger's device "
+                                             "through sampled proofs' `remote.RemoteChallenger` (`--tree-from`) and holds "
+                                             "its sessions to the device's release log (`challenger.coin_trees_of`)",
     "ml/flock/pod/rec_inner.py": "stages the inner statement over sampled proofs' `one_stage.partition`, as V*'s builders "
                                   "do (the rec_* entry), and moves with them in the follow-up to T2",
     "ml/flock/pod/rec_reprice.py": "builds the inner statement's population program and partition with sampled proofs' "
@@ -178,7 +188,7 @@ INFRA_IMPORTERS = {
 #: uses it.  It only shrinks.
 BENCHMARKS_IMPORTERS = {
     # the H200 example: its runner loads benchmark code by path
-    "examples/h200/e2e_h200/attention.py": "compute-accounting: kernels' attn_ref (`benchmarks/torch_gpu/attn_ref`)",
+    "examples/h200/e2e_h200/attention.py": "compute-accounting: attn_bf16's reference kernels (`benchmarks/torch_gpu/attn_bf16`)",
     "examples/h200/e2e_h200/commit.py": "compute-accounting: kernels' commit_slots (`benchmarks/torch_gpu/commit_slots`)",
     "examples/h200/e2e_h200/percall.py": "compute-accounting: J10-R's sm_90 build (`benchmarks/torch_gpu/j10r_sm90`)",
     "examples/h200/e2e_h200/store.py": "compute-accounting: P2's store (`benchmarks/pous`) and the s8 decode linear "
@@ -212,7 +222,7 @@ BENCHMARKS_IMPORTERS = {
         "verity/ml/flock/tests/test_flock_rows.py", "verity/ml/flock/tests/test_gemm_hill.py",
         "verity/ml/flock/tests/test_inner_registered.py", "verity/ml/flock/tests/test_ir_lowering.py",
         "verity/ml/flock/tests/test_ir_sampling.py", "verity/ml/flock/tests/test_lean_hidden_outputs.py",
-        "verity/ml/flock/tests/test_lean_plain_hidden.py", "verity/ml/flock/tests/test_lean_plain_hidden_tables.py",
+        "verity/ml/flock/tests/test_lean_plain_hidden_tables.py",
         "verity/ml/flock/tests/test_lean_registered_bit_rows.py", "verity/ml/flock/tests/test_lean_registered_reads.py",
         "verity/ml/flock/tests/test_lean_served_registered.py", "verity/ml/flock/tests/test_lean_session_tables.py",
         "verity/ml/flock/tests/test_lean_typed_statement.py", "verity/ml/flock/tests/test_lean_verifier.py",
@@ -348,6 +358,41 @@ def test_core_unit_imports_only_inward(unit: str) -> None:
                     or (parts[0] == "verity" and parts[1:2] != ["errors"] and target not in (None, unit, *ALLOWED[unit]))):
                 offenders.append(f"{path.relative_to(SRC)}:{line}: {name}")
     assert not offenders, "\n".join(offenders)
+
+
+#: A read of another package at run time, matched in the text: its package data (``importlib.resources``) or a module an import
+#: call names by a string, an f-string included (`_imports` sees only a whole constant handed to an import call).
+RUN_TIME_READ = re.compile(r"""\b(?:files|read_text|read_binary|open_text|open_binary|import_module|__import__|find_spec)\("""
+                           r"""\s*[rRbBuUfF]{0,2}["'](?P<name>[A-Za-z_]\w*)""")
+
+
+def _run_time_reads(text: str) -> list[tuple[int, str]]:
+    """``(line, name)`` for each read in ``text`` that `RUN_TIME_READ` matches and whose top-level name is ``FORBIDDEN_EXTERNAL``."""
+    return [(text.count("\n", 0, m.start()) + 1, m["name"]) for m in RUN_TIME_READ.finditer(text) if m["name"] in FORBIDDEN_EXTERNAL]
+
+
+def test_verity_reads_no_other_distribution_at_run_time() -> None:
+    """No Python file under ``verity/`` (tests, Lean scripts and sidecars included; a ``SEPARATE`` tree is a distribution of its own)
+    reads another distribution's package data or names one of its modules for an import call, so ``verity`` alone evaluates its
+    Definitions and no suite of it takes another distribution as an input."""
+    offenders = []
+    for path in sorted(SRC.rglob("*.py")):
+        rel = path.relative_to(SRC)
+        if {".lake", "__pycache__"} & set(rel.parts) or _separate(rel):
+            continue
+        offenders += [f"{rel}:{line}: {name}" for line, name in _run_time_reads(path.read_text(encoding="utf-8"))]
+    assert not offenders, ("verity reads another distribution at run time, and an integration may import verity but never the "
+                           "reverse: move the data or code into verity beside what reads it (as `bf16_gemm_check`'s device pins "
+                           "sit in its `device_pins/`), or take it as a parameter the caller supplies\n" + "\n".join(offenders))
+
+
+def test_a_run_time_read_is_found() -> None:
+    """The check above isn't vacuous: package data, and a module named by a string or an f-string, are each a read of their
+    distribution; ``verity``'s own package data is not."""
+    src = ('P = resources.files("verity_vllm") / "pins"\nm = importlib.import_module("verity_vllm.pins")\n'
+           "n = import_module(f'verity_vllm.{x}')\no = __import__('research')\n"
+           'q = resources.files("verity.ml.circuits.ops") / "tables"\nr = resources.files(__package__)\n')
+    assert _run_time_reads(src) == [(1, "verity_vllm"), (2, "verity_vllm"), (3, "verity_vllm"), (4, "research")]
 
 
 def test_every_source_belongs_to_a_unit_or_is_a_grouping() -> None:
@@ -685,7 +730,7 @@ def test_a_benchmarks_import_is_found() -> None:
     found; a path into another directory, a mere mention of ``benchmarks/``, and ``benchmarks/``'s own files are not."""
     texts = {
         "x/names.py": ("import verity_bench.vllm\nfrom benchmarks.tc_probe import tool\nimport importlib\n"
-                       "importlib.import_module('datacenter.graph')\nTOOL = 'benchmarks.pouw.tool:POUW_VLLM'\n"),
+                       "importlib.import_module('datacenter.graph')\nTOOL = 'benchmarks.commitments.tool:COMMIT_COST'\n"),
         "x/syspath.py": ("import sys\nfrom pathlib import Path\nPPL = Path(__file__).parents[2] / 'benchmarks' / 'ppl'\n"
                          "sys.path.insert(0, str(PPL))\nsys.path[:0] = ['../../benchmarks/rho']\n"),
         "x/config.py": "from pathlib import Path\nSESSION = Path('/r') / 'benchmarks' / 'remote_session'\n",
@@ -699,7 +744,7 @@ def test_a_benchmarks_import_is_found() -> None:
     }
     found = _benchmarks_importers(texts, {"benchmarks", "verity_bench", "datacenter"})
     assert found == {
-        "x/names.py": ["1: verity_bench.vllm", "2: benchmarks.tc_probe", "4: datacenter.graph", "5: benchmarks.pouw.tool"],
+        "x/names.py": ["1: verity_bench.vllm", "2: benchmarks.tc_probe", "4: datacenter.graph", "5: benchmarks.commitments.tool"],
         "x/syspath.py": ["4: sys.path.insert(0, str(PPL))", "5: sys.path[:0] = ['../../benchmarks/rho']"],
         "x/loader.py": ["6: importlib.util.spec_from_file_location(named(name), directory / f'{name}.py')"],
         "x/caller.py": ["2: loader.load('paged', config.SESSION.parent / 'vllm_encoded')"],

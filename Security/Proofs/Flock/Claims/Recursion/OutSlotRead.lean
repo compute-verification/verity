@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.VerdictRowEBytes
-import Proofs.Flock.Claims.Recursion.CapLowerPin
-import Proofs.Flock.Claims.Recursion.ResLowerDeployed
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRowEBytes
+public import Proofs.Flock.Claims.Recursion.CapLowerPin
+public import Proofs.Flock.Claims.Recursion.ResLowerDeployed
 
 /-!
 # A level part's copy's `out` columns are its instance's `out` row (`OutSlotTie`'s column read)
@@ -22,6 +24,8 @@ RecCap's `top` commit string at `capIdx`. The instance is the copy's own, `N`:
 openings of one registration at one position, which bind only up to a collision among the setups' own evaluations
 (`setupCalls`), outside `JointP`'s escape.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

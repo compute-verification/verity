@@ -1,5 +1,7 @@
-import Definitions.Pouw.PearlC.Defs
-import Definitions.Pouw.PearlC.Fp4
+module
+
+public import Definitions.Pouw.PearlC.Defs
+public import Definitions.Pouw.PearlC.Fp4
 
 /-!
 # Pearl-C4's chain and noise atom on the block-scaled FP4 step (trusted definitions)
@@ -18,6 +20,8 @@ The FP4 line's two uses of `Fp4Atom.step` (`pearl-c-nvfp4-v0` on `sm120Nvf4`,
   E4M3 cast of the row's noise scale (`e4m3`), read as a UE4M3 byte. MXFP4's cast of `β` to UE8M0 is not modelled yet
   (`fp-model/sm120-fp4-casts`), so `noiseAtom` takes the byte.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Fp4
 

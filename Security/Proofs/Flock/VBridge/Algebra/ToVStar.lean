@@ -1,5 +1,7 @@
-import Flock.RecAlgebra
-import Proofs.Flock.VBridge.OfVStar
+module
+
+public import Flock.RecAlgebra
+public import Proofs.Flock.VBridge.OfVStar
 
 /-!
 # E's `GfResiduals` read as V*'s
@@ -14,6 +16,8 @@ computes `resVal (gfS S) (termVal w v)` over V*'s S (`VStar.GfS`, lists) and the
   is 0, as `w[i]!` reads it).
 * `residuals_toV`: when `Algebra.residuals S w v = .ok rs`, the ports have S's sizes and `rs[r]` is V*'s residual `r`.
 -/
+
+@[expose] public section
 
 namespace Flock.RecAlgebra
 

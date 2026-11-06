@@ -1,10 +1,12 @@
-import Proofs.Flock.Soundness.LigeritoDecode
-import Proofs.Flock.Soundness.LigeritoFolds
-import Proofs.Flock.Soundness.LigeritoOOD
-import Proofs.Flock.Soundness.LigeritoQueries
+module
+
+public import Proofs.Flock.Soundness.LigeritoDecode
+public import Proofs.Flock.Soundness.LigeritoFolds
+public import Proofs.Flock.Soundness.LigeritoOOD
+public import Proofs.Flock.Soundness.LigeritoQueries
 
 /-!
-# Ligerito level by level (PROTOCOL.md §13.3)
+# Ligerito level by level (`Flock.Ligerito`)
 
 The doomed states between a level's steps:
 * `PreFold`: before a level's folds, the running claim is false for every message of the level's
@@ -15,6 +17,8 @@ The doomed states between a level's steps:
 
 `phaseB` is the folds (sumcheck and MCA), costing `foldError`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

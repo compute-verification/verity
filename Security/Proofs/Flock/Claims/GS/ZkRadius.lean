@@ -1,5 +1,9 @@
-import Proofs.Flock.Claims.GS.Radius
-import Proofs.Flock.Claims.ZkDecodeFlock
+module
+
+public import Proofs.Flock.Claims.GS.Radius
+public import Proofs.Flock.Claims.ZkDecodeFlock
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The masked level-0 code in the radius form
@@ -20,6 +24,8 @@ The masked (`--zk`) verifier's level-0 code at each `m` it serves (`Flock.flockZ
 * `zkDecodeR_complexity`: its count is at most `zkPolyR = zkPoly + X^2 + X` at the size `(os.length + n)·s·128`, with
   `zkPoly = gsBound roots128Cost (2·X^2 + 2·X) 1` (`gsBound_zk`).
 -/
+
+@[expose] public section
 
 namespace Claims.GS
 

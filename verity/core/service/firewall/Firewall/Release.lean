@@ -11,7 +11,11 @@ record again: an error is a record the firewall can't read, and the session ends
 `Firewall.Loop` runs these stages on the record's file around the session loop (`core-firewall session`), and the
 difftest's `outer` (`Firewall.Json`) runs them in turn on a record and a clock it is given.
 -/
-import Firewall.Record
+module
+
+public import Firewall.Record
+
+@[expose] public section
 
 namespace Core.Firewall
 

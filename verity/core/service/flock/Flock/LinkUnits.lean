@@ -1,3 +1,5 @@
+module
+
 /-!
 # Linking's units, read from the description (PROTOCOL.md §16.13)
 
@@ -7,6 +9,8 @@ locate a unit and a gate's unit from that list, in work proportional to the root
 `unitsRef` unrolls every member; `unitRef` and `ownerRef`, the lookups in it (the first unit whose gates hold a gate), are
 the reference they are proved equal to (`unitAt_eq`, `ownerAt_eq`, `count_eq`).
 -/
+
+@[expose] public section
 
 namespace Flock.HmLinks
 

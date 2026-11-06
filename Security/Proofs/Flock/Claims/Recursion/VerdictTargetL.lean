@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.NonVacuous
-import Proofs.Flock.Claims.Recursion.VerdictRowL
-import Proofs.Flock.Claims.Recursion.RoundCounts
+module
+
+public import Proofs.Flock.Claims.Recursion.NonVacuous
+public import Proofs.Flock.Claims.Recursion.VerdictRowL
+public import Proofs.Flock.Claims.Recursion.RoundCounts
 
 /-!
 # Row L's target
@@ -13,6 +15,8 @@ reader's (`recJ`), whose rep streams have the schedule's round counts stream by 
 `TargetZ` is proved (`targetZ`). The same per-stream counts give row R's `hsz` where the schedule's coin counts are the
 shape's `roundSizes` (`hsz_of_sched`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

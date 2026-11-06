@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.DeployedR
-import Proofs.Flock.Claims.Recursion.PartsCompose
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployedR
+public import Proofs.Flock.Claims.Recursion.PartsCompose
 
 /-!
 # `finalR`'s cut over openings laid row then salt, and commit strings laid end to end
@@ -8,6 +10,8 @@ The layout-free half of `OpensSlots`: where the openings `finalR` reads are each
 round after round, `cutRounds` at their rows' lengths gives back each round's rows and salts (`cutRounds_groups`); and
 where a round's message is 128-byte commit strings end to end, `commitAt` reads the `i`-th (`commitAt_flatten`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.CutOpens
 

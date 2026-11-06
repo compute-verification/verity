@@ -1,4 +1,6 @@
-import Definitions.Accounting.Remote
+module
+
+public import Definitions.Accounting.Remote
 
 /-!
 # The remote audit's named assumptions (trusted)
@@ -21,6 +23,8 @@ named `Prop` on a run:
 WorkHardness, the codec's cost of a partial completion, is `Accounting.Assumptions.WorkHardness`; the route it gives
 here is `Run.Rebuild`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Remote.Assumptions
 

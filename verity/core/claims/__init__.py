@@ -218,6 +218,12 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "The auditor's device runs its stated code, timing included, on a host the prover doesn't control, with its CPU "
           "isolated from other tenants and a monotonic clock; the host never restores its earlier state", "Trusted host",
           "standard"),
+    # `Verity.Assumptions.ZkServerOwnUser` (Security/Definitions/Core/Assumptions/ZkServer.lean), the premise of
+    # `Verity.Guarantees.RegisteredLeakage`: a stack is the same function under every key of the ZK server's
+    Entry("zk-server-own-user", "assumption",
+          "The ZK server's value service and its session loop run under the ZK server's own OS user, which no worker and no "
+          "serving stack shares, and the salt key's file is that user's alone, so nothing the serving stack runs reads the "
+          "key", "ZK server's own user", "standard"),
     # The four per-party assumptions of `Accounting.Assumptions.Parties` (Security/Definitions/Accounting/Assumptions/
     # Parties.lean), each about one auditor party p; the reason to believe them is that p runs on a machine the auditor
     # owns, which is not itself an assumption.  The device-attest statements (`Properties.Attest`) read them
@@ -472,6 +478,15 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "32 cells have z = A·Bᵀ and y = dq(z), or for the combine that the rows' XOR is the receipt. That every port "
           "is registered and opens at its registered root is proved from flock-verify's complete check, not assumed",
           "TS leaf checks", "conjectured"),
+    Entry("accounting-ts-group-realizes", "assumption",
+          "A leaf's group of statements (its lanes, each in n chunks along K, and its combine) realizes the leaf's "
+          "relation at the rows its sessions open: past the leaf verifier's check of the tile and its chunks, where "
+          "each session's complete, known-read and file checks pass, every served root is registered, each session "
+          "has a unit, the sessions' registrants' rows agree at one tree and position, the known rows hold, and each "
+          "session's committed rows are the port rows of a wire assignment its circuit's evaluation agrees with, the "
+          "relation holds of the leaf the layer opens. Proved at the 32 × 32 leaf with one chunk a lane from the "
+          "circuits' lowerings; at another shape no Lean states the shape's Definitions yet, and circuit-check and "
+          "h1zy's tests back it", "TS group realizes", "conjectured"),
     Entry("accounting-ts-ok-realizes", "assumption",
           "The checked unit's Flock circuit is its declared unit's: on any wire assignment the key program's "
           "evaluation agrees with at a unit, whose ok wires carry the ok row (the word 1), every check the declared "
@@ -514,8 +529,9 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "Every input the firewall's session loop takes from its host and its operating system is the session tape's: "
           "for each table's level 0, the witness's packed table at the tape's mask words and the tape's extra lanes, lane "
           "paddings and level-0 salts; for each rep, its pads, its pads tree's salts and its salts for levels 1 and up. "
-          "The loop runs on the auditor-trusted host (trusted-host), whose operating system's random bytes are the "
-          "uniform draws the tape models", "Firewall OS source", "standard"),
+          "The loop runs on the developer's own host, whose operating system's random bytes are the uniform draws the "
+          "tape models; the host is the developer's, not an auditor-trusted one, and that is the host to trust here, "
+          "since zero knowledge protects the developer", "Firewall OS source", "standard"),
 )}
 
 

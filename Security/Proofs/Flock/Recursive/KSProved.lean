@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.HresAsm
+module
+
+public import Proofs.Flock.Claims.Recursion.HresAsm
 
 /-!
 # `RecursiveKS`, proved
@@ -6,6 +8,8 @@ import Proofs.Flock.Claims.Recursion.HresAsm
 The recursive verifier's knowledge soundness at the deployed reader (`Flock.Guarantees.RecursiveKS`), from KS's residual
 leaf at the deployed readers (`RecDeploy.ResLower.recursiveKS_deployed`, which takes no hypothesis).
 -/
+
+@[expose] public section
 
 namespace Flock.SecurityProofs
 

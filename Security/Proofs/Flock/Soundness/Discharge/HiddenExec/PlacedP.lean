@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Placed
-import Proofs.Flock.Soundness.Discharge.HiddenExec.CopiesP
-import Proofs.Flock.Soundness.Discharge.Placed.KeyedP
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Placed
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.CopiesP
+public import Proofs.Flock.Soundness.Discharge.Placed.KeyedP
 
 /-!
 # `ProgPlaces` and `hConst` from `Stmt.setupHidden`'s accept at public inputs
@@ -16,6 +18,8 @@ import Proofs.Flock.Soundness.Discharge.Placed.KeyedP
   (`Placed.keyProgP`), from the sites and the parse alone; `constCols_keyProgHP` and `zeroCols_keyProgHP` are its
   `hConst` and `hZero` (a stacked input on the zero gate is off a public leaf, `AcceptedHP.zero_block`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

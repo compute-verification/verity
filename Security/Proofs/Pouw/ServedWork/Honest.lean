@@ -1,5 +1,7 @@
-import Proofs.Pouw.ServedWork
-import Proofs.Pouw.PeriodJ10R.Honest
+module
+
+public import Proofs.Pouw.ServedWork
+public import Proofs.Pouw.PeriodJ10R.Honest
 
 /-!
 # `ServedWork` is honest and nontrivial
@@ -21,6 +23,8 @@ period, conditional as `j10r_meets` is on `Credit.window`'s verdict on the windo
   every tile right at no cost), and every path is accepted and earns credit `(1 − ε(n))·N_p·n > 0` for no work, so the
   event has probability 1, past the bound `e^{−1}`.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Served.SecurityProofs.Honest
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegDelta
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegDelta
 
 /-!
 # Δ's copies at the rows, for rows of every kind
@@ -10,6 +12,8 @@ slots (`Dst`), so Δ's copies at a column of row `p` are row `p`'s (`filter_rows
 `filter_rows`' of `Wide.Copies`, whatever the other rows. `Any` restates `Wide.Copies`' copies at an unsegmented row's own
 columns (`cv0_filterAll` … `msg_filterAll`) for circuits whose other rows may be segmented.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

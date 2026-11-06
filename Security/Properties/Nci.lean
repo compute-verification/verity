@@ -1,5 +1,7 @@
-import Definitions.Nci
-import NciCheck.Check
+module
+
+public import Definitions.Nci
+public import NciCheck.Check
 
 /-!
 # The NCI check's properties, stated against the Lean function
@@ -44,6 +46,8 @@ widths, input gates and reads, which is all `size` and `Nci.novelReads` read, an
 No statement takes an assumption. What is not proved about the decoder (its `Prog.gate` is `partial`) is not needed:
 the statements read the decoder only through what it returns.
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties
 

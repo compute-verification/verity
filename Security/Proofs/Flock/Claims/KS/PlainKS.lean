@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.KS.PlainBound
-import Proofs.Flock.Claims.KS.Trim
-import Proofs.Flock.Claims.Scope.Fit
-import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
+module
+
+public import Proofs.Flock.Claims.KS.PlainBound
+public import Proofs.Flock.Claims.KS.Trim
+public import Proofs.Flock.Claims.Scope.Fit
+public import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
 
 /-!
 # The deployed plain verifier's KS from the live sessions' bound at table 0
@@ -18,6 +20,8 @@ two levels and level 0's lanes (`fast100_plainSched`, `Integrate.model_sched`), 
 is not committed to its model statement (`plain_not_committed`). `plain_tableBoundθ_live` is the bound at full-width
 columns, the form the trimmed record reads (`plain_KS_trim`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Recursive.Registrants
+module
+
+public import Proofs.Flock.Recursive.Registrants
 
 /-!
 # Recursion: a session's registered read off the table's leaf, priced by a finder of the recursive audit
@@ -17,6 +19,8 @@ which reads every session's outcome at one history, the pair is a history's, so 
   public file's digest (`FlockC3.RegLevels.regLeaf_inl`) and the path the public file header's (`regPathsHJ`), so an
   honest budget counts the audit run and, at each registered read, the two openings' recomputation.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

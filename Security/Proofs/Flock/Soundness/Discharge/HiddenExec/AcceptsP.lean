@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Proofs.Flock.Soundness.Discharge.Hidden.SpecP
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+public import Proofs.Flock.Soundness.Discharge.Hidden.SpecP
 
 /-!
 # flock-verify's acceptance at the verifier's public inputs
@@ -12,6 +14,8 @@ both are the deployed ones (`setupOfP_none`, `acceptsP_none`).
 `Hidden.setupHidden_specP`: every table of a hidden-output session accepted at `own` is its `SpecP`, at its circuit's
 public input ports.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

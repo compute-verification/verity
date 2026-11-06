@@ -1,11 +1,13 @@
-import Proofs.Flock.Claims.Recursion.AcceptedScope
-import Proofs.Flock.Claims.Recursion.BoundRun
-import Proofs.Flock.Claims.Recursion.BoundBridge
-import Proofs.Flock.Claims.Recursion.SchedCount
-import Proofs.Flock.Claims.Recursion.NextRRows
-import Proofs.Flock.Claims.Bridge.Committed
-import Proofs.Flock.Recursive.HoloRepCoins
-import Proofs.Flock.Claims.Recursion.LastCallsR
+module
+
+public import Proofs.Flock.Claims.Recursion.AcceptedScope
+public import Proofs.Flock.Claims.Recursion.BoundRun
+public import Proofs.Flock.Claims.Recursion.BoundBridge
+public import Proofs.Flock.Claims.Recursion.SchedCount
+public import Proofs.Flock.Claims.Recursion.NextRRows
+public import Proofs.Flock.Claims.Bridge.Committed
+public import Proofs.Flock.Recursive.HoloRepCoins
+public import Proofs.Flock.Claims.Recursion.LastCallsR
 
 /-!
 # The inner verifier's own calls at the deployed bound record (`hU`)
@@ -31,6 +33,8 @@ So at a statement the compiled verifier accepts, the inner-verifier calls are at
 (`innerCalls_plain_le_acc`), `c_B` bounding the inner setup's calls and `c_V` its verdict's at every oracle, both counts
 of the verifier's own code; `lamLin2_plain_ge_acc` is `λ₂ ≥ 100` there wherever `2^28 + c_B + c_V ≤ 2^55`.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

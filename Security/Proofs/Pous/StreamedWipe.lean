@@ -1,11 +1,13 @@
-import Proofs.Pous.StreamedWipe.Count
-import Proofs.Pous.StreamedWipe.Bound
-import Proofs.Pous.StreamedWipe.Deployed
-import Proofs.Pous.StreamedWipe.Disk
-import Proofs.Pous.StreamedWipe.Family
-import Proofs.Pous.StreamedWipe.Honest
-import Proofs.Pous.StreamedWipe.Server
-import Proofs.Pous.StreamedWipe.Witnesses
+module
+
+public import Proofs.Pous.StreamedWipe.Count
+public import Proofs.Pous.StreamedWipe.Bound
+public import Proofs.Pous.StreamedWipe.Deployed
+public import Proofs.Pous.StreamedWipe.Disk
+public import Proofs.Pous.StreamedWipe.Family
+public import Proofs.Pous.StreamedWipe.Honest
+public import Proofs.Pous.StreamedWipe.Server
+public import Proofs.Pous.StreamedWipe.Witnesses
 
 /-!
 # The streamed-label wipe
@@ -41,3 +43,5 @@ import Proofs.Pous.StreamedWipe.Witnesses
 
 None of them uses a named assumption.
 -/
+
+@[expose] public section

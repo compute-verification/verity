@@ -1,11 +1,13 @@
-import Definitions.NetworkCertifier
-import Definitions.NetworkCertifier.Assumptions
-import Mathlib.Data.Sym.Card
-import Mathlib.Data.Set.Card
-import Mathlib.Data.Fintype.Pi
-import Mathlib.Order.Interval.Finset.Fin
-import Mathlib.Algebra.BigOperators.Fin
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
+module
+
+public import Definitions.NetworkCertifier
+public import Definitions.NetworkCertifier.Assumptions
+public import Mathlib.Data.Sym.Card
+public import Mathlib.Data.Set.Card
+public import Mathlib.Data.Fintype.Pi
+public import Mathlib.Order.Interval.Finset.Fin
+public import Mathlib.Algebra.BigOperators.Fin
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 /-!
 # The network certifier's lemmas
@@ -15,6 +17,8 @@ a document cites: the occupancy facts, Theorem 1(b)'s counting bound and the adv
 specialises. Each is a `def G : Prop` under the guarantees' namespace, proved by `NetTiming.SecurityProofs.G`, so they
 are audited with them and pinned by no record.
 -/
+
+@[expose] public section
 
 namespace NetTiming.Guarantees
 

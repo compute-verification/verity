@@ -1,7 +1,9 @@
-import Proofs.Flock.Bridge.Defs
-import Proofs.Flock.Claims.Sampling.Deployed
-import Proofs.Flock.Soundness.Binding.RowSeg
-import Proofs.Flock.Soundness.Discharge.Layout.Scope
+module
+
+public import Proofs.Flock.Bridge.Defs
+public import Proofs.Flock.Claims.Sampling.Deployed
+public import Proofs.Flock.Soundness.Binding.RowSeg
+public import Proofs.Flock.Soundness.Discharge.Layout.Scope
 
 /-!
 # The deployed sampling commitment at a C-Flock session
@@ -42,6 +44,8 @@ and the registered path check). A `sha512/row-seg/v1` row's outer message is not
 openings of one leaf are a SHA-512 collision of a segment's message (`Binding.RowSeg.extPair_spec`), which the leaf's
 queries don't make.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

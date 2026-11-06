@@ -1,4 +1,4 @@
-"""The first recursive session's inner side (hiding model architectures, lane rec-v0; ``80-rec-inner.sh``): the inner
+"""The first recursive session's inner side (hiding model architectures; ``80-rec-inner.sh``): the inner
 statement staged as M0's ``verity/flock-circuit`` over RoPE d64, proved by the unmodified prover against
 ``verity_flock.rec_live``'s proxy and challenger.
 
@@ -25,16 +25,28 @@ statement staged as M0's ``verity/flock-circuit`` over RoPE d64, proved by the u
     python rec_inner.py forge --what top|unsalted --inner DIR
                                                              top: flips one byte of rep 0's level-1 top in private.json;
                                                              unsalted: public.json's tops as their clear nodes (no salts)
+    python rec_inner.py release-parts --statements REC_STATEMENTS --windows-s CLASS=S,...
+                                                             the recursive session's parts (V*'s statements as 85 names them,
+                                                             in rec-statements' order) and its release windows (85's RELEASE)
+    python rec_inner.py release-report --state DIR --session ID [--times FILE ...]
+                                                             that session on the ZK server's record against its schedule:
+                                                             each part's release time, when the Lean loop decided it, the
+                                                             slack and the outcome; exit 1 unless every part was released
+    python rec_inner.py tree-held --challenger DIR SESSION...
+                                                             each rec_live session's coins held to the challenger's release
+                                                             log (tree_held); exit 1 unless every one is its tree's
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 
 from verity_flock import circuit as FC
+from verity_flock import rec_budget as RB
 from verity_flock import rec_live as RL
 from verity_flock import rec_vstar as V
 from verity_flock.record_text import session_text
@@ -75,7 +87,8 @@ def _shape(out: Path, low, sub_id: str, n: int, part: dict) -> dict:
     blocks = -(-n // G)
     return {"subcircuit": sub_id, "unit": low.name, "n": n, "vus_per_block": G, "k_log": meta["k_log"],
             "units_per_vu": meta["units_per_vu"], "unit_log": meta["unit_log"], "unit_rows": low.layout.useful,
-            "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"], "blocks": blocks,
+            "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"], "unit_ands": low.layout.counts["ands"],
+            "blocks": blocks,
             "m": meta["k_log"] + max(3, (blocks - 1).bit_length()), "leaf_scheme": meta["leaf_scheme"]["id"],
             "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text), "partition_digest": P.digest(part),
             "program_sha512": part["program"], **({"registration": meta["registration"]} if "registration" in meta else {})}
@@ -92,6 +105,7 @@ def stage(n: int, sets: Path, out: Path, plain_leaves: bool = False, sparse=None
     from verity.core.protocols.sampled_proofs.one_stage import partition as P
     from verity_numerical.bench import templates as TM
 
+    RB.check_inner(n)
     sub = TM.parse_subcircuit_id(subcircuit) if subcircuit else TM.rope_head(64)
     s, low, part, program = _population(sub, n, sets, seed)
     FC.stage(low, s, 0, n, out, partition=P.digest(part), program=part["program"],
@@ -121,6 +135,7 @@ def stage_window(window: Path, k: int, subcircuit: str, sets: Path, out: Path, z
     win = json.loads((window / "window.json").read_text())
     mem = win["members"][k]
     n = int(mem["n"])
+    RB.check_inner(n)
     s, low, part, program = _population(TM.parse_subcircuit_id(subcircuit), n, sets, SEED)
     if P.digest(part) != win["partition_digest"]:
         raise ValueError(f"{subcircuit} at n = {n}: partition {P.digest(part)[:16]}, not the window's "
@@ -191,6 +206,98 @@ def forge(what: str, inner: Path, level: int = 0, record: str = "session") -> di
     return {"forged": what, "record": record, "stream": STREAM, "k": k, "coin": 0, **({"level": level} if what == "query" else {})}
 
 
+def release_parts(units: list[str]) -> list[str]:
+    """V*'s statements (``rec-statements``' list, in its order) named as 85 stages them: RecOpen's levels ``L0``, ``L1``, ..
+    in order, the algebra's parts ``alg-p<j>``, a later level's cap ``cap-L<l>``, level 0's cap ``cap``, and any other by
+    its unit's name. The recursive session's parts, in the order its proofs leave."""
+    out, level = [], 0
+    for u in units:
+        kind, _, rest = u.partition("/")
+        if kind == "rec-open":
+            out.append(f"L{level}")
+            level += 1
+        elif kind == "rec-residuals" and (m := re.search(r"-p(\d+)$", rest)):
+            out.append(f"alg-p{m[1]}")
+        elif kind == "rec-cap":
+            out.append(f"cap-L{m[1]}" if (m := re.search(r"-l(\d+)$", rest)) else "cap")
+        else:
+            out.append(u)
+    if len(set(out)) != len(out):
+        raise ValueError(f"V*'s statements {units} name the same part twice: {out}")
+    return out
+
+
+def window_class(part: str, spec: dict[str, int]) -> str:
+    """The class of ``spec`` (`release_windows_ms`) a part's window is: L0 its own if named, then L, alg, cap, else other."""
+    if part == "L0" and "L0" in spec:
+        return "L0"
+    for c, pat in (("L", r"L\d+"), ("alg", r"alg-p\d+"), ("cap", r"cap(-L\d+)?")):
+        if re.fullmatch(pat, part):
+            return c
+    return "other"
+
+
+def release_windows_ms(parts: list[str], spec: str) -> list[int]:
+    """The release schedule's windows (`verity_flock.firewall`, rule 3), one a part, from ``spec``: comma-separated
+    ``CLASS=SECONDS`` (`window_class`), and ``lead=SECONDS``, added to the first part's: what comes between the inner
+    session's connection and the first outer session (the inner proof, icheck, vstage, vcap, oprove's setup)."""
+    s = {k: int(v) for k, v in (kv.split("=", 1) for kv in spec.split(",") if kv)}
+    missing = sorted({window_class(p, s) for p in parts} - set(s))
+    if missing:
+        raise ValueError(f"RELEASE_WINDOWS_S={spec}: no window for {', '.join(missing)} ({parts})")
+    ws = [1000 * s[window_class(p, s)] for p in parts]
+    ws[0] += 1000 * s.get("lead", 0)
+    if not all(w > 0 for w in ws):
+        raise ValueError(f"RELEASE_WINDOWS_S={spec}: every window is positive, not {ws}")
+    return ws
+
+
+def release_report(state: Path, session: str, times: list[dict]) -> dict:
+    """The recursive session ``session`` on the ZK server's record in ``state`` against its release schedule: each part's
+    window, its release time, when the Lean session loop decided it (``times``, its ``FIREWALL-TIMES`` lines), the
+    slack between them, and its outcome on the record. ``ok`` when the inner session finished and every part was released,
+    in order, at its scheduled time, with no stop and no refusal."""
+    ev = [json.loads(ln) for ln in (state / "record.jsonl").read_text().splitlines() if ln.strip()]
+    mine = [e for e in ev if e.get("session") == session]
+    (open_,) = [e for e in mine if e["event"] == "open"]
+    r, parts = open_.get("release"), open_["parts"]
+    at = {t["part"]: t for t in times if t.get("session") == session}
+    rows = []
+    for j, p in enumerate(parts):
+        sched = r["start_ms"] + sum(r["windows_ms"][:j + 1]) if r else None
+        outs = [e["event"] for e in mine if e.get("part") == p and e["event"] in ("release", "stop", "refused")]
+        t = at.get(p, {})
+        rows.append({"part": p, "window_ms": r["windows_ms"][j] if r else None, "release_ms": sched,
+                     "ready_ms": t.get("ready_ms"), "decided": t.get("outcome"), "record": outs,
+                     "slack_ms": None if sched is None or t.get("ready_ms") is None else sched - t["ready_ms"],
+                     "loop_release_ms": t.get("release_ms")})
+    order = [e["part"] for e in mine if e["event"] == "release"]
+    bad = [e for e in mine if e["event"] in ("stop", "refused")]
+    finished = any(e["event"] == "finish" for e in mine)
+    ok = (finished and r is not None and order == parts and not bad
+          and all(x["record"] == ["release"] and x["decided"] == "go" and x["loop_release_ms"] == x["release_ms"] for x in rows))
+    return {"session": session, "stream": open_["stream"], "start_ms": r and r["start_ms"], "parts": rows,
+            "released": order, "stops": bad, "inner_finished": finished, "ok": ok,
+            "schedule_ms": r and sum(r["windows_ms"])}
+
+
+def tree_held(challenger: Path, sessions: list[Path]) -> dict:
+    """Each rec_live session directory of ``sessions`` held to the release log in ``challenger`` (`rec_live.tree_held_reason`):
+    its coin server's record (``public.json``) and its coin tree (a stopped session's ``coin_tree.json``, else its session
+    record's ``coin_tree``)."""
+    from verity.core.protocols.sampled_proofs import remote as R
+
+    held = []
+    for d in sessions:
+        ct = d / "coin_tree.json"
+        tree = json.loads(ct.read_text()) if ct.exists() else json.loads((d / "session" / "session.json").read_text())["coin_tree"]
+        held.append((d.name, tree, json.loads((d / "public.json").read_text())))
+    why = RL.tree_held_reason(R.log_lines(challenger / R.RELEASES), held)
+    return {"sessions": [n for n, _, _ in held], "reason": why, "ok": why is None,
+            "held_by": "rec_live.tree_held_reason, the Python mirror of SampledProofs.Challenger.innerTreesReason, which "
+                       "the recursive audit reads"}
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     sp = ap.add_subparsers(dest="cmd", required=True)
@@ -216,7 +323,37 @@ def main(argv=None) -> int:
     fg.add_argument("--inner", required=True)
     fg.add_argument("--level", type=int, default=0)
     fg.add_argument("--record", choices=("session", "prover"), default="session")
+    rp = sp.add_parser("release-parts")
+    rp.add_argument("--statements", required=True, help="flock-verify rec-statements' output (its RECVSTAR line)")
+    rp.add_argument("--windows-s", required=True, help="CLASS=SECONDS,... (release_windows_ms)")
+    rr = sp.add_parser("release-report")
+    rr.add_argument("--state", required=True)
+    rr.add_argument("--session", required=True)
+    rr.add_argument("--times", nargs="*", default=[], help="files holding the Lean session loop's FIREWALL-TIMES lines")
+    th = sp.add_parser("tree-held")
+    th.add_argument("--challenger", required=True, help="the challenger's directory (its releases.jsonl)")
+    th.add_argument("sessions", nargs="+", help="rec_live's session directories (public.json beside session/)")
     a = ap.parse_args(argv)
+    if a.cmd == "tree-held":
+        res = tree_held(Path(a.challenger), [Path(s) for s in a.sessions])
+        json.dump(res, sys.stdout, sort_keys=True, indent=1)
+        print()
+        return 0 if res["ok"] else 1
+    if a.cmd == "release-parts":
+        (line,) = [json.loads(ln[9:]) for ln in Path(a.statements).read_text().splitlines() if ln.startswith("RECVSTAR ")]
+        units = [s[0] for s in line["statements"]]
+        parts = release_parts(units)
+        json.dump({"units": units, "parts": parts, "windows_ms": release_windows_ms(parts, a.windows_s),
+                   "windows_s": a.windows_s}, sys.stdout, sort_keys=True)
+        print()
+        return 0
+    if a.cmd == "release-report":
+        times = [json.loads(ln.split(" ", 1)[1]) for f in a.times for ln in Path(f).read_text().splitlines()
+                 if ln.startswith("FIREWALL-TIMES ")]
+        res = release_report(Path(a.state), a.session, times)
+        json.dump(res, sys.stdout, sort_keys=True, indent=1)
+        print()
+        return 0 if res["ok"] else 1
     if a.cmd == "stage":
         if bool(a.stacked) != bool(a.sparse):
             ap.error("--stacked and --sparse come together: R is the bucket's table")

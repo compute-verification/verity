@@ -1,5 +1,7 @@
-import Proofs.Flock.Recursive.Stage
-import Proofs.Flock.Recursive.ForkRuns
+module
+
+public import Proofs.Flock.Recursive.Stage
+public import Proofs.Flock.Recursive.ForkRuns
 
 /-!
 # Recursion: every outcome of V*'s sessions is written
@@ -14,6 +16,8 @@ reaches does (`Leaves.outcome`). It passes through `bind`, `map`, `play` and `se
 `prob_recT_le` reads `leaves_sessions` at the outcomes the transported prover reaches, so the checked sessions' gate
 (`Flock.Guarantees.keepOwn`, a written, accepted transcript) holds where the event's does (`acceptsV_checked`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 

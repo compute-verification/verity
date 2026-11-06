@@ -1,5 +1,7 @@
-import Definitions.Pouw.H1Zy.Combine
-import Mathlib.Algebra.BigOperators.Fin
+module
+
+public import Definitions.Pouw.H1Zy.Combine
+public import Mathlib.Algebra.BigOperators.Fin
 
 /-!
 # `PouwH1LaneZy_v1{TILE}` on words, at a 32 × 32 leaf over `PouwH1Tile_v1` (trusted)
@@ -29,6 +31,8 @@ The dequant (`PouwZyDequant_v2`'s word view, `PouwZyDequant_v1`, three float rou
 chain's words the parameter `chain` (`chainOf (h1Chain K)` in `LeafLanesSound`); everything else is stated here. The leaf's `PouwH1Tile_v3` form computes z from the
 chain's words instead of EXACT, and is not stated here.
 -/
+
+@[expose] public section
 
 namespace Pouw.H1Zy
 

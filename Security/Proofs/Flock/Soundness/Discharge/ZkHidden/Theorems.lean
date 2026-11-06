@@ -1,9 +1,11 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
-import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Flat
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
-import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Flat
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 
 /-!
 # The theorems of `Statements.lean`
@@ -11,6 +13,8 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 The tables' theorems hold from the session alone (`drawSetupZKH_of_acceptsU`, `tablesAtZKH_liveU`), so each circuit
 form, `HmOut.parse`'s and the statement circuit's (`…St`, `HmOut.parseStmt`), reads them.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkHidden
 

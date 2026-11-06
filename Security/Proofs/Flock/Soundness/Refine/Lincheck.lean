@@ -1,9 +1,11 @@
-import Proofs.Flock.Soundness.Refine.Zerocheck
-import Proofs.Flock.Soundness.Refine.Realizes
-import Proofs.Flock.Level3.Folded
+module
+
+public import Proofs.Flock.Soundness.Refine.Zerocheck
+public import Proofs.Flock.Soundness.Refine.Realizes
+public import Proofs.Flock.Level3.Folded
 
 /-!
-# The lincheck refines the model's (PROTOCOL.md §10)
+# The lincheck refines the model's (`Flock.Piop`)
 
 `lincheck_refines`: if the executable's `lincheck` succeeds, on a statement whose circuit fold realizes the model
 statement `S` (`FoldRealizes`) and on the zerocheck's output, the model's `lincheck`, played with the proof's lincheck
@@ -14,6 +16,8 @@ After the rounds the executable takes the 64 entries left from the statement (`C
 column vector halved at each round's challenge (`halve`, `FoldRealizes.folded`); the model folds it after the rounds
 (`foldAll`). `foldl_halve` shows the two agree on the 64 entries left.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 
@@ -143,7 +147,7 @@ theorem cClaim_rel {m : ℕ} (zc : Flock.ZcOut) (zc' : Model.ZcOut 𝔽 m) (hzc 
     ClaimRel m { value := zc.vC, skip := skipWeights zc.z, x := zc.rRest } (Model.cClaim execArith zc') :=
   ⟨hzc.vc, skipWeights_size _, fun s => by simp only [Model.cClaim, hzc.z]; rfl, hzc.r_size, hzc.r⟩
 
-/-- **The lincheck refines the model's** (PROTOCOL.md §10). If the executable's lincheck succeeds from `t` to `t'`, on
+/-- **The lincheck refines the model's** (`Flock.Piop`). If the executable's lincheck succeeds from `t` to `t'`, on
 a circuit fold realizing `S` and on a zerocheck output that is the model's `zc'`, the model's lincheck on `zc'`, played
 with the proof's lincheck messages and the coins of the rounds consumed, returns the executable's `ab` claim, read in
 the model's field. -/

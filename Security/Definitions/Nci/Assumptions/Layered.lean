@@ -1,4 +1,6 @@
-import Definitions.Nci.Layered
+module
+
+public import Definitions.Nci.Layered
 
 /-!
 # NCI over threads: the reference circuit is keyed
@@ -9,6 +11,8 @@ a transformer block at Kimi K2's shapes, not in Lean: no Lean reference circuit 
 `Layered` on. Until one does, it is a named conjecture, stated over a reference circuit `c` and its threading `T` as
 `WeightsIncompressible` is.
 -/
+
+@[expose] public section
 
 namespace Nci.Assumptions
 

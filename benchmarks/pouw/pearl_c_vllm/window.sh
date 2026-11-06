@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The e2e's timed window on node 2, from the run tree's root, with GPU 1's build.sh output tarred as
+# The e2e's timed window on setup.sh's node, from the run tree's root, with GPU 1's build.sh output tarred as
 # pearl-c-sm120-ship.tar:
 #   research run --on MACHINE --project verity --source <run tree> --cwd source \
 #     --env GPU_LEASE_WHO=<you> --send pearl-c-sm120-ship.tar -- \
@@ -9,7 +9,7 @@
 #  2. the ship: its MANIFEST.sha256 holds and its run.py is the tree's;
 #  3. GPU 1's device check on this cubin, v1 (G = 4) only, no timing (run.py check.json, SHAPES empty);
 #  4. e2e.py: every mode's own gates, then its timing, then pearlc's verify pass, retained under $WORK/passes/<run id> (about
-#     45 GB on node 2's /workspace, outside the run directory, so custody does not upload it).  Before e2e.py writes a
+#     45 GB on the node's /workspace, outside the run directory, so custody does not upload it).  Before e2e.py writes a
 #     retained pass, its directory gets a retention record (`research keep`, priority keep, never expiring, owned by
 #     the benchmark's handle; KEEP_PRIORITY, KEEP_EXPIRES and KEEP_OWNER override them), and the window fails KEEP
 #     without one.

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.Wald
+module
+
+public import Proofs.Flock.Claims.Recursion.Wald
 
 /-!
 # The composed extractor: the outer extractor, then the inner one
@@ -20,6 +22,8 @@ with `E₂`'s coins; its judged draw is the judged run's coins `r₀` with `E₂
   (`KSLin_of_servedERep`, `KS_servedERep`, `KSLin_servedERep`), with an extraction-based finder's linear term folded in
   through `Finder.either`, which runs two finders and outputs a collision either finds.
 -/
+
+@[expose] public section
 
 namespace Claims
 
