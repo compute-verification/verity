@@ -15,7 +15,8 @@
 * a circuit reading registered values is audited against the entries the verifier pinned, each under its own domain
   (`pinned`), and refused before any draw without them, a record that lists its members (a served window's) as one that
   states them; one whose program takes values only tied to the earlier registration that registered them first
-  (`tie_of`), its readers' reads registered at that record's roots;
+  (`tie_of`), its readers' reads registered at that record's roots; the summary states the entry its registered reads
+  opened each of the window's own values at;
 * a window's audit is one compute audit of the network certifier's period (`period`), its scan state's reads registered;
 * `source` and the negatives refuse what the records don't bind, and `fixed_before_draw` refuses advice re-committed after
   the coins;
@@ -747,7 +748,37 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
     summary = json.loads((tmp_path / "out" / "summary.json").read_text())
     assert summary["tie"] == {"record": R.digest(got.w), "values": [got.name]}
     assert summary["registered"]["roots"] == summary["registered"]["pins"] == {got.name: got.entry["root"]}
+    assert summary["registered"]["own"] == {}
     assert summary["leak"]["registered"] == 8 * 8 * K and "unpinned" not in summary["leak"]
+
+
+def test_the_summary_states_the_entry_the_registered_reads_opened_the_windows_own_scan_state_at(tmp_path, monkeypatch):
+    """A window whose circuit reads its own scan state (`RA.TIED`, committed in its registration's ``activations``):
+    every --registered file reads it at that entry's root and domain, and the summary states the entry
+    (``registered.own``), which the onsite record holds to the one the period ties to its scan's state. The sessions
+    (`a5.audit`) are stubbed and sample nothing, so the audit doesn't pass."""
+    import a5 as A5
+    import a5_coins as AC
+
+    got = _registered(tmp_path / "w", name=RA.TIED, own=True)
+    rec = json.loads((got.dir / "registration.json").read_text())
+    entry, seen = rec["window"]["activations"]["values"][RA.TIED], {}
+
+    def audit(a, sets, out, mine, served, source, port, summary, more, **kw):
+        seen.update(registered=kw["registered"])
+        return {"audit": {"accepted": True}}, True
+
+    session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
+    monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
+    monkeypatch.setattr(A5, "audit", audit)
+    monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
+    assert RA.main(["audit", "--window", str(got.dir), "--law", LAW, "--circuit", rec["window"]["circuit"], "--run", RUN,
+                    "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--skip-negatives",
+                    "--challenger", "local", "--main", "m.txt", "--out", str(tmp_path / "out")]) == 1
+    ports = [p for f in seen["registered"].values() for p in f["ports"].values()]
+    assert ports and {(p["value"], p["root"], p["domain"]) for p in ports} == {(RA.TIED, entry["root"], entry["domain"])}
+    summary = json.loads((tmp_path / "out" / "summary.json").read_text())
+    assert summary["registered"]["own"] == {RA.TIED: entry}
 
 
 def _audited(window: Path, out: Path, registration: dict | None = None, accepted: bool = True) -> Path:
