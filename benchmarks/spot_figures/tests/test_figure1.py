@@ -95,6 +95,16 @@ def test_a_line_at_zero_is_captioned_and_coincident_lines_drawn_once():
     assert f.captions(1.0, zeros={"exfiltration": ["zero"]})["exfiltration"].endswith(" At 0, so not drawn: zero.")
 
 
+def test_a_references_cards_caption_joins_its_panels_captions():
+    line = {"label": "x", "unit": "bit", "value": 1.0, "source": "s"}
+    notes = f.reference_notes([
+        {"value": {"lines": [line | {"panel": "exfiltration"}] * 2, "caption": "Caps."}},
+        {"value": {"lines": [line | {"panel": "skipped_work"}]}}])
+    assert notes == {"exfiltration": ["Caps."]}
+    caps = f.captions(1.0, notes=notes)
+    assert caps["exfiltration"].endswith(" Caps.") and "Caps." not in caps["skipped_work"]
+
+
 def test_the_infiltration_panel_draws_its_card(card_dir, tmp_path):
     xs = [1.0, 1.5e8, 1e14]
     card = envelope("infiltration", "GLM-5.3", {

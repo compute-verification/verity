@@ -86,3 +86,7 @@ def test_references_cards_add_up_the_models_first(tmp_path, monkeypatch):
     assert cards.path("references", "GLM-5.3", "art:" + "a" * 64).name == "references.glm-5.3.aaaaaaaaaaaa.json"
     assert [c["art"][4] for c in cards.load_all("references", "GLM-5.3")] == ["a", "b", "c"]
     assert [c["art"][4] for c in cards.load_all("references", "DeepSeek-V4-Pro")] == ["d", "c"]
+    cards.write(ref | {"model": "GLM-5.3", "art": "art:" + "e" * 64}, replaces=("art:" + "b" * 64,))
+    assert [c["art"][4] for c in cards.load_all("references", "GLM-5.3")] == ["a", "e", "c"]
+    with pytest.raises(FileNotFoundError, match="replaces"):
+        cards.write(ref | {"model": "GLM-5.3", "art": "art:" + "f" * 64}, replaces=("art:" + "b" * 64,))

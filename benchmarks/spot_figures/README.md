@@ -20,9 +20,11 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   ~~~sh
   uv run python benchmarks/spot_figures/cards.py check CARD.json
   research data put --kind spot-card/v1 --file CARD.json --preserve --json
-  uv run python benchmarks/spot_figures/cards.py fetch art:...
+  uv run python benchmarks/spot_figures/cards.py fetch art:... [--replaces art:OLD]
   uv run python benchmarks/spot_figures/cards.py list
   ~~~
+
+  A `references` card's optional `caption` is appended to the caption of each panel it has lines on.
 
   A model without a `workload` card is refused; no census is guessed from a model's config. A `workload` card marks a
   stratum whose Definition has no cut on main `modeled` and gives the whole circuit's MACs a token

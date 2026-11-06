@@ -386,6 +386,16 @@ def references(c: dict[str, InputCard], model: str, refs: list[dict] = ()) -> di
     return out
 
 
+def reference_notes(refs: list[dict]) -> dict[str, list[str]]:
+    """Each panel's sentences from the `references` cards with lines on it: a card's `caption`."""
+    out: dict[str, list[str]] = {}
+    for card in refs:
+        if note := card["value"].get("caption"):
+            for panel in dict.fromkeys(line["panel"] for line in card["value"]["lines"]):
+                out.setdefault(panel, []).append(note)
+    return out
+
+
 def zero_lines(refs: dict[str, list[dict]], scope: str) -> dict[str, list[str]]:
     """Each panel's lines at 0 in `scope`, which a log axis can't draw and its caption names."""
     return {panel: [r["label"] for r in rows if (r["value"] if "value" in r else r["by_scope"].get(scope, 1)) <= 0]
@@ -393,7 +403,8 @@ def zero_lines(refs: dict[str, list[dict]], scope: str) -> dict[str, list[str]]:
 
 
 def captions(serve_hash_share: float, infiltration: dict | None = None, coverage: dict | None = None,
-             boundary_hash_share: float = 0.0, zeros: dict[str, list[str]] | None = None) -> dict[str, str]:
+             boundary_hash_share: float = 0.0, zeros: dict[str, list[str]] | None = None,
+             notes: dict[str, list[str]] | None = None) -> dict[str, str]:
     serve = (f"hashes every proof block's outputs at serve time, {serve_hash_share:.2g}× the scope's compute, outside "
              "the budget")
     tokens = f"the token ids, {boundary_hash_share:.2g} of the scope's compute"
@@ -418,6 +429,8 @@ def captions(serve_hash_share: float, infiltration: dict | None = None, coverage
                          f"committed after the first stage, so they don't show the work was done at serve time."
                          f"{fill}{gaps}"),
     }
+    for panel, sentences in (notes or {}).items():
+        out[panel] += "".join(f" {s}" for s in sentences)
     for panel, labels in (zeros or {}).items():
         if labels:
             out[panel] += f" At 0, so not drawn: {'; '.join(labels)}."
@@ -444,6 +457,7 @@ def run(model_name: str = "GLM-5.3", points: int = 57, scope_names: tuple[str, .
     budgets = c["budgets"].value
     and_per_flop = c["ands_per_mac"].value / 2
     refs = references(c, model_name, sc.get("references", []))
+    notes = reference_notes(sc.get("references", []))
     out_scopes, series = {}, {"exfiltration": [], "skipped_work": []}
     for s in scopes(c, part):
         if scope_names is not None and s.name not in scope_names:
@@ -457,7 +471,7 @@ def run(model_name: str = "GLM-5.3", points: int = 57, scope_names: tuple[str, .
                               "flop": cap(base, "work"), "ands": cap(base, "work") * and_per_flop,
                               "serve_hash_share": serve_hash, "boundary_hash_share": boundary_hash,
                               "captions": captions(serve_hash, sc.get("infiltration"), part.coverage(),
-                                                   boundary_hash, zero_lines(refs, s.name))}
+                                                   boundary_hash, zero_lines(refs, s.name), notes)}
         models = [model(c, part, s, x, fill) for x in xs]
         for panel, target in (("exfiltration", "leak"), ("skipped_work", "work")):
             for design in DESIGNS[panel]:

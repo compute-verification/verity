@@ -14,12 +14,13 @@ token over its ranks; a stratum whose Definition has no cut on main, sized at th
 `served_macs_per_token` is the whole circuit's MACs a token where the strata leave some out; `params`, the model's
 total parameters, scales the references that go as the model's size.  The `references` cards
 of a model add up: each is kept as `cards/references.MODEL.ART.json`, under the first twelve hex digits of its art id,
-and the figures draw every card's lines; a line at 0 is named in its panel's caption, not drawn.  A card reaches the
-figures by art id:
+and the figures draw every card's lines, with its `caption` appended to the caption of each panel it has lines on; a
+line at 0 is named in its panel's caption, not drawn.  A card reaches the figures by art id, a later one naming the
+earlier card it replaces:
 
     uv run python benchmarks/spot_figures/cards.py check CARD.json ...       # refuses unknown and missing fields
     research data put --kind spot-card/v1 --file CARD.json --preserve --json
-    uv run python benchmarks/spot_figures/cards.py fetch art:...             # checks it, writes cards/SLOT.MODEL.json
+    uv run python benchmarks/spot_figures/cards.py fetch art:... [--replaces art:OLD]   # checks it, keeps it in cards/
 """
 from __future__ import annotations
 
@@ -88,7 +89,7 @@ SLOTS = {
     "replay": {"factor": F(NUM), "batch_layout": F(str, choices=("served", "alone")),
                "deterministic": F(bool, nullable=True), "gpu_seconds_per_request": _opt(NUM, nullable=True)},
     "design": {"delta": F(NUM), "budgets": F(list), "overheads": F(list), "token_bytes": F(NUM)},
-    "references": {"lines": F(list, each=LINE)},
+    "references": {"lines": F(list, each=LINE), "caption": _opt(str)},
     "infiltration": {"design": F(str, choices=("two-stage", "layer_of_token", "one-stage", "request")),
                      "form": F(str, choices=("write", "information")), "unit": F(str), "caption": F(str),
                      "consumer": F(str, nullable=True), "cap_bits_per_block": _opt(NUM),
@@ -180,8 +181,14 @@ def load_all(slot: str, model: str | None) -> list[dict]:
     return found
 
 
-def write(card: dict, force: bool = False) -> Path:
+def write(card: dict, force: bool = False, replaces: tuple[str, ...] = ()) -> Path:
+    """Keep `card` under `cards/`, removing the kept cards whose art ids it `replaces`."""
     check(card)
+    gone = [q for q in CARDS.glob("*.json") if replaces and json.loads(q.read_text()).get("art") in replaces]
+    if len(gone) != len(set(replaces)):
+        raise FileNotFoundError(f"replaces {sorted(replaces)}, but {len(gone)} of them are kept in {CARDS}")
+    for q in gone:
+        q.unlink()
     p = path(card["slot"], card["model"], card.get("art"))
     if p.exists() and not force:
         old = json.loads(p.read_text()).get("art")
@@ -192,15 +199,15 @@ def write(card: dict, force: bool = False) -> Path:
     return p
 
 
-def fetch(art: str, force: bool = False) -> Path:
-    """The published card `art`, checked and kept under `cards/` with its art id."""
+def fetch(art: str, force: bool = False, replaces: tuple[str, ...] = ()) -> Path:
+    """The published card `art`, checked and kept under `cards/` with its art id, in place of `replaces`."""
     with tempfile.TemporaryDirectory() as tmp:
         subprocess.run(["research", "data", "fetch", art, "--to", tmp], check=True, stdout=subprocess.DEVNULL)
         found = [p for p in Path(tmp).rglob("*.json")]
         if len(found) != 1:
             raise ValueError(f"{art}: a card is one JSON file, found {[p.name for p in found]}")
         card = json.loads(found[0].read_text())
-    return write(card | {"art": art}, force)
+    return write(card | {"art": art}, force, replaces)
 
 
 def main(argv=None) -> None:
@@ -210,6 +217,8 @@ def main(argv=None) -> None:
     f = sub.add_parser("fetch")
     f.add_argument("arts", nargs="+")
     f.add_argument("--force", action="store_true", help="rewrite a card already kept under the same art id")
+    f.add_argument("--replaces", action="append", default=[], metavar="ART",
+                   help="a kept card's art id the fetched card replaces, whose file is removed (repeatable)")
     sub.add_parser("list")
     args = ap.parse_args(argv)
     if args.cmd == "check":
@@ -223,8 +232,10 @@ def main(argv=None) -> None:
                 print(f"{p}: {e}")
         sys.exit(1 if bad else 0)
     if args.cmd == "fetch":
+        if args.replaces and len(args.arts) != 1:
+            ap.error("--replaces names what one fetched card replaces: fetch that card alone")
         for art in args.arts:
-            print(fetch(art, args.force))
+            print(fetch(art, args.force, tuple(args.replaces)))
     if args.cmd == "list":
         for p in sorted(CARDS.glob("*.json")):
             c = json.loads(p.read_text())
