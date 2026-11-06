@@ -22,7 +22,8 @@ to cite:
   V5's `LawOn` admits no Bernoulli law (`lawOn_not_bernoulli`).
 * **`live-verifier` at the writer** (`recordCustodyZKJPLaw_deployed`): `RecordCustodyZKJPLaw` at the writer that keeps an
   accepted record (`Claims.Bridge.CustodyZkP.wrZP`), the printed draw file and the law, at any inputs and public inputs
-  (`SetsUp`'s `own = none` among them), under V5's `LawOn law ns kd`.
+  (`SetsUp`'s `own = none` among them), under V5's `LawOn law ns kd`; and at a member of a window's sample
+  (`recordCustodyZKJPLaw_part`), whose draw file at its part `S` is printed under `subset |S|` (`printedPart`).
 * **The draw's size** (`drawSize_deployed`): V5's `hsz` at the printed draw file, under the same `LawOn`
   (`Flock.Bridge.lawOn_size`).
 * **A3 at the device's bytes** (`uniformRandomBytes_deployed`): the session's sample is the device's one-stage rounds,
@@ -180,8 +181,22 @@ at the writer that keeps an accepted record (`wrZP`), its record half with no pr
 theorem recordCustodyZKJPLaw_deployed (I : Exec.Inputs) (own : Option ByteArray) {law : Flock.Draw.Law}
     {ns : List ℕ} {kd : ℕ} (hlaw : Flock.Bridge.LawOn law ns kd) (Jf : Finset (Fin n) → Reg → ℕ) :
     Assumptions.Zk.RecordCustodyZKJPLaw (mPts := mPts) I own (printedDraw law) Jf
-      (Claims.Bridge.CustodyZkP.wrZP I own (printedDraw law) Jf) law :=
+      (Claims.Bridge.CustodyZkP.wrZP I own (printedDraw law) Jf) fun _ => law :=
   ⟨Claims.Bridge.CustodyZkP.recordsLiveZKJA_wrZP I own _ Jf, drawFileZK_printedDraw law (lawOn_not_bernoulli hlaw)⟩
+
+/-- **The draw file a member of a window's sample is served** (`serve --draw-file`): at its part `S` of the sample, the
+one `flock-verify draw` prints for the verifier's own draw of `S` under `subset |S|` over the member's `n` proof blocks. -/
+def printedPart (S : Finset (Fin n)) : Lean.Json := printedDraw (.subset S.card) S
+
+/-- **`live-verifier` at a member's writer and draw file** (`Flock.Guarantees.MemberV5.hCust`): `RecordCustodyZKJPLaw`
+at the writer that keeps an accepted record (`wrZP`) and the member's printed draw file, under `subset |S|` at each part
+`S`, with no premise: the record half is `Claims.Bridge.CustodyZkP.recordsLiveZKJA_wrZP`, and the draw half the subset
+law's round trip at `|S|`. -/
+theorem recordCustodyZKJPLaw_part (I : Exec.Inputs) (own : Option ByteArray) (Jf : Finset (Fin n) → Reg → ℕ) :
+    Assumptions.Zk.RecordCustodyZKJPLaw (mPts := mPts) I own printedPart Jf
+      (Claims.Bridge.CustodyZkP.wrZP I own printedPart Jf) fun S => .subset S.card :=
+  ⟨Claims.Bridge.CustodyZkP.recordsLiveZKJA_wrZP I own _ Jf, fun S =>
+    ZkLink.drawFileZK_of_toJson_subset (fun T => printedDraw (.subset S.card) T) S.card n (fun _ => rfl) S⟩
 
 /-- **The printed draw file's size under V5's law** (V5's `hsz`): a printed draw file that `UnitDraw.ofJson` decodes
 draws the law's `kd` units (`Flock.Bridge.lawOn_size`). -/

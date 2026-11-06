@@ -76,9 +76,26 @@ def test_a_guarantee_is_proved_only_when_its_premises_were_read_and_name_no_assu
         "A.SecurityProofs.Unread": ("unknown", [], False),
         "A.SecurityProofs.Moved": ("unknown", [], False),
     }
-    assert doc["packages"] == [{"path": "Sec", "guarantees": 6, "assumptions": 2}]
+    assert doc["packages"] == [{"path": "Sec", "guarantees": 6, "assumptions": 2, "open": 0, "domain": 0}]
     assert [g["name"] for g in doc["guarantees"]] == sorted(LOCK["guarantees"])
     assert [(a["name"], a["owner"]) for a in doc["assumptions"]] == [("A.Assumptions.One", "@lean"), ("A.Assumptions.Two", "@proofs")]
+
+
+def test_a_domain_hypothesis_is_part_of_what_a_guarantee_says_and_not_an_assumption_it_rests_on(tmp_path):
+    scope = "A.Definitions.Scope"
+    lock = LOCK | {"domain": {scope: {"owner": "@lean", "digest": "3" * 64, "why": "the inputs it covers"}},
+                   "guarantees": LOCK["guarantees"] | {
+                       "A.SecurityProofs.Scoped": _g(f"A.SecurityProofs.Scoped (h : {scope}) : A.G", assumptions=[scope])}}
+    pin = {"kind": "theorem", "signature": f"A.SecurityProofs.Scoped (h : {scope}) : A.G", "premises": []}
+    facts = tmp_path / "facts"
+    (facts / "audit-Sec" / "proved-in-Proofs").mkdir(parents=True)
+    (facts / "audit-Sec" / "proved-in-Proofs" / "facts.json").write_text(json.dumps(
+        FACTS | {"pins": FACTS["pins"] | {"A.SecurityProofs.Scoped": pin}}))
+    doc, _ = se.export(_repo(tmp_path / "repo", {"Sec/lean-audit.json": lock}), facts=facts)
+    scoped = next(g for g in doc["guarantees"] if g["name"] == "A.SecurityProofs.Scoped")
+    assert (scoped["status"], scoped["assumptions"], scoped["domain"]) == ("proved", [], [scope])
+    assert doc["packages"][0]["domain"] == 1
+    assert [(a["kind"], a["why"]) for a in doc["assumptions"] if a["name"] == scope] == [("domain", "the inputs it covers")]
 
 
 def test_without_facts_no_guarantee_is_proved(tmp_path):

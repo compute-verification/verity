@@ -138,6 +138,20 @@ def test_what_only_a_person_writes_still_refuses_beside_derived_candidates():
         return rec | {"assumptions": {"P.Hyp": {"owner": who, "digest": "a" * 64}}}
     assert M.merge(hyp(base, "@lean"), hyp(ours, "@proofs"), hyp(theirs, "@circuits"))[1] == [
         "assumptions[P.Hyp].owner: changed on both sides, differently"]
+    def opened(rec, issue, due="2026-11-30"):
+        return rec | {"open": {"P.Sound": {"owner": "@lean", "digest": "a" * 64, "issue": issue, "due": due}}}
+    assert M.merge(opened(base, "LEAN-1"), opened(ours, "LEAN-2"), opened(theirs, "LEAN-3"))[1] == [
+        "open[P.Sound].issue: changed on both sides, differently"]
+    merged, why = M.merge(opened(base, "LEAN-1"), opened(ours, "LEAN-2"), opened(theirs, "LEAN-1", "2026-12-31"))
+    assert why == [] and merged["open"]["P.Sound"] == {"owner": "@lean", "digest": "a" * 64, "issue": "LEAN-2",
+                                                       "due": "2026-12-31"}, "one side's issue, the other's due date"
+    def scoped(rec, why, cites=None):
+        return rec | {"domain": {"P.Scope": {"owner": "@lean", "digest": "a" * 64, "why": why}
+                                 | ({"cites": cites} if cites else {})}}
+    assert M.merge(scoped(base, "x"), scoped(ours, "y"), scoped(theirs, "z"))[1] == [
+        "domain[P.Scope].why: changed on both sides, differently"]
+    merged, why = M.merge(scoped(base, "x"), scoped(ours, "y"), scoped(theirs, "x", "P.u"))
+    assert why == [] and merged["domain"]["P.Scope"] == {"owner": "@lean", "digest": "a" * 64, "why": "y", "cites": "P.u"}
 
 
 def test_an_owner_merges_apart_from_the_statement():
@@ -238,6 +252,51 @@ def test_a_guarantee_one_side_removed_stays_removed_unless_the_other_side_change
     assert why == [] and candidate == ["guarantees[P.u] (removed)"] and merged["guarantees"] == ours["guarantees"]
     owner = theirs | {"guarantees": theirs["guarantees"] | {"P.u": theirs["guarantees"]["P.u"] | {"owner": "@proofs"}}}
     assert M.merge(base, ours, owner)[1] == ["guarantees[P.u]: removed on one side and changed on the other"]
+
+
+def claims(**sections: dict) -> dict:
+    return {"claims": {"modules": ["Definitions.Claims"], "witnesses": {}, "not": {}, "generic": {}} | sections}
+
+
+def test_proofs_zkoutleak_main_moved_to_claims_generic_leaves_claims_not_where_the_branch_still_has_it():
+    """Merging `main` into a branch: `main` moved `Claims.ZKOutLeak` from `claims.not` to `claims.generic`, and the
+    branch still had it under `claims.not`, with the base's reason or an older one. The merged record lists it under
+    `claims.generic` alone; the driver had kept both, which the Lean check refuses (`claims.generic-both`)."""
+    leak, excuse = "Claims.ZKOutLeak", {"Claims.Bits": "a helper"}
+    base = claims(**{"not": excuse | {leak: "a corollary of `ZKOut`, proved of every `ZKOut`"}})
+    main = claims(**{"not": excuse, "generic": {leak: "Claims.zkOutLeak"}})
+    for reason in ("a corollary of `ZKOut`, proved of every `ZKOut`", "proved of every protocol zero knowledge"):
+        branch = claims(**{"not": excuse | {leak: reason}})
+        merged, why = M.merge(base, branch, main)
+        assert why == [] and merged["claims"]["not"] == excuse and merged["claims"]["generic"] == {leak: "Claims.zkOutLeak"}
+
+
+def test_a_premise_one_side_moved_to_another_section_leaves_the_one_the_other_side_changed_it_in():
+    """Ours made `P.Hyp` a domain hypothesis while theirs gave the named assumption another owner: it is a domain
+    hypothesis alone, as ours put it, and the other sections' entries merge as before."""
+    hyp, other = {"owner": "@lean", "digest": "a" * 64}, {"P.Other": {"owner": "@lean", "digest": "b" * 64}}
+    domain = {"owner": "@lean", "digest": "a" * 64, "why": "a deployment's choice"}
+    base = {"assumptions": {"P.Hyp": hyp} | other}
+    ours = {"assumptions": other, "domain": {"P.Hyp": domain}}
+    theirs = {"assumptions": {"P.Hyp": hyp | {"owner": "@proofs"}} | other}
+    merged, why = M.merge(base, ours, theirs)
+    assert why == [] and merged["assumptions"] == other and merged["domain"] == {"P.Hyp": domain}
+
+
+def test_an_entry_both_sides_placed_in_different_sections_is_refused_naming_both():
+    """A claim ours witnessed and theirs made generic, and a premise each side brought into a different section: neither
+    side's placement is the base's, so the record can't say which stands."""
+    base = claims(**{"not": {"Claims.C": "no claim yet"}})
+    ours = claims(witnesses={"Claims.C": {"fails": "Claims.C_fails", "meets": ["Claims.C_meets"]}}) \
+        | {"open": {"P.Hyp": {"owner": "@lean", "digest": "a" * 64, "issue": "LEAN-1", "due": "2026-11-06"}}}
+    theirs = claims(generic={"Claims.C": "Claims.c"}) \
+        | {"domain": {"P.Hyp": {"owner": "@lean", "digest": "a" * 64, "why": "a deployment's choice"}}}
+    _, why = M.merge(base, ours, theirs)
+    assert why == [
+        "Claims.C: ours put it under witnesses and theirs under generic, from not in the base (claims.witnesses[Claims.C] and "
+        "claims.generic[Claims.C]): it sits in one of witnesses, not, generic",
+        "P.Hyp: ours put it under open and theirs under domain, from neither in the base (open[P.Hyp] and domain[P.Hyp]): it "
+        "sits in one of assumptions, domain, open"]
 
 
 FIXTURES = HERE / "fixtures" / "merge"

@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Core
+public import Definitions.Core.Formalism.Instances
 public import Definitions.Core.Accel
 public import Definitions.Core.Assumptions.Accel
 public import Definitions.Core.Blocks
@@ -17,6 +18,9 @@ public import Definitions.Nci.Dark
 public import Definitions.Nci.Packed
 public import Definitions.Nci.Covering
 public import Definitions.Nci.Capability
+public import Definitions.Nci.Formalism
+public import Definitions.Nci.Formalism.Instances
+public import Definitions.Nci.Cut
 public import Definitions.Pous
 public import Definitions.Pous.Guarantees.StreamedWipeFamily
 public import Definitions.Pous.Guarantees.StreamedWipeReads
@@ -42,6 +46,9 @@ public import Definitions.Claims.SamplingGeneric
 public import Definitions.Claims.ZKOut
 public import Definitions.Hash
 public import Definitions.Flock
+public import Definitions.WeightSecurity
+public import Definitions.WeightSecurity.Toy
+public import Definitions.Assumptions
 
 /-! The trusted vocabulary: each component's definitions. -/
 

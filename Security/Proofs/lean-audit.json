@@ -11,6 +11,7 @@
   "Proofs.Accounting",
   "Proofs.Accounting.Bandwidth",
   "Proofs.Population",
+  "Proofs.WeightSecurity",
   "Proofs.Properties.Pouw",
   "Proofs.Properties.Pouw.Check",
   "Proofs.Properties.Pouw.Commit",
@@ -79,6 +80,7 @@
   "Proofs.Properties.Verity.Soundness",
   "Proofs.Properties.Verity.Sampled",
   "Proofs.Properties.Verity.Sampled.Binding",
+  "Proofs.Properties.Verity.Sampled.Device",
   "Proofs.Properties.Challenger.Window",
   "Proofs.Properties.Challenger.CanonLine",
   "Proofs.Properties.Challenger.Drawn",
@@ -100,7 +102,8 @@
   "Proofs.Properties.Verity.Recursive",
   "Proofs.Properties.Verity.Recursive.Target",
   "Proofs.Properties.Verity.Recursive.Refusals",
-  "Proofs.Properties.Verity.Recursive.Audit"
+  "Proofs.Properties.Verity.Recursive.Audit",
+  "Proofs.Properties.Verity.Subprotocols"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
