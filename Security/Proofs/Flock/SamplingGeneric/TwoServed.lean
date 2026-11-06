@@ -563,8 +563,8 @@ theorem lightBits_lightOf (s : AuditStatement) (Pt : Partition) (n : ℕ) (U : F
 
 /-- **The patterns' form**: at any split `req`, the influence set has at most `Σ_p 2^{Σ_r bits(p r)}` members, `p` over
 the admissible sets' patterns `r ↦ lightOf |r| T_r`. A request `T` doesn't touch costs nothing. One whose `T_r` commits
-at least `|r|` bits costs `|r|`, and its pattern forgets which of its blocks are incorrect. Any other costs `b(T_r)`. The
-exponent is the capped sets' `Σ_{r touched by T} min(b(T_r), |r|)` at every `T` of the pattern (`lightBits_lightOf`), so
+at least `|r|` bits costs `|r|`, and its pattern forgets which of its blocks are incorrect. Any other costs `b(T_r)`.
+The exponent is the capped sets' `Σ_{r touched by T} min(b(T_r), |r|)` at every `T` of the pattern (`lightBits_lightOf`), so
 the bound is never above `card_influenceTwo_le_served`'s (`sum_patterns_le_served`). -/
 theorem card_influenceTwo_le_patterns (H : Msg → Msg) (Cm : CommitmentScheme Bool) {s : AuditStatement}
     {Pt : Partition} {d : Design.Two} (hs : InScopeTwo Pt d s) (δ : ℝ) (a : ℕ → Option Bool) {R : Type} [Fintype R]
@@ -580,7 +580,8 @@ theorem card_influenceTwo_le_patterns (H : Msg → Msg) (Cm : CommitmentScheme B
   refine prod_le_prod fun r _ => ?_
   match hp : p r with
   | none =>
-    refine (min_le_left _ _).trans ((sum_le_sum_of_subset (t := {∅}) fun U hU => ?_).trans (by simp [bitsOf, lightBits]))
+    refine (min_le_left _ _).trans
+      ((sum_le_sum_of_subset (t := {∅}) fun U hU => ?_).trans (by simp [bitsOf, lightBits]))
     exact mem_singleton.2 (lightOf_eq_none (mem_filter.1 hU).2)
   | some none => exact min_le_right _ _
   | some (some U₀) =>
