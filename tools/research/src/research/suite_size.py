@@ -46,8 +46,9 @@ def _words(command: list[str]) -> list[str]:
             try:
                 out += [w for w in shlex.split(a) if w not in ("&&", "||", ";")]
                 continue
-            except ValueError:
-                pass
+            except ValueError as e:
+                print(f"suite_size: {a[:120]!r} doesn't split as a shell string ({e}); it is sized by its words as given",
+                      file=sys.stderr)
         out.append(a)
     return out
 
