@@ -93,7 +93,12 @@ def keep_facts(root: Path, rev: str, work: Path) -> dict[str, str]:
     return keys
 
 
-def test_taking_away_a_declaration_s_last_mention_fails_naming_its_module_the_line_and_the_fix_with_no_lean_built(repo, tmp_path):
+def judged_again(*args):
+    raise AssertionError("judged again")
+
+
+def test_taking_away_a_declaration_s_last_mention_fails_naming_its_module_the_line_and_the_fix_with_no_lean_built(
+        repo, tmp_path, monkeypatch):
     base = git(repo, "rev-parse", "HEAD")
     keys = keep_facts(repo, base, tmp_path / "keys")
     top = commit(repo, "drop the name", {"tools/lonely.py": LONELY.replace('NAME = "Dead.lonely"\n', "")})
@@ -121,6 +126,12 @@ def test_taking_away_a_declaration_s_last_mention_fails_naming_its_module_the_li
                               "reads it") and dead["fix"][1].startswith("or seed it again: keep a mention of it outside Lean")
     assert not list(fake.glob("*.ran")), "the gate builds no Lean"
     assert G.main([base, top]) == 1
+    monkeypatch.setattr(G, "judged", judged_again)
+    same = git(repo, "commit-tree", f"{top}^{{tree}}", "-p", base, "-m", "the same change, merged again")
+    doc = G.gate(base, same)
+    assert (doc["top"], [f["why"] for f in doc["failures"]]) == (same, [dead["why"], gone["why"]]), \
+        "drive's next merge of the same trees after `main` moves reads the verdict back"
+    assert doc["notes"][-1] == f"kept: the verdict of {base[:12]}..{top[:12]}, the same trees, by the same code"
 
 
 def test_a_change_that_leaves_each_name_somewhere_or_that_a_lean_check_reads_passes(repo, tmp_path):
@@ -155,6 +166,12 @@ def test_with_none_of_the_tree_s_facts_it_can_t_judge_and_with_main_s_it_judges_
     assert doc["below"] == base and [f["area"] for f in doc["failures"]] == ["Definitions/Dead", "Definitions/Gone"]
     assert f"judged on the facts of `main` {main[:12]}'s Lean" in doc["notes"][0]
     assert doc["failures"][0]["why"].endswith(f"(on the facts of `main` {main[:12]}'s Lean)")
+    monkeypatch.setattr(G, "judged", judged_again)
+    assert G.gate(main, top)["notes"][-1].startswith("kept: ")
+    moved = commit(repo, "main's Lean moves", {"Security/Definitions/Core.lean":
+                                               (repo / "Security/Definitions/Core.lean").read_text() + "\n"})
+    with pytest.raises(AssertionError, match="judged again"):
+        G.gate(moved, top)
 
 
 class Store:
@@ -200,3 +217,21 @@ def test_the_store_lookup_takes_the_newest_recorded_check_s_facts_of_each_key_wh
     got, _ = G.stored({"Security": k1}, tmp_path / "old", "1", store=Store([runs[0], runs[2]], {"r1": "c" * 40}), scan=1,
                       commits=("c" * 40,))
     assert got["Security"].read_bytes() == b"oldest", "a check of the commit judged is read however many checks ran since"
+
+
+def test_the_names_lean_declares_read_alike_under_any_locale_and_are_kept_by_the_lean_s_tree(repo, tmp_path, monkeypatch):
+    """Under `C`, git's `[^...⟨]` matches bytes, so `fooΨ.psiOnly` would stop inside `Ψ` (whose last byte is one of `⟨`'s) and
+    the line would be no UTF-8; the gate runs git under `LOCALE`, so the host's locale doesn't change what it reads."""
+    rev = commit(repo, "a name past ASCII", {"Security/Definitions/Psi.lean": "theorem fooΨ.psiOnly : True := trivial\n"})
+    monkeypatch.setenv("LC_ALL", "C")
+    heads, lasts = G.declared(rev)
+    assert "foo" in heads and "psiOnly" in lasts
+    assert G.declared(rev, tmp_path / "kept") == (heads, lasts)
+    real = G.git_text
+
+    def no_grep(*args, **kw):
+        assert args[0] != "grep", "a kept set greps nothing"
+        return real(*args, **kw)
+
+    monkeypatch.setattr(G, "git_text", no_grep)
+    assert G.declared(rev, tmp_path / "kept") == (heads, lasts)

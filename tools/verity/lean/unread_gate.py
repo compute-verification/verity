@@ -22,7 +22,9 @@ a PR (a ``Queue: #N`` merge), else its merge base with ``MAIN``, as `markdown_ca
   fails, naming each module that went, the mentions that kept it (each at its file and line at ``LO``) and the fix.
 
 It runs ``MAIN``'s `unread.py`, `lean_audit.py` and their helpers (`git archive`, `CODE`), so the change it judges can't change
-how it is judged, and it builds nothing. Before marking a branch, run ``python3 tools/verity/lean/unread_gate.py origin/main
+how it is judged, and it builds nothing; it runs git under `LOCALE`, so the host's locale can't either. Drive judges every PR
+of `next` again whenever `main` moves, so the gate keeps each verdict by the trees it judged and the code that judged it
+(`gate`), and what the Lean declares by the Lean's tree (`declared`). Before marking a branch, run ``python3 tools/verity/lean/unread_gate.py origin/main
 HEAD``. Exit 0 when it passes, 1 when it fails (``--json``: `{"failures": [{"why", "fix"}]}`, `KIND`), 2 when it can't judge: a
 git error, `MAIN`'s code doesn't load, or neither tree's facts are kept here or stored.
 """
@@ -49,14 +51,18 @@ LEAN_TOOL = "tools/verity/lean/"
 #: what a Lean check reads (drive's `lean_reads`): a change to any of it is the Lean check's to judge
 LEAN_READS = (".lean", "lakefile.toml", "lakefile.lean", "lean-toolchain", "lake-manifest.json", "lean-audit.json")
 #: ``MAIN``'s code the gate runs: the Lean tools (not their tests) and what `lean_audit.py` loads
-CODE = (f":(glob){LEAN_TOOL}*", "tools/verity/check/common.py", "tools/verity/graph/verity_graph/contract.py")
+COMMON = "tools/verity/check/common.py"
+CODE = (f":(glob){LEAN_TOOL}*", COMMON, "tools/verity/graph/verity_graph/contract.py")
+#: what a kept verdict's key holds of ``MAIN``: `CODE`'s trees (the Lean tools with their tests: a superset)
+CODE_TREES = (LEAN_TOOL.rstrip("/"), *CODE[1:])
 #: the analysis's Lean, all of whose packages (`unread.ANALYSIS`) are under it
 ANALYSIS_DIR = "Security/"
 CAPS = f"{LEAN_TOOL}unread-caps.json"
 #: how many of the newest recorded checks the store lookup lists the files of
 SCAN = 64
-#: how many facts files this gate keeps in its cache, the last used first
-KEPT = 16
+#: how many facts files this gate keeps in its cache, the last used first; how many `declared` sets; how many verdicts (drive
+#: judges each PR of `next` again on every landing)
+KEPT, DECLARED_KEPT, VERDICTS_KEPT = 16, 16, 1024
 #: a recorded check's facts of the package with key K: `unread/K.jsonl.gz` under its lean-audit output
 STORED = re.compile(r"(?:.*/)?lean-audit/unread/([0-9a-f]{64})\.jsonl\.gz")
 #: a name component's start that is a word (its `'`, `!` or `?` aside)
@@ -69,6 +75,9 @@ DECLARED = (r"\b(theorem|lemma|def|abbrev|structure|class|inductive|instance|opa
 WHERE = r"^[[:space:]]*where[[:space:]]*($|--)"
 #: the statuses of a wholly unread module (`unread.analyse`)
 GONE = ("unread", "unread aggregator")
+#: the locale git runs under: its patterns match characters, whatever the host's default (`C`'s match bytes, and cut a name
+#: inside a character)
+LOCALE = "C.UTF-8"
 
 
 class GitError(RuntimeError):
@@ -79,24 +88,33 @@ class CantJudge(RuntimeError):
     pass
 
 
+def git_env() -> dict[str, str]:
+    return os.environ.copy() | {"LC_ALL": LOCALE}
+
+
 def git(*args: str, input: bytes | None = None, ok: tuple[int, ...] = (0,)) -> bytes:
-    r = subprocess.run(["git", *args], capture_output=True, input=input)
+    r = subprocess.run(["git", *args], capture_output=True, input=input, env=git_env())
     if r.returncode not in ok:
         raise GitError(f"git {' '.join(args[:4])}: {r.stderr.decode(errors='replace').strip()[-300:]}")
     return r.stdout
 
 
+def git_text(*args: str, ok: tuple[int, ...] = (0,)) -> str:
+    """git's output as text, a byte that is no UTF-8 replaced (a host without `LOCALE` gives git `C`'s)."""
+    return git(*args, ok=ok).decode(errors="replace")
+
+
 def below(base: str, top: str) -> str:
     """The commit ``top``'s change is judged against: the tip it merged onto when it is the queue's merge of a PR, else its
     merge base with ``base``."""
-    parents, _, subject = git("log", "-1", "--format=%P%x00%s", top).decode().strip().partition("\0")
+    parents, _, subject = git_text("log", "-1", "--format=%P%x00%s", top).strip().partition("\0")
     if len(parents.split()) == 2 and subject.startswith(QUEUE_SUBJECT):
         return parents.split()[0]
-    return git("merge-base", base, top).decode().strip()
+    return git_text("merge-base", base, top).strip()
 
 
 def tracked(rev: str, *paths: str) -> list[str]:
-    return [p for p in git("ls-tree", "-r", "-z", "--name-only", rev, "--", *paths).decode().split("\0") if p]
+    return [p for p in git_text("ls-tree", "-r", "-z", "--name-only", rev, "--", *paths).split("\0") if p]
 
 
 def blobs(rev: str, paths: list[str]) -> dict[str, bytes | None]:
@@ -119,7 +137,7 @@ def archive(rev: str, dest: Path, *paths: str) -> Path:
     """``rev``'s tree (its ``paths``, as git pathspecs, when given) written under ``dest``."""
     dest.mkdir(parents=True, exist_ok=True)
     p = subprocess.Popen(["git", "archive", "--format=tar", rev, *(["--", *paths] if paths else [])], stdout=subprocess.PIPE,
-                         stderr=subprocess.PIPE)
+                         stderr=subprocess.PIPE, env=git_env())
     with tarfile.open(fileobj=p.stdout, mode="r|") as t:
         t.extractall(dest, filter="data")
     if p.wait():
@@ -210,8 +228,8 @@ def unnamed(U, top: str, gone: dict[tuple[str, str], list[str]], docs: Docs, wor
         return {}
     words = sorted({n.rsplit("/", 1)[-1] if r == "path" else n for r, n in gone})
     (work / "words").write_text("\n".join(words) + "\n")
-    hits = [p.split(":", 1)[1] for p in git("grep", "-l", "-z", "-F", "-f", str(work / "words"), top, "--",
-                                            *(f"*{s}" for s in U.CITED_BY + U.DOCS), ok=(0, 1)).decode().split("\0") if p]
+    hits = [p.split(":", 1)[1] for p in git_text("grep", "-l", "-z", "-F", "-f", str(work / "words"), top, "--",
+                                                 *(f"*{s}" for s in U.CITED_BY + U.DOCS), ok=(0, 1)).split("\0") if p]
     hits = [p for p in hits if U.cited_kind(p) is not None]
     in_docs = docs(top) if any(U.cited_kind(p) == "doc" for p in hits) else set()
     left = dict(gone)
@@ -221,25 +239,68 @@ def unnamed(U, top: str, gone: dict[tuple[str, str], list[str]], docs: Docs, wor
     return left
 
 
-def declared(lo: str) -> tuple[set[str], set[str]]:
+def own() -> str:
+    """This script's sha256: the caches' keys hold it, since it decides what they keep."""
+    return hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+
+
+def digest(*parts: str) -> str:
+    return hashlib.sha256("\0".join([KIND, *parts]).encode()).hexdigest()
+
+
+def kept(f: Path) -> dict | None:
+    """The entry kept at ``f``, touched as the last used, or None: there is none, or it doesn't read (then it is deleted, and
+    whatever it held is worked out again)."""
+    if not f.is_file():
+        return None
+    try:
+        doc = json.loads(f.read_text())
+    except (OSError, ValueError):
+        f.unlink(missing_ok=True)
+        return None
+    os.utime(f)
+    return doc
+
+
+def keep(f: Path, doc: dict, most: int) -> None:
+    """``doc`` at ``f``, written whole, with at most ``most`` entries beside it, the last used first."""
+    f.parent.mkdir(parents=True, exist_ok=True)
+    tmp = f.with_name(f".{f.name}.{os.getpid()}")
+    tmp.write_text(json.dumps(doc))
+    os.replace(tmp, f)
+    for old in sorted(f.parent.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)[most:]:
+        old.unlink(missing_ok=True)
+
+
+def lean_tree(rev: str) -> str:
+    return git_text("rev-parse", f"{rev}:{ANALYSIS_DIR.rstrip('/')}").strip()
+
+
+def declared(lo: str, cache: Path | None = None) -> tuple[set[str], set[str]]:
     """What the names the Lean under `ANALYSIS_DIR` declares at ``lo`` can start and end with (each a `WORD`): the first
     component of a `namespace` or of a name a keyword of `DECLARED` declares, and a private name's `_private`; the last
-    component of such a name, or of a helper first on a line of a definition's `WHERE` block."""
+    component of such a name, or of a helper first on a line of a definition's `WHERE` block.  Kept in ``cache`` by the tree
+    of `ANALYSIS_DIR` (`declared/K.json`): every PR of `next` above the same Lean reads the same."""
+    f = cache / "declared" / f"{digest(own(), lean_tree(lo))}.json" if cache is not None else None
+    if f is not None and (got := kept(f)) is not None:
+        return set(got["heads"]), set(got["lasts"])
     heads, lasts = {"_private"}, set()
-    for line in git("grep", "-h", "-o", "-E", DECLARED, lo, "--", f"{ANALYSIS_DIR}*.lean", ok=(0, 1)).decode().splitlines():
+    for line in git_text("grep", "-h", "-o", "-E", DECLARED, lo, "--", f"{ANALYSIS_DIR}*.lean", ok=(0, 1)).splitlines():
         word, name = (line.split(None, 1) + [""])[:2]
         parts = name.strip().removeprefix("_root_.").split(".")
         if (m := WORD.match(parts[0])):
             heads.add(m.group(0))
         if word != "namespace" and (m := WORD.match(parts[-1])):
             lasts.add(m.group(0))
-    for line in git("grep", "-h", "-A", "3", "-E", WHERE, lo, "--", f"{ANALYSIS_DIR}*.lean", ok=(0, 1)).decode().splitlines():
+    for line in git_text("grep", "-h", "-A", "3", "-E", WHERE, lo, "--", f"{ANALYSIS_DIR}*.lean", ok=(0, 1)).splitlines():
         if (m := re.match(r"\s+([A-Za-z_][A-Za-z0-9_]*)", line)):
             lasts.add(m.group(1))
+    if f is not None:
+        keep(f, {"heads": sorted(heads), "lasts": sorted(lasts)}, DECLARED_KEPT)
     return heads, lasts
 
 
-def plausible(lo: str, gone: dict[tuple[str, str], list[str]]) -> dict[tuple[str, str], list[str]]:
+def plausible(lo: str, gone: dict[tuple[str, str], list[str]], cache: Path | None = None) -> dict[tuple[str, str], list[str]]:
     """The names of ``gone`` that could name the analysis's Lean at ``lo``: a declaration's full name (all a file outside
     Lean keeps it by) whose first component a namespace or a declaration there starts with and whose last component a Lean
     file under `ANALYSIS_DIR` declares, or is an instance's (`inst...`, which Lean may make up) (`declared`); a module or a
@@ -250,7 +311,7 @@ def plausible(lo: str, gone: dict[tuple[str, str], list[str]]) -> dict[tuple[str
     lean = [f for f in tracked(lo, ANALYSIS_DIR) if f.endswith(".lean")]
     tails = {"/".join(f.split("/")[k:]) for f in lean for k in range(f.count("/") + 1)}
     ends = {n: (WORD.match(n.split(".", 1)[0]), WORD.match(n.rsplit(".", 1)[-1])) for r, n in gone if r == "decl"}
-    heads, lasts = declared(lo) if ends else (set(), set())
+    heads, lasts = declared(lo, cache) if ends else (set(), set())
 
     def could(role: str, name: str) -> bool:
         if role == "decl":
@@ -332,7 +393,7 @@ def facts_of(LA, rev: str, tree: Path, files: list[str], cache: Path, work: Path
 
 def judge(U, LA, base: str, lo: str, top: str, gone: dict[tuple[str, str], list[str]], work: Path, cache: Path) -> dict:
     """The ratchet on ``lo``'s and ``top``'s trees from the facts of ``lo``'s Lean, else of ``base``'s: {"failures", "notes",
-    "facts"}."""
+    "facts", "facts_of": the commit whose Lean's facts it read}."""
     files_lo, files_top = tracked(lo), tracked(top)
     tree = archive(lo, work / "tree")
     keys, facts, errors = facts_of(LA, lo, tree, files_lo, cache, work)
@@ -355,7 +416,7 @@ def judge(U, LA, base: str, lo: str, top: str, gone: dict[tuple[str, str], list[
     namer = U.path_namer(named)
     changed = sorted({f for fs in gone.values() for f in fs})
     was = blobs(lo, changed)
-    overlay(tree, top, [p for p in git("diff", "--no-renames", "--name-only", "-z", lo, top).decode().split("\0") if p])
+    overlay(tree, top, [p for p in git_text("diff", "--no-renames", "--name-only", "-z", lo, top).split("\0") if p])
     rep_top = U.analyse(U.Tree(tree, files_top), F, full=False)
     caps = U.load_caps(tree / CAPS) if (tree / CAPS).is_file() else {}
     kept_by: dict[str, list[str]] = defaultdict(list)
@@ -389,44 +450,60 @@ def judge(U, LA, base: str, lo: str, top: str, gone: dict[tuple[str, str], list[
                     "or seed it again: keep a mention of it outside Lean in code that reads it (its dotted name or its file's "
                     f"path in a {', '.join(U.MODULE_CITED_BY)} file, or the full name of a declaration of it in a "
                     f"{', '.join(U.CITED_BY)} file), or name it in a lock's text"]})
-    return {"failures": failures, "notes": notes, "facts": {p: k for p, k in keys.items()}}
+    return {"failures": failures, "notes": notes, "facts": {p: k for p, k in keys.items()}, "facts_of": base if on_main else lo}
 
 
 def gate(base: str, top: str) -> dict:
-    base, top = (git("rev-parse", "--verify", f"{r}^{{commit}}").decode().strip() for r in (base, top))
+    """The verdict on ``top``'s change: one kept for the same trees (``LO``'s and ``top``'s) by the same code (this script,
+    ``base``'s `CODE_TREES`), and for one on `main`'s facts the same `main` Lean, else `judged` and kept (`verdicts/K.json`).
+    Drive judges every PR of `next` again when `main` moves, and a PR whose members below are the same has the same trees.
+    A gate that can't judge raises, and keeps nothing."""
+    base, top = (git_text("rev-parse", "--verify", f"{r}^{{commit}}").strip() for r in (base, top))
     lo = below(base, top)
+    with tempfile.TemporaryDirectory(prefix="unread-gate-") as d:
+        code = archive(base, Path(d) / "code", *CODE)
+        cache = load(code / COMMON, "common_for_unread_gate").cache_dir() / "unread-gate"
+        trees = git_text("rev-parse", f"{lo}^{{tree}}", f"{top}^{{tree}}", *(f"{base}:{p}" for p in CODE_TREES)).split()
+        f = cache / "verdicts" / f"{digest(own(), *trees)}.json"
+        if (got := kept(f)) is not None and got.get("main_lean") in (None, lean_tree(base)):
+            was = got["doc"]
+            return was | {"base": base, "top": top, "below": lo, "notes": [
+                *was["notes"], f"kept: the verdict of {was['below'][:12]}..{was['top'][:12]}, the same trees, by the same code"]}
+        doc = judged(base, lo, top, code, cache, Path(d))
+    keep(f, {"doc": doc, "main_lean": lean_tree(base) if doc.get("facts_of") not in (None, lo) else None}, VERDICTS_KEPT)
+    return doc
+
+
+def judged(base: str, lo: str, top: str, code: Path, cache: Path, d: Path) -> dict:
     doc = {"kind": KIND, "base": base, "top": top, "below": lo, "stage": "lean", "seed_files": [], "went": [],
            "failures": [], "notes": []}
-    changed = [p for p in git("diff", "--no-renames", "--name-only", "-z", lo, top).decode().split("\0") if p]
+    changed = [p for p in git_text("diff", "--no-renames", "--name-only", "-z", lo, top).split("\0") if p]
     if lean := [p for p in changed if p.endswith(LEAN_READS) or p.startswith(LEAN_TOOL)]:
         doc["notes"].append(f"it changes what a Lean check reads ({', '.join(lean[:3])}{' ...' if len(lean) > 3 else ''}): "
                             "the Lean check's ratchet judges it")
         return doc
-    with tempfile.TemporaryDirectory(prefix="unread-gate-") as d:
-        code = archive(base, Path(d) / "code", *CODE)
-        U = load(code / LEAN_TOOL / "unread.py", "unread_for_unread_gate")
-        doc["stage"], doc["seed_files"] = "git", (seeded := [p for p in changed if U.cited_kind(p) is not None])
-        docs = Docs(U, lo)
-        gone = removed(U, lo, top, changed, seeded, docs)
-        could = unnamed(U, top, plausible(lo, gone), docs, Path(d))
-        doc["went"] = sorted(f"{r}:{n}" for r, n in could)[:40]
-        if not could:
-            doc["notes"].append(f"{len(seeded)} seed file(s) changed, and of the {len(gone)} name(s) they no longer hold, "
-                                "none that the analysis's Lean could hold is gone from every seed file")
-            return doc
-        LA = load(code / LEAN_TOOL / "lean_audit.py", "lean_audit_for_unread_gate")
-        cache = LA.COMMON.cache_dir() / "unread-gate"
-        cache.mkdir(parents=True, exist_ok=True)
-        for old in cache.glob("work-*"):
-            if not Path("/proc", old.name.split("-")[1]).exists():
-                shutil.rmtree(old, ignore_errors=True)
-        work = Path(tempfile.mkdtemp(prefix=f"work-{os.getpid()}-", dir=cache))
-        try:
-            doc |= {"stage": "facts", **judge(U, LA, base, lo, top, could, work, cache)}
-        finally:
-            shutil.rmtree(work, ignore_errors=True)
-            for old in sorted(cache.glob("*.jsonl.gz"), key=lambda f: f.stat().st_mtime, reverse=True)[KEPT:]:
-                old.unlink(missing_ok=True)
+    U = load(code / LEAN_TOOL / "unread.py", "unread_for_unread_gate")
+    doc["stage"], doc["seed_files"] = "git", (seeded := [p for p in changed if U.cited_kind(p) is not None])
+    docs = Docs(U, lo)
+    gone = removed(U, lo, top, changed, seeded, docs)
+    could = unnamed(U, top, plausible(lo, gone, cache), docs, d)
+    doc["went"] = sorted(f"{r}:{n}" for r, n in could)[:40]
+    if not could:
+        doc["notes"].append(f"{len(seeded)} seed file(s) changed, and of the {len(gone)} name(s) they no longer hold, "
+                            "none that the analysis's Lean could hold is gone from every seed file")
+        return doc
+    LA = load(code / LEAN_TOOL / "lean_audit.py", "lean_audit_for_unread_gate")
+    cache.mkdir(parents=True, exist_ok=True)
+    for old in cache.glob("work-*"):
+        if not Path("/proc", old.name.split("-")[1]).exists():
+            shutil.rmtree(old, ignore_errors=True)
+    work = Path(tempfile.mkdtemp(prefix=f"work-{os.getpid()}-", dir=cache))
+    try:
+        doc |= {"stage": "facts", **judge(U, LA, base, lo, top, could, work, cache)}
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+        for old in sorted(cache.glob("*.jsonl.gz"), key=lambda f: f.stat().st_mtime, reverse=True)[KEPT:]:
+            old.unlink(missing_ok=True)
     return doc
 
 
