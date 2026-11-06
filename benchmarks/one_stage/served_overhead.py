@@ -7,14 +7,15 @@ stock control, the same endpoint, engine and load with no protocol and no Commit
 
 A serve dir's traces and the load's records hold request values and stay on the node, so `metrics` runs there, over each
 serve dir, and prints one aggregate a line (`aggregate`): each load's counts and metrics, the Commit windows' parts, the
-engine's identity and scheduler, and no step's or request's own times or values. That line is what leaves the node
-(`served_verdicts.sh`'s ``$OUT/serve/overhead.json``, `served_stock.sh`'s ``$OUT/<lifetime>/overhead.json``), the
-composed run's in its published form: `served_verdicts.py publish` holds its loads' counts, span and windows in the serve
-dir's ``private/out``. `table`'s RUN is a full aggregate (a stock run's file, or the composed run's
-``private/out/serve/overhead.json`` on the node), or a serve dir when it runs on the node; it refuses a published one.
+engine's identity and scheduler, and no step's or request's own times or values. That line is `served_verdicts.sh`'s
+``$OUT/serve/overhead.json``, which leaves the node in its published form: `served_verdicts.py publish` holds its loads'
+counts, span and windows in the serve dir's ``private/out``. `served_stock.sh`'s,
+``SERVE_ROOT/runs/RUN/<lifetime>/overhead.json``, stays on the node whole, with the load's private counts. `table`'s RUN
+is a full aggregate (a stock run's file, or the composed run's ``private/out/serve/overhead.json``, each on the node), or
+a serve dir when it runs on the node; it refuses a published one.
 
-Two rulers, each the same code in both arms. The client's is `examples/vllm/serve_load.py --varied`'s timings file
-(``load.timings.json`` beside its record, on the node, which `metrics` reads there): each request's
+Two rulers, each the same code in both arms. The client's is `examples/vllm/serve_load.py`'s timings file, a ``--varied``
+or a ``--fixed`` load's alike (``load.timings.json`` beside its record, on the node, which `metrics` reads there): each request's
 send, first-token and done times on the client's monotonic clock. Per load, from it:
 
 - ``client_time_per_output_token_s``: the first send to the last done, over the output ids the requests streamed;
