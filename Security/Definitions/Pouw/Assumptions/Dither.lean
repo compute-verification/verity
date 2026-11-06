@@ -39,6 +39,8 @@ public best; it enters `κ` once a round.
 
 @[expose] public section
 
+open Claims renaming Ex → avg
+
 namespace Pouw.Assumptions
 
 open Pouw.RelativeSecurity Pouw.Dither

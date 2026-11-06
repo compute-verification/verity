@@ -13,6 +13,8 @@ and the escape slack on sampled proofs catching each faulty block whatever came 
 
 @[expose] public section
 
+open Verity.Game renaming prPMFReal → prob
+
 namespace Nci.Assumptions
 
 open Nci.Dampener

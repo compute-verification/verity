@@ -22,6 +22,8 @@ summing to 1 (`prob_add_not`).
 
 @[expose] public section
 
+open Verity.Game renaming prPMFReal → prob
+
 namespace Nci.SecurityProofs
 
 open Verity Nci.Dampener
@@ -29,7 +31,7 @@ open Verity Nci.Dampener
 /-- `prob` is monotone in the event. -/
 theorem prob_mono {Ω : Type} [Fintype Ω] (μ : PMF Ω) {E F : Ω → Prop} (h : ∀ ω, E ω → F ω) :
     prob μ E ≤ prob μ F := by
-  unfold prob
+  simp only [prob_eq_sum]
   refine Finset.sum_le_sum fun ω _ => ?_
   by_cases hE : E ω
   · simp [hE, h ω hE]
@@ -45,7 +47,7 @@ theorem prob_add_not {Ω : Type} [Fintype Ω] (μ : PMF Ω) (E : Ω → Prop) :
   have h1 : ∑ ω, (μ ω).toReal = 1 := by
     have h := congrArg ENNReal.toReal h0
     rwa [ENNReal.toReal_sum fun ω _ => μ.apply_ne_top ω, ENNReal.toReal_one] at h
-  unfold prob
+  simp only [prob_eq_sum]
   rw [← Finset.sum_add_distrib, ← h1]
   refine Finset.sum_congr rfl fun ω _ => ?_
   by_cases h : E ω <;> simp [h]
@@ -53,7 +55,7 @@ theorem prob_add_not {Ω : Type} [Fintype Ω] (μ : PMF Ω) (E : Ω → Prop) :
 /-- The union bound: `P(E ∨ F) ≤ P(E) + P(F)`. -/
 theorem prob_or_le {Ω : Type} [Fintype Ω] (μ : PMF Ω) (E F : Ω → Prop) :
     prob μ (fun ω => E ω ∨ F ω) ≤ prob μ E + prob μ F := by
-  unfold prob
+  simp only [prob_eq_sum]
   rw [← Finset.sum_add_distrib]
   refine Finset.sum_le_sum fun ω _ => ?_
   have hq : 0 ≤ (μ ω).toReal := ENNReal.toReal_nonneg
@@ -69,7 +71,7 @@ theorem prob_ge_of_not {Ω : Type} [Fintype Ω] (μ : PMF Ω) {G F : Ω → Prop
 /-- **Markov's inequality** on a finite outcome space: for `Z ≥ 0`, `a · P(a < Z) ≤ E[Z]`. -/
 theorem markov {Ω : Type} [Fintype Ω] (μ : PMF Ω) (Z : Ω → ℝ) (hZ : ∀ ω, 0 ≤ Z ω) (a : ℝ) :
     a * prob μ (fun ω => a < Z ω) ≤ ∑ ω, (μ ω).toReal * Z ω := by
-  unfold prob
+  simp only [prob_eq_sum]
   rw [Finset.mul_sum]
   refine Finset.sum_le_sum fun ω _ => ?_
   have hq : 0 ≤ (μ ω).toReal := ENNReal.toReal_nonneg
@@ -83,7 +85,8 @@ theorem markov {Ω : Type} [Fintype Ω] (μ : PMF Ω) (Z : Ω → ℝ) (hZ : ∀
 wrong. -/
 theorem expected_wrong {Ω : Type} [Fintype Ω] (μ : PMF Ω) {N : ℕ} (c : Fin N → ℝ) (wrong : Ω → Fin N → Prop) :
     ∑ ω, (μ ω).toReal * wrongCapacity c (wrong ω) = ∑ i, c i * prob μ (fun ω => wrong ω i) := by
-  unfold wrongCapacity prob
+  unfold wrongCapacity
+  simp only [prob_eq_sum]
   simp only [Finset.mul_sum]
   refine Finset.sum_comm.trans (Finset.sum_congr rfl fun i _ => Finset.sum_congr rfl fun ω _ => ?_)
   by_cases h : wrong ω i <;> simp [h, mul_comm]

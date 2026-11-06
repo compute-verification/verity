@@ -22,6 +22,8 @@ public import Proofs.Accounting.Lemmas.Compose
 
 @[expose] public section
 
+open Claims renaming Ex → expect
+
 namespace Properties.Served.SecurityProofs
 
 open Pouw.RelativeSecurity
