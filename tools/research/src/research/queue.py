@@ -5070,8 +5070,8 @@ def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str |
     unless ``again`` (a re-mark at an ejected head would fail a second train on the same line).  Before any of it, a PR
     `PR.outside` refuses (its head on another repository than ``github``'s, or an author the organization doesn't have) is
     refused, then ``goals`` (`goal_gate`) refuses a PR whose body names no live goal of the Goals page and no `Issue: none:
-    REASON`, then ``records`` (`RecordsGate`, which `--no-preflight` keeps) refuses a head that changes a Lean lock no records run
-    or Lean check passed on the head's Lean inputs for that package (`lean_passed`),
+    REASON`, then ``records`` (`RecordsGate`, which `--no-preflight` keeps) refuses a head that changes a Lean lock no records run passed, of
+    it or of a commit with the same inputs for that package,
     then ``preflight`` (`Preflight`; None with `--no-preflight`) refuses a head that would break `next`, with the fix.  With ``sha``
     (`--sha`) it marks only that head: GitHub's head lags a push by seconds (`git push && research queue ready N --mark` can mark
     the old head), so it reads again, up to `SHA_READS` times, and refuses when GitHub still has another head.  A PR based
