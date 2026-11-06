@@ -12,8 +12,8 @@ public import Proofs.Flock.SamplingGeneric.Session
 `Compiled.RunsFixed`), and the extraction's deterministic half is `Compiled.split`'s with the interior roots read at a
 replay block. Only the failure event changes: its candidate sets are sets `Y` of proof blocks whose counts per cell
 (`counts`) are a footprint of acceptance probability at most `δ` (`S₁Two`), and a kept inner run is bad when it finds no
-block of any set at least as large as `Y` in every cell (`above`), which every kept outer run's incorrect set at its own
-interior values is.
+block of any set that escapes no more than `Y` in every replay block (`above`), which every kept outer run's incorrect
+set at its own interior values does when `Y` is the incorrect set at each replay block's best interior.
 
 * `escCell_nonneg`, `escCell_le_one`, `escCell_zero`, `escCell_anti`: a cell's escape is a probability, `1` at no
   incorrect proof block and antitone in their count.
@@ -22,13 +22,15 @@ interior values is.
   is at most `P̄_a` (`Sessions.replayDraws`).
 * `inner_badTwo_le`, `outer_badTwo_le`, `pr_failsTwo_le_of`: **the failure event's probability**, at `Compiled`'s
   `κ_δ` and `γ`: the inner wait's union bound over `above Y` (at most `2^{n_PU}` sets) at the second stage's miss
-  (`Sessions.secondDraws`, at most `∏_{ρ∈S} e_ρ` at `Y`'s counts by `escCell_anti`), and the outer wait's over `S₁Two`
+  (`Sessions.secondDraws`, at most `∏_{ρ∈S} e_ρ` at `Y`'s counts, by `above`), and the outer wait's over `S₁Two`
   (at most `2^{n_PU}`), the two within the waits' slack.
-* `exists_counts`, `splitTwo`: **the deterministic half**. At an accepted run whose extraction fails, without an own-call
-  collision the kept openings assemble a witness whose footprint is refused at `δ`; a `Y` with its counts is in
-  `S₁Two`, and each kept outer run's incorrect set at the interior values its interior roots open is in `above Y`
-  (each cell's at least the footprint, the infimum); a block of it found at a kept inner run would be correct
-  (`Sessions.opens`, with the interior roots fixed by `Sessions.interior`).
+* `wrongAll`, `inter_cell_wrongAll`, `exists_best_interior`: the incorrect proof blocks at interiors, cell by cell,
+  and a replay block's best interior, at which it escapes the most (its escape takes finitely many values).
+* `splitTwo`: **the deterministic half**. At an accepted run whose extraction fails, without an own-call collision the
+  kept openings assemble a witness whose footprint is refused at `δ` at every interior; `Y`, its incorrect set at each
+  replay block's best interior, is in `S₁Two`, and each kept outer run's incorrect set at the interior values its
+  interior roots open is in `above Y` (no interior escapes more than the best); a block of it found at a kept inner run
+  would be correct (`Sessions.opens`, with the interior roots fixed by `Sessions.interior`).
 * `compilerKSTwo`: **`CompilerKSTwo`**.
 -/
 
@@ -141,24 +143,74 @@ theorem cell_disj {Pt Pρ : Partition} {ρ t ρ' t' v : ℕ} (h : v ∈ cell Pt 
   ⟨Option.some.inj ((replayOf_of_mem_cell h).symm.trans (replayOf_of_mem_cell h')),
     (mem_filter.1 h).2.2.symm.trans (mem_filter.1 h').2.2⟩
 
-theorem footprint_le (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt Pρ : Partition) (w : Wit)
-    (ρ t : ℕ) (ι : ℕ → Bool) : footprint H Cm s Pt Pρ w ρ t ≤ (wrongIn H Cm s Pt Pρ w ρ t ι).card :=
-  ciInf_le (OrderBot.bddBelow _) ι
+open Classical in
+theorem wrongIn_subset_cell (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt Pρ : Partition)
+    (w : Wit) (ρ t : ℕ) (ι : ℕ → Bool) : wrongIn H Cm s Pt Pρ w ρ t ι ⊆ cell Pt Pρ ρ t :=
+  filter_subset _ _
+
+/-- **The incorrect proof blocks at interior values `ι`** over the grid of replay blocks and strata: each cell's at its
+replay block's interior. -/
+noncomputable def wrongAll (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt Pρ : Partition)
+    (w : Wit) (ι : ℕ → ℕ → Bool) : Finset ℕ :=
+  (range Pρ.blocks.length ×ˢ range Pt.strata.length).biUnion fun p => wrongIn H Cm s Pt Pρ w p.1 p.2 (ι p.1)
+
+theorem wrongAll_subset (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt Pρ : Partition)
+    (w : Wit) (ι : ℕ → ℕ → Bool) : wrongAll H Cm s Pt Pρ w ι ⊆ range Pt.blocks.length := by
+  intro v hv
+  obtain ⟨p, _, hvp⟩ := mem_biUnion.1 hv
+  exact cell_subset Pt Pρ p.1 p.2 (wrongIn_subset_cell H Cm s Pt Pρ w p.1 p.2 _ hvp)
+
+/-- On the grid, a cell's share of `wrongAll` is its incorrect proof blocks at its replay block's interior. -/
+theorem inter_cell_wrongAll (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt Pρ : Partition)
+    (w : Wit) (ι : ℕ → ℕ → Bool) {ρ t : ℕ} (hρ : ρ < Pρ.blocks.length) (ht : t < Pt.strata.length) :
+    wrongAll H Cm s Pt Pρ w ι ∩ cell Pt Pρ ρ t = wrongIn H Cm s Pt Pρ w ρ t (ι ρ) := by
+  ext v
+  rw [mem_inter]
+  constructor
+  · rintro ⟨hv, hvc⟩
+    obtain ⟨p, _, hvp⟩ := mem_biUnion.1 hv
+    obtain ⟨h1, h2⟩ := cell_disj (wrongIn_subset_cell H Cm s Pt Pρ w p.1 p.2 _ hvp) hvc
+    subst h1
+    subst h2
+    exact hvp
+  · intro hv
+    exact ⟨mem_biUnion.2 ⟨(ρ, t), mem_product.2 ⟨mem_range.2 hρ, mem_range.2 ht⟩, hv⟩,
+      wrongIn_subset_cell H Cm s Pt Pρ w ρ t _ hv⟩
 
 open Classical in
-theorem footprint_le_cell (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt Pρ : Partition)
-    (w : Wit) (ρ t : ℕ) : footprint H Cm s Pt Pρ w ρ t ≤ (cell Pt Pρ ρ t).card :=
-  (footprint_le H Cm s Pt Pρ w ρ t fun _ => false).trans (card_le_card (filter_subset _ _))
+/-- **A best interior** of replay block `ρ`: one at which `ρ` escapes the second stage at least as often as at any
+other. Its escape reads only its incorrect proof blocks, one of finitely many sets. -/
+theorem exists_best_interior (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt : Partition)
+    (d : Design.Two) (w : Wit) {ρ : ℕ} (hρ : ρ < d.part.blocks.length) :
+    ∃ ι : ℕ → Bool, ∀ ι' : ℕ → Bool,
+      d.esc Pt (footprint H Cm s Pt d.part w fun _ => ι') ρ ≤ d.esc Pt (footprint H Cm s Pt d.part w fun _ => ι) ρ := by
+  have hf : ∀ ι' : ℕ → Bool, d.esc Pt (footprint H Cm s Pt d.part w fun _ => ι') ρ =
+      d.esc Pt (fun ρ t => ((wrongAll H Cm s Pt d.part w fun _ => ι') ∩ cell Pt d.part ρ t).card) ρ := by
+    intro ι'
+    refine prod_congr rfl fun t ht => ?_
+    show escCell _ _ (wrongIn H Cm s Pt d.part w ρ t ι').card =
+      escCell _ _ ((wrongAll H Cm s Pt d.part w fun _ => ι') ∩ cell Pt d.part ρ t).card
+    rw [inter_cell_wrongAll H Cm s Pt d.part w _ hρ (mem_range.1 ht)]
+  have hA : ∀ ι' : ℕ → Bool, (wrongAll H Cm s Pt d.part w fun _ => ι') ∈
+      (range Pt.blocks.length).powerset.filter fun Z => ∃ ι'' : ℕ → Bool, (wrongAll H Cm s Pt d.part w fun _ => ι'') = Z :=
+    fun ι' => mem_filter.2 ⟨mem_powerset.2 (wrongAll_subset H Cm s Pt d.part w _), ι', rfl⟩
+  obtain ⟨Z, hZ, hmax⟩ := ((range Pt.blocks.length).powerset.filter fun Z =>
+      ∃ ι'' : ℕ → Bool, (wrongAll H Cm s Pt d.part w fun _ => ι'') = Z).exists_max_image
+    (fun Z => d.esc Pt (fun ρ t => (Z ∩ cell Pt d.part ρ t).card) ρ) ⟨_, hA fun _ => false⟩
+  obtain ⟨ι, hι⟩ := (mem_filter.1 hZ).2
+  refine ⟨ι, fun ι' => ?_⟩
+  rw [hf, hf, hι]
+  exact hmax _ (hA ι')
 
 end Claims.Sampling
 
 namespace Claims.SamplingGeneric
 
 open Claims Finset
-open Claims.Sampling (AuditStatement Partition InScopeTwo RTwo cell escCell replayOf footprint wrongIn forkOn
+open Claims.Sampling (AuditStatement Partition InScopeTwo RTwo cell counts escCell replayOf footprint wrongIn forkOn
   forkOn_forkOn' accList AllBad wait_bad_le Pr_or_le slack slack_pos Pr_acc_forkOn Opening OwnColl agree_of_passes
   val_assemble ιOf ιOf_eq acc_of_accList accList_length_eq assemble escCell_anti Ex_esc_le cell_subset cell_disj
-  replayOf_of_mem_cell footprint_le footprint_le_cell)
+  replayOf_of_mem_cell wrongAll wrongAll_subset inter_cell_wrongAll exists_best_interior)
 open Claims.Recursion (serve viewing)
 
 namespace CompiledTwo
@@ -167,9 +219,6 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg 
 
 /-! ## The failure event -/
 
-/-- `Y`'s proof blocks in cell `(ρ, t)`. -/
-def counts (Pt Pρ : Partition) (Y : Finset ℕ) (ρ t : ℕ) : ℕ := (Y ∩ cell Pt Pρ ρ t).card
-
 open Classical in
 /-- **The candidate sets**: sets of proof blocks whose counts per cell are a footprint of acceptance probability at
 most `δ`. -/
@@ -177,10 +226,10 @@ noncomputable def S₁Two (Pt : Partition) (d : Claims.Sampling.Design.Two) (δ 
   (range Pt.blocks.length).powerset.filter fun Y => d.Pa Pt (counts Pt d.part Y) ≤ δ
 
 open Classical in
-/-- The sets of proof blocks at least as large as `Y` in every cell of the grid. -/
+/-- The sets of proof blocks that escape the second stage no more than `Y` in every replay block. -/
 noncomputable def above (Pt : Partition) (d : Claims.Sampling.Design.Two) (Y : Finset ℕ) : Finset (Finset ℕ) :=
   (range Pt.blocks.length).powerset.filter fun X =>
-    ∀ ρ < d.part.blocks.length, ∀ t < Pt.strata.length, counts Pt d.part Y ρ t ≤ counts Pt d.part X ρ t
+    ∀ ρ < d.part.blocks.length, d.esc Pt (counts Pt d.part X) ρ ≤ d.esc Pt (counts Pt d.part Y) ρ
 
 /-- **An outer run bad for the sets `Xs`**, its second stage `g`: the inner wait comes up short, or for some `X ∈ Xs`
 no kept inner run has a proof block of `X` good. -/
@@ -192,7 +241,7 @@ def BadOuterTwo (L : CompiledTwo Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Co
       (fun d uc => ∀ v ∈ X, ¬ L.GoodAt x found (g d) v uc) ((List.finRange (L.cap x)).map e.1) e.2
 
 /-- **The extraction's failure event**: the statement is in scope, and the outer wait comes up short or, for some
-candidate `Y`, every kept outer run is bad for the sets at least as large as `Y`. -/
+candidate `Y`, every kept outer run is bad for the sets that escape no more than `Y`. -/
 def FailsTwo (L : CompiledTwo Coin A) (δ : ℝ) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) (c : L.ECoins x) : Prop :=
   ∃ s Pt d, L.parse x = some s ∧ L.partition s = some Pt ∧ L.two s = some d ∧ InScopeTwo Pt d s ∧
@@ -261,7 +310,7 @@ omit [Inhabited Coin] in
 /-- **One tape's outer wait**: on a statement in scope at `(s, Pt, d)`, where the first stage misses each set of replay
 blocks with probability at most its `P_a` and the second stage misses `X` with at most the product of its cells'
 escapes, the outer wait (times its acceptance) comes up short or, for some candidate `Y`, keeps only runs bad for the
-sets at least as large as `Y`, with probability at most `T + c·(T + c·(δ + E[κr]))`, `T = 2k/K + e^{−k/8}`. -/
+sets that escape no more than `Y`, with probability at most `T + c·(T + c·(δ + E[κr]))`, `T = 2k/K + e^{−k/8}`. -/
 theorem outer_badTwo_le (L : CompiledTwo Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x : Msg)
     (run' : (Fin (L.V.k x) → Coin) → Trace)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop)
@@ -305,9 +354,8 @@ theorem outer_badTwo_le (L : CompiledTwo Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x 
         Pr (fun e : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x (forkOn (L.stage2 x) r e), u ∉ X) ≤ esc r := by
       intro r X hX
       have hXY := (mem_filter.1 hX).2
-      refine (hsecond r X).trans (prod_le_prod₀ (fun ρ _ => prod_nonneg fun t _ => Claims.Sampling.escCell_nonneg _ _ _)
-        fun ρ hρ => prod_le_prod₀ (fun t _ => Claims.Sampling.escCell_nonneg _ _ _) fun t ht => ?_)
-      exact escCell_anti _ _ (hXY ρ (mem_range.1 (mem_filter.1 hρ).1) t (mem_range.1 ht))
+      exact (hsecond r X).trans (prod_le_prod₀ (fun ρ _ => prod_nonneg fun t _ => Claims.Sampling.escCell_nonneg _ _ _)
+        fun ρ hρ => hXY ρ (mem_range.1 (mem_filter.1 hρ).1))
     have hXs : ∀ X ∈ above Pt d Y, ∀ v ∈ X, v < L.nPU x := fun X hX v hv => by
       rw [hPU]
       exact mem_range.1 (mem_powerset.1 (mem_filter.1 hX).1 hv)
@@ -447,43 +495,13 @@ theorem KS_of_splitTwo {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Sessio
 
 /-! ## The split -/
 
-/-- **A set of proof blocks with given counts per cell**, at counts within the cells' sizes: one subset of each cell of
-the grid, of the count's size, their union (the cells are disjoint). -/
-theorem exists_counts (Pt Pρ : Partition) (nR nS : ℕ) (f : ℕ → ℕ → ℕ)
-    (hf : ∀ ρ < nR, ∀ t < nS, f ρ t ≤ (cell Pt Pρ ρ t).card) :
-    ∃ Y ⊆ range Pt.blocks.length, ∀ ρ < nR, ∀ t < nS, counts Pt Pρ Y ρ t = f ρ t := by
-  classical
-  have hZ : ∀ p : ℕ × ℕ, ∃ Z ⊆ cell Pt Pρ p.1 p.2, (p.1 < nR ∧ p.2 < nS → Z.card = f p.1 p.2) := by
-    intro p
-    by_cases hp : p.1 < nR ∧ p.2 < nS
-    · obtain ⟨Z, hZ, hc⟩ := exists_subset_card_eq (hf p.1 hp.1 p.2 hp.2)
-      exact ⟨Z, hZ, fun _ => hc⟩
-    · exact ⟨∅, empty_subset _, fun h => absurd h hp⟩
-  choose Z hZsub hZcard using hZ
-  refine ⟨(range nR ×ˢ range nS).biUnion Z, fun v hv => ?_, fun ρ hρ t ht => ?_⟩
-  · obtain ⟨p, _, hvp⟩ := mem_biUnion.1 hv
-    exact cell_subset Pt Pρ p.1 p.2 (hZsub p hvp)
-  · unfold counts
-    have e : (range nR ×ˢ range nS).biUnion Z ∩ cell Pt Pρ ρ t = Z (ρ, t) := by
-      ext v
-      rw [mem_inter, mem_biUnion]
-      constructor
-      · rintro ⟨⟨p, _, hvp⟩, hvc⟩
-        obtain ⟨h1, h2⟩ := cell_disj (hZsub p hvp) hvc
-        have hp : p = (ρ, t) := Prod.ext h1 h2
-        rw [← hp]
-        exact hvp
-      · intro hv
-        exact ⟨⟨(ρ, t), mem_product.2 ⟨mem_range.2 hρ, mem_range.2 ht⟩, hv⟩, hZsub _ hv⟩
-    rw [e, hZcard _ ⟨hρ, ht⟩]
-
 /-- **The split**: at an accepted run whose extraction fails, the failure event holds or the extractor's own calls
 collide. Otherwise the kept openings agree (`agree_of_passes`) and assemble a witness `w` whose footprint is refused at
-`δ`; take `Y` with its counts (`exists_counts`) and a kept outer run `r`. In each cell the proof blocks incorrect at the
-interior values the kept openings under `r`'s interior roots of their replay block give are at least the footprint
-(`footprint_le`), so their union is at least as large as `Y`; a kept inner run at which one is found would make it
-correct (`Sessions.opens`, its revealed openings kept by `Compiled.mem_found`, the interior roots `r`'s by
-`Sessions.interior`), so `r` is bad for it. -/
+`δ` at every interior; take `Y`, its incorrect proof blocks at each replay block's best interior
+(`exists_best_interior`), and a kept outer run `r`. The proof blocks incorrect at the interior values the kept openings
+under `r`'s interior roots give escape no more than `Y` in each replay block, at its best interior; a kept inner run at
+which one is found would make it correct (`Sessions.opens`, its revealed openings kept by `Compiled.mem_found`, the
+interior roots `r`'s by `Sessions.interior`), so `r` is bad for it. -/
 theorem splitTwo {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H) (δ : ℝ)
     (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω) (r₀ : Fin (L.V.k x) → Coin) (c : L.ECoins x)
     (hacc : (run H P L.V x ω r₀).out = .acc)
@@ -506,35 +524,44 @@ theorem splitTwo {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.commit.Bi
     fun q hq q' hq' h1 h2 => agree_of_passes hbind hpass hcoll hq hq' h1 h2
   rw [L.E_eval H P x ω r₀ c hs hacc] at hfail
   set w := assemble s fd with hw
-  have hPa : d.Pa Pt (footprint H L.commit s Pt d.part w) ≤ δ := by
+  have hPa : ∀ ι, d.Pa Pt (footprint H L.commit s Pt d.part w ι) ≤ δ := fun ι => by
     by_contra hlt
-    exact hfail ⟨s, Pt, d, hs, hPt, hd, lt_of_not_ge hlt⟩
-  obtain ⟨Y, hYsub, hY⟩ := exists_counts Pt d.part d.part.blocks.length Pt.strata.length
-    (footprint H L.commit s Pt d.part w) fun ρ _ t _ => footprint_le_cell H L.commit s Pt d.part w ρ t
-  have hYS : Y ∈ S₁Two Pt d δ := by
-    refine mem_filter.2 ⟨mem_powerset.2 hYsub, ?_⟩
-    rw [d.Pa_congr Pt hY]
-    exact hPa
+    exact hfail ⟨s, Pt, d, hs, hPt, hd, ι, lt_of_not_ge hlt⟩
+  have hbest : ∀ ρ, ∃ ι : ℕ → Bool, ρ < d.part.blocks.length → ∀ ι' : ℕ → Bool,
+      d.esc Pt (footprint H L.commit s Pt d.part w fun _ => ι') ρ ≤
+        d.esc Pt (footprint H L.commit s Pt d.part w fun _ => ι) ρ := by
+    intro ρ
+    by_cases hρ : ρ < d.part.blocks.length
+    · obtain ⟨ι, hι⟩ := exists_best_interior H L.commit s Pt d w hρ
+      exact ⟨ι, fun _ => hι⟩
+    · exact ⟨fun _ => false, fun h => absurd h hρ⟩
+  choose ιs hιs using hbest
+  have hesc : ∀ (ι : ℕ → ℕ → Bool) ρ, ρ < d.part.blocks.length →
+      d.esc Pt (counts Pt d.part (wrongAll H L.commit s Pt d.part w ι)) ρ =
+        d.esc Pt (footprint H L.commit s Pt d.part w fun _ => ι ρ) ρ := fun ι ρ hρ =>
+    prod_congr rfl fun t ht => by
+      show escCell _ _ ((wrongAll H L.commit s Pt d.part w ι) ∩ cell Pt d.part ρ t).card =
+        escCell _ _ (wrongIn H L.commit s Pt d.part w ρ t (ι ρ)).card
+      rw [inter_cell_wrongAll H L.commit s Pt d.part w ι hρ (mem_range.1 ht)]
+  have hYS : wrongAll H L.commit s Pt d.part w ιs ∈ S₁Two Pt d δ := by
+    refine mem_filter.2 ⟨mem_powerset.2 (wrongAll_subset H L.commit s Pt d.part w ιs), ?_⟩
+    exact (d.Pa_congr Pt (f := counts Pt d.part (wrongAll H L.commit s Pt d.part w ιs))
+      (g := footprint H L.commit s Pt d.part w ιs)
+      fun ρ hρ t ht => congrArg card (inter_cell_wrongAll H L.commit s Pt d.part w ιs hρ ht)).trans_le (hPa ιs)
   by_cases hshort : (accList (fun r => (run' r).out = .acc) (L.k x) ((List.finRange (L.cap x)).map c.1)).length <
     L.k x
   · exact Or.inl hshort
-  refine Or.inr ⟨Y, hYS, accList_length_eq hshort, fun j r hj => ?_⟩
+  refine Or.inr ⟨_, hYS, accList_length_eq hshort, fun j r hj => ?_⟩
   have hjZ := L.mem_outerList H x run' c hj
   by_cases hshort2 : (accList (fun d => (run' (forkOn (L.stage2 x) r d)).out = .acc) (L.k x)
     ((List.finRange (L.cap x)).map (c.2.1 j))).length < L.k x
   · exact Or.inl hshort2
   let ιr : ℕ → ℕ → Bool := fun ρ => ιOf fd (L.iroots x (run' r).seen ρ)
-  let Xr : Finset ℕ := (range d.part.blocks.length ×ˢ range Pt.strata.length).biUnion fun p =>
-    wrongIn H L.commit s Pt d.part w p.1 p.2 (ιr p.1)
-  have hXr : Xr ∈ above Pt d Y := by
-    refine mem_filter.2 ⟨mem_powerset.2 fun v hv => ?_, fun ρ hρ t ht => ?_⟩
-    · obtain ⟨p, _, hvp⟩ := mem_biUnion.1 hv
-      exact cell_subset Pt d.part p.1 p.2 ((filter_subset _ _) hvp)
-    · rw [hY ρ hρ t ht]
-      refine (footprint_le H L.commit s Pt d.part w ρ t (ιr ρ)).trans (card_le_card fun v hv => ?_)
-      exact mem_inter.2 ⟨mem_biUnion.2 ⟨(ρ, t), mem_product.2 ⟨mem_range.2 hρ, mem_range.2 ht⟩, hv⟩,
-        (filter_subset _ _) hv⟩
-  refine Or.inr ⟨Xr, hXr, accList_length_eq hshort2, fun l e hl v hv hgood => ?_⟩
+  have hXr : wrongAll H L.commit s Pt d.part w ιr ∈ above Pt d (wrongAll H L.commit s Pt d.part w ιs) := by
+    refine mem_filter.2 ⟨mem_powerset.2 (wrongAll_subset H L.commit s Pt d.part w ιr), fun ρ hρ => ?_⟩
+    rw [hesc ιr ρ hρ, hesc ιs ρ hρ]
+    exact hιs ρ hρ (ιr ρ)
+  refine Or.inr ⟨_, hXr, accList_length_eq hshort2, fun l e hl v hv hgood => ?_⟩
   obtain ⟨⟨ρ', t'⟩, _, hvp⟩ := mem_biUnion.1 hv
   obtain ⟨hvcell, hvwrong⟩ := mem_filter.1 hvp
   obtain ⟨i, hvlt, hvi, xS, vS, hsess, hsh, wS, hwS, hRw⟩ := hgood
