@@ -1,0 +1,86 @@
+{
+ "content_digest": "4bc532b251b2eaf9390a7001b87e6e498b41766a7b6ef7ff759117d5806981ff",
+ "content_digest_rule": "sha256 of the canonical JSON of {schema, set, relation, n, ports, files without index.json}",
+ "files": {
+  "cs.u16": {
+   "bytes": 512,
+   "sha256": "5bbac6cd16b27d1dc8e9952e18f98859410f6872759f2815a0dd7525c01a88ae"
+  },
+  "index.json": {
+   "bytes": 402,
+   "sha256": "f7726c4e5bbfd1f9dae66d12b3f6de58a821e677a001d1db1f4ea2bcc1f6e581"
+  },
+  "out.u16": {
+   "bytes": 512,
+   "sha256": "5d44ee8821040f084f5815127c8261fe866a80f6cec423cd6dce792081d4c140"
+  },
+  "x.u16": {
+   "bytes": 512,
+   "sha256": "96d1cc32e546468d16d08be33c6e8d833a7a5692d33ee05302cca48e0a42c352"
+  }
+ },
+ "n": 4,
+ "ports": {
+  "cs": {
+   "dtype": "u16",
+   "file": "cs.u16",
+   "words": 64
+  },
+  "out": {
+   "dtype": "u16",
+   "file": "out.u16",
+   "words": 64
+  },
+  "x": {
+   "dtype": "u16",
+   "file": "x.u16",
+   "words": 64
+  }
+ },
+ "provenance": {
+  "manifest_digest": null,
+  "model": null,
+  "pair": null,
+  "program_digests": {
+   "RoPEHead_v1{D=64}": "57fab977f7eea6eb7e8d474e851842f8b1810157198b0680ecda481585c7a92d3515c7276cb9d9b27cb70f39e8b3370c025a54d0ec41b29a02727e0504f7b249"
+  },
+  "recipe": {
+   "admission": "every BF16 output word finite (Subcircuit.admitted); instance i = the i-th admitted draw",
+   "draw": "templates.Subcircuit.draw(key, j): each port's words from key.stream((port, j), 4 bytes per word)",
+   "draws": 4,
+   "generator": "verity_numerical.bench.generate",
+   "key": "verity.ml.randomness.derive(b'verity input-set synthetic', 'verity/input-sets/synthetic/v1', {'subcircuit': 'rope-head/d64/neox-bf16', 'seed': 20260926})",
+   "n": 4,
+   "parameters": {
+    "D": 64
+   },
+   "rejected": 0,
+   "rejected_draws": [],
+   "samplers": {
+    "cs": "bf16 window: exponent field 120 +- h, h in [6] per draw; 1/32 edge words [0, 32768, 1, 32769, 16256, 49024] (|c|, |s| < 1)",
+    "x": "bf16 window: exponent field 127 +- h, h in [4, 16] per draw; 1/32 edge words [0, 32768, 1, 32769, 16256, 49024]"
+   },
+   "seed": 20260926,
+   "subcircuit": "rope-head/d64/neox-bf16",
+   "template": "rope-head"
+  },
+  "research_run": null,
+  "revision": null,
+  "row": null,
+  "row_key": null,
+  "run_root": null,
+  "selection": "the first n admitted draws, in draw order",
+  "source": "synthetic",
+  "versions": null
+ },
+ "relation": {
+  "definition": "RoPE_v1",
+  "rule": "out[i] = bf16_rn(RN32(x[i]*c[i] - x[i+R]*s[i])), out[i+R] = bf16_rn(RN32(x[i+R]*c[i] + x[i]*s[i])), cs = [c | s], R = D/2",
+  "statics": {
+   "D": 64
+  },
+  "subcircuit": "RoPEHead<64>"
+ },
+ "schema": "input-set/v1",
+ "set": "rope-head-d64"
+}

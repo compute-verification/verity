@@ -20,7 +20,7 @@
 # varied requests (network-accounting's traffic, `serve_load.py --varied`), each numbered under a fresh release run and
 # sent up to the jitter late, then `tools/admit_rows_check.py` over the serve dir: every window's first rows must be in
 # admission order, else the endpoint stops (exit 14). After UNTIL the check runs again over everything served.
-# `verity example vllm serve` (run.sh) starts it where placement.toml's [run.serve] says, on one leased GPU, with the node's VENV,
+# `verity demo vllm serve` (run.sh) starts it where placement.toml's [run.serve] says, on one leased GPU, with the node's VENV,
 # CUDA_HOME, HF_HOME, HIDDEN_SO and NORM_TAP_SO, the run's SERVE_ROOT, and the workload's REPO, REV and ROW (the Commit of record's
 # workload dir, named by the workload's id) as its environment; --env PORT=... and --env UNTIL=... after `serve` change the run's own. Windows are sealed off the engine loop and close at WINDOW_GB committed; the server itself also refuses to start, and later
 # stops taking requests, below DISK_FLOOR_GB free on the serve dir's filesystem, and copies its records into $OUT after each
@@ -41,7 +41,7 @@ set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 PORT=${PORT:-18084} UNTIL=${UNTIL:-13:30} ADMIT=${ADMIT:-arrival} MAX_MODEL_LEN=${MAX_MODEL_LEN:-512} BURSTS=${BURSTS:-8} PER_BURST=${PER_BURST:-4} CAP=${CAP:-8388608}
 for v in REPO REV ROW HIDDEN_SO NORM_TAP_SO VENV CUDA_HOME HF_HOME SERVE_ROOT; do
-  [ -n "${!v:-}" ] || { echo "serve.sh: no $v: start it with \`verity example vllm serve\` (examples/vllm/run.sh)"; exit 2; }
+  [ -n "${!v:-}" ] || { echo "serve.sh: no $v: start it with \`verity demo vllm serve\` (examples/vllm/run.sh)"; exit 2; }
 done
 TREE=$PWD
 ROOT=$SERVE_ROOT
@@ -52,14 +52,14 @@ export CUDA_HOME TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions
 export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
 export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src
 export TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=host
-export HIDDEN_GPU_BUILD=$ROOT/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
+export NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
 # A learning step's transient host copy: a 1,984-token prefill step stages over 16 GiB, past the
 # collector's 4096 MiB default, and isn't committed; lease --mem-gb 256 with it.
 [ "$MAX_MODEL_LEN" -gt 512 ] && export VERITY_LEARN_HOST_BUDGET_MB=${VERITY_LEARN_HOST_BUDGET_MB:-65536}
 rs() { "$PY" -m research "$@" 2>&1 || research "$@" 2>&1; }
 { id; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; echo "serve dir $D port $PORT until $UNTIL"; nvidia-smi -L; } | tee "$OUT/machine.txt"
 rs keep "$ROOT" --owner @vllm --expires 7d --priority high \
-  --why "G-A (network accounting): LLAMA32_1B serve-openai windows sealed as rows-sha512 row dirs for PROVE-PATH" | tail -2
+  --why "G-A (network certification): LLAMA32_1B serve-openai windows sealed as rows-sha512 row dirs for PROVE-PATH" | tail -2
 cd "$TREE/integrations/vllm"
 vv() { "$PY" -m verity_vllm.pipeline.cli "$@"; }
 compiler_args() {   # DIR: `verity-vllm advice`'s --compiler-name/--compiler-digest for the served run DIR (its serve.json)
@@ -109,7 +109,7 @@ echo "PREDICT-COMPARE $(tail -1 "$OUT/predict_compare.log")" | tee -a "$OUT/step
 # finishes the pending seals
 "$PY" -m verity_vllm.pipeline.cli serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" --precision pin \
   --run-id "${RESEARCH_RUN_ID:-local}" \
-  --scheme rows-sha512 --seal --gpu-tree --window-steps 256 --required-manifest "$PRED/manifest.json" --hidden-so "$HIDDEN_SO" \
+  --scheme rows-sha512 --seal --window-steps 256 --required-manifest "$PRED/manifest.json" --hidden-so "$HIDDEN_SO" \
   --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 --admit "$ADMIT" --max-model-len "$MAX_MODEL_LEN" \
   --window-gb "${WINDOW_GB:-32}" --disk-floor-gb "$DISK_FLOOR_GB" \
   --seal-hold-gb "${SEAL_HOLD_GB:-64}" --seal-warm-gb "${SEAL_WARM_GB:-0}" ${MAX_NUM_SEQS:+--max-num-seqs "$MAX_NUM_SEQS"} \

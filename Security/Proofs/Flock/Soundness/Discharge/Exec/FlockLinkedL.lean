@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.Exec.FlockLinkL
 public import Proofs.Flock.Soundness.Audit.FlockLinked
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # The compiled-layer audit with `δ_link` discharged

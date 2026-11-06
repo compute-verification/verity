@@ -18,7 +18,7 @@ import pytest
 
 from verity.ml.circuits import Program, bind
 from verity.ml.circuits import query_ast as G
-from verity.ml.circuits.partition import Level, members_per_parent, validate_partition
+from verity.ml.circuits.partition import Level, validate_partition
 from verity.ml.circuits.ops import gemm
 from verity.core.protocols.profile import HARM_MARGIN, MARGIN, Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
 
@@ -231,10 +231,10 @@ def test_a_chain_read_off_a_program_gives_the_profile_its_sizes():
     computed = [(32 + 4 * 32, program.gates)]
     assert validate_partition(program, coarse, within=computed).status == "exact"
     assert validate_partition(program, fine, within=computed).status == "exact"
-    per = members_per_parent(program, coarse, fine)
-    assert per == (2, 2, 2, 2)
+    per, rest = divmod(fine.count(), coarse.count())   # `each` nests fine in coarse, the same count in every coordinate
+    assert (per, rest) == (2, 0)
     a = IntegrityProfile((Level("coordinate", G.query_id(coarse_q)), Level("call", G.query_id(fine_q))),
-                         (coarse.count(), per[0]), {"coordinate": Bernoulli(Fraction(1, 2)), "call": Subset(1)}, 0.01)
+                         (coarse.count(), per), {"coordinate": Bernoulli(Fraction(1, 2)), "call": Subset(1)}, 0.01)
     assert a.count("call") == fine.count() == 8 and a.accept(2) == Fraction(1, 2)
 
 
@@ -242,7 +242,7 @@ def one_level(n, k, delta) -> IntegrityProfile:
     return IntegrityProfile((Level("unit"),), (n,), {"unit": Subset(k)}, delta)
 
 
-#: The one-stage audits' wrong-unit bounds (lane one-stage-e2e): (n units, k drawn, delta, the exact optimum to 12 digits,
+#: The one-stage audits' wrong-unit bounds: (n units, k drawn, delta, the exact optimum to 12 digits,
 #: at most).  `worst_case` is within its margin above the exact optimum.
 E2E = {"A0": (1024, 16, 0.01, 254.226320800, 254),
        "A1": (1024, 256, 2.0 ** -20, 46.9243795425, 46),
@@ -298,7 +298,7 @@ def test_rho_is_exact_where_accept_underflows():
 
 def _exact_threshold(n, k, delta) -> Decimal:
     """For one level drawn Subset(k), rho is convex from rho(0) = 0, so the relaxation's optimum interpolates between the
-    last admitted count and the next (one-stage-e2e's direct bound, #116 6ccb9b7b), here in 60-digit Decimal."""
+    last admitted count and the next (the one-stage audit's direct bound), here in 60-digit Decimal."""
     with localcontext() as ctx:
         ctx.prec = 60
         lo = _largest_admitted(n, k, delta)

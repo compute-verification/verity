@@ -314,7 +314,7 @@ def test_the_leg_on_a_store_with_a_native_fill(tmp_path, monkeypatch, wipe_strea
 
 
 def test_the_cheats_leg_rejects_under_a_simulated_placement(tmp_path, monkeypatch) -> None:
-    """`main` on period.json's cheat (`foreign_bytes` `fM`) with the challenger a process of its own on the prover's
+    """`main` on period.json's cheat (`foreign_bytes` `fM`) with the challenger a process of its own on the developer's
     node named `simulated`: the wipe rejects, `--expect reject` exits 0, and the record names the placement and what
     the prover kept."""
     period = tmp_path / "periods" / "p0"

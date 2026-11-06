@@ -29,7 +29,7 @@ from test_units import _run as _run_units
 
 
 def test_a_target_s_shard_is_its_id_s_hash_and_never_its_place():
-    """Pinned: a change to the hash moves every target, which ci's shard plans and the measured walls assume it doesn't."""
+    """Pinned: a change to the hash moves every target, which the check's shard plans and their measured walls assume it doesn't."""
     assert [SH.shard_of("definition", "F32Add_v1", n) for n in (2, 3, 4, 7)] == [1, 3, 1, 1]
     assert [SH.shard_of("definition", "RMSNormTriton_v1{N=64,EPS=1e-05}", n) for n in (2, 3, 4, 7)] == [1, 1, 3, 4]
     assert [SH.shard_of("template", "rmsnorm-cuda-vec8/n6144-b256-eps1e-05/bf16", n) for n in (2, 3, 4, 7)] == [2, 2, 2, 6]
@@ -404,7 +404,7 @@ UNIT_IDS = ["SynAdd_v1", "SynK_v1{K=2}", "SynOther_v1", "SynSub_v1", "SynTop_v1"
 
 
 def test_a_shard_describes_only_its_own_targets_before_its_checks(tmp_path):
-    """A cold ``--all`` described every target (its key) before forking a worker, most of an hour on ci's ~8,600: a shard
+    """Describing every target (its key) before forking a worker is slow over the whole catalog, so a shard of ``--all``
     describes only its own.  A full build builds the whole catalog, as the ids come from it, describes only shard 1's targets
     before its checks and still stores every binding's record; shard 2, from those records, describes and makes only its own;
     shard 1 again reuses its task list and every target it checked, describing nothing.  Unsharded, the full build describes

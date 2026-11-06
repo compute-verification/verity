@@ -1,6 +1,9 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Flock.Soundness.Game.Basic
 
 /-!
 # Right on the registration, with canonical openings

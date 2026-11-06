@@ -49,7 +49,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from inputs import I, KEY, observations  # noqa: E402
+from inputs import CARDS, I, observations  # noqa: E402
 
 from verity.core.protocols.pous import wipe_monitoring
 from verity.core.protocols.profile import Stratified, Stratum  # noqa: E402
@@ -188,7 +188,7 @@ def _group(name: str, child: Shape, count: int, rows: tuple[int, ...]) -> Shape:
                  parts=((child, count),))
 
 
-class Dag:
+class DefinitionGraph:
     """The block's Definition DAG: `ops` maps each op to its root shape and its instances a block, and `ids` each real
     Definition's shape id to its descriptor id (the circuit record's subcircuit id); a stub has none."""
 
@@ -369,18 +369,19 @@ def serve(m: Model, s: Serving) -> tuple[Commitment, ...]:
     return tuple(Commitment(scale, tensor, b, cost=b * rate) for scale, tensor, b in rows if b)
 
 
-def costs(m: Model, s: Serving) -> CostModel:
-    """Flock's fitted model (int8_llama's fit) with the commitment rate, the block's serve-time commitments and the
-    `request` replay grain."""
-    obs = observations()
+def costs(m: Model, s: Serving, card: str = "rtx-pro-6000") -> CostModel:
+    """Flock's model fitted on `card`'s observations (`inputs.CARDS`; the RTX PRO 6000's is int8_llama's fit) with the
+    commitment rate, the block's serve-time commitments and the `request` replay grain."""
+    obs = observations(card)
+    key, cpu = CARDS[card]
     fitted = Fitted(fit(obs, "prove", ["one", "ands", "ands*staged", "ands*drawn"]),
                     fit(obs, "verify", ["one", "ands", "ands*staged", "ands*drawn"]),
-                    fit(obs, "stage", ["one", "ands", "ands*staged"]), I["cpu"].value, KEY)
+                    fit(obs, "stage", ["one", "ands", "ands*staged"]), I[cpu].value, key)
     return replace(fitted.model(), commit_per_bit=I["commit_per_byte"].value / 8, serve=serve(m, s),
                    replay={"request": ReplayGrain(m.requests, s.replay)})
 
 
-def candidates(dag: Dag, cm: CostModel, objective: Objective, grid: int = 21) -> tuple[list[Candidate], dict]:
+def candidates(dag: DefinitionGraph, cm: CostModel, objective: Objective, grid: int = 21) -> tuple[list[Candidate], dict]:
     """`candidates.cuts` on each op, every subcircuit in the `request` replay grain: its alternatives, each its units
     by Definition."""
     out, alts = [], {}
@@ -394,7 +395,7 @@ def candidates(dag: Dag, cm: CostModel, objective: Objective, grid: int = 21) ->
 def plans(m: Model, s: Serving, delta: float = DELTAS[0], *, grid: int = 61, cut_grid: int = 21):
     """The block's DAG, its cost model, objective and candidates, and the frontier of expected cost against certified
     faulty proof blocks (screened by `density_bound`)."""
-    dag = Dag(m)
+    dag = DefinitionGraph(m)
     objective = Objective(delta)
     cm = costs(m, s)
     cands, alts = candidates(dag, cm, objective, cut_grid)
@@ -460,7 +461,7 @@ def monitoring(plan: Plan, cands: list[Candidate], s: Serving, *, servers: int =
     return rows
 
 
-def handoff(plan: Plan, cands: list[Candidate], dag: Dag) -> dict:
+def handoff(plan: Plan, cands: list[Candidate], dag: DefinitionGraph) -> dict:
     """The plan as a GPU loop registers it (a `circuit_record(..., law, cap)`), each subcircuit
     a Definition's descriptor id (a stub's id until its Definition lands) with its units:
 
@@ -500,7 +501,7 @@ def handoff(plan: Plan, cands: list[Candidate], dag: Dag) -> dict:
             "statement_units": statement, "stubs": sorted(t for t, _ in templates if t.startswith("stub:"))}
 
 
-def summary(plan: Plan, cands: list[Candidate], dag: Dag) -> dict:
+def summary(plan: Plan, cands: list[Candidate], dag: DefinitionGraph) -> dict:
     rows = [{"template": dag.template_id(c), "op": c.op, "units": c.units, "k": plan.sizes[c.template],
              "statement": plan.statement_size[c.template], "work": c.work,
              "ands": c.ands + sum(row_ands(r) for r in c.rows)} for c in cands if c.template in plan.sizes]

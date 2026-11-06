@@ -2,6 +2,7 @@ module
 
 public import Mathlib.Logic.Equiv.Fin.Basic
 public import Definitions.Pous.Model.StreamedWipe
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The streamed-label wipe: the honest server is accepted

@@ -1,4 +1,4 @@
-# The machine model
+# machine_model: the ACCEL model of each measured card
 
 `machine-model` prices PoUW's designs on the ACCEL model 𝓜 of each measured card. For a card it holds, as data, the rows
 (the measured ceilings: a pipe, a port, or a joint frontier of several classes), the census that places every warp
@@ -292,7 +292,7 @@ record, never to compare designs. `solve` prints τ, the price vectors' real-tim
 - **ε_mand**: the fold or the filler done in fewer instructions than honest's. The design's `[mand.PART]`: 0 for duo.
 - **ε_machine = ε_cert + ε_route**: the cheater's best mix over Π at q*, from the LP below. ε_cert = 1 − π*·n(H)/B(H) is
   honest's own free compute at the certificate π*; ε_route is what the cheater's routes add.
-- **ε_luck**: the sampling bound inside the same LP. Every check is one draw, so an accepted cheater leaves d̄ =
+- **ε_luck**: the sampling bound inside the same LP. Every check is one sample, so an accepted cheater leaves d̄ =
   ln(1/δ)/((1 − p)·S) of the words wrong over S spot checks, still folded, each filler's blocks at their own p. The
   design's `[luck]`.
 - **ε_sched**: honest's measured time above its model time; 0 unmeasured. `[measured]` in `data/honest/NAME.toml`.
@@ -432,7 +432,7 @@ a card, with the counts by mark and every hole.
   gitignored): `suites.py` fetches them before the tests, and `uv run research data fetch-fixtures
   benchmarks/pouw/machine_model/data/cover benchmarks/pouw/sass_census/data` brings them into a checkout. `rows.toml`,
   the reviewed table, stays in Git.
-- **A row** (`rows.toml`) names its opcodes, devices, census kinds, mark, envelope op with its pipe, stores or formats,
+- **A row** (`rows.toml`) names its opcodes, devices, census kinds, mark, ACCEL op (`envelope`) with its pipe, stores or formats,
   units a warp instruction, register words, rate (card-table keys, or `rate_value` with its unit), argument and source.
   A row with `forms` (regexes over the dotted form) covers those forms; the opcode's plain row covers the rest. A unit
   outside the SM pipes is a `[[unit]]` with the same marks.
