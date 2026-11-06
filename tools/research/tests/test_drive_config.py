@@ -81,7 +81,7 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
                            landing_gates=("gates/g.py",), max_lean_checks=3, nonlean_first=False, reviewed_first=False,
                            verdict_first=False, stale_days=3, stale_close_days=7, preflight_pool=3)
     assert DriveFlags.parse("") == DriveFlags() == DriveFlags(None, None, False, (), "review", None, False)
-    assert DriveFlags().preflight_pool == 16
+    assert DriveFlags().preflight_pool == 8
     assert DriveFlags.parse("after_landing_shards = 3\n").after_landing_shards == 3
     assert [DriveFlags.parse(f'after_landing_shards = "{v}"\n').after_landing_shards for v in ("auto", "auto:4")] == ["auto", "auto:4"]
     assert f.line() == ("on=m1,m2 marked_after=2026-10-12T06:00:00Z regenerate_locks=True first=1858 land=review "
@@ -230,7 +230,7 @@ def test_without_drive_toml_at_main_drive_takes_the_defaults_and_its_on_and_firs
     rules.write_text('hold_label = "hold"\nmarked_after = "2026-10-12T06:00:00Z"\n')
     monkeypatch.chdir(world.dev)
     assert drive(world, "--on", "m1", "--rules", str(rules), "--first", "5") == 0
-    assert driven[-1] == {"first": (5,), "nonlean_first": True, "reviewed_first": True, "verdict_first": True, "preflight_pool": 16, "on": "m1", "regenerate_locks": False,
+    assert driven[-1] == {"first": (5,), "nonlean_first": True, "reviewed_first": True, "verdict_first": True, "preflight_pool": 8, "on": "m1", "regenerate_locks": False,
                           "after_landing_no_cache": False, "max_lean_checks": 2, "stale_days": 0, "stale_close_days": 0,
                           "stale_keep": (), "after_landing_shards": 1, "lowrisk_lane": True, "lowrisk_per_tick": 20,
                           "lowrisk_excludes": (), "executor": "off", "executor_enqueue": ()}

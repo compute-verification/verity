@@ -669,7 +669,7 @@ class DriveFlags:
     executor_enqueue: tuple[str, ...] = ()
     #: the most preflight runs outstanding on the research pool at once (`Queue._launch_runs`): a sync launches one for each PR
     #: whose merge onto `next` has no verdict, up to this many, and the PR waits off `next` until a later sync reads its verdict
-    preflight_pool: int = 16
+    preflight_pool: int = 8
     #: count a ready mark or land verdict only when its `label_auth` companion authenticates it as its author's, or as an agent's
     #: its author delegated to (`research.labelauth`, `StoreLabels`); `ready`, `judge` and `review` then refuse to write one they
     #: can't sign.  On only while the low-risk lane can't change who holds a handle or how a label is judged (`SIGNED_GUARDS`)

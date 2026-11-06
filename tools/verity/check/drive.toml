@@ -26,8 +26,9 @@ first = []
 landing_gates = ["tools/verity/check/gates/markdown_caps.py"]
 # the most preflight runs outstanding on the research pool at once. A sync never runs a preflight itself: a PR whose merge onto
 # `next` has no verdict (its ready mark's, or an earlier run's) waits off `next` while a `research run --on auto` of `research
-# queue preflight` judges that merge, and a later sync admits or refuses it by the verdict
-preflight_pool = 16
+# queue preflight` judges that merge, and a later sync admits or refuses it by the verdict. The runs share the CPU nodes with
+# the after-landing shards and the Lean checks
+preflight_pool = 8
 # how `next` lands: "review", each member on a reviewer's land verdict (`research queue review`), a Lean change once a Lean check
 # passed; the only landing there is. With `land_into = "checked"`, `main` holds only fully checked commits
 land = "review"
