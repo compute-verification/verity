@@ -33,7 +33,7 @@ open scoped ENNReal
 
 -- As in `SHVZK`: the randomness is a product of up to fifteen factors.
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
+set_option synthInstance.maxHeartbeats 1000000
 
 /-- **T1 over any finite set of leaves**: `ideal_leaves_swap` through an enumeration of the index. -/
 theorem ideal_leaves_swap_fintype {Y B C D ι : Type} [Fintype Y] [Nonempty Y] [AddCommGroup B] [Fintype B]

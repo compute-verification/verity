@@ -55,7 +55,6 @@ structure SpecP (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tables : List
 variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
   {draw partition : Option Json} {program own : Option ByteArray} {st : Stmt}
 
--- `walk_step` down `Stmt.setupHidden`'s unfolded do-block with a sample and without, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- **What `Stmt.setupHidden` accepted at the verifier's public inputs `own`** is its `SpecP`, at the circuit's public
 input ports. -/

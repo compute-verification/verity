@@ -136,7 +136,6 @@ private theorem stmtOf_congr {a b : Flock.Stmt} (h : a = b) (ha : StmtWF a) (hb 
 variable {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
   (x₀ : HiddenExec.DrawSetupH (inputsPJ I 0) mPts S₀ d₀)
 
--- one proof down the opened statement's decode (`opnPHJ`), a bind step per value it reads and `rw` on each
 set_option maxHeartbeats 4000000 in
 /-- **The decoder is right at a plain session of `J` hidden-output tables** (R11b at `--plain-tables --session-tables J`
 under hidden outputs): given the tags, the session's circuit, `wr` the challenger's record and the challenger's draws

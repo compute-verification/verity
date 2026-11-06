@@ -150,7 +150,7 @@ window and `T_bw` the bandwidth window's length. A bandwidth window that spans t
 `F·T − W` for every other account, the rebuilds and tags among them: `μ_rebuild = (F·T − W − tagging)/(N·c_enc)`, which
 is `(1 − τ)/x` with `τ = (W + tagging)/(F·T)` and `x = N·c_enc/(F·T)`. The compute audit's certificate is what makes `W`
 hold: a per-run compute guarantee bounding the probability that the compute audit accepts with the compute account's
-work below `W` by `ε_W` (`Run.ComputeSoundPerRun`) gives, by a union bound, the probability that both
+work below `W` by `ε_W` (lane `ra-per-run`'s `ComputeSoundPerRun`) gives, by a union bound, the probability that both
 audits accept and the bandwidth account read short of the floor at most `ε + ε_W`. Unlike `BandwidthOfAudit`, this is
 a per-run reading: the event is about the reads at the coins drawn. A `RealizesRate` for a deployed run must put the
 deadline and a round trip, `T + RTT`, inside `T_bw`, and every rebuild in the bandwidth window must fall in the compute

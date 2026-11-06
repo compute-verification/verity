@@ -37,7 +37,6 @@ theorem check_round {n : ℕ} {coins : Array F128} {b c : Bool} {why : String} {
   simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at this
   exact ⟨this.1.1.1, this.1.2⟩
 
--- `split` at every branch of `Record.decodeJWithK`'s unfolded body, an `obtain` per value it reads
 set_option maxHeartbeats 1000000 in
 /-- **S12: every decoded round has at least one coin, and as many as its count.** -/
 theorem decodeJWith_rounds (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json} {sess : RunRecord}
@@ -76,7 +75,6 @@ theorem find_of_any {ss : Array StreamRec} {w : String} (h : ss.any (·.name == 
     obtain ⟨s, hs, hw⟩ := Array.any_eq_true'.1 h
     exact absurd hw (hf s hs)
 
--- `split` at every branch of `Record.decodeJWithK`'s unfolded body, an `obtain` per value it reads
 set_option maxHeartbeats 1000000 in
 /-- **S11: the decoder finds a stream at each rep stream's name.** -/
 theorem decodeJWith_finds (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json} {sess : RunRecord}

@@ -118,7 +118,6 @@ theorem roundsWF_of {rs : Array Round} (h : ∀ r ∈ rs.toList, r.coins.size = 
   rw [getElem!_pos rs i hi]
   exact h _ (Array.getElem_mem_toList hi)
 
--- `split` at every branch of `Record.decode`'s unfolded body, an `obtain` per value it reads
 set_option maxHeartbeats 1000000 in
 /-- The record's rounds are well formed: `Record.decode` checks every round's coin count (S12). -/
 theorem decode_roundsWF {spec : SessionSpec} {text : String} {sess : RunRecord}

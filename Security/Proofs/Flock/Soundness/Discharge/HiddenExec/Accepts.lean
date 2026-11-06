@@ -27,7 +27,6 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ} {tables
   {draw partition : Option Json} {program : Option ByteArray} {work : Option (ℕ × Array (String × ℕ × ℕ))}
   {stratified : Option ℕ} {closure : Option (Std.HashMap ℕ (Array ℕ))} {spec : SessionSpec} {sts : Array Flock.Stmt}
 
--- `walk_step` down `Stmt.setupTables`' unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- **`setupTables` sets up each table with `setupHidden`** under a tag with hidden outputs (`Exec.setupTables_ok`'s
 counterpart). -/
@@ -68,7 +67,6 @@ theorem setupTables_okH (hh : tags.hiddenOutputs = true)
     obtain ⟨hsz, hall⟩ := range_mapM_ok (by assumption)
     exact Or.inr ⟨by omega, hsz, fun j hj => ⟨_, ok_of_refuse (hall j hj)⟩, mPts_of_any (by assumption), rfl⟩
 
--- `walk_step` down `Stmt.setupTables`' unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- **`setupTables` refuses pinned outputs** under a tag with hidden outputs: no table it returns has any
 (`HmRow.pinnedCount`). -/
@@ -172,7 +170,6 @@ theorem accepts_oneAny : AcceptsOneAny := by
   · exact ⟨st, hst, by simpa using hv⟩
   · omega
 
--- `walk_step` down `Stmt.setupTables`' unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- The session's spec retains rounds exactly when its tags do, under hidden outputs (`Exec.setupTables_retain`'s
 counterpart). -/

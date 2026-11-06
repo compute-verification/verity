@@ -62,32 +62,26 @@ public import Definitions.Accounting.TS.Fixed
 public import Definitions.Accounting.Window
 public import Definitions.Accounting.Wipe
 
-/-!
-# Resource accounting: the device model the resource audits share, and their joint guarantee
-
-Each resource audit reads as an audit of one joint run on the device model, and the joint guarantee bounds the
-probability that some audit accepts while its claim fails by the sum of their errors.
-
-Read first `Accounting.Guarantees.JointPeriodLive` (module `Definitions.Accounting.Guarantees.JointLive`), the joint
-guarantee over a period played as a causal game, over sampled proofs, PoUW, PoUS, the bandwidth audit and the network
-certifier. Security/README.md's table lists `Bandwidth.Guarantees.AuditRO` (`Definitions.Accounting.Guarantees.Bandwidth`)
-for the bandwidth audit. The guarantees are `Definitions.Accounting.Guarantees` and the named assumptions
-`Definitions.Accounting.Assumptions`.
-
-The modules, by topic:
-* The device model and the actual circuit: `Device`, `Additive` (a device's period on 𝓜), `Physical`, `Actual`,
-  `Actual.Sampler`, `Bridge` (the device's schedule the actual circuit induces), `Confidence`, `CostModel`, `PerRun`.
-* Joint runs and periods: `Joint`, `JointPeriod`, `JointBlocks` (server blocks audited by every protocol), `JointLive`
-  (a period as a causal game), and `JointBridge`, which reads each subprotocol's period guarantee as a joint run's.
-* Compute: `Pouw`, `PouwWork`, `Compose` and `ComposePeriod` (PoUW as a compile pass over a registered circuit, and
-  over a monitoring period), `Filler`, `HMu`, `BoundReceipt`, `BoundSketch`, `CoinFlow`, `Served`, `Carrier`, `TS`.
-* Bandwidth: `Bandwidth`, `BandwidthAudit`, `Tag`, the rate audit (`RateAudit` and the `RateAudit*` variants), and
-  PoUB (`Remote`, `Remote.Deployed`).
-* Capacity and memory: `Capacity`, `Memory`, `Responder`, `Window`, `Wipe`, `Requirement`, `Requirement.Placed`,
-  `Schedule`.
-* Lower bounds: `Gates` (the gate model), `Slowdown` (tasks, thresholds and the slowdown), `ServingBlocks` (server
-  blocks, with an honest layout and counterexamples in `ServingBlocks.Instances`).
-* The headline instances' exact data: `Headline`, `HeadlineDc`.
--/
+/-! Resource accounting's vocabulary: the device model every resource audit is about, a joint audit's run on it, and
+how PoUW's game, the bandwidth audit's game and a state-bounded capacity game realize its compute, bandwidth and
+capacity audits, the filler's cell check and the windows that check it, the rate audit's game with its embedding as a
+bandwidth audit whose rebuilds are charged as compute,
+with side sources that answer what the chip sent, over memory tiers and chained passes, the causal rounds its samples
+close, with partial completion, and its sketch-then-hash variant for a device that reads sectors verbatim, with such
+side sources too and for a prover whose memory holds any function of the store, the deployed game that composes them
+(partial completion, interactive side sources, tiers, ground chained passes and a session of pooled draws), the remote
+bandwidth audit's node and run, the actual circuit, its physical assumptions, a challenge's reach and the device's
+schedule it induces, the actual circuit's runs, strategies, soundness and the confidence set, a location's window with
+the ring's oracle locations, its provers' cost model, the tags and sketches the audits read, the headline instances as
+exact data (a device's sheet, a design's TS model and its floor program), a receipt's skipped values
+and the coin rounds that give (H-μ⁺), a Program's coin flow under the Build's two coin rules, the generic-mix game of
+receipts bound to the matmul on two locations, the deployed bound receipt's sketch as a two-party protocol, what a
+run's guarantee per run is, PoUW's verdict, credits and help on one node of the actual circuit, stacking's carriers:
+device memory whose post-seed contents are a circuit's values, seen through its inputs and encodes, a declared
+circuit's requirement: the values its schedule keeps live and reads, by block, and when the audit's store and plans are
+its, a pass's layout as the verifier's plan of a schedule of counted bits (`ScheduleDeterministic`), the run tree of
+a prover's wipes that the memory cap's lifetime pool is over, a device's period as runs of the machine model 𝓜
+that compute additivity is stated over, and the gate model the lower bounds on a declared
+circuit are proved over (`Gates`). -/
 
 @[expose] public section

@@ -1007,7 +1007,7 @@ theorem stream_leak_deferred {Ω α : Type} [Fintype Ω] (m b : ℕ) (obs : Patt
 open FlockSoundness.Discharge
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
+set_option synthInstance.maxHeartbeats 1000000
 
 /-- **The ZK server at `flock-circuit --zk`'s masked record**: for every worker, the server whose frame at honest workers
 is the record's reference prover's message (`ZkServer.Ref` at `(S.zkD rel coinOf tapeOf t).prover`, `ZkTables.honestPR` behind

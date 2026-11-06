@@ -127,7 +127,6 @@ theorem verifyK_one_ok (keep : Bool → Bool) {spec : SessionSpec} {st : Setup} 
 
 /-! ## What the decoder reads through `keep` -/
 
--- `split` at every branch of `Record.decodeWithK`'s unfolded body, an `obtain` per value it reads
 set_option maxHeartbeats 1000000 in
 /-- **`decode_points` at `keep`**: the record's link points have the configured shape (S9). -/
 theorem decodeWithK_points (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
@@ -141,7 +140,6 @@ theorem decodeWithK_points (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : 
     subst h
     exact check_pts (by assumption)
 
--- `split` at every branch of `Record.decodeWithK`'s unfolded body, an `obtain` per value it reads
 set_option maxHeartbeats 1000000 in
 /-- **`decode_roundsWF` at `keep`**: the record's rounds are well formed (S12's coin count). -/
 theorem decodeWithK_roundsWF (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
@@ -171,7 +169,6 @@ theorem decodeWithK_roundsWF (keep : Bool → Bool) (hs : Hashes Flock.V) {spec 
         subst hg
         exact check_coins (by assumption)
 
--- `split` at every branch of `Record.decodeWithK`'s unfolded body, an `obtain` per value it reads
 set_option maxHeartbeats 1000000 in
 /-- **`decode_retained` at `keep`**: when the spec retains rounds, every round of every stream has its bytes (S12's
 presence check, which `keep` leaves alone). -/

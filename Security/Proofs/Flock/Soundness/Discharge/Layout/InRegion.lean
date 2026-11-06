@@ -86,7 +86,6 @@ theorem in_range_mapM {β ε : Type} {f : ℕ → Except ε β} {n : ℕ} {ys : 
       have := hall j (by rw [Array.toList_range, List.length_range]; omega) hj'
       simpa [Array.toList_range] using this
 
--- `HmIn.regions` unfolded and reduced at a nonempty port list, its `mapM` read back with `in_range_mapM`
 set_option maxHeartbeats 2000000 in
 /-- **`HmIn.regions` has region "in x" for each in region `x`, `(w, s)`**, as `mkRegion` built it. -/
 theorem regions_in {c : Circuit} {pi : HmIn.Ports} {pub : Public} {regs : Array Region}

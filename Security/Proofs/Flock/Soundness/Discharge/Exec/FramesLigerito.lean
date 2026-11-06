@@ -235,7 +235,6 @@ theorem Emitted.retained {t t₁ : Transcript} {fs : List Frame} (e : Emitted t 
     AllRetained t₁.rounds := by
   rw [e.rounds]; exact h
 
--- one proof down `Flock.ligerito`'s unfolded run, a `*_bind` step per bind and `rw` and `omega` on the frames' indices
 set_option maxHeartbeats 4000000 in
 theorem ligerito_frames (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (cap : Array ByteArray)
     (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (hdim : DimSeam sch)

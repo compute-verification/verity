@@ -97,7 +97,6 @@ theorem emitNet_run (name : String) (l : Laid) (s : String) :
   simp only [netLs, rowsLs, joinNl_cons, String.append_assoc]
   rfl
 
--- `simp` through `VStar.emitSections`' unfolded loop over its three sections
 set_option maxHeartbeats 1000000 in
 theorem emitSections_run (u : VStar.UnitC) (l : Laid) (s : String) :
     (VStar.emitSections (m := StateM String) (fun x => modify (· ++ x)) u l).run s =
@@ -113,7 +112,6 @@ theorem emitSections_run (u : VStar.UnitC) (l : Laid) (s : String) :
   simp only [String.append_assoc]
   rfl
 
--- `simp` through the file's lines (`emitSections_run`) to its `joinNl` normal form
 set_option maxHeartbeats 1000000 in
 /-- **V\*'s file is its lines** (`RecVStar.circuitFile`): the head `flock-circuit <unit>`, `META <d>`, then the three
 sections. -/
@@ -341,8 +339,6 @@ theorem fileLs_secs (name d : String) (l ls lh : Laid) :
 
 /-! ## `HmRow.parse`'s nets -/
 
--- one proof of a few hundred lines down `HmRow.parse`'s unfolded body: `split` and `cases` at each branch, a bind step
--- per value it reads
 set_option maxHeartbeats 4000000 in
 /-- **`HmRow.parse`'s nets** without tables: each net's name is one word (a header line's token, `parse_name`), and where
 lines 2, `p1` and `p2` are section lines running to `p1`, `p2` and the last line, the section loop (`HmRow.lean:640-649`)

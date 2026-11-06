@@ -48,7 +48,6 @@ theorem ite_throw_okP {α β : Type} {c : Prop} [Decidable c] {e : String} {f : 
   · rw [ite_eq_left hc] at h; cases h
   · exact ⟨hc, by rwa [ite_eq_right hc] at h⟩
 
--- one proof down `HmRow.parseRest`'s unfolded body: `split` at each branch, a bind step per value it reads
 set_option maxHeartbeats 4000000 in
 theorem parseRest_ports (tags : Tags) (tables : List (String × ByteArray)) (pre : Array (String × Net)) (sha : ByteArray)
     (lines : Array String) (name : String) (mj : Json) (cs : ByteArray) (c : Circuit)
@@ -155,7 +154,6 @@ def metaOf (bytes : ByteArray) : Option Json :=
     let metaLine := (lines.getD 1 "").trimAsciiEnd.toString
     (Flock.JsonParse.parse (metaLine.drop 5).toString).toOption
 
--- `split` at every branch of `HmRow.parseWith`'s unfolded body and its `metaOf`, a bind step per value it reads
 set_option maxHeartbeats 4000000 in
 theorem parseWith_ports (h : ByteArray → ByteArray) (tags : Tags) (bytes : ByteArray)
     (tables : List (String × ByteArray)) (c : Circuit)

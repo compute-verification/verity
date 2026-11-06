@@ -99,7 +99,7 @@ open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 open scoped ENNReal
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
+set_option synthInstance.maxHeartbeats 1000000
 
 /-- **Check 5's inputs at candidate 3**, as the verifier forms them (`RecSetup.c3`): the inner shape's RecSparse
 shape (`--sparse`), R's shape, the inner shape's or else the one the inner transcript held R's stream to, and the

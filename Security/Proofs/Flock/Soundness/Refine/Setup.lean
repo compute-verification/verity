@@ -196,7 +196,6 @@ theorem hm_parseTyped_check {tags : Tags} {bytes : ByteArray} {tables : List (St
 
 /-! ### The regions the setup builds -/
 
--- `walk_step` down `HmRow.regions`' unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
 theorem hm_regions_wf {c : Circuit} {pub : Public} {regs : Array Region} (h : HmRow.regions c pub = .ok regs) :
     ∀ x ∈ regs.toList, RegionWF c.kLog x := by
@@ -230,7 +229,6 @@ theorem wf_of_facts {st : Stmt} (hslots : ∀ r ∈ st.c.ranges.toList, 7 ≤ r.
   have := hslots r hr
   exact ⟨by omega, by omega, hp, fun r hr => ⟨by have := hslots r hr; omega, (hslots r hr).2⟩⟩
 
--- `walk_step` down `Stmt.setupH`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **The hm96 path's statements are well formed** (`Flock.Statement`). `Stmt.setupH` returns only statements whose layout and
 regions are the ones `stmtOf` and `regionsOf` read. -/
@@ -294,7 +292,6 @@ theorem hm_check_mask {c : Flock.Circuit} {tags : Tags} {ls : Lean.Json} (h : Hm
     | (constructor; omega; nlinarith [Nat.one_le_two_pow (n := r.slotLog)])
     | simp_all
 
--- `walk_step` down `Stmt.setupH`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **`Stmt.setupH`'s mask slot is a slot of at least a word inside the block** (`HmRow.check`). -/
 theorem setupH_mask {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}

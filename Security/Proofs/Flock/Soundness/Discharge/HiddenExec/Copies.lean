@@ -6,7 +6,7 @@ public import Proofs.Flock.Soundness.Discharge.Zero
 /-!
 # `Layout.Aliased` at a hidden-output statement, from its flat twin's copy positions
 
-`Discharge.Aliased.Copies`' and `Discharge.Zero.Uniform`'s block lemmas, at the hidden statement's block R1CS (`L.model regs`, its
+`Aliased.Copies.lean` and `Zero.Uniform.lean`'s block lemmas, at the hidden statement's block R1CS (`L.model regs`, its
 level-0 matrices `placedA st`, `placedB st`), with the copy positions of its flat twin (`Aliased.copyPos Lf regs F`, at
 the twin's layout `Lf` and unit facts `F`, which read only the circuit). Each unit slot's row reads the same in the
 hidden statement as in its twin (`UnitRowsFlat`), so:

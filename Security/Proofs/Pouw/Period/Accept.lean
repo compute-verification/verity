@@ -9,11 +9,11 @@ import all Init.Data.Array.Basic
 import all Init.Data.Array.DecidableEq
 
 /-!
-# PoUW's deployed check accepts H1's honest window at `h1Params`
+# PoUW's deployed check accepts H1's honest window at the leg's parameters
 
-The parameters (`h1Params`) are the
+The all-protocols PoUW leg (`benchmarks/all_protocols/legs/pouw.py`) checks its H1 window at `h1_params`: the
 pinned H1 tile's check item with the entries bound 1024 and no coin mode, ε = 1/2, δ = 10⁻⁶, the 3-bit grid, the range
-`[1, 2^16]` and the loop's fixed length, 4 requests of 2 decode steps. A window registering the loop's
+`[1, 2^16]` and the loop's fixed length, 4 requests of 2 decode steps (`h1Params`). A window registering the loop's
 128 real tiles is at level 39, which pads to `N = 144`, and its draw is `K′ = 24` (`kPrime_h1`:
 `q = 1 − (1/2)·128/144 = 5/9`, `q^23 > 10⁻⁶ ≥ q^24`).
 
@@ -36,12 +36,12 @@ open Properties.Pouw.Period.SecurityProofs.Sort
 /-- The pinned H1 tile (`core_check.TILES`' salted `PouwH1Tile_v1`, `K = 64`, `R = 4`, `C = 8`). -/
 def h1Tile : Tile := tiles[4]
 
-/-- H1's check item: the pinned tile's template and work per tile (`64·32`), the scheme and the
+/-- The leg's check item (`h1_check`): the pinned tile's template and work per tile (`64·32`), the scheme and the
 entries bound 1024, no coin mode. -/
 def h1Check : CheckItem :=
   { entries := 1024, scheme := PouwCheck.scheme, template := h1Tile.template, tileWork := h1Tile.tileWork }
 
-/-- H1's check parameters in the period's context `context`. -/
+/-- The leg's check parameters (`h1_params`) in the period's context `context`. -/
 def h1Params (context : String) : Params where
   check := h1Check
   context := context
@@ -145,7 +145,7 @@ theorem work_h1 : Work.at 3 39 = ⟨39, 128, 144⟩ := by decide
 
 /-! ## The draw: `K′ = 24` -/
 
-/-- **`K′ = 24` at `h1Params`' ε, δ and level**: `p = (1/2)·(128·2048)/(144·2048) = 4/9`, so `q = 5/9`, and
+/-- **`K′ = 24` at the leg's ε, δ and level**: `p = (1/2)·(128·2048)/(144·2048) = 4/9`, so `q = 5/9`, and
 `q^23 ≈ 1.34·10⁻⁶ > 10⁻⁶ ≥ q^24 ≈ 7.45·10⁻⁷`. -/
 theorem kPrime_h1 (E D : Rat) (C N W : Int) (hE : E = 1 / 2) (hD : D = 1 / 1000000) (hC : C = 128 * 2048)
     (hN : N = 144) (hW : W = 2048) : PouwWindow.kPrime E D C N W = .ok 24 := by
@@ -170,7 +170,7 @@ theorem sampling_h1 : PouwWindow.sampling (toRat ⟨1, 2⟩) (toRat ⟨1, 100000
 
 /-! ## The check accepts -/
 
-/-- **The loop's honest registration keeps PoUW's rule** at `h1Params`, fixing level 39 and `K′ = 24`. -/
+/-- **The loop's honest registration keeps PoUW's rule** at the leg's parameters, fixing level 39 and `K′ = 24`. -/
 theorem keeps_h1 (context format program partition : String) (bytes : ByteArray) :
     Properties.Pouw.Check.RegistrationKeeps (h1Params context) (h1Reg context format program partition bytes)
       h1Fixed := by
@@ -185,12 +185,12 @@ theorem keeps_h1 (context format program partition : String) (bytes : ByteArray)
   · exact cs_work_h1
   · cases h
 
-/-- **The window's salt is kept**: H1's check item names no coin mode, so the window is seeded, and the honest
+/-- **The window's salt is kept**: the leg's check item names no coin mode, so the window is seeded, and the honest
 answer carries no salt. -/
 theorem saltKept_h1 (context : String) (r c : Registration) (units : Array Nat) :
     Properties.Pouw.Check.SaltKept (h1Params context) r (h1Evidence c units) := rfl
 
-/-- **The deployed check accepts H1's honest window at `h1Params`**: on the loop's honest registration and
+/-- **The deployed check accepts H1's honest window at the leg's parameters**: on the loop's honest registration and
 any one-stage answer citing it that accepted 24 ascending distinct units below 144 at the rule's profile, with no salt
 (the window is seeded), it publishes level 39's work (`N = 144`), `K′ = 24` and those units. -/
 theorem check_h1 (context format program partition : String) (bytes : ByteArray) (units : Array Nat)
@@ -202,7 +202,7 @@ theorem check_h1 (context format program partition : String) (bytes : ByteArray)
     (keeps_h1 context format program partition bytes)
     ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, hu.1, hu.2.1, hu.2.2⟩ (saltKept_h1 _ _ _ _)
 
-/-- **`DrawIsCoin`'s numbers at `h1Params`**: every window the check accepts at them, registered at level 39
+/-- **`DrawIsCoin`'s numbers at the leg's parameters**: every window the check accepts at them, registered at level 39
 (the loop's 128 real tiles), publishes the population `N = 144` and the draw size `K′ = 24`. -/
 theorem numbers_h1 (context : String) (c : Registration) (e : Evidence) (pub : Public) (prof : Core.Integrity)
     (hc : protocol.check (h1Params context) c e = .accept pub prof) (hl : levelOf c.window.items = some 39) :

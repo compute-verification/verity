@@ -29,7 +29,6 @@ def mPtsOf (g n : ℕ) : ℕ := PT_LOCAL + max 3 (log2ceil (max ((n + g - 1) / g
 variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
   {draw partition : Option Json} {program : Option ByteArray} {st : Stmt}
 
--- `split` at every branch of `Stmt.setupH`'s unfolded body, a bind step per value it reads
 set_option maxHeartbeats 4000000 in
 /-- **`setupH`'s statement: its circuit, its public file and `m_pts`.** The circuit is the circuit file's parse, the
 public file of a drawn session is `HmRow.drawn`'s, and `m_pts` is `mPtsOf` of the circuit's `g` and the public file's
@@ -111,7 +110,6 @@ theorem setupH_facts (h : Stmt.setupH tags cf pf coins tables draw partition pro
   subst hs
   exact ⟨hc, fun d hd => ⟨pop, hpub d hd⟩, rfl⟩
 
--- `walk_step` down the unfolded do-block that puts the sample in the population's header, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- **A drawn public file has the draw's proved units** (`Flock.Statement`): its units are `UnitDraw.proved`, the drawn units and
 their closure. -/

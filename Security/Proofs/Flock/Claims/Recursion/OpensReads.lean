@@ -512,7 +512,6 @@ theorem vu_lt_pow2_setupOne {tags : Tags} {cf pf : ByteArray} {coins : Coins} {t
   · exact Layout.vu_lt_pow2_of (Aliased.setupH_unitFacts ht h).check hg
 
 open FlockSoundness.Refine in
--- `walk_step` down `Stmt.setupH`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **An undrawn statement's public file is its population's**: `setupH` loads it and keeps it whole. -/
 theorem setupH_full {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}

@@ -78,7 +78,6 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ} {tables
   {draw partition : Option Json} {program : Option ByteArray} {work : Option (ℕ × Array (String × ℕ × ℕ))}
   {stratified : Option ℕ} {closure : Option (Std.HashMap ℕ (Array ℕ))} {spec : SessionSpec} {sts : Array Stmt}
 
--- `simp` through `Except.bind` and `throw`'s instances at both cases of the setup's result
 set_option maxHeartbeats 4000000 in
 /-- A table's setup followed by a refusal (of a `public_inputs` meta key on a plain table, of pinned outputs on one
 with hidden outputs) returns the setup's statement, which the refusal's test passes. -/
@@ -93,7 +92,6 @@ theorem refuse_ok {x : V Stmt} {p : Stmt → Bool} {e : String} {s : Stmt}
       subst ha
       exact ⟨rfl, Bool.eq_false_iff.2 hp⟩
 
--- copied from `refuse_ok` above; this term proof's own need is unmeasured
 set_option maxHeartbeats 4000000 in
 /-- A plain table's setup, `setupH` followed by the refusal of a `public_inputs` meta key, returns `setupH`'s statement. -/
 theorem ok_of_refuse {x : V Stmt} {p : Stmt → Bool} {e : String} {s : Stmt}
@@ -207,7 +205,6 @@ theorem accepts_one {I : Inputs} {t : Transcript} (hh : I.tags.hiddenOutputs = f
   · exact ⟨st, hst, by simpa using hv⟩
   · omega
 
--- `walk_step` down `Stmt.setupH`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- **`setupH`'s checks on the public file** (`Flock.Statement`, `Flock.Tags`): the population's (or the draw's) public file passed
 `HmRow.checkPublic`, and the statement's regions are `HmRow.regions` of it. -/

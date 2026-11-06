@@ -43,7 +43,7 @@ open Claims
 open FlockSoundness.Discharge
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
+set_option synthInstance.maxHeartbeats 1000000
 
 /-! ## A table's real view before the last coin -/
 
