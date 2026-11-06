@@ -10,6 +10,7 @@ this fixes:
   opening takes (`Stmt.regionPoint` past its six skip coordinates, `flock-circuit`'s `extra_points(..)[6..]`).
 * `openStep`: the rep's opening a round at a time, the scheduled rounds after the algebraic phase's
   (`Skeleton.rounds`), each the round in whose place a device round leaves; `opening` feeds it a stream's coins.
+  `openStepM` is it ending with what the opening computed that the rep's proof computes again (`Finish.Memo`).
 * `reqs`: the frame's requests, **the one schedule**: rep 1's earlier rep's algebraic-phase coins (`prior`), each
   scheduled round with the device's round in its place and its coins, each of the inner proof's rounds (the frame's
   own, `Frame.ownRound`) with its coins, then `finish`.
@@ -127,6 +128,24 @@ def openStep (t : Tab) (rep : Nat) (dom : ByteArray) (xs : Array (Array F128)) (
     if k != coins.size then throw s!"drive: the rep's PIOP took {k} of its {coins.size} rounds of coins"
     let _ ← repOpening (stepAsks coins true) commit t.st t.sch lay t.tPad rep t.g t.cm0 claims
       (Array.replicate lay.len 0) t.extra t.lanePad salt
+  ((prog.run' (Transcript.init #[] dom)).run' #[])
+
+/-- **`openStep` ending with what its opening computed that the rep's proof computes again** (`Finish.Memo`): the same
+rounds, its opening `repOpeningMemo`'s with nothing to read back. The session loop runs it (`Frames.placeOf`) and keeps
+its end in the rep's frame, which the rep's proof reads (`Frames.ownOf`). -/
+def openStepM (t : Tab) (rep : Nat) (dom : ByteArray) (xs : Array (Array F128)) (hiSalts : Array ByteArray)
+    (coins : Array (Array F128)) : Step Memo :=
+  let lay := Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0
+  let commit : Level → Array F128 → (Nat → ByteArray) → OpenM Commit := fun lv g salt => pure (commitFw lv g salt)
+  let salt : Nat → Nat → ByteArray := fun l => saltAt (hiSalts.getD (l - 1) ByteArray.empty)
+  let prog : TMW OpenM Memo := do
+    let (_, _, claims) ← repPiop (stepAsks coins false) t.st lay (flat t.cm0.cap) ByteArray.empty (claimsOf xs)
+      fun _ => 0
+    let k := (← getThe (Array (Array F128))).size
+    if k != coins.size then throw s!"drive: the rep's PIOP took {k} of its {coins.size} rounds of coins"
+    let r ← repOpeningMemo none (stepAsks coins true) commit t.st t.sch lay t.tPad rep t.g t.cm0 claims
+      (Array.replicate lay.len 0) t.extra t.lanePad salt
+    return r.2
   ((prog.run' (Transcript.init #[] dom)).run' #[])
 
 /-- **A rep's opening's scheduled rounds** on the stream's coins `coins`: `openStep` on the algebraic phase's `nAlg`

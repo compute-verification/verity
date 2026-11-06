@@ -9,7 +9,7 @@ issues every request to it, on the schedule `Drive.reqs` fixes. Nothing the prov
   draws from the operating system, which never leave the loop: the prover gets the pads' root alone.
 * `round`: a session's `Round` of a rep stream carries the device's round. Its place is the statement's: the algebraic
   phase's scheduled round (`Skeleton.rounds`, on the table's level 0, the loop's own), then the opening's
-  (`Drive.openStep`, the rep's opening a round at a time, on the extra claims at the session's `Commit` coins,
+  (`Drive.openStepM`, the rep's opening a round at a time, on the extra claims at the session's `Commit` coins,
   `Drive.extras`, and the rep's salts for levels ≥ 1, the loop's finish's), then the inner proof's: the frame's own round
   (`Frame.innerSched`) on the rounds the loop's finish computed for the rep before they went to the host
   (`Sessions.inner`, `Finish.serve`'s `inner`), so the host only relays them. At a round the finish has not computed,
@@ -36,7 +36,9 @@ loop's frames and the request alone.
 
 So every coin a frame takes is the loop's own reading of the auditor's answer, and every round in a device round's place
 is the loop's own, a function of the statement, the table's level 0, the rep's salts and the coins: the opening's are
-`Drive.opening`'s, which feeds `Drive.openStep` the same coins (`Drive.Step.feed`).
+`Drive.opening`'s, which feeds `Drive.openStep`, the loop's `Drive.openStepM` but for what it ends with, the same coins
+(`Drive.Step.feed`). What it ends with, the opening's switched vectors and batched basis (`Finish.Memo`), the rep's
+proof reads back (`ownOf`) rather than computing them again.
 -/
 module
 
@@ -73,8 +75,9 @@ structure Rep where
   st : Frame.State := {}
   alg : Array (ByteArray × Nat) := #[]
   coins : Array (Array F128) := #[]
-  /-- the rep's opening, at its next round (`Drive.openStep`) -/
-  opening : Option (Drive.Step Unit) := none
+  /-- the rep's opening, at its next round (`Drive.openStepM`); once it ended, until the inner proof's first round, what
+  it computed that the rep's proof reads back (`ownOf`) -/
+  opening : Option (Drive.Step Memo) := none
   /-- the opening ended: every round after it is the inner proof's -/
   opened : Bool := false
   /-- the round last released was the opening's, whose coins go to it too -/
@@ -192,7 +195,7 @@ def startRep (ch : Frame.Chan) (reg : IO.Ref Sessions) (l0s : IO.Ref Level0.Slot
   | _ => err s!"a request `{line.trim}`"
 
 /-- What stands in rep `p`'s next round's place, the coins it squeezes, and `p` after, at the loop's salts `salts`: the
-algebraic phase's scheduled round, then the opening's (`Drive.openStep` begun at its first round, then at the round its
+algebraic phase's scheduled round, then the opening's (`Drive.openStepM` begun at its first round, then at the round its
 last coins asked for), then none (and no coins). -/
 def placeOf (salts : Array (ByteArray × Nat × Array ByteArray)) (l0 : Level0.Level0) (s : Release) (p : Rep)
     (dom : ByteArray) : Except String (Frame.Place × Nat × Rep) := do
@@ -207,7 +210,7 @@ def placeOf (salts : Array (ByteArray × Nat × Array ByteArray)) (l0 : Level0.L
       | throw s!"table {p.table} rep {p.rep}'s opening before its salts for levels ≥ 1"
     let t ← tabOfLevel0 (Setup.ofCircuit st) l0
     let xs := Drive.extras st (Drive.linkPoints st c)
-    p := { p with opening := some (Drive.openStep t p.rep dom xs hi (p.coins.extract 0 p.alg.size)) }
+    p := { p with opening := some (Drive.openStepM t p.rep dom xs hi (p.coins.extract 0 p.alg.size)) }
   match p.opening with
   | some (.ask c n _) => return (.sched c, n, { p with toOpening := true })
   | some (.done _) => return (.own, 0, { p with opened := true, opening := none })
@@ -375,12 +378,12 @@ theorem repPiop_fold {M : Type → Type} [Monad M] [LawfulMonad M] [MonadExceptO
     repPiop io { S with fold := c } lay cap root extras mk = repPiop io S lay cap root extras mk := by
   simp only [repPiop, lincheckFw_fold io c S.fold hk hf]
 
-theorem repOpening_fold {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (io : Asks M)
-    (commit : Level → Array F128 → (Nat → ByteArray) → M Commit) (S : Setup) (c : CircuitFold) (sch : Flock.Schedule)
-    (lay : Zk.PadLayout) (tPad rep : Nat) (g : Array F128) (cm0 : Commit) (claims : Array Claim) (h : Array F128)
-    (extra lanePad : Nat → Nat → F128) (salt : Nat → Nat → ByteArray) :
-    repOpening io commit { S with fold := c } sch lay tPad rep g cm0 claims h extra lanePad salt =
-      repOpening io commit S sch lay tPad rep g cm0 claims h extra lanePad salt := rfl
+theorem repOpeningMemo_fold {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M]
+    (memo : Option Memo) (io : Asks M) (commit : Level → Array F128 → (Nat → ByteArray) → M Commit) (S : Setup)
+    (c : CircuitFold) (sch : Flock.Schedule) (lay : Zk.PadLayout) (tPad rep : Nat) (g : Array F128) (cm0 : Commit)
+    (claims : Array Claim) (h : Array F128) (extra lanePad : Nat → Nat → F128) (salt : Nat → Nat → ByteArray) :
+    repOpeningMemo memo io commit { S with fold := c } sch lay tPad rep g cm0 claims h extra lanePad salt =
+      repOpeningMemo memo io commit S sch lay tPad rep g cm0 claims h extra lanePad salt := rfl
 
 theorem rounds_fold (S : Setup) (c : CircuitFold) (hk : c.kLog = S.fold.kLog)
     (hf : ∀ a w r, (fun _ => ()) <$> c.fold a w r = (fun _ => ()) <$> S.fold.fold a w r) (k0 : Nat) (cap dom : ByteArray) :
@@ -401,12 +404,12 @@ instance instLawfulStep : LawfulMonad Drive.Step := LawfulMonad.mk' Drive.Step
     | fail _ => rfl
     | ask c n k ih => exact congrArg (Drive.Step.ask c n) (funext ih))
 
-theorem openStep_fold (t : Tab) (S : Setup) (c : CircuitFold) (hk : c.kLog = S.fold.kLog)
+theorem openStepM_fold (t : Tab) (S : Setup) (c : CircuitFold) (hk : c.kLog = S.fold.kLog)
     (hf : ∀ a w r, (fun _ => ()) <$> c.fold a w r = (fun _ => ()) <$> S.fold.fold a w r) (rep : Nat) (dom : ByteArray)
     (xs : Array (Array F128)) (hi : Array ByteArray) (coins : Array (Array F128)) :
-    Drive.openStep { t with st := { S with fold := c } } rep dom xs hi coins =
-      Drive.openStep { t with st := S } rep dom xs hi coins := by
-  simp only [Drive.openStep, repPiop_fold (Drive.stepAsks coins false) S c hk hf, repOpening_fold]
+    Drive.openStepM { t with st := { S with fold := c } } rep dom xs hi coins =
+      Drive.openStepM { t with st := S } rep dom xs hi coins := by
+  simp only [Drive.openStepM, repPiop_fold (Drive.stepAsks coins false) S c hk hf, repOpeningMemo_fold]
 
 theorem ok_bind {α β : Type} (a : α) (f : α → V β) : ((Except.ok a : V α) >>= f) = f a := rfl
 
@@ -425,10 +428,10 @@ theorem tabOfLevel0_with (S S' : Setup) (hm : S'.merkle = S.merkle) (hn : S'.m =
     · rfl
   · rfl
 
-/-- A rep's opening (`Drive.openStep`) on the table's level 0 `l0` at the statement's setup `setup st`. -/
+/-- A rep's opening (`Drive.openStepM`) on the table's level 0 `l0` at the statement's setup `setup st`. -/
 def openingOf (setup : Stmt → Setup) (st : Stmt) (l0 : Level0.Level0) (rep : Nat) (dom : ByteArray)
-    (xs : Array (Array F128)) (hi : Array ByteArray) (coins : Array (Array F128)) : V (Drive.Step Unit) :=
-  (fun t => Drive.openStep t rep dom xs hi coins) <$> tabOfLevel0 (setup st) l0
+    (xs : Array (Array F128)) (hi : Array ByteArray) (coins : Array (Array F128)) : V (Drive.Step Memo) :=
+  (fun t => Drive.openStepM t rep dom xs hi coins) <$> tabOfLevel0 (setup st) l0
 
 theorem openingOf_chk : openingOf Setup.ofCircuit = openingOf ofCircuitChk := by
   funext st l0 rep dom xs hi coins
@@ -437,12 +440,12 @@ theorem openingOf_chk : openingOf Setup.ofCircuit = openingOf ofCircuitChk := by
     tabOfLevel0_with (Setup.ofCircuit st) (Setup.ofCircuit st) rfl rfl l0]
   simp only [Functor.map_map]
   refine congrArg (fun f => Functor.map f (tabOfLevel0 (Setup.ofCircuit st) l0)) (funext fun t => ?_)
-  exact (openStep_fold t (Setup.ofCircuit st) { st.circuitFold with fold := foldChk st } rfl (foldChk_map st) rep dom xs
+  exact (openStepM_fold t (Setup.ofCircuit st) { st.circuitFold with fold := foldChk st } rfl (foldChk_map st) rep dom xs
     hi coins).symm
 
 /-- `placeOf` with the rep's opening `op st l0 rep dom xs hi coins` (`openingOf`). -/
 def placeOfWith (op : Stmt → Level0.Level0 → Nat → ByteArray → Array (Array F128) → Array ByteArray →
-    Array (Array F128) → V (Drive.Step Unit)) (salts : Array (ByteArray × Nat × Array ByteArray))
+    Array (Array F128) → V (Drive.Step Memo)) (salts : Array (ByteArray × Nat × Array ByteArray))
     (l0 : Level0.Level0) (s : Release) (p : Rep) (dom : ByteArray) : Except String (Frame.Place × Nat × Rep) := do
   let k := p.coins.size
   if h : k < p.alg.size then return (.sched p.alg[k].1, p.alg[k].2, p)
@@ -639,7 +642,8 @@ def finish (reg : IO.Ref Sessions) (sid tables : Nat) : IO (Except String Unit) 
 what it holds the rep's requests to: the algebraic phase's values the frame took at their pads (`Frame.absorbed`'s order,
 the rest `0`), the extra claims at the session's link points (`Drive.extras`, as `placeOf` opens with them), the coins
 the stream answered each of the rep's rounds so far, and whether those cover every round of its algebraic phase (`alg`,
-known once its first round came). -/
+known once its first round came); and once the rep's opening ended, until its inner proof's first round, what the opening
+computed that the rep's proof reads back (`Finish.Own.memo`). -/
 def ownOf (R : Sessions) (L0 : Level0.Slots) (i r : Nat) (root : ByteArray) : Except String Finish.Own := do
   let some sl := L0.slots.find? (·.l0.root == root) | throw s!"table {i}: a level 0 the session loop did not draw"
   let some (sid, name) := sl.bound | throw s!"table {i}: a level 0 no session's Commit carries"
@@ -650,7 +654,8 @@ def ownOf (R : Sessions) (L0 : Level0.Slots) (i r : Nat) (root : ByteArray) : Ex
   let some (_, p) := R.find sid i r | throw s!"a request of table {i} rep {r}, whose frame the loop has not started"
   let vals := (p.cfg.order.zip p.vals).foldl (fun v (k, x) => v.set! k x) (Array.replicate (p.cfg.lay.zp 64) 0)
   return { draws := p.draws, vals, xs := Drive.extras st (Drive.linkPoints st c), coins := p.coins,
-           algebraEnded := !p.alg.isEmpty && p.alg.size ≤ p.coins.size }
+           algebraEnded := !p.alg.isEmpty && p.alg.size ≤ p.coins.size,
+           memo := match p.opening with | some (.done m) => some m | _ => none }
 
 /-- **What the loop tells the prover of table `i`'s rep `r`** in the live session named `name`, for the request line
 `line` on `ch`, past the session's `Commit`: `place NAME I R` is answered by its next round's place (`placeOf`), `alg N`
