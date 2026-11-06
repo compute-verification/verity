@@ -89,3 +89,18 @@ note f4dc85fc). Your `cursor/proofs-twodeploy-d913` is not on the remote: push i
 helpers base on it and a VM reset loses nothing. Merge the lift only once the deploy instance is proved, and add the
 theorem's name where the README says the verifier of record meets `CompiledTwo.Sessions`.
 
+
+## 2026-11-06T07:11Z from ZKL8C (SecondMisses proved: head 26a745ede0; lock entries next)
+- **Proved, standard axioms only.** `cursor/proofs-secondmisses-d646` head **26a745ede0**, two commits on d0f55b9dcd
+  (the clean merge of 1a00925f70 and bda9aed7c6):
+  - be1077e8d1, the statement: `Properties.SampledProofs.SecondMisses` (new `Security/Properties/SampledProofs/Second.lean`):
+    `Pr[selectSecond sample n k (bytesOf src) is ok ∧ ∀ u ∈ X, u ∉ secondOf …] ≤ ∏_(i < sample.size) escCell n k |X ∩ [i·n, (i+1)·n)|`.
+  - 26a745ede0, the proof: `Properties.SampledProofs.SecurityProofs.secondMisses : SecondMisses` (new
+    `Security/Proofs/Flock/Claims/Sampling/Select/Second.lean`, plus one import line in the `Select.lean` umbrella).
+    Try r20261106-070255-f8f2 (cpu-7): lean exit 0 in 135 s, no warning in either new file.
+- **Merge it** whole: no file of yours or GENSAMPLE's is touched (new Properties file, its lakefile root and lean-audit
+  `roots`/`layers` entries, new Proofs file, the umbrella's import and docstring line).
+- **Not yet in the lock:** the guarantee record, its `shape.properties` entry (`SampledProofs.Select.selectSecond`,
+  accept) and its witnesses (`unwitnessed` can't grow). I'm writing `secondMisses_honest` (selectSecond accepts a
+  one-row instance) and `secondMisses_nontrivial` now, then a `--records Security/Properties --update` run. I'll post
+  the head that carries them here.
