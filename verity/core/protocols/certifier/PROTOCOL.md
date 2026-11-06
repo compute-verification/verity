@@ -40,9 +40,9 @@ check that reads the same leaf is tied to N2's only under three conditions, each
    something the prover chooses.
 3. SHA-512 is collision resistant, as hm96 rows in frame-v3-sha512 trees already assume.
 
-N2 compares no grid, and the network claim is counts only. N2's verifier of record
+N2 compares no grid, and the network claim is counts only. N2's verifier
 decides each execution phase on a `--zk` proof of its registered proof block and public inputs alone, and reads no head,
-salt or sibling ("Its verifier of record" below). What stays open is in the README: the certificates reach the verifier
+salt or sibling ("Its verifier" below). What stays open is in the README: the certificates reach the verifier
 in the clear beside the proof system, a provisional exception to the four public kinds, and a run that proves nothing is
 decided in the clear.
 
@@ -187,7 +187,7 @@ One execution phase's certificates are registered through the proof system
   a registered window with no outcome yet, a gap in the registrations (a window registered out of order or never, or a
   run that stops short of the profile) and a registration past the profile each reject the link, and `refused` lists
   their windows. A run's network verdict is the AND over its links'. The datacenter model (`benchmarks/datacenter`, a
-  Python model, not a verifier of record) builds no `LinkWindows` outcomes, so its account doesn't read this
+  Python model, not the verifier) builds no `LinkWindows` outcomes, so its account doesn't read this
   aggregate. Its `Account.sound` is the same AND over its own port records: false on any refused port-window, each
   charged at its link's line rate (`refused_bits`).
 - **Public:** the population, the window, the value's leaf count, domain and salted root, the parameters digests, the
@@ -236,7 +236,7 @@ One execution phase's certificates are registered through the proof system
 - **N3, the content check,** a prototype in `benchmarks/network_sim` evaluated in the clear and in no proof-system
   Spec, is retired, superseded by the network certifier's step-indexed scan (`ingress_scan`, `egress`), which
   `benchmarks/network_traces/scan_zk.py` proves in zero knowledge, outside this protocol.
-- **Its verifier of record** is `LinkWindows.verify`, which decides on the delivered proof (`service.Delivered`) and
+- **Its verifier** is `LinkWindows.verify`, which decides on the delivered proof (`service.Delivered`) and
   public inputs alone. It accepts when its own run of Flock's Lean verifier (`proofs.verify`, `verify --zk`, on the
   circuit file the auditor committed) accepts every session, the sessions prove the link's registered proof block (every
   gate names a pinned digest and every session names the registered Program, the partition object's `program`,
@@ -325,7 +325,7 @@ with no public egress profile.
   it and none on egress, the served sizes (F, F_in, OWN and the link's windows, fixed before the run), and each window's
   declared sync as an output of the protocol. That sync is the clock-sync advice the audit already reads and charges
   (log2 #Σ_sync bits a window, 7 at 16 × 8): the served counts read it, and nothing else about the run is declared.
-- **The verifier of record** is `LinkWindows.verify`, as above: the proof block's verdict bit holds the served counts'
+- **The verifier** is `LinkWindows.verify`, as above: the proof block's verdict bit holds the served counts'
   check too, and the verifier's own public row holds the window's declared sync. The in-the-clear check runs
   `served_check`, `served.reference` over the opened heads' counts and the sync. `network_verdict` takes the served
   profile's windows.
@@ -606,10 +606,10 @@ proof block outputs 1 exactly when, in each lane of ordinal q:
   row t. The unit is `NetworkIngressTieBucket`: one gate naming IoTieRequest and its pinned circuit digest
   (`io_request.circuit-check.json`), its witness row the bucket row itself, read off the network certifier's root by
   the verifier's own registered read (`warden_rows.bucket_port`). The statement is a shared-row file every port of
-  which is one of the verifier's registered reads (C-Flock's `Registered.checkComplete`): `wit` at the network
+  which is one of the verifier's registered reads (Flock's `Registered.checkComplete`): `wit` at the network
   certifier's root, and `pub` and `o0` at known content the verifier registers itself (`IngressTie.known`), each
   unit's lanes (`io_request.lanes`, from the advice it holds and the network certifier's release, taken in the clear)
-  and the output word 1, under public salts, which hide nothing since both rows are public. The verifier of record
+  and the output word 1, under public salts, which hide nothing since both rows are public. The verifier
   decides each window on the proof alone, each unit's `pub` row opened to its own lanes, and reports the advice's
   digest. `IngressTie.tie` reads the verdict from the stream's outcomes of record
   alone, on the link and the stream's registrations. Window w is accepted when its outcome is, decided on the proof

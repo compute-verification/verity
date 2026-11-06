@@ -1,6 +1,6 @@
 # verifier_cost
 
-A verifier of record's time against the size of the description it reads and against the size of the circuit that
+A verifier's time against the size of the description it reads and against the size of the circuit that
 description unrolls to. The rule it measures (AGENTS.md "Design rules"): a verifier's cost is
 O(circuit description), never O(unrolled circuit).
 
@@ -14,7 +14,7 @@ the way down (`ir="boolean"` can't derive Serve_v1; `lift.py`'s docstring says w
   circuit is small enough (`--unrolled-max`), the instance expanded gate by gate also goes through
   `nci-check --policy --unrolled` (`NciCheck.check`, the gate-by-gate reference), and the two verdicts must agree.
 * `partition`, the one-stage verifier's partition: `sampled-proofs-difftest`'s `partition` (`Partition.units`, `strata`,
-  the expanded law and the digest, as the verifier of record computes them) on Serve_v1 under the template query of its
+  the expanded law and the digest, as the verifier computes them) on Serve_v1 under the template query of its
   Calls (`Q_template_instances`), under `Q_word` v1 and `Q_call` v1 at `X = 16` where its Calls' distinct Definitions are
   small enough (`--unrolled-max`), and on the served shape: the population program of Serve_v1's largest Definition at
   1 to 10⁶ instances under `Q_template_instance`, as a served window registers one. A template query must apply.
@@ -138,9 +138,9 @@ config's word-level descriptor: `flock-verify qcall-program` at each X, with the
 compare, a `perf` profile at the first X, and the one-stage `partition` piece under `Q_call` v1 at X = 16. Its header has
 the command.
 
-`results.json` (`verity/verifier-cost/v1`) has one row per config and IR: the description's bytes, Definitions and body
+`results.json` (`verity/verifier-cost/v1`) has one row per config and `ir` (word or Boolean): the description's bytes, Definitions and body
 nodes, the unrolled circuit's gates, and per check its wall seconds (the best of `--repeat`), peak RSS and the verdict.
-`partition.json` (`verity/verifier-cost-partition/v1`) has one row per config, IR, shape and query: the description's
+`partition.json` (`verity/verifier-cost-partition/v1`) has one row per config, `ir`, shape and query: the description's
 bytes, the unrolled gates, the gates of the Calls' distinct Definitions (what `Q_word` and `Q_call` lay out), the wall
 seconds, peak RSS and the population (null where the verifier refuses the query). `store` puts either in the store as
 an `evidence/v1` record naming the run and its commit; it runs where the store's keys are (a VM), since a node's shell
