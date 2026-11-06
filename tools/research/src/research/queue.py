@@ -29,13 +29,13 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    warns on stderr, and goes on, when the body has neither a `Goal <id>` line
                                                    naming a live goal of the Goals page (on it, and not done) nor an `Issue:
                                                    none: REASON` line (`goal_gate`; the goals as this machine last read them
-                                                   when the page can't be read, said in one line), and when the head changes a
-                                                   Lean lock against the landing branch that no records run or Lean check
-                                                   passed, of the head or of a commit whose files of the package and the
+                                                   when the page can't be read, said in one line), and (the records gate,
+                                                   `RecordsGate`: the lock run after its landing regenerates the records, and
+                                                   a failure there reverts it) when the head changes a Lean lock against the
+                                                   landing branch that no records run or Lean check passed, of the head or of
+                                                   a commit whose files of the package and the
                                                    packages it requires (tests and docs aside), lean-toolchain and the Lean
-                                                   checker (tools/verity/lean) are the head's, naming the run that would record
-                                                   it (the records gate, `RecordsGate`: the lock run after its landing
-                                                   regenerates the records, and a failure there reverts it); then,
+                                                   checker (tools/verity/lean) are the head's, naming the run to start; then,
                                                    in about a minute, the preflight (`Preflight`) refuses, with
                                                    the fix, a head that conflicts with a
                                                    fresh `next` outside the pins (naming the paths), contains an
@@ -5727,7 +5727,10 @@ def main(argv: list[str]) -> int:
                          f"worktree, in about {PREFLIGHT_CHECKS_S:g} s, and build the Lean modules that are or import what it "
                          f"changes (at most {PREFLIGHT_LEAN_MODULES}, in {PREFLIGHT_LEAN_S:g} s, on a warm Lean tree: here on a "
                          f"node, else on the first of {', '.join(PREFLIGHT_LEAN_ON)} that starts the build, whatever the tier; "
-                         "one no node can build refuses the mark, one not built in time is a skipped check)")
+                         "one no node can build refuses the mark, one not "
+                         "built in time is a skipped check); the records gate (which warns of a changed Lean lock with no records "
+                         "run that passed it, of the head or of a commit whose files of its package and the packages it requires "
+                         "(tests and docs aside), lean-toolchain and the Lean checker (tools/verity/lean) are the head's) still runs")
     ap.add_argument("--regenerate-locks", action=argparse.BooleanOptionalAction,
                     help="drive: after a landing that changes Lean, a lock or the spec, run lean-audit alone on `checked`'s tip "
                          "(the lock run) and commit the lock records it regenerated onto `checked` (`Regenerated:`), which "
