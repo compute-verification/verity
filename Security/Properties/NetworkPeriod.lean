@@ -213,8 +213,9 @@ def RowsStateHeldAt (p : Params) (c : Commitment) (pub : Public) : Prop :=
 /-- **The rows form charges a tied audit its reads of the scan's state only where they are of the scan's own state.**
 If the check accepts a period in the rows form, its public's term of each link-window counts as free inputs its scan's
 and, for each audit its scan's `prog` is an output of (`tiedAudits`), that audit's: with its reads of
-`verity/certifier/scan-state/v1` held (`Audit.stateFree`) only where its registration has a state entry and, in every
-link-window it is tied to, each of its state entries is at the root and domain of that link-window's scan's state
+`verity/certifier/scan-state/v1` held (`Audit.stateFree`) only where its registration has a state entry
+(`auditStateEntries`: of its `roots` or `registered`, or its `window`'s `activations.values` entry of that value) and, in
+every link-window it is tied to, each of its state entries is at the root and domain of that link-window's scan's state
 (`stateHeldIn`), the pin taken from the scan's registration, never from the parameters; else all its free inputs
 (`Audit.free`). So the term leaves out no input the prover chose of an audit whose state reads the scan's chain does
 not fix (`RowsStateTied` holds the scan's state to that chain from the empty state). That `stateFree` counts the audit's
