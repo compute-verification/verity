@@ -67,23 +67,6 @@ def Level0.toIn (l : Level0) : Link.In where
 def up (below : Array ByteArray) : Array ByteArray :=
   (Array.range (below.size / 2)).map fun i => Sha512.hash (below[2 * i]! ++ below[2 * i + 1]!)
 
-/-- `up` in tasks of `2^10` nodes where its nodes fill them (`upPar_eq`). -/
-def upPar (below : Array ByteArray) : Array ByteArray :=
-  if below.size / 2 % 1024 = 0 then
-    Link.parRange (fun i => Sha512.hash (below[2 * i]! ++ below[2 * i + 1]!)) (below.size / 2 / 1024) 1024
-  else up below
-
-theorem upPar_eq (below : Array ByteArray) : upPar below = up below := by
-  unfold upPar
-  split
-  · rename_i h
-    rw [Link.parRange_eq, Nat.div_mul_cancel (Nat.dvd_of_mod_eq_zero h)]
-    rfl
-  · rfl
-
-/-- Compiled code runs `upPar`; proofs see `up`. Above `tower` and every tree's layers, so they compile to it. -/
-@[csimp] theorem up_eq_upPar : @up = @upPar := funext fun below => (upPar_eq below).symm
-
 /-- A Merkle tree over the leaves `lf q` (`q < 2^d`), `k` layers up: its top layer, and its layers from the leaves to it,
 each hashed once (`tower_fst`, `tower_snd`). -/
 def tower (d : Nat) (lf : Nat → ByteArray) : Nat → Array ByteArray × Array (Array ByteArray)
