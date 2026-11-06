@@ -133,5 +133,5 @@ Limits of the model:
   returns more (logits, state) serves more, and the cap is then too low.
 - The two-stage write forms need a harm bound at the footprint, which no lemma states yet, and (B) replays a layer of
   one token at its share of its request's replay, from state it retains.
-- A type the `proof_overhead` card doesn't measure is priced from its staged witness bits, not measured: (A′)'s
-  per-expert types are, until a card measures them.
+- A type the `proof_overhead` card doesn't measure is priced from its staged witness bits, not measured; the caption
+  gives each line's share of it.

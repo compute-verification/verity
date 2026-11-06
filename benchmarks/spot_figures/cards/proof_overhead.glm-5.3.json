@@ -4,20 +4,26 @@
  "model": "GLM-5.3",
  "status": "measured",
  "provisional": true,
- "source": "GLM-5.3's proof blocks (benchmarks/served_units/stage.py's types at TP8) proved on one H200 by flock-circuit prove --zk --gpu, warm, full 2^35-bit statements (benchmarks/one_stage/zk_cost.py overhead, arm dev, e2e); priced per census stratum on the census's workload card by fig1_glm.py, each stratum by the staged Definition of its kind and K (the evidence's out/figure1-glm.json names it); the strata no measured type prices (under 1% of the price) are left pending. Model h, prefill, end to end: as registered (today's circuit) dev 1.4e+10 marginal, 1.3e+11 at full statements; per expert (the design point, needs the per-expert Definitions registered) dev 4.6e+08 marginal, 1.1e+09 at full statements. The other arms: nofw (FC_HOST_WITNESS=1) 1.1e+11 marginal, 2.3e+11 at full statements registered, 2.9e+09 marginal, 3.6e+09 at full statements per expert; fw (FC_HOST_WITNESS=1 FC_FIREWALL=1, the ZK server's path; its send check fitted on drawn sessions and extrapolated to 2^35 bits) 1.7e+13 marginal, 2e+13 at full statements registered, 4.5e+11 marginal, 4.6e+11 at full statements per expert. SPOT's prover is the dev arm.",
+ "source": "GLM-5.3's proof blocks (benchmarks/served_units/stage.py's types at TP8) proved on one H200 by flock-circuit prove --zk --gpu, warm, full 2^35-bit statements (benchmarks/one_stage/zk_cost.py overhead, arm dev, e2e); priced per census stratum on the census's workload card by fig1_glm.py, each stratum by the staged Definition of its kind and K (the evidence's out/figure1-glm.json names it); the strata no measured type prices (under 1% of the price) are left pending. Model h, prefill, end to end: as registered (today's circuit) dev 1.4e+10 marginal, 1.3e+11 at full statements; per expert (the design point, needs the per-expert Definitions registered) dev 4.6e+08 marginal, 1.1e+09 at full statements. The other arms: nofw (FC_HOST_WITNESS=1) 1.1e+11 marginal, 2.3e+11 at full statements registered, 2.9e+09 marginal, 3.6e+09 at full statements per expert; fw (FC_HOST_WITNESS=1 FC_FIREWALL=1, the ZK server's path; its send check fitted on drawn sessions and extrapolated to 2^35 bits) 1.7e+13 marginal, 2e+13 at full statements registered, 4.5e+11 marginal, 4.6e+11 at full statements per expert. SPOT's prover is the dev arm. Beside them, the seven block types of GLM-5.3's MoE cut per expert, under the per-expert partition card's names, so that a line on that cut prices them measured: Each per-expert block type's proving time measured on one H200 SXM (RunPod) with the deployed prover, flock-circuit prove --zk --gpu, at its partition-card statics and staged k_log, at full and half statements (2^35 witness bits at full; the k_log 25 reads also at a quarter), every block drawn, one warm process and two or three timed sessions each. Lean flock-verify checked one session a type and arm at its largest statement: each passed every check, then was refused only for lacking the Program, which these statements are staged without. h is proving GPU-seconds over the MACs' seconds at 9.8943e+14 MAC/s (verity.hardware.rate, the H200's e4m3). model_overhead and the label stay the registered cut's; the per-expert cut's own is 5.53e+08 marginal end to end, 1.7e+09 at full statements. Every block's overhead is at verity.hardware.rate's peak, 9.8943e+14 MAC/s (the registered blocks' rescaled from the data sheet's 9.8945e+14).",
  "runs": [
   "r20261106-074634-13c4",
   "r20261106-074918-e6ff",
   "r20261106-074923-fbc6",
   "r20261106-092817-df0b",
-  "r20261106-092821-266a"
+  "r20261106-092821-266a",
+  "r20261106-175237-4385",
+  "r20261106-175250-934f",
+  "r20261106-175304-1b29",
+  "r20261106-175708-e992",
+  "r20261106-181146-ca23",
+  "r20261106-191000-820d"
  ],
  "owner": "@proofs",
  "value": {
-  "definition": "proving GPU-seconds over the same GPU's seconds for the block's MACs at its dense peak (the H200 data sheet's dense FP8 peak, 1,979 TFLOPS at the 1,830 MHz boost)",
+  "definition": "proving GPU-seconds over the same GPU's seconds for the block's MACs at its dense peak (verity.hardware.rate for the H200's e4m3: 132 SMs x 4096 MAC/clk x 1830 MHz)",
   "device": "H200",
   "format": "fp8",
-  "peak_mac_s": 989450000000000.0,
+  "peak_mac_s": 989429760000000.0,
   "arm": "dev",
   "blocks": [
    {
@@ -32,7 +38,7 @@
     "runs": [
      "r20261106-092817-df0b"
     ],
-    "overhead": 279018694543.90485
+    "overhead": 279012986990.84247
    },
    {
     "block": "MoeExpertFp8GemmW_v1{E=256,K=256,N=1,G=128,KB=128,SWAP=true,DOT={\"fn\":\"HopperE4m3QgmmaDot32_v1\"}}",
@@ -46,7 +52,7 @@
     "runs": [
      "r20261106-092821-266a"
     ],
-    "overhead": 314026043321.2974
+    "overhead": 314019619664.6025
    },
    {
     "block": "ScaledMmFp8BlockSharedScale_v1{K=6144,N=1,G=128}",
@@ -60,7 +66,7 @@
     "runs": [
      "r20261106-074634-13c4"
     ],
-    "overhead": 531886501.4128248
+    "overhead": 531875621.24425787
    },
    {
     "block": "ScaledMmFp8BlockSharedScale_v1{K=2048,N=1,G=128}",
@@ -74,7 +80,7 @@
     "runs": [
      "r20261106-074634-13c4"
     ],
-    "overhead": 535702519.5806682
+    "overhead": 535691561.3523633
    },
    {
     "block": "MoeExpertFp8CoordinateChunk_v1{E=256,K=512,G=128,KB=128,SWAP=true,DOT={\"fn\":\"HopperE4m3QgmmaDot32_v1\"},FIRST=false,LAST=true}",
@@ -88,7 +94,7 @@
     "runs": [
      "r20261106-092817-df0b"
     ],
-    "overhead": 279018694543.90485
+    "overhead": 279012986990.84247
    },
    {
     "block": "MoeExpertFp8CoordinateChunk_v1{E=256,K=512,G=128,KB=128,SWAP=true,DOT={\"fn\":\"HopperE4m3QgmmaDot32_v1\"},FIRST=true,LAST=false}",
@@ -102,7 +108,7 @@
     "runs": [
      "r20261106-092817-df0b"
     ],
-    "overhead": 279018694543.90485
+    "overhead": 279012986990.84247
    },
    {
     "block": "ScaledMmFp8BlockSharedScale_v1{K=256,N=1,G=128}",
@@ -116,7 +122,7 @@
     "runs": [
      "r20261106-074634-13c4"
     ],
-    "overhead": 963929091.1612391
+    "overhead": 963909373.2120703
    },
    {
     "block": "RMSNormFusedCudaVector8_v1{N=6144,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"},BLOCK=256}",
@@ -144,7 +150,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 737434089.4531846
+    "overhead": 737419004.642461
    },
    {
     "block": "MoeSum_v1{TOPK=8,H=3072}",
@@ -270,7 +276,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 12290568.157553077
+    "overhead": 12290316.744041016
    },
    {
     "block": "DsaMqaLogits_v3{N=59,H=32,D=128}",
@@ -284,7 +290,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 12498882.872087875
+    "overhead": 12498627.197329847
    },
    {
     "block": "DsaMqaLogits_v3{N=58,H=32,D=128}",
@@ -298,7 +304,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 12714380.852641115
+    "overhead": 12714120.769697605
    },
    {
     "block": "DsaMqaLogits_v3{N=57,H=32,D=128}",
@@ -312,7 +318,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 12937440.165845346
+    "overhead": 12937175.520043176
    },
    {
     "block": "DsaMqaLogits_v3{N=56,H=32,D=128}",
@@ -326,7 +332,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 13168465.883092582
+    "overhead": 13168196.511472518
    },
    {
     "block": "DsaMqaLogits_v3{N=55,H=32,D=128}",
@@ -340,7 +346,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 13407892.535512447
+    "overhead": 13407618.266226564
    },
    {
     "block": "DsaMqaLogits_v3{N=54,H=32,D=128}",
@@ -354,7 +360,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 13656186.841725642
+    "overhead": 13655907.493378907
    },
    {
     "block": "DsaMqaLogits_v3{N=53,H=32,D=128}",
@@ -368,7 +374,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 13913850.74439971
+    "overhead": 13913566.125329452
    },
    {
     "block": "DsaMqaLogits_v3{N=52,H=32,D=128}",
@@ -382,7 +388,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 14181424.797176627
+    "overhead": 14181134.70466271
    },
    {
     "block": "DsaMqaLogits_v3{N=51,H=32,D=128}",
@@ -396,7 +402,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 14459491.950062444
+    "overhead": 14459196.16946002
    },
    {
     "block": "DsaMqaLogits_v3{N=50,H=32,D=128}",
@@ -410,7 +416,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 14748681.789063692
+    "overhead": 14748380.09284922
    },
    {
     "block": "DsaMqaLogits_v3{N=49,H=32,D=128}",
@@ -424,7 +430,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 15049675.294962952
+    "overhead": 15049367.441682877
    },
    {
     "block": "DsaMqaLogits_v3{N=48,H=32,D=128}",
@@ -438,7 +444,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 15363210.196941346
+    "overhead": 15362895.93005127
    },
    {
     "block": "DsaMqaLogits_v3{N=47,H=32,D=128}",
@@ -452,7 +458,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 15690087.009642227
+    "overhead": 15689766.056222575
    },
    {
     "block": "DsaMqaLogits_v3{N=46,H=32,D=128}",
@@ -466,7 +472,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 16031175.857677925
+    "overhead": 16030847.92701002
    },
    {
     "block": "DsaMqaLogits_v3{N=45,H=32,D=128}",
@@ -480,7 +486,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 16387424.210070768
+    "overhead": 16387088.992054688
    },
    {
     "block": "DsaMqaLogits_v3{N=44,H=32,D=128}",
@@ -494,7 +500,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 16759865.669390557
+    "overhead": 16759522.832783202
    },
    {
     "block": "DsaMqaLogits_v3{N=43,H=32,D=128}",
@@ -508,7 +514,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 17149629.987283364
+    "overhead": 17149279.17773165
    },
    {
     "block": "DsaMqaLogits_v3{N=42,H=32,D=128}",
@@ -522,7 +528,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 17557954.51079011
+    "overhead": 17557595.348630022
    },
    {
     "block": "DsaMqaLogits_v3{N=41,H=32,D=128}",
@@ -536,7 +542,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 17986197.30373621
+    "overhead": 17985829.381523438
    },
    {
     "block": "DsaMqaLogits_v3{N=40,H=32,D=128}",
@@ -550,7 +556,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 18435852.236329615
+    "overhead": 18435475.116061524
    },
    {
     "block": "DsaMqaLogits_v3{N=39,H=32,D=128}",
@@ -564,7 +570,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 18908566.396235503
+    "overhead": 18908179.60621695
    },
    {
     "block": "DsaMqaLogits_v3{N=38,H=32,D=128}",
@@ -578,7 +584,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 19406160.248768017
+    "overhead": 19405763.28006476
    },
    {
     "block": "DsaMqaLogits_v3{N=37,H=32,D=128}",
@@ -592,7 +598,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 19930651.066302285
+    "overhead": 19930243.36871516
    },
    {
     "block": "DsaMqaLogits_v3{N=36,H=32,D=128}",
@@ -606,7 +612,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 20484280.26258846
+    "overhead": 20483861.240068357
    },
    {
     "block": "DsaMqaLogits_v3{N=35,H=32,D=128}",
@@ -620,7 +626,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 21069545.41294813
+    "overhead": 21069114.418356027
    },
    {
     "block": "DsaTopKShortRow_v1{TOPK=2048}",
@@ -648,7 +654,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 21689237.925093666
+    "overhead": 21688794.254190028
    },
    {
     "block": "DsaMqaLogits_v3{N=33,H=32,D=128}",
@@ -662,7 +668,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 22346487.559187412
+    "overhead": 22346030.443710938
    },
    {
     "block": "DsaMqaLogits_v3{N=32,H=32,D=128}",
@@ -676,7 +682,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 23044815.29541202
+    "overhead": 23044343.895076904
    },
    {
     "block": "DsaMqaLogits_v3{N=31,H=32,D=128}",
@@ -690,7 +696,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 23788196.4339737
+    "overhead": 23787709.82717616
    },
    {
     "block": "DsaMqaLogits_v3{N=30,H=32,D=128}",
@@ -704,7 +710,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 24581136.315106153
+    "overhead": 24580633.488082033
    },
    {
     "block": "DsaMqaLogits_v3{N=29,H=32,D=128}",
@@ -718,7 +724,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 25428761.70528223
+    "overhead": 25428241.53939521
    },
    {
     "block": "DsaMqaLogits_v3{N=28,H=32,D=128}",
@@ -732,7 +738,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 26336931.766185164
+    "overhead": 26336393.022945035
    },
    {
     "block": "DsaMqaLogits_v3{N=27,H=32,D=128}",
@@ -746,7 +752,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 27312373.683451284
+    "overhead": 27311814.986757815
    },
    {
     "block": "DsaMqaLogits_v3{N=26,H=32,D=128}",
@@ -760,7 +766,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 28362849.594353255
+    "overhead": 28362269.40932542
    },
    {
     "block": "DsaMqaLogits_v3{N=25,H=32,D=128}",
@@ -774,7 +780,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 29497363.578127384
+    "overhead": 29496760.18569844
    },
    {
     "block": "DsaMqaLogits_v3{N=24,H=32,D=128}",
@@ -788,7 +794,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 30726420.39388269
+    "overhead": 30725791.86010254
    },
    {
     "block": "DsaMqaLogits_v3{N=23,H=32,D=128}",
@@ -802,7 +808,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 32062351.71535585
+    "overhead": 32061695.85402004
    },
    {
     "block": "DsaMqaLogits_v3{N=22,H=32,D=128}",
@@ -816,7 +822,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 33519731.338781115
+    "overhead": 33519045.665566403
    },
    {
     "block": "DsaMqaLogits_v3{N=21,H=32,D=128}",
@@ -830,7 +836,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 35115909.02158022
+    "overhead": 35115190.697260045
    },
    {
     "block": "DsaMqaLogits_v3{N=20,H=32,D=128}",
@@ -844,7 +850,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 36871704.47265923
+    "overhead": 36870950.23212305
    },
    {
     "block": "DsaMqaLogits_v3{N=19,H=32,D=128}",
@@ -858,7 +864,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 38812320.49753603
+    "overhead": 38811526.56012952
    },
    {
     "block": "DsaMqaLogits_v3{N=18,H=32,D=128}",
@@ -872,7 +878,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 40968560.52517692
+    "overhead": 40967722.480136715
    },
    {
     "block": "DsaMqaLogits_v3{N=17,H=32,D=128}",
@@ -886,7 +892,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 43378475.85018733
+    "overhead": 43377588.508380055
    },
    {
     "block": "DsaMqaLogits_v3{N=16,H=32,D=128}",
@@ -900,7 +906,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 46089630.59082404
+    "overhead": 46088687.79015381
    },
    {
     "block": "DsaMqaLogits_v3{N=15,H=32,D=128}",
@@ -914,7 +920,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 49162272.63021231
+    "overhead": 49161266.976164065
    },
    {
     "block": "DsaMqaLogits_v3{N=14,H=32,D=128}",
@@ -928,7 +934,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 52673863.53237033
+    "overhead": 52672786.04589007
    },
    {
     "block": "DsaMqaLogits_v3{N=13,H=32,D=128}",
@@ -942,7 +948,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 56725699.18870651
+    "overhead": 56724538.81865084
    },
    {
     "block": "DsaMqaLogits_v3{N=12,H=32,D=128}",
@@ -956,7 +962,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 61452840.78776538
+    "overhead": 61451583.72020508
    },
    {
     "block": "DsaMqaLogits_v3{N=11,H=32,D=128}",
@@ -970,7 +976,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 67039462.67756223
+    "overhead": 67038091.33113281
    },
    {
     "block": "DsaMqaLogits_v3{N=10,H=32,D=128}",
@@ -984,7 +990,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 73743408.94531846
+    "overhead": 73741900.4642461
    },
    {
     "block": "DsaMqaLogits_v3{N=9,H=32,D=128}",
@@ -998,7 +1004,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 81937121.05035384
+    "overhead": 81935444.96027343
    },
    {
     "block": "DsaMqaLogits_v3{N=8,H=32,D=128}",
@@ -1012,7 +1018,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 92179261.18164808
+    "overhead": 92177375.58030762
    },
    {
     "block": "DsaMqaLogits_v3{N=7,H=32,D=128}",
@@ -1026,7 +1032,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 105347727.06474066
+    "overhead": 105345572.09178014
    },
    {
     "block": "DsaMqaLogits_v3{N=6,H=32,D=128}",
@@ -1040,7 +1046,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 122905681.57553077
+    "overhead": 122903167.44041017
    },
    {
     "block": "DsaMqaLogits_v3{N=5,H=32,D=128}",
@@ -1054,7 +1060,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 147486817.89063692
+    "overhead": 147483800.9284922
    },
    {
     "block": "DsaMqaLogits_v3{N=4,H=32,D=128}",
@@ -1068,7 +1074,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 184358522.36329615
+    "overhead": 184354751.16061524
    },
    {
     "block": "DsaMqaLogits_v3{N=3,H=32,D=128}",
@@ -1082,7 +1088,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 245811363.15106153
+    "overhead": 245806334.88082033
    },
    {
     "block": "DsaMqaLogits_v3{N=2,H=32,D=128}",
@@ -1096,7 +1102,7 @@
     "runs": [
      "r20261106-074918-e6ff"
     ],
-    "overhead": 368717044.7265923
+    "overhead": 368709502.3212305
    },
    {
     "block": "MoeExpertFp8BlockCoordinate_v1{K=6144,G=128,KB=128,SWAP=True}",
@@ -1106,7 +1112,7 @@
     "seconds_per_block": 0.002069831107421875,
     "fixed_seconds": 6.67470915,
     "statement_blocks": 1024,
-    "overhead": 1383056199.2403347,
+    "overhead": 1383027907.7071874,
     "runs": [
      "r20261106-074634-13c4"
     ]
@@ -1119,14 +1125,116 @@
     "seconds_per_block": 0.0003898016727701823,
     "fixed_seconds": 0.7632348886666667,
     "statement_blocks": 8192,
-    "overhead": 1866697893.3689117,
+    "overhead": 1866659708.55375,
     "runs": [
      "r20261106-074634-13c4"
     ]
+   },
+   {
+    "block": "MoeRouterSigmoidBiasSlots_v2{E=256,TOPK=8,SCALE={\"f64\":\"0x1.4000000000000p+1\"},KERNEL=\"block\"}",
+    "stands_in": false,
+    "macs": 0,
+    "out_bits": 512,
+    "seconds_per_block": 0.009459905389648433,
+    "fixed_seconds": 22.830934152000008,
+    "statement_blocks": 1024,
+    "k_log": 25,
+    "runs": [
+     "r20261106-175708-e992"
+    ],
+    "overhead": null
+   },
+   {
+    "block": "EmbeddingRead_v1{V=256,H=3072}",
+    "stands_in": false,
+    "macs": 0,
+    "out_bits": 49153,
+    "seconds_per_block": 0.004929873044562092,
+    "fixed_seconds": 9.908206843368419,
+    "statement_blocks": 1024,
+    "k_log": 25,
+    "runs": [
+     "r20261106-175237-4385",
+     "r20261106-175250-934f",
+     "r20261106-191000-820d"
+    ],
+    "overhead": null
+   },
+   {
+    "block": "EmbeddingRead_v1{V=256,H=96}",
+    "stands_in": false,
+    "macs": 0,
+    "out_bits": 1537,
+    "seconds_per_block": 0.0012212981000976565,
+    "fixed_seconds": 4.248619223499998,
+    "statement_blocks": 4096,
+    "k_log": 23,
+    "runs": [
+     "r20261106-181146-ca23"
+    ],
+    "overhead": null
+   },
+   {
+    "block": "MoeExpertFp8BlockGemm_v4{K=6144,N=1,G=128,KB=128,SWAP=false,DOT={\"fn\":\"HopperE4m3MmaV2Dot32_v2\"}}",
+    "stands_in": false,
+    "macs": 6144,
+    "out_bits": 16,
+    "seconds_per_block": 0.0011518767812500007,
+    "fixed_seconds": 7.3955476199999985,
+    "statement_blocks": 2048,
+    "k_log": 24,
+    "runs": [
+     "r20261106-175304-1b29"
+    ],
+    "overhead": 767030946.1907814
+   },
+   {
+    "block": "EmbeddingRead_v1{V=256,H=4096}",
+    "stands_in": false,
+    "macs": 0,
+    "out_bits": 65537,
+    "seconds_per_block": 0.005274532962993421,
+    "fixed_seconds": 12.327373149394736,
+    "statement_blocks": 1024,
+    "k_log": 25,
+    "runs": [
+     "r20261106-175237-4385",
+     "r20261106-175250-934f",
+     "r20261106-191000-820d"
+    ],
+    "overhead": null
+   },
+   {
+    "block": "EmbeddingRead_v1{V=256,H=4}",
+    "stands_in": false,
+    "macs": 0,
+    "out_bits": 65,
+    "seconds_per_block": 0.0005124637016601563,
+    "fixed_seconds": 6.0389399445,
+    "statement_blocks": 4096,
+    "k_log": 23,
+    "runs": [
+     "r20261106-181146-ca23"
+    ],
+    "overhead": null
+   },
+   {
+    "block": "MoeExpertFp8BlockGemmW_v4{K=256,N=32,G=128,KB=128,SWAP=true,DOT={\"fn\":\"HopperE4m3QgmmaDot32_v2\"}}",
+    "stands_in": false,
+    "macs": 8192,
+    "out_bits": 512,
+    "seconds_per_block": 0.0014367354614257814,
+    "fixed_seconds": 6.257390269999999,
+    "statement_blocks": 2048,
+    "k_log": 24,
+    "runs": [
+     "r20261106-175304-1b29"
+    ],
+    "overhead": 542556055.9111817
    }
   ],
   "model_overhead": 13900000000.0,
   "label": "Measured on an H200, GLM-5.3's proof blocks as registered (provisional)"
  },
- "art": "art:2db61f40e10b876140263b5ef307b9069534a538d109d2a1570ba6471b1bf4e7"
+ "art": "art:b92517eadfd0731c4ae150b15b1573a245d32d2cb0ae26fc864eac8de2cac365"
 }

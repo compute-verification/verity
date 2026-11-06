@@ -4,7 +4,7 @@
  "model": "GLM-5.3",
  "status": "modeled",
  "provisional": true,
- "source": "GLM-5.3's MoE cut per expert at its TP8 statics (the circuit glm53-moe-per-expert): the router's slots, one output field a slot; each slot's w13 and w2 rows and scales read from tables registered one expert a row (EmbeddingRead_v1 at the leaf the router's committed slot index names); per-expert GEMMs over the rows read. Units a token are 75 layers x 8 slots on each of 8 ranks; ANDs and staged k_log as circuit-check reports them at those statics; output bits from each Definition's outputs (a read's h, H 16-bit words, and ok; a GEMM's N bf16 words). No proof_overhead card measures its types yet, so Figure 1 prices each at its staged k_log, computed, not measured. Its Definitions and circuit are built and circuit-checked per block type (in review); the cut is not yet proved or served, and the expert's binding is proved for the read's reference, not yet for its gates.",
+ "source": "GLM-5.3's MoE cut per expert at its TP8 statics (the circuit glm53-moe-per-expert): the router's slots, one output field a slot; each slot's w13 and w2 rows and scales read from tables registered one expert a row (EmbeddingRead_v1 at the leaf the router's committed slot index names); per-expert GEMMs over the rows read. Units a token are 75 layers x 8 slots on each of 8 ranks; ANDs and staged k_log as circuit-check reports them at those statics; output bits from each Definition's outputs (a read's h, H 16-bit words, and ok; a GEMM's N bf16 words). The proof_overhead card measures its seven types under these names (one H200, the deployed prover, full statements), so Figure 1 prices them measured. Its Definitions and circuit are built and circuit-checked per block type (in review); the cut is not yet proved or served, and the expert's binding is proved for the read's reference, not yet for its gates.",
  "runs": [
   "r20261106-131055-0e29",
   "r20261106-131003-3028"
@@ -12,7 +12,7 @@
  "owner": "@proofs",
  "value": {
   "name": "per-expert",
-  "label": "Definitions and circuit built and circuit-checked per block type (in review); h computed, not measured; not yet proved or served; the expert's binding proved for the read's reference, not yet for its gates",
+  "label": "Definitions and circuit built and circuit-checked per block type (in review); h measured; not yet proved or served; the expert's binding proved for the read's reference, not yet for its gates",
   "replaces": [
    "MoeExpertFp8Gemm_v1",
    "MoeExpertFp8GemmW_v1",
@@ -84,5 +84,5 @@
    }
   ]
  },
- "art": "art:d3e4cca4f0d089be68833aed7daf521d60e2c14f4c4d278c7771f97d4b1e0c0f"
+ "art": "art:503a55396a396466f27ee52c7dae7186470fc09c0d769e206616aa86468e8936"
 }
