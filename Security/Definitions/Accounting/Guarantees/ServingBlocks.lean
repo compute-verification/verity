@@ -16,10 +16,9 @@ where `n_u` is the number of inference blocks inside serving block `u`. Each arg
 or its `n_u` inference blocks at `(c, k)` (`Verity.Guarantees.InferenceCap`). `Verity.Guarantees.ServingBlockSum` sums
 them. The statements are about one circuit; Layer 2's envelopes supply the premises, each with its probability.
 
-A serving block has at most `c_S` gates and reads at most `k_S` unregistered input bits, `Verity.Guarantees.Padding`'s
-premise: padded to exactly `c_S` gates, the serving blocks read as many unregistered input bits as before and are proof
-blocks of exactly `c_S` gates of the padded circuit. The per-block cap reads blocks of at most `c` gates, so the bound is
-stated on the circuit at hand.
+A serving block has at most `c_S` gates and reads at most `k_S` unregistered input bits: a proof block at `(c_S, k_S)`,
+as a `(c, k)`-partition's proof blocks have at most `c` gates (`Verity.Partition.IsCK`). The per-block cap reads
+blocks of at most `c` gates, so the bound is stated on the circuit at hand.
 
 Two terms differ from Theorem 3 at the serving blocks:
 * `ω_max μ k_S` bounds the weight assigned to `u` but not computed wholly inside it. `Ω_u` counts an operation by its
@@ -57,7 +56,7 @@ at each `(c_S u, k_S u)` and at `(c, k)`, the operations' bodies lead to their r
 weight in the dark remainder:
 `Σ_v ω_v ≤ Σ_{u ∈ S} min {q(c_S, k_S) + ω_max μ k_S, n_u q(c, k) + q_U(u)} + q_U(L_dark)`. -/
 def ServingBlockBound : Prop :=
-  ∀ (d : Declaration) (J : Counted d.D) (q : ℕ → ℕ → ℝ) (c k B nf : ℕ) (P : Partition d.D B) (S : Finset (Fin B))
+  ∀ (d : RegisteredCircuit) (J : Counted d.D) (q : ℕ → ℕ → ℝ) (c k B nf : ℕ) (P : Partition d.D B) (S : Finset (Fin B))
     (cS kS : Fin B → ℕ) (Pf : Partition d.D nf) (r : Pf.Refines P) (ωmax : ℝ) (μ : ℕ) (qU : Fin B → ℝ) (qD : ℝ),
     ServingSizes d P S cS kS →
     (∀ u ∈ S, PerBlockCap d J q (cS u) (kS u)) → Pf.IsCK d c k → PerBlockCap d J q c k →
@@ -70,7 +69,7 @@ def ServingBlockBound : Prop :=
 /-- **The serving-block bound, remote**: with no wipe or certifier, only the inference cap applies:
 `Σ_v ω_v ≤ Σ_{u ∈ S} (n_u q(c, k) + q_U(u)) + q_U(L_dark)`. -/
 def ServingBlockBoundRemote : Prop :=
-  ∀ (d : Declaration) (J : Counted d.D) (q : ℕ → ℕ → ℝ) (c k B nf : ℕ) (P : Partition d.D B) (S : Finset (Fin B))
+  ∀ (d : RegisteredCircuit) (J : Counted d.D) (q : ℕ → ℕ → ℝ) (c k B nf : ℕ) (P : Partition d.D B) (S : Finset (Fin B))
     (Pf : Partition d.D nf) (r : Pf.Refines P) (qU : Fin B → ℝ) (qD : ℝ),
     Pf.IsCK d c k → PerBlockCap d J q c k →
     (∀ u ∈ S, UncertifiedCap J (P.gates u) (fun i : {i // r.parent i = u} => Pf.gates i) (qU u)) →

@@ -23,7 +23,8 @@ seconds, each test that failed, and which of the suite's `test_*.py` files were 
 its tests ran (under `"*"` when neither: a session fixture, a conftest). It deselects the tests `VERITY_SUITE_REUSE` names,
 whose passes `suites.py` reuses, and in an xdist worker it moves the longest tests (`VERITY_SUITE_HEAVY`) to the heads of the
 workers' shares: an order only, which parallel suites declare their outcomes don't depend on. Under `suites.py --files` it
-collects only the test files of the run's part (`VERITY_SUITE_PART`, `in_part`). It sets `VERITY_SUITE_MODULE` while a test module is collected or run, so the Pythons a test starts
+collects only the test files of the run's part (`VERITY_SUITE_PART`, `in_part`), or of a part by test id deselects the tests
+whose node id hashes to another part (`id_part`), and reports how many it left out (`part_out`). It sets `VERITY_SUITE_MODULE` while a test module is collected or run, so the Pythons a test starts
 trace their own reads (`child/`), and in a child this process forks it writes each such read at once to `VERITY_SUITE_READS`
 (`child/verity_suite_reads.py`): a fork's memory never comes back, and one that ends through `os._exit` flushes nothing.
 
@@ -273,8 +274,14 @@ def heavy_first(nodeids: list[str], heavy: list[str], workers: int) -> list[int]
 
 @pytest.hookimpl(trylast=True)
 def pytest_collection_modifyitems(session, config, items) -> None:
-    """Deselect the tests `VERITY_SUITE_REUSE` names; in an xdist worker, start the longest of those left at the heads of the
-    workers' shares (`VERITY_SUITE_HEAVY`, longest first; every worker orders its collection alike, as xdist requires)."""
+    """Deselect the tests of the other parts of a part by test id (`id_part`), then those `VERITY_SUITE_REUSE` names; in an xdist
+    worker, start the longest of those left at the heads of the workers' shares (`VERITY_SUITE_HEAVY`, longest first; every
+    worker orders its collection alike, as xdist requires)."""
+    global _part_out
+    if _id_part is not None and (out := [i for i in items if id_part(i.nodeid, _id_part[1]) not in _id_part[0]]):
+        _part_out = len(out)
+        config.hook.pytest_deselected(items=out)
+        items[:] = [i for i in items if id_part(i.nodeid, _id_part[1]) in _id_part[0]]
     if reuse := os.environ.get("VERITY_SUITE_REUSE"):
         with open(reuse) as f:
             ids = set(json.load(f))
@@ -289,15 +296,27 @@ def pytest_collection_modifyitems(session, config, items) -> None:
         items[:] = [items[i] for i in order]
 
 
-def _load_part() -> tuple[str, tuple[set[int], int, frozenset, frozenset]] | None:
+def _load_part() -> dict | None:
     if not (_ACTIVE and (f := os.environ.get("VERITY_SUITE_PART"))):
         return None
     with open(f) as fh:
-        p = json.load(fh)
-    return p["dir"], (set(p["ks"]), p["m"], frozenset(p["mine"]), frozenset(p["every"]))
+        return json.load(fh)
 
 
-_part = _load_part()
+_part_doc = _load_part()
+#: a part by test file: (the suite's directory, `in_part`'s arguments)
+_part = ((_part_doc["dir"], (set(_part_doc["ks"]), _part_doc["m"], frozenset(_part_doc["mine"]), frozenset(_part_doc["every"])))
+         if _part_doc is not None and _part_doc.get("by") != "id" else None)
+#: a part by test id: (its ks, m)
+_id_part = (set(_part_doc["ks"]), _part_doc["m"]) if _part_doc is not None and _part_doc.get("by") == "id" else None
+_part_out = 0                                                    # the collected tests of the other parts by id, deselected
+
+
+def id_part(nodeid: str, m: int) -> int:
+    """The part, 1..``m``, of a suite in parts by test id (`suites.id_part_of`) that runs test ``nodeid`` (from the suite's
+    directory): by its sha256, as circuit-check shards its targets, so every test the suite's collection finds runs in exactly
+    one part on any machine."""
+    return 1 + int.from_bytes(hashlib.sha256(nodeid.encode()).digest()[:8], "big") % m
 
 
 def in_part(rel: str, ks: set[int], m: int, mine: frozenset, every: frozenset) -> bool:
@@ -310,7 +329,8 @@ def in_part(rel: str, ks: set[int], m: int, mine: frozenset, every: frozenset) -
 
 
 def pytest_ignore_collect(collection_path, config):
-    """Under `suites.py --files` (`VERITY_SUITE_PART`): a test file outside the run's part isn't collected, nor imported."""
+    """Under `suites.py --files` (`VERITY_SUITE_PART`): a test file outside the run's part by file isn't collected, nor imported
+    (a part by test id collects every file)."""
     name = collection_path.name
     if _part is None or not name.endswith(".py") or not (name.startswith("test_") or name.endswith("_test.py")):
         return None
@@ -391,11 +411,12 @@ def pytest_runtest_logreport(report) -> None:
 @pytest.hookimpl(optionalhook=True)
 def pytest_testnodedown(node, error) -> None:
     """In the controller, for each xdist worker as it finishes: take the files it read outside the inputs."""
-    global _workers_untraced
+    global _workers_untraced, _part_out
     record = (getattr(node, "workeroutput", None) or {}).get(_KEY)
     if record is None:
         _unguarded.append(node.gateway.id)
     else:
+        _part_out = max(_part_out, record.get("part_out", 0))
         for p, m in record["outside"].items():
             _outside.setdefault(p, m)
         _watched.update(record["watched"])
@@ -417,14 +438,16 @@ def pytest_sessionfinish(session, exitstatus) -> None:
     reads = {m: sorted(files) for m, files in sorted(_reads.items())}
     if hasattr(config, "workerinput"):
         config.workeroutput[_KEY] = {"outside": dict(sorted(_outside.items())), "watched": sorted(_watched), "reads": reads, **used,
-                                     "traced": sorted(_traced), "untraced": {m: sorted(v) for m, v in sorted(_untraced.items())}}
+                                     "traced": sorted(_traced), "untraced": {m: sorted(v) for m, v in sorted(_untraced.items())},
+                                     "part_out": _part_out}
         return
     used = {k: sorted(set(v) | _record[k]) for k, v in used.items()}
     passed = {n: round(s, 3) for n, s in sorted(_outcomes.items()) if s is not None}
     untraced = _untraced if _workers_untraced is None else _workers_untraced     # a controller's own programs are its workers
     payload = json.dumps({"counts": _counts, "outside": dict(sorted(_outside.items())), "unguarded": _unguarded, "unmarked_slow": _slow,
                           "watched": sorted(_watched), "passed": passed, "failed": sorted(_failed), "reads": reads, **used,
-                          "traced": sorted(_traced), "untraced": {m: sorted(v) for m, v in sorted(untraced.items())}},
+                          "traced": sorted(_traced), "untraced": {m: sorted(v) for m, v in sorted(untraced.items())},
+                          "part_out": _part_out},
                          indent=1)
     with open(_REPORT, "w") as f:
         f.write(payload)

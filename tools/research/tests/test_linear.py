@@ -25,7 +25,7 @@ PROJECTS = [{"id": "PJ1", "name": "E2E toy deployment on one H200", "projectMile
 
 
 class FakeLinear:
-    """Linear's token endpoint and GraphQL API: one team per name in `teams`, labels made on first use; the parent CMP-92 on
+    """Linear's token endpoint and GraphQL API: one team per name in `teams`, labels made on first use; the parent (id `P1`) on
     PJ1's M3, the active `projects`, the open issues the audit pages through (`open`), the team keys the credentials see
     (`visible`, default the teams'), the team of the issue a comment reads (`team_key`), the issues' `relations` (an
     issue's id is `I-` and its identifier), the workspace's `users`, and each relation, project or milestone mutation as
@@ -37,10 +37,16 @@ class FakeLinear:
         self.state_type = "backlog"
         self.projects, self.open, self.updated, self.refuse_project = PROJECTS, [], [], False
         self.visible, self.team_key = None, "INF"
+        self.project_teams = {"PJ3": [{"id": "T-infra", "key": "INF"}]}
+        self.project_state = {"PJ3": {"targetDate": "2026-10-28", "status": {"name": "In Progress"}}}
         self.parent = {"id": "P1", "project": {"id": "PJ1"}, "projectMilestone": {"id": "MS3"}}
-        self.relations, self.wrote = [], []
+        self.relations, self.wrote, self.reviewed = [], [], None
         self.users = [{"id": "U1", "name": "Daniel Reuter"}, {"id": "U2", "name": "Verity Asks"}]
         self.asked, self.ask_filter, self.tags = [], None, {}
+
+    def _project(self, pid: str) -> dict:
+        name = next(p["name"] for p in PROJECTS if p["id"] == pid)
+        return {"name": name, **self.project_state.get(pid, {}), "teams": {"nodes": self.project_teams.get(pid, [])}}
 
     @staticmethod
     def _issue(x: str) -> dict:
@@ -66,15 +72,28 @@ class FakeLinear:
             raise urllib.error.HTTPError(url, 401, "Unauthorized", {}, io.BytesIO(b'{"errors": [{"message": "auth"}]}'))
         user = "the app" if headers["Authorization"].startswith("Bearer") else "Daniel"
         if m := re.search(r"\{ (issueRelationCreate|issueRelationDelete|projectUpdateCreate|projectCreate|projectMilestoneCreate|"
-                          r"projectMilestoneUpdate)\(", q):
+                          r"projectMilestoneUpdate|projectUpdate)\(", q):
             self.wrote.append((m[1], v))
             if m[1] == "issueRelationCreate":
                 self.relations.append({"id": f"R{len(self.wrote)}", "type": v["i"]["type"], "issue": self._issue(v["i"]["issueId"]),
                                        "relatedIssue": self._issue(v["i"]["relatedIssueId"])})
             if m[1] == "issueRelationDelete":
                 self.relations = [r for r in self.relations if r["id"] != v["id"]]
+            if m[1] == "projectUpdate":
+                st, i = self.project_state.setdefault(v["id"], {}), v["i"]
+                if "teamIds" in i:
+                    self.project_teams[v["id"]] = [{"id": t, "key": t[2:5].upper()} for t in i["teamIds"]]
+                if "targetDate" in i:
+                    st["targetDate"] = i["targetDate"]
+                if "statusId" in i:
+                    st["status"] = {"name": i["statusId"][3:]}
+                return {"data": {"projectUpdate": {"success": True, "project": self._project(v["id"])}}}
             return {"data": {m[1]: {"success": True, "project": {"url": "https://linear.app/x/project/1"},
                                     "projectUpdate": {"url": "https://linear.app/x/update/1"}}}}
+        if "toState { name }" in q:
+            self.reviewed = v["f"]
+            nodes = [{"id": i["id"], "history": i.get("history", {"nodes": []})} for i in self.open if i["id"] in v["f"]["id"]["in"]]
+            return {"data": {"issues": {"pageInfo": {"hasNextPage": False, "endCursor": None}, "nodes": nodes}}}
         if "inverseRelations" in q:
             a = self._issue(v["a"])
             return {"data": {"a": {**a, "relations": {"nodes": [r for r in self.relations if r["issue"] == a]},
@@ -82,6 +101,11 @@ class FakeLinear:
                              "b": self._issue(v["b"])}}
         if "projects(filter" in q:
             return {"data": {"projects": {"nodes": [{"name": p["name"]} for p in self.projects if p["name"].lower() == v["n"].lower()]}}}
+        if "projectStatuses" in q:
+            return {"data": {"projectStatuses": {"nodes": [{"id": f"PS-{n}", "name": n} for n in
+                                                           ("Backlog", "Planned", "In Progress", "Completed", "Canceled")]}}}
+        if "project(id:" in q:
+            return {"data": {"project": self._project(v["id"])}}
         if "users(first" in q:
             return {"data": {"users": {"nodes": self.users}}}
         if q.startswith("{ teams(first"):
@@ -438,14 +462,18 @@ def test_place_takes_one_active_project_and_its_milestone_by_prefix_and_names_th
 
 
 AUDIT_NOW = 1792440000.0                                          # 2026-10-19T20:00:00Z
+TYPES = {"Triage": "triage", "Backlog": "backlog", "Todo": "unstarted", "In Progress": "started", "In Review": "started"}
 
 
 def issue(ident: str, state: str = "In Progress", **kw) -> dict:
-    """An open issue as the audit reads it, with nothing to find: on PJ1's M3, due later, started and updated an hour ago."""
-    return {"identifier": ident, "title": "The auditor-only host", "url": f"https://linear.app/x/issue/{ident}", "dueDate": "2026-10-30",
-            "startedAt": "2026-10-19T19:00:00Z", "updatedAt": "2026-10-19T19:00:00Z", "createdAt": "2026-10-18T00:00:00Z",
-            "state": {"name": state}, "team": {"key": ident.split("-")[0]}, "project": {"id": "PJ1", "name": PROJECTS[0]["name"]},
-            "projectMilestone": {"id": "MS3"}, "labels": {"nodes": []}, "comments": {"nodes": []}, "attachments": {"nodes": []}, **kw}
+    """An open issue as the audit reads it, with nothing to find: on PJ1's M3, both due after AUDIT_NOW, filed 68 h before
+    it, started and updated an hour before it."""
+    return {"id": f"I-{ident}", "identifier": ident, "title": "The auditor-only host", "url": f"https://linear.app/x/issue/{ident}",
+            "dueDate": "2026-10-30", "startedAt": "2026-10-19T19:00:00Z", "updatedAt": "2026-10-19T19:00:00Z",
+            "createdAt": "2026-10-17T00:00:00Z", "state": {"name": state, "type": TYPES[state]}, "team": {"key": ident.split("-")[0]},
+            "project": {"id": "PJ1", "name": PROJECTS[0]["name"]}, "projectMilestone": {"id": "MS3", "name": "M3 · composed",
+                                                                                         "targetDate": "2026-10-25"},
+            "labels": {"nodes": []}, "comments": {"nodes": []}, "attachments": {"nodes": []}, **kw}
 
 
 def child(updated: str, commented: str | None = None) -> dict:
@@ -503,13 +531,13 @@ def test_the_audit_finds_each_kind_once_on_its_issue_and_nothing_on_the_rest(tmp
     assert [(f["issue"], f["kind"]) for f in found] == [
         ("DAN-1", "lane"), ("INF-2", "orphan"), ("INF-3", "milestone"), ("INF-4", "undated"), ("INF-5", "overdue"),
         ("INF-6", "quiet"), ("INF-8", "stale"), ("INF-9", "title"), ("INF-10", "title"), ("INF-11", "landed"),
-        ("INF-18", "title"), ("INF-23", "quiet"), ("INF-25", "landed"), ("INF-26", "landed")]
+        ("INF-14", "orphan"), ("INF-18", "title"), ("INF-23", "quiet"), ("INF-25", "landed"), ("INF-26", "landed")]
     assert {f["issue"]: f["lane"] for f in found}["DAN-1"] == linear.NO_LANE
     by = {(f["issue"], f["kind"]): f for f in found}
     assert by[("INF-2", "orphan")] == {"issue": "INF-2", "url": "https://linear.app/x/issue/INF-2", "title": "The auditor-only host",
                                        "team": "INF", "lane": "infra", "state": "Todo", "kind": "orphan",
-                                       "fix": "put it in its project and milestone (`research msg linear place INF-2 PROJECT "
-                                              "--milestone M`), or move it to Backlog"}
+                                       "fix": "filed 68 h ago and in no project: put it in its project and milestone (`research "
+                                              "msg linear place INF-2 PROJECT --milestone M`), or move it to Backlog"}
     assert '`research msg linear place INF-3 "E2E toy deployment on one H200" --milestone M`' in by[("INF-3", "milestone")]["fix"]
     assert by[("INF-6", "quiet")]["fix"].startswith("no comment or start for 25 h: comment one line")
     assert by[("INF-8", "stale")]["fix"].startswith("not updated or commented on for 8 days: plan it")
@@ -526,12 +554,156 @@ def test_the_audit_finds_each_kind_once_on_its_issue_and_nothing_on_the_rest(tmp
     assert len(audited) == 8 and all("first: 4," in q for q in audited)
     assert all("children(first: 50, orderBy: updatedAt) { nodes { updatedAt comments(first: 1, orderBy: createdAt)" in q
                for q in audited)                                                                    # one field, no pass per issue
-    assert len(fake.sent("history(first")) == 1                                                     # people's asks: one more pass
-    assert fake.audited == {"state": {"type": {"in": ["triage", "unstarted", "started"]}}}
-    assert linear.tally(found) == {"-": {"lane": 1}, "infra": {"orphan": 1, "milestone": 1, "undated": 1, "overdue": 1, "quiet": 2,
+    assert len([q for q, _, _ in fake.sent("history(first") if "toState" not in q]) == 1           # people's asks: one more pass
+    assert fake.audited == {"state": {"type": {"in": ["triage", "unstarted", "started", "backlog"]}}}
+    assert fake.reviewed == {"id": {"in": ["I-INF-3", "I-INF-11", "I-INF-12"]}}                    # In Review's history, one pass
+    assert linear.tally(found) == {"-": {"lane": 1}, "infra": {"orphan": 2, "milestone": 1, "undated": 1, "overdue": 1, "quiet": 2,
                                                                 "stale": 1, "title": 3, "landed": 3}}
     linear.Linear(KEY, fake, cache=tmp_path / "t").audit({}, ["INF", "infra"], now=AUDIT_NOW)
     assert fake.audited["team"] == {"or": [{"key": {"in": ["INF", "infra"]}}, {"name": {"in": ["INF", "infra"]}}]}
+
+
+def test_an_issue_that_waits_only_on_landing_is_neither_overdue_nor_slipped_and_is_counted_apart(tmp_path):
+    """The queue's wait is ci's: In Review, every attached PR open and marked ready at its head."""
+    fake = FakeLinear()
+    fake.open = [issue("INF-50", "In Review", dueDate="2026-10-18", attachments={"nodes": [pr(20, "open")]}),        # waits
+                 issue("INF-51", "In Review", dueDate="2026-10-18", attachments={"nodes": [pr(21, "open")]}),        # unmarked
+                 issue("INF-52", dueDate="2026-10-18", attachments={"nodes": [pr(20, "open")]}),                     # In Progress
+                 issue("INF-53", "In Review", dueDate="2026-10-18", attachments={"nodes": [pr(20, "open"), pr(22, "merged")]}),
+                 issue("INF-54", "In Review", dueDate="2026-10-18")]                                                # no PR
+    fake.asked = [asked("INF-50", "In Review", dates=("2026-10-14", "2026-10-16", "2026-10-18")),                   # slipped, waits
+                  asked("INF-51", "In Review", dates=("2026-10-14", "2026-10-16", "2026-10-18"))]                   # slipped
+    asks: list[list[int]] = []
+    lin = linear.Linear(KEY, fake, cache=tmp_path / "t")
+    found = lin.audit({"INF": "infra"}, now=AUDIT_NOW, waiting=lambda nums: asks.append(nums) or set(nums) <= {20})
+    assert [(f["issue"], f["kind"]) for f in found] == [
+        ("INF-51", "overdue"), ("INF-51", "slipped"), ("INF-52", "overdue"), ("INF-53", "overdue"), ("INF-54", "overdue")]
+    assert lin.landing == [{"issue": "INF-50", "lane": "infra", "due": "2026-10-18", "late_h": 20.0}]
+    assert asks == [[20], [21]]                                     # asked only of an In Review issue whose PRs are all open
+    assert ("INF-50", "overdue") in [(f["issue"], f["kind"]) for f in lin.audit({"INF": "infra"}, now=AUDIT_NOW)]   # no `waiting`
+    assert slack.render_landing(lin.audit({"INF": "infra"}, now=AUDIT_NOW, waiting=lambda n: True) and lin.landing) == (
+        "\nwaiting on landing: 2 issue(s), not findings; ci and top see the total (2 past their date, the oldest by 20 h)")
+    assert slack.render_landing([]) == ""
+
+
+def ago(h: float) -> str:
+    return datetime.fromtimestamp(AUDIT_NOW - h * 3600, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def audit_of(tmp_path, issues: list[dict]) -> list[tuple[str, str]]:
+    fake = FakeLinear()
+    fake.open = issues
+    return [(f["issue"], f["kind"]) for f in linear.Linear(KEY, fake, cache=tmp_path / "t").audit({"INF": "infra"}, now=AUDIT_NOW)]
+
+
+def test_an_open_issue_in_no_project_is_an_orphan_48_h_after_it_was_filed_and_a_backlog_one_never_is(tmp_path):
+    """Backlog is where an issue that serves no goal waits, so only open work (Triage, Todo, In Progress, In Review) is held
+    to a project."""
+    loose = {"project": None, "projectMilestone": None}
+    assert audit_of(tmp_path, [
+        issue("INF-60", "Backlog", **loose, createdAt=ago(49)),
+        issue("INF-61", "Backlog", **loose, createdAt=ago(47)),
+        issue("INF-62", "Triage", **loose, createdAt=ago(49)),
+        issue("INF-63", "Todo", **loose, createdAt=ago(47)),                               # taken up, but not 48 h old
+        issue("INF-64", "Backlog", dueDate="2026-10-01", title="Parked\u2026", createdAt=ago(49)),   # Backlog: not overdue, no title
+        issue("INF-65", "Todo", **loose, createdAt=ago(49)),
+    ]) == [("INF-62", "orphan"), ("INF-65", "orphan")]
+
+
+def test_an_open_issue_on_a_milestone_dated_before_today_is_lapsed_and_one_dated_today_is_not(tmp_path):
+    def on(date: str) -> dict:
+        return {"id": "MS3", "name": "M3 · composed", "targetDate": date}
+    fake = FakeLinear()
+    fake.open = [issue("INF-70", projectMilestone=on("2026-10-18")), issue("INF-71", projectMilestone=on("2026-10-19")),
+                 issue("INF-72", "Backlog", projectMilestone=on("2026-10-18")), issue("INF-73", projectMilestone=on(None))]
+    found = linear.Linear(KEY, fake, cache=tmp_path / "t").audit({"INF": "infra"}, now=AUDIT_NOW)
+    assert [(f["issue"], f["kind"]) for f in found] == [("INF-70", "lapsed"), ("INF-72", "lapsed")]
+    assert found[0]["fix"] == (
+        "its milestone M3 · composed was due 2026-10-18: re-date the milestone (`research msg linear milestone edit \"E2E toy "
+        "deployment on one H200\" \"M3 · composed\" --date YYYY-MM-DD`) and comment what moved it, or move it on to a later "
+        "milestone (`research msg linear place INF-70 \"E2E toy deployment on one H200\" --milestone M`)")
+
+
+def test_in_review_24_h_with_no_open_pr_attached_is_unlinked_and_landed_isnt_said_twice(tmp_path):
+    def entered(*moves: tuple[float, str | None]) -> dict:
+        return {"nodes": [{"createdAt": ago(h), "toState": {"name": s} if s else None} for h, s in moves]}
+    closed = [pr(30, "closed", ago(30))]
+    fake = FakeLinear()
+    fake.open = [
+        issue("INF-80", "In Review", history=entered((25, "In Review"), (2, None))),       # unlinked
+        issue("INF-81", "In Review", history=entered((60, "In Review"), (30, "In Progress"), (23, "In Review"))),   # 23 h since
+        issue("INF-82", "In Review", history=entered((25, "In Review")), attachments={"nodes": [pr(31, "open")]}),
+        issue("INF-83", "In Review", history=entered((25, "In Review")), attachments={"nodes": closed},
+              comments={"nodes": [{"createdAt": ago(26)}]}),                                  # landed answered: unlinked
+        issue("INF-84", "In Review", history=entered((25, "In Review")), attachments={"nodes": closed}),   # landed alone
+        issue("INF-85", "In Review", startedAt=ago(25)),                                       # no history: its start
+        issue("INF-86", "In Progress", startedAt=ago(25)),
+        issue("INF-87", "In Review", history=entered((25, "In Review")), attachments={"nodes": [pr(32, "draft"), *closed]}),
+    ]
+    found = linear.Linear(KEY, fake, cache=tmp_path / "t").audit({"INF": "infra"}, now=AUDIT_NOW)
+    assert [(f["issue"], f["kind"]) for f in found] == [("INF-80", "unlinked"), ("INF-83", "unlinked"), ("INF-84", "landed"),
+                                                        ("INF-85", "unlinked"), ("INF-86", "quiet")]
+    assert found[0]["fix"] == ("In Review 25 h with no open PR attached: attach it (`research queue link N --issue INF-80`; a "
+                               "PR naming the issue doesn't attach it), or move it back to In Progress")
+
+
+STRAYS = [
+    issue("INF-90", "Backlog", labels={"nodes": [{"name": "from:comms"}]}, project=None, dueDate=None, updatedAt=ago(49)),
+    issue("INF-91", "Backlog", labels={"nodes": [{"name": "from:comms"}]}, project=None, dueDate=None, updatedAt=ago(47)),
+    issue("INF-92", "Backlog", labels={"nodes": [{"name": "from:infra"}]}, project=None, dueDate=None, updatedAt=ago(49)),
+    issue("INF-93", "Backlog", labels={"nodes": [{"name": "from:comms"}, {"name": "asker:daniel"}]}, dueDate=None, updatedAt=ago(49)),
+    issue("INF-94", "Todo", labels={"nodes": [{"name": "from:comms"}]}, updatedAt=ago(49)),               # a project and a date
+    issue("INF-95", "Triage", labels={"nodes": [{"name": "from:comms"}, {"name": "lane:comms"}]}, dueDate=None, updatedAt=ago(49)),
+    issue("INF-96", "Triage", labels={"nodes": [{"name": "from:comms"}]}, dueDate=None, updatedAt=ago(49),
+          comments={"nodes": [{"createdAt": ago(10)}]}),                                                    # commented on since
+    issue("INF-97", labels={"nodes": [{"name": "from:comms"}]}, dueDate=None, startedAt=ago(49), updatedAt=ago(49),
+          comments={"nodes": [{"createdAt": ago(49)}]}),                                                    # started
+    issue("DAN-98", "Backlog", labels={"nodes": [{"name": "from:comms"}]}, dueDate=None, updatedAt=ago(49)),   # no lane's team
+]
+
+
+def test_an_ask_in_another_lanes_team_nobody_took_up_or_touched_for_48_h_is_a_stray(tmp_path):
+    assert [x for x in audit_of(tmp_path, STRAYS) if x[1] == "stray"] == [("INF-90", "stray")]
+
+
+def test_only_close_strays_cancels_a_stray_with_a_comment_naming_the_rule_and_the_plain_audit_writes_nothing(
+        fake, registry, capsys, lin):
+    lin.open, lin.subscribers["I1"] = STRAYS, []
+    now = ("--now", str(AUDIT_NOW))
+    rc, out, err = run(capsys, "linear", "audit", "infra", *now)
+    assert rc == 1 and "  INF-90 stray: filed by comms in INF, not taken up (a project and a date) and untouched for 49 h: " in out
+    def mutations() -> list[str]:
+        return [q.split("{ ")[1].split("(")[0] for q, _, _ in lin.calls if q.startswith("mutation")]
+    assert mutations() == [] and lin.moved == [] and "stray" not in err
+    rc, out, err = run(capsys, "linear", "audit", "infra", "--close-strays", "--as", "infra", "--dry-run", *now)
+    assert rc == 1 and err.startswith("dry-run: would cancel INF-90, a stray, with the comment: Canceled by the Linear audit's")
+    assert mutations() == []
+    rc, out, err = run(capsys, "linear", "audit", "infra", "--close-strays", "--as", "infra", *now)
+    assert rc == 1 and err.strip() == ("INF-90 Canceled: a stray (filed by comms in INF, not taken up (a project and a date) and "
+                                       "untouched for 49 h)")
+    assert mutations() == ["commentCreate", "issueUnsubscribe", "issueUpdate"]
+    assert [v["i"] for _, v, _ in lin.sent("commentCreate")] == [{"issueId": "I1", "body": "@infra: " + linear.STRAY_NOTE}]
+    assert lin.moved == [("I1", "S9")] and "stray rule" in linear.STRAY_NOTE and "48 h" in linear.STRAY_NOTE
+    rc, _, err = run(capsys, "linear", "audit", "--close-strays", "--asks", *now)
+    assert rc == 2 and "--close-strays goes with `audit` alone" in err
+    rc, _, err = run(capsys, "linear", "audit", "infra", "--close-strays", *now)
+    assert rc == 2 and "--as HANDLE" in err and len(lin.moved) == 1
+
+
+@pytest.mark.parametrize("fail", ["no checkout", "gh fails"])
+def test_landing_waiter_that_cant_read_the_open_prs_lets_nothing_wait_instead_of_crashing_the_audit(fail, tmp_path, monkeypatch,
+                                                                                                   capsys):
+    from research import queue
+
+    def refuse(*a, **k):
+        raise (OSError("not a git repository") if fail == "no checkout" else queue.QueueError("gh pr list: HTTP 502"))
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(queue, "_out", refuse)
+    monkeypatch.setattr(queue.GitHub, "open_prs", refuse)
+    waiting = queue.landing_waiter(repo=None if fail == "no checkout" else "o/r", store_root=str(tmp_path))
+    assert waiting([20]) is False and waiting([21]) is False
+    assert capsys.readouterr().err.count("can't read the open PRs") == 1          # read, and refused, once
 
 
 def test_audit_prints_each_lanes_findings_and_their_counts_and_exits_1_on_any(fake, registry, capsys, lin):
@@ -545,8 +717,8 @@ def test_audit_prints_each_lanes_findings_and_their_counts_and_exits_1_on_any(fa
         "@- (1):", "  DAN-1 lane: team DAN has no handle: add `lane:<owner>`",
         "@compute-research (1):", "  CMP-3 undated: set the date it lands, its milestone's at the latest (`research msg linear edit "
                                   "CMP-3 --due YYYY-MM-DD`), or move it to Backlog",
-        "@infra (2):", "  INF-2 orphan: put it in its project and milestone (`research msg linear place INF-2 PROJECT --milestone M`), "
-                       "or move it to Backlog",
+        "@infra (2):", "  INF-2 orphan: filed 68 h ago and in no project: put it in its project and milestone (`research msg linear "
+                       "place INF-2 PROJECT --milestone M`), or move it to Backlog",
         "  INF-9 title: retitle it to the deliverable, with no handle, sender, time or trailing \u2026 (`research msg linear edit "
         "INF-9 --title T`)"]
     assert err == ""                                                                              # every team read
@@ -767,7 +939,7 @@ def test_edit_from_the_cli_replaces_the_description_with_the_file_and_a_dry_run_
 
 def test_a_lanes_worker_comments_as_lane_slash_name_through_the_app_and_rings_no_one(fake, registry, routes_dirs, capsys, lin,
                                                                                      monkeypatch, tmp_path):
-    """Workers hold no handle, so `--as` refuses them; the Linear MCP connector, their other way to comment, acts as Daniel."""
+    """Workers hold no handle, so `--as` refuses them; the Linear MCP connector, their other way to comment, acts as whoever connected it."""
     monkeypatch.setenv("LINEAR_CLIENT_ID", APP["LINEAR_CLIENT_ID"])
     monkeypatch.setenv("LINEAR_CLIENT_SECRET", APP["LINEAR_CLIENT_SECRET"])
     monkeypatch.setenv("RESEARCH_LINEAR_TOKEN_CACHE", str(tmp_path / "tok"))
@@ -795,6 +967,12 @@ def test_a_lanes_worker_comments_as_lane_slash_name_through_the_app_and_rings_no
 def stateless(fake: FakeLinear) -> bool:
     """No request sent a state or a status: an edit that sends one can reset an issue's state (Done back to Todo)."""
     return not any(k in json.dumps(v) for q, v, _ in fake.calls if q != "grant" for k in ("stateId", "statusId"))
+
+
+def issue_stateless(fake: FakeLinear) -> bool:
+    """As `stateless`, but a project's status, which `project edit --status` sets on purpose, may be sent."""
+    return not any("stateId" in json.dumps(v) or ("statusId" in json.dumps(v) and "projectUpdate(" not in q)
+                   for q, v, _ in fake.calls if q != "grant")
 
 
 def test_relate_sends_each_kind_its_way_round_and_refuses_one_issue_twice_or_a_relation_that_exists(tmp_path):
@@ -863,6 +1041,25 @@ def test_project_create_sends_its_teams_lead_date_and_body_and_refuses_a_name_ta
     assert len(fake.wrote) == 1 and stateless(fake)
 
 
+def test_project_edit_adds_teams_sets_the_target_and_status_and_prints_them_after(tmp_path):
+    fake = FakeLinear()
+    lin = linear.Linear(APP, fake, cache=tmp_path / "t")
+    assert lin.project_edit("Full s", ["INF", "comms"]) == "Full stack: target 2026-10-28, status In Progress, added teams COM"
+    assert fake.wrote == [("projectUpdate", {"id": "PJ3", "i": {"teamIds": ["T-infra", "T-comms"]}})]
+    assert lin.project_edit("Full s", ["INF"]) == "Full stack: target 2026-10-28, status In Progress (nothing to change)"
+    assert lin.project_edit("Full s", date="2026-11-03", status="back") == "Full stack: target 2026-11-03, status Backlog"
+    assert fake.wrote[-1] == ("projectUpdate", {"id": "PJ3", "i": {"targetDate": "2026-11-03", "statusId": "PS-Backlog"}})
+    assert lin.project_edit("Full s", date="none") == "Full stack: target none, status Backlog" and len(fake.wrote) == 3
+    for args, kw, says in ((("Full s",), {}, "project edit: give --team KEY, --date YYYY-MM-DD or --status STATUS"),
+                           (("Full s", ["NOPE"]), {}, "no Linear team named 'NOPE'"),
+                           (("Full s",), {"date": "3 Nov"}, "--date '3 Nov': give a date as YYYY-MM-DD"),
+                           (("Full s",), {"status": "Paused"}, "project status 'Paused' matches none of"),
+                           (("Full",), {"date": "2026-11-03"}, "active project 'Full' matches 2 of")):
+        with pytest.raises(linear.LinearError, match=re.escape(says)):
+            lin.project_edit(*args, **kw)
+    assert len(fake.wrote) == 3 and issue_stateless(fake)
+
+
 def test_milestone_create_and_edit_by_prefix_and_refuse_a_name_the_project_has_in_any_case(tmp_path):
     fake = FakeLinear()
     lin = linear.Linear(APP, fake, cache=tmp_path / "t")
@@ -906,12 +1103,14 @@ def test_the_relation_and_project_verbs_from_the_cli_print_one_line_and_refuse_w
             (["project", "create", "Smaller", "Lean", "--team", "INF", "--team", "COM", "--target", "2026-11-30",
               "--description-file", str(body)],
              "project Smaller Lean created: teams INF COM, targetDate 2026-11-30, content 15 characters https://linear.app/x/project/1"),
+            (["project", "edit", "Full", "stack", "--team", "COM", "--date", "2026-11-03", "--status", "Planned"],
+             "Full stack: target 2026-11-03, status Planned, added teams COM"),
             (["milestone", "create", "E2E", "M4 · served", "--date", "2026-11-02"], f"{e2e} / M4 · served: created, targetDate 2026-11-02"),
             (["milestone", "edit", "E2E", "M3", "--rename", "M3 · served", "--description-file", str(body)],
              f"{e2e} / M3 · composed: set name M3 · served, description 15 characters")):
         assert run(capsys, "linear", *argv) == (0, want + "\n", "")
     assert [w for w, _ in lin.wrote] == ["issueRelationCreate", "issueRelationDelete", "projectUpdateCreate", "projectCreate",
-                                         "projectMilestoneCreate", "projectMilestoneUpdate"]
+                                         "projectUpdate", "projectMilestoneCreate", "projectMilestoneUpdate"]
     assert lin.wrote[2][1]["i"]["body"] == "M3 slips a day\n" and lin.wrote[3][1]["i"]["content"] == "M3 slips a day\n"
     for argv, says in ((["relate", "INF-1", "INF-2"], "linear relate: give ISSUE blocks|blocked-by|related|duplicate OTHER"),
                        (["relate", "INF-1", "blocks", "INF-1"], "INF-1 and INF-1 are one issue"),
@@ -920,14 +1119,15 @@ def test_the_relation_and_project_verbs_from_the_cli_print_one_line_and_refuse_w
                        (["update", "--health", "onTrack", "--body-file", str(body)], "linear update: give the PROJECT"),
                        (["update", "E2E", "--health", "onTrack", "--body-file", str(tmp_path / "missing.md")], "No such file"),
                        (["update", "E2E", "--body-file", str(body)], "--health: give one of onTrack, atRisk, offTrack"),
-                       (["project", "edit", "Smaller", "Lean"], "linear project: give `create NAME`"),
+                       (["project", "rename", "Smaller", "Lean"], "linear project: give `create NAME` or `edit PROJECT [--team KEY]"),
+                       (["project", "edit", "Full", "s"], "project edit: give --team KEY, --date YYYY-MM-DD or --status STATUS"),
                        (["project", "create", "--team", "INF"], "linear project: give the project's NAME"),
                        (["milestone", "rename", "E2E", "M3"], "linear milestone: give `create` or `edit`, then PROJECT NAME"),
                        (["milestone", "create", "E2E"], "linear milestone create: give PROJECT"),
                        (["relate", "INF-1", "blocks", "INF-2", "--dry-run"], "linear relate has no --dry-run (it would write)")):
         rc, _, err = run(capsys, "linear", *argv)
         assert rc == 2 and says in err, (argv, err)
-    assert len(lin.wrote) == 6 and stateless(lin)
+    assert len(lin.wrote) == 7 and issue_stateless(lin)
 
 
 def slack_bot(registry) -> str:

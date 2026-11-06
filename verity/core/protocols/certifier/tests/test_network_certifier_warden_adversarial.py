@@ -1,19 +1,21 @@
-"""Adversarial cases against the active warden (`warden`, the byte-only relay). The warden closes the egress base and
-the fail reason as channels, and the first two cases and the regression after them pin that.
+"""Adversarial cases against the active network certifier (`warden`, the byte-only relay). The network certifier closes
+the egress base and the fail reason as channels, and the first two cases and the regression after them pin that.
 
-The warden's own tests show the honest path: the egress cells, their sizes and buckets are a function of (admission s,
-the egress length, the fail cell) and the public parameters, and the server's timing never reaches the wire. These show
-where a *malicious server* still gets bits to the client beyond the stated v3 bound (ε·egress bits at δ, plus log2 of
-the schedule, plus the fail-closed term log2(cells+1) a failed connection), and confirm which channels close.
+The network certifier's own tests show the honest path: the egress cells, their sizes and buckets are a function of
+(admission s, the egress length, the fail cell) and the public parameters, and the server's timing never reaches the
+wire. These show where a *malicious server* still gets bits to the client beyond the stated v3 bound (ε·egress bits at
+δ, plus log2 of the schedule, plus the fail-closed term log2(cells+1) a failed connection), and confirm which channels
+close.
 
 Each case states the bits it bounds.
 
-- **the egress base (CLOSED).** Formerly egress started at a + D, a the bucket the warden released the client's
-  ingress END, which waited on the server's connect: the server shifted a by delaying its accept, ~log2(ingress_buckets)
-  bit a connection. Egress now starts at s + D, s the admission bucket, and nothing the server does moves s.
+- **the egress base (CLOSED).** Formerly egress started at a + D, a the bucket the network certifier released the
+  client's ingress END, which waited on the server's connect: the server shifted a by delaying its accept,
+  ~log2(ingress_buckets) bit a connection. Egress now starts at s + D, s the admission bucket, and nothing the server
+  does moves s.
 - **the fail reason (CLOSED).** Formerly a FAIL cell carried a reason byte the client's shim read, so at one fail
   cell the server still picked late vs upstream, ≥1 bit a fail beyond the fail-closed term. Every FAIL is now the same
-  bytes; the reason is in the warden's `fails` record, witness.
+  bytes; the reason is in the network certifier's `fails` record, witness.
 - **the fail cell (CHARGED).** The server picks which egress cell a connection fails at — the fail-closed term.
 - **data vs padding (CLOSED to timing).** For a fixed (s, egress length) the cell kinds and buckets don't move with
   the server's send timing: 0 bit from timing.
@@ -42,11 +44,12 @@ def _verdict(warden):
 
 
 def test_the_servers_connect_delay_doesnt_move_the_egress_base_from_the_admission_bucket():
-    """Formerly the egress schedule started at a + D, a the bucket the warden released the client's END, and the
-    warden released nothing until the server's connection was open: a server that connected at bucket 1 or 4 set a to
-    1 or 4, and the client read it from the padding before the first live cell. Now egress starts at s + D (s = 0
-    here) whatever the connect: a server that connects at 1 or 2 gives the client the same bytes in the same cells, and
-    one that connects at 4, past its first cell's deadline, fails there (the charged fail term), still at s + D."""
+    """Formerly the egress schedule started at a + D, a the bucket the network certifier released the client's END, and
+    the network certifier released nothing until the server's connection was open: a server that connected at bucket 1
+    or 4 set a to 1 or 4, and the client read it from the padding before the first live cell. Now egress starts at s + D
+    (s = 0 here) whatever the connect: a server that connects at 1 or 2 gives the client the same bytes in the same
+    cells, and one that connects at 4, past its first cell's deadline, fails there (the charged fail term), still at s +
+    D."""
 
     async def go(connect_at: int):
         clock = VirtualClock(-TAU / 2)
@@ -114,7 +117,7 @@ def test_at_one_fail_cell_the_reason_is_not_on_the_wire():
     """Two connections that both fail at egress cell 0: one whose server connects but never sends (late), one whose
     server connection is refused (upstream). Formerly the FAIL cell carried the reason byte and the shim read
     "late" vs "upstream". Now the clients get the same bytes, a FAIL with no payload, and the reason is only in the
-    warden's `fails` record, witness the client never sees; the audit reads it there."""
+    network certifier's `fails` record, witness the client never sees; the audit reads it there."""
     late_w, (late_c,), _ = run([[]], {0: [cells(request(5), B)]})  # connects, never answers: late at cell 0
     up_w, (up_c,), _ = run(Server([[]], refuse=(0,)), {0: [cells(request(5), B)]})  # refused: upstream at cell 0
     assert late_w.log[0]["failed_at"] == up_w.log[0]["failed_at"] == 0  # same fail cell

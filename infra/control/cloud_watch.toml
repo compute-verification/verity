@@ -68,14 +68,17 @@ name = "Drive"
 started_by = "/data/infra/drive.sh"
 file = "/data/drive/drive.log"
 pattern = '^(\S+Z) (?:tick rc=0 |stopped: )'   # a tick, then 2 min of sleep; stopped, a line every 10 min
-period_s = 1800                      # a tick that launches several trains waits on each launch (train.sh: up to 10 min)
+period_s = 3600                      # a tick that launches several trains waits on each launch (train.sh: up to 10 min each)
 
 [[loop]]
 name = "Agent watch"
 started_by = "/data/infra/agent_watch.sh"
 file = "/data/agent-watch/status.json"
 json = "t"                           # each sweep (60 s) rewrites it
-period_s = 300
+period_s = 480                       # twice this must exceed a sweep whose reads take agent_watch.SWEEP_READS_S (12 min)
+also_mention = ["S0C977GL9R7"]       # the top coordinator's group: with the watch down, nobody's held or crashed run is freed
+page_user = "U0BEN96ES8Y"            # the person who runs the project, once it has stayed down this much longer than the alert
+page_after_s = 3600
 
 [[loop]]
 name = "Control disk relay"
@@ -138,7 +141,8 @@ runpod_topup_below_usd = 100         # RunPod tops the account up by itself once
                                      # steward log's ACCOUNT lines show each one), so a balance under it means the top-up failed:
                                      # at the guard's balance_floor every pod in scope is terminated, and an empty balance stops
                                      # this pod and can take its /data volume
-r2_alert_usd_per_month = 100         # no budget line covers R2; this is an alert line only
+r2_alert_usd_per_month = 250         # no budget line covers R2; this is an alert line only, above the evidence store's
+                                     # steady cost and growth; runaway writers still page through r2 growth's own line
 
 # The keys that would close a gap no check here can cover, each said once in the digest while it is missing.
 [[spend.gap]]
