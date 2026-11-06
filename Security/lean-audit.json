@@ -854,6 +854,10 @@
    "owner": "@proofs",
    "digest": "04c1ce9db8f787c16362b856c49d87cf4e2480f2aeb92fa87a2c2ff743061f1b"
   },
+  "Claims.ZKMal.RefSession.SwCausal": {
+   "owner": "@proofs",
+   "digest": "6b3d5fe008703ed714ae8f3167d6d050d5346c4416fa19b27385b893fa7f213f"
+  },
   "Claims.ZKMal.RefSession.SwCausalOn": {
    "owner": "@proofs",
    "digest": "d30a3a94d09326d9781197cf25ca91ddb7a00e4639aca8d0ac7a325ce87015df"
@@ -881,6 +885,10 @@
   "Claims.ZKServer.LeanRelease.LiveRoundEq": {
    "owner": "@proofs",
    "digest": "4f55243982de1d6b848edc44cfbfeaaa514680ad34659da4cec25e873acceb3b"
+  },
+  "Claims.ZKServer.Loop.ReachesInner": {
+   "owner": "@proofs",
+   "digest": "c85954d73d66971ffcfdef16a3eb0c9904191418d4939daeb0bf10faff31a793"
   },
   "Claims.ZKServer.Loop.Serves": {
    "owner": "@proofs",
@@ -3143,6 +3151,10 @@
    "honest": ["Verity.SecurityProofs.ExpandAndSize_honest"],
    "nontrivial": "Verity.SecurityProofs.ExpandAndSize_nontrivial",
    "kind": "exclusion"
+  },
+  "Flock.SecurityProofs.LoopInnerRound0Own": {
+   "honest": ["Flock.SecurityProofs.LoopInnerRound0Own_honest"],
+   "nontrivial": "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial"
   }
  },
  "unwitnessed": {
@@ -3477,7 +3489,6 @@
   "Verity.SecurityProofs.CapacityWithinEstimate": "33f7bf73bd890217a96e1f811c4fa5862df92ccec1ba47b063fff95e97ba8370",
   "Flock.SecurityProofs.EndToEndRegisteredRows": "2663b1a7e4d37b7b0c345dbf40b33344f4e86c82f17c36de855847c1e11059d9",
   "Flock.SecurityProofs.EndToEndRegisteredRowsFlat": "9379a1081b06f17ac700b677afa3a3917e440e7d57dee670a1cab1b230c069ce",
-  "Flock.SecurityProofs.LoopInnerRound0Own": "074ca4c2e7c09cd236106bc9347f26e15625cd966d0eb466ef4d0f65c93a15b8",
   "Flock.SecurityProofs.ServedRowsLinked": "2cde2f3d97c487723b8f8899ebf241205f576cceca38ba6d92a6a1872108aba6",
   "Flock.SecurityProofs.SessionLoopZK": "a4028bdba4de3cb93455dbf5d27c01dc1e341693a308bf26b99de7a4451e2862",
   "Flock.SecurityProofs.SessionLoopZKDeployed": "19b9ed293bdf1729089ef8b18463bb7f832ece9b92432e1e88d38c7c4a4b9659",
@@ -7802,6 +7813,107 @@
    "signature": ["Flock.SecurityProofs.LoopInnerRound0Own : Flock.Guarantees.LoopInnerRound0Own"],
    "assumptions": [],
    "type_hash": "074ca4c2e7c09cd236106bc9347f26e15625cd966d0eb466ef4d0f65c93a15b8"
+  },
+  "Flock.SecurityProofs.LoopInnerRound0Own_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest (hfix : Claims.ZKServer.Loop.ReachesInner) :",
+    "  Exists fun src =>",
+    "    Exists fun x =>",
+    "      Exists fun w =>",
+    "        Exists fun ρ =>",
+    "          Exists fun h =>",
+    "            Exists fun s0 =>",
+    "              Exists fun spec =>",
+    "                Exists fun sts =>",
+    "                  Exists fun q =>",
+    "                    Exists fun k =>",
+    "                      Exists fun j =>",
+    "                        Exists fun tr =>",
+    "                          Exists fun hr =>",
+    "                            And",
+    "                              (Eq (FlockDeploy.setupOf Bool.true x)",
+    "                                (Option.some { fst := s0, snd := { fst := spec, snd := sts } }))",
+    "                              (And (Eq h.length (instHAdd.hAdd q 2))",
+    "                                (And",
+    "                                  (Eq (Claims.ZKMal.CoinLayer.locate (Claims.ZKServer.Loop.roundsOf spec sts) 0 q)",
+    "                                    { fst := k, snd := instHAdd.hAdd j 1 })",
+    "                                  (And",
+    "                                    (Eq (Claims.ZKServer.Loop.realOf src x w ρ k) (Except.ok { fst := tr, snd := hr }))",
+    "                                    (And",
+    "                                      (Eq",
+    "                                        (Except.map Array.size",
+    "                                          (Claims.ZKServer.Loop.schedSoFar tr (instHMod.hMod k 2)",
+    "                                            (spec.domain",
+    "                                                (Array.instGetElem?NatLtSize.getElem! spec.tables (instHDiv.hDiv k 2))",
+    "                                                (instHMod.hMod k 2)).toUTF8",
+    "                                            (Flock.Firewall.Drive.extras",
+    "                                              (Array.instGetElem?NatLtSize.getElem! sts (instHDiv.hDiv k 2))",
+    "                                              (Flock.Firewall.Drive.linkPoints",
+    "                                                (Array.instGetElem?NatLtSize.getElem! sts (instHDiv.hDiv k 2))",
+    "                                                (Claims.ZKServer.Loop.wordsAt x",
+    "                                                  (List.map (fun p => Claims.ZKMal.CoinLayer.rd p.snd) h.tail) 0)))",
+    "                                            hr",
+    "                                            (Array.map",
+    "                                              (fun i =>",
+    "                                                Claims.ZKServer.Loop.wordsAt x",
+    "                                                  (List.map (fun p => Claims.ZKMal.CoinLayer.rd p.snd) h.tail)",
+    "                                                  (instHAdd.hAdd (instHAdd.hAdd (instHSub.hSub q (instHAdd.hAdd j 1)) i)",
+    "                                                    1))",
+    "                                              (Array.range (instHAdd.hAdd j 1)))))",
+    "                                        (Except.ok (instHAdd.hAdd j 1)))",
+    "                                      (∀",
+    "                                        (L₀ :",
+    "                                          Claims.ZKServer.LeanRelease Claims.Flock.Wit",
+    "                                            (Prod",
+    "                                              (Claims.ZKMal.CoinLayer.session Claims.ZKServer.Loop.loopNr",
+    "                                                    Claims.ZKMal.Masked.dataE).refP.Nonce",
+    "                                              (Claims.ZKMal.CoinLayer.session Claims.ZKServer.Loop.loopNr",
+    "                                                    Claims.ZKMal.Masked.dataE).refP.Rand))",
+    "                                        (fin :",
+    "                                          Claims.Msg →",
+    "                                            Claims.Flock.Wit →",
+    "                                              Prod",
+    "                                                  (Claims.ZKMal.CoinLayer.session Claims.ZKServer.Loop.loopNr",
+    "                                                        Claims.ZKMal.Masked.dataE).refP.Nonce",
+    "                                                  (Claims.ZKMal.CoinLayer.session Claims.ZKServer.Loop.loopNr",
+    "                                                        Claims.ZKMal.Masked.dataE).refP.Rand →",
+    "                                                List (Prod Claims.Msg Claims.Msg) → Array ByteArray)",
+    "                                        (vals : String → Option ByteArray),",
+    "                                        Eq",
+    "                                          ((Claims.ZKServer.LeanRelease.withInner Claims.ZKMal.Masked.dataE L₀",
+    "                                                (Claims.ZKServer.Loop.realOf src) fin).scheduled",
+    "                                            x w ρ h vals)",
+    "                                          (instHAppendOfAppend.hAppend",
+    "                                                (instHAppendOfAppend.hAppend",
+    "                                                  (instHAppendOfAppend.hAppend",
+    "                                                    (Flock.Firewall.Frame.labelFrame Flock.Zk.LABEL_INNER.toUTF8)",
+    "                                                    (Flock.Transcript.header 3 1 1))",
+    "                                                  (Flock.Firewall.Frame.wordBytes",
+    "                                                    (Flock.Firewall.Frame.words ((fin x w ρ h).getD 0 ByteArray.empty)",
+    "                                                      (instHAdd.hAdd",
+    "                                                        (Flock.Firewall.Frame.labelFrame",
+    "                                                            Flock.Zk.LABEL_INNER.toUTF8).size",
+    "                                                        16)",
+    "                                                      1)))",
+    "                                                (Flock.Transcript.header 4 1 1)).data.toList)))))"
+   ],
+   "assumptions": ["Claims.ZKServer.Loop.ReachesInner"],
+   "type_hash": "7a48fb4fdca14f29b9fc657afde3abf5920759ec5edf760f050cdc644ea3d0ef"
+  },
+  "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial (hfix : Claims.ZKServer.Loop.ReachesInner) :",
+    "  Exists fun src =>",
+    "    Exists fun x =>",
+    "      Exists fun w =>",
+    "        Not",
+    "          (Flock.Guarantees.LoopInnerRound0 Claims.ZKMal.Masked.dataE Claims.ZKServer.LeanRelease.silent",
+    "            (Claims.ZKServer.Loop.realOf src) x w)"
+   ],
+   "assumptions": ["Claims.ZKServer.Loop.ReachesInner"],
+   "type_hash": "8cf0ae944172f33b17bee5f4bdd0ab05d76590f21b5513a469f87be6e089b5d3"
   },
   "Flock.SecurityProofs.MaskedKS": {
    "owner": "@proofs",
@@ -16368,8 +16480,8 @@
     "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.IntOp.input Accounting.Gates.Binding.coin i))) → Eq (x t i) (Accounting.Gates.byte (Accounting.Gates.nibbles s t) (slot i)).cast": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → ∀ (t' : Fin s → Fin 16), SetLike.instMembership.mem G t' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.IntOp.input Accounting.Gates.Binding.registered i))) → Eq (x t i) (x t' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (g : Accounting.Gates.Gate ι), List.instMembership.mem C g → ∀ (cls : Accounting.Gates.Budget) (f : List Int → Int), Eq g.op (Accounting.Gates.Op.budgeted cls f) → instLENat.le g.size (instHPow.hPow 2 w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.coin i))) → Eq (x t i) (Accounting.Gates.byte (Accounting.Gates.nibbles s t) (slot i)).cast": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → ∀ (t' : Fin s → Fin 16), SetLike.instMembership.mem G t' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.registered i))) → Eq (x t i) (x t' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → ∀ (t' : Fin s → Fin 16), SetLike.instMembership.mem G t' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.registered i))) → Eq (x t i) (x t' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.coin i))) → Eq (x t i) (Accounting.Gates.byte (Accounting.Gates.nibbles s t) (slot i)).cast": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Gates.UnitsFooling": {
     "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → Ne s s' → Exists fun o => And (List.instMembership.mem out o) (Not ((instHPow.hPow 2 j).ModEq (Accounting.Gates.val C (x s) o) (Accounting.Gates.val C (x s') o)))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -16377,8 +16489,8 @@
     "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.IntOp.input Accounting.Gates.Binding.coin i))) → (instHPow.hPow 2 j).ModEq (x s i) (x s' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.IntOp.input Accounting.Gates.Binding.registered i))) → Eq (x s i) (x s' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (g : Accounting.Gates.Gate ι), List.instMembership.mem C g → ∀ (cls : Accounting.Gates.Budget) (f : List Int → Int), Eq g.op (Accounting.Gates.Op.budgeted cls f) → instLENat.le g.size (instHPow.hPow 2 w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.coin i))) → (instHPow.hPow 2 j).ModEq (x s i) (x s' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.registered i))) → Eq (x s i) (x s' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.registered i))) → Eq (x s i) (x s' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.coin i))) → (instHPow.hPow 2 j).ModEq (x s i) (x s' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.HMu.PersistentOneWord": {
     "∀ (n : Nat) (x : W), Function.Injective fun s => step n s x": "an injectivity, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -30381,7 +30493,7 @@
    }
   },
   "Flock.Firewall.Frame": {
-   "digest": "533e3e17d17fa98fdf734fe850256e8c5b3afb13e3d834b01c916911a284c3f1",
+   "digest": "f7b67c1ce9c05a8b6444b4ee45cbca333f0ad609cefc377e1e32658ef0a5397e",
    "definitions": {
     "Flock.Firewall.Frame.Cfg": "bf9503846407764cd457755ef636ee64e0c349d8a0c4e1796a2a729919931930",
     "Flock.Firewall.Frame.Cfg.h": "37b00e39b0369196fef37e649c7bc44a58dd4010204b20b00713eec6c895d8b8",
@@ -30409,6 +30521,8 @@
     "Flock.Firewall.Frame.LABEL_ZC": "87797493625e3f138063ec1272d7297a384397ea51fa46f2380411c198146f17",
     "Flock.Firewall.Frame.MaskSlot": "d762bd305ae002405e073fbd614790b65853e94a2f35d7a5e6265adcef31d6a0",
     "Flock.Firewall.Frame.MaskSlot.blocks": "e3bba1021e7bda2b9980053a677af1ab6b5771c48d4026963603913f9aa2dc4e",
+    "Flock.Firewall.Frame.MaskSlot.fill._sparseCasesOn_1": "866b8a91c27307a49c95524c96d83db81c05ba73753607810652f12e4b232975",
+    "Flock.Firewall.Frame.MaskSlot.fill.match_1": "bc3e4a1d321342663a51a34d396886c900e8cac0a19298405f958644318da5a3",
     "Flock.Firewall.Frame.MaskSlot.n": "c01efe4b3af030619fe9d9c5ea2e991b1b973c5adbadefe933971a29e7830c8c",
     "Flock.Firewall.Frame.MaskSlot.w0": "0626b63451e4f7d9e6ad14b6663995dfa4aba98b73e3fc3818379d8ef57a8eb5",
     "Flock.Firewall.Frame.MaskSlot.word": "b2ab0fe47a7eb21e1f1da0bd2b98c94032a5aac32518b6c18b566cc1260f6bbf",
@@ -36697,6 +36811,12 @@
     "RecDeploy.setupView": "f80c0404ac0803bc94390e66f6c7a179a7442b11f640184c789c0da005c90c45"
    }
   },
+  "Proofs.Flock.Claims.Recursion.Assumptions.LoopFixture": {
+   "digest": "2d9d23be847d0db501da286972b47322c6b866079568ed114067f1b448ba7fb1",
+   "definitions": {
+    "Claims.ZKServer.Loop.ReachesInner": "c85954d73d66971ffcfdef16a3eb0c9904191418d4939daeb0bf10faff31a793"
+   }
+  },
   "Proofs.Flock.Claims.Recursion.Assumptions.PlainLeaves": {
    "digest": "cfb02704b1827fe60bf17c7783eca806da858ad8c8de1404a7000cce8e3ae027",
    "definitions": {
@@ -39901,11 +40021,19 @@
    }
   },
   "Proofs.Flock.SessionLoop.Inner": {
-   "digest": "55c58322b9340d775c31c028287c316f048a0964c4274b682d6199eb0060ae45",
+   "digest": "60c172c56ba2e79c953b43c1857ebf1eb5f909399e0e1a71cef083ffa1a5aa0a",
    "definitions": {
     "Claims.ZKServer.LeanRelease.withInner": "f5ec534552d23c1bff48a6a2799bf8949aab648a755b5a03204679c61d9d3784",
     "Claims.ZKServer.Loop.innerOf": "dcbfed36475e79a7518d16a662fc5bd24c71c4756cde0e032d38c6f4f7820f19",
+    "Claims.ZKServer.Loop.innerOf._sparseCasesOn_5": "40213eeff0858bf31936ccdd687000af339330bf961923ac07bb92978e7dcca9",
+    "Claims.ZKServer.Loop.innerOf._sparseCasesOn_6": "dee1eadabd977a268fb47f103c35a70fc3d18465306604619f2ac3244f8be737",
     "Flock.Guarantees.LoopInnerRound0Own": "cddec953854c5e9debbf39861f09943cd12d34c041339b4d337a565f75ecce0c"
+   }
+  },
+  "Proofs.Flock.SessionLoop.InnerWitness": {
+   "digest": "e98a3d8be57acafdc071667441508567e2724b223104f03cf53096218cd3f964",
+   "definitions": {
+    "Claims.ZKServer.LeanRelease.silent": "d2a4c994cdb5c917955492790f0cfdb1a56c2fe1b08026af9c90903dd67681a4"
    }
   },
   "Proofs.Flock.SessionLoop.Statement": {
