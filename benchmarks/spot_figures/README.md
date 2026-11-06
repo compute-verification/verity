@@ -63,11 +63,15 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
     with skipped work). (A′) is (A)'s serving and tax on the `partition` card `per-expert`'s cut (the MoE cut per
     expert), dash-dot, labelled with the card's `label` (what of the cut is built, checked, proved and served), a
     line only for a model with that card. A new configuration, such as another cut, is a new entry with its own line.
-  - A two-stage statement holds one Definition's sampled proof blocks of one registration's sampled replay blocks, up
-    to its cap (`optimize.two_stage_design`'s `registration`): a registration spans the census window on one machine,
-    on a 64-machine pod (`POD`) or on all of the census datacenter's machines (`REGISTRATIONS`). (A) and (A′) are drawn
-    at each of the three, dark to light, and (B) at one machine's; each series gives R, the sampled replay blocks a
-    statement shares.
+  - A two-stage statement holds one Definition's sampled proof blocks of a sampled replay block, or of a
+    registration's (`optimize.two_stage_design`'s `registration`): a registration spans the census window on one
+    machine, on a 64-machine pod (`POD`) or on all of the census datacenter's machines (`REGISTRATIONS`). A statement's
+    shape is fixed before any coin, so a registration's sessions are padded to a public cap, K0 replay blocks' blocks,
+    the least with P(K > K0) ≤ 2^−40 at the Q it samples (`optimize.registration_cap`), a sample past it refused;
+    every registration proves its padding whatever it samples, and each Definition takes the registration's statements
+    only where they cost less than its own (`optimize.two_stage_statements`). (A) and (A′) are plotted at each of the
+    three, dark to light, and (B) at one machine's; each series gives Q, K0 and the shares of its proving in the
+    registration's statements and on padding.
   - Exfiltration: (A) and (A′) in the patterns' form (`card_influenceTwo_le_patterns`), under its two modeling
     conditions (each request serves at most S bits, and no proof block is shared across requests), with the capped
     sets' form (`card_influenceTwo_le_served_min`) at one machine's registration beside each, thin and dashed; (B) in
@@ -144,8 +148,10 @@ Limits of the model:
   `card_influenceTwo_le_served_min` and the patterns' form on `card_influenceTwo_le_patterns`.
 - The patterns' form takes each request to serve at most S bits and no proof block to be shared across requests: a
   batched or routed block that several requests read needs the planner changed.
-- A registration's sharing is its expected sampled replay blocks given at least one, Q/(1 − e^−Q), not their
-  distribution; a pod-wide or datacenter-wide registration needs one committer over its machines' boundary rows.
+- A registration's cap pads only for the first stage's count: a Definition's blocks in a sampled replay block are
+  taken at their mean share of its stratum's k, and its sessions' padding to one size within a statement, not to one
+  size across Definitions. A pod-wide or datacenter-wide registration needs one committer over its machines' boundary
+  rows.
 - The served bits count every token of a request as served, as the token select's output word alone: a circuit that
   returns more (logits, state) serves more, and the cap is then too low.
 - The two-stage write forms need a harm bound at the footprint, which no lemma states yet, and (B) replays a layer of

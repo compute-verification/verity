@@ -19,7 +19,7 @@ def test_the_configurations_are_the_cards():
     assert [n for n, c in t.CONFIGURATIONS.items() if "skipped_work" in c.panels] == ["every_block"]
 
 
-def test_a_request_line_is_drawn_at_every_registration_and_compared_in_the_sets_form():
+def test_a_request_line_is_plotted_at_every_registration_and_compared_in_the_sets_form():
     """(A) and (A′) in the patterns' form at each registration, and in the sets' form at their own, which only
     exfiltration plots; a registration's GPU-seconds are its machines' over the census window."""
     for name in ("tokens", "per_expert"):
@@ -169,7 +169,7 @@ def test_a_computed_types_fixed_cost_counts_in_its_share_of_proving():
     """Two of a hundred narrow blocks sampled pay their statement's whole fixed cost, so a computed type at 2 of a
     sampled replay block's 3 marginal seconds is 52 of its 53."""
     cells = [Cell(100, 16, prove=1.0, fixed=50.0, cap=1000), Cell(1, 64, stratum=64, prove=1.0, cap=10)]
-    row = {"merged": 16, "k": {0: 2, 64: 1}}
+    row = {"merged": 16, "k": {0: 2, 64: 1}, "q": .5, "registration": 0.0}
     assert t.computed_proving(cells, row, (True, False)) == pytest.approx(52 / 53, rel=1e-12)
     assert (t.computed_proving(cells, row, (False, False)), t.computed_proving(cells, row, (True, True))) == (0, 1)
     with pytest.raises(ValueError):
@@ -198,8 +198,9 @@ def measured(tmp_path_factory) -> dict:
 @pytest.mark.slow
 def test_each_line_starts_at_its_own_tax(measured, tmp_path):
     """The planned scope: each line's x is its tax plus β, a measured tax as it comes; the exfiltration lines never
-    above the served bits, saying which term binds, a wider registration never above a narrower one and the patterns'
-    form below the sets'; both infiltration lines plotted, and (C)'s falling with β; skipped work only for (C); the
+    above the served bits, saying which term binds, a wider registration never above a narrower one, sampling more
+    requests under a cap past them, and the patterns' form below the sets'; both infiltration lines plotted, and (C)'s
+    falling with β; skipped work only for (C); the
     captions name what each rests on and the lines the served bits bound at β = 1%; and it renders.  It plans every
     configuration at four shares, about a minute on four workers, the only test of the series end to end."""
     out, scope = measured, "datacenter week"
@@ -230,7 +231,12 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
         spans = [lines[n]["y"] for n in (name, f"{name}_pod", f"{name}_datacenter")]
         assert all(b <= a * (1 + 1e-9) for x in zip(*spans) for a, b in zip(x, x[1:])), name
         assert lines[name]["y"][at] < lines[f"{name}_sets"]["y"][at]
-        assert all(r >= 1 for n in (name, f"{name}_pod", f"{name}_datacenter") for r in lines[n]["share"])
+        for n in (name, f"{name}_pod", f"{name}_datacenter"):
+            assert all(k >= 1 and k >= q for q, k in zip(lines[n]["registration_sample"], lines[n]["registration_cap"]))
+            assert all(0 <= p <= s <= 1 for s, p in zip(lines[n]["shared"], lines[n]["padding"]))
+        samples = [lines[n]["registration_sample"][at] for n in (name, f"{name}_pod", f"{name}_datacenter")]
+        assert samples == sorted(samples), name
+    assert "sessions padded to a public cap" in caps["exfiltration"]
     served_at = [n for n, s in lines.items() if s["binds"][at] == "served"]
     assert served_at and "tokens" not in served_at
     assert caps["exfiltration"].count("bounded here only by everything the scope serves") == 1

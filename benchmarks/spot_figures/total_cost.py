@@ -34,8 +34,9 @@ witness bits where the card doesn't measure the type; a line's marginal overhead
 
 Each configuration's two panels read one design, the one with the least exfiltration bound at β; skipped work is
 planned on its own.  The serve tax is outside β; the token ids' hashing is in the tax, not in β, for every line.  A
-two-stage statement holds one Definition's sampled proof blocks of a registration's sampled replay blocks, up to its
-cap, so a registration that samples more of them fills its statements more.  `breakeven` gives each patterns'-form
+two-stage statement holds one Definition's sampled proof blocks of a sampled request, or of a registration's sampled
+requests, its sessions padded to a public cap that every registration pays (`optimize.two_stage_statements`), each
+Definition taking whichever costs less.  `breakeven` gives each patterns'-form
 line's marginal overhead and β at which its bound reaches the weights, at FP8 and FP4.
 
     uv run python benchmarks/spot_figures/total_cost.py priced-card --model GLM-5.3 --out CARD.json
@@ -103,6 +104,9 @@ POD = 64
 #: an interior registration's span over the census window: one machine, a pod or every machine of the census
 #: datacenter; its sampled requests fill each Definition's statements together, up to the cap
 REGISTRATIONS = {"machine": "one machine's", "pod": f"a {POD}-machine pod's", "datacenter": "a datacenter's"}
+#: a two-stage design's registration: the requests it samples (Q), its public cap (K0), and the shares of proving in
+#: its statements and on their padding
+REG = ("registration_sample", "registration_cap", "shared", "padding")
 
 
 def registration_gpu_seconds(name: str, c: dict[str, f1.InputCard]) -> float:
@@ -283,10 +287,10 @@ def computed_proving(cells: list[Cell], row: dict, computed: tuple[bool, ...]) -
     samples a few blocks of a type pays its statement's fixed cost on them, so this can be far above the type's share
     of the marginal."""
     split = [replace(c, stratum=0 if _size_class(c.bits) <= row["merged"] else _size_class(c.bits)) for c in cells]
-    share = row.get("share", 1.0)
-    whole = two_stage_price(split, row["k"], share)[2]
+    at = (row["k"], row["q"], row["registration"])
+    whole = two_stage_price(split, *at)[2]
     measured = two_stage_price([replace(c, prove=0.0, fixed=0.0) if x else c
-                                for c, x in zip(split, computed, strict=True)], row["k"], share)[2]
+                                for c, x in zip(split, computed, strict=True)], *at)[2]
     return 1 - measured / whole
 
 
@@ -314,9 +318,9 @@ def _plan(row: dict | None) -> dict | None:
 
 def _point(job: tuple) -> dict:
     """One configuration's bounds at one budget, in GPU-seconds: each panel's, with the plan and, for the capped
-    exfiltration, which of the count and the served bits binds, the sampled requests a statement shares and the computed
-    share of its design's proving.  A two-stage line's `form` and its registration's replay blocks (`span`) come with
-    it."""
+    exfiltration, which of the count and the served bits binds, the requests a registration samples and its cap (`REG`),
+    and the computed share of its design's proving.  A two-stage line's `form` and its registration's replay blocks
+    (`span`) come with it."""
     name, m, g, budget, computed, form, span = job
     served = f1.served_total(m)
     if name == "every_block":
@@ -334,7 +338,8 @@ def _point(job: tuple) -> dict:
                            served=m.served, union=form == "patterns", registration=span)
     return {"exfiltration": {"y": min(row["bound"], served), "count": row["bound"],
                              "binds": "served" if served <= row["bound"] else "count", "plan": _plan(row),
-                             "share": row["share"], "computed_proving": computed_proving(list(g.cells), row, computed)},
+                             **{k: row[k] for k in REG},
+                             "computed_proving": computed_proving(list(g.cells), row, computed)},
             "infiltration": {"y": write_form(list(g.cells), row, g.replay_blocks, m.delta, g.footprint),
                              "plan": _plan(row)}}
 
@@ -381,8 +386,10 @@ def captions(out: dict, scope: str) -> dict[str, str]:
         if at is None:
             return ""
         s = lines["exfiltration"][name]
-        return (f" {_size(s['y'][at])}, R = {s['share'][at]:.3g}, {_share(s['computed_proving'][at])} of its sampled "
-                "replay block's proving computed;")
+        shared = (f"{_share(s['shared'][at])} of its proving in the registration's statements, "
+                  f"{_share(s['padding'][at])} padding" if s["shared"][at] else "its own statements")
+        return (f" {_size(s['y'][at])}; Q = {s['registration_sample'][at]:.2g}, K0 = {s['registration_cap'][at]:,}: "
+                f"{shared}; {_share(s['computed_proving'][at])} of its sampled replay block's proving computed;")
 
     head = ("x is the serve tax, what each configuration's change to the production server costs on every token, plus "
             "β, the share of compute spent on replays and proofs of the sampled proof blocks; each line starts at its "
@@ -392,14 +399,17 @@ def captions(out: dict, scope: str) -> dict[str, str]:
             f"{_share(conf['tokens']['computed_share'])} of it computed. Every β has its own plan, the one with the "
             "least bound.")
     regs, window = out["registrations"], out["inputs"]["window"]["value"]
-    head += (f" A two-stage statement holds one Definition's sampled proof blocks of one registration's sampled replay "
-             f"blocks, at most the Definition's cap: a registration spans the {window:g} s window on one machine "
+    head += (f" A two-stage statement holds one Definition's sampled proof blocks of a sampled replay block or of a "
+             f"registration's: a registration spans the {window:g} s window on one machine "
              f"({out['inputs']['machine_gpus']['value']:g} GPUs), on a {POD}-machine pod or on a datacenter's "
-             f"{regs['datacenter']['machines']:,.0f} machines, and its R sampled replay blocks share a statement, "
-             "R = Q/(1 − e^−Q) at the Q it samples, a fixed point with the design's q. The registration and its "
-             "statements' split are the protocol's, fixed before any coin, never the prover's. Each two-stage line "
-             f"gives at β = {_share(f1.RATIO_BUDGET)} its bound, R and the share of its sampled replay block's "
-             "proving, the statements' fixed costs included, that is computed.")
+             f"{regs['datacenter']['machines']:,.0f} machines, its statements' sessions padded to a public cap of K0 "
+             "replay blocks' blocks, the least with P(K > K0) ≤ 2^−40 at the Q it samples, a sample past it refused; "
+             "every registration proves its padding, whatever it samples, and each Definition takes the "
+             "registration's statements only where they cost less than its own. The registration and its statements' "
+             "split are the protocol's, fixed before any coin, never the prover's. Each two-stage line gives at "
+             f"β = {_share(f1.RATIO_BUDGET)} its bound, Q and K0, the shares of its proving in the registration's "
+             "statements and on padding, and the share of its sampled replay block's proving, the statements' fixed "
+             "costs included, that is computed.")
     a, b, c = CONFIGURATIONS["tokens"], CONFIGURATIONS["layer_of_token"], CONFIGURATIONS["every_block"]
     short = a.label.split(" ")[0]
     served, betas = out["served_bits_request"], out["betas"]
@@ -448,7 +458,7 @@ def captions(out: dict, scope: str) -> dict[str, str]:
     trivial = [tag(n) for n, s in lines["exfiltration"].items()
                if at is not None and s["binds"][at] == "served"]
     who = ("every line is" if len(trivial) == len(lines["exfiltration"]) else trivial[0] + " is" if len(trivial) == 1
-           else f"{', '.join(trivial[:-1])} and {trivial[-1]} are")
+           else f"{', '.join(trivial[:-1])} and {trivial[-1]} are" if trivial else "")
     one = len(trivial) == 1
     exfil = (f" At β = {_share(f1.RATIO_BUDGET)} {who} bounded here only by everything the scope serves "
              f"({_size(sc['served_bits'])}), the trivial bound: the audit's {'count is' if one else 'counts are'} "
@@ -534,7 +544,7 @@ def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, eac
             rows = [p[panel] for p in pts]
             series[panel].append({"scope": s.name, "config": name, "beta": betas,
                                   "x": [tax[name]["tax"] + b for b in betas], "y": [r["y"] for r in rows],
-                                  **{k: [r[k] for r in rows] for k in ("binds", "count", "share", "computed_proving")
+                                  **{k: [r[k] for r in rows] for k in ("binds", "count", *REG, "computed_proving")
                                      if k in rows[0]},
                                   "plan": [r["plan"] for r in rows]})
     out_scopes = {s.name: {"who": s.who, "period": s.period, "gpus": c[f"{s.who}_gpus"].value,
@@ -674,7 +684,7 @@ def at_budgets(out: dict) -> list[dict]:
 
 PRIMARY = "world year"
 #: each configuration's colour, line style and width: a line's registrations dark to light, each narrower so that one
-#: drawn over another shows; the sets' form thin and dashed; (C) dashed, its tax a lower bound
+#: plotted over another shows; the sets' form thin and dashed; (C) dashed, its tax a lower bound
 CUT, SETS = (0, (7, 2, 1.5, 2)), (0, (3, 2))
 STYLE = {"tokens": ("#08306B", "-", 4.2), "tokens_pod": ("#2171B5", "-", 2.8),
          "tokens_datacenter": ("#9ECAE1", "-", 1.4), "tokens_sets": ("#08306B", SETS, 1.6),
