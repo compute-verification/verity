@@ -1,4 +1,5 @@
-"""The training formalism v2's quantities measured on one traced step, in Boolean gates (training_slowdown.gates) and bits. No torch: a `StepCircuit` saved by ``python -m training_slowdown.capture.script --circuit F.npz`` is measured again with
+"""The training formalism v2's quantities measured on one traced step, in Boolean gates (training_slowdown.gates) and
+bits. No torch: a `StepCircuit` saved with `StepCircuit.save` is measured again with
 ``python -m training_slowdown.capture.circuit F.npz``.
 
 `StepCircuit` is training_slowdown.capture.structure's dataflow of a program recorded from its start, restricted to its measured
@@ -16,9 +17,9 @@ share of its ops' gates, and a cut's bits over the step's tokens are a token's.
   `affected_share` = |A ∩ ∪T| / |C_R|, the token ops that depend on θ'; `affected_all_share` = every affected op's
   (A, the optimizer's included).
 - tokens: the step's consumed tokens, the union of the positions the token-index ops read in each token input, and
-  in each sampled id the step feeds back (a generation round's decode, training_slowdown.capture.script). An index computed
-  from token data otherwise (a sampled head's unique(y), a QAT code) is no token, though training_slowdown.flops counts its
-  reads too; a step whose token-index ops read no token input (a program-made source) counts every token-index read.
+  in each sampled id the step feeds back (a generation round's decode). An index computed from token data otherwise (a
+  sampled head's unique(y), a QAT code) is no token, though training_slowdown.flops counts its reads too; a step whose
+  token-index ops read no token input (a program-made source) counts every token-index read.
   `token_factor` = tokens over the record's count for the step.
 - τ: the token inputs' positions the step reads (its targets included), per consumed token (`tau_ids`, ids, priced at
   ⌈log2 V⌉ by the caller), and `tau_other_bits`: any other input a token op reads, and 64 bits (a seed) per random op
@@ -46,31 +47,13 @@ share of its ops' gates, and a cut's bits over the step's tokens are a token's.
 - `update_cut_bits`: the narrowest cut between the carried values and every update value any token op of the step
   reads: the trace's own encoding of θ' (compare 8 |E|).
 - `partial_cut_bits`: the gradient's cut from one token's group alone (its own dW products): the partial a block
-  holding the group's work passes, at its passed width, which the one bound's reduction kind reads (training_slowdown.formalism).
-- `entries`, reading A's inputs (A1's approved reading: a block reads at least the update bits its work reads,
-  counted once, plus each token's computed state where its work on the token begins, the context it reads and doesn't
-  compute included). One token's path (its group's affected ops in program order, as for u_in) is cut into at most
-  `segments` runs: one starts at the forward's end, about half at the forward's narrowest boundaries (where the charged
-  bits the rest of the forward reads drop, so an entry lands inside a code), and the rest at about equal gates. For
-  each run of segments i through j, what a block doing that work for one of the group's `tokens` reads beyond θ:
-  `frontier_bits[i][j - i]`, per token, the computed values its ops read and don't make (the token's state at the
-  entry, a skip connection, a statistic; values computed from θ and token data alone are free, the block computing
-  them from the token's id; an op none of whose values is read, such as a slice only a zeros_like reads, reads
-  nothing); `ids[i][j - i]`, the token-input positions its ops read
-  per token (1, the token's id, where they read only such state); `u_bits[i][j - i]`, once a block, the narrowest cut from the carried
-  values to the update values its ops read, plus 64 bits a random op it reads. Per segment: its affected `gates` per
-  token, its `phase` (the least of its ops'), and, from a trace whose variant halves the context (`positions` its
-  length; None otherwise), `context_fwd_bits` and `context_bwd_bits`: the bits per other position of the sequence
-  that its token-mixing ops read (an op reading or making a value quadratic in the context, at the least per-position
-  bits of its affected token-indexed operands), earlier positions in the forward and later ones in the backward; and its
-  first op (`first_ops`), so a run's ops on the path (`path`) are `run_ops`'s. Reading A's checker, `check`, counts the
-  gates and reads of any set of the trace's ops by the same rule: a witness block, of which the runs are the default
-  packer's (training_slowdown.formalism.packer).
-- `data_dependent` and `carried_scalars`: the recording's read-backs that decide what the graph can't carry
-  (training_slowdown.capture.script), which the circuit keeps (`read_backs`, saved with it); absent for a circuit no recording
-  listed them for, which training_slowdown.formalism refuses as unchecked.
-- `products`: the step's matrix products as training_slowdown.io_bound reads them (training_slowdown.capture.products' rows), which the
-  circuit keeps too; absent for a circuit recorded before training_slowdown 4.8.
+  holding the group's work passes, at its passed width, which the one bound's reduction sensitivity reads
+  (training_slowdown.formalism).
+- `data_dependent` and `carried_scalars`: the recording's read-backs that decide what the graph can't carry, which the
+  circuit keeps (`read_backs`, saved with it); absent for a circuit no recording listed them for, which
+  training_slowdown.formalism refuses as unchecked.
+- `products`: the step's matrix products (training_slowdown.capture.products' rows), which the circuit keeps too; absent
+  for a circuit recorded before training_slowdown 4.8.
 """
 from __future__ import annotations
 
@@ -117,15 +100,11 @@ class StepCircuit:
     token_key: np.ndarray
     region: int
     step_tokens: int
-    #: the recording's read-backs that decide what the graph can't carry (training_slowdown.capture.script's `data_dependent` and
-    #: `carried_scalars`), which `measure` returns; None for a circuit no recording listed them for
+    #: the recording's read-backs that decide what the graph can't carry (`data_dependent` and `carried_scalars`),
+    #: which `measure` returns; None for a circuit no recording listed them for
     read_backs: dict | None = None
-    #: whether a value is quadratic in the context (attention's scores and probabilities), and the context's length;
-    #: None and 0 for a trace whose variant doesn't halve the context
-    mix: np.ndarray | None = None
-    ctx: int = 0
-    #: the step's matrix products as training_slowdown.io_bound reads them (training_slowdown.capture.products' `rows`), which `measure`
-    #: returns; None for a circuit recorded before training_slowdown 4.8
+    #: the step's matrix products (training_slowdown.capture.products' `rows`), which `measure` returns; None for a
+    #: circuit recorded before training_slowdown 4.8
     products: dict | None = None
 
     def save(self, path: Path) -> None:
@@ -139,7 +118,7 @@ class StepCircuit:
     @classmethod
     def load(cls, path: Path) -> "StepCircuit":
         z = np.load(path, allow_pickle=False)
-        out = {f.name: (int(z[f.name]) if f.name in ("region", "step_tokens", "ctx") else z[f.name])
+        out = {f.name: (int(z[f.name]) if f.name in ("region", "step_tokens") else z[f.name])
                for f in fields(cls) if f.name not in JSON_FIELDS and f.name in z.files}
         return cls(**out, **{name: json.loads(str(z[name])) if name in z.files else None for name in JSON_FIELDS})
 
@@ -292,54 +271,10 @@ def _profile(cuts: list[tuple[float, int]]) -> list[list[float]]:
     return pts
 
 
-def _op_gates(c: StepCircuit) -> np.ndarray:
-    node = c.node.astype(np.int64)
-    ops = int(node.max()) + 1 if len(c) and node.max() >= 0 else 0
-    return np.bincount(node[node >= 0], weights=c.gates[node >= 0], minlength=ops)
-
-
 def _update(c: StepCircuit, preds: list[list[int]]) -> tuple[set[int], dict[int, int], list[int]]:
     """The update values (affected and free of the step's tokens), their bits, and the carried ones among them."""
     U = set(np.nonzero(c.dep.astype(bool) & ~c.tokdep.astype(bool))[0].tolist())
     return U, {v: int(c.bits[v]) for v in U}, [v for v in U if c.kind[v] == CARRIED and (c.outside[v] or not preds[v])]
-
-
-def _ops_reads(c: StepCircuit, preds: list[list[int]], ops) -> tuple[dict[int, list[int]], dict[int, set[int]]]:
-    """Each op of `ops`'s values, and the values it reads: none for an op none of whose values is read."""
-    by_op: dict[int, list[int]] = {}
-    for v in np.nonzero(np.isin(c.node, list(ops)))[0].tolist():
-        by_op.setdefault(int(c.node[v]), []).append(v)
-    used = c.read_next.astype(bool).copy()
-    used[c.indices] = True
-    return by_op, {o: {p for v in by_op.get(o, []) for p in preds[v]} if any(used[v] for v in by_op.get(o, []))
-                   else set() for o in ops}
-
-
-def _charger(c: StepCircuit, U: set[int], tokens: int):
-    """What reading a value costs a block beyond θ (module docstring), memoised: ("u", 0) an update value, ("seed", its
-    op) a random one, ("bits", its bits over `tokens`) another input or a computed value that depends on θ', ("data", 0)
-    one computed from θ and token data alone, ("", 0) θ and the token inputs."""
-    dep, tokdep = c.dep.astype(bool), c.tokdep.astype(bool)
-    charges: dict[int, tuple[str, float]] = {}
-
-    def charge(p: int) -> tuple[str, float]:
-        k = c.kind[p]
-        if p in U:
-            return "u", 0.0
-        if k == TOKEN_INPUT:
-            return "", 0.0
-        if k == RANDOM:
-            return "seed", float(c.node[p])
-        if k == OTHER_INPUT or (k == COMPUTED and dep[p]):
-            return "bits", int(c.bits[p]) / tokens
-        if k == COMPUTED and tokdep[p]:
-            return "data", 0.0
-        return "", 0.0
-
-    def charged(p: int) -> tuple[str, float]:
-        return charges[p] if p in charges else charges.setdefault(p, charge(p))
-
-    return charged
 
 
 def path(c: StepCircuit, preds: list[list[int]] | None = None) -> tuple[list[int], int]:
@@ -368,156 +303,7 @@ def path(c: StepCircuit, preds: list[list[int]] | None = None) -> tuple[list[int
     return np.nonzero(op_group & op_dep)[0].tolist(), len(np.unique(fp))
 
 
-def check(c: StepCircuit, ops, tokens: int = 1, preds: list[list[int]] | None = None) -> dict:
-    """A witness block's count (reading A, module docstring): the gates of the ops `ops`, as traced, and what they read
-    beyond θ, each over `tokens` (a block doing that work for one of the tokens the ops process): `frontier_bits`, the
-    values they read and don't make, charged as `_charger` charges them; `ids`, the token-input positions they read (1,
-    the token's id, where they read only state computed from token data); `u_bits`, the narrowest cut from the carried
-    values to the update values they read, plus 64 bits a random op they read, once. The default packer's blocks are
-    such witnesses (a run of `entries`' segments, `run_ops`), and a block any other set of the trace's ops gives is
-    counted by the same rule."""
-    preds = c.preds() if preds is None else preds
-    ops = sorted({int(o) for o in ops})
-    U, ucap, carried = _update(c, preds)
-    by_op, reads_of = _ops_reads(c, preds, ops)
-    charged = _charger(c, U, tokens)
-    made = {v for o in ops for v in by_op.get(o, [])}
-    bits, targets, seeds, data = 0.0, set(), set(), False
-    for p in set().union(*reads_of.values()) - made:
-        kind, x = charged(p)
-        if kind == "u":
-            targets.add(p)
-        elif kind == "seed":
-            seeds.add(x)
-        elif kind == "bits":
-            bits += x
-        elif kind == "data":
-            data = True
-    on = set(ops)
-    direct = _union_size(c, [r for r in range(len(c.tr_op))
-                             if c.token_key[c.tr_key[r]] and int(c.tr_op[r]) in on]) / tokens
-    g = _op_gates(c)
-    return {"ops": len(ops), "gates": float(g[[o for o in ops if o < len(g)]].sum()) / tokens, "frontier_bits": bits,
-            "ids": direct if direct or not data else 1.0,
-            "u_bits": (vertex_cut(preds, ucap, carried, targets)[0] or 0) + SEED_BITS * len(seeds)}
-
-
-def run_ops(order: list[int], entries: dict, i: int, j: int) -> list[int]:
-    """The ops of `entries`' segments i through j on the path `order` (`path`)."""
-    first = entries["first_ops"]
-    hi = first[j + 1] if j + 1 < len(first) else math.inf
-    return [o for o in order if first[i] <= o < hi]
-
-
-def _cut_path(order: list[int], op_gates: np.ndarray, op_phase: np.ndarray, by_op: dict[int, list[int]],
-              reads_of: dict[int, set[int]], charged, segments: int) -> dict[int, int]:
-    """Each op of the path `order`'s segment, at most `segments` of them: one starts at the forward's end, about half at
-    the forward's narrowest boundaries (where the charged bits the rest of the forward reads and the path made before
-    drop, the least first), and the rest at about equal gates."""
-    n = len(order)
-    at = {o: t for t, o in enumerate(order)}
-    made = {v: at[o] for o in order for v in by_op.get(o, [])}
-    last: dict[int, int] = {}
-    for t, o in enumerate(order):
-        if op_phase[o] == FORWARD:
-            for p in reads_of[o]:
-                last[p] = t
-    diff = np.zeros(n + 1)
-    for p, t in last.items():
-        kind, x = charged(p)
-        lo = made.get(p, -1) + 1
-        if kind == "bits" and lo <= t:
-            diff[lo] += x
-            diff[t + 1] -= x
-    live = np.cumsum(diff)[:n]
-    fwd = [t for t in range(1, n) if op_phase[order[t - 1]] == FORWARD]
-    bounds = {0, *[t for t in fwd if op_phase[order[t]] != FORWARD][:1]}
-    drops = sorted((t for t in fwd if live[t] < live[t - 1]), key=lambda t: (live[t], t))
-    bounds |= set(drops[:max(segments // 2 - len(bounds), 0)])
-    g = op_gates[order]
-    total, rest = float(g.sum()), segments - len(bounds)
-    if total and rest > 0:
-        raw = ((np.cumsum(g) - g) * (rest + 1) / total).astype(int)
-        bounds |= {t for t in range(1, n) if raw[t] != raw[t - 1]}
-    b = np.array(sorted(bounds))
-    return {o: int(np.searchsorted(b, t, side="right")) - 1 for t, o in enumerate(order)}
-
-
-def _entries(c: StepCircuit, preds: list[list[int]], order: list[int], op_gates: np.ndarray, op_phase: np.ndarray,
-             U: set[int], ucap: dict[int, int], carried: list[int], tokens: int, segments: int) -> dict | None:
-    """Reading A's inputs on one token's traced path (module docstring): its ops in program order cut into runs
-    (`_cut_path`), and for each run of them, i through j at `[i][j - i]`, what a block doing that work for one of the
-    group's tokens reads."""
-    if not order or not tokens:
-        return None
-    tok, dep = c.tok.astype(bool), c.dep.astype(bool)
-    mix = c.mix.astype(bool) if c.mix is not None else None
-    by_op, reads_of = _ops_reads(c, preds, order)
-    charged = _charger(c, U, tokens)
-    seg_of = _cut_path(order, op_gates, op_phase, by_op, reads_of, charged, segments)
-    n_seg = int(max(seg_of.values())) + 1
-    made = [set() for _ in range(n_seg)]
-    reads = [set() for _ in range(n_seg)]
-    gates = [0.0] * n_seg
-    phase = [OTHER] * n_seg
-    ctx = {FORWARD: [0.0] * n_seg, BACKWARD: [0.0] * n_seg}
-    for o in order:
-        s, vs, rd = seg_of[o], by_op.get(o, []), reads_of[o]
-        gates[s] += float(op_gates[o]) / tokens
-        phase[s] = min(phase[s], int(op_phase[o]))
-        made[s].update(vs)
-        reads[s] |= rd
-        if mix is not None and op_phase[o] in ctx and (any(mix[x] for x in vs) or any(mix[p] for p in rd)):
-            per = [int(c.bits[p]) / tokens for p in rd if tok[p] and dep[p] and not mix[p]]
-            ctx[int(op_phase[o])][s] += min(per, default=0.0)
-
-    token_reads = [[] for _ in range(n_seg)]
-    for r in range(len(c.tr_op)):
-        if c.token_key[c.tr_key[r]] and int(c.tr_op[r]) in seg_of:
-            token_reads[seg_of[int(c.tr_op[r])]].append(r)
-
-    frontier, ids, u_bits = [], [], []
-    cut_of: dict[frozenset, int] = {}
-    for i in range(n_seg):
-        seen, inside, bits, direct, data, targets, seeds = set(), set(), 0.0, 0.0, False, set(), set()
-        read_at: list[int] = []
-        row_f, row_i, row_u = [], [], []
-        for j in range(i, n_seg):
-            inside |= made[j]
-            if token_reads[j]:
-                read_at += token_reads[j]
-                direct = _union_size(c, read_at) / tokens
-            for p in reads[j] - seen - inside:
-                seen.add(p)
-                kind, x = charged(p)
-                if kind == "u":
-                    targets.add(p)
-                elif kind == "seed":
-                    seeds.add(x)
-                elif kind == "bits":
-                    bits += x
-                elif kind == "data":
-                    data = True
-            key = frozenset(targets)
-            if key not in cut_of:
-                cut_of[key] = vertex_cut(preds, ucap, carried, key)[0] or 0
-            row_f.append(bits)
-            row_i.append(direct if direct or not data else 1.0)
-            row_u.append(cut_of[key] + SEED_BITS * len(seeds))
-        frontier.append(row_f)
-        ids.append(row_i)
-        u_bits.append(row_u)
-    first = [0] * n_seg
-    for o in reversed(order):
-        first[seg_of[o]] = o
-    return {"segments": n_seg, "first_ops": first, "gates": gates, "phase": phase, "frontier_bits": frontier, "ids": ids,
-            "u_bits": u_bits,
-            "context_fwd_bits": ctx[FORWARD] if mix is not None else None,
-            "context_bwd_bits": ctx[BACKWARD] if mix is not None else None,
-            "positions": c.ctx or None, "tokens": tokens}
-
-
-def measure(c: StepCircuit, max_cuts: int = 128, segments: int = 24) -> dict:
+def measure(c: StepCircuit, max_cuts: int = 128) -> dict:
     """The step's quantities (module docstring)."""
     n = len(c)
     preds = c.preds()
@@ -622,7 +408,6 @@ def measure(c: StepCircuit, max_cuts: int = 128, segments: int = 24) -> dict:
     tail = [o for o in order if lo < o < hi]
     frozen = float(op_gates[tail].sum()) / g_total if g_total and fwd_reads else 0.0
     a_x = sorted(x_after[node_l[v]] for v in a_set if node_l[v] in x_after)
-    entries = _entries(c, preds, order, op_gates, op_phase, U, ucap, carried, group_tokens, segments)
 
     # the whole step's update read, the gradient's cut and the carried state
     all_targets = set()
@@ -660,13 +445,13 @@ def measure(c: StepCircuit, max_cuts: int = 128, segments: int = 24) -> dict:
             "u_in": u, "u1_bits": u[-1][1], "u_cuts": len(cuts), "tail_share": t, "frozen_tail_share": frozen,
             "group_gates": g_total, "group_tokens": group_tokens, "update_cut_bits": update_cut,
             "grad_cut_bits": grad_cut, "partial_cut_bits": partial_cut, "state_bits": state,
-            "delta_grad_bits": None if grad_cut is None else grad_cut + state, "entries": entries} | (c.read_backs or {}) | (
+            "delta_grad_bits": None if grad_cut is None else grad_cut + state} | (c.read_backs or {}) | (
         {"products": c.products} if c.products is not None else {})
 
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("circuit", type=Path, help="a StepCircuit saved by training_slowdown.capture.script --circuit")
+    ap.add_argument("circuit", type=Path, help="a StepCircuit saved by StepCircuit.save")
     ap.add_argument("--max-cuts", type=int, default=128)
     a = ap.parse_args(argv)
     print(json.dumps(measure(StepCircuit.load(a.circuit), a.max_cuts), indent=1))

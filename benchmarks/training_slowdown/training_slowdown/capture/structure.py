@@ -11,8 +11,8 @@ multiplications), dense linear algebra at n³ per matrix (`approx_macs`), and an
 activation with a parameter that differs from θ (a norm with a trained gain, an add then ``exp``) at one MAC per element
 of its largest operand or result (only its indices and result, for a gather), as training_slowdown.flops counts it.
 
-Terms are the training ontology's, with T2 read as Daniel's smell check set it: deep use is about activations that
-depend on the run's own persistent values, however the circuit is written.
+Terms are the training ontology's, with T2 read as deep use of activations that depend on the run's own persistent
+values, however the circuit is written.
 
 - A value is **token-indexed** when one of its dims changes with a token axis (a GEMM's result when its batch, m or n
   dim does), else **parameter-indexed** (a weight-shaped sum over tokens, as dW).
@@ -47,8 +47,8 @@ depend on the run's own persistent values, however the circuit is written.
   (through casts). A circuit that sends its update through a sign bit with error feedback, a top-k list or low-rank
   factors has that cut; a dense update's is its elements at that width. `beta` is the cut over the step's updated MACs
   per token.
-- A program recorded from its start (`training_slowdown.capture.script`, `Trace.region`) is measured at one step of its history,
-  and its slots are whatever it carries: a value is update-dependent when it depends on an earlier step's token data
+- A program recorded from its start (a capture of several steps whose `Trace.region` names one) is measured at that
+  step of its history, and its slots are whatever it carries: a value is update-dependent when it depends on an earlier step's token data
   (the run's weights, optimizer state and error feedback, kept in place, rebound or written by hand; a cache made from
   θ and this step's tokens is not), and the cut's sinks are the update-dependent values the step makes that the next
   step's forward reads, at the width it reads them (none in a program's last step, whose cut is 0).
@@ -351,7 +351,6 @@ class _Flow:
         self.preds: list[tuple[int, ...]] = []
         self.phase: list[str] = []
         self.tok: list[bool] = []
-        self.mix: list[bool] = []                      # value -> quadratic in the context (attention's scores)
         self.step: list[int] = []
         self.bits: list[int] = []
         self.width: list[int] = []                     # value -> its dtype's bits (64: a Python scalar)
@@ -372,12 +371,11 @@ class _Flow:
             self._at, self._step = n, int(n.meta.get("te_step", 0))
             self._node(n, phases.get(n, "forward"), tok)
 
-    def _new(self, preds, phase: str, tok: int, val=None) -> int:
-        """A value; `tok` is the callback's: 0 not token-indexed, 1 token-indexed, 2 quadratic in the context."""
+    def _new(self, preds, phase: str, tok: bool, val=None) -> int:
+        """A value; `tok`: whether it is token-indexed."""
         self.preds.append(tuple(sorted(set(preds))))
         self.phase.append(phase)
         self.tok.append(bool(tok))
-        self.mix.append(tok == 2)
         self.step.append(self._step)
         self.bits.append(_value_bits(val))
         self.width.append(_dtype_bits(val.dtype) if isinstance(val, torch.Tensor) else 64)
@@ -619,14 +617,9 @@ class StepGraph:
                 v = v[idx] if isinstance(v, (list, tuple)) and idx < len(v) else None
             return _shape(v)
 
-        ctx = vnodes[axis_names.index("ctx")] if "ctx" in axis_names else None
-
-        def tok(n, idx) -> int:
+        def tok(n, idx) -> bool:
             s = vshape(n, idx, None)
-            if s is None or all(vshape(n, idx, vs) == s for vs in vnodes):
-                return 0
-            half = vshape(n, idx, ctx) if ctx is not None else None
-            return 2 if half is not None and prod(s) > 3 * prod(half) else 1
+            return s is not None and any(vshape(n, idx, vs) != s for vs in vnodes)
 
         phases = _phases(gm)
         flow = _Flow(gm, phases, tok)
@@ -948,9 +941,8 @@ class StepGraph:
             sink_names = sorted(names_of[k] for k in dependent if k in writes and k in entry and fr[entry[k]])
         else:
             dep_names, sink_names = sorted({label(v) for v in carried}), sorted({label(v) for v in sinks})
-        positions = dict(zip(axis_names, base.axis_sizes)).get("ctx", 0) if ctx is not None else 0
-        circuit = (_step_circuit(flow, nodes, region, dep, carried, node_gates, step_tokens.get(region, tokens),
-                                 positions) if region is not None else None)
+        circuit = (_step_circuit(flow, nodes, region, dep, carried, node_gates, step_tokens.get(region, tokens))
+                   if region is not None else None)
         return cls(name, region_tokens, dict(zip(axis_names, base.axis_sizes)), matmuls, plist, crossing, upd, trained, gm,
                    digest=_digest(gm), elementwise_macs=other["elementwise"], approx_macs=other["approx"],
                    updated_elementwise=updated_elementwise, dependent=dep_names, cut_bits=cut_bits,
@@ -1150,12 +1142,11 @@ def _storage_positions(v: torch.Tensor) -> np.ndarray:
 
 
 def _step_circuit(flow: _Flow, nodes: list, region: int, dep: list[bool], carried: list[int], node_gates: dict,
-                  step_tokens: int, positions: int = 0) -> StepCircuit:
+                  step_tokens: int) -> StepCircuit:
     """The measured step `region` as a `StepCircuit` (training_slowdown.capture.circuit): its values and the carried ones it reads,
     each op's gates split over its values by elements, every read of token data through a storage a step-R token
     input owns or by a token-index op (a sampled id's lookup's ids, ``meta["te_sampled"]``, token data as an input's
-    are), and (with `positions`, the context's length, from a trace whose variant halves it) which values are
-    quadratic in the context."""
+    are)."""
     ph = [n for n in nodes if n.op == "placeholder" and int(n.meta.get("te_step", -1)) == region]
     token_names = {n.name for n in ph if n.name.startswith("tokens_")}
     token_in = {v for v, k in flow.source.items() if k[0] == "input" and k[1] in token_names}
@@ -1235,8 +1226,7 @@ def _step_circuit(flow: _Flow, nodes: list, region: int, dep: list[bool], carrie
         tr_indptr=np.array(tr_indptr, dtype=np.int64),
         tr_pos=np.concatenate(tr_pos) if tr_pos else np.zeros(0, dtype=np.int64),
         keys=np.array(list(keys), dtype=str), token_key=np.array(token_key, bool), region=region,
-        step_tokens=int(step_tokens),
-        mix=np.array([flow.mix[v] for v in keep], bool) if positions else None, ctx=int(positions))
+        step_tokens=int(step_tokens))
 
 
 
