@@ -7,9 +7,9 @@ public import Definitions.Pouw.Assumptions.ShaRealize
 /-!
 # The no-fold Dither protocol's work-soundness over a monitoring period (trusted)
 
-The ACCEL program's headline, on the accelerator model of `Definitions.Pouw.Dither`. The round protocols these
-guarantees read are the no-fold round's, the only ones the Lean defines, so none of them covers Dither v3.2's proof
-block, which no guarantee states yet.
+The ACCEL program's headline, on the accelerator model of `Definitions.Pouw.Dither`. The only round protocols the Lean
+defines are the no-fold round's (`noFoldRound`, `ditherSelected`), so none of these guarantees covers Dither v3.2's
+proof block, which no guarantee states yet.
 
 * `WorkSound`: under the accelerator model's device premises (G1, G2, G3, P1, P2) and exactly the program's trust
   base, each a named premise (SAK(matmul), SHA-512's speed, the price of an exchanged bit, the proof system's

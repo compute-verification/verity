@@ -154,25 +154,27 @@ def WorkSoundOnCard (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) : Pr
     ∃ x, c.Exact x ∧ Verity.Assumptions.AccelProductForm x ∧ CardRunsAt c x can ∧ WorkSoundAtX c pb hr x
 
 /-- **The headline on the H200 SXM at θ**: `WorkSoundAt` on `Verity.Accel.H200.card`, with `pubBestH200`'s public
-bests on the H200 and the H200 node's hosts. Like `WorkSoundAt`, it is stated for the no-fold round and doesn't cover
-Dither v3.2's proof block, which no guarantee states yet. -/
+bests on the H200 and the H200 node's hosts. Like `WorkSoundAt`, it is stated over any round protocol, and the only
+ones the Lean defines are the no-fold round's, so it doesn't cover Dither v3.2's proof block, which no guarantee states
+yet. -/
 def WorkSoundH200 : Prop := WorkSoundAt Verity.Accel.H200.card pubBestH200 hostH200
 
 /-- **The headline on the RTX PRO 6000 (sm_120) at θ**: `WorkSoundAt` on `Verity.Accel.Sm120.card`, with
-`pubBestSm120`'s public bests on the RTX PRO 6000 and its node's hosts. Like `WorkSoundAt`, it is stated for the
-no-fold round and doesn't cover Dither v3.2's proof block, which no guarantee states yet. -/
+`pubBestSm120`'s public bests on the RTX PRO 6000 and its node's hosts. Like `WorkSoundAt`, it is stated over any
+round protocol, and the only ones the Lean defines are the no-fold round's, so it doesn't cover Dither v3.2's proof
+block, which no guarantee states yet. -/
 def WorkSoundSm120 : Prop := WorkSoundAt Verity.Accel.Sm120.card pubBestSm120 hostSm120
 
 /-- **The headline on the H200 SXM itself**: `WorkSoundOnCard` on `Verity.Accel.H200.card`, at the semantics
 `card-within-accel(H200)` gives, with `pubBestH200`'s public bests on the H200 and the H200 node's hosts. Like
-`WorkSoundOnCard`, it is stated for the no-fold round and doesn't cover Dither v3.2's proof block, which no guarantee
-states yet. -/
+`WorkSoundOnCard`, it is stated over any round protocol, and the only ones the Lean defines are the no-fold round's, so
+it doesn't cover Dither v3.2's proof block, which no guarantee states yet. -/
 def WorkSoundOnCardH200 : Prop := WorkSoundOnCard Verity.Accel.H200.card pubBestH200 hostH200
 
 /-- **The headline on the RTX PRO 6000 (sm_120) itself**: `WorkSoundOnCard` on `Verity.Accel.Sm120.card`, at the
 semantics `card-within-accel(RTX PRO 6000)` gives, with `pubBestSm120`'s public bests on it and its node's hosts.
-Like `WorkSoundOnCard`, it is stated for the no-fold round and doesn't cover Dither v3.2's proof block, which no
-guarantee states yet. -/
+Like `WorkSoundOnCard`, it is stated over any round protocol, and the only ones the Lean defines are the no-fold
+round's, so it doesn't cover Dither v3.2's proof block, which no guarantee states yet. -/
 def WorkSoundOnCardSm120 : Prop := WorkSoundOnCard Verity.Accel.Sm120.card pubBestSm120 hostSm120
 
 end Pouw.Guarantees.DitherInstance

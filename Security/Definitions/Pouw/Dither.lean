@@ -34,8 +34,8 @@ Dither's headline (`Definitions.Pouw.Guarantees.Dither.WorkSound`) is stated ove
   luck (`fleetLuck`);
 * the error (`epsWorkSound`, `ε_skip`).
 
-`noFoldRound` and `ditherSelected` are the only round protocols the Lean defines, so the headline is stated for the
-no-fold round and doesn't cover Dither v3.2's proof block, which no guarantee states yet.
+`noFoldRound` and `ditherSelected` are the only round protocols the Lean defines, so the headline's only instances are
+the no-fold round's, and it doesn't cover Dither v3.2's proof block, which no guarantee states yet.
 -/
 
 @[expose] public section
