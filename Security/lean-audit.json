@@ -39,18 +39,6 @@
    "owner": "@compute-accounting",
    "digest": "0035e422498bd1633149b3f529c2efec768567e52651a33e4a5b2e4bcf48b542"
   },
-  "Claims.ZKServer.Loop.ReachesInner": {
-   "owner": "@proofs",
-   "digest": "c85954d73d66971ffcfdef16a3eb0c9904191418d4939daeb0bf10faff31a793"
-  },
-  "Flock.Bridge.DrawsUnder": {
-   "owner": "@proofs",
-   "digest": "4abc5d864ced1e67194111af4d2122149bb5e799458282f37b5c35064bf1204f"
-  },
-  "Flock.Bridge.NotBernoulli": {
-   "owner": "@proofs",
-   "digest": "7fbb409621af22209f87159630d58bfdb550a9f4402f53926ac16f9a45ad3e4d"
-  },
   "Nci.Assumptions.ActivationChained": {
    "owner": "@compute-accounting",
    "digest": "59e507187ce11f64467bc68809a64ac99432a9d3d1001d96e28eb12104ae14c9"
@@ -67,10 +55,6 @@
    "owner": "@training",
    "digest": "01e7c2e54429c917e1d5410ec3c77cb1bfb221feb7a6c259b841c7817b87e26e"
   },
-  "Pous.OracleAlgorithm.Bounded": {
-   "owner": "@memory-accounting",
-   "digest": "a6a3781c01ac3496f8c34d59d3b200974df41c5e60f89c5424b2cf2e9f24d00d"
-  },
   "Pouw.NCP.Assumptions.TTNCP": {
    "owner": "@compute-accounting",
    "digest": "d4a4be0349555cc8856cae95e7df0ec17481ce28e49c24c3bd1e6892af1a819a"
@@ -86,18 +70,6 @@
   "Pouw.PearlC.PearlCDevice.RowLocal": {
    "owner": "@compute-accounting",
    "digest": "933b2f2d2e86b8e477121efd03065429e661d8daeaf81a740244b6908bde9469"
-  },
-  "WeightSecurity.Assumptions.HonestUseHard": {
-   "owner": "@proofs",
-   "digest": "ac9ed71d973e1db5d86647c7ab9ec3404e44567a2046211c8b0987b8084eed48"
-  },
-  "WeightSecurity.Assumptions.LeaksThrough": {
-   "owner": "@proofs",
-   "digest": "3a2698362a1e14711580dd145fafd0556395f7956c8d950e365e49f1246a683e"
-  },
-  "WeightSecurity.Assumptions.Simulable": {
-   "owner": "@proofs",
-   "digest": "0f793429e5101f9d09499a06c42130c425331c423049968423d474a22a279d29"
   }
  },
  "domain": {
@@ -1472,6 +1444,12 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Claims.ZKServer.Loop.ReachesInner": {
+   "owner": "@proofs",
+   "digest": "c85954d73d66971ffcfdef16a3eb0c9904191418d4939daeb0bf10faff31a793",
+   "issue": "PRF-310",
+   "due": "2026-11-06"
+  },
   "Claims.ZKServer.Loop.Src": {
    "owner": "@proofs",
    "digest": "1d5e4b1d63a9509aabc392614d2a4117d8d0df226d09a8ce96ec9f6a08ffb8f7",
@@ -1502,11 +1480,23 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Flock.Bridge.DrawsUnder": {
+   "owner": "@proofs",
+   "digest": "4abc5d864ced1e67194111af4d2122149bb5e799458282f37b5c35064bf1204f",
+   "issue": "PRF-164",
+   "due": "2026-11-06"
+  },
   "Flock.Bridge.LawOn": {
    "owner": "@proofs",
    "digest": "7c7fa64502d20482a017e00e936e8d89230c941423cb231994d664f0fc712217",
    "issue": "LEAN-186",
    "due": "2026-11-30"
+  },
+  "Flock.Bridge.NotBernoulli": {
+   "owner": "@proofs",
+   "digest": "7fbb409621af22209f87159630d58bfdb550a9f4402f53926ac16f9a45ad3e4d",
+   "issue": "PRF-164",
+   "due": "2026-11-06"
   },
   "Flock.Bridge.RootFixesDomainL": {
    "owner": "@proofs",
@@ -2588,6 +2578,12 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Pous.OracleAlgorithm.Bounded": {
+   "owner": "@memory-accounting",
+   "digest": "a6a3781c01ac3496f8c34d59d3b200974df41c5e60f89c5424b2cf2e9f24d00d",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
   "Pous.P2.Assumptions.P2RingAuditSecure": {
    "owner": "@memory-accounting",
    "digest": "a22cc6653b91f423e9ec2af90439f16b13fd83a20e5f51729151ec083856ca4b",
@@ -3385,6 +3381,24 @@
    "digest": "930ff1b2c507f083a7872be8f15f4e78eaa15f4a1cc287304b1376da022be53c",
    "issue": "LEAN-186",
    "due": "2026-11-07"
+  },
+  "WeightSecurity.Assumptions.HonestUseHard": {
+   "owner": "@proofs",
+   "digest": "ac9ed71d973e1db5d86647c7ab9ec3404e44567a2046211c8b0987b8084eed48",
+   "issue": "PRF-413",
+   "due": "2026-11-06"
+  },
+  "WeightSecurity.Assumptions.LeaksThrough": {
+   "owner": "@proofs",
+   "digest": "3a2698362a1e14711580dd145fafd0556395f7956c8d950e365e49f1246a683e",
+   "issue": "PRF-413",
+   "due": "2026-11-06"
+  },
+  "WeightSecurity.Assumptions.Simulable": {
+   "owner": "@proofs",
+   "digest": "0f793429e5101f9d09499a06c42130c425331c423049968423d474a22a279d29",
+   "issue": "PRF-413",
+   "due": "2026-11-06"
   }
  },
  "meaning": [

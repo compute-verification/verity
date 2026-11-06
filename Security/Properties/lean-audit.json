@@ -74,12 +74,7 @@
  ],
  "proved_in": ["../Proofs"],
  "assumptions_module": "Definitions.Assumptions",
- "assumptions": {
-  "Hash.Assumptions.LmsUnforgeable": {
-   "owner": "@soundness",
-   "digest": "53b0ceae6abe1e800ca2ed8e64c70ff33d5cf5656bcbb5427fa2ee7ccab09648"
-  }
- },
+ "assumptions": {},
  "domain": {
   "Core.Protocol.Accepts": {
    "owner": "@lean",
@@ -327,6 +322,12 @@
    "digest": "d0aa0ce85aa44739a2c1b77355321989f75e5341ae0d84073797caa63794306b",
    "issue": "LEAN-186",
    "due": "2026-11-30"
+  },
+  "Hash.Assumptions.LmsUnforgeable": {
+   "owner": "@soundness",
+   "digest": "53b0ceae6abe1e800ca2ed8e64c70ff33d5cf5656bcbb5427fa2ee7ccab09648",
+   "issue": "PRF-195",
+   "due": "2026-11-09"
   },
   "MemoryChallenger.Properties.WipeRun.Plays": {
    "owner": "@memory-accounting",
