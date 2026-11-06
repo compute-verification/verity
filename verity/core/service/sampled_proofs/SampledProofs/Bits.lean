@@ -1,8 +1,15 @@
-import Flock.Circuit
-import Flock.HmRow
-import Flock.KnownRead
-import Flock.Program
-import Std.Data.HashMap
+module
+
+public import Flock.Circuit
+public import Flock.HmRow
+public import Flock.KnownRead
+public import Flock.Program
+public import Std.Data.HashMap
+meta import Flock.Circuit
+meta import Flock.HmRow
+meta import Flock.KnownRead
+meta import Flock.Program
+meta import Std.Data.HashMap
 
 /-!
 # A sampled statement's bits
@@ -42,6 +49,10 @@ describes, where each of its gates sits, and each unit's gates and inputs. The s
 The circuit file holds each unit's Boolean circuit as a whole, not each primitive's: no row is a primitive's own, so a
 packed primitive's bits are placed through its unit's ports, never through its Definition.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Bits
 

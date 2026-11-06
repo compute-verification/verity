@@ -1,5 +1,7 @@
-import Proofs.Flock.Bridge.Defs
-import Properties.SampledProofs.Bits
+module
+
+public import Proofs.Flock.Bridge.Defs
+public import Properties.SampledProofs.Bits
 
 /-!
 # The bridge's lowering is Bits' (`SampledProofs.Bits.prog`, `posOf`, `blockOf`)
@@ -18,6 +20,8 @@ block (`blockOf_eq`) are Bits'.
 
 Nothing here reads how `kp` or `C` is built: the key program's `LaysOut` and `UnitsOut` are proved where it is.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

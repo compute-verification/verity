@@ -1,9 +1,11 @@
-import Proofs.Flock.Bridge.BitsKeys
-import Proofs.Flock.Bridge.BitsRows
-import Proofs.Flock.Bridge.LeafMap
-import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
-import Proofs.Flock.Soundness.Discharge.Hidden.Rows
-import Proofs.Flock.Soundness.Discharge.Hidden.Delta
+module
+
+public import Proofs.Flock.Bridge.BitsKeys
+public import Proofs.Flock.Bridge.BitsRows
+public import Proofs.Flock.Bridge.LeafMap
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
+public import Proofs.Flock.Soundness.Discharge.Hidden.Rows
+public import Proofs.Flock.Soundness.Discharge.Hidden.Delta
 
 /-!
 # Bits' row map is the bridge's (`SampledProofs.Bits.rowBit`, `outRowBit`)
@@ -27,6 +29,8 @@ name, the unit's leaf and the bit.
   Bits' output row of a word is its port's (`outPortOf`), so Bits' position of a returned output's bit is the bridge's.
 * `outRowBit_outRowOf`: that position is the bridge's output-row bit of the unit's computed gate (`outRowOf`).
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

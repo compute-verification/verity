@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.ExecRows
-import Properties.Flock.Circuit.Keyed
-import SampledProofs.Bits
+module
+
+public import Proofs.Flock.Soundness.ExecRows
+public import Properties.Flock.Circuit.Keyed
+public import SampledProofs.Bits
 
 /-!
 # Bits' rows are the audit's (`SampledProofs.Bits.Rows`)
@@ -14,6 +16,8 @@ computed row reading the same columns in A and in B.
   row (`stackRow_val`).
 * `rowsAgree_circuitRows`: so a circuit's template instance rows (`Placed.circuitRows`) are Bits' stacked unit rows.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

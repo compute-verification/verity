@@ -1,5 +1,7 @@
-import Properties.Flock.Circuit.Keys
-import SampledProofs.Bits
+module
+
+public import Properties.Flock.Circuit.Keys
+public import SampledProofs.Bits
 
 /-!
 # Bits' source keys are the bridge's (`SampledProofs.Bits.srcKey`, `keyIdx`)
@@ -14,6 +16,10 @@ bridge's, constructor for constructor:
 * `srcAt_eq`, `srcKey_eq`: the bridge's source is `srcOf` of Bits'.
 * `keyIdx_eq`: Bits' key of an input is the bridge's.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock.Bridge
 
