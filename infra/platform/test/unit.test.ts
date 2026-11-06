@@ -43,10 +43,11 @@ describe("slack", () => {
     expect(verifySlackSignature({ secret, timestamp: "1000", signature: sig, body: `${body} `, nowSeconds: 1100 })).toBe(false);
     expect(verifySlackSignature({ secret, timestamp: null, signature: sig, body, nowSeconds: 1100 })).toBe(false);
   });
-  it("parses messages and drops bots, edits and other subtypes", () => {
+  it("parses messages and bots' posts, and drops edits and other subtypes", () => {
     const ev = (e: Record<string, unknown>) => parseSlackEvent({ type: "event_callback", event_id: "Ev1", event: { type: "message", channel: "C1", text: "hi", ts: "1.1", ...e } });
     expect(ev({ user: "U1", thread_ts: "0.9" })).toEqual({ message: { eventId: "Ev1", channel: "C1", user: "U1", text: "hi", ts: "1.1", threadTs: "0.9" } });
-    expect(ev({ bot_id: "B1" })).toBeNull();
+    expect(ev({ bot_id: "B1" })).toEqual({ message: { eventId: "Ev1", channel: "C1", user: "B1", text: "hi", ts: "1.1", botId: "B1" } });
+    expect(ev({ user: "U9", bot_id: "B1", subtype: "bot_message" })).toMatchObject({ message: { user: "U9", botId: "B1" } });
     expect(ev({ subtype: "message_changed" })).toBeNull();
     expect(parseSlackEvent({ type: "url_verification", challenge: "abc" })).toEqual({ challenge: "abc" });
   });

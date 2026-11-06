@@ -9,6 +9,7 @@ import { getRun, start } from "workflow/api";
 import { tick } from "../src/cron.ts";
 import { changeLead, jobCallback, slackEvents, status } from "../src/http.ts";
 import { mcpHandler } from "../src/mcp.ts";
+import { MEMORY_BOT_ID } from "../src/slack.ts";
 import { type LeadResult, leadWorkflow } from "../workflows/lead.ts";
 import { NOW, signedSlackRequest, slackBody, slackEnv, testRuntime } from "./helpers.ts";
 
@@ -74,6 +75,17 @@ describe("a lead on the platform", () => {
     const { rows } = await t.store.db.query(`select count(*)::int as n from events where payload->>'text' = 'once only'`);
     expect(rows[0]!.n).toBe(1);
     await reply(m.thread, "slack/message");
+  });
+
+  it("hears another bot's post (an agent still on Cursor, an alert) and ignores its own", async () => {
+    const post = async (botId: string, text: string) => {
+      const { ts, body } = slackBody({ channel: "C_COORD", text, user: "U_BOT", botId });
+      return { ts, res: (await (await slackEvents(signedSlackRequest(body), slackEnv, NOW)).json()) as { routed: string[] } };
+    };
+    expect((await post(MEMORY_BOT_ID, "<!subteam^SPROOFS1> from the platform itself")).res.routed).toEqual([]);
+    const other = await post("BTEAMBOT", "<!subteam^SPROOFS1> from an agent on Cursor");
+    expect(other.res.routed).toEqual(["proofs"]);
+    await reply(other.ts, "slack/message");
   });
 
   it("wakes on a cron tick and posts in its channel", async () => {

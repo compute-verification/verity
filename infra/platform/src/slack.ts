@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 export type SlackPost = { channel: string; text: string; threadTs?: string };
-export type SlackClient = { post(m: SlackPost): Promise<{ ts: string }> };
+export type SlackClient = { post(m: SlackPost): Promise<{ ts: string }>; botId(): Promise<string> };
 
 // Slack signs every request with the app's signing secret; anything unsigned,
 // mis-signed or older than five minutes is refused.
@@ -32,25 +32,29 @@ export type SlackMessage = {
   text: string;
   ts: string;
   threadTs?: string;
+  botId?: string;
 };
 
-// The Events API envelope, reduced to what routing needs. Bot messages, edits
-// and other subtypes are dropped, so the platform never wakes on its own posts.
+// The Events API envelope, reduced to what routing needs. Edits and other
+// subtypes are dropped. A bot's post is kept with its bot id: other agents and
+// the alerts post through bots, and only the platform's own posts are ignored
+// (by the caller, which knows its bot id).
 export function parseSlackEvent(body: Record<string, unknown>): { challenge: string } | { message: SlackMessage } | null {
   if (body.type === "url_verification" && typeof body.challenge === "string") return { challenge: body.challenge };
   if (body.type !== "event_callback") return null;
   const e = body.event as Record<string, unknown> | undefined;
   if (!e || (e.type !== "message" && e.type !== "app_mention")) return null;
-  if (e.bot_id || e.subtype) return null;
+  if (e.subtype && e.subtype !== "bot_message") return null;
   if (typeof e.channel !== "string" || typeof e.text !== "string" || typeof e.ts !== "string") return null;
   return {
     message: {
       eventId: String(body.event_id ?? `${e.channel}:${e.ts}`),
       channel: e.channel,
-      user: String(e.user ?? ""),
+      user: String(e.user ?? e.bot_id ?? ""),
       text: e.text,
       ts: e.ts,
       threadTs: typeof e.thread_ts === "string" ? e.thread_ts : undefined,
+      ...(typeof e.bot_id === "string" && { botId: e.bot_id }),
     },
   };
 }
@@ -70,7 +74,23 @@ export function mentionedLanes(text: string, leads: { lane: string; slackUsergro
 }
 
 export function webSlack(token: string): SlackClient {
+  let me: Promise<string> | undefined;
   return {
+    botId() {
+      if (!me) {
+        const p = (async () => {
+          const r = await fetch("https://slack.com/api/auth.test", { method: "POST", headers: { authorization: `Bearer ${token}` } });
+          const j = (await r.json()) as { ok: boolean; bot_id?: string; error?: string };
+          if (!j.ok || !j.bot_id) throw new Error(`slack auth.test: ${j.error ?? "no bot_id"}`);
+          return j.bot_id;
+        })();
+        me = p;
+        p.catch(() => {
+          if (me === p) me = undefined;
+        });
+      }
+      return me;
+    },
     async post({ channel, text, threadTs }) {
       const r = await fetch("https://slack.com/api/chat.postMessage", {
         method: "POST",
@@ -86,6 +106,8 @@ export function webSlack(token: string): SlackClient {
 
 type Posted = SlackPost & { ts: string };
 
+export const MEMORY_BOT_ID = "BPLATFORM";
+
 // Records posts; `waitFor(match)` resolves with the first post that matches, so
 // a test waits on the post itself rather than on a clock.
 export function memorySlack() {
@@ -93,6 +115,7 @@ export function memorySlack() {
   const waiters: { match: (p: Posted) => boolean; resolve: (p: Posted) => void }[] = [];
   return {
     posts,
+    botId: async () => MEMORY_BOT_ID,
     async post(m: SlackPost) {
       const p = { ...m, ts: `${1_800_000_000 + posts.length}.000100` };
       posts.push(p);

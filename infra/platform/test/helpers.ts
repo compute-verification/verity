@@ -37,13 +37,13 @@ export async function testRuntime() {
 let seq = 0;
 
 // A Slack Events API body for one message, with a fresh event id and ts.
-export function slackBody(o: { channel: string; text: string; threadTs?: string; user?: string }) {
+export function slackBody(o: { channel: string; text: string; threadTs?: string; user?: string; botId?: string }) {
   seq++;
   const ts = `${NOW}.${String(seq).padStart(6, "0")}`;
   const body = JSON.stringify({
     type: "event_callback",
     event_id: `Ev${seq}`,
-    event: { type: "message", channel: o.channel, user: o.user ?? "U_DANIEL", text: o.text, ts, thread_ts: o.threadTs },
+    event: { type: "message", channel: o.channel, user: o.user ?? "U_DANIEL", text: o.text, ts, thread_ts: o.threadTs, bot_id: o.botId },
   });
   return { ts, body };
 }

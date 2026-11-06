@@ -36,6 +36,7 @@ export async function slackEvents(req: Request, env: Env = process.env, nowSecon
   if ("challenge" in parsed) return json({ challenge: parsed.challenge });
   const m = parsed.message;
   const rt = await runtime();
+  if (m.botId && m.botId === (await rt.slack.botId())) return json({ ok: true, routed: [] });
   const leads = (await rt.store.listLeads()).filter((l) => l.status === "active");
   let lanes = mentionedLanes(m.text, leads);
   if (lanes.length === 0 && m.threadTs) {
