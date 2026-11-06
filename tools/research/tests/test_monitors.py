@@ -1261,7 +1261,7 @@ def test_disk_forecast_pages_when_the_fitted_line_reaches_the_watermark_within_6
 
 
 def test_disk_forecast_pages_on_its_own_key_once_free_inodes_near_the_check_slots_floor(tmp_path, monkeypatch):
-    """A node can stand past 80% inodes for days, so that finding's one page says nothing when the slots stop (cpu-6, 2 Nov)."""
+    """A node can stand past 80% inodes for days, so that finding's one page says nothing when the slots stop."""
     root = machine_root(tmp_path, {})
     use = {"pct": 50.0, "ipct": 92.0, "size_b": 2 * 2**40, "ifree": 900_000.0}
     monkeypatch.setattr(M, "disk_use", lambda path: dict(use))
