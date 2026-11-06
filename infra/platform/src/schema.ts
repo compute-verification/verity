@@ -23,6 +23,7 @@ create table if not exists leads (
   updated_at timestamptz not null default now()
 );
 alter table leads add column if not exists slack_inbox text;
+alter table leads add column if not exists linear_team text unique;
 alter table leads add column if not exists apis text not null default 'slack,linear';
 create unique index if not exists leads_inbox on leads (slack_channel, slack_inbox) where slack_inbox is not null;
 

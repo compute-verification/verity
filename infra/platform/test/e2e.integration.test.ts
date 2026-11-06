@@ -7,7 +7,8 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { beforeAll, describe, expect, it } from "vitest";
 import { getRun, start } from "workflow/api";
 import { tick } from "../src/cron.ts";
-import { changeLead, jobCallback, slackEvents, status } from "../src/http.ts";
+import { changeLead, jobCallback, linearEvents, slackEvents, status } from "../src/http.ts";
+import { signLinearBody } from "../src/linear.ts";
 import { mcpHandler } from "../src/mcp.ts";
 import { leadAgentId } from "../src/slack.ts";
 import { type LeadResult, leadWorkflow } from "../workflows/lead.ts";
@@ -90,6 +91,28 @@ describe("a lead on the platform", () => {
     expect(typed.res.routed).toEqual(["proofs"]);
     const turn = await turnOf("proofs", "slack/message");
     expect((await t.store.transcript(turn.id)).some((p) => p.type === "post")).toBe(false);
+  });
+
+  it("wakes the lead of an issue's team when the issue is created or changes state, and on nothing else", async () => {
+    const env = { LINEAR_WEBHOOK_SECRET: "test-linear-secret" };
+    const nowMs = NOW * 1000;
+    const send = async (o: Record<string, unknown>, sign = env.LINEAR_WEBHOOK_SECRET, stamp = nowMs) => {
+      const body = JSON.stringify({ type: "Issue", url: "https://linear.app/x/issue/INF-7", webhookTimestamp: stamp, ...o });
+      const req = new Request("http://platform.test/api/linear/webhook", { method: "POST", headers: { "linear-signature": signLinearBody(sign, body), "linear-delivery": `d-${nextTs()}` }, body });
+      const res = await linearEvents(req, env, nowMs);
+      return { status: res.status, routed: ((await res.json()) as { routed?: string[] }).routed };
+    };
+    await t.store.upsertLead({ lane: "infra", model: "fake/fake", linearTeam: "INF" });
+    const issue = { identifier: "INF-7", title: "node 2 is out of disk", team: { key: "INF" }, state: { name: "Todo" } };
+    expect(await send({ action: "create", data: issue }, "wrong")).toMatchObject({ status: 401 });
+    expect(await send({ action: "create", data: issue }, env.LINEAR_WEBHOOK_SECRET, nowMs - 120_000)).toMatchObject({ status: 401 });
+    expect(await send({ action: "create", data: issue })).toEqual({ status: 200, routed: ["infra"] });
+    expect((await turnOf("infra", "linear/issue-created")).finalText).toContain("Handled");
+    expect(await send({ action: "update", data: { ...issue, state: { name: "Done" } }, updatedFrom: { stateId: "s1" } })).toEqual({ status: 200, routed: ["infra"] });
+    expect(await send({ action: "update", data: { ...issue, title: "renamed" }, updatedFrom: { title: "old" } })).toEqual({ status: 200, routed: [] });
+    expect(await send({ type: "Comment", action: "create", data: { body: "hi" } })).toEqual({ status: 200, routed: [] });
+    expect(await send({ action: "create", data: { ...issue, identifier: "PRF-1", team: { key: "PRF" } } })).toEqual({ status: 200, routed: [] });
+    await turnOf("infra", "linear/issue-state");
   });
 
   it("refuses an unsigned request and records a redelivered event once", async () => {

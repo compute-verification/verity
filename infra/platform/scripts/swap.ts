@@ -2,7 +2,7 @@
 // and PLATFORM_API_TOKEN in the environment.
 //
 //   swap.ts id LANE                         the agent id LANE's platform lead holds its inbox under (names open --holder)
-//   swap.ts register LANE --channel C --inbox TS --charter FILE --doc FILE [--apis slack,linear,notion]
+//   swap.ts register LANE --channel C --inbox TS --charter FILE --doc FILE [--linear TEAM] [--apis slack,linear,notion]
 //                         [--model M] [--harness claude-code|codex] [--budget USD] [--cron MINUTES] [--kick TEXT]
 //   swap.ts all LEADS.json [--kick TEXT]     register every lead in the file (an array of register's fields)
 //   swap.ts pause LANE                      rollback: the platform stops taking events for LANE
@@ -50,6 +50,7 @@ type Entry = {
   lane: string;
   slackChannel?: string;
   slackInbox?: string;
+  linearTeam?: string;
   apis?: string[];
   charterFile?: string;
   docFile?: string;
@@ -66,6 +67,7 @@ async function register(e: Entry, kick?: string) {
     lane: e.lane,
     slackChannel: e.slackChannel,
     slackInbox: e.slackInbox,
+    linearTeam: e.linearTeam,
     apis: e.apis,
     charter: read(e.charterFile),
     doc: read(e.docFile),
@@ -97,6 +99,7 @@ switch (cmd) {
         lane,
         slackChannel: f.channel,
         slackInbox: f.inbox,
+        linearTeam: f.linear,
         apis: f.apis ? f.apis.split(",") : undefined,
         charterFile: f.charter,
         docFile: f.doc,

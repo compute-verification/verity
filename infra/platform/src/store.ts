@@ -13,6 +13,8 @@ export type Lead = {
   // The lead's inbox: the thread `research msg` rings its doorbells in.
   slackChannel: string | null;
   slackInbox: string | null;
+  // The Linear team (its key) whose issue creations and state changes wake the lead.
+  linearTeam: string | null;
   // The APIs (services.ts) the lead's sandbox may call.
   apis: string[];
   cronEveryMinutes: number | null;
@@ -32,7 +34,7 @@ export type ReplyTo = { channel: string; threadTs: string } | { lane: string } |
 export type InboxEvent = {
   id: number;
   lane: string;
-  source: "slack" | "cron" | "job" | "worker" | "mcp" | "lead";
+  source: "slack" | "linear" | "cron" | "job" | "worker" | "mcp" | "lead";
   kind: string;
   payload: Record<string, unknown>;
   replyTo: ReplyTo | null;
@@ -114,6 +116,7 @@ function toLead(r: Record<string, unknown>): Lead {
     model: r.model as string,
     slackChannel: (r.slack_channel as string) ?? null,
     slackInbox: (r.slack_inbox as string) ?? null,
+    linearTeam: (r.linear_team as string) ?? null,
     apis: String(r.apis ?? "").split(",").filter(Boolean),
     cronEveryMinutes: r.cron_every_minutes == null ? null : num(r.cron_every_minutes),
     nextTickAt: iso(r.next_tick_at),
@@ -202,10 +205,10 @@ export function createStore(db: Db) {
     async upsertLead(l: Partial<Lead> & Pick<Lead, "lane" | "model">): Promise<Lead> {
       const { rows } = await db.query(
         `insert into leads (lane, charter, doc, harness, model, slack_channel, cron_every_minutes,
-                            next_tick_at, monthly_budget_usd, status, slack_inbox, apis)
+                            next_tick_at, monthly_budget_usd, status, slack_inbox, apis, linear_team)
          values ($1, coalesce($2, ''), coalesce($3, ''), coalesce($4, 'claude-code'), $5, $6, $7,
                  case when $7::int is null then null else now() + make_interval(mins => $7::int) end,
-                 $8, coalesce($9, 'active'), $10, coalesce($11, 'slack,linear'))
+                 $8, coalesce($9, 'active'), $10, coalesce($11, 'slack,linear'), $12)
          on conflict (lane) do update set
            charter = coalesce($2, leads.charter),
            doc = coalesce($3, leads.doc),
@@ -217,6 +220,7 @@ export function createStore(db: Db) {
            status = coalesce($9, leads.status),
            slack_inbox = coalesce($10, leads.slack_inbox),
            apis = coalesce($11, leads.apis),
+           linear_team = coalesce($12, leads.linear_team),
            updated_at = now()
          returning *`,
         [
@@ -231,6 +235,7 @@ export function createStore(db: Db) {
           l.status ?? null,
           l.slackInbox ?? null,
           l.apis ? l.apis.join(",") : null,
+          l.linearTeam ?? null,
         ],
       );
       return toLead(rows[0]!);
@@ -244,6 +249,11 @@ export function createStore(db: Db) {
     async listLeads(): Promise<Lead[]> {
       const { rows } = await db.query(`select * from leads order by lane`);
       return rows.map(toLead);
+    },
+
+    async leadByLinearTeam(key: string): Promise<Lead | null> {
+      const { rows } = await db.query(`select * from leads where linear_team = $1`, [key]);
+      return rows[0] ? toLead(rows[0]) : null;
     },
 
     async leadByInbox(channel: string, threadTs: string): Promise<Lead | null> {

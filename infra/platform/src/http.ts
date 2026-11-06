@@ -1,8 +1,9 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { start } from "workflow/api";
 import { leadWorkflow } from "../workflows/lead.ts";
 import { tick } from "./cron.ts";
 import { jobDone } from "./job-done.ts";
+import { parseLinearEvent, verifyLinearSignature } from "./linear.ts";
 import { runtime } from "./runtime.ts";
 import { SERVICE_NAMES, isService } from "./services.ts";
 import { PLATFORM_NAME, leadAgentId, parseDoorbell, parseSlackEvent, verifySlackSignature } from "./slack.ts";
@@ -57,6 +58,27 @@ export async function slackEvents(req: Request, env: Env = process.env, nowSecon
   return json({ ok: true, routed: [lead.lane] });
 }
 
+export async function linearEvents(req: Request, env: Env = process.env, nowMs = Date.now()) {
+  const body = await req.text();
+  const signature = req.headers.get("linear-signature");
+  if (!env.LINEAR_WEBHOOK_SECRET || !verifyLinearSignature({ secret: env.LINEAR_WEBHOOK_SECRET, signature, body, nowMs })) {
+    return json({ error: "bad signature" }, 401);
+  }
+  const e = parseLinearEvent(JSON.parse(body));
+  const rt = await runtime();
+  const lead = e ? await rt.store.leadByLinearTeam(e.team) : null;
+  if (!e || !lead || lead.status !== "active") return json({ ok: true, routed: [] });
+  await wake(lead.lane, {
+    lane: lead.lane,
+    source: "linear",
+    kind: e.kind,
+    payload: { ...e, text: `${e.identifier} ${e.title}${e.state ? ` (${e.state})` : ""}${e.url ? ` ${e.url}` : ""}` },
+    replyTo: null,
+    dedupeKey: `linear:${req.headers.get("linear-delivery") ?? createHash("sha256").update(body).digest("hex")}`,
+  });
+  return json({ ok: true, routed: [lead.lane] });
+}
+
 // A job runner posts here when a job ends. The URL's token is the job's
 // capability: it names one job and is good for nothing else.
 export async function jobCallback(req: Request, token: string) {
@@ -96,6 +118,7 @@ type LeadChange = {
   doc?: string;
   slackChannel?: string;
   slackInbox?: string;
+  linearTeam?: string;
   apis?: string[];
   harness?: HarnessName;
   model?: string;
@@ -180,6 +203,7 @@ export async function statusReport(lane?: string) {
       lane: l.lane,
       agentId: leadAgentId(l.lane),
       inbox: l.slackInbox ? { channel: l.slackChannel, threadTs: l.slackInbox } : null,
+      linearTeam: l.linearTeam,
       status: l.status,
       harness: l.harness,
       model: l.model,
