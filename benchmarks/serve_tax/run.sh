@@ -2,16 +2,17 @@
 # The serve tax on one node (README.md), from the shipped tree's root under `research run`, the C4 shard sent with
 # --send (or C4=PATH):
 #   ARMS="compiled eager ..." RATES=light=R,medium=R,saturated=R [MODEL_ID=moonlight] [REPS=3] [SPAN_S=60]
-#     [WINDOW_S=600] [KV_WINDOW_S=WINDOW_S] [TICK_MS=SAT,FREE | TICK_FROM=RECORD_ARM_DIR] [MAX_MIN=240]
+#     [REQUESTS=N] [WINDOW_S=600] [KV_WINDOW_S=WINDOW_S] [TICK_MS=SAT,FREE | TICK_FROM=RECORD_ARM_DIR]
+#     [REPLAY=LOAD [REPLAY_FROM=RECORD_ARM_DIR] [REPLAY_MODES="compiled eager"]] [MAX_MIN=240]
 #     bash benchmarks/serve_tax/run.sh
 #   CAPACITY=1 [REQUESTS=800] bash benchmarks/serve_tax/run.sh   # stock compiled under one burst: its capacity
 # One plan (OUT/plan.jsonl, from the shard's first DOCS documents) is made before the GPUs are held; then each arm is a
-# server lifetime of its own (serve_tax.py run) into OUT/<arm>, in ARMS's order, all under one gpu-lease;
-# the tick arms take τ from TICK_MS, else from TICK_FROM, else from this job's own record arm, calibrated on its
-# saturated load. REPLAY=LOAD then replays that load's first rep of the record arm (REPLAY_FROM, by default this job's)
-# compiled and eager (replay.py) into OUT/replay-{compiled,eager}. Then OUT/table.{json,md}. MODEL_ID moonlight serves the replay-determinism benchmark's kept checkpoint
-# on one GPU; glm53 the GLM-5.3 TP drivers' (benchmarks/served_commit/tp_decode.sh) on eight. VENV's vLLM must be
-# d9105ea80, the integration's pin.
+# server lifetime of its own (serve_tax.py run) into OUT/<arm>, in ARMS's order, all under one gpu-lease; the tick arms
+# take τ from TICK_MS, else from TICK_FROM, else from this job's own record arm, calibrated on its saturated load.
+# REPLAY then replays LOAD's first rep of the record arm (by default this job's) in each of REPLAY_MODES (replay.py)
+# into OUT/replay-<mode>. Then OUT/table.{json,md}. MODEL_ID moonlight serves the replay-determinism benchmark's kept
+# checkpoint on one GPU; glm53 the GLM-5.3 TP drivers' (benchmarks/served_commit/tp_decode.sh) on eight. VENV's vLLM
+# must be d9105ea80, the integration's pin.
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$D/out
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -47,13 +48,15 @@ if [ "${1:-}" = leased ]; then
   fi
   rc=0
   if [ -n "${TICK_MS:-}" ]; then tick=(--tick-ms "$TICK_MS"); else tick=(--tick-from "${TICK_FROM:-$OUT/record}"); fi
+  count=(); [ -n "${REQUESTS:-}" ] && count=(--requests "$REQUESTS")
   for arm in ${ARMS:?ARMS: the arms to serve, in order}; do
     echo "== $arm $(date -u +%FT%TZ)"
     "$PY" "$here/serve_tax.py" run --arm "$arm" "${common[@]}" --rates "$RATES" --reps "$REPS" --span-s "$SPAN_S" \
-      --plan "$PLAN" --docs "$DOCS" --window-s "$WINDOW_S" --kv-window-s "$KV_WINDOW_S" "${tick[@]}" --out "$OUT/$arm" || rc=1
+      --plan "$PLAN" --docs "$DOCS" --window-s "$WINDOW_S" --kv-window-s "$KV_WINDOW_S" "${tick[@]}" "${count[@]}" \
+      --out "$OUT/$arm" || rc=1
   done
   if [ -n "${REPLAY:-}" ]; then
-    for mode in compiled eager; do
+    for mode in ${REPLAY_MODES:-compiled eager}; do
       flag=(); [ "$mode" = eager ] && flag=(--eager)
       echo "== replay $REPLAY $mode $(date -u +%FT%TZ)"
       "$PY" "$here/replay.py" --arm-dir "${REPLAY_FROM:-$OUT/record}" --load "$REPLAY" --checkpoint "$CK" "${flag[@]}" \
@@ -66,7 +69,7 @@ fi
 
 if [ "${CAPACITY:-0}" != 1 ]; then
   "$PY" "$here/serve_tax.py" plan --model-id "$MODEL_ID" --checkpoint "$CK" --c4 "$C4" --rates "${RATES:?RATES: NAME=REQ_PER_S,...}" \
-    --span-s "$SPAN_S" --docs "$DOCS" --out "$PLAN" || exit 1
+    --span-s "$SPAN_S" ${REQUESTS:+--requests "$REQUESTS"} --docs "$DOCS" --out "$PLAN" || exit 1
 fi
 export PLAN DOCS WINDOW_S KV_WINDOW_S
 GPU_LEASE_WHO=${GPU_LEASE_WHO:-serve-tax} gpu-lease "$GPUS" --wait --max-min "$MAX_MIN" -- bash "$here/run.sh" leased
