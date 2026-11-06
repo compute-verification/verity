@@ -139,8 +139,9 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   `sampled-proofs-one-stage-zk`): v1 with the verdicts computed rather than read. Its parameters add the auditor's
   circuit and public files' digests and the verifier's registered file; its evidence names step 4's one session's
   record and rep files by SHA-512 in place of `verdicts`, the files coming in as `Core.Blobs`. It refuses none or
-  several sessions, a public file whose header isn't the registration's (`Record.matchesPublic`) or whose population
-  isn't the program's proof blocks in order (`Slots.popOk`), and parameters naming no challenger coins. It reads the
+  several sessions, a public file whose header isn't the registration's (`Record.matchesPublic`) or whose
+  `units.indices` aren't its population's units in order (`indicesHeld`), a population that isn't the program's proof
+  blocks in order (`Slots.popOk`), and parameters naming no challenger coins. It reads the
   draw's coins as v1 does (`OneStage.coinsOf`; `oneStageZkReads` in `Security/Properties/Challenger.lean`) and holds
   the session's record to the coin trees the signed release log shows the challenger sampled and opened
   (`SampledProofs/ChallengerTrees.lean`, `challenger.sessions_tree_reason`): its `coin_tree` the one tree logged, its

@@ -1191,8 +1191,9 @@ def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public:
     public file's as `public_pin` pinned it at staging, before the draw, and the verifier's registered file), the evidence with its
     ``verdicts`` replaced by the proofs' files (`proofs.evidence_v2`, under the evidence's ``sessions``), and ``blobs``,
     the paths of the files those name and of the pinned lookup tables, which onsite reads after the evidence
-    (`compose.onsite_check`). v2 holds the public file's header to the registration (`registration.matches_public`), so
-    it refuses a windowed registration, whose ports are its members' (``<member>/<port>``). With ``drawn`` (`drawn_by`),
+    (`compose.onsite_check`). v2 holds the public file's header to the registration (`registration.matches_public`, and
+    its ``units.indices`` the population's units in order), so it refuses a windowed registration, whose ports are its
+    members' (``<member>/<port>``). With ``drawn`` (`drawn_by`),
     the params name the auditor's challenger and its window root and the evidence carries the draw's coins; without, the
     case names no challenger, which v2 refuses (`OneStageZk.NO_CHALLENGER`)."""
     import replay as RP
