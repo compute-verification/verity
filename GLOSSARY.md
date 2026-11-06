@@ -137,7 +137,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | `verity_sp1.proofs.statement.Statement` (statement formats 2 and 3 on the wire), its `KindProgram` and "kind" | the SP1-era wire encoding of a batch of proof-block obligations, not a statement in this sense; a kind is a subcircuit |
 | "pin", "pinned theorem", "pinned statement"; `pins` in a `lean-audit.json` written before the rename (read as `guarantees`, rewritten by its next `--update`) and in `tools/verity/lean/Facts.lean`'s facts | guarantee |
 | "law", "draw law"; `law` identifiers and record keys (`parse_law`, `same_law`, `law_object`, a registration's `law`), the Lean's `Law` | sampling design |
-| "escape", "escape probability"; the Lean's `*_escape` theorems and `effEscape` | acceptance probability (P_a; `effEscape` is P̄_a) |
+| "escape", "escape probability"; the Lean's `*_escape` theorems and `effEscape` | acceptance probability (P_a; `effEscape` is P̄_a at footprint 1) |
 | "proof unit", "unit class", and "unit" alone meaning one; `unitClasses`, `verity.ml.circuits.parts`, the audit record's `wrong_units` and `proved_units`, `LinkWindows.proof_unit`, the `"proof-unit"` kind of Flock's Boolean export, a `Spec`'s public-item reasons (its digest hashes them), and the `vu_*` names (below) | proof block; a unit class is a size class, or Flock's proof-block class |
 | "wrong unit", "incorrect unit", "faulty unit", "faulty proof block", "faulty set"; the Lean's `wrong`, the audit record's `wrong_units` | incorrect proof block (and correct); the incorrect set F |
 | "transcript", "committed values" and "the circuit's values" for the values of a run's gates; `ExecutionTranscript` | trace |
@@ -175,9 +175,11 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "compile unit" | the compile slice's proof block |
 | "isolation unit" (IU), "isolation block", "certified block" | inference block |
 | "novel communication intensity" (NCI); "baseline" for θ; `Nci*`, `nci-*`, `ius` and the `nci` directories, until renamed | the inference-only policy; the registered information θ |
-| "replay unit" (RU) | proof block (optimizer: replay block) |
+| "replay unit" (RU), `ReplayUnit`, `n_v`; "audit block"; "coarse unit" and "chain" in the Lean's older two-stage audit | replay block (n_ρ, its count of proof blocks) |
+| "replay domain"; the planner's `ReplayDomain`, `Candidate.replay` and `per_replay`, until renamed | replay grain; n_ρ |
+| "clustered" sampling, "commit-after-draw"; "deferred interior"; "inner rule", "inner sample", "the second draw", "stage 2"; "the first draw", "stage 1" | a two-stage design; the interior commitment; the second stage; the first stage |
 | "leg"; "integrity", "work", "space" and "communication" naming subprotocols; the all-protocols runner's legs, the verdict keys `integrity` and `communication`, the Lean's `Core.Protocol` | subprotocol |
-| "stage", outside "one-stage"; names and record keys that keep it, such as `research run --stage` | phase, or run |
+| "stage", outside a sampling design's stages (one-stage, two-stage, the first and second stage) and a pipeline stage; names and record keys that keep it, such as `research run --stage` | phase, or run |
 | "row" for a server's window (s, w), "per-row bound" | server block, server-block yield |
 | "work", "FLOPs", "MAC-times", "pricing" for how much a circuit computes or a protocol credits; pub(μ°), μ°, W_reg and W_b in Dither's docs until restated in AND gates; the Lean's `CircuitWork*` names and the device model's `Price`; "κ/2" | size, in AND gates; U/s_×. "Work" stays for resources spent in 𝓜, the slowdown lower bound's unit, so `WorkSound` (freed compute in 𝓜's resources) keeps its name |
 | "row" for a workload; vLLM's `verity-vllm row`, `row.py`, `config.RowConfig`, `row_file`, row ids and row dirs, and "row of record" (`manifests/records.json`), in `integrations/vllm/` and `examples/vllm/` until vLLM's workloads move | workload; a workload of record |
@@ -285,7 +287,9 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
 - A **sliding window** is a model's term: the span of positions a layer's attention reads (a model config's
   `sliding_window`).
 - In `integrations/vllm`, "family" and "kind" name circuit Definitions and query families, many of them serialized fields (its README's vocabulary).
-- Five words still carry two senses in the code:
+- Six words still carry two senses in the code:
+  - **Footprint**: a replay block's is where sampled proofs read harm (Two-stage design, below). An HBM footprint
+    (`Accounting.BoundReceipt.footprint`) and a theorem's (its hypotheses, in Flock's `ASSUMPTIONS.md`) keep the word.
   - **Row**: a commitment row, the bits one leaf hashes (`hm96` rows, the `*/row/*` leaf schemes, the row-form
     statements). A matrix's row stays plain English. A workload or a server block is never a row (Older names).
   - **Transcript**: the messages of a proof or a session, what its verifier sees (Flock's, PoUS's transcript hash).
@@ -322,6 +326,13 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   `gemm_coordinate(K=1536, semantics=sm90.wgmma.m64n8k32.e4m3)`. The proof system proves subcircuits.
 - **Input** and **input set**: one assignment of values to a subcircuit's input gates, with the chip's output beside
   it; an input set is a batch of them for one subcircuit, with provenance (captured or synthetic).
+- **Two-stage design** (`ARCHITECTURE.md`'s Glossary, "Sampling design"): serving commits only the values read across
+  replay-block boundaries (the *boundary commitment*, in the registration); the *first stage* samples replay blocks (the
+  *replay sample*); the prover replays each sampled one from its boundary values and the registered information and
+  commits its *interior*, the other values its proof blocks read and write (the *interior commitment*, in the *interior
+  registration*); the *second stage* samples k of its n_ρ proof blocks (or k per template stratum) on fresh coins, and
+  misses every incorrect one with probability at most C(n_ρ − w(ρ), k)/C(n_ρ, k) (stratified, the product over strata).
+  Harm is read at ρ's *footprint* w(ρ), the fewest incorrect proof blocks of any interior its boundary commitment allows.
 - **Cell**: one benchmark result: a proof system (or an archived one's backend id) × statement × input set × prover
   hardware.
 - **Input block** (`INPUT_UNIT` in `verity.ml.circuits.partition`): the part of a partition that holds every input gate.

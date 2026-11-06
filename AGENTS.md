@@ -119,7 +119,8 @@ The rules in force, each stated as itself; the friction skill has the standing r
   circuit, partitioned into proof blocks, with its public layout of external I/O, registered by digest; for run-time
   choices, a registered compiler (a circuit with a public length cap) and the advice it compiles, a bit string Verity
   never interprets, whose length is charged; the values, committed in a `verity.ml.commitments` scheme and registered
-  before any coin; and on a sample, the sampled proof blocks' openings, to the prover behind the ZK server.
+  before any coin (under a two-stage sampling design, a sampled replay block's interior between its two stages); and on a
+  sample, the sampled proof blocks' openings, to the prover behind the ZK server.
 - **Results are per monitoring period, over all compute.** The time length of interest is the monitoring
   period (Glossary), not the execution phase, the run or the demo. Every result, in a report, a
   table, a PR or a message, is presented for monitoring periods of one week, one month and one year, and over
