@@ -5,17 +5,15 @@
 # syncs, each tick refuses, with the fix, a name used here that doesn't exist: the `land_into` branch and drive's push to it,
 # each machine of `on`, each of `landing_gates` (`drive_names`). ci owns this file; infra runs drive from it on the control pod.
 
-# the keys drive's command line (the control pod's /data/drive/args) may override: `--on` and `--first`; any other flag there
-# refuses the tick
-command_line = ["on", "first"]
+# the keys drive's command line (the control pod's /data/drive/args) may override: `--on`; any other flag there that sets a key
+# refuses the tick. The landing order is no key: it is drive's priority file (`--priority-file`), read again at each sync
+command_line = ["on"]
 # the machines train.sh launches drive's Lean checks and its after-landing run on (a machine, or `auto`)
 on = ["vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
 # ready marks written before this don't count
 marked_after = "2026-10-12T06:00:00Z"
 # land a prefix whose Lean check passed by committing the lock records it regenerated on top
 regenerate_locks = true
-# ready PRs to put at the bottom of `next`, in this order, ahead of members that keep their place (a fix `main` needs)
-first = []
 # scripts each PR passes, run from `main` as `python3 PATH MAIN TOP --json`: TOP is its head at the ready mark's preflight, and
 # its merge onto `next` at the sync, which leaves out what they refuse (a Markdown file over its cap); the
 # vLLM integration's lint ratchets don't grow, and a change to a lint is judged like source. A sync's TOP holds every PR

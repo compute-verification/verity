@@ -2351,8 +2351,8 @@ def test_a_lean_check_above_the_landing_top_covers_it_only_with_no_lean_change_b
 
 
 def test_a_hand_lean_check_holds_the_members_up_to_its_commit_until_it_ends(world, monkeypatch):
-    """A `--first` rebuild of `next` before hand Lean checks (`train.sh COMMIT MACHINES --deferred lean-audit`) landed anything
-    would throw them away: drive holds `next` under them as under its own."""
+    """A rebuild of `next` for drive's priority list before hand Lean checks (`train.sh COMMIT MACHINES --deferred lean-audit`)
+    landed anything would throw them away: drive holds `next` under them as under its own."""
     h = Review(world, monkeypatch)
     for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt"), (4, "d.txt")):
         world.gh.put(n, world.change({f: f"{n}\n"}))
@@ -2360,9 +2360,9 @@ def test_a_hand_lean_check_holds_the_members_up_to_its_commit_until_it_ends(worl
     one, two = (m.commit for m in h.q.chain()[:2])
     h.hand[two] = ["r20261026-063429-f8e3"]
     h.run_state["r20261026-063429-f8e3"] = ("running", None, None)
-    h.q.first = (4,)
+    world.prioritize(h.q, 4)
     h.tick()
-    assert [m.pr for m in h.q.chain()] == [1, 2, 4, 3], world.logs        # `--first` goes above the running check
+    assert [m.pr for m in h.q.chain()] == [1, 2, 4, 3], world.logs        # the priority list goes above the running check
     assert [m.commit for m in h.q.chain()[:2]] == [one, two] and h.launched == []
     assert any("didn't launch hold `next` up to them: " + two[:12] in s for s in world.logs), world.logs
     h.run_state["r20261026-063429-f8e3"] = ("done", 0, None)
@@ -2406,7 +2406,7 @@ def test_lean_runs_reads_the_registry_s_live_lean_checks_of_the_commits_asked_an
         raise OSError("runs root gone")
 
     h.d.lean_runs = unreadable
-    h.q.first = (2,)
+    world.prioritize(h.q, 2)
     h.tick()
     assert [m.pr for m in h.q.chain()] == [2, 1]
     # read before the sync and again after it, to land on what the Lean checks are then
@@ -2856,9 +2856,9 @@ def test_a_hand_lean_check_through_drive_holds_next_from_its_launch_before_train
     assert saved == rec and rec["state"] is None and rec["ids"] == [] and rec["launch"]["dir"] == str(tmp_path / "launch-1")
     assert (rec["hand"], rec["by"], rec["members"]) == (True, "ci", [[m.pr, m.head] for m in h.q.chain()[:2]])
     assert Q.lean_running(h.d.q.load_state(), 2) == "(launching)"
-    h.q.first = (4,)
+    world.prioritize(h.q, 4)
     h.tick()
-    assert [m.pr for m in h.q.chain()] == [1, 2, 4, 3], world.logs        # `--first` goes above the hand check
+    assert [m.pr for m in h.q.chain()] == [1, 2, 4, 3], world.logs        # the priority list goes above the hand check
     assert [m.commit for m in h.q.chain()[:2]] == [one, two] and starts == [two]
 
 
@@ -2980,13 +2980,13 @@ def test_a_passed_lean_check_holds_next_until_it_lands_and_an_ejection_below_it_
     h.run_state[rid] = ("done", 0, None)
     h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
     assert h.tick().startswith("nothing lands before")
-    h.q.first = (3,)
+    world.prioritize(h.q, 3)
     world.gh.put(2, world.change({"b.txt": "two\n"}))                      # its owner pushes, and marks the new head
     h.tick()
-    assert [m.commit for m in h.q.chain()] == [one, two, top], world.logs  # the pass keeps them, `--first` too
+    assert [m.commit for m in h.q.chain()] == [one, two, top], world.logs  # the pass keeps them, the priority list too
     world.gh.ready.discard((2, world.gh.prs[2].head))
     world.gh.ready.discard((2, admitted))                                  # #2 ejected, both heads
-    h.q.first = ()
+    world.prioritize(h.q)
     h.tick()
     chain = h.q.chain()
     assert [m.pr for m in chain] == [1, 3] and chain[0].commit == one and top not in {m.commit for m in chain}, world.logs
@@ -3014,13 +3014,13 @@ def _two_lean_checks(world, monkeypatch, higher: str) -> tuple[Review, list[str]
 
 
 @pytest.mark.parametrize("higher", ["running", "passed"])
-def test_next_stays_up_to_the_higher_of_two_lean_checks_and_first_goes_above_it(world, monkeypatch, higher):
-    """A sync that put a `--first` fix and a re-head above the lower check's commit only would take the higher one's commit off
-    `next`, and with it a pass no land verdict yet lands (its prefix unreviewed), or a check mid-audit."""
+def test_next_stays_up_to_the_higher_of_two_lean_checks_and_the_priority_list_goes_above_it(world, monkeypatch, higher):
+    """A sync that put a fix of drive's priority list and a re-head above the lower check's commit only would take the higher
+    one's commit off `next`, and with it a pass no land verdict yet lands (its prefix unreviewed), or a check mid-audit."""
     h, commits = _two_lean_checks(world, monkeypatch, higher)
     world.gh.put(5, world.change({"f5.txt": "five\n"}))                    # above both checks: it moves to the tip
     world.gh.put(6, world.change({"f6.txt": "6\n"}))
-    h.q.first = (6,)
+    world.prioritize(h.q, 6)
     h.tick()
     chain = h.q.chain()
     assert [m.commit for m in chain[:4]] == commits[:4], world.logs
