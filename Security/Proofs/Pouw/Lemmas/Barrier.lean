@@ -3,7 +3,9 @@ module
 public import Definitions.Pouw.Barrier.Pinned
 
 /-!
-# The degenerate-input barrier's guarantee (trusted)
+# The degenerate-input barrier: a lemma
+
+These are steps of proofs, not guarantees: they sit with the proofs, and no record of the lock pins them.
 
 Each guarantee is a `def G : Prop`, stated over `Definitions.Pouw`'s definitions with the named assumptions it rests on as
 hypotheses (`Pouw.Assumptions`). Its proof is the theorem `Pouw.SecurityProofs.Barrier.G : Pouw.Guarantees.Barrier.G`.
