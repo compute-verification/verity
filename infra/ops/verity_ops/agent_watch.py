@@ -1392,7 +1392,7 @@ class Watch:
             elif status == "ARCHIVED":
                 w["gone"] = True
             if status == "IDLE" and (latest := info.get("latestRunId")):
-                self.dropped({**info, "id": agent}, self.read({**info, "id": agent}, latest), t, **detail)
+                self.dropped({**info, "id": agent}, self.read({**info, "id": agent}, latest), t, role="worker", **detail)
         for agent in [a for a, w in self.workers.items() if (w.get("gone") or w.get("status") == "IDLE")
                       and t - max(w.get("updated", t), w["heard"]) >= WORKER_KEEP_S]:
             self.workers.pop(agent)

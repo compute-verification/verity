@@ -1391,9 +1391,9 @@ def test_a_worker_whose_message_never_became_a_run_is_recorded_dropped_for_its_l
     w.sweep(lambda r: None)
     clock.t += 60
     w.sweep(lambda r: None)
-    assert [(r["kind"], r["agent"], r["run"], r["since"], r["ended"], r.get("owner")) for r in records(tmp_path)
+    assert [(r["kind"], r["agent"], r["run"], r["since"], r["ended"], r.get("owner"), r.get("role")) for r in records(tmp_path)
             if r["kind"] == "dropped"] == [
-        ("dropped", W1_, "run-w", "2026-10-18T19:45:00Z", "2026-10-18T19:32:53Z", "circuits")]
+        ("dropped", W1_, "run-w", "2026-10-18T19:45:00Z", "2026-10-18T19:32:53Z", "circuits", "worker")]
 
 
 def test_the_workers_heard_most_recently_are_read_first_when_more_are_new_than_a_sweep_reads(tmp_path, monkeypatch):
