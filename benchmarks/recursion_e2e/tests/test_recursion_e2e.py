@@ -514,7 +514,7 @@ def test_forged_statements_are_ok_when_refused_and_forge_after_reads_each_case(t
     d = o / "steps" / "oprove" / "r1" / "out" / "oprove" / "forged-coef-L0-firewall"
     d.mkdir(parents=True)
     stop = "FIREWALL-REFUSED: circuit: the constraints lincheck fails"
-    (d / "prove.tsv").write_text(f"1792871908.2\tLIVE\t{json.dumps({'accepted': False, 'prover_stopped': stop, 'prove_s': 1900.0})}\n")
+    (d / "prove.tsv").write_text(f"1792871908.2\tLIVE\t{json.dumps({'accepted': False, 'prover_stopped': stop})}\n")
     d = d.parent / "forged-dirs-L0-firewall"
     d.mkdir()
     (d / "prove.err").write_text("FIREWALL-REFUSED R7: the witness does not open the registered row; no proof\n")
