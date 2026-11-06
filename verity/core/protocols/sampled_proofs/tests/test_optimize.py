@@ -2,8 +2,8 @@
 bound, `Achievability`'s rates at zero statement cost, the frontier under Flock's statement-batched cost, the choice
 between a partition and a covering, serving's commitment (per proof block, and the fixed serve-time total with its overlaps), the
 weight classes' weights, the sensitivity queries, and the two-stage design: its exfiltration bound against the
-admissible sets' count enumerated and the adversary's best attack at scale, its proving price, and the width-stratified
-design against the uniform one."""
+admissible sets' count enumerated and the adversary's best attack at scale, uncapped and capped at the bits a replay
+block serves, its proving price, and the width-stratified design against the uniform one."""
 
 from __future__ import annotations
 
@@ -514,28 +514,40 @@ def _esc(n: int, k: int, m: int) -> float:
     return comb(n - m, k) / comb(n, k)
 
 
-def _admissible_sum(cells: list[Cell], k: dict[int, int], replay_blocks: int, q: float, delta: float) -> float:
+def _admissible_sum(cells: list[Cell], k: dict[int, int], replay_blocks: int, q: float, delta: float,
+                    served: float | None = None, union: bool = False) -> float:
     """`CompiledTwo.Exfil`'s count, Σ_{T ∈ admissibleTwo} 2^{b(T)}, enumerating every set T of incorrect proof blocks:
-    T is admissible when P̄_a = ∏_ρ (1 − q(1 − ∏_t escCell(n_t, k_t, T's in (ρ, t)))) > δ."""
+    T is admissible when P̄_a = ∏_ρ (1 − q(1 − ∏_t escCell(n_t, k_t, T's in (ρ, t)))) > δ.  Under `served` a replay
+    block's charge is min(b(T_ρ), S); under `union` its choices are each T_ρ of at most S bits, charged 2^{b(T_ρ)}, and
+    one for all the others together, charged 2^S at the best escape among them."""
     blocks = [(c.bits, c.stratum) for c in cells for _ in range(int(c.n))]
     sizes: dict[int, int] = {}
     for _, t in blocks:
         sizes[t] = sizes.get(t, 0) + 1
+    choices = []
+    for mask in range(1 << len(blocks)):
+        counts: dict[int, int] = {}
+        bits = 0.0
+        for i, (b, t) in enumerate(blocks):
+            if mask >> i & 1:
+                counts[t] = counts.get(t, 0) + 1
+                bits += b
+        e = 1.0
+        for t, n in sizes.items():
+            e *= _esc(n, k[t], counts.get(t, 0))
+        choices.append((e, bits))
+    if union:
+        heavy = [e for e, b in choices if b > served]
+        choices = [(e, b) for e, b in choices if b <= served] + ([(max(heavy), served)] if heavy else [])
+    elif served is not None:
+        choices = [(e, min(b, served)) for e, b in choices]
     total = 0.0
-    for masks in product(range(1 << len(blocks)), repeat=replay_blocks):
-        pa, bits = 1.0, 0.0
-        for mask in masks:
-            counts: dict[int, int] = {}
-            for i, (b, t) in enumerate(blocks):
-                if mask >> i & 1:
-                    counts[t] = counts.get(t, 0) + 1
-                    bits += b
-            e = 1.0
-            for t, n in sizes.items():
-                e *= _esc(n, k[t], counts.get(t, 0))
+    for picks in product(choices, repeat=replay_blocks):
+        pa = 1.0
+        for e, _ in picks:
             pa *= 1 - q * (1 - e)
         if pa > delta:
-            total += 2.0 ** bits
+            total += 2.0 ** fsum(b for _, b in picks)
     return total
 
 
@@ -565,8 +577,66 @@ def test_the_two_stage_bound_is_at_least_the_admissible_sets_count():
     assert two_stage_exfil(cells, {0: 2, 1: 1}, 1000, 1.0, 0.01) < 0.01
 
 
+def test_the_capped_bound_is_at_least_the_capped_count():
+    """On small designs, every set of incorrect proof blocks enumerated: capped at S served bits a replay block, the
+    bound is at least log2 of the sets' count Σ_{T adm} 2^{Σ_ρ min(b(T_ρ), S)} and of the patterns' count, and the sets'
+    form is at most the uncapped bound."""
+    rng = random.Random(12)
+    checked = 0
+    while checked < 300:
+        replay_blocks = rng.choice([1, 2, 3])
+        cells = [Cell(rng.choice([1, 2, 3]), rng.choice([0.0, 0.5, 1.0, 3.0, 8.0, 20.0]), rng.choice([0, 1]))
+                 for _ in range(rng.choice([1, 2, 3]))]
+        if sum(c.n for c in cells) * replay_blocks > 12:
+            continue
+        k = {c.stratum: rng.choice([1, 2, 3, 4]) for c in cells}
+        q, delta = rng.choice([0.0, 0.1, 0.5, 0.9, 1.0]), rng.choice([0.5, 0.1, 0.01, 1e-4])
+        served = rng.choice([0.0, 1.0, 4.0, 10.0, 30.0])
+        for union in (False, True):
+            bound = two_stage_exfil(cells, k, replay_blocks, q, delta, served, union)
+            count = _admissible_sum(cells, k, replay_blocks, q, delta, served, union)
+            assert log2(count) <= bound + 1e-9, (cells, k, q, delta, served, union)
+        plain = two_stage_exfil(cells, k, replay_blocks, q, delta)
+        assert two_stage_exfil(cells, k, replay_blocks, q, delta, served) <= plain * (1 + 1e-6) + 1e-9
+        checked += 1
+    with pytest.raises(ValueError, match="patterns' form needs one"):
+        two_stage_exfil([Cell(2, 3.0)], {0: 1}, 1, 0.5, 0.01, union=True)
+
+
 def _log2_comb(n: float, m: float) -> float:
     return (lgamma(n + 1) - lgamma(m + 1) - lgamma(n - m + 1)) / log(2)
+
+
+def test_the_capped_bound_meets_the_adversarys_best_attack_at_scale():
+    """Capped at S = 10^5 served bits a replay block, the best attack is many partly incorrect replay blocks: in each of
+    m, just over S bits in the stratum whose incorrect blocks escape most cheaply a bit, 25 of stratum 1's 4,096-bit
+    blocks.  Each such replay block is caught with probability q (1 − escCell(n_1, k_1, 25)); the sets' form counts
+    C(R, m) (C(n_1, 25) 2^S)^m and the patterns' C(R, m) 2^{m S}, and the bound is within 5% of each.  Proved whole,
+    every incorrect replay block is caught with probability q: the sets' form counts at least C(R, m) 2^{m(N − 1 + S)}
+    (half a replay block's sets hold at least S bits) and the patterns' C(R, m) (C(1000, 625) 2^S)^m, 625 of the
+    16-bit blocks at S bits, and the bound is within 1% of each.  One wide block over S alone, its escape weight far
+    below a float's least, still counts 2^S in each of the m replay blocks it is in."""
+    delta, lam, served = 2.0 ** -20, 20 * log(2), 1e5
+    cells = [Cell(10 ** 6, 16.0, 0), Cell(10 ** 4, 4096.0, 1), Cell(100, 65536.0, 2)]
+    caught = 1 - _esc(10 ** 4, 2, 25)
+    for replay_blocks, q in ((10 ** 9, 1e-4), (10 ** 12, 1e-2), (10 ** 13, 1e-3)):
+        m = ceil(lam / -log1p(-q * caught)) - 1
+        for union, each in ((False, served + _log2_comb(10 ** 4, 25)), (True, served)):
+            attack = _log2_comb(replay_blocks, m) + m * each
+            bound = two_stage_exfil(cells, {0: 4, 1: 2, 2: 1}, replay_blocks, q, delta, served, union)
+            assert attack <= bound <= 1.05 * attack, (replay_blocks, q, union)
+    cells, served = [Cell(1000, 16.0, 0), Cell(10, 4096.0, 1)], 1e4
+    for replay_blocks, q in ((10 ** 6, 1e-3), (10 ** 9, 1e-4), (10 ** 12, 1e-2)):
+        m = ceil(lam / -log1p(-q)) - 1
+        for union, each in ((False, 1010 - 1 + served), (True, served + _log2_comb(1000, 625))):
+            attack = _log2_comb(replay_blocks, m) + m * each
+            bound = two_stage_exfil(cells, {0: 1000, 1: 10}, replay_blocks, q, delta, served, union)
+            assert attack <= bound <= 1.01 * attack, (replay_blocks, q, union)
+    cells, served, replay_blocks, q = [Cell(10 ** 5, 16.0), Cell(4, 131072.0)], 4096.0, 10 ** 8, 0.0438
+    m = ceil(lam / -log1p(-q * 995 / (10 ** 5 + 4))) - 1
+    for union, each in ((False, served + 2), (True, served)):
+        attack = _log2_comb(replay_blocks, m) + m * each
+        assert attack <= two_stage_exfil(cells, {0: 995}, replay_blocks, q, delta, served, union) <= 1.05 * attack
 
 
 def test_the_two_stage_bound_meets_the_adversarys_best_attack_at_scale():
@@ -635,6 +705,25 @@ def test_the_width_stratified_design_beats_the_uniform_one_when_proving_costs():
         else:
             assert rows[True]["bound"] == pytest.approx(rows[False]["bound"], rel=1e-2)
     assert two_stage_design(cells, replay_blocks, delta, budget=1.0, replay=1.0, boundary=2.0) is None
+
+
+def test_a_capped_design_charges_what_a_request_serves():
+    """Capped at S served bits a request, a design charges a stratum's width at most S and a request its capped count,
+    every T counted (at most N + S bits in the sets' form): its bound is the capped `two_stage_exfil` at its rates, at
+    most the uncapped design's, and the patterns' form's at most the sets'."""
+    delta, replay_blocks, budget, served = 2.0 ** -20, 10 ** 8, 1e7, 4096.0
+    cells = [Cell(10 ** 5, 16.0, prove=1e-3, commit_bytes=2.0), Cell(4, 131072.0, prove=1e-3, commit_bytes=2.0 ** 14)]
+    assert two_stage_exfil(cells, {0: 1}, 1, 0.0, 0.5, served) <= 10 ** 5 + 4 + served
+    for s in (True, False):
+        kw = {"budget": budget, "replay": 1.0, "boundary": 1e5, "h": 1e-6, "stratify": s}
+        plain = two_stage_design(cells, replay_blocks, delta, **kw)
+        sets = two_stage_design(cells, replay_blocks, delta, served=served, **kw)
+        patterns = two_stage_design(cells, replay_blocks, delta, served=served, union=True, **kw)
+        assert patterns["bound"] <= sets["bound"] < plain["bound"]
+        for row, union in ((sets, False), (patterns, True)):
+            strata = [replace(c, stratum=0 if c.bits <= row["merged"] else 131072) for c in cells]
+            assert row["bound"] == two_stage_exfil(strata, row["k"], replay_blocks, row["q"], delta, served, union)
+            assert row["total"] <= budget * (1 + 1e-12)
 
 
 def test_a_one_stage_sample_replays_the_replay_blocks_it_meets():
