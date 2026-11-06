@@ -1,6 +1,28 @@
 module
 
 public import Properties.SampledProofs.Tables
+import all Init.Data.Range.Basic
+import all Init.Data.ByteArray.Basic
+import all Init.Data.Array.Basic
+import all Init.Data.Array.DecidableEq
+import all Init.Data.String.Defs
+import all Init.Data.String.Basic
+import all Init.Data.String.Decode
+import all Init.Data.String.TakeDrop
+import all Init.Data.String.Slice
+import all Init.Data.String.Pattern.Basic
+import all Init.Data.String.Pattern.Pred
+import all Init.Data.String.Pattern.Char
+import all Init.Data.String.Pattern.String
+import all Init.Data.Char.Basic
+import all Init.Data.Ord.String
+import all Lean.Data.Json.Basic
+import all Std.Data.TreeMap.Raw.Basic
+import all Std.Data.DTreeMap.Raw.Basic
+import all Std.Data.DTreeMap.Internal.Queries
+import all Std.Data.DTreeMap.Internal.Operations
+import all Std.Data.DTreeMap.Internal.Balancing
+import all Std.Data.DTreeMap.Internal.Def
 
 /-! # Proofs of v2's holding the blobs' lookup tables to the registered circuit's (`Properties.SampledProofs.Tables`)
 
@@ -12,7 +34,9 @@ only where its chain of refusals ends in `run`'s acceptance (`checkBlobsAt_run`)
 the served path hands v2 (`honestBlobs`), pass the refusal. `tablesRegistered_nontrivial` is its nontrivial lemma: blobs
 holding a circuit file that looks up no table and `rcp`'s table (`tableBlobs`) hold a table the circuit doesn't look
 up, so a check that accepts every input, as one without the refusal does there, does not have `TablesRegistered`'s
-conclusion.
+conclusion. The kernel evaluates both on the witnesses (`decide +kernel`), reading the toolchain's string, byte array
+and JSON definitions through `import all`, all but `String.trimAsciiEnd`, whose recursion is well-founded: `metaOf_of`
+takes the META line's trim as a hypothesis, unfolded once on each witness's line.
 -/
 
 @[expose] public section
@@ -83,8 +107,7 @@ private theorem tablesHeld_of {p : OneStageZk.Own} {bs : Core.Blobs} {c : ByteAr
   simp
   rfl
 
-/-- `Flock.HmOut.metaOf` at a circuit file whose second line is `line`, with no trailing whitespace: the kernel does
-not evaluate `String.trimAsciiEnd`, whose recursion is well-founded, so the witnesses' lines take it by `h3`. -/
+/-- `Flock.HmOut.metaOf` at a circuit file whose second line is `line`, with no trailing whitespace. -/
 private theorem metaOf_of {bytes : ByteArray} {n1 : Nat} {line : String} (h1 : Flock.findByte bytes 10 = some n1)
     (h2 : String.fromUTF8? (bytes.extract (n1 + 1) ((Flock.findByte bytes 10 (n1 + 1)).getD bytes.size)) = some line)
     (h3 : line.trimAsciiEnd.toString = line) (h4 : line.startsWith "META " = true) :
