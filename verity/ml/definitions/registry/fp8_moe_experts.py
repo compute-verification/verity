@@ -36,6 +36,8 @@ from verity.ml.definitions.registry import ref_prims as RP
 from verity.ml.definitions.registry.fp8 import E4M3, E4M3_NAN, weight_blocks
 from verity.ml.definitions.registry.prims import BF16, F32, I32
 
+F32_NAN_FILL = 0x7FC00000
+
 _GATHERS: dict[tuple[str, int], PrimitiveDefinition] = {}
 
 

@@ -8,11 +8,10 @@ one's word view is its `_v1` composite at the same statics (`elementwise.on_bits
 
     MoeExpertFp8BlockCoordinate(W)_v4{K,G,KB,SWAP,DOT}, MoeExpertFp8BlockGemm(W)_v4{K,N,G,KB,SWAP,DOT}
                     word view `_v3`, `DOT` a Boolean e4m3 k32 step read as its word view (`BlackwellE4m3QmmaDot32_v2`)
-    GatherE4m3x{E}_v2, MoeExpertFp8Row_v2{E,K}, MoeExpertFp8ScaleRow_v2{E,K},
+    GatherE4m3x{E}_v2, GatherF32x{E}_v2, MoeExpertFp8Row_v2{E,K}, MoeExpertFp8ScaleRow_v2{E,K},
     MoeExpertFp8Coordinate(W)_v2{E,K,G,KB,SWAP,DOT}, MoeExpertFp8Gemm(W)_v2{E,K,N,G,KB,SWAP,DOT},
     MoeExpertFp8CoordinateChunk_v2{E,K,G,KB,SWAP,DOT,FIRST,LAST}
-                    word view `fp8_moe_experts`' `_v1`; each gather `boolean_gather`'s multiplexer tree over the id's 32 bits (E <= 1024),
-                    the scales' `GatherF32x{E}_v2` `boolean_gather.gather_f32` itself
+                    word view `fp8_moe_experts`' `_v1`; each gather `boolean_gather`'s multiplexer tree over the id's 32 bits (E <= 1024)
 
 The callees are `verity.ml.circuits.ops.boolean.gemm`'s `HopperE4m3QgmmaDot32_v2` and `F2fpBf16_v2`, `verity.ml.circuits.ops.boolean.scalar`'s FP32 pieces,
 `boolean_moe.NvExpf_v2` and `boolean_fp8.Fp8RowScale_v2`; the constant words are constant bits and `-g` is one NOT gate on g's sign bit
@@ -159,14 +158,19 @@ def gather_e4m3(vocab: int) -> Any:
     return _gather("GatherE4m3", vocab, E4M3, F8.E4M3_NAN, X.gather_e4m3(vocab))
 
 
+def gather_f32(vocab: int) -> Any:
+    """`GatherF32x{V}_v2`: `GatherF32x{V}_v1` on bits."""
+    return _gather("GatherF32", vocab, F32, X.F32_NAN_FILL, X.gather_f32(vocab))
+
+
 def _row(B, S, e, slab):
     """`MoeExpertFp8Row_v1`'s body on bits: one `GatherE4m3x{E}_v2` per k."""
     return B.batch(gather_e4m3(S.E), e, X.columns(slab, S.E, S.K, E4M3), axes=(None, 0))
 
 
 def _scale_row(B, S, e, slab):
-    """`MoeExpertFp8ScaleRow_v1`'s body on bits: one `GatherF32x{E}_v2` (`boolean_gather.gather_f32`) per k."""
-    return B.batch(BGA.gather_f32(S.E), e, X.columns(slab, S.E, S.K, F32), axes=(None, 0))
+    """`MoeExpertFp8ScaleRow_v1`'s body on bits: one `GatherF32x{E}_v2` per k."""
+    return B.batch(gather_f32(S.E), e, X.columns(slab, S.E, S.K, F32), axes=(None, 0))
 
 
 MoeExpertFp8RowV2 = EW.on_bits("MoeExpertFp8Row", 2, ["E", "K"], X.row_sig(E4M3, I32), _row, X.MoeExpertFp8Row)

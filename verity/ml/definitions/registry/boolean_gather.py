@@ -10,9 +10,6 @@ bits (`verity.ml.circuits.boolean.trace`).
     GatherI32x{V}_v2        (token: Array<32, Value<1>>, column: Array<V, Array<32, Value<1>>>) -> Array<32, Value<1>>
                             word view: GatherI32x{V}_v1 (`dsv4_decode_indices.gather_i32`), column[token], else -1
     GatherI32x{N}u{k}_v1    the i32 levels, -1 past N
-    GatherF32x{V}_v2        (token: Array<32, Value<1>>, column: Array<V, Array<32, Value<1>>>) -> Array<32, Value<1>>
-                            word view: GatherF32x{V}_v1 (`ref_prims.gather_f32`), column[token], else 0x7FC00000
-    GatherF32x{N}u{k}_v1    the f32 levels, 0x7FC00000 past N
 
 A gather of at most `CHUNK` (1024) words is traced from `verity.ml.circuits.boolean.gather.gather`: the multiplexer tree over the
 token's 32 bits, a word past the end standing for the constant 0x7FFF, so a token outside [0, V) (a negative one is at least
@@ -26,8 +23,8 @@ No gate of a gather reads the token alone (`gather`), so `Embedding_v2`'s H gath
 token, share no gate, and since its body reads only its parameters and returns every gather's word, it is cut gather by gather
 (`verity.ml.circuits.cut.separable`): each gather one unit of 16 output bits under `Q_word_v1{X=16,W=32}`.
 
-The i32 and f32 gathers are the same tree over 32-bit words with -1 (0xFFFFFFFF), and the NaN 0x7FC00000, for the word past the
-end, made on demand as their word primitives are (`verity.ml.definitions.boolean._families`).
+The i32 gather is the same tree over 32-bit words with -1 (0xFFFFFFFF) for the word past the end, made on demand as its word
+primitive is (`verity.ml.definitions.boolean._families`).
 """
 from __future__ import annotations
 
@@ -43,8 +40,7 @@ from verity.ml.circuits.boolean.trace import definition
 from . import b1
 from . import prims as P
 
-__all__ = ["CHUNK", "CHUNK_BITS", "Embedding", "F32_FILL", "FILL", "I32_FILL", "gather_bf16", "gather_f32", "gather_i32",
-           "gather_index"]
+__all__ = ["CHUNK", "CHUNK_BITS", "Embedding", "FILL", "I32_FILL", "gather_bf16", "gather_i32", "gather_index"]
 
 BIT = BL.BIT
 WORD = Array(16, BIT)
@@ -56,8 +52,6 @@ CHUNK = 1 << CHUNK_BITS
 I32 = Array(32, BIT)
 #: the word an index outside an i32 gather's column selects (`dsv4_decode_indices.FILL`)
 I32_FILL = 0xFFFFFFFF
-#: the word an index outside an f32 gather's column selects (`ref_prims.gather_f32`'s extension, a NaN)
-F32_FILL = 0x7FC00000
 
 _GATHERS: dict[Any, Any] = {}
 _INDEXED: dict[tuple[int, int, str], Any] = {}
@@ -71,13 +65,8 @@ def _select_i32(C, idx, *column):
     return gather(C, idx, list(column), I32_FILL)
 
 
-def _select_f32(C, idx, *column):
-    return gather(C, idx, list(column), F32_FILL)
-
-
 #: kind -> (its word, the word past the end, the traced selection)
-_KINDS: dict[str, tuple[Any, int, Any]] = {"Bf16": (WORD, FILL, _select), "I32": (I32, I32_FILL, _select_i32),
-                                           "F32": (I32, F32_FILL, _select_f32)}
+_KINDS: dict[str, tuple[Any, int, Any]] = {"Bf16": (WORD, FILL, _select), "I32": (I32, I32_FILL, _select_i32)}
 
 
 def _tree(B, idx: Coll, column: Coll, n: int, k: int, kind: str = "Bf16") -> Coll:
@@ -134,32 +123,19 @@ def gather_bf16(vocab: int) -> CompositeDefinition:
     return d
 
 
-def _word_gather(kind: str, vocab: int, word, fill: str) -> CompositeDefinition:
-    """`Gather{kind}x{V}_v2`: `word` (its `_v1`) on bits, column[token] for 0 <= token < V, else `fill`."""
-    if vocab < 1:
-        raise ValueError(f"a gather selects from at least one word, not {vocab}")
-    d = _GATHERS.get((kind, vocab))
-    if d is None:
-        d = _GATHERS[(kind, vocab)] = _gather_definition(
-            f"Gather{kind}x{vocab}", 2, vocab, 32, "token", word(vocab),
-            f"Gather{kind}x{vocab}_v1 on bits: column[token] for 0 <= token < {vocab} (i32), else {fill}; the multiplexer tree "
-            "over the token's bits", kind)
-    return d
-
-
 def gather_i32(vocab: int) -> CompositeDefinition:
     """`GatherI32x{V}_v2`: `GatherI32x{V}_v1` on bits, column[token] for 0 <= token < V, else -1."""
     from . import dsv4_decode_indices as DI
 
-    return _word_gather("I32", vocab, DI.gather_i32, "-1")
-
-
-def gather_f32(vocab: int) -> CompositeDefinition:
-    """`GatherF32x{V}_v2`: `GatherF32x{V}_v1` (`ref_prims.gather_f32`) on bits, column[token] for 0 <= token < V, else
-    0x7FC00000."""
-    from . import ref_prims as RP
-
-    return _word_gather("F32", vocab, RP.gather_f32, "0x7FC00000")
+    if vocab < 1:
+        raise ValueError(f"a gather selects from at least one word, not {vocab}")
+    d = _GATHERS.get(("I32", vocab))
+    if d is None:
+        d = _GATHERS[("I32", vocab)] = _gather_definition(
+            f"GatherI32x{vocab}", 2, vocab, 32, "token", DI.gather_i32(vocab),
+            f"GatherI32x{vocab}_v1 on bits: column[token] for 0 <= token < {vocab} (i32), else -1; the multiplexer tree over the "
+            "token's bits", "I32")
+    return d
 
 
 def _embedding(B, S, tok, table):

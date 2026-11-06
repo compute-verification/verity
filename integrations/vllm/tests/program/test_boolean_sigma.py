@@ -4,8 +4,8 @@ with none.
 * each new Boolean leaf (`ops.boolean.scalar`'s I32/bit/f32 scalars, `ops.boolean.attention`'s GPU-NaN FTZ arithmetic,
   `registry.boolean_scalar`, `registry.boolean_marlin_moe`'s integer division) computes its word primitive on random words and
   on the f32 specials (zeros, subnormals, infinities, NaNs of both kinds), through bit-sliced evaluation against the word's;
-* a word primitive made on demand (`Const<w>[0x..]_v1`, `GatherBf16x{V}_v1`, `GatherI32x{V}_v1`, `GatherF32x{V}_v1`, whole and
-  as a tree of 1024-word chunks) has a Boolean version made on demand;
+* a word primitive made on demand (`Const<w>[0x..]_v1`, `GatherBf16x{V}_v1`, `GatherI32x{V}_v1`, whole and as a tree of
+  1024-word chunks) has a Boolean version made on demand;
 * `sigma_lift`'s Definitions (`registry.boolean_sigma`) compute their word composites at small statics, are Boolean throughout,
   and are refused, naming every gap, when their word body Calls a Definition with no Boolean version;
 * GLM-5.3 TP8's embedding shard selects the rows of its own tokens and zeros the rest on bits, its fused all-reduce + RMSNorm
@@ -106,14 +106,6 @@ def test_a_word_primitive_made_on_demand_has_a_boolean_version_made_on_demand():
     tokens = np.array([0, 1, 1023, 1024, 1025, 1099, 1100, 2047, 2048, 0xFFFFFFFF, 0x80000000, *rng.integers(0, 1100, 21)], np.uint64)
     column = rng.integers(0, 1 << 32, size=(len(tokens), 1100), dtype=np.uint64)
     want = [c[t] if t < 1100 else 0xFFFFFFFF for t, c in zip(tokens.tolist(), column)]
-    assert evaluate_batch(word, tokens, column).tolist() == want
-    assert evaluate_words(tree, tokens, column).tolist() == want
-    _agrees(R.gather_f32(16))
-    word = R.gather_f32(1100)
-    tree = BB.boolean_version(word)
-    assert tree.id == "GatherF32x1100_v2" and BL.is_boolean(tree) and {n.fn.id for n in tree.body.nodes} == {
-        "GatherF32x1024u10_v1", "GatherF32x76u10_v1", "GatherF32x2u22_v1"}
-    want = [c[t] if t < 1100 else 0x7FC00000 for t, c in zip(tokens.tolist(), column)]
     assert evaluate_batch(word, tokens, column).tolist() == want
     assert evaluate_words(tree, tokens, column).tolist() == want
 
