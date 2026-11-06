@@ -6,7 +6,9 @@ public import Definitions.Pouw.Assumptions.OnsiteFreed
 # The onsite PoUW protocol's freed compute (trusted)
 
 `OnsiteFreed`: an accepted onsite period frees at most `ε C` of the registered devices' capacity at the period's dual
-price (`Pouw.Dither.FreedSound`), for any work check over a round protocol. It composes:
+price (`Pouw.Dither.FreedSound`), for any work check over a round protocol. The only round protocols the Lean defines
+are Dither's no-fold round's, so it doesn't cover Dither v3.2's proof block, which no guarantee states yet. It
+composes:
 
 * the remote form's floor (`RemoteWorkFloor`): an accepted period of a prover whose whole inventory is the registered
   devices spent at least `F` of priced timed work on them, but with probability `κ`;
@@ -32,7 +34,9 @@ namespace Pouw.Guarantees
 
 open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions
 
-/-- **An accepted onsite period frees at most `ε C`**. In every accelerator model `G` at its
+/-- **An accepted onsite period frees at most `ε C`**. Like `Pouw.Guarantees.Dither.WorkSound`, it is stated over
+any round protocol, and the only ones the Lean defines are Dither's no-fold round's, so it doesn't cover Dither v3.2's
+proof block, which no guarantee states yet. In every accelerator model `G` at its
 device premises (G1, G2, P1, P2), for every round protocol `P` over a period of `k` sampling blocks, every work check
 `vw` on the transcript (the proof system's, which reads no device), every network certifier's check `vn` on the
 transcript and the devices' readings `dev`, every period `Pd` of the registered devices and every price `μ` that is

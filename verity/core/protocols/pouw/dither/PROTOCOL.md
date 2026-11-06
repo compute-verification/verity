@@ -9,8 +9,10 @@ Its credit at pub(μ°) against W_reg is superseded, tentatively: credit is a sa
 statement about values, and 𝓜's resources appear only inside the exclusion argument (`GLOSSARY.md`, "Size, credit and
 exclusion"). This document still states the protocol at pub(μ°) until it is restated in sizes.
 
-The protocol is experimental. Its guarantee is `Pouw.Guarantees.Dither.WorkSound` and its card instances
-`Pouw.Guarantees.DitherInstance.WorkSoundAt`, over the ACCEL model `Accel`, with the clocks of `Timed`. The change whose
+The protocol is experimental. Its Lean headlines are `Pouw.Guarantees.Dither.WorkSound` and its card instances
+`Pouw.Guarantees.DitherInstance.WorkSoundAt`, over the ACCEL model `Accel`, with the clocks of `Timed`. The only round
+protocols the Lean defines are the no-fold round's (`noFoldRound`), so they don't cover v3.2's proof block, which no
+guarantee states yet. The change whose
 Lean covers this document deletes it. The numbers are D6 v1.1's, and the segment and noise periods NOFOLD-OPT's (see
 "The segment and the noise period").
 
