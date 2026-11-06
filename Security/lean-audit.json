@@ -1872,7 +1872,7 @@
   },
   "Pouw.Dither.OnCard": {
    "owner": "@compute-research",
-   "digest": "4a40e06630394c3a6d7647d8bd2d25ad8c9e8bb32d9f5dfa21228a53969e1612"
+   "digest": "e20c87706269f72b71ea976ba7603ab9d00d2ef322d355e02f7b49e0c96f6aef"
   },
   "Pouw.Dither.Period.DualOpt": {
    "owner": "@compute-research",
@@ -2178,6 +2178,10 @@
    "owner": "@soundness",
    "digest": "8c09825011781cb4d73b14f1056b1887cea82faad845141e6d826075010c94fa"
   },
+  "Verity.Assumptions.DeviceWithinRegisteredFigures": {
+   "owner": "@soundness",
+   "digest": "e083b5535a6d2136d0c688b1d62f6a038456b92fc48609c1a1e6ed2157d4301c"
+  },
   "Verity.Assumptions.FlipsAfterRecorded": {
    "owner": "@soundness",
    "digest": "3261cd32e88a813bed5cba80d2463e28d2202169df59653ce77d0692830f48f7"
@@ -2225,6 +2229,10 @@
   "Verity.Committed.Honest": {
    "owner": "@lean",
    "digest": "f5f7d51a49315432e4df695ff99101c66c65bda69dd9141e5a99b190dd92af58"
+  },
+  "Verity.DeviceFigures.Accepted": {
+   "owner": "@soundness",
+   "digest": "e79ecdc887349564c389cf682a4b8a6e7a7467e8f9de6e664ee9c4853fc07516"
   },
   "Verity.Evaluates": {
    "owner": "@lean",
@@ -13657,6 +13665,12 @@
    "assumptions": [],
    "type_hash": "d29489247f5da3d50fd1a297d4dedec5e94940fa1ff83ecab62fd5b8fae592df"
   },
+  "Verity.SecurityProofs.CapacityWithinEstimate": {
+   "owner": "@soundness",
+   "signature": ["Verity.SecurityProofs.CapacityWithinEstimate : Verity.Guarantees.CapacityWithinEstimate"],
+   "assumptions": [],
+   "type_hash": "33f7bf73bd890217a96e1f811c4fa5862df92ccec1ba47b063fff95e97ba8370"
+  },
   "Verity.SecurityProofs.CommittedMeets": {
    "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.CommittedMeets : Verity.Guarantees.CommittedMeets"],
@@ -14194,6 +14208,7 @@
    "Definitions.Accounting.Assumptions.PouwWork",
    "Proofs.Flock.Recursive.Premises",
    "Definitions.Nci.Assumptions.Fit",
+   "Definitions.Core.Assumptions.DeviceFigures",
    "Proofs.Accounting.TS.Session.Group.Premises",
    "Definitions.Pouw.Assumptions.LeadCommit"
   ],
@@ -14477,6 +14492,10 @@
    "Pouw.Salt.keyed_leaf_binds": {
     "function": "Hash.Keyed.accepts",
     "outcome": "none"
+   },
+   "Verity.SecurityProofs.CapacityWithinEstimate": {
+    "function": "Verity.DeviceFigures.Accepted",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -16575,7 +16594,7 @@
    "Flock.SecurityProofs.RanRegisteredRun": {
     "com.Opens rt p op₀": "com.Opens taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (b : β), acc b → com.Opens rt (prog b) (op b)": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "ENNReal.instLE.le (Verity.Game.prob (fun b => And (acc b) (Q b)) G σ) B": "a bound that is no plain range, printed so since #6403 renamed `FlockSoundness.Game` to `Verity.Game`, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "ENNReal.instLE.le (Verity.Game.prob (fun b => And (acc b) (Q b)) G σ) B": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "ENNReal.instLE.le (FlockSoundness.Game.prob (fun b => And (acc b) (Q b)) G σ) B": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.RecursiveCircuitIndist": {
@@ -18192,6 +18211,12 @@
     "Nci.Guarantees.CapabilityFloorHonest": "5986074fbd6e718962766e4e46522f5890fa6e4d9d971c8c45117fe91f4aa45e"
    }
   },
+  "Definitions.Accounting.Guarantees.DeclaredCircuit": {
+   "digest": "6285565506ddab79d1e87e99d50ef46b0e20ac846d42d0cf871160d71ba470bc",
+   "definitions": {
+    "Accounting.Guarantees.DeclaredCircuitRequirement": "13a8c0306cbff41fa934e600abf4dc72341eafb70c726b2e99df984281ce9ead"
+   }
+  },
   "Definitions.Claims": {
    "digest": "4cce7d024d9dc15ca2751eb2f856ac3ea493d3083c6634b387a398a220e36145",
    "definitions": {
@@ -18851,6 +18876,12 @@
     "Claims.SamplingGeneric.simAt": "0b60f8fe98acb3df4ee53a8cc10fd2ffa43444819254e111218d018b6c316c2f"
    }
   },
+  "Definitions.Core.Assumptions.DeviceFigures": {
+   "digest": "95e5ba7cf9502a59823597ea469397355e0be722060604c818461808639a3e8e",
+   "definitions": {
+    "Verity.Assumptions.DeviceWithinRegisteredFigures": "e083b5535a6d2136d0c688b1d62f6a038456b92fc48609c1a1e6ed2157d4301c"
+   }
+  },
   "Definitions.Core.Assumptions.ZkServer": {
    "digest": "ad020b2215f9a23c89d8d6f748e4b0e58c52906a727e51e62355b3ff44ddd5bd",
    "definitions": {
@@ -18996,15 +19027,27 @@
    }
   },
   "Definitions.Core.DeviceFigures": {
-   "digest": "9ea02610bc8e8afcebf9121038d577360f7c4daedd37de793227fdd0de30cd3d",
+   "digest": "a816e1beec2d56e2de32419d2f474dd9833135d1dcaacbf2b97c5febe94324e3",
    "definitions": {
+    "Verity.DeviceEstimate": "628996fcc98bd4bc25fee0ac6e18cd632b0ff9dcf0777c7a2ad1073a91e3572b",
+    "Verity.DeviceEstimate.figures": "b994f55a27e1c087e35a796efd9618be61de4b3f2448cfe7eb07e39f4f561c13",
+    "Verity.DeviceEstimate.tolerance": "5edc7fc2a7a41969b06e58666200a4844ff52e27b15dfd0fdd7755e6bdbf0d63",
     "Verity.DeviceFigures": "edb3fe10aa0d2974eebab374708843ca273a050eb36ce4036e36cdaffd1574ef",
+    "Verity.DeviceFigures.Accepted": "e79ecdc887349564c389cf682a4b8a6e7a7467e8f9de6e664ee9c4853fc07516",
+    "Verity.DeviceFigures.CapacityLE": "b879bf3de7795498e32a6333c36802f75c07eb6aafbc2930d3db8bba44f28a7e",
+    "Verity.DeviceFigures.bounding": "c74548660ebde4861263df2ca8567fc71d0d63b55642897d7a452f31709a4a39",
+    "Verity.DeviceFigures.clock": "af0cc05deb191c3242ab04a139910cc4963dfae7b9fe828c44243ea081177db7",
+    "Verity.DeviceFigures.peakRate": "3927e2ea990861827e1f327e535b86bade0ddd2452fc44bc9648e5ef8ae0e6bf",
+    "Verity.DeviceFigures.sku": "c59fd273b19abca7ec327e0ece6c9c1a119ce4829a8616c2f84bdf43925811ea",
+    "Verity.FigureTolerance": "6a94bbb8b652dfbbaa5cb0b3da6f65160c37f82e1bbadf93aa2591ce90c1d9f4",
+    "Verity.FigureTolerance.capacity": "021cf4e3b9b17b36592ed12372c5c167ae95f56e760872e384f132c1cb171453",
     "Verity.OperandClass": "c7124247fd605913f662ebde42c460fdda510a356ac33f51f99c9b41908af863",
     "Verity.OperandClass.uniformS2": "98a8bbe96a1488b52aae46cf55d7aba54ff57ea08c91d62f18fac7e51cd47ac9",
     "Verity.OperandClass.uniformS8": "fed02e8cb1f8774c7caac27a59b4d991b821ba9b90a7375316338e332aae2477",
     "Verity.OperandClass.uniformU2": "d5825638a477c5fafea58cf6c8ce7092ee5fbf1461b62c76c27d5fd150a718df",
     "Verity.OperandClass.uniformU4": "5c57d663d92adabb3ae94a09f12662503be4b1af086708cc22dd90758258ebc1",
-    "Verity.OperandClass.zero": "fa8184d9fccd6741ab95294c43bda2707e7952f427b2fb2319b6ea22fef40ccc"
+    "Verity.OperandClass.zero": "fa8184d9fccd6741ab95294c43bda2707e7952f427b2fb2319b6ea22fef40ccc",
+    "Verity.WithinTolerance": "fff5cf264015c437f51408465ddffce73b2dcc9fccdf1fb3f4e3584d0fae0794"
    }
   },
   "Definitions.Core.Formalism": {
@@ -19130,6 +19173,12 @@
     "Verity.Game.drawStrat": "a90a41279fcd1d64277b99cc405a6dee1d985ec78dbf3bc75fab24d87330e335",
     "Verity.Game.runsG": "bbc8fc5f477b5509bbe3ac830743db287a4d4bb60e806f50fd439ef39acc9463",
     "Verity.Game.runsStrat": "252d77524f0829877a146c1bd1235eb4346db1c8eea52cb4064d8cf14b110794"
+   }
+  },
+  "Definitions.Core.Guarantees.DeviceFigures": {
+   "digest": "ff21d9752621598edd23682de7eb2f187c86c749b5216b790d339328ef798143",
+   "definitions": {
+    "Verity.Guarantees.CapacityWithinEstimate": "a15b51a66aa2902094984e4c0f87215b72a03fb31f88cf2daa1e707c180aa987"
    }
   },
   "Definitions.Core.Guarantees.Rec": {
@@ -20105,6 +20154,21 @@
     "Pouw.Assumptions.ServiceSoundStagedJ10R": "76d9d685916c2a126a735a11a405235e44abae18b815249b05eea86ab08748da",
     "Pouw.Assumptions.ServiceSoundStagedJ10RPerProver": "eae88490109ca94104c2173e7a6273f500bf8e1eef974fc158ab757966f3f9cf",
     "Pouw.Assumptions.ServiceSoundStagedPerProver": "4c3fe8a649c99598cd3ecbc2003205b301be1b01b090eac60f65acd46a29066b"
+   }
+  },
+  "Definitions.Pouw.DitherInstance": {
+   "digest": "584d0b65c369a0b3498c10377df8632ec904266c3114637e63d22daccccbb951",
+   "definitions": {
+    "Pouw.Dither.OnCard": "e20c87706269f72b71ea976ba7603ab9d00d2ef322d355e02f7b49e0c96f6aef",
+    "Pouw.Dither.RoundPlan": "d9035d0b1774d8f2ceb2dbae79a1ea40339d231b9f8e45369d0087b2004e05dc",
+    "Pouw.Dither.RoundPlan.getTr": "0773ae16c8865621277946cb50e33dda6e90f542bd65a58ed1e9f1d08f008355",
+    "Pouw.Dither.RoundPlan.putDraw": "fcca059d5e05147d9d360beb8b2ee152bca0bd277bce31ebecee87367e00791a"
+   }
+  },
+  "Definitions.Pouw.Guarantees.DitherInstance": {
+   "digest": "c06981ecb5ba3de6ba6643c33c8e390f7264a3bb454503f594a024537c7fe627",
+   "definitions": {
+    "Pouw.Guarantees.DitherInstance.WorkSoundAtX": "fa77d1236b008872a8823ec63016088b1065fbd28a561982a3a76ad1edd235e3"
    }
   },
   "Definitions.Pouw.Guarantees.RelativeSecurity": {
@@ -24274,9 +24338,10 @@
    }
   },
   "NciCheck.Baseline": {
-   "digest": "1853c08a34576d4514fa6ef14088f61f91c4fa0467dbdfbd3f180f552c33c592",
+   "digest": "047788f832087dd9f4ad95e1020d8e9e3a6ab44629f6751f5ad92e20e855bdb8",
    "definitions": {
     "NciCheck.Baseline.countsOf": "c7b574caf0ae40929c5212f2820980b0d61b12242cacd38eafc579ec726c9b0d",
+    "NciCheck.Baseline.digest": "2fb5b08693a056720c5d6c1051e0b0caae4bb7d0542c05d8a9dd1be17f28e0e8",
     "NciCheck.Baseline.dims": "297a9089ae22877bc3ba94e2a8dcc36061d368b8de8d822f76a6d99cc9fc6e4f",
     "NciCheck.Baseline.entryStep": "05e8d7aa92d0990b6f99002f7ad7a0eae0ca227172daa6d7e5f11e9086a4792c",
     "NciCheck.Baseline.fixOf": "40322a441d276a44abbfb2b4375c1ad509ec6709a4d67e083aaf183c7452d8b8",
@@ -27218,7 +27283,7 @@
    }
   },
   "SampledProofs.ChallengerTrees": {
-   "digest": "323f0e6d3aefa26041285b300137e79bfc15970f399bbc1d2d05640d0bb4c52c",
+   "digest": "7e88c49b13ca69102ede49e92c71d9c08f4612de692dd6b65963ff6c9a8078b3",
    "definitions": {
     "SampledProofs.Challenger.LINK_ROOT_LEN": "1f8fe31e355f018a53a514f119ab08ada8488ed6acb6643ec9c8df82a7dc045a",
     "SampledProofs.Challenger.LINK_TABLES": "8af716a484dd7ab4f4e315c2eeb20f7828c8781f86bb7275cf827566b638e88d",
@@ -27258,8 +27323,6 @@
     "_private.SampledProofs.ChallengerTrees.0.SampledProofs.Challenger.isHexN": "e24fdbe1fd04f2fc70bb3951f9785216d01f275f14546a088bf15cd3ddb8451f",
     "_private.SampledProofs.ChallengerTrees.0.SampledProofs.Challenger.isHexN._sparseCasesOn_1": "9e591fab54932b0c102c0b1e0cf9b09dc6a2177e28c3de3afc214557e19e1dfa",
     "_private.SampledProofs.ChallengerTrees.0.SampledProofs.Challenger.isStream": "15df1311b604d9cadeaf4d2d41f6d1a1047f75c26a03a33fea7284a1628a3d9b",
-    "_private.SampledProofs.ChallengerTrees.0.SampledProofs.Challenger.recordCoins?": "80df91b2f8689a5640931e6190c75075f98d0a3f43a13eb9af1398f1c96bb126",
-    "_private.SampledProofs.ChallengerTrees.0.SampledProofs.Challenger.recordCoins?._sparseCasesOn_1": "64160630b533d4011c876adaff3107b7fb372bd184ad126f42d542dee5b09a9c",
     "_private.SampledProofs.ChallengerTrees.0.SampledProofs.Challenger.strOf": "3ea208f6c5b8fa118cede43ad8b64ffd5ed9bcd2fcb529e7fbf2ef8f36d68808"
    }
   },
@@ -27322,12 +27385,14 @@
    }
   },
   "SampledProofs.OneStageZk": {
-   "digest": "1dc074409404aa7e767a9cffb306b84a0d664bae1874631b821ade20e25dbb55",
+   "digest": "bc492a1f2654392795d2cd550effb4c20e239828ce8b301c21da17dd5fd6865a",
    "definitions": {
     "SampledProofs.OneStageZk.checkIdentifier": "2fd8c67dfca865e4f5ef6c301b5ed5dcc80837cbe5ac4606f38372f80bfec899",
+    "SampledProofs.OneStageZk.evidenceOf": "ee3924c24476b44aac57c4f4bf48dda23f443a3e130f444b4a5c44843112b0f3",
     "SampledProofs.OneStageZk.programDigest": "1203586e1a289f82fd3cb9d12de401779ee02b4594feeebffbd358999b3b52c6",
     "SampledProofs.OneStageZk.provedUnits": "761e109f465f102c40f163e3a4c38058435aa02b0d22af703606b842f60f263d",
-    "_private.SampledProofs.OneStageZk.0.SampledProofs.OneStageZk.headerLine": "212a78996d70e299639f5cf7f183b10bf121b87826f5ef77bc4473ed143fed56"
+    "_private.SampledProofs.OneStageZk.0.SampledProofs.OneStageZk.headerLine": "212a78996d70e299639f5cf7f183b10bf121b87826f5ef77bc4473ed143fed56",
+    "_private.SampledProofs.OneStageZk.0.SampledProofs.OneStageZk.headerOf": "01b7a303697008c7160efb9d191ed1351082fa20e6cde5872cea19283055f92f"
    }
   },
   "SampledProofs.PyJson": {
