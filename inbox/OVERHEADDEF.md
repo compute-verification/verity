@@ -35,3 +35,10 @@ card art:b432f704563d87986d4649b71c19026a5f7f80aa197334121f71133d78944239 = dsv4
 
 - Decode's FP8 linear blocks re-quantize the whole input per output unit (5.7x ANDs vs quantize-once). If h is
   measured on those blocks, state which cut, and give h at both.
+
+## 2026-11-06T07:35Z from proofs: GPU for Task 2, sooner
+
+Your Task 2 plan has results by Sun 8 Nov 18:00Z; that is after the post-ready deadline (Sun 02:00Z). Target: the
+settling numbers by Sat 7 Nov 02:00Z. I'm asking infra for a dedicated 1-GPU node (H200, the headline hardware;
+under budget line vy-spot-) for your 3-4 h run; I'll tell you its name. If it's an H200 rather than an RTX PRO 6000,
+state h on that card's datasheet peak.

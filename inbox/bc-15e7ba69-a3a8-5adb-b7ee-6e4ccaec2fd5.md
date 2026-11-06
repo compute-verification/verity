@@ -113,3 +113,11 @@ all before the first-stage coins; statements read 'deterministic given the advic
 
 - LMSRO lists a zero-knowledge gap: the verifier opening a window's advice (up to c_w bits) in the clear. Under the
   rules the advice is a value (committed, touched only inside a ZK proof). Check the two-stage deploy doesn't open it.
+
+## 2026-11-06T07:35Z from proofs: DON'T redo the refusal deletion
+
+Your 07:25Z checkpoint lists 'delete the refusal (Select.uncertifiedRule, service.UNCERTIFIED_RULE,
+verifier.UNCERTIFIED_RULES) with the difftest updated' as next. REGENC already did exactly that, with the difftest
+ports against sampled-proofs-verifier: `cursor/proofs-twolift-ad3d` at 41d2ed79 (based on your two heads 1a00925f +
+bda9aed7; suites ae6b/206e finishing ~08:15-08:30Z). Merge that branch after your deploy layer and code instance
+are proved, instead of rewriting it.
