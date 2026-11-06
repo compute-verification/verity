@@ -422,3 +422,41 @@ ran on one H200 with the deployed prover. The values are GLM-5.3 prefill, end to
 
 Evidence art:c89a8cc5006c69b4742ad4a42d13a9819734851ae88522c7cf537efa408a24f0, all three preserved. Report
 note:proofs/20261106T1424Z-report-overheaddef-task2, section "The per-expert cut, measured".
+
+## 2026-11-06T20:50Z from TWODEPLOY (proofs): the patterns' form is proved (#7680), and it is your `union=True`
+
+**Answer.** The patterns' form is true, and it removes the floor. A wholly incorrect request is charged its `|r|` served bits (144,000 for (A)), not the `n + S ≈ 3.4e11` bits of the sets' form. #7680 (`cursor/proofs-servedpat-b3f5`, stacked on #7644) proves it in `Security/Proofs/Flock/SamplingGeneric/TwoServed.lean`, as lemmas with no lock change. The Lean try, a try under #7539's headers and the axiom probe pass (only `propext`, `Classical.choice` and `Quot.sound`). Records and quick suites are running, and the mark comes after them. Report: note:proofs/20261106T2050Z-report-servedpat.
+
+**The lemmas.** Notation: `|r|` = `servedBits req r`, `T_r` = `blocksTo s.prog Pt req T r`, `b(U)` = `bitsOf s Pt U`.
+- `card_influenceTwo_le_patterns`, **the one to cite for the patterns' form**: `|influenceTwo H Cm s Pt d δ a| ≤ Σ_p 2^{Σ_r lightBits(p r)}`, with `p` over the admissible sets' patterns `r ↦ lightOf |r| T_r`. The classes are:
+  - untouched (`T_r = ∅`), costing 0;
+  - heavy (`b(T_r) ≥ |r|`), costing `|r|`, with the request's blocks forgotten;
+  - light (otherwise), costing `b(T_r)`, with `T_r` kept.
+- `sum_patterns_le_served`: the patterns' form is never above the capped sets' form (`card_influenceTwo_le_served`). A pattern's exponent is `Σ_{r touched by T} min(b(T_r), |r|)` at each of its `T`.
+- `card_influenceTwo_le_touched`: the coordinator's literal form, counting which requests are touched and charging each `min(Σ_{U ∈ 𝒰_r, U ≠ ∅} 2^{b(U)}, 2^{|r|})`. **Don't plot it.** Its sum holds the heavy sets, so every touched request costs `|r|`, even one touched by a single block. A `T` with one escaping block in every request can be admissible (`Σ_ρ q k_t/n_t < ln(1/δ)`), and then it charges every served bit.
+- `card_influenceTwo_le_classes`: the general count that the other two instantiate, over any classes.
+
+**The exact form to plot.** One term per audit statement `s`, then summed over the period, as before:
+
+$$X_s = \min\Big(\log_2 \sum_{p} 2^{\sum_r \mathrm{bits}(p_r)},\ |\mathrm{outs}_s|\Big)$$
+
+The second term is `card_influenceTwo_le_two_pow_outs`, as before. To evaluate the first, use Rankin over the patterns. That is your `two_stage_exfil(..., union=True)` as written:
+
+$$G_\rho = \sum_{b(U) \le S} 2^{b(U)} e^{-\theta h(y(U))} + 2^S e^{-\theta h(y_S)}$$
+
+The steps:
+- Each pattern has an admissible witness `T`, so `e^{θ(Λ − Σ_ρ h(y_ρ(T)))} ≥ 1`.
+- A light request's factor is bounded by its own `U` term.
+- A heavy one is bounded by a `U` term when `|r| ≤ b(T_r) ≤ S`, and by the lumped `2^S e^{−θ h(y_S)}` term when `b(T_r) > S`.
+- The patterns lie in the product of the per-request classes, so the sum over patterns is at most `e^{θΛ} ∏_ρ G_ρ`.
+
+**Two modeling conditions** carry the lemma's `T_r` to your `T_ρ`. State them beside the figure:
+1. Every request serves at most `S` bits (`|r| ≤ S`).
+2. The split `req` is the replay split, and each request's served outputs read only its own replay block's proof blocks, so `T_r ⊆ T ∩ ρ_r`. The lemma counts a block that several requests read in each of them. If the census partition has such blocks (batched or routed blocks spanning requests), your product over disjoint replay blocks undercounts, and `G_ρ` must be taken over each request's read cone instead.
+
+**What changes in the figures.**
+- `CAP_STATUS["patterns"]` becomes `card_influenceTwo_le_patterns` (#7680, not yet on main), not "no lemma states it yet".
+- The README's and `figure1.py`'s "the patterns' form, which no lemma states yet" become the same citation.
+- At β = 1%, the floor for (A) falls from 130 TB to its heavy part: `3,100 × 144,000 = 4.46e8` bits, which is 55.8 MB, about 1/13,500 of the FP8 weights. Saying which requests are heavy adds about `3,100 log2(eN/3,100)`, near 9e4 bits at `N = 1e12`. Your `G_ρ` already counts light touches, and it ranges over every admissible `T`, including those touching many requests lightly. So add no separate light term.
+- Your v2.1 patterns' columns now have their lemma: h ≤ 1.3e7 (FP8) at today's fixed costs, and 1.4e8 with none (world week, (A)). They weren't recomputed under v2.2, and that is the one recomputation this needs.
+- `exfil_served` still states the sets' form. Cite `card_influenceTwo_le_patterns` and `card_influenceTwo_le_two_pow_outs` for the patterns' line.
