@@ -34,6 +34,8 @@ public import Definitions.Nci.Guarantees.PartitionCovers
 public import Definitions.Nci.Guarantees.CompliesCK
 public import Definitions.Nci.Guarantees.Ldl
 public import Definitions.Nci.Guarantees.Witnesses
+public import Definitions.Nci.Guarantees.Formalism
+public import Definitions.Nci.Guarantees.Formalism.Witnesses
 public import Definitions.Pous.Assumptions
 public import Definitions.Pous.Guarantees
 public import Definitions.Pouw.Assumptions

@@ -6,12 +6,12 @@ public import Proofs.Nci.Cover.Chained
 /-!
 # A verdict of compliance carries the covering bound's factor on the chained multiplication blocks
 
-`CoverTrainedChained` is `Nci.Cover.Guarantees.CoverTrainingChained`'s conclusion on a verdict, at `c = gamma`
-and `k = α c`, `α = num / den`, as `CoverTrained` (`Proofs.Nci.Cover.Checked`) is `CoverTraining`'s. `coverTrainedChained` proves it of
-every verdict of the gate-level check `NciCheck.evaluate`, from the verdict's compliance (`Witnesses`), and
-`CheckedCoverTrainingChained` states it of every verdict of the check of record, `NciCheck.Baseline.evaluate`, on every
-expansion of the instance, and `checkedCoverTrainingChained` proves it from `SecurityProofs.DescAgrees`. It is stated
-here in `Proofs/`, so it is no guarantee.
+`CoverTrainedChained` is `Nci.Cover.Guarantees.CoverTrainingChained`'s conclusion on a verdict, its count multiplied out
+by `c = gamma`, at `k = α c`, `α = num / den`, as `CoverTrained` (`Proofs.Nci.Cover.Checked`) is `CoverTraining`'s.
+`coverTrainedChained` proves it of every verdict of the gate-level check `NciCheck.evaluate`, from the verdict's
+compliance (`Witnesses`), and `CheckedCoverTrainingChained` states it of every verdict of the check of record,
+`NciCheck.Baseline.evaluate`, on every expansion of the instance, and `checkedCoverTrainingChained` proves it from
+`SecurityProofs.DescAgrees`. It is stated here in `Proofs/`, so it is no guarantee.
 -/
 
 @[expose] public section
@@ -25,7 +25,7 @@ open Flock.Program (Prog)
 information `theta` names, containing a reference training circuit `r` with none of its fresh input registered
 (`ThetaRegistered`), pays the covering bound's two-cost factor on the multiplication blocks of `r`'s bits chained at
 `(D, c_a)`, at `c = gamma`, `α = num / den` and `k = α c` (`Nci.Cover.Guarantees.CoverTrainingChained`'s
-conclusion, under its premises on `bitDecl r`). -/
+conclusion, its count multiplied out by `c`, under its premises on `bitDecl r`). -/
 def CoverTrainedChained (j out : Json) : Prop :=
   ∀ (i : Instance) (P : Prog) (d : Verity.RegisteredCircuit),
     Parses j i → Flock.Program.decode i.program.toUTF8 = .ok P → LaysOut P d.D → Names i.theta d.θ →

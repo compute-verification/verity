@@ -3,7 +3,6 @@ module
 public import Proofs.Nci.Chain
 public import Proofs.Nci.Inequalities
 public import Proofs.Nci.LoomisWhitney
-public import Proofs.Nci.Rate
 public import Proofs.Nci.Lemmas
 
 /-!
