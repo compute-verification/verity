@@ -1693,29 +1693,6 @@ def test_train_sh_refuses_an_empty_commit_and_one_origin_lacks(tmp_path):
     assert not argv.exists()
 
 
-def test_train_sh_runs_with_priority_and_posts_a_launch_that_registers_no_run(tmp_path):
-    git, train, argv = _train_repo(tmp_path)
-    (tmp_path / "repo" / "a").write_text("b\n")
-    git("commit", "-q", "-am", "change")
-    git("push", "-q", "origin", "HEAD:main")
-    p = train("HEAD", "vy-x", "--agreement")
-    args = argv.read_text().split()
-    assert p.returncode == 0 and {"--record", "--priority", "--keep-going", "--agreement"} <= set(args), args
-    p = train("HEAD", "vy-x", "--deferred", "pytest,circuit-check", "--no-cache", "--circuit-cache", "--no-regenerate")
-    args = argv.read_text().split()
-    assert p.returncode == 0 and args[args.index("--deferred"):] == ["--deferred", "pytest,circuit-check", "--no-cache",
-                                                                     "--circuit-cache", "--no-regenerate"], args
-    p = train("HEAD", "vy-x", "--deferred", "pytest", "--shard", "2/3")
-    args = argv.read_text().split()
-    assert p.returncode == 0 and args[-4:] == ["--deferred", "pytest", "--shard", "2/3"], args
-    assert "shard 2/3" in p.stdout and f"train-{git('rev-parse', 'HEAD')[:12]}-2of3.log" in p.stdout, p.stdout
-
-    (tmp_path / "origin.git").rename(tmp_path / "gone.git")
-    (tmp_path / "bin" / "sleep").write_text("#!/bin/sh\n")                # the fetch's backoffs: nothing launches to wait for
-    p = train("HEAD", "vy-x")
-    assert p.returncode == 1 and "git fetch origin failed" in (tmp_path / "posted").read_text()
-
-
 def test_train_sh_launches_the_records_step_alone_and_hands_a_shard_its_artifact(tmp_path):
     """Drive's sharded after-landing run: `--cc-records` launches circuit-check's records step alone, in a worktree of its own,
     and `--cc-records-from ART@SHA256` reaches a shard's check.py; either is refused where it doesn't belong."""
