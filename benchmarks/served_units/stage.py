@@ -66,6 +66,11 @@ from verity.ml.definitions.registry import act, b1, dsa, fp8_moe, moe, ref_prims
 from verity.ml.definitions.registry import boolean_fp8 as BF
 
 
+#: the prover's witness bits a statement (70-class-sweep.sh's MAX_STATEMENT_BITS): `class_statement.stage` cuts a PARTS type's
+#: N to the most instances under it
+MAX_STATEMENT_BITS = 1 << 35
+
+
 def bf16(v: np.ndarray) -> np.ndarray:
     u = v.astype(np.float32).view(np.uint32).astype(np.uint64)
     return ((u + 0x7FFF + ((u >> 16) & 1)) >> 16).astype(np.uint16)
@@ -194,6 +199,7 @@ def stage_part(name: str, part: Part, S: dict, tag: str, n: int, out: Path, t0: 
     """The class of rank ``S["C"]`` of the type's word Definition under `Q_word`, ``n`` inputs, as stage.json's record."""
     TG.load_registries()
     CS.cache_slot_circuits()
+    CS._CTX["max_statement_bits"] = MAX_STATEMENT_BITS
     fn = part.definition(S)
     prog = PU.one_call(fn)
     units = PU.partition_units(prog, "q-word")

@@ -6,6 +6,8 @@
 #   (a job run from a clone of the tree, on a GPU host, 32 CPUs, 96 GB, up to 240 min)
 # (a guest job on a shared GPU node is preemptible; one arm a run, ZK_ARMS=fw, takes about 3.5 h with its verification, the builds cached)
 # env: ZK_KS=4096,14336  ZK_SIZES=1,8,64,512  ZK_DRAWS=1,8,64,c  ZK_ARMS=fw,nofw  ZK_COLD=2  ZK_RUNS=3  ZK_WARM=1
+#      ZK_UNITS="fp8-coord:K=6144 router" (served types instead of A6's coordinates, zk_cost.py's --units: ZK_SIZES then
+#      defaults to half,full, ZK_DRAWS to c:dev+nofw,8:nofw+fw,64:nofw+fw, ZK_ARMS to dev,nofw,fw; overhead instead of fit)
 #      LEASE_MAX_MIN=30 (one GPU lease a point)
 #      FLOCK_WORK=/workspace/jobs/proof-throughput (the CUDA prover's build and venv, as proof_throughput's job.sh keeps them)
 #      PT_WORK=/workspace/cache/proof-throughput (the Lean verifier's build, as its verify.sh keeps it)
@@ -72,9 +74,15 @@ export PYTHONPATH=$REPO:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$RE
 Z=$S/zk
 ZK() { "$PY" benchmarks/one_stage/zk_cost.py "$@" --out "$Z"; }
 
-log "stage: K ${ZK_KS:-4096,14336}, sizes ${ZK_SIZES:-1,8,64,512}, draws ${ZK_DRAWS:-1,8,64,c}"
-ZK stage --lean "$LEAN" --ks "${ZK_KS:-4096,14336}" --sizes "${ZK_SIZES:-1,8,64,512}" --draws "${ZK_DRAWS:-1,8,64,c}" 2>&1 \
-  | tee -a "$O/zk.log" | grep ZKCOST
+if [ -n "${ZK_UNITS:-}" ]; then
+  : "${ZK_SIZES:=half,full}" "${ZK_DRAWS:=c:dev+nofw,8:nofw+fw,64:nofw+fw}" "${ZK_ARMS:=dev,nofw,fw}"
+  log "stage: units $ZK_UNITS, sizes $ZK_SIZES, draws $ZK_DRAWS"
+  ZK stage --units "$ZK_UNITS" --sizes "$ZK_SIZES" --draws "$ZK_DRAWS" 2>&1 | tee -a "$O/zk.log" | grep ZKCOST
+else
+  log "stage: K ${ZK_KS:-4096,14336}, sizes ${ZK_SIZES:-1,8,64,512}, draws ${ZK_DRAWS:-1,8,64,c}"
+  ZK stage --lean "$LEAN" --ks "${ZK_KS:-4096,14336}" --sizes "${ZK_SIZES:-1,8,64,512}" --draws "${ZK_DRAWS:-1,8,64,c}" 2>&1 \
+    | tee -a "$O/zk.log" | grep ZKCOST
+fi
 rc=${PIPESTATUS[0]}
 if [ "$rc" = 0 ]; then
   if [ -x /workspace/verity-guest/bin/gpu-lease ] && [ -e /run/gpu-lease/pool.gpus ]; then
@@ -96,9 +104,9 @@ if [ "$rc" = 0 ]; then
   log "prove: exit $rc; verify"
   ZK verify --lean "$LEAN" 2>&1 | tee -a "$O/zk.log" | grep ZKCOST
   [ "${PIPESTATUS[0]}" = 0 ] || rc=1
-  ZK fit 2>&1 | tee -a "$O/zk.log"
+  if [ -n "${ZK_UNITS:-}" ]; then ZK overhead 2>&1 | tee -a "$O/zk.log"; else ZK fit 2>&1 | tee -a "$O/zk.log"; fi
 fi
-(cd "$Z" && find . -type f -size -8M ! -name circuit.txt ! -name 'inst-*' ! -name 'pub-*' ! -path '*/archive/*' \
+(cd "$Z" && find . -type f -size -8M ! -name circuit.txt ! -name 'inst*.bin' ! -name 'pub*.bin' ! -path '*/archive/*' \
   \( ! -path '*/sessions/*/*' -o -name session.json \) -print0 | xargs -0 -r -I{} cp --parents {} "$O/")
 log "zk-cost: done, rc $rc"
 exit "$rc"
