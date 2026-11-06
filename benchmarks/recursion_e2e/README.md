@@ -71,13 +71,11 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
   `SampledProofs.Challenger.innerTreesReason`). The result's `release` and the table's release-side section give each
   part's window, release time, decision time, slack and prove wall; the headline's `released` is its verdict, and `ok`
   needs it. `--max-min` gives oprove twice its proving model (a window is about twice its part's prove) and the lead.
-- **The figures** (`figures.py`, the result's `figures` and the table's last section): the session's cost, its
-  knowledge-soundness error and its stop-leak bound, for one window and pooled over a week, a month and a year, over the
-  reference datacenter and the world's compute (`benchmarks/census`), each with its basis: measured (the run), proved (the
-  Lean theorem it reads and what that assumes) or scaled (a session a machine a window, each as this one). The
-  knowledge-soundness error is κ + t·ε a session (κ and ε proved), pooled by the union bound as sessions·κ + T·ε against
-  the SHA-512 calls of the world's GPUs and of the datacenter's, and as a share of the sessions and of the ANDs they cover.
-  The module's docstring states every figure.
+- **The session's times** (the result's `session_times`): each step of one recursive session after its build (inner,
+  vstage, vcap, oprove, lean), its first invocation's wall and CPU seconds and peak RSS, what the session's figures (its
+  cost, knowledge-soundness error and stop-leak bound per window and pooled over the monitoring periods) scale from. The
+  figures read the census and the periods, which stay off this public bench: `benchmarks/recursion_figures/figures.py
+  RESULT.json` gives them.
 - **The negative** (`negative`, on by default): the lean step again over a copy of the inner run with one coin of
   rep 0 flipped (the pod script's `NEG_INNER`, `rec_inner.py forge`), once per `--neg` coin. A flipped coin moves only the V*
   statements that read it, so a coin counts as refused when Lean refuses it under at least one statement (exit 1, no

@@ -61,6 +61,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `sampling_plan/` | the sampling plan for one served workload: a cost model fitted to proving measurements, and ε at δ over the verification overhead (a model, not a measurement) | maintained |
 | `verifier_cost/` | a verifier's time against the size of the circuit description it reads and of the circuit that description unrolls to | maintained |
 | `recursion_e2e/` | recursive witness zero knowledge, timed step by step: the inner proof, V* proved with `--zk`, and the Lean verifier | maintained |
+| `recursion_figures/` | a recursion bench result's session scaled over the census's fleets and the monitoring periods: its cost, knowledge-soundness error and stop-leak bound per window and pooled | maintained |
 | `private_circuit/` | the universal unit, which runs any private circuit of a size class, proved under `--zk` and verified by the Lean verifier | frozen |
 | `live_challenger/` | the proof system's challenger on an auditor host: each session's live coins, recorded in a signed ledger before the first coin | maintained |
 
