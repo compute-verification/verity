@@ -16,6 +16,7 @@ PY=$REPO/.venv/bin/python
 export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm
 RANKS=$(cd "$ROW/build" && ls -d rank* | sed 's/rank//' | sort -n)
 (cd "$ROW" && find commit -maxdepth 1 -type f -print0 | sort -z | xargs -0 sha256sum) > "$O/commit.sha256"
+(cd "$ROW" && find build -type f -path 'build/rank*' -print0 | sort -z | xargs -0 sha256sum) > "$O/build.sha256"
 cp "$ROW/commit/versions.json" "$O/" 2>/dev/null
 $PY -c "from verity_vllm.pipeline.workload_file import workload_file; print(workload_file('$WL'))" || exit 4
 rank() {
