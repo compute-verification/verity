@@ -173,30 +173,9 @@ theorem CoverTrainingChained_rate :
   rw [hσsum] at hcount
   exact ⟨hcount, slowdown_of_count hcw hca (Nat.cast_nonneg _) hα (Nat.cast_nonneg _) (Nat.cast_nonneg _) hcount⟩
 
-/-- **The cover theorem on a compliant declaration, counting the chained multiplication blocks**, at `(c, k)`:
-`CoverTrainingChained_rate` at the rate `k / c`, its count multiplied out by `c`. -/
+/-- **The cover theorem on a compliant declaration, counting the chained multiplication blocks**. -/
 theorem CoverTrainingChained : Guarantees.CoverTrainingChained := by
-  intro c k r d M B s D w₀ cw ca hC hB hH hk hca hw
-  have hk' : (k : ℝ) < cw * D := hk
-  have hcw : 0 < cw := by
-    by_contra h
-    nlinarith [not_lt.1 h, (Nat.cast_nonneg D : (0 : ℝ) ≤ D), (Nat.cast_nonneg k : (0 : ℝ) ≤ k)]
-  rcases Nat.eq_zero_or_pos c with rfl | hc
-  · simp only [Nat.cast_zero, mul_zero, zero_mul, zero_div]
-    exact ⟨mul_nonneg (add_nonneg (mul_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _))
-      (mul_nonneg (mul_nonneg hcw.le hca.le) (Nat.cast_nonneg _))) (Nat.cast_nonneg _),
-      div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)⟩
-  have h := CoverTrainingChained_rate c (k / c) r d M B s D w₀ cw ca (by positivity)
-    (Nci.SecurityProofs.compliesRate_of_complies hC) hB hH
-    (by rw [Nci.SecurityProofs.rate_mul _ hc]; exact hk) hca hw.1
-    (by rw [Nci.SecurityProofs.rate_mul _ hc]; exact_mod_cast hw.2)
-  rw [Nci.SecurityProofs.rate_mul _ hc] at h
-  refine ⟨?_, h.2⟩
-  set m := ((Nci.Assumptions.chainedBlocksAt (bitDecl r) B D ca).card : ℝ)
-  calc cw * ca * c * m = cw * ca * m * c := by ring
-    _ ≤ (k / c * (k / c) * c + cw * ca * (k / c)) * d.D.size d.D.computed * c :=
-        mul_le_mul_of_nonneg_right h.1 (Nat.cast_nonneg _)
-    _ = (k / c * c * (k / c * c) + cw * ca * (k / c * c)) * d.D.size d.D.computed := by ring
-    _ = (k * k + cw * ca * k) * d.D.size d.D.computed := by rw [Nci.SecurityProofs.rate_mul _ hc]
+  intro Γ α r d M B s D w₀ cw ca hα hC hB hH hk hca hw
+  exact CoverTrainingChained_rate Γ α r d M B s D w₀ cw ca hα hC hB hH hk hca hw.1 hw.2
 
 end Nci.Cover.SecurityProofs
