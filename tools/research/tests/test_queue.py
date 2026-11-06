@@ -22,6 +22,7 @@ from typing import Callable
 
 import pytest
 
+from goals_page import DOWN, PAGE, serve
 import research.queue as Q
 from research.cli import _custody_ttl_problem, main as research_main
 from research.pods.nebius import slot_only
@@ -2354,6 +2355,74 @@ def test_ready_mark_writes_the_mark_with_no_quick_tier(world, capsys):
     assert StoreLabels(world.store, log=world.logs.append).ready(3, h) is True
 
 
+GOAL_FIX = ("add a `Goal <id>` line naming the live goal it serves (its id on the Goals page, `research goals show`), or an "
+            "`Issue: none: REASON` line, to its body (`research queue edit {n} --body-file F`)")
+
+
+def test_ready_refuses_a_body_naming_no_live_goal_and_no_issue_before_any_gate_runs_and_marks_one_that_names_either(
+        world, monkeypatch, capsys):
+    """A mark (here `--mark`'s, as every tier's) needs the body to name a live goal of the Goals page on a `Goal <id>` line, or no
+    issue on purpose on an `Issue: none: REASON` line."""
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    world.with_store_remote()
+    serve(monkeypatch, world.tmp, dict(PAGE))
+    ran: list[str] = []
+    gate = lambda name: lambda *a: ran.append(name)            # noqa: E731  (each gate records that it ran, and passes)
+    bodies = {"Lane `lane-3`.": "its body names no goal",
+              "Lane `lane-3`.\n\nGoal ci/old-landing\n": "its body names no live goal (ci/old-landing is done)",
+              "Lane `lane-3`.\n\nGoal ci/unlisted\nGoal ci/old-landing\n":
+                  "its body names no live goal (the Goals page has no goal ci/unlisted; ci/old-landing is done)",
+              "Lane `lane-3`.\n\nRefs ENG-123\nGoal ci/faster-landing\n": None,
+              "Lane `lane-3`.\n\n> Goal: `ci/merge-speed`.\nGoal ci/old-landing\n": None,
+              "Lane `lane-3`.\n\nIssue: none: docs only\n": None}
+    for i, (body, why) in enumerate(bodies.items()):
+        world.gh.put(3, h := world.change({"m.txt": f"{i}\n"}), body=body, ready=False)
+        assert ready(world.gh, world.store, 3, "lane-3", MarkOnly(), records=gate("records"), preflight=gate("preflight"),
+                     goals=Q.goal_gate) == (1 if why else 0)
+        assert StoreLabels(world.store, log=world.logs.append).ready(3, h) is (why is None)
+        if why:
+            assert (f"research queue ready: #3 is not marked ready at {h[:12]}: {why}: {GOAL_FIX.format(n=3)}"
+                    in capsys.readouterr().err)
+    assert ran == ["records", "preflight"] * 3
+
+
+def test_ready_reads_the_goals_this_machine_last_read_whatever_their_age_while_the_page_is_down_and_refuses_with_neither(
+        world, monkeypatch, capsys):
+    """Each read of the Goals page is kept on this machine; while the page can't be read the gate judges by that copy, saying so in
+    one line, and with no copy it refuses, naming the outage and the `Issue: none:` escape, which still marks."""
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    world.with_store_remote()
+    page, cache = serve(monkeypatch, world.tmp, None), world.tmp / "cache" / "goals.json"
+    marked = lambda n, h: StoreLabels(world.store, log=world.logs.append).ready(n, h)    # noqa: E731
+    mark = lambda n: ready(world.gh, world.store, n, f"lane-{n}", MarkOnly(), goals=Q.goal_gate)  # noqa: E731
+    body = "Lane `lane-3`.\n\nGoal ci/merge-speed\n"
+    world.gh.put(3, h := world.change({"m.txt": "1\n"}), body=body, ready=False)
+    assert mark(3) == 1 and not marked(3, h) and not cache.exists()
+    assert (f"research queue ready: #3 is not marked ready at {h[:12]}: the Goals page can't be read ({DOWN}) and this machine "
+            f"has no copy of it ({cache}): mark it once the page answers, or give its body an `Issue: none: REASON` line "
+            "(`research queue edit 3 --body-file F`)") in capsys.readouterr().err
+    world.gh.put(4, h4 := world.change({"n.txt": "4\n"}), body="Lane `lane-4`.\n\nIssue: none: docs only\n", ready=False)
+    assert mark(4) == 0 and marked(4, h4)
+    page.goals = dict(PAGE)
+    assert mark(3) == 0 and marked(3, h)
+    kept = json.loads(cache.read_text())
+    assert kept["goals"] == [{"id": g, "status": PAGE[g]} for g in sorted(PAGE)]
+    assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", kept["read"])
+    page.goals = None
+    cache.write_text(json.dumps({**kept, "read": "2020-01-01T00:00:00Z"}))
+    for i, (b, rc) in enumerate(((body, 0), ("Lane `lane-3`.\n\nGoal ci/old-landing\n", 1))):
+        world.gh.put(3, h := world.change({"m.txt": f"{i + 2}\n"}), body=b, ready=False)
+        capsys.readouterr()
+        assert mark(3) == rc and marked(3, h) is (rc == 0)
+        said = [line for line in capsys.readouterr().err.splitlines() if "Goals page" in line]
+        assert said[0] == (f"research queue: the Goals page can't be read ({DOWN}): using its 4 goals as this machine read them "
+                           f"at 2020-01-01T00:00:00Z ({cache})")
+        assert said[1:] == ([] if rc == 0 else [f"research queue ready: #3 is not marked ready at {h[:12]}: its body names no "
+                                                f"live goal (ci/old-landing is done): {GOAL_FIX.format(n=3)}"])
+
+
 def test_pr_from_api_reads_the_head_repository_and_the_author():
     d = {"number": 7, "head": {"sha": "a" * 40, "ref": "lane/x", "repo": {"full_name": "someone/verity"}}, "base": {"ref": "main"},
          "user": {"login": "someone"}, "author_association": "CONTRIBUTOR"}
@@ -3387,8 +3456,9 @@ def test_the_lean_step_ships_the_merged_tree_to_a_node_for_ready_on_and_reads_it
 def test_research_queue_ready_runs_the_preflight_unless_no_preflight(world, monkeypatch, capsys):
     from research import queue as Q
 
-    seen, gates = [], []
-    monkeypatch.setattr(Q, "ready", lambda *a, preflight=None, records=None, **kw: seen.append(preflight) or gates.append(records) or 0)
+    seen, gates, goal_gates = [], [], []
+    monkeypatch.setattr(Q, "ready", lambda *a, preflight=None, records=None, goals=None, **kw:
+                        seen.append(preflight) or gates.append(records) or goal_gates.append(goals) or 0)
     monkeypatch.chdir(world.dev)
     base = ["queue", "ready", "3", "--mark", "--by", "lane-3", "--remote", str(world.origin), "--repo", "o/r"]
     assert research_main(base) == 0 and research_main([*base, "--no-preflight"]) == 0
@@ -3397,9 +3467,22 @@ def test_research_queue_ready_runs_the_preflight_unless_no_preflight(world, monk
     assert [(p.lean.on, p.lean.by) for p in (seen[0], seen[2])] == [(Q.PREFLIGHT_LEAN_ON, "lane-3")] * 2, \
         "--mark and --local ship the Lean step to a node too"
     assert all(isinstance(g, Q.RecordsGate) for g in gates) and len(gates) == 3        # the records gate isn't the preflight's
+    assert goal_gates == [Q.goal_gate] * 3                                               # nor is the goal gate
     with pytest.raises(SystemExit) as e:
         research_main(["queue", "status", "--no-preflight"])
     assert e.value.code == 2 and "--no-preflight is for ready only" in capsys.readouterr().err
+
+
+def test_research_queue_judge_marks_through_the_records_and_goal_gates(world, monkeypatch):
+    from research import queue as Q
+
+    got = []
+    monkeypatch.setattr(Q, "judge", lambda *a, records=None, goals=None, **kw: got.append((records, goals)) or 0)
+    monkeypatch.chdir(world.dev)
+    assert research_main(["queue", "judge", "r20261004-160000-abcd", "--by", "lane-1", "--remote", str(world.origin), "--repo",
+                          "o/r"]) == 0
+    [(records, goals)] = got
+    assert isinstance(records, Q.RecordsGate) and goals is Q.goal_gate
 
 
 LOCK = "pkg/lean-audit.json"
@@ -4312,6 +4395,22 @@ def test_judge_marks_a_pr_ready_from_its_quick_tiers_run_once_it_ended_without_i
     assert f"#1 is ready at {h1[:12]} (pr:1@{h1})" in capsys.readouterr().out
     [label] = world.store.labels(label_target(1, h1), key=vocab.READY)
     assert label.value is True and label.by == "lane-1"
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is True
+
+
+def test_judge_refuses_a_pr_whose_body_names_no_live_goal_and_marks_it_once_its_body_does(world, monkeypatch, capsys):
+    """`judge` writes the mark `ready` would have, so `ready`'s goal gate refuses it, with the same fix."""
+    from research import queue as Q
+
+    machine, rid, h1 = _orphaned(world, monkeypatch)
+    serve(monkeypatch, world.tmp, dict(PAGE))
+    capsys.readouterr()
+    assert Q.judge(world.gh, world.store, rid, "lane-1", fetch=machine.fetch, goals=Q.goal_gate) == 1
+    assert capsys.readouterr().err == (f"research queue judge: #1 is not marked ready at {h1[:12]}: its body names no goal: "
+                                       f"{GOAL_FIX.format(n=1)}\n")
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is False
+    world.gh.prs[1] = dataclasses.replace(world.gh.prs[1], body="Lane `lane-1`.\n\nGoal ci/faster-landing\n")
+    assert Q.judge(world.gh, world.store, rid, "lane-1", fetch=machine.fetch, goals=Q.goal_gate) == 0
     assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is True
 
 

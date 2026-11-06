@@ -12,10 +12,12 @@ Sampled proofs (`verity/sampled-proofs/v1`) is a subprotocol of both composite p
 `verity/core/protocols/remote/`) composes it with PoUW's period (`verity/pouw/period/v1`) and the inference-only
 policy, and onsite (`verity/core/protocols/onsite/`) with the other subprotocols. Each composite's verifier runs
 `VStar.Recursive.Sampled`'s Lean check in the form its params name: one-stage v2 (`verity/sampled-proofs/one-stage/v2`,
-the audit on the proofs) or the recursive audit (`verity/sampled-proofs/recursive/v1`, V*'s compiled check, which ends in
-the one-stage audit's live check on its verdict of record). One-stage v1, whose verdicts are the evidence's, is refused
-by name (`V1_REFUSED`: a one-stage form whose params or evidence name no `proofs`). The composite accepts only when
-every component accepts.
+the audit on the proofs) or the recursive audit (`verity/sampled-proofs/recursive/v1`: the recursive session's inner
+coins held to the challenger's release log, every round its coin server recorded opened after what it recorded and
+every logged opening read (`VStar.Recursive.innerCoinsHeld`, `SampledProofs/ChallengerInnerTrees.lean`), then V*'s
+compiled check, which ends in the one-stage audit's live check on its verdict of record). One-stage v1, whose verdicts
+are the evidence's, is refused by name (`V1_REFUSED`: a one-stage form whose params or evidence name no `proofs`). The
+composite accepts only when every component accepts.
 
 ## Guarantee and assumptions
 

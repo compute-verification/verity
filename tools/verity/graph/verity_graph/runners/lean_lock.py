@@ -5,13 +5,14 @@ audit computes.
 A task gives (`families/lean_lock.py`): `vars` `package`; inputs every file of the packages the audit reads (the package,
 those it requires by path, those its `proved_in` names) and the auditor's; reads what an importer reads of each of their
 modules (its `.olean`, and a `module` file's parts), in one directory of the work directory (`out/lean/<A>/<B>.olean` for
-`A.B`); and output `records`. The runner copies the
-inputs into a scratch tree (`lean_audit.scratch_tree`), gives each of its packages that directory as its build and its
-fetched packages from the worker's `lean` env (`lean_module.packages`), and runs `check.py` there. It passes when the audit
-passes, `records` then the committed lock; a lock whose every failure is a record difference is stale, a fail naming the
-command that regenerates it, `records` then the lock that command writes; a `roots` entry no read holds (`lake build
-+ROOT` fails on it) and any other failure of the audit are fails too. A lock's `runs` aren't run: a run's `generate` reads
-the tree beyond the task's inputs."""
+`A.B`); and output `records`. The runner copies the inputs into a scratch tree (`lean_audit.scratch_tree`), gives each of
+its packages a build of its own modules' parts alone (hard links into its `.lake/build/lib/lean`: the audit counts every
+`.olean` that resolves under a `proved_in` package's build as one of its modules) and its fetched packages from the
+worker's `lean` env (`lean_module.packages`), and runs `check.py` there. It passes when the audit passes, `records` then
+the committed lock; a lock whose every failure is a record difference is stale, a fail naming the command that regenerates
+it, `records` then the lock that command writes; a `roots` entry no read holds (`lake build +ROOT` fails on it) and any
+other failure of the audit are fails too. A lock's `runs` aren't run: a run's `generate` reads the tree beyond the task's
+inputs."""
 from __future__ import annotations
 
 import json
@@ -21,7 +22,7 @@ import sys
 from pathlib import Path
 
 from .. import ROOT
-from ..families.lean_module import la, mk
+from ..families.lean_module import la, mk, modules, out_path
 from . import call
 from .lean_module import EnvError, packages
 
@@ -45,11 +46,17 @@ def run(task: dict, work: Path) -> dict:
         return {"status": "fail", "detail": {"error": f"{pkg}/{POLICY}'s `roots` names modules no task builds, which "
                                                       f"`lake build +ROOT` fails on: {', '.join(missing[:20])}"}}
     pkgs = [p.rpartition("/")[0] or "." for p in task["inputs"] if p.rpartition("/")[2] in ("lakefile.toml", "lakefile.lean")]
+    _, owner = modules(tree, task["inputs"])
+    for q in pkgs:
+        (tree / q / ".lake" / "build" / "lib" / "lean").mkdir(parents=True, exist_ok=True)
+    for r in task["reads"]:
+        q, mod = owner[r["task"].partition(":")[2]]
+        part = out_path(mod, r["output"])
+        dst = tree / q / ".lake" / "build" / "lib" / part.removeprefix("out/")
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        os.link(work / part, dst)
     try:
         for q in pkgs:
-            build = tree / q / ".lake" / "build" / "lib"
-            build.mkdir(parents=True, exist_ok=True)
-            (build / "lean").symlink_to(lib, target_is_directory=True)
             if (deps := packages(ROOT / q, work)) is not None:
                 (tree / q / ".lake" / "packages").symlink_to(deps, target_is_directory=True)
     except EnvError as e:

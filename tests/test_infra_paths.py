@@ -110,6 +110,7 @@ INFRA_PATHS = {
     ".agents/skills/team": "infra",
     ".agents/skills/using-slack": "infra",
     ".agents/skills/writing-runs": "infra",
+    ".agents/skills/writing-goals": "infra",
 }
 
 FIX = ("Infra starts in the infra repository (compute-verification/infra), never here, and INFRA_PATHS in "
