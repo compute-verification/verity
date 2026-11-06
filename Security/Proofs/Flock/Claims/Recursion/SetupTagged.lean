@@ -1,5 +1,8 @@
-import Proofs.Flock.Claims.Recursion.LayoutBTops
-import Proofs.Flock.Claims.Recursion.VStarCross
+module
+
+public import Proofs.Flock.Claims.Recursion.LayoutBTops
+public import Proofs.Flock.Claims.Recursion.VStarCross
+import all Init.Data.String.Defs
 
 /-!
 # The plain setup makes a call no recorded part makes
@@ -16,6 +19,8 @@ log `p` holds of nowhere, the poisoned run is the `OC` run (`poisonSim`, one mor
 `setupTablesWith_sim`). With `p` the inputs not `HmTagged`, a hidden-output setup refuses at `σ`
 (`setupHiddenWith_poison`), and so does every session of such tables (`setupTablesWith_poison`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

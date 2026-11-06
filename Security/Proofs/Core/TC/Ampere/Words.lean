@@ -1,9 +1,13 @@
-import Proofs.Core.TC.Ampere.Step
-import Proofs.Core.TC.Proofs.Words
+module
+
+public import Proofs.Core.TC.Ampere.Step
+public import Proofs.Core.TC.Proofs.Words
 
 /-!
 # The FP32 word at the boundary, on the Ampere pipeline (floor `-132`)
 -/
+
+@[expose] public section
 
 namespace Verity.TC.Proofs.Ampere
 

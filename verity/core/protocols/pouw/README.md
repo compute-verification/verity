@@ -10,22 +10,25 @@ It carries no policy parameter: it surfaces the ε at δ its sample established.
 
 ## PoUW in the remote protocol
 
-The remote protocol, for an auditor with no devices at the datacenter, composes two subprotocols: sampled proofs'
-one-stage audit and PoUW's execution-phase check (`Core.Remote.components` in
-`verity/core/protocols/remote/CoreRemote.lean`, id `verity/remote/v0`). It accepts only when both subprotocols accept
-their own cases and its commitment binds both subprotocols' commitments; either one's rejection rejects it
-(`Core.Composition.product`, `verity/core/protocols/composition/README.md`). In the remote demo, the vLLM demo
+The remote protocol, for an auditor with no devices at the datacenter, composes three subprotocols: sampled proofs'
+one-stage audit, PoUW's period check, `PouwCheck.Period.protocol` (`verity/pouw/period/v1`), as onsite does, and the
+inference-only policy's check (`Core.Remote.components` in `verity/core/protocols/remote/CoreRemote.lean`, id
+`verity/remote/v0`). It accepts only when every subprotocol accepts its own case, its commitment binds the
+subprotocols' commitments, the policy and the one-stage audit committed to one record, and every window of the period
+names that record as its Commit record (`Core.Remote.windows`); any one's rejection rejects it
+(`Core.Composition.tiedSameB`, `verity/core/protocols/composition/README.md`). In the remote demo, the vLLM demo
 (`verity example vllm`), PoUW runs on the served model as H1, under the challenger's development key, so its verdict
-credits nothing, and an H1 commitment's served execution blocks aren't yet a `verity/pouw/v1` case. The remote
+credits nothing, and an H1 commitment's served execution blocks aren't yet a `verity/pouw/period/v1` case. The remote
 protocol's front door is
 `verity/core/protocols/remote/`; PoUW is also a subprotocol of the onsite protocol (`verity/core/protocols/onsite`).
 
 ## What runs
 
-The verifier is Lean, three Lake packages under `lean/`:
+The verifier is Lean, the source of truth for what PoUW checks: three Lake packages under `lean/`.
 
-- `lean/check` (`pouw_check`): `PouwCheck.protocol`, the `Core.Protocol` with id `verity/pouw/v1` that the remote
-  protocol composes. `PouwCheck.check` decides one execution phase from its registration (the commitment) and the proof
+- `lean/check` (`pouw_check`): `PouwCheck.Period.protocol` (`verity/pouw/period/v1`), the `Core.Protocol` both the
+  onsite and the remote protocol compose, and `PouwCheck.protocol` (`verity/pouw/v1`), one execution phase's check,
+  which neither composes. `PouwCheck.check` decides one execution phase from its registration (the commitment) and the proof
   system's answer to it (the evidence); `PouwCheck.Credit` decides what a served execution phase, and a credit period
   (below), credits. Its executable is `pouw-check` (`id | check | serve`, the core interface's commands).
 - `lean/window` (`pouw_window`): what an execution phase registers and makes public: its grid level, its sample size K′, its
@@ -101,11 +104,12 @@ reads. Proved:
   `Accounting.SecurityProofs.ComputeOfPouwPerRun`, `Accounting.SecurityProofs.PouwEndToEndPerRun` and
   `Accounting.SecurityProofs.PouwLocalOff`.
 
-Stated, open: an execution phase's ε from its calls' (`Pouw.Guarantees.WindowEps`, and `Pouw.Guarantees.ServiceEscapes` for
-the deployed sample, `Security/Definitions/Pouw/Guarantees/Window.lean`); Dither's guarantees
-(`Security/Definitions/Pouw/Guarantees/DitherInstance.lean`); and several of Pearl-C's per-shape and per-model instances
-(`Security/Definitions/Pouw/Guarantees/PearlC.lean`). No guarantee over the remote protocol as a whole is stated yet; `Properties.Composition` (`Security/Properties/Composition.lean`) proves the composition's accept
-rule against its code.
+Stated, open: an execution phase's ε from its calls' (`Pouw.Guarantees.Window.WindowEps`, and
+`Pouw.Guarantees.Window.ServiceEscapes` for the deployed sample, `Security/Definitions/Pouw/Guarantees/Window.lean`);
+Dither's guarantees (`Security/Definitions/Pouw/Guarantees/DitherInstance.lean`); and several of Pearl-C's per-shape and
+per-model instances (`Security/Definitions/Pouw/Guarantees/PearlC.lean`). No guarantee over the remote protocol as a whole
+is stated yet; `Properties.Composition` (`Security/Properties/Composition.lean`) proves the composition's accept rule
+against its code.
 
 The guarantees rest on named assumptions, each a hypothesis of the statement: the schemes' conjectures, stated and not
 proved (`Pouw.NCP.Assumptions.TTNCP_U`, and Pearl-C's TT_OUT forms such as
@@ -137,6 +141,6 @@ k = window.k_prime(eps, delta, work.credited, work.n, tile_work)   # K′, the s
   (`compile`) and the sampling plan (`plan`). Each Definition has its `circuit-check` sidecar.
 - `lean/check`, `lean/commit`, `lean/window`: the Lean verifier, each with its difftest; `lean/check/README.md` and
   `lean/window/README.md` map each Lean module to its Python.
-- `PROTOCOL.md`: the experimental spec, until the Lean covers it.
 - `dither/`: Dither, experimental, with its `PROTOCOL.md`.
-- `tests/`: the package's suite. `benchmarks/pouw/` is the measuring side; nothing here imports it.
+- `tests/`: the package's suite, with the schemes' and the window's pinned vectors under `tests/vectors`.
+  `benchmarks/pouw/` is the measuring side; nothing here imports it.

@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.ZkBind.Shadow
-import Proofs.Flock.Soundness.Discharge.ZkBind.Headline
-import Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt
-import Proofs.Flock.Soundness.Discharge.Integrate.Headline
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkBind.Shadow
+public import Proofs.Flock.Soundness.Discharge.ZkBind.Headline
+public import Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt
+public import Proofs.Flock.Soundness.Discharge.Integrate.Headline
 
 /-!
 # The sites, the layout and the rows at the `--zk` tables
@@ -23,6 +25,8 @@ table of a `DrawSetupZK` at the challenger's draw `dj S`, a refused table otherw
 None of them takes a draw premise: like `tablesAtZK` they are defined at every draw. `sitesZAt_at` reads the draw's own
 `DrawSetupZK`, which item 3 gives from `AcceptsZK` and `DrawOkZK I dj mPts S` at the session's own draw `S`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkBind
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.ZkDecJ
-import Proofs.Flock.Claims.Recursion.DeployPremises
-import Proofs.Flock.Claims.Scope.Tables
+module
+
+public import Proofs.Flock.Claims.KS.ZkDecJ
+public import Proofs.Flock.Claims.Recursion.DeployPremises
+public import Proofs.Flock.Claims.Scope.Tables
 
 /-!
 # Recursion completeness at `deployRec`: the honest outer witnesses are in the V\* relation
@@ -41,6 +43,8 @@ without `--zk` and with hidden outputs (`ProvedScope.leafOk`); where the scope c
 `InnerAccepts` is a hypothesis about the coins, not a consequence of the relation: at coins in the inner completeness
 error the honest inner proof is refused, and the V\* statements staged there need not have a witness.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

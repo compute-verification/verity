@@ -1,4 +1,6 @@
-import Definitions.Accounting.TS
+module
+
+public import Definitions.Accounting.TS
 
 /-!
 # The tensor–scalar model's named assumptions (trusted)
@@ -53,8 +55,8 @@ Which form each takes:
   unit's pinning, the share covering every unit that isn't good (`DrawnLayer.Covers`, proved for each game), and
   `UnitFixed`. Its crypto half, the drawn units right, is `Accounting.Guarantees.TS.DrawnRightOff`.
 * `RightFixed`: E1(c) with the rounds' equal shares, the part of (I8) that is the TS model's accounting rather than the
-  proof service's.
-* `BindingForkAt`, `ProofSoundAt`, `ProofsPin`: `ProofsSoundOfPinned`'s proof-service pieces as named premises, binding
+  proof system's.
+* `BindingForkAt`, `ProofSoundAt`, `ProofsPin`: `ProofsSoundOfPinned`'s proof-system pieces as named premises, binding
   in its fork form, so the headlines' binding is `√δ_fork` and no advantage bound.
 * `UnitFixed`: E1(c) per unit, which doesn't read the draw: the good units' words are fixed, a unit being good when
   the run computed it and the units that write it values after its coin (not skipped and guessed), and the words of
@@ -69,6 +71,8 @@ The joint-luck premise JL is not used: D-ideal keeps the proved `ε_jl`.
 noise-active segments carry equal counts), and no guarantee rests on it; `Accounting.Guarantees.TS.SegmentSteer` is the
 bound that holds.
 -/
+
+@[expose] public section
 
 namespace Accounting.Assumptions.TS
 

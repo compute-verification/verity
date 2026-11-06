@@ -1,5 +1,7 @@
-import Proofs.Flock.SamplingBoundary
-import Proofs.Flock.Soundness.Discharge.ZkLink.Public
+module
+
+public import Proofs.Flock.SamplingBoundary
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
 
 /-!
 # The sampling claims' faulty units are wrong on the registration
@@ -20,6 +22,8 @@ game's circuit, partition and transcript, every faulty slot is a unit wrong on e
 * `wrongRegZ_of_faulty`, `card_faulty_le_card_wrongRegZ`: a faulty slot is a unit wrong on the registration, so there
   are at most as many faulty slots as units wrong on it.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink.SamplingFaulty
 

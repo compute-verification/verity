@@ -1,5 +1,7 @@
-import Properties.Pous.Period
-import Definitions.Pous.P2.Mutable
+module
+
+public import Properties.Pous.Period
+public import Definitions.Pous.P2.Mutable
 
 /-!
 # PoUS as an obligation over one audit window: the deployed check's acceptance certifies the snapshot's space
@@ -23,6 +25,8 @@ the instantiation (`Instantiates`), with the other tags' keys read as part of th
 labeling, or keys of blocks committed earlier) is outside it. `PeriodCapacity` gives the joint's capacity guarantee at
 each value of the other tags' keys as it stands.
 -/
+
+@[expose] public section
 
 namespace Pous.Period
 

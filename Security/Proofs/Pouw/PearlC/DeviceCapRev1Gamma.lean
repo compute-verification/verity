@@ -1,7 +1,9 @@
-import Proofs.Pouw.PearlC.DeviceSm120KernelGamma
-import Proofs.Pouw.PearlC.UOnlyGamma
-import Definitions.Pouw.Guarantees.PearlC
-import Proofs.Pouw.PearlC.TTOutW1
+module
+
+public import Proofs.Pouw.PearlC.DeviceSm120KernelGamma
+public import Proofs.Pouw.PearlC.UOnlyGamma
+public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.PearlC.TTOutW1
 
 /-!
 # v1 under rev1 at a stricter cap, and γ there (FP8 security's file)
@@ -23,6 +25,8 @@ Staged; nothing pinned.
   (`pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192_of_cap400`, `_16384_of_cap400`). Per audit tile it does not: from
   rev1 per tile at 1/400 the sampled γ at 1/1,000 is 1/400's (`TileCapRev1Gamma`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

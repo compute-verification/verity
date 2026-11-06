@@ -1,6 +1,10 @@
-import Proofs.Pouw.PearlC.PeelFp4Checks.Defs
+module
+
+public import Proofs.Pouw.PearlC.PeelFp4Checks.Defs
 
 /-! # `test-16-nvfp4`: selected rows of `A′·F_B` and `B̃·F_A` (`PeelFp4Checks`, which joins them) -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.PeelFp4Checks
 

@@ -10,6 +10,7 @@ defaultTargets = ["PousCheck", "pous-setup", "pous-setup-difftest", "pous-audit-
 [leanOptions]
 autoImplicit = false
 relaxedAutoImplicit = false
+backward.proofsInPublic = true
 
 [[require]]
 name = "flock_verifier"

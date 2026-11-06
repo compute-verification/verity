@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Refine.LiveSim
+module
+
+public import Proofs.Flock.Soundness.Refine.LiveSim
 
 /-!
 # The transfer for the compiled table
@@ -7,6 +9,8 @@ import Proofs.Flock.Soundness.Refine.LiveSim
 live run goes on the model can still play. `allInh_repC` proves it for the compiled reps, from `AllInh` of each game
 they are built from. `live_le_tableC` is then the transfer for `tableC` itself: its one hypothesis is `Decodes`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 

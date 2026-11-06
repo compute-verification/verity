@@ -1,5 +1,7 @@
-import Proofs.Flock.C3.VStarList.Shape
-import Proofs.Flock.Level3.Assembly
+module
+
+public import Proofs.Flock.C3.VStarList.Shape
+public import Proofs.Flock.Level3.Assembly
 
 /-!
 # Rulings 2 and 4: `ℓ` and the slots' units from check 5's refusals
@@ -16,6 +18,8 @@ Check 5 (`RecCoins.checkSparse`) refuses the inner shape's `sparse` entry off Re
 * `units_of_sparseRange`: where the slots' units are the unit range's (`UnitsOf`), the class keeps every one of them
   (`HoloClass.ofExec`'s filter): the range ends inside the `2^(k_log − ℓ)` units of the block.
 -/
+
+@[expose] public section
 
 namespace FlockC3.VStarList
 

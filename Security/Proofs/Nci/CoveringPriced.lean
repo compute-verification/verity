@@ -1,6 +1,8 @@
-import Definitions.Nci.Guarantees.CoveringPriced
-import Proofs.Nci.CoveringTwoCosts
-import Mathlib.Tactic.FieldSimp
+module
+
+public import Definitions.Nci.Guarantees.CoveringPriced
+public import Proofs.Nci.CoveringTwoCosts
+public import Mathlib.Tactic.FieldSimp
 
 /-!
 # The covering bound at a price per weight
@@ -19,6 +21,8 @@ At `p = fun _ => c_w` the premise is `ParameterHardAt` (`parameterHardPricedAt_c
 `CoveringBoundTwoCosts` (`coveringBoundTwoCosts_of_priced`). `k < p i · D` for every `i` gives the two conditions on the
 prices (`depth_of_lt_mul`).
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs.CoveringPriced
 

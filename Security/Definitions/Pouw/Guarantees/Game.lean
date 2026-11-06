@@ -1,8 +1,10 @@
-import Definitions.Pouw.Assumptions.Pinned
-import Definitions.Pouw.Basic.Prob
-import Definitions.Pouw.Game.Defs
-import Definitions.Pouw.Game.Params
-import Definitions.Pouw.Assumptions.Game
+module
+
+public import Definitions.Pouw.Assumptions.Pinned
+public import Definitions.Pouw.Basic.Prob
+public import Definitions.Pouw.Game.Defs
+public import Definitions.Pouw.Game.Params
+public import Definitions.Pouw.Assumptions.Game
 
 /-!
 # The game's guarantees (trusted)
@@ -12,6 +14,8 @@ hypotheses (`Pouw.Assumptions`). Its proof is the theorem `Pouw.SecurityProofs.G
 of `Pouw.Assumptions.Pinned`: Theorem 1, work-weighted sampling, and TT's resource exhaustion end to end. Each keeps the
 text, the docstring and the `open`s of the statement it was in its source module.
 -/
+
+@[expose] public section
 
 namespace Pouw.Guarantees
 

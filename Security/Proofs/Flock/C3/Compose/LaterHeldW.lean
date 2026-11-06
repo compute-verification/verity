@@ -1,4 +1,6 @@
-import Proofs.Flock.C3.Compose.HoloSparseWords
+module
+
+public import Proofs.Flock.C3.Compose.HoloSparseWords
 
 /-!
 # `LaterCoins` from the inner session's records, word by word
@@ -10,6 +12,8 @@ the history's rounds as it holds words (a sparse phase's ζ_c is one round of si
 `laterCoins_of_held`: `LaterCoins` at a run whose link points are the record's, whose sparse phases are each
 `StageHeldW` and whose R stages are each `StageHeld`, each from where the one before ends.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 
@@ -126,7 +130,7 @@ theorem laterCoins_of_held {r : ℕ} {CT : Fin r → Type} {e : ExecHolo} {Cm : 
     {held : Lean.Json × String → Except String Flock.RecVStar.InnerCommits} {sparse : Option Flock.RecSparse.Shape}
     {m : FlockSoundness.Assumptions.InnerRecordMap Cm ((k : Fin r) → CT k)} {sel selW : ℕ → String → ℕ → Prop}
     {pts : Array (Array Flock.F128) → Fin 2 → Fin e.cls.mPts → GF128} {spec : Flock.SessionSpec}
-    {sess : Flock.Session}
+    {sess : Flock.RunRecord}
     (hcus : FlockSoundness.Assumptions.InnerRecordCustody wr held sparse m) (henc : CoinsEncoded sel m.coin)
     (hsel : ∀ i s q, sel i s q → m.selC i s q) (hencW : CoinWordsEncoded selW m.coin)
     (hselW : ∀ i s q, selW i s q → m.selC i s q)

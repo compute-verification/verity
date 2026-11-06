@@ -37,8 +37,8 @@ that law over the registered population (Lean's `flock-verify draw --registratio
 (two requests, one step, both linears, width 128: 512 units, registered `subset:4`), its weights registered as core's
 registered values and its step committed under test salt keys, its target the RTX PRO 6000's. The suite pins its
 SHA-512s. `check` recomputes every string, path and domain and replays each unit's Definition on its input rows. The
-window itself, which `benchmarks/one_stage/prove_bundle.sh` proves the bundle against, is in the evidence store
-(its `BUNDLE_WINDOW`).
+window itself, which `benchmarks/one_stage/prove_bundle.sh` proves the bundle against, is the registered fixture
+`benchmarks/one_stage/tests/fixtures/bundle-window` (its `BUNDLE_WINDOW`).
 
 ## The block record (`verity/block-record/v1`)
 
@@ -52,7 +52,9 @@ for one server block and what the composed verdict reads. It extends the all-pro
   S_cert, Q_cert, K, the wipe's foreign_bits at its reads `k` and ratio `r`), its error and the certificate at δ = 1/100
   and 1/10^6, its run ids, and `source: real|fixture`;
 - the composed verdict and the error of `Accounting.Guarantees.JointHorizonLive` over the block: the accepted
-  subprotocols' errors summed;
+  subprotocols' errors summed. It composes the subprotocols of one product (`PRODUCTS`): onsite's, every one, unless
+  `composed.product` names remote's, sampled proofs and PoUW, whose other subprotocols are `dropped`: not run and not
+  composed;
 - the monitoring period: week, month and year over a census deployment's machines (a parameter), with JointHorizonLive's
   union bound over that many blocks and the per-block error each δ needs.
 

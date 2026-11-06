@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkSession.Compose
-import Proofs.Flock.Soundness.SoundnessPad
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkSession.Compose
+public import Proofs.Flock.Soundness.SoundnessPad
 
 /-!
 # C-Flock ZK's masked Ligerito level 0 (live/PROTOCOL.md §1, §4, §7)
@@ -21,6 +23,8 @@ acceptance probability (`ligeritoPadZK_couple`). Unmasking each message at `h` t
 the claim forms evaluate at `h` to the clear claims (`fold_couple`), and when the row vanishes `T'` is the clear
 restart, after which the two games are the same game.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkSession
 
@@ -145,7 +149,7 @@ structure Pads0 (np e : ℕ) where
 /-- A round polynomial whose coefficients are forms. -/
 abbrev QuadL (K : Type) (np : ℕ) := LinK K np × LinK K np × LinK K np
 
-/-- `from(msg, s)` (§13.2) on forms. -/
+/-- `from(msg, s)` (`Flock.Ligerito`) on forms. -/
 def fromMsgL {np : ℕ} (m : LinK K np × LinK K np) (s : LinK K np) : QuadL K np := (m.1, s + m.2, m.2)
 
 /-- `q(x) = q₀ + q₁·x + q₂·x²` on forms. -/

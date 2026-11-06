@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Sampling.KS
+module
+
+public import Proofs.Flock.Claims.Sampling.KS
 
 /-!
 # Flock's KS at a checked unit's session
@@ -29,6 +31,8 @@ A session may cover several checked units, as the one-stage audit's one session 
 (`sessionRunsSlots_units_iff`). `InnerNumbers` at one session over every unit is one statement about it
 (`innerNumbers_one_iff`).
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 

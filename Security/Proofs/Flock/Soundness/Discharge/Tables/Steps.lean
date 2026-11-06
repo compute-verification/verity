@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Refine.LiveSim
-import Proofs.Flock.Soundness.Game.Batch
+module
+
+public import Proofs.Flock.Soundness.Refine.LiveSim
+public import Proofs.Flock.Soundness.Game.Batch
 
 /-!
 # The model's moves inside a batch
@@ -14,6 +16,8 @@ structure as moves of the whole game.
   `interleave`, and a position of `batch` are contexts.
 * `steps_batch_ofFn`: a batch whose every position has a path to an end has a path to the end with their outputs.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Tables
 

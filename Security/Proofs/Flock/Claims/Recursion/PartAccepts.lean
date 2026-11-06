@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.TopsOpens
+module
+
+public import Proofs.Flock.Claims.Recursion.TopsOpens
 
 /-!
 # `PartChecksBV` at what each part's circuit accepts (`PartAccepts`), and the corollaries without it
@@ -35,6 +37,8 @@ both facts does.
 accepted run) and `ReadersTrue` from `readersTrue_layoutBTops` (every hm96 slot `layoutBTops` reads outputs its commit
 string at the outer relation, `hmSlotsCommit_of_full`). What they take: `DecompB` there, and nothing else.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion.VStarB
 

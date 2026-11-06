@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkSession.Algebraic
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkSession.Algebraic
 
 /-!
 # Soundness of a `--zk` table (live/PROTOCOL.md §1, §4, §5, §7)
@@ -14,6 +16,8 @@ probability at most `padLinkError + (padRepError + εInner)²`: `table_sound_pad
 the inner proof's `εInner = (N + 3)/|F| + (1 − δ)^q`. Per rep it is `zk_compose` (the inner proof), whose coupling
 premise is `repMaskedZK_couple` (the masked rep against the clear one) followed by `rep_sound_pad`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkSession
 

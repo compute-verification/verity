@@ -1,7 +1,9 @@
-import Definitions.Pouw.Dither
-import Definitions.Core.Accel.Machine
-import Definitions.Core.Accel.H200
-import Definitions.Core.Accel.Sm120
+module
+
+public import Definitions.Pouw.Dither
+public import Definitions.Core.Accel.Machine
+public import Definitions.Core.Accel.H200
+public import Definitions.Core.Accel.Sm120
 
 /-!
 # The headline's model on the cards: the H200 and the RTX PRO 6000 (trusted)
@@ -37,6 +39,8 @@ import Definitions.Core.Accel.Sm120
 The card's semantics `x` are not fixed here: the headline holds at every `x` meeting P1 (`Card.Exact`) and P2
 (`Open.ProductForm`, as `Assumptions.AccelProductForm`).
 -/
+
+@[expose] public section
 
 open scoped NNRat
 

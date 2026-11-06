@@ -1,6 +1,8 @@
-import Definitions.Pouw.Receipt.Duo
-import Definitions.Pouw.Receipt.Li
-import Definitions.Pouw.Receipt.Fx1
+module
+
+public import Definitions.Pouw.Receipt.Duo
+public import Definitions.Pouw.Receipt.Li
+public import Definitions.Pouw.Receipt.Fx1
 
 /-!
 # The receipt folds duo's, fx1's and li's binding (trusted)
@@ -97,6 +99,8 @@ chain's segment has the rotations `(6, 20, 3, 17)` or `(13, 27, 10, 24)` (`fgemm
 one parity), so `r₁ + r₃ mod 32 ∈ {5, 9, 19, 23}`, off that family; three and four words have no statement here. fx1
 has the same (`Fx1PairXorNoKernel`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Guarantees.Receipt
 

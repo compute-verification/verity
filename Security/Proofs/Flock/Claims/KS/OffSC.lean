@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.Refit
-import Proofs.Flock.Claims.KS.ConflictTied
+module
+
+public import Proofs.Flock.Claims.KS.Refit
+public import Proofs.Flock.Claims.KS.ConflictTied
 
 /-!
 # Off the table without a self-clash, at the deployed reader
@@ -15,6 +17,8 @@ have one row. Only which entries the reader is given matters, not their order. A
 openings verify against its cap when both reps' level-0 requests have level 0's lanes and path length
 (`verified_slotOpensL`, `verified_opens₀L`).
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 

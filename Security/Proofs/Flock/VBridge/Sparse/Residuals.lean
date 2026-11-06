@@ -1,7 +1,9 @@
-import Proofs.Flock.VBridge.Sparse.Defs
-import Proofs.Flock.VBridge.Algebra.Build
-import Proofs.Flock.Soundness.Refine.Arith
-import Proofs.Flock.Soundness.Refine.Regions
+module
+
+public import Proofs.Flock.VBridge.Sparse.Defs
+public import Proofs.Flock.VBridge.Algebra.Build
+public import Proofs.Flock.Soundness.Refine.Arith
+public import Proofs.Flock.Soundness.Refine.Regions
 
 /-!
 # `RecSparse_v1`'s residuals and verifier row over the model's field
@@ -11,6 +13,8 @@ evaluated (`rget_eq`): its added terms plus its products, read through `fOf`; `s
 verifier row's parts are the model's values at the coins (`v_*`): the equality tables are `eqAt` at the coins they
 slice, the rounds' slots are `r` and `r^k + r`, and the two dots are `ŵ(ζ_r)` and `Ũ(r_s)`.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Sparse
 

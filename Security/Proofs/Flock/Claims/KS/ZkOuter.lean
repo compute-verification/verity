@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.ZkExtend
-import Proofs.Flock.Claims.Recursion.DeployOuter
+module
+
+public import Proofs.Flock.Claims.KS.ZkExtend
+public import Proofs.Flock.Claims.Recursion.DeployOuter
 
 /-!
 # Masked knowledge soundness at the outer verifier (`zk_KS_outer`)
@@ -12,6 +14,8 @@ instance (`KS.Gen.deployZk`) is `deployZkRec` (`deployZk_SO`): the same step (`a
 verdict (`outOf_decision_SO`), the same reading of the statement, columns and numbers. So the chain's knowledge
 soundness at `SO` (`KS.Gen.zk_KS_untrim`) is the outer verifier's (`zk_KS_outer`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

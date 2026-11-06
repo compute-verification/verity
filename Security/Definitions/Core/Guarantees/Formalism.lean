@@ -1,5 +1,7 @@
-import Definitions.Core.Formalism
-import Definitions.Core.Boolean
+module
+
+public import Definitions.Core.Formalism
+public import Definitions.Core.Boolean
 
 /-!
 # The working draft's Lemma 1 and Theorem 3
@@ -11,6 +13,8 @@ summed by `ServingBlockSum`, with each serving block's inference cap from `Infer
 which credit and reporting are stated, is at most `size` (`AndSizeLe`), and on C-Flock's circuits counts its AND gates
 and rows (`ToCircuitAnd`). Credit under the pinned lowering is at most the lowered circuit's size (`CreditSizeLe`).
 -/
+
+@[expose] public section
 
 namespace Verity.Guarantees
 

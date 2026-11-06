@@ -1,6 +1,8 @@
-import Proofs.Flock.C3.Compose.HoloEncoded
-import Proofs.Flock.C3.Compose.HoloStreamSizes
-import Proofs.Flock.VBridge.Sparse.Defs
+module
+
+public import Proofs.Flock.C3.Compose.HoloEncoded
+public import Proofs.Flock.C3.Compose.HoloStreamSizes
+public import Proofs.Flock.VBridge.Sparse.Defs
 
 /-!
 # The sparse phases' rounds at the map read
@@ -14,6 +16,8 @@ own before `q`; `roundAt_sparseRounds` at `sparseRounds`, phase 0's being `nc`.
 where each holds coins and they are as many, as `RecCoins.sparseCoins` reads a sparse stream (its `filter`);
 `coinRounds_held` at a schedule's coin rounds (`filter_range_sublist`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 

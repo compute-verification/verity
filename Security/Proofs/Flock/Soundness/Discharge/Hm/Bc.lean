@@ -4,7 +4,11 @@ string of the row and salt its slots read. Δ's one copy at each `cv` and `pad` 
 `port_commit_rows` its four facts (`row_copies_flat`); the constant bits read the pin (`pin_bit`) and the unit range's
 forced-zero row (`zero_bit`).
 -/
-import Proofs.Flock.Soundness.Discharge.Hm.Flat
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hm.Flat
+
+@[expose] public section
 
 open Flock FlockLevel3
 

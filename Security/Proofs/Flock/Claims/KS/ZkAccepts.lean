@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainEvent
-import Proofs.Flock.Claims.Sampling.Deployed
+module
+
+public import Proofs.Flock.Claims.KS.PlainEvent
+public import Proofs.Flock.Claims.Sampling.Deployed
 
 /-!
 # An accepted run of the deployed `--zk` verifier is flock-verify `--zk`'s acceptance
@@ -17,6 +19,8 @@ record and proof files `f`, and:
 This is the `--zk` side of `plainVerdict_of_run`. Equality of the draw as a value is what the setup reads: `Exec.setupOf`
 sets the record up at the record's own draw (`Custody.setupOf_record`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

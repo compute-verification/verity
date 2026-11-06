@@ -27,7 +27,7 @@ def _salts(n: int) -> list[bytes]:
 
 def test_a_leaf_is_the_hiding_row_leaf():
     rows, salts = _rows(3), _salts(3)
-    reg = A.register(rows, N_BITS, BINDING, salts)
+    reg = A.commit(rows, N_BITS, BINDING, salts)
     d, inst, kind = A.domain(BINDING, 3), hm96.SHA512, BitRowLeaf(N_BITS)
     for i in range(3):
         bc = inst.commit_string(inst.default_key, kind.layout().digest(rows[i]), salts[i])
@@ -37,7 +37,7 @@ def test_a_leaf_is_the_hiding_row_leaf():
 
 @pytest.mark.parametrize("n", [1, 2, 5, 16, 33])
 def test_every_row_opens_and_nothing_else_does(n):
-    reg = A.register(_rows(n), N_BITS, BINDING, _salts(n))
+    reg = A.commit(_rows(n), N_BITS, BINDING, _salts(n))
     for i in range(n):
         o = reg.open(i)
         assert A.verify(reg.root, n, N_BITS, BINDING, o)
@@ -52,16 +52,16 @@ def test_every_row_opens_and_nothing_else_does(n):
 
 def test_fresh_salts_hide_equal_rows():
     rows = [bytes(N_BITS // 8)] * 4
-    a, b = A.register(rows, N_BITS, BINDING), A.register(rows, N_BITS, BINDING)
+    a, b = A.commit(rows, N_BITS, BINDING), A.commit(rows, N_BITS, BINDING)
     assert a.root != b.root and len(set(a.leaves)) == 4 and all(len(s) == A.INST.salt_bytes for s in a.salts)
 
 
 def test_malformed_registrations_are_refused():
     with pytest.raises(ValueError):
-        A.register([], N_BITS, BINDING)
+        A.commit([], N_BITS, BINDING)
     with pytest.raises(ValueError):
-        A.register([b"\0" * 3], N_BITS, BINDING)
+        A.commit([b"\0" * 3], N_BITS, BINDING)
     with pytest.raises(ValueError):
-        A.register(_rows(2), N_BITS, BINDING, _salts(1))
+        A.commit(_rows(2), N_BITS, BINDING, _salts(1))
     with pytest.raises(ValueError):
-        A.register(_rows(1), N_BITS, b"short")
+        A.commit(_rows(1), N_BITS, b"short")

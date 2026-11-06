@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.ExecTemplateSetup
+module
+
+public import Proofs.Flock.Soundness.ExecTemplateSetup
 
 /-!
 # A typed flat class's unit, placed (1e for flat classes)
@@ -14,6 +16,8 @@ a flat class: `parseTyped` parses the file with the unit's net first (`HmRow.par
 - `setupH_flatRealizes`, `setupH_flatPlacement`: so at each unit slot, the accepted statement realizes the unit's composed
   rows (`Layout.realizes`) and places them (`Realizes.placement`), the table class's `placed` there.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

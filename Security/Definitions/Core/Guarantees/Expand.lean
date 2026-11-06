@@ -1,4 +1,6 @@
-import Definitions.Core.Expand
+module
+
+public import Definitions.Core.Expand
 
 /-!
 # The bit-level expansion's guarantees
@@ -8,6 +10,8 @@ Boolean model through `Circuit.expand`: the expansion computes the circuit bit f
 every computed gate of positive width reads a gate of positive width, has as many gates as the circuit has bits, and a
 partition's proof blocks keep their sizes in bits and read at most the bits they read before.
 -/
+
+@[expose] public section
 
 namespace Verity.Guarantees
 

@@ -1,7 +1,9 @@
-import Proofs.Flock.Level3.ArithFacts
-import Proofs.Flock.Level3.GF256
-import Proofs.Flock.Soundness.Discharge.Composed.Base
-import Proofs.Flock.Claims.Deploy
+module
+
+public import Proofs.Flock.Level3.ArithFacts
+public import Proofs.Flock.Level3.GF256
+public import Proofs.Flock.Soundness.Discharge.Composed.Base
+public import Proofs.Flock.Claims.Deploy
 
 /-!
 # The mask slot's rank
@@ -24,6 +26,8 @@ is full when it is `⊤` (`RankFull`).
   `GF(2^128)^k`; `maskRankOk_append_left`: rep 1's check at all four points covers rep 0's.
 * `maskWords_ge`: a statement the `--zk` setup admits has `N = 2^D` mask words with `D ≥ 10`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.MaskRank
 

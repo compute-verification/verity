@@ -1,5 +1,7 @@
-import Definitions.Nci.Assumptions
-import Definitions.Nci.Dark
+module
+
+public import Definitions.Nci.Assumptions
+public import Definitions.Nci.Dark
 
 /-!
 # NCI's partial-sum law on a reference circuit
@@ -21,6 +23,8 @@ Both support forms are falsified (`Assumptions.ActivationsSupport`, `Assumptions
 guarantee here rests on a falsified premise. The same laws in reads form, under `TrainingIncompressible` on `c`, are
 `IncompressibleContainedTraining`, `IncompressibleContainedMatMulOn` and `IncompressibleContainedTrainingOn`.
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 

@@ -1,4 +1,6 @@
-import Definitions.Accounting.TS.SharedNoise
+module
+
+public import Definitions.Accounting.TS.SharedNoise
 
 /-!
 # One noise seed a call: the bridge and the grid's moment
@@ -27,6 +29,8 @@ J10's guarantees: H1 + fx1's noise derived from one seed a call (`Definitions.Ac
   columns, `g ≤ 64` tiles a band. There `θ = 1/(256·32)`, `TemplateMoment`'s rate at one tile, for every `g ≤ 64` and
   every number of row blocks: banded, one seed a call costs the seeded premium nothing.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.TS
 

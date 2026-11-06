@@ -1,4 +1,6 @@
-import Proofs.Flock.SamplingBoundary
+module
+
+public import Proofs.Flock.SamplingBoundary
 
 /-!
 # Input slots
@@ -16,8 +18,10 @@ through a drawn unit that reads it.
   faulty exactly when that gate's value is unopened (`faulty_withInputs_iff`).
 * `InScope`'s input clause: every input gate of `C` is in a proof unit of `withInputs P C` (`input_mem_withInputs`), so
   where `P` covers every other gate but the constants, `withInputs P C` covers every gate but the constants
-  (`covers_withInputs`), `Partitions`' covering clause.
+  (`covers_withInputs`), which gives `Partitions`' covering clause.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling.InputSlot
 
@@ -105,8 +109,8 @@ theorem input_mem_withInputs (P : Partition) {C : Prog} {g : ℕ} (hg : C.gates[
   exact List.mem_flatten.2 ⟨[g], List.mem_append_right _ (List.mem_map.2 ⟨g, mem_inputsAt.2 hg, rfl⟩),
     List.mem_singleton_self _⟩
 
-/-- **`Partitions`' covering clause at `withInputs P C`**, where `P` covers every gate but the constants and the
-inputs. -/
+/-- **`withInputs P C` covers every gate but the constants**, where `P` covers every gate but the constants and the
+inputs, which gives `Partitions`' covering clause. -/
 theorem covers_withInputs (P : Partition) (C : Prog)
     (h : ∀ g < C.gates.length, (∀ b, C.gates[g]? ≠ some (.const b)) → C.gates[g]? ≠ some .input → g ∈ P.gates) :
     ∀ g < C.gates.length, (∀ b, C.gates[g]? ≠ some (.const b)) → g ∈ (withInputs P C).gates := by

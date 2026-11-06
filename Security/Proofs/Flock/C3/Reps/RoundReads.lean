@@ -1,4 +1,8 @@
-import Proofs.Flock.C3.Reps.RoundLinks
+module
+
+public import Proofs.Flock.C3.Reps.RoundLinks
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # `RoundReads` and `WRoundReads` at the verifier's message-round ports
@@ -22,6 +26,8 @@ and the unit a rep reads at (`hun`).
 * `wRoundReads_ownAt`, `wRoundReads_checked`: `WRoundReads` at `ownAt ss` where some outer proof is accepted
   (`AcceptedAt`), and at the checked family.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps.RoundReads
 

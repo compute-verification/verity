@@ -1,5 +1,7 @@
-import Definitions.Accounting.Remote.Draw
-import RemoteAudit.Line
+module
+
+public import Definitions.Accounting.Remote.Draw
+public import RemoteAudit.Line
 
 /-!
 # The verifier's pooled bound covers the draw's (`RemoteAudit.Pooled`)
@@ -21,6 +23,8 @@ rational root, and W by the fractional knapsack's greedy. The draw's model reads
 They take no premise. That the windows the line reads are the session's (each window's receipts and its draws, as the
 verifier's record holds them, `audit.Record`) is the record's, outside this statement.
 -/
+
+@[expose] public section
 
 open RemoteAudit
 

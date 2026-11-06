@@ -1,4 +1,6 @@
-import Proofs.Properties.NetworkRecords.Program
+module
+
+public import Proofs.Properties.NetworkRecords.Program
 
 /-!
 # A committed record's digest binds its frames
@@ -8,6 +10,8 @@ import Proofs.Properties.NetworkRecords.Program
 where SHA-256 has no collision on the strings the two digests hash, have the same frames row by row (`frames_eq`), and a
 committed record whose digest is the Program's grid's commits to it (`commitsTo`).
 -/
+
+@[expose] public section
 
 open NetworkCheck hiding Params
 open NetworkCheck.Check (Params Grid)

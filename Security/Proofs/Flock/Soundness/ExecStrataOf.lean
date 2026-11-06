@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.ExecStratified
-import Proofs.Flock.Soundness.Refine.Setup
+module
+
+public import Proofs.Flock.Soundness.ExecStratified
+public import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
 # The strata the verifier accepts are a partition's
@@ -13,9 +15,16 @@ on the statement's form: they follow from the verifier accepting.
   passed `stratumOfJson`, whose units are non-empty ranges `lo < hi` (`stratumOfJson_ranges`).
 * `StrataExec.strataProblem_none`: what `strataProblem` checks: `1 ≤ k ≤ pop`, each stratum's `k` the rule's
   (`stratumK`), and the ranges, sorted by their starts, chain from `0` to `pop` (`Chain`).
-* `StrataExec.chain_facts`: a chain of non-empty ranges from `a` to `b` covers each unit of `[a, b)` exactly once.
+* `StrataExec.chain_facts`: a chain of non-empty ranges from `a` to `b` covers each unit of `[a, b)` exactly once;
+  `StrataExec.chain_covers`: any chain from `a` to `b` covers each unit of `[a, b)`.
 * `Law.execStrata_of_strataProblem`: those checks give `σ`, each unit's stratum the one whose ranges hold it.
+* At a work law: `StrataExec.ofJson_work`, `ofJson` checks that `workProblem` finds nothing, and
+  `StrataExec.workProblem_chain`, which checks that the ranges, sorted by their starts, chain from `0` to `pop`.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace FlockSoundness.Audit
 
@@ -106,11 +115,18 @@ theorem chain_facts : ∀ (a b : Nat) (l : List (Nat × Nat)), Chain a b l → (
       simp only [hits, decide_eq_true_eq]
       split <;> split <;> split <;> omega
 
+/-- A chain of ranges from `a` to `b` covers each unit of `[a, b)`: some range holds it. -/
+theorem chain_covers : ∀ {a b : ℕ} {l : List (ℕ × ℕ)}, Chain a b l → ∀ u, a ≤ u → u < b →
+    ∃ r ∈ l, r.1 ≤ u ∧ u < r.2
+  | a, b, [], h, u, hau, hub => by cases h; omega
+  | a, b, r :: rs, ⟨h1, h2⟩, u, hau, hub => by
+    by_cases hu : u < r.2
+    · exact ⟨r, List.mem_cons_self, by omega, hu⟩
+    · obtain ⟨r', hr', h⟩ := chain_covers h2 u (by omega) hub
+      exact ⟨r', List.mem_cons_of_mem _ hr', h⟩
+
 theorem qsort_perm {α : Type} (lt : α → α → Bool) (as : Array α) : (as.qsort lt).toList.Perm as.toList := by
-  unfold Array.qsort
-  split
-  · exact List.Perm.refl _
-  · exact Array.perm_iff_toList_perm.1 (DrawExec.sort_perm lt _ _ _ _ _ _ _ rfl)
+  exact Array.perm_iff_toList_perm.1 (DrawExec.qsort_perm as lt)
 
 theorem loopA {β : Type} (l : List β) (b : β → Option (Option String) × Unit → Id (ForInStep (Option (Option String) × Unit)))
     (hb : ∀ i, b i (none, ()) = ForInStep.yield (none, ()) ∨ ∃ m, b i (none, ()) = ForInStep.done (some (some m), ())) :
@@ -149,6 +165,19 @@ theorem loopB (msg : String) (l : List (Nat × Nat)) (a : Nat) :
     · have hne : (x.fst != a) = true := by simp [hx]
       simp only [hne, ite_true]
       left; rfl
+
+/-- A loop each of whose steps from no early return continues or returns some `m` never returns `none` early. -/
+theorem forIn_ne_some_none {β : Type} (l : List β)
+    (b : β → Option (Option String) × Unit → Id (ForInStep (Option (Option String) × Unit)))
+    (hb : ∀ i, b i (none, ()) = ForInStep.yield (none, ()) ∨ ∃ m, b i (none, ()) = ForInStep.done (some (some m), ())) :
+    (forIn (m := Id) l (none, ()) b).run.1 ≠ some none := by
+  induction l with
+  | nil => simp [Id.run]
+  | cons i is ih =>
+    rw [List.forIn_cons]
+    rcases hb i with h | ⟨m, h⟩
+    · rw [h]; exact ih
+    · rw [h]; intro h'; cases h'
 
 theorem strataProblem_none {k : Nat} {S : Array Stratum} {pop : Nat} (h : strataProblem k S pop = none) :
     1 ≤ k ∧ k ≤ pop ∧ (∀ s ∈ S, s.k = stratumK k s.size pop) ∧
@@ -202,8 +231,53 @@ theorem strataProblem_none {k : Nat} {S : Array Stratum} {pop : Nat} (h : strata
           · next heq => rw [← beq_iff_eq.1 heq]; exact hc
           · cases h
 
+/-- What `workProblem` checks of the ranges: sorted by their starts, they chain from `0` to `pop`. -/
+theorem workProblem_chain {k : ℕ} {S : Array WorkStratum} {pop : ℕ} (h : workProblem k S pop = none) :
+    Chain 0 pop ((S.foldl (fun x1 x2 => x1 ++ x2.units) #[]).qsort fun a b => decide (a.fst < b.fst)).toList := by
+  unfold workProblem at h
+  split at h
+  · simp at h
+  · simp only [Std.Legacy.Range.forIn_eq_forIn_range'] at h
+    split at h
+    · simp at h
+    · simp only [Id.run_bind] at h
+      split at h
+      · next r heq =>
+        have hr : r = none := h
+        subst hr
+        exact absurd heq (forIn_ne_some_none _ _ fun i => by
+          split
+          · exact Or.inr ⟨_, rfl⟩
+          · split
+            · exact Or.inr ⟨_, rfl⟩
+            · split
+              · exact Or.inr ⟨_, rfl⟩
+              · exact Or.inl rfl)
+      · simp only [Id.run_bind] at h
+        rcases loopB "U2: the strata don't tile the population"
+            ((S.foldl (fun (x1 : Array (ℕ × ℕ)) (x2 : WorkStratum) => x1 ++ x2.units) #[]).qsort
+              fun (a b : ℕ × ℕ) => decide (a.fst < b.fst)).toList 0 with hm | ⟨hn2, hc⟩
+        · simp only [Array.forIn_toList] at hm
+          simp only [hm] at h
+          cases h
+        · simp only [Array.forIn_toList] at hn2 hc
+          simp only [hn2] at h
+          split at h
+          · next heq => rw [← beq_iff_eq.1 heq]; exact hc
+          · cases h
+
 theorem foldl_units (S : Array Stratum) :
     (S.foldl (fun (x1 : Array (ℕ × ℕ)) (x2 : Stratum) => x1 ++ x2.units) #[]).toList =
+      S.toList.flatMap fun s => s.units.toList := by
+  rw [← Array.foldl_toList]
+  suffices ∀ acc : Array (ℕ × ℕ), (S.toList.foldl (fun x1 x2 => x1 ++ x2.units) acc).toList =
+      acc.toList ++ S.toList.flatMap fun s => s.units.toList by simpa using this #[]
+  induction S.toList with
+  | nil => intro acc; simp
+  | cons s ss ih => intro acc; simp [ih]
+
+theorem foldl_units_work (S : Array WorkStratum) :
+    (S.foldl (fun (x1 : Array (ℕ × ℕ)) (x2 : WorkStratum) => x1 ++ x2.units) #[]).toList =
       S.toList.flatMap fun s => s.units.toList := by
   rw [← Array.foldl_toList]
   suffices ∀ acc : Array (ℕ × ℕ), (S.toList.foldl (fun x1 x2 => x1 ++ x2.units) acc).toList =
@@ -295,6 +369,24 @@ theorem ofJson_stratified {j : Json} {D : UnitDraw} {k : ℕ} {S : Array Stratum
     refine ⟨Option.eq_none_iff_forall_ne_some.2 fun w hw => hp w hw, fun s hs => ?_⟩
     obtain ⟨a, -, ha⟩ := ok_of_mem_mapM _ _ _ ‹Array.mapM stratumOfJson _ = Except.ok _› s hs
     exact stratumOfJson_ranges ha
+
+/-- A draw file `UnitDraw.ofJson` accepts under a work law: `workProblem` found nothing. -/
+theorem ofJson_work {j : Json} {D : UnitDraw} {k : ℕ} {S : Array WorkStratum} (h : UnitDraw.ofJson j = .ok D)
+    (hl : D.law = .work k S) : workProblem k S D.population = none := by
+  unfold UnitDraw.ofJson at h
+  simp only [throw_bind'] at h
+  repeat' walk_step
+  all_goals
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    cases hl
+  all_goals
+    have hlaw := ‹(_ : Flock.V Flock.Draw.Law) = Except.ok (Flock.Draw.Law.work k S)›
+    simp only [pure, Except.pure, Except.ok.injEq, reduceCtorEq, Flock.Draw.Law.work.injEq] at hlaw
+  all_goals
+    obtain ⟨-, rfl⟩ := ‹_ ∧ _ = S›
+    have hp := ‹∀ (why : String), workProblem _ _ _ = some why → False›
+    exact Option.eq_none_iff_forall_ne_some.2 fun w hw => hp w hw
 
 end ofJson
 
