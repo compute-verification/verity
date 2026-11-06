@@ -87,9 +87,10 @@ def test_the_quoted_numbers() -> None:
     """The firmware ceilings, host peaks and bandwidths already quoted outside this package, pinned so that a change to
     one is deliberate: among them remote_bandwidth/timing.py's HOST_ figures, which the RTX node's host card states."""
     server, h200, b200 = load("rtx-pro-6000-server"), load("h200-sxm-141gb"), load("b200-sxm-180gb")
-    assert [value(server, k) for k in ("clock.sm", "clock.memory")] == [2430, 12481]
-    assert [value(h200, k) for k in ("clock.sm", "clock.memory")] == [1980, 3201]
-    assert [value(b200, k) for k in ("clock.sm", "clock.memory")] == [1965, 3996]
+    clocks = ("clock.sm", "clock.tensor", "clock.memory")
+    assert [value(server, k) for k in clocks] == [2430, 2430, 12481]
+    assert [value(h200, k) for k in clocks] == [1980, 1830, 3201]
+    assert [value(b200, k) for k in clocks] == [1965, 1965, 3996]
     assert value(server, "memory.bandwidth") == 1597568 * 10 ** 6
     assert value(h200, "memory.bandwidth") == 4916736 * 10 ** 6
     granite, sapphire = load("xeon-6776p-2s"), load("xeon-platinum-8468-2s")
@@ -101,18 +102,18 @@ def test_the_quoted_numbers() -> None:
 
 def test_the_rates_readers_quote() -> None:
     """`rate`, the one calculator of the peaks the benchmarks quote: the tensor peak in s8 MACs and in another format's
-    MACs, at the SM clock on a card without a `clock.tensor` (every card file today), at the tensor's own clock on a
-    card with one, and at a clock a reader names; every other resource at the SM clock, and device memory's words a
-    second."""
+    MACs, at the tensor's own clock (the H200's 1830 MHz, under its 1980 MHz SM clock), at the SM clock on a card
+    without a `clock.tensor`, and at a clock a reader names; every other resource at the SM clock, and device memory's
+    words a second."""
     server, h200 = load("rtx-pro-6000-server"), load("h200-sxm-141gb")
-    assert "tensor" not in h200["clock"] and "tensor" not in server["clock"]
     assert hardware.rate(server) == 188 * 1024 * 2430 * 10 ** 6
-    assert hardware.rate(h200, fmt="bf16") == 132 * 4096 * 1980 * 10 ** 6 / 2
+    assert hardware.rate(h200) == 132 * 4096 * 1830 * 10 ** 6
+    assert hardware.rate(h200, fmt="bf16") == 132 * 4096 * 1830 * 10 ** 6 / 2
     assert hardware.rate(h200, "issue") == 132 * 4 * 1980 * 10 ** 6
-    slower = copy.deepcopy(h200)
-    slower["clock"]["tensor"] = {"value": 1830, "unit": "MHz", "mark": "ceiling", "source": "a test's tensor clock"}
-    assert hardware.rate(slower) == 132 * 4096 * 1830 * 10 ** 6
-    assert hardware.rate(slower, "issue") == 132 * 4 * 1980 * 10 ** 6
+    untimed = copy.deepcopy(h200)
+    del untimed["clock"]["tensor"]
+    assert hardware.rate(untimed) == 132 * 4096 * 1980 * 10 ** 6
+    assert hardware.rate(untimed, "issue") == 132 * 4 * 1980 * 10 ** 6
     assert hardware.rate(server, "issue", mhz=2092) == 4 * 188 * 2092 * 10 ** 6
     assert hardware.rate(server, fmt="nvf4", mhz=2092.5) == 188 * 1024 * Fraction("2092.5") * 10 ** 6 * 2
     assert hardware.rate(h200, "dram") == 4916736 * 10 ** 6 / 4

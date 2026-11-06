@@ -164,23 +164,22 @@ def test_a_changed_number_is_a_disagreement() -> None:
 
 
 def test_the_tensor_runs_at_its_own_clock_where_the_card_has_one() -> None:
-    """A card without ``clock.tensor`` (the H200's) prices the tensor at the 1980 MHz SM clock, as its Lean table does.
-    The same card with a 1830 MHz ``clock.tensor`` disagrees with that table on the clock and the tensor arm, and agrees
-    with the table that defines ``tensorClock`` at 1830 MHz and prices the tensor at it."""
+    """The H200's card file and its Lean table price the tensor at the 1830 MHz ``clock.tensor`` and every other resource
+    at the 1980 MHz SM clock, and a tensor arm at the SM clock disagrees. The same card without ``clock.tensor`` prices
+    the tensor at the SM clock, and disagrees with that table on the clock and the tensor arm."""
     card = load("h200-sxm-141gb")
     text = (ROOT / card["lean"]).read_text(encoding="utf-8")
-    assert "tensor" not in card["clock"] and "tensorClock" not in text
-    assert card_table(text)[0] == expected(card)[0] == {"clock": 1980 * 10 ** 6, "tensorClock": 1980 * 10 ** 6}
-    assert expected(card)[1]["ρ"]["tensor"] == 132 * 4096 * 1980 * 10 ** 6
-    slower = copy.deepcopy(card)
-    slower["clock"]["tensor"] = {"value": 1830, "unit": "MHz", "mark": "ceiling", "source": "a test's tensor clock"}
-    assert disagreements(slower, text) == [
-        f"tensorClock: Lean {1980 * 10 ** 6}, card file {1830 * 10 ** 6}",
-        f"ρ tensor: Lean 132 * 4096 * clock = {132 * 4096 * 1980 * 10 ** 6}, card file {132 * 4096 * 1830 * 10 ** 6}"]
-    clock = re.search(r"^def clock : ℚ≥0 := .+\n", text, re.M).group(0)
-    own = text.replace(clock, clock + "def tensorClock : ℚ≥0 := 1830 * 10 ^ 6\n").replace(
-        "132 * 4096 * clock", "132 * 4096 * tensorClock")
-    assert disagreements(slower, own) == []
+    assert card_table(text)[0] == expected(card)[0] == {"clock": 1980 * 10 ** 6, "tensorClock": 1830 * 10 ** 6}
+    assert expected(card)[1]["ρ"]["tensor"] == 132 * 4096 * 1830 * 10 ** 6
+    at_sm = text.replace("132 * 4096 * tensorClock", "132 * 4096 * clock")
+    assert disagreements(card, at_sm) == [f"ρ tensor: Lean 132 * 4096 * clock = {132 * 4096 * 1980 * 10 ** 6}, "
+                                          f"card file {132 * 4096 * 1830 * 10 ** 6}"]
+    untimed = copy.deepcopy(card)
+    del untimed["clock"]["tensor"]
+    assert expected(untimed)[0] == {"clock": 1980 * 10 ** 6, "tensorClock": 1980 * 10 ** 6}
+    assert disagreements(untimed, text) == [
+        f"tensorClock: Lean {1830 * 10 ** 6}, card file {1980 * 10 ** 6}",
+        f"ρ tensor: Lean 132 * 4096 * tensorClock = {132 * 4096 * 1830 * 10 ** 6}, card file {132 * 4096 * 1980 * 10 ** 6}"]
 
 
 def test_a_truncating_nat_division_is_refused() -> None:
