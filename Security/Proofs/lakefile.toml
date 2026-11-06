@@ -86,5 +86,6 @@ roots = ["Proofs.Core", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.Netw
   "Proofs.Properties.Verity.Sampled.Counts", "Proofs.Properties.Verity.SampledDraw",
   "Proofs.Properties.Verity.SampledLog", "Proofs.Properties.Verity.SampledRead", "Proofs.Properties.Remote",
   "Proofs.Properties.Remote.Honest", "Proofs.Properties.Verity.Recursive", "Proofs.Properties.Verity.Recursive.Target",
-  "Proofs.Properties.Verity.Recursive.Refusals", "Proofs.Properties.Pous.WipeSigned", "Proofs.Properties.Challenger",
-  "Proofs.Properties.Challenger.CanonLine", "Proofs.Properties.Challenger.Drawn", "Proofs.Properties.Firewall"]
+  "Proofs.Properties.Verity.Recursive.Refusals", "Proofs.Properties.Verity.Subprotocols",
+  "Proofs.Properties.Pous.WipeSigned", "Proofs.Properties.Challenger", "Proofs.Properties.Challenger.CanonLine",
+  "Proofs.Properties.Challenger.Drawn", "Proofs.Properties.Firewall"]
