@@ -1,8 +1,13 @@
 module
 
-public import Definitions.NetworkCertifier.Tap
+public import Aesop.BuiltinRules
 public import Definitions.Core.Assumptions
+public import Definitions.NetworkCertifier.Tap
+public import Mathlib.Tactic.ToDual
 public import Proofs.NetworkCertifier.Warden
+import Mathlib.Data.Finset.Attr
+import Mathlib.Tactic.Finiteness.Attr
+import Mathlib.Tactic.SetLike
 
 /-!
 # What the tap's certifier saw is what its warden sent

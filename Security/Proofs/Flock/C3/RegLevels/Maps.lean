@@ -1,7 +1,22 @@
 module
 
 public import Proofs.Flock.C3.Reps.Maps
-public import Proofs.Flock.C3.RegLevels.RsT
+public import Proofs.Flock.C3.Opening.SrcOpening
+public import Proofs.Flock.C3.RegLevels.SrcUnits
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.C3.RegLevels.RsT
 
 /-!
 # n7's levels at C3's decoder of R's openings

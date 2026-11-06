@@ -1,7 +1,9 @@
 module
 
-public import Mathlib.Algebra.Order.BigOperators.Group.LocallyFinite
 public import Properties.Accounting.Requirement
+public import Mathlib.Algebra.GroupWithZero.Nat
+import Mathlib.Algebra.Order.BigOperators.Group.LocallyFinite
+import Std.Data.HashSet.Lemmas
 
 /-!
 # Proofs of the requirement code's equalities (`Properties.Accounting.Requirement`)

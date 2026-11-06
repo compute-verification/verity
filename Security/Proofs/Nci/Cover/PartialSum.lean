@@ -1,7 +1,9 @@
 module
 
+public import Definitions.Nci.Guarantees.CoverPartialSum
 public import Proofs.Nci.Cover.PartialSumCover
-public import Proofs.Nci.Cover.PartialSumKeyed
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Nci.Cover.PartialSumKeyed
 
 /-!
 # The partial-sum bounds

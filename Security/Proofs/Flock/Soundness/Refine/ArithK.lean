@@ -1,6 +1,15 @@
 module
 
 public import Proofs.Flock.Soundness.Refine.Opening
+public import Proofs.Flock.Soundness.Refine.Tapes
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.List.GetD
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Level3.Fold
+import Proofs.Flock.Soundness.Refine.Arith
+import VCVio.Prelude.Core
 
 /-!
 # Element seams over `K = GF(2^256)` (`Flock.Field`, `Flock.Ligerito`)

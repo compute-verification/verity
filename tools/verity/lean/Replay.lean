@@ -36,8 +36,12 @@ hide taken out. `OUT` names the declarations accepted that way (`on_public_impor
 A replayed module's verdict is cached under a key of its own `.olean` files and its imports', so it must depend on
 nothing else: each constant a checked declaration mentions must be declared by its module or by a module it imports,
 transitively, and a theorem two modules declare with one statement (an equation lemma each realized) is checked in both,
-the second under a fresh name. The quotient goes to the kernel in this thread, and its constants must be the ones the
-kernel makes.
+the second under a fresh name. A module `--closure-reused` names, whose own replay passed at its key (its graph task, or
+`check.py`'s cache), may hold its copy as the axiom its public part makes of it, which that replay recorded the axioms
+of; an import from outside the set, an own module and any module under `--env-out` may not. Copies that are all such
+axioms must state a proposition, whatever bodies they hide. Lean's import takes two declarations of a name on those terms
+(`subsumesInfo`), and this refuses any other. The quotient goes to the kernel in this thread, and its constants must be
+the ones the kernel makes.
 
 It then writes to `OUT` the axioms the package's own constants (the `Mᵢ` and `Rᵢ`) use, found by walking their bodies
 (the ones the kernel accepted, not the axiom sets each `.olean` recorded when it was built), so `check.py` can compare the
@@ -48,7 +52,9 @@ rejected declarations.
 each own constant (`declarations`, those with any), and walks no `Eᵢ` that has a record: an `Eᵢ`'s constants take the sets
 its record `DIR/<its path>.json` holds (`{"module": E, "axioms": {name: [axiom, …]}}`, what this writes for `E`, a constant
 with none left out). An `Eᵢ` is read from the parts its files have, so under the module system its public part alone
-serves, where its theorems are axioms; one without a record is walked as those parts have it.
+serves, where its theorems are axioms; one without a record is walked as those parts have it. A module read without its
+private part brings in only what its `public import`s reach, as `lean` loads its importers: `importModulesCore` loads a
+module's other imports only below an `import all`, so the runner reads no more.
 
 `--env FILE` (before the modules) takes the sets of the imported modules' constants from FILE, the lean env's record
 (`verity_graph/runners/lean_env.py` writes it: a line `"sets":[…],` naming each set once, then after a line `"axioms":{`
@@ -328,6 +334,47 @@ def sameKind : QuotKind → QuotKind → Bool
   | .type, .type | .ctor, .ctor | .lift, .lift | .ind, .ind => true
   | _, _ => false
 
+/-- Why `b`, of module `mb`, can't be one constant with `a`, of module `ma`, declared before it under its name, or none
+when it can: as an import takes two declarations of a name (`subsumesInfo`), theorems, or a theorem and the axiom a
+`module`'s public part makes of it, or two such axioms, with one statement. An axiom copy must come from a module
+`readPublic` names, one `--closure-reused` names: its own replay passed at its key, putting a theorem's proof through the
+kernel and recording a written axiom as one, so this replay may read it at the parts it has. A module this replay checks
+is read at its private part, where an axiom is one. Two axioms must also state a proposition (`isPropCheap`), which proof
+irrelevance makes them one constant, the trust an import already gets. -/
+def notOne (readPublic : Name → Bool) (ma mb : Name) (a b : ConstantInfo) : Option String :=
+  let axiomFrom (m : Name) : ConstantInfo → Option String
+    | .axiomInfo v =>
+      if v.isUnsafe then some s!"as an unsafe axiom in {m}"
+      else if readPublic m then none
+      else some s!"as an axiom in {m}, which `--closure-reused` doesn't name: only a module whose own replay passed \
+        may hold a theorem as the axiom its public part makes of it"
+    | _ => none
+  let single : ConstantInfo → Bool
+    | .thmInfo t => t.all == [t.name]
+    | _ => true
+  if !(a.type == b.type && a.levelParams == b.levelParams) then some "with different statements"
+  else match a, b with
+    | .thmInfo _, .thmInfo _ => none
+    | .thmInfo _, .axiomInfo _ | .axiomInfo _, .thmInfo _ | .axiomInfo _, .axiomInfo _ =>
+      if single a && single b then axiomFrom ma a <|> axiomFrom mb b else some "as a mutual theorem and an axiom"
+    | _, _ => some "and not as theorems or axioms"
+
+/-- `subsumesInfo`'s test that a type is a proposition, `∀ …, p xs` with `p : ∀ args, Prop` and as many `xs` as `args`,
+which makes two axioms of one name one constant whatever each was before its module's public part made it one (two
+definitions, perhaps, with different bodies). -/
+def isPropCheap (find? : Name → Option ConstantInfo) (ty : Expr) : Bool := Id.run do
+  let mut ty := ty
+  while ty.isForall do
+    let .forallE (body := body) .. := ty | return false
+    ty := body
+  let .const n .. := ty.getAppFn | return false
+  let some decl := find? n | return false
+  let mut p := decl.type
+  for _ in [0:ty.getAppNumArgs] do
+    let .forallE (body := body) .. := p | return false
+    p := body
+  return p.isProp
+
 /-- The checked declarations (``checked n``) an unchecked constant of the set reaches through what it mentions, through
 other unchecked ones of the set: the kernel unfolds an unchecked definition when it checks a declaration that mentions
 it, so whatever that definition's body needs has to be in the kernel first. -/
@@ -398,6 +445,7 @@ unsafe def main (args : List String) : IO UInt32 := do
   let ownSet := own.foldl NameSet.insert {}
   -- each module's imports and the data of its last part (its private one, where it has one), read once
   let mut loaded : Array (Name × Array Import × ModuleData) := #[]
+  let mut publicOnly : NameSet := {}                     -- each `module` read without its private part
   let mut seen : NameSet := {}
   -- the closure's modules first, so that a theorem a dependency and an own module both declare is the dependency's
   let mut todo := (get "--closure" ++ get "--closure-of" ++ get "--closure-reused" ++ own).toList
@@ -426,6 +474,8 @@ unsafe def main (args : List String) : IO UInt32 := do
         data := d
         regions := regions.push r
     loaded := loaded.push (m, header.imports, data)
+    if data.isModule && !(← (OLeanLevel.private.adjustFileName olean).pathExists) then
+      publicOnly := publicOnly.insert m
     if expand.contains m then
       for i in header.imports do
         unless seen.contains i.module do
@@ -439,22 +489,30 @@ unsafe def main (args : List String) : IO UInt32 := do
   let mut moduleOf : Std.HashMap Name Name := {}
   let mut alsoIn : Std.HashMap Name (Array Name) := {}     -- the other modules that declare a duplicated theorem
   let mut dups : Array (Name × ConstantInfo) := #[]      -- each second declaration of one, with its module
+  let mut proved : NameSet := {}                         -- each duplicated name a theorem declares
   let mut importsOf : Std.HashMap Name (Array Name) := {}
   let mut imports : Array Import := #[]
   let mut importSet : NameSet := {}
+  -- a module whose copy of a theorem may be an axiom: one `--closure-reused` names, whose own replay passed at its key
+  -- (its graph task in this run, or `check.py`'s replay cache) and recorded what that copy rests on, read here at the
+  -- parts it has; not an import from outside the set, nor an own module, nor any by `--env-out`, which writes every
+  -- module's axioms
+  let readPublic (m : Name) := envOut.isNone && !ownSet.contains m && reusedSet.contains m
   for (m, imported, data) in loaded do
     importsOf := importsOf.insert m (imported.map (·.module))
     for c in data.constants do
-      match constants[c.name]?, c with
-      | none, _ => constants := constants.insert c.name c; moduleOf := moduleOf.insert c.name m
-      | some (.thmInfo a), .thmInfo b =>
-        unless a.type == b.type && a.levelParams == b.levelParams do
-          throw <| IO.userError s!"{c.name} is declared by {moduleOf[c.name]!} and by {m} with different statements"
+      match constants[c.name]? with
+      | none => constants := constants.insert c.name c; moduleOf := moduleOf.insert c.name m
+      | some a =>
+        if let some why := notOne readPublic moduleOf[c.name]! m a c then
+          throw <| IO.userError s!"{c.name} is declared by {moduleOf[c.name]!} and by {m} {why}"
         alsoIn := alsoIn.alter c.name fun ms => some ((ms.getD #[]).push m)
-        unless reusedSet.contains m do
+        if a matches .thmInfo _ || c matches .thmInfo _ then proved := proved.insert c.name
+        if c matches .thmInfo _ && !reusedSet.contains m then
           dups := dups.push (m, c)
-      | some _, _ => throw <| IO.userError s!"{c.name} is declared by {moduleOf[c.name]!} and by {m}"
     for i in imported do
+      -- a public part mentions nothing a private import declares, and `lean` never loaded it for the importer
+      if publicOnly.contains m && !i.isExported then continue
       if !modSet.contains i.module && !importSet.contains i.module then
         imports := imports.push i
         importSet := importSet.insert i.module
@@ -463,24 +521,24 @@ unsafe def main (args : List String) : IO UInt32 := do
   for h : i in [0:env.header.moduleNames.size] do
     importsOf := importsOf.insert env.header.moduleNames[i] (env.header.moduleData[i]!.imports.map (·.module))
   -- An equation lemma (`f.eq_1`) is realized in each module that first asks for it, so an import from outside the set
-  -- can hold the same theorem: the import's stays in the environment, and the set's is checked under a fresh name.
+  -- can hold the same theorem (or the axiom a public part makes of it): the import's stays in the environment, and the
+  -- set's theorem is checked under a fresh name.
   for (n, c) in constants do
-    match env.find? n, c with
-    | none, _ => pure ()
-    | some (.thmInfo a), .thmInfo b =>
-      unless a.type == b.type && a.levelParams == b.levelParams do
-        throw <| IO.userError s!"{n} is declared by {moduleOf[n]!} and by an import from outside the set with different statements"
+    match env.find? n with
+    | none => pure ()
+    | some a =>
       let m := moduleOf[n]!
+      let im := (env.getModuleIdxFor? n).bind fun i => env.header.moduleNames[i.toNat]?
+      if let some why := notOne readPublic (im.getD .anonymous) m a c then
+        throw <| IO.userError s!"{n} is declared by {m} and by {im.getD `«an import»} from outside the set {why}"
       constants := constants.erase n
       moduleOf := moduleOf.erase n
-      if let some i := env.getModuleIdxFor? n then
-        if let some im := env.header.moduleNames[i.toNat]? then
-          moduleOf := moduleOf.insert n im
+      if let some im := im then
+        moduleOf := moduleOf.insert n im
       alsoIn := alsoIn.alter n fun ms => some ((ms.getD #[]).push m)
-      unless reusedSet.contains m do
+      if a matches .thmInfo _ || c matches .thmInfo _ then proved := proved.insert n
+      if c matches .thmInfo _ && !reusedSet.contains m then
         dups := dups.push (m, c)
-    | some _, _ =>
-      throw <| IO.userError s!"{n} is declared by a replayed module and by one it imports from outside the set"
   -- after the loop above, which moves a theorem an import from outside the set also declares: a closure takes the values
   -- `moduleOf` and `alsoIn` have where it is defined
   let declaredIn (n : Name) : Array Name :=
@@ -488,6 +546,14 @@ unsafe def main (args : List String) : IO UInt32 := do
       | some m => #[m]
       | none => ((env.getModuleIdxFor? n).bind fun i => env.header.moduleNames[i.toNat]?).toArray
     here ++ alsoIn.getD n #[]
+  -- a name only axioms declare is one constant if they state a proposition, whatever bodies their public parts hide
+  let lookup (n : Name) := constants[n]? <|> env.find? n
+  for (n, _) in alsoIn do
+    unless proved.contains n do
+      let some c := lookup n | unreachable!
+      unless isPropCheap lookup c.type do
+        throw <| IO.userError s!"{n} is declared by {", ".intercalate ((declaredIn n).toList.map toString)}, axioms \
+          each, of a type that isn't a proposition: the definitions their public parts hide may differ"
   -- A second declaration of a theorem gets a name no module declares, so the kernel checks its proof too.
   let mut renamed : Std.HashMap Name ConstantInfo := {}
   let mut renamedFrom : Std.HashMap Name (Name × Name) := {}   -- fresh name ↦ (the theorem, its module)
@@ -532,13 +598,11 @@ unsafe def main (args : List String) : IO UInt32 := do
   let importedIdx : Std.HashMap Name Nat :=
     (List.range env.header.moduleNames.size).foldl (fun h i => h.insert env.header.moduleNames[i]! i) {}
   let alsoImported (reach : Std.HashSet Name) (n : Name) : Bool := Id.run do
-    let some (.thmInfo e) := env.find? n | return false
+    let some e := env.find? n | return false
     for r in reach do
       if let some i := importedIdx[r]? then
         for c in env.header.moduleData[i]!.constants do
-          if c.name == n then
-            if let .thmInfo v := c then
-              if v.type == e.type && v.levelParams == e.levelParams then return true
+          if c.name == n && (notOne (fun _ => true) r r e c).isNone then return true
     return false
   let mut byModule : Std.HashMap Name (Array Name) := {}
   for (d, _) in members do

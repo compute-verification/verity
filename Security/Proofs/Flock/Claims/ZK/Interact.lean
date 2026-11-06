@@ -5,8 +5,8 @@ public import Proofs.Flock.Claims.ZK.GK
 /-!
 # Runs as transcripts
 
-* `interact`: the transcript of `n` rounds of a prover's next message `pm` (evaluated) against a verifier's answers
-  `ask`. `runStar_msgs`: `runStar`'s messages are `interact`'s; `spRun_eval`: so are the simulator's `spRun`.
+* `runStar_msgs`: `runStar`'s messages are `interact`'s (the transcript of `n` rounds of a prover's next message `pm`,
+  evaluated, against a verifier's answers `ask`, which Core states); `spRun_eval`: so are the simulator's `spRun`.
 * `interact_take_congr`, `interact_congr`: two provers that agree on a run's histories, up to a round, give the same
   transcript up to that round.
 * `runStar_round_log`: each round's calls of the prover are in the run's `pLog`, and every call there is `H`'s
@@ -74,24 +74,6 @@ theorem oc_eval_calls (H : Msg → Msg) {α : Type} : ∀ (o : OC α), ∀ e ∈
       · exact oc_eval_calls H (k (H q)) e he
 
 /-! ## Transcripts -/
-
-/-- The transcript of `n` rounds of the prover's next message `pm` against the verifier's answers `ask`, from the
-history `hist`. -/
-def interact (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) : ℕ → List (Msg × Msg) → List (Msg × Out)
-  | 0, _ => []
-  | n + 1, hist =>
-    match ask (hist.map Prod.fst ++ [pm hist]) with
-    | .msg m => (pm hist, .msg m) :: interact ask pm n (hist ++ [(pm hist, m)])
-    | .acc => [(pm hist, .acc)]
-    | .rej => [(pm hist, .rej)]
-
-/-- A verifier answer's message, `[]` for a decision. -/
-def msgOf : Out → Msg
-  | .msg m => m
-  | _ => []
-
-/-- The prover's history after the transcript `τ`. -/
-def histOf (τ : List (Msg × Out)) : List (Msg × Msg) := τ.map fun p => (p.1, msgOf p.2)
 
 theorem stepWith_msgs {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vnext : List Msg → OC Out) :
     ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace), as = hist.map Prod.fst →

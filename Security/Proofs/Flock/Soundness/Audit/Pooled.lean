@@ -1,8 +1,8 @@
 module
 
-public import Proofs.Flock.Soundness.Audit.Law
 public import Proofs.Flock.Soundness.Audit.Periods
-public import Mathlib.Analysis.SpecialFunctions.Log.Basic
+public import Definitions.Flock.Audit.Law
+import Proofs.Flock.Soundness.Audit.Law
 
 /-!
 # The pooled escape: wrong units that escape every period's draw
