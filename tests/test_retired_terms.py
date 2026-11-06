@@ -139,6 +139,7 @@ PENDING: dict[str, str] = {
     "integrations/vllm/tests/program/predict/test_weights_tie.py": "queued PRs add the term here; the proof-service rename follows them",
     "verity/ml/commitments/domains.py": "queued PRs add the term here; the proof-service rename follows them",
     "benchmarks/pouw/served_h1/coins.py": "queued PRs rewrite its lines; the proof-service rename follows them",
+    "verity/ml/circuits/silicon/README.md": "a queued PR on next adds it, naming the block-scaled FP4 path; the rename follows it",
     "verity/core/claims/tests/test_claims_registry.py": "queued PRs rewrite its lines; the proof-service rename follows them",
     "verity/core/protocols/pouw/dither/PROTOCOL.md": "queued PRs rewrite its lines; the proof-service rename follows them",
     "verity/core/protocols/remote_bandwidth/README.md": "queued PRs rewrite its lines; the proof-service rename follows them",
