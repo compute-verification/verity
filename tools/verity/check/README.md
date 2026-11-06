@@ -198,6 +198,16 @@ but doesn't hold `main`. The team skill's "Landing" is the procedure. A layout m
 body) lands from `next` too: drive regenerates it on the tip below it and lands it only if `move_check.py` certifies it there
 (`verity check move BASE HEAD`), running both scripts as `checked` has them.
 
+## The public boundary
+
+The public monorepo is exported one way from this repository. `public_boundary.toml` is the decided list of what it holds.
+`public_boundary.py` reads what each public file needs (Lean imports, Lake requires, Python imports and dependencies, anchored
+paths, commands) and fails on an edge into a file the export doesn't copy that `public_boundary_allowed.txt` doesn't list; the
+list only shrinks (`tests/test_public_boundary.py`). `public_export.py DEST` is the export's dry run: the public set as one
+commit of fresh history, its manifests pruned to what it copies, the leftovers a public reader shouldn't meet counted by area,
+and the third-party pins; with `--build` (a node's work: `research run`), each Lake package's `lake build`, the workspace's
+`uv sync` and the licenses of what they fetched. It publishes nothing.
+
 ## Settings
 
 Every environment variable check reads is declared once in `settings.py`, with its type, default, doc and role: `value` (hashed
