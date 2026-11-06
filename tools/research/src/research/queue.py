@@ -252,6 +252,13 @@ that contains one left out waits, recorded (the state's `waiting`) and named in 
 names the PR it contains and why that one is out, judging each PR after those it contains (else it shows
 'admitted' for hours while one it contains conflicts with `main`).
 
+Drive's priority list goes on past its file's PRs in the order of the goals the PRs serve.  Each sync that reads the file again
+reads the Goals page too (`goal_records`; a machine with no Cursor identity reads it through the site key
+`research.goals.READ_KEY`), and takes as the list the file's PRs, then every other admitted PR: those serving a live goal by its
+priority (1 first), then its due (soonest first), then their places on `next`, then the rest by their places on `next`
+(`Queue._goal_order`).  A PR's goal is a `Goal <id>` line of its body, else a label of the Linear issue it names that is a
+goal's id (`Queue._issue_labels`).  While the goals can't be read, the list is the file's PRs alone.
+
 Once the merged tree is on Lean's module system (it holds the codemod, `MODULES`, and its `PORTED_ROOTS` are modules:
 `on_modules`, since the codemod may land before the port), the sync runs that codemod over the whole merged tree, in a
 worktree of it, and what it ports goes into the merge commit, with each pin recording it (`ported`): git runs the `.lean`
@@ -385,8 +392,16 @@ NO_ISSUE_RE = re.compile(r"^[ \t>*_]*Issue:[ \t]*none:[ \t]*(\S.*?)[ \t]*$", re.
 #: each live goal KEY's labels name (`with_goals`), and a ready mark needs one naming a live goal, or `NO_ISSUE_LINE` (`goal_gate`)
 GOAL_LINE = "Goal {id}"
 GOAL_RE = re.compile(r"^[ \t>*_]*Goal:?[ \t]+`?([A-Za-z0-9](?:[\w./-]*[A-Za-z0-9])?)`?[ \t.]*$", re.M)
-#: the Goals page's goals (id and status) as this machine last read them, which the goal gate reads when the page can't be read
+#: the Goals page's goals (id, status, priority and due) as this machine last read them, which the goal gate and drive's priority
+#: list read when the page can't be read
 GOALS_CACHE = Path("~/.research/cache/goals.json")
+#: how long drive's priority list takes the labels of a Linear issue a PR names as read (the state's `issue_labels`), and the
+#: most issues a sync reads them of one at a time, those its team's read doesn't hold (`Queue._issue_labels`)
+ISSUE_LABELS_TTL_S = 3600
+ISSUE_LABELS_READS = 40
+#: the labels of a Linear team's issues of up to 100 numbers, archived ones too (`Queue._issue_labels`)
+ISSUE_LABELS_QUERY = ("query($t: String!, $n: [Float!]) { issues(first: 100, includeArchived: true, filter: {team: {key: {eq: $t}}, "
+                      "number: {in: $n}}) { nodes { identifier labels(first: 100) { nodes { name } } } } }")
 #: a key after any of Linear's magic words (closing, non-closing or relation), whatever its team
 ISSUE_LINK_RE = re.compile(r"(?i)\b(?:refs?|references|part of|contributes to|towards?|relates to|related to|close[sd]?|closing|"
                            r"fix(?:e[sd])?|fixing|resolve[sd]?|resolving|complete[sd]?|completing|implement(?:s|ed|ing)?)"
@@ -1427,6 +1442,11 @@ class Queue:
         self.priority: frozenset[int] = frozenset()
         self.priority_file: Path | None = None
         self._prioritized: set[int] = set()
+        #: the Goals page's goals (`goal_records`), by which each sync that reads `priority_file` lists after its PRs the
+        #: admitted ones it doesn't name (`_goal_order`); None: the file's PRs alone (a sync off drive's, a test)
+        self.goals: Callable[[], dict[str, dict]] | None = None
+        #: the Linear app that reads the labels of the issue a PR names when its body names no goal (`_issue_labels`)
+        self.linear: Callable[[], linear.Linear] = linear.Linear
         #: releases the workdir's lock (`_lock`): a command that only reads calls it once its clone and fetches are done, so a
         #: listing that reads hundreds of members' labels doesn't refuse a verdict meanwhile
         self.unlock: Callable[[], None] = lambda: None
@@ -2425,6 +2445,80 @@ class Queue:
         it can't be read."""
         return got[2] if (got := self._read_registry()) else set()
 
+    def _goal_order(self, entries: dict[int, Entry], chain: list[Member], state: dict) -> tuple[int, ...]:
+        """Drive's priority list as a sync takes it from the file's PRs (`priority`) and the goals (`goals`): the file's PRs, then
+        every other admitted PR whose goal is live (on the Goals page, not done), by that goal's priority (1 first), then its
+        due (soonest first), then the PR's place on `next`, then the other admitted PRs by their place on `next`; those off it
+        by number.  A PR's goal is a `Goal <id>` line of its body (`GOAL_RE`), else a label of the Linear issue it names
+        (`named_issue`, `_issue_labels`) that is a goal's id; of several, the most urgent live one.  While the goals can't be
+        read, the file's PRs alone, said once (the state's `priority_goals_error`); the list is logged when it changes
+        (`priority_goals`)."""
+        from .goals import due_time
+
+        listed = list(dict.fromkeys(self.priority))
+        try:
+            goals = self.goals()
+        except QueueError as e:
+            if state.get("priority_goals_error") != str(e):
+                self.log(f"research queue: {e}: drive's priority list is the file's PRs alone until the goals can be read")
+            state["priority_goals_error"] = str(e)
+            state.pop("priority_goals", None)
+            return tuple(listed)
+        state.pop("priority_goals_error", None)
+        named = {n: GOAL_RE.findall(e.pr.body) for n, e in sorted(entries.items()) if e.state == "ready" and n not in listed}
+        teams = self.issue_teams()
+        issues = {n: k for n, g in named.items() if not g and (k := named_issue(entries[n].pr.body, teams))
+                  and not k.startswith("none:")}
+        labels = self._issue_labels(sorted(set(issues.values())), state)
+        place = {m.pr: i for i, m in enumerate(chain)}
+
+        def urgency(n: int) -> tuple:
+            live = [(g["priority"] if g.get("priority") in (1, 2, 3) else 3, due_time(g.get("due")))
+                    for g in map(goals.get, named[n] or labels.get(issues.get(n, ""), [])) if g and g["status"] != "done"]
+            return *min(live, default=(math.inf, math.inf)), place.get(n, math.inf), n
+
+        got = tuple(listed + sorted(named, key=urgency))
+        if list(got) != state.get("priority_goals"):
+            self.log(f"research queue: drive's priority list ({self.priority_file}, then by the goals the admitted PRs serve): "
+                     + (" ".join(f"#{n}" for n in got) or "empty"))
+            state["priority_goals"] = list(got)
+        return got
+
+    def _issue_labels(self, keys: list[str], state: dict) -> dict[str, list[str]]:
+        """The labels of each Linear issue of ``keys``, as the state's `issue_labels` keeps them, read again
+        `ISSUE_LABELS_TTL_S` after they were: each team's at once (`ISSUE_LABELS_QUERY`), then one by one, at most
+        `ISSUE_LABELS_READS` a sync, those its team's read doesn't hold (moved to another team since; `linear.Linear.issue_labels`,
+        none for one Linear doesn't have).  While the Linear app can't read them, as last read, said once
+        (`issue_labels_error`)."""
+        kept = {k: v for k, v in (state.get("issue_labels") or {}).items() if k in keys}
+        now = self.now()
+        todo = [k for k in keys if now - kept.get(k, {}).get("read", -math.inf) >= ISSUE_LABELS_TTL_S]
+        try:
+            teams: dict[str, list[int]] = {}
+            for k in todo:
+                team, _, n = k.rpartition("-")
+                teams.setdefault(team, []).append(int(n))
+            app = self.linear() if todo else None
+            seen: set[str] = set()
+            for team, nums in sorted(teams.items()):
+                for i in range(0, len(nums), 100):
+                    for node in app.gql(ISSUE_LABELS_QUERY, {"t": team, "n": nums[i:i + 100]})["issues"]["nodes"]:
+                        seen.add(node["identifier"])
+                        kept[node["identifier"]] = {"labels": sorted(x["name"] for x in node["labels"]["nodes"]), "read": now}
+            for k in [k for k in todo if k not in seen][:ISSUE_LABELS_READS]:
+                try:
+                    kept[k] = {"labels": app.issue_labels(k), "read": now}
+                except linear.NoIssue:
+                    kept[k] = {"labels": [], "read": now}
+            state.pop("issue_labels_error", None)
+        except (linear.LinearError, OSError, ValueError, KeyError, TypeError) as e:
+            if state.get("issue_labels_error") != str(e):
+                self.log(f"research queue: the Linear app can't read the labels of the issues PRs name ({e}): drive's priority "
+                         "list takes them as last read until it can")
+            state["issue_labels_error"] = str(e)
+        state["issue_labels"] = kept
+        return {k: v["labels"] for k, v in kept.items()}
+
     def sync(self, dry_run: bool = False) -> tuple[list[Member], dict[int, Entry]]:
         """Rebuild `next` (see the module's `next`).  Off drive it refuses before anything (`_drive_only`)."""
         self._drive_only(self.branch, "queue sync", dry_run)
@@ -2448,6 +2542,8 @@ class Queue:
         chain = self.chain()
         entries = self.entries(prs, state)
         entries.update(waiting)
+        if self.priority_file is not None and self.goals is not None:
+            self.priority = self._goal_order(entries, chain, state)
         listed = [n for n in self.priority if n in entries]
         self._prioritized = set(listed).union(*(entries[n].after for n in listed))
         frozen = {m.pr: m.head for m in chain if self._frozen(m, entries) or self._pending(m, entries)}
@@ -5734,20 +5830,23 @@ def link_issue(key: str, url: str, app: tuple[linear.Linear, str] | Exception | 
                          f"`research queue link {n or 'N'} --issue {key}`") from None
 
 
-def goal_statuses(cache: Path | None = None) -> dict[str, str]:
-    """Each goal on the Goals page (`research.goals`), its id to its status, written to ``cache`` (`GOALS_CACHE`) at each read.
-    When the page can't be read, the goals last written there, whatever their age, said in one line on stderr; with neither,
-    QueueError naming the outage, to which each caller adds its escape."""
+def goal_records(cache: Path | None = None) -> dict[str, dict]:
+    """Each goal on the Goals page (`research.goals`), its id to its status and, where it has them, its priority and due,
+    written to ``cache`` (`GOALS_CACHE`) at each read.  When the page can't be read, the goals last written there, whatever
+    their age, said in one line on stderr; with neither, QueueError naming the outage, to which each caller adds its escape."""
     from . import goals
     from .slack import SlackError
 
+    def record(g: dict) -> dict:
+        return {"status": str(g["status"]), **{k: g[k] for k in ("priority", "due") if g.get(k) is not None}}
+
     path = (cache or GOALS_CACHE).expanduser()
     try:
-        got = {str(g["id"]): str(g.get("status")) for g in goals.Route().call()}
+        got = {str(g["id"]): record({"status": None, **g}) for g in goals.Route().call()}
     except (SlackError, OSError, ValueError, KeyError, TypeError) as e:
         try:
             kept = json.loads(path.read_text())
-            got = {str(g["id"]): str(g["status"]) for g in kept["goals"]}
+            got = {str(g["id"]): record(g) for g in kept["goals"]}
         except (OSError, ValueError, KeyError, TypeError):
             raise QueueError(f"the Goals page can't be read ({e}) and this machine has no copy of it ({path})") from None
         print(f"research queue: the Goals page can't be read ({e}): using its {len(got)} goals as this machine read them at "
@@ -5757,11 +5856,16 @@ def goal_statuses(cache: Path | None = None) -> dict[str, str]:
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
         tmp.write_text(json.dumps({"read": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                                   "goals": [{"id": k, "status": v} for k, v in sorted(got.items())]}, indent=1) + "\n")
+                                   "goals": [{"id": k, **v} for k, v in sorted(got.items())]}, indent=1) + "\n")
         tmp.replace(path)
     except OSError as e:
         print(f"research queue: the Goals page's goals aren't cached at {path} ({e})", file=sys.stderr)
     return got
+
+
+def goal_statuses(cache: Path | None = None) -> dict[str, str]:
+    """Each goal on the Goals page, its id to its status (`goal_records`)."""
+    return {k: g["status"] for k, g in goal_records(cache).items()}
 
 
 def live_goals(names: Iterable[str], status: dict[str, str]) -> list[str]:
@@ -6321,7 +6425,7 @@ def main(argv: list[str]) -> int:
             q.log = one_line_at_a_time(q.log)
             q.preflight = Preflight(q.workdir, remote, store, lean=LakeBuild(on=PREFLIGHT_LEAN_ON, by=a.by), log=q.log,
                                     root=a.preflight_root).onto
-            q.priority_file = a.priority_file
+            q.priority_file, q.goals = a.priority_file, goal_records
         if a.command == "sync":
             q.hand_sync(dry_run=a.dry_run)
             return 0
