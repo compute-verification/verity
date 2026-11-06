@@ -72,7 +72,7 @@ def TTOutU [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q
 
 - **What it adds to the (C̃, U) row.** U is four BF16 k16 steps accumulated into C̃'s word, so U reads C̃ down to the bits
   its first step keeps: a word's U ignores a +1-ulp move of C̃ on about 30% of words and a +4-ulp move on about 5%
-  (`pearlc_u_only_skips.py`: ≤ 1.6% at 16 ulps). A tile is credited only if all
+  (≤ 1.6% at 16 ulps). A tile is credited only if all
   its U words are right, so a C̃ that is off anywhere beyond that slack fails the tile.
 - **The debit carries over unchanged.** No lone atom skip that changes C̃ leaves U unchanged (0 per family at `k = 1,024`,
   promoted and unpromoted; 0 of 4,096 words at `k = 8,192`). Promotion stays forced: U from the

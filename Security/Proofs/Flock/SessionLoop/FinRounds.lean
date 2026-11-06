@@ -128,6 +128,7 @@ open _root_.Flock (V)
 open _root_.Flock.Transcript (header)
 open _root_.Flock.Firewall.Frame (Cfg Masker INNER_ROUNDS roundFree)
 
+-- `split` and `cases` at every branch of `roundFree`'s unfolded body
 set_option maxHeartbeats 1000000 in
 /-- **A round the frame takes releases its squeeze last**: `roundFree`'s loop returns only at the squeeze of the `n`
 coins it was asked for, which it appends to the round's release. -/

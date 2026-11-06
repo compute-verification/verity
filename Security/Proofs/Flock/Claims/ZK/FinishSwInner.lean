@@ -63,7 +63,7 @@ pads are the request's draws, which are the tape's wherever the tape's pads of t
 @[expose] public section
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
 
 /-- The triple's two messages `ρ_in`, `σ_in` are the same on pads moved by `padShift`. -/
 theorem FlockSoundness.ZK.Table.innerMsg_padShift {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]

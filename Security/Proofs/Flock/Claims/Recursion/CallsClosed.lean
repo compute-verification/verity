@@ -68,6 +68,7 @@ section Walk
 
 open FlockSoundness.Refine FlockSoundness.Discharge.Exec
 
+-- `walk_step` down `Stmt.setupTablesWith`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- **`setupTables_le` at any hash**: at most `Tags.MAX_TABLES` tables, and the spec names one per statement. -/
 theorem setupTablesWith_le {h₀ : ByteArray → ByteArray} {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ}

@@ -100,6 +100,20 @@
   "FlockFrameTape": "the flock-frame-tape executable's entry point, a test's: Flock.Firewall.Frame.cmdWith (audited under Flock) with the rep's draws read from a file, so verity/ml/flock/tests/test_firewall_frame.py knows the pads the frame masks with"
  },
  "assumptions": {},
+ "open": {
+  "Flock.Firewall.Contract.FirewallComputes": {
+   "owner": "@firewall-contract",
+   "digest": "10ce3362fd413ab328b12f38b4771422e218144267f0fc7504c5a67821372912",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Flock.Firewall.Contract.Holds": {
+   "owner": "@firewall-contract",
+   "digest": "5eef9362b6eac7cb9ba9a919a4274a63f7ab369f6059ab598fefcd0e51df6ee3",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  }
+ },
  "meaning": ["Flock"],
  "escapes": {
   "Flock.Test.JsonParse.shw.go": "partial def: the test's printer of a parsed value (each number's mantissa and exponent), recursing through nested arrays and objects, to compare `JsonParse.parse` with `Lean.Json.parse` as text; no proof is about it, and the verifier never calls it"
@@ -851,19 +865,5 @@
  },
  "dependencies": {
   "toolchain": "d5ca9d1164aa2cf25419881c4ec5c6a1486192af7c11e9d1704efd15e3fbd2fa"
- },
- "open": {
-  "Flock.Firewall.Contract.FirewallComputes": {
-   "owner": "@firewall-contract",
-   "digest": "10ce3362fd413ab328b12f38b4771422e218144267f0fc7504c5a67821372912",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Flock.Firewall.Contract.Holds": {
-   "owner": "@firewall-contract",
-   "digest": "5eef9362b6eac7cb9ba9a919a4274a63f7ab369f6059ab598fefcd0e51df6ee3",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  }
  }
 }

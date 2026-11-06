@@ -130,6 +130,7 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ} {tables
   {stratified : Option ℕ} {closure : Option (Std.HashMap ℕ (Array ℕ))} {publicInputs : Option ByteArray}
   {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
 
+-- `walk_step` down `Stmt.setupH`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- **`Stmt.setupH`'s statements satisfy `Counts`.** -/
 theorem setupH_counts (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) : Counts st := by
@@ -162,6 +163,7 @@ theorem hmOutC_g {tags : Tags} {cf : ByteArray} {tables : List (String × ByteAr
     obtain ⟨ls, hls⟩ := hm_parse_check_any hp
     exact g_of_range (c := c₀) hls hr hk hcnt
 
+-- `walk_step` down `Stmt.setupHidden`'s unfolded do-block with a sample and without, a goal per branch
 set_option maxHeartbeats 8000000 in
 /-- **`Stmt.setupHidden`'s statements satisfy `Counts`**, at any public input words. -/
 theorem setupHidden_counts
@@ -176,6 +178,7 @@ theorem setupHidden_counts
     have hg := hmOutC_g (by with_reducible assumption) hr hki hcnt
     exact ⟨rfl, rfl, rfl, hk.2, hg.1, hg.2⟩
 
+-- `walk_step` down `Stmt.setupTables`' unfolded do-block, a goal per branch
 set_option maxHeartbeats 8000000 in
 /-- **Every statement `Stmt.setupTables` returns satisfies `Counts`**, at any public input words: the plain path
 refuses them, and the hidden path passes them to `Stmt.setupHidden` (`setupHidden_counts`). -/

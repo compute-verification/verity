@@ -27,7 +27,7 @@ coins, so its worst case over them is below the certificate (`ComputeShort`, `Ba
 other accounts are covert when their charges are beyond the residual (the device's capacity over the window, less the
 certificate) on every one of the audit's own coins (`ComputeCovert`, `BandwidthCovert`, `CapacityCovert`). A device
 that does little charged work and a lot of covert work on a few of the compute coins is in neither event. The per-run
-reading, at the coins drawn, is `Run.ComputeSoundPerRun` and the two beside it (`Definitions.Accounting.PerRun`).
+reading, at the coins flipped, is `Run.ComputeSoundPerRun` and the two beside it (`Definitions.Accounting.PerRun`).
 -/
 
 @[expose] public section

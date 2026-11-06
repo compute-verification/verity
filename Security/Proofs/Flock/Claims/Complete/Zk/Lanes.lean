@@ -72,6 +72,7 @@ theorem lforIn_count {σ : Type} (body : ℕ → σ → LM (ForInStep σ)) (sz :
       have := lforIn_count body sz hb n (a + 1) s₁ st₁ t₁ s' st' t' h₂
       omega
 
+-- one proof down `Zk.ligeritoWith`'s unfolded run, a `*_bind` step per bind, each step's state in context
 set_option maxHeartbeats 1000000 in
 /-- **The masked Ligerito's record**: one out-of-domain value and `k0` lane challenges, whatever the hashes are. -/
 theorem zkLigeritoWith_rec (hs : Hashes V) (ms : MerkleScheme) (sch : Schedule) (T : F128)
