@@ -2316,7 +2316,8 @@ class Driver:
         if len(hits) == 1:
             r.update(culprit=[hits[0].pr, hits[0].head, hits[0].owner, hits[0].commit], why=why)
             self._ring(drive, r, key, f"Culprit: #{hits[0].pr} ({why}), of the {since}")
-        elif hits and REVERTS_RE.search(_out(self.repo, "log", "--format=%B", f"{base}..{tip}")):
+        # only a revert on the landing branch itself: one inside a PR's own history is part of that PR's landing
+        elif hits and REVERTS_RE.search(_out(self.repo, "log", "--first-parent", "--format=%B", f"{base}..{tip}")):
             self._ring(drive, r, key, f"{' '.join(f'#{x.pr}' for x in hits)} each touch it ({since}), and a revert lies in "
                                       f"{base[:12]}..{tip[:12]}, so bisecting could blame the wrong PR. Reverted nothing; find "
                                       "the culprit by hand")

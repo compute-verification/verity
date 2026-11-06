@@ -2247,9 +2247,10 @@ def test_an_after_landing_failure_several_prs_touch_is_bisected_to_the_one_that_
     assert post.startswith("@lane-2 queue: #2 reverted on `main`"), post
 
 
-def _bisecting(world, monkeypatch, tmp_path, revert: bool = False) -> tuple[Review, str]:
+def _bisecting(world, monkeypatch, tmp_path, revert: bool = False, inner_revert: bool = False) -> tuple[Review, str]:
     """#1 and #2 both change the failing test's file and land with #3; the after-landing run fails there, and drive bisects them
-    (its first run, `r-post-1`, of #1's landing).  With ``revert``, a hand revert lands on `main` first."""
+    (its first run, `r-post-1`, of #1's landing).  With ``revert``, a hand revert lands on `main` first; with ``inner_revert``,
+    #2's own branch reverts one of its commits."""
     _registry(world, "lane-1", "lane-2")
     h = Review(world, monkeypatch)
     if revert:
@@ -2258,7 +2259,13 @@ def _bisecting(world, monkeypatch, tmp_path, revert: bool = False) -> tuple[Revi
         _git(world.dev, "commit", "-q", "--allow-empty", "-m", f"Revert \"x\"\n\nThis reverts commit {_main(world)}.")
         _git(world.dev, "push", "-q", "origin", "HEAD:refs/heads/main")
     world.gh.put(1, h1 := world.change({"pkg/tests/test_x.py": "def test_y():\n    pass\n"}))
-    world.gh.put(2, world.change({"pkg/tests/test_x.py": "def test_y():\n    assert False\n"}, base=h1))
+    h2 = world.change({"pkg/tests/test_x.py": "def test_y():\n    assert False\n"}, base=h1)
+    if inner_revert:
+        h2 = world.change({"c.txt": "2\n"}, base=h2)
+        _git(world.dev, "revert", "--no-edit", "HEAD")
+        h2 = _git(world.dev, "rev-parse", "HEAD")
+        _git(world.dev, "push", "-q", "origin", f"{h2}:refs/dev/{h2}")
+    world.gh.put(2, h2)
     world.gh.put(3, world.change({"b.txt": "3\n"}))
     for n in (1, 2, 3):
         h.review(n)
@@ -2313,6 +2320,14 @@ def test_a_bisection_with_a_revert_among_its_landings_reverts_nothing(world, mon
     assert "bisect" not in h.postland() and len(h.posted) == 1 and _main(world) == tip
     (post,) = [p for p in h.posts if "a revert lies in" in p]
     assert "Reverted nothing" in post, post
+
+
+def test_a_revert_inside_a_prs_own_branch_still_bisects(world, monkeypatch, tmp_path):
+    """Any `This reverts commit` in the range's history stopped the bisection, a PR's own revert of its own commit included:
+    every red whose batch held such a PR named no culprit and reverted nothing."""
+    h, tip = _bisecting(world, monkeypatch, tmp_path, inner_revert=True)
+    assert h.postland()["bisect"] and len(h.posted) == 2, world.logs
+    assert not [p for p in h.posts if "a revert lies in" in p]
 
 
 def test_a_lean_check_above_the_landing_top_covers_it_only_with_no_lean_change_between(world, monkeypatch):
