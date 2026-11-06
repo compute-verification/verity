@@ -1,8 +1,9 @@
 """The training rules for a quantizer's masks, integers, conversions and order statistics (`rules.training_masks`), each Program
-run on small CPU tensors and its output words compared with torch's: comparisons, logic, int64 shifts and ands (a code packed into
-bytes and back), `where`, `clamp`, integer sums, the conversions among int64, uint8, bool and f32, a codebook lookup, `amax`,
-`floor` and a static f32 `arange` with a row scattered in, bit for bit against torch CPU on words with signed zeros, infinities
-and NaNs, with and without a compute capability; at one, a clamp by ±0 against the GPU kernel's
+run on small CPU tensors and its output words compared with torch's: comparisons (of f16 values too), logic, int64 adds, shifts and
+ands (a code packed into bytes and back, and split into bit planes as bools and summed back), `where` (of f16 values too),
+`clamp`, integer sums, the conversions among int64, uint8, bool and f32, a codebook lookup (static, and a value), `amax`, `floor`
+and a static f32 `arange` with a row scattered in, bit for bit against torch CPU on words with signed zeros, infinities and NaNs,
+with and without a compute capability; at one, a clamp by ±0 against the GPU kernel's
 `fmaxf` and `fminf`, the GPU's conversions to bf16, to and from f16 and from f32 to int64 and uint8 against torch CPU on NaN-free
 words and against the GPU's NaN and saturated words, and `kthvalue` against a model of torch's CUDA radix select
 (`radixSelect` as SortingRadixSelect.cuh writes it, two bits a digit) on slices with NaNs and signed zeros, and against torch
@@ -260,13 +261,18 @@ def test_floor(rules) -> None:
     assert got == [IE.F32Rint.evaluate(w) for w in nans] and all(w & 0x7FC00000 == 0x7FC00000 for w in got), [hex(w) for w in got]
 
 
+#: int64 values at the ends of its range and between
+ENDS = torch.tensor([0, 1, -1, 2 ** 63 - 1, -2 ** 63, 255, -256, 12345678901234, -987654321])
+
+
 @BOTH
-def test_int64_shifts_and_ands(rules) -> None:
-    """Every amount from -2 to 66 of values at the ends of int64 (torch's 0 and sign fills past them), by Python ints, and two-bit
-    codes packed eight to a word, through bytes and back, by static amounts, as a quantizer passes its code."""
-    a = torch.tensor([0, 1, -1, 2 ** 63 - 1, -2 ** 63, 255, -256, 12345678901234, -987654321])
+def test_int64_adds_shifts_and_ands(rules) -> None:
+    """Every amount from -2 to 66 of values at the ends of int64 (torch's 0 and sign fills past them), by Python ints; adds that
+    wrap modulo 2^64; and two-bit codes packed eight to a word, through bytes and back, by static amounts, as a quantizer passes its
+    code."""
     s = torch.arange(-2, 67)
-    _check(lambda a, s: (a[:, None] << s, a[:, None] >> s, a << 3, a >> 62, a & 255, a[:, None] & s), a, s, rules=rules)
+    _check(lambda a, s: (a[:, None] << s, a[:, None] >> s, a << 3, a >> 62, a & 255, a[:, None] & s, a[:, None] + a, a + 1,
+                         0 + a), ENDS, s, rules=rules)
 
     def through_bytes(c):
         lanes, octets = torch.arange(8), torch.arange(2)
@@ -276,6 +282,37 @@ def test_int64_shifts_and_ands(rules) -> None:
         return packed, ((word.unsqueeze(-1) >> (2 * lanes)) & 3).reshape(c.shape)
 
     _check(through_bytes, torch.randint(0, 4, (4, 16), generator=torch.Generator().manual_seed(17)), rules=rules)
+
+
+@BOTH
+def test_bit_planes_through_bools(rules) -> None:
+    """A four-bit code split into bit planes as bools and summed back, as a quantizer passes its code between blocks (`(c >> b) & 1`
+    to bool, each plane to int64 shifted back, Python's `sum` from 0), and int64 to bool of values at the ends of int64."""
+    def f(c, a):
+        planes = tuple(((c >> b) & 1).bool() for b in range(4))
+        return planes + (sum(p.long() << b for b, p in enumerate(planes)), a.bool())
+
+    _check(f, torch.randint(0, 16, (4, 16), generator=torch.Generator().manual_seed(19)), ENDS, rules=rules)
+
+
+@BOTH
+def test_f16_comparisons_and_selects(rules) -> None:
+    """f16 values with ±0, infinities and NaNs compared with each other (every third element equal) and with numbers f16 holds,
+    and f16 `where`s, as a quantizer keeps or replaces its f16 scales."""
+    h, k = X.half(), YEQ.half()
+
+    def f(h, k):
+        return tuple(c(h, k) for c in _CMPS.values()) + tuple(c(h, x) for c in _CMPS.values() for x in (0, -0.0, 65504.0)) + (
+            torch.where(h > k, h, k), torch.where(h > 0, h, torch.ones_like(h)))
+
+    _check(f, h, k, rules=rules)
+
+
+@BOTH
+def test_a_value_table_lookup(rules) -> None:
+    """A codebook that is a value, indexed by an int64 value from -T to T - 1, as a quantizer reads its grid."""
+    g = torch.Generator().manual_seed(20)
+    _check(lambda t, i: (t[i],), _special(255, seed=21), torch.randint(-255, 255, (4, 16), generator=g), rules=rules)
 
 
 @BOTH
@@ -437,8 +474,12 @@ A = torch.randn(4, 16, generator=torch.Generator().manual_seed(13)).abs()
     (lambda i: (i << 2,), (I64.int(),), GPU, "result dtype torch.int32"),
     (lambda a: (a[0] * torch.arange(0.0, 4.0, 0.25),), (A,), GPU, "a fractional bound or step"),
     (lambda a: (a[0] * torch.arange(2 ** 24 - 8, 2 ** 24 + 8, dtype=torch.float32),), (A,), GPU, "an integer past 2^24"),
+    (lambda a: (a.half() > 0.1,), (A,), GPU, "a number f16 rounds"),
+    (lambda a: (a.half() > a,), (A,), GPU, "not an f16 value"),
+    (lambda i: (torch.add(i, i, alpha=2),), (I64,), GPU, "alpha != 1"),
 ], ids=["kth-cpu", "kth-indices", "to-f16-cpu", "from-f16-cpu", "bf16-compare", "to-int64-cpu", "to-uint8-cpu", "nan-bound",
-        "bf16-clamp", "bf16-abs", "bf16-floor", "bf16-amax", "int64-bf16", "int32-shift", "fractional-arange", "big-arange"])
+        "bf16-clamp", "bf16-abs", "bf16-floor", "bf16-amax", "int64-bf16", "int32-shift", "fractional-arange", "big-arange",
+        "f16-inexact-number", "f16-beside-f32", "int64-alpha"])
 def test_refusals(f, xs, rules, why: str) -> None:
     u = _refused(f, *xs, rules=rules)
     assert u.reason == "numerics_unregistered" and why in u.hint, u

@@ -151,6 +151,7 @@ def _elementwise(x, y, pos, m, row, col) -> dict:
         "lerp_small": (lambda a, b: (torch.lerp(a, b, 0.1),), (x, y)),
         "lerp_large": (lambda a, b: (torch.lerp(a, b, 0.9),), (x, y)),
         "addcmul": (lambda a, b, c: (torch.addcmul(a, b, c, value=0.05),), (x, y, pos)),
+        "addcdiv": (lambda a, b, c: (torch.addcdiv(a, b, c, value=-0.05),), (x, y, pos)),
     }
 
 
@@ -509,7 +510,8 @@ def _recip(s: float) -> torch.Tensor:
 
 #: the GPU's arithmetic (`training_rules(cc=...)`), each case with that arithmetic in torch CPU's f32 operations, which on NaN-free
 #: words are the GPU's (its NaN words are the `_v2` Definitions'): a number is its f32 word, which a bf16 add doesn't round first,
-#: and a division by a number is the product by its f32 reciprocal; an add with alpha is one fma, as on the CPU
+#: and a division by a number is the product by its f32 reciprocal; an add with alpha is one fma, as on the CPU; addcdiv is
+#: fma(value, t1 / t2, self), as torch CPU's addcmul by a value of 1 computes it
 GPU = {
     "add_number_bf16": (lambda a: (a + 0.1,), (XB,), lambda a: (a.float() + _f32_of(0.1)).bfloat16()),
     "sub_tie_bf16": (lambda a: (a - TIE,), (X67B,), lambda a: (a.float() - _f32_of(TIE)).bfloat16()),
@@ -525,6 +527,8 @@ GPU = {
     "foreach_lerp": (lambda a, b, c, d: torch._foreach_lerp([a, c], [b, d], 0.1), (X67, Y67, X, Y),
                      lambda a, b, c, d: torch.cat([torch.lerp(a, b, 0.1).reshape(-1), torch.lerp(c, d, 0.1).reshape(-1)])),
     "lerp_large_weight": (lambda a, b: (torch.lerp(a, b, 0.9),), (X67, Y67), lambda a, b: torch.lerp(a, b, 0.9)),
+    "addcdiv": (lambda a, b, c: (torch.addcdiv(a, b, c, value=-0.05),), (X67, Y67, POS67),
+                lambda a, b, c: torch.addcmul(a, b / c, torch.full_like(a, -0.05))),
     "static_div_number": (lambda a: (a * (torch.full((16,), 3.0) / 7.0),), (X,),
                           lambda a: a * (torch.full((16,), 3.0) * _recip(7.0))),
     "copy_rounds_to_bf16": (lambda a, b: (torch.empty_like(b).copy_(a) * b,), (X, XB),

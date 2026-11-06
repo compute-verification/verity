@@ -2,17 +2,17 @@
 f32 arithmetic. Each is exact and the same word on torch's CPU and CUDA kernels, except where a docstring names the GPU's
 (`training_rules(cc=...)`).
 
-    Compare     gt / ge / lt / le / eq / ne of f32: IEEE, a NaN unordered and -0 equal to +0
+    Compare     gt / ge / lt / le / eq / ne of f32 or f16: IEEE, a NaN unordered and -0 equal to +0
     Logic       and / or / not of bool values
-    Bitwise     << / >> / & of int64 values
-    Where       where.self with an f32, bf16 or int64 result
+    IntOps      + / << / >> / & of int64 values
+    Where       where.self with an f32, bf16, f16 or int64 result
     Clamp       clamp by Python numbers of an int64 or f32 value, at `cc` as the GPU's kernel clamps
     Cast        conversions between int64, uint8, bool and f32, and at `cc` the GPU's to bf16, to and from f16 and from f32 to
                 int64 and uint8
     Copy        a functionalized copy_: its source by reference, or converted as `Cast` converts (bf16 to f32 too)
     IntSum      sum of a bool or int64 value to int64
     AMax        amax of an f32 value
-    Index       a static float table (a codebook) indexed by an integer value
+    Index       a 1-D f32 table (a codebook), static or a value, indexed by an integer value
     KthValue    kthvalue of an f32 value at `cc`, as the GPU's radix select
 """
 
@@ -30,9 +30,10 @@ from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry import ref_prims as R
 from verity.ml.definitions.registry import torch_words as W
 from verity.ml.definitions.registry.dsv4_decode_indices import gather_i32
-from verity_vllm.program.frontend.rules.training_emit import (_DT, _batch, _bits, _const, _converted, _ew, _flat, _from_bits,
-                                                              _operand, _operand_ok, _ref, _shape, _static_coll, _tokens,
-                                                              _TrainRule, _tree, _word_ok, _word_operand, aten)
+from verity_vllm.program.frontend.rules.training_emit import (_DT, _alpha, _batch, _bits, _broadcast, _const, _converted, _ew,
+                                                              _flat, _from_bits, _operand, _operand_ok, _ref, _shape,
+                                                              _static_coll, _tokens, _TrainRule, _tree, _word_ok, _word_operand,
+                                                              aten)
 from verity_vllm.program.frontend.rules.training_views import StaticFloat, _info, _view_expand, _view_permute
 from verity_vllm.program.frontend.strided_views import _tensor_type
 from verity_vllm.program.frontend.value_types import WIDTH_OF_DTYPE, shape_of
@@ -54,13 +55,36 @@ _CMP = {aten.gt.Tensor: "gt", aten.gt.Scalar: "gt", aten.ge.Tensor: "ge", aten.g
         aten.ne.Tensor: "ne", aten.ne.Scalar: "ne"}
 
 
+def _f16_ok(ctx, a) -> str | None:
+    """None if `a` is an operand of an f16 comparison that widening reads exactly: an f16 value, or a Python number f16 holds;
+    else why not."""
+    if isinstance(a, torch.fx.Node):
+        if isinstance(ctx.val(a), Coll) and ctx.dtype_of(a) == torch.float16:
+            return None
+        return f"numerics_unregistered: an f16 comparison with {a.name}, not an f16 value (torch promotes one or rounds it)"
+    if isinstance(a, bool) or not isinstance(a, (int, float)):
+        return f"operand {a!r}"
+    held = a != a or torch.tensor(float(a), dtype=torch.float16).item() == a
+    return None if held else f"numerics_unregistered: a number f16 rounds ({a!r}; torch rounds it to f16 first)"
+
+
+def _widened_operand(ctx, node, a, S) -> tuple[Coll, int | None]:
+    """`_operand`'s f32 words, an f16 value's widened (`F16ToF32_v1`, exact)."""
+    if isinstance(a, torch.fx.Node) and ctx.dtype_of(a) == torch.float16:
+        return _broadcast(_converted(ctx, node, ctx.coll(a), W.F16ToF32, 32), S, 32, node.name)
+    return _operand(ctx, node, a, S)
+
+
 class Compare(_TrainRule):
     """`gt` / `ge` / `lt` / `le` / `eq` / `ne` (`.Tensor`, `.Scalar`) of f32 values, static float tensors and Python numbers (each
     its f32 word), broadcast, as IEEE compares them: `F32GtStrict_v1` (`lt` with the operands swapped), `F32Eq_v1`, `ge` and `le`
-    their `BitOr_v1`, `ne` the `BitNot_v1` of `F32Eq_v1`. A NaN is unordered and -0 equals +0. Refused: a bf16 operand (torch
-    compares in bf16, rounding a number to bf16 first)."""
-    info = _info("Compare", "aten gt/ge/lt/le/eq/ne .Tensor/.Scalar of f32", "operands are f32 values, static float tensors or "
-                 "Python numbers, one a value", "one batch per step over the output's elements")
+    their `BitOr_v1`, `ne` the `BitNot_v1` of `F32Eq_v1`. A NaN is unordered and -0 equals +0. f16 values compare with f16 values
+    and with Python numbers f16 holds, each widened exactly (`F16ToF32_v1`, whose NaN word no comparison reads), as torch's f16
+    comparison reads them. Refused: a bf16 operand (torch compares in bf16, rounding a number to bf16 first), and beside an f16
+    value another dtype or a number f16 rounds."""
+    info = _info("Compare", "aten gt/ge/lt/le/eq/ne .Tensor/.Scalar of f32 or f16", "operands are f32 values, static float "
+                 "tensors or Python numbers, or f16 values and Python numbers f16 holds, one a value",
+                 "one batch per step over the output's elements")
 
     def targets(self):
         return set(_CMP)
@@ -69,13 +93,14 @@ class Compare(_TrainRule):
         args = node.args[:2]
         if any(isinstance(a, torch.fx.Node) and ctx.dtype_of(a) == torch.bfloat16 for a in args):
             return "numerics_unregistered: a bf16 comparison (torch compares in bf16, a number rounded to bf16 first)"
-        if why := _first(_operand_ok(ctx, a) for a in args):
+        f16 = any(isinstance(a, torch.fx.Node) and ctx.dtype_of(a) == torch.float16 for a in args)
+        if why := _first(_f16_ok(ctx, a) if f16 else _operand_ok(ctx, a) for a in args):
             return why
         return True if _a_value(ctx, args) else "no operand is a value"
 
     def emit(self, node, ctx):
         S, op = ctx.shape_of_node(node), _CMP[node.target]
-        a, b = (_operand(ctx, node, x, S) for x in node.args[:2])
+        a, b = (_widened_operand(ctx, node, x, S) for x in node.args[:2])
         if op in ("lt", "le"):
             a, b = b, a
 
@@ -125,46 +150,51 @@ class Logic(_TrainRule):
         ctx.record(self, node, {"shape": list(S)}, emitted=f"{fn.id} x{math.prod(S)}")
 
 
-_BITWISE = {aten.__lshift__.Tensor: W.I64Shl, aten.__lshift__.Scalar: W.I64Shl, aten.bitwise_left_shift.Tensor: W.I64Shl,
+_INT_OPS = {aten.add.Tensor: W.I64Add, aten.add.Scalar: W.I64Add,
+            aten.__lshift__.Tensor: W.I64Shl, aten.__lshift__.Scalar: W.I64Shl, aten.bitwise_left_shift.Tensor: W.I64Shl,
             aten.__rshift__.Tensor: W.I64Shr, aten.__rshift__.Scalar: W.I64Shr, aten.bitwise_right_shift.Tensor: W.I64Shr,
             aten.bitwise_and.Tensor: W.I64And, aten.bitwise_and.Scalar: W.I64And, aten.__and__.Tensor: W.I64And,
             aten.__and__.Scalar: W.I64And}
 
 
-class Bitwise(_TrainRule):
-    """`<<`, `>>` and `&` (`__lshift__`, `__rshift__`, `bitwise_left_shift`, `bitwise_right_shift`, `bitwise_and`, `__and__`) of
-    int64 values, static int64 tensors and Python ints, broadcast, as torch's kernels compute them: `I64Shl_v1` (0 for an amount
-    below 0 or past 63), `I64Shr_v1` (the sign shifted in, by 63 for an amount below 0 or past 62), `I64And_v1`."""
-    info = _info("Bitwise", "aten __lshift__/__rshift__/bitwise_left_shift/bitwise_right_shift/bitwise_and/__and__ of int64",
-                 "operands are int64 values, static int64 tensors or Python ints, one a value")
+class IntOps(_TrainRule):
+    """`+`, `<<`, `>>` and `&` (`add` with alpha 1, `__lshift__`, `__rshift__`, `bitwise_left_shift`, `bitwise_right_shift`,
+    `bitwise_and`, `__and__`) of int64 values, static int64 tensors and Python ints, broadcast, as torch's kernels compute them:
+    `I64Add_v1` (modulo 2^64), `I64Shl_v1` (0 for an amount below 0 or past 63), `I64Shr_v1` (the sign shifted in, by 63 for an
+    amount below 0 or past 62), `I64And_v1`."""
+    info = _info("IntOps", "aten add (alpha 1)/__lshift__/__rshift__/bitwise_left_shift/bitwise_right_shift/bitwise_and/__and__ "
+                 "of int64", "operands are int64 values, static int64 tensors or Python ints, one a value")
 
     def targets(self):
-        return set(_BITWISE)
+        return set(_INT_OPS)
 
     def applies(self, node, ctx):
         if ctx.dtype_of(node) != torch.int64:
             return f"numerics_unregistered: result dtype {ctx.dtype_of(node)}"
+        if _INT_OPS[node.target] is W.I64Add and _alpha(node) != 1:
+            return "numerics_unregistered: an int64 add with alpha != 1"
         args = node.args[:2]
         if why := _first(_word_ok(ctx, a, torch.int64) for a in args):
             return why
         return True if _a_value(ctx, args) else "no operand is a value"
 
     def emit(self, node, ctx):
-        S, fn = ctx.shape_of_node(node), _BITWISE[node.target]
+        S, fn = ctx.shape_of_node(node), _INT_OPS[node.target]
         ctx.define(node, _ew(ctx, node, fn, [_word_operand(ctx, node, a, S, torch.int64) for a in node.args[:2]], S, w=64))
         ctx.record(self, node, {"shape": list(S)}, emitted=f"{fn.id} x{math.prod(S)}")
 
 
-_SELECT = {torch.float32: SC.SelectF32, torch.bfloat16: SC.SelectBf16, torch.int64: W.SelectI64}
+_SELECT = {torch.float32: SC.SelectF32, torch.bfloat16: SC.SelectBf16, torch.float16: SC.SelectBf16, torch.int64: W.SelectI64}
 
 
 class Where(_TrainRule):
     """`where.self(c, a, b)` of a bool condition (a value or static), element by element, broadcast: an f32 result
     `SelectF32_v1` of the operands' f32 words as `Binary` reads them (a bf16 value widened, a bool one 1.0 or +0, an int64 one
-    rounded to nearest, as torch converts each to the result's dtype), an int64 result `SelectI64_v1` and a bf16 one
-    `SelectBf16_v1` of operands of the result's dtype (values, static tensors)."""
-    info = _info("Where", "aten.where.self with an f32, bf16 or int64 result", "the condition is a bool value or static",
-                 "f32: operands f32, bf16, bool or int64 values or static floats; int64, bf16: operands of the result's dtype",
+    rounded to nearest, as torch converts each to the result's dtype), an int64 result `SelectI64_v1` and a bf16 or f16 one
+    `SelectBf16_v1` (a choice of 16-bit words, whatever their format) of operands of the result's dtype (values, static
+    tensors)."""
+    info = _info("Where", "aten.where.self with an f32, bf16, f16 or int64 result", "the condition is a bool value or static",
+                 "f32: operands f32, bf16, bool or int64 values or static floats; int64, bf16, f16: operands of the result's dtype",
                  "one operand a value")
 
     def targets(self):
@@ -265,15 +295,33 @@ _GPU = {(torch.float32, torch.bfloat16): P.F2fpBf16, (torch.float32, torch.float
         (torch.float32, torch.uint8): (W.F32ToI64Rz, W.I64ToU8)}
 
 
+def _lowers(pair, cc) -> bool:
+    """Whether `Cast` lowers the conversion `pair` (from, to) of a value."""
+    return (pair in _EXACT or pair == (torch.int64, torch.bool)
+            or (pair[0] == torch.bool and pair[1] in (torch.float32, torch.int64)) or bool(cc and pair in _GPU))
+
+
+def _nonzero(ctx, node, x: Coll) -> Coll:
+    """An int64 value's words as bool, x != 0: the `BitNot_v1` of `I64Le_v1(x, 0)` `BitAnd_v1` `I64Le_v1(0, x)`, in its shape."""
+    S = tuple(shape_of(x.type)[0])
+    zero, v = (_const(ctx, node, 0, 64), None), _flat(x, S, 64)
+
+    def ew(fn, *ops):
+        return _flat(_ew(ctx, node, fn, list(ops), S, w=1), S, 1)
+
+    return ew(SC.BitNot, ew(SC.BitAnd, ew(W.I64Le, v, zero), ew(W.I64Le, zero, v)))[0].reshape(_tensor_type(S, 1))
+
+
 class Cast(_TrainRule):
     """`_to_copy` of a value to another dtype, as torch converts it: int64 to uint8 its low byte (`I64ToU8_v1`), uint8 to int64
-    zero-extended (`U8ToI64_v1`), int64 to f32 rounded to nearest even (`I64ToF32Rn_v1`), bool to f32 and to int64 1 or 0
-    (`SelectF32_v1`, `SelectI64_v1`), each the same on the CPU and the GPU; at a compute capability `cc` the GPU's f32 to bf16
-    (`F2fpBf16_v1`), f32 to f16 (`F32ToF16Rn_v1`) and f16 to f32 (`F16ToF32_v1`), whose NaN words are the GPU's, and f32 to
-    int64 truncated toward zero (`F32ToI64Rz_v1`, saturated, a NaN 0) and to uint8 through int64 (its low byte, `I64ToU8_v1`),
-    as c10 converts. `training_rules` places it first at `cc`, ahead of the default rules' f32 to bf16 (torch CPU's rounding),
-    which it leaves to them without `cc`. Refused without `cc`: the f16 conversions (torch CPU's keep a NaN's payload in their
-    vector body and not in their scalar tail) and f32 to int64 and uint8 (torch CPU's is INT64_MIN for a NaN and from 2^63 up)."""
+    zero-extended (`U8ToI64_v1`), int64 to f32 rounded to nearest even (`I64ToF32Rn_v1`), int64 to bool x != 0 (`_nonzero`), bool
+    to f32 and to int64 1 or 0 (`SelectF32_v1`, `SelectI64_v1`), each the same on the CPU and the GPU; at a compute capability
+    `cc` the GPU's f32 to bf16 (`F2fpBf16_v1`), f32 to f16 (`F32ToF16Rn_v1`) and f16 to f32 (`F16ToF32_v1`), whose NaN words are
+    the GPU's, and f32 to int64 truncated toward zero (`F32ToI64Rz_v1`, saturated, a NaN 0) and to uint8 through int64 (its low
+    byte, `I64ToU8_v1`), as c10 converts. `training_rules` places it first at `cc`, ahead of the default rules' f32 to bf16 (torch
+    CPU's rounding), which it leaves to them without `cc`. Refused without `cc`: the f16 conversions (torch CPU's keep a NaN's
+    payload in their vector body and not in their scalar tail) and f32 to int64 and uint8 (torch CPU's is INT64_MIN for a NaN and
+    from 2^63 up)."""
     info = _info("Cast", "aten._to_copy of a value between int64, uint8, bool and f32; at cc f32 to bf16, f32 to and from f16 and "
                  "f32 to int64 and uint8", "the operand is a value", "a dtype pair this rule lowers")
 
@@ -288,7 +336,7 @@ class Cast(_TrainRule):
         if not isinstance(ctx.val(a), Coll):
             return "the operand is not a value"
         pair = (ctx.dtype_of(a), ctx.dtype_of(node))
-        if pair in _EXACT or (pair[0] == torch.bool and pair[1] in (torch.float32, torch.int64)) or (self.cc and pair in _GPU):
+        if _lowers(pair, self.cc):
             return True
         if pair == (torch.float32, torch.bfloat16):
             return "an f32 to bf16 conversion without a compute capability is the default rules' (torch CPU's rounding)"
@@ -307,10 +355,13 @@ class Cast(_TrainRule):
 
 
 def _convert(ctx, node, x: Coll, src, dst) -> tuple[Coll, str]:
-    """(the value x converted from `src` to `dst` as torch's kernels convert it, its Definitions): bool by `_from_bits`, bf16 to
-    f32 widened exactly (`Bf16ToF32_v1`), or a pair of `_EXACT` or `_GPU` (through int64 between two Definitions)."""
+    """(the value x converted from `src` to `dst` as torch's kernels convert it, its Definitions): bool by `_from_bits`, int64 to
+    bool by `_nonzero`, bf16 to f32 widened exactly (`Bf16ToF32_v1`), or a pair of `_EXACT` or `_GPU` (through int64 between two
+    Definitions)."""
     if src == torch.bool:
         return _from_bits(ctx, node, x, dst), "SelectF32_v1" if dst == torch.float32 else "SelectI64_v1"
+    if (src, dst) == (torch.int64, torch.bool):
+        return _nonzero(ctx, node, x), "I64Le_v1 x2 then BitAnd_v1 then BitNot_v1"
     f = P.Bf16ToF32 if (src, dst) == (torch.bfloat16, torch.float32) else _EXACT.get((src, dst)) or _GPU[(src, dst)]
     fs = f if isinstance(f, tuple) else (f,)
     for g, w in zip(fs, [64] * (len(fs) - 1) + [WIDTH_OF_DTYPE[dst]], strict=True):
@@ -340,8 +391,7 @@ class Copy(_TrainRule):
         pair = (ctx.dtype_of(src), ctx.dtype_of(node))
         if pair[0] == pair[1]:
             return True
-        if isinstance(ctx.val(src), Coll) and (pair == (torch.bfloat16, torch.float32) or pair in _EXACT or (
-                pair[0] == torch.bool and pair[1] in (torch.float32, torch.int64)) or (self.cc and pair in _GPU)):
+        if isinstance(ctx.val(src), Coll) and (pair == (torch.bfloat16, torch.float32) or _lowers(pair, self.cc)):
             return True
         return f"numerics_unregistered: a conversion from {pair[0]} to {pair[1]} (lowered at a compute capability, or not at all)"
 
@@ -428,19 +478,23 @@ class AMax(_TrainRule):
 
 
 class Index(_TrainRule):
-    """`index.Tensor(table, [i])` of a static 1-D f32 table (a codebook) by an int64 or int32 value: each index narrowed to i32
-    (`I64ToI32_v1`), wrapped once if negative (`I32Le_v1`, `I32Add_v1`, `SelectI32_v1`: torch reads -T <= i < 0 as i + T) and
-    its entry read from the table's words (`GatherI32x{T}_v1`). An index out of range reads 0xFFFFFFFF, a NaN (torch raises)."""
-    info = _info("Index", "aten.index.Tensor of a static 1-D f32 table by one integer value", "one index tensor, an int64 or int32 "
-                 "value", "an index out of range reads 0xFFFFFFFF (torch raises)")
+    """`index.Tensor(table, [i])` of a 1-D f32 table (a codebook), static or a value, by an int64 or int32 value: each index
+    narrowed to i32 (`I64ToI32_v1`), wrapped once if negative (`I32Le_v1`, `I32Add_v1`, `SelectI32_v1`: torch reads -T <= i < 0
+    as i + T) and its entry read from the table's words (`GatherI32x{T}_v1`). An index out of range reads 0xFFFFFFFF, a NaN
+    (torch raises)."""
+    info = _info("Index", "aten.index.Tensor of a 1-D f32 table, static or a value, by one integer value", "one index tensor, an "
+                 "int64 or int32 value", "an index out of range reads 0xFFFFFFFF (torch raises)")
 
     def targets(self):
         return {aten.index.Tensor}
 
     def applies(self, node, ctx):
         tab, idx = node.args[:2]
-        if not isinstance(ctx.val(tab), StaticFloat) or ctx.val(tab).tensor.dim() != 1 or ctx.dtype_of(node) != torch.float32:
-            return "the table is not a static 1-D f32 tensor"
+        t = ctx.val(tab)
+        static = isinstance(t, StaticFloat) and t.tensor.dim() == 1
+        value = isinstance(t, Coll) and ctx.dtype_of(tab) == torch.float32 and len(_shape(ctx, tab)) == 1
+        if not (static or value) or ctx.dtype_of(node) != torch.float32:
+            return "the table is not a 1-D f32 tensor, static or a value"
         if len(idx) != 1 or not isinstance(idx[0], torch.fx.Node) or not isinstance(ctx.val(idx[0]), Coll):
             return "not one index tensor that is a value"
         if ctx.dtype_of(idx[0]) not in (torch.int64, torch.int32):
@@ -448,13 +502,17 @@ class Index(_TrainRule):
         return True
 
     def emit(self, node, ctx):
-        tab = ctx.val(node.args[0]).tensor
-        T = tab.numel()
+        t = ctx.val(node.args[0])
+        if isinstance(t, StaticFloat):
+            T, tab = t.tensor.numel(), _static_coll(ctx, node, t.tensor)
+        else:
+            T = _shape(ctx, node.args[0])[0]
+            tab = ctx.coll(node.args[0]).reshape(Array(T, I32))
         i = _tokens(ctx, node, node.args[1][0])
         neg = _batch(ctx, node, SC.I32Le, i, _const(ctx, node, -1), axes=(0, None))
         up = _batch(ctx, node, SC.I32Add, i, _const(ctx, node, T), axes=(0, None))
         j = _batch(ctx, node, SC.SelectI32, neg, up, i, axes=(0, 0, 0))
-        y = _batch(ctx, node, gather_i32(T), j, _static_coll(ctx, node, tab), axes=(0, None))
+        y = _batch(ctx, node, gather_i32(T), j, tab, axes=(0, None))
         ctx.define(node, y.reshape(_tensor_type(ctx.shape_of_node(node), 32)))
         ctx.record(self, node, {"table": T, "indices": len(i)}, emitted=f"GatherI32x{T}_v1 x{len(i)}")
 
@@ -535,4 +593,4 @@ class KthValue(_TrainRule):
         ctx.record(self, node, {"k": k, "slice": N, "slices": rows}, emitted=f"radix select of {N} keys x{rows} (32 steps)")
 
 
-__all__ = ["Compare", "Logic", "Bitwise", "Where", "Clamp", "Cast", "Copy", "IntSum", "AMax", "Index", "KthValue"]
+__all__ = ["Compare", "Logic", "IntOps", "Where", "Clamp", "Cast", "Copy", "IntSum", "AMax", "Index", "KthValue"]

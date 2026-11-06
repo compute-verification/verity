@@ -39,6 +39,11 @@ def _bits(x: float) -> int:
     return int(np.float32(x).view(np.uint32))
 
 
+def _alpha(node):
+    """`add` / `sub`'s alpha: keyword-only in `.Tensor`, positional in `.Scalar`."""
+    return node.kwargs.get("alpha", node.args[2] if len(node.args) > 2 else 1)
+
+
 def _note(ctx, node, k0: int) -> None:
     for k in range(k0, len(ctx.B.nodes)):
         ctx.node_hints.setdefault(k, ctx.hint_name(node))
