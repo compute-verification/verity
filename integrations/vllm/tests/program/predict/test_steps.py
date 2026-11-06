@@ -6,14 +6,21 @@ from __future__ import annotations
 
 import json
 import random
+import re
 from pathlib import Path
 from types import SimpleNamespace as NS
 
 import pytest
+from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine
+from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR
+from verity_vllm.pipeline import launch_context as LC
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.program.predict import batch as B
+from verity_vllm.program.predict import score as S
 from verity_vllm.program.predict.build import Unexpressible, _Specs, build_program, model_shape
 from verity_vllm.program.predict.common import _arr
+from verity_vllm.program.predict.domain import check_phi
+from verity_vllm.program.predict.dsa import Net
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import (
     Registered,
@@ -44,6 +51,8 @@ GREEDY = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "seed": None, "max_token
 STOCH = {"temperature": 0.8, "top_p": 1.0, "top_k": 0, "seed": None, "max_tokens": 3, "min_p": 0.0, "repetition_penalty": 1.0}
 STOCH_POLICY = {"kind": "stochastic", "temperature": 0.8, "top_p": 1.0, "top_k": 0, "seeded": True, "splits": registered_splits(188)}
 SERVED = "served-model"
+GLM53_B8 = "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager"
+CLASS_G_ENGINE = {"max_model_len": 2048, "max_num_batched_tokens": 2048, "long_prefill_token_threshold": 256, "enable_prefix_caching": False}
 
 
 def _registered(cfg: dict = TINY, **kw) -> Registered:
@@ -520,11 +529,122 @@ def test_a_tensor_parallel_rank_compiles_to_its_dead_free_rank_programs(tmp_path
     assert "--tp" not in trace_commands(one.summary(), _registered(), str(tmp_path))[0]
 
 
-def test_a_target_without_batch_invariance_is_refused():
-    with pytest.raises(Unexpressible, match="a target without batch invariance"):
+def test_a_target_without_batch_invariance_outside_class_g_is_refused():
+    with pytest.raises(Unexpressible, match=re.escape("a target without batch invariance outside class G ('eager'), whose launches the "
+                                                      "advice doesn't fix: model_type 'llama', not 'glm_moe_dsa'; world 1, not 8")):
         compile_steps(_registered(execution="eager"), *_mixed())
     with pytest.raises(ValueError, match="carries no workload"):
         Registered(Phi(model={"repo": "org/m", "revision": "r", "hf_config": TINY}, workload={"requests": [{"prompt_len": 1}]}), 7)
+
+
+def _class_g(hf_home: Path, rank: int = 0, engine: dict | None = None, **edit: dict) -> Registered:
+    """GLM-5.3's B8 row of record at `rank` as `score.phi_of` makes its φ (the checkpoint's config.json the package's byte copy),
+    registered with class G's engine limits (`engine` over them, None dropping one; `edit` over φ's other parts)."""
+    w = json.loads((WORKLOADS / f"{GLM53_B8}.json").read_text())
+    cp = Path(S.hf_config_path(str(hf_home), w["model"], RowEngine.of(w).revision))
+    cp.parent.mkdir(parents=True, exist_ok=True)
+    cp.write_bytes((HF_CONFIG_DIR / "GLM53.config.json").read_bytes())
+    phi = S.phi_of({"row": GLM53_B8, "workload": w}, hf_home=str(hf_home)).to_json()
+    eng = {k: v for k, v in {**phi["engine"], **CLASS_G_ENGINE, **(engine or {})}.items() if v is not None}
+    phi = {**phi, "tp": {**phi["tp"], "rank": rank}, "engine": eng}
+    return Registered.of(Phi.from_json({**phi, **{k: {**phi[k], **v} for k, v in edit.items()}}), default_seed=7)
+
+
+def _b8_window() -> tuple[I1.Advice, dict, dict]:
+    """The B8 row's recorded schedule as one window's advice and certified bodies, and the launch context its Build traced each
+    request shape at (`launch_context.shape_contexts`): its requests at their realized arrivals, each engine step's rows in
+    admission order (the scheduler's, which the launch keeps for its decodes), each request to its max_tokens (ignore_eos), greedy."""
+    w = json.loads((WORKLOADS / f"{GLM53_B8}.json").read_text())
+    reqs = LC._requests(w)
+    order = sorted(range(len(reqs)), key=lambda i: reqs[i]["arrive_step"])
+    steps = [[(i, LC.start_at(reqs[i], e), LC.rows_at(reqs[i], e)) for i in order if LC.rows_at(reqs[i], e)]
+             for e in range(max(r["arrive_step"] + r["max_tokens"] for r in reqs))]
+    advice, ingress = _session([(r["prompt_len"], r["max_tokens"], {**GREEDY, "max_tokens": r["max_tokens"], "ignore_eos": True})
+                                for r in reqs], [s for s in steps if s])
+    return advice, ingress, LC.shape_contexts(w)
+
+
+def test_class_g_plans_each_request_at_the_launch_context_its_build_traced(tmp_path):
+    """GLM-5.3's B8 mixed-arrivals row, its schedule as a window's advice under a class-G registration: each request's launch context,
+    read from the advice's steps, is the one its Build was traced at (the row's `--launch-context`), its eight shapes are the traced
+    Build's eight request Programs, and each trace command builds at its unit's launch context, into a dir of its own."""
+    reg, (advice, ingress, traced) = _class_g(tmp_path), _b8_window()
+    check_phi(reg.phi, Net.DOMAIN)
+    plan = plan_steps(reg, advice, ingress)
+    assert not plan.refused and not plan.discarded
+    assert [u.batch() for u in plan.requests] == [traced[(u.LP, u.T)] for u in plan.requests]
+    record = json.loads((MANIFESTS / "records.json").read_text())["rows"][GLM53_B8]["programs"]["0"]["requests"]
+    assert sorted(f"build_request_LP{u.LP}_T{u.T}" for u in plan.distinct()) == sorted(record)
+    summary = {"requests": [{"LP": u.LP, "T": u.T, "C": u.C, "policy": u.policy, "launch": u.batch()} for u in plan.requests]}
+    cmds = trace_commands(summary, reg, str(tmp_path))
+    assert [json.loads(c[c.index("--launch-context") + 1]) for c in cmds] == [{"batch": u.batch()} for u in plan.requests]
+    assert len({c[c.index("--out") + 1] for c in cmds}) == 8 and trace_dir(plan.requests[0]).startswith("build_request_LP11_T12_greedy_l")
+    assert trace_dir(plan.requests[0]) == trace_dir(summary["requests"][0])
+
+
+def test_class_g_compiles_a_request_alone_at_its_launch_context(tmp_path):
+    """R2 in class G: each B8 request planned alone (`batch._solo`, each of its rows a launch of its own) is its unit in the batch
+    apart from its launch context, with the same rows, while in the batch each request's launches hold another request's rows."""
+    reg, (advice, ingress, _) = _class_g(tmp_path), _b8_window()
+    plan = plan_steps(reg, advice, ingress)
+    for r, u in enumerate(plan.requests):
+        solo, bodies, k = B._solo(advice, ingress, r)
+        alone = plan_steps(reg, solo, bodies)
+        a = alone.requests[k]
+        assert B._unit(a) == B._unit(u) and [x[1:] for x in sum(alone.steps, [])] == [x[1:] for x in sum(plan.steps, []) if x[0] == r]
+        assert all(len(step) == 1 for step in a.launch) and any(len(step) > 1 for step in u.launch)
+
+
+@pytest.mark.parametrize("engine,edit,fact", [
+    ({"max_num_batched_tokens": 4096}, {}, "engine arg max_num_batched_tokens 4096, not a stated value of at most 2048"),
+    ({"max_model_len": None}, {}, "engine arg max_model_len None, not a stated value of at most 2048"),
+    ({"long_prefill_token_threshold": 512}, {}, "engine arg long_prefill_token_threshold 512, not a stated value of at most 256"),
+    ({"enable_prefix_caching": None}, {}, "engine arg enable_prefix_caching None, not False"),
+    ({}, {"tp": {"world": 4}}, "world 4, not 8"),
+    ({}, {"target": {"device_name": "NVIDIA H100 80GB HBM3"}}, "device_name 'NVIDIA H100 80GB HBM3', not 'NVIDIA H200'"),
+])
+def test_class_g_is_the_one_registration_without_batch_invariance_that_compiles(engine, edit, fact, tmp_path):
+    with pytest.raises(Unexpressible, match=re.escape(f"a target without batch invariance outside class G ('eager'), whose launches the "
+                                                      f"advice doesn't fix: {fact}")):
+        plan_steps(_class_g(tmp_path, engine=engine, **edit), *_b8_window()[:2])
+
+
+A = WA.RequestAdvice("a", 3, 4, "length")
+
+
+def _wrow(start: int, n: int) -> WA.StepAdvice:
+    return WA.StepAdvice((WA.Row(0, "decode" if n == 1 and start >= 3 else "prefill", start, n, 0, False, ()),))
+
+
+@pytest.mark.parametrize("session,fact", [
+    (_session([(8, 2, GREEDY)], [[(0, 0, 3)], [(0, 3, 5)], [(0, 8, 1)]]),
+     "request 0: step 0 prefills 3 of its 8 prompt rows, a chunked prefill without batch invariance"),
+    (_session([(8, 3, GREEDY), (4, 1, {**GREEDY, "max_tokens": 1})], [[(0, 0, 8)], [(0, 8, 1)], [(1, 0, 4)], [(0, 0, 10, {"preempted": True})]]),
+     "request 0: step 3 runs 10 rows of it resumed, a recompute without batch invariance"),
+    (_hit(16), "request 1: a prefix-cache hit of 16 tokens without batch invariance"),
+    (_session([(1100, 1, {**GREEDY, "max_tokens": 1}), (1000, 1, {**GREEDY, "max_tokens": 1})], [[(0, 0, 1100), (1, 0, 1000)]]),
+     "step 0 runs 2100 rows, over the registered max_num_batched_tokens 2048"),
+    ((WA.Advice((A,), (_wrow(0, 3), _wrow(3, 1)), (0, 1)), {"a": {**GREEDY, "prompt": [1, 2, 3]}}),
+     "request 0 is carried out of the window without batch invariance"),
+    ((WA.Advice((A,), (_wrow(4, 1), _wrow(5, 1)), (0, 1), (WA.Carried(0, 4, 2, ((0, 4),)),)), {"a": {**GREEDY, "prompt": [1, 2, 3]}}),
+     "request 0 is carried into the window without batch invariance"),
+])
+def test_class_g_refuses_a_request_whose_program_misses_a_launch_it_ran_in(session, fact, tmp_path):
+    with pytest.raises(Unexpressible, match=re.escape(fact)):
+        plan_steps(_class_g(tmp_path), *session)
+
+
+@pytest.mark.slow
+def test_a_class_g_window_compiles_to_the_traced_build(tmp_path):
+    """GLM-5.3's B8 mixed-arrivals row as a window's advice, compiled at rank 0 under a class-G registration: every request Program,
+    each at the launch context the advice gives it, is the one the Build traced for the row (`records.json`, as `aot.compare` reads
+    the traced Build), and the batch rules pass (R1 over GP-01 of the eight, R2 alone at the same launch context). The only test that
+    builds a compilation off batch invariance: the fast tests plan it, and only the DeepSeek sparse-attention decoder reads a launch."""
+    reg, (advice, ingress, _) = _class_g(tmp_path), _b8_window()
+    c = compile_steps(reg, advice, ingress)
+    record = json.loads((MANIFESTS / "records.json").read_text())["rows"][GLM53_B8]["programs"]["0"]["requests"]
+    assert {f"build_request_LP{u.LP}_T{u.T}": u.digest for u in c.requests} == record
+    assert c.batch_rule is None and len(c.programs) == 8
 
 
 def test_the_traced_side_is_one_build_a_distinct_program(tmp_path):

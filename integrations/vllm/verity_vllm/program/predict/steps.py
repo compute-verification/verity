@@ -26,6 +26,15 @@
   prefill rows in turn, and a resume's recompute of positions its request had reached is `discarded`, like the row past the last
   kept output. This rests on the target computing a position's row bit for bit alike however its prefill is chunked or
   recomputed; where it doesn't, the committed row isn't the Program's and the proof fails visibly.
+- Off batch invariance the compiler serves class G alone (`CLASS_G`, `launch_class`: GLM-5.3 at TP8, eager, on H200, its steps at
+  most 2,048 tokens and its positions at most 2,048, prefill chunks of at most 256 rows, no prefix cache), whose token-count-dependent
+  kernel choices read the whole launch. There a request's Program is the request wrapper at its launch context too
+  (`RequestUnit.launch`, `common._Launch`): per step of its Program, its prefill and then its T decodes, every row that step's forward
+  ran as (n, start), in the advice's batch order, a refused request's rows and discarded rows included, since they ran. The launch
+  is the advice's schedule, never a batch-mate's value; requests of one (LP, T, C, policy, launch) share one Program. The request
+  wrapper prefills in one launch and its Program reads every launch its rows ran in, so a chunked prefill, a recompute after
+  preemption, a cache hit, and a request a Commit window carries in or leaves with outputs to keep (its other launches are another
+  window's advice) have no Program there.
 - At tensor-parallel world W, `registered.phi.tp` names one rank, and the Programs are that rank's over its weight shards, each
   collective's other partials its `peers_*` Inputs in call order (`vllm_meta.WithPeers`), in the registered compiler's form as at
   one rank (`build_program(..., dead_free=True)`, the Build's `--dead-free`). The advice is the node's, the same at every rank.
@@ -39,7 +48,7 @@
 The compiler is total: it compiles its input or refuses it by name (`Unexpressible`), deterministically. Refused, in order:
 - advice that isn't I1's bytes or an `Advice`, is over ℓ (before any of it is read), or isn't I1 v0 (`MalformedAdvice`: I1's
   validity, its types, ranges, order and the schedule's position rules);
-- a target without batch invariance, whose launches would come from the advice (v1);
+- a target without batch invariance outside class G, and in class G a step over the registered `max_num_batched_tokens`;
 - a request whose body is missing or off the ingress schema, whose prompt isn't `prompt_len` token ids of the vocabulary, or
   whose `output_len` and `finish` its `max_tokens` contradicts;
 - a cache hit whose `sources` don't hold the request's own KV: through each run, the source's certified prompt must equal the
@@ -47,8 +56,9 @@ The compiler is total: it compiles its input or refuses it by name (`Unexpressib
   the hit (a resume's run of its own KV is I1's replay's to hold);
 - what v0 doesn't compile: a prefix-cache hit on a stochastic request (the cached stochastic wrapper isn't ported), or on a
   request a window carries in (its prefix's producers are the admitting window's requests); positions
-  past the model's; sampling other than greedy or seeded top-p with top_k 0 (min_p, the penalties, logit_bias, min_tokens, n > 1,
-  or a parameter this compiler doesn't know);
+  past the model's (in class G, past the registered `max_model_len` too); in class G, a request whose Program wouldn't hold every
+  launch it ran in (`launch_of`); sampling other than greedy or seeded top-p with top_k 0 (min_p, the penalties, logit_bias,
+  min_tokens, n > 1, or a parameter this compiler doesn't know);
 - a request Program with a dead unit (`program.prune`: a node no output reads), whose fix is in the lowering, never the advice;
 - a compilation `predict.batch.check_compiled` refuses (`BatchDependent`): one where a request's outputs could read its
   batch-mates (R3 a derived split count; R2 a request planned differently alone, which keeps a cache hit on another request's KV
@@ -60,11 +70,12 @@ KV; `refused` names why. It records `check_compiled`'s refusal (`batch_rule`) ra
 
 The compiler digest is `score.code_version()`, with ℓ beside it. `Compiled.transfer_gates` lists the templates whose units hold
 transfer gates (the ingress parse and the token selects), each of which a window proves whole. `trace_commands` lists the Build traces (`verity-vllm build
---wrapper request`) of a compilation's Programs, and `compare` holds the compiled digests to them. With `named=True` each Program
+--wrapper request`, in class G at the unit's `--launch-context`) of a compilation's Programs, and `compare` holds the compiled digests to them. With `named=True` each Program
 carries what its trace's Build says beside it (`Compiled.named`, `naming`), so an auditor writes that Build with no vLLM.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import os
@@ -100,6 +111,12 @@ _FINISH = ("max_tokens", "stop", "stop_token_ids", "ignore_eos")
 _READ = ("temperature", "top_p", "seed")
 #: a body's fields that compute nothing: the prompt (read apart) and how the response travels
 _TRANSPORT = ("prompt", "model", "user", "stream", "stream_options", "return_token_ids")
+#: class G, the one registration without batch invariance the compiler serves: GLM-5.3 at TP8, eager, on H200 (`predict.dsa`'s
+#: domain), and the engine limits (each stated, at most these) that keep every launch where `predict.dsa` writes it: steps of at
+#: most 2,048 tokens (its captured statics), at most 2,048 keys a row (DSA's top-k is the identity there, and deterministic), and
+#: prefill chunks of at most 256 rows (its decode route at 8 heads a rank)
+CLASS_G = {"model_type": "glm_moe_dsa", "world": 8, "execution": "eager", "device_name": "NVIDIA H200"}
+CLASS_G_LIMITS = {"max_num_batched_tokens": 2048, "max_model_len": 2048, "long_prefill_token_threshold": 256}
 
 
 @dataclass(frozen=True)
@@ -141,7 +158,8 @@ class RowRef:
 @dataclass(frozen=True)
 class RequestUnit:
     """A request that ran: its Program's shape and digest, its policy, the seed its `seed` Input takes, its first step and its id;
-    with a prefix-cache hit, its C cached rows and the request that computed each cached block."""
+    with a prefix-cache hit, its C cached rows and the request that computed each cached block; in class G, its launch context
+    (`launch_of`)."""
 
     request: int
     digest: str
@@ -156,9 +174,15 @@ class RequestUnit:
     parse: Any = None   # with byte ingress, its `IngressPrompt_v1` binding: the unit that reads the ingress transfer gates
     carried_in: bool = False    # admitted in an earlier Commit window
     carried_out: bool = False   # left to the next window with outputs to keep
+    launch: tuple[tuple[tuple[int, int], ...], ...] | None = None  # class G: per Program step, every row its forward ran, (n, start)
 
     def key(self) -> str:
-        return json.dumps([self.LP, self.T, self.policy, *([self.C] if self.C else [])], sort_keys=True)
+        return json.dumps([self.LP, self.T, self.policy, *([self.C] if self.C else []),
+                           *([{"launch": self.launch}] if self.launch is not None else [])], sort_keys=True)
+
+    def batch(self) -> list | None:
+        """The launch context as `build_program`'s ``batch`` and the Build's `--launch-context '{"batch": ...}'` take it."""
+        return None if self.launch is None else [[list(seq) for seq in step] for step in self.launch]
 
 
 @dataclass
@@ -189,7 +213,8 @@ class Compiled:
                 "lag": self.workload.lag, "programs": sorted(self.programs),
                 "requests": [None if u is None else {"request": u.request, "id": u.id, "digest": u.digest, "LP": u.LP, "T": u.T, "C": u.C,
                                                      "policy": u.policy, "seed": u.seed, "first_step": u.first_step,
-                                                     "parse": u.parse and u.parse.id} for u in self.requests],
+                                                     "parse": u.parse and u.parse.id, **({"launch": u.batch()} if u.launch else {})}
+                             for u in self.requests],
                 "steps": [[[r.request, r.start, r.n, r.samples] for r in rows] for rows in self.steps],
                 "discarded": [list(d) for d in self.discarded], "refused": {str(i): why for i, why in sorted(self.refused.items())},
                 "batch_rule": self.batch_rule, "transfer_gates": list(self.transfer_gates),
@@ -368,6 +393,44 @@ def producers_of(i: int, s: int, row: I1.Row, bs: int) -> tuple[int, ...]:
     return tuple(out)
 
 
+def launch_class(phi: Phi) -> None:
+    """Refuse a registration without batch invariance outside class G (`CLASS_G`), naming each fact of it outside: the model,
+    world, execution and device, and the engine limits, each stated and within `CLASS_G_LIMITS`, the prefix cache stated off (vLLM's
+    default is on)."""
+    eng = dict(phi.engine or {})
+    facts = [f"{k} {v!r}, not {CLASS_G[k]!r}" for k, v in (("model_type", str(phi.hf_config.get("model_type", "")).lower()),
+                                                        ("world", int((phi.tp or {}).get("world", 1))), ("execution", phi.execution),
+                                                        ("device_name", (phi.target or {}).get("device_name"))) if v != CLASS_G[k]]
+    facts += [f"engine arg {k} {eng.get(k)!r}, not a stated value of at most {cap}" for k, cap in CLASS_G_LIMITS.items()
+              if type(eng.get(k)) is not int or not 0 < eng[k] <= cap]
+    if eng.get("enable_prefix_caching") is not False:
+        facts.append(f"engine arg enable_prefix_caching {eng.get('enable_prefix_caching')!r}, not False")
+    if facts:
+        raise Unexpressible(f"a target without batch invariance outside class G ({phi.execution!r}), whose launches the advice doesn't "
+                            f"fix: {'; '.join(facts)}")
+
+
+def launch_of(i: int, LP: int, T: int, C: int, rows: Rows, steps: Any, carried: bool, left: bool) -> tuple:
+    """Request `i`'s launch context in class G: per step of its Program (its prefill, then its T decodes, its first T + 1 rows), every
+    row of the advice step that row ran in as (n, start), in the step's batch order. Refused where its Program wouldn't hold every
+    launch it ran in: a request carried into or out of the window, a cache hit, a chunked prefill, a recompute."""
+    if carried or left:
+        raise Unexpressible(f"request {i} is carried {'into' if carried else 'out of'} the window without batch invariance: its "
+                            f"Program reads its launches in the other window, which are that window's advice")
+    if C:
+        raise Unexpressible(f"request {i}: a prefix-cache hit of {C} tokens without batch invariance (class G serves without the "
+                            f"prefix cache)")
+    (s0, _, first), *decodes = rows[:T + 1]
+    if (first.start, first.n) != (0, LP):
+        raise Unexpressible(f"request {i}: step {s0} prefills {first.n} of its {LP} prompt rows, a chunked prefill without batch "
+                            f"invariance (the request wrapper prefills in one launch)")
+    for s, _, row in decodes:
+        if row.n != 1 or row.preempted:
+            raise Unexpressible(f"request {i}: step {s} runs {row.n} rows of it{' resumed' if row.preempted else ''}, a recompute "
+                                f"without batch invariance (the request wrapper decodes one row a launch)")
+    return tuple(tuple((r.n, r.start) for r in steps[s].rows) for s, _, _ in rows[:T + 1])
+
+
 @dataclass
 class Plan:
     """What the advice fixes before any Program is built: each request's unit (its digest unset), each step's live rows as
@@ -392,13 +455,13 @@ class Plan:
 
 def request_program(registered: Registered, unit: RequestUnit, named: bool = False) -> Any:
     """`unit`'s Program (a `build.BuildResult`): the Build's request wrapper at its (LP, T), under its policy, with its C cached rows,
-    at φ's rank, in the registered compiler's form (`dead_free`) at any world; `named`: with its trace's names
-    (`naming.named_program`)."""
+    in class G at its launch context, at φ's rank, in the registered compiler's form (`dead_free`) at any world; `named`: with its
+    trace's names (`naming.named_program`, which names no class-G decoder)."""
     phi = Phi.from_json({**registered.phi.to_json(), "sampling": unit.policy})
     if named:
         from .naming import named_program
         return named_program(phi, unit.LP, unit.T, unit.C)
-    return build_program(phi, "request", LP=unit.LP, T=unit.T, C=unit.C, dead_free=True)
+    return build_program(phi, "request", LP=unit.LP, T=unit.T, C=unit.C, dead_free=True, batch=unit.batch())
 
 
 def compile_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bool = False, named: bool = False) -> Compiled:
@@ -448,8 +511,8 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
     """`compile_steps` up to building Programs: every refusal, each request's shape and policy, and each step's live rows."""
     adv = advice_of(registered, advice)
     phi0 = registered.phi
-    if not phi0.target_profile().batch_invariant:
-        raise Unexpressible(f"a target without batch invariance ({phi0.execution!r}): its requests' launches would come from the advice (v1)")
+    if not (bi := phi0.target_profile().batch_invariant):
+        launch_class(phi0)
     if not isinstance(ingress, Mapping):
         raise Unexpressible(f"the ingress is each request's certified body by its id, not a {type(ingress).__name__}")
     if not adv.requests:
@@ -457,13 +520,25 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
     ids = {q.id for q in adv.requests}
     if not partial and (extra := [k for k in ingress if k not in ids]):
         raise Unexpressible(f"{len(extra)} certified requests have no row in the advice, {extra[0]!r} first")
-    shape = model_shape(phi0.model["hf_config"])
+    if bi:
+        shape = model_shape(phi0.model["hf_config"])
+        V, max_pos = shape.V, shape.max_pos
+    else:
+        hf, eng = phi0.hf_config, phi0.engine
+        V, max_pos = int(hf["vocab_size"]), min(int(hf["max_position_embeddings"]), eng["max_model_len"])
     refused: dict[int, str] = {}
 
     def refuse(i: int, why: str) -> None:
         if not partial:
             raise Unexpressible(why)
         refused.setdefault(i, why)
+
+    if not bi:
+        for s, step in enumerate(adv.steps):
+            if (n := sum(row.n for row in step.rows)) > eng["max_num_batched_tokens"]:
+                for row in step.rows:
+                    refuse(row.request, f"step {s} runs {n} rows, over the registered max_num_batched_tokens "
+                                        f"{eng['max_num_batched_tokens']}")
 
     rows: dict[int, Rows] = {i: [] for i in range(len(adv.requests))}
     for s, step in enumerate(adv.steps):
@@ -479,9 +554,9 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
         try:
             body = ingress.get(q.id)
             if type(body) is bytes:
-                body = ingress_body(i, q, body, registered.served_model, shape.V)
+                body = ingress_body(i, q, body, registered.served_model, V)
                 wired.add(i)
-            prompts[i], params[i] = request_of(i, q, body, shape.V)
+            prompts[i], params[i] = request_of(i, q, body, V)
         except Unexpressible as e:
             refuse(i, str(e))
     for s, step in enumerate(adv.steps):
@@ -499,9 +574,12 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
             try:
                 carry = carried.get(i)
                 LP, T, s0, C = shape_of(i, q.prompt_len, rows[i], q.output_len, carry)
-                if LP + T > shape.max_pos:
-                    raise Unexpressible(f"request {i}: positions to {LP + T - 1}, past the model's {shape.max_pos} positions")
+                if LP + T > max_pos:
+                    raise Unexpressible(f"request {i}: positions to {LP + T - 1}, past the model's {max_pos} positions" if bi else
+                                        f"request {i}: positions to {LP + T - 1}, past the {max_pos} the model and the registered "
+                                        f"max_model_len allow")
                 own = place(i, LP, T, C, rows[i], q.output_len, carry, i in left)
+                launch = None if bi else launch_of(i, LP, T, C, rows[i], adv.steps, carry is not None, i in left)
                 policy, seed = policy_of(i, params[i], registered.default_seed, phi0.target_profile().num_sms)
                 if C and policy["kind"] != "greedy":
                     raise Unexpressible(f"request {i}: a prefix-cache hit of {C} tokens on a stochastic request (the cached stochastic "
@@ -514,8 +592,9 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
             except Unexpressible as e:
                 refuse(i, str(e))
             else:
-                parse = bind(IO.IngressPrompt, MODEL=registered.served_model, LP=LP, V=shape.V) if i in wired else None
-                units.append(RequestUnit(i, "", LP, T, policy, seed, s0, q.id, C, producers, parse, carry is not None, i in left))
+                parse = bind(IO.IngressPrompt, MODEL=registered.served_model, LP=LP, V=V) if i in wired else None
+                units.append(RequestUnit(i, "", LP, T, policy, seed, s0, q.id, C, producers, parse, carry is not None, i in left,
+                                         launch))
                 placed.update(own)
                 continue
         units.append(None)
@@ -579,14 +658,18 @@ def _label(policy: dict) -> str:
 
 
 def trace_dir(u: RequestUnit | dict) -> str:
-    """The derive dir name of a request Program's trace: `build_request_<prefix_plan.shape_name>_<policy>`."""
-    LP, T, C, policy = (u.LP, u.T, u.C, u.policy) if isinstance(u, RequestUnit) else (u["LP"], u["T"], u.get("C") or 0, u["policy"])
-    return f"build_request_{PP.shape_name(PP.shape(LP, T, C))}_{_label(policy)}"
+    """The derive dir name of a request Program's trace: `build_request_<prefix_plan.shape_name>_<policy>`, in class G then `_l` and
+    the first 12 hex digits of its launch context's SHA-256 (its compact JSON)."""
+    LP, T, C, policy, launch = ((u.LP, u.T, u.C, u.policy, u.batch()) if isinstance(u, RequestUnit) else
+                                (u["LP"], u["T"], u.get("C") or 0, u["policy"], u.get("launch")))
+    tail = f"_l{hashlib.sha256(json.dumps(launch, separators=(',', ':')).encode()).hexdigest()[:12]}" if launch else ""
+    return f"build_request_{PP.shape_name(PP.shape(LP, T, C))}_{_label(policy)}{tail}"
 
 
 def trace_commands(summary: dict, registered: Registered, root: str, *, max_model_len: int = 2048) -> list[list[str]]:
     """One `verity-vllm build --wrapper request` per distinct request Program of a compilation (`Compiled.summary()`), on the pinned
-    vLLM (CPU, on meta), each writing `<root>/<trace_dir>`; at tensor-parallel world W, φ's rank's (`--tp W --rank r --dead-free`)."""
+    vLLM (CPU, on meta), each writing `<root>/<trace_dir>`; at tensor-parallel world W, φ's rank's (`--tp W --rank r --dead-free`);
+    in class G at the unit's launch context (`--launch-context '{"batch": ...}'`)."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
     phi, seen, cmds = registered.phi, set(), []
     target = {k: v for k, v in phi.target.items() if k in TargetProfile.__dataclass_fields__}
@@ -600,6 +683,7 @@ def trace_commands(summary: dict, registered: Registered, root: str, *, max_mode
         sampling = "greedy" if pol["kind"] == "greedy" else json.dumps({k: pol[k] for k in ("temperature", "top_p", "top_k")}, sort_keys=True)
         cmds.append(["verity-vllm", "build", "--out", os.path.join(root, d), "--wrapper", "request", "--LP", str(u["LP"]), "--T", str(u["T"]),
                      *(["--cached", str(u["C"])] if u.get("C") else []),
+                     *(["--launch-context", json.dumps({"batch": u["launch"]}, separators=(",", ":"))] if u.get("launch") else []),
                      "--model", phi.model["repo"], "--revision", phi.model["revision"], "--max-model-len", str(max_model_len),
                      "--target", json.dumps(target, sort_keys=True), "--profile", phi.profile, "--sampling", sampling, *tp])
     return cmds
