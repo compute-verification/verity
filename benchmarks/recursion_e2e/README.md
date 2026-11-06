@@ -1,7 +1,7 @@
 # recursion_e2e: the recursive run, timed step by step (`verity bench recursion_e2e`)
 
-Recursive witness zero knowledge proves an inner statement with C-Flock's circuit prover, ZK off, against the inner phase's ZK server. It then
-proves V*, the inner verifier written as C-Flock statements, with `--zk`, and the auditor's Lean verifier checks V*'s
+Recursive witness zero knowledge proves an inner statement with Flock's circuit prover, ZK off, against the inner phase's ZK server. It then
+proves V*, the inner verifier written as Flock statements, with `--zk`, and the auditor's Lean verifier checks V*'s
 releases only. This is the one runner for that pipeline. It drives the steps of the pod script,
 `verity/ml/flock/pod/85-rec-reprice.sh`, as one recorded run, times each step on the smallest real input (K = 4096,
 N = 2), repeats what is cheap to repeat, and says whether the run was whole (every step of one recursive proof) and whether it was accepted. Speed work measures each cut

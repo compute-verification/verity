@@ -84,7 +84,7 @@ reads and its named assumptions.
 files (their ports `sha512/row/v1`, `row/v2` or `row-seg/v1` rows of distinct names, no root registered under two domains)
 and the sampled-proofs run passes the registration's population, the committed transcript, read as the sampling witness, is
 outside the sampling relation `RelS` at δ with probability at most δ + ε_ks + δ_link. It takes no hypothesis on the files.
-It follows from `SampledKSLiveV2`, the same bound at the circuit files the verifier of record reads. Its named assumptions
+It follows from `SampledKSLiveV2`, the same bound at the circuit files the verifier reads. Its named assumptions
 are the coins (A3, `FlockSoundness.Assumptions.UniformRandomBytes`), the live verifier, and SHA-512's collision resistance.
 
 **The property.** `NetTiming.SecurityProofs.SampledAuditAccepted : NetTiming.Guarantees.SampledAuditAccepted`, at any
