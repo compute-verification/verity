@@ -153,3 +153,14 @@ TRIAGE merged main into #7537 (stacks on #7447/#7464) at de6f4bf0be. The conflic
   `zk_deployZk_sw_stops` keeps its statement and follows from it.
 - PoUS `TRUSTED.sha256`: `pins.py --regen`.
 Simplest: take TRIAGE's resolved files from de6f4bf0be for those paths.
+
+## 2026-11-06T11:30Z from proofs: more of #7447's main-merge breaks, fixed in #7537
+
+TRIAGE found main's verifier changes break #7447's own files too (in #7537's build): `SchedSlot.lean` (main's
+`refK_of_none` / `schedOf_eq_none_iff` now need `decodeRec x = none`; the same break waits unbuilt in RoundsPass,
+RoundsPassInner, RoundsPassInner0, LiveOwn, FinInnerParts, Honest) and main's `SampledGeneric/FlockZk.lean`'s call to
+`zk_server_lean_loop` (#7447's new signature: Ok, SwCausalOn, StopsOk, LiveRoundEqOwn). Fixes on #7537's branch,
+commits 0a86365900 and e665421cf0: new `Loop.decodeRec_none_of_scope` (from the --zk scope),
+`liveRoundEqOwn_ofLoopLink` takes it as a hypothesis, one-directional uses go through main's `schedOf_none_of_innerAt`,
+`server_below` passes the new arguments. When #7447 merges main, take the same fixes (cherry-pick the #7447-file parts)
+so #7537 doesn't conflict again.
