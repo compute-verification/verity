@@ -3830,13 +3830,16 @@ def _texts(section: str, entries: dict, g: str) -> list[str]:
     return [v if isinstance(v, str) else json.dumps(v, sort_keys=True)]
 
 
-def _read_by(lock: dict) -> dict[str, dict[str, str]]:
-    """{guarantee: {definition: its hash}} of what each guarantee reads, from the lock's `reads`."""
-    out: dict[str, dict[str, str]] = {}
+#: a name as a lock's recorded signature prints it (`check.py`'s `NAMES`)
+LOCK_NAME = re.compile(r"(?<![\w.'!?])([^\W\d][\w'!?]*(?:\.[^\W\d][\w'!?]*)*)")
+
+
+def _read_hashes(lock: dict) -> dict[str, str]:
+    """{definition: its hash} over the lock's `reads`."""
+    out: dict[str, str] = {}
     for group in (lock.get("reads") or {}).values():
         if isinstance(group, dict) and isinstance(defs := group.get("definitions"), dict):
-            for g in group.get("guarantees") or []:
-                out.setdefault(g, {}).update(defs)
+            out.update(defs)
     return out
 
 
@@ -3845,17 +3848,19 @@ def dropped_entries(base: dict, merged: dict) -> list[str]:
     statements still need it: a premise of `shape.inline` ({guarantee: {premise as printed: why}}), as `shape.inline[G]:
     PREMISE`, and a key of `shape.frozen`, as `shape.frozen[G]`.  ``merged`` may drop a guarantee's entry when it no longer
     lists the guarantee under `guarantees` (removed), or restated it: it records the guarantee otherwise than ``base`` does,
-    its owner aside, or a definition both say it reads has another hash (`check.py --update` keeps a premise only while the
-    statement prints it, and the head's records run checked its lock).  It may drop an entry whose text (a premise, a frozen
-    entry's reason) it holds under a key of the section ``base`` lacks (renamed), a guarantee's premises while it adds as
+    its owner aside, or a definition its signature names has another hash in both (a guarantee lifted into a `Guarantees`
+    definition is restated there; `check.py --update` keeps a premise only while the statement prints it, and the head's
+    records run checked its lock).  It may drop an entry whose text (a premise, a frozen entry's reason) it holds under a
+    key of the section ``base`` lacks (renamed), a guarantee's premises while it adds as
     many others under that guarantee (re-keyed at a restated statement, as `check.py`'s `paired` keys them), and a frozen
     entry's reason while it keeps the key (reworded: `check.py` reads the key and the reason's category, not its wording)."""
     listed, was = merged.get("guarantees") or {}, base.get("guarantees") or {}
-    reads, read = _read_by(base), _read_by(merged)
+    old, new = _read_hashes(base), _read_hashes(merged)
 
     def restated(g: str) -> bool:
+        names = LOCK_NAME.findall(" ".join((listed[g] if isinstance(listed[g], dict) else {}).get("signature") or []))
         return _unowned(listed[g]) != _unowned(was.get(g)) or any(
-            read[g][d] != h for d, h in reads.get(g, {}).items() if d in read.get(g, {}))
+            old[n] != new[n] for n in names if n in old and n in new)
 
     out = []
     for section in ("inline", "frozen"):
