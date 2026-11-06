@@ -34,6 +34,24 @@ S_V = [[1, 0, 0, 1], [1, 0, 0, 0], [0, 1, 0, -1], [-1, 0, 1, 0], [0, 0, 0, 1], [
 W_V = [[1, 0, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1], [-1, 1, 1, -1], [-1, 1, 0, 0], [1, -1, 0, 1], [0, -1, 0, 1]]
 SCHEMES = {"strassen": S_V, "winograd": W_V}
 CALIB_TOL = 1e-6
+FIELDS = torch.arange(0, 62, 2)
+
+
+def draw(kind: str, shape, g: torch.Generator, device) -> torch.Tensor:
+    """One call's E as int8: e4 uniform on {−2, −1, 0, 1}, e3 on {−1, 0, 1}. On a GPU one randint an element; on the
+    CPU, whose generator draws one value at a time (otherwise most of a 70B forward), 2-bit fields cut from 62-bit
+    draws, e3's by rejecting 3."""
+    lo = -2 if kind == "e4" else -1
+    if device.type != "cpu":
+        return torch.randint(lo, 2, shape, device=device, generator=g).to(torch.int8)
+    n, out, got = shape.numel(), [], 0
+    while got < n:
+        m = n - got if kind == "e4" else (n - got) * 4 // 3 + 4096
+        w = torch.empty((m + 30) // 31, dtype=torch.int64).random_(0, 2**62, generator=g)
+        f = ((w[:, None] >> FIELDS) & 3).to(torch.int8).reshape(-1)[:m]
+        out.append(f if kind == "e4" else f[f != 3])
+        got += out[-1].numel()
+    return (torch.cat(out) if len(out) > 1 else out[0])[:n].reshape(shape) + lo
 
 
 def row_scale(w: torch.Tensor, c: float | None) -> torch.Tensor:
@@ -149,9 +167,9 @@ class Served:
 
     In every mode but a16 the sink row (position 0) is served exact. Linears that read the same input tensor (q, k and
     v; gate and up) are one call and share its codes and E. Whenever any matrix reads an E, every call draws it,
-    whatever its own matrices' modes, so a matrix's E doesn't depend on how the others are served. E is drawn from one
-    generator per GPU, seeded seed + 1000·index (e3's offset by 2,000,000), which `reseed` restarts; a model on one GPU
-    draws from seed itself.
+    whatever its own matrices' modes, so a matrix's E doesn't depend on how the others are served. E is drawn (`draw`)
+    from one generator per device, seeded seed + 1000·index (e3's offset by 2,000,000), which `reseed` restarts; a
+    model on one GPU, or on the CPU, draws from seed itself.
 
     With wnoise f (HT-DEFENCE's candidate 3), q, k and v are served as q + F, F live integer weight noise uniform on
     [−f, f] drawn on every call, clipped to ±127 (`hardness_public/rotated.py --live-noise`), from generators of their
@@ -190,9 +208,9 @@ class Served:
         live[:, 0] = False
         es = {}
         if "e4" in self.draws:
-            es["e4"] = torch.randint(-2, 2, xr.shape, device=x.device, generator=self.gen(x.device)).to(torch.int8)
+            es["e4"] = draw("e4", xr.shape, self.gen(x.device), x.device)
         if "e3" in self.draws:
-            es["e3"] = torch.randint(-1, 2, xr.shape, device=x.device, generator=self.gen(x.device, 2)).to(torch.int8)
+            es["e3"] = draw("e3", xr.shape, self.gen(x.device, 2), x.device)
         b = {"xr": xr, "sx": sx, "live": live, "e": es, "v": {}}
         self._last = (x, rot, b)
         return b
@@ -203,7 +221,7 @@ class Served:
         b = self.base(x, rot)
         if mode not in b["v"]:
             kind, rnd, mean = MODES[mode]
-            e = torch.zeros((), device=x.device) if kind is None else b["e"][kind].float()
+            e = torch.zeros((), device=x.device) if kind is None else b["e"][kind]
             if mode == "e1":
                 e = torch.floor(e / 2)
             v = _ActQ.apply(b["xr"], b["sx"], e, b["live"], rnd)
@@ -292,12 +310,16 @@ class QLinear(nn.Module):
                 x = self.rot(x)
             return F.linear(x, q).float() * s
         v, sx, off = sv.act(x, self.rot, mode)
-        if wnoise and sv.wnoise and self.noised:
+        noised = wnoise and sv.wnoise and self.noised
+        if noised:
             q = sv.noised(q)
         y = F.linear(v, q).float()
         if off is not None:
-            y = y + off * q.float().sum(1)
+            y = y + off * (q.float().sum(1) if noised else self.code_sums(q))
         return y * sx * s
+
+    def code_sums(self, q) -> torch.Tensor:
+        return q.float().sum(1)
 
     def lowrank(self, x) -> torch.Tensor | None:
         return None
@@ -334,6 +356,13 @@ class FrozenQLinear(QLinear):
 
     def frozen(self) -> tuple[torch.Tensor, torch.Tensor]:
         return self.q, self.s
+
+    def code_sums(self, q) -> torch.Tensor:
+        if q is not self.q:
+            return q.float().sum(1)
+        if getattr(self, "_sums", None) is None:
+            self._sums = q.float().sum(1)
+        return self._sums
 
 
 class DeflatedQLinear(FrozenQLinear):
