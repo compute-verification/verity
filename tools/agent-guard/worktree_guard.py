@@ -13,10 +13,11 @@ branch it had then is registered to it. The hook then refuses, from any other ag
   - pushing a branch registered to another agent: one it created (`checkout -b`, `switch -c`, `worktree add -b`) or the one its
     worktree had when it claimed it, until that agent hands it over (`hand`). An unregistered branch passes.
 For every agent, whatever it owns, it also refuses a push that would update `main`, `checked` or `next` (only drive and the lander move
-them; INF-110), a `git config` that prints values, since the checkout's http.*.extraheader carries a GitHub token (INF-105),
-and a push, branch switch or worktree add with `$` or a backquote in its words, whose branch the shell names only after the hook.
+them; INF-110), and a `git config` that prints values, since the checkout's http.*.extraheader carries a GitHub token (INF-105).
 A lander's hand repair of `next` under the queue lock names its reason on the push itself (`AGENT_GUARD_PUSH_NEXT_OK='REASON'
 git push ...`), and is logged to `$AGENT_GUARD_STATE/push-next-ok.jsonl`. Nothing lets a push to `main` through.
+It refuses, too, a push, branch switch or worktree add with `$` or a backquote in its words, whose branch the shell names only
+after the hook has read it.
 The registry is `$AGENT_GUARD_STATE/branches.json` (default /tmp/agent-guard), one VM's: an agent on a VM of its own is never
 judged. Where a command names no directory (`git -C DIR`, or a `cd DIR` before it in the same command) the hook judges the
 event's cwd, else the workspace root, since the shell's remembered directory never reaches it.
