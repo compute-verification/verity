@@ -8,7 +8,7 @@ public import Proofs.Pouw.RelativeSecurity
 /-!
 # Proofs: a period's work over the windows PoUW's deployed check accepts (`Properties.Pouw.Period`)
 
-`CheckedWorkPeriod` and `CheckedCreditPeriod` are `CircuitWorkPeriod` and `CircuitCreditPeriod` at the period's proofs
+`CheckedWorkPeriod` and `CheckedCreditPeriod` are `CircuitWorkMonitoringPeriod` and `CircuitCreditPeriod` at the period's proofs
 with the check's verdict (`checkedRun`). There a window is credited exactly when it and every earlier window are
 accepted (`credited_iff`, at `K_d > 0`: the check's verdict is every drawn tile's), so the run's accepted prefix and its
 live words are the check's (`prefixLen_eq`, `creditedLive_eq`). `JointSound` holds at `δ_ks`: an unsound drawn tile of
@@ -80,12 +80,12 @@ theorem jointSound_checked {ι C Ξ V : Type} [Fintype C] [Fintype Ξ] (Cd : Dec
   obtain ⟨pub, prof, hc⟩ := hacc
   exact ⟨pub, prof, hc, drawOf hK (coinAt x w).2 i, ((hD x w pub prof hc).2.2 _).2 ⟨i, rfl⟩, hrel⟩
 
-/-- **`CheckedWorkPeriod`**: `CircuitWorkPeriod` at `checkedRun`, its accepted prefix and live words the check's. -/
+/-- **`CheckedWorkPeriod`**: `CircuitWorkMonitoringPeriod` at `checkedRun`, its accepted prefix and live words the check's. -/
 theorem checkedWorkPeriod : CheckedWorkPeriod := by
   intro ι K T L U C Ξ V _ _ _ _ _ _ _ Sc Cd n Np Kd hn hN hr hK hKd prm ws opened rel right Wp Pl folded
     ρ p p0 a b wmax Λ δs δbind δks hS hρ hρN hwmax hlk ha hb hΛ hSR hG hDD hPre hMoved _hReg hDraw hServ hPins
     hMu hRB hGs hUF
-  have h := Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod Sc Cd hn hN hr hK Wp Pl
+  have h := Accounting.SecurityProofs.ComposePeriod.CircuitWorkMonitoringPeriod Sc Cd hn hN hr hK Wp Pl
     (checkedRun hK prm ws opened rel right) folded ρ p p0 a b wmax Λ δs δbind δks hS hρ hρN hwmax hlk ha hb hΛ hSR hG
     hDD hPre hMoved (jointSound_checked Cd hr hK prm ws opened rel right hDraw hServ) hPins hMu hRB hGs hUF
   simp only [prefixLen_eq hK hKd prm ws opened rel right,
