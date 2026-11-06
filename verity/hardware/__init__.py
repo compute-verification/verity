@@ -17,7 +17,7 @@ skus("host")                       # ['xeon-6776p-2s', 'xeon-platinum-8468-2s']
 card = load("h200-sxm-141gb")
 card["clock"]["sm"]["value"]       # 1980 (MHz)
 card["memory"]["bandwidth"]        # {'value': 4916736000000.0, 'unit': 'B/s', 'mark': 'ceiling', 'source': ...}
-rate(card)                         # Fraction(1070530560000000): s8 MACs a second, 132 SMs x 4096 x clock.sm 1980 MHz
+rate(card)                         # Fraction(989429760000000): s8 MACs a second, 132 SMs x 4096 x clock.tensor 1830 MHz
 rate(card, fmt="f16", mhz=1700)    # the f16 MACs a second at a 1700 MHz clock
 ~~~
 """
