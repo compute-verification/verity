@@ -21,8 +21,8 @@ first six steps. Every request decodes to its cap (``ignore_eos``), so an arm's 
 - ``warm``: a producer with ``d-long``'s prompt and one output token, then ``d-long`` once the engine is idle, its prompt's blocks
   in the prefix cache.
 
-Every run starts with an empty prefix cache (`cold`), so only ``warm``'s ``d-long`` reads cached blocks; pass 2 checks that it
-does and that no other request does.
+Every run starts with an empty prefix cache (`run_workload` empties it), so only ``warm``'s ``d-long`` reads cached blocks; pass 2
+checks that it does and that no other request does (`cache_misuse`).
 
 Pass 1 runs every arm with `Interior` on every rank: a forward hook on every module, a wrapper on each DSA attention layer's
 ``_sparse_indexer_and_attn`` (the shared top-k buffer as the layer's indexer leaves it, and the attention's core output), and the
@@ -41,6 +41,10 @@ after the producer finished, with its cached-token count, against ``alone-d-long
 ranks, those only one run has, the first differing (position, group), the group kinds that differ, and whether the request
 replayed bit for bit (its tokens, and every entry both runs have equal, with none only the replay has: ``warm`` skips the
 positions its prefix cache held); and the timings. Exit 3 when the instrument failed: a rank's reference compared nothing for a sampled request, or a hook stayed installed.
+
+Pass 1 also writes, per arm under ``advice/<arm>/``, the scheduler's step trace (`engine.step_trace`, ``step_trace.jsonl``) and the
+run's requests as a Commit record (`commit_record`, ``requests.jsonl``): what ``verity-vllm advice advice/<arm>`` reads to write
+that arm's advice on a CPU.
 """
 from __future__ import annotations
 
@@ -516,10 +520,11 @@ class Steps:
         return outs
 
 
-def cold(llm: Any) -> None:
-    """Empty the prefix cache, so that a run reads no block an earlier run computed."""
-    if not llm.reset_prefix_cache():
-        raise SystemExit("reset_prefix_cache failed: a request still holds KV blocks between runs")
+def commit_record(path: Path, reqs: list[dict[str, Any]], tokens: dict[str, list[int]]) -> None:
+    """A run's requests as `verity-vllm advice` reads a Commit record (``requests.jsonl``): each request's id, as its ``user`` too,
+    and its prompt and output token ids, the engine's own outputs (no committer is installed)."""
+    path.write_text("".join(json.dumps({"request": r["request_id"], "user": r["request_id"], "prompt_ids": list(r["prompt_token_ids"]),
+                                        "output_ids": tokens[r["request_id"]]}) + "\n" for r in reqs))
 
 
 def cache_misuse(arm: str, cached: dict[str, int]) -> list[str]:
@@ -621,6 +626,8 @@ def main() -> None:
     from served_commit.tp_decode import open_engine
 
     E = open_engine(a, out, max_num_seqs=MAX_SEQS, prefix_caching=True)
+    from verity_vllm.engine.engine_driver import external_id
+    from verity_vllm.engine.step_trace import StepTrace
     from verity_vllm.pipeline.commit import run_workload
 
     llm, eng, wl, world = E.llm, E.eng, E.wl, E.world
@@ -651,9 +658,13 @@ def main() -> None:
 
         put({"pass": 0, "arm": "first-fillers", "wall_s": first["wall_s"], "steps": first["iterations"], "interior": made})
         for arm, reqs in plan.items():
-            cold(llm)
             llm.collective_rpc(begin, timeout=a.rpc_timeout)
-            r = run_workload(eng, reqs, sampling)
+            trace = StepTrace(out / "advice" / arm / "step_trace.jsonl", request_id=external_id).install(llm)
+            try:
+                r = run_workload(eng, reqs, sampling)
+            finally:
+                trace.uninstall()
+            commit_record(out / "advice" / arm / "requests.jsonl", reqs, r["tokens"])
             ranks = llm.collective_rpc(end, timeout=a.rpc_timeout, kwargs={"arm": arm, "sampled": list(SAMPLED), "reference": REFERENCE})
             r0 = min(ranks, key=lambda x: x["rank"])
             tok1[arm], gaps1[arm], sched1[arm] = r["tokens"], r0.pop("gaps"), r0.pop("schedule")
@@ -675,7 +686,6 @@ def main() -> None:
         for rep in range(a.reps):
             for arm, reqs in plan.items():
                 st = Steps()
-                cold(llm)
                 r = run_workload(eng, reqs, sampling, step=st)
                 broken += cache_misuse(arm, st.cached)
                 spans = {d: span(r["step_wall_s"], st.done, d, PRODUCER if arm == "warm" else None) for d in SAMPLED}

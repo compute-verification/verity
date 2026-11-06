@@ -2,7 +2,8 @@
 mod 2^64 for every dtype and byte width, sees one flipped bit, doesn't depend on the row's place or alignment, and refuses a row
 wider than its keys; its rows and logits rows read an input batch as the runner builds one; `flatten` and `compare` count equal,
 differing and one-sided entries and name the first difference; its arms keep the sampled requests the same across arms and the
-fillers in their companions' shapes; `span` and `summarize` read a run's steps. CPU tensors, no engine."""
+fillers in their companions' shapes; `span` and `summarize` read a run's steps; its Commit record is what `verity-vllm advice`
+reads. CPU tensors, no engine."""
 from __future__ import annotations
 
 import importlib.util
@@ -201,17 +202,23 @@ def test_autotune_cache_is_the_resolved_files_digest(monkeypatch, tmp_path):
     assert D.autotune_cache(object())["error"].startswith("ModuleNotFoundError")
 
 
-def test_every_run_starts_cold_and_only_warm_reads_the_cache():
-    resets = []
-    D.cold(SimpleNamespace(reset_prefix_cache=lambda: resets.append(1) or True))
-    assert resets == [1]
-    with pytest.raises(SystemExit, match="reset_prefix_cache failed"):
-        D.cold(SimpleNamespace(reset_prefix_cache=lambda: False))
+def test_only_warm_reads_the_cache_and_it_must():
     assert D.cache_misuse("warm", {D.PRODUCER: 0, "d-long": 3008}) == []
     assert D.cache_misuse("served-2", {"d-short": 0, "d-long": 0}) == []
     assert D.cache_misuse("served-2", {"d-short": 256, "d-long": 0}) == ["served-2: d-short read 256 cached tokens"]
     assert D.cache_misuse("warm", {D.PRODUCER: 16, "d-long": 0}) == [f"warm: {D.PRODUCER} read 16 cached tokens",
                                                                     "warm: d-long read no cached tokens"]
+
+
+def test_commit_record_is_what_the_advice_reads(tmp_path):
+    from verity_vllm.pipeline.advice import io_record
+
+    reqs = D.arms(list(range(3, 40)), 154_880)["warm"]
+    tokens = {D.PRODUCER: [11], "d-long": [5, 6, 7]}
+    D.commit_record(tmp_path / "requests.jsonl", reqs, tokens)
+    assert io_record(tmp_path / "requests.jsonl") == {
+        r["request_id"]: {"user": r["request_id"], "prompt_ids": r["prompt_token_ids"], "output_ids": tokens[r["request_id"]],
+                          "finish": None} for r in reqs}
 
 
 class _Attn(torch.nn.Module):

@@ -17,7 +17,8 @@ labeled run, `served.py` the served arm's runs).
 - `tp_replay.py` and `tp_replay.sh`: whether a sampled request replays bit for bit (its tokens and every module's values at its
   rows, the DSA top-k and the attention core among them) in the same batch, beside fillers of its companions' shapes, alone and
   in another batch, and its replay's GPU-seconds with its prompt's KV cold or in the prefix cache (GLM-5.3 TP8, eager).
-  `tp_env.sh` is both TP drivers' node setup.
+  Each arm's step trace and requests, under `out/advice/<arm>/`, are what `verity-vllm advice` reads. `tp_env.sh` is both TP
+  drivers' node setup.
 - Measurement: `prof.sh` runs a sweep with the arms of `prof_arm.py` (roots and plans per run, native drain, rows-sha512,
   serving on a high-priority stream over the worker's hashing, NVTX ranges; `-base` and `-batch`
   arms turn the decode host-cost changes off, or all but the batched captured copies; `-ring8` and `-w64` arms size the
