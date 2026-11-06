@@ -1,2 +1,2 @@
-"""Benchmark harnesses that use Verity integrations and backends."""
+"""Benchmark harnesses that use Verity's integrations."""
 

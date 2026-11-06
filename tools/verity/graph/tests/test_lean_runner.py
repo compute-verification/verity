@@ -3,7 +3,8 @@ control package (`tools/verity/lean/tests/fixtures/control`), a package under th
 axiom and `native_decide` in private proofs and a private theorem that skipped the kernel, one that doesn't compile, and
 one whose env fetches a package with a `sorry` in a private proof. The toolchain's env passes, every module of it replayed
 and recorded, the executables that can't be imported together in rounds; the fetched package's `sorry` fails its env, and
-its missing private part is an error. Each module compiles from its reads alone to Lake's bytes and gets its replay and
+its missing private part is an error; that env, layered on the toolchain's, replays its own module alone and records the
+toolchain's as their record has them, and a base record of other bytes than the worker's is an error. Each module compiles from its reads alone to Lake's bytes and gets its replay and
 its declarations' axiom sets, an importer's taken through its import's record and the env's through the env's; a record
 of another env or of other bytes than the worker's, and an `import all` without its import's private part, are errors; a
 lock passes, is stale with the command that regenerates it, or names a root no task builds, and a spec whose `proved_in`
@@ -109,7 +110,7 @@ class Envs:
     def run(self, task: dict, doc: dict) -> tuple[dict, Path]:
         if task["key"] not in self.got:
             work = self.store / f"{len(self.got)}"
-            self.got[task["key"]] = (runners.execute(task, doc, work), work / env_family.AXIOMS)
+            self.got[task["key"]] = (runners.execute(task, doc, work), work / env_family.record(task["vars"]["package"]))
         return self.got[task["key"]]
 
     def launch(self, doc: dict):
@@ -118,7 +119,7 @@ class Envs:
                 return runners.execute(t, doc, w)
             res, record = self.run(t, doc)
             if record.is_file():
-                stage(record, w)
+                stage(record, w, env_family.record(t["vars"]["package"]))
             return res
         return go
 
@@ -126,13 +127,14 @@ class Envs:
         """``work`` holding the record of the env ``doc``'s module tasks read."""
         res, record = self.run(next(t for t in doc["tasks"] if t["id"] == ENV), doc)
         assert res["status"] == "pass", res["detail"]
-        return stage(record, work)
+        return stage(record, work, env_family.record("ax"))
 
 
-def stage(record: Path, work: Path) -> Path:
-    (work / env_family.AXIOMS).parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(record, work / env_family.AXIOMS)
-    return work / env_family.AXIOMS
+def stage(record: Path, work: Path, at: str) -> Path:
+    """``work`` holding ``record`` at ``at``."""
+    (work / at).parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(record, work / at)
+    return work / at
 
 
 @pytest.fixture(scope="module")
@@ -419,6 +421,7 @@ def test_the_toolchain_s_env_passes_with_every_module_recorded_and_its_executabl
     tc = module_runner.toolchain_dir(TOOLCHAIN) / "lib" / "lean"
     want = {".".join(o.relative_to(tc).with_suffix("").parts) for o in tc.rglob("*.olean")}
     assert head["env"] == head["toolchain"] == TOOLCHAIN and head["schema"] == env_runner.SCHEMA and head["scope"] == "whole"
+    assert head["base"] is None and "base" not in res["detail"]
     assert set(head["files"]) == set(body["axioms"]) == want and res["detail"]["modules"] == len(want)
     assert head["files"]["Init.Prelude"] == module_runner.module_digest(tc / "Init" / "Prelude.olean")
     assert {"LeanChecker", "LeanIR", "Leanc"} <= set(res["detail"]["deferred"]) and len(res["detail"]["rounds"]) > 1, \
@@ -457,14 +460,14 @@ def test_an_env_module_whose_private_proof_holds_a_sorry_fails_its_env(tree, tmp
     fetched_env(tree)
     res = runners.execute(task, doc, tmp_path / "env")
     assert res["status"] == "fail" and res["detail"]["axioms"] == {"sorryAx": ["q"]}, res["detail"]
-    body = json.loads((tmp_path / "env" / env_family.AXIOMS).read_text())
+    body = json.loads((tmp_path / "env" / env_family.record("dep")).read_text())
     assert set(body["axioms"]) == {"Evil", "Init.Prelude"}
     assert body["sets"][body["axioms"]["Evil"]["q"]] == ["sorryAx"], "an importer of `q` takes its `sorry` from the record"
 
     monkeypatch.setattr(env_runner, "UNPROVED", {"Evil": ("q",)})
     res = runners.execute(task, doc, tmp_path / "unproved")
     assert res["status"] == "pass" and res["detail"]["unproved"] == ["q"], res["detail"]
-    body = json.loads((tmp_path / "unproved" / env_family.AXIOMS).read_text())
+    body = json.loads((tmp_path / "unproved" / env_family.record("dep")).read_text())
     assert body["sets"][body["axioms"]["Evil"]["q"]] == ["sorryAx"], "listed, `q` still carries its `sorry` to importers"
     monkeypatch.setattr(env_runner, "UNPROVED", {"Evil": ("q", "p")})
     res = runners.execute(task, doc, tmp_path / "stale")
@@ -499,12 +502,62 @@ def test_a_declaration_the_kernel_stops_on_passes_on_the_imports_lean_checked_it
     assert res["status"] == "fail" and res["detail"]["rejected"] == ["Evil"], res["detail"]
 
 
-def test_an_env_with_no_build_of_its_fetched_packages_beyond_mathlib_s_cache_is_an_error(tree, tmp_path):
+def test_an_env_with_no_build_of_its_fetched_packages_beyond_mathlib_s_cache_is_an_error(tree, tmp_path, envs):
     doc = graph.task_graph(tree, "lean-env:dep", listers=LISTERS)
     shutil.rmtree(fetched_env(tree) / "evil" / ".lake" / "build")
-    res = runners.execute(doc["tasks"][0], doc, tmp_path / "env")
+    envs.stage(doc, tmp_path / "env")
+    res = runners.execute(next(t for t in doc["tasks"] if t["id"] == "lean-env:dep"), doc, tmp_path / "env")
     assert res["status"] == "error" and "no build of evil" in res["detail"]["error"], \
         "a worker without warm dependencies or the bundle would record an env without them"
+
+
+def test_an_env_layered_on_the_toolchain_s_replays_its_own_modules_alone_and_records_the_toolchain_s_as_its_base_did(
+        tree, tmp_path, envs, monkeypatch):
+    doc = graph.task_graph(tree, "lean-env:dep", listers=LISTERS)
+    task = next(t for t in doc["tasks"] if t["id"] == "lean-env:dep")
+    assert task["reads"] == [{"task": ENV, "output": "axioms"}], "dep fetches evil, on the toolchain ax's env is alone"
+    evil = fetched_env(tree) / "evil" / ".lake" / "build" / "lib" / "lean" / "Evil.olean"
+    monkeypatch.setattr(env_runner, "UNPROVED", {"Evil": ("q",)})
+    base = envs.stage(doc, tmp_path / "base")
+    given = json.loads(base.read_text())
+
+    def layered(name: str, edit=lambda line: line) -> tuple[dict, Path]:
+        record = stage(base, tmp_path / name, env_family.record("ax"))
+        record.write_text("".join(edit(line) for line in record.read_text().splitlines(keepends=True)))
+        return runners.execute(task, doc, tmp_path / name), tmp_path / name / env_family.record("dep")
+
+    res, record = layered("layered")
+    assert res["status"] == "pass", res["detail"]
+    assert res["detail"]["base"] == ENV and res["detail"]["base_modules"] == len(given["files"])
+    assert [r["modules"] for r in res["detail"]["rounds"]] == [1], \
+        "Evil alone goes to the kernel, importing the toolchain's modules with their sets from ax's record"
+    head, body = module_runner.env_header(record), json.loads(record.read_text())
+    assert head["base"] == ENV and head["env"] == env_family.env_key(tree / "dep") != TOOLCHAIN
+    assert set(body["axioms"]) == {*given["axioms"], "Evil"} and head["files"] == given["files"] | {
+        "Evil": module_runner.module_digest(evil)}
+    for m, cs in given["axioms"].items():
+        assert {c: given["sets"][i] for c, i in cs.items()} == {c: body["sets"][i] for c, i in body["axioms"][m].items()}, m
+    assert body["sets"][body["axioms"]["Evil"]["q"]] == ["sorryAx"]
+
+    mod = graph.task_graph(tree, "lean-module:dep/Dep.lean", listers=LISTERS)
+    dep = next(t for t in mod["tasks"] if t["id"] == "lean-module:dep/Dep.lean")
+    assert dep["reads"] == [{"task": "lean-env:dep", "output": "axioms"}]
+    stage(record, tmp_path / "dep", env_family.record("dep"))
+    res = runners.execute(dep, mod, tmp_path / "dep")
+    assert res["status"] == "pass" and res["detail"]["env_modules"] == 2, \
+        ("a module of the layered env takes Evil's sets and Init.Prelude's from its record", res["detail"])
+
+    def files(f):
+        return lambda line: f'"files":{json.dumps(f(json.loads(line[8:-2])))},\n' if line.startswith('"files":') else line
+
+    res, _ = layered("bytes", files(lambda d: d | {"Init.Prelude": "sha512:" + "0" * 128}))
+    assert res["status"] == "error" and res["detail"]["differ"] == ["Init.Prelude"], res["detail"]
+    res, _ = layered("unhashed", files(lambda d: {k: v for k, v in d.items() if k != "Init.Core"}))
+    assert res["status"] == "error" and "a line and a digest for each" in res["detail"]["error"], \
+        ("a base module without its digest would go unchecked", res["detail"])
+    res, _ = layered("absent", lambda line: files(lambda d: d | {"Nowhere": "sha512:" + "0" * 128})(line)
+                     + ('"Nowhere":{},\n' if line == '"axioms":{\n' else ""))
+    assert res["status"] == "error" and res["detail"]["absent"] == ["Nowhere"], res["detail"]
 
 
 def test_a_fetched_declaration_may_use_lake_s_family_axioms_and_no_axiom_a_fetched_package_or_init_declares():

@@ -11,7 +11,7 @@ from test_queue import World, _git
 
 
 class Harness:
-    """A drive on ``world`` whose Lean-check launches are recorded (`launched`) and whose after-landing launches are recorded
+    """A drive on ``world`` whose lock-run launches are recorded (`launched`) and whose after-landing launches are recorded
     (`posted`) as `r-post-N`, each running until a test sets its state in `run_state`."""
 
     def __init__(self, world: World, monkeypatch, **kw):
@@ -28,7 +28,6 @@ class Harness:
                         cancel=lambda repo, ids, reason: self.cancelled.extend(ids), evidence=lambda repo, ids: self.evidence)
         self.evidence: list = []
         self.d.launch_postland = self.launch_post
-        self.d.lean_runs = lambda commits, since: {}
 
     def launch(self, repo, commit, machine, agreement):
         rid = f"r20261012-0000{len(self.launched):02d}-abcd"
@@ -422,9 +421,9 @@ def test_lean_errors_reads_lakes_list_of_failed_modules(tmp_path):
     assert lean_errors(log) == {"Security/Proofs/Flock/Claims/NumbersRadius.lean", "Security/Definitions/Claims/Sampling.lean"}
 
 
-def test_a_lean_check_whose_replay_was_killed_is_a_machines_fault(tmp_path):
+def test_a_lean_audit_whose_replay_was_killed_is_a_machines_fault(tmp_path):
     """A Security/Proofs replay OOM-killed (exit 137) fails lean-audit with rc 1; that is the machine's fault, and the fallback
-    on Lean sources mustn't eject PRs whose heads passed."""
+    on Lean sources mustn't revert landings that broke nothing."""
     from research.drive import killed
 
     d = tmp_path / "run"
@@ -553,11 +552,11 @@ def test_the_after_landing_launch_gives_train_sh_no_cache_with_circuit_checks_ca
     assert f"argv: {'c' * 40} m1 --deferred ratchet-gate --base {'b' * 40} --ratchet-base {'a' * 40}" in tail, tail
 
 
-def test_the_after_landing_run_takes_a_check_slot_ahead_of_the_lean_checks(tmp_path, monkeypatch):
-    """Each part of the after-landing run (a shard, circuit-check's records step) asks for its check slot at
-    `POSTLAND_SLOT_RANK` (CHECK_SLOT_RANK, which check.py passes on as `slot.py --rank`), and a Lean check asks unranked,
-    whatever drive's own environment says: a ranked priority waiter takes the next free slot ahead of the unranked, so `main`
-    never waits on a slot for a Lean check of `next`."""
+def test_the_after_landing_run_and_the_lock_run_take_a_check_slot_ahead_of_unranked_priority_checks(tmp_path, monkeypatch):
+    """Each part of the after-landing run (a shard, circuit-check's records step) and the lock run ask for their check slot at
+    `POSTLAND_SLOT_RANK` (CHECK_SLOT_RANK, which check.py passes on as `slot.py --rank`), whatever drive's own environment
+    says: a ranked priority waiter takes the next free slot ahead of the unranked, so `main` never waits on a slot for a
+    `train.sh` launched by hand."""
     import contextlib
     import os
     import tempfile
@@ -581,7 +580,7 @@ def test_the_after_landing_run_takes_a_check_slot_ahead_of_the_lean_checks(tmp_p
     ranked = f"rank=[{POSTLAND_SLOT_RANK}]"
     assert ranked in tail(d.launch_postland(repo, "c" * 40, "m1", "pytest", shard="1/3"))
     assert ranked in tail(d.launch_postland(repo, "c" * 40, "m1", "circuit-check", cc_records=True))
-    assert "rank=[]" in tail(d.launch_lean(repo, "c" * 40, "m1"))
+    assert ranked in tail(d.launch_locks(repo, "c" * 40, "m1"))
 
 
 def test_a_tick_sets_the_record_drivers_its_clone_lacks_and_plain_git_then_merges_two_records_with_merge_py(world, monkeypatch):
