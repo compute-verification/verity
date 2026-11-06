@@ -6,6 +6,9 @@
   raises; a repo pinned under two roles resolves to the downloaded one);
 * the engine is built by ``vllm_adapter.build_engine`` with the pin's role, and only the options the caller set reach vLLM;
 * ``generate`` returns vLLM's outputs unchanged and records the call;
+* ``engine_class="G"`` builds at class G's settings, which reach ``vllm.LLM``'s keyword arguments (its ``EngineArgs``) and are
+  read back from the built engine's scheduler config; an option, a checkpoint or a built engine the class contradicts is
+  refused by name, and the built engine's admission refuses a prompt over the class's limit and a window closed in flight;
 * ``import verity_vllm`` imports neither torch nor vLLM.
 """
 from __future__ import annotations
@@ -13,7 +16,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
@@ -21,8 +24,14 @@ import verity_vllm
 from verity_vllm import config
 from verity_vllm.config import EnginePin
 from verity_vllm import llm as L
+from verity_vllm.engine import handle
+from verity_vllm.engine.profiles import engine_classes as EC
+from verity_vllm.errors import Refused
 
 LLAMA = ("unsloth/Llama-3.2-1B", "9535bd9b1d1dea6acafbdc4813b728796aeb28da")
+GLM53 = ("zai-org/GLM-5.3", "aca966e4e02791568aa6a4ced368624b3d897f42")
+CLASS_G_ARGS = {"tensor_parallel_size": 8, "max_num_batched_tokens": 2048, "max_model_len": 2048, "long_prefill_token_threshold": 256,
+                "enable_prefix_caching": False, "moe_backend": "triton"}
 
 
 def test_the_package_exports_llm_and_what_it_is_built_from():
@@ -223,6 +232,150 @@ def test_protocols_install_on_the_built_model_and_close_uninstalls_them(built, m
     assert llm.engine_record["protocols"]["protocols"] == [{"entry": "pous:band-chain/d12/v1", "commitment": {"storage_root": "c"}}]
     llm.close()
     assert not hasattr(model, "decoded")
+
+
+def test_an_engine_class_fills_its_settings():
+    assert L.class_options({"engine_class": "G"}) == {"engine_class": "G", "execution": "eager", "max_num_seqs": 8, **CLASS_G_ARGS}
+    assert L.class_options({"engine_class": "G", "max_num_seqs": 4, "seed": 3, "max_model_len": 2048}) == {
+        "engine_class": "G", "execution": "eager", "max_num_seqs": 4, "seed": 3, **CLASS_G_ARGS}
+    assert L.class_options({"seed": 3}) == {"seed": 3}
+    assert EC.max_num_seqs("G") * EC.prompt_limit("G") == CLASS_G_ARGS["max_num_batched_tokens"]
+
+
+def test_an_option_the_class_contradicts_is_refused_by_name():
+    with pytest.raises(Refused) as e:
+        L.class_options({"engine_class": "G", "tensor_parallel_size": 4, "long_prefill_token_threshold": 512,
+                         "enable_prefix_caching": True, "execution": "bi-eager", "attention_backend": "FLASH_ATTN", "max_num_seqs": 9})
+    msg = str(e.value)
+    assert msg.startswith("engine class G refused: ")
+    for part in ("tensor_parallel_size=4, where the class serves 8", "long_prefill_token_threshold=512, where the class serves 256",
+                 "enable_prefix_caching=True, where the class serves False", "execution='bi-eager', where the class serves 'eager'",
+                 "attention_backend='FLASH_ATTN': the class serves the engine profile's",
+                 "max_num_seqs=9, over the class's 8: a step's token budget would cut a prefill"):
+        assert part in msg, part
+    with pytest.raises(Refused, match=r"engine class 'H' is not registered \(registered: G\)"):
+        L.class_options({"engine_class": "H"})
+    with pytest.raises(TypeError, match="'engine_class' must be str"):
+        L.class_options({"engine_class": 7})
+
+
+class _Scheduler:
+    """vLLM V1's scheduler as the admission reads it: ``add_request`` and ``requests``, from which it deletes a freed request."""
+
+    def __init__(self):
+        self.requests = {}
+
+    def add_request(self, request):
+        self.requests[request.request_id] = request
+
+
+@pytest.fixture
+def built_g(monkeypatch):
+    """`build_engine` stood in, with the built engine's read-back (`effective`) what vLLM's config holds of the engine args,
+    overridden by ``seen["effective"]``, and an in-process scheduler."""
+    from verity_vllm.engine import vllm_adapter as va
+    seen = {"effective": {}}
+
+    def build_engine(checkpoints, **kw):
+        seen.update(kw)
+        args = kw["engine_args"]
+        effective = {"tensor_parallel_size": args.get("tensor_parallel_size", 1),
+                     "enable_prefix_caching": args.get("enable_prefix_caching", False),
+                     **{k: args.get(k) for k in ("max_num_batched_tokens", "max_model_len", "long_prefill_token_threshold")},
+                     **seen["effective"]}
+        llm = _FakeVllm()
+        llm.llm_engine = SimpleNamespace(engine_core=SimpleNamespace(engine_core=SimpleNamespace(scheduler=_Scheduler())))
+        return SimpleNamespace(llm=llm, kwargs={"max_num_seqs": kw["max_num_seqs"], **args}, env_flags={},
+                               execution=kw["execution"], effective=effective, build_s=1.0)
+
+    monkeypatch.setattr(va, "build_engine", build_engine)
+    return seen
+
+
+def test_class_g_builds_at_its_settings_and_its_window_refuses_past_its_limits(built_g):
+    llm = L.LLM(GLM53[0], revision=GLM53[1], engine_class="G")
+    assert built_g["engine_args"] == CLASS_G_ARGS
+    assert (built_g["case"], built_g["max_num_seqs"], built_g["execution"]) == ("GLM53", 8, "eager")
+    assert llm.engine_record["engine_class"] == "G" and llm.engine_record["engine_overrides"] == {"moe_backend": "triton"}
+    sched = handle.scheduler(llm)
+    sched.add_request(SimpleNamespace(request_id="a", num_prompt_tokens=256))
+    with pytest.raises(Refused, match=r"engine class G refused: 1 requests in flight at a Commit window's close, 'a' first"):
+        llm.close_window()
+    with pytest.raises(Refused, match="in flight"):
+        sched.add_request(SimpleNamespace(request_id="b", num_prompt_tokens=8))
+
+
+def test_class_g_refuses_a_prompt_over_its_limit(built_g):
+    llm = L.LLM(GLM53[0], revision=GLM53[1], engine_class="G")
+    sched = handle.scheduler(llm)
+    with pytest.raises(Refused, match="request r0: a prompt of 257 tokens, over the 256 a class-G window admits"):
+        sched.add_request(SimpleNamespace(request_id="r0", num_prompt_tokens=257))
+    assert sched.requests == {}
+    with pytest.raises(Refused, match="a prompt of 257 tokens"):
+        llm.close_window()
+
+
+def test_without_an_engine_class_nothing_is_held(built):
+    llm = L.LLM(LLAMA[0], revision=LLAMA[1])
+    assert llm.admission is None and llm.engine_record["engine_class"] is None
+    llm.close_window()
+
+
+def test_class_g_refuses_another_model_before_the_build(built_g):
+    with pytest.raises(Refused, match=rf"engine class G refused: {LLAMA[0]}@{LLAMA[1]} is a 'llama' checkpoint, not the class's "
+                                      r"'glm_moe_dsa'"):
+        L.LLM(LLAMA[0], revision=LLAMA[1], engine_class="G")
+    assert "engine_args" not in built_g
+
+
+def test_class_g_refuses_a_built_engine_whose_config_doesnt_carry_its_settings(built_g):
+    built_g["effective"] = {"long_prefill_token_threshold": 0, "enable_prefix_caching": None}
+    with pytest.raises(Refused) as e:
+        L.LLM(GLM53[0], revision=GLM53[1], engine_class="G")
+    assert str(e.value) == ("engine class G refused: the built engine's long_prefill_token_threshold is 0, not the class's 256; "
+                            "the built engine's enable_prefix_caching is None, not the class's False")
+
+
+def test_class_g_reaches_vllms_engine_args_and_is_read_back_from_its_scheduler_config(monkeypatch, tmp_path):
+    """The real `build_engine` at class G's settings: they reach ``vllm.LLM(**kw)`` (which makes its ``EngineArgs`` of them), and
+    the read-back takes them from the configs the pinned vLLM makes of those args (``EngineArgs.create_engine_config``: the
+    scheduler config's ``long_prefill_token_threshold`` is the arg's), here stood in.  At TP8 no in-process model runner is read."""
+    from verity_vllm.engine import build as B
+    from verity_vllm.engine import engine_profile as prof
+    from verity_vllm.engine import sparse_mla, topp_pin
+    monkeypatch.setattr(prof, "apply_env", lambda: {})
+    monkeypatch.setattr(B.served, "apply", lambda execution: {})
+    monkeypatch.setattr(sparse_mla, "arm", lambda: None)
+    monkeypatch.setattr(topp_pin, "arm", lambda: None)
+    seen = {}
+
+    class _VllmLLM:
+        def __init__(self, **kw):
+            seen.update(kw)
+            sc = SimpleNamespace(max_num_batched_tokens=kw["max_num_batched_tokens"], max_num_seqs=kw["max_num_seqs"],
+                                 long_prefill_token_threshold=kw.get("long_prefill_token_threshold", 0), enable_chunked_prefill=True)
+            vc = SimpleNamespace(scheduler_config=sc, cache_config=SimpleNamespace(enable_prefix_caching=kw["enable_prefix_caching"]),
+                                 model_config=SimpleNamespace(max_model_len=kw["max_model_len"], dtype="bfloat16"),
+                                 parallel_config=SimpleNamespace(tensor_parallel_size=kw.get("tensor_parallel_size", 1)))
+            self.llm_engine = SimpleNamespace(vllm_config=vc, engine_core=SimpleNamespace(engine_core=SimpleNamespace(
+                scheduler=_Scheduler(), model_executor=SimpleNamespace())))
+
+    vllm, envs = ModuleType("vllm"), ModuleType("vllm.envs")
+    vllm.LLM, vllm.envs, envs.VLLM_BATCH_INVARIANT = _VllmLLM, envs, False
+    monkeypatch.setitem(sys.modules, "vllm", vllm)
+    monkeypatch.setitem(sys.modules, "vllm.envs", envs)
+    cps = tmp_path / "checkpoints.json"
+    cps.write_text(json.dumps({"checkpoints": [{"repo": "r/m", "role": "M", "downloaded": True, "local_path": str(tmp_path)}]}))
+    args = {k: v for k, v in L.class_options({"engine_class": "G"}).items() if k in (*L.ENGINE_ARGS, "tensor_parallel_size")}
+    assert args == CLASS_G_ARGS
+    eng = B.build_engine(cps, case="M", max_num_seqs=EC.max_num_seqs("G"), engine_args=args, execution="eager")
+    assert {k: seen[k] for k in args} == args and (seen["enforce_eager"], seen["max_num_seqs"]) == (True, 8)
+    assert eng.runner is None and eng.model is None
+    assert EC.effective_refusals("G", eng.effective) == []
+    assert eng.effective["long_prefill_token_threshold"] == 256 and eng.effective["batch_invariant"] is False
+    target = SimpleNamespace(env=lambda: {}, engine_args=lambda: {})
+    with pytest.raises(RuntimeError, match="at tensor_parallel_size 8 the model is in the ranks' processes: declare none"):
+        B.build_engine(cps, case="M", engine_args=args, execution="eager", target=target)
 
 
 def test_importing_the_package_loads_neither_torch_nor_vllm():
