@@ -9,7 +9,7 @@ b4325d3d238395398ac9b0951e1fa7d3a44c5349625ebfef00ac3167481a23ef  Grader/Registr
 519a4aef7e29047739fa3a52bedfe931e32c4b37528dce19f4ff10491522dc6f  ../../../../../Security/lake-manifest.json
 bcc7328dbca37e8a580187a2aa8c65ce6e7399ac5e21b5c978e59dd4720d86c8  ../../../../../Security/Proofs/lakefile.toml
 ff93ba694c8590e42a4a230477990c192059d3929935f71021592c8eb1217c89  ../../../../../Security/Proofs/lake-manifest.json
-2a558d6e845ea62c23c70879c9d0cbf166cc5285d0194c3c85ddde9998d0992b  ../../../../../Security/Definitions/Pous.lean
+6eb8aa85e0636d2d44525e655924b19b5f2554f378d4db1f9f5966c8a94fea2e  ../../../../../Security/Definitions/Pous.lean
 68085b771fb1962c35c2cd8ad2fcf200d916b4b537dce50e4d029f18e979d888  ../../../../../Security/Proofs/Pous/Statements.lean
 53b6edf0eeae703187ee181b48b4285f60503817489a30866269a079a9698015  ../../../../../Security/Proofs/Pous/Sanity.lean
 7669d64daa672e7bdab848bfae5934a14cd581ba41e271b57f6352ffb92de738  ../../../../../Security/Proofs/Pous/Accounting/Numbers.lean
