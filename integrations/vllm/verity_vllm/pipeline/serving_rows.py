@@ -90,6 +90,10 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
                                    ``out.<member>``, its q and s; packed ports, `part_rows.read_part`), its GEMM in coordinates as
                                    ``COORDS`` (``in0``, ``in1`` the row's committed q and s, ``in2``, ``in3`` ``w[n]`` and
                                    ``ws[n // 128]`` -> ``out.<member>``, its y word n); one index entry per row
+  ``FlashInferFp8Quant1x128_v1{..}``, ``ScaledMmFp8BlockSharedScale_v1{N=1,..}``  the parts of every ``FlashInferFp8Linear_v1``
+                                   row, likewise: its quantisation once (``in0`` x -> ``o0``, ``o1``: q and s, intermediates
+                                   its twin computes, `part_rows.MIDS`), then the same coordinates, whose ``in0`` and ``in1``
+                                   rows are wired to those (`part_rows.wire`); both chunked (``chunk_cap``), v2 bit rows
   ``Gemm_v2{N=1,..}``, ``BatchedGemm_v1{B=1,N=1,..}``, ..  every slice of the rows of that Definition at any extents along its
                                    axes (``SLICES``): ``in<g>`` per argument group, its element along each axis it carries and
                                    whole along the others (a GEMM coordinate: ``x`` whole, ``w[n]``) -> ``out.<member>``, the
@@ -129,6 +133,7 @@ from verity.ml.windows import interface as IF
 from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import chunk_rows as CR, ingress_rows as IR
 from verity_vllm.pipeline import kchunk_rows as KC
+from verity_vllm.pipeline import part_rows as PR
 from verity_vllm.pipeline import slice_rows as SL
 from verity_vllm.pipeline import split_rows as SP, weight_rows as WT
 from verity_vllm.pipeline.chunk_rows import s8_words
@@ -299,7 +304,7 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
             params, ret = template(t).fn.signature()
             p = part(template(t).word, r["spec"])
             m = CS.Member(t, tuple((f"in{g}", sum(ty.leaf_widths()) // 16) for g, (_n, ty) in enumerate(params)),
-                          tuple((f"out.{d['members'][j][0]}", sum(ty.leaf_widths()) // 16)
+                          tuple((f"out.{PR.output_name(d, j)}", sum(ty.leaf_widths()) // 16)
                                 for j, ty in zip(p[2] if p else (0,), getattr(ret, "fields", None) or (ret,), strict=True)), n, base)
         else:
             ins = [sum(int(sl[3]) - int(sl[2]) for sl in runs_from_file_items(grp)) for grp in r["args"]]
@@ -426,6 +431,7 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
     scope = partition.get("scope") or {}
     rows, defs, counts = member_rows(programs, tmpls, scope.get("op_path_prefix"), program_dirs, index, scope.get("steps"), reuse)
     ms = SP.wire(KC.wire(members(tmpls, rows, counts, partition.get("chunk_cap") or {}), tmpls, rows), tmpls, rows)
+    ms = PR.wire(ms, tmpls, rows, row_units)
     ms = WT.cut(ms, WT.reads(ms, rows, row_units))
     tables: tuple[CS.RowTable, ...] = ()
     if partition.get("row_tables"):
@@ -476,7 +482,6 @@ def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
     operand and output its rows' columns [jw, jw + w) in order, under one index entry.  A part of the row (``PARTS``) reads the
     row's argument groups and committed outputs it names, in its order, and returns, and names in its entry, its outputs.  A
     ``cols`` row whose blocks are not its columns (`cols_refused`) is refused in blocks."""
-    from verity_vllm.pipeline import part_rows as PR
     from verity_vllm.pipeline.serving_templates import cols_refused
     from verity_vllm.query.program_view import spec_base, spec_statics
 
