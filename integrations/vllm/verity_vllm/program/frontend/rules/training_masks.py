@@ -4,6 +4,7 @@ f32 arithmetic. Each is exact and the same word on torch's CPU and CUDA kernels,
 
     Compare     gt / ge / lt / le / eq / ne of f32: IEEE, a NaN unordered and -0 equal to +0
     Logic       and / or / not of bool values
+    Bitwise     << / >> / & of int64 values
     Where       where.self with an f32, bf16 or int64 result
     Clamp       clamp by Python numbers of an int64 or f32 value, at `cc` as the GPU's kernel clamps
     Cast        conversions between int64, uint8, bool and f32, and at `cc` the GPU's to bf16, to and from f16 and from f32 to
@@ -121,6 +122,36 @@ class Logic(_TrainRule):
     def emit(self, node, ctx):
         S, fn = ctx.shape_of_node(node), _LOGIC[node.target]
         ctx.define(node, _ew(ctx, node, fn, [_word_operand(ctx, node, a, S, torch.bool) for a in self._args(node)], S, w=1))
+        ctx.record(self, node, {"shape": list(S)}, emitted=f"{fn.id} x{math.prod(S)}")
+
+
+_BITWISE = {aten.__lshift__.Tensor: W.I64Shl, aten.__lshift__.Scalar: W.I64Shl, aten.bitwise_left_shift.Tensor: W.I64Shl,
+            aten.__rshift__.Tensor: W.I64Shr, aten.__rshift__.Scalar: W.I64Shr, aten.bitwise_right_shift.Tensor: W.I64Shr,
+            aten.bitwise_and.Tensor: W.I64And, aten.bitwise_and.Scalar: W.I64And, aten.__and__.Tensor: W.I64And,
+            aten.__and__.Scalar: W.I64And}
+
+
+class Bitwise(_TrainRule):
+    """`<<`, `>>` and `&` (`__lshift__`, `__rshift__`, `bitwise_left_shift`, `bitwise_right_shift`, `bitwise_and`, `__and__`) of
+    int64 values, static int64 tensors and Python ints, broadcast, as torch's kernels compute them: `I64Shl_v1` (0 for an amount
+    below 0 or past 63), `I64Shr_v1` (the sign shifted in, by 63 for an amount below 0 or past 62), `I64And_v1`."""
+    info = _info("Bitwise", "aten __lshift__/__rshift__/bitwise_left_shift/bitwise_right_shift/bitwise_and/__and__ of int64",
+                 "operands are int64 values, static int64 tensors or Python ints, one a value")
+
+    def targets(self):
+        return set(_BITWISE)
+
+    def applies(self, node, ctx):
+        if ctx.dtype_of(node) != torch.int64:
+            return f"numerics_unregistered: result dtype {ctx.dtype_of(node)}"
+        args = node.args[:2]
+        if why := _first(_word_ok(ctx, a, torch.int64) for a in args):
+            return why
+        return True if _a_value(ctx, args) else "no operand is a value"
+
+    def emit(self, node, ctx):
+        S, fn = ctx.shape_of_node(node), _BITWISE[node.target]
+        ctx.define(node, _ew(ctx, node, fn, [_word_operand(ctx, node, a, S, torch.int64) for a in node.args[:2]], S, w=64))
         ctx.record(self, node, {"shape": list(S)}, emitted=f"{fn.id} x{math.prod(S)}")
 
 
@@ -504,4 +535,4 @@ class KthValue(_TrainRule):
         ctx.record(self, node, {"k": k, "slice": N, "slices": rows}, emitted=f"radix select of {N} keys x{rows} (32 steps)")
 
 
-__all__ = ["Compare", "Logic", "Where", "Clamp", "Cast", "Copy", "IntSum", "Index", "KthValue"]
+__all__ = ["Compare", "Logic", "Bitwise", "Where", "Clamp", "Cast", "Copy", "IntSum", "AMax", "Index", "KthValue"]

@@ -24,8 +24,8 @@ A random op's values are an input of the step, committed with its generator's se
     training_rules(min_view_leaves, cc, tf32) -> RuleSet     the training rule set
 
 Views and static float tensors are `rules.training_views`'s, matrix products `rules.training_matmul`'s, softmax and log-softmax
-`rules.training_softmax`'s, comparisons, masks, integer sums, conversions, functionalized copies, table lookups, `amax` and
-`kthvalue` `rules.training_masks`'s, draws `rules.training_draws`'s and the helpers the rules emit with `rules.training_emit`'s; a
+`rules.training_softmax`'s, comparisons, masks, integer sums, shifts and ands, conversions, functionalized copies, table lookups,
+`amax` and `kthvalue` `rules.training_masks`'s, draws `rules.training_draws`'s and the helpers the rules emit with `rules.training_emit`'s; a
 survey of what the rules refuse is `rules.training_survey`'s.
 """
 
@@ -49,8 +49,8 @@ from verity_vllm.program.frontend.rules.training_emit import (_DT, BIT, F32, _ba
                                                               _operand, _operand_ok, _ones, _per_row, _ref, _rounded, _shape, _tokens,
                                                               _TrainRule, _widened, aten)
 from verity_vllm.program.frontend.rules.training_draws import Random
-from verity_vllm.program.frontend.rules.training_masks import (AMax, Cast, Clamp, Compare, Copy, Index, IntSum, KthValue, Logic,
-                                                               Where)
+from verity_vllm.program.frontend.rules.training_masks import (AMax, Bitwise, Cast, Clamp, Compare, Copy, Index, IntSum, KthValue,
+                                                               Logic, Where)
 from verity_vllm.program.frontend.rules.training_matmul import Matmul
 from verity_vllm.program.frontend.rules.training_reduce import FullReduce
 from verity_vllm.program.frontend.rules.training_softmax import LogSoftmax, LogSoftmaxBackward, SafeSoftmax, SoftmaxBackward
@@ -681,7 +681,7 @@ def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, 
     last = ([] if cc else [Binary()]) + [Unary(), Lerp(cc), Addcmul(), SiluBackward(cc), ForeachAdd(cc), FusedAdamW(cc),
                                          FullReduce(cc), Reduce(), IntSum(), AMax(), SafeSoftmax(), SoftmaxBackward(), LogSoftmax(),
                                          LogSoftmaxBackward(), NllLossForward(), NllLossBackward(), EmbeddingDenseBackward(cc),
-                                         Compare(), Logic(), Where(), Clamp(cc), Index(), KthValue(cc), Random(),
+                                         Compare(), Logic(), Bitwise(), Where(), Clamp(cc), Index(), KthValue(cc), Random(),
                                          Copy(cc)] + ([] if cc else [Cast()])
     name = "training" if cc is None else f"training-cc{cc[0]}.{cc[1]}" + ("-tf32" if tf32 else "")
     return RuleSet(name, first + list(DEFAULT_RULES.rules) + last, list(DEFAULT_RULES.families))
@@ -689,5 +689,5 @@ def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, 
 
 __all__ = ["training_rules", "Matmul", "Binary", "Unary", "Lerp", "Addcmul", "SiluBackward", "ForeachAdd", "FusedAdamW",
            "FullReduce", "Reduce", "IntSum", "AMax", "SafeSoftmax", "SoftmaxBackward", "LogSoftmax", "LogSoftmaxBackward",
-           "NllLossForward", "NllLossBackward", "EmbeddingDenseBackward", "Compare", "Logic", "Where", "Clamp", "Cast", "Index",
-           "KthValue", "Random", "Copy"]
+           "NllLossForward", "NllLossBackward", "EmbeddingDenseBackward", "Compare", "Logic", "Bitwise", "Where", "Clamp", "Cast",
+           "Index", "KthValue", "Random", "Copy"]

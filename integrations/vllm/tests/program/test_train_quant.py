@@ -1,7 +1,8 @@
 """The training rules for a quantizer's masks, integers, conversions and order statistics (`rules.training_masks`), each Program
-run on small CPU tensors and its output words compared with torch's: comparisons, logic, `where`, `clamp`, integer sums, the
-conversions among int64, uint8, bool and f32, a codebook lookup, `amax` and `floor`, bit for bit against torch CPU on words with
-signed zeros, infinities and NaNs, with and without a compute capability; at one, a clamp by ±0 against the GPU kernel's
+run on small CPU tensors and its output words compared with torch's: comparisons, logic, int64 shifts and ands (a code packed into
+bytes and back), `where`, `clamp`, integer sums, the conversions among int64, uint8, bool and f32, a codebook lookup, `amax`,
+`floor` and a static f32 `arange` with a row scattered in, bit for bit against torch CPU on words with signed zeros, infinities
+and NaNs, with and without a compute capability; at one, a clamp by ±0 against the GPU kernel's
 `fmaxf` and `fminf`, the GPU's conversions to bf16, to and from f16 and from f32 to int64 and uint8 against torch CPU on NaN-free
 words and against the GPU's NaN and saturated words, and `kthvalue` against a model of torch's CUDA radix select
 (`radixSelect` as SortingRadixSelect.cuh writes it, two bits a digit) on slices with NaNs and signed zeros, and against torch
@@ -259,6 +260,37 @@ def test_floor(rules) -> None:
     assert got == [IE.F32Rint.evaluate(w) for w in nans] and all(w & 0x7FC00000 == 0x7FC00000 for w in got), [hex(w) for w in got]
 
 
+@BOTH
+def test_int64_shifts_and_ands(rules) -> None:
+    """Every amount from -2 to 66 of values at the ends of int64 (torch's 0 and sign fills past them), by Python ints, and two-bit
+    codes packed eight to a word, through bytes and back, by static amounts, as a quantizer passes its code."""
+    a = torch.tensor([0, 1, -1, 2 ** 63 - 1, -2 ** 63, 255, -256, 12345678901234, -987654321])
+    s = torch.arange(-2, 67)
+    _check(lambda a, s: (a[:, None] << s, a[:, None] >> s, a << 3, a >> 62, a & 255, a[:, None] & s), a, s, rules=rules)
+
+    def through_bytes(c):
+        lanes, octets = torch.arange(8), torch.arange(2)
+        word = (c.reshape(4, -1, 8) << (2 * lanes)).sum(-1)
+        packed = ((word.unsqueeze(-1) >> (8 * octets)) & 255).to(torch.uint8)
+        word = (packed.long() << (8 * octets)).sum(-1)
+        return packed, ((word.unsqueeze(-1) >> (2 * lanes)) & 3).reshape(c.shape)
+
+    _check(through_bytes, torch.randint(0, 4, (4, 16), generator=torch.Generator().manual_seed(17)), rules=rules)
+
+
+@BOTH
+def test_a_static_arange_with_a_row_scattered_in(rules) -> None:
+    """An f32 `arange`, arithmetic on it and a row divided in place (`select_scatter`) are static, as torch CPU computes them, and
+    read by a value's product."""
+    def f(x):
+        i = torch.arange(8, dtype=torch.float32)
+        m = (i[None, :] + 0.5) * i[:, None] / 8
+        m[0] = m[0] / 2.0
+        return x * m, m
+
+    _check(f, torch.randn(8, 8, generator=torch.Generator().manual_seed(18)), rules=rules)
+
+
 def test_an_index_out_of_range_reads_a_nan() -> None:
     """torch raises; the lookup reads 0xFFFFFFFF, past the table at either end and past the i32 range."""
     assert _run(lambda i: (torch.tensor([1.0, 2.0, 3.0, 4.0])[i],), torch.tensor([4, -5, 2 ** 40])) == [0xFFFFFFFF] * 3
@@ -402,8 +434,11 @@ A = torch.randn(4, 16, generator=torch.Generator().manual_seed(13)).abs()
     (lambda a: (a.bfloat16().floor(),), (A,), GPU, "(this rule lowers f32)"),
     (lambda a: (a.bfloat16().amax(1),), (A,), GPU, "not an f32 value"),
     (lambda a, i: (a.bfloat16() * i,), (A, I64), GPU, "an int64 operand of a bf16 result"),
+    (lambda i: (i << 2,), (I64.int(),), GPU, "result dtype torch.int32"),
+    (lambda a: (a[0] * torch.arange(0.0, 4.0, 0.25),), (A,), GPU, "a fractional bound or step"),
+    (lambda a: (a[0] * torch.arange(2 ** 24 - 8, 2 ** 24 + 8, dtype=torch.float32),), (A,), GPU, "an integer past 2^24"),
 ], ids=["kth-cpu", "kth-indices", "to-f16-cpu", "from-f16-cpu", "bf16-compare", "to-int64-cpu", "to-uint8-cpu", "nan-bound",
-        "bf16-clamp", "bf16-abs", "bf16-floor", "bf16-amax", "int64-bf16"])
+        "bf16-clamp", "bf16-abs", "bf16-floor", "bf16-amax", "int64-bf16", "int32-shift", "fractional-arange", "big-arange"])
 def test_refusals(f, xs, rules, why: str) -> None:
     u = _refused(f, *xs, rules=rules)
     assert u.reason == "numerics_unregistered" and why in u.hint, u
