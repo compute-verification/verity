@@ -461,6 +461,18 @@
       ]
     },
     {
+      "handle": "dashboard",
+      "holder": "4d92fa93-101a-42e1-8282-d4a998892829",
+      "remit": "Daniel's dashboards on the console: the Goals page and live plots of running experiments. Asks wait until Daniel opens it; nothing wakes it.",
+      "charter": "Daniel, 2026-11-02 11:24 AM PST",
+      "linear": "CON",
+      "examples": [
+        "How do I put my goals on Daniel's Goals page?",
+        "How do I publish a live plot of my runs to the console?"
+      ],
+      "usergroup": "S0CEC206YBW"
+    },
+    {
       "handle": "ci",
       "holder": "bc-8d3a66f8-f3da-5dae-9fb0-4a5b381b3d4e",
       "remit": "Open PRs: shepherds each to a passing check and into the merge trains.",
