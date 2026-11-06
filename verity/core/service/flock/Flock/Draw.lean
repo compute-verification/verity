@@ -10,6 +10,9 @@ module
 public import Lean.Data.Json
 public import Std.Data.HashMap
 public import Flock.Canon
+meta import Lean.Data.Json
+meta import Std.Data.HashMap
+meta import Flock.Canon
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -220,10 +223,12 @@ def Stratum.toJson (s : Stratum) : Json :=
   Json.mkObj [("template", Json.str s.template),
     ("units", Json.arr (s.units.map fun (lo, hi) => Json.arr #[Lean.toJson lo, Lean.toJson hi])), ("k", Lean.toJson s.k)]
 
+/-- A work stratum's object. Its fields are listed in key order, the order `Flock.norm` rebuilds an object in, so `norm`
+leaves its tree as it is: a draw the verifier keeps as `norm` of what it parsed is this object's tree. -/
 def WorkStratum.toJson (s : WorkStratum) : Json :=
-  Json.mkObj [("template", Json.str s.template),
+  Json.mkObj [("floor", Lean.toJson s.floor), ("k", Lean.toJson s.k), ("template", Json.str s.template),
     ("units", Json.arr (s.units.map fun (lo, hi) => Json.arr #[Lean.toJson lo, Lean.toJson hi])),
-    ("work", Lean.toJson s.work), ("floor", Lean.toJson s.floor), ("k", Lean.toJson s.k)]
+    ("work", Lean.toJson s.work)]
 
 /-- The law object (the registration's `law`): `{law, k, strata}` for `stratified` and `work`. -/
 def Law.toJson : Law → Json
@@ -243,6 +248,21 @@ def UnitDraw.toJson (d : UnitDraw) : Json :=
   | .work k strata => Json.mkObj ([("law", Json.str "work"), ("population", Lean.toJson d.population),
       ("k", Lean.toJson k), ("strata", Json.arr (strata.map (·.toJson))), ("units", u)] ++
       if d.closure.isEmpty then [] else [("closure", Json.arr (d.closure.map fun x => Lean.toJson x))])
+
+#guard
+  let s : WorkStratum := { template := "A", units := #[(0, 2)], k := 1, work := 3, floor := 1 }
+  let listed := Json.mkObj [("template", Json.str s.template),
+    ("units", Json.arr (s.units.map fun (lo, hi) => Json.arr #[Lean.toJson lo, Lean.toJson hi])),
+    ("work", Lean.toJson s.work), ("floor", Lean.toJson s.floor), ("k", Lean.toJson s.k)]
+  s.toJson.compress == listed.compress && (canon s.toJson).toOption == (canon listed).toOption
+#guard
+  let ss : Array WorkStratum := #[{ template := "A", units := #[(0, 2)], k := 1, work := 3, floor := 1 },
+    { template := "B", units := #[(2, 4)], k := 1, work := 1, floor := 1 }]
+  let record := Json.mkObj [("unit_draw", UnitDraw.toJson ⟨.work 2 ss, 4, #[1, 2], #[3]⟩)]
+  let printed := "{\"unit_draw\":{\"closure\":[3],\"k\":2,\"law\":\"work\",\"population\":4,\"strata\":[{\"floor\":1," ++
+    "\"k\":1,\"template\":\"A\",\"units\":[[0,2]],\"work\":3},{\"floor\":1,\"k\":1,\"template\":\"B\",\"units\":[[2,4]]," ++
+    "\"work\":1}],\"units\":[1,2]}}"
+  record.compress == printed && (canon record).toOption == some printed
 
 /-- A stratum object: exactly `{template, units, k}`, its units non-empty `[lo, hi)` ranges, ascending, disjoint and not
 adjacent (`draw.strata_problem`). -/
