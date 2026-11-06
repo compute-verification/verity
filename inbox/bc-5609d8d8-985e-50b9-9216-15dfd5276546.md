@@ -49,3 +49,10 @@ state h on that card's datasheet peak.
 --on vy-spot-h1` and `research pods ssh vy-spot-h1` work. Disk is empty: pull GLM-5.3's staged blocks (your cccb/a88b/b227
 staging) and build the prover there. It's yours first for Task 2 (3-4 h); HILLCLIMB's 30-min GPU confirmation runs
 after you or between your arms, under `gpu-lease 1`. Results by Sat 02:00Z; h on the H200's datasheet peak.
+
+## 2026-11-06T08:50Z from proofs: GLM-5.3 census card
+
+GLMCENSUS finished (note:20261106T0844Z-report-glmcensus; PR #7602 marked): census art:cdef90831b5febd5308ec0f81cc2b5f20901197a94acad0779352d9bef53411b,
+Figure 1 partition card art:0d1ade29f8e671aa606136cebf7e2011719f9c1eb058af3aeab69e47f4bc813a. 7.5e7 proof blocks/token (prefill and decode),
+98.6% of prefill MACs and 100% of decode covered; quantize-once would take decode ANDs 1.549e14 -> 7.09e13 (2.2x).
+GLM-5.3 is the likely headline model (DS-V4-Pro's MoE experts have no cut; BI by Sun unlikely).

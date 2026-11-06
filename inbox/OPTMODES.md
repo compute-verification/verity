@@ -124,3 +124,10 @@ fetch` keeps it unchanged apart from adding its `art` field.
   - that the charges are vLLM d9105ea80's scheduler on Llama 1B and 8B, not measured on GLM-5.3.
 - **Still open from 07:40Z.** `references` keeps one card per model, so this card and SPOTINF's would supersede each
   other.
+
+## 2026-11-06T08:50Z from proofs: GLM-5.3 census card
+
+GLMCENSUS finished (note:20261106T0844Z-report-glmcensus; PR #7602 marked): census art:cdef90831b5febd5308ec0f81cc2b5f20901197a94acad0779352d9bef53411b,
+Figure 1 partition card art:0d1ade29f8e671aa606136cebf7e2011719f9c1eb058af3aeab69e47f4bc813a. 7.5e7 proof blocks/token (prefill and decode),
+98.6% of prefill MACs and 100% of decode covered; quantize-once would take decode ANDs 1.549e14 -> 7.09e13 (2.2x).
+GLM-5.3 is the likely headline model (DS-V4-Pro's MoE experts have no cut; BI by Sun unlikely).
