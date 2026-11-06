@@ -28939,15 +28939,20 @@
    }
   },
   "Flock.RecBudget": {
-   "digest": "6959339e8d4d6858bc97ecde1de983dcb1e08de266b68f6d979a9618f6d2fa6a",
+   "digest": "6a0438af335ffb797d15e95be32cf8ed0fd718a803d6113a6901f5286291d80a",
    "definitions": {
     "Flock.RecBudget.MAX_DEPTH": "f959294d54f7cc019e5cfe1eb1afa671fc401095b2782618bebc491816f9dcef",
     "Flock.RecBudget.MAX_INNER_ROWS": "21b6371029b701384a7f0b924760ca8ad2d086fc1dd59080a1924c1f64fc559d",
     "Flock.RecBudget.MAX_INSTANCES": "afbfc72e1a18bc8fc32b38848807c5a43430f216aa189d9c63d9ddd293d32d50",
     "Flock.RecBudget.MAX_PORTS": "e5bbbb3d0d4cf2306ecb22769d1014ad652b09a854a5abf418f65d8f8a2d9e1f",
+    "Flock.RecBudget.MAX_RECORDED": "6ceafce6a1aca74596646843ff9a6a812a046b34a8494a25a166558200ef0d8f",
     "Flock.RecBudget.MAX_STATEMENTS": "d31f477d79ac8cf50b2f29c92c27d9bcd156acc74c4abb6b01febddddf89cd07",
     "Flock.RecBudget.count": "2e5156dff654c07a93d4ee2442e8c97a057409039f50dfbc1fb721c408ad4807",
     "Flock.RecBudget.innerRows": "b19e4233a34e4125306d28ad06ddcc55d2b7c6a899fff718527c4c35cf8a1ae7",
+    "Flock.RecBudget.recorded": "f9b560dac17ea83adef1666c128b051f435152aac8a30aa71cdb3a8b583e95ae",
+    "Flock.RecBudget.recordedAt": "b88927110838d76cc89b8de190e37a369ebfc91d4f5761c714dc5a0915f8971c",
+    "Flock.RecBudget.recordedAt._sparseCasesOn_1": "c42eea3056db9fa639bb0d892e59da777ae62a591040985efb0c1d315cbe3f22",
+    "Flock.RecBudget.recordedCalls": "81edfa451d9006aafa962d30f0a21d244ed532e0692ee36a81d0ab67f250afd4",
     "Flock.RecBudget.regs": "8ee9dea0e887dc3afe61892982235adec10ea5521bb2a948d3db219802c16d73",
     "Flock.RecBudget.statements": "cf58c0b75b752607bca16f20584d930bc60f9eb5176f3c42647d87116fbf1df1",
     "Flock.RecBudget.table": "79f1527ada8d39130fccf1633b5312c0ed2cc0f59ac5ec445ad533c80ef30561",

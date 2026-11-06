@@ -658,9 +658,9 @@ def recTranscriptCmd (args : List String) : IO UInt32 := do
   | .error e => IO.eprintln e; return 1
 
 /-- `rec-statements --rec-inner F [--unit NAME | --circuit F --rec-bindings F] [--instances N] [--rec-part J]
-[--registered F]`: V*'s statements at the inner shape (`RecVStar.statements`), each unit name and instance count, as one
-`RECVSTAR` line; with `--unit` and `--instances`, `RecVStar.check` on them as well (as statement `J` with `--rec-part`),
-with `--circuit`, `--instances`, `--rec-part` and `--rec-bindings`, `RecVStar.checkCircuit` on that circuit file as
+[--registered F]`: V*'s statements at the inner shape (`RecVStar.statements`), each unit name and instance count, and the
+hm96 calls they record at most (`RecBudget.recordedCalls`), as one `RECVSTAR` line; with `--unit` and `--instances`,
+`RecVStar.check` on them as well (as statement `J` with `--rec-part`), with `--circuit`, `--instances`, `--rec-part` and `--rec-bindings`, `RecVStar.checkCircuit` on that circuit file as
 statement `J` under those bindings, and then with `--registered`, `RecVStar.checkOwn` on those reads, with the statement's
 own message-round ports (`RecVStar.ownPorts`). -/
 def recStatementsCmd (args : List String) : IO UInt32 := do
@@ -681,7 +681,8 @@ def recStatementsCmd (args : List String) : IO UInt32 := do
   let circuitB ← (argOf args "--circuit").mapM IO.FS.readBinFile
   let res : V Lean.Json := do
     let ss ← RecVStar.statements i
-    let base := [("statements", Lean.Json.arr (ss.map fun s => Lean.Json.arr #[Lean.Json.str s.name, Lean.toJson s.instances]))]
+    let base := [("statements", Lean.Json.arr (ss.map fun s => Lean.Json.arr #[Lean.Json.str s.name, Lean.toJson s.instances])),
+      ("recorded", Lean.toJson (RecBudget.recordedCalls i ss))]
     let checked := fun (s : VStar.Stmt) (n : Nat) => do
       if let some r := registered then RecVStar.checkOwn s r
       let own := (RecVStar.ownPorts s).map fun (nm, v, rd) => Lean.Json.arr #[Lean.Json.str nm, Lean.Json.str v, Lean.toJson rd]
