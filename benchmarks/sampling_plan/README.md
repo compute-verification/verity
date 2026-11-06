@@ -77,10 +77,7 @@ their floor.
   commitment) at two readings of a hashed byte's cost, through `grain_costs` and `for_target`, and the second mode again
   under a code-based commitment at each rate ρ (codeword columns hashed, 1/ρ the bytes, and no row hashed in circuit),
   each total with the replay of the requests the draw meets, each re-run from its prompt at the stock step's share;
-  then each rung under a two-stage design (`optimize.two_stage`: serving commits only the replay blocks' boundaries, q of
-  them sampled, their interiors committed after that, and k proof blocks sampled in each), at the `request` replay
-  grain for exfiltration and a layer of a token for both targets, beside today's one-stage design at the same scope, also
-  pooled over the census's datacenter and the world's fleet; then the chunk family's optimum against √(wβhC/(oΛ)). A rung fits when C-Flock's block holds each of its proof blocks (`inputs.cap`). Its
+  then the chunk family's optimum against √(wβhC/(oΛ)). A rung fits when C-Flock's block holds each of its proof blocks (`inputs.cap`). Its
   inputs, each with its status and source, are `served_window_inputs.json`; it writes `served_window.json` and
   `served_window.md`.
 
