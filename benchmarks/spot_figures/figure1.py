@@ -264,12 +264,18 @@ class TokenBlocks:
                 "modeled_mac_share": self.modeled_macs / self.served_macs}
 
 
+def price(stratum: dict) -> float:
+    """The MACs a stratum's block is proved at: its `price_macs` where its partition prices proving by staged witness
+    bits, else its MACs."""
+    return stratum.get("price_macs", stratum["macs"])
+
+
 @dataclass(frozen=True)
 class Fill:
     """Proving's price over its marginal at a statement's fill, per proof-block type: its share of the proof blocks, its
-    share of their MACs, its statement's fixed GPU-seconds over a block's marginal ones, and its statement's cap in
-    blocks.  A type the `proof_overhead` card doesn't measure takes the measured blocks' pooled fixed cost and least
-    cap.  Proving GPU-seconds go as MACs, so a design's price is the types' MAC-weighted mean."""
+    share of their proving (`price`), its statement's fixed GPU-seconds over a block's marginal ones, and its
+    statement's cap in blocks.  A type the `proof_overhead` card doesn't measure takes the measured blocks' pooled fixed
+    cost and least cap.  Proving GPU-seconds go as `price`, so a design's price is the types' mean weighted by it."""
 
     types: tuple[tuple[float, float, float, int], ...]
 
@@ -279,8 +285,8 @@ class Fill:
         pooled = (sum(b["fixed_seconds"] for b in blocks) / sum(b["seconds_per_block"] for b in blocks),
                   min(b["statement_blocks"] for b in blocks))
         n = sum(s["per_token"] for s in strata)
-        macs = sum(s["per_token"] * s["macs"] for s in strata)
-        return cls(tuple((s["per_token"] / n, s["per_token"] * s["macs"] / macs,
+        macs = sum(s["per_token"] * price(s) for s in strata)
+        return cls(tuple((s["per_token"] / n, s["per_token"] * price(s) / macs,
                           *((b["fixed_seconds"] / b["seconds_per_block"], b["statement_blocks"])
                             if (b := by.get(s["block"])) else pooled)) for s in strata))
 
@@ -345,8 +351,8 @@ def model(c: dict[str, InputCard], part: TokenBlocks, s: Scope, overhead: float,
     def dot(macs: float) -> Grain:
         return Grain("proof block", n, work, part.widest_bits, part.bytes / part.blocks, overhead * 2 * macs / peak)
 
-    cells = tuple(Cell(x["per_token"] * tokens, x["out_bits"], prove=overhead * 2 * x["macs"] / peak,
-                       fixed=ratio * overhead * 2 * x["macs"] / peak, cap=statement,
+    cells = tuple(Cell(x["per_token"] * tokens, x["out_bits"], prove=overhead * 2 * price(x) / peak,
+                       fixed=ratio * overhead * 2 * price(x) / peak, cap=statement,
                        commit_bytes=x.get("commit_bytes", x["out_bits"] / 8))
                   for x, (_, _, ratio, statement) in zip(c["partition"].value["strata"], fill.types)
                   if x["per_token"] > 0)

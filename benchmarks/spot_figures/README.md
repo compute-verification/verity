@@ -15,7 +15,7 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
 
 - **Cards** (`cards.py`, schema `spot-card/v1`): every number the figures read arrives as one JSON card in a slot
   (`workload`, `proof_overhead`, `commitment`, `replay`, `design`, `references`, `infiltration`,
-  `commit_hillclimb`, `serve_tax`), for a model or for every model. `cards.py` holds each slot's fields and checks a card against
+  `commit_hillclimb`, `serve_tax`, `partition`), for a model or for every model. `cards.py` holds each slot's fields and checks a card against
   them. A card is published to the evidence store and kept in `cards/SLOT.MODEL.json` with its art id; a model's
   `references` cards add up, each kept as `cards/references.MODEL.ART.json`:
 
@@ -41,6 +41,10 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   every token against its `baseline`, as one number with its range, `priced` or `measured`, a lower bound or not, and
   its parts. `total_cost.py priced-card` prices one from the model's cards; a measured value replaces a priced one
   configuration by configuration, and the figure plots a priced tax hollow.
+
+  A `partition` card is another cut of the model's circuit: its strata take the place of the `workload` card's strata
+  of the kinds it `replaces`, at its own `model_overhead`, its blocks proved at their MACs or at their staged witness
+  bits' share of a token's proving (`price`), and its `label` says how far it has got.
 - **Figure 1** (`total_cost.py`): what an adversary serving the model on all of a scope's compute over a monitoring
   period can exfiltrate or infiltrate while evading detection with probability above δ, against total cost as a share
   of serving compute, the serve tax plus β (the share spent on replays, interior commitments and proofs of the sampled
@@ -49,7 +53,9 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
     priced, with its range as a bar: (A) tokens only (the token ids, the schedule record and the KV cache at window
     edges committed; a replay block is a request), (B) each layer's state (a replay block is one layer of one token),
     and (C) every proof-block boundary (one-stage, dashed, its tax a lower bound from hashing alone, the only line
-    with skipped work). A new configuration, such as another circuit partition, is a new entry with its own line.
+    with skipped work). (A′) is (A)'s serving and tax on the `partition` card `per-expert`'s cut (the MoE cut per
+    expert), dash-dot, a line only for a model with that card. A new configuration, such as another cut, is a new
+    entry with its own line.
   - Exfiltration: (A) and (B) in the capped sets' form (`card_influenceTwo_le_served_min`) and never above the
     scope's served bits (`card_influenceTwo_le_min`), the JSON saying which term binds at each β; (C) in
     `consumers.exfiltration_bound`'s form, at most the served bits by the same count.
@@ -120,3 +126,6 @@ Limits of the model:
   returns more (logits, state) serves more, and the cap is then too low.
 - The two-stage write forms need a harm bound at the footprint, which no lemma states yet, and (B) replays a layer of
   one token at its share of its request's replay, from state it retains.
+- The registered cut's lines prove each block at its MACs and (A′)'s at its staged witness bits, so where the two
+  disagree on a block's share of a token's proving, the lines price it differently; (A′)'s overhead is priced from
+  staged k_log, not measured.

@@ -4,14 +4,39 @@ from itertools import product
 from math import comb
 
 import cards
+import figure1 as f1
 import pytest
 import total_cost as t
 from verity.core.protocols.sampled_proofs.optimize import Cell
 
 
 def test_the_configurations_are_the_cards():
-    assert tuple(t.CONFIGURATIONS) == cards.CONFIGURATIONS
+    """Every configuration that pays its own serve tax has its slot in the serve_tax card; one on another cut of the
+    circuit pays one of theirs."""
+    assert tuple(n for n, c in t.CONFIGURATIONS.items() if c.serve is None) == cards.CONFIGURATIONS
+    assert all(t.CONFIGURATIONS[c.serve].serve is None for c in t.CONFIGURATIONS.values() if c.serve)
     assert [n for n, c in t.CONFIGURATIONS.items() if "skipped_work" in c.panels] == ["every_block"]
+
+
+def test_a_partition_card_cuts_the_circuit_and_keeps_its_macs():
+    """The per-expert cut: its strata in place of the registered cut's MoE GEMMs and router, every MAC of the circuit
+    kept, each block proved at its staged witness bits' share of a token's MACs (a table read too, which has none), at
+    the card's overhead; a witness-priced card without a block's k_log is refused."""
+    c = f1.cards("GLM-5.3")
+    card = next(x for x in cards.load_all("partition", "GLM-5.3") if x["value"]["name"] == "per-expert")
+    cut = t.cut(c, card)
+    old, new = c["partition"].value["strata"], cut["partition"].value["strata"]
+    kinds = set(card["value"]["replaces"])
+    assert any(x.get("kind") in kinds for x in old) and not any(x.get("kind") in kinds for x in new)
+    macs = sum(x["per_token"] * x["macs"] for x in old)
+    assert sum(x["per_token"] * x["macs"] for x in new) == pytest.approx(macs, rel=1e-12)
+    assert sum(x["per_token"] * f1.price(x) for x in new) == pytest.approx(macs, rel=1e-12)
+    reads = [x for x in new if x.get("kind") == "EmbeddingRead_v1"]
+    assert reads and all(x["macs"] == 0 < f1.price(x) for x in reads)
+    assert cut["proof_overhead"].value == card["value"]["model_overhead"] < c["proof_overhead"].value
+    bare = [{k: v for k, v in x.items() if k != "k_log"} for x in card["value"]["strata"]]
+    with pytest.raises(ValueError, match="no k_log"):
+        cards.check(card | {"value": card["value"] | {"strata": bare}})
 
 
 def test_the_kept_priced_taxes_are_the_generators():
@@ -118,6 +143,8 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
     every = next(s for s in out["panels"]["infiltration"]["series"] if s["config"] == "every_block")["y"]
     assert all(b < a for a, b in zip(every, every[1:])), "(C)'s infiltration is its plan's K, not every block's bits"
     caps = out["scopes"][scope]["captions"]
+    assert out["taxes"]["per_expert"] == out["taxes"]["tokens"]
+    assert out["configurations"]["per_expert"]["cut"]["label"] in caps["exfiltration"]
     assert "card_influenceTwo_le_served_min" in caps["exfiltration"] and "card_influenceTwo_le_min" in caps["exfiltration"]
     assert "serve tax 3%" in caps["exfiltration"] and "measured" in caps["exfiltration"]
     assert "a lower bound, the hashing alone" in caps["skipped_work"]
