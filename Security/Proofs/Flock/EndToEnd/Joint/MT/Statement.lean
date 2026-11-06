@@ -11,13 +11,13 @@ public import Flock.Desc
 
 `JointStratified` and `JointStratifiedHorizon` (`Joint/Statement.lean`) at sampling blocks proved in `J` tables in
 parallel. A sampling block is one hidden-output `--zk` session of `J` tables over `n` proof units, whose units the
-challenger's coins draw by one live stratified draw (`Flock.Draw.drawWith` at `.stratified`, `Law.execOS`): stratum `s`
-holds `n_s` of the sampling block's units, `k_s` of them are drawn uniformly without replacement, independently across
-strata, and the strata run over every table's units, so a table's subcircuits are strata of the one draw. `verify --zk
---session-tables J` proves the drawn units in `J` equal consecutive parts, table `j` part `j` (`drawJ`, `partS`); when
-the units are laid out table by table and every table's strata draw the same number of units, part `j` is table `j`'s
-own stratified draw. The record's custody is `RecordCustodyZKJS` (`live-verifier` at the stratified law); that the
-parts are proved and set up with the session's link points is flock-verify's own arithmetic
+challenger's coins sample by one live stratified draw (`Flock.Draw.drawWith` at `.stratified`, `Law.execOS`): stratum
+`s` holds `n_s` of the sampling block's units, `k_s` of them are drawn uniformly without replacement, independently
+across strata, and the strata run over every table's units, so a table's subcircuits are strata of the one draw.
+`verify --zk --session-tables J` proves the drawn units in `J` equal consecutive parts, table `j` part `j` (`drawJ`,
+`partS`); when the units are laid out table by table and every table's strata draw the same number of units, part `j` is
+table `j`'s own stratified draw. The record's custody is `RecordCustodyZKJS` (`live-verifier` at the stratified law);
+that the parts are proved and set up with the session's link points is flock-verify's own arithmetic
 (`ZkHidden.drawOkZKHJ_of_accepts_stratified`).
 
 `StratifiedBlockMT` is such a sampling block, with every binder of `EndToEndHidden` but the prover and its law, as

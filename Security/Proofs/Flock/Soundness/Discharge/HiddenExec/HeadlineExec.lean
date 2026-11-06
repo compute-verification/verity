@@ -128,7 +128,7 @@ theorem rsAtH_computes : (rsAtH ht hc hscope dj x₀ hU hpub hpt (Reg := Reg)).C
 under a tag with hidden outputs, whose one circuit file parses to an untyped circuit `c` (`hc`: `HmOut.parse`, which
 checks each output row holds its port's words, `ht`) and whose public file loads to `pub` with no shared-row tables
 (`hpub`: `HmOut.loadPublic`, every row's `b ‖ c` and no output word; `hpt`), and let the challenger write draw `S` as
-the JSON `dj S` (`x₀` one draw it sets up with `Stmt.setupHidden`). Let the units be drawn with
+the JSON `dj S` (`x₀` one draw it sets up with `Stmt.setupHidden`). Let the units be sampled with
 `Flock.Draw.drawWith`'s stratified law on the challenger's coins, a byte source A3 makes uniform, and let each draw's
 session be the live coin server's one table (`liveTable`, A6), written out by `wr`. Against any live prover `τ`,
 flock-verify accepts with at least `K` wrong units of the production program `Placed.keyProg c hU n`, at the simulated

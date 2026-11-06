@@ -35,7 +35,7 @@ variable {n : ℕ} {I : Inputs} {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json)
 
 /-- **The headline over hidden-output sessions.** Let `I` be a verify command's inputs (one table) under a tag with
 hidden outputs, and let the challenger write draw `S` as the JSON `dj S` (`x₀` one draw it sets up with
-`Stmt.setupHidden`). Let the units be drawn with `Flock.Draw.drawWith`'s stratified law on the challenger's coins, a
+`Stmt.setupHidden`). Let the units be sampled with `Flock.Draw.drawWith`'s stratified law on the challenger's coins, a
 byte source A3 makes uniform, and let each draw's session be the challenger's one table (`liveTable`, A6), written out
 by `wr`. Against any live prover `τ`, flock-verify accepts with at least `K` wrong units of the program `p`, at the
 simulated prover's committed values, with probability at most `miss(K) + ε_ks + δ_link`, given the program's places,

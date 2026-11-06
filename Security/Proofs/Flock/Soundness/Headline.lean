@@ -49,7 +49,7 @@ variable {N n : ℕ} (p : FlockSoundness.Prog N n) (outs : Finset (Fin N)) {Reg 
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
 
-/-- **The headline: the count curve on the statement's rows, under SHA-512, at the live draw.** Let the units be drawn
+/-- **The headline: the count curve on the statement's rows, under SHA-512, at the live draw.** Let the units be sampled
 with `Flock.Draw.drawWith`'s stratified law (strata `St`, matching `Law.stratified σs ks` by `hS`) on a byte source
 `src` that A3 makes uniform (`hA3`), the challenger's coins, and run the batched session with SHA-512 leaves, nodes and
 rows. If `execAccept` holds, the probability that at least `K` units of the program's rows circuit are wrong at the

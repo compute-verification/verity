@@ -24,7 +24,7 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
 open Classical in
-/-- **C-Flock's one-stage audit, end to end.** The prover registers `R` (its roots); the challenger's coins draw a
+/-- **C-Flock's one-stage audit, end to end.** The prover registers `R` (its roots); the challenger's coins sample a
 uniform `kd`-subset of the `n` proof units (`Flock.Draw.drawWith`, `Law.execOS` on the byte source `src`); one `--zk`
 session of `J = nTab I` tables proves the drawn units, `kd / J` in each; and the verifier of record,
 `flock-verify verify --zk --session-tables J`, reads the session's record. Then for every live prover `τ`,

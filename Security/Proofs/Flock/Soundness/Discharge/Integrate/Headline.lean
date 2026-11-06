@@ -74,7 +74,7 @@ noncomputable abbrev tablesAt : Finset (Fin n) → Reg → TabSpec mPts := fun S
 /-- **The headline at the executable.** Let `I` be a verify command's inputs (one table) whose one circuit file parses
 to an untyped circuit `c` (`hc`, `ht`) and whose public file loads to `pub` with no shared-row tables (`hpt`, as
 the circuit prover's per-instance public files load, under `@967b8d06` too, whose tag allows them), and let the
-challenger write draw `S` as the JSON `dj S` (`x₀` one draw it sets up). Let the units be drawn with
+challenger write draw `S` as the JSON `dj S` (`x₀` one draw it sets up). Let the units be sampled with
 `Flock.Draw.drawWith`'s stratified law on the challenger's coins, a byte source A3 makes uniform, and let each draw's
 session be the challenger's one table (`liveTable`, A6), written out by `wr`. Against any live prover `τ`, flock-verify
 accepts with at least `K` wrong units of the production program `Placed.keyProg c hU n`, at the simulated prover's

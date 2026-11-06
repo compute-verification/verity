@@ -16,7 +16,7 @@ subcircuit and no sum of per-subcircuit worst cases.
 
 `StratifiedBlock` is such a sampling block: one hidden-output `--zk` session of one table (a stratified draw is a
 one-table session: flock-verify takes only the subset draw at more than one table, `RecordCustodyZKJ`) whose units the
-challenger's coins draw by the live stratified draw (`Flock.Draw.drawWith` at `.stratified`, `Law.execOS`), with every
+challenger's coins sample by the live stratified draw (`Flock.Draw.drawWith` at `.stratified`, `Law.execOS`), with every
 binder of `zk_session_soundH_custody` but the prover. Its wrong units are `wrongRegZ` in the committed transcript fixed
 at registration (`XplurZC`), as `SamplingBlock`'s are.
 
