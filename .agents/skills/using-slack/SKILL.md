@@ -27,7 +27,8 @@ msg owners PATH...` names each path's owner (longest prefix).
   wakes it, so its inbox holds your ask until he opens it. Put the whole brief in the ask, and card `#ask-daniel` when it
   can't wait.
 - **Each handle has an inbox thread** (its route, `routes.d` in the notes), where a post rings each name it addresses
-  with a doorbell (`from AUTHOR, thread T: ...`); the holder's own posts never ring it. The route names the holder:
+  with a doorbell (`from AUTHOR, thread T: ...`; a person's leads with them and how long they've waited, `from douglas
+  (a person, waiting 18 min), #chat-douglas thread T: ...`); the holder's own posts never ring it. The route names the holder:
   `names open --as HANDLE --succeeds` takes a handle over, `names open --as HANDLE` on a new branch adds its suffix, and
   `--poster BC_ID` lets another agent post as it, subscribed to the inbox itself: its post naming the handle rings the
   holder (so a handover's outgoing generation reaches the incoming one), and that doorbell wakes the poster too.
@@ -124,9 +125,12 @@ id is missing).
 
 A person who asks the lanes gets a private `#chat-NAME`, which `@top` runs with `research msg chat open|expect|list|close`
 (slack.py's docstring). `open` invites the person and Cursor's bot, pins a welcome, bookmarks `--start-here`, and
-publishes the person as `people.d/NAME.json` in the notes, read into `collaborators` with no registry PR. The events
-service routes each post to the lanes it starts with, a reply naming no one to the lanes in its thread, else to `@top`,
-and its watchdog rings again when nobody picks it up (`infra/slack-events/`'s README). Doorbells carry no text (the
+publishes the person as `people.d/NAME.json` in the notes, read into `collaborators` with no registry PR. `--lane
+HANDLE` (on `open` or `expect`; `--lane ''` clears it) records the lane the person usually works with. The events
+service routes each post to the lanes it starts with, a reply naming no one to the lanes in its thread, else to the
+person's usual lane (`sent to @LANE: no lane named; NAME's usual lane`), else to `@top`. Its watchdog rings again,
+URGENT, when nobody picks a post up in 15 min (no 👀, no lane reply), and then also rings `@top` once for a post it sent to
+a usual lane (`infra/slack-events/`'s README). A route it can't read is retried, never dropped. Doorbells carry no text (the
 channel is private, the inboxes aren't): read with `research msg read --channel chat-NAME --thread T`, answer with
 `research msg reply --as ME --channel chat-NAME --thread T`; their next reply rings you as a doorbell (no subscription
 reaches a private chat). One agent answers each
