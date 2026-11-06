@@ -529,8 +529,6 @@ theorem countsReachAt {V : Vocab d α} {k : Verity.Registration.Composite} {θ :
     {A : Live} (reg : Option Claims.Msg → A.Reg) (record : ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : ByteArray → Claims.Msg) (hA : SetsUp V θ F A) (hDg : DigestsAt V θ)
     (hL : A.Lb 0 = _root_.SampledProofs.Challenger.MAX_COINS * 64)
-    (hord : ∀ c (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ),
-      V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) → OrderHeld (CoinTape.run (V.game θ F c) σ x).sent)
     (hO : ∀ c (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ),
       V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) →
       Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ x) →
@@ -544,7 +542,8 @@ theorem countsReachAt {V : Vocab d α} {k : Verity.Registration.Composite} {θ :
         (afterAt V k θ F c σ) (srcCoinsAt _root_.SampledProofs.Challenger.MAX_COINS A)) :=
   countsReach_layout (label := labelAt θ) (after := afterAt V k θ F c σ)
     (κ := srcCoinsAt _root_.SampledProofs.Challenger.MAX_COINS A) hA hDg reg (record c) (recordDigest c)
-    rfl rfl le_rfl (bytesOf_srcCoinsAt hL) rfl (sampleNamed_layout hA) (hord c σ) (hO c σ)
+    rfl rfl le_rfl (bytesOf_srcCoinsAt hL) rfl (sampleNamed_layout hA)
+    (fun x hv => orderHeld_verdict hA (play_ends V θ F c σ x).1 hv) (hO c σ)
 
 /-- **The coupling at the deployment, off the empty classes at their counts**: `couplingTarget_assembled_at` at the
 deployed device's history and `movesReachAt`'s readings, decoders, family, digest and coins, with its `hM` by
@@ -557,8 +556,6 @@ theorem couplingTargetAt_counts {V : Vocab d α} {k : Verity.Registration.Compos
     (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
     (hD : V.signer θ = P.signer V.families θ)
     (hA : SetsUp V θ F A) (hDg : DigestsAt V θ) (hL : A.Lb 0 = _root_.SampledProofs.Challenger.MAX_COINS * 64)
-    (hord : ∀ c (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ),
-      V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) → OrderHeld (CoinTape.run (V.game θ F c) σ x).sent)
     (hO : ∀ c (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ),
       V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) →
       Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ x) →
@@ -573,7 +570,7 @@ theorem couplingTargetAt_counts {V : Vocab d α} {k : Verity.Registration.Compos
     (fun A _ _ _ _ => decodersAt (reg A) A.layout) (fun θ _ _ _ => labelAt θ)
     (srcCoinsAt _root_.SampledProofs.Challenger.MAX_COINS) A θ F (fun o _ => Device.printsLog_dev _ o)
     (fun c => Device.signsPlay_dev V P θ F c hD) (avg_srcCoinsAt hL) hA hDg (writesView_wrZP A rfl)
-    (fun c σ => movesReach_at (movesReachAt (reg A) (record A θ F) (recordDigest A θ F) hA hDg hL hord hO c σ)
-      (countsReachAt (reg A) (record A θ F) (recordDigest A θ F) hA hDg hL hord hO c σ))
+    (fun c σ => movesReach_at (movesReachAt (reg A) (record A θ F) (recordDigest A θ F) hA hDg hL hO c σ)
+      (countsReachAt (reg A) (record A θ F) (recordDigest A θ F) hA hDg hL hO c σ))
 
 end Verity.Sampled
