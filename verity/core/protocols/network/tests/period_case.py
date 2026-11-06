@@ -990,6 +990,13 @@ def _states(reg: dict) -> list[dict]:
             *(e for e in _entries(reg, "registered") if e.get("value") == SCAN_STATE)]
 
 
+def _audit_states(reg: dict) -> list[dict]:
+    """`auditStateEntries`: a compute audit's `_states` and its window's `activations.values` entry of `SCAN_STATE`
+    when that entry's `value` is `SCAN_STATE`."""
+    e = _get(_get(_get(_get(reg, "window"), "activations"), "values"), SCAN_STATE)
+    return [*_states(reg), *([e] if isinstance(e, dict) and e.get("value") == SCAN_STATE else [])]
+
+
 def _get(j, k: str):
     """`getObjValD`: `j`'s value at `k`, None where `j` is no object or has none."""
     return j.get(k) if isinstance(j, dict) else None
@@ -1063,7 +1070,7 @@ def state_empty(tree: ADV.Committed) -> dict:
 def _state_tied(p: Params, audits: list[dict], reg: dict) -> bool:
     """`stateTied`: the scan's registration states its units' state reads as the chain (`_state_read`), has a state
     entry (`_states`), every one at one root and domain, both strings, and an audit wired to its `prog` (`_wired`) has
-    one, every one at that root and domain."""
+    one (`_audit_states`), every one at that root and domain."""
     es = _states(reg)
     if not _state_read(p, reg) or not es or not isinstance(root := es[0].get("root"), str) \
             or not isinstance(dom := es[0].get("domain"), str):
@@ -1073,7 +1080,7 @@ def _state_tied(p: Params, audits: list[dict], reg: dict) -> bool:
         return o.get("root") == root and o.get("domain") == dom
 
     return all(map(at, es)) and any(
-        _wired(dataclasses.replace(p, audits=[a]), [r], reg) and bool(ss := _states(r)) and all(map(at, ss))
+        _wired(dataclasses.replace(p, audits=[a]), [r], reg) and bool(ss := _audit_states(r)) and all(map(at, ss))
         for a, r in zip(p.audits, audits))
 
 
@@ -1124,10 +1131,10 @@ def _tied_in(audits: list[dict], windows: list[dict], i: int) -> bool:
 
 
 def _state_held(audits: list[dict], windows: list[dict], i: int) -> bool:
-    """`stateHeldIn`: audit `i`'s registration has a state entry (`_states`), and in each link-window whose `prog` is its
-    output (`_tied_audits`) the scan's first state entry has a root and a domain, both strings, at which every one of the
-    audit's is."""
-    if i >= len(audits) or not (ss := _states(audits[i])):
+    """`stateHeldIn`: audit `i`'s registration has a state entry (`_audit_states`), and in each link-window whose `prog`
+    is its output (`_tied_audits`) the scan's first state entry has a root and a domain, both strings, at which every one
+    of the audit's is."""
+    if i >= len(audits) or not (ss := _audit_states(audits[i])):
         return False
 
     def at(reg: dict) -> bool:
@@ -1804,6 +1811,12 @@ UNWIRES = ("output", "key", "chunk", "leaves", "lane", "members", "body")
 #: scan's transitions), no state entry or one under another name, at another audit's `SCAN_STATE`, its root no string,
 #: or a second state entry at another root; the wired audit's `SCAN_STATE` absent, at another root, or beside a second
 UNSTATES = ("root", "domain", "missing", "renamed", "other", "untyped", "extra", "audit", "audit-root", "audit-extra")
+#: Where a tied audit's registration holds its `SCAN_STATE`: a `roots` entry of port `STATE`, a `registered` entry of
+#: value `SCAN_STATE`, or its window's `activations.values` entry of it, as a window circuit's registration commits its
+#: per-window values (`{"program", "values": {value: entry}}`), a second state entry then in `registered`
+STATE_PLACES = ("roots", "registered", "activations")
+#: the program a tied audit's window's `activations` names
+WINDOW_PROGRAM = "verity-vllm/window"
 #: How `rows-circuit-swapped` breaks the class circuit's hold while every tie, wiring and state holds: the aimed
 #: phase's tied audit registered under a Program of one more unit, its answer and population that Program's
 #: (`audit`), or the parameters' `circuit` another digest: of no Program, the scan's, or an untied audit's (`params`)
@@ -2334,12 +2347,17 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             stated = i == ties[first + t]["audit"]
             if not (stated and unstate == "audit"):
                 st = states[i] | ({"root": rp.randbytes(64).hex()} if stated and unstate == "audit-root" else {})
-                there = rp.choice(["roots", "registered"])
+                there = rp.choice(STATE_PLACES)
                 got = [st | ({"port": STATE} if there == "roots" else {"value": SCAN_STATE}) | {"leaves": sched.window}]
                 if stated and unstate == "audit-extra":
                     got.append(got[0] | {"root": rp.randbytes(64).hex()})
-                rec[there] = rec.get(there, []) + got
-                rp.shuffle(rec[there])
+                if there == "activations":
+                    rec["window"]["activations"] = {"program": WINDOW_PROGRAM,
+                                                    "values": {SCAN_STATE: got[0] | {"words": 1}}}
+                    there, got = "registered", got[1:]
+                if got:
+                    rec[there] = rec.get(there, []) + got
+                    rp.shuffle(rec[there])
         record = {}
         if recorded:
             _, doc, order = record_audit(bits)

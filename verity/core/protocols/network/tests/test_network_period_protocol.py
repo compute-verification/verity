@@ -184,6 +184,33 @@ def test_a_scan_whose_state_is_not_its_wired_audits_is_refused(server, monkeypat
         refused_by_lean_alone(build("rows-state-untied", n, small=True), server, PC.UNSTATED)
 
 
+def test_a_tied_audit_whose_state_is_in_its_windows_activations_alone_is_tied(server, monkeypatch):
+    """A window circuit's registration commits the scan's state rows its slots read as a per-window value, its window's
+    `activations.values` entry of `SCAN_STATE`, with no `roots` or `registered` entry of it (`PC.STATE_PLACES`): a
+    period whose every tied audit holds its state there alone passes with each audit's state held, and Lean accepts it
+    with the mirror's public; one whose aimed audit's entry there is at another root, or beside a second state entry at
+    another root, is refused, in Lean and in the mirror and by name."""
+    monkeypatch.setattr(PC, "STATE_PLACES", ("activations",))
+    for m in ("rows-honest", "rows-state-anchored"):
+        for n in range(3):
+            case = build(m, n, small=n % 2 == 0)
+            c = PC.commitment(bytes.fromhex(case["commitment"]))
+            tied = {i for reg in c.windows for i in PC._tied_audits(c.audits, reg)}
+            assert tied and all(not PC._states(c.audits[i]) and PC._audit_states(c.audits[i]) for i in tied), (m, n)
+            assert all(PC._state_held(c.audits, c.windows, i) for i in tied), (m, n)
+            out = reference(case)
+            assert out["verdict"] == ACCEPT, (m, n, out)
+            verdict, got = D.replay(PORT, case, server)
+            assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (m, n, got)
+    for u in ("audit-root", "audit-extra"):
+        monkeypatch.setattr(PC, "UNSTATES", (u,))
+        for n in range(2):
+            case = build("rows-state-untied", n, small=n % 2 == 0)
+            assert PC.UNSTATED in reference(case)["reason"], (u, n, reference(case))
+            verdict, out = D.replay(PORT, case, server)
+            assert verdict == REJECT and PC.UNSTATED in json.loads(out)["reason"], (u, n, out)
+
+
 def test_a_tied_audit_that_runs_another_circuit_is_refused(server, monkeypatch):
     """The rows form holds each phase's tied audits to the class circuit, the parameters' `circuit`: a period
     whose every tied audit is registered under it passes, and Lean accepts it with the mirror's public, whose `held`

@@ -182,7 +182,9 @@ against that salted digest is a later change to its circuit (the certifier PROTO
 * in the rows form, link-window `w`'s scan's state is the `SCAN_STATE` of an audit its `prog` is wired to
   (`stateTied`): the scan's registration has an entry of its `roots` whose port is `scan/state` or of its `registered`
   whose value is `verity/certifier/scan-state/v1`, every such entry at one root and domain, and so has a `wired`
-  audit's registration, every such entry at that root and domain; and the scan's registration states its units' reads
+  audit's registration, every such entry at that root and domain, with the entry of that value in its `window`'s
+  `activations.values`, where a window circuit's registration commits its per-window values
+  (`auditStateEntries`); and the scan's registration states its units' reads
   of that state and opens its row 0, its `window`'s
 
       "reads": {"scan/state": {"o1": {"leaf": 1, "units": [0, T − 1]}, "sin": {"leaf": 1, "units": [1, T]}}, …},
@@ -1179,6 +1181,23 @@ def stateEntries (reg : Json) : Array Json :=
   let named := fun (k n : String) (e : Json) => match e.getObjValD k with | .str x => x == n | _ => false
   (entries "roots").filter (named "port" stateName) ++ (entries "registered").filter (named "value" stateValue)
 
+/-- A compute audit's state entries: its `stateEntries` and, where its `window` commits its per-window values
+(`window.activations.values`, fixed with the record before the sample, the entries its registered reads of those values
+open against), its entry of `stateValue` when that entry's `value` is `stateValue`. A scan's state entries are its
+`stateEntries` alone. -/
+def auditStateEntries (reg : Json) : Array Json :=
+  let named := fun (k n : String) (e : Json) => match e.getObjValD k with | .str x => x == n | _ => false
+  stateEntries reg ++ #[(((reg.getObjValD "window").getObjValD "activations").getObjValD "values").getObjValD
+    stateValue].filter (named "value" stateValue)
+
+-- a registration whose window's activations hold the state: an audit's state entry, no scan's; one whose activations
+-- entry names another value: none
+#guard
+  let act := fun (v : String) => Json.mkObj [("window", Json.mkObj [("activations", Json.mkObj [("program", "c"),
+    ("values", Json.mkObj [(stateValue, Json.mkObj [("value", v), ("root", "s"), ("domain", "d")])])])])]
+  (auditStateEntries (act stateValue)).size == 1 && (stateEntries (act stateValue)).isEmpty &&
+    (auditStateEntries (act "w")).isEmpty
+
 /-- Whether `j` is the run `{"leaf": l, "units": [lo, hi]}`: units `lo` to `hi − 1`, unit `lo + i` at leaf `l + i`. Read
 field by field, which the kernel evaluates (`Json`'s `==` it doesn't). -/
 def isRun (j : Json) (lo hi l : Nat) : Bool :=
@@ -1210,8 +1229,8 @@ def stateRead (s : Schedule) (reg : Json) : Bool :=
 
 /-- The scan's state is the state its slots' Programs read, read where the scan's transitions chain it: the scan's
 registration states its state reads as the chain (`stateRead`: unit `t`'s `sin` at leaf `t`, its `o1` at leaf `t + 1`, but
-the last unit's `o1`, which no leaf holds), has a state entry (`stateEntries`), every one at one root and domain, and an audit `wired` to the scan's `prog` has one,
-every one at that root and domain. So the `SCAN_STATE` that audit's Programs read is the chain of the scan's
+the last unit's `o1`, which no leaf holds), has a state entry (`stateEntries`), every one at one root and domain, and an audit `wired` to the scan's `prog` has one
+(`auditStateEntries`), every one at that root and domain. So the `SCAN_STATE` that audit's Programs read is the chain of the scan's
 transitions, each row past row 0 the one the unit before registered. -/
 def stateTied (audits : Array Audit) (s : Schedule) (regs : Array Json) (reg : Json) : Bool :=
   let named := fun (k n : String) (e : Json) => match e.getObjValD k with | .str x => x == n | _ => false
@@ -1220,7 +1239,7 @@ def stateTied (audits : Array Audit) (s : Schedule) (regs : Array Json) (reg : J
     | .str root, .str dom =>
       let atRoot := fun (o : Json) => named "root" root o && named "domain" dom o
       (stateEntries reg).all atRoot && (audits.zip regs).any fun (a, r) =>
-        wired #[a] s #[r] reg && !(stateEntries r).isEmpty && (stateEntries r).all atRoot
+        wired #[a] s #[r] reg && !(auditStateEntries r).isEmpty && (auditStateEntries r).all atRoot
     | _, _ => false
   | none => false
 
@@ -1314,16 +1333,16 @@ def tiedOf : Form → Commitment → Nat → Bool
   | .rows .., c => tiedIn c.audits c.windows
 
 /-- Audit `i`'s `SCAN_STATE` is the scan's state in every phase tied to it: its registration has a state entry
-(`stateEntries`), and in each link-window whose scan's `prog` is its output (`tiedAudits`) the scan's first state entry
+(`auditStateEntries`), and in each link-window whose scan's `prog` is its output (`tiedAudits`) the scan's first state entry
 has a root and a domain, each a string, at which every one of the audit's is. So the root its reads of the scan's state
 are held to is the scan's registration's own in every term that charges it, never a parameter's. -/
 def stateHeldIn (audits windows : Array Json) (i : Nat) : Bool :=
   let named := fun (k n : String) (e : Json) => match e.getObjValD k with | .str x => x == n | _ => false
   match audits[i]? with
-  | some r => !(stateEntries r).isEmpty && windows.all fun reg => !(tiedAudits audits reg).contains i ||
+  | some r => !(auditStateEntries r).isEmpty && windows.all fun reg => !(tiedAudits audits reg).contains i ||
       match (stateEntries reg)[0]? with
       | some e => match e.getObjValD "root", e.getObjValD "domain" with
-        | .str root, .str dom => (stateEntries r).all fun o => named "root" root o && named "domain" dom o
+        | .str root, .str dom => (auditStateEntries r).all fun o => named "root" root o && named "domain" dom o
         | _, _ => false
       | none => false
   | none => false
@@ -1336,11 +1355,15 @@ def chargeOf (p : Params) (audits windows : Array Json) (i : Nat) : Nat :=
 
 -- an audit tied by its port `b/o1` to a phase whose scan's state is at root `s`: held with its `SCAN_STATE` there, in
 -- one phase or two, beside a phase not tied to it, and charged its `stateFree`; not with no state entry, at root `t`,
--- beside one at `t`, or tied to a second phase whose state is at `t`, and charged its `free`
+-- beside one at `t`, or tied to a second phase whose state is at `t`, and charged its `free`; held too with its
+-- `SCAN_STATE` in its window's activations alone at `s`, not there at `t` or beside a `registered` one at `t`
 #guard
   let st := fun (root : String) => Json.mkObj [("value", stateValue), ("root", root), ("domain", "d")]
   let audit := fun (states : List Json) => Json.mkObj [("registered", Json.arr states.toArray),
     ("roots", Json.arr #[Json.mkObj [("port", "b/o1"), ("root", "p"), ("domain", "q")]])]
+  let acted := fun (root : String) (states : List Json) => Json.mkObj [("registered", Json.arr states.toArray),
+    ("roots", Json.arr #[Json.mkObj [("port", "b/o1"), ("root", "p"), ("domain", "q")]]),
+    ("window", Json.mkObj [("activations", Json.mkObj [("values", Json.mkObj [(stateValue, st root)])])])]
   let window := fun (prog root : String) => Json.mkObj [("roots", Json.arr #[
     Json.mkObj [("port", progName 0), ("root", prog), ("domain", "q")],
     Json.mkObj [("port", stateName), ("root", root), ("domain", "d")]])]
@@ -1355,7 +1378,9 @@ def chargeOf (p : Params) (audits windows : Array Json) (i : Nat) : Nat :=
     !stateHeldIn #[audit []] #[window "p" "s"] 0 && !stateHeldIn #[audit [st "t"]] #[window "p" "s"] 0 &&
     !stateHeldIn #[audit [st "s", st "t"]] #[window "p" "s"] 0 &&
     !stateHeldIn #[audit [st "s"]] #[window "p" "s", window "p" "t"] 0 &&
-    chargeOf p #[audit [st "s"]] #[window "p" "s", window "p" "t"] 0 == 9 && chargeOf p #[] #[] 1 == 0
+    chargeOf p #[audit [st "s"]] #[window "p" "s", window "p" "t"] 0 == 9 && chargeOf p #[] #[] 1 == 0 &&
+    stateHeldIn #[acted "s" []] #[window "p" "s"] 0 && chargeOf p #[acted "s" []] #[window "p" "s"] 0 == 4 &&
+    !stateHeldIn #[acted "t" []] #[window "p" "s"] 0 && !stateHeldIn #[acted "s" [st "t"]] #[window "p" "s"] 0
 
 /-- The certified records of the rows form's link-window: the requests' (ingress), responses' (egress) and fails'. -/
 def records (link : String) : Array (String × Direction) :=
