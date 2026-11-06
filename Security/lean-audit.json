@@ -22064,9 +22064,10 @@
    }
   },
   "Definitions.Nci.Guarantees": {
-   "digest": "798a5203106d44d5c112ca1a6cf4c0024667ebcd294eaf9d03ca7fa0ed7d89ab",
+   "digest": "a4bee2b01d1f359a71bb75278c96a18ff6a69b7b58d22d30ff79d335b1074f70",
    "definitions": {
     "Nci.Guarantees.ReadBound": "3f8da9387ea135c793262b83645a55cd35d5137c64586c622ad27f9e34fffed1",
+    "Nci.Guarantees.Training": "ac755629ce33d179673a1e6d5a3e8956a54355cfe321073d60a7653241a75f4b",
     "Nci.Guarantees.UpdatedMatMul": "19ca98d4838f32e2aba4adae24a217a33de492bc6f19337391354c9c2c004783"
    }
   },
@@ -22277,9 +22278,11 @@
    }
   },
   "Definitions.Nci.Guarantees.Info": {
-   "digest": "1a11f8f835f92008e18f148c1bfe98c18bcccc33c150a07219c9f8b8f07b706d",
+   "digest": "0673f594d30f5a136607025c037bcaed6df344e15d8843c63ed9518abac12d55",
    "definitions": {
-    "Nci.Guarantees.InfoOfState": "abedae17ce184de3ab12da621c0c8872266d1e1a1bfa50b3685e1e869c06b000"
+    "Nci.Guarantees.InfoOfState": "abedae17ce184de3ab12da621c0c8872266d1e1a1bfa50b3685e1e869c06b000",
+    "Nci.Guarantees.ThreadedContainedInfo": "de51224a83445e288ff4d3893f4d62d8abae7196f304e6486ab08324fd9da457",
+    "Nci.Guarantees.ThreadedOfState": "4327f2ace41254899c3ab61b4ede227b1dbc8093a2d578f6ac7fd605d3d4ef4b"
    }
   },
   "Definitions.Nci.Guarantees.Layered": {

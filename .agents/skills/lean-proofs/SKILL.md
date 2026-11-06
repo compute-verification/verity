@@ -154,7 +154,9 @@ Their history is in the decisions log.
   one (its conclusion fails for a verifier that accepts everything), in the lock as a claim's `meets` and `fails`;
   failing either, it says nothing. Both build their instance (`witnesses` in `check.py`), taking
   only listed assumptions; an exclusion's nontrivial lemma is a circuit where the other premises hold and one named
-  premise and the bound fail, or, for an exclusion that takes no premise, a circuit where a tighter bound fails.
+  premise and the bound fail, or, for an exclusion with no premise, one where a tighter bound fails. `nontrivial` may
+  be a list: each lemma past the first has that exclusion form, whatever the guarantee's kind, and drops a premise no
+  earlier one drops (a `Wf` negation, when `Wf` is a premise).
 - A property's premises are assumptions about the world the function can't see; what the code can see, it checks. A
   condition picking out what the conclusion talks about goes inside the conclusion. Completeness theorems are not
   claims: they live in `Proofs/` with one concrete instance where the honest case holds.
