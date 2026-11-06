@@ -11,8 +11,8 @@ public import Proofs.Pouw.PearlC.FreezePPure
 
 The honest transcript commits `wordOf v` for each reference value `v` (`Game.honestTranscript`), and `wordOf v` reads
 back as `v` exactly when some FP32 word has the value `v` (`wordOf_spec`). This file proves that one does for every
-ticket and useful value of Pearl-C at a device record `devAt ⟨[32], w, z⟩ G pr` with `w ≥ 24`, sm_120 v1 included, on
-every row of at most `2^24 − 1` atoms (the domain's `k ≤ 2^16` gives at most `2^11`):
+ticket and useful value of Pearl-C at a device record `devAt ⟨[32], w, z⟩ G pr` of any width `w`, the H100's and
+sm_120 v1 included, on every row of at most `2^24 − 1` atoms (the domain's `k ≤ 2^16` gives at most `2^11`):
 
 - **A useful value** is `(peelExactP …).bind wordQ`: a word's value or `none`, and `none` is an infinity's.
 - **A ticket value** is the promoted chain `rn(… rn(0 + x₁) … + x_g)`, and `rn` has no exponent range, so the total is
@@ -190,15 +190,38 @@ theorem wordQ_packTerm_canon {t : Term} (hc : Canon t) (he : t.mag ≠ 0 → t.e
     simp only [Value.finite?, Option.map_some, Option.some.injEq, Term.value, hsub]
     cases t.neg <;> simp
 
-theorem fromAdder_ge {w : ℕ} (hw : 24 ≤ w) (m : ℕ) : fromAdder w m = m / 2 ^ (w - 24) := by
-  rw [fromAdder, ite_eq_left hw, Nat.shiftRight_eq_div_pow]
-
 theorem two_zpow_sub_natCast (a b : ℕ) (h : b ≤ a) : (2 : ℚ) ^ ((a : ℤ) - b) = 2 ^ (a - b) := by
   rw [← zpow_natCast, Nat.cast_sub h]
 
+/-- **`fromAdder` at any width**: a `w`-bit magnitude returned to the 24-bit grid is below `2^24`, at most the magnitude
+on the adder's grid (a truncating shift when `w > 24`, exact when `w ≤ 24`), and normal when the magnitude's top bit is
+set. -/
+theorem fromAdder_spec {w : ℕ} (m : ℕ) (hm : m < 2 ^ w) :
+    fromAdder w m < 2 ^ 24 ∧ (fromAdder w m : ℚ) * 2 ^ ((w : ℤ) - 24) ≤ m ∧
+      (0 < w → 2 ^ (w - 1) ≤ m → 2 ^ 23 ≤ fromAdder w m) := by
+  unfold fromAdder
+  split_ifs with h
+  · rw [Nat.shiftRight_eq_div_pow]
+    refine ⟨?_, ?_, fun _ hlo => ?_⟩
+    · rw [Nat.div_lt_iff_lt_mul (by positivity), ← pow_add, show 24 + (w - 24) = w by omega]
+      exact hm
+    · rw [show ((w : ℤ) - 24) = ((w - 24 : ℕ) : ℤ) by omega, zpow_natCast]
+      exact_mod_cast Nat.div_mul_le_self _ _
+    · rw [Nat.le_div_iff_mul_le (by positivity), ← pow_add]
+      exact le_trans (Nat.pow_le_pow_right (by norm_num) (by omega)) hlo
+  · rw [Nat.shiftLeft_eq]
+    refine ⟨?_, ?_, fun _ hlo => ?_⟩
+    · calc m * 2 ^ (24 - w) < 2 ^ w * 2 ^ (24 - w) := Nat.mul_lt_mul_of_pos_right hm (by positivity)
+        _ = 2 ^ 24 := by rw [← pow_add]; congr 1; omega
+    · rw [show ((w : ℤ) - 24) = -((24 - w : ℕ) : ℤ) by omega, zpow_neg, zpow_natCast]
+      push_cast
+      rw [mul_assoc, mul_inv_cancel₀ (by positivity), mul_one]
+    · calc 2 ^ 23 = 2 ^ (w - 1) * 2 ^ (24 - w) := by rw [← pow_add]; congr 1; omega
+        _ ≤ m * 2 ^ (24 - w) := Nat.mul_le_mul_right _ hlo
+
 /-- `normalize`'s last two steps on a `w`-bit magnitude `M1` at exponent `e`: below `−126` the shift to the subnormal
 grid, then the return to 24 bits. Both truncate toward zero. -/
-theorem normalize_tail {w : ℕ} (hw : 24 ≤ w) (neg : Bool) (e : ℤ) (M1 : ℕ) (hlo : 2 ^ (w - 1) ≤ M1)
+theorem normalize_tail {w : ℕ} (neg : Bool) (e : ℤ) (M1 : ℕ) (hlo : 2 ^ (w - 1) ≤ M1)
     (hhi : M1 < 2 ^ w) :
     Canon (if fromAdder w (if e < -126 then M1 >>> (-126 - e).toNat else M1) = 0 then Term.zero
       else ⟨neg, if e < -126 then -126 else e, fromAdder w (if e < -126 then M1 >>> (-126 - e).toNat else M1)⟩) ∧
@@ -217,37 +240,54 @@ theorem normalize_tail {w : ℕ} (hw : 24 ≤ w) (neg : Bool) (e : ℤ) (M1 : �
       · exact lt_of_le_of_lt (Nat.shiftRight_le _ _) hhi
     · refine ⟨M1, e, by rw [ite_eq_right hs], by rw [ite_eq_right hs], by simp, hhi, by omega, Or.inl hlo⟩
   rw [hM2, he2]
-  rw [fromAdder_ge hw]
-  set M3 := M2 / 2 ^ (w - 24) with hM3
-  have hv3 : (M3 : ℚ) * 2 ^ (w - 24) ≤ M2 := by exact_mod_cast Nat.div_mul_le_self _ _
-  have hhi3 : M3 < 2 ^ 24 := by
-    rw [hM3, Nat.div_lt_iff_lt_mul (by positivity), ← pow_add, show 24 + (w - 24) = w by omega]; exact hhi2
+  have hw : 0 < w := by
+    rcases Nat.eq_zero_or_pos w with h | h
+    · subst h
+      simp only [Nat.zero_sub, pow_zero] at hlo hhi
+      omega
+    · exact h
+  obtain ⟨hhi3, hv3, hlo3⟩ := fromAdder_spec M2 hhi2
+  set M3 := fromAdder w M2 with hM3
   by_cases h0 : M3 = 0
   · rw [ite_eq_left h0]
     exact ⟨Or.inl rfl, by simpa [Term.zero, Term.value] using hpos⟩
   rw [ite_eq_right h0]
   refine ⟨Or.inr ⟨hhi3, hcan2.1, ?_⟩, ?_⟩
   · rcases hcan2.2 with h | h
-    · left
-      rw [hM3, Nat.le_div_iff_mul_le (by positivity), ← pow_add]
-      exact le_trans (Nat.pow_le_pow_right (by norm_num) (by omega)) h
+    · exact Or.inl (hlo3 hw h)
     · exact Or.inr h
   · rw [FreezePPure.term_abs_value]
     dsimp only
-    calc (M3 : ℚ) * 2 ^ (e2 - 23) = ((M3 : ℚ) * 2 ^ (w - 24)) * 2 ^ (e2 - e) * 2 ^ (e - w + 1) := by
-          rw [← two_zpow_sub_natCast w 24 hw, mul_assoc, mul_assoc, ← zpow_add₀ two_ne_zero,
-            ← zpow_add₀ two_ne_zero]
-          congr 2; push_cast; ring
+    calc (M3 : ℚ) * 2 ^ (e2 - 23) = ((M3 : ℚ) * 2 ^ ((w : ℤ) - 24)) * 2 ^ (e2 - e) * 2 ^ (e - w + 1) := by
+          rw [mul_assoc, mul_assoc, ← zpow_add₀ two_ne_zero, ← zpow_add₀ two_ne_zero]
+          congr 2; ring
       _ ≤ (M2 : ℚ) * 2 ^ (e2 - e) * 2 ^ (e - w + 1) :=
           mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_right hv3 (two_zpow_pos _).le) (two_zpow_pos _).le
       _ ≤ M1 * 2 ^ (e - w + 1) := mul_le_mul_of_nonneg_right hv2 (two_zpow_pos _).le
 
-/-- **`normalize` truncates toward zero** at any width `w ≥ 24`, subnormals included: a `Canon` term no larger than the
-sum on its grid `2^(E − w + 1)`. -/
-theorem normalize_le {w : ℕ} (hw : 24 ≤ w) (E total : ℤ) :
+/-- At width `0`, `normalize` keeps no bit: every sum is zero. -/
+theorem normalize_width_zero (E total : ℤ) : normalize 0 E total = Term.zero := by
+  by_cases h0 : total = 0
+  · simp [normalize, h0]
+  have hn : total.natAbs ≠ 0 := by omega
+  have hbl : 0 < bitLength total.natAbs := by unfold bitLength; rw [ite_eq_right hn]; omega
+  have hs : total.natAbs >>> bitLength total.natAbs = 0 := by
+    rw [Nat.shiftRight_eq_div_pow, Nat.div_eq_of_lt]
+    unfold bitLength; rw [ite_eq_right hn]; exact Nat.lt_log2_self
+  simp [normalize, h0, hbl, hs, fromAdder]
+
+/-- **`normalize` truncates toward zero** at any width, subnormals included: a `Canon` term no larger than the sum on its
+grid `2^(E − w + 1)`. -/
+theorem normalize_le {w : ℕ} (E total : ℤ) :
     Canon (normalize w E total) ∧ |(normalize w E total).value| ≤ |(total : ℚ)| * 2 ^ (E - w + 1) := by
   by_cases h0 : total = 0
   · subst h0; simp [normalize, Canon, Term.zero, Term.value]
+  rcases Nat.eq_zero_or_pos w with hw | hw
+  · subst hw
+    rw [normalize_width_zero]
+    have hpos : (0 : ℚ) ≤ |(total : ℚ)| * 2 ^ (E - ((0 : ℕ) : ℤ) + 1) :=
+      mul_nonneg (abs_nonneg _) (two_zpow_pos _).le
+    exact ⟨Or.inl rfl, by simpa [Term.zero, Term.value] using hpos⟩
   have hTq : |(total : ℚ)| = (total.natAbs : ℚ) := by rw [Nat.cast_natAbs, Int.cast_abs]
   have hn : total.natAbs ≠ 0 := by omega
   have hbl : bitLength total.natAbs = total.natAbs.log2 + 1 := by unfold bitLength; rw [ite_eq_right hn]
@@ -285,20 +325,20 @@ theorem normalize_le {w : ℕ} (hw : 24 ≤ w) (E total : ℤ) :
       push_cast
       rw [mul_assoc, mul_inv_cancel₀ (by positivity), mul_one]
   generalize (if w < L + 1 then T >>> (L + 1 - w) else T <<< (w - (L + 1))) = M1 at hlo hhi hv1 ⊢
-  have key := normalize_tail hw (decide (total < 0)) (E + ((L + 1 : ℕ) : ℤ) - w) M1 hlo hhi
+  have key := normalize_tail (decide (total < 0)) (E + ((L + 1 : ℕ) : ℤ) - w) M1 hlo hhi
   refine ⟨key.1, key.2.trans ?_⟩
   calc (M1 : ℚ) * 2 ^ (E + ((L + 1 : ℕ) : ℤ) - w - w + 1) =
         (M1 : ℚ) * 2 ^ (((L + 1 : ℕ) : ℤ) - w) * 2 ^ (E - w + 1) := by
         rw [mul_assoc, ← zpow_add₀ two_ne_zero]; congr 2; ring
     _ ≤ T * 2 ^ (E - w + 1) := mul_le_mul_of_nonneg_right hv1 (two_zpow_pos _).le
 
-/-- **A group sum is no larger than the sum of its terms' magnitudes**, at any width `w ≥ 24`: each term truncated
+/-- **A group sum is no larger than the sum of its terms' magnitudes**, at any width: each term truncated
 toward zero to the group's grid, then the sum truncated toward zero by `normalize`. -/
-theorem groupSum_le {w : ℕ} (hw : 24 ≤ w) (z : ℤ) (ts : List Term) :
+theorem groupSum_le {w : ℕ} (z : ℤ) (ts : List Term) :
     Canon (groupSum w z ts) ∧ |(groupSum w z ts).value| ≤ (ts.map fun t => |t.value|).sum := by
   unfold groupSum
   set E := maxExp z ts
-  obtain ⟨hc, hv⟩ := normalize_le hw E (alignedSum w E ts)
+  obtain ⟨hc, hv⟩ := normalize_le E (alignedSum w E ts)
   refine ⟨hc, hv.trans ?_⟩
   have hE : ∀ t ∈ ts, t.mag ≠ 0 → t.exp ≤ E := le_maxExp z ts
   clear_value E
@@ -339,9 +379,9 @@ theorem groupStepTotal_fin_inv {w : ℕ} {z : ℤ} {acc : Value} {ps : List Valu
     · exact ⟨t', rfl⟩
   exact ⟨(Value.fin.inj h).symm, hv⟩
 
-/-- **One step adds at most `32·448²`**: at a pipeline `⟨[32], w, z⟩` with `w ≥ 24`, a finite word out of the step has
+/-- **One step adds at most `32·448²`**: at a pipeline `⟨[32], w, z⟩` of any width, a finite word out of the step has
 a finite accumulator in, and its magnitude exceeds the accumulator's by at most `32·448² < 2^23`. -/
-theorem step_abs_le {w : ℕ} (hw : 24 ≤ w) (z : ℤ) {acc : ℕ} (a b : List Code) {y : ℚ}
+theorem step_abs_le {w : ℕ} (z : ℤ) {acc : ℕ} (a b : List Code) {y : ℚ}
     (h : wordQ ((⟨[32], w, z⟩ : Pipeline).step acc a b) = some y) :
     ∃ x, wordQ acc = some x ∧ |y| ≤ |x| + 32 * 448 ^ 2 := by
   have hs : (⟨[32], w, z⟩ : Pipeline).step acc a b =
@@ -354,7 +394,7 @@ theorem step_abs_le {w : ℕ} (hw : 24 ≤ w) (z : ℤ) {acc : ℕ} (a b : List 
   obtain ⟨ht, hfin⟩ := groupStepTotal_fin_inv hv
   obtain ⟨tc, htc⟩ := hfin _ List.mem_cons_self
   refine ⟨tc.value, by simp [wordQ, htc, Value.finite?], ?_⟩
-  obtain ⟨hcan, habs⟩ := groupSum_le hw z ((fp32Value acc :: _).filterMap Value.finite?)
+  obtain ⟨hcan, habs⟩ := groupSum_le z ((fp32Value acc :: _).filterMap Value.finite?)
   rw [← ht] at hcan habs
   have hy : wordQ (packValue (.fin t)) = some t.value := by
     show wordQ (packTerm t) = _
@@ -399,7 +439,7 @@ theorem step_abs_le {w : ℕ} (hw : 24 ≤ w) (z : ℤ) {acc : ℕ} (a b : List 
 
 /-! ## The promoted chain -/
 
-theorem foldl_step_abs_le {w : ℕ} (hw : 24 ≤ w) (z : ℤ) (g : List AtomIn) :
+theorem foldl_step_abs_le {w : ℕ} (z : ℤ) (g : List AtomIn) :
     ∀ (acc : ℕ) {y : ℚ},
       wordQ (g.foldl (fun v x => (⟨[32], w, z⟩ : Pipeline).step v (List.ofFn x.1) (List.ofFn x.2)) acc) = some y →
         ∃ x, wordQ acc = some x ∧ |y| ≤ |x| + g.length * 2 ^ 23 := by
@@ -409,22 +449,22 @@ theorem foldl_step_abs_le {w : ℕ} (hw : 24 ≤ w) (z : ℤ) (g : List AtomIn) 
     intro acc y h
     rw [List.foldl_cons] at h
     obtain ⟨x', hx', hy⟩ := ih _ h
-    obtain ⟨x, hx, hxy⟩ := step_abs_le hw z _ _ hx'
+    obtain ⟨x, hx, hxy⟩ := step_abs_le z _ _ hx'
     refine ⟨x, hx, ?_⟩
     simp only [List.length_cons]
     push_cast
     linarith
 
 /-- **A group's word is at most `2^23` per atom.** -/
-theorem groupWord_abs_le {w : ℕ} (hw : 24 ≤ w) (z : ℤ) (g : List AtomIn) {y : ℚ}
+theorem groupWord_abs_le {w : ℕ} (z : ℤ) (g : List AtomIn) {y : ℚ}
     (h : wordQ (groupWordP ⟨[32], w, z⟩ g) = some y) : |y| ≤ g.length * 2 ^ 23 := by
-  obtain ⟨x, hx, hy⟩ := foldl_step_abs_le hw z g 0 h
+  obtain ⟨x, hx, hy⟩ := foldl_step_abs_le z g 0 h
   rw [Freeze.wordQ_zero, Option.some.injEq] at hx
   subst hx
   simpa using hy
 
 /-- The promotions keep the total on the grid, with a 24-bit significand, at most `2^23` per atom promoted so far. -/
-theorem foldl_promote_bound {w : ℕ} (hw : 24 ≤ w) (z : ℤ) (gs : List (List AtomIn)) :
+theorem foldl_promote_bound {w : ℕ} (z : ℤ) (gs : List (List AtomIn)) :
     ∀ (t : ℚ) (A : ℕ), OnGrid t → Representable t → |t| ≤ A * 2 ^ 23 → A + (gs.map List.length).sum < 2 ^ 24 →
       ∀ q, (gs.map (groupWordP ⟨[32], w, z⟩)).foldl promote (some t) = some q →
         OnGrid q ∧ Representable q ∧ |q| ≤ ((A + (gs.map List.length).sum : ℕ) : ℚ) * 2 ^ 23 := by
@@ -444,7 +484,7 @@ theorem foldl_promote_bound {w : ℕ} (hw : 24 ≤ w) (z : ℤ) (gs : List (List
       exact absurd h (by simp)
     have hp : promote (some t) (groupWordP ⟨[32], w, z⟩ g) = some (rnAdd t x) := by simp [promote, hx]
     rw [hp] at h
-    have hxb := groupWord_abs_le hw z g hx
+    have hxb := groupWord_abs_le z g hx
     have hs : |t + x| ≤ ((A + g.length : ℕ) : ℚ) * 2 ^ 23 := by
       push_cast
       linarith [abs_add_le t x]
@@ -477,13 +517,13 @@ theorem toChunks_length_sum {α : Type} (G : ℕ) (l : List α) : ((l.toChunks G
 theorem exists_wordQ_none : ∃ wd, wordQ wd = none := ⟨_, wordQ_packValue_inf false⟩
 
 /-- **The promoted chain's value is an FP32 word's** (or `none`, an infinity's), on a row of fewer than `2^24` atoms at
-a step `⟨[32], w, z⟩` with `w ≥ 24`: its magnitude is at most `2^23` per atom. -/
-theorem chainP_word {w : ℕ} (hw : 24 ≤ w) (z : ℤ) (G : ℕ) (atoms : List AtomIn) (hk : atoms.length < 2 ^ 24) :
+a step `⟨[32], w, z⟩` of any width: its magnitude is at most `2^23` per atom. -/
+theorem chainP_word {w : ℕ} (z : ℤ) (G : ℕ) (atoms : List AtomIn) (hk : atoms.length < 2 ^ 24) :
     ∃ wd, wordQ wd = chainP ⟨[32], w, z⟩ G atoms := by
   rcases h : chainP ⟨[32], w, z⟩ G atoms with _ | q
   · exact exists_wordQ_none
   have hr0 : Representable 0 := ⟨0, 0, by norm_num, by simp⟩
-  obtain ⟨hg, hr, hq⟩ := foldl_promote_bound hw z (atoms.toChunks G) 0 0 onGrid_zero hr0 (by simp)
+  obtain ⟨hg, hr, hq⟩ := foldl_promote_bound z (atoms.toChunks G) 0 0 onGrid_zero hr0 (by simp)
     (by rw [toChunks_length_sum]; omega) q h
   rw [toChunks_length_sum, zero_add] at hq
   refine exists_wordQ hg hr (lt_of_le_of_lt hq ?_)
@@ -491,10 +531,10 @@ theorem chainP_word {w : ℕ} (hw : 24 ≤ w) (z : ℤ) (G : ℕ) (atoms : List 
   calc (atoms.length : ℚ) * 2 ^ 23 < 2 ^ 24 * 2 ^ 23 := mul_lt_mul_of_pos_right h24 (by norm_num)
     _ ≤ 2 ^ 128 := by norm_num
 
-theorem chainAt_word {w : ℕ} (hw : 24 ≤ w) (z : ℤ) (G : ℕ) {m n k : ℕ} (hk : k / 32 < 2 ^ 24)
+theorem chainAt_word {w : ℕ} (z : ℤ) (G : ℕ) {m n k : ℕ} (hk : k / 32 < 2 ^ 24)
     (A : Matrix (Fin m) (Fin k) Code) (B : Matrix (Fin n) (Fin k) Code) (i : Fin m) (j : Fin n) :
     ∃ wd, wordQ wd = chainAt ⟨[32], w, z⟩ G A B i j :=
-  chainP_word hw z G _ (by unfold rowAtoms; rw [List.length_ofFn]; exact hk)
+  chainP_word z G _ (by unfold rowAtoms; rw [List.length_ofFn]; exact hk)
 
 theorem bind_wordQ_word (x : Option ℕ) : ∃ wd, wordQ wd = x.bind wordQ := by
   rcases x with _ | v
@@ -513,10 +553,10 @@ theorem unitUsefulDev_word {Q R S : Type} (p : Pipeline) (G : ℕ) (pr : Prices)
     ∃ wd, wordQ wd = sem.unitUsefulDev (devAt p G pr) H s U u act i j :=
   bind_wordQ_word _
 
-/-- **The honest words at a device record on a step `⟨[32], w, z⟩` with `w ≥ 24`**, under rev1 with the honest kernel's
+/-- **The honest words at a device record on a step `⟨[32], w, z⟩` of any width**, under rev1 with the honest kernel's
 `W_ref`: every ticket and useful value of a unit of `k/32 < 2^24` atoms per row is an FP32 word's, or `none`, an
 infinity's, whatever the noise, the activations and the weights. -/
-theorem honestWords_devRev1K {Q R S : Type} {w : ℕ} (hw : 24 ≤ w) (z : ℤ) (G : ℕ) (pr : Prices)
+theorem honestWords_devRev1K {Q R S : Type} {w : ℕ} (z : ℤ) (G : ℕ) (pr : Prices)
     (sem : PearlCSem Q R S) (ρ c : ℚ) (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes)
     (hk : (U.layout.shape u).k / 32 < 2 ^ 24) (i j : ℕ) :
     (∃ wd, wordQ wd = (pearlCProtocolDevRev1K (devAt ⟨[32], w, z⟩ G pr) sem ρ c).ticket H s U u act i j) ∧
@@ -524,7 +564,7 @@ theorem honestWords_devRev1K {Q R S : Type} {w : ℕ} (hw : 24 ≤ w) (z : ℤ) 
 by
   refine ⟨?_, ?_⟩
   · exact atNat_word (chainAt ⟨[32], w, z⟩ G (sem.unitChain H s U u act).1 (sem.unitChain H s U u act).2)
-      (fun _ _ => chainAt_word hw z G hk _ _ _ _) i j
+      (fun _ _ => chainAt_word z G hk _ _ _ _) i j
   · exact atNat_word (sem.unitUsefulDev (devAt ⟨[32], w, z⟩ G pr) H s U u act)
       (fun _ _ => unitUsefulDev_word _ _ _ _ _ _ _ _ _ _ _) i j
 

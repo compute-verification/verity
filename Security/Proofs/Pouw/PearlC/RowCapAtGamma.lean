@@ -3,6 +3,7 @@ module
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeedK
 public import Proofs.Pouw.PearlC.RowSeedCode
 public import Proofs.Pouw.PearlC.DeviceGamma
+public import Proofs.Pouw.PearlC.TileGammaTol
 
 /-!
 # Per-row seeds at a census k: the tile cap `ρ` and a wider row cap `ρr` (compute accounting's file)
@@ -21,6 +22,9 @@ TT_OUT per tile at `ρr`, through (C2) at `ρr`:
   `TTOutTilePearlCH100Rev1` at 1/100, C1 and C3 (`pearlCSampledH100v1RowSeedRowCap100_6144x256`), and its code form
   (`-h3`) with C1-h3 and C5 (`pearlCSampledH100v1RowSeedCodeRowCap100_6144x256`): `ω = 25210/25137` and
   `γ = 32437/2521000` (1.28667%), with the error at the `m·N` rows. C0 is `devAt_rowLocal`, by `rfl`.
+* **The tolerant audit** (`…Tol`, `GγSampledTol`): the same γ from the same premises when the audit accepts a sampled tile
+  over its cap and credits it nothing. The strict forms are its case `u 0 = ε_s`, `u x = 1` otherwise
+  (`gammaSampled_of_tol`).
 -/
 
 @[expose] public section
@@ -115,15 +119,16 @@ section Gamma
 
 variable {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
 
-/-- **The row-seeded TT_OUT per audit tile at both caps gives `GγSampled` at any per-shape `W_ref`** `W`: rev1's tiles
-with the tile cap `ρ`, the row cap `ρr` and `W_ref` and the credited rows' `W_ref` at `W`, on the one-shape domain at
-`γ = 1 − (1 − γ₀)/ω`, where `W s = ω·(1 − ρ)·creditDevRev1 ≥ 0`, with the error at the row count (`gammaSampled`). -/
-theorem pearlCSampledDevRev1RowCapAtW (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρr : ℚ)
+/-- **The row-seeded TT_OUT per audit tile at both caps gives `GγSampledTol` at any per-shape `W_ref`** `W`: rev1's
+tiles with the tile cap `ρ`, the row cap `ρr` and `W_ref` and the credited rows' `W_ref` at `W`, on the one-shape domain
+at `γ = 1 − (1 − γ₀)/ω`, where `W s = ω·(1 − ρ)·creditDevRev1 ≥ 0`, with the error at the row count
+(`gammaSampledTol`). -/
+theorem pearlCSampledDevRev1RowCapAtWTol (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρr : ℚ)
     (W : Shape → ℚ) (s : Shape) (ω : ℚ) (γ₀ γ : ℝ) (hγ₀ : γ₀ < 1) (hω0 : 0 < ω) (hw0 : 0 ≤ W s)
     (hω : W s = ω * ((1 - ρ) * creditDevRev1 d s)) (hγ : γ = 1 - (1 - γ₀) / (ω : ℝ))
     (hTT : TTOutTileRowSeed CM (pearlCProtocolDevRev1RowCapAt d sem ρ ρr) (pearlCTilesDevRev1RowCapAt d sem ρ ρr)
       (pearlCDomainDev d) γ₀) :
-    GγSampled CM { pearlCProtocolDevRev1RowCapAt d sem ρ ρr with Wref := fun L u => (W (L.shape u) : ℝ) }
+    GγSampledTol CM { pearlCProtocolDevRev1RowCapAt d sem ρ ρr with Wref := fun L u => (W (L.shape u) : ℝ) }
       { pearlCTilesDevRev1RowCapAt d sem ρ ρr with
         Wref := fun L g =>
           let tl := auditTiling 64 64 L
@@ -135,7 +140,7 @@ theorem pearlCSampledDevRev1RowCapAtW (CM : CostModel Q R S) (d : PearlCDevice) 
           ((W sh * tileShare sh (sem.passRows sh act (tl.rows g)) (tl.cols g) : ℚ) : ℝ) }
       (fun L => pearlCDomainDevAt d s L ∧ rowsOf L ≤ 2 ^ 64) γ (fun q N => εPearlC q (N * s.m)) := by
   rw [hγ]
-  refine gammaSampled CM _ _ _ γ₀ (ω : ℝ) _ hγ₀ (by exact_mod_cast hω0) ?_ ?_
+  refine gammaSampledTol CM _ _ _ γ₀ (ω : ℝ) _ hγ₀ (by exact_mod_cast hω0) ?_ ?_
     (ttOutTile_of_ttOutTileRowSeed (ttOutTileRowSeed_wref (fun L u => (W (L.shape u) : ℝ))
       (fun L g =>
         let tl := auditTiling 64 64 L
@@ -159,20 +164,39 @@ theorem pearlCSampledDevRev1RowCapAtW (CM : CostModel Q R S) (d : PearlCDevice) 
     rw [hsh]
     exact_mod_cast mul_le_mul_of_nonneg_left (tileShare_mono _ (passRows_subset sem _ _ _) _) hw0
 
-/-- `pearlCSampledDevRev1RowCapAtW` from the row-seeded TT_OUT per tile at (C2) with the row cap `ρr` and `γ₀ = 1/400`
-(`ttOutTileRowSeed_rowCapAt`), at rev1's `W_ref`: `γ = 1 − (399/400)·(1 − ρr)/((1 − ρ)·ω)`, where
+/-- `pearlCSampledDevRev1RowCapAtWTol` under the audit that accepts only checked tiles (`gammaSampled_of_tol`). -/
+theorem pearlCSampledDevRev1RowCapAtW (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρr : ℚ)
+    (W : Shape → ℚ) (s : Shape) (ω : ℚ) (γ₀ γ : ℝ) (hγ₀ : γ₀ < 1) (hω0 : 0 < ω) (hw0 : 0 ≤ W s)
+    (hω : W s = ω * ((1 - ρ) * creditDevRev1 d s)) (hγ : γ = 1 - (1 - γ₀) / (ω : ℝ))
+    (hTT : TTOutTileRowSeed CM (pearlCProtocolDevRev1RowCapAt d sem ρ ρr) (pearlCTilesDevRev1RowCapAt d sem ρ ρr)
+      (pearlCDomainDev d) γ₀) :
+    GγSampled CM { pearlCProtocolDevRev1RowCapAt d sem ρ ρr with Wref := fun L u => (W (L.shape u) : ℝ) }
+      { pearlCTilesDevRev1RowCapAt d sem ρ ρr with
+        Wref := fun L g =>
+          let tl := auditTiling 64 64 L
+          let sh := L.shape (tl.unit g)
+          ((W sh * tileShare sh (tl.rows g) (tl.cols g) : ℚ) : ℝ)
+        Wcred := fun L g act =>
+          let tl := auditTiling 64 64 L
+          let sh := L.shape (tl.unit g)
+          ((W sh * tileShare sh (sem.passRows sh act (tl.rows g)) (tl.cols g) : ℚ) : ℝ) }
+      (fun L => pearlCDomainDevAt d s L ∧ rowsOf L ≤ 2 ^ 64) γ (fun q N => εPearlC q (N * s.m)) :=
+  gammaSampled_of_tol (pearlCSampledDevRev1RowCapAtWTol CM d sem ρ ρr W s ω γ₀ γ hγ₀ hω0 hw0 hω hγ hTT)
+
+/-- `pearlCSampledDevRev1RowCapAtWTol` from the row-seeded TT_OUT per tile at (C2) with the row cap `ρr` and
+`γ₀ = 1/400` (`ttOutTileRowSeed_rowCapAt`), at rev1's `W_ref`: `γ = 1 − (399/400)·(1 − ρr)/((1 − ρ)·ω)`, where
 `wrefDevRev1 = ω·(1 − ρ)·creditDevRev1 ≥ 0`. -/
-theorem pearlCSampledDevRev1RowCapAt (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρr : ℚ)
+theorem pearlCSampledDevRev1RowCapAtTol (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρr : ℚ)
     (s : Shape) (ω γ : ℚ) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16) (hρ : ρ < 1) (hρr : ρr < 1)
     (hω0 : 0 < ω) (hw0 : 0 ≤ wrefDevRev1 d s) (hω : wrefDevRev1 d s = ω * ((1 - ρ) * creditDevRev1 d s))
     (hγ : γ = 1 - (1 - 1 / 400) * (1 - ρr) / ((1 - ρ) * ω))
     (hTT : TTOutTileRowSeed CM (pearlCProtocolDevRev1RowCap d sem ρr) (pearlCTilesDevRev1RowCap d sem ρr)
       (pearlCDomainDev d) (1 / 400)) :
-    GγSampled CM (pearlCProtocolDevRev1RowCapAt d sem ρ ρr) (pearlCTilesDevRev1RowCapAt d sem ρ ρr)
+    GγSampledTol CM (pearlCProtocolDevRev1RowCapAt d sem ρ ρr) (pearlCTilesDevRev1RowCapAt d sem ρ ρr)
       (fun L => pearlCDomainDevAt d s L ∧ rowsOf L ≤ 2 ^ 64) (γ : ℝ) (fun q N => εPearlC q (N * s.m)) := by
   have hr : (0 : ℚ) < 1 - ρ := by linarith
   have hr' : (0 : ℚ) < 1 - ρr := by linarith
-  refine pearlCSampledDevRev1RowCapAtW CM d sem ρ ρr (wrefDevRev1 d) s ω _ (γ : ℝ) ?_ hω0 hw0 hω ?_
+  refine pearlCSampledDevRev1RowCapAtWTol CM d sem ρ ρr (wrefDevRev1 d) s ω _ (γ : ℝ) ?_ hω0 hw0 hω ?_
     (ttOutTileRowSeed_rowCapAt hadd hbf hρ hρr hTT)
   · have : (0 : ℝ) < (1 - 1 / 400) * (((1 - ρr) / (1 - ρ) : ℚ) : ℝ) :=
       mul_pos (by norm_num) (by exact_mod_cast div_pos hr' hr)
@@ -183,6 +207,18 @@ theorem pearlCSampledDevRev1RowCapAt (CM : CostModel Q R S) (d : PearlCDevice) (
     push_cast at h1 h3 ⊢
     field_simp
     ring
+
+/-- `pearlCSampledDevRev1RowCapAtTol` under the audit that accepts only checked tiles (`gammaSampled_of_tol`). -/
+theorem pearlCSampledDevRev1RowCapAt (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρr : ℚ)
+    (s : Shape) (ω γ : ℚ) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16) (hρ : ρ < 1) (hρr : ρr < 1)
+    (hω0 : 0 < ω) (hw0 : 0 ≤ wrefDevRev1 d s) (hω : wrefDevRev1 d s = ω * ((1 - ρ) * creditDevRev1 d s))
+    (hγ : γ = 1 - (1 - 1 / 400) * (1 - ρr) / ((1 - ρ) * ω))
+    (hTT : TTOutTileRowSeed CM (pearlCProtocolDevRev1RowCap d sem ρr) (pearlCTilesDevRev1RowCap d sem ρr)
+      (pearlCDomainDev d) (1 / 400)) :
+    GγSampled CM (pearlCProtocolDevRev1RowCapAt d sem ρ ρr) (pearlCTilesDevRev1RowCapAt d sem ρ ρr)
+      (fun L => pearlCDomainDevAt d s L ∧ rowsOf L ≤ 2 ^ 64) (γ : ℝ) (fun q N => εPearlC q (N * s.m)) :=
+  gammaSampled_of_tol
+    (pearlCSampledDevRev1RowCapAtTol CM d sem ρ ρr s ω γ hadd hbf hρ hρr hω0 hw0 hω hγ hTT)
 
 /-- As `pearlCSampledDevRev1RowCapAt`, against the honest kernel's `W_ref`, where
 `wrefDevRev1K d c = ω·(1 − ρ)·creditDevRev1 ≥ 0`. -/
@@ -248,9 +284,26 @@ theorem pearlCSampledH100v1RowSeedRowCap100_6144x256 (m : ℕ)
     (by norm_num)
     (ttOutTileRowSeed_of_ttOutTile hTT hN hCM devH100_rowLocal (by norm_num) devH100_add devH100_bf16)
 
+/-- **The code-form seed (`-h3`) of `pearlCSampledH100v1RowSeedRowCap100_6144x256` under the tolerant audit**, the
+served record `pearl-c-h100-v1-h3` at a census k, adding C1-h3 and C5: `γ = 32437/2521000` (1.28667%), with the error
+at the `m·N` rows, for every miss-bound table. -/
+theorem pearlCSampledH100v1RowSeedCodeRowCap100_6144x256Tol {π : Layout → Q ≃ Q} (m : ℕ)
+    (hTT : TTOutTilePearlCH100Rev1 CM sem (1 / 100)) (hN : RowSeedNoise sem sem') (hC : CodeSeedNoise sem' semC π)
+    (hCM : CM.SplitClosed) (hCM' : CM.RelabelClosed) :
+    GγSampledTol CM (pearlCProtocolDevRev1RowCapAt devH100 semC (1 / 400) (1 / 100))
+      (pearlCTilesDevRev1RowCapAt devH100 semC (1 / 400) (1 / 100))
+      (fun L => pearlCDomainDevAt devH100 ⟨m, 6144, 256⟩ L ∧ rowsOf L ≤ 2 ^ 64)
+      ((32437 / 2521000 : ℚ) : ℝ) (fun q N => εPearlC q (N * m)) :=
+  pearlCSampledDevRev1RowCapAtTol CM devH100 semC (1 / 400) (1 / 100) ⟨m, 6144, 256⟩ (25210 / 25137) _ devH100_add
+    devH100_bf16 (by norm_num) (by norm_num) (by norm_num)
+    (by rw [wrefDevRev1_h100_n6144k256]; positivity)
+    (by rw [wrefDevRev1_h100_n6144k256, creditDevRev1_h100_n6144k256]; ring)
+    (by norm_num)
+    (ttOutTileRowSeedCode_of_ttOutTile hTT hN hC hCM hCM' devH100_rowLocal (by norm_num) devH100_add devH100_bf16)
+
 /-- **The code-form seed (`-h3`) of `pearlCSampledH100v1RowSeedRowCap100_6144x256`**, the served record
 `pearl-c-h100-v1-h3` at a census k, adding C1-h3 and C5: `γ = 32437/2521000` (1.28667%), with the error at the `m·N`
-rows. -/
+rows (`pearlCSampledH100v1RowSeedCodeRowCap100_6144x256Tol` under the audit that accepts only checked tiles). -/
 theorem pearlCSampledH100v1RowSeedCodeRowCap100_6144x256 {π : Layout → Q ≃ Q} (m : ℕ)
     (hTT : TTOutTilePearlCH100Rev1 CM sem (1 / 100)) (hN : RowSeedNoise sem sem') (hC : CodeSeedNoise sem' semC π)
     (hCM : CM.SplitClosed) (hCM' : CM.RelabelClosed) :
@@ -258,12 +311,7 @@ theorem pearlCSampledH100v1RowSeedCodeRowCap100_6144x256 {π : Layout → Q ≃ 
       (pearlCTilesDevRev1RowCapAt devH100 semC (1 / 400) (1 / 100))
       (fun L => pearlCDomainDevAt devH100 ⟨m, 6144, 256⟩ L ∧ rowsOf L ≤ 2 ^ 64)
       ((32437 / 2521000 : ℚ) : ℝ) (fun q N => εPearlC q (N * m)) :=
-  pearlCSampledDevRev1RowCapAt CM devH100 semC (1 / 400) (1 / 100) ⟨m, 6144, 256⟩ (25210 / 25137) _ devH100_add
-    devH100_bf16 (by norm_num) (by norm_num) (by norm_num)
-    (by rw [wrefDevRev1_h100_n6144k256]; positivity)
-    (by rw [wrefDevRev1_h100_n6144k256, creditDevRev1_h100_n6144k256]; ring)
-    (by norm_num)
-    (ttOutTileRowSeedCode_of_ttOutTile hTT hN hC hCM hCM' devH100_rowLocal (by norm_num) devH100_add devH100_bf16)
+  gammaSampled_of_tol (pearlCSampledH100v1RowSeedCodeRowCap100_6144x256Tol CM m hTT hN hC hCM hCM')
 
 end Gamma
 
