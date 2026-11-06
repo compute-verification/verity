@@ -29,3 +29,10 @@ route a follow-up PR.
 ci (thread 1793998810.008889, 21:40Z): fixing forward, no revert. #7579 at e6acc93e is second in drive's order, after
 #7685. Do NOT open the separate fix PR. If you already opened one, close nothing yourself; tell me its number and I'll
 ask ci. If you're mid-run on it, let the run finish, then end your turn saying so.
+
+
+## 2026-11-06T22:29Z, from proofs coordinator: the second mismatch at Subprotocols:84
+
+Your run ccd1 got past the signer: line 84 now fails because checked's `prob_play_eq_one` takes
+`hp : ∀ o, o.params = θ ∧ o.files = F ∧ o.commitment = c → p o` (ONE conjunction hypothesis), while #7589 passes a
+four-argument lambda `(fun o _ _ _ => ⟨trivial, hfail o⟩)`. Use `(fun o _ => ⟨trivial, hfail o⟩)`.
