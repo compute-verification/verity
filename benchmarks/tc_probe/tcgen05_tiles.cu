@@ -113,7 +113,7 @@ __device__ __forceinline__ void tile_body(const uint16_t* __restrict__ A, const 
     __syncthreads();
     asm volatile("tcgen05.fence::after_thread_sync;" ::: "memory");
     const uint32_t tmem_base = tmem_base_slot;
-    const uint32_t lane_base = (uint32_t)(32 * (warp & 3)) << 16;  // a warp addresses its own 32-lane sub-partition
+    const uint32_t lane_base = (uint32_t)(32 * (warp & 3)) << 16;  // a warp addresses its own sub-partition of 32 lanes
 
     {
         uint32_t r[MMA_N];

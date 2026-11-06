@@ -200,14 +200,14 @@ def _div_full_divisor(b: int) -> int:
 @primitive("MufuEx2Ftz", 1, [("x", F32)], F32, conformance="exact-model-tested",
            tables=(("ex2", library.LIBRARY),))
 def MufuEx2Ftz(x: int) -> int:
-    """`ex2.approx.ftz.f32` (MUFU.EX2), measured table + reduction rule (attention-model.md §3.1)."""
+    """`ex2.approx.ftz.f32` (MUFU.EX2), measured table + reduction rule."""
     return mufu_ex2_bits(x, _row("ex2"))
 
 
 @primitive("MufuRcpFtz", 1, [("x", F32)], F32, conformance="exact-model-tested",
            tables=(("rcp", library.LIBRARY),))
 def MufuRcpFtz(x: int) -> int:
-    """`rcp.approx.ftz.f32` (MUFU.RCP), measured 2^23 mantissa table (attention-model.md §3.1)."""
+    """`rcp.approx.ftz.f32` (MUFU.RCP), measured 2^23 mantissa table."""
     return mufu_rcp_bits(x, _row("rcp"))
 
 
@@ -223,7 +223,7 @@ def Fa2InvSum(s: int) -> int:
 @primitive("MufuSqrtFtz", 1, [("x", F32)], F32, conformance="exact-model-tested",
            tables=(("sqrt", library.LIBRARY),))
 def MufuSqrtFtz(x: int) -> int:
-    """`sqrt.approx.ftz.f32` (MUFU.SQRT) as the Triton RMSNorm kernel uses it (rmsnorm-model.md)."""
+    """`sqrt.approx.ftz.f32` (MUFU.SQRT) as the Triton RMSNorm kernel uses it."""
     return mufu_sqrt_bits(x, _row("sqrt"))
 
 
