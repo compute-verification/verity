@@ -23,9 +23,9 @@ or the repository's own (`REPO_AUDIT`, read after the store's files) holds that 
 otherwise.
 
 A twin lifted to a guarantee is pinned as `Pouw.SecurityProofs.PearlC.G : Pouw.Guarantees.PearlC.G`, whose signature
-states no γ. Its statement is the body of the definition `G`, read from the Lean source of the module that the audit's
-`reads` records it in, and checked as a signature is. A lifted twin whose `G` the audit doesn't record, or whose body
-states no literal γ, fails the table (`TwinError`).
+states no γ. Its statement is the body of the definition `G`, read from the Lean source of `Pouw/Guarantees/` in the
+audit's definitions tree (`trees`), and checked as a signature is. A lifted twin whose `G` that source doesn't define,
+or whose body states no literal γ, fails the table (`TwinError`).
 
   python price_twins.py STORE_ROOT [--out price_twins.json]   regenerate the table from the POUS Project store's pins
   python price_twins.py --repository-only                     re-read only the repository's pins, keeping the store's rows
@@ -101,23 +101,26 @@ def _q(num: str, den: str | None) -> Fraction:
 
 
 def lifted_definitions(audit: dict, lean: Path) -> dict[str, str]:
-    """The body of each `Pouw.Guarantees` definition that the audit's `reads` record, from its module's source under `lean`,
-    with whitespace collapsed: `def G : Prop :=` and the indented lines after it, in `namespace` G's prefix, or
-    `def _root_.G : Prop :=` in any namespace (how `tools/verity/lean/check.py --lift` writes it)."""
+    """The body of each `Pouw.Guarantees` definition a guarantee of the audit is lifted to (`X : G`, its signature), from
+    the Lean source under `lean` of `Pouw/Guarantees/` in the audit's definitions tree (`trees`' `definitions` roots;
+    `tools/verity/lean/check.py --lift` writes a lifted statement into a module under `Guarantees`), with whitespace
+    collapsed: `def G : Prop :=` and the indented lines after it, in `namespace` G's prefix, or `def _root_.G : Prop :=`
+    in any namespace (how `--lift` writes it). The audit's `reads` aren't read: a merged lock's are a candidate until the
+    Lean check regenerates them (`tools/verity/lean/merge.py`)."""
+    names = {m[2] for name, pin in guarantees(audit).items()
+             if (m := _LIFTED.fullmatch(" ".join(" ".join(pin["signature"]).split()))) and m[1] == name}
+    dirs = [lean / root / "Pouw" / "Guarantees" for root in audit["trees"]["definitions"]]
+    texts = [p.read_text() for d in dirs if d.is_dir() for p in sorted(d.rglob("*.lean"))] if names else []
     out = {}
-    for module, group in audit.get("reads", {}).items():
-        names = [d for d in group.get("definitions", {}) if d.startswith("Pouw.Guarantees.")]
-        path = lean / (module.replace(".", "/") + ".lean")
-        if not names or not path.is_file():
-            continue
-        text = path.read_text()
-        for d in names:
-            ns, short = d.rsplit(".", 1)
+    for d in sorted(names):
+        ns, short = d.rsplit(".", 1)
+        for text in (t for t in texts if short in t):
             m = (re.search(rf"^namespace {re.escape(ns)}\n(?:.*\n)*?def {re.escape(short)} : Prop :=\n((?:[ \t]+\S.*\n)+)",
                            text, re.M)
                  or re.search(rf"^def _root_\.{re.escape(d)} : Prop :=\n((?:[ \t]+\S.*\n)+)", text, re.M))
             if m:
                 out[d] = " ".join(m[1].split())
+                break
     return out
 
 
@@ -126,7 +129,7 @@ def _statement(name: str, pin: dict, defs: dict[str, str]) -> tuple[str, bool]:
     sig = " ".join(" ".join(pin["signature"]).split())
     if (m := _LIFTED.fullmatch(sig)) and m[1] == name:
         if m[2] not in defs:
-            raise TwinError(f"{name}: states {m[2]}, which no Guarantees definition the audit's reads record gives")
+            raise TwinError(f"{name}: states {m[2]}, which no Guarantees definition of the audit's definitions tree gives")
         return defs[m[2]], True
     return sig, False
 
