@@ -101,6 +101,17 @@ def test_a_line_at_zero_is_captioned_and_coincident_lines_plotted_once():
     assert f.captions(1.0, zeros={"exfiltration": ["zero"]})["exfiltration"].endswith(" At 0, so not plotted: zero.")
 
 
+def test_a_capped_caption_says_what_it_rests_on():
+    """The capped sentences name each form's status, the patterns' form only in the appendix, beside every panel's own
+    sentences."""
+    caps = f.captions(1.0, boundary_hash_share=1e-7, served=(81000.0, 4500, 18, 3.36e11))
+    assert "Capped (dash-dot; cap lemma in progress): two-stage with each request charged at most the 81,000 bits it " \
+           "serves (4,500 tokens of 18 bits)" in caps["exfiltration"] and "Patterns" not in caps["exfiltration"]
+    assert "Patterns (dash-dot-dot; no lemma states it yet)" in caps["exfiltration_appendix"]
+    for panel in ("exfiltration", "skipped_work"):
+        assert "the token ids, 1e-07 of the scope's compute" in caps[panel], panel
+
+
 def test_a_references_cards_caption_joins_its_panels_captions():
     line = {"label": "x", "unit": "bit", "value": 1.0, "source": "s"}
     notes = f.reference_notes([

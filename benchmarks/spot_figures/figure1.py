@@ -559,9 +559,9 @@ def captions(serve_hash_share: float, infiltration: dict | None = None, coverage
     request = "Request-level (dotted) proves each sampled request whole; serving commits only the token ids."
     capped = patterns = ""
     if served:
-        cap, tokens, bits, blocks = served
+        cap, count, bits, blocks = served
         capped = (f" Capped (dash-dot; {CAP_STATUS['sets']}): two-stage with each request charged at most the "
-                  f"{cap:,.0f} bits it serves ({tokens:,} tokens of {bits} bits), so a wholly incorrect request is "
+                  f"{cap:,.0f} bits it serves ({count:,} tokens of {bits} bits), so a wholly incorrect request is "
                   f"charged which of its {blocks:.2g} proof blocks are incorrect and what it serves, about "
                   f"{blocks + cap:.2g} bits.")
         patterns = (f" Patterns (dash-dot-dot; {CAP_STATUS['patterns']}): a request's incorrect sets of more than "
