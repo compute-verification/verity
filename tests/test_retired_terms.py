@@ -158,6 +158,8 @@ PENDING: dict[str, str] = {
     "benchmarks/pouw/served_h1/coins.py": "queued PRs rewrite its lines; the proof-service rename follows them",
     "verity/core/claims/tests/test_claims_registry.py": "queued PRs rewrite its lines; the proof-service rename follows them",
     "verity/core/protocols/pouw/dither/PROTOCOL.md": "queued PRs rewrite its lines; the proof-service rename follows them",
+    "Security/Definitions/Nci/Capability/README.md": "its per-block cap q was pending when the accounting vocabulary's rename "
+                                                     "ran; that rename follows",
     "verity/core/protocols/remote_bandwidth/README.md": "queued PRs rewrite its lines; the proof-service rename follows them",
     "Security/Proofs/NetworkCertifier/README.md": "#4690 adds lines",
     "benchmarks/census/README.md": "#4731 rewrites its lines",
@@ -180,7 +182,6 @@ PENDING: dict[str, str] = {
     "verity/ml/windows/interface.py": "#4502 adds lines",
     "benchmarks/pouw/accel_v31/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "examples/onsite_served/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
-    "Security/Definitions/Nci/Capability/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "Security/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "benchmarks/hash/lib/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "benchmarks/multi_unit/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
