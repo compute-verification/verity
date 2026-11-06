@@ -218,10 +218,8 @@ def _tensors(x) -> list[torch.Tensor]:
 
 
 def _ptr(t: torch.Tensor) -> int:
-    try:
-        return t.untyped_storage().data_ptr()
-    except (RuntimeError, NotImplementedError):
-        return 0
+    """`t`'s storage's address; 0 for a tensor with no storage (a sparse or a wrapper tensor)."""
+    return t.untyped_storage().data_ptr() if t.layout == torch.strided and torch._C._has_storage(t) else 0
 
 
 def read_positions(t: torch.Tensor) -> np.ndarray:

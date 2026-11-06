@@ -555,42 +555,40 @@ def classified_at(p: dict, k: float) -> dict | None:
 
 def log_products(op: str, shapes: list) -> list[tuple[int, int, int, int]] | None:
     """An op log's op's matrix products as (b, m, K, n), from its tensor operands' shapes in training_slowdown.flops's
-    order; None for an op this doesn't place. Attention (scaled dot product, [B, H, L, E] operands) is its products as
-    torch's FLOP formula counts them, the query heads sharing a key head stacked as rows of one product."""
+    order; None for an op this doesn't place, and an error for shapes that aren't its operands'. Attention (scaled dot
+    product, [B, H, L, E] operands) is its products as torch's FLOP formula counts them, the query heads sharing a key
+    head stacked as rows of one product."""
     s = [tuple(x) for x in shapes]
-    try:
-        if op in ("mm", "_int_mm", "_scaled_mm"):
-            (m, K), (_, n) = s[0], s[1]
-        elif op in ("addmm", "addmm_", "_addmm_activation"):
-            (m, K), (_, n) = s[1], s[2]
-        elif op == "bmm":
-            (b, m, K), (_, _, n) = s[0], s[1]
-            return [(b, m, K, n)]
-        elif op in ("baddbmm", "baddbmm_"):
-            (b, m, K), (_, _, n) = s[1], s[2]
-            return [(b, m, K, n)]
-        elif op in ("addbmm", "addbmm_"):
-            (b, m, K), (_, _, n) = s[1], s[2]
-            K *= b
-        elif op == "mv":
-            (m, K), n = s[0], 1
-        elif op in ("addmv", "addmv_"):
-            (m, K), n = s[1], 1
-        elif op in ("dot", "vdot"):
-            (K,), m, n = s[0], 1, 1
-        elif op in ("addr", "addr_"):
-            (m,), (n,), K = s[1], s[2], 1
-        elif op in SDPA or op.removesuffix("_backward") in SDPA:
-            back = op.endswith("_backward")
-            (B, hq, L, E), (_, hkv, S, _), (*_, Ev) = s[1:4] if back else s[0:3]
-            b, rows = B * hkv, hq // hkv * L
-            scores = (b, rows, E, S)
-            if not back:
-                return [scores, (b, rows, S, Ev)]
-            return [scores, (b, rows, Ev, S), (b, S, rows, Ev), (b, rows, S, E), (b, S, rows, E)]
-        else:
-            return None
-    except (ValueError, TypeError, IndexError, ZeroDivisionError):
+    if op in ("mm", "_int_mm", "_scaled_mm"):
+        (m, K), (_, n) = s[0], s[1]
+    elif op in ("addmm", "addmm_", "_addmm_activation"):
+        (m, K), (_, n) = s[1], s[2]
+    elif op == "bmm":
+        (b, m, K), (_, _, n) = s[0], s[1]
+        return [(b, m, K, n)]
+    elif op in ("baddbmm", "baddbmm_"):
+        (b, m, K), (_, _, n) = s[1], s[2]
+        return [(b, m, K, n)]
+    elif op in ("addbmm", "addbmm_"):
+        (b, m, K), (_, _, n) = s[1], s[2]
+        K *= b
+    elif op == "mv":
+        (m, K), n = s[0], 1
+    elif op in ("addmv", "addmv_"):
+        (m, K), n = s[1], 1
+    elif op in ("dot", "vdot"):
+        (K,), m, n = s[0], 1, 1
+    elif op in ("addr", "addr_"):
+        (m,), (n,), K = s[1], s[2], 1
+    elif op in SDPA or op.removesuffix("_backward") in SDPA:
+        back = op.endswith("_backward")
+        (B, hq, L, E), (_, hkv, S, _), (*_, Ev) = s[1:4] if back else s[0:3]
+        b, rows = B * hkv, hq // hkv * L
+        scores = (b, rows, E, S)
+        if not back:
+            return [scores, (b, rows, S, Ev)]
+        return [scores, (b, rows, Ev, S), (b, S, rows, Ev), (b, rows, S, E), (b, S, rows, E)]
+    else:
         return None
     return [(1, m, K, n)]
 
@@ -599,16 +597,19 @@ def other_program(rows: list[dict], log: dict) -> dict | None:
     """Whether a trace's product rows are of the run whose op log is `log` (its `ops`), as far as their shapes say: None
     where every shape (m, K, n) of the rows' `PLAIN_PRODUCTS` is a product of one of the log's ops (`log_products`), in
     either orientation; else how many distinct shapes the rows run, how many of those the log never ran, how many the
-    log ran, and the three largest the log never ran by their multiplications. A trace keeps no list of the tensors it
+    log ran, and the three largest the log never ran by their multiplications, with how many of the log's entries it
+    couldn't read (`unread`) where there are any. A trace keeps no list of the tensors it
     trains, but a weight's gradient is a product with that weight's shape as m by n, so a rank, a width or a batch the
     trace took and the run didn't shows here; a program that differs from the run's only in a vector it trains, or only
     in a batched product, doesn't."""
     ran: set = set()
+    unread = []
     for key in log.get("ops", {}):
         op, shapes = split_key(key)[2:4]
         try:
             prods = log_products(op, json.loads(shapes))
-        except json.JSONDecodeError:
+        except (ValueError, TypeError, IndexError, ZeroDivisionError):
+            unread.append(key)
             continue
         ran |= {(m, K, n) for b, m, K, n in prods or () if b == 1}
     runs: dict = {}
@@ -619,7 +620,8 @@ def other_program(rows: list[dict], log: dict) -> dict | None:
     miss = sorted((s for s in runs if s not in ran and s[::-1] not in ran), key=lambda s: (-runs[s], s))
     if not miss:
         return None
-    return {"shapes": len(runs), "unmatched": len(miss), "ran": len(ran), "largest": [list(s) for s in miss[:3]]}
+    return {"shapes": len(runs), "unmatched": len(miss), "ran": len(ran), "largest": [list(s) for s in miss[:3]]} | (
+        {"unread": len(unread)} if unread else {})
 
 
 def traced_products(p: dict | None, block: dict | None, log: dict | None = None) -> dict | None:
