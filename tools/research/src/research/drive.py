@@ -78,15 +78,15 @@ machine (killed, out of disk or memory: `_machine_fault`) runs again once on the
 again on the Lean change's own commit, and only a failure there is told to its owner; nothing at or above a failed commit lands until it leaves `next`, unless a passed Lean check
 of a reviewed commit above it checked the tree that lands (`_past_failed`).  No Lean check is stacked or cut above a failed
 one that would hold every Lean change of its prefix still on `next`, though a sync that rebuilds `next` above a running
-check's prefix (a `--first` fix) took the failed commit off it, until one of its members is held, ejected or pushed, or a
+check's prefix (a fix of drive's priority list) took the failed commit off it, until one of its members is held, ejected or pushed, or a
 Lean check that holds them all passes (`_live_failures`).  And every .py file the
 landing leaves must compile (`py_compile`): the PR that last changed one that doesn't is ejected.  While any Lean check of a
 commit of `next` runs, drive's or a hand one of its run registry (`_running_lean`), the members up to it keep their place
-and their merges (`--first` and each PR admitted meanwhile go above them, one a member contains too: `Queue.order`); only one
+and their merges (drive's priority list and each PR admitted meanwhile go above them, one a member contains too: `Queue.order`); only one
 of them ejected, unmarked at its head or held rebuilds `next` from it, logged with why, and its check runs again on the
 rebuilt prefix.  So do they keep it under a passed one of drive's whose every
 member up to it has its ready mark and a land verdict (`_landable`), until it lands.  Up to the highest commit of any of drive's
-Lean checks that runs or passed, `next` is kept (`queue.lean_hold`, `--first` above it too), though a member under a passed one
+Lean checks that runs or passed, `next` is kept (`queue.lean_hold`, drive's priority list above it too), though a member under a passed one
 alone that is pushed or loses its mark leaves, and `next` is rebuilt from it.  ci's hand Lean check goes through drive
 (`/data/infra/drive.sh queue lean-check COMMIT`, `Driver.hand_lean`): recorded in drive's state at its launch, it holds `next`
 from its first second and counts, is followed and covers as drive's own.  Each landing awaits the after-landing run, one at a
@@ -3383,7 +3383,8 @@ class Driver:
         else:
             chain = q.chain()
             frozen = max(max((i + 1 for i, m in enumerate(chain) if m.commit in running), default=0), self._landable(drive, chain))
-            # a passed check whose prefix doesn't land yet holds `next` too, or a `--first` fix goes below it and its pass is lost;
+            # a passed check whose prefix doesn't land yet holds `next` too, or a fix of drive's priority list goes below it and its
+            # pass is lost;
             # a member under it that is pushed or loses its mark still leaves, or it would wait at its old head for a verdict
             q.hold = max(frozen, lean_hold({"drive": drive}, chain))
             q.frozen = {m.pr for m in chain[:frozen]}
@@ -3496,9 +3497,9 @@ class Driver:
 
     def _running_lean(self, drive: dict) -> set[str]:
         """The commits of `next` a Lean check runs at, which the sync keeps in place with the members below them (`queue.hold`,
-        `frozen`; `--first` goes above them): drive's own (`drive["lean"]`), and any other run of its run registry whose steps
-        include lean-audit (`lean_runs`: a hand `train.sh COMMIT MACHINES --deferred lean-audit`) while `research status` reads
-        it live (a `--first` rebuild of `next` would throw away hand checks).  A registry that can't be read
+        `frozen`; drive's priority list goes above them): drive's own (`drive["lean"]`), and any other run of its run registry
+        whose steps include lean-audit (`lean_runs`: a hand `train.sh COMMIT MACHINES --deferred lean-audit`) while `research
+        status` reads it live (a rebuild of `next` for the priority list would throw away hand checks).  A registry that can't be read
         adds none."""
         running = {c for c, rec in drive["lean"].items() if rec.get("state") is None}
         mine = {r for rec in drive["lean"].values() for r in rec.get("ids") or ()}
@@ -4280,7 +4281,7 @@ class Driver:
     def _note_failed(self, drive: dict) -> None:
         """Remember each failed Lean check of `next` by its members (`drive["lean_failed"]`: {the commit it failed on: {"members",
         "ids", "why"}}), past its record in `drive["lean"]`, which a sync that rebuilds `next` above a running check's prefix
-        (a `--first` fix, a lift) drops with its commit, though what broke it is still on `next` (`_live_failures`)."""
+        (a fix of drive's priority list, a lift) drops with its commit, though what broke it is still on `next` (`_live_failures`)."""
         failed = drive.setdefault("lean_failed", {})
         seen = [f["members"] for f in failed.values()]
         for c, rec in (drive.get("lean") or {}).items():

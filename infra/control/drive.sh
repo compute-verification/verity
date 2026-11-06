@@ -4,7 +4,8 @@
 # /data/drive/deployed pins (`drive.sh deploy SHA`, a landed commit) or else at main's tip, in that
 # checkout, as lane ci (RESEARCH_LANE), with its flags from tools/verity/check/drive.toml at main (read fresh each tick, their one
 # source) plus whatever /data/drive/args holds (`#` lines skipped): only flags drive.toml's `command_line` lets override its keys
-# (`--on`, `--first`), and a `--config FILE` there is refused unless every key it sets has main's value; then sleeps 120 s.
+# (`--on`), and `--priority-file /data/drive/priority`, drive's priority list, whose order is the landing order (a `--first`
+# there refuses the tick); a `--config FILE` there is refused unless every key it sets has main's value; then sleeps 120 s.
 # The queue's state is root's ~/.research/queue/verity.state.json, on the volume. Both git clones, drive's checkout ($REPO) and
 # the queue's (~/.research/queue/verity, a symlink), live on the container disk under $FAST: on the volume's NFS git cost
 # about 4.3 min a tick (ci's tick profile, 26 Oct). `fast_clones` seeds each from its copy on the volume ($DIR/verity,
