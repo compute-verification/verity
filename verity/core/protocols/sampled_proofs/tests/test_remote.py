@@ -1437,7 +1437,7 @@ def test_a_reserved_window_is_read_when_its_open_binds_its_reserve(tmp_path, sig
 
 
 def test_a_period_commits_its_cap_and_circuit_and_holds_no_window_past_its_cap(tmp_path, signer):
-    """A period's open commits the most windows it may hold and its circuit (compute-accounting's CircuitWorkPeriod): a
+    """A period's open commits the most windows it may hold and its circuit (compute-accounting's CircuitWorkMonitoringPeriod): a
     window past the cap is refused, as is a cap or circuit of another form, and a window in a period that committed
     neither (opened before they were required) isn't read, since its cap is unknown."""
     one = Ledger(tmp_path / "one.jsonl", signer)

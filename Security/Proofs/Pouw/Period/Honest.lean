@@ -45,7 +45,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 # An honest live-salt period meets `H1CheckedCreditPeriod`'s premises
 
 The positive twin of `Properties.Pouw.Period.H1CheckedCreditPeriod`, as
-`Accounting.SecurityProofs.ComposePeriod.Honest` is of `CircuitWorkPeriod`: a period of `n ≥ 1` windows at H1's
+`Accounting.SecurityProofs.ComposePeriod.Honest` is of `CircuitWorkMonitoringPeriod`: a period of `n ≥ 1` windows at H1's
 instance's own numbers, whose every window the deployed check (`PouwCheck.protocol.check`) accepts at the
 parameters `Accept.h1Params`, and which meets every premise of the instance
 (`h1_meets`).
