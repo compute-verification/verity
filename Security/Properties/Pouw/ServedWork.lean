@@ -37,7 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The served PoUW protocol's work: priced work on the prover's machines from an accepted period
 
-`Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod` says what an accepted period of served H1 (`PouwCheck.Period`,
+`Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod` says what an accepted period of served H1 (`PouwCheck.Credit.periodCredit`,
 the verdict `PouwCheck.Credit.window` on each window, J10-R's noise) fixes: except with probability
 `δ_s + n·(δ_bind + δ_ks)`, its fixed words are at least `(1 − ε(j))₊` of the live words of its windows before the first
 refusal. `ServedWork` turns those words into work: the prover's machines, wherever they ran, spent at least `p` a
