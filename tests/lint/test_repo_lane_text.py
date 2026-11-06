@@ -18,8 +18,7 @@ not read.  Lane text is what records how the tree got here or who is working on 
 
 ``art:`` ids are allowed: they name evidence, which the store keeps.  Declared data isn't read at all (``*.json``, ``*.csv``
 and every other file not named above: ``fixtures/artifacts.json``, each ``lean-audit.json``'s records, the handle registry,
-the manifests), nor what ``SKIP`` names, each with its reason.  This lint takes over P11's docstring patterns
-(``integrations/vllm/tests/lint/test_p11_names.py``: board ids, ``[lane ``, rounds and dates), for the whole tree.
+the manifests), nor what ``SKIP`` names, each with its reason.
 
 Sites are counted per file, the key the ratchet gate counts by too: an entry ``{"file", "count"}`` allows ``count`` sites in
 its file.  A file with more than its entry allows, or with one and no entry, fails, and the files ``PINNED`` names
