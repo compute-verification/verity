@@ -46,6 +46,8 @@ public import Definitions.Claims.SamplingGeneric
 public import Definitions.Claims.ZKOut
 public import Definitions.Hash
 public import Definitions.Flock
+public import Definitions.WeightSecurity
+public import Definitions.WeightSecurity.Toy
 public import Definitions.Assumptions
 
 /-! The trusted vocabulary: each component's definitions. -/
