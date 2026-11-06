@@ -33,6 +33,7 @@
   "Properties.SampledProofs",
   "Properties.SampledProofs.Draw",
   "Properties.SampledProofs.Halt",
+  "Properties.SampledProofs.Second",
   "Properties.Pous.TimedAudit",
   "Properties.Pous.MemoryChallenger",
   "Properties.Pous.Wipe",
@@ -545,6 +546,10 @@
   "Properties.Firewall.afterOnTime": {
    "honest": ["Properties.Firewall.afterOnTime_honest"],
    "nontrivial": "Properties.Firewall.afterOnTime_nontrivial"
+  },
+  "Properties.SampledProofs.SecurityProofs.secondMisses": {
+   "honest": ["Properties.SampledProofs.SecurityProofs.secondMisses_honest"],
+   "nontrivial": "Properties.SampledProofs.SecurityProofs.secondMisses_nontrivial"
   }
  },
  "unwitnessed": {
@@ -863,7 +868,7 @@
   },
   "Properties.SampledProofs": {
    "imports": ["SampledProofs"],
-   "except": ["Properties.SampledProofs.Draw"],
+   "except": ["Properties.SampledProofs.Draw", "Properties.SampledProofs.Second"],
    "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.CertifierNetwork": {
@@ -1097,6 +1102,11 @@
    "imports": ["Firewall"],
    "except": [],
    "why": "the record's rules are stated against the release side's own functions (`Firewall.Record`, `Firewall.Release`), on Lean core: nothing of Mathlib or of `security`, never a proof"
+  },
+  "Properties.SampledProofs.Second": {
+   "imports": ["Definitions.Claims", "SampledProofs", "Properties.SampledProofs.Draw"],
+   "except": [],
+   "why": "what the two-stage rule's second stage misses is stated against `Select.selectSecond` and the claims' escape `escCell` (`Definitions.Claims.SamplingTwo`), with `Properties.SampledProofs.bytesOf`'s reading of uniform bytes, never a proof"
   }
  },
  "reads_exempt": {
@@ -3670,6 +3680,54 @@
    "assumptions": [],
    "type_hash": "303f59f6e5d086c022bcd5f65d8494f0da4a42aa9cb9b2d7b80aaba186bfc119"
   },
+  "Properties.SampledProofs.SecurityProofs.secondMisses": {
+   "owner": "@proofs",
+   "signature": ["Properties.SampledProofs.SecurityProofs.secondMisses : Properties.SampledProofs.SecondMisses"],
+   "assumptions": [],
+   "type_hash": "ff788e862fb2352e1a7725945407d58c18891043acc77a6e477127c206c64abd"
+  },
+  "Properties.SampledProofs.SecurityProofs.secondMisses_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.secondMisses_honest :",
+    "  Eq",
+    "    (Except.isOk",
+    "      (SampledProofs.Select.selectSecond (List.cons 0 List.nil).toArray 2 1 { data := Array.replicate 82 0 }))",
+    "    Bool.true"
+   ],
+   "assumptions": [],
+   "type_hash": "0bf1c0612eaf9632cb7c373d83d1057fe7c126a344cacaa260b3fcb7f9d37a0e"
+  },
+  "Properties.SampledProofs.SecurityProofs.secondMisses_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.secondMisses_nontrivial :",
+    "  Not",
+    "    (Real.instLE.le",
+    "      (Claims.Pr fun src =>",
+    "        And",
+    "          (Eq",
+    "            (Except.isOk",
+    "              (Properties.SampledProofs.acceptAllSecond (List.cons 0 List.nil).toArray 2 1",
+    "                (Properties.SampledProofs.bytesOf src)))",
+    "            Bool.true)",
+    "          (∀ (j : Nat),",
+    "            SetLike.instMembership.mem (Finset.instInsert.insert 0 (Finset.instSingleton.singleton 1)) j →",
+    "              Not",
+    "                (Array.instMembership.mem",
+    "                  (Properties.SampledProofs.secondOf",
+    "                    (Properties.SampledProofs.acceptAllSecond (List.cons 0 List.nil).toArray 2 1",
+    "                      (Properties.SampledProofs.bytesOf src)))",
+    "                  j.cast)))",
+    "      ((Finset.range (List.cons 0 List.nil).toArray.size).prod fun i =>",
+    "        Claims.Sampling.escCell 2 1",
+    "          (Finset.filter",
+    "              (fun j => And (instLENat.le (instHMul.hMul i 2) j) (instLTNat.lt j (instHMul.hMul (instHAdd.hAdd i 1) 2)))",
+    "              (Finset.instInsert.insert 0 (Finset.instSingleton.singleton 1))).card))"
+   ],
+   "assumptions": [],
+   "type_hash": "b4a8966ca0afbf7b46c60166c017c5666268e59ebcdab215fec081980c990f06"
+  },
   "Properties.SampledProofs.acceptMeans": {
    "owner": "@proofs",
    "signature": ["Properties.SampledProofs.acceptMeans : Properties.SampledProofs.AcceptMeans"],
@@ -5220,6 +5278,10 @@
    },
    "Properties.Firewall.afterOnTime": {
     "function": "Core.Firewall.Decision.after",
+    "outcome": "accept"
+   },
+   "Properties.SampledProofs.SecurityProofs.secondMisses": {
+    "function": "SampledProofs.Select.selectSecond",
     "outcome": "accept"
    }
   },
@@ -8453,6 +8515,16 @@
     "Properties.SampledProofs.SecurityProofs.drawMisses"
    ]
   },
+  "Definitions.Claims.SamplingTwo": {
+   "digest": "17dbc31fb78972b64f7622d216b3a8cd7068e21c71d0b4bb42882500b721b51d",
+   "definitions": {
+    "Claims.Sampling.escCell": "2df351680cfc4f8102912671169f8a73fe3abc89e91d48b77d54493967dcf098"
+   },
+   "guarantees": [
+    "Properties.SampledProofs.SecurityProofs.secondMisses",
+    "Properties.SampledProofs.SecurityProofs.secondMisses_nontrivial"
+   ]
+  },
   "Definitions.Core.Blocks": {
    "digest": "54f267a3d33842ebc4b203b859b3253df82cbd7c0b54706eb4b16aba05afd4e0",
    "definitions": {
@@ -8980,6 +9052,8 @@
     "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_honest",
     "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_nontrivial",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
+    "Properties.SampledProofs.SecurityProofs.secondMisses",
+    "Properties.SampledProofs.SecurityProofs.secondMisses_nontrivial",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -11121,6 +11195,9 @@
     "Properties.RemoteAudit.releasedStayOut",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
+    "Properties.SampledProofs.SecurityProofs.secondMisses",
+    "Properties.SampledProofs.SecurityProofs.secondMisses_honest",
+    "Properties.SampledProofs.SecurityProofs.secondMisses_nontrivial",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
     "Properties.SampledProofs.digestIsRecord's",
@@ -11269,6 +11346,8 @@
     "Properties.RemoteAudit.Component.acceptIsVerified",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
+    "Properties.SampledProofs.SecurityProofs.secondMisses",
+    "Properties.SampledProofs.SecurityProofs.secondMisses_honest",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
     "Properties.SampledProofs.digestIsRecord's",
@@ -11848,6 +11927,8 @@
     "Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
+    "Properties.SampledProofs.SecurityProofs.secondMisses",
+    "Properties.SampledProofs.SecurityProofs.secondMisses_honest",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
     "Verity.remote_soundness_of_subprotocols",
@@ -22874,7 +22955,9 @@
     "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_nontrivial",
     "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
-    "Properties.SampledProofs.SecurityProofs.drawMisses"
+    "Properties.SampledProofs.SecurityProofs.drawMisses",
+    "Properties.SampledProofs.SecurityProofs.secondMisses",
+    "Properties.SampledProofs.SecurityProofs.secondMisses_nontrivial"
    ]
   },
   "Properties.SampledProofs.Halt": {
@@ -22895,6 +22978,18 @@
     "Properties.SampledProofs.haltEndsOpen",
     "Properties.SampledProofs.haltIsFinal",
     "Properties.SampledProofs.noAcceptAfterHalt"
+   ]
+  },
+  "Properties.SampledProofs.Second": {
+   "digest": "70fa30762407f37f139075d351faa619f320b36f734207f8b2756163cf1bc973",
+   "definitions": {
+    "Properties.SampledProofs.SecondMisses": "da0ec96b81d4212a6234cb77e0362af9a56214f91db018e3ac55c21e2da54c93",
+    "Properties.SampledProofs.acceptAllSecond": "32e234382277260092619ff2db70e548745859544d98be91ee112265838042a7",
+    "Properties.SampledProofs.secondOf": "c07c683dafac79d1ac0dda1c95831f6cd02aa9583937083c8220b6d930ab7706"
+   },
+   "guarantees": [
+    "Properties.SampledProofs.SecurityProofs.secondMisses",
+    "Properties.SampledProofs.SecurityProofs.secondMisses_nontrivial"
    ]
   },
   "Properties.Verity.Game": {
@@ -24734,7 +24829,7 @@
    ]
   },
   "SampledProofs.Draw": {
-   "digest": "66bc2c426880094b1e74be3c069ae3c40d233a86e98b9947bfaaca2f495a9217",
+   "digest": "4491784b5adf14350b662d0b904f4a9e08a798c7c39f62531f006b0d104bc348",
    "definitions": {
     "SampledProofs.Draw.checkDraw": "f0ace14dbcd5fa4fc9a616623b67f88503048732a6bcf3924adc6b0ad262383c",
     "SampledProofs.Draw.checkDrawFull": "520696a6b58435127072e0f3df1a29baa34800efd6ec4df0444f51537afa7c11",
@@ -24745,6 +24840,7 @@
     "SampledProofs.Draw.deriveLaw": "db8def04c0db34e9488742c04f1ee5f8f0e3a026867174017b64a3f2506417cf",
     "SampledProofs.Draw.deriveLaw._sparseCasesOn_1": "06444dffbdc6b43e19a7fbb5921879f7a9ceba2d8bd11de93051c74c0ea5061e",
     "SampledProofs.Draw.deriveLaw._sparseCasesOn_4": "5cff8062fb2ab6a52973a1e0b63a9173449c25c334ca081ca9de17162382bd2b",
+    "SampledProofs.Draw.drawFirstRead": "a725360cb045996ad4347132284d362f57b4140b7073ed2557f673d8b9b43a8c",
     "SampledProofs.Draw.drawUnits": "2a0f8ec96176f4c4c7c75ed0a260d70073d795471b52a1a94d24f0abf4b18340",
     "SampledProofs.Draw.flockLaw": "fa1e8d695af9a161b92d7b528cefc8fce42d22044ade92e25fedaaf3018bcd13",
     "SampledProofs.Draw.lawOf": "5e9f1cd98e9e3edae16e0e2bc0580a246fb14292f58970ddbe7acf485e2269c9",
@@ -24774,6 +24870,9 @@
     "Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
+    "Properties.SampledProofs.SecurityProofs.secondMisses",
+    "Properties.SampledProofs.SecurityProofs.secondMisses_honest",
+    "Properties.SampledProofs.SecurityProofs.secondMisses_nontrivial",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
     "Verity.remote_soundness_of_subprotocols",
@@ -24902,6 +25001,9 @@
     "Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
+    "Properties.SampledProofs.SecurityProofs.secondMisses",
+    "Properties.SampledProofs.SecurityProofs.secondMisses_honest",
+    "Properties.SampledProofs.SecurityProofs.secondMisses_nontrivial",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
     "Properties.SampledProofs.fleetHaltIsFinal",
@@ -25421,7 +25523,7 @@
    ]
   },
   "SampledProofs.Select": {
-   "digest": "6b70b4d7386c8c1ca94d186f4aa07914e874191778896237fe453b6d60e2a3d6",
+   "digest": "4cdcd8f3401533eb88d76c980a556ff1088af9994922b38e6ec346723b28c493",
    "definitions": {
     "SampledProofs.Select.Rule": "4d6275879b486259c6334a2786df14db3abbdb1d68f5fc81e4cf8e7366e5b42e",
     "SampledProofs.Select.Rule.all": "2544366e1ae9127d40ce553944a8944f3b817850a309fde4b98ec81121a23c1f",
@@ -25433,15 +25535,19 @@
     "SampledProofs.Select.Rule.rec": "6b86a047e84a8f81717cf905ce6b3fe4789ce2e9f0eabe7f0dd770a0b3088159",
     "SampledProofs.Select.Rule.twoStage": "0fe2600bfc07c6847a00ff955691d1aad66506571afff078dccbe826fb5a4e4e",
     "SampledProofs.Select.parseLaw": "8e8143f693ccb4e8e47c9aace02ed651ccf887533ae4d578d5fe41b41b7f1208",
+    "SampledProofs.Select.secondLaw": "d28af09c79c12dc7da2b428d0dfc296686e50622f69349521069853929f9a2a1",
     "SampledProofs.Select.select": "3d23055d514e363bdb68ea5e072507f5302503a783fd6d188f7435fb33a3a035",
     "SampledProofs.Select.select._sparseCasesOn_5": "68dbad9830bada2019d068b123dc47e0ff44ccaab9e5411dcae169f61f68cda6",
+    "SampledProofs.Select.selectSecond": "0fdf5d7d50ab73f72f9e620f577616664c6ada10371b9310e852f6b7514ab45a",
     "_private.SampledProofs.Select.0.SampledProofs.Select.digits": "bf69d85895f131cda7a2347b84402cd71edf7edfabf39b414bf26bbd5a7e501d",
     "_private.SampledProofs.Select.0.SampledProofs.Select.inRange": "467ac9a46463ca587d1762148ee897fcfba450f27c3a03d97620c94a91b4cc9c",
     "_private.SampledProofs.Select.0.SampledProofs.Select.split1": "38b9c8a087d263eb0b33bb8ac70a1ae37586f972bbf21660e622e8519c708cae"
    },
    "guarantees": [
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
-    "Properties.SampledProofs.SecurityProofs.drawMisses"
+    "Properties.SampledProofs.SecurityProofs.drawMisses",
+    "Properties.SampledProofs.SecurityProofs.secondMisses",
+    "Properties.SampledProofs.SecurityProofs.secondMisses_honest"
    ]
   },
   "SampledProofs.Slots": {
