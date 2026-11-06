@@ -12,9 +12,8 @@ issues every request to it, on the schedule `Drive.reqs` fixes. Nothing the prov
   (`Drive.openStepM`, the rep's opening a round at a time, on the extra claims at the session's `Commit` coins,
   `Drive.extras`, and the rep's salts for levels ≥ 1, the loop's finish's), then the inner proof's: the frame's own round
   (`Frame.innerSched`) on the rounds the loop's finish computed for the rep before they went to the host
-  (`Sessions.inner`, `Finish.serve`'s `inner`), so the host only relays them. At a round the finish has not computed,
-  the frame takes no device round: whatever the host relays fails, the frame's own round on the finish's rounds so far
-  stands in, and the rep stops, so the session's `Finish` leaves without proofs. A stop is the session's: once any rep's
+  (`Sessions.inner`, `Finish.serve`'s `inner`), so the host only relays them. A round the finish has not computed has
+  no place: whatever the host relays there is refused, and the session stops. A stop is the session's: once any rep's
   frame of it stopped (a failed round, a refused one, a failed worker's rounds; `Sessions.stopped`), the frame takes no
   device round at any of its reps' rounds, and every rep of the session stops, its rounds leaving as the scheduled ones
   of a stopped rep. Rep 1's frame first takes rep 0's algebraic-phase coins (`prior`). What leaves is the frame's
@@ -518,10 +517,10 @@ first round, its algebraic phase's scheduled rounds on the session's level 0, `w
 algebraic-phase coins), the round's place, whether it is the stream's first round, and why the frame takes no device
 round in that place, if it takes none; or why the round has none. The place is `placeOf`'s, but past the opening: there
 the inner proof's round `j` is the frame's own (`Frame.innerSched`) on the rounds the loop's finish computed for the rep
-(`Sessions.innerOf`). At a round `j` the finish has not computed, the frame takes no device round: whatever the host
-relays, the frame fails it, and its own round on the finish's rounds so far stands in (`roundStep`). Nor does it take
-one at any round of a session that stopped (`Sessions.stopped`): the session stops at its first failure, and every rep's
-round from there on leaves as the scheduled round of a stopped rep, whatever the device sent. -/
+(`Sessions.innerOf`). A round `j` the finish has not computed has none, whatever the host relays: the loop refuses it,
+and the session stops there (`Session`). Nor does the frame take a device round at any round of a session that stopped
+(`Sessions.stopped`): the session stops at its first failure, and every rep's round from there on leaves as the
+scheduled round of a stopped rep, whatever the device sent. -/
 def roundPlace (R : Sessions) (L0 : Level0.Slots) (sid i r : Nat) (dom content : ByteArray) (n : Nat) :
     Except String (Rep × Frame.Place × Bool × Option String) := do
   let some (_, p) := R.find sid i r | throw s!"a round of table {i} rep {r}, whose frame the loop has not started"
@@ -548,9 +547,8 @@ def roundPlace (R : Sessions) (L0 : Level0.Slots) (sid i r : Nat) (dom content :
     let j := p'.st.m.inner.getD 0
     let fin := R.innerOf l0.root r
     if Frame.INNER_ROUNDS ≤ j then throw s!"a round after the inner proof's {Frame.INNER_ROUNDS}"
-    let noDevice := if j < fin.size then stopped
-      else some s!"table {i} rep {r}'s inner round {j}, which the loop's finish has not computed"
-    return (p', .sched (Frame.innerSched p'.cfg p'.st.m fin n j), first, noDevice)
+    else if fin.size ≤ j then throw s!"table {i} rep {r}'s inner round {j}, which the loop's finish has not computed"
+    else return (p', .sched (Frame.innerSched p'.cfg p'.st.m fin n j), first, stopped)
   | _ => return (p', place, first, stopped)
 
 /-- A round's effect on the loop: what leaves (or why nothing does), the rep's frame after it, which the loop puts back,
