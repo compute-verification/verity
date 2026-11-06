@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# The recursion bench over an inner statement rec_inner.py stages rather than 85's build (85's STAGE=0): N seeded draws of
-# SUBCIRCUIT (`rec_inner.py stage --subcircuit`), or with WINDOW every unit of a served window's member MEMBER
-# (`rec_inner.py stage-window`: prove_path.py commit's window dir, the prover's files included). Both write
-# $FLOCK_WORK/data/$TAG/stage (plain leaves, the recursive inner) and stage-zk (hm96, today's --zk on the same units) with
-# the partition, program and full draw beside them (own-partition), then run job.sh on them with STAGE=0 and N the
-# statement's instances. Every other KEY=VALUE goes on to job.sh. Run from the verity tree, as job.sh is:
+# The recursion bench over an inner statement rec_inner.py stages rather than 85's build (85's STAGE=0): N seeded
+# inputs to SUBCIRCUIT (`rec_inner.py stage --subcircuit`), or with WINDOW every proof block of a served window's
+# member MEMBER (`rec_inner.py stage-window`: prove_path.py commit's window dir, the prover's files included). Both write
+# $FLOCK_WORK/data/$TAG/stage (plain leaves, the recursive inner) and stage-zk (hm96, today's --zk on the same proof
+# blocks) with the partition, program and full sample (draw.json) beside them (own-partition), then run job.sh on them
+# with STAGE=0 and N the statement's template instances. Every other KEY=VALUE goes on to job.sh. Run from the verity
+# tree, as job.sh is:
 #   research run --on vy-nebius-cpu-2 --project verity --cwd source --mem-gb 128 --timeout 600m -- \
 #     taskset -c 0-31 bash benchmarks/recursion_e2e/stage.sh SUBCIRCUIT=silu-mul-v2/i8192/bf16 N=3 GPU=0 \
 #     FLOCK_WORK=/workspace/cache/rec-bench STEPS=build,inner,icheck,vstage,vcap,oprove,oreplay,lean,negative
-# env: SUBCIRCUIT (a census-style id)  N=3 (seeded draws; WINDOW: the member's own n)  SEED (rec_inner.py's)
+# env: SUBCIRCUIT (a census-style id)  N=3 (seeded inputs; WINDOW: the member's own n)  SEED (rec_inner.py's)
 #      WINDOW=DIR MEMBER=0  FLOCK_WORK=/workspace/jobs/rec-bench  TAG=rb-<run id>
 #      SERVE_RUN=DIR SERVE_WINDOW=0 (with WINDOW: the window's run root must be the one DIR/windows.jsonl published for it)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
