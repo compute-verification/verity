@@ -178,7 +178,7 @@ paths = [
 ]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_cache_redteam.py", "tests/test_cache_imports_and_moves.py"]
+tests = ["tests/test_cache_redteam.py", "tests/test_cache_imports_and_moves.py", "tests/test_catalog_fixture.py"]
 paths = ["tools/verity/circuit_check/src/circuit_check"]
 
 [[tool.verity.tests.reads]]
