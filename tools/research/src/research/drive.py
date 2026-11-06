@@ -61,7 +61,8 @@ gate vouches for against the run (`merge.regenerated_parent`), and that commit g
 since changed (one that did is the next lock run's) (`_commit_locks`).  That commit is `fresh`, or the run's tip when it
 regenerated nothing.  Failed, each step it judges (`LOCKS_JUDGED`: lean-audit and the preflights) is named red as an
 after-landing run's is (`_red`): its culprit is reverted on `checked` with the lock commits that go with it
-(`_lock_commits`), and the lock run of the revert checks again.  A lock run lost or failed by its machine (killed, out of
+(`_lock_commits`), and a lock run follows the revert while what it leaves still differs from `fresh` in Lean, a lock or the
+spec (as it does once a lock commit was reverted with it).  A lock run lost or failed by its machine (killed, out of
 disk or memory: `_machine_fault`) runs again once on the other machines.  Each landing awaits the after-landing run, one at a
 time, of the newest commit on `checked`'s first-parent line that no Lean, lock or spec change separates from `fresh`
 (`_target`: the tip, unless records of a lock run are still to come; `train.sh COMMIT MACHINES --deferred STEPS --base
