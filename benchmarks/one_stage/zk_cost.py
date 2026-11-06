@@ -31,7 +31,7 @@ sessions.
   can't recheck (flock-circuit refuses `FC_FIREWALL=1` without the host's witness).
 * **Overhead** (`overhead`): per served type and arm, the timed sessions' end-to-end seconds at k = c fitted as
   `fixed + marginal c` over its sizes, and a dot product's proof overhead: its GPU-seconds a proof block over the
-  GPU-seconds the same card's datasheet dense peak needs for the block's K MACs in its operand format (`verity.hardware`).
+  GPU-seconds the same card's datasheet dense peak needs for the block's K MACs in its operand format (`verity.hardware.rate`).
   Per statement and arm, its sessions at every k it drew, k = c among them, fitted over k (`drawn`): the statement's
   fixed seconds and a drawn block's, the deployed sample's price; `fw` less `nofw` at the same draws is the send
   check's increment. Its `observations.json` holds each arm's `costfit.Observation`s, prove the median timed session.
@@ -575,12 +575,6 @@ DEFINITION = ("proof overhead: the GPU-seconds the prover takes to prove a proof
               "needs to compute the block's MACs at its datasheet dense peak for the block's operand format")
 
 
-def peak_macs(card: dict, fmt: str) -> float:
-    """The card's datasheet dense tensor MACs a second in operand format ``fmt`` (`verity.hardware`'s card)."""
-    return (card["rate"]["tensor"]["value"] * card["sm"]["count"]["value"] * card["clock"]["sm"]["value"] * 1e6
-            / card["weight"][fmt]["value"])
-
-
 def line(points: dict[int, list[float]]) -> dict:
     """``seconds = fixed + marginal n`` over every session at each n, by least squares (one n: no slope)."""
     xs = [(n, y) for n, ys in points.items() for y in ys]
@@ -609,7 +603,7 @@ def overhead(a) -> int:
     for tag in dict.fromkeys(r["tag"] for r in stages):
         st = {r["c"]: r for r in stages if r["tag"] == tag}
         s0 = st[max(st)]
-        peak = peak_macs(card, s0["format"]) if s0["macs"] else None
+        peak = float(hardware.rate(card, fmt=s0["format"])) if s0["macs"] else None
         t = {"unit": s0["unit"], "definition": s0["definition"], "class": s0.get("class"), "ands": s0["ands"],
              "k_log": s0["k_log"], "full": s0["full"], "sizes": sorted(st), "macs": s0["macs"], "format": s0["format"],
              "peak_mac_per_s": peak, "stage_s": {c: r["stage_s"] for c, r in st.items()}, "arms": {}, "drawn": {}}
