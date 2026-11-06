@@ -135,8 +135,8 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   Fetch `main` first: a checkout whose `merge.py` is older than `origin/main`'s merges by `origin/main`'s.
 - Record your lock at your own head, then mark (`ready` refuses a changed lock no records run of that head passed); a
   passing Lean check, a clean merge of `main` over a passing head, or a commit of exactly the records under `record/` a
-  passing run kept needs no new run. A train regenerates records that differ only because another PR moved what yours
-  reads; re-record only what it can't (a refused conflict, `shape`, a move's map).
+  passing run kept needs no new run. Once your PR lands, drive's lock run regenerates records that differ only because
+  another PR moved what yours reads; re-record only what it can't (a refused conflict, `shape`, a move's map).
 
 ## Standing rulings
 
