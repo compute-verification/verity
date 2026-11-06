@@ -14,9 +14,7 @@ training circuit needs many blocks. Nothing here reads what a gate computes, onl
 
 The covering bound (`Nci.Guarantees.CoveringBoundTwoCosts`) is stated in `Nci.Covering`'s vocabulary, over a
 declaration's gates. This one is the bare wiring, so that it also reads a declaration bit by bit (`Circuit.ofDecl`), and
-its products carry a use and an updated parameter, so that one parameter's many uses (fan-out) and a token's keyed
-lookups (`Keyed`) can be counted. On a declaration's gates the two agree: its inference blocks and covers are
-`Nci.Covering`'s, and `UpdateHardness` is `Nci.Assumptions.ParameterHardAt` (`Proofs.Nci.Cover.Gates`).
+its products carry a use and an updated parameter, so that one parameter's many uses are counted once.
 
 * `Circuit`: gates `Fin N`, each reading gates of smaller index (so the circuit is acyclic), and the registered
   parameters `θ`, which are input gates.
