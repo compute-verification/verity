@@ -2,7 +2,7 @@
 of each rank, sized with ``--estimate``) cut into proof blocks, and the proof blocks counted per Definition, for the prefill
 step (step 0) and the decode steps, per token and per request.
 
-A row's cut is its own Definition, or else a unit template for each slot of its split (`serving_templates.unit_templates`):
+A row's cut is its own Definition, or else a unit template for each slot of its split (`serving_rows.unit_templates`):
 a ``CUT`` row's batched members, a ``PARTS`` row's parts and a ``SPLITS`` row's split parts and combine are a slot each; a
 ``COORDS``, ``COLS`` or ``SLICES`` row has one slot, its units listed coarse to fine, and a ``KCHUNKS`` row's slot is its
 coordinate or its K-chunks of one width. A unit template fits when it binds, C-Flock has a piece for every leaf, its block
@@ -27,7 +27,7 @@ from pathlib import Path
 from m1_families import K_MAX
 from verity.core.protocols.sampled_proofs.optimize import row_ands, unit_class
 from verity.ml.definitions.call_scope import spec_base, spec_statics
-from verity_vllm.pipeline import serving_templates as ST
+from verity_vllm.pipeline import serving_rows as ST
 
 PHASES = ("prefill", "decode")
 
