@@ -523,17 +523,18 @@ def versionWhy (tags : Tags) : Option String :=
       else "a superseded statement version"
     some s!"refused: {tags.name}, {what}: verify takes only {" and ".intercalate served}"
 
-/-- A session on seed coins (`--coins seed`, the default without `--zk`): every coin derives from the prover's seed, so
-none is live and no plain claim's record premise (`RecordCustodyExec`) can hold. -/
+/-- A session on seed coins (a plain session without `--coins tree`): every coin derives from the prover's seed, so none
+is live and no plain claim's record premise (`RecordCustodyExec`) can hold. The verifier reads coins only from a
+challenger's log. -/
 def SEED_COINS : String :=
-  "refused: a session on seed coins (--coins seed, the default without --zk): every coin derives from the prover's seed, so none is live; verify a plain session with --coins os"
+  "refused: a session on seed coins (a plain session without --coins tree): every coin derives from the prover's seed, so none is live; the verifier reads coins only from a challenger's log: verify a plain session on the challenger's keyed coin tree with --coins tree"
 
 def coinsWhy : Coins → Option String
   | .seed => some SEED_COINS
-  | _ => none
+  | .tree _ => none
 
-/-- **The session is in a form `verify` takes**: a statement version of `served`, on live coins (`--coins os`, or under
-`--zk` the keyed coin tree). `verify` runs it last, once every check has passed. -/
+/-- **The session is in a form `verify` takes**: a statement version of `served`, on the challenger's keyed coin tree
+(`--coins tree`, or `--zk`). `verify` runs it last, once every check has passed. -/
 def servedForm (tags : Tags) (coins : Coins) : Except String Unit :=
   match versionWhy tags <|> coinsWhy coins with
   | some why => .error why

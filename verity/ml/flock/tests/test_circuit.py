@@ -1,4 +1,4 @@
-"""verity/flock-circuit's Python side (lane flock-circuit): the composite circuit, its instance files, and the tail pieces in
+"""verity/flock-circuit's Python side: the composite circuit, its instance files, and the tail pieces in
 the circuit. The Rust statement's own tests are ``flock-circuit selftest`` on a pod (every negative) and the crate's unit tests."""
 from __future__ import annotations
 

@@ -645,14 +645,22 @@ class Linear:
                  {"id": issue["id"], "s": to["id"]})
         return to["name"]
 
-    def issue_id(self, issue: str) -> str:
-        """The id of the issue an identifier such as `INF-12` names; `NoIssue` when Linear has none."""
+    def _issue(self, issue: str, fields: str) -> dict:
+        """The issue a team key and number identify, with `fields`; `NoIssue` when Linear has none."""
         try:
-            return self.gql("query($id: String!) { issue(id: $id) { id } }", {"id": issue})["issue"]["id"]
+            return self.gql(f"query($id: String!) {{ issue(id: $id) {{ {fields} }} }}", {"id": issue})["issue"]
         except LinearError as e:
             if "Entity not found" in str(e):
                 raise NoIssue(f"Linear has no issue {issue} that {self.mode} can read") from None
             raise
+
+    def issue_id(self, issue: str) -> str:
+        """The id of the issue an identifier such as `INF-12` names; `NoIssue` when Linear has none."""
+        return self._issue(issue, "id")["id"]
+
+    def issue_labels(self, issue: str) -> list[str]:
+        """The names of the labels of the issue a team key and number identify, sorted; `NoIssue` when Linear has none."""
+        return sorted(x["name"] for x in self._issue(issue, "labels { nodes { name } }")["labels"]["nodes"])
 
     def link_pr(self, issue_id: str, url: str) -> bool:
         """Attach the GitHub pull request at `url` to the issue (its id) as Linear's GitHub integration would, which is off
