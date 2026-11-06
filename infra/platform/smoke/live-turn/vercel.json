@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "api/turn.mjs": {
+      "maxDuration": 300,
+      "includeFiles": "node_modules/@ai-sdk/harness-{claude-code,codex}/dist/bridge/**"
+    }
+  }
+}
