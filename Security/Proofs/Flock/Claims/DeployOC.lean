@@ -1,5 +1,7 @@
-import Definitions.Claims
-import Flock.With.SimSetup
+module
+
+public import Definitions.Claims
+public import Flock.With.SimSetup
 
 /-!
 # The verifier over `OC`: every SHA-512 call an oracle query
@@ -15,6 +17,8 @@ between `OCV` and the logging monad `LogV`, at `verifyWithM_sim` and at `setupTa
 
 `hOf H` is `H` on byte arrays: `ByteArray` and `Msg = List UInt8` are the same bytes (`ofMsg_toMsg`).
 -/
+
+@[expose] public section
 
 namespace Claims
 

@@ -1,6 +1,8 @@
-import Mathlib.LinearAlgebra.Matrix.Rank
-import Definitions.Accounting.RateAuditDeployed
-import Definitions.Accounting.RateAuditSketchDeployed
+module
+
+public import Mathlib.LinearAlgebra.Matrix.Rank
+public import Definitions.Accounting.RateAuditDeployed
+public import Definitions.Accounting.RateAuditSketchDeployed
 
 /-!
 # The deployed rate audit's measured capacity: the squaring ceiling (trusted)
@@ -19,6 +21,8 @@ hypothesis, never an `axiom`:
 * `SketchHashBudget A qtot`: across a pass's `G` grinding candidates, the oracle queries total at most `qtot`, the
   node's hash budget for the pass.
 -/
+
+@[expose] public section
 
 namespace Accounting.Assumptions
 

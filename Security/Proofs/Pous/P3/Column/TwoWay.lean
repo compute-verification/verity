@@ -1,8 +1,10 @@
-import Definitions.Pous
-import Definitions.Pous.Assumptions
-import Proofs.Pous.Statements
-import Proofs.Pous.Sanity
-import Proofs.Pous.Accounting.Numbers
+module
+
+public import Definitions.Pous
+public import Definitions.Pous.Assumptions
+public import Proofs.Pous.Statements
+public import Proofs.Pous.Sanity
+public import Proofs.Pous.Accounting.Numbers
 
 /-!
 # The two-directional column game: from a winning holding to a schedule
@@ -22,6 +24,8 @@ Counting each lower label's held columns:
   (`ndHeld`);
 * a held label pays `n − |U|`.
 -/
+
+@[expose] public section
 
 namespace PousP3Column
 

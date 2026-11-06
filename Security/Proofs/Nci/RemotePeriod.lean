@@ -1,6 +1,8 @@
-import Definitions.Nci.Guarantees.RemotePeriod
-import Proofs.Nci.Remote
-import Proofs.Flock.Soundness.Audit.Periods
+module
+
+public import Definitions.Nci.Guarantees.RemotePeriod
+public import Proofs.Nci.Remote
+public import Proofs.Flock.Soundness.Audit.Periods
 
 /-!
 # Proof of the remote overhead bound over a monitoring period
@@ -25,6 +27,8 @@ The witnesses, `DampenerRemotePeriod_honest` and `DampenerRemotePeriod_nontrivia
 window with no faulty proof block and no declared run, where each event holds on every run or on none. The `example` at
 the end applies `DampenerRemotePeriod` to the nontrivial lemma's conjuncts, so they are its premises as it states them.
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

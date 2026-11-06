@@ -1,8 +1,10 @@
-import Definitions.Core.Boolean
-import Proofs.Core.Circuit
-import Proofs.Flock.Bridge.Count
-import Proofs.Flock.Soundness.Discharge.Layout.Outs
-import Properties.Flock.Circuit.CircuitOf
+module
+
+public import Definitions.Core.Boolean
+public import Proofs.Core.Circuit
+public import Proofs.Flock.Bridge.Count
+public import Proofs.Flock.Soundness.Discharge.Layout.Outs
+public import Properties.Flock.Circuit.CircuitOf
 
 /-!
 # The parsed circuit file as core's circuit, and the sampling relation as its wrong units
@@ -28,6 +30,8 @@ game circuit and partition as core's), `circuitOf D hU n` and `partsOf D hU n` (
   (`Flock.Desc.parse`, `HmOut.loadPublic`), and `ofFile_iff` restates any statement about the committed files' circuit,
   units and partition as one about `circuitOf`, `n` and `partsOf` at the parse.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

@@ -12,7 +12,11 @@ A soundness argument reasons about `answerAt` at the coins the challenger drew. 
 drew, or the run carries a break, is each reader's property (`Security/Properties`). A protocol without live coins
 needs none of this: `Protocol` and `Protocol.answer` are unchanged.
 -/
-import CoreProtocol.Protocol
+module
+
+public import CoreProtocol.Protocol
+
+@[expose] public section
 
 namespace Core
 

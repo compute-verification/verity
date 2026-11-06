@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.PlainEvent
+module
+
+public import Proofs.Flock.Claims.KS.PlainEvent
 
 /-!
 # The plain verdict at the statement's draw
@@ -20,6 +22,8 @@ draw `d`, and no draw in the record is read, as the masked side does (`Composed.
   column off `C` has at its live outcome, on every draw-carrying record (`plainVerdict_of_run` without its premise
   that the record carry the statement's draw verbatim).
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.PlainDraw
 

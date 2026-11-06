@@ -20,7 +20,11 @@ caller binds, copy by copy.
 Cost: per call path, its Definition's own entries and its calls' bound inputs times their copies, each an `eq` of at
 most `sl` coordinates and a position read through the call tree; `work` counts the entries and binding terms.
 -/
-import Flock.TmplLayout
+module
+
+public import Flock.TmplLayout
+
+@[expose] public section
 
 namespace Flock.Tmpl
 

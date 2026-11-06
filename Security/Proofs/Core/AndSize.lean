@@ -1,9 +1,11 @@
-import Definitions.Core.Guarantees.Formalism
-import Definitions.Core.Guarantees.Expand
-import Proofs.Core.Expand
-import Mathlib.Data.ZMod.Basic
-import Mathlib.Tactic.LinearCombination
-import Mathlib.Tactic.Ring
+module
+
+public import Definitions.Core.Guarantees.Formalism
+public import Definitions.Core.Guarantees.Expand
+public import Proofs.Core.Expand
+public import Mathlib.Data.ZMod.Basic
+public import Mathlib.Tactic.LinearCombination
+public import Mathlib.Tactic.Ring
 
 /-!
 # Proofs about the AND count
@@ -15,6 +17,8 @@ import Mathlib.Tactic.Ring
 * `ToCircuitAnd`: C-Flock's XOR, NOT and input gates are affine, and its `and a b` (`a ≠ b`) and its rows whose XORs
   differ are not.
 -/
+
+@[expose] public section
 
 namespace Verity
 

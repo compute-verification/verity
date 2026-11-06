@@ -1,5 +1,7 @@
-import Definitions.Core.Formalism
-import Definitions.Nci.Covering
+module
+
+public import Definitions.Core.Formalism
+public import Definitions.Nci.Covering
 
 /-!
 # Appendix A.1: from a `(c, k)`-partition to a covering
@@ -9,6 +11,8 @@ inference block (`Nci.Covering.InferenceBlock`) holds its inputs among its gates
 inputs, `Î = I ∪ in(I)` with inputs `in(I)`, turns a `(c, k)`-partition into a covering at size `c + max_I |in(I)|` and
 the same read cap `k`, with one inference block per proof block, each computing exactly the gates of its proof block.
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 

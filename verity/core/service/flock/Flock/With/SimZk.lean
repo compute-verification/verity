@@ -3,8 +3,12 @@ The `--zk` verifier's `…With` functions (`Flock.With.Zk`) under a simulation (
 `S` relates hash by hash, each function's two runs are related by `S` (or by its lift to the transcript and the Ligerito
 state).
 -/
-import Flock.With.SimVerify
-import Flock.With.Zk
+module
+
+public import Flock.With.SimVerify
+public import Flock.With.Zk
+
+@[expose] public section
 
 namespace Flock.With
 

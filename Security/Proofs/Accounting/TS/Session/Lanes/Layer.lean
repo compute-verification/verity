@@ -1,9 +1,11 @@
-import Proofs.Accounting.TS.Session.Checked.Layer
-import Proofs.Accounting.TS.Session.Held.Layer
-import Proofs.Flock.Recursive.Registrants
-import Flock.KnownRead
-import PouwWindow.OwnPorts
-import PouwWindow.FullDraw
+module
+
+public import Proofs.Accounting.TS.Session.Checked.Layer
+public import Proofs.Accounting.TS.Session.Held.Layer
+public import Proofs.Flock.Recursive.Registrants
+public import Flock.KnownRead
+public import PouwWindow.OwnPorts
+public import PouwWindow.FullDraw
 
 /-!
 # A leaf's proof layer through its 33 linked C-Flock sessions (option A)
@@ -59,6 +61,8 @@ Words are integers as `Accounting.Served` reads them (codes s8, z s32, scales an
 receipt words are `BitVec 32`. These definitions sit beside the checked layer's, under `reads_exempt`'s
 `Proofs.Accounting.TS.Session`.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Lanes
 

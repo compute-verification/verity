@@ -1,5 +1,7 @@
-import Definitions.Accounting.PouwWork
-import Definitions.Accounting.Requirement.Placed
+module
+
+public import Definitions.Accounting.PouwWork
+public import Definitions.Accounting.Requirement.Placed
 
 /-!
 # PoUW's credits and help when a node runs a declared circuit as placed (trusted)
@@ -25,6 +27,8 @@ are in `Security/Proofs/Accounting/RequirementPouw.lean`.
 
 Completeness: statements about the run of a node that runs `W` as placed, about no function of the code.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 

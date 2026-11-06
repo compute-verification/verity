@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.FinishSwLig
-import Proofs.Flock.Claims.ZK.FinishSwSv
+module
+
+public import Proofs.Flock.Claims.ZK.FinishSwLig
+public import Proofs.Flock.Claims.ZK.FinishSwSv
 
 /-!
 # Level 0's opening at the switched source, at the coins
@@ -19,6 +21,8 @@ or a pad. So those are the honest source's, and the honest source's are what the
   basis of the PIOP's switched vectors and the tape's extra lanes, lane paddings and salts, at the request's pads,
   where level 0's part of the firewall's clear values is `l0Clear` there.
 -/
+
+@[expose] public section
 
 set_option smartUnfolding false in
 /-- The switched pre-final view's `y₁'` is the honest view's. -/

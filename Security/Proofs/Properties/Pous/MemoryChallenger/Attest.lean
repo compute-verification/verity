@@ -1,7 +1,10 @@
-import Properties.Attest
-import Proofs.Properties.Pous.MemoryChallenger.Tree
-import Proofs.Flock.Claims.Finder
-import Proofs.Properties.CertifierDevice.Lms
+module
+
+public import Properties.Attest
+public import Proofs.Properties.Pous.MemoryChallenger.Tree
+public import Proofs.Flock.Claims.Finder
+public import Proofs.Properties.CertifierDevice.Lms
+import all Init.Data.String.Defs
 
 /-!
 # Proofs of a party's signed periods (`Properties.Attest`)
@@ -39,6 +42,8 @@ carries no break (`periodSigned_nontrivial`), so a verifier that accepts everyth
 party's whole output, which carries the records (`livenessContentFree_nontrivial`); at an overheard witness path
 (`auditorSeesSkeleton_nontrivial`); and at a prover that reads the party's state (`proverSeesMessages_nontrivial`).
 -/
+
+@[expose] public section
 
 namespace MemoryChallenger.Attest.Properties.SecurityProofs
 

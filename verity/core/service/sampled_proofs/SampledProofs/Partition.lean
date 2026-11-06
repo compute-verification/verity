@@ -10,13 +10,17 @@ wider than the widest class is refused (a template instance's bits are its disti
 `Q_word` unit's are its cut's), and so is a program with a template of no gate. The verifier holds its own copy of the
 program and applies the query itself; it never takes a population or a unit index on the prover's word.
 -/
-import Flock.HmRow
-import Flock.TemplateQuery
-import Flock.Draw
-import Flock.Extract
-import Flock.Qcall
-import SampledProofs.Json
-import SampledProofs.Program
+module
+
+public import Flock.HmRow
+public import Flock.TemplateQuery
+public import Flock.Draw
+public import Flock.Extract
+public import Flock.Qcall
+public import SampledProofs.Json
+public import SampledProofs.Program
+
+@[expose] public section
 
 namespace SampledProofs.Partition
 

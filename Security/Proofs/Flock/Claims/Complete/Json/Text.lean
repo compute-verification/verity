@@ -1,8 +1,10 @@
-import Flock.RecordText
-import Std.Data.TreeMap.Raw.Lemmas
-import Proofs.Flock.Claims.Complete.Json.Value
-import Proofs.Flock.Claims.Complete.Prover.Print
-import Proofs.Flock.Claims.Complete.Json.RoundTrip
+module
+
+public import Flock.RecordText
+public import Std.Data.TreeMap.Raw.Lemmas
+public import Proofs.Flock.Claims.Complete.Json.Value
+public import Proofs.Flock.Claims.Complete.Prover.Print
+public import Proofs.Flock.Claims.Complete.Json.RoundTrip
 
 /-!
 # The honest record is in its canonical text (S0)
@@ -13,6 +15,8 @@ print in its tree's order, which for a well-formed tree is its keys' sorted orde
 verifier's parser reads a printable value's text back as an alike value (`FlockComplete.JsonRT.parse_print`), so S0
 accepts the honest record (`check_printJ`), with no assumption.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

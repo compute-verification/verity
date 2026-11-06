@@ -1,6 +1,8 @@
-import Mathlib.Combinatorics.Enumerative.DoubleCounting
-import Proofs.Nci.Cover.PartialSumCube
-import Proofs.Nci.Cover.PartialSumRate
+module
+
+public import Mathlib.Combinatorics.Enumerative.DoubleCounting
+public import Proofs.Nci.Cover.PartialSumCube
+public import Proofs.Nci.Cover.PartialSumRate
 
 /-!
 # The partial-sum bounds: the cover
@@ -17,6 +19,8 @@ The crossings' share is paid by the accumulations' reads (`crossings_sum_le`): a
 `m` its blocks and `n` its not-whole products, which sum to at most `3 Σ #(inputs ∩ accGates)` (`PartialSumsRead`).
 `ps_cover_sum` adds the blocks up.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.SecurityProofs
 

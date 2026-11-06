@@ -1,4 +1,6 @@
-import Definitions.Nci
+module
+
+public import Definitions.Nci
 
 /-!
 # NCI over threads: the vocabulary
@@ -17,6 +19,8 @@ It states them over `C` itself, not over the declared circuit, which reaches the
 * `Threading.Threaded Γ S d e`: the draft's `(d, e)`-threaded: every small subcircuit that reads fewer than `d` novel values
   of a thread computes at most `e` of that thread's counted multiplications per value it reads from the thread.
 -/
+
+@[expose] public section
 
 namespace Nci
 

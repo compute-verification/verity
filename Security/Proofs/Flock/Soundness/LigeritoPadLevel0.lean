@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.PadCode
-import Proofs.Flock.Soundness.LigeritoPhase
-import Definitions.Flock.LigeritoPad
+module
+
+public import Proofs.Flock.Soundness.PadCode
+public import Proofs.Flock.Soundness.LigeritoPhase
+public import Definitions.Flock.LigeritoPad
 
 /-!
 # The padded level 0: lane rounds, extra lanes, and decoding
@@ -20,6 +22,8 @@ The pieces of `ligeritoPad`'s level 0 that differ from `ligerito`'s:
   column agrees with the encoding of `G` on `(1 − γ')·2^d` positions, then `G` is `padFold` of a
   family in the list. The padding correction `ybar` is then the family's folded padding.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

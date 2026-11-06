@@ -1,5 +1,7 @@
-import Definitions.Pouw.Assumptions.Dimension.H100W
-import Definitions.Pouw.Assumptions.Dimension.H100LoopFree
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.H100W
+public import Definitions.Pouw.Assumptions.Dimension.H100LoopFree
 
 /-!
 # `MH100`'s floor table, and the distinct-writes bound for citing the hardware (trusted statements; draft semantics)
@@ -32,6 +34,8 @@ with no hypothesis on any instruction's accumulator or multiplicands. `DistinctW
 cheap tensor-core instruction can write. All three are additive-W1 work, not time: co-issued mixes write a register as
 often as every 21.45 units loop-free, and 21.33 at full dispatch (`H32`'s docstring).
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.H100
 

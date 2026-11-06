@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.Zk.PiopGo
-import Proofs.Flock.Claims.Complete.Zk.ReplayPos
-import Proofs.Flock.Claims.Complete.Zk.Replay
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.PiopGo
+public import Proofs.Flock.Claims.Complete.Zk.ReplayPos
+public import Proofs.Flock.Claims.Complete.Zk.Replay
 
 /-!
 # The masked ring switch replays (`RingSwitchZk`)
@@ -17,6 +19,8 @@ check, and the extra claims returns, given the extra claims' algebra (`RsExtrasZ
   (`ringSwitchWith_of`, `rs_of`): the two checked claims meet their values by definition (`Zk.claimCheck`), the extra
   claims by `RsExtrasZk`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

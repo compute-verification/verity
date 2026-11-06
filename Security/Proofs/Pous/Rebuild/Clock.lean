@@ -1,4 +1,6 @@
-import Proofs.Pous.Chain.Flat
+module
+
+public import Proofs.Pous.Chain.Flat
 
 /-!
 # The cumulative chain clock, and the band's hardness from one held label
@@ -8,6 +10,8 @@ import Proofs.Pous.Chain.Flat
 band, that block is label `v − 1` (`ovBlock_band_one`), so a run of labels with no seed costs the sum of its rows'
 calls (`band_run`), and a holding priced at one label leaves a run of at least 251 labels of 6 calls or more.
 -/
+
+@[expose] public section
 
 namespace PousRebuild
 

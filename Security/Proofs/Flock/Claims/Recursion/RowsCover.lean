@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.LayoutBTops
-import Proofs.Flock.C3.Reps.RoundLinks
+module
+
+public import Proofs.Flock.Claims.Recursion.LayoutBTops
+public import Proofs.Flock.C3.Reps.RoundLinks
 
 /-!
 # Every absorbing stream round is a part's row (`RowsCover`), from the verifier's checks
@@ -15,6 +17,8 @@ by some part through a port under its `rec-c<k>` (`heldRows`). Two checks give i
 
 `rowsCover`: `RowsCover` at every shape. `ksLin2_deployed_rows` is `ksLin2_deployed_tops` with it discharged.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

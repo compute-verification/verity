@@ -5,27 +5,38 @@ circuit divides into inference blocks within their gate and fresh-input budgets,
 and the registered information and so needs no hardware at the site), work by proof of useful work over the period
 (`PouwCheck.Period.protocol`, `verity/pouw/period/v1`: the period's windows credited all or nothing), onsite's work
 subprotocol, and integrity by sampled proofs (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`, in the
-form its params name: one-stage v1's audit, or the recursive audit, V*'s compiled check run on the recursive session's
-parts, which the caller hands in as blobs; one-stage v2, the audit on the proofs themselves, is not remote's until the
-composites switch to it). `Core.Composition.tiedSameB` composes them on the caller's blobs: every
+form its params name: one-stage v2's audit on the proofs themselves, or the recursive audit, V*'s compiled check run on
+the recursive session's parts, each on the blobs the caller hands in; one-stage v1, whose verdicts are the evidence's, is
+refused). `Core.Composition.tiedSameB` composes them on the caller's blobs: every
 subprotocol accepts or remote doesn't, and any one's rejection rejects remote whatever the others answer. The policy's
 commitment and sampled proofs' are the run's record, and both must commit to the same one; every window of the period
 must name that record as its Commit record (`windows`). Two records reject remote whatever the subprotocols answer.
 
 A stated exception: the policy's v0 publishes the declared division and each inference block's profile (its gates and
-fresh-input bits) in the clear. Remote composes it for the run of record of 28 Oct only, as an exception to
-everything-zero-knowledge, by Daniel's ruling: "Let's run it in the clear tonight as a stated exception." v1's
-private form (the division committed under hiding leaves, compliance proved, a padded profile) replaces it after
-15:00Z on 28 Oct.
+fresh-input bits) in the clear. Remote composes it for one run of record only, as an exception to
+everything-zero-knowledge, and v1's private form (the division committed under hiding leaves, compliance proved, a
+padded profile) replaces it.
 -/
-import CoreComposition.Blobs
-import CoreComposition.Cases
-import CoreComposition.Tie
-import NciCheck.Protocol
-import PouwCheck.Period
-import SampledProofs.OneStage
-import SampledProofs.OneStageZk
-import VStarRecursive.Sampled
+module
+
+public import CoreComposition.Blobs
+public import CoreComposition.Cases
+public import CoreComposition.Tie
+public import NciCheck.Protocol
+public import PouwCheck.Period
+public import SampledProofs.OneStage
+public import SampledProofs.OneStageZk
+public import VStarRecursive.Sampled
+meta import CoreComposition.Blobs
+meta import CoreComposition.Cases
+meta import CoreComposition.Tie
+meta import NciCheck.Protocol
+meta import PouwCheck.Period
+meta import SampledProofs.OneStage
+meta import SampledProofs.OneStageZk
+meta import VStarRecursive.Sampled
+
+@[expose] public section
 
 namespace Core.Remote
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ERepCost
+module
+
+public import Proofs.Flock.Claims.ERepCost
 
 /-!
 # One wait, truncated: from `k` accepted runs to `E^rep`'s `K` draws
@@ -17,6 +19,8 @@ law of `k` accepted runs (the old soundness's `expectAcc`).
   fails with probability at most `1/2 + 2^k e^{−k}`, and `m` of them with at most `2^{−m} + 4·2^k e^{−k}`, which is at
   most `2^{−m} + e^{−k/8}`.
 -/
+
+@[expose] public section
 
 namespace Claims
 

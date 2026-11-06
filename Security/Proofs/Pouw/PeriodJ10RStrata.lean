@@ -1,5 +1,7 @@
-import Properties.Pouw.PeriodJ10RStrata
-import Proofs.Pouw.PeriodJ10R
+module
+
+public import Properties.Pouw.PeriodJ10RStrata
+public import Proofs.Pouw.PeriodJ10R
 
 /-!
 # Proof of `H1J10RCheckedCreditPeriodStrata`
@@ -13,6 +15,8 @@ salt being its live coin, read on the view (`saltAt`). Its accepted prefix and l
 bound holds on the period's coins (`stratum_bound`). An accepted period whose fixed words, summed over `S`, fall short of
 the summed credit has a stratum whose own fall short, so the union bound gives the statement.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.PeriodJ10RStrata.SecurityProofs
 

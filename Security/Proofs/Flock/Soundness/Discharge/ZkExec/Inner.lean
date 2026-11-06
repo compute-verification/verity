@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.Statements
-import Proofs.Flock.Soundness.Refine.Exec
-import Proofs.Flock.Soundness.Refine.Table
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Statements
+public import Proofs.Flock.Soundness.Refine.Exec
+public import Proofs.Flock.Soundness.Refine.Table
 
 /-!
 # flock-verify `--zk`'s inner proof accepts (live/PROTOCOL.md §5)
@@ -9,6 +11,8 @@ import Proofs.Flock.Soundness.Refine.Table
 commitment, the batched constraint, and every queried column consistent with `Y` and climbing to the pads' root under
 its `hm96` leaf. The run is peeled step by step (`Refine.Exec`); the column loop's checks come from `forIn_each`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

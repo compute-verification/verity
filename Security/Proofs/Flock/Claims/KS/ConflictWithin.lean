@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.ConflictMerkle
+module
+
+public import Proofs.Flock.Claims.KS.ConflictMerkle
 
 /-!
 # A run within a log, as a verdict
@@ -9,6 +11,8 @@ with `hashesIn L` (`within`), and a copy that `hashesIn L` accepts runs within `
 more than the deployed hashes do (`sub`). So a lemma proved of the verifier in `V` under every oracle holds of a run
 within its log, and the Merkle check it reaches runs within that log too.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

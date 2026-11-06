@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.CROnly.Hankel
+module
+
+public import Proofs.Flock.Soundness.CROnly.Hankel
 
 /-!
 # `hm96-sha512`'s hiding gap
@@ -10,6 +12,8 @@ values. The leftover hash lemma (`sum_hidingGap_le`, `hankel_universal`) gives t
 at most a `2^-64` fraction (`hm96_sha512_tail`). That the pinned key is not among them is `hash-derived-key`, the
 common-reference-string step of §2a. Bits are a field `F` of two elements.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.CROnly
 

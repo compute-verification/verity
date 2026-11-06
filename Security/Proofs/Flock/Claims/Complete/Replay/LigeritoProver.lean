@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Replay.LigeritoRun
-import Proofs.Flock.Claims.Complete.Json.Session
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoRun
+public import Proofs.Flock.Claims.Complete.Json.Session
 
 /-!
 # The honest prover's Ligerito, on the model's rounds
@@ -22,6 +24,8 @@ sent. Its first cap is the commitment's.
   (`PRuns.challenge`), a level's four challenges (`levelChals`), an out-of-domain intro (`PRuns.oodIntro`) and a level's
   query (`PRuns.query`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

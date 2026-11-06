@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.Exec.Retained
-import Proofs.Flock.Soundness.Refine.Regions
-import Flock.With.Deployed
-import Flock.With.VerifyE
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.Retained
+public import Proofs.Flock.Soundness.Refine.Regions
+public import Flock.With.Deployed
+public import Flock.With.VerifyE
 
 /-!
 # flock-verify's acceptance with its digest comparisons read through `keep`
@@ -22,6 +24,8 @@ the acceptance walkers read of `verify` at every `keep`:
 At `keep := id` the decoder is `Record.decode` (`decodeWithK_id_std`), so each statement here at `keep := id` is the
 shipped one.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

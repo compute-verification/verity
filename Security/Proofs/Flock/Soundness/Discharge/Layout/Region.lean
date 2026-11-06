@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Refine.Setup
-import Proofs.Flock.Soundness.Discharge.Layout.Bytes
+module
+
+public import Proofs.Flock.Soundness.Refine.Setup
+public import Proofs.Flock.Soundness.Discharge.Layout.Bytes
 
 /-!
 # What a region pins in a satisfying witness
@@ -14,6 +16,8 @@ Where they sit: a region `mkRegion` builds puts its free bits at the given posit
 (`inBlock_mkRegion`, `spread`); and every in-block address of a region with distinct free bits is in the block
 (`inBlock_lt`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Layout
 

@@ -1,5 +1,7 @@
-import Mathlib
-import Proofs.Accounting.RateAudit.Audit
+module
+
+public import Mathlib
+public import Proofs.Accounting.RateAudit.Audit
 
 /-!
 # The rate audit over `n` windows: the proof
@@ -10,6 +12,8 @@ least `m` of them short of the floor (`le_card_short`). The probability that win
 class, played on the store and window `i`'s own coins (`pr_short_le`). Markov's inequality over the count of short
 windows (`mul_pr_le_sum`) gives the guarantee.
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate
 

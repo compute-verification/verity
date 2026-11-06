@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.ZkSched
-import Proofs.Flock.Claims.KS.PushSched
+module
+
+public import Proofs.Flock.Claims.KS.ZkSched
+public import Proofs.Flock.Claims.KS.PushSched
 
 /-!
 # The masked slot from a schedule whose tables pause and resume
@@ -24,6 +26,8 @@ as the simulator does when it sends the table's openings after the later tables'
 * `ZkBatchAlign`, `zkFrontAlign_of_batch`: so `ZkFrontAlign`, and with it `ZkSlotAlign`, holds where the simulated
   strategy follows that schedule at the deployed tables' counts.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

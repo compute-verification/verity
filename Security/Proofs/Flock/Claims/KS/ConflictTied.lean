@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.ConflictRun
-import Proofs.Flock.Claims.DeployK
+module
+
+public import Proofs.Flock.Claims.KS.ConflictRun
+public import Proofs.Flock.Claims.DeployK
 
 /-!
 # Conflicts tied to collisions, at both records
@@ -22,6 +24,8 @@ The plain opening holds of every column a rep opens, before `distinctBelow` keep
 `plain_opening_raw`), so two such columns of one accepted run at one position that differ collide in its own log
 (`plain_selfClash_tied`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

@@ -1,6 +1,8 @@
-import Mathlib.Data.List.Perm.Basic
-import Properties.Core.Site
-import Proofs.Core.Site
+module
+
+public import Mathlib.Data.List.Perm.Basic
+public import Properties.Core.Site
+public import Proofs.Core.Site
 
 /-!
 # The Site's code is the spec's: the proofs
@@ -11,6 +13,8 @@ exactly when the spec's holds of what it denotes (`fresh_iff` … `reached_iff`)
 check of a log then follows the spec's validity one entry at a time (`go_says`), by
 `Verity.Registration.valid_append_singleton`.
 -/
+
+@[expose] public section
 
 open scoped NNRat
 

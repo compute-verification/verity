@@ -1,6 +1,8 @@
-import Properties.Nci
-import Definitions.Nci.Assumptions.Baseline
-import Definitions.Nci.Assumptions.Threads
+module
+
+public import Properties.Nci
+public import Definitions.Nci.Assumptions.Baseline
+public import Definitions.Nci.Assumptions.Threads
 
 /-!
 # A verdict of compliance carries the thread bound
@@ -25,6 +27,8 @@ The bounds' `0 ≤ α` is no premise here: `num / den` of naturals is nonnegativ
 `NciCheck.Properties.SecurityProofs.X : NciCheck.Properties.X` in `Proofs.Nci.Verdict` (package `security_proofs`), from
 `Witnesses` and the bound's proof: a property whose proof needs `security_proofs` is stated here and proved there.
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties
 

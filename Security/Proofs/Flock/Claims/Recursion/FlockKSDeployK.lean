@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.ConflictTiedE
-import Proofs.Flock.Claims.DeployVK
+module
+
+public import Proofs.Flock.Claims.Recursion.ConflictTiedE
+public import Proofs.Flock.Claims.DeployVK
 
 /-!
 # The code facts and the accepted run's decision at `FlockDeploy.VK keep`
@@ -13,6 +15,8 @@ so its verdict accepts with SHA-512 answered only within that log (`decisionK_ru
 At `keep := fun _ => true` these are the facts at `VE` (`VK_true`), and at `keep := id` the ones at `V false`
 (`VK_id`), so a proof that reads them at `VK keep` holds at both.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

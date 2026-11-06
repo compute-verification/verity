@@ -1,4 +1,4 @@
-"""V*'s algebra statement (hiding model architectures, lane rec-v0): the inner verifier's algebraic checks on each rep of the
+"""V*'s algebra statement (hiding model architectures): the inner verifier's algebraic checks on each rep of the
 inner session (`verity_flock.rec_algebra`) as ``InnerRepCheck_v2{S}``, one instance a rep, one C-Flock statement.
 
     U16 = Array<16, Value<1>>
@@ -26,7 +26,7 @@ then zero words.
   k's ring switch). The opening is one instance, ``rec-opening/m<m>-c<claims>-p<j>``, its rounds' messages one-row
   registrations.
 * ``v``: the coefficients and constants at the rep's coins, then ``z_partial``'s comb, the inner circuit's fold at the rep's
-  point (§10), which the verifier computes from the inner session's public record and the inner statement
+  point (`Flock.Piop`), which the verifier computes from the inner session's public record and the inner statement
   (`rec_algebra.verifier_rows`; the extra claims and the comb `verity_flock.rec_vstage` computes), as a row port of
   ``P(nv)`` words, its words after the nv elements zero and unread. The verifier registers it itself (`verifier_value`): the
   value ``rec-v`` (`V_VALUE`), row r rep r's, under public salts (`verifier_salts`), so its root is a function of the public

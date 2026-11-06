@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainDrawRColsE
-import Proofs.Flock.Claims.KS.PlainDrawJRun
+module
+
+public import Proofs.Flock.Claims.KS.PlainDrawRColsE
+public import Proofs.Flock.Claims.KS.PlainDrawJRun
 
 /-!
 # Two accepted last steps of the deployed reader: what they share, and the verdict at a parsed value
@@ -17,6 +19,8 @@ coins that differ only in the last message. Here what both halves read:
   (`rep_plainJK`, `streams_ns_plainJK`, `rounds_ns_plainJK`, `streams_sizes_plainJK`), and two records under one
   custody (`live_keys_eqJK`, `sess_rounds_eqJK`, `streams_coins_eqJK`): the text forms' proofs less the parse.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

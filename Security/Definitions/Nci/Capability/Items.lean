@@ -1,4 +1,6 @@
-import Definitions.Core.Formalism
+module
+
+public import Definitions.Core.Formalism
 
 /-!
 # Local bounds: items, what a block holds, and budgets
@@ -8,6 +10,8 @@ of its value) and a **price** in bits. A **selection** picks some items and one 
 when its cells lie among the block's gates and what they read. Every information premise reaches the counting as a
 **budget**: what each block holds costs at most `h` (`HeldPriceAtMost`).
 -/
+
+@[expose] public section
 
 namespace Nci.Capability
 

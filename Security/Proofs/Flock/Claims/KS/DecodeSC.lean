@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Bridge.DecodePlain
-import Proofs.Flock.Claims.KS.Entries
+module
+
+public import Proofs.Flock.Claims.Bridge.DecodePlain
+public import Proofs.Flock.Claims.KS.Entries
 
 /-!
 # The deployed plain decoder, with no opening off the table
@@ -13,6 +15,8 @@ root is the live strategies' and on which the deployed plain reader looks up no 
   `accepts_opens₀L` reads, so an opening off `C` without a self-clash is a column off `C` the reader looks up
   (`Claims.Flock.exists_ne_of_entries`), which `TxNoOff` excludes.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.DecodePlain
 

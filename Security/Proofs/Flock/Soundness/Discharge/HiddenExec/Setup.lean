@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Statements
-import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Statements
+public import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
 
 /-!
 # What `Stmt.setupHidden` returns, as this area reads it
@@ -11,6 +13,8 @@ The rest are what this area reads of `Stmt.setupHidden`, all from `Discharge/Hid
 of `Spec` (`tagsEq`, `pub`, `parse`, and `n`, `blocksReal`, `nbl`); `setupHidden_hm96`, `setupHidden_wf` and
 `parse_untyped` are `Discharge/Hidden`'s (`Hidden/Facts.lean`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

@@ -1,19 +1,21 @@
-import Proofs.Flock.Claims.Recursion.VerdictRowEOpens
-import Proofs.Flock.Claims.Recursion.CapOpens
-import Proofs.Flock.C3.RegLevels.AccReads
-import Proofs.Flock.Claims.Recursion.DeployPremises
-import Proofs.Flock.Claims.Recursion.SlotsCheck
-import Proofs.Flock.Claims.Recursion.DeployScope
-import Proofs.Flock.Claims.Recursion.DeployOuter
-import Proofs.Flock.Claims.JsonNorm
-import Proofs.Flock.Claims.Complete.Json.Stmt
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
-import Proofs.Flock.C3.PubRows.Check
-import Proofs.Flock.Recursive.Witness
-import Proofs.Flock.Claims.KS.PlainWrP
-import Proofs.Flock.Claims.Bridge.Custody
-import Proofs.Flock.Claims.DeployTables
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRowEOpens
+public import Proofs.Flock.Claims.Recursion.CapOpens
+public import Proofs.Flock.C3.RegLevels.AccReads
+public import Proofs.Flock.Claims.Recursion.DeployPremises
+public import Proofs.Flock.Claims.Recursion.SlotsCheck
+public import Proofs.Flock.Claims.Recursion.DeployScope
+public import Proofs.Flock.Claims.Recursion.DeployOuter
+public import Proofs.Flock.Claims.JsonNorm
+public import Proofs.Flock.Claims.Complete.Json.Stmt
+public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+public import Proofs.Flock.C3.PubRows.Check
+public import Proofs.Flock.Recursive.Witness
+public import Proofs.Flock.Claims.KS.PlainWrP
+public import Proofs.Flock.Claims.Bridge.Custody
+public import Proofs.Flock.Claims.DeployTables
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 
 /-!
 # A staged part's table labels its instances `0..n-1`
@@ -32,6 +34,8 @@ holds, from the decision's own checks (`labels_full`):
 
 `labels_run` and `labels_stagedAll` state it at each part an accepted run stages (`stagedPart_run`, `stagedAll_run`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

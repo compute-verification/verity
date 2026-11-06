@@ -1,4 +1,6 @@
-import Proofs.Accounting.TS.Session.Guarantees
+module
+
+public import Proofs.Accounting.TS.Session.Guarantees
 
 /-!
 # The served layer is sound through its C-Flock sessions (the proof)
@@ -11,6 +13,8 @@ and every other unsound proof is `RowsSession.BadU`.
 This module imports `Proofs.Flock.SoundAtBridge`, whose imports make `X` a token (ArkLib's `notation3 "X"`), so
 `Proofs/Accounting.lean` imports it rather than `Proofs/Accounting/TS.lean`, whose theorems bind `X`.
 -/
+
+@[expose] public section
 
 open Accounting.TS Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg in
 /-- **A window of proofs is sound at `δs + δ` through its C-Flock sessions**

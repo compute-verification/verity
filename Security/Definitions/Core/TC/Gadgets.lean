@@ -1,4 +1,6 @@
-import Definitions.Core.TC.Relation
+module
+
+public import Definitions.Core.TC.Relation
 
 /-!
 # The range and is-zero gadgets, chunk by chunk
@@ -13,6 +15,8 @@ themselves, with their chunk columns as a circuit holds them:
 
 `Verity.SecurityProofs.TC.Gadgets` proves that each holds exactly when its predicate does.
 -/
+
+@[expose] public section
 
 namespace Verity.TC.Gadgets
 

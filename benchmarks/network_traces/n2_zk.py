@@ -15,10 +15,11 @@ comparison to each verdict, which decides nothing.
 * **The runs.** A certifier-serve run's directory (`certifier_serve.py rehearse`'s per strategy, or `virtual`'s): its
   `plan.json`, `calibration.json`, `deployment.json` and `certified.jsonl`. `virtual` makes them on an injected clock
   against a stub endpoint that answers at once (certifier-serve's tests' run), honest, extra and late, with fresh keys.
-  Or, with ``--warden-run``, an active warden's run (`warden_serve.py`'s, or the gate's ``warden-rehearse``'s), read by
-  `warden_chain`: its own certified records under its key and session, on the warden link (`service.WardenProfile`:
-  both heads at the warden's grid and parameters digest, no sync declared or charged), a certifier rehearsal's run
-  refused by name; its members are honest and tampered, the tampered head failing its signed digest alone.
+  Or, with ``--warden-run``, an active network certifier's run (`warden_serve.py`'s, or the gate's
+  ``warden-rehearse``'s), read by `warden_chain`: its own certified records under its key and session, on the network
+  certifier link (`service.WardenProfile`: both heads at the network certifier's grid and parameters digest, no sync
+  declared or charged), a certifier rehearsal's run refused by name; its members are honest and tampered, the tampered
+  head failing its signed digest alone.
 * **Members.** One stream each, over all of the run's execution phases: ``honest``; ``tampered``, the honest records
   with window 0's egress head one count off (`one_count`), committed by the prover under its own root, the certificates
   still the certifier's; with ``--extra``, certifier-serve's ``extra`` run (the shim wrote one event more and the
@@ -139,9 +140,9 @@ def link(run: Path) -> tuple[LinkWindows, dict]:
 
 
 def warden_link(run: Path) -> tuple[LinkWindows, dict, dict, list]:
-    """A warden run's link (`warden_chain.link`: the active warden's own records, its key and session, no sync), the
-    plan it stands for (its windows, no syncs), its certified records by (direction, window) and the signer's
-    refusals. A certifier rehearsal's run is refused by name (`warden_chain.PROXY`)."""
+    """A network certifier run's link (`warden_chain.link`: the active network certifier's own records, its key and
+    session, no sync), the plan it stands for (its windows, no syncs), its certified records by (direction, window) and
+    the signer's refusals. A certifier rehearsal's run is refused by name (`warden_chain.PROXY`)."""
     import warden_chain as WC
 
     lw, dep, _ = WC.link(run)
@@ -157,8 +158,8 @@ def link_windows(run: Path, edit=None, clock=None, warden: bool = False) -> Simp
     the proof block's output word by the gates' references (`LinkWindows.outputs`); and the certifier's certificates,
     which the verifier receives from the certifier. ``edit(lw, w, pair)``: the records the prover commits in place of
     the certified ones. ``expect``: the verdict the verifier of record should reach on an honest proof of the opening.
-    With ``warden``, ``run`` is an active warden's run (`warden_link`), its records and certificates the warden's own
-    and no sync declared.
+    With ``warden``, ``run`` is an active network certifier's run (`warden_link`), its records and certificates the
+    network certifier's own and no sync declared.
 
     With ``clock``, for a report on runs nothing is proved for (network_e2e), also on N2's stream as certifier-serve's
     check takes it: each execution phase registered (``digest``), selected (Selection All) and decided before the next
@@ -718,7 +719,7 @@ def main(argv=None) -> int:
                                      "record")
     run = p.add_mutually_exclusive_group(required=True)
     run.add_argument("--run", type=Path, help="the honest run's directory")
-    run.add_argument("--warden-run", type=Path, help="an active warden's run (warden_serve.py's, or the gate's "
+    run.add_argument("--warden-run", type=Path, help="an active network certifier's run (warden_serve.py's, or the gate's "
                      "warden-rehearse's): its own certified records, no certifier rehearsal (warden_chain)")
     p.add_argument("--extra", type=Path, help="certifier-serve's extra run of the same plan")
     p.add_argument("--late", type=Path, help="certifier-serve's late run of the same plan")

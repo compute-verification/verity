@@ -1,7 +1,9 @@
-import Mathlib.Data.Fintype.Card
-import Definitions.Pouw.Fp8Atom.Vectors
-import Definitions.Pouw.Fp8Atom.Vectors.Ada
-import Definitions.Pouw.Fp8Atom.Vectors.Add
+module
+
+public import Mathlib.Data.Fintype.Card
+public import Definitions.Pouw.Fp8Atom.Vectors
+public import Definitions.Pouw.Fp8Atom.Vectors.Ada
+public import Definitions.Pouw.Fp8Atom.Vectors.Add
 
 /-!
 # `Pouw.Fp8Atom`'s pinned statements (trusted)
@@ -43,6 +45,8 @@ The FP32 add of the running words, `rnAdd` (`Pouw.Fp8Atom.Fp32`):
 * **`WordsRepresentable`**: every finite FP32 word's value is representable, so `RnAddExact` gives
   `rnAdd 0 x = x` for every word value `x` (`C2FirstRunCopy`'s hypothesis on words).
 -/
+
+@[expose] public section
 
 namespace Pouw.Fp8Atom
 

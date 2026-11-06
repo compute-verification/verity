@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysStatements
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysStatements
 
 /-!
 # The inner proof's runs
@@ -9,6 +11,8 @@ three), absorbs `τ`'s commitment, draws `β`, absorbs `Y` and draws the `Q` que
 same, in order. What follows the last coin is checks only (`forIn_keeps`). `zk_inner_coins` is the four rounds read,
 and `innerGameC_plays` the model's run on them, which records each query's position from the fourth round's coin.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

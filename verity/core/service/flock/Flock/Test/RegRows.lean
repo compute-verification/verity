@@ -6,9 +6,16 @@ root at its stated position, framed under the port's row format, and every insta
 verifier's program reads for its unit at that port. A K = 64 A row is 64 int8 codes, a `hm96-sha512/row/v2` bit row of
 512 bits: `words = K / 2 = 32` leaves of `word_bits = 16`, as `Port.fits` counts it.
 -/
-import Flock.Registered
-import Flock.JsonKeys
-import Flock.JsonParse
+module
+
+public import Flock.Registered
+public import Flock.JsonKeys
+public import Flock.JsonParse
+meta import Flock.Registered
+meta import Flock.JsonKeys
+meta import Flock.JsonParse
+
+@[expose] public section
 
 namespace Flock.Test.RegRows
 

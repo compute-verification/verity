@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.PlainJ.Defs
-import Proofs.Flock.Soundness.Discharge.PlainJ.Decode
-import Proofs.Flock.Soundness.Discharge.PlainJ.Sound
+module
+
+public import Proofs.Flock.Soundness.Discharge.PlainJ.Defs
+public import Proofs.Flock.Soundness.Discharge.PlainJ.Decode
+public import Proofs.Flock.Soundness.Discharge.PlainJ.Sound
 
 /-!
 # One plain sampled session of `J` tables (`flock-verify verify --plain-tables`)
@@ -9,3 +11,5 @@ import Proofs.Flock.Soundness.Discharge.PlainJ.Sound
 * `Decode.lean`: `setupOf_tablePJ`, `decodesOnPJ_exec` (R11b at every number of tables).
 * `Sound.lean`: `plain_session_soundJ`.
 -/
+
+@[expose] public section

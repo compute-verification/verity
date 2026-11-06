@@ -1,6 +1,8 @@
-import Definitions.Accounting.Guarantees.Capacity
-import Proofs.Accounting.Joint
-import Mathlib.Tactic.Linarith
+module
+
+public import Definitions.Accounting.Guarantees.Capacity
+public import Proofs.Accounting.Joint
+public import Mathlib.Tactic.Linarith
 
 /-!
 # Proof that a state-bounded game's soundness is a joint run's capacity guarantee, and that derived state shares the
@@ -14,6 +16,8 @@ is one of the other accounts, so what it holds and what the rest hold together a
 (`Run.othersHeld_eq`), and the other accounts beyond the residual less `w`'s share on every capacity coin leave the
 capacity account below the certificate on every one of them (`Run.capacityShort_of_covertBut`).
 -/
+
+@[expose] public section
 
 namespace Accounting
 

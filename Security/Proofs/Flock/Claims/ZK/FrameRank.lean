@@ -1,5 +1,7 @@
-import Flock.Firewall.Drive
-import Proofs.Flock.Claims.Complete.Zk.MaskRank
+module
+
+public import Flock.Firewall.Drive
+public import Proofs.Flock.Claims.Complete.Zk.MaskRank
 
 /-!
 # The frame's rank check is the prover's (`FrameAdmits`)
@@ -19,6 +21,8 @@ all of `GF(2^128)^k`):
   the slot's words, which at the statement's slot (`Drive.maskSlot`) are its mask words (`words_maskSlot`,
   `Composed.maskWordsOf`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer.Rank
 

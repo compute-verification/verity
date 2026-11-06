@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkReg.Guarded
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Guarded
 
 /-!
 # The coin server's stratified draw at `J` tables
@@ -12,6 +14,8 @@ past its bytes draws every unit, and then `sum_ks_of_univ`), and an accepted rec
 `drawOkZKHJ_of_custodyJS` gives the same from `RecordCustodyZKJS` (`ZkReg/Guarded.lean`), where `verify --zk` takes a
 stratified draw at several tables.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkHidden
 
