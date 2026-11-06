@@ -163,7 +163,6 @@ PENDING: dict[str, str] = {
     "examples/h200/interfaces/verity_e2e_demo/report.py": "#4691 adds a line",
     "examples/h200/README.md": "#4680 rewrites its lines",
     "benchmarks/stacked_share/README.md": "#4514 rewrites its lines",
-    "benchmarks/torch_gpu/p2_stage/README.md": "#4761 adds lines",
     "integrations/vllm/README.md": "#4773 adds lines",
     "verity/README.md": "#4502 rewrites its lines",
     "verity/core/protocols/network/tests/period_case.py": "#6383 rewrites its docstrings and the rows form's refusals",
