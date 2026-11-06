@@ -78,6 +78,7 @@ theorem audK_pos (spec : SessionSpec) (sts : Array Stmt) (x : Claims.Msg) : 0 < 
   rw [hT]
   exact List.countP_pos_iff.mpr ⟨.hello, List.mem_cons_of_mem _ List.mem_cons_self, rfl⟩
 
+open Claims.ZKMal in
 /-- **The model's run against `auditorV` is the auditor's**: each of its messages answered as `A` answers the view of
 the messages through it, and a message at each round while `A` answered every earlier one. -/
 theorem runStar_auditorV {Ω Θ : Type} {H : Claims.Msg → Claims.Msg} {P : Claims.Prover Ω} {k : Claims.Msg → ℕ}
@@ -86,7 +87,7 @@ theorem runStar_auditorV {Ω Θ : Type} {H : Claims.Msg → Claims.Msg} {P : Cla
     (hτ : τ = (Claims.runStar H P (auditorV k spec sts A) x ω θ).msgs) :
     (∀ j (hj : j < τ.length), (τ[j]'hj).2 = audOut (A θ (audView spec sts ((τ.take (j + 1)).map (·.1))))) ∧
       ∀ j, j < k x → (∀ i < j, (A θ (audView spec sts ((τ.take (i + 1)).map (·.1)))).isSome) → j < τ.length := by
-  have e : τ = ZKMal.interact (fun as => audOut (A θ (audView spec sts as)))
+  have e : τ = interact (fun as => audOut (A θ (audView spec sts as)))
       (fun h => ((P.next x h ω).eval H).1) (k x) [] :=
     hτ.trans (ZKMal.runStar_msgs _ _ _ _ _ _)
   have h1 : ∀ j (hj : j < τ.length),
@@ -100,7 +101,7 @@ theorem runStar_auditorV {Ω Θ : Type} {H : Claims.Msg → Claims.Msg} {P : Cla
     intro hk _
     obtain ⟨n, hn⟩ : ∃ n, k x = n + 1 := ⟨k x - 1, by omega⟩
     rw [e, hn]
-    simp only [ZKMal.interact]
+    simp only [interact]
     split <;> simp
   | succ i ih =>
     intro hk hpre
