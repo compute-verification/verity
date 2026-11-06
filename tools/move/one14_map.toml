@@ -80,6 +80,7 @@ paths = []
 "benchmarks/pouw/highutil/pyproject.toml: verity/core/protocols/pouw/circuit" = "its tests run accel_v31's prover, which imports pouw.circuit.dither, which moves; nothing they run reads live_reads"
 "benchmarks/property_redteam/pyproject.toml: verity/core/protocols/pouw/circuit" = "its tests import pouw.circuit.words, which moves; nothing they run reads live_reads"
 "tools/verity/circuit_check/pyproject.toml: verity/core/protocols/pouw/circuit" = "names the circuits circuit-check checks, which move; live_reads, which circuit.live imports, the suite lists beside them after the move"
+"tools/verity/circuit_check/reads/bindings.json: verity/core/protocols/pouw/circuit" = "a read set's probe of the circuits' package directory, which moves; the read set names live_reads by its own path"
 "verity/core/protocols/pouw/PROTOCOL.md: verity/core/protocols/pouw/circuit" = "names where PoUW's circuits are, which move"
 "verity/core/protocols/pouw/lean/check/pyproject.toml: verity/core/protocols/pouw/circuit" = "its tests read live_reads too, which the suite lists beside the circuits after the move"
 "verity/core/service/sigma/pyproject.toml: verity/core/protocols/pouw/circuit" = "the PoUW circuit's Boolean profile it reads moves; nothing it runs reads live_reads"
