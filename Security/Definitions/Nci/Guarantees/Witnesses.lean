@@ -39,6 +39,8 @@ for the dampener, and PoUW's soundness (`PouwSound`) for the remote dampener. Th
 
 @[expose] public section
 
+open Verity.Game renaming prPMFReal → prob
+
 namespace Nci.Guarantees
 
 open Verity Finset Nci.Capability.Toy Nci.Witness Nci.Dampener
