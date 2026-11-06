@@ -32,7 +32,6 @@ from verity.ml.circuits.ops import mufu
 from verity.ml.definitions.numerics import fa2_model as FA
 from verity.ml.definitions.numerics.gemm_relation import GemmRelationError, _arg_cols, _const, _extra, _node_of, _words
 
-
 MODEL_VERSION = "fa2-sm8x-hdim128-bf16.v1"
 TABLE_SHA256 = {  # what the MUFU Definitions evaluate through: another table is another Definition version, not a new pin
     "ex2": "7b3249116f9ca84455389f3a9b116da2be327646fb4b544369314ee168b79d88",
