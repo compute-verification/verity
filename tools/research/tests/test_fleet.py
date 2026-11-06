@@ -294,3 +294,21 @@ def test_each_days_samples_are_put_in_the_store_once_the_day_is_over(tmp_path, m
     assert F.archive(now, put=lambda p: put.append(p.name) or ("art:ab", "")) is None and put == ["samples-20261105.jsonl"]
     assert json.loads((tmp_path / "archived.json").read_text()) == {"20261105": "art:ab"}
     assert F.archive(now + 3600, put=lambda p: put.append(p.name) or ("art:cd", "")) is None and len(put) == 1
+
+
+def test_a_panel_goes_only_to_an_https_site(monkeypatch):
+    """The panels key is sent only over https: with $FLEET_PANELS_URL unset or not https, put_panel sends nothing and says why."""
+    panel = {"id": "compute/online", "rows": []}
+    monkeypatch.setattr(F.urllib.request, "urlopen", lambda *a, **k: (_ for _ in ()).throw(AssertionError("nothing is sent")))
+    for url in (None, "http://site.invalid", "file:///etc/passwd"):
+        monkeypatch.setattr(F, "PANELS_URL", url)
+        assert F.put_panel(panel, "k") == f"compute/online: $FLEET_PANELS_URL is {url!r}, not an https URL: nothing sent"
+
+
+def test_an_unreadable_archive_state_is_the_passes_error_and_nothing_is_put(tmp_path, monkeypatch):
+    monkeypatch.setattr(F, "FLEET_DIR", tmp_path)
+    now = int(datetime(2026, 11, 6, 0, 30, tzinfo=UTC).timestamp())
+    (tmp_path / "samples-20261105.jsonl").write_text("{}\n")
+    (tmp_path / "archived.json").write_text("{not json")
+    why = F.archive(now, put=lambda p: (_ for _ in ()).throw(AssertionError("an unreadable state puts nothing")))
+    assert why.startswith("archived.json unreadable (JSONDecodeError") and why.endswith("nothing archived until it is fixed")
