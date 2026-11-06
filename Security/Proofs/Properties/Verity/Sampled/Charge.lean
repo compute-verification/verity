@@ -2,6 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.Assembled
 public import Proofs.Properties.Verity.Sampled.LeafErr
+public import Proofs.Properties.Verity.Sampled.Stops
 public import Proofs.Properties.Verity.Sampled.Walk
 
 /-!
@@ -137,12 +138,6 @@ theorem add_pathCharge_walk_le (Γ : Game α → ℝ≥0∞) (hret : ∀ a, Γ (
   | @Game.coin _ C iF iN k, s', Ks, x, back, h => by
     rw [walk_coin s' Ks x back h]
     exact add_le_add le_rfl (pathCharge_walk_le Γ (k x.1) (s' x.1) _ (x.2 x.1) _)
-
-theorem isHere_consume (p : Pos g σ V ι) (i : ι) : (p.consume.Ks i).isHere = false := by
-  show DigestCut.isHere (if (p.Ks i).isHere then DigestCut.skip else p.Ks i) = false
-  split_ifs with h
-  · rfl
-  · exact Bool.eq_false_iff.2 h
 
 /-- **The charge from the next stop**: along the play from where the walk from the position stops. -/
 noncomputable def stopCharge (Γ : Game α → ℝ≥0∞) (r : Pos g σ V ι) : ℝ≥0∞ :=
