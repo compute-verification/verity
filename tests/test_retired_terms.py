@@ -182,6 +182,7 @@ PENDING: dict[str, str] = {
     "benchmarks/pouw/fp_exact/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "benchmarks/pouw/opcode_probe/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "benchmarks/recursion_e2e/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
+    "benchmarks/torch_gpu/sha512_rows/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "examples/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "examples/lifecycle/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "examples/vllm/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
