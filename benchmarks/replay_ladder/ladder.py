@@ -108,8 +108,22 @@ def tp_engine(tp: int) -> Any:
 
 # ------------------------------------------------------------------------------------------------------------ serve
 
+def native_tokens(tok: Any) -> tuple[int, int]:
+    """The tokenizer's document start (its BOS, else its EOS) and blank line, which the traffic plan, written for Llama 3's
+    ids, puts at the head of every prompt."""
+    start = tok.bos_token_id if tok.bos_token_id is not None else tok.eos_token_id
+    blank = tok.encode("\n\n", add_special_tokens=False)
+    if start is None or len(blank) != 1:
+        raise SystemExit(f"the tokenizer has no document-start token ({start}) or no one-token blank line ({blank})")
+    return int(start), int(blank[0])
+
+
 def serve(a: argparse.Namespace) -> int:
     ck = register(a.model)
+    from transformers import AutoTokenizer
+
+    traffic = S.corpus().traffic
+    traffic.BOS, traffic.BLANK_LINE = native_tokens(AutoTokenizer.from_pretrained(str(ck), trust_remote_code=True))
     out = Path(a.out)
     cap = out / "capacity"
     base = ["--model-id", a.model, "--checkpoint", str(ck), "--c4", a.c4, "--reps", "1", "--warm-s", "10"]
@@ -125,7 +139,8 @@ def serve(a: argparse.Namespace) -> int:
     rec = S.arm_metrics(out / "record")
     (out / "serve.json").write_text(json.dumps({
         "schema": SCHEMA + "/serve", "model": a.model, "checkpoint": f"{S.MODELS[a.model].repo}@{S.MODELS[a.model].revision}",
-        "tp": LADDER[a.model].tp, "capacity": burst, "over": a.over, "rate": rate, "span_s": a.span_s,
+        "tp": LADDER[a.model].tp, "bos": traffic.BOS, "blank_line": traffic.BLANK_LINE, "capacity": burst, "over": a.over,
+        "rate": rate, "span_s": a.span_s,
         "window": (rec["loads"].get(LOAD) or [None])[0], "error": rec.get("error"), "run_id": S.SHARED.RESEARCH_RUN_ID,
     }, indent=1))
     return rc

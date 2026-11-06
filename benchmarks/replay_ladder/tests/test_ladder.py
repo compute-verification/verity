@@ -37,6 +37,22 @@ def test_every_rung_names_a_role_the_integration_pins():
     assert {r.role for r in L.LADDER.values()} <= roles
 
 
+class Tok:
+    def __init__(self, bos, eos, blank):
+        self.bos_token_id, self.eos_token_id, self.blank = bos, eos, blank
+
+    def encode(self, text, add_special_tokens=True):
+        assert text == "\n\n" and not add_special_tokens
+        return self.blank
+
+
+def test_the_plan_starts_documents_with_the_checkpoint_s_own_tokens():
+    assert L.native_tokens(Tok(128000, 128001, [271])) == (128000, 271)
+    assert L.native_tokens(Tok(None, 50279, [187])) == (50279, 187)
+    with pytest.raises(SystemExit, match="blank line"):
+        L.native_tokens(Tok(1, 2, [13, 13]))
+
+
 def test_the_alone_sample_is_spread_over_the_window():
     reqs = [{"before_step": s, "engine_id": f"r{s}"} for s in reversed(range(10))]
     assert [r["engine_id"] for r in L.sample(reqs, 3)] == ["r0", "r3", "r6"]
