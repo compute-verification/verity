@@ -42,7 +42,6 @@ REGISTRY = Registry(__file__, ("VERITY_BENCH_",),
       "checkout's HEAD"),
     elsewhere=(
         "VERITY_BENCH_FULL",       # benchmarks/numerical/tests/bench/test_instances.py's opt-in
-        "VERITY_BENCH_INSTANCES",  # archive/sp1's instance directory
         "VERITY_BENCH_CUBIN",      # `verity bench overhead run --cubin`'s file, which overhead_node sets and a scheme's arm loads
     ), shared=False)
 del S
