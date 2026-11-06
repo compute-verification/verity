@@ -129,7 +129,7 @@ theorem LoopModel.Deployed.head_hello {T : ZKMal.CoinLayer.TableData}
 
 /-- **`EnvPre` at the relay's requests from its start, at the model's run**: at the release
 `withFiles (withLink (withInner Masked.dataE L₁ (Loop.realOf src) fin) src) src` on the loop's own tables on `src`,
-with `envPre_withInner`'s premises on the loop and the release (`hsrc`, `hfin`, `hS`, `hlive`, `LoopModel.Takes`,
+with `envPre_withInner`'s premises on the loop and the release (`hsrc`, `hfin`, `hS`, `hlive`,
 `LeanRelease.CrossPasses`), where the model's run is the deferred server's against `V*` (`hτ`), of at least one round
 (`hk`), its worker answering the link and the `Finish` with the firewall's own message (`hlk`, `hfw`) and giving the
 worker's round values `rv` (`WorkerDeterministic`), and the relay's nonce is the tape's (`hn`): at every requests the
@@ -157,7 +157,7 @@ theorem envPre_run
     (hD : LoopModel.Deployed M (LeanRelease.withFiles (LeanRelease.withLink
       (LeanRelease.withInner ZKMal.Masked.dataE L₁ (Loop.realOf src) fin) src) src) (Loop.realOf src) s0 spec sts)
     (hsrc : M.src = src M.x M.w M.ρ) (hfin : M.fin = fin M.x M.w M.ρ) (hS : Loop.Level0Src src M.x M.w)
-    (hlive : ZKMal.Masked.Live M.x) (hT : M.Takes) (hcp : M.L.CrossPasses) {Θ : Type} {H : Msg → Msg}
+    (hlive : ZKMal.Masked.Live M.x) (hcp : M.L.CrossPasses) {Θ : Type} {H : Msg → Msg}
     {Vs : VStar Θ} {θ : Θ}
     (hτ : M.τ = (runStar H (M.L.toSrv.proverD M.L.fillOf M.nN M.wk M.w) Vs M.x (M.ρ, M.κ) θ).msgs)
     (hk : 0 < Vs.k M.x)
@@ -182,7 +182,7 @@ theorem envPre_run
     rw [hn]
     exact hD.head_hello hOwn hne
   have hwk := hlk (M.hist 1) (by rw [LoopModel.hist, length_histOf_take]; omega)
-  exact envPre_withInner hD hsrc hfin hS hlive hT hcp hOwn hn h0 hwk _ [] {} {} M.msgs
+  exact envPre_withInner hD hsrc hfin hS hlive hcp hOwn hn h0 hwk _ [] {} {} M.msgs
     (loopP_start hc hnew (hR.loopReads hwd hfw hc hA) (pick_setup hs hb))
 
 /-- **The relay's model frames are the model's messages, encoded, at the model's run**: `envPre_run`'s premises give
@@ -206,7 +206,7 @@ theorem relayPre_run
     (hD : LoopModel.Deployed M (LeanRelease.withFiles (LeanRelease.withLink
       (LeanRelease.withInner ZKMal.Masked.dataE L₁ (Loop.realOf src) fin) src) src) (Loop.realOf src) s0 spec sts)
     (hsrc : M.src = src M.x M.w M.ρ) (hfin : M.fin = fin M.x M.w M.ρ) (hS : Loop.Level0Src src M.x M.w)
-    (hlive : ZKMal.Masked.Live M.x) (hT : M.Takes) (hcp : M.L.CrossPasses) {Θ : Type} {H : Msg → Msg}
+    (hlive : ZKMal.Masked.Live M.x) (hcp : M.L.CrossPasses) {Θ : Type} {H : Msg → Msg}
     {Vs : VStar Θ} {θ : Θ}
     (hτ : M.τ = (runStar H (M.L.toSrv.proverD M.L.fillOf M.nN M.wk M.w) Vs M.x (M.ρ, M.κ) θ).msgs)
     (hk : 0 < Vs.k M.x)
@@ -222,6 +222,6 @@ theorem relayPre_run
     (hA : AuditorAnswers M (modelSlots {} {} (pick true {} {} ins))) :
     RelayPre (relayTrace true ins) (encOf spec sts M.msgs) :=
   relayPre_of_env ins M.msgs hs hb
-    (envPre_run hD hsrc hfin hS hlive hT hcp hτ hk hlk hfw hwd hn hs hb hc hnew hR hA)
+    (envPre_run hD hsrc hfin hS hlive hcp hτ hk hlk hfw hwd hn hs hb hc hnew hR hA)
 
 end Claims.ZKServer.Relay

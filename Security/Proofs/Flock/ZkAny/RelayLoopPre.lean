@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.ZkAny.RelayLoopDeployed
 public import Proofs.Flock.ZkAny.RelayLoopFinish
 public import Proofs.Flock.ZkAny.RelayLoopOwnAt
+public import Proofs.Flock.ZkAny.RelayFreshStart
 
 /-!
 # `EnvPre` at the deployed loop
@@ -18,8 +19,8 @@ public import Proofs.Flock.ZkAny.RelayLoopOwnAt
   rounds, the inner proof's own place at each frame round's slot the model's scheduled round (`placeSched_own`),
   from what the loop took (`LoopJ.took`).
 * **`envPre_withInner`**: at the release with the session loop's own rounds of the inner proof at the model's
-  finish's rounds, where the release takes the run's coins and the crossing passes below the `Finish`, `hRF` holds
-  (`roundFacts_deployed`, `ownSched_deployed`), so `EnvPre` does wherever `LoopP` at `LoopJ` does.
+  finish's rounds, where the crossing passes below the `Finish`, `hRF` holds (`roundFacts_deployed`,
+  `ownSched_deployed`, `freshStart_deployed`), so `EnvPre` does wherever `LoopP` at `LoopJ` does.
 -/
 
 @[expose] public section
@@ -130,11 +131,11 @@ theorem ownSched_deployed
 /-- **`EnvPre` at the deployed loop with the session loop's own rounds of the inner proof**: at the release
 `withFiles (withLink (withInner Masked.dataE L₁ (Loop.realOf src) fin) src) src` on the loop's own tables on `src`,
 the loop handed `src`'s bytes (`hsrc`) and its finish's rounds of the inner proof the model's (`hfin`), whose level 0
-are drawn from the tape (`Loop.Level0Src`) at a statement the masked session proves (`hlive`), where the release takes
-the run's coins (`LoopModel.Takes`), the crossing passes below the `Finish` (`LeanRelease.CrossPasses`), each of the
-run's messages is the deferred release's, its first the `Hello` at the drawn nonce, that nonce the tape's, and the
-worker's link the firewall's own: `envPre_deployed`, its `hRF` by `roundFacts_deployed` with the inner proof's own
-place by `ownSched_deployed`. -/
+are drawn from the tape (`Loop.Level0Src`) at a statement the masked session proves (`hlive`), where the crossing
+passes below the `Finish` (`LeanRelease.CrossPasses`), each of the run's messages is the deferred release's, its first
+the `Hello` at the drawn nonce, that nonce the tape's, and the worker's link the firewall's own: `envPre_deployed`,
+its `hRF` by `roundFacts_deployed` with the inner proof's own place by `ownSched_deployed` and the next rep's start by
+`freshStart_deployed`. -/
 theorem envPre_withInner
     {L₁ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Nonce ×
@@ -154,7 +155,7 @@ theorem envPre_withInner
     (hD : LoopModel.Deployed M (LeanRelease.withFiles (LeanRelease.withLink
       (LeanRelease.withInner ZKMal.Masked.dataE L₁ (Loop.realOf src) fin) src) src) (Loop.realOf src) s0 spec sts)
     (hsrc : M.src = src M.x M.w M.ρ) (hfin : M.fin = fin M.x M.w M.ρ) (hS : Loop.Level0Src src M.x M.w)
-    (hlive : ZKMal.Masked.Live M.x) (hT : M.Takes) (hcp : M.L.CrossPasses) (hOwn : M.Own) {sid : Nat}
+    (hlive : ZKMal.Masked.Live M.x) (hcp : M.L.CrossPasses) (hOwn : M.Own) {sid : Nat}
     {nonce : ByteArray} (hn : nonce = ⟨(ZKMal.CoinLayer.nb M.ρ.1).toArray⟩)
     (h0 : M.msgs.headD [] = _root_.Flock.Firewall.Hello.msg spec nonce)
     (hwk : M.wk M.x M.w M.ρ (M.hist 1) 0 = some (M.L.ownMsg M.x M.w M.ρ (M.hist 1), false)) :
@@ -162,6 +163,6 @@ theorem envPre_withInner
       LoopP M (LoopJ M sid spec sts) sid spec sts nonce seen st pl es ms →
         EnvPre spec seen (schedSteps true st pl es) ms :=
   envPre_deployed hD hsrc hS hlive hOwn hn h0 hwk fun {_ _} =>
-    roundFacts_deployed hD hsrc hS hlive hT hcp (ownSched_deployed hD hsrc hfin hS hlive)
+    roundFacts_deployed hD hsrc hS hlive hcp (ownSched_deployed hD hsrc hfin hS hlive) (freshStart_deployed hD hlive)
 
 end Claims.ZKServer.Relay

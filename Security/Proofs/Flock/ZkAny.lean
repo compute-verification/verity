@@ -68,6 +68,10 @@ public import Proofs.Flock.ZkAny.RelayTaken
 public import Proofs.Flock.ZkAny.RelayRoundTook
 public import Proofs.Flock.ZkAny.RelayLoopStart
 public import Proofs.Flock.ZkAny.RelayServes
+public import Proofs.Flock.ZkAny.RelayRankStop
+public import Proofs.Flock.ZkAny.RelayOpenFirst
+public import Proofs.Flock.ZkAny.RelayRankSched
+public import Proofs.Flock.ZkAny.RelayFreshStart
 
 /-! Zero knowledge at any values: the generic forms, a table's and a release of `J` tables behind the ZK server's
 checks, the ZK server's check as the gate a table's file leaves behind, a release at coins it refuses, the release
@@ -134,7 +138,9 @@ the `Finish`; and what the loop took of the coins so far against the model's rel
 frame's taking of each earlier round's coins and its coin step on the last; and the model's taking of the coins
 before its rank stop, which a frame releasing an opening round passes; and so the model's taking of the coins after a
 frame round's history, from what the loop took, a rep's first-round state and the rank stop at the opening round the
-frame releases; and so, from the session's first request, at the model's run of the deferred server against `V*`
+frame releases; and that first-round state a masking state at the deployed loop on a `Live` statement, where the rep's
+frame starts at its table's statement, the placeholder's table of the shape of the loop's and its algebraic phase one
+as the loop's; and so, from the session's first request, at the model's run of the deferred server against `V*`
 whose worker answers the link with the firewall's own message, `EnvPre` at the relay's requests, and the relay's model
 frames the model's messages, encoded. -/
 

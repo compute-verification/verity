@@ -8,8 +8,8 @@ public import Proofs.Flock.ZkAny.RelayLoop
 `LoopReads` reads the relay's requests as the loop answers them. Most of its clauses say what the relay's IO code did at
 a slot; two couple the run to the model's: the auditor answering as `V*` did (`LoopModel.Ans`, and at the `Finish` the
 model's run having a message there), and the model's worker giving the worker's round values. Here they stand apart:
-the IO code's readings are the named trust `relay-serves`, the worker's the named trust `worker-deterministic`, and the
-auditor's a statement about `V*`:
+the IO code's readings are the named trust `flock-relay-serves`, the worker's the named trust
+`flock-worker-deterministic`, and the auditor's a statement about `V*`:
 
 * `modelSlots`: the requests of the relay's run at its model slots (`isModel`), each with its slot's kind, in order, up
   to the session's stop or end, as `LoopReads` walks them.
@@ -122,14 +122,14 @@ def AudReads (aud : List ByteArray → Option ByteArray) : List ByteArray → St
       AudReads aud (v ++ (stepK true st pl (some (tagOf k)) (.ok k) e).sent)
         (stepK true st pl (some (tagOf k)) (.ok k) e).st (stepK true st pl (some (tagOf k)) (.ok k) e).pl rest)
 
-/-- `relay-serves` (a trust in the relay's IO code, which Lean reads but does not run). **The relay serves session
-`sid`'s requests `ins` as its IO code reads**, from its start with the loop at `σ`: at each request that reaches a
-slot, `LoopServe`'s clauses (`ReadsBy`), and the answers it reads are the auditor `aud`'s to everything that left
-(`AudReads`). They read `Flock.Firewall.Session.relay`'s loop body (`stepK`, held to it by reading), the frames it puts
-on the auditor's connection (`sendFrame a`) and the answers it reads there (`recvFrame a`), the rep frames' tasks it
-calls on the shared frames (`Frames.round` on the request's `roundContent`, `Frames.coins` on the auditor's coins,
-`Frames.finish`; their pure updates `RegStep`, `RoundRun`), the `Commit`'s `Level0.commit` against the level 0s
-`Session.level0` drew (`Level0.draw`), the `Link`'s put, the loop's own proofs (`ownProofs`) and the updates of the
+/-- `flock-relay-serves` (a trust in the relay's IO code, which Lean reads but does not run). **The relay serves
+session `sid`'s requests `ins` as its IO code reads**, from its start with the loop at `σ`: at each request that
+reaches a slot, `LoopServe`'s clauses (`ReadsBy`), and the answers it reads are the auditor `aud`'s to everything that
+left (`AudReads`). They read `Flock.Firewall.Session.relay`'s loop body (`stepK`, held to it by reading), the frames
+it puts on the auditor's connection (`sendFrame a`) and the answers it reads there (`recvFrame a`), the rep frames'
+tasks it calls on the shared frames (`Frames.round` on the request's `roundContent`, `Frames.coins` on the auditor's
+coins, `Frames.finish`; their pure updates `RegStep`, `RoundRun`), the `Commit`'s `Level0.commit` against the level
+0s `Session.level0` drew (`Level0.draw`), the `Link`'s put, the loop's own proofs (`ownProofs`) and the updates of the
 loop's other requests between the session's (`Between`, `Stays`), with the rep frames' starts (`Frames.startRep`,
 `StartOk`), the rounds of the inner proof the loop's finish computes (`Sessions.innerRound`, `InnerSrc`) and the salts
 `Finish.serve` keeps (`SaltsSrc`), each against the model's run `M`; a frame round's content being the worker's round
@@ -141,8 +141,8 @@ def RelayServes {W Rr : Type} (M : LoopModel W Rr) (rv : List (Claims.Msg × Cla
   ReadsBy (LoopServe M rv sid spec sts nonce) σ {} {} (pick true {} {} ins) ∧
     AudReads aud [] {} {} (pick true {} {} ins)
 
-/-- `worker-deterministic` (a trust in the worker's code). **The model's worker gives the worker's round values**: at
-each history `h` where the worker sends a frame round's content `v` (`rv h = some v`: the content
+/-- `flock-worker-deterministic` (a trust in the worker's code). **The model's worker gives the worker's round
+values**: at each history `h` where the worker sends a frame round's content `v` (`rv h = some v`: the content
 `LiveChallenger::round` in `verity/ml/flock/live/src/lib.rs` sends in its `Req::Round`, everything the prover absorbed
 since its previous squeeze), the model's worker gives `v` there and goes on. Why it is reasonable: the worker is the
 honest prover behind the ZK server, whose round contents its code computes from the statement, the witness, its tapes
