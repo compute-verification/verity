@@ -100,9 +100,9 @@ def measured(tmp_path_factory) -> dict:
 @pytest.mark.slow
 def test_each_line_starts_at_its_own_tax(measured, tmp_path):
     """The planned scope: each line's x is its tax plus β, a measured tax as it comes; the exfiltration lines never
-    above the served bits, saying which term binds; both infiltration lines plotted; skipped work only for (C); the
-    captions name what each rests on; and it renders.  It plans every configuration at four shares, about 20 s, the
-    only test of the series end to end."""
+    above the served bits, saying which term binds; both infiltration lines plotted, and (C)'s falling with β; skipped
+    work only for (C); the captions name what each rests on; and it renders.  It plans every configuration at four
+    shares, about 20 s, the only test of the series end to end."""
     out, scope = measured, "datacenter week"
     served = out["scopes"][scope]["served_bits"]
     assert out["taxes"]["tokens"] == out["taxes"]["tokens"] | {"status": "measured", "tax": .03}
@@ -115,6 +115,8 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
             if panel == "exfiltration":
                 assert all(y <= served for y in s["y"])
                 assert [b == "served" for b in s["binds"]] == [c >= served for c in s["count"]]
+    every = next(s for s in out["panels"]["infiltration"]["series"] if s["config"] == "every_block")["y"]
+    assert all(b < a for a, b in zip(every, every[1:])), "(C)'s infiltration is its plan's K, not every block's bits"
     caps = out["scopes"][scope]["captions"]
     assert "card_influenceTwo_le_served_min" in caps["exfiltration"] and "card_influenceTwo_le_min" in caps["exfiltration"]
     assert "serve tax 3%" in caps["exfiltration"] and "measured" in caps["exfiltration"]

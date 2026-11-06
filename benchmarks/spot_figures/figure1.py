@@ -409,11 +409,11 @@ def served_total(m: Model) -> float:
     return m.request.units * m.served
 
 
-def point(m: Model, design: str, target: str, budget: float, rel: float = 1e-4) -> dict:
-    """The least target whose cost is at most `budget` GPU-seconds, by bisection in log, capped at `cap`; a two-stage
-    design's bound at the budget, which certifies exfiltration alone (its interiors are committed after its first
-    stage), a capped form at most the scope's served bits too (`SERVED_STATUS`, `OUTS_STATUS`)."""
-    top = cap(m, target)
+def point(m: Model, design: str, target: str, budget: float, rel: float = 1e-4, top: float | None = None) -> dict:
+    """The least target whose cost is at most `budget` GPU-seconds, by bisection in log, capped at `top` (default
+    `cap`); a two-stage design's bound at the budget, which certifies exfiltration alone (its interiors are committed
+    after its first stage), a capped form at most the scope's served bits too (`SERVED_STATUS`, `OUTS_STATUS`)."""
+    top = cap(m, target) if top is None else top
     if design in TWO_STAGE:
         if target != "leak":
             raise ValueError("the two-stage design's interior commitments come after its first stage: no work target")

@@ -198,8 +198,9 @@ def _point(job: tuple) -> dict:
     name, m, g, budget = job
     served = f1.served_total(m)
     if name == "every_block":
-        leak, work = f1.point(m, "one-stage", "leak", budget), f1.point(m, "one-stage", "work", budget)
         total_bits = m.scope.requests * sum(c.n * c.bits for c in m.cells)
+        leak = f1.point(m, "one-stage", "leak", budget, top=max(total_bits, f1.cap(m, "leak")))
+        work = f1.point(m, "one-stage", "work", budget)
         written = total_bits if leak["row"] is None else min(m.dot.out_bits * leak_count(m.dot, leak["bound"]),
                                                              total_bits)
         return {"exfiltration": {"y": min(leak["bound"], served), "count": leak["bound"],
