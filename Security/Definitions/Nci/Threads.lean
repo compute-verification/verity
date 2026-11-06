@@ -15,7 +15,8 @@ thread's work. It states them over `C` itself, not over the declared circuit, wh
   with each weight used at most `reuse` times per thread. A counted multiplication belongs to the thread of its
   activation. In a standard transformer a thread is one token position at one training step, and `reuse = 2`.
 * `Small C c k R`: the draft's small subcircuit, at most `c` computed gates reading at most `k` fresh input
-  bits (its `F*` and `S*`). Under the policy at `(c, k)` every inference block is small.
+  bits (its `F*` and `S*`). Under the policy at `(c, k)`, or at `c` gates and the rate `α` with `k = α c`, every
+  inference block is small.
 * `Threading.Threaded c k d e`: the draft's `(d, e)`-threaded: every small subcircuit that reads fewer than `d` fresh
   input values of a thread computes at most `e` of that thread's counted multiplications per value it reads from the
   thread.

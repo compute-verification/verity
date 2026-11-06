@@ -147,7 +147,7 @@ def words(row: str, x: dict) -> list[int]:
         return L.words_pc4_carry(x["tot"])
     if row == "nvfp4-codes":
         return L.words_nvfp4_codes(x["codes"], x["scales"])
-    return L.words_tile(C.leaf(types.SimpleNamespace(c=x["c"], u=x["u"])))
+    return L.words_tile(C.leaf(types.SimpleNamespace(c=x["c"], u=x["u"]), hashing="h0"))
 
 
 def sha(b: bytes) -> str:

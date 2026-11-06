@@ -17,8 +17,9 @@ square root of a two-continuation finder's success (`Core.Game.TwoRun`), one fin
   miss at none of a family of cuts, plus each cut's miss (`DigestCut.prob_le_noMiss_add_missP`), and at cuts whose
   revealed messages open one digest, plus the square root of each cut's finder's success
   (`DigestCut.prob_le_noMiss_add_sqrt`).
-* **The period's game as one game** (`relK`, `releases_bind`, `game_eq_relK`): the device's releases and then the
-  evidence, each release's continuation carrying the log after it, so a cut follows the frames the prover sends.
+* **The period's game as one game** (`relK`, `releases_bind`, `game_eq_relK`): the prover's request, the device's
+  releases and then the close (`finish`), each release's continuation carrying the log after it, so a cut follows the
+  frames the prover sends.
 * **Where the messages are fixed** (`Reading`): round `j` at the first frame the prover sends that the reading's
   `round j` picks after the device's log before it, its digest the bytes the frame answers (an opening's `after`, the
   SHA-512 of the round's message, `SampledProofs.Challenger.linkAfter` and each rep round's `msg_sha512`); the record
@@ -201,6 +202,13 @@ def coin {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game α} (K : 
     AgreeCut H (@Game.coin _ C iF iN k) :=
   ⟨@DigestCut.coin _ _ C iF iN k fun c => (K c).cut, fun c => (K c).agrees⟩
 
+/-- A decision's two cuts, on `ite`'s two branches. -/
+def iteCut {c : Prop} {dc : Decidable c} {t e : Game α} (ct : AgreeCut H t) (ce : AgreeCut H e) :
+    AgreeCut H (@ite _ c dc t e) :=
+  match dc with
+  | isTrue _ => ct
+  | isFalse _ => ce
+
 /-- The cut on a game equal to its own. -/
 def cast {g g' : Game α} (h : g = g') (K : AgreeCut H g) : AgreeCut H g' := h ▸ K
 
@@ -233,13 +241,18 @@ def relK {β : Type} : ℕ → List (String × ℕ) → List OpenTree → (List 
     | none => f []
     | some (.fresh l, b) => optGame (takeCoin l fs) (f []) fun fs' =>
         .coin (Fin 512 → Bool) fun x => relK k fs' ts fun log => f (⟨.fresh l, b, List.ofFn x⟩ :: log)
-    | some (.hello spec, ν) => .coin (TreeSample spec) fun t =>
-        relK k fs (ts ++ [⟨ν, spec, t, fun _ => 0⟩]) fun log =>
+    | some (.hello spec, ν) =>
+      if treeLines ts < maxTreeLines ∧ TreeSpecOk spec then
+        .coin (TreeSample spec) fun t => relK k fs (ts ++ [⟨ν, spec, t, fun _ => 0⟩]) fun log =>
           f (⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec t ++ treeKey t.1)⟩ :: log)
-    | some (.opening i s n, b) => optGame ts[i]? (f []) fun T => optGame (T.next s n) (f []) fun p =>
-        haveI : Nonempty (TreeOpenable T.nonce T.spec T.sample p.1 p.2) := ⟨⟨T.sample.2 p.1 p.2, rfl⟩⟩
-        .coin (TreeOpenable T.nonce T.spec T.sample p.1 p.2) fun d =>
-          relK k fs (ts.set i (T.bump p.1)) fun log => f (⟨.opening i s n, b, TreeDraw.opened d.1 n⟩ :: log)
+      else f []
+    | some (.opening i s n, b) =>
+      if treeLines ts < maxTreeLines then
+        optGame ts[i]? (f []) fun T => optGame (T.next s n) (f []) fun p =>
+          haveI : Nonempty (TreeOpenable T.nonce T.spec T.sample p.1 p.2) := ⟨⟨T.sample.2 p.1 p.2, rfl⟩⟩
+          .coin (TreeOpenable T.nonce T.spec T.sample p.1 p.2) fun d =>
+            relK k fs (ts.set i (T.bump p.1)) fun log => f (⟨.opening i s n, b, TreeDraw.opened d.1 n⟩ :: log)
+      else f []
 
 theorem releases_bind {β : Type} :
     ∀ (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Release → Game β),
@@ -259,30 +272,34 @@ theorem releases_bind {β : Type} :
         congr 1
         funext x
         exact releases_bind k fs' ts _
-    · simp only [Game.bind_coin, Game.map, Game.bind_assoc, Game.bind_ret]
-      congr 1
-      funext t
-      exact releases_bind k _ _ _
     · dsimp only
-      cases ts[i]? with
-      | none => rfl
-      | some T =>
-        dsimp only [optGame]
-        cases T.next s n with
+      split_ifs
+      · simp only [Game.bind_coin, Game.map, Game.bind_assoc, Game.bind_ret]
+        congr 1
+        funext t
+        exact releases_bind k _ _ _
+      · rfl
+    · dsimp only
+      split_ifs
+      · cases ts[i]? with
         | none => rfl
-        | some p =>
-          simp only [Game.bind_coin, Game.map, Game.bind_assoc, Game.bind_ret]
-          congr 1
-          funext d
-          exact releases_bind k _ _ _
+        | some T =>
+          dsimp only [optGame]
+          cases T.next s n with
+          | none => rfl
+          | some p =>
+            simp only [Game.bind_coin, Game.map, Game.bind_assoc, Game.bind_ret]
+            congr 1
+            funext d
+            exact releases_bind k _ _ _
+      · rfl
 
-/-- The evidence after the device's log `log`, and how the play ends. -/
-def evidenceG (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (log : List Release) : Game Exchange :=
-  .send (ByteArray × Array ByteArray) fun e => .ret ⟨θ, F, c, log, e.1, e.2⟩
-
-theorem play_eq (fs : List (String × ℕ)) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :
-    play fs θ F c = relK (frames fs) fs [] (evidenceG θ F c) :=
-  releases_bind _ _ _ _
+theorem play_eq (fs : List (String × ℕ)) (D : Signer) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :
+    play fs D θ F c = .send ByteArray fun a => relK (frames fs) fs [] (finish D θ F c a) := by
+  show Game.send ByteArray _ = _
+  congr 1
+  funext a
+  exact releases_bind _ _ _ _
 
 /-! ## The cuts at the frames the prover sends -/
 
@@ -329,12 +346,12 @@ noncomputable def frameCut {β : Type} (P : List Release → Frame → Prop) (rv
           frameCut P rv k fs' ts _ (pre ++ [⟨.fresh l, b, List.ofFn x⟩])
     | some (.hello spec, ν) =>
       if P pre (.hello spec) then cutAt rv ν.data.toList else
-        .coin fun t => frameCut P rv k fs (ts ++ [⟨ν, spec, t, fun _ => 0⟩]) _
-          (pre ++ [⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec t ++ treeKey t.1)⟩])
+        .iteCut (.coin fun t => frameCut P rv k fs (ts ++ [⟨ν, spec, t, fun _ => 0⟩]) _
+          (pre ++ [⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec t ++ treeKey t.1)⟩])) .skip
     | some (.opening i s n, b) =>
       if P pre (.opening i s n) then cutAt rv b.data.toList else
-        optCut ts[i]? .skip fun T => optCut (T.next s n) .skip fun p => .coin fun d =>
-          frameCut P rv k fs (ts.set i (T.bump p.1)) _ (pre ++ [⟨.opening i s n, b, TreeDraw.opened d.1 n⟩])
+        .iteCut (optCut ts[i]? .skip fun T => optCut (T.next s n) .skip fun p => .coin fun d =>
+          frameCut P rv k fs (ts.set i (T.bump p.1)) _ (pre ++ [⟨.opening i s n, b, TreeDraw.opened d.1 n⟩])) .skip
 
 end Verity
 
@@ -345,10 +362,11 @@ open scoped ENNReal
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
-/-- **The period's game is the device's releases, then the evidence**, as one game. -/
+/-- **The period's game is the prover's request, the device's releases, then the close**, as one game. -/
 theorem game_eq_relK (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :
-    V.game θ F c = relK (frames (V.families θ)) (V.families θ) [] (evidenceG θ F c) :=
-  play_eq _ θ F c
+    V.game θ F c = .send ByteArray fun a =>
+      relK (frames (V.families θ)) (V.families θ) [] (finish (V.signer θ) θ F c a) :=
+  play_eq _ _ θ F c
 
 /-- **Where a session's messages are fixed, and what the evidence reveals for them**, at `R` rounds. Round `j` is fixed
 at the first frame the prover sends that `round j` picks, after the device's log before it; its digest is the bytes
@@ -368,10 +386,11 @@ abbrev Readings := (A : Live) → ByteArray → Array ByteArray → ByteArray �
 
 variable (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) {R : ℕ}
 
-/-- **Round `j`'s cut**: at the first frame round `j`'s reading picks, the messages the evidence reveals for it that
-open the bytes the frame answers. -/
+/-- **Round `j`'s cut**: after the prover's request, at the first frame round `j`'s reading picks, the messages the
+evidence reveals for it that open the bytes the frame answers. -/
 noncomputable def roundCut (rd : Reading R) (j : Fin R) : DigestCut.AgreeCut sha512Msg (V.game θ F c) :=
-  (frameCut (rd.round j) (rd.reveal j) _ _ _ (evidenceG θ F c) []).cast (game_eq_relK V θ F c).symm
+  (DigestCut.AgreeCut.send fun a : ByteArray => frameCut (rd.round j) (rd.reveal j) (frames (V.families θ))
+    (V.families θ) [] (finish (V.signer θ) θ F c a) []).cast (game_eq_relK V θ F c).symm
 
 /-- **The record's cut**: at the play's start, the records the evidence reveals that open the record's digest. -/
 noncomputable def recordCut (rd : Reading R) : DigestCut.AgreeCut sha512Msg (V.game θ F c) :=
@@ -448,8 +467,8 @@ theorem prob_le_messages (rd : Readings) (K : Constructions V) (hM : K.msgFinder
 omit θ F c in
 /-- **The coupling off the messages' misses**: at constructions whose two-continuation finders are these,
 `CouplingTarget` holds once the sampled verdict on the tapes that miss at no round and not at the record is at most as
-likely as the live audit's acceptance at the projected strategy, plus the hiding term, the read finder's collision and
-the forger's forgery. -/
+likely as the live audit's acceptance at the projected strategy, plus the square root of the bound digests' finder's
+success, the hiding term, the read finder's collision and the forger's forgery. -/
 theorem couplingTarget_of_noMiss (k : Verity.Registration.Composite) (rd : Readings) (K : Constructions V)
     (hM : K.msgFinder = msgFinder V rd) (hR : K.recordFinder = recordFinder V rd) (A : Live) (θ : ByteArray)
     (F : Array ByteArray)
@@ -458,7 +477,8 @@ theorem couplingTarget_of_noMiss (k : Verity.Registration.Composite) (rd : Readi
           V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) ∧ NoMiss V θ F c (rd A θ F c) σ x) ≤
         FlockSoundness.Game.prob (fun o => FlockSoundness.Discharge.ZkHidden.LiveAcceptsZKP A.I A.own o)
             (K.live A θ F c σ).game (K.project A θ F c σ) +
-          (A.hidingTerm + ENNReal.ofReal ((K.readFinder θ F c σ).Pr sha512Msg) +
+          (ENNReal.ofReal (Real.sqrt ((K.bindFinder A θ F c σ).Pr sha512Msg)) + A.hidingTerm +
+            ENNReal.ofReal ((K.readFinder θ F c σ).Pr sha512Msg) +
             ENNReal.ofReal ((K.forger θ F c σ).Pr Verity.lmsVerify))) :
     CouplingTarget V k K A θ F := fun c σ =>
   (prob_le_messages V rd K hM hR A θ F c σ _).trans <| (add_le_add (h c σ) le_rfl).trans_eq (by ring)

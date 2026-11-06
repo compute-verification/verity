@@ -58,11 +58,6 @@ DISAGREE = "disagree"
 CORE = Path(__file__).resolve().parents[3]
 PACKAGE = CORE.parents[1] / "verity/core/service/sampled_proofs"
 EXE = "sampled-proofs-verifier"
-UNCERTIFIED_RULES = False
-"""A test hook, off in every deployment. On, the service runs a two-stage rule, which the verifier of record refuses
-(`service.UNCERTIFIED_RULE`, `Select.uncertifiedRule`), and every call here goes to `UNCERTIFIED_EXE`."""
-UNCERTIFIED_EXE = "sampled-proofs-difftest"
-"""The difftest's executable, whose pieces (`Pieces.table`) run a two-stage rule."""
 BUILD_LOCK = CORE / "difftest" / "lean" / ".lake" / "harness-build.lock"
 #: The δ the Lean's registration parameters carry, which R1-R7 never read.
 REGISTRATION_DELTA = "1/2"
@@ -161,14 +156,12 @@ class _Server:
 
 _server = _Server()
 atexit.register(_server.close)
-_uncertified = _Server(UNCERTIFIED_EXE)
-atexit.register(_uncertified.close)
 
 
 def lean(fn: str, value: Any) -> dict[str, Any]:
     """The Lean's answer: its output, or `{"refused": reason}` where it refuses the input or can't run."""
     try:
-        kind, body = (_uncertified if UNCERTIFIED_RULES else _server).call(fn, value)
+        kind, body = _server.call(fn, value)
     except LeanError as e:
         return {"refused": str(e)}
     return body if kind == "output" else {"refused": body}
@@ -236,7 +229,8 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
             registered: Mapping[str, int] | None, supplied: Mapping[str, Any] | None = None,
             pinned: Mapping[str, str] | None = None, binding: Mapping[str, str] | None = None,
             schemas: Mapping[str, str] | None = None, window_root: str | None = None,
-            held: Sequence[str] | None = None, outputs: Mapping[str, Mapping[str, str]] | None = None) -> dict[str, Any]:
+            held: Sequence[str] | None = None, outputs: Mapping[str, Mapping[str, str]] | None = None,
+            day: int | None = None, declarations: Sequence[Mapping[str, Any]] | None = None) -> dict[str, Any]:
     """`registration.check`'s copies as the Lean's parameters (`OneStage.paramsOfJson`)."""
     p = {"anchors": list(anchors), "delta": REGISTRATION_DELTA, "law": dict(law), "leaf_layer": leaf_layer,
          "log": [dict(r) for r in log], "partition": None if partition is None else dict(partition),
@@ -259,6 +253,9 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
         p["held"] = list(held)
     if outputs is not None:
         p["outputs"] = {v: dict(o) for v, o in outputs.items()}
+    if day is not None or declarations is not None:
+        p["day"] = day
+        p["declarations"] = None if declarations is None else [dict(d) for d in declarations]
     return p
 
 
@@ -269,14 +266,16 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           supplied: Mapping[str, Any] | None = None, pinned: Mapping[str, str] | None = None,
           binding: Mapping[str, str] | None = None, schemas: Mapping[str, str] | None = None,
           window_root: str | None = None, held: Sequence[str] | None = None,
-          outputs: Mapping[str, Mapping[str, str]] | None = None) -> Verdict:
-    """`registration.check` (R1-R7) by the verifier."""
+          outputs: Mapping[str, Mapping[str, str]] | None = None, day: int | None = None,
+          declarations: Sequence[Mapping[str, Any]] | None = None) -> Verdict:
+    """`registration.check` (R1-R7) by the verifier, with R2's declared day when it passes `day` and `declarations`."""
     log = list(log)
     py = R.check(rec, program, query, law, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered,
-                 supplied, pinned, binding, outputs=outputs, schemas=schemas, window_root=window_root, held=held)
+                 supplied, pinned, binding, outputs=outputs, schemas=schemas, window_root=window_root, held=held,
+                 day=day, declarations=declarations)
     got = lean("registration", {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, partition,
                                                   work_table, registered, supplied, pinned, binding, schemas,
-                                                  window_root, held, outputs),
+                                                  window_root, held, outputs, day, declarations),
                        "record": dict(rec)})
     if "codes" in got:
         got = {"ok": not got["codes"], "codes": got["codes"]}
@@ -518,6 +517,6 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
     return rec
 
 
-__all__ = ["BUILD_LOCK", "COINS_MAX", "DISAGREE", "EXE", "LeanError", "PACKAGE", "RECORD_VERDICT", "UNCERTIFIED_EXE",
-           "UNCERTIFIED_RULES", "audit_record", "check", "check_draw", "check_proved", "check_public", "check_verdicts",
-           "coins", "executable", "fleet", "lean", "matches_public", "run", "select", "select_second", "stream"]
+__all__ = ["BUILD_LOCK", "COINS_MAX", "DISAGREE", "EXE", "LeanError", "PACKAGE", "RECORD_VERDICT", "audit_record",
+           "check", "check_draw", "check_proved", "check_public", "check_verdicts", "coins", "executable", "fleet", "lean",
+           "matches_public", "run", "select", "select_second", "stream"]

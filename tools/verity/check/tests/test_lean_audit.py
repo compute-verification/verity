@@ -874,6 +874,29 @@ def test_each_packages_newest_build_stays_past_the_cap(tmp_path):
     assert builds.evict() == 1 and not old.exists() and not (store / "stale.pkg").exists()
 
 
+def test_builds_past_the_byte_cap_go_least_recently_used_first_but_never_a_packages_newest_or_a_held_one(tmp_path):
+    """Kept by count alone, 48 builds of about 17 GB each fill a node's root disk. Past `max_gb` the least recently used go
+    until the rest fit, but never a package's newest, and never one whose lock a run holds."""
+    import fcntl
+
+    store = tmp_path / "lean-builds"
+    for i in range(5):
+        home = store / f"k{i}"
+        home.mkdir(parents=True)
+        (home / "out.olean").write_bytes(b"x" * 400_000)
+        os.utime(home, (1000 + i, 1000 + i))
+    (store / "k0.pkg").write_text("pkg/a")                  # pkg/a's only build: its newest, so it stays
+    size = LA.tree_bytes(store / "k1")
+    assert size >= 400_000
+    builds = LA.WarmBuilds(store, kept=48, max_gb=3.5 * size / 1e9)     # room for three and a half builds
+    with open(store / "k1.lock", "w") as held:
+        fcntl.flock(held, fcntl.LOCK_EX)
+        assert builds.evict() == 2
+    left = sorted(p.name for p in store.iterdir() if p.is_dir())
+    assert left == ["k0", "k1", "k4"], "k2 and k3 go; k0 is pkg/a's newest and k1 is held"
+    assert LA.WarmBuilds(store, kept=48, max_gb=None).evict() == 0, "no byte cap: the count alone"
+
+
 def test_inputs_are_the_package_its_path_dependencies_and_the_auditor(tmp_path, monkeypatch):
     _tree(tmp_path, monkeypatch)
     files = LA.COMMON.tracked_files()

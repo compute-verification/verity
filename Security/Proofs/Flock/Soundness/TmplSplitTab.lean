@@ -1,7 +1,15 @@
 module
 
-public import Proofs.Flock.Soundness.TmplFoldClassOk
 public import Flock.TmplSplit
+public import Proofs.Flock.Level3.GF128Field
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Level3.FoldedBase
+import Proofs.Flock.Level3.Nodes
+import Proofs.Flock.Soundness.TmplFoldClassOk
+import Proofs.Flock.Soundness.TmplFoldDef
+import Proofs.Flock.Soundness.TmplFoldRef
+import Std.Data.HashMap.Lemmas
 
 /-!
 # The split fold's tables, valued

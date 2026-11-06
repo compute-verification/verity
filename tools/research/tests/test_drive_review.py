@@ -564,7 +564,7 @@ def test_no_verdict_counts_by_the_owner_its_handle_or_its_ready_marks_author_wha
     h = Review(world, monkeypatch)
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     world.store.add_label(label_target(1, world.gh.prs[1].head), vocab.READY, "true", "marker")
-    for by in ("Lane-1", "@LANE-1", "Marker"):                  # #1's `Lane lane-1`, its handle, its ready mark's author
+    for by in ("Lane-1", "@LANE-1", "Marker"):                  # #1's owning lane, its handle, its ready mark's author
         h.review(1, by=by)
         out = h.tick()
         assert "no land verdict but its owner's own" in out and _subject(world, "main") == "change ['.agents/skills/using-slack/registry.json']", out
@@ -599,8 +599,8 @@ def test_with_signed_verdicts_drive_lands_only_on_an_authenticated_land_verdict(
 
 
 def test_the_lowest_member_waiting_for_a_land_verdict_rings_the_reviewers_and_top_every_30_min_at_its_head(world, monkeypatch):
-    """`next`'s lowest member with no land verdict holds every landing above it, and its tick's log rang nobody: drive rings @ci
-    (who staffs the reviewers) and @top `BOTTOM_WAIT_S` after it became the lowest or its ready mark, whichever is later, once
+    """`next`'s lowest member with no land verdict holds every landing above it, and its tick's log rang nobody: drive rings `CI`
+    (who staffs the reviewers) and `TOP` `BOTTOM_WAIT_S` after it became the lowest or its ready mark, whichever is later, once
     per `BOTTOM_WAIT_S` at its head; a hold rings nothing, and a new head starts the wait again."""
     from research.drive import BOTTOM_WAIT_S
 
@@ -1453,9 +1453,10 @@ def test_an_after_landing_failure_several_prs_touch_is_bisected_to_the_one_that_
     assert post.startswith("@lane-2 queue: #2 reverted on `main`"), post
 
 
-def _bisecting(world, monkeypatch, tmp_path, revert: bool = False) -> tuple[Review, str]:
+def _bisecting(world, monkeypatch, tmp_path, revert: bool = False, inner_revert: bool = False) -> tuple[Review, str]:
     """#1 and #2 both change the failing test's file and land with #3; the after-landing run fails there, and drive bisects them
-    (its first run, `r-post-1`, of #1's landing).  With ``revert``, a hand revert lands on `main` first."""
+    (its first run, `r-post-1`, of #1's landing).  With ``revert``, a hand revert lands on `main` first; with ``inner_revert``,
+    #2's own branch reverts one of its commits."""
     _registry(world, "lane-1", "lane-2")
     h = Review(world, monkeypatch)
     if revert:
@@ -1464,7 +1465,13 @@ def _bisecting(world, monkeypatch, tmp_path, revert: bool = False) -> tuple[Revi
         _git(world.dev, "commit", "-q", "--allow-empty", "-m", f"Revert \"x\"\n\nThis reverts commit {_main(world)}.")
         _git(world.dev, "push", "-q", "origin", "HEAD:refs/heads/main")
     world.gh.put(1, h1 := world.change({"pkg/tests/test_x.py": "def test_y():\n    pass\n"}))
-    world.gh.put(2, world.change({"pkg/tests/test_x.py": "def test_y():\n    assert False\n"}, base=h1))
+    h2 = world.change({"pkg/tests/test_x.py": "def test_y():\n    assert False\n"}, base=h1)
+    if inner_revert:
+        h2 = world.change({"c.txt": "2\n"}, base=h2)
+        _git(world.dev, "revert", "--no-edit", "HEAD")
+        h2 = _git(world.dev, "rev-parse", "HEAD")
+        _git(world.dev, "push", "-q", "origin", f"{h2}:refs/dev/{h2}")
+    world.gh.put(2, h2)
     world.gh.put(3, world.change({"b.txt": "3\n"}))
     for n in (1, 2, 3):
         h.review(n)
@@ -1519,6 +1526,14 @@ def test_a_bisection_with_a_revert_among_its_landings_reverts_nothing(world, mon
     assert "bisect" not in h.postland() and len(h.posted) == 1 and _main(world) == tip
     (post,) = [p for p in h.posts if "a revert lies in" in p]
     assert "Reverted nothing" in post, post
+
+
+def test_a_revert_inside_a_prs_own_branch_still_bisects(world, monkeypatch, tmp_path):
+    """Any `This reverts commit` in the range's history stopped the bisection, a PR's own revert of its own commit included:
+    every red whose batch held such a PR named no culprit and reverted nothing."""
+    h, tip = _bisecting(world, monkeypatch, tmp_path, inner_revert=True)
+    assert h.postland()["bisect"] and len(h.posted) == 2, world.logs
+    assert not [p for p in h.posts if "a revert lies in" in p]
 
 
 def test_a_landing_that_does_not_compile_lands_what_is_below_the_pr_that_broke_it(world, monkeypatch):
@@ -1752,6 +1767,33 @@ def test_an_after_landing_launch_that_exits_1_rings_ci_and_top_once_an_hour_and_
     assert alarm.startswith("@ci @top queue: `main`'s last verified commit"), alarm
     assert f"its launch registered no run 4 times since {since}: {refused}; red: nothing named red" in alarm, alarm
     assert "(launching)" not in alarm and "has run" not in alarm, alarm
+
+
+def test_a_shard_of_the_after_landing_run_that_prints_no_run_ids_within_the_bound_registered_no_run(world, monkeypatch, tmp_path):
+    """A shard's launch record holds no launch time of its own: without the run's, a train.sh that hung before printing its run
+    ids would leave the run launching for good, and nothing would land."""
+    from research.drive import LAUNCH_LOST_S
+
+    h = Review(world, monkeypatch, baseline=False)
+    h.d.after_landing_shards = 2
+    starts = _detached(h, tmp_path, post=True)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    main = _main(world)
+    h.tick()
+    h.printed[str(tmp_path / "launch-1")] = ([], "train: no run launched")   # circuit-check's records step: the shards build them
+    h.tick()
+    shards = h.postland()["run"]["shards"]
+    assert starts == [main] * 3 and all("at" not in s for s in shards), world.logs
+    h.printed[shards[0]["launch"]["dir"]] = (["r-one"], "RUN r-one")
+    h.clock += LAUNCH_LOST_S                                              # within the bound the other still launches
+    h.tick()
+    assert starts == [main] * 3 and not [p for p in h.posts if "--shard 2/2 registered no run" in p], world.logs
+    h.clock += 1
+    h.tick()
+    (post,) = [p for p in h.posts if "--shard 2/2 registered no run" in p]
+    assert "no run ids 60 min after its launch" in post, post
+    assert h.cancelled == ["r-one"] and starts == [main] * 5, world.logs
 
 
 def test_detach_returns_before_train_sh_prints_its_run_ids_and_launched_reads_them_or_an_exit_without_them(tmp_path, monkeypatch):

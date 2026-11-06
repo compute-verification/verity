@@ -28,6 +28,8 @@ adversary's fork finders.
 
 @[expose] public section
 
+open Claims renaming Ex → expect
+
 namespace Pouw.RelativeSecurity
 
 open Finset

@@ -259,8 +259,9 @@ def shard_set(store, repo: Path, commit: str, ids: list[str], tool: str = "check
     steps' parts its shard's parts; together, one N with K = 1..N once each, one list of every part and one auto plan's digest
     (or none), whose parts they make exactly once and which covers every job ``commit``'s `ci.toml` puts on the gate
     (`declared_jobs`: not circuit-check or ratchet-gate, which run after landing), and the same steps outside their parts (the
-    preflight), passed in each, but for an auto plan's builds a shard runs beside its parts.  The steps: those once, then each
-    part as its shard's step ran it."""
+    preflight), passed in each, but for the builds a shard runs beside its parts (an auto plan's, a hand plan's lean-build
+    beside lean-suites' parts), whose verdict is their own shard's.  The steps: those once, then each part as its shard's step
+    ran it."""
     if not ids or len(set(ids)) != len(ids):
         return None, "a set of shards names each shard's attempt once" if ids else "no shard is named"
     config = _git(repo, "rev-parse", "--verify", "-q", f"{commit}:tools/verity/check", check=False).stdout.strip()
@@ -310,7 +311,7 @@ def shard_set(store, repo: Path, commit: str, ids: list[str], tool: str = "check
     if len(plans) != 1:
         return None, ("the shards are of different plans (their N, every part they say an unsharded check covers, or their auto "
                       "plan's digest)")
-    (n, _, auto), = plans
+    (n, _, _), = plans
     if missing := [k for k in range(1, n + 1) if k not in shards]:
         return None, f"shard {', '.join(f'{k}/{n}' for k in missing)} is not among them"
     every = shards[1][1]["all"]
@@ -325,11 +326,11 @@ def shard_set(store, repo: Path, commit: str, ids: list[str], tool: str = "check
     if uncovered := [j for j in jobs if not any(p == j or p.startswith(j + ":") for p in every)]:
         return None, f"no shard runs {', '.join(uncovered)}, which {commit[:12]}'s ci.toml puts on the gate"
     names = {p.partition(":")[0] for p in every}
-    # an auto plan's shard runs the builds its parts need beside them (`tools/verity/check/shards.py`): a job's step outside its
-    # parts, passed or skipped like every step of a shard, whose part another shard holds
-    common = [[s["step"] for s in shards[k][2] if not s.get("parts") and not (auto and s["step"] in names)] for k in sorted(shards)]
-    if any(sorted(c) != sorted(common[0]) for c in common) or names & set(common[0]):
-        return None, "the shards ran different steps outside their parts, or a job outside its parts"
+    # a shard runs the builds its parts need beside them when another shard holds them (`tools/verity/check/shards.py`,
+    # `declaration.py`): a job's step outside its parts, passed or skipped like every step of a shard, whose part another holds
+    common = [[s["step"] for s in shards[k][2] if not s.get("parts") and s["step"] not in names] for k in sorted(shards)]
+    if any(sorted(c) != sorted(common[0]) for c in common):
+        return None, "the shards ran different steps outside their parts"
     out = [{"step": s, "status": "passed" if all(x.get("status") == "passed" for k in shards for x in shards[k][2] if x["step"] == s)
             else "skipped", "shards": [shards[k][0] for k in sorted(shards)]} for s in common[0]]
     part = {p: {"step": p, "status": s.get("status"), "shard": k, "run_id": shards[k][0], "seconds": s.get("seconds")}
@@ -1429,7 +1430,8 @@ def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool 
     open pull request uses.  Then the head branch of each pull request GitHub has as merged (its head on ``into``) or closed
     unmerged goes too, while it is still at that PR's head: never a fork's, one of `KEEP_BRANCHES`, one an open pull request
     uses as its head or base, a closed one's that is a lead's run branch (`RUN_BRANCH_RE`), or ``keep`` (the heads of PRs
-    drive closed as stale, which stay to be reopened: `research.stale`); GitHub keeps each one's commits under
+    drive closed as stale or unlandable, which stay to be reopened: `research.stale`, `drive.Driver._unlandable`); GitHub
+    keeps each one's commits under
     `refs/pull/N/head`.  Idempotent: what it closed is no longer open, and what it retargeted is based on ``into``.  Returns
     (closed, retargeted) PR numbers, ascending."""
     gh = gh or (lambda *a: _gh_cli(repo, *a))
@@ -1528,7 +1530,8 @@ def sweep_branches(repo: Path, remote: str = "origin", into: str = "main", now: 
     is on ``into`` and is a day idle (its content is there), and move each branch with unmerged work three days idle to
     `refs/archive/heads/NAME` (still fetchable: `git fetch origin refs/archive/heads/NAME`). It keeps `KEEP_BRANCHES`, leads'
     run branches (`RUN_BRANCH_RE`), every branch an open PR uses as its head or base, and ``keep`` (the heads of PRs drive
-    closed as stale, which stay to be reopened: `research.stale`).  At most ``limit`` of each, the longest idle first, each
+    closed as stale or unlandable, which stay to be reopened: `research.stale`, `drive.Driver._unlandable`).  At most
+    ``limit`` of each, the longest idle first, each
     logged by name.  Each push leases the tip it saw, so a branch pushed to meanwhile is kept.  Returns (deleted, archived)."""
     gh = gh or (lambda *a: _gh_cli(repo, *a))
     now = time.time() if now is None else now

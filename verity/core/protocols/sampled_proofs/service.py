@@ -58,9 +58,9 @@ samples `k` proof blocks in each sampled replay block on fresh coins (`second_la
 and its sample is proved. The outcome holds both audit records and accepts when both do; its profile counts incorrect
 proof blocks at each replay block's footprint, which the boundary commitment fixes before any coin
 (`IntegrityProfile`'s two levels). One-stage is `Law`: a two-stage design whose replay blocks are single proof blocks is
-refused, so each design has one form. Until a proof that the verifier's code meets the two-stage certificate lands, a
-spec refuses a two-stage rule (`UNCERTIFIED_RULE`), as the verifier of record does, and this code runs only under
-`verifier.UNCERTIFIED_RULES`, a test hook.
+refused, so each design has one form. Both stages' draws are the Lean verifier's (`Select.select`,
+`Select.selectSecond`), and its knowledge soundness at C-Flock's masked record is `SamplingDeploy.ksTwo_code`'s, under
+the premises that theorem takes.
 
 **The salt and the registration deadline.** `Stream.salt` issues the epoch's salt coin once, from the challenger's own
 coins, and reads its release on the challenger's clock (`salted_at`). `Stream.salt_released` instead records a salt
@@ -342,12 +342,6 @@ class TwoStage:
 
 Selection = All | Law | Sequential | TwoStage
 
-UNCERTIFIED_RULE = ("a two-stage selection rule is refused until the proof that this verifier meets the two-stage "
-                    "certificate lands")
-"""The refusal of a two-stage rule, here and in the verifier of record (`Select.uncertifiedRule`), until a proof that
-the verifier's code meets the two-stage certificate (`CompiledTwo.Sessions`) lands. The code behind it runs only under
-`verifier.UNCERTIFIED_RULES`, a test hook."""
-
 
 def boundary_values(values: Sequence[Value]) -> tuple[Value, ...]:
     """The values a registration commits: under a two-stage design, the boundary commitment's, every phase but
@@ -427,8 +421,6 @@ class Spec:
             raise ValueError("a spec's values have distinct names")
         if not isinstance(self.selection, (All, Law, Sequential, TwoStage)):
             raise ValueError(f"a selection rule is All, Law, Sequential or TwoStage, not {self.selection!r}")
-        if isinstance(self.selection, TwoStage) and not V.UNCERTIFIED_RULES:
-            raise ValueError(UNCERTIFIED_RULE)
         interior = [v.name for v in self.values if v.phase == "interior"]
         if isinstance(self.selection, TwoStage):
             if not interior or not any(v.phase == "serve" and not v.registered for v in self.values):
@@ -506,7 +498,7 @@ _O = TypeVar("_O", Outcome, tuple[Outcome, ...])
 class WindowCommitmentRecord:
     """A window's commitment record the challenger admitted: one-stage's `record`, its `receipt` and `digest`, and
     `order`, its audit's index in the stream. It is Verification's, not an entry of the registration log, which registers
-    only the site, θ and the builder. The receipt's `received` is the record's position in
+    only the site, θ and the registered compiler. The receipt's `received` is the record's position in
     the stream's log; the challenger's clock stays its own. Under `Check.registration_deadline`, `salted_at` and
     `received_at` are its readings of the salt's release and of this registration's receipt (None otherwise)."""
 
@@ -2099,9 +2091,9 @@ class Stream:
     def _footprint(self, e: _Entry) -> IntegrityProfile:
         """An accepted two-stage outcome's integrity profile: two levels, the replay blocks (`replay`, the registration's
         partition) and their proof blocks (`A.LEVEL`, the interior registration's), n_rho in each. The first stage's
-        uniform Q-subset of the N replay blocks is bounded by `Bernoulli(Q/N)` (sampling without replacement is
-        negatively associated, so the product of the replay blocks' escapes has no larger mean), and the second stage is
-        `Subset(k)` inside each sampled replay block. Its `accept(m)` is a replay block's at footprint m, the fewest
+        uniform Q-subset of the N replay blocks is bounded by `Bernoulli(Q/N)` (`Design.Two.Pa_le_bernoulli_pop`: it
+        misses a set T with probability C(N − |T|, Q)/C(N, Q) ≤ (1 − Q/N)^|T|), and the second stage is `Subset(k)`
+        inside each sampled replay block. Its `accept(m)` is a replay block's at footprint m, the fewest
         incorrect proof blocks of any interior consistent with its boundary commitment, which is fixed before any coin;
         the prover's choice of interior after the first stage only raises it."""
         assert e.draw is not None and e.interior is not None and e.second is not None
@@ -2136,6 +2128,6 @@ def _why(symbol: str, audit: Mapping[str, Any] | None,
 
 __all__ = ["ACCEPT", "All", "Check", "Draw", "Exhaustive", "Fleet", "HALTED", "HIDING", "KINDS", "LATE", "Law", "Outcome",
            "PHASES", "Pending", "Public", "REJECT", "REPLAY", "ROOTS", "ROUNDS", "Refused", "SCHEME", "SOURCES",
-           "Selection", "Sequential", "Session", "Spec", "Stream", "Terms", "TwoStage", "UNCERTIFIED_RULE", "Value",
+           "Selection", "Sequential", "Session", "Spec", "Stream", "Terms", "TwoStage", "Value",
            "WindowCommitmentRecord", "boundary_values", "check_public", "check_verdicts", "interior_values",
            "second_law", "select_draw", "select_second", "selection_law"]

@@ -51,8 +51,8 @@ $S$ of $N$ units and a block $B$, conditioned on $|S \cap B| = j$ the share $S \
 (`share_uniform`, `share_cond`), the share size is hypergeometric (`share_card`), and $W \subseteq B$ escapes at share
 size $j$ with that size's probability times the member's own $\binom{|B|-|W|}{j}/\binom{|B|}{j}$ (`share_escape`,
 `share_escape_total`). **The pooled escape** (`Audit/Pooled.lean`): over $T$ periods, each a fresh uniform
-$kd$-subset of the same $N$ units, an adaptive adversary that fixes period $t$'s wrong set $W_t$ from the earlier draws
-escapes every draw with $\sum_t |W_t| \ge M$ with probability at most $(1 - kd/N)^M$ (`horizon_escape`), at most
+$kd$-subset of the same $N$ units, an adaptive adversary that fixes period $t$'s wrong set $W_t$ from the earlier samples
+escapes every sample with $\sum_t |W_t| \ge M$ with probability at most $(1 - kd/N)^M$ (`horizon_escape`), at most
 $\prod_t \binom{N-w_t}{kd}/\binom{N}{kd}$ when $|W_t| \ge w_t$ (`horizon_escape_prod`); at $\delta$, the escaped total
 reaches $\ln(1/\delta)/q$, $q = kd/N$, with probability at most $\delta$ (`pooled_escape_log`, in `Claims.Pr`, which is outside the audit layer:
 `Claims/Sampling/PooledPr.lean`).
@@ -76,10 +76,11 @@ over strata; `flock_e2e_drawn_exec` and `flock_e2e_count_exec` are the e2e theor
 stratum's `k` at most its size, so those two hypotheses follow from the verifier accepting. The `FailClosed` claims take
 neither: their law is the verifier's own (`liveLaw`) and their bound the infimum over such assignments
 (`liveStrata_of_ofJson`: non-empty at an accepted sample file's law). `drawOS_subset_escape_le`,
-`drawOS_stratified_escape_le` and `drawOS_work_escape_le` (`ExecDrawOS.lean`), **the live sample**: `Flock.Draw.drawOS`,
-which is `drawWith` on `IO.getRandomBytes` (`drawOS_def`), extending a stream that runs out and rerunning, misses $B$
-with probability at most the same acceptance probabilities, on a byte source that A3 makes uniform
-(`Assumptions.UniformRandomBytes`); `execOS_escape_le` and `execOS_subset_escape_le` state it for the live sample as a
+`drawOS_stratified_escape_le` and `drawOS_work_escape_le` (`ExecDrawOS.lean`), **the live sample**:
+`Flock.Draw.drawWith` on the challenger's coins (`SampledProofs.Draw.drawUnits`; `Flock.Draw.drawOS` is `drawWith` on
+`IO.getRandomBytes`, `drawOS_def`), extending a stream that runs out and rerunning, misses $B$ with probability at most
+the same acceptance probabilities, on a byte source that A3 makes uniform (`Assumptions.UniformRandomBytes`);
+`execOS_escape_le` and `execOS_subset_escape_le` state it for the live sample as a
 sampling design (`execOS`). `subsetOn_escape_le`, `drawOn_escape_le` and `keyedWindow_escape_le` (`KeyedDraw.lean`),
 **the PoUW circuit's keyed samples**. `Key.subset`, which samples each swap from its own `verity.ml.randomness` stream, has
 no higher acceptance probability than the uniform $k$-subset. The window's per-call samples under one key form one
@@ -199,8 +200,8 @@ context.
   probability
   $e_{\text{eff}}(B) = \mathbb E_{S_1}\big[\prod_{u \in B \cap S_1} \max_{v \subseteq u}(1 - \pi_{L_2 u}(v))\big]$, with
   $\varepsilon_{ks}$ and $\delta_{link}$ at the fine level;
-- `effEscape_full`, `twoStage_full_profile`: **(b1) is one-stage over the coarse partition** ($e_{\text{eff}} = e_{L_1}$);
-- `effEscape_bernoulli_prod`: with a Bernoulli first stage, $e_{\text{eff}}(B) = \prod_{u \in B}\big(1 - p + p\,m_u\big)$ for
+- `effAcceptProb_full`, `twoStage_full_profile`: **(b1) is one-stage over the coarse partition** ($e_{\text{eff}} = e_{L_1}$);
+- `effAcceptProb_bernoulli_prod`: with a Bernoulli first stage, $e_{\text{eff}}(B) = \prod_{u \in B}\big(1 - p + p\,m_u\big)$ for
   any second stage, $m_u$ the largest second-stage miss probability inside $u$;
 - `Partition.two_stage_a_coarse`: **(a) is one-stage over the fine partition**, and its curve bounds coarse counts;
 - `Partition.Refines.exists_wrong_fine`: an incorrect coarse unit has an incorrect fine unit under every interior, the lemma
@@ -260,7 +261,7 @@ fine unit per gate, with a uniform `k₂`-subset of each sampled chain's gates i
 - `late_interior_insecure`: with the interior committed after the fine sample (`twoStageLate`), an incorrect chain is accepted
   with probability 1.
 
-- `effEscape_bernoulli`: **(b2) is one-stage over the coarse partition, thinned.** With a Bernoulli($p$) first stage,
+- `effAcceptProb_bernoulli`: **(b2) is one-stage over the coarse partition, thinned.** With a Bernoulli($p$) first stage,
   the effective acceptance probability of any set of chains is its acceptance probability under the one-stage
   Bernoulli($p\,k_2/n_v$) sample, $(1 - p\,k_2/n_v)^{|B|}$ (`Law.bernoulli_escape`, `Law.bernoulli_avg_prod`).
 

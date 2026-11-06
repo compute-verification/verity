@@ -3,6 +3,41 @@ module
 public import Proofs.Flock.Recursive.LoopZK
 public import Proofs.Flock.Recursive.FirewallSalted
 public import Proofs.Flock.Recursive.FirewallAdaptive
+public import Proofs.Flock.Recursive.StopLeak
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Soundness.CROnly.Hiding
+import Proofs.Flock.Soundness.ZK.Hiding
+import Proofs.Flock.Soundness.ZK.RealLeaves
 
 /-!
 # `RecursiveZKLoop` at any worker that reads its answers
@@ -227,8 +262,8 @@ session finished, and V*'s statements' view if it did. The salt bytes are drawn 
 them from the operating system (A3, `uniform/io-getrandombytes`).
 
 It takes, each an obligation:
-* `SessionLoopZKDeployed`'s premises on the deployed tables (`Tables`, `Complete`, `DummyReg`, `Causal`, `SwCausal`,
-  `TapeOK` of the loop's session), which take `SessionsCoined`'s role;
+* `SessionLoopZKDeployed`'s premises on the deployed tables (`Tables`, `Complete`, `DummyReg`, `Causal`, `TapeOK` of
+  the loop's session, and `SwCausalOn` at `Loop.SwOk`'s coins), which take `SessionsCoined`'s role;
 * the worker's values satisfy V*'s circuits wherever the inner session finished: at every such tape, randomness and
   salts, each statement parses and its witness satisfies its circuit (`OuterZK.LoopSessions.Honest` at
   `Claims.Flock.R`);
@@ -279,7 +314,8 @@ def RecursiveZKLoopAnySum : Prop :=
     0 < t →
     Claims.ZKServer.Loop.finS.Tables →
     Claims.ZKServer.Loop.finS.Complete (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse) →
-    Claims.ZKServer.Loop.finS.DummyReg → Claims.ZKServer.Loop.finS.Causal → Claims.ZKServer.Loop.finS.SwCausal vs →
+    Claims.ZKServer.Loop.finS.DummyReg → Claims.ZKServer.Loop.finS.Causal →
+    Claims.ZKServer.Loop.finS.SwCausalOn (Claims.ZKServer.Loop.SwOk Claims.ZKMal.Masked.dataE) vs →
     Claims.ZKServer.Loop.finS.TapeOK →
     (OuterZK.LoopSessions.atWorker m stmt wit).Honest
       (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse)
@@ -487,7 +523,8 @@ theorem anyOuter_le {Ωa Ωp Θ : Type} {nh : ℕ} (vs : Claims.ZKServer.Loop.fi
     (hV : Claims.ZKServer.Loop.finS.Complete
       (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse))
     (hD : Claims.ZKServer.Loop.finS.DummyReg) (hc : Claims.ZKServer.Loop.finS.Causal)
-    (hsc : Claims.ZKServer.Loop.finS.SwCausal vs) (hT : Claims.ZKServer.Loop.finS.TapeOK)
+    (hsc : Claims.ZKServer.Loop.finS.SwCausalOn (Claims.ZKServer.Loop.SwOk Claims.ZKMal.Masked.dataE) vs)
+    (hT : Claims.ZKServer.Loop.finS.TapeOK)
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
     (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
       _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
@@ -553,7 +590,8 @@ theorem anySent_le {Ωa Ωp Θ : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ωp
     (hV : Claims.ZKServer.Loop.finS.Complete
       (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse))
     (hD : Claims.ZKServer.Loop.finS.DummyReg) (hc : Claims.ZKServer.Loop.finS.Causal)
-    (hsc : Claims.ZKServer.Loop.finS.SwCausal vs) (hT : Claims.ZKServer.Loop.finS.TapeOK)
+    (hsc : Claims.ZKServer.Loop.finS.SwCausalOn (Claims.ZKServer.Loop.SwOk Claims.ZKMal.Masked.dataE) vs)
+    (hT : Claims.ZKServer.Loop.finS.TapeOK)
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
     (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
       _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))

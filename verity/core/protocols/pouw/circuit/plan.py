@@ -13,7 +13,7 @@ strip's path to D_A and the call's key unit, each proved once, and its Y strip's
   inside each, k_s = max(1, round(K·n_s/N)) (rounding half up), K the law's budget over the strata it draws.
 * `WorkLaw` is the verifier's work law with its floors (`Flock/Draw.lean` `workK`):
   k_s = min(n_s, max(f_s, ⌈K·W_s/W⌉)), with K = `RECORD_K` = 27,713 at ε = 0.1% and δ = 2⁻⁴⁰ (`record_k`) and f_s the
-  verifier's floor. `work_table` is the verifier's `--work-table` and `law_object` the law `verify` derives from it. K is
+  verifier's floor. `work_table` is the verifier's `--work-table` and `design_object` the law `verify` derives from it. K is
   a **window's** budget: a call draws its share K_c = ⌈K·W_c/W_window⌉, capped at its units, and its y cells at the
   floor ⌈K_y·n_c/N⌉ of the window's N, K_y = K (`window_laws`).
 
@@ -46,7 +46,7 @@ from verity.ml.randomness import Key
 from ..protocol import DomainError
 from ..schemes.ncp import FORM_UNITS
 from .ncp2 import D, Shape, rfc6962
-from .partition import Unit, units
+from .partition import ProofBlock, units
 
 DRAW_DOMAIN = domains.POUW_CLOSURE_SAMPLING
 
@@ -210,7 +210,7 @@ class Layout:
     """The units a plan reads: every unit, the tile and rest strata, and each tile's closure."""
 
     shape: Shape
-    units: tuple[Unit, ...]
+    units: tuple[ProofBlock, ...]
     strata: tuple[StratumSpec, ...]
     closure: Mapping[int, tuple[int, ...]]              # tile unit -> the call's units proved with it (itself first)
     y_strip: Mapping[int, int] = None                   # tile unit -> the weight Program's Y unit it reads (column strip)
@@ -242,7 +242,7 @@ class Layout:
 
 def layout(shape: Shape, kind: str = "shift24") -> Layout:
     us = units(shape, kind)
-    by_role: dict[str, list[Unit]] = {}
+    by_role: dict[str, list[ProofBlock]] = {}
     for u in us:
         by_role.setdefault(u.role, []).append(u)
     # the tree's nodes in emission order, each with the strips beneath it
@@ -310,10 +310,10 @@ def tile_layout(shape, w_ref: int) -> Layout:
     return Layout(shape, us, strata, closure, None, b_rows, w_ref)
 
 
-def template_strata(us: Sequence[Unit], per_tile: int) -> tuple[StratumSpec, ...]:
+def template_strata(us: Sequence[ProofBlock], per_tile: int) -> tuple[StratumSpec, ...]:
     """The verifier's strata (`Draw.strataOf`): one per template, in the order of its first unit, the tile's with W_ref
     ``per_tile`` a unit and every other's with none."""
-    groups: dict[str, list[Unit]] = {}
+    groups: dict[str, list[ProofBlock]] = {}
     for u in us:
         groups.setdefault(u.template, []).append(u)
     return tuple(StratumSpec(t, g[0].role, tuple(u.index for u in g), per_tile * len(g) if g[0].role == "tile" else 0)
@@ -360,7 +360,7 @@ def work_table(lay: Layout, law: WorkLaw = WorkLaw()) -> dict[str, dict[str, int
     return {s.name: {"work": s.work // len(s.units), "floor": law.floor(s.name)} for s in lay.strata}
 
 
-def law_object(lay: Layout, law: WorkLaw) -> dict:
+def design_object(lay: Layout, law: WorkLaw) -> dict:
     """The law `flock-verify draw --program P --partition Q --work K --work-table F` derives for this call
     (`Draw.deriveWork`, as `Law.toJson` writes it): each stratum `{template, units, work, floor, k}`, at the call's K
     (`WorkLaw.budget`)."""
@@ -396,6 +396,6 @@ def unsound_work_bound(lay: Layout, sizes: Mapping[str, int], delta: float) -> f
 
 
 __all__ = ["DRAW_DOMAIN", "RECORD_K", "CountLaw", "Layout", "Plan", "StratumSpec", "TileLaw", "WorkLaw", "check_work_strata",
-           "draw", "law_object",
+           "draw", "design_object",
            "layout", "openings", "profile", "record_k", "template_strata", "tile_layout", "unsound_work_bound", "window_laws",
            "work_table"]

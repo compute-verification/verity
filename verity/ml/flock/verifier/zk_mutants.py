@@ -8,8 +8,8 @@ A proof edit reaches the record as a prover that sent the edited proof would hav
 message, so only the check the edit breaks can reject it. A value no round absorbs (`τ`'s opening, the opened columns,
 their salts and paths, which follow the last coin) changes the file alone, and so does a nonce edit, whose rounds keep the
 prover's absorbed `0` (no replacement carries a nonce's eight zero bytes alone). Record edits change one field of
-`session.json`. The edits are table `T`'s (the first by default); a session of several tables adds its first two tables'
-rep-0 proofs swapped.
+`session.json`, or one round's count and coins together. The edits are table `T`'s (the first by default); a session of
+several tables adds its first two tables' rep-0 proofs swapped.
 
 Writes OUT_DIR/<name>/ per case and OUT_DIR/zk_mutants.json, the `--expect` form of `agree.py`: the verdict both verifiers
 must reach, the Lean verifier's reason prefix, and `upstream_accepted` where upstream's offline replay, which takes the
@@ -244,6 +244,14 @@ def main(src, out, table=None):
         return edit
     record_case("zk-retained-not-digest", retained(False), reject("S12:"))
     record_case("zk-retained-edited", retained(True), reject("R2: round 0"))
+
+    def recount(rec):
+        r = r0(rec)[0]
+        r["coins"].append(r["coins"][-1])
+        r["n"] += 1
+    # a round issuing one coin more than the replay squeezes, its count and coins agreeing (S12) and its bytes unchanged
+    n0 = len(r0(base)[0]["coins"])
+    record_case("zk-round-count", recount, reject(f"R2: round 0: {n0} coins requested, {n0 + 1} issued"))
 
     def swap(a, b):
         """Proof files `a` and `b` (`(table, rep)`) exchanged, with their digests."""

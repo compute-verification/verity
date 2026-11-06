@@ -103,8 +103,11 @@ theorem emitSections_run (u : VStar.UnitC) (l : Laid) (s : String) :
       (PUnit.unit, s ++ joinNl (secLs "unit" u.name l ++ secLs VStar.SHA_NET VStar.SHA_NET (shaLaid ()) ++
         secLs VStar.HM_NET VStar.HM_NET (hmLaid ()))) := by
   unfold VStar.emitSections
-  generalize shaLaid () = ls
-  generalize hmLaid () = lh
+  -- An `Exists` eliminator's variables, not `generalize`'s: the elaborated term substitutes `generalize`'s back, and
+  -- the kernel's check of the `simp` below then evaluates the two nets.
+  obtain ⟨ls, hls⟩ : ∃ ls, shaLaid () = ls := ⟨_, rfl⟩
+  obtain ⟨lh, hlh⟩ : ∃ lh, hmLaid () = lh := ⟨_, rfl⟩
+  rw [hls, hlh]
   simp [List.forIn_cons, List.forIn_nil, StateT.run_bind, StateT.run_modify, emitNet_run, secLs, joinNl_cons,
     joinNl_append, String.append_assoc]
   refine Prod.ext rfl ?_

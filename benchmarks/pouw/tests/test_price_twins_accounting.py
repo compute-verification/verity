@@ -47,7 +47,7 @@ H100_PINS = {f"Pouw.SecurityProofs.PearlC.{kind}H100Rev1_{n}": n
 def scheme_of(twin: dict) -> C.PearlC:
     """The twin's device record as a scheme: v1's G = 4 or v2's no promotion, at the twin's prices and cap."""
     d = DEVICES[twin["statement"]]
-    return C.PearlC(forming="v1", device=replace(d, cap=Fraction(twin["cap"]), prices=PRICES[Fraction(twin["fadd"])][0]))
+    return C.PearlC(forming="v1", device=replace(d, cap=Fraction(twin["cap"]), prices=PRICES[Fraction(twin["fadd"])][0]), hashing="h0")
 
 
 def cast_offset(twin: dict) -> Fraction:

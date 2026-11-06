@@ -1,7 +1,8 @@
 module
 
-public import Mathlib.Data.Nat.Size
 public import Definitions.Core.Digest
+public import Mathlib.Data.Nat.Bits
+public import Mathlib.Data.Nat.Size
 
 /-!
 # Messages, digests, collisions, and the byte encodings (trusted)

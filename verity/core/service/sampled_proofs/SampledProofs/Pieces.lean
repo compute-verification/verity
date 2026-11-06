@@ -46,10 +46,11 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   (`Challenger`): a coin commitment and an opening as `from_json` reads them, `live_reason` and `order_reason`.
 * `challenger_key`, `challenger_record`, `challenger_trusted`: the challenger's signed record (`ChallengerRecord`): the
   verifier's key and a record as `from_json` reads them, with `record_message`, and `trusted_reason`.
-* `challenger_close`, `challenger_released`, `challenger_ledger`, `challenger_head`, `challenger_session`,
-  `challenger_credited`, `challenger_pinned`: the challenger's session (`ChallengerSession`): its close as `from_json`
-  reads it, with `close_message`; `log_chain` and `released_roots_of`; `audited_session`, the auditor's ledger;
-  `ledger_head`, the ledger's published heads; `trusted_session_of` and `credited_session`, a window counted toward its
+* `challenger_close`, `challenger_released`, `challenger_ledger`, `challenger_day`, `challenger_head`,
+  `challenger_session`, `challenger_credited`, `challenger_pinned`: the challenger's session (`ChallengerSession`): its
+  close as `from_json` reads it, with `close_message`; `log_chain` and `released_roots_of`; `audited_session`, the
+  auditor's ledger; `declared_day`, a window's day and its lane's declarations before it; `ledger_head`, the ledger's
+  published heads; `trusted_session_of` and `credited_session`, a window counted toward its
   period's circuit, each over `pinned_session`: a session from a commit the host's pins log records and the auditor's
   first-parent list of main holds.
 * `challenger_read`, `challenger_draw_coins`, `challenger_within`: a draw's coins from one challenger family
@@ -67,7 +68,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   wired row's public string its writer's) and on the reference's entries whose unit is drawn.
 
 `sampled-proofs-verifier` serves those the verifier of record runs (`verifier`): `registration`, `matches_public`,
-`select` (the draw of record: `Stream.select` hands it the bytes of the challenger's coins), `check_draw`,
+`select` (the draw of record: `Stream.select` hands it the bytes of the challenger's coins), `select_second` (a
+two-stage rule's second stage, on the coins after the interior registration), `check_draw`,
 `check_proved`, `record`, `check_public`, `check_verdicts`, `run` (`Stream.outcome` holds its outcome to it), `hello`,
 `stream` (each of `service.Stream`'s ops) and `fleet` (each of `service.Fleet`'s).
 -/
@@ -626,7 +628,8 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_order", Challenger.orderPiece), ("challenger_key", Challenger.keyPiece),
    ("challenger_record", Challenger.recordPiece), ("challenger_trusted", Challenger.trustedPiece),
    ("challenger_close", Challenger.closePiece), ("challenger_released", Challenger.releasedPiece),
-   ("challenger_ledger", Challenger.ledgerPiece), ("challenger_head", Challenger.headPiece),
+   ("challenger_ledger", Challenger.ledgerPiece), ("challenger_day", Challenger.dayPiece),
+   ("challenger_head", Challenger.headPiece),
    ("challenger_session", Challenger.sessionPiece), ("challenger_credited", Challenger.creditedPiece),
    ("challenger_pinned", Challenger.pinnedPiece), ("challenger_read", Challenger.readPiece),
    ("challenger_draw_coins", Challenger.drawCoinsPiece), ("challenger_within", Challenger.withinPiece),
@@ -635,22 +638,9 @@ def table : List (String × (Json → V Json)) :=
    ("wires", Wires.piece), ("wires_unrolled", Wires.pieceRef),
    ("wires_drawn", Wires.pieceDrawn), ("wires_drawn_unrolled", Wires.pieceDrawnRef)]
 
-/-- Whether a piece's input names a two-stage rule: its `rule` is `{"rule": "two-stage", …}`, or its stream's `params`
-carry `two_stage`. -/
-def namesTwoStage (j : Json) : Bool :=
-  jeq (getD (getD j "rule") "rule") (.str "two-stage") || jeq (getD (getD j "params") "two_stage") (.bool true)
-
-/-- `f`, refusing an input that names a two-stage rule (`Select.uncertifiedRule`). -/
-def certified (f : Json → V Json) (j : Json) : V Json :=
-  if namesTwoStage j then throw Select.uncertifiedRule else f j
-
-/-- The verifier of record's pieces. It refuses a two-stage rule (`certified`) until the proof that this code meets the
-two-stage certificate lands; `table`, the difftest's, runs one. -/
+/-- The verifier of record's pieces: `table`'s, by name. -/
 def verifier : List (String × (Json → V Json)) :=
-  [("registration", registration), ("matches_public", matchesPublic), ("select", certified select),
-   ("select_second", fun _ => throw Select.uncertifiedRule), ("check_draw", checkDraw),
-   ("check_proved", checkProved), ("record", record), ("check_public", checkPublic),
-   ("check_verdicts", checkVerdicts), ("run", certified run), ("hello", Hello.check), ("stream", certified stream),
-   ("fleet", fleet)]
+  table.filter fun p => ["registration", "matches_public", "select", "select_second", "check_draw", "check_proved",
+    "record", "check_public", "check_verdicts", "run", "hello", "stream", "fleet"].contains p.1
 
 end SampledProofs.Pieces
