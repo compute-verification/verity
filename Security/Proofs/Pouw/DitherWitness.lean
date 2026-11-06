@@ -48,6 +48,8 @@ at `δ = 1/2`.
 
 @[expose] public section
 
+open Claims renaming Ex → avg
+
 namespace Pouw.SecurityProofs.DitherWitness
 
 open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Pouw.Witness Finset

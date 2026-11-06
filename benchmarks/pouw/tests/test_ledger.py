@@ -279,11 +279,14 @@ end Pouw.Guarantees.PearlC
 
 
 def lifted_audit(tmp_path: Path, source: str = LIFTED_SOURCE, recorded: bool = True) -> tuple[dict, Path]:
+    """The audit and its Lean root, `G`'s source in the audit's definitions tree when ``recorded``, else in its proofs tree."""
     lean = tmp_path / "Security"
-    (lean / "Definitions" / "Pouw" / "Guarantees").mkdir(parents=True)
-    (lean / "Definitions" / "Pouw" / "Guarantees" / "PearlC.lean").write_text(source)
+    tree = "Definitions" if recorded else "Proofs"
+    (lean / tree / "Pouw" / "Guarantees").mkdir(parents=True)
+    (lean / tree / "Pouw" / "Guarantees" / "PearlC.lean").write_text(source)
     audit = {"guarantees": {LIFTED: {"type_hash": "l", "signature": [f"{LIFTED} :", f"  {LIFTED_G}"]}},
-             "reads": {"Definitions.Pouw.Guarantees.PearlC": {"definitions": {LIFTED_G: "h"} if recorded else {}, "pins": [LIFTED]}}}
+             "trees": {"definitions": ["Definitions"], "proofs": ["Proofs"]},
+             "reads": {"Definitions.Pouw.Guarantees.PearlC": {"definitions": {LIFTED_G: "h"}}}}
     return audit, lean
 
 

@@ -619,6 +619,9 @@ class PearlKW:
     def __init__(self, device: str = "ada"):
         self.device = DEVICES[device]
         self.name = NAME
+        #: the frame hash of the protocol's trees that replace Pearl's (`HASH_ID`): SHA-256, since its tile digests are
+        #: Pearl's 32-byte tickets (`audit`'s default tree, hm96-sha512, takes 64)
+        self.commitment_hash = "sha256"
         self.certificate = Certificate(
             conjecture="pearl-quantized-subspace-hardness",
             gamma0=None,

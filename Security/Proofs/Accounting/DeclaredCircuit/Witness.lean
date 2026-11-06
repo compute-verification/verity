@@ -157,7 +157,7 @@ def offset : Val → ℕ
 the step that completes it. -/
 def encoded (N b : ℕ) : ℕ := b / (N + 2) * (2 * N + 4) + 2 * (b % (N + 2)) + 4
 
-def kvLayout (n P N : ℕ) : Requirement.Layout Val := ⟨block n P N, offset, encoded N⟩
+def kvLayout (n P N : ℕ) : Requirement.Store.Placement Val := ⟨block n P N, offset, encoded N⟩
 
 /-- A value's group: its request, layer `0`, plane `0` and page parity. -/
 def kvGrp : Val → ℕ × ℕ × ℕ × ℕ
@@ -579,7 +579,7 @@ theorem requirement {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) (hval : ∀ r i
 
 /-- The honest pass device (`RateSketch.Completeness.honest`) at the session's on-chip state, link and query caps. -/
 def honestDev (N ρ S Lk q : ℕ) (hL : ρ * 256 ≤ Lk) (hq : N ≤ q) :
-    RateSketch.Device N 128 ρ 512 S Lk q 256 RateSketch.Sector (RateSketch.SketchSigns 16 128)
+    RateSketch.Prover N 128 ρ 512 S Lk q 256 RateSketch.Sector (RateSketch.SketchSigns 16 128)
       (Fin 16 → ZMod (2 ^ 32)) where
   held := ∅
   held_le := by simp

@@ -87,9 +87,10 @@ three more links, each stated:
   (`Proofs/Flock/Soundness/Audit/OneStage.lean`). PoUW's event, the window accepting while its committed transcript
   isn't anchored, served and outside `𝓑`, is then at most `WindowEps`'s bound plus `δ_in`
   (`Pouw.Window.window_served_le`, proved).
-* **The bridge to C-Flock** (`Proofs/Pouw/Window/FlockBridge.lean`): C-Flock's sessions read in this game
-  (`Pouw.Window.ofFlock`) win with the same probabilities (`prob_ofFlock`, proved), a C-Flock `ExtractionAnalysis` of a
-  session is a `CallAnalysis` of its call (`CallAnalysis.ofFlock`), and C-Flock's pointwise knowledge bound
+* **The bridge to C-Flock** (`Proofs/Pouw/Window/FlockBridge.lean`): C-Flock's sessions read in core's game
+  (`Pouw.PearlC.FlockTile.toVerity`) win with the same probabilities (`prob_ofVerity`, proved), a C-Flock
+  `ExtractionAnalysis` of a session is a `CallAnalysis` of its call (`CallAnalysis.ofFlock`), and C-Flock's pointwise
+  knowledge bound
   (`FlockKnowledgeSound`) is the call's `KnowledgeSound` (`ofFlock_knowledgeSound`, proved). The bound reads the
   session's own coins and the extractor's `k` accepted reruns, at the state the registration, the draw and the earlier
   sessions left, never the draw's coin. At main's `--zk` sessions it is proved (`flockKnowledgeSound_analysisZC`, from

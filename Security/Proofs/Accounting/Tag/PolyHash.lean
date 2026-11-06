@@ -13,6 +13,8 @@ for fixed blocks and for fixed lists of hashes (root counting), unpredictability
 
 @[expose] public section
 
+open Verity.Game renaming prPMF → prob
+
 namespace Accounting.TagProofs
 
 open Accounting.Tag Accounting.Guarantees.Tag

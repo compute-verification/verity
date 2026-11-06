@@ -8,6 +8,7 @@ public import Mathlib.Algebra.Order.Field.Power
 public import Mathlib.Tactic.FieldSimp
 public import Mathlib.Tactic.Ring
 public import Definitions.Pouw.Guarantees.Game
+public import Proofs.Pouw.Lemmas.Game
 
 /-!
 # (c) Work-weighted sampling: `δ_s = (1 − ε_s)^t`

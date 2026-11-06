@@ -17,12 +17,12 @@ under plain SHA-512 leaves. Every term is generic in `Lp`; its binding is `Lp.bi
   `ksAvgBE_le_strictL` and `flock_batched_linkSoundEL`, through `flock_e2e_count_hm96L`.
 * `Prog.flock_headline_execL`: the headline at the executable for the salted session. Flock-verify's verdict on the
   live audit (`LiveAccepts I`) with at least `K` wrong units of `σ`'s committed values has probability at most
-  `miss(K) + ksAvgStrict + linkBoundE + Pr[bad]`, given the refinement `hRef` (R11 at one strategy pair, `Event.lean`)
-  of the live audit by the audit with `batchedSessionL H512 enc512 Lp plan`. Its hypotheses are
+  `miss(K) + ksAvgStrict + linkBoundE + Pr[bad]`, given the refinement `hRef` (`ExecRefines` at one strategy pair,
+  `Event.lean`) of the live audit by the audit with `batchedSessionL H512 enc512 Lp plan`. Its hypotheses are
   `Prog.flock_headline_L`'s at `tr := TreeRewind.ofNever` (`δ_tree = 0`), with `hRef` in place of `tr` and `hT`.
 
-What stays open of R11 is `hRef` itself: a strategy `σ` of this audit built from the live prover `τ`, the challenger's
-per-round coins (A6) as the audit's coins, and the live event `bad` bounded.
+What stays open of the refinement is `hRef` itself: a strategy `σ` of this audit built from the live prover `τ`, the
+challenger's per-round coins (A6) as the audit's coins, and the live event `bad` bounded.
 -/
 
 @[expose] public section
@@ -131,7 +131,7 @@ theorem _root_.FlockSoundness.Prog.flock_headline_LX {Lp : Merkle.Leaf (List Flo
 the prover `τ`, refine the audit with `batchedSessionL H512 enc512 Lp plan` played by `σ`, up to the live event
 `bad` (`hRef`). If `σ`'s committed values have at least `K` wrong units, flock-verify accepts with probability at most
 `miss(K) + ε_ks + δ_link + Pr[bad]`. `pp`, `hConst`, `hZero`, `lay`, `rs` and `hHm` are open as in
-`Prog.flock_headline`; `hRef` is R11. -/
+`Prog.flock_headline`; `hRef` is the refinement. -/
 theorem _root_.FlockSoundness.Prog.flock_headline_execL {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)

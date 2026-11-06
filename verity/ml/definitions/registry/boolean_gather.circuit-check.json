@@ -7,6 +7,26 @@
   "Embedding_v2{V=64,H=16}": {
    "and": 22784,
    "type": "89b83f7b58b81847ca014c5acd12ce78eeda9d228f5cbf0d41d1ab0476cc4608e893fbff1d7d009ec6e123cf4e0c8a31e14f21cacb2c8dba4c822c80afd78401"
+  },
+  "GatherChunkOffsets_v1{V=100,W=40}": {
+   "and": 59,
+   "type": "81f2e1ad5da6353f143b6343f49da8ea2ecc610bb0fcea0b78a8fa66143fc59dc45f76fc407aa57024bdcf627b4a3e54647e195e853202314ac5cfa1f1dc039f"
+  },
+  "GatherChunkOffsets_v1{V=50304,W=47163}": {
+   "and": 24,
+   "type": "9bb66d29b3f503c07024827c290e6536901a2d22442240f3a88e491561111f7ffc5c273a009495dc3cb8a2f27a9204f09ff25c3dd65354e28f73cce96c7de888"
+  },
+  "GatherChunkXor_v1{C=2}": {
+   "and": 0,
+   "type": "ffd5f2530fa9ecbb2905e54161cf198bbcb0b21b96907ffd4b7277a2d2362596b06ed50c2fafa0c192d9a998d97998cb5b775088ab1304c6b66bb3e88714fb49"
+  },
+  "GatherChunkXor_v1{C=3}": {
+   "and": 0,
+   "type": "efeb84529f75829d22cabe53cbaa1d6e76e03b0cd9ef3c0b08231668604f6d67cb4dc8d41592664f2334e472eee881592a53f3628e5b4e94a992bba5ae97e494"
+  },
+  "GatherF32Chunked_v1{V=100,W=40}": {
+   "and": 6107,
+   "type": "d9ba80ff6ec946a59e627c52ce9cc86d9d81422cc0125264cc5fa8cd5679ae342ba0c6d8c405648f58251dbf28e3b1b6b3e18efbe2abf56106e556caa78adc3f"
   }
  }
 }

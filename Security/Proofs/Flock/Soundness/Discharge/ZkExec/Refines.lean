@@ -4,7 +4,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkExec.Statements
 public import Proofs.Flock.Soundness.Discharge.Exec.Headline
 
 /-!
-# R11 at `--zk`, one table, and the `--zk` headline at flock-verify's acceptance
+# The refinement at `--zk`, one table, and the `--zk` headline at flock-verify's acceptance
 
 * `execRefinesZK_one : ExecRefinesZKOne …`: the live `--zk` audit simulated in the compiled `--zk` audit, by the live
   challenger's simulation (`live_le`, `Refine/LiveSim.lean`) at each draw, with `bad = ⊥`, given `DecodesZK`.
