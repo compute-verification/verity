@@ -1,8 +1,10 @@
-"""lean-suites: `tools/verity/check/suites.py` on the suites check runs after its lean-build (`suites.AFTER_LEAN`, the task's var
+"""lean-suites: `tools/verity/check/suites.py` on suites check runs after its lean-build (`suites.AFTER_LEAN`; the task's var
 `suites`), as check's lean-suites step runs them: `--lean-built`, lake on the PATH through elan (`lean_build.ELAN`), each suite's
-timeout, and the task's cores and memory as `--jobs` and `--mem-gb`.  First each verifier executable the task reads goes to its
-path in the tree (its var `bin`, lean-build's `.lake/build/bin`), where the suites look, unless the tree holds those bytes there
-already (lean-build built them on this machine).
+timeout, and the task's cores and memory as `--jobs` and `--mem-gb`.  A task of a suite's part (its var `files`, K/M) runs
+`--files K/M` with `--timings` a record that holds none of the suite's files, so suites.py packs them by path alone and every
+machine splits one tree alike.  First each verifier executable the task reads goes to its path in the tree (its var `bin`,
+lean-build's `.lake/build/bin`), where the suites look, unless the tree holds those bytes there already (lean-build built them
+on this machine).
 
 Its status is from suites.py's exit and its report.  Every suite passed, a pass of its key reused among them, is a pass.  Suites
 that failed on their tests, on reads outside their inputs or on their timeout are a fail, each named in `detail.failed` (its name,
@@ -24,7 +26,7 @@ from . import call
 from .lean_build import ELAN
 
 SUITES = "tools/verity/check/suites.py"
-REPORT, LOGS = "suites-lean.json", "suites"
+REPORT, LOGS, TIMINGS = "suites-lean.json", "suites", "suites-timings.json"
 #: suites.py's line when tests wrote into the repository, which fails its run with no suite failed
 WROTE = "the tests changed"
 #: the most failed tests a row names: a longer list is cut, and then failed for more than the tests it names
@@ -49,8 +51,12 @@ def run(task: dict, work: Path) -> dict:
     place(task, work)
     names = task["vars"]["suites"].split()
     r = task["resources"]
+    part = []
+    if files := task["vars"].get("files"):
+        (work / TIMINGS).write_text(json.dumps({n: {} for n in names}))
+        part = ["--files", files, "--timings", str(work / TIMINGS)]
     argv = [sys.executable, str(ROOT / SUITES), *names, "--lean-built", "--json", str(work / REPORT), "--logs", str(work / LOGS),
-            "--timeouts", "--jobs", str(max(1, int(r["cores"]))), "--mem-gb", str(r["mem_gb"])]
+            "--timeouts", "--jobs", str(max(1, int(r["cores"]))), "--mem-gb", str(r["mem_gb"]), *part]
     rc = call(["bash", "-c", ELAN + shlex.join(argv)], work, ROOT)
     if rc < 0 or rc > 128:
         return {"status": "error", "detail": {"error": f"suites.py was killed (exit {rc})"}}

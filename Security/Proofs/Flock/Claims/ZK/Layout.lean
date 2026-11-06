@@ -7,7 +7,8 @@ public import Proofs.Flock.Claims.ZK.Congr
 # A run in parts, as sessions in turn
 
 `zkmalAt_iterG` composes sessions on nested tapes (`SeqTape.iter`, `forkTape`). A protocol's prover reads its tape as a
-first part's and one session tape per slot. `Layout` fixes the parts at each statement: a first part of `k₀ x` rounds,
+first part's and one session tape per slot. `Layout` (Core's, with `Layout.prover`, `Layout.flatten`, `Layout.seq` and
+`progOf`: `Definitions/Core/Compose.lean`) fixes the parts at each statement: a first part of `k₀ x` rounds,
 then sessions back to back, session `j` of `n x j` rounds at the statement `xs x j h` with the witness `ws j w t₀ x h`,
 read from the history `h` before it and the first part's tape `t₀`. `Layout.prover` runs them on a flat tape (the
 first part's and a session tape per slot), and `Layout.flatten` reads the nested tape as the flat one, so the nested
@@ -85,23 +86,9 @@ theorem zkmalAt_public {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [No
 
 /-! ## The layout -/
 
-/-- **A run in parts** at each statement: a first part of `k₀ x` rounds, then sessions back to back, session `j` of
-`n x j` rounds at the statement `xs x j h`, with the witness `ws j w t₀ x h`, from the history `h` before it and the
-first part's tape `t₀`. -/
-structure Layout (W WS T : Type) where
-  k₀ : Msg → ℕ
-  n : Msg → ℕ → ℕ
-  xs : Msg → ℕ → List (Msg × Msg) → Msg
-  ws : ℕ → W → T → Msg → List (Msg × Msg) → WS
-
 namespace Layout
 
 variable {W WS T TS : Type}
-
-/-- Where session `j` starts: after the first part and the sessions before `j`. -/
-def start (L : Layout W WS T) (x : Msg) : ℕ → ℕ
-  | 0 => L.k₀ x
-  | j + 1 => L.start x j + L.n x j
 
 /-- Where the sessions start reads only the rounds. -/
 theorem start_congr {L L' : Layout W WS T} (hk : L.k₀ = L'.k₀) (hn : L.n = L'.n) : L.start = L'.start := by
@@ -125,14 +112,6 @@ theorem exists_slot (L : Layout W WS T) (x : Msg) (len : ℕ) (h0 : L.k₀ x ≤
       · obtain ⟨j, hj, h1, h2⟩ := L.exists_slot x len h0 m hm
         exact ⟨j, by omega, h1, h2⟩
       · exact ⟨m, by omega, by omega, h⟩
-
-/-- **The parts on a flat tape**: the first part's prover on its tape, then session `j` on slot `j`'s tape, at the
-statement and witness the history before it gives, for the first `m` sessions. -/
-def prover (L : Layout W WS T) (P₀ : W → Prover T) (PS : WS → Prover TS) : ℕ → W → Prover (T × (ℕ → TS))
-  | 0 => fun w => (P₀ w).comap Prod.fst
-  | j + 1 => fun w => ⟨fun x hist ω => if hist.length < L.start x j then (L.prover P₀ PS j w).next x hist ω else
-      (PS (L.ws j w ω.1 x (hist.take (L.start x j)))).next (L.xs x j (hist.take (L.start x j)))
-        (hist.drop (L.start x j)) (ω.2 j)⟩
 
 /-- The first `m` sessions read no slot after the `m`-th. -/
 theorem prover_congr (L : Layout W WS T) (P₀ : W → Prover T) (PS : WS → Prover TS) :
@@ -174,24 +153,6 @@ theorem prover_session (L : Layout W WS T) (P₀ : W → Prover T) (PS : WS → 
       · have hm : hist.length < L.start x m := lt_of_lt_of_le h2 (L.start_mono x (by omega))
         simp only [prover, hm, ite_true]
         exact L.prover_session P₀ PS m j (by omega) w x hist ω h1 h2
-
-/-- **The nested tape read flat**: the first part's tape, and session `j`'s at slot `j` for `j < m`; the other slots
-are arbitrary. -/
-noncomputable def flatten (T₀ : SeqTape) (c : ℕ) (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB]
-    [Nonempty ΩB] : (m : ℕ) → T₀.at c NB ΩB m → (T₀.N × T₀.Ω) × (ℕ → NB × ΩB)
-  | 0 => fun s => (s, fun _ => Classical.arbitrary _)
-  | m + 1 => fun s => ((flatten T₀ c NB ΩB m (forkTape (c + m) s).1).1, fun i =>
-      if i < m then (flatten T₀ c NB ΩB m (forkTape (c + m) s).1).2 i else (forkTape (c + m) s).2)
-
-/-- **Session `j` after the parts before it**, as `Seq`: the first part and the sessions before `j` as `A`, on the
-nested tape, then session `j` at the history before it, with the witness from the first part's tape `flatten` reads. -/
-noncomputable def seq (T₀ : SeqTape) (c : ℕ) (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
-    (L : Layout W WS (T₀.N × T₀.Ω)) (j : ℕ) : Seq W WS (T₀.at c NB ΩB j) where
-  kA x := L.start x j
-  U _ := List (Msg × Msg)
-  sel _ h := h
-  xB x u := L.xs x j u
-  wB w t x u := L.ws j w (flatten T₀ c NB ΩB j t).1 x u
 
 /-- **The simulator reads no witness**: `iterSimG` at two layouts with the same rounds and statements is one
 simulator. -/
@@ -288,11 +249,6 @@ theorem zkmalAt_layout {W WS NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype 
     S₀ CB progB go ε₀ γ₀ g eB m h₀ hB hR hgo (fun _ _ => rfl) hγ₀ he0 hg
   exact h.of_equiv _ (Equiv.refl _) (Equiv.refl _) fun w hist ω =>
     (Layout.iterProver_flat T₀ c NB ΩB L P₀ PS m w x hist ω).symm
-
-open Classical in
-/-- **A simulator's program on coins of another type**: `S`'s at `xS` through a bijection, where there is one. -/
-noncomputable def progOf (S : Simulator) (C : Type) (xS : Msg) (c : C) : SP (List (Msg × Out)) :=
-  if h : Nonempty (C ≃ S.C xS) then S.prog xS (h.some c) else .ret []
 
 theorem progOf_of {S : Simulator} {C : Type} {xS : Msg} (h : Nonempty (C ≃ S.C xS)) :
     progOf S C xS = fun c => S.prog xS (h.some c) := by

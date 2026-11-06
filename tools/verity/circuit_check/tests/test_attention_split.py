@@ -102,13 +102,13 @@ PARTS = 8
 
 
 @pytest.fixture(scope="module")
-def now(suite, served):
+def now(catalog, served):
     """The family's Definitions at every circuit-check binding, pin and served binding."""
     from circuit_check import targets as TG
 
     TG.load_registries()
     fam = _family()
-    bound = {fid: fn for fid, fn in suite.items() if (getattr(fn, "base_id", None) or fn.id) in fam}
+    bound = {fid: catalog.suite[fid] for fid in catalog.suite if catalog.reached[fid][0] in fam}
     pinned = {}
     for key, pin in PINS.get("definitions", {}).items():
         if key.split("{")[0] in fam:
