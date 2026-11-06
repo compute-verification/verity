@@ -2,7 +2,8 @@
 # Replay determinism on one GPU (README.md).  Under `research run`, which sets OUT:
 #   run.sh fetch   download the model to MODEL_DIR, refusing unless DISK_FLOOR_GB and INODE_FLOOR stay free
 #   run.sh         build the window, then under one `gpu-lease 1`: serve it, replay it (twice captured, once plain),
-#                  serve each request alone; then compare
+#                  serve each request alone; then compare.  MODEL_DIR may be any local checkpoint (a dense baseline), and
+#                  BATCH_INVARIANT=1 serves every phase with VLLM_BATCH_INVARIANT=1
 set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=$(cd "$here/../.." && pwd)
@@ -43,6 +44,7 @@ phase() {   # NAME: one phase in its own process; its fingerprints stay in SCRAT
     alone) args=(alone --capture) ;;
     *) echo "unknown phase $name"; exit 2 ;;
   esac
+  [[ ${BATCH_INVARIANT:-0} == 1 ]] && args+=(--batch-invariant)
   echo "== $name $(date -u +%FT%TZ)"
   "$PY" "$here/replay_det.py" "${args[@]}" --model "$MODEL_DIR" --workload "$OUT/workload.json" --out "$SCRATCH/$name" \
     > "$OUT/$name.log" 2>&1 || { tail -n 120 "$OUT/$name.log"; exit 1; }
@@ -66,8 +68,9 @@ fi
 
 [[ -d $MODEL_DIR ]] || { echo "no model at $MODEL_DIR: run.sh fetch first"; exit 2; }
 floor 3
+mkdir -p "$WORK"
 SCRATCH=${SCRATCH:-$(mktemp -d "$WORK/scratch.XXXXXX")}
-export SCRATCH OUT PY MODEL_DIR PHASES
+export SCRATCH OUT PY MODEL_DIR PHASES BATCH_INVARIANT
 echo "scratch $SCRATCH"
 "$PY" "$here/replay_det.py" workload --model "$MODEL_DIR" --corpus "$root" --n "$N" --out "$OUT/workload.json"
 GPU_LEASE_WHO=${GPU_LEASE_WHO:-replay-determinism} gpu-lease 1 --wait --max-min "$LEASE_MIN" -- bash "$here/run.sh" leased

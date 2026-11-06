@@ -41,9 +41,10 @@ class Run:
             self.whole = [json.loads(line) for line in (d / "whole.jsonl").read_text().splitlines()]
 
 
-#: each op of decoder layer N and the outputs it reads (`@` names resolved per layer by `_inputs`); MLA attention reads
-#: its own query and the keys of every position up to its own (``@kv_prefix``)
-READS = {
+#: by attention family (`family`), each op of decoder layer N and the outputs it reads (`@` names resolved per layer by
+#: `_reads`); attention reads its own query and the keys and values of every position up to its own (``@kv_prefix``,
+#: the outputs `KV` names)
+MLA = {
     "input_layernorm:0": ["@prev_mlp", "@prev_residual"],
     "self_attn.q_proj": ["@ln_in"],
     "self_attn.kv_a_proj_with_mqa": ["@ln_in"],
@@ -63,7 +64,25 @@ READS = {
     "mlp.experts": ["post_attention_layernorm:0", "mlp.experts.router.select_experts.ids",
                     "mlp.experts.router.select_experts.weights", "mlp.shared_experts.down_proj"],
 }
-KV = ("self_attn.kv_a_proj_with_mqa", "self_attn.kv_a_layernorm", "self_attn.rotary_emb:1")
+GQA = {
+    "input_layernorm:0": ["@prev_mlp", "@prev_residual"],
+    "self_attn.qkv_proj": ["@ln_in"],
+    "self_attn.rotary_emb:0": ["self_attn.qkv_proj"],
+    "self_attn.rotary_emb:1": ["self_attn.qkv_proj"],
+    "self_attn.attn": ["self_attn.rotary_emb:0", "@kv_prefix"],
+    "self_attn.o_proj": ["self_attn.attn"],
+    "post_attention_layernorm:0": ["self_attn.o_proj", "@res_in"],
+    "mlp.gate_up_proj": ["post_attention_layernorm:0"],
+    "mlp.act_fn": ["mlp.gate_up_proj"],
+    "mlp.down_proj": ["mlp.act_fn"],
+}
+READS = {"mla": MLA, "gqa": GQA}
+KV = {"mla": ("self_attn.kv_a_proj_with_mqa", "self_attn.kv_a_layernorm", "self_attn.rotary_emb:1"),
+      "gqa": ("self_attn.qkv_proj", "self_attn.rotary_emb:1")}
+
+
+def family(labels: list[str]) -> str:
+    return "mla" if any(".mla_attn" in lab for lab in labels) else "gqa"
 
 
 def canonical(label: str) -> str:
@@ -173,10 +192,10 @@ def _prefix_all(ok: np.ndarray, req: np.ndarray, pos: np.ndarray) -> np.ndarray:
     return out
 
 
-def _reads(n: int, op: str) -> list[str] | None:
-    """The labels op of layer n reads, or None for the KV prefix (`READS`)."""
+def _reads(reads: dict[str, list[str]], n: int, op: str) -> list[str]:
+    """The labels op of layer n reads, less the KV prefix (`READS`)."""
     out = []
-    for name in READS[op]:
+    for name in reads[op]:
         if name == "@kv_prefix":
             continue
         out += {"@ln_in": [f"model.layers.{n}.input_layernorm" + (":0" if n else "")],
@@ -190,23 +209,24 @@ def op_variance(eq: np.ndarray, valid: np.ndarray, common: list[str], req: np.nd
                 decode: np.ndarray) -> dict[str, Any]:
     """Each op's output against its inputs: over the rows where everything the op reads is bit-identical alone and in the
     batch, how many rows of its output differ (by op over every layer, prefill and decode apart)."""
+    fam = family(common)
     col = {canonical(lab): j for j, lab in enumerate(common)}
     same = eq | ~valid
     layers = sorted({n for lab in col if (n := layer_of(lab)) is not None})
     table: dict[str, dict[str, int]] = {}
     for n in layers:
-        kv = [col.get(f"model.layers.{n}.{k}") for k in KV]
+        kv = [col.get(f"model.layers.{n}.{k}") for k in KV[fam]]
         kv_prefix = _prefix_all(np.all([eq[:, j] & valid[:, j] for j in kv if j is not None], axis=0), req, pos) if all(
             j is not None for j in kv) else None
-        for op in READS:
+        for op, needs in READS[fam].items():
             if op == "input_layernorm:0" and n == 0:
                 continue
             j = col.get(f"model.layers.{n}.{op}")
-            reads = _reads(n, op)
-            if j is None or any(r not in col for r in reads) or ("@kv_prefix" in READS[op] and kv_prefix is None):
+            reads = _reads(READS[fam], n, op)
+            if j is None or any(r not in col for r in reads) or ("@kv_prefix" in needs and kv_prefix is None):
                 continue
             ok = valid[:, j] & np.all([eq[:, col[r]] & valid[:, col[r]] for r in reads], axis=0)
-            if "@kv_prefix" in READS[op]:
+            if "@kv_prefix" in needs:
                 ok &= kv_prefix
             t = table.setdefault(f"model.layers.N.{op}", {"inputs_equal_prefill": 0, "differs_prefill": 0,
                                                           "inputs_equal_decode": 0, "differs_decode": 0})

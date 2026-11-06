@@ -47,12 +47,17 @@ and logits rows, `lease.json` (the lease's wall time, its GPU-seconds) and `comp
 per-row fingerprints stay in `SCRATCH` under `WORK`. `N`, `PHASES`, `PY` (a Python with vLLM at the pin), `WORK` and
 `LEASE_MIN` are settable.
 
+A dense baseline is the same run with `MODEL_DIR` set to a local Llama-architecture checkpoint, a hub snapshot such as
+`$HF_HOME/hub/models--ORG--NAME/snapshots/REV` (its prompts take the checkpoint's chat template, or for a base model its
+BOS token); `BATCH_INVARIANT=1` serves every phase with `VLLM_BATCH_INVARIANT=1`, the arm that shows what batch invariance
+changes.
+
 `compare.md` answers:
 
 - whether replay matches replay, and served matches replay: schedule, tokens, every row's module outputs, logits rows;
 - alone against in-batch, over the positions whose inputs agree: the rows bit-identical, by prefill and decode and, for
   prefill, by whether the row's chunk had the same boundaries; for the rest the first module output that differs, by op
   and by layer; the rows whose router picks another expert; logits rows and argmax; tokens per request;
-- each op's batch variance: over the rows where everything the op reads (for MLA attention, the keys of every earlier
-  position too) is bit-identical alone and in the batch, how many rows of its output still differ;
+- each op's batch variance: over the rows where everything the op reads (for attention, MLA or GQA, the keys and values
+  of every earlier position too) is bit-identical alone and in the batch, how many rows of its output still differ;
 - the GPU-seconds of each phase.

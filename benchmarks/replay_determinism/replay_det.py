@@ -2,7 +2,8 @@
 schedule give the served bytes, and does a request alone give the bytes it got inside its batch?
 
 One in-process vLLM engine (`verity_vllm.engine.env.ENGINE`, eager, prefix caching off, synchronous scheduling, a fixed
-KV block count) per phase, each phase a fresh process:
+KV block count) per phase, each phase a fresh process, on Moonlight (`MODEL`) or any local checkpoint (a dense baseline);
+``--batch-invariant`` serves a phase with ``VLLM_BATCH_INVARIANT=1`` instead:
 
 - ``workload``: the window's requests, built from text in this tree in the model's chat format: prompt lengths and
   output lengths log-uniform, half greedy and half sampled with a per-request seed, every request ``ignore_eos`` so the
@@ -60,25 +61,56 @@ KEY_WORDS = 1 << 18
 ABSENT = np.int64(0x5EED5EED5EED5EED)
 
 
-def workload(model_dir: Path, corpus_root: Path, n: int, seed: int, out: Path) -> None:
-    import tiktoken
-    from tiktoken.load import load_tiktoken_bpe
+def _identity(model_dir: Path) -> tuple[str, str]:
+    """The checkpoint's name and revision: a hub snapshot's (``models--ORG--NAME/snapshots/REV``), else Moonlight's pin."""
+    p = model_dir.resolve()
+    if p.parent.name == "snapshots" and p.parent.parent.name.startswith("models--"):
+        return p.parent.parent.name.removeprefix("models--").replace("--", "/"), p.name
+    return MODEL, REVISION
 
-    enc = tiktoken.Encoding(name="moonlight", pat_str=PAT, mergeable_ranks=load_tiktoken_bpe(str(model_dir / "tiktoken.model")),
-                            special_tokens={})
+
+def _chat(model_dir: Path) -> tuple[Any, list[int], list[int]]:
+    """The model's text encoder and the chat format's tokens before and after the user's text: Moonlight's tiktoken format,
+    else the checkpoint's own chat template, else (a base model) just its BOS token."""
+    if (model_dir / "tiktoken.model").exists():
+        import tiktoken
+        from tiktoken.load import load_tiktoken_bpe
+
+        enc = tiktoken.Encoding(name="moonlight", pat_str=PAT, mergeable_ranks=load_tiktoken_bpe(str(model_dir / "tiktoken.model")),
+                                special_tokens={})
+
+        def encode(s: str) -> list[int]:
+            return enc.encode(s, disallowed_special=())
+        head = [IM_SYSTEM, *encode("system"), IM_MIDDLE, *encode("You are a helpful assistant"), IM_END,
+                IM_USER, *encode("user"), IM_MIDDLE]
+        return encode, head, [IM_END, IM_ASSISTANT, *encode("assistant"), IM_MIDDLE]
+    from transformers import AutoTokenizer
+
+    tok = AutoTokenizer.from_pretrained(str(model_dir))
+
+    def encode(s: str) -> list[int]:
+        return tok.encode(s, add_special_tokens=False)
+    if not tok.chat_template:
+        return encode, [tok.bos_token_id] if tok.bos_token_id is not None else [], []
+    mark = "\x00USER\x00"
+    text = tok.apply_chat_template([{"role": "system", "content": "You are a helpful assistant"}, {"role": "user", "content": mark}],
+                                   tokenize=False, add_generation_prompt=True, date_string="06 Nov 2026")
+    before, after = text.split(mark)
+    return encode, encode(before), encode(after)
+
+
+def workload(model_dir: Path, corpus_root: Path, n: int, seed: int, out: Path) -> None:
+    encode, head, tail = _chat(model_dir)
     paths = sorted(p for p in corpus_root.rglob("*.md")
                    if not any(part.startswith(".") or part == "node_modules" for part in p.relative_to(corpus_root).parts))
     text = "\n\n".join(p.read_text(encoding="utf-8", errors="replace") for p in paths)[:4_000_000]
-    corpus = enc.encode(text, disallowed_special=())
+    corpus = encode(text)
     rng = np.random.default_rng(seed)
-    head = [IM_SYSTEM, *enc.encode("system"), IM_MIDDLE, *enc.encode("You are a helpful assistant"), IM_END,
-            IM_USER, *enc.encode("user"), IM_MIDDLE]
-    tail = [IM_END, IM_ASSISTANT, *enc.encode("assistant"), IM_MIDDLE]
     reqs, t = [], 0.0
     for i in range(n):
         body = int(round(math.exp(rng.uniform(math.log(16), math.log(6000)))))
         max_tokens = int(round(math.exp(rng.uniform(math.log(8), math.log(512)))))
-        ask = enc.encode(ASKS[int(rng.integers(len(ASKS)))])
+        ask = encode(ASKS[int(rng.integers(len(ASKS)))])
         body = min(body, ENGINE_ARGS["max_model_len"] - max_tokens - len(head) - len(tail) - len(ask))
         off = int(rng.integers(0, len(corpus) - body))
         sampled = i % 2 == 1
@@ -88,16 +120,19 @@ def workload(model_dir: Path, corpus_root: Path, n: int, seed: int, out: Path) -
                      "max_tokens": max_tokens, "temperature": 0.8 if sampled else 0.0, "top_p": 0.95 if sampled else 1.0,
                      "seed": 1000 + i if sampled else None})
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps({"model": MODEL, "revision": REVISION, "seed": seed, "corpus_files": len(paths), "requests": reqs}))
+    model, revision = _identity(model_dir)
+    out.write_text(json.dumps({"model": model, "revision": revision, "seed": seed, "corpus_files": len(paths), "requests": reqs}))
     lens = [len(r["prompt"]) for r in reqs]
     print(f"workload: {n} requests, prompts {min(lens)}..{max(lens)} tokens (total {sum(lens)}), "
           f"outputs {sum(r['max_tokens'] for r in reqs)} tokens, last arrival {t:.2f}s")
 
 
-def _pin_env() -> dict[str, str]:
+def _pin_env(batch_invariant: bool) -> dict[str, str]:
     from verity_vllm.engine.env import ENGINE, pin, served_defaults
 
     cleared = served_defaults()
+    if batch_invariant:
+        os.environ["VLLM_BATCH_INVARIANT"] = "1"
     pinned = pin({**ENGINE, "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION": "1", "HF_HUB_OFFLINE": "1"})
     if os.environ.get("PYTHONHASHSEED") != "0":
         raise SystemExit("run with PYTHONHASHSEED=0 (run.sh sets it): the scheduler and the runner iterate sets of request ids")
@@ -379,9 +414,9 @@ def _collect(outs: list[Any], tokens: dict[str, list[int]]) -> None:
             tokens[o.request_id] = [int(t) for t in o.outputs[0].token_ids]
 
 
-def run(mode: str, model_dir: Path, wl: Path, out: Path, capture: bool, record: Path | None) -> None:
+def run(mode: str, model_dir: Path, wl: Path, out: Path, capture: bool, record: Path | None, batch_invariant: bool) -> None:
     t0 = time.monotonic()
-    env = _pin_env()
+    env = _pin_env(batch_invariant)
     out.mkdir(parents=True, exist_ok=True)
     reqs = json.loads(wl.read_text())["requests"]
     engine = _engine(model_dir)
@@ -467,6 +502,7 @@ def main(argv: list[str] | None = None) -> None:
         p.add_argument("--workload", type=Path, required=True)
         p.add_argument("--out", type=Path, required=True)
         p.add_argument("--capture", action="store_true", help="fingerprint every row of every module output and logits row")
+        p.add_argument("--batch-invariant", action="store_true", help="serve with VLLM_BATCH_INVARIANT=1")
         if mode == "replay":
             p.add_argument("--record", type=Path, required=True, help="the serve phase's --out")
     a = ap.parse_args(argv)
@@ -475,7 +511,7 @@ def main(argv: list[str] | None = None) -> None:
     elif a.cmd == "workload":
         workload(a.model, a.corpus, a.n, a.seed, a.out)
     else:
-        run(a.cmd, a.model, a.workload, a.out, a.capture, getattr(a, "record", None))
+        run(a.cmd, a.model, a.workload, a.out, a.capture, getattr(a, "record", None), a.batch_invariant)
 
 
 if __name__ == "__main__":
