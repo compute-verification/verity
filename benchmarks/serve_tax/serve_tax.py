@@ -63,6 +63,9 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 TRACES = ROOT / "benchmarks/network_e2e/traces"
+sys.path.insert(0, str(ROOT / "tools" / "config"))
+sys.path.append(str(ROOT))
+from verity_config.settings import SHARED  # noqa: E402 (from the tree's tools/config, put on sys.path above)
 SCHEMA = "verity-bench/serve-tax/v0"
 PLUGIN_ENV = "VERITY_SERVETAX"
 TICK_MIDDLEWARE = "verity_vllm.pipeline.tick_plugin.TickFeed"
@@ -102,7 +105,7 @@ class Model:
     env: dict = field(default_factory=dict)
 
     def checkpoint(self) -> Path:
-        hub = Path(os.environ.get("HF_HOME", "/workspace/hf")) / "hub"
+        hub = Path(SHARED.HF_HOME or "/workspace/hf") / "hub"
         return hub / f"models--{self.repo.replace('/', '--')}" / "snapshots" / self.revision
 
 
@@ -153,7 +156,7 @@ def server_argv(arm: Arm, model: Model, checkpoint: Path, port: int) -> list[str
 def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float, kv_window_s: float) -> dict[str, str]:
     env = dict(os.environ, VLLM_SERVER_DEV_MODE="1",
                PYTHONPATH=os.pathsep.join([str(site), str(HERE), str(ROOT / "integrations/vllm"), str(ROOT),
-                                           *filter(None, [os.environ.get("PYTHONPATH")])]))
+                                           *SHARED.PYTHONPATH]))
     if arm.plugin:
         env[PLUGIN_ENV] = json.dumps({"out": str(d), "window_s": window_s, "kv_window_s": kv_window_s,
                                       **{k: True for k in arm.plugin}})
@@ -166,7 +169,7 @@ def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float
 
 
 def wait_ready(server: subprocess.Popen, port: int, startup_s: float) -> None:
-    deadline = time.monotonic() + startup_s
+    deadline, last = time.monotonic() + startup_s, None
     while time.monotonic() < deadline:
         if server.poll() is not None:
             raise RuntimeError(f"the server exited with {server.returncode} before it was ready (server.log)")
@@ -174,10 +177,10 @@ def wait_ready(server: subprocess.Popen, port: int, startup_s: float) -> None:
             with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=2) as r:
                 if r.status == 200:
                     return
-        except OSError:
-            pass
+        except OSError as e:
+            last = e
         time.sleep(1.0)
-    raise RuntimeError(f"the server was not ready in {startup_s:g} s")
+    raise RuntimeError(f"the server was not ready in {startup_s:g} s (its health check last: {last!r})")
 
 
 def reset_prefix_cache(port: int, tries: int = 30) -> bool:
@@ -191,7 +194,9 @@ def reset_prefix_cache(port: int, tries: int = 30) -> bool:
     return False
 
 
-def stop(server: subprocess.Popen) -> None:
+def stop(server: subprocess.Popen) -> str:
+    """Stop the server and every process of its group (the engine core): ``killed`` if any of the group was left after
+    the server exited, else ``exited``."""
     if server.poll() is None:
         server.send_signal(signal.SIGINT)
         try:
@@ -202,7 +207,8 @@ def stop(server: subprocess.Popen) -> None:
     try:
         os.killpg(server.pid, signal.SIGKILL)
     except ProcessLookupError:
-        pass
+        return "exited"
+    return "killed"
 
 
 # ----------------------------------------------------------------------------------------------------------- the plan
@@ -276,13 +282,8 @@ def drive_load(port: int, served: str, plan: list[dict], rate: float, span_s: fl
 def versions() -> dict:
     from importlib import metadata
 
-    out = {}
-    for dist in ("vllm", "torch", "aiohttp", "transformers"):
-        try:
-            out[dist] = metadata.version(dist)
-        except metadata.PackageNotFoundError:
-            out[dist] = None
-    return out
+    return {dist: next((d.version for d in metadata.distributions(name=dist)), None)
+            for dist in ("vllm", "torch", "aiohttp", "transformers")}
 
 
 def run(a: argparse.Namespace) -> int:
@@ -306,7 +307,7 @@ def run(a: argparse.Namespace) -> int:
             "model": f"{model.repo}@{model.revision}", "checkpoint": str(checkpoint), "server_argv": argv[1:],
             "plugin": list(arm.plugin), "tick": tick, "window_s": a.window_s, "kv_window_s": a.kv_window_s, "rates": rates, "reps": a.reps, "plan": a.plan,
             "span_s": a.span_s, "c4": a.c4, "seed": a.seed, "versions": versions(), "host": os.uname().nodename,
-            "run_id": os.environ.get("RESEARCH_RUN_ID"), "gpus": os.environ.get("CUDA_VISIBLE_DEVICES"), "loads": []}
+            "run_id": SHARED.RESEARCH_RUN_ID, "gpus": SHARED.CUDA_VISIBLE_DEVICES, "loads": []}
     (out / "meta.json").write_text(json.dumps(meta, indent=1))
     t = time.monotonic()
     with open(srv / "server.log", "wb") as log:
@@ -336,7 +337,7 @@ def run(a: argparse.Namespace) -> int:
         print(f"[serve-tax] {a.arm}: FAILED {meta['error']}", flush=True)
         rc = 1
     finally:
-        stop(server)
+        meta["server_stop"] = stop(server)
         meta["server_rc"] = server.returncode
         (out / "meta.json").write_text(json.dumps(meta, indent=1))
         shutil.rmtree(out / ".site", ignore_errors=True)

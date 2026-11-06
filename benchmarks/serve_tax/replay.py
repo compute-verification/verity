@@ -24,6 +24,9 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
+sys.path.insert(0, str(ROOT / "tools" / "config"))
+sys.path.append(str(ROOT))
+from verity_config.settings import SHARED  # noqa: E402 (from the tree's tools/config, put on sys.path above)
 
 
 def window(arm_dir: Path, load: str, rep: int) -> dict[str, Any]:
@@ -160,7 +163,7 @@ def main(argv: list[str] | None = None) -> int:
     w = window(a.arm_dir, a.load, a.rep)
     got = replay(w, checkpoint, a.eager)
     out = {"schema": "verity-bench/serve-tax/replay/v0", "arm_dir": str(a.arm_dir), "served_run_id": meta.get("run_id"),
-           "run_id": os.environ.get("RESEARCH_RUN_ID"), "load": a.load, "rep": a.rep, "mode": "eager" if a.eager else "compiled",
+           "run_id": SHARED.RESEARCH_RUN_ID, "load": a.load, "rep": a.rep, "mode": "eager" if a.eager else "compiled",
            "served_mode": "eager" if "--enforce-eager" in meta["server_argv"] else "compiled", "requests": len(w["requests"]),
            "served_window_s": w["served_s"], "replay_wall_s": got["wall_s"], "replay_over_served": got["wall_s"] / w["served_s"],
            "engine_ready_s": got["ready_s"], **compare(w, got)}

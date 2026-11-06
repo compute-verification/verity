@@ -368,9 +368,11 @@ def _input(orig: Callable[[Any], None]) -> Callable[[Any], None]:
         gate = getattr(self.scheduler, "_verity_release", None)
         while gate is not None and gate.held() and not self.has_work() and self.is_running():
             try:
-                self._handle_client_request(*self.input_queue.get(timeout=POLL_S))
+                req = self.input_queue.get(timeout=POLL_S)
             except queue.Empty:
-                pass
+                gate.poll()
+                continue
+            self._handle_client_request(*req)
             gate.poll()
         return orig(self)
     return _process_input_queue
