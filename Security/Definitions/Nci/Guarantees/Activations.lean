@@ -72,14 +72,4 @@ def ActivationsTrainingOn : Prop :=
       κ * b_a * r.D.size r.D.computed ≤
         2 * b_a * M.dark.card + 2 * (k / c : ℝ) * T.bound K b_w dd e * d.D.size d.D.computed
 
-/-- **The premise over all counted multiplications gives the chain's**: where a chain `ch` is part of the threading
-(`ChainIn`), `ActivationsIncompressibleAll` gives `ActivationsIncompressible` for `ch` at the same caps, for nonnegative
-rates: a chain's weight entries and input entries are distinct weight and activation gates, and an input entry whose
-activation is whole in `R` is linked to an entry whole in `R`. -/
-def ActivationsChain : Prop :=
-  ∀ (r : RegisteredCircuit) (ch : Chain r.D) (T : Threading r) (L : T.Links) (c : ℕ) (k b_w b_a : ℝ),
-    ChainIn ch T L → 0 ≤ b_w → 0 ≤ b_a →
-    Assumptions.ActivationsIncompressibleAll r T L c k b_w b_a →
-      Assumptions.ActivationsIncompressible r ch c k b_w b_a
-
 end Nci.Guarantees
