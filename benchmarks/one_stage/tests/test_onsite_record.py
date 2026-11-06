@@ -1974,8 +1974,9 @@ def test_the_network_and_composite_verdicts_are_established_only_where_v3cs_read
                                     {OR.SCAN_STATE: dict(STATE_ENTRY, value="weights/w@8")}])
 def test_scan_state_pinned_holds_where_no_audits_window_commits_the_scans_state_in_its_activations(tmp_path, values):
     """No audit's window commits the scan's state in its activations as the period reads it (an entry at that value
-    naming it): none at all, another value's, or an entry at that value naming another, which the period doesn't
-    read. Then the check holds, naming no audit, with no summary or period read, and the verdicts stand."""
+    naming it, `auditStateEntries`): none at all, another value's, or an entry at that value naming another, which the
+    period doesn't read as the audit's state (and refuses where the audit then has none, `stateTied`). Then the check
+    holds, naming no audit, with no summary or period read, and the verdicts stand."""
     audit = {**NO_ADVICE, "window": {**NO_ADVICE["window"], "activations": {"program": "ab" * 64, "values": values}}}
     rec = record(accepted(tmp_path, dict(PUBLIC, held=["free", "circuit"]), audits=(audit,)))
     assert rec["checked"][OR.SCAN_STATE_PINNED] == {"is": OR.CHECKED[OR.SCAN_STATE_PINNED], "holds": True, "audits": []}
