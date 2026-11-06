@@ -144,7 +144,7 @@ def OutsourceWithinEgress (G : Accel) (μ : G.Res → ℝ) (β : ℝ) : Prop :=
     G.Mc.eval f' i = G.Mc.eval f i ∧ G.ext f' i = 0 ∧ G.cost μ f' i ≤ G.cost μ f i + β * G.ext f i
 
 /-- `pouw-nofold-service` (proposed; `pouw-rs-staged-service`'s form, per prover, on a period of rounds). **The proof
-service's verdict accepts only periods whose sampling blocks' checks pass** at the registrable instances `Reg`, but
+system's verdict accepts only periods whose sampling blocks' checks pass** at the registrable instances `Reg`, but
 with probability `κ_S` over the oracle and the verifier's coins, for every prover: every block's committed instance is
 one of its registrable ones and its check passes (`Prover.Accepted`). The checks run inside C-Flock's zero-knowledge
 proofs (sound and zero knowledge), on live coins drawn by the auditor's challenger after each block's commitments
