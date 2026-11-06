@@ -86,7 +86,7 @@ signer and sessions) is its own check. The auditor's ledger (`SampledProofs.Chal
 ## The profile (`CoreProtocol/Profile.lean`)
 
 `Core.Integrity` is `verity.core.protocols.profile.IntegrityProfile.to_json`: `programs`, `prescribed`,
-`linked`, `covered`, the `levels` coarse to fine (name, query, size, and the sampling design `draw`: `{"bernoulli":"p"}`, `{"subset":k}` or
+`linked`, `covered`, the `levels` coarse to fine (name, query, size, and draw: `{"bernoulli":"p"}`, `{"subset":k}` or
 `{"law":"stratified","strata":[...]}`), `delta` and `drawn`. The one change is that δ is an exact ratio, not a float. A
 protocol whose acceptance isn't a sampling design over proof blocks (a timed storage audit, a certificate check) declares its
 own profile type and JSON.
@@ -108,7 +108,7 @@ composite's genesis, so the head names the whole log. An entry is in one of two 
 | format | what it registers |
 | --- | --- |
 | `verity/registration/hardware/v1` | the site's cards (each device's registered figures: SKU, tensor clock, peak rate per operand class, memory figures), locations (site, hosts, devices, memory leaves by tier and bytes, the auditor's certifiers and challengers with their keys) and links (`β`, latency) |
-| `verity/registration/information/v1` | θ, each registered value by its committed root (`value`, `root`, `leaves`, `words`, `word_bits`, `domain`, a public checkpoint's pin), and the registered compiler `B` (digest, advice format, public advice cap `ℓ`); each once in the log |
+| `verity/registration/information/v1` | θ, each registered value by its committed root (`value`, `root`, `leaves`, `words`, `word_bits`, `domain`, a public checkpoint's pin), and the builder `B` (digest, advice format, public advice cap `ℓ`); each once in the log |
 
 Registration registers the site, θ and `B`, not the circuit `B` builds. A subprotocol's Program and parameters, and
 the proof system, are that protocol's public verifier parameters, not entries of the log.
@@ -117,8 +117,7 @@ An entry's digest is `SHA-512(format ‖ 0 ‖ canon(entry))`, a card's is under
 genesis is under `verity/registration/genesis/v1` over `{"composite": "onsite" | "remote"}`. `check` holds each entry to
 the log before it and refuses the first that fails by name (`previous`, `duplicate-id`, `unknown-ref`, `kind`,
 `card-digest`, `figures`, `capacity`, `owner`, and onsite `uncertified` and `challenger-reach`, then `duplicate-information`). A
-subprotocol reads its view of an accepted log by projection (`View`: the site, θ's values and the registered compiler, at
-the head).
+component reads its view of an accepted log by projection (`View`: the site, θ's values and the builder, at the head).
 Registration is ASCII-only without DEL: a log or parameters holding any other character is refused as `ascii` before
 any digest is taken. As a core protocol, `protocol` (`verity/registration/log/v1`, the `core-registration` executable) takes the
 auditor's parameters (`{"composite", "keys", "sheets", "tolerance"}`), the log as commitment (`{"composite", "entries"}`, its head
