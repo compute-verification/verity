@@ -37,6 +37,18 @@ def test_checkpoint_goes_under_the_front_matter_newest_first_and_sets_status(tmp
     assert (row["state"], row["commit"], row["checkpoint_at"], row["text"]) == ("blocked", "abc1234", "21:00Z", "waiting on the pod")
 
 
+def test_checkpoint_names_its_writer_as_origin_so_the_agent_watch_credits_every_checkpoint(tmp_path):
+    a, b = "bc-11111111-1111-4111-8111-111111111111", "bc-22222222-2222-4222-8222-222222222222"
+    p = _report(tmp_path, "lane-o", "# lane-o\n", 5)
+    notes.checkpoint(tmp_path, "lane-o", "open", "first", commit="abc1234", now=NOW, agent=a)
+    assert f"\norigin: {a}\n---\n" in p.read_text()
+    notes.checkpoint(tmp_path, "lane-o", "open", "second", commit="abc1234", now=NOW, agent=b)
+    front = p.read_text().split("\n---\n", 1)[0]
+    assert front.count("origin:") == 1 and f"origin: {b}" in front and "created: 2026-09-23T17:00Z" in front
+    notes.checkpoint(tmp_path, "lane-o", "open", "third", commit="abc1234", now=NOW)
+    assert f"origin: {b}" in p.read_text()
+
+
 def test_checkpoint_survives_the_store_mounts_eagain_without_doubling_its_line(tmp_path, monkeypatch):
     # the Project store's mount answers EAGAIN on rewrites of a recently written file, sometimes after the write landed
     p = _report(tmp_path, "lane-e", "# lane-e\n", 5)

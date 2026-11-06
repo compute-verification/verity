@@ -24,7 +24,8 @@ lane writes later (`<stamp>-report-<slug>.md`) never takes its checkpoints; with
 never a report another agent sent the lane (`<stamp>-report-from-<x>-<slug>.md`) or a note of another kind whose slug says report
 (`<stamp>-handoff-from-<x>-report-for.md`).  `checkpoint` writes
 `CHECKPOINT <sha> (<HH:MM>Z) [<state>] <text>` directly under the front matter (newest first, where lanes already put them),
-sets the front matter's `status:` to the state, and creates the report if the lane has none.  `superseded` marks a lane whose
+sets the front matter's `status:` to the state, sets its `origin:` to the writing agent's id (the agent watch credits a note
+to the agent its origin names), and creates the report if the lane has none.  `superseded` marks a lane whose
 work a successor took over: it is done, never STALE.
 
 Mail is files named `*handoff*` / `*asks*` / `*reply*` in the recipient's lane dir: the machines' notices (the merge queue's
@@ -237,7 +238,14 @@ def wake_hint(text: str, now: dt.datetime | None = None) -> str | None:
             + "; not a cron timer")
 
 
-def checkpoint(root: Path, lane: str, state: str, text: str, commit: str | None = None, now: dt.datetime | None = None) -> Path:
+def _set_front(front: str, key: str, value: str) -> str:
+    if re.search(rf"^{key}:", front, re.M):
+        return re.sub(rf"^{key}:.*$", lambda _: f"{key}: {value}", front, count=1, flags=re.M)
+    return front[:-4] + f"{key}: {value}\n---\n"
+
+
+def checkpoint(root: Path, lane: str, state: str, text: str, commit: str | None = None, now: dt.datetime | None = None,
+               agent: str | None = None) -> Path:
     if state not in STATES:
         raise ValueError(f"state must be one of {', '.join(STATES)}, not {state!r}")
     now = now or _utcnow()
@@ -249,8 +257,9 @@ def checkpoint(root: Path, lane: str, state: str, text: str, commit: str | None 
         _io(lambda: path.write_text(head))
     front, body = _split_front_matter(_io(path.read_text))
     if front:
-        front = re.sub(r"^status:.*$", f"status: {state}", front, count=1, flags=re.M) if re.search(r"^status:", front, re.M) \
-            else front[:-4] + f"status: {state}\n---\n"
+        front = _set_front(front, "status", state)
+        if agent:
+            front = _set_front(front, "origin", agent)
     line = f"CHECKPOINT {commit or _head_commit()} ({now:%H:%M}Z) [{state}] {' '.join(text.split())}\n"
     new = front + "\n" + line + body.lstrip("\n") if front else line + body
     _io(lambda: path.write_text(new))
@@ -1962,7 +1971,9 @@ def _main(argv: list[str]) -> int:
         os.environ[LIVENESS_ENV] = ns.liveness
     if ns.cmd in ("checkpoint", "inbox"):
         if ns.cmd == "checkpoint":
-            print(checkpoint(root, ns.lane, ns.state, " ".join(ns.text), commit=ns.commit))
+            from .slack import self_agent_id
+
+            print(checkpoint(root, ns.lane, ns.state, " ".join(ns.text), commit=ns.commit, agent=self_agent_id()))
             if hint := wake_hint(" ".join(ns.text)):
                 print(hint)
             if ns.keep_pod:                                 # the reaper reads it from the binding
