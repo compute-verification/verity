@@ -26,8 +26,11 @@ of record, from whose coins each rank's registration draws once (`sampled_proofs
   then each rank's sample once, by its own `service.Stream` on `RankCoins`: the stream registers the rank's window, the coins
   commit to the registration's digest (`ChallengerCoins.commit`), and the stream's `select` reads them, in the rank's turn
   on the one client until `drawn` returns its segment, which is settled once the session has closed (`Draws.released`).
-  Once every rank has drawn or won't (`skip`), the client closes the
-  session. `Replay` reads an honest draw's bytes again, for the negatives' streams.
+  Once every rank has drawn or won't (`skip`), the client closes the session. A trees session (`start`'s ``trees``: one
+  rank's audit) stays open until the rank's member sessions are done too (`Draws.sessions_done`): its drawn member's
+  ``--zk`` server takes its session's coin tree from the session through the relay (`Draws.trees`, `TreeRelay`), so the
+  session's release log holds the tree that session's record must show (`challenger.sessions_tree_reason`). `Replay`
+  reads an honest draw's bytes again, for the negatives' streams.
 * **The evidence** (`Local.finish` or `GateClient.finish`, on a thread of the run's process once the session closed): the session's out/,
   the auditor's ledger and the host's pins log, copied to ``out/challenger/``, the key, the verifier's own copy of main's
   first-parent history (`start`'s ``main``, never the host's or the prover's), `remote.trusted_session`'s check of the files the
@@ -46,6 +49,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 import re
 import secrets
 import shutil
@@ -66,6 +70,7 @@ from typing import Any
 from verity.core.protocols.sampled_proofs import challenger as Ch, coins as CC, remote as R, service as S
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, verifier as V
 from verity.ml.circuits.program import Program
+from verity.ml.commitments import coin_tree as CT
 from verity.ml.crypto import lms
 
 TREE = Path(__file__).resolve().parents[2]
@@ -150,15 +155,119 @@ def lines(path: Path) -> list[str]:
 #: the proof system's rule for a client of a session the gate has just opened (`remote.connect_when_listening`)
 TUNNEL_WAIT_S, connect_when_listening = R.TUNNEL_WAIT_S, R.connect_when_listening
 
+#: the frames the relay forwards (`TreeRelay`)
+RELAYED = ("the relay's frames are hello with its secret, then tree {nonce, spec} per coin tree and tree-open {after, n, "
+           "round, stream, tree} per round of one, then close")
+
+
+class TreeRelay:
+    """The step's session as a drawn member's ``--zk`` server takes its session's coin tree from it (``flock-circuit serve
+    --tree-from ADDRESS --tree-secret-file FILE``, `Draws.trees`): a thread of the manager's process listening on
+    127.0.0.1:0 (`address`), its secret fresh in `file`, mode 0600. It takes one connection whose hello carries the secret
+    (`remote.greet`, which answers a refused hello and hangs up; the next connection is then taken), closes its listener
+    and answers ``commitment {}``, which the client checks for its form alone. Each ``tree {nonce, spec}`` and ``tree-open
+    {after, n, round, stream, tree}`` frame is asked of the step's one client by `forward` in the draws' `turn`, and its
+    answer, or its refusal, goes back. A ``close`` ends the connection alone, answered ``closed``: the step's session stays
+    open until its ranks' sessions are done (`Draws.sessions_done`). Any other frame, a refusal or a broken stream ends the
+    connection with nothing more forwarded. `trees` and `rounds` count what it forwarded and `ended` says how it ended,
+    set before its last answer is sent; the file is removed once it has (`stop`)."""
+
+    def __init__(self, file: Path, turn: threading.Lock, forward: Callable[[dict], dict]) -> None:
+        self.file, self._turn, self._forward, self._secret = file, turn, forward, secrets.token_bytes(32)
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.unlink(missing_ok=True)
+        with os.fdopen(os.open(file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w") as f:
+            f.write(self._secret.hex() + "\n")
+        self._listener = socket.create_server(("127.0.0.1", 0))
+        self.address = f"127.0.0.1:{self._listener.getsockname()[1]}"
+        self._lock, self._stopped, self._listening = threading.Lock(), False, True
+        self.trees, self.rounds, self.ended = 0, 0, None
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def _greeted(self) -> socket.socket | None:
+        """The first connection whose hello carries the secret, its listener then closed; None once stopped (`stop` shuts
+        the listener, which ends a wait for a connection)."""
+        while True:
+            try:
+                conn, _ = self._listener.accept()
+            except OSError:
+                with self._lock:
+                    if not self._stopped:
+                        raise
+                return None
+            why = R.greet(conn, self._secret)
+            with self._lock:
+                stopped = self._stopped
+                if why is None and not stopped:
+                    self._listening = False
+                    self._listener.close()
+                    return conn
+            conn.close()
+            if stopped:
+                return None
+
+    def _run(self) -> None:
+        conn = None
+        try:
+            conn = self._greeted()
+            if conn is None:
+                return
+            wire = R._Wire(conn)
+            wire.send({"type": "commitment", "commitment": {}})
+            while True:
+                head = wire.recv()
+                if head == {"type": "close"}:
+                    with self._lock:
+                        self.ended = self.ended or "the server closed it"
+                    wire.send({"type": "closed"})
+                    R._hang_up(conn)
+                    return
+                with self._turn, self._lock:
+                    reply = ({"type": "refused", "reason": f"the relay has ended ({self.ended})"} if self._stopped
+                             else self._forward(head))
+                    self.trees += reply["type"] == "tree"
+                    self.rounds += reply["type"] == "tree-coins"
+                    if reply["type"] == "refused" and self.ended is None:
+                        self.ended = f"it refused a frame: {reply['reason']}"
+                wire.send(reply)
+                if reply["type"] == "refused":
+                    R._hang_up(conn)
+                    return
+        except (Ch.CoinError, OSError) as e:
+            with self._lock:
+                self.ended = self.ended or f"the stream broke ({e})"
+        finally:
+            self.stop("the relay's thread ended")
+            with self._lock:
+                self._listening = False
+            self._listener.close()
+            if conn is not None:
+                conn.close()
+
+    def stop(self, why: str) -> None:
+        """End the relay (`why`, unless it has ended already): an in-flight frame finishes first and none is forwarded
+        after, a listener still waiting for its server is shut, and the secret file is removed. A server's connection is
+        left to end by itself: the step's session closes only once its member sessions are done (`Draws.sessions_done`),
+        their servers exited."""
+        with self._lock:
+            if self.ended is None:
+                self.ended = why
+            if self._listening and not self._stopped:
+                self._listener.shutdown(socket.SHUT_RDWR)
+            self._stopped = True
+        self.file.unlink(missing_ok=True)
+
 
 class Draws:
     """The step's coins over the window root `window_root` for every rank of `ranks`. Each rank plans its sample (`plan`).
     Once every rank has planned or ended (`wait_planned`), the session either opens (`connect`: its client, one
     `ChallengerCoins` for every rank) or is refused (`refuse`). The session's evidence follows once published. A rank's
     sample holds the client from its `commit` to its `drawn` (its turn), so no other rank's coins open between its commitment
-    and its reads."""
+    and its reads. With `relay` (the secret file's path, `start`'s ``trees``) it is a trees session: it stays open until
+    every rank's member sessions are done as well (`sessions_done`), and a drawn member's ``--zk`` server takes its
+    session's coin tree from it through the relay (`trees`)."""
 
-    def __init__(self, window_root: str, ranks: list[int]) -> None:
+    def __init__(self, window_root: str, ranks: list[int], relay: str | None = None) -> None:
         self._root = window_root
         self._lock, self._left, self._closed, self._ready = threading.Lock(), set(ranks), threading.Event(), threading.Event()
         self._unplanned, self._needs, self._planned = set(ranks), {}, threading.Event()
@@ -167,6 +276,9 @@ class Draws:
         self._turn, self._current, self._segment = threading.Lock(), None, None
         self._ended: str | None = None
         self._evidence: dict | None = None
+        self._relay_file = None if relay is None else Path(relay)
+        self._serving = set(ranks) if relay is not None else set()
+        self._relay: TreeRelay | None = None
         if not ranks:
             self._planned.set()
 
@@ -221,8 +333,7 @@ class Draws:
         self._client, self._coins, self._pre = client, coins, pre
         self._opened.set()
         with self._lock:
-            if not self._left and self._current is None:
-                self._close()
+            self._maybe_close()
 
     def refuse(self, why: str) -> None:
         """No session for the samples (`why`): every rank's `plan` and `commit` raise it."""
@@ -262,26 +373,90 @@ class Draws:
         self._current, self._segment = None, None
         self._turn.release()
         with self._lock:
-            if not self._left:
-                self._close()
+            self._maybe_close()
         return segment
 
     def skip(self, rank: int) -> None:
-        """Rank `rank` draws nothing (refused before its sample, or its process failed), ending its turn if it holds one: no-op
-        once it has drawn."""
+        """Rank `rank` draws nothing (refused before its sample, or its process failed), ending its turn if it holds one, and
+        on a trees session serves nothing more (`sessions_done`): no-op once it has drawn and its sessions are done."""
         self.drawn(rank)
         with self._lock:
             self._left.discard(rank)
+            self._serving.discard(rank)
             if rank in self._unplanned:
                 self._settled(rank)
-            if not self._left and self._current is None and self._client is not None:
-                self._close()
+            self._maybe_close()
+
+    def sessions_done(self, rank: int) -> None:
+        """Rank `rank`'s member sessions are done, so none of them takes a coin tree from the session any more (`trees`): a
+        trees session closes once every rank's are and every rank has drawn or won't. No-op on any other session."""
+        with self._lock:
+            self._serving.discard(rank)
+            self._maybe_close()
+
+    def serves_trees(self) -> bool:
+        """Whether this is a trees session: open through its ranks' member sessions, whose ``--zk`` servers take their
+        sessions' coin trees from it (`trees`)."""
+        return self._relay_file is not None
+
+    def trees(self) -> tuple[str, str]:
+        """The relay a drawn member's ``--zk`` server takes its session's coin tree through (`TreeRelay`), started once on
+        the open trees session: its address (127.0.0.1:PORT) and the file holding its secret, for ``flock-circuit serve
+        --tree-from ADDRESS --tree-secret-file FILE``. Raises `CoinError` on any other session, on one not open, and when
+        called again: the relay takes one server's connection."""
+        with self._lock:
+            if self._relay_file is None:
+                raise Ch.CoinError("the step's session closes at its last draw (`start` without trees): no member's server "
+                                   "takes its coin tree from it")
+            if self._client is None or self._closed.is_set():
+                raise Ch.CoinError("the step's session is not open, so no coin tree is sampled on it")
+            if self._relay is not None:
+                raise Ch.CoinError("the step's session relays one server's coin trees, and its relay has started")
+            self._relay = TreeRelay(self._relay_file, self._turn, self._relayed)
+            return self._relay.address, str(self._relay.file)
+
+    def _relayed(self, head: dict) -> dict:
+        """The relay's frame `head` asked of the step's one client (`TreeRelay`, in the turn): its answer, or its refusal."""
+        try:
+            kind = head.get("type")
+            if kind == "tree" and sorted(head) == ["nonce", "spec", "type"]:
+                nonce = None if head["nonce"] is None else Ch._hex(head["nonce"])
+                if head["nonce"] is not None and (nonce is None or len(nonce) != CT.NONCE_BYTES):
+                    raise Ch.CoinError(f"a coin tree's nonce is {CT.NONCE_BYTES} bytes in lowercase hex, or null")
+                got, root, key = self._client.tree(head["spec"], nonce)
+                return {"type": "tree", "tree": {"key": key.hex(), "nonce": got.hex(), "root": root.hex()}}
+            if (kind == "tree-open" and sorted(head) == ["after", "n", "round", "stream", "tree", "type"]
+                    and type(head["n"]) is int and type(head["round"]) is int and type(head["stream"]) is str):
+                _, ws = self._client.tree_open(R._root(head["tree"]), head["stream"], head["round"], head["n"],
+                                               R._root(head["after"]))
+                return {"type": "tree-coins", "tree-coins": [f"{w:032x}" for w in ws]}
+            raise Ch.CoinError(RELAYED)
+        except (Ch.CoinError, ValueError, TypeError) as e:
+            return {"type": "refused", "reason": str(e)}
+
+    def relayed(self) -> dict | None:
+        """What the relay forwarded (`trees`): its trees and rounds, and how it ended (None while it runs); None when no
+        relay started."""
+        r = self._relay
+        return None if r is None else {"trees": r.trees, "rounds": r.rounds, "ended": r.ended}
+
+    def closed(self) -> bool:
+        """Whether the session has closed, or was refused."""
+        return self._closed.is_set()
+
+    def _maybe_close(self) -> None:
+        """Under the lock: close the opened session (`_close`) once every rank has drawn or won't, none in its turn, and
+        on a trees session every rank's member sessions are done (`sessions_done`, `skip`)."""
+        if self._client is not None and not self._left and self._current is None and not self._serving:
+            self._close()
 
     def _close(self) -> None:
-        """Close the session, then settle every segment's coins to the full openings a withheld session released at its
-        close (`ChallengerCoins.settle`), before any evidence is published."""
+        """Close the session, the relay first (`TreeRelay.stop`), then settle every segment's coins to the full openings a
+        withheld session released at its close (`ChallengerCoins.settle`), before any evidence is published."""
         if self._closed.is_set():
             return
+        if self._relay is not None:
+            self._relay.stop("the step's session closed")
         try:
             if self._client is not None:
                 self._client.close()
@@ -661,7 +836,7 @@ def opened_pin(ledger: list[str], session: str) -> str | None:
 
 def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | Path, *, ssh_key: str | None = None,
           peer: str | None = None, key_record: str | None = None,
-          reserve: Callable[[Mapping[int, int]], list] = families):
+          reserve: Callable[[Mapping[int, int]], list] = families, trees: bool = False):
     """The step's session on `root` (``local`` or ``gate:USER@HOST``, module docstring) and its samples' manager: (the manager, a
     `Draws` proxy, and the thread that opens the session and publishes its evidence). The thread waits until every rank of
     `ranks` has planned its sample (`Draws.plan`), then opens the session with the layout `reserve` gives their needs
@@ -669,7 +844,12 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | 
     rank's sample, when a rank ended before planning (refused before its sample, or failed) or `reserve_reason` refuses the
     layout. The evidence's `plan` is the needs, the layout and the session's id (None when none opened). `main` is the
     verifier's own copy of main's first-parent history (`remote.main_lines`'s file: ``git rev-list --first-parent
-    origin/main``)."""
+    origin/main``). With `trees`, for one rank's audit, it is a trees session (`Draws`): open until the rank's member
+    sessions are done (`Draws.sessions_done`), its relay's secret fresh beside `dest` (``<dest>.relay-secret``) until the
+    relay ends."""
+    if trees and len(ranks) != 1:
+        raise ValueError(f"a trees session relays one drawn member's coin trees (`Draws.trees`): start it for one rank's "
+                         f"audit, not {len(ranks)} ranks'")
     first_parent = R.main_lines(main)
     if challenger == "local":
         session = Local(Path(tempfile.mkdtemp(prefix="a5-challenger-")), first_parent)
@@ -682,7 +862,7 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | 
                          f"not {challenger!r}")
     manager = _Manager(ctx=get_context("spawn"))
     manager.start()
-    draws = manager.Draws(root, ranks)
+    draws = manager.Draws(root, ranks, str(dest.resolve().with_name(dest.name + ".relay-secret")) if trees else None)
 
     def finish() -> None:
         needs = draws.wait_planned()

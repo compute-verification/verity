@@ -114,7 +114,12 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   its own: a stream's sample is the challenger's (`service.NO_OWN_COINS`). The challenger's release of the draw's coins
   (`drawn_by`: its key, the window root and the coins, the segment settled) is kept beside the audit's case in
   ``out/release.json`` (`RELEASE`) whenever the session gave evidence, and v2's case names it (`case_v2`), so a later
-  case of the window's units reads the same draw.
+  case of the window's units reads the same draw. One rank's audit (``records_audit.py audit``, `tp` of one rank) opens a
+  trees session (`a5_coins.start`'s ``trees``): its one drawn member's ``--zk`` server takes its session's coin tree from
+  the step's session through its relay (`a5_coins.Draws.trees`, `a0.session`'s ``tree_from``: ``serve --tree-from``, no
+  challenger of the server's own), so that session's release log holds the tree v2 holds the member's session record to
+  (`OneStageZk.treesHeld`). The session closes once the rank's member sessions are done (`a5_coins.Draws.sessions_done`),
+  before the tie (below).
 * **Transfer gates opened under the warden's signed roots** (`audit`'s ``registered``): a member whose port's rows are an outside
   registered value's (a warden link-window's cells, `certifier.warden_rows`), committed under that value's salts
   (`ml.windows.rows.commit`'s ``salts_of``), is verified with the verifier's own reads of it (``--registered``, the port at
@@ -156,17 +161,24 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   So after the draw and before any session, each drawn member's files are completed (`flock_inputs.complete`): each parameter
   port (a row table's ``x``, an outside registered value's: the set the verifier's own reads make, never the member's) at
   the root those reads give it, and every other port at its window tree, the registration's root for it, which the member's
-  served rows must fold to again under the domain the window's run binds. A root is taken from the registration only once the
-  auditor's record ties it to the coins (`window_record`): on a stream, its window's run is the root the auditor's signed
-  ledger opens and its SHA-512 the digest the challenger's coins were released after in that one session
-  (`coins.coins_reason` on the evidence `a5_coins.start` read from the challenger's host); a development draw has no such
-  record. A completed file is a shared-row file, so an instance-major member's bodies are re-laid port-major under identity
-  refs. A member that can't be completed (a port with no registered tree, a root its rows don't fold to) refuses the audit
-  by name before any session. Negatives, each refused before any session (`complete_negatives`): a registration of another
-  digest, a window run not the verifier's or one the ledger opens no session on, the member's trees under another run, a
-  served row not its tree's, a root another window tree's, a port with no tree, a parameter port named at a window tree,
-  and a header registering a port the registration doesn't; and Lean's on a drawn member's session
-  (`registered_negatives`), a window port read at another window tree's root among them.
+  served rows must fold to again under the domain the window's run binds. The registration's roots complete the files
+  before the tie, and the audit refuses unless the tie holds: once the sessions are done and the step's session has closed,
+  the auditor's record must tie the registration to the coins (`tie_after_sessions`, `window_record`, the check
+  ``record``): on a stream, its window's run is the root the auditor's signed ledger opens and its SHA-512 the digest the
+  challenger's coins were released after in that one session (`coins.coins_reason` on the evidence `a5_coins.start` read
+  from the challenger's host); a development draw has no such record, so only its run is held. A tie that fails refuses
+  the audit by name (`refuse_after_sessions`): no audit record, nothing accepted in part, nothing retried. Until the tie
+  holds, nothing built from the completed files leaves the auditor but what the prover holds already: its staged file,
+  under its own registration's roots, and its session's frames, the challenger's coin tree and coins and the verdict on
+  its own statement; the audit record, its cases, the release and the negatives are written only once the tie holds. A
+  completed file is a shared-row file, so an instance-major member's bodies are re-laid port-major under identity refs. A
+  member that can't be completed (a port with no registered tree, a root its rows don't fold to) refuses the audit by
+  name before any session. Negatives: each refused before any session (`complete_negatives`), the member's trees under
+  another run, a served row not its tree's, a root another window tree's, a port with no tree, a parameter port named at
+  a window tree, and a header registering a port the registration doesn't; the tie's, each refused once the tie holds
+  (`record_negatives`), a window run not the verifier's, and on a stream a registration of another digest and a window
+  run the ledger opens no session on; and Lean's on a drawn member's session (`registered_negatives`), a window port
+  read at another window tree's root among them.
 """
 from __future__ import annotations
 
@@ -551,8 +563,9 @@ OTHER_RUN = hashlib.sha512(b"verity/one-stage/a5/another-run").hexdigest()
 
 def window_record(a: argparse.Namespace, rec: dict, run: str, ev: dict | None, read: bytes, rank: int | None,
                   root: str | None = None) -> str | None:
-    """Why the window's registration ``rec`` is not the one the auditor's record ties to the coins, or None; only then does
-    the audit take a per-port root from it (`complete_drawn`). Its window's run is ``run``, the verifier's own, and on a
+    """Why the window's registration ``rec`` is not the one the auditor's record ties to the coins, or None: the tie, held
+    once the sessions are done (`tie_after_sessions`), without which the audit refuses though the registration's roots
+    completed the drawn members' files before it (`complete_drawn`). Its window's run is ``run``, the verifier's own, and on a
     stream that run is the root the auditor's ledger opens (``root``, default ``a.window_root``; a TP rank's is
     ``<root>/rank<r>``, `tp.serving_rows.run_of`), and the registration's SHA-512 is the digest the challenger's coins were
     released after, in the one session the auditor's signed ledger opens on that root under the verifier's challenger key
@@ -571,21 +584,17 @@ def window_record(a: argparse.Namespace, rec: dict, run: str, ev: dict | None, r
     return CC.coins_reason(ev, root, bytes.fromhex(R.digest(rec)), read, AC.lms_verify)
 
 
-def complete_drawn(a: argparse.Namespace, rec: dict, mine: CS.Binding, files: tuple[dict, dict], publics: dict[str, bytes],
-                   reads: dict[str, dict], drawn: list[tuple[dict, list[int]]], served: Path, ev: dict | None, read: bytes,
-                   rank: int | None) -> tuple[dict, dict[str, dict]]:
+def complete_drawn(rec: dict, mine: CS.Binding, files: tuple[dict, dict], publics: dict[str, bytes], reads: dict[str, dict],
+                   drawn: list[tuple[dict, list[int]]], served: Path) -> tuple[dict, dict[str, dict]]:
     """Every drawn member's files completed (`flock_inputs.complete`) before any session, so the Lean verifier's
-    ``--registered`` file names every port of its circuit (`Flock.Registered.checkComplete`). Only once the auditor's record
-    ties the registration to the coins (`window_record`) does a root come from it: each parameter port at the root the
-    verifier's own reads give it (``reads``: a row table's or an outside registered value's, the set the registration makes,
-    never the member's), every other port at its window tree, which its served rows must fold to again under the domain
-    bound to the window's run. Each drawn member's public file is then rewritten under the completed header, its
-    ``--registered`` file is the completed reads, and so is ``reads[key]``. -> (the check after the draw, ``ok`` only when
-    every drawn member's files are complete, naming each member refused and why; the negatives, each refused before any
-    session, on the drawn member of fewest rows)."""
-    why = window_record(a, rec, mine.run, ev, read, rank)
-    if why is not None:
-        return {"ok": False, "codes": ["record"], "detail": {"record": why}}, {}
+    ``--registered`` file names every port of its circuit (`Flock.Registered.checkComplete`), at the registration's roots,
+    which the audit refuses unless the auditor's record ties them to the coins once the sessions are done
+    (`tie_after_sessions`): each parameter port at the root the verifier's own reads give it (``reads``: a row table's or an
+    outside registered value's, the set the registration makes, never the member's), every other port at its window tree,
+    which its served rows must fold to again under the domain bound to the window's run. Each drawn member's public file is
+    then rewritten under the completed header, its ``--registered`` file is the completed reads, and so is ``reads[key]``.
+    -> (the check after the draw, ``ok`` only when every drawn member's files are complete, naming each member refused and
+    why; the negatives, each refused before any session, on the drawn member of fewest rows)."""
     roots = {r["port"]: r for r in rec["roots"]}
 
     def complete(mm: dict, **kw: Any) -> FI.Complete:
@@ -599,12 +608,12 @@ def complete_drawn(a: argparse.Namespace, rec: dict, mine: CS.Binding, files: tu
             done[mm["k"]] = complete(mm)
         except ValueError as e:
             bad[mm["m"].key] = str(e)
-    check = {"ok": not bad, "codes": sorted(bad), "detail": bad, "record": "auditor" if streamed(a) else "none: a development draw",
+    check = {"ok": not bad, "codes": sorted(bad), "detail": bad,
              "members": {mm["m"].key: {"window_ports": len(done[mm["k"]].window_ports),
                                        "parameter_ports": len(done[mm["k"]].parameter_ports)} for mm, _ in drawn if mm["k"] in done}}
     small = min((mm for mm, _ in drawn if mm["k"] in done and done[mm["k"]].window_ports),
                 key=lambda mm: sum(CS.port_leaves(mm["m"]).values()), default=None)
-    neg = {} if small is None else complete_negatives(a, rec, mine, roots, publics, small, done[small["k"]], complete, ev, read, rank)
+    neg = {} if small is None else complete_negatives(rec, mine, roots, publics, small, done[small["k"]], complete)
     if bad:
         return check, neg
     for mm, _ in drawn:
@@ -618,14 +627,12 @@ def complete_drawn(a: argparse.Namespace, rec: dict, mine: CS.Binding, files: tu
     return check, neg
 
 
-def complete_negatives(a: argparse.Namespace, rec: dict, mine: CS.Binding, roots: dict[str, dict], publics: dict[str, bytes],
-                       mm: dict, c: FI.Complete, complete: Callable[..., FI.Complete], ev: dict | None, read: bytes,
-                       rank: int | None) -> dict[str, dict]:
-    """`complete_drawn`'s negatives on drawn member ``mm`` (its honest completion ``c``), each refused before any session: on a
-    stream, a registration of another digest (a window root on the prover's node not the one registered before the coin) and
-    a window run the auditor's ledger opens no session on; and, the record held, the member's trees under another run, a
-    served row that is not its registered tree's, a registered root that is another window tree's, a port with no registered
-    tree, a parameter port named at a window tree, and a header that registers a port the registration doesn't."""
+def complete_negatives(rec: dict, mine: CS.Binding, roots: dict[str, dict], publics: dict[str, bytes], mm: dict,
+                       c: FI.Complete, complete: Callable[..., FI.Complete]) -> dict[str, dict]:
+    """`complete_drawn`'s negatives on drawn member ``mm`` (its honest completion ``c``), each refused before any session: the
+    member's trees under another run, a served row that is not its registered tree's, a registered root that is another
+    window tree's, a port with no registered tree, a parameter port named at a window tree, and a header that registers a
+    port the registration doesn't."""
     m, p = mm["m"], c.window_ports[0]
     r = roots[m.port(p)]
     other = next((x["root"] for x in rec["roots"] if x["root"] != r["root"]), "00" * 64)
@@ -637,17 +644,7 @@ def complete_negatives(a: argparse.Namespace, rec: dict, mine: CS.Binding, roots
             return {"refused": True, "why": str(e)}
         return {"refused": False}
 
-    def reason(why: str | None) -> dict:
-        return {"refused": why is not None, "why": why}
-
     neg: dict[str, dict] = {}
-    run_off = {**rec, "window": {**rec["window"], "run": OTHER_RUN}}
-    neg["registration-window-run-not-the-verifier-s (record)"] = reason(window_record(a, run_off, mine.run, ev, read, rank))
-    if streamed(a):
-        moved = {**rec, "roots": [{**x, "root": other} if x["port"] == m.port(p) else x for x in rec["roots"]]}
-        neg["registration-of-another-digest (record)"] = reason(window_record(a, moved, mine.run, ev, read, rank))
-        neg["window-run-the-auditor-s-ledger-opens-no-session-on (record)"] = reason(
-            window_record(a, run_off, OTHER_RUN, ev, read, None, root=OTHER_RUN))
     leaves, names = CS.port_leaves(m), [q for q, _ in m.all_rows]
     at = (sum(leaves[q] for q in names[:names.index(p)]) if m.tables else names.index(p)) * CS.BC_BYTES
     body = bytearray(publics[m.key])
@@ -660,6 +657,51 @@ def complete_negatives(a: argparse.Namespace, rec: dict, mine: CS.Binding, roots
     header = {**{q: c.registered[q] for q in c.parameter_ports}, p: c.registered[p]}
     neg["parameter-port-named-at-a-window-tree (complete)"] = refused(params=params, header=header)
     neg["header-registers-a-port-the-registration-does-not (complete)"] = refused(header=header)
+    return neg
+
+
+def tie_after_sessions(a: argparse.Namespace, rec: dict, mine: CS.Binding, segment: dict | None, read: bytes,
+                       rank: int | None) -> tuple[dict, dict | None]:
+    """The tie (`window_record`), held once the drawn members' sessions are done and the step's session has closed and
+    published its evidence (`a5_coins.Draws.evidence`; a trees session closes at `a5_coins.Draws.sessions_done`): the
+    registration's roots completed the drawn members' files before it (`complete_drawn`), and the audit refuses unless it
+    holds (`refuse_after_sessions`). -> (the check after the draw ``record``, ``ok`` only when the auditor's record ties the
+    registration to the coins, naming why not; the coins' evidence for ``segment``, None off a stream)."""
+    ev = AC.evidence(a.coins.evidence(), segment) if streamed(a) else None
+    why = window_record(a, rec, mine.run, ev, read, rank)
+    return ({"ok": why is None, "codes": [] if why is None else ["record"], "detail": {} if why is None else {"record": why},
+             "record": "auditor" if streamed(a) else "none: a development draw"}, ev)
+
+
+def refuse_after_sessions(out: Path, summary: dict, checks: dict, negatives: dict[str, dict]) -> tuple[dict, bool]:
+    """The audit refused once its sessions are done, by each of ``checks`` that failed (the tie, `tie_after_sessions`): its
+    summary alone is written under ``out``, with the ``negatives`` decided so far, and no audit record, case, release or
+    negatives file, so nothing built from the files the registration's roots completed leaves the auditor; nothing is
+    retried. -> (the summary, False)."""
+    summary.update(checks=checks, negatives={x: y["refused"] for x, y in negatives.items()})
+    (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+    print("A5 " + json.dumps({"refused_after_sessions": {c: v for c, v in checks.items() if not v["ok"]}}, default=str))
+    return summary, False
+
+
+def record_negatives(a: argparse.Namespace, rec: dict, mine: CS.Binding, ev: dict | None, read: bytes,
+                     rank: int | None) -> dict[str, dict]:
+    """The tie's negatives (`window_record`), each refused on the evidence ``ev`` and bytes ``read`` the tie held on: a
+    window run not the verifier's, and on a stream a registration of another digest (a window root on the prover's node
+    not the one registered before the coin) and a window run the auditor's ledger opens no session on."""
+
+    def reason(why: str | None) -> dict:
+        return {"refused": why is not None, "why": why}
+
+    run_off = {**rec, "window": {**rec["window"], "run": OTHER_RUN}}
+    neg = {"registration-window-run-not-the-verifier-s (record)": reason(window_record(a, run_off, mine.run, ev, read, rank))}
+    if streamed(a):
+        first, *rest = rec["roots"]
+        other = next((x["root"] for x in rest if x["root"] != first["root"]), "00" * 64)
+        moved = {**rec, "roots": [{**first, "root": other}, *rest]}
+        neg["registration-of-another-digest (record)"] = reason(window_record(a, moved, mine.run, ev, read, rank))
+        neg["window-run-the-auditor-s-ledger-opens-no-session-on (record)"] = reason(
+            window_record(a, run_off, OTHER_RUN, ev, read, None, root=OTHER_RUN))
     return neg
 
 
@@ -903,6 +945,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         p = a0.challenger_draw(a.lean, ["--population", str(n_all), "--k", str(law["k"])], {"law": "subset", "k": law["k"]},
                                n_all, R.digest(rec), out / "draw.log")
         union_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
+        segment, read = None, b""
     else:
         stream, draw, counts_of, coins, segment, refused, need = coins_draw(a, rank, rec, mine, members, want, leaf_layer)
         read = bytes(coins.read)
@@ -942,9 +985,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             drawn.append((mm, local))
     complete_neg: dict[str, dict] = {}
     if not plain(a):
-        ev = AC.evidence(a.coins.evidence(), segment) if streamed(a) else None
-        after["registered_complete"], complete_neg = complete_drawn(a, rec, mine, files, publics, reads, drawn, served, ev,
-                                                                    read if streamed(a) else b"", rank)
+        after["registered_complete"], complete_neg = complete_drawn(rec, mine, files, publics, reads, drawn, served)
         if not after["registered_complete"]["ok"]:
             summary.update(checks={**checks, **after}, negatives={x: y["refused"] for x, y in complete_neg.items()})
             (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
@@ -954,10 +995,10 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     for mm in members:
         mm["st"]["archived"] = archived
 
-    def member_session(i: int, mm: dict, local: list[int]) -> dict:
+    def member_session(i: int, mm: dict, local: list[int], tree_from: tuple[str, str] | None = None) -> dict:
         """Member ``mm``'s firewalled session on its proved units ``local`` (drawn, and a work sample's closure), on port
-        ``port + i`` (``i`` its place among the members with proved units, `port_refusal`); `member_checks` adds Lean's
-        verdicts on it."""
+        ``port + i`` (``i`` its place among the members with proved units, `port_refusal`), its coin tree from the step's
+        session's relay at ``tree_from`` where given (`a5_coins.Draws.trees`); `member_checks` adds Lean's verdicts on it."""
         m, k = mm["m"], mm["k"]
         sdir = out / f"session-m{k}"
         sdir.mkdir(parents=True, exist_ok=True)
@@ -971,7 +1012,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         t = time.time()
         env = {"FC_COINS": "os"} if plain(a) else {"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": a.firewall, **a0.firewall_env(mm["st"])}
         record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + i, sdir, draw_file=sdir / "draw.json",
-                                  zk=not plain(a), env=env, prove_timeout=a.session_timeout)
+                                  zk=not plain(a), env=env, prove_timeout=a.session_timeout, tree_from=tree_from)
         session_s = round(time.time() - t, 1)
         draw_t = (record or {}).get("unit_draw") or {}
         v = V.check_draw(draw_t, {"population": session_draw["population"]}, session_law)
@@ -1007,13 +1048,26 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                 "sessions": [a0.sha512_file(f) for f in sorted((sdir / "sessions").glob("*/session.json"))]}
 
     # outer proofs go through the ZK server one at a time (`ONE_AT_A_TIME`): the sessions run here in the members' order, and
-    # only Lean's checks of finished members, outside the ZK server, overlap the next member's session
+    # only Lean's checks of finished members, outside the ZK server, overlap the next member's session. On a trees session
+    # the one drawn member's --zk server, whose session v2's case is (`v2_proof`), takes its coin tree from the step's
+    # session, which closes once the sessions are done
     with LeanPool(getattr(a, "lean_workers", LEAN_WORKERS), audit_memory(a, available_memory), available_memory) as lean:
-        for i, (mm, local) in enumerate(drawn):
-            with lean.session(session_need(mm["circuit"])):
-                s = member_session(i, mm, local)
-            lean.submit(member_checks, s, lean_need(mm["st"]))
+        try:
+            tree_from = (a.coins.trees() if streamed(a) and not plain(a) and len(drawn) == 1 and a.coins.serves_trees()
+                         else None)
+            for i, (mm, local) in enumerate(drawn):
+                with lean.session(session_need(mm["circuit"])):
+                    s = member_session(i, mm, local, tree_from)
+                lean.submit(member_checks, s, lean_need(mm["st"]))
+        finally:
+            if streamed(a):
+                a.coins.sessions_done(rank)
         done = lean.results()
+    if not plain(a):
+        after["record"], ev = tie_after_sessions(a, rec, mine, segment, read, rank)
+        if not after["record"]["ok"]:
+            return refuse_after_sessions(out, summary, {**checks, **after}, complete_neg)
+        complete_neg.update(record_negatives(a, rec, mine, ev, read, rank))
     for got in done:
         mm = got["mm"]
         summary["staging"]["drawn_s"] = round(summary["staging"].get("drawn_s", 0) + got["staged_s"], 1)
@@ -1531,7 +1585,8 @@ def tp(a: argparse.Namespace, sets: dict, out: Path) -> bool:
                              f"audit the {len(ranks)} ranks at once (--jobs {len(ranks)}), or fewer ranks (--ranks)")
         a.window_root = rec["tp_run_root"]
         manager, a.coins, finisher = AC.start(a.challenger, a.window_root, ranks, out / "challenger", a.main,
-                                              ssh_key=a.gate_key, peer=a.peer, key_record=a.challenger_key)
+                                              ssh_key=a.gate_key, peer=a.peer, key_record=a.challenger_key,
+                                              trees=len(ranks) == 1)
         summary["challenger"] = {"challenger": a.challenger, "rule": a.rule}
     try:
         for r, row in tp_ranks(a, sets, out, world, ranks):

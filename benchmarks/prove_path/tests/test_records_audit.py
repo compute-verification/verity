@@ -1033,7 +1033,8 @@ def test_the_advice_is_fixed_before_the_draw_and_refused_re_committed_after_it(w
 
 def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session(written, tmp_path, monkeypatch):
     """``--challenger gate:USER@HOST`` hands ``--gate-key``, ``--peer`` and ``--challenger-key`` to `a5_coins.start`, as
-    `prove_path.py audit` does; the command refuses a gate without the peer or the key record, and any other challenger."""
+    `prove_path.py audit` does, for a trees session (its drawn member takes its coin tree from it, `a5_coins.Draws.trees`);
+    the command refuses a gate without the peer or the key record, and any other challenger."""
     import a5_coins as AC
 
     args = ["audit", "--window", str(written.dir), "--law", LAW, "--circuit", written.rec["window"]["circuit"], "--run", RUN,
@@ -1061,7 +1062,29 @@ def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session
         RA.main([*args, "--challenger", "gate:research@gate", "--peer", "vy-nebius-1", "--challenger-key", "key.json",
                  "--gate-key", "gate.key"])
     assert seen == {"challenger": "gate:research@gate", "root": RUN, "ranks": [0], "main": "main.txt", "ssh_key": "gate.key",
-                    "peer": "vy-nebius-1", "key_record": "key.json"}
+                    "peer": "vy-nebius-1", "key_record": "key.json", "trees": True}
+
+
+def test_a_tie_failing_after_the_sessions_is_a_reject_naming_it(written, tmp_path, monkeypatch):
+    """An audit a5 refused once its sessions were done because its tie failed (`a5.refuse_after_sessions`, no audit record)
+    is a reject naming the check, ``record``: the summary carries a5's checks, which `served_integrity.answer` names, not an
+    audit that wrote no record and no refusal."""
+    import a5 as A5
+    import a5_coins as AC
+
+    tie = {"ok": False, "codes": ["record"], "detail": {"record": "the challenger's session gave no evidence"}}
+    checks = {"registration": {"ok": True, "codes": []}, "registered_complete": {"ok": True, "codes": []}, "record": tie}
+    session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
+    monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
+    monkeypatch.setattr(A5, "audit", lambda *a, **kw: ({"checks_before_draw": {"registration": True}, "checks": checks}, False))
+    monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
+    out = tmp_path / "out"
+    assert RA.main(["audit", "--window", str(written.dir), "--law", LAW, "--circuit", written.rec["window"]["circuit"],
+                    "--run", RUN, "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(out),
+                    "--skip-negatives", "--challenger", "local", "--main", "m.txt"]) == 1
+    assert json.loads((out / "summary.json").read_text())["checks"] == checks
+    assert SI.answer(out, written.rec) == {"commitment": R.digest(written.rec), "profile": None, "protocol": SI.PROTOCOL,
+                                           "public": None, "reason": "after the draw: record (record)", "verdict": "reject"}
 
 
 def test_the_audit_reserves_a_port_for_every_session_its_draw_can_open(tmp_path, monkeypatch):

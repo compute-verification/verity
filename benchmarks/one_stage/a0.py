@@ -190,22 +190,32 @@ def stand_in(set_dir: str) -> dict:
 
 
 def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_file: Path | None = None,
-            zk: bool = False, env: dict | None = None, prove_timeout: float = 3600) -> tuple[dict | None, dict | None]:
+            zk: bool = False, env: dict | None = None, prove_timeout: float = 3600,
+            tree_from: tuple[str, str] | None = None) -> tuple[dict | None, dict | None]:
     """One live session: `serve --draw` (the verifier's side: registration, the sample, coins, the verdict) and `prove`.
     `draw_file`: the server serves the verifier's own draw from that file (`--draw-file`) instead of sampling one. `zk`: both
     sides run the masked protocol (`--zk`); without it the Lean verifier accepts a subset sample at hidden outputs and one table
     (`Flock.ProvedScope`). `env`: added to
-    both sides' environment (a firewalled prover's, `firewall_env`). `prove_timeout`: the prover's limit in seconds."""
+    both sides' environment (a firewalled prover's, `firewall_env`). `prove_timeout`: the prover's limit in seconds.
+    `tree_from`: a ``--zk`` session's coin tree is sampled and opened by that challenger session, its address and the file
+    holding its secret (`serve --tree-from ADDRESS --tree-secret-file FILE`, `a5_coins.Draws.trees`), and by no challenger
+    of the server's own (FLOCK_CHALLENGER unset)."""
+    if tree_from is not None and not zk:
+        raise ValueError("tree_from is a --zk session's: only its coins are committed to a coin tree (serve --tree-from)")
     out.mkdir(parents=True, exist_ok=True)
     d = st["dir"]
     tables = d / "tables"
     zf = ["--zk"] if zk else []
+    senv = {**os.environ, **(env or {})}
+    if tree_from is not None:
+        senv.pop("FLOCK_CHALLENGER", None)
     serve_log = open(out / "serve.log", "w")
     serve = subprocess.Popen([bin_, "serve", *zf, "--listen", f"127.0.0.1:{port}", "--out", str(out / "sessions"),
                               "--instances", str(d / f"pub-{n}.bin"), "--circuit", str(d / "circuit.txt"), "--tables", str(tables),
                               "--pin", st["pin"], "--operator", "one-stage-a0",
-                              *(["--draw-file", str(draw_file)] if draw_file else ["--draw", law]), "--sessions", "1"],
-                             stdout=serve_log, stderr=subprocess.STDOUT, text=True, env={**os.environ, **(env or {})})
+                              *(["--draw-file", str(draw_file)] if draw_file else ["--draw", law]), "--sessions", "1",
+                              *(["--tree-from", tree_from[0], "--tree-secret-file", tree_from[1]] if tree_from else [])],
+                             stdout=serve_log, stderr=subprocess.STDOUT, text=True, env=senv)
     try:
         for _ in range(1800):
             if "SERVING" in (out / "serve.log").read_text() or serve.poll() is not None:
