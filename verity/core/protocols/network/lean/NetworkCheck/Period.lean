@@ -703,7 +703,8 @@ def selectEntryPins : List String :=
 def entryPins : List String := slotEntryPins ++ selectEntryPins
 
 /-- The value a window circuit registers the scan's state rows as (`ingress_scan`'s `SCAN_STATE`), row a the state
-before bucket a: the entry of an audit's `registered`, or of the scan's, whose value it is. -/
+before bucket a: the entry of an audit's `registered`, or of the scan's, whose value it is, or an audit's entry of it in
+its `window`'s `activations.values` (`auditStateEntries`). -/
 def stateValue : String := "verity/certifier/scan-state/v1"
 
 /-- A compute audit's layout terms and its Program, from the Program's descriptor (`Flock.Program.decode` of its
