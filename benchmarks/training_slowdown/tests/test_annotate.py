@@ -1,10 +1,5 @@
 """training_slowdown.annotate: a run's annotation through a step as a prefix of its count, and its traced structures."""
 from training_slowdown.annotate import annotate, with_structures
-from training_slowdown.run import C_PER_FORWARD_TOKEN, block_c
-
-
-def test_c_is_4096_forward_passes():
-    assert block_c(10) == 10 * C_PER_FORWARD_TOKEN == 40_960
 
 
 def record(n_steps: int) -> dict:

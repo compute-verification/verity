@@ -7,6 +7,11 @@ import torch
 from training_slowdown import run
 from training_slowdown.counterexample import check
 
+
+def test_c_is_4096_forward_passes():
+    assert run.block_c(10) == 10 * run.C_PER_FORWARD_TOKEN == 40_960
+
+
 MODEL = '''
 import torch
 import torch.nn.functional as F
