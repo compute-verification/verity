@@ -94,6 +94,10 @@ The rules in force, each stated as itself; the friction skill has the standing r
   or scan iteration: it summarizes once per specialized Definition and multiplies through batches and scans
   (`NciCheck.Desc`). An unrolled walk survives only as a difftest's reference. `tests/test_verifier_cost.py` enforces it
   (the walks still open are its `ALLOWED`), and `benchmarks/verifier_cost/` measures it.
+- **PoUW is mostly useful work.** A PoUW scheme leaves the useful work at least half of the honest prover's GPU
+  effort, its commitments and checks included (Daniel, 3 Nov). The trivial PoUW, which hashes every product and leaves
+  useful work near 1% of that effort, is ruled out as an answer; it stays on main only as a reference. Pearl+ is held
+  to the same floor.
 - **Auditor-trusted devices.** The network certifiers and memory challengers sign what they see; what they sign is
   witness and never reaches the auditor in the clear. Each is the auditor's hardware on a machine the prover doesn't
   control, never a process on the prover's node, and trust in it and its host is the named assumption `trusted-host`.
