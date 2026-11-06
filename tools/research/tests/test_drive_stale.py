@@ -83,8 +83,8 @@ def test_status_reads_stale_days_from_drive_toml_at_main(world, monkeypatch, cap
 
 def test_status_pulls_the_stores_labels_in_one_batch_however_many_prs_are_open(world, monkeypatch, capsys):
     """`research queue status` pulled the store's labels once for admission, once for the PRs based off `main` and once for the
-    stale ones, and a PR none of those covered alone; one batch of every open PR's head, whatever their number, keeps the
-    command within seconds on an agent VM."""
+    stale ones, and a PR none of those covered alone; one batch of every open PR's labels (each of its heads', which a head
+    with none of its own may take), whatever their number, keeps the command within seconds on an agent VM."""
     from research.store import labels_sync
 
     world.with_store_remote()
@@ -93,10 +93,11 @@ def test_status_pulls_the_stores_labels_in_one_batch_however_many_prs_are_open(w
     _git(world.dev, "push", "-q", "origin", f"{sha}:refs/heads/main")
     monkeypatch.setattr(Q, "GitHub", lambda repo: world.gh)
     batches: list[int] = []
-    pull = labels_sync.pull_targets
-    monkeypatch.setattr(labels_sync, "pull_targets", lambda store, targets, jobs=1: batches.append(len(targets))
-                        or pull(store, targets, jobs=jobs))
-    monkeypatch.setattr(labels_sync, "pull_prefix", lambda *a, **k: pytest.fail("status lists no PR's other heads"))
+    for name in ("pull_targets", "pull_prefixes"):
+        pull = getattr(labels_sync, name)
+        monkeypatch.setattr(labels_sync, name, lambda store, todo, jobs=1, pull=pull: batches.append(len(todo))
+                            or pull(store, todo, jobs=jobs))
+    monkeypatch.setattr(labels_sync, "pull_prefix", lambda *a, **k: pytest.fail("status pulls no PR's heads one PR at a time"))
     argv = ["status", "--json", "--workdir", str(world.tmp / "q" / "verity"), "--remote", str(world.origin), "--repo", "o/r",
             "--store", str(world.tmp / "store")]
 
