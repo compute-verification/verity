@@ -118,16 +118,17 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
   variables pass through undeclared.
 
 - **Another inner statement** (`stage.sh`, launched as `job.sh` is): `rec_inner.py stage --subcircuit` stages N seeded
-  draws of a census-style subcircuit into `data/$TAG/stage` (plain leaves) and `stage-zk` (hm96), or, with
-  `WINDOW=DIR`, `rec_inner.py stage-window` stages every unit of a served window's member from the window's own rows and
-  salts (`prove_path.py commit`'s window dir). It then runs `job.sh` with 85's `STAGE=0`, which proves what it finds.
+  inputs to a census-style subcircuit into `data/$TAG/stage` (plain leaves) and `stage-zk` (hm96), or, with
+  `WINDOW=DIR`, `rec_inner.py stage-window` stages every proof block of a served window's member from the window's own
+  rows and salts (`prove_path.py commit`'s window dir). It then runs `job.sh` with 85's `STAGE=0`, which proves what it
+  finds.
 
 ## The pipeline (step map)
 
 Every step is a STEP of the pod script (read as it is), run on one node with the big files under
 `$FLOCK_WORK/data/$TAG` for the next step. Each GPU step leases one RTX PRO 6000 per prover invocation (`on_gpu`), and
 everything else is CPU. The where column is a GPU run's: a CPU run (the default) runs every step on its CPU node
-with `GPU=0`. The inner statement is `N` instances of `GemmCoordinate_v2{K, DOT=HopperBF16WgmmaDot16_v1}`
+with `GPU=0`. The inner statement is `N` template instances of `GemmCoordinate_v2{K, DOT=HopperBF16WgmmaDot16_v1}`
 (`pod/rec_reprice.py`, the population program cut by `Q_template_instance`), with every proof block sampled.
 
 | # | step (STEP) | command (inside the pod script) | reads | writes | where |
