@@ -3,6 +3,7 @@ module
 public import Definitions.Core
 public import Definitions.Core.Accel
 public import Definitions.Core.Assumptions.Accel
+public import Definitions.Core.Assumptions.DeviceFigures
 public import Definitions.Core.Blocks
 public import Definitions.Core.DeviceFigures
 public import Definitions.Core.Site
