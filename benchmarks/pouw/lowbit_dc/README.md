@@ -61,4 +61,4 @@ cuBLASLt; γ is taken against cuBLASLt, and FULLRES gives it with the feed remov
 words a SM a clock of its median CTA (DC's metric) against DC's fastest honest configuration at each L.
 
 Not covered: FP4 emulation of int8 (emu8's FP4 route is counted in `../emu8/accounting.py`, not built), and pgemm on a
-CTA pair (cta_group::2, 256-wide tiles), which a serving kernel would use for its operand feed.
+CTA pair (cta_group::2, 256-wide tiles), which a production kernel would use for its operand feed.
