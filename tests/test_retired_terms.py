@@ -88,6 +88,8 @@ DOC_TERMS = {
     "sampling period, sampling block, PoUW's commit period": "execution phase (work plus its audit: an execution phase and its "
                                                             "verification phase)",
     "hm96 rows, outside the commitments' docs": "hiding commitments",
+    "integrity period": "execution phase (`IntegrityPeriod` stays in backticks until renamed)",
+    "execution transcript": "trace (a proof's or a session's messages stay its transcript)",
     "that period's coins": "before any coins are flipped",
     "rejection dominates, reject dominance": "any rejection rejects the whole",
     "physical block": "server-time block",
@@ -104,6 +106,7 @@ _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}u
                        rf"|legs?|(?:re)?(?:draws?|drawn|drawing|drew)|components?|firewall(?:s|ed)?|flock-verify"
                        rf"|remote{_SPACE}check|builders?|advice{_SPACE}compilers?|declared{_SPACE}(?:advice|circuits?|work(?:loads?)?)"
                        rf"|declar(?:es|ed|ing){_SPACE}(?:its|their|the){_SPACE}advice|sampled{_SPACE}units?"
+                       rf"|integrity{_SPACE}periods?|execution{_SPACE}transcripts?"
                        rf"|units?{_SPACE}class(?:es)?|audit{_SPACE}coins?"
                        rf"|faulty{_SPACE}(?:proof{_SPACE})?blocks?|faulty{_SPACE}sets?"
                        rf"|declaration{_SPACE}(?:blocks?|periods?)|sampling{_SPACE}(?:periods?|blocks?)|hm96{_SPACE}rows?"
@@ -361,6 +364,14 @@ def test_the_scan_reads_the_incorrect_ands():
     """`sampling_plan`'s incorrect ANDs, on toy files, in every file: an AND gate in another sense stays."""
     docs = {"a.py": "# 9 faulty ANDs and faulty\n# ANDs; a faulty AND gate, faulty outputs outside rho\n"}
     assert offenders(list(docs), read=docs.__getitem__)[0] == [("a.py", 1, "faulty ANDs"), ("a.py", 1, "faulty # ANDs")]
+
+
+def test_the_doc_scan_reads_the_trace_and_phase_terms():
+    """A run's trace and the execution phase, on toy files: a proof's transcript and `IntegrityPeriod` stay."""
+    docs = {"a.md": "An integrity period, two integrity\nperiods and an execution-transcript; a proof's transcript, "
+                    "`IntegrityPeriod`.\n"}
+    assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
+        ("a.md", 1, "integrity period"), ("a.md", 1, "integrity periods"), ("a.md", 2, "execution-transcript")]
 
 
 def test_the_doc_scan_reads_each_form():
