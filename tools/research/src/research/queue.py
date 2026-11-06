@@ -252,12 +252,14 @@ that contains one left out waits, recorded (the state's `waiting`) and named in 
 names the PR it contains and why that one is out, judging each PR after those it contains (else it shows
 'admitted' for hours while one it contains conflicts with `main`).
 
-Drive's priority list goes on past its file's PRs in the order of the goals the PRs serve.  Each sync that reads the file again
-reads the Goals page too (`goal_records`; a machine with no Cursor identity reads it through the site key
-`research.goals.READ_KEY`), and takes as the list the file's PRs, then every other admitted PR: those serving a live goal by its
-priority (1 first), then its due (soonest first), then their places on `next`, then the rest by their places on `next`
-(`Queue._goal_order`).  A PR's goal is a `Goal <id>` line of its body, else a label of the Linear issue it names that is a
-goal's id (`Queue._issue_labels`).  While the goals can't be read, the list is the file's PRs alone.
+Drive's priority list goes on past its file's PRs in the order of the goals the PRs serve, those with a land verdict first.
+Each sync that reads the file again reads the Goals page too (`goal_records`; a machine with no Cursor identity reads it
+through the site key `research.goals.READ_KEY`), and takes as the list the file's PRs, then every other admitted PR: those
+serving a live goal that have a land verdict at their head as drive reads one (`unreviewed`: a `reviewed` land by someone who
+isn't the PR's owner, its owner's handle or its ready mark's author, held by no one), then those serving one that wait for a
+verdict, each part by the goal's priority (1 first), then its due (soonest first), then their places on `next`; then the rest
+by their places on `next` (`Queue._goal_order`).  A PR's goal is a `Goal <id>` line of its body, else a label of the Linear
+issue it names that is a goal's id (`Queue._issue_labels`).  While the goals can't be read, the list is the file's PRs alone.
 
 Once the merged tree is on Lean's module system (it holds the codemod, `MODULES`, and its `PORTED_ROOTS` are modules:
 `on_modules`, since the codemod may land before the port), the sync runs that codemod over the whole merged tree, in a
@@ -1446,6 +1448,9 @@ class Queue:
         #: `priority_file` lists after its PRs the admitted ones it doesn't name (`_goal_order`); None: the file's PRs alone (a
         #: sync off drive's, a test)
         self.goals: Callable[..., dict[str, dict]] | None = None
+        #: the store's labels, whose land verdicts put the PRs that have one at their head first of those `_goal_order` lists by
+        #: their goals; None: no PR has one (a sync off drive's, a test)
+        self.labels: StoreLabels | None = None
         #: the Linear app that reads the labels of the issue a PR names when its body names no goal (`_issue_labels`)
         self.linear: Callable[[], linear.Linear] = linear.Linear
         #: releases the workdir's lock (`_lock`): a command that only reads calls it once its clone and fetches are done, so a
@@ -2447,13 +2452,16 @@ class Queue:
         return got[2] if (got := self._read_registry()) else set()
 
     def _goal_order(self, entries: dict[int, Entry], chain: list[Member], state: dict) -> tuple[int, ...]:
-        """Drive's priority list as a sync takes it from the file's PRs (`priority`) and the goals (`goals`): the file's PRs, then
-        every other admitted PR whose goal is live (on the Goals page, not done), by that goal's priority (1 first), then its
-        due (soonest first), then the PR's place on `next`, then the other admitted PRs by their place on `next`; those off it
-        by number.  A PR's goal is a `Goal <id>` line of its body (`GOAL_RE`), else a label of the Linear issue it names
-        (`named_issue`, `_issue_labels`) that is a goal's id; of several, the most urgent live one.  While the goals can't be
-        read, the file's PRs alone; what their read says (a copy of the page standing in for it, or none) is said once while it
-        stays the same (the state's `priority_goals_said`), and the list is logged when it changes (`priority_goals`)."""
+        """Drive's priority list as a sync takes it from the file's PRs (`priority`), the goals (`goals`) and the land verdicts
+        (`labels`): the file's PRs; then every other admitted PR whose goal is live (on the Goals page, not done) and that has
+        a land verdict at its head as drive reads one (`unreviewed` of its `reviewed` labels there: a land by none of those
+        `review_owners` names, and no hold), by that goal's priority (1 first), then its due (soonest first), then the PR's
+        place on `next`; then those waiting for one, a PR whose verdicts can't be read among them, in the same order; then the
+        other admitted PRs by their place on `next`.  Those off it go by number.  A PR's goal is a `Goal <id>` line of its
+        body (`GOAL_RE`), else a label of the Linear issue it names (`named_issue`, `_issue_labels`) that is a goal's id; of
+        several, the most urgent live one.  While the goals can't be read, the file's PRs alone; what their read says (a copy
+        of the page standing in for it, or none) is said once while it stays the same (the state's `priority_goals_said`), and
+        the list is logged when it changes (`priority_goals`)."""
         from .goals import due_time
 
         listed, said = list(dict.fromkeys(self.priority)), []
@@ -2473,18 +2481,28 @@ class Queue:
         teams = self.issue_teams()
         issues = {n: k for n, g in named.items() if not g and (k := named_issue(entries[n].pr.body, teams))
                   and not k.startswith("none:")}
-        labels = self._issue_labels(sorted(set(issues.values())), state)
+        tags = self._issue_labels(sorted(set(issues.values())), state)
         place = {m.pr: i for i, m in enumerate(chain)}
+
+        def why_waits(p: PR) -> str | None:
+            if self.labels is None:
+                return "no verdict read"
+            try:
+                return unreviewed(self.labels.reviews(p.number, p.head),
+                                  review_owners(self, self.labels, p.number, p.head, p.owner, {p.number: p}))
+            except QueueError as e:
+                return f"its verdicts can't be read: {e}"
 
         def urgency(n: int) -> tuple:
             live = [(g["priority"] if g.get("priority") in (1, 2, 3) else 3, due_time(g.get("due")))
-                    for g in map(goals.get, named[n] or labels.get(issues.get(n, ""), [])) if g and g["status"] != "done"]
-            return *min(live, default=(math.inf, math.inf)), place.get(n, math.inf), n
+                    for g in map(goals.get, named[n] or tags.get(issues.get(n, ""), [])) if g and g["status"] != "done"]
+            tier = 2 if not live else int(why_waits(entries[n].pr) is not None)
+            return tier, *min(live, default=(math.inf, math.inf)), place.get(n, math.inf), n
 
         got = tuple(listed + sorted(named, key=urgency))
         if list(got) != state.get("priority_goals"):
-            self.log(f"research queue: drive's priority list ({self.priority_file}, then by the goals the admitted PRs serve): "
-                     + (" ".join(f"#{n}" for n in got) or "empty"))
+            self.log(f"research queue: drive's priority list ({self.priority_file}, then by the land verdicts at the admitted PRs' "
+                     "heads and the goals they serve): " + (" ".join(f"#{n}" for n in got) or "empty"))
             state["priority_goals"] = list(got)
         return got
 
@@ -6432,7 +6450,7 @@ def main(argv: list[str]) -> int:
             q.log = one_line_at_a_time(q.log)
             q.preflight = Preflight(q.workdir, remote, store, lean=LakeBuild(on=PREFLIGHT_LEAN_ON, by=a.by), log=q.log,
                                     root=a.preflight_root).onto
-            q.priority_file, q.goals = a.priority_file, goal_records
+            q.priority_file, q.goals, q.labels = a.priority_file, goal_records, labels
         if a.command == "sync":
             q.hand_sync(dry_run=a.dry_run)
             return 0
