@@ -26,8 +26,7 @@
                                     holds it, with its Lean options as `lake build` gives them, exiting with lean's
                                     status, and last the axiom probe: each theorem whose
                                     axioms go beyond the standard three (`sorryAx` too), or none (on a project machine with
-                                    --on NODE [--pool P]); --siblings: then fail on a name another module of its package
-                                    declares too
+                                    --on auto); --siblings: then fail on a name another module of its package declares too
 """
 from __future__ import annotations
 
@@ -46,11 +45,9 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parents[2]
 ROOT = HERE.parents[1]
 LAKEFILES = ("lakefile.lean", "lakefile.toml")
-USAGE = "verity lean try FILE [--siblings] [--on NODE [--pool P] [--as LANE]]"
-#: the node whose pool `verity lean try --on` takes when --pool names none, and that pool
-TRY_NODE, TRY_POOL = "vy-nebius-cpu-1", "research"
-#: `research run --on`'s line naming the run it started (or refused)
-LAUNCHED = re.compile(r"^research: run (\S+) (?:launched|refused) on ", re.M)
+USAGE = "verity lean try FILE [--siblings] [--on auto | --on MACHINE [--pool P] [--as LANE]]"
+#: `research run --on`'s line naming the run it started (or refused) and the machine it is on, which `--on auto` chose
+LAUNCHED = re.compile(r"^research: run (\S+) (?:launched|refused) on (\S+)", re.M)
 
 
 def _run(argv: list[str]) -> int:
@@ -183,7 +180,8 @@ def _lean(args: list[str]) -> int:
     ap.add_argument("--siblings", action="store_true", help="once it elaborates, import its build beside every built module "
                     "of its package that doesn't import it, which fails on a name two of them declare, as the package's "
                     "root would")
-    ap.add_argument("--on", metavar="NODE", help="elaborate it on a project machine instead")
+    ap.add_argument("--on", metavar="MACHINE", help="elaborate it on a project machine instead: `auto`, where `research run "
+                    "--on auto` places it")
     ap.add_argument("--pool", help="with --on: the machine's pool for it")
     ap.add_argument("--as", dest="lane", metavar="LANE", help="with --on: the lane the pool's slot names (default $RESEARCH_LANE)")
     if not args or args[0] != "try":
@@ -197,13 +195,12 @@ def _lean(args: list[str]) -> int:
     file = a.file if not Path(a.file).is_file() else os.path.relpath(Path(a.file).resolve(), tree)
     if file.startswith(os.pardir + os.sep) or not (tree / file).is_file():
         raise SystemExit(f"verity lean try: no {a.file} in {tree}, the checkout it ships: put FILE in a checkout")
-    pool = a.pool or (TRY_POOL if a.on == TRY_NODE else None)
     research = [sys.executable, "-m", "research"]
     t0 = time.monotonic()
     with tempfile.TemporaryDirectory(prefix="verity-lean-try-") as tmp:
         source = _snapshot(tree, Path(tmp))
         try:
-            p = subprocess.Popen([*research, "run", "--on", a.on, *(["--pool", pool] if pool else []),
+            p = subprocess.Popen([*research, "run", "--on", a.on, *(["--pool", a.pool] if a.pool else []),
                                   *(["--as", a.lane] if a.lane else []), "--project", "verity",
                                   "--source", str(source), "--cwd", "clone", "--wait", "--wait-every", "5", "--",
                                   "python3", "tools/verity/lean/lean_changed.py", "--try", file,
@@ -220,13 +217,13 @@ def _lean(args: list[str]) -> int:
     if not (m := LAUNCHED.search("".join(said))):
         print(f"verity lean try: `research run` exited {rc} without starting a run", file=sys.stderr)
         return rc or 1
-    run_id = m.group(1)
-    subprocess.run([*research, "fetch", run_id, "--on", a.on, "--all"], cwd=ROOT, stdout=subprocess.DEVNULL)
+    run_id, machine = m.groups()
+    subprocess.run([*research, "fetch", run_id, "--on", machine, "--all"], cwd=ROOT, stdout=subprocess.DEVNULL)
     d = Path(os.environ.get("RESEARCH_RUNS", Path.home() / ".research" / "runs")).expanduser() / run_id
     for name, to in (("stdout.log", sys.stdout), ("stderr.log", sys.stderr)):
         if (d / name).is_file():
             to.write((d / name).read_text(errors="replace"))
-    print(f"verity lean try: run {run_id} on {a.on}: exit {rc} in {time.monotonic() - t0:.0f} s wall", flush=True)
+    print(f"verity lean try: run {run_id} on {machine}: exit {rc} in {time.monotonic() - t0:.0f} s wall", flush=True)
     return rc
 
 

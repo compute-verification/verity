@@ -20,9 +20,9 @@ status on FILE's own lines (with `--siblings`, that copy's build then goes throu
 status it takes); when that status is an import clash (an
 import declaring what an earlier one did), the two modules it names lose their traces (`clashed`), so the next try rebuilds
 them against the outputs in place. It never runs check.py, so it reads and writes
-no record; where the node grants no `build` slot it refuses, naming the nodes that do. Dependencies the slot tree holds that no
-`--records` run took (not in its `links.json`) are kept as they are; without a sandbox Lake runs unsandboxed, and fetches
-dependencies the node does not keep.
+no record; where the node grants no `build` slot it refuses, naming how to list a machine's Lean pools. Dependencies the
+slot tree holds that no `--records` run took (not in its `links.json`) are kept as they are; without a sandbox Lake runs
+unsandboxed, and fetches dependencies the node does not keep.
 
 `--records` is a lane's fast path to the records in PKG's `lean-audit.json` (PKG: its path, or a unique part of one):
 `tools/verity/lean/check.py --build --no-replay --no-runs` on PKG in a slot tree (one per slot), which prints what the audit prints,
@@ -1227,8 +1227,8 @@ def dev_records(pkg: str, todo: list[str], update: bool, moved: Path | None, out
     return finish(pkg, outcome, (rc or 1) if outcome == FAILED else 0, out, update, "dev-cache", records, log, passes)
 
 
-#: the nodes whose Lean slots list a `build` pool, which `--try` names when it is refused one
-BUILD_NODES = "vy-nebius-cpu-1, vy-nebius-cpu-3, vy-nebius-cpu-5 and vy-nebius-1"
+#: what lists a machine's Lean pools, which `--try` names when it is refused a `build` slot
+SLOTS_STATUS = "python3 tools/verity/check/lean_slot.py --status"
 
 
 def owner(file: str, pkgs: list[str]) -> str | None:
@@ -1277,7 +1277,7 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
     try:
         slot = LEAN_SLOT.hold(FAST_POOL, or_any=False)
     except LEAN_SLOT.Refused as e:
-        log(f"lean-try: no `{FAST_POOL}` Lean slot here ({e}): nothing ran; try on a node that has them ({BUILD_NODES})")
+        log(f"lean-try: no `{FAST_POOL}` Lean slot here ({e}): nothing ran; `{SLOTS_STATUS}` on a machine lists its Lean pools")
         return 2
     try:
         tree = tree or records_tree()

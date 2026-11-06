@@ -314,8 +314,8 @@ MEM_FLOOR_GIB = 24
 #: about 120 GiB and a thread adds under 1: fewer threads don't make it fit, only the floor does
 SPEC_FLOOR_GIB = 160
 #: where a machine below the floor runs it instead
-ON_NODE = ("research run --on vy-nebius-1 --project verity --source . --cwd source --declared-output 'lean-audit/*' -- "
-           "python3 tools/verity/lean/lean_changed.py --records {pkg}")
+ON_NODE = ("research run --on auto --mem-gb 32 --max-min 120 --project verity --source . --cwd clone "
+           "--declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records {pkg}")
 #: the same for a spec beside its ArkLib package, on a cluster shape above SPEC_FLOOR_GIB (`cpu-xl`, 280 GiB)
 ON_NODE_SPEC = ("research run --on auto --kind lean-audit --project verity --source . --cwd source "
                 "--declared-output 'lean-audit/*' -- python3 tools/verity/lean/check.py --build {pkg}")

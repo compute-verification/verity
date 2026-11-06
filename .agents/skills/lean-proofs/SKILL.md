@@ -50,7 +50,7 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   imports (`bash tools/verity/lean/setup.sh PKG`, then `lake build` there, once), with lean's status. Lean's exit 0
   isn't proof: the last line, the axiom probe's, names each theorem of FILE whose axioms go beyond `propext`,
   `Classical.choice` and `Quot.sound` (`sorryAx` too). After editing a file others import, `lake build` its module, then
-  try an importer. Try one that adds or renames declarations with `--siblings --on NODE` too: a name another module
+  try an importer. Try one that adds or renames declarations with `--siblings --on auto` too: a name another module
   declares otherwise clashes first at the package root, an hour into a records run.
 - **Build on a CPU machine.** Never `lake update` or change an external dependency (a git `require` or its revision,
   Mathlib, ArkLib, `lean-toolchain`) in a feature PR; a `path` require between in-repo packages that AGENTS.md "Lean"
@@ -61,16 +61,17 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   docstring).
 
   ~~~text
-  research run --on vy-nebius-cpu-1 --pool research --project verity --source . --cwd clone --declared-output 'lean-audit/*' -- \
+  research run --on auto --mem-gb 32 --max-min 120 --project verity --source . --cwd clone --declared-output 'lean-audit/*' -- \
     python3 tools/verity/lean/lean_changed.py --records PKG --update
   ~~~
 
-  In cpu-1's research pool the runner takes the check slot: don't wrap it in `slot.py`. On vy-nebius-1 wrap it in n1's
-  Lean-record pool, `env CHECK_SLOTS=/workspace/research/locks/leanrec/slots python3 tools/verity/check/slot.py --by
-  LANE -- python3 …`. Commit each record it kept under `lean-audit/record/` (its log says over what). Its result,
-  `lean-fast/v1`, no merge check accepts. It repairs a slot tree another run left mid-way: never delete or copy one.
-- **A full record**: `research run --on POD --project verity --source . --cwd clone -- python3
-  tools/verity/lean/check.py --build --update PKG`, unwrapped, leaves it at `lean-audit/audit-TAG/lean-audit.json`.
+  `--on auto` places it: never name a node, and never launch one run on two nodes to race them (cancel a duplicate).
+  Don't wrap it in `slot.py`: where it lands, the runner takes the slot. Commit each record it kept under
+  `lean-audit/record/` (its log says over what). Its result, `lean-fast/v1`, no merge check accepts. It repairs a slot
+  tree another run left mid-way: never delete or copy one.
+- **A full record**: `research run --on auto --mem-gb 32 --max-min 180 --project verity --source . --cwd clone --
+  python3 tools/verity/lean/check.py --build --update PKG`, unwrapped, leaves it at
+  `lean-audit/audit-TAG/lean-audit.json`; below a package's memory floor check.py refuses and prints the line to run.
 - **Ask Lean in a scratch file** outside the repository, from the package directory (`lake env lean
   /tmp/scratch/Probe.lean`): `#print axioms X` (a `sorry` shows as `sorryAx`), `example … := by exact?`, or
   `trace_state` before a `sorry`. Probe what you build on too: a section `variable` typed through a local notation can
