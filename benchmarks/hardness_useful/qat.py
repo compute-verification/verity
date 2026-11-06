@@ -375,6 +375,10 @@ def main(argv=None) -> int:
         log("price rc", res["price_rc"])
     res["seconds"] = time.time() - t_start
     res["peak_rss_gib"] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20
+    status = Path("/proc/self/status")
+    if status.exists():  # the peak counts a CPU model's checkpoint pages in node RAM (RssShmem), shared and fetched once
+        res["rss_kib"] = {k: int(v.split()[0]) for k, v in (ln.split(":", 1) for ln in status.read_text().splitlines())
+                          if k in ("VmHWM", "VmRSS", "RssAnon", "RssFile", "RssShmem")}
     (args.out / "result.json").write_text(json.dumps(res, indent=1))
     log("done", json.dumps({k: res["eval_after"][k]["ppl"] for k in ("wikitext2", "fineweb_val") if k in res["eval_after"]}))
     return 0 if res.get("price_rc", 0) == 0 else 1

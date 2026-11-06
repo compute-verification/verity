@@ -20,6 +20,8 @@ matrix in its own mode (`set_served`).
 
 from __future__ import annotations
 
+import ctypes
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -413,6 +415,14 @@ def block_linears(model) -> list[tuple[str, nn.Module, str]]:
     return out
 
 
+def trim_heap():
+    """Hand glibc's freed heap pages back to the OS (malloc_trim). With MALLOC_MMAP_MAX_=0 (hardness_defence/cpu70b.sh),
+    a frozen CPU wrap's float64 temporaries otherwise stay resident between the codes: 128 GB on 70B."""
+    libc = ctypes.CDLL(None)
+    if hasattr(libc, "malloc_trim"):
+        libc.malloc_trim(0)
+
+
 def wrap(model, target: float | None, rotate: bool = False, log=print, targets: dict | None = None,
          frozen: bool = False, calib: dict | None = None) -> dict[str, dict]:
     """Replace every block linear by a QLinear calibrated to its target, targets[name] where listed (None is absmax) and
@@ -469,6 +479,8 @@ def wrap(model, target: float | None, rotate: bool = False, log=print, targets: 
                 else:
                     q.copy_(codes(w, s))
             del w
+            if dev.type == "cpu":
+                trim_heap()
             setattr(parent, attr, DeflatedQLinear(q, s, c, rot, a.float(), b.float()) if deflate
                     else FrozenQLinear(q, s, c, rot))
         else:
