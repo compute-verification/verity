@@ -1521,6 +1521,11 @@
       "paths": {
         "benchmarks/pous/band_gpu/memory_challenger.py": "verity/core/devices/memory_challenger/timed_audit.py"
       }
+    },
+    {
+      "paths": {
+        "verity/core/protocols/pous/challenger_party.py": "verity/core/devices/memory_challenger/challenger_party.py"
+      }
     }
   ]
 }
