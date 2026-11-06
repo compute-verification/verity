@@ -3821,8 +3821,9 @@ def http_json(method: str, url: str, data: bytes | None, headers: dict[str, str]
         return json.load(r)
 
 
-def route_error(what: str, e: urllib.error.HTTPError, code: str) -> str:
-    why = f"HTTP {e.code}{code}"
+def route_error(what: str, e: urllib.error.HTTPError, code: str | None = None) -> str:
+    """Why a site route refused, in one line; `code` is the body's short error code (`_code`) where the caller read it."""
+    why = f"HTTP {e.code}{_code(e) if code is None else code}"
     if e.code == 401:
         return f"{what}: the route rejected this agent's Cursor identity ({why}): it takes managed agents on compute-verification/verity only"
     if e.code == 403:

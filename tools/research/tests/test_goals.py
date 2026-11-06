@@ -115,6 +115,21 @@ def test_a_refusal_is_one_line_naming_the_field(capsys):
     assert len(err) == 1 and "due must be a date" in err[0]
 
 
+def test_a_route_error_other_than_400_is_one_line_with_its_code(monkeypatch):
+    import io
+    import urllib.error
+
+    def refuse(*a, **k):
+        raise urllib.error.HTTPError(goals.GOALS, 403, "Forbidden", {}, io.BytesIO(b'{"error": "identity_refused"}'))
+
+    route = goals.Route()
+    monkeypatch.setattr(route._oidc, "send", lambda fn: fn("t"))
+    monkeypatch.setattr(goals, "http_json", refuse)
+    with pytest.raises(RouteError) as e:
+        route.call()
+    assert e.value.status == 403 and "HTTP 403 identity_refused" in str(e.value)
+
+
 @pytest.mark.parametrize("argv", [["set", "x", "--status", "maybe"], ["set", "x", "--wait", "goal:a", "--no-wait"],
                                   ["set", "x", "--tier", "2", "--no-tier"], ["set", "x", "--tier", "12"]])
 def test_the_command_line_refuses_what_the_site_would(argv):
