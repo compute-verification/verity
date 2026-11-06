@@ -53,6 +53,14 @@ def test_a_model_without_a_workload_card_is_refused():
         f.cards("DeepSeek-V4-Pro")
 
 
+def test_a_model_runs_once_its_workload_card_lands(card_dir):
+    cards.write(cards.load("workload", "GLM-5.3") | {"model": "DeepSeek-V4-Pro"})
+    out = f.run("DeepSeek-V4-Pro", 2, ("world year",))
+    assert out["model"] == "DeepSeek-V4-Pro"
+    assert {out["cards"][s]["model"] for s in ("workload", "proof_overhead", "replay")} == {"DeepSeek-V4-Pro"}
+    assert out["panels"]["exfiltration"]["references"][1]["label"] == "DeepSeek-V4-Pro's weights"
+
+
 def test_the_infiltration_panel_draws_its_card(card_dir, tmp_path):
     xs = [1.0, 1.5e8, 1e14]
     card = envelope("infiltration", "GLM-5.3", {
