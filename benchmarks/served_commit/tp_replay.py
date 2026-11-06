@@ -264,6 +264,18 @@ def compare(ref: tuple[np.ndarray, np.ndarray], run: tuple[np.ndarray, np.ndarra
     return out
 
 
+def autotune_cache(runner: Any) -> dict[str, Any]:
+    """The FlashInfer autotune cache this rank's warmup loaded or wrote (its tactics were chosen by timing on the first boot that
+    wrote it): its path and sha256, None when there is none, so that two boots can be compared."""
+    try:
+        from vllm.model_executor.warmup.flashinfer_autotune_cache import resolve_flashinfer_autotune_file
+
+        p = Path(resolve_flashinfer_autotune_file(runner))
+    except (ImportError, AttributeError, OSError) as e:
+        return {"path": None, "sha256": None, "error": repr(e)}
+    return {"path": str(p), "sha256": hashlib.sha256(p.read_bytes()).hexdigest() if p.is_file() else None}
+
+
 class Interior:
     """On one rank: every module's outputs, the DSA top-k and attention core, fingerprinted per token row and folded per (request,
     position, group); `end` compares a run with the reference run on this rank."""
@@ -419,7 +431,7 @@ class Interior:
 
         for name, make in (("execute_model", execute_model), ("prepare_inputs", prepare_inputs), ("sample", sample)):
             self.hooks.wrap(self.runner, name, make)
-        return {"rank": self.rank, "modules": len(self.handles), "dsa_attention": attn}
+        return {"rank": self.rank, "modules": len(self.handles), "dsa_attention": attn, "flashinfer_autotune": autotune_cache(self.runner)}
 
     def _attention(self, layer: str, mod: Any) -> Any:
         me = self
@@ -637,7 +649,7 @@ def main() -> None:
             f.write(json.dumps(row) + "\n")
             f.flush()
 
-        put({"pass": 0, "arm": "first-fillers", "wall_s": first["wall_s"], "steps": first["iterations"]})
+        put({"pass": 0, "arm": "first-fillers", "wall_s": first["wall_s"], "steps": first["iterations"], "interior": made})
         for arm, reqs in plan.items():
             cold(llm)
             llm.collective_rpc(begin, timeout=a.rpc_timeout)

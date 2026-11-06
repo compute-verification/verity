@@ -190,6 +190,17 @@ def test_steps_and_span():
     assert D.span(walls, st.done, "x") is None
 
 
+def test_autotune_cache_is_the_resolved_files_digest(monkeypatch, tmp_path):
+    f = tmp_path / "autotune_configs.json"
+    mod = "vllm.model_executor.warmup.flashinfer_autotune_cache"
+    monkeypatch.setitem(sys.modules, mod, SimpleNamespace(resolve_flashinfer_autotune_file=lambda runner: f))
+    assert D.autotune_cache(object()) == {"path": str(f), "sha256": None}
+    f.write_bytes(b"{}")
+    assert D.autotune_cache(object())["sha256"] == "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    monkeypatch.setitem(sys.modules, mod, None)
+    assert D.autotune_cache(object())["error"].startswith("ModuleNotFoundError")
+
+
 def test_every_run_starts_cold_and_only_warm_reads_the_cache():
     resets = []
     D.cold(SimpleNamespace(reset_prefix_cache=lambda: resets.append(1) or True))
@@ -299,7 +310,9 @@ def test_interior_folds_every_module_per_row_and_compares_runs_across_batches(mo
     monkeypatch.setitem(sys.modules, "vllm", SimpleNamespace())
     monkeypatch.setitem(sys.modules, "vllm.distributed", SimpleNamespace(get_tensor_model_parallel_rank=lambda: 0))
     worker = SimpleNamespace(model_runner=_Runner())
-    assert D.install(worker) == {"rank": 0, "modules": 14, "dsa_attention": 2}
+    made = D.install(worker)
+    assert made.pop("flashinfer_autotune")["sha256"] is None
+    assert made == {"rank": 0, "modules": 14, "dsa_attention": 2}
     d, c = [3, 7, 11, 13], [5, 9, 2]
     batched = [(d[:3] + c, [("d", 3, 0), ("c", 3, 0)]), ([d[3], 1], [("d", 1, 3), ("c", 1, 3)])]
     alone = [(d[:2], [("d", 2, 0)]), ([d[2]], [("d", 1, 2)]), ([d[3]], [("d", 1, 3)])]
