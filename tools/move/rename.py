@@ -33,6 +33,9 @@ build: a word that stands as a word in a comment, a docstring or Markdown's text
 code, a string literal, a data file, backticks, a name, a path or a constant's name, nor in a file a JSON pin records (its
 command regenerates the pin). Such a move moves no path, renames no declaration (`--moves` prints `{}`) and leaves every
 lock and pin as it was.
+
+Every mode refuses a map whose [[words_in]] files, [keep_in] or [keep_paths] name a path or glob that no tracked file
+matches (`Words.unmatched`), naming each, rather than skip the renames or keeps it holds for a file since moved or deleted.
 """
 from __future__ import annotations
 
@@ -500,6 +503,16 @@ class Words:
                                         + r")(?![\w/-])"))
         return held
 
+    def unmatched(self, files: list[str]) -> list[str]:
+        """The paths and globs of [[words_in]]'s files, [keep_in] and [keep_paths] that match none of `files`, each after its
+        table. Each names files the map renames or keeps apart, so one that matches none (a file since moved or deleted) is
+        a rename or a keep the move would skip; [rewrite] exclude may name what a tree lacks (`archive/**`, a file that
+        lands later), since it only leaves files as they are."""
+        named = [("[[words_in]] files", g) for globs, _ in self.scoped for g in globs]
+        named += [(t, g) for t, held in (("[keep_in]", self.keep_in), ("[keep_paths]", self.keep_paths)) for g in held]
+        tracked = set(files)
+        return [f"{t}: {g}" for t, g in dict.fromkeys(named) if g not in tracked and not any(_match(p, g) for p in files)]
+
     def name(self, n: str, path: str = "") -> str:
         """A Lean or Python dotted name, as it is renamed where it stands in file `path`: not where [keep] keeps it (a
         namespace that shares a module's name)."""
@@ -703,6 +716,9 @@ def main(argv: list[str] | None = None) -> int:
     root = (a.root or Path(L.git(HERE, "rev-parse", "--show-toplevel").strip())).resolve()
     words = Words(tomllib.loads(a.map.read_text()))
     files = [p for p in L.git(root, "ls-files", "-z").split("\0") if p]
+    if missing := words.unmatched(files):
+        raise SystemExit(f"{a.map}: it names paths no tracked file matches, whose renames or keeps the move would skip; point "
+                         "each at its file's path on this tree, or drop it:\n  " + "\n  ".join(missing))
     words.hold(files)
     if a.moves:
         print(json.dumps({} if words.scope else lock_moves(root, words, files), indent=1))
