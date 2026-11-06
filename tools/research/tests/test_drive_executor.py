@@ -4,7 +4,8 @@ executor listed, and records how their verdicts compare by its keys; on enqueues
 results by key (a task that reads others by the key the contract's rule gives it), judges a failure by policy.toml's
 allowances, names the landing whose change touches what a red task depends on (a coarse lean-suites task's, per failed suite
 as a run's), and moves `main` only once every task on the gate passed, never on a run that ran nothing, and once the run of
-`SLIM_STEPS` it launches beside the check passed them, whose red ratchet-gate names its culprit as a run's.  `QueueTransport`
+`SLIM_STEPS` it launches beside the check passed its preflights and its steps on the gate, whose red ratchet-gate, off it,
+holds nothing and names its culprit as a run's.  `QueueTransport`
 reads the executor's graphs and results through the store's remote."""
 from __future__ import annotations
 
@@ -15,17 +16,19 @@ from pathlib import Path
 import pytest
 
 from research import merge
-from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, SLIM_STEPS, task_files
+from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, SLIM_JUDGED, SLIM_STEPS, task_files
 from research.executor import (AFTER_LANDING_PRIORITY, BLOCKED, GRAPH_V2, SHADOW_WAIT_S, TASKS_GRAPH_KIND, Executor, FileTransport,
                                QueueTransport, Shadowed, agrees, compare, keyed, old_verdicts, shadow_records, shadow_report,
                                task_key, task_target)
 from research.store.local import LocalStore
 from research.store import vocab
 from test_drive_policy import EXPIRED, LIVE, _policy
-from test_drive_review import GATED_TREE, POLICY_TOML, Review, _main, _move_main, _owning, _rings
+from test_drive_review import GATED_TREE, Review, _main, _move_main, _owning, _rings
 from test_queue import World, _git
 
 K_SUITE, K_LEAN = "a" * 128, "b" * 128
+#: the preflights a check runs before any step (check.py's `preflight`), which the run beside the executor's check judges
+PREFLIGHTS = tuple(s for s in SLIM_JUDGED if s not in SLIM_STEPS)
 #: the jobs the graph lists whole, unkeyed (a build, or a job that keeps no verdict of its own)
 WHOLE = tuple(j for j in AFTER_LANDING if j not in ("pytest", "lean-audit", "flock-rust-tests", "circuit-check"))
 N_TASKS = 5 + len(WHOLE)
@@ -449,13 +452,14 @@ def _reader_key(g: dict, reader: str, producer: str) -> str:
 
 
 def _slim(h: Review, tmp_path, **logs: str) -> Path:
-    """The newest run beside the executor's check (`r-post-N`, of `SLIM_STEPS` but one it skips) ended: a preflight and each of
-    its steps passed, but each step ``logs`` names (``ratchet_gate=LOG``), which failed with that log, its exit 1 then."""
+    """The newest run beside the executor's check (`r-post-N`, of `SLIM_STEPS` but one it skips) ended: each preflight and each
+    of its steps passed, but each ``logs`` names (``ratchet_gate=LOG``), which failed with that log, its exit 1 then; after a
+    failed preflight it ran no step, as check.py starts none."""
     rid, failed = f"r-post-{len(h.posted) - 1}", {k.replace("_", "-"): v for k, v in logs.items()}
     d = tmp_path / rid
     d.mkdir(parents=True)
-    rows = [{"step": "preflight-lock", "status": "passed"}]
-    for s in h.posted[-1][1].split(","):
+    rows = []
+    for s in (*PREFLIGHTS, *(() if failed.keys() & set(PREFLIGHTS) else h.posted[-1][1].split(","))):
         rows.append({"step": s, "status": "failed", "rc": 1, "log": f"{s}.log"} if s in failed else {"step": s, "status": "passed"})
         if s in failed:
             (d / f"{s}.log").write_text(failed[s])
@@ -824,16 +828,15 @@ def test_on_main_waits_for_the_run_of_lean_agreement_and_ratchet_gate_beside_the
     assert any(", and its run r-post-0 passed lean-agreement, ratchet-gate" in x for x in world.logs), world.logs
 
 
-def test_on_a_red_ratchet_gate_in_the_run_beside_the_check_holds_main_and_names_its_culprit_as_a_run_does(world, monkeypatch,
-                                                                                                      tmp_path):
+def test_on_a_red_ratchet_gate_in_the_run_beside_the_check_holds_nothing_and_names_its_culprit_as_a_run_does(world, monkeypatch,
+                                                                                                         tmp_path):
     """Every task of the executor's check passes, but the run beside it fails ratchet-gate, its log naming the merge the gate
-    fails: `main` stays below the tip, though ratchet-gate is off the gate; the red names that merge's PR as its culprit and
-    rings as a run's does, and drive reverts it on `checked` at once.  The revert's check, launched in the same tick, runs
-    beside a run whose gate judges above the red tip, where the revert lies; that passing, `main` follows the revert and the
-    red ends."""
+    fails.  ratchet-gate is off the gate (policy.toml's `off_gate`, as in the tree), so it holds nothing, as in a run of every
+    step: the tip is `gated` and `main` follows it.  The red names that merge's PR as its culprit and rings as a run's does,
+    and drive reverts it on `checked` at once.  The revert's check, launched in the same tick, runs beside a run whose gate
+    judges above the red tip, where the revert lies; that passing, `main` follows the revert and the red ends."""
     _owning(world, {"lane-2": []})
-    _move_main(world, {**GATED_TREE, "tools/verity/check/policy.toml": POLICY_TOML.replace('"circuit-check"',
-                                                                                         '"circuit-check", "ratchet-gate"')})
+    _move_main(world, {**GATED_TREE, "tools/verity/check/policy.toml": _policy(off_gate=("circuit-check", "ratchet-gate"))})
     h = Review(world, monkeypatch, land_into="checked")
     fake = _executor(h, tmp_path, "on")
     main = _main(world)
@@ -857,10 +860,10 @@ def test_on_a_red_ratchet_gate_in_the_run_beside_the_check_holds_main_and_names_
     assert "Culprit: #2 (the ratchet gate fails its merge), of the 3 landing(s)" in ring and "Drive reverts #2 now." in ring, ring
     assert pl["red"]["step ratchet-gate"]["culprit"][:1] == [2]
     assert pl["ratchet_judged"] == {"tip": tip, "base": verified, "failed": [merge2]}
-    assert pl["failed"] == tip and pl.get("gated") != tip
-    assert pl["verified"] == verified and _main(world) == main
+    assert pl["failed"] == tip
+    assert pl["verified"] == verified and pl["gated"] == tip == _main(world) != main, world.logs
     reverted = _checked(world)
-    assert _git(world.origin, "rev-parse", f"{reverted}^") == tip and _main(world) == main
+    assert _git(world.origin, "rev-parse", f"{reverted}^") == tip and _main(world) == tip
     assert f"This reverts commit {merge2}" in _git(world.origin, "log", "-1", "--format=%B", reverted)
     assert any(p.startswith("@lane-2 @ci queue: #2 reverted on `checked`") for p in h.posts), h.posts
     assert pl["run"]["tip"] == pl["slim"]["tip"] == reverted, "the revert's check and its run, launched in the red tick"
@@ -873,6 +876,33 @@ def test_on_a_red_ratchet_gate_in_the_run_beside_the_check_holds_main_and_names_
     h.tick()
     pl = h.postland()
     assert _main(world) == reverted == pl["verified"] and "step ratchet-gate" not in (pl.get("red") or {}), world.logs
+
+
+@pytest.mark.parametrize("fails, off_gate, holds", [
+    ("ratchet-gate", ("circuit-check", "ratchet-gate"), False), ("ratchet-gate", ("circuit-check",), True),
+    ("lean-agreement", ("circuit-check", "ratchet-gate"), True), ("preflight-lints", ("circuit-check", "ratchet-gate"), True)])
+def test_on_a_red_in_the_run_beside_the_check_holds_main_only_on_the_gate(world, monkeypatch, tmp_path, fails, off_gate,
+                                                                          holds):
+    """Every task of the executor's check passes and the run beside it fails one thing: the tip is `gated` and `main` follows
+    it unless that is on the gate by the `off_gate` a run of every step reads (`_gating`), or is a preflight, which no graph/v2
+    task runs, so it holds `main` though the run's one step after it, ratchet-gate (lean-agreement skipped), is off the gate."""
+    if fails == "lean-agreement":
+        monkeypatch.setattr(merge, "required_steps", lambda repo, base, commit, tool: {"lean-agreement": ["verity/ml/flock/"]})
+    _move_main(world, {**GATED_TREE, "tools/verity/check/policy.toml": _policy(off_gate=off_gate)})
+    h = Review(world, monkeypatch, land_into="checked")
+    fake = _executor(h, tmp_path, "on")
+    main = _main(world)
+    assert ("ratchet-gate" in h.d._gating(main)) is ("ratchet-gate" not in off_gate)
+    tip = _land(h, 1)
+    assert h.posted[-1][1] == ("lean-agreement,ratchet-gate" if fails == "lean-agreement" else "ratchet-gate")
+    g = _graph_v2(tip)
+    fake.list_graph(f"after-landing:{tip}", g)
+    _results(fake, g)
+    _slim(h, tmp_path, **{fails.replace("-", "_"): f"{fails} failed\n"})
+    h.tick()
+    pl = h.postland()
+    assert pl["failed"] == tip and pl["run"] is None and pl["verified"] != tip, world.logs
+    assert (pl.get("gated") == tip) is not holds and _main(world) == (main if holds else tip), world.logs
 
 
 def test_on_a_run_beside_the_check_killed_by_its_machine_runs_again_once_and_killed_again_is_told(world, monkeypatch, tmp_path):

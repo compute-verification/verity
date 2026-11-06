@@ -254,8 +254,8 @@ AFTER_LANDING = tuple(s for s in CHECK_STEPS if not s.startswith("preflight-"))
 #: the after-landing steps a run may skip by name: lean-agreement when nothing it checks changed, lean-changed under --no-cache
 AFTER_LANDING_OPTIONAL = ("lean-agreement", "lean-changed")
 #: the after-landing steps train.sh still checks with `executor = "on"`: a run of them alone beside the executor's check of each
-#: tip (`Driver._start_slim`), which `main` waits for as for the executor's tasks on the gate, lean-agreement unless that run
-#: skips it by name; the executor's tasks of them count for nothing
+#: tip (`Driver._start_slim`), whose steps on the merge gate `main` waits for as for the executor's tasks on it: lean-agreement
+#: unless that run skips it by name, not ratchet-gate (policy.toml's `off_gate`); the executor's tasks of them count for nothing
 SLIM_STEPS = ("lean-agreement", RATCHET_STEP)
 #: what the run of `SLIM_STEPS` judges of its records (`Driver._follow_slim`): those steps, and the preflights no graph/v2 task
 #: runs; the steps they need (lean-build) are the executor's tasks' to judge
@@ -1576,8 +1576,9 @@ class Driver:
     #    shadow mode; in "on" mode the after-landing run's record is {"tip", "at", "tasks": {"check", "graph": its graph/v2's
     #    id once labelled}, ...}: the graph itself is read from the store each tick, never kept in the state; and
     #    `postland["slim"]` is the run of `SLIM_STEPS` beside it, a run's record ({"ids" or "launch", "tip", "at", "steps",
-    #    "skip", "ratchet_base", "baseline", "resend"}) with "relaunch" while it must launch again, and once it ended "ok" and
-    #    "passed" (the steps it passed), dropped with the check's record
+    #    "skip", "ratchet_base", "baseline", "resend"}) with "relaunch" while it must launch again, and once it ended "ok",
+    #    "passed" (the steps it passed) and "gate" (whether it passed those it judges on the merge gate), dropped with the
+    #    check's record
 
     def _shadow_enqueue(self, drive: dict, tip: str) -> None:
         """`executor = "shadow"`: put ``tip``'s after-landing check on the executor's queue beside its run, once, with no graph:
@@ -1696,11 +1697,12 @@ class Driver:
         the tip's policy covers is not red (`_task_allowed`); each other is named red at once with its culprit, by the units a
         run would name (`_task_units`: a test-file's suite, each failed suite a lean-suites task's report names, else its kind's
         job; `_name_tasks`), each unit allowed on its own.  Once every task on the merge gate (its job not in policy.toml's
-        `off_gate`) passed or is covered and the run passed its steps, ratchet-gate's though it is off the gate, the tip is
-        `gated`.  Once no task is pending and the run ended, the tip is verified when every task passed or is covered and the
-        run passed, each red record at or below it ending, and `_promote` moves `main` there; else it is failed, `main` stays,
-        and each red record whose unit a task passed here ends (`_unit_states`).  A runner that ran nothing (a skip) gives an
-        error, no result, so its task stays pending and `main` with it.  The check stands for the jobs its graph has tasks of
+        `off_gate`) passed or is covered and the run ended, passing each of its preflights and steps on that gate too (its
+        `gate`: ratchet-gate is off it, as in a run of every step), the tip is `gated`.  Once no task is pending and the run
+        ended, the tip is verified when every task passed or is covered and the run passed, each red record at or below it
+        ending, and `_promote` moves `main` there; else it is failed, `main` going there only if it is `gated`, and each red
+        record whose unit a task passed here ends (`_unit_states`).  A runner that ran nothing (a skip) gives an error, no
+        result, so its task stays pending and `main` with it.  The check stands for the jobs its graph has tasks of
         (`_job`) and the run's steps, and no others: a graph with no task of a job `main` waits for (`_gating`) gates nothing
         and verifies only the jobs it has, so `main` stays, and `CI` is told which it lacks.  A failed baseline check is
         verified with the jobs whose every task passed and the steps the run passed, as a red baseline run is
@@ -1750,7 +1752,8 @@ class Driver:
         off = set(self._policy(tip).off_gate)
         jobs = {self._job(x) for x in tasks.values()}
         lacks = [s for s in self._gating(tip) if s not in jobs and s not in SLIM_STEPS]
-        if slim and not lacks and all(ok(i) for i, x in tasks.items() if self._job(x) not in off) and not (
+        gate = slim is not None and pl["slim"]["gate"]
+        if gate and not lacks and all(ok(i) for i, x in tasks.items() if self._job(x) not in off) and not (
                 (g := pl.get("gated")) and (g == tip or not self._ancestor(g, tip))):
             pl["gated"], pl["gated_run"], pl["gated_by"] = tip, "", t["check"]
         if slim is None or any(s == PENDING for s, _ in states.values()):
@@ -1844,7 +1847,9 @@ class Driver:
         after-landing run is (`follow_postland`).  None while it launches or runs, or once it launches again: none of the tip
         yet, its train.sh registered no run, it never ran or was stopped, or it was lost or killed (once: again, it failed).
         Once it ended, whether it passed each of its steps (or failed only on what an allowance covers), kept in it with the
-        steps it passed.  It judges only `SLIM_JUDGED` of its records (`_red`): each such step it failed is named red with its
+        steps it passed and whether it passed each it judges on the merge gate (`gate`, by which `_follow_tasks` gates the tip:
+        its preflights, which no graph/v2 task runs, and its steps but those policy.toml's `off_gate` takes off it, as for a run
+        of every step).  It judges only `SLIM_JUDGED` of its records (`_red`): each such step it failed is named red with its
         culprit as a run's is, ratchet-gate's the change its gate's log fails (`_name`), at once while it runs and once it
         ended, and its culprit reverted at once (`_revert_reds`); a baseline's failure is named nothing.  One whose
         records name no failure of those steps, that passed without passing one, or that was killed again is told to `CI`."""
@@ -1892,14 +1897,18 @@ class Driver:
             self._start_slim(drive, pl, tip, base)
             return None
         self._timed(drive, "postland", ids)
-        unrun = self._unrun(ids, slim["steps"], tip)
-        slim.update(ok=passed and not unrun, passed=[s for s in slim["steps"] if s not in unrun])
+        missed = self._unrun(ids, [s for s in SLIM_JUDGED if s in slim["steps"] or s not in SLIM_STEPS], tip)
+        unrun = [s for s in slim["steps"] if s in missed]
+        off = self._policy(tip).off_gate
+        slim.update(ok=passed and not unrun, passed=[s for s in slim["steps"] if s not in unrun],
+                    gate=passed and not unrun or not [s for s in missed if s not in off])
         if base:
             return slim["ok"]
         if passed and unrun:
             self.refuse(drive, f"postland:slim:{tip}", f"{what}, {' '.join(ids)}, passed without passing {', '.join(unrun)} "
-                                                       "(skipped, or absent from its steps.jsonl): `main` stays below it, and "
-                                                       f"nothing is reverted. Find why; the next landing's check runs it again")
+                                                       "(skipped, or absent from its steps.jsonl): it verifies nothing, `main` "
+                                                       "stays below it unless each is off the gate, and nothing is reverted. Find "
+                                                       "why; the next landing's check runs it again")
         elif passed:
             self._red(drive, pl, slim, ended=True, steps=SLIM_JUDGED)
         elif killed_:
@@ -3122,11 +3131,11 @@ class Driver:
     def _promote(self, drive: dict) -> None:
         """When drive lands on `checked` (drive.toml's `land_into`), fast-forward `main` to the newest commit of `checked` whose
         after-landing run passed every step on the merge gate (`_promotable`), and run what a landing on `main` runs for what it
-        brings (`_on_main`).  A step off the gate (circuit-check) holds nothing here: its red reverts its culprit on `checked`,
-        and `main` follows the revert.  With `executor = "on"`, a tip is `gated` or verified only once the executor's tasks on
-        the gate and the run of `SLIM_STEPS` beside them passed, ratchet-gate's red holding `main` there until its revert
-        (`_follow_tasks`).  `main` never moves to a commit no such run passed, and never back; one that isn't below it (pushed
-        outside drive) waits for `_absorb`."""
+        brings (`_on_main`).  A step off the gate (circuit-check, ratchet-gate) holds nothing here: its red reverts its culprit
+        on `checked`, and `main` follows the revert.  With `executor = "on"`, a tip is `gated` once the executor's tasks on the
+        gate passed and the run of `SLIM_STEPS` beside them passed its preflights and its steps on the gate, by the same
+        `off_gate`, and verified once both passed everything (`_follow_tasks`).  `main` never moves to a commit no such run
+        passed, and never back; one that isn't below it (pushed outside drive) waits for `_absorb`."""
         q = self.q
         pl = drive.get("postland") or {}
         if q.into == "main" or self.dry_run or q.shadow:
