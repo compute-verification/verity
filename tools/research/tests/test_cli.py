@@ -132,6 +132,16 @@ def test_run_requires_separator_and_command(tmp_path):
     assert not list(tmp_path.iterdir())
 
 
+def test_run_refuses_an_id_the_store_would_refuse(tmp_path, capsys):
+    """r20261103-225039-run1 ran, then its attempt and its out/coin.json were never published (`not a run id`)."""
+    for bad in ("r20261103-225039-run1", "r20261103-225039-ABCD", "run1"):
+        assert main(["run", "--runs-dir", str(tmp_path), "--id", bad, "--no-sampler", "--", "true"]) == 2
+        assert "is not a run id" in capsys.readouterr().err
+    assert not list(tmp_path.iterdir())
+    assert main(["run", "--runs-dir", str(tmp_path), "--id", "r20261103-225039-a1b2", "--no-sampler", "--", "true"]) == 0
+    assert (tmp_path / "r20261103-225039-a1b2" / "job.json").is_file()
+
+
 def test_remote_requires_project_and_listed_machine(tmp_path, capsys, monkeypatch):
     monkeypatch.setenv("RESEARCH_MACHINES", str(tmp_path / "machines.toml"))
     assert main(["run", "--runs-dir", str(tmp_path / "runs"), "--on", "pod-x", "--", "true"]) == 2
