@@ -103,7 +103,7 @@ def layer_of(label: str) -> int | None:
 
 def schedule(a: Run, b: Run) -> dict[str, Any]:
     """Equal when every step has the same tokens, rows (request, first position, length, in the runner's order), new KV
-    blocks, arrivals, preemptions and finishes."""
+    pages, arrivals, preemptions and finishes."""
     out: dict[str, Any] = {"steps": [len(a.steps), len(b.steps)], "equal": False}
     for i, (x, y) in enumerate(zip(a.steps, b.steps)):
         fields = [f for f in SCHEDULE_FIELDS if x.get(f) != y.get(f)]

@@ -2,7 +2,7 @@
 schedule give the served bytes, and does a request alone give the bytes it got inside its batch?
 
 One in-process vLLM engine (`verity_vllm.engine.env.ENGINE`, eager, prefix caching off, synchronous scheduling, a fixed
-KV block count) per phase, each phase a fresh process, on Moonlight (`MODEL`) or any local checkpoint (a dense baseline);
+KV page count) per phase, each phase a fresh process, on Moonlight (`MODEL`) or any local checkpoint (a dense baseline);
 ``--batch-invariant`` serves a phase with ``VLLM_BATCH_INVARIANT=1`` instead:
 
 - ``workload``: the window's requests, built from text in this tree in the model's chat format: prompt lengths and
@@ -10,7 +10,7 @@ KV block count) per phase, each phase a fresh process, on Moonlight (`MODEL`) or
   schedule doesn't depend on the tokens, and Poisson arrivals;
 - ``serve``: the requests added at their wall-clock arrival times while the engine steps; each arrival is recorded with the
   number of forward steps before it, and each step's batch (rows in the model runner's order, each row's request, first
-  position and length, the KV blocks each request gained);
+  position and length, the KV pages each request gained);
 - ``replay --record SERVED``: the same requests added before the same forward steps; the schedule must come out equal;
 - ``alone``: each request served by itself, one after another.
 
@@ -134,9 +134,9 @@ def _pin_env(batch_invariant: bool) -> dict[str, str]:
     if batch_invariant:
         os.environ["VLLM_BATCH_INVARIANT"] = "1"
     pinned = pin({**ENGINE, "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION": "1", "HF_HUB_OFFLINE": "1"})
-    if os.environ.get("PYTHONHASHSEED") != "0":
+    if sys.flags.hash_randomization:
         raise SystemExit("run with PYTHONHASHSEED=0 (run.sh sets it): the scheduler and the runner iterate sets of request ids")
-    return {"pinned": pinned, "cleared": cleared, "VLLM_BATCH_INVARIANT": os.environ.get("VLLM_BATCH_INVARIANT")}
+    return {"pinned": pinned, "cleared": cleared, "VLLM_BATCH_INVARIANT": "1" if batch_invariant else None}
 
 
 def _engine(model_dir: Path) -> Any:

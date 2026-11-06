@@ -18,14 +18,14 @@ collectives.
   6,000 tokens, outputs from 8 to 512, half greedy and half sampled at temperature 0.8 with a seed each, Poisson
   arrivals; every request ignores EOS, so the schedule doesn't depend on the tokens;
 - `serve`: the window served at its arrival times, recording each arrival's step and each step's batch: rows in the
-  runner's order with each one's request, first position and length, and the KV blocks each request gained;
+  runner's order with each one's request, first position and length, and the KV pages each request gained;
 - `replay1`, `replay2`: the window replayed with each request added before its recorded step, fingerprinting every row;
   `replay_plain` the same without any hooks, for tokens;
 - `alone`: each request served by itself;
 - `compare.py`: schedules, tokens, and every row's fingerprints between the phases.
 
 The engine is eager, with chunked prefill at 2,048 tokens a step, prefix caching off, synchronous scheduling, a fixed KV
-block count, `PYTHONHASHSEED=0` and request ids without vLLM's random suffix, so a replay can reproduce the schedule; the
+page count, `PYTHONHASHSEED=0` and request ids without vLLM's random suffix, so a replay can reproduce the schedule; the
 compare refuses to compare values unless it did.
 
 A row's fingerprint is the wrapping int64 sum of its 32-bit words times fixed odd keys, so a single changed bit changes
