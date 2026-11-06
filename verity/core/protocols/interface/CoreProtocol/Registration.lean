@@ -12,7 +12,7 @@ meta import Flock.Hash
 
 A deployment's registration is one append-only log of entries, each naming the head of the log before it
 (`Entry.previous`): the digest of the log's last entry, or of its composite's genesis when the log is empty. So the head
-names the whole log. An entry is one of two kinds, each under its own versioned format:
+names the whole log. An entry is one of three kinds, each under its own versioned format:
 
 * **site** (`verity/registration/site/v1`): the Site's own registration entry (`Core.Site.Registration.Entry`), the
   sheets, locations and links it adds to the Site (`Core.Site`), its JSON, digest and check the Site's.
@@ -21,6 +21,10 @@ names the whole log. An entry is one of two kinds, each under its own versioned 
   advice into the circuit (its digest, its advice's format and its public cap `ℓ` on one declaration's advice, in
   bits). Registration registers the site, θ and `B`, not the circuit `B` builds; a subprotocol's Program and
   parameters, and the proof system, are that protocol's public verifier parameters, not registration.
+* **declaration** (`verity/registration/declaration/v1`): a day's circuit (`Declared`, the spec's
+  `Verity.Registration.Declared`): the day, by its index among the monitoring period's days, its program's digest, and
+  its block Definitions by descriptor key. The prover declares one circuit a day, before the day's first coin, so a
+  second declaration of a day is refused; a window's program is its day's (`View.declared?`).
 
 An entry's digest is `SHA-512(format ‖ 0 ‖ canon(entry))` over the entry's canonical JSON, its format and `previous`
 among its keys, and the genesis of a composite's log is the Site's (`Core.Site.Registration.sha512`), so a log of site
@@ -28,11 +32,13 @@ entries alone has the Site's head. Registration is ASCII-only without DEL: a log
 character, as itself or escaped, is refused (`ascii`, in `Core.canonicalJson`'s words) before any entry is read.
 
 The check (`check`) holds each entry to the log before it, and refuses the first entry that fails by the first check it
-fails: a site entry by the Site's checks (`Core.Site.Registration.Entry.refusal`, `previous` first), and an information
-entry by `previous` and then `duplicate-information`, no item registered twice. A site entry's checks hold of an
-information entry whenever they held of the log before it, which it adds no hardware to.
+fails: a site entry by the Site's checks (`Core.Site.Registration.Entry.refusal`, `previous` first), an information
+entry by `previous` and then `duplicate-information`, no item registered twice, and a declaration by `previous` and then
+`duplicate-declaration`, no day declared twice. A site entry's checks hold of an information entry or a declaration
+whenever they held of the log before it, which it adds no hardware to.
 
-A component reads its view of the log by projection (`View`): the Site, θ's values and the builder, at the head. As a
+A component reads its view of the log by projection (`View`): the Site, θ's values, the builder and the days' declared
+circuits, at the head. As a
 core protocol (`protocol`, `verity/registration/log/v1`) the log is the commitment, its head the digest, and the
 parameters the auditor's own: the composite and the Site's auditor (`Core.Site.Registration.Auditor`: its data sheets,
 the tolerance it allows a sheet's figures around their estimates, and its devices' keys).
@@ -49,6 +55,7 @@ open Flock (V)
 open Core.Site.Registration (Composite Auditor)
 
 def INFORMATION : String := "verity/registration/information/v1"
+def DECLARATION : String := "verity/registration/declaration/v1"
 def protocolId : String := "verity/registration/log/v1"
 
 /-- One of θ's registered values (weights, initial state, tables) by its committed root: its name, the root as hex, its
@@ -82,17 +89,27 @@ def Item.key : Item → String
   | .theta t => "theta " ++ t.value
   | .builder _ => "builder"
 
-/-- **An entry of the registration log**: the Site's site entry, or an information entry naming the head of the log
-it follows and the items it registers. -/
+/-- A day's declared circuit: the day, by its index among the monitoring period's days, the digest of the circuit's
+program as hex, and its block Definitions by descriptor key. -/
+structure Declared where
+  day : Nat
+  program : String
+  blocks : List String
+  deriving DecidableEq, Repr
+
+/-- **An entry of the registration log**: the Site's site entry, an information entry naming the head of the log it
+follows and the items it registers, or a declaration naming that head and the day's circuit. -/
 inductive Entry
   | site (e : Site.Registration.Entry)
   | information (previous : String) (items : List Item)
+  | declaration (previous : String) (d : Declared)
   deriving DecidableEq
 
 /-- The head of the log the entry follows. -/
 def Entry.previous : Entry → String
   | .site e => e.previous
   | .information p _ => p
+  | .declaration p _ => p
 
 /-- **The registration log**, oldest entry first. -/
 abbrev Log := List Entry
@@ -107,14 +124,21 @@ def Item.toJson : Item → Json
   | .builder b => Json.mkObj [("advice", .str b.advice), ("cap", Lean.toJson b.cap), ("digest", .str b.digest),
       ("kind", .str "builder")]
 
+def Declared.toJson (d : Declared) : Json :=
+  Json.mkObj [("blocks", .arr (d.blocks.map Json.str).toArray), ("day", Lean.toJson d.day), ("program", .str d.program)]
+
 def Entry.format : Entry → String
   | .site _ => Site.SITE
   | .information .. => INFORMATION
+  | .declaration .. => DECLARATION
 
 def Entry.toJson : Entry → Json
   | .site e => e.toJson
   | .information p items =>
     Json.mkObj [("format", .str INFORMATION), ("items", .arr (items.map Item.toJson).toArray), ("previous", .str p)]
+  | .declaration p d =>
+    Json.mkObj [("blocks", .arr (d.blocks.map Json.str).toArray), ("day", Lean.toJson d.day),
+      ("format", .str DECLARATION), ("previous", .str p), ("program", .str d.program)]
 
 /-- **An entry's digest**: `SHA-512(format ‖ 0 ‖ canon(entry))`, a site entry's the Site's. -/
 def Entry.digest (e : Entry) : String := Site.tagged e.format e.toJson
@@ -133,6 +157,9 @@ def site (s : Site.Entry) : String → Entry := fun p => .site (.site p s)
 
 /-- An information entry registering `items`, to chain. -/
 def information (items : List Item) : String → Entry := fun p => .information p items
+
+/-- A declaration of `d`, to chain. -/
+def declaration (d : Declared) : String → Entry := fun p => .declaration p d
 
 /-- The log of `entries` in order, each following the head of the log before it. -/
 def chain (c : Composite) (entries : List (String → Entry)) : Log :=
@@ -179,7 +206,14 @@ def Entry.ofJson (j : Json) : V Entry := do
     exactly j ["format", "items", "previous"] "an information entry"
     pure (.information (← Flock.J.str j "previous" "an entry")
       (← (← Flock.J.arr j "items" "an information entry").toList.mapM Item.ofJson))
-  else throw s!"an entry: format {format} is not one of [{Site.SITE}, {INFORMATION}]"
+  else if format == DECLARATION then
+    exactly j ["blocks", "day", "format", "previous", "program"] "a declaration"
+    let previous ← hex64 (← Flock.J.get j "previous" "an entry") "an entry's previous"
+    let day ← Flock.J.nat j "day" "a declaration"
+    let program ← hex64 (← Flock.J.get j "program" "a declaration") "a declaration's program"
+    let blocks ← (← Flock.J.arr j "blocks" "a declaration").toList.mapM (Flock.J.asStr · "a declaration's block")
+    pure (.declaration previous { day, program, blocks })
+  else throw s!"an entry: format {format} is not one of [{Site.SITE}, {INFORMATION}, {DECLARATION}]"
 
 /-- The log as committed: its composite and its entries, `{"composite": NAME, "entries": [...]}`. -/
 structure Committed where
@@ -196,24 +230,28 @@ def Committed.ofJson (j : Json) : V Committed := do
 
 /-! ## The check -/
 
-/-- A refusal: a site entry's, by the Site's check that fails, or `duplicate-information`. -/
+/-- A refusal: a site entry's, by the Site's check that fails, `duplicate-information` or `duplicate-declaration`. -/
 inductive Refusal
   | site (r : Site.Registration.Refusal)
   | duplicateInformation
+  | duplicateDeclaration
   deriving DecidableEq, Repr
 
 def Refusal.name : Refusal → String
   | .site r => r.name
   | .duplicateInformation => "duplicate-information"
+  | .duplicateDeclaration => "duplicate-declaration"
 
 def nodup : List String → Bool
   | [] => true
   | x :: xs => !xs.contains x && nodup xs
 
-/-- The log so far, folded: its Site, its information items in order, its head and its length. -/
+/-- The log so far, folded: its Site, its information items in order, its declarations in order, its head and its
+length. -/
 structure State where
   site : Site
   items : List Item
+  declared : List Declared := []
   head : String
   entries : Nat
 
@@ -226,11 +264,15 @@ def Entry.refusal (A : Auditor) (c : Composite) (s : State) : Entry → Option R
   | .information p items =>
     if p ≠ s.head then some (.site .previous)
     else if nodup ((s.items ++ items).map Item.key) then none else some .duplicateInformation
+  | .declaration p d =>
+    if p ≠ s.head then some (.site .previous)
+    else if s.declared.any (·.day == d.day) then some .duplicateDeclaration else none
 
 def State.add (s : State) (e : Entry) : State :=
   match e with
   | .site x => { s with site := s.site.add x.added, head := e.digest, entries := s.entries + 1 }
   | .information _ items => { s with items := s.items ++ items, head := e.digest, entries := s.entries + 1 }
+  | .declaration _ d => { s with declared := s.declared ++ [d], head := e.digest, entries := s.entries + 1 }
 
 /-- **The check**: the log folded entry by entry, each held to the log before it; or the first entry that fails, by its
 index and the first check it fails. -/
@@ -241,24 +283,31 @@ def check (A : Auditor) (c : Composite) (log : Log) : Except (Nat × Refusal) St
 
 /-! ## Views: what a component reads of the log -/
 
-/-- What a component reads of an accepted log, at its head: the Site, θ's registered values in order, and the builder. -/
+/-- What a component reads of an accepted log, at its head: the Site, θ's registered values in order, the builder, and
+the days' declared circuits in order. -/
 structure View where
   site : Site
   theta : List Theta
   builder : Option Builder
+  declarations : List Declared := []
   head : String
 
 def State.view (s : State) : View :=
   { site := s.site, head := s.head,
     theta := s.items.filterMap fun | .theta t => some t | _ => none,
-    builder := s.items.findSome? fun | .builder b => some b | _ => none }
+    builder := s.items.findSome? fun | .builder b => some b | _ => none,
+    declarations := s.declared }
 
 /-- θ's registered value named `value`. -/
 def View.value? (v : View) (value : String) : Option Theta := v.theta.find? (·.value == value)
 
+/-- **Day `day`'s declared circuit**, the spec's `Verity.Registration.declared`: the one declaration of the day in an
+accepted log, or `none` when the log declares no circuit for it. A window of that day runs its program. -/
+def View.declared? (v : View) (day : Nat) : Option Declared := v.declarations.find? (·.day == day)
+
 def View.toJson (v : View) : Json :=
   Json.mkObj [("builder", match v.builder with | some b => Item.toJson (.builder b) | none => .null),
-    ("head", .str v.head), ("site", v.site.toJson), ("theta", .arr (v.theta.map (Item.toJson ∘ .theta)).toArray)]
+    ("declarations", .arr (v.declarations.map Declared.toJson).toArray), ("head", .str v.head), ("site", v.site.toJson), ("theta", .arr (v.theta.map (Item.toJson ∘ .theta)).toArray)]
 
 /-! ## The core protocol -/
 
@@ -304,8 +353,9 @@ def checkLog (p : Params) (c : Commitment) (_ : Unit) : Outcome Json Json :=
 /-- **The registration log's check** as a core protocol, `verity/registration/log/v1`: the parameters are the auditor's
 (`{"auditor": AUDITOR, "composite"}`, the auditor as `Core.Site.Registration.Auditor.ofJson` reads it), the commitment
 is the log (`{"composite", "entries": [ENTRY]}`) with its head as digest, the evidence is `{}`. It accepts a log the
-check passes, making public its view (`View.toJson`) and keeping its length, and rejects the first entry the check
-refuses as `entry I: REFUSAL`, and a log or parameters outside ASCII without DEL as not ASCII. It is never undecided. -/
+check passes, making public its view (`View.toJson`: its site, θ, builder, declarations and head) and keeping its
+length, and rejects the first entry the check refuses as `entry I: REFUSAL`, and a log or parameters outside ASCII
+without DEL as not ASCII. It is never undecided. -/
 def protocol : Protocol where
   id := protocolId
   Params := Params
@@ -371,7 +421,10 @@ def items : List Item :=
   [.theta weights, .theta { value := "state", root := hex 'd', leaves := 1, words := 8, wordBits := 32, domain := hex 'e' },
    .builder { digest := hex 'f', advice := "verity/advice/v1", cap := 32 }]
 
-def entries : List (String → Entry) := [site ⟨[sheet], locs, links⟩, information items]
+/-- Day 0's circuit: its program's digest and its one block Definition. -/
+def day0 : Declared := { day := 0, program := hex '1', blocks := ["block0"] }
+
+def entries : List (String → Entry) := [site ⟨[sheet], locs, links⟩, information items, declaration day0]
 
 /-- A site entry adding only `k`. -/
 def stating (k : Sheet) : List (String → Entry) := [site ⟨[k], [], []⟩]
@@ -429,9 +482,18 @@ private def over : Loc := { id := "hbm0", kind := .memory, parent := some "gpu0"
 #guard refusal .remote [site ⟨[], locs.take 2 ++ [{ id := "node1", kind := .host, parent := some "node0" }], []⟩] ==
   some (0, .site .kind)
 -- θ's weights registered twice, and a second builder; another θ value is a new item
-#guard refusal .onsite (entries ++ [information (items.take 1)]) == some (2, .duplicateInformation)
-#guard refusal .onsite (entries ++ [information (items.drop 2)]) == some (2, .duplicateInformation)
+#guard refusal .onsite (entries ++ [information (items.take 1)]) == some (3, .duplicateInformation)
+#guard refusal .onsite (entries ++ [information (items.drop 2)]) == some (3, .duplicateInformation)
 #guard refusal .onsite (entries ++ [information [.theta { weights with value := "tables" }]]) == none
+-- day 0 declared twice, even with the same circuit; day 1 is a new day; the view reads each day's circuit
+#guard refusal .onsite (entries ++ [declaration { day0 with program := hex '2' }]) == some (3, .duplicateDeclaration)
+#guard refusal .onsite (entries ++ [declaration day0]) == some (3, .duplicateDeclaration)
+#guard refusal .onsite (entries ++ [declaration { day0 with day := 1, program := hex '2' }]) == none
+#guard ((check auditor .onsite (chain .onsite entries)).toOption.map fun s => (s.view.declared? 0, s.view.declared? 1)) ==
+  some (some day0, none)
+#guard (match Entry.ofJson (Json.mkObj [("blocks", .arr #[]), ("day", Lean.toJson (0 : Nat)),
+    ("format", .str DECLARATION), ("previous", .str (hex 'a')), ("program", .str "1")]) with
+  | .ok _ => false | .error _ => true)
 
 private def bytes (j : Json) : ByteArray := ((Flock.canon j).toOption.getD "").toUTF8
 
