@@ -349,7 +349,6 @@ class Warden:
         self._watermark_writer: Any = None
         self._watermark_unsent = bytearray()
         self._watermark_lines: deque[tuple[int, int, list[_Connection]]] = deque()
-        self._released: list[_Connection] = []
         self.params, self.connect = params, connect
         self.origin, self.windows, self.clock, self.sleep, self.slack = origin, windows, clock, sleep, slack
         self.egress = Certifier(egress_link, params.grid)
@@ -438,11 +437,13 @@ class Warden:
             self._emit(t // T - 1, Reason.MONITOR_UNAVAILABLE)
         while self.queue and len(self.active) < self.params.lanes:
             self._admit(self.queue.popleft(), t)
-        parts = []
+        parts, released = [], []
         for c in self.active:
             if c.ingress_end is None and c.failed is None:
                 for frame in self._ingress(c, t):
                     self.ingress.enqueue(frame)
+                if c.ingress_end == t:
+                    released.append(c)
             out = self._egress(c, t)
             for frame in out:
                 self.egress.enqueue(frame)
@@ -458,8 +459,7 @@ class Warden:
                 self._end(c)
         self.active = [c for c in self.active if c.ended is None]
         if self.watermark is not None:
-            self._watermark_lines.append((t, self.requests_released, self._released))
-            self._released = []
+            self._watermark_lines.append((t, self.requests_released, released))
             self._flush_watermark()
         for grid in (self.ingress, self.egress, self.fails):
             row = grid.tick()
@@ -607,8 +607,6 @@ class Warden:
             elif not c.server[1].is_closing():
                 c.server[1].write(whole)
                 c.wrote = True
-            if self.watermark is not None:
-                self._released.append(c)
         return out
 
     def _egress(self, c: _Connection, t: int) -> list[bytes]:
