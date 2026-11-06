@@ -1,5 +1,5 @@
 """`cluster status`: node 1's Kueue objects and node 2's ledger state as rows by owner and key, GPU-h ready, holds, disk and
-release.py's bundle count, from snapshots in the shapes the live nodes return (30 Sep / 1 Oct 2026)."""
+release.py's bundle count, from snapshots in the shapes the live nodes return."""
 from __future__ import annotations
 
 import json

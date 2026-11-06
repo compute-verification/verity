@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The control pod's VM stops (INF-58, INF-131): the Nebius API stops for VMs that can't stop themselves, which ran on infra's VM
+"""The control pod's VM stops: the Nebius API stops for VMs that can't stop themselves, which ran on infra's VM
 (h200-idle.sh, dc-backstop.sh, glm53-cpu2-backstop.sh) and stopped nothing while that VM was suspended.
 
     vm_stop.py loop [--config PATH] [--state PATH]     a pass every EVERY_S (the watchers supervisor runs it)
@@ -10,11 +10,11 @@ host, user, `nebius_instance_id` and `deadline`; an entry's own `id` or `deadlin
 
 - `deadline`: stopped once the API reads it RUNNING within DEADLINE_LEAD_S of its deadline or after, as a backstop to the VM's own
   /etc/research/deadline timer;
-- `idle` (circuits' H200s, INF-58): every pass one ssh read of its GPUs' highest utilization, its live `research run`s and its
+- `idle` (circuits' H200s): every pass one ssh read of its GPUs' highest utilization, its live `research run`s and its
   held gpu-leases. Busy is a 2-h mean utilization of at least BUSY_PCT, or a held lease within LEASE_IDLE_S of the GPUs' last
-  use (18-19 Oct: eu ran 15.8 of 18.8 h at 1.7% with 8 leases held). Idle for IDLE_S since the last busy reading: stopped. A
-  CPU-only run holds no lease and doesn't count (INF-67). A VM not RUNNING or not read forgets its busy time, so one started
-  again counts as busy from its first reading (18 Oct: eu was stopped the moment circuits restarted it);
+  use (a VM can hold 8 leases for hours at 1.7%). Idle for IDLE_S since the last busy reading: stopped. A
+  CPU-only run holds no lease and doesn't count. A VM not RUNNING or not read forgets its busy time, so one started
+  again counts as busy from its first reading (else it would stop the moment it's restarted);
 - `lease` (the vy-dc-* VMs): stopped once the lease it holds (the first field of ~research/.research/lease) passed LEASE_GRACE_S
   ago.
 

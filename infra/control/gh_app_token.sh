@@ -1,5 +1,5 @@
 #!/bin/sh
-# Print a GitHub App installation token (INF-133): a JWT signed RS256 with the App's private key (openssl, no Python crypto on the
+# Print a GitHub App installation token: a JWT signed RS256 with the App's private key (openssl, no Python crypto on the
 # pod), exchanged at GitHub for a 1-hour token scoped to compute-verification/verity and compute-verification/infra with contents and pull requests write.
 # Its only output on stdout is the token, for `GH_TOKEN=$(gh_app_token.sh)`. Exit 1, with GitHub's message on stderr, when the
 # exchange fails.

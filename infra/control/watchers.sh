@@ -1,5 +1,5 @@
 #!/bin/sh
-# The watchers supervisor (watchers.py, INF-131) on the control pod, started again 10 s after it exits: every loop that watches the
+# The watchers supervisor (watchers.py) on the control pod, started again 10 s after it exits: every loop that watches the
 # system and used to run on an agent VM, from one pushed commit's tree (/data/watchers/src; its COMMIT file names it) and the loop
 # table /data/watchers/watchers.toml. Deployed as /data/watchers/run.sh; post_start.sh starts it. To restart the supervisor and
 # every loop (after a deploy): kill "$(cat /data/watchers/supervisor.pid)". Log: /data/watchers/supervisor.log; each loop's

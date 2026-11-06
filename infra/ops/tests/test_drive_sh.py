@@ -1,5 +1,5 @@
 """infra/control/drive.sh's checkout: `drive.sh merge` runs `research merge` on branch main, which it refuses on a detached HEAD
-(CI-169, 25 Oct: every `drive.sh merge` was refused), while the tick and `drive.sh queue` keep a detached checkout of origin's main."""
+(else every `drive.sh merge` is refused), while the tick and `drive.sh queue` keep a detached checkout of origin's main."""
 import os
 import re
 import subprocess
@@ -43,7 +43,7 @@ def checkout(repo, verb):
 
 
 def test_store_links_puts_the_stores_bulk_on_the_volume_and_keeps_what_it_held(tmp_path):
-    """objects/ and attempts/ become links into the volume's copy (they took the pod's root to 94%, 26 Oct); a real directory
+    """objects/ and attempts/ become links into the volume's copy (they can fill the pod's root); a real directory
     already there is merged in first, so nothing it held is lost, and the catalog stays where it is."""
     store, vol = tmp_path / "store", tmp_path / "volume"
     (store / "objects" / "sha256" / "ab").mkdir(parents=True)

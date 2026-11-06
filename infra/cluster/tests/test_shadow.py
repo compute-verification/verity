@@ -1,4 +1,4 @@
-"""The shadow against vy-nebius-2's own logs: a slice of 30 Sep (07:20-07:58Z, three timed windows and fifteen
+"""The shadow against vy-nebius-2's own logs: a 38-minute slice (three timed windows and fifteen
 preemptions) replayed through the adapter reproduces what `gpu-lease` did, and the pass bar sees what it must."""
 from __future__ import annotations
 

@@ -144,8 +144,8 @@ def test_a_process_that_started_before_its_file_was_installed_needs_a_restart(wo
 
 
 def test_a_file_installed_from_a_commit_main_has_since_merged_and_changed_is_stale_not_ahead(world, monkeypatch):
-    """Node 1's custody tree ran a store/local.py from 6 Oct that drift called `ahead` (its record named the commit) for two days
-    after main had merged that commit and changed the file (#1402), because the stale search reads only main's last HISTORY
+    """Node 1's custody tree ran an old store/local.py that drift called `ahead` (its record named the commit) for two days
+    after main had merged that commit and changed the file, because the stale search reads only main's last HISTORY
     commits and the record was taken at its word."""
     node, repo, n = world["node"], world["repo"], world["nodes"]["n"]
     deploy.install(n, "origin/fix", "lane-x", [str(node / "bin" / "c.py")], local, apply=True, repo=repo)
@@ -398,7 +398,7 @@ def test_an_admin_only_node_is_read_only_when_named(world, capsys):
 
 
 def test_a_node_no_machine_entry_names_is_that_nodes_error_not_the_whole_drift(world, monkeypatch, capsys):
-    """A node added to deploy.toml before its VM is registered (vy-auditor-1, 21 Oct) failed every relay drift with Refused."""
+    """A node added to deploy.toml before its VM is registered failed every relay drift with Refused."""
     from research import remote
 
     def unknown(name, project):

@@ -1,4 +1,4 @@
-# vy-nebius-1 and vy-nebius-2 as one cluster, as their owners describe them on 30 Sep 2026, with Daniel's defaults for the
+# vy-nebius-1 and vy-nebius-2 as one cluster, as their owners describe them, with the decided defaults for the
 # cutover plan's decisions (research-notes lanes/infra/20260930T1858Z-handoff-from-pous-one-cluster-to-infra-cutover-plan).
 # Node 2's agent plans from the copy in its pinned tree; `cluster validate` checks it, the tests plan against it, and `cluster
 # policy diff` compares its [policy] with the nodes' live values. GPU UUIDs stay out: each lease records its own.
@@ -18,8 +18,8 @@ drain_s = 7200  # admissions end 2 h before the stop, leaving the final backups 
 service = 1000  # the node's own daemons: sampler, exporters, the node agent
 timed = 900     # quiet whole-node windows
 session = 700   # a lease taken by hand: a kernel inner loop, a debugger
-gate = 650      # drive's merge-path gates: ahead of every lane job in node 2's cpu-hold line (INF-147, infra 19 Oct)
-# capture > work > bench is kueue.yaml's order, which is policy (the steward, 30 Sep 19:40Z): capture 1100 > sweep-night
+gate = 650      # drive's merge-path gates: ahead of every lane job in node 2's cpu-hold line
+# capture > work > bench is kueue.yaml's order, which is policy: capture 1100 > sweep-night
 # 1000 > a vLLM deployment's GPU work 600 > its CPU work 500 > prover-bench 300 > dev 100 > backfill 10
 capture = 600   # port captures
 work = 500      # a lane's queued work: vLLM deployments, sweep-night
@@ -35,7 +35,7 @@ stops_at = "2026-10-23T15:00:00Z"  # the fallback for the VM's /etc/research/dea
 system_cpus = "0-7"  # k3s and the system (the steward's CPU map, 07:13Z)
 numa = { 0 = "0-95", 1 = "96-191" }
 # The merge-train check slots: never preempted, never borrowed, never used by other work (research coordinator, 17:22Z), slot
-# d on 128-159 since 2 Oct. The provers' slices, the dispatcher's VY_PROVER_CPUS, which no other job may share
+# d on 128-159. The provers' slices, the dispatcher's VY_PROVER_CPUS, which no other job may share
 # (160-191 since slot d took 128-159); a job naming no pool gets 96-127.
 pools = { checks = "8-95,128-159", provers = "160-191" }
 # A GPU job pinned here runs under node 1's gpu-lease, on a GPU n1_lease.py (infra/nebius) lends from a Kueue holder in provers.
@@ -64,18 +64,18 @@ owner = "pous"
 memory_gib = 1690
 stops_at = "2026-10-24T15:00:00Z"  # the fallback for the VM's /etc/research/deadline
 numa = { 0 = "0-95", 1 = "96-191" }
-# GPUs 0-3 on NUMA 0 and 4-7 on NUMA 1, no NVLink, the NIC on NUMA 1 (node2-ops read it at 19:09Z, 30 Sep).
+# GPUs 0-3 on NUMA 0 and 4-7 on NUMA 1, no NVLink, the NIC on NUMA 1.
 gpus = [
   { index = 0, numa = 0 }, { index = 1, numa = 0 }, { index = 2, numa = 0 }, { index = 3, numa = 0 },
   { index = 4, numa = 1 }, { index = 5, numa = 1 }, { index = 6, numa = 1 }, { index = 7, numa = 1 },
 ]
 
-# Verity on node 2 (decision 1 at Daniel's default): idle capacity only, preemptible, never in a window, GPUs included.
+# Verity on node 2 (decision 1, at its default): idle capacity only, preemptible, never in a window, GPUs included.
 # CPUs, memory and job caps are pous infra's interim terms (research-notes, 20260930T1629Z).
 # Its CPUs sit inside check slots a (0-63) and b (64-119), so no core of it is outside a check's. A guest's CPU job claims
 # `cpus` of them in whole cores of its own (`research cpu-hold`, waiting while none are free) at nice 0; nice never made it
 # yield to a check, which runs in a session scope beside user@.service (every queued run and fill job), weighted the same. A
-# guest's GPU job's runner keeps all of them at nice 19. It lasts until the VM's stop, renewals included (INF-57, INF-113).
+# guest's GPU job's runner keeps all of them at nice 19. It lasts until the VM's stop, renewals included.
 [[shares]]
 project = "verity"
 node = "vy-nebius-2"
@@ -95,15 +95,15 @@ cpus = "96-191"
 until = "stops_at"
 
 # Policy: the values node services read from outside git today (a tmux pane's environment, Kueue's objects, slot and CPU-map
-# files), as agreed on 3 Oct 2026, each under the handle who decides a change (`owner`, which covers every key below it).
+# files), as agreed, each under the handle who decides a change (`owner`, which covers every key below it).
 # `cluster policy show` prints them, each with where it is read; `cluster policy diff` reads each from its node, read-only,
 # and names every key where the live value differs (policy.py). `vy-nebius-1.pools.*` are the node's `pools` above. A change
 # that should end on its own is an override (`cluster policy override ... --until T`), recorded on the key's node, not here.
 [policy.vy-nebius-1]
 owner = "infra"
-direct-gpus = "none"            # /etc/vy/direct-gpus: gpu-lease's direct runs get no GPU (the 30 Sep cutover)
-direct-cpus = "0-95,128-159"    # /etc/vy/direct-cpus: a direct run's CPUs, the non-benchmark ones (96-127 are the --queue GPU jobs', 6 Oct)
-user-cpuset = { delegate = "cpu cpuset memory pids" }   # user@.service.d/vy-cpuset.conf, so a user scope's AllowedCPUs holds (#855)
+direct-gpus = "none"            # /etc/vy/direct-gpus: gpu-lease's direct runs get no GPU
+direct-cpus = "0-95,128-159"    # /etc/vy/direct-cpus: a direct run's CPUs, the non-benchmark ones (96-127 are the --queue GPU jobs')
+user-cpuset = { delegate = "cpu cpuset memory pids" }   # user@.service.d/vy-cpuset.conf, so a user scope's AllowedCPUs holds
 # /workspace/research/locks/lean-slots (lean_slot.py): the cap of 4, split by infra and proofs (16:25Z)
 lean-slots = { check = 2, audit = 2 }
 # /workspace/research/locks/slots (slot.py): the merge-check slots, the `checks` pool
@@ -124,7 +124,7 @@ queue = "deployments-gpu"
 local-queue = "deployments-gpu-pool"
 priority = "circuits-gpu"
 max = 6
-idle-s = 30   # circuits' ask, 2 Oct 10:21Z
+idle-s = 30   # circuits' ask
 
 # Kueue's ClusterQueues: sky/kueue.yaml's quotas, which cluster_up.sh applies; the GPU quotas of provers and deployments-gpu
 # are the workstreams' above, and policy.py checks they agree. Only the quiet hour and the disk guard hold a queue (stopPolicy).
@@ -152,22 +152,22 @@ gpu = { nominal = 0 }
 cpu = { nominal = 0 }
 memory = { nominal = 0 }
 
-[policy.vy-nebius-1.kueue.circuits]   # draining since 1 Oct: delete it once it is empty
+[policy.vy-nebius-1.kueue.circuits]   # draining: delete it once it is empty
 stop-policy = "None"
 gpu = { nominal = 0 }
 cpu = { nominal = 0 }
 memory = { nominal = 0 }
 
-# Node 2 as read on 18 Oct 20:05Z with its fill runner down since the 16 Oct 21:37Z boot (`policy diff` reads it as quiet from
+# Node 2 as read with its fill runner down since a boot (`policy diff` reads it as quiet from
 # gpu-lease's state), every key as declared. No /etc/vy/direct-* here: gpu-lease's direct runs aren't capped.
 [policy.vy-nebius-2]
 owner = "infra"
-# vy-device-cores owns node 2's cpusets (#1361): user.slice 0-119, its device cores 120-127, so `cluster policy apply` only
+# vy-device-cores owns node 2's cpusets: user.slice 0-119, its device cores 120-127, so `cluster policy apply` only
 # plans this drop-in here (policy_apply.PLAN_ONLY) and never `systemctl revert`s it
 user-cpuset = { delegate = "cpu cpuset memory pids" }
 # two full-check slots (node 2 runs for check capacity) that stop taking checks 90 min before
-# every booked window, so a check started before it ends in time (infra, 12 Oct); b ends at 119 because 120-127 are
-# vy-device-cores' device cores (#1361: isolcpus on the kernel cmdline, user.slice 0-119)
+# every booked window, so a check started before it ends in time; b ends at 119 because 120-127 are
+# vy-device-cores' device cores (isolcpus on the kernel cmdline, user.slice 0-119)
 check-slots = { a = "0-63 windows=/workspace/pouw/fill/windows lead=90 mem=560", b = "64-119 windows=/workspace/pouw/fill/windows lead=90 mem=560" }
 # /workspace/pouw/fill/cpu-sets: compute accounting's verifies, 4 at a time in 40 GB each, on 0-47, inside check slot a since
 # slot d left node 2

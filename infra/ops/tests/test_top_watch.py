@@ -1,5 +1,5 @@
 """Top's loops on the control pod (infra/control/top_watch.py): the asks relay applies Daniel's ticks to his Asks pages and rings
-the lane and @top once each, quoting only his own new reply text; the sweep rings each finding's owner once."""
+the lane and top once each, quoting only his own new reply text; the sweep rings each finding's owner once."""
 import calendar
 import importlib.util
 import sys
@@ -292,7 +292,7 @@ def at(day, hour, minute=0):
 
 def test_the_linear_audit_rings_each_lane_once_a_window_and_issues_with_no_lane_to_top(tmp_path):
     state, ring, log = {}, Ring(), tmp_path / T.AUDIT_LOG
-    for t in (at(19, 12, 30), at(19, 14, 30)):                             # one 12 h window, before @top's daily line
+    for t in (at(19, 12, 30), at(19, 14, 30)):                             # one 12 h window, before top's daily line
         T.linear_audit(state, ring, t, lambda: FOUND, lambda: VOLUME, log)
     assert [to for to, _, _ in ring.rings] == ["top", "infra", "proofs"]
     (_, no_lane, _), (_, infra, _), _ = ring.rings

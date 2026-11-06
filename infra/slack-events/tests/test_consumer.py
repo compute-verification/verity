@@ -1,5 +1,5 @@
 """The consumer: routing by `research msg`'s `deliver` with Slack as the record (the routing line read back on a
-redelivery), no-model mode's @top, the dead letter and the newcomers' `team_join`."""
+redelivery), no-model mode's top, the dead letter and the newcomers' `team_join`."""
 from __future__ import annotations
 
 import json
@@ -94,8 +94,8 @@ def test_an_edit_or_another_event_type_is_acknowledged_and_ignored(world):
 
 
 def test_a_redelivery_after_the_routing_line_rings_only_the_missing_lanes_with_no_second_pick(world, monkeypatch):
-    """The first delivery picked, posted its line and rang @circuits, then failed to ring @kernels.  The redelivery finds
-    the line, so the model isn't asked again, and rings @kernels alone; @circuits keeps its one doorbell."""
+    """The first delivery picked, posted its line and rang circuits, then failed to ring kernels.  The redelivery finds
+    the line, so the model isn't asked again, and rings kernels alone; circuits keeps its one doorbell."""
     model = Model(monkeypatch, ["circuits", "kernels"])
     post = world.slack.add(CHAT, text="how is the TP8 kernel validated?", user=LUKE)
     payload = world.event(CHAT, post, "EvR")
