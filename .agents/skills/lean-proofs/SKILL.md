@@ -135,8 +135,8 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   Fetch `main` first: a checkout whose `merge.py` is older than `origin/main`'s merges by `origin/main`'s.
 - Record your lock at your own head, then mark (`ready` refuses a changed lock no records run of that head passed); a
   passing Lean check, a clean merge of `main` over a passing head, or a commit of exactly the records under `record/` a
-  passing run kept needs no new run. A train regenerates records that differ only because another PR moved what yours
-  reads; re-record only what it can't (a refused conflict, `shape`, a move's map).
+  passing run kept needs no new run. Once your PR lands, drive's lock run regenerates records that differ only because
+  another PR moved what yours reads; re-record only what it can't (a refused conflict, `shape`, a move's map).
 
 ## Standing rulings
 
@@ -162,7 +162,7 @@ repository.
   one (its conclusion fails for a verifier that accepts everything), in the lock as a claim's `meets` and `fails` are;
   failing either, it says nothing. `check.py` holds them to it (`witnesses`): both lemmas build their instance, taking
   only listed assumptions; an exclusion's nontrivial lemma is a circuit where the other premises hold and one named
-  premise and the bound fail.
+  premise and the bound fail, or, for an exclusion that takes no premise, a circuit where a tighter bound fails.
 - A property's premises are assumptions about the world the function can't see; what the code can see, it checks. A
   condition picking out what the conclusion talks about goes inside the conclusion. Completeness theorems are not claims:
   they live in `Proofs/` with one concrete instance where the honest case holds.

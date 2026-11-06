@@ -1,8 +1,16 @@
-"""stage.py UNIT N OUT: N inputs of one served proof-block type's Q_word proof block, from synthetic values at the model's served statics,
-staged for Flock as a ``verity/flock-circuit`` statement with hidden outputs.
+"""stage.py UNIT N OUT [--public-weights [--packed]]: N inputs of one served proof-block type's Q_word proof block, from synthetic
+values at the model's served statics, staged for Flock as a ``verity/flock-circuit`` statement with hidden outputs.
 
     UNIT  TYPE[:S=V,...]   a type of `UNITS` or `PARTS` at its statics (each type's defaults are its model's: GLM-5.3's at TP8,
                            s8-coord's Llama-3.2-1B's), e.g. fp8-coord:K=2048, router:C=1, s8-coord:K=8192
+    --public-weights       a `UNITS` type's weight row ``w`` as public input ports (`UnitStager`'s ``public_inputs``, each leaf in
+                           its own u16 words) instead of a row hashed in the circuit, on the same values: the price of the block
+                           with its weight row's in-circuit opening removed, the in-circuit share a registered weight encoding
+                           would take out of the block. It prices no registered encoding's own opening, and the verifier refuses
+                           a statement with public input ports as outside the proved scope (``ProvedScope``) after every check.
+    --packed               with --public-weights, each port its parameter's leaves concatenated as the row lays them (the row's
+                           own words; `UnitStager`'s ``packed``): a registered encoding read packed, so the unit's input words
+                           are the opened block's.
 
 A type of `UNITS` is a Definition proved as one proof block, staged by `class_statement.stage_unit`: its Boolean Definition
 lowered once, its input rows hashed in the circuit (the per-call row on ``hm96-sha512/row-seg/v1``, the weight row on
@@ -220,12 +228,45 @@ def stage_part(name: str, part: Part, S: dict, tag: str, n: int, out: Path, t0: 
             "seconds": {"draw": round(t_draw, 1), "total": round(time.time() - t0, 1)}, "maxrss_gb": gb()}
 
 
+def public_words(d, row: np.ndarray, params: tuple[str, ...], packed: bool = False) -> dict[str, np.ndarray]:
+    """Each of ``params``, read in order from the row words ``row`` ``(n, words)``, as a public input port: its leaves each in
+    their own ceil(bits / 16) u16 words, low first (`class_statement.unit_lowering`'s public layout), or with ``packed`` the
+    row's own words that hold them."""
+    types = dict(d.signature()[0])
+    bits = np.unpackbits(np.ascontiguousarray(row, dtype="<u2").view(np.uint8), axis=1, bitorder="little")
+    out, at = {}, 0
+    for p in params:
+        ws = list(types[p].leaf_widths())
+        w = ws[0]
+        if packed:
+            if at % 16 or sum(ws) % 16:
+                raise SystemExit(f"stage.py: --packed takes parameters of whole u16 words; {p} is {sum(ws)} bits at bit {at}")
+            out[p] = np.ascontiguousarray(row[:, at // 16:(at + sum(ws)) // 16], dtype=np.uint16)
+            at += sum(ws)
+            continue
+        if any(x != w for x in ws):
+            raise SystemExit(f"stage.py: --public-weights takes parameters of one leaf width; {p} has {sorted(set(ws))}")
+        pad = np.zeros((len(row), len(ws), -(-w // 16) * 16), np.uint8)
+        pad[..., :w] = bits[:, at:at + w * len(ws)].reshape(len(row), len(ws), w)
+        out[p] = np.packbits(pad.reshape(len(row), -1), axis=1, bitorder="little").view("<u2").copy()
+        at += w * len(ws)
+    if at != bits.shape[1]:
+        raise SystemExit(f"stage.py: the row's {bits.shape[1]} bits are not its parameters' {at}")
+    return out
+
+
 def main() -> None:
-    spec, n, out = sys.argv[1], int(sys.argv[2]), Path(sys.argv[3])
+    args = [a for a in sys.argv[1:] if a not in ("--public-weights", "--packed")]
+    public, packed = "--public-weights" in sys.argv, "--packed" in sys.argv
+    if packed and not public:
+        raise SystemExit("stage.py: --packed lays out --public-weights' ports")
+    spec, n, out = args[0], int(args[1]), Path(args[2])
     t0 = time.time()
     name, u, S = parse(spec)
     tag = f"{name}-" + "-".join(f"{k.lower()}{v}" for k, v in sorted(S.items()))
     if isinstance(u, Part):
+        if public:
+            raise SystemExit(f"stage.py: --public-weights is for a type of UNITS, not {name}")
         rec = stage_part(name, u, S, tag, n, out, t0)
         (out / "pin.txt").write_text(rec["circuit_sha512"])
         (out / "stage.json").write_text(json.dumps(rec, indent=1))
@@ -235,9 +276,17 @@ def main() -> None:
     rng = np.random.default_rng(int.from_bytes(hashlib.sha256(f"verity/served-units/v1\0{tag}".encode()).digest()[:8], "little"))
     rows, twin = u.draw(S, n, rng)
     t_draw = time.time() - t0
-    in_rows = [(r, schema, 16 * rows[r].shape[1], list(ps)) for r, schema, ps in u.rows]
+    unit_rows, ports = u.rows, None
+    if public:
+        (w,) = [r for r in u.rows if r[0] == "w"]
+        unit_rows = tuple(r for r in u.rows if r[0] != "w")
+        rows = {**{r: rows[r] for r, *_ in unit_rows}, **public_words(d, rows["w"], w[2], packed)}
+        ports = {p: {"seed": hashlib.sha256(f"verity/served-units/weights\0{tag}".encode()).hexdigest(),
+                     "derivation": "served-units/public-weights"} for p in w[2]}
+        tag += "-packed-weights" if packed else "-public-weights"
+    in_rows = [(r, schema, 16 * rows[r].shape[1], list(ps)) for r, schema, ps in unit_rows]
     salt_key = hashlib.sha256(f"verity/served-units/salts\0{tag}".encode()).digest()
-    got = CS.stage_unit(d, f"unit/served-{tag}", in_rows, [(V2, (0,))], rows, out, salt_key)
+    got = CS.stage_unit(d, f"unit/served-{tag}", in_rows, [(V2, (0,))], rows, out, salt_key, public_inputs=ports, packed=packed)
     o0 = np.asarray(got["outs"]["o0"], dtype=np.uint16)
     if not np.array_equal(o0[:, :twin.shape[1]], twin):
         raise AssertionError(f"{tag}: the circuit's outputs are not the served twin's on {int((o0[:, :twin.shape[1]] != twin).any(1).sum())} instances")
@@ -246,7 +295,8 @@ def main() -> None:
     (out / "pin.txt").write_text(pin)
     meta = got["meta"]
     rec = {"unit": name, "statics": S, "tag": tag, "n": n, "definition": d.id,
-           "in_rows": [[r, s, b] for r, s, b, _ in in_rows], "ands": got["ands"], "unit_nnz": got["unit_nnz"],
+           "in_rows": [[r, s, b] for r, s, b, _ in in_rows], "public_inputs": sorted(ports or {}), "packed": packed, "ands": got["ands"],
+           "unit_nnz": got["unit_nnz"],
            "k_log": meta["k_log"], "unit_log": meta.get("unit_log"), "vus_per_block": meta.get("vus_per_block"),
            "row_schemas": meta.get("row_schemas"), "circuit_bytes": len(text), "circuit_sha512": pin,
            "class_sha512": FC.class_digest(text), "inst_bytes": (out / "inst.bin").stat().st_size,

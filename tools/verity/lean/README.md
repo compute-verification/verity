@@ -235,13 +235,12 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   modules the package imports.
 - `guarantees`: the guarantees (README "Glossary"), and any lemma still listed beside them.
   `--update` fills each record, and a `reads` section, from the build: the signature, the named assumptions among the
-  hypotheses, a hash of the type, and for each module the definitions the guarantees read, with a hash each, the
-  guarantees that read them, and a `digest` of those hashes (which the record therefore determines). Without `--update`
-  the audit fails on any difference, so a statement, or a definition it depends on, cannot change without a visible diff
-  of this file. A record holds the statement, not the proof: list a `sorry` stub, and the guarantee passes once a proof
-  with allowed axioms replaces it. A record written before guarantees were called that holds them (and each module's
-  readers) under `pins`: the audit reads it so, `--update` rewrites it under today's names, and a record holding both
-  is refused.
+  hypotheses, a hash of the type, and for each module the definitions the guarantees read, with a hash each (not who
+  reads them), and a `digest` of those hashes. Without `--update` the audit fails on any difference, so a statement, or
+  a definition it depends on, cannot change without a visible diff of this file. A record holds the statement, not the
+  proof: list a `sorry` stub, and the guarantee passes once a proof with allowed axioms replaces it. A record written
+  before guarantees were called that holds them under `pins`: the audit reads it so, `--update` rewrites it under
+  today's names, and one holding both is refused.
 - `owner`, in each guarantee's entry: the handle of the lane that answers for it (a handle of the registry), whom
   a broken or restated guarantee goes to. The audit fails an entry without one. Write it by hand, or pass
   `--update --owner @lane`, which gives it to the new entries only: `--update` keeps an entry's owner, and writes no
@@ -279,7 +278,7 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   property resting on it, which stays under `frozen` only as `falsified`. Every package is checked: without a `shape`
   section each guarantee is frozen or fails. An entry added to `frozen`, and a conjecture added or with a new status,
   is a claims change: the landing DM shows it with its reason (`research/spec_alert.py`), and nothing waits on it.
-- **The spec**, the trusted text a guarantee is stated over, is the `layers` prefixes: the modules whose imports the
+- **The spec**, what a guarantee is stated over, is the `layers` prefixes: the modules whose imports the
   policy rules. Every definition a guarantee's statement reads (theorems are not read: a statement means the same
   whatever proves the propositions in it), followed through `meaning` and where the walk leaves it, must lie in the spec
   of its package or of a package it requires by path (by that package's own `layers`), or in a pinned dependency (the
@@ -306,9 +305,10 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
 - **The hashes are SHA-256.** They are taken over a canonical form of the kernel term (`Facts.lean`'s `canonText`),
   which keeps what Lean's `Expr.hash` keeps (constant names, universe levels, bound variable indices, projections,
   literals) and drops what it drops (binder names and binder info, `let` names, metadata). A renamed hypothesis is
-  therefore the same statement, and a different term is a different one. Records written with `Expr.hash`, which has
-  32 bits, are still checked as they are, and the run notes them. `--update` rewrites them, and its review says
-  "rehashed" where the 32-bit hash still matches, which the landing DM (below) leaves out.
+  therefore the same statement, and a different term is a different one. A definition's text holds the matchers and
+  proofs Lean shares across a module in place, not by name, so a file split changes no hash. Records written with
+  `Expr.hash` (32 bits) are checked as they are and noted; `--update` rewrites them, its review saying "rehashed" where
+  the 32-bit hash still matches, which the landing DM leaves out.
 
 **A changed guarantee is shown when it lands.** A weakened definition leaves every proof valid, so the axiom checks and
 the replay pass it: only the records see it, and only a person can judge it. (A redefinition of `Collision` once made a
@@ -417,13 +417,13 @@ The proofs package's own audit replays its declarations through the kernel, so `
 Two branches that each add guarantees both change `lean-audit.json`, usually in the same `reads` module, so git's text merge
 conflicts. `.gitattributes` gives the file to `merge.py` instead, once `python tools/verity/lean/merge.py --install` has registered
 it in the clone's git config. It merges entry by entry: each side's change to a guarantee, a module under `reads`, a dependency
-or a policy entry applies. Within a module both sides changed, the definitions merge the same way, the readers as sets, and
-the digest is recomputed. A guarantee's `owner` merges apart from the rest of its entry, so one side's new owner and the
-other side's restatement both apply.
+or a policy entry applies. Within a module both sides changed, the definitions merge the same way, and the digest is
+recomputed; an older lock's readers and `pins` are read as today's. A guarantee's `owner` merges apart from the rest of
+its entry, so one side's new owner and the other side's restatement both apply.
 
 What the build determines never refuses: a guarantee's record (restated on both sides, the merged statement decides it),
-`reads` and assumption digests merge as the union or ours' value, named on stderr, and the train's Lean check regenerates
-them. It refuses where both sides changed what a person writes: an owner, a `shape` entry, a dependency. A refusal is a
+`reads` and assumption digests merge as the union or ours' value, named on stderr, and drive's lock run regenerates them
+once the merge lands. It refuses where both sides changed what a person writes: an owner, a `shape` entry, a dependency. A refusal is a
 conflict in git, with the entries named; take either side and run `check.py --update` on the merged tree. Git runs the driver
 from the worktree you merge into, and one whose rules are older than `origin/main`'s runs `origin/main`'s (`deferred`), so
 fetch `main` before you merge.
