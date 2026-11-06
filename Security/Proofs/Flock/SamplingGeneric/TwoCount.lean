@@ -552,7 +552,7 @@ theorem Design.Two.Pa_zero (d : Design.Two) (Pt : Partition) : d.Pa Pt (fun _ _ 
 /-- At a gate of replay block `ρ`, its values are the same under two committed traces that agree at every gate that
 is no replay block's interior. -/
 theorem refIn_congr_off {C : Prog} {Pρ : Partition} (hn : Pρ.gates.Nodup) {val val' : ℕ → Option Bool}
-    (hw : ∀ g, (∀ ρ r, Pρ.blocks[ρ]? = some r → g ∈ r → C.Boundary r g = true) → val g = val' g)
+    (hw : ∀ g, (∀ (ρ : ℕ) (r : List ℕ), Pρ.blocks[ρ]? = some r → g ∈ r → C.Boundary r g = true) → val g = val' g)
     {ρ : ℕ} {r : List ℕ} (hr : Pρ.blocks[ρ]? = some r) (ι : ℕ → Bool) {g : ℕ} (hg : g ∈ r) :
     C.refIn r val ι g = C.refIn r val' ι g := by
   by_cases hb : C.Boundary r g = true
@@ -569,7 +569,7 @@ theorem refIn_congr_off {C : Prog} {Pρ : Partition} (hn : Pρ.gates.Nodup) {val
 that is no replay block's interior have the same footprint at every interior values. -/
 theorem footprint_congr (H : Msg → Msg) (Cm : CommitmentScheme Bool) {s : AuditStatement} {Pt Pρ : Partition}
     (hP : Pt.Partitions s.prog) (hn : Pρ.gates.Nodup) {w w' : Wit}
-    (hw : ∀ g, (∀ ρ r, Pρ.blocks[ρ]? = some r → g ∈ r → s.prog.Boundary r g = true) →
+    (hw : ∀ g, (∀ (ρ : ℕ) (r : List ℕ), Pρ.blocks[ρ]? = some r → g ∈ r → s.prog.Boundary r g = true) →
       w.val H Cm s g = w'.val H Cm s g) (ι : ℕ → ℕ → Bool) :
     footprint H Cm s Pt Pρ w ι = footprint H Cm s Pt Pρ w' ι := by
   classical
@@ -611,7 +611,7 @@ theorem rTwo_congr (H : Msg → Msg) (Cm : CommitmentScheme Bool) {parse : Msg �
     {partition : AuditStatement → Option Partition} {two : AuditStatement → Option Design.Two} {δ : ℝ} {x : Msg}
     {s : AuditStatement} {Pt : Partition} {d : Design.Two} (hs : parse x = some s) (hPt : partition s = some Pt)
     (hd : two s = some d) (hin : InScopeTwo Pt d s) {w w' : Wit}
-    (hw : ∀ g, (∀ ρ r, d.part.blocks[ρ]? = some r → g ∈ r → s.prog.Boundary r g = true) →
+    (hw : ∀ g, (∀ (ρ : ℕ) (r : List ℕ), d.part.blocks[ρ]? = some r → g ∈ r → s.prog.Boundary r g = true) →
       w.val H Cm s g = w'.val H Cm s g) :
     RTwo H Cm parse partition two δ x w ↔ RTwo H Cm parse partition two δ x w' := by
   have key : ∀ ι, footprint H Cm s Pt d.part w ι = footprint H Cm s Pt d.part w' ι :=
