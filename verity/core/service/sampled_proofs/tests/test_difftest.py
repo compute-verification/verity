@@ -1997,6 +1997,8 @@ POPULATION_ORDER = ("population-order: the program's proof blocks under the quer
                     "population units in order")
 #: `OneStageZk.sessionTables`: the tables of the one session v2 reads, its statement's (`proofs.STATEMENT`) one
 V2_TABLES = ["circuit"]
+#: A stand-in circuit file: v2 reads its META alone, for the lookups it holds the blobs' tables to (`OneStageZk.tablesHeld`)
+STAND_IN_CIRCUIT = b"not a circuit file\nMETA {}\n"
 
 
 #: `OneStageZk.KEY_PARAMS`
@@ -2065,7 +2067,7 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF)
     rng = random.Random("v2-verdicts")
-    circuit, public = b"not a circuit file", _public_of(rec)
+    circuit, public = STAND_IN_CIRCUIT, _public_of(rec)
 
     def audit(trees: int, keys: list[str] | None = None) -> tuple[Drawn, dict, dict, dict]:
         ch, d, coins = _challenger_draw(rng, s, law, rec, trees, keys)
@@ -2145,7 +2147,7 @@ def test_v2_refuses_a_population_out_of_order(server, server_v2):
     of order (`test_the_run_refuses_a_population_out_of_order`); `SETUPS[3]`'s audit goes on to its session's
     verdict."""
     law = {"k": 2, "law": "subset"}
-    circuit = b"not a circuit file"
+    circuit = STAND_IN_CIRCUIT
     for s, ok in ((SETUPS[4], False), (SETUPS[5], False), (SETUPS[3], True)):
         assert P.in_order(s.program, s.query, s.population) is ok, s.templates
         rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
@@ -2188,7 +2190,7 @@ def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF)
     after = bytes.fromhex(R.digest(rec))
-    circuit, public = b"not a circuit file", _public_of(rec)
+    circuit, public = STAND_IN_CIRCUIT, _public_of(rec)
     failed = {"flock-verify/s": {"accepted": False, "of_record": True}}
 
     def audit_of(d: Drawn, draw: dict, coins, **params) -> dict:
@@ -4212,7 +4214,7 @@ def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
         out = server.exchange(case)
         assert out == answer(case) | {"reason": out["reason"]} and out["verdict"] == "reject", (kind, out)
         assert out["reason"].startswith(stage) and "soundness statement doesn't cover" in out["reason"], (kind, out)
-        circuit, public, record = b"not a circuit file", b"not a public file", b"{}"
+        circuit, public, record = STAND_IN_CIRCUIT, b"not a public file", b"{}"
         base = {k: v for k, v in evidence.items() if k != "verdicts"}
         d = Drawn(random.Random(kind), params=[DEPLOYED])
         v2 = {"blobs": [circuit.hex(), public.hex(), record.hex()], "commitment": _hex(rec),
