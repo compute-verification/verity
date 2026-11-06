@@ -15308,6 +15308,10 @@
     "∀ (u : Fin n), instLENat.le (D.D.size (P.gates u)) Γ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (u : Fin n), Real.instLE.le (Nci.novelReads D (P.gates u)).cast K": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
+   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound": {
+    "∀ (u : Fin B), SetLike.instMembership.mem S u → And (instLENat.le (P.gates u).card (cS u)) (instLENat.le (d.unregistered (P.gates u)).card (kS u))": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion",
+    "∀ (v : Fin d.D.N), SetLike.instMembership.mem J.V v → Real.instLE.le (J.ω v) ωmax": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
+   },
    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_honest": {
     "SetLike.instMembership.mem Accounting.ServingBlocks.Honest.S u": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
    },
@@ -15321,10 +15325,6 @@
    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial": {
     "SetLike.instMembership.mem Accounting.ServingBlocks.Counter.S u": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion",
     "SetLike.instMembership.mem Accounting.ServingBlocks.Counter.J.V v": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
-   },
-   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound": {
-    "∀ (u : Fin B), SetLike.instMembership.mem S u → And (instLENat.le (P.gates u).card (cS u)) (instLENat.le (d.unregistered (P.gates u)).card (kS u))": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion",
-    "∀ (v : Fin d.D.N), SetLike.instMembership.mem J.V v → Real.instLE.le (J.ω v) ωmax": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
    }
   }
  },
@@ -25666,14 +25666,16 @@
    }
   },
   "SampledProofs.ChallengerSession": {
-   "digest": "1933c53673b0ce0a93879a286c071ab0392be2b5872261c183c3017e945b0c5d",
+   "digest": "62ae6c5ea61459aea8b01258407586294f0dcdd3224f798e9c7343b359c75cd7",
    "definitions": {
     "SampledProofs.Challenger.ChallengerClose.ofJson": "ef338d6b514e3399021477cd6e984bdc81338a94058be4c06a817fb97b907b38",
+    "SampledProofs.Challenger.DECLARATION_FORM": "b5722bfe8994c251866297aeb248b642151e4ee65631d61945bd63b076cc1dbf",
     "SampledProofs.Challenger.auditedOpen": "2b1951dd55e9c7e5c74acc02c6a96326061bd81068f2e18c78701edc4900b8b4",
     "SampledProofs.Challenger.checked": "61cbf6b35998797d7cb5848acaeef84b159bd732b388d5d06b88c2822e717c1f",
     "SampledProofs.Challenger.circuitReason": "23e4bf4502c444a403160f17c1834e83cf25a4b923b17c23106c8830afd90819",
     "SampledProofs.Challenger.closeMessage": "6dcc0f52ae7fe564a511bee488f6b312cf78d734eb56f112ee3ca2abbc516a3c",
     "SampledProofs.Challenger.creditedSession": "841f7fa489a57f899e1cfcfaefee1c86d54b0bd7107111ba02f797b3d9a8f0f9",
+    "SampledProofs.Challenger.dayOf": "d0d7693d70fd0841c2f02e7b5d6e1121653f55f33fa9bf41c2e2e0bbf11091b1",
     "SampledProofs.Challenger.event": "f6ece7af729906b11e5608e5d8dac90e07c601f7e118245d9008a50ce1a456f2",
     "SampledProofs.Challenger.firstParentReason": "3d532a87bfde38ff862e595b480c224c6555076e8f88a7c64038ad806cec63c9",
     "SampledProofs.Challenger.isCap": "2d8956710c6c917a4e1f74c1eaf1ba861000f0ccf61dce12683467dfc5942554",
@@ -25690,11 +25692,13 @@
     "SampledProofs.Challenger.sessionNamed": "289abca5e462a1374593865be294c5f5d26bfc76055f7fdd9568aab13835479a",
     "SampledProofs.Challenger.sessionOf": "654432692d2de8ea12286720144b6dbec9e62c53f2728b64e688dc27b6ac4fae",
     "SampledProofs.Challenger.treeLine": "3d9e21631d42f02b4098705d83fc9f6df9cce0da21d16aa031e1c271f6df7b0b",
+    "SampledProofs.Challenger.verifyDays": "4fd16ee48bf8474e1845e683b2ab1310f9cbfcb94e8648b0bb3a062352165495",
     "SampledProofs.Challenger.verifyLedger": "b4c033dd738e5f6fa713d77b1170d1decc73d441f0d86b98c26b999002940509",
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.escapesSurrogate": "7a1c764e2a2ca88201c065e2bf8f9d3d33a41eb2a489ae23eaac24a1cfb1a766",
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.hexAt?": "776001f338109dfcb66a33228efe333de7d238779bf11af956510ca45e080282",
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.inReserve": "ff389dbf44900ce4f01d35b5abebc0bff022a16d3a2e9af2de36c67a36cffa49",
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.isBodyOf": "af6d7bd690a6301fc83acb076a878e1fe6d8cf7d7b8c8ee9a40bb6a1b83a4542",
+    "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.isDeclaration": "54bf610d1269c2dc1a62d41ede5515a7cb36631f7fadc913f608fa8021e03aae",
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.isDigest": "213b45fbc020ce33f4964a1418ecdcaef1ca5a5c527dcb9bcab287160cd72ed1",
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.isLedgerName": "f3438cfc7a1df903cd01903dd21bf619b5021e9899f1c8743735dfe9dc81c3fd",
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.isOutcome": "e7055a128e70a5e456b802629534839308d3cdfd55633901c8896783737750db",
