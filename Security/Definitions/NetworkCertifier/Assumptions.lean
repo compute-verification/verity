@@ -1,5 +1,6 @@
 module
 
+public import Definitions.NetworkCertifier
 public import Definitions.NetworkCertifier.Run
 
 /-!

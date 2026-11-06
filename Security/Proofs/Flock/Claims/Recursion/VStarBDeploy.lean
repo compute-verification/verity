@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.VStarLinks
 public import Proofs.Flock.Claims.Recursion.BoundDeploy
+public import Proofs.Flock.Claims.Recursion.DeployChecked
+public import Proofs.Flock.Claims.Recursion.VStarLinks
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -34,7 +35,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.BoundAccepts
-import Proofs.Flock.Claims.Recursion.DeployChecked
 import Proofs.Flock.Claims.Recursion.DeployMargin
 import Proofs.Flock.Claims.Recursion.DeployScope
 import Proofs.Flock.Claims.Recursion.DeploySessions

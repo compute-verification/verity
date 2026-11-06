@@ -1,12 +1,16 @@
 module
 
-public import Proofs.Flock.Claims.Complete.ZkTables.Parts
+public import Proofs.Flock.Claims.Complete.Zk.ConsCoins
 public import Proofs.Flock.Claims.Complete.Zk.ConsRingSwitch
+public import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
+public import Proofs.Flock.Claims.Complete.ZkTables.LaneRows
+public import Proofs.Flock.Claims.Complete.ZkTables.Parts
+public import Proofs.Flock.Claims.Complete.ZkTables.RepRuns
+public import Proofs.Flock.Claims.Complete.ZkTables.RepSplit
+public import Proofs.Flock.Claims.Complete.ZkTables.ReplayGo
+import Flock.With.ZkEq
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
-public import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
-public import Proofs.Flock.Claims.Complete.ZkTables.RepSplit
-import Flock.With.ZkEq
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -45,15 +49,11 @@ import Proofs.Flock.Claims.Complete.Replay.LigeritoSum
 import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
 import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
 import Proofs.Flock.Claims.Complete.Replay.Trace
-import Proofs.Flock.Claims.Complete.Zk.ConsCoins
 import Proofs.Flock.Claims.Complete.Zk.Count
 import Proofs.Flock.Claims.Complete.Zk.Json.Session
 import Proofs.Flock.Claims.Complete.Zk.Lanes
 import Proofs.Flock.Claims.Complete.Zk.LigeritoPos
 import Proofs.Flock.Claims.Complete.Zk.RingSwitch
-import Proofs.Flock.Claims.Complete.ZkTables.LaneRows
-import Proofs.Flock.Claims.Complete.ZkTables.RepRuns
-import Proofs.Flock.Claims.Complete.ZkTables.ReplayGo
 import Proofs.Flock.Claims.Complete.ZkTables.Trace
 import Proofs.Flock.Claims.Complete.ZkTables.View
 import Proofs.Flock.Soundness.Refine.Arith

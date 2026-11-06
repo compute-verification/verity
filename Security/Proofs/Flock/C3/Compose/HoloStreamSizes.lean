@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.C3.Compose.HoloCoinTys
 public import Proofs.Flock.C3.VStarList.Shape
+public import Proofs.Flock.Recursive.HoloRepCoins
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -19,7 +20,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
-import Proofs.Flock.Recursive.HoloRepCoins
 
 /-!
 # The sparse phases' and R's streams at the model's coins

@@ -3,6 +3,7 @@ module
 public import Aesop.BuiltinRules
 public import Mathlib.Tactic.ToAdditive
 public import Mathlib.Tactic.ToDual
+public import Proofs.Properties.NetworkCertifier.Grid
 public import Properties.NetworkCertifier
 import Mathlib.Algebra.Ring.Int.Defs
 import Mathlib.Data.Finset.Attr

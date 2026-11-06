@@ -1,6 +1,7 @@
 module
 
 public import Flock.RegKnown
+public import Proofs.Flock.C3.RegLevels.ValueTie
 public import Proofs.Flock.Recursive.ValueSrc
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -16,7 +17,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.C3.RegLevels.OpensRegs
-import Proofs.Flock.C3.RegLevels.ValueTie
 import Proofs.Flock.Soundness.Registered.Binding
 
 /-!

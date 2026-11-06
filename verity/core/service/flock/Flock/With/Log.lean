@@ -11,8 +11,8 @@ module
 
 public import Flock.With.Sim
 public import Flock.With.SimVerify
+public import Flock.With.SimZk
 public import Flock.With.Zk
-import Flock.With.SimZk
 
 @[expose] public section
 

@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Recursion.LayoutBDeployed
 public import Proofs.Flock.Claims.Recursion.RegSetup
+public import Proofs.Flock.Claims.Recursion.VerdictRowECommit
 public import Proofs.Flock.VBridge.Family.AccRows
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

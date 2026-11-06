@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.KS.ZkFork0
+public import Proofs.Flock.Claims.KS.ZkPadsLog
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -35,7 +36,6 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.KS.ConflictRun
 import Proofs.Flock.Claims.KS.Width
-import Proofs.Flock.Claims.KS.ZkPadsLog
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictRows
 

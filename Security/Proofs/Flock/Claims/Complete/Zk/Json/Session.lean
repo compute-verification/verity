@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Complete.Json.Session
+public import Proofs.Flock.Claims.Complete.Zk.Json.Decode
 public import Proofs.Flock.Claims.Complete.Zk.Json.Record
 public import Proofs.Flock.Claims.Complete.Zk.Link
 import Flock.With.SimVerify

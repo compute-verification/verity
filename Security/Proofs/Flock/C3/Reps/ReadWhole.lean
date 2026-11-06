@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.C3.Reps.ResRead
 public import Proofs.Flock.VBridge.ResLayer
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational

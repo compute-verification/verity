@@ -1,11 +1,12 @@
 module
 
-public import Proofs.Flock.Claims.KS.PlainRCaps
 public import Proofs.Flock.C3.Compose.HoloStreamSizes
-import all Init.Data.Array.Basic
-import all Init.Data.Range.Basic
+public import Proofs.Flock.Claims.KS.PlainRCaps
+public import Proofs.Flock.Claims.Recursion.NextRHonest
 import Flock.With.Returns
 import Flock.With.SimVerify
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

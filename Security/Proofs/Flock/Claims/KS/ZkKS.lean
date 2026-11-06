@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.KS.PlainKS
 public import Proofs.Flock.Claims.KS.ZkBound
 public import Std.Tactic.BVDecide.Normalize.Prop
 import Mathlib.Algebra.Order.Floor.Extended
@@ -34,7 +35,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployTables
-import Proofs.Flock.Claims.KS.PlainKS
 import Proofs.Flock.Claims.KS.Trim
 import Proofs.Flock.Claims.Scope.Fit
 import Proofs.Flock.Claims.Scope.InScope

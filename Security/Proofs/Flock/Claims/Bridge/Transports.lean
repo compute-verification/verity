@@ -1,5 +1,7 @@
 module
 
+public import Proofs.Flock.C3.RegLevels.ValueTie
+public import Proofs.Flock.Claims.Bridge.BindsColl
 public import Proofs.Flock.Claims.Sampling.Deployed
 public import Proofs.Flock.Recursive.ValueSrc
 import Mathlib.Algebra.Order.Floor.Extended
@@ -33,7 +35,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.C3.RegLevels.ValueTie
 
 /-!
 # The deployed check opens shaped rows only

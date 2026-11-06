@@ -5,6 +5,7 @@ public import Proofs.Flock.Claims.KS.PlainCapsDep
 public import Proofs.Flock.Claims.Recursion.BindsDeployed
 public import Proofs.Flock.Claims.Recursion.BoundRouteKSLin2
 public import Proofs.Flock.Claims.Recursion.DeployScope
+public import Proofs.Flock.Claims.Recursion.KSLin2PlainClosed
 public import Proofs.Flock.Claims.Recursion.LayoutBDeployed
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -37,7 +38,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Recursion.KSLin2PlainClosed
 import Std.Tactic.BVDecide.Normalize.Bool
 
 /-!

@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.EndToEnd.Blocks
 public import Proofs.Flock.EndToEnd.Carry.Statement
 public import Proofs.Flock.EndToEnd.Period.Union
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -16,7 +17,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
-import Proofs.Flock.EndToEnd.Blocks
 import Proofs.Flock.EndToEnd.Period
 import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
 import Proofs.Flock.Soundness.Game.Basic

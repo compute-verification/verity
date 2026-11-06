@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.C3.Opening.SessionCoins
+public import Proofs.Flock.C3.RegLevels.RsT
 public import Proofs.Flock.C3.RegLevels.SrcUnits
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational

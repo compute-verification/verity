@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Refine.Opening
 public import Proofs.Flock.VBridge.Algebra.Eval
+public import Proofs.Flock.VBridge.Algebra.Lincheck
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.MeasureTheory.Integral.Bochner.Basic

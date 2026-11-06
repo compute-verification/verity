@@ -1,5 +1,6 @@
 module
 
+public import PouwCheck
 public import PouwCheck.Pass
 
 /-!

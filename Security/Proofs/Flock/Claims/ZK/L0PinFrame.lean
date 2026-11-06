@@ -2,6 +2,7 @@ module
 
 public import Flock.Firewall.Drive
 public import Proofs.Flock.Claims.ZK.FinishBridge
+public import Proofs.Flock.Claims.ZK.FinishLive
 public import Proofs.Flock.Claims.ZK.FrameOpenCut
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -35,7 +36,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.ZK.FinishLig
-import Proofs.Flock.Claims.ZK.FinishLive
 import Proofs.Flock.Claims.ZK.FramePlan
 
 /-!

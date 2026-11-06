@@ -1,5 +1,7 @@
 module
 
+public import Proofs.Flock.Claims.KS.ZkEntries
+public import Proofs.Flock.Claims.KS.ZkPlanHJ
 public import Proofs.Flock.Claims.KS.ZkPlanJ
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -32,8 +34,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.KS.ZkEntries
-import Proofs.Flock.Claims.KS.ZkPlanHJ
 import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
 import Proofs.Flock.Soundness.Discharge.Exec.Merkle
 import Proofs.Flock.Soundness.Discharge.Exec.Retained

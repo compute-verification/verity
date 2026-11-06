@@ -1,10 +1,11 @@
 module
 
-public import Mathlib.Data.Nat.Log
-public import Mathlib.Data.Finset.Card
 public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 public import Mathlib.Algebra.GroupWithZero.Nat
+public import Mathlib.Algebra.Order.Field.Rat
 public import Mathlib.Algebra.Ring.Int.Defs
+public import Mathlib.Data.Finset.Card
+public import Mathlib.Data.Nat.Log
 public import Mathlib.Data.Rat.Init
 
 /-!

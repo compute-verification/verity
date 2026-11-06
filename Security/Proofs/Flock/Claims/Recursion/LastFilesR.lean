@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.LastBindsR
+public import Proofs.Flock.Claims.Recursion.LastSharedR
 import Flock.With.SimVerify
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -34,7 +35,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployK
-import Proofs.Flock.Claims.Recursion.LastSharedR
 
 /-!
 # The columns half of the deployed reader's last-message binding (`RecDeploy.RColsBind`)

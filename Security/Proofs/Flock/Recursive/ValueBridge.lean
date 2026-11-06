@@ -1,9 +1,10 @@
 module
 
-public import Proofs.Flock.Recursive.LeafFinder
 public import Proofs.Flock.Recursive.ForkInner
 public import Proofs.Flock.Recursive.ForkLast
+public import Proofs.Flock.Recursive.LeafFinder
 public import Proofs.Flock.Recursive.TopFinder
+public import Proofs.Flock.Recursive.ValueFinder
 public import Proofs.Flock.Recursive.ValueSrc
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -20,7 +21,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Recursive.ForkInnerC
-import Proofs.Flock.Recursive.ValueFinder
 import Proofs.Flock.Soundness.Game.Prob
 
 /-!

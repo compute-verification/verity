@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Claims.KS.ZkLevels
 public import Proofs.Flock.Claims.KS.ZkDrawJ
+public import Proofs.Flock.Claims.KS.ZkLevels
+public import Proofs.Flock.Claims.KS.ZkLevelsAll
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -38,7 +39,6 @@ import Proofs.Flock.Claims.KS.Entries
 import Proofs.Flock.Claims.KS.LevelZeroAcc
 import Proofs.Flock.Claims.KS.ZkDecJ
 import Proofs.Flock.Claims.KS.ZkDecodeW
-import Proofs.Flock.Claims.KS.ZkLevelsAll
 import Proofs.Flock.Claims.KS.ZkPlanHJ
 import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
 import Proofs.Flock.Soundness.Discharge.Exec.Merkle

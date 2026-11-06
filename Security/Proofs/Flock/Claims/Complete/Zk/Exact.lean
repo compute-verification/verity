@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Complete.Link
+public import Proofs.Flock.Claims.Complete.Zk.InnerGo
 public import Proofs.Flock.Claims.Complete.Zk.LigeritoProverPos
 public import Proofs.Flock.Claims.Complete.Zk.PiopGo
 public import Proofs.Flock.Claims.Complete.Zk.RingSwitch
@@ -37,7 +38,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Replay.LigeritoProver
-import Proofs.Flock.Claims.Complete.Zk.InnerGo
 import Std.Tactic.BVDecide.Normalize.Bool
 import Std.Tactic.BVDecide.Normalize.Prop
 

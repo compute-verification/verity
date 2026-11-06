@@ -1,15 +1,15 @@
 module
 
-public import Proofs.Flock.Soundness.Refine.Lincheck
 public import Flock.Statement
+public import Proofs.Flock.Soundness.Refine.Lincheck
 public import Proofs.Flock.VBridge.Algebra.Eval
+public import Proofs.Flock.VBridge.Algebra.Zerocheck
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.CategoryTheory.Category.Init
 import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Proofs.Flock.Level3.Folded
 import Proofs.Flock.Soundness.Refine.Arith
-import Proofs.Flock.VBridge.Algebra.Zerocheck
 import VCVio.Prelude.Core
 
 /-!

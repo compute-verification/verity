@@ -1,7 +1,9 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.VerdictRows
 public import Proofs.Flock.Claims.Complete.Reps
+public import Proofs.Flock.Claims.Recursion.VerdictRows
+public import Proofs.Flock.SessionLoop.FinPoints
+public import Proofs.Flock.VBridge.Family.Setup
 import Flock.With.Returns
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -41,11 +43,9 @@ import Proofs.Flock.Claims.Recursion.SchedDense
 import Proofs.Flock.Level3.Assembly
 import Proofs.Flock.Level3.FoldedBase
 import Proofs.Flock.Recursive.ExecClass
-import Proofs.Flock.SessionLoop.FinPoints
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Refine.Arith
 import Proofs.Flock.VBridge.Algebra.RunSkel
-import Proofs.Flock.VBridge.Family.Setup
 
 /-!
 # Row G: the verdict's setup is the reader's

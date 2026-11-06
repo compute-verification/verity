@@ -1,9 +1,10 @@
 module
 
-import all Init.Data.Array.Basic
-import all Init.Data.Range.Basic
+public import Proofs.Flock.Claims.Scope.StmtOf
 public import Proofs.Flock.Claims.ZK.Deployed
 public import Std.Tactic.BVDecide.Normalize.Prop
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -39,7 +40,6 @@ import Proofs.Flock.Claims.Scope.Fit
 import Proofs.Flock.Claims.Scope.InScope
 import Proofs.Flock.Claims.Scope.Setup
 import Proofs.Flock.Claims.Scope.Sizes
-import Proofs.Flock.Claims.Scope.StmtOf
 import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
 import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts

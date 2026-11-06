@@ -5,13 +5,13 @@ prefix's midstate (`saltMid`), over the salt's 24 big-endian words and the fixed
 -/
 module
 
+public import Mathlib.Data.List.GetD
 public import Proofs.Flock.Soundness.Discharge.Hm.Hash
+public import Proofs.Flock.Soundness.Discharge.Hm.Word
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
 import all Init.Data.String.Defs
-public import Proofs.Flock.Soundness.Discharge.Hm.Word
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
-import Mathlib.Data.List.GetD
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.Measurability.Init
 import Mathlib.Tactic.NormNum.Irrational

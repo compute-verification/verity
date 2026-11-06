@@ -1,5 +1,7 @@
 module
 
+public import Proofs.Flock.Claims.Complete.Encode
+public import Proofs.Flock.Claims.KS.PlainStep
 public import Proofs.Flock.Claims.Recursion.BoundDeploy
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

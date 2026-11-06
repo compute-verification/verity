@@ -1,6 +1,9 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.Composed.Coins
+public import Proofs.Flock.Soundness.Discharge.Composed.Geometry
 public import Proofs.Flock.Soundness.Discharge.Composed.Inner.Holds
+public import Proofs.Flock.Soundness.Discharge.Composed.Pads
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -14,8 +17,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Soundness.Discharge.Composed.Coins
-import Proofs.Flock.Soundness.Discharge.Composed.Pads
 
 /-!
 # `coinedOf_setup`, from the refinement's three facts

@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Claims.Complete.Replay.ZerocheckAlgebra
 public import Proofs.Flock.Claims.Complete.Replay.Lincheck
+public import Proofs.Flock.Claims.Complete.Replay.Satisfies
+public import Proofs.Flock.Claims.Complete.Replay.ZerocheckAlgebra
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -35,7 +36,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Complete.Replay.Satisfies
 import Proofs.Flock.Claims.Complete.Replay.Trace
 import Proofs.Flock.Level3.Assembly
 import Proofs.Flock.Level3.Folded

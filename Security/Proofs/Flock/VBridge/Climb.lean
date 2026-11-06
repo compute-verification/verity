@@ -1,8 +1,9 @@
 module
 
-public import Proofs.Flock.VBridge.Sha
-public import Flock.Merkle
 public import Batteries.Data.List.Basic
+public import Flock.Merkle
+public import Proofs.Flock.VBridge.Sha
+public import Proofs.Flock.Verifier.Hash
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.Measurability.Init
@@ -18,7 +19,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Verifier.Hash
 
 /-!
 # V*'s climb through the tree's nodes

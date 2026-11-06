@@ -1,6 +1,9 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.ZkBind
+public import Proofs.Flock.Soundness.Discharge.ZkExec
 public import Proofs.Flock.Soundness.Discharge.ZkSession.Session
+public import Proofs.Flock.Soundness.Discharge.ZkView
 public import Proofs.Flock.Soundness.Discharge.ZkView.Defs
 public import Proofs.Flock.Soundness.Refine.Regions
 import Mathlib.Tactic.Echelon.Zsqrtd

@@ -1,9 +1,10 @@
 module
 
-public import Proofs.Flock.VBridge.ResUnit
 public import Proofs.Flock.VBridge.AccUnits
 public import Proofs.Flock.VBridge.Algebra.ToVStar
 public import Proofs.Flock.VBridge.PartS
+public import Proofs.Flock.VBridge.PartsCover
+public import Proofs.Flock.VBridge.ResUnit
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -17,7 +18,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.VBridge.PartsCover
 
 /-!
 # VBridge G items 1–3: `AlgebraHolds` from the parts' units

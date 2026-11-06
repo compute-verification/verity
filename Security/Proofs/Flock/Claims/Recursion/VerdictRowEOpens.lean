@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.C3.RegLevels.AccReads
 public import Proofs.Flock.Claims.Recursion.LayoutBDeployed
 public import Proofs.Flock.VBridge.Family.AccRows
 import Mathlib.Algebra.Order.Floor.Extended
@@ -33,7 +34,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.C3.RegLevels.AccReads
 import Proofs.Flock.C3.RegLevels.OpensRegs
 import Proofs.Flock.Claims.Recursion.DeployScope
 import Proofs.Flock.Claims.Recursion.OpensReads

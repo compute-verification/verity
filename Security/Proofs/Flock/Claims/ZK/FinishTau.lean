@@ -1,8 +1,11 @@
 module
 
+public import Proofs.Flock.Claims.Complete.Zk.ConsReplay
 public import Proofs.Flock.Claims.ZK.FinishLane
 public import Proofs.Flock.Claims.ZK.FinishRank
 public import Proofs.Flock.Claims.ZK.FinishRep
+public import Proofs.Flock.Claims.ZK.FinishRows
+public import Proofs.Flock.Claims.ZK.FinishZc
 import Flock.With.SimWalk
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -35,11 +38,8 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Complete.Zk.ConsReplay
 import Proofs.Flock.Claims.ZK.CausalExe
-import Proofs.Flock.Claims.ZK.FinishRows
 import Proofs.Flock.Claims.ZK.FinishSrc
-import Proofs.Flock.Claims.ZK.FinishZc
 import Proofs.Flock.Claims.ZK.InnerTauLig
 import Proofs.Flock.Claims.ZK.PiopSrcLc
 import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep

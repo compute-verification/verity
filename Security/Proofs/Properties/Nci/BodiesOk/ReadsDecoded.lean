@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Properties.Nci.ReadsSet
 public import Proofs.Properties.Nci.BodiesOk.Decode
+public import Proofs.Properties.Nci.BodiesOk.ForReads
+public import Proofs.Properties.Nci.ReadsSet
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
 import Mathlib.Data.NNRat.Floor
 import Mathlib.Tactic.ENatToNat
@@ -22,7 +23,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Properties.Nci.BodiesOk.Basic
 import Proofs.Properties.Nci.BodiesOk.Decoded
-import Proofs.Properties.Nci.BodiesOk.ForReads
 import Proofs.Properties.Nci.ReadsOneNode
 
 /-!

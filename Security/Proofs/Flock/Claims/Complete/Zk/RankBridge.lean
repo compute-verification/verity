@@ -1,6 +1,8 @@
 module
 
+public import Proofs.Flock.Claims.Complete.Zk.Coins
 public import Proofs.Flock.Claims.Complete.Zk.MaskRank
+public import Proofs.Flock.Claims.KS.Range
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -36,8 +38,6 @@ import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Coins
-import Proofs.Flock.Claims.Complete.Zk.Coins
-import Proofs.Flock.Claims.KS.Range
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Scope.Setup
 import Proofs.Flock.Soundness.Discharge.FailClosed.Mask

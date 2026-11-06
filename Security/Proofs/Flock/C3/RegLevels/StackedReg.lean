@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.C3.Opening.SessionCoins
+public import Proofs.Flock.C3.RegLevels.Kappa
 public import Proofs.Flock.C3.RegLevels.SrcUnits
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -15,7 +16,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.C3.RegLevels.Kappa
 
 /-!
 # n7's levels: the coef `checkStackedLevel` registers (`hreg`)

@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.HonestWitR
 public import Proofs.Flock.Claims.Recursion.DeployedR
+public import Proofs.Flock.Claims.Recursion.HonestPartsR
+public import Proofs.Flock.Claims.Recursion.HonestWitR
 public import Proofs.Flock.Claims.Recursion.SlotsCommit
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -35,7 +36,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.CapPorts
-import Proofs.Flock.Claims.Recursion.HonestPartsR
 import Proofs.Flock.Claims.Recursion.RowsCover
 import Proofs.Flock.Claims.Recursion.SchedDense
 import Proofs.Flock.Claims.Recursion.SlotsCheck

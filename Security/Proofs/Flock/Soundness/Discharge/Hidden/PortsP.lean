@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.Hidden.SpecP
 public import Proofs.Flock.Soundness.ExecCheck
 import Mathlib.Tactic.ENatToNat
 import Mathlib.Tactic.Echelon.Zsqrtd

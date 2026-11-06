@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Properties.Pous.RunAt
 public import Properties.Pous.PeriodAt
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Algebra.Order.Ring.Star
@@ -14,7 +15,6 @@ import Proofs.Pous.EndToEndAt
 import Proofs.Pous.Obligation
 import Proofs.Pous.Period
 import Proofs.Pouw.Prob
-import Proofs.Properties.Pous.RunAt
 import VCVio.Prelude.Core
 
 /-!

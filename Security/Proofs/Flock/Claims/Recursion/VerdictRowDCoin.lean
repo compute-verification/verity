@@ -1,10 +1,11 @@
 module
 
 public import Proofs.Flock.Claims.DeployK
+public import Proofs.Flock.Claims.Recursion.OpenPieces
+public import Proofs.Flock.Claims.Recursion.VerdictRowDSide
+public import Proofs.Flock.Claims.Recursion.VerdictRows
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
-public import Proofs.Flock.Claims.Recursion.OpenPieces
-public import Proofs.Flock.Claims.Recursion.VerdictRows
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -39,7 +40,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Json.Decode
 import Proofs.Flock.Claims.Recursion.CallsAgree
-import Proofs.Flock.Claims.Recursion.VerdictRowDSide
 import Proofs.Flock.Claims.Recursion.VerdictRowG
 
 /-!

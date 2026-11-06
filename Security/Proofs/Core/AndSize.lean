@@ -1,11 +1,11 @@
 module
 
-public import Definitions.Core.Guarantees.Formalism
 public import Definitions.Core.Guarantees.Expand
+public import Definitions.Core.Guarantees.Formalism
+public import Proofs.Core.Expand
 import Mathlib.Data.ZMod.Basic
 import Mathlib.Tactic.LinearCombination
 import Mathlib.Tactic.Ring.RingNF
-import Proofs.Core.Expand
 
 /-!
 # Proofs about the AND count

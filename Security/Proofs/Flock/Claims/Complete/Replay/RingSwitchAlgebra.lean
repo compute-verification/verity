@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
 public import Proofs.Flock.Claims.Complete.Replay.RingSwitch
 public import Proofs.Flock.Claims.Complete.Replay.ZerocheckAlgebra
 public import Proofs.Flock.Soundness.Discharge.Composed.Inner.LincheckReplay
@@ -36,7 +37,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Discharge
-import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
 import Proofs.Flock.Claims.Complete.Replay.Satisfies
 import Proofs.Flock.Claims.Complete.Replay.Trace
 import Proofs.Flock.Level3.Assembly

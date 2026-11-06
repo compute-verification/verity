@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Accounting.Guarantees.Confidence
+public import Proofs.Accounting.Actual.Split
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Data.Rat.Cast.Order
@@ -8,7 +9,6 @@ import Mathlib.Tactic.Linarith.Frontend
 import Mathlib.Tactic.NormNum.Abs
 import Mathlib.Tactic.NormNum.DivMod
 import Mathlib.Tactic.NormNum.OfScientific
-import Proofs.Accounting.Actual.Split
 
 /-!
 # Composition and fit, proved

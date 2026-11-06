@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Complete.Encode
 public import Proofs.Flock.Claims.Complete.Prover.Session
 public import Proofs.Flock.Claims.Deploy
 import Mathlib.Algebra.Order.Floor.Extended

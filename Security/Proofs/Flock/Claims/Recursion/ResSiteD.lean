@@ -1,6 +1,8 @@
 module
 
+public import Proofs.Flock.Claims.Recursion.LabelsFull
 public import Proofs.Flock.Claims.Recursion.ResLowerD
+public import Proofs.Flock.Claims.Recursion.ResSite
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -35,9 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.DeployScope
 import Proofs.Flock.Claims.Recursion.DeployScopeRuns
 import Proofs.Flock.Claims.Recursion.DeploySessions
-import Proofs.Flock.Claims.Recursion.LabelsFull
 import Proofs.Flock.Claims.Recursion.ResLowerDA
-import Proofs.Flock.Claims.Recursion.ResSite
 import Proofs.Flock.Claims.Recursion.TopsOpens
 
 /-!

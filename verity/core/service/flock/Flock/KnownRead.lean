@@ -19,8 +19,9 @@ depend on the same bits of it.
 module
 
 public import Flock.ProvedScope
-public import Flock.TmplReads
+public import Flock.RegKnown
 public import Flock.Registered
+public import Flock.TmplReads
 
 @[expose] public section
 

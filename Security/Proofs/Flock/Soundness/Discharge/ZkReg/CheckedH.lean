@@ -1,11 +1,12 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.ZkReg.BindH
-public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
 public import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
-import all Init.Data.Array.Basic
+public import Proofs.Flock.Soundness.Discharge.ZkReg.BindH
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 public import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
+public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
 public import Proofs.Flock.Soundness.Registered.ReadsX
+import all Init.Data.Array.Basic
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -27,7 +28,6 @@ import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 import Proofs.Flock.Soundness.Discharge.Layout.QSort
 import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
 import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
-import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 
 /-!
 # The registered check at an accepted hidden-output `--zk --registered` outcome

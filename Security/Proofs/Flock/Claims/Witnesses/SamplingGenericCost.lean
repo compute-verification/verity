@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Witnesses.SamplingGeneric
+public import Proofs.Flock.SamplingGeneric.Efficient
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Ring.Star

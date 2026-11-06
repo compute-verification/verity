@@ -1,8 +1,9 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.RestReadsAt
-public import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
 public import Proofs.Flock.Claims.Recursion.NextRHonest
+public import Proofs.Flock.Claims.Recursion.NextRTables
+public import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
+public import Proofs.Flock.Claims.Recursion.RestReadsAt
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -39,7 +40,6 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Shaped
 import Proofs.Flock.Claims.Recursion.NextRRows
 import Proofs.Flock.Claims.Recursion.NextRSetup
-import Proofs.Flock.Claims.Recursion.NextRTables
 import Proofs.Flock.Claims.Recursion.RestFinal
 import Proofs.Flock.Claims.Recursion.RestFitsLift
 import Proofs.Flock.Claims.Recursion.VerdictRowG

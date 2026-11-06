@@ -1,8 +1,9 @@
 module
 
-public import Proofs.Flock.Claims.Scope.Matches
 public import Flock.RecSetup
 public import Proofs.Flock.Claims.Complete.Json.Value
+public import Proofs.Flock.Claims.JsonNorm
+public import Proofs.Flock.Claims.Scope.Matches
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -34,7 +35,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.JsonNorm
 import VCVio.Prelude.Core
 
 /-!

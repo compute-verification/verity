@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.VerdictRowRLeaf
+public import Proofs.Flock.Claims.Recursion.PartsVStar
 public import Proofs.Flock.Claims.Recursion.VerdictRowRDeployed
+public import Proofs.Flock.Claims.Recursion.VerdictRowRLeaf
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -36,7 +37,6 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.C3.VStarList.Shape
 import Proofs.Flock.Claims.Recursion.InnerForm
-import Proofs.Flock.Claims.Recursion.PartsVStar
 import Proofs.Flock.Claims.Recursion.SchedDense
 import Proofs.Flock.Claims.Recursion.VerdictDecision
 import Proofs.Flock.Claims.Recursion.VerdictLoop

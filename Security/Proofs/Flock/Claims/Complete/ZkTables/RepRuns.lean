@@ -1,10 +1,12 @@
 module
 
-import all Init.Data.Array.Basic
-import all Init.Data.Range.Basic
 public import Proofs.Flock.Claims.Complete.Zk.InnerGo
+public import Proofs.Flock.Claims.Complete.Zk.LigeritoPos
 public import Proofs.Flock.Claims.Complete.ZkTables.Level0
 public import Proofs.Flock.Claims.Complete.ZkTables.Table
+public import Proofs.Flock.Claims.Complete.ZkTables.View
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -41,10 +43,8 @@ import Proofs.Flock.Claims.Complete.Json.Goals
 import Proofs.Flock.Claims.Complete.Replay.LigeritoBasis
 import Proofs.Flock.Claims.Complete.Replay.LigeritoSum
 import Proofs.Flock.Claims.Complete.Zk.Count
-import Proofs.Flock.Claims.Complete.Zk.LigeritoPos
 import Proofs.Flock.Claims.Complete.Zk.RingSwitch
 import Proofs.Flock.Claims.Complete.ZkTables.Trace
-import Proofs.Flock.Claims.Complete.ZkTables.View
 
 /-!
 # The masked prover's rep: its round count

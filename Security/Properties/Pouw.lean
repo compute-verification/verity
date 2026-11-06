@@ -1,5 +1,6 @@
 module
 
+public import PouwWindow
 public import PouwWindow.Draw
 public import PouwWindow.Public
 

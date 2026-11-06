@@ -1,8 +1,10 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
+public import Proofs.Flock.Soundness.Discharge.Composed.Coined
 public import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
+public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
 public import Proofs.Flock.Soundness.Discharge.ZkView.Defs
+public import Proofs.Flock.Soundness.ZK.Complete
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime

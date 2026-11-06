@@ -1,9 +1,10 @@
 module
 
-import all Lean.Data.Json.Basic
-import all Init.Data.Ord.String
 public import Proofs.Flock.Claims.Complete.Json.Record
 public import Proofs.Flock.Claims.Complete.Sim
+public import Proofs.Flock.Claims.Complete.Zk.Json.QSort
+import all Init.Data.Ord.String
+import all Lean.Data.Json.Basic
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -41,7 +42,6 @@ import Proofs.Flock.Claims.Complete.Json.Live
 import Proofs.Flock.Claims.Complete.Json.RoundTrip
 import Proofs.Flock.Claims.Complete.Json.Session
 import Proofs.Flock.Claims.Complete.Json.Spec
-import Proofs.Flock.Claims.Complete.Zk.Json.QSort
 import Std.Data.TreeMap.Raw.Lemmas
 import Std.Tactic.BVDecide.Normalize.Bool
 import Std.Tactic.BVDecide.Normalize.Prop

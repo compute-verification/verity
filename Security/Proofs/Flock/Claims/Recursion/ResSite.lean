@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Recursion.PastIn
 public import Proofs.Flock.Claims.Recursion.ResLowerDeployed
 public import Proofs.Flock.Claims.Recursion.VerdictRowRDep
 import Mathlib.Algebra.Order.Floor.Extended
@@ -37,7 +38,6 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.CopySiteDeployed
 import Proofs.Flock.Claims.Recursion.OpensReads
-import Proofs.Flock.Claims.Recursion.PastIn
 import Proofs.Flock.Claims.Recursion.ResTieVV
 import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Claims.Recursion.VVTieOf

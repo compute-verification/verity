@@ -1,8 +1,9 @@
 module
 
-public import Proofs.Flock.Claims.ZK.SimLig
+public import Proofs.Flock.Claims.Complete.Zk.Level0Run
 public import Proofs.Flock.Claims.Complete.ZkTables.Table
 public import Proofs.Flock.Claims.ZK.CausalExe
+public import Proofs.Flock.Claims.ZK.SimLig
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -40,7 +41,6 @@ import Proofs.Flock.Claims.Complete.Zk.Count
 import Proofs.Flock.Claims.Complete.Zk.Lanes
 import Proofs.Flock.Claims.Complete.Zk.Level0Lanes
 import Proofs.Flock.Claims.Complete.Zk.Level0Premises
-import Proofs.Flock.Claims.Complete.Zk.Level0Run
 import Proofs.Flock.Claims.Complete.Zk.Stops
 import Proofs.Flock.Claims.Complete.ZkTables.RepRuns
 import Proofs.Flock.Claims.Complete.ZkTables.Scope

@@ -1,9 +1,9 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.Exec.SessionAccL
 public import Proofs.Flock.Soundness.Discharge.Exec.SessionBatchL
 public import Proofs.Flock.Soundness.SessionBatchAcc
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Discharge.Exec.SessionAccL
 import Proofs.Flock.Soundness.Game.Expect
 
 /-!

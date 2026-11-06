@@ -1,8 +1,9 @@
 module
 
-public import Proofs.Flock.VBridge.Family
-import all Init.Data.Repr
 public import Proofs.Flock.VBridge.Algebra.LigeritoConverse
+public import Proofs.Flock.VBridge.Family
+public import Proofs.Flock.VBridge.Runs.Rep
+import all Init.Data.Repr
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -18,7 +19,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Defs
-import Proofs.Flock.VBridge.Runs.Rep
 
 /-!
 # The family's table files: `HSch`, `HFiles`, `HRuns`

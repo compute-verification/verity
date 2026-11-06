@@ -1,7 +1,10 @@
 module
 
 public import Proofs.Flock.Claims.Witnesses.SamplingGeneric
+public import Proofs.Flock.Claims.ZK.Compose
 public import Proofs.Flock.Claims.ZK.Split
+public import Proofs.Flock.Claims.ZKOut
+public import Proofs.Flock.Masked
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -35,8 +38,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
-import Proofs.Flock.Claims.ZKOut
-import Proofs.Flock.Masked
 
 /-!
 # Refutation witnesses: the generic sampled compiler's zero knowledge

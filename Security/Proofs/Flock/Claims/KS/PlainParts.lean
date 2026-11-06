@@ -1,8 +1,9 @@
 module
 
-public import Proofs.Flock.Claims.KS.PlainStep
-public import Proofs.Flock.Claims.KS.PlainDrawSim
 public import Proofs.Flock.Claims.KS.PlainClashL
+public import Proofs.Flock.Claims.KS.PlainDrawSim
+public import Proofs.Flock.Claims.KS.PlainSlackFit
+public import Proofs.Flock.Claims.KS.PlainStep
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -34,7 +35,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.KS.PlainSlackFit
 
 /-!
 # The plain chain from the concrete simulator's parts

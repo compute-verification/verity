@@ -1,8 +1,9 @@
 module
 
+public import Flock.Keccak
+public import PouwCheck.CommittedFiles
 public import PouwCheck.CreditDifftest
 public import PouwCheck.LiveVerified
-public import PouwCheck.CommittedFiles
 
 /-!
 # The difftest's functions for a served window's statements (`PouwCheck.Verified`, `PouwCheck.LiveVerified`,

@@ -1,7 +1,9 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.BitsLin2
+public import Proofs.Flock.Claims.Recursion.DeployedCounts
 public import Proofs.Flock.Claims.Recursion.LamDeployed
+public import Proofs.Flock.Claims.Recursion.LamDeployedTight
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Star.Real
@@ -35,8 +37,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Recursion.DeployedCounts
-import Proofs.Flock.Claims.Recursion.LamDeployedTight
 
 /-!
 # Route 2C's split bound at the deployment's sizes: `κ ≤ 2^{−167.7}` and `ε ≤ 2^{−174.95}`

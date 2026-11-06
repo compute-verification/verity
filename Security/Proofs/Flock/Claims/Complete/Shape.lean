@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Complete.Discharge
 public import Proofs.Flock.Claims.Complete.Skeleton
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

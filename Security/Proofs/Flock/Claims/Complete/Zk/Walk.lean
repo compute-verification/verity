@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Complete.Walk
 public import Proofs.Flock.Claims.Complete.Zk.Json.Files
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -35,7 +36,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Json.Canon
-import Proofs.Flock.Claims.Complete.Walk
 import Proofs.Flock.Claims.Complete.Zk.Discharge
 import Proofs.Flock.Claims.Complete.Zk.Json.Decode
 import Proofs.Flock.Claims.Complete.Zk.Json.Session

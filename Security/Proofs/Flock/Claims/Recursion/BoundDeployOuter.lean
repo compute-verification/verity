@@ -4,6 +4,7 @@ public import Proofs.Flock.Claims.KS.ZkOuter
 public import Proofs.Flock.Claims.Recursion.BoundWeight
 public import Proofs.Flock.Claims.Recursion.DeployLayout
 public import Proofs.Flock.Claims.Recursion.LastBindsDeployed
+public import Proofs.Flock.Claims.Recursion.PlainKSAbortDeployed
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -41,7 +42,6 @@ import Proofs.Flock.Claims.Recursion.DeployFacts
 import Proofs.Flock.Claims.Recursion.DeployMargin
 import Proofs.Flock.Claims.Recursion.DeploySessions
 import Proofs.Flock.Claims.Recursion.KSStated
-import Proofs.Flock.Claims.Recursion.PlainKSAbortDeployed
 import Proofs.Flock.Claims.Recursion.VStarKS
 
 /-!

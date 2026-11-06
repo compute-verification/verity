@@ -2,6 +2,7 @@ module
 
 public import Batteries.Data.ByteArray
 public import Flock.Firewall.Finish
+public import Proofs.Flock.Claims.ZK.FinishRep
 public import Proofs.Flock.Claims.ZK.PadFree
 public import Proofs.Flock.Claims.ZK.Worker
 public import Proofs.Flock.Soundness.Discharge.Composed.Inner.Holds

@@ -25,6 +25,7 @@ module
 
 public import Flock.Registered
 public import SampledProofs.Json
+public import SampledProofs.Partition
 
 @[expose] public section
 

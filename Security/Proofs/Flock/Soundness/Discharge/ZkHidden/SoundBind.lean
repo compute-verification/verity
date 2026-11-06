@@ -6,6 +6,7 @@ public import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.Sites
 public import Proofs.Flock.Soundness.Discharge.ZkBind.At
 public import Proofs.Flock.Soundness.Discharge.ZkBind.BindX
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Count
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.Defs
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -20,7 +21,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Count
 
 @[expose] public section
 

@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Recursion.DeployedBrings
 public import Proofs.Flock.Claims.Recursion.ResLowerD
+public import Proofs.Flock.Claims.Recursion.ResSiteD
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -34,7 +35,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.ResLowerDA
-import Proofs.Flock.Claims.Recursion.ResSiteD
 import Proofs.Flock.Claims.Recursion.ResTieVV
 import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Claims.Recursion.VVTieOf

@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Accounting.Guarantees.RemoteBinding
+public import Proofs.Hash.RowBinding
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Star.Real
@@ -34,7 +35,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.TS.Drawn
-import Proofs.Hash.RowBinding
 import Proofs.Pouw.RelativeSecurity
 
 /-!

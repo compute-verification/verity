@@ -1,5 +1,6 @@
 module
 
+public import Flock.Firewall.Salts
 public import Flock.Firewall.Session
 public import Proofs.Flock.Claims.ZK.FrameInner
 public import Proofs.Flock.Claims.ZK.FrameReal

@@ -2,6 +2,7 @@ module
 
 public import Definitions.Core.Game.Expect
 public import Definitions.Flock.Game
+public import Definitions.Flock.Rewinding
 import Mathlib.Analysis.Real.Sqrt
 import Mathlib.Tactic.Positivity.Finset
 

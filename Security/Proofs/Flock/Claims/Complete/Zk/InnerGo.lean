@@ -1,8 +1,9 @@
 module
 
-public import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
 public import Proofs.Flock.Claims.Complete.Replay.Steps
 public import Proofs.Flock.Claims.Complete.Zk.Inner
+public import Proofs.Flock.Claims.Complete.Zk.InnerMerkle
+public import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
 import Flock.With.Eq
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -37,7 +38,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Replay.LigeritoRun
-import Proofs.Flock.Claims.Complete.Zk.InnerMerkle
 import Proofs.Flock.Claims.Complete.Zk.Json.Files
 import Std.Tactic.BVDecide.Normalize.Bool
 import Std.Tactic.BVDecide.Normalize.Prop

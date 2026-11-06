@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.C3.Reps.RoundLinks
 public import Proofs.Flock.Claims.Recursion.LayoutBTops
 public import Proofs.Flock.Claims.Recursion.OpensReads
 public import Proofs.Flock.Claims.Recursion.RecRecord
@@ -35,7 +36,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.C3.Reps.RoundLinks
 import Proofs.Flock.C3.VStarList.Accepts
 import Proofs.Flock.Claims.Recursion.DeployHonest
 import Proofs.Flock.Claims.Recursion.DeployScope

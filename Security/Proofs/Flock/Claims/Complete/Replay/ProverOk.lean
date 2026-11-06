@@ -1,9 +1,10 @@
 module
 
+public import Proofs.Flock.Claims.Complete.Json.Goals
 public import Proofs.Flock.Claims.Complete.Replay.LigeritoWalk
+public import Proofs.Flock.Claims.DeployK
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
-public import Proofs.Flock.Claims.Complete.Json.Goals
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -38,7 +39,6 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Discharge
 import Proofs.Flock.Claims.Complete.Replay.RepRounds
-import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.Scope.Check
 import Proofs.Flock.Claims.Scope.Sizes
 import Proofs.Flock.Soundness.Discharge.Exec.Merkle

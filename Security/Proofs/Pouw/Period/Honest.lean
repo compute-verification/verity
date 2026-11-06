@@ -1,7 +1,9 @@
 module
 
-public import Proofs.Pouw.Period.Accept
+public import Flock.Keccak
 public import Proofs.Accounting.ComposePeriod.Honest
+public import Proofs.Pouw.Period
+public import Proofs.Pouw.Period.Accept
 public import Properties.Pouw.Period
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -37,7 +39,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Pouw.Period
 import Std.Tactic.BVDecide.Normalize.BitVec
 import Std.Tactic.BVDecide.Normalize.Prop
 

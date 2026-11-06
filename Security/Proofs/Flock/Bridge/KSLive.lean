@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Bridge.FaultyRightC
 public import Proofs.Flock.Bridge.Refused
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -35,7 +36,6 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Bridge.Assembly
 import Proofs.Flock.Bridge.Count
 import Proofs.Flock.Bridge.EndToEndHiddenC
-import Proofs.Flock.Bridge.FaultyRightC
 import Proofs.Flock.Bridge.OpeningsCanon
 import Proofs.Flock.Bridge.Transports
 

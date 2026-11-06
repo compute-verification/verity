@@ -1,9 +1,10 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.FlockKSRecord
-public import Proofs.Flock.Claims.KS.ZkAbortR
 public import Proofs.Flock.Claims.DeployE
+public import Proofs.Flock.Claims.KS.ZkAbortR
 public import Proofs.Flock.Claims.Recursion.BoundDeploy
+public import Proofs.Flock.Claims.Recursion.BoundDeployE
+public import Proofs.Flock.Claims.Recursion.FlockKSRecord
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

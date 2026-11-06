@@ -1,5 +1,7 @@
 module
 
+public import Proofs.Flock.C3.VStarList.Accepts
+public import Proofs.Flock.Claims.Recursion.DeployHonest
 public import Proofs.Flock.Claims.Recursion.LayoutBTops
 public import Proofs.Flock.Claims.Recursion.RecRecord
 public import Proofs.Flock.Claims.Recursion.SlotsCheck
@@ -38,8 +40,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.C3.PubRows.Check
-import Proofs.Flock.C3.VStarList.Accepts
-import Proofs.Flock.Claims.Recursion.DeployHonest
 import Proofs.Flock.Claims.Recursion.DeployScope
 import Proofs.Flock.Claims.Scope.Fit
 import Proofs.Flock.Claims.Scope.Setup

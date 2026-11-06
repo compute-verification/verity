@@ -1,5 +1,6 @@
 module
 
+public import RemoteAudit
 public import RemoteAudit.Session
 
 /-!

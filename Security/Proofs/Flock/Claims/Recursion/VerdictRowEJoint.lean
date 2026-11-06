@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.VerdictRowECoin
+public import Proofs.Flock.Claims.Recursion.OpenLowerJointV
 public import Proofs.Flock.Claims.Recursion.PartAcceptsSetup
+public import Proofs.Flock.Claims.Recursion.VerdictRowECoin
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

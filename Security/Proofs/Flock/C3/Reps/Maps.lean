@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.C3.Reps.AlgL
 public import Proofs.Flock.C3.Reps.Vals
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -14,7 +15,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.C3.Reps.AlgL
 import Proofs.Flock.VBridge.Algebra.BitsOk
 
 /-!

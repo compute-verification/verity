@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.C3.Sparse.Src
 public import Proofs.Flock.VBridge.Sparse.Laid
+public import Proofs.Flock.VBridge.Sparse.Unit
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -17,7 +18,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.C3.Sparse.SrcTape
-import Proofs.Flock.VBridge.Sparse.Unit
 
 /-!
 # The source's sparse phases from V*'s RecSparse units

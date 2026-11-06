@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.ZK.MaskedTables
+public import Proofs.Flock.Claims.ZK.Round1
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

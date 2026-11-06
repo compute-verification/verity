@@ -18,6 +18,7 @@ public import Flock.JsonParse
 public import Flock.Sizes
 public import Flock.Steps
 public import Lean.Data.Json.FromToJson.Basic
+public import Std.Data.HashMap
 
 @[expose] public section
 set_option backward.privateInPublic true

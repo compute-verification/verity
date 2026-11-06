@@ -1,7 +1,8 @@
 module
 
-public import VStar.In
 public import Proofs.Flock.Claims.Recursion.LayoutBDeployed
+public import Proofs.Flock.Claims.Recursion.VStarWit
+public import VStar.In
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

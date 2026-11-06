@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Complete.ZkTables.Round2
 public import Proofs.Flock.Claims.ZK.Round1Enc
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -34,7 +35,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Zk.Json.Runs
 import Proofs.Flock.Claims.Complete.ZkTables.Round1
-import Proofs.Flock.Claims.Complete.ZkTables.Round2
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Claims.ZK.Round1
 

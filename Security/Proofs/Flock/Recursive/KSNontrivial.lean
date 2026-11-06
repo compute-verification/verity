@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.Assumptions.KSFixture
+public import Proofs.Flock.Claims.Recursion.PlainKSAbortFails
 public import Proofs.Flock.Claims.Witnesses.RecursionLin2
 public import Proofs.Flock.Recursive.KSStatement
 import Mathlib.Algebra.Order.Floor.Extended
@@ -38,7 +39,6 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployEfficient
 import Proofs.Flock.Claims.Recursion.DeployMargin
 import Proofs.Flock.Claims.Recursion.DeployScope
-import Proofs.Flock.Claims.Recursion.PlainKSAbortFails
 
 /-!
 # `RecursiveKS` at the verifier that accepts everything (the Lean check's `nontrivial`)

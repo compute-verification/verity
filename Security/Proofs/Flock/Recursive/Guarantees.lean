@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Recursive.Statements
+public import Proofs.Flock.Recursive.StopLeak
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -15,7 +16,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Recursive.Compose
-import Proofs.Flock.Recursive.StopLeak
 import Proofs.Flock.Soundness.CROnly.Hiding
 import Proofs.Flock.Soundness.Game.Basic
 import Proofs.Flock.Soundness.ZK.Hiding

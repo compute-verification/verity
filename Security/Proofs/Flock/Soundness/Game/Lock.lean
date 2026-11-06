@@ -5,6 +5,7 @@ public import Definitions.Flock.Rewinding
 public import Mathlib.Analysis.Real.Sqrt
 public import Proofs.Core.Game.Lock
 public import Proofs.Flock.Soundness.Game.Expect
+public import Proofs.Flock.Soundness.Game.Interleave
 import Mathlib.Algebra.Order.Chebyshev
 import Proofs.Flock.Soundness.Game.Basic
 

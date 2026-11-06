@@ -1,8 +1,9 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.SideCapUp
 public import Proofs.Flock.Claims.Recursion.DecompBDeployed
 public import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
+public import Proofs.Flock.Claims.Recursion.SideCapUp
+public import Proofs.Flock.Recursive.HoloRepCoins
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -39,7 +40,6 @@ import Proofs.Flock.Claims.Recursion.NextRFits
 import Proofs.Flock.Claims.Recursion.RestLens
 import Proofs.Flock.Claims.Recursion.RowDLevels
 import Proofs.Flock.Claims.Recursion.SchedDense
-import Proofs.Flock.Recursive.HoloRepCoins
 import Proofs.Flock.Soundness.Refine.Seam
 
 /-!

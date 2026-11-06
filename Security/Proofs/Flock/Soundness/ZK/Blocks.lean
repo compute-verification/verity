@@ -3,8 +3,8 @@ module
 public import Mathlib.Data.Fin.VecNotation
 public import Mathlib.Data.Fintype.Prod
 public import Mathlib.Tactic.FinCases
+public import Proofs.Flock.Soundness.ZK.Adaptivity
 import Mathlib.Tactic.NormNum.Basic
-import Proofs.Flock.Soundness.ZK.Adaptivity
 
 /-!
 # Zero knowledge: `Adaptivity`'s two lemmas for four blocks of randomness

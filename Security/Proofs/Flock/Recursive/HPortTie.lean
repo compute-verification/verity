@@ -1,8 +1,9 @@
 module
 
 public import Proofs.Flock.C3.Compose.HoloEncoded
-public import Proofs.Flock.C3.Sparse.SessionAt
 public import Proofs.Flock.C3.RegLevels.AccReads
+public import Proofs.Flock.C3.RegLevels.SharedRows
+public import Proofs.Flock.C3.Sparse.SessionAt
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -19,7 +20,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.C3.HoloValues.Shape
 import Proofs.Flock.C3.HoloValues.ZcLc
 import Proofs.Flock.C3.RegLevels.OpensRegs
-import Proofs.Flock.C3.RegLevels.SharedRows
 import Proofs.Flock.Soundness.Discharge.Aliased.Rows
 import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked

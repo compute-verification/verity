@@ -1,8 +1,10 @@
 module
 
 public import Proofs.Flock.Claims.ZK.FinishInner
+public import Proofs.Flock.Claims.ZK.FinishSwLigE
 public import Proofs.Flock.Claims.ZK.FinishSwSrc
 public import Proofs.Flock.Claims.ZK.FrameTape
+public import Proofs.Flock.Claims.ZK.InnerY
 public import Proofs.Flock.Claims.ZK.PiopSrcVals
 public import Proofs.Flock.Claims.ZK.SimInner
 public import Proofs.Flock.Claims.ZK.SimLig

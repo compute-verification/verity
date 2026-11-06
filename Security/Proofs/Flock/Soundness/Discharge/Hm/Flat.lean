@@ -9,8 +9,9 @@ read the pin and the unit range's forced-zero row (`Aliased.zeroPos_block`).
 -/
 module
 
-public import Proofs.Flock.Soundness.Discharge.Hm.Copy
+public import Proofs.Flock.Soundness.Discharge.Aliased
 public import Proofs.Flock.Soundness.Discharge.Aliased.Copies
+public import Proofs.Flock.Soundness.Discharge.Hm.Copy
 import Mathlib.Tactic.ENatToNat
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational

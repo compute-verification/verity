@@ -1,12 +1,12 @@
 module
 
 public import Definitions.Pouw.Assumptions.Dimension.Pinned
+public import Proofs.Pouw.NCP.ChainProofs
 public import Proofs.Pouw.NCP.RelationProofs
 public import Proofs.Pouw.NCP.RelationWitness
 import Mathlib.LinearAlgebra.FiniteDimensional.Lemmas
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Exact
-import Proofs.Pouw.NCP.ChainProofs
 import Proofs.Pouw.NCP.Proofs
 
 /-!

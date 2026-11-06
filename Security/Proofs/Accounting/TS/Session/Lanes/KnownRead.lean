@@ -1,7 +1,9 @@
 module
 
-public import Proofs.Accounting.TS.Session.Lanes.KnownFields
 public import Proofs.Accounting.TS.Session.Lanes.KnownBits
+public import Proofs.Accounting.TS.Session.Lanes.KnownFields
+public import Proofs.Flock.C3.Reps.ReadWhole
+public import Proofs.Flock.Soundness.TmplReads
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -36,11 +38,9 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.C3.Reps.ReadWhole
 import Proofs.Flock.Soundness.Audit.Circuit
 import Proofs.Flock.Soundness.Discharge.FailClosed.TmplStmt
 import Proofs.Flock.Soundness.Discharge.Placed.Wiring
-import Proofs.Flock.Soundness.TmplReads
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!

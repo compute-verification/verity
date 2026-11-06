@@ -1,8 +1,8 @@
 module
 
 public import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
+public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Unequal.Bounds
 import Proofs.Flock.Soundness.Audit.Law
-import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Unequal.Bounds
 import Proofs.Flock.Soundness.Game.Basic
 
 /-!

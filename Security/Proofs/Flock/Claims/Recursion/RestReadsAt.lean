@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.DeployedR
+public import Proofs.Flock.Claims.Recursion.RestLive
 public import Proofs.Flock.Claims.Recursion.RestRead
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -37,7 +38,6 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.DeployChecked
 import Proofs.Flock.Claims.Recursion.RestFinal
 import Proofs.Flock.Claims.Recursion.RestLens
-import Proofs.Flock.Claims.Recursion.RestLive
 
 /-!
 # `ReadsAt` at the deployed readers `rdR`, `finalR` and `restR elem`

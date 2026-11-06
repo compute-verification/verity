@@ -1,5 +1,7 @@
 module
 
+public import Proofs.Flock.Claims.KS.PlainWrP
+public import Proofs.Flock.Claims.KS.ZkAccJ
 public import Proofs.Flock.Claims.KS.ZkDrawJ
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -33,7 +35,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployTables
-import Proofs.Flock.Claims.KS.PlainWrP
 
 /-!
 # The deployed `--zk` decoders at the masked statement

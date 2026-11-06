@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Accounting.TS.Receipt
+public import Proofs.Pouw.Receipt
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -34,7 +35,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Pouw.Receipt
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!

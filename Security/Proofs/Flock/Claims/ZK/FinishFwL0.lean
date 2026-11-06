@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Complete.ZkTables.Level0
+public import Proofs.Flock.Claims.ZK.FinishFwRep
 public import Proofs.Flock.Claims.ZK.FinishSrc
 public import Proofs.Flock.Claims.ZK.FinishSwLig
 import Mathlib.Algebra.Order.Floor.Extended

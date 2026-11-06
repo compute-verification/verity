@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.NonVacuous
+public import Proofs.Flock.Claims.Recursion.RoundCounts
+public import Proofs.Flock.Claims.Recursion.VerdictRowL
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -32,9 +34,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Recursion.RoundCounts
 import Proofs.Flock.Claims.Recursion.VerdictLoop
-import Proofs.Flock.Claims.Recursion.VerdictRowL
 
 /-!
 # Row L's target

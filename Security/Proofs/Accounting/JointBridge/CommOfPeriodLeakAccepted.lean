@@ -2,6 +2,7 @@ module
 
 public import Definitions.Accounting.Guarantees.JointBridge.CommOfPeriodLeakAccepted
 public import Definitions.NetworkCertifier.Guarantees.Period
+public import Proofs.NetworkCertifier.Period
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -34,7 +35,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.PouwWork
-import Proofs.NetworkCertifier.Period
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!

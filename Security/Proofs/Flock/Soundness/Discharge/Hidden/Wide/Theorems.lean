@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Defs
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Block
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Checked
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Defs
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime

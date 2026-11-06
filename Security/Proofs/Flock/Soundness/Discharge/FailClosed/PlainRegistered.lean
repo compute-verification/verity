@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.FailClosed.Design
+public import Proofs.Flock.Soundness.Discharge.PlainReg
 public import Proofs.Flock.Soundness.Discharge.PlainReg.BindH
 public import Proofs.Flock.Soundness.Discharge.PlainReg.Defs
 public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH

@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLane
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictReplay
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -25,7 +26,6 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
 import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictOpens
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictReplay
 import Proofs.Flock.Soundness.Game.Basic
 import Proofs.Flock.Soundness.Refine.Opening
 import Proofs.Flock.Soundness.Refine.Plays

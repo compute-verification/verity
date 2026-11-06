@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Complete.Count
+public import Proofs.Flock.Claims.Complete.Zk.Count
 public import Proofs.Flock.Claims.Complete.Zk.Link
 public import Proofs.Flock.Claims.Complete.ZkTables.Skeleton
 import Mathlib.Algebra.Order.Floor.Extended
@@ -35,7 +36,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Complete.Zk.Count
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Claims.DeployK
 

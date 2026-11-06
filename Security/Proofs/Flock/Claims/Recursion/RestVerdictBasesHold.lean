@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.RestVerdictBases
+public import Proofs.Flock.Claims.Recursion.RestVerdictDraw
 import Batteries.Tactic.OpenPrivate
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

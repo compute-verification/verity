@@ -1,8 +1,9 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.PartAccepts
 public import Proofs.Flock.Claims.Recursion.FlockKSLin
 public import Proofs.Flock.Claims.Recursion.KSLin2Staged
+public import Proofs.Flock.Claims.Recursion.LastColsE
+public import Proofs.Flock.Claims.Recursion.PartAccepts
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -38,7 +39,6 @@ import Proofs.Flock.Claims.KS.Deploy
 import Proofs.Flock.Claims.KS.PlainKSLin
 import Proofs.Flock.Claims.Recursion.CapPorts
 import Proofs.Flock.Claims.Recursion.ConflictTiedE
-import Proofs.Flock.Claims.Recursion.LastColsE
 import Proofs.Flock.Claims.Recursion.RowsCover
 import Proofs.Flock.Claims.Recursion.SchedDense
 import Proofs.Flock.Claims.Recursion.SlotsCheck

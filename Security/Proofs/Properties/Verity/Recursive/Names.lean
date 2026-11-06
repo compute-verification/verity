@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.BoundRouteKSLin2
+public import Proofs.Flock.Claims.Recursion.CapLowerPin
 public import VStarRecursive.Protocol
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -35,7 +36,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.C3.PubRows.Check
 import Proofs.Flock.C3.Reps.AtList
-import Proofs.Flock.Claims.Recursion.CapLowerPin
 import Proofs.Flock.Claims.Recursion.DeployMargin
 import Proofs.Flock.Claims.Recursion.DeployScope
 import Proofs.Flock.Claims.Recursion.OpensReads

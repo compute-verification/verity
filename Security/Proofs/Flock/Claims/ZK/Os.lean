@@ -1,6 +1,8 @@
 module
 
+public import Proofs.Flock.Claims.Sampling.Draws
 public import Proofs.Flock.Claims.ZK.Release
+public import Proofs.Flock.Soundness.Discharge.ZkView.OsSalts
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -32,8 +34,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Sampling.Draws
-import Proofs.Flock.Soundness.Discharge.ZkView.OsSalts
 import Proofs.Flock.Soundness.ZK.Hiding
 
 /-!

@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Claims.Sampling
+public import Proofs.Flock.Claims.Finder
 public import Proofs.Flock.Claims.Sampling.Cost
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

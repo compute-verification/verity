@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.VBridge.Family.OutCols
 public import Proofs.Flock.VBridge.Family.PartReads
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational

@@ -3,6 +3,7 @@ module
 public import Definitions.Pouw.PearlC.Device
 public import Definitions.Pouw.PearlC.DeviceFp4Issue
 public import Definitions.Pouw.PearlC.DevicePrices
+public import Definitions.Pouw.PearlC.DevicePricesLoop
 public import Definitions.Pouw.PearlC.Sha512
 
 /-!

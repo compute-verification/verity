@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.Claims.Bridge.DecodePlain
 public import Proofs.Flock.Claims.KS.PlainBound
 public import Proofs.Flock.Claims.KS.PlainDraw
+public import Proofs.Flock.Claims.KS.PlainDrawAcc
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

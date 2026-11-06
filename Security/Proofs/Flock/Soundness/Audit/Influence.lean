@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Soundness.Audit.TwoStage
 public import Definitions.Flock.Audit.Harm
+public import Proofs.Flock.Soundness.Audit.Harm
+public import Proofs.Flock.Soundness.Audit.TwoStage
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Algebra.Order.Module.Field

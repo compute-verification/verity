@@ -1,5 +1,6 @@
 module
 
+public import Definitions.Accounting.Bandwidth
 public import Definitions.Accounting.Bandwidth.Interactive
 public import Definitions.Accounting.Bandwidth.Joint
 public import Definitions.Accounting.Bandwidth.Relay

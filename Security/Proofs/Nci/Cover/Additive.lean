@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Nci.Assumptions.Cover
+public import Proofs.Nci.Cover.Area
 import Mathlib.Data.Rat.Cast.Order
 import Mathlib.Tactic.Linarith.Frontend
 import Mathlib.Tactic.NormNum.Abs

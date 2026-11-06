@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Complete.Custody
 public import Proofs.Flock.Claims.Complete.Json.Live
 public import Proofs.Flock.Claims.Complete.Json.Session
 public import Proofs.Flock.Claims.Complete.Zk.Json.Record

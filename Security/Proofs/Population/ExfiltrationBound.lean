@@ -3,6 +3,7 @@ module
 public import Definitions.Population.Dataflow
 public import Definitions.Population.Exfiltration
 public import Proofs.Population.Exfiltration
+public import Proofs.Population.Leakage
 import Mathlib.Algebra.Order.BigOperators.Expect
 import Mathlib.Algebra.Order.Field.Power
 import Mathlib.Analysis.Complex.Order
@@ -10,7 +11,6 @@ import Mathlib.Analysis.Complex.Trigonometric
 import Mathlib.Data.EReal.Inv
 import Mathlib.Logic.Equiv.PartialEquiv
 import Proofs.Population.Determinacy
-import Proofs.Population.Leakage
 meta import Lean.Meta.Tactic.NormCast
 
 /-!

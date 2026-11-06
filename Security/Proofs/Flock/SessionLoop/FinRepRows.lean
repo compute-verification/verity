@@ -1,6 +1,8 @@
 module
 
+public import Proofs.Flock.Claims.ZK.FinishFwRep
 public import Proofs.Flock.Claims.ZK.FinishFwRows
+public import Proofs.Flock.Claims.ZK.FrameUnrefused
 public import Proofs.Flock.SessionLoop.FinRepOpen
 public import Proofs.Flock.SessionLoop.FinRepXs
 public import Proofs.Flock.SessionLoop.Tables
@@ -37,8 +39,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Claims.DeployK
-import Proofs.Flock.Claims.ZK.FinishFwRep
-import Proofs.Flock.Claims.ZK.FrameUnrefused
 
 /-!
 # `FinRepRows`: every table's rows hold at its base

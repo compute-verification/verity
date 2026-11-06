@@ -1,8 +1,9 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.NextJ
-public import Proofs.Flock.Claims.Recursion.CallsBridgeE
 public import Proofs.Flock.Claims.KS.PlainDrawJ
+public import Proofs.Flock.Claims.KS.PlainDrawJMove
+public import Proofs.Flock.Claims.Recursion.CallsBridgeE
+public import Proofs.Flock.Claims.Recursion.NextJ
 import Flock.With.SimVerify
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -36,7 +37,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployK
-import Proofs.Flock.Claims.KS.PlainDrawJMove
 import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
 
 /-!

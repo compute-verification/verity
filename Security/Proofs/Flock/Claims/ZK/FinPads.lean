@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.ZK.FinExe
+public import Proofs.Flock.Claims.ZK.Round1Root
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -34,7 +35,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Zk.InnerGo
 import Proofs.Flock.Claims.Complete.ZkTables.Table
-import Proofs.Flock.Claims.ZK.Round1Root
 import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
 import Proofs.Flock.Soundness.Refine.Arith
 

@@ -1,6 +1,11 @@
 module
 
 public import Proofs.Accounting.RemoteHeld.Draw
+public import Proofs.Accounting.RemoteHeld.Outside
+public import Proofs.Accounting.RemoteHeld.Window
+public import Proofs.Properties.RemoteAudit.Line
+public import Proofs.Properties.RemoteAudit.Pooled
+public import Proofs.Properties.RemoteAudit.Shared
 public import Properties.RemoteAudit.Line
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -38,12 +43,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.RemoteHeld
-import Proofs.Accounting.RemoteHeld.Outside
-import Proofs.Accounting.RemoteHeld.Window
 import Proofs.Pouw.Prob
-import Proofs.Properties.RemoteAudit.Line
-import Proofs.Properties.RemoteAudit.Pooled
-import Proofs.Properties.RemoteAudit.Shared
 
 /-!
 # The memory line of record, proved (`Properties.RemoteAudit.Line`: `LineHeld`, `LineHeldIdentity`)

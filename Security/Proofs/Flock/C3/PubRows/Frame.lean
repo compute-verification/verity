@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.C3.Compose.Honest
 public import Proofs.Flock.C3.Compose.Tape
+public import Proofs.Flock.C3.PubRows.Prefix
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime

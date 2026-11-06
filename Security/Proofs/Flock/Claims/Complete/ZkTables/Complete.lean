@@ -1,9 +1,12 @@
 module
 
-public import Proofs.Flock.Claims.Complete.ZkTables.Runs
 public import Proofs.Flock.Claims.Complete.Json.Spec
+public import Proofs.Flock.Claims.Complete.Zk.Complete
 public import Proofs.Flock.Claims.Complete.Zk.Json.Files
 public import Proofs.Flock.Claims.Complete.Zk.Json.Runs
+public import Proofs.Flock.Claims.Complete.ZkTables.Discharge
+public import Proofs.Flock.Claims.Complete.ZkTables.Link
+public import Proofs.Flock.Claims.Complete.ZkTables.Runs
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -40,8 +43,6 @@ import Proofs.Flock.Claims.Complete.Zk.Lanes
 import Proofs.Flock.Claims.Complete.Zk.RepRounds
 import Proofs.Flock.Claims.Complete.Zk.Replay
 import Proofs.Flock.Claims.Complete.ZkTables.Count
-import Proofs.Flock.Claims.Complete.ZkTables.Discharge
-import Proofs.Flock.Claims.Complete.ZkTables.Link
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
 
 /-!

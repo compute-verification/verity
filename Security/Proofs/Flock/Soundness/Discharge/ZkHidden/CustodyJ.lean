@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Soundness.Assumptions.Zk
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundJ
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -18,8 +20,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundJ
 
 /-!
 # `zk_session_soundHJ` at the coin server's custody

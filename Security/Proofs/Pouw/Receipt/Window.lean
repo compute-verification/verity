@@ -1,8 +1,8 @@
 module
 
 public import Definitions.Pouw.Receipt.Duo
+public import Mathlib.SetTheory.Cardinal.Finite
 import Mathlib.Data.BitVec
-import Mathlib.SetTheory.Cardinal.Finite
 import Mathlib.Tactic.NormNum.Ineq
 import Mathlib.Tactic.NormNum.Pow
 import Proofs.Pouw.Receipt.Duo

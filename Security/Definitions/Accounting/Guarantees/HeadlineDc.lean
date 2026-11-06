@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Accounting.Assumptions.Sheet
+public import Definitions.Accounting.HeadlineDc
 public import Definitions.Accounting.HeadlineDc.Sm100Measured
 public import Definitions.Accounting.HeadlineDc.Sm90MeasuredI3
 import Mathlib.Algebra.Order.Floor.Extended

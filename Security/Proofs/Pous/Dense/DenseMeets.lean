@@ -4,6 +4,7 @@ public import Definitions.Pous.Accounting.Params
 public import Definitions.Pous.Model.Dense
 public import Definitions.Pous.Model.Inc
 public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+public import Proofs.Pous.Audit.SampledAudit
 public import Proofs.Pous.B5.ExPostFacto
 public import Proofs.Pous.Thm1.Theorem1iTimed
 import Proofs.Pous.Sanity

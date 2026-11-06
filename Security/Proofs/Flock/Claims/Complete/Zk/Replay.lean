@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Complete.Replay.Steps
 public import Proofs.Flock.Claims.Complete.Zk.Json.Files
+public import Proofs.Flock.Claims.Complete.Zk.Walk
 import Flock.With.ZkEq
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -38,7 +39,6 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Replay.ZerocheckGoal
 import Proofs.Flock.Claims.Complete.Zk.Json.Session
 import Proofs.Flock.Claims.Complete.Zk.Transfer
-import Proofs.Flock.Claims.Complete.Zk.Walk
 
 /-!
 # The masked replay passes (`Replay`)

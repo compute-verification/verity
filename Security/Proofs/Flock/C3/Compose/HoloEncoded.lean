@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.C3.Compose.HoloCoinTys
 public import Proofs.Flock.C3.Compose.LaterHeld
 import all Init.Data.Repr
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -15,7 +16,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.C3.Compose.HoloCoinTys
 
 /-!
 # The map's coins and points at candidate 3

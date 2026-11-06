@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.RestVerdictBases
+public import Proofs.Flock.Claims.Recursion.RestVerdictCustody
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -36,7 +37,6 @@ import Proofs.Flock.Claims.Complete.Json.Stmt
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Claims.Complete.ZkTables.Stmt
 import Proofs.Flock.Claims.JsonNorm
-import Proofs.Flock.Claims.Recursion.RestVerdictCustody
 
 /-!
 # `hrest`'s base checks with the draw tied at several tables

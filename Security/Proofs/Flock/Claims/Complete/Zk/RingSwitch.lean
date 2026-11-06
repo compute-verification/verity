@@ -1,9 +1,10 @@
 module
 
-public import Proofs.Flock.Claims.Complete.Zk.PiopGo
-public import Proofs.Flock.Claims.Complete.Zk.ReplayPos
 public import Proofs.Flock.Claims.Complete.Replay.RingSwitch
 public import Proofs.Flock.Claims.Complete.Zk.Json.Files
+public import Proofs.Flock.Claims.Complete.Zk.PiopGo
+public import Proofs.Flock.Claims.Complete.Zk.Replay
+public import Proofs.Flock.Claims.Complete.Zk.ReplayPos
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -37,7 +38,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Zk.Json.Session
-import Proofs.Flock.Claims.Complete.Zk.Replay
 import Proofs.Flock.Claims.Complete.Zk.Walk
 import Std.Tactic.BVDecide.Normalize.Prop
 

@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Accounting.TS.ProofLayer
+public import Proofs.Accounting.TS.Session.Assumptions
 public import Proofs.Flock.SoundAtBridge.Session
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

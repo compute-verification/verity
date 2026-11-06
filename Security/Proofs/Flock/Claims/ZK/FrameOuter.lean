@@ -1,10 +1,11 @@
 module
 
-import all Init.Data.String.Defs
-import all Init.Data.Array.Basic
+public import Proofs.Flock.Claims.ZK.FrameBeta
 public import Proofs.Flock.Claims.ZK.FrameProg
 public import Proofs.Flock.Claims.ZK.FrameZK
 public import Proofs.Flock.Claims.ZK.Refusals
+import all Init.Data.Array.Basic
+import all Init.Data.String.Defs
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -38,7 +39,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Claims.DeployK
-import Proofs.Flock.Claims.ZK.FrameBeta
 import Proofs.Flock.Claims.ZK.FrameInner
 import Proofs.Flock.Claims.ZK.FrameTaken
 

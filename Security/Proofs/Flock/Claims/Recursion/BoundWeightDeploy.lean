@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Recursion.BoundRouteCols
 public import Proofs.Flock.Claims.Recursion.BoundWeight
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -33,7 +34,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.BoundBridge
-import Proofs.Flock.Claims.Recursion.BoundRouteCols
 
 /-!
 # The deployed bound record at `coverW`, and the route with (P3) discharged

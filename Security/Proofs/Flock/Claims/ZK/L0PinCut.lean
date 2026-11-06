@@ -1,7 +1,10 @@
 module
 
-public import Proofs.Flock.Claims.ZK.L0Pin
 public import Proofs.Flock.Claims.ZK.FinishRank
+public import Proofs.Flock.Claims.ZK.L0Pin
+public import Proofs.Flock.Claims.ZK.L0PinCoins
+public import Proofs.Flock.SessionLoop.FinCommits
+public import Proofs.Flock.SessionLoop.FinRounds
 import Flock.With.SimWalk
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -41,9 +44,6 @@ import Proofs.Flock.Claims.ZK.CausalExe
 import Proofs.Flock.Claims.ZK.CutPrefix
 import Proofs.Flock.Claims.ZK.FinishSrc
 import Proofs.Flock.Claims.ZK.FinishTau
-import Proofs.Flock.Claims.ZK.L0PinCoins
-import Proofs.Flock.SessionLoop.FinCommits
-import Proofs.Flock.SessionLoop.FinRounds
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 
 /-!

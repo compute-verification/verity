@@ -1,8 +1,9 @@
 module
 
-public import Proofs.Flock.Claims.KS.ZkLiveJ
-public import Proofs.Flock.Claims.KS.OnAcc
 public import Proofs.Flock.Claims.Bridge.Returns
+public import Proofs.Flock.Claims.KS.Escapes
+public import Proofs.Flock.Claims.KS.OnAcc
+public import Proofs.Flock.Claims.KS.ZkLiveJ
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -36,7 +37,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployTables
 import Proofs.Flock.Claims.KS.Deploy
-import Proofs.Flock.Claims.KS.Escapes
 import Proofs.Flock.Claims.KS.Range
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Soundness.Game.Expect

@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.ZK.InnerTauLig
 public import Proofs.Flock.Soundness.Discharge.Composed.Inner
 public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLane
 import Mathlib.Algebra.Order.Floor.Extended
@@ -35,7 +36,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.ZkTables.LaneRows
-import Proofs.Flock.Claims.ZK.InnerTauLig
 
 /-!
 # `FinishLane`: level 0's two lane rows on a view's masked values, constants included

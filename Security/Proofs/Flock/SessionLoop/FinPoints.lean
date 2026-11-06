@@ -1,5 +1,8 @@
 module
 
+public import Proofs.Flock.Claims.ZK.FrameLinks
+public import Proofs.Flock.Claims.ZK.FrameRankFault
+public import Proofs.Flock.Claims.ZK.PrefixLive
 public import Proofs.Flock.SessionLoop.FinishParts
 public import Proofs.Flock.VBridge.Family.Structure
 import Mathlib.Algebra.Order.Floor.Extended
@@ -37,8 +40,6 @@ import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.Scope.Check
 import Proofs.Flock.Claims.Scope.Sizes
-import Proofs.Flock.Claims.ZK.FrameLinks
-import Proofs.Flock.Claims.ZK.FrameRankFault
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 import Proofs.Flock.Soundness.Refine.Walk

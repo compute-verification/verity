@@ -1,6 +1,11 @@
 module
 
+public import Proofs.Flock.Claims.Recursion.ResCopyRows
+public import Proofs.Flock.Claims.Recursion.ResFrameElems
+public import Proofs.Flock.Claims.Recursion.ResHeldRows
 public import Proofs.Flock.Claims.Recursion.ResLowerD
+public import Proofs.Flock.Claims.Recursion.ResOpenedRow
+public import Proofs.Flock.VBridge.Family.PartKeys
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -36,19 +41,14 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.C3.Reps.RoundLinks
 import Proofs.Flock.Claims.Recursion.DecodeTies
-import Proofs.Flock.Claims.Recursion.ResCopyRows
-import Proofs.Flock.Claims.Recursion.ResFrameElems
 import Proofs.Flock.Claims.Recursion.ResFrames
-import Proofs.Flock.Claims.Recursion.ResHeldRows
 import Proofs.Flock.Claims.Recursion.ResLowerDA
-import Proofs.Flock.Claims.Recursion.ResOpenedRow
 import Proofs.Flock.Claims.Recursion.RestLens
 import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Claims.Recursion.TopsOpens
 import Proofs.Flock.Claims.Recursion.VVTieOf
 import Proofs.Flock.Claims.Recursion.VerdictLoop
 import Proofs.Flock.Claims.Recursion.VerdictRowG
-import Proofs.Flock.VBridge.Family.PartKeys
 
 /-!
 # P2 at the deployed constants (`framePorts_D`)

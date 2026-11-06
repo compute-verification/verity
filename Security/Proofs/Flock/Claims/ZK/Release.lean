@@ -1,8 +1,9 @@
 module
 
-public import Proofs.Flock.Claims.ZK.Blind
-public import Flock.Firewall.Frame
+public import Flock.Firewall.Assumptions
 public import Flock.Firewall.Contract
+public import Flock.Firewall.Frame
+public import Proofs.Flock.Claims.ZK.Blind
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

@@ -1,8 +1,9 @@
 module
 
-public import Proofs.Flock.Claims.GS.Interp
-public import Proofs.Flock.Claims.GS.RR
 public import Proofs.Flock.Claims.Decode
+public import Proofs.Flock.Claims.GS.Interp
+public import Proofs.Flock.Claims.GS.Johnson
+public import Proofs.Flock.Claims.GS.RR
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Star.Real
@@ -39,7 +40,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.GS.Johnson
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!

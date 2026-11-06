@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.C3.Compose.HoloStageCoins
 public import Proofs.Flock.C3.Reps.RepCoins
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational

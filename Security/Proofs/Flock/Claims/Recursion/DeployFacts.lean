@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Recursion
 public import Proofs.Flock.Claims.Recursion.Deploy
 public import Proofs.Flock.Claims.Recursion.DeployScope
 public import Proofs.Flock.Claims.Recursion.Inner

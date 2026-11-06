@@ -1,8 +1,9 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.NonVacuousRows
-public import Proofs.Flock.Claims.Recursion.VPiecesDeployed
 public import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
+public import Proofs.Flock.Claims.Recursion.RowDLevels
+public import Proofs.Flock.Claims.Recursion.VPiecesDeployed
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -37,7 +38,6 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.DecodeTies
 import Proofs.Flock.Claims.Recursion.OpenedDecode
 import Proofs.Flock.Claims.Recursion.RoundSizes
-import Proofs.Flock.Claims.Recursion.RowDLevels
 import Proofs.Flock.Claims.Recursion.VerdictLoop
 import Proofs.Flock.Claims.Recursion.VerdictRowD
 import Proofs.Flock.Claims.Recursion.VerdictRowG

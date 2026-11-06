@@ -1,9 +1,11 @@
 module
 
-import all Init.Data.Array.Basic
-import all Init.Data.Range.Basic
-import all Init.Data.Nat.Power2.Basic
+public import Proofs.Flock.Claims.KS.Extend
 public import Proofs.Flock.Claims.KS.ZkTables
+public import Proofs.Flock.Claims.KS.ZkUntrim
+import all Init.Data.Array.Basic
+import all Init.Data.Nat.Power2.Basic
+import all Init.Data.Range.Basic
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -35,8 +37,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.KS.Extend
-import Proofs.Flock.Claims.KS.ZkUntrim
 
 /-!
 # `ExtendJ` at the untrimmed masked instance

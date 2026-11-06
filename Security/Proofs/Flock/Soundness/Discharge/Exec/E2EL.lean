@@ -1,9 +1,9 @@
 module
 
-public import Proofs.Flock.Soundness.E2E
 public import Proofs.Flock.Soundness.Discharge.Exec.FlockLinkL
+public import Proofs.Flock.Soundness.Discharge.Exec.FlockPublicL
+public import Proofs.Flock.Soundness.E2E
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Discharge.Exec.FlockPublicL
 import Proofs.Flock.Soundness.Game.Prob
 
 /-!

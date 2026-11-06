@@ -1,8 +1,9 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.DeployedBrings
-public import Proofs.Flock.Claims.Recursion.VStarDense
+public import Proofs.Flock.Claims.Recursion.HonestRun
 public import Proofs.Flock.Claims.Recursion.HpEarly
+public import Proofs.Flock.Claims.Recursion.VStarDense
 public import Proofs.Flock.Claims.Recursion.VStarHonest
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -37,7 +38,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.HhHeld
 import Proofs.Flock.Claims.Recursion.HonestPartsLayR
-import Proofs.Flock.Claims.Recursion.HonestRun
 import Proofs.Flock.Claims.Recursion.HpEarlyStaged
 import Proofs.Flock.Claims.Recursion.MoreSlotsAll
 import Proofs.Flock.Claims.Recursion.NumsFixedR

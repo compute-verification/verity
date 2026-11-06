@@ -2,6 +2,7 @@ module
 
 public import Definitions.Claims.Sampling
 public import Proofs.Flock.Claims.Sampling.Draws
+public import Proofs.Flock.Claims.Sampling.Wait
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Ring.Star

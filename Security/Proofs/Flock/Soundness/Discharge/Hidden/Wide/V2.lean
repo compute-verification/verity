@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Copies
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Defs
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.RowBc
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Tail
 import Mathlib.Tactic.ENatToNat
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational

@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Complete.Replay.Steps
+public import Proofs.Flock.Claims.Complete.Zk.Transfer
 import Flock.With.Eq
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -34,7 +35,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Complete.Zk.Transfer
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!

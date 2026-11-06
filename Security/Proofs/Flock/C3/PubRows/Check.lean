@@ -1,7 +1,9 @@
 module
 
-import all Init.Data.Array.Basic
 public import Proofs.Flock.C3.Compose.Family
+public import Proofs.Flock.C3.Compose.RowsReg
+public import Proofs.Flock.VBridge.Family.Pub
+import all Init.Data.Array.Basic
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -16,7 +18,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
-import Proofs.Flock.C3.Compose.RowsReg
 import Proofs.Flock.Soundness.Discharge.Hidden.Public
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.Layout.Drawn
