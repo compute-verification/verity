@@ -1,6 +1,8 @@
-import Definitions.Flock.ZK.SHVZK
-import Proofs.Flock.Soundness.ZK.Blocks
-import Proofs.Flock.Soundness.ZK.Dist
+module
+
+public import Definitions.Flock.ZK.SHVZK
+public import Proofs.Flock.Soundness.ZK.Blocks
+public import Proofs.Flock.Soundness.ZK.Dist
 
 /-!
 # Zero knowledge of one masked table: Lemmas A and B, and `table_shvzk`
@@ -28,6 +30,8 @@ tables: the product over tables (no claim or message reads two tables' witnesses
 cases where the coins make the prover refuse (a failing rank check, dependent `ρ^r`, `β = 0`), with the schedule, are
 `Refusal`'s; and Lemma C, which T5 builds from them, is `AdaptivePrefinal`'s.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK
 

@@ -1,7 +1,9 @@
-import Definitions.Nci.Guarantees.Capability.Budgets
-import Definitions.Nci.Guarantees.Capability.Incidence
-import Definitions.Nci.Guarantees.Capability.Dependency
-import Definitions.Nci.Guarantees.Capability.Witnesses
+module
+
+public import Definitions.Nci.Guarantees.Capability.Budgets
+public import Definitions.Nci.Guarantees.Capability.Incidence
+public import Definitions.Nci.Guarantees.Capability.Dependency
+public import Definitions.Nci.Guarantees.Capability.Witnesses
 
 /-!
 # Local bounds: the repertoire
@@ -25,3 +27,5 @@ A new premise, structure or kind of consumer is a new module or a new value of a
 steps. Improving the structure never strengthens a premise; a stronger premise is a new hypothesis, named as one. Each
 is proved (`Proofs.Nci.Capability`). The survey of all of it is `Security/Definitions/Nci/Capability/README.md`.
 -/
+
+@[expose] public section

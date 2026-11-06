@@ -3,7 +3,11 @@
 compiling, so it is alone here, the module `compile_time` lists, apart from the proofs that use it (`Flock.With.SimVerify`,
 `Flock.With.SimZk`).
 -/
-import Flock.With.Sim
+module
+
+public import Flock.With.Sim
+
+@[expose] public section
 
 namespace Flock.With
 

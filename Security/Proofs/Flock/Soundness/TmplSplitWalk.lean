@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.TmplSplitOk
+module
+
+public import Proofs.Flock.Soundness.TmplSplitOk
 
 /-!
 # Every walk means its class's
@@ -7,6 +9,8 @@ import Proofs.Flock.Soundness.TmplSplitOk
   copies' `refVal`s (`callVal`), for an explicit and a summed class.
 - `walk_ok`: by induction on the depth, every walk's table means its class's (`WalkOk`).
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl FlockLevel3 GF128 Std
 

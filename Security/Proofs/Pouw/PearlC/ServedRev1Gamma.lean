@@ -1,4 +1,6 @@
-import Proofs.Pouw.PearlC.TileCapRev1Gamma
+module
+
+public import Proofs.Pouw.PearlC.TileCapRev1Gamma
 
 /-!
 # v1 under rev1 at the served linears, at any batch (compute accounting's file)
@@ -14,6 +16,8 @@ import Proofs.Pouw.PearlC.TileCapRev1Gamma
   TT_OUT at 1/1,000, and per unit from TT_OUT at 1/400 at the same γ: 0.35535% (Llama's gate_up) to 0.38912% (Llama's
   down). Per tile from TT_OUT per tile at 1/400 the γ is 1/400's (`TileCapRev1Gamma`): 0.50496% to 0.53869%.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

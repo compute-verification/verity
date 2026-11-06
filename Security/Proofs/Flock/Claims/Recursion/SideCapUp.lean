@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.SideCapRead
+module
+
+public import Proofs.Flock.Claims.Recursion.SideCapRead
 
 /-!
 # The reader's caps above level 0 (`SideCapUp`), at the deployed `finalR` and `DeployedR.layR`
@@ -21,6 +23,8 @@ deployed last message those rows are the rounds' openings (`openPieces`), so the
 `sideCapUp_of` gives `SideCapUp` at SHA-512, `layR elem` and the bound record at `finalR` from `ReadsAt` and
 the opened position's range (`PosCapUp`), and `sideCapR_deployed` puts it with level 0 (`sideCapR_of`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.CapLower
 

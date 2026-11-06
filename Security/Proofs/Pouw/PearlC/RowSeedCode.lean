@@ -1,4 +1,6 @@
-import Proofs.Pouw.PearlC.RowSeedGamma
+module
+
+public import Proofs.Pouw.PearlC.RowSeedGamma
 
 /-!
 # The code-form seed (`-h3`): a relabelling of the one-row-unit form (staging, nothing pinned)
@@ -17,6 +19,8 @@ A fixed permutation of the oracle's inputs, one per layout, carries one to the o
 * **From rev1's TT_OUT:** `ttOutRowSeedCode_of_ttOut` and `ttOutTileRowSeedCode_of_ttOutTile` (C1, C1-h3, C3, C5). The
   γ theorems `pearlCGammaDevRev1RowSeedAt` and `pearlCSampledDevRev1RowSeedAt` apply at `semC` unchanged.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

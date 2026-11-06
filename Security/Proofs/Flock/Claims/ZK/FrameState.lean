@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FramePhase
+module
+
+public import Proofs.Flock.Claims.ZK.FramePhase
 
 /-!
 # The frame's state across level 0's opening
@@ -25,6 +27,8 @@ transport (`LeanRelease.prog`) and the coins the stream answered (`coinsOf`). Th
   its values; the pair's sums reach the layout's last value and take `ρ_0`; `ρ_1`'s round takes `ρ_1`, after which the
   closing round's state (`release_close`) holds.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

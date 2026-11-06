@@ -1,6 +1,8 @@
-import Flock.Draw
-import Flock.Norm
-import Flock.JsonParse
+module
+
+public import Flock.Draw
+public import Flock.Norm
+public import Flock.JsonParse
 
 /-!
 # A drawn H1 leaf's sessions draw every unit
@@ -15,6 +17,8 @@ policy itself (`checkFull`, which `pouw-leaf-own` runs on every session of a sta
 * `checkFull`: that draw decodes, its law is `subset k` with `k` its population, `0 < k`, and its units are every unit
   `[0, k)`; `checkFull_ok` states what its `.ok` gives.
 -/
+
+@[expose] public section
 
 namespace PouwWindow.Lanes
 

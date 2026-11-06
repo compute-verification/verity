@@ -20,6 +20,8 @@ verity-bench table R1 R2...  # one table from one spec's per-point results, only
 verity-bench served-table    # every protocol's served overhead from the store: runs of record, else newest passing (--json)
 verity-bench breakdown [RESULT...]  # where the bandwidth audit's time goes, by span: the store's newest passing runs, or these files
 verity-bench vllm --preset SPEC --arms A,B --out DIR   # the same measurement in this process, unrecorded
+verity-bench overhead points|run|table  # the front door for γ at a card's operating points (`verity bench overhead`,
+                                        # benchmarks/overhead/README.md): the PoUW harness's kernels, not served vLLM
 ~~~
 
 ## Specs

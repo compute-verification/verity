@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.Split
-import Proofs.Flock.Claims.Complete.Zk.Exact
+module
+
+public import Proofs.Flock.Claims.ZK.Split
+public import Proofs.Flock.Claims.Complete.Zk.Exact
 
 /-!
 # Hybrid 2 against hybrid 3: a rep's inner proof from the cut (`SimInner`)
@@ -25,6 +27,8 @@ round's coin.
 * **`innerYE`**: wherever the cut sent `Y₁`, its `Y` read in `yAt`'s order is the session's `h ‖ pad_h + β·(μ ‖ pad_μ)`
   at the honest pads, `β` the coin two rounds after `ε`'s.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.SimInner
 

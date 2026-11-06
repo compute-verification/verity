@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.BatchSim
-import Proofs.Flock.Claims.KS.PlainLive
-import Proofs.Flock.Claims.KS.ZkLock
+module
+
+public import Proofs.Flock.Claims.KS.BatchSim
+public import Proofs.Flock.Claims.KS.PlainLive
+public import Proofs.Flock.Claims.KS.ZkLock
 
 /-!
 # The masked simulator's live strategy submits its rounds stream by stream
@@ -17,6 +19,8 @@ bytes prover on the rounds' explicit game (`roundsK`), follows `SchedLJ` at `zkS
 * `zkStreams_eq`, `zkStreams_length`, `zkStreams_split`: the streams are `fromS` at `repRounds`, as many as the
   deployed rounds, split at table `j` as `front_simRJ` reads them.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

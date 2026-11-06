@@ -1,6 +1,8 @@
-import Flock.Canon
-import PousCheck.P2
-import Identity.Tagged
+module
+
+public import Flock.Canon
+public import PousCheck.P2
+public import Identity.Tagged
 
 /-!
 The commitment to `W` (`setup.commit`):
@@ -18,6 +20,8 @@ tagged_sha512(tag, x) = SHA512("verity/tagged-sha512/v1\0" â€– u32be(len tag) â€
 through Flock's canonical JSON (sorted keys, compact; its integers and ASCII strings are what Python's
 `canonical_json_bytes` writes).
 -/
+
+@[expose] public section
 
 namespace PousCheck.Commit
 

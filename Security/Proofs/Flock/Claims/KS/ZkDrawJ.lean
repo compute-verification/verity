@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.ZkPlanHJ
-import Proofs.Flock.Claims.KS.ZkEntries
+module
+
+public import Proofs.Flock.Claims.KS.ZkPlanHJ
+public import Proofs.Flock.Claims.KS.ZkEntries
 
 /-!
 # The deployed `--zk` decoders at the statement's draw
@@ -26,6 +28,8 @@ statement's draw instead, so no draw in the record is read:
   `zkTabs` on the outcomes `verify --zk` accepts at the setup at the empty draw at `wrS`, at public and hidden
   outputs (`ZkPlanJ`'s and `ZkPlanHJ`'s plans at the law of that one draw).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 

@@ -1,5 +1,8 @@
-import Proofs.Flock.Recursive.FirewallTemplate
-import Proofs.Flock.Recursive.FirewallLive
+module
+
+public import Proofs.Flock.Recursive.FirewallTemplate
+public import Proofs.Flock.Recursive.FirewallLive
+import all Lean.Data.Json.Basic
 
 /-!
 # The live firewall at any requests
@@ -22,6 +25,8 @@ The proof reads one live session as `run` on the requests it took (`liveOut_live
 Two live sessions on requests of one shape refuse at the same request and send the same messages but for their commit
 strings, those of the same digests (`liveOut_rel`, from `FirewallRun.stepOf_rel` one request at a time).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion.FirewallAny
 

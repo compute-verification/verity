@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 
 /-!
 # flock-verify `--zk`'s acceptance sets up each table with `Stmt.setupH`
@@ -13,6 +15,8 @@ there):
 * `acceptsZK_retained : AcceptsZKRetained`: under tags that retain rounds, every stream of the record retained every
   round's bytes.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

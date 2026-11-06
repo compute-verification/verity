@@ -1,12 +1,14 @@
-import Proofs.Flock.Claims.Complete.Zk.Json.Runs
-import Proofs.Flock.Claims.Complete.Zk.Json.Stmt
-import Proofs.Flock.Claims.Complete.Zk.Count
-import Proofs.Flock.Claims.Complete.Zk.RepRounds
-import Proofs.Flock.Claims.Complete.Zk.Lanes
-import Proofs.Flock.Claims.Complete.Zk.Consumed
-import Proofs.Flock.Claims.Complete.Zk.Replay
-import Proofs.Flock.Claims.Complete.Zk.RingSwitch
-import Proofs.Flock.Claims.Complete.Zk.Extras
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Json.Runs
+public import Proofs.Flock.Claims.Complete.Zk.Json.Stmt
+public import Proofs.Flock.Claims.Complete.Zk.Count
+public import Proofs.Flock.Claims.Complete.Zk.RepRounds
+public import Proofs.Flock.Claims.Complete.Zk.Lanes
+public import Proofs.Flock.Claims.Complete.Zk.Consumed
+public import Proofs.Flock.Claims.Complete.Zk.Replay
+public import Proofs.Flock.Claims.Complete.Zk.RingSwitch
+public import Proofs.Flock.Claims.Complete.Zk.Extras
 
 /-!
 # Masked completeness from named premises
@@ -24,6 +26,8 @@ recorded round is consumed (`consumedZk_goal`).
 `complete_zk_relation`: the same at the deployed relation (`deployZk Readable.relation`), where the extra claims'
 algebra holds from `RelS` (`rsExtrasZk`), and `Out64` is `Claims.Complete`'s own hypothesis.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

@@ -1,8 +1,10 @@
-import Definitions.Nci.Guarantees.Covering
-import Mathlib.Algebra.Order.BigOperators.Ring.Finset
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.Positivity
-import Mathlib.Tactic.Ring
+module
+
+public import Definitions.Nci.Guarantees.Covering
+public import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.Positivity
+public import Mathlib.Tactic.Ring
 
 /-!
 # The covering bound at one width and one rate
@@ -14,6 +16,8 @@ completed. The completed ones lie in `θ'_S × J_S`: `|θ'_S| ≤ k / c` by para
 the inputs of `S` in `T_j` cut the activation off from every weight outside `θ'_S` (`inner_or_meets` traced back from the
 activation, which `S` reads), so they are at least `c` and `|J_S| ≤ k / c`.
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs.Covering
 

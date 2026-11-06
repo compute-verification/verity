@@ -1,12 +1,14 @@
-import Definitions.Pouw.Guarantees.Receipt
-import Proofs.Pouw.Receipt.Duo
-import Proofs.Pouw.Receipt.Window
-import Proofs.Pouw.Receipt.Li
-import Proofs.Pouw.Receipt.Fx1
-import Proofs.Pouw.Receipt.Run
-import Proofs.Pouw.Receipt.DuoReceipt
-import Proofs.Pouw.Receipt.AtState
-import Proofs.Pouw.Receipt.Xor
+module
+
+public import Definitions.Pouw.Guarantees.Receipt
+public import Proofs.Pouw.Receipt.Duo
+public import Proofs.Pouw.Receipt.Window
+public import Proofs.Pouw.Receipt.Li
+public import Proofs.Pouw.Receipt.Fx1
+public import Proofs.Pouw.Receipt.Run
+public import Proofs.Pouw.Receipt.DuoReceipt
+public import Proofs.Pouw.Receipt.AtState
+public import Proofs.Pouw.Receipt.Xor
 
 /-!
 # The receipt folds duo's, fx1's and li's guarantees
@@ -23,6 +25,8 @@ Runs at one start state, the counting bound past two words and the served chain'
 `Receipt/AtState.lean`. Two words' all-state XOR kernel, the warp checkpoint's cross-chain cancellation, is in
 `Receipt/Xor.lean`.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Receipt
 

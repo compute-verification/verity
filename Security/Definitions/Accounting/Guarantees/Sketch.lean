@@ -1,6 +1,8 @@
-import Mathlib.Probability.Distributions.Uniform
-import Definitions.Accounting.Tag.Prob
-import Definitions.Accounting.Tag.Sketch
+module
+
+public import Mathlib.Probability.Distributions.Uniform
+public import Definitions.Accounting.Tag.Prob
+public import Definitions.Accounting.Tag.Sketch
 
 /-!
 # Exact integer ±1 sketches: the statements (trusted)
@@ -23,6 +25,8 @@ product with a block's elements, computed exactly on the tensor cores.
 Each takes no hypothesis: a condition on its inputs (the vectors differ) is part of the event it bounds, and the bounds
 on the data and the chain's length are in their types. The proofs are in `Security/Proofs/Accounting/Tag/`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.Sketch
 

@@ -1,12 +1,16 @@
-import Proofs.Flock.Claims.Recursion.RecRecord
-import Proofs.Flock.Claims.Recursion.DeployHonest
-import Proofs.Flock.C3.VStarList.Accepts
-import Proofs.Flock.C3.PubRows.Check
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Shared
-import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
-import Proofs.Flock.Soundness.Discharge.Layout.QSort
-import Proofs.Flock.Claims.Recursion.SlotsCheck
-import Proofs.Flock.Claims.Recursion.LayoutBTops
+module
+
+public import Proofs.Flock.Claims.Recursion.RecRecord
+public import Proofs.Flock.Claims.Recursion.DeployHonest
+public import Proofs.Flock.C3.VStarList.Accepts
+public import Proofs.Flock.C3.PubRows.Check
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Shared
+public import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
+public import Proofs.Flock.Soundness.Discharge.Layout.QSort
+public import Proofs.Flock.Claims.Recursion.SlotsCheck
+public import Proofs.Flock.Claims.Recursion.LayoutBTops
+import all Init.Data.String.Defs
+import all Init.Data.Repr
 
 /-!
 # What a staged part's transcript shows is the record the verifier read in its own format
@@ -29,6 +33,8 @@ digest (`slotPub_table`). On the record's side, rep `x`'s `kc`-th `c_k` in the J
 schedule lists `kc`-th, and at a round with no salted tops it is the record's message `x · R + k + 1`
 (`cmt_of_rep`): the rounds open with the two reps' schedules (`scheduleOf_reps`), whose streams are apart (`rep_ne`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

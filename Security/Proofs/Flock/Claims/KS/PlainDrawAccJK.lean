@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainDrawAccK
-import Proofs.Flock.Claims.KS.PlainDrawJ
+module
+
+public import Proofs.Flock.Claims.KS.PlainDrawAccK
+public import Proofs.Flock.Claims.KS.PlainDrawJ
 
 /-!
 # flock-verify's acceptance at a draw value, at the parsed record, through `keep`
@@ -9,6 +11,8 @@ import Proofs.Flock.Claims.KS.PlainDrawJ
 `decodeJWithK_allRetained`), which have the text walkers' statements at the parsed value. Each name is its `K`
 original's with `J` before the `K` (`accepts_oneAnyDJK`), or after it where it has none (`LeafFormJ`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.AtDraw
 

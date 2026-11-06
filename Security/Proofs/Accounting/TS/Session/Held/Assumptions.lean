@@ -1,4 +1,6 @@
-import Proofs.Accounting.TS.Session.Held.Layer
+module
+
+public import Proofs.Accounting.TS.Session.Held.Layer
 
 /-!
 # The premise that ties a checked unit's C-Flock circuit to its declared circuit
@@ -8,6 +10,8 @@ so that its `ok` wires carrying the `ok` row means those checks hold. It belongs
 `Security/Definitions/Accounting/Assumptions/TS`, but it reads `RowsSession`, which is in the proofs package, so it is here
 beside `Accounting.Assumptions.TS`'s other session premises (`Proofs.Accounting.TS.Session.Assumptions`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Assumptions.TS
 

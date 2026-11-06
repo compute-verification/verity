@@ -1,6 +1,8 @@
-import Definitions.Pous.Guarantees.StreamedWipeDisk
-import Proofs.Pous.StreamedWipe.Server
-import Proofs.Pous.StreamedWipe.Witnesses
+module
+
+public import Definitions.Pous.Guarantees.StreamedWipeDisk
+public import Proofs.Pous.StreamedWipe.Server
+public import Proofs.Pous.StreamedWipe.Witnesses
 
 /-!
 # The streamed-label wipe with a server's disks in the fill
@@ -10,6 +12,8 @@ import Proofs.Pous.StreamedWipe.Witnesses
 honest and nontrivial lemmas are at the session on the deployed H200's card (`StreamedWipe.h200`) and its disks as
 measured (`StreamedWipe.h200Disks`), in the pattern of `Security/Proofs/Pous/StreamedWipe/Witnesses.lean`.
 -/
+
+@[expose] public section
 
 namespace PousStreamedWipe
 

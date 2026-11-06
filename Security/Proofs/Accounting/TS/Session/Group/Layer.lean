@@ -1,5 +1,7 @@
-import Proofs.Accounting.TS.Session.Lanes.Layer
-import PouwWindow.KnownRows
+module
+
+public import Proofs.Accounting.TS.Session.Lanes.Layer
+public import PouwWindow.KnownRows
 
 /-!
 # A leaf's proof layer through a group of linked C-Flock sessions, any shape
@@ -24,6 +26,8 @@ The leaf's relation `rel` and the value `opened` are parameters: which leaf the 
 served checks are depends on the shape's Definitions, which the group's premise
 (`Accounting.Assumptions.TS.GroupRealizes`) reads.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Group
 

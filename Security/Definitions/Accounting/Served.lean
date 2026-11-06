@@ -1,6 +1,8 @@
-import Definitions.Accounting.Compose
-import Definitions.Accounting.Gates.Declared
-import Definitions.Pouw.Game.Deadline
+module
+
+public import Definitions.Accounting.Compose
+public import Definitions.Accounting.Gates.Declared
+public import Definitions.Pouw.Game.Deadline
 
 /-!
 # The served window's shape, its rounds, and the coin each served value is committed before (`Accounting.Served`)
@@ -199,6 +201,8 @@ Definition is proved), with the leaf and the
 receipt the ones the statements' committed rows decode to (the known ports' are checked, and each A, B and partials
 row is one row of one registered tree that every statement reading it reads in full).
 -/
+
+@[expose] public section
 
 namespace Accounting.Served
 

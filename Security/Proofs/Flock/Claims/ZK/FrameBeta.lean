@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.FrameAdmits
-import Proofs.Flock.Claims.ZK.FrameTaken
+module
+
+public import Proofs.Flock.Claims.ZK.FrameAdmits
+public import Proofs.Flock.Claims.ZK.FrameTaken
 
 /-!
 # The frames refuse `β = 0` (`FrameUnrefused`'s `β` fault)
@@ -18,6 +20,8 @@ at its round, in the inner proof's round 2, where `Masker.answer` stops at `β =
   schedule so far is complete (`schedSoFar_size`, at the plan's counts `repPlan_list`, `repPlan_size`).
 -/
 
+@[expose] public section
+
 namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
@@ -28,7 +32,7 @@ namespace Count
 
 open _root_.Flock.Firewall.Drive (Step OpenM stepAsks)
 
-theorem sp_run'_end {α : Type} {p : TMW OpenM α} {t : Transcript} {s : Got} {ns : List ℕ}
+theorem sp_run'_end {α : Type} {p : TMW OpenM α} {t : Flock.Transcript} {s : Got} {ns : List ℕ}
     (h : SP (fun _ ns => ns = []) ((p.run t).run s) ns) : SP (fun _ ns => ns = []) ((p.run' t).run' s) ns := by
   refine sp_bind (Q := fun _ ns => ns = []) (fun _ _ h => ?_) _ _ (sp_bind (fun _ _ h => ?_) _ _ h) <;> exact h
 

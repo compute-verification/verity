@@ -1,5 +1,7 @@
-import Definitions.Pouw.Basic.Mat
-import Definitions.Pouw.FpG1.Encoding
+module
+
+public import Definitions.Pouw.Basic.Mat
+public import Definitions.Pouw.FpG1.Encoding
 
 /-!
 # FP8-g1 and W4A8-g1: the int8 GEMM, the coin's rank-one terms and the epilogue (trusted)
@@ -26,6 +28,8 @@ the int8 GEMM's exact product less two rank-one terms, one a function of the row
   in int32 (`accW`), its products and sums in int32. int32 arithmetic is arithmetic mod `2^32`, so wrapping once at
   the end (`wrap32`) is wrapping after each operation.
 -/
+
+@[expose] public section
 
 namespace Pouw.FpG1
 

@@ -1,5 +1,7 @@
-import Proofs.Core.Boolean
-import Proofs.Flock.Claims.Scope.Readable
+module
+
+public import Proofs.Core.Boolean
+public import Proofs.Flock.Claims.Scope.Readable
 
 /-!
 # Block R1CS systems over GF(2), as the readable relation
@@ -16,6 +18,8 @@ gates' outputs are those hidden bits again, its pins' the public `1`, and its fi
 `relS_iff`: a witness satisfies `Claims.Flock.RelS` of a statement with these fields exactly when, in every block, every
 table's rows hold (`Sys.Holds`).
 -/
+
+@[expose] public section
 
 namespace Flock.Readable
 

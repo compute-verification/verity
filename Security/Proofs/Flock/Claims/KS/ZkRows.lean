@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.ZkEvent
-import Proofs.Flock.Claims.KS.ZkLevels
-import Proofs.Flock.Claims.KS.ZkLevelsAll
+module
+
+public import Proofs.Flock.Claims.KS.ZkEvent
+public import Proofs.Flock.Claims.KS.ZkLevels
+public import Proofs.Flock.Claims.KS.ZkLevelsAll
 
 /-!
 # The masked reader's opened rows at a rep's run
@@ -26,6 +28,8 @@ rep's opened rows, row by row:
   public and hidden outputs and at a masked statement in scope (`decodesTableW_zkTabs`, `decodesTableHW_zkTabs`,
   `decodesTableW_deploy`). The verdict reads `o₀`'s transcript, so the outcome is pinned.
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 

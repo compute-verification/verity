@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.RowBc
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Tail
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.RowBc
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Tail
 
 /-!
 # `sha512/row/v1` or `sha512/row/v2` rows (`OutputsCommittedV2`, `OutputsBindingV2`)
@@ -9,6 +11,8 @@ at an output row's message bit are none (`msg_filterAll`: an output row's messag
 block), so a satisfying witness of the hidden statement satisfies its flat twin (`sat_flatAll`) and holds each output
 row's message bit's copy (`msg_copyAll`); the row's `b ‖ c` is under its own prefix (`row_bc_tgt`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

@@ -1,5 +1,7 @@
-import NciCheck.Desc
-import Mathlib.Tactic
+module
+
+public import NciCheck.Desc
+public import Mathlib.Tactic
 
 /-!
 # The description-sized NCI check against the unrolled one
@@ -21,6 +23,8 @@ through §7's resolution; open as `Novel.ReadsExact`). That `novelWidth` is the 
 given is proved in `Width` (`novelWidthExact`). The difftest holds the open one (`runs` `NciCheck.DescDifftestMain` in
 the package's `lean-audit.json`: 3,993 declarations, the description-sized check against the unrolled one).
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.Desc
 

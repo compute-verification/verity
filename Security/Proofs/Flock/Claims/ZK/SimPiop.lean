@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.Split
-import Proofs.Flock.Claims.ZK.SimPiopOf
-import Proofs.Flock.Claims.ZK.PiopSrcSv
+module
+
+public import Proofs.Flock.Claims.ZK.Split
+public import Proofs.Flock.Claims.ZK.SimPiopOf
+public import Proofs.Flock.Claims.ZK.PiopSrcSv
 
 /-!
 # `SimPiop`
@@ -11,6 +13,8 @@ least `14` variables, and its rep `r` source from the cut is at the opened coins
 and the lincheck's pad indices (`src_r1ab` … `src_fc`, `src_lc0`, `src_lc1`, `src_zp`) and its switched vectors
 wherever the rep sends them before the stop (`src_sv`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

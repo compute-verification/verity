@@ -1,4 +1,6 @@
-import Definitions.Nci.Capability
+module
+
+public import Definitions.Nci.Capability
 
 /-!
 # Local bounds: caps from dependency
@@ -15,6 +17,8 @@ consumer's region) or **recomputed** (the block contains the consumer's required
 Together, for the uses of counted products: weighted products ≤ `h (k + c/g)`, or `h k` when recomputing is priced out.
 The bound degrades with the gate budget instead of failing at a threshold.
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 

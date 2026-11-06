@@ -1,4 +1,6 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
 
 /-!
 # TT_OUT over U alone, per audit tile (trusted; the named `Prop`s)
@@ -10,6 +12,8 @@ over `goodTilesU`, and `TTOutTilePearlCDevUOnly` is it at rev1's protocol and ti
 It asserts **more** than the (C̃, U) tile row: every tile good under both bindings is good under U alone
 (`TileUOnlyGamma.ttOutTilePearlCDevRev1_of_uOnly`). It is a new conjecture, not a weakening.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Assumptions
 

@@ -5,8 +5,14 @@ programs are `TGemm{K=32,N=6}` (Input batches, a composite batch, nested calls; 
 `TSynth{N=4}` (two zip-able batches, a constant, a scan; 21 gates, 4 of them input gates), as `verity.ml.circuits` encodes
 them (`verity/core/difftest/tests/test_annot.py` builds them, and holds the sets to `query_ast`'s).
 -/
-import Flock.AnnotExpand
-import Flock.JsonParse
+module
+
+public import Flock.AnnotExpand
+public import Flock.JsonParse
+meta import Flock.AnnotExpand
+meta import Flock.JsonParse
+
+@[expose] public section
 
 namespace Flock.Test.Annot
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Recursive.KSNontrivial
-import Proofs.Flock.Claims.Recursion.HresAsm
+module
+
+public import Proofs.Flock.Recursive.KSNontrivial
+public import Proofs.Flock.Claims.Recursion.HresAsm
 
 /-!
 # The recursive verifier's knowledge soundness at the linked relation
@@ -12,6 +14,8 @@ deployed chain at `R` (`RecDeploy.ResLower.recursiveKS_deployed`), and the links
 the link finder reads collide), by the union bound `Claims.Recursion.ksLin2LinkOn_of`. `recursiveKSLink_nontrivial` is
 its conclusion's nontrivial lemma, at any link clause, from `RecDeploy.KSFixture`, as `recursiveKS_nontrivial`'s.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

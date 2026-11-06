@@ -1,6 +1,8 @@
-import Mathlib.Analysis.Real.Sqrt
-import Proofs.Nci.LoomisWhitneyBase
-import Proofs.Nci.Cover.PartialSumRead
+module
+
+public import Mathlib.Analysis.Real.Sqrt
+public import Proofs.Nci.LoomisWhitneyBase
+public import Proofs.Nci.Cover.PartialSumRead
 
 /-!
 # The partial-sum bounds: one block's products in the cube
@@ -13,6 +15,8 @@ product is determined by its parameter and token (`cell_inj`), so the high produ
 the weights, the entries and the activations they use, the activations at `f` reads each (`ActivationReads`); and
 by `aOut` per activation (`Keyed.reach`). `PartialSumIntensity` is `block_counts` on all of a block's whole products.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.SecurityProofs
 

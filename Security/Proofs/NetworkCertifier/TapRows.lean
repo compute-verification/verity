@@ -1,5 +1,7 @@
-import Definitions.NetworkCertifier.TapRows
-import Proofs.NetworkCertifier.SampledLeakReg
+module
+
+public import Definitions.NetworkCertifier.TapRows
+public import Proofs.NetworkCertifier.SampledLeakReg
 
 /-!
 # The leak bound at the network certifier's rows
@@ -25,6 +27,8 @@ collision (`tapColl_of_disagree`, `Pr_tapColl_le_Btap`). `sampledLeak_tap` is th
 
 The registered-input and collision steps follow the registration's (proofs' P1b), at the network certifier's openings.
 -/
+
+@[expose] public section
 
 namespace NetTiming.TapProof
 

@@ -1,5 +1,7 @@
-import NetworkCheck.Period
-import Mathlib.Algebra.BigOperators.Fin
+module
+
+public import NetworkCheck.Period
+public import Mathlib.Algebra.BigOperators.Fin
 
 /-!
 # The network period check's bound: what its `K` counts in each form (`NetworkCheck.Period`)
@@ -34,6 +36,8 @@ alters one of the scan's transitions is no Program's input. Beside them, their n
 `RowsTiedDrawnOf`, `RowsProgWiredOf` and `RowsStateTiedOf`, the properties of any period check, and `acceptAllRows`, a
 check that accepts every period.
 -/
+
+@[expose] public section
 
 namespace Properties.NetworkPeriod
 

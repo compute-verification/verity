@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.ZkAlign
-import Proofs.Flock.Claims.KS.RepDistDeploy
-import Proofs.Flock.Claims.KS.ZkStep
+module
+
+public import Proofs.Flock.Claims.KS.ZkAlign
+public import Proofs.Flock.Claims.KS.RepDistDeploy
+public import Proofs.Flock.Claims.KS.ZkStep
 
 /-!
 # The masked fork round of a cap, split at the schedule
@@ -17,6 +19,8 @@ node comes after the tables in front's coins, rep 0's if `r = 1`, and a distance
   0's (`repRounds`) and `zkCapDist` add up to `zkRdAt`;
 * `ZkFrontAlign`, `zkSlotAlign_of_front`: so `ZkSlotAlign` is the slot at that split count.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

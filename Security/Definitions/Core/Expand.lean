@@ -1,6 +1,8 @@
-import Mathlib.Algebra.BigOperators.Fin
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Definitions.Core.Formalism
+module
+
+public import Mathlib.Algebra.BigOperators.Fin
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Definitions.Core.Formalism
 
 /-!
 # The bit-level expansion: a multi-bit circuit as a Boolean one
@@ -14,6 +16,8 @@ its gate is (`Declaration.expand`), and a partition puts each bit in its gate's 
 `expandT X` is a transcript of `C` read bit by bit, and `collapse a` is a transcript of the expansion assembled gate by
 gate. Gates of width 0 have no bits.
 -/
+
+@[expose] public section
 
 namespace Verity
 

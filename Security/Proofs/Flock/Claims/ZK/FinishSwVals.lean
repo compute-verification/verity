@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FinishSwRep
+module
+
+public import Proofs.Flock.Claims.ZK.FinishSwRep
 
 /-!
 # The firewall's rep is the switched source's cut, at any clear values
@@ -15,6 +17,8 @@ at any clear values.
 * `swSrcE_ligHyp_frame_v`, `swSrcE_ligHyp_E_v`: `hlig` at `v`.
 * **`swSrcE_repCut_v`**: `repCut_fw` at the switched source at `v`.
 -/
+
+@[expose] public section
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000

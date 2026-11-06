@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Refine.LiveSim
-import Proofs.Flock.Soundness.Discharge.Exec.Tables
+module
+
+public import Proofs.Flock.Soundness.Refine.LiveSim
+public import Proofs.Flock.Soundness.Discharge.Exec.Tables
 
 /-!
 # Pieces of `DecodesAll`: the aligned tape and the cap
@@ -19,6 +21,8 @@ import Proofs.Flock.Soundness.Discharge.Exec.Tables
   `capOfRoot root_B`. So `capOf` can be `capOfRoot`: the cap the salted verdict of `verify_refines_hm96` reads,
   `capDig p₀.cap`, is a function of `root_B` alone.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 

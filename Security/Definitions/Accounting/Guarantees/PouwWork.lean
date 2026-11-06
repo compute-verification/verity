@@ -1,5 +1,7 @@
-import Definitions.Accounting.Assumptions.PouwFloor
-import Definitions.Accounting.Assumptions.PouwWork
+module
+
+public import Definitions.Accounting.Assumptions.PouwFloor
+public import Definitions.Accounting.Assumptions.PouwWork
 
 /-!
 # PoUW's work lower bound on an isolated node (trusted)
@@ -11,6 +13,8 @@ content is in A3, an open conjecture, so the guarantee is conditional on it.
 
 Proved by `Accounting.SecurityProofs.PouwLocalOff : Accounting.Guarantees.PouwLocalOff` (`Proofs.Accounting.PouwWork`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 

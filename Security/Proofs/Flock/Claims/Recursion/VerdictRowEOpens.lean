@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.CapOpens
-import Proofs.Flock.C3.RegLevels.AccReads
+module
+
+public import Proofs.Flock.Claims.Recursion.CapOpens
+public import Proofs.Flock.C3.RegLevels.AccReads
 
 /-!
 # A rec-open part's `acc` and `acc_out` slots are registered `rec-acc` rows at their chain positions
@@ -20,6 +22,8 @@ label is taken as `n` (`hidx`, as `check5_bytes` takes it). Two parts staged at 
 their setups parse the one set of V*'s shared rows the staging round carries (`Stage.rows`, `partRaw`'s `recRows`)
 (`insO_staged_rows`), so their ports' sites agree (`accRow_site_eq`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

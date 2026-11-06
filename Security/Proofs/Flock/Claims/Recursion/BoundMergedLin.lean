@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.BoundMerged
-import Proofs.Flock.Claims.Recursion.KSLin
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundMerged
+public import Proofs.Flock.Claims.Recursion.KSLin
 
 /-!
 # Route 2B, linearly: `KSLin` from (P1) at `DE` through one plurality
@@ -21,6 +23,8 @@ So `Pr[BadO] ≤ k_I·(Pr[Fdev] + 1/(M+1))` (`Bound.Pr_badO_le_PrFdev`), and the
 `Bound.KSLin_of_plainKSAbort_binds` is `KSLin` at the bound record from it, on `Bound.KS_of_plainKSAbort_binds`'
 premises: no bridge and no `WeightCovers`.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 
@@ -56,7 +60,8 @@ theorem Bound.linkOut_collO (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFloc
     ⟨hg, by simp only [fork_fork]; exact hgv, by simp only [fork_fork]; exact Ne.symm hfv⟩
   simp only [forkColl, fork_fork] at hfc
   have hv' : firstPick (linkG H D (Inner.ofFlock Bd.deploy decI) DO decO P x j ω r) M us = some v := hv
-  simp only [linkOut, hv', Option.getD_some]
+  have hg' : linkG H D (Inner.ofFlock Bd.deploy decI) DO decO P x j ω r u := hg
+  simp only [linkOut, hg', hv', ↓reduceIte, Option.getD_some]
   exact hfc
 
 /-- **`P_O`'s bad draws, linearly**: at most `k_I` times `Fdev`'s success, plus `k_I/(M+1)`, where

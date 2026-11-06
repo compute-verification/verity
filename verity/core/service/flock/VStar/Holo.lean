@@ -1,7 +1,9 @@
-import VStar.Compose
-import VStar.Json
-import VStar.Stage
-import Flock.JsonParse
+module
+
+public import VStar.Compose
+public import VStar.Json
+public import VStar.Stage
+public import Flock.JsonParse
 
 /-!
 # V*'s statements over a holo inner session (`rec_algebra.Shape.holo`, `rec_residuals.statement(..., holo=True)`)
@@ -19,6 +21,8 @@ Its statements are the plain shape's levels and the parts of that S (`statements
 it is over a holo shape in META (`HOLO_KEY`, `compose`'s `extra_meta`), which the verifier's `RecResiduals.check` reads to
 select the net. The plain shape's definitions are left as they are.
 -/
+
+@[expose] public section
 
 namespace VStar
 

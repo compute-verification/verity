@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.KS.LevelZero
-import Proofs.Flock.Claims.DeployCode
-import Proofs.Flock.Soundness.Discharge.Exec.Verdict
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+module
+
+public import Proofs.Flock.Claims.KS.LevelZero
+public import Proofs.Flock.Claims.DeployCode
+public import Proofs.Flock.Soundness.Discharge.Exec.Verdict
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 
 /-!
 # Level 0's request first, at flock-verify's acceptance
@@ -13,6 +15,8 @@ at the positions of the coins of the stream's round `plainQueryRound` (`rep_refi
 a run has one result, `plays_det`), where the proof opens one level-0 row per position (`merkleCheck_rows`), and every
 request has its level's lanes and path length in the model's schedule `schedOf sch` (`ReqOK`, `lvOf_schedOf`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 

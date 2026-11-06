@@ -1,4 +1,6 @@
-import Proofs.Nci.Fit
+module
+
+public import Proofs.Nci.Fit
 
 /-!
 # The fit bound's hypotheses hold together
@@ -12,6 +14,8 @@ Each window reads 3 bits (a weight and the activation), so `S = 3 < N* b_w = 2 �
 (`Reach` at `N* = 2`). Window 0 uses one weight (`2 ≤ 3`) and window 1 one weight and one entered thread
 (`2 + 1 ≤ 3`, `Fits` at `b_w = 2`, `w_e = 1`, tight). `FitBound` then gives `4 · 1 · (4 − 3) · 2 ≤ 2 · 1 · 2 · 9`.
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs.FitWitness
 

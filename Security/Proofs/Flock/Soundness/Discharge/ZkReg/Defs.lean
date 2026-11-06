@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.Event
-import Proofs.Flock.Soundness.Registered.Defs
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Event
+public import Proofs.Flock.Soundness.Registered.Defs
 
 /-!
 # `verify --zk --registered F`, as an event of the audit
@@ -20,6 +22,8 @@ path per table row (`Registered.entry`). Instance `r` of the drawn statement is 
   at the position the verifier's program reads in the unit the drawn statement names for `u`;
 * `regPaths c pub t port`: the path the drawn statement's header gives for that row, at the table row `u`'s ref names.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkReg
 

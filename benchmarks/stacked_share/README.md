@@ -30,8 +30,8 @@ At f ≥ 1 no KV is credited.
   statics key is a callee's id, a `Family{k=v,..}` its family and statics match, or a family, and a key that names no callee
   is refused.
 - `share.py --model NAME=UNITS.json,MIX.json ... --out share.json` combines units with a served trace
-  (the serve-bandwidth benchmark's `mix.json`). It computes R_cap per node (busy-time mean and peak 1 s window), M_dyn, and f
-  for each E, L and R_in, as built and under each lever, cumulatively:
+  (a `mix.json`: each engine step's timed span and rows, the trace's arguments, the KV pool). It computes R_cap per node
+  (busy-time mean and peak 1 s window), M_dyn, and f for each E, L and R_in, as built and under each lever, cumulatively:
   - K' quantized once at the KV write (its cost leaves every key a step reads for one write a token row);
   - V' stored once with a static scale (likewise);
   - an int8 LM head;

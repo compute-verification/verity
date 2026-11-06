@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.SessionZ
-import Proofs.Flock.Soundness.Discharge.ZkLink.Count
-import Proofs.Flock.Soundness.StrictCR
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.SessionZ
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Count
+public import Proofs.Flock.Soundness.StrictCR
 
 /-!
 # The compiled `--zk` knowledge term under strict-time collision resistance
@@ -25,6 +27,8 @@ count is a collision of `H` (`opRZ_conflict_collision`, `opPadsAtZ_conflict_coll
 
 The budgets are the hypotheses' to state: the prover is a strategy, and Lean counts no evaluations.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 

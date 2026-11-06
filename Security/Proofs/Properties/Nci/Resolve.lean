@@ -1,4 +1,6 @@
-import Proofs.Properties.Nci.Walk
+module
+
+public import Proofs.Properties.Nci.Walk
 
 /-!
 # `Flock.Program.resolve`'s walk, toward `Walk.OperandsEarlier`
@@ -18,6 +20,8 @@ What that needs of each body the walk reaches is `BodyOk` (`BodiesOk`, a named `
 resolution reads through each node are in range, which `Flock.Program.decode` and `Prog.orderViolation` check.
 `operandsEarlier_of` gives `Walk.OperandsEarlier` from it.
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.Resolve
 

@@ -1,6 +1,8 @@
-import Mathlib.Basic.Real.Basic
-import Mathlib.Data.Fintype.Card
-import Mathlib.Data.List.Chain
+module
+
+public import Mathlib.Basic.Real.Basic
+public import Mathlib.Data.Fintype.Card
+public import Mathlib.Data.List.Chain
 
 /-!
 # Stacked depth-robust graphs, pebbles and the white/green game (B2, Fisch Claims 13–14)
@@ -9,6 +11,8 @@ The definitions of B2 (Fisch 2018/702 §2.4, §2.6 and App. B), proved in
 `Security/Proofs/Pous/Pebbling/B2Stacking.lean`, and the white/green game of Claims 13–14, proved in
 `Security/Proofs/Pous/Pebbling/FischClaims1314.lean`.
 -/
+
+@[expose] public section
 
 namespace Pous.DRG
 

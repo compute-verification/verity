@@ -1,4 +1,8 @@
-import Proofs.Flock.Claims.Recursion.LayoutBCap
+module
+
+public import Proofs.Flock.Claims.Recursion.LayoutBCap
+import all Init.Data.String.Defs
+import all Init.Data.Array.Basic
 
 /-!
 # V*'s bound layout with every level's tops at its RecCap (`layoutBTops`), and `HeldB` there
@@ -32,6 +36,8 @@ drops it.
 read the round's bytes (a top's strings at its cap's port, the row at its part's) is what `PartChecksBV`,
 `PartOpensB` and `DecompB` take, unchanged here.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

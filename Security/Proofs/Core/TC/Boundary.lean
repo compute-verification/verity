@@ -1,5 +1,7 @@
-import Proofs.Core.TC.AmpereSound
-import Proofs.Core.TC.Proofs.Pack
+module
+
+public import Proofs.Core.TC.AmpereSound
+public import Proofs.Core.TC.Proofs.Pack
 
 /-!
 # The unit boundary: the committed BF16 word
@@ -9,6 +11,8 @@ A verification unit starts from `zero_state`, chains its k16 steps (`ChainHolds`
 relation accepts commits `cvt_rn_bf16_f32` of the semantics' accumulator, and its FP32 word is that accumulator.
 `pack_sound` and `pack_complete` are the boundary alone.
 -/
+
+@[expose] public section
 
 open Verity.TC.Relation Verity.TC.Spec Verity.TC.Proofs
 

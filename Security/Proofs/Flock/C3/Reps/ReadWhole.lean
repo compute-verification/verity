@@ -1,4 +1,6 @@
-import Proofs.Flock.C3.Reps.ResRead
+module
+
+public import Proofs.Flock.C3.Reps.ResRead
 
 /-!
 # The checks' whole reads: `RsReadCol` and `ResReadCol`
@@ -18,6 +20,8 @@ rows read.
 This file imports no session, so the sessions read these directly: `RsReadCol` is `rsReadCol` (`RsFacts`, from
 `readCol_rsAt`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps.ReadWhole
 

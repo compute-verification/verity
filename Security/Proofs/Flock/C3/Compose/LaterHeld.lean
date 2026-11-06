@@ -1,4 +1,6 @@
-import Proofs.Flock.C3.Compose.HoloStageCoins
+module
+
+public import Proofs.Flock.C3.Compose.HoloStageCoins
 
 /-!
 # `LaterCoins` from the inner session's records
@@ -12,6 +14,8 @@ record's points are the map's at the first coin) where the map's points are the 
 `stageHeld_repsOfVals`: the reps' stages are `StageHeld` at `repsOfVals`, rep 0's from round 1 and rep 1's after it,
 from their rounds' custody (`RepRoundsHeld`) and draws (`RepsDrawn`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

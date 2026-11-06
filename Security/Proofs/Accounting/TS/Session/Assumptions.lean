@@ -1,4 +1,6 @@
-import Proofs.Flock.SoundAtBridge
+module
+
+public import Proofs.Flock.SoundAtBridge
 
 /-!
 # The named premises a window of C-Flock sessions takes
@@ -14,6 +16,8 @@ They belong in `Security/Definitions/Accounting/Assumptions/TS`, but they read `
 (the `security` package can't import it), so they are here until C-Flock's spec is extracted, as C-Flock's own
 assumptions are (`Proofs/Flock/Soundness/Assumptions`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Assumptions.TS
 

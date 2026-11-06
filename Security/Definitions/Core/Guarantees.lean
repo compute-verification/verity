@@ -1,11 +1,14 @@
-import Definitions.Core.Guarantees.Circuit
-import Definitions.Core.Guarantees.Game
-import Definitions.Core.Guarantees.Challenger
-import Definitions.Core.Guarantees.NaiveStrassen
-import Definitions.Core.Guarantees.PrivatePartition
-import Definitions.Core.Guarantees.TC
-import Definitions.Core.Guarantees.Formalism
-import Definitions.Core.Guarantees.Expand
+module
+
+public import Definitions.Core.Guarantees.Circuit
+public import Definitions.Core.Guarantees.Game
+public import Definitions.Core.Guarantees.Challenger
+public import Definitions.Core.Guarantees.NaiveStrassen
+public import Definitions.Core.Guarantees.PrivatePartition
+public import Definitions.Core.Guarantees.TC
+public import Definitions.Core.Guarantees.Formalism
+public import Definitions.Core.Guarantees.Expand
+public import Definitions.Core.Guarantees.ValueSalts
 
 /-!
 # Core's guarantees
@@ -14,3 +17,5 @@ Each guarantee is a `def G : Prop`, stated over `Protocol`'s definitions with th
 (`Assumptions`). Its proof is the theorem `Verity.SecurityProofs.G : Verity.Guarantees.G`, and a guarantee without one
 is open: nothing may cite it until it is proved.
 -/
+
+@[expose] public section

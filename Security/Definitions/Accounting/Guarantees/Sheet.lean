@@ -1,4 +1,6 @@
-import Definitions.Accounting.Assumptions.Sheet
+module
+
+public import Definitions.Accounting.Assumptions.Sheet
 
 /-!
 # What the data-sheet axioms give (trusted)
@@ -11,6 +13,8 @@ proved as `Accounting.SecurityProofs.TS.G` in `Proofs.Accounting.TS`:
 * `SheetDIdealFloor`: Theorem D-ideal (2.7♭) on the data-sheet machine, its (I1)–(I5) replaced by A1–A7 at the ½
   floor.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.TS
 

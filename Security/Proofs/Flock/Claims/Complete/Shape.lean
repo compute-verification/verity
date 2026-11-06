@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.Discharge
+module
+
+public import Proofs.Flock.Claims.Complete.Discharge
 
 /-!
 # What the pure session returns
@@ -10,6 +12,8 @@ A small program logic over the pure session's monad `PS`, for the goals that rea
 * `sessionP_proofs`: the session returns one proof file per rep stream.
 * `proofCount_goal` (`ProofCount`): one proof file per rep stream at every honest run.
 -/
+
+@[expose] public section
 
 open Flock FlockDeploy
 

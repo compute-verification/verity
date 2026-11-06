@@ -1,4 +1,6 @@
-import Definitions.Nci.Guarantees.Remote
+module
+
+public import Definitions.Nci.Guarantees.Remote
 
 /-!
 # The compute dampener, remote protocol, over a monitoring period: the statement
@@ -54,6 +56,8 @@ are fixed over the period: nothing here models or rests on re-registration.
 are its witnesses: its premises hold at a constructed honest developer, and at `AcceptAll`, a PoUW verifier that accepts
 every certificate, every other premise holds while PoUW's per-window bound and the conclusion fail.
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Assumptions.Recursive
-import Proofs.Flock.Recursive.Statements
+module
+
+public import Proofs.Flock.Soundness.Assumptions.Recursive
+public import Proofs.Flock.Recursive.Statements
 
 /-!
 # `v-bridge` at the wires V* reads
@@ -8,8 +10,10 @@ import Proofs.Flock.Recursive.Statements
 `Proofs.Flock.Recursive.Stage`), and `VCommits` at sessions that accept a transcript they write (`ZkOuter.Writes`):
 V*'s message rows pad a port of `n` elements to `64 ⌈8 n / 64⌉` words and read its first `128 n` bits
 (`InnerRepCheck.lean:24,39-44`), and a session that accepts nothing it writes may be another history's. `VBridgeRead` is that assumption at the family's arguments, so the
-lanes' theorems state what `Flock.SecurityProofs.RecursiveRanRegistered` reads.
+family's theorems state what `Flock.SecurityProofs.RecursiveRanRegistered` reads.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 

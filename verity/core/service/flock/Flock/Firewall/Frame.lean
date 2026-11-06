@@ -42,10 +42,14 @@ opened (`Frames`). Each request is one pure step of the rep's state (`step`, fol
 request's bytes, runs the host's hooks and writes the answer. Rust's `zk_veil::Masking` and `zk_veil::Pads` do the same
 on the unfirewalled `--zk` path, which no ZK server serves.
 -/
-import Flock.Zk
-import Flock.ZkLigerito
-import Flock.Firewall.Coins
-import Flock.JsonParse
+module
+
+public import Flock.Zk
+public import Flock.ZkLigerito
+public import Flock.Firewall.Coins
+public import Flock.JsonParse
+
+@[expose] public section
 
 namespace Flock.Firewall.Frame
 
