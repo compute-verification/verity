@@ -67,8 +67,19 @@ zero-work subcircuits at their floor.
   and the commits beside it; then M3's uniform 8-unit draw against the block's GPU time, and each Definition's share
   of the ANDs against the step's GPU time.
 
+- `served_window.py`: the served window (Llama-3.2-1B int8, T 8,192 on the H200, one step a window) cut at each rung of
+  a ladder (K-chunks of the int8 linears, output coordinates, tiles, and fused attention/MLP, layer and 4-layer proof
+  blocks that commit only the residual and K, V), for the free-compute target (a window, and pooled over a week, a month
+  and a year) and the exfiltration target, in the planner's two modes (proving only, and proving plus w times the serve-time
+  commitment) at two readings of a hashed byte's cost, through `grain_costs` and `for_target`, and the second mode again
+  under a code-based commitment at each rate ρ (codeword columns hashed, 1/ρ the bytes, and no row hashed in circuit);
+  then the chunk family's optimum against √(wβhC/(oΛ)). A rung fits when C-Flock's block holds each of its proof blocks (`inputs.cap`). Its
+  inputs, each with its status and source, are `served_window_inputs.json`; it writes `served_window.json` and
+  `served_window.md`.
+
 ```text
 uv run python benchmarks/sampling_plan/int8_llama.py --out DIR [--model qwen3-8b] [--scheme pearl-c] [--weights]
+uv run python benchmarks/sampling_plan/served_window.py --out DIR [--weight W] [--rates R ...] [--no-planner]
 uv run python benchmarks/sampling_plan/transformer.py --out DIR [--model large] [--share S] [--delta D]
 uv run python benchmarks/sampling_plan/h200.py --out DIR [--share S] [--batch B] [--step-s T] [--tiles] [--pad]
 uv run python benchmarks/sampling_plan/demo_a.py --out DIR [--spans NAME ...] [--no-frontier]
