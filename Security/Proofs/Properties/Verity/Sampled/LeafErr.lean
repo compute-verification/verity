@@ -94,7 +94,7 @@ theorem sum_ite_le {N : ℕ} (o : ℕ) (h : o < N) (f : Fin N → ℝ≥0∞) :
       · rw [if_pos h2.le, if_neg h1, if_pos (Fin.ext h2 : (⟨o, h⟩ : Fin N) = r), zero_add]
       · rw [if_neg (show ¬ o ≤ r.1 by omega), if_neg h1,
           if_neg fun h3 : (⟨o, h⟩ : Fin N) = r => h2 (congrArg Fin.val h3), add_zero]
-  rw [Fintype.sum_congr _ _ hr, Finset.sum_add_distrib, Finset.sum_ite_eq Finset.univ ⟨o, h⟩,
+  rw [Fintype.sum_congr _ _ hr, Finset.sum_add_distrib, Finset.sum_ite_eq Finset.univ (⟨o, h⟩ : Fin N) f,
     if_pos (Finset.mem_univ _)]
 
 end Verity.Game
@@ -270,23 +270,28 @@ device samples holds at most `maxTreeCoins` leaves (`Leaves.treeLeaves_le`), eac
 (`avg_leafErrMax_key_le`). -/
 theorem avg_treeErr_hello_le (ν : ByteArray) (spec : Flock.CoinTree.Spec) (hok : TreeSpecOk spec) :
     avg (fun t : TreeSample spec => treeErr e ⟨ν, spec, t, fun _ => 0⟩) ≤ (maxTreeCoins : ℝ≥0∞) * leafTerm := by
-  have h0 : ∀ t : TreeSample spec, treeErr e ⟨ν, spec, t, fun _ => 0⟩ =
-      ∑ s : Fin spec.streams.size, ∑ r : Fin (2 ^ spec.roundsLog), leafErrMax e ν (treeKey t.1) s r (t.2 s r) :=
-    fun t => Finset.sum_congr rfl fun s _ => Finset.sum_congr rfl fun r _ => if_pos (Nat.zero_le _)
-  have h1 : ∀ (κ : Fin 2047 → Bool) (s : Fin spec.streams.size) (r : Fin (2 ^ spec.roundsLog)),
-      avg (fun w : Fin spec.streams.size → Fin (2 ^ spec.roundsLog) → TreeDraw spec.block =>
-        leafErrMax e ν (treeKey κ) s r (w s r)) =
-        avg fun d₀ : TreeDraw spec.block => leafErrMax e ν (treeKey κ) s r d₀ :=
-    fun κ s r => (avg_eval s fun w' => leafErrMax e ν (treeKey κ) s r (w' r)).trans
-      (avg_eval r fun d₀ => leafErrMax e ν (treeKey κ) s r d₀)
+  have hr : ∀ (s : Fin spec.streams.size) (r : Fin (2 ^ spec.roundsLog)),
+      avg (fun t : TreeSample spec => roundErr e ⟨ν, spec, t, fun _ => 0⟩ s r) ≤ leafTerm := fun s r =>
+    calc avg (fun t : TreeSample spec => roundErr e ⟨ν, spec, t, fun _ => 0⟩ s r)
+        = avg (fun κ : Fin 2047 → Bool => avg fun w : Fin spec.streams.size → Fin (2 ^ spec.roundsLog) →
+            TreeDraw spec.block => leafErrMax e ν (treeKey κ) s r (w s r)) :=
+          avg_prod (C := Fin 2047 → Bool)
+            (D := Fin spec.streams.size → Fin (2 ^ spec.roundsLog) → TreeDraw spec.block) _
+      _ = avg (fun κ : Fin 2047 → Bool => avg fun d₀ : TreeDraw spec.block => leafErrMax e ν (treeKey κ) s r d₀) :=
+          congrArg avg (funext fun κ =>
+            (avg_eval (T := fun _ => Fin (2 ^ spec.roundsLog) → TreeDraw spec.block) s
+              fun w' => leafErrMax e ν (treeKey κ) s r (w' r)).trans
+            (avg_eval (T := fun _ => TreeDraw spec.block) r fun d₀ => leafErrMax e ν (treeKey κ) s r d₀))
+      _ ≤ leafTerm := avg_leafErrMax_key_le e ν s r spec.block
+  have hsum : ∀ t : TreeSample spec, treeErr e ⟨ν, spec, t, fun _ => 0⟩ =
+      ∑ s : Fin spec.streams.size, ∑ r : Fin (2 ^ spec.roundsLog), roundErr e ⟨ν, spec, t, fun _ => 0⟩ s r :=
+    fun t => Finset.sum_congr rfl fun s _ => Finset.sum_congr rfl fun r _ => ite_eq_left (Nat.zero_le _)
   calc avg (fun t : TreeSample spec => treeErr e ⟨ν, spec, t, fun _ => 0⟩)
-      = ∑ s : Fin spec.streams.size, ∑ r : Fin (2 ^ spec.roundsLog), avg fun κ : Fin 2047 → Bool =>
-          avg fun d₀ : TreeDraw spec.block => leafErrMax e ν (treeKey κ) s r d₀ := by
-        simp only [h0]
-        rw [avg_prod]
-        simp only [avg_sum_comm, h1]
+      = ∑ s : Fin spec.streams.size, ∑ r : Fin (2 ^ spec.roundsLog),
+          avg (fun t : TreeSample spec => roundErr e ⟨ν, spec, t, fun _ => 0⟩ s r) := by
+        simp only [hsum, avg_sum_comm]
     _ ≤ ∑ _s : Fin spec.streams.size, ∑ _r : Fin (2 ^ spec.roundsLog), leafTerm :=
-        Finset.sum_le_sum fun s _ => Finset.sum_le_sum fun r _ => avg_leafErrMax_key_le e ν s r spec.block
+        Finset.sum_le_sum fun s _ => Finset.sum_le_sum fun r _ => hr s r
     _ = (Leaves.treeLeaves spec : ℝ≥0∞) * leafTerm := by
         simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul, Leaves.treeLeaves]
         push_cast
@@ -496,8 +501,8 @@ theorem treePotential_nil (A : Live) : treePotential e [] = A.hidingTerm := by
   have h : ENNReal.ofReal (1 / 2 ^ 257) = ((2 : ℝ≥0∞) ^ 257)⁻¹ := by
     rw [one_div, ENNReal.ofReal_inv_of_pos (by positivity), ENNReal.ofReal_pow (by norm_num),
       ENNReal.ofReal_ofNat]
-  simp only [treePotential, treesErr, leafTerm, Live.hidingTerm, maxLeaves, h, List.map_nil, List.sum_nil, zero_add,
-    treeLines, Nat.sub_zero, Nat.cast_mul, div_eq_mul_inv]
+  rw [treePotential, treesErr, leafTerm, h, Live.hidingTerm, maxLeaves]
+  simp only [List.map_nil, List.sum_nil, zero_add, treeLines, Nat.sub_zero, Nat.cast_mul, div_eq_mul_inv]
   ring
 
 end Verity.Sampled
