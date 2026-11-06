@@ -31,7 +31,7 @@ takes of the loop beyond the code is named, each an obligation:
 and proof files of the loop's `Finish`, `Loop.filesE`). In place of `LinkRoundEq` it
 takes the masked verifier's scope (`Claims.Flock.Scope`) and `Loop.Src` (`flock-firewall-os-src`): every input the loop
 takes from its host and operating system is the tape's, its level-0 inputs (`Loop.Level0Src`) and its rep draws
-(`Loop.RepSrc`). `FinishIs` it does not take: there it is proved (`Loop.finishIs`), from the scope, `Loop.Src`,
+(`Loop.RepSrc`). `FinishIs` it does not take: there it is proved (`Loop.finishIsOn`), from the scope, `Loop.Src`,
 `LoopInnerRound0`, `LiveRoundEq` and `SwCausalOn`.
 
 `SessionLoopZK`'s transport trusts (`LeanRelease.LinkRoundEq`, `FinishIs`, `LiveRoundEq`, `FillRoundEq`) and the tables'
@@ -467,7 +467,7 @@ and `TapeOK` hold at `Masked.dataE` (`Loop.tables_dataE`, `complete_dataE`, `dum
 `LinkRoundEq` it takes that `x` is in the masked verifier's scope (`Claims.Flock.Scope`, the statement check
 `flock-verify verify --zk` runs, `ScopeMatches`) and that the loop's inputs from its host and operating system are the
 tape's (`Loop.Src`). It takes no `FinishIs`: at these premises, with `LiveRoundEq` and `SwCausalOn`, the loop's `Finish`
-is the switched session's (`Loop.finishIs`). The scope
+is the switched session's (`Loop.finishIsOn`). The scope
 is a premise because the loop does not run that check, and cannot run all of it: the check reads the verifier's own
 `--public-inputs` and `--registered`, which the loop never sees. At a statement outside it the model's session has no
 tables, so its link carries no root while the loop's `Commit` carries each table's. -/
