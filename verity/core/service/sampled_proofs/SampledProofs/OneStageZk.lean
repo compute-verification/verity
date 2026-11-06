@@ -315,8 +315,9 @@ def tablesPiece (j : Json) : V Json := do
     | .error _ => Json.mkObj []
   let c := s!"circuit\nMETA {m.compress}\n".toUTF8
   let d := Flock.Sha512.hash c
-  let own : Own := { programJ := Json.null, program := .empty, partition := Json.null, circuit := Flock.hexOf d, pub := "",
-    registered := none }
+  let own : Own :=
+    { programJ := Json.null, program := .empty, partition := Json.null, circuit := Flock.hexOf d, pub := "",
+      registered := none }
   return Json.mkObj [("why", match tablesHeld own ⟨#[(d, c)] ++ entries⟩ with
     | .ok () => Json.null
     | .error w => Json.str w)]
