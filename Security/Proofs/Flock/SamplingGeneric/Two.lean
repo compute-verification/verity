@@ -3,6 +3,10 @@ module
 public import Definitions.Claims.SamplingTwo
 public import Proofs.Flock.SamplingGeneric.Assemble
 public import Proofs.Flock.SamplingGeneric.Session
+import Proofs.Flock.Claims.Aggregate
+import Proofs.Flock.Claims.ERepCost
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Claims.Sampling.Extract
 
 /-!
 # The two-stage compiler is knowledge sound at the footprint
