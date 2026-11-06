@@ -727,20 +727,6 @@ def _elementwise_products(vs: _Values) -> list[dict]:
     return [{"op": op, "count": c, "macs": m} for op, (c, m) in sorted(found.items())]
 
 
-def gathered_gemms(graph) -> set[tuple[str, str]]:
-    """The (node, part) of each GEMM of the measured step with an operand that reads a gather's rows (`_gathered`)."""
-    vs = _Values(graph)
-    gathered = _gathered(vs, _made(vs))
-    by_name = {n.name: n for n in vs.nodes}
-    out = set()
-    for m in graph.matmuls:
-        n = by_name[m.node]
-        g = next(x for x in _gemms(n) if x.part == m.part)
-        if any(x in gathered for a in (g.operands[0], g.operands[1]) for x in _reads(vs, n, a)):
-            out.add((m.node, m.part))
-    return out
-
-
 def _gemm_rate(vs: _Values, n, g, R, k: float) -> float:
     """A GEMM output's rate (`_rates`), each operand's as the node read it: ∞ where no token indexes it (a sum over
     tokens is paid at its width); attention's (two token-indexed dims) rate(A)·K/n + rate(B)·K/m; with an affected

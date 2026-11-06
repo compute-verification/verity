@@ -1,4 +1,4 @@
-"""Describe a start for the starts registry that run.py and launch.py read.
+"""Describe a start for the starts registry that run.py reads.
 
     python -m training_slowdown.starts --name small --theta THETA.pt --factory model_starts:small [--ctx 1024] [--vocab 50304] \\
         [--val-bpb X] >> entries.jsonl

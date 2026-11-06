@@ -1,4 +1,4 @@
-"""training_slowdown: the fixed core that scores training-efficiency submissions (README.md). Search agents never edit it; a change
-goes through its toolsmith and bumps VERSION, which every record carries."""
+"""training_slowdown: the code that measures a training run's slowdown (README.md). A change to what it measures bumps
+VERSION, which every record carries."""
 
 VERSION = "4.13.4"

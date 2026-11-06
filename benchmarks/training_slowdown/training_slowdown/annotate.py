@@ -3,7 +3,7 @@ circuit (training_slowdown.capture, `with_structures`), never from the program.
 
 - multiplication blocks: MACs, as counted;
 - token blocks: one token's computation in one step;
-- updated blocks U (training_slowdown 4.0, after Daniel's smell check): the forward pass's MACs with a token-indexed result and
+- updated blocks U (training_slowdown 4.0 on): the forward pass's MACs with a token-indexed result and
   an update-dependent operand, one that depends, through any path of the traced step graph, on a value the run produced
   that persists across steps (the slow weights, optimizer state, any buffer carried from one step to the next that
   isn't θ or token data). A gather of a dependent table makes its rows dependent with no MAC; a cache computed only
@@ -100,8 +100,7 @@ def _step(rec: dict, struct: dict) -> StepAnnotation:
 def with_structures(record: dict, traced: dict[str, dict]) -> dict:
     """A record counted by the runtime counter with its U, cut and training-formalism quantities from the traced step
     circuit: `traced` maps a structure id of the record to a traced structure (training_slowdown.capture's
-    `StepGraph.structure()`, or a recorded script's, `training_slowdown.capture.script`), whose per-token rows are scaled to each
-    step's tokens. Only steps whose own structure has updated MACs take its U and cut (a step before the run's first
+    `StepGraph.structure()`), whose per-token rows are scaled to each step's tokens. Only steps whose own structure has updated MACs take its U and cut (a step before the run's first
     update reads θ only), and |C| stays the runtime count. A traced structure's `formalism`
     (training_slowdown.capture.circuit.measure) gives its steps' σ, affected share, token factor and Δ_grad (training_slowdown.formalism's
     `TRACED_STRUCTURE`), a step that updates nothing included where a step that does is traced too: its Δ_grad, 0, is

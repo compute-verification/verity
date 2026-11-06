@@ -18,8 +18,8 @@ AND + XOR + NOT as `verity.ml.circuits.evaluation.bits.compile(D).counts` gives 
 - a gather's MAC (training_slowdown.flops's `gather_macs`) is one word multiplexer, y ⊕ (b ∧ (x ⊕ y)) per bit: 3 gates per bit.
 
 A record names each op's dtype from training_slowdown 4.0's capture on. A record without one (v2.3's `macs_log`) is priced by
-`ASSUMED`: GEMMs and forward or backward elementwise ops in bf16 (the islands train under bf16 autocast), the optimizer
-in f32; `of_log` lists every assumption it made. The ops training_slowdown.flops doesn't count (exp, max, comparisons, casts)
+`ASSUMED`: GEMMs and forward or backward elementwise ops in bf16 (the lf model trains under bf16 autocast), the
+optimizer in f32; `of_log` lists every assumption it made. The ops training_slowdown.flops doesn't count (exp, max, comparisons, casts)
 are in no record, so |C| here is the counted ops' gates.
 """
 from __future__ import annotations
@@ -83,7 +83,7 @@ def per_and(kind: str) -> float:
     return per_mac(kind) / sum(DEFINITIONS[d][1] / k for d, k in PRICES[kind])
 
 
-#: the unit of every gate count, as the training panels' titles state it (coordinator 08:09Z item 3)
+#: the unit of every gate count
 UNIT = f"gates: AND + XOR + NOT, {per_and('gemm/bf16'):.1f}x a bf16 GEMM's AND count"
 
 
@@ -125,8 +125,7 @@ def split_key(key: str) -> tuple[str, str, str, str, str | None]:
 
 
 def of_log(log: dict) -> dict:
-    """A `macs_log` (training_slowdown.ledger's: `by` class -> MACs, `ops` "phase role op shapes [dtype]" -> [count, MACs]) in
-    gates: the total, the MACs and gates per kind, and the assumptions made. MACs `by` counts that no op row holds are
+    """A record's `macs_log` (`by` class -> MACs, `ops` "phase role op shapes [dtype]" -> [count, MACs]) in gates: the total, the MACs and gates per kind, and the assumptions made. MACs `by` counts that no op row holds are
     priced as elementwise bf16, an assumption it names."""
     kinds: dict[str, list[float]] = {}
     notes: dict[str, int] = {}

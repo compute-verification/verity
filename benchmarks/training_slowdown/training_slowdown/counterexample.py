@@ -7,7 +7,7 @@ A family is a directory a program writes during its run (`Family`, through `Sess
 - `<t>.enc`: E_t, everything the decoder reads beyond θ to rebuild step t's updated weights, declared imported computed
   values included (they travel in E_t and count in its bits).
 
-The checker (`check`) draws a sample of the declared steps from a live coin (5 at search time, 20 at final), rebuilds each
+The checker (`check`) draws a sample of the declared steps from a live coin (`n_sample` of them), rebuilds each
 sampled step's updated weights and compares each, bit for bit, with the digest the harness logged when the step read it.
 A rebuild must cost at most c MACs: the larger of the plan's declared cost and the MACs the harness's counter sees the
 decode compute. Each declared step gets β_t = bits(E_t) / (updated MACs per token block). The family covers the steps
@@ -129,7 +129,7 @@ def rebuild(plan: Plan, enc: bytes, step, theta: dict, c: float, device="cpu", w
 def check(family_dir: Path, record: dict, theta: dict[str, torch.Tensor], c: float, n_sample: int = SAMPLE_SEARCH,
           coin: bytes | None = None, device="cpu", plan=None) -> Verified:
     """Verify a family against a run's count. `coin` is the verifier's live coin (default: fresh from the OS); `plan` is
-    the family's decoder when the run holds it (a plan outside the codec library, such as cw.py's), else its spec's."""
+    the family's decoder when the run holds it (a plan outside the codec library), else its spec's."""
     family_dir = Path(family_dir)
     meta = json.loads((family_dir / "family.json").read_text())
     plan = plan or Plan.from_spec(meta["decoder"])
