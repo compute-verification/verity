@@ -444,6 +444,18 @@ export function createStore(db: Db) {
       return rows.map(toTurn);
     },
 
+    // Failed lead turns whose failure notice reached no thread: a tick's turn,
+    // or one whose notice couldn't be posted (a sandbox that can't run research).
+    async unheardFailures(withinHours = 24): Promise<Turn[]> {
+      const { rows } = await db.query(
+        `select * from turns t where t.kind = 'lead' and t.status = 'failed' and t.started_at > now() - make_interval(hours => $1)
+           and not exists (select 1 from transcript_parts p where p.turn_id = t.id and p.type = 'post')
+         order by t.started_at`,
+        [withinHours],
+      );
+      return rows.map(toTurn);
+    },
+
     async appendParts(turnId: string, parts: TranscriptPart[]) {
       if (parts.length === 0) return;
       const { rows } = await db.query<{ n: number }>(

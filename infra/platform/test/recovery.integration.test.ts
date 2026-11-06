@@ -2,13 +2,14 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { getRun } from "workflow/api";
 import { tick } from "../src/cron.ts";
 import { slackEvents } from "../src/http.ts";
+import { wake } from "../src/wake.ts";
 import type { LeadResult } from "../workflows/lead.ts";
 import { NOW, nextTs, signedSlackRequest, slackBody, slackEnv, testRuntime } from "./helpers.ts";
 
 // What happens without a human when something breaks: a failed turn is
 // reported in its thread and the lead carries on; the minute cron rings a lead
 // whose events wait, restarts one whose events wait too long, and reports a
-// turn that has run too long, once.
+// turn that has run too long, or failed where no thread heard, once.
 
 let t: Awaited<ReturnType<typeof testRuntime>>;
 const INBOX = "1700000000.000009";
@@ -76,5 +77,13 @@ describe("recovery", () => {
     expect((await tick()).rolled).toEqual([]);
     const thread = await ring("after the roll");
     await reply(thread, "slack/doorbell");
+  });
+
+  it("alerts once when a turn fails where no thread hears of it", async () => {
+    await wake("kernels", { lane: "kernels", source: "cron", kind: "tick", payload: { text: "[[fail: bootstrap failed]]" }, replyTo: null });
+    const [failed] = await t.turnsEnded((x) => x.lane === "kernels" && (x.finalText ?? "").includes("bootstrap failed"));
+    const r = await tick({ alertChannel: "C_ALERTS" });
+    expect(r.alerts).toEqual([`platform: turn ${failed!.id} of kernels failed and no thread was told (harness turn emitted an error: bootstrap failed).`]);
+    expect((await tick({ alertChannel: "C_ALERTS" })).alerts).toEqual([]);
   });
 });

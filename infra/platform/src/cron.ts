@@ -13,8 +13,8 @@ export const ROLL_AFTER_HOURS = 24;
 // lead with pending events is rung (which starts it if no run holds its hook),
 // a lead whose events wait too long with no turn running gets a fresh run, an
 // idle lead whose run is a day old moves to a fresh run on the current
-// deployment, a turn running too long is reported once, and jobs that ended
-// are delivered. Nothing here needs a human.
+// deployment, a turn running too long or failing where no thread hears of it
+// is reported once, and jobs that ended are delivered. Nothing here needs a human.
 export async function tick(o: { alertChannel?: string; now?: Date } = {}) {
   const rt = await runtime();
   const now = o.now ?? new Date();
@@ -67,6 +67,9 @@ export async function tick(o: { alertChannel?: string; now?: Date } = {}) {
   }
   for (const t of await rt.store.staleTurns(STALE_TURN_MINUTES)) {
     await alert(`stale:${t.id}`, `platform: turn ${t.id} of ${t.lane} has run over ${STALE_TURN_MINUTES} min.`);
+  }
+  for (const t of await rt.store.unheardFailures()) {
+    await alert(`unheard:${t.id}`, `platform: turn ${t.id} of ${t.lane} failed and no thread was told (${(t.error ?? "unknown error").slice(0, 200)}).`);
   }
   // A job's end is also read from the queue, so a runner that never calls back
   // (or a callback that was lost) still wakes the lead.
