@@ -4,7 +4,8 @@ import { join } from "node:path";
 import { localCredentials } from "../src/credentials.ts";
 import { openDb } from "../src/db.ts";
 import { memoryJobs } from "../src/jobs.ts";
-import { harnessFor, localSandboxes, type Runtime, setRuntime } from "../src/runtime.ts";
+import { harnessFor } from "../src/harness/providers.ts";
+import { localSandboxes, type Runtime, setRuntime } from "../src/runtime.ts";
 import { memorySlack, signSlackBody } from "../src/slack.ts";
 import { createStore } from "../src/store.ts";
 

@@ -1,16 +1,12 @@
 import { HarnessAgent } from "@ai-sdk/harness/agent";
-import {
-  type HarnessWorkflowAgent,
-  type HarnessWorkflowState,
-  createHarnessWorkflowState,
-  runHarnessAgentTimeSlice,
-} from "@ai-sdk/workflow-harness";
+import { type HarnessWorkflowState, createHarnessWorkflowState, runHarnessAgentTimeSlice } from "@ai-sdk/workflow-harness";
+import { tapped } from "../src/harness/tap.ts";
 import { costUsd } from "../src/prices.ts";
 import { DOC_PATH, leadInstructions, turnPrompt, workerInstructions } from "../src/prompt.ts";
 import { GITHUB_PLACEHOLDER, type Runtime, runtime } from "../src/runtime.ts";
 import type { HarnessName, InboxEvent, ReplyTo, Usage, Worker } from "../src/store.ts";
 import { hostTools } from "../src/tools.ts";
-import { ZERO_USAGE, addUsage, finalText, foldChunks, fromSdkUsage } from "../src/transcript.ts";
+import { finalText, foldChunks } from "../src/transcript.ts";
 import { wake } from "../src/wake.ts";
 
 export type TurnCtx = {
@@ -124,20 +120,6 @@ export async function beginWorkerTurn(w: WorkerInput, runId: string): Promise<Be
   return { ctx, state: createHarnessWorkflowState({ sessionId: turnId, prompt: w.task }) };
 }
 
-// The UI stream reports every error as "An error occurred." unless given an
-// onError; the transcript and the failure reply want the harness's own words.
-function unmasked<R extends object>(r: R): R {
-  const errorText = (e: unknown) => String((e as Error)?.message ?? e).slice(0, 500);
-  return new Proxy(r, {
-    get(target, prop) {
-      const v = Reflect.get(target, prop, target);
-      if (prop === "toUIMessageStream" && typeof v === "function")
-        return (o?: Record<string, unknown>) => v.call(target, { ...o, onError: errorText });
-      return typeof v === "function" ? v.bind(target) : v;
-    },
-  });
-}
-
 // One time-boxed slice of a harness turn. A turn longer than a function may
 // run is several slices, each its own step; the harness suspends and resumes
 // the runtime in the sandbox between them.
@@ -145,18 +127,7 @@ export async function sliceTurn(ctx: TurnCtx, state: HarnessWorkflowState): Prom
   "use step";
   const rt = await runtime();
   const sandboxSession = await openSandbox(rt, ctx);
-  const agent = await buildAgent(rt, ctx);
-  const results: { totalUsage: PromiseLike<unknown> }[] = [];
-  const tap = <R extends { totalUsage: PromiseLike<unknown> }>(r: R): R => {
-    results.push(r);
-    return unmasked(r);
-  };
-  const tapped: HarnessWorkflowAgent = {
-    hasOutput: agent.hasOutput,
-    createSession: (o) => agent.createSession(o as never),
-    stream: async (o) => tap(await agent.stream(o as never)) as never,
-    continueStream: async (o) => tap(await agent.continueStream(o as never)) as never,
-  };
+  const t = tapped(await buildAgent(rt, ctx));
   const chunks: { type: string }[] = [];
   const writable = new WritableStream<{ type: string }>({
     write(c) {
@@ -164,14 +135,13 @@ export async function sliceTurn(ctx: TurnCtx, state: HarnessWorkflowState): Prom
     },
   });
   const next = await runHarnessAgentTimeSlice({
-    agent: tapped,
+    agent: t.agent,
     state,
     sandboxSession: sandboxSession as never,
     writable,
     timeSliceSeconds: rt.sliceSeconds,
   });
-  let usage = ZERO_USAGE;
-  for (const r of results) usage = addUsage(usage, fromSdkUsage(await Promise.resolve(r.totalUsage).catch(() => undefined)));
+  const usage = await t.usage();
   const parts = foldChunks(chunks);
   await rt.store.appendParts(ctx.turnId, parts);
   if (ctx.kind === "lead") await rt.store.renewLease(ctx.lane, ctx.turnId, rt.leaseSeconds);
