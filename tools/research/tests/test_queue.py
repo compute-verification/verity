@@ -287,23 +287,6 @@ def test_the_priority_list_puts_a_ready_fix_at_the_bottom_of_next_ahead_of_membe
     assert [m.commit for m in again] == [m.commit for m in members]
 
 
-def test_the_priority_files_order_is_the_landing_order_above_the_members_a_check_holds(world):
-    """Drive's priority list is the landing order: its ready PRs go at the bottom of `next` in the file's order, first to land
-    first (#9, then #7, whatever their numbers), above only the members a running or passed check covers (`Queue.hold`), which
-    keep their place and their merges."""
-    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
-        world.gh.put(n, world.change({f: f"{n}\n"}))
-    q = world.queue()
-    held = q.sync()[0][0]
-    for n in (7, 9):
-        world.gh.put(n, world.change({f"{n}.txt": f"{n}\n"}))
-    world.prioritize(q, 9, 7)
-    q.hold = 1
-    members, _ = q.sync()
-    assert [m.pr for m in members] == [1, 9, 7, 2, 3] and members[0] == held, world.logs
-    assert world.logs[-1].endswith("kept 1, merged 4"), world.logs[-1]
-
-
 def test_an_edit_of_the_priority_file_reorders_next_at_the_next_sync_from_the_first_pr_whose_place_changed(world):
     """Each sync reads drive's priority file again: a number repeated keeps its first place, so it moves nothing; swapping two
     PRs rebuilds `next` from the lower one, and listing one more after them merges again only what is above them."""

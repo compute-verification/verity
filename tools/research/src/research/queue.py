@@ -207,12 +207,10 @@ PR whose head contains another open PR's head, or by ancestry an older one (a he
 `next` already bring), goes
 in after it and waits while that one waits, unless it carries that one's change: the same owner, or that one's owner withdrew its
 mark (`Queue._carried`); drive tells the owner of the one it waits for (unmarked, ejected, held or waiting itself) and those of
-every marked PR left out for it in one post, with the fix (`Driver.tell_out`); but a member a running or passed check covers
-(`Queue.hold`) stays in place while it stands (`Queue._stands`: not ejected, unmarked at its head or held), and a PR it contains
-that comes new goes above it.  Drive's priority list (`--priority-file`, read again at each sync: `Queue.priority`) is the
-landing order: its ready PRs go at the bottom of `next`, above only the members a running or passed check covers, in its
-order, first to land first, each after the PRs it contains, so an edit of the file reorders `next` from the first PR whose
-place it changed.  Members on `next` never move for what a sync adds, merged again or not: those above a moved or dropped
+every marked PR left out for it in one post, with the fix (`Driver.tell_out`).  Drive's priority list (`--priority-file`,
+read again at each sync: `Queue.priority`) is the landing order: its ready PRs go at the bottom of `next`, in its order, first
+to land first, each after the PRs it contains, so an edit of the file reorders `next` from the first PR whose place it
+changed.  Members on `next` never move for what a sync adds, merged again or not: those above a moved or dropped
 member are merged again in their order, and only a PR of the priority list placed again, or a `next` rebuilt on a `main` that
 moved off it, sorts what is above it.  Nor do they
 move but for drive's lift (`Queue.lift`, `Driver._lift`): each sync, the members with a land verdict go below those waiting
@@ -220,15 +218,14 @@ for one (drive.toml's `verdict_first`), each after the PRs it contains, and land
 `Driver._park`): each sync, a
 member held by a verdict at its head goes to the top of `next` with every PR that contains it, above what the sync adds, so
 one hold holds only itself and what contains it and the members that were above it land; it stays there until a land verdict
-(then it lands in its place) or a new head.  The park moves no member that a running or passed check covers below the lowest
-member it moves, so it cancels no check below a held member.  A PR that doesn't merge cleanly is left out of that sync, and its owner is told
+(then it lands in its place) or a new head.  A PR that doesn't merge cleanly is left out of that sync, and its owner is told
 which files conflict and which queued PRs touched them; while its head stays, later syncs try it, and the PRs that contain it,
 above everything else, whatever the priority list would say, so a sync with nothing new keeps `next`.  So is a PR
 a landing gate refuses (drive.toml's `landing_gates` at
 `main`, `gate_refusal`) on its merge onto `next` (`tools/verity/check/gates/markdown_caps.py`: one it puts over a cap),
 with the gate's fix, and a PR whose lock merge drops an entry `next`'s statements still need (`lock_drops`), naming each:
 each PR the sync merges is judged, a new one or one merged again above a
-dropped or moved member, never one in the prefix it keeps, so a refusal never takes a running check's commit off `next`; a merge
+dropped or moved member, never one in the prefix it keeps, so a refusal never rebuilds what `next` keeps; a merge
 with the message, tree and parent tree of one judged under the same `main` takes that verdict (`Queue._gated`).  A ready mark
 admits a PR: the sync runs no preflight and waits on none, and its merge onto `next` (with the gates and lock drops above, and
 the codemod and the move below) is the only check before the PR joins it; what a merge breaks past that, drive's landing
@@ -1467,29 +1464,21 @@ class Queue:
         self.into_fetched = False
         self.shadow, self.log, self._rules, self.auth = shadow, log, rules, auth
         self.before_cutoff, self.marked_by, self.marked_at, self.prefetch = before_cutoff, marked_by, marked_at, prefetch
-        #: how many members at the bottom of `next` a running check covers (none of drive's: it checks after landing): drive's
-        #: priority list goes above them, so no reorder takes that check's commit off `next`
-        self.hold = 0
         #: whether drive's lift puts members with a land verdict below those without (`Driver._lift`); None: drive.toml's
         #: `verdict_first` at `main`
         self.verdict_first = verdict_first
-        #: members a running check (or a passed one drive lands this tick) covers that keep their place at the head it checks though their PR's head has moved
-        #: (`Driver`: a new head doesn't cancel a running check, and its PR rejoins above once that check ends)
-        self.frozen: set[int] = set()
         #: members `next` keeps that this sync moves below the rest, in this order, at the heads it holds (`Driver._lift`: those
-        #: with a land verdict, above the `hold` members); what `order` moved of them
+        #: with a land verdict, above the priority list's); what `order` moved of them
         self.lift: list[int] = []
         self._lifted: list[int] = []
         #: members `next` keeps that this sync moves to its top, each with the PRs that contain it (`Driver._park`: those held
         #: by a verdict at the head `next` holds), so the members above them form the prefix that lands; what `order` moved
         self.park: list[int] = []
         self._parked: list[int] = []
-        #: the bottom members `order` keeps where they are under `hold`, each at the head `next` holds
-        self._held: dict[int, str] = {}
         self.now: Callable[[], float] = time.time
         #: drive's priority list (`--priority-file`: `priority_file`, read again at each sync, `priority_list`), the landing
-        #: order: the ready ones go at the bottom of `next` in its order, above the `hold` members (`order`); these PRs and
-        #: those they contain (`_prioritized`) go first of what a sync merges anew
+        #: order: the ready ones go at the bottom of `next` in its order (`order`); these PRs and those they contain
+        #: (`_prioritized`) go first of what a sync merges anew
         self.priority: tuple[int, ...] = ()
         self.priority_file: Path | None = None
         self._prioritized: set[int] = set()
@@ -1850,18 +1839,13 @@ class Queue:
               park: Iterable[int] = ()) -> list[int]:
         """Members that keep their head, or move it to a descendant (`_same_or_fixed`), keep their order; the rest follow by PR
         number, those of drive's priority list and the PRs they contain first (`_prioritized`), each after the PRs it contains.
-        The PRs
-        of drive's priority list (`priority`, the landing order) that are ready go below all of them, in its order, so they land
-        first; but
-        above the bottom `hold` members, which a running or passed check covers: each keeps its place and its merge, and the PRs
-        it contains that come new go above them too, until one of them stops standing (`_stands`) or is parked; then the rebuild
-        from it is logged with why.  The members of ``lift`` at the heads `next` holds, none of those, go above the priority
-        list's and below the rest, each only after the PRs it contains (`_lifted`).  The members of
-        ``park`` that stay at the head `next` holds (or at the old head a check keeps), and every PR that contains one, go above
-        all of these, in `next`'s order (`_parked`), out of the `hold` members too: what a check covers below the lowest of
-        them keeps its place."""
+        The PRs of drive's priority list (`priority`, the landing order) that are ready go below all of them, in its order, so
+        they land first.  The members of ``lift`` at the heads `next` holds, none of those, go above the priority list's and
+        below the rest, each only after the PRs it contains (`_lifted`).  The members of ``park`` that stay at the head `next`
+        holds (or at the admitted head while a new one waits for its mark: `_pending`), and every PR that contains one, go
+        above all of these, in `next`'s order (`_parked`)."""
         ready = {n for n, e in entries.items() if e.state == "ready"}
-        stays = {m.pr for m in chain if self._frozen(m, entries) or self._pending(m, entries)}
+        stays = {m.pr for m in chain if self._pending(m, entries)}
         kept = [m.pr for m in chain if m.pr in ready and self._same_or_fixed(m, entries) or m.pr in stays]
         at = {m.pr: m.head for m in chain}
         parked = {n for n in park if n in kept and (entries[n].pr.head == at[n] or n in stays)}
@@ -1872,16 +1856,7 @@ class Queue:
                 if parked.intersection(entries[n].after):
                     parked.add(n)
                     grown = True
-        held: list[int] = []
-        self._held = {}
-        for m in chain[:self.hold]:
-            e = entries.get(m.pr)
-            stands = self._stands(m, e) and (m.pr in self.frozen or e.pr.head == m.head)
-            if m.pr in parked or not (stands or m.pr in kept):
-                break
-            held.append(m.pr)
-            self._held[m.pr] = m.head if stands else entries[m.pr].pr.head
-        out: list[int] = list(held)             # in place: a PR one of them contains that comes new goes above them
+        out: list[int] = []
         placing: set[int] = set()
 
         def place(n: int) -> None:
@@ -1896,16 +1871,16 @@ class Queue:
         cold = {n for n in new if self._forces_cold(n)}
         self._lifted = []
         first = [n for n in self.priority if n in ready]
-        below = set(held).union(first)
+        below = set(first)
         for n in lift:
             if (n in kept and n not in parked and n not in below and entries[n].pr.head == at.get(n)
                     and all(a in self._lifted or a in below for a in entries[n].after)):
                 self._lifted.append(n)
         self._parked = [n for n in kept if n in parked] + sorted(parked - set(kept))
         # a newly ready PR that makes circuit-check run cold goes above the warm ones, unless drive's priority list puts it first;
-        # members already on `next` keep their place, and so the check that covers them
+        # members already on `next` keep their place
         ahead = [n for n in new if n in self._prioritized]
-        for n in (held + first + self._lifted + kept + ahead
+        for n in (first + self._lifted + kept + ahead
                   + [n for n in new if n not in cold and n not in ahead] + sorted(cold.difference(ahead))):
             if n not in parked:
                 place(n)
@@ -1934,18 +1909,6 @@ class Queue:
         if e is None or e.pr.head == m.head or e.state != "waiting" or not e.why.startswith("not marked ready"):
             return False
         return bool(self.ready(m.pr, m.head)) and self._same_or_fixed(m, entries)
-
-    def _frozen(self, m: Member, entries: dict[int, Entry]) -> bool:
-        """Whether member ``m`` stays at its old head: `frozen` names it, its PR's head has moved, and it stands (`_stands`)."""
-        e = entries.get(m.pr)
-        return m.pr in self.frozen and e is not None and e.pr.head != m.head and self._stands(m, e)
-
-    def _stands(self, m: Member, e: Entry | None) -> bool:
-        """Whether member ``m`` may stay on `next` at its head under a check that covers it: its PR is still open, neither
-        ejected nor held, and that head is still marked ready, whatever else its entry waits for (a PR it contains that moved
-        on or came new): a head whose mark was withdrawn doesn't ride the running trains until their checks fail on it."""
-        return (e is not None and e.state != "refused" and not e.why.startswith("held")
-                and bool(self.ready(m.pr, m.head)))
 
     def _forces_cold(self, n: int) -> bool:
         r = _git(self.workdir, "diff", "--name-only", f"refs/remotes/origin/main...refs/queue/pr/{n}", check=False)
@@ -2331,7 +2294,7 @@ class Queue:
         entries.update(waiting)
         listed = [n for n in self.priority if n in entries]
         self._prioritized = set(listed).union(*(entries[n].after for n in listed))
-        frozen = {m.pr: m.head for m in chain if self._frozen(m, entries) or self._pending(m, entries)}
+        pending = {m.pr: m.head for m in chain if self._pending(m, entries)}
         # what the last sync left out at its head is tried again above the rest: in the priority list's place or among members
         # `next` keeps, it would be left out again and every member above it merged again, each tick keeping none of them
         on = {m.pr for m in chain}
@@ -2344,7 +2307,7 @@ class Queue:
 
         main = _out(self.workdir, "rev-parse", self.base)
         order = last(self.order(chain, entries, self.lift, self.park))
-        heads = {n: frozen.get(n, self._held.get(n, entries[n].pr.head)) for n in order}
+        heads = {n: pending.get(n, entries[n].pr.head) for n in order}
 
         def kept(order: list[int]) -> int:
             want = [(n, heads[n]) for n in order]
@@ -2359,12 +2322,6 @@ class Queue:
         if any(m.pr not in parked and m.pr in heads for m in chain[low:]):
             self.log(f"research queue: {' '.join(f'#{n}' for n in self._parked)} (held, or containing a held PR) go to the top "
                      f"of `{self.branch}`, so what was above them lands")
-        if k < min(self.hold, len(chain)):
-            m, e = chain[k], entries.get(chain[k].pr)
-            why = ("is held by a verdict" if m.pr in parked else "is closed" if e is None
-                   else e.why if not self._stands(m, e) else f"moved to {e.pr.head[:8]}")
-            self.log(f"research queue: `{self.branch}` is rebuilt from #{m.pr}, below the {self.hold} member(s) a check holds, "
-                     f"so that check runs again on the rebuilt prefix: #{m.pr} {why}")
         members = chain[:k]
         tip = members[-1].commit if members else main
         dropped: set[int] = set()
@@ -5777,8 +5734,8 @@ def main(argv: list[str]) -> int:
                     help="sync/drive: drive's priority list, the landing order: a file of PR numbers separated by spaces or "
                          "commas, first to land first (a number repeated keeps its first place), read again at each sync (none: "
                          "an empty list; one it can't read: an error logged once, and an empty list); its ready PRs go at the "
-                         "bottom of `next` in its order, above only the members a running or passed check covers, so an edit "
-                         "reorders `next` from the first PR whose place changed; these PRs and those they contain go first of "
+                         "bottom of `next` in its order, so an edit reorders `next` from the first PR whose place changed; "
+                         "these PRs and those they contain go first of "
                          "what the sync merges anew")
     ap.add_argument("--after-landing-no-cache", action=argparse.BooleanOptionalAction,
                     help="drive: run the after-landing check reusing no pass but circuit-check's per-target ones "
