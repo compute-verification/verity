@@ -18255,7 +18255,7 @@
    }
   },
   "VStar.Compose": {
-   "digest": "40a35f673a56991b94a361fb33c86aa9922f8c210e81d11b3cf5233952ec3adc",
+   "digest": "5cab35f1ef783ba8c7e6e62694892cac0f5008adb578f1366ec8a032d19041e4",
    "definitions": {
     "VStar.Bindings": "32b96feea2803c483d0da0236d3b79e9326651d61b6b8c69e72ca96bfa36fba1",
     "VStar.Bindings.partition": "d699fd4e18fe7585e5fa228523a350cf52acad36440da7338cfdfe8e0282fefd",
@@ -18271,6 +18271,7 @@
     "VStar.Item.sl": "30c575c02a1662c9795b89b59e23c75875a8b1de3a3b2427fba1ce4c14e9e128",
     "VStar.Item.typ": "c95eb6b1956c543f3361cfb339c8a7e1d2b0fb3fe658bfa575f313935cf357f9",
     "VStar.KEY_SHA512": "a68d79ecac2fa606c1a6192d6bc29f6bc85c893f6512c0dba2243f96e58dda8f",
+    "VStar.K_MAX": "67f643fdb8c4776343f5fff8b77732a62e1218fd0b80a15541f22fb911106aaf",
     "VStar.MASK_LOG": "9c6213abb3ddf9564f6a189de1dedd8186ecd3652334e2175befeca5c672c0b4",
     "VStar.PARTITION_V1": "1d21c18f722fcce0abe7474bac4040bc8e427352671dc3988e82a7e5f700d4e8",
     "VStar.PER_SLOT": "ae3296bfa56c3c8bf57d26f84bc012b9673107b487aedc147a5bc3c1e6965339",
