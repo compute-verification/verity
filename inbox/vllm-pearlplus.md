@@ -1430,3 +1430,36 @@ network-accounting's ODLEAN reads `v3c-w0-4-32-4/compose-cache/e9a7e9…/circuit
 7. **Heads:** the fix branch `cursor/vllm-handoff-pp-3a37` at `ab66bd024e`; the record's hand-off tree `cursor/vllm-pprecord-handoff-4734` at `997af1d259`; the frozen `cursor/vllm-pprecord-496a` untouched at `44b0c741c930`. h200-3 is untouched.
 
 **I wait on:** r20261106-084839-0bb4 (near 11:00Z Sun 8 Nov), and your word on the mark.
+
+## 12:36Z Fri (vllm-pearlplus): **The follow-on failed because the gate host couldn't open its coin link to cpu-3: "Host key verification failed." That spent the record root's one session with no coin drawn, and the gate opens a root once, ever. A relaunch the same way would be refused, so I haven't relaunched. This needs your decision.**
+
+1. **The first error,** 12:14:43–12:16:43Z: V3c's audit opened its one live session at the lane's gate, s20261106T121437Z-c3ee (ledger seq 1775; peer vy-nebius-cpu-3, port 7865, root `c1da2be1b4d0973f…`, the window's run root).
+   - On vy-challenger-1, the session's coin link listened, then its `ssh -N -R 127.0.0.1:7865:…` to cpu-3 exited 255 with "Host key verification failed." (the session's `coin-link.log` and `coin-link.json`).
+   - The gate stopped serve.py (rc −15) and ended the session (seq 1776): closed false, complete false, no coin released, no hello.
+   - On cpu-3, the client found nothing at 127.0.0.1:7865 for 120 s. `records_audit.py` exited 1 (the A5 draw refused, code `stream`), the period step found no audit record, and the run exited 1 at 12:17:33Z.
+2. **The cause:** vy-challenger-1 has no host key for cpu-3. It was the gate's first session ever with peer cpu-3: the ledger's 1777 entries hold only this one. cpu-3's host keys are unchanged since 15 Oct (ED25519 `SHA256:vG3GfTiYsnkXtdJc4d4TS7dB6Gd3mB2NiI5QfYopqB8`).
+   - cpu-3's side is right: its `authorized_keys` holds `auditor@vy-challenger-1 tunnel` with `from="204.12.178.84"`, `port-forwarding` and `permitlisten="127.0.0.1:*"`.
+   - Other CPU peers look the same: cpu-2 (7 sessions), cpu-5, cpu-11 and cpu-12 have none closed and complete; cpu-4 has 3 of 5.
+3. **Ruled out:**
+   - disk: 1.3 TB and 7.98M inodes free;
+   - memory: the shared session cgroup touched `memory.max` 1771 times at 11:32–11:40Z during the warm-up, alongside other jobs' Lean builds, peaking at 432.6 GB. `oom` and `oom_kill` stayed 0, and the warm-up exited 0;
+   - the window copy (FOLLOW-ON PASS, WINDOW-CIRCUIT-HELD PASS), the tie (V3C-TIE PASS), and a code error in the frozen tree.
+4. **Why no relaunch:** the gate opens a root once, ever.
+   - `benchmarks/live_challenger/auditor.py`'s `open_refusal` refuses "root … already has its session …" (also at the gate's pinned `f0c4b1355fb7`).
+   - The follow-on's own `gate_ready` refuses the same at V3C-GATE, after its 49-minute warm-up.
+   - The verifier's ledger check (`_verify` in `verity/core/protocols/sampled_proofs/challenger.py`) rejects the whole shared ledger on a second open of a root.
+   - So pinning the host key alone doesn't make a relaunch of this root possible.
+5. **The options, your call:**
+   - **(a) Take it as V3c's outcome for the record:** a refused window (no coin reached the peer). Nothing to run.
+   - **(b) A rule change:** a root may get a second session when its first released no coin and accepted no hello.
+     - It is code in the gate (`auditor.py` `open_refusal`), the verifier's ledger check (`challenger.py` `_verify`) and `served_verdicts.py` `gate_ready`.
+     - It lands on main and the gate's pin, not on a branch off `44b0c741c930`, since the gate runs main's pinned code.
+     - It changes "no retries", so it is a ruling.
+     - The tie would hold, since W and R are read from the serve dir. But the follow-on's gate check is in the frozen tree, so a fixed follow-on would run from a branch with `FOLLOW_ANY_TREE=1`, which its WINDOW-CIRCUIT line names.
+   - **(c) A new run of record,** with a new root and a new tie, once cpu-3's host key is pinned on the gate (or with a follow-on node whose coin link works).
+6. **Done:**
+   - Posted the status on VLLM-217.
+   - Asked infra on INF-518 to pin cpu-3's host key for the coin link, and said no b-slot pause is needed for now.
+   - The run's records are fetched (and preserved on cpu-3). h200-3, the serve dir and the frozen tree are untouched.
+
+**I wait on:** your decision. Nothing is running.
