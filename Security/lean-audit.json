@@ -29279,7 +29279,7 @@
    }
   },
   "Flock.Registered": {
-   "digest": "b7cab3f828783e8c4586903759bc8c8ecb69f8e5dcb43a07fc4ffb21a2377eab",
+   "digest": "00b856b23e1edfc9b4281fb02676a7658a2b59aec4b1b1c4a69eb9908b1c0e18",
    "definitions": {
     "Flock.Registered.FILE_KEYS": "f0c35dfcb8a6a4b2e574a62c121592a276b16512b53c37b2ff75025e63c2ae4e",
     "Flock.Registered.FORMAT": "fda4f60dfaea5d4458ee6f0696f8e183cfcd06e6f555178bf57f3c6e3ea83bd2",
@@ -29324,6 +29324,7 @@
     "Flock.Registered.domainWith": "e36768ed995d03d14bbafcb75ea0d218bf9d467699f8ec04ed92604979676d05",
     "Flock.Registered.drawsInFull": "b8e548db4153a2651ad903ade42bea470730b5f3e9ebc69d902250ae0a77d0c8",
     "Flock.Registered.dupName": "7653a5291d54c631dbd47a1b1a95db976f1abe8a1a3bcc7bc7bef938fe8aebda",
+    "Flock.Registered.dupName?": "6f430d04a0e160d9fbd053928a22d09ff14c30d5c4ddc64f0ee1f656881a2e34",
     "Flock.Registered.entry": "e43a2d348b7e817abc010477d839be3ed13ed031198fc525cb35b043e5c8cf28",
     "Flock.Registered.finding": "a036ce0a88940a951cb793e3448707ff9a597de497d7333262fb6d4d78273631",
     "Flock.Registered.fullMiss": "948d0777b81a1e9963e532901316b5961bea25107f3ebe405fa64b84b059ab42",
@@ -29338,6 +29339,9 @@
     "Flock.Registered.partNodes": "eeaaf418643fb55a9926dd0d03761de125d144645a7247ec264a2dcae4f5c860",
     "Flock.Registered.portOf": "0c10fbeb7e0ce39faf4ec341fe87ff54f12f181cfd4d9d9754affac065439c57",
     "Flock.Registered.portSchema": "9d4b5b4c24880a3f1bc728068dd2e0bb99d39a34e0733c6fb31498af84449dd5",
+    "Flock.Registered.portsOf": "ad62ebb08a4dff78609a25459d59ba9fc598404046558bfeef2b848c493da1f4",
+    "Flock.Registered.portsOf._sparseCasesOn_1": "51a5b93b3a9a4aaa7ab562dc5a6fb724e6431cc4af28cd69c4d035dfde0b69e9",
+    "Flock.Registered.portsOf._sparseCasesOn_4": "8cb3e8dee685dc56bb2fa1b2d807641bc0e4c98861167556d815746727e2bc65",
     "Flock.Registered.programInputs": "addc99af4402796f128d13256155cd8f61ff54565aafcb9984c8c90436b60dd2",
     "Flock.Registered.ref": "3570ae9fa17ad0da292a0118d7dc56baeddc733f7213a7c46b8420a04a958420",
     "Flock.Registered.regDef": "14632bf44e504fac3fa96bf82284456681c81a823d0fe3c100710d0422ced640",
