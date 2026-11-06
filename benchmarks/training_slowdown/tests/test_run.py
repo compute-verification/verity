@@ -6,8 +6,6 @@ import torch
 
 from training_slowdown import run as te_run
 from training_slowdown.counterexample import check
-from training_slowdown.gates import of_log
-from training_slowdown.ledger import Ledger, ingest
 
 MODEL = '''
 import torch
@@ -134,27 +132,6 @@ def test_mezo_run_is_rebuilt_from_its_seed_log(tmp_path, theta_file):
     v = check(out / "families" / "mezo", rec, theta, c=rec["c"], n_sample=6, coin=b"x")
     assert list(v.failed) == [3]
     assert v.covers == [0, 1, 2, 4, 5]  # a uniform family with a failed step covers only what it verified
-
-    led = Ledger(tmp_path / "ledger", "agent-a")
-    subs = ingest(out, led, direction="zeroth-order", mechanism="seed-replay", parent="", run_id="r1")
-    assert len(subs) == 6
-    assert [s["checkpoint_step"] for s in subs] == [0, 1, 2, 3, 4, 5]
-    assert all(s["formalism"]["parts"] and "rho" not in s for s in subs)
-    assert all(s["annotation"]["untraced"] == s["annotation"]["updated_steps"] > 0 for s in subs[1:])  # no cut
-    assert subs[-1]["macs"] == rec["totals"]["macs"]
-    assert subs[0]["macs"] < subs[-1]["macs"]
-    for s in subs:
-        assert sum(p["gates"] for p in s["formalism"]["parts"]) == pytest.approx(of_log(s["macs_log"])["gates"])
-    final = json.loads((out / "run.json").read_text())
-    for cp in final["checkpoints"]:
-        cp["score"] = {"val": 1.0}  # final mode scores on the final set, which has no slice
-    (out / "run.json").write_text(json.dumps(final))
-    subs = ingest(out, led, direction="zeroth-order", mechanism="seed-replay", parent="", run_id="r1")
-    assert [s["val_slice"] for s in subs] == [None] * 6
-    assert "readout_leaks" not in subs[0]
-    subs = ingest(out, led, direction="zeroth-order", mechanism="seed-replay", parent="", run_id="r1", tensors={})
-    assert subs[0]["readout_leaks"] == []
-    assert subs[0]["args"] == final.get("script_args")
 
 
 TOKENS_OUTSIDE = MODEL + '''

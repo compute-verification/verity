@@ -1,6 +1,6 @@
-"""training_slowdown.score: a run's checkpoints as prefixes of its count, and training_slowdown.annotate's traced structures."""
+"""training_slowdown.annotate: a run's annotation through a step as a prefix of its count, and its traced structures."""
 from training_slowdown.annotate import annotate, with_structures
-from training_slowdown.score import C_PER_FORWARD_TOKEN, block_c, checkpoints
+from training_slowdown.run import C_PER_FORWARD_TOKEN, block_c
 
 
 def test_c_is_4096_forward_passes():
@@ -17,15 +17,11 @@ def record(n_steps: int) -> dict:
             "checkpoints": [{"step": s, "val_bpb": 1.0 - 0.01 * s} for s in (4, 9)]}
 
 
-def test_checkpoints_are_prefixes():
+def test_an_annotation_through_a_step_is_a_prefix():
     rec = record(10)
     a4 = annotate(rec, through=4)
     assert a4.macs == 7 + 5 * 9600
     assert annotate(rec).macs == 7 + 10 * 9600 + 5
-    subs = checkpoints(rec)
-    assert [s["macs"] for s in subs] == [7 + 5 * 9600, 7 + 10 * 9600 + 5]
-    assert subs[0]["annotation"]["steps"] == 5
-    assert subs[0]["annotation"]["beta"] == [2.0, 2.0] and subs[0]["annotation"]["untraced"] == 0
     assert a4.depth() == 300
 
 

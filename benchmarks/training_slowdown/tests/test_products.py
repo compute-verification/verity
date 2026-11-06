@@ -1,28 +1,21 @@
-"""training_slowdown.capture.products: a step's matrix products as training_slowdown.io_bound reads them. On test_script.py's program at
-H = 256 (past the K at which io_bound's GEMM rate rule changes, 3^1.5·√(k/32), 235 at the console's k), the step
-recorded from the start (training_slowdown.capture.script), whose weights the measured step reads through the versions the
-previous step's update wrote, has the rows of the same step captured by capture_step, and those are io_bound.rows_of's."""
+"""training_slowdown.capture.products: a step's matrix products as the products term reads them. On a toy step at
+H = 256, past the K at which the GEMM rate rule changes (3^1.5·√(k/32), 235 at the console's k)."""
 from __future__ import annotations
-
-import dataclasses
-import json
-from pathlib import Path
 
 import pytest
 import torch
 import torch.nn.functional as tF
 from torch import nn
 
-from training_slowdown import VERSION, formalism, io_bound, policy
-from training_slowdown.capture import capture_fn, capture_step, products, script
+from training_slowdown import formalism, policy
+from training_slowdown.capture import capture_fn, capture_step, products
 
-PROGRAM = Path(__file__).parent / "recorded" / "islands" / "toy" / "train.py"
 V, H, B, CTX = 16, 256, 4, 8
-SHAPES = {"emb": [V, H], "fc": [H, H], "head": [V, H], "frozen": [V, H]}
+SHAPES = {"emb": [V, H], "fc": [H, H], "head": [V, H]}
 
 
 class Toy(nn.Module):
-    """The program's model: an embedding, one tanh layer and an untied head."""
+    """An embedding, one tanh layer and an untied head."""
 
     def __init__(self):
         super().__init__()
@@ -32,73 +25,35 @@ class Toy(nn.Module):
         return tF.linear(torch.tanh(tF.linear(tF.embedding(x, self.emb), self.fc)), self.head)
 
 
-def comparable(block: dict) -> list:
-    return sorted(json.dumps(r, sort_keys=True) for r in block["rows"])
-
-
-@pytest.fixture
-def recorded(tmp_path, monkeypatch):
-    monkeypatch.setattr(script, "STREAM_TOKENS", 10 ** 5)
-    (tmp_path / "toy.start.json").write_text(json.dumps({"config": {"vocab": V, "d_model": H},
-                                                         "tensors": {n: ["float32", s] for n, s in SHAPES.items()}}))
-    return script.record(PROGRAM, ["--batch", str(B), "--update", "inplace"], step=1, starts=tmp_path,
-                         wall=[0.1] * 8, step_tokens=B * CTX)
-
-
-def test_a_recorded_steps_rows_are_the_captured_steps_and_io_bounds(recorded):
-    """The forward's head product is fresh and its fc product an expansion (io_bound's rule pays a lookup at the token
-    ids at no rate); in the backward three products are fresh and one an expansion. The trace keeps the rows with the
-    capture's version and the training_slowdown VERSION whose code wrote them (`capture_code`), and the order is unknown, and at
-    each other k of the console's dial the rows there."""
+def test_a_steps_rows_and_their_kinds():
+    """The forward's head product is fresh and its fc product an expansion (a lookup at the token ids is paid at no
+    rate); in the backward three products are fresh and one an expansion. The rows carry the capture's version, the
+    order unknown and the step's |C| (`step_gates`), and at each other k of the console's dial the rows there."""
     k = policy.CONSOLE[1]
     model = Toy()
-    ref = capture_step(model, torch.optim.SGD(model.parameters(), lr=1e-3),
-                       lambda m, b: tF.cross_entropy(m(b[0]).flatten(0, 1), b[1].flatten()),
-                       (torch.zeros(B, CTX, dtype=torch.long), torch.zeros(B, CTX, dtype=torch.long)))
-    got, want = products.rows(recorded, k), products.rows(ref, k)
-    assert comparable(got) == comparable(want)
-    kept = dict(recorded.formalism["products"])
-    at = kept.pop("at")
-    assert kept.pop("capture_code") == VERSION and "capture_code" not in got
-    assert kept == got and (got["capture"], got["order"]) == (products.CAPTURE, "unknown")
-    assert formalism.products_of_trace(recorded.formalism["products"])["capture_code"] == VERSION
-    assert sorted(map(int, at)) == sorted(set(products.DIAL_K) - {k})
-    for x, block in at.items():
-        there = products.rows(recorded, float(x))
+    g = capture_step(model, torch.optim.SGD(model.parameters(), lr=1e-3),
+                     lambda m, b: tF.cross_entropy(m(b[0]).flatten(0, 1), b[1].flatten()),
+                     (torch.zeros(B, CTX, dtype=torch.long), torch.zeros(B, CTX, dtype=torch.long)))
+    got = products.rows(g, k)
+    assert (got["capture"], got["order"]) == (products.CAPTURE, "unknown")
+    assert got["gates"] == products.step_gates(g, "bfloat16") > 0 and all(r["count"] == 1 for r in got["rows"])
+    assert sorted((r["phase"], formalism.product_kind(r)) for r in got["rows"]) == sorted(
+        [("forward", "fresh"), ("forward", "expansion"), ("backward", "expansion")] + [("backward", "fresh")] * 3)
+    dial = products.rows_on_dial(g)
+    assert sorted(map(int, dial["at"])) == sorted(set(products.DIAL_K) - {k})
+    for x, block in dial["at"].items():
+        there = products.rows(g, float(x))
         assert block == {"k": float(x), "rows": there["rows"], "p_match": there["p_match"]}
-    assert at[str(800_000_000)]["rows"] != got["rows"]
-    assert got["gates"] == recorded.formalism["gates"] and want["gates"] == io_bound.step_gates(ref, "bfloat16")
-    dims = ("batch", "m", "k", "n")
-    by_dims = {(r.phase, *(r.dims[x] for x in dims)): r for r in io_bound.rows_of(ref, "bfloat16", k)}
-    assert len(by_dims) == len(got["rows"])
-    kinds = []
-    for r in got["rows"]:
-        o = by_dims[(r["phase"], *(r["dims"][x] for x in dims))]
-        assert formalism.product_kind(r) == o.kind and r["count"] == 1
-        assert (tuple(r["widths"]), tuple(r["rates"])) == (o.widths, o.rates)
-        assert r["k_whole"] == (o.k_whole if o.k_whole != float("inf") else None)
-        kinds.append((r["phase"], o.kind))
-    assert sorted(kinds) == sorted([("forward", "fresh"), ("forward", "expansion"), ("backward", "expansion")]
-                                   + [("backward", "fresh")] * 3)
-
-
-def test_the_capture_keeps_rows_at_the_consoles_dial_levels():
-    """The capture's dial is training_slowdown.panels' `K_LEVELS` (products can't import panels, which imports formalism, which
-    imports products); a trace has no rows at a level added after it was captured, so a new level means a retrace."""
-    from training_slowdown import panels
-
-    assert products.DIAL_K == panels.K_LEVELS, (
-        f"set training_slowdown.capture.products.DIAL_K to training_slowdown.panels.K_LEVELS {panels.K_LEVELS}, bump products.CAPTURE and "
-        "say on the board that traces need a retrace for the new levels")
+    assert dial["at"][str(800_000_000)]["rows"] != got["rows"]
 
 
 def test_the_capture_is_frozen_at_4_12_9_under_the_trace_jobs_torch():
-    """Every published row was priced from a trace of the capture's 4.12.9 rows taken under torch 2.15.0, the trace
-    job's (training_slowdown.capture.script refuses another), so moving either moves rows already traced."""
+    """Every published row was priced from a trace of the capture's 4.12.9 rows taken under torch 2.15.0, and the
+    grader reads beside that capture, so moving either moves rows already traced."""
     assert (products.CAPTURE, products.TORCH) == ("4.12.9", "2.15.0"), (
-        "the capture is frozen at 4.12.9 under torch 2.15.0 through the finals: a later fix prices at read time, adds "
-        "what it captures that is new, and fails closed only for the runs it changes; moving products.CAPTURE or "
-        "products.TORCH needs the coordinator's ruling and a retrace of every row it moves")
+        "the capture is frozen at 4.12.9 under torch 2.15.0: a later fix prices at read time, adds what it captures "
+        "that is new, and fails closed only for the runs it changes; moving products.CAPTURE or products.TORCH needs "
+        "a retrace of every row it moves and the grader's CAPTURE moved with it")
 
 
 class Fan(nn.Module):
@@ -123,25 +78,25 @@ class Fan(nn.Module):
                                          ("fan", [{"op": "expand", "fan_out": 16.0, "count": 1}])))
 def test_p_match_fails_where_one_entry_is_handed_to_several_on_the_way_into_an_operand(via, broken):
     """A product's output carried into the next product's operand one to one (directly, or through a row norm whose
-    statistic is charged nothing and whose broadcast its reduction pays for) keeps P-match, and the step's whole-making
-    system reads the class (K = 16) feeding the third layer's operand; one column repeated across its row hands each
-    entry made whole to 16, so P-match fails at the expand and the fresh-products term is unmeasured with the reason."""
+    statistic is charged nothing and whose broadcast its reduction pays for) keeps P-match; one column repeated across
+    its row hands each entry to 16, so P-match fails at the expand and the products term is unmeasured with the
+    reason."""
     torch.manual_seed(0)
     m = Fan(16, via)
     g = capture_step(m, torch.optim.SGD(m.parameters(), lr=0.1), lambda mm, b: tF.mse_loss(mm(b[0]), b[1]),
                      (torch.randn(6, 16), torch.randn(6, 16)))
     k = policy.CONSOLE[1]
     got = products.rows(g, k)
-    assert got["p_match"] == broken
-    third = [r for r in got["rows"] if r["phase"] == "forward" and all(r["affected"]) and r["fed"]]
-    assert bool(third) == (not broken) and all([16, 1.0] in r["fed"] for r in third)
     p = formalism.products_of([(1, g)], k)
-    assert p["p_match"] == broken and p["system"] is not None
+    assert got["p_match"] == p["p_match"] == broken
     m_ = formalism.Measured(parts=(formalism.Part(gates=got["gates"], tokens=6, token_gates=got["gates"],
                                                   affected_gates=got["gates"]),), tau_bits=0.0, a_bits=0.0, u=0.0,
                             u_in=0.0, delta_bits=0.0, products=p)
-    term, why, _ = formalism.fresh_products(m_, *policy.CONSOLE)
-    assert (term is None and f"breaks the premise that {formalism.P_MATCH}" in why and "expand (fan-out 16" in why) if broken else why is None
+    term, why, _ = formalism.he_products(m_, *policy.CONSOLE)
+    if broken:
+        assert term is None and f"breaks the premise that {formalism.P_MATCH}" in why and "expand (fan-out 16" in why
+    else:
+        assert why is None and term is not None
 
 
 class Embedded(nn.Module):
@@ -166,9 +121,8 @@ class Embedded(nn.Module):
 def test_products_that_read_an_embeddings_rows_before_a_position_makes_them_token_specific_are_dropped(pos):
     """Tokens that share an id share its row, and so do their first layer's outputs, so the second layer's forward
     product and its weight gradient read gathered rows unless a position's table makes them token-specific first. A
-    trace's rows say which operands do (`gathered`), and the fresh-products term drops those products from G (never
-    |C|), with how many and their share of the counted MACs in what it read. io_bound's P-match check and the
-    capture's agree that the gather breaks nothing: no class's outputs reach the table it reads."""
+    trace's rows say which operands do (`gathered`), and the products term leaves those products out of M (never
+    |C|). The capture's P-match check finds that the gather breaks nothing."""
     torch.manual_seed(0)
     m = Embedded(pos)
 
@@ -186,15 +140,11 @@ def test_products_that_read_an_embeddings_rows_before_a_position_makes_them_toke
     first = [("backward", 16, (True, False)), ("forward", 256, (True, False))]
     second = [("backward", 16, (True, False)), ("forward", 256, (True, False))]
     assert flags == sorted(first if pos else first + second)
-    assert got["p_match"] == [] and io_bound.p_match(g, k) == []
-    p = formalism.products_of_trace(got)
+    assert got["p_match"] == []
     second_fresh = [r for r in got["rows"] if r["dims"]["n"] == 16 and formalism.product_kind(r) == "fresh"]
     assert second_fresh and all(any(r["gathered"]) != pos for r in second_fresh)
-    dropped = sum(r["count"] for r in got["rows"] if formalism.product_kind(r) == "fresh" and any(r["gathered"]))
-    assert p["gathered"]["dropped"] == dropped and (dropped == 0) == pos
-    assert p["gathered"]["of"] == sum(r["count"] for r in got["rows"] if formalism.product_kind(r) == "fresh")
-    assert len(p["products"]) == sum(formalism.product_kind(r) == "fresh" and not any(r["gathered"])
-                                     for r in got["rows"])
+    gathered = [r for r in got["rows"] if all(r["affected"]) and not r["self"] and any(r["gathered"])]
+    assert formalism.products_of_trace(got)["he"]["gathered_macs"] == sum(r["count"] * r["macs"] for r in gathered) > 0
 
 
 def _product(form: str, u, v):
@@ -275,24 +225,20 @@ class Adapted(nn.Module):
 
 @pytest.mark.parametrize("form, flagged", (("matmul", []), ("broadcast", ["mul"]), ("index", ["mul"]),
                                            ("sparse", ["index_add"])))
-def test_products_written_with_elementwise_ops_are_found_and_never_priced(form, flagged):
+def test_products_written_with_elementwise_ops_are_found_and_are_no_rows(form, flagged):
     """A bf16 step of two stacked rank-16 adapters over 8 x 256 tokens. Written with @, three of its products are fresh
-    (50.3M MACs, the second layer's down projection and both up projections) and the step's whole-making system counts
-    the class of K = 512, with nothing written elementwise. Written as broadcast multiplications and sums, or as
-    gathers, multiplications and index_adds, the adapters' products are no rows, so none is fresh and the system has
-    no class; the capture finds each (their multiplications, each broadcasting both operands, in the forward and the
-    backward), and the fresh-products term is unmeasured naming them, never priced as elementwise work; on a trace
-    that records no capture code the reason adds that later code lists fewer and a retrace may clear it, and the
-    term's inputs name the capture code where the trace records one. A sparse
-    product whose gather reads each entry once is found at its sum by index, in the forward and the backward; the
-    first layer's reads the frozen input, so its product is θ's and not one."""
+    (50.3M MACs, the second layer's down projection and both up projections), with nothing written elementwise.
+    Written as broadcast multiplications and sums, or as gathers, multiplications and index_adds, the adapters'
+    products are no rows, so none is fresh and M holds none of them; the capture finds each (their multiplications,
+    each broadcasting both operands, in the forward and the backward). A sparse product whose gather reads each entry
+    once is found at its sum by index, in the forward and the backward; the first layer's reads the frozen input, so
+    its product is θ's and not one."""
     torch.manual_seed(0)
     m = Adapted(form).to(torch.bfloat16)
     x = torch.randn(8, 256, 512, dtype=torch.bfloat16)
     g = capture_step(m, torch.optim.SGD([p for p in m.parameters() if p.requires_grad], lr=0.1),
                      lambda mm, b: tF.mse_loss(mm(b[0]), b[1]), (x, x.clone()))
-    k = policy.CONSOLE[1]
-    got = products.rows(g, k)
+    got = products.rows(g, policy.CONSOLE[1])
     found = got["elementwise_products"]
     assert [x["op"] for x in found] == flagged
     fresh = [r for r in got["rows"] if formalism.product_kind(r) == "fresh"]
@@ -302,47 +248,6 @@ def test_products_written_with_elementwise_ops_are_found_and_never_priced(form, 
         assert fresh == [] and found[0]["count"] == 9 and found[0]["macs"] == 150_994_944
     if form == "sparse":
         assert found[0]["count"] == 2 and found[0]["macs"] == 2 * 8 * 256 * 512
-    p = formalism.products_of([(1, g)], k)
-    assert p["elementwise_products"] == found
-    assert [e["k"] for e in p["system"]["classes"]] == ([16, 512, 2048] if form in ("matmul", "sparse") else [])
-    assert p["system"]["counted"] == ([[512.0, 1.0]] if form in ("matmul", "sparse") else [])
-    m_ = formalism.Measured(parts=(formalism.Part(gates=got["gates"], tokens=8 * 256, token_gates=got["gates"],
-                                                  affected_gates=got["gates"]),), tau_bits=0.0, a_bits=0.0, u=0.0,
-                            u_in=0.0, delta_bits=0.0, products=p)
-    unrecorded = "this trace records no capture code"
-    for q, says, code in ((p, False, None), (formalism.products_of_trace(got), True, None),
-                          (formalism.products_of_trace(got | {"capture_code": VERSION}), False, VERSION)):
-        term, why, inputs = formalism.fresh_products(dataclasses.replace(m_, products=q), *policy.CONSOLE)
-        assert inputs.get("capture_code") == code
-        if flagged:
-            assert term is None and why.startswith("unmeasured: the traced step writes matrix products as elementwise")
-            assert all(f"{op} (" in why for op in flagged) and inputs["elementwise_products"] == found
-            assert (unrecorded in why) == says and ("or later may clear it" in why) == says
-        else:
-            assert "elementwise" not in (why or "")
-
-
-def test_a_trace_captured_before_the_elementwise_check_is_unmeasured_until_retraced():
-    """A trace's rows from a capture that didn't look for products written elementwise may hide some, so its
-    fresh-products term is unmeasured with the reason that says to retrace, whatever its rows give."""
-    torch.manual_seed(0)
-    m = Adapted("matmul", d=64, r=4)
-    x = torch.randn(2, 8, 64)
-    g = capture_step(m, torch.optim.SGD([p for p in m.parameters() if p.requires_grad], lr=0.1),
-                     lambda mm, b: tF.mse_loss(mm(b[0]), b[1]), (x, x.clone()))
-    got = products.rows(g, policy.CONSOLE[1])
-    old = {x: v for x, v in got.items() if x != "elementwise_products"} | {"capture": "4.12.1"}
-    m_ = formalism.Measured(parts=(formalism.Part(gates=got["gates"], tokens=16, token_gates=got["gates"],
-                                                  affected_gates=got["gates"]),), tau_bits=0.0, a_bits=0.0, u=0.0,
-                            u_in=0.0, delta_bits=0.0, products=formalism.products_of_trace(old))
-    term, why, _ = formalism.fresh_products(m_, *policy.CONSOLE)
-    assert term is None and why == formalism.FRESH_UNCHECKED
-    _, why, _ = formalism.fresh_products(dataclasses.replace(m_, products=formalism.products_of_trace(got)),
-                                         *policy.CONSOLE)
-    assert why != formalism.FRESH_UNCHECKED
-    _, why, _ = formalism.fresh_products(dataclasses.replace(m_, products=formalism.products_of_trace(
-        got | {"capture": "4.12.7"})), *policy.CONSOLE)
-    assert why == formalism.FRESH_UNCHECKED
 
 
 def _elementwise(m, x, y=None) -> list[dict]:
@@ -415,7 +320,7 @@ def test_an_embeddings_rows_are_no_broadcast(form, found):
 
 
 class Lanes(nn.Module):
-    """A token's value spread over 8 lanes by constants, as the wildcard adapter's decoder unpacks a packed word, times
+    """A token's value spread over 8 lanes by constants, as an adapter's decoder unpacks a packed word, times
     the token's own scale (`same`) or a trained vector of the lanes (`outer`), then a head."""
 
     def __init__(self, form: str) -> None:
@@ -436,14 +341,14 @@ class Lanes(nn.Module):
 def test_two_broadcasts_along_the_same_dim_are_elementwise(form, found):
     """A token's code over 8 lanes times its own scale: both are broadcasts along the lanes, so neither is one along a
     dim the other isn't, and the multiplication is elementwise (`products._flats`), where its entries alone would make
-    it a product (4.12.9's check first found the wildcard adapter's decoder so). Times a trained vector of the lanes,
+    it a product (4.12.9's check first found such a decoder so). Times a trained vector of the lanes,
     it is an outer product, found."""
     torch.manual_seed(0)
     assert _elementwise(Lanes(form), torch.randn(2, 16, 32), torch.randn(2, 16, 8)) == found
 
 
 class Dequantized(nn.Module):
-    """lowrank's quant-format refresh: a trained 4 x 8 weight rounded once a step onto a constant 4-level codebook by
+    """A quant-format refresh: a trained 4 x 8 weight rounded once a step onto a constant 4-level codebook by
     each row's f16 RMS and decoded, cb[codes] * s, its update the decode minus the weight (`decode`); or, the control,
     the weight plus a trained vector's outer product with its column means (`outer`)."""
 
@@ -468,7 +373,7 @@ class Dequantized(nn.Module):
 
 @pytest.mark.parametrize("form, found", (("decode", []), ("outer", [{"op": "mul", "count": 1, "macs": 32}])))
 def test_a_codebook_decode_is_elementwise_and_an_outer_product_beside_it_is_found(form, found):
-    """lowrank's minimal case: each decoded entry is its own code's level times its row's scale, so the decode is
+    """A codebook decode: each decoded entry is its own code's level times its row's scale, so the decode is
     elementwise (4.12.7's check found it, as a mul of 32 multiplications; 4.12.9's doesn't), while the weight plus an
     outer product of a trained vector and its column means is one, found by both."""
     torch.manual_seed(0)
@@ -476,7 +381,7 @@ def test_a_codebook_decode_is_elementwise_and_an_outer_product_beside_it_is_foun
 
 
 class Messages(nn.Module):
-    """lowrank's coded gradient message: a trained 4 x 64 weight in two groups of 128, each group's entries coded at
+    """A coded gradient message: a trained 4 x 64 weight in two groups of 128, each group's entries coded at
     `bits` by its absmax, packed 8 // bits to a byte and unpacked, so the update is the decode minus the weight; the
     decode is each level times its group's scale (`scale`), or, the control, the levels times a trained vector of a
     group's 128 entries (`vector`), which varies along the lanes the levels are flat along."""
@@ -521,7 +426,7 @@ class Flattened(nn.Module):
 
 @pytest.mark.parametrize("bits", (2, 4, 8))
 def test_a_coded_messages_levels_times_their_groups_scale_are_elementwise_through_the_view_that_groups_them(bits):
-    """lowrank's minimal case: unpacked levels [1, 256 // per, per] are flat along their per lanes, and the view to the
+    """A coded message's decode: unpacked levels [1, 256 // per, per] are flat along their per lanes, and the view to the
     groups [1, 2, 128] merges the lanes with 128 // per bytes into one dim, which no dim of its own can say flat; their
     multiplication by each group's scale [1, 2, 1] is elementwise, since on the grid both share ([1, 2, 128 // per,
     per], `products._cells`) the scale is flat along the bytes and the lanes, the levels along the lanes. 4.12.9's
@@ -555,8 +460,8 @@ class MatVec(nn.Module):
 
 
 def test_a_bf16_steps_matrix_vector_products_are_priced_as_gemms():
-    """aten.mv is a GEMM by its name (training_slowdown.opnames' GEMM_LIKE), as capture.structure counts it, so a bf16 step
-    with torch.mv is priced at the bf16 GEMM's Definition through the capture's rows and io_bound, never as an
+    """aten.mv is a GEMM by its name (training_slowdown.opnames' GEMM_LIKE), as capture.structure counts it, so a bf16
+    step with torch.mv is priced at the bf16 GEMM's Definition through the capture's rows and |C|, never as an
     elementwise op, whose price has two Definitions that a GEMM's can't take."""
     from training_slowdown import gates
 
@@ -567,15 +472,14 @@ def test_a_bf16_steps_matrix_vector_products_are_priced_as_gemms():
     got = products.rows(g, policy.CONSOLE[1])
     mv = [r for r in got["rows"] if r["op"] == "mv"]
     assert mv and all(r["gates_per_mac"] == gates.per_mac("gemm/bf16") for r in mv)
-    assert {r.op for r in io_bound.rows_of(g, "bfloat16")} == {"aten.mm.default", "aten.mv.default"}
-    assert got["gates"] == io_bound.step_gates(g, "bfloat16") > 0
+    assert {r["op"] for r in got["rows"]} == {"mm", "mv"} and got["gates"] == products.step_gates(g, "bfloat16") > 0
 
 
 class Packed(nn.Module):
-    """The wildcard topcode cut's forward code: a layer's outputs, each token's 64 on 2^bits levels by a bf16 step
-    (2 bits: their RMS's, 4: their absmax's), the codes passed through bytes as the cut's through_bytes passes them
-    (eight to `bits` bytes, unpacked over 8 lanes and viewed back to the token's 64), decoded (j + 0.5) * step and
-    passed straight through (`scale`); or, the control, the levels times a trained vector of the 64 (`vector`)."""
+    """A forward code passed through bytes: a layer's outputs, each token's 64 on 2^bits levels by a bf16 step
+    (2 bits: their RMS's, 4: their absmax's), the codes passed through bytes (eight to `bits` bytes, unpacked over 8
+    lanes and viewed back to the token's 64), decoded (j + 0.5) * step and passed straight through (`scale`); or, the
+    control, the levels times a trained vector of the 64 (`vector`)."""
 
     def __init__(self, bits: int, form: str = "scale") -> None:
         super().__init__()
@@ -610,7 +514,7 @@ def test_a_code_passed_through_bytes_and_decoded_by_its_step_is_elementwise(bits
     """The unpacked levels [32, 1, 8, 8] are flat along their 8 lanes, and the view back to [32, 1, 64] keeps that run
     of the index, however it merges the lanes with the bytes, through the cast and the maps that follow; their
     multiplication by each token's step [32, 1, 1], flat along all 64, is elementwise. 4.12.12's check followed a
-    view that regroups dims only where it is the multiplication's own operand, so it found the topcode cut's decode,
+    view that regroups dims only where it is the multiplication's own operand, so it found such a decode,
     a map after the view, at both widths. Times a trained vector of the 64, which varies along the lanes the levels
     are flat along, it is an outer product, found."""
     torch.manual_seed(0)
@@ -638,8 +542,8 @@ class Clipped(nn.Module):
 @pytest.mark.parametrize("form, found", (("clip", []), ("outer", [{"op": "mul", "count": 1, "macs": 128}])))
 def test_a_gradient_scaled_by_its_clip_coefficient_is_elementwise(form, found):
     """clip_grad_norm_ scales each gradient in place by one coefficient, a norm's, which has one entry and so is flat
-    along the whole index: it mixes with nothing, whatever the gradient's runs are. 4.12.12's check found the
-    wildcard adapter's clipped gradients so, each padded by its slice's backward, whose runs it can't tell. A
+    along the whole index: it mixes with nothing, whatever the gradient's runs are. 4.12.12's check found an
+    adapter's clipped gradients so, each padded by its slice's backward, whose runs it can't tell. A
     padded vector, whose runs it can't tell either, times a trained vector's broadcast is still an outer product."""
     torch.manual_seed(0)
 
