@@ -118,9 +118,10 @@ exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*
            "tools/research/src/research/store/moves.json",
            "benchmarks/tc_probe_fp4/fp4_emulation_1ad1aaa2.py",
            "benchmarks/network_e2e/tests/data/**",
-           # dither's J10 arms, measured-only and superseded, which leave the tree rather than follow the builders; the
-           # CA and J10-R reference runners among them run under pinned old trees in core's layout
-           "benchmarks/hash/dither/j10*.py",
+           # dither's J10 banded arms and their references, measured only and superseded, which leave the tree rather than
+           # follow the builders; the references read credit's banded reference from pinned old trees in core's layout
+           "benchmarks/hash/dither/j10b_ref.py", "benchmarks/hash/dither/j10ca_ref.py", "benchmarks/hash/dither/j10hb.py",
+           "benchmarks/hash/dither/j10rtx.py", "benchmarks/hash/dither/j10served.py",
            # the superseded-quarantine migration and its test, which run on a synthetic tree of the layout they migrated
            "integrations/vllm/tools/migrate/superseded_quarantine.py",
            "integrations/vllm/tests/migrate/test_superseded_quarantine.py"]
