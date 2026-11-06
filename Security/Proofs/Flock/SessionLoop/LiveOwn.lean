@@ -85,7 +85,7 @@ theorem liveRoundEqOwn_withInner (vs : Loop.finS.SwVals) (L₁ : LeanRelease Flo
       wk x w) :
     LiveRoundEqOwn Loop.finS vs (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real)
       CoinOpen.shaH wk x w :=
-  liveRoundEqOwn_ofLoopLink vs _ src real wk x w (by obtain ⟨-, hp, -⟩ := hsc; exact decodeRec_none_of_parse hp)
+  liveRoundEqOwn_ofLoopLink vs _ src real wk x w (by obtain ⟨_, hp, -⟩ := hsc; exact decodeRec_none_of_parse hp)
     (liveSchedOwn_ofLoopLink vs _ src real hreal wk hTab hTape hR hSv hsc hSrc hrows hL0 hV)
     (liveInnerOwn_withInner vs L₁ src real hreal x w hTab hTape hR hSv hsc hSrc hcaus wk hV hC hL0 hrows)
 
