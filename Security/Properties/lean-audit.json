@@ -7955,7 +7955,26 @@
    "owner": "@soundness",
    "signature": ["Verity.soundness_at_of_componentBounds : Verity.SoundnessOfComponents"],
    "assumptions": [],
-   "type_hash": "3de40e1bed659f5abb9db6888f1a04747e488eba9ab6f04694abf6ee4bb3ab8e"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Verity.Vocab.ComponentBound"],
+    "reads": [
+     "Hash.Assumptions.LmsForger",
+     "Hash.Assumptions.LmsForger.Forges",
+     "Hash.Assumptions.LmsForger.Pr",
+     "Hash.Assumptions.LmsForger.S",
+     "Hash.Assumptions.LmsForger.cost",
+     "Hash.Assumptions.LmsForger.fin",
+     "Hash.Assumptions.LmsForger.key",
+     "Hash.Assumptions.LmsForger.mk",
+     "Hash.Assumptions.LmsForger.out",
+     "Hash.Assumptions.LmsForger.signed",
+     "Hash.Assumptions.LmsUnforgeable"
+    ]
+   },
+   "type_hash": "3de40e1bed659f5abb9db6888f1a04747e488eba9ab6f04694abf6ee4bb3ab8e",
+   "unfolded_hash": "c27a93b10fb8f4002e2f1c907713875cbf8369d7e2f99ad896e81a0cdec93002"
   },
   "Verity.soundness_at_of_componentBounds_honest": {
    "owner": "@soundness",
@@ -7966,6 +7985,24 @@
     "      (Verity.Idle.unbounded.ComponentBound Verity.Registration.Composite.remote Verity.Subprotocol.inferenceOnly))"
    ],
    "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": [
+     "Hash.Assumptions.LmsForger",
+     "Hash.Assumptions.LmsForger.Forges",
+     "Hash.Assumptions.LmsForger.Pr",
+     "Hash.Assumptions.LmsForger.S",
+     "Hash.Assumptions.LmsForger.cost",
+     "Hash.Assumptions.LmsForger.fin",
+     "Hash.Assumptions.LmsForger.key",
+     "Hash.Assumptions.LmsForger.mk",
+     "Hash.Assumptions.LmsForger.out",
+     "Hash.Assumptions.LmsForger.signed",
+     "Hash.Assumptions.LmsUnforgeable"
+    ]
+   },
    "type_hash": "7a53d54e04ee0639bb994b2197ce5caedd59afa8a5fc3200d9c208ed758eb235"
   },
   "Verity.soundness_at_of_componentBounds_nontrivial": {
@@ -7975,6 +8012,24 @@
     "  Not (Verity.Idle.exact.SoundnessFor Verity.Registration.Composite.remote fun x => True)"
    ],
    "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": [
+     "Hash.Assumptions.LmsForger",
+     "Hash.Assumptions.LmsForger.Forges",
+     "Hash.Assumptions.LmsForger.Pr",
+     "Hash.Assumptions.LmsForger.S",
+     "Hash.Assumptions.LmsForger.cost",
+     "Hash.Assumptions.LmsForger.fin",
+     "Hash.Assumptions.LmsForger.key",
+     "Hash.Assumptions.LmsForger.mk",
+     "Hash.Assumptions.LmsForger.out",
+     "Hash.Assumptions.LmsForger.signed",
+     "Hash.Assumptions.LmsUnforgeable"
+    ]
+   },
    "type_hash": "6b58eb505a9bce5f3e3068ff276b0f6b7f22c5aa2702a1d43cf7b62ffbd757e6"
   },
   "Verity.soundness_at_of_targets": {
@@ -9510,9 +9565,7 @@
   "events": ["Claims.Pr", "Pouw.pr"],
   "inline": {
    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld": {
-    "Real.instLE.le (instHAdd.hAdd (instHAdd.hAdd (instHMul.hMul c.S (run.win Accounting.Resource.capacity).len.cast) d.chip.cast) (Finset.univ.sum fun i => instHMul.hMul (d.cap i) round).cast) Pous.EndToEnd.S.cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "PousCheck.Properties.AcceptsDecodes": "PousCheck.Properties.AcceptsDecodes taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "PousCheck.Properties.PublishesRoot": "PousCheck.Properties.PublishesRoot taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Real.instLE.le (instHAdd.hAdd (instHAdd.hAdd (instHMul.hMul c.S (run.win Accounting.Resource.capacity).len.cast) d.chip.cast) (Finset.univ.sum fun i => instHMul.hMul (d.cap i) round).cast) Pous.EndToEnd.S.cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Bridge.WorkOfCreditedWords": {
     "∀ (ξ : (i : I) → Ω i), Real.instLE.le (Pouw.pr fun x => And (acc ξ x) (Real.instLT.lt (fixed ξ x) (credit ξ x))) δ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -9589,16 +9642,7 @@
     "∀ (v : Nat), instLTNat.lt v Aud.windows → instLENat.le (Aud.reads v) (instHMul.hMul (instHMul.hMul P N) 4096)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (w' : Fin n) (j' : Fin P), Or (instLTFin.lt w w') (And (Eq w w') (instLTFin.lt j j')) → instLTNat.lt (bind x w j) (bind x w' j')": "a disjunction, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Set.InjOn (addr x) (Finset.instSetLike.coe (plan x w j))": "Set.InjOn taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (b : Nat), SetLike.instMembership.mem (plan x w j) b → Set.instMembership.mem (Set.range (Function.instFunLikeEmbedding.coe (layout (Accounting.RateSketch.SketchPrefix.of x.snd w j) x.fst))) (addr x b)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.RateSketch.LifetimeCapped layout joined L": "Accounting.RateSketch.LifetimeCapped taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Gates.Restricted B Wc": "Accounting.Gates.Restricted taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Gates.Property caps Aud Wc": "Accounting.Gates.Property taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G), (p x).Deadlines (bind x) τ": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Accounting.Requirement.StoreMatches W (p x).toExecution (ℓ x) (σ x) 32768 (bind x w j)": "Accounting.Requirement.StoreMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Accounting.Requirement.PlanMatches W (p x).toExecution (ℓ x) (plan x w j) 32768 (bind x w j)": "Accounting.Requirement.PlanMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Accounting.Requirement.OneBlockEach (ℓ x) (grp x) (Finset.instSDiff.sdiff (Accounting.Requirement.reads W (p x).toExecution (bind x w j)) (Accounting.Requirement.creditedReads W (p x).toExecution (ℓ x) (bind x w j)))": "Accounting.Requirement.OneBlockEach taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.RateSketch.LifetimeCapped (Properties.RemoteAudit.sessionLayout blocks dflt appended sent) joined L": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (b : Nat), SetLike.instMembership.mem (plan x w j) b → Set.instMembership.mem (Set.range (Function.instFunLikeEmbedding.coe (Properties.RemoteAudit.sessionLayout blocks dflt appended sent (Accounting.RateSketch.SketchPrefix.of x.snd w j) x.fst))) (addr x b)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (b : Nat), SetLike.instMembership.mem (plan x w j) b → Set.instMembership.mem (Set.range (Function.instFunLikeEmbedding.coe (layout (Accounting.RateSketch.SketchPrefix.of x.snd w j) x.fst))) (addr x b)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.Pouw.LiveSalt.epochRootBinding": {
     "Eq w.size 64": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -9623,18 +9667,7 @@
     "∀ (t : Fin Np), Real.instLT.lt 0 (Accounting.Compose.shareCone Sc Cd Np t) → And (Real.instLE.le (Accounting.Compose.tileLuck Sc Cd Np t) p) (Real.instLE.le (Accounting.Compose.tileLuck0 Sc Cd Np t) p0)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq Pl.game (Accounting.Compose.periodGame (Accounting.Compose.tileStage Cd Np) (Accounting.Compose.liveCone Sc Cd Np) 1 1 Kd Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.Period.checkedLayer Cd hr hK prm ws opened rel right).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Pouw.RelativeSecurity.Paths (Prod (Pouw.RelativeSecurity.Paths C Cd.rounds) (Prod (Equiv.Perm (Fin Np)) Ξ)) n) (w : Fin n) (j : Fin Np) (v : Nat → V), rel x w j v → right x w j v": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Scope Sc Cd δs": "Accounting.Compose.Scope taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.SplitRate Kd ρ p p0 a b wmax Λ": "Accounting.Compose.SplitRate taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.WindowPlay.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd Np live) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.PrefixOf (Properties.Pouw.Period.checkedLayer Cd hr hK prm ws opened rel right) Pl.game": "Accounting.Compose.PrefixOf taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.WindowPlay.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k G x => Accounting.Assumptions.TS.OperandHMu (Sc.mu k) G) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.WindowPlay.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k G x => Accounting.Assumptions.TS.ReceiptLuckAt (Sc.rB k) G) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.WindowPlay.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k x G0 => Accounting.Assumptions.Compose.GuessLuckAt (Sc.guess k) G0) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Period.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd Np live) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Period.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k G x => Accounting.Assumptions.TS.OperandHMu (Sc.mu k) G) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Period.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k G x => Accounting.Assumptions.TS.ReceiptLuckAt (Sc.rB k) G) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Period.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k x G0 => Accounting.Assumptions.Compose.GuessLuckAt (Sc.guess k) G0) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (x : Pouw.RelativeSecurity.Paths (Prod (Pouw.RelativeSecurity.Paths C Cd.rounds) (Prod (Equiv.Perm (Fin Np)) Ξ)) n) (w : Fin n) (j : Fin Np) (v : Nat → V), rel x w j v → right x w j v": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod": {
     "instLENat.le Cd.units Np": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -9644,18 +9677,7 @@
     "∀ (t : Fin Np), Real.instLT.lt 0 (Accounting.Compose.shareCone Sc Cd Np t) → And (Real.instLE.le (Accounting.Compose.tileLuck Sc Cd Np t) p) (Real.instLE.le (Accounting.Compose.tileLuck0 Sc Cd Np t) p0)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq Pl.game (Accounting.Compose.periodGame (Accounting.Compose.tileStage Cd Np) (Accounting.Compose.liveCone Sc Cd Np) 1 1 Kd Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.Period.checkedLayer Cd hr hK prm ws opened rel right).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Pouw.RelativeSecurity.Paths (Prod (Pouw.RelativeSecurity.Paths C Cd.rounds) (Prod (Equiv.Perm (Fin Np)) Ξ)) n) (w : Fin n) (j : Fin Np) (v : Nat → V), rel x w j v → right x w j v": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Scope Sc Cd δs": "Accounting.Compose.Scope taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.SplitRate Kd ρ p p0 a b wmax Λ": "Accounting.Compose.SplitRate taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.WindowPlay.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd Np live) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.PrefixOf (Properties.Pouw.Period.checkedLayer Cd hr hK prm ws opened rel right) Pl.game": "Accounting.Compose.PrefixOf taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.WindowPlay.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k G x => Accounting.Assumptions.TS.OperandHMu (Sc.mu k) G) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.WindowPlay.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k G x => Accounting.Assumptions.TS.ReceiptLuckAt (Sc.rB k) G) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.WindowPlay.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k x G0 => Accounting.Assumptions.Compose.GuessLuckAt (Sc.guess k) G0) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Period.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd Np live) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Period.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k G x => Accounting.Assumptions.TS.OperandHMu (Sc.mu k) G) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Period.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k G x => Accounting.Assumptions.TS.ReceiptLuckAt (Sc.rB k) G) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Period.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k x G0 => Accounting.Assumptions.Compose.GuessLuckAt (Sc.guess k) G0) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (x : Pouw.RelativeSecurity.Paths (Prod (Pouw.RelativeSecurity.Paths C Cd.rounds) (Prod (Equiv.Perm (Fin Np)) Ξ)) n) (w : Fin n) (j : Fin Np) (v : Nat → V), rel x w j v → right x w j v": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod": {
     "instLENat.le Cd.units 144": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -9665,17 +9687,7 @@
     "∀ (j : Nat), Real.instLE.le (Accounting.Compose.stageShare (Accounting.Compose.tileStage Cd 144) (Accounting.Compose.shareCone Sc Cd 144) j) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (t : Fin 144), Real.instLT.lt 0 (Accounting.Compose.shareCone Sc Cd 144 t) → And (Real.instLE.le (Accounting.Compose.tileLuck Sc Cd 144 t) (7 / 8)) (Real.instLE.le (Accounting.Compose.tileLuck0 Sc Cd 144 t) (1 / 2))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq Pl.game (Accounting.Compose.periodGame (Accounting.Compose.tileStage Cd 144) (Accounting.Compose.liveCone Sc Cd 144) 1 1 24 Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.Period.checkedLayer Cd hr hK prm ws opened (Properties.Pouw.Period.stagedAt salt staged) (Properties.Pouw.Period.flatAtCoin hr enc flat)).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Scope Sc Cd δs": "Accounting.Compose.Scope taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.WindowPlay.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd 144 live) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.PrefixOf (Properties.Pouw.Period.checkedLayer Cd hr hK prm ws opened (Properties.Pouw.Period.stagedAt salt staged) (Properties.Pouw.Period.flatAtCoin hr enc flat)) Pl.game": "Accounting.Compose.PrefixOf taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.WindowPlay.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k G x => Accounting.Assumptions.TS.OperandHMu (Sc.mu k) G) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.WindowPlay.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k G x => Accounting.Assumptions.TS.ReceiptLuckAt (Sc.rB k) G) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.WindowPlay.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k x G0 => Accounting.Assumptions.Compose.GuessLuckAt (Sc.guess k) G0) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Period.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd 144 live) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Period.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k G x => Accounting.Assumptions.TS.OperandHMu (Sc.mu k) G) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Period.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k G x => Accounting.Assumptions.TS.ReceiptLuckAt (Sc.rB k) G) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Period.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k x G0 => Accounting.Assumptions.Compose.GuessLuckAt (Sc.guess k) G0) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.Period.checkedLayer Cd hr hK prm ws opened (Properties.Pouw.Period.stagedAt salt staged) (Properties.Pouw.Period.flatAtCoin hr enc flat)).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod": {
     "∀ (s : Fin mB), instLENat.le (k s) (Properties.Pouw.PeriodJ10R.stratum σ s).card": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -9686,11 +9698,7 @@
     "∀ (j : Nat), Real.instLE.le (Accounting.Compose.stageShare (Accounting.Compose.tileStage Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT)) (Accounting.Compose.shareCone Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT)) j) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (t : Fin (Properties.Pouw.PeriodJ10R.tileCount σ sT)), Real.instLT.lt 0 (Accounting.Compose.shareCone Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) t) → And (Real.instLE.le (Accounting.Compose.tileLuck Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) t) (7 / 8)) (Real.instLE.le (Accounting.Compose.tileLuck0 Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) t) (1 / 2))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq Pl.game (Accounting.Compose.periodGame (Accounting.Compose.tileStage Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT)) (Accounting.Compose.liveCone Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT)) 1 1 (k sT) Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.PeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.PeriodJ10R.pinnedAt (Properties.Pouw.PeriodJ10R.saltOf ws) place tile) (Properties.Pouw.PeriodJ10R.j10rAtCoin hr enc place tile)).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Scope Sc Cd δs": "Accounting.Compose.Scope taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.WindowPlay.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) live) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.PrefixOf (Properties.Pouw.PeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.PeriodJ10R.pinnedAt (Properties.Pouw.PeriodJ10R.saltOf ws) place tile) (Properties.Pouw.PeriodJ10R.j10rAtCoin hr enc place tile)) Pl.game": "Accounting.Compose.PrefixOf taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Period.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) live) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.PeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.PeriodJ10R.pinnedAt (Properties.Pouw.PeriodJ10R.saltOf ws) place tile) (Properties.Pouw.PeriodJ10R.j10rAtCoin hr enc place tile)).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata": {
     "∀ (s : Fin mB), instLENat.le (k s) (Properties.Pouw.PeriodJ10R.stratum σ s).card": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -9703,11 +9711,7 @@
     "∀ (s : Fin mB), SetLike.instMembership.mem S s → ∀ (j : Nat), Real.instLE.le (Accounting.Compose.stageShare (Accounting.Compose.tileStage (Cd s) (Properties.Pouw.PeriodJ10R.tileCount σ s)) (Accounting.Compose.shareCone Sc (Cd s) (Properties.Pouw.PeriodJ10R.tileCount σ s)) j) 1": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : Fin mB), SetLike.instMembership.mem S s → ∀ (t : Fin (Properties.Pouw.PeriodJ10R.tileCount σ s)), Real.instLT.lt 0 (Accounting.Compose.shareCone Sc (Cd s) (Properties.Pouw.PeriodJ10R.tileCount σ s) t) → And (Real.instLE.le (Accounting.Compose.tileLuck Sc (Cd s) (Properties.Pouw.PeriodJ10R.tileCount σ s) t) (7 / 8)) (Real.instLE.le (Accounting.Compose.tileLuck0 Sc (Cd s) (Properties.Pouw.PeriodJ10R.tileCount σ s) t) (1 / 2))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : Fin mB), SetLike.instMembership.mem S s → Eq (Pl s).game (Accounting.Compose.periodGame (Accounting.Compose.tileStage (Cd s) (Properties.Pouw.PeriodJ10R.tileCount σ s)) (Accounting.Compose.liveCone Sc (Cd s) (Properties.Pouw.PeriodJ10R.tileCount σ s)) 1 1 (k s) (Wp s))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : Fin mB), SetLike.instMembership.mem S s → ∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun y => (Properties.Pouw.PeriodJ10RStrata.layerAt (Cd s) ⋯ ⋯ σ k hk s unitOf ws opened enc (place s) (tile s)).MovedIn y w) (δbind s)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : Fin mB), SetLike.instMembership.mem S s → Accounting.Compose.Scope Sc (Cd s) (δs s)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : Fin mB), SetLike.instMembership.mem S s → Accounting.Compose.WindowPlay.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc (Cd s) (Properties.Pouw.PeriodJ10R.tileCount σ s) live) (Wp s)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : Fin mB), SetLike.instMembership.mem S s → Accounting.Compose.PrefixOf (Properties.Pouw.PeriodJ10RStrata.layerAt (Cd s) ⋯ ⋯ σ k hk s unitOf ws opened enc (place s) (tile s)) (Pl s).game": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : Fin mB), SetLike.instMembership.mem S s → Accounting.Compose.Period.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc (Cd s) (Properties.Pouw.PeriodJ10R.tileCount σ s) live) (Wp s)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (s : Fin mB), SetLike.instMembership.mem S s → ∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun y => (Properties.Pouw.PeriodJ10RStrata.layerAt (Cd s) ⋯ ⋯ σ k hk s unitOf ws opened enc (place s) (tile s)).MovedIn y w) (δbind s)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.Pouw.Served.SecurityProofs.servedFreed": {
     "∀ (s : Fin mB), instLENat.le (k s) (Properties.Pouw.PeriodJ10R.stratum σ s).card": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -9723,14 +9727,7 @@
     "G.P2": "G.P2 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Exists fun e => Function.Injective e": "an existential, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : Pouw.RelativeSecurity.Paths (Properties.Pouw.PeriodJ10R.Coin C Ξ Cd.rounds σ sT) n) (w : Fin n), Set.instMembership.mem Reg (inst x w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLT.lt 0 (Finset.univ.sum fun r => instHMul.hMul (μ r) (instHMul.hMul 1 (Pd.hon r)))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Scope Sc Cd δs": "Accounting.Compose.Scope taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.WindowPlay.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) live) Wp": "Accounting.Compose.WindowPlay.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.PrefixOf (Properties.Pouw.PeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.PeriodJ10R.pinnedAt (Properties.Pouw.PeriodJ10R.saltOf ws) place tile) (Properties.Pouw.PeriodJ10R.j10rAtCoin hr enc place tile)) Pl.game": "Accounting.Compose.PrefixOf taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "G.G1": "G.G1 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "G.G2": "G.G2 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Pd.DualOpt μ 1": "Pd.DualOpt taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Period.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) live) Wp": "PRF-301 debt (Tue 3 Nov): this premise as checked's tree prints it (Period.EveryWindow); next prints WindowPlay.EveryWindow"
+    "Real.instLT.lt 0 (Finset.univ.sum fun r => instHMul.hMul (μ r) (instHMul.hMul 1 (Pd.hon r)))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.Pouw.Served.SecurityProofs.servedWork": {
     "∀ (s : Fin mB), instLENat.le (k s) (Properties.Pouw.PeriodJ10R.stratum σ s).card": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -9746,13 +9743,7 @@
     "G.P2": "G.P2 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Exists fun e => Function.Injective e": "an existential, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : Pouw.RelativeSecurity.Paths (Properties.Pouw.PeriodJ10R.Coin C Ξ Cd.rounds σ sT) n) (w : Fin n) (i : Prod St C), Eq (G.ext (work x w) i) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Pouw.RelativeSecurity.Paths (Properties.Pouw.PeriodJ10R.Coin C Ξ Cd.rounds σ sT) n) (w : Fin n), Set.instMembership.mem Reg (inst x w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Scope Sc Cd δs": "Accounting.Compose.Scope taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.WindowPlay.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) live) Wp": "Accounting.Compose.WindowPlay.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.PrefixOf (Properties.Pouw.PeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.PeriodJ10R.pinnedAt (Properties.Pouw.PeriodJ10R.saltOf ws) place tile) (Properties.Pouw.PeriodJ10R.j10rAtCoin hr enc place tile)) Pl.game": "Accounting.Compose.PrefixOf taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "G.G1": "G.G1 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "G.G2": "G.G2 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Period.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) live) Wp": "PRF-301 debt (Tue 3 Nov): this premise as checked's tree prints it (Period.EveryWindow); next prints WindowPlay.EveryWindow"
+    "∀ (x : Pouw.RelativeSecurity.Paths (Properties.Pouw.PeriodJ10R.Coin C Ξ Cd.rounds σ sT) n) (w : Fin n), Set.instMembership.mem Reg (inst x w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.Pouw.ServedValues.SecurityProofs.rightValues": {
     "∀ (s : Fin mB), instLENat.le (k s) (Properties.Pouw.PeriodJ10R.stratum σ s).card": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -9763,14 +9754,7 @@
     "∀ (j : Nat), Real.instLE.le (Accounting.Compose.stageShare (Accounting.Compose.tileStage Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT)) (Accounting.Compose.shareCone Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT)) j) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (t : Fin (Properties.Pouw.PeriodJ10R.tileCount σ sT)), Real.instLT.lt 0 (Accounting.Compose.shareCone Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) t) → And (Real.instLE.le (Accounting.Compose.tileLuck Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) t) (7 / 8)) (Real.instLE.le (Accounting.Compose.tileLuck0 Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) t) (1 / 2))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq Pl.game (Accounting.Compose.periodGame (Accounting.Compose.tileStage Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT)) (Accounting.Compose.liveCone Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT)) 1 1 (k sT) Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.PeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.PeriodJ10R.pinnedAt (Properties.Pouw.PeriodJ10R.saltOf ws) place tile) (Properties.Pouw.PeriodJ10R.j10rAtCoin hr enc place tile)).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Scope Sc Cd δs": "Accounting.Compose.Scope taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.WindowPlay.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) live) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.PrefixOf (Properties.Pouw.PeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.PeriodJ10R.pinnedAt (Properties.Pouw.PeriodJ10R.saltOf ws) place tile) (Properties.Pouw.PeriodJ10R.j10rAtCoin hr enc place tile)) Pl.game": "Accounting.Compose.PrefixOf taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Period.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) live) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll": {
-    "∀ (p : MemoryChallenger.WipeProtocol.Params) (c : MemoryChallenger.StreamedWipe.Commitment) (e : MemoryChallenger.WipeProtocol.Evidence), Exists fun out => Exists fun prof => Eq (check p c e) (Core.Outcome.accept out prof)": "PRF-301 debt (Tue 3 Nov): the acceptAll lemma's hypothesis as checked states it; #6241 unlists the lemma above this PR"
+    "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.PeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.PeriodJ10R.pinnedAt (Properties.Pouw.PeriodJ10R.saltOf ws) place tile) (Properties.Pouw.PeriodJ10R.j10rAtCoin hr enc place tile)).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    }
   }
  },
@@ -11840,13 +11824,12 @@
    }
   },
   "Definitions.Core.Expand": {
-   "digest": "461fda993e5c08216e0611d98dfd2b7d87144eec931707f0bdbe8e4e589e5e90",
+   "digest": "d714740ce56bd93b1c39dfbeaa927911172dc70f3ca1c133a2bfe1c31f7e9447",
    "definitions": {
     "Verity.Circuit.BitFaninPos": "45512e8df059ed91e18686bc0566c1fea60a580b592f5f8090ed5983c13f0d3e",
     "Verity.Circuit.bit": "0005897ad245b158c4efc8b88eca1e06581f02f604c652b1504b528496421965",
     "Verity.Circuit.expand": "0e91d1e0585e8f779a41ea56aeac90df96574a1d40e6db721ea96a41aaa2a233",
     "Verity.Circuit.unbit": "6c40f0bbb034dbe4ed813cbf4a464ac332329f5fc06d851ef075a2f4840b9784",
-    "Verity.Declaration.expand": "268b0c67ee97fd7098d09d291c485d253d1ef03caaa8e57f56b94c2442ef42ad",
     "Verity.RegisteredCircuit.expand": "c30d59f91d94c9a26bd81862562a200a20012cfae9ab38718d864f32515cb124",
     "Verity.ofBits": "c6c125c5334c5958506129c2975c7a413a89fce593ee3e7023263ef6d82c4520"
    }
@@ -13016,20 +12999,23 @@
    }
   },
   "Firewall.Record": {
-   "digest": "3143353d43dee3d954ae605890d638187aacdac5f041e9932da1970fbf59ab61",
+   "digest": "162811313f0ed64ea398215d0c941acde3e5498555a9ad40df98560960009cc0",
    "definitions": {
     "Core.Firewall.Admitted": "1104c0260be780c10fa41f3671663755a6b0a2b0353d4361b3565017a585eeba",
     "Core.Firewall.Admitted.index": "89308749aab0514f57f1d68410ba8e371a9ae1d88c52e4e5d911dec04fb69f5a",
     "Core.Firewall.Admitted.releaseMs": "1a51f1ae58938249355af4e4a4d31dfa9986a232c1d6191104ce8f0610bddd16",
     "Core.Firewall.Admitted.stream": "ad2cc086aa808c7b31ab8ff03091290432cd5c89bc7ac273e6183b4cc22ae1d9",
     "Core.Firewall.Event": "df2386fc89b982c787bf8c5630086b63a4ebc7feca79cf18acf9b6a9e5fdce0f",
-    "Core.Firewall.Event.casesOn": "74ad47aa312d4ab5383dbf6f251886ec13b2b41a8a6dba37d1bd02000dd89c74",
-    "Core.Firewall.Event.ctorIdx": "e12c956735a35da34eeaf4fbced11d33819dd079e2dee506001c6c7f7af0a784",
+    "Core.Firewall.Event.admitted": "ee9ed1db55cb5ea29c856a8ed0a60c3a42deda79cbeb21ea04e18cf3a2ac9e02",
+    "Core.Firewall.Event.casesOn": "2d932f70afb9b024c9d86ef674d6a0fbb3610a153eed4ed5e238978afc407adf",
+    "Core.Firewall.Event.ctorIdx": "061e520b60ff0c09cffc66a1f1369dfed6a37ba3fc15297438348d11f234ba34",
     "Core.Firewall.Event.finish": "7dfc5af19b04ee6d2bee31598b793b793699b100a9848414bd285fa895cb0316",
     "Core.Firewall.Event.opened": "dae9dbd761d8680c4852ea8c9d52184d49349ec87fbd92f8c0e4808e96d4f5c7",
-    "Core.Firewall.Event.rec": "f7e6183df740b5f3dffc8199806977405ee2fc7f26ae01f8d0811f684d34887a",
+    "Core.Firewall.Event.rec": "84517f230cdb36d73a0cb6791a48bf058241e734986b5e98658095eeb3fe5a24",
     "Core.Firewall.Event.refused": "bc9163cf1fa90e0cd05c128ab2a287ab9fb3f31a348339c1274d25cdd2875872",
+    "Core.Firewall.Event.register": "5a82b6d21ce72c56abde93d3acec32a9cf7439bd92da348483c9367bc7055346",
     "Core.Firewall.Event.release": "e0b6c0ce5767979fe31545ec0829579acaaba14f2ed035049d60c94d13e92ece",
+    "Core.Firewall.Event.skipped": "f5f1e0e76977575170369a02cce9b3168f1c758acea01985192db0bc36ec7315",
     "Core.Firewall.Event.slot": "034f494b4cb96fcc5f547726b8033633363b20d23b7572b83c8371cfe9d0863f",
     "Core.Firewall.Event.stop": "143b3218b801cfd7468b4db9051aed331ac4b98287280e5e7b05e77d9f0eb503",
     "Core.Firewall.Event.wait": "1f89316f5bf3d9dac333881fa63ab5360081df7d03f67cb06a77c2634d6c4929",
@@ -13047,19 +13033,19 @@
     "Core.Firewall.Tally.mine": "e1f88e2867d8d356498b3ed109e8be00c603838426671b8e64dba41540045ee1",
     "Core.Firewall.Tally.n": "6cf802bf7a4253b8d4310ca4321c906e6c0af289957f078999682ec36c444d5c",
     "Core.Firewall.Tally.released": "deacda3479eba72fe6d63e17a84c5e97f41c38af3e59d7d4b0c85ed091067cd4",
-    "Core.Firewall.Tally.step": "a9ac39570a72b54238e3c03de9abfe47b284763b752c41f96789d41947262c0a",
+    "Core.Firewall.Tally.step": "bcf8c4188808135c956abae7b4d3242076e8bb16342ad9cfd156949b426120ed",
     "Core.Firewall.Tally.stopped": "0e7c20b37b07db0d22ed7950f5de88c28de8b1f1be5cc0a9dd786afdf2546772",
     "Core.Firewall.admit": "6b80a9f1aacd8f7e6e0e863717e1a63ad59772fabba36ba9af7e4b81fde82869",
     "Core.Firewall.admit.refuse": "58e85ab8e499eea1b6923b2b93d38a9a1128852f48940ff1f3fdbca928dddce9",
     "Core.Firewall.admit.served": "3426b68caccfb957a0269c5f4854e3c1933dd00a7dbe03fafb12c4bd7be60182",
-    "Core.Firewall.budgetOf": "1b98585a4cf4120fce73e400da05fd61b9c27b30df7c19cabf8a45756bee3a63",
+    "Core.Firewall.budgetOf": "50886b722e1b80719ea9721d68ac369df364a249c8df57d3de566f7579536e24",
     "Core.Firewall.failures": "d145c9e7e8bd0851eaaa06c4158e9a7c7796d612386f986e159caf5178e750d0",
-    "Core.Firewall.finished": "59fdc28dc03b10af134d8e2ccba7024c5302a4a09e3640136f31819be85a681d",
-    "Core.Firewall.nextOf": "2aa9120b07401d2d74d44d2b591dcf846474e9e7093c00d3fb02328c863049cf",
-    "Core.Firewall.openOf": "8ec1f87c2ef14563ad885d050d0fc0d84b4c9f2125d3f258b4f9d5f13db3a79b",
+    "Core.Firewall.finished": "849b223e9342491330573e342c562b34cb033dd834c35ca5b5f30fc9fb71437c",
+    "Core.Firewall.nextOf": "2247f397cb2f24623e1d1017d72772b6009ef5e3fab4e1ff514ea9f439d7070e",
+    "Core.Firewall.openOf": "8034d1b6895d729ebbbb45fb39262afc120a6954281baaf1eeb861e6659e2ca6",
     "Core.Firewall.releaseMs": "276e441f89640543374c8bdcd910ff25c07b657eb50d2b6f96ee39aef8c874ab",
     "Core.Firewall.stop": "a3cbb98ace234db3fa243363f2512c5647e60345cd23db48cdbf2fb802e0563f",
-    "Core.Firewall.stopOf": "0e2e4ffbea3bc6190a52ffc1d156c43eb9ca354d6be0bb6dccd54d38208575ac"
+    "Core.Firewall.stopOf": "2b90e40fe38897cadcd11a852f88eae391d6c5a681231dd46aa95906489b3270"
    }
   },
   "Firewall.Release": {
@@ -13292,7 +13278,7 @@
    }
   },
   "Flock.CoinTree": {
-   "digest": "567cca828d3704af611daccf082951743cbd7fe2eb55e88362116525885739df",
+   "digest": "b6d6c99e7e484b188d3d7e010270d058e4f0bdcbb8768ae884934674a4a069ab",
    "definitions": {
     "Flock.CoinTree.SCHEME": "235501eb763963d2826e45654e8f92bf08febcec1687aff89b32b79686a6bcdc",
     "Flock.CoinTree.Spec": "a60170c2f600c552a9b10cfc7420b12d6987c9ba37f9ae9157a41614251439cb",
@@ -13304,7 +13290,6 @@
     "Flock.CoinTree.checkFresh": "40aea57d4d291eb921bdd9b2bcadf7291371549a4c4b94f62043e6933407ae30",
     "Flock.CoinTree.checkHello": "fd665baf9d5443745f0fc8ca6d99002051f6bf0afb9bba3d2b156df50d879c64",
     "Flock.CoinTree.checkRecord": "c7e8236d9eeaaf5013a0d24aa2c12fc76f23e8e42ad075fb0050598fbe8074b1",
-    "Flock.CoinTree.instBEqSpec.beq": "59f93c533cf6a809e4e48a1f5997628585b7a5b4d76e79c817d1d684737bd216",
     "Flock.CoinTree.isHex": "406291475f855f1cab1efe838a5095a30eaec25d9eb2dd981162f4807a8d0081"
    }
   },
@@ -13833,7 +13818,7 @@
    }
   },
   "Flock.HmRow": {
-   "digest": "a084db63c1545bd12b14aa788bde4262e087de06dbd6bd82bd66d238c3b4d508",
+   "digest": "5dacbf65db0d90b1695a999c55795cf15908846a7a6def3a7cc319f4993a436d",
    "definitions": {
     "Flock.HmIn.FORMAT": "d170c17911f12935b7c639f768d2a51f2df2f502c139d50dafcd92acca7de79a",
     "Flock.HmIn.Ports": "215bbcb52a5c9b82ffa0c34ab9a1e63f466d28f12cb80b3227186587ecca5d72",
@@ -13981,8 +13966,8 @@
     "Flock.Stmt.setupH": "e8feab24dbb0ecb3fe022fc7e4e7483a1a5b1cea6d49df2e12039fbbbdaf5603",
     "Flock.Stmt.setupHidden": "eaa3eeb93b122259593e99e75dd339ade9ea5d92a95413c3ccb44ba5cdb51366",
     "Flock.Stmt.setupHiddenOf": "5e8a1161fdc74a15d6ecf01eaea263cfaa8bbc75c0888473f8b4eae3b3e9e8af",
-    "Flock.Stmt.setupTables": "12413dd569c6fbe303f016c34c6244f923bd6d661ce0ec5e58f7d65318e4a4b4",
-    "Flock.Stmt.setupTablesOf": "6cbc10a95270cc721a7e071a4554ee383686cc1fc20d15a5fc5d84209726413b",
+    "Flock.Stmt.setupTables": "355274624ca968a3b7494c545ceac5e8890f0656664767c082f4c863eb7c2d12",
+    "Flock.Stmt.setupTablesOf": "c987d6a219c8b644ba9148f64fe0cd56336bf5f2e48ac026f8d5b20369c0507d",
     "_private.Flock.HmRow.0.Flock.HmRow.ctx": "be137ad375de546cbbc26a3840c9dda721fa5d02e7a0e715321bc4d87666e495",
     "_private.Flock.HmRow.0.Flock.HmRow.intLists": "0c26d755fb4eada06d94d2a78a53ea3ab79542eac0d9e569c9d05341cd625f89",
     "_private.Flock.HmRow.0.Flock.HmRow.templateStrata": "78d3ab5c1e6b6999f5790ae59ba277e93ac36e4ecf1c6adddd26bc1ae9c22e8c"
@@ -15163,7 +15148,7 @@
    }
   },
   "Flock.RecCoins": {
-   "digest": "ccc2ddc7faa29359fd55512c2f4893c911480013bb361347424e7c2f327dcdab",
+   "digest": "85dfeede1d9cab5dd40c40207b1a3faaaa1909cc1a44839e2a7fbacc23050ad8",
    "definitions": {
     "Flock.RecCoins.C3": "ad22be988630c4ef35240abbc128d3f3b94009c8858477ff6dbfe4a2d71a68cf",
     "Flock.RecCoins.C3.coins": "f3f687cf5aceef88af32263cb05f2dda1c771923cb3d5d9df3c7d750cff2d9e1",
@@ -15184,7 +15169,7 @@
     "Flock.RecCoins.Files.program": "0582741d2420c350bc0f7705d4050d802ff0ea1d2c3f6675819277e6a9167954",
     "Flock.RecCoins.Files.pub": "cc1c82d7268cc1a2da060aebbc36c12cc3b645731ef016b32c4ae1f8c8ad12fb",
     "Flock.RecCoins.Files.record": "8ca1fa00a976cf40c68751e53624c6ab309ff0acc27810908029c21591885e38",
-    "Flock.RecCoins.Files.stmt": "c33bbf2dfd1628ae032ee292fef1ccab9f90751acf582ba6502f29947e1f9a7e",
+    "Flock.RecCoins.Files.stmt": "29e9c55c9c7628ebd13aeaef4038c3365df2eeb44129ed714bde5553bc695908",
     "Flock.RecCoins.Inner": "afb5006806dcb2a746cc0b9b571ae12f4bf8b6f243c7320ebe0964f7fde0aa5b",
     "Flock.RecCoins.Inner.algebra": "146a6231bcdc6a4936f86c4fe059c9b4f98cddc99f9a3ca31699b17c57cf7a93",
     "Flock.RecCoins.Inner.comb": "50d5f78c313fea3add83bf5d3f921f6f3c37b8df6cecccb0d0231d0827b5bd13",
@@ -15532,11 +15517,11 @@
    }
   },
   "Flock.RecSetup": {
-   "digest": "069c7d7ac3a1fe1bda7b7a9327364c3dffbd7d40afa4d852fc368a5eb1ab6058",
+   "digest": "f244192bd744ad822b667ce7a23beb839223aa2e994c7e0423dbe1bd87ad24c1",
    "definitions": {
     "Flock.RecSetup.boundKey": "bb19420e84d8bd1bd6b4ad739912dde9d4f1e5f0cc6f9a196bce04dbe9939a2f",
     "Flock.RecSetup.c3": "9a2b0905ace053620940ce65ba89fede01f5fcc9a6d84679811cbd6df0be5aa1",
-    "Flock.RecSetup.checkForm": "b47641005482270e473c773427420d07f4b87f678445df00acbb3a62007f1059",
+    "Flock.RecSetup.checkForm": "128f212c67c647c21e13895af94218c6d225e96e764088a62d0f58ecdfdc748a",
     "Flock.RecSetup.checkInner": "0af564e3248d4ebad946cc163d050e1d482d4bd880adf948a05a0a6b23f3e27a",
     "Flock.RecSetup.checkMeta": "e42215ae5a412d9717535f58a7e0173ae4232bd3cba8370f836248d6c456a2e6",
     "Flock.RecSetup.checkReads": "a415213e46170b4e168daded6d346af89e7291766e6ddbeff26a780f702ee6e0",
@@ -15612,7 +15597,7 @@
    }
   },
   "Flock.RecVStar": {
-   "digest": "5d8aafd75e7027d5c9e38aa7990edbf19a3dc748ab47cd92169e8ea1e3986b38",
+   "digest": "92c01e252c6cc65f6a99034e8bab1f113c04d6674275ee1fa20afb2694a367c5",
    "definitions": {
     "Flock.RecVStar.ACC_VALUE": "d296633d397b8e10ccccb733a9b2e1b21acfa7e9700302160ffa4a4dac396c09",
     "Flock.RecVStar.CLAIM_VALUE": "14791ba5dbace24801878ebd6c2418a152a92342a8c3c5872a822d765fda9def",
@@ -15728,7 +15713,7 @@
     "Flock.RecVStar.innerCommits": "c65c6b51973f637caae9b1e449b27eb7044f049b0455470c3eeaea342d81a3a8",
     "Flock.RecVStar.innerLink": "8af54739c4a22114ee2f7dacc6f313821574fac7d1204b64b88e485ea3cd90fa",
     "Flock.RecVStar.innerMsgRounds": "38925f72252f729a68124916e68e0ae431ca9f43d85a467c23d4964554edfa64",
-    "Flock.RecVStar.innerOf": "dc90c03ec708dd3a0340fa92862a5a6a69e74720fbd2dd4a75a4373a6a86c727",
+    "Flock.RecVStar.innerOf": "702b01e7d09f31276dda0c278455fc00e06a4122209cf555f2f767aeb62e08a1",
     "Flock.RecVStar.innerTags": "06337b0f0d3de11bb10e1a9c8215375ea52b49baa1d7c886a3cd36877b227736",
     "Flock.RecVStar.innerTree": "04d005fe707104f26361dbfacde18f97fb77e3e5ac574269e670aa5d2c14b411",
     "Flock.RecVStar.instBEqShape": "c43ac214cf3bb9bd9e941ed631e33c0b075afd2e8d3ab6fdd1989aa6ac152236",
@@ -15985,7 +15970,7 @@
    }
   },
   "Flock.Statement": {
-   "digest": "9f1010390b59bd176c69c42c660ab8cf844e86b2f4d3c18f615fd38b1ee14c9b",
+   "digest": "91633e7b9b801faa69060a3f99aa0e66ce4af17a169c4384b3e148606e40454b",
    "definitions": {
     "Flock.Circuit.outRegion": "f6b4ca14f0b034c2ccce2bf66760224485048945db798082919a76c8d1989047",
     "Flock.Coins": "8abc721264730cb40980b5bfa53b29d67f70dde81fe4513cd5f00b6cd17f76a8",
@@ -15993,7 +15978,7 @@
     "Flock.Coins.rec": "f7157c0f8a236483be651a1c0127de30e6e38ea1cdc7d384b30a00a631e393fb",
     "Flock.Coins.seed": "edd532500c01b77787dac10e0053a293a9030fe85bbc21708082cb52a3e56280",
     "Flock.Coins.tree": "22aec660da817f7a20e8dfd8e6202ecc58120455cbd0fbbdbb4e8767ddba659a",
-    "Flock.Coins.tree?": "3b3f8f262a0c83a7f43010410f17002f59272339a12deba25192d3702de5883a",
+    "Flock.Coins.tree?": "0f76dc225e9075cd41f5bd08d5bccb960e2407e8a30248b3e69a2ab8508c8201",
     "Flock.Stmt": "27fb37f0f9296621e8318d636a6f635d50f964cf0200088d9092b504901f2153",
     "Flock.Stmt.addDelta": "5e7f3690c19545d2c6c5a5c041c5f0ec296774248d700695f7c71111490b4eb7",
     "Flock.Stmt.baseOf": "b84fa68bcec42cb2d21605d62863dad343c7ae138eb2a8e271b13d7bb7cb6976",
@@ -16035,9 +16020,8 @@
     "Flock.Stmt.unitShare": "d340b381fc216cfd3468a1c61ba960bb64022add4fa81437f86fdd896191ddcf",
     "Flock.checkInRange": "af916f3d8a80fd126a8ab2c23e640312ee6e2805bf9c39038e26b57296a5ef41",
     "Flock.checkRegionBytes": "fd9ee558fd6e1251b4990ac06dcc008f14d7049fe15e04764a52189ad46d8dac",
-    "Flock.helloOf": "4d4e886f22807618e797c02f41cd9e5f007acc8a235594911bbfe9edbfb7bf34",
+    "Flock.helloOf": "d5b4a6b8b88ed8c626fe75297a7182edcf695503108e8833a978aafe12e9e33a",
     "Flock.identityBytes": "b909667c353f0306771b85b309b889fc68daa9085509da007e3d9f8cd116dc3c",
-    "Flock.instBEqCoins.beq": "1594cb92e6dd7b709b48f9bed625777c2a813ccb610a5826e24fc12202b5e818",
     "Flock.instInhabitedStmt": "36553d28b0205165c2b1939d9bd18c1c28b8eee43e10f71075f3051bb01db7a0",
     "Flock.instInhabitedStmt.default": "69746fdadc99b28ed08dff66c1dfe7a4610ca4fd06a2205aac8810c3366216cd"
    }
@@ -16396,7 +16380,7 @@
    }
   },
   "Flock.Transcript": {
-   "digest": "115ff5e63133f7acdfb127825c66e1f02bd3e293543713e35202671412437e1f",
+   "digest": "90baa34972aa1b1e411b809aaa61dd5911b54dd416f1d0dbc8463e89298ec99e",
    "definitions": {
     "Flock.Round": "7c08e6498f31a55ce88f38102c22a7d9b1a41de6fe8240e8990dc78424c94ba4",
     "Flock.Round.answers": "25d61b4c35d75644c68583352376622ce0463f40542a1b85a4cd8795b55a8783",
@@ -16423,8 +16407,7 @@
     "Flock.Transcript.sample": "e6fc4ae9b5368617e87e56a2bf99d860ee36debe1a134e7a4db8aaa24aeda4a7",
     "Flock.Transcript.sampleK": "b58189b567a5613f72145283e2fc47ad5e68f9ebf2dc9647cba46d3ecde79f05",
     "Flock.Transcript.sampleVec": "f48876feddea8a551e014c282a6d6be97e7406e48ec9ab0fec4cba872c92339e",
-    "Flock.Transcript.squeeze": "1c3033f64c786b241a97524739a06d86906e37c6b39bad5aa8f5859b4b213513",
-    "_private.Flock.Transcript.0.Flock.Round.answers.match_1.splitter": "8f95ee1a3f3870ba63fa535596a2c3001ae66cf46e3dffafd3c81f3b8f34bf16"
+    "Flock.Transcript.squeeze": "1c3033f64c786b241a97524739a06d86906e37c6b39bad5aa8f5859b4b213513"
    }
   },
   "Flock.Typed": {
@@ -21367,7 +21350,7 @@
    }
   },
   "SampledProofs.ChallengerSession": {
-   "digest": "ddf9830a7f28e302c6b6645d59079246440f8cb773e532df6789fdb780845195",
+   "digest": "543d8647f51c7fcc2bb3047c067d915baf35de8d8c234684da657a21e8857a9e",
    "definitions": {
     "SampledProofs.Challenger.Audited": "159b77cf065dee90e23af320bf78c6c962956fb8dafae7711c47bf9b416a91e0",
     "SampledProofs.Challenger.Audited.circuit": "322482c0ce5792be8e392fd5470dd756d5e44c3af242df1d9f634e383c868c95",
@@ -21454,7 +21437,7 @@
     "SampledProofs.Challenger.circuitReason": "23e4bf4502c444a403160f17c1834e83cf25a4b923b17c23106c8830afd90819",
     "SampledProofs.Challenger.closeMessage": "6dcc0f52ae7fe564a511bee488f6b312cf78d734eb56f112ee3ca2abbc516a3c",
     "SampledProofs.Challenger.creditedSession": "841f7fa489a57f899e1cfcfaefee1c86d54b0bd7107111ba02f797b3d9a8f0f9",
-    "SampledProofs.Challenger.event": "f6ece7af729906b11e5608e5d8dac90e07c601f7e118245d9008a50ce1a456f2",
+    "SampledProofs.Challenger.event": "e3f0123c234049cf5dc3bf0f42f7f2457a16df27c8175316db2197ff2c792091",
     "SampledProofs.Challenger.firstParentReason": "3d532a87bfde38ff862e595b480c224c6555076e8f88a7c64038ad806cec63c9",
     "SampledProofs.Challenger.instInhabitedLedgerEntry": "e80cd9d4742cb6b57326602cddb1b02b3802ff5ad8b61b81d00f01a23d8d71cf",
     "SampledProofs.Challenger.instInhabitedLedgerEntry.default": "3848285ea2ab9d7a4e425a5fee117e2d67980ed4dea9b413c5dda27b2c750c8b",
@@ -21470,12 +21453,12 @@
     "SampledProofs.Challenger.laneOf": "89f94029905b9a787a9b6cb67c31561dd1e28d8c6538e861e0f1e0991405fcff",
     "SampledProofs.Challenger.later": "1abd998f4747fe1c8ba3fa327c2abae6688adbf55b86adb5cbecef71a7892e16",
     "SampledProofs.Challenger.leafOf": "4712a23a6e2670b893b88edaeeabda556391b612cd99fc324902b4497ec3d224",
-    "SampledProofs.Challenger.ledgerEntry?": "af6d789632c539e54c6a72c4ddc3131cb08849dc657507b2e9f61fd10f687ed7",
+    "SampledProofs.Challenger.ledgerEntry?": "6f8495ed29a9763cf96047e11548e7bff3c706e7b7875c4a583875bba4c08294",
     "SampledProofs.Challenger.ledgerMessage": "e28cef32529cf349582119358d48be78874ccd2c334384d5bff61201a40d8394",
     "SampledProofs.Challenger.ledgerTag?": "067eb3424c26db586f33e8132fc064ed8b924fda9d3cdcb78e169fe384a4912f",
     "SampledProofs.Challenger.logChain": "fbde5859f5f5bf70d7e326d5ee0089196a31d1e8f28ea84f809c85ce5c3f530c",
     "SampledProofs.Challenger.logDigest": "6d06248e8115e687377bb0f9515d3cdea1ad643c3426b7a06ab0754872b2fecf",
-    "SampledProofs.Challenger.pinOf?": "57c3808772a9fbac56977792341ca4d2956eaec1d1ed3aacb2e3fdb47eef732a",
+    "SampledProofs.Challenger.pinOf?": "2bbe803f55f6001d00195f198f3be7edddb5dd361eda07f7fbd0aa77ea8d3e37",
     "SampledProofs.Challenger.pinnedSession": "78477917e8645eefddc6a714977cef1616547e40993f56786e20f3424fa07163",
     "SampledProofs.Challenger.pinsReason": "ae5ab9c8c472280698e051ba8c518e884bfc135b6a1cdd2b99f1725ee3eba888",
     "SampledProofs.Challenger.releasedRootsOf": "c8efef619f3e76e906436ef3eaf78e97e9154fc8c8987fcc69f579f111bcfe65",
@@ -21508,7 +21491,7 @@
    }
   },
   "SampledProofs.ChallengerTrees": {
-   "digest": "aabdec7223f93a7657219644b8de906ccb543fc5e921fc5223579c5e3844339d",
+   "digest": "f8a53cadd3a5763c5a350f71bcf15eac0117cb7102ca200fbd89f077f7865310",
    "definitions": {
     "SampledProofs.Challenger.LoggedTree": "885ea6f8fcb5591d9bbb4b603865b76ffdf652083bbbff692a634efdf096f032",
     "SampledProofs.Challenger.LoggedTree.key": "e940f525be182c1d1571a352e1cd449dd4a86123311c0c57cbc48538b843ae17",
@@ -21533,7 +21516,6 @@
     "SampledProofs.Challenger.TreeOpening.stream": "0f3022aa9c1dc98c799c52ea8719005f23b6dfce83ba8804030d46b3c52769bf",
     "SampledProofs.Challenger.UNUSED_TREE": "4e32086f72701ca1a4dba3a02400a2a00a4685b53511d71187dacb954b469993",
     "SampledProofs.Challenger.coinTreesOf": "28e1948fb94cc46c1b90d2ba1292282eff10e304b7855b35729bd27940aa8c79",
-    "SampledProofs.Challenger.coinTreesOf._sparseCasesOn_4": "6e1451e282564ed3f188408421b7665ebf98e116584ab4f63ff7185f4a61bfdb",
     "SampledProofs.Challenger.isTreeSpec": "e05ab677a862280f33665e787ac20323831fb7da2873870bbf6e788ee02d6b06",
     "SampledProofs.Challenger.linkAfter": "67ff9a436e3726b807091b85643971704355f416be0f38043c0fedb88aa3472b",
     "SampledProofs.Challenger.recordCoins?": "e0b5d72ec7b5b6e2b4ac1cc5739121ba32d466004d30d0cc62210f159f0daed6",
@@ -21542,7 +21524,6 @@
     "SampledProofs.Challenger.trustedTreesOf": "b68a1fcd5206defc96c6413db71389f77ec1703dfc3f204a85d564ed1148d794",
     "_private.SampledProofs.ChallengerTrees.0.SampledProofs.Challenger.isHexN": "2dcd137ccdf67fb110c9b12c5c48d9cb3d84a940e1316b7093818f79c566d4cc",
     "_private.SampledProofs.ChallengerTrees.0.SampledProofs.Challenger.isStream": "e1c6e1745b80341e2fb0ce52396de6f234d1571ad69accb08f57cba803089faf",
-    "_private.SampledProofs.ChallengerTrees.0.SampledProofs.Challenger.recordCoins?._sparseCasesOn_1": "64160630b533d4011c876adaff3107b7fb372bd184ad126f42d542dee5b09a9c",
     "_private.SampledProofs.ChallengerTrees.0.SampledProofs.Challenger.strOf": "3c64e96cec1f8ba9cdb56c0279fec34d9b496d66ad66ec0e35e6571df9cdf4d0"
    }
   },
@@ -21576,14 +21557,11 @@
    }
   },
   "SampledProofs.FilePart": {
-   "digest": "eb212396c58caa30f84f7aa0ad5957a0cc8c5d4c29c6f49b7fc0cf5885eb90f1",
+   "digest": "2e81c2abe392e8f44f1f76d94318cb9bba5d20951fb9c4e87afbca7fd4d55f5b",
    "definitions": {
     "SampledProofs.FilePart.check": "98c2f7cab34de83f1fd1e93f635348c156e6a0c8d5dcc96bf56e4dc1bd1c087f",
     "SampledProofs.FilePart.sizes": "2939baec931755aae9824ad86433b8cc0cf493ddc2c83b6bab692f0a98db5523",
-    "SampledProofs.FilePart.srcAt.match_3": "23acaa142a06cb279b09d55d3e4b2b294c22ff35e724535f1f96e20ac527e462",
     "SampledProofs.FilePart.unitIndices": "ec328afc443f3b569417e19f59b498d44c4524561fcf74c857a70c9b6abc6650",
-    "SampledProofs.FilePart.unitIndices._sparseCasesOn_1": "33bac7c0a9db5d95f5da0a8641dda76c5f2a94a52c3a9ff9489c0783ca2e0f2c",
-    "SampledProofs.FilePart.unitIndices._sparseCasesOn_4": "d054832a3de18b1c2f23128c969b5467d6c3ac5e3a94eb46cde9f4df0f57b59b",
     "SampledProofs.FilePart.why": "e9138e9b3326ade3b4857022e1d8da0923b1e127ce377acd9f2f897d7183bd0e"
    }
   },
@@ -21690,7 +21668,7 @@
    }
   },
   "SampledProofs.OneStageZk": {
-   "digest": "c7c8f19913244fb1478e41b28b28afb380346f8843eda4092daa1fefc43a872d",
+   "digest": "d24075434aa2819f33695de0e0065e3f296c346bf1fe387620ecda20c9c2c5bf",
    "definitions": {
     "SampledProofs.OneStageZk.Evidence": "c6225844065026f039f99bb073a172ebd1caf057aa99df9629dc83c3b72b4444",
     "SampledProofs.OneStageZk.Evidence.base": "f88a295c9c15075955eadf77c4082a0174b7338e8a580fe01d770c8929000895",
@@ -21727,7 +21705,7 @@
     "SampledProofs.OneStageZk.checkBlobs": "69a71ca7b33dfeaeafd8a942514e9ac15b76b72c60055753d22914cae25d229e",
     "SampledProofs.OneStageZk.checkBlobsAt": "4dee0498e471efc338742bd8f3d20c6d5f79f9100da480f9b252557dab44648f",
     "SampledProofs.OneStageZk.checkIdentifier": "2fd8c67dfca865e4f5ef6c301b5ed5dcc80837cbe5ac4606f38372f80bfec899",
-    "SampledProofs.OneStageZk.coinKeyOf": "40d03dd630062728c75951df4d2c252091401e1461e4a605c2e730782b0e2b80",
+    "SampledProofs.OneStageZk.coinKeyOf": "2f076452391d2f9699cd256b41ed7ad3121574668000a0c9ac4cae5ede049c5c",
     "SampledProofs.OneStageZk.coinsOf": "f4a3817c6bac2789ede643ecc05906095185a5b6a7c9d090c48e0b6cdda1ffd3",
     "SampledProofs.OneStageZk.evidenceOf": "a99d36ec485677c5b2143ee0e055b69fcfde11fb2c448d9fe001342bb9303910",
     "SampledProofs.OneStageZk.filesOf": "4703a5c941a4ff5baab9c56044ab5cc9d3e73cf1d5682df921b6ce40662b8468",
@@ -21735,11 +21713,10 @@
     "SampledProofs.OneStageZk.oneSession": "67a2157b27c555e6e20cd120bc386e9a8c9c16d834c6f4b527fe348736da4ca4",
     "SampledProofs.OneStageZk.paramsOfJson": "954effa60a74a966153bc98bc707036491aa9d1e196eaec871433f8248647184",
     "SampledProofs.OneStageZk.popHeld": "7401258b698bc7082b7e9ca823432a2dbbb86bb055535be66266c058e4c7f37c",
-    "SampledProofs.OneStageZk.programDigest": "1203586e1a289f82fd3cb9d12de401779ee02b4594feeebffbd358999b3b52c6",
+    "SampledProofs.OneStageZk.programDigest": "6d8b4f0a82867f552c47880757b9b9a5854b01dcba12bb65d4d39f689cc17d64",
     "SampledProofs.OneStageZk.proofsOf": "c0dfc365ea612c5fd0d3c5b2536b3f7070b565b755399fba2e9c94f3135442b9",
-    "SampledProofs.OneStageZk.proofsOf._sparseCasesOn_4": "fbc75a5ad47a1d9c0fb5cea5b59fd0b4306057cd018c133ce224ca7823458937",
     "SampledProofs.OneStageZk.provedHeld": "b6c33bfe26865815971bbb2e841f4c57278e528f57e4385d9256470b60ddbd72",
-    "SampledProofs.OneStageZk.provedUnits": "dfb79e950fcc3f4ba476fc4f6b47d0e00ef577df0d83b4801008dff7010878a6",
+    "SampledProofs.OneStageZk.provedUnits": "ae64f151087ff234e389a149cda4feed0dbf1fb3d67610a2ef94711b627c9fee",
     "SampledProofs.OneStageZk.publicHeld": "247fc0b3a6716af1c4d25068c44ca70046e0665d97fe15905a83aabee16dcacd",
     "SampledProofs.OneStageZk.push": "d21e46b449ade253db65e2ac3a004b8ade87f31209dc14a2e4047efe980e2217",
     "SampledProofs.OneStageZk.readsOf": "b98e69f3ece10e22b375c78035f3e9dd026d348b2bf5c38fc3e0f4fd88c27978",
@@ -21757,17 +21734,13 @@
     "SampledProofs.OneStageZk.verdictJson": "f9cd35934b9201419fc1a000b289928fbb7cffc52fbfcfc05067460894049250",
     "SampledProofs.OneStageZk.verdictOf": "b590381d4005392392b922c699294f284b154de426bff45a9d455cb8173fe534",
     "_private.SampledProofs.OneStageZk.0.SampledProofs.OneStageZk.committedOf": "3a6180f985ef5ee53c897b2414d8d78649f15dd5e8e5dd8f6c7edc6101008eee",
-    "_private.SampledProofs.OneStageZk.0.SampledProofs.OneStageZk.committedOf._sparseCasesOn_1": "b651ebef4f5cab1ff6632d327460119d7732722bda62e08c60ce07c96086f3d9",
     "_private.SampledProofs.OneStageZk.0.SampledProofs.OneStageZk.digest?": "fbfbb365d80c4737b28a96f2654ab7701bd844041c6f3e0dbb76d38e3a96e45a",
     "_private.SampledProofs.OneStageZk.0.SampledProofs.OneStageZk.digestOf": "24ae602a2d32345d835497437af0eba0715f3c3dd9376b6b82d7117821627603",
-    "_private.SampledProofs.OneStageZk.0.SampledProofs.OneStageZk.digestOf._sparseCasesOn_1": "1869c9a98cfabc7833da61d299294957449adc774ec95227e45c1f2c6a138b8f",
     "_private.SampledProofs.OneStageZk.0.SampledProofs.OneStageZk.exactly": "a70860b0bb00e91804830d9149b9014c83a0e52ec40fdf8e3f97c438c380ab6f",
     "_private.SampledProofs.OneStageZk.0.SampledProofs.OneStageZk.headerLine": "212a78996d70e299639f5cf7f183b10bf121b87826f5ef77bc4473ed143fed56",
-    "_private.SampledProofs.OneStageZk.0.SampledProofs.OneStageZk.headerOf": "1db8f3f1fa6351ab9b471e572fed2a4ba93119aec100079a764723055ae4a7de",
-    "_private.SampledProofs.OneStageZk.0.SampledProofs.OneStageZk.headerOf._sparseCasesOn_1": "208363f83d320bfa456f7dfe114ebad2a4553fe5c6b2bf893a4d58acfe2c5e7e",
+    "_private.SampledProofs.OneStageZk.0.SampledProofs.OneStageZk.headerOf": "dbbb88290a301f6013afaea9553052dea636d5426934b69b24b83b7c6e053dba",
     "_private.SampledProofs.OneStageZk.0.SampledProofs.OneStageZk.sessionOf": "2453a16c523c93e8297af06a4aabd502466a3135f57da7caec5f0c3ff203b080",
-    "_private.SampledProofs.OneStageZk.0.SampledProofs.OneStageZk.without": "6d0e774246b569b5af817a1494a3b43ee1b609854d6be9cde3ba551a1e3068c7",
-    "_private.SampledProofs.OneStageZk.0.SampledProofs.OneStageZk.without._sparseCasesOn_1": "94a9af26bee219e677ec80e87f18cd568e5ab3731ef4ed83ba2323f16e35c957"
+    "_private.SampledProofs.OneStageZk.0.SampledProofs.OneStageZk.without": "6d0e774246b569b5af817a1494a3b43ee1b609854d6be9cde3ba551a1e3068c7"
    }
   },
   "SampledProofs.Partition": {
@@ -22506,7 +22479,7 @@
    }
   },
   "VStarRecursive.Protocol": {
-   "digest": "8776b0585aa82906704ff77df147c66a80680859d77a182d6a403b5b0f990390",
+   "digest": "6e683f93b4e9ef99c4dd660ec2ad94e66a1e92c33f434cdd69e600d09648b3c8",
    "definitions": {
     "VStar.Recursive.Evidence": "a17492dffbdb429d61649d16045eb6fdd665be45ec350cfce4d689ea194aed47",
     "VStar.Recursive.Evidence.base": "ba0fe67895d453c2a8624e80ec2f8cce8a0a5d278e76f5e1abd614b4d334daf5",
@@ -22554,16 +22527,16 @@
     "VStar.Recursive.evidenceOf": "caf2acb4cec0d54a044583b7d4af931af3af17b0577fd66d64df5eb1b45d84e3",
     "VStar.Recursive.fits": "32b632269c8f7a9f656ba2c2799e4efddbd44c6aa6fee16b5d765151c77a29de",
     "VStar.Recursive.innerForm": "dc2a31b5f5a23c9172cee92ef0f6af9d601a49bc65e1b93124b5170026484ded",
-    "VStar.Recursive.innerHeld": "da78fc9235a91d3fdee781117f6488f2799e65dd606ce90d8690f031c0a7c6b9",
-    "VStar.Recursive.innerOk": "cafdc6a76a5b7ad939ecc85311f70a11db7e8dc2611bef22776d2fd16062c73f",
+    "VStar.Recursive.innerHeld": "d1b7c3931bbcc028c32f8acc50e660bef9a6d77f70e560d6c93686f0842f7d63",
+    "VStar.Recursive.innerOk": "d46630154ac8848fc048dffa035a7029644499b4b8a99ceb1ee92ae05548619a",
     "VStar.Recursive.lineEnd": "08f3f8a6ca79ec9bca18488856b517e63e59d445c0c104326b8a1e6e81bb0634",
     "VStar.Recursive.metaOf": "b1cd47a27ca618b941c7a55749e37e8fc56eed12c7ef8d76c4aa12f9c9f9fe81",
     "VStar.Recursive.need": "e7bbdffdbbf61828d6e4cae5344342cf93a279518aabe5cc4bd6bd9c1156ce99",
     "VStar.Recursive.ownOf": "e9c5f487957ab06baa7790fec82c4a6fca8be39ee840152bd3783e43380187a7",
     "VStar.Recursive.paramsOfJson": "0ce3bbac96b75e63a7e99533d757da428435261fa0fbf9efaca4b1f81e125469",
     "VStar.Recursive.partJson": "452868b110da42c2a36e59b70306043f4419be7f0168553f4b3e15d6a62ae991",
-    "VStar.Recursive.partSize": "9e5a066caaad57fdc44a0eb206a13a1a9b9bfd21d98eb16b15a1427415dc6b66",
-    "VStar.Recursive.partVerdict": "d172f3b0209930705802063f742e84cc61eccec53f29971f2a440981252fce96",
+    "VStar.Recursive.partSize": "bba29da2eb4498c27560023d6477c2156c8d12efbab323ce500575ffed313d4e",
+    "VStar.Recursive.partVerdict": "62b8bc46c0a61b8fe7722abdb0e5debf39a7d0a867656ff2dbd17244e2cf19c4",
     "VStar.Recursive.partVerdicts": "fa001a1a1e0b5541942b39ea864bb3b8fa33fc5cadf533f8a56e9e97b762cde2",
     "VStar.Recursive.partVerdicts.partsAt": "239b4c11782219a25658eb5ef939a24c988710eb13ddd95adbecc58e280819a0",
     "VStar.Recursive.partsSize": "0a27543a76387b6e978719a82b3875ae50ee26c48368212cdc6f8c2f5d15005c",
