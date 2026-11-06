@@ -3,7 +3,9 @@ changes nothing; shadow enqueues each checked tip's check with no graph beside i
 executor listed, and records how their verdicts compare by its keys; on enqueues each tip as graph/v2, reads its tasks'
 results by key (a task that reads others by the key the contract's rule gives it), judges a failure by policy.toml's
 allowances, names the landing whose change touches what a red task depends on (a coarse lean-suites task's, per failed suite
-as a run's), and moves `main` only once every task on the gate passed, never on a run that ran nothing.  `QueueTransport` reads the executor's graphs and results through the store's remote."""
+as a run's), and moves `main` only once every task on the gate passed, never on a run that ran nothing, and once the run of
+`SLIM_STEPS` it launches beside the check passed them, whose red ratchet-gate names its culprit as a run's.  `QueueTransport`
+reads the executor's graphs and results through the store's remote."""
 from __future__ import annotations
 
 import hashlib
@@ -12,14 +14,15 @@ from pathlib import Path
 
 import pytest
 
-from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, FIX_WINDOW_S, task_files
+from research import merge
+from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, FIX_WINDOW_S, SLIM_STEPS, task_files
 from research.executor import (AFTER_LANDING_PRIORITY, BLOCKED, GRAPH_V2, SHADOW_WAIT_S, TASKS_GRAPH_KIND, Executor, FileTransport,
                                QueueTransport, Shadowed, agrees, compare, keyed, old_verdicts, shadow_records, shadow_report,
                                task_key, task_target)
 from research.store.local import LocalStore
 from research.store import vocab
 from test_drive_policy import EXPIRED, LIVE, _policy
-from test_drive_review import GATED_TREE, Review, _main, _move_main, _owning
+from test_drive_review import GATED_TREE, POLICY_TOML, Review, _main, _move_main, _owning
 from test_queue import World, _git
 
 K_SUITE, K_LEAN = "a" * 128, "b" * 128
@@ -388,6 +391,22 @@ def _reader_key(g: dict, reader: str, producer: str) -> str:
     return task_key(by[reader], g["files"], ENVS[by[reader]["env"]]["digest"], {producer: _result(p, p["key"])["outputs"]})
 
 
+def _slim(h: Review, tmp_path, **logs: str) -> Path:
+    """The newest run beside the executor's check (`r-post-N`, of `SLIM_STEPS` but one it skips) ended: a preflight and each of
+    its steps passed, but each step ``logs`` names (``ratchet_gate=LOG``), which failed with that log, its exit 1 then."""
+    rid, failed = f"r-post-{len(h.posted) - 1}", {k.replace("_", "-"): v for k, v in logs.items()}
+    d = tmp_path / rid
+    d.mkdir(parents=True)
+    rows = [{"step": "preflight-lock", "status": "passed"}]
+    for s in h.posted[-1][1].split(","):
+        rows.append({"step": s, "status": "failed", "rc": 1, "log": f"{s}.log"} if s in failed else {"step": s, "status": "passed"})
+        if s in failed:
+            (d / f"{s}.log").write_text(failed[s])
+    (d / "steps.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    h.run_state[rid], h.evidence = ("done", 1 if failed else 0, None), [d]
+    return d
+
+
 def _results(fake: FileTransport, g: dict, fails: dict[str, dict] | None = None, reader: str | None = "pass") -> None:
     """Each keyed task of ``g`` finished: those ``fails`` names failed with their detail, the rest passed; and B, which reads A,
     under the key A's result gives it (``reader``: its status, None for no result yet)."""
@@ -442,15 +461,20 @@ def test_settle_keys_a_reader_once_what_it_reads_passed_and_blocks_it_behind_a_f
 
 
 def test_on_enqueues_graph_v2_and_verifies_the_tip_once_every_task_passed_by_key(world, monkeypatch, tmp_path):
-    """No run: the tip's check goes on the queue as graph/v2 with no graph, and the tip is verified, and `main` follows, once
-    every task's result under its key passed, B's under the key A's result gives it."""
+    """No run of every step: the tip's check goes on the queue as graph/v2 with no graph, beside a run of ratchet-gate alone
+    (lean-agreement skipped: nothing it checks changed) with the base a run of every step takes, and the tip is verified, and
+    `main` follows, once every task's result under its key passed, B's under the key A's result gives it, and that run
+    passed: until then `main` waits for it."""
     h = Review(world, monkeypatch, land_into="checked")
     fake = _executor(h, tmp_path, "on")
     main = _main(world)
     tip = _land(h, 1)
     check = f"after-landing:{tip}"
-    assert h.posted == [] and fake.enqueued() == [{"check": check, "priority": AFTER_LANDING_PRIORITY, "graph": None,
-                                                   "schema": GRAPH_V2}]
+    assert fake.enqueued() == [{"check": check, "priority": AFTER_LANDING_PRIORITY, "graph": None, "schema": GRAPH_V2}]
+    assert h.posted == [(tip, "ratchet-gate", {"base": main, "agreement": False, "no_cache": False, "circuit_cache": False,
+                                               "no_regenerate": True})]
+    assert h.postland()["slim"] == {"ids": ["r-post-0"], "tip": tip, "at": h.clock, "steps": ["ratchet-gate"],
+                                    "skip": ["lean-agreement"], "ratchet_base": main}
     h.tick()
     assert _main(world) == main and h.postland()["run"]["tasks"] == {"check": check}, "no graph labelled yet"
     g = _graph_v2(tip)
@@ -464,14 +488,23 @@ def test_on_enqueues_graph_v2_and_verifies_the_tip_once_every_task_passed_by_key
     _results(fake, g)
     h.tick()
     pl = h.postland()
-    assert _main(world) == tip and pl["verified"] == tip and pl["run"] is None and h.posted == [] and not pl.get("red")
-    assert pl["verified_as"] == {"steps": list(AFTER_LANDING), "no_cache": False, "executor": check}
+    assert _main(world) == main and pl["run"]["tip"] == tip and pl.get("gated") != tip and pl["verified"] != tip, \
+        "every task passed, but the run beside them runs: `main` waits for it"
+    _slim(h, tmp_path)
+    h.tick()
+    pl = h.postland()
+    assert _main(world) == tip and pl["verified"] == tip and pl["run"] is None and len(h.posted) == 1 and not pl.get("red")
+    assert pl["verified_as"] == {"steps": list(AFTER_LANDING), "no_cache": False, "executor": check, "slim": "r-post-0"}
+    assert "slim" not in pl and pl["green"]["step ratchet-gate"] == tip and pl["ratchet_judged"]["tip"] == tip
     assert len(fake.enqueued()) == 1 and any(f"(the executor's {check})" in x for x in world.logs), world.logs
+    assert any(", and its run r-post-0 passed ratchet-gate" in x for x in world.logs), world.logs
 
 
 def test_on_a_graph_with_no_task_of_a_job_main_waits_for_gates_nothing_and_is_told(world, monkeypatch, tmp_path):
-    """The check stands for the jobs its graph has tasks of: with none of some job `main` waits for (one graph/v2 has no family
-    of), every task passing verifies the tip on its jobs alone, `main` stays, and `CI` is told what the graph lacks."""
+    """The check stands for the jobs its graph has tasks of and the steps of the run beside it: with none of some job `main`
+    waits for (one graph/v2 has no family of), every task passing verifies the tip on its jobs and that run's steps alone (and
+    lean-agreement, which it skipped by name), `main` stays, and `CI` is told what the graph lacks, ratchet-gate not among
+    them though it gates here: that run checks it."""
     _move_main(world, GATED_TREE)
     h = Review(world, monkeypatch, land_into="checked")
     fake = _executor(h, tmp_path, "on")
@@ -480,11 +513,13 @@ def test_on_a_graph_with_no_task_of_a_job_main_waits_for_gates_nothing_and_is_to
     g = _graph_v2(tip, whole=False)
     fake.list_graph(f"after-landing:{tip}", g)
     _results(fake, g)
+    _slim(h, tmp_path)
     h.tick()
     pl = h.postland()
-    assert pl["verified"] == tip and pl["verified_as"]["steps"] == ["lean-audit", "pytest", "circuit-check"]
+    assert pl["verified"] == tip and pl["verified_as"]["steps"] == ["lean-agreement", "lean-audit", "pytest", "circuit-check",
+                                                                    "ratchet-gate"]
     assert _main(world) == main and pl.get("gated") != tip and pl["run"] is None
-    lacks = [j for j in AFTER_LANDING if j not in (*AFTER_LANDING_OPTIONAL, "pytest", "lean-audit", "circuit-check")]
+    lacks = [j for j in AFTER_LANDING if j not in (*AFTER_LANDING_OPTIONAL, *SLIM_STEPS, "pytest", "lean-audit", "circuit-check")]
     (told,) = [p for p in h.posts if "its graph has no task of" in p]
     assert f"has no task of {', '.join(lacks)}, which `main` waits for there" in told, told
 
@@ -516,6 +551,7 @@ def test_on_names_the_one_landing_of_the_batch_whose_change_touches_the_failed_t
     assert r["culprit"][0] == 2 and r["base"] == main and r["paths"] == ["pkg/x.py"] and r["step"] == "pytest"
     assert h.postland()["run"] is not None, "B is still pending: the check goes on, red named at once"
     _results(fake, g, {X: {"exit": 1, "failed_tests": [TEST]}})
+    _slim(h, tmp_path)
     h.tick()
     pl = h.postland()
     assert pl["failed"] == tip and pl["run"] is None and _main(world) == main and pl.get("gated") != tip
@@ -528,6 +564,7 @@ def test_on_names_the_one_landing_of_the_batch_whose_change_touches_the_failed_t
     assert "pkg/y.py" in _git(world.origin, "ls-tree", "-r", "--name-only", reverted)
     assert any(p.startswith("@lane-2 @pkg-owner queue: #2 reverted on `checked`") for p in h.posts), h.posts
     assert fake.enqueued()[-1]["check"] == f"after-landing:{reverted}", "the revert's tip is checked next"
+    assert [c for c, _, _ in h.posted] == [tip, reverted], "beside a run of its own"
 
 
 @pytest.mark.parametrize("expires, exit_, red", [(LIVE, 1, False), (EXPIRED, 1, True), (LIVE, 2, True)])
@@ -544,6 +581,7 @@ def test_on_a_failed_task_an_unexpired_allowance_covers_is_not_red(world, monkey
     g = _graph_v2(tip)
     fake.list_graph(f"after-landing:{tip}", g)
     _results(fake, g, {X: {"exit": exit_, "failed_tests": [TEST]}})
+    _slim(h, tmp_path)
     h.tick()
     pl = h.postland()
     rings = [p for p in h.posts if "is red on" in p]
@@ -572,6 +610,7 @@ def test_on_a_red_task_off_the_gate_holds_no_promotion_and_reverts_its_culprit_a
     g = _graph_v2(tip)
     fake.list_graph(f"after-landing:{tip}", g)
     _results(fake, g, {FP8_TASK: {"failures": [f"{FP8}{{N=4}}: 3 mismatches"]}})
+    _slim(h, tmp_path)
     h.tick()
     pl = h.postland()
     assert _main(world) == tip and any(f"(the executor's after-landing:{tip})" in x for x in world.logs), world.logs
@@ -615,6 +654,7 @@ def test_on_a_lean_suites_task_is_red_per_failed_suite_and_names_its_culprit_as_
     fake.list_graph(f"after-landing:{tip}", g)
     _results(fake, g, {LS: {"exit": 1, "suites": {"l-suite": "failed", "other": "passed"},
                             "failed": [_suite_row("l-suite", "tools/lsuite", L_TEST)]}})
+    _slim(h, tmp_path)
     h.tick()
     pl = h.postland()
     assert list(pl["red"]) == ["suite l-suite"] and pl["failed"] == tip and _main(world) == main
@@ -642,6 +682,7 @@ def test_on_a_lean_suites_tasks_failed_suite_is_judged_by_its_own_allowance(worl
     fake.list_graph(f"after-landing:{tip}", g)
     _results(fake, g, {LS: {"exit": 1, "suites": {"l-suite": "failed", "other": "passed"},
                             "failed": [_suite_row("l-suite", "tools/lsuite", L_TEST, **more)]}})
+    _slim(h, tmp_path)
     h.tick()
     pl = h.postland()
     rings = [p for p in h.posts if "is red on" in p]
@@ -656,7 +697,7 @@ def test_on_a_lean_suites_tasks_failed_suite_is_judged_by_its_own_allowance(worl
 def test_on_a_suite_a_lean_suites_task_passes_ends_its_red_and_a_run_that_ran_nothing_holds_main(world, monkeypatch, tmp_path):
     """Tip 1's lean-suites task fails suites `l-suite` and `other`: each is red.  Tip 2's fails `other` alone: `l-suite`'s red
     ends there though the tip failed.  Tip 3's runner ran nothing it was to run (a skip): it gives an error, which is no result,
-    so the task stays pending, nothing is gated or verified, and `main` stays."""
+    so the task stays pending, nothing is gated or verified, and `main` stays, though the run beside the check passed."""
     _move_main(world, L_TREE)
     h = Review(world, monkeypatch, land_into="checked")
     fake = _executor(h, tmp_path, "on")
@@ -668,6 +709,7 @@ def test_on_a_suite_a_lean_suites_task_passes_ends_its_red_and_a_run_that_ran_no
         fake.list_graph(f"after-landing:{tip}", g)
         _results(fake, g, {LS: {"exit": 1, "failed": failed,
                                 "suites": {"l-suite": "failed" if n == 1 else "passed", "other": "failed"}}})
+        _slim(h, tmp_path)
         h.tick()
         pl = h.postland()
         assert pl["failed"] == tip and _main(world) == main
@@ -679,6 +721,7 @@ def test_on_a_suite_a_lean_suites_task_passes_ends_its_red_and_a_run_that_ran_no
     _results(fake, {**g, "tasks": [t for t in g["tasks"] if t["id"] != LS]})
     ls = next(t for t in g["tasks"] if t["id"] == LS)
     fake.finish_result({**_result(ls, ls["key"]), "status": "error", "detail": {"error": "not run: tools/lsuite"}})
+    _slim(h, tmp_path)
     h.tick()
     pl = h.postland()
     assert _main(world) == main and pl["run"]["tip"] == tip and pl.get("gated") != tip and pl["verified"] != tip
@@ -694,6 +737,109 @@ def test_on_a_graph_of_another_commit_is_told_and_the_check_enqueued_again(world
     assert any("is of commit " + "9" * 40 in p and "the next tick enqueues" in p for p in h.posts), h.posts
     assert [r["check"] for r in fake.enqueued()] == [f"after-landing:{tip}"] * 2 and h.postland()["run"]["tasks"] == {
         "check": f"after-landing:{tip}"}, "the tick that refused it enqueues it again"
+    assert len(h.posted) == 1 and h.postland()["slim"]["ids"] == ["r-post-0"], "beside the same run"
+
+
+def test_on_main_waits_for_the_run_of_lean_agreement_and_ratchet_gate_beside_the_executors_check(world, monkeypatch, tmp_path):
+    """A landing that changes what lean-agreement checks: the run beside the executor's check is of lean-agreement and
+    ratchet-gate (`train.sh --deferred lean-agreement,ratchet-gate --agreement`).  The graph's own tasks of those two fail,
+    which counts for nothing, and every other task passes: nothing is gated, verified or red while that run runs, and once it
+    passed both, the tip is verified on every step and `main` follows."""
+    monkeypatch.setattr(merge, "required_steps", lambda repo, base, commit, tool: {"lean-agreement": ["verity/ml/flock/"]})
+    h = Review(world, monkeypatch, land_into="checked")
+    fake = _executor(h, tmp_path, "on")
+    main = _main(world)
+    tip = _land(h, 1)
+    assert h.posted == [(tip, "lean-agreement,ratchet-gate", {"base": main, "agreement": True, "no_cache": False,
+                                                              "circuit_cache": False, "no_regenerate": True})]
+    g = _graph_v2(tip)
+    fake.list_graph(f"after-landing:{tip}", g)
+    _results(fake, g, {"lean-agreement:all": {"exit": 1}, "ratchet-gate:all": {"exit": 1}})
+    for _ in range(2):
+        h.tick()
+        pl = h.postland()
+        assert _main(world) == main and pl["run"]["tip"] == tip and pl.get("gated") != tip and not pl.get("red"), pl
+    _slim(h, tmp_path)
+    h.tick()
+    pl = h.postland()
+    assert _main(world) == tip == pl["verified"] and not pl.get("red") and pl.get("failed") != tip, world.logs
+    assert pl["verified_as"]["steps"] == list(AFTER_LANDING) and pl["verified_as"]["slim"] == "r-post-0"
+    assert any(", and its run r-post-0 passed lean-agreement, ratchet-gate" in x for x in world.logs), world.logs
+
+
+def test_on_a_red_ratchet_gate_in_the_run_beside_the_check_holds_main_and_names_its_culprit_as_a_run_does(world, monkeypatch,
+                                                                                                      tmp_path):
+    """Every task of the executor's check passes, but the run beside it fails ratchet-gate, its log naming the merge the gate
+    fails: `main` stays below the tip, though ratchet-gate is off the gate; the red names that merge's PR as its culprit and
+    rings as a run's does, and with no fix marked in `FIX_WINDOW_S` drive reverts it on `checked`.  The revert's check runs
+    beside a run whose gate judges above the red tip, where the revert lies; that passing, `main` follows the revert and the
+    red ends."""
+    _owning(world, {"lane-2": []})
+    _move_main(world, {**GATED_TREE, "tools/verity/check/policy.toml": POLICY_TOML.replace('"circuit-check"',
+                                                                                         '"circuit-check", "ratchet-gate"')})
+    h = Review(world, monkeypatch, land_into="checked")
+    fake = _executor(h, tmp_path, "on")
+    main = _main(world)
+    assert "ratchet-gate" not in h.d._gating(main)
+    for n, f in ((1, "a.txt"), (2, "c.py"), (3, "b.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+        h.review(n)
+    assert h.tick().startswith("landed #3"), world.logs
+    tip, verified = _checked(world), h.postland()["verified"]
+    merge2 = _git(world.origin, "rev-parse", f"{tip}^1")
+    assert _git(world.origin, "log", "-1", "--format=%s", merge2).startswith("Queue: #2")
+    g = _graph_v2(tip)
+    fake.list_graph(f"after-landing:{tip}", g)
+    _results(fake, g)
+    _slim(h, tmp_path / "1", ratchet_gate=f"  #2 ({merge2[:12]}): failed: grows p01.json 2 -> 3 entries\n")
+    h.tick()
+    pl = h.postland()
+    (ring,) = [p for p in h.posts if "is red on" in p]
+    assert ring.startswith(f"@lane-2 @ci queue: step ratchet-gate is red on `checked` {tip[:12]} (run r-post-0): "
+                           f"`#2 ({merge2[:12]}): failed: grows p01.json 2 -> 3 entries`"), ring
+    assert "Culprit: #2 (the ratchet gate fails its merge), of the 3 landing(s)" in ring and "Drive reverts #2 at" in ring, ring
+    assert pl["red"]["step ratchet-gate"]["culprit"][:1] == [2]
+    assert pl["ratchet_judged"] == {"tip": tip, "base": verified, "failed": [merge2]}
+    assert pl["failed"] == tip and pl["run"] is None and "slim" not in pl and pl.get("gated") != tip
+    assert pl["verified"] == verified and _main(world) == main
+    h.clock += FIX_WINDOW_S + 1
+    h.tick()
+    reverted = _checked(world)
+    assert _git(world.origin, "rev-parse", f"{reverted}^") == tip and _main(world) == main
+    assert f"This reverts commit {merge2}" in _git(world.origin, "log", "-1", "--format=%B", reverted)
+    assert any(p.startswith("@lane-2 @ci queue: #2 reverted on `checked`") for p in h.posts), h.posts
+    got, steps, kw = h.posted[-1]
+    assert got == reverted and steps == "ratchet-gate" and kw["base"] == verified and kw["ratchet_base"] == tip, kw
+    g = _graph_v2(reverted)
+    fake.list_graph(f"after-landing:{reverted}", g)
+    _results(fake, g)
+    _slim(h, tmp_path / "2")
+    h.tick()
+    pl = h.postland()
+    assert _main(world) == reverted == pl["verified"] and "step ratchet-gate" not in (pl.get("red") or {}), world.logs
+
+
+def test_on_a_run_beside_the_check_killed_by_its_machine_runs_again_once_and_killed_again_is_told(world, monkeypatch, tmp_path):
+    """The run beside the executor's check, killed (a signal's exit, a machine's fault), launches again once beside the same
+    check; killed again, `CI` is told, nothing is reverted, and `main` stays below the tip though every task passed."""
+    h = Review(world, monkeypatch, land_into="checked")
+    fake = _executor(h, tmp_path, "on")
+    main = _main(world)
+    tip = _land(h, 1)
+    g = _graph_v2(tip)
+    fake.list_graph(f"after-landing:{tip}", g)
+    _results(fake, g)
+    h.run_state["r-post-0"] = ("done", 137, None)
+    h.tick()
+    pl = h.postland()
+    assert [c for c, _, _ in h.posted] == [tip, tip] and pl["slim"]["ids"] == ["r-post-1"] and pl["slim"]["resend"], world.logs
+    assert _main(world) == main and pl["run"]["tip"] == tip and len(fake.enqueued()) == 1
+    h.run_state["r-post-1"] = ("done", 137, None)
+    h.tick()
+    pl = h.postland()
+    (told,) = [p for p in h.posts if "killed or lost again on its resend" in p]
+    assert f"the run of ratchet-gate beside the executor's check of `checked` {tip[:12]}, r-post-1, failed" in told, told
+    assert len(h.posted) == 2 and _main(world) == main and pl["failed"] == tip and pl["run"] is None and not pl.get("red")
 
 
 def test_drive_runs_the_enqueue_command_drive_toml_names(world, monkeypatch, tmp_path):
