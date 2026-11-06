@@ -44,7 +44,10 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # and the discharges of its premises, each at the statement whose hypotheses and antecedents it names (`RESTS_ON`,
 # `DISCHARGES`), which the locks record by digest and no other way. `integrations/vllm/manifests/checkpoints.json` and its
 # int8 sibling: the pin whose config of record the inference-only policy's φ reads (`served_compiler.phi_of_serve`).
+# `benchmarks/numerical/tests/bench/data/captured-101/slices/rope-head-d64`: RoPE's two captured heads, which the opt-in
+# trees session's real `serve --zk --tree-from` stages (`test_a5_tree_relay`, through M0's staging, which no tracer sees).
 inputs = ["verity", "verity/core/service/sampled_proofs/lakefile.toml", "benchmarks/live_challenger",
+          "benchmarks/numerical/tests/bench/data/captured-101/slices/rope-head-d64",
           "Security/lean-audit.json", "Security/Properties/lean-audit.json",
           "examples/h200/interfaces/verity_e2e_demo", "benchmarks/torch_gpu/commit_slots/slots.py",
           "benchmarks/prove_path/records_audit.py", "examples/vllm/serve_load.py", "examples/vllm/serve.sh",

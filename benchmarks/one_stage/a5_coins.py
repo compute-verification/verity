@@ -169,8 +169,8 @@ class TreeRelay:
     {after, n, round, stream, tree}`` frame is asked of the step's one client by `forward` in the draws' `turn`, and its
     answer, or its refusal, goes back. A ``close`` ends the connection alone, answered ``closed``: the step's session stays
     open until its ranks' sessions are done (`Draws.sessions_done`). Any other frame, a refusal or a broken stream ends the
-    connection with nothing more forwarded. `trees` and `rounds` count what it forwarded and `ended` says how it ended;
-    the file is removed once it has (`stop`)."""
+    connection with nothing more forwarded. `trees` and `rounds` count what it forwarded and `ended` says how it ended,
+    set before its last answer is sent; the file is removed once it has (`stop`)."""
 
     def __init__(self, file: Path, turn: threading.Lock, forward: Callable[[dict], dict]) -> None:
         self.file, self._turn, self._forward, self._secret = file, turn, forward, secrets.token_bytes(32)
@@ -220,8 +220,9 @@ class TreeRelay:
             while True:
                 head = wire.recv()
                 if head == {"type": "close"}:
+                    with self._lock:
+                        self.ended = self.ended or "the server closed it"
                     wire.send({"type": "closed"})
-                    self.ended = "the server closed it"
                     R._hang_up(conn)
                     return
                 with self._turn, self._lock:
@@ -229,9 +230,10 @@ class TreeRelay:
                              else self._forward(head))
                     self.trees += reply["type"] == "tree"
                     self.rounds += reply["type"] == "tree-coins"
+                    if reply["type"] == "refused" and self.ended is None:
+                        self.ended = f"it refused a frame: {reply['reason']}"
                 wire.send(reply)
                 if reply["type"] == "refused":
-                    self.ended = f"it refused a frame: {reply['reason']}"
                     R._hang_up(conn)
                     return
         except (Ch.CoinError, OSError) as e:
