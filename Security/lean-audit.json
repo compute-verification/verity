@@ -1917,12 +1917,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.ActivationsIncompressible": {
-   "owner": "@lean",
-   "digest": "1c8e9276c4097990f54cce4c9030cce7265ffdbf235d29ba1895323219224bfd",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Nci.Assumptions.ActivationsIncompressibleAll": {
    "owner": "@lean",
    "digest": "d8da3ccd538aaa5323da2eb01346c8d358cc4490fe3511c79401563e9aadd732",
@@ -31133,9 +31127,8 @@
    }
   },
   "Definitions.Nci.Assumptions": {
-   "digest": "0d6dcf0a6d0339fed29f58c4ffc619ed99c596ed0ca0d54cc903e475d7e0164e",
+   "digest": "78af6f7a9f35463b99f88fac69a44ef0e45bc85391c54d2e9caf299519a80efe",
    "definitions": {
-    "Nci.Assumptions.ActivationsIncompressible": "1c8e9276c4097990f54cce4c9030cce7265ffdbf235d29ba1895323219224bfd",
     "Nci.Assumptions.Coverage": "f5c08e9f733d3b86105a396c50c33d7e9f6f0f3cdb0b1164500c67f530e8f6cc"
    }
   },
@@ -31232,12 +31225,6 @@
    "definitions": {
     "Nci.Assumptions.CapBelowColumns": "aae638ad32224f459cb0a973699c9e18f2a594f1d9c5bdf7d8950250e5a03598",
     "Nci.Assumptions.ReferenceLayered": "44bf4685e681184c35f39fd8f4002a2b0b7cce0cbbf2898b198c83a3f8f94e29"
-   }
-  },
-  "Definitions.Nci.Assumptions.Packed": {
-   "digest": "ee9eec80a6cd8365fc8313198383693ecb1447af5c0825b38d6fa50c06638a15",
-   "definitions": {
-    "Nci.Assumptions.PackedActivationsIncompressible": "079ec6cdff44f15ba29a4e2d836ca249c5511df8e591fe60efa05abc2ff5df32"
    }
   },
   "Definitions.Nci.Assumptions.PackedTraining": {
@@ -31706,12 +31693,6 @@
     "Nci.Guarantees.ThreadedOfLayered": "c28c1616164e63ed529d9946b5466e1a4e8757ac998d4236554ae258d303968a"
    }
   },
-  "Definitions.Nci.Guarantees.Packed": {
-   "digest": "c79799ad0b9261040d5fb935ee8ed4fe7c99082a113bfed5dd4b1fa74a14406b",
-   "definitions": {
-    "Nci.Guarantees.PackedContainedFanOutOn": "032125ef79a6370f81709c2f36acdb538e35e0cde0563ade966f7cfb49064ba0"
-   }
-  },
   "Definitions.Nci.Guarantees.PackedTraining": {
    "digest": "83fcf09e612673f25efcf92ccaa5d023e30d3064f81f8e7bdc27a2abd5c799d5",
    "definitions": {
@@ -31775,9 +31756,8 @@
    }
   },
   "Definitions.Nci.Guarantees.Training": {
-   "digest": "190f07829400662c8d38b1bcdcfb06c2d6a35ab03421d2a985116247dcadb91e",
+   "digest": "a10c4ad5d7e4dcfd9893218c52458546a1a18b18525cab86266a3dcc3d7f5e8d",
    "definitions": {
-    "Nci.Guarantees.ContainedFanOutOn": "1f2ce4e6602c21bccd645f90a3a4c6bcd4d7f2b53b55bbebd5b050e3e550b298",
     "Nci.Guarantees.IncompressibleContainedMatMulOn": "f69b810689185c3a941fead3958ca9062fab1952c46dcec216e48d29438b34aa",
     "Nci.Guarantees.IncompressibleContainedTraining": "7e1c8121fd97f67f438ceadeb567133cb82710178642f8fadc8ece0bb83e028d",
     "Nci.Guarantees.IncompressibleContainedTrainingOn": "c505b1cb39c57cac009e5501b32c010dd77cac1ca57924d42f782515b415555b",
