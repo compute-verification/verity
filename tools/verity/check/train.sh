@@ -14,12 +14,12 @@
 # --twin`): the first to take a slot runs the check and the others exit 75, not started, so RUN names one id per twin. When every
 # twin exits 75 (check.py's own exit 75), none of them ran: rerun the train.
 #
-# `--deferred STEP,...`: drive's after-landing run and its Lean checks in place of the check: only those ci.toml jobs and what
+# `--deferred STEP,...`: drive's after-landing run and its lock run in place of the check: only those ci.toml jobs and what
 # they need (`check.py --record --deferred`), in a priority slot as a check runs, recorded without `--tool check`, so no gate
 # reads it; drive reads its steps and suites. With it alone, `--agreement` sends the upstream build (a run of `main` has no
 # change to send it for), `--no-cache` reuses no pass (`--circuit-cache` beside it: but circuit-check's per-target ones), and
 # `--no-regenerate` fails lean-audit on a lock record difference rather than passing it on a regenerated record: drive's
-# after-landing run (`after_landing_no_cache`), where nothing commits regenerated records. `--base REF` (with --deferred alone)
+# after-landing run, of a commit whose records drive's lock run regenerated and drive committed. `--base REF` (with --deferred alone)
 # is the run's base (`check.py --record --base`), above which ratchet-gate judges every landing: drive sends the last verified
 # `main`, below the tip it checks, since against origin/main a run of `main`'s tip would judge nothing. `--ratchet-base REF` (with
 # --deferred alone) is ratchet-gate's base in place of it (`check.py --record --ratchet-base`): drive sends the tip of its last
@@ -71,7 +71,7 @@ done
 [ -z "$ccache" ] || [ -n "$nocache" ] \
   || { echo "train: --circuit-cache refused without --no-cache: it keeps circuit-check's reuse on under --no-cache" >&2; exit 2; }
 [ -z "$noregen" ] || [ -n "$deferred" ] \
-  || { echo "train: --no-regenerate refused without --deferred: a train's check regenerates the locks drive commits" >&2; exit 2; }
+  || { echo "train: --no-regenerate refused without --deferred: a train's check regenerates stale lock records" >&2; exit 2; }
 [ -z "$below" ] || [ -n "$deferred" ] \
   || { echo "train: --base refused without --deferred: a train's check judges its merges above origin/main" >&2; exit 2; }
 [ -z "$rbelow" ] || [ -n "$deferred" ] \

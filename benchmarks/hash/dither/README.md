@@ -84,7 +84,7 @@ Each arm's module patches vLLM before `sbench.py` builds the arm's engine.
   (J10-R's call-scale noise, J10's banded noise and credit's banded reference).
 - `job.sh`: libraries built on a CPU node, then kernel benches on a leased H200 or B200, one mode a run: `hb_kbench.py`
   (checked after by `verify.py`), `h1bench.py`, `h1ubench.py`, `h1zbench.py` (against `h1zref.cu`), `j10hb.py`,
-  `unitsbench.py`, `zbench.py`, `hb_prof.py` under ncu, and `benchmarks/pouw`'s partials tests on each build.
+  `unitsbench.py`, `hb_prof.py` under ncu, and `benchmarks/pouw`'s partials tests on each build.
 - `kbench.sh` (`kbench.py`): the honest linear against vLLM's int8 GEMM and cuBLASLt on an RTX PRO 6000. `dmmsweep.py`:
   dither-a's GEMM configs at the decode shapes, each gated before it is timed. `native.sh` (`native.py`): vLLM serving the
   int8 pin natively, one arm a process.
