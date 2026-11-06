@@ -1,7 +1,7 @@
 /-
 What a statement keeps without parsing its own output. The keyed coin tree a session reads (`Stmt.coinTree`,
 `SessionSpec.coinTree`) is the setup's coins' (`Coins.tree?`), which is what the setup's `Hello` names
-(`CoinTree.ofHello (helloOf …)`): the tree's spec for `.tree`, none for the OS's coins or a seed's. The public header is
+(`CoinTree.ofHello (helloOf …)`): the tree's spec for `.tree`, none for a seed's. The public header is
 kept as `Flock.norm` of what `JsonParse.parse` read, which has the same value at every key, the same `unit_draw` once `drawn`
 puts the draw in, and the same canonical bytes (`publicDigest` hashes those).
 -/
@@ -19,7 +19,7 @@ open Lean (Json)
 def specs : List CoinTree.Spec :=
   [⟨#["rep0", "rep1"], 3, 64⟩, ⟨#[], 0, 1⟩, ⟨#["a\"b", "ünï", "x"], 20, 65536⟩]
 
-def coinsAll : List Coins := [.os, .seed] ++ specs.map .tree
+def coinsAll : List Coins := .seed :: specs.map .tree
 
 def helloAt (t : Tags) (c : Coins) (tables : Array String) : String :=
   (helloOf t (ByteArray.mk #[1, 2, 3]) 10 c tables).toOption.getD ""

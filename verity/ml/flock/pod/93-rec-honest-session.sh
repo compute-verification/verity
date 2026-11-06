@@ -10,6 +10,11 @@
 # Pins its own slices where it can take slice locks (node 1); on a vy-cpu pod, run it in a check slot (--pool), which pins it.
 # env: N=1 (RoPE heads: 1 to 8 are m=25, the smallest fast100 takes)  CPUS=32  FLOCK_WORK (as 80-rec-inner.sh; where neither
 #      /workspace nor /workspace/jobs is writable, /workspace/cache/flock, as 71-gemm-slowdown.sh's)
+# Refused: the prover has no per-round OS coins (FC_COINS is tree, or unset for the seed), and `flock-firewall live`'s
+# inner session takes a Hello that names no coins (`Flock.Firewall.step`), so no honest session can be recorded until the
+# firewall's inner session takes the challenger's coin tree.
+echo "93-rec-honest-session: refused: the prover has no FC_COINS=os, and flock-firewall live's inner Hello names no coins" >&2
+exit 2
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 if [ -z "${RI_PINNED:-}" ]; then

@@ -1,5 +1,6 @@
 """`verity lean try FILE` without `--on`: `lake env lean FILE` in the directory of the nearest lakefile above FILE, with
-lean's exit status passed through, against a stand-in `lake` on PATH, so no Lean toolchain is needed.  With or without
+its package's Lean options and lean's exit status passed through, against a stand-in `lake` on PATH, so no Lean
+toolchain is needed.  With or without
 `--on`, it takes FILE from the checkout FILE is in (or the current directory's), not the one the CLI's code lives in."""
 from __future__ import annotations
 
@@ -31,8 +32,35 @@ def test_try_runs_lake_env_lean_in_the_nearest_package_and_passes_its_status(tmp
     file.write_text("theorem t : True := trivial\n")
     called = stand_in_lake(tmp_path, monkeypatch, 3)
     assert verity_cli.main(["lean", "try", str(file)]) == 3
-    assert called.read_text().splitlines() == [str(pkg.resolve()), "env lean Inner/Area/File.lean"]
-    assert f"verity lean try: lake env lean Inner/Area/File.lean (in {pkg.resolve()})" in capsys.readouterr().out
+    assert called.read_text().splitlines() == [str(pkg.resolve()), "env lean .lake/axiom-probe/Inner/Area/File.lean"]
+    assert (f"verity lean try: lake env lean .lake/axiom-probe/Inner/Area/File.lean, Inner/Area/File.lean with the axiom "
+            f"probe after its last line (in {pkg.resolve()})") in capsys.readouterr().out
+    assert not (pkg / ".lake" / "axiom-probe" / "Inner" / "Area" / "File.lean").exists()
+
+
+def test_try_gives_lean_its_packages_lean_options(tmp_path, monkeypatch, capsys):
+    """`lake build` gives each module its package's `[leanOptions]` and `lake env lean` doesn't, so the try passes them."""
+    (tmp_path / "lakefile.toml").write_text('name = "P"\n\n[leanOptions]\nautoImplicit = false\n')
+    (tmp_path / "T.lean").write_text("theorem t : True := trivial\n")
+    called = stand_in_lake(tmp_path, monkeypatch, 0)
+    assert verity_cli.main(["lean", "try", str(tmp_path / "T.lean")]) == 0
+    assert called.read_text().splitlines()[1] == "env lean -Dweak.autoImplicit=false .lake/axiom-probe/T.lean"
+    assert ("verity lean try: lake env lean -Dweak.autoImplicit=false .lake/axiom-probe/T.lean, T.lean with the axiom probe"
+            in capsys.readouterr().out)
+
+
+def test_try_ends_with_the_axiom_probes_line_when_lean_exits_0(tmp_path, monkeypatch, capsys):
+    (tmp_path / "lakefile.toml").write_text('name = "P"\n')
+    (tmp_path / "T.lean").write_text("theorem t : True := sorry\n")
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    (bin_ / "lake").write_text("#!/bin/sh\necho \"'t' depends on axioms: [sorryAx]\"\n")
+    (bin_ / "lake").chmod(0o755)
+    monkeypatch.setenv("PATH", str(bin_), prepend=os.pathsep)
+    assert verity_cli.main(["lean", "try", str(tmp_path / "T.lean")]) == 0
+    assert capsys.readouterr().out.splitlines()[-1] == (
+        "verity lean try: T.lean: axiom probe: 1 of its 1 theorems use axioms beyond propext, Classical.choice and "
+        "Quot.sound: t (sorryAx)")
 
 
 def test_try_refuses_a_file_in_no_package_and_remote_options_without_on(tmp_path, monkeypatch, capsys):
