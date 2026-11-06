@@ -1,8 +1,9 @@
 /-
-The unit draw. After serving registers its roots and before the session's statements are fixed, the
-verifier draws the sampled units from its own randomness with exact samplers and sends them in the clear. The drawn units'
-statement carries the draw (the public header's `unit_draw`, under Σ) and the session record keeps it. Offline, the
-verifier checks that the two agree, that the draw is well formed, and that the statement's instances are the drawn units.
+The unit draw. After serving registers its roots and before the session's statements are fixed, the challenger's coins
+sample the units with exact samplers, and the sample is sent in the clear; the verifier has no randomness of its own.
+The drawn units' statement carries the draw (the public header's `unit_draw`, under Σ) and the session record keeps it.
+Offline, the verifier checks that the two agree, that the draw is well formed, and that the statement's instances are
+the drawn units.
 -/
 module
 
@@ -419,15 +420,16 @@ def drawWith {m : Type → Type} [Monad m] (get : Nat → Nat → m ByteArray) (
     | .work _ strata => stratifiedWith get (strata.map (·.toStratum))
   return units.map fun units => { law, population, units }
 
-/-- The draw from the verifier's operating-system randomness: `drawWith` with every stream's bytes from
-`IO.getRandomBytes`. -/
+/-- The sample from the operating system's randomness: `drawWith` with every stream's bytes from `IO.getRandomBytes`.
+The verifier never runs it: it has no randomness of its own, and its samples read the challenger's coins (`drawOn`). -/
 def drawOS (law : Law) (population : Nat) : IO UnitDraw := do
   let some d ← drawWith (fun _ need => IO.getRandomBytes need.toUSize) law population
     | throw (IO.userError "unreachable")
   return d
 
-/-- The draw from given bytes (a test): `subset` and `bernoulli` on the one stream; `stratified` and `work` on
-consecutive segments, stratum `s`'s the next `2 k_s · width(n_s) + 64` bytes. `none` when a stream runs out. -/
+/-- The sample from given bytes, the challenger's coins (`flock-verify draw`): `subset` and `bernoulli` on the one
+stream; `stratified` and `work` on consecutive segments, stratum `s`'s the next `2 k_s · width(n_s) + 64` bytes. `none`
+when a stream runs out. -/
 def drawOn (law : Law) (population : Nat) (src : ByteArray) : Option UnitDraw := do
   let units ← match law with
     | .subset k => subset k population src
