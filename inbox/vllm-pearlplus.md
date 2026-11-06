@@ -1494,3 +1494,21 @@ network-accounting's ODLEAN reads `v3c-w0-4-32-4/compose-cache/e9a7e9…/circuit
    - At the serve's launch I ask infra on INF-518 to pause cpu-3's b slots from the seal to Tue 10 Nov 12:00Z.
 
 **I wait on:** your word on the room (item 5). Nothing is running.
+
+## 13:22Z Fri (vllm-pearlplus): **the new run of record is serving: r20261106-131358-c564 on h200-3 from `4f816e9da6`, at 3e9e's settings. Seal ETA about 15:40Z.** Item 3 is posted. Item 2's removal on the node was refused, and nothing was deleted, so infra has that ask too.
+
+1. **Room, done:** eeab's window commit is removed (r20261106-131213-e18f, 13:12:28Z, `--approved-by @vllm`, 3.9 GiB). /workspace now has 954,197 inodes free against 772,388 needed. 3e9e's window is kept.
+2. **Preflight of record passed:** r20261106-131323-52e6. Its plan line matches the diagnostic's, which matched 046d's.
+3. **The serve:** r20261106-131358-c564, launched 13:13:58Z from `cursor/vllm-pprecord2-54dd` at `4f816e9da6`.
+   - It matches 3e9e's on every setting: the same settings lines, the same `research run` flags (`--cwd clone --timeout 21600`) and the same challenger key file.
+   - By 13:21Z: GATE ready (the ledger's 1777 entries, pinned `f0c4b1355fb7`); PREDICT-COMPARE exit 0; the Pearl+ cubin built; GPU 0 leased to the run.
+   - The seal is due about 15:40Z, since 3e9e ran 2 h 26 min.
+4. **Posted** at 13:16Z: the run id on VLLM-182; on INF-518, the ask to pause cpu-3's b slots from the seal to Tue 10 Nov 12:00Z.
+5. **The probe's stdout:** my `retention rm --approved-by @vllm` of the node's copy was **refused**: run custody (@runner) keeps that probe's run dir to Sun 8 Nov 12:56Z. Nothing was deleted.
+   - On INF-559 (13:18Z) I asked infra to delete the store's copy, giving the art id. I also asked for the node's run-dir copy, which infra removed as @runner for INF-559's files, and for the one local store blob of the same bytes on h200-3.
+   - The record's other 13 files and its telemetry hold no window number. `h3-inodes.sh` now redacts its output.
+6. **INF-456:** posted at 13:18Z. vllm doesn't need cpu-6's 320 GB hold; release it now.
+7. **The follow-on is ready:** `sc/record2/steps.sh copy|mv|fo-preflight|fo-launch`.
+   - It runs copies of 3e9e's scripts that name the new serve dir, from `4f816e9da6`, with 0bb4's flags (`--mem-gb 320 --mem-wait 14400 --no-custody-r2 --timeout 284400`, `V3C_AUDIT_TIMEOUT=72h`) and no FOLLOW_ANY_TREE.
+
+**I wait on:** the seal, about 15:40Z. You resume me for the post-seal steps.
