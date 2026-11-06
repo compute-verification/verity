@@ -30,6 +30,7 @@ FLOOR = {"rms_triton": 1, "gemm2048": 905, "rope": 2, "rms_fused": 1, "silu_mul"
 BY_BITS = {"rms_triton": 10, "gemm2048": 104, "rope": 12, "rms_fused": 20, "silu_mul": 39, "gemm8192": 10}
 ROOT = Path(__file__).resolve().parents[5]
 LEAN_VECTORS = Path(__file__).parent / "fixtures" / "exfiltration_lean.json"
+LEAN_TWO_VECTORS = Path(__file__).parent / "fixtures" / "exfiltration_two_lean.json"
 
 
 def a4_law(ks: dict) -> Stratified:
@@ -129,17 +130,29 @@ def test_stratified_miss_is_the_lean_certified_greedy_fill():
 def test_the_lean_vectors_were_generated_from_this_tree():
     """The vectors record the sha256 of the exporter and of the soundness package's files they read (`lean/generate.sh`):
     `audit_exfiltration` (`Audit/Influence.lean`), the uniform sampling design and `subset_miss` (`Audit/Law.lean`), the stratified
-    sampling design and `stratified_miss_eq_greedy` (`Audit/Stratified.lean`, `Audit/StratifiedMiss.lean`), the two-stage design,
-    its count and its table (`Claims/SamplingTwo.lean`, `SamplingGeneric/TwoCount.lean`, `SamplingGeneric/TwoTable.lean`), and
-    the toolchain and Mathlib pins.  A change to any of them fails here until the vectors are regenerated."""
+    sampling design and `stratified_miss_eq_greedy` (`Audit/Stratified.lean`, `Audit/StratifiedMiss.lean`), and the toolchain and
+    Mathlib pins.  A change to any of them fails here until the vectors are regenerated."""
     recorded = json.loads(LEAN_VECTORS.read_text())["inputs"]
     soundness = "Security/Proofs/"
     assert set(recorded) == {"verity/core/protocols/sampled_proofs/tests/lean/ExfiltrationVectors.lean",
-                             "Security/Definitions/Claims/SamplingTwo.lean",
                              *(soundness + f for f in ("Flock/Soundness/Audit/Influence.lean", "Flock/Soundness/Audit/Law.lean",
                                                        "Flock/Soundness/Audit/Stratified.lean",
                                                        "Flock/Soundness/Audit/StratifiedMiss.lean",
-                                                       "Flock/SamplingGeneric/TwoCount.lean",
+                                                       "lake-manifest.json", "lean-toolchain"))}
+    stale = [p for p, h in recorded.items() if hashlib.sha256((ROOT / p).read_bytes()).hexdigest() != h]
+    assert not stale, f"changed since the vectors were generated, rerun verity/core/protocols/sampled_proofs/tests/lean/generate.sh: {stale}"
+
+
+def test_the_two_stage_vectors_were_generated_from_this_tree():
+    """The two-stage vectors record the sha256 of their exporter (`lean/ExfiltrationTwoVectors.lean`) and of the files they
+    read: the two-stage design (`Claims/SamplingTwo.lean`), its count `card_influenceTwo_le_uniform`
+    (`SamplingGeneric/TwoCount.lean`), its table (`SamplingGeneric/TwoTable.lean`), and the toolchain and Mathlib pins.  A
+    change to any of them fails here until the vectors are regenerated."""
+    recorded = json.loads(LEAN_TWO_VECTORS.read_text())["inputs"]
+    soundness = "Security/Proofs/"
+    assert set(recorded) == {"verity/core/protocols/sampled_proofs/tests/lean/ExfiltrationTwoVectors.lean",
+                             "Security/Definitions/Claims/SamplingTwo.lean",
+                             *(soundness + f for f in ("Flock/SamplingGeneric/TwoCount.lean",
                                                        "Flock/SamplingGeneric/TwoTable.lean",
                                                        "lake-manifest.json", "lean-toolchain"))}
     stale = [p for p, h in recorded.items() if hashlib.sha256((ROOT / p).read_bytes()).hexdigest() != h]
@@ -173,16 +186,17 @@ def test_a_two_stage_profile_is_read_for_infiltration_and_exfiltration_and_refus
 
 
 def test_the_two_stage_bound_is_at_least_the_footprint_count_evaluated_in_lean():
-    """The two-stage vectors (`gridTwo_influence`): R replay blocks of N proof blocks each, the first stage at rate num/den,
-    k of each sampled replay block's proof blocks drawn, at delta = 2^-e with b bits per proof block.  Lean takes the largest
+    """`fixtures/exfiltration_two_lean.json` (`lean/ExfiltrationTwoVectors.lean`, `gridTwo_influence`): R replay blocks of N
+    proof blocks each, the first stage at rate num/den, k of each sampled replay block's proof blocks drawn, at
+    delta = 2^-e with b bits per proof block.  Lean takes the largest
     product of the replay blocks' acceptance factors at each total count, in exact integers, and the kernel checks that
     every count past K escapes with probability at most delta, so the served outputs at any inputs number at most
     2^H admissible, H = b K and admissible = sum_{j <= K} C(R N, j).  Core's acceptance factor is Lean's; its count bound,
     the linear relaxation, is at least K and below K + N, and K itself when every replay block is replayed and the replay
     blocks are strata; so `exfiltration_bound` is at least log2 of the numerator."""
-    data = json.loads(LEAN_VECTORS.read_text())
-    assert data["two_stage_statement"] == "Claims.Sampling.card_influenceTwo_le_uniform" and len(data["two_stage"]) == 22
-    for v in data["two_stage"]:
+    data = json.loads(LEAN_TWO_VECTORS.read_text())
+    assert data["statement"] == "Claims.Sampling.card_influenceTwo_le_uniform" and len(data["vectors"]) == 22
+    for v in data["vectors"]:
         R, N, k, (num, den) = v["replay_blocks"], v["n_rho"], v["k"], v["rate"]
         K, H, b, admissible, delta = v["K"], v["H"], v["bits"], v["admissible"], 2.0 ** v["delta_log2"]
         p = IntegrityProfile((REPLAY, "unit"), (R, N), {REPLAY: Bernoulli(Fraction(num, den)), "unit": Subset(k)}, delta)

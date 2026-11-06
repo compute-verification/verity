@@ -130,6 +130,8 @@ PINS = (
         "Security/Proofs"),
     Pin("verity/core/protocols/sampled_proofs/tests/fixtures/exfiltration_lean.json", "inputs", "",
         "bash verity/core/protocols/sampled_proofs/tests/lean/generate.sh", "Security/Proofs"),
+    Pin("verity/core/protocols/sampled_proofs/tests/fixtures/exfiltration_two_lean.json", "inputs", "",
+        "bash verity/core/protocols/sampled_proofs/tests/lean/generate.sh", "Security/Proofs"),
     Pin("verity/ml/flock/tests/fixtures/inner_claims.json", "inputs", "",
         "bash verity/ml/flock/tests/lean/generate_inner_claims.sh", "verity/core/service/flock"),
     Pin("verity/core/protocols/pouw/tests/vectors/ncp_lean.json", "sources_sha256", "Security",
