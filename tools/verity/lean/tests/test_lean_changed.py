@@ -783,6 +783,20 @@ def test_try_builds_the_files_imports_then_runs_lean_on_it_in_its_owning_package
         LC.main(["--try", "Sec/Proofs/Flock/X.lean", "--records", "Sec"])
 
 
+def test_try_gives_lean_the_packages_lean_options_as_its_build_does(trying, tmp_path):
+    """`lake env lean` passes no `[leanOptions]`: without them a try under `autoImplicit = false` takes an unknown name for
+    an auto-bound variable and passes what the package's build refuses. They're read from the slot tree's package."""
+    tree, calls = trying
+    (tree / "Sec" / "Proofs").mkdir(parents=True)
+    (tree / "Sec" / "Proofs" / "lakefile.toml").write_text(
+        'name = "p"\nsrcDir = ".."\n\n[leanOptions]\nautoImplicit = false\nbackward.proofsInPublic = true\n')
+    said = []
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 0
+    opts = ["-Dweak.autoImplicit=false", "-Dweak.backward.proofsInPublic=true"]
+    assert calls["build"][1][4] == ["env", "lean", *opts, ".lake/axiom-probe/Flock/X.lean"]
+    assert any(f"then lake env lean {' '.join(opts)} on .lake/axiom-probe/Flock/X.lean" in s for s in said), said
+
+
 def test_try_elaborates_the_files_probed_copy_and_ends_with_the_theorems_beyond_the_standard_axioms(trying, tmp_path,
                                                                                                      monkeypatch):
     """Lean's exit 0 isn't proved: the last line names the theorem resting on `sorry`, and an error on an appended
