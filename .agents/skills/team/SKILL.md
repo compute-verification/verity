@@ -53,8 +53,9 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   queue link N --issue KEY`), or `none:REASON`. The issue carries the label of the goal it serves (its id on the Goals
   page), which `open` writes as `Goal <id>`. It marks it ready at its head, `research queue ready N --mark --by LANE`. A
   body with neither a `Goal <id>` line naming a live goal nor `Issue: none: REASON` gets a warning from both, never a
-  refusal (fix it with `research queue edit N --body-file F`). A push makes a new head, which needs a
-  new mark and a new review. `research queue status` says what each PR waits for and
+  refusal (fix it with `research queue edit N --body-file F`). A new head needs a new mark and a new review unless
+  its own diff, whitespace too, is unchanged (`git patch-id --verbatim`), as after merging `main`.
+  `research queue status` says what each PR waits for and
   lists the PRs naming no issue. The mark admits a PR: the sync's own merge onto `next` is the only check before it joins,
   so a conflict there or a Markdown file over its cap (`landing_gates`) keeps it out, as a `hold` label does; a
   PR from a fork, or by an author outside the organization but for the team's Apps and Daniel, is refused at its mark and at
