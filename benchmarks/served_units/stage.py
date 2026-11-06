@@ -36,6 +36,10 @@ FP8 scale groups of 128, DSA indexer 32 heads of 128, index_topk 2048; per TP8 r
                 o, gate and up, 8192 is down.
     s8-linear   `PARTS`: ScaledMmS8_v1{K,N,DOT=BlackwellS8ImmaDot32_v1}, the W8A8 linear on one token row, whose `Q_word`
                 proof blocks are its N coordinates (`ScaledMmS8Coordinate_v1`): the s8-coord proof block as a class of the partition.
+    moe-chunk   `PARTS`: the routed experts as the registered circuit partitions them, the expert's rows gathered inside the
+    moe-gemmw   block from all 256 experts' (`fp8_moe_experts`): K = 512 of a w13 coordinate (a middle chunk) and one w2
+                coordinate, on the H200's wgmma step.  `moe-w13` and `moe-w2` are the same products with the expert's rows as
+                the block's inputs instead.
     the rest    `PARTS`: the capture map's Programs (``glm-moe-dsa-eager-hopper-tp8-v0``) at their GLM-5.3 statics; the MoE
                 tiles' KB and SWAP are Triton's 128 and swapped until the H200 capture pins them."""
 from __future__ import annotations
@@ -62,7 +66,8 @@ from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
 from verity_flock import partition_units as PU
 from verity.ml.definitions.numerics import derived_rows as DR
-from verity.ml.definitions.registry import act, b1, dsa, fp8_moe, moe, ref_prims, sparse_mla
+from verity.ml.circuits.ops.prims import HopperE4m3QgmmaDot32
+from verity.ml.definitions.registry import act, b1, dsa, fp8_moe, fp8_moe_experts, moe, ref_prims, sparse_mla
 from verity.ml.definitions.registry import boolean_fp8 as BF
 
 
@@ -149,10 +154,14 @@ class Part:
 
 
 _MLA = tuple((k, v) for k, v in sparse_mla.SPARSE_MLA_GLM53.items() if k not in ("NH", "DR", "DV", "BN", "SCALE"))
+_HOPPER = (("DOT", HopperE4m3QgmmaDot32),)
 PARTS: dict[str, Part] = {
     "router": Part(moe.MoeRouterSigmoidBias, {"E": 256, "TOPK": 8, "SCALE": 2.5, "KERNEL": "block"}),
     "moe-w13": Part(fp8_moe.MoeExpertFp8BlockGemm, {"K": 6144, "N": 2, "G": 128, "KB": 128, "SWAP": True}),
     "moe-w2": Part(fp8_moe.MoeExpertFp8BlockGemmW, {"K": 256, "N": 2, "G": 128, "KB": 128, "SWAP": True}),
+    "moe-chunk": Part(fp8_moe_experts.MoeExpertFp8CoordinateChunk,
+                      {"E": 256, "K": 512, "G": 128, "KB": 128, "SWAP": True, "FIRST": False, "LAST": False}, _HOPPER),
+    "moe-gemmw": Part(fp8_moe_experts.MoeExpertFp8GemmW, {"E": 256, "K": 256, "N": 1, "G": 128, "KB": 128, "SWAP": True}, _HOPPER),
     "silu-quant": Part(fp8_moe.SiluMulFp8BlockQuant, {"I": 256, "G": 128}),
     "moe-sum": Part(moe.MoeSum, {"TOPK": 8, "H": 2}),
     "silu-mul": Part(act.SiluMul, {"I": 2}),
