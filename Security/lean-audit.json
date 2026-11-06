@@ -15830,8 +15830,7 @@
    "Flock.SecurityProofs.RanRegisteredRun": {
     "com.Opens rt p op₀": "com.Opens taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (b : β), acc b → com.Opens rt (prog b) (op b)": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "ENNReal.instLE.le (Verity.Game.prob (fun b => And (acc b) (Q b)) G σ) B": "a bound that is no plain range, printed so since #6403 renamed `FlockSoundness.Game` to `Verity.Game`, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "ENNReal.instLE.le (FlockSoundness.Game.prob (fun b => And (acc b) (Q b)) G σ) B": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "ENNReal.instLE.le (Verity.Game.prob (fun b => And (acc b) (Q b)) G σ) B": "a bound that is no plain range, printed so since #6403 renamed `FlockSoundness.Game` to `Verity.Game`, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.RecursiveCircuitIndist": {
     "honest o P w": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
