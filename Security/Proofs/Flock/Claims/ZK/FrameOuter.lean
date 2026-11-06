@@ -18,8 +18,11 @@ round 1 squeezes them, and the frame's taking of a round's coins in the algebrai
 * `Loop.run_outer`: the frame, from a rep's start, takes the binding (the algebraic phase on, `roundFree_zc`), its six
   coins, and `r_outer`'s round (`roundFree_zcOuter`): it owes `m − 13` coins on the six it kept.
 * `Loop.answer_outer`: where it then takes coins, none of the first `n_mlv − 7` is `1`.
-* **`LeanRelease.outer_unrefused`**: the fault. The opening at `Masked.outerSlot x j r` is rep `2j + r`'s round 1, whose
-  state is that one (`repState_outer`).
+* `Loop.outer_of_answer`: where the frame takes the coin at `Masked.outerSlot x j r`, rep `2j + r`'s round 1, whose
+  state is that one (`repState_outer`), its outer coins are not `1`.
+* **`LeanRelease.outer_unrefused`**: the fault, on a live history, whose frames took every round's coins.
+* **`LeanRelease.rfOf_outer`**: the same at every coin vector, for the stop rule of the transport's reading (`rfOf`):
+  where it has not fired by a rep's outer coins' round, the frame took that round's coins (`answer_of_refuseOf`).
 -/
 
 @[expose] public section
@@ -581,33 +584,26 @@ theorem start_nMlv {st : Stmt} {lay : _root_.Flock.Zk.PadLayout} {mask : _root_.
   rw [← h.1]
   rfl
 
-end Loop
+/-- A rep's outer coins' round follows `Hello`. -/
+theorem one_le_outerSlot {x : Msg} {s0 : _} {spec : SessionSpec} {sts : Array Stmt}
+    (hsx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (j r : ℕ) : 1 ≤ Masked.outerSlot x j r := by
+  have hs : Masked.outerSlot x j r = FlockComplete.repStartZk spec sts (2 * j + r) + 1 := by
+    unfold Masked.outerSlot
+    rw [hsx]
+  omega
 
-
-namespace LeanRelease
-
-open Loop
-
-/-- **The frames refuse an outer coin `1`**: at a `Live` statement the loop serves, on a live history of at most
-`refK x` openings whose last coins the frame takes, table `j`'s rep `r`'s outer coin `e`, where its slot is among the
-history's openings, is not `1`. The opening at `outerSlot` is the rep's round 1, `r_outer`'s, its frame there in the
-algebraic phase on the binding's six coins (`repState_outer`), and the frame took its coins (`coins_taken_of_live`),
-which it does only at no outer coin `1` (`answer_outer`). -/
-theorem outer_unrefused (T : ZKMal.CoinLayer.TableData)
-    (L₀ : LeanRelease Flock.Wit
-      ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
-    (real : Msg → Flock.Wit →
-      (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
-      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
-    (wk : (ofLoop T L₀ real).toSrv.Worker) (x : Msg) (w : Flock.Wit) (hx : Masked.Live x) (hSv : Serves x)
-    (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
-    (κ : (ofLoop T L₀ real).toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (hl : ops.length ≤ refK x)
-    (hlive : (ofLoop T L₀ real).toSrv.live wk x w ρ κ ((m₀, ρ₀) :: ops) = true)
-    (hr : (ofLoop T L₀ real).refusesCoins x ρ ((m₀, ρ₀) :: ops) = false)
-    {j r e : ℕ} (hj : j < (Masked.stsOf x).size) (hr2 : r < 2) (hb : Masked.outerSlot x j r < ops.length)
-    (he : e < (Masked.stsOf x)[j]!.m - 13) :
-    Masked.outerAt (x := x) ((ZKMal.CoinLayer.session loopNr T).pad (K := refK x)
-      (ops.map fun p => (ZKMal.CoinLayer.session loopNr T).decOf p.2)) j r e ≠ 1 := by
+/-- **The frame takes no outer coin `1`**: at a `Live` statement the loop serves, where the frame, after the decoded
+coins `cs` up to table `j`'s rep `r`'s outer coins' round, at a configuration of that round's rep's layout, takes the
+coin `d` that opens them, its outer coin `e` is not `1`. The round is the rep's round 1, `r_outer`'s, its frame there
+in the algebraic phase on the binding's six coins (`repState_outer`), which takes coins only at no outer coin `1`
+(`answer_outer`). -/
+theorem outer_of_answer {x : Msg} (hx : Masked.Live x) (hSv : Serves x) {j r e s : ℕ}
+    (hj : j < (Masked.stsOf x).size) (hr2 : r < 2) (he : e < (Masked.stsOf x)[j]!.m - 13)
+    (hsd : Masked.outerSlot x j r = s) {cs : List FlockDeploy.Coin} (hcs : cs.length = s) {d : FlockDeploy.Coin}
+    {cfg : Cfg} (hlay : cfg.lay = ((startOf x (repOf x (s + 1))).toOption.map (·.1)).getD default) {m : Masker}
+    (ha : (progOf x (cs ++ [d])).answer cfg (d.vals (min (loopNr x s) _root_.Flock.Firewall.Frames.COIN_MAX)) =
+      .ok m) :
+    d.at e ≠ 1 := by
   obtain ⟨s0, spec, hsx⟩ := Masked.setupOf_of_pos (lt_of_le_of_lt (Nat.zero_le _) hj)
   obtain ⟨y⟩ := hx.2 j hj
   obtain ⟨-, -, hspec, -⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hsx
@@ -637,8 +633,88 @@ theorem outer_unrefused (T : ZKMal.CoinLayer.TableData)
     rw [e1]
   have hs1 : 1 ≤ FlockComplete.repStartZk spec (Masked.stsOf x) (2 * j + r) := by
     unfold FlockComplete.repStartZk; omega
+  rw [hsd] at hs
+  have hloc : ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 (s - 1) = (2 * j + r, 1) := by
+    have e := locate_take_sum (roundsOf spec (Masked.stsOf x)) 0 (2 * j + r) 1 (by rw [hrsl]; exact hq2)
+      (by rw [hrq]; omega)
+    rw [Nat.zero_add] at e
+    rw [← e, hs, repStartZk_eq spec _ hq2.le]
+    congr 1
+    omega
+  rw [show s + 1 = s - 1 + 2 by omega, LeanRelease.repOf_add_two hsx, hloc] at hlay
+  rw [progOf_snoc x cs d hsx (q := s - 1) (by omega), hloc] at ha
+  dsimp only at ha
+  rcases hph : placeholder spec (Masked.stsOf x) (2 * j + r) (wordsAt x cs 0) with e' | ⟨c', t, dom, xs, hi⟩
+  · rw [hph] at ha
+    exact absurd ha (answer_owed_none _ rfl)
+  rw [hph] at ha
+  dsimp only at ha
+  obtain ⟨alg, sched, hal, hsc⟩ := repState_ok ha
+  obtain ⟨hts', -, -⟩ := Count.placeholder_tab hph
+  obtain ⟨hm36, -, -, -⟩ := Count.sched_facts (show _root_.Flock.Zk.schedule _ = .ok (y.sch, y.tPad) from hz)
+  obtain ⟨-, hdom', -, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec _ hsx) hq2
+  obtain ⟨lay, mask, hds, hc', hdm, -⟩ := placeholder_ok hph
+  have hdg : t.st.digest.size < 2 ^ 64 := by
+    rw [hts']
+    simp only [_root_.Flock.Setup.ofCircuit, ByteArray.size_extract]
+    omega
+  have hmb : t.st.m < 2 ^ 64 := by rw [hts']; exact Nat.lt_trans hm36 (by decide)
+  have htm : t.st.m = (Masked.stsOf x)[j]!.m := by rw [hts', hst, hstj]; rfl
+  have hcc : ∀ p, p < c'.order.size → c'.order[p]! < c'.h.size := by rw [hc']; exact _root_.Claims.ZKServer.ofDraws_order _ _ _
+  have hnm : cfg.lay.nMlv = (Masked.stsOf x)[j]!.m - 6 := by
+    rw [hlay]
+    unfold startOf
+    rw [hsx]
+    dsimp only
+    rw [hds]
+    show lay.nMlv = _
+    rw [start_nMlv hds, hst, hstj]
+  obtain ⟨hsz, hall⟩ := repState_outer hcc hal hsc (by omega) hmb hdg (placeholder_cap hph) (hdm ▸ hdom') ha
+  rw [htm] at hsz hall
+  have hek : e < min (loopNr x s) _root_.Flock.Firewall.Frames.COIN_MAX := by
+    have := hsz
+    simp only [FlockDeploy.Coin.vals, Array.size_map, Array.size_range] at this
+    omega
+  have h0 : (d.vals (min (loopNr x s) _root_.Flock.Firewall.Frames.COIN_MAX))[e]! = d.at e := by
+    rw [getElem!_pos _ e (by simp only [FlockDeploy.Coin.vals, Array.size_map, Array.size_range]; exact hek)]
+    simp [FlockDeploy.Coin.vals]
+  have hk := hall e he (by rw [hnm, N_INNER]; omega)
+  rw [h0] at hk
+  intro h1
+  rw [h1] at hk
+  exact absurd hk (by decide)
+
+end Loop
+
+
+namespace LeanRelease
+
+open Loop
+
+/-- **The frames refuse an outer coin `1`**: at a `Live` statement the loop serves, on a live history of at most
+`refK x` openings whose last coins the frame takes, table `j`'s rep `r`'s outer coin `e`, where its slot is among the
+history's openings, is not `1`. The opening at `outerSlot` is the rep's round 1, `r_outer`'s, its frame there in the
+algebraic phase on the binding's six coins (`repState_outer`), and the frame took its coins (`coins_taken_of_live`),
+which it does only at no outer coin `1` (`answer_outer`). -/
+theorem outer_unrefused (T : ZKMal.CoinLayer.TableData)
+    (L₀ : LeanRelease Flock.Wit
+      ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
+    (real : Msg → Flock.Wit →
+      (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
+      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+    (wk : (ofLoop T L₀ real).toSrv.Worker) (x : Msg) (w : Flock.Wit) (hx : Masked.Live x) (hSv : Serves x)
+    (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
+    (κ : (ofLoop T L₀ real).toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (hl : ops.length ≤ refK x)
+    (hlive : (ofLoop T L₀ real).toSrv.live wk x w ρ κ ((m₀, ρ₀) :: ops) = true)
+    (hr : (ofLoop T L₀ real).refusesCoins x ρ ((m₀, ρ₀) :: ops) = false)
+    {j r e : ℕ} (hj : j < (Masked.stsOf x).size) (hr2 : r < 2) (hb : Masked.outerSlot x j r < ops.length)
+    (he : e < (Masked.stsOf x)[j]!.m - 13) :
+    Masked.outerAt (x := x) ((ZKMal.CoinLayer.session loopNr T).pad (K := refK x)
+      (ops.map fun p => (ZKMal.CoinLayer.session loopNr T).decOf p.2)) j r e ≠ 1 := by
+  obtain ⟨s0, spec, hsx⟩ := Masked.setupOf_of_pos (lt_of_le_of_lt (Nat.zero_le _) hj)
+  have h1 := one_le_outerSlot hsx j r
   obtain ⟨s, hsd⟩ : ∃ s, Masked.outerSlot x j r = s := ⟨_, rfl⟩
-  rw [hsd] at hs hb
+  rw [hsd] at h1 hb
   have hlast : (ofLoop T L₀ real).last x = refK x + 1 := loop_last loopNr T (withFrames T L₀ real) x
   obtain ⟨-, m, ha⟩ := coins_taken_of_live (ofLoop T L₀ real) wk x w ρ κ ((m₀, ρ₀) :: ops) hlive
     (by rw [hlast, List.length_cons]; omega) hr (i := s + 2) (by omega) (by simp only [List.length_cons]; omega)
@@ -658,68 +734,174 @@ theorem outer_unrefused (T : ZKMal.CoinLayer.TableData)
       hts, List.length_singleton, Nat.add_sub_cancel]
     exact feedOf_rd _ _
   rw [hca, List.map_append, List.map_cons, List.map_nil] at ha
-  have hloc : ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 (s - 1) = (2 * j + r, 1) := by
-    have e := locate_take_sum (roundsOf spec (Masked.stsOf x)) 0 (2 * j + r) 1 (by rw [hrsl]; exact hq2)
-      (by rw [hrq]; omega)
-    rw [Nat.zero_add] at e
-    rw [← e, hs, repStartZk_eq spec _ hq2.le]
-    congr 1
-    omega
-  have hlay : ((ofLoop T L₀ real).cfgAt x ρ (s + 1)).lay =
-      ((startOf x (ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 (s - 1)).1).toOption.map
-        (·.1)).getD default := by
-    show ((startOf x (repOf x (s + 1))).toOption.map (·.1)).getD default = _
-    rw [show s + 1 = s - 1 + 2 by omega, repOf_add_two hsx]
-  rw [progOf_snoc x ((ops.take s).map fun p => ZKMal.CoinLayer.rd p.2) (ZKMal.CoinLayer.rd da) hsx (q := s - 1)
-    (by rw [List.length_map, hts]; omega), hloc] at ha
-  rw [hloc] at hlay
-  dsimp only at ha
-  rcases hph : placeholder spec (Masked.stsOf x) (2 * j + r)
-      (wordsAt x ((ops.take s).map fun p => ZKMal.CoinLayer.rd p.2) 0) with e' | ⟨c', t, dom, xs, hi⟩
-  · rw [hph] at ha
-    exact absurd ha (answer_owed_none _ rfl)
-  rw [hph] at ha
-  dsimp only at ha
-  obtain ⟨alg, sched, hal, hsc⟩ := repState_ok ha
-  obtain ⟨hts', -, -⟩ := Count.placeholder_tab hph
-  obtain ⟨hm36, -, -, -⟩ := Count.sched_facts (show _root_.Flock.Zk.schedule _ = .ok (y.sch, y.tPad) from hz)
-  obtain ⟨-, hdom', -, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec _ hsx) hq2
-  obtain ⟨lay, mask, hds, hc', hdm, -⟩ := placeholder_ok hph
-  have hdg : t.st.digest.size < 2 ^ 64 := by
-    rw [hts']
-    simp only [_root_.Flock.Setup.ofCircuit, ByteArray.size_extract]
-    omega
-  have hmb : t.st.m < 2 ^ 64 := by rw [hts']; exact Nat.lt_trans hm36 (by decide)
-  have htm : t.st.m = (Masked.stsOf x)[j]!.m := by rw [hts', hst, hstj]; rfl
-  have hcc : ∀ p, p < c'.order.size → c'.order[p]! < c'.h.size := by rw [hc']; exact ofDraws_order _ _ _
-  have hnm : ((ofLoop T L₀ real).cfgAt x ρ (s + 1)).lay.nMlv = (Masked.stsOf x)[j]!.m - 6 := by
-    rw [hlay]
-    unfold startOf
-    rw [hsx]
-    dsimp only
-    rw [hds]
-    show lay.nMlv = _
-    rw [start_nMlv hds, hst, hstj]
-  obtain ⟨hsz, hall⟩ := repState_outer hcc hal hsc (by omega) hmb hdg (placeholder_cap hph) (hdm ▸ hdom') ha
-  rw [htm] at hsz hall
-  have hek : e < min (loopNr x s) _root_.Flock.Firewall.Frames.COIN_MAX := by
-    have := hsz
-    simp only [FlockDeploy.Coin.vals, Array.size_map, Array.size_range] at this
-    omega
-  have h0 : ((ZKMal.CoinLayer.rd da).vals (min (loopNr x s) _root_.Flock.Firewall.Frames.COIN_MAX))[e]! =
-      (ZKMal.CoinLayer.rd da).at e := by
-    rw [getElem!_pos _ e (by simp only [FlockDeploy.Coin.vals, Array.size_map, Array.size_range]; exact hek)]
-    simp [FlockDeploy.Coin.vals]
-  have hk := hall e he (by rw [hnm, N_INNER]; omega)
-  rw [h0] at hk
+  have hk := outer_of_answer hx hSv hj hr2 he hsd (by rw [List.length_map, hts])
+    (cfg := (ofLoop T L₀ real).cfgAt x ρ (s + 1)) rfl ha
   unfold Masked.outerAt
   rw [hsd, dite_eq_left_of_eq_true (eq_true (lt_of_lt_of_le hb hl))]
   show ((ops.map fun p => (ZKMal.CoinLayer.session loopNr T).decOf p.2).getD s default).at e ≠ 1
   rw [List.getD_eq_getElem?_getD, List.getElem?_map, hd, Option.map_some, Option.getD_some]
-  show (ZKMal.CoinLayer.rd da).at e ≠ 1
-  intro h1
-  rw [h1] at hk
-  exact absurd hk (by decide)
+  exact hk
+
+/-- **Where the transport's reading does not refuse the coins `cs`**, past the `Commit`'s, the frame of round
+`cs.length`'s rep answers them at its rep's layout (`takeAt`): where the next round is the same rep's, at the next
+round's configuration, which has that layout and the rep's mask slot, before the rank stop; else at no mask slot, the
+rep's answer before the next rep's start. -/
+theorem answer_of_refuseOf {W R Coin : Type} (L : LeanRelease W R) (pc : Msg → List Coin → Masker)
+    (fc : Msg → List Coin → Except String Masker) (cc : Msg → List Coin → Array _root_.Flock.F128) (x : Msg)
+    {cs : List Coin} {n : ℕ} (hn : cs.length = n) (h2 : 2 ≤ n) (h : L.refuseOf pc fc cc x cs = false) :
+    ∃ mk m, (pc x cs).answer (Cfg.ofDraws (L.lay x (L.rep x n)) default mk) (cc x cs) = .ok m := by
+  subst hn
+  unfold refuseOf at h
+  rw [Bool.not_eq_false'] at h
+  unfold takeAt at h
+  rw [ite_eq_right (by omega)] at h
+  by_cases hs : L.rep x (cs.length + 1) = L.rep x cs.length
+  · rw [ite_eq_left (decide_eq_true hs), hs] at h
+    cases ha : (pc x cs).answer (Cfg.ofDraws (L.lay x (L.rep x cs.length)) default (L.slot x (L.rep x cs.length)))
+        (cc x cs) with
+    | error e =>
+      rw [ha] at h
+      cases h
+    | ok m => exact ⟨_, m, ha⟩
+  · rw [ite_eq_right (fun e => hs (of_decide_eq_true e))] at h
+    cases ha : (pc x cs).answer (Cfg.ofDraws (L.lay x (L.rep x cs.length)) default none) (cc x cs) with
+    | error e =>
+      rw [ha] at h
+      cases h
+    | ok m => exact ⟨_, m, ha⟩
+
+/-- **The loop's stop rule fires at an outer coin `1`**: at a `Live` statement the loop serves, where the stop rule of
+the transport's reading (`rfOf`) has not fired by round `i` at the coins `c`, table `j`'s rep `r`'s outer coin `e`,
+where its slot is before `i`, is not `1`. The stop rule not firing there means the frame of the slot's rep answered its
+coins (`answer_of_refuseOf`), which it does only at no outer coin `1` (`Loop.outer_of_answer`). It holds at every coin
+vector, where `outer_unrefused` holds on live histories. -/
+theorem rfOf_outer (T : ZKMal.CoinLayer.TableData)
+    (L₀ : LeanRelease Flock.Wit
+      ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
+    (real : Msg → Flock.Wit →
+      (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
+      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+    {x : Msg} (hx : Masked.Live x) (hSv : Serves x) (c : Fin (refK x) → FlockDeploy.Coin) (i : ℕ)
+    (hR : rfOf (ZKMal.CoinLayer.session loopNr T) (ofLoop T L₀ real) progOf freshOf readCoins x c i = false)
+    {j r e : ℕ} (hj : j < (Masked.stsOf x).size) (hr2 : r < 2) (hs : Masked.outerSlot x j r < i)
+    (he : e < (Masked.stsOf x)[j]!.m - 13) :
+    Masked.outerAt (x := x) c j r e ≠ 1 := by
+  have hR' : (ofLoop T L₀ real).stopOf progOf freshOf readCoins x ((List.ofFn c).take i) = false := hR
+  obtain ⟨s0, spec, hsx⟩ := Masked.setupOf_of_pos (lt_of_le_of_lt (Nat.zero_le _) hj)
+  have h1 := one_le_outerSlot hsx j r
+  obtain ⟨s, hsd⟩ : ∃ s, Masked.outerSlot x j r = s := ⟨_, rfl⟩
+  rw [hsd] at h1 hs
+  unfold Masked.outerAt
+  rw [hsd]
+  split
+  · rename_i hK
+    have hd : (List.ofFn c)[s]? = some (c ⟨s, hK⟩) := by rw [List.getElem?_ofFn, dite_eq_left hK]
+    have hmin : min (s + 1) i = s + 1 := by omega
+    have htk : ((List.ofFn c).take i).take (s + 1) = (List.ofFn c).take s ++ [c ⟨s, hK⟩] := by
+      rw [List.take_take, hmin, List.take_add_one, hd]
+      rfl
+    have hcs : ((List.ofFn c).take s).length = s := by
+      rw [List.length_take, List.length_ofFn]
+      omega
+    have hl : ((List.ofFn c).take s ++ [c ⟨s, hK⟩]).length = s + 1 := by
+      rw [List.length_append, hcs, List.length_singleton]
+    unfold stopOf at hR'
+    have h' : (ofLoop T L₀ real).refuseOf progOf freshOf readCoins x (((List.ofFn c).take i).take (s + 1)) ≠ true :=
+      List.any_eq_false.1 hR' (s + 1) (List.mem_range.2 (by rw [List.length_take, List.length_ofFn]; omega))
+    rw [htk] at h'
+    obtain ⟨_, m, ha⟩ := answer_of_refuseOf (ofLoop T L₀ real) progOf freshOf readCoins x hl (by omega)
+      (Bool.eq_false_iff.2 h')
+    have hrc : readCoins x ((List.ofFn c).take s ++ [c ⟨s, hK⟩]) =
+        (c ⟨s, hK⟩).vals (min (loopNr x s) _root_.Flock.Firewall.Frames.COIN_MAX) := by
+      unfold readCoins
+      simp only [List.getLast?_append, List.getLast?_singleton, Option.some_or, hl, Nat.add_sub_cancel]
+    rw [hrc] at ha
+    refine outer_of_answer hx hSv hj hr2 he hsd hcs ?_ ha
+    rfl
+  · decide
+
+/-- **Past the opened coins no outer coin is `1`**: the padding's coins are `0`. -/
+theorem outerAt_pad_ge (T : ZKMal.CoinLayer.TableData) {x : Msg} (cs : List (ZKMal.CoinLayer.session loopNr T).Coin)
+    {j r : ℕ} (hs : cs.length ≤ Masked.outerSlot x j r) (e : ℕ) :
+    Masked.outerAt (x := x) ((ZKMal.CoinLayer.session loopNr T).pad (K := refK x) cs) j r e ≠ 1 := by
+  unfold Masked.outerAt
+  split
+  · rename_i h
+    have hd : (ZKMal.CoinLayer.session loopNr T).pad (K := refK x) cs ⟨Masked.outerSlot x j r, h⟩ = default := by
+      show cs.getD (Masked.outerSlot x j r) default = default
+      rw [List.getD_eq_getElem?_getD, List.getElem?_eq_none hs]
+      rfl
+    rw [hd]
+    unfold FlockDeploy.Coin.at
+    split
+    · exact (by decide : (0 : _root_.Flock.F128) ≠ 1)
+    · decide
+  · decide
+
+/-- **The loop's stop rule computes only at `SwOk`'s coins** (`RefSession.StopsOk`): where the stop rule of the
+transport's reading (`rfOf`) has not fired by round `cs.length` at the coins `cs`, padded, no outer coin is `1` at a
+`Live` statement the loop serves, before `cs.length` as the frames took them (`rfOf_outer`) and past it as the padding's
+(`outerAt_pad_ge`); and the coins every table admits are `SwOk`'s (`Loop.swOk_of_admits`). -/
+theorem stopsOk_swOk (T : ZKMal.CoinLayer.TableData)
+    (L₀ : LeanRelease Flock.Wit
+      ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
+    (real : Msg → Flock.Wit →
+      (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
+      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)) :
+    (ZKMal.CoinLayer.session loopNr T).StopsOk
+      (rfOf (ZKMal.CoinLayer.session loopNr T) (ofLoop T L₀ real) progOf freshOf readCoins) (SwOk T) := by
+  refine ⟨fun x cs _ hR => .inl fun hx hSv j hj r hr2 e he => ?_, fun _ _ hA => swOk_of_admits T hA⟩
+  by_cases hs : Masked.outerSlot x j r < cs.length
+  · exact rfOf_outer T L₀ real hx hSv _ cs.length hR hj hr2 hs he
+  · exact outerAt_pad_ge T cs (Nat.le_of_not_lt hs) e
+
+/-- **A live history's opened coins are `SwOk`'s**: at a statement the loop serves, the coins of a live history of at
+most `refK x` openings the release doesn't refuse have no outer coin `1`, where the frames took them
+(`outer_unrefused`) and past them (`outerAt_pad_ge`). -/
+theorem swOk_of_live (T : ZKMal.CoinLayer.TableData)
+    (L₀ : LeanRelease Flock.Wit
+      ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
+    (real : Msg → Flock.Wit →
+      (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
+      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+    (wk : (ofLoop T L₀ real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
+    (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
+    (κ : (ofLoop T L₀ real).toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (hl : ops.length ≤ refK x)
+    (hlive : (ofLoop T L₀ real).toSrv.live wk x w ρ κ ((m₀, ρ₀) :: ops) = true)
+    (hr : (ofLoop T L₀ real).refusesCoins x ρ ((m₀, ρ₀) :: ops) = false) :
+    SwOk T x ((ZKMal.CoinLayer.session loopNr T).pad (K := refK x)
+      (ops.map fun p => (ZKMal.CoinLayer.session loopNr T).decOf p.2)) := by
+  refine .inl fun hx hSv j hj r hr2 e he => ?_
+  by_cases hs : Masked.outerSlot x j r < ops.length
+  · exact outer_unrefused T L₀ real wk x w hx hSv ρ κ m₀ ρ₀ ops hl hlive hr hj hr2 hs he
+  · exact outerAt_pad_ge T _ (by rw [List.length_map]; exact Nat.le_of_not_lt hs) e
+
+/-- **The same at every prefix of a live history**: its prefixes are live (`live_take`) and, a refusal being for good
+(`refusesCoins_of_take`), not refused. -/
+theorem swOk_take_of_live (T : ZKMal.CoinLayer.TableData)
+    (L₀ : LeanRelease Flock.Wit
+      ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
+    (real : Msg → Flock.Wit →
+      (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
+      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+    (wk : (ofLoop T L₀ real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
+    (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
+    (κ : (ofLoop T L₀ real).toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (hl : ops.length ≤ refK x)
+    (hlive : (ofLoop T L₀ real).toSrv.live wk x w ρ κ ((m₀, ρ₀) :: ops) = true)
+    (hr : (ofLoop T L₀ real).refusesCoins x ρ ((m₀, ρ₀) :: ops) = false) (k : ℕ) :
+    SwOk T x ((ZKMal.CoinLayer.session loopNr T).pad (K := refK x)
+      ((ops.take k).map fun p => (ZKMal.CoinLayer.session loopNr T).decOf p.2)) := by
+  have ht : ((m₀, ρ₀) :: ops).take (k + 1) = (m₀, ρ₀) :: ops.take k := List.take_succ_cons
+  have hlive' := (ofLoop T L₀ real).live_take wk x w ρ κ _ hlive (k + 1)
+  rw [ht] at hlive'
+  have hr' : (ofLoop T L₀ real).refusesCoins x ρ ((m₀, ρ₀) :: ops.take k) = false := by
+    cases h : (ofLoop T L₀ real).refusesCoins x ρ ((m₀, ρ₀) :: ops.take k) with
+    | false => rfl
+    | true =>
+      have h' := (ofLoop T L₀ real).refusesCoins_of_take x ρ ((m₀, ρ₀) :: ops) (k + 1) (by rw [ht]; exact h)
+      rw [hr] at h'
+      cases h'
+  exact swOk_of_live T L₀ real wk x w ρ κ m₀ ρ₀ (ops.take k) (by rw [List.length_take]; omega) hlive' hr'
 
 end LeanRelease
 

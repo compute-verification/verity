@@ -19,6 +19,9 @@ This file states the bound there with `ProgChecks` as a conclusion, its premises
   (`Session.State.sendHello`: no `Hello` leaves).
 * `Loop.Serves`, `Loop.sizesOk_of_serves`: the loop serves `x` where its `Hello` leaves at `x`'s setup
   (`FlockDeploy.setupOf`), and then the setup passes `sizesOk` (`sizesOk_of_sendHello`).
+* `Loop.SwOk T`: the coin vectors with no zerocheck outer coin `1` at a `Live` statement the loop serves, or that every
+  table admits, where `RefSession.SwCausalOn` asks the switched round encoding to be causal; `SwCausal` gives it there
+  (`Loop.swCausalOn_swOk`).
 * `LeanRelease.ofLoop_progChecks_sizes`: `ofLoop_progChecks` with its size premises (`hS`, `hP`, `hRow`) from that check.
 * **`Flock.zk_server_lean_ofLoop`**: `Flock.zk_server_lean_loop` at `ofLoop`, at `Loop.progOf` and `Loop.freshOf`,
   with no `ProgReads`, and `ProgChecks` at `ofLoop`, at every `x` the loop serves. Beyond `zk_server_lean_loop`'s other premises it reads the
@@ -103,6 +106,30 @@ theorem linkPoints_size_le (st : Stmt) (c : Array F128) :
   rw [Array.size_map, Array.size_range]
   exact Nat.div_le_self _ _
 
+/-- **The coin vectors the one-tape switched causality covers** (`RefSession.SwCausalOn`): at a `Live` statement the
+loop serves, no table's rep's zerocheck outer coin is `1`; or every table admits them. -/
+def SwOk (T : ZKMal.CoinLayer.TableData) (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) : Prop :=
+  (Masked.Live x → Serves x → ∀ j < (Masked.stsOf x).size, ∀ r < 2, ∀ e < (Masked.stsOf x)[j]!.m - 13,
+      Masked.outerAt c j r e ≠ 1) ∨
+    (ZKMal.CoinLayer.session loopNr T).Admits x c
+
+/-- Coin vectors every table admits are `SwOk`'s. -/
+theorem swOk_of_admits (T : ZKMal.CoinLayer.TableData) {x : Msg} {c : Fin (refK x) → FlockDeploy.Coin}
+    (h : (ZKMal.CoinLayer.session loopNr T).Admits x c) : SwOk T x c :=
+  .inr h
+
+/-- Where the statement is not `Live` or the loop doesn't serve it, every coin vector is `SwOk`'s, so `SwCausalOn` at
+`SwOk` is one-tape `SwCausal` there. -/
+theorem swOk_of_not_served (T : ZKMal.CoinLayer.TableData) {x : Msg} (h : ¬ (Masked.Live x ∧ Serves x))
+    (c : Fin (refK x) → FlockDeploy.Coin) : SwOk T x c :=
+  .inl fun hx hS => absurd ⟨hx, hS⟩ h
+
+/-- **`SwCausal vs` gives `SwCausalOn (SwOk T) vs`**: the restricted premise asks for less. -/
+theorem swCausalOn_swOk (T : ZKMal.CoinLayer.TableData) (vs : (ZKMal.CoinLayer.session loopNr T).SwVals)
+    (h : (ZKMal.CoinLayer.session loopNr T).SwCausal vs) :
+    (ZKMal.CoinLayer.session loopNr T).SwCausalOn (SwOk T) vs :=
+  (ZKMal.CoinLayer.session loopNr T).swCausalOn_of_swCausal vs _ h
+
 end Loop
 
 namespace LeanRelease
@@ -167,7 +194,7 @@ the tables `real` answers being the session loop's own
 (`hRt`, `Count.RealTabs`: `Finish`'s `level0` request) and `L₀`'s round at the inner proof's round 0 being the
 firewall's own at some `final_c'` (`hL0`: the loop's frame releases that round itself, `Frame.innerSched`). The
 transport's other trusts
-(`LinkRoundEq`, `FinalRoundEq`, `LiveRoundEq`, `FillRoundEq`) and the tables' side are `zk_server_lean_loop`'s. -/
+(`LinkRoundEq`, `FinalRoundEq`, `LiveRoundEqOwn`, `FillRoundEq`) and the tables' side are `zk_server_lean_loop`'s. -/
 theorem Flock.zk_server_lean_ofLoop
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (T : CoinLayer.TableData)
     (vs : (CoinLayer.session Loop.loopNr T).SwVals) (t : ℕ) (ht : 0 < t)
@@ -175,12 +202,14 @@ theorem Flock.zk_server_lean_ofLoop
     (hS : (CoinLayer.session Loop.loopNr T).Tables)
     (hV : (CoinLayer.session Loop.loopNr T).Complete (Flock.R (FlockDeploy.deployZk rel).parse))
     (hD : (CoinLayer.session Loop.loopNr T).DummyReg) (hc : (CoinLayer.session Loop.loopNr T).Causal)
-    (hsc : (CoinLayer.session Loop.loopNr T).SwCausal vs) (hT : (CoinLayer.session Loop.loopNr T).TapeOK)
+    (hsc : (CoinLayer.session Loop.loopNr T).SwCausalOn (Loop.SwOk T) vs) (hT : (CoinLayer.session Loop.loopNr T).TapeOK)
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand))
     (real : Msg → Flock.Wit →
       (CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand →
       ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+    (hOk : (CoinLayer.session Loop.loopNr T).StopsOk (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T)
+      (LeanRelease.ofLoop T L₀ real) Loop.progOf Loop.freshOf Loop.readCoins) (Loop.SwOk T))
     (wk : (LeanRelease.ofLoop T L₀ real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
     (hR : Flock.R (FlockDeploy.deployZk rel).parse x w) (hServe : Loop.Serves x)
     (hRt : ∀ (ρ : (CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand)
@@ -202,7 +231,7 @@ theorem Flock.zk_server_lean_ofLoop
     (hLk : LeanRelease.LinkRoundEq (CoinLayer.session Loop.loopNr T) vs (LeanRelease.ofLoop T L₀ real) x w)
     (hF : LeanRelease.FinalRoundEq (CoinLayer.session Loop.loopNr T) vs (LeanRelease.ofLoop T L₀ real) CoinOpen.shaH
       wk x w)
-    (hE : LeanRelease.LiveRoundEq (CoinLayer.session Loop.loopNr T) vs (LeanRelease.ofLoop T L₀ real) CoinOpen.shaH
+    (hE : LeanRelease.LiveRoundEqOwn (CoinLayer.session Loop.loopNr T) vs (LeanRelease.ofLoop T L₀ real) CoinOpen.shaH
       wk x w)
     (hEf : LeanRelease.FillRoundEq (CoinLayer.session Loop.loopNr T) vs (LeanRelease.ofLoop T L₀ real) CoinOpen.shaH
       wk x w)
@@ -241,9 +270,9 @@ theorem Flock.zk_server_lean_ofLoop
                   Loop.freshOf Loop.readCoins) (LeanRelease.ofLoop T L₀ real).stop).swP vs).prover w) Vs θ x).Pr
               CoinOpen.shaH) :=
   ⟨LeanRelease.ofLoop_progChecks_sizes T L₀ real x w (Loop.sizesOk_of_serves hServe) hRt hL0,
-    Flock.zk_server_lean_loop rel T vs t ht hT1 hδ₁ hS hV hD hc hsc hT (LeanRelease.withFrames T L₀ real)
+    Flock.zk_server_lean_loop rel T vs t ht hT1 hδ₁ hS hV hD hc (Loop.SwOk T) hsc hT (LeanRelease.withFrames T L₀ real)
       (LeanRelease.ofLoop T L₀ real) rfl wk x w hR Loop.progOf Loop.freshOf
-      (LeanRelease.ofLoop_progReads T L₀ real x)
+      (LeanRelease.ofLoop_progReads T L₀ real x) hOk
       hLk hF hE hEf Vs θ hk Ev⟩
 
 end Claims.ZKServer

@@ -7,8 +7,8 @@ public import Proofs.Flock.Claims.ZK.CausalExe
 # The tables' side of `SessionLoopZKDeployed` at the deployed tables
 
 At the session `CoinLayer.session Loop.loopNr Masked.dataE`, the tables' side `Flock.SecurityProofs.SessionLoopZKDeployed`
-discharges (all of it but `SwCausal`), each at the deployed prover `Masked.PE`, its stopped round plan and its tape plan
-`Masked.UE`:
+discharges (all of it but `SwCausalOn`), each at the deployed prover `Masked.PE`, its stopped round plan and its tape
+plan `Masked.UE`:
 
 * `tables_dataE`: every table is one it sets up (`Masked.tables`).
 * `complete_dataE`: at the deployed relation each table's share is valid (`complete_tabC`).
@@ -17,9 +17,10 @@ discharges (all of it but `SwCausal`), each at the deployed prover `Masked.PE`, 
   seen, `Masked.causal_encStop`).
 * `tapeOK_dataE`: the tape is read with fibers of one size (`Masked.fibersEq_ofLayout` at `TapeLayout.exe`).
 
-`SwCausal vs` stays a premise: the statement's other premises read `vs` only at the coins a strict prefix pads to, and
-`SwCausal` reads it at every coin vector. It holds at the honest values (`swCausal_honestVals_dataE`, from
-`RefSession.swCausal_vals`), so the statement applies to an honest worker.
+`SwCausalOn (Loop.SwOk Masked.dataE) vs` stays a premise: the statement's other premises read `vs` only at the coins a
+strict prefix pads to, and `SwCausalOn` reads it at every coin vector with no outer coin `1` (`Loop.SwOk`). It holds at
+the honest values (`swCausalOn_honestVals_dataE`, from `swCausal_honestVals_dataE`, `RefSession.swCausal_vals`), so the
+statement applies to an honest worker.
 -/
 
 @[expose] public section
@@ -53,6 +54,11 @@ theorem tapeOK_dataE : (CoinLayer.session Loop.loopNr Masked.dataE).TapeOK :=
 theorem swCausal_honestVals_dataE :
     (CoinLayer.session Loop.loopNr Masked.dataE).SwCausal (CoinLayer.session Loop.loopNr Masked.dataE).honestVals :=
   RefSession.swCausal_vals _ causal_dataE
+
+theorem swCausalOn_honestVals_dataE :
+    (CoinLayer.session Loop.loopNr Masked.dataE).SwCausalOn (Loop.SwOk Masked.dataE)
+      (CoinLayer.session Loop.loopNr Masked.dataE).honestVals :=
+  swCausalOn_swOk Masked.dataE _ swCausal_honestVals_dataE
 
 end Loop
 

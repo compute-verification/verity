@@ -19,6 +19,17 @@ public import Proofs.Flock.ZeroKnowledgeHidden
 public import Proofs.Flock.Masked
 public import Proofs.Flock.SessionLoop
 public import Proofs.Flock.SessionLoop.Fill
+public import Proofs.Flock.SessionLoop.Honest
+public import Proofs.Flock.SessionLoop.Leak
+public import Proofs.Flock.SessionLoop.RepSrcSat
+public import Proofs.Flock.SessionLoop.Concrete
+public import Proofs.Flock.SessionLoop.Concrete.Stmt
+public import Proofs.Flock.SessionLoop.Concrete.Scope
+public import Proofs.Flock.SessionLoop.Concrete.Total
+public import Proofs.Flock.SessionLoop.Concrete.Trace
+public import Proofs.Flock.SessionLoop.Concrete.Regions
+public import Proofs.Flock.SessionLoop.Concrete.Live
+public import Proofs.Flock.SessionLoop.Concrete.LiveNets
 public import Proofs.Flock.Recursive
 public import Proofs.Flock.RecGeneric
 public import Proofs.Flock.C3
@@ -36,6 +47,7 @@ public import Proofs.Flock.Bridge.Transports
 public import Proofs.Flock.Bridge.TransportsRefs
 public import Proofs.Flock.SamplingBoundary
 public import Proofs.Flock.SamplingScope
+public import Proofs.Flock.ZkAny
 
 /-! C-Flock's proofs: the verifier's, level3's and soundness's. -/
 

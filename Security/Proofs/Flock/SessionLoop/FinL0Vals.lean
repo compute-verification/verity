@@ -454,8 +454,8 @@ theorem swSrcE_l0_of_cut (vs : finS.SwVals)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
     (hL0 : _root_.Flock.Guarantees.LoopInnerRound0 Masked.dataE L₀ (realOf src) x w)
-    (hE : LeanRelease.LiveRoundEq finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
-    (hc : finS.SwCausal vs)
+    (hE : LeanRelease.LiveRoundEqOwn finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
+    (hc : finS.SwCausalOn (Loop.SwOk Masked.dataE) vs)
     {ν : finS.Nonce} {t : finS.Tape} {κ : (LeanRelease.ofLoopLink L₀ src (realOf src)).toSrv.Chk} {m₀ ρ₀ : Msg}
     {ops : List (Msg × Msg)} (hF : FinCtx (LeanRelease.ofLoopLink L₀ src (realOf src)) wk x w ν t κ m₀ ρ₀ ops)
     {s0 : _} {spec : SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x))
@@ -493,7 +493,7 @@ theorem swSrcE_l0_of_cut (vs : finS.SwVals)
     simp only [List.length_cons]
     omega
   obtain ⟨s', spec', hsx', hm⟩ := msg_runCut vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w hE
-    hc hlast ν t κ m₀ ρ₀ ops hF.1 hF.2.1 hF.2.2.1 hF.2.2.2.2.2 (Masked.ligP0 x j r + 1 + i) (by omega) (by omega)
+    hc hlast ν t κ m₀ ρ₀ ops hF.1 (swOk_take_of_finCtx hF) hF.2.1 hF.2.2.1 hF.2.2.2.2.2 (Masked.ligP0 x j r + 1 + i) (by omega) (by omega)
   rw [hsx] at hsx'
   cases hsx'
   rw [← hsrc, show Masked.ligP0 x j r + 1 + i - 1 = Masked.ligP0 x j r + i by omega, hcut i h1 h2 (by omega),
@@ -518,8 +518,8 @@ theorem swSrcE_l0_live (vs : finS.SwVals)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
     (hL0 : _root_.Flock.Guarantees.LoopInnerRound0 Masked.dataE L₀ (realOf src) x w)
-    (hE : LeanRelease.LiveRoundEq finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
-    (hc : finS.SwCausal vs)
+    (hE : LeanRelease.LiveRoundEqOwn finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
+    (hc : finS.SwCausalOn (Loop.SwOk Masked.dataE) vs)
     {ν : finS.Nonce} {t : finS.Tape} {κ : (LeanRelease.ofLoopLink L₀ src (realOf src)).toSrv.Chk} {m₀ ρ₀ : Msg}
     {ops : List (Msg × Msg)} (hF : FinCtx (LeanRelease.ofLoopLink L₀ src (realOf src)) wk x w ν t κ m₀ ρ₀ ops)
     {s0 : _} {spec : SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x))

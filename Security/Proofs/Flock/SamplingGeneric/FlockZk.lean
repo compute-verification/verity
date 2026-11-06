@@ -12,8 +12,8 @@ Flock's ZK server (`Claims.ZKServer.Flock.zk_server_lean_loop`) releases the ses
 the claims core's `ZKOut` at the factor `1`: the instance of `ZkArg.ZK`'s notion at Flock's masked session.
 
 * `Sess`, `Tape`, `Release`, `PC`, `FC`, `Stops`, `rounds`: the server's session, tape, release, frame states and rounds.
-* `Live`, `LiveRel`: the live path's premises at a statement, each as `zk_server_lean_loop` takes it, and the relation
-  the server is zero knowledge at.
+* `Live`, `LiveRel`: the live path's premises at a statement, each `zk_server_lean_loop`'s or one that gives it, and the
+  relation the server is zero knowledge at.
 * `simOut`, `errOut`: the server's simulator given the outcome, and its error per outcome.
 * `zkOut_stops`, `server_zkOut`: `zk_server_lean_loop` per outcome.
 
@@ -68,9 +68,10 @@ abbrev roundsAt {Coin Col Tr : Type} (D : Claims.Flock.Deploy Coin Col Tr) : Cla
 /-- The server's rounds at `x`: the masked verifier's and the `Hello`. -/
 noncomputable abbrev rounds (rel : Parser) : Claims.Msg → ℕ := roundsAt (FlockDeploy.deployZk rel)
 
-/-- **The live path's premises at `(x, w)`**, each as `zk_server_lean_loop` takes it: the transport's frame states
-(`ProgReads`), and the link, final, live and fill rounds' releases being the reference's (`LinkRoundEq`,
-`FinalRoundEq`, `LiveRoundEq`, `FillRoundEq`). -/
+/-- **The live path's premises at `(x, w)`**, each `zk_server_lean_loop`'s or one that gives it: the transport's frame
+states (`ProgReads`), and the link, final, live and fill rounds' releases being the reference's (`LinkRoundEq`,
+`FinalRoundEq`, `LiveRoundEq`, `FillRoundEq`). `LiveRoundEq` holds at every history and gives `LiveRoundEqOwn`, the
+worker's own (`LiveRoundEq.own`). -/
 abbrev Live (T : Claims.ZKMal.CoinLayer.TableData) (vs : (Sess T).SwVals) (L : Release T) (wk : L.toSrv.Worker)
     (pc : PC T) (fc : FC T) (x : Claims.Msg) (w : Claims.Flock.Wit) : Prop :=
   Claims.ZKServer.LeanRelease.ProgReads (Sess T) L pc fc x ∧
@@ -159,14 +160,12 @@ theorem zkOut_stops (H : Claims.Msg → Claims.Msg) {Coin Col Tr : Type} (D : Cl
     show D.V.k x + 1 = _
     omega
   L.toSrv.zkOut_deferred L.fillOf H (roundsAt D) ((S.withStops Rf L.stop).swP vs).prover _ _ _ _
-    (Claims.ZKMal.Flock.zkAt_sw H D hzk hkD (S.withStops Rf L.stop) vs t ht hT1 hδ₁
-      (S.withStops_tables Rf L.stop hS) (S.withStops_complete Rf L.stop hV) (S.withStops_dummyReg Rf L.stop hD)
-      (S.withStops_causal Rf L.stop hRf hc) (S.withStops_swCausal Rf L.stop vs hRf hsc)
-      (S.withStops_tapeOK Rf L.stop hT)).2 x w hR wk
+    (Claims.ZKMal.Flock.zkAt_sw_stops H D hzk hkD S Rf L.stop vs (fun _ _ => True) t ht hT1 hδ₁ hS hV hD hc hRf
+      (S.swCausalOn_of_swCausal vs _ hsc) (S.stopsOk_true Rf) hT).2 x w hR wk
     (L.refD H _ _ wk x w
       ⟨L.helloRefine_withStops S Rf vs H x w hH,
         L.ownRefine_withStops S Rf vs H (roundsAt D) wk x w hK hlast hst hO hLk hF,
-        L.liveRefine_withStops S Rf vs H wk x w hlast hst hO hE,
+        L.liveRefine_withStops S Rf vs H wk x w hlast hst hO hE.own,
         L.fillRefine_withStops S Rf vs H (roundsAt D) wk x w hK.le hlast hst hO hEf,
         L.stopRefine_withStops S Rf vs H (roundsAt D) wk x w hK.le hst⟩)
     Vs θ hk o Ev
@@ -206,9 +205,11 @@ path's premises (`LiveRel`), against every verifier of the server's rounds, the 
 outcome `o` (`ZKServer.outD`: the verdict, and whether the session stopped at its `Finish`) and an event with
 probability at most the simulator's given `o` (`simOut`) of the event, plus `errOut`, which reads the statement, the
 witness and the verifier through `Fork`. `zk_server_lean_loop`'s factor `2` is the simulator's guess of the outcome's bit,
-which the simulator given `o` doesn't make. The premises are `zk_server_lean_loop`'s, as it takes them: the release's
-facts at the session loop are `Flock.zk_server_lean_coinLayer`'s and `zk_server_lean_loop`'s, then `zkOut_stops`.
-`server_zkOutAt` at Flock's masked deployment, whose rounds on its relation are the session's (`ZKMal.V_k_of_R`). -/
+which the simulator given `o` doesn't make. The premises are `zk_server_lean_loop`'s or give them: `SwCausal` gives
+`SwCausalOn` at every coin vector (`swCausalOn_of_swCausal`), which every stop rule's `StopsOk` takes in
+(`stopsOk_true`). The release's facts at the session loop are `Flock.zk_server_lean_coinLayer`'s and
+`zk_server_lean_loop`'s, then `zkOut_stops`. `server_zkOutAt` at Flock's masked deployment, whose rounds on its
+relation are the session's (`ZKMal.V_k_of_R`). -/
 theorem server_zkOut (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (vs : (Sess T).SwVals) (t : ℕ)
     (ht : 0 < t) {δ₁ : ℝ≥0∞}
     (hT1 : Claims.Hm96Hiding FlockSoundness.Discharge.ZkView.My FlockSoundness.Discharge.ZkView.saltHash δ₁)

@@ -103,6 +103,7 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Accounting.DeclaredCircuit", "Properties.RemoteAudit.Line", "Properties.RemoteAudit.Schedule",
   "Properties.RemoteAudit.Shared", "Properties.RemoteAudit.Live", "Properties.RemoteAudit.Component",
   "Properties.Composition", "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
-  "Properties.Accounting.JointBridge.WorkOfCreditedWords", "Properties.Pous.WipeSigned", "Properties.Challenger",
-  "Properties.Firewall", "Properties.Core.Site", "Properties.Flock.Circuit", "Properties.Nci.Protocol",
-  "Properties.Verity.Soundness", "Properties.Verity.Game", "Properties.Verity.Idle", "Properties.Remote"]
+  "Properties.Accounting.JointBridge.WorkOfCreditedWords", "Properties.Flock.Circuit", "Properties.Nci.Protocol",
+  "Properties.Verity.Soundness", "Properties.Verity.Game", "Properties.Verity.Idle", "Properties.Remote",
+  "Properties.Flock.Nets", "Properties.Pous.WipeSigned", "Properties.Challenger", "Properties.Firewall",
+  "Properties.Core.Site"]
