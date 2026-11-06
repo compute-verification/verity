@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Top's two loops on the control pod (INF-131; top's spec, #agent-coordination 1792433424.443299), which ran as Cursor timers on
+"""Top's two loops on the control pod (top's spec), which ran as Cursor timers on
 top's VM (asks-relay-v4, admin-hourly-v3) and stopped whenever it was suspended. Each detects and rings: it posts nothing but
-inbox doorbells, and whatever needs judgment rings @top instead of being decided.
+inbox doorbells, and whatever needs judgment rings top instead of being decided.
 
     top_watch.py asks  [--every 900]  [--state PATH] [--once] [--seed] [--dry-run]    $NOTION_API_KEY, $SLACK_BOT_TOKEN
     top_watch.py sweep [--every 3600] [--state PATH] [--once] [--seed] [--dry-run]    $SLACK_BOT_TOKEN, $GH_TOKEN, $CURSOR_API_KEY,
@@ -18,25 +18,25 @@ Default-kind page still Waiting on Daniel past its Deadline.
   <If no answer>".
 - New text under the bold first line of the yellow "Your reply" callout, or a new comment, not starting with an @handle or the
   page's lane (or top) and a colon or a time (`proofs 03:20Z:`): quoted (QUOTE_MAX characters).
-Each rings the page's Lane, led by its name, with what to do (`resolve` on its card), and @top with one line, since top writes the
+Each rings the page's Lane, led by its name, with what to do (`resolve` on its card), and top with one line, since top writes the
 decisions log. The state keeps `since`, the pages decided, the reply pieces seen per page (by block id), the comment ids
 seen, and the Choose last seen per page (`chosen`; its first pass records every page not open that carries one).
 
 **sweep**, hourly; each finding rings its owner once (its id kept in `rung` for KEEP_S):
 1. `research msg traffic`: an ask unanswered for over an hour from a person or a handle (not a machine: `vy-*`): its addressees.
 2. An ACTIVE Verity cloud agent (`GET /v1/agents`) that holds no handle: no registry `holder` and no inbox in the routes names it.
-   @top.
-3. A new post in #agent-coordination thread RULES_THREAD (deadlocks and rule questions): @top.
-4. main's head unchanged for STALL_S (since the sweep first saw it) while `next` is ahead of it (PRs queued): @ci.
+   top.
+3. A new post in #agent-coordination thread RULES_THREAD (deadlocks and rule questions): top.
+4. main's head unchanged for STALL_S (since the sweep first saw it) while `next` is ahead of it (PRs queued): ci.
 5. Once a day after 15:00Z: each H200 under H200_BUSY_PCT mean GPU utilization over 24 h, from fleet.py's samples
-   ($FLEET_DIR): @top, with the numbers.
+   ($FLEET_DIR): top, with the numbers.
 6. The Linear audit (`research.linear`'s `audit`, $LINEAR_CLIENT_ID and $LINEAR_CLIENT_SECRET): one JSON line a pass in
    <state dir>/linear-audit.jsonl, with the counts by lane and kind and #agent-coordination's last 24 h (`traffic --volume`:
    posts, words, posts over 80 words). Each lane with findings, once per LANE_RING_S, with its counts and the command that
-   lists them (findings with no lane: @top); a person's ask off track (`linear.ASK_KINDS`) rings its lane once per
-   LANE_RING_S, naming the issues (a slip only once per new date), until it holds; once a day after 15:00Z,
-   @top with the totals and their change from the line 24 h earlier, and the registry's teams the app can't read
-   (`unread`), which the audit skips.
+   lists them (findings with no lane: top); a person's ask off track (`linear.ASK_KINDS`) rings its lane once per
+   LANE_RING_S, naming the issues, until it holds (a slipped ask holds once a `slip:` comment follows its last move); once
+   a day after 15:00Z, top with the totals and their change from the line 24 h earlier, and the registry's teams the app
+   can't read (`unread`), which the audit skips.
 
 `--seed` runs one pass that records every reply, comment, post and finding as seen or rung and rings nothing (a page's pending
 tick is left to the next pass), so a loop taking over from top's timers starts where they are; the watchers supervisor waits for
@@ -385,7 +385,7 @@ def _change(n: int, then) -> str:
 
 def linear_audit(state, ring, now, audit: Callable[[], list[dict]], volume: Callable[[], dict], log_path: Path | None,
                  unread: Callable[[], list[str]] = list) -> None:
-    """The audit's line appended to `log_path` (None: a dry run, which appends nothing), each lane's ring and @top's daily one.
+    """The audit's line appended to `log_path` (None: a dry run, which appends nothing), each lane's ring and top's daily one.
     A volume that can't be read leaves the line's `volume` null; `unread`, the teams the audit can't see, goes in both."""
     found, blind = audit(), unread()
     counts = linear.tally(found)
