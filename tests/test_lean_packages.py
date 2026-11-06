@@ -73,7 +73,7 @@ def test_one_mathlib():
 #: its one-block partition (`RegisteredCircuit.ofCircuit`), and C-Flock's three joint-sample statements
 #: (`JointSampledV5`, `JointShareV5`, `JointHorizonV5`), whose acceptance is flock-verify's as `SampledKSLiveV5`'s is,
 #: until they read a verifier record
-UNWITNESSED = {"Security": 565, "Security/Properties": 234, "verity/core/service/flock": 8}
+UNWITNESSED = {"Security": 563, "Security/Properties": 234, "verity/core/service/flock": 8}
 
 
 def test_the_unwitnessed_list_only_shrinks():
