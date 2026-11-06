@@ -225,7 +225,7 @@ theorem opensAt_of_sessions (I : Instance d α)
 end Instance
 
 /-- **`remote_soundness_deployedAt` at sessions `OpensReady`**: its openings premise `OpensAt` discharged by
-`opensAt_of_sessions`. -/
+`opensAt_of_sessions`, and its session premise `SessionAt` by `sessionAt_of_registered` from `SessionRegistered`. -/
 theorem remote_soundness_deployedReady (I : Instance d α) (K₀ : Constructions I.base)
     (reg : (A : Live) → Option Claims.Msg → A.Reg)
     (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
