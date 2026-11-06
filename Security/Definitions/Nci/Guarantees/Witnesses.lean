@@ -39,6 +39,8 @@ reference circuit for `Training`, the sessions for `Inference`, `WindowsHold` fo
 
 @[expose] public section
 
+open Verity.Game renaming prPMFReal → prob
+
 namespace Nci.Guarantees
 
 open Verity Finset Nci.Capability.Toy Nci.Witness Nci.Dampener
