@@ -15,6 +15,7 @@ public import Std.Data.String.ToInt
 public import Mathlib.Data.List.Find
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
+import Proofs.Flock.Soundness.Discharge.Hidden.Public
 
 /-!
 # What v2 holds of the record's draw
