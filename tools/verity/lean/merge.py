@@ -99,7 +99,7 @@ CAP_ENTRY = re.compile(r'\s*"([^"\\]*)"\s*:\s*(\d+)\s*')
 #: where a merged string array wraps
 WIDTH = 120
 #: the sections `check.py --update` writes in sorted order; the others keep ours' order, with theirs' new entries after it
-SORTED = {"assumptions", "guarantees", "reads", "dependencies", "compile_time"}
+SORTED = {"assumptions", "domain", "open", "guarantees", "reads", "dependencies", "compile_time"}
 #: sections whose entries are maps merged entry by entry in turn (`upstream`'s `scan` and `watch`, `shape`'s `properties`,
 #: `frozen` and `conjectures`, `trees`' `except`)
 NESTED = {"upstream", "shape", "claims", "trees"}
@@ -113,6 +113,9 @@ MISSING = object()
 #: the `check.py` it loads
 MAIN = "origin/main"
 RULES = ("tools/verity/lean/merge.py", "tools/verity/lean/check.py")
+#: sections an entry sits in at most one of (`exclusive`), by the section holding them (None: the record): a claim is
+#: witnessed, excused or generic, and a premise is a named assumption, a domain hypothesis or open
+EXCLUSIVE = (("claims", ("witnesses", "not", "generic")), (None, ("assumptions", "domain", "open")))
 
 
 def one(path: str, o, a, b, why: list[str]):
@@ -234,21 +237,23 @@ def guarantees(o: dict, a: dict, b: dict, why: list[str], candidate: list[str]) 
     return out
 
 
-def assumptions(o: dict, a: dict, b: dict, why: list[str], candidate: list[str]) -> dict:
+def assumptions(o: dict, a: dict, b: dict, why: list[str], candidate: list[str], section: str = "assumptions") -> dict:
     """The named assumptions entry by entry, each one's `owner` (hand-written) apart from its `digest` (the build's: the hash
     its `reads` record holds), which merges as `derived`.  An entry one side removed and the other changed is kept: the
     train's Lean check drops it when no guarantee of the merged tree reads it (`assumptions.unread`)."""
     out = {}
-    for k in keys("assumptions", a, b):
+    for k in keys(section, a, b):
         x, y, z = o.get(k, MISSING), a.get(k, MISSING), b.get(k, MISSING)
         if not all(isinstance(r, dict) for r in (x, y, z) if r is not MISSING):
-            v = one(f"assumptions[{k}]", x, y, z, why)
+            v = one(f"{section}[{k}]", x, y, z, why)
         elif MISSING in (y, z):
-            v = derived(f"assumptions[{k}]", x, y, z, candidate)
+            v = derived(f"{section}[{k}]", x, y, z, candidate)
         else:
-            d = derived(f"assumptions[{k}].digest", owned(x, "digest"), owned(y, "digest"), owned(z, "digest"), candidate)
-            who = one(f"assumptions[{k}].owner", owned(x), owned(y), owned(z), why)
-            v = ({} if who is MISSING else {"owner": who}) | ({} if d is MISSING else {"digest": d})
+            v = {}
+            for f in ("owner", "digest", "issue", "due", "why", "cites"):
+                w = (derived if f == "digest" else one)(f"{section}[{k}].{f}", owned(x, f), owned(y, f), owned(z, f),
+                                                        candidate if f == "digest" else why)
+                v |= {} if w is MISSING else {f: w}
         if v is not MISSING:
             out[k] = v
     return out
@@ -394,6 +399,37 @@ def layers(o: dict, a: dict, b: dict, why: list[str]) -> dict:
     return out
 
 
+def exclusive(base: dict, ours: dict, theirs: dict, why: list[str]) -> tuple[dict, dict]:
+    """Ours and theirs with each entry of an `EXCLUSIVE` group where the side that moved it put it: an entry one side moved
+    between the group's sections from the base leaves the sections the other side still has it in, whatever that side
+    changed there (`Claims.ZKOutLeak`, which `main` moved from `claims.not` to `claims.generic`, kept under both beside a
+    branch's older reason, and the Lean check refuses an entry in two sections).  An entry both sides placed differently,
+    each away from the base, is refused, naming both sections.  A side that removed an entry places it nowhere, and the
+    sections merge it as any removal."""
+    sides = [base, ours, theirs]
+    for parent, group in EXCLUSIVE:
+        def held(rec: dict) -> dict:
+            top = rec if parent is None else rec.get(parent)
+            return {s: top[s] if isinstance(top, dict) and isinstance(top.get(s), dict) else {} for s in group}
+        o, a, b = (held(s) for s in sides)
+        for n in sorted({n for side in (o, a, b) for s in group for n in side[s]}):
+            x, y, z = (tuple(s for s in group if n in side[s]) for side in (o, a, b))
+            if y == z or () in (y, z):
+                continue
+            if x in (y, z):
+                stale, kept = (1, z) if y == x else (2, y)
+                sides[stale] = rec = dict(sides[stale])
+                if parent is not None:
+                    rec[parent] = rec = dict(rec[parent])
+                for s in set(x) - set(kept):
+                    rec[s] = {k: v for k, v in rec[s].items() if k != n}
+            else:
+                where = " and ".join(f"{s}[{n}]" if parent is None else f"{parent}.{s}[{n}]" for s in (*y, *z))
+                why.append(f"{n}: ours put it under {', '.join(y)} and theirs under {', '.join(z)}, from "
+                           f"{', '.join(x) or 'neither'} in the base ({where}): it sits in one of {', '.join(group)}")
+    return sides[1], sides[2]
+
+
 def merge(base: dict, ours: dict, theirs: dict, candidate: list[str] | None = None) -> tuple[dict, list[str]]:
     """(the merged record, why it is refused: empty when it merged).  A pure function of the three records.  ``candidate``
     collects the records the build determines (`RECORD_DIFFERENCE`'s kinds: guarantees' records, `reads`, assumptions'
@@ -401,6 +437,7 @@ def merge(base: dict, ours: dict, theirs: dict, candidate: list[str] | None = No
     regenerates; and the `shape.inline` premises `held` keeps."""
     why: list[str] = []
     candidate = [] if candidate is None else candidate
+    ours, theirs = exclusive(base, ours, theirs, why)
     out = {}
     for k in keys("", ours, theirs):
         o, a, b = base.get(k, MISSING), ours.get(k, MISSING), theirs.get(k, MISSING)
@@ -409,8 +446,8 @@ def merge(base: dict, ours: dict, theirs: dict, candidate: list[str] | None = No
             v = reads({} if o is MISSING else o, {} if a is MISSING else a, {} if b is MISSING else b, why, candidate, records)
         elif k == "guarantees" and isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
             v = guarantees({} if o is MISSING else o, a, b, why, candidate)
-        elif k == "assumptions" and all(isinstance(s, dict) for s in (o, a, b) if s is not MISSING):
-            v = assumptions(*({} if s is MISSING else s for s in (o, a, b)), why, candidate)
+        elif k in ("assumptions", "domain", "open") and all(isinstance(s, dict) for s in (o, a, b) if s is not MISSING):
+            v = assumptions(*({} if s is MISSING else s for s in (o, a, b)), why, candidate, k)
             v = MISSING if not v and MISSING in (a, b) else v
         elif k in JUDGED and isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
             v = judged(k, {} if o is MISSING else o, a, b, candidate)
