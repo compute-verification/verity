@@ -6481,10 +6481,15 @@
    }
   },
   "Flock.Qcall": {
-   "digest": "9effb90c9639bf44741a1dd718c2e33fcf0e067f19bcc44062a324719eb6d45b",
+   "digest": "099f0c8de4f6b8b270a5cb891417e5e0de18d44d59c4e8a1035144088aca2771",
    "definitions": {
+    "Flock.Qcall.ProofBlock": "d015e99350660c62d082925bfaaaf51809fb1ecc166b4ec7182d05b3120f3175",
+    "Flock.Qcall.ProofBlock.hi": "a7543510f59fa8b1247f6e23742e723cde0727131dee7f53a5f639218084d86a",
+    "Flock.Qcall.ProofBlock.lo": "6663d8cec6334c5aa00c022245ab8cfb79ce17ad41d4649ad8736c302924c419",
     "Flock.Qcall.check": "a8712039fc56b448811057970102e468d488a753cd3791975566d738edfac912",
     "Flock.Qcall.claimedUnits": "1901c2bbefd953a5b629c3d22470983c7e614262e494666d8d3f14e57925d54d",
+    "Flock.Qcall.instInhabitedProofBlock": "6ff471c0ba52f6d86fdaa1ad58b71c17397d610a6086439e7ec0f7aa825c17e4",
+    "Flock.Qcall.instInhabitedProofBlock.default": "09967563652175830b49c57a0cc0a8699084e342b70ee580f41a26d3d5d872cf",
     "Flock.Qcall.locate": "c5266666687b97a15f424ab007748d427e9fe7cb823a8144ba77a664412967cc"
    }
   },
@@ -7046,14 +7051,18 @@
    }
   },
   "NetworkCheck.Period": {
-   "digest": "15724566bb94d6fdca7901ef2a779652b74f275caadfbef628843a5a79e8201b",
+   "digest": "742270333498981941f38cb048e8beca3cd4c83571ad12d7f18fccc08667b63f",
    "definitions": {
     "NetworkCheck.Period.Public.eps": "b17a83bc3210f820272c25a0eeadf70b75964ad71b22473f894e31abe11de17d",
     "NetworkCheck.Period.answered": "9638a680336ebedac02aee59166b28aaa2675536353a7c7f8189033817a6f901",
     "NetworkCheck.Period.auditCheck": "49a5add6075b56213d317b125ea0d99100422b09b24333db9e5944a9badfa641",
     "NetworkCheck.Period.auditChecks": "52014dcfea3476d3f9ac2c6c3863094a72309a9edbd4173f1adb6a50e41ff7c5",
     "NetworkCheck.Period.auditOf": "194e926b95af5c85f331db0b0d679116bbaab64832878d1c94a387f5bf1da878",
+    "NetworkCheck.Period.canonicalEntry.match_5": "f7b69a160fa804df0f99459dcc2e0ce791d642ad4ad7e3ca50164dd6dcd8073b",
     "NetworkCheck.Period.check": "db55c676a6d2b03eba819f70dae93f4b87cf8f7e2409bfcc2e920dd3486c895a",
+    "NetworkCheck.Period.flatParts._sparseCasesOn_1": "be1f1eae95ba51ff7f85642719afe6089ae8f9581b7c2f34fec7dd4a9537e0b7",
+    "NetworkCheck.Period.flatParts._sparseCasesOn_13": "a3dac698e43b9d104f57b5bfee355f38124a87f1a139d3187bba3794a95a4f06",
+    "NetworkCheck.Period.flatParts._sparseCasesOn_4": "50c9a652e8ddc0cff337b1a5495197c23bc2dd2061c9bef72ae394e4034243de",
     "NetworkCheck.Period.holds": "fa08d19be245e09652cf1792365f351a89cba4417ede184e8efdf81c04cb4ebc",
     "NetworkCheck.Period.ingressTemplates": "ca9f303075ececb803e17dc27d55a4afa8c3bdc0137d750717533af5ff91e9e8",
     "NetworkCheck.Period.inputArg": "847fbb8b6f56ca7b3222df9afbf3d0bf508d8e27949f0b8ee1a8773d4948e8f0",
