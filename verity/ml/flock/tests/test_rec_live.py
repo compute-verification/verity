@@ -250,7 +250,7 @@ def test_a_session_off_its_pinned_schedule_is_refused_before_the_coin_server_see
     s["rounds"][1]["n"] = 2
     proxy = _proxy(s)
     _session(proxy)
-    assert len(proxy.coins.rounds) == 1, "the off-schedule round never reached the coin server"
+    assert len(proxy.coins.rounds) == 1, "the off-schedule round never reached the challenger"
 
 
 def test_a_link_whose_y_is_not_zero_is_refused():

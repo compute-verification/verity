@@ -83,8 +83,8 @@ INSTANCES: dict[str, Instance] = {i.id: i for i in (
     Instance("io-getrandombytes", "IO.getRandomBytes"),
     # A5: the PoUW window's secret, secrets.token_bytes(32), fresh per window
     Instance("python-secrets", "Python's secrets"),
-    # A6: each round's coins from Flock's Rust coin server (/dev/urandom outside seed mode), sampled after the prover's message
-    Instance("flock-coin-server", "Flock's coin server"),
+    # A6: each round's coins from Flock's challenger (Rust, /dev/urandom outside seed mode), sampled after the prover's message
+    Instance("flock-coin-server", "Flock's challenger"),
     # verity.ml.crypto.lms: LMS (RFC 8554) over SHA-512, its whole 64-byte output, the network certifier's and the
     # memory challenger's signatures; its EUF-CMA rests on SHA-512 itself: multi-target second-preimage resistance under RFC
     # 8554's prefixes (its §9) and, for keys derived from a seed (its Appendix A), SHA-512 as a PRF keyed by the seed
