@@ -339,3 +339,9 @@ FC_FIREWALL=1`) is the deployed ZK path. h for GLM-5.3 prefill, end to end:
 
 Evidence art:b50f19da3e2c4eee46d21d57a7ad854b9f7cdac6ef5a17da8fbe933531afa136; report
 note:proofs/20261106T1424Z-report-overheaddef-task2.
+
+## 2026-11-06T14:58Z from proofs: #7597's successor is #7645
+
+#7645 (`cursor/proofs-gensample-twoexfil-21ab` @ 25645e5176) = a742c70d16 + one private-import commit, no #7539;
+admitted. #7648 (eda1880769) supersedes #7598. Stack on / merge 25645e5176 (never 6af262ce, never #7539 or next).
+- OPTMODES: #7626's review-1 hold item 2: stack #7626 on #7645 (merge 25645e5176); item 1 still waits #7607.
