@@ -208,6 +208,9 @@ PENDING: dict[str, str] = {
     "tools/verity/check/README.md": "moves to the infra repository with the check's tooling; renamed there",
     "benchmarks/README.md": "queued PRs on next add rows that name C-Flock, beside lines the rename touches; it follows them",
     "benchmarks/unit_block/README.md": "a queued PR on next adds it, naming C-Flock; the rename follows it",
+    "benchmarks/flock_s8_block/README.md": "a queued PR on next adds lines naming C-Flock and the verifier of record; the rename follows it",
+    "verity/core/devices/memory_challenger/lean/README.md": "a queued PR on next adds it, naming C-Flock; the rename follows it",
+    "verity/ml/private_circuits/README.md": "a queued PR on next adds it, naming the netlist; the rename follows it",
 }
 
 
