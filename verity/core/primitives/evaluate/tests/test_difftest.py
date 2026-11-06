@@ -6,8 +6,8 @@ The reference is `python_answer`: `codec.decode_program`, then `evaluate.evaluat
 is not an input node, with the inputs bound by runs (a registered table as `reference`'s `RegisteredTable`, read where a gate
 reads it), the gate-by-gate oracle that `reference.evaluate` runs on a target's one-call Program; for those Programs
 `reference.evaluate` itself is checked too. Two of the Lean evaluator's refusals are not the oracle's, so `python_answer`
-applies them by name: a primitive the Lean does not implement (one outside the registry's 172 and the lazy families it
-reads), and an input word at or above `2^w` (the oracle stores whatever it is given).
+applies them by name: a primitive the Lean does not implement (one outside the registry's gate primitives and the lazy
+families it reads), and an input word at or above `2^w` (the oracle stores whatever it is given).
 
 The Programs: seeded random Boolean composites built with the IR builder, which reach every node form (primitive, call,
 batch of a gate and of a composite over an axis, scan with xs and a shared argument) and both constants, sampled by a
@@ -112,7 +112,7 @@ SAMPLER = (TW.NvLogf, TW.NvLogfV2, SPL.GumbelStreamKey, SPL.GumbelNoiseLane, SPL
 #: E4's MUFU primitives (`Evaluate.Mufu`)
 MUFU = (MU.MufuEx2Ftz, MU.MufuRcpFtz, MU.Fa2InvSum, HOP.Fa3InvSum, MU.MufuSqrtFtz, MU.DivFullRcp, MU.RsqrtApprox, MU.MufuTanh)
 #: E4's correctly rounded transcendentals of the reference kinds (`Evaluate.Decimal`)
-DECIMALS = (RP.F32ExpRn, RP.F32ErfRn, RP.F32TanhRn)
+DECIMALS = (RP.F32ExpRn, RP.F32LogRn, RP.F32ErfRn, RP.F32TanhRn)
 #: E4's activations and RoPE's outputs (`Evaluate.Act`)
 ACTS = (VP.SiluMulBf16, ACT.SiluMulBf16, VP.RopeOut, VP.RopeOutAdd, DENSE.TanhF32Rn, DENSE.GeluTanhMulBf16, ACT.GeluErfBf16)
 _E4_IDS = frozenset(p.id for p in WORDS + SAMPLER + MUFU + DECIMALS + ACTS)
@@ -1696,7 +1696,7 @@ def test_mufu_words_out_of_range_are_refused(server):
     assert agree(server, cases) == (0, len(cases)) == (0, 3 * 8)
 
 
-# ---- E4: the correctly rounded transcendentals of the reference kinds: exp, erf and tanh at 100 digits -------------------
+# ---- E4: the correctly rounded transcendentals of the reference kinds: exp, log, erf and tanh at 100 digits --------------
 
 def _f32w(v):
     return struct.unpack("<I", struct.pack("<f", v))[0]
@@ -1710,13 +1710,22 @@ DEC_SWEEP = tuple(sorted({*F32_SWEEP, *(s | (_f32w(v) + d) for v in _DEC_EDGES f
                           *(_f32w(k / 16) | s for k in range(1, 16 * 12) for s in (0, 1 << 31)),
                           *(_rng.getrandbits(1) << 31 | _rng.randrange(0x41800000) for _rng in [random.Random("decimals")]
                             for _ in range(8192))}))
+#: log's words: `DEC_SWEEP` (the edge words its exhaustive check's specials read, the subnormals' and the normals' ends,
+#: one and its neighbours, two and the largest finite word, are `F32_SWEEP`'s), 4096 seeded words about one, where `ln`
+#: is least, and 4096 seeded positive finite words
+LOG_SWEEP = tuple(sorted({*DEC_SWEEP,
+                          *(_rng.randrange(0x3F700000, 0x3F900000) for _rng in [random.Random("log about one")]
+                            for _ in range(4096)),
+                          *(_rng.randrange(1, 0x7F800000) for _rng in [random.Random("log")] for _ in range(4096))}))
 
 
 def test_decimal_primitives_on_their_grids(server):
-    """Each of exp, erf and tanh on every word of `DEC_SWEEP`, each answer also the Python primitive's own evaluator's."""
-    counts = {fn.id: _agree_on(server, fn, [[(a,) for a in DEC_SWEEP[i:i + 2048]] for i in range(0, len(DEC_SWEEP), 2048)])
-              for fn in DECIMALS}
-    assert counts == {fn.id: len(DEC_SWEEP) for fn in DECIMALS}, counts
+    """Each of exp, erf and tanh on every word of `DEC_SWEEP` and log on every word of `LOG_SWEEP`, each answer also the
+    Python primitive's own evaluator's."""
+    sweeps = [(fn, LOG_SWEEP if fn is RP.F32LogRn else DEC_SWEEP) for fn in DECIMALS]
+    counts = {fn.id: _agree_on(server, fn, [[(a,) for a in w[i:i + 2048]] for i in range(0, len(w), 2048)])
+              for fn, w in sweeps}
+    assert counts == {fn.id: len(w) for fn, w in sweeps}, counts
 
 
 @st.composite
@@ -1742,7 +1751,7 @@ def test_decimal_primitives_drawn(server):
 
 def test_decimal_words_out_of_range_are_refused(server):
     cases = _refused_leaves(DECIMALS)
-    assert agree(server, cases) == (0, len(cases)) == (0, 3 * 3)
+    assert agree(server, cases) == (0, len(cases)) == (0, 3 * 4)
 
 
 # ---- E4: the activations and RoPE ---------------------------------------------------------------------------------------
