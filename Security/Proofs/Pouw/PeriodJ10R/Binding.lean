@@ -251,7 +251,7 @@ theorem plural_of_sp {X W : Type} [Fintype X] [Nonempty W] (sp : X → X → X) 
 /-- A path of `onePeriod`'s coins with coin bit `b`. -/
 def oneCoins (b : Bool) : OneCoins := (((b, ()), (1, ())), ())
 
-instance : Nonempty OneCoins := ⟨oneCoins false⟩
+instance instNonemptyOneCoins_proofs : Nonempty OneCoins := ⟨oneCoins false⟩
 
 variable (o : Outcomes Bool (Equiv.Perm (Fin 1) × Unit) 1 1 1 1 Bool)
 
