@@ -10,8 +10,8 @@ then takes, in order:
 
   - a pool where a slot that fits the job (not trains-only, at least its CPUs and its memory: the slot's mem= reserves the
     run, with no cgroup cap) is free and unblocked for every waiter ahead and this job;
-  - else node 2's share when it can start the job now, with no one waiting there (INF-438, 3 Nov 03:49Z: a run queued 100 min
-    behind cpu-6's 8 held slots and 9 waiters while node 2's 48 CPUs sat free);
+  - else node 2's share when it can start the job now, with no one waiting there (a run once queued 100 min behind cpu-6's 8
+    held slots and 9 waiters while node 2's 48 CPUs sat free);
   - else the pool with the shortest wait, as waiters ahead per fitting slot;
   - node 2 only when no pool fits the job or none can be read, and node 2 itself can be. Node 2 is the only GPU node, and on
     24 Oct 02:10Z its GPUs sat at 0% under a load of 235 on 120 cores from CPU work while cpu-5 ran at 8 of 192 (top).

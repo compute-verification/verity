@@ -60,8 +60,8 @@ def test_with_nothing_free_the_pool_with_the_shortest_line_per_fitting_slot_wins
 
 
 def test_with_every_pool_full_node_2_takes_a_job_it_can_start_now():
-    """INF-438, 3 Nov 03:49Z: --on auto queued top's suites behind cpu-6's 8 held slots and 9 waiters (first slot ~05:30Z) while
-    node 2's 48 CPUs sat free with no one waiting."""
+    """--on auto once queued a lane's suites behind cpu-6's 8 held slots and 9 waiters while node 2's 48 CPUs sat free with no
+    one waiting."""
     full = pool(*(slot(f"r{i}", held=True) for i in range(8)), waiters=9)
     target, why = auto.choose({N2: share(free=48), CPU1: full, CPU5: full}, 4, 16)
     assert target is None and why.endswith(f"no pool slot is free, and it starts on {N2} now")
