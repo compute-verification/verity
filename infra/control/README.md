@@ -63,12 +63,12 @@ a doorbell pending in its inbox, never on idle time alone.
 Drive moved here from ci's VM (INF-129). `post_start.sh` starts its loop, and the loop ticks only while `/data/drive/stopped`
 is absent, so a reset brings drive back in whichever state ci left it. Two drives must never tick against one `next`: ci
 stops its own loop before `drive.sh start` here. Its checkout was cloned over https with `--filter=blob:none`, with
-`notes_sync.CREDENTIAL_HELPER`'s helper for `GH_TOKEN` as its local `credential.helper`; the read-only deploy key can't push.
+`notes_sync.CREDENTIAL_HELPER`'s helper for `GH_TOKEN` as its local `credential.helper`.
 `drive.sh start` refuses until a dry-run push of `next` with that token goes through: the token is verity-drive's (App
 5385601, installation 173153984), minted by `gh_app_token.sh` with Contents and Pull requests write on this repository only (INF-133).
 
-The steward holds a lease, so a second copy stands by instead of running. Its `--reap` reads `lane/*` tips from origin with the
-read-only deploy key; if `watch.log` shows `FETCH-FAILED`, remove `--reap` until the fetch works again.
+The steward holds a lease, so a second copy stands by instead of running. Its `--reap` reads `lane/*` tips from origin over https,
+its clone's local `credential.helper` being `gh_app_token.sh git`; if `watch.log` shows `FETCH-FAILED`, remove `--reap` until the fetch works again.
 
 ## `/data`
 
@@ -78,7 +78,7 @@ read-only deploy key; if `watch.log` shows `FETCH-FAILED`, remove `--reap` until
 | `/data/state/root-research` | `/root/.research` | the guard's and the steward's state |
 | `/data/state/runpod` | `/root/.runpod` | the RunPod CLI config and its ssh key |
 | `/data/state/config-verity` | `/root/.config/verity` | `r2.env` (R2 credentials), `relay.env` (`SLACK_BOT_TOKEN`, `GH_TOKEN`), `store-index.env` (`STORE_INDEXER_DATABASE_URL`), `store-export.env` (`RESEARCH_EXPORT_BUCKET`; optionally a key pair of its own, `RESEARCH_EXPORT_ACCESS_KEY_ID` / `RESEARCH_EXPORT_SECRET_ACCESS_KEY`, which must be able to list the bucket, else `store_index.sh` uses `r2.env`'s; optionally `RESEARCH_EXPORT_ENDPOINT`) and `panels.key` |
-| `/data/state/secrets` | | `notes-git-credentials`, `verity-deploy` (read-only deploy key), `panels-key-push`, `known_hosts`, `msg.env` (`SLACK_BOT_TOKEN`, a copy of `relay.env`'s, for `msg.sh`; root, 0600) |
+| `/data/state/secrets` | | `verity-drive.pem` (the App key `gh_app_token.sh` signs with: every clone of verity here fetches over https with its token; GitHub refuses the old deploy key `verity-deploy`), `panels-key-push`, `known_hosts`, `msg.env` (`SLACK_BOT_TOKEN`, a copy of `relay.env`'s, for `msg.sh`; root, 0600) |
 | `/data/slack-app` | | `token.json`: the Slack app's configuration token pair, the one copy (top and comms, 19 Oct 15:33Z), which `research msg slack-app` rotates in place (root, 0600; the directory 0700) |
 | `/data/uv` | `/root/.local/bin/uv`, `/root/.local/share/uv/python`, `/usr/local/bin/python3.12` | uv and CPython 3.12 |
 | `/data/steward` | `/workspace/steward` | the verity clone, the research-notes clone, the steward's store, `run.sh`, `render-src` |
@@ -123,13 +123,13 @@ $CP "/data/infra/control-disk/run.sh --once --dry-run"      # one pass, posting 
 $CP "cat > /data/infra/msg.sh && chmod +x /data/infra/msg.sh" < infra/control/msg.sh
 ~~~
 
-`monitors-relay`'s `drift` reads git history the tree lacks from `/data/watchers/repo`, cloned once with the pod's deploy key, and
+`monitors-relay`'s `drift` reads git history the tree lacks from `/data/watchers/repo`, cloned once over https with `gh_app_token.sh` as its credential helper, and
 `fixtures-public`, `unverified-main` (which also reads drive's `/root/.research/queue/verity.state.json`), the failed-check posts and
 the router call `gh`, installed once into `/data/watchers/bin`:
 
 ~~~sh
-$CP 'K="ssh -i /data/state/secrets/verity-deploy -o IdentitiesOnly=yes -o UserKnownHostsFile=/data/state/secrets/known_hosts"; \
-  git clone -q --no-checkout -c core.sshCommand="$K" git@github.com:compute-verification/verity.git /data/watchers/repo'
+$CP "git clone -q --no-checkout -c credential.helper='!/data/infra/gh_app_token.sh git' \
+  https://github.com/compute-verification/verity.git /data/watchers/repo"
 V=2.102.0; $CP "set -e; d=\$(mktemp -d /data/tmp/gh.XXXX); cd \$d; B=https://github.com/cli/cli/releases/download/v$V; \
   curl -fsSLO \$B/gh_${V}_linux_amd64.tar.gz; curl -fsSLO \$B/gh_${V}_checksums.txt; grep ' gh_${V}_linux_amd64.tar.gz\$' gh_${V}_checksums.txt | sha256sum -c -; \
   tar --no-same-owner -xzf gh_${V}_linux_amd64.tar.gz gh_${V}_linux_amd64/bin/gh; install -D -m 0755 gh_${V}_linux_amd64/bin/gh /data/watchers/bin/gh; cd /; rm -rf \$d"
