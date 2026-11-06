@@ -176,6 +176,19 @@ def test_steps_and_span():
     assert D.span(walls, st.done, "x") is None
 
 
+def test_every_run_starts_cold_and_only_warm_reads_the_cache():
+    resets = []
+    D.cold(SimpleNamespace(reset_prefix_cache=lambda: resets.append(1) or True))
+    assert resets == [1]
+    with pytest.raises(SystemExit, match="reset_prefix_cache failed"):
+        D.cold(SimpleNamespace(reset_prefix_cache=lambda: False))
+    assert D.cache_misuse("warm", {D.PRODUCER: 0, "d-long": 3008}) == []
+    assert D.cache_misuse("served-2", {"d-short": 0, "d-long": 0}) == []
+    assert D.cache_misuse("served-2", {"d-short": 256, "d-long": 0}) == ["served-2: d-short read 256 cached tokens"]
+    assert D.cache_misuse("warm", {D.PRODUCER: 16, "d-long": 0}) == [f"warm: {D.PRODUCER} read 16 cached tokens",
+                                                                    "warm: d-long read no cached tokens"]
+
+
 class _Attn(torch.nn.Module):
     """A DSA attention layer's shape: its forward fills ``output`` in ``_sparse_indexer_and_attn``, which also writes the shared
     top-k buffer; rows don't mix."""

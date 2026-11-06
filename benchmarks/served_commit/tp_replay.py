@@ -19,6 +19,9 @@ first six steps. Every request decodes to its cap (``ignore_eos``), so an arm's 
 - ``warm``: a producer with ``d-long``'s prompt and one output token, then ``d-long`` once the engine is idle, its prompt's blocks
   in the prefix cache.
 
+Every run starts with an empty prefix cache (`cold`), so only ``warm``'s ``d-long`` reads cached blocks; pass 2 checks that it
+does and that no other request does.
+
 Pass 1 runs every arm with `Interior` on every rank: a forward hook on every module, a wrapper on each DSA attention layer's
 ``_sparse_indexer_and_attn`` (the shared top-k buffer as the layer's indexer leaves it, and the attention's core output), and the
 runner's ``prepare_inputs`` and ``sample`` for each step's rows. Each value is fingerprinted on the GPU per token row
@@ -495,6 +498,20 @@ class Steps:
         return outs
 
 
+def cold(llm: Any) -> None:
+    """Empty the prefix cache, so that a run reads no block an earlier run computed."""
+    if not llm.reset_prefix_cache():
+        raise SystemExit("reset_prefix_cache failed: a request still holds KV blocks between runs")
+
+
+def cache_misuse(arm: str, cached: dict[str, int]) -> list[str]:
+    """What's wrong with a run's cached prompt tokens: only ``warm``'s ``d-long`` reads the prefix cache, and it must."""
+    bad = [f"{arm}: {rid} read {n} cached tokens" for rid, n in sorted(cached.items()) if n and not (arm == "warm" and rid == "d-long")]
+    if arm == "warm" and not cached.get("d-long"):
+        bad.append("warm: d-long read no cached tokens")
+    return bad
+
+
 def span(walls: list[float], done: dict[str, int], rid: str, after: str | None = None) -> float | None:
     """Seconds from the start of the run, or from the end of the step at which ``after`` finished, to the end of the step at which
     ``rid`` finished."""
@@ -615,6 +632,7 @@ def main() -> None:
 
         put({"pass": 0, "arm": "first-fillers", "wall_s": first["wall_s"], "steps": first["iterations"]})
         for arm, reqs in plan.items():
+            cold(llm)
             llm.collective_rpc(begin, timeout=a.rpc_timeout)
             r = run_workload(eng, reqs, sampling)
             ranks = llm.collective_rpc(end, timeout=a.rpc_timeout, kwargs={"arm": arm, "drawn": list(DRAWN), "reference": REFERENCE})
@@ -638,7 +656,9 @@ def main() -> None:
         for rep in range(a.reps):
             for arm, reqs in plan.items():
                 st = Steps()
+                cold(llm)
                 r = run_workload(eng, reqs, sampling, step=st)
+                broken += cache_misuse(arm, st.cached)
                 spans = {d: span(r["step_wall_s"], st.done, d, PRODUCER if arm == "warm" else None) for d in DRAWN}
                 put({"pass": 2, "rep": rep, "arm": arm, "wall_s": r["wall_s"], "gpu_s": world * r["wall_s"], "steps": r["iterations"],
                      "tokens_equal_pass1": r["tokens"] == tok1[arm], "spans": spans, "cached_tokens": st.cached,
