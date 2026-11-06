@@ -14,8 +14,8 @@ token over its ranks; a stratum whose Definition has no cut on main, sized at th
 `served_macs_per_token` is the whole circuit's MACs a token where the strata leave some out; `params`, the model's
 total parameters, scales the references that go as the model's size.  The `references` cards
 of a model add up: each is kept as `cards/references.MODEL.ART.json`, under the first twelve hex digits of its art id,
-and the figures draw every card's lines, with its `caption` appended to the caption of each panel it has lines on; a
-line at 0 is named in its panel's caption, not drawn.  A card reaches the figures by art id, a later one naming the
+and the figures plot every card's lines, with its `caption` appended to the caption of each panel it has lines on; a
+line at 0 is named in its panel's caption, not plotted.  A card reaches the figures by art id, a later one naming the
 earlier card it replaces:
 
     uv run python benchmarks/spot_figures/cards.py check CARD.json ...       # refuses unknown and missing fields

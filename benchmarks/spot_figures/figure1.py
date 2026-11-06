@@ -397,7 +397,7 @@ def reference_notes(refs: list[dict]) -> dict[str, list[str]]:
 
 
 def zero_lines(refs: dict[str, list[dict]], scope: str) -> dict[str, list[str]]:
-    """Each panel's lines at 0 in `scope`, which a log axis can't draw and its caption names."""
+    """Each panel's lines at 0 in `scope`, which a log axis can't plot and its caption names."""
     return {panel: [r["label"] for r in rows if (r["value"] if "value" in r else r["by_scope"].get(scope, 1)) <= 0]
             for panel, rows in refs.items()}
 
@@ -433,7 +433,7 @@ def captions(serve_hash_share: float, infiltration: dict | None = None, coverage
         out[panel] += "".join(f" {s}" for s in sentences)
     for panel, labels in (zeros or {}).items():
         if labels:
-            out[panel] += f" At 0, so not drawn: {'; '.join(labels)}."
+            out[panel] += f" At 0, so not plotted: {'; '.join(labels)}."
     return out
 
 

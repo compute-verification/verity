@@ -83,16 +83,16 @@ def test_sparseloco_goes_as_the_served_models_parameters(out):
 def test_every_references_card_adds_its_lines(out):
     arts = [c["art"] for c in out["cards"]["references"]]
     assert len(arts) == len(set(arts)) >= 2
-    drawn = {r.get("art") for r in out["panels"]["exfiltration"]["references"]}
-    assert set(arts) <= drawn
+    shown = {r.get("art") for r in out["panels"]["exfiltration"]["references"]}
+    assert set(arts) <= shown
 
 
-def test_a_line_at_zero_is_captioned_and_coincident_lines_drawn_once():
+def test_a_line_at_zero_is_captioned_and_coincident_lines_plotted_once():
     refs = [{"label": "a", "value": 100.0}, {"label": "b", "value": 101.0}, {"label": "zero", "value": 0.0},
             {"label": "c", "by_scope": {"world year": 1e4}}, {"label": "elsewhere", "by_scope": {"world week": 1.0}}]
     assert _lines(refs, "world year", 1.0) == [(100.0, "a"), (1e4, "c")]
     assert f.zero_lines({"exfiltration": refs}, "world year") == {"exfiltration": ["zero"]}
-    assert f.captions(1.0, zeros={"exfiltration": ["zero"]})["exfiltration"].endswith(" At 0, so not drawn: zero.")
+    assert f.captions(1.0, zeros={"exfiltration": ["zero"]})["exfiltration"].endswith(" At 0, so not plotted: zero.")
 
 
 def test_a_references_cards_caption_joins_its_panels_captions():
@@ -121,7 +121,7 @@ def test_the_infiltration_panel_draws_its_card(card_dir, tmp_path):
     inf = out["panels"]["infiltration"]
     assert inf["status"] == "card" and inf["headline"] == "layer_of_token" and len(inf["series"]) == 6
     assert out["scopes"]["world year"]["captions"]["infiltration"] == "Deferred interiors at a layer."
-    assert out["scopes"]["world year"]["captions"]["exfiltration"].endswith(" At 0, so not drawn: no advice.")
+    assert out["scopes"]["world year"]["captions"]["exfiltration"].endswith(" At 0, so not plotted: no advice.")
     assert inf["references"] == [{"label": "a steering vector", "input": "references", "value": 98304.0}]
     line = out["panels"]["skipped_work"]["references"][-1]
     assert line["by_scope"]["world year"] == pytest.approx(1e30 * 2 / out["inputs"]["ands_per_mac"]["value"])

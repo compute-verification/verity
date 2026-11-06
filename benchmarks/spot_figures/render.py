@@ -70,7 +70,7 @@ def _style(design: str, headline: str):
 
 def _lines(references: list[dict], scope: str, scale: float) -> list[tuple[float, str]]:
     """The panel's reference lines in `scope`, scaled and ascending: a line at 0 is in the caption, not here, and lines
-    within `COINCIDENT` of one another are drawn once, under the first one's label."""
+    within `COINCIDENT` of one another are plotted once, under the first one's label."""
     rows = sorted(((r["value"] if "value" in r else r["by_scope"][scope]) * scale, r["label"]) for r in references
                   if "value" in r or scope in r["by_scope"])
     out: list[tuple[float, str]] = []
