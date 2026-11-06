@@ -1809,11 +1809,12 @@ UNWIRES = ("output", "key", "chunk", "leaves", "lane", "members", "body")
 #: How `rows-state-untied` breaks its link-window's tie of the scan's state to its wired audit's `SCAN_STATE` while its
 #: `prog` stays wired: the scan's state entry at another root or domain (a state tree that skips or alters one of the
 #: scan's transitions), no state entry or one under another name, at another audit's `SCAN_STATE`, its root no string,
-#: or a second state entry at another root; the wired audit's `SCAN_STATE` absent, at another root, or beside a second,
-#: or held in its window's `activations.values` alone under another name (its entry's `value` another or none, or
-#: the entry under another value's key)
-UNSTATES = ("root", "domain", "missing", "renamed", "other", "untyped", "extra", "audit", "audit-root", "audit-extra",
-            "audit-misnamed")
+#: a second state entry at another root, or held in its window's `activations.values` alone, where an audit's may be
+#: and a scan's never is (`scan-activations`); the wired audit's `SCAN_STATE` absent, at another root, or beside a
+#: second, or held in its window's `activations.values` alone under another name (its entry's `value` another or none,
+#: or the entry under another value's key)
+UNSTATES = ("root", "domain", "missing", "renamed", "other", "untyped", "extra", "scan-activations", "audit",
+            "audit-root", "audit-extra", "audit-misnamed")
 #: Where a tied audit's registration holds its `SCAN_STATE`: a `roots` entry of port `STATE`, a `registered` entry of
 #: value `SCAN_STATE`, or its window's `activations.values` entry of it, as a window circuit's registration commits its
 #: per-window values (`{"program", "values": {value: entry}}`), a second state entry then in `registered`
@@ -1935,10 +1936,11 @@ def _prog_entries(rp: random.Random, tie: dict, where: str, untie: str | None, u
 
 def _state_entries(rp: random.Random, states: dict, i: int, where: str, unstate: str | None) -> list[dict]:
     """The scan's registration's entries for its state (`STATE` by port in `roots`, `SCAN_STATE` by value in
-    `registered`) at the `SCAN_STATE` of audit `i`, the one its `prog` is tied to, broken as `unstate` says."""
+    `registered`) at the `SCAN_STATE` of audit `i`, the one its `prog` is tied to, broken as `unstate` says (none where
+    its window's `activations` holds it, `scan-activations`)."""
     key, name = ("port", STATE) if where == "roots" else ("value", SCAN_STATE)
     e = {"domain": states[i]["domain"], key: name, "root": states[i]["root"]}
-    if unstate == "missing":
+    if unstate in ("missing", "scan-activations"):
         return []
     if unstate in ("root", "domain"):
         e[unstate] = rp.randbytes(64).hex()
@@ -2189,6 +2191,9 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         empty = _unpinned(rp, tree, unpin) if aimed and unpin else state_empty(tree)
         window = {"kind": "stand-in", "window": w} | ({} if reads is None else {"reads": reads}) | (
             {} if empty is None else {"empty": empty})
+        if aimed and unstate == "scan-activations":
+            held = states[ties[w]["audit"]] | {"value": SCAN_STATE, "leaves": T, "words": 1}
+            window["activations"] = {"program": WINDOW_PROGRAM, "values": {SCAN_STATE: held}}
         rec = {"format": fmt, "law": law, "partition": f"{link}/scan/{w}", "population": units, "program": program,
                "protocol": ONE_STAGE, where: entries, "window": window}
         if aimed and m == "program":
