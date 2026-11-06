@@ -122,6 +122,7 @@ export async function fromEnv(env: NodeJS.ProcessEnv): Promise<Runtime> {
         oidcToken: () => getVercelOidcToken(),
       })
     : localCredentials(store);
+  if (env.VERCEL && env.PLATFORM_SANDBOX !== "vercel") throw new Error("PLATFORM_SANDBOX=vercel is required on Vercel: local sandboxes isolate nothing");
   const sandbox =
     env.PLATFORM_SANDBOX === "vercel"
       ? await vercelSandboxes({ vcpus: Number(env.PLATFORM_SANDBOX_VCPUS ?? 2), timeoutMs: 45 * 60_000 })

@@ -1,11 +1,13 @@
-import { spawn as spawnChild } from "node:child_process";
+import { type ChildProcess, spawn as spawnChild } from "node:child_process";
 import { mkdir, readFile, rm, stat as fsStat, readdir, writeFile, lstat } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
 import { Readable, Writable } from "node:stream";
 import type { Experimental_SandboxSession } from "@ai-sdk/provider-utils";
 
 // A sandbox session over a local directory, for tests and local runs. It
-// isolates nothing: it exists so the real HarnessAgent path runs without Vercel.
+// isolates no process: it exists so the real HarnessAgent path runs without
+// Vercel. Commands see only PATH and a HOME inside the directory, so neither
+// the host's environment nor its git config reaches them or is changed by them.
 export function localSandboxSession(root: string): Experimental_SandboxSession {
   const abs = (p: string) => (isAbsolute(p) ? p : join(root, p));
 
@@ -24,9 +26,9 @@ export function localSandboxSession(root: string): Experimental_SandboxSession {
   };
 
   const spawn = (async (opts: { command: string; workingDirectory?: string; env?: Record<string, string>; stdin?: boolean; abortSignal?: AbortSignal }) => {
-    const child = spawnChild("bash", ["-lc", opts.command], {
+    const child: ChildProcess = spawnChild("bash", ["-lc", opts.command], {
       cwd: opts.workingDirectory ? abs(opts.workingDirectory) : root,
-      env: { ...process.env, ...opts.env },
+      env: { PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: root, LANG: "C.UTF-8", ...opts.env } as NodeJS.ProcessEnv,
       stdio: [opts.stdin ? "pipe" : "ignore", "pipe", "pipe"],
       signal: opts.abortSignal,
     });

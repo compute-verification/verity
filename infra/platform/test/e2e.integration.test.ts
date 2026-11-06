@@ -174,6 +174,7 @@ describe("a lead on the platform", () => {
     const workerGrants = (await t.store.listGrants()).filter((g) => g.subject.startsWith("infra-w-"));
     expect(workerGrants.length).toBe(1);
     for (const f of await filesUnder(t.root)) expect(await readFile(f, "utf8")).not.toContain("local-github-token");
+    expect(await readFile(join(t.root, "lead-infra", ".gitconfig"), "utf8")).toContain("password=platform-github-placeholder");
     const { rows } = await t.store.db.query(`select count(*)::int as n from transcript_parts where text like '%local-github-token%'`);
     expect(rows[0]!.n).toBe(0);
   });
