@@ -2637,6 +2637,14 @@
    "Claims.SamplingGeneric.ZkCompiled.ZK": {
     "fails": "Claims.SamplingGeneric.ZkCompiled.ZK_fails",
     "meets": ["Claims.Sampling.masked_meets_zk", "Claims.Witness.SamplingGeneric.echo_meets"]
+   },
+   "Claims.SamplingGeneric.CompiledTwo.KS": {
+    "fails": "Claims.SamplingGeneric.CompiledTwo.KS_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
+    ]
    }
   },
   "not": {
@@ -2691,7 +2699,11 @@
    "Claims.SamplingGeneric.Compiled.OpenCallsLe": "a helper the claims read: the opening checks' count, which `CompilerBits` and `CompilerEfficient` read",
    "Claims.SamplingGeneric.ZkCompiled.ZkSessions": "a helper the claims read: the compiler's zero-knowledge contract, the code facts `CompilerZK` takes of a masked compiled verifier",
    "Claims.ZKmalRLeak": "proved of every prover from `ZKmalRx` and `CutsOf` (`Claims.zkmalRLeak_of_cuts`), not of a deployment: a guarantee concludes it at a release's stop positions (`Verity.recZK_leak`, `Verity.zkStop_leak`), and no deployed record's claim reads it",
-   "Claims.CutsOf": "a premise of `ZKmalRLeak`'s derivation (`Claims.zkmalRLeak_of_cuts`) on the released prover: its run is the reference prover's cut at a public position, a condition on the prover like `decOK`, no claim"
+   "Claims.CutsOf": "a premise of `ZKmalRLeak`'s derivation (`Claims.zkmalRLeak_of_cuts`) on the released prover: its run is the reference prover's cut at a public position, a condition on the prover like `decOK`, no claim",
+   "Claims.SamplingGeneric.CompiledTwo.Scope": "a helper the claims read: the two-stage scope on the statement's bytes, which `CompiledTwo.KS` reads",
+   "Claims.SamplingGeneric.CompiledTwo.Sessions": "a helper the claims read: the two-stage compiler's contract, the code facts `CompilerKSTwo` takes of a compiled two-stage verifier",
+   "Claims.Sampling.InScopeTwo": "a helper the claims read: the programs, partitions and two-stage designs the two-stage scope takes",
+   "Claims.Sampling.Design.Two.WellFormed": "a helper the claims read: a well-formed two-stage design, a well-formed first stage and one `k ≥ 1` per stratum"
   },
   "generic": {
    "Claims.SamplingGeneric.CompilerKS": "Claims.SamplingGeneric.compilerKS",
@@ -2700,7 +2712,8 @@
    "Claims.SamplingGeneric.CompilerBits": "Claims.SamplingGeneric.compilerBits",
    "Claims.SamplingGeneric.CompilerEfficient": "Claims.SamplingGeneric.compilerEfficient",
    "Claims.SamplingGeneric.CompilerZK": "Claims.SamplingGeneric.compilerZK",
-   "Claims.ZKOutLeak": "Claims.zkOutLeak"
+   "Claims.ZKOutLeak": "Claims.zkOutLeak",
+   "Claims.SamplingGeneric.CompilerKSTwo": "Claims.SamplingGeneric.compilerKSTwo"
   }
  },
  "witnesses": {
@@ -3011,6 +3024,10 @@
    "honest": ["Verity.SecurityProofs.CKSize_honest"],
    "nontrivial": "Verity.SecurityProofs.CKSize_nontrivial",
    "kind": "exclusion"
+  },
+  "Claims.SamplingGeneric.compilerKSTwo": {
+   "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerKSTwo_nontrivial"
   }
  },
  "unwitnessed": {
@@ -5946,6 +5963,15 @@
    "assumptions": [],
    "type_hash": "196e6f2701cbab3465fe7f07ad01cc4bb6f385d3d01b8dfa60ab2a8d643eeef0"
   },
+  "Claims.SamplingGeneric.CompiledTwo.KS_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.CompiledTwo.KS_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) : Exists fun A => Exists fun L => Not (Claims.SamplingGeneric.CompiledTwo.KS H L)"
+   ],
+   "assumptions": [],
+   "type_hash": "4bad71657d26ec907352689f45442dbd782f32e32ed982af684bf697305d4c26"
+  },
   "Claims.SamplingGeneric.ZkArg.ZK_fails": {
    "owner": "@proofs",
    "signature": [
@@ -6038,6 +6064,46 @@
    ],
    "assumptions": [],
    "type_hash": "02b874bf1dad6f1c0a57e8bc140ad86d05eee47b3301c6ae2d1cb742d2915a90"
+  },
+  "Claims.SamplingGeneric.compilerKSTwo": {
+   "owner": "@proofs",
+   "signature": ["Claims.SamplingGeneric.compilerKSTwo : Claims.SamplingGeneric.CompilerKSTwo"],
+   "assumptions": [],
+   "type_hash": "a48429565d46e6a9b348700bbb4eb813a300258fe7b32558e605b50eb344f53f"
+  },
+  "Claims.SamplingGeneric.compilerKSTwo_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerKSTwo_honest :",
+    "  And (Claims.SamplingGeneric.Arg.KS FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.twoA Bool))",
+    "    (And",
+    "      (Claims.Sampling.CommitmentScheme.Binds FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.twoLTwo Bool).commit)",
+    "      (And",
+    "        (Claims.SamplingGeneric.CompiledTwo.Sessions FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.twoLTwo Bool))",
+    "        (And ((Claims.Witness.SamplingGeneric.twoLTwo Bool).Scope List.nil)",
+    "          (∀ (r : Fin ((Claims.Witness.SamplingGeneric.twoLTwo Bool).V.k List.nil) → Bool),",
+    "            And",
+    "              (Eq ((Claims.Witness.SamplingGeneric.twoLTwo Bool).replaySample List.nil r)",
+    "                (List.cons 0 (List.cons 1 List.nil)))",
+    "              (And",
+    "                (Eq ((Claims.Witness.SamplingGeneric.twoLTwo Bool).checked List.nil r)",
+    "                  (List.cons 0 (List.cons 1 List.nil)))",
+    "                (Eq",
+    "                  (Claims.run FlockDeploy.sha512 Claims.Witness.silentP (Claims.Witness.SamplingGeneric.twoLTwo Bool).V",
+    "                      List.nil Unit.unit r).out",
+    "                  Claims.Out.acc))))))"
+   ],
+   "assumptions": [],
+   "type_hash": "14127d0737102c740a7dd6c497d9726d833d6aba8c16de458569681ad5ff5488"
+  },
+  "Claims.SamplingGeneric.compilerKSTwo_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerKSTwo_nontrivial :",
+    "  Not (Claims.SamplingGeneric.CompiledTwo.KS FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.sksLTwo Bool))"
+   ],
+   "assumptions": [],
+   "type_hash": "eab81deaee26391d40a2ce9e727de7234b53c13c3313f1a1d4ead2fc52bed009"
   },
   "Claims.SamplingGeneric.compilerKS_honest": {
    "owner": "@proofs",
@@ -6682,6 +6748,30 @@
    ],
    "assumptions": [],
    "type_hash": "db05dd40452c35e361a969c884c781189c12aab8ab7523a98889559519b52312"
+  },
+  "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) :",
+    "  And (Claims.SamplingGeneric.Arg.KS H (Claims.Witness.SamplingGeneric.twoA Coin))",
+    "    (And (Claims.Sampling.CommitmentScheme.Binds H (Claims.Witness.SamplingGeneric.twoLTwo Coin).commit)",
+    "      (And (Claims.SamplingGeneric.CompiledTwo.Sessions H (Claims.Witness.SamplingGeneric.twoLTwo Coin))",
+    "        (And ((Claims.Witness.SamplingGeneric.twoLTwo Coin).Scope List.nil)",
+    "          (∀ (r : Fin ((Claims.Witness.SamplingGeneric.twoLTwo Coin).V.k List.nil) → Coin),",
+    "            And",
+    "              (Eq ((Claims.Witness.SamplingGeneric.twoLTwo Coin).replaySample List.nil r)",
+    "                (List.cons 0 (List.cons 1 List.nil)))",
+    "              (And",
+    "                (Eq ((Claims.Witness.SamplingGeneric.twoLTwo Coin).checked List.nil r)",
+    "                  (List.cons 0 (List.cons 1 List.nil)))",
+    "                (Eq",
+    "                  (Claims.run H Claims.Witness.silentP (Claims.Witness.SamplingGeneric.twoLTwo Coin).V List.nil",
+    "                      Unit.unit r).out",
+    "                  Claims.Out.acc))))))"
+   ],
+   "assumptions": [],
+   "type_hash": "06d21a25430f4a147151327ecd1dc1a0e8f79485b98ee26f582910c9f3925ef4"
   },
   "Claims.Witness.SamplingGeneric.twoSessions_meets": {
    "owner": "@proofs",
@@ -15640,6 +15730,38 @@
     "Claims.SamplingGeneric.simAt": "0b60f8fe98acb3df4ee53a8cc10fd2ffa43444819254e111218d018b6c316c2f"
    }
   },
+  "Definitions.Claims.SamplingTwo": {
+   "digest": "a52c5baeb3090f28f6fd7b53489a73182b713651dfb42593a5f8ddc93c284a19",
+   "definitions": {
+    "Claims.Sampling.Design.Two": "d1c7605e035e8d2d77209adadc6b25301fae1804f7e8ea858fa1aa597e7d4a00",
+    "Claims.Sampling.Design.Two.M": "f685c3eac9cb1ebfd1f1bbbb8f78fe8368792ef6b2d7193895d63189ec9b51e7",
+    "Claims.Sampling.Design.Two.Pa": "fe77e76e5f11969aff55dce1914e72b14d8d412edf8c4e694ff9e368122a19c4",
+    "Claims.Sampling.Design.Two.WellFormed": "b7cc3dd0a3125939273b4946c219c8e31a97a3acf8cd283f7a1c1f5d6823240f",
+    "Claims.Sampling.Design.Two.esc": "db01bb7d132447619f2e9a41c30252de6ce6c789b11831131bbb56c990ed9588",
+    "Claims.Sampling.Design.Two.k": "3a1b7d06e5002007728c85700d8d8b29e73a60e4ec35dd036626b7fc7b5e3c7c",
+    "Claims.Sampling.Design.Two.part": "62aed119073122d2b64c1924d9477e5a1dabc5b6114f6682a0f76f1aeabe93fc",
+    "Claims.Sampling.Design.Two.replay": "9ccfe1e923e1c1ab4497e4530aaa6d7688d882662069951b6a2744662043aa4a",
+    "Claims.Sampling.InScopeTwo": "54d52ad10bb17118bb32e7c108b7b17656ea700c2e9d8830a07c2d76473e2c0c",
+    "Claims.Sampling.Partition.strata": "ef54861ec2e83602e5e78b161f1af421e370618c2c50a7b22b2cb1fb64af6d47",
+    "Claims.Sampling.Partition.stratumOf": "f4aab9b02cc5565cc5092a56f17cfbb6e44f697ff270a8d73a116021efba5d4f",
+    "Claims.Sampling.RTwo": "a85a6ed3f149137344ba3aec882eacc710eca36988b85caa78d3ce12e5c2329c",
+    "Claims.Sampling.cell": "8907137168290395d637224cfeec928fda35e415f4e3f952fe5cb842d40d585f",
+    "Claims.Sampling.escCell": "2df351680cfc4f8102912671169f8a73fe3abc89e91d48b77d54493967dcf098",
+    "Claims.Sampling.footprint": "7ecd7336c8f05a4fb6634e24d997b1764d463e8e3995abf04afc1d8781c70896",
+    "Claims.Sampling.replayOf": "e2d867e725f85e66d2a2834e2b7ab0799351cb864202cea27dace396884219ee",
+    "Claims.Sampling.replayOf._sparseCasesOn_1": "77c89d3091cd8e495f75b17b9ce2f40b0e67d4e25eb1771a5f18d905c8e0596a",
+    "Claims.Sampling.stratumIdx": "40906385747c7442a82ead1ef2e694a8cd12fc476b68b4d711b421959abeb02b",
+    "Claims.Sampling.wrongIn": "14680f6d84fe901a6f2e2decdb57837625368c557cbf82c262fdb7caad920355",
+    "Claims.SamplingGeneric.CompiledTwo": "1e25965b53856ad51df8689214d9d45be650b291cbdc5e15e73975a9b6b4d5ec",
+    "Claims.SamplingGeneric.CompiledTwo.KS": "a1248a70c0faedf4a598de524bcb491f3f08cd20d7dff39d0502a1dc8c78f936",
+    "Claims.SamplingGeneric.CompiledTwo.Scope": "c5b24307da73e3fd56aa75fc4617e03dfd0f41984fb40bccb792e97a43515735",
+    "Claims.SamplingGeneric.CompiledTwo.Sessions": "b75b47678cd68dec4024450995083072fa2ed0fa5dda902d273c398682193b77",
+    "Claims.SamplingGeneric.CompiledTwo.replaySample": "bc99ecaee387a6c05784d9894a69e22031f3ec413d1cbc3efa4f596a3f029841",
+    "Claims.SamplingGeneric.CompiledTwo.toCompiled": "0c63c2616b1bb25764ab651b8c1f7e5428848cea5d0fa4e874c241d8ccec06a2",
+    "Claims.SamplingGeneric.CompiledTwo.two": "bb5d61d75e180d0e5265c7ed2a38bbd6e337091d093c853487fe82047d09b02e",
+    "Claims.SamplingGeneric.CompilerKSTwo": "2f34960aa5248cf8bb1d7da7cd439645e6b8cc5e051e7b29e12ed2a0991345bf"
+   }
+  },
   "Definitions.Core.Annotation": {
    "digest": "7709cad1d4985dc3d66e725299e81008451ac5b8e1af06c2ef0f1e02e8b5d061",
    "definitions": {
@@ -23343,6 +23465,15 @@
     "Flock.Readable.sysOf": "8cea43bcd45c9db3ae1a94e22f2b602e6f3a7330825579754f904c830c060d3c",
     "Flock.Readable.toZ": "2d14c7bafa1b6988106d67d3e5cae4e07c4d0961a16a634bdd117e76ccd51321",
     "Flock.Readable.zOf": "22cc65a58b05032c6f5eeba5592440dbe3276b1a24fa6aacfb28054e6fad8889"
+   }
+  },
+  "Proofs.Flock.Claims.Witnesses.SamplingTwo": {
+   "digest": "1639978600d3853cdee1693a3e81a0899f959fc61adb2edb305c3d0fdcd074b9",
+   "definitions": {
+    "Claims.Witness.SamplingGeneric.sksLTwo": "5f9c5d5642c0bb69915e483da28d6de19b5514edb0ea75df62e089fa9a9fcdda",
+    "Claims.Witness.SamplingGeneric.toyTwo": "7210475e26c3a3fd843518adfe0a4012b6eda68f7deae0ae6de7d42261e4ffac",
+    "Claims.Witness.SamplingGeneric.twoLTwo": "50fbf176a9705e89026cf3974b238432828c9aea0b5ad4270d5e8f179c456dbb",
+    "Claims.Witness.SamplingGeneric.twoTwo": "ddd8445d33c7ed6a26bd6dd7b5738019b1f45791da9b72a37c51c544df738d4c"
    }
   },
   "Proofs.Flock.Claims.ZK.CoinLayer": {
