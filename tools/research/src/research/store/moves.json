@@ -1516,6 +1516,15 @@
         "benchmarks/e2e_h200/": "examples/h200/",
         "benchmarks/e2e_demo/": "examples/h200/interfaces/"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/remote_session/verifier.py": "verity/core/protocols/remote_bandwidth/session/verifier.py",
+        "benchmarks/remote_session/lean_verifier.py": "verity/core/protocols/remote_bandwidth/session/lean_verifier.py",
+        "benchmarks/remote_session/checks.py": "verity/core/protocols/remote_bandwidth/session/checks.py",
+        "benchmarks/remote_session/challengers.py": "verity/core/protocols/remote_bandwidth/session/challengers.py",
+        "benchmarks/remote_session/wire.py": "verity/core/protocols/remote_bandwidth/session/wire.py"
+      }
     }
   ]
 }

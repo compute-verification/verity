@@ -770,13 +770,13 @@ KNOWN: dict[str, str] = {
     "benchmarks/property_redteam/squaring.py::Op": "homonym, a red-team model's op: rename (memory-accounting)",
     "benchmarks/prove_path/window_cost.py::Registration":
         "homonym, a size model of one window's registration: rename (network-accounting)",
-    "benchmarks/remote_session/challengers.py::Gate":
+    "verity/core/protocols/remote_bandwidth/session/challengers.py::Gate":
         "homonym, infra's challenger gate (an SSH host): rename (memory-accounting)",
     "benchmarks/remote_session/device.py::Device":
         "homonym, the prover's backend in a remote session: rename (memory-accounting)",
     "benchmarks/remote_session/gate_whatif.py::Record":
         "homonym, a session's replayed times: rename (memory-accounting)",
-    "benchmarks/remote_session/lean_verifier.py::Transcript":
+    "verity/core/protocols/remote_bandwidth/session/lean_verifier.py::Transcript":
         "homonym, a remote session's difftest case: rename (memory-accounting)",
     "benchmarks/remote_session/serve.py::Trace":
         "homonym, the engine's steps as a remote session runs them: rename (memory-accounting)",
