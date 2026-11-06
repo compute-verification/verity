@@ -1,8 +1,10 @@
-import Proofs.Flock.C3.Sparse.MsgsLayers
-import Proofs.Flock.C3.PubRows.Shape
-import Proofs.Flock.C3.Opening.SessionCoins
-import Proofs.Flock.C3.Compose.RsFacts
-import Proofs.Flock.C3.Reps.WRead
+module
+
+public import Proofs.Flock.C3.Sparse.MsgsLayers
+public import Proofs.Flock.C3.PubRows.Shape
+public import Proofs.Flock.C3.Opening.SessionCoins
+public import Proofs.Flock.C3.Compose.RsFacts
+public import Proofs.Flock.C3.Reps.WRead
 
 /-!
 # `SparseSessionAt` from the sparse session's acceptance
@@ -29,6 +31,8 @@ array) and coins whose phase coins are check 5's (`csOf`).
   `tau` (`htau`) and the zero outputs (`hz`), which the verifier does not check against the coins (`rec-sparse-tau`
   and `rec-sparse-zero` are the prover's registrations, and no check reads their rows).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Sparse
 

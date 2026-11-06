@@ -1,5 +1,7 @@
-import Definitions.Accounting.Guarantees.TS
-import Definitions.Accounting.Assumptions.Stages
+module
+
+public import Definitions.Accounting.Guarantees.TS
+public import Definitions.Accounting.Assumptions.Stages
 
 /-!
 # Sampled proofs under per-stage coins (trusted)
@@ -22,6 +24,8 @@ probability `p` gives `E[e^{d/Λ}·1{pass}] = p^{−m}·(1 − (1 − p)·m) > 1
 (`Pouw.RelativeSecurity.RoundGame.Staged`) covers one draw a round, at `Λ = 1/(1 − p)`, for skips fixed before the
 draw.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.TS
 

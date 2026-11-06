@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.Replay.LigeritoSum
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoSum
 
 /-!
 # The honest Ligerito's claim is the verifier's, step by step
@@ -20,6 +22,8 @@ model keeps it, on the prover's matching step:
 The array operations read as the model's on their entries (`gv`): `foldK` is `foldLo` (`gv_foldK`), `liftU` multiplies
 the odd entries by `u` (`gv_liftU`), `splitK` is the limbs (`splitK_get`), `addScaled` is entrywise (`gv_addScaled`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

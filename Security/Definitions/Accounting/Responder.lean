@@ -1,5 +1,7 @@
-import Definitions.Accounting.Confidence
-import Definitions.Pous.Model.Audit
+module
+
+public import Definitions.Accounting.Confidence
+public import Definitions.Pous.Model.Audit
 
 /-!
 # A location as PoUS's responder: the vocabulary (trusted)
@@ -18,6 +20,8 @@ coded in `M + 1` bits by `lengthCode` (its bits, a `1`, then `0`s: there are `2^
 `M`), a `τ`-bit code of the tick `t x j`, and a code of the help. What `X` does during a window includes its
 state at the window's end, in flight too, so causality alone carries the state from one challenge tick to the next.
 -/
+
+@[expose] public section
 
 namespace Accounting
 

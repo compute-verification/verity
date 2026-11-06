@@ -17,9 +17,15 @@ line that subprotocol's own `serve` reads, under its id, in the same order:
 `{"components":[{"commitment":HEX,"evidence":HEX,"id":ID,"params":PARAMS},...]}`. All three are canonical JSON or bytes,
 and an object with a key missing or a key more is refused.
 -/
-import CoreProtocol.Protocol
-import CoreProtocol.Protocol.Canonical
-import Flock.Hash
+module
+
+public import CoreProtocol.Protocol
+public import CoreProtocol.Protocol.Canonical
+public import Flock.Hash
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Core.Composition
 

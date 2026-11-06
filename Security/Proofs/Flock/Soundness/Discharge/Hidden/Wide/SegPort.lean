@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegCommit
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegCopies
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegCommit
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegCopies
 
 /-!
 # A segmented row's commit string at its columns
@@ -11,6 +13,8 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegCopies
 Segment `j`'s compressions are `firstOf j … firstOf (j + 1) - 1` (`seg_digest`), the outer message's from
 `firstOf s` on, ending in the `hm96` slot (`seg_commit`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

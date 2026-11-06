@@ -13,6 +13,7 @@ defaultTargets = ["NciCheck", "nci-difftest", "nci-desc-difftest", "nci-desc-liv
 [leanOptions]
 autoImplicit = false
 relaxedAutoImplicit = false
+backward.proofsInPublic = true
 
 [[require]]
 name = "flock_verifier"

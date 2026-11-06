@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.DecodeZL.OP
-import Proofs.Flock.Soundness.Discharge.DecodeZL.LIG
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Tables
+module
+
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.OP
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.LIG
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Tables
 
 /-!
 # The decoder at the hidden-output headline's draws: statements
@@ -19,6 +21,8 @@ is set up:
   DecodeZL's wires `wOP` and `wLIG`, `one := true`, no final messages, `capOfRoot`. `DecodesOnExecHSt` is it at the
   statement circuit (`HmOut.parseStmt`, a templated file's template unrolled).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.HiddenDec
 

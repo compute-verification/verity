@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.FinishSwSrc
-import Proofs.Flock.Claims.ZK.PiopSrcSv
+module
+
+public import Proofs.Flock.Claims.ZK.FinishSwSrc
+public import Proofs.Flock.Claims.ZK.PiopSrcSv
 
 /-!
 # The switched source's switched vectors
@@ -17,6 +19,8 @@ claims read the witness and the mask slot alone.
 * `Masked.swSrcE_sv`: the switched source's switched vectors are the honest source's, at every table and rep.
 * **`Masked.swSrc_sv`**: `src_sv` at the switched source, at every worker's values.
 -/
+
+@[expose] public section
 
 set_option smartUnfolding false in
 /-- The switched pre-final view's `ŝ` is the honest view's. -/

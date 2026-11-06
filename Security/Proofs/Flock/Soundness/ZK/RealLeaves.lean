@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.ZK.SHVZK
-import Proofs.Flock.Soundness.ZK.Hiding
-import Definitions.Flock.ZK.RealView
+module
+
+public import Proofs.Flock.Soundness.ZK.SHVZK
+public import Proofs.Flock.Soundness.ZK.Hiding
+public import Definitions.Flock.ZK.RealView
 
 /-!
 # Zero knowledge: Lemma B with real hm96 leaves
@@ -21,6 +23,8 @@ every level-0 and pads-tree leaf, so `|Hid| ≤ N_hid`, and the Lean bound is at
 * `table_shvzk_hm96`: for every event on the view, the real prover's probability and `S_shvzk`'s differ by at most
   `2·|Hid|·δ₁` in each direction.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK
 

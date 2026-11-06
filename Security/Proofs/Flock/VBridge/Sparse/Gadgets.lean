@@ -1,5 +1,7 @@
-import Proofs.Flock.VBridge.Verifier
-import Flock.RecSparse
+module
+
+public import Proofs.Flock.VBridge.Verifier
+public import Flock.RecSparse
 
 /-!
 # The sparse-phase unit's gadgets
@@ -13,6 +15,8 @@ what the gadget computes is stated apart from the algebra:
 * `demuxLevel` splits each slot's vectors by one bit of the slot's type, `demux` level by level (`demuxVal`).
 * `RecOpen.xorL` and `xorAllL` are sums (`holds_xorL`, `sumVal`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Sparse
 

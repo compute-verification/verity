@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Tables.Headline
-import Proofs.Flock.Soundness.Discharge.Tables.Accepts
+module
+
+public import Proofs.Flock.Soundness.Discharge.Tables.Headline
+public import Proofs.Flock.Soundness.Discharge.Tables.Accepts
 
 /-!
 # Sessions of `J` tables: the statements
@@ -26,6 +28,8 @@ The decoder (`DecodesTable`, inside `DecodesOnJ`) is a named hypothesis per draw
 it is `DecodesOn`'s, which `decodesOn_exec` (`Discharge/DecodeZL`) discharges for the plain headline's tables, and its
 coin half is `decodesOnOfRuns`'s.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Tables
 

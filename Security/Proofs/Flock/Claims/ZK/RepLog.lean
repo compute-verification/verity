@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.Zk.RepRounds
-import Proofs.Flock.Claims.ZK.CausalExe
-import Proofs.Flock.Claims.ZK.FrameRounds
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.RepRounds
+public import Proofs.Flock.Claims.ZK.CausalExe
+public import Proofs.Flock.Claims.ZK.FrameRounds
 
 /-!
 # A cut rep's rounds are its log's bodies (`repCut_rounds`)
@@ -17,6 +19,8 @@ The squeezes' sizes are those of `RepRounds.lean`'s walk (`repPZk_grows`): the z
 switch's `7` and claims, Ligerito's `n` and its levels' (the recursive levels' out-of-domain sizes carried by the loop,
 `loopR_logs`), and the inner proof's constraints and `Zk.Q`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.RepLog
 

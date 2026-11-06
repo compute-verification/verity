@@ -1,8 +1,10 @@
-import Definitions.Accounting.Guarantees.PerRun
-import Proofs.Accounting.PerRunJoint
-import Proofs.Accounting.PerRunTruncation
-import Proofs.Pouw.Sampling
-import Proofs.Pouw.PearlC.W1BudgetAbort
+module
+
+public import Definitions.Accounting.Guarantees.PerRun
+public import Proofs.Accounting.PerRunJoint
+public import Proofs.Accounting.PerRunTruncation
+public import Proofs.Pouw.Sampling
+public import Proofs.Pouw.PearlC.W1BudgetAbort
 
 /-!
 # Proof of the priced per-run guarantees
@@ -22,6 +24,8 @@ accounts at most `(F + pRead·BW)·T − (W + pRead·Q)` of priced work and read
 `BudgetAbortPearlC` is compute-accounting's `Pouw.PearlC.W1BudgetAbort.BudgetAbortPearlC` (`budgetAbortPearlC_iff`),
 and a cost model whose costs and calls don't depend on the coins satisfies it (`budgetAbortPearlC_of_oblivious`).
 -/
+
+@[expose] public section
 
 namespace Accounting
 

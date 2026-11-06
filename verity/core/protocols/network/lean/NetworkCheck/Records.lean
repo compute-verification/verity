@@ -1,5 +1,7 @@
-import NetworkCheck.Check
-import Difftest
+module
+
+public import NetworkCheck.Check
+public import Difftest
 
 /-!
 # The audit over every published record, a core protocol: `verity/network-records/v3`
@@ -41,6 +43,10 @@ nothing else holds. Its refusals are otherwise `evaluate`'s, and its ingress ver
 `network-records verdicts`, every execution phase's verdict on a `serve` case through `Difftest.serve`: `verdicts`
 (`verdictsFn`) and `verdicts-no-grid` (`verdictsNoGridFn`).
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace NetworkCheck.Records
 

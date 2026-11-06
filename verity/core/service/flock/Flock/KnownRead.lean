@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §16.10 (registered reads), a value the verifier registers at known content (`Registered.KNOWN_KEY`): the known
+`Flock.HmRow` (registered reads), a value the verifier registers at known content (`Registered.KNOWN_KEY`): the known
 content binds a statement's row only where the circuit reads or returns it. `check` refuses a circuit one of whose ports
 the `--registered` file names at known content is not a `sha512/row/v2` row of the known rows' words, or has a row bit
 that no computed row of the unit reads (an input row) or no copy returns (an output row): the statement would then not
@@ -16,10 +16,14 @@ A port the file marks `read_in_full` (`READ_KEY`) is checked the same way, as on
 (`fullRows`): its every bit is read, at the registered width, so two statements that read one registered row in full
 depend on the same bits of it.
 -/
-import Flock.RegKnown
-import Flock.RecResiduals
-import Flock.ProvedScope
-import Flock.TmplReads
+module
+
+public import Flock.RegKnown
+public import Flock.RecResiduals
+public import Flock.ProvedScope
+public import Flock.TmplReads
+
+@[expose] public section
 
 namespace Flock
 namespace KnownRead
@@ -154,7 +158,7 @@ def readsOk (c : Circuit) (known : Array (String × Array (Array Nat × ByteArra
     | .error _ => readsOkAt c known (RecResiduals.readIns c.unit)
   | none => readsOkAt c known (RecResiduals.readIns c.unit)
 
-/-- **The known content binds the circuit's rows** (PROTOCOL.md §16.10): each known value names one port of the
+/-- **The known content binds the circuit's rows** (`Flock.HmRow`): each known value names one port of the
 circuit (`namesOk`), and every bit of every known port is read or returned (`readsOk`). -/
 def check (c : Circuit) (known : Array (String × Array (Array Nat × ByteArray))) : V Unit :=
   namesOk c known >>= fun _ => readsOk c known

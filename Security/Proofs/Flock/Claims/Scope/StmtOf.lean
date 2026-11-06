@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Scope.Setup
-import Proofs.Flock.Claims.Scope.Fit
-import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
+module
+
+public import Proofs.Flock.Claims.Scope.Setup
+public import Proofs.Flock.Claims.Scope.Fit
+public import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
 
 /-!
 # Each table the verifier parses is `stmtOf`'s
@@ -9,6 +11,8 @@ import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
 `RegionsWF`), and its table's matrices (`placedA`, `placedB`, what `Tab.toModel` reads) are `stmtOf`'s (`matA`, `matB`;
 `placedA_eq`, on the public-output path and the hidden one).
 -/
+
+@[expose] public section
 
 namespace Flock.Readable
 

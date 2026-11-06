@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.Stopped
+module
+
+public import Proofs.Flock.Claims.ZK.Stopped
 
 /-!
 # The masked session's rounds where no refusal is seen
@@ -7,7 +9,7 @@ At a round after the first where the openings show no refusal, `flock-circuit --
 body. No answered outer coin is `1`, so `honestPR` is `honestP` at the tape's mask words; fed fewer answers than the
 session sends, it sends the session's body at their count, tagged `0` (`FlockComplete.ZkTables.honestPR_sent`).
 
-* `setupOf_of_refK`: a statement with a pre-final round sets up a session.
+* `setupOf_of_refK`: a live statement with a pre-final round sets up a session.
 * `refused_of_outerHit`: an outer hit at the openings' answers is a refusal they show (`Refused`'s first kind), the
   converse of `outerHit_of_lt`.
 * `liveRun`: the masked session on the mask witness at the tape, answered by the openings.
@@ -19,6 +21,8 @@ session sends, it sends the session's body at their count, tagged `0` (`FlockCom
   coins show: table `0`'s extra claims throw at a statement whose regions do not fit, right after the link message.
 -/
 
+@[expose] public section
+
 namespace Claims.ZKMal
 
 open Claims FlockSoundness.Discharge
@@ -26,13 +30,16 @@ open CoinLayer
 
 namespace Masked
 
-/-- **A statement with a pre-final round sets up a session**: where none sets up, the verifier has one round. -/
-theorem setupOf_of_refK {x : Msg} (h : 0 < refK x) :
+/-- **A live statement with a pre-final round sets up a session**: where none sets up, a statement the masked deployment
+parses is no recursive one either (`decodeRec_none_of_parse`), so it sets up no masked session and has one round. -/
+theorem setupOf_of_refK {x : Msg} (hx : Live x) (h : 0 < refK x) :
     ∃ s spec, FlockDeploy.setupOf true x = some (s, spec, stsOf x) := by
   unfold stsOf
-  unfold refK at h
   cases hs : FlockDeploy.setupOf true x with
-  | none => simp [FlockDeploy.V, hs] at h
+  | none =>
+    obtain ⟨_, hp, -⟩ := hx.1
+    rw [refK_none (sessOf_none hs (RecDeploy.setupO_none (decodeRec_none_of_parse hp)))] at h
+    exact absurd h (Nat.lt_irrefl 0)
   | some v =>
     obtain ⟨s, spec, sts⟩ := v
     exact ⟨s, spec, rfl⟩
@@ -42,7 +49,7 @@ slot is `1` at the opened coins (`outerAt`). -/
 theorem refused_of_outerHit {x : Msg} (hx : Live x) (ops : List (Msg × Msg)) (hl : ops.length < refK x)
     (h : FlockComplete.ZkTables.outerHit x ((ops.map fun p => (p.1, coinOfD p.2)).map Prod.snd) = true) :
     Refused x (padOps ops) ops.length := by
-  obtain ⟨s, spec, hsx⟩ := setupOf_of_refK (lt_of_le_of_lt (Nat.zero_le _) hl)
+  obtain ⟨s, spec, hsx⟩ := setupOf_of_refK hx (lt_of_le_of_lt (Nat.zero_le _) hl)
   obtain ⟨-, -, -, hall⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hsx
   have hh : (ops.map fun p => (p.1, coinOfD p.2)).map Prod.snd = ops.map fun p => coinOfD p.2 := by
     rw [List.map_map]
@@ -149,7 +156,7 @@ theorem hlive_of_sent {P : Composed.LigProver}
           ((session nr (tableData P (RoundPlan.stop cz enc fin) U)).cutOf x (padOps ops) (wtOf P x w) τ) =
         (((FlockComplete.ZkTables.honestPR w).next x (ops.map fun p => (p.1, coinOfD p.2)) (U.tapeZk τ)).eval H).1 := by
   intro x hx w hR τ ops h0 hl hs
-  obtain ⟨s, spec, hsx⟩ := setupOf_of_refK (lt_of_le_of_lt (Nat.zero_le _) hl)
+  obtain ⟨s, spec, hsx⟩ := setupOf_of_refK hx (lt_of_le_of_lt (Nat.zero_le _) hl)
   rcases hstep x hx w hR τ ops h0 hl hs s spec hsx with ⟨hn, hb⟩ | ⟨he, hn, hb⟩
   · rw [honestPR_live H hH hx w (U.tapeZk τ) ops hl hs hsx hn]
     exact hb

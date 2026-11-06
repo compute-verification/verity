@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Honest
-import Proofs.Flock.Claims.Complete.Zk.Sim
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.Honest
+public import Proofs.Flock.Claims.Complete.Zk.Sim
 
 /-!
 # The honest run against the masked verifier, at any number of tables
@@ -8,6 +10,8 @@ import Proofs.Flock.Claims.Complete.Zk.Sim
 prover's `feed_sim` and `stepWith_acc`, and the run is the pure masked session (`sessionPZk_sim`) on each table's share
 of the witness (`sessionS`, `honestRun_eq`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.Live
-import Proofs.Flock.Soundness.Discharge.Exec.Setup
-import Proofs.Flock.Soundness.Discharge.Exec.Retained
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Live
+public import Proofs.Flock.Soundness.Discharge.Exec.Setup
+public import Proofs.Flock.Soundness.Discharge.Exec.Retained
 
 /-!
 # The target statements of flock-verify `--zk`'s acceptance and its refinement
@@ -31,6 +33,8 @@ Each statement is a `Prop` here; its theorem (`theorem … : G`) is in the file 
   audit's `Pr[accept ∧ Q]` at the simulated prover, for any event `Q` of that prover (at least `K` wrong units of its
   committed values): `Pr[flock-verify --zk accepts ∧ Q] ≤ B`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

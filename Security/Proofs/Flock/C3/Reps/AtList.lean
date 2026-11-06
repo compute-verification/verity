@@ -1,5 +1,7 @@
-import Proofs.Flock.C3.Reps.WithReads
-import Proofs.Flock.C3.PubRows.Shape
+module
+
+public import Proofs.Flock.C3.Reps.WithReads
+public import Proofs.Flock.C3.PubRows.Shape
 
 /-!
 # C3's rep decoder over the verifier's own list
@@ -19,6 +21,8 @@ the list is V*'s holo statements (`FlockC3.VStarList.statements_holo`).
   from each part's `ResZeroAtLH`, `RepMaps.algebraDecodes` and `withReads_algebraDecodes` with the structure and groups
   the list's.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.Json.Live
-import Proofs.Flock.Claims.Complete.Zk.Link
-import Proofs.Flock.Claims.Complete.Zk.Json.Decode
+module
+
+public import Proofs.Flock.Claims.Complete.Json.Live
+public import Proofs.Flock.Claims.Complete.Zk.Link
+public import Proofs.Flock.Claims.Complete.Zk.Json.Decode
 
 /-!
 # What the one-table honest masked session returns and sends
@@ -17,6 +19,8 @@ then the streams' rounds in order (`SessionFactsZk`).
 * **The quiet parts**: the masked commitment and the pads' commitment send nothing (`commitPZk_pureS`,
   `innerCommitP_pureS`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

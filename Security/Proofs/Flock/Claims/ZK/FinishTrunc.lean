@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.FinishBridge
-import Proofs.Flock.Claims.ZK.FrameAsks
-import Proofs.Flock.Claims.Complete.Zk.RepRounds
+module
+
+public import Proofs.Flock.Claims.ZK.FinishBridge
+public import Proofs.Flock.Claims.ZK.FrameAsks
+public import Proofs.Flock.Claims.Complete.Zk.RepRounds
 
 /-!
 # The firewall's rounds as the session's, at coins that agree below each round's count
@@ -18,6 +20,8 @@ header's `u64`), so the two runs agree wherever every squeeze is below `2^64`:
 * **`repFwC_br`**: `repFwC` at the port's coins and at any coins that agree with them below each round's count, from the
   session's round `base`, given `m − 13`, the claims, `n + 1` and every level's `q + 1` bounded.
 -/
+
+@[expose] public section
 
 namespace Flock.Firewall.Finish
 

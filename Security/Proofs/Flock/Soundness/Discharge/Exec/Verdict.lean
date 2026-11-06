@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.Exec.Decode
-import Proofs.Flock.Soundness.Discharge.Exec.Live
-import Proofs.Flock.Soundness.Discharge.Exec.Merkle
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.Decode
+public import Proofs.Flock.Soundness.Discharge.Exec.Live
+public import Proofs.Flock.Soundness.Discharge.Exec.Merkle
 
 /-!
 # The salted table's verdict at flock-verify's acceptance (the verdict part of `Decodes`)
@@ -21,6 +23,8 @@ What remains of `Decodes` at an accepted outcome is that those runs are runs on 
 that the messages between coins `j − 1` and `j` are the ones `dec j` reads off round `j`'s retained bytes, which are the
 encodings of chunk `j` of the rep's frames (`accepts_rep_rounds`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

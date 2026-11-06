@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainLeafDecJK
-import Proofs.Flock.Claims.KS.PlainClash0K
+module
+
+public import Proofs.Flock.Claims.KS.PlainLeafDecJK
+public import Proofs.Flock.Claims.KS.PlainClash0K
 
 /-!
 # The level-0 clash's draw half at the parsed record
@@ -7,6 +9,8 @@ import Proofs.Flock.Claims.KS.PlainClash0K
 `PlainClash0`'s and `PlainClash0K`'s `keep` lemmas at `wrPDJK` (`EntriesClashJK`, `plain_clash₀AtJK`,
 `plain_clash₀HAtJK`), on `PlainDrawAccJK`'s acceptance lemmas.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.PlainDraw
 

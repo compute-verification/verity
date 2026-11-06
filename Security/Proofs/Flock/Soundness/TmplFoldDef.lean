@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.TmplFoldRef
+module
+
+public import Proofs.Flock.Soundness.TmplFoldRef
 
 /-!
 # The template fold's arithmetic
@@ -10,6 +12,8 @@ What `Tmpl.foldDef` relies on besides the call tree:
 - `eqTail_at`, `eqTail_split`: the halves table read at `lo` is `eq(r[lo ..], ·)`, and `eq(r, u + 2^k v)` splits into
   `eq(r[0 .. k], u) · eq(r[k ..], v)`, the low and high factors of a summed class.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl FlockLevel3 GF128
 

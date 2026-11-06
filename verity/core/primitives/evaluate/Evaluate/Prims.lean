@@ -1,12 +1,14 @@
-import Flock.Program
-import Evaluate.Scalar
-import Evaluate.Casts
-import Evaluate.TC.Dots
-import Evaluate.Words
-import Evaluate.Libdevice
-import Evaluate.Mufu
-import Evaluate.Decimal
-import Evaluate.Act
+module
+
+public import Flock.Program
+public import Evaluate.Scalar
+public import Evaluate.Casts
+public import Evaluate.TC.Dots
+public import Evaluate.Words
+public import Evaluate.Libdevice
+public import Evaluate.Mufu
+public import Evaluate.Decimal
+public import Evaluate.Act
 
 /-!
 # The primitives the evaluator implements
@@ -28,6 +30,10 @@ Each gate's value is the Python evaluator's, transcribed on `Nat`, its operands 
 A primitive is recognized by its id and must declare the signature the registry holds for it, parameter names included
 (`codec.decode_program`'s check). Every other primitive is refused by name, never guessed.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Evaluate
 

@@ -1,7 +1,9 @@
-import Proofs.Pouw.PearlC.DeviceCapGamma
-import Definitions.Pouw.Assumptions.PearlC.DeviceChainCap
-import Definitions.Pouw.Guarantees.PearlC
-import Proofs.Pouw.PearlC.TTOutW1Variants
+module
+
+public import Proofs.Pouw.PearlC.DeviceCapGamma
+public import Definitions.Pouw.Assumptions.PearlC.DeviceChainCap
+public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.PearlC.TTOutW1Variants
 
 /-!
 # The cap on the chain's share: what it admits, that it asserts less, and γ
@@ -22,6 +24,8 @@ Staged; nothing pinned.
   - per unit, `26921/7493750` (0.35925%) at 8192³ and `367519/103656250` (0.35456%) at 16384³;
   - per audit tile, `216793/59950000` (0.36162%) and `2950127/829250000` (0.35576%), as the 1/1,000 row.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

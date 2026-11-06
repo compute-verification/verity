@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.PlaysCoin.Statements
+module
+
+public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Statements
 
 /-!
 # A tape from its groups
@@ -9,6 +11,8 @@ A tape is determined by its coin steps and its messages cut at them: `groups ts`
 `coinMsg true` (`ungroup_tapeFrom`). So `tapeOfGroups` (`TapeOfGroups`). `cutOfPat` (`CutOfPat`): groups and a tail,
 along a spine whose coin pattern is theirs, cut back into them.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.PlaysCoin
 

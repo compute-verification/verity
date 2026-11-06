@@ -1,6 +1,8 @@
-import Proofs.Flock.C3.RegLevels.OpensRegs
-import Proofs.Flock.C3.PubRows.Check
-import Proofs.Flock.VBridge.Family.Openings
+module
+
+public import Proofs.Flock.C3.RegLevels.OpensRegs
+public import Proofs.Flock.C3.PubRows.Check
+public import Proofs.Flock.VBridge.Family.Openings
 
 /-!
 # n11: `OpensTopAt`'s registered outputs, from the unit's output rows
@@ -24,6 +26,8 @@ output row (`HiddenExec.rowOfH`, `outRowOf`): copy `j`'s output `o`, bit `t`, is
 * `accOutRegs_of_check`: at the verifier's unit, the `acc_out` columns registered as the bits of the row the `acc_out`
   read holds, as `accOut_of_regOut` takes them.
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

@@ -1,3 +1,5 @@
+module
+
 /-!
 # A drawn H1 leaf's 33 statements, port by port (option A)
 
@@ -38,6 +40,10 @@ leaf at K = 64.
 Code: Lean core only, never `Security/`, so proofs' decoders (`Security/Proofs/Accounting/TS/Session/Lanes`) import it
 from `pouw_window` through `security_properties`.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace PouwWindow.Lanes
 

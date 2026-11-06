@@ -1,4 +1,6 @@
-import Properties.Evaluate
+module
+
+public import Properties.Evaluate
 
 /-!
 # Proofs of the evaluator's equalities (`Properties.Evaluate`)
@@ -8,6 +10,8 @@ an operand that Security reads unmasked, the bit fields both read are rewritten 
 two (`Bits`), which `omega` decides. Where the types are the evaluator's own, each function commutes with `toCore` by
 cases on the constructors, and the lists by `List.foldl_map`, `List.filterMap_map` and induction on the groups.
 -/
+
+@[expose] public section
 
 namespace Properties.Evaluator
 

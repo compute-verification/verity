@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.ZkFork0
+module
+
+public import Proofs.Flock.Claims.KS.ZkFork0
 
 /-!
 # Flock's KS at the trimmed record and at the untrimmed one
@@ -25,6 +27,8 @@ decoders:
   (`Flock.TrimBridge.KS_both_of_tableBoundJR`). At the masked record: `FlockDeploy.KS.TrimBridge.zk_KS_both_of_tableBoundJR`,
   and at the premises `FlockDeploy.KS.zk_KS_of_kinds` takes, `FlockDeploy.KS.TrimBridge.zk_KS_both_of_kinds`.
 -/
+
+@[expose] public section
 
 namespace Claims.Flock.TrimBridge
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Facts
-import Proofs.Flock.Soundness.ParseStmt
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+public import Proofs.Flock.Soundness.ParseStmt
 
 /-!
 # The committed circuit and the statement circuit
@@ -9,6 +11,8 @@ template), and its statement circuit (`HmOut.parseStmt`) is that circuit unrolle
 committed circuit itself for a flat file. A session-side consumer takes `HmOut.parseCommit … = .ok st.c` where it took
 `HmOut.parse … = .ok st.c`; a statement-side one reads `HmOut.unrolled st.c`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

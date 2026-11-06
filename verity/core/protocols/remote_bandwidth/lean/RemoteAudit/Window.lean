@@ -1,5 +1,7 @@
-import Std.Data.HashMap
-import RemoteAudit.Receipts
+module
+
+public import Std.Data.HashMap
+public import RemoteAudit.Receipts
 
 /-!
 # A window's receipt checks: `audit.py`'s `Session.close` draw and `Session.verify`
@@ -23,6 +25,8 @@ openings of them, in the order drawn. Each opening, in `_check`'s order, fails w
 A window with another number of openings than draws is `malformed`. `tile` is never reached: a registration that binds
 PoUW's tiles is refused (`Registration.make?`), a form no proof here covers.
 -/
+
+@[expose] public section
 
 namespace RemoteAudit
 

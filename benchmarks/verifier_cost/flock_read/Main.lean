@@ -99,7 +99,7 @@ def main (args : List String) : IO UInt32 := do
   if ml > 0 then report "maskLogOf" t0 [("mask_log", toJson ml)] else report "maskLogOf" t0
   let count := 1
   let coinsV := Coins.tree (Zk.coinSpec (tags0.tableNames count))
-  let tags := Zk.tags (tags0.withCoins coinsV) ml count
+  let tags := Zk.tags tags0 ml count
   -- the decode and line split, then each section's parse, as `HmRow.parse` reads them
   let t0 ← IO.monoNanosNow
   match String.fromUTF8? bytes with

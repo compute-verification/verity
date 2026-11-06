@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.Sent
-import Proofs.Flock.Claims.Complete.ZkTables.Round1
-import Proofs.Flock.Claims.Complete.Zk.Json.Runs
+module
+
+public import Proofs.Flock.Claims.ZK.Sent
+public import Proofs.Flock.Claims.Complete.ZkTables.Round1
+public import Proofs.Flock.Claims.Complete.Zk.Json.Runs
 
 /-!
 # The masked session's second message at a live statement
@@ -14,6 +16,8 @@ stops after the link message (`FlockComplete.sessionPZk_go_round1_err`).
 * `repStreams_head`: the first rep stream is table `0`'s rep `0`.
 * `liveRun_round1`: round `1` of `liveRun` at a live statement, in those two cases.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

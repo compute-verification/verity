@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.DecodeZLJ.Statements
+module
+
+public import Proofs.Flock.Soundness.Discharge.DecodeZLJ.Statements
 
 /-!
 # flock-verify's acceptance at table `j`, rep by rep
@@ -10,6 +12,8 @@ import Proofs.Flock.Soundness.Discharge.DecodeZLJ.Statements
 `planJ_get`, `tableJ_of`: table `j` of `planJ` is `tableJ` at part `j`, and wherever a `SetupJ` exists it is the
 `SetupJ.spec` of one with the same statement.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.DecodeZLJ
 

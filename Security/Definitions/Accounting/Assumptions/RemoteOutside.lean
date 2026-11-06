@@ -1,4 +1,6 @@
-import Definitions.Accounting.Remote.Outside
+module
+
+public import Definitions.Accounting.Remote.Outside
 
 /-!
 # No device outside the node computes on the store: statement C in full (trusted)
@@ -34,6 +36,8 @@ The two give `SketchBound` (`Accounting.SecurityProofs.Remote.sketchBound_of_noO
   `outside`), so it holds wherever the grinding ran. What C adds is where the computation on a block's sectors (the
   block clause) and on its receipts (the receipts clause) ran.
 -/
+
+@[expose] public section
 
 namespace Accounting.Remote.Held.Assumptions
 

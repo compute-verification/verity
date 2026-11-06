@@ -1,6 +1,8 @@
-import Proofs.Flock.Bridge.Lowers
-import Proofs.Flock.Bridge.Deployed
-import Proofs.Flock.Bridge.Canon
+module
+
+public import Proofs.Flock.Bridge.Lowers
+public import Proofs.Flock.Bridge.Deployed
+public import Proofs.Flock.Bridge.Canon
 
 /-!
 # A unit right on its canonical openings is not faulty
@@ -22,6 +24,8 @@ wire's position under `Cm` and `roots`. It reads the transport only at the right
   `wireAt`, so `lowers` gives the unit's gates correct, and each input the unit owns is one of its committed wires
   (`mem_io_of_owner`), so its row opens.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

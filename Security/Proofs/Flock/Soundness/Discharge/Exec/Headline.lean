@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Headline
-import Proofs.Flock.Soundness.Discharge.Exec.Event
-import Proofs.Flock.Soundness.Discharge.Exec.SessionL
+module
+
+public import Proofs.Flock.Soundness.Headline
+public import Proofs.Flock.Soundness.Discharge.Exec.Event
+public import Proofs.Flock.Soundness.Discharge.Exec.SessionL
 
 /-!
 # A draft of the headline at the executable (R11)
@@ -28,6 +30,8 @@ is the headline restated there: knowledge soundness and the link theorem over `M
 `flock_headline_exec_L` takes as `hB`. The other open half of R11 is `hRef` itself: a strategy of the audit built from
 the live prover, the challenger's per-round coins (A6) as the audit's coins, and the live event `bad` bounded.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 

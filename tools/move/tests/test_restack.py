@@ -288,6 +288,34 @@ def test_a_script_that_fails_is_reported_and_nothing_else_happens(repo):
     assert git(repo, "worktree", "list", "--porcelain") == before
 
 
+def test_the_moves_main_has_and_the_branch_lacks_are_found_by_their_move_lines_oldest_first(repo):
+    """`Move:` runs rename.py and `Layout-move:` layout.py, each with its map (and `--no-lock` as the move ran); a merge, a
+    restack's own commit and a commit the branch has are no moves to cross."""
+    words = commit(repo, "words", {"a.txt": "a\n"})
+    git(repo, "commit", "-q", "--allow-empty", "-m", "words\n\nMove: tools/move/words_map.toml")
+    words = git(repo, "rev-parse", "HEAD")
+    git(repo, "branch", "later", words)
+    git(repo, "commit", "-q", "--allow-empty", "-m", "paths\n\nLayout-move: tools/move/paths_map.toml --no-lock")
+    paths = git(repo, "rev-parse", "HEAD")
+    git(repo, "commit", "-q", "--allow-empty", "-m", f"carried\n\n{RS.TRAILER_MOVE}: {paths}\nMove: tools/move/x.toml.bak")
+    git(repo, "checkout", "-q", "-b", "side", "HEAD~1")
+    git(repo, "commit", "-q", "--allow-empty", "-m", "side")
+    git(repo, "checkout", "-q", "main")
+    git(repo, "merge", "-q", "--no-ff", "-m", "land side\n\nMove: tools/move/merged_map.toml", "side")
+    assert RS.moves_on("main", "pr", str(repo)) == [
+        (words, "tools/move/rename.py", ("--map", "tools/move/words_map.toml")),
+        (paths, "tools/move/layout.py", ("--map", "tools/move/paths_map.toml", "--no-lock"))]
+    assert RS.moves_on("main", "later", str(repo)) == RS.moves_on("main", "pr", str(repo))[1:]
+    assert RS.move_line(paths, str(repo)) == ("tools/move/layout.py", ("--map", "tools/move/paths_map.toml", "--no-lock"))
+    assert RS.move_line("move", str(repo)) is None
+
+
+def test_a_branch_with_no_move_to_cross_is_told_to_merge(repo, monkeypatch, capsys):
+    monkeypatch.chdir(repo)
+    assert RS.main(["pr", "--main", "base"]) == 0
+    assert "pr: no-moves" in capsys.readouterr().out
+
+
 def test_the_source_branch_and_checkout_are_untouched(repo):
     head = on(repo, "pr", ("edit util", {"app/util.py": edit(UTIL, "return 5", "return 50")}))
     (repo / "scratch.txt").write_text("the caller's uncommitted file\n")

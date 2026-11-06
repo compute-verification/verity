@@ -1,5 +1,7 @@
-import Mathlib
-import Definitions.Claims
+module
+
+public import Mathlib
+public import Definitions.Claims
 
 /-!
 # Relative security for matmul PoUW: the vocabulary its guarantees read (trusted)
@@ -25,6 +27,8 @@ follow them into the spec:
   `OneSidedAt`), `Z/2³²` read mod 2 (`toF2`), a cell-block's frame (`dFrame`), products two-sided at a frame
   (`XBlind`, `YBlind`, `TwoSidedAt`) and charging purity (`SlpG.ChargePure`; across draws, `SlpG.ChargePureAt`).
 -/
+
+@[expose] public section
 
 namespace Pouw.RelativeSecurity
 

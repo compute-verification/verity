@@ -1,28 +1,30 @@
-import Mathlib.Combinatorics.SimpleGraph.Clique
-import Mathlib.Combinatorics.SimpleGraph.Finite
-import Mathlib.Data.ZMod.Basic
-import Definitions.Pous.Accounting.LemmaA
-import Definitions.Pous.Accounting.Params
-import Definitions.Pous.Accounting.PubMeets
-import Definitions.Pous.Accounting.GradedMeets
-import Definitions.Pous.Accounting.Rebuild
-import Definitions.Pous.Assumptions
-import Definitions.Pous.Model.HashChain
-import Definitions.Pous.Model.Dense
-import Definitions.Pous.Model.Inc
-import Definitions.Pous.Model.Invertible
-import Definitions.Pous.Model.Labelling
-import Definitions.Pous.Model.M1
-import Definitions.Pous.Model.P3Chain
-import Definitions.Pous.Model.BandChain
-import Definitions.Pous.Model.Pebbling
-import Definitions.Pous.Model.SampledAudit
-import Definitions.Pous.Guarantees.P2
-import Definitions.Pous.Guarantees.Obligation
-import Definitions.Pous.Guarantees.StreamedWipe
-import Definitions.Pous.Model.BandGraph
-import Definitions.Pous.Model.SegLift
-import Definitions.Pous.Model.Continuous
+module
+
+public import Mathlib.Combinatorics.SimpleGraph.Clique
+public import Mathlib.Combinatorics.SimpleGraph.Finite
+public import Mathlib.Data.ZMod.Basic
+public import Definitions.Pous.Accounting.LemmaA
+public import Definitions.Pous.Accounting.Params
+public import Definitions.Pous.Accounting.PubMeets
+public import Definitions.Pous.Accounting.GradedMeets
+public import Definitions.Pous.Accounting.Rebuild
+public import Definitions.Pous.Assumptions
+public import Definitions.Pous.Model.HashChain
+public import Definitions.Pous.Model.Dense
+public import Definitions.Pous.Model.Inc
+public import Definitions.Pous.Model.Invertible
+public import Definitions.Pous.Model.Labelling
+public import Definitions.Pous.Model.M1
+public import Definitions.Pous.Model.P3Chain
+public import Definitions.Pous.Model.BandChain
+public import Definitions.Pous.Model.Pebbling
+public import Definitions.Pous.Model.SampledAudit
+public import Definitions.Pous.Guarantees.P2
+public import Definitions.Pous.Guarantees.Obligation
+public import Definitions.Pous.Guarantees.StreamedWipe
+public import Definitions.Pous.Model.BandGraph
+public import Definitions.Pous.Model.SegLift
+public import Definitions.Pous.Model.Continuous
 
 /-!
 # Guarantees
@@ -38,6 +40,8 @@ are stated under the same names in `Security/Proofs/Pous/Statements.lean`.
 hypotheses of the pinned `Prop`, never as axioms. "Pinned as drafted" means the binders and conclusion are the draft's,
 verbatim.
 -/
+
+@[expose] public section
 
 namespace Pous.Guarantees
 

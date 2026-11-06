@@ -1,4 +1,6 @@
-import Definitions.Pous.Model.StreamedWipe
+module
+
+public import Definitions.Pous.Model.StreamedWipe
 
 /-!
 # The streamed-label wipe at 2152 reads: what `verity/wipe/v0` publishes
@@ -13,6 +15,8 @@ and every tier counted, C5 and C6 are the game's shape, which the challenger's d
 `eps = 2^-128` leaves the PRF's advantage out. **What they cover:** the sequential reveal (batch size 1), the only one
 the verdict accepts.
 -/
+
+@[expose] public section
 
 namespace Pous.Guarantees
 

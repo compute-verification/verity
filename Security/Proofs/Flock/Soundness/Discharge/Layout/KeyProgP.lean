@@ -1,5 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
-import Proofs.Flock.Soundness.Discharge.Placed.KeyedP
+module
+
+public import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
+public import Proofs.Flock.Soundness.Discharge.Placed.KeyedP
+
+@[expose] public section
 
 set_option Elab.async false
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Sampling.Select.DrawLaw
-import Proofs.Flock.Claims.Sampling.Reference.Prover
+module
+
+public import Proofs.Flock.Claims.Sampling.Select.DrawLaw
+public import Proofs.Flock.Claims.Sampling.Reference.Prover
 
 /-!
 # Sampling completeness from Flock's, session by session
@@ -26,6 +28,8 @@ the statements of the sessions at `x`.
 * `complete_of_sessions`: **`Complete H D`** from Flock's completeness at `D.flock`, `DrawFixed`, the four facts,
   Flock's errors nonnegative, and `D.δc H x ≥ K · sessErr`.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling.Reference
 

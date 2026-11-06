@@ -1,4 +1,6 @@
-import Mathlib
+module
+
+public import Mathlib
 
 /-!
 # Slot writes, heads and a steered consumer (trusted)
@@ -13,6 +15,8 @@ SAMPLING's LIN-STEER:
 * a consumer dot product of a lever row, with its noise-active coordinates and its least work once some of them are
   zeroed (`Consumer`).
 -/
+
+@[expose] public section
 
 namespace Accounting.TS
 

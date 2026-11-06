@@ -1,4 +1,6 @@
-import Definitions.Nci.Dampener
+module
+
+public import Definitions.Nci.Dampener
 
 /-!
 # The compute dampener, remote protocol: the vocabulary
@@ -25,6 +27,8 @@ residual read there is `r̂ + ε_W W_cert/C`.
 `remoteDampener` is the hardware multiple the bound gives, as `tiers.evaluate` computes `dampener` and `fit.dampener`
 computes it at `s = 0`; `hardwareMultiple` is the one a developer needs.
 -/
+
+@[expose] public section
 
 namespace Nci.Dampener
 

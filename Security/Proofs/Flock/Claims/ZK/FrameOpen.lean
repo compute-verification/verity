@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FrameRounds
+module
+
+public import Proofs.Flock.Claims.ZK.FrameRounds
 
 /-!
 # Level 0's masked rounds: the frame's release of the zero-pad rounds is the rounds at the pads
@@ -24,6 +26,8 @@ which adds the rep's pads at those values' absorbed positions, releases it as th
   for a stopped rep or not. That is `RoundHonest` at a live round and `RoundFrames` at a stand-in, the two forms
   `liveRoundEq_of_honest` and `fillRoundEq_of_frames` read, at each of level 0's masked rounds.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

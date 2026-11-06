@@ -1,4 +1,6 @@
-import Definitions.Pouw.Assumptions.Dimension.H100
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.H100
 
 /-!
 # `MH100w`: W1's free operations only, and the distinct-writes bound (trusted statements; draft semantics)
@@ -51,6 +53,8 @@ instructions at `pr.tc` or more per register, FFMA, FADD and FMUL at `pr.ffma`, 
 * **Tightness** (`DistinctWritesAttained`), the C-2 corollary (`C2DistinctWords`, `C2FirstRunCopy`), and the scheme's
   side (`DistinctLiveAt`, `DistinctLiveMH100`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.H100
 

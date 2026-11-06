@@ -1,7 +1,9 @@
-import Definitions.Pouw.PearlC.Defs
-import Definitions.Pouw.Basic.Prob
-import Definitions.Pouw.Basic.QTree
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+module
+
+public import Definitions.Pouw.PearlC.Defs
+public import Definitions.Pouw.Basic.Prob
+public import Definitions.Pouw.Basic.QTree
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 
 /-!
 # Pearl-C's γ-gap game and accounting (trusted)
@@ -22,6 +24,8 @@ peel) are `Pouw.PearlC.Defs`'; here the protocol's reference functions are field
                 cap (units above the cap are rejected, so they enter neither sum); A wins if T / (1 − γ) < ∑_{u ∈ K} W_ref(u).
 ~~~
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

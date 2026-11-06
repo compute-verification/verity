@@ -12,9 +12,13 @@ files, and never by the prover's workers.
 
 The analysis holds these to the coin layer's `Hello` (`Claims.ZKMal.CoinLayer.helloD`, `Claims/ZK/HelloLean.lean`).
 -/
-import Flock.Witness
-import Flock.Firewall.Coins
-import Flock.JsonParse
+module
+
+public import Flock.Witness
+public import Flock.Firewall.Coins
+public import Flock.JsonParse
+
+@[expose] public section
 
 namespace Flock.Firewall.Hello
 

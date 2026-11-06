@@ -1,4 +1,6 @@
-import Definitions.Core.Partition
+module
+
+public import Definitions.Core.Partition
 
 /-!
 # Annotations: the gates each label holds
@@ -25,6 +27,8 @@ module states only what it denotes. Its **meaning** Φ is a `Prop` on an annotat
 what a check establishes: a check reads the annotation's committed table, never the algorithm that chose it. The query
 reads no trace and no coins: the sample is a set of labels, not an annotation.
 -/
+
+@[expose] public section
 
 namespace Verity
 
