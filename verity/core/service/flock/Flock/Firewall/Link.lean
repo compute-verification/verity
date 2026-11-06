@@ -168,6 +168,25 @@ theorem parRange_eq {α : Type} (f : Nat → α) (a b : Nat) : parRange f a b = 
       List.length_nil, Nat.zero_add, List.foldl_toArray', List.foldl_cons, List.foldl_nil, Array.map_append,
       Array.map_map, Function.comp_def]
 
+/-- `(Array.range n).map f` in tasks of `2^10` entries, the rest inline (`parMapRange_eq`). -/
+def parMapRange {α : Type} (f : Nat → α) (n : Nat) : Array α :=
+  let a := n / 1024
+  parRange f a 1024 ++ (Array.range (n - a * 1024)).map fun j => f (a * 1024 + j)
+
+theorem parMapRange_eq {α : Type} (f : Nat → α) (n : Nat) : parMapRange f n = (Array.range n).map f := by
+  conv => rhs; rw [← Nat.add_sub_cancel' (Nat.div_mul_le_self n 1024)]
+  rw [Array.range_add, Array.map_append, Array.map_map, parMapRange, parRange_eq]
+  rfl
+
+/-- A Merkle layer's nodes `SHA-512(l ‖ r)` over the pairs of `below`, in tasks (`parMapRange`): `Level0.up`'s and
+`Finish.treeOf`'s step as compiled code runs it. -/
+def nodesPar (below : Array ByteArray) : Array ByteArray :=
+  parMapRange (fun i => Sha512.hash (below[2 * i]! ++ below[2 * i + 1]!)) (below.size / 2)
+
+theorem nodesPar_eq (below : Array ByteArray) :
+    nodesPar below = (Array.range (below.size / 2)).map fun i => Sha512.hash (below[2 * i]! ++ below[2 * i + 1]!) :=
+  parMapRange_eq _ _
+
 /-- **Layer `h` of a Merkle tree** over the leaves `lf q` (`q < 2^d`): layer `h + 1` holds the nodes `SHA-512(l ‖ r)`
 of layer `h`'s pairs. -/
 def layer (d : Nat) (lf : Nat → ByteArray) : Nat → Array ByteArray

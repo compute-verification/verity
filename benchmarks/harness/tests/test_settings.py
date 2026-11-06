@@ -9,8 +9,7 @@ from pathlib import Path
 import pytest
 from verity_bench import jobs, settings
 from verity_bench.cli import main
-from verity_bench.settings import check, direct_uses
-from verity_config.settings import DEBUG, REDACTED, VALUE, WHERE, DebugOnRecord, Registry, Setting, UnknownSetting
+from verity_config.settings import DEBUG, REDACTED, VALUE, WHERE, Registry, Setting, UnknownSetting, direct_uses
 
 MEMBER = Path(__file__).resolve().parents[1]
 REGISTRY_FILE = "verity_bench/settings.py"
@@ -82,17 +81,6 @@ def test_verity_bench_refuses_an_unknown_setting_at_startup(monkeypatch: pytest.
     assert e.value.code == 2 and "unknown setting VERITY_BENCH_VNEV" in capsys.readouterr().err
 
 
-def test_check_refuses_a_value_that_doesnt_parse_and_a_debug_setting_on_a_run_of_record() -> None:
-    r = Registry("x.py", ("X_",), Setting("X_TRACE", str, None, DEBUG, "a trace file"),
-                 Setting("X_N", int, 3, VALUE, "a number"), shared=False)
-    check(r, {"X_TRACE": "/t"}, of_record=False)
-    check(r, {"X_TRACE": ""}, of_record=True)
-    with pytest.raises(DebugOnRecord, match="X_TRACE: debug setting, refused on a run of record"):
-        check(r, {"X_TRACE": "/t"}, of_record=True)
-    with pytest.raises(ValueError, match="X_N='x'"):
-        check(r, {"X_N": "x"}, of_record=False)
-
-
 def test_every_prefixed_name_the_member_spells_is_declared() -> None:
     """Python and shell alike: a script sets what the harness reads, and the harness forwards what a script reads."""
     names: dict[str, set[str]] = {}
@@ -104,14 +92,6 @@ def test_every_prefixed_name_the_member_spells_is_declared() -> None:
     bad = {n: sorted(f) for n, f in names.items() if not settings.REGISTRY.known(n)}
     assert not bad, f"declare it in {REGISTRY_FILE}, or name it as read elsewhere: {bad}"
     assert {"VERITY_BENCH_VENV", "VERITY_BENCH_SETUP", "VERITY_BENCH_LIB_CACHE"} <= set(names)
-
-
-def test_direct_uses_sees_each_form() -> None:
-    src = ("import os\nimport os as o\nfrom os import environ, getenv as g\n"
-           "a = os.environ.get('A')\nb = o.environ['B']\nc = environ.get('C')\nd = g('D')\nos.environ['E'] = '1'\n"
-           "e = {**os.environ}\nf = os.getpid()\nx.os.environ\n")
-    assert direct_uses(src) == [(4, "os.environ"), (5, "os.environ"), (6, "os.environ"), (7, "os.getenv"), (8, "os.environ"),
-                                (9, "os.environ")]
 
 
 def test_direct_environment_uses_only_shrink() -> None:

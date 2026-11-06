@@ -105,15 +105,16 @@ def probability? (p : String) : Option (Nat × Nat) :=
   | [a, b] => if digits a && digits b && 0 < b.toNat! && a.toNat! ≤ b.toNat! then some (a.toNat!, b.toNat!) else none
   | _ => none
 
-/-- `service.count_varies`: the law draws a count that varies from draw to draw, so the sessions of one registration set
-up tables of different shapes: `bernoulli` at `0 < p < 1`, which the sampled audit's soundness statement doesn't cover.
-The stream's run (`Run.run`: `shapes`) and the audit (`OneStage.paramsOfJson`) refuse it. -/
-def countVaries (law : Json) : Bool :=
-  match getD law "law", getD law "p" with
-  | .str "bernoulli", .str p => match probability? p with
-    | some (num, den) => 0 < num && num < den
-    | none => false
-  | _, _ => false
+/-- `service.bernoulli`: the law is `bernoulli`, at any `p`, which the sampled audit's soundness statement doesn't cover
+(at `0 < p < 1` its drawn count varies; at `p = 0` it draws nothing, at `p = 1` everything, and neither is covered
+either). The audit (`OneStage.paramsOfJson`) and the stream's run (`Run.run`: `bernoulli`) refuse it. -/
+def bernoulli (law : Json) : Bool :=
+  match getD law "law" with
+  | .str "bernoulli" => true
+  | _ => false
+
+/-- The refusal of a `bernoulli` law (`service.BERNOULLI`). -/
+def BERNOULLI : String := "the law is bernoulli, which the sampled audit's soundness statement doesn't cover"
 
 private def sumSizes (rs : Array (Int × Int)) : Int := rs.foldl (fun a (lo, hi) => a + (hi - lo)) 0
 
@@ -258,14 +259,15 @@ def take (src : ByteArray) (need : Nat) : StateT Nat (Except String) ByteArray :
 
 /-- The C-Flock law a one-stage law object (the verifier's law as `derive` expands it) names over `[0, population)`, as
 `coins.draw_first` reads it: `subset`, `bernoulli` at its `NUM/DEN` as written, `stratified` or `work`. An error when
-the law is not exactly a one-stage law's keys (`coins._law_problem`), a subset exceeds the population, or a stratified
-or work law isn't well formed over it (`strataProblem`). -/
+the law is not exactly a one-stage law's keys (`coins._law_problem`), a subset draws no unit or exceeds the population,
+or a stratified or work law isn't well formed over it (`strataProblem`). -/
 def flockLaw (law : Json) (population : Nat) : Except String Flock.Draw.Law := do
   let kind := match getD law "law" with | .str s => s | _ => ""
   match kind with
     | "subset" =>
       if keys? law != some (sortStrings #["law", "k"]) then throw "a subset law is exactly {law, k}"
       let some k := nat? (getD law "k") | throw "a subset law's k is a natural number"
+      if k < 1 then throw "a subset law draws at least one unit"
       if population < k then throw s!"a subset draw of {k} exceeds the population of {population}"
       pure (Flock.Draw.Law.subset k)
     | "bernoulli" =>

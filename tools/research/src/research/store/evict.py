@@ -12,7 +12,8 @@ Two kinds of local copy can go, and only these:
 * **run-directory files** (`~/.research/runs/<run>/...`, `evict_runs`): the big files of a finished run that appear, with the same
   size (and the same sha256 when the file is <= `hash_max` bytes), in a PRESERVED tree artifact of its attempt: `run_record` /
   `run_files`, or a typed output its `outputs.json` declares, laid out under that output's `tree` path (a Build's `outputs/build`).
-  Oldest run first.  A run touched in the last `quiet_s` seconds, or whose status is not terminal, is left alone.
+  Oldest run first.  A run touched in the last `quiet_s` seconds (a day by default: an agent VM's runs are read for hours
+  after they end, and a node's evictor passes its own shorter window), or whose status is not terminal, is left alone.
   `run-files.evicted.json` in the run dir lists what went and the `research data fetch`es that bring it back.
   A sealed run dir (store.sealed) is the root helper's to change: `sudo -n vy-seal-runs evict` removes the files its
   `.custody` lists at the size it recorded and unchanged since (`evict_custody`'s rule), as root.
@@ -59,8 +60,10 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
-from . import sealed
-from .local import LocalStore, sha256_file
+from concurrent.futures import ThreadPoolExecutor
+
+from . import ids, sealed
+from .local import LocalStore, manifest_key, object_key, sha256_file
 from .model import utc_now
 
 MIN_BYTES = 1 << 20          # blobs / files below this are not worth an eviction (and a re-fetch)
@@ -68,7 +71,7 @@ MIN_BYTES = 1 << 20          # blobs / files below this are not worth an evictio
 #: theirs for most of an hour), so eviction leaves it; `LocalStore.fetch` refreshes an entry's mtime on every fetch
 TREE_KEEP_S = 24 * 3600
 HASH_MAX = 64 << 20          # run files up to this size are sha256-checked against the artifact before eviction
-QUIET_S = 30 * 60            # a run directory touched more recently than this is still being worked on
+QUIET_S = 24 * 3600          # a run directory touched more recently than this may still be read (collected, inspected)
 TERMINAL_STATES = ("done", "failed", "dead", "timed_out", "exited", "cancelled")
 EVICTED_SCHEMA = "research/run-files-evicted/v0.1"
 EVICTED_FILE = "run-files.evicted.json"
@@ -208,16 +211,36 @@ def _sha256(p: Path) -> str:
     return sha256_file(p)[0]
 
 
+def on_remote(store: LocalStore, art: str) -> bool:
+    """`art`'s manifest and every blob it names are on the remote at their sizes: one HEAD each, no read-back. Enough to drop a
+    local copy whose files match the manifest (`plan_runs` hashes them), and so not recorded as a verified replica."""
+    r = store.remote
+    if r is None:
+        return False
+    try:
+        m = store.get_manifest(art)
+        head = r.head(manifest_key(ids.hex_of(art)))
+        if head is None or head["bytes"] != len(m.canonical()):
+            return False
+        return all((h := r.head(object_key(b))) is not None and h["bytes"] == size for b, size in m.blobs())
+    except Exception:  # noqa: BLE001  an unreadable manifest or a failed HEAD keeps the run's files
+        return False
+
+
 def plan_runs(store: LocalStore, runs_root: Path, *, min_bytes: int = MIN_BYTES, quiet_s: float = QUIET_S, hash_max: int = HASH_MAX,
-              now: float | None = None, log: Callable[[str], None] | None = None) -> list[dict[str, Any]]:
+              now: float | None = None, log: Callable[[str], None] | None = None, remote_check: bool = False,
+              jobs: int = 16) -> list[dict[str, Any]]:
     """Per run dir with evictable files: `{"run", "dir", "artifact", "files": [{"path", "bytes", "sha256", "artifact"}], "restore"}`,
-    oldest run first; `artifact` is the first of the run's PRESERVED trees (`_sources`) that holds one of them."""
+    oldest run first; `artifact` is the first of the run's PRESERVED trees (`_sources`) that holds one of them. With `remote_check`
+    (an agent VM, whose copies `research fetch` made and whose catalog records no verified replica), a tree the catalog doesn't
+    record as verified counts once `on_remote` finds it on the remote, `jobs` trees at a time."""
     say = log or (lambda s: None)
     now = time.time() if now is None else now
     verified = verified_remote(store)
     plan: list[dict[str, Any]] = []
     if not runs_root.is_dir():
         return plan
+    pending: list[tuple[str, Path, list[tuple[str, int]], list[tuple[str, str]]]] = []
     for run in sorted(os.listdir(runs_root)):
         rd = runs_root / run
         if not rd.is_dir() or (rd / EVICTED_FILE).exists():
@@ -258,31 +281,52 @@ def plan_runs(store: LocalStore, runs_root: Path, *, min_bytes: int = MIN_BYTES,
             say(f"{run}: no run_record, run_files or tree output artifact ({sum(b for _, b in big) / 1e6:.0f} MB), skipping")
             continue
         preserved = [(art, under) for art, under in sources if art in verified]
+        if not preserved and remote_check:
+            pending.append((run, rd, big, sources))
+            continue
         if not preserved:
             say(f"{run}: {', '.join(art[:20] for art, _ in sources)} not verified on the remote, skipping")
             continue
-        tree: dict[str, tuple[str, int, str]] = {}
-        for art, under in preserved:
-            try:
-                m = store.get_manifest(art)
-            except Exception as e:  # noqa: BLE001
-                say(f"{run}: manifest {art[:20]} unreadable ({e}), keeping its files")
+        _plan_files(store, run, rd, big, preserved, hash_max, plan, say)
+    if pending:
+        arts = sorted({art for *_, sources in pending for art, _ in sources})
+        with ThreadPoolExecutor(max(1, jobs)) as ex:
+            there = {a for a, ok in zip(arts, ex.map(lambda a: on_remote(store, a), arts)) if ok}
+        say(f"{len(there)} of {len(arts)} trees of {len(pending)} run dirs the catalog doesn't record are on the remote")
+        for run, rd, big, sources in pending:
+            preserved = [(art, under) for art, under in sources if art in there]
+            if not preserved:
+                say(f"{run}: {', '.join(art[:20] for art, _ in sources)} not on the remote, skipping")
                 continue
-            for tf in m.payload.files if m.payload and m.payload.type == "tree" else []:
-                tree.setdefault(f"{under}/{tf.path}" if under else tf.path, (tf.sha256, tf.bytes, art))
-        files = []
-        for rel, size in big:
-            if rel not in tree or tree[rel][1] != size:
-                continue
-            if size <= hash_max and _sha256(rd / rel) != tree[rel][0]:
-                say(f"{run}: {rel} sha256 differs from the artifact, keeping")
-                continue
-            files.append({"path": rel, "bytes": size, "sha256": tree[rel][0], "artifact": tree[rel][2]})
-        if files:
-            used = [(art, under) for art, under in preserved if any(f["artifact"] == art for f in files)]
-            plan.append({"run": run, "dir": str(rd), "artifact": used[0][0], "files": files,
-                         "restore": " && ".join(f"research data fetch {art} --to {rd / under if under else rd}" for art, under in used)})
+            _plan_files(store, run, rd, big, preserved, hash_max, plan, say)
+        plan.sort(key=lambda r: r["run"])
     return plan
+
+
+def _plan_files(store: LocalStore, run: str, rd: Path, big: list[tuple[str, int]], preserved: list[tuple[str, str]], hash_max: int,
+                plan: list[dict[str, Any]], say: Callable[[str], None]) -> None:
+    """Add to `plan` the run dir's big files that match a file of one of its `preserved` trees (sha256-checked up to `hash_max`)."""
+    tree: dict[str, tuple[str, int, str]] = {}
+    for art, under in preserved:
+        try:
+            m = store.get_manifest(art)
+        except Exception as e:  # noqa: BLE001
+            say(f"{run}: manifest {art[:20]} unreadable ({e}), keeping its files")
+            continue
+        for tf in m.payload.files if m.payload and m.payload.type == "tree" else []:
+            tree.setdefault(f"{under}/{tf.path}" if under else tf.path, (tf.sha256, tf.bytes, art))
+    files = []
+    for rel, size in big:
+        if rel not in tree or tree[rel][1] != size:
+            continue
+        if size <= hash_max and _sha256(rd / rel) != tree[rel][0]:
+            say(f"{run}: {rel} sha256 differs from the artifact, keeping")
+            continue
+        files.append({"path": rel, "bytes": size, "sha256": tree[rel][0], "artifact": tree[rel][2]})
+    if files:
+        used = [(art, under) for art, under in preserved if any(f["artifact"] == art for f in files)]
+        plan.append({"run": run, "dir": str(rd), "artifact": used[0][0], "files": files,
+                     "restore": " && ".join(f"research data fetch {art} --to {rd / under if under else rd}" for art, under in used)})
 
 
 def _sources(rd: Path, outs: dict[str, Any]) -> list[tuple[str, str]]:
@@ -310,10 +354,11 @@ def _sources(rd: Path, outs: dict[str, Any]) -> list[tuple[str, str]]:
 
 def evict_runs(store: LocalStore, runs_root: Path, *, target_free_bytes: int, dry_run: bool = False, min_bytes: int = MIN_BYTES,
                quiet_s: float = QUIET_S, hash_max: int = HASH_MAX, free_fn: Callable[[], int] | None = None, now: float | None = None,
-               log: Callable[[str], None] | None = None) -> dict[str, Any]:
+               log: Callable[[str], None] | None = None, remote_check: bool = False) -> dict[str, Any]:
     say = log or (lambda s: None)
     free = free_fn or (lambda: free_bytes(runs_root if runs_root.exists() else store.root))
-    plan = plan_runs(store, runs_root, min_bytes=min_bytes, quiet_s=quiet_s, hash_max=hash_max, now=now, log=log)
+    plan = plan_runs(store, runs_root, min_bytes=min_bytes, quiet_s=quiet_s, hash_max=hash_max, now=now, log=log,
+                     remote_check=remote_check)
     total = sum(f["bytes"] for r in plan for f in r["files"])
     rep: dict[str, Any] = {"runs_root": str(runs_root), "dry_run": dry_run, "target_free_bytes": target_free_bytes, "free_before": free(),
                            "evictable_bytes": total, "evictable_runs": len(plan), "runs": [], "evicted_bytes": 0, "reached_target": False}
@@ -402,7 +447,10 @@ GIT_TIMEOUT_S = 300
 ASIDE = ".evicting-"         # <src>/.evicting-<sha>-<nonce>: a tree on its way out, never executable by name
 READY_FILE = "READY.json"    # remote.READY_FILE: the marker that makes <src>/<sha> executable
 LOCK = ".evict.lock"         # <src>/.evict.lock: one pass at a time
-ENDED = TERMINAL_STATES + ("refused",)
+#: a run marked running whose runner (status.json's last pid, at its start time) is gone: a node restart or a killed runner
+#: leaves it so, and such records, some weeks old, kept half of a node's trees
+LOST = "lost"
+ENDED = TERMINAL_STATES + ("refused", LOST)
 PF_KTHREAD = 0x00200000      # /proc/<pid>/stat flags: a kernel thread, which opens no file of ours
 NGINX_CONF = Path("/etc/nginx/nginx.conf")  # a bare `/usr/sbin/nginx` master's configuration (Debian/Ubuntu build)
 _SHA = re.compile(r"[0-9a-f]{40}")
@@ -577,13 +625,30 @@ def _doc(text: str | None) -> dict[str, Any] | None:
     return d if isinstance(d, dict) else {}
 
 
-def _run_state(rd: Path) -> str:
+def _run_state(rd: Path, proc: Path = Path("/proc")) -> str:
     status = _doc(_text(rd / "status.json"))
     if status is None:
         return "refused" if (rd / "refused.json").exists() else "without a status (not known to have ended)"
-    tr = status.get("transitions") or []
-    last = tr[-1] if tr and isinstance(tr[-1], dict) else {}
-    return str(status.get("state") or last.get("state") or "unknown")
+    tr = [t for t in status.get("transitions") or [] if isinstance(t, dict)]
+    last = tr[-1] if tr else {}
+    state = str(status.get("state") or last.get("state") or "unknown")
+    if state == "running":
+        runner = next((t for t in reversed(tr) if t.get("pid") is not None), status)
+        if _gone(runner.get("pid"), runner.get("starttime_ticks"), proc):
+            return LOST
+    return state
+
+
+def _gone(pid: Any, ticks: Any, proc: Path) -> bool:
+    """Whether a recorded runner is known not to run: its pid has no /proc entry, or one started at another time (reused). No
+    pid, or a stat without a start time, is not known gone."""
+    if not isinstance(pid, int) or isinstance(pid, bool):
+        return False
+    text = _quiet(lambda: (proc / str(pid) / "stat").read_text())
+    if text is None:
+        return True
+    fields = text.rsplit(")", 1)[-1].split()
+    return isinstance(ticks, int) and len(fields) > 19 and fields[19].isdigit() and int(fields[19]) != ticks
 
 
 def _get(d: Any, *keys: str) -> Any:
@@ -605,11 +670,11 @@ def _dirty_preserved(rd: Path, job: dict[str, Any], src: dict[str, Any]) -> bool
 
 
 def record_uses(pattern: re.Pattern[str], runs_dirs: list[Path], requests_dir: Path, *, now: float,
-                keep_s: float = SRC_KEEP_S) -> dict[str, set[str]]:
+                keep_s: float = SRC_KEEP_S, proc: Path = Path("/proc")) -> dict[str, set[str]]:
     """{sha: reasons} from the run records that name a tree (job.json, launch.json, remote.json) and the requests: a run that has
     not ended, or was recorded within `keep_s`, or whose source is not the tree's own clean commit (condition 3; a refused run ran
     nothing, so it is no run's source and keeps a tree only while recent), and a request
-    with no run dir yet or whose run has not ended."""
+    with no run dir yet or whose run has not ended. A run marked running whose runner is gone (`LOST`) has ended."""
     uses: dict[str, set[str]] = {}
 
     def add(shas: set[str], why: str) -> None:
@@ -623,7 +688,7 @@ def record_uses(pattern: re.Pattern[str], runs_dirs: list[Path], requests_dir: P
             named = {m.group(1) for t in texts.values() if t for m in pattern.finditer(t)}
             if not named:
                 continue
-            if (state := _run_state(rd)) not in ENDED:
+            if (state := _run_state(rd, proc)) not in ENDED:
                 add(named, f"2: run {name} is {state}")
             mtime = _quiet(lambda: os.stat(rd / "job.json").st_mtime)
             if mtime is not None and now - mtime < keep_s:
@@ -654,7 +719,7 @@ def record_uses(pattern: re.Pattern[str], runs_dirs: list[Path], requests_dir: P
         rd = next((r / name for r in runs_dirs if (r / name).is_dir()), None)
         if rd is None:
             add(named, f"2: request {name} has no run dir yet (queued)")
-        elif (state := _run_state(rd)) not in ENDED:
+        elif (state := _run_state(rd, proc)) not in ENDED:
             add(named, f"2: request {name}'s run is {state}")
     return uses
 
@@ -899,7 +964,7 @@ def evict_src(src_root: Path, *, origin: str | None = None, dry_run: bool = Fals
     def live(shas: set[str]) -> dict[str, set[str]]:
         """Condition 2 and the run records' part of 3, read afresh."""
         why: dict[str, set[str]] = {}
-        for found in (proc_uses(pattern, proc, inside, src_root, nginx_conf), record_uses(pattern, runs_dirs, requests_dir, now=t_wall + clock() - t0, keep_s=keep_s),
+        for found in (proc_uses(pattern, proc, inside, src_root, nginx_conf), record_uses(pattern, runs_dirs, requests_dir, now=t_wall + clock() - t0, keep_s=keep_s, proc=proc),
                       slot_uses(pattern, locks_dir, proc)):
             for s, rs in found.items():
                 if s in shas:

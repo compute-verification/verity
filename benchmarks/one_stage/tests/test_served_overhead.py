@@ -214,5 +214,104 @@ def test_without_timings_the_table_has_only_the_engine_ruler(tmp_path):
     assert list(t["metrics"]) == list(O.METRICS)
 
 
+def _fixed(t0: float, n: int, steps: int, step_s: float) -> list[dict]:
+    """`serve_load.py --fixed n --window-steps steps`'s load on the trace: n requests arriving at t0, each emitting a token at
+    every one of the window's steps (ignore_eos), all finishing at its last."""
+    users = [f"fixed.{j:05d}.{t0}" for j in range(n)]
+    return [{"kind": "arrive", "request": u, "t": t0} for u in users] + [
+        _step(t0 + (k + 1) * step_s, dict.fromkeys(users, 1), tuple(users) if k == steps - 1 else ()) for k in range(steps)]
+
+
+def _fixed_timings(at: float, n: int, steps: int, step_s: float) -> dict:
+    """The fixed load's timings document as `serve_load.timings` writes it: every request at 0, released in order."""
+    req = lambda j: {"user": f"fixed.{j:05d}", "release": j, "at_s": 0.0, "send_s": 0.0, "first_token_s": step_s,  # noqa: E731
+                     "done_s": steps * step_s, "tokens": steps, "ok": True}
+    return {"clock": "monotonic", "release_run": "r", "start_unix": at, "requests": [req(j) for j in range(n)]}
+
+
+def test_a_fixed_load_lifetime_is_read_as_a_varied_one(tmp_path, capsys):
+    """A stock lifetime of `served_stock.sh` with FIXED (4 requests of max_tokens WINDOW_STEPS 4, ignore_eos): `metrics` gives
+    its aggregate and `table --stock --public` its ratios, as for a varied lifetime."""
+    c = _dir(tmp_path / "c", _fixed(10.0, 4, 4, 0.5), windows=[])
+    (c / "load.timings.json").write_text(json.dumps(_fixed_timings(10.0, 4, 4, 0.5)))
+    stock = []
+    for i, s in enumerate((0.2, 0.25, 0.3)):
+        stock.append(d := _dir(tmp_path / f"rep-{i}", _fixed(100.0, 4, 4, s)))
+        (d / "load-1.timings.json").write_text(json.dumps(_fixed_timings(100.0, 4, 4, s)))
+    assert O.main(["metrics", str(stock[0])]) == 0
+    (ld,) = json.loads(capsys.readouterr().out)["loads"]
+    assert (ld["requests"], ld["tokens"], ld["steps"]) == (4, 16, 4) and ld["span_s"] == pytest.approx(0.8)
+    assert ld["time_to_first_token_s"] == pytest.approx(0.2) and ld["client_time_per_output_token_s"] == pytest.approx(0.8 / 16)
+    assert O.main(["table", "--composed", str(c), "--stock", *map(str, stock), "--public", "--out", str(tmp_path / "o")]) == 0
+    pub = json.loads((tmp_path / "o" / "ratios.json").read_text())
+    assert pub["ratios"]["time_per_output_token_s"]["ratio"]["mean"] == pytest.approx(0.5 / 0.25)
+    assert set(pub["ratios"]) == set(O.CLIENT + O.METRICS) and '"requests"' not in json.dumps(pub)
+
+
 def test_served_stock_sh_parses():
     assert subprocess.run(["bash", "-n", str(HERE.parent / "served_stock.sh")]).returncode == 0
+
+
+STUB_PY = """#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "$ARGV_LOG"
+case "$*" in
+  "-c "*) echo 0123456789abcdef ;;
+  *" serve-openai "*) echo "SERVE-OPENAI listening on 127.0.0.1"; exec tail -f /dev/null ;;
+  *serve_load.py*) echo "[serve-load] fixed: 4/4 ok, prompts 32…32 tokens" ;;
+  *"served_overhead.py metrics"*) echo '{}' ;;
+esac
+"""
+
+
+def _stock(tmp_path: Path, *args: str, **env: str) -> tuple[subprocess.CompletedProcess, list[str]]:
+    """`served_stock.sh` on the CPU with a stub interpreter that logs each argv, answers serve-openai's listening line and
+    holds it until the script's TERM, and stands in for the load and `served_overhead.py metrics`."""
+    venv = tmp_path / "venv" / "bin"
+    venv.mkdir(parents=True)
+    (venv / "python").write_text(STUB_PY)
+    (venv / "python").chmod(0o755)
+    log = tmp_path / "argv.log"
+    base = {"PATH": "/usr/bin:/bin", "HOME": str(tmp_path), "VENV": str(tmp_path / "venv"), "ARGV_LOG": str(log),
+            "OUT": str(tmp_path / "out"), "SERVE_ROOT": str(tmp_path / "root"), "RESEARCH_RUN_ID": "t", "WARM": "0", "REPS": "1",
+            "LOADS": "1", "SLOTS": "4", "PROMPTS": "32:32"}
+    p = subprocess.run(["bash", str(HERE.parent / "served_stock.sh"), *args], cwd=HERE.parents[2], env=base | env,
+                       capture_output=True, text=True)
+    return p, log.read_text().splitlines() if log.exists() else []
+
+
+def _argv(lines: list[str], what: str) -> list[str]:
+    (line,) = [x for x in lines if what in x]
+    return line.split()
+
+
+def test_served_stock_sh_with_fixed_serves_the_records_fixed_load_and_window_steps(tmp_path):
+    """FIXED and WINDOW_STEPS give serve_load.py the fixed load as served_verdicts.sh's LOAD=fixed passes it and serve-openai
+    its --window-steps; $OUT gets status lines alone and the load's counts stay in the private dir."""
+    p, lines = _stock(tmp_path, "reps", FIXED="4", WINDOW_STEPS="4")
+    assert p.returncode == 0, p.stdout + p.stderr
+    serve, load = _argv(lines, " serve-openai "), _argv(lines, "serve_load.py")
+    assert serve[serve.index("--window-steps") + 1] == "4" and serve.count("--window-steps") == 1
+    i = load.index("--fixed")
+    assert load[i:i + 6] == ["--fixed", "4", "--window-steps", "4", "--prompt-range", "32:32"]
+    assert not {"--varied", "--rate", "--max-tokens"} & set(load)
+    out = tmp_path / "out"
+    assert sorted(f.name for f in out.iterdir()) == ["stock.txt"]
+    assert (out / "stock.txt").read_text().splitlines() == ["rep-1 LOAD 1: exit 0", "rep-1: stopped (exit 143)"]
+    priv = tmp_path / "root" / "runs" / "t"
+    assert "4/4 ok" in (priv / "stock.txt").read_text() and (priv / "rep-1" / "overhead.json").exists()
+
+
+def test_served_stock_sh_without_fixed_serves_the_varied_load_and_no_window_steps(tmp_path):
+    p, lines = _stock(tmp_path, "reps")
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert "--window-steps" not in _argv(lines, " serve-openai ")
+    load = _argv(lines, "serve_load.py")
+    assert load[load.index("--varied"):load.index("--varied") + 6] == ["--varied", "4", "--rate", "1000", "--max-tokens", "4"]
+    assert "--fixed" not in load and "--window-steps" not in load
+
+
+@pytest.mark.parametrize(("env", "why"), [({"FIXED": "4"}, "FIXED needs WINDOW_STEPS"),
+                                         ({"FIXED": "4", "WINDOW_STEPS": "four"}, "WINDOW_STEPS is a positive integer")])
+def test_served_stock_sh_refuses_a_fixed_load_without_its_window_steps(tmp_path, env, why):
+    p, lines = _stock(tmp_path, **env)
+    assert p.returncode == 3 and f"PREFLIGHT: {why}" in (tmp_path / "out" / "stock.txt").read_text() and lines == []

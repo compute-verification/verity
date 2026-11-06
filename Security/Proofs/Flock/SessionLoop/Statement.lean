@@ -293,9 +293,11 @@ def Loop.LinkLevel0 (src : Msg → Flock.Wit →
 
 /-- **The level-0 inputs are the tape's** at `x`: at every nonce and tape, table `j`'s rep `r`'s drawn level 0
 (`Loop.level0At` at rep stream `2j + r`) has `Masked.linkIn`'s inputs: the witness's packed table at the tape's mask
-words (what the host hands the loop) and the tape's extra lanes, lane paddings and level-0 salts (the bytes
-`Level0.draw` reads from `IO.getRandomBytes`). It says nothing of how a root is committed: the root is `Link.root` of
-those inputs by the code (`Level0.ofDraws_ok`). -/
+words (what the host hands the loop) and the tape's extra lanes, lane paddings and level-0 salts at the sizes the table's
+level 0 draws (the bytes `Level0.draw` reads from `IO.getRandomBytes`): each extra lane's first `2^cols` words, each of
+the `2^lanes + 4` lanes' first `t_pad` padding coefficients and the salts of the `2^d` tree positions, with `0` or
+empty past them, as every level 0 drawn at those sizes holds. It says nothing of how a root is committed: the root is
+`Link.root` of those inputs by the code (`Level0.ofDraws_ok`). -/
 def Loop.Level0Src (src : Msg → Flock.Wit →
       (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
       ℕ → V (Array F128 × ByteArray × Array ByteArray))
@@ -335,7 +337,7 @@ def Loop.RepSrc
 
 /-- `flock-firewall-os-src` (a trust in the host's inputs and in the operating system's bytes, which the loop reads and
 does not check). **Every input the session loop takes from its host and its operating system is the tape's** at `x`, in
-two halves: the level-0 inputs (`Loop.Level0Src`: the packed witness the host hands it and the bytes `Level0.draw`
+two halves: level 0's inputs at its sizes (`Loop.Level0Src`: the host's packed witness and the bytes `Level0.draw`
 reads) and the rep draws (`Loop.RepSrc`: the bytes `Frames.startRep` and `Finish.serve` read for each rep). Why it is
 reasonable: the loop runs on the developer's own host, whose operating system's random bytes are the uniform draws the
 tape models, and which hands the loop the witness `w` the statement is served at. The host is the developer's, not an
@@ -375,7 +377,7 @@ def _root_.Flock.Guarantees.LoopInnerRound0 (T : CoinLayer.TableData)
     ∃ w' : ByteArray, w'.size = 16 ∧ L₀.scheduled x w ρ h vals =
       (labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8 ++ header 3 1 1 ++ w' ++ header 4 1 1).data.toList
 
-/-- **C-Flock's zero knowledge at the session loop's own frames, at the tables `T`.** At the deployed relation, where
+/-- **Flock's zero knowledge at the session loop's own frames, at the tables `T`.** At the deployed relation, where
 `T`'s session meets the tables' side (`Tables`, `Complete` at the relation, `DummyReg`, `Causal`, `TapeOK`, and the
 switched round encoding at `vs` causal on the coins the loop computes at, `SwCausalOn` at `Loop.SwOk T`: no zerocheck
 outer coin `1` at a `Live` statement it serves, as its frames refuse one, or coins every table admits), at every
@@ -384,10 +386,11 @@ are the loop's own, `Loop.realOf src`) and worker `wk`, at every statement `x` t
 (`Loop.Serves`) with a witness `w` under the relation, where the loop's obligation (`LoopInnerRound0`) and the
 transport's round trusts hold: the deployed frame's state
 is the loop's but for `stopped` (`ProgChecks`), and against every `V*` of one more round than the verifier, the
-probability of any event of the real view at `ofLoop` is at most twice the simulator's, plus
+probability of any event of the real view at `ofLoop` is at most twice the sum of the simulator's probability,
 $$8\,n_L(x)\,\delta_1 + 8\,t\,n_L(x)\,\delta_1 + 2 \cdot 3^{-t}$$
-with `n_L(x)` the session's leaf count and `δ₁` the hm96 salted-leaf hiding gap at the pinned key, plus `4·t·3^t` times
-the fork probability. -/
+and `4·t·3^t` times the fork probability, with `n_L(x)` the session's leaf count and `δ₁` the hm96 salted-leaf hiding
+gap at the pinned key: the simulator's probability doubled, plus
+$$16\,n_L(x)\,\delta_1 + 16\,t\,n_L(x)\,\delta_1 + 4 \cdot 3^{-t} + 8\,t\,3^t\,\Pr[\mathrm{Fork}].$$ -/
 def _root_.Flock.Guarantees.SessionLoopZKAt (T : CoinLayer.TableData) : Prop :=
   ∀ (vs : (CoinLayer.session Loop.loopNr T).SwVals) (t : ℕ), 0 < t →
     (CoinLayer.session Loop.loopNr T).Tables →

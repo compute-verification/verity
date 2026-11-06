@@ -2,6 +2,7 @@ module
 
 public import Definitions.Accounting.Guarantees.Compose
 public import Proofs.Accounting.TS.Stages
+public import Proofs.Accounting.Lemmas.Compose
 
 /-!
 # The service's window budget: proof

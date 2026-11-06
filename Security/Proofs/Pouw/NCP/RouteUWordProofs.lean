@@ -4,6 +4,7 @@ public import Definitions.Pouw.Assumptions.NCP.RouteUWord
 public import Proofs.Pouw.NCP.ChainProofs
 public import Proofs.Pouw.NCP.RouteUProofs
 public import Definitions.Pouw.Guarantees.NCP
+public import Proofs.Pouw.Lemmas.NCP
 
 /-!
 # The word layer on route U: proofs

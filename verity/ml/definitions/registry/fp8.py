@@ -1,8 +1,8 @@
-"""FP8 (`--quantization fp8`) linear of the B1 serving program on Hopper — lane QZ, port `b1-fp8`.
+"""FP8 (`--quantization fp8`) linear of the B1 serving program on Hopper, port `b1-fp8`.
 
 Under `LLM(quantization="fp8")` on an H100 (pinned build d9105ea80, eager, `VLLM_BATCH_INVARIANT=1`, TP=1) every
 decoder linear of Qwen2.5-1.5B (qkv_proj, o_proj, gate_up_proj, down_proj; the tied lm_head stays bf16) is
-executed by two kernels, both read from the vLLM source and confirmed on the production run (fp8.md §1):
+executed by two kernels, both read from the vLLM source and confirmed on the production run:
 
 1. `_C.dynamic_per_token_scaled_fp8_quant` (`dynamic_per_token_scaled_fp8_quant_kernel_strided`, 256 threads per
    token row, `scale_ub = None`): per-row absmax `m = max_e |f32(x_e)|` (thread partials from `0.f` over 8-element
@@ -25,9 +25,11 @@ executed by two kernels, both read from the vLLM source and confirmed on the pro
 The weights are quantised once at load (`Fp8PerTensorOnlineLinearMethod.process_weights_after_loading`): `amax =
 max(|W|)` over the bf16 fused tensor, `s_w = f32(amax) / 448` (torch f32 division), `W_q = cvt(f32(W) * (1.0f / s_w))`
 (`static_scaled_fp8_quant`: here a *reciprocal multiply*), stored as `layer.weight = W_q.t()` ([K, N] view) and
-`layer.weight_scale` (one f32).  They are **derived Inputs** of the program (bound from the commit's stored e4m3/f32
-words and cross-checked against a CPU re-quantisation of the checkpoint; fp8.md §2).  The activation scale `s_x`
-and the e4m3 activations are **computed** by `Fp8ActQuant` from the norm output — never Inputs.
+`layer.weight_scale` (one f32).  They are **derived Inputs** of the program, bound from the commit's stored e4m3/f32
+words.  `numerics.fp8_twins.np_online_weight_quant` is this quantisation on CPU, and on the checkpoint's layer-0
+qkv_proj it gives the production run's committed words (`verity/ml/definitions/tests/test_fp8_twins.py`); binding
+doesn't call it, so a commit's weight words are not compared with a re-quantisation of the checkpoint.  The activation
+scale `s_x` and the e4m3 activations are **computed** by `Fp8ActQuant` from the norm output — never Inputs.
 
 Registered functions (all `Name_v1`):
   primitives  core's: F32Fabs, F32Fmaxf, F32Fminf (`verity.ml.circuits.ops.scalar`), F32ToE4m3Sat, HopperE4m3QgmmaDot32 (`verity.ml.circuits.ops.prims`)
@@ -145,7 +147,7 @@ def Fp8ActQuant(B, S, x):
 _SCALED_MM_CONF = ("exact-model-tested; _C.cutlass_scaled_mm vs the model at 320/320 sampled coordinates over five B1 shapes (K=1536/8960, "
                    "N=1536/2048/17920, bias on/off; gpu/tc-fp8/vllm_fp8_kernels_probe.py --gemm, "
                    f"{EVIDENCE['vllm_fp8_kernels_probe']['captured_utc']}) and 0 mismatches at every coordinate-sampled quantised gemm "
-                   "leaf of the production capture (corr-A/B, fp8.md §5); the k32 step pinned by the tc-fp8 campaign")
+                   "leaf of the production capture (corr-A/B); the k32 step pinned by the tc-fp8 campaign")
 
 
 @composite("DotE4m3", 1, ["K"], lambda S: ((("xq", Array(S.K, E4M3)), ("wq", Array(S.K, E4M3))), F32),
@@ -600,13 +602,3 @@ ServeFp8 = CompositeDefinition("ServeFp8", 1, b1.Serve.statics, H._reinstantiate
 ServeFp8.ported_from = b1.Serve  # type: ignore[attr-defined]
 LayerPreFp8.ported_from = b1.LayerPre  # type: ignore[attr-defined]
 LayerPostFp8.ported_from = b1.LayerPost  # type: ignore[attr-defined]
-
-FP8_COMPOSITES = [Fp8RowAbsMax, Fp8RowScale, Fp8ActQuant, DotE4m3, ScaledMmFp8Coordinate, ScaledMmFp8, QuantLinearFp8,
-                  LayerPreFp8, LayerPostFp8, ServeFp8]
-
-
-def set_conformance(status: dict[str, str]) -> None:
-    """Set conformance statuses from evidence (the port's expectations / conformance run / the tc-fp8 pin)."""
-    by_name = {d.name: d for d in FP8_COMPOSITES}  # the FP8 primitives' conformance is core's
-    for name, st in status.items():
-        by_name[name].conformance = st

@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Claims.IndexedTapes
+public import Definitions.Claims
 
 /-!
 # `ZKmalRx` at one tape

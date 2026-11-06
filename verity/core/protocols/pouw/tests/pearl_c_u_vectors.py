@@ -68,7 +68,7 @@ class Gate:
 
 def forming_vectors(forming: str, gate: Gate | None) -> tuple[dict, list]:
     m, n, k = SHAPE
-    s, ctx = C.PearlC(forming=forming), context()
+    s, ctx = C.PearlC(forming=forming, hashing="h0"), context()
     noise, norm = s.noise(ctx), s.line_norm
     make = CV.rows if forming == "v0" else CV.rows_f32
     ra, rb = make(CASE, "A", m, k), make(CASE, "B", n, k)

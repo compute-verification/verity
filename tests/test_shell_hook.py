@@ -79,6 +79,12 @@ def test_cursor_runs_the_hook_on_every_shell_command_and_blocks_if_it_fails():
     "ps -f -u research",
     "ps -o args -C git",
     "ps -p 1,2 -o args",
+    "ps -ef --forest | grep -v -E 'xfce|dbus' | tail -30",  # an inverted filter prints every other line
+    "ps -eo pid,etime,args | grep -v kworker",
+    "ps aux | grep -iv lake",
+    "ps aux | rg --invert-match lake",
+    "ps aux | grep --inv lake",
+    "ssh n1 'ps -ef | grep -v grep'",
     "cat /proc/*/cmdline",
     "tmux -f /exec-daemon/tmux.portal.conf show-environment -g | cut -d= -f1",   # a multi-line key's lines
     "tmux show-environment",
@@ -127,6 +133,7 @@ def test_a_command_that_would_print_the_environment_is_refused(command):
     "ps -u research",
     "ps -eo pid,args | grep \"[p]ytest\"",
     "ps aux | rg -i lake",
+    "ps -ef | grep -v grep | grep \"[p]ython\"",
     "ssh n1 'ps -eo pid,args | grep \"[s]lot.py\"'",
     "pgrep -af quick_tier",
     "tmux show-environment -g DISPLAY",

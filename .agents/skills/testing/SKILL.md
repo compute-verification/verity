@@ -35,9 +35,9 @@ uv run tools/verity/check/suites.py --list                    # each suite's inp
 
 To record a check of your clean commit as an Attempt, the whole check (every job on the merge gate: circuit-check and
 ratchet-gate, off it, only with `--deferred circuit-check,ratchet-gate`) or some of its steps (`--deferred lean-agreement`),
-launch `uv run python tools/verity/check/check.py --record --on vy-nebius-cpu-1 --pool research [--deferred STEP,...]` from
-your checkout. It starts its own `research run` in a slot of that lane pool (the CPU nodes' check slots take train checks only),
-so inside a `research run` it is refused, naming this command.
+launch `uv run python tools/verity/check/check.py --record --on auto --pool research [--deferred STEP,...]` from your
+checkout. It starts its own `research run` in a slot of the research pool `research run --on auto` would spill to (the CPU
+nodes' check slots take train checks only), so inside a `research run` it is refused, naming this command.
 
 Locally, while editing, one named test file or `-k` selection of under about a minute and 1 GB is fine:
 `cd verity/ml/flock && uv run pytest tests/test_layouts.py -k typed`. It doesn't cache and doesn't load the read guard. The shell
@@ -97,8 +97,8 @@ untraced`, which keys it on the suite's whole tree. A test that builds or runs a
   `FLOCK_IR_SLOW`, `VERITY_BENCH_FULL`, `VERITY_REGRESSION`). Name it `VERITY_{PACKAGE}_...`, and say in the skip reason
   how long it takes.
 - **A check far past ten minutes cold** stays out of `check` and runs as a recorded run on the change that needs it:
-  integrations/vllm's heavy circuit-neutrality tier, `verity-vllm neutrality --tier heavy` on a CPU pod (vy-nebius-cpu-2;
-  `integrations/vllm/verity_vllm/pipeline/neutrality.py`), on a change under `integrations/vllm/verity_vllm/program/`,
+  integrations/vllm's heavy circuit-neutrality tier, `verity-vllm neutrality --tier heavy` on a 256-CPU node (`research
+  pods list`; `integrations/vllm/verity_vllm/pipeline/neutrality.py`), on a change under `integrations/vllm/verity_vllm/program/`,
   `integrations/vllm/verity_vllm/engine/` or its `pipeline/build.py` meant to leave the circuits alone.
 - **GPU, pod and vLLM tests skip themselves** without the hardware or runtime; their real runs are recorded runs on a pod.
 - **Skip on a third-party package, never on a module of this checkout** (the guard fails that skip):
@@ -111,6 +111,11 @@ untraced`, which keys it on the suite's whole tree. A test that builds or runs a
   --fresh` a few times, and its tests then spread over pytest-xdist workers: they must run in any order and process, and
   session and module fixtures are built once per worker, so keep them cheap. A suite whose workers are big declares
   `worker_gb`, one worker's peak.
+- **A suite that alone makes a check's shard long declares `parts = P`** under `[tool.verity.tests]`: it runs as P parts
+  by test id (`suites.py SUITE:K/P`, each collecting every file and running the tests whose node id hashes to K), the
+  shard planner spreads them over shards (a lean suite's, `lean-suites:SUITE:K/P`, are named in `ci.toml`'s plans), and
+  check reports the suite as one, passed only when every part did. Each part builds its own fixtures, so a suite whose
+  cost is in shared fixtures gains little.
 - In `check` a suite still running after `SUITE_TIMEOUT_S` (an hour) fails as timed out; one that honestly needs longer
   declares `timeout_s` under `[tool.verity.tests]`, with a comment giving its longest pass.
 
@@ -134,7 +139,9 @@ untraced`, which keys it on the suite's whole tree. A test that builds or runs a
   --kind fixture/v1 --file|--tree PATH --preserve`, its id and path into the registry and its path into `.gitignore`.
   The control pod exports `next`'s registry every 5 minutes, so the fixture needs no ask. `suites.py` fetches it before the suites that read it (`research data fetch-fixtures` by hand, as before
   `cargo test`), checks every byte against its id, and keys the suite on the id. A verifier's fixtures are the prover's
-  bytes, never regenerated in its test; when a test can recompute an expected output, pin its digest, not the file.
+  bytes, never regenerated in its test; when a test can recompute an expected output, pin its digest, not the file. A
+  fixture its test module rewrites from the tree (``python MODULE --write``) is a `Writer` in `tools/verity/check/pins.py`,
+  rewritten by `uv run python tools/verity/check/pins.py --write PATH`, which the test's failure names (`tests/test_pins.py`).
 
 ## Dummy credentials
 

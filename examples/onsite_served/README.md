@@ -25,7 +25,7 @@ the deploy bindings' (below), so binding another host changes no hash.
 | `firewall` | developer | `prover-node` | the Lean firewall of the records audit, inside the served window |
 | `prover` | developer | `prover-node` | PoUS's served piece, PoUB's served session and the wipe, inside the served window |
 | `challenger` | auditor | `gate-host` | the gate: sampled proofs' live challenger and PoUW's H1 coins |
-| `network-certifier` | auditor | `gate-host` | the warden in front of the endpoint and its piece, reached through the gate |
+| `network-certifier` | auditor | `gate-host` | the network certifier in front of the endpoint and its piece, reached through the gate |
 | `memory-challenger` | auditor | `auditor-host` | PoUS's and the wipe's timed reads, on its own coins and clock, signing the session |
 | `bandwidth-verifier` | auditor | `auditor-host` | PoUB's verifier, on its own coins and clock |
 | `verifier` | auditor | `auditor-host` | the onsite check over the served window's public record |

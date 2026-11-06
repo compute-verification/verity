@@ -19,8 +19,9 @@ a card: a decision waiting in a note or a thread waits forever.
 
 ## Before asking
 
-Only claims and his own clicks need him (the team skill's "Working principles"): keys and access between our own
-machines and accounts are the lanes' call. A recorded ruling that covers the case (AGENTS.md, the
+Nothing waits on him (the team skill's "Working principles"): a lane decides, claims included, and only a click only
+an account he holds can make waits, when no other way exists. Keys and access between our own machines and accounts are
+the lanes' call. A recorded ruling that covers the case (AGENTS.md, the
 skills, the friction skill's "Standing rulings") stands until he reverses it. A question the system already answers isn't
 an ask (which circuit a templated unit's theorem names: the one its template unrolls to).
 

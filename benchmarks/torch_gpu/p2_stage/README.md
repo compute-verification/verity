@@ -1,4 +1,4 @@
-# p2_stage: the staging decode
+# p2_stage: the store's load
 
 The simplest exact path from the P2-encoded weights store to the W8A8 GEMM on one H200: decode a
 layer's matrix with memory-accounting's P2 decode, unchanged, into a plaintext staging buffer, then run the exact GEMM
@@ -41,8 +41,8 @@ on that buffer.
   from the pass's σ, and sampled units' σ from C*); `bw_check.py` holds the GPU to the fixture and times the receipts
   at the store's size (`bw.sh`).
 - `build.sh` builds `libp2v1.so` for sm_90a on a CPU node by P2's own Makefile. `session.sh` is one run on
-  vy-dc-h200 under an untimed `gpu-lease`, from memory-accounting's store (`ENCODED=1`, the layer's segment files sent
-  with the run) or a development store. `full.sh` runs `full.py` on the demo card over memory-accounting's finished
+  an H200 under an untimed `gpu-lease`, from PoUS's encoded store (`ENCODED=1`, the layer's segment files sent
+  with the run) or a development store. `full.sh` runs `full.py` on the demo card over PoUS's finished encoded
   store in place, read only. Each script's header gives its command line.
 
 The decode is libp2v1's, unchanged. Both GEMMs are `int_mm.linear` (`benchmarks/torch_gpu/s8_linear/int_mm.py`, the
