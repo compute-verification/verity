@@ -17,8 +17,8 @@
 //! `--session-tables J` (both sides, CPU prover): the session's units in J equal tables (`session_tables`), each with its own
 //! randomness, all J roots in one `Commit`, and every proof after the session's last coin (the barrier).
 //!
-//! `serve --tree-from HOST:PORT [--tree-secret-file F]` (`--zk`, with `--sessions N`): each session's coin tree sampled and
-//! opened by the challenger (`flock_live::tree_from`), not drawn here.
+//! `serve --tree-from HOST:PORT [--tree-secret-file F]` (`--zk` or `FC_COINS=tree`, with `--sessions N`): each session's
+//! coin tree sampled and opened by the challenger (`flock_live::tree_from`), not drawn here.
 
 use std::{
     collections::BTreeMap,
@@ -123,8 +123,6 @@ enum CoinMode {
     /// M0's step-0 seed (the default; `coin_seed`): the verifier's OS-random seed under a SHA-512 commitment sent at Hello and
     /// opened in the verdict, every round's coins its SHA-256 counter-mode PRF
     Seed,
-    /// `os`: every round's coins flipped from the OS, so soundness rests on SHA-512 collision resistance alone
-    Os,
     /// `tree`: the challenger's keyed coin tree (`coin_tree::SCHEME`, M2's commitment without M1's masks): every coin committed
     /// at Hello, the Hello answered with the root and session key, each round's coins opened against it. The prover checks
     /// each opening ([`flock_live::coin_tree::Checked`]) unless a ZK server does ([`zk_server_checks_coins`])
@@ -137,15 +135,13 @@ fn zk_server_checks_coins() -> bool {
     std::env::var("FC_COIN_STREAMS").is_ok_and(|x| !x.is_empty())
 }
 
-/// The Hello and the identity carry the mode, so a prover and a server that disagree refuse the session. A selftest build
-/// seeds where it would flip OS coins: its harness fixes the coins through the seed.
+/// The Hello carries the mode, so a prover and a server that disagree refuse the session. The verifier reads coins only from
+/// a challenger's log, so it refuses a seeded session once every check has passed; the seed stays for upstream's form.
 fn coin_mode() -> CoinMode {
     match std::env::var("FC_COINS").as_deref() {
-        Err(_) | Ok("" | "seed") => CoinMode::Seed,
-        Ok("os") if cfg!(feature = "seed-injection") => CoinMode::Seed,
-        Ok("os") => CoinMode::Os,
+        Err(_) | Ok("") => CoinMode::Seed,
         Ok("tree") => CoinMode::Tree,
-        Ok(v) => refuse(format!("FC_COINS={v}: \"seed\" (the default), \"os\" or \"tree\"")),
+        Ok(v) => refuse(format!("FC_COINS={v}: \"tree\" (the challenger's keyed coin tree), or unset for the seed")),
     }
 }
 
@@ -395,13 +391,6 @@ fn identity(c: &Composite) -> Value {
                       "coin_derivation": "sha512 (verity.randomness)", "frame_v3_tree": "sha512 (frame-v3-sha512)",
                       "transcript": "none (live verifier coins)", "row_leaf_in_circuit": "hm96-sha512/row/v1 over sha512/row/v1"},
            "hooks": hooks});
-    // only under FC_COINS=os: the statement digest pins the identity, and the default's must not move (a coin-tree session's
-    // identity is the default's, as `Tags.withCoins` keeps it)
-    if !zk_mode() && coin_mode() == CoinMode::Os {
-        id["coins"] = json!("live-os (every round's coins the verifier's OS draws: no seed, no PRF)");
-        id["hashes"]["coin_commitment"] = json!("none (FC_COINS=os)");
-        id["hashes"]["coin_derivation"] = json!("none (FC_COINS=os)");
-    }
     // only for bit rows (META `row_schemas`): a `sha512/row/v1` statement's digest must not move
     if c.meta.get("row_schemas").is_some() {
         id["hashes"]["row_leaf_in_circuit"] = json!("hm96-sha512/row/v2 over sha512/row/v2");
@@ -738,7 +727,7 @@ fn config_with(tabs: &[(&str, &Stmt, &Instances)], unit_draw: Option<Value>) -> 
     let specs = tabs.iter().map(|(name, st, _)| TableSpec { name: name.to_string(), binding: Binding::R1cs { statement_digest: st.flock_digest } }).collect();
     let mut cfg = SessionConfig::flock_128_r2(specs);
     cfg.link = Some(LinkSpec { sigma: session_sigma(tabs).to_vec(), m: st.m_pts, points: 2 });
-    // M2 (--zk) and FC_COINS=tree: every coin committed at Hello and opened round by round; M0: the step-0 seed, or OS coins
+    // M2 (--zk) and FC_COINS=tree: every coin committed at Hello and opened round by round; M0: the step-0 seed
     let names = tabs.iter().map(|t| t.0.to_string()).collect::<Vec<_>>();
     if is_zk(st) {
         cfg.coin_tree = Some(coin_spec_of(&names));
@@ -857,8 +846,8 @@ impl Drop for TreeFrom {
 }
 
 /// `serve --tree-from HOST:PORT [--tree-secret-file F]`: the challenger that samples and opens every session's coin tree
-/// ([`flock_live::tree_from`]). Only a `--zk` statement's sessions commit their coins to a tree, and the challenger's
-/// session closes after the server's last, so a bounded `--sessions N`.
+/// ([`flock_live::tree_from`]). Only sessions on the keyed coin tree (`--zk`, or plain ones under `FC_COINS=tree`)
+/// commit their coins to a tree, and the challenger's session closes after the server's last, so a bounded `--sessions N`.
 fn tree_from_arg(tabs: &Tables) -> Option<TreeFrom> {
     let (address, secret_file) = (arg("--tree-from", ""), arg("--tree-secret-file", ""));
     if address.is_empty() {
@@ -868,7 +857,8 @@ fn tree_from_arg(tabs: &Tables) -> Option<TreeFrom> {
         return None;
     }
     if std::env::args().nth(1).as_deref() != Some("serve") || config_of(tabs).coin_tree.is_none() {
-        refuse("--tree-from is serve's, for a --zk statement: only its sessions commit their coins to a tree".into());
+        refuse("--tree-from is serve's, for sessions on the keyed coin tree (--zk, or FC_COINS=tree): only theirs commit \
+                their coins to a tree".into());
     }
     if arg("--sessions", "").parse::<usize>().is_err() {
         refuse("--tree-from: the challenger's session closes after the server's last, so --sessions N".into());
@@ -1342,7 +1332,8 @@ fn lean_statement_args(st: &Stmt, public: &std::path::Path, tables: usize) -> Ve
 /// Where a session of `tables` tables against the auditor at `verifier` connects, and, where that is the ZK server's Lean
 /// session loop (`firewall::LeanSession`, one process for every such session), which then owns the auditor's connection,
 /// where its reps' Lean frames connect: a firewalled statement's ([`firewall_on`]); otherwise the auditor's own address.
-/// With `fw` (`--firewall-state`) the loop is `core-firewall session`, the release side around it (PROTOCOL.md §10.5).
+/// With `fw` (`--firewall-state`) the loop is `core-firewall session`, the release side around it (PROTOCOL.md §10.5),
+/// and with `FC_FIREWALL_SALT_KEY` it admits the statement's registrations on the ZK server's record (`--salt-key`).
 fn session_addr(st: &Stmt, inst: &Instances, tables: usize, verifier: &str, fw: Option<&ReleaseArgs>) -> Result<(String, Option<String>), String> {
     if !firewall_on(st) {
         return Ok((verifier.to_string(), None));
@@ -1354,10 +1345,8 @@ fn session_addr(st: &Stmt, inst: &Instances, tables: usize, verifier: &str, fw: 
     }
     let public = lean_public(inst, "session", tables)?;
     let mut args = lean_statement_args(st, &public, tables);
-    for (var, flag) in [("FC_FIREWALL_SALT_KEY", "--salt-key"), ("FC_FIREWALL_COMMITMENTS", "--commitments")] {
-        if let Ok(v) = std::env::var(var) {
-            args.extend([flag.to_string(), v]);
-        }
+    if let Ok(key) = std::env::var("FC_FIREWALL_SALT_KEY") {
+        args.extend(["--salt-key".into(), key]);
     }
     let exe = match fw {
         Some(fw) => {
@@ -1382,7 +1371,7 @@ fn value_salts(c: &Composite, inst: &mut Instances, path: &str) -> Result<(), St
         return Err("--salt-refs: the ZK server's salts are a --zk session's".into());
     }
     let addr = std::env::var("FC_FIREWALL_VALUES")
-        .map_err(|_| "--salt-refs: FC_FIREWALL_VALUES, the value service's address (`flock-firewall values`' VALUES line)".to_string())?;
+        .map_err(|_| "--salt-refs: FC_FIREWALL_VALUES, the value service's address (`core-firewall values`' VALUES line)".to_string())?;
     let refs = std::fs::read(path).map_err(|e| format!("--salt-refs {path}: {e}"))?;
     let np = c.ports.len();
     let rows = flock_live::firewall::refs_rows(&refs).map_err(|e| format!("--salt-refs {path}: {e}"))?;
@@ -3838,13 +3827,11 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
             // M0's seed commitment (4 words), the keyed coin tree's root and session key (20; `coin_tree::Checked` checked them,
             // or the ZK server did), or under the Lean session loop, which checked them, the loop's id for the session in their
             // place (4, `Session.idFrame`)
-            Resp::Coins(c) if c.len() == if tree && !plan.lean_session { 20 } else { 4 } && (tree || seed_coins()) => commit = c,
-            // FC_COINS=os: nothing committed, every round's coins the verifier's OS draws
-            Resp::Ok if !is_zk(st) && coin_mode() == CoinMode::Os => {}
+            Resp::Coins(c) if c.len() == if tree && !plan.lean_session { 20 } else { 4 } => commit = c,
             r => return Err(format!("hello: step 0 expects {}, got {r:?}",
                                     if plan.lean_session { "the Lean session loop's id for the session" }
                                     else if tree { "the verifier's coin-tree root and session key" }
-                                    else if seed_coins() { "the verifier's seed commitment" } else { "the verifier's Ok (FC_COINS=os)" })),
+                                    else { "the verifier's seed commitment" })),
         }
         // under the ZK server every table's level 0 is the Lean session loop's, drawn once it has every table's witness, before
         // any rep's frame starts (its time counts in table 0's level 0)
@@ -4223,7 +4210,7 @@ fn session_finish(p: Proved) -> (Value, Vec<Vec<u8>>) {
     let (ws, wr, calls) = t.lock().unwrap_or_else(PoisonError::into_inner).stats();
     let wait_s = t.lock().unwrap_or_else(PoisonError::into_inner).wait_s();
     // M0's seed opens at the end; under M2 and a plain coin-tree session every coin was checked against the commitment before
-    // it was used, and OS coins commit to nothing
+    // it was used
     let step0 = if verified(&v) && !is_zk(st) && seed_coins() { check_coin_seed(&commit, &hello, &v, &log.lock().unwrap_or_else(PoisonError::into_inner)) } else { Ok(()) };
     let v = if let Err(e) = &step0 { json!({"accepted": false, "why": e, "verdict": v}) } else { v };
     let c = &st.c;
@@ -4239,7 +4226,7 @@ fn session_finish(p: Proved) -> (Value, Vec<Vec<u8>>) {
                "unit_draw": if tabs.list.len() == 1 { inst.header.get("unit_draw").cloned() } else { tabs.draw.clone() },
                "tables": tabs.list.iter().map(|t| &t.name).collect::<Vec<_>>(),
                "identity": st.identity, "tp_s": tp0.elapsed().as_secs_f64(), "coin_seed": v["coin_seed"].clone(),
-               "step0_checked": step0.is_ok() && verified(&v) && (is_zk(st) || plain_tree(st) || seed_coins())});
+               "step0_checked": step0.is_ok() && verified(&v)});
     // past json!'s recursion limit in the literal above
     live["public_file_sha512"] = json!(hex(&inst.public_file_sha512));
     (live, proofs)
@@ -5283,7 +5270,8 @@ impl Transport for Wire {
 
 /// The selftest's own process for one firewalled session (`--only zk_worker_session`), its controls from this process's
 /// environment (`FC_FIREWALL`, `FC_FIREWALL_TAMPER`, `FC_FIREWALL_CUT_AT`, `FC_WIRE_TAMPER`): the session goes through the
-/// Lean session loop as `prove`'s does ([`session_addr`]), to a verifier of this process's on loopback, and the record is the
+/// Lean session loop as `prove`'s does ([`session_addr`], with `--firewall-state` an outer session of the ZK server's
+/// release side, [`release_args`]), to a verifier of this process's on loopback, and the record is the
 /// session's outcome and every request that reached the verifier, behind the loop ([`seen`]; a frame that is not its
 /// request's own encoding as `["noncanonical", …]`, one that does not decode as `["undecodable", LEN]`, and a refusal of the
 /// verifier's after its request as `["refused", WHY]`).
@@ -5329,7 +5317,8 @@ fn worker_session(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
     });
     let plan = Plan::default();
     FINISH_REPS.store(2 * table_names(plan.tables).len(), std::sync::atomic::Ordering::SeqCst);
-    let (addr, frames) = session_addr(st, inst, table_names(plan.tables).len(), &verifier, None).unwrap_or_else(|e| refuse(e));
+    let fw = release_args(st, 1);
+    let (addr, frames) = session_addr(st, inst, table_names(plan.tables).len(), &verifier, fw.as_ref()).unwrap_or_else(|e| refuse(e));
     let plan = Plan { lean_session: frames.is_some(), lean_frames: frames, ..plan };
     let tcp = TcpTransport::connect(&addr).unwrap_or_else(|e| refuse(format!("the firewall's session loop at {addr}: {e}")));
     let wire = std::env::var("FC_WIRE_TAMPER").unwrap_or_default();
@@ -5364,7 +5353,7 @@ fn worker_subsession_on(instances: &str, extra: &[String], env: &[(&str, String)
         .env("FC_FIREWALL", "1").env("FC_HOST_WITNESS", "1").env_remove("FC_FIREWALL_TAMPER").env_remove("FC_FIREWALL_CUT_AT")
         .env_remove("FC_FIREWALL_DEADLINE_S").env_remove("FC_WIRE_TAMPER").env_remove("FC_FINISH_TAMPER")
         .env_remove("FC_INNER_TAMPER").env_remove("FC_LEVEL0_TAMPER").env_remove("FC_FIREWALL_VALUES")
-        .env_remove("FC_FIREWALL_SALT_KEY").env_remove("FC_FIREWALL_COMMITMENTS");
+        .env_remove("FC_FIREWALL_SALT_KEY");
     // the verifier's sample, as this process's server has it ([`serving`])
     for flag in ["--draw", "--draw-law", "--draw-file"] {
         let v = arg(flag, "");
@@ -5622,43 +5611,61 @@ fn worker_pads_case(gpu: bool) -> Value {
 }
 
 /// `zk_value_salts` (live PROTOCOL.md §10.2): the value commitments' salts are the ZK server's, never the serving stack's. The
-/// stack commits every row of the staged file through the ZK server's value service (`flock-firewall values`), each row's
-/// unsalted digest and nothing else, and writes the service's `b || c` and roots into its file beside salts of its own
-/// choosing; a refs file names the service's tables and every row, and the stack registers the session, the one its epoch
-/// opened. Three firewalled CPU sessions, each in a process of its own, the session loop given the server's key and the
-/// registration's record (`--salt-key`, `--commitments`):
-/// * `overwritten`: the prover takes the server's salts in place of the stack's (`--salt-refs`), and the session is accepted;
-/// * `kept`: the prover keeps the stack's salts, which open none of the service's commitments, and the auditor rejects the
-///   session at its opening, where the value commitments' claims are checked;
-/// * `own`: the staged file as the stack committed it, under salts of its own: the loop refuses the statement before any
-///   session, since none of its roots is a table of the server's record.
+/// stack commits every row of the staged file through the ZK server's value service (`core-firewall values` on the ZK
+/// server's record), each row's unsalted digest and nothing else, and writes the service's `b || c` and roots into its file
+/// beside salts of its own choosing; a refs file names the service's tables and every row, and the stack registers the
+/// session, the one its epoch opened, which takes number 0 on the record. Three firewalled CPU sessions, each in a process
+/// of its own and an outer session of its own recursive session (`--firewall-state`, the record's), the session loop given
+/// the server's key (`--salt-key`), so that it admits each statement's registrations on the record:
+/// * `overwritten`: the prover takes the server's salts in place of the stack's (`--salt-refs`); registration 0 is admitted
+///   and the session accepted;
+/// * `kept`: the prover keeps the stack's salts, which open none of the service's commitments; registration 0, read again,
+///   is served without a second admission, and the auditor rejects the session at its opening, where the value
+///   commitments' claims are checked;
+/// * `own`: the staged file as the stack committed it, under salts of its own: none of its roots is a table of a
+///   registration on the record, so the loop refuses the session at its admission, its recursive session's stop, and
+///   nothing of it reaches the auditor.
 ///
 /// And the service itself refuses a commit whose body carries a salt beside each digest, a short refs file and a refs file
-/// with a forged tag; the salts it answers open every one of its commitments; the record counts one session and holds the
-/// session's table refs; a session registers once, and in the epoch that opened it only: of two sessions committed after,
-/// the second's record counts two and the first no longer registers.
+/// with a forged tag; the salts it answers open every one of its commitments; the record is number 0, counts one session
+/// and holds the session's table refs; a session registers once, and in the epoch that opened it only; and an epoch opens
+/// one session: a second commit before its session registers is refused, so the next record, number 1, counts one too.
 fn value_salts_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
     let name = "zk_value_salts";
     if gpu {
         return json!({"case": name, "pass": true, "skipped": "the value service's controls run on the CPU device"});
     }
-    let lean = flock_live::firewall::lean_frame_exe();
+    let (lean, core) = (flock_live::firewall::lean_frame_exe(), flock_live::firewall::core_firewall_exe());
     if !lean.exists() {
         return json!({"case": name, "pass": true, "skipped": format!("no Lean frame at {} (FC_FIREWALL_LEAN)", lean.display())});
+    }
+    if !core.exists() {
+        return json!({"case": name, "pass": true, "skipped": format!("no core-firewall at {} (FC_CORE_FIREWALL)", core.display())});
     }
     let dir = std::env::temp_dir().join(format!("flock-value-salts-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let v = value_salts_run(st, inst, &lean, &dir).unwrap_or_else(|e| json!({"case": name, "pass": false, "error": e}));
+    let v = value_salts_run(st, inst, &core, &dir).unwrap_or_else(|e| json!({"case": name, "pass": false, "error": e}));
     let _ = std::fs::remove_dir_all(&dir);
     v
 }
 
-fn value_salts_run(st: &Stmt, inst: &Instances, lean: &std::path::Path, dir: &std::path::Path) -> Result<Value, String> {
+/// The sessions `value_salts_run` serves, each an outer session at `L0` of its own recursive session, in its order.
+const VALUE_SALTS_SESSIONS: [&str; 3] = ["r0000", "r0001", "r0002"];
+
+fn value_salts_run(st: &Stmt, inst: &Instances, core: &std::path::Path, dir: &std::path::Path) -> Result<Value, String> {
     use flock_live::firewall::{CommitTable, LeanValues, lean_commit, lean_register, lean_salts, refs_file, table_ref, values_request};
     let (c, np) = (&st.c, st.c.ports.len());
     let key = dir.join("salt.key");
-    let values = LeanValues::start(lean, &key)?;
+    // the ZK server's record: each session's recursive session opened and its inner session finished, as
+    // `verity_flock.firewall` writes them (`json.dumps(ev, sort_keys=True)`, each with its `seq`)
+    let state = dir.join("firewall");
+    std::fs::create_dir_all(&state).map_err(|e| e.to_string())?;
+    let opened: String = VALUE_SALTS_SESSIONS.iter().enumerate().map(|(k, s)| format!(
+        "{{\"event\": \"open\", \"parts\": [\"L0\"], \"seq\": {}, \"session\": \"{s}\", \"stream\": \"value-salts\"}}\n\
+         {{\"event\": \"finish\", \"part\": \"inner\", \"seq\": {}, \"session\": \"{s}\"}}\n", 2 * k, 2 * k + 1)).collect();
+    std::fs::write(state.join("record.jsonl"), opened).map_err(|e| e.to_string())?;
+    let values = LeanValues::start(core, &state, &key)?;
     // every port's table: its rows in leaf order, where each sits in the file's salts and `b || c`
     let fv = &inst.header["frame_v3"];
     let mut tables = Vec::with_capacity(np);
@@ -5709,12 +5716,10 @@ fn value_salts_run(st: &Stmt, inst: &Instances, lean: &std::path::Path, dir: &st
     let refs = refs_file(&trefs, &order);
     let refs_path = dir.join("refs.bin");
     std::fs::write(&refs_path, &refs).map_err(|e| e.to_string())?;
-    // the session's registration, the one the epoch opened
-    let (m, record) = lean_register(values.addr(), &s)?;
-    let records_path = dir.join("records.bin");
-    std::fs::write(&records_path, &record).map_err(|e| e.to_string())?;
+    // the session's registration, the one the epoch opened, on the ZK server's record
+    let (n, m, record) = lean_register(values.addr(), &s)?;
     let (key_s, refs_s, path_s) = (key.display().to_string(), refs_path.display().to_string(), path.display().to_string());
-    let loop_env = vec![("FC_FIREWALL_SALT_KEY", key_s), ("FC_FIREWALL_COMMITMENTS", records_path.display().to_string())];
+    let loop_env = vec![("FC_FIREWALL_SALT_KEY", key_s)];
     // the service's salts open its every commitment
     let salts = lean_salts(values.addr(), &refs)?;
     let opens = order.iter().enumerate()
@@ -5728,33 +5733,46 @@ fn value_salts_run(st: &Stmt, inst: &Instances, lean: &std::path::Path, dir: &st
     let mut forged = refs.clone();
     forged[8 + 205] ^= 1;
     let forged_tag = lean_salts(values.addr(), &forged).err().unwrap_or_default();
-    // the registration: its record holds the session's table refs; the session registers once, and a stack that commits
-    // its values twice more and registers the second has a record that says two
-    let holds = record.len() == 12 + trefs.iter().map(Vec::len).sum::<usize>() + 64 && record[12..record.len() - 64] == trefs.concat()[..];
+    // the registration: number 0, its record holds the session's table refs; the session registers once, and a stack that
+    // commits its values twice more has the second refused, so registration 1's record says one
+    let holds = record.len() == 20 + trefs.iter().map(Vec::len).sum::<usize>() + 64 && record[20..record.len() - 64] == trefs.concat()[..];
     let again = lean_register(values.addr(), &s).err().unwrap_or_default();
     let (s2, _) = lean_commit(values.addr(), &tables)?;
-    let (s3, _) = lean_commit(values.addr(), &tables)?;
-    let (m3, _) = lean_register(values.addr(), &s3)?;
+    let second = lean_commit(values.addr(), &tables).err().unwrap_or_default();
+    let (n2, m2, _) = lean_register(values.addr(), &s2)?;
     let closed = lean_register(values.addr(), &s2).err().unwrap_or_default();
+    let numbered: Vec<Value> = firewall_events(&state).into_iter().filter(|e| e["event"] == "register")
+        .map(|e| json!([e["n"], e["record"].as_str().is_some_and(|r| r == hex(&record))])).collect();
     let service = json!({
         "opens": opens,
         "commit_with_salts": with_salts.trim_end(),
         "short_refs": short,
         "forged_tag": forged_tag,
-        "registered": {"sessions": m, "holds_its_table_refs": holds, "again": again, "of_two_sessions": m3, "closed_epoch": closed},
+        "registered": {"number": n, "sessions": m, "holds_its_table_refs": holds, "again": again, "second_commit": second,
+                       "next": [n2, m2], "closed_epoch": closed, "on_the_record": numbered},
         "ok": opens && with_salts.starts_with("err a commit body of") && short.contains("a refs file of")
             && forged_tag.contains("its tag is not the ZK server's")
-            && m == 1 && holds && m3 == 2 && [&again, &closed].iter().all(|w| w.contains("is none the current epoch opened")),
+            && (n, m, n2, m2) == (0, 1, 1, 1) && holds && numbered == [json!([0, true]), json!([1, false])]
+            && second.contains("the current epoch's session is not yet registered")
+            && [&again, &closed].iter().all(|w| w.contains("is none the current epoch opened")),
     });
-    // the sessions
+    // the sessions, each an outer session at L0 of its own recursive session on the record
     let seen = |v: &Value| v["seen"].as_array().cloned().unwrap_or_default();
     let proofs = |v: &Value| seen(v).iter().filter(|x| x[0] == "proof").count();
+    let outer = |s: &str| -> Vec<String> {
+        vec!["--firewall-state".into(), state.display().to_string(), "--session".into(), s.into(), "--part".into(), "L0".into()]
+    };
     let mut over_env = loop_env.clone();
     over_env.push(("FC_FIREWALL_VALUES", values.addr().to_string()));
-    let over = worker_subsession_on(&path_s, &["--salt-refs".into(), refs_s], &over_env);
-    let kept = worker_subsession_on(&path_s, &[], &loop_env);
-    let own = worker_subsession_on(&arg("--instances", ""), &[], &loop_env);
-    let own_why = own["refused"].as_str().unwrap_or("").to_string();
+    let [s_over, s_kept, s_own] = VALUE_SALTS_SESSIONS;
+    let over = worker_subsession_on(&path_s, &[outer(s_over), vec!["--salt-refs".into(), refs_s]].concat(), &over_env);
+    let kept = worker_subsession_on(&path_s, &outer(s_kept), &loop_env);
+    let own = worker_subsession_on(&arg("--instances", ""), &outer(s_own), &loop_env);
+    let own_why = own["why"].as_str().unwrap_or("").to_string();
+    let events = firewall_events(&state);
+    let admitted: Vec<Value> = events.iter().filter(|e| e["event"] == "admit" || e["event"] == "skip")
+        .map(|e| json!([e["event"], e["n"], e["session"]])).collect();
+    let own_stop = events.iter().find(|e| e["event"] == "stop" && e["session"] == s_own).map(|e| e["why"].clone()).unwrap_or(Value::Null);
     let sessions = json!({
         "overwritten": {"ok": over["accepted"] == true && proofs(&over) > 0, "accepted": over["accepted"], "proofs": proofs(&over),
                         "why": over["why"], "error": over["error"], "refused": over["refused"]},
@@ -5763,14 +5781,19 @@ fn value_salts_run(st: &Stmt, inst: &Instances, lean: &std::path::Path, dir: &st
                  "accepted": kept["accepted"], "proofs": proofs(&kept),
                  "prover_stopped": kept["prover_stopped"].as_str().unwrap_or("").chars().take(200).collect::<String>(),
                  "why": kept["why"].as_str().unwrap_or("").chars().take(200).collect::<String>(), "error": kept["error"]},
-        "own": {"ok": own["accepted"].is_null() && own_why.contains("no value commitment of the ZK server's"),
-                "refused": own_why.chars().take(400).collect::<String>(), "error": own["error"]},
+        "own": {"ok": own["accepted"] == false && own["error"].is_null() && seen(&own).is_empty()
+                    && own_why.contains("no value commitment of the ZK server's")
+                    && own_stop.as_str().is_some_and(|w| w.contains("no value commitment of the ZK server's")),
+                "why": own_why.chars().take(400).collect::<String>(), "stop": own_stop, "error": own["error"]},
+        "admitted": {"ok": admitted == [json!(["admit", 0, s_over])], "events": admitted},
     });
-    let pass = service["ok"] == true && ["overwritten", "kept", "own"].iter().all(|k| sessions[k]["ok"] == true);
-    Ok(json!({"case": "zk_value_salts", "expect": "the server's salts overwrite the stack's and the session is accepted; the stack's kept, \
-                                                 rejected at the opening; the stack's own commitments refused by the loop; a salt in a commit, a short \
-                                                 refs file and a forged tag refused by the service; a record counting its \
-                                                 epoch's sessions, each session registered once and in its own epoch",
+    let pass = service["ok"] == true && ["overwritten", "kept", "own", "admitted"].iter().all(|k| sessions[k]["ok"] == true);
+    Ok(json!({"case": "zk_value_salts", "expect": "the server's salts overwrite the stack's, registration 0 is admitted and the session \
+                                                 accepted; the stack's kept, registration 0 served again unadmitted, rejected at the opening; \
+                                                 the stack's own commitments refused at admission, its recursive session's stop; a salt in a \
+                                                 commit, a short refs file and a forged tag refused by the service; registrations numbered \
+                                                 0 and 1 on the record, each counting its epoch's one session, a second commit in an epoch \
+                                                 refused, each session registered once and in its own epoch",
               "service": service, "sessions": sessions, "pass": pass}))
 }
 
@@ -6228,9 +6251,7 @@ fn release_args(st: &Stmt, sessions: usize) -> Option<ReleaseArgs> {
     if session.is_empty() || part.is_empty() {
         refuse("--firewall-state takes --session ID (the recursive session: rec_live's firewall.json) and --part NAME".into());
     }
-    let lean = std::env::var_os("FC_CORE_FIREWALL").map(Into::into)
-        .unwrap_or_else(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../..").join("verity/core/service/firewall/.lake/build/bin/core-firewall"));
-    Some(ReleaseArgs { state: state.into(), session, part, lean })
+    Some(ReleaseArgs { state: state.into(), session, part, lean: flock_live::firewall::core_firewall_exe() })
 }
 
 /// The ZK server's record (`record.jsonl` in `state`), its events in order; none where it can't be read.

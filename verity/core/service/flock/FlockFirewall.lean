@@ -5,8 +5,8 @@
 `flock-firewall hello`, a firewalled session's `Hello` at a nonce it draws, `Flock.Firewall.Hello.cmd`,
 `flock-firewall session`, the firewall's session loop, which owns the auditor's connection, `Flock.Firewall.Session.cmd`,
 `flock-firewall finish`, a firewalled rep's proof file computed by the firewall, `Flock.Firewall.Finish.cmd`,
-`flock-firewall values`, the ZK server's value service, which derives every value commitment's salts from its own key,
-`Flock.Firewall.Values.cmd`, and `flock-firewall live`, the inner phase's send check on one live session,
+`flock-firewall values`, the ZK server's value service, which derives every value commitment's salts from its own key and
+registers none without the ZK server's record (`core-firewall values` registers), `Flock.Firewall.Values.cmd`, and `flock-firewall live`, the inner phase's send check on one live session,
 `Flock.Firewall.liveCmd`. -/
 module
 
