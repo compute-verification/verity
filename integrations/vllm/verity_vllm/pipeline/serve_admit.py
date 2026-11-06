@@ -54,23 +54,19 @@ later ones ``hold_s``, then is skipped; a watermark the gate has waited on ``hol
 opens the gate (``opened``: every request is added at once from then on), as a shutdown or a drain does. Refused: a
 scheduler policy other than FCFS (the waiting queue must be the admission order) and more than one data-parallel engine.
 Two frontends feed the gate: serve-openai's (`TickAdmit`, its watermark route in the server), and vLLM's own OpenAI server
-through `TickFeed` (its ``--middleware``), which appends the releases and the watermark to a feed file that `register`'s gate
-(a vLLM general plugin in the engine core process, configured by ``VERITY_TICK``, `tick_config`) reads (`FeedReader`).
+through `verity_vllm.pipeline.tick_plugin` (its ``--middleware``, which writes the releases and the watermark to a feed
+file, and a vLLM general plugin whose gate in the engine core process reads it).
 """
 from __future__ import annotations
 
 import asyncio
 import bisect
-import json
-import os
-import queue
 import re
 import sys
 import time
 import uuid
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 from verity_vllm.engine.hooks import Hooks
@@ -78,8 +74,6 @@ from verity_vllm.engine.hooks import Hooks
 ADMIT = ("arrival", "release-order", "tick")
 RELEASE_HEADER, RUN_HEADER, BUCKET_HEADER = "x-verity-release", "x-verity-release-run", "x-verity-release-bucket"
 WATERMARK_PATH = "/verity/watermark"
-#: `register`'s and `TickFeed`'s configuration, a JSON object (`tick_config`)
-TICK_ENV = "VERITY_TICK"
 #: seconds between the gate's looks at its feed while the engine waits on it
 POLL_S = 0.002
 _WATERMARK_LINE = re.compile(rb"(0|[1-9][0-9]*) (0|[1-9][0-9]*)\n")
@@ -339,7 +333,7 @@ class TickGate:
     the request's id as `install`'s ``key`` reads it), before the request reaches the engine; ``{"run", "n", "passed":
     true}`` for one that won't reach it; each watermark line ``{"run", "t", "n"}``; and the watermark's end ``{"run",
     "end": true}`` or its break ``{"run", "error": why}``. ``pull()``, if given, returns the records that came since its
-    last call (a `FeedReader`). The rest runs on the engine's thread: `add` is the scheduler's ``add_request``, `finished`
+    last call (a `tick_plugin.FeedReader`). The rest runs on the engine's thread: `add` is the scheduler's ``add_request``, `finished`
     its ``finish_requests``, `ready` comes before each engine iteration and `scheduled` after each ``schedule()``.
     ``clock`` (seconds) times only the holds and the waits, ``log`` gets one dict per admission and per event."""
 
@@ -571,7 +565,7 @@ class TickGate:
 
 def request_key(engine_id: str) -> str:
     """The client's X-Request-Id inside vLLM's OpenAI server's engine request id (``cmpl-{X-Request-Id}-0-{8 hex}``), else
-    the id unchanged: `TickFeed`'s key for a release."""
+    the id unchanged: `tick_plugin.TickFeed`'s key for a release."""
     m = _ENGINE_ID.match(engine_id)
     return m.group(1) if m else engine_id
 
@@ -703,187 +697,3 @@ class TickAdmit:
 
     def summary(self) -> dict[str, Any]:
         return {**self.counts, "runs": len(self.seen)}
-
-
-# --- under vLLM's own OpenAI server ----------------------------------------------------------------------------------
-
-
-def tick_config(environ: Mapping[str, str] = os.environ) -> dict[str, Any] | None:
-    """``VERITY_TICK``'s JSON object, None where it isn't set: ``bucket_us``, ``sat_us`` and ``free_us`` (the `Tick`),
-    ``hold_ms`` (5000 by default), ``feed`` (the file `TickFeed` appends to and `register`'s gate reads) and ``log`` (a
-    directory for each gate's ``tick.PID.jsonl``, optional)."""
-    raw = environ.get(TICK_ENV)
-    if not raw:
-        return None
-    cfg = json.loads(raw)
-    if not isinstance(cfg, dict) or not cfg.get("feed"):
-        raise ValueError(f"{TICK_ENV}: a JSON object with bucket_us, sat_us, free_us and feed, not {raw[:80]!r}")
-    return {"tick": Tick(cfg.get("bucket_us"), cfg.get("sat_us"), cfg.get("free_us")),
-            "hold_s": float(cfg.get("hold_ms", 5000)) / 1000, "feed": str(cfg["feed"]), "log": cfg.get("log")}
-
-
-class FeedReader:
-    """The records appended to a feed file (JSON lines) since the last call; a partial last line waits for its end."""
-
-    def __init__(self, path: str | os.PathLike[str]) -> None:
-        self.path, self.fd, self.tail = os.fspath(path), None, b""
-
-    def __call__(self) -> list[dict[str, Any]]:
-        if self.fd is None:
-            try:
-                self.fd = os.open(self.path, os.O_RDONLY)
-            except FileNotFoundError:
-                return []
-        data = self.tail
-        while chunk := os.read(self.fd, 1 << 16):
-            data += chunk
-        *lines, self.tail = data.split(b"\n")
-        return [json.loads(x) for x in lines if x.strip()]
-
-
-async def _answer(send: Callable[[dict[str, Any]], Any], status: int, text: str) -> None:
-    body = text.encode()
-    await send({"type": "http.response.start", "status": status,
-                "headers": [(b"content-type", b"text/plain"), (b"content-length", b"%d" % len(body))]})
-    await send({"type": "http.response.body", "body": body})
-
-
-class TickFeed:
-    """vLLM's OpenAI server's side of ``--admit tick`` (an ASGI ``--middleware``): with ``VERITY_TICK`` set, it appends to
-    the feed file the records `TickGate.take` reads: a numbered request's release before the server sees the request (its
-    key the request's X-Request-Id, ``verity-<run>-<N>`` set where the client sent none), that it won't reach the engine
-    (no 200 response began), and the watermark's lines from its ``POST /verity/watermark``, which it answers itself. A
-    malformed or repeated release and a malformed watermark are answered 400. Without the variable it passes everything."""
-
-    def __init__(self, app: Any) -> None:
-        self.app = app
-        cfg = tick_config()
-        self.fd = None if cfg is None else os.open(cfg["feed"], os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
-        self.seen: dict[str, set[int]] = {}
-
-    def write(self, rec: dict[str, Any]) -> None:
-        os.write(self.fd, (json.dumps(rec, separators=(",", ":")) + "\n").encode())
-
-    async def __call__(self, scope: dict[str, Any], receive: Callable[[], Any], send: Callable[[dict[str, Any]], Any]) -> None:
-        if self.fd is None or scope.get("type") != "http":
-            return await self.app(scope, receive, send)
-        headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope.get("headers") or ()}
-        if scope.get("path") == WATERMARK_PATH:
-            return await self._watermark(headers.get(RUN_HEADER, "").strip(), receive, send)
-        try:
-            rel = release_of(headers)
-            if rel is not None and rel[1] in self.seen.setdefault(rel[0], set()):
-                raise ValueError(f"{RELEASE_HEADER}: {rel[1]} came twice in run {rel[0]!r}")
-        except ValueError as e:
-            return await _answer(send, 400, str(e))
-        if rel is None:
-            return await self.app(scope, receive, send)
-        run, n, bucket = rel
-        self.seen[run].add(n)
-        key = headers.get("x-request-id")
-        if not key:
-            key = f"verity-{run}-{n}"
-            scope = {**scope, "headers": [*scope.get("headers", ()), (b"x-request-id", key.encode())]}
-        self.write({"key": key, "run": run, "n": n, "bucket": bucket})
-        began = False
-
-        async def watched(message: dict[str, Any]) -> None:
-            nonlocal began
-            if message.get("type") == "http.response.start" and message.get("status") == 200:
-                began = True
-            await send(message)
-
-        try:
-            await self.app(scope, receive, watched)
-        finally:
-            if not began:
-                self.write({"run": run, "n": n, "passed": True})
-
-    async def _watermark(self, run: str, receive: Callable[[], Any], send: Callable[[dict[str, Any]], Any]) -> None:
-        w = Watermark(run, self.write)
-        while True:
-            message = await receive()
-            if message.get("type") == "http.disconnect":
-                w.close("the connection closed before the watermark's end")
-                return
-            if not w.feed(message.get("body", b"")):
-                break
-            if not message.get("more_body", False):
-                w.close()
-                break
-        await _answer(send, 200 if w.error is None else 400, w.error or "")
-
-
-def _log_to(directory: str | None) -> Callable[[dict[str, Any]], None] | None:
-    if not directory:
-        return None
-    f = open(Path(directory) / f"tick.{os.getpid()}.jsonl", "a", encoding="utf-8")  # noqa: SIM115  (the process's life)
-
-    def log(rec: dict[str, Any]) -> None:
-        f.write(json.dumps(rec, separators=(",", ":")) + "\n")
-        f.flush()
-    return log
-
-
-def _gated_init(init: Callable[..., None], cfg: Mapping[str, Any]) -> Callable[..., None]:
-    def __init__(self: Any, *args: Any, **kwargs: Any) -> None:
-        init(self, *args, **kwargs)
-        gate = TickGate(cfg["tick"], hold_s=cfg["hold_s"], pull=FeedReader(cfg["feed"]), log=_log_to(cfg["log"]))
-        self._verity_tick_hooks = install(self, gate)
-    return __init__
-
-
-def _gated_input(orig: Callable[[Any], None]) -> Callable[[Any], None]:
-    """`EngineCoreProc._process_input_queue` under a gate: it returns once the gate is ready and the engine has work,
-    handling client requests meanwhile, and waits on the input queue at most ``poll_s`` at a time while the gate waits."""
-    def _process_input_queue(self: Any) -> None:
-        gate = getattr(self.scheduler, "_verity_tick", None)
-        if gate is None:
-            return orig(self)
-        while True:
-            while not self.input_queue.empty():
-                self._handle_client_request(*self.input_queue.get_nowait())
-            if not self.is_running():
-                gate.open("the engine core is shutting down")
-                return
-            ok = gate.ready(self.scheduler)
-            if ok and self.has_work():
-                return
-            if ok:
-                self._notify_idle_state_callbacks()
-                if self.input_queue.empty():
-                    with self.aborts_queue.mutex:
-                        self.aborts_queue.queue.clear()
-            try:
-                req = self.input_queue.get(timeout=None if ok else gate.poll_s)
-            except queue.Empty:
-                continue
-            self._handle_client_request(*req)
-    return _process_input_queue
-
-
-def _gated_has_work(orig: Callable[[Any], bool]) -> Callable[[Any], bool]:
-    def has_work(self: Any) -> bool:
-        gate = getattr(self.scheduler, "_verity_tick", None)
-        return orig(self) or (gate is not None and gate.pending())
-    return has_work
-
-
-_PLUGIN: list[Hooks] = []
-
-
-def register() -> None:
-    """``--admit tick`` under vLLM's own OpenAI server, as a vLLM general plugin (entry point group
-    ``vllm.general_plugins``, run in each of its processes): with ``VERITY_TICK`` set (`tick_config`), every V1 scheduler
-    built in this process gets a `TickGate` that reads the feed (`install`, keyed by the client's X-Request-Id), and the
-    engine core process's input loop waits on it (`EngineCoreProc._process_input_queue` and ``has_work``). Idempotent."""
-    cfg = tick_config()
-    if cfg is None or _PLUGIN:
-        return
-    from vllm.v1.core.sched.scheduler import Scheduler
-    from vllm.v1.engine.core import EngineCoreProc
-    hooks = Hooks(tag="admit-tick")
-    hooks.wrap(Scheduler, "__init__", lambda init: _gated_init(init, cfg))
-    hooks.wrap(EngineCoreProc, "_process_input_queue", _gated_input)
-    hooks.wrap(EngineCoreProc, "has_work", _gated_has_work)
-    _PLUGIN.append(hooks)

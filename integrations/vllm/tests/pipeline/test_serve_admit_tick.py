@@ -1,8 +1,8 @@
 """``--admit tick`` (`serve_admit.TickGate`): the certified tick in front of a vLLM-like FCFS scheduler, run in simulated
 physical time, so that the batches can be compared across wall-clock jitter and against the rule in logical time alone;
 what isn't certified (unnumbered, late, lost, aborted, a new run, a stalled or broken watermark); the watermark's lines;
-`TickFeed` and `FeedReader` under vLLM's own server; the plugin's engine-core loop; and serve-openai's ``--admit tick`` over
-HTTP."""
+`tick_plugin` under vLLM's own server (`TickFeed`, `FeedReader` and the plugin's engine-core loop); and serve-openai's
+``--admit tick`` over HTTP."""
 from __future__ import annotations
 
 import asyncio
@@ -26,6 +26,7 @@ from verity_vllm.engine import hooks
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_admit as sa
 from verity_vllm.pipeline import serve_openai as so
+from verity_vllm.pipeline import tick_plugin as tp
 
 TICK = sa.Tick(bucket_us=100_000, sat_us=30_000, free_us=40_000)
 RUN = "ab"
@@ -353,7 +354,7 @@ def test_watermark_lines_as_the_certifier_sends_them():
 
 
 def config(tmp_path: Path) -> dict[str, str]:
-    return {sa.TICK_ENV: json.dumps({"bucket_us": 100_000, "sat_us": 30_000, "free_us": 40_000, "hold_ms": 2000,
+    return {tp.TICK_ENV: json.dumps({"bucket_us": 100_000, "sat_us": 30_000, "free_us": 40_000, "hold_ms": 2000,
                                      "feed": str(tmp_path / "feed.jsonl"), "log": str(tmp_path)})}
 
 
@@ -390,7 +391,7 @@ def test_tick_feed_writes_the_releases_and_the_watermark_the_gate_reads(tmp_path
     for k, v in config(tmp_path).items():
         monkeypatch.setenv(k, v)
     ok, refused = App(), App(400)
-    feed, read = sa.TickFeed(ok), sa.FeedReader(tmp_path / "feed.jsonl")
+    feed, read = tp.TickFeed(ok), tp.FeedReader(tmp_path / "feed.jsonl")
     assert read() == []
     asgi(feed, scope_of("/v1/completions", {"x-verity-release": "0", "x-verity-release-run": "ab",
                                             "x-verity-release-bucket": "0", "x-request-id": "c0"}), [b"{}"])
@@ -398,7 +399,7 @@ def test_tick_feed_writes_the_releases_and_the_watermark_the_gate_reads(tmp_path
     assert ok.seen[1][b"x-request-id"] == b"verity-ab-1"
     dup = asgi(feed, scope_of("/v1/completions", {"x-verity-release": "1", "x-verity-release-run": "ab"}), [b"{}"])
     assert dup[0]["status"] == 400 and len(ok.seen) == 2
-    asgi(sa.TickFeed(refused), scope_of("/v1/completions", {"x-verity-release": "2", "x-verity-release-run": "ab"}), [b"{}"])
+    asgi(tp.TickFeed(refused), scope_of("/v1/completions", {"x-verity-release": "2", "x-verity-release-run": "ab"}), [b"{}"])
     plain = asgi(feed, scope_of("/v1/completions", {}), [b"{}"])
     assert plain[0]["status"] == 200
     wm = asgi(feed, scope_of(sa.WATERMARK_PATH, {"x-verity-release-run": "ab"}), [b"0 1", b"\n1 3\n", b""])
@@ -422,12 +423,14 @@ def test_tick_feed_writes_the_releases_and_the_watermark_the_gate_reads(tmp_path
 
 
 def test_without_its_variable_the_feed_passes_everything(monkeypatch):
-    monkeypatch.delenv(sa.TICK_ENV, raising=False)
+    monkeypatch.delenv(tp.TICK_ENV, raising=False)
     app = App()
-    sent = asgi(sa.TickFeed(app), scope_of("/v1/completions", {"x-verity-release": "x"}), [b"{}"])
-    assert sent[0]["status"] == 200 and len(app.seen) == 1 and sa.tick_config({}) is None
+    sent = asgi(tp.TickFeed(app), scope_of("/v1/completions", {"x-verity-release": "x"}), [b"{}"])
+    assert sent[0]["status"] == 200 and len(app.seen) == 1 and tp.tick_config({}) is None
     with pytest.raises(ValueError, match="feed"):
-        sa.tick_config({sa.TICK_ENV: json.dumps({"bucket_us": 1, "sat_us": 1, "free_us": 1})})
+        tp.tick_config({tp.TICK_ENV: json.dumps({"bucket_us": 1, "sat_us": 1, "free_us": 1})})
+    with pytest.raises(ValueError, match="VERITY_TICK="):
+        tp.tick_config({tp.TICK_ENV: "{not json"})
 
 
 class EngineCoreProc:
@@ -469,19 +472,19 @@ def plugin(tmp_path, monkeypatch):
                       ("vllm.v1.core", types.ModuleType("vllm.v1.core")), ("vllm.v1.core.sched", types.ModuleType("vllm.v1.core.sched")),
                       ("vllm.v1.engine", types.ModuleType("vllm.v1.engine")), (sched_mod.__name__, sched_mod), (core_mod.__name__, core_mod)):
         monkeypatch.setitem(sys.modules, name, mod)
-    sa.register()
-    sa.register()
+    tp.register()
+    tp.register()
     try:
         yield Scheduler
     finally:
-        sa._PLUGIN.pop().uninstall()
+        tp._PLUGIN.pop().uninstall()
 
 
 def test_the_plugin_gates_the_engine_cores_input_loop(plugin, tmp_path):
-    assert len(sa._PLUGIN) == 1
+    assert len(tp._PLUGIN) == 1
     sched = plugin()
     core = EngineCoreProc(sched)
-    write = sa.TickFeed(App()).write
+    write = tp.TickFeed(App()).write
     write({"key": "c0", "run": "ab", "n": 0, "bucket": 0})
     core.input_queue.put(("add", Req("cmpl-c0-0-0123abcd")))
     core.input_queue.put(("add", Req("cmpl-probe-0-0123abcd")))

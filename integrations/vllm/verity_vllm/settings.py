@@ -208,6 +208,8 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_REPLAY_DUMP_MAX", int, 1024, DEBUG, "the most values the replay dumps"),
     S("VERITY_REPLAY_FORK_GC_FREEZE", not_off, True, VALUE, "the replay freezes the GC before it forks its workers"),
     S("VERITY_RESEARCH", str, None, WHERE, "the research tree a row's stages import (the row sets it)"),
+    S("VERITY_TICK", json.loads, None, VALUE, "the certified tick under vLLM's own OpenAI server (`pipeline.tick_plugin`), a JSON "
+      "object: the registered bucket_us, sat_us and free_us, hold_ms, the feed file and the gate's log directory; unset, none"),
     S("VERITY_TIMELINE", str, None, WHERE, "the stage telemetry file"),
     S("VERITY_TREE", str, None, WHERE, "the source tree that runs (the mixed-tree refusal)"),
     S("VERITY_UNIT_RULE_CACHE", str, None, WHERE, "the host's unit-rule cache directory (`sweep --unit-rule-cache`)"),
