@@ -17,10 +17,14 @@ field missing or not hex, not an object), and every field of the outcome but its
 proofs' cases all reject: v2 refuses evidence naming no session (`oneSession`), and a session on the challenger's coin
 trees is verified by `flock-verify`, which the mirror doesn't run. So every product rejects here, onsite often with a
 component undecided beside the rejection. Remote's `windows` tie decides only where no component rejects, so this
-difftest doesn't reach it; `CoreRemote`'s `#guard`s check which windows it finds stray. `product IDS
-serve` over each composite's subprotocols, the composite `verity run`'s verifier runs, is held to the same reference,
-and `product IDS id` names remote and onsite for their subprotocols and refuses every other set: the same two
-composites a configuration may list (`verity.core.deploy.config.COMPOSITES`)."""
+difftest doesn't reach it; `CoreRemote`'s `#guard`s check which windows it finds stray. Remote's case on one record
+that reuses the window's registration of its tables (`reusing`) is one made case, which sampled proofs refuses at
+`oneSession` too, before R1-R7 read the record; `CoreRemote`'s `#guard`s check what v2 decides on that record with a
+session's proofs granted (R7's domains and outputs, R6's previous) and that remote credits the one window on it and
+finds a window on the window's own registration stray. `product IDS serve` over each composite's subprotocols, the
+composite `verity run`'s verifier runs, is held to the same reference, and `product IDS id` names remote and onsite for
+their subprotocols and refuses every other set: the same two composites a configuration may list
+(`verity.core.deploy.config.COMPOSITES`)."""
 
 from __future__ import annotations
 
@@ -46,6 +50,7 @@ from verity_difftest import canonical
 
 from verity.core.deploy import config as K
 from verity.core.protocols.sampled_proofs import parties as SPP
+from verity.ml.circuits.types import Array, Value
 
 PROTOCOLS = Path(__file__).resolve().parents[2]
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -550,6 +555,89 @@ def test_sampled_proofs_refuses_one_stage_v1(remote_server):
             seen[br] += 1
     check()
     assert set(seen) == set(want), dict(seen)
+
+
+#: `reusing`'s R's law: a subset of none, so v2's audit of R draws nothing at its challenger's coins
+REUSING_LAW = {"k": 0, "law": "subset"}
+
+
+def reusing(made: list[dict]):
+    """A window's Commit record as `pouw_credit_cases.period_instance`'s `commit` makes it: R, the run's registration,
+    chained after W (``previous``), the serving process's registration of the window's tables in a served window's form,
+    and registering those tables under the Commit's names (`commit_names`) as output values that reuse W's entries
+    (``outputs``), of a program whose parameters they are (registered on `ONE_STAGE.PROGRAMS`). Each call appends W, R,
+    R's setup and its outputs to `made`."""
+    CC = R.POUW_PERIOD_CASES.credit_cases
+
+    def commit(true: dict[str, dict], _steps: int, circuit: str, open_root: str) -> str:
+        w = OS._json({"format": OS.R.FORMAT_V2, "previous": None, "program": circuit, "protocol": OS.R.PROTOCOL,
+                      "registered": [true[v] for v in sorted(true)],
+                      "window": {"entry": len(made), "kind": "served", "open_root": open_root, "refused": []}})
+        named = sorted((n, v) for v, n in CC.commit_names(true).items())
+        params = tuple((n, Array(true[v]["leaves"] * true[v]["words"], Value(16))) for n, v in named)
+        s = OS.RegisteredSetup(OS._registered_program("CoreRemoteReuse", 1, params, tuple(n for n, _ in named)),
+                               [{n: true[v]["words"] for n, v in named}])
+        OS.PROGRAMS[s.sha512] = s.program
+        rec = OS._json(OS.R.record(s.program, s.query, REUSING_LAW, OS.SCHEME,
+                                   [{"port": p, "root": OS.ROOTS[p], **s.ports[p]} for p in s.ports], OS.WINDOW,
+                                   registered=[{**true[v], "value": n} for n, v in named], leaf_layer=OS.LEAF,
+                                   anchors=[], previous=OS.R.digest(w),
+                                   partition={"program": s.sha512, "query": s.query}))
+        made.append({"w": w, "record": rec, "setup": s,
+                     "outputs": {n: {"record": OS.R.digest(w), "value": v} for n, v in named}})
+        return CC.Cr._canonical(rec).encode().hex()
+    return commit
+
+
+def reusing_audit(m: dict) -> dict:
+    """Sampled proofs' one-stage v2 case on `reusing`'s R (`m`) over the log [W], with R's outputs: its draw at its
+    challenger's coins (`_challenger_draw`, a session whose challenger sampled no coin tree) drew nothing, so it names no
+    session and no proved unit, its params name the circuit and public files `BLOBS` hold, and its registered file names
+    R's tables, which no proof block of R's program reads."""
+    s, rec = m["setup"], m["record"]
+    ch, d, coins = OS._challenger_draw(random.Random("remote/reusing"), s, REUSING_LAW, rec, trees=0)
+    reads = {"format": "verity/registered-reads/v1", "ports": {
+        e["value"]: {k: e[k] for k in ("domain", "leaves", "root", "value", "words")} | {"reads": [None]}
+        for e in rec["registered"]}}
+    params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/10",
+              "law": REUSING_LAW, "leaf_layer": OS.LEAF, "log": [m["w"]], "outputs": m["outputs"],
+              "parameters": s.signature, "partition": {"program": s.sha512, "query": s.query}, "ports": s.ports,
+              "program": s.desc, "proofs": {"circuit": _sha(CIRCUIT), "public": _sha(PUBLIC), "registered": reads},
+              "query": s.query, "registered": s.values[0], "scheme": OS.SCHEME,
+              "window_root": ch.ledger.window["root"], "work_table": None}
+    evidence = {"coins": coins, "draw": d, "instances": 0, "proofs": {"sessions": []}, "proved_units": [],
+                "receipt": OS.R.receipt(rec, "v", received=OS.RECEIVED), "served": None, "session_roots": None,
+                "sessions": [], "statement": {}}
+    return form_case(OS._json({"params": params, "record": rec, "evidence": evidence}))
+
+
+#: v2's refusal of evidence naming no session (`OneStageZk.oneSession`)
+NO_SESSION = "proofs: the evidence names 0 sessions: the drawn units are proved in one session"
+
+
+def test_remote_on_one_record_that_reuses_the_windows_registration(remote_server):
+    """A period of one window whose Commit record is R, the run's registration chained after W, the window's
+    registration of its tables, reusing W's entries as R's outputs (`reusing`): the policy on the log [W] and R and the
+    period accept, and the policy's record and the window's are R. Sampled proofs' one-stage v2 audit of R names no
+    session, so v2 refuses it at `oneSession`, before R1-R7 read R, and remote rejects with that reason, in Lean as in
+    Python. With a component rejecting, remote's `windows` tie decides nothing here: `CoreRemote`'s `#guard`s check v2
+    on R with a session's proofs granted and the tie on a window on R or on W."""
+    PPC, made = R.POUW_PERIOD_CASES, []
+    period = as_component(R.POUW_PERIOD, PPC.serve(PPC.credit_cases.period_instance(
+        random.Random("remote/reusing"), windows=1, commit=reusing(made), **PPC.COVERED)))
+    reused = reusing_audit(made[0])
+    audit = as_component(R.SAMPLED_PROOFS, reused)
+    policy = policy_on(audit)
+    record = OS.R.digest(made[0]["record"])
+    assert [x.hex() for x in R.policy_record(policy["root"], policy["evidence"])] == [record]
+    assert [x.hex() for x in R.window_records(period["root"], period["evidence"])] == [record]
+    got = R.SAMPLED_PROOFS.answer({**reused, "blobs": BLOBS})
+    assert (got["verdict"], got["reason"]) == (R.REJECT, NO_SESSION), got
+    case = remote_case([policy, period, audit])
+    assert R.REMOTE.verdicts(case) == [R.ACCEPT, R.ACCEPT, R.REJECT], R.REMOTE.verdicts(case)
+    python, lean = R.REMOTE.answer(case), remote_server.exchange(case)
+    assert {k: v for k, v in lean.items() if k != "reason"} == {k: v for k, v in python.items() if k != "reason"}
+    assert python["verdict"] == R.REJECT and lean["reason"] == f"{R.SAMPLED_PROOFS.id} reject: {NO_SESSION}", lean
 
 
 @pytest.mark.slow
