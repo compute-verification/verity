@@ -22,6 +22,8 @@ summing to 1 (`prob_add_not`).
 
 @[expose] public section
 
+open Verity.Game renaming prPMFReal → prob
+
 namespace Nci.SecurityProofs
 
 open Verity Nci.Dampener
@@ -29,7 +31,7 @@ open Verity Nci.Dampener
 /-- `prob` is monotone in the event. -/
 theorem prob_mono {Ω : Type} [Fintype Ω] (μ : PMF Ω) {E F : Ω → Prop} (h : ∀ ω, E ω → F ω) :
     prob μ E ≤ prob μ F := by
-  unfold prob
+  simp only [prob_eq_sum]
   refine Finset.sum_le_sum fun ω _ => ?_
   by_cases hE : E ω
   · simp [hE, h ω hE]
@@ -45,7 +47,7 @@ theorem prob_add_not {Ω : Type} [Fintype Ω] (μ : PMF Ω) (E : Ω → Prop) :
   have h1 : ∑ ω, (μ ω).toReal = 1 := by
     have h := congrArg ENNReal.toReal h0
     rwa [ENNReal.toReal_sum fun ω _ => μ.apply_ne_top ω, ENNReal.toReal_one] at h
-  unfold prob
+  simp only [prob_eq_sum]
   rw [← Finset.sum_add_distrib, ← h1]
   refine Finset.sum_congr rfl fun ω _ => ?_
   by_cases h : E ω <;> simp [h]
@@ -53,7 +55,7 @@ theorem prob_add_not {Ω : Type} [Fintype Ω] (μ : PMF Ω) (E : Ω → Prop) :
 /-- The union bound: `P(E ∨ F) ≤ P(E) + P(F)`. -/
 theorem prob_or_le {Ω : Type} [Fintype Ω] (μ : PMF Ω) (E F : Ω → Prop) :
     prob μ (fun ω => E ω ∨ F ω) ≤ prob μ E + prob μ F := by
-  unfold prob
+  simp only [prob_eq_sum]
   rw [← Finset.sum_add_distrib]
   refine Finset.sum_le_sum fun ω _ => ?_
   have hq : 0 ≤ (μ ω).toReal := ENNReal.toReal_nonneg
@@ -69,7 +71,7 @@ theorem prob_ge_of_not {Ω : Type} [Fintype Ω] (μ : PMF Ω) {G F : Ω → Prop
 /-- **Markov's inequality** on a finite outcome space: for `Z ≥ 0`, `a · P(a < Z) ≤ E[Z]`. -/
 theorem markov {Ω : Type} [Fintype Ω] (μ : PMF Ω) (Z : Ω → ℝ) (hZ : ∀ ω, 0 ≤ Z ω) (a : ℝ) :
     a * prob μ (fun ω => a < Z ω) ≤ ∑ ω, (μ ω).toReal * Z ω := by
-  unfold prob
+  simp only [prob_eq_sum]
   rw [Finset.mul_sum]
   refine Finset.sum_le_sum fun ω _ => ?_
   have hq : 0 ≤ (μ ω).toReal := ENNReal.toReal_nonneg
@@ -83,7 +85,8 @@ theorem markov {Ω : Type} [Fintype Ω] (μ : PMF Ω) (Z : Ω → ℝ) (hZ : ∀
 wrong. -/
 theorem expected_wrong {Ω : Type} [Fintype Ω] (μ : PMF Ω) {N : ℕ} (c : Fin N → ℝ) (wrong : Ω → Fin N → Prop) :
     ∑ ω, (μ ω).toReal * wrongCapacity c (wrong ω) = ∑ i, c i * prob μ (fun ω => wrong ω i) := by
-  unfold wrongCapacity prob
+  unfold wrongCapacity
+  simp only [prob_eq_sum]
   simp only [Finset.mul_sum]
   refine Finset.sum_comm.trans (Finset.sum_congr rfl fun i _ => Finset.sum_congr rfl fun ω _ => ?_)
   by_cases h : wrong ω i <;> simp [h, mul_comm]
@@ -280,13 +283,11 @@ theorem residualShare_sub {W C εW ε L θ : ℝ} (hC : 0 < C) :
   linear_combination (ε + L + θ) * hCi
 
 theorem DampenerRemote : Guarantees.DampenerRemote := by
-  intro Ω _ μ N cap wrong p ε β ι _ bad detected I ident τ w Φ Δ H q B θ εW κ C U W χ mfu M Mu Mr Mx c k b_w b_a r d T
-    dd e Mc hp hε hcap0 hcC hsound hH hΔ hΦ hI hT hcap hθ hw hq hq1 hB0 hwB hS hκ hC hU hmfu hmfu1 hc hbw hba hdd hcomp
+  intro Ω _ μ N cap wrong p ε β ι _ bad detected I ident τ w Φ Δ H q B θ εW κ C U W χ mfu M Mu Mr Mx Γ α b_w b_a r d T
+    dd e Mc hp hε hcap0 hcC hsound hH hΔ hΦ hI hT hcap hθ hw hq hq1 hB0 hwB hS hκ hC hU hmfu hmfu1 hα hbw hba hdd hcomp
     hB hthr hW hsize hM0 hM hu hres hx
-  have hdecl : (T.M.card : ℝ) ≤ C / rhoT (k / c : ℝ) b_a (T.bound k b_w dd e) := by
-    have h := declared_le (Γ := c) (α := (k / c : ℝ)) (by positivity) hbw hba hdd (compliesRate_of_complies hcomp) hB
-      (by rwa [rate_mul _ hc]) (by rwa [rate_mul _ hc]) hsize
-    rwa [rate_mul _ hc] at h
+  have hdecl : (T.M.card : ℝ) ≤ C / rhoT α b_a (T.bound (α * Γ) b_w dd e) :=
+    declared_le hα hbw hba hdd hcomp hB hthr hW hsize
   refine prob_ge_of_not μ ?_ ((prob_or_le μ (fun ω => ε * C < wrongCapacity cap (wrong ω))
     (fun ω => θ * C < ∑ b ∈ escaped (bad ω) (detected ω) ident τ, w b)).trans
       (add_le_add (CertificateSlack Ω μ N cap wrong p ε C hp hε hC hcap0 hcC hsound)
