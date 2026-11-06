@@ -84,6 +84,7 @@ outputs = llm.generate(["The capital of France is"], SamplingParams(temperature=
 | `tensor_parallel_size` | 1 | GPUs the model is sharded over |
 | `max_num_seqs` | 8 | requests the scheduler runs together |
 | `max_num_batched_tokens` | vLLM's | tokens per scheduler step |
+| `long_prefill_token_threshold` | vLLM's, no cap | the most tokens of one prompt a scheduler step prefills |
 | `max_model_len` | the pin's | context length |
 | `gpu_memory_utilization` | the profile's | fraction of device memory the engine may take |
 | `kv_cache_memory_bytes` | vLLM's sizing | the KV cache's size in bytes, in place of sizing it from free memory |
@@ -92,6 +93,7 @@ outputs = llm.generate(["The capital of France is"], SamplingParams(temperature=
 | `async_scheduling` | vLLM's, on | False schedules each step once the previous step's output is in |
 | `enforce_eager` | True | eager execution; False compiles with torch.compile and CUDA graphs |
 | `execution` | `bi-eager`, or `bi-compiled` with `enforce_eager` False | the execution label (`engine.served.EXECUTIONS`) |
+| `engine_class` | none | a registered engine class (`engine/profiles/engine_classes.py`), whose settings the engine runs at and whose window limits it refuses past |
 | `dtype` | the profile's | served dtype override |
 | `quantization` | the checkpoint's | vLLM quantization override, such as `"fp8"` |
 | `compilation_config` | vLLM's | compilation and CUDA-graph settings |
@@ -104,7 +106,10 @@ outputs = llm.generate(["The capital of France is"], SamplingParams(temperature=
 
 Any other option, or a value of the wrong type, raises `TypeError` naming it. `generate` returns vLLM's `RequestOutput` list
 unchanged and appends a `GenerateRecord` to `llm.records`; `llm.pin` is the resolved `EnginePin`, `llm.engine_record` the
-engine as built, `llm.vllm` the wrapped `vllm.LLM` and `llm.model` the served model, which protocol options install on.
+engine as built, `llm.vllm` the wrapped `vllm.LLM` and `llm.model` the served model, which protocol options install on. Under
+`engine_class`, an option the class contradicts is refused before the build, a prompt over the class's
+`long_prefill_token_threshold` is refused as it reaches the scheduler, and `llm.close_window()` is refused while a request is in
+flight (`errors.Refused`, `engine/class_admission.py`).
 
 ## Protocol hooks
 
