@@ -10709,11 +10709,11 @@
    }
   },
   "Flock.ProvedScope": {
-   "digest": "55c1c8f58ce2517e0b972cc08ecfe036a17f43341962f17e1bfcc8b2654d87cf",
+   "digest": "a76de5b09fb80528d50d4f23133455c34b8fe66faab5011912a4daff12d22d65",
    "definitions": {
     "Flock.ProvedScope.NO_PROGRAM": "c1e8296485c16b9065ec7619c59042d2c85b28a452c8a0fc69bb424a18799cd8",
     "Flock.ProvedScope.bitRows": "dc20bcb262eb035ca8081ca0137f92d04992b583a856c067e408f42845a459f0",
-    "Flock.ProvedScope.bitRowsU": "d2d1f98978c28f7cba361b8006d2bbacc62825151625bb0ed2453993dd38df40",
+    "Flock.ProvedScope.bitRowsU": "4ed4538dcfa3ceb0496db406cd70ce93cdcb9a3d0892cba48eaf32bd37daa5f5",
     "Flock.ProvedScope.check": "140955f63c8d257981d9f8b343d0ee9842daacccd97e36e81e6d602d0729fcbb",
     "Flock.ProvedScope.checkOf": "2aac9ceb54a3a6d19cbbb93d1e5d9fb3dbf4079985e95c4be01d633af52d8cfc",
     "Flock.ProvedScope.circuitOf": "d510c8a5367b7827727bac22729a3bc82445c9293e7e8e83d7276134cc31c82f",
@@ -10738,7 +10738,7 @@
     "Flock.ProvedScope.scopeOkH": "318d23b0bc53a7169e9218a78b16323fb5415e33f63a941d2d1c7d36cd75bf95",
     "Flock.ProvedScope.scopeOkI": "45924f746076eabf0813ad43bb244b5af5658dd6426f9724d2fd76db2ff71cb5",
     "Flock.ProvedScope.scopeOkT": "0f4c2f9325a0fbbc2e8a1c360af067ccd825d5a1df77b7779ce986a0859d9d78",
-    "Flock.ProvedScope.scopeWhy": "8c202ec5473ed423386ec28cc2794ef5d3e1c896819b2f22924604227077d3b6",
+    "Flock.ProvedScope.scopeWhy": "e995dab8ac12363338b52d47248081bfe6d3d5673f511e7297db9da0712011f9",
     "Flock.ProvedScope.scopeWhyT": "97de0ca306cc389b5730c45e5aaa2c86cfa1f14e3793f5a3d9e895c9579378d8",
     "Flock.ProvedScope.segRow": "33846aadab03ac3d93cfc33f65bf3a02b008237bfb0a6f9cf0b5735a9f9ddc0a",
     "Flock.ProvedScope.sharedRowsOk": "1559af994ca463a2c99bb9b81fc7da8fe08899af06b4fae942360cde9c753e59",
