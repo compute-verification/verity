@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# The plain hidden-output fixture (tests/plain_hidden.py, tests/test_lean_plain_hidden.py): a RoPE d64 statement with hidden
-# outputs, no shared rows and no registered value, proved in one loopback session without --zk under a subset sample on OS
-# coins, then Lean's `flock-verify verify --coins os` on it with the verifier's own program and partition (PROTOCOL.md
-# §16.15: the plain claim at hidden outputs draws by the subset law at one table, FailClosed.SoundExecH at its subset sample design). The staged files
-# and the session go into the evidence store as a fixture (`research data put --kind fixture/v1 --preserve`), whose id
-# `out/fixture.txt` names. Run from the verity tree (research run --cwd source); CPU only. Outputs under out/: host.txt,
-# stage.json, statement.txt, serve.log, prove.txt and prove.err, live.json (the LIVE record), lean-honest.log (its VERDICT
-# line), fixture.txt.
+# The plain hidden-output fixture (tests/plain_hidden.py, tests/test_lean_plain_tree.py): a RoPE d64 statement with hidden
+# outputs, no shared rows and no registered value, proved in one loopback session without --zk under a subset sample on the
+# keyed coin tree (FC_COINS=tree), which the auditor's challenger samples and opens (challenger.sh: serve --tree-from; its
+# release log holds the session's record, challenger/audit.json), then Lean's `flock-verify verify --coins tree` on it with
+# the verifier's own program and partition (`Flock.ProvedScope`: the plain claim at hidden outputs draws by the subset law
+# at one table, FailClosed.SoundExecH at its subset sample design). The staged files, the session and its challenger's
+# challenger/ (no private key or secret) go into the evidence store as a fixture (`research data put --kind fixture/v1
+# --preserve`), whose id `out/fixture.txt` names. Run from the verity tree (research run --cwd source); CPU only. Outputs
+# under out/: host.txt, stage.json, statement.txt, serve.log, prove.txt and prove.err, live.json (the LIVE record),
+# challenger/ (its record, releases.jsonl, hellos.jsonl and audit.json), lean-honest.log (its VERDICT line), fixture.txt.
 # Pins its own slices where it can take slice locks (node 1); on a vy-cpu pod, run it in a check slot (--pool), which pins it.
 # env: CPUS=16  K=16 (the subset sample's units, of the stage's 32)  FLOCK_WORK=/workspace, or where /workspace isn't writable
 #      /workspace/jobs/pc-read-gadget (node 1, shared as 76-read-gadget.sh's) else /workspace/cache/plain-hidden (the prover
@@ -23,7 +25,7 @@ if [ -z "${PH_PINNED:-}" ]; then
   # no slice locks here (a vy-cpu pod): the check slot (research run --pool) has pinned the job to its own cores
   export PH_PINNED=slot RAYON_NUM_THREADS=$(nproc)
 fi
-export FC_COINS=os
+export FC_COINS=tree
 REPO=$(pwd); O=${RESEARCH_RUN_DIR:-/tmp/plain-hidden}/out; mkdir -p $O
 if [ -z "${FLOCK_WORK:-}" ] && [ ! -w /workspace ]; then
   if [ -d /workspace/jobs ]; then export FLOCK_WORK=/workspace/jobs/pc-read-gadget; else export FLOCK_WORK=/workspace/cache/plain-hidden; fi
@@ -49,6 +51,9 @@ LEAN_BIN=$L/lean-$LSHA/flock-verify
   fi
 ) > $O/build-lean.log 2>&1 &
 LP=$!
+CHALLENGER_REPO=$REPO CHALLENGER_WORK=$S/challenger-work
+. verity/ml/flock/pod/challenger.sh
+challenger_build
 
 # the CPU prover, cached per pod under its sources' key (76-read-gadget.sh's)
 SM=${SM:-$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d .)}; SM=${SM:-89}
@@ -75,9 +80,11 @@ D=$S/stage; N=32
 python3 verity/ml/flock/tests/plain_hidden.py --out $D > $O/stage.json 2> $O/stage.err || { tail -20 $O/stage.err; exit 1; }
 PIN=$(sha512sum $D/circuit.txt | cut -d' ' -f1)
 $B statement --circuit $D/circuit.txt --instances $D/pub-$N.bin --tables $D/tables > $O/statement.txt 2>&1
+CHALLENGER_PY=python3
+challenger_built && challenger_start $O/challenger || exit 1
 PORT=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
 $B serve --listen 127.0.0.1:$PORT --out $S/sessions --instances $D/pub-$N.bin --circuit $D/circuit.txt --tables $D/tables \
-  --pin $PIN --operator plain-hidden --draw subset:${K:-16} --sessions 1 > $O/serve.log 2>&1 &
+  --pin $PIN --operator plain-hidden --draw subset:${K:-16} --sessions 1 "${TREE_FROM[@]}" > $O/serve.log 2>&1 &
 SP=$!
 for i in $(seq 1800); do grep -q SERVING $O/serve.log && break; kill -0 $SP 2>/dev/null || break; sleep 1; done
 $B prove --verifier 127.0.0.1:$PORT --instances $D/inst-$N.bin --circuit $D/circuit.txt --tables $D/tables --runs 1 --warm 0 \
@@ -86,9 +93,11 @@ grep -h '^LIVE' $O/prove.txt | head -1 | cut -f2- > $O/live.json
 for i in $(seq 600); do kill -0 $SP 2>/dev/null || break; sleep 1; done
 kill $SP 2>/dev/null; wait $SP
 SESS=$(dirname $(ls -1 $S/sessions/*/session.json | LC_ALL=C sort | tail -1)) || exit 1
+challenger_end $O/challenger; echo "challenger exit $?"
+challenger_audit $O/challenger $SESS || exit 1
 
 wait $LP; [ -x $LEAN_BIN ] || { tail -20 $O/build-lean.log; exit 1; }
-$LEAN_BIN verify --statement verity/flock-circuit --coins os --circuit $D/circuit.txt --public $D/pub-$N.bin \
+$LEAN_BIN verify --statement verity/flock-circuit --coins tree --circuit $D/circuit.txt --public $D/pub-$N.bin \
   --partition $D/partition.json --program $D/program.json --session $SESS > $O/lean-honest.log 2>&1
 echo "honest rc $?"
 grep -h '^VERDICT' $O/lean-honest.log | head -1 | cut -c1-600
@@ -98,6 +107,7 @@ X=$S/fixture; mkdir -p $X/stage $X/session
 cp $D/circuit.txt $D/pub-$N.bin $D/program.json $D/partition.json $X/stage/ && cp -r $D/tables $X/stage/
 cp -r $SESS/. $X/session/
 cp $O/live.json $X/live.json
+cp -r $O/challenger $X/challenger || exit 1
 if [ -n "$RESEARCH" ]; then
   $RESEARCH data put --kind fixture/v1 --tree $X --preserve > $O/fixture.txt 2> $O/fixture.err || tail -5 $O/fixture.err
 fi

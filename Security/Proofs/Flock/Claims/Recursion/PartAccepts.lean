@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.TopsOpens
+module
+
+public import Proofs.Flock.Claims.Recursion.TopsOpens
 
 /-!
 # `PartChecksBV` at what each part's circuit accepts (`PartAccepts`), and the corollaries without it
@@ -36,6 +38,8 @@ accepted run) and `ReadersTrue` from `readersTrue_layoutBTops` (every hm96 slot 
 string at the outer relation, `hmSlotsCommit_of_full`). What they take: `DecompB` there, and nothing else.
 -/
 
+@[expose] public section
+
 namespace Claims.Recursion.VStarB
 
 open Claims
@@ -56,7 +60,7 @@ the verifier's evaluations ties the rows the part commits to the ones the verifi
 def PartAccepts (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : LayoutB)
     (shape : Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg) (s : ℕ) (x : Msg)
     (c : ℕ → Coin) (ms : List Msg) : Prop :=
-  (∃ st : Stmt, D.parse x = some st ∧ shape st.form) ∧
+  (∃ st : CompiledStatement, D.parse x = some st ∧ shape st.form) ∧
     ∃ (xO : Msg) (w : Flock.Wit), Flock.check DO.parse xO w = true ∧ (∀ e ∈ L.calls x s w, H e.1 = e.2) ∧
       (findColl (L.calls x s w ++ vcallsAt H D xO)).isSome = false ∧ shows s x xO c ∧
       (∀ i < L.rounds x, ∀ m, L.held x s w i = some m → ms.getD i [] = m) ∧

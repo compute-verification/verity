@@ -1,6 +1,6 @@
 """memory-map/v1 under deferred residency against the map that writes each block at the step that completed it: vllm's
-rules for moving one to the other (`deferred`, its compare.py in run r20261018-070848-81e2, the Store's map against
-circuits' oracle), on hand histories and on seeded ones.  The moved map is
+rules for moving one to the other (`deferred`, the Store's map against circuits'
+oracle), on hand histories and on seeded ones.  The moved map is
 one `Replay` accepts, every index the oracle wrote is written once or withdrawn once, a block is withdrawn exactly
 when its last structural reader is at or before the line its encode landed in, each written block is in the plans of
 the passes after that line through its last structural reader, and a session the moved map drives is accepted."""
@@ -101,7 +101,7 @@ def plans(dm: list[Step], steps: int) -> dict[int, list[int]]:
 
 def drive(run: Run, dm: list[Step], appends: dict[int, list[bytes]], steps: int, boundaries=()) -> audit.Verdict | None:
     """The moved map through a session: at each step t the pass at t (its change `Replay.take(t)`), then the append t
-    made, answered with its coin, then line t's releases, its withdrawn blocks named (`Session.release(released,
+    made, answered with its coin, then line t's releases, its withdrawn blocks named (`AuditRun.release(released,
     withdrawn)`); a window ends before each step in `boundaries` and after the last.  The first rejection, if any."""
     replay, lines = Replay(Header(run.store.registration.digest, N), run.store.registration), {s.step: s for s in dm}
     digests: dict[int, bytes] = {}

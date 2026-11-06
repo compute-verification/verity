@@ -24,7 +24,7 @@ with the memory challenger a party of its own on the challenger host (`verity.co
   each index from ``C*`` where it is held, and the verifier's answer: setup's own inputs tied to the run (`period.tie`,
   the public-encoder check of ``C*``), the run's check, and the bits an accepted run certifies (`period.certify`: 0 at a
   point no certificate covers).  In `PousOption.leg` the memory challenger runs at ``period.json``'s ``challenger_host``
-  (`challenger_party.Party.of`) and the Lean answers where the period's tools name it.
+  (`challenger_party.side_of`) and the Lean answers where the period's tools name it.
 * **Composition:** installed after PoUW and around it, so PoUW's GEMM consumes the decoded weight.  An option that
   keeps a weight-derived copy resident across forwards is the selector's to refuse (``keeps_weight_copy``); POUS keeps
   only ``C*``.
@@ -436,7 +436,7 @@ class PousOption(Option):
     def leg(self, period_dir: str | Path, node: str, out: str | Path, *, schemes: Mapping[str, Any] | None = None,
             protocol: str | None = None) -> dict[str, Any]:
         """One period's PoUS of what this option holds, as `period.leg` runs it for a node's records: the memory
-        challenger at ``period.json``'s ``challenger_host`` (`challenger_party.Party.of`, its side's key and session log
+        challenger at ``period.json``'s ``challenger_host`` (`challenger_party.side_of`, its side's key and session log
         in ``pous-challenger`` beside the periods when it is this node), fresh coins, and the Lean's answer where the
         period's tools name ``pous-run-protocol`` (and, at the first period, ``pous-setup``), which must agree with the
         Python's.  Writes ``out/pous.case.json``, ``out/pous.json`` and, at the first period, ``out/pous-setup.case.json``;
@@ -448,7 +448,7 @@ class PousOption(Option):
 
         doc = json.loads((Path(period_dir) / "period.json").read_text())
         tools = doc.get("tools", {})
-        party = CP.Party.of(doc, node, Path(period_dir).parent / "pous-challenger")
+        party = CP.side_of(doc, node, Path(period_dir).parent / "pous-challenger")
         where = CP.placement(node, party.host)
         fresh, answered = self.periods == 0, self.answered
         t = time.monotonic()
@@ -476,7 +476,7 @@ class PousOption(Option):
         q = self.store.params
         (out / "pous.json").write_text(json.dumps({
             "answer": answer, "blocks": q.blocks, "eps": str(got.eps), "lean": lean, "placement": where,
-            "rounds_answered": self.answered - answered, "s_bits": got.s_bits, "seconds": seconds,
+            "rounds_answered": self.answered - answered, "s_bits": got.public("s_bits"), "seconds": seconds,
             "setup": {"fresh": fresh, "encode": self.store.encode if fresh else None}, "w_bytes": q.w_bytes},
             sort_keys=True, indent=1))
         return answer

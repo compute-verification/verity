@@ -1,5 +1,5 @@
 // sx::compress's rounds for a hash warpgroup that shares its SM's register file with MMA warpgroups (setmaxnreg): the same
-// FIPS 180-4 rounds as sha512x.cuh's compress<V, ROLL> (its sigmas, Ch, Maj and constants), split so the caller chooses where
+// FIPS 180-4 rounds as sha512.cuh's compress<V, ROLL> (its sigmas, Ch, Maj and constants), split so the caller chooses where
 // each part of the state lives:
 //
 //   rounds<V, ROLL>(v, W)        the 80 rounds over the working variables v[0..7] (a .. h) and the chunk W, without the
@@ -12,7 +12,7 @@
 // shared memory, word j of a thread's chunk at p[j * S] ([word][thread]: a warp's accesses to one word fall in distinct
 // banks), 32 fewer live registers for the schedule's loads and stores.
 #pragma once
-#include "sha512x.cuh"
+#include "../../../verity/ml/kernels/sha512.cuh"
 
 namespace sx {
 

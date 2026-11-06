@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.Joint
+module
+
+public import Proofs.Flock.Claims.KS.Joint
 
 /-!
 # Fork events counted at their own round
@@ -15,6 +17,8 @@ With the conflict fork of weight `c` at round `0` (`Escapes.addFork`): `Escapes.
 `2·c + c_0 + Σ_r c_r ≤ 2C` (`Escapes.fitsForkR_of_round`), where `FitsFork` asks for `2·c + 2·Σ_r c_r ≤ 2C`: only
 round `0`'s events are charged twice.
 -/
+
+@[expose] public section
 
 namespace Claims
 

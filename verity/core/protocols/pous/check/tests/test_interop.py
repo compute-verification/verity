@@ -1,4 +1,4 @@
-"""`interop.py --all`: `wire.py` and `pous_check` agree byte for byte on every vector of `p2/PROTOCOL.md` §7, the outputs
+"""`interop.py --all`: `wire.py` and `pous_check` agree byte for byte on every pinned P2 vector file, the outputs
 cover acceptance and each failure code the vectors hold, and a difference in one byte of one side is reported."""
 
 from __future__ import annotations

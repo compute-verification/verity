@@ -10,8 +10,9 @@ import hashlib
 
 import pytest
 
+from remote_bandwidth_fakes import Clock, Entropy
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts
-from verity.core.protocols.remote_bandwidth.audit import Params, Session
+from verity.core.protocols.remote_bandwidth.audit import AuditRun, Params
 from verity.ml.commitments.rowleaf import sha512_row_v2_digest
 
 SEED = hashlib.sha512(b"verity/remote-bandwidth/test-key-binding/v0\0").digest()[:codec.SEED_BYTES]
@@ -19,28 +20,6 @@ NODE = b"node-under-test"
 WEIGHTS, KV = 0, 1
 PICKED = bytes(codec.BLOCK_BYTES)
 P512 = codec.Codec(codec.P512, 2, False)
-
-
-class Clock:
-    def __init__(self) -> None:
-        self.now = 0
-
-    def __call__(self) -> int:
-        return self.now
-
-
-class Entropy:
-    """SHA-512 in counter mode under `label`, in place of the operating system's generator."""
-
-    def __init__(self, label: bytes) -> None:
-        self.label, self.count = label, 0
-
-    def __call__(self, n: int) -> bytes:
-        out = b""
-        while len(out) < n:
-            out += hashlib.sha512(self.label + self.count.to_bytes(8, "big")).digest()
-            self.count += 1
-        return out[:n]
 
 
 class Memory:
@@ -73,9 +52,9 @@ def window(store: audit.Store, prover_store: audit.Store, passes: int = 2) -> tu
     reg = store.registration
     p = Params(blocks=reg.blocks, deadline_ns=10, windows=1, samples=passes * reg.blocks, delta=1e-6, window_ns=10)
     clock = Clock()
-    s = Session(p, reg, None, coins.local(reg.digest, 0, p.windows, Entropy(b"coins"), appends=1), not_before_ns=0,
-                clock=clock)
-    prover = audit.Prover(prover_store, None, s.commitment, entropy=Entropy(b"receipt salts"))
+    s = AuditRun(p, reg, None, coins.local(reg.digest, 0, p.windows, Entropy(b"coins"), appends=1), not_before_ns=0,
+                 clock=clock)
+    prover = audit.Prover(prover_store, None, entropy=Entropy(b"receipt salts"))
     challenge, previous, out = s.start(), reg.digest, []
     for i in range(passes):
         out.append(prover.run(challenge, i, previous))

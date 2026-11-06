@@ -6,7 +6,12 @@ output leaves off V*'s (permuted, short or missing), or a row port off V*'s by n
 output leaves as the check requires them, its output words in order (read off its META, as `HmRow.parse` reads
 `leaves_out`).
 -/
-import Flock.RecVStar
+module
+
+public import Flock.RecVStar
+meta import Flock.RecVStar
+
+@[expose] public section
 
 namespace Flock.Test.Parsed
 

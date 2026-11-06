@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 
 /-!
 # A draw flock-verify accepts under hidden outputs sets up
@@ -17,6 +19,8 @@ public path:
 `drawSetupH_of_accepts` and `tableAtH_of_accepts` are `drawSetup_of_accepts` and `tableAt_of_accepts` under hidden
 outputs (`hh : I.tags.hiddenOutputs = true`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -37,7 +41,7 @@ theorem drawSetupH_of_setupHiddenI {st : Flock.Stmt}
     {sch : Flock.Schedule} (hf : Flock.fast100 st.m = some sch) {D : Draw.UnitDraw}
     (hD : Draw.UnitDraw.ofJson d = .ok D) (hS : ∀ u ∈ S, u.val ∈ D.proved) (hmPts : st.mPts = mPts) :
     ∃ x : DrawSetupH I mPts S d, x.st = st := by
-  have hcst : st.c = c := Except.ok.inj ((setupHidden_parseC h).symm.trans hc)
+  have hcst : st.c = c := setupHidden_c_of_parse hc h
   have hg : 0 < st.c.g := by
     have P := parse_facts (parse_untyped ht hc).1
     obtain ⟨ls, hls⟩ := P.check

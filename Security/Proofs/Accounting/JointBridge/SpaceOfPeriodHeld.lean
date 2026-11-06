@@ -1,6 +1,8 @@
-import Properties.Accounting.JointBridge.SpaceOfPeriodHeld
-import Proofs.Pous.Period
-import Proofs.Pouw.Prob
+module
+
+public import Properties.Accounting.JointBridge.SpaceOfPeriodHeld
+public import Proofs.Pous.Period
+public import Proofs.Pouw.Prob
 
 /-!
 # PoUS's per-period guarantee is the coins model's `.pous` input
@@ -11,6 +13,8 @@ at the other coins `other ξ`, whose probability `Pous.Period.SecurityProofs.per
 bound holds at the challenge times PoUS grades (`Definitions.Accounting.JointBridge.SpaceOfPeriodHeld`'s header).
 -/
 
+@[expose] public section
+
 namespace Accounting.SecurityProofs.Bridge
 
 open Pous Pous.EndToEnd PousCheck PousCheck.Properties Pous.Period
@@ -20,8 +24,8 @@ set_option exponentiation.threshold 20000
 
 /-- **PoUS's per-period guarantee at a period that realizes it** (`Accounting.Bridge.SpaceOfPeriodHeld`). -/
 theorem SpaceOfPeriodHeld : Accounting.Bridge.SpaceOfPeriodHeld := by
-  intro _ _ hH D Q L hP ι α _ _ d C I _ Ω _ r ΩW ΩQ run P round c p hR hdev hS ξ
-  have h := Pous.Period.SecurityProofs.periodHeld hH D Q L hP ι α ΩW ΩQ d run P round c.S hdev hS
+  intro _ _ hH D Q L hP ι α _ _ d C I _ Ω _ r ΩW ΩQ run P τ round c p hR hdev hinst hS ξ
+  have h := Pous.Period.SecurityProofs.periodHeld hH D Q L hP ι α ΩW ΩQ d run P τ round c.S hdev hinst hS
     (hR.other ξ)
   refine le_trans ?_ ((Pouw.pr_equiv hR.coins _).trans_le h)
   refine Pouw.pr_mono fun x hx => ?_

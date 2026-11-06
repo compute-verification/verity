@@ -1,4 +1,6 @@
-import Definitions.Pous.Model.Audit
+module
+
+public import Definitions.Pous.Model.Audit
 
 /-!
 # The sequential audit with free blocks (a sampled setup)
@@ -10,6 +12,8 @@ commitment, so the audit's check on that round always passes. This game gives pr
 `S`-bit state, it names at most `F` free blocks from `(W, pp, C)` and the whole primitive, and a round whose index is
 free passes whatever the responder returns. With `F = 0` it is `seqAccepts`.
 -/
+
+@[expose] public section
 
 namespace Pous
 

@@ -33,15 +33,15 @@ window-domain rule (``verity.ml.commitments.window``): ``binding = identity_dige
 schema, leaves, run})``, every field a registration field and ``run`` the record's run root, so the verifier recomputes every domain
 from the registration and the Commit's record (``expected_ports``).  The leaf layer is the SHA-512 of the canonical map from each
 member (its template, or its chunk's name) to the SHA-512 of its public body (``leaf_layer``).  ``write`` puts into a window
-directory ``registration.json``, ``index.json`` (the integration's labels of the units, opaque here, its SHA-512 in the
-window's provenance), per member
+directory ``registration.json``, ``index.json`` (the integration's labels of the units, opaque here and prover only, with its
+salt in ``index-salt.bin``; the window's provenance names its hiding leaf, `index_leaf`), per member
 ``m<k>-public.bin`` and ``m<k>-private.bin`` (the circuit prover's public and prover bodies; the private one is prover
 only, less the rows and salts of a port given as a registered value's, which ``v<j>-private.bin`` holds once for the
 window, and of a wired port, which its writers' own files hold) and ``m<k>-units.json`` (its global unit indices), and
 ``window.json``; ``flock_inputs.flock_input_files`` wraps member ``k``'s bodies as the circuit prover's
 ``m<k>-pub-<n>.bin`` (``rows: false``) and ``m<k>-inst-<n>.bin`` (`Bodies`).
 
-A window may carry row tables (:class:`RowTable`, ``Window.row_tables``): shared tables of rows several units read, each a tree
+A window may carry row tables (:class:`RowTable`, ``Binding.row_tables``): shared tables of rows several units read, each a tree
 of ``hm96-sha512/row-seg/v1`` leaves, committed in segments, each segment's root given before that segment's live coin: a
 segment's tables in the order the integration gives them, under the ``table_domain`` of the window's ``context``, salted by
 ``segment_salts`` under the run's row key, and the segment's root the tree over their roots.  The window registers one port for
@@ -74,7 +74,8 @@ from verity.ml.circuits import partition_object as PO
 from verity.ml.commitments import hm96, row_table as RT
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain
+from verity.ml.commitments.hm96 import batch as HB
+from verity.ml.commitments.merkle import CommitmentDomain, levels, merkle_depth
 from verity.ml.commitments.window import WINDOW_DOMAIN, window_domain
 from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2,
                                            sha512_row_prefix, sha512_row_seg_digest, sha512_row_v2_prefix)
@@ -108,6 +109,10 @@ SEGMENT_KEY = "engine_step"
 #: `commit`'s rows of a wired input port given by reference: its writers' output rows (`Member.wired`), their salts and
 #: ``b || c`` taken, never hashed again
 WIRED = "wired"
+#: ``index.json``'s salt beside it (prover only), the tag its inner digest is taken under and its leaf's rule (`index_leaf`)
+INDEX_SALT = "index-salt.bin"
+INDEX_TAG = b"verity/window-index/v1\0"
+INDEX_RULE = "hm96-sha512/v1 leaf of SHA-512(\"verity/window-index/v1\\0\" || index.json) under the 192-byte salt index-salt.bin"
 
 
 @dataclass(frozen=True)
@@ -136,101 +141,32 @@ def value_rows(value: Any, positions: Sequence[int] | np.ndarray) -> np.ndarray:
     return np.asarray(a, dtype=np.uint16).reshape(len(at), value.words)
 
 
-_FRAME = b"veritor/protocol/merkle/frame/v3\0"
+# --- salts: hm96's salt stream under RFC 8439's nonce -------------------------------------------------------------------
 
-
-# --- salts: ChaCha20 (RFC 8439) over numpy -------------------------------------------------------------------------------
-
-_SIGMA = np.frombuffer(b"expand 32-byte k", dtype="<u4")
-_QR = ((0, 4, 8, 12), (1, 5, 9, 13), (2, 6, 10, 14), (3, 7, 11, 15), (0, 5, 10, 15), (1, 6, 11, 12), (2, 7, 8, 13), (3, 4, 9, 14))
-
-
-def _rotl(v: np.ndarray, n: int) -> np.ndarray:
-    return (v << np.uint32(n)) | (v >> np.uint32(32 - n))
-
-
-def chacha20(key: bytes, nonce: bytes, nbytes: int, counter: int = 0) -> bytes:
-    """``nbytes`` of the RFC 8439 ChaCha20 keystream (32-byte key, 12-byte nonce, 32-bit block counter from ``counter``)."""
-    if len(key) != 32 or len(nonce) != 12:
-        raise ValueError("ChaCha20 takes a 32-byte key and a 12-byte nonce")
-    nblk = -(-nbytes // 64)
-    if counter + nblk > 1 << 32:
+def _stream(key: bytes, nonce: int, n: int) -> bytes:
+    """The salts of rows 0 .. n - 1 under ``key`` at the 96-bit ``nonce`` (12 bytes LE), row i at offset 192 i of RFC 8439's
+    ChaCha20 stream from block 0: `hm96.batch.salts`, whose 64-bit counter and nonce are RFC 8439's 32-bit counter and
+    96-bit nonce read another way."""
+    if not 0 <= nonce < 1 << 96:
+        raise ValueError("an RFC 8439 nonce is 12 bytes")
+    if HB.SALT_BLOCKS * n > 1 << 32:
         raise ValueError("the 32-bit block counter would wrap")
-    out = []
-    for lo in range(0, nblk, 1 << 16):
-        m = min(1 << 16, nblk - lo)
-        s = np.empty((16, m), dtype=np.uint32)
-        s[0:4] = _SIGMA[:, None]
-        s[4:12] = np.frombuffer(key, dtype="<u4")[:, None]
-        s[12] = np.arange(counter + lo, counter + lo + m, dtype=np.uint64).astype(np.uint32)
-        s[13:16] = np.frombuffer(nonce, dtype="<u4")[:, None]
-        x = s.copy()
-        for _ in range(10):
-            for a, b, c, d in _QR:
-                x[a] += x[b]; x[d] = _rotl(x[d] ^ x[a], 16)  # noqa: E702
-                x[c] += x[d]; x[b] = _rotl(x[b] ^ x[c], 12)  # noqa: E702
-                x[a] += x[b]; x[d] = _rotl(x[d] ^ x[a], 8)  # noqa: E702
-                x[c] += x[d]; x[b] = _rotl(x[b] ^ x[c], 7)  # noqa: E702
-        x += s
-        out.append(np.ascontiguousarray(x.T).astype("<u4").tobytes())
-    return b"".join(out)[:nbytes]
+    return HB.salts(key, nonce >> 32, np.arange(n), (nonce & 0xFFFFFFFF) << 32)
 
 
 def salts(key: bytes, port_index: int, n: int) -> bytes:
-    """The ``n`` rows' salts of port ``port_index`` (192 bytes each, concatenated)."""
-    return chacha20(key, port_index.to_bytes(12, "little"), n * SALT_BYTES)
+    """The ``n`` rows' salts of port ``port_index`` (192 bytes each, concatenated): nonce = the port's index."""
+    return _stream(key, port_index, n)
 
 
 def segment_salts(key: bytes, segment: int, n: int) -> bytes:
     """The salts of ``segment``'s ``n`` table rows under the run's row key (192 bytes each, concatenated): its tables in order,
-    each table's rows in rank order, one stream per segment (nonce = the segment, 12 bytes LE)."""
-    return chacha20(key, segment.to_bytes(12, "little"), n * SALT_BYTES)
-
-
-# --- the frame on SHA-512, batched ---------------------------------------------------------------------------------------
-
-def _uint(v: int) -> bytes:
-    return v.to_bytes(max(1, (v.bit_length() + 7) // 8), "big")
-
-
-def _part(p: bytes) -> bytes:
-    return len(p).to_bytes(8, "big") + p
-
-
-class _Frame:
-    """``merkle._hash`` for one SHA-512 domain, with the constant prefix of each tag hashed once."""
-
-    def __init__(self, domain_id: bytes) -> None:
-        head = lambda tag: hashlib.sha512(_FRAME + len(tag).to_bytes(4, "big") + tag + _part(domain_id))  # noqa: E731
-        self._leaf, self._node, self._pad = head(b"leaf"), head(b"node"), head(b"pad")
-
-    def leaf(self, rank: int, schema: bytes, value: bytes) -> bytes:
-        u = _part(_uint(rank))
-        h = self._leaf.copy()
-        h.update(u + u + schema + _part(value))
-        return h.digest()
-
-    def node(self, level: int, index: int, left: bytes, right: bytes) -> bytes:
-        h = self._node.copy()
-        h.update(_part(_uint(level)) + _part(_uint(index)) + _part(left) + _part(right))
-        return h.digest()
-
-    def pad(self, rank: int) -> bytes:
-        h = self._pad.copy()
-        h.update(_part(_uint(rank)))
-        return h.digest()
-
-    def reduce(self, level: list[bytes], first: int, depth: int = 0) -> bytes:
-        """Fold a level whose first node has global index ``first`` at ``depth`` up to one node."""
-        while len(level) > 1:
-            level = [self.node(depth, (first >> 1) + j, level[2 * j], level[2 * j + 1]) for j in range(len(level) // 2)]
-            first >>= 1
-            depth += 1
-        return level[0]
+    each table's rows in rank order, one stream per segment (nonce = the segment)."""
+    return _stream(key, segment, n)
 
 
 def _width(n: int) -> int:
-    return 1 << max(0, (n - 1).bit_length())
+    return 1 << merkle_depth(n)
 
 
 def _copy_update(h: Any, data: bytes | memoryview) -> bytes:
@@ -247,7 +183,7 @@ def _chunk(task: tuple[str, int, int]) -> tuple[str, int, bytes, bytes]:
     (a ``string`` port's are given)."""
     port, start, size = task
     j = _JOB["ports"][port]
-    fr, n = _Frame(j["domain_id"]), j["count"]
+    dom, n = j["domain"], j["count"]
     hi = min(start + size, n)
     leaves: list[bytes] = []
     bc = b""
@@ -262,16 +198,16 @@ def _chunk(task: tuple[str, int, int]) -> tuple[str, int, bytes, bytes]:
         for i in range(m):
             s = bytes(b[i * 64:(i + 1) * 64]) + _copy_update(salt_h, yv[i * SALT_BYTES:(i + 1) * SALT_BYTES])
             out += s
-            leaves.append(fr.leaf(start + i, schema, _copy_update(leaf_h, s)))
+            leaves.append(dom.leaf(start + i, start + i, schema, _copy_update(leaf_h, s)))
         bc = bytes(out)
     elif j["kind"] == "string" and hi > start:
         s, leaf_h = memoryview(j["strings"]), _JOB["leaf_h"]
-        leaves = [fr.leaf(i, j["schema"], _copy_update(leaf_h, s[i * BC_BYTES:(i + 1) * BC_BYTES])) for i in range(start, hi)]
+        leaves = [dom.leaf(i, i, j["schema"], _copy_update(leaf_h, s[i * BC_BYTES:(i + 1) * BC_BYTES])) for i in range(start, hi)]
     elif j["kind"] == "word" and hi > start:
         w = j["words"][start:hi].astype(">u2").tobytes()
-        leaves = [fr.leaf(start + i, j["schema"], w[2 * i:2 * i + 2]) for i in range(hi - start)]
-    leaves += [fr.pad(r) for r in range(max(start, n), start + size)]
-    return port, start, fr.reduce(leaves, start), bc
+        leaves = [dom.leaf(start + i, start + i, j["schema"], w[2 * i:2 * i + 2]) for i in range(hi - start)]
+    leaves += [dom.pad(r) for r in range(max(start, n), start + size)]
+    return port, start, levels(dom.domain_id, leaves, start, hash=dom.hash)[-1][0], bc
 
 
 # --- the window ----------------------------------------------------------------------------------------------------------
@@ -377,7 +313,7 @@ class RowTable:
 
 
 @dataclass(frozen=True)
-class Window:
+class Binding:
     """What the roots are bound to: the verifier's population program and query (the partition over them), the law it draws by, the
     run (the record's run root, hex), and the members the population is made of, in the partition's order (refused otherwise); and
     its row tables, grouped by segment in rising order and in the integration's order within one, every rank of each the row of
@@ -476,7 +412,7 @@ class Window:
 
 @dataclass
 class Committed:
-    window: Window
+    window: Binding
     roots: dict[str, bytes]            # by <member>/<port>
     domains: dict[str, CommitmentDomain]
     bc: dict[str, bytes]               # per row port: every row's b || c, concatenated
@@ -569,16 +505,16 @@ def commit_ports(domains: dict[str, CommitmentDomain], rows: dict[str, np.ndarra
     for p, s in (strings or {}).items():
         if len(s) != domains[p].count * BC_BYTES:
             raise ValueError(f"{p}: {len(s)} bytes of strings, not {domains[p].count} rows' b || c")
-        ports[p] = {"kind": "string", "count": domains[p].count, "domain_id": domains[p].domain_id, "strings": bytes(s),
-                    "schema": _part((schemas or {}).get(p, ROW_SCHEMA).encode())}
+        ports[p] = {"kind": "string", "count": domains[p].count, "domain": domains[p], "strings": bytes(s),
+                    "schema": (schemas or {}).get(p, ROW_SCHEMA)}
     for p, r in rows.items():
         r = np.ascontiguousarray(r).astype("<u2")
         s = (schemas or {}).get(p, ROW_SCHEMA)
-        ports[p] = {"kind": "row", "count": domains[p].count, "domain_id": domains[p].domain_id, "rows": r.tobytes(),
-                    "row_bytes": 2 * int(r.shape[1]), "salts": ys[p], "inner": _inner(s, int(r.shape[1])), "schema": _part(s.encode())}
+        ports[p] = {"kind": "row", "count": domains[p].count, "domain": domains[p], "rows": r.tobytes(),
+                    "row_bytes": 2 * int(r.shape[1]), "salts": ys[p], "inner": _inner(s, int(r.shape[1])), "schema": s}
     for p, w in words.items():
-        ports[p] = {"kind": "word", "count": domains[p].count, "domain_id": domains[p].domain_id,
-                    "words": np.ascontiguousarray(w).reshape(-1).astype(np.uint16), "schema": _part(WORD_SCHEMA.encode())}
+        ports[p] = {"kind": "word", "count": domains[p].count, "domain": domains[p],
+                    "words": np.ascontiguousarray(w).reshape(-1).astype(np.uint16), "schema": WORD_SCHEMA}
     _JOB.update(ports=ports, hiding=HidingLeaves(instance=INST), salt_h=hashlib.sha512(INST.salt_prefix),
                 leaf_h=hashlib.sha512(INST.leaf_prefix(INST.default_key)))
     tasks = []
@@ -601,7 +537,7 @@ def commit_ports(domains: dict[str, CommitmentDomain], rows: dict[str, np.ndarra
     for p, j in ports.items():
         mine = sorted(by.get(p, ()))
         size = min(chunk, _width(j["count"]))
-        roots[p] = _Frame(j["domain_id"]).reduce([node for _, node, _ in mine], 0, (size - 1).bit_length())
+        roots[p] = levels(j["domain"].domain_id, [node for _, node, _ in mine], 0, (size - 1).bit_length(), j["domain"].hash)[-1][0]
         if j["kind"] == "row":
             bc[p] = b"".join(b for _, _, b in mine)
         elif j["kind"] == "string":
@@ -657,7 +593,7 @@ class _Rows(Mapping):
         return len(self._order)
 
 
-def _table_rows(window: Window, rows: Mapping[str, np.ndarray]) -> list[np.ndarray]:
+def _table_rows(window: Binding, rows: Mapping[str, np.ndarray]) -> list[np.ndarray]:
     """Each row table's rows, read off its linked members' ``x`` tables; refused when two members read one row differently."""
     out = [np.zeros((t.n, t.words), dtype=np.uint16) for t in window.row_tables]
     seen = [np.zeros(t.n, dtype=bool) for t in window.row_tables]
@@ -670,7 +606,7 @@ def _table_rows(window: Window, rows: Mapping[str, np.ndarray]) -> list[np.ndarr
     return out
 
 
-def commit(window: Window, data: Sequence[dict[str, dict[str, np.ndarray]]], *, salt_key: bytes | None = None,
+def commit(window: Binding, data: Sequence[dict[str, dict[str, np.ndarray]]], *, salt_key: bytes | None = None,
            row_salt_key: bytes | None = None, segment_roots: Mapping[int, bytes] | None = None, workers: int = 1,
            chunk: int = CHUNK, salts_of: Mapping[str, bytes] | None = None) -> Committed:
     """Commit every member's rows (``data[k]["rows"][port]``: (n, words) u16) and output words (``data[k]["outs"][port]``, each
@@ -793,7 +729,7 @@ def port_leaves(m: Member) -> dict[str, int]:
     return {p: tables.get(p, m.n) for p, _ in m.all_rows}
 
 
-def expected_ports(window: Window) -> dict[str, dict[str, Any]]:
+def expected_ports(window: Binding) -> dict[str, dict[str, Any]]:
     """The ports the verifier's own window derives, as ``registration.check`` takes them: ``{<member>/<port>: {leaves,
     domain}}``, each domain ``window_domain`` (core's ``registration.window_domain``) over the window's program, partition and run."""
     prog, part, segs = window.partition["program"], window.partition_digest, len(window.segments)
@@ -859,6 +795,23 @@ def units_doc(m: Member) -> dict[str, Any]:
 
 def index_bytes(doc: dict[str, Any]) -> bytes:
     return (json.dumps(doc, separators=(",", ":")) + "\n").encode()
+
+
+def index_leaf(ib: bytes, salt: bytes) -> bytes:
+    """``index.json``'s hiding commitment (``ib``, its bytes): the ``hm96-sha512/v1`` leaf of its tagged SHA-512 under ``salt``
+    (192 bytes, `INDEX_RULE`), what the registration binds of the labels. An integration's labels may name what it served (a
+    request, a token row), and over so few candidates an unsalted digest of them would be no commitment at all."""
+    if len(salt) != SALT_BYTES:
+        raise ValueError(f"an index's salt is {SALT_BYTES} bytes, not {len(salt)}")
+    x = hashlib.sha512(INDEX_TAG + bytes(ib)).digest()
+    return INST.tree_leaf(INST.default_key, INST.commit_string(INST.default_key, x, bytes(salt)))
+
+
+def _private(path: Path) -> Any:
+    """``path`` opened to write, readable by its owner alone, a rewrite over an older file too: a file only the prover reads."""
+    f = os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "wb")
+    os.fchmod(f.fileno(), 0o600)
+    return f
 
 
 def registered_entry(c: Committed, m: Member, trees: dict[int, RT.RowTable] | None = None) -> dict[str, Any]:
@@ -1063,10 +1016,13 @@ def read_private(window_dir: str | Path, win: Mapping[str, Any], k: int) -> byte
 
 
 def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: dict[str, Any], extra: dict[str, Any] | None = None, *,
-          kind: str = "served", registered: Mapping[str, dict[str, Any]] | None = None, registrar: Any) -> dict[str, Any]:
+          kind: str = "served", registered: Mapping[str, dict[str, Any]] | None = None, registrar: Any,
+          index_salt: bytes | None = None) -> dict[str, Any]:
     """The window's files, its registration's window of ``kind`` (`registration`, by ``registrar``, which also names and digests
-    the record: ``FORMAT``, ``digest``); the window's provenance gets the index's SHA-512 (so the registration binds the unit ->
-    identity map).  ``registered``: by member key, an outside value's reads (``salts_of``), each a header entry
+    the record: ``FORMAT``, ``digest``); the window's provenance gets the index's hiding leaf (`index_leaf`), so the
+    registration binds the unit -> label map and says nothing of it. ``index.json`` and its salt are prover only: the salt is
+    ``index_salt`` (192 bytes, a committer's drawn under its key) or else fresh bytes from the OS.  ``registered``: by member
+    key, an outside value's reads (``salts_of``), each a header entry
     (``{port: {"value", "positions", "paths"}}``), whose paths ``window.json`` gives once for the window
     (``registered_paths``, by value and position; `registered_header`).  A member's ``m<k>-private.bin`` is its prover body
     less two kinds of port, rows and salts: a port given as a registered value's rows (`Committed.by_value`) its entry names
@@ -1078,8 +1034,13 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
     d = Path(out_dir)
     d.mkdir(parents=True, exist_ok=True)
     ib = index_bytes(index)
-    (d / "index.json").write_bytes(ib)
-    rec = registration(c, {**provenance, "index": hashlib.sha512(ib).hexdigest(), "order": ORDER}, kind=kind, registrar=registrar)
+    salt = os.urandom(SALT_BYTES) if index_salt is None else bytes(index_salt)
+    leaf = index_leaf(ib, salt).hex()
+    with _private(d / "index.json") as f:
+        f.write(ib)
+    with _private(d / INDEX_SALT) as f:
+        f.write(salt)
+    rec = registration(c, {**provenance, "index_leaf": leaf, "order": ORDER}, kind=kind, registrar=registrar)
     (d / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True) + "\n")
     trees: dict[int, RT.RowTable] = {}
     members, paths, read = [], {}, {}
@@ -1089,8 +1050,7 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
         wired = {p for p, _o, _ws in m.wired}
         pub = c.public_body(k)
         (d / f"m{k}-public.bin").write_bytes(pub)
-        fd = os.open(d / f"m{k}-private.bin", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "wb") as f:
+        with _private(d / f"m{k}-private.bin") as f:
             for piece in c.private_pieces(k, left.keys() | wired):
                 f.write(piece)
         for p, s in left.items():
@@ -1121,8 +1081,7 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
         for pos, ys in zip(ats, yss, strict=True):
             if not np.array_equal(held[np.searchsorted(at, pos)], ys):
                 raise ValueError(f"{name!r}: a row two members read is committed under two salts")
-        fd = os.open(d / f"v{j}-private.bin", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "wb") as f:
+        with _private(d / f"v{j}-private.bin") as f:
             for lo in range(0, len(at), step):
                 f.write(np.ascontiguousarray(value_rows(v, at[lo:lo + step]), dtype="<u2").tobytes())
             f.write(held.tobytes())
@@ -1131,8 +1090,7 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
     for t, tab in enumerate(c.window.row_tables):
         pub = c.table_public(t)
         (d / f"t{t}-public.bin").write_bytes(pub)
-        fd = os.open(d / f"t{t}-private.bin", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "wb") as f:
+        with _private(d / f"t{t}-private.bin") as f:
             f.write(c.table_private(t))
         dom = c.domains[tab.port]
         tables.append({"k": t, **tab.doc(), "step_index": c.window.places[t], "root": c.table_roots[tab.port].hex(),
@@ -1148,7 +1106,7 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
            "partition": c.window.partition, "partition_digest": c.window.partition_digest, "run": c.window.run,
            "domain_tag": DOMAIN_TAG, "registration": registrar.FORMAT, "registration_digest": registrar.digest(rec),
            "leaf_layer": rec["leaf_layer"],
-           "leaf_layer_rule": LEAF_LAYER, "index_sha512": hashlib.sha512(ib).hexdigest(),
+           "leaf_layer_rule": LEAF_LAYER, "index_leaf": leaf, "index_rule": INDEX_RULE,
            "salt_rule": "chacha20 (rfc 8439), a fresh 32-byte os key per window, nonce = the row port's index over all members "
            "(12 bytes le), row i at stream offset 192 i; the key is dropped after expansion", "seconds": c.seconds, **(extra or {})}
     (d / "window.json").write_text(json.dumps(win, indent=1, default=str) + "\n")

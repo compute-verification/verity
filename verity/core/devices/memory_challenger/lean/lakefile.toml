@@ -9,6 +9,7 @@ defaultTargets = ["MemoryChallenger", "memory-challenger", "memory-challenger-te
 [leanOptions]
 autoImplicit = false
 relaxedAutoImplicit = false
+backward.proofsInPublic = true
 
 [[require]]
 name = "flock_verifier"
@@ -21,6 +22,10 @@ path = "../../../primitives/randomness"
 [[require]]
 name = "lms"
 path = "../../../primitives/lms/lean"
+
+[[require]]
+name = "core_attest"
+path = "../../../attest/lean"
 
 [[require]]
 name = "core_protocol"

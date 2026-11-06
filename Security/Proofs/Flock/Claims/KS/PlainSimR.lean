@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.KS.PlainRunR
-import Proofs.Flock.Claims.KS.PlainFitCausal
-import Proofs.Flock.Claims.KS.PlainLive
-import Proofs.Flock.Claims.KS.PlainStep
-import Proofs.Flock.Claims.KS.PlainStepJ
+module
+
+public import Proofs.Flock.Claims.KS.PlainRunR
+public import Proofs.Flock.Claims.KS.PlainFitCausal
+public import Proofs.Flock.Claims.KS.PlainLive
+public import Proofs.Flock.Claims.KS.PlainStep
+public import Proofs.Flock.Claims.KS.PlainStepJ
 
 /-!
 # The plain simulator at `VR rd`
@@ -19,6 +21,8 @@ through round `j` (`plainFrameR`), which `fit_chunk` fixes wherever the rep is s
 * `plainSimAtR`, `plainRdInR`, `rdAllAt_RS`: so `PlainSimAtR` holds at every statement, and with it `PlainRdInR` and
   `RdAllAt` at the deployed reader.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

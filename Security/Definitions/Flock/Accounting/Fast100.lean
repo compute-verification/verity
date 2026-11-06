@@ -1,9 +1,11 @@
-import Definitions.Flock.Accounting.Bound
-import Mathlib.Tactic.NormNum
-import Mathlib.Tactic.Positivity
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.IntervalCases
-import Mathlib.Tactic.GCongr
+module
+
+public import Definitions.Flock.Accounting.Bound
+public import Mathlib.Tactic.NormNum
+public import Mathlib.Tactic.Positivity
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.IntervalCases
+public import Mathlib.Tactic.GCongr
 
 /-!
 # Rational upper bounds for `fast100`'s error, term by term
@@ -14,6 +16,8 @@ and the folds, the level pairs and the last level; `ligUp`, `repUp` and `linkUp`
 `Stmt.InRange` are the levels and statements the bound covers. The bounds themselves are proved in
 `Proofs.Flock.Soundness.Accounting.Fast100`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Accounting
 

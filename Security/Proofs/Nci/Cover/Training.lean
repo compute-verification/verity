@@ -1,8 +1,10 @@
-import Definitions.Nci.Guarantees.CoverTraining
-import Proofs.Nci.Pull
-import Proofs.Nci.Cover.Area
-import Proofs.Nci.Cover.Bits
-import Proofs.Nci.Cover.Sum
+module
+
+public import Definitions.Nci.Guarantees.CoverTraining
+public import Proofs.Nci.Pull
+public import Proofs.Nci.Cover.Area
+public import Proofs.Nci.Cover.Bits
+public import Proofs.Nci.Cover.Sum
 
 /-!
 # The cover theorem on a declaration that complies with the NCI policy, proved
@@ -15,6 +17,8 @@ so its gate is a computed gate of `c`, in some piece, whose block computes it (`
 the IUs (`sum_area_le`), `b #P ≤ (α² Γ + b α) size(d)`. `training_of_block_bound` is this route for any per-block
 bound of the same form, which the whole-word variant (`Aligned`) reuses.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.SecurityProofs
 
@@ -47,7 +51,7 @@ counted products, then `α₀ e size(c) ≤ (α² Γ + e α) size(d)`. `CoverTra
 theorem training_of_block_bound {Γ : ℕ} {α b α₀ e : ℝ} {c d : Verity.Declaration} (M : Verity.Containment c.D d.D)
     {J L : Type} [DecidableEq J] [DecidableEq L] (Mb : MulBlocks (Circuit.ofDecl c) J L) {s D w₀ : ℕ}
     (he : 0 ≤ e) (hα : 0 ≤ α) (hC : Nci.Complies Γ α d)
-    (hB : Nci.Assumptions.BaselineRegistered c d (Nci.PartialContainment.ofContainment M)) (hk : α * Γ < b * D)
+    (hB : Nci.Assumptions.ThetaRegistered c d (Nci.PartialContainment.ofContainment M)) (hk : α * Γ < b * D)
     (hw : ∀ g, c.D.w g ≤ w₀) (hs : w₀ * Γ + α * Γ + c.D.width c.θ ≤ s)
     (hα₀ : α₀ * c.D.size c.D.computed ≤ Mb.P.card)
     (hblk : ∀ R : Finset (Fin c.D.N), (block c R).card ≤ s →

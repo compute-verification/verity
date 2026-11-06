@@ -1,17 +1,22 @@
-import Proofs.Flock.Claims.Recursion.SameJAt
-import Proofs.Flock.Claims.Recursion.VerdictFramed
-import Proofs.Flock.Claims.Recursion.VerdictFramedJson
-import Proofs.Flock.Claims.Recursion.VerdictPublics
-import Proofs.Flock.Claims.Recursion.VerdictRowG
-import Proofs.Flock.Claims.Recursion.VerdictParts
-import Proofs.Flock.Claims.Recursion.InnerForm
-import Proofs.Flock.Claims.Recursion.SchedDense
-import Proofs.Flock.Claims.Recursion.SchedCount
-import Proofs.Flock.Claims.Complete.Json.Stmt
-import Proofs.Flock.Recursive.HoloRepCoins
-import Proofs.Flock.C3.Compose.HoloStreamSizes
-import Proofs.Flock.VBridge.Family.Lig
-import Proofs.Flock.VBridge.Family.Encode
+module
+
+public import Proofs.Flock.Claims.Recursion.SameJAt
+public import Proofs.Flock.Claims.Recursion.VerdictFramed
+public import Proofs.Flock.Claims.Recursion.VerdictFramedJson
+public import Proofs.Flock.Claims.Recursion.VerdictPublics
+public import Proofs.Flock.Claims.Recursion.VerdictRowG
+public import Proofs.Flock.Claims.Recursion.VerdictParts
+public import Proofs.Flock.Claims.Recursion.InnerForm
+public import Proofs.Flock.Claims.Recursion.SchedDense
+public import Proofs.Flock.Claims.Recursion.SchedCount
+public import Proofs.Flock.Claims.Complete.Json.Stmt
+public import Proofs.Flock.Recursive.HoloRepCoins
+public import Proofs.Flock.C3.Compose.HoloStreamSizes
+public import Proofs.Flock.VBridge.Family.Lig
+public import Proofs.Flock.VBridge.Family.Encode
+import all Lean.Data.Json.Basic
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The record the verdict reads decodes, at a decision of `nextR`
@@ -19,7 +24,7 @@ import Proofs.Flock.VBridge.Family.Encode
 At a dense inner statement where the last step reads and the base checks hold, the record value the verdict reads
 (`jAt`) decodes at the setup SHA-512 gives (`decode_at`, `TargetDecode` with `At` unfolded), with no JSON
 premise: the verifier keeps the public header and the draw normalized, so both are well-formed (`unitDraw_of`,
-`draw_wf`), and the statement's coin tree is its coins' (`setupOne_stmt`), none at `.os` or `.seed` (`tree?_none`). `jAt` is the reader's record (`recJ`) with its digests and coins
+`draw_wf`), and the statement's coin tree is its coins' (`setupOne_stmt`), none at `.seed` (`tree?_none`). `jAt` is the reader's record (`recJ`) with its digests and coins
 substituted, so it is alike the honest record whose rounds hold the fill's coins (`same_coinSubJ`, with the fill finding
 a coin wherever `liveOf` reads, `fill_of_live`), and an honest record of a one-table statement decodes
 (`decodeJ_same`). What `decodeJ_same` asks:
@@ -31,6 +36,8 @@ a coin wherever `liveOf` reads, `fill_of_live`), and an honest record of a one-t
 * **The streams** (`repSchedAt_bounds`): rep `k`'s rounds are its schedule's, which has a round, each of between 1
   and 65536 coins.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.DecodeAt
 
@@ -79,12 +86,11 @@ theorem inner_drawn {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScope.ac
     | none => simp [filesOf, hq] at hheld
     | some p => exact ⟨p, rfl⟩
   have hfs : filesOf r = some (.files ⟨r.innerRaw.circuit, r.innerRaw.publicFile, p, "", none,
-      some (innerFormOf r.innerRaw)⟩) := by rw [filesOf, hp]; rfl
+      some (innerFormOf r.innerRaw), r.innerRaw.program⟩) := by rw [filesOf, hp]; rfl
   rw [hfs] at hsh
   obtain ⟨spec', st', hstm, -, -, -, -, hform⟩ := checkShape_files hsh
-  obtain ⟨hs1, hs2, -, b, d, D, hb, hjd, -, -⟩ := checkForm_ok hform
+  obtain ⟨hs1, -, b, d, D, hb, hjd, -, -⟩ := checkForm_ok hform
   have hs1 : r.innerRaw.statement = Tags.circuitPlainLeaves.name := hs1
-  have hs2 : r.innerRaw.osCoins = true := hs2
   have hb : r.innerRaw.draw = some b := hb
   obtain ⟨hdec, -, -⟩ := readX_inner hr
   obtain ⟨hins, -⟩ := FlockDeploy.setupOf_some hset
@@ -97,7 +103,7 @@ theorem inner_drawn {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScope.ac
     · cases hw
     change r.innerRaw.ins.toOption = some s at hw
     exact ⟨not_not.1 hz, toOption_eq_some hw⟩
-  obtain ⟨-, -, -, -, -, -, -, -, ⟨dr, hm, hd9⟩, -⟩ := ins_plainLeaves hw.2 hw.1 hs1 hs2
+  obtain ⟨-, -, -, -, -, -, -, -, ⟨dr, hm, hd9⟩, -⟩ := ins_plainLeaves hw.2 hw.1 hs1
   rw [hb] at hm
   simp only [Option.mapM_some, hjd, Functor.map, Except.map, Except.ok.injEq] at hm
   rw [hd9, ← hm]
@@ -106,7 +112,7 @@ theorem inner_drawn {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScope.ac
 /-- **What the record needs of a dense inner statement**: the plain verifier sets it up as one table, with no coin
 tree, a non-empty Σ, a printable draw that decodes to its instances, two link points, at most 1024 regions and a
 `fast100` schedule. -/
-theorem dense_stmt {xo : Msg} {sto : Claims.Recursion.Stmt}
+theorem dense_stmt {xo : Msg} {sto : Claims.Recursion.CompiledStatement}
     (hst : parse xo = some sto) (hf : Claims.Recursion.Form.Dense sto.form) {s : FlockDeploy.Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : FlockDeploy.setupOf false (xIOf xo) = some (s, spec, sts)) :
     ∃ st t, sts = #[st] ∧ spec.tables = #[t] ∧ spec.coinTree = none ∧ 0 < spec.sigma.size ∧ DrawOk spec ∧
@@ -220,7 +226,7 @@ theorem repSchedAt_bounds {spec : SessionSpec} {st : Stmt} (hf : (fast100 st.m).
 /-- **The record the verdict reads decodes** at a decision at a dense inner statement where the last step reads and
 the base checks hold, at the setup SHA-512 gives. -/
 theorem decode_jAt {rd : Msg → Option FinalP} {x : Msg}
-    {ms : List Msg} {cs : List Coin} {xo : Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+    {ms : List Msg} {cs : List Coin} {xo : Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) (hr : ReadOkR rd x ms cs)
     (hb : ∀ b ∈ VerdictP.bases, holdsR FlockDeploy.sha512 rd b x ms cs) {d : FlockDeploy.DecR}
     (hd : FlockDeploy.decR rd x ms cs = some d) {spec : SessionSpec} {sts : Array Stmt}
@@ -347,7 +353,7 @@ checks hold, a decision's record value the verdict reads decodes at the setup SH
 theorem decode_at (rd : Msg → Option FinalP)
     (P : Msg → List Msg → List Coin → Prop) :
     ∀ (x : Msg) (ms : List Msg) (cs : List Coin),
-      ((∃ (xo : Msg) (sto : Claims.Recursion.Stmt), parse xo = some sto ∧ Claims.Recursion.Form.Dense sto.form ∧
+      ((∃ (xo : Msg) (sto : Claims.Recursion.CompiledStatement), parse xo = some sto ∧ Claims.Recursion.Form.Dense sto.form ∧
         x = xIOf xo) ∧ ReadOkR rd x ms cs ∧ (∀ b ∈ VerdictP.bases, holdsR FlockDeploy.sha512 rd b x ms cs) ∧
         P x ms cs) →
       ∀ d : FlockDeploy.DecR, FlockDeploy.decR rd x ms cs = some d → ∀ (spec : SessionSpec) (sts : Array Stmt),

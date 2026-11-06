@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.SlotDist
-import Proofs.Flock.Soundness.CompiledLock
+module
+
+public import Proofs.Flock.Claims.KS.SlotDist
+public import Proofs.Flock.Soundness.CompiledLock
 
 /-!
 # A rep's level caps, at a distance fixed by the statement and the schedule
@@ -18,6 +20,8 @@ OOD samples, its queries and the next level's folds. A path that rejects early m
 * `recSlotDist_eq`, `fast100_lanes`: with four lanes after level 0, as `fast100` has, the caps are `11` coins apart;
 * `getRep_slotOf_ne`: the other rep never holds this rep's slots.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

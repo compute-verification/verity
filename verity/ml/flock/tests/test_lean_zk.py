@@ -1,10 +1,10 @@
-"""`verify --zk` (verifier PROTOCOL.md §16.14, `Flock.Zk`): the Lean verifier on `flock-circuit --zk` sessions, the masked
+"""`verify --zk` (`Flock.Zk`): the Lean verifier on `flock-circuit --zk` sessions, the masked
 protocol (M1) on the keyed coin tree (M2). The sessions are the live build's on RoPE d64 (m = 25 and 26), each with the
 verdict its server reached: a `selftest --zk --record-dir` run (`selftest_records.py`), and `serve`/`prove --zk` sessions of
 two tables, of one m = 26 table and of a drawn one. Tampered copies come from `zk_mutants.py`; `agree.py --zk` compares all of
-them with upstream's offline verdict (§18). None is accepted: the circuit is no Program's, so the drawn session is refused for
+them with upstream's offline verdict (`verity/ml/flock/verifier/vectors.json`). None is accepted: the circuit is no Program's, so the drawn session is refused for
 want of the verifier's program (`NO_PROGRAM`) once every check has passed, and the others have no sample, which `verify` refuses
-first (§16.15, D12), so a session the server accepted gets that refusal (`DRAWLESS`) and every other session its own reason."""
+first (`Flock.ProvedScope`, D12), so a session the server accepted gets that refusal (`DRAWLESS`) and every other session its own reason."""
 from __future__ import annotations
 
 import json
@@ -23,7 +23,7 @@ BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: sessions/selftest (one table, m = 25, each case's live verdict in case.json), sessions/j2 (two tables of 16 instances),
 #: sessions/m26 (one table of 32) and sessions/drawn (a subset sample of 16 of 32), each with its server's index.jsonl (all
 #: accepted), at the coin schedule of 2^9 rounds (`verity/ml/flock/pod/92-zk-sessions.sh`, run r20261027-022105-c4fb); a fetched
-#: fixture (`fixtures/artifacts.json`), which `suites.py` fetches before the suite runs: `art:b9cc903c`
+#: fixture (`fixtures/artifacts.json`), which `suites.py` fetches before the suite runs
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "zk-sessions"
 STATEMENT = "verity/flock-circuit+seed-injection"
 #: the refusal of a session without a sample, which `verify` reaches only when every check has passed
@@ -113,7 +113,7 @@ def test_every_selftest_session_gets_its_live_verdict(zk):
 
 @pytest.mark.slow
 def test_a_session_key_is_used_once(zk):
-    """The coin tree's key is fresh (§7.4): a session read twice in one run is refused the second time."""
+    """The coin tree's key is fresh (`Flock.CoinTree`): a session read twice in one run is refused the second time."""
     honest = zk / "sessions" / "selftest" / "honest"
     first, second = _verify(zk, honest, honest)
     assert _passes(first), first["why"]
@@ -129,9 +129,9 @@ def test_zk_is_the_verifiers_setting(zk):
 
 @pytest.mark.slow
 def test_zk_takes_no_coins_flag(zk):
-    """A `--zk` session's coins are its keyed coin tree, never `os` or `seed` coins (the live build reads no `FC_COINS` under
-    `--zk`, and its identity never names live-OS coins), so `--zk` with either `--coins` is refused before any setup."""
-    for coins in ("os", "seed"):
+    """A `--zk` session's coins are its keyed coin tree (the live build reads no `FC_COINS` under `--zk`), and `--coins` is a
+    plain session's, so `--zk` with any `--coins` is refused before any setup."""
+    for coins in ("tree", "seed"):
         p = _run(zk, zk / "sessions" / "selftest" / "honest", extra=("--coins", coins))
         assert p.returncode == 2 and "VERDICT" not in p.stdout, (coins, p.stdout)
         assert p.stderr.startswith("verify --zk: a --zk session's coins are its keyed coin tree"), (coins, p.stderr)

@@ -33,7 +33,7 @@ class FakeGitHub:
             assert "merged" not in args, "a listing of merged PRs by number misses those that waited in the queue"
             return json.dumps(list(self.open.values()))
         if args[:2] == ("api", "graphql"):
-            assert f"query={M.MERGED_QUERY}" in args and "orderBy: {field: UPDATED_AT, direction: DESC}" in M.MERGED_QUERY
+            assert f"query={M.ENDED_QUERY}" in args and "orderBy: {field: UPDATED_AT, direction: DESC}" in M.ENDED_QUERY
             return json.dumps(self.merged)
         self.mutations.append(args)
         n = int(args[2])
@@ -215,7 +215,7 @@ def _checked_c(tmp_path, monkeypatch, gh, repo):
 
 
 def test_a_merge_push_of_main_off_drive_is_refused_and_pushes_nothing(tmp_path, monkeypatch, capsys):
-    """GitHub's rulesets let only drive's App move `main`; a pure move lands from the control pod (`drive.sh merge`)."""
+    """GitHub's rulesets let only drive's App move `main`; the lander's push runs on the control pod (`drive.sh merge`)."""
     repo, gh, _tips, _merge = _world(tmp_path)
     _checked_c(tmp_path, monkeypatch, gh, repo)
     monkeypatch.delenv("RESEARCH_DRIVE")
@@ -773,7 +773,7 @@ def test_the_landings_go_to_the_merge_thread_quietly_and_a_failed_post_leaves_th
 
 def test_the_sweep_deletes_the_head_branch_of_a_pr_github_marked_merged_itself(tmp_path):
     """Drive lands a PR's commits; GitHub then marks the PR merged, so it was never open for the sweep, and its branch would
-    stay.  The merged PRs are the most recently updated ones (`MERGED_QUERY`; the fake refuses `gh pr list --state merged`):
+    stay.  The merged PRs are the most recently updated ones (`ENDED_QUERY`; the fake refuses `gh pr list --state merged`):
     the newest 200 by number would leave out PRs that had waited in the queue, and their branches would stay."""
     repo, gh, tips, _merge = _world(tmp_path)
     del gh.open[1], gh.open[2]
@@ -784,6 +784,32 @@ def test_the_sweep_deletes_the_head_branch_of_a_pr_github_marked_merged_itself(t
     log = []
     M.sweep(repo, gh=gh, log=log.append)                                  # A and B are gone: nothing to delete, nothing kept
     assert not [x for x in log if "branch A" in x or "branch B" in x or "kept" in x], log
+
+
+def test_the_sweep_deletes_the_head_branch_of_a_pr_closed_unmerged_unless_something_still_needs_it(tmp_path):
+    """A closed PR's branch goes while it is at the PR's head (its commits stay under `refs/pull/N/head`), but not a stale
+    PR's that drive closed to be reopened (``keep``), a lead's run branch, a fork's, one an open PR uses, or one pushed to
+    since the close."""
+    repo, gh, tips, _merge = _world(tmp_path)
+    for name in ("gone", "stale", "cursor/verity-lead-ab12", "fork", "moved"):
+        _git(repo, "checkout", "-q", "-b", name, "C")
+        (repo / f"{name.replace('/', '_')}.txt").write_text(name)
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "-m", name)
+        _git(repo, "push", "-q", "origin", name)
+        tips[name] = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "main")
+    closed = {"gone": 11, "stale": 12, "cursor/verity-lead-ab12": 13, "fork": 14, "moved": 15, "C": 16}
+    gh.merged = [{"number": n, "state": "CLOSED", "headRefName": h, "headRefOid": tips[h], "isCrossRepository": h == "fork"}
+                 for h, n in closed.items()]
+    gh.merged[4]["headRefOid"] = tips["C"]                                # "moved" was at C's tip when it closed
+    log = []
+    M.sweep(repo, gh=gh, log=log.append, keep=["stale"])
+    assert _heads(repo) == {"main", "C", "D", "E", "stale", "cursor/verity-lead-ab12", "fork", "moved"}
+    assert "research merge: delete origin's branch gone (closed #11's head, unmerged)" in log, log
+    log = []
+    M.sweep(repo, gh=gh, log=log.append)                                  # without ``keep``, the stale PR's goes too
+    assert "stale" not in _heads(repo) and not [x for x in log if "kept" in x], log
 
 
 def test_main_line_is_the_checked_heads_newest_first(tmp_path, monkeypatch):

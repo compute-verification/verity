@@ -18,7 +18,7 @@ bytes are all 0xFF is compared with p exactly), bit 3 for a tensor's last block 
 library's own flags (bit 0: a tweak's first candidate at or above p, where the spec draws the next). `decode_matrix` and
 `decode_layer` call it before they return.
 
-With a pass of the remote bandwidth audit attached (`store.sketch = sketch.Pass(...)`), `decode_rows` sketches the units
+With a pass of PoUB attached (`store.sketch = sketch.Pass(...)`), `decode_rows` sketches the units
 each chunk's blocks lie in from the same rows on the device before the decode reads them (`sketch.py`); the rows then
 hold whole units.
 

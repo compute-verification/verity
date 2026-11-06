@@ -1,7 +1,9 @@
-import Definitions.Nci.Guarantees.CoverChained
-import Proofs.Nci.CoveringTwoCosts
-import Proofs.Nci.Cover.Gates
-import Proofs.Nci.Cover.Training
+module
+
+public import Definitions.Nci.Guarantees.CoverChained
+public import Proofs.Nci.CoveringTwoCosts
+public import Proofs.Nci.Cover.Gates
+public import Proofs.Nci.Cover.Training
 
 /-!
 # The cover theorem on a compliant declaration, counting the chained multiplication blocks, proved
@@ -19,6 +21,8 @@ what it says. Pull a compliant division of `d` back to `c` (`Nci.SecurityProofs.
 predecessor is computed by the block of the piece holding its gate (`mem_computed_block_of_pred`). So
 `chained_le_of_blocks` applies, with `Σ σ_u = size(d)`, and the slowdown form follows (`slowdown_of_count`).
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.SecurityProofs
 
