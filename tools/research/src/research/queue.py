@@ -305,13 +305,18 @@ owner once, and again only when its head, those PRs or its reason changes (`Driv
 `--shadow` builds `queue-shadow` instead of `next`, never pushes `main` and sends no notices, so the queue can run beside the trains
 with no effect on them; its `sync`, `land` and `drive` still run only on drive (`--dry-run` shows the same off it).
 
-Files.  The queue works only in its own clone (`--workdir`, default ~/.research/queue/verity), and fetches with forced refspecs: a
-local copy of a branch that wasn't force-fetched once put a train on a stale base.  `state.json` beside the clone keeps ejections and
-the notices sent; losing it costs a retry.  One queue command runs at a time per workdir (`queue.lock`), and one that only reads
-(`status`, `review` without N) holds it only while it clones and fetches, not while it reads labels.  The clone authenticates as
-the caller's checkout does (`credential_args`): a cloud VM sets its credential helper in the checkout's own config, which a clone
-elsewhere never reads.  Git never prompts, so a remote the queue can't read fails the command instead of answering from what the
-clone fetched last.
+Files.  The queue works only in its own clone (`--workdir`, default ~/.research/queue/NAME for `--repo OWNER/NAME`, else
+~/.research/queue/verity) of its remote (`--remote`, default https://github.com/OWNER/NAME.git for `--repo`, else the caller's
+origin; one naming another repository on GitHub than `--repo` is refused: `remote_and_repo`), and fetches with forced refspecs: a
+local copy of a branch that wasn't force-fetched once put a train on a stale base.  Only a clone the queue made has its origin
+set to the remote (`Queue._clone`): it sets `research.queueclone` in each clone's git config, and those it made before that are
+at ~/.research/queue/verity.  Any other checkout keeps its origin, so a push from it still goes where its owner meant, and one
+whose origin is another repository than the remote is refused before anything in it changes.  `state.json` beside the clone
+keeps ejections and the notices sent; losing it costs a retry.  One queue command runs at a time per workdir (`queue.lock`), and
+one that only reads (`status`, `review` without N) holds it only while it clones and fetches, not while it reads labels.  The
+clone authenticates as the caller's checkout does (`credential_args`): a cloud VM sets its credential helper in the checkout's
+own config, which a clone elsewhere never reads.  Git never prompts, so a remote the queue can't read fails the command instead
+of answering from what the clone fetched last.
 """
 from __future__ import annotations
 
@@ -418,6 +423,13 @@ MOVE_DIR, MOVE_PINS = "tools/move/", "tools/verity/check/pins.py"
 #: landed, and the moves a PR based before them is restacked through
 LANDED_WINDOW = 2000
 SLUG_RE = re.compile(r"github\.com[:/]+([^/]+/[^/]+?)(?:\.git)?/?$")
+#: OWNER/NAME on GitHub, as `--repo` takes it
+REPO_ARG_RE = re.compile(r"[\w.-]+/[\w.-]+")
+#: the git config key the queue sets to `true` in each clone it makes (`Queue._clone`): only such a clone, or one at `WORKDIR`, has
+#: its origin set to the queue's remote
+CLONE_MARK = "research.queueclone"
+#: the queue's clone with no --repo or --workdir: one there without `CLONE_MARK` is one the queue made before it set it (drive's)
+WORKDIR = Path.home() / ".research" / "queue" / "verity"
 AUTH_FAILED_RE = re.compile(r"could not read (Username|Password)|Authentication failed|unable to get password")
 #: what decides how a check runs and what it passes: a `main` that changed any of it re-checks the queue rather than land on it
 CHECK_TOOLING = ("tools/verity/check/", "tools/verity/lean/", "tools/verity/circuit_check/")
@@ -463,6 +475,42 @@ def credential_args(repo: Path, remote: str) -> tuple[str, ...]:
             return ()
         conf = {"credential.helper": f"!{shlex.quote(gh)} auth git-credential"}
     return ("-c", "credential.helper=", *(o for k, v in conf.items() for o in ("-c", f"{k}={v}")))
+
+
+def redacted(url: str) -> str:
+    """``url`` without the user and password it may carry, so a token in a remote's URL never reaches a message."""
+    return re.sub(r"(?<=://)[^/@]*@", "", url)
+
+
+def slug(url: str) -> str | None:
+    """The OWNER/NAME a GitHub URL names (https or ssh, with or without `.git`, whatever user it carries), else None."""
+    return (m := SLUG_RE.search(url)) and m.group(1)
+
+
+def same_repository(a: str, b: str) -> bool:
+    """Whether two remote URLs name one repository: on GitHub by OWNER/NAME in any case (`slug`), elsewhere (a path) by the URL
+    itself."""
+    sa, sb = slug(a), slug(b)
+    return (sa or "").lower() == (sb or "").lower() if sa or sb else a.rstrip("/") == b.rstrip("/")
+
+
+def remote_and_repo(remote: str | None, repo: str | None, cwd: Path) -> tuple[str, str]:
+    """The remote the queue clones and fetches, and its OWNER/NAME on GitHub, from `--remote` and `--repo`: `--repo` alone takes
+    `https://github.com/OWNER/NAME.git`, and with neither the remote is ``cwd``'s origin.  Refused when `--remote` names
+    another repository on GitHub than `--repo` (the queue would read one's PRs against the other's pull refs), and when no
+    OWNER/NAME can be told."""
+    if repo is not None and not REPO_ARG_RE.fullmatch(repo):
+        raise QueueError(f"--repo {repo!r}: OWNER/NAME on GitHub, as {REPO}")
+    if repo and remote is None:
+        return f"https://github.com/{repo}.git", repo
+    remote = remote or _out(cwd, "remote", "get-url", "origin")
+    named = slug(remote)
+    if repo and named and named.lower() != repo.lower():
+        raise QueueError(f"--remote {redacted(remote)} is {named} on GitHub, not --repo {repo}: pass --repo alone (its remote is "
+                         f"https://github.com/{repo}.git), or a --remote of {repo}")
+    if not (repo := repo or named):
+        raise QueueError(f"can't tell OWNER/NAME from {redacted(remote)!r}: pass --repo")
+    return remote, repo
 
 
 # ---- the open PRs -------------------------------------------------------------------------------------------------------------------
@@ -573,6 +621,33 @@ class GitHub:
             raise QueueError(f"gh pr close {number}: no answer in {GH_TIMEOUT_S} s") from None
         if r.returncode:
             raise QueueError(f"gh pr close {number}: {(r.stderr or r.stdout).strip()[-300:]}")
+
+
+def landing_waiter(repo: str | None = None, store_root: str | None = None) -> Callable[[list[int]], bool]:
+    """Whether PRs wait only on landing: each is open, not held (the rules' hold label) and marked ready at its current head
+    (`StoreLabels.ready`), as the Linear audit asks of an issue In Review.  The open PRs are read once, on the first call;
+    `repo` defaults to the checkout's origin, and a PR GitHub or the store can't answer for doesn't wait.  When the open PRs
+    can't be read at all (no checkout, gh failing), nothing waits: the audit then counts the issue as it would without this."""
+    from .store.local import LocalStore
+
+    state: dict = {}
+
+    def waiting(numbers: list[int]) -> bool:
+        if "heads" not in state:
+            try:
+                slug = repo or ((m := SLUG_RE.search(_out(Path.cwd(), "remote", "get-url", "origin"))) and m.group(1))
+                hold = Rules().hold_label
+                state["heads"] = {pr.number: pr.head for pr in GitHub(slug).open_prs() if hold not in pr.labels}
+                state["labels"] = StoreLabels(LocalStore(store_root), log=lambda s: None)
+                state["labels"].prefetch(state["heads"].items())
+            except (QueueError, OSError) as e:
+                print(f"linear audit: can't read the open PRs ({e}), so no issue counts as waiting on landing",
+                      file=sys.stderr)
+                state["heads"], state["labels"] = {}, None
+        heads, labels = state["heads"], state["labels"]
+        return bool(numbers) and all(n in heads and labels.ready(n, heads[n]) for n in numbers)
+
+    return waiting
 
 
 # ---- rules and labels ---------------------------------------------------------------------------------------------------------------
@@ -1544,12 +1619,29 @@ class Queue:
             raise QueueError(f"git {' '.join(args)}: {err}{hint}")
         return r
 
+    def _ours(self) -> bool:
+        """Whether the workdir is a clone the queue made: one whose git config has `CLONE_MARK`, which the queue sets in each
+        clone it makes, or `WORKDIR`, where it cloned before it set it."""
+        return (_git(self.workdir, "config", "--local", "--get", CLONE_MARK, check=False).stdout.strip() == "true"
+                or self.workdir.resolve() == WORKDIR.resolve())
+
     def _clone(self) -> None:
+        """Clone the remote into the workdir, or bring the checkout there to the remote's state.  The origin of a clone the queue
+        made (`_ours`) follows the remote; any other checkout keeps its own, and one whose origin names another repository
+        than the remote is refused before anything in it changes."""
         if fresh := not (self.workdir / ".git").exists():
             self.workdir.parent.mkdir(parents=True, exist_ok=True)
-            self._remote(self.workdir.parent, "clone", "-q", self.remote, str(self.workdir))
-        # the caller's origin as it is now: a token embedded in the URL the clone was made from rotates
-        _git(self.workdir, "remote", "set-url", "origin", self.remote)
+            self._remote(self.workdir.parent, "clone", "-q", "--config", f"{CLONE_MARK}=true", self.remote, str(self.workdir))
+        if fresh or self._ours():
+            # the caller's origin as it is now: a token embedded in the URL the clone was made from rotates
+            _git(self.workdir, "remote", "set-url", "origin", self.remote)
+        elif not same_repository(origin := _git(self.workdir, "remote", "get-url", "origin", check=False).stdout.strip(),
+                                 self.remote):
+            here, there = redacted(origin), redacted(self.remote)
+            raise QueueError(f"{self.workdir} is a checkout the queue didn't clone (its git config has no {CLONE_MARK}), whose "
+                             f"origin, {here or 'unset'}, is another repository than the queue's remote {there}, and the queue "
+                             f"never repoints such a checkout: pass --workdir a directory of its own, where the queue clones "
+                             f"{there}" + (f", or --remote {here}, the repository that checkout is a clone of" if here else ""))
         # `.gitattributes` names these drivers; `git_env` gives them to the queue's own git, but without them in the clone's
         # config any other git in it (one by hand) merges the records line by line
         from .clone import Refused, set_drivers
@@ -6148,8 +6240,11 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--shadow", action="store_true", help=f"build `{SHADOW_BRANCH}`, never push `main`, send no notices")
     ap.add_argument("--dry-run", action="store_true", help="sync/drive: decide and report, push and launch nothing, tell no "
                                                            "one; open, edit: say what it would send, and send nothing")
-    ap.add_argument("--workdir", type=Path, default=Path.home() / ".research" / "queue" / "verity", help="the queue's own clone")
-    ap.add_argument("--remote", default=None, help="the repository to clone (default: this checkout's origin)")
+    ap.add_argument("--workdir", type=Path, default=None, help="the queue's own clone (default: ~/.research/queue/NAME for --repo "
+                                                              "OWNER/NAME, else ~/.research/queue/verity)")
+    ap.add_argument("--remote", default=None, help="the repository to clone (default: https://github.com/OWNER/NAME.git for --repo "
+                                                   "OWNER/NAME, else this checkout's origin); one naming another repository on "
+                                                   "GitHub than --repo is refused")
     ap.add_argument("--repo", default=None, help="OWNER/NAME on GitHub (default: from the remote's URL)")
     ap.add_argument("--rules", type=Path, default=None, help=f"the admission rules (default: {RULES} on `main`)")
     ap.add_argument("--store", default=None, help="evidence store root (default $RESEARCH_STORE or ~/.research/store)")
@@ -6254,10 +6349,7 @@ def main(argv: list[str]) -> int:
         if not (a.pr and a.pr.isdigit() and a.issue and ISSUE_KEY_RE.fullmatch(a.issue)) or a.dry_run:
             ap.error("link needs the PR number and --issue KEY (its Linear issue, like ENG-123), and has no --dry-run")
         try:
-            remote = a.remote or _out(Path.cwd(), "remote", "get-url", "origin")
-            repo = a.repo or ((m := SLUG_RE.search(remote)) and m.group(1))
-            if not repo:
-                raise QueueError(f"can't tell OWNER/NAME from {remote!r}: pass --repo")
+            repo = remote_and_repo(a.remote, a.repo, Path.cwd())[1]
             print(f"research queue link: {link_issue(a.issue, f'https://github.com/{repo}/pull/{a.pr}')}")
             return 0
         except (QueueError, OSError) as e:
@@ -6270,10 +6362,7 @@ def main(argv: list[str]) -> int:
         try:
             body = with_issue(a.body_file.read_text(), a.issue)
             top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
-            remote = a.remote or _out(top, "remote", "get-url", "origin")
-            repo = a.repo or ((m := SLUG_RE.search(remote)) and m.group(1))
-            if not repo:
-                raise QueueError(f"can't tell OWNER/NAME from {remote!r}: pass --repo")
+            repo = remote_and_repo(a.remote, a.repo, top)[1]
             app = issue_app(a.issue) if ISSUE_KEY_RE.fullmatch(a.issue) else None
             if app is not None:
                 body = with_goals(body, a.issue, app)
@@ -6299,10 +6388,7 @@ def main(argv: list[str]) -> int:
             ap.error("edit needs the PR number and --body-file F")
         try:
             top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
-            remote = a.remote or _out(top, "remote", "get-url", "origin")
-            repo = a.repo or ((m := SLUG_RE.search(remote)) and m.group(1))
-            if not repo:
-                raise QueueError(f"can't tell OWNER/NAME from {remote!r}: pass --repo")
+            repo = remote_and_repo(a.remote, a.repo, top)[1]
             url, body = edit_pr(top, repo, int(a.pr), a.body_file.read_text(), title=a.title, dry_run=a.dry_run)
             titled = f" and its title with {a.title!r}" if a.title else ""
             if a.dry_run:
@@ -6359,13 +6445,11 @@ def main(argv: list[str]) -> int:
     from .store.local import LocalStore
 
     try:
-        remote = a.remote or _out(Path.cwd(), "remote", "get-url", "origin")
-        repo = a.repo or ((m := SLUG_RE.search(remote)) and m.group(1))
-        if not repo:
-            raise QueueError(f"can't tell OWNER/NAME from {remote!r}: pass --repo")
+        remote, repo = remote_and_repo(a.remote, a.repo, Path.cwd())
+        workdir = a.workdir or (WORKDIR.with_name(repo.split("/")[1].lower()) if a.repo else WORKDIR)
         store = LocalStore(a.store)
         here = _git(Path.cwd(), "rev-parse", "--show-toplevel", check=False).stdout.strip()
-        main_ref, keys = "refs/remotes/origin/main", a.workdir.parent / f"{a.workdir.name}.issuer-keys.json"
+        main_ref, keys = "refs/remotes/origin/main", workdir.parent / f"{workdir.name}.issuer-keys.json"
         if a.command == "delegate":
             return delegate(store, a.pr, a.by, a.days, holders_at(Path(here), main_ref) if here else None)
         if a.command in ("judge", "ready"):
@@ -6381,12 +6465,12 @@ def main(argv: list[str]) -> int:
             return ready(GitHub(repo), store, a.pr, a.by, tier, again=a.again, preflight=pre, sha=a.sha, as_json=a.json,
                          records=RecordsGate(top, remote, store), goals=goal_gate)
         labels = StoreLabels(store, log=lambda s: print(s, file=sys.stderr), since=a.marked_after)
-        q = Queue(a.workdir, remote=remote, github=GitHub(repo), ready=labels.ready, store=store, shadow=a.shadow,
+        q = Queue(workdir, remote=remote, github=GitHub(repo), ready=labels.ready, store=store, shadow=a.shadow,
                   rules=Rules.parse(a.rules.read_text(), str(a.rules)) if a.rules else None,
                   auth=credential_args(Path.cwd(), remote), first=tuple(int(n) for n in (a.first or "").split(",") if n),
                   before_cutoff=labels.before_cutoff, marked_by=labels.marked_by, marked_at=labels.marked_at,
                   prefetch=labels.prefetch)
-        lock = _lock(a.workdir)
+        lock = _lock(workdir)
         q.unlock = lock.close
         if ignored := [f"--{k.replace('_', '-')}" for k in ("max_running", "train_size") if getattr(a, k) is not None]:
             q.log(f"research queue drive: {' and '.join(ignored)} ignored: train landing was deleted (#5070); drop them from "

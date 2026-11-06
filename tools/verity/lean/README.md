@@ -151,8 +151,9 @@ one process, `leanchecker --fresh`'s check of every root at once; warm, nothing 
 an own module replays it and what imports it, as without `--closure`. The cache is shared between packages, so
 `Security` reuses the Mathlib modules `Security/Proofs` checked. For a module's verdict to be a function of its key,
 `Replay.lean` refuses a declaration that mentions a constant its module neither declares nor imports, checks a theorem
-that two modules each declare (an equation lemma realized in both) once per module, and requires the quotient's
-constants to be the ones the kernel makes. A change to `Replay.lean` changes every key, so the next run is cold.
+that two modules each declare (an equation lemma realized in both) once per module, taking a reused module's public
+part's axiom copy as Lean's import does (`subsumesInfo`), and requires the quotient's constants to be the ones the
+kernel makes. A change to `Replay.lean` changes every key, so the next run is cold.
 The audit prints `closure: N modules checked, M reused` under each package's line. `check`'s lean-audit step runs
 `--closure` against the node's kept cache (`lean_audit.FLAGS`, `lean-replay/`), so a dependency module that skipped the
 kernel fails the merge check, and the `closure_dependency` control fails without `--fresh`. Cold, after a bump of the
