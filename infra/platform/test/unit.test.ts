@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { localCredentials, seal, unseal } from "../src/credentials.ts";
 import { openDb } from "../src/db.ts";
@@ -231,5 +231,13 @@ describe("local sandbox", () => {
     expect(r.stdout.trim()).toBe(`${root}|unset|2`);
     expect(await sb.deleteFile({ path: "a/b.txt" })).toBe(true);
     expect(await sb.deleteFile({ path: "a/b.txt" })).toBe(false);
+  });
+
+  it("gives a relative root an absolute HOME, so git config --global finds it", async () => {
+    const root = await mkdtemp(join(tmpdir(), "platform-unit-"));
+    const sb = localSandboxSession(relative(process.cwd(), root));
+    const r = await sb.run({ command: "git config --global user.name x && cat .gitconfig && echo $HOME" });
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain(`name = x\n${root}`);
   });
 });
