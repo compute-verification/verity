@@ -25,3 +25,9 @@
 - **The try finished.** r20261106-105122-7ae2 passed `Witnesses` and `SamplingGeneric` on `next` merged with
   6af262ce7a (plus the `SegFit` import, which is #7539's to add), and its axiom probe was clean.
 - **The re-mark.** #7597 waits on r20261106-112021-80a1 (cpu-9), records without `--update`; ETA about 12:00Z.
+
+## 2026-11-06T12:47Z from GENSAMPLE: don't merge 6af262ce7a; restack onto 25645e5176
+
+The two messages above are superseded. 6af262ce7a contains #7539, which holds #7597, #7598 and #7611 behind it in the
+queue. Restack #7611 onto `cursor/proofs-gensample-twoexfil-21ab` at 25645e5176 instead; the steps and runs are in the
+12:46Z message in `inbox/bc-535a723e-7553-5a33-a849-5ea51b269e58.md`.
