@@ -2,8 +2,8 @@
 
 Slack's Events and Interactivity requests, onto a Vercel queue, routed by `research msg`'s own code. A person's
 post in a chat channel (`#chat-NAME`), `#ask-the-team` or `#resource-accounting` rings the lanes it names, as
-`research msg deliver --channel KEY --event -` does today on top's watcher. A post that names no one goes to top, with
-a routing line in its thread that says no lane was named and routing by model is off. Nothing is routed in
+`research msg deliver --channel KEY --event -` does today on @top's watcher. A post that names no one goes to @top, with
+a routing line in its thread: `sent to @top: no lane named; routing by model is off`. Nothing is routed in
 `#agent-coordination`: there the sender rings its own doorbells. A newcomer whom `research msg chat expect` published
 gets their chat when they join the workspace.
 
@@ -22,10 +22,10 @@ gets their chat when they join the workspace.
   - `slack_events/subscriber.py`, the queue's consumer in poll mode: the `drain` cron, every minute, claims the topic's
     messages as consumer group `slack-events-drain` and runs `slack_events/consumer.py` (below) on each, until the
     topic is empty or 45 s have passed. A failure retries with backoff; after 5 deliveries the message goes to
-    `slack-events-dead`, a failure line goes in its thread and top is rung.
+    `slack-events-dead`, a failure line goes in its thread and @top is rung.
   - `slack_events/crons.py`: the watchdog (every 5 minutes) rings again a chat post with no 👀 and no lane reply after
-    15 minutes, rings top and says so in the thread after 60, and once a day (16:00Z) posts the open chat threads to
-    top's inbox. Reconciliation (every 10 minutes) re-enqueues, keyed on channel and ts, a person's post of the last
+    15 minutes, rings @top and says so in the thread after 60, and once a day (16:00Z) posts the open chat threads to
+    @top's inbox. Reconciliation (every 10 minutes) re-enqueues, keyed on channel and ts, a person's post of the last
     hour that should ring someone and has neither a routing line nor a doorbell. Both keep no state but what they post.
   - `slack_events/router.py`: `route_unaddressed`, the seam for routing by model. It returns None (no-model mode)
     unless `ROUTER_MODEL_ENABLED=1`; its docstring is the plan for the AI Gateway call, which isn't built.
@@ -62,7 +62,7 @@ best effort): the cache is regional and may drop a value at any time, so a cold 
 
 - `last_success_at`: when a delivery or a cron last finished.
 - `last_done_at`: when the consumer last finished a message (no cron writes it), and `last_enqueued_at`: when the app
-  last published an event. An enqueued time after the done time means events wait. The watchdog rings comms when that
+  last published an event. An enqueued time after the done time means events wait. The watchdog rings @comms when that
   has lasted 10 minutes, at most hourly (`crons.stall`), since `last_success_at`, which the crons keep
   fresh, looks healthy while nothing is consumed.
 - `canary_sent_at` and `canary_done_at`: each hour the watchdog publishes a synthetic `canary` event, stamped as an
@@ -125,7 +125,7 @@ the registry changed since the deployment before (`service/ignore.py`, vercel.js
    invite it to `#ask-the-team` and `#resource-accounting` (it reads their threads for its routing lines, too). Leave
    the Interactivity Request URL where it is (see below). `slack-app.json` gets these blocks in a separate PR.
 5. For each person Daniel invites: `research msg chat expect NAME --email E` before they join.
-6. Then retire top's watcher hand-off of chat and `#ask-the-team` posts (the using-slack skill).
+6. Then retire @top's watcher hand-off of chat and `#ask-the-team` posts (the using-slack skill).
 
 ## Needs
 
