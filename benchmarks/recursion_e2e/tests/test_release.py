@@ -39,10 +39,13 @@ def test_the_release_side_is_read_and_holds_the_headline(tmp_path):
 
 
 def test_the_result_carries_each_session_steps_time(tmp_path):
+    """Each session step's first invocation's time; the job has no vcap step, which has none."""
     doc = RP.read(job(tmp_path))
     times = doc["session_times"]
     assert tuple(times) == RP.SESSION_STEPS == RP.E2E_STEPS[1:]
-    assert all({"wall_s", "cpu_s"} <= set(t) for t in times.values())
+    assert times["vcap"] is None
+    assert times["inner"] == {"wall_s": 70.0, "peak_rss_gb": 2.0, "cpu_s": 2.0}
+    assert all({"wall_s", "cpu_s"} <= set(t) for s, t in times.items() if s != "vcap")
     assert json.loads(json.dumps(doc))["session_times"] == times
 
 

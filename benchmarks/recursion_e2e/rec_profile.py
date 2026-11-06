@@ -442,8 +442,9 @@ def read(root: Path) -> dict[str, Any]:
     doc["headline"] = headline(rows, s, steps) | ({"released": rel["ok"]} if rel else {})
     if doc["params"].get("release") == "1":
         doc["headline"]["ok"] = doc["headline"]["ok"] and bool(rel and rel["ok"])
-    # each session step's first invocation's /usr/bin/time -v, what a session's cost is scaled from
-    doc["session_times"] = {x: (lambda r: r and timev(r[0].parent / "time-step.txt"))(repeats(root, x)[:1])
+    # each session step's first invocation's /usr/bin/time -v (None for a step that didn't run), what a session's cost is
+    # scaled from
+    doc["session_times"] = {x: timev(r[0].parent / "time-step.txt") if (r := repeats(root, x)) else None
                             for x in SESSION_STEPS}
     return doc
 
