@@ -1,0 +1,5 @@
+# 70B's layer 0 and 1 q, k, v (the four served exact among them) at design U's 2%, in every order, with E on a = 4 (the
+# control: 0.689, 0.781, 0.794, 0.814), 3 (e3) and 2 (e1) values.
+70b-four-a4 --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 0,1 --match q_proj,k_proj,v_proj --fast --ranks 1,8,16,32,48,64,96,128,192,256,384 --orders none,fold,sort --a-noise 4 --workers 6
+70b-four-a3 --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 0,1 --match q_proj,k_proj,v_proj --fast --ranks 1,8,16,32,48,64,96,128,192,256,384 --orders none,fold,sort --a-noise 3 --workers 6
+70b-four-a2 --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 0,1 --match q_proj,k_proj,v_proj --fast --ranks 1,8,16,32,48,64,96,128,192,256,384 --orders none,fold,sort --a-noise 2 --workers 6

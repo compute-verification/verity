@@ -1,8 +1,9 @@
 """HT-PUBLIC's split search (`natural.py`, `tiles.py`) and HT-PROV's low-rank + clipped-residual projections
 (`benchmarks/hardness_prov/routes.py`) on design U's codes: each linear's input rotated by a random-sign Hadamard matrix
 (`hardness_useful/rotation.py`) and each row clipped so the matrix's Strassen level-1 forms overflow int8 at 2%
-(HT-USEFUL). Prices are HT-PREMISE's (`pouw/theory/hardness_premise/natural.py`): W1 per MAC of E·Wᵀ, E on a = 4 values,
-s8 1, b1 0.125, nvf4 0.5, a register write 32, the fast reading; the honest leaf is 1 + 32/K. A correction price in
+(HT-USEFUL). Prices are HT-PREMISE's (`pouw/theory/hardness_premise/natural.py`): W1 per MAC of E·Wᵀ, E on a = 4 values
+(--a-noise: design U's e1 is a = 2, e3 a = 3), s8 1, b1 0.125, nvf4 0.5, a register write 32, the fast reading; the
+honest leaf is 1 + 32/K. A correction price in
 --alus is the writes one corrected entry costs per noise row (HT-PROTO-U's floors 1.48 and 1.78, and 0.84).
 
 The codes come from an exported file (--codes, `hardness_useful/qat.py`'s NAME.q) or from Hugging Face weights rotated
@@ -19,8 +20,9 @@ plus P, the honest kernel with a detour, which tends to it as P → 0.
   r/n + 3r/K (`lr3`, HT-PROV's: the s32 intermediate in three int8 passes);
 - `isvd`: the exact one: P = A·Bᵀ with A (n×r) and B (K×r) int8, B = rint(β·V) with β_j = √(σ_j·√(K/n)) (which
   balances the two roundings' errors) and A the rounded least-squares fit to q given B, so S = q − A·Bᵀ exactly. E·Bᵀ
-  is an s8 pass (r/n); its output T, with E − 2 on [−2, 1], needs d int8 digits for 2·Σ|B_j| (d ≥ 2 once that exceeds
-  127), each an s8 pass against Aᵀ (d·r/K), and each of their d accumulators joins the output in one write (a shift
+  is an s8 pass (r/n); its output T, with E − ⌊a/2⌋ within ±⌊a/2⌋ (E − 2 on [−2, 1] at a = 4), needs d int8 digits
+  for ⌊a/2⌋·Σ|B_j| (d ≥ 2 once that exceeds 127), each an s8 pass against Aᵀ (d·r/K), and each of their d
+  accumulators joins the output in one write (a shift
   and an add, as natural.py's 256·(A·hi) correction);
 - `rpca`: P a rank-r fit refit twice with the entries whose residual exceeds a masked to P;
 - `tiles`: HT-PUBLIC's per-tile P = 0 routes, each tile its cheapest of b1 planes (H200) or FP4 digits (sm_120) on
@@ -100,6 +102,14 @@ def keys(alus):
     return [f"{chip}@{aname}" for aname in alus for chip in CHIPS]
 
 
+def set_a_noise(a: int):
+    """E's range, in this process and (as the pool's initializer) in each worker."""
+    global A_NOISE
+    assert a >= 2, a
+    A_NOISE = a
+    zero_tree_costs.cache_clear()
+
+
 def residual_routes(S: np.ndarray, alus: dict, orders=("none",)) -> dict:
     """W1 per MAC of the cheapest route for E·Sᵀ whose root isn't the plain leaf, per chip@price: natural.py's tree,
     its plane routes, or 2:4, in each of `orders` (`price.permute`; the attacker reorders n and K freely)."""
@@ -156,7 +166,7 @@ def lr1(r, n, K):
 
 
 def integer_split(q: np.ndarray, s: np.ndarray, Vt: np.ndarray, r: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, int]:
-    """(S, A, B, d): q = S + A·Bᵀ exactly, A and B int8, d the int8 digits of T = (E − 2)·B."""
+    """(S, A, B, d): q = S + A·Bᵀ exactly, A and B int8, d the int8 digits of T = (E − ⌊a/2⌋)·B."""
     n, K = q.shape
     beta = np.sqrt(np.maximum(s[:r].astype(np.float64), 1e-9) * math.sqrt(K / n))
     B = np.clip(np.rint(Vt[:r].T.astype(np.float64) * beta), -127, 127)
@@ -164,7 +174,7 @@ def integer_split(q: np.ndarray, s: np.ndarray, Vt: np.ndarray, r: int) -> tuple
     A = np.clip(np.rint(At.T), -127, 127).astype(np.int64)
     B = B.astype(np.int64)
     S = (q.astype(np.int64) - A @ B.T).astype(np.int32)
-    width = 2 * int(np.abs(B).sum(axis=0).max())
+    width = A_NOISE // 2 * int(np.abs(B).sum(axis=0).max())
     d = 1 if width <= 127 else 2 if width <= 32639 else 3
     return S, A, B, d
 
@@ -263,7 +273,7 @@ def prov_projection(S: np.ndarray, chip: str, w: float) -> tuple[float, int]:
 def tile_routes(q: np.ndarray, alus: dict) -> dict:
     n, K = q.shape
     out = {}
-    pE = 2
+    pE = max(1, math.ceil(math.log2(A_NOISE)))
     for tr, tk in TILES:
         tk = tk or K
         nt, kt = n // tr, K // tk
@@ -360,7 +370,7 @@ def work(job) -> dict:
     fast, orders = opts.get("fast", False), opts.get("orders", ("none",))
     m = min(n, K)
     leaf = 1 + 32 / K
-    rec = {"tensor": name, "shape": [n, K], "macs_per_token": int(q.size), "c": c, "leaf": leaf,
+    rec = {"tensor": name, "shape": [n, K], "macs_per_token": int(q.size), "c": c, "leaf": leaf, "a_noise": A_NOISE,
            "target": src[4] if src[0] == "hf" else None, "rot": src[6] if src[0] == "hf" else None,
            "sigma_q": float(q.astype(np.float64).std()), "overflow1": nat.overflow_profile(q, 1)["strassen"][0],
            "saturated": float((np.abs(q) == 127).mean())}
@@ -495,6 +505,7 @@ def work_chunked(name, src, q, c, alus, ranks, opts, t0) -> dict:
     leaf = 1 + 32 * chunks / K
     orders = opts.get("orders", ("none",))
     rec = {"tensor": name, "shape": [n, K], "macs_per_token": int(q.size), "c": c, "leaf": leaf, "chunked": True,
+           "a_noise": A_NOISE,
            "chunks": chunks, "K_chunk": kc, "target": src[4] if src[0] == "hf" else None,
            "rot": src[6] if src[0] == "hf" else None, "sigma_q": float(q.astype(np.float64).std()),
            "overflow1": nat.overflow_profile(q, 1)["strassen"][0], "per_chunk": []}
@@ -623,6 +634,7 @@ def main(argv=None) -> int:
     ap.add_argument("--rot", default="hadamard", choices=("hadamard", "hadamard2", "haar", "both"),
                     help="with --hf, the rotation (module docstring)")
     ap.add_argument("--live-noise", type=int, default=0, help="price live weight noise uniform on [-f, f]")
+    ap.add_argument("--a-noise", type=int, default=A_NOISE, help="the values E takes (design U's 4)")
     ap.add_argument("--kcap", type=int, default=0, help="K in chunks of at most this, each committed (0 = served K)")
     ap.add_argument("--orders", default="none", help="comma-separated orders of n and K (`price.permute`)")
     ap.add_argument("--fast", action="store_true", help="exact routes only (none, isvd, tiles)")
@@ -639,6 +651,7 @@ def main(argv=None) -> int:
         (args.out / "summary.json").write_text(json.dumps(summarize(args.out / "matrices.jsonl"), indent=1))
         return 0
     alus = price.parse_alus(args.alus)
+    set_a_noise(args.a_noise)
     for chip in CHIPS:
         ours, theirs = nat.check_counts(chip, "fast", 2, A_NOISE)
         assert abs(ours - theirs) < 1e-6 * theirs, (chip, ours, theirs)
@@ -648,7 +661,8 @@ def main(argv=None) -> int:
         j for t in targets for j in hf_jobs(args.hf, t, layers, args.deflate, args.rot)]
     ranks = [int(x) for x in args.ranks.split(",")] if args.ranks else None
     opts = {"fast": args.fast, "orders": tuple(args.orders.split(",")), "kcap": args.kcap,
-            "live_noise": args.live_noise, "nosplit": args.no_split, "isvd": not args.no_isvd, "rpca": not args.no_rpca}
+            "live_noise": args.live_noise, "nosplit": args.no_split, "isvd": not args.no_isvd, "rpca": not args.no_rpca,
+            "a_noise": args.a_noise}
     if args.match:
         jobs = [j for j in jobs if keep(j[0], None, args.match.split(","))]
     jobs.sort(key=lambda j: (-math.prod(load_shape(j[1])), j[0]))
@@ -658,7 +672,7 @@ def main(argv=None) -> int:
     fhs = {t: open(d / "matrices.jsonl", "w") for t, d in outs.items()}
     ok = True
     print(f"{len(jobs)} jobs, {args.workers} workers, OMP {os.environ.get('OMP_NUM_THREADS')}, {opts}", flush=True)
-    with concurrent.futures.ProcessPoolExecutor(args.workers) as ex:
+    with concurrent.futures.ProcessPoolExecutor(args.workers, initializer=set_a_noise, initargs=(args.a_noise,)) as ex:
         futs = [ex.submit(work, (name, src, alus, ranks, opts)) for name, src in jobs]
         for fut in concurrent.futures.as_completed(futs):
             rec = fut.result()
