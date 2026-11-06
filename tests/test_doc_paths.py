@@ -77,6 +77,23 @@ NOT_PATHS = {
 WAITING = {
     ("Security/Definitions/NetworkCertifier/Schedule.lean", "verity/protocols/accounting/communication/certifier/schedule.py"):
         "the `remote` demo branch rewrites this docstring",
+    ("Security/Definitions/Accounting/Guarantees/Headline.lean", "fixtures/fold_bulk_loops.json"): "both demo branches edit the file",
+    ("Security/Definitions/Accounting/Guarantees/Headline.lean", "fold_bulk.cu"): "both demo branches edit the file",
+    ("Security/Definitions/Accounting/Sheets/B200.lean", "census/DS-100.csv"): "both demo branches edit the file",
+    ("Security/Definitions/Accounting/Sheets/H200.lean", "census/DS-90.csv"): "both demo branches edit the file",
+    ("Security/Definitions/Core/TC/Pipeline.lean", "relation.py"): "both demo branches edit the file",
+    ("Security/Definitions/Core/TC/Relation.lean", "relation.py"): "both demo branches edit the file",
+    ("Security/Definitions/Pouw.lean", "verity/protocols/accounting/work/pouw/lean/scripts/fp8atom_vectors.py"):
+        "both demo branches edit the file",
+    ("Security/Definitions/Pouw.lean", "verity/protocols/accounting/work/pouw/lean/scripts/h1t_vectors.py"):
+        "both demo branches edit the file",
+    ("Security/Definitions/Pouw/DitherInstance.lean", "benchmarks/pouw/theory/d5_v2.py"): "both demo branches edit the file",
+    ("Security/Definitions/Pouw/PearlC/RowCircuit.lean", "tests/test_circuit_row_lean.py"): "both demo branches edit the file",
+    ("Security/Definitions/Pouw/PearlC/Tile4Circuit.lean", "tests/test_circuit_tile_lean.py"): "both demo branches edit the file",
+    ("Security/Definitions/Pouw/PearlC/TileCircuit.lean", "tests/test_circuit_tile_lean.py"): "both demo branches edit the file",
+    ("Security/Definitions/Pouw/PearlC/WholeCircuit.lean", "tests/test_circuit_whole_lean.py"): "both demo branches edit the file",
+    ("Security/Proofs/Pouw/Period/Accept.lean", "benchmarks/all_protocols/legs/pouw.py"): "both demo branches edit the file",
+    ("Security/Proofs/Pouw/TileBound/WinogradStrassen.lean", "winograd_strassen_check.py"): "both demo branches edit the file",
 }
 
 _TOKEN = re.compile(r"`([^`\s]+)`|\]\(([^)\s]+)\)")
