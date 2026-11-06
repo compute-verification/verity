@@ -9,10 +9,7 @@ state_bits_per_param = { value = 16, low = 2.5, high = 96, source = "the state a
 b = { value = 2.5, low = 0.8, high = 4.5, source = "UpdateHardness at Kimi K2 (FanOutIntensity docstring); range: b_w.pretrained/frontier-lossy", status = "conjecture" }
 b_w = { value = 2.5, low = 0.8, high = 4.5, source = "benchmarks/nci/parameters.json b_w.pretrained/frontier-lossy", status = "measured" }
 b_a = { value = 4, low = 1, high = 16, source = "benchmarks/nci/parameters.json b_a.activation", status = "assumed" }
-f = { value = 4, low = 1, high = 8, source = "FanOutReadIntensity docstring (Kimi K2 at f = 4)", status = "conjecture" }
-width = { value = 390, low = 48, high = 512, source = "PartialSumCoverBound docstring (a = 390)", status = "derived" }
 per_param = { value = 2, low = 1, high = 2, source = "Dgrad on the forward's tokens (FanOutIntensity docstring)", status = "derived" }
-bcol = { value = 1, low = 1, high = 2.5, source = "ColumnsIncompressible at Kimi K2 (FanOutIntensity docstring)", status = "conjecture" }
 beta_x = { value = 0.87, low = 0.39, high = 0.94, source = "measured: replay-consistent, exact block on Qwen2.5-1.5B; the best coder's rate, so an upper bound on what the premise may assume, carried to other models at fixed F/d", status = "assumed" }
 thread_d = { value = 10, source = "benchmarks/nci/rows.json pretrain-full", status = "derived" }
 thread_c = { value = 2, source = "benchmarks/nci/rows.json pretrain-full", status = "derived" }
@@ -35,17 +32,8 @@ grad_bits = { value = 16, low = 8, high = 32, unit = "bit", source = "a bf16 gra
 [family.full.efficiency]
 pretrain = { value = 1.0, source = "the reference algorithm", status = "declared" }
 
-# Number formats: precision.<name> sets beta_x, caps b_a and f at its bits, and multiplies the family's efficiency.
-
-[precision.fp8]
-beta_x = { value = 0.87, low = 0.39, high = 0.94, source = "measured: replay-consistent exact blocks on Qwen2.5-1.5B GRPO, 0.39-0.87; high: the cheapest boundary's 0.87-0.94; coders' rates, so upper bounds on what the premise may assume", status = "assumed" }
-bits = { value = 8, unit = "bit", source = "E4M3: 8 bits an entry", status = "datasheet" }
-
-[precision.fp8.efficiency]
-pretrain = { value = 1.0, low = 1.0, high = 1.053, source = "benchmarks/nci/parameters.json train.compute_multiplier/w8a8 (0.95, 1, 1), inverted", status = "measured" }
-sft = { value = 1.0, low = 1.0, high = 1.053, source = "train.compute_multiplier/w8a8 (pretraining at 7B-175B), taken for SFT", status = "assumed" }
-rl-elicit = { value = 1.67, low = 1.0, high = 1.67, source = "A1, measured: FP8 weights and activations train GRPO at about 60% of bf16's gain in 100 steps, inverted; low: w8a8's parity in pretraining", status = "measured" }
-rl-agentic = { value = 1.67, low = 1.0, high = 1.67, source = "as rl-elicit (A1's GRPO), untested on agentic RL", status = "conjecture" }
+# Number formats: precision.<name> sets beta_x, caps b_a and tile_weight_bits at its bits, and multiplies the family's
+# efficiency.
 
 [precision.nvfp4]
 beta_x = { value = 0.26, low = 0.195, high = 0.26, source = "measured: at most 0.26 at NVFP4; low: the cheapest boundary's 0.195; a coder's rate, so an upper bound on what the premise may assume", status = "assumed" }
@@ -53,8 +41,8 @@ bits = { value = 4.5, unit = "bit", source = "NVFP4: a 4-bit entry and an 8-bit 
 
 [precision.nvfp4.efficiency]
 pretrain = { value = 1.33, low = 1.11, high = 1.82, source = "benchmarks/nci/parameters.json train.compute_multiplier/w4a4 (0.55, 0.75, 0.9), inverted", status = "measured" }
-sft = { value = 1.0, low = 1.0, high = 1.75, source = "A1's follow-up, measured: NVFP4 SFT matches bf16 on the 88-bit and 2.4-kbit keys at about 1.75x and 1.0x its FLOPs", status = "measured" }
-rl-elicit = { value = 1.75, low = 1.0, high = 3.0, source = "no NVFP4 RL run: between FP8 GRPO's 1/0.6 (A1) and NVFP4 SFT's 1.75 (A1 follow-up); high assumed", status = "conjecture" }
+sft = { value = 1.0, low = 1.0, high = 1.75, source = "measured: NVFP4 SFT matches bf16 on the 88-bit and 2.4-kbit keys at about 1.75x and 1.0x its FLOPs", status = "measured" }
+rl-elicit = { value = 1.75, low = 1.0, high = 3.0, source = "no NVFP4 RL run: between FP8 GRPO's measured 1/0.6 (FP8 weights and activations reach about 60% of bf16's gain in 100 steps) and NVFP4 SFT's 1.75 (sft's high); high assumed", status = "conjecture" }
 rl-agentic = { value = 1.75, low = 1.0, high = 3.0, source = "as rl-elicit", status = "conjecture" }
 
 # The `benchmarks/nci` library's attacker convention, for families of kind nci and nci:<id>; the carried state as family.full's.
@@ -70,7 +58,7 @@ kind = "full"
 premises = "full"
 precision = "nvfp4"
 kappa = { value = 0.602, source = "as family.full", status = "derived" }
-state_bits_per_param = { value = 4.5, low = 4.5, high = 16, source = "A1's follow-up, measured: weights stored only in NVFP4, and sign descent with no optimizer state learns the 88-bit key; high: family.full's FP8 weights and moment", status = "measured" }
+state_bits_per_param = { value = 4.5, low = 4.5, high = 16, source = "measured: weights stored only in NVFP4, and sign descent with no optimizer state learns the 88-bit key; high: family.full's FP8 weights and moment", status = "measured" }
 
 [family.full-nvfp4.efficiency]
 pretrain = { value = 1.0, source = "the reference algorithm, in NVFP4 (precision.nvfp4 prices the format)", status = "declared" }
@@ -125,7 +113,7 @@ bits = { value = 16, unit = "bit", source = "a bf16 adapter (benchmarks/nci/rows
 overhead = { value = 1.7, source = "benchmarks/nci/kappa.py: what isn't a weight matmul at 32k rollouts (1.11 at 4k)", status = "derived" }
 
 [family.lora-r16.efficiency]
-rl-elicit = { value = 1.0, low = 1.0, high = 1.11, source = "benchmarks/nci/parameters.json rl.small_state_retention/math-rlvr: rank-1 LoRA matches full RL at 8B (schulman-2025-lora-without-regret); A2, measured: 10 kB keeps 0.95 of full RL's gain at 1.5B, 1.08 at 7B", status = "measured" }
+rl-elicit = { value = 1.0, low = 1.0, high = 1.11, source = "benchmarks/nci/parameters.json rl.small_state_retention/math-rlvr: rank-1 LoRA matches full RL at 8B (schulman-2025-lora-without-regret); measured: a 10 kB adapter keeps 0.95 of full RL's gain at 1.5B, 1.08 at 7B", status = "measured" }
 rl-agentic = { value = 1.3, low = 1.0, high = 10, source = "benchmarks/nci/parameters.json rl.small_state_retention/agentic-frontier: Yin's retention 0.77 at rank 16, inverted; high: the retention's low 0.1", status = "conjecture" }
 sft = { value = 1.5, low = 1.0, high = 4.0, source = "schulman-2025-lora-without-regret (benchmarks/nci/rows.json): LoRA matches full fine-tuning until the data exceeds its capacity; b_w.delta/sft: SFT deltas lack RL's low-rank structure", status = "conjecture" }
 
@@ -181,13 +169,13 @@ kind = "adapter"
 premises = "full"
 form = "tied"
 rank = { value = 2, source = "as family.tinylora", status = "assumed" }
-params = { value = 13, unit = "param", source = "A2's tiny13: 13 values", status = "measured" }
-bits = { value = 16, unit = "bit", source = "A2's tiny13: bf16 values", status = "measured" }
-seed_bits = { value = 64, unit = "bit", source = "A2's tiny13 is 272 bits: 13 x 16 and a 64-bit projection seed", status = "derived" }
+params = { value = 13, unit = "param", source = "the measured tiny13 adapter: 13 values", status = "measured" }
+bits = { value = 16, unit = "bit", source = "tiny13: bf16 values", status = "measured" }
+seed_bits = { value = 64, unit = "bit", source = "tiny13 is 272 bits: 13 x 16 and a 64-bit projection seed", status = "derived" }
 overhead = { value = 1.7, source = "benchmarks/nci/kappa.py: what isn't a weight matmul at 32k rollouts (1.11 at 4k)", status = "derived" }
 
 [family.tinylora-13.efficiency]
-rl-elicit = { value = 2.2, low = 1.32, high = 6.7, source = "A2, measured: tiny13 reaches 0.45 [0.15, 0.76] of full RL's T = 1 gain on Qwen2.5-7B base, inverted", status = "measured" }
+rl-elicit = { value = 2.2, low = 1.32, high = 6.7, source = "measured: tiny13 reaches 0.45 [0.15, 0.76] of full RL's T = 1 gain on Qwen2.5-7B base, inverted", status = "measured" }
 
 # Seeded updates: the state is the description (steps x population scalars).
 
@@ -200,7 +188,7 @@ population = { value = 30, source = "benchmarks/nci/algorithms.json es-30", stat
 
 [family.es.efficiency]
 pretrain = { value = 2780, low = 2780, high = 7.1e7, source = "benchmarks/nci/algorithms.json es-30 multiplier 0.00036 (dahal-2026-dust: FLOPs to equal loss against backprop at 37.7M), inverted; high: its shrinks-with-scale extrapolation, 1.4e-8 at 1e12 parameters", status = "measured" }
-rl-elicit = { value = 1.0, low = 0.5, high = 50, source = "Qiu et al. 2025 (arXiv 2509.24372): ES at population 30 matches or beats GRPO on Countdown at 0.5-8B; high: R1, measured: ES fails a new 88-bit skill at over 50-230x backprop's FLOPs", status = "conjecture" }
+rl-elicit = { value = 1.0, low = 0.5, high = 50, source = "Qiu et al. 2025 (arXiv 2509.24372): ES at population 30 matches or beats GRPO on Countdown at 0.5-8B; high: measured, ES fails a new 88-bit skill at over 50-230x backprop's FLOPs", status = "conjecture" }
 
 [family.mezo]
 kind = "seed"
