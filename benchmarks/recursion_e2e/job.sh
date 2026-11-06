@@ -18,12 +18,22 @@
 #      FORGE= (85's forgeries, staged by vstage and proved by oprove, comma separated: message,sum,comb,top,top-salt,coef,dirs;
 #      empty: none)  forge-after: coef, dirs and message made on the honest L0 and alg-p0 releases after proving
 #      (forge_after.py), each put to Lean beside its honest control
+#      REC_LINKS=0 (85's; 1: the inner population wired, a chain of its N units, and V*'s link table part and its forged-row
+#      forgery staged, proved and composed with the table's --rec-links)
 #      TAG=rb-<run id> (85's data/$TAG, removed at the end unless KEEP_DATA=1; a later job's STEPS=oprove,... takes it with
 #      TAG=... KEEP_DATA=1)  FLOCK_WORK=/workspace/jobs/rec-bench
+#      TREE_FROM= (the inner sessions' coin trees: the challenger's device, HOST:PORT, with TREE_SECRET_FILE; local: the
+#      challenger started beside the inner step, its release log audited against the session (85's); empty: this host's
+#      OS, rec_live --tree-test-os, a test's coins)
+#      RELEASE=0 (1: the recursive session through the ZK server's release side, 85's RELEASE: the inner session opens it,
+#      oprove proves its parts in order through the Lean session loop and holds each to its release window; one inner
+#      session, so WARM=0 RUNS=1, and each CPU step once, REPEAT=1, unless set)  RELEASE_WINDOWS_S= RELEASE_BUDGET= (85's)
 #      and any of 85's own (LEVELS, GPU, PCPUS, GPU_PREEMPTIBLE, ...), passed through
 #      CUDA_TK, WARM_FROM: as 85 takes them (default: the rec-reprice unpack and cargo tree where present, read only)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
+# RELEASE=1: one inner session opens the one recursive session, and every step inside its first window runs once
+[ "${RELEASE:-0}" = 1 ] && export WARM=${WARM:-0} RUNS=${RUNS:-1} REPEAT=${REPEAT:-1}
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:-/tmp/rec-bench-$$}/out}; mkdir -p "$O"
 # settings.py: an unknown REPEAT_* or OPROVE_*, or a value that doesn't parse, is refused; the value settings given are recorded
 SETTINGS=$(python3 benchmarks/recursion_e2e/settings.py record "$O/settings.json") || exit 2
@@ -56,8 +66,9 @@ LSHA=$(cd verity/core/service/flock && find . -name .lake -prune -o -type f -pri
 { echo "commit=${RESEARCH_SOURCE_SHA:-$(git rev-parse HEAD 2>/dev/null)} K=$K N=$N TAG=$TAG WARM=$WARM RUNS=$RUNS REPEAT=$REPEAT settings=$SETTINGS"
   echo "OPROVE_WARM=${OPROVE_WARM:-0} OPROVE_RUNS=${OPROVE_RUNS:-1} GPU_MAX_MIN=$GPU_MAX_MIN GPU=${GPU:-1} OPROVE_GPU=$OPROVE_GPU OPROVE_JOBS=$OPROVE_JOBS" \
     $(for v in $(compgen -v REPEAT_); do echo "$v=${!v}"; done)
-  echo "steps=$STEPS modes=$MODES lean_jobs=${LEAN_JOBS:-4} lean_sources=$LSHA neg=${NEG// /+} forge=${FORGE//,/+}"
-  echo "cuda_tk=${CUDA_TK:-} warm_from=${WARM_FROM:-}"; nproc; nvidia-smi -L 2>/dev/null; } > "$O/params.txt"
+  echo "steps=$STEPS modes=$MODES lean_jobs=${LEAN_JOBS:-4} lean_sources=$LSHA neg=${NEG// /+} forge=${FORGE//,/+} rec_links=${REC_LINKS:-0}"
+  echo "cuda_tk=${CUDA_TK:-} warm_from=${WARM_FROM:-} tree_from=${TREE_FROM:-test-os} release=${RELEASE:-0}" \
+    "release_windows_s=${RELEASE_WINDOWS_S:-} release_budget=${RELEASE_BUDGET:-}"; nproc; nvidia-smi -L 2>/dev/null; } > "$O/params.txt"
 
 # timed NAME I CMD...: CMD under $O/steps/NAME/r<I> (its RESEARCH_RUN_DIR) and /usr/bin/time -v; its exit status
 timed() {
@@ -93,7 +104,8 @@ rc=0
 for s in ${STEPS//,/ }; do
   case $s in
     build) step build 1 || { log "build failed: nothing later can run"; rc=1; break; } ;;
-    inner) step inner 1 CHECKS=0 INNER_LOOPBACK=1 || rc=1 ;;
+    # RELEASE=1: the inner step is the session's own (no loopback baselines inside its first window)
+    inner) step inner 1 CHECKS=0 INNER_LOOPBACK=$([ "${RELEASE:-0}" = 1 ] && echo 0 || echo 1) || rc=1 ;;
     oprove)
       M=$MODES
       if [ "$OPROVE_GPU" = 0 ] && [ "${GPU:-1}" != 0 ]; then
@@ -107,9 +119,9 @@ for s in ${STEPS//,/ }; do
       fw=$L/lean-$LSHA/flock-firewall; [[ ,$M, != *,firewall,* ]] || [ ! -x $fw ] || sha256sum $fw >> "$O/params.txt" ;;
     icheck|vcap|oreplay) for i in $(reps $s); do step $s $i || { rc=1; break; }; done ;;
     vstage) for i in $(reps vstage); do step vstage $i "FORGE=${FORGE//,/ }" || { rc=1; break; }; done ;;
-    lean) for i in $(reps lean); do step lean $i INNER_LEAN=1 JOBS=${LEAN_JOBS:-4} NEG_INNER= || rc=1; done ;;
+    lean) for i in $(reps lean); do step lean $i JOBS=${LEAN_JOBS:-4} NEG_INNER= || rc=1; done ;;
     # the lean step once more with rep 0's coins flipped (85's NEG_INNER): Lean must refuse each flipped coin
-    negative) [ -z "$NEG" ] || step negative 1 STEP=lean INNER_LEAN=0 JOBS=${LEAN_JOBS:-4} "NEG_INNER=$NEG" || rc=1 ;;
+    negative) [ -z "$NEG" ] || step negative 1 STEP=lean JOBS=${LEAN_JOBS:-4} "NEG_INNER=$NEG" || rc=1 ;;
     # the forgeries the ZK server stops before release, made on the honest releases after proving and put to Lean with the
     # lean step's own flags (forge_after.py; out/forge-after.json)
     forge-after)
