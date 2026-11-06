@@ -41,12 +41,44 @@ class Run:
             self.whole = [json.loads(line) for line in (d / "whole.jsonl").read_text().splitlines()]
 
 
+#: each op of decoder layer N and the outputs it reads (`@` names resolved per layer by `_inputs`); MLA attention reads
+#: its own query and the keys of every position up to its own (``@kv_prefix``)
+READS = {
+    "input_layernorm:0": ["@prev_mlp", "@prev_residual"],
+    "self_attn.q_proj": ["@ln_in"],
+    "self_attn.kv_a_proj_with_mqa": ["@ln_in"],
+    "self_attn.kv_a_layernorm": ["self_attn.kv_a_proj_with_mqa"],
+    "self_attn.mla_attn.mla_attn": ["self_attn.q_proj", "self_attn.rotary_emb:0", "@kv_prefix"],
+    "self_attn.o_proj": ["self_attn.mla_attn.mla_attn"],
+    "post_attention_layernorm:0": ["self_attn.o_proj", "@res_in"],
+    "mlp.gate_up_proj": ["post_attention_layernorm:0"],
+    "mlp.act_fn": ["mlp.gate_up_proj"],
+    "mlp.down_proj": ["mlp.act_fn"],
+    "mlp.gate": ["post_attention_layernorm:0"],
+    "mlp.shared_experts.gate_up_proj": ["post_attention_layernorm:0"],
+    "mlp.shared_experts.act_fn": ["mlp.shared_experts.gate_up_proj"],
+    "mlp.shared_experts.down_proj": ["mlp.shared_experts.act_fn"],
+    "mlp.experts.router.select_experts.ids": ["mlp.gate"],
+    "mlp.experts.router.select_experts.weights": ["mlp.gate"],
+    "mlp.experts": ["post_attention_layernorm:0", "mlp.experts.router.select_experts.ids",
+                    "mlp.experts.router.select_experts.weights", "mlp.shared_experts.down_proj"],
+}
+KV = ("self_attn.kv_a_proj_with_mqa", "self_attn.kv_a_layernorm", "self_attn.rotary_emb:1")
+
+
+def canonical(label: str) -> str:
+    """A module every layer shares (the rotary embedding) is registered under layer 0's name and labelled by its
+    occurrence in the step (``#k``); its k-th occurrence is layer k's."""
+    m = re.fullmatch(r"(model\.layers\.)0(\..*)#(\d+)", label)
+    return f"{m.group(1)}{m.group(3)}{m.group(2)}" if m else label
+
+
 def op_of(label: str) -> str:
-    return re.sub(r"layers\.\d+\.", "layers.N.", label)
+    return re.sub(r"layers\.\d+\.", "layers.N.", canonical(label))
 
 
 def layer_of(label: str) -> int | None:
-    m = re.search(r"layers\.(\d+)\.", label)
+    m = re.search(r"layers\.(\d+)\.", canonical(label))
     return int(m.group(1)) if m else None
 
 
@@ -122,6 +154,68 @@ def values(a: Run, b: Run) -> dict[str, Any]:
     return out
 
 
+def _chunks(run: Run, keys: np.ndarray) -> np.ndarray:
+    """[rows, 3]: the first position and length of each row's chunk of its request in its step, and the step's tokens."""
+    at = {(s["step"], int(rid[1:])): (start, n, s["T"]) for s in run.steps for rid, start, n in s["rows"]}
+    return np.array([at[(int(st), int(rq))] for st, rq in keys[:, :2]], dtype=np.int64).reshape(-1, 3)
+
+
+def _prefix_all(ok: np.ndarray, req: np.ndarray, pos: np.ndarray) -> np.ndarray:
+    """ok at every position of the row's request up to and including its own."""
+    order = np.lexsort((pos, req))
+    bad = (~ok[order]).astype(np.int64)
+    first = np.r_[True, req[order][1:] != req[order][:-1]]
+    c = np.cumsum(bad)
+    group = np.cumsum(first) - 1
+    before = (c - bad)[first][group]
+    out = np.empty(len(ok), dtype=bool)
+    out[order] = (c - before) == 0
+    return out
+
+
+def _reads(n: int, op: str) -> list[str] | None:
+    """The labels op of layer n reads, or None for the KV prefix (`READS`)."""
+    out = []
+    for name in READS[op]:
+        if name == "@kv_prefix":
+            continue
+        out += {"@ln_in": [f"model.layers.{n}.input_layernorm" + (":0" if n else "")],
+                "@res_in": ["model.embed_tokens" if n == 0 else f"model.layers.{n}.input_layernorm:1"],
+                "@prev_mlp": [f"model.layers.{n - 1}.mlp"],
+                "@prev_residual": [f"model.layers.{n - 1}.post_attention_layernorm:1"]}.get(name, [f"model.layers.{n}.{name}"])
+    return out
+
+
+def op_variance(eq: np.ndarray, valid: np.ndarray, common: list[str], req: np.ndarray, pos: np.ndarray,
+                decode: np.ndarray) -> dict[str, Any]:
+    """Each op's output against its inputs: over the rows where everything the op reads is bit-identical alone and in the
+    batch, how many rows of its output differ (by op over every layer, prefill and decode apart)."""
+    col = {canonical(lab): j for j, lab in enumerate(common)}
+    same = eq | ~valid
+    layers = sorted({n for lab in col if (n := layer_of(lab)) is not None})
+    table: dict[str, dict[str, int]] = {}
+    for n in layers:
+        kv = [col.get(f"model.layers.{n}.{k}") for k in KV]
+        kv_prefix = _prefix_all(np.all([eq[:, j] & valid[:, j] for j in kv if j is not None], axis=0), req, pos) if all(
+            j is not None for j in kv) else None
+        for op in READS:
+            if op == "input_layernorm:0" and n == 0:
+                continue
+            j = col.get(f"model.layers.{n}.{op}")
+            reads = _reads(n, op)
+            if j is None or any(r not in col for r in reads) or ("@kv_prefix" in READS[op] and kv_prefix is None):
+                continue
+            ok = valid[:, j] & np.all([eq[:, col[r]] & valid[:, col[r]] for r in reads], axis=0)
+            if "@kv_prefix" in READS[op]:
+                ok &= kv_prefix
+            t = table.setdefault(f"model.layers.N.{op}", {"inputs_equal_prefill": 0, "differs_prefill": 0,
+                                                          "inputs_equal_decode": 0, "differs_decode": 0})
+            for kind, sel in (("prefill", ~decode), ("decode", decode)):
+                t[f"inputs_equal_{kind}"] += int((ok & sel).sum())
+                t[f"differs_{kind}"] += int((ok & sel & ~same[:, j]).sum())
+    return table
+
+
 def _index(keys: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     k = keys[:, 1] * (1 << POS_BITS) + keys[:, 2]
     uniq, first = np.unique(k, return_index=True)
@@ -164,9 +258,25 @@ def alone(batch: Run, solo: Run, workload: dict[str, Any]) -> dict[str, Any]:
             f = _first_labels(diff[sel], common)
             out[f"first_op_counts_{kind}"] = dict(Counter(op_of(lab) for lab in f).most_common(6))
         out["labels_differing_share"] = float(diff[hit].mean())
-        if "model" in common:
-            j = common.index("model")
-            out["final_hidden_differing"] = int(diff[:, j].sum())
+    valid = (A != ABSENT) & (B != ABSENT)
+    eq = A == B
+    canon = [canonical(lab) for lab in common]
+    final = canon.index("model.norm:0") if "model.norm:0" in canon else None
+    if final is not None:
+        out["final_hidden_differing"] = int(diff[:, final].sum())
+    ids = [j for j, lab in enumerate(canon) if lab.endswith("router.select_experts.ids")]
+    if ids:
+        flips = ~eq[:, ids] & valid[:, ids]
+        out["router"] = {"moe_layers": len(ids), "rows_with_an_expert_change": int(flips.any(axis=1).sum()),
+                         "row_layers_changed": int(flips.sum()), "row_layers": int(valid[:, ids].sum())}
+    cb_, ca_ = _chunks(batch, batch.keys[rb]), _chunks(solo, solo.keys[ra])
+    same_chunk = (cb_[:, 0] == ca_[:, 0]) & (cb_[:, 1] == ca_[:, 1])
+    pre = ~decode
+    out["prefill_by_chunk"] = {
+        kind: {"rows": int((pre & sel).sum()), "bit_identical": int((pre & sel & ~hit).sum()),
+               "first_op_counts": dict(Counter(op_of(lab) for lab in _first_labels(diff[pre & sel], common)).most_common(4))}
+        for kind, sel in (("same_chunk", same_chunk), ("other_chunk", ~same_chunk))}
+    out["op_variance"] = op_variance(eq, valid, common, req, pos, decode)
     lb, flb = _index(batch.logit_keys)
     la, fla = _index(solo.logit_keys)
     _, yb, ya = np.intersect1d(lb, la, return_indices=True)
@@ -175,10 +285,18 @@ def alone(batch: Run, solo: Run, workload: dict[str, Any]) -> dict[str, Any]:
     ok = lp < limit[lr]
     gb, ga = gb[ok], ga[ok]
     delta = np.abs(batch.logit_top[gb, 0] - solo.logit_top[ga, 0])
-    out["logits"] = {"rows_compared": int(len(gb)), "bit_identical": int((batch.logit_digest[gb] == solo.logit_digest[ga]).sum()),
+    same_logits = batch.logit_digest[gb] == solo.logit_digest[ga]
+    out["logits"] = {"rows_compared": int(len(gb)), "bit_identical": int(same_logits.sum()),
                      "argmax_equal": int((batch.logit_topi[gb, 0] == solo.logit_topi[ga, 0]).sum()),
                      "top1_abs_delta": {"max": float(delta.max()) if len(delta) else 0.0,
                                         "median": float(np.median(delta)) if len(delta) else 0.0}}
+    if final is not None and len(gb):
+        rows_k = req * (1 << POS_BITS) + pos
+        at = dict(zip(rows_k.tolist(), range(len(rows_k))))
+        idx = np.array([at.get(int(k), -1) for k in batch.logit_keys[gb, 1] * (1 << POS_BITS) + batch.logit_keys[gb, 2]])
+        hidden_same = (idx >= 0) & np.where(idx >= 0, eq[np.maximum(idx, 0), final] & valid[np.maximum(idx, 0), final], False)
+        out["logits"]["final_hidden_equal"] = int(hidden_same.sum())
+        out["logits"]["differs_where_final_hidden_equal"] = int((hidden_same & ~same_logits).sum())
     greedy = {i for i, r in reqs.items() if r["temperature"] == 0}
     out["tokens"] = {"requests": len(reqs), "identical": sum(d is None for d in div.values()),
                      "identical_greedy": sum(div[i] is None for i in greedy), "greedy": len(greedy),
@@ -212,7 +330,28 @@ def render(res: dict[str, Any]) -> str:
         if "first_op_counts" in a:
             lines.append(f"- first differing op: {json.dumps(a['first_op_counts'])}")
             lines.append(f"- first differing layer: {json.dumps(a['first_layer_counts'])}")
-    lines += ["", f"- GPU-seconds: {res['gpu_seconds']['total_s']} ({json.dumps(res['gpu_seconds']['per_phase'])})"]
+        for kind, c in a.get("prefill_by_chunk", {}).items():
+            lines.append(f"- prefill rows, {kind.replace('_', ' ')} alone and in batch: {c['bit_identical']}/{c['rows']} bit-identical; "
+                         f"first differing op {json.dumps(c['first_op_counts'])}")
+        if "router" in a:
+            r = a["router"]
+            lines.append(f"- router: {r['rows_with_an_expert_change']}/{a['rows_compared']} rows choose another expert in some layer "
+                         f"({r['row_layers_changed']}/{r['row_layers']} row-layers)")
+        if "logits" in a:
+            g = a["logits"]
+            lines.append(f"- logits rows: {g['bit_identical']}/{g['rows_compared']} bit-identical, argmax equal {g['argmax_equal']}, "
+                         f"top-1 |delta| max {g['top1_abs_delta']['max']} median {g['top1_abs_delta']['median']}"
+                         + (f"; {g['differs_where_final_hidden_equal']} differ where the final hidden row is equal "
+                            f"({g['final_hidden_equal']} such rows)" if "final_hidden_equal" in g else ""))
+        if a.get("op_variance"):
+            lines += ["", "Each op where everything it reads is bit-identical alone and in the batch: rows whose output still differs.",
+                      "", "| op | prefill: inputs equal | output differs | decode: inputs equal | output differs |", "| --- | --- | --- | --- | --- |"]
+            for op, t in a["op_variance"].items():
+                lines.append(f"| `{op.removeprefix('model.layers.N.')}` | {t['inputs_equal_prefill']} | {t['differs_prefill']} | "
+                             f"{t['inputs_equal_decode']} | {t['differs_decode']} |")
+    g = res["gpu_seconds"]
+    lines += ["", f"- GPU-seconds: {g.get('lease_wall_s', g['total_s'])} on one GPU (the lease's wall time; phases "
+                  f"{json.dumps(g['per_phase'])})"]
     return "\n".join(lines) + "\n"
 
 
@@ -241,6 +380,8 @@ def main(argv: list[str] | None = None) -> None:
         runs.append(solo)
         res["alone"] = alone(served, solo, wl) if served.captured and solo.captured else {"tokens": tokens(served, solo)}
     res["gpu_seconds"] = gpu_seconds(runs)
+    if (lease := a.out / "lease.json").exists():
+        res["gpu_seconds"]["lease_wall_s"] = json.loads(lease.read_text())["lease_wall_s"]
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "compare.json").write_text(json.dumps(res, indent=1))
     (a.out / "compare.md").write_text(render(res))
