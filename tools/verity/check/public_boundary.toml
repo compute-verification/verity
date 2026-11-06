@@ -31,6 +31,7 @@ ml = ["verity/ml/{circuits,definitions,commitments,crypto,randomness,windows,ker
 # PoUW: the integrity profile, the protocol, and its part of the security analysis (the accounting it reads is `needed`)
 pouw = [
     "verity/core/protocols/{profile.py,pouw}",
+    "verity/ml/protocols/pouw",
     "Security/*/Pouw{,.lean}",
     "Security/Proofs/Properties/Pouw{,.lean}",
 ]
@@ -68,6 +69,7 @@ benchmarks = [
 [private]
 protocols = [
     "verity/core/protocols/{pous,bandwidth,remote_bandwidth,certifier,network}",
+    "verity/ml/protocols/{pous,certifier}",
     "Security/*/{Nci,NciDesc}{,.lean}",
     "Security/Proofs/Properties/Nci{,.lean}",
     "verity/core/primitives/identity",
