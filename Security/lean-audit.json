@@ -4889,18 +4889,9 @@
    "type_hash": "977691a65aeb1cef599392e0fb308271d5502f07cbe550f93624f75e7e1ddc6a",
    "unfolded_hash": "4ac15a5114cba7328b3c433614b9b77a1d550ae1fabfa1accef111a5aca2ae47"
   },
-  "Nci.SecurityProofs.DampenerRemotePeriod": {
-   "type_hash": "f2167e10c1f3bdadfee41a7346dd05b7cbb25383842da21f1accda19d252e145",
-   "unfolded_hash": "6a2103e94716691461fc4f665fd81f18963934d142dade51e2f7af0f6c1ca44c"
-  },
-  "Nci.SecurityProofs.DampenerRemotePeriod_honest": {
-   "type_hash": "758484026aef0f1c121e7249b351b8116d2c0fbc16b87918a12b4b151206b701",
-   "unfolded_hash": "7266d527e6a30d36d3f5202d38346156817f17e4f2ce43a5bd2de88a4e76cd5d"
-  },
-  "Nci.SecurityProofs.DampenerRemotePeriod_nontrivial": {
-   "type_hash": "37a9dd20dbd9846c0fa2704730c0843e97677106f446caa801d2970bb88b856c",
-   "unfolded_hash": "d99293a892bf6f38e69e8be76dd7ae3466cf9394c1ecb51e5469525035b06566"
-  },
+  "Nci.SecurityProofs.DampenerRemotePeriod": "f2167e10c1f3bdadfee41a7346dd05b7cbb25383842da21f1accda19d252e145",
+  "Nci.SecurityProofs.DampenerRemotePeriod_honest": "758484026aef0f1c121e7249b351b8116d2c0fbc16b87918a12b4b151206b701",
+  "Nci.SecurityProofs.DampenerRemotePeriod_nontrivial": "37a9dd20dbd9846c0fa2704730c0843e97677106f446caa801d2970bb88b856c",
   "Nci.SecurityProofs.FitBound": {
    "type_hash": "51bd3f7e82387c8acf4e636b2b68f2a2a4688846c86ce302c18139bddb9cdcd0",
    "unfolded_hash": "c4beca85935eb4a65f01c5af1ea1b27f84cd9757c51ff969c0d2615762c590d8"
