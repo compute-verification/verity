@@ -77,7 +77,7 @@ and so does a link that ends while `serve.py` still serves, because its tunnel e
 
 ### What it rests on
 
-The challenger's assumptions `CoinsConfidential` and `OneClock`, stated in
+The challenger's premises `CoinsConfidential` (`Pouw.Assumptions.CoinsConfidential`) and `OneClock`, named in
 `verity/core/protocols/sampled_proofs/README.md`.
 Here the challenger and the link are one device, the trusted host: the coins cross only its loopback until the link
 releases them, and the link's ticks read the host's monotonic clock, which the challenger's release log reads too (RP8).

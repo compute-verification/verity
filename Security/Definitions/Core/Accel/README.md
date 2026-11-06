@@ -89,7 +89,7 @@ and firmware.
 - **The card numbers.** Nothing the protocol checks attests a node's SKU and firmware. The H200's L2 row is a
   placeholder, neither measured nor a ceiling, and sm_120's is one read pattern's measurement.
 - **CUDA-core matmul routes.** With every register word an `alu` lane, the four-Russians table method pays at least an
-  `alu` lane a MAC: at most 6.25% of the `s8` tensor rate on sm_120 and 1.6% on the H200 through registers, and 12.5% on
-  the H200 through L2 at its placeholder row. IDP.4A on `imad` does 4 MACs a lane. None of these is a public route, so
-  `SAKMatmul` as written fails at a dual price that leaves their pipes cheap. The proposed algorithmic
-  assumption that would carry them, `SAKResidual`, is not yet adopted.
+  `alu` lane a MAC: at most 6.25% of the `s8` tensor rate on sm_120 and 1.7% on the H200 through registers, and 13.5% on
+  the H200 through L2 at its placeholder row (1.6% and 12.5% with the H200's tensor at 1980 MHz). IDP.4A on `imad` does 4 MACs a lane. None of these is a public route, so
+  `SAKMatmul` as written fails at a dual price that leaves their pipes cheap. The algorithmic premise that would carry
+  them, `SAKResidual`, is not yet adopted.

@@ -20,8 +20,8 @@ algorithm families the adversary may use, and the bounds and attacks applied. Fo
   bound it is `max(1, 1/(s + a x))` (`theorem.multiple_bound`), with the dark share `s` training like the reference and
   the bound's other terms `x`, free compute, at `a = 1` under reference efficiency, so that it is the padded size ratio;
   at `a = 1/MFU₀` (peak) without it, Lean's `Nci.Dampener.remoteDampener` and, for a remote regime,
-  `Nci.Guarantees.DampenerRemote`'s `ρ`. `benchmarks/nci` reads its compute dampener `D` from `multiple_bound`. It
-  comes with its status, where its assumptions stand, the δ that the envelopes fail (`δ_coin + δ_crypto`, plus a
+  `Nci.Guarantees.DampenerRemote`'s `ρ`. `benchmarks/nci` reads its slowdown `D` from `multiple_bound`. It
+  comes with its status, where its named premises stand, the δ that the envelopes fail (`δ_coin + δ_crypto`, plus a
   named `Pr[Break]`), the monitored share (the part of the adversary's counted weight on monitored gates), and the
   time it implies;
 - **the padded size ratio** `|A| / T_0` (`Overhead.padded`): the size of the actual circuit that reaches the target,

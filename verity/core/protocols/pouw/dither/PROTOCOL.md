@@ -66,8 +66,8 @@ The Glossary's terms (`ARCHITECTURE.md`), the shared notation, and these:
 
 The Lean predates these names. Its round is a sampling block, and its word is a proof block's committed value. Its `k`
 and `nsb` are k, and `k_draw` is q. Its `C` is W_reg, `H` is W_b, `H_o` is W_ans and `δ` is δ_coin. Its fleet's unit is
-a replica, and θ is 𝓜. A rename is to follow. Two assumptions have new names, which the Lean is to take: SHA-512's
-assumption is SAK for SHA, `SAKSha` (the Lean's `ShaSpeed`), and the proof service's "the proof system is sound" is
+a replica, and θ is 𝓜. A rename is to follow. Two premises have new names, which the Lean is to take: SHA-512's
+premise is SAK for SHA, `SAKSha` (the Lean's `ShaSpeed`), and the proof system's premise, "the proof system is sound", is
 `ProofSystemSound` (the Lean's `ServiceSound`).
 
 ## What is committed
@@ -391,11 +391,9 @@ k_exfil. Dither needs these of the challenger and the certifier:
     across hosts the developer controls is open (see "Open"). A SHA-512 keystream with HMAC-SHA-512, at
     the measured 0.86 GB/s a core, would take about 27 certifier cores for an H200 V4 replica's 11.6 GB/s and 56 for an
     RTX PRO 6000 V4 replica's 24.0 GB/s.
-  - The challenger's side is two assumptions, named as in `verity/core/protocols/sampled_proofs/README.md`:
-    - `CoinsConfidential`: the challenger's coin stream reaches the network certifier only over a path on auditor
-      hosts, or the challenger and the certifier are one device at the boundary. In the Lean it is the named Prop
-      `Pouw.Assumptions.CoinsConfidential`, listed in the lock, which `FleetSound` takes: a replica's strategy reads
-      none of its own coins.
+  - The challenger's side is two premises, named as in `verity/core/protocols/sampled_proofs/README.md`:
+    - `CoinsConfidential`: the named Prop `Pouw.Assumptions.CoinsConfidential` above, listed in the lock, which
+      `FleetSound` takes: a replica's strategy reads none of its own coins.
     - `OneClock`: the challenger's release times and the certifier's ingress and receipt times are read on one clock,
       and a challenger on a device of its own keeps its clock within 1.03 s of the certifier's (the one clock below).
       It is a spec premise: the Lean reads every time on one axis and names no Prop for it.
