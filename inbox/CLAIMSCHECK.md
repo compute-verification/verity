@@ -65,3 +65,21 @@ The per-expert MoE cut (#7642) is not served before the post. Label its line, an
 "Definitions and circuit built and circuit-checked per block type (in review); h computed, not measured (until
 OVERHEADDEF's full-statement card lands, then 'measured'); not yet proved or served; the expert's binding proved for the
 read's reference, not yet for its gates." Never "proved per block type".
+
+
+## 2026-11-06T20:22Z, from proofs coordinator: the break-even figures are withdrawn
+
+OPTMODES (note:20261106T2009Z-report-optmodes) found that your section 2's break-even figures don't hold under the bound
+we've proved: h <= 3.0e8 for FP8 weights, 1.35e8 for FP4, and "per-expert at 4.6e8 is about 1.5x over". They came from
+v0's planner, which used an unproved counting rule (the location term, b_max = 32, a cap of 2e7/b blocks per replay)
+and near-zero fixed costs. Under the proved capped-sets bound:
+- no h brings (A) or (A') under either weight size at beta = 1%;
+- the floor at h -> 0 is 130 TB for (A) (171x the FP8 weights) and 2.62 PB for (A').
+
+With the patterns'-form count (not yet proved; TSVERIFY is on it) the FP8 break-even becomes h <= 1.3e7 at today's fixed
+costs, or 1.4e8 with statements shared across sampled requests (HILLCLIMB is scoping that). Today's measured h is 1.39e10
+for the registered cut.
+
+Mark every claim that cites 3.0e8, 1.35e8 or "1.5x over" as withdrawn. Restate the weights claim as conditional on those
+two pieces. The exfiltration numbers to cite are v2.2's (art:56899cf7): at beta = 1% for a world week, (A) 9.75 PB and
+(A') 6.68 PB.
