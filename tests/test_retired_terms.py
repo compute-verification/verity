@@ -51,7 +51,7 @@ RETIRED_ROWS = ('| "proof unit"', '| "wrong unit"', '| "proof service"', '| "dec
 DOC_TERMS = {
     "wrong unit, incorrect unit": "incorrect proof block",
     "faulty proof block, faulty block, faulty set": "incorrect proof block; the incorrect set F",
-    "isolation unit, IU": "isolation block",
+    "isolation unit, IU": "inference block",
     "replay unit": "replay block",
     "draw, drawn, redraw": "the sample, sampled proof block (verb: sample; coins are flipped)",
     "components, the composite's product": "subprotocols, composition",
@@ -66,6 +66,23 @@ DOC_TERMS = {
     "sampled unit, unit class": "sampled proof block; a size class, or Flock's proof-block class",
     "audit coin": "the challenger's coins (the step that reads them is the verification phase)",
     "declaration block, declaration period": "execution block, execution phase",
+    "uplink tap, the auditor's tap": "the network certifier, and its records network certificates",
+    "timed verifier": "the memory challenger",
+    "network transparency": "network accounting",
+    "prover gateway, verifier gateway": "the ZK server; the challenger",
+    "batch verifier": "the verifier",
+    "GPU workers": "workers",
+    "escape probability": "acceptance probability",
+    "post-landing run, postland": "after-landing run",
+    "Commit window": "Commit period",
+    "accounting period": "the monitoring period",
+    "isolation block, certified block": "inference block",
+    "transformer block": "layer",
+    "audit phase, audit round": "the verification phase",
+    "monitored compute, monitored hardware, monitored server": "registered hardware (the monitoring period keeps its name)",
+    "staging decode": "the store's load",
+    "pinned theorem, pinned statement": "guarantee",
+    "trusted text": "spec",
     "sampling period, sampling block, PoUW's commit period": "execution phase (work plus its audit: an execution phase and its "
                                                             "verification phase)",
     "hm96 rows, outside the commitments' docs": "hiding commitments",
@@ -88,6 +105,13 @@ _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}u
                        rf"|faulty{_SPACE}(?:proof{_SPACE})?blocks?|faulty{_SPACE}sets?"
                        rf"|declaration{_SPACE}(?:blocks?|periods?)|sampling{_SPACE}(?:periods?|blocks?)|hm96{_SPACE}rows?"
                        rf"|period's{_SPACE}(?:audit{_SPACE})?coins|reject(?:ion)?{_SPACE}domina\w*|dampeners?"
+                       rf"|uplink{_SPACE}taps?|auditor's{_SPACE}taps?"
+                       rf"|timed{_SPACE}verifiers?|network{_SPACE}transparency|(?:prover|verifier){_SPACE}gateways?"
+                       rf"|batch{_SPACE}verifiers?|GPU{_SPACE}workers?|escape{_SPACE}probabilit(?:y|ies)"
+                       rf"|post{_SPACE}landing(?:{_SPACE}runs?)?|postland\w*|commit{_SPACE}windows?|accounting{_SPACE}periods?"
+                       rf"|(?:isolation|certified|transformer){_SPACE}blocks?|audit{_SPACE}(?:phases?|rounds?)"
+                       rf"|monitored{_SPACE}(?:compute|hardware|servers?)|staging{_SPACE}decodes?"
+                       rf"|pinned{_SPACE}(?:theorems?|statements?)|trusted{_SPACE}texts?"
                        rf"|novel{_SPACE}communication{_SPACE}intensity)\b)|\bIUs?\b|\bNCI\b"
                        rf"|\bcommit{_SPACE}periods?\b")
 #: The commitments' own docs, where hm96 rows keep their name.
@@ -381,6 +405,22 @@ def test_the_doc_scan_reads_the_protocol_terms():
         ("a.md", 1, "sampling block"), ("a.md", 2, "declared circuit"), ("a.md", 3, "hm96 rows"),
         ("a.md", 3, "period's coins"), ("a.md", 3, "rejection dominates"), ("a.md", 4, "commit period"),
         ("a.md", 4, "flock-verify"), ("verity/ml/commitments/x/PROTOCOL.md", 1, "draw")]
+
+
+def test_the_doc_scan_reads_the_network_and_process_terms():
+    """The network certifier's, the lock's and the landing's older names, on toy files: a Commit period, a pinned key and
+    a trusted host stay."""
+    docs = {
+        "a.md": "The uplink\ntap and the auditor's tap.\n"
+                "A Commit window, the isolation blocks, a transformer block; each pinned theorem in the trusted text.\n"
+                "The timed verifier, the prover gateway, GPU workers, the escape probability, the post-landing run.\n"
+                "A Commit period, a pinned key and a trusted host stay.\n",
+    }
+    assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
+        ("a.md", 1, "uplink tap"), ("a.md", 2, "auditor's tap"), ("a.md", 3, "Commit window"),
+        ("a.md", 3, "isolation blocks"), ("a.md", 3, "transformer block"), ("a.md", 3, "pinned theorem"),
+        ("a.md", 3, "trusted text"), ("a.md", 4, "timed verifier"), ("a.md", 4, "prover gateway"), ("a.md", 4, "GPU workers"),
+        ("a.md", 4, "escape probability"), ("a.md", 4, "post-landing run")]
 
 
 def test_the_doc_scan_reads_the_reporting_terms():
