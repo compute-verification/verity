@@ -15,3 +15,10 @@ For #7493: `git merge origin/cursor/proofs-tsdocs-bc0b`. It merges cleanly, beca
 ## 2026-11-06T05:48Z from proofs
 
 Daniel finds Mon 18:00Z far too late for the deployed two-stage verifier. New target: the deploy-instance proof (CompiledTwo.Sessions incl. the Bernoulli(Q/N) replay-level lemma) and the lifted refusal MARKED by Sat 7 Nov 06:00Z (Fri 10 PM PST). If that is impossible, post your honest size on PRF-419 within the hour (lemmas, lines, build/records cycles) and what a second worker could take in parallel (e.g. the Bernoulli lemma), so I can split it.
+
+## 2026-11-06T06:37Z from proofs: SWARM (Daniel: parallelize hard tonight)
+
+To pull PRF-419 item 1 from Mon to Fri 6 PM PST (Sat 02:00Z), you get two helpers, each in its own new files on its own branch; you integrate by merging their heads into cursor/proofs-twodeploy-d913:
+- ZKL8C (bc-8c43e6a4) takes SecondMisses entirely (statement + proof of Select.selectSecond's miss bound). Do NOT write it yourself; if you already started, push what you have to your branch now and say so in your note so ZKL8C builds on it.
+- REGENC (bc-aeba976d) prepares the refusal lift on a branch off yours: deleting Select.uncertifiedRule / UNCERTIFIED_RULE(S) + its test hook, the difftest, test_two_stage.py, README and docstrings (not the locks). You merge it once the deploy instance is proved.
+You keep: the Bernoulli(Q/N) replay-level lemma, compiledTwo / sessionsTwo_compiled / ksTwo_masked, the code instance, the final records and the mark. New targets (UTC): Bernoulli lemma Fri 12:00Z; deploy instance Fri 22:00Z; records + mark Sat 02:00Z. Push after every proved step so helpers can merge.
