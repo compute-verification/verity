@@ -11,11 +11,12 @@ total (everything is committed at serve time): every
 scale's serve-time commitments under the PoUW scheme (`--scheme`: `floor`, the measured s8 A-operand floor alone;
 `h1`, `h1-bf16`, `pearl-c`, each scheme's rows a token a layer) and the store-block receipts of
 PoUB, which every plan pays; then proving and the verifier's CPU (at its price ratio) for the drawn units,
-the commitment of every unit's outputs, replay of the layer-steps the draw meets (to build their witnesses), and the
-zero-work subcircuits at their floor.
+the commitment of every unit's outputs, replay of the requests the draw meets (serving keeps only the requests' tokens and
+the weights, so each is re-run whole from its prompt to build its drawn units' witnesses), and the zero-work subcircuits at
+their floor.
 
 - `inputs.py`: the models (Llama-3.1-8B, Qwen3-8B); each scheme's serve-time rows a token a layer, with their leaf
-  chains; the row's inputs (price ratio, rounds, throughput, replay and commitment speeds, PoUB's receipts
+  chains; the row's inputs (price ratio, rounds, throughput, a request's context, commitment speeds, PoUB's receipts
   and passes, decode's step and its compression latency), each with a low and a
   high; the pieces' AND counts (#2391's pins, hm96's rows); and the observations the cost model is fitted from, Flock's
   zero-knowledge sessions on sm_120 (`benchmarks/one_stage/zk_cost.py`'s of s8 coordinates, and A8's of PoUB's
@@ -24,7 +25,9 @@ zero-work subcircuits at their floor.
 - `int8_llama.py`: the int8 Llama-3.1-8B row (vLLM's `cursor/vllm-int8-build-8350`). Its units: every s8 dot checks its
   seed, derives its own noise and opens its rows in circuit. `--model qwen3-8b`
   runs the Qwen3-8B row the same way. A linear's coordinate may be cut into K-chunks that commit their running sums, and
-  r × c tiles are offered, each a unit when its outputs fit a size class. It writes the fitted model (`cost-model.json`, a
+  r × c tiles are offered, each a unit when its outputs fit a size class. Its replay domain is the window's requests, each
+  one prompt of `context` tokens re-run through every layer at `tokens_per_s` (the engine is batch-invariant, so no
+  co-scheduled request is re-run with it). It writes the fitted model (`cost-model.json`, a
   cost-model/v1 record), the serve-time commitments, the frontier, the plan at each budget, the tensors committed at
   more than one scale and what committing each once saves (`overlaps`), the weight classes' weights at each ε
   (`--weights`), the break-even table (the linears forced to each grain, per window, ε and commitment regime), the
@@ -72,7 +75,8 @@ zero-work subcircuits at their floor.
   blocks that commit only the residual and K, V), for the free-compute target (a window, and pooled over a week, a month
   and a year) and the exfiltration target, in the planner's two modes (proving only, and proving plus w times the serve-time
   commitment) at two readings of a hashed byte's cost, through `grain_costs` and `for_target`, and the second mode again
-  under a code-based commitment at each rate ρ (codeword columns hashed, 1/ρ the bytes, and no row hashed in circuit);
+  under a code-based commitment at each rate ρ (codeword columns hashed, 1/ρ the bytes, and no row hashed in circuit),
+  each total with the replay of the requests the draw meets, each re-run from its prompt at the stock step's share;
   then the chunk family's optimum against √(wβhC/(oΛ)). A rung fits when C-Flock's block holds each of its proof blocks (`inputs.cap`). Its
   inputs, each with its status and source, are `served_window_inputs.json`; it writes `served_window.json` and
   `served_window.md`.
