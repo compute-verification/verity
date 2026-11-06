@@ -1,9 +1,11 @@
-import Proofs.Flock.Recursive.LoopAny
-import Proofs.Flock.Recursive.FirewallAccepts
-import Proofs.Flock.Recursive.FirewallFixed
-import Proofs.Flock.Claims.Recursion.BaseParses
-import Proofs.Flock.SessionLoop.TablesSide
-import Proofs.Flock.Soundness.Audit.TwoStage
+module
+
+public import Proofs.Flock.Recursive.LoopAny
+public import Proofs.Flock.Recursive.FirewallAccepts
+public import Proofs.Flock.Recursive.FirewallFixed
+public import Proofs.Flock.Claims.Recursion.BaseParses
+public import Proofs.Flock.SessionLoop.TablesSide
+public import Proofs.Flock.Soundness.Audit.TwoStage
 
 /-!
 # `RecursiveZKLoop` and `RecursiveZKLoopAnySum` say something
@@ -32,6 +34,8 @@ the simulated view is unfinished only at the stop `false`).
 * `Flock.SecurityProofs.RecursiveZKLoop_honest`, `Flock.SecurityProofs.RecursiveZKLoop_nontrivial`.
 * `Flock.SecurityProofs.RecursiveZKLoopAnySum_honest`, `Flock.SecurityProofs.RecursiveZKLoopAnySum_nontrivial`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion.LoopWitness
 

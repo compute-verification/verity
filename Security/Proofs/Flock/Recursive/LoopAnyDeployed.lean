@@ -1,5 +1,7 @@
-import Proofs.Flock.Recursive.LoopAny
-import Proofs.Flock.SessionLoop.TablesSide
+module
+
+public import Proofs.Flock.Recursive.LoopAny
+public import Proofs.Flock.SessionLoop.TablesSide
 
 /-!
 # `RecursiveZKLoopAnySum` at the deployed tables
@@ -11,6 +13,8 @@ workers' values `vs` are the statement's, and it holds at the honest ones (`swCa
 
 * `Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed`: `RecursiveZKLoopAnySum` at those five theorems.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

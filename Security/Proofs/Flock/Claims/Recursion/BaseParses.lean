@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.HonestHalfFixture
+module
+
+public import Proofs.Flock.Claims.Recursion.HonestHalfFixture
 
 /-!
 # A recursive statement's base parses at the masked deployment's parser
@@ -14,6 +16,8 @@ recursive deployment's parser gives it at the masked deployment's, at the base a
 * `fixture_stmt`: at the honest fixture (`HonestFixture`), V* part 0's statement's base and its witness are in the claims'
   relation at the masked deployment's parser and the deployed readable relation (`Readable.relation`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.BaseParses
 
