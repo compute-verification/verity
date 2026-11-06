@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.Json.Live
-import Proofs.Flock.Claims.Complete.Zk.Link
-import Proofs.Flock.Claims.Complete.Zk.Json.Decode
+module
+
+public import Proofs.Flock.Claims.Complete.Json.Live
+public import Proofs.Flock.Claims.Complete.Zk.Link
+public import Proofs.Flock.Claims.Complete.Zk.Json.Decode
 
 /-!
 # What the one-table honest masked session returns and sends
@@ -17,6 +19,8 @@ then the streams' rounds in order (`SessionFactsZk`).
 * **The quiet parts**: the masked commitment and the pads' commitment send nothing (`commitPZk_pureS`,
   `innerCommitP_pureS`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 
@@ -143,7 +147,7 @@ def SessionFactsZk (h : ByteArray → ByteArray) (resp : ℕ → Claims.Msg) (sp
 rep rounds on the table's extra claims at the link's points. -/
 theorem sessionPZk_facts (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) {spec : SessionSpec} {t : String}
     (ht : spec.tables = #[t]) {ct : CoinTree.Spec} (hct : spec.coinTree = some ct) {own : Json}
-    (hown : Json.parse spec.hello = .ok own) {hz : String} (hc : canon (helloJ own) = .ok hz) (st : Setup)
+    (hown : Flock.JsonParse.parse spec.hello = .ok own) {hz : String} (hc : canon (helloJ own) = .ok hz) (st : Setup)
     (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk)
     (hC : ∀ v, Zk.schedule st.m = .ok v → ∀ g extra lanePad salt cm,
       commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) st.merkle (v.1.levels.getD 0 default) v.2 g extra lanePad

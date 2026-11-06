@@ -22,7 +22,7 @@ from typing import Any
 import torch
 
 from verity.ml.circuits.refs import Affine, Coll, Concat, Strided, prefix_runs
-from verity.ml.circuits.types import Record
+from verity.ml.circuits.types import RecordType
 from verity_vllm.program.frontend.value_types import flat_types
 from verity_vllm.correspondence.runtime import NAMESPACE, SCHEMA
 
@@ -295,7 +295,7 @@ def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> di
     weights_index = len(params) - 1 if ctx.weights_coll is not None else None
     field_names: list[str] = []
     field_starts: list[int] = []
-    if weights_index is not None and isinstance(params[weights_index][1], Record):
+    if weights_index is not None and isinstance(params[weights_index][1], RecordType):
         off = 0
         for fname, ft in params[weights_index][1].fields:
             field_names.append(fname)

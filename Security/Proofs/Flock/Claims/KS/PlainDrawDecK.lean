@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.PlainDrawAccK
+module
+
+public import Proofs.Flock.Claims.KS.PlainDrawAccK
 
 /-!
 # The deployed plain decoders at the statement's draw, at `VK keep`
@@ -18,6 +20,8 @@ and `wrPD` `PlainDrawDec`'s for `plainVerdictAt`:
 * `plain_hdecAtK_of`, `plain_hdecHAtK_of`: at `plainTab`; `plain_hdecAtK`, `plain_hdecHAtK` at `wrPDK`, with
   `plainVerdictAtK keep`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.PlaysCoin
 
@@ -506,7 +510,8 @@ theorem plain_hdecHLfAtK_of (keep : Bool → Bool) (F : AtDraw.LeafForm)
       fun _ _ => plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay := by
     funext S R
     obtain rfl : S = ∅ := Finset.eq_empty_of_isEmpty S
-    exact tableAtH_plainTab ht (fun _ : Finset (Fin 0) => d) (spec := st.spec) (S := ∅) x₀ x₀ hx₀ L m k0 l₀ l₁
+    exact tableAtH_plainTab ht (HmOut.parse_isTmpl hc) (fun _ : Finset (Fin 0) => d) (spec := st.spec) (S := ∅) x₀ x₀
+      hx₀ L m k0 l₀ l₁
       rest ext hsch hm hlay
   have hS : HiddenDec.DrawOkH ins.read.I (fun _ : Finset (Fin 0) => d) st.spec.mPts ∅ :=
     ⟨fun _ _ u hu => absurd hu (Finset.notMem_empty u), fun st' hst' => by

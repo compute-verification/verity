@@ -1,7 +1,10 @@
-import Flock.Hm96
-import Flock.HmRow
-import PouwCommit.Frame
-import PouwCommit.Bindings
+module
+
+public import Flock.Hm96
+public import Flock.HmRow
+public import PouwCommit.Frame
+public import PouwCommit.Bindings
+public import Identity.Domains
 
 /-!
 # The protocol's row and tile trees (`audit.rows_domain`, `Hm96Domain`, `commit_rows`, `transcript_domain`)
@@ -16,12 +19,16 @@ leaf is the frame's plain leaf over the value under the tree's schema (`verity/p
 the key, with a 64-bit counter and the tree's 64-bit nonce (`hm96_salt`).
 -/
 
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
+
 namespace PouwCommit
 
 open Flock
 
-def ROW_SCHEMA : String := "verity/pouw/row/v1"
-def TILE_SCHEMA : String := "verity/pouw/tile/v1"
+def ROW_SCHEMA : String := Domains.POUW_AUDIT_ROW
+def TILE_SCHEMA : String := Domains.POUW_AUDIT_TILE
 def HM96_SALT : Nat := 192
 
 private def rotl (x : UInt32) (n : UInt32) : UInt32 := (x <<< n) ||| (x >>> (32 - n))

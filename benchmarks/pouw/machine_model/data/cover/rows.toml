@@ -1,6 +1,6 @@
-# The coverage table (MODEL-COVER): the evidence for MODEL-MIN's one coverage premise, that every instruction a
-# card executes is dominated by an envelope op (envelope.toml: MODEL-MIN's `Accel.Op` and the entries MODEL-COVER
-# proposes) at no fewer units of the same resource. It is evidence, not the trusted base: `machine-model cover` renders
+# The coverage table: the evidence for the ACCEL model's one coverage premise, that every instruction a
+# card executes is dominated by an envelope op (envelope.toml: `Accel.Op` and the proposed
+# entries) at no fewer units of the same resource. It is evidence, not the trusted base: `machine-model cover` renders
 # it, and tests/test_cover.py fails when an opcode has no row or a dominated row's rate exceeds its resource's ρ.
 #
 # A `[[row]]` covers the opcodes `ops` on `devices` (default both). With `forms` (regexes on the dotted SASS opcode) it

@@ -1,7 +1,12 @@
-import Proofs.Flock.Claims.Complete.ZkTables.RunsGo
-import Proofs.Flock.Claims.Complete.Zk.InnerMerkle
-import Proofs.Flock.Claims.Complete.Zk.ProverOk
-import Proofs.Flock.Claims.Complete.Zk.Json.Files
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.RunsGo
+public import Proofs.Flock.Claims.Complete.Zk.InnerMerkle
+public import Proofs.Flock.Claims.Complete.Zk.ProverOk
+public import Proofs.Flock.Claims.Complete.Zk.Json.Files
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import all Init.Data.Nat.Power2.Basic
 
 /-!
 # The honest masked rep proof fits its shape
@@ -25,6 +30,8 @@ shape the masked verifier decodes it at.
 and `Zk.Level0Verifier`) and the mask-rank bound (`L0.complete_jsonT_closed`; with the bound proved,
 `L0.complete_jsonT_of_spec`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 
@@ -368,9 +375,9 @@ theorem shapeRest (H : Claims.Msg → Claims.Msg) : ShapeRest H := by
 
 /-- **Masked completeness from level 0**: `complete_jsonT` from level 0's four premises (`Level0`) and the mask-rank
 bound; `RepShapedT` beyond level 0's shape (`shapeRest`) and `ProverRunsT` beyond level 0 (`runsRest`) hold. -/
-theorem complete_jsonT_of_level0 (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon)
+theorem complete_jsonT_of_level0 (H : Claims.Msg → Claims.Msg) 
     (h0 : Level0.ProverRuns) (h1 : Level0.ProverShape) (h2 : Level0.Lanes) (h3 : Level0.Verifier)
     (hMR : MaskRank.MaskRankBound) : Claims.Flock.Complete H (deployZk Readable.relation) :=
-  complete_jsonT_of_parts H S h0 h1 h2 h3 (shapeRest H) (runsRest H) hMR
+  complete_jsonT_of_parts H h0 h1 h2 h3 (shapeRest H) (runsRest H) hMR
 
 end FlockComplete.ZkTables

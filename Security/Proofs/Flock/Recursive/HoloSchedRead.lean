@@ -1,4 +1,6 @@
-import Proofs.Flock.Recursive.HoloSched
+module
+
+public import Proofs.Flock.Recursive.HoloSched
 
 /-!
 # Where `fixedRow` reads, by the schedule
@@ -11,6 +13,8 @@ neither of the reps' or the sparse phases': `innerCommits` holds the reps' round
 checks only a sparse stream's count of `c_k`. `RepsCommitsAt`, `SparseCommitsAt` and `StackedAt` name what the
 verifier's checks of the three give, and `ClaimReadsAt` what its check of the claim ports' reads gives.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

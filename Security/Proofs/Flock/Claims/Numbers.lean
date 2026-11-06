@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Bits
-import Mathlib.Analysis.Complex.ExponentialBounds
+module
+
+public import Proofs.Flock.Claims.Bits
+public import Mathlib.Analysis.Complex.ExponentialBounds
 
 /-!
 # Flock's numbers: `m′`, `K`, `k`, `κ` and `λ`
@@ -17,6 +19,8 @@ The numbers Flock's claims read (`Claims.Flock.κ`, `γ`, `lamOf`) at the deploy
 
 Each is stated over a `Deploy`'s fields, so it applies to the deployed record once its fields are pinned to these values.
 -/
+
+@[expose] public section
 
 namespace Claims.Flock.Numbers
 

@@ -1,5 +1,7 @@
-import Proofs.Nci.Cover.PartialSumCover
-import Proofs.Nci.Cover.PartialSumKeyed
+module
+
+public import Proofs.Nci.Cover.PartialSumCover
+public import Proofs.Nci.Cover.PartialSumKeyed
 
 /-!
 # The partial-sum bounds
@@ -8,6 +10,8 @@ import Proofs.Nci.Cover.PartialSumKeyed
 `PartialSumCover` and `KeyedActivationReads` in `PartialSumKeyed`. `PartialSumKeyedCoverBound` is the cover bound at
 `f = 1` with `KeyedActivationReads` for its premise.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.SecurityProofs
 

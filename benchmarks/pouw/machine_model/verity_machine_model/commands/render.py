@@ -40,10 +40,10 @@ def _vectors(data: Path) -> str | None:
         v = vector(n, data)
         status = "current" if n == m.current else f"superseded by {v.superseded_by}" if v.superseded_by else ""
         p = v.published
-        body.append([f"`{n}`", v.epoch, status, len(v.rows), len(v.credits), _num(p, "tau", 4), _num(p, "tau_600w", 4),
-                     _num(p, "uf_low", 4), _num(p, "margin", 3), v.note, v.summary])
-    return _table(["vector", "epoch", "status", "rows", "credits", "τ", "τ at 600 W", "U/F_low", "margin", "note",
-                   "summary"], body) if body else None
+        body.append([f"`{n}`", v.epoch, status, len(v.rows), len(v.credits), _num(p, "tau", 4), _num(p, "uf_low", 4),
+                     _num(p, "margin", 3), v.note, v.summary])
+    return _table(["vector", "epoch", "status", "rows", "credits", "τ", "U/F_low", "margin", "note", "summary"],
+                  body) if body else None
 
 
 def _epochs(data: Path) -> str | None:
@@ -248,7 +248,7 @@ def _theta(data: Path) -> str | None:
     out += ["### Derived (`machine-model theta` prints the arithmetic)",
             _table(["derived", "sheet", "measured", "how"], body)]
     share = lambda u, rd: "" if (s := T.share(t, u, rd)) is None else f"{100 * s:.2f}%"
-    out += ["### Units RT-UNITS lists, with their verdicts",
+    out += ["### Units, with their verdicts",
             _table(["unit", "what", "verdict", "rates", "bound a SM-clock", "share, sheet", "share, measured", "why",
                     "settles it"],
                    [[f"`{u.key}`", u.what, u.verdict, _code(u.rates),

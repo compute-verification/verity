@@ -1,4 +1,4 @@
-"""`verity.ml.commitments.gates.block_check`: the reference of the remote bandwidth audit's opening unit is its Python
+"""`verity.ml.commitments.gates.block_check`: the reference of PoUB's opening unit is its Python
 checks (`verity.core.protocols.remote_bandwidth.codec`, `receipts`, `audit`'s trees and `merkle.verify_opening`) on random
 openings at p512/k2 and p1024/k3/masked, appended and registered, and names the check each wrong opening fails: a tampered
 block, a payload not the committed one or not the committed KV, a word at or above p, a wrong append coin, a wrong receipt

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Bridge.OfGame
-import Proofs.Flock.Claims.Aggregate
+module
+
+public import Proofs.Flock.Claims.Bridge.OfGame
+public import Proofs.Flock.Claims.Aggregate
 
 /-!
 # The transport: `Claims.run`'s probabilities are the live game's
@@ -18,6 +20,8 @@ coins `r : Fin (k x) → Coin` and the game `g x` played by the decoded strategy
 
 Each needs the game to end within `k x` rounds for the prover's strategy (`RoundsLe`).
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge
 

@@ -62,8 +62,8 @@ in the circuit) fall into two cases (the lifetime-soundness desk study, §1 and 
   At `t ≥ 2^65` such roots need a hash of at least 288 bits.
 - **Not tight for serving roots in a sampled audit.** Serving registers its roots before the sample and nobody else holds
   an opening, so against arbitrary provers they need the rewinding argument too. `Rewinding.bad_sq_le` applies unchanged
-  with the unit sample in place of the proof coins: `δ_tree ≤ √(N_s·Q_s·Adv) ≤ t·√(2·N_s·Q_s)/2^256`. Here `N_s` counts
-  the leaves under every serving root registered before the sample, and `Q_s` the leaves the sampled units open.
+  with the proof-block sample in place of the proof coins: `δ_tree ≤ √(N_s·Q_s·Adv) ≤ t·√(2·N_s·Q_s)/2^256`. Here `N_s` counts
+  the leaves under every serving root registered before the sample, and `Q_s` the leaves the sampled proof blocks open.
   - `log2 √(2·N_s·Q_s)` is 17.4 to 34.0 over the study's audits, so this term exceeds the Flock proof term by up to
     2^17.
   - Clearing 2^-128 per audit needs `n ≥ 2·(log2 t + 128 + log2 √(2·N_s·Q_s))`: 475 bits at `t = 2^80` for the study's
@@ -73,7 +73,7 @@ in the circuit) fall into two cases (the lifetime-soundness desk study, §1 and 
 ## 2. The compiled theorem: its terms, its number, its proof
 
 The protocol is README.md §1.1's table (the `fast100` profile twice on one root, live `os` coins, a statement of
-§16) in the adopted variant: SHA-512 Merkle caps, and the challenger keeping each round's bytes.
+`Flock.Statement`) in the adopted variant: SHA-512 Merkle caps, and the challenger keeping each round's bytes.
 
 **The committed values of an arbitrary prover.** Let `P*` be any classical prover. Without loss of generality it is
 deterministic, since a randomized prover is an average of deterministic ones. Its **committed table** is the plurality
@@ -226,7 +226,7 @@ strict time.
     samples until one reads the string, $1/r$ of them in expectation, and collides if the value differs. That is
     $2(1+k)\,t$ evaluations in expectation (Wald). Weighting each string by the probability that a sample reads it gives
     $\delta_{\rm link}\le2Q_s(1+k)\,t/2^{256}$, with $Q_s\le N_s$ (below).
-  - **The bound is relative.** $u^*$ is faulty, so acceptance itself is the bad event:
+  - **The bound is relative.** $u^*$ is incorrect, so acceptance itself is the bad event:
     $\Pr[\text{accept}\wedge\text{hit}]\,(1-1/c)\le\delta_{\rm tree}+\varepsilon_c^-+\sqrt{k\,\mathrm{Adv}_0}+\delta_{\rm link}$.
     The square root goes.
   - **The constant.** $c=2$ minimizes $c^2/(c-1)$, giving the record's $t\cdot Q_s(8N_0/e)/2^{256}$ up to lower-order
@@ -255,7 +255,7 @@ strict time.
   proved under strict-time collision resistance. A2 enters only the value layer, and `CROnly` replaces it there by
   strict time at the price above.
 
-## 4. Where the spec follows upstream rather than the paper (spec §19), and the bound
+## 4. Where the spec follows upstream rather than the paper (`verity/ml/flock/verifier/README.md`), and the bound
 
 | Id | Change | How the model and bound cover it |
 |---|---|---|
@@ -279,7 +279,7 @@ strict time.
 ## 5. Accounting findings
 
 - **2^-205 holds for every m, 22 ≤ m ≤ 35,** at the analysis slack `η = 1/200`, the seventh Ligerito level at
-  m = 34, 35 included. At `η = 1/50` it was 2^-195.5 for m ≤ 33 and 2^-195.43 at m = 34, 35. PROTOCOL.md §15 quotes
+  m = 34, 35 included. At `η = 1/50` it was 2^-195.5 for m ≤ 33 and 2^-195.43 at m = 34, 35. `Flock.Schedule` quotes
   2^-195.5 per table, from the m = 33 ledger at `η = 0.02`. All are far below 2^-128.
 - **Terms flock-128's ledger does not charge,** none moving the total by 0.001 bit at `η = 1/50`: the list factor
   `L₀` before Ligerito's binding (paper Appendix A), the `r = 1` set (A5), the pin (A8), the link points (A14), MCA and
@@ -332,7 +332,7 @@ We follow the staging and vocabulary, and differ where the setting does.
 | **1a** PIOP soundness | A machine-checked soundness proof of the polynomial IOP | `table_sound` at the oracle layer: the PIOP with Ligerito as an interactive oracle commitment, information-theoretic, per table, against any prover. | Follows, with no named assumption: A1, mutual correlated agreement up to the Johnson bound, is proved from DKT26, which ArkLib proves (README.md §1.6). |
 | **1b** commitment binding, under a cryptographic assumption or an idealized model | Binding of the polynomial commitment | The Merkle layer: plain SHA-512 collision resistance, for every prover, by rewinding to the plurality table (§2). Ligerito's commitment binds to a list of at most L₀ codewords, not to one polynomial (README.md §2). The random-oracle version is only a cross-check. | Follows. The model is named per result, as a16z asks. |
 | **1c** the compiled argument | With Fiat–Shamir, security in the random-oracle model | **Deliberately different: no Fiat–Shamir.** The oracle protocol plus Merkle commitments (1b) plus session binding, which needs no assumption since the challenger keeps each round's bytes. | Differs. No random oracle for coins, avoiding the article's main caveat; Fiat–Shamir is out (§8). |
-| **1d** constraint system against semantics | The constraint system is equivalent to the VM's semantics | No VM: 1d is the lowering theorem, that the block R1CS (spec §16) is satisfied exactly by correct evaluations of the named circuit. | Differs in content, not intent: "the circuit is the meaning". Circuit against hardware is checked by capture replay, outside formal scope. |
+| **1d** constraint system against semantics | The constraint system is equivalent to the VM's semantics | No VM: 1d is the lowering theorem, that the block R1CS (`Flock.Statement`) is satisfied exactly by correct evaluations of the named circuit. | Differs in content, not intent: "the circuit is the meaning". Circuit against hardware is checked by capture replay, outside formal scope. |
 | **1e** glue, and ZK if intended | One theorem, including zero knowledge | One theorem from the verifier's acceptance to "the committed values satisfy the named circuit", for the compiled protocol. Zero knowledge is proved separately (§6). | Follows. **Recursion caveat:** triggered only by the recursion track. Its outer proof must be knowledge-sound (§3), and every part inside it verified. |
 | **2** verifier implementation | The implemented verifier (Rust, Solidity, …) matches the Stage-1 protocol | `Flock.Verify` refines `Model`: if it accepts, the model accepts. | Differs: a Lean-to-Lean refinement; the compiler and runtime are trusted, mitigated by agreement tests (`assumption-notes/trusted-components.md`). |
 | **3** prover implementation | The prover implementation is proved complete, and zero-knowledge if intended | A Lean reference prover with completeness and zero-knowledge theorems, tied to production by byte-for-byte differential tests (§6). | **Deliberately different: the production prover is not proved.** Untested equivalence is trusted; its failures cost liveness, not soundness. |
@@ -529,8 +529,8 @@ If real concurrency is ever needed:
 - **Strategies, not `value`.** `value` can exceed every strategy's `prob` when a branch has no strategy. So the audit
   theorems take per-strategy hypotheses and give per-strategy conclusions (`Game/Prob.lean`), as `table_sound_exec`
   does.
-- **Knowledge soundness and the link term.** Halevi–Micali leaves open to essentially any value, so a unit is faulty
-  relative to a committed trace defined by extraction. A sampled faulty proof block is charged to one of two named events:
+- **Knowledge soundness and the link term.** Halevi–Micali leaves open to essentially any value, so a unit is incorrect
+  relative to a committed trace defined by extraction. A sampled incorrect proof block is charged to one of two named events:
   extraction fails, or it disagrees with the trace (`cover`, from `correct_congr`). The oracle layer is the special
   case where the registration is the trace (`Partition.oracle`).
 - **Traces are total** (`Fin C.N → Bool`), and the committed set is derived. `Circuit.run` is the one evaluator,
@@ -544,7 +544,7 @@ If real concurrency is ever needed:
 - **The compiled layer** (`Audit/Extraction.lean`, `Audit/FlockCompiled.lean`, `Audit/FlockBatched.lean`). The
   table's extractor is randomized and its bound depends on the prover, so the audit carries, per sampled proof block, the joint
   probabilities `ks = Pr[accept ∧ extraction fails]` and `link = Pr[accept ∧ extraction disagrees]` over the fresh run
-  and the reruns, with `cover: Pr[accept] ≤ ks + link` at a faulty sampled proof block, and bounds that are functions of the
+  and the reruns, with `cover: Pr[accept] ≤ ks + link` at an incorrect sampled proof block, and bounds that are functions of the
   prover's state (the form agreed with flock-soundness). A deterministic extractor is the special case
   (`Analysis.toExtraction`), so `extraction_audit_le` subsumes `audit_le`.
   - Several tables (`FlockBatched.lean`): the protocol's batched session (`sessionB`); each sampled proof block is read from

@@ -1,13 +1,15 @@
-import Proofs.Flock.Recursive.AuditC3
-import Proofs.Flock.Recursive.FirewallZK
-import Proofs.Flock.Recursive.Loads
-import Proofs.Flock.Recursive.RegExtract
-import Proofs.Flock.C3.VStarList.Range
+module
+
+public import Proofs.Flock.Recursive.AuditC3
+public import Proofs.Flock.Recursive.FirewallZK
+public import Proofs.Flock.Recursive.Loads
+public import Proofs.Flock.Recursive.RegExtract
+public import Proofs.Flock.C3.VStarList.Range
 
 /-!
 # The recursive audit at candidate 3: its proof
 
-`Flock.SecurityProofs.RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3`, `PublicAudit`'s proof at candidate 3's
+`Flock.SecurityProofs.RecursiveAuditHolo : Flock.Guarantees.RecursiveAuditHolo`, `PublicAudit`'s proof at candidate 3's
 table, and `RecursiveFirewallPrivate`.
 
 In (i), as in `PublicAudit`'s:
@@ -41,6 +43,8 @@ gap 2 is read at VBridge at the committed rounds (`zk_sessions_recursive_fork_in
 
 (ii) is `RecursiveFirewallPrivate`.
 -/
+
+@[expose] public section
 
 namespace Flock.SecurityProofs
 
@@ -287,14 +291,14 @@ theorem recursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
     rows hob hF dg N σ wmsg Sk cmt msg hk hRw hM hρ hr hbr
 
 /-- **The recursive audit at candidate 3, as the verifier of record runs it, with no A3.** -/
-theorem RecursiveAuditC3NoA3 : Flock.Guarantees.RecursiveAuditC3NoA3 := by
+theorem RecursiveAuditHoloNoA3 : Flock.Guarantees.RecursiveAuditHoloNoA3 := by
   refine And.intro ?_ ?_
   swap
   · exact RecursiveFirewallPrivate
   exact recursiveAuditC3AtNoA3 Flock.Guarantees.holoCTs Flock.Guarantees.holoMap
 
 /-- **The recursive audit at candidate 3, as the verifier of record runs it.** -/
-theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by
+theorem RecursiveAuditHolo : Flock.Guarantees.RecursiveAuditHolo := by
   refine And.intro ?_ ?_
   swap
   · exact RecursiveFirewallPrivate

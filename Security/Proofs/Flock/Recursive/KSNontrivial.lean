@@ -1,9 +1,11 @@
-import Proofs.Flock.Recursive.KSStatement
-import Proofs.Flock.Claims.Recursion.VCallsAt
-import Proofs.Flock.Claims.Recursion.PlainKSAbortFails
-import Proofs.Flock.Claims.Recursion.LamDeployed
-import Proofs.Flock.Claims.Witnesses.RecursionLin2
-import Proofs.Flock.Claims.Recursion.Assumptions.KSFixture
+module
+
+public import Proofs.Flock.Recursive.KSStatement
+public import Proofs.Flock.Claims.Recursion.VCallsAt
+public import Proofs.Flock.Claims.Recursion.PlainKSAbortFails
+public import Proofs.Flock.Claims.Recursion.LamDeployed
+public import Proofs.Flock.Claims.Witnesses.RecursionLin2
+public import Proofs.Flock.Claims.Recursion.Assumptions.KSFixture
 
 /-!
 # `RecursiveKS` at the verifier that accepts everything (the Lean check's `nontrivial`)
@@ -33,6 +35,8 @@ the dense statements stay deployed. `RecursiveKSAtAll` is `RecursiveKSAt` there.
   statement can be built in Lean that it reads, and the nontrivial lemma assumes only the reading, witnessed by a
   fixture run.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 
@@ -299,7 +303,7 @@ theorem one_le_Îº_acceptAll_of_readX_none (rel : _root_.Flock.Readable.Parsed â†
       (Claims.Recursion.Inner.ofFlock (bdDeployed rel nextE colsE wE join rowIn final w).deploy decI) x := by
   have hx : Claims.Recursion.xI ((recBoundAt rel b L).acceptAll.record
       (bdDeployed rel nextE colsE wE join rowIn final w).IVStar) x = [] := by
-    show ((parse x).map Claims.Recursion.Stmt.inner).getD [] = []
+    show ((parse x).map Claims.Recursion.CompiledStatement.inner).getD [] = []
     rw [parse_of_readX_none h]
     rfl
   have : IsEmpty (Fin (((recBoundAt rel b L).acceptAll.record

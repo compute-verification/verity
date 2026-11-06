@@ -1,10 +1,12 @@
-import Proofs.Flock.Claims.Recursion.BoundDeploy
-import Proofs.Flock.Claims.DeployE
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundDeploy
+public import Proofs.Flock.Claims.DeployE
 
 /-!
 # The bound record at the element-level verifier's steps (DecompB, option (b))
 
-`RecDeploy.KSBoundDeployed` and its ∀-form `KSBoundRoute` take the element-level verifier's steps `nextE` as a
+`RecDeploy.KSBoundDeployed` and its ∀-form `KSBoundRouteCols` take the element-level verifier's steps `nextE` as a
 parameter. Option (b) instantiates them with the element-level inner verifier's (`FlockDeploy.VE`, the deployed plain
 verifier with its digests of encodings dropped). What that reads, and what it doesn't:
 
@@ -22,6 +24,8 @@ So a bound proved at `nextE := VE.next` is a bound on the deployed compiled veri
 `VE` are (P1) and (P4) at `VE`'s steps, not yet proved (`plainKSAbort_bd` and `lastBindsEC_deployed_sha512_closed` are
 at the deployed plain verifier's own steps).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

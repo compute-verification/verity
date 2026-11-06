@@ -1,9 +1,9 @@
-import Definitions.Pouw.Assumptions.Dither
+module
+
+public import Definitions.Pouw.Assumptions.Dither
 
 /-!
 # SAK(matmul) from a pointwise work premise: what is proved, and the residual
-
-The lower bound.
 
 `Definitions.Pouw.Assumptions.Dither.SAKMatmul` bounds a words program's moment
 `E_σ[1_{d ∉ Deg ∧ pass} · e^{η (pub − cost)₊}] ≤ 1`. It mixes two things: what a program must spend to get a fraction of
@@ -30,6 +30,8 @@ So the trust that `SAKMatmul` asks of programs is `SAKResidual`'s, at the cost o
 headline's slack, and the rate condition is a theorem about the check. Nothing here is a new premise of a guarantee:
 `SAKResidual` is a proof-only definition, a hypothesis of these lemmas.
 -/
+
+@[expose] public section
 
 namespace Pouw.SakLb
 

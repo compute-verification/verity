@@ -610,7 +610,7 @@ TP_DENSE = "llama32-1b__bf16__l40s__tp2__b1__i256__o32__mixed__greedy__bi-eager"
 
 def _tap_manifest(path: Path, *families: str) -> str:
     """A manifest built under every tap policy whose identities name `families` (a policy with no site writes its header only)."""
-    query = {"engine": "v2-query", **{k: {} for k in ("norm_scales", "router_softmax", "vocab_range", "guarded_max")}}
+    query = {"engine": "v2-query", **{k: {} for k in ("norm_scales", "router_softmax", "vocab_range")}}
     path.write_text(json.dumps({"query": query, "identities": [{"family": "instance_outputs"}] + [{"family": f} for f in families]}))
     return str(path)
 
@@ -620,13 +620,13 @@ def test_the_taps_are_on_by_default_and_0_turns_one_off_for_ab_only(tmp_path):
     assert (ck.norm_tap, ck.guarded_max_tap, ck.router_tap, ck.vocab_tap) == ("1", "1", "1", "1")
     off = _opts(tmp_path, "--router-tap", "0", environ={"NORM_TAP": "0", "GUARDED_MAX_TAP": "0"}).commit
     assert (off.norm_tap, off.guarded_max_tap, off.router_tap, off.vocab_tap) == ("0", "0", "0", "1")
-    assert R.tap_policy_flags(ck) == ["--norm-scales", "--router-softmax", "--vocab-range", "--guarded-max"]
-    assert R.tap_policy_flags(off) == ["--no-norm-scales", "--no-router-softmax", "--vocab-range", "--no-guarded-max"]
+    assert R.tap_policy_flags(ck) == ["--norm-scales", "--router-softmax", "--vocab-range"]
+    assert R.tap_policy_flags(off) == ["--no-norm-scales", "--no-router-softmax", "--vocab-range"]
     for argv in (["manifest", "build", "--program", "p"], ["manifest", "build-global", "--fixture", "f", "--programs-root", "r"],
                  ["manifest-verify", "--manifest", "m"]):
         on, ab = cli.parse(argv[0], [*argv[1:], "--out", "o"], {}), cli.parse(argv[0], [*argv[1:], "--out", "o", *R.tap_policy_flags(off)], {})
-        assert (on.norm_scales, on.router_softmax, on.vocab_range, on.guarded_max) == (True, True, True, True)
-        assert (ab.norm_scales, ab.router_softmax, ab.vocab_range, ab.guarded_max) == (False, False, True, False)
+        assert (on.norm_scales, on.router_softmax, on.vocab_range) == (True, True, True) and not hasattr(on, "guarded_max")
+        assert (ab.norm_scales, ab.router_softmax, ab.vocab_range) == (False, False, True)
 
 
 def test_a_manifest_of_other_policies_is_rebuilt_either_way(tmp_path):
@@ -634,8 +634,7 @@ def test_a_manifest_of_other_policies_is_rebuilt_either_way(tmp_path):
     assert R.manifest_policy_mismatch(man, _opts(tmp_path).commit) == []
     assert R.manifest_policy_mismatch(man, _opts(tmp_path, environ={"NORM_TAP": "0"}).commit) == ["norm_scales"]
     (tmp_path / "old.json").write_text(json.dumps({"query": {"engine": "v2-query"}, "identities": []}))
-    assert R.manifest_policy_mismatch(str(tmp_path / "old.json"), _opts(tmp_path).commit) == ["norm_scales", "router_softmax", "vocab_range",
-                                                                                                "guarded_max"]
+    assert R.manifest_policy_mismatch(str(tmp_path / "old.json"), _opts(tmp_path).commit) == ["norm_scales", "router_softmax", "vocab_range"]
 
 
 def test_a_passing_commit_verifies_the_manifest_it_ran_over(tmp_path, monkeypatch):
@@ -660,7 +659,7 @@ PD = "p" * 64
 
 
 def _record_manifest(path: Path, query_id: str, *, program_digest: str = PD, partition: bool = True, word_check: bool = True) -> None:
-    query = {"query_id": query_id, **{k: {} for k in ("norm_scales", "router_softmax", "vocab_range", "guarded_max")}}
+    query = {"query_id": query_id, **{k: {} for k in ("norm_scales", "router_softmax", "vocab_range")}}
     if partition:
         query["partition"] = {"object": {"format": "verity/partition/v1"}, "digest": "d" * 128}
     if word_check:
@@ -682,7 +681,7 @@ def _row_with_build(tmp_path: Path, monkeypatch) -> tuple[SingleRow, list[str]]:
 
 def test_the_rows_query_of_record_is_the_one_its_manifest_build_writes():
     from verity_vllm.query import required
-    assert R.QUERY_OF_RECORD == required.QUERY_OF_RECORD == required.query_header("ampere", "fa2_hidden_m1_stream", return_slots=True)["query_id"]
+    assert R.QUERY_OF_RECORD == required.QUERY_OF_RECORD == required.query_header("ampere", return_slots=True)["query_id"]
 
 
 def test_the_builds_q_word_manifest_with_a_partition_of_its_program_is_the_manifest_of_record(tmp_path, monkeypatch):
@@ -757,7 +756,7 @@ def test_a_tp_row_runs_the_guarded_build_and_every_tap_its_manifest_names(tmp_pa
     monkeypatch.setattr(t, "run_tl", lambda stage, to, log, cmd: seen.append(cmd) or 0)
     os.makedirs(t.d)
     t.manifest_global("commit.required_manifest")
-    assert {"--norm-scales", "--router-softmax", "--vocab-range", "--guarded-max"} <= set(seen[0])
+    assert {"--norm-scales", "--router-softmax", "--vocab-range"} <= set(seen[0]) and "--guarded-max" not in seen[0]
     taps = R.applicable_taps(_tap_manifest(tmp_path / "moe.json", "norm_scales", "router_softmax", "vocab_range"), t.ck_)
     cmd = t.commit_cmd(taps)
     assert cmd[cmd.index("--hidden-so") + 1] == t.env.hidden_so_fa2_guarded and "--vocab-range" in cmd

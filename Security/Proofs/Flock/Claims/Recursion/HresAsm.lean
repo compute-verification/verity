@@ -1,10 +1,12 @@
-import Proofs.Flock.Claims.Recursion.ResLowerDD
-import Proofs.Flock.Claims.Recursion.ResChainW
-import Proofs.Flock.Claims.Recursion.ResAccEnd
-import Proofs.Flock.Claims.Recursion.ResFramePorts
-import Proofs.Flock.Claims.Recursion.RestVerdictBasesHold
-import Proofs.Flock.Claims.Recursion.RestOpenedSized
-import Proofs.Flock.Recursive.KSDeployed
+module
+
+public import Proofs.Flock.Claims.Recursion.ResLowerDD
+public import Proofs.Flock.Claims.Recursion.ResChainW
+public import Proofs.Flock.Claims.Recursion.ResAccEnd
+public import Proofs.Flock.Claims.Recursion.ResFramePorts
+public import Proofs.Flock.Claims.Recursion.RestVerdictBasesHold
+public import Proofs.Flock.Claims.Recursion.RestOpenedSized
+public import Proofs.Flock.Recursive.KSDeployed
 
 /-!
 # KS's residual leaf at the deployed readers (`hres_deployed`)
@@ -21,6 +23,8 @@ import Proofs.Flock.Recursive.KSDeployed
 It takes no hypothesis. `hres_deployed_all` is the form `recursiveKS_of_resLowered` takes, at the deployed weights, and
 `recursiveKS_deployed` is `RecursiveKS` from it.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.ResLower
 

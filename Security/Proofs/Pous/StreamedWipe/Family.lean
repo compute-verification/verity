@@ -1,6 +1,8 @@
-import Definitions.Pous.Guarantees.StreamedWipeFamily
-import Definitions.Pous.Guarantees.StreamedWipeReads
-import Proofs.Pous.StreamedWipe.Deployed
+module
+
+public import Definitions.Pous.Guarantees.StreamedWipeFamily
+public import Definitions.Pous.Guarantees.StreamedWipeReads
+public import Proofs.Pous.StreamedWipe.Deployed
 
 /-!
 # The streamed-label wipe at any number of reads, for every fill
@@ -18,6 +20,8 @@ The count is the crude `2^n`, so no binomial of the deployed numbers is ever eva
 (`24 · (D − 1) < n`, and `512/24 + 1 < 512/19` bits a label leaves room for the `141`); `StreamedWipeMeets141GB5` is the
 one at `r = 59`, `k = 5231` and an H200's reserve. The kernel decides each `(r − 1)^k · 2^129 ≤ r^k`.
 -/
+
+@[expose] public section
 
 namespace PousStreamedWipe
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainSimW
-import Proofs.Flock.Claims.Recursion.PlainK
+module
+
+public import Proofs.Flock.Claims.KS.PlainSimW
+public import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # Self-clashes past level 0
@@ -16,6 +18,8 @@ What remains for a later level is the level-`ℓ` form of `plain_opening_raw`: a
 against the rep's level-`ℓ` cap (`recursiveCaps[ℓ]`, the cap the custody check records) in the run's log; with it a
 live self-clash at a later level gives `PlainRawClashRunL`'s middle case.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

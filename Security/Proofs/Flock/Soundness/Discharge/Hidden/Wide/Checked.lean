@@ -1,14 +1,18 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Defs
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Defs
 
 /-!
 # The widened statements, with flock-verify's own count of units
 
 `Wide/Defs.lean`'s six statements take `0 < st.c.upv` as a hypothesis: the unit range's `g · upv` slots are a power of
 two only when the unit returns the outputs, so nothing else refuses a tail with no unit in a template instance.
-`HmRow.check` refuses `units_per_vu = 0` (PROTOCOL.md §16.10, D8; `setupHidden_upv_pos`), so these are the same
+`HmRow.check` refuses `units_per_vu = 0` (`Flock.HmRow`, D8; `setupHidden_upv_pos`), so these are the same
 statements without that hypothesis, each the conclusion of its `Wide/Defs.lean` statement under the same remaining
 conditions.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 
@@ -21,7 +25,8 @@ namespace FlockSoundness.Discharge.Hidden
 def OutputsCommittedTailChecked : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)} {d : Lean.Json}
     {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt},
-    tags.typed = false → Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
+    tags.typed = false → tags.isTmpl = false →
+    Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop → pop.tables = none →
     ∀ {D : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
     (∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks) →
@@ -40,7 +45,8 @@ def OutputsCommittedTailChecked : Prop :=
 def OutputsBindingTailChecked : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins coins' : Coins} {tables : List (String × ByteArray)} {d d' : Lean.Json}
     {partition partition' : Option Lean.Json} {program program' : Option ByteArray} {st st' : Stmt},
-    tags.typed = false → Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
+    tags.typed = false → tags.isTmpl = false →
+    Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
     Stmt.setupHidden tags cf pf coins' tables (some d') partition' program' = .ok st' →
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop → pop.tables = none →
     ∀ {D D' : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
@@ -71,7 +77,8 @@ def OutputsBindingTailChecked : Prop :=
 def OutputsCommittedV2Checked : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)} {d : Lean.Json}
     {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt},
-    tags.typed = false → Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
+    tags.typed = false → tags.isTmpl = false →
+    Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop → pop.tables = none →
     ∀ {D : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
     (∀ p ∈ st.c.ports.toList, p.segs = none) →
@@ -92,7 +99,8 @@ def OutputsCommittedV2Checked : Prop :=
 def OutputsBindingV2Checked : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins coins' : Coins} {tables : List (String × ByteArray)} {d d' : Lean.Json}
     {partition partition' : Option Lean.Json} {program program' : Option ByteArray} {st st' : Stmt},
-    tags.typed = false → Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
+    tags.typed = false → tags.isTmpl = false →
+    Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
     Stmt.setupHidden tags cf pf coins' tables (some d') partition' program' = .ok st' →
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop → pop.tables = none →
     ∀ {D D' : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
@@ -125,7 +133,8 @@ def OutputsBindingV2Checked : Prop :=
 def OutputsCommittedWideChecked : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)} {d : Lean.Json}
     {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt},
-    tags.typed = false → Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
+    tags.typed = false → tags.isTmpl = false →
+    Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop →
     ∀ {D : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
     (∀ p ∈ st.c.ports.toList, p.segs = none) →
@@ -146,7 +155,8 @@ def OutputsCommittedWideChecked : Prop :=
 def OutputsBindingWideChecked : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins coins' : Coins} {tables : List (String × ByteArray)} {d d' : Lean.Json}
     {partition partition' : Option Lean.Json} {program program' : Option ByteArray} {st st' : Stmt},
-    tags.typed = false → Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
+    tags.typed = false → tags.isTmpl = false →
+    Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
     Stmt.setupHidden tags cf pf coins' tables (some d') partition' program' = .ok st' →
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop →
     ∀ {D D' : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →

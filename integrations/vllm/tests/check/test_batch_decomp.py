@@ -98,7 +98,7 @@ def test_derived_shape_from_construction_manifest(tmp_path):
 def test_dataflow_attribution_is_primary_and_refuses_cross_request(monkeypatch, tmp_path):
     """Instances: node 3 (Embedding, reads prompt param 0 -> R0), node 4 (reads param 1 -> R1), node 5 (per-position Attention, rows=1,
     reads node 3 -> R0 by data flow though the row rule cannot place it), node 6 (reads nodes 3 AND 4 -> refused), node 7 (TokenSelect
-    of R0), node 8 (TokenSelect of R1). Weights = param 2. The oracle Prog is stubbed; no Programs are decoded."""
+    of R0), node 8 (TokenSelect of R1). Weights = param 2. The oracle RootView is stubbed; no Programs are decoded."""
 
     class FakeProg:
         pass
@@ -219,7 +219,7 @@ def test_decompose_refuses_fewer_inputs_than_requests_by_name(monkeypatch, tmp_p
 
 
 def _dag_prog(order: list[int], rewire: bool = False):
-    """A 4-instance DAG over a stub Prog: two per-row ops (rows 0, 1) each feeding a Norm, then a TokenSelect over both norms. Emitted in
+    """A 4-instance DAG over a stub RootView: two per-row ops (rows 0, 1) each feeding a Norm, then a TokenSelect over both norms. Emitted in
     `order` (indices into the canonical node list); `rewire` swaps which row feeds which Norm (same multiset of specs, different wiring)."""
 
     class FakeProg:

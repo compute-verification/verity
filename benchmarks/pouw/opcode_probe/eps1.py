@@ -1,4 +1,4 @@
-"""EPS1's readings of the opcode probes (note:20261017T0310Z-report-eps1-program): joint facets, side units, clock.
+"""The epsilon program's readings of the opcode probes: joint facets, side units, clock.
 
   python eps1.py facets OUT/rows.jsonl... [--margin 0.02] [--prior rows.csv] [--emit EPOCH]
       # frontier.cu's MMA + X points (every run given) -> facets (SMSP-cycles a warp instruction, x (1 - margin)), with
@@ -116,7 +116,7 @@ def prior_points(rows_csv: Path, prefix: str, kind: str, margin: float) -> tuple
 
 OPS = {"imad": "IMAD", "hfma2": "HFMA2*", "lop3": "LOP3.LUT", "shfl": "SHFL.BFLY", "iadd3": "IADD3", "ffma": "FFMA",
        "idp4a": "IDP.4A*", "popc": "POPC"}
-#: each family's census kind, its published rows (VF3f, r20261016-093909-ac84) and the rows its facets become; iadd3,
+#: each family's census kind, its published rows (VF3f) and the rows its facets become; iadd3,
 #: ffma, idp4a and popc are sm89/scalar.cu's
 FAMILY = {"imad": ("IMAD", "KIMAD", "EIMAD"), "hfma2": ("HFMA2", "KHFMA2", "EHFMA2"), "lop3": ("ALU", "KALU", "EALU"),
           "shfl": ("SHFL", "KSHFL", "ESHFL"), "iadd3": ("ALU", "KIADD3", "EIADD3"), "ffma": ("FFMA", "KFFMA", "EFFMA"),
@@ -334,7 +334,7 @@ def cmd_uniform(a) -> int:
     return 0
 
 
-#: QSTAR's fastest table kernel (fr16_c32, benchmarks/pouw/qstar, note:20261017T0344Z-draft-eps1-qstar) sustains this
+#: qstar's fastest table kernel (fr16_c32, benchmarks/pouw/qstar) sustains this
 QSTAR_TBS = 3.3
 
 

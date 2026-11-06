@@ -1,4 +1,6 @@
-import Mathlib
+module
+
+public import Mathlib
 
 /-!
 # Gaussian elimination with a field-operation count
@@ -10,6 +12,8 @@ eliminates one pivot per equation and back-substitutes, with no choice: the pivo
 `kernelCost n eqs` counts the field operations it performs (each `+`, `−`, `×`, `÷`, negation and test against `0`),
 at most `r·n·(2r+1)` for `r` equations (`kernelCost_le`).
 -/
+
+@[expose] public section
 
 namespace Claims.GS
 

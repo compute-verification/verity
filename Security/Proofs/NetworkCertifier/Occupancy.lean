@@ -1,14 +1,18 @@
-import Definitions.NetworkCertifier.Grid
-import Mathlib.Data.Sym.Card
-import Mathlib.Data.Set.Card
-import Mathlib.Order.Interval.Finset.Fin
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
+module
+
+public import Definitions.NetworkCertifier.Grid
+public import Mathlib.Data.Sym.Card
+public import Mathlib.Data.Set.Card
+public import Mathlib.Order.Interval.Finset.Fin
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 /-!
 # Proposition 2: timing is occupancy, its counts, and tightness
 
 `docs/network-transparency/timing-channel.md` §2.3.
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

@@ -45,7 +45,7 @@ over it names no architecture (`prims`), and a refusal for any other step:
                                       `ScaledMmS8Coordinate_v1` over W's rows (each coordinate a `Q_word` proof block)
 
 census/v1 counts `GemmAccumulatorS8_v1`'s products as served by none (`census.serves_none`): it has no committed words of its
-own, so Lean's `Accounting.Gates.roleOf` puts its steps at `Site.other`.
+own, so Lean's `Accounting.Gates.roleOf` puts its steps at `Place.other`.
 
 `bind` refuses a K that isn't a multiple of the Definition's step width k (16, 32 or 64): its K/k steps would drop the last
 K mod k products. The s8 Definitions also refuse K >= `S8_K_LIMIT` = 2^17 (`integer.exact_k_limit`), where an s8 x s8 sum can

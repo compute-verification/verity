@@ -1,8 +1,10 @@
-import Proofs.Flock.Soundness.Refine.Opening
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysReplay
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysInner
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsFrames
+module
+
+public import Proofs.Flock.Soundness.Refine.Opening
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysReplay
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysInner
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsFrames
 
 /-!
 # `repProg`'s run is a run of the compiled `--zk` rep
@@ -16,6 +18,8 @@ proof's on the seven rows (the replay's three, `replay_cons_size`, the ring swit
 
 A run of a `bind` splits (`plays_bind_inv`), which is how the opening's run is taken apart.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

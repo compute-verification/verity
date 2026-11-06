@@ -1,7 +1,9 @@
-import Proofs.Accounting.BoundReceipt.Audit
-import Proofs.Accounting.BoundReceipt.Interactive
-import Proofs.Accounting.BoundReceipt.Tile
-import Proofs.Accounting.BoundReceipt.Sketch
+module
+
+public import Proofs.Accounting.BoundReceipt.Audit
+public import Proofs.Accounting.BoundReceipt.Interactive
+public import Proofs.Accounting.BoundReceipt.Tile
+public import Proofs.Accounting.BoundReceipt.Sketch
 
 /-! The proofs for receipts bound to the matmul: co-location (`Accounting.SecurityProofs.Colocation`), the link relay
 (`Accounting.SecurityProofs.BoundReceiptLink`), the same at `e > 0`, where the answers between the locations may depend
@@ -11,3 +13,5 @@ assumptions (`Accounting.SecurityProofs.TileUnpredictableOfTT`, `Accounting.Secu
 `Accounting.SecurityProofs.TileUnpredictablePearlCOfTTOut`) and over fewer bound entries
 (`Accounting.SecurityProofs.TileUnpredictableMono`), and the deployed sketch's relay bound by Lindsey's lemma
 (`Accounting.SecurityProofs.InnerProductRelay`, `Accounting.SecurityProofs.BoundSketchRelay`). -/
+
+@[expose] public section

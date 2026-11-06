@@ -1,10 +1,12 @@
-import Definitions.Accounting.Assumptions.Remote
-import Proofs.Pouw.Prob
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.Positivity
-import Mathlib.Tactic.Ring
+module
+
+public import Definitions.Accounting.Assumptions.Remote
+public import Proofs.Pouw.Prob
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Tactic.FieldSimp
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.Positivity
+public import Mathlib.Tactic.Ring
 
 /-!
 # The remote audit's compositions, from their routes
@@ -40,6 +42,8 @@ the node-level reading that is listed. The memory a session shows held is the me
 (`Accounting.Guarantees.Remote.Held` and its time-held forms), and Mbw is the bandwidth game's
 (`Bandwidth.Guarantees.Mbw`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Remote
 

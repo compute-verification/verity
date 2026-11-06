@@ -1,7 +1,9 @@
-import Proofs.Accounting.TS.Session.Lanes.Holds
-import Proofs.Accounting.TS.HeldSound
-import Proofs.Accounting.TS.Session.Held.Known
-import Proofs.Flock.VBridge.Family.Registrants
+module
+
+public import Proofs.Accounting.TS.Session.Lanes.Holds
+public import Proofs.Accounting.TS.HeldSound
+public import Proofs.Accounting.TS.Session.Held.Known
+public import Proofs.Flock.VBridge.Family.Registrants
 
 /-!
 # What a lane's decode reads at the opened rows: the registrant's row bits
@@ -22,6 +24,8 @@ what those bits are, so `LaneHolds` and `CombHolds` become statements of the row
 * `portBit_bytes`, `holds_of_bytes`: `portBit` at a read bit, and `Holds` on a field all of whose bits are read, from
   the row's bytes. A known row (`KnownHeld`, flock-verify's `--known` check) and a registered one give those bytes.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Lanes
 

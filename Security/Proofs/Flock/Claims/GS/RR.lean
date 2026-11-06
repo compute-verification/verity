@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.GS.Basic
+module
+
+public import Proofs.Flock.Claims.GS.Basic
 
 /-!
 # The Y-roots of `Q(X, Y)` of degree below `k`: Roth–Ruckenstein, counted
@@ -22,6 +24,8 @@ polynomial bounds the degree of its child's row polynomial (`phi_child_le`), and
 distinct roots sum to at most its degree (`expand_le`). The operation count (`rrCost`) is at most
 `k·(L + 1)·((D + 1)(L + 1) + ρ(L + 1) + (D + 1)(L + 1)²(L + 4))`, with `ρ` the root finder's bound (`rrCost_le`).
 -/
+
+@[expose] public section
 
 namespace Claims.GS
 

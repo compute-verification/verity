@@ -25,7 +25,7 @@ from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
 from verity.ml.circuits.program import Program, is_input
 from verity.ml.circuits.refs import Affine, Coll, concat
 from verity.ml.circuits.requirement import from_census
-from verity.ml.circuits.types import Array, Record, Value
+from verity.ml.circuits.types import Array, RecordType, Value
 from verity_vllm.commit import memory_map as MM
 from verity_vllm.program.predict.build import BF16, I32, build_program, decoder
 from verity_vllm.program.predict.common import _Peers
@@ -358,7 +358,7 @@ def warm_program(LP: int, T: int, C: int) -> Program:
     K and V rows of its `prefix` input (bf16 [L, 2, C, row], layer l the l-th to open), and its own rows follow from position C
     (rows C..LP-1 at its first step, then T decodes)."""
     net = decoder(_phi(WIDE), 1, LP + T)
-    wrec, rl = Record(*net.leaves()), net.C.KVH * net.C.D
+    wrec, rl = RecordType(*net.leaves()), net.C.KVH * net.C.D
     params = (("prompt", Array(LP, I32)), ("prefix", Array(net.C.NL, Array(2, Array(C, Array(rl, BF16))))), ("weights", wrec))
     B = Builder(params, Value(1))
     model = net.model(B, Coll(wrec, Affine("p", 2, 0, wrec.leaves)), _Peers([], 1, 0))

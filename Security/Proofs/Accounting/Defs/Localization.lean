@@ -1,5 +1,7 @@
-import Definitions.Accounting.Actual
-import Mathlib.Logic.Relation
+module
+
+public import Definitions.Accounting.Actual
+public import Mathlib.Logic.Relation
 
 /-!
 # Reach
@@ -13,6 +15,8 @@ sends and their ticks don't depend on `C`, which one circuit can't say: the per-
 `Accounting.SecurityProofs.Actual.localization_wires`, and localization is `Accounting.Guarantees.Localization`, over
 strategies.
 -/
+
+@[expose] public section
 
 namespace Accounting.Placed
 

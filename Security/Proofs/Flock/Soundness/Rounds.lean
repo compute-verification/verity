@@ -1,12 +1,14 @@
-import Proofs.Flock.Soundness.Game.Poly
-import Definitions.Flock.Piop
-import Definitions.Flock.Ligerito
-import Mathlib.Algebra.CharP.Defs
+module
+
+public import Proofs.Flock.Soundness.Game.Poly
+public import Definitions.Flock.Piop
+public import Definitions.Flock.Ligerito
+public import Mathlib.Algebra.CharP.Defs
 
 /-!
 # One sumcheck round
 
-The spec encodes a round's quadratic in three ways (PROTOCOL.md §9.2 Z6, §10 L3, §13.2). In each,
+The spec encodes a round's quadratic in three ways (`Flock.Piop`'s Z6 and L3, `Flock.Ligerito`). In each,
 the verifier derives a quadratic from the prover's message and the running claim, and the new
 claim is its value at the fresh coin. If the running claim is false, the derived quadratic
 differs from the true one whatever the prover sends, so the new claim is false except with
@@ -16,6 +18,8 @@ them unchanged (`DESIGN.md` §8).
 
 All three identities use characteristic 2 (`1 + 1 = 0`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Rounds
 
@@ -35,7 +39,7 @@ theorem add_self (a : F) : a + a = 0 := by
 /-! ## The residual round of the zerocheck (Z6) -/
 
 /-- The verifier's quadratic in a residual round: `G(X) = g₀(1 + X) + g₁X + g∞X(1 + X)`, with
-`g₀ = (claim + r_eq·g₁)/(1 + r_eq)` (§9.2). -/
+`g₀ = (claim + r_eq·g₁)/(1 + r_eq)` (`Flock.Piop`'s zerocheck). -/
 noncomputable def residualPoly (req claim g₁ gInf : F) : F[X] :=
   C ((claim + req * g₁) * (1 + req)⁻¹) * (1 + X) + C g₁ * X + C gInf * X * (1 + X)
 

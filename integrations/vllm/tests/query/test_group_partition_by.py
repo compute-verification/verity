@@ -33,8 +33,9 @@ _Mix = CompositeDefinition(
                Tuple(Array(4, BF16), Array(2, BF16), Array(4, BF16), Array(4, F32), F32)),
     _mix, register=False)
 
-KEYS = {("def",): lambda c: c.family, ("spec",): lambda c: c.definition, ("static:N",): lambda c: str(c.statics.get("N", "")),
-        ("def", "static:K"): lambda c: f"{c.family}|{c.statics.get('K', '')}", (): lambda c: ""}
+KEYS = {("base",): lambda c: c.family, ("definition",): lambda c: c.definition, ("name",): lambda c: c.family.rsplit("_v", 1)[0],
+        ("static:N",): lambda c: str(c.statics.get("N", "")), ("base", "static:K"): lambda c: f"{c.family}|{c.statics.get('K', '')}",
+        (): lambda c: ""}
 
 
 @pytest.fixture(scope="module")

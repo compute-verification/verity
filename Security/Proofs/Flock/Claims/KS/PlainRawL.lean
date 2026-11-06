@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.KS.PlainOffLive
-import Proofs.Flock.Claims.KS.PlainLeafKS
-import Proofs.Flock.Claims.KS.SessionRaw
-import Proofs.Flock.Claims.Recursion.PlainK
+module
+
+public import Proofs.Flock.Claims.KS.PlainOffLive
+public import Proofs.Flock.Claims.KS.PlainLeafKS
+public import Proofs.Flock.Claims.KS.SessionRaw
+public import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # The plain table bound at one tape, each slot at read sets, at any leaf
@@ -21,6 +23,8 @@ that it serves the public and hm96 cases at `leaf512` and the plain-leaf case at
 * `plain_accPr_le_rdL`: at the concrete simulator, a run accepts with probability at most `ε_table`, the one-run
   event's probability, each slot's read-set term and the chance of opening off the table.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

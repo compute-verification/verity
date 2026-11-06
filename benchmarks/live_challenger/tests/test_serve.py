@@ -4,8 +4,9 @@ session, signs its release log when it ends and publishes nothing secret; the ve
 process's `out/` and the auditor's signed ledger alone.  A Lean that can't answer starts no session, a second session
 signs at the key's next leaves, a session id the key has signed for is refused, a key inside `out/` is refused, a refused
 hello is logged and the next connection taken, a broken sequence after the hello ends the session with exit 1, signed as
-such, a salt opens only after `--root`, and with `--peer` (development sessions alone: a window's, with `--root`, is
-refused it) the tunnel opens once the challenger listens and a tunnel that ends first ends it."""
+such, an open whose label is past ASCII is refused in ASCII and its close written, a salt opens only after `--root`, and
+with `--peer` (development sessions alone: a window's, with `--root`, is refused it) the tunnel opens once the challenger
+listens and a tunnel that ends first ends it."""
 
 from __future__ import annotations
 
@@ -228,6 +229,28 @@ def test_a_broken_sequence_after_the_hello_ends_the_session_with_exit_1(tmp_path
     assert code == 1
     assert close(out)["ended"].startswith("a client's frames are hello")
     with pytest.raises(C.CoinError, match="ended without its client closing it: a client's frames are hello"):
+        trusted(out, auditor)
+
+
+@pytest.mark.parametrize("label", ["positions\u00e9", "\ud800", ["positions"]])
+def test_an_open_whose_label_is_past_ascii_is_refused_in_ascii_and_the_close_is_written(tmp_path, label):
+    """An open's label that isn't an ASCII string is refused before any coin opens, in ASCII, so the close that signs how
+    the session ended is written and the verifier reads it as refused."""
+    auditor = Auditor(tmp_path)
+    proc, out, first = start(tmp_path, auditor=auditor)
+    host, port = first.split()[1].split(":")
+    hello = json.dumps({"type": "hello"}).encode()
+    head = json.dumps({"type": "open", "label": label, "index": 0, "after": "00" * 64}).encode()
+    with socket.create_connection((host, int(port))) as s:
+        s.sendall(R.HEADER.pack(len(hello), 0) + hello)
+        assert s.recv(1 << 16)
+        s.sendall(R.HEADER.pack(len(head), 0) + head)
+        assert R.LABEL.encode() in s.recv(1 << 16)
+    assert finish(proc)[0] == 1
+    assert close(out)["ended"] == R.LABEL and R.LABEL.isascii()
+    record = C.ChallengerRecord.from_json(json.loads((out / R.RECORD).read_text()))
+    assert not any(R.released_roots(out / R.RELEASES, record.commitment).values())
+    with pytest.raises(C.CoinError, match="ended without its client closing it: an open's label is an ASCII string"):
         trusted(out, auditor)
 
 

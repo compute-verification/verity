@@ -88,14 +88,13 @@ class Device:
 
 #: sm_90, the H100 (Rounds 10–11, `Prices.h100`): FADD 32, a BF16 MAC 2, and `Costs.adopted`'s forming, 64 + 4
 H100_PRICES = Prices("sm_90", fadd=32, bf16_mac=2, forming_credited=64, forming_a_only=4)
-#: sm_120, the RTX PRO 6000 (`Prices.sm120`; node 2, locked 2,100 MHz, `r20260930-063213-c94a` and
-#: `r20260930-061717-3e84`): FADD 8, issue-bound (8.38 in the measured 64-add loop); a BF16 MAC 2; the k32 noise atom
+#: sm_120, the RTX PRO 6000 (`Prices.sm120`; node 2, locked 2,100 MHz): FADD 8, issue-bound (8.38 in the measured 64-add loop); a BF16 MAC 2; the k32 noise atom
 #: (32) and the E4M3 cast alone (8; 12.31 in the packing loop), 40; ρ's one FFMA per 8 elements, 1
 SM120_PRICES = Prices("sm_120", fadd=8, bf16_mac=2, forming_credited=40, forming_a_only=1)
 PRICES = {p.device: p for p in (H100_PRICES, SM120_PRICES)}
 
 #: k = 256 is GLM-5.3's shared-expert down_proj and sharded routed w2 per TP8 rank: TT_OUT's census at k = 256 (hopper, s5
-#: at line norm 16, δ = 1, every family, tiles 64 x 64 and 64 x 16, runs 1-3) passed with the debit in r20261023-170626-9dea
+#: at line norm 16, δ = 1, every family, tiles 64 x 64 and 64 x 16, runs 1-3) passes with the debit
 H100 = Device("h100", HOPPER_E4M3_K32, HOPPER_BF16_WGMMA_K16, 4, H100_PRICES, 1 << 16, census_ks=(256,))
 
 SM120 = Device(

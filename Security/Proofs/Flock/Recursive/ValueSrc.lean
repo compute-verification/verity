@@ -1,6 +1,8 @@
-import Proofs.Flock.Recursive.SaltFinder
-import Proofs.Flock.VBridge.Decode
-import Flock.RecCoins
+module
+
+public import Proofs.Flock.Recursive.SaltFinder
+public import Proofs.Flock.VBridge.Decode
+public import Flock.RecCoins
 
 /-!
 # The value tie's extractor and its finder, as the guarantee reads them
@@ -22,6 +24,8 @@ that plays the recursive audit once and outputs its pair (`valueFinder`, `Recurs
   `files`): `coef` and `dirs` at `rec-open`, `v` at `rec-residuals` and `rec-sparse` (their ties:
   `Recursive/ValueInner.lean`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

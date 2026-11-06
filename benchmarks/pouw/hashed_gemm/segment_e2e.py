@@ -21,11 +21,11 @@ The fold is a parameter (``FOLD``, `FOLDS`):
   z = mix32(y + 0x9E3779B9) (NW = KS / S windows). Chain 4 (t % 2) + e absorbs entry 4 t + e at position t:
   u = y ^ p ^ kx_t, y = u a_t + z, z = rotl(u, r_t) + y (mod 2^32, a_t odd, fgemm.cu's lane-0 keys); R = xor_i (y_i ^
   rotl(z_i, 16)).
-- ``xin`` (P2-FF r9's XOR-in with rotations (13, 19), note:20261016T1117Z-draft-fullfloor-s-r9; provisional): state y (8
-  chains, duo's y keys), chain t absorbing entries 4 t .. 4 t + 3 as d0 .. d3: y = (rotl(y, 13) ^ d0) a0_t + d1, then
-  y = (rotl(y, 19) ^ d2) a1_t + d3, the multipliers odd and outside Lambda8 (`key_ok`); R = xor_t y_t.
+- ``xin`` (the XOR-in fold with rotations (13, 19); provisional): state y (8 chains, duo's y keys), chain t absorbing
+  entries 4 t .. 4 t + 3 as d0 .. d3: y = (rotl(y, 13) ^ d0) a0_t + d1, then y = (rotl(y, 19) ^ d2) a1_t + d3, the
+  multipliers odd and outside Lambda8 (`key_ok`); R = xor_t y_t.
 
-Operands are committed as decision 46's tile leaves: R = 64 rows x 32 values of an operand (row block i / 64, segment j).
+Operands are committed as tile leaves: R = 64 rows x 32 values of an operand (row block i / 64, segment j).
 The thread's 4 rows of A at segment j are rows o + 8 r of A's leaf, o = 32 (wm % 2) + g (16 offsets); its 8 rows of B are
 rows o' + 8 (c >> 1) + (c & 1) of B's leaf, o' = 32 (wn % 2) + 2 q (8 offsets).
 
@@ -171,8 +171,8 @@ ROT = tuple(((t * 7 + 5) % 31) + 1 for t in range(MI * NI))
 
 
 def key_ok(a: int) -> bool:
-    """XOR-in's multiplier condition (the Lambda8 half of P2-FF r9's key_ok_r9): a odd, and neither +a nor -a mod 2^30 in
-    Lambda8 = {lambda : lambda b = b' mod 2^30 for some int8 b != 0 and int8 b'}."""
+    """XOR-in's multiplier condition (the Lambda8 half of receipt_folds_r9.key_ok_r9): a odd, and neither +a nor -a
+    mod 2^30 in Lambda8 = {lambda : lambda b = b' mod 2^30 for some int8 b != 0 and int8 b'}."""
     if not a & 1:
         return False
     for lam in (a, -a):

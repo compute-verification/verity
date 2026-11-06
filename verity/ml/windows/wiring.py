@@ -1,9 +1,9 @@
-"""A window's wiring across statements (`verifier/PROTOCOL.md` §16.13 ``Wiring``): a wired member (``serving_rows.Member.wired``,
+"""A window's wiring across statements (`HmOut` ``Wiring``): a wired member (``serving_rows.Member.wired``,
 one ``(port, out, writers)`` per wire) reads, unit by unit, other units' output rows: its unit i's ``port`` row is global unit
 ``writers[i]``'s ``out`` row, committed under that row's salt, so the two rows' ``b || c`` are one string.  Lean's links hold
 inside one statement; these join statements (one coordinate's K-chunks, chunk c's ``acc`` chunk c - 1's output; split partials,
 a combine unit's ``in<j>.s`` split s's), so the verifier holds them on the public bodies the leaf layer binds, and a sampled proof block's input is the committed output of
-the unit that wrote it.  A unit whose wired row is not its writer's row is faulty in the wired flattening (its outputs
+the unit that wrote it.  A unit whose wired row is not its writer's row is incorrect in the wired flattening (its outputs
 are not its Definition's on its writers' committed outputs), so the verifier holds the wires of the units it samples
 (`check_drawn`, `SampledProofs.Wires.Summary.drawnOk` in Lean, whose `drawnOk_iff` makes it the expanded check on the
 sampled proof blocks); `check`, every unit's, is the reference.  A member may be wired and read registered rows (a GEMM slice: its

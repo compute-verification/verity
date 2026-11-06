@@ -40,7 +40,7 @@ string (`b || c`). So is the stale bound, the store index below which every writ
 derives it from the pass row as a step, the cap, and holds a re-key's old block's write step in the map below it; no
 input names it.
 
-**The appends.** A step's written blocks are the remote audit's append for that step. A payload row's commit string is the
+**The appends.** A step's written blocks are PoUB's append for that step. A payload row's commit string is the
 append leaf's (`hm96-sha512/row/v2` of the same 4,096 bytes under the same salt: the leaf hides ``d_j``), so an append's root
 is a function of its instance's payload rows' ``b || c`` and its public ``first`` and ``count``. The chain over the steps'
 appends is then the record's (remote_bandwidth's `Record.appends`): no dummy append, none out of the map's order, no re-key the

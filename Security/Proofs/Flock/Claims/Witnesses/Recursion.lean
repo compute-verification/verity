@@ -1,8 +1,9 @@
-import Proofs.Flock.Claims.Witnesses.Flock
-import Proofs.Flock.Claims.ZK.Rewind
-import Proofs.Flock.Claims.ZK.Indexed
-import Definitions.Claims.Recursion
-import Proofs.Flock.Claims.ZK.Indexed
+module
+
+public import Proofs.Flock.Claims.Witnesses.Flock
+public import Proofs.Flock.Claims.ZK.Rewind
+public import Proofs.Flock.Claims.ZK.Indexed
+public import Definitions.Claims.Recursion
 
 /-!
 # Refutation witnesses: the ZK-recursion compiler's claims
@@ -40,6 +41,8 @@ only at a record whose own reference prover does: `ZK_zeroRecord`, `ZKPriv_zeroR
 inner round with a one-byte salt whose reference prover sends `Sim`'s commit string to the zero digest (`zeroP`), where
 every witness is in the relation (`accI`), at an error of `0` (`zkmalR_zeroP`).
 -/
+
+@[expose] public section
 
 namespace Claims.Witness.Recursion
 
@@ -94,7 +97,7 @@ def ksR (Coin : Type) : Recursion.Deploy Coin where
 
 /-- A recursion statement in scope: a dense inner table at `m = 22`, `k_log = 6`, one region and four claims, with no
 RecSparse phase and no V* session. -/
-def recStmt : Recursion.Stmt where
+def recStmt : Recursion.CompiledStatement where
   inner := []
   innerDims := none
   circ := none
@@ -188,7 +191,7 @@ def zvZR (Coin : Type) (circ : Option Msg) (SO : ℕ → Msg → ℕ → OSim) :
     SO := SO }
 
 theorem recStmt_inScope : Recursion.InScope recStmt :=
-  ⟨rfl, le_rfl, by decide, le_rfl, rfl, Or.inl ⟨rfl, rfl⟩, fun _ h => absurd h List.not_mem_nil⟩
+  ⟨rfl, le_rfl, by decide, le_rfl, rfl, ⟨rfl, rfl, rfl⟩, fun _ h => absurd h List.not_mem_nil⟩
 
 /-! ## `ksR`'s extraction and numbers -/
 

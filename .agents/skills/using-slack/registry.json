@@ -127,6 +127,7 @@
         "benchmarks/private_circuit/",
         "benchmarks/verifier_cost/",
         "benchmarks/proof_throughput/",
+        "benchmarks/flock_s8_block/",
         "benchmarks/sampling_plan/",
         "integrations/vllm/verity_vllm/protocols/sampled_proofs.py",
         "Security/Definitions/Hash/",
@@ -160,6 +161,7 @@
       "owns": [
         "integrations/",
         "benchmarks/served_units/",
+        "benchmarks/unit_block/",
         "benchmarks/served_commit/",
         "benchmarks/g2/",
         "tools/verity/circuit_check/",
@@ -168,6 +170,7 @@
         "benchmarks/tc_probe_fp4/",
         "benchmarks/load_time/",
         "benchmarks/bool_build_cost/",
+        "benchmarks/f32_exhaustive/",
         "verity/ml/circuits/ops/",
         "integrations/vllm/verity_vllm/program/",
         "integrations/vllm/verity_vllm/query/",
@@ -296,7 +299,10 @@
       "holder": "compute-accounting's research lane (bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac): the machine model (W1 and the device records), the Lean accounting statements (NCI, DeclaredCircuitRequirement) and their red and blue teams, and PoUW's protocol statements (period, salt, credit form)",
       "remit": "The machine model, the Lean accounting statements (NCI and the rest) and their red and blue teams, and PoUW's protocol statements.",
       "charter": "note:compute-accounting/20261019T2230Z-report-lane-split",
-      "usergroup": "S0CBZ2L8542"
+      "usergroup": "S0CBZ2L8542",
+      "owns": [
+        "verity/hardware/"
+      ]
     },
     {
       "handle": "memory-accounting",
@@ -321,10 +327,10 @@
         "benchmarks/rate_squaring/",
         "benchmarks/remote_session/",
         "benchmarks/resource_accounting/",
-        "benchmarks/serve_bandwidth/",
         "benchmarks/stacked_share/",
         "benchmarks/vllm_encoded/",
         "benchmarks/word_codec/",
+        "examples/onsite_served/",
         "integrations/vllm/verity_vllm/protocols/pous.py",
         "verity/core/devices/memory_challenger/",
         "verity/core/protocols/bandwidth/",
@@ -462,6 +468,7 @@
         "tools/config/",
         "tools/verity/check/",
         "tools/verity/cli/",
+        "tools/verity/graph/",
         "tools/move/",
         "tools/research/src/research/queue.py",
         "tools/research/src/research/quick_tier.py",
@@ -600,6 +607,7 @@
       "linear": "BENCH",
       "owns": [
         "benchmarks/harness/",
+        "benchmarks/overhead/",
         "benchmarks/recursion_e2e/",
         "benchmarks/specs/",
         "infra/cluster/kinds/benchmarks.toml",

@@ -31,6 +31,8 @@ reuse_key = sha256 hex of canon({"derivation": drv_id, "source": <source identit
 attempt id = run id (r20260922-105905-2021)
 pr:<number>@<40-hex commit>                             a pull request at one head; only labels target it
 ckpt:<HF repo id>@<40-hex revision>                     a checkpoint at one revision; only labels target it
+task:<sha512 hex of a task's key>                       a check's task: the executor's verdicts and results on it; only labels target it
+commit:<40-hex commit>                                  a commit: the executor's task graphs of it and drive's shadow record of its check; only labels target it
 ~~~
 
 Two agents freezing the same member set produce the same snapshot id (members are sorted and de-duplicated; `name`, `note`
@@ -83,6 +85,9 @@ catalog.sqlite                       LOCAL ONLY: rebuildable index (§5); never 
 scratch/<reuse_key>/<name>/          LOCAL ONLY: tool caches namespaced by reuse_key (§6.5)
 steward/lease.json                   REMOTE ONLY, not a store record: the steward lease, the one mutable key, changed by conditional
                                      PUT only (research/steward.py); the store never reads, lists or indexes it
+live/<run id>/<seq>.json             REMOTE ONLY, not a store record: a running check's live record, a new immutable object per
+                                     write with the run's custody key (tools/verity/check/live.py, read by `verity ci`); the store
+                                     never reads, lists or indexes it, and gc leaves it
 ~~~
 
 Python API: `research.store.local.LocalStore(root=None, *, config_path=None, repo=None)` (root from `$RESEARCH_STORE`, config
@@ -437,7 +442,11 @@ prints the table; the groups are:
   no-dumps), `verifier`, `verifier_seconds`, `same_device` (bool), `below_bar` (bool: verified, but the whole-proof bound misses the tables' 2^-128 bar,
   so it is shown in the below-bar drill-down and never as a Table 2 cell), `outcome`; `independently_verified` (bool) is the back-fill's
   spelling of `verified` — accepted by every reader, deprecated for new writes; `verified_by` is a ledger row's free text and
-  carries no verdict — ignored.
+  carries no verdict — ignored; `verdict` (enum: pass | fail) and `result` (a result/v1 document) on `task:<key>`, by the
+  executor's worker, `tasks_graph` and `verity_graph` on `commit:<sha>`, by the executor (the `art:` id of the
+  `tasks-graph/v1` or `verity-graph/v2` graph it listed on a worker), and `executor_shadow` on `commit:<sha>`, by drive
+  (`research.executor`); `label_auth` beside a ready mark or land verdict on `pr:<n>@<head>`, and `label_delegation` on an
+  agent's delegation target (`task:<sha512>`), each by a handle (`research.labelauth`).
 - **evidence** — probe captures and input sets: `instruction`, `model`, `model_agrees` (bool), `model_status`,
   `model_rejected`, `evidence`, `family`, `instances_dataset`, `instances_tier`, `mismatches`, `target`, `component`, `jobs`, `dtype`;
   `staged` on `ckpt:<repo>@<revision>`, when a host finished staging a checkpoint's weights (`verity-vllm records staged`).

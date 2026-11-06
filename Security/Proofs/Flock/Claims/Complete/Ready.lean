@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Sim
-import Proofs.Flock.Claims.Complete.ZkTables.Honest
+module
+
+public import Proofs.Flock.Claims.Complete.Sim
+public import Proofs.Flock.Claims.Complete.ZkTables.Honest
 
 /-!
 # The deployed completeness error
@@ -38,6 +40,8 @@ import Proofs.Flock.Claims.Complete.ZkTables.Honest
   the masked proofs state `honestPZk`'s completeness at `δcZk` in, and `ZkTables.honestPR`'s at `ZkTables.δc` is
   `Claims.Flock.Complete H (deployZk rel)`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

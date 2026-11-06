@@ -1,4 +1,6 @@
-import Definitions.Population.Oblivious
+module
+
+public import Definitions.Population.Oblivious
 
 /-!
 # Address maps and the wirings that express them
@@ -17,6 +19,8 @@ statement's cones are read from, and the question here is which static wirings c
 * `DynPopulation.addressMap`: an address-closed program's address map, for which the program's own functions are
   compatible.
 -/
+
+@[expose] public section
 
 namespace Population
 

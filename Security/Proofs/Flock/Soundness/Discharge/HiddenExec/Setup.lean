@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Statements
-import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Statements
+public import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
 
 /-!
 # What `Stmt.setupHidden` returns, as this area reads it
@@ -11,6 +13,8 @@ The rest are what this area reads of `Stmt.setupHidden`, all from `Discharge/Hid
 of `Spec` (`tagsEq`, `pub`, `parse`, and `n`, `blocksReal`, `nbl`); `setupHidden_hm96`, `setupHidden_wf` and
 `parse_untyped` are `Discharge/Hidden`'s (`Hidden/Facts.lean`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -62,10 +66,16 @@ theorem setupHidden_drawn {d : Json}
   obtain ⟨pop, hl, -, hd⟩ := (Hidden.setupHidden_spec h).pub
   exact ⟨pop, hl, hd d rfl⟩
 
-/-- `Spec.parse`: the statement's circuit is the one `HmOut.parse` accepts. -/
-theorem setupHidden_parseC (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
+/-- `Spec.parseF`: at flat tags, the statement's circuit is the one `HmOut.parse` accepts. -/
+theorem setupHidden_parseC (hi : tags.isTmpl = false)
+    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
     HmOut.parse tags cf tables = .ok st.c :=
-  (Hidden.setupHidden_spec h).parse
+  (Hidden.setupHidden_spec h).parseF hi
+
+/-- **The statement's circuit is the file's**, when `HmOut.parse` accepts the file. -/
+theorem setupHidden_c_of_parse {c : Circuit} (hc : HmOut.parse tags cf tables = .ok c)
+    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) : st.c = c :=
+  Except.ok.inj ((setupHidden_parseC (HmOut.parse_isTmpl hc) h).symm.trans hc)
 
 /-- `Spec.n`, `Spec.blocksReal`, `Spec.nbl`: `n` is the (drawn) public file's, and `nbl = max 3 (log2ceil ⌈n / c.g⌉)`,
 as setupH's (`Integrate.setupH_n`). -/

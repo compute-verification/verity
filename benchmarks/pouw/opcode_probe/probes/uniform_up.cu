@@ -1,7 +1,7 @@
-// FACET-BREAK's UP search (note:20261017T0524Z-draft-eps1-facet-break): uniform-datapath forms uniform.cu didn't time,
+// facet_break's UP search: uniform-datapath forms uniform.cu didn't time,
 // against the rows that price them, UP above all (UNI at 0.766 a SMSP-cycle alone, UNI64 at 0.66, neither measured
-// beside any form but UIMAD/ULOP3, USHF/ULEA/ULOP3 and LDCU). Built as uniform.cu is, under its measurement standard
-// (note:20261017T0332Z-draft-eps1-datasheet, P10): 16 warps (4 a SMSP, one block a SM), each loop's uniform count
+// beside any form but UIMAD/ULOP3, USHF/ULEA/ULOP3 and LDCU). Built as uniform.cu is, under its measurement standard:
+// 16 warps (4 a SMSP, one block a SM), each loop's uniform count
 // pinned exactly by the gate, the chains loop-carried from a parameter into the sink, and every vector setting inside
 // the honest step with its extra work reading the accumulators, the one place ptxas 13.0 keeps a chain uniform.
 //   v<F>_<K><S>  F: h the honest step (8 IMMA, duo on each accumulator); g h + 64 FFMA reading the accumulators

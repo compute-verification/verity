@@ -132,7 +132,7 @@ def expected(row: resolver.Row) -> dict:
 
 
 BUILDER = "verity_vllm.pipeline.cli"         # Q_module_body_v1 over the Program + correspondence (same build / build-global flags as row_pod.sh)
-POLICIES_OFF = ["--no-norm-scales", "--no-guarded-max", "--no-router-softmax", "--no-vocab-range"]    # the manifests of record predate them
+POLICIES_OFF = ["--no-norm-scales", "--no-router-softmax", "--no-vocab-range"]    # the manifests of record predate them
 
 
 def _flags(row: resolver.Row) -> list[str]:

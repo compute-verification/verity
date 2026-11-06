@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.Replay.LigeritoCons
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoCons
 
 /-!
 # The honest prover's weight is the verifier's residual weight
@@ -16,6 +18,8 @@ model's weight on the lists so far:
   `Σ_j eq(α)_j·X̂_c(ω_{pos_j})` (`embed_consW`, from `fOf_xhats`);
 * **the end** (`res_honest`): the residual weights are the prover's last weight plus the last consistency claim.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

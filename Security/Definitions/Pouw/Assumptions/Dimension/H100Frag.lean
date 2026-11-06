@@ -1,4 +1,6 @@
-import Definitions.Pouw.Assumptions.Dimension.H100Dense
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.H100Dense
 
 /-!
 # Computed fragments in the k8 lemma (trusted statements; draft semantics)
@@ -28,6 +30,8 @@ The lane bound on the multiplicands is the named hypothesis `FragLanes S p q W` 
 adversaries whose cheap tensor-core multiplicands meet it. It is not needed at Round 8's loop-free prices
 (`DistinctWritesLoopFree`, `Pouw.Dimension.H100Floor`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.H100
 

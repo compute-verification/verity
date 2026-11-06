@@ -2,10 +2,10 @@
 (nothing reaches a node otherwise). The gate's scan rehearsal (`vy-challenger-gate warden-rehearse --scan --prompts`,
 `benchmarks/live_challenger/auditor.py`) runs against the endpoint on the peer's loopback, by default `PEER`'s
 `verity-vllm serve-openai` on 127.0.0.1:18782, inside the scan's class (`scan_zk.W63`: at most KI = 1,024 prompt ids and
-KO = 64 ids out a request). The session's prompts are of `PROMPT_IDS` = 256 ids, since prompts of 1,024 reach the warden
-late against its D = 2.7 s (about 1.2 s of ingress and 1.2 to 4 s of committed prefill), and each is answered
-greedily with at most 64 ids: the base Llama-3.2-1B ends at its one EOS id, 128001, after 1 to 5 ids in 15 to 27% of
-requests. The network chain's run of record (`chain_record.sh`'s warden path) then proves the session.
+KO = 64 ids out a request). The session's prompts are of `PROMPT_IDS` = 256 ids, since prompts of 1,024 reach the
+network certifier late against its D = 2.7 s (about 1.2 s of ingress and 1.2 to 4 s of committed prefill), and each is
+answered greedily with at most 64 ids: the base Llama-3.2-1B ends at its one EOS id, 128001, after 1 to 5 ids in 15 to
+27% of requests. The network chain's run of record (`chain_record.sh`'s network certifier path) then proves the session.
 
     python served_session.py plan [FLAGS]
     python served_session.py session --out DIR [FLAGS] [--gate USER@HOST | --gate local] [--key KEY] [--keep DIR]
@@ -32,8 +32,10 @@ request's max_tokens, at most KO.
   128,000 regular ids by default), sampled from a fresh secret seed this process alone holds: they are the prover's,
   which the gate writes to its run's ``witness/`` alone, so they are written nowhere here.
   - ``--gate USER@HOST`` (the challenger's gate, `GATE`, under the lane's gate key ``--key``): the request with the
-    prompts on its stdin (``start.json``), ``status`` every `POLL_S` seconds until the run ends (``status.json``), then
-    ``fetch``.
+    prompts on its stdin, whose reply goes to KEEP/RUN/start.json alone (0600), ``status`` every `POLL_S` seconds
+    until the run ends (``status.json``), then ``fetch``. The reply is the request's public fields and the run's
+    systemd unit, ``vy-certifier@RUN.service``, which the warden's witness also records (stalls.json's cgroup paths)
+    and no public file holds: published, the leak guard would hold it as a piece of the witness.
   - ``--gate local``, the dry rehearsal: this tree's gate on a scratch host under KEEP, its rehearsal run in this
     process (`auditor.certifier_run`), where the tunnel is the stand-in endpoint itself (`demo_stub.py serve --out`,
     the endpoint's records to KEEP/RUN/endpoint) listening on the port the run picks. The stand-in serves byte ids:
@@ -42,12 +44,16 @@ request's max_tokens, at most KO.
   The lane's own fetch, with ``witness/``, goes to KEEP/RUN/fetch.tar.gz (KEEP and KEEP/RUN 0700, refused inside the
   run dir: custody publishes all of ``--out``). ``--out`` gets ``bundle.tgz``, what ``fetch`` gives any other key (the
   bundle less ``witness/``), and ``session.json``, the public outcome: the gate run, its rc, the check's verdict and
-  counts, the link-windows, the origin and the session's span. Before it exits, every file of ``--out`` and member of
-  ``bundle.tgz`` is read for a prompt's ids, and one that holds them is removed (exit 4). Exit 0 when the gate's check
-  accepted the run, its rc (or 1) when it didn't, 2 when the gate refused the request.
+  counts, the link-windows, the origin and the session's span. Every file is first written to a fresh hold under
+  KEEP/held (0700), and reaches ``--out`` only through the record's leak guard (``leak_guard.py``), whatever the exit:
+  each file of the hold and member of ``bundle.tgz`` that holds a prompt's ids is removed, then the guard reads
+  ``--out`` and the hold against the kept fetch, moves what holds a piece of the witness to KEEP/quarantine and releases
+  the rest (exit 4 when either found one). A guard that fails or runs past its budget releases nothing (exit 5), nor
+  does SIGTERM (exit 143): the files stay in the hold, out of the record. Exit 0 when the gate's check accepted the run,
+  its rc (or 1) when it didn't, 2 when the gate refused the request.
 * **io** writes the kept warden run's certified I/O (`warden_chain.io`: each request's prompt and streamed ids as the
-  warden's cells carry them) and its deployment.json to KEEP/RUN/certified-io.json (0600), on `AUDITOR`, and prints only
-  its path and counts.
+  network certifier's cells carry them) and its deployment.json to KEEP/RUN/certified-io.json (0600), on `AUDITOR`, and
+  prints only its path and counts.
 * **endpoint** is the chain's endpoint step on the served node, where the endpoint's records stay: serve-openai's serve
   dir (``--from``, its ``--out``) holds requests.jsonl and advice_trace.jsonl, whose arrive, step and finish records
   carry each request's prompt length, sampling (its seed), rows and emitted ids. It copies the trace, windows.jsonl,
@@ -59,7 +65,8 @@ request's max_tokens, at most KO.
   its report.json and `RECORDS`. It writes nothing unless serve.json shows the endpoint served with `ENDPOINT`'s flags
   and no published file holds a request's prompt ids, a trace's arrive, step or finish record, or a request-valued
   field (`valued`).
-* **chain** runs chain_record.sh's warden path on the kept fetch (CR_PATH=warden, CR_GATES=KEEP/RUN/fetch.tar.gz), with
+* **chain** runs chain_record.sh's network certifier path on the kept fetch (CR_PATH=warden,
+  CR_GATES=KEEP/RUN/fetch.tar.gz), with
   the endpoint's report (``--endpoint``, ``endpoint``'s art), or a dry rehearsal's endpoint records (KEEP/RUN/endpoint
   by default) and the model's EOS ids (``--eos-ids``, the stand-in's ``--vocab``), N2's period drawn
   on the verifier's coins (CR_N2_DRAW 8) and the tie on 8 link-windows (CR_TIE_WINDOWS)
@@ -77,7 +84,7 @@ run's witness are the auditor's, so the sample never runs on the served node, wh
 that is the kept run's peer (its request.json's) or `PEER` is refused. Only P's own line serves P, and a reserve for a
 node with no line is refused: `AUDITOR`'s line is ports 7821-7830 (with its /etc/vy/peers entry), and on
 a node without one the chain draws on the verifier's coins. ``--main`` is the verifier's copy of main's first-parent
-history, fetched from the tree's origin into KEEP/RUN by default as n2_advised_zk.sh does; ``--challenger-key`` is the
+history, fetched from the tree's origin into KEEP/RUN by default (`first_parent`); ``--challenger-key`` is the
 deployment's challenger-key/v1 record (labelled ``challenger-key current``), sent with the run. CR_SCAN_ARGS and
 CR_SCAN_CMD may not name the scan's coins (``--draw``, ``--challenger``, ``--peer``) themselves.
 
@@ -85,14 +92,14 @@ CR_SCAN_CMD may not name the scan's coins (``--draw``, ``--challenger``, ``--pee
 listens within about 35 s. Its records stay in its serve dir on h200-2: requests.jsonl (prompt and streamed ids) and
 advice_trace.jsonl (prompt lengths, sampling, rows, emitted ids) are request values, and this runbook neither fetches
 nor publishes them. The endpoint step's advice (`verity-vllm advice`) needs both, so ``endpoint`` runs it there, on a
-copy whose requests.jsonl is rebuilt from `USERS` (each engine request's id and its warden user, ``{"engine_id",
-"user"}`` a line, in requests.jsonl's order) and the certified I/O, each request's prompt and streamed ids as the
-warden's cells carry them and its finish (`finish`): the endpoint's trace is checked against the certified I/O, not the
-prover's record of it. The certified I/O is ``io``'s file, written in KEEP on `AUDITOR`: it reaches the served node
-over a private route (``endpoint --io -`` on an ssh stdin, or a ``--send`` the step moves out of the run dir), never
-through a run's custody, and the served node already holds its values. The check then runs on the prover's node, and
-the chain's report says so (`chain_record.WARDEN_SERVED_STUBBED`). Its art (``--endpoint ART``, ``endpoint``'s
-``$OUT``) is report.json, windows.jsonl and serve.json.
+copy whose requests.jsonl is rebuilt from `USERS` (each engine request's id and its network certifier user,
+``{"engine_id", "user"}`` a line, in requests.jsonl's order) and the certified I/O, each request's prompt and streamed
+ids as the network certifier's cells carry them and its finish (`finish`): the endpoint's trace is checked against the
+certified I/O, not the prover's record of it. The certified I/O is ``io``'s file, written in KEEP on `AUDITOR`: it
+reaches the served node over a private route (``endpoint --io -`` on an ssh stdin, or a ``--send`` the step moves out of
+the run dir), never through a run's custody, and the served node already holds its values. The check then runs on the
+prover's node, and the chain's report says so (`chain_record.WARDEN_SERVED_STUBBED`). Its art (``--endpoint ART``,
+``endpoint``'s ``$OUT``) is report.json, windows.jsonl and serve.json.
 
 The runs (the lane's gate key is on `AUDITOR`, a CPU node; KEEP is the lane's gate directory there):
 
@@ -131,6 +138,7 @@ import os
 import secrets
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import tarfile
@@ -155,7 +163,7 @@ REQUESTS = 113
 #: takes, the auditor's node, the gate key's file under ~/.ssh and the lane's gate directory there
 SITE: dict[str, str] = json.loads((HERE / "site.json").read_text())
 PEER, PORT, GATE, LANE = SITE["peer"], 18782, SITE["gate"], SITE["lane"]
-#: the auditor's side, where the chain runs and the gate's coins for its draw arrive
+#: the auditor's side, where the chain runs and the gate's coins for its sample arrive
 AUDITOR = SITE["auditor"]
 KEY = Path.home() / ".ssh" / SITE["gate_key"]
 KEEP = Path(SITE["keep"])
@@ -165,14 +173,15 @@ VOCAB = 128_000
 MARGIN = 3
 LATE_S, POLL_S = 60, 15
 SSH = ("ssh", "-T", "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "ServerAliveInterval=15")
-#: the flags the endpoint serves the session with: the warden's id form, in its release order, each window sealed
-#: without the attention interiors (about 1 GB a request at 256 ids)
+#: the flags the endpoint serves the session with: the network certifier's id form, in its release order, each window
+#: sealed without the attention interiors (about 1 GB a request at 256 ids)
 ENDPOINT = "verity-vllm serve-openai --host 127.0.0.1 --port {port} --protocol ids --id-payload 503 --admit release-order " \
            "--scheme rows-sha512 --seal --retain-exclude hidden_m1"
 #: serve-openai's default --max-model-len, which the endpoint's flags name only past it
 CONTEXT = 512
-#: the endpoint's map from its engine requests to the warden's, in its serve dir: each engine request's engine_id and
-#: its warden user (null for a body that sent none), a line in requests.jsonl's order: requests.jsonl less its values
+#: the endpoint's map from its engine requests to the network certifier's, in its serve dir: each engine request's
+#: engine_id and its network certifier user (null for a body that sent none), a line in requests.jsonl's order:
+#: requests.jsonl less its values
 USERS = "request_users.jsonl"
 #: the endpoint's records its art publishes beside the endpoint step's report.json, from the serve dir
 RECORDS = ("windows.jsonl", "serve.json")
@@ -214,8 +223,10 @@ def prompts(n: int, ids: int, vocab: int, seed: bytes) -> list[list[int]]:
 
 
 def words(a: argparse.Namespace) -> list[str]:
+    tick = getattr(a, "bucket_ms", None)
     return ["warden-rehearse", "--peer", a.peer, "--port", str(a.port), "--minutes", str(a.minutes),
-            "--requests", str(a.requests), "--height", str(a.height), "--scan", "--prompts", "--tokens", str(a.tokens),
+            "--requests", str(a.requests), "--height", str(a.height), "--scan",
+            *(["--bucket-ms", str(tick)] if tick is not None else []), "--prompts", "--tokens", str(a.tokens),
             *(["--window-per-group"] if getattr(a, "window_per_group", False) else [])]
 
 
@@ -332,16 +343,21 @@ def wait_until(at: str, *, now=time.time, sleep=time.sleep) -> None:
         sleep(t - now())
 
 
-def remote(a: argparse.Namespace, data: bytes, out: Path, *, sleep=time.sleep) -> bytes:
-    """The session through the gate at `a.gate`: the lane's fetch of its run."""
+def remote(a: argparse.Namespace, data: bytes, out: Path, keep: Path, *, sleep=time.sleep) -> bytes:
+    """The session through the gate at `a.gate`: the lane's fetch of its run, its start reply in KEEP/RUN alone."""
     ssh = [*SSH, "-i", str(a.key), a.gate]
     got = subprocess.run([*ssh, shlex.join(words(a))], input=data, capture_output=True)
-    (out / "start.json").write_bytes(got.stdout)
     try:
         run = json.loads(got.stdout)["run"]
+        if not A.CERTIFIER_RUN.fullmatch(run):
+            raise ValueError(run)
     except (ValueError, KeyError, TypeError):
         raise Refused(f"the gate didn't start the session (exit {got.returncode}): {got.stdout[:400]!r} "
                       f"{got.stderr[-400:]!r}") from None
+    (keep / run).mkdir(mode=0o700, exist_ok=True)
+    fd = os.open(keep / run / "start.json", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "wb") as f:
+        f.write(got.stdout)
     print(f"gate run {run}", flush=True)
     while True:
         got = subprocess.run([*ssh, f"status {run}"], capture_output=True)
@@ -381,14 +397,19 @@ def local(a: argparse.Namespace, data: bytes, keep: Path) -> bytes:
     return A.certifier_fetch(run, host, witness=True)
 
 
-def session(a: argparse.Namespace, data: bytes, ps: list[list[int]]) -> int:
-    out = a.out.resolve()
-    keep = keep_dir(a.keep, out)
-    keep.mkdir(parents=True, exist_ok=True)
-    keep.chmod(0o700)
+class Ended(BaseException):
+    """SIGTERM reached the session."""
+
+
+def _ended(signum, _frame):
+    raise Ended(signal.Signals(signum).name)
+
+
+def _session(a: argparse.Namespace, data: bytes, ps: list[list[int]], keep: Path, hold: Path) -> tuple[dict, Path]:
+    """The session, its files written to `hold`: its outcome and the kept fetch."""
     if a.at:
         wait_until(a.at)
-    full = local(a, data, keep) if a.gate == "local" else remote(a, data, out)
+    full = local(a, data, keep) if a.gate == "local" else remote(a, data, hold, keep)
     shown = public(full)
     doc = outcome(shown)
     run = doc["run"]
@@ -397,15 +418,59 @@ def session(a: argparse.Namespace, data: bytes, ps: list[list[int]]) -> int:
     kept = keep / run / "fetch.tar.gz"
     kept.write_bytes(full)
     kept.chmod(0o600)
-    (out / "bundle.tgz").write_bytes(shown)
+    (hold / "bundle.tgz").write_bytes(shown)
     doc |= {"gate": a.gate, "request": shlex.join(words(a)), "prompts": {"count": len(ps), "ids": sum(map(len, ps))},
             "keep": str(kept)}
-    (out / "session.json").write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
-    found = leaked(out, needles(ps))
-    for rel in found:
-        (out / rel).unlink()
-    print(json.dumps(doc | {"leaked_removed": found}, sort_keys=True), flush=True)
-    if found:
+    (hold / "session.json").write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
+    return doc, kept
+
+
+def release(out: Path, hold: Path, quarantine: Path, kept: Path | None) -> int:
+    """The record's leak guard on `out` and `hold` against the kept fetch, which releases the hold to `out` once it
+    passes (0 when it found nothing, 3 when it moved a find to `quarantine`)."""
+    got = subprocess.run([sys.executable, str(HERE / "leak_guard.py"), str(out), str(quarantine),
+                          *(["--gates", str(kept)] if kept is not None and kept.is_file() else []),
+                          "--hold", str(hold), "--release-to", str(out), "--report", str(out / "leak-guard.json")],
+                         capture_output=True, text=True)
+    print(f"leak guard (exit {got.returncode}): {(got.stdout.strip() or got.stderr.strip())[-600:]}", flush=True)
+    return got.returncode
+
+
+def session(a: argparse.Namespace, data: bytes, ps: list[list[int]]) -> int:
+    out = a.out.resolve()
+    keep = keep_dir(a.keep, out)
+    keep.mkdir(parents=True, exist_ok=True)
+    keep.chmod(0o700)
+    (keep / "held").mkdir(mode=0o700, exist_ok=True)
+    hold = Path(tempfile.mkdtemp(dir=keep / "held", prefix="session-"))
+    was = signal.signal(signal.SIGTERM, _ended)
+    doc, kept, refused = None, None, None
+    try:
+        try:
+            doc, kept = _session(a, data, ps, keep, hold)
+        except Refused as e:
+            refused = e
+        found = leaked(hold, needles(ps))
+        for rel in found:
+            (hold / rel).unlink()
+        g = release(out, hold, keep / "quarantine" / hold.name, kept)
+    except Ended as e:
+        print(f"{e} ended the session: nothing released, its files stay in {hold}, out of the record", file=sys.stderr,
+              flush=True)
+        return 143
+    finally:
+        signal.signal(signal.SIGTERM, was)
+    if g not in (0, 3):
+        print(f"the leak guard failed (exit {g}): nothing released, the session's files stay in {hold}", file=sys.stderr,
+              flush=True)
+        return 5
+    if not any(hold.iterdir()):
+        hold.rmdir()
+    if refused is not None:
+        raise refused
+    if (out / "session.json").is_file():
+        print(json.dumps(doc | {"leaked_removed": found}, sort_keys=True), flush=True)
+    if found or g == 3:
         return 4
     return 0 if doc["rc"] == 0 and (doc["verdict"] or {}).get("accepted") is True else (doc["rc"] or 1)
 
@@ -420,7 +485,7 @@ def served_peer(fetch: Path) -> str | None:
 
 
 def first_parent(tree: Path, dest: Path) -> Path:
-    """main's first-parent history from `tree`'s origin, written to `dest` (n2_advised_zk.sh's)."""
+    """main's first-parent history from `tree`'s origin, written to `dest`."""
     git = ["git", "-C", str(tree)]
     shallow = subprocess.run([*git, "rev-parse", "--is-shallow-repository"], capture_output=True, text=True)
     unshallow = ["--unshallow"] if shallow.stdout.strip() == "true" else []
@@ -465,8 +530,8 @@ def coin_args(a: argparse.Namespace, fetch: Path) -> list[str]:
 
 
 def certified_io(fetch: Path) -> tuple[dict, dict]:
-    """The kept warden run's deployment.json and certified I/O (`warden_chain.io`), read in a scratch directory beside
-    the fetch."""
+    """The kept network certifier run's deployment.json and certified I/O (`warden_chain.io`), read in a scratch
+    directory beside the fetch."""
     sys.path[:0] = [str(TREE), str(HERE)]
     import warden_chain as WC
     with tempfile.TemporaryDirectory(dir=fetch.parent) as d:

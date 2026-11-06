@@ -12,7 +12,7 @@ _SPLITS_OPERAND = 5   # GumbelTopPTokenSelect_v1{V}(logits, top_p, seed, pos, te
 
 def top_p_split_count(spec: str, B=None, inst: dict | None = None) -> int | None:
     """The launch's top-p split count S carried by a fold TokenSelect instance.  The value of
-    the select's `Const32[S]` splits operand (compare.Prog._bind_splits keeps it in `B.splits_values[select node]`; the constant itself
+    the select's `Const32[S]` splits operand (compare.RootView._bind_splits keeps it in `B.splits_values[select node]`; the constant itself
     is bound to the Program's request-owned `splits` input entry, or held equal to a single-request Program's own `Const32[S]` by
     `constant_splits_agree`), else the `S=<n>` static of the older form `GumbelTopPTokenSelect_v1{V,S}` (the fold's spec strings may carry
     a `prefix:`).  None when the instance carries no readable S."""
@@ -20,7 +20,7 @@ def top_p_split_count(spec: str, B=None, inst: dict | None = None) -> int | None
         v = getattr(B, "splits_values", {}).get(inst.get("k"))
         if v is not None:
             return int(v)
-        # an unbound instance sequence (a Prog-shaped reader without compare's binding): the 6th operand must be ONE run
+        # an unbound instance sequence (a RootView-shaped reader without compare's binding): the 6th operand must be ONE run
         # ("n", k, 0, 1) onto a `Const32[0x<S>]_v1` instance emitted for the select (fold._const, patterns._stage3 Const(32, S, "splits"))
         args = inst.get("args") or []
         if len(args) > _SPLITS_OPERAND and len(args[_SPLITS_OPERAND]) == 1:
@@ -38,7 +38,7 @@ def top_p_split_count(spec: str, B=None, inst: dict | None = None) -> int | None
 
 def constant_splits_agree(A, B) -> dict | None:
     """A Program carries the registered S = SplitsFor_v1(1, num_SMs) as its own `Const32[S]` per select,
-    bound like the fold's and removed from both sequences by `compare.Prog._bind_splits`, so neither the canonical hash nor a DAG hash
+    bound like the fold's and removed from both sequences by `compare.RootView._bind_splits`, so neither the canonical hash nor a DAG hash
     carries its value: the two sides agree only if the constants are equal at every event both have (an event on one side only is a
     step the structural comparison already reports, e.g. a component's steps past an EOS).  None when either side binds no constant
     (a derived-S Program reads its `splits` input instead).  Mismatches are [event, S of A, S of B]."""
@@ -51,7 +51,7 @@ def constant_splits_agree(A, B) -> dict | None:
 
 
 def _splits_by_event(P) -> dict[int, int]:
-    """{event ordinal: S} of a compare.Prog's bound `Const32[S]` splits operands."""
+    """{event ordinal: S} of a compare.RootView's bound `Const32[S]` splits operands."""
     out = {}
     for k, S in getattr(P, "splits_values", {}).items():
         i = P.k2i.get(k)

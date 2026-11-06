@@ -1,4 +1,6 @@
-import Definitions.Pouw.MerkleExtract
+module
+
+public import Definitions.Pouw.MerkleExtract
 
 /-!
 # Merkle extraction: the deterministic core and the fresh-answer count
@@ -19,6 +21,8 @@ import Definitions.Pouw.MerkleExtract
 * `card_fails_oracle_le`: `extract_of_ro_roots` over a uniform oracle `X → D` instead of the stream.
 * `opens_congr`: an opening's check reads the hash only at the points it hashes.
 -/
+
+@[expose] public section
 
 namespace Pouw.MerkleExtract
 

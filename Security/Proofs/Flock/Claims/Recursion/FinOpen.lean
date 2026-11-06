@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.TopsStaged
+module
+
+public import Proofs.Flock.Claims.Recursion.TopsStaged
 
 /-!
 # The last round's pieces at the parts that commit the earlier rounds (`finOpen`), and `FinPieces` there
@@ -19,6 +21,8 @@ each index one of the list's parts.
 `FinPieces` is structural. That these pieces read the last message's bytes (the rows and salts at the offsets `final`
 reads them, and `rest`'s at the element-level message's) is what `PartChecksBV` and `DecompB` take, unchanged here.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

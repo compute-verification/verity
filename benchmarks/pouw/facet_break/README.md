@@ -15,7 +15,7 @@ any other probe's or tensor_kinds' records) on every facet.
 | `run.sh` | One batch under `research run`: generate, build, gate, drop the refusals by name, rebuild in chunks of 64, time under one `gpu-lease`, then `loads.py table` and `summary` into `$OUT` |
 
 ~~~bash
-research run --on vy-nebius-2 --project verity --campaign pouw --source . --cwd source --custody-ttl 12h \
+research run --on MACHINE --project verity --source . --cwd source --custody-ttl 12h \
   --env GPU_LEASE_WHO=facet-break -- bash benchmarks/pouw/facet_break/run.sh --seed 2 --n 300
 python benchmarks/pouw/facet_break/loads.py summary ~/.research/runs/*/out/rows.jsonl ~/.research/runs/*/out/tensor_kinds.jsonl
 python benchmarks/pouw/facet_break/loads.py refit RUN/out/rows.jsonl --row R1

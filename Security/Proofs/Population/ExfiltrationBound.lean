@@ -1,5 +1,7 @@
-import Proofs.Population.Exfiltration
-import Proofs.Population.Leakage
+module
+
+public import Proofs.Population.Exfiltration
+public import Proofs.Population.Leakage
 
 /-!
 # Exfiltration before detection: from the draw and the population to the probability of theft
@@ -23,6 +25,8 @@ import Proofs.Population.Leakage
   differs from honest only on the slots it changes (`Dataflow.card_changed_le` bounds those by its faulty proof blocks'
   cone egress), plus at most `Δ` slots after the detection. The count is over the deployment's `n · |O|` slots.
 -/
+
+@[expose] public section
 
 namespace Population.Exfil
 

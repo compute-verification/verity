@@ -199,7 +199,7 @@ built and timed under its own name (its own SBENCH_ARM_ENV, --arm-mem and DITHER
 timed beside itself with a knob set.  SBENCH_TIME_AT=HH:MM (UTC) holds the reps until then (a booked window's start),
 the engines built and gated before it; sbench.sh's SBENCH_TIMED=1 takes the lease such a window grants (gpu-lease --timed).
 
---bw-passes GIB runs the remote bandwidth audit's passes beside the arms on their GPU once every arm is built, warm and
+--bw-passes GIB runs PoUB's passes beside the arms on their GPU once every arm is built, warm and
 gated (`dbw.py`: the prover's calibration beside the dither arms' decode ops, an idle session, each rep an off block of
 every arm's ops and an on block inside a session's passes, and a tampered session beside each dither arm; summary.json's
 "bw", per_arm's TPOT the off blocks' alone).  Not with --serial, whose arms are never up together.
@@ -384,8 +384,8 @@ def mm_cfg() -> None:
 
 # ARM-mmq's $DITHER_MM_CFG by the units' "Q/D" ($DITHER_SO_UNITS_SMQ's): dmmsweep.py --block Q/D's best.json
 # dither_mm_cfg, the m=64 entries the 11/16 sweep's.  The forward's GEMMs run on the SMs the units leave them, so a config
-# holds at the SMQ it was tuned at alone (at 47/64, 11/16's configs cost 1.7 ms a step).  45/64 takes 47/64's: dmmsweep
-# --block 45/64's own best, timed with the units beside it, slowed both the forward and the units (18.25 ms, not 16.8)
+# holds at the SMQ it was tuned at alone (11/16's configs make a 47/64 step slower).  45/64 takes 47/64's: dmmsweep
+# --block 45/64's own best, timed with the units beside it, slowed both the forward and the units
 MM_CFGS = {"47/64": "6144,4096,32=32x32x128:w4:s3:k1+4096,4096,32=32x32x256:w4:s3:k1:t1+28672,4096,32=32x64x128:w4:s2:k1"
                     "+4096,14336,32=32x32x256:w4:s3:k1+4096,4096,64=32x64x256:w8:s4:k3+4096,14336,64=32x64x512:w8:s3:k3"}
 MM_CFGS["45/64"] = MM_CFGS["47/64"]
@@ -960,7 +960,7 @@ def main() -> int:
                          "comes up, in --arms order (its reference arm first); for an arm that needs most of the GPU, as "
                          "Dither's window does at --prefill's T = 2048")
     ap.add_argument("--bw-passes", type=float, default=0.0, metavar="GIB",
-                    help="the remote bandwidth audit's passes beside the arms on their GPU, over a store of GIB GiB "
+                    help="PoUB's passes beside the arms on their GPU, over a store of GIB GiB "
                          "(`dbw.py`: the prover calibrated beside the dither arms' decode ops, an idle session, each rep "
                          "an off block and an on block, a tampered session)")
     ap.add_argument("--bw-prover-args", action="append", metavar="ARGS",

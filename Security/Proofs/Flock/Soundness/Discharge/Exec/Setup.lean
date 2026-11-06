@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Exec.Event
-import Proofs.Flock.Soundness.Refine.Setup
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.Event
+public import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
 # flock-verify's acceptance sets up each table with `Stmt.setupH`
@@ -14,6 +16,8 @@ import Proofs.Flock.Soundness.Refine.Setup
 `setupH_public` records the two checks `setupH` makes on the public file that the layout's registered values read:
 `HmRow.checkPublic st.c st.pub` passed, and `st.regions` is `HmRow.regions st.c st.pub`.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -75,17 +79,26 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ} {tables
   {stratified : Option ℕ} {closure : Option (Std.HashMap ℕ (Array ℕ))} {spec : SessionSpec} {sts : Array Stmt}
 
 set_option maxHeartbeats 4000000 in
-/-- A plain table's setup, `setupH` followed by the refusal of a `public_inputs` meta key, returns `setupH`'s statement. -/
-theorem ok_of_refuse {x : V Stmt} {p : Stmt → Bool} {e : String} {s : Stmt}
-    (h : (do let st ← x; if p st = true then throw e else pure st) = .ok s) : x = .ok s := by
+/-- A table's setup followed by a refusal (of a `public_inputs` meta key on a plain table, of pinned outputs on one
+with hidden outputs) returns the setup's statement, which the refusal's test passes. -/
+theorem refuse_ok {x : V Stmt} {p : Stmt → Bool} {e : String} {s : Stmt}
+    (h : (do let st ← x; if p st = true then throw e else pure st) = .ok s) : x = .ok s ∧ p s = false := by
   cases x with
   | error => cases h
   | ok a =>
     by_cases hp : p a = true
     · simp [bind, Except.bind, hp, throw, throwThe, MonadExceptOf.throw, Except.bind] at h
-    · simpa [bind, Except.bind, hp, pure, Except.pure] using h
+    · have ha : a = s := by simpa [bind, Except.bind, hp, pure, Except.pure] using h
+      subst ha
+      exact ⟨rfl, Bool.eq_false_iff.2 hp⟩
 
-/-- **`setupTables` sets up each table with `setupH`** (§16.12) under a tag without hidden outputs (`hh`; with them
+set_option maxHeartbeats 4000000 in
+/-- A plain table's setup, `setupH` followed by the refusal of a `public_inputs` meta key, returns `setupH`'s statement. -/
+theorem ok_of_refuse {x : V Stmt} {p : Stmt → Bool} {e : String} {s : Stmt}
+    (h : (do let st ← x; if p st = true then throw e else pure st) = .ok s) : x = .ok s :=
+  (refuse_ok h).1
+
+/-- **`setupTables` sets up each table with `setupH`** (`Stmt.setupTables`) under a tag without hidden outputs (`hh`; with them
 it calls `setupHidden`). For one table, its statement is `setupH`'s at the session's draw, and the session's spec is
 the table's. For `count > 1`, there are `count` tables, and table `j` is `setupH`'s statement under
 `Tags.tableIdentity count j` at a subset draw of its part. -/
@@ -135,6 +148,9 @@ theorem tagsAt_typed (tags : Tags) (count j : ℕ) : (tagsAt tags count j).typed
   unfold tagsAt; split_ifs <;> rfl
 
 theorem tagsAt_hm96Rows (tags : Tags) (count j : ℕ) : (tagsAt tags count j).hm96Rows = tags.hm96Rows := by
+  unfold tagsAt; split_ifs <;> rfl
+
+theorem tagsAt_isTmpl (tags : Tags) (count j : ℕ) : (tagsAt tags count j).isTmpl = tags.isTmpl := by
   unfold tagsAt; split_ifs <;> rfl
 
 /-- Every table `setupTables` returns is `setupH`'s statement, under the table's tags (`tagsAt`) and at some draw
@@ -190,7 +206,7 @@ theorem accepts_one {I : Inputs} {t : Transcript} (hh : I.tags.hiddenOutputs = f
   · omega
 
 set_option maxHeartbeats 4000000 in
-/-- **`setupH`'s checks on the public file** (§16.2, §16.4): the population's (or the draw's) public file passed
+/-- **`setupH`'s checks on the public file** (`Flock.Statement`, `Flock.Tags`): the population's (or the draw's) public file passed
 `HmRow.checkPublic`, and the statement's regions are `HmRow.regions` of it. -/
 theorem setupH_public {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Json} {program : Option ByteArray} {st : Stmt}

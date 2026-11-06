@@ -1,8 +1,10 @@
-import Proofs.Flock.VBridge.Algebra.LigeritoConverse
-import Proofs.Flock.VBridge.Compiled
-import Proofs.Flock.Soundness.Refine.RepConverse
-import Proofs.Flock.Soundness.Refine.Seam
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+module
+
+public import Proofs.Flock.VBridge.Algebra.LigeritoConverse
+public import Proofs.Flock.VBridge.Compiled
+public import Proofs.Flock.Soundness.Refine.RepConverse
+public import Proofs.Flock.Soundness.Refine.Seam
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 
 /-!
 # `prog_of_checks`' Ligerito hypothesis from E
@@ -18,6 +20,8 @@ on every record whose rounds from there retain the bytes it frames.
 * `levelsLoop_count`, `ligeritoRun_conss`: V*'s Ligerito records one consistency context per level, so the proof's
   query and consistency nonces (`decodeProof_sizes`) are as many as the verifier consumes.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Runs
 
@@ -117,7 +121,7 @@ the zerocheck's `3 + (m − 6)` rounds, the lincheck's `3 + (k_log − 6)` and r
 (Structure.lean:532–539). -/
 theorem ligerito_of_residuals_at {sh : Shape} {w comb : Array F128} {cons : Nat → Nat → F128}
     {rounds : Array (Array F128)} {extras : Array Claim} {v : Array F128} {info : Info RecAlgebra.Lin}
-    {kappa : Array (Array (Array F128))} {S : GfS} {rs : Array F128} (hm : 14 ≤ sh.m)
+    {kappa : Array (Array (Array F128))} {S : Flock.RecAlgebra.GfS} {rs : Array F128} (hm : 14 ≤ sh.m)
     (hrows : verifierRows sh rounds extras comb = .ok (v, info, kappa)) (hS : structureOf sh = .ok S)
     (hw : w.size = S.nw) (hc : comb.size = 64)
     (hacc : ∀ r < 2, valOf sh w comb cons (.acc1 r) + valOf sh w comb cons (.acc0 r) = kapSum kappa r cons)
@@ -166,7 +170,7 @@ round `k₂ + n + 1` with every recorded round consumed, on the record whose rou
 frames. -/
 theorem hlg_of_residuals {sh : Shape} {d : Compiled.RepData} {st : Setup} {sch : Flock.Schedule} {p : Proof}
     {bytes : ByteArray} {extras : Array Claim} {t : Transcript} {v : Array F128} {info : Info RecAlgebra.Lin}
-    {kappa : Array (Array (Array F128))} {S : GfS} {rs : Array F128}
+    {kappa : Array (Array (Array F128))} {S : Flock.RecAlgebra.GfS} {rs : Array F128}
     -- E's preconditions at the rep
     (hrows : verifierRows sh d.rounds d.extras d.comb = .ok (v, info, kappa)) (hS : structureOf sh = .ok S)
     (hw : d.w.size = S.nw) (hc : d.comb.size = 64)
@@ -257,7 +261,7 @@ each Ligerito round retains named: round `k₂ + n + 1 + i` retains the `i`-th r
 verifier's Ligerito emits, `Exec.ligerito_frames`) at V*'s `T`, the commitment's cap and the proof's Ligerito fields. -/
 theorem hlg_of_frames {sh : Shape} {d : Compiled.RepData} {st : Setup} {sch : Flock.Schedule} {p : Proof}
     {bytes : ByteArray} {extras : Array Claim} {t : Transcript} {v : Array F128} {info : Info RecAlgebra.Lin}
-    {kappa : Array (Array (Array F128))} {S : GfS} {rs : Array F128}
+    {kappa : Array (Array (Array F128))} {S : Flock.RecAlgebra.GfS} {rs : Array F128}
     -- E's preconditions at the rep
     (hrows : verifierRows sh d.rounds d.extras d.comb = .ok (v, info, kappa)) (hS : structureOf sh = .ok S)
     (hw : d.w.size = S.nw) (hc : d.comb.size = 64)

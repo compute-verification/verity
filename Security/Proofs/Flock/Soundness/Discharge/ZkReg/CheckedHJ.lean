@@ -1,6 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
-import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
-import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedH
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedH
+import all Init.Data.Array.Basic
 
 /-!
 # The registered check at an accepted hidden-output `--zk --registered` outcome of `J` tables
@@ -12,6 +15,8 @@ the table `u` is drawn into (`OwnReadsHJ`), so that table's check is `checked_of
 instance at `u`'s rank in the table's draw holds the population's row of `u` (`Hidden.drawn_digestW`), whose leaf is the
 hidden layout's registered leaf at `(u, q)`, which reads the population alone, whatever the table.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkReg
 
@@ -42,7 +47,7 @@ theorem checked_of_acceptsHJ (I : Inputs) (ht : I.tags.typed = false) (own : Arr
   have hst := hstJ _ hjs
   have s := Hidden.setupHidden_spec' hst
   have hcst : sts[(partOf I d u.val).val].c = c := by
-    have h1 := s.parse
+    have h1 := s.parseF ((FlockSoundness.Discharge.Exec.tagsAt_isTmpl _ _ _).trans (HmOut.parse_isTmpl hc))
     rw [parseH_tagsAt ((zkTags_typed I).trans ht), hc] at h1
     exact (Except.ok.inj h1).symm
   obtain ⟨pop', hpop', -, hdr⟩ := s.pub

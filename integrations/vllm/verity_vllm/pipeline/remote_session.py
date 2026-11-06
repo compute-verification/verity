@@ -1,4 +1,4 @@
-"""The Commit's remote bandwidth session (``--remote-verifier HOST:PORT``, `store.remote.CommitSession`), from its
+"""The Commit's PoUB session (``--remote-verifier HOST:PORT``, `store.remote.CommitSession`), from its
 ``--remote-*`` options to its lines in the Commit's record: the audited run's row entry, the verdict's
 ``remote_session`` and the Commit's last line, whose rejection fails the Commit (`pipeline.commit.main`)."""
 from __future__ import annotations
