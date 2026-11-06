@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.SessionLoop.Statement
 public import Proofs.Flock.Claims.ZK.CausalExe
+public import Proofs.Flock.Claims.ZK.FrameZK
 
 /-!
 # The tables' side of `SessionLoopZKDeployed` at the deployed tables
