@@ -18,7 +18,7 @@ public file, which holds for a file without shared rows (`pop.tables = none`; `B
 population, `Layout.SharedRows`). `HmRow.sharedRows` refuses a
 header's `shared_rows` unless the statement's tag has shared-row files, so under any tag without them every population
 `HmRow.loadPublic` accepts has no tables (`loadPublic_tables`; `@eb90718f` by `rfl`, `circuitEb90718f_sharedRows`).
-`verity/flock-circuit@967b8d06`, the tag the circuit prover's sessions on OS coins verify under, has them, so the
+`verity/flock-circuit@967b8d06`, a tag the circuit prover's sessions verify under, has them, so the
 headline takes `pub.tables = none` as a condition on the loaded file (`hpt`), which the circuit prover's per-instance
 public files meet.
 -/

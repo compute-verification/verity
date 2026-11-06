@@ -21,7 +21,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 # The statements: flock-verify `--zk`'s acceptance and its tables under hidden outputs
 
 ZkExec's acceptance statements and ZkLink's `TablesAtZKLive` take `hh : I.tags.hiddenOutputs = false`: they are about
-`Stmt.setupH`'s statements, and under hidden outputs (the default `--statement`, PROTOCOL §16.13) `Stmt.setupTables`
+`Stmt.setupH`'s statements, and under hidden outputs (the default `--statement`, `HmOut`) `Stmt.setupTables`
 calls `Stmt.setupHidden`. Each statement here is one of them for the sessions production `--zk` writes, as HiddenExec's
 are for the public path. Where the original names `setupH`, this one names `setupOne` (without `hh`) or
 `setupHidden` (under `hh = true`); otherwise the conclusion is the original's.

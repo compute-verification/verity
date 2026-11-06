@@ -159,12 +159,12 @@ theorem lcProofOf_k0 (m kLog k0 k0' : ℕ) (mk : ℕ → F128) :
     lcProofOf (_root_.Flock.Zk.PadLayout.new m kLog k0') mk = lcProofOf (_root_.Flock.Zk.PadLayout.new m kLog k0) mk :=
   rfl
 
-theorem fst_go {α : Type} {m : TMW PS α} {s : Transcript} {l : Array Claims.Msg} {a : α} {t : Transcript}
+theorem fst_go {α : Type} {m : TMW PS α} {s : Flock.Transcript} {l : Array Claims.Msg} {a : α} {t : Flock.Transcript}
     (h : ((m.run s).go l).1 = .ok (a, t)) : (m.run s).go l = (.ok (a, t), ((m.run s).go l).2) :=
   Prod.ext h rfl
 
-theorem runPost_apply {α : Type} {m : TMW PS α} {P : α → Transcript → Array Claims.Msg → Prop} (hm : RunPost m P)
-    {s : Transcript} {l : Array Claims.Msg} {a : α} {t : Transcript} {l' : Array Claims.Msg}
+theorem runPost_apply {α : Type} {m : TMW PS α} {P : α → Flock.Transcript → Array Claims.Msg → Prop} (hm : RunPost m P)
+    {s : Flock.Transcript} {l : Array Claims.Msg} {a : α} {t : Flock.Transcript} {l' : Array Claims.Msg}
     (e : (m.run s).go l = (.ok (a, t), l')) : P a t l' :=
   hm s l a t l' e
 
@@ -173,7 +173,7 @@ lincheck at `mk` followed by a ring switch with a claim, all returned, sent thei
 returned `zcProofOf` and `lcProofOf` at `mk`. -/
 theorem piop_proofs (coin : ℕ → ℕ → F128) (n : ℕ) {st : _root_.Flock.Setup} (hm : 14 ≤ st.m)
     (hkL : st.fold.kLog = st.kLog) (k0 : ℕ) {cap root : ByteArray} {mk : ℕ → F128} {sv : ℕ → Array F128}
-    {claims : Array Claim} (hc : claims.size ≠ 0) {t₀ t₁ t₂ t₃ : Transcript} {l l₁ l₂ l₃ : Array Claims.Msg}
+    {claims : Array Claim} (hc : claims.size ≠ 0) {t₀ t₁ t₂ t₃ : Flock.Transcript} {l l₁ l₂ l₃ : Array Claims.Msg}
     {zp : _root_.Flock.ZerocheckProof} {zc : _root_.Flock.ZcOut} {lp : _root_.Flock.LincheckProof}
     {lc : _root_.Flock.LcOut} {ss : Array (Array F128)} {T : F128} {sws : Array _root_.Flock.Switched}
     (h₁ : ((zerocheckCut (asksCut coin n) st.m st.digest cap root (_root_.Flock.Zk.PadLayout.new st.m st.kLog k0)
@@ -204,7 +204,7 @@ theorem repFwC_proofs (coin : ℕ → ℕ → F128) (n : ℕ) (hs : _root_.Flock
     (hm : 14 ≤ st.m) (hkL : st.fold.kLog = st.kLog) {sch : _root_.Flock.Schedule} {tPad rep : ℕ} {dom : ByteArray}
     {g : Array F128} {cm0 : FlockComplete.Commit} {extras : Array Claim} {pads : FlockComplete.PadsZk}
     {ic : FlockComplete.InnerCommit} {vals : Array F128} {extra lanePad : ℕ → ℕ → F128} {salt : ℕ → ℕ → ByteArray}
-    {t₀ : Transcript} {l : Array Claims.Msg} {p : _root_.Flock.Zk.ZkProof} {t : Transcript} {l' : Array Claims.Msg}
+    {t₀ : Flock.Transcript} {l : Array Claims.Msg} {p : _root_.Flock.Zk.ZkProof} {t : Flock.Transcript} {l' : Array Claims.Msg}
     (h : ((_root_.Flock.Firewall.Finish.repFwC (asksCut coin n) hs st sch tPad rep dom g cm0 extras pads ic vals extra
       lanePad salt).run t₀).go l = (.ok (p, t), l')) :
     p.proof.zerocheck = zcProofOf (_root_.Flock.Zk.PadLayout.new st.m st.kLog sch.k0) (fun i => vals[i]! + pads.h[i]!) ∧
@@ -231,8 +231,8 @@ theorem repFwC_proofs (coin : ℕ → ℕ → F128) (n : ℕ) (hs : _root_.Flock
 theorem repCut_proofs (coin : ℕ → ℕ → F128) (n : ℕ) (hs : _root_.Flock.Hashes PS) {st : _root_.Flock.Setup}
     (hm : 14 ≤ st.m) (hkL : st.fold.kLog = st.kLog) {sch : _root_.Flock.Schedule} {rep : ℕ} {dom : ByteArray}
     {cm0 : FlockComplete.Commit} {extras : Array Claim} {ic : FlockComplete.InnerCommit} {src : FlockComplete.RepSrc}
-    {prior : Array (List F128)} {words : List ℕ} {t₀ : Transcript} {l : Array Claims.Msg}
-    {p : _root_.Flock.Zk.ZkProof} {t : Transcript} {l' : Array Claims.Msg}
+    {prior : Array (List F128)} {words : List ℕ} {t₀ : Flock.Transcript} {l : Array Claims.Msg}
+    {p : _root_.Flock.Zk.ZkProof} {t : Flock.Transcript} {l' : Array Claims.Msg}
     (h : ((FlockComplete.repCut (asksCut coin n) hs st sch rep dom cm0 extras ic src prior words).run t₀).go l =
       (.ok (p, t), l')) :
     p.proof.zerocheck = zcProofOf (_root_.Flock.Zk.PadLayout.new st.m st.kLog sch.k0) src.masked ∧
@@ -258,7 +258,7 @@ theorem masked_of_eraseZ (coin coin' : ℕ → ℕ → F128) (n n' : ℕ) (hs hs
     {cm0 cm0' : FlockComplete.Commit} {extras extras' : Array Claim} {pads : FlockComplete.PadsZk}
     {ic ic' : FlockComplete.InnerCommit} {vals : Array F128} {extra lanePad : ℕ → ℕ → F128}
     {salt : ℕ → ℕ → ByteArray} {src : FlockComplete.RepSrc} {prior : Array (List F128)} {words : List ℕ}
-    {t₀ t₀' : Transcript} {l l₀ : Array Claims.Msg} {p p' : _root_.Flock.Zk.ZkProof} {t t' : Transcript}
+    {t₀ t₀' : Flock.Transcript} {l l₀ : Array Claims.Msg} {p p' : _root_.Flock.Zk.ZkProof} {t t' : Flock.Transcript}
     {l₀' : Array Claims.Msg}
     (hF : (((_root_.Flock.Firewall.Finish.repFwC (asksCut coin n) hs st sch tPad rep dom g cm0 extras pads ic vals extra
       lanePad salt).run t₀).go l).1 = .ok (p, t))

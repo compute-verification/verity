@@ -426,7 +426,7 @@ private def sameCanon (j : Json) : Bool :=
   pyCanonical j && (Flock.canon j).toOption == py && (Flock.WindowRecord.digestHex j).toOption ==
     py.map fun t => sha512Hex ((Flock.WindowRecord.tagOf j).toUTF8 ++ ByteArray.mk #[0] ++ t.toUTF8)
 
-private def parsed (s : String) : Json := (Json.parse s).toOption.getD .null
+private def parsed (s : String) : Json := (Flock.JsonParse.parse s).toOption.getD .null
 
 private def PRINTABLE : String := String.ofList ((List.range 0x7f).map Char.ofNat)
 

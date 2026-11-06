@@ -188,33 +188,14 @@ theorem raw_ins_files {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (h : w.ins = .
   repeat' split at h
   all_goals first | (cases h; done) | (cases h; exact ⟨rfl, rfl, rfl⟩)
 
-/-- A `--zk` statement's coins are its keyed coin tree. -/
-theorem raw_ins_coins {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (h : w.ins = .ok s) (hz : w.zk = true) :
-    ∃ cs, s.read.I.coins = .tree cs := by
-  unfold FlockDeploy.Raw.ins at h
-  simp only [bind, Except.bind, pure, Except.pure] at h
-  repeat' split at h
-  all_goals
-    first
-    | (cases h; done)
-    | (cases h
-       first
-       | exact ⟨_, rfl⟩
-       | (try dsimp only
-          rw [if_pos hz]
-          exact ⟨_, rfl⟩)
-       | exact absurd hz ‹_›)
-
 /-- A `--zk` statement's tags are its statement's under the circuit's mask and its table count. -/
 theorem read_tags_of {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (h : w.ins = .ok s) (hz : w.zk = true) :
     s.read.tags = Zk.tags s.stmtTags (Zk.maskLogOf w.circuit) w.count := by
-  obtain ⟨cs, hcs⟩ := raw_ins_coins h hz
   obtain ⟨-, hT⟩ := ResLower.raw_ins_tags h
   obtain ⟨hc, hn, -⟩ := raw_ins_files h
   have hz' : s.read.zk = true := (FlockDeploy.Raw.ins_zk h).trans hz
   unfold Flock.Readable.Read.tags
-  rw [if_pos hz', FlockSoundness.Discharge.ZkExec.zkTags_eq, hT, hcs, FlockSoundness.Discharge.ZkExec.withCoins_tree,
-    hc, hn]
+  rw [if_pos hz', FlockSoundness.Discharge.ZkExec.zkTags_eq, hT, hc, hn]
 
 /-- Part `s`'s staged statement is read from its part's raw statement with the staged public file. -/
 theorem staged_ins {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claims.Out)} {s : ℕ} {i : RecIns}

@@ -41,7 +41,7 @@ the one-table plan of the session's inputs (`planAtH`), with:
 
 So the hypotheses left are those of the plain headline: `hscope`, `hdec`, A3, `cr/sha-512`, `ecr/sha-512` and the
 numeric conditions. flock-verify refuses a statement failing `hscope` or the statement's other form hypotheses
-(PROTOCOL.md §16.15), and `FailClosed.flock_headline_exec_hidden` takes none of them.
+(`Flock.ProvedScope`), and `FailClosed.flock_headline_exec_hidden` takes none of them.
 -/
 
 namespace FlockSoundness.Discharge.HiddenExec
@@ -165,7 +165,7 @@ What differs from the plain headline: the statement is `Stmt.setupHidden`'s, who
 output rows' `b ‖ c` in place of its output words, so a unit's computed committed gates are bits of output rows bound
 through their `b ‖ c` (`rsAtH`), not single gates pinned by region "out"; the units' committed values and the bound are
 the same expressions at the hidden tables. Scope otherwise as the plain headline's: W6 is definitional on the untyped
-path, `keyProg` has no edges between units, the proof coins are the challenger's OS coins (A6), and sessions of more
+path, `keyProg` has no edges between units, the proof coins are the challenger's coin tree's (A6), and sessions of more
 than one table are outside it. -/
 theorem flock_headline_exec_hidden {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)

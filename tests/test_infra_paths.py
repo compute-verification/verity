@@ -98,8 +98,8 @@ INFRA_PATHS = {
     "tools/verity/circuit_check/src/circuit_check/cache.py": "coarse-check",
     "tools/verity/circuit_check/src/circuit_check/units.py": "coarse-check",
     "tools/verity/circuit_check/tests/test_cache.py": "coarse-check",
+    "tools/verity/circuit_check/tests/test_cache_imports_and_moves.py": "coarse-check",
     "tools/verity/circuit_check/tests/test_cache_redteam.py": "coarse-check",
-    "tools/verity/circuit_check/tests/test_cache_redteam_1176.py": "coarse-check",
     "tools/verity/circuit_check/tests/test_units.py": "coarse-check",
     # the team's skills
     ".agents/skills/asking-daniel": "infra",
@@ -110,6 +110,7 @@ INFRA_PATHS = {
     ".agents/skills/team": "infra",
     ".agents/skills/using-slack": "infra",
     ".agents/skills/writing-runs": "infra",
+    ".agents/skills/writing-goals": "infra",
 }
 
 FIX = ("Infra starts in the infra repository (compute-verification/infra), never here, and INFRA_PATHS in "

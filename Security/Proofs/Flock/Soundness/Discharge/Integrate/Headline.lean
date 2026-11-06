@@ -39,7 +39,7 @@ session's inputs (`planAt`, `Sites.lean`), with:
 * `hHm := Discharge.Hm.keyedRowsOuts_computes` (`rsAt_computes`).
 
 Its hypotheses on the statement's form (`ht`, `hc`, `hU`, `hpub`, `hpt`, `hscope`) are ones flock-verify refuses a statement
-failing (PROTOCOL.md §16.15), and `FailClosed.flock_headline_exec` takes none of them.
+failing (`Flock.ProvedScope`), and `FailClosed.flock_headline_exec` takes none of them.
 -/
 
 @[expose] public section
@@ -117,10 +117,10 @@ Scope. W6 is definitional on the untyped path: the unit's rows are the parsed ne
 that the unit net lowers its template's Definition. The tail stages of `tc_units` templates are outside every unit's
 rows. The typed path is not production. `keyProg` has no edges between units: the headline bounds template instances
 that fail at their own committed values, and a template instance reading its producers' outputs is carried by the copy
-constraints and the region pins, not by an edge of the program. The proof coins are the challenger's per-round OS coins
-(A6): seed-derived coins are outside the headline, so a circuit-prover session counts only under `FC_COINS=os`. The tag
-is whatever the verifier passes as `--statement`: a session counts when
-`flock-verify verify --statement verity/flock-circuit@967b8d06 --coins os` accepts it with one table, so the headline
+constraints and the region pins, not by an edge of the program. The proof coins are the challenger's, on its keyed coin
+tree (A6, tree coins): `verify` refuses a session on a committed seed's coins (`ProvedScope.servedForm`), so a session
+counts only under `--coins tree`. The tag is whatever the verifier passes as `--statement`: a session counts when
+`flock-verify verify --statement verity/flock-circuit@967b8d06 --coins tree` accepts it with one table, so the headline
 covers only public-output `@967b8d06` sessions, from older builds. Main's prover now always writes the
 hidden-output statement (`verity/flock-circuit`, the default `--statement`, `hiddenOutputs = true`), under which
 `setupTables` calls `setupHidden`, which this headline does not cover: `HiddenExec.flock_headline_exec_hidden`

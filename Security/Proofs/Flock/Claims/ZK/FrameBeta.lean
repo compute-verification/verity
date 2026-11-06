@@ -68,7 +68,7 @@ namespace Count
 
 open _root_.Flock.Firewall.Drive (Step OpenM stepAsks)
 
-theorem sp_run'_end {α : Type} {p : TMW OpenM α} {t : Transcript} {s : Got} {ns : List ℕ}
+theorem sp_run'_end {α : Type} {p : TMW OpenM α} {t : Flock.Transcript} {s : Got} {ns : List ℕ}
     (h : SP (fun _ ns => ns = []) ((p.run t).run s) ns) : SP (fun _ ns => ns = []) ((p.run' t).run' s) ns := by
   refine sp_bind (Q := fun _ ns => ns = []) (fun _ _ h => ?_) _ _ (sp_bind (fun _ _ h => ?_) _ _ h) <;> exact h
 

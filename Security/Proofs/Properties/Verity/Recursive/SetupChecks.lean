@@ -366,8 +366,7 @@ theorem partVerdict_setup {h : VStar.Recursive.InnerHeld} {j : ℕ} {p : VStar.R
     · simp only [hrec] at hv
       first | (simp [throw, throwThe, MonadExceptOf.throw] at hv; done) | cases hv
     simp only [hrec] at hv
-    generalize hT : Zk.tags (tags0.withCoins (Coins.tree (Zk.coinSpec (tags0.tableNames 1))))
-      (Zk.maskLogOf circuitB) 1 = T at hv
+    generalize hT : Zk.tags tags0 (Zk.maskLogOf circuitB) 1 = T at hv
     generalize hD : (if T.hm96Rows = true then Witness.recordDraw record else none) = D at hv
     have hv := Except.ok.inj hv
     obtain ⟨proofs, -, hv⟩ := bind_ok hv

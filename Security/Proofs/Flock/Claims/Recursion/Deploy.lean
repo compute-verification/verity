@@ -337,9 +337,9 @@ theorem readX_of_pre {x : Claims.Msg} {r : XR} (h : readXPre x = some r) {vs : A
   simp [h, hvs, hp, Except.toOption]
 
 /-- How Flock's plain verifier is told to set the inner statement `w` up, as each staged V* statement hands it to the
-verifier (`--rec-inner-statement`, `--rec-inner-statement-coins`, `--rec-inner-tables`, `--rec-inner-draw`): its
-`--statement`, `--coins`, lookup tables and draw. -/
-def innerFormOf (w : Raw) : RecCoins.InnerForm := ⟨w.statement, w.osCoins, w.tables, w.draw⟩
+verifier (`--rec-inner-statement`, `--rec-inner-tables`, `--rec-inner-draw`): its `--statement`, lookup tables and
+draw. -/
+def innerFormOf (w : Raw) : RecCoins.InnerForm := ⟨w.statement, w.tables, w.draw⟩
 
 /-- The inner statement's files as each staged V* statement hands them to check 5 (`--rec-inner-circuit`,
 `--rec-inner-public`, `--rec-inner-partition`), with how the inner statement is set up (`innerFormOf`), its program
@@ -439,7 +439,6 @@ def partRaw (r : XR) (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Cla
   transcript := some (st.transcript x ms)
   registration := r.w.registration
   innerStatement := some r.innerRaw.statement
-  innerStatementCoins := some r.innerRaw.osCoins
   innerTables := some r.innerRaw.tables
   innerDraw := r.innerRaw.draw
   recLinks := r.w.links

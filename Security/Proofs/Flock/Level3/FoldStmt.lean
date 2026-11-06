@@ -1,5 +1,5 @@
 /-
-Level 3, L3-A: the lincheck fold `Stmt.fold` (PROTOCOL.md §10, §16.1). `fold_get`: when the fold succeeds, entry `c` of
+Level 3, L3-A: the lincheck fold `Stmt.fold` (`Flock.Piop`, `Flock.Statement`). `fold_get`: when the fold succeeds, entry `c` of
 the block is the base of the last range whose slots cover `c`, scaled by that slot's `eq(ρ_hi, q)`, plus Δ's entries at
 `c`. `baseOf_get` and `slot_factor` then read a slot's base as `α·Aᵀe + Bᵀe` on the slot's rows.
 -/

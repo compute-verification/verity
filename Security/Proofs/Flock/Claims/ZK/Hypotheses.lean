@@ -481,7 +481,7 @@ theorem Flock.zk_deployZk_of_models (H : Msg → Msg)
     (hG : G.Honest H FlockComplete.ZkTables.honestPR coinOf tapeOf) :
     Claims.Flock.ZK H (zkOf rel G coinOf tapeOf (G.simulatorE t (t * 3 ^ t)))
       (fun x => 8 * nL x * δ₁.toReal + 8 * t * nB x * δ₁.toReal + 2 * (1 / 3) ^ t) fun _ => 4 * t * 3 ^ t :=
-  zk_zkOf rel G coinOf tapeOf _ (fun _ => by positivity) (deployZk_proto_k rel G hK) hG
+  zk_zkOf rel G coinOf tapeOf _ (fun _ => by positivity) (fun x _ _ => deployZk_proto_k rel G hK x) hG
     (Flock.zkAt_deployZk_of_models H rel G t ht hK My cs hT1 hδ₁ Mp Mc nL nB hnL hnB hL hS hN hI hC)
 
 end Claims.ZKMal

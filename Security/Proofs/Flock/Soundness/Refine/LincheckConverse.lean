@@ -8,7 +8,7 @@ import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import VCVio.Prelude.Core
 
 /-!
-# The lincheck accepts when its checks hold (PROTOCOL.md §10)
+# The lincheck accepts when its checks hold (`Flock.Piop`)
 
 `lincheck_of_checks` is `lincheck_refines`' converse on the executable's side: the verifier's `lincheck`
 (Piop.lean:126–151) returns `.ok`, with the claim it hands on and the transcript it leaves, when

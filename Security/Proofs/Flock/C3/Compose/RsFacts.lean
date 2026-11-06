@@ -257,8 +257,7 @@ def SessStmt (ish : RecVStar.Inner) (bind : Fin S → VStar.Bindings)
     ∃ (ss : Array VStar.Stmt) (sv : VStar.Stmt) (cf : ByteArray), RecVStar.statements ish = .ok ss ∧
       ss[(s : ℕ)]? = some sv ∧ ss.toList.filter (·.name == (Vs s).c.unit.name) = [sv] ∧
       RecVStar.circuitFile sv (bind s) ish.holo = .ok cf ∧
-      Flock.HmRow.parse (Flock.Zk.tags (Flock.Tags.circuit.withCoins
-        (.tree (Flock.Zk.coinSpec #[Flock.Tags.circuit.table]))) (Flock.Zk.maskLogOf cf) 1) cf [] = .ok (Vs s).c
+      Flock.HmRow.parse (Flock.Zk.tags Flock.Tags.circuit (Flock.Zk.maskLogOf cf) 1) cf [] = .ok (Vs s).c
 
 /-- **`SessStmt` from the verifier's statement check**: where a session accepts, some transcript it accepts passes
 `checkStmt` as statement `s` under `bind s` (`StmtsChecked`, the checked family's `ChecksAccepted`), and the inputs

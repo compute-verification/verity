@@ -1871,10 +1871,10 @@ theorem loop_round_in_plan (T : CoinLayer.TableData)
     | error e => rw [hh] at hv; cases hv
     | ok hl' =>
       rw [hh] at hv
-      obtain ⟨s', spec', sts', ct, hs', hc, hok, hle⟩ := helloChkAt_ok hh
-      rw [hx] at hs'
+      obtain ⟨spec', sts', ct, hs', hc, hok, hle⟩ := helloChkAt_ok hh
+      rw [sessOf_flock hx] at hs'
       simp only [Option.some.injEq, Prod.mk.injEq] at hs'
-      obtain ⟨rfl, rfl, rfl⟩ := hs'
+      obtain ⟨rfl, rfl⟩ := hs'
       rcases Nat.lt_or_ge (roundsOf spec sts).sum q with hlt' | hge
       · obtain ⟨S, S', _, hO, hhe⟩ := coinVerdict_ok hv
         simp only [List.length_cons] at hq
@@ -1885,7 +1885,7 @@ theorem loop_round_in_plan (T : CoinLayer.TableData)
         exact empty_not_stream hok hst
       · apply hne
         unfold lastOf
-        rw [hx]
+        rw [sessOf_flock hx]
         simp only [hc, hok, ↓reduceIte]
         rw [plan_size, hq]
         omega

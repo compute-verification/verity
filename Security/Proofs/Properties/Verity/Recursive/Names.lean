@@ -52,8 +52,8 @@ The compiled component (`VStar.Recursive.checkBlobs`) reads parameters, evidence
 * `x` decodes (`RecDeploy.decodeX`) to `w`, and `w`'s inner statement to Flock's plain statement `ri`
   (`FlockDeploy.decode`);
 * `InnerNames`: `ri` is the inner session `innerHeld` reads: the inner circuit, public file and draw are the blobs the
-  verifier's own digests name (`Own`), its partition and program the verifier's own, its statement `INNER_STATEMENT` on
-  Flock's os coins at one table with no lookup table, `--stratified` at the population the verifier's partition and
+  verifier's own digests name (`Own`), its partition and program the verifier's own, its statement `INNER_STATEMENT`
+  without `--coins` (a seed's, as `Raw.ins` reads a plain statement) at one table with no lookup table, `--stratified` at the population the verifier's partition and
   program give (`HmRow.stratifiedLaw` at `K = 1`, as the compiled `innerOk` sets it up) and none of `verify`'s other
   inputs; `w`'s inner shape is
   `innerHeld`'s; `w`'s registration the registration blob `Own` names; and `w` carries no link table;
@@ -84,7 +84,7 @@ def partCoins (tags0 : Tags) : Flock.Coins := .tree (Zk.coinSpec (tags0.tableNam
 
 /-- The tags the compiled part's session is set up under: `--zk`'s, at the part circuit's mask log and one table. -/
 def partTags (tags0 : Tags) (circuitB : ByteArray) : Tags :=
-  Zk.tags (tags0.withCoins (partCoins tags0)) (Zk.maskLogOf circuitB) 1
+  Zk.tags tags0 (Zk.maskLogOf circuitB) 1
 
 /-- **The inner statement `ri` is the inner session the component holds**, and `w`'s inner shape and registration
 are the component's. Each parsed field is pinned twice: what it parses to, and its bytes, the canonical bytes
@@ -95,7 +95,7 @@ structure InnerNames (o : VStar.Recursive.Own) (pr : VStar.Recursive.Proofs) (bs
   pub : bs.get o.pub "the inner public file" = .ok ri.publicFile
   statement : ri.statement = VStar.Recursive.INNER_STATEMENT
   plain : ri.zk = false
-  os : ri.osCoins = true
+  os : ri.osCoins = false
   count : ri.count = 1
   tables : ri.tables = []
   partition : ri.partition.map (jsonOf "partition") = some (.ok o.partition)
@@ -139,7 +139,7 @@ structure PartNames (po : VStar.Recursive.PartOwn) (pp : VStar.Recursive.PartPro
   draw : ∀ tags0 recordB record, Flock.Tags.find? VStar.Recursive.STATEMENT = some tags0 →
     bs.get pp.record s!"part {j}'s record" = .ok recordB → String.fromUTF8? recordB = some record →
     (q.base.draw.mapM (jsonOf "draw")).map (Option.map Flock.norm) =
-      .ok (if (Flock.Zk.tags (tags0.withCoins (Flock.Coins.tree (Flock.Zk.coinSpec (tags0.tableNames 1))))
+      .ok (if (Flock.Zk.tags tags0
           (Flock.Zk.maskLogOf q.base.circuit) 1).hm96Rows then Flock.Witness.recordDraw record else none)
   publicFile : bs.get pp.pub s!"part {j}'s public file" = .ok q.base.publicFile
   partitionB : (VStar.Recursive.canonBytes po.partition).map some = .ok q.base.partition
@@ -147,7 +147,7 @@ structure PartNames (po : VStar.Recursive.PartOwn) (pp : VStar.Recursive.PartPro
   bindingsB : VStar.Recursive.canonBytes po.bindings = .ok q.bindings
   drawB : ∀ tags0 recordB record, Flock.Tags.find? VStar.Recursive.STATEMENT = some tags0 →
     bs.get pp.record s!"part {j}'s record" = .ok recordB → String.fromUTF8? recordB = some record →
-    (if (Flock.Zk.tags (tags0.withCoins (Flock.Coins.tree (Flock.Zk.coinSpec (tags0.tableNames 1))))
+    (if (Flock.Zk.tags tags0
         (Flock.Zk.maskLogOf q.base.circuit) 1).hm96Rows then Flock.Witness.recordDraw record else none).mapM
       VStar.Recursive.canonBytes = .ok q.base.draw
 

@@ -201,9 +201,7 @@ theorem innerAt_unrefused
     (hI : Loop.InnerAt (real x w (ν, t)) x (ops.map fun p => CoinLayer.rd p.2)) :
     ¬ Masked.Refused x ((CoinLayer.session Loop.loopNr Masked.dataE).pad (K := refK x)
       (ops.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2)) ops.length := by
-  have hk : 0 < refK x := by omega
-  have hc0 : 0 < (ops.map fun p => CoinLayer.rd p.2).length := by rw [List.length_map]; exact h0
-  have hsch := (schedOf_eq_none_iff (real := real x w (ν, t)) hk hc0).mpr hI
+  have hsch := schedOf_none_of_innerAt hI
   obtain ⟨s0, spec, sts, q, k, i, tr, hr', rsched, hxs, hq, hloc, hreal, hrs, hle⟩ := hI
   have hq1 : ops.length = q + 1 := by rw [← hq, List.length_map]
   obtain ⟨jf, rf, -, -, hslot, hb0, hb1, -, -, -⟩ := Loop.innerAt_slot hx hSv hxs hq (by rw [List.length_map]; exact hlt)

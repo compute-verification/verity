@@ -1265,17 +1265,17 @@ theorem outRows_setupOne {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {ta
   have s := FlockSoundness.Discharge.Hidden.setupHidden_spec' hd'
   exact (FlockSoundness.Discharge.Hidden.committed_of_commit s.parse).outRows ht fun p hp => (hv1 p hp).1
 
-/-- `FlockDeploy.Raw.ins` reads its tags from `--statement`'s name, and C's under the session's coins. -/
+/-- `FlockDeploy.Raw.ins` reads its tags from `--statement`'s name, and C's are them. -/
 theorem raw_ins_tags {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (h : w.ins = .ok s) :
-    Tags.byName? w.statement = some s.stmtTags ∧ s.read.I.tags = s.stmtTags.withCoins s.read.I.coins := by
+    Tags.byName? w.statement = some s.stmtTags ∧ s.read.I.tags = s.stmtTags := by
   unfold FlockDeploy.Raw.ins at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
   all_goals first | (cases h; done) | (cases h; exact ⟨by assumption, rfl⟩)
 
-/-- A recursive statement's tags are a known statement's, and C's are them under the session's coins. -/
+/-- A recursive statement's tags are a known statement's, and C's are them. -/
 theorem insO_tags {x : Msg} {i : RecIns} (h : insO x = some i) :
-    (∃ nm, Tags.byName? nm = some i.base.stmtTags) ∧ ∃ coins, i.base.read.I.tags = i.base.stmtTags.withCoins coins := by
+    (∃ nm, Tags.byName? nm = some i.base.stmtTags) ∧ i.base.read.I.tags = i.base.stmtTags := by
   cases hd : decodeRec x with
   | none => unfold insO at h; rw [hd] at h; simp at h
   | some w =>
@@ -1286,7 +1286,7 @@ theorem insO_tags {x : Msg} {i : RecIns} (h : insO x = some i) :
     · simp at h
     have h' : w.ins.toOption = some i := by simpa using h
     obtain ⟨hf, hc⟩ := raw_ins_tags (RecRaw.ins_base (toOption_eq_some h'))
-    exact ⟨⟨_, hf⟩, _, hc⟩
+    exact ⟨⟨_, hf⟩, hc⟩
 
 /-- With an inner shape, `RecVStar.checkStmt` refuses a statement other than `verity/flock-circuit`. -/
 theorem checkStmt_name {i : Flock.RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
@@ -1305,7 +1305,7 @@ theorem checkStmt_name {i : Flock.RecVStar.Inner} {tags : Flock.Tags} {tables : 
     simpa using hn
 
 /-- **A staged part's tables have hidden outputs**: its setup's `checkStmt` holds it to `verity/flock-circuit`
-(`checkStmt_name`), the one statement of that name (`Tags.byName?`), whose outputs are hidden, under any coins and in
+(`checkStmt_name`), the one statement of that name (`Tags.byName?`), whose outputs are hidden, and in
 `verify --zk`'s tags (`zkTags_hiddenOutputs`). -/
 theorem staged_hidden {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {p : Flock.Readable.Parsed}
     (hx : Flock.Readable.parseBytes readOfO xO = some p) {t : ℕ} (ht : t < p.sts.size) :
@@ -1318,15 +1318,13 @@ theorem staged_hidden {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s 
   have hC := RecIns.setup_checks hset
   rw [hinner, insO_staged_part hins] at hC
   have hn := checkStmt_name (checks_stmt hC t ht)
-  obtain ⟨⟨nm, hf⟩, coins, hI⟩ := insO_tags hins
+  obtain ⟨⟨nm, hf⟩, hI⟩ := insO_tags hins
   have hnm : nm = Flock.Tags.circuit.name := by rw [← Flock.Tags.byName?_name hf, hn]
   subst hnm
   rw [Flock.Tags.byName?_of_find? FlockSoundness.Discharge.Recursion.find?_circuit] at hf
   have hT : i.base.stmtTags = Flock.Tags.circuit := (Option.some.inj hf).symm
   have hI' : i.base.read.I.tags.hiddenOutputs = true := by
-    rw [hI, hT]
-    unfold Flock.Tags.withCoins
-    split <;> rfl
+    rw [hI, hT] <;> rfl
   show i.base.read.tags.hiddenOutputs = true
   unfold Flock.Readable.Read.tags
   split

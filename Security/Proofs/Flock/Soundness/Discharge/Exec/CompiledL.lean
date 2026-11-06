@@ -8,7 +8,7 @@ import Proofs.Flock.Soundness.Merkle
 import Proofs.Flock.Soundness.Soundness
 
 /-!
-# Compiled soundness of one table under a leaf scheme (README.md §1.2, PROTOCOL.md §14)
+# Compiled soundness of one table under a leaf scheme (README.md §1.2, `Flock.Merkle`)
 
 `table_sound_compiled` (`CompiledSound.lean`) bounds `tableC`, whose openings verify from the unsalted leaf
 `H(encode row)`. This file proves the same bound for `Model.tableCL A H E Lf`, whose openings carry salts and verify

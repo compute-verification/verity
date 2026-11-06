@@ -58,7 +58,7 @@ open FlockComplete.Replay (pushes bind_go liftTM_ok pure_go)
 /-- **The cut's zerocheck proof is its masked values**: answered by `asksCut` with room for its `3 + (m − 6)` asks,
 the run returns `mk` at `round1_ab`'s, `round1_c`'s, the residual rounds' and the finals' indices. -/
 theorem zerocheckCut_proof (coin : ℕ → ℕ → F128) (n : ℕ) {m : ℕ} (hm : 14 ≤ m) (digest cap root : ByteArray)
-    (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) (t : Transcript) (l : Array Claims.Msg)
+    (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) (t : Flock.Transcript) (l : Array Claims.Msg)
     (hl : l.size + 3 + (m - 6) ≤ n) :
     ∃ zc t' L', ((zerocheckCut (asksCut coin n) m digest cap root lay mk).run t).go l =
       (.ok (((⟨(Array.range 64).map fun i => mk (lay.r1ab i), (Array.range 64).map fun i => mk (lay.r1c i),
@@ -103,7 +103,7 @@ theorem zerocheckCut_proof (coin : ℕ → ℕ → F128) (n : ℕ) {m : ℕ} (hm
 /-- **The cut's lincheck proof is its masked values**: answered by `asksCut` with room for its `3 + (k_log − 6)` asks
 and the circuit's fold defined at `α`, the run returns `mk` at the rounds' and `z_partial`'s indices. -/
 theorem lincheckCut_proof (coin : ℕ → ℕ → F128) (n : ℕ) (c : _root_.Flock.CircuitFold) (m : ℕ)
-    (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) (zc : _root_.Flock.ZcOut) (t : Transcript)
+    (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) (zc : _root_.Flock.ZcOut) (t : Flock.Transcript)
     (l : Array Claims.Msg) (hl : l.size + 3 + (c.kLog - 6) ≤ n)
     (hf : ∃ v, c.fold (coin l.size 0) (_root_.Flock.skipWeights zc.z) (zc.rho.extract 0 (c.kLog - 6)) = .ok v) :
     ∃ lc t' L', ((lincheckCut (asksCut coin n) c m lay mk zc).run t).go l =
