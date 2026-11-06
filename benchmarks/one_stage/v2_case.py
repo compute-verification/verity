@@ -57,7 +57,7 @@ class Refused(ValueError):
 
 
 def compose_command(log: str) -> dict:
-    """What ``m0/compose.log`` records: the subcircuit, the pin, the input set's name and the partition and program
+    """What a member's ``compose.log`` records: the subcircuit, the pin, the input set's name and the partition and program
     digests `compose_circuit.py` was given."""
     cmd = log.splitlines()[0]
     arg = {k: (m.group(1) if (m := re.search(rf"--{k} ([0-9a-f]+)", cmd)) else None) for k in ("partition", "program")}

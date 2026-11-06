@@ -202,7 +202,8 @@ def test_the_case_reads_the_drawn_members_files_whichever_member_it_is(tmp_path,
     """A kept window whose one drawn member is m2: the case reads m2's session, public file, held to m2's pin, and
     circuit file, or its template's first member's where m2 kept no link, and the compose.log of that first member,
     where a5 composed the template's circuit once (`summary.json`'s members). A window that kept sessions of two
-    members or of none, or no compose.log a member of the drawn one's template kept, is refused."""
+    members or of none, no public file of the drawn member, or no compose.log a member of the drawn one's template
+    kept, is refused."""
     w, scratch = kept_window(tmp_path, RP, k=2), tmp_path / "scratch"
     got, how, n, _ = V.case(w, scratch)
     assert (how, n, got["params"]["proofs"]["circuit"]) == ("kept", 1, V.compose_command(LOG.read_text())["pin"])
@@ -214,6 +215,10 @@ def test_the_case_reads_the_drawn_members_files_whichever_member_it_is(tmp_path,
     with pytest.raises(V.Refused, match=f"isn't, by SHA-512, the one {a5.PIN} pinned at staging"):
         V.case(w, scratch)
     (w / "m2" / "pub-4.bin").write_bytes(public_of(2))
+    (w / "m2" / "pub-4.bin").rename(w / "m2" / "kept.bin")
+    with pytest.raises(V.Refused, match="the drawn member m2 kept no public file"):
+        V.case(w, scratch)
+    (w / "m2" / "kept.bin").rename(w / "m2" / "pub-4.bin")
     summary = (w / "summary.json").read_text()
     (w / "summary.json").unlink()
     with pytest.raises(V.Refused, match="m2 kept no compose.log"):
