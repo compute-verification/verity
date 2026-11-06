@@ -59,26 +59,12 @@ theorem checkBlobsAt_run {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ :
 theorem tablesRefused : TablesRefused :=
   ⟨fun _ => tablesHeld_ok, fun _ _ _ _ _ _ _ h => (checkBlobsAt_run h).elim fun _ hr => run_tables hr⟩
 
-/-- Blobs as the deployment hands v2: a circuit file and a public file, each under a SHA-512 that is no pinned table's. -/
-def honestBlobs : Core.Blobs :=
-  ⟨#[(⟨Array.replicate 64 0x11⟩, "circuit file".toUTF8), (⟨Array.replicate 64 0x22⟩, "public file".toUTF8)]⟩
-
 /-- **`TablesRefused`'s honest lemma**: blobs holding a circuit file and a public file pass v2's refusal. -/
 theorem tablesRefused_honest : OneStageZk.tablesHeld honestBlobs = .ok () := by
   have h : (OneStageZk.tablesOf honestBlobs).isEmpty = true := by decide +kernel
   unfold OneStageZk.tablesHeld
   rw [List.isEmpty_iff.1 h]
   rfl
-
-/-- `rcp`'s pinned SHA-512 (`Flock.MUFU_TABLES`), as bytes. -/
-def rcpDigest : ByteArray :=
-  ⟨#[0x8a, 0x31, 0x7a, 0xdb, 0xcc, 0x07, 0x8b, 0xf7, 0x0a, 0xe0, 0x19, 0x59, 0xb6, 0x79, 0xd4, 0x9f,
-     0x97, 0xcd, 0x9c, 0x8a, 0x93, 0xd6, 0xf3, 0x9b, 0x73, 0x25, 0xc9, 0x3d, 0x0f, 0xd5, 0x50, 0xfa,
-     0x43, 0x96, 0xa4, 0xc3, 0xa0, 0x56, 0x8d, 0x23, 0x87, 0xc2, 0xff, 0x2f, 0x33, 0xeb, 0x76, 0x45,
-     0x3b, 0x33, 0xa7, 0xb8, 0x89, 0x0d, 0x97, 0x75, 0x2d, 0x86, 0xcc, 0x1d, 0x97, 0x1a, 0xea, 0xcc]⟩
-
-/-- Blobs holding a file under `rcp`'s pinned SHA-512. -/
-def tableBlobs : Core.Blobs := ⟨#[(rcpDigest, ByteArray.empty)]⟩
 
 /-- **`TablesRefused`'s nontrivial lemma**: blobs holding a file under a pinned table's SHA-512 hold a table, so a check
 that accepts them, as one that accepts every input does, does not have `TablesRefused`'s conclusion. -/
