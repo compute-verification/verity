@@ -3,9 +3,9 @@ module
 public import Definitions.Pous.Game.Prob
 public import Definitions.Pouw.Basic.Prob
 public import Mathlib.Data.Fintype.Prod
+public import Proofs.Pouw.Prob
 import Mathlib.Basic.ENNReal.Inv
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.Prob
 
 /-!
 # A sure-bound guarantee against advice, over the product of the coins

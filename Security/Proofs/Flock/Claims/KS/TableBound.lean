@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.KS.ConflictTied
 public import Proofs.Flock.Claims.KS.Trace
+public import Proofs.Flock.Claims.Scope.Deployed
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
 import Mathlib.Algebra.Order.Floor.Extended
@@ -41,7 +42,6 @@ import Proofs.Flock.Claims.KS.Deploy
 import Proofs.Flock.Claims.KS.Range
 import Proofs.Flock.Claims.KS.Width
 import Proofs.Flock.Claims.Prob
-import Proofs.Flock.Claims.Scope.Deployed
 import Proofs.Flock.Claims.Scope.InScope
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Refine.Seam

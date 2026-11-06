@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Recursive.Statements
 public import Proofs.Flock.Recursive.OuterAbort
+public import Proofs.Flock.Recursive.Statements
+public import Proofs.Flock.Soundness.Discharge.ZkEveryCoin.Headline
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime

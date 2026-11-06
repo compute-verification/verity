@@ -1,7 +1,9 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.ResStepsW
 public import Proofs.Flock.Claims.Recursion.AccTies
+public import Proofs.Flock.Claims.Recursion.ResCopyRows
+public import Proofs.Flock.Claims.Recursion.ResStepsW
+public import Proofs.Flock.VBridge.Family.PartKeys
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -34,12 +36,10 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Recursion.ResCopyRows
 import Proofs.Flock.Claims.Recursion.ResLowerDA
 import Proofs.Flock.Claims.Recursion.TopsOpens
 import Proofs.Flock.Claims.Recursion.VVTieOf
 import Proofs.Flock.Claims.Recursion.VerdictRowG
-import Proofs.Flock.VBridge.Family.PartKeys
 
 /-!
 # P3's ends half: the copy's accumulator ports read the outer witnesses' chain at the rep's ends

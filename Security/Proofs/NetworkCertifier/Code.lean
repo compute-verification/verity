@@ -1,13 +1,15 @@
 module
 
+public import Definitions.NetworkCertifier
+public import Definitions.NetworkCertifier.AdviceV1
 public import Definitions.NetworkCertifier.WindowCharge
 public import NetworkCertifier.Ingress
 public import NetworkCertifier.Schedule
+public import NetworkCertifier.AdviceV1
 public import NetworkCertifier.WindowCharge
-public import Definitions.NetworkCertifier.Ingress
-public import Definitions.NetworkCertifier.Schedule
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Data.Nat.Size
+public import Mathlib.Algebra.BigOperators.Fin
+public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Data.Finset.Dedup
 
 /-!
 # The certifier program agrees with the reference definitions

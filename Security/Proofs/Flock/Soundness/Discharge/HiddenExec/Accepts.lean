@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.Statements
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -18,7 +19,6 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.Exec.Merkle
 import Proofs.Flock.Soundness.Discharge.Exec.Retained
 import Proofs.Flock.Soundness.Discharge.Exec.Tables
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 import Proofs.Flock.Soundness.Refine.Seam
 import Proofs.Flock.Soundness.Refine.Setup
 import Proofs.Flock.Soundness.Refine.Walk

@@ -2,6 +2,7 @@ module
 
 public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnly
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+public import Proofs.Pouw.PearlC.KernelWrefGamma
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.TileGamma

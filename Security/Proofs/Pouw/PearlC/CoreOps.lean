@@ -1,12 +1,12 @@
 module
 
+public import Proofs.Core.Fp32.Round
+public import Proofs.Core.Prims.Round
 public import Proofs.Core.Round
 public import Proofs.Pouw.PearlC.Block4Sem
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Core.Fp32.Round
-import Proofs.Core.Prims.Round
 import Proofs.Pouw.Fp8Atom.Fp32Proofs
 import Proofs.Pouw.Fp8Atom.H1TAtomProofs
 import Proofs.Pouw.PearlC.FreezePPure

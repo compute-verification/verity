@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Properties.CertifierDevice.Fifo
+public import Batteries.Data.ByteArray
 public import Batteries.Data.List.Basic
+public import Proofs.Properties.CertifierDevice.Fifo
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Pous.Statements
+public import Proofs.Pous.TrackA.A3Prime
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
 import Mathlib.Tactic.ENatToNat
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -20,7 +21,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Pous.Sanity
 import Proofs.Pous.Thm1.Theorem1iTimed
-import Proofs.Pous.TrackA.A3Prime
 
 /-!
 # The certificate in model M1 (`Pous.m1`)

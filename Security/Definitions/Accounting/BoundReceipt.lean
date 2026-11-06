@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Accounting.RateAudit
-import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Receipts bound to the matmul: the generic-mix game on two locations (trusted)

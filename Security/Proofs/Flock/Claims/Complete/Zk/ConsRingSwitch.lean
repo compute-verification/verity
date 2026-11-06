@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
 public import Proofs.Flock.Claims.Complete.Replay.ZerocheckAlgebra
 public import Proofs.Flock.Claims.Complete.Zk.PiopGo
 import Mathlib.Algebra.Order.Floor.Extended
@@ -33,7 +34,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
 import Proofs.Flock.Claims.Complete.Zk.ConsLincheck
 import Proofs.Flock.Claims.Complete.Zk.ConsZerocheck
 import Proofs.Flock.Soundness.Refine.Arith

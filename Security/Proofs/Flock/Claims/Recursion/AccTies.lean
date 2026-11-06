@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Claims.Recursion.RegSetup
 public import Proofs.Flock.Claims.Recursion.ResLowerD
+public import Proofs.Flock.Claims.Recursion.ResLowerDD
+public import Proofs.Flock.Claims.Recursion.VerdictRowEInner
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -42,7 +44,6 @@ import Proofs.Flock.Claims.Recursion.SchedDense
 import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Claims.Recursion.VerdictRowEAccR
 import Proofs.Flock.Claims.Recursion.VerdictRowECommit
-import Proofs.Flock.Claims.Recursion.VerdictRowEInner
 import Proofs.Flock.Claims.Recursion.VerdictRowEOpens
 import Proofs.Flock.Claims.Scope.Fit
 import Proofs.Flock.Claims.Scope.Setup

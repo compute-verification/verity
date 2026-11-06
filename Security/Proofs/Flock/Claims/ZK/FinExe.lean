@@ -1,8 +1,10 @@
 module
 
-public import Proofs.Flock.Claims.ZK.Split
 public import Proofs.Flock.Claims.Complete.Replay.LigeritoMerkle
+public import Proofs.Flock.Claims.Complete.Zk.Level0Opens
+public import Proofs.Flock.Claims.ZK.SimPiop
 public import Proofs.Flock.Claims.ZK.SimPiopGo
+public import Proofs.Flock.Claims.ZK.Split
 import Flock.With.SimWalk
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -39,14 +41,12 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Json.Goals
 import Proofs.Flock.Claims.Complete.Shaped
 import Proofs.Flock.Claims.Complete.Zk.Count
-import Proofs.Flock.Claims.Complete.Zk.Level0Opens
 import Proofs.Flock.Claims.Complete.Zk.RingSwitch
 import Proofs.Flock.Claims.Complete.ZkTables.Count
 import Proofs.Flock.Claims.Complete.ZkTables.Refuse
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Claims.Complete.ZkTables.Table
 import Proofs.Flock.Claims.DeployK
-import Proofs.Flock.Claims.ZK.SimPiop
 import Proofs.Flock.Soundness.Discharge.Composed.Coins
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLig

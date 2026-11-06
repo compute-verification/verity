@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.KS.ForkSim
 public import Proofs.Flock.Claims.KS.ZkClash0
+public import Proofs.Flock.Claims.KS.ZkClashL
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Inh
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -35,7 +36,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.ConflictRun
-import Proofs.Flock.Claims.KS.ZkClashL
 import Proofs.Flock.Claims.KS.ZkStep
 import Proofs.Flock.Soundness.Game.Expect
 

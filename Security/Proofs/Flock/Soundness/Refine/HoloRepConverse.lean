@@ -1,12 +1,12 @@
 module
 
-public import Proofs.Flock.Soundness.Refine.RepConverse
 public import Definitions.Flock.Sparse
+public import Proofs.Flock.Soundness.Refine.HoloRefines
 public import Proofs.Flock.Soundness.Refine.HoloRep
+public import Proofs.Flock.Soundness.Refine.RepConverse
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
-import Proofs.Flock.Soundness.Refine.HoloRefines
 import VCVio.Prelude.Core
 
 /-!

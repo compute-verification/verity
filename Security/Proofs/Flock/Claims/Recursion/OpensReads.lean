@@ -1,9 +1,12 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.RecRecord
+public import Proofs.Flock.C3.VStarList.Accepts
+public import Proofs.Flock.Claims.Recursion.DeployHonest
 public import Proofs.Flock.Claims.Recursion.LayoutBTops
-import all Init.Data.String.Defs
+public import Proofs.Flock.Claims.Recursion.RecRecord
+public import Proofs.Flock.Claims.Recursion.SlotsCheck
 import all Init.Data.Repr
+import all Init.Data.String.Defs
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -37,10 +40,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.C3.PubRows.Check
-import Proofs.Flock.C3.VStarList.Accepts
-import Proofs.Flock.Claims.Recursion.DeployHonest
 import Proofs.Flock.Claims.Recursion.DeployScope
-import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Claims.Scope.Fit
 import Proofs.Flock.Claims.Scope.Setup
 import Proofs.Flock.Soundness.Discharge.Hidden.Committed

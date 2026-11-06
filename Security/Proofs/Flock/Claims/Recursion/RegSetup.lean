@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.BoundDeploy
+public import Proofs.Flock.Claims.Recursion.PartAcceptsSetup
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

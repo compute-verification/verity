@@ -4,6 +4,7 @@ public import Aesop.BuiltinRules
 public import Batteries.Data.ByteArray
 public import Mathlib.Algebra.Group.Nat.Defs
 public import Mathlib.Tactic.ToDual
+public import Proofs.Properties.CertifierDevice.Lms
 public import Properties.CertifierDevice
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -38,7 +39,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Properties.CertifierDevice.Lms
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!

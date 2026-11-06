@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.Recursive.KSLinked
 public import Proofs.Flock.Recursive.LinksInner
 public import Proofs.Flock.Recursive.LinksRef
+public import Proofs.Flock.Recursive.LinksRefProof
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -40,7 +41,6 @@ import Proofs.Flock.Claims.Recursion.CapLowerPin
 import Proofs.Flock.Claims.Recursion.InnerAtCoins
 import Proofs.Flock.Claims.Recursion.TopsOpens
 import Proofs.Flock.Recursive.LinksOuter
-import Proofs.Flock.Recursive.LinksRefProof
 import Proofs.Flock.Recursive.LinksRows
 import Proofs.Flock.VBridge.RecLink
 

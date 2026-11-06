@@ -8,13 +8,8 @@ carries `ℓ` as a u64, and `ℓ` fixes how many bits the bytes after it hold. T
 module
 
 public import Flock.HmRow
+public import Mathlib.Data.List.Basic
 import all Init.Data.String.Defs
-public import Aesop.BuiltinRules
-public import Mathlib.Data.Nat.Notation
-public import Mathlib.Data.Subtype
-public import Mathlib.Tactic.Attr.Core
-public import Mathlib.Tactic.Basic
-import Mathlib.Tactic.Push
 
 @[expose] public section
 

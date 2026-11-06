@@ -1,12 +1,13 @@
 module
 
+public import Proofs.Flock.Claims.Complete.Json.Decode
 public import Proofs.Flock.Claims.Complete.Json.Parse
+public import Proofs.Flock.Claims.Complete.Skeleton
+public import Proofs.Flock.Soundness.Discharge.FailClosed.PublicTies
+import Batteries.Tactic.OpenPrivate
+import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
-import all Init.Data.Ord.String
-public import Proofs.Flock.Claims.Complete.Json.Decode
-public import Proofs.Flock.Claims.Complete.Skeleton
-import Batteries.Tactic.OpenPrivate
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -43,7 +44,6 @@ import Proofs.Flock.Claims.Complete.Discharge
 import Proofs.Flock.Claims.JsonNorm
 import Proofs.Flock.Claims.Scope.Check
 import Proofs.Flock.Claims.Scope.Sizes
-import Proofs.Flock.Soundness.Discharge.FailClosed.PublicTies
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup

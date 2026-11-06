@@ -1,8 +1,9 @@
 module
 
-public import Properties.Flock.Circuit.CircuitOf
 public import Batteries.Data.ByteArray
+public import Proofs.Flock.Bridge.Count
 public import Proofs.Flock.Bridge.Defs
+public import Properties.Flock.Circuit.CircuitOf
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -36,7 +37,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Core.Circuit
-import Proofs.Flock.Bridge.Count
 import Proofs.Flock.Bridge.Lowers
 import Proofs.Flock.SamplingBoundary
 import Proofs.Flock.Soundness.Audit.Circuit

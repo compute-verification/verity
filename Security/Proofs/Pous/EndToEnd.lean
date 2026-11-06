@@ -1,13 +1,13 @@
 module
 
-public import Properties.Pous.EndToEnd
-public import Proofs.Pous.Sanity
 public import Mathlib.Logic.Equiv.PartialEquiv
+public import Proofs.Pous.Sanity
+public import Proofs.Pous.Thm1.Theorem1iiSeq
+public import Properties.Pous.EndToEnd
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Combinatorics.SimpleGraph.Init
 import Mathlib.Data.Sym.Sym2.Init
 import Proofs.Pous.Thm1.Theorem1iTimed
-import Proofs.Pous.Thm1.Theorem1iiSeq
 
 @[expose] public section
 

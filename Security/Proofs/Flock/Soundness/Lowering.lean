@@ -1,9 +1,9 @@
 module
 
 public import Definitions.Flock.Lowering
+public import Proofs.Flock.Soundness.Audit.Circuit
 import Mathlib.Tactic.NormNum.Inv
 import Mathlib.Tactic.NormNum.Pow
-import Proofs.Flock.Soundness.Audit.Circuit
 
 /-!
 # The compiled lowering: a satisfied table makes every placed unit correct

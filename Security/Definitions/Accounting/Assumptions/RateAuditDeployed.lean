@@ -2,8 +2,7 @@ module
 
 public import Mathlib.LinearAlgebra.Matrix.Rank
 public import Definitions.Accounting.RateAuditDeployed
-public import Definitions.Accounting.RateAuditSketch
-import Mathlib.Basic.ENNReal.Real
+public import Definitions.Accounting.RateAuditSketchDeployed
 
 /-!
 # The deployed rate audit's measured capacity: the squaring ceiling (trusted)

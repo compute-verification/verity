@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Complete.Prover.Ligerito
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoSum
 public import Proofs.Flock.Soundness.Refine.Final
 public import Proofs.Flock.Soundness.ZerocheckPhase
 import Mathlib.Algebra.Order.Floor.Extended

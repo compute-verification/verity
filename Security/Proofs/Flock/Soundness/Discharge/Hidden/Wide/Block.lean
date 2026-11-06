@@ -4,6 +4,7 @@ public import Aesop.BuiltinRules
 public import Flock.HmRow
 public import Mathlib.Tactic.ToAdditive
 public import Mathlib.Tactic.ToDual
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Upv
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime

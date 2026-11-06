@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.ZK.FinishSwSrc
 public import Proofs.Flock.Claims.ZK.SimLig
+public import Proofs.Flock.SessionLoop.FinRepErasedOf
 public import Proofs.Flock.SessionLoop.FinRepView
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -39,7 +40,6 @@ import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.SessionLoop.FinCommits
 import Proofs.Flock.SessionLoop.FinHmkCut
 import Proofs.Flock.SessionLoop.FinPoints
-import Proofs.Flock.SessionLoop.FinRepErasedOf
 import Proofs.Flock.SessionLoop.FinRounds
 
 /-!

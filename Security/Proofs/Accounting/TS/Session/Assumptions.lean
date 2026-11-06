@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.SoundAtBridge
 public import Proofs.Flock.SoundAtBridge.Session
 public import Proofs.Flock.SoundAtBridge.Union
 import Mathlib.Algebra.Order.Floor.Extended

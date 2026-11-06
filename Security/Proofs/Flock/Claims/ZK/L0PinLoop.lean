@@ -1,11 +1,12 @@
 module
 
+public import Proofs.Flock.Claims.ZK.FramePlan
+public import Proofs.Flock.Claims.ZK.FrameRho
+public import Proofs.Flock.Claims.ZK.FrameZK
 public import Proofs.Flock.Claims.ZK.L0PinChain
+public import Proofs.Flock.Claims.ZK.L0PinRec
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
-public import Proofs.Flock.Claims.ZK.FramePlan
-public import Proofs.Flock.Claims.ZK.FrameZK
-public import Proofs.Flock.Claims.ZK.L0PinRec
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -42,7 +43,6 @@ import Proofs.Flock.Claims.Complete.ZkTables.Table
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.ZK.FrameBeta
 import Proofs.Flock.Claims.ZK.FrameRankFault
-import Proofs.Flock.Claims.ZK.FrameRho
 import Proofs.Flock.Claims.ZK.FrameTaken
 import Proofs.Flock.Claims.ZK.L0PinBind
 import Proofs.Flock.Claims.ZK.L0PinLive

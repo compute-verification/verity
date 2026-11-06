@@ -1,10 +1,11 @@
 module
 
-public import Proofs.Flock.Claims.ZK.Shvzk
-public import Proofs.Flock.Claims.ZK.Pin
 public import Proofs.Flock.Claims.ZK.CoinCheck
+public import Proofs.Flock.Claims.ZK.Flock
 public import Proofs.Flock.Claims.ZK.GKExp
+public import Proofs.Flock.Claims.ZK.Pin
 public import Proofs.Flock.Claims.ZK.Prefix
+public import Proofs.Flock.Claims.ZK.Shvzk
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -36,7 +37,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.ZK.Flock
 
 /-!
 # What Flock's zero knowledge against a malicious verifier still assumes of the masked prover

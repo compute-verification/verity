@@ -1,9 +1,9 @@
 module
 
 public import Definitions.Flock.Merkle
+public import Proofs.Flock.Soundness.Merkle
 import Mathlib.Tactic.Push
 import Mathlib.Tactic.Set
-import Proofs.Flock.Soundness.Merkle
 
 /-!
 # Zero knowledge: the verifier's coin commitment is binding (T6)

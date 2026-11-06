@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.KS.PlainDrawK
 public import Proofs.Flock.Claims.KS.PlainDrawKDefs
 public import Proofs.Flock.Soundness.Discharge.Exec.Rounds
 import Mathlib.Algebra.Order.Floor.Extended
@@ -38,7 +39,6 @@ import Proofs.Flock.Claims.KS.Entries
 import Proofs.Flock.Claims.KS.LevelZero
 import Proofs.Flock.Claims.KS.LevelZeroAcc
 import Proofs.Flock.Claims.KS.OffSC
-import Proofs.Flock.Claims.KS.PlainDrawK
 import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts

@@ -1,9 +1,10 @@
 module
 
-public import Proofs.Flock.Claims.KS.PlainAcc
-public import Proofs.Flock.Claims.DeployEfficient
-public import Proofs.Flock.Claims.ZK.Hypotheses
+public import Proofs.Flock.Claims.Complete.WalkPacked
 public import Proofs.Flock.Claims.Complete.ZkTables.RingSwitch
+public import Proofs.Flock.Claims.DeployEfficient
+public import Proofs.Flock.Claims.KS.PlainAcc
+public import Proofs.Flock.Claims.ZK.Hypotheses
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -36,7 +37,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Bits
-import Proofs.Flock.Claims.Complete.WalkPacked
 import Proofs.Flock.Claims.Complete.ZkTables.StmtOne
 import Proofs.Flock.Claims.KS.ZkTauSlot
 

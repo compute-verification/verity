@@ -1,8 +1,9 @@
 module
 
-public import Proofs.Flock.Claims.ZK.FrameOpenLive
 public import Proofs.Flock.Claims.ZK.FrameLoop
+public import Proofs.Flock.Claims.ZK.FrameOpenLive
 public import Proofs.Flock.Claims.ZK.FramePhase
+public import Proofs.Flock.Claims.ZK.L0PinBind
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

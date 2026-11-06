@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.Claims.Complete.Replay.Steps
 public import Proofs.Flock.Claims.Complete.Reps
 public import Proofs.Flock.Claims.Complete.ZkTables.RingSwitch
+public import Proofs.Flock.Claims.Complete.ZkTables.StmtOne
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -41,7 +42,6 @@ import Proofs.Flock.Claims.Complete.Zk.RingSwitch
 import Proofs.Flock.Claims.Complete.ZkTables.Count
 import Proofs.Flock.Claims.Complete.ZkTables.Prover
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
-import Proofs.Flock.Claims.Complete.ZkTables.StmtOne
 import Proofs.Flock.Claims.Complete.ZkTables.Trace
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.Scope.Fit

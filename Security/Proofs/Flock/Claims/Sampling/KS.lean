@@ -1,6 +1,8 @@
 module
 
+public import Proofs.Flock.Claims.Aggregate
 public import Proofs.Flock.Claims.Sampling.Bext
+public import Proofs.Flock.Claims.Sampling.Escape
 public import Proofs.Flock.Claims.Sampling.Wait
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -37,7 +39,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Aggregate
 import Proofs.Flock.Claims.ERep
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Sampling.Binding

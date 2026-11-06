@@ -1,8 +1,9 @@
 module
 
-public import Definitions.Pouw.NCP.Relation
 public import Definitions.Pouw.Assumptions.NCP.Assumptions
+public import Definitions.Pouw.Assumptions.NCP.GamePinned
 public import Definitions.Pouw.Game.Params
+public import Definitions.Pouw.NCP.Relation
 public import Definitions.Pouw.NCP.Witness
 
 /-!

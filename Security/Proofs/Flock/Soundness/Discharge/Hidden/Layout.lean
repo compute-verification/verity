@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Hidden.Defs
+public import Proofs.Flock.Soundness.Discharge.Hidden.Delta
+public import Proofs.Flock.Soundness.Discharge.Hidden.Rows
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -14,7 +16,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Soundness.Discharge.Hidden.Rows
 
 /-!
 # A hidden-output statement's layout (`HiddenLayout`)

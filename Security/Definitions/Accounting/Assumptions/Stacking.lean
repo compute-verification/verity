@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Accounting.Carrier
-import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Stacking's named assumptions: bound keys, the declared circuit's carriers, the steered layout (trusted)

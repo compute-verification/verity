@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.FinOpen
+public import Proofs.Flock.Claims.Recursion.RecOpen
 public import Proofs.Flock.Claims.Recursion.RecRecord
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -34,7 +35,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Recursion.RecOpen
 import Proofs.Flock.Soundness.Discharge.Hm.Commit
 import Proofs.Flock.Soundness.Discharge.Hm.Mask
 import Std.Tactic.BVDecide.Normalize.BitVec

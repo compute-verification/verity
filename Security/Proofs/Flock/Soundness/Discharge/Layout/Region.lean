@@ -1,9 +1,10 @@
 module
 
 public import Definitions.Flock.Lowering
+public import Proofs.Flock.Soundness.Discharge.Layout.Bytes
 public import Proofs.Flock.Soundness.Refine.Regions
+public import Proofs.Flock.Soundness.Refine.Setup
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Discharge.Layout.Bytes
 
 /-!
 # What a region pins in a satisfying witness

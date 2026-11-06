@@ -1,7 +1,9 @@
 module
 
+public import Definitions.Claims
 public import Definitions.Core.Interaction
 public import Definitions.Pouw.Basic.Prob
+public import Proofs.Pouw.Prob
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -34,7 +36,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Pouw.Prob
 
 /-!
 # The union bound over a product of coins

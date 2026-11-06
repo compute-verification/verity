@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Pous.P2.Cost
-import Mathlib.Basic.ENNReal.Real
 
 /-!
 # A program cut to the ring budget, a state packed into a fixed width, and a sequential strategy's rounds

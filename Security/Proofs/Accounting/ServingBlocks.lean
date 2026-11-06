@@ -1,14 +1,8 @@
 module
 
 public import Definitions.Accounting.Guarantees.ServingBlocks
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Data.Rat.Cast.Order
-import Mathlib.Tactic.Linarith.Frontend
-import Mathlib.Tactic.NormNum.Abs
-import Mathlib.Tactic.NormNum.DivMod
-import Mathlib.Tactic.NormNum.OfScientific
-import Proofs.Core.Circuit
-import Proofs.Core.Padding
+public import Proofs.Core.Padding
+public import Mathlib.Tactic.Linarith
 
 /-!
 # The serving-block bound: proofs

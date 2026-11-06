@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Assumptions.Zk
 public import Proofs.Flock.Soundness.Discharge.Composed.Defs
+public import Proofs.Flock.Soundness.Discharge.HiddenDec
 public import Proofs.Flock.Soundness.Discharge.HiddenDec.Assemble
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineInst
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.BindInst

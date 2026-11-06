@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Accounting.Guarantees.RateAuditSketch
+public import Proofs.Accounting.RateAudit.Sketch
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Ring.Star
@@ -35,7 +36,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.Bandwidth.Chip
-import Proofs.Accounting.RateAudit.Sketch
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!

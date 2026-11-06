@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.ZK.PrefixLive
 public import Proofs.Flock.SessionLoop.Statement
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -34,7 +35,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.ZK.FinExe
-import Proofs.Flock.Claims.ZK.PrefixLive
 
 /-!
 # `FinishIs` at the loop's own `Finish`, in parts

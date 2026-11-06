@@ -2,6 +2,7 @@ module
 
 public import Definitions.Claims.RecursionLin
 public import Proofs.Flock.Claims.KS.Fork
+public import Proofs.Flock.Claims.Recursion.CapLink
 public import Proofs.Flock.Soundness.LinkFinder
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -37,7 +38,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Bridge.Transport
 import Proofs.Flock.Claims.Finder
-import Proofs.Flock.Claims.Recursion.CapLink
 import Proofs.Flock.Claims.Recursion.FlockKSLin
 import Proofs.Flock.Claims.Recursion.OuterKS
 import Proofs.Flock.Soundness.Game.Expect

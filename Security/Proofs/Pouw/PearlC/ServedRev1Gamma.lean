@@ -1,15 +1,6 @@
 module
 
-public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
-public import Definitions.Pouw.PearlC.DeviceKernelWref
-public import Definitions.Pouw.PearlC.DevicePricesLoop
-import Mathlib.Analysis.SpecialFunctions.Pow.Real
-import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.PearlC.DeviceCapRev1Gamma
-import Proofs.Pouw.PearlC.KernelWrefGamma
-import Proofs.Pouw.PearlC.TileCapRev1Gamma
-import Proofs.Pouw.PearlC.TileGamma
-import Proofs.Pouw.PearlC.UOnlyGamma
+public import Proofs.Pouw.PearlC.TileCapRev1Gamma
 
 /-!
 # v1 under rev1 at the served linears, at any batch (compute accounting's file)

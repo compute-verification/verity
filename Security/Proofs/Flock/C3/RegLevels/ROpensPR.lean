@@ -3,7 +3,9 @@ module
 public import Proofs.Flock.C3.RegLevels.Maps
 public import Proofs.Flock.C3.RegLevels.ROpens
 public import Proofs.Flock.C3.Reps.OpensRead
+public import Proofs.Flock.C3.Reps.ReadSib
 public import Proofs.Flock.C3.Reps.RepsRead
+public import Proofs.Flock.C3.Reps.SrcOK
 public import Proofs.Flock.C3.VStarList.Statements
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -20,8 +22,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.C3.PubRows.Shape
 import Proofs.Flock.C3.Reps.IoCols
-import Proofs.Flock.C3.Reps.ReadSib
-import Proofs.Flock.C3.Reps.SrcOK
 import Proofs.Flock.C3.VStarList.Shape
 import Proofs.Flock.Soundness.Refine.Seam
 import Proofs.Flock.VBridge.Pinned

@@ -1,11 +1,11 @@
 module
 
 public import Definitions.Flock.ZK.SHVZK
+public import Proofs.Flock.Soundness.ZK.Blocks
 public import Proofs.Flock.Soundness.ZK.Dist
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Tactic.Abel
 import Mathlib.Tactic.FieldSimp
-import Proofs.Flock.Soundness.ZK.Blocks
 
 /-!
 # Zero knowledge of one masked table: Lemmas A and B, and `table_shvzk`

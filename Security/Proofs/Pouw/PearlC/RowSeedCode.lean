@@ -3,10 +3,10 @@ module
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
 public import Mathlib.Tactic.Continuity
+public import Proofs.Pouw.PearlC.RowSeedGamma
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.PearlC.RowSeedGamma
 
 /-!
 # The code-form seed (`-h3`): a relabelling of the one-row-unit form (staging, nothing pinned)

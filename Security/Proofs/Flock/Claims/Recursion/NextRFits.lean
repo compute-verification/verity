@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.C3.Compose.HoloStreamSizes
 public import Proofs.Flock.Claims.Recursion.NextRHonest
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
@@ -35,7 +36,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.C3.Compose.HoloStreamSizes
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.Recursion.SchedCount
 

@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.VerdictRowDCover
 public import Proofs.Flock.Claims.Complete.Replay.LigeritoProver
+public import Proofs.Flock.Claims.Recursion.RoundSizes
+public import Proofs.Flock.Claims.Recursion.VerdictRowDCover
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

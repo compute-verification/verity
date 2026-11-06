@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Flock.Game.Batch
+public import Proofs.Flock.Soundness.Game.Batch
 public import Proofs.Flock.Soundness.Refine.Live
 public import Proofs.Flock.Soundness.Refine.Plays
 import Mathlib.Algebra.Order.Floor.Semifield

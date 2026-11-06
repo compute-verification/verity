@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Claims.ZK.FrameState
 public import Proofs.Flock.Claims.ZK.FrameOpenLive
+public import Proofs.Flock.Claims.ZK.FrameState
+public import Proofs.Flock.Claims.ZK.L0PinLive
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -34,7 +35,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.ZK.FrameTaken
-import Proofs.Flock.Claims.ZK.L0PinLive
 
 /-!
 # A live history's level-0 messages are its bodies at the frame's pads

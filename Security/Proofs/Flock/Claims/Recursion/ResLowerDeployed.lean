@@ -1,9 +1,11 @@
 module
 
+public import Proofs.Flock.Claims.Recursion.CopySiteDeployed
 public import Proofs.Flock.Claims.Recursion.DeployedR
-public import Proofs.Flock.Claims.Recursion.SlotsCommit
 public import Proofs.Flock.Claims.Recursion.NonVacuous
+public import Proofs.Flock.Claims.Recursion.SlotsCommit
 public import Proofs.Flock.Recursive.ValueSrc
+public import Proofs.Flock.VBridge.Family.OutCols
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -39,7 +41,6 @@ import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.C3.PubRows.Check
-import Proofs.Flock.Claims.Recursion.CopySiteDeployed
 import Proofs.Flock.Claims.Recursion.DeployScope
 import Proofs.Flock.Claims.Recursion.OpensReads
 import Proofs.Flock.Claims.Recursion.SlotsCheck
@@ -57,7 +58,6 @@ import Proofs.Flock.Soundness.Discharge.Hm.Commit
 import Proofs.Flock.Soundness.Discharge.Hm.Site
 import Proofs.Flock.Soundness.Discharge.Layout.OutShape
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
-import Proofs.Flock.VBridge.Family.OutCols
 
 /-!
 # The `rec-residuals` pieces' lowering at the deployed run (U12)

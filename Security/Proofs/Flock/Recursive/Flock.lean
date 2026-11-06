@@ -1,10 +1,12 @@
 module
 
+public import Proofs.Flock.Recursive.Finds
 public import Proofs.Flock.Recursive.Sound
 public import Proofs.Flock.Recursive.ZkReg.Off
-public import Proofs.Flock.Recursive.Finds
 public import Proofs.Flock.Soundness.Assumptions.CustodyZk
+public import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
 public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Sound
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -20,7 +22,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
 import Proofs.Flock.Soundness.Discharge.Hidden.Facts
-import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
 import Proofs.Flock.Soundness.Game.Basic
 import Proofs.Flock.Soundness.Game.Prob
 

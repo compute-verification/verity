@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.SessionLoop.FinishParts
+public import Proofs.Flock.SessionLoop.Link
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -35,7 +36,6 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Claims.ZK.CausalExe
 import Proofs.Flock.Claims.ZK.FinExe
-import Proofs.Flock.SessionLoop.Link
 
 /-!
 # (a) `FinCommits`: the commitments the session reads from the views

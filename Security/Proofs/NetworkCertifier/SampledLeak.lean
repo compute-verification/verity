@@ -2,6 +2,7 @@ module
 
 public import Definitions.NetworkCertifier.Guarantees.SampledAudit
 public import Definitions.NetworkCertifier.SampledCharge
+public import Proofs.NetworkCertifier.SampledCharge
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -34,7 +35,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
-import Proofs.NetworkCertifier.SampledCharge
 
 /-!
 # The leak bound under a sampled audit: `SampledAuditAccepted` composed with the count

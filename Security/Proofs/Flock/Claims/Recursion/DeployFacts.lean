@@ -1,6 +1,8 @@
 module
 
+public import Proofs.Flock.Claims.Recursion
 public import Proofs.Flock.Claims.Recursion.Deploy
+public import Proofs.Flock.Claims.Recursion.DeployScope
 public import Proofs.Flock.Claims.Recursion.Inner
 public import Proofs.Flock.Claims.Recursion.OuterKS
 import Mathlib.Algebra.Order.Floor.Extended
@@ -37,7 +39,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployK
-import Proofs.Flock.Claims.Recursion.DeployScope
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!

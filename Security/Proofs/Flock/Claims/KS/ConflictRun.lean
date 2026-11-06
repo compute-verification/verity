@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.DeployCode
 public import Proofs.Flock.Claims.KS.ConflictWithin
+public import Proofs.Flock.Claims.KS.PlainQueryRound
 public import Proofs.Flock.Claims.KS.Width
 import Flock.With.SimVerify
 import Flock.With.SimZk

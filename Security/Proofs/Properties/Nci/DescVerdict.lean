@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Properties.Nci
 public import Properties.NciDesc.Verdict
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
 import Mathlib.Data.NNRat.Floor
@@ -17,7 +18,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Properties.Nci
 import Proofs.Properties.Nci.Agrees
 
 /-!

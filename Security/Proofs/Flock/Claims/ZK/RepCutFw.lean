@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Flock.Claims.ZK.FinishRep
+public import Proofs.Flock.Claims.ZK.RepInner
+public import Proofs.Flock.Claims.ZK.RepReplay
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -37,8 +39,6 @@ import Proofs.Flock.Claims.ZK.FinishSrc
 import Proofs.Flock.Claims.ZK.FinishTau
 import Proofs.Flock.Claims.ZK.L0PinCut
 import Proofs.Flock.Claims.ZK.PiopFree
-import Proofs.Flock.Claims.ZK.RepInner
-import Proofs.Flock.Claims.ZK.RepReplay
 
 /-!
 # The cut rep returns where the firewall's rep does

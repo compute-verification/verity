@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Claims.ZK.CutSession
 public import Flock.Firewall.Finish
+public import Proofs.Flock.Claims.ZK.CutSession
+public import Proofs.Flock.Claims.ZK.FinishCommit
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

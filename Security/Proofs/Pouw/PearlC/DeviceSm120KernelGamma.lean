@@ -1,10 +1,10 @@
 module
 
-public import Definitions.Pouw.Guarantees.PearlC
 public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnly
+public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.PearlC.ChainOnlyGamma
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.PearlC.ChainOnlyGamma
 import Proofs.Pouw.PearlC.KernelWrefGamma
 import Proofs.Pouw.PearlC.TTOutW1
 import Proofs.Pouw.PearlC.TTOutW1Variants

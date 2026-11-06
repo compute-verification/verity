@@ -1,6 +1,9 @@
 module
 
 public import Proofs.Flock.Claims.Complete.Replay.ZerocheckAlgebra
+public import Proofs.Flock.Claims.Complete.ZkTables.RunsGo
+public import Proofs.Flock.Claims.ZK.Round3Vals
+public import Proofs.Flock.Claims.ZK.SimPiopOf
 public import Proofs.Flock.Claims.ZK.SimZerocheck
 public import Proofs.Flock.Claims.ZK.Split
 import Mathlib.Algebra.Order.Floor.Extended
@@ -34,11 +37,9 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Complete.ZkTables.RunsGo
 import Proofs.Flock.Claims.Complete.ZkTables.Trace
 import Proofs.Flock.Claims.Scope.InScope
 import Proofs.Flock.Claims.Scope.StmtOf
-import Proofs.Flock.Claims.ZK.Round3Vals
 
 /-!
 # The deployed source's zerocheck values at the opened coins

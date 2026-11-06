@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.ZK.FrameAdmits
+public import Proofs.Flock.Claims.ZK.FrameRho
 public import Proofs.Flock.Claims.ZK.FrameZK
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -39,7 +40,6 @@ import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.ZK.FrameBeta
 import Proofs.Flock.Claims.ZK.FrameOuter
 import Proofs.Flock.Claims.ZK.FrameRankFault
-import Proofs.Flock.Claims.ZK.FrameRho
 
 /-!
 # The session loop's own frames refuse every coin fault (`FrameUnrefused` at `ofLoop`)

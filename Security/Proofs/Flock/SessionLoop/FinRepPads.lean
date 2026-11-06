@@ -1,7 +1,9 @@
 module
 
 public import Proofs.Flock.Claims.ZK.FinExe
+public import Proofs.Flock.Claims.ZK.SimCommit
 public import Proofs.Flock.SessionLoop.FinRep
+public import Proofs.Flock.SessionLoop.FinRepCm
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -37,7 +39,6 @@ import Proofs.Flock.Claims.Complete.Shaped.Commit
 import Proofs.Flock.Claims.Complete.Zk.Count
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Claims.ZK.FinishSwInner
-import Proofs.Flock.Claims.ZK.SimCommit
 import Proofs.Flock.SessionLoop.RepSrc
 
 /-!

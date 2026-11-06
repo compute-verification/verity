@@ -1,8 +1,9 @@
 module
 
+public import Proofs.Flock.Claims.Recursion.NextRRows
+public import Proofs.Flock.Claims.Recursion.NextRSession
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
-public import Proofs.Flock.Claims.Recursion.NextRSession
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -38,7 +39,6 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.C3.Compose.HoloStreamSizes
 import Proofs.Flock.Claims.Complete.Discharge
 import Proofs.Flock.Claims.Complete.Json.Goals
-import Proofs.Flock.Claims.Recursion.NextRRows
 import Proofs.Flock.Claims.Recursion.NextRSetup
 import Proofs.Flock.Claims.Recursion.SchedCount
 

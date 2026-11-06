@@ -1,8 +1,9 @@
 module
 
 public import Definitions.Pouw.Guarantees.KeyedLeaf
-import all Init.Data.String.Defs
 public import Mathlib.Algebra.Group.End
+public import Proofs.Hash.RowBinding
+import all Init.Data.String.Defs
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -36,7 +37,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Hash.Bytes
-import Proofs.Hash.RowBinding
 import Proofs.Pouw.Prob
 import Std.Tactic.BVDecide.Normalize.Prop
 

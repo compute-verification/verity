@@ -2,9 +2,9 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
 public import Proofs.Flock.Soundness.Discharge.Layout.OutRegion
+public import Proofs.Flock.Soundness.Discharge.Layout.OutShape
+public import Proofs.Flock.Soundness.Discharge.Layout.OutSite
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Discharge.Layout.OutShape
-import Proofs.Flock.Soundness.Discharge.Layout.OutSite
 
 @[expose] public section
 

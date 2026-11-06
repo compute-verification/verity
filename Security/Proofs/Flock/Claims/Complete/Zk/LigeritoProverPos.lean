@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Claims.Complete.Zk.Ligerito
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoProver
 public import Proofs.Flock.Claims.Complete.Sim
+public import Proofs.Flock.Claims.Complete.Zk.Ligerito
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -35,7 +36,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Json.Session
-import Proofs.Flock.Claims.Complete.Replay.LigeritoProver
 
 /-!
 # The masked prover's Ligerito record, by send position

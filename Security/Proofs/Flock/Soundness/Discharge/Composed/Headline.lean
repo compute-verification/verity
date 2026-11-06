@@ -1,9 +1,12 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Composed.Coined
 public import Proofs.Flock.Soundness.Assumptions.Zk
+public import Proofs.Flock.Soundness.Discharge.Composed.Coined
 public import Proofs.Flock.Soundness.Discharge.Composed.Defs
+public import Proofs.Flock.Soundness.Discharge.Composed.RegWords
+public import Proofs.Flock.Soundness.Discharge.Composed.Setup
 public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLive
+public import Proofs.Flock.Soundness.ZK.PadNonvanishing40
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -17,12 +20,9 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Soundness.Discharge.Composed.RegWords
-import Proofs.Flock.Soundness.Discharge.Composed.Setup
 import Proofs.Flock.Soundness.Discharge.Exec.Headline
 import Proofs.Flock.Soundness.Discharge.ZkView.Fixed
 import Proofs.Flock.Soundness.ZK.Complete
-import Proofs.Flock.Soundness.ZK.PadNonvanishing40
 import Proofs.Flock.Soundness.ZK.Session
 
 /-!

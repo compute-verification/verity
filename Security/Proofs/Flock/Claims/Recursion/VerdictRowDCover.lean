@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Complete.Replay.LigeritoRun
+public import Proofs.Flock.Claims.Recursion.VerdictAssembly
 public import Proofs.Flock.Claims.Recursion.VerdictRowDPieces
 public import Proofs.Flock.Claims.Recursion.VerdictRowE
 public import Proofs.Flock.Claims.Recursion.VerdictRowR
@@ -36,7 +37,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.RecordCanon
-import Proofs.Flock.Claims.Recursion.VerdictAssembly
 import Proofs.Flock.Claims.Recursion.VerdictRowG
 import Proofs.Flock.Soundness.Refine.Seam
 

@@ -1,6 +1,8 @@
 module
 
+public import Proofs.Flock.Bridge.Lowers
 public import Proofs.Flock.Bridge.Targets
+public import Proofs.Flock.Claims.Sampling.EndToEndDraw
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -34,8 +36,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Bridge.Lowers
-import Proofs.Flock.Claims.Sampling.EndToEndDraw
 
 /-!
 # The bridge's slot count, `P_a`, count lemma and scope

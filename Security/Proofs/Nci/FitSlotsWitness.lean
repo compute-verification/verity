@@ -1,8 +1,6 @@
 module
 
-public import Definitions.Nci.Assumptions.Fit
-import Mathlib.Data.NNRat.Floor
-import Proofs.Nci.Fit
+public import Proofs.Nci.Fit
 
 /-!
 # A window across optimizer steps: `FitBoundSlots` applies where `FitBound` can't

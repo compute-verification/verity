@@ -2,8 +2,6 @@ module
 
 public import Definitions.Pouw.Guarantees.Barrier
 public import Proofs.Pouw.Barrier.Proofs
-import Mathlib.Analysis.SpecialFunctions.Pow.Real
-import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # Proofs of the degenerate-input barrier's guarantee

@@ -1,6 +1,7 @@
 module
 
 public import Flock.Firewall.Frame
+public import Proofs.Flock.Soundness.Discharge.ZkView.Decode
 public import Proofs.Flock.Soundness.Refine.Frames
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Algebra.Order.Ring.Star
@@ -21,7 +22,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
-import Proofs.Flock.Soundness.Discharge.ZkView.Decode
 import VCVio.Prelude.Core
 
 /-!

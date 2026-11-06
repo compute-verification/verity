@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.C3.Compose.HoloStreamSizes
+public import Proofs.Flock.C3.Reps.RoundSel
 public import Proofs.Flock.C3.Sparse.MsgsRead
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational

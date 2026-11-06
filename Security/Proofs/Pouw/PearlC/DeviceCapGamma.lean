@@ -1,10 +1,10 @@
 module
 
 public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.PearlC.DeviceRev1Gamma
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.DeviceGamma
-import Proofs.Pouw.PearlC.DeviceRev1Gamma
 import Proofs.Pouw.PearlC.TTOutW1
 import Proofs.Pouw.Prob
 

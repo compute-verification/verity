@@ -1,7 +1,9 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.Placed
+public import Proofs.Flock.Soundness.Discharge.Hidden.Committed
 public import Proofs.Flock.Soundness.Discharge.Hidden.Rows
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Shared
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Placed
 import Mathlib.Tactic.ENatToNat
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -17,11 +19,9 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Aliased.Keys
-import Proofs.Flock.Soundness.Discharge.Hidden.Committed
 import Proofs.Flock.Soundness.Discharge.Hidden.Delta
 import Proofs.Flock.Soundness.Discharge.Hidden.Facts
 import Proofs.Flock.Soundness.Discharge.Hidden.Unrolled
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Shared
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Copies
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Ret
 import Proofs.Flock.Soundness.Discharge.Hm.Bc

@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Pouw.H1Zy.Tile
+public import Proofs.Pouw.H1Zy.Lane
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Data.Fintype.BigOperators
 import Mathlib.Data.Rat.Cast.Order
@@ -9,7 +10,6 @@ import Mathlib.Tactic.NormNum.Abs
 import Mathlib.Tactic.NormNum.DivMod
 import Mathlib.Tactic.NormNum.OfScientific
 import Mathlib.Tactic.Ring.RingNF
-import Proofs.Pouw.H1Zy.Lane
 
 /-!
 # What the tile's `ok = 1` gives, on words

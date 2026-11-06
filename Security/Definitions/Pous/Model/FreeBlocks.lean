@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Pous.Model.Audit
-import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The sequential audit with free blocks (a sampled setup)

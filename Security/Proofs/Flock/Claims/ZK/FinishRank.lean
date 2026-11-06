@@ -1,5 +1,8 @@
 module
 
+public import Proofs.Flock.Claims.ZK.CausalExe
+public import Proofs.Flock.Claims.ZK.FinExe
+public import Proofs.Flock.Claims.ZK.FrameRounds
 public import Proofs.Flock.Claims.ZK.Split
 import Flock.With.SimWalk
 import Mathlib.Algebra.Order.Floor.Extended
@@ -34,8 +37,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
-import Proofs.Flock.Claims.ZK.CausalExe
-import Proofs.Flock.Claims.ZK.FinExe
 
 /-!
 # A rep's rank check from the source, at coins that show no refusal

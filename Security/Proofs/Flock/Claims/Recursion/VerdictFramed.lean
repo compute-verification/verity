@@ -1,7 +1,10 @@
 module
 
-import all Lean.Data.Json.Basic
+public import Proofs.Flock.Claims.Recursion.RepSqCounts
+public import Proofs.Flock.Claims.Recursion.VerdictDecision
+public import Proofs.Flock.Claims.Recursion.VerdictFramedJson
 public import Proofs.Flock.Claims.Recursion.VerdictRows
+import all Lean.Data.Json.Basic
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -40,9 +43,6 @@ import Proofs.Flock.Claims.Recursion.DecodeTies
 import Proofs.Flock.Claims.Recursion.DecodeTiesW
 import Proofs.Flock.Claims.Recursion.NextRFits
 import Proofs.Flock.Claims.Recursion.RecordCanon
-import Proofs.Flock.Claims.Recursion.RepSqCounts
-import Proofs.Flock.Claims.Recursion.VerdictDecision
-import Proofs.Flock.Claims.Recursion.VerdictFramedJson
 import Proofs.Flock.Claims.Recursion.VerdictRowG
 
 /-!

@@ -1,12 +1,9 @@
 module
 
-public import Definitions.Core.Game
-public import Definitions.Flock.Arith
-public import Definitions.Flock.Game.Expect
 public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 public import Proofs.Flock.Soundness.Game.Expect
 public import Randomness
-import Mathlib.Tactic.Positivity.Finset
+public import Definitions.Flock.Arith
 public import Definitions.Core.Hm96
 
 /-!

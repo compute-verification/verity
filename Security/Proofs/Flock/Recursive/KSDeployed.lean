@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Recursion.DeployedBringsLam
 public import Proofs.Flock.Claims.Recursion.ResLowerDD
 public import Proofs.Flock.Recursive.KS
 public import Proofs.Flock.Recursive.KSStatement

@@ -4,12 +4,12 @@ public import Definitions.Pous.Game.Prob
 public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 public import Mathlib.Data.Fintype.Pi
 public import Mathlib.Data.Fintype.Prod
+public import Proofs.Pous.Thm1.Theorem1iiSeq
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Combinatorics.SimpleGraph.Init
 import Mathlib.Data.Sym.Sym2.Init
 import Proofs.Pous.Sanity
 import Proofs.Pous.Thm1.Theorem1iTimed
-import Proofs.Pous.Thm1.Theorem1iiSeq
 
 /-!
 # The tail rule for sequential rounds

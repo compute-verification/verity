@@ -4,6 +4,8 @@ public import Proofs.Flock.Soundness.Refine.RepConverse
 public import Proofs.Flock.VBridge.Algebra.Ligerito
 public import Proofs.Flock.VBridge.Algebra.Lincheck
 public import Proofs.Flock.VBridge.Compiled
+public import Proofs.Flock.VBridge.Runs.Rs
+public import Proofs.Flock.VBridge.Runs.ZcLc
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -17,8 +19,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.VBridge.Runs.Rs
-import Proofs.Flock.VBridge.Runs.ZcLc
 
 /-!
 # A rep's program from its algebra

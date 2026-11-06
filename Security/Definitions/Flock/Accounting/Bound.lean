@@ -2,6 +2,7 @@ module
 
 public import Definitions.Flock.Accounting.Schedule
 public import Mathlib.Analysis.SpecialFunctions.Pow.Real
+public import Mathlib.Analysis.SpecialFunctions.Sqrt
 import Mathlib.Algebra.Order.Algebra
 import Mathlib.Tactic.Positivity.Finset
 

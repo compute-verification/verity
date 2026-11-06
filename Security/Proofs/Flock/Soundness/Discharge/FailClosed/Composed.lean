@@ -1,9 +1,10 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
 public import Proofs.Flock.Soundness.Discharge.Composed.Coined
+public import Proofs.Flock.Soundness.Discharge.Composed.Custody
 public import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
 public import Proofs.Flock.Soundness.Discharge.Composed.Defs
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
 public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLive
 public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOkJson
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -19,7 +20,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Soundness.Discharge.Composed.Custody
 import Proofs.Flock.Soundness.Discharge.Composed.CustodyJJson
 import Proofs.Flock.Soundness.Discharge.Composed.Headline
 import Proofs.Flock.Soundness.Discharge.Composed.Sound

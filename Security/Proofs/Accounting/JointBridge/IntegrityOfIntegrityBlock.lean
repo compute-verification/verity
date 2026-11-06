@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityBlock
+public import Proofs.Flock.EndToEnd.Carry
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -14,7 +15,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.EndToEnd.Carry
 import Proofs.Flock.Soundness.Game.Interleave
 import Proofs.Pouw.Prob
 

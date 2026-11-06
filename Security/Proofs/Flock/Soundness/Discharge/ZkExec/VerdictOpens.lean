@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
 public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements
 import Mathlib.Tactic.ENatToNat
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -19,7 +20,6 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
 import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysInner
 import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
 import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysReplay
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsFrames
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLig

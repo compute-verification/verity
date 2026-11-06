@@ -1,8 +1,9 @@
 module
 
+public import Proofs.Flock.Claims.Complete.ZkTables.RepSplit
+public import Proofs.Flock.Claims.ZK.InnerBatched
 public import Proofs.Flock.Claims.ZK.InnerTauVal
 public import Proofs.Flock.Claims.ZK.PiopSrcLc
-public import Proofs.Flock.Claims.Complete.ZkTables.RepSplit
 public import Proofs.Flock.Claims.ZK.SimSession
 import Flock.With.SimWalk
 import Mathlib.Algebra.Order.Floor.Extended
@@ -42,7 +43,6 @@ import Proofs.Flock.Claims.Complete.Zk.Json.Session
 import Proofs.Flock.Claims.Complete.Zk.RingSwitch
 import Proofs.Flock.Claims.Complete.ZkTables.RepRuns
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
-import Proofs.Flock.Claims.ZK.InnerBatched
 import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
 import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
 import Proofs.Flock.Soundness.Refine.Arith

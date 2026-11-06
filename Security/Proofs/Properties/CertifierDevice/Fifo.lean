@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Properties.CertifierDevice.Trace
+public import Batteries.Data.ByteArray
 public import Mathlib.Algebra.GroupWithZero.Nat
+public import Proofs.Properties.CertifierDevice.Trace
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

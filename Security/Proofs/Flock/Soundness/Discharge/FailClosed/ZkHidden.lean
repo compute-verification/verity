@@ -1,7 +1,9 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
 public import Proofs.Flock.Soundness.Discharge.Composed.Defs
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+public import Proofs.Flock.Soundness.Discharge.ZkHidden
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.BindStmt
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJ
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
@@ -22,7 +24,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
 import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyStmt
 import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundStmt
 

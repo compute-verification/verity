@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Recursion.ResFrames
 public import Proofs.Flock.Claims.Recursion.RestOpenedSized
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -35,7 +36,6 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.DecodeTiesW
 import Proofs.Flock.Claims.Recursion.OutTopRows
-import Proofs.Flock.Claims.Recursion.ResFrames
 import Proofs.Flock.Claims.Recursion.SchedCount
 
 /-!

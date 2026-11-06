@@ -1,9 +1,10 @@
 module
 
 public import Definitions.Pouw.Assumptions.PearlC.TTOut
+public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.PearlC.Game
+public import Proofs.Pouw.PearlC.Instance
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.PearlC.Game
-import Proofs.Pouw.PearlC.Instance
 import Proofs.Pouw.Prob
 
 /-!

@@ -1,8 +1,11 @@
 module
 
-public import Definitions.Accounting.HeadlineDc.Encoding
 public import Definitions.Accounting.Assumptions.TS
+public import Definitions.Accounting.HeadlineDc.Encoding
 public import Mathlib.CategoryTheory.Category.Basic
+public import Proofs.Accounting.Headline.Encoding
+public import Proofs.Accounting.Headline.EpsJl
+public import Proofs.Accounting.Headline.Luck
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Ring.Star
@@ -37,7 +40,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Accounting.Headline.EpsJl
 import Proofs.Accounting.Headline.Whole
 import Proofs.Accounting.TS
 

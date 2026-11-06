@@ -1,7 +1,8 @@
 module
 
 public import Definitions.Pouw.Receipt.Duo
-import Mathlib.Algebra.BigOperators.Fin
+public import Mathlib.Algebra.BigOperators.Fin
+public import Mathlib.Tactic.Ring
 import Mathlib.Data.BitVec
 import Mathlib.Tactic.NormNum.Ineq
 import Mathlib.Tactic.Ring.RingNF

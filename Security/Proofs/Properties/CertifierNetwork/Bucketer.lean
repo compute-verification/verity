@@ -1,5 +1,6 @@
 module
 
+public import Batteries.Data.ByteArray
 public import Proofs.Properties.CertifierDevice.Step
 public import Properties.CertifierNetwork
 import Mathlib.Algebra.Order.Floor.Extended

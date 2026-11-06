@@ -1,12 +1,7 @@
 module
 
-public import Definitions.Pous.Guarantees
-public import Proofs.Pous.Chain.Flat
-import Mathlib.Algebra.Order.Algebra
-import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pous.Rebuild.Clock
-import Proofs.Pous.Rebuild.Window
-import Proofs.Pous.Sanity
+public import Proofs.Pous.Rebuild.Clock
+public import Proofs.Pous.Rebuild.Window
 
 /-!
 # The background-rebuild exclusion

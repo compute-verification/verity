@@ -1,17 +1,8 @@
 module
 
 public import Definitions.Pous.Model.Audit
-public import Mathlib.Algebra.Group.End
-public import Mathlib.Data.Nat.Cast.Prod
 public import Proofs.Pous.Sanity
 public import Proofs.Pous.Thm1.Theorem1iTimed
-import Definitions.Pous
-import Definitions.Pous.Guarantees
-import Mathlib.Analysis.SpecialFunctions.Pow.Real
-import Mathlib.Combinatorics.SimpleGraph.Init
-import Mathlib.Data.Sym.Sym2.Init
-import Proofs.Pous.Accounting.Numbers
-import Proofs.Pous.Statements
 
 /-!
 # One more round never helps: the sequential audit's acceptance is monotone in `k`

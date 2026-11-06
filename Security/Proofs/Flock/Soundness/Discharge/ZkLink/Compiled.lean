@@ -1,7 +1,8 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkSession.Session
-import Mathlib.Combinatorics.Matroid.Init
+public import Proofs.Flock.Soundness.CompiledSound
+public import Proofs.Flock.Soundness.ExtractAcc
 
 /-!
 # The compiled `--zk` table and session (live/PROTOCOL.md §1, §3, §5, §7; PROTOCOL.md §5, §14)

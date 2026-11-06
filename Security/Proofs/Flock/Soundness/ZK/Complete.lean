@@ -1,11 +1,11 @@
 module
 
-public import Proofs.Flock.Soundness.Assumptions
-public import Definitions.Flock.LigeritoPad
 public import Definitions.Flock.Defs
+public import Definitions.Flock.LigeritoPad
 public import Definitions.Flock.ZK.Table
+public import Proofs.Flock.Soundness.Assumptions
+public import Proofs.Flock.Soundness.ZK.Masking
 import Proofs.Flock.Soundness.NovelBasis
-import Proofs.Flock.Soundness.ZK.Masking
 import VCVio.Prelude.Core
 
 /-!

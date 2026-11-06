@@ -1,11 +1,12 @@
 module
 
+public import Proofs.Flock.Claims.Recursion.DeployComplete
 public import Proofs.Flock.Claims.Recursion.SlotsCommit
-import all Init.Data.String.TakeDrop
-import all Init.Data.String.Slice
-import all Init.Data.String.Pattern.String
-import all Init.Data.String.Pattern.Basic
 import all Init.Data.String.Basic
+import all Init.Data.String.Pattern.Basic
+import all Init.Data.String.Pattern.String
+import all Init.Data.String.Slice
+import all Init.Data.String.TakeDrop
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

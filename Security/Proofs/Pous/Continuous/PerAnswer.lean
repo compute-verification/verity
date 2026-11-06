@@ -2,13 +2,11 @@ module
 
 public import Proofs.Pous.Statements
 public import Proofs.Pous.Thm1.Theorem1iTimed
+public import Proofs.Pous.Thm1.Theorem1iiSeq
+public import Proofs.Pous.Thm1.Theorem1iiiTimed
 public import Proofs.Pous.Graded.Theorem
-public import Definitions.Pous.Guarantees
-import Proofs.Pous.Continuous.MissCount
-import Proofs.Pous.Continuous.Verifier
-import Proofs.Pous.Sanity
-import Proofs.Pous.Thm1.Theorem1iiSeq
-import Proofs.Pous.Thm1.Theorem1iiiTimed
+public import Proofs.Pous.Continuous.MissCount
+public import Proofs.Pous.Continuous.Verifier
 
 /-!
 # The continuous audit from `TimedINC`: `Pous.Guarantees.PerAnswer` and `Pous.Guarantees.ContinuousAudit`

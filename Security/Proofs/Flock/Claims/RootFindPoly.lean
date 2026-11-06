@@ -1,17 +1,7 @@
 module
 
-public import Mathlib.Algebra.Polynomial.Degree.Defs
-meta import Lean.Meta.Tactic.NormCast
-import Mathlib.Algebra.Order.Field.Basic
-import Mathlib.Algebra.Polynomial.Degree.Lemmas
-import Mathlib.Data.List.GetD
-import Mathlib.Data.Nat.Totient
-import Mathlib.Data.Sym.Sym2.Init
-import Mathlib.RingTheory.LocalRing.Basic
-import Mathlib.Tactic.ContinuousFunctionalCalculus
-import Mathlib.Tactic.LinearCombination
-import Mathlib.Tactic.NormNum.GCD
-import Mathlib.Tactic.Positivity.Finset
+public import Mathlib.FieldTheory.Finite.Basic
+public import Mathlib.Data.List.GetD
 
 /-!
 # Counted field arithmetic on coefficient lists

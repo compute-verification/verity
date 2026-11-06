@@ -1,9 +1,8 @@
 module
 
 public import Mathlib.Data.Finset.Basic
-public import Definitions.Core.Digest
-public import Mathlib.Data.Nat.Bits
 public import Mathlib.Data.Nat.Size
+public import Definitions.Core.Digest
 
 /-!
 # The advice root, with every string it hashes

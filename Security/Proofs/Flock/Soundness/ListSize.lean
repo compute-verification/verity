@@ -1,8 +1,8 @@
 module
 
+public import ArkLib.Data.CodingTheory.JohnsonBound.Family
 public import ArkLib.Data.CodingTheory.ReedSolomon.Interleaved
 public import Definitions.Flock.Defs
-import ArkLib.Data.CodingTheory.JohnsonBound.Family
 import Proofs.Flock.Soundness.Defs
 
 /-!

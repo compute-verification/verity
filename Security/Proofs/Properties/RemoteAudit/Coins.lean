@@ -1,10 +1,10 @@
 module
 
-public import Properties.RemoteAudit.Coins
+public import Batteries.Tactic.OpenPrivate
+public import Proofs.Properties.RemoteAudit.Draw
 public import Proofs.Properties.RemoteAudit.Session
-import Batteries.Tactic.OpenPrivate
-import Proofs.Properties.RemoteAudit.Draw
-import Proofs.Properties.RemoteAudit.Window
+public import Proofs.Properties.RemoteAudit.Window
+public import Properties.RemoteAudit.Coins
 
 /-!
 # When the verifier reads a window's openings coin (`AcceptDrawsOpenable`, `OpeningsUnreadUntilDrawn`)

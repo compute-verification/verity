@@ -1,5 +1,7 @@
 module
 
+public import Proofs.Flock.SessionLoop.FinHmkRet
+public import Proofs.Flock.SessionLoop.FinPrevFw
 public import Proofs.Flock.SessionLoop.FinRepRows
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -36,10 +38,8 @@ import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Claims.ZK.FinishSwInner
 import Proofs.Flock.Claims.ZK.FinishSwMkAny
 import Proofs.Flock.SessionLoop.FinCommits
-import Proofs.Flock.SessionLoop.FinHmkRet
 import Proofs.Flock.SessionLoop.FinPiopRet
 import Proofs.Flock.SessionLoop.FinPoints
-import Proofs.Flock.SessionLoop.FinPrevFw
 import Proofs.Flock.SessionLoop.FinRounds
 import Proofs.Flock.SessionLoop.RepSrc
 

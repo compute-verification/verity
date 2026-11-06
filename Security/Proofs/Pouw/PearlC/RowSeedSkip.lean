@@ -1,9 +1,9 @@
 module
 
 public import Definitions.Pouw.Assumptions.PearlC.RowSeedAssumptions
+public import Proofs.Pouw.PearlC.RowSeedFragment
 public import Proofs.Pouw.QTree
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.PearlC.RowSeedFragment
 import Proofs.Pouw.Prob
 
 /-!

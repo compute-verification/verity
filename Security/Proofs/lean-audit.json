@@ -130,7 +130,7 @@
   },
   "Proofs.Flock.Claims.KS.PushSched": {
    "why": "push_unfold and lead_unfold, local tactics that unfold the primed prover one node (a `simp only` over Lock's rightSame, leftSame, lockWith, interleaveLock, bind and oracleStrat) in the pushing chooser's proofs (firstS_push, followR_push, lead_push and the rest of the module). They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
-   "digest": "35b23a0303b98e31542ed97b467ee2955a9f0b00a9e3bd5526090cdc0e0fe343"
+   "digest": "dbb8d41f0c615efa79fc7a22f945f14d61b63004a37d97c4c0b5b217dc6c6048"
   },
   "Proofs.Flock.Claims.Recursion.CallsLe": {
    "why": "keep_walk, a macro that expands to repeated refine/exact of the module's keepL/keepT bind, pure and get lemmas (a logged computation keeps its log's prefix). It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds.",

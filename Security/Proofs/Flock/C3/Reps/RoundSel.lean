@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.C3.Reps.RoundReads
 public import Proofs.Flock.C3.Reps.SentKeys
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -15,7 +16,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.C3.Compose.HoloStreamSizes
-import Proofs.Flock.C3.Reps.RoundReads
 
 /-!
 # `holoSel_parts` at the verifier's streams

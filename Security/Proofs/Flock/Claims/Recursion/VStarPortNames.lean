@@ -1,7 +1,9 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.VStarBuild
 public import Proofs.Flock.C3.Reps.AtList
+public import Proofs.Flock.C3.Reps.RoundOfHolo
+public import Proofs.Flock.Claims.Recursion.VStarBuild
+public import Proofs.Flock.Recursive.HoloSchedCheck
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -35,11 +37,9 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.C3.Reps.RoundLinks
-import Proofs.Flock.C3.Reps.RoundOfHolo
 import Proofs.Flock.Claims.Recursion.NextRCounts
 import Proofs.Flock.Claims.Recursion.NextRFits
 import Proofs.Flock.Recursive.HoloRepCoins
-import Proofs.Flock.Recursive.HoloSchedCheck
 
 /-!
 # V\*'s inner parts' port names (`innerPorts_named`)

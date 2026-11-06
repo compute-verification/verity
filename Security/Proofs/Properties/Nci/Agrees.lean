@@ -1,6 +1,9 @@
 module
 
+public import Proofs.Properties.Nci.BodiesOk
+public import Proofs.Properties.Nci.BodiesOk.ReadsDecoded
 public import Proofs.Properties.Nci.Novel
+public import Proofs.Properties.Nci.OperandsResolve
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
 import Mathlib.Data.NNRat.Floor
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -17,9 +20,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Properties.Nci.BodiesOk
-import Proofs.Properties.Nci.BodiesOk.ReadsDecoded
-import Proofs.Properties.Nci.OperandsResolve
 
 /-!
 # The description-sized check agrees with the check gate by gate

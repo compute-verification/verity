@@ -1,9 +1,9 @@
 module
 
-public import Mathlib.Analysis.SpecialFunctions.Log.Basic
 public import Definitions.Core.Game
+public import Mathlib.Analysis.SpecialFunctions.Log.Basic
+public import Proofs.Flock.Soundness.Game.Prob
 import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # The monitoring period: adaptive per-period bounds over `T` periods

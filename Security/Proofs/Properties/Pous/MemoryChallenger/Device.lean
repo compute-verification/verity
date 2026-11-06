@@ -1,13 +1,13 @@
 module
 
 public import Proofs.Properties.Pous.MemoryChallenger.Header
-import all Init.Data.String.Defs
+public import Proofs.Properties.Pous.MemoryChallenger.Inputs
 public import Proofs.Properties.Pous.MemoryChallenger.Tree
+import all Init.Data.String.Defs
 import Mathlib.Algebra.Order.Group.Nat
 import Mathlib.Data.Finset.Attr
 import Mathlib.Tactic.Bound.Init
 import Mathlib.Tactic.SetLike
-import Proofs.Properties.Pous.MemoryChallenger.Inputs
 
 /-!
 # A verifying signature is the device's, or the run carries a break

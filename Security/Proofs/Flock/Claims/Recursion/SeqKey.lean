@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Recursion.SeqCap
 public import Proofs.Flock.Claims.Recursion.SeqPrefix
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

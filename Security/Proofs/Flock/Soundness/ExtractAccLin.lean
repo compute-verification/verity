@@ -1,12 +1,6 @@
 module
 
-public import Proofs.Flock.Soundness.Assumptions
-public import Proofs.Flock.Soundness.ExtractWait
-import Mathlib.Tactic.Positivity.Finset
-import Proofs.Flock.Soundness.Extract
-import Proofs.Flock.Soundness.Game.Expect
-import Proofs.Flock.Soundness.Game.Seq
-import Proofs.Flock.Soundness.LinkFinder
+public import Proofs.Flock.Soundness.LinkFinder
 
 /-!
 # Extraction from accepted reruns, linearly: a conflict finder at level 0

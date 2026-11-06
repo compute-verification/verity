@@ -1,8 +1,11 @@
 module
 
-public import Properties.Pouw.Credit
-public import Proofs.Pouw.Credit.Lanes
 public import Definitions.Core.Game
+public import Proofs.Flock.Claims.Sampling.Select.Misses
+public import Proofs.Pouw.Credit.Lanes
+public import Proofs.Properties.Pouw
+public import Proofs.Properties.Pouw.Strata
+public import Properties.Pouw.Credit
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Star.Real
@@ -39,13 +42,10 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.Served
 import Proofs.Flock.Claims.Sampling.Draws
-import Proofs.Flock.Claims.Sampling.Select.Misses
 import Proofs.Flock.Soundness.Audit.Law
 import Proofs.Flock.Soundness.Game.Basic
 import Proofs.Flock.Soundness.Game.Prob
 import Proofs.Flock.VBridge.Full
-import Proofs.Properties.Pouw
-import Proofs.Properties.Pouw.Strata
 import Std.Tactic.BVDecide.Normalize.Bool
 
 /-!

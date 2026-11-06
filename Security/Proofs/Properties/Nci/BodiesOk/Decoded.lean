@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Properties.Nci.BodiesOk.Composite
 public import Proofs.Properties.Nci.BodiesOk.Decode
 import Batteries.Tactic.OpenPrivate
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
@@ -19,7 +20,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Properties.Nci.BodiesOk.Composite
 import Std.Data.HashMap.Lemmas
 
 /-!

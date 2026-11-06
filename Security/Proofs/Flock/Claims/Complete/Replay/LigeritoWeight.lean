@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoCons
 public import Proofs.Flock.Claims.Complete.Replay.LigeritoSync
 public import Proofs.Flock.Soundness.LigeritoRes
 import Mathlib.Algebra.Order.Floor.Extended
@@ -36,7 +37,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Complete.Replay.LigeritoCons
 import Proofs.Flock.Claims.Complete.Replay.ZerocheckAlgebra
 import Proofs.Flock.Level3.Assembly
 import Proofs.Flock.Level3.LookupRows

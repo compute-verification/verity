@@ -3,12 +3,13 @@ module
 public import Definitions.Pouw.Assumptions.NCP.GamePinned
 public import Proofs.Pouw.Barrier.Proofs
 public import Proofs.Pouw.QTree
+public import Proofs.Pouw.Sanity
+public import Proofs.Pouw.Witness
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Exact
 import Proofs.Pouw.NCP.Proofs
 import Proofs.Pouw.Prob
 import Proofs.Pouw.Reduction
-import Proofs.Pouw.Sanity
 
 /-!
 # NCP's game instance: proofs

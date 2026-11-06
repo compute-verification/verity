@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Nci.Assumptions.CoverAdditive
-public import Definitions.Nci.Assumptions.CoveringTwoCosts
 
 /-!
 # The additive covering bound

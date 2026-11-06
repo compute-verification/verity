@@ -5,6 +5,8 @@ public import Flock.HmRow
 public import Mathlib.Data.Nat.Notation
 public import Mathlib.Tactic.ToAdditive
 public import Mathlib.Tactic.ToDual
+public import Proofs.Flock.Soundness.ExecSetup
+public import Proofs.Flock.Soundness.ExecTyped
 import Mathlib.Algebra.Order.BigOperators.Ring.Finset
 import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.Data.Nat.Totient

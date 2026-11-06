@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.ZkExec.Event
 public import Flock.Registered
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Event
+public import Proofs.Flock.Soundness.Registered.Defs
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.CategoryTheory.Category.Init
 import Mathlib.Combinatorics.Matroid.Init

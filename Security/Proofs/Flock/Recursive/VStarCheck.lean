@@ -2,6 +2,7 @@ module
 
 public import Flock.RecVStar
 public import Proofs.Flock.Recursive.Raw
+public import Proofs.Flock.Soundness.Discharge.FailClosed.One
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime

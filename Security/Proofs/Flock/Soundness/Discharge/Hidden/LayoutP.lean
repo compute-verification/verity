@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.Hidden.PortsP
 public import Proofs.Flock.Soundness.Discharge.Hidden.SpecP
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -19,7 +20,6 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Delta
 import Proofs.Flock.Soundness.Discharge.Hidden.Facts
 import Proofs.Flock.Soundness.Discharge.Hidden.Layout
 import Proofs.Flock.Soundness.Discharge.Hidden.ParseCommit
-import Proofs.Flock.Soundness.Discharge.Hidden.PortsP
 import Proofs.Flock.Soundness.TmplLayout
 import Proofs.Flock.Soundness.TmplNetOK
 import Proofs.Flock.Soundness.TmplUnitNet

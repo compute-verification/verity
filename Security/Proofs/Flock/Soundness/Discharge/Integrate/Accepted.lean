@@ -1,11 +1,11 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
+public import Proofs.Flock.Soundness.Discharge.Integrate.Sites
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
-public import Proofs.Flock.Soundness.Discharge.Integrate.Sites
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Discharge.Exec.Setup
-import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
 import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
 import Proofs.Flock.Soundness.Refine.Seam

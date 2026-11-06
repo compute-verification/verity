@@ -1,8 +1,10 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.DeployStop
-public import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
 public import Proofs.Flock.Claims.Recursion.Assumptions.PlainLeaves
+public import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
+public import Proofs.Flock.Claims.Recursion.DeployChecked
+public import Proofs.Flock.Claims.Recursion.DeployComplete
+public import Proofs.Flock.Claims.Recursion.DeployStop
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -35,8 +37,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployEfficient
-import Proofs.Flock.Claims.Recursion.DeployChecked
-import Proofs.Flock.Claims.Recursion.DeployComplete
 
 /-!
 # Antecedent witnesses: the ZK-recursion compiler's claims at the deployed record

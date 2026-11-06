@@ -4,9 +4,9 @@ public import Definitions.Core.Game
 public import Definitions.Flock.Defs
 public import Definitions.Flock.Session
 public import Mathlib.Algebra.MvPolynomial.Degrees
+public import Mathlib.Data.Nat.BitIndices
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Algebra.Order.Ring.Star
-import Mathlib.Data.Nat.BitIndices
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Mathlib.RingTheory.Henselian
 import Mathlib.RingTheory.RegularLocalRing.Defs

@@ -1,11 +1,9 @@
 module
 
 public import Flock.HmRow
+public import Flock.Norm
 public import Flock.Verify
-public import Definitions.Flock.Audit.Law
-public import Definitions.Flock.Game
-import Mathlib.Algebra.Order.Module.Field
-import Mathlib.Basic.ENNReal.Real
+public import Proofs.Flock.Soundness.Audit.OneStage
 
 /-!
 # flock-verify's acceptance, as an event of the audit

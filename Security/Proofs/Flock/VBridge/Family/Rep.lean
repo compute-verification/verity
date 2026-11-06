@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.VBridge.Family
+public import Proofs.Flock.VBridge.Pinned
 public import Proofs.Flock.VBridge.ResLayer
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -17,7 +18,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Lowering
-import Proofs.Flock.VBridge.Pinned
 
 /-!
 # A rep's values in V*'s layers: `HStruct`, `HShape`, `HResL`

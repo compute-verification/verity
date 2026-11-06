@@ -1,17 +1,11 @@
 module
 
 public import Definitions.Pouw.H1Zy.LaneBits
-import Mathlib.Algebra.BigOperators.Fin
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Data.Rat.Cast.Order
-import Mathlib.Tactic.Linarith.Frontend
-import Mathlib.Tactic.LinearCombination
-import Mathlib.Tactic.NormNum.Abs
-import Mathlib.Tactic.NormNum.DivMod
-import Mathlib.Tactic.NormNum.OfScientific
-import Mathlib.Tactic.Ring.RingNF
-import Proofs.Pouw.H1Zy.Combine
-import Proofs.Pouw.H1Zy.CombineBits
+public import Proofs.Pouw.H1Zy.CombineBits
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Tactic.LinearCombination
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.Ring
 
 /-!
 # The lane's pieces on bits compute their word views, and so does their composition

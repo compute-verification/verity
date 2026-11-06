@@ -1,9 +1,9 @@
 module
 
-public import Proofs.Flock.Soundness.CompiledTable
 public import Definitions.Flock.Extract
+public import Proofs.Flock.Soundness.CompiledTable
+public import Proofs.Flock.Soundness.Extract
 public import Proofs.Flock.Soundness.Game.Runs
-import Proofs.Flock.Soundness.Extract
 import Proofs.Flock.Soundness.Game.Expect
 
 /-!

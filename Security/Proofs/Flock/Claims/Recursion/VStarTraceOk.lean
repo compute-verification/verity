@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.VStarTrace
+public import Proofs.Flock.Recursive.VStarCheck
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -36,7 +37,6 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Claims.Scope.InScope
 import Proofs.Flock.Claims.Scope.Setup
-import Proofs.Flock.Recursive.VStarCheck
 import Proofs.Flock.Soundness.Discharge.Aliased.Rows
 import Proofs.Flock.Soundness.Discharge.Hm.Nets
 import Proofs.Flock.Soundness.SparseRows

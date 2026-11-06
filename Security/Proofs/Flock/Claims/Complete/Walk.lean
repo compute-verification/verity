@@ -1,6 +1,11 @@
 module
 
+public import Proofs.Flock.Claims.Complete.Count
+public import Proofs.Flock.Claims.Complete.Custody
+public import Proofs.Flock.Claims.Complete.Discharge
+public import Proofs.Flock.Claims.Complete.Files
 public import Proofs.Flock.Claims.Complete.Json.Goals
+public import Proofs.Flock.Claims.Complete.Replay
 public import Proofs.Flock.Claims.Complete.Replay.LigeritoWalk
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -35,10 +40,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Complete.Count
-import Proofs.Flock.Claims.Complete.Custody
-import Proofs.Flock.Claims.Complete.Discharge
-import Proofs.Flock.Claims.Complete.Files
 import Proofs.Flock.Claims.Complete.Json.Stmt
 import Proofs.Flock.Claims.Complete.Replay.LigeritoRep
 import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra

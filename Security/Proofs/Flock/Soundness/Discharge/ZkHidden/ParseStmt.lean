@@ -1,8 +1,9 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.ZkExec.Event
 public import Proofs.Flock.Soundness.Discharge.Exec.Setup
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.Tables
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Event
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime

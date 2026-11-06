@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.VBridge.Family.Assembly
 public import Proofs.Flock.VBridge.Family.Lig
+public import Proofs.Flock.VBridge.Family.Names
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -21,7 +22,6 @@ import Proofs.Flock.Soundness.Refine.Seam
 import Proofs.Flock.VBridge.Algebra.Lincheck
 import Proofs.Flock.VBridge.Algebra.RingSwitch
 import Proofs.Flock.VBridge.Algebra.RunSkel
-import Proofs.Flock.VBridge.Family.Names
 
 /-!
 # The inner statement's setup, from the hidden statement

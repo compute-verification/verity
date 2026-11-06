@@ -1,7 +1,9 @@
 module
 
+public import Proofs.Properties.CertifierDevice.Fifo
 public import Proofs.Properties.CertifierDevice.Step
 public import Proofs.Properties.CertifierNetwork.Defs
+public import Proofs.Properties.NetworkCertifier.Bytes
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -33,8 +35,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Properties.CertifierDevice.Fifo
-import Proofs.Properties.NetworkCertifier.Bytes
 import Std.Data.HashMap.Lemmas
 import Std.Tactic.BVDecide.Normalize.Prop
 

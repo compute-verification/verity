@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Recursion.CapOpens
 public import Proofs.Flock.Claims.Recursion.FinOpen
 public import Proofs.Flock.Claims.Recursion.RecRecord
 import Mathlib.Algebra.Order.Floor.Extended
@@ -37,7 +38,6 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.C3.Reps.AtList
 import Proofs.Flock.C3.VStarList.Accepts
 import Proofs.Flock.Claims.Recursion.BoundAccepts
-import Proofs.Flock.Claims.Recursion.CapOpens
 import Proofs.Flock.Claims.Recursion.DeployScope
 import Proofs.Flock.Claims.Recursion.OpensReads
 import Proofs.Flock.Claims.Recursion.SchedDense

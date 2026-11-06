@@ -1,7 +1,9 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.CallsAgree
+public import Proofs.Flock.Claims.Recursion.CallsAgreeE
 public import Proofs.Flock.Claims.Recursion.LastBindsR
+public import Proofs.Flock.Claims.Recursion.LastFilesR
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -34,8 +36,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.ConflictRun
-import Proofs.Flock.Claims.Recursion.CallsAgreeE
-import Proofs.Flock.Claims.Recursion.LastFilesR
 import Proofs.Flock.Claims.Recursion.LastSharedR
 
 /-!

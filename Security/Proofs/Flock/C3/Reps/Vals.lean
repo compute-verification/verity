@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.C3.Reps.Tie
+public import Proofs.Flock.VBridge.Family.Runs
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -15,7 +16,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Refine.Arith
-import Proofs.Flock.VBridge.Family.Runs
 import Proofs.Flock.VBridge.Runs.Rs
 
 /-!

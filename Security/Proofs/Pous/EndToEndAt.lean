@@ -1,7 +1,8 @@
 module
 
-public import Properties.Pous.EndToEndAt
 public import Proofs.Flock.Soundness.ExecDraw
+public import Proofs.Flock.Soundness.KeyedDraw
+public import Properties.Pous.EndToEndAt
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Algebra.Order.Ring.Star
 import Mathlib.CategoryTheory.Category.Init
@@ -11,7 +12,6 @@ import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Flock.Soundness.Game.Basic
 import Proofs.Flock.Soundness.Game.Prob
-import Proofs.Flock.Soundness.KeyedDraw
 import Proofs.Pous.EndToEnd
 import Proofs.Pous.Obligation
 import Proofs.Pous.P2.Rounds

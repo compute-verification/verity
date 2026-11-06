@@ -1,5 +1,6 @@
 module
 
+public import Definitions.Claims
 public import Definitions.Core.Interaction
 public import Mathlib.Algebra.Field.ZMod
 import Mathlib.Algebra.Order.Floor.Extended

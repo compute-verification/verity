@@ -2,8 +2,6 @@ module
 
 public import Definitions.Accounting.TS.Fold
 public import Definitions.Pouw.Receipt.Li
-import Mathlib.Data.Finset.Attr
-import Mathlib.Tactic.SetLike
 
 /-!
 # A one-register fold's low bit (trusted)

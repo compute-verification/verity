@@ -1,9 +1,10 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.Hm.Laid
+public import Proofs.Flock.Soundness.Discharge.Hm.Nets
+public import Proofs.Flock.Soundness.Discharge.Hm.Port
 import all Init.Data.Range.Basic
 import all Init.Data.String.Defs
-public import Proofs.Flock.Soundness.Discharge.Hm.Laid
-public import Proofs.Flock.Soundness.Discharge.Hm.Port
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -18,7 +19,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Hm.Commit
-import Proofs.Flock.Soundness.Discharge.Hm.Nets
 import Proofs.Flock.Verifier.HmNets
 
 /-!

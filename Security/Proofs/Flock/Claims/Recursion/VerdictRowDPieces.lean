@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.OpenPieces
+public import Proofs.Flock.Claims.Recursion.VerdictRowD
 public import Proofs.Flock.Claims.Recursion.VerdictRows
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -33,7 +34,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Recursion.VerdictRowD
 
 /-!
 # Row D of the verdict from the `rec-open` pieces

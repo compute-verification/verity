@@ -1,8 +1,9 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
-public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundBind
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundBind
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundRuns
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime

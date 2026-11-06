@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.ZK.FinishInnerRet
 public import Proofs.Flock.Claims.ZK.FinishSwSrc
 public import Proofs.Flock.Claims.ZK.SimLig
 public import Proofs.Flock.SessionLoop.FinRep
@@ -34,7 +35,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.ZK.FinishInnerRet
 import Proofs.Flock.Claims.ZK.FinishSwFc
 import Proofs.Flock.SessionLoop.FinHmkCut
 import Proofs.Flock.SessionLoop.FinHmkFc

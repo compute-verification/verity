@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkView.Statements
+public import Proofs.Flock.Soundness.Refine.Frames
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Algebra.Order.Ring.Star
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
@@ -18,7 +19,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
-import Proofs.Flock.Soundness.Refine.Frames
 import VCVio.Prelude.Core
 
 /-!

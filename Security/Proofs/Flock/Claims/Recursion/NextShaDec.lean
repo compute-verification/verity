@@ -1,9 +1,11 @@
 module
 
+public import Proofs.Flock.Claims.Recursion.CallsAgree
+public import Proofs.Flock.Claims.Recursion.NextShaRep
 public import Proofs.Flock.Claims.Recursion.NextShaS17
-import all Lean.Data.Json.Basic
-import all Init.Data.Array.Basic
 import Flock.With.SimVerify
+import all Init.Data.Array.Basic
+import all Lean.Data.Json.Basic
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -37,7 +39,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Json.Decode
 import Proofs.Flock.Claims.DeployK
-import Proofs.Flock.Claims.Recursion.CallsAgree
 
 /-!
 # The last step's decision with no proof file decoded (`decisionAtS_eval`)

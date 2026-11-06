@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Recursion.ElemRead
 public import Proofs.Flock.Claims.Recursion.NextRHonest
+public import Proofs.Flock.Claims.Recursion.ResFrameRounds
 public import Proofs.Flock.Claims.Recursion.RestReadsAt
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -37,7 +38,6 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.C3.Reps.RoundLinks
 import Proofs.Flock.Claims.Recursion.DecodeTies
-import Proofs.Flock.Claims.Recursion.ResFrameRounds
 import Proofs.Flock.Claims.Recursion.SchedCount
 import Proofs.Flock.Claims.Recursion.VerdictDecision
 import Proofs.Flock.Claims.Recursion.VerdictFramed

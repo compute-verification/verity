@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.Claims.KS.PlainCapsDep
 public import Proofs.Flock.Claims.Recursion.BindsDeployed
 public import Proofs.Flock.Claims.Recursion.BoundRouteKSLin2
+public import Proofs.Flock.Claims.Recursion.LastBindsClosed
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -36,7 +37,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.CallsOfProofs
 import Proofs.Flock.Claims.Recursion.KSLin2Plain
-import Proofs.Flock.Claims.Recursion.LastBindsClosed
 
 /-!
 # `KSLin2` at the intended choice, with the decoder's canonicity and the calls half proved

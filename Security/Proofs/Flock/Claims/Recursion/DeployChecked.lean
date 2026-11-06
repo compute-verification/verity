@@ -1,8 +1,9 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.VStarCross
-public import Proofs.Flock.Claims.Recursion.Assumptions.PlainLeaves
+public import Proofs.Flock.Claims.Complete.Json.UnitDraw
 public import Proofs.Flock.Claims.Complete.Replay.LigeritoGoal
+public import Proofs.Flock.Claims.Recursion.Assumptions.PlainLeaves
+public import Proofs.Flock.Claims.Recursion.VStarCross
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -35,7 +36,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Complete.Json.UnitDraw
 import Proofs.Flock.Claims.Complete.Walk
 
 /-!

@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.C3.Fork.Runs
 public import Proofs.Flock.Recursive.HoloExec
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -14,7 +15,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.C3.Fork.Runs
 import Proofs.Flock.Recursive.ForkRuns
 import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 import Proofs.Flock.Soundness.Refine.Seam

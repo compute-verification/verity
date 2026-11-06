@@ -3,8 +3,8 @@ module
 public import ArkLib.Data.CodingTheory.ReedSolomon
 public import Definitions.Core.Game
 public import Proofs.Flock.Soundness.Discharge.ZkSession.Inner
+public import Proofs.Flock.Soundness.Discharge.ZkSession.InnerSound
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Discharge.ZkSession.InnerSound
 import Proofs.Flock.Soundness.Game.Basic
 import Proofs.Flock.Soundness.Game.Interleave
 import VCVio.Prelude.Core

@@ -1,7 +1,8 @@
 module
 
+public import Mathlib.Order.Bounds.Defs
+public import Mathlib.Tactic.NormNum
 public import Definitions.Pous.Model.Inc
-import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Certified numbers

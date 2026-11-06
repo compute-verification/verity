@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.DeployPremises
+public import Proofs.Flock.Recursive.Witness
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -40,7 +41,6 @@ import Proofs.Flock.Claims.Recursion.DeployScope
 import Proofs.Flock.Claims.Recursion.DeployScopeRuns
 import Proofs.Flock.Claims.Recursion.DeploySessions
 import Proofs.Flock.Claims.Recursion.SlotsCheck
-import Proofs.Flock.Recursive.Witness
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 

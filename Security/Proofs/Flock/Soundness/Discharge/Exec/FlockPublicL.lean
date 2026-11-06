@@ -2,8 +2,8 @@ module
 
 public import Proofs.Flock.Soundness.Audit.FlockPublic
 public import Proofs.Flock.Soundness.Discharge.Exec.FlockLinkL
+public import Proofs.Flock.Soundness.Discharge.Exec.FlockLinkedL
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Discharge.Exec.FlockLinkedL
 import Proofs.Flock.Soundness.Game.Basic
 import Proofs.Flock.Soundness.Game.Expect
 

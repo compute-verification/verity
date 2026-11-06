@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Pous.Model.FreeBlocks
-import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The free-blocks audit with no free blocks is the sequential audit

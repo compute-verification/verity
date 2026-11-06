@@ -1,6 +1,7 @@
 module
 
 public import Definitions.NetworkCertifier.TapRows
+public import Proofs.NetworkCertifier.SampledLeakReg
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -40,7 +41,6 @@ import Proofs.Flock.Claims.Sampling.Binding
 import Proofs.NetworkCertifier.SampledAuditAccepted
 import Proofs.NetworkCertifier.SampledCharge
 import Proofs.NetworkCertifier.SampledLeak
-import Proofs.NetworkCertifier.SampledLeakReg
 
 /-!
 # The leak bound at the network certifier's rows

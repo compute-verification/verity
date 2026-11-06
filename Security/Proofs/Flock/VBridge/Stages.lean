@@ -1,8 +1,9 @@
 module
 
-public import Proofs.Flock.VBridge.Compiled
-public import Proofs.Flock.VBridge.InnerAccepts
 public import Proofs.Flock.Soundness.Refine.RepConverse
+public import Proofs.Flock.VBridge.Compiled
+public import Proofs.Flock.VBridge.Full
+public import Proofs.Flock.VBridge.InnerAccepts
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime

@@ -1,9 +1,11 @@
 module
 
 public import Proofs.Flock.C3.Compose.HoloStreamSizes
+public import Proofs.Flock.Claims.Recursion.NonVacuous
+public import Proofs.Flock.Claims.Recursion.VerdictTargetL
+public import Proofs.Flock.VBridge.Family.Setup
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
-public import Proofs.Flock.Claims.Recursion.NonVacuous
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -39,11 +41,9 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.Recursion.VerdictLoop
 import Proofs.Flock.Claims.Recursion.VerdictRowG
-import Proofs.Flock.Claims.Recursion.VerdictTargetL
 import Proofs.Flock.Soundness.Refine.Seam
 import Proofs.Flock.VBridge.Algebra.RingSwitch
 import Proofs.Flock.VBridge.Algebra.RunSkel
-import Proofs.Flock.VBridge.Family.Setup
 
 /-!
 # The schedule's coin counts are the rounds `verifierRows` takes

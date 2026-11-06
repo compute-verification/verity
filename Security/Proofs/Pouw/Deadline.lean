@@ -1,11 +1,11 @@
 module
 
 public import Definitions.Pouw.Guarantees.Deadline
+public import Proofs.Pouw.Game
+public import Proofs.Pouw.PearlC.ServedMixedRev1Gamma
+public import Proofs.Pouw.PearlC.TTOutW1
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.Game
 import Proofs.Pouw.PearlC.DeviceCapRev1Gamma
-import Proofs.Pouw.PearlC.ServedMixedRev1Gamma
-import Proofs.Pouw.PearlC.TTOutW1
 import Proofs.Pouw.Prob
 
 /-!

@@ -1,7 +1,8 @@
 module
 
+public import Definitions.Accounting.RateAudit
+public import Definitions.Accounting.RateAuditInteractive
 public import Definitions.Accounting.RateAuditRemote
-import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The remote rate audit: conservation over tiers, and chained passes (trusted)

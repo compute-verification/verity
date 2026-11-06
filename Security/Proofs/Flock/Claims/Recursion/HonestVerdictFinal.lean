@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Complete.Json.Goals
+public import Proofs.Flock.Claims.Recursion.HonestStreams
 public import Proofs.Flock.Claims.Recursion.HonestVerdictR
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -47,7 +48,6 @@ import Proofs.Flock.Claims.Complete.Replay.Trace
 import Proofs.Flock.Claims.Complete.Reps
 import Proofs.Flock.Claims.Complete.Walk
 import Proofs.Flock.Claims.Complete.WalkPacked
-import Proofs.Flock.Claims.Recursion.HonestStreams
 import Proofs.Flock.Claims.Recursion.HonestVerdictJson
 import Proofs.Flock.Claims.Recursion.NextRRows
 

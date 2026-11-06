@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.BoundMerged
+public import Proofs.Flock.Claims.Recursion.VCalls
 public import Proofs.Flock.Claims.Recursion.VCallsAt
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -38,7 +39,6 @@ import Proofs.Flock.Claims.Finder
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Recursion.Cost
 import Proofs.Flock.Claims.Recursion.Gap
-import Proofs.Flock.Claims.Recursion.VCalls
 
 /-!
 # Route 2C: `KSLin2` from `KSFlockLin` at `DE`

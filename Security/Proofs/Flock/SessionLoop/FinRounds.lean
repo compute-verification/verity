@@ -1,8 +1,10 @@
 module
 
-public import Proofs.Flock.SessionLoop.FinishParts
-public import Proofs.Flock.Claims.ZK.RepLog
+public import Proofs.Flock.Claims.ZK.CutPrefix
 public import Proofs.Flock.Claims.ZK.FinExe
+public import Proofs.Flock.Claims.ZK.FrameUnrefused
+public import Proofs.Flock.Claims.ZK.RepLog
+public import Proofs.Flock.SessionLoop.FinishParts
 import Flock.With.SimWalk
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -40,11 +42,9 @@ import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Claims.Complete.ZkTables.Table
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.ZK.CausalExe
-import Proofs.Flock.Claims.ZK.CutPrefix
 import Proofs.Flock.Claims.ZK.FrameBeta
 import Proofs.Flock.Claims.ZK.FrameRankFault
 import Proofs.Flock.Claims.ZK.FrameTaken
-import Proofs.Flock.Claims.ZK.FrameUnrefused
 
 /-!
 # (d) `FinRepRounds`: the reps' rounds

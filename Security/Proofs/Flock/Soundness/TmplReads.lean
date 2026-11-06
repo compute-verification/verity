@@ -1,10 +1,11 @@
 module
 
-public import Flock.KnownRead
-import all Init.Util
 public import Aesop.BuiltinRules
+public import Flock.KnownRead
 public import Mathlib.Tactic.ToAdditive
 public import Mathlib.Tactic.ToDual
+public import Proofs.Flock.C3.Reps.ReadWhole
+import all Init.Util
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -18,7 +19,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.C3.Reps.ReadWhole
 import Proofs.Flock.Soundness.SparseRows
 import Proofs.Flock.Soundness.TmplUnrollAt
 

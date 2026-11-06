@@ -1,16 +1,8 @@
 module
 
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeedK
-public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
-import Mathlib.Algebra.Order.Floor.Semifield
-import Mathlib.Analysis.SpecialFunctions.Pow.Real
-import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.PearlC.DeviceGamma
-import Proofs.Pouw.PearlC.RowSeedCode
-import Proofs.Pouw.PearlC.RowSeedGamma
-import Proofs.Pouw.PearlC.TileGamma
-import Proofs.Pouw.PearlC.UOnlyGamma
-import Proofs.Pouw.Prob
+public import Proofs.Pouw.PearlC.RowSeedCode
+public import Proofs.Pouw.PearlC.DeviceGamma
 
 /-!
 # Per-row seeds at a census k: the tile cap `ρ` and a wider row cap `ρr` (compute accounting's file)

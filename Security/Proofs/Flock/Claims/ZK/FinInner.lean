@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Flock.Claims.ZK.FinExe
+public import Proofs.Flock.Claims.ZK.FinPads
+public import Proofs.Flock.Claims.ZK.FinTau
 public import Proofs.Flock.Claims.ZK.SplitInner
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -33,8 +35,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.ZK.FinPads
-import Proofs.Flock.Claims.ZK.FinTau
 
 /-!
 # `FinExe` from the hybrids, the live end and `InnerTauVal`

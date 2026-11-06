@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Flock.Statement
+public import Proofs.Flock.Soundness.Discharge.Pinned
 import Mathlib.Tactic.Ring.RingNF
 
 /-!

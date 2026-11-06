@@ -1,5 +1,7 @@
 module
 
+public import Batteries.Data.ByteArray
+public import Proofs.Flock.Claims.KS.BatchMove
 public import Proofs.Flock.Claims.KS.BatchSched
 public import Proofs.Flock.Claims.KS.SimLead
 import Mathlib.Algebra.Order.Floor.Extended
@@ -36,7 +38,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.KS.BatchMove
 import Proofs.Flock.Claims.KS.BatchSteps
 import Std.Tactic.BVDecide.Normalize.Prop
 import VCVio.Prelude.Core

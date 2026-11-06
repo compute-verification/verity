@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Core.Assumptions
+public import Definitions.Core.TC
 public import Definitions.Core.TC.Bridge
 public import Definitions.Core.TC.Gadgets
 

@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Nci.Capability.Products
+public import Definitions.Nci.Capability
 
 /-!
 # Local bounds: caps from incidence

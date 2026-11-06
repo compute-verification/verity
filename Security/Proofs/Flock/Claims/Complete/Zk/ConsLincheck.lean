@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Complete.Replay.ZerocheckAlgebra
+public import Proofs.Flock.Claims.Complete.Zk.ConsZerocheck
 public import Proofs.Flock.Claims.Complete.Zk.PiopGo
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

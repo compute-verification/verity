@@ -7,6 +7,7 @@ every row of the builder holds under `v ∘ col` (`laid_rows`), and output `j`'s
 module
 
 public import Proofs.Flock.Soundness.Discharge.Hm.Fresh
+public import Proofs.Flock.Verifier.HmNets
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.Measurability.Init
@@ -22,7 +23,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Verifier.HmNets
 
 @[expose] public section
 

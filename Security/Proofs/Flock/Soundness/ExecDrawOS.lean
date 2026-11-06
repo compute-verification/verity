@@ -1,10 +1,8 @@
 module
 
 public import Proofs.Flock.Soundness.ExecStratified
-import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Audit.Law
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Prob
+public import Proofs.Flock.Soundness.Assumptions
+public import Init.Internal.Order.While
 
 /-!
 # The live draw: `drawOS`, extend-and-rerun included, escapes no more often than the model's

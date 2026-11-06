@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.ResLowerDeployed
+public import Proofs.Flock.Claims.Recursion.VVTieOf
 public import Proofs.Flock.Claims.Recursion.VerdictRowRDep
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -33,7 +34,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Recursion.VVTieOf
 
 /-!
 # Check 5's tie at a piece's copy, at `Rows.resVRead`'s verifier values

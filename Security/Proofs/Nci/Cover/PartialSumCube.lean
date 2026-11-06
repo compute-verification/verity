@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Nci.Guarantees.CoverPartialSum
+public import Proofs.Nci.Cover.PartialSumRead
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Nci.Cover.Area
 import Proofs.Nci.Cover.Charge

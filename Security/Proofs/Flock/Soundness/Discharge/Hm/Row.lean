@@ -9,9 +9,10 @@ string (`row_commit`).
 module
 
 public import Flock.HmRow
-import all Init.Data.String.Defs
 public import Proofs.Flock.Soundness.Binding.Leaf
+public import Proofs.Flock.Soundness.Discharge.Hm.Commit
 public import Proofs.Flock.Soundness.Discharge.Hm.Slot
+import all Init.Data.String.Defs
 import Mathlib.Tactic.ENatToNat
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -28,7 +29,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
-import Proofs.Flock.Soundness.Discharge.Hm.Commit
 
 @[expose] public section
 

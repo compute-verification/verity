@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Recursive.VStarCheck
 public import Proofs.Flock.Recursive.Stage
+public import Proofs.Flock.Recursive.VStarCheck
+public import Proofs.Flock.Recursive.Written
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -15,7 +16,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Recursive.Written
 import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
 import Proofs.Flock.Soundness.Discharge.Hidden.Facts
 import Proofs.Flock.Soundness.Discharge.ZkHidden.NonVacuousJ

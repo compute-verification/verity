@@ -1,8 +1,9 @@
 module
 
-public import Proofs.Flock.Claims.KS.SlotDistOn
 public import Proofs.Flock.Claims.KS.BatchSched
+public import Proofs.Flock.Claims.KS.SlotDistOn
 public import Proofs.Flock.Claims.KS.ZkBatch
+public import Proofs.Flock.Claims.KS.ZkKSAlign
 public import Proofs.Flock.Claims.KS.ZkTauFork
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -38,7 +39,6 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.RepDistZ
 import Proofs.Flock.Claims.KS.ZkBatchSim
-import Proofs.Flock.Claims.KS.ZkKSAlign
 import Proofs.Flock.Claims.KS.ZkLiveSched
 import Proofs.Flock.Claims.KS.ZkStep
 import Proofs.Flock.Soundness.Defs

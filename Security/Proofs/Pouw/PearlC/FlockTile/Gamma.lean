@@ -1,11 +1,7 @@
 module
 
 public import Proofs.Pouw.PearlC.FlockTile.Statement
-public import Definitions.Pouw.Assumptions.PearlC.HiddenTile
-import Mathlib.Analysis.SpecialFunctions.Pow.Real
-import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.PearlC.HiddenGamma
-import Proofs.Pouw.PearlC.HiddenTileGame
+public import Proofs.Pouw.PearlC.HiddenTileGame
 
 /-!
 # Pearl-C's γ under C-Flock's hidden audit, conditional on T3 and the binding

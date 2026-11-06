@@ -1,8 +1,6 @@
 module
 
 public import Definitions.Pous.Game.Oracle
-public import Definitions.Pous.Game.Prob
-import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The state after a history (sampled audits)

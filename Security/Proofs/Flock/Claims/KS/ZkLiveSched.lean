@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.KS.BatchSim
+public import Proofs.Flock.Claims.KS.PlainLive
 public import Proofs.Flock.Claims.KS.ZkSim
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -35,7 +36,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployK
-import Proofs.Flock.Claims.KS.PlainLive
 import Proofs.Flock.Claims.KS.ZkLock
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 

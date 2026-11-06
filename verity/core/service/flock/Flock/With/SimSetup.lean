@@ -10,9 +10,9 @@ the log's length is `Stmt.setupCalls h`, the number of SHA-512 calls a run with 
 -/
 module
 
-public import Flock.With.Setup
 public import Flock.With.Log
-import Flock.With.SimWalk
+public import Flock.With.Setup
+public import Flock.With.SimWalk
 
 @[expose] public section
 

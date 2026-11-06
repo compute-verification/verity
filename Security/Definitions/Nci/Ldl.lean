@@ -2,7 +2,7 @@ module
 
 public import Definitions.Nci
 public import Mathlib.Data.ENat.Lattice
-import Mathlib.Data.NNRat.Floor
+public import Mathlib.Data.Nat.Log
 
 /-!
 # Local description length on a `(c,k)`-partition: the vocabulary

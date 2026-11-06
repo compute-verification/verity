@@ -1,15 +1,10 @@
 module
 
+public import Proofs.Pouw.PearlC.PeelExists
+public import Proofs.Pouw.PearlC.PeelExists4
 public import Proofs.Pouw.PearlC.TileCheck4Words
+public import Proofs.Pouw.PearlC.CoreOps
 public import Definitions.Pouw.Guarantees.PearlCTileCheck
-import Mathlib.Algebra.Order.Floor.Semifield
-import Mathlib.Analysis.SpecialFunctions.Pow.Real
-import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.PearlC.CoreOps
-import Proofs.Pouw.PearlC.PeelExists
-import Proofs.Pouw.PearlC.PeelExists4
-import Proofs.Pouw.PearlC.RowStats
-import Proofs.Pouw.PearlC.TileGamma
 
 /-!
 # The plain `pc8` and `pc4` tile checks compute the words (proofs)

@@ -2,9 +2,9 @@ module
 
 public import Definitions.Nci
 public import Definitions.Nci.BitView
-import Mathlib.Data.Fintype.Fin
-import Mathlib.Data.NNRat.Floor
-import Proofs.Nci.Cover.Paths
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Data.Fintype.Fin
+public import Proofs.Nci.Cover.Paths
 
 /-!
 # A declaration's circuit, bit by bit: blocks of word gates

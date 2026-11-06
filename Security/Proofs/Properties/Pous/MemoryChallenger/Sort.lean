@@ -1,9 +1,9 @@
 module
 
-import all Init.Data.Array.QSort.Basic
 public import Aesop.BuiltinRules
+public import Batteries.Tactic.OpenPrivate
 public import Mathlib.Tactic.ToDual
-import Batteries.Tactic.OpenPrivate
+import all Init.Data.Array.QSort.Basic
 import Mathlib.Tactic.Attr.Core
 import Mathlib.Tactic.SplitIfs
 

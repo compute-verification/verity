@@ -2,12 +2,12 @@ module
 
 public import Definitions.Pous.Guarantees.Obligation
 public import Mathlib.Topology.Path
+public import Proofs.Pous.P2.Rounds
+public import Proofs.Pous.Thm1.Theorem1ii
 public import Properties.Pous.Obligation
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pous.P2.Rounds
 import Proofs.Pous.Period
 import Proofs.Pous.Sanity
-import Proofs.Pous.Thm1.Theorem1ii
 import Proofs.Pouw.Prob
 
 /-!

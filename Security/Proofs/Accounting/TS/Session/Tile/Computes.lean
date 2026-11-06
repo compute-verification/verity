@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Accounting.TS.Session.Tile.Assumptions
 public import Proofs.Accounting.TS.Session.Lanes.Lane
+public import Proofs.Accounting.TS.Session.Tile.Assumptions
+public import Proofs.Pouw.H1Zy.Tile
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -34,7 +35,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Pouw.H1Zy.Lane
-import Proofs.Pouw.H1Zy.Tile
 
 /-!
 # A tile unit's `TileChecks` from its Definition

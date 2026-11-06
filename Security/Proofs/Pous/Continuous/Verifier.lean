@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Pous.Model.Continuous
-import Mathlib.Analysis.SpecialFunctions.Log.Basic
 
 /-!
 # The continuous audit's memory challenger enforces its three rules

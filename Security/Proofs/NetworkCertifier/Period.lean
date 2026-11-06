@@ -1,6 +1,10 @@
 module
 
 public import Definitions.NetworkCertifier.Guarantees.Period
+public import Proofs.NetworkCertifier.SampledAuditAccepted
+public import Proofs.NetworkCertifier.SampledLeak
+public import Proofs.NetworkCertifier.Tap
+public import Proofs.NetworkCertifier.TapRows
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -34,9 +38,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.NetworkCertifier.SampledCharge
-import Proofs.NetworkCertifier.SampledLeak
-import Proofs.NetworkCertifier.Tap
-import Proofs.NetworkCertifier.TapRows
 
 /-!
 # The leak through the network certifier over a monitoring period of sampled audits

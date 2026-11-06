@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Recursion.RestVerdictBasesHold
 public import Proofs.Properties.Verity.Recursive.Names
 import all Init.Data.String.Defs
 import Mathlib.Algebra.Order.Floor.Extended
@@ -36,7 +37,6 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Encode
 import Proofs.Flock.Claims.Recursion.DeployChecked
-import Proofs.Flock.Claims.Recursion.RestVerdictBasesHold
 import Proofs.Flock.Soundness.Refine.Walk
 import Proofs.Properties.Verity.Recursive.BaseSetup
 import Proofs.Properties.Verity.Recursive.Compiled

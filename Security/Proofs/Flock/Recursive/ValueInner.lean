@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Recursive.ValueSource
 public import Proofs.Flock.Recursive.ValueSrc
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational

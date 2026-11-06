@@ -1,15 +1,7 @@
 module
 
+public import Proofs.Properties.NetworkCertifier.Bytes
 public import Proofs.Properties.NetworkCertifier.Strings
-public import Aesop.BuiltinRules
-public import Mathlib.Algebra.Group.Nat.Defs
-public import Mathlib.Tactic.Attr.Core
-public import Mathlib.Tactic.Basic
-public import Mathlib.Tactic.ToDual
-import Mathlib.Algebra.Order.Ring.Nat
-import Mathlib.Data.Finset.Attr
-import Mathlib.Data.Nat.SuccPred
-import Proofs.Properties.NetworkCertifier.Bytes
 
 /-!
 # The frame tree binds its frames

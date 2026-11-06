@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Pous.Model.Dense
-import Mathlib.Basic.ENNReal.Real
 
 /-!
 # A segment's parents at their global positions (trusted)

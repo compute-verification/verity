@@ -1,14 +1,8 @@
 module
 
-public import Definitions.Core.Game
-public import Definitions.Flock.ZK.RealView
-public import Definitions.Flock.ZK.SHVZK
-public import Proofs.Flock.Soundness.ZK.Dist
+public import Proofs.Flock.Soundness.ZK.SHVZK
 public import Proofs.Flock.Soundness.ZK.Hiding
-import Mathlib.Analysis.SpecialFunctions.Pow.Real
-import Mathlib.Tactic.Positivity.Finset
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.ZK.SHVZK
+public import Definitions.Flock.ZK.RealView
 
 /-!
 # Zero knowledge: Lemma B with real hm96 leaves

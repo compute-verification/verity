@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.Recursive.Stage
 public import Proofs.Flock.VBridge.InnerUnit
 public import Proofs.Flock.VBridge.Keyed
+public import Proofs.Flock.VBridge.PartS
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime

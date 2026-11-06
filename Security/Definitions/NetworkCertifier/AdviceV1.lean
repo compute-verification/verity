@@ -1,6 +1,7 @@
 module
 
 public import Mathlib.Data.Nat.Bits
+public import Mathlib.Data.Nat.Size
 public import Mathlib.Data.Subtype
 public import Mathlib.Tactic.Attr.Core
 public import Mathlib.Tactic.ToAdditive

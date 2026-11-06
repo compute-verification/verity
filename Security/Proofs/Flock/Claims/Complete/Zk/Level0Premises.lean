@@ -1,5 +1,8 @@
 module
 
+public import Proofs.Flock.Claims.Complete.Zk.Level0Lanes
+public import Proofs.Flock.Claims.Complete.Zk.Level0Run
+public import Proofs.Flock.Claims.Complete.Zk.Level0Shape
 public import Proofs.Flock.Claims.Complete.ZkTables.Level0
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -34,9 +37,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Replay.LigeritoGoal
 import Proofs.Flock.Claims.Complete.Zk.Count
-import Proofs.Flock.Claims.Complete.Zk.Level0Lanes
-import Proofs.Flock.Claims.Complete.Zk.Level0Run
-import Proofs.Flock.Claims.Complete.Zk.Level0Shape
 
 /-!
 # Level 0's masked Ligerito: its premises, proved

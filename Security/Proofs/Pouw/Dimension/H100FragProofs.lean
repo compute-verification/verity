@@ -1,10 +1,10 @@
 module
 
 public import Definitions.Pouw.Assumptions.Dimension.H100Frag
+public import Proofs.Pouw.Dimension.H100DenseProofs
 import Mathlib.Data.Sym.Sym2.Init
 import Mathlib.Tactic.NormNum.GCD
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.Dimension.H100DenseProofs
 import Proofs.Pouw.Dimension.H100Proofs
 
 /-!

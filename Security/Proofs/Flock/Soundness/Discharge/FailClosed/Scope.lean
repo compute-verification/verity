@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.FailClosed.TmplStmt
 public import Proofs.Flock.Soundness.Discharge.Layout.Scope
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Event
 import Mathlib.Tactic.ENatToNat
@@ -16,7 +17,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Soundness.Discharge.FailClosed.TmplStmt
 import Proofs.Flock.Soundness.Discharge.Hidden.Facts
 import Proofs.Flock.Soundness.Discharge.Hidden.ParseCommit
 import Proofs.Flock.Soundness.Game.Prob

@@ -1,8 +1,8 @@
 module
 
 public import Definitions.Nci.Guarantees.CoverPartialSum
+public import Proofs.Nci.Cover.PartialSumCover
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Nci.Cover.PartialSumCover
 import Proofs.Nci.Cover.PartialSumKeyed
 
 /-!

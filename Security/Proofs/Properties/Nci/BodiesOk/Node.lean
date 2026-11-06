@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Properties.Nci.BodiesOk.Basic
 public import Proofs.Properties.Nci.Resolve
 import Batteries.Tactic.OpenPrivate
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
@@ -20,7 +21,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
-import Proofs.Properties.Nci.BodiesOk.Basic
 
 /-!
 # What `buildNode` checks of a node

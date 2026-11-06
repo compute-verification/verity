@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.ZK.FinExe
 public import Proofs.Flock.Claims.ZK.FinishSwLig
 public import Proofs.Flock.Claims.ZK.FrameOpenCut
 import Mathlib.Algebra.Order.Floor.Extended
@@ -33,7 +34,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.ZK.FinExe
 
 /-!
 # Level 0's bodies pin the source's masked values

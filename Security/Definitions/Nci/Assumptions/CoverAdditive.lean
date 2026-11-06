@@ -1,8 +1,7 @@
 module
 
+public import Definitions.Nci.Assumptions.CoveringTwoCosts
 public import Mathlib.Data.Finset.Union
-public import Definitions.Nci.Covering
-public import Mathlib.Basic.Real.Basic
 
 /-!
 # The additive covering bound's premise: parameter-hardness outside the token computations

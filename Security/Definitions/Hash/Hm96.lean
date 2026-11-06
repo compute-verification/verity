@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Core.Hash
+public import Definitions.Hash.Basic
 public import Mathlib.Algebra.Group.Nat.Defs
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

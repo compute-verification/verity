@@ -1,7 +1,9 @@
 module
 
-public import Definitions.Core.Game
+public import Definitions.Accounting.JointBlocks
 public import Definitions.Accounting.JointPeriod
+public import Definitions.Claims
+public import Definitions.Core.Game
 public import Definitions.Core.Interaction
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

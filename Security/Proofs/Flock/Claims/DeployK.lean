@@ -1,11 +1,12 @@
 module
 
-public import Proofs.Flock.Claims.DeployCode
 public import Flock.With.VerifyE
-import all Lean.Data.Json.Basic
-import all Lean.Data.Json.FromToJson.Basic
+public import Proofs.Flock.Claims.DeployCode
+public import Proofs.Flock.Claims.DeployRoundsZk
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -39,7 +40,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployRounds
-import Proofs.Flock.Claims.DeployRoundsZk
 import Proofs.Flock.Soundness.Discharge.Exec.Tables
 import Proofs.Flock.Soundness.Refine.Seam
 import Std.Tactic.BVDecide.Normalize.Prop

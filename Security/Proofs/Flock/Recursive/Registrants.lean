@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Recursive.Stage
+public import Proofs.Flock.Recursive.StageRead
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -15,7 +16,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
-import Proofs.Flock.Recursive.StageRead
 import Proofs.Flock.Soundness.Game.Basic
 import Proofs.Flock.Soundness.Game.Expect
 import Proofs.Flock.Soundness.Game.Prob

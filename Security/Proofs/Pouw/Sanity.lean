@@ -5,7 +5,7 @@ public import Definitions.Pouw.M1
 public import Definitions.Pouw.Witness.Copy
 public import Definitions.Pouw.Witness.Model
 public import Mathlib.Analysis.SpecialFunctions.Pow.Real
-import Mathlib.Data.Set.Finite.List
+public import Mathlib.Data.Set.Finite.List
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Prob
 import Proofs.Pouw.Reduction

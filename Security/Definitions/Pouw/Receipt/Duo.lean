@@ -1,6 +1,7 @@
 module
 
 public import Mathlib.Algebra.Group.Nat.Defs
+public import Mathlib.Data.BitVec
 public import Mathlib.Data.Fin.Tuple.Basic
 import Mathlib.Data.Finset.Attr
 import Mathlib.Tactic.SetLike

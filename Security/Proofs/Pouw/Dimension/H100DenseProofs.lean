@@ -1,11 +1,11 @@
 module
 
 public import Definitions.Pouw.Assumptions.Dimension.H100Dense
+public import Proofs.Pouw.Dimension.H100WProofs
 import Mathlib.Data.Sym.Sym2.Init
 import Mathlib.Tactic.NormNum.GCD
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Dimension.EmbedProofs
-import Proofs.Pouw.Dimension.H100WProofs
 
 /-!
 # Dense words and the legacy k8 class in `MH100w`: proofs

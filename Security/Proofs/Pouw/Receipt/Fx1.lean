@@ -1,12 +1,12 @@
 module
 
 public import Definitions.Pouw.Receipt.Fx1
+public import Proofs.Pouw.Receipt.Run
 import Mathlib.Data.Finset.Attr
 import Mathlib.Tactic.NormNum.Ineq
 import Mathlib.Tactic.NormNum.Pow
 import Mathlib.Tactic.SetLike
 import Proofs.Pouw.Receipt.Duo
-import Proofs.Pouw.Receipt.Run
 
 /-!
 # fx1's words are bound wherever duo's are

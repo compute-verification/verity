@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Pouw.FpG1.H1
+public import Proofs.Pouw.FpG1
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Ring.Star
@@ -34,7 +35,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Pouw.FpG1
 
 /-!
 # FP8-g1 and W4A8-g1 on H1: g1's leaves are H1's

@@ -3,10 +3,10 @@ module
 public import Proofs.Flock.Soundness.CROnly.Defs
 public import Proofs.Flock.Soundness.E2E
 public import Proofs.Flock.Soundness.Registered.Defs
+public import Proofs.Flock.Soundness.Registered.E2E
 public import Proofs.Flock.Soundness.StrictCR
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.CROnly.Link
-import Proofs.Flock.Soundness.Registered.E2E
 
 /-!
 # The end-to-end theorems with registered reads, under `cr/sha-512` alone

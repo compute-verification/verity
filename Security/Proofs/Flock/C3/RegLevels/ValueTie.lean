@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Recursive.ValueSrc
+public import Proofs.Flock.C3.RegLevels.OpensRegs
 public import Proofs.Flock.Recursive.HoloExec
+public import Proofs.Flock.Recursive.ValueSrc
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -16,7 +17,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
-import Proofs.Flock.C3.RegLevels.OpensRegs
 import Proofs.Flock.Soundness.Registered.Binding
 
 /-!

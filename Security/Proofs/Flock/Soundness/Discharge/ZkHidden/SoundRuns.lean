@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDefs
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Theorems
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -22,7 +23,6 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLive
 import Proofs.Flock.Soundness.Discharge.ZkExec.Verdict
 import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Theorems
 
 /-!
 # `RunsZC` at the live hidden-output `--zk` tables, from `TablesAtZKHLive`

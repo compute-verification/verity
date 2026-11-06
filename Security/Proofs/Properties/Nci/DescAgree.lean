@@ -1,8 +1,9 @@
 module
 
+public import Proofs.Properties.Nci
 public import Properties.NciDesc
-import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
+import all Lean.Data.Json.Basic
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
 import Mathlib.Data.NNRat.Floor
 import Mathlib.Tactic.ENatToNat
@@ -20,7 +21,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Properties.Nci
 import Std.Data.HashSet.Lemmas
 
 /-!

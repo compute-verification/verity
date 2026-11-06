@@ -1,6 +1,9 @@
 module
 
+public import Proofs.Flock.Claims.Complete.Zk.Extras
 public import Proofs.Flock.Claims.Complete.ZkTables.Reps
+public import Proofs.Flock.Claims.Complete.ZkTables.Stmt
+public import Proofs.Flock.Claims.Complete.ZkTables.Trace
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -35,12 +38,9 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
 import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
 import Proofs.Flock.Claims.Complete.Replay.Trace
-import Proofs.Flock.Claims.Complete.Zk.Extras
 import Proofs.Flock.Claims.Complete.Zk.RepRounds
 import Proofs.Flock.Claims.Complete.ZkTables.MaskFree
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
-import Proofs.Flock.Claims.Complete.ZkTables.Stmt
-import Proofs.Flock.Claims.Complete.ZkTables.Trace
 import Proofs.Flock.Claims.Scope.InScope
 import Proofs.Flock.Claims.Scope.StmtOf
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts

@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Complete.Replay.LigeritoFinal
+public import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -34,7 +35,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Discharge
-import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
 import Proofs.Flock.Claims.Complete.Replay.Satisfies
 import Proofs.Flock.Level3.LookupRows
 import Proofs.Flock.Soundness.Refine.Arith

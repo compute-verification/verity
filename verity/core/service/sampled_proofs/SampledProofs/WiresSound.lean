@@ -1,7 +1,6 @@
 module
 
-public import SampledProofs.Wires
-import SampledProofs.WiresSpan
+public import SampledProofs.WiresSpan
 
 /-! **`check` is sound against its unrolled reference.** Whenever `check` accepts a circuit's wires:
 

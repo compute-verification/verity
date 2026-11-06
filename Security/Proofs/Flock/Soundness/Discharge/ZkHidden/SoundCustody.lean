@@ -1,9 +1,10 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
 public import Proofs.Flock.Soundness.Assumptions.Zk
 public import Proofs.Flock.Soundness.Discharge.Composed.Defs
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Sound
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundBind
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundRuns
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.Theorems
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -19,7 +20,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Sound
 
 /-!
 # One hidden-output `--zk` sampled session is sound, under the record's custody

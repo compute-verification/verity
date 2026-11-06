@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Copies
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Defs
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.RowBc
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Tail
 import Mathlib.Tactic.ENatToNat
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -22,7 +24,6 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Delta
 import Proofs.Flock.Soundness.Discharge.Hidden.Facts
 import Proofs.Flock.Soundness.Discharge.Hidden.Rows
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.RowBc
 import Proofs.Flock.Soundness.Discharge.Hm.Bc
 import Proofs.Flock.Soundness.Discharge.Hm.Nets
 

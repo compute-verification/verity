@@ -2,6 +2,7 @@ module
 
 public import Definitions.Claims.RecursionLin
 public import Proofs.Flock.Claims.Witnesses.Recursion
+public import Proofs.Flock.Claims.Witnesses.RecursionLin
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Ring.Star

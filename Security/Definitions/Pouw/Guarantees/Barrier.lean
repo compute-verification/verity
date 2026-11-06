@@ -1,6 +1,5 @@
 module
 
-public import Definitions.Pouw.Barrier.Defs
 public import Definitions.Pouw.Barrier.Pinned
 
 /-!

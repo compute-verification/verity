@@ -1,15 +1,9 @@
 module
 
 public import Definitions.Nci.Guarantees.CoverChained
-public import Proofs.Nci.Cover.Bits
+public import Proofs.Nci.CoveringTwoCosts
 public import Proofs.Nci.Cover.Gates
 public import Proofs.Nci.Cover.Training
-public import Proofs.Nci.CoveringTwoCosts
-public import Proofs.Nci.Pull
-import Mathlib.Data.NNRat.Floor
-import Mathlib.Tactic.Positivity.Finset
-import Proofs.Core.Circuit
-import Proofs.Nci.Cover.Sum
 
 /-!
 # The cover theorem on a compliant declaration, counting the chained multiplication blocks, proved

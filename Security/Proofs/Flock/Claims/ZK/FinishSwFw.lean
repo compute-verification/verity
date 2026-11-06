@@ -2,7 +2,9 @@ module
 
 public import Proofs.Flock.Claims.ZK.FinishSrc
 public import Proofs.Flock.Claims.ZK.FinishSwMk
+public import Proofs.Flock.Claims.ZK.FinishSwRows
 public import Proofs.Flock.Claims.ZK.FinishSwTau
+public import Proofs.Flock.Claims.ZK.InnerTauRep
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -38,10 +40,8 @@ import Proofs.Flock.Claims.Complete.Zk.Level0Lanes
 import Proofs.Flock.Claims.ZK.CausalExe
 import Proofs.Flock.Claims.ZK.FinishSwFrame
 import Proofs.Flock.Claims.ZK.FinishSwInner
-import Proofs.Flock.Claims.ZK.FinishSwRows
 import Proofs.Flock.Claims.ZK.FinishSwSv
 import Proofs.Flock.Claims.ZK.FinishTau
-import Proofs.Flock.Claims.ZK.InnerTauRep
 import Proofs.Flock.Claims.ZK.SentE
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 import Proofs.Flock.Soundness.Refine.Arith

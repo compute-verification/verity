@@ -1,7 +1,9 @@
 module
 
-public import Proofs.Flock.Claims.Bridge.Dead
 public import Batteries.Data.ByteArray
+public import Proofs.Flock.Claims.Bridge.Dead
+public import Proofs.Flock.Claims.Bridge.LivePlain
+public import Proofs.Flock.Claims.KS.Rounds
 public import Proofs.Flock.Soundness.Discharge.Tables.Session
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

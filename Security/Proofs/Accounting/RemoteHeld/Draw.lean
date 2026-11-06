@@ -1,6 +1,10 @@
 module
 
 public import Definitions.Accounting.Guarantees.RemoteDraw
+public import Proofs.Accounting.Actual.Sampler
+public import Proofs.Accounting.Prob
+public import Proofs.Accounting.RateAudit.Horizon
+public import Proofs.Hash.RowBinding
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Ring.Star
@@ -38,10 +42,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Accounting.Actual.Sampler
 import Proofs.Accounting.Bandwidth.AuditRO
-import Proofs.Accounting.Prob
-import Proofs.Accounting.RateAudit.Horizon
 import Proofs.Accounting.RateAudit.Windows
 import Proofs.Accounting.RemoteHeld
 import Proofs.Accounting.RemoteHeld.OverTime

@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Hidden.SpecP
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Shared
 public import Proofs.Flock.Soundness.Discharge.Layout.InRegion
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
