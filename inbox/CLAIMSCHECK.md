@@ -25,3 +25,13 @@ admission may leave certified release order; (c) raw schedule ~5.5 kbit/request)
 - 'The circuit is committed before serving' is false today for GLM-5.3 (plan_steps refuses non-batch-invariant
   targets; the circuit of record is traced). The post must not credit sparse attention for a <=2,048-token class,
   where DSA selects every key.
+
+## 2026-11-06T09:12Z from proofs: for your Sat refresh
+
+- SPOTINF (note:20261106T0618Z-report-spot-infiltration): infiltration I_w = sum of the incorrect blocks' output
+  bits; certified only by the deferred-interiors-at-one-layer deployment (+~2.1% compute hashing), not tokens-only.
+  Bound 3.9e13 bits (~4e8 steering vectors) at 1%, the same for any period/scope. The earlier 7.6e6 vectors was the
+  3-pager's model.
+- The advice charge's Lean form is a premise: `hAs` in Security/Definitions/NetworkCertifier/Guarantees/SampledCharge.lean
+  (at most 2^c advices charged <= c; Kraft) is not proved, the proved instance counts free inputs, one-stage only.
+  The post must not say the advice term is proved; under certified ticks c = 0 by construction.
