@@ -11,10 +11,9 @@ public import Proofs.Flock.ZkAny.RelayLoopOwnAt
 `Finish`, and `J` kept at every other slot. Here they are at the invariant `LoopJ` on the loop's own tables:
 
 * `LoopModel.Deployed.last_eq`: the deployed model's last round is two past the setup's plan.
-* **`envPre_deployed`**: where the release takes the run's coins, each of the run's messages is the deferred
-  release's, its first the `Hello` at the drawn nonce, which is the tape's, the worker's link the firewall's own, and
-  `RoundFacts` holds at each request at a frame round's slot as the loop answers it (`hRF`), `EnvPre` holds wherever
-  `LoopP` at `LoopJ` does.
+* **`envPre_deployed`**: where each of the run's messages is the deferred release's, its first the `Hello` at the
+  drawn nonce, which is the tape's, the worker's link the firewall's own, and `RoundFacts` holds at each request at a
+  frame round's slot as the loop answers it (`hRF`), `EnvPre` holds wherever `LoopP` at `LoopJ` does.
 * `ownSched_deployed`: at the release with the session loop's own rounds of the inner proof at the model's finish's
   rounds, the inner proof's own place at each frame round's slot the model's scheduled round (`placeSched_own`),
   from what the loop took (`LoopJ.took`).
@@ -49,8 +48,8 @@ theorem LoopModel.Deployed.last_eq {T : ZKMal.CoinLayer.TableData}
 
 /-- **`EnvPre` at the deployed loop**: at the loop's own tables on `src` (`LoopModel.Deployed` at `Loop.realOf src`),
 the loop handed `src`'s bytes (`hsrc`) whose level 0 are drawn from the tape (`Loop.Level0Src`) at a statement the
-masked session proves (`hlive`), where the release takes the run's coins (`LoopModel.Takes`), each of the run's
-messages is the deferred release's (`LoopModel.Own`), its first the `Hello` at the nonce the relay drew (`h0`), that
+masked session proves (`hlive`), where each of the run's messages is the deferred release's (`LoopModel.Own`), its
+first the `Hello` at the nonce the relay drew (`h0`), that
 nonce the tape's (`hn`), the worker's link the firewall's own (`hwk`), and `RoundFacts` holds at each request at a
 frame round's slot as the loop answers it (`hRF`), `EnvPre` holds wherever `LoopP` at `LoopJ` does: `LoopJ` is kept at
 every slot that reads no model message (`loopKept_ctl_all`), at the `Hello` (the release checking the setup's `Hello`
@@ -69,7 +68,7 @@ theorem envPre_deployed {M : LoopModel Claims.Flock.Wit
       Nat → V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)}
     {s0 : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hD : LoopModel.Deployed M L₀ (Loop.realOf src) s0 spec sts) (hsrc : M.src = src M.x M.w M.ρ)
-    (hS : Loop.Level0Src src M.x M.w) (hlive : ZKMal.Masked.Live M.x) (hT : M.Takes) (hOwn : M.Own) {sid : Nat}
+    (hS : Loop.Level0Src src M.x M.w) (hlive : ZKMal.Masked.Live M.x) (hOwn : M.Own) {sid : Nat}
     {nonce : ByteArray} (hn : nonce = ⟨(ZKMal.CoinLayer.nb M.ρ.1).toArray⟩)
     (h0 : M.msgs.headD [] = _root_.Flock.Firewall.Hello.msg spec nonce)
     (hwk : M.wk M.x M.w M.ρ (M.hist 1) 0 = some (M.L.ownMsg M.x M.w M.ρ (M.hist 1), false))
@@ -88,7 +87,7 @@ theorem envPre_deployed {M : LoopModel Claims.Flock.Wit
   have hnext := hD.next
   exact envPre_loop loopKept_ctl_all (slotCase_hello h0 (loopKept_hello (hD.helloChk hn)))
     (slotCase_commit hOwn (by omega) (loopKept_commit hD.setup (by omega) hwk hD.req hD.frameAnswer_one))
-    (fun _ _ => slotCase_round hOwn hRF (loopKept_round_deployed hD hsrc hS hlive hT hRF))
+    (fun _ _ => slotCase_round hOwn hRF (loopKept_round_deployed hD hsrc hS hlive hRF))
     (slotCase_finish hOwn fun _ _ _ _ hsl _ hJ => by rw [hJ.stop, slot_finish hsl, Bool.true_and])
 
 /-- **`OwnSched` at the deployed loop**: at the loop's own tables on `src` (`LoopModel.Deployed` at `Loop.realOf
@@ -162,7 +161,7 @@ theorem envPre_withInner
     ∀ (es : List Env) (seen : List String) (st : State) (pl : Placed) (ms : List Claims.Msg),
       LoopP M (LoopJ M sid spec sts) sid spec sts nonce seen st pl es ms →
         EnvPre spec seen (schedSteps true st pl es) ms :=
-  envPre_deployed hD hsrc hS hlive hT hOwn hn h0 hwk fun {_ _} =>
+  envPre_deployed hD hsrc hS hlive hOwn hn h0 hwk fun {_ _} =>
     roundFacts_deployed hD hsrc hS hlive hT hcp (ownSched_deployed hD hsrc hfin hS hlive)
 
 end Claims.ZKServer.Relay
