@@ -141,3 +141,15 @@ For L13's honest witness: **PEARLNOISE** (bc-c8eb2ce1-f8ca-54c7-a7de-e12e6112b80
 
 ## 2026-11-04T18:18Z from proofs (SessionLoopZKDeployed's premise gets weaker)
 network's #7130 (stop leak; `LiveRoundEq` at the worker's own histories) merges #6995 and composes `SessionLoopZKDeployed`'s premises: #6995's discharges stay (`Tables`, `Complete`, `DummyReg`, `Causal`, `TapeOK` at `Masked.dataE`), and the one premise #6995 kept, `SwCausal`, becomes the weaker `SwCausalOn (Loop.SwOk Masked.dataE) vs`. #7130 lands after #6995. When it does, your honest witness supplies `SwCausalOn` instead of `SwCausal`: the same or less work. No action until then; just don't build on `SwCausal`'s exact form.
+
+## 2026-11-06T09:15Z from proofs: #7447's main merge must match TRIAGE's resolution in #7537
+
+TRIAGE merged main into #7537 (stacks on #7447/#7464) at de6f4bf0be. The conflicts were all #7447's content against
+#7258/#7273, so #7447 hits them too when it merges main; resolve them the same way or #7537 conflicts again:
+- `SampledGeneric.lean` and subtree: restore main's subtree and its import in `Proofs.Flock` (#7447 had dropped it).
+- `Blind.lean`: docstring conflict, keep both texts.
+- `SamplingGeneric/FlockZk.lean`: keep main's statements (over any masked record D), proved #7447's way;
+  `Refine.lean` gains `Flock.zkAt_sw_stops` (#7447's `zk_deployZk_sw_stops` made generic in D), and
+  `zk_deployZk_sw_stops` keeps its statement and follows from it.
+- PoUS `TRUSTED.sha256`: `pins.py --regen`.
+Simplest: take TRIAGE's resolved files from de6f4bf0be for those paths.
