@@ -487,6 +487,11 @@ export function createStore(db: Db) {
       return rev;
     },
 
+    async docAt(lane: string, rev: number): Promise<string | null> {
+      const { rows } = await db.query(`select doc from doc_revisions where lane = $1 and rev = $2`, [lane, rev]);
+      return rows[0] ? (rows[0].doc as string) : null;
+    },
+
     async docRevisions(lane: string) {
       const { rows } = await db.query(
         `select rev, turn_id, at from doc_revisions where lane = $1 order by rev`,
