@@ -58,9 +58,15 @@ nothing else but Lean core and the core interface (`core_protocol`).
 - `nci-check --count` runs `NciCheck.Count.check`, the count of (c, k)-inference blocks: the declaration names its block
   Definitions by descriptor key, and the check gives each one's Boolean gates (from a per-primitive gate table), its
   fresh input bits outside θ and its blocks, multiplied through batches and scans, and the root's total against n.
-  `NciCheck.Properties.DescCountsCK` (`Security/Properties/Nci/Count.lean`) states that an accepted count means
+  - Public: the judgment against n, `{"complies": true|false}`, or the refusal (`{"error": code}`, with a `message`
+    for some codes).
+  - Not public: the rows (each block Definition's gates, fresh bits and blocks), the total and which block failed.
+    `nci-check --count --detail` prints that whole verdict (`NciCheck.Count.checkDetail`) for the private record
+    only.
+
+  `NciCheck.Properties.DescCountsCK` (`Security/Properties/Nci/Count.lean`) states that a published `complies` means
   `Nci.CompliesAtMost c k n`; it is not yet proved, and the lock lists it as an open piece. `nci-count-difftest` holds
-  it to the Python reference's `check_count` (`lean/scripts/nci_reference.py`), run by
+  both forms to the Python reference's `check_count` and `check_count_detail` (`lean/scripts/nci_reference.py`), run by
   `../tests/test_nci_count_difftest.py`.
 - `nci-check --unrolled` runs the same with `NciCheck.check`, the check gate by gate, kept as the reference; its input
   format is in `NciCheck.Check`'s docstring. `nci-check --policy` runs the policy's check alone, without θ's
